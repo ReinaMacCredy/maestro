@@ -1,0 +1,33 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editor
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Dependencies
+node_modules/
+
+# Local development
+.env
+.env.local
+
+# Beads local data (users have their own)
+.beads/
+.beads-village/
+
+# Memory (user-specific)
+.memory/
+.memory-index/
+
+# Logs
+*.log
+
+# Python
+__pycache__/
+*.pyc
