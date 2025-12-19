@@ -1,0 +1,75 @@
+description = "Export project summary as markdown"
+prompt = """
+## 1.0 SYSTEM DIRECTIVE
+Generate a comprehensive project summary document.
+
+## 2.0 GATHER INFORMATION
+Read all conductor files:
+- `conductor/product.md`
+- `conductor/tech-stack.md`
+- `conductor/workflow.md`
+- `conductor/tracks.md`
+- All `conductor/tracks/*/spec.md`
+- All `conductor/tracks/*/plan.md`
+
+## 3.0 GENERATE EXPORT
+Create a markdown document with:
+
+```markdown
+# Project Export: [Project Name]
+Generated: YYYY-MM-DD HH:MM
+
+## Product Overview
+[Content from product.md]
+
+## Technology Stack
+[Content from tech-stack.md]
+
+## Development Workflow
+[Summary of workflow.md]
+
+## Tracks Summary
+
+### Completed Tracks
+| Track | Description | Completed Date |
+|-------|-------------|----------------|
+| ... | ... | ... |
+
+### In Progress
+| Track | Description | Progress |
+|-------|-------------|----------|
+| ... | ... | X/Y tasks |
+
+### Pending
+| Track | Description | Priority |
+|-------|-------------|----------|
+| ... | ... | ... |
+
+## Detailed Track Specifications
+
+### [Track 1 Name]
+**Status:** Completed
+**Spec:** [Summary]
+**Tasks Completed:** X
+
+### [Track 2 Name]
+...
+
+## Statistics
+- Total Tracks: X
+- Completed: X
+- In Progress: X
+- Pending: X
+- Total Tasks: X
+- Completion Rate: X%
+```
+
+## 4.0 OUTPUT OPTIONS
+> "Where would you like to save the export?
+> A) conductor/export_YYYYMMDD.md
+> B) README.md (overwrite)
+> C) Print to console only"
+
+## 5.0 SAVE AND ANNOUNCE
+Save to selected location and announce completion.
+"""

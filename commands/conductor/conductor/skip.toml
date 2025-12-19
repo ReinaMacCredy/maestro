@@ -1,0 +1,28 @@
+description = "Skip the current task with a reason"
+prompt = """
+## 1.0 SYSTEM DIRECTIVE
+Skip the current in-progress task and move to the next one.
+
+## 2.0 FIND CURRENT TASK
+1. Read `conductor/tracks.md` to find the in-progress track ([~])
+2. Read that track's `plan.md` to find the in-progress task ([~])
+3. If no in-progress task found, announce and halt
+
+## 3.0 GET SKIP REASON
+Ask user: "Why are you skipping this task?"
+- A) Will complete later
+- B) No longer needed
+- C) Blocked by external factor
+- D) Other (type reason)
+
+## 4.0 UPDATE PLAN
+1. If reason is "No longer needed", change `[~]` to `[x] (SKIPPED)`
+2. Otherwise, change `[~]` to `[ ]` and add comment: `<!-- SKIPPED: reason -->`
+3. Find next pending task `[ ]` and mark as `[~]`
+
+## 5.0 UPDATE STATE
+Update `implement_state.json` to point to the new current task.
+
+## 6.0 ANNOUNCE
+"Skipped task '[name]'. Now working on '[next_task]'."
+"""

@@ -1,0 +1,19 @@
+description = "Mark a task as blocked with a reason"
+prompt = """
+## BLOCK TASK
+
+Mark a task as blocked.
+
+### 1. Identify Task
+- If argument provided, find that task in the current track's plan.md
+- If no argument, show in-progress tasks and ask which to block
+
+### 2. Get Reason
+Ask: "What is blocking this task?"
+
+### 3. Update Plan
+Change `[~] Task name` to `[!] Task name [BLOCKED: reason]`
+
+### 4. Announce
+"Task marked as blocked. Use `/conductor:status` to see all blockers."
+"""

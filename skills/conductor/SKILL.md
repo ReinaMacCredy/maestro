@@ -55,6 +55,44 @@ Users can invoke these commands directly:
 | `/conductor-status` | Display progress overview |
 | `/conductor-revert` | Git-aware revert of work |
 
+## Intent Mapping
+
+When users express these intents, invoke the corresponding workflow:
+
+| User Intent | Action | Command |
+|-------------|--------|---------|
+| "Set up this project" / "Initialize conductor" | Run setup workflow | `/conductor-setup` |
+| "Create a new feature" / "Add a track for X" | Create new track | `/conductor-newtrack [desc]` |
+| "Start working" / "Implement the feature" | Begin implementation | `/conductor-implement` |
+| "What's the status?" / "Show progress" | Display status | `/conductor-status` |
+| "Undo that" / "Revert the last task" | Revert work | `/conductor-revert` |
+| "Check for issues" / "Validate the project" | Run validation | `/conductor-validate` |
+| "This is blocked" / "Can't proceed" | Mark as blocked | `/conductor-block` |
+| "Skip this task" | Skip current task | `/conductor-skip` |
+| "Archive completed tracks" | Archive tracks | `/conductor-archive` |
+| "Export project summary" | Generate export | `/conductor-export` |
+
+## Context Loading
+
+When this skill activates, automatically load:
+1. `conductor/product.md` - Understand the product
+2. `conductor/tech-stack.md` - Know the tech constraints
+3. `conductor/workflow.md` - Follow the methodology
+4. `conductor/tracks.md` - Current work status
+
+For active tracks, also load:
+- `conductor/tracks/<track_id>/spec.md`
+- `conductor/tracks/<track_id>/plan.md`
+- `conductor/tracks/<track_id>/implement_state.json` (if exists)
+
+## Proactive Behaviors
+
+When skill is active:
+1. **On new session**: Check for in-progress tracks, offer to resume
+2. **On task completion**: Suggest next task or phase verification
+3. **On blocked detection**: Alert user and suggest alternatives
+4. **On all tasks complete**: Congratulate and offer archive/cleanup
+
 ## Conductor Directory Structure
 
 When you see this structure, the project uses Conductor:

@@ -1,0 +1,97 @@
+description = "Validates the integrity of the Conductor project structure"
+prompt = """
+## 1.0 SYSTEM DIRECTIVE
+You are an AI agent for the Conductor framework. Your task is to validate the integrity of the conductor/ directory structure and report any issues.
+
+CRITICAL: You must validate the success of every tool call. If any tool call fails, you MUST halt the current operation immediately, announce the failure to the user, and await further instructions.
+
+---
+
+## 2.0 VALIDATION CHECKS
+
+### 2.1 Core Files Check
+Verify these required files exist:
+- `conductor/product.md`
+- `conductor/tech-stack.md`
+- `conductor/workflow.md`
+- `conductor/tracks.md`
+
+For each missing file, add to error list.
+
+### 2.2 Tracks Consistency Check
+1. Read `conductor/tracks.md` and extract all track links
+2. For each track link:
+   - Verify the directory exists: `conductor/tracks/<track_id>/`
+   - Verify required files exist:
+     - `metadata.json`
+     - `spec.md`
+     - `plan.md`
+   - Validate `metadata.json` structure has required fields: track_id, type, status, created_at
+
+### 2.3 Orphan Tracks Check
+1. List all directories in `conductor/tracks/`
+2. For each directory, check if it's referenced in `tracks.md`
+3. Report any orphan tracks (exist on disk but not in tracks.md)
+
+### 2.4 Status Marker Consistency
+1. For each track in `tracks.md`:
+   - Get status marker ([ ], [~], [x])
+   - Compare with `status` field in `metadata.json`
+   - Report mismatches
+
+### 2.5 Plan Integrity Check
+For each track's `plan.md`:
+1. Verify it has at least one phase
+2. Verify each phase has at least one task
+3. Check for invalid status markers (anything other than [ ], [~], [x], [!])
+4. If track status is [x], verify all tasks are [x]
+
+### 2.6 State Files Check
+1. Check `conductor/setup_state.json` if exists - verify valid JSON
+2. Check each `conductor/tracks/<track_id>/implement_state.json` if exists - verify valid JSON
+
+---
+
+## 3.0 REPORT GENERATION
+
+Present results in this format:
+
+```
+## Conductor Validation Report
+
+**Status:** ✅ VALID | ⚠️ WARNINGS | ❌ ERRORS
+
+### Core Files
+- [✓] product.md
+- [✓] tech-stack.md
+- [✗] workflow.md (MISSING)
+
+### Tracks (X total)
+- [✓] auth_20241215 - All files present
+- [⚠] profile_20241216 - metadata.json missing 'created_at'
+
+### Orphan Tracks
+- [!] old_feature_20241201 - Not in tracks.md
+
+### Status Mismatches
+- [!] auth_20241215 - tracks.md says [~], metadata says "completed"
+
+### Recommendations
+1. Run `/conductor-setup` to regenerate missing workflow.md
+2. Add orphan track to tracks.md or delete directory
+```
+
+---
+
+## 4.0 AUTO-FIX OPTION
+
+After presenting the report, if there are fixable issues, offer:
+
+> "Would you like me to attempt to fix these issues automatically?
+> A) Yes - Fix all auto-fixable issues
+> B) No - I will fix manually
+> 
+> Auto-fixable: Missing metadata fields, status mismatches, orphan track cleanup"
+
+If user chooses A, perform fixes and re-run validation to confirm.
+"""

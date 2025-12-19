@@ -1,0 +1,261 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://conductor.dev/schemas/implement_state.schema.json",
+  "title": "Implementation State",
+  "description": "State file for tracking implementation progress within a track",
+  "type": "object",
+  "required": ["track_id", "status"],
+  "properties": {
+    "track_id": {
+      "type": "string",
+      "description": "ID of the track being implemented",
+      "pattern": "^[a-z0-9_]+_[0-9]{8}$"
+    },
+    "status": {
+      "type": "string",
+      "description": "Current implementation status",
+      "enum": ["not_started", "in_progress", "paused", "blocked", "completed"],
+      "default": "not_started"
+    },
+    "current_phase": {
+      "type": "object",
+      "description": "Currently active phase",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Phase name/title"
+        },
+        "index": {
+          "type": "integer",
+          "description": "Phase index (0-based)",
+          "minimum": 0
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "current_task": {
+      "type": "object",
+      "description": "Currently active task",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Task description"
+        },
+        "phase_index": {
+          "type": "integer",
+          "description": "Parent phase index",
+          "minimum": 0
+        },
+        "task_index": {
+          "type": "integer",
+          "description": "Task index within phase",
+          "minimum": 0
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "tdd_stage": {
+          "type": "string",
+          "description": "Current TDD stage if using TDD workflow",
+          "enum": ["red", "green", "refactor", "complete"]
+        }
+      }
+    },
+    "completed_phases": {
+      "type": "array",
+      "description": "List of completed phase indices",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "completed_tasks": {
+      "type": "array",
+      "description": "List of completed tasks with commit info",
+      "items": {
+        "type": "object",
+        "required": ["phase_index", "task_index", "commit_sha"],
+        "properties": {
+          "phase_index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "task_index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "commit_sha": {
+            "type": "string",
+            "description": "Git commit SHA for this task",
+            "pattern": "^[a-f0-9]{7,40}$"
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    },
+    "phase_checkpoints": {
+      "type": "array",
+      "description": "Checkpoint commits for completed phases",
+      "items": {
+        "type": "object",
+        "required": ["phase_index", "checkpoint_sha"],
+        "properties": {
+          "phase_index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "phase_name": {
+            "type": "string"
+          },
+          "checkpoint_sha": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{7,40}$"
+          },
+          "verified_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "verification_method": {
+            "type": "string",
+            "enum": ["automated", "manual", "both"]
+          }
+        }
+      }
+    },
+    "last_commit_sha": {
+      "type": "string",
+      "description": "SHA of the last implementation commit",
+      "pattern": "^[a-f0-9]{7,40}$"
+    },
+    "blockers": {
+      "type": "array",
+      "description": "Current blockers if status is 'blocked'",
+      "items": {
+        "type": "object",
+        "required": ["description"],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "reported_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resolved": {
+            "type": "boolean",
+            "default": false
+          },
+          "resolved_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    },
+    "test_results": {
+      "type": "object",
+      "description": "Latest test run results",
+      "properties": {
+        "passed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "skipped": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "coverage_percentage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "last_run_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "started_at": {
+      "type": "string",
+      "description": "When implementation started",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": "string",
+      "description": "When implementation completed",
+      "format": "date-time"
+    },
+    "paused_at": {
+      "type": "string",
+      "description": "When implementation was paused",
+      "format": "date-time"
+    },
+    "resume_notes": {
+      "type": "string",
+      "description": "Notes for resuming paused implementation"
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "track_id": "user_auth_20240115",
+      "status": "in_progress",
+      "current_phase": {
+        "name": "Phase 2: Backend Implementation",
+        "index": 1,
+        "started_at": "2024-01-15T11:00:00Z"
+      },
+      "current_task": {
+        "name": "Implement JWT token generation",
+        "phase_index": 1,
+        "task_index": 0,
+        "started_at": "2024-01-15T11:30:00Z",
+        "tdd_stage": "green"
+      },
+      "completed_phases": [0],
+      "completed_tasks": [
+        {
+          "phase_index": 0,
+          "task_index": 0,
+          "commit_sha": "abc1234",
+          "completed_at": "2024-01-15T10:00:00Z"
+        },
+        {
+          "phase_index": 0,
+          "task_index": 1,
+          "commit_sha": "def5678",
+          "completed_at": "2024-01-15T10:45:00Z"
+        }
+      ],
+      "phase_checkpoints": [
+        {
+          "phase_index": 0,
+          "phase_name": "Phase 1: Setup",
+          "checkpoint_sha": "aaa1111",
+          "verified_at": "2024-01-15T10:50:00Z",
+          "verification_method": "both"
+        }
+      ],
+      "last_commit_sha": "def5678",
+      "test_results": {
+        "passed": 12,
+        "failed": 0,
+        "skipped": 1,
+        "coverage_percentage": 85.5,
+        "last_run_at": "2024-01-15T11:25:00Z"
+      },
+      "started_at": "2024-01-15T09:00:00Z"
+    }
+  ]
+}

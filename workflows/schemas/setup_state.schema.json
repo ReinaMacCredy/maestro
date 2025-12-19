@@ -1,0 +1,134 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://conductor.dev/schemas/setup_state.schema.json",
+  "title": "Setup State",
+  "description": "State file for tracking Conductor setup progress",
+  "type": "object",
+  "required": ["last_successful_step"],
+  "properties": {
+    "last_successful_step": {
+      "type": "string",
+      "description": "The last successfully completed setup step",
+      "enum": [
+        "",
+        "2.1_product_guide",
+        "2.2_product_guidelines",
+        "2.3_tech_stack",
+        "2.4_code_styleguides",
+        "2.5_workflow",
+        "3.3_initial_track_generated"
+      ],
+      "default": ""
+    },
+    "project_type": {
+      "type": "string",
+      "description": "Detected project type during setup",
+      "enum": ["greenfield", "brownfield"]
+    },
+    "detected_languages": {
+      "type": "array",
+      "description": "Programming languages detected in brownfield projects",
+      "items": {
+        "type": "string"
+      }
+    },
+    "detected_frameworks": {
+      "type": "array",
+      "description": "Frameworks detected in brownfield projects",
+      "items": {
+        "type": "string"
+      }
+    },
+    "selected_styleguides": {
+      "type": "array",
+      "description": "Code styleguides selected during setup",
+      "items": {
+        "type": "string"
+      }
+    },
+    "workflow_customizations": {
+      "type": "object",
+      "description": "Custom workflow settings",
+      "properties": {
+        "test_coverage_threshold": {
+          "type": "number",
+          "description": "Required test coverage percentage",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 80
+        },
+        "commit_frequency": {
+          "type": "string",
+          "description": "When to commit changes",
+          "enum": ["task", "phase"],
+          "default": "task"
+        },
+        "summary_method": {
+          "type": "string",
+          "description": "How to record task summaries",
+          "enum": ["git_notes", "commit_message"],
+          "default": "git_notes"
+        }
+      }
+    },
+    "initial_track_id": {
+      "type": "string",
+      "description": "ID of the first track created during setup",
+      "pattern": "^[a-z0-9_]+_[0-9]{8}$"
+    },
+    "setup_started_at": {
+      "type": "string",
+      "description": "ISO 8601 timestamp when setup started",
+      "format": "date-time"
+    },
+    "setup_completed_at": {
+      "type": "string",
+      "description": "ISO 8601 timestamp when setup completed",
+      "format": "date-time"
+    },
+    "error_log": {
+      "type": "array",
+      "description": "Log of any errors encountered during setup",
+      "items": {
+        "type": "object",
+        "properties": {
+          "step": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "last_successful_step": ""
+    },
+    {
+      "last_successful_step": "2.3_tech_stack",
+      "project_type": "brownfield",
+      "detected_languages": ["typescript", "python"],
+      "detected_frameworks": ["react", "fastapi"]
+    },
+    {
+      "last_successful_step": "3.3_initial_track_generated",
+      "project_type": "greenfield",
+      "selected_styleguides": ["typescript.md", "python.md"],
+      "workflow_customizations": {
+        "test_coverage_threshold": 80,
+        "commit_frequency": "task",
+        "summary_method": "git_notes"
+      },
+      "initial_track_id": "mvp_20240115",
+      "setup_started_at": "2024-01-15T09:00:00Z",
+      "setup_completed_at": "2024-01-15T10:30:00Z"
+    }
+  ]
+}

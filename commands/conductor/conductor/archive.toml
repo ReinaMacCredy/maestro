@@ -1,0 +1,33 @@
+description = "Archive completed tracks"
+prompt = """
+## 1.0 SYSTEM DIRECTIVE
+Archive completed tracks to clean up the project.
+
+## 2.0 FIND COMPLETED TRACKS
+1. Read `conductor/tracks.md`
+2. Find all tracks marked as `[x]` (completed)
+3. If none found, announce "No completed tracks to archive" and halt
+
+## 3.0 PRESENT OPTIONS
+List completed tracks:
+> "The following tracks are completed and can be archived:
+> 1. [x] track_id_1 - Description
+> 2. [x] track_id_2 - Description
+> 
+> A) Archive all
+> B) Select specific tracks
+> C) Cancel"
+
+## 4.0 ARCHIVE SELECTED
+For each track to archive:
+1. Create `conductor/archive/` if not exists
+2. Move `conductor/tracks/<track_id>/` to `conductor/archive/<track_id>/`
+3. Remove track entry from `conductor/tracks.md`
+4. Add archive entry: `<!-- Archived: track_id on YYYY-MM-DD -->`
+
+## 5.0 COMMIT
+Commit changes: `conductor(archive): Archive N completed tracks`
+
+## 6.0 ANNOUNCE
+"Archived N tracks. They can be found in `conductor/archive/`."
+"""
