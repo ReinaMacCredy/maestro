@@ -1,35 +1,72 @@
 # My Workflow
 
-Personal AI agent workflow skills for Claude Code - a curated collection of skills for structured development workflows.
+Personal AI agent workflow skills for Claude Code - a batteries-included collection for structured development workflows.
 
 ## Overview
 
-This plugin provides a comprehensive set of skills for:
-- **Brainstorming & Planning** - Structured exploration before implementation
-- **Test-Driven Development** - RED-GREEN-REFACTOR methodology
-- **Systematic Debugging** - Four-phase debugging with root cause analysis
-- **Code Review** - Both requesting and receiving reviews with technical rigor
-- **Multi-Session Tracking** - Beads issue tracking for complex, long-running work
+This plugin bundles everything needed for context-driven development:
 
-## Skills Included
+- **Conductor** - Automated planning flow with specs and plans
+- **Beads** - Multi-session issue tracking with dependencies
+- **Superpowers** - TDD, debugging, code review, and more
 
-| Skill | Description |
-|-------|-------------|
-| `brainstorming` | Deep exploration and creative design before implementation |
-| `test-driven-development` | TDD workflow with verification enforcement |
-| `systematic-debugging` | Four-phase debugging methodology |
-| `requesting-code-review` | Request reviews with structured requirements |
-| `receiving-code-review` | Handle feedback with technical verification |
-| `writing-plans` | Create implementation plans from specs |
-| `executing-plans` | Execute plans with review checkpoints |
-| `verification-before-completion` | Ensure evidence before success claims |
-| `using-git-worktrees` | Isolated feature development |
-| `finishing-a-development-branch` | Complete and integrate work |
-| `dispatching-parallel-agents` | Parallel task execution |
-| `subagent-driven-development` | Subagent coordination |
-| `beads/*` | Multi-session issue tracking with dependencies |
-| `using-superpowers` | Session initialization and skill discovery |
-| `writing-skills` | Create and test new skills |
+## Skills (26 total)
+
+### Core Workflow
+
+| Skill | Trigger | Description |
+|-------|---------|-------------|
+| `conductor` | `/conductor-*` | Context-driven development methodology |
+| `beads` | `bd status` | Multi-session issue tracking |
+| `beads/file-beads` | `fb` | Convert plans to beads issues |
+| `beads/review-beads` | `rb` | Review filed beads issues |
+
+### Planning & Execution
+
+| Skill | Trigger | Description |
+|-------|---------|-------------|
+| `brainstorming` | `bs` | Deep exploration before implementation |
+| `writing-plans` | `write plan` | Create implementation plans |
+| `executing-plans` | `execute plan` | Execute plans with checkpoints |
+| `spike-workflow` | `spike [topic]` | Time-boxed technical research |
+| `retro-workflow` | `retro` | Capture lessons learned |
+
+### Development
+
+| Skill | Trigger | Description |
+|-------|---------|-------------|
+| `test-driven-development` | `tdd` | RED-GREEN-REFACTOR methodology |
+| `testing-anti-patterns` | - | Avoid common testing mistakes |
+| `using-git-worktrees` | - | Isolated feature development |
+| `finishing-a-development-branch` | - | Complete and integrate work |
+| `subagent-driven-development` | - | Subagent coordination |
+| `dispatching-parallel-agents` | `dispatch` | Parallel task execution |
+
+### Debugging
+
+| Skill | Trigger | Description |
+|-------|---------|-------------|
+| `systematic-debugging` | `debug` | Four-phase debugging methodology |
+| `root-cause-tracing` | `trace` | Trace bugs backward through stack |
+| `condition-based-waiting` | `flaky` | Replace timeouts with polling |
+| `defense-in-depth` | - | Multi-layer validation |
+
+### Code Review
+
+| Skill | Trigger | Description |
+|-------|---------|-------------|
+| `requesting-code-review` | `review code` | Request structured reviews |
+| `receiving-code-review` | - | Handle feedback with rigor |
+
+### Meta
+
+| Skill | Trigger | Description |
+|-------|---------|-------------|
+| `using-superpowers` | - | Session initialization |
+| `verification-before-completion` | - | Evidence before assertions |
+| `writing-skills` | `write skill` | Create new skills |
+| `testing-skills-with-subagents` | - | Test skills before deployment |
+| `sharing-skills` | `share skill` | Contribute skills upstream |
 
 ## Installation
 
@@ -41,19 +78,47 @@ This plugin provides a comprehensive set of skills for:
 /plugin install my-workflow
 ```
 
-## Usage
-
-Skills are automatically loaded based on trigger phrases:
+## Workflow Pipeline
 
 ```
-bs, brainstorm     → brainstorming skill
-debug, investigate → systematic-debugging skill
-tdd                → test-driven-development skill
-review code        → requesting-code-review skill
-write plan         → writing-plans skill
-fb, file beads     → file-beads skill
-bd status          → beads skill
+PLANNING PHASE
+  /conductor-setup (once per project)
+       │
+  /conductor-newtrack [description]
+       │
+       ├── Clarifying questions
+       ├── Generate spec.md
+       └── Generate plan.md
+                │
+                ▼
+  fb (file beads) → bd issues created
+                │
+EXECUTION PHASE │
+                ▼
+  bd ready → claim issue → execute with TDD
+                │
+                ▼
+  bd checkpoint → finishing-a-development-branch
+                │
+RETROSPECTIVE   │
+                ▼
+  bd close → retro → history/retros/
 ```
+
+## Manual Specialist Tools
+
+Outside the automated flow:
+- `bs` (brainstorm) - Deep exploration for complex unknowns
+- `spike [topic]` - Time-boxed research
+- `debug` - Systematic debugging
+- `retro` - Capture lessons learned
+
+## Credits
+
+Built on foundations from:
+- [superpowers](https://github.com/obra/superpowers) by Jesse Vincent
+- [conductor](https://github.com/anthropics/conductor) 
+- [beads](https://github.com/anthropics/beads)
 
 ## License
 
