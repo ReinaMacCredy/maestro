@@ -1,4 +1,4 @@
-# AGENTS.md - my-workflow Plugin
+# AGENTS.md - Maestro Plugin
 
 ## Overview
 Claude Code plugin bundling workflow skills: Conductor (planning), Beads (issue tracking), and Superpowers (TDD, debugging, code review).

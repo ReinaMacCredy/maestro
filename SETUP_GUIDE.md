@@ -1,14 +1,14 @@
 # Setup Guide
 
-**For AI agents setting up my-workflow.**
+**For AI agents setting up maestro.**
 
 ## Step 1: Install Plugin
 
 In Claude Code or Amp:
 
 ```
-/plugin marketplace add ReinaMacCredy/my-workflow
-/plugin install my-workflow
+/plugin marketplace add ReinaMacCredy/maestro
+/plugin install maestro
 ```
 
 Verify skills are loaded:
@@ -18,7 +18,15 @@ Verify skills are loaded:
 
 You should see 27 skills including `conductor`, `beads`, `test-driven-development`, etc.
 
-## Step 2: Install CLI Tools (Optional)
+## Step 2: Install Beads Village
+
+```bash
+npx beads-village    # Recommended
+# or: npm install -g beads-village
+# or: pip install beads-village
+```
+
+## Step 3: Install CLI Tools (Optional)
 
 The plugin provides skills (mental models + workflows). For full functionality, install these optional CLI tools:
 
@@ -145,7 +153,7 @@ Tell the user:
 ```
 Setup complete!
 
-Installed: my-workflow plugin (27 skills)
+Installed: maestro plugin (27 skills)
 Required: beads-village MCP (multi-agent coordination)
 Optional: bd, bv, cass, ubs (CLI tools)
 
@@ -165,7 +173,7 @@ Next: Read TUTORIAL.md for complete workflow guide.
 
 | What | How |
 |------|-----|
-| Install plugin | `/plugin install my-workflow` |
+| Install plugin | `/plugin install maestro` |
 | Initialize planning | `/conductor-setup` |
 | New feature | `/conductor-newtrack "description"` |
 | See available work | `bd ready --json` |

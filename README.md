@@ -1,4 +1,4 @@
-# My Workflow
+# Maestro
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -20,7 +20,7 @@ If a skill is in this plugin, it's because I actively use it.
 Tell your AI agent:
 
 ```
-Follow https://raw.githubusercontent.com/ReinaMacCredy/my-workflow/main/SETUP_GUIDE.md to set up my-workflow for this project.
+Follow https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/SETUP_GUIDE.md to set up maestro for this project.
 ```
 
 Or manually: [SETUP_GUIDE.md](./SETUP_GUIDE.md)
@@ -284,7 +284,7 @@ Outside the automated flow:
 ### Repository Structure
 
 ```
-my-workflow/
+maestro/
 ├── README.md              # This file
 ├── SETUP_GUIDE.md         # Installation guide
 ├── TUTORIAL.md            # Complete workflow guide

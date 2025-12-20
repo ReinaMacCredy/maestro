@@ -1,11 +1,11 @@
 {
-  "name": "my-workflow-marketplace",
+  "name": "maestro-marketplace",
   "plugins": [
     {
-      "name": "my-workflow",
+      "name": "maestro",
       "source": {
         "source": "url",
-        "url": "https://github.com/ReinaMacCredy/my-workflow.git"
+        "url": "https://github.com/ReinaMacCredy/maestro.git"
       },
       "version": "1.0.0"
     }

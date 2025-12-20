@@ -1,4 +1,4 @@
-# my-workflow: The Complete Guide
+# Maestro: The Complete Guide
 
 > **For humans**: Read this to understand what these skills do and why they matter.
 > **For agents**: See the Quick Reference at the end for copy-paste triggers.
@@ -62,7 +62,7 @@ Before diving in, understand these principles:
 
 ## Part 2: The Core Workflow
 
-The spine of my-workflow is three components working together:
+The spine of Maestro is three components working together:
 
 ```
 Conductor (Planning) → Beads + Village (Tracking & Coordination) → TDD (Execution)
@@ -589,7 +589,7 @@ No need to re-explain context. It's all in beads.
 
 ## Part 4: Specialist Skills Quick Reference
 
-Beyond the core workflow, my-workflow includes specialist skills for specific situations.
+Beyond the core workflow, Maestro includes specialist skills for specific situations.
 
 ---
 
