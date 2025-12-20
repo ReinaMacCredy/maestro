@@ -61,3 +61,11 @@ Do NOT proceed to documentation until grounding confirms the design is based on 
 - **Explore alternatives** - Always propose 2-3 approaches before settling
 - **Incremental validation** - Present design in sections, validate each
 - **Be flexible** - Go back and clarify when something doesn't make sense
+
+## After Completion
+
+After writing the design to `docs/plans/` or `conductor/tracks/<id>/plan.md`:
+
+1. Ask: "Review the plan?"
+2. Address any feedback
+3. When approved, say: "Plan approved. Say `fb` to convert into beads issues."

@@ -152,6 +152,13 @@ Present to user:
 **Cross-epic deps linked:** 2
 ```
 
+### After Completion
+
+After parallel agents finish filing beads:
+
+1. Summarize what was created (epic ID, issue count)
+2. Say: "Beads filed. Say `rb` to review and refine."
+
 ## Priority Guide
 
 | Priority | Use For |

@@ -204,3 +204,21 @@ You may iterate on refinements up to 5 times if asked. Track iterations:
 - Iteration 2-5: Deeper refinements based on feedback
 
 After 5 iterations, respond: "I don't think we can do much better than this. The issues are thoroughly reviewed, well-documented, and ready for workers to implement."
+
+## Completion
+
+After presenting the review report, immediately output the HANDOFF block:
+
+```markdown
+## HANDOFF
+
+**Command:** `Start epic <epic-id>`
+**Epic:** <epic-id> - <epic title>
+**Plan:** conductor/tracks/<id>/plan.md (or conductor/plans/<design>.md)
+**Ready issues:** <count>
+**First task:** <first-issue-id> - <title>
+
+Copy the command above to start a new session.
+```
+
+Say: "Ready for execution. Copy this HANDOFF for next session."

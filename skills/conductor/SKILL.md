@@ -111,6 +111,14 @@ When skill is active:
 3. **On blocked detection**: Alert user and suggest alternatives
 4. **On all tasks complete**: Congratulate and offer archive/cleanup
 
+## After Track Creation
+
+After creating spec.md and plan.md:
+
+1. Present the plan for review
+2. Address any feedback
+3. When approved, say: "Plan approved. Say `fb` to convert into beads issues."
+
 ## Conductor Directory Structure
 
 When you see this structure, the project uses Conductor:
