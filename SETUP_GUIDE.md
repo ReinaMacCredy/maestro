@@ -1,14 +1,25 @@
 # Setup Guide
 
-**For AI agents setting up maestro.**
+**For AI agents setting up maestro globally.**
 
 ## Step 1: Install Plugin
 
-In Claude Code or Amp:
+**Claude Code:**
+```bash
+# Add from marketplace
+claude plugin marketplace add ReinaMacCredy/maestro
 
+# Or add manually via git URL
+claude plugin add https://github.com/ReinaMacCredy/maestro.git
 ```
-/plugin marketplace add ReinaMacCredy/maestro
-/plugin install maestro
+
+**Amp:**
+```bash
+# Add from marketplace
+amp plugin marketplace add ReinaMacCredy/maestro
+
+# Or add manually via git URL
+amp plugin add https://github.com/ReinaMacCredy/maestro.git
 ```
 
 Verify skills are loaded:
@@ -16,7 +27,7 @@ Verify skills are loaded:
 /skill list
 ```
 
-You should see 27 skills including `conductor`, `beads`, `test-driven-development`, etc.
+You should see 15 skills: `beads`, `brainstorming`, `codemaps`, `conductor`, `dispatching-parallel-agents`, `doc-sync`, `execution-workflow`, `finishing-a-development-branch`, `sharing-skills`, `subagent-driven-development`, `test-driven-development`, `using-git-worktrees`, `using-superpowers`, `verification-before-completion`, `writing-skills`.
 
 ## Step 2: Install Beads Village
 
@@ -54,19 +65,9 @@ curl -fsSL https://raw.githubusercontent.com/Dicklesworthstone/coding_agent_sess
 curl -fsSL https://raw.githubusercontent.com/Dicklesworthstone/ultimate_bug_scanner/master/install.sh | bash -s -- --easy-mode
 ```
 
-## Step 3: Initialize Project
-
-```bash
-# Initialize beads database (if bd installed)
-bd init
-
-# Commit beads database with project
-git add .beads/ && git commit -m "Initialize beads"
-```
-
 ## Step 4: Configure MCP Servers (Optional)
 
-### Beads Village - Multi-Agent Coordination (Required)
+### Beads Village - Multi-Agent Coordination
 
 Prerequisites:
 - `pip install beads` (beads CLI already installed in Step 2)
@@ -78,7 +79,7 @@ claude mcp add beads-village -s user -- npx beads-village
 ```
 
 **Install for Amp:**
-Add to `.amp/settings.json`:
+Add to `~/.config/amp/settings.json`:
 ```json
 {
   "mcpServers": {
@@ -109,26 +110,6 @@ Add to your MCP configuration file:
 
 **Source:** https://github.com/LNS2905/mcp-beads-village
 
-**Add ephemeral directories to .gitignore:**
-```bash
-# Village creates ephemeral state directories - don't commit these
-echo ".reservations/" >> .gitignore
-echo ".mail/" >> .gitignore
-```
-
-**Key tools:**
-| Tool | Purpose |
-|------|---------|
-| `init` | Join workspace with team/role |
-| `claim` | Atomic task claiming |
-| `done` | Complete task, release locks |
-| `reserve` | Lock file for editing |
-| `release` | Release file lock |
-| `msg` | Send message to team |
-| `inbox` | Read messages |
-| `status` | View team state |
-| `assign` | (Leader only) Assign tasks |
-
 ### Enhanced Search (Optional)
 
 For enhanced search capabilities:
@@ -156,16 +137,28 @@ Add maestro triggers to your global config:
 | Amp | `~/.config/amp/AGENTS.md` |
 | Codex | `~/.codex/AGENTS.md` |
 
-Copy content from [docs/GLOBAL_CONFIG_TEMPLATE.md](./docs/GLOBAL_CONFIG_TEMPLATE.md) to your global config.
+**Append** this snippet to your existing global config:
+
+```markdown
+## Maestro Workflow
+
+**Planning:** `bs` (brainstorm) → `/conductor-setup` → `/conductor-newtrack`
+
+**Execution:** `fb` → `bd ready` → `ct` → `tdd` → `finish branch`
+
+**Utilities:** `/doc-sync`, `/compact`, `dispatch`, `git worktree`
+
+**Review:** `rb`, `review code`
+```
+
+For the full workflow reference, see [docs/GLOBAL_CONFIG_TEMPLATE.md](./docs/GLOBAL_CONFIG_TEMPLATE.md).
 
 ## Step 6: Done
 
-Tell the user:
-
 ```
-Setup complete!
+Global setup complete!
 
-Installed: maestro plugin
+Installed: maestro plugin (global)
 Required: bd CLI
 Optional: beads-village MCP
 
@@ -177,6 +170,10 @@ Key triggers:
   bd ready --json            # See available work
   ct                         # Claim and implement task
   tdd                        # Enter TDD mode
+
+Per-project setup (when starting a new project):
+  bd init                    # Initialize beads database
+  git add .beads/ && git commit -m "Initialize beads"
 
 Next: Read TUTORIAL.md for complete workflow guide.
 ```
@@ -199,7 +196,7 @@ Next: Read TUTORIAL.md for complete workflow guide.
 | Problem | Solution |
 |---------|----------|
 | Skills not loading | Run `/plugin list` to verify installation |
-| `bd: command not found` | Install via Agent Mail installer (Step 2) |
+| `bd: command not found` | Install via Agent Mail installer (Step 3) |
 | Agent ignores workflow | Use trigger phrase explicitly: `tdd`, `debug`, `bs` |
 | MCP tools not working | Check `/mcp` shows the server, verify API key |
 
