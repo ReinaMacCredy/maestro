@@ -89,7 +89,59 @@ For each target AGENTS.md:
    git diff -- "**/AGENTS.md"
    ```
 2. Wait for user confirmation
-3. If approved → ready to commit
+3. If approved → commit changes and proceed to Phase 7
+4. If rejected → abort workflow
+
+### Phase 7: Auto-Cleanup
+
+After successful commit, automatically maintain beads database.
+
+> **Note:** Cleanup runs after Phases 1-6 complete, so deleted issues' knowledge is already preserved in AGENTS.md files. No context is lost.
+
+**1. Cleanup if over threshold**
+
+Check closed issue count:
+```bash
+bd count --status closed --json
+```
+
+If count > 200, remove excess oldest issues:
+```bash
+excess = closed_count - 200
+bd cleanup --older-than 0 --limit <excess> --force
+```
+
+**2. Compact remaining issues**
+
+Generate AI summaries for closed issues that lack them:
+
+```bash
+bd compact --analyze --json
+```
+
+For each candidate returned:
+```bash
+bd compact --apply --id <id> --summary "<generated-summary>"
+```
+
+Generate summary from issue content (title, description, notes, thread findings).
+
+**3. Sync changes**
+
+Commit beads state:
+```bash
+bd sync
+```
+
+**Report:** `"Compacted X issues. Cleaned up Y oldest (threshold: 150)."`
+
+| Setting | Value | Rationale |
+|---------|-------|-----------|
+| Max closed | 150 | ~3-6 months history |
+| Cleanup target | Oldest first | Preserve recent work |
+| Open issues | Never touched | Active work protected |
+
+**Recovery:** Compacted issues retain summaries. Full content via `bd restore <id>` from git history.
 
 ## Output Format
 
