@@ -1,5 +1,6 @@
 ---
 name: spike-workflow
+version: "1.0.0"
 description: Use when exploring unknown technology, assessing feasibility, or before Complex (C) tier work - time-boxed technical research with structured output
 argument-hint: <topic>
 ---

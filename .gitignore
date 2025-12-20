@@ -31,3 +31,5 @@ node_modules/
 # Python
 __pycache__/
 *.pyc
+# Demo
+demo.yml

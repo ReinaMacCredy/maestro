@@ -1,5 +1,6 @@
 ---
 name: retro-workflow
+version: "1.0.0"
 description: Use after completing tracks, significant milestones, or incident resolution - captures lessons learned for future reference
 ---
 
