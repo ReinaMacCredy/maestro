@@ -146,25 +146,37 @@ claude mcp add morph-fast-tools -s user -e MORPH_API_KEY=<key> -e ALL_TOOLS=true
 claude mcp add exa -s user -e EXA_API_KEY=<key> -- npx -y @anthropic-labs/exa-mcp-server
 ```
 
-## Step 5: Done
+## Step 5: Configure Global Agent
+
+Add maestro triggers to your global config:
+
+| Tool | Config File |
+|------|-------------|
+| Claude Code | `~/.claude/CLAUDE.md` |
+| Amp | `~/.config/amp/AGENTS.md` |
+| Codex | `~/.codex/AGENTS.md` |
+
+Copy content from [docs/GLOBAL_CONFIG_TEMPLATE.md](./docs/GLOBAL_CONFIG_TEMPLATE.md) to your global config.
+
+## Step 6: Done
 
 Tell the user:
 
 ```
 Setup complete!
 
-Installed: maestro plugin (27 skills)
-Required: beads-village MCP (multi-agent coordination)
-Optional: bd, bv, cass, ubs (CLI tools)
+Installed: maestro plugin
+Required: bd CLI
+Optional: beads-village MCP
 
 Key triggers:
+  bs                         # Brainstorm before implementing
   /conductor-setup           # Initialize project planning
   /conductor-newtrack "X"    # Create new feature track
-  bs                         # Brainstorm before implementing
-  tdd                        # Enter TDD mode
-  debug                      # Systematic debugging
   fb                         # File beads from plan
   bd ready --json            # See available work
+  ct                         # Claim and implement task
+  tdd                        # Enter TDD mode
 
 Next: Read TUTORIAL.md for complete workflow guide.
 ```
@@ -174,11 +186,11 @@ Next: Read TUTORIAL.md for complete workflow guide.
 | What | How |
 |------|-----|
 | Install plugin | `/plugin install maestro` |
+| Global config template | [docs/GLOBAL_CONFIG_TEMPLATE.md](./docs/GLOBAL_CONFIG_TEMPLATE.md) |
 | Initialize planning | `/conductor-setup` |
 | New feature | `/conductor-newtrack "description"` |
 | See available work | `bd ready --json` |
 | Start TDD | Say `tdd` |
-| Debug issue | Say `debug` |
 | Multi-agent coordination | `init`, `claim`, `done` via beads-village MCP |
 | Full documentation | [TUTORIAL.md](./TUTORIAL.md) |
 

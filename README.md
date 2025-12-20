@@ -276,6 +276,7 @@ Outside the automated flow:
 |-------------------|------|
 | Understand the philosophy and workflow | [TUTORIAL.md](./TUTORIAL.md) |
 | Set up a new project | [SETUP_GUIDE.md](./SETUP_GUIDE.md) |
+| Configure global agent (CLAUDE.md/AGENTS.md) | [docs/GLOBAL_CONFIG_TEMPLATE.md](./docs/GLOBAL_CONFIG_TEMPLATE.md) |
 | See all skills at a glance | [Skills table above](#the-skills) |
 
 ### Repository Structure
