@@ -873,4 +873,4 @@ git push
 
 ---
 
-*Built on foundations from [superpowers](https://github.com/obra/superpowers), [conductor](https://github.com/anthropics/conductor), [beads](https://github.com/anthropics/beads), and [Knowledge & Vibes](https://github.com/kyleobrien91/knowledge-and-vibes).*
+*Built on foundations from [superpowers](https://github.com/obra/superpowers), [conductor](https://github.com/NguyenSiTrung/conductor), [beads](https://github.com/steveyegge/beads), and [Knowledge & Vibes](https://github.com/kyleobrien91/knowledge-and-vibes).*

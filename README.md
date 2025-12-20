@@ -17,10 +17,14 @@ If a skill is in this plugin, it's because I actively use it.
 
 ## Install
 
-### One-liner (Claude Code / Amp / Cursor)
+### Claude Code
 
-Tell your AI agent:
+**Plugin install (recommended):**
+```
+/plugin install https://github.com/ReinaMacCredy/maestro
+```
 
+**Or via agent prompt:**
 ```
 Follow https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/SETUP_GUIDE.md to set up maestro for this project.
 ```
@@ -32,9 +36,15 @@ $skill-installer ReinaMacCredy/maestro
 ```
 
 Or install a specific skill:
-
 ```
 $skill-installer brainstorming from ReinaMacCredy/maestro
+```
+
+### Amp / Cursor / Other Agent Skills-compatible tools
+
+Tell your AI agent:
+```
+Follow https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/SETUP_GUIDE.md to set up maestro for this project.
 ```
 
 ### Manual Setup
@@ -277,10 +287,8 @@ Outside the automated flow:
 | `/brainstorm` | Start brainstorming session |
 | `/ground <pattern>` | Verify patterns against current truth |
 | `/decompose-task <phase>` | Break phases into atomic beads |
-| `/execute-plan` | Execute implementation plan |
+| `/compact` | Checkpoint and compact session |
 | `/review` | Request code review |
-| `/session-start` | Initialize session |
-| `/session-end` | Checkpoint before ending |
 
 ---
 
@@ -303,7 +311,7 @@ maestro/
 ├── SETUP_GUIDE.md         # Installation guide
 ├── TUTORIAL.md            # Complete workflow guide
 ├── AGENTS.md              # Agent instructions
-├── skills/                # 20 skill directories
+├── skills/                # 15 skill directories
 │   ├── conductor/         # Planning methodology
 │   ├── beads/             # Issue tracking (+ file-beads, review-beads)
 │   ├── test-driven-development/

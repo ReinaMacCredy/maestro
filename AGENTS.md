@@ -11,7 +11,7 @@ cat .claude-plugin/plugin.json | jq .   # Validate plugin manifest
 
 ## Architecture
 ```
-skills/           # 24 skill directories, each with SKILL.md (frontmatter + instructions)
+skills/           # 15 skill directories, each with SKILL.md (frontmatter + instructions)
   beads/          # Issue tracking skill with references/ subdirectory
   conductor/      # Planning methodology
   ...             # TDD, debugging, code review, etc.

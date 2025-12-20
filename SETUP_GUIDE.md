@@ -2,29 +2,61 @@
 
 **For AI agents setting up maestro globally.**
 
-## Step 1: Install Plugin
+## Step 1: Install Plugin/Skills
 
-**Claude Code:**
+### Claude Code
+
 ```bash
-# Add from marketplace
-claude plugin marketplace add ReinaMacCredy/maestro
+# Plugin install (recommended)
+/plugin install https://github.com/ReinaMacCredy/maestro
 
-# Or add manually via git URL
+# Or via CLI
 claude plugin add https://github.com/ReinaMacCredy/maestro.git
 ```
 
-**Amp:**
-```bash
-# Add from marketplace
-amp plugin marketplace add ReinaMacCredy/maestro
+Verify: `/plugin list` should show `maestro`
 
-# Or add manually via git URL
+### OpenAI Codex
+
+```
+$skill-installer ReinaMacCredy/maestro
+```
+
+Or install specific skills:
+```
+$skill-installer brainstorming from ReinaMacCredy/maestro
+$skill-installer conductor from ReinaMacCredy/maestro
+$skill-installer beads from ReinaMacCredy/maestro
+```
+
+Skills install to `~/.codex/skills/`
+
+### Amp
+
+```bash
+# Add via git URL
 amp plugin add https://github.com/ReinaMacCredy/maestro.git
 ```
 
-Verify skills are loaded:
+### Manual (any agent)
+
+Clone skills to your agent's skill directory:
+```bash
+# Claude Code
+git clone https://github.com/ReinaMacCredy/maestro.git ~/.claude/plugins/maestro
+
+# Codex
+git clone https://github.com/ReinaMacCredy/maestro.git /tmp/maestro && cp -r /tmp/maestro/skills/* ~/.codex/skills/
+
+# Amp
+git clone https://github.com/ReinaMacCredy/maestro.git ~/.config/amp/plugins/maestro
 ```
-/skill list
+
+### Verify Installation
+
+```
+/skill list   # Claude Code / Amp
+/skills       # Codex
 ```
 
 You should see 15 skills: `beads`, `brainstorming`, `codemaps`, `conductor`, `dispatching-parallel-agents`, `doc-sync`, `execution-workflow`, `finishing-a-development-branch`, `sharing-skills`, `subagent-driven-development`, `test-driven-development`, `using-git-worktrees`, `using-superpowers`, `verification-before-completion`, `writing-skills`.
@@ -92,14 +124,11 @@ Add to `~/.config/amp/settings.json`:
 ```
 
 **Install for Codex:**
-Add to your MCP configuration file:
-```json
-{
-  "beads-village": {
-    "command": "npx",
-    "args": ["beads-village"]
-  }
-}
+Add to `~/.codex/config.toml` under `[mcp]`:
+```toml
+[mcp.beads-village]
+command = "npx"
+args = ["beads-village"]
 ```
 
 **Verify:**
