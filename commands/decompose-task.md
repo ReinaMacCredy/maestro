@@ -27,7 +27,7 @@ Break a phase from your master plan into atomic tasks (beads) and subtasks (sub-
 This command is part of the Conductor planning workflow:
 
 ```
-1. IDEATION (/conductor-setup, bs, spike)
+1. IDEATION (/conductor-setup, bs)
    └─ Use frontier reasoning models with thinking cranked up
    └─ Go from idea → fully fleshed out plan (3,000-5,000+ lines)
 

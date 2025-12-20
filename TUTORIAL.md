@@ -32,7 +32,6 @@ You're using AI coding agents to write code. That's great. But you've probably n
 | **No visibility** | Can't see dependencies or blockers | `beads` — dependency-aware graph |
 | **Tests as afterthought** | Tests written after code, prove nothing | `test-driven-development` — RED-GREEN-REFACTOR |
 | **Chaotic debugging** | Random fix attempts | `systematic-debugging` — four-phase methodology |
-| **Lost knowledge** | Same lessons re-learned | `retro-workflow` — capture what worked |
 | **Messy handoffs** | Can't resume where you left off | `beads` notes — session-surviving context |
 
 These skills work together as a system, not a bag of independent tools.
@@ -98,7 +97,7 @@ Everything else in the plugin supports this core pipeline.
 | **Requirements** | "Does the AI understand what we're building?" | Questions → `spec.md` |
 | **Plan** | "Does this plan fit our architecture?" | `spec.md` → `plan.md` |
 | **Implement** | "Can this be tested independently?" | Execute via beads + TDD |
-| **Reflect** | "Would I bet my job on this code?" | Retro + close |
+| **Reflect** | "Would I bet my job on this code?" | Verify + close |
 
 **Directory Structure**:
 
@@ -540,8 +539,6 @@ Beyond the core workflow, my-workflow includes specialist skills for specific si
 | `brainstorming` | `bs` | Before any creative work. Explores intent and requirements before implementation. |
 | `writing-plans` | `write plan` | When you have requirements but need a detailed implementation plan. |
 | `executing-plans` | `execute plan` | When you have a written plan and want structured execution with checkpoints. |
-| `spike-workflow` | `spike [topic]` | Time-boxed technical research. For unknowns that need investigation before committing. |
-| `retro-workflow` | `retro` | End of track/feature. Captures lessons learned for future sessions. |
 
 ---
 
@@ -647,7 +644,6 @@ bd ready --json                     # See what's unblocked
 bd update bd-001 --status in_progress
   → TDD loop for each task
   → bd close when done
-retro                               # Capture lessons
 ```
 
 **Value**: Full pipeline prevents scope creep, lost context, and untested code.
@@ -721,12 +717,7 @@ bd ready --json
 
 **Flow**:
 ```
-retro                               # At end of feature
-  → What worked?
-  → What didn't?
-  → What will we do differently?
-  → Output: history/retros/YYYY-MM-DD-feature.md
-
+# Capture patterns as you go
 # If pattern is reusable:
 write skill                         # Create new skill
   → Encode the pattern
@@ -734,7 +725,7 @@ write skill                         # Create new skill
 share skill                         # Optional: PR to upstream
 ```
 
-**Value**: Retro outcomes feed back into the system. Workflow improves over time.
+**Value**: Encode learnings into skills for future reuse.
 
 ---
 
@@ -796,8 +787,7 @@ git push
 1. **Start with `bd ready`** — See what's actually unblocked
 2. **Use `bs` when uncertain** — Brainstorm before committing
 3. **Skip Conductor if you have a plan** — Go straight to `fb`
-4. **Run `retro` at feature end** — Capture what worked
-5. **Commit before leaving** — `git add -A && git commit && git push`
+4. **Commit before leaving** — `git add -A && git commit && git push`
 
 ---
 
@@ -812,8 +802,6 @@ git push
 | `flaky`, `race condition` | condition-based-waiting |
 | `fb`, `file beads` | beads/file-beads |
 | `rb`, `review beads` | beads/review-beads |
-| `retro` | retro-workflow |
-| `spike [topic]` | spike-workflow |
 | `dispatch` | dispatching-parallel-agents |
 | `write skill` | writing-skills |
 | `share skill` | sharing-skills |

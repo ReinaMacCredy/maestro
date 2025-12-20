@@ -15,7 +15,7 @@ Detailed step-by-step workflows for common bd usage patterns with checklists.
 - [Unblocking Work](#unblocking) - Handling blocked issues
 - [Integration with TodoWrite](#integration-with-todowrite) - Using both tools together
 - [Common Workflow Patterns](#common-workflow-patterns)
-  - Systematic Exploration, Bug Investigation, Refactoring with Dependencies, Spike Investigation
+  - Systematic Exploration, Bug Investigation, Refactoring with Dependencies
 - [Checklist Templates](#checklist-templates)
   - Starting Any Work Session, Creating Issues During Work, Completing Work, Planning Complex Features
 - [Decision Points](#decision-points)
@@ -433,19 +433,6 @@ Research or investigation work:
 4. bd ready automatically shows next step
 5. Each completion unblocks next work
 ```
-
-### Pattern: Spike Investigation
-
-```
-1. Create spike issue: "Investigate caching options"
-2. Time-box exploration
-3. Document findings in design field
-4. Create follow-up issues for chosen approach
-5. Link follow-ups with discovered-from
-6. Close spike with recommendation
-```
-
----
 
 ## Checklist Templates
 

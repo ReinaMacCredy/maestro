@@ -37,7 +37,7 @@ Conductor implements the Knowledge & Vibes 4-phase framework:
 | **Requirements** | Understand problem completely before code | `/conductor-newtrack` questions → `spec.md` |
 | **Plan** | Create detailed plan BEFORE writing code | `spec.md` → `plan.md` generation |
 | **Implement** | Build incrementally with TDD | `bd ready` → execution via plan-executor |
-| **Reflect** | Verify before shipping | `retro-workflow` + `bd close` |
+| **Reflect** | Verify before shipping | `verification-before-completion` + `bd close` |
 
 **Key Questions per Phase:**
 

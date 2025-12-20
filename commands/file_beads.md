@@ -35,7 +35,7 @@ Before filing any issues, analyze the plan for:
 2. **Individual tasks** - These become issues under epics
 3. **Dependencies** - What must complete before other work can start?
 4. **Parallelization opportunities** - What can be worked on simultaneously?
-5. **Technical risks** - What needs spikes or investigation first?
+5. **Technical risks** - What needs investigation first?
 
 ## Step 4: File Epics First
 

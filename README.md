@@ -77,7 +77,6 @@ git add -A && git commit && git push
 debug                              # Systematic debugging
 trace                              # Root cause tracing
 bs                                 # Brainstorm alternatives
-spike [topic]                      # Time-boxed research
 ```
 
 ### Rules
@@ -94,7 +93,7 @@ spike [topic]                      # Time-boxed research
 | Category | Skills |
 |----------|--------|
 | **Core Workflow** | conductor, beads, file-beads, review-beads |
-| **Planning** | brainstorming, writing-plans, executing-plans, spike-workflow |
+| **Planning** | brainstorming, writing-plans, executing-plans |
 | **Development** | test-driven-development, using-git-worktrees, finishing-a-development-branch |
 | **Debugging** | systematic-debugging, root-cause-tracing, condition-based-waiting, defense-in-depth |
 | **Code Review** | requesting-code-review, receiving-code-review |
@@ -241,26 +240,15 @@ flowchart TD
         checkpoint --> finish
     end
     
-    subgraph RETROSPECTIVE["RETROSPECTIVE PHASE"]
-        close["bd close"]
-        retro["retro"]
-        history["history/retros/"]
-        
-        close --> retro
-        retro --> history
-    end
-    
     issues --> ready
-    finish --> close
+    finish --> close["bd close"]
 ```
 
 ### Manual Specialist Tools
 
 Outside the automated flow:
 - `bs` (brainstorm) — Deep exploration for complex unknowns
-- `spike [topic]` — Time-boxed research
 - `debug` — Systematic debugging
-- `retro` — Capture lessons learned
 
 ---
 
