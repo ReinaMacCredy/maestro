@@ -35,13 +35,13 @@ Start by understanding the current project context, then ask questions one at a 
 
 ## After the Design
 
-**Grounding the design:**
-Before finalizing, ground any external dependencies:
+**Grounding the design (REQUIRED quality gate):**
+Before finalizing, verify all architectural decisions against current reality:
 - For external libraries/APIs: Use `/ground` if available, otherwise use `web_search` to verify patterns against current docs
 - For existing patterns: Use `/ground` if available, otherwise use `Grep` and `finder` to confirm "how we do X here"
 - For past decisions: Use `/ground` if available, otherwise search codebase history with `git log`
 
-This prevents designs based on outdated training data (deprecated APIs, old patterns).
+Do NOT proceed to documentation until grounding confirms the design is based on verified, current information—not assumptions or outdated training data.
 
 **Documentation:**
 - Write the validated design to `docs/plans/YYYY-MM-DD-<topic>-design.md`

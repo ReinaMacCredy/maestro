@@ -1,87 +1,216 @@
 # My Workflow
 
-Personal AI agent workflow skills for Claude Code - a batteries-included collection for structured development workflows.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Overview
+This plugin is my **personal source of truth** for structured AI-assisted development.
+It contains the exact skills, workflows, and patterns I use across *every* project — continuously updated as I discover better ways to work.
 
-This plugin bundles everything needed for context-driven development:
+Think of this as the **official, up-to-date playbook** for context-driven development:
+how I plan features, how I track work across sessions, how I debug systematically, and how the whole system stays reliable.
 
-- **Conductor** - Automated planning flow with specs and plans
-- **Beads** - Multi-session issue tracking with dependencies
-- **Superpowers** - TDD, debugging, code review, and more
+If you're exploring structured AI coding workflows, this plugin shows the stack that actually works:
+a combination of persistent memory (Beads), structured planning (Conductor), TDD methodology, and systematic debugging.
+These workflows are not theoretical — they're refined daily through real builds.
 
-## Skills (26 total)
+Everything here evolves as I refine my process.
+If a skill is in this plugin, it's because I actively use it.
 
-### Core Workflow
+## Install
 
-| Skill | Trigger | Description |
-|-------|---------|-------------|
-| `conductor` | `/conductor-*` | Context-driven development methodology |
-| `beads` | `bd status` | Multi-session issue tracking |
-| `beads/file-beads` | `fb` | Convert plans to beads issues |
-| `beads/review-beads` | `rb` | Review filed beads issues |
+Tell your AI agent:
 
-### Planning & Execution
+```
+Follow https://raw.githubusercontent.com/ReinaMacCredy/my-workflow/main/SETUP_GUIDE.md to set up my-workflow for this project.
+```
 
-| Skill | Trigger | Description |
-|-------|---------|-------------|
-| `brainstorming` | `bs` | Deep exploration before implementation |
-| `writing-plans` | `write plan` | Create implementation plans |
-| `executing-plans` | `execute plan` | Execute plans with checkpoints |
-| `spike-workflow` | `spike [topic]` | Time-boxed technical research |
-| `retro-workflow` | `retro` | Capture lessons learned |
+Or manually: [SETUP_GUIDE.md](./SETUP_GUIDE.md)
 
-### Development
+---
 
-| Skill | Trigger | Description |
-|-------|---------|-------------|
-| `test-driven-development` | `tdd` | RED-GREEN-REFACTOR methodology |
-| `testing-anti-patterns` | - | Avoid common testing mistakes |
-| `using-git-worktrees` | - | Isolated feature development |
-| `finishing-a-development-branch` | - | Complete and integrate work |
-| `subagent-driven-development` | - | Subagent coordination |
-| `dispatching-parallel-agents` | `dispatch` | Parallel task execution |
+## Table of Contents
+
+- [Quick Start for Agents](#quick-start-for-agents)
+- [The Skills](#the-skills)
+- [Skill Reference](#skill-reference)
+  - [Conductor (Planning)](#conductor-planning)
+  - [Beads (Issue Tracking)](#beads-issue-tracking)
+  - [TDD (Execution)](#tdd-execution)
+  - [Debugging](#debugging)
+  - [Code Review](#code-review)
+- [Workflow Pipeline](#workflow-pipeline)
+- [Slash Commands](#slash-commands)
+- [Documentation](#documentation)
+- [Troubleshooting](#troubleshooting)
+
+---
+
+## Quick Start for Agents
+
+### The Three Triggers You Need
+
+```
+/conductor-newtrack "feature"   # 1. Plan the work
+fb                              # 2. File beads from plan
+tdd                             # 3. Execute with TDD
+```
+
+### Session Workflow
+
+```bash
+# Start
+bd ready --json                    # What's available?
+bd update bd-123 --status in_progress  # Claim it
+bd show bd-123                     # Read context
+
+# Work (with TDD)
+tdd                                # Enter TDD mode
+# RED → GREEN → REFACTOR
+
+# End
+bd close bd-123 --reason "Completed"
+git add -A && git commit && git push
+```
+
+### When Stuck
+
+```
+debug                              # Systematic debugging
+trace                              # Root cause tracing
+bs                                 # Brainstorm alternatives
+spike [topic]                      # Time-boxed research
+```
+
+### Rules
+
+- **Always** use `--robot-*` flags with `bv` (bare `bv` launches TUI and will hang)
+- **Always** use `--json` flags with `bd` for structured output
+- **Never** write production code without a failing test first (TDD)
+- **Always** commit `.beads/` with your code changes
+
+---
+
+## The Skills
+
+| Category | Skills |
+|----------|--------|
+| **Core Workflow** | conductor, beads, file-beads, review-beads |
+| **Planning** | brainstorming, writing-plans, executing-plans, spike-workflow |
+| **Development** | test-driven-development, using-git-worktrees, finishing-a-development-branch |
+| **Debugging** | systematic-debugging, root-cause-tracing, condition-based-waiting, defense-in-depth |
+| **Code Review** | requesting-code-review, receiving-code-review |
+| **Meta** | using-superpowers, verification-before-completion, writing-skills, sharing-skills |
+
+---
+
+## Skill Reference
+
+### Conductor (Planning)
+
+**What it does**: Structured planning flow that turns fuzzy goals into `spec.md` and `plan.md`.
+
+**Triggers**:
+```
+/conductor-setup                   # Initialize project (once)
+/conductor-newtrack "description"  # Create feature track
+/conductor-implement               # Execute track tasks
+/conductor-status                  # View progress
+```
+
+**Output structure**:
+```
+conductor/
+├── product.md              # Product vision
+├── tech-stack.md           # Technology choices
+├── workflow.md             # Development standards
+├── tracks.md               # Master track list
+└── tracks/<track_id>/
+    ├── spec.md             # Requirements + acceptance
+    └── plan.md             # Phased task list
+```
+
+**Key insight**: Spend tokens once on a good plan; reuse it many times.
+
+### Beads (Issue Tracking)
+
+**What it does**: Persistent issue tracking across sessions with dependency graphs.
+
+**Commands** (requires `bd` CLI):
+```bash
+# Finding work
+bd ready --json              # What's unblocked?
+bd blocked --json            # What's waiting?
+bd list --status in_progress # What's active?
+
+# Working
+bd update bd-123 --status in_progress   # Claim task
+bd show bd-123                          # Read context
+bd close bd-123 --reason "Done"         # Complete
+
+# Dependencies
+bd dep add bd-child bd-blocker --type blocks
+bd dep tree bd-123
+```
+
+**Skill triggers**:
+```
+fb                          # File beads from plan
+rb                          # Review filed beads
+bd status                   # Check project status
+```
+
+**Key insight**: Beads survive context compaction; chat history doesn't.
+
+### TDD (Execution)
+
+**What it does**: RED-GREEN-REFACTOR methodology for safe implementation.
+
+**Trigger**: Say `tdd` to enter TDD mode.
+
+**The cycle**:
+```
+RED     → Write one failing test (watch it fail)
+GREEN   → Write minimal code to pass (watch it pass)
+REFACTOR → Clean up (stay green)
+REPEAT  → Next failing test
+```
+
+**Iron law**: No production code without a failing test first.
+
+**Key insight**: If you didn't watch the test fail, you don't know if it tests the right thing.
 
 ### Debugging
 
-| Skill | Trigger | Description |
-|-------|---------|-------------|
-| `systematic-debugging` | `debug` | Four-phase debugging methodology |
-| `root-cause-tracing` | `trace` | Trace bugs backward through stack |
-| `condition-based-waiting` | `flaky` | Replace timeouts with polling |
-| `defense-in-depth` | - | Multi-layer validation |
+**Skills**:
+
+| Trigger | Skill | Use When |
+|---------|-------|----------|
+| `debug` | systematic-debugging | Any bug or unexpected behavior |
+| `trace` | root-cause-tracing | Need to find original trigger |
+| `flaky` | condition-based-waiting | Race conditions, timing issues |
+
+**Four-phase methodology** (systematic-debugging):
+1. **Reproduce** — Confirm the problem exists
+2. **Isolate** — Find minimal reproduction
+3. **Identify** — Trace to root cause
+4. **Fix** — Fix with TDD (failing test first)
+
+**Key insight**: Evidence before assertions. Show the error, show the fix working.
 
 ### Code Review
 
-| Skill | Trigger | Description |
-|-------|---------|-------------|
-| `requesting-code-review` | `review code` | Request structured reviews |
-| `receiving-code-review` | - | Handle feedback with rigor |
+| Trigger | Skill | Use When |
+|---------|-------|----------|
+| `review code` | requesting-code-review | Before merging, after major work |
+| — | receiving-code-review | When handling feedback |
 
-### Meta
+**Key insight**: Require technical rigor, not performative agreement.
 
-| Skill | Trigger | Description |
-|-------|---------|-------------|
-| `using-superpowers` | - | Session initialization |
-| `verification-before-completion` | - | Evidence before assertions |
-| `writing-skills` | `write skill` | Create new skills |
-| `testing-skills-with-subagents` | - | Test skills before deployment |
-| `sharing-skills` | `share skill` | Contribute skills upstream |
-
-## Installation
-
-```bash
-# Add the marketplace
-/plugin marketplace add ReinaMacCredy/my-workflow
-
-# Install the plugin
-/plugin install my-workflow
-```
+---
 
 ## Workflow Pipeline
 
 ```
-PLANNING PHASE
+PLANNING PHASE (Conductor)
   /conductor-setup (once per project)
        │
   /conductor-newtrack [description]
@@ -105,20 +234,107 @@ RETROSPECTIVE   │
   bd close → retro → history/retros/
 ```
 
-## Manual Specialist Tools
+### Manual Specialist Tools
 
 Outside the automated flow:
-- `bs` (brainstorm) - Deep exploration for complex unknowns
-- `spike [topic]` - Time-boxed research
-- `debug` - Systematic debugging
-- `retro` - Capture lessons learned
+- `bs` (brainstorm) — Deep exploration for complex unknowns
+- `spike [topic]` — Time-boxed research
+- `debug` — Systematic debugging
+- `retro` — Capture lessons learned
+
+---
+
+## Slash Commands
+
+| Command | Description |
+|---------|-------------|
+| `/conductor-setup` | Initialize Conductor for project |
+| `/conductor-newtrack [desc]` | Create new feature/bug track |
+| `/conductor-implement` | Execute track tasks |
+| `/conductor-status` | View progress |
+| `/brainstorm` | Start brainstorming session |
+| `/ground <pattern>` | Verify patterns against current truth |
+| `/decompose-task <phase>` | Break phases into atomic beads |
+| `/execute-plan` | Execute implementation plan |
+| `/review` | Request code review |
+| `/session-start` | Initialize session |
+| `/session-end` | Checkpoint before ending |
+
+---
+
+## Documentation
+
+### Start Here
+
+| If you want to... | Read |
+|-------------------|------|
+| Understand the philosophy and workflow | [TUTORIAL.md](./TUTORIAL.md) |
+| Set up a new project | [SETUP_GUIDE.md](./SETUP_GUIDE.md) |
+| See all skills at a glance | [Skills table above](#the-skills) |
+
+### Repository Structure
+
+```
+my-workflow/
+├── README.md              # This file
+├── SETUP_GUIDE.md         # Installation guide
+├── TUTORIAL.md            # Complete workflow guide
+├── AGENTS.md              # Agent instructions
+├── skills/                # 20 skill directories
+│   ├── conductor/         # Planning methodology
+│   ├── beads/             # Issue tracking (+ file-beads, review-beads)
+│   ├── test-driven-development/
+│   ├── systematic-debugging/
+│   └── ...
+├── commands/              # 25+ slash commands
+├── agents/                # Agent definitions
+├── workflows/             # Workflow definitions
+├── hooks/                 # Lifecycle hooks
+├── lib/                   # Shared utilities
+└── templates/             # Templates
+```
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+| Issue | Fix |
+|-------|-----|
+| Skills not loading | Run `/plugin list` to verify installation |
+| `bd: command not found` | Install via Agent Mail installer (see SETUP_GUIDE.md) |
+| `bv` hangs | You forgot `--robot-*` flag. Kill and restart with flag |
+| Agent ignores workflow | Use trigger phrase explicitly: `tdd`, `debug`, `bs` |
+| Tests pass immediately | You wrote code first. Delete it. Start with failing test. |
+| Context compacted, lost state | Run `bd show <issue-id>` — notes field has recovery context |
+| Plan seems incomplete | Use `rb` (review-beads) to check and refine issues |
+
+### Agent-Specific Rules
+
+**Critical**: These tools have TUI modes that will hang AI agents:
+- `bv` → Always use `bv --robot-*` flags
+- `cass` → Always use `cass --robot` or `--json` flags
+
+### Without CLI Tools
+
+The plugin still provides value without `bd`:
+- Skills work as mental models and methodologies
+- Use `TodoWrite` for session-local task tracking
+- Track issues manually in GitHub Issues or markdown
+- Full TDD, debugging, and code review workflows still apply
+
+**The skills are the methodology; the CLIs are the persistence layer.**
+
+---
 
 ## Credits
 
 Built on foundations from:
 - [superpowers](https://github.com/obra/superpowers) by Jesse Vincent
-- [conductor](https://github.com/anthropics/conductor) 
+- [conductor](https://github.com/anthropics/conductor)
 - [beads](https://github.com/anthropics/beads)
+- [Knowledge & Vibes](https://github.com/kyleobrien91/knowledge-and-vibes) methodology
 
 ## License
 

@@ -99,6 +99,14 @@ After decomposition, verify:
 
 ## Standard Sub-Bead Structure
 
+This standardized output format is **essential for automation**. Every decomposed task MUST use these suffixes to ensure agents can parse, execute, and verify beads consistently.
+
+**Why This Structure Matters:**
+- **Predictable parsing**: Automation tools rely on consistent suffix patterns
+- **Complete context**: Every sub-bead carries the context needed for independent execution
+- **Test coverage guaranteed**: Dedicated suffixes ensure tests aren't omitted
+- **Verification built-in**: `.10` suffix enforces acceptance criteria checks
+
 | Suffix | Content | Purpose |
 |--------|---------|---------|
 | `.0` | **Context Brief** | WHY this phase exists, architecture decisions, system map |
@@ -112,7 +120,7 @@ After decomposition, verify:
 | `.9` | **Reference Data** | Constants, addresses, lookup tables |
 | `.10` | **Verification Checklist** | Acceptance criteria, completion checks |
 
-Adjust based on what the phase actually contains. Not every phase needs all suffixes.
+Adjust based on what the phase actually contains. Not every phase needs all suffixes—but `.0` (context), at least one test suffix (`.4-.8`), and `.10` (verification) are strongly recommended.
 
 ---
 
