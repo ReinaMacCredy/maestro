@@ -209,39 +209,36 @@ REPEAT  → Next failing test
 ## Workflow Pipeline
 
 ```mermaid
-flowchart TD
-    subgraph PLANNING["PLANNING PHASE (Conductor)"]
-        setup["/conductor-setup<br/>(once per project)"]
-        newtrack["/conductor-newtrack [description]"]
-        questions["Clarifying questions"]
-        spec["Generate spec.md"]
-        plan["Generate plan.md"]
-        filebeads["fb (file beads)"]
-        issues["bd issues created"]
+flowchart LR
+    subgraph SESSION1["SESSION 1 (Planning)"]
+        direction TB
+        brainstorm["conductor/brainstorm"]
+        design["creates design + spec + plan"]
+        fb["fb → creates beads epic"]
+        rb1["rb → review/refine issues"]
+        handoff["outputs HANDOFF block"]
         
-        setup --> newtrack
-        newtrack --> questions
-        questions --> spec
-        spec --> plan
-        plan --> filebeads
-        filebeads --> issues
+        brainstorm --> design
+        design --> fb
+        fb --> rb1
+        rb1 --> handoff
     end
     
-    subgraph EXECUTION["EXECUTION PHASE"]
-        ready["bd ready"]
-        claim["claim issue"]
-        tdd["execute with TDD"]
-        checkpoint["bd checkpoint"]
-        finish["finishing-a-development-branch"]
+    subgraph SESSION2["SESSION 2 (Execution)"]
+        direction TB
+        paste["User pastes HANDOFF block"]
+        load["execution-workflow loads epic"]
+        find["finds linked plan in conductor/tracks/"]
+        tdd["claims tasks → TDD → verify"]
+        rb2["rb → verify threads + doc-sync + archive"]
         
-        ready --> claim
-        claim --> tdd
-        tdd --> checkpoint
-        checkpoint --> finish
+        paste --> load
+        load --> find
+        find --> tdd
+        tdd --> rb2
     end
     
-    issues --> ready
-    finish --> close["bd close"]
+    handoff -.-> paste
 ```
 
 ### Manual Specialist Tools
