@@ -260,6 +260,7 @@ Outside the automated flow:
 | `/conductor-newtrack [desc]` | Create new feature/bug track |
 | `/conductor-implement` | Execute track tasks |
 | `/conductor-status` | View progress |
+| `/doc-sync` | Sync AGENTS.md from completed threads |
 | `/brainstorm` | Start brainstorming session |
 | `/ground <pattern>` | Verify patterns against current truth |
 | `/decompose-task <phase>` | Break phases into atomic beads |

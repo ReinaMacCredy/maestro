@@ -16,7 +16,7 @@ skills/           # 24 skill directories, each with SKILL.md (frontmatter + inst
   conductor/      # Planning methodology
   ...             # TDD, debugging, code review, etc.
 commands/         # Slash command definitions (.md files)
-lib/              # Shared utilities (memory_search.py, skills-core.js)
+lib/              # Shared utilities (skills-core.js)
 .claude-plugin/   # Plugin manifest (plugin.json, marketplace.json)
 ```
 
@@ -29,3 +29,11 @@ lib/              # Shared utilities (memory_search.py, skills-core.js)
 ## Naming Conventions
 - Skill directories: kebab-case (`test-driven-development`, `using-git-worktrees`)
 - SKILL.md must match directory name in frontmatter `name` field
+
+## Key Skills
+
+| Skill | Trigger | Description |
+|-------|---------|-------------|
+| `doc-sync` | `doc-sync`, `/doc-sync` | Sync AGENTS.md from completed thread knowledge |
+| `execution-workflow` | `ct`, `claim task` | Claim and implement beads tasks with TDD |
+| `beads` | `bd ready`, `bd status` | Issue tracking for multi-session work |

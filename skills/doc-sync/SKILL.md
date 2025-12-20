@@ -1,0 +1,145 @@
+---
+name: doc-sync
+version: "1.0.0"
+description: "Sync AGENTS.md files by extracting knowledge from completed work threads. Use after closing an epic or manually with doc-sync command."
+---
+
+# Doc Sync
+
+Automatically sync AGENTS.md files by extracting knowledge from Amp threads linked in closed beads issues.
+
+## Trigger Phrases
+
+- `doc-sync`
+- `/doc-sync`
+- `sync docs`
+- `update agents.md from threads`
+
+## Prerequisites
+
+**Thread URLs must be saved in beads notes** (via execution-workflow):
+- When claiming: `bd update <id> --notes "THREAD: <url>"`
+- When completing: `bd update <id> --notes "COMPLETED: ... THREAD: <url>. Files changed: ..."`
+
+## Workflow
+
+### Phase 1: Get Closed Issues
+
+```bash
+bd list --status closed --json
+```
+
+Filter to relevant issues:
+- If epic specified: Get child issues of that epic
+- If no epic: Get issues closed in last session/timeframe
+
+### Phase 2: Extract Thread URLs
+
+For each closed issue:
+1. Parse notes field for `THREAD: https://ampcode.com/threads/T-xxx`
+2. Collect unique thread IDs
+
+**Fallback** if no threads in notes:
+```
+find_thread file:<changed-files-from-notes>
+```
+
+### Phase 3: Read Threads (Parallel)
+
+For each thread ID, use read_thread to extract:
+- API changes or new patterns introduced
+- Gotchas or edge cases discovered
+- Key decisions and rationale
+- Commands or conventions established
+
+```
+read_thread(
+  threadID: "T-xxx",
+  goal: "Extract: API changes, patterns, gotchas, decisions, commands"
+)
+```
+
+### Phase 4: Identify Target AGENTS.md
+
+For each issue with extracted findings:
+1. Get changed files from notes
+2. Walk up directory tree from each file to find nearest AGENTS.md
+3. Group findings by target AGENTS.md file
+
+**Priority:**
+- Module-level AGENTS.md (e.g., `skills/beads/AGENTS.md`)
+- Project root AGENTS.md
+- Skip if no AGENTS.md found (ask user if should create)
+
+### Phase 5: Edit AGENTS.md Files
+
+For each target AGENTS.md:
+1. Read current content
+2. Identify appropriate sections to update:
+   - Commands → add to Build/Test Commands section
+   - Patterns → add to Code Style section
+   - Architecture changes → update Architecture section
+3. Merge new info without duplicating existing content
+4. Edit file with updates
+
+### Phase 6: User Review
+
+1. Show git diff of all changes:
+   ```bash
+   git diff -- "**/AGENTS.md"
+   ```
+2. Wait for user confirmation
+3. If approved → ready to commit
+
+## Output Format
+
+```
+DOC-SYNC: <epic-or-scope>
+
+THREADS FOUND: <count>
+- T-xxx: <brief description>
+- T-yyy: <brief description>
+
+EXTRACTED:
+- [commands] <new command discovered>
+- [pattern] <new pattern established>
+- [decision] <key decision made>
+
+TARGETS:
+- skills/beads/AGENTS.md → +2 commands, +1 pattern
+- AGENTS.md → +1 architecture note
+
+[Shows git diff]
+
+REVIEW: Confirm changes? (y/n)
+```
+
+## Edge Cases
+
+| Case | Handling |
+|------|----------|
+| No threads in notes | Use `find_thread file:<files>` as fallback |
+| AGENTS.md doesn't exist | Ask user if should create new file |
+| Thread not accessible | Log warning, continue with remaining threads |
+| Conflicting info between threads | Prefer most recent thread (by timestamp) |
+| No changes to make | Report "No new documentation needed" |
+
+## Examples
+
+### Manual sync after epic
+
+```
+User: doc-sync for the auth epic
+Agent: [Finds closed issues under auth epic]
+       [Extracts 3 thread URLs from notes]
+       [Reads threads, finds 2 new patterns and 1 command]
+       [Updates skills/auth/AGENTS.md]
+       [Shows diff for review]
+```
+
+### Auto-triggered after bd close
+
+When closing an epic, agent automatically:
+1. Detects epic has closed child issues with thread URLs
+2. Triggers doc-sync workflow
+3. Presents diff for user review before commit

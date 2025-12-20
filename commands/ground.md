@@ -36,7 +36,7 @@ LLMs are trained on snapshots of documentation from months or years ago:
 |------------|------|----------|
 | **Repo truth** | `Grep`, `finder` | "How do we do X here?" |
 | **Web truth** | `web_search`, `read_web_page` | External libs/APIs/docs |
-| **History truth** | memory search, `find_thread` | "Did we solve this before?" |
+| **History truth** | `find_thread` | "Did we solve this before?" |
 | **Task truth** | `bd` commands | "What should I do next?" |
 
 ---
@@ -73,7 +73,7 @@ web_search "stripe API create customer 2024"
 read_web_page "https://docs.library.io/api/method"
 ```
 
-### Memory Search / find_thread (History)
+### find_thread (History)
 
 Use when you suspect we've solved it before:
 - "Have we seen this bug before?"
@@ -81,9 +81,6 @@ Use when you suspect we've solved it before:
 - "What did we decide about Y?"
 
 ```bash
-# Search memory blocks
-/memory-search "authentication pattern"
-
 # Find related thread
 find_thread "similar error message"
 ```
@@ -163,7 +160,7 @@ PATTERN: throw new AppError(code, message, { cause })
 Output:
 ```
 GROUNDING: Authentication strategy decision
-SOURCE: history (.memory/project.md)
+SOURCE: history (find_thread)
 STATUS: ✅ Current
 PATTERN: JWT with refresh tokens, 15min access / 7day refresh
 ```

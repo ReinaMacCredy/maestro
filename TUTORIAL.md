@@ -544,6 +544,22 @@ Implements bd-001, progress on bd-002.
 git push
 ```
 
+#### Step 4: Sync documentation (after epic completion)
+
+When you close an epic (not every session), capture learnings:
+
+```
+doc-sync
+```
+
+The `doc-sync` skill:
+1. Finds closed issues with thread URLs in notes
+2. Reads each thread to extract patterns, commands, decisions
+3. Updates relevant AGENTS.md files with new knowledge
+4. Shows diff for your review before committing
+
+**Why this matters**: Lessons learned during implementation often get lost when context compacts. Doc-sync preserves them in version-controlled AGENTS.md files.
+
 ---
 
 ### Phase 6: Next Session Resume
@@ -851,6 +867,7 @@ git push
 | `write skill` | writing-skills |
 | `share skill` | sharing-skills |
 | `review code` | requesting-code-review |
+| `doc-sync`, `/doc-sync` | doc-sync |
 | `/conductor-setup` | conductor (setup) |
 | `/conductor-newtrack` | conductor (new track) |
 | `/conductor-status` | conductor (status) |

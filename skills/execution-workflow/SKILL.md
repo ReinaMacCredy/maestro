@@ -28,7 +28,21 @@ If no tasks available:
    ```bash
    bd update <issue-id> --status in_progress
    ```
-3. Read task details:
+3. **CRITICAL: Record thread URL for doc-sync integration**
+   
+   ⚠️ This step is REQUIRED - doc-sync relies on thread URLs to extract knowledge.
+   
+   **Before proceeding, verify:**
+   - [ ] You have the current Amp thread URL (check Environment section or `$AMP_THREAD_URL`)
+   - [ ] The URL is valid (format: `https://ampcode.com/threads/T-...` or `http://localhost:.../threads/T-...`)
+   
+   ```bash
+   bd update <issue-id> --notes "THREAD: <current-amp-thread-url>"
+   ```
+   
+   **If thread URL is unavailable:** STOP and notify user. Do not proceed without recording the thread link - this creates orphaned work that cannot be synced to documentation.
+
+4. Read task details:
    ```bash
    bd show <issue-id>
    ```
@@ -56,7 +70,7 @@ For complex tasks, create isolated worktree:
 ### Phase 6: Update Beads
 
 ```bash
-bd update <issue-id> --notes "COMPLETED: <summary>. Files changed: <list>"
+bd update <issue-id> --notes "COMPLETED: <summary>. THREAD: <amp-thread-url>. Files changed: <list>"
 ```
 
 ### Phase 7: Finish or Continue
