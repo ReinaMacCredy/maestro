@@ -2,7 +2,9 @@
   "name": "maestro",
   "version": "1.0.0",
   "description": "Personal AI agent workflow skills for Claude Code - includes brainstorming, debugging, code review, test-driven development, and multi-session task tracking with Beads",
-  "author": "Reina MacCredy",
+  "author": {
+    "name": "Reina MacCredy"
+  },
   "repository": "https://github.com/ReinaMacCredy/maestro",
   "license": "MIT",
   "keywords": [
