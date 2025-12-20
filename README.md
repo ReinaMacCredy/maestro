@@ -209,29 +209,49 @@ REPEAT  → Next failing test
 
 ## Workflow Pipeline
 
-```
-PLANNING PHASE (Conductor)
-  /conductor-setup (once per project)
-       │
-  /conductor-newtrack [description]
-       │
-       ├── Clarifying questions
-       ├── Generate spec.md
-       └── Generate plan.md
-                │
-                ▼
-  fb (file beads) → bd issues created
-                │
-EXECUTION PHASE │
-                ▼
-  bd ready → claim issue → execute with TDD
-                │
-                ▼
-  bd checkpoint → finishing-a-development-branch
-                │
-RETROSPECTIVE   │
-                ▼
-  bd close → retro → history/retros/
+```mermaid
+flowchart TD
+    subgraph PLANNING["PLANNING PHASE (Conductor)"]
+        setup["/conductor-setup<br/>(once per project)"]
+        newtrack["/conductor-newtrack [description]"]
+        questions["Clarifying questions"]
+        spec["Generate spec.md"]
+        plan["Generate plan.md"]
+        filebeads["fb (file beads)"]
+        issues["bd issues created"]
+        
+        setup --> newtrack
+        newtrack --> questions
+        questions --> spec
+        spec --> plan
+        plan --> filebeads
+        filebeads --> issues
+    end
+    
+    subgraph EXECUTION["EXECUTION PHASE"]
+        ready["bd ready"]
+        claim["claim issue"]
+        tdd["execute with TDD"]
+        checkpoint["bd checkpoint"]
+        finish["finishing-a-development-branch"]
+        
+        ready --> claim
+        claim --> tdd
+        tdd --> checkpoint
+        checkpoint --> finish
+    end
+    
+    subgraph RETROSPECTIVE["RETROSPECTIVE PHASE"]
+        close["bd close"]
+        retro["retro"]
+        history["history/retros/"]
+        
+        close --> retro
+        retro --> history
+    end
+    
+    issues --> ready
+    finish --> close
 ```
 
 ### Manual Specialist Tools
