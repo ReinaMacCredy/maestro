@@ -34,5 +34,4 @@ __pycache__/
 # Demo
 demo.yml
 tmp/
-docs/
 conductor/plans
