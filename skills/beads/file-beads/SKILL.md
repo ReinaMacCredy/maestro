@@ -72,6 +72,27 @@ Use `--deps bd-X,bd-Y` for multiple dependencies.
 - `3` - Nice-to-haves, polish
 - `4` - Backlog, future considerations
 
+## LOSSLESS Decomposition
+
+When breaking epics into issues, agents naturally summarize—losing critical implementation details. Apply the LOSSLESS rule to prevent this.
+
+### The 4 NEVER Rules
+
+1. **NEVER paraphrase or summarize** - Copy content verbatim, typos and all
+2. **NEVER write "see parent bead for details"** - Each issue must be self-contained
+3. **NEVER skip "obvious" content** - What's obvious now won't be mid-implementation
+4. **NEVER assume context carries forward** - Agents start fresh each session
+
+### Verification After Decomposition
+
+Before moving on, verify:
+
+- **Character count**: Sub-issues total >= original epic content (overhead expected)
+- **Content coverage**: Every section from original appears in some child issue
+- **Standalone test**: Each issue makes sense without reading siblings or parent
+
+If verification fails, you lost information—go back and fix it.
+
 ## Step 7: Verify the Graph
 
 After filing all issues, run:

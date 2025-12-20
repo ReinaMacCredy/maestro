@@ -28,6 +28,24 @@ Conductor enables context-driven development by:
 3. Creating specs and phased implementation plans
 4. Executing with TDD practices and progress tracking
 
+## 4-Phase Framework Mapping
+
+Conductor implements the Knowledge & Vibes 4-phase framework:
+
+| Phase | Purpose | Conductor Equivalent |
+|-------|---------|---------------------|
+| **Requirements** | Understand problem completely before code | `/conductor-newtrack` questions → `spec.md` |
+| **Plan** | Create detailed plan BEFORE writing code | `spec.md` → `plan.md` generation |
+| **Implement** | Build incrementally with TDD | `bd ready` → execution via plan-executor |
+| **Reflect** | Verify before shipping | `retro-workflow` + `bd close` |
+
+**Key Questions per Phase:**
+
+1. **Requirements**: "Does the AI actually understand what we're building?"
+2. **Plan**: "Does this plan fit our architecture and constraints?"
+3. **Implement**: "Can this be tested independently?"
+4. **Reflect**: "Would I bet my job on this code?"
+
 **Interoperability:** This skill understands conductor projects created by either:
 - Gemini CLI extension (`/conductor:setup`, `/conductor:newTrack`, etc.)
 - Claude Code commands (`/conductor-setup`, `/conductor-newtrack`, etc.)

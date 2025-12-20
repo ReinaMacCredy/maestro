@@ -29,12 +29,33 @@ Task tool (general-purpose):
     ## Your Job
 
     Once you're clear on requirements:
-    1. Implement exactly what the task specifies
-    2. Write tests (following TDD if task says to)
-    3. Verify implementation works
-    4. Commit your work
-    5. Self-review (see below)
-    6. Report back
+    1. **Ground external dependencies** (see below)
+    2. Implement exactly what the task specifies
+    3. Write tests (following TDD if task says to)
+    4. Verify implementation works
+    5. Commit your work
+    6. Self-review (see below)
+    7. Report back
+
+    ## Grounding External Dependencies
+
+    **Before using any external library, API, or framework:**
+
+    AI training data may be outdated. Verify patterns against current documentation:
+
+    - **External libs/APIs**: Use `web_search` or `read_web_page` to check current docs
+    - **Existing patterns**: Use `Grep`/`finder` to confirm "how we do X here"
+    - **Past decisions**: Check memory or project docs for prior context
+
+    Signs you need grounding:
+    - Using a library you haven't verified in this codebase
+    - Calling an API method from memory (not from docs)
+    - Following a pattern that "should" work but you haven't confirmed
+
+    Skip grounding for:
+    - Standard library features
+    - Already-used patterns visible in the codebase
+    - Pure logic with no external dependencies
 
     Work from: [directory]
 

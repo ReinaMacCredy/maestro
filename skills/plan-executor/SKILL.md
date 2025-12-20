@@ -85,6 +85,30 @@ Use when:
    - Tasks without dependencies can run in parallel
    - Acceptance criteria define "done"
 
+### Phase Sizing Guidelines
+
+Before executing, verify phase sizing aligns with agent cognitive limits:
+
+| Metric | Target | Action if Wrong |
+|--------|--------|-----------------|
+| Phase size | 500-1000 lines | Split if too large |
+| Task size | ~500 lines | Merge if too small |
+| Work duration | 30-120 min per task | Re-scope if outside |
+
+**Why sizing matters:**
+- Large phases cause **context bombing** (agent skips critical detail)
+- Vague tasks lead to **lazy summarization** ("implement auth" vs specific methods)
+- Critical edge cases get paraphrased away in oversized work units
+
+**Pre-execution check:**
+1. Estimate lines of code per phase
+2. If phase > 1000 lines: split into sub-phases
+3. If task < 200 lines: consider merging with adjacent task
+
+**Grounding reminder:** Before implementing tasks with external dependencies (APIs, libraries, frameworks), ground patterns against current documentation:
+- Use `/ground` if available, otherwise use `web_search` to verify external API/library patterns
+- For existing codebase patterns: use `Grep` and `finder` to confirm conventions
+
 ### Phase 2: Classify Execution Mode
 
 ```
