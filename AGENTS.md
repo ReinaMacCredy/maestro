@@ -18,7 +18,20 @@ skills/           # 15 skill directories, each with SKILL.md (frontmatter + inst
 commands/         # Slash command definitions (.md files)
 lib/              # Shared utilities (skills-core.js)
 .claude-plugin/   # Plugin manifest (plugin.json, marketplace.json)
+conductor/        # Unified save location for plans and tracks
+  plans/          # Brainstorming designs (inbox)
+  tracks/<id>/    # Active work (spec.md + plan.md per track)
+  archive/        # Completed work
 ```
+
+## Handoff Mechanism (Planning → Execution)
+
+**Planning session outputs:**
+```bash
+bd update <epic-id> --notes "HANDOFF_READY: true. PLAN: <plan-path>"
+```
+
+**Execution session starts with:** `Start epic <epic-id>`
 
 ## Code Style
 - Skills: Markdown with YAML frontmatter (`name`, `description` required)
