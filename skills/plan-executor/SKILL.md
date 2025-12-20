@@ -56,6 +56,35 @@ Use when:
    - Individual tasks
    - Dependencies between tasks
 
+3. Expected plan format:
+   ```markdown
+   # Plan: <title>
+   
+   ## Context
+   Brief description of what this plan implements.
+   
+   ## Tasks
+   
+   ### Phase 1: <phase-name>
+   - [ ] Task 1.1: <description>
+     - Acceptance: <criteria>
+     - Depends: none
+   - [ ] Task 1.2: <description>
+     - Acceptance: <criteria>
+     - Depends: 1.1
+   
+   ### Phase 2: <phase-name>
+   - [ ] Task 2.1: <description>
+     - Acceptance: <criteria>
+     - Depends: Phase 1
+   ```
+   
+   Key elements:
+   - Checkbox syntax `[ ]` / `[x]` for tracking
+   - `Depends:` field indicates sequential requirements
+   - Tasks without dependencies can run in parallel
+   - Acceptance criteria define "done"
+
 ### Phase 2: Classify Execution Mode
 
 ```

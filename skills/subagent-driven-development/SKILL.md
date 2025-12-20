@@ -229,8 +229,8 @@ Done!
 ## Integration
 
 **Required workflow skills:**
-- **superpowers:writing-plans** - Creates the plan this skill executes
-- **superpowers:requesting-code-review** - Code review template for reviewer subagents
+- **conductor** - Creates the plan this skill executes (via `/conductor-newtrack`)
+- **agents/code-reviewer** - Code review agent for reviewer subagents
 - **superpowers:finishing-a-development-branch** - Complete development after all tasks
 
 **Subagents should use:**

@@ -33,3 +33,4 @@ __pycache__/
 *.pyc
 # Demo
 demo.yml
+tmp/
