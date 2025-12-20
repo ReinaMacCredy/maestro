@@ -31,7 +31,6 @@ You're using AI coding agents to write code. That's great. But you've probably n
 | **Fuzzy planning** | Vague discussions, no written spec | `conductor` — structured specs + plans |
 | **No visibility** | Can't see dependencies or blockers | `beads` — dependency-aware graph |
 | **Tests as afterthought** | Tests written after code, prove nothing | `test-driven-development` — RED-GREEN-REFACTOR |
-| **Chaotic debugging** | Random fix attempts | `systematic-debugging` — four-phase methodology |
 | **Messy handoffs** | Can't resume where you left off | `beads` notes — session-surviving context |
 | **Conflicts in multi-agent** | Multiple agents edit same files | `beads` + Village — file locking and task claiming |
 
@@ -300,7 +299,7 @@ The full pipeline assumes you're starting fresh. But you can jump in anywhere.
 
 | You Already Have | Skip To | Trigger |
 |------------------|---------|---------|
-| An idea to explore | Brainstorm first | `bs` → history/plans/ |
+| An idea to explore | Brainstorm first | `bs` → conductor/plans/ |
 | A plan (markdown, PRD, spec) | File beads directly | `fb` (file-beads skill) |
 | Existing issues/tasks | Claim and execute | `bd ready` → `bd update` |
 | A bug to fix | Debug first | `debug` → systematic-debugging |
@@ -599,7 +598,6 @@ Beyond the core workflow, Maestro includes specialist skills for specific situat
 |-------|---------|-------------|
 | `brainstorming` | `bs` | Before any creative work. Explores intent and requirements before implementation. |
 | `writing-plans` | `write plan` | When you have requirements but need a detailed implementation plan. |
-| `executing-plans` | `execute plan` | When you have a written plan and want structured execution with checkpoints. |
 
 ---
 
@@ -619,9 +617,7 @@ Beyond the core workflow, Maestro includes specialist skills for specific situat
 
 | Skill | Trigger | When to Use |
 |-------|---------|-------------|
-| `systematic-debugging` | `debug` | Any bug, test failure, or unexpected behavior. Four-phase methodology. |
 | `root-cause-tracing` | `trace` | Errors deep in execution. Traces backward through call stack. |
-| `condition-based-waiting` | `flaky` | Tests with race conditions or timing dependencies. Replace timeouts with polling. |
 | `defense-in-depth` | — | Invalid data causes failures deep in execution. Validate at every layer. |
 
 ---

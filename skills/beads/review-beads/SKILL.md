@@ -127,6 +127,50 @@ Before completing, ensure:
 4. **Parallelism**: Multiple issues can be worked simultaneously
 5. **Completeness**: No gaps in the plan coverage
 
+## Step 7: Workflow Integration Check
+
+For closed/completed issues, verify workflow integration:
+
+### Thread URL Verification
+
+```bash
+bd show <id> --json | jq -r '.notes // "" | scan("THREAD: [^\n]+")'
+```
+
+- If closed issue is **missing thread URL**: Flag as incomplete
+  - "Issue <id> closed but missing THREAD: - cannot sync to docs"
+- Thread URLs enable doc-sync to extract knowledge from implementation
+
+### Doc-Sync Readiness
+
+When all issues in an epic are closed with thread URLs:
+
+1. Check epic status:
+   ```bash
+   bd show <epic-id> --json
+   # Verify all child issues have THREAD: in notes
+   ```
+
+2. Prompt user: "All issues complete with thread URLs. Run doc-sync to update AGENTS.md? (y/n)"
+
+3. If yes: Trigger doc-sync workflow with epic ID
+
+### Auto-Archive Prompt
+
+When epic is complete (all issues closed):
+
+1. Prompt: "Epic complete. Archive to conductor/archive/? (y/n)"
+
+2. If yes:
+   ```bash
+   mv conductor/tracks/<id>/ conductor/archive/<id>/
+   ```
+
+3. Update epic notes:
+   ```bash
+   bd update <epic-id> --notes "ARCHIVED: conductor/archive/<id>/"
+   ```
+
 ## Output Format
 
 Provide a review report:

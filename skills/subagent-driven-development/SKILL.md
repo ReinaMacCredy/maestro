@@ -17,7 +17,7 @@ digraph when_to_use {
     "Tasks mostly independent?" [shape=diamond];
     "Stay in this session?" [shape=diamond];
     "subagent-driven-development" [shape=box];
-    "executing-plans" [shape=box];
+    "execution-workflow" [shape=box];
     "Manual execution or brainstorm first" [shape=box];
 
     "Have implementation plan?" -> "Tasks mostly independent?" [label="yes"];
@@ -25,11 +25,11 @@ digraph when_to_use {
     "Tasks mostly independent?" -> "Stay in this session?" [label="yes"];
     "Tasks mostly independent?" -> "Manual execution or brainstorm first" [label="no - tightly coupled"];
     "Stay in this session?" -> "subagent-driven-development" [label="yes"];
-    "Stay in this session?" -> "executing-plans" [label="no - parallel session"];
+    "Stay in this session?" -> "execution-workflow" [label="no - use beads/execution-workflow"];
 }
 ```
 
-**vs. Executing Plans (parallel session):**
+**vs. Execution Workflow (beads-based):**
 - Same session (no context switch)
 - Fresh subagent per task (no context pollution)
 - Two-stage review after each task: spec compliance first, then code quality
@@ -93,7 +93,7 @@ digraph process {
 ```
 You: I'm using Subagent-Driven Development to execute this plan.
 
-[Read plan file once: history/plans/feature-plan.md]
+[Read plan file once: conductor/tracks/<id>/plan.md]
 [Extract all 5 tasks with full text and context]
 [Create TodoWrite with all tasks]
 
@@ -172,7 +172,7 @@ Done!
 - Parallel-safe (subagents don't interfere)
 - Subagent can ask questions (before AND during work)
 
-**vs. Executing Plans:**
+**vs. Execution Workflow:**
 - Same session (no handoff)
 - Continuous progress (no waiting)
 - Review checkpoints automatic
@@ -237,4 +237,4 @@ Done!
 - **superpowers:test-driven-development** - Subagents follow TDD for each task
 
 **Alternative workflow:**
-- **superpowers:executing-plans** - Use for parallel session instead of same-session execution
+- **execution-workflow** - Use for beads-based task execution across sessions

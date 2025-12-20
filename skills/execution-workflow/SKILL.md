@@ -8,8 +8,36 @@ Use when: User says `ct`, `claim task`, or wants to claim and implement the next
 - `claim task`
 - `claim next task`
 - `work on next issue`
+- `Start epic <epic-id>` (handoff from planning session)
 
 ## Workflow
+
+### Phase 0: Handoff Detection
+
+If user message matches `Start epic <epic-id>`:
+
+1. **Load epic from beads:**
+   ```bash
+   bd show <epic-id> --json
+   ```
+
+2. **Parse notes for plan location:**
+   Look for `PLAN: <path>` in notes field
+   
+3. **Read the plan:**
+   ```bash
+   cat <plan-path>
+   ```
+
+4. **Get ready tasks:**
+   ```bash
+   bd ready --json
+   ```
+   Filter to tasks that are children of this epic
+
+5. **Begin execution** at Phase 1 with epic context loaded
+
+**If no handoff detected:** Proceed directly to Phase 1.
 
 ### Phase 1: Find Available Work
 

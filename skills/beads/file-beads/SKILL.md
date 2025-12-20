@@ -168,3 +168,31 @@ Present to user:
 - **Context hygiene** — `bd create` output stays in subagent contexts
 - **Reliable linking** — Cross-epic dependencies resolve correctly since all IDs are stable
 - **Clean summary** — Main agent only sees results, not noise
+
+## Phase 5: HANDOFF Block Output
+
+After filing, save handoff state and output for next session:
+
+### Step 1: Save handoff state to beads
+
+```bash
+bd update <epic-id> --notes "HANDOFF_READY: true. PLAN: <plan-path>"
+```
+
+Where `<plan-path>` is the source plan (e.g., `conductor/plans/2024-12-20-feature-design.md` or `conductor/tracks/<id>/plan.md`)
+
+### Step 2: Output HANDOFF block to user
+
+```markdown
+## HANDOFF
+
+**Command:** `Start epic <epic-id>`
+**Epic:** <epic-id> - <epic-title>
+**Plan:** <plan-path>
+**Ready issues:** <count>
+**First task:** <first-issue-id> - <title>
+
+Copy the command above to start a new session.
+```
+
+This enables the execution-workflow to detect handoffs and load epic context automatically.
