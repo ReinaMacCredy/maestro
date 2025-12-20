@@ -256,7 +256,7 @@ The full pipeline assumes you're starting fresh. But you can jump in anywhere.
 
 | You Already Have | Skip To | Trigger |
 |------------------|---------|---------|
-| An idea to explore | Brainstorm first | `bs` → docs/plans/ |
+| An idea to explore | Brainstorm first | `bs` → history/plans/ |
 | A plan (markdown, PRD, spec) | File beads directly | `fb` (file-beads skill) |
 | Existing issues/tasks | Claim and execute | `bd ready` → `bd update` |
 | A bug to fix | Debug first | `debug` → systematic-debugging |

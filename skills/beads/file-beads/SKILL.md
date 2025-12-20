@@ -6,115 +6,165 @@ argument-hint: <plan-description-or-context>
 
 # File Beads Epics and Issues from Plan
 
-You are tasked with converting a plan into a comprehensive set of Beads epics and issues. Follow these steps carefully:
+Convert a plan into Beads epics and issues using **sequential subagents** to keep the main context clean.
 
-## Step 1: Understand the Plan
+> **Why Sequential?** The `bd` CLI does not have file locking or atomic ID generation.
+> Parallel `bd create` calls cause race conditions (ID collisions, data corruption).
+> Each epic must complete before the next begins.
 
-First, review the plan context provided: `$ARGUMENTS`
+## Phase 1: Analyze Plan
 
-If no specific plan is provided, ask the user to share the plan or point to a planning document (check `history/` directory for recent plans).
+Review the plan context: `$ARGUMENTS`
 
-## Step 2: Analyze and Structure
+If no plan provided, check:
+- Recent brainstorming output in current context
+- `docs/plans/` directory
+- `conductor/tracks/` for spec.md and plan.md files
 
-Before filing any issues, analyze the plan for:
+**Identify for each epic:**
 
-1. **Major workstreams** - These become epics
-2. **Individual tasks** - These become issues under epics
-3. **Dependencies** - What must complete before other work can start?
-4. **Parallelization opportunities** - What can be worked on simultaneously?
-5. **Technical risks** - What needs spikes or investigation first?
+| Field | Description |
+|-------|-------------|
+| Epic title | Clear workstream name |
+| Child tasks | Individual issues under this epic |
+| Intra-epic deps | Dependencies within the epic |
+| Cross-epic hints | Tasks that depend on other epics (by name, not ID) |
+| Priority | 0-4 scale |
 
-## Step 3: File Epics First
+## Phase 2: Sequential Dispatch
 
-Create epics for major workstreams using:
+Dispatch one subagent per epic. **Wait for each to complete before starting the next** to avoid ID collisions.
 
-```bash
-bd create "Epic: <title>" -t epic -p <priority> --json
+### Subagent Prompt Template
+
+```markdown
+File Epic: "<EPIC_TITLE>"
+
+## Your Task
+Create one epic and all its child issues in Beads.
+
+## Epic Context
+<PASTE_EPIC_SECTION_FROM_PLAN>
+
+## Steps
+
+1. Create the epic:
+   ```bash
+   bd create "Epic: <title>" -t epic -p <priority> --json
+   ```
+
+2. For each task, create an issue with parent dependency:
+   ```bash
+   bd create "<task title>" -t <type> -p <priority> --deps bd-<epic-id> --json
+   ```
+   
+   Include in each issue:
+   - Clear action-oriented title
+   - Acceptance criteria
+   - Technical notes if relevant
+
+3. Link intra-epic dependencies:
+   ```bash
+   bd dep add bd-<child> bd-<blocker> --type blocks --json
+   ```
+
+## Return Format
+
+Return ONLY this JSON (no other text):
+```json
+{
+  "epicId": "bd-XXX",
+  "epicTitle": "<title>",
+  "issues": [
+    {"id": "bd-XXX", "title": "...", "deps": ["bd-XXX"]}
+  ],
+  "crossEpicDeps": [
+    {"issueId": "bd-XXX", "needsLinkTo": "<epic or task name>"}
+  ]
+}
+```
 ```
 
-Epics should:
+### Dispatch Example
 
-- Have clear, descriptive titles
-- Include acceptance criteria in the description
-- Be scoped to deliverable milestones
+```
+Task(description: "File Epic: Authentication", prompt: <above template>)
+// Wait for result...
 
-## Step 4: File Detailed Issues
+Task(description: "File Epic: Database Layer", prompt: <above template>)
+// Wait for result...
 
-For each epic, create child issues with:
-
-```bash
-bd create "<task title>" -t <type> -p <priority> --deps <parent-epic-id> --json
+Task(description: "File Epic: API Endpoints", prompt: <above template>)
+// Wait for result...
 ```
 
-Each issue MUST include:
+**Execute sequentially** — each subagent must return before dispatching the next.
 
-- **Clear title** - Action-oriented (e.g., "Implement X", "Add Y", "Configure Z")
-- **Detailed description** - What exactly needs to be done
-- **Acceptance criteria** - How do we know it's done?
-- **Technical notes** - Implementation hints, gotchas, relevant files
-- **Dependencies** - Link to blocking issues with `--deps bd-<id>`
+## Phase 3: Collect & Link Cross-Epic Dependencies
 
-## Step 5: Map Dependencies Carefully
+When subagents return:
 
-For each issue, consider:
+1. Parse JSON results from each subagent
+2. Build ID lookup table:
+   ```
+   "Authentication" → bd-101
+   "Database Layer" → bd-102
+   "Setup user table" → bd-105
+   ```
 
-- Does this depend on another issue completing first?
-- Can this be worked on in parallel with siblings?
-- Are there cross-epic dependencies?
+3. Resolve cross-epic dependencies:
+   ```bash
+   bd dep add bd-<from> bd-<to> --type blocks --json
+   ```
 
-Use `--deps bd-X,bd-Y` for multiple dependencies.
+## Phase 4: Verify & Summarize
 
-## Step 6: Set Priorities Thoughtfully
-
-- `0` - Critical path blockers, security issues
-- `1` - Core functionality, high business value
-- `2` - Standard work items (default)
-- `3` - Nice-to-haves, polish
-- `4` - Backlog, future considerations
-
-## LOSSLESS Decomposition
-
-When breaking epics into issues, agents naturally summarize—losing critical implementation details. Apply the LOSSLESS rule to prevent this.
-
-### The 4 NEVER Rules
-
-1. **NEVER paraphrase or summarize** - Copy content verbatim, typos and all
-2. **NEVER write "see parent bead for details"** - Each issue must be self-contained
-3. **NEVER skip "obvious" content** - What's obvious now won't be mid-implementation
-4. **NEVER assume context carries forward** - Agents start fresh each session
-
-### Verification After Decomposition
-
-Before moving on, verify:
-
-- **Character count**: Sub-issues total >= original epic content (overhead expected)
-- **Content coverage**: Every section from original appears in some child issue
-- **Standalone test**: Each issue makes sense without reading siblings or parent
-
-If verification fails, you lost information—go back and fix it.
-
-## Step 7: Verify the Graph
-
-After filing all issues, run:
+Run verification:
 
 ```bash
 bd list --json
 bd ready --json
 ```
 
-Verify:
-
+Check:
 - All epics have child issues
-- Dependencies form a valid DAG (no cycles)
-- Ready work exists (some issues have no blockers)
-- Priorities make sense for execution order
+- No dependency cycles
+- Some issues are ready (unblocked)
 
-## Output Format
+### Summary Format
 
-After completing, provide:
+Present to user:
 
-1. Summary of epics created
-2. Summary of issues per epic
-3. Dependency graph overview (what unblocks what)
-4. Suggested starting points (ready issues)
-5. Parallelization opportunities
+```
+## Filed Beads Summary
+
+**Epics created:** 3
+**Issues created:** 12
+
+| Epic | Issues | Ready |
+|------|--------|-------|
+| Authentication | 4 | 2 |
+| Database Layer | 5 | 1 |
+| API Endpoints | 3 | 0 (blocked) |
+
+**Start with:** bd-105 (Setup user table), bd-108 (Init auth config)
+
+**Cross-epic deps linked:** 2
+```
+
+## Priority Guide
+
+| Priority | Use For |
+|----------|---------|
+| 0 | Critical path blockers, security |
+| 1 | Core functionality, high value |
+| 2 | Standard work (default) |
+| 3 | Nice-to-haves, polish |
+| 4 | Backlog, future |
+
+## Why Sequential?
+
+- **No race conditions** — `bd` CLI lacks file locking; serial execution prevents ID collisions
+- **Context hygiene** — `bd create` output stays in subagent contexts
+- **Reliable linking** — Cross-epic dependencies resolve correctly since all IDs are stable
+- **Clean summary** — Main agent only sees results, not noise

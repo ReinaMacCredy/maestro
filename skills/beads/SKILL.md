@@ -254,6 +254,29 @@ bd close issue-123 --reason "Implemented in PR #42"
 bd close issue-1 issue-2 issue-3 --reason "Bulk close related work"
 ```
 
+### Auto-Archive Plans on Close
+
+When closing an issue that has a `**Source Plan:**` reference:
+
+1. **Extract source plan path** from the issue description (e.g., `docs/plans/foo.md` or `history/plans/bar.md`)
+2. **Query related issues by filename** (not full path, to avoid path format mismatches):
+   ```bash
+   # Extract just the filename for matching (handles absolute/relative path differences)
+   PLAN_FILENAME=$(basename "<path>")
+   bd list --json | jq --arg fn "$PLAN_FILENAME" '.[] | select(.description | test("Source Plan:.*" + $fn; "i"))'
+   ```
+3. **If all are closed** → archive the plan to the appropriate archive directory:
+   ```bash
+   # For plans in history/plans/
+   mv history/plans/<name>.md history/plans/archive/$(date +%Y-%m-%d)-<name>.md
+   # For legacy plans in docs/plans/
+   mv docs/plans/<name>.md docs/plans/archive/$(date +%Y-%m-%d)-<name>.md
+   ```
+
+**Archive naming**: `YYYY-MM-DD-<original-name>.md` (date prefix when archived)
+
+**Only archive when ALL issues from that plan are closed** — if any remain open, skip archiving.
+
 **Show issue details:**
 ```bash
 bd show issue-123

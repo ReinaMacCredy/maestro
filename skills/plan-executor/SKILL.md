@@ -48,7 +48,7 @@ Use when:
 1. Find plan file (check in order):
    - User-specified path
    - `conductor/tracks/<id>/plan.md`
-   - `docs/plans/*.md` (most recent)
+   - `history/plans/*.md` (most recent)
    - `.beads/` database via `bd ready`
 
 2. Parse plan structure:
