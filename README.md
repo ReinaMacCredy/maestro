@@ -343,6 +343,7 @@ Built on foundations from:
 - [superpowers](https://github.com/obra/superpowers) by Jesse Vincent
 - [conductor](https://github.com/anthropics/conductor)
 - [beads](https://github.com/anthropics/beads)
+- [beads-village](https://github.com/LNS2905/mcp-beads-village) by LNS2905
 - [Knowledge & Vibes](https://github.com/kyleobrien91/knowledge-and-vibes) methodology
 
 ## License
