@@ -45,12 +45,11 @@ Do NOT proceed to documentation until grounding confirms the design is based on 
 
 **Documentation:**
 - Write the validated design to `conductor/plans/YYYY-MM-DD-<topic>-design.md`
-- Use elements-of-style:writing-clearly-and-concisely skill if available
 - Commit the design document to git
 
 **Implementation (if continuing):**
 - Ask: "Ready to set up for implementation?"
-- Use superpowers:using-git-worktrees to create isolated workspace
+- Use `using-git-worktrees` skill to create isolated workspace
 - Create a detailed implementation plan (break down the design into ordered tasks with clear acceptance criteria)
 
 ## Key Principles

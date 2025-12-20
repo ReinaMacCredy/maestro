@@ -209,15 +209,8 @@ REPEAT  → Next failing test
 
 | Trigger | Skill | Use When |
 |---------|-------|----------|
-| `debug` | systematic-debugging | Any bug or unexpected behavior |
 | `trace` | root-cause-tracing | Need to find original trigger |
 | `flaky` | condition-based-waiting | Race conditions, timing issues |
-
-**Four-phase methodology** (systematic-debugging):
-1. **Reproduce** — Confirm the problem exists
-2. **Isolate** — Find minimal reproduction
-3. **Identify** — Trace to root cause
-4. **Fix** — Fix with TDD (failing test first)
 
 **Key insight**: Evidence before assertions. Show the error, show the fix working.
 

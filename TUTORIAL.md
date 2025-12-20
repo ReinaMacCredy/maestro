@@ -302,7 +302,7 @@ The full pipeline assumes you're starting fresh. But you can jump in anywhere.
 | An idea to explore | Brainstorm first | `bs` → conductor/plans/ |
 | A plan (markdown, PRD, spec) | File beads directly | `fb` (file-beads skill) |
 | Existing issues/tasks | Claim and execute | `bd ready` → `bd update` |
-| A bug to fix | Debug first | `debug` → systematic-debugging |
+| A bug to fix | Debug first | `debug` → `systematic-debugging` |
 | Code that needs tests | Add tests | `tdd` skill |
 
 ### Why This Matters: Token Economics
@@ -854,7 +854,6 @@ git push
 |--------|-----------------|
 | `bs`, `brainstorm` | brainstorming |
 | `tdd` | test-driven-development |
-| `debug`, `investigate` | systematic-debugging |
 | `trace`, `find source` | root-cause-tracing |
 | `flaky`, `race condition` | condition-based-waiting |
 | `fb`, `file beads` | beads/file-beads |

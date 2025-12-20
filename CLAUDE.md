@@ -170,9 +170,7 @@ git add -A && git commit && git push
 | `bs` | brainstorming | Deep exploration before implementation |
 | `fb` | file-beads | Convert plan to beads issues |
 | `rb` | review-beads | Review/refine filed beads |
-| `ct` | execution-workflow | Claim and implement task |
 | `tdd` | test-driven-development | Enter TDD mode |
-| `debug` | systematic-debugging | Bug or unexpected behavior |
 | `finish branch` | finishing-a-development-branch | Complete and merge work |
 | `dispatch` | dispatching-parallel-agents | Run independent tasks in parallel |
 
