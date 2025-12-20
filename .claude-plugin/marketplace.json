@@ -1,5 +1,9 @@
 {
   "name": "maestro-marketplace",
+  "description": "Marketplace for maestro workflow plugin",
+  "owner": {
+    "name": "Reina MacCredy"
+  },
   "plugins": [
     {
       "name": "maestro",
