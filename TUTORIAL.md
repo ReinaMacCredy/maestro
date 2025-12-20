@@ -33,6 +33,7 @@ You're using AI coding agents to write code. That's great. But you've probably n
 | **Tests as afterthought** | Tests written after code, prove nothing | `test-driven-development` — RED-GREEN-REFACTOR |
 | **Chaotic debugging** | Random fix attempts | `systematic-debugging` — four-phase methodology |
 | **Messy handoffs** | Can't resume where you left off | `beads` notes — session-surviving context |
+| **Conflicts in multi-agent** | Multiple agents edit same files | `beads` + Village — file locking and task claiming |
 
 These skills work together as a system, not a bag of independent tools.
 
@@ -64,7 +65,7 @@ Before diving in, understand these principles:
 The spine of my-workflow is three components working together:
 
 ```
-Conductor (Planning) → Beads (Tracking) → TDD (Execution)
+Conductor (Planning) → Beads + Village (Tracking & Coordination) → TDD (Execution)
 ```
 
 Everything else in the plugin supports this core pipeline.
@@ -172,6 +173,48 @@ NEXT: Immediate next action
 
 ---
 
+### Village — Multi-Agent Coordination
+
+**What it is**: MCP server that adds atomic task claiming, file locking, and agent messaging to Beads.
+
+**Why you need it**: When multiple Claude instances work on the same codebase, they can step on each other. Village prevents conflicts through file reservations and ensures only one agent claims each task.
+
+**Key insight**: Single-agent workflows work fine without Village. Multi-agent workflows require it.
+
+**For humans**:
+- Think of it as "mutex locks for AI agents"
+- One agent reserves a file, others wait or work on something else
+- Tasks are claimed atomically — no two agents grab the same work
+
+**For agents**:
+- At session start: `init` to join workspace with your role
+- Before work: `claim` to atomically get a task (replaces manual selection)
+- Before editing: `reserve` to lock files
+- When done: `done` releases locks and notifies team
+- If blocked on a file: `msg` the owner, `inbox` to check responses
+
+**Core Commands**:
+
+```
+# Joining and claiming
+init team="backend" role="be"     # Join as backend developer
+claim                              # Get next ready task for your role
+
+# File coordination
+reserve path="src/auth.ts"        # Lock file for editing (10 min TTL)
+release path="src/auth.ts"        # Release when done
+
+# Task completion
+done id="bd-42" msg="Implemented JWT refresh"  # Complete + release all locks
+
+# Communication
+msg to="frontend" content="API ready"  # Direct message
+inbox                              # Read your messages
+status                             # See team state and locks
+```
+
+---
+
 ### TDD — Safe Execution
 
 **What it is**: RED-GREEN-REFACTOR methodology for implementing each task.
@@ -230,6 +273,8 @@ REPEAT  → Next failing test
 └─────────────────────────────────────────────────────────────┘
                            ↓
                     bd ready → pick bd-001
+                    claim                    # Atomic task selection (multi-agent)
+                    reserve                  # Lock files before editing
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
 │                         TDD                                  │
@@ -238,7 +283,7 @@ REPEAT  → Next failing test
 │  REFACTOR: Extract config helper                            │
 └─────────────────────────────────────────────────────────────┘
                            ↓
-                    bd close bd-001
+                    done bd-001              # Releases locks, notifies team
                            ↓
                     bd-002 becomes ready
 ```
@@ -809,6 +854,7 @@ git push
 | `/conductor-setup` | conductor (setup) |
 | `/conductor-newtrack` | conductor (new track) |
 | `/conductor-status` | conductor (status) |
+| `init`, `claim`, `done` | beads-village (multi-agent) |
 | `/ground` | grounding (context alignment) |
 | `/decompose-task` | task decomposition |
 

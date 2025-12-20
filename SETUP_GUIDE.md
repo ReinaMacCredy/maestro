@@ -58,6 +58,71 @@ git add .beads/ && git commit -m "Initialize beads"
 
 ## Step 4: Configure MCP Servers (Optional)
 
+### Beads Village - Multi-Agent Coordination (Required)
+
+Prerequisites:
+- `pip install beads` (beads CLI already installed in Step 2)
+- Node.js 16+
+
+**Install for Claude Code:**
+```bash
+claude mcp add beads-village -s user -- npx beads-village
+```
+
+**Install for Amp:**
+Add to `.amp/settings.json`:
+```json
+{
+  "mcpServers": {
+    "beads-village": {
+      "command": "npx",
+      "args": ["beads-village"]
+    }
+  }
+}
+```
+
+**Install for Codex:**
+Add to your MCP configuration file:
+```json
+{
+  "beads-village": {
+    "command": "npx",
+    "args": ["beads-village"]
+  }
+}
+```
+
+**Verify:**
+```bash
+# Check MCP server responds
+/mcp  # Should show beads-village with tools: init, claim, done, reserve, release, msg, inbox, status, assign
+```
+
+**Source:** https://github.com/LNS2905/mcp-beads-village
+
+**Add ephemeral directories to .gitignore:**
+```bash
+# Village creates ephemeral state directories - don't commit these
+echo ".reservations/" >> .gitignore
+echo ".mail/" >> .gitignore
+```
+
+**Key tools:**
+| Tool | Purpose |
+|------|---------|
+| `init` | Join workspace with team/role |
+| `claim` | Atomic task claiming |
+| `done` | Complete task, release locks |
+| `reserve` | Lock file for editing |
+| `release` | Release file lock |
+| `msg` | Send message to team |
+| `inbox` | Read messages |
+| `status` | View team state |
+| `assign` | (Leader only) Assign tasks |
+
+### Enhanced Search (Optional)
+
 For enhanced search capabilities:
 
 **Get API keys:**
@@ -81,6 +146,7 @@ Tell the user:
 Setup complete!
 
 Installed: my-workflow plugin (27 skills)
+Required: beads-village MCP (multi-agent coordination)
 Optional: bd, bv, cass, ubs (CLI tools)
 
 Key triggers:
@@ -105,6 +171,7 @@ Next: Read TUTORIAL.md for complete workflow guide.
 | See available work | `bd ready --json` |
 | Start TDD | Say `tdd` |
 | Debug issue | Say `debug` |
+| Multi-agent coordination | `init`, `claim`, `done` via beads-village MCP |
 | Full documentation | [TUTORIAL.md](./TUTORIAL.md) |
 
 ## Troubleshooting

@@ -533,3 +533,132 @@ Research or investigation work:
 3. Consider closing old issues that no longer matter
 4. Use labels for organization
 
+---
+
+## Multi-Agent Workflows {#multi-agent}
+
+Workflow patterns for teams of Claude instances working on the same codebase.
+
+### Team Session Start Checklist
+
+```
+Team Session Start:
+- [ ] Run init team="<team>" role="<role>" to join
+- [ ] Run inbox to check for messages from previous sessions
+- [ ] Run status to see who's online and what's locked
+- [ ] Run claim to atomically get next task for your role
+- [ ] Report: "Joined as <role>, claimed <task-id>, <N> files currently locked"
+```
+
+**Pattern**: Always init before any other Village operations. Check inbox for handoff context.
+
+### Handoff Between Agents Workflow {#agent-handoff}
+
+When one agent stops and another continues. This prevents context loss in long-running tasks by ensuring explicit state transfer.
+
+**Why this matters**: Without proper handoff, resuming agents waste cycles rediscovering state, may duplicate work, or miss critical context that existed only in the previous agent's memory.
+
+```
+Agent A (stopping):
+- [ ] Update bd notes with structured status:
+      COMPLETED: What was finished
+      IN_PROGRESS: Current state, any partial work
+      NEXT: Immediate next steps
+      BLOCKERS: Known issues or decisions needed
+- [ ] Run msg to="<next-agent>" content="Handing off <task>, check notes"
+- [ ] Run release for each held file (or let done handle it)
+- [ ] If task complete: run done id="<task>" msg="Summary"
+
+Agent B (resuming):
+- [ ] Run init with appropriate team/role
+- [ ] Run inbox to get handoff message
+- [ ] Run bd show <task> to read notes (REQUIRED before any work)
+- [ ] Run status to check lock state
+- [ ] Run claim or bd update --status in_progress
+- [ ] Run reserve for files you'll edit
+- [ ] Continue work from documented NEXT steps
+```
+
+**Pattern**: Notes are the source of truth for continuity. Always read before resuming; always write before stopping.
+
+### Parallel Task Execution {#parallel-execution}
+
+For independent tasks that can be worked simultaneously:
+
+```
+Leader Setup:
+- [ ] Run init team="<team>" role="be" leader=true
+- [ ] Run bd ready to see available work
+- [ ] For each parallel task: assign id="<task>" to="<agent>"
+- [ ] Run msg content="Work assigned, check claims"
+
+Worker Execution:
+- [ ] Run init team="<team>" role="<role>"
+- [ ] Run claim to get assigned work
+- [ ] Run reserve for files you'll edit
+- [ ] Execute task (TDD as usual)
+- [ ] Run done id="<task>" msg="Summary"
+- [ ] Run claim for next available work
+```
+
+**Coordination principle**: Each agent works on one task at a time. Complete before claiming next.
+
+### Conflict Resolution Workflow {#conflict-resolution}
+
+When you need a file another agent holds:
+
+```
+Conflict Resolution:
+- [ ] Attempt reserve path="<file>"
+- [ ] If locked: note holder and TTL from error
+- [ ] Run status to confirm lock holder
+- [ ] Run msg to="<holder>" content="Need <file> for <reason>"
+- [ ] Run inbox periodically to check response
+- [ ] Either:
+  - [ ] Wait for release (TTL expiry or explicit)
+  - [ ] Claim different task in the meantime
+  - [ ] Negotiate with holder via msg
+```
+
+**Best practice**: If blocked for >5 min, claim different task to stay productive.
+
+### Multi-Agent Bug Investigation
+
+When debugging spans multiple agents:
+
+```
+Investigation Lead:
+- [ ] Create bd issue for bug
+- [ ] Reserve key diagnostic files
+- [ ] Run status to see available agents
+- [ ] Run msg content="Investigating <bug>, need help on <area>"
+
+Supporting Agent:
+- [ ] Run inbox to see request
+- [ ] Run claim or bd update to join investigation
+- [ ] Reserve your diagnostic area
+- [ ] Run msg content="Findings: <details>" as you discover
+
+Coordination:
+- [ ] Use msg for real-time findings
+- [ ] Update bd notes for persistent context
+- [ ] done when root cause found
+```
+
+### End of Day Protocol
+
+When all agents finish for the day:
+
+```
+Each Agent:
+- [ ] Update bd notes with current state
+- [ ] Run msg content="EOD: <summary of work>, <blockers if any>"
+- [ ] Run done for completed tasks
+- [ ] For incomplete: release all files explicitly
+
+Last Agent:
+- [ ] Run status to verify all locks released
+- [ ] Run bd blocked --json to document blockers
+- [ ] Commit .beads/ state
+```
+
