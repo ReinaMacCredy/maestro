@@ -17,13 +17,29 @@ If a skill is in this plugin, it's because I actively use it.
 
 ## Install
 
+### One-liner (Claude Code / Amp / Cursor)
+
 Tell your AI agent:
 
 ```
 Follow https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/SETUP_GUIDE.md to set up maestro for this project.
 ```
 
-Or manually: [SETUP_GUIDE.md](./SETUP_GUIDE.md)
+### OpenAI Codex
+
+```
+$skill-installer ReinaMacCredy/maestro
+```
+
+Or install a specific skill:
+
+```
+$skill-installer brainstorming from ReinaMacCredy/maestro
+```
+
+### Manual Setup
+
+See [SETUP_GUIDE.md](./SETUP_GUIDE.md) for detailed instructions.
 
 ---
 

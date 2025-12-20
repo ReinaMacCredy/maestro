@@ -8,6 +8,9 @@ Add this to your global config file after installing maestro plugin.
 | Amp | `~/.config/amp/AGENTS.md` |
 | Codex | `~/.codex/AGENTS.md` |
 
+> **Local Reference:** After plugin installation, this template is available at:
+> `~/.claude/plugins/marketplaces/maestro-marketplace/docs/GLOBAL_CONFIG_TEMPLATE.md`
+
 ---
 
 ## Maestro Workflow
