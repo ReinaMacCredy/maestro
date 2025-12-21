@@ -214,7 +214,7 @@ After presenting the review report, immediately output the HANDOFF block:
 
 **Command:** `Start epic <epic-id>`
 **Epic:** <epic-id> - <epic title>
-**Plan:** conductor/tracks/<id>/plan.md (or conductor/plans/<design>.md)
+**Plan:** conductor/tracks/<id>/plan.md (or conductor/design/<design>.md)
 **Ready issues:** <count>
 **First task:** <first-issue-id> - <title>
 

@@ -186,7 +186,7 @@ After filing, save handoff state and output for next session:
 bd update <epic-id> --notes "HANDOFF_READY: true. PLAN: <plan-path>"
 ```
 
-Where `<plan-path>` is the source plan (e.g., `conductor/plans/2024-12-20-feature-design.md` or `conductor/tracks/<id>/plan.md`)
+Where `<plan-path>` is the source plan (e.g., `conductor/design/2024-12-20-feature-design.md` or `conductor/tracks/<id>/plan.md`)
 
 ### Step 2: Output HANDOFF block to user
 

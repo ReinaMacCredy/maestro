@@ -31,7 +31,7 @@ Add this to your global config file after installing maestro plugin.
 PLANNING PHASE
   bs (brainstorm)
        │
-       └─ Creates: conductor/plans/YYYY-MM-DD-<topic>-design.md
+       └─ Creates: conductor/design/YYYY-MM-DD-<topic>-design.md
        
   /conductor-newtrack [description]
        │
@@ -70,7 +70,7 @@ EXECUTION PHASE (new session)
 |------|------|
 | Conductor Context | `conductor/{product,tech-stack,workflow,tracks}.md` |
 | Conductor Tracks | `conductor/tracks/<id>/{spec,plan}.md` |
-| Design Docs | `conductor/plans/*.md` |
+| Design Docs | `conductor/design/*.md` |
 | Beads Database | `.beads/` |
 
 ### Session Protocols

@@ -44,7 +44,7 @@ Before finalizing, verify all architectural decisions against current reality:
 Do NOT proceed to documentation until grounding confirms the design is based on verified, current information—not assumptions or outdated training data.
 
 **Documentation:**
-- Write the validated design to `conductor/plans/YYYY-MM-DD-<topic>-design.md`
+- Write the validated design to `conductor/design/YYYY-MM-DD-<topic>-design.md`
 - Commit the design document to git
 
 **Implementation (if continuing):**
@@ -63,7 +63,7 @@ Do NOT proceed to documentation until grounding confirms the design is based on 
 
 ## After Completion
 
-After writing the design to `docs/plans/` or `conductor/tracks/<id>/plan.md`:
+After writing the design to `conductor/design/` or `conductor/tracks/<id>/plan.md`:
 
 1. Ask: "Review the plan?"
 2. Address any feedback
