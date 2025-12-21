@@ -1,0 +1,38 @@
+# Product: Maestro
+
+## Vision
+
+A plugin that provides structured AI-assisted development capabilities through portable, reusable skills that work across multiple AI coding agents.
+
+## Target Users
+
+- **Developers using AI agents**: Claude Code, Amp, OpenAI Codex, Cursor, GitHub Copilot, VS Code agents
+- **Teams adopting AI workflows**: Organizations building structured AI development practices
+- **Skill authors**: Developers creating reusable agent capabilities
+
+## Problems Solved
+
+1. **Context loss across sessions**: AI agents lose context after compaction; Beads provides persistent issue tracking
+2. **Unstructured planning**: Features get built without specs; Conductor enforces plan-before-code
+3. **Inconsistent quality**: No enforcement of TDD, code review; skills encode best practices
+4. **Tool fragmentation**: Different agents need different formats; Agent Skills standard provides interoperability
+
+## Key Goals
+
+- [ ] Provide production-ready skills for planning (Conductor), tracking (Beads), and execution (TDD)
+- [ ] Support all major Agent Skills-compatible tools
+- [ ] Enable context-driven development with persistent memory
+- [ ] Package organizational knowledge into portable, version-controlled skills
+
+## Success Metrics
+
+- Skills load correctly across Claude Code, Amp, Codex, Cursor
+- Workflows produce consistent, documented outputs
+- Users can resume work after context compaction via Beads
+- Skills are discoverable and self-documenting
+
+## Non-Goals
+
+- Runtime code execution (skills are instructions + resources, not code)
+- Building a new AI agent (skills extend existing agents)
+- Replacing existing issue trackers (Beads supplements, doesn't replace GitHub Issues)
