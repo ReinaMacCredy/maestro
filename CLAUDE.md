@@ -24,7 +24,7 @@ skills/                    # 16 skill directories, each with SKILL.md
   └── ...                 # See SETUP_GUIDE.md for full list
 
 commands/                 # Slash command definitions (.md files)
-  ├── conductor/          # /conductor-setup, /conductor-newtrack, etc.
+  ├── conductor/          # /conductor-setup, /conductor-design, /conductor-newtrack, etc.
   ├── compact.md
   ├── decompose-task.md
   ├── doc-sync.md
@@ -142,14 +142,26 @@ bd dep tree <id>             # Show dependency graph
 # Initialize project planning (once per project)
 /conductor-setup
 
-# Create new feature track
-/conductor-newtrack "feature description"
+# Design a feature through dialogue
+/conductor-design "feature description"
+
+# Create spec + plan from design
+/conductor-newtrack
 
 # Execute track tasks
 /conductor-implement
 
 # Check progress
 /conductor-status
+
+# Update spec/plan when issues discovered
+/conductor-revise
+
+# Sync context docs with codebase
+/conductor-refresh
+
+# Git-aware revert of work
+/conductor-revert
 ```
 
 ### Git Integration
@@ -167,7 +179,14 @@ git add -A && git commit && git push
 
 | Trigger | Skill/Command | Use When |
 |---------|---------------|----------|
+| `/conductor-setup` | conductor | Initialize project planning (once) |
 | `/conductor-design` | conductor | Design a feature through collaborative dialogue |
+| `/conductor-newtrack` | conductor | Create spec + plan from design |
+| `/conductor-implement` | conductor | Execute ONE EPIC from track's plan |
+| `/conductor-status` | conductor | View progress overview |
+| `/conductor-revert` | conductor | Git-aware revert of work |
+| `/conductor-revise` | conductor | Update spec/plan when issues discovered |
+| `/conductor-refresh` | conductor | Sync context docs with codebase |
 | `fb` | file-beads | Convert plan to beads issues |
 | `rb` | review-beads | Review/refine filed beads |
 | `tdd` | test-driven-development | Enter TDD mode |

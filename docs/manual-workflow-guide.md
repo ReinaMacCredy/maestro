@@ -57,6 +57,7 @@ Step 5: Verify artifacts
    ├── tracks.md
    └── tracks/<track_id>/
        ├── metadata.json
+       ├── design.md
        ├── spec.md
        └── plan.md
 ```
@@ -71,7 +72,65 @@ Step 5: Verify artifacts
 
 ---
 
-### 2. `/conductor:newTrack` (or `/conductor-newtrack`)
+### 2. `/conductor:design` (or `/conductor-design`)
+
+**Purpose**: Design a feature through collaborative dialogue before creating spec/plan.
+
+**When to use**: When you want to explore and design a feature before committing to a track.
+
+**Manual workflow**:
+
+```
+Step 1: Run the command (optionally with description)
+   /conductor:design "Add user authentication"
+   # or without description for interactive mode
+   /conductor:design
+
+Step 2: Load context
+   - Reads conductor/product.md, tech-stack.md, workflow.md
+   - Resumes from existing design.md if present
+
+Step 3: Collaborative design dialogue
+   a) Understanding phase - one question at a time
+      - Purpose, constraints, success criteria
+      - Prefers multiple choice when possible
+   b) Exploring approaches - 2-3 options with trade-offs
+      - Lead with recommendation
+   c) Presenting design - 200-300 word sections
+      - Ask after each: "Does this look right so far?"
+      - Cover: architecture, components, data flow, error handling, testing
+
+Step 4: Ground the design
+   - Verify external libraries/APIs with web_search
+   - Confirm existing patterns with Grep/finder
+   - Check past decisions with git log
+
+Step 5: Write design.md
+   conductor/tracks/<track_id>/design.md created with:
+   - Overview
+   - Goals and Non-Goals
+   - Architecture and Components
+   - Data and Interfaces
+   - Risks and Open Questions
+   - Acceptance and Success Criteria
+
+Step 6: Offer track creation
+   - "Create track now (spec + plan)?"
+   - Yes → runs newtrack workflow
+   - No → "Run /conductor-newtrack <track_id> later"
+```
+
+**Generated artifacts**:
+```
+conductor/tracks/<shortname_YYYYMMDD>/
+├── design.md       # High-level design from dialogue
+```
+
+**Next step**: Run `/conductor-newtrack <track_id>` to create spec.md and plan.md from design.
+
+---
+
+### 3. `/conductor:newTrack` (or `/conductor-newtrack`)
 
 **Purpose**: Create a new feature or bug fix track.
 
@@ -108,6 +167,7 @@ Step 5: Approve artifacts
 ```
 conductor/tracks/<shortname_YYYYMMDD>/
 ├── metadata.json   # Track configuration
+├── design.md       # High-level design
 ├── spec.md         # Requirements
 └── plan.md         # Implementation plan
 ```
@@ -116,7 +176,7 @@ conductor/tracks/<shortname_YYYYMMDD>/
 
 ---
 
-### 3. `/conductor:implement` (or `/conductor-implement`)
+### 4. `/conductor:implement` (or `/conductor-implement`)
 
 **Purpose**: Execute tasks from a track's plan.
 
@@ -174,7 +234,7 @@ Step 7: Track completion
 
 ---
 
-### 4. `/conductor:status` (or `/conductor-status`)
+### 5. `/conductor:status` (or `/conductor-status`)
 
 **Purpose**: Display project progress overview.
 
@@ -198,7 +258,7 @@ Step 2: Review output
 
 ---
 
-### 5. `/conductor:validate` (or `/conductor-validate`)
+### 6. `/conductor:validate` (or `/conductor-validate`)
 
 **Purpose**: Check project integrity and fix issues.
 
@@ -227,7 +287,7 @@ Step 3: Choose fix option
 
 ---
 
-### 6. `/conductor:block` (or `/conductor-block`)
+### 7. `/conductor:block` (or `/conductor-block`)
 
 **Purpose**: Mark a task as blocked.
 
@@ -258,7 +318,7 @@ Step 4: Verify update
 
 ---
 
-### 7. `/conductor:skip` (or `/conductor-skip`)
+### 8. `/conductor:skip` (or `/conductor-skip`)
 
 **Purpose**: Skip current task and move to next.
 
@@ -280,7 +340,7 @@ Step 4: Implementation moves to next task
 
 ---
 
-### 8. `/conductor:revise` (or `/conductor-revise`)
+### 9. `/conductor:revise` (or `/conductor-revise`)
 
 **Purpose**: Update spec/plan when implementation reveals issues.
 
@@ -298,6 +358,7 @@ Step 2: Select what to revise
    A) Spec only
    B) Plan only
    C) Both
+   D) Design (architecture/approach fundamentally wrong)
 
 Step 3: Describe changes needed
 
@@ -308,11 +369,20 @@ Step 5: Approve changes
    - Recorded in revisions.md
 ```
 
+**Issue Analysis Decision Tree** (used during `/conductor:implement`):
+
+| Issue Type | Indicators | Action |
+|------------|------------|--------|
+| Implementation Bug | Typo, logic error, missing import | Fix directly |
+| Spec Issue | Requirement wrong, missing, impossible | Revise spec |
+| Plan Issue | Missing task, wrong order, task too big | Revise plan |
+| Blocked | External dependency, need user input | Mark blocked |
+
 **Revision log**: `conductor/tracks/<track_id>/revisions.md`
 
 ---
 
-### 9. `/conductor:revert` (or `/conductor-revert`)
+### 10. `/conductor:revert` (or `/conductor-revert`)
 
 **Purpose**: Git-aware revert of work.
 
@@ -339,7 +409,7 @@ Step 4: Confirm revert
 
 ---
 
-### 10. `/conductor:archive` (or `/conductor-archive`)
+### 11. `/conductor:archive` (or `/conductor-archive`)
 
 **Purpose**: Move completed tracks to archive.
 
@@ -361,7 +431,7 @@ Step 4: Tracks moved to conductor/archive/
 
 ---
 
-### 11. `/conductor:export` (or `/conductor-export`)
+### 12. `/conductor:export` (or `/conductor-export`)
 
 **Purpose**: Generate project summary report.
 
@@ -388,7 +458,7 @@ Step 4: Report generated
 
 ---
 
-### 12. `/conductor:refresh` (or `/conductor-refresh`)
+### 13. `/conductor:refresh` (or `/conductor-refresh`)
 
 **Purpose**: Sync context docs with current codebase.
 

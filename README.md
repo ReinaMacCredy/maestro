@@ -140,6 +140,9 @@ trace                              # Root cause tracing
 /conductor-newtrack                # Create spec.md + plan.md from design
 /conductor-implement               # Execute tasks using beads
 /conductor-status                  # View progress
+/conductor-revert                  # Git-aware revert of work
+/conductor-revise                  # Update spec/plan mid-track
+/conductor-refresh                 # Sync context docs with codebase
 ```
 
 **Output structure**:
@@ -403,6 +406,7 @@ Outside the automated flow:
 | `/conductor-newtrack [id]` | Create spec + plan from design |
 | `/conductor-implement [id]` | Execute ONE EPIC from track's plan |
 | `/conductor-status` | View progress |
+| `/conductor-revert` | Git-aware revert of work |
 | `/conductor-revise` | Update spec/plan when implementation reveals issues |
 | `/conductor-refresh` | Sync context docs with current codebase |
 | `/doc-sync` | Sync AGENTS.md from completed threads |

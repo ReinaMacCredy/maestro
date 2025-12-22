@@ -53,7 +53,7 @@ bd update <epic-id> --notes "HANDOFF_READY: true. PLAN: <plan-path>"
 | Skill | Trigger | Description |
 |-------|---------|-------------|
 | `design` | `ds` | Design session with mandatory grounding and fb handoff |
-| `conductor` | `/conductor-design`, `/conductor-newtrack`, `/conductor-implement` | Structured planning and execution through specs and plans |
+| `conductor` | `/conductor-setup`, `/conductor-design`, `/conductor-newtrack`, `/conductor-implement`, `/conductor-status`, `/conductor-revert`, `/conductor-revise`, `/conductor-refresh` | Structured planning and execution through specs and plans |
 | `file-beads` | `fb` | File beads from plan (parallel subagents per epic) |
 | `review-beads` | `rb` | Review beads (parallel + cross-epic validation) |
 | `doc-sync` | `doc-sync`, `/doc-sync` | Sync AGENTS.md from completed thread knowledge |

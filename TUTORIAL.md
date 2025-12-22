@@ -202,10 +202,13 @@ conductor/
 ├── tech-stack.md       # Technology choices
 ├── workflow.md         # Development standards (TDD, commits)
 ├── tracks.md           # Master track list with status
+├── refresh_state.json  # Context refresh tracking
 └── tracks/
     └── auth_20241215/  # Track directory
+        ├── design.md   # High-level design (from /conductor-design)
         ├── spec.md     # Requirements and acceptance criteria
-        └── plan.md     # Phased task list with status
+        ├── plan.md     # Phased task list with status
+        └── revisions.md # Revision history log (if any)
 ```
 
 ---
@@ -982,7 +985,14 @@ git push
 
 | Phrase | Skill Activated |
 |--------|-----------------|
+| `/conductor-setup` | conductor (setup) |
 | `/conductor-design` | conductor (design) |
+| `/conductor-newtrack` | conductor (new track) |
+| `/conductor-implement` | conductor (implement) |
+| `/conductor-status` | conductor (status) |
+| `/conductor-revert` | conductor (revert) |
+| `/conductor-revise` | conductor (revise spec/plan) |
+| `/conductor-refresh` | conductor (sync docs with codebase) |
 | `tdd` | test-driven-development |
 | `trace`, `find source` | root-cause-tracing |
 | `flaky`, `race condition` | condition-based-waiting |
@@ -993,9 +1003,6 @@ git push
 | `share skill` | sharing-skills |
 | `review code` | requesting-code-review |
 | `doc-sync`, `/doc-sync` | doc-sync |
-| `/conductor-setup` | conductor (setup) |
-| `/conductor-newtrack` | conductor (new track) |
-| `/conductor-status` | conductor (status) |
 | `init`, `claim`, `done` | beads-village (multi-agent) |
 | `/ground` | grounding (context alignment) |
 | `/decompose-task` | task decomposition |

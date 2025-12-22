@@ -19,6 +19,8 @@ Add this to your global config file after installing maestro plugin.
 
 **Execution:** `fb` → `rb` → `/conductor-implement` (uses TDD) → `finish branch`
 
+**Maintenance:** `/conductor-revise` (update spec/plan), `/conductor-refresh` (sync stale docs)
+
 **Utilities:** `/ground`, `/doc-sync`, `/compact`, `dispatch`, `git worktree`
 
 **Review:** `rb`, `review code`
@@ -50,9 +52,13 @@ bd sync
 | Phrase | Skill | Description |
 |--------|-------|-------------|
 | `/conductor-setup` | `conductor` | Initialize project context |
+| `/conductor-design [desc]` | `conductor` | Design feature through collaborative dialogue |
 | `/conductor-newtrack [desc]` | `conductor` | Create feature/bug track with spec + plan |
 | `/conductor-implement [id]` | `conductor` | Execute track tasks with TDD |
 | `/conductor-status` | `conductor` | Display progress overview |
+| `/conductor-revert` | `conductor` | Git-aware revert of work |
+| `/conductor-revise` | `conductor` | Update spec/plan when issues discovered |
+| `/conductor-refresh` | `conductor` | Sync context docs with codebase |
 
 ### Beads (Issue Tracking)
 
@@ -148,7 +154,7 @@ MCP server for task coordination via `npx beads-village`.
 | `file-beads` | `fb` | File beads from plan (parallel subagents per epic) |
 | `review-beads` | `rb` | Review and refine beads issues (parallel + cross-epic validation) |
 | `codemaps` | — | Token-aware architecture documentation |
-| `conductor` | `/conductor-design`, `/conductor-newtrack` | Design and planning through dialogue |
+| `conductor` | `/conductor-setup`, `/conductor-design`, `/conductor-newtrack`, `/conductor-implement`, `/conductor-status`, `/conductor-revert`, `/conductor-revise`, `/conductor-refresh` | Structured planning and execution through specs and plans |
 | `design` | `ds` | Design session - collaborative brainstorming with mandatory grounding and fb handoff |
 | `dispatching-parallel-agents` | `dispatch` | 2+ independent parallel tasks |
 | `doc-sync` | `doc-sync`, `/doc-sync` | Sync AGENTS.md from completed threads |

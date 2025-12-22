@@ -220,6 +220,8 @@ Add maestro triggers to your global config:
 
 **Execution:** `fb` → `rb` → `/conductor-implement` → `tdd` → `finish branch`
 
+**Maintenance:** `/conductor-revise` (update spec/plan), `/conductor-refresh` (sync stale docs)
+
 **Utilities:** `/doc-sync`, `/compact`, `dispatch`, `git worktree`
 
 **Review:** `rb`, `review code`
@@ -244,6 +246,8 @@ Key triggers:
   rb                         # Review beads
   bd ready --json            # See available work
   /conductor-implement       # Execute tasks with TDD
+  /conductor-revise          # Update spec/plan mid-track
+  /conductor-refresh         # Sync docs with codebase
   tdd                        # Enter TDD mode
 
 Per-project setup (when starting a new project):
@@ -260,7 +264,13 @@ Next: Read TUTORIAL.md for complete workflow guide.
 | Install plugin | `/plugin install maestro` |
 | Global config template | [docs/GLOBAL_CONFIG_TEMPLATE.md](./docs/GLOBAL_CONFIG_TEMPLATE.md) |
 | Initialize planning | `/conductor-setup` |
-| New feature | `/conductor-newtrack "description"` |
+| Design feature | `/conductor-design "description"` |
+| New track from design | `/conductor-newtrack` |
+| Execute track | `/conductor-implement` |
+| View progress | `/conductor-status` |
+| Revert work | `/conductor-revert` |
+| Revise spec/plan | `/conductor-revise` |
+| Refresh stale docs | `/conductor-refresh` |
 | See available work | `bd ready --json` |
 | Start TDD | Say `tdd` |
 | Multi-agent coordination | `init`, `claim`, `done` via beads-village MCP |

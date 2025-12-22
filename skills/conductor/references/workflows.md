@@ -387,13 +387,16 @@ Reset status markers in plan.md from `[x]` to `[ ]` for reverted items.
 | File | Purpose |
 |------|---------|
 | `conductor/setup_state.json` | Track setup progress for resume |
+| `conductor/refresh_state.json` | Context refresh tracking |
 | `conductor/product.md` | Product vision, users, goals |
 | `conductor/tech-stack.md` | Technology choices |
 | `conductor/workflow.md` | Development workflow (TDD, commits) |
 | `conductor/tracks.md` | Master track list with status |
 | `conductor/tracks/<id>/metadata.json` | Track metadata |
+| `conductor/tracks/<id>/design.md` | High-level design |
 | `conductor/tracks/<id>/spec.md` | Requirements |
 | `conductor/tracks/<id>/plan.md` | Phased task list |
+| `conductor/tracks/<id>/revisions.md` | Revision history log |
 
 ## Status Markers
 

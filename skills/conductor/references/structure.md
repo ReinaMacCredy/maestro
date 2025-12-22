@@ -59,14 +59,15 @@ Throughout conductor files:
 | `conductor/archive/` | Archived completed tracks |
 | `conductor/exports/` | Exported summaries |
 
-## Gemini CLI Compatibility
+## Gemini CLI, Claude Code, Amp Code, and Codex Compatibility
 
 Projects set up with Gemini CLI's Conductor extension use identical structure.
 The only differences are command syntax:
 
-| Gemini CLI | Claude Code | Amp Code | Codex
-|------------|-------------|
+| Gemini CLI | Claude Code | Amp Code | Codex 
+|------------|-------------|----------|-------|
 | `/conductor:setup` | `/conductor-setup` |
+| `/conductor:design` | `/conductor-design` |
 | `/conductor:newTrack` | `/conductor-newtrack` |
 | `/conductor:implement` | `/conductor-implement` |
 | `/conductor:status` | `/conductor-status` |

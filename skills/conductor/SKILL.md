@@ -1,7 +1,7 @@
 ---
 name: conductor
-version: "1.2.0"
-description: Context-driven development methodology. Understands projects set up with Conductor (via Gemini CLI or Claude Code). Use when working with conductor/ directories, tracks, specs, plans, or when user mentions context-driven development.
+version: "1.3.0"
+description: Context-driven development methodology. Understands projects set up with Conductor (via Gemini CLI, Claude Code, Amp Code, Codex, or any Agent Skills compatible CLI). Use when working with conductor/ directories, tracks, specs, plans, or when user mentions context-driven development.
 license: Apache-2.0
 compatibility: Works with Claude Code, Gemini CLI, Amp Code, Codex, and any Agent Skills compatible CLI
 metadata:
@@ -201,10 +201,13 @@ The only differences are command syntax:
 | Gemini CLI | Claude Code |
 |------------|-------------|
 | `/conductor:setup` | `/conductor-setup` |
+| `/conductor:design` | `/conductor-design` |
 | `/conductor:newTrack` | `/conductor-newtrack` |
 | `/conductor:implement` | `/conductor-implement` |
 | `/conductor:status` | `/conductor-status` |
 | `/conductor:revert` | `/conductor-revert` |
+| `/conductor:revise` | `/conductor-revise` |
+| `/conductor:refresh` | `/conductor-refresh` |
 
 Files, workflows, and state management are fully compatible.
 

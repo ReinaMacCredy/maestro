@@ -18,10 +18,12 @@ Run after completing an epic or anytime you want to capture learnings from past 
 
 ## Prerequisites
 
-Thread URLs must be saved in beads notes during execution:
+Thread URLs must be saved in beads during execution:
 ```bash
-bd update <id> --notes "THREAD: https://ampcode.com/threads/T-xxx"
+bd comment <id> "THREAD: https://ampcode.com/threads/T-xxx"
 ```
+
+This uses atomic comment append (safer for multi-agent concurrency than `--notes`).
 
 ## Examples
 
