@@ -4,7 +4,7 @@ description: Context-driven development methodology. Understands projects set up
 license: Apache-2.0
 compatibility: Works with Claude Code, Gemini CLI, Amp Code, Codex, and any Agent Skills compatible CLI
 metadata:
-  version: "0.1.0"
+  version: "0.2.0"
   author: "Gemini CLI Extensions"
   repository: "https://github.com/gemini-cli-extensions/conductor"
   keywords:

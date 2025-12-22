@@ -86,7 +86,7 @@ bd sync
 
 | Phrase | Skill | Description |
 |--------|-------|-------------|
-| `ds` | `ds` | Design session - collaborative brainstorming |
+| `ds` | `design` | Design session - collaborative brainstorming |
 | `bs`, `brainstorm` | `brainstorming` | Deep exploration, creative design |
 | `spike [topic]` | `spike-workflow` | Time-boxed research |
 | `retro` | `retro-workflow` | Capture lessons learned |
