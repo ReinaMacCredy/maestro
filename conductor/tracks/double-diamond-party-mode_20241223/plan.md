@@ -112,45 +112,45 @@
 ## Phase 5: Custom Agent Support
 *Output: Template and documentation for user-defined agents*
 
-- [ ] Task 5.1: Create agent template
-  - [ ] Create `workflows/party-mode/custom/_template.md`
-  - [ ] Document all required and optional fields
-  - [ ] Include example values
+- [x] Task 5.1: Create agent template
+  - [x] Create `workflows/party-mode/custom/_template.md`
+  - [x] Document all required and optional fields
+  - [x] Include example values
 
-- [ ] Task 5.2: Create custom agent README
-  - [ ] Create `workflows/party-mode/custom/README.md`
-  - [ ] Write step-by-step instructions for creating custom agents
-  - [ ] Document how custom agents are discovered
-  - [ ] Add examples of custom agent use cases
+- [x] Task 5.2: Create custom agent README
+  - [x] Create `workflows/party-mode/custom/README.md`
+  - [x] Write step-by-step instructions for creating custom agents
+  - [x] Document how custom agents are discovered
+  - [x] Add examples of custom agent use cases
 
-- [ ] Task: Conductor - User Manual Verification 'Phase 5' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 5' (Protocol in workflow.md)
 
 ## Phase 6: Command & Skill Updates
 *Output: Updated design.toml and skill files*
 
-- [ ] Task 6.1: Update design.toml with Double Diamond + Party Mode
-  - [ ] Write new prompt with 4 explicit phases (DISCOVER, DEFINE, DEVELOP, DELIVER)
-  - [ ] Add phase markers ("📍 Phase: [NAME]")
-  - [ ] Add A/P/C checkpoints at 4 locations
-  - [ ] Add Party Mode protocol (references workflow.md)
-  - [ ] Add loop-back support ("revisit [phase]")
-  - [ ] Add mini-grounding at transitions
-  - [ ] Add full grounding before DELIVER
-  - [ ] Add track_id generation logic
-  - [ ] Add existing track handling
-  - [ ] Add handoff section with fb reference
+- [x] Task 6.1: Update design.toml with Double Diamond + Party Mode
+  - [x] Write new prompt with 4 explicit phases (DISCOVER, DEFINE, DEVELOP, DELIVER)
+  - [x] Add phase markers ("📍 Phase: [NAME]")
+  - [x] Add A/P/C checkpoints at 4 locations
+  - [x] Add Party Mode protocol (references workflow.md)
+  - [x] Add loop-back support ("revisit [phase]")
+  - [x] Add mini-grounding at transitions
+  - [x] Add full grounding before DELIVER
+  - [x] Add track_id generation logic
+  - [x] Add existing track handling
+  - [x] Add handoff section with fb reference
 
-- [ ] Task 6.2: Update skills/design/SKILL.md
-  - [ ] Add reference to workflows/party-mode/
-  - [ ] Add Double Diamond phase descriptions
-  - [ ] Keep existing principles (one question, multiple choice, grounding)
+- [x] Task 6.2: Update skills/design/SKILL.md
+  - [x] Add reference to workflows/party-mode/
+  - [x] Add Double Diamond phase descriptions
+  - [x] Keep existing principles (one question, multiple choice, grounding)
 
-- [ ] Task 6.3: Update skills/conductor/SKILL.md
-  - [ ] Add Double Diamond → Conductor phase mapping
-  - [ ] Document: Discover/Define = Requirements, Develop/Deliver = Plan+Implement
-  - [ ] Reference Party Mode as optional design enhancement
+- [x] Task 6.3: Update skills/conductor/SKILL.md
+  - [x] Add Double Diamond → Conductor phase mapping
+  - [x] Document: Discover/Define = Requirements, Develop/Deliver = Plan+Implement
+  - [x] Reference Party Mode as optional design enhancement
 
-- [ ] Task: Conductor - User Manual Verification 'Phase 6' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 6' (Protocol in workflow.md)
 
 ## Phase 7: Documentation & Tracks Update
 *Output: Updated tracks.md and documentation*
