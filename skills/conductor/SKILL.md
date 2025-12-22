@@ -81,7 +81,7 @@ When users express these intents, invoke the corresponding workflow:
 | User Intent | Action | Command |
 |-------------|--------|---------|
 | "Set up this project" / "Initialize conductor" | Run setup workflow | `/conductor-setup` |
-| "Design a feature" / "Brainstorm X" / `ds` | Create design through dialogue | `/conductor-design [desc]` |
+| "Design a feature" / "Brainstorm X" | Create design through dialogue | `/conductor-design [desc]` |
 | "Create a new feature" / "Add a track for X" | Create track from design | `/conductor-newtrack [id]` |
 | "Start working" / "Implement the feature" | Begin implementation | `/conductor-implement` |
 | "What's the status?" / "Show progress" | Display status | `/conductor-status` |

@@ -15,7 +15,7 @@ Add this to your global config file after installing maestro plugin.
 
 ## Core Triggers
 
-**Planning:** `ds` → `/conductor-setup` → `/conductor-newtrack`
+**Planning:** `ds`(design) → `/conductor-setup` → `/conductor-newtrack`
 
 **Execution:** `fb` → `rb` → `/conductor-implement` (uses TDD) → `finish branch`
 
@@ -86,6 +86,7 @@ bd sync
 
 | Phrase | Skill | Description |
 |--------|-------|-------------|
+| `ds` | `ds` | Design session - collaborative brainstorming |
 | `bs`, `brainstorm` | `brainstorming` | Deep exploration, creative design |
 | `spike [topic]` | `spike-workflow` | Time-boxed research |
 | `retro` | `retro-workflow` | Capture lessons learned |
