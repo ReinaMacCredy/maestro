@@ -24,7 +24,6 @@ $skill-installer ReinaMacCredy/maestro
 
 Or install specific skills:
 ```
-$skill-installer brainstorming from ReinaMacCredy/maestro
 $skill-installer conductor from ReinaMacCredy/maestro
 $skill-installer beads from ReinaMacCredy/maestro
 ```
@@ -59,7 +58,7 @@ git clone https://github.com/ReinaMacCredy/maestro.git ~/.config/amp/plugins/mae
 /skills       # Codex
 ```
 
-You should see 15 skills: `beads`, `brainstorming`, `codemaps`, `conductor`, `dispatching-parallel-agents`, `doc-sync`, `execution-workflow`, `finishing-a-development-branch`, `sharing-skills`, `subagent-driven-development`, `test-driven-development`, `using-git-worktrees`, `using-superpowers`, `verification-before-completion`, `writing-skills`.
+You should see 13 skills: `beads`, `codemaps`, `conductor`, `dispatching-parallel-agents`, `doc-sync`, `finishing-a-development-branch`, `sharing-skills`, `subagent-driven-development`, `test-driven-development`, `using-git-worktrees`, `using-superpowers`, `verification-before-completion`, `writing-skills`.
 
 ## Step 2: Install Beads Village
 
@@ -72,6 +71,20 @@ npx beads-village    # Recommended
 ## Step 3: Install CLI Tools (Optional)
 
 The plugin provides skills (mental models + workflows). For full functionality, install these optional CLI tools:
+
+### System Dependencies
+
+```bash
+# jq - required for conductor-implement and beads parsing
+# macOS
+brew install jq
+
+# Ubuntu/Debian
+sudo apt-get install jq
+
+# Fedora
+sudo dnf install jq
+```
 
 ### Beads CLI (`bd`) - Recommended
 
@@ -171,9 +184,9 @@ Add maestro triggers to your global config:
 ```markdown
 ## Maestro Workflow
 
-**Planning:** `bs` (brainstorm) → `/conductor-setup` → `/conductor-newtrack`
+**Planning:** `/conductor-design` → `/conductor-setup` → `/conductor-newtrack`
 
-**Execution:** `fb` → `bd ready` → `ct` → `tdd` → `finish branch`
+**Execution:** `fb` → `rb` → `/conductor-implement` → `tdd` → `finish branch`
 
 **Utilities:** `/doc-sync`, `/compact`, `dispatch`, `git worktree`
 
@@ -192,12 +205,13 @@ Required: bd CLI
 Optional: beads-village MCP
 
 Key triggers:
-  bs                         # Brainstorm before implementing
+  /conductor-design          # Design before implementing
   /conductor-setup           # Initialize project planning
   /conductor-newtrack "X"    # Create new feature track
   fb                         # File beads from plan
+  rb                         # Review beads
   bd ready --json            # See available work
-  ct                         # Claim and implement task
+  /conductor-implement       # Execute tasks with TDD
   tdd                        # Enter TDD mode
 
 Per-project setup (when starting a new project):
@@ -226,7 +240,7 @@ Next: Read TUTORIAL.md for complete workflow guide.
 |---------|----------|
 | Skills not loading | Run `/plugin list` to verify installation |
 | `bd: command not found` | Install via Agent Mail installer (Step 3) |
-| Agent ignores workflow | Use trigger phrase explicitly: `tdd`, `debug`, `bs` |
+| Agent ignores workflow | Use trigger phrase explicitly: `tdd`, `debug`, `/conductor-design` |
 | MCP tools not working | Check `/mcp` shows the server, verify API key |
 
 ## Without CLI Tools

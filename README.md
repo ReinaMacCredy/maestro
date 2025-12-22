@@ -37,7 +37,7 @@ $skill-installer ReinaMacCredy/maestro
 
 Or install a specific skill:
 ```
-$skill-installer brainstorming from ReinaMacCredy/maestro
+$skill-installer conductor from ReinaMacCredy/maestro
 ```
 
 ### Amp / Cursor / Other Agent Skills-compatible tools
@@ -72,29 +72,29 @@ See [SETUP_GUIDE.md](./SETUP_GUIDE.md) for detailed instructions.
 
 ## Quick Start for Agents
 
-### The Three Triggers You Need
+### The Complete Workflow
 
 ```
-/conductor-newtrack "feature"   # 1. Plan the work
-fb                              # 2. File beads from plan
-tdd                             # 3. Execute with TDD
+/conductor-setup                   # 1. Initialize project (once)
+/conductor-design "feature"        # 2. Design through dialogue → design.md
+/conductor-newtrack                # 3. Create spec.md + plan.md
+fb                                 # 4. File beads from plan
+rb                                 # 5. Review beads
+/conductor-implement               # 6. Execute with TDD + beads tracking
 ```
 
-### Session Workflow
+### Quick Start (Existing Project)
 
 ```bash
 # Start
 bd ready --json                    # What's available?
-bd update bd-123 --status in_progress  # Claim it
-bd show bd-123                     # Read context
+/conductor-implement               # Execute next task (auto-claims from beads)
 
 # Work (with TDD)
 tdd                                # Enter TDD mode
 # RED → GREEN → REFACTOR
 
-# End
-bd close bd-123 --reason "Completed"
-git add -A && git commit && git push
+# Session ends automatically tracked via beads
 ```
 
 ### When Stuck
@@ -102,7 +102,7 @@ git add -A && git commit && git push
 ```
 debug                              # Systematic debugging
 trace                              # Root cause tracing
-bs                                 # Brainstorm alternatives
+/conductor-design                  # Design alternatives
 ```
 
 ### Rules
@@ -119,7 +119,6 @@ bs                                 # Brainstorm alternatives
 | Category | Skills |
 |----------|--------|
 | **Core Workflow** | conductor, beads, file-beads, review-beads |
-| **Planning** | brainstorming, writing-plans, executing-plans |
 | **Development** | test-driven-development, using-git-worktrees, finishing-a-development-branch |
 | **Debugging** | systematic-debugging, root-cause-tracing, condition-based-waiting, defense-in-depth |
 | **Code Review** | requesting-code-review, receiving-code-review |
@@ -129,15 +128,16 @@ bs                                 # Brainstorm alternatives
 
 ## Skill Reference
 
-### Conductor (Planning)
+### Conductor (Planning & Design)
 
-**What it does**: Structured planning flow that turns fuzzy goals into `spec.md` and `plan.md`.
+**What it does**: Structured design and planning flow that turns ideas into `design.md`, `spec.md` and `plan.md`.
 
 **Triggers**:
 ```
 /conductor-setup                   # Initialize project (once)
-/conductor-newtrack "description"  # Create feature track
-/conductor-implement               # Execute track tasks
+/conductor-design "description"    # Design through dialogue → design.md
+/conductor-newtrack                # Create spec.md + plan.md from design
+/conductor-implement               # Execute tasks using beads
 /conductor-status                  # View progress
 ```
 
@@ -149,6 +149,7 @@ conductor/
 ├── workflow.md             # Development standards
 ├── tracks.md               # Master track list
 └── tracks/<track_id>/
+    ├── design.md           # High-level design (from /conductor-design)
     ├── spec.md             # Requirements + acceptance
     └── plan.md             # Phased task list
 ```
@@ -231,14 +232,14 @@ REPEAT  → Next failing test
 flowchart LR
     subgraph SESSION1["SESSION 1 (Planning)"]
         direction TB
-        brainstorm["conductor/brainstorm"]
-        design["creates design + spec + plan"]
-        fb["fb → creates beads epic"]
-        rb1["rb → review/refine issues"]
+        design["/conductor-design"]
+        newtrack["/conductor-newtrack"]
+        fb["fb → creates beads"]
+        rb1["rb → review issues"]
         handoff["outputs HANDOFF block"]
         
-        brainstorm --> design
-        design --> fb
+        design --> newtrack
+        newtrack --> fb
         fb --> rb1
         rb1 --> handoff
     end
@@ -246,15 +247,13 @@ flowchart LR
     subgraph SESSION2["SESSION 2 (Execution)"]
         direction TB
         paste["User pastes HANDOFF block"]
-        load["execution-workflow loads epic"]
-        find["finds linked plan in conductor/tracks/"]
+        implement["/conductor-implement"]
         tdd["claims tasks → TDD → verify"]
-        rb2["rb → verify threads + doc-sync + archive"]
+        complete["track complete"]
         
-        paste --> load
-        load --> find
-        find --> tdd
-        tdd --> rb2
+        paste --> implement
+        implement --> tdd
+        tdd --> complete
     end
     
     handoff -.-> paste
@@ -263,8 +262,8 @@ flowchart LR
 ### Manual Specialist Tools
 
 Outside the automated flow:
-- `bs` (brainstorm) — Deep exploration for complex unknowns
 - `debug` — Systematic debugging
+- `trace` — Root cause tracing
 
 ---
 
@@ -273,11 +272,11 @@ Outside the automated flow:
 | Command | Description |
 |---------|-------------|
 | `/conductor-setup` | Initialize Conductor for project |
-| `/conductor-newtrack [desc]` | Create new feature/bug track |
-| `/conductor-implement` | Execute track tasks |
+| `/conductor-design [desc]` | Design through collaborative dialogue |
+| `/conductor-newtrack [id]` | Create spec + plan from design |
+| `/conductor-implement [id]` | Execute tasks using beads |
 | `/conductor-status` | View progress |
 | `/doc-sync` | Sync AGENTS.md from completed threads |
-| `/brainstorm` | Start brainstorming session |
 | `/ground <pattern>` | Verify patterns against current truth |
 | `/decompose-task <phase>` | Break phases into atomic beads |
 | `/compact` | Checkpoint and compact session |
@@ -329,7 +328,7 @@ maestro/
 | Skills not loading | Run `/plugin list` to verify installation |
 | `bd: command not found` | Install via Agent Mail installer (see SETUP_GUIDE.md) |
 | `bv` hangs | You forgot `--robot-*` flag. Kill and restart with flag |
-| Agent ignores workflow | Use trigger phrase explicitly: `tdd`, `debug`, `bs` |
+| Agent ignores workflow | Use trigger phrase explicitly: `tdd`, `debug`, `/conductor-design` |
 | Tests pass immediately | You wrote code first. Delete it. Start with failing test. |
 | Context compacted, lost state | Run `bd show <issue-id>` — notes field has recovery context |
 | Plan seems incomplete | Use `rb` (review-beads) to check and refine issues |

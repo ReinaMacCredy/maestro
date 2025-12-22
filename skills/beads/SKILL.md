@@ -360,7 +360,7 @@ done id="bd-42" msg="Implemented JWT refresh with rate limiting"
 
 When closing an issue that has a `**Source Plan:**` reference:
 
-1. **Extract source plan path** from the issue description (e.g., `conductor/design/foo.md` or `conductor/tracks/<id>/plan.md`)
+1. **Extract source plan path** from the issue description (e.g., `conductor/tracks/<id>/plan.md`)
 2. **Query related issues by filename** (not full path, to avoid path format mismatches):
    ```bash
    # Extract just the filename for matching (handles absolute/relative path differences)
@@ -370,9 +370,13 @@ When closing an issue that has a `**Source Plan:**` reference:
 3. **If all are closed** → archive the plan to the archive directory:
    ```bash
    # For plans in conductor/tracks/
-   mv conductor/tracks/<id>/ conductor/archive/<id>/
-   # For designs in conductor/design/
-   mv conductor/design/<name>.md conductor/archive/$(date +%Y-%m-%d)-<name>.md
+   mkdir -p conductor/archive
+   # Use timestamp suffix if destination already exists (re-archiving)
+   DEST="conductor/archive/<id>"
+   if [[ -d "$DEST" ]]; then
+     DEST="conductor/archive/<id>-$(date +%Y%m%d%H%M%S)"
+   fi
+   mv conductor/tracks/<id>/ "$DEST/"
    ```
 
 **Archive naming**: `YYYY-MM-DD-<original-name>.md` (date prefix when archived)

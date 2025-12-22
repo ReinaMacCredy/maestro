@@ -2,7 +2,7 @@
 name: conductor
 description: Context-driven development methodology. Understands projects set up with Conductor (via Gemini CLI or Claude Code). Use when working with conductor/ directories, tracks, specs, plans, or when user mentions context-driven development.
 license: Apache-2.0
-compatibility: Works with Claude Code, Gemini CLI, and any Agent Skills compatible CLI
+compatibility: Works with Claude Code, Gemini CLI, Amp Code, Codex, and any Agent Skills compatible CLI
 metadata:
   version: "0.1.0"
   author: "Gemini CLI Extensions"
@@ -34,8 +34,8 @@ Conductor implements the Knowledge & Vibes 4-phase framework:
 
 | Phase | Purpose | Conductor Equivalent |
 |-------|---------|---------------------|
-| **Requirements** | Understand problem completely before code | `/conductor-newtrack` questions → `spec.md` |
-| **Plan** | Create detailed plan BEFORE writing code | `spec.md` → `plan.md` generation |
+| **Requirements** | Understand problem completely before code | `/conductor-design` → `design.md` → review |
+| **Plan** | Create detailed plan BEFORE writing code | `/conductor-newtrack` uses `design.md` → `spec.md` + `plan.md` |
 | **Implement** | Build incrementally with TDD | `bd ready` → execution via plan-executor |
 | **Reflect** | Verify before shipping | `verification-before-completion` + `bd close` |
 
@@ -68,7 +68,8 @@ Users can invoke these commands directly:
 | Command | Description |
 |---------|-------------|
 | `/conductor-setup` | Initialize project with product.md, tech-stack.md, workflow.md |
-| `/conductor-newtrack [desc]` | Create new feature/bug track with spec and plan |
+| `/conductor-design [desc]` | Design a feature/bug through collaborative dialogue (replaces `bs`) |
+| `/conductor-newtrack [id or desc]` | Create spec and plan from design.md (or interactive if no design) |
 | `/conductor-implement [id]` | Execute tasks from track's plan |
 | `/conductor-status` | Display progress overview |
 | `/conductor-revert` | Git-aware revert of work |
@@ -80,7 +81,8 @@ When users express these intents, invoke the corresponding workflow:
 | User Intent | Action | Command |
 |-------------|--------|---------|
 | "Set up this project" / "Initialize conductor" | Run setup workflow | `/conductor-setup` |
-| "Create a new feature" / "Add a track for X" | Create new track | `/conductor-newtrack [desc]` |
+| "Design a feature" / "Brainstorm X" / `ds` | Create design through dialogue | `/conductor-design [desc]` |
+| "Create a new feature" / "Add a track for X" | Create track from design | `/conductor-newtrack [id]` |
 | "Start working" / "Implement the feature" | Begin implementation | `/conductor-implement` |
 | "What's the status?" / "Show progress" | Display status | `/conductor-status` |
 | "Undo that" / "Revert the last task" | Revert work | `/conductor-revert` |
@@ -99,9 +101,9 @@ When this skill activates, automatically load:
 4. `conductor/tracks.md` - Current work status
 
 For active tracks, also load:
+- `conductor/tracks/<track_id>/design.md` (if exists)
 - `conductor/tracks/<track_id>/spec.md`
 - `conductor/tracks/<track_id>/plan.md`
-- `conductor/tracks/<track_id>/implement_state.json` (if exists)
 
 ## Proactive Behaviors
 
@@ -113,7 +115,7 @@ When skill is active:
 
 ## After Track Creation
 
-After creating spec.md and plan.md:
+After creating design.md, spec.md and plan.md:
 
 1. Present the plan for review
 2. Address any feedback
@@ -135,6 +137,7 @@ conductor/
 └── tracks/
     └── <track_id>/         # Format: shortname_YYYYMMDD
         ├── metadata.json   # Track type, status, dates
+        ├── design.md       # High-level design (created via /conductor-design)
         ├── spec.md         # Requirements and acceptance criteria
         └── plan.md         # Phased task list with status
 ```

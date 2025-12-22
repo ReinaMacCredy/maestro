@@ -17,19 +17,19 @@ digraph when_to_use {
     "Tasks mostly independent?" [shape=diamond];
     "Stay in this session?" [shape=diamond];
     "subagent-driven-development" [shape=box];
-    "execution-workflow" [shape=box];
-    "Manual execution or brainstorm first" [shape=box];
+    "/conductor-implement" [shape=box];
+    "/conductor-design first" [shape=box];
 
     "Have implementation plan?" -> "Tasks mostly independent?" [label="yes"];
-    "Have implementation plan?" -> "Manual execution or brainstorm first" [label="no"];
+    "Have implementation plan?" -> "/conductor-design first" [label="no"];
     "Tasks mostly independent?" -> "Stay in this session?" [label="yes"];
-    "Tasks mostly independent?" -> "Manual execution or brainstorm first" [label="no - tightly coupled"];
+    "Tasks mostly independent?" -> "/conductor-design first" [label="no - tightly coupled"];
     "Stay in this session?" -> "subagent-driven-development" [label="yes"];
-    "Stay in this session?" -> "execution-workflow" [label="no - use beads/execution-workflow"];
+    "Stay in this session?" -> "/conductor-implement" [label="no - use /conductor-implement"];
 }
 ```
 
-**vs. Execution Workflow (beads-based):**
+**vs. /conductor-implement (beads-based):**
 - Same session (no context switch)
 - Fresh subagent per task (no context pollution)
 - Two-stage review after each task: spec compliance first, then code quality
@@ -172,7 +172,7 @@ Done!
 - Parallel-safe (subagents don't interfere)
 - Subagent can ask questions (before AND during work)
 
-**vs. Execution Workflow:**
+**vs. /conductor-implement:**
 - Same session (no handoff)
 - Continuous progress (no waiting)
 - Review checkpoints automatic
@@ -237,4 +237,4 @@ Done!
 - **superpowers:test-driven-development** - Subagents follow TDD for each task
 
 **Alternative workflow:**
-- **execution-workflow** - Use for beads-based task execution across sessions
+- **/conductor-implement** - Use for beads-based task execution across sessions

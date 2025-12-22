@@ -299,7 +299,7 @@ The full pipeline assumes you're starting fresh. But you can jump in anywhere.
 
 | You Already Have | Skip To | Trigger |
 |------------------|---------|---------|
-| An idea to explore | Brainstorm first | `bs` → conductor/design/ |
+| An idea to explore | Design first | `/conductor-design` → conductor/tracks/<id>/design.md |
 | A plan (markdown, PRD, spec) | File beads directly | `fb` (file-beads skill) |
 | Existing issues/tasks | Claim and execute | `bd ready` → `bd update` |
 | A bug to fix | Debug first | `debug` → `systematic-debugging` |
@@ -318,7 +318,7 @@ Conductor generates context files (`spec.md`, `plan.md`). These files:
 - **Complex feature, starting from scratch** → Full Conductor flow
 - **Clear task, plan exists** → `fb` to file beads, then execute
 - **Single bug or small fix** → Direct to `debug` or `tdd`
-- **Exploratory/uncertain** → `bs` (brainstorm) first
+- **Exploratory/uncertain** → `/conductor-design` first
 
 ### The Minimal Path
 
@@ -596,8 +596,8 @@ Beyond the core workflow, Maestro includes specialist skills for specific situat
 
 | Skill | Trigger | When to Use |
 |-------|---------|-------------|
-| `brainstorming` | `bs` | Before any creative work. Explores intent and requirements before implementation. |
-| `writing-plans` | `write plan` | When you have requirements but need a detailed implementation plan. |
+| `conductor` | `/conductor-design` | Before any creative work. Explores intent and requirements before implementation. |
+| `conductor` | `/conductor-newtrack` | When you have a design and need spec.md + plan.md. |
 
 ---
 
@@ -677,7 +677,7 @@ Some skills work best with optional CLI tools. The skills still provide value wi
 | Problem | Solution |
 |---------|----------|
 | `bd: command not found` | Install via K&V setup or add `~/.local/bin` to PATH |
-| Agent ignores the workflow | Say trigger phrase explicitly: `tdd`, `debug`, `bs` |
+| Agent ignores the workflow | Say trigger phrase explicitly: `tdd`, `debug`, `/conductor-design` |
 | Plan seems incomplete | Use `rb` (review-beads) to check and refine issues |
 | Tests pass immediately | You wrote code first. Delete it. Start with failing test. |
 | Context compacted, lost state | Run `bd show <issue-id>` — notes field has recovery context |
@@ -801,7 +801,7 @@ bd show <id>                        # Read context
 ```
 /conductor-setup                    # Initialize project (once)
 /conductor-newtrack "description"   # New feature/bug track
-bs                                  # Brainstorm before implementing
+/conductor-design                   # Design before implementing
 fb                                  # File beads from plan
 rb                                  # Review beads
 ```
@@ -842,7 +842,7 @@ git push
 ### For Humans: What to Remember
 
 1. **Start with `bd ready`** — See what's actually unblocked
-2. **Use `bs` when uncertain** — Brainstorm before committing
+2. **Use `/conductor-design` when uncertain** — Design before committing
 3. **Skip Conductor if you have a plan** — Go straight to `fb`
 4. **Commit before leaving** — `git add -A && git commit && git push`
 
@@ -852,7 +852,7 @@ git push
 
 | Phrase | Skill Activated |
 |--------|-----------------|
-| `bs`, `brainstorm` | brainstorming |
+| `/conductor-design` | conductor (design) |
 | `tdd` | test-driven-development |
 | `trace`, `find source` | root-cause-tracing |
 | `flaky`, `race condition` | condition-based-waiting |

@@ -1,7 +1,14 @@
 # Workflow-Aware Skills Design
 
+> **SUPERSEDED (2025-12-22):** This design has been implemented. Key changes since this doc:
+> - `bs` trigger replaced by `/conductor-design` command
+> - `ct` trigger replaced by `/conductor-implement` command  
+> - `brainstorming` skill merged into conductor as `/conductor-design`
+> - `execution-workflow` skill merged into conductor as `/conductor-implement`
+> - design.md now lives at `conductor/tracks/<id>/design.md` (not separate `conductor/design/` or `conductor/plans/`)
+
 **Date**: 2025-12-21  
-**Status**: Ready for implementation
+**Status**: Implemented
 
 ## Problem
 

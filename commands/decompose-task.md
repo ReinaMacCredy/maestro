@@ -27,7 +27,7 @@ Break a phase from your master plan into atomic tasks (beads) and subtasks (sub-
 This command is part of the Conductor planning workflow:
 
 ```
-1. IDEATION (/conductor-setup, bs)
+1. IDEATION (/conductor-setup, /conductor-design)
    └─ Use frontier reasoning models with thinking cranked up
    └─ Go from idea → fully fleshed out plan (3,000-5,000+ lines)
 
@@ -40,8 +40,8 @@ This command is part of the Conductor planning workflow:
    └─ Creates parent bead (epic-level) + sub-beads
    └─ Each sub-bead is ~500 lines, 30-120 minutes of work
 
-4. EXECUTION (fb → bd ready → ct)
-   └─ Agents claim and execute individual beads
+4. EXECUTION (fb → rb → /conductor-implement)
+   └─ Agents execute using /conductor-implement with TDD
    └─ Use bd ready, bd update, bd close for coordination
 ```
 

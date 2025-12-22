@@ -18,9 +18,8 @@ This is a skills-based plugin (no build required) - all functionality is deliver
 ```
 skills/                    # 24 skill directories, each with SKILL.md
   ├── beads/              # Issue tracking (main + file-beads/review-beads)
-  ├── conductor/          # Planning methodology
+  ├── conductor/          # Planning methodology (includes /conductor-design)
   ├── test-driven-development/
-  ├── brainstorming/
   ├── systematic-debugging/
   └── ...                 # Other workflow skills
 
@@ -55,6 +54,7 @@ conductor/               # Conductor context (created per-project when initializ
   ├── workflow.md
   ├── tracks.md
   └── tracks/<id>/      # Feature/bug tracks
+      ├── design.md     # High-level design (from /conductor-design)
       ├── spec.md       # Requirements + acceptance criteria
       └── plan.md       # Phased task list
 
@@ -74,12 +74,12 @@ The plugin uses a **two-session workflow**:
 
 **Session 1 (Planning):**
 ```
-brainstorm → /conductor-newtrack → fb (file beads) → rb (review beads) → HANDOFF block
+/conductor-design → /conductor-newtrack → fb (file beads) → rb (review beads) → HANDOFF block
 ```
 
 **Session 2 (Execution):**
 ```
-HANDOFF block → ct (claim task) → tdd → verify → close → finish branch
+HANDOFF block → /conductor-implement → tdd → verify → close → finish branch
 ```
 
 ## Key Commands
@@ -165,9 +165,9 @@ git add -A && git commit && git push
 
 ## Workflow Triggers
 
-| Trigger | Skill | Use When |
-|---------|-------|----------|
-| `bs` | brainstorming | Deep exploration before implementation |
+| Trigger | Skill/Command | Use When |
+|---------|---------------|----------|
+| `/conductor-design` | conductor | Design a feature through collaborative dialogue |
 | `fb` | file-beads | Convert plan to beads issues |
 | `rb` | review-beads | Review/refine filed beads |
 | `tdd` | test-driven-development | Enter TDD mode |
@@ -188,7 +188,7 @@ The `workflows/` directory contains **single source of truth** for Conductor log
 ### Skill Naming
 - Directory names: kebab-case (`test-driven-development`)
 - SKILL.md frontmatter `name` field must match directory name
-- Triggers can be shorthand (`bs` for brainstorming, `fb` for file-beads)
+- Triggers can be shorthand (`fb` for file-beads, `rb` for review-beads)
 
 ### TDD Methodology
 **Iron law**: No production code without a failing test first.

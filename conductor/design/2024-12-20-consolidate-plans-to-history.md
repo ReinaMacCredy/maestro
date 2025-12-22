@@ -1,5 +1,14 @@
 # Consolidate Plans Directory to history/
 
+> **SUPERSEDED (2025-12-22):** This design is obsolete. The new workflow uses:
+> - `/conductor-design` creates `conductor/tracks/<id>/design.md` directly
+> - `/conductor-newtrack` creates `spec.md` + `plan.md` in the same track folder
+> - All artifacts live in `conductor/tracks/<id>/` (unified per-track location)
+> - The `history/plans/` and `docs/plans/` directories are no longer used
+> - Archiving moves completed tracks to `conductor/archive/<id>/`
+>
+> See `2024-12-20-skills-cleanup-design.md` for the updated approach.
+
 ## Goal
 
 Unify all workflow artifacts under `history/` for consistency, so skills like `file-beads` can find plans without searching multiple locations.

@@ -17,9 +17,11 @@ Automatically sync AGENTS.md files by extracting knowledge from Amp threads link
 
 ## Prerequisites
 
-**Thread URLs must be saved in beads notes** (via execution-workflow):
-- When claiming: `bd update <id> --notes "THREAD: <url>"`
-- When completing: `bd update <id> --notes "COMPLETED: ... THREAD: <url>. Files changed: ..."`
+**Thread URLs must be saved in beads comments** (via `/conductor-implement`):
+- When claiming: `bd comment <id> "THREAD: <url>"`
+- When completing: `bd comment <id> "IN_PROGRESS: ... NEXT: ... THREAD: <url>"`
+
+> **Note:** Comments are used instead of notes for multi-agent concurrency safety (append-only operations).
 
 ## Workflow
 
@@ -36,13 +38,13 @@ Filter to relevant issues:
 ### Phase 2: Extract Thread URLs
 
 For each closed issue:
-1. Parse notes field for `THREAD: https://ampcode.com/threads/T-xxx`
-2. Collect unique thread IDs
+1. Get comments: `bd comments <issue-id> --json`
+2. Parse comments for `THREAD: https://ampcode.com/threads/T-xxx` (or localhost URLs)
+3. Collect unique thread IDs
 
-**Fallback** if no threads in notes:
-```
-find_thread file:<changed-files-from-notes>
-```
+**Fallback** if no threads in comments:
+1. Check notes field (legacy format)
+2. Use `find_thread file:<changed-files-from-notes>`
 
 ### Phase 3: Read Threads (Parallel)
 
@@ -98,20 +100,7 @@ After successful commit, automatically maintain beads database.
 
 > **Note:** Cleanup runs after Phases 1-6 complete, so deleted issues' knowledge is already preserved in AGENTS.md files. No context is lost.
 
-**1. Cleanup if over threshold**
-
-Check closed issue count:
-```bash
-bd count --status closed --json
-```
-
-If count > 200, remove excess oldest issues:
-```bash
-excess = closed_count - 200
-bd cleanup --older-than 0 --limit <excess> --force
-```
-
-**2. Compact remaining issues**
+**1. Compact remaining issues**
 
 Generate AI summaries for closed issues that lack them:
 
@@ -125,6 +114,19 @@ bd compact --apply --id <id> --summary "<generated-summary>"
 ```
 
 Generate summary from issue content (title, description, notes, thread findings).
+
+**2. Cleanup if over threshold**
+
+Check closed issue count:
+```bash
+bd count --status closed --json
+```
+
+If count > 150, remove excess oldest issues:
+```bash
+excess=$((closed_count - 150))
+bd cleanup --older-than 0 --limit "$excess" --force
+```
 
 **3. Sync changes**
 
@@ -170,7 +172,7 @@ REVIEW: Confirm changes? (y/n)
 
 | Case | Handling |
 |------|----------|
-| No threads in notes | Use `find_thread file:<files>` as fallback |
+| No threads in comments | Check notes (legacy), then use `find_thread file:<files>` |
 | AGENTS.md doesn't exist | Ask user if should create new file |
 | Thread not accessible | Log warning, continue with remaining threads |
 | Conflicting info between threads | Prefer most recent thread (by timestamp) |

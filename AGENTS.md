@@ -13,14 +13,13 @@ cat .claude-plugin/plugin.json | jq .   # Validate plugin manifest
 ```
 skills/           # 15 skill directories, each with SKILL.md (frontmatter + instructions)
   beads/          # Issue tracking skill with references/ subdirectory
-  conductor/      # Planning methodology
+  conductor/      # Planning methodology (includes /conductor-design)
   ...             # TDD, debugging, code review, etc.
 commands/         # Slash command definitions (.md files)
 lib/              # Shared utilities (skills-core.js)
 .claude-plugin/   # Plugin manifest (plugin.json, marketplace.json)
 conductor/        # Unified save location for plans and tracks
-  plans/          # Brainstorming designs (inbox)
-  tracks/<id>/    # Active work (spec.md + plan.md per track)
+  tracks/<id>/    # Active work (design.md + spec.md + plan.md per track)
   archive/        # Completed work
 ```
 
@@ -47,6 +46,6 @@ bd update <epic-id> --notes "HANDOFF_READY: true. PLAN: <plan-path>"
 
 | Skill | Trigger | Description |
 |-------|---------|-------------|
+| `conductor` | `ds`, `/conductor-design`, `/conductor-newtrack` | Design and planning through dialogue |
 | `doc-sync` | `doc-sync`, `/doc-sync` | Sync AGENTS.md from completed thread knowledge |
-| `execution-workflow` | `ct`, `claim task` | Claim and implement beads tasks with TDD |
 | `beads` | `bd ready`, `bd status` | Issue tracking for multi-session work |

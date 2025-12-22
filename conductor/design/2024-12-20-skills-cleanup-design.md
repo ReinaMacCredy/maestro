@@ -1,7 +1,14 @@
 # Skills Cleanup Design
 
+> **SUPERSEDED (2025-12-22):** This design has been implemented with additional changes:
+> - `brainstorming` skill REMOVED - merged into conductor as `/conductor-design`
+> - `execution-workflow` skill REMOVED - merged into conductor as `/conductor-implement`
+> - design.md now lives at `conductor/tracks/<id>/design.md` (single location per track)
+> - `conductor/plans/` directory is OBSOLETE - designs go directly into tracks
+> - The `bs` and `ct` triggers are deprecated in favor of `/conductor-design` and `/conductor-implement`
+
 **Date:** 2025-12-20
-**Status:** Approved
+**Status:** Implemented (with modifications)
 
 ## Overview
 

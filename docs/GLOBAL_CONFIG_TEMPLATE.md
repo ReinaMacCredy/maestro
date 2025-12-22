@@ -17,60 +17,73 @@ Add this to your global config file after installing maestro plugin.
 
 ### Core Triggers
 
-**Planning:** `bs` (brainstorm) → `/conductor-setup` → `/conductor-newtrack`
+**Planning:** `ds` → `/conductor-setup` → `/conductor-newtrack`
 
-**Execution:** `fb` → `bd ready` → `ct` → `tdd` → `finish branch`
+**Execution:** `fb` → `rb` → `/conductor-implement` (uses TDD) → `finish branch`
 
 **Utilities:** `/ground`, `/doc-sync`, `/compact`, `dispatch`, `git worktree`
 
 **Review:** `rb`, `review code`
 
+### Quick Triggers
+
+| Shortcut | Command | Description |
+|----------|---------|-------------|
+| `ds` | `/conductor-design` | Design a feature through dialogue |
+| `st` | `/conductor-setup` | Initialize project context |
+| `fb` | file-beads | File beads issues from plan |
+| `rb` | review-beads | Review and refine beads issues |
+| `ct` | claim task | Claim and implement next task |
+| `bs` | brainstorming | Deep exploration before design |
+
 ### Workflow Pipeline
 
 ```
 PLANNING PHASE
-  bs (brainstorm)
+  /conductor-design "feature"
        │
-       └─ Creates: conductor/design/YYYY-MM-DD-<topic>-design.md
+       └─ Creates: conductor/tracks/<id>/design.md
        
-  /conductor-newtrack [description]
+  /conductor-newtrack
        │
-       ├─ Step 1: Clarifying questions
-       ├─ Step 2: Generate spec.md
-       ├─ Step 3: Generate plan.md
+       ├─ Uses design.md (if exists)
+       ├─ Generate spec.md
+       ├─ Generate plan.md
        │
-       └─ Creates: conductor/tracks/<id>/{spec.md, plan.md}
+       └─ Creates: conductor/tracks/<id>/{design.md, spec.md, plan.md}
                         │
                         ▼
   fb (file beads) → beads issues created (.beads/ database)
                         │
                         ▼
+  rb (review beads) → refine issues
+                        │
+                        ▼
                    Outputs HANDOFF block
 
 EXECUTION PHASE (new session)
-  Paste HANDOFF block
+  Paste HANDOFF block ("Start epic <id>")
        │
-       └─ ct (claim task) → TDD cycle → verify → close
-                                              │
-                                              ▼
-                              finish branch → merge/PR
+       └─ /conductor-implement → claims tasks → TDD cycle → verify → close
+                                                                   │
+                                                                   ▼
+                                                   finish branch → merge/PR
 ```
 
 ### Workflow Chains
 
 | Scenario | Flow |
 |----------|------|
-| Standard | `/conductor-newtrack` → `fb` → `bd ready` → `ct` |
-| With exploration | `bs` → `/conductor-newtrack` → `fb` |
-| Resume work | `bd status` → `ct` |
+| Standard | `/conductor-design` → `/conductor-newtrack` → `fb` → `rb` → `/conductor-implement` |
+| Skip design | `/conductor-newtrack` → `fb` → `rb` → `/conductor-implement` |
+| Resume work | `bd status` → `/conductor-implement` or `Start epic <id>` |
 
 ### Standard Paths
 
 | Type | Path |
 |------|------|
 | Conductor Context | `conductor/{product,tech-stack,workflow,tracks}.md` |
-| Conductor Tracks | `conductor/tracks/<id>/{spec,plan}.md` |
-| Design Docs | `conductor/design/*.md` |
+| Conductor Tracks | `conductor/tracks/<id>/{design,spec,plan}.md` |
 | Beads Database | `.beads/` |
 
 ### Session Protocols
@@ -102,13 +115,13 @@ After adding to your global config, verify:
 
 ```bash
 # Check skills loaded
-/skill list  # Should show skills including conductor, beads, brainstorming
+/skill list  # Should show skills including conductor, beads
 
 # Check beads CLI
 bd --version
 
 # Test trigger
-bs  # Should activate brainstorming skill
+/conductor-design  # Should activate design exploration workflow
 ```
 
 ---

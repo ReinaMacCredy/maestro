@@ -207,14 +207,24 @@ After 5 iterations, respond: "I don't think we can do much better than this. The
 
 ## Completion
 
-After presenting the review report, immediately output the HANDOFF block:
+After presenting the review report:
+
+Say: "Issues reviewed. Run `/conductor-implement` to start execution."
+
+Then persist the handoff metadata to the epic:
+
+```bash
+bd update <epic-id> --notes "HANDOFF_READY: true. PLAN: conductor/tracks/<id>/plan.md"
+```
+
+Then output the HANDOFF block:
 
 ```markdown
 ## HANDOFF
 
 **Command:** `Start epic <epic-id>`
 **Epic:** <epic-id> - <epic title>
-**Plan:** conductor/tracks/<id>/plan.md (or conductor/design/<design>.md)
+**Plan:** conductor/tracks/<id>/plan.md
 **Ready issues:** <count>
 **First task:** <first-issue-id> - <title>
 
