@@ -1,6 +1,6 @@
 {
   "name": "maestro",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Personal AI agent workflow skills - includes conductor planning, design sessions, TDD, and multi-session task tracking with Beads",
   "author": {
     "name": "Reina MacCredy"

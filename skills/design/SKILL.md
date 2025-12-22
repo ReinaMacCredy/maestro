@@ -1,6 +1,6 @@
 ---
 name: design
-version: "1.1.1"
+version: "1.1.2"
 description: Design Session - collaborative brainstorming to turn ideas into designs. Use when user types "ds" or wants to explore/design a feature before implementation.
 license: Apache-2.0
 compatibility: Works with Claude Code, Amp Code, Codex, and any Agent Skills compatible CLI
@@ -54,21 +54,27 @@ Present the design in small sections (200-300 words each):
 - Cover: architecture, components, data flow, error handling
 - Be ready to go back and clarify
 
+### 5. Ground the Design (REQUIRED)
+
+**This is a quality gate - do NOT proceed without grounding.**
+
+Before finalizing, verify all architectural decisions against current reality:
+
+- **External libraries/APIs**: Use `web_search` to verify patterns against current docs
+- **Existing patterns**: Use `Grep` and `finder` to confirm "how we do X here"
+- **Past decisions**: Search codebase history with `git log`
+
+Do NOT proceed to documentation until grounding confirms design is based on verified, current information—not assumptions or outdated training data.
+
 ## After the Design
 
-### Create the Track
+### Review and Handoff
 
-After design validation, create the track and save:
+1. Ask: "Review the design?"
+2. Address any feedback
+3. When approved, say: **"Design approved. Say `fb` to convert into beads issues."**
 
-1. Run `/conductor-newtrack <description>` to create the track
-2. Design is saved to: `conductor/tracks/<track_id>/design.md`
-3. Spec and plan are generated from the design
-
-### Next Steps
-
-After design is complete, say:
-
-> "Design complete. Run `/conductor-newtrack <description>` to create the track with spec and plan."
+If a track doesn't exist yet, suggest running `/conductor-newtrack <description>` first.
 
 ## Key Principles
 

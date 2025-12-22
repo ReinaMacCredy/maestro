@@ -298,20 +298,15 @@ bd list --type epic --json | jq '[.[] | select(.status != "closed")]'
 
 ### 9.1 If more epics exist:
 
-Output handoff block:
+**Present explicit choice to user (MANDATORY - do not auto-continue):**
 
 ```
----
-HANDOFF: Epic complete. Next epic ready.
-
-To continue implementation in a new session:
-/conductor-implement Start epic <next-epic-id>
-
-Or paste this message to a new thread.
----
+Epic complete. Choose:
+1. Say `rb` to review remaining beads (recommended: fewer mistakes, but uses more tokens)
+2. Handoff to next epic: Start epic <next-epic-id>
 ```
 
-**STOP HERE.** Do not automatically continue to the next epic.
+**STOP HERE.** Wait for user response. Do not automatically continue to the next epic.
 
 ### 9.2 If no more epics:
 

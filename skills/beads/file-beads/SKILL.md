@@ -1,6 +1,6 @@
 ---
 name: file-beads
-version: "1.1.1"
+version: "1.1.2"
 description: File detailed Beads epics and issues from a plan
 argument-hint: <plan-description-or-context>
 ---
@@ -87,15 +87,17 @@ Return ONLY this JSON (no other text):
 
 ### Dispatch Example
 
+> **IMPORTANT:** You MUST actually invoke the Task tool. Do not just describe or write about dispatching — execute it.
+
 ```
 Task(description: "File Epic: Authentication", prompt: <above template>)
-// Wait for result...
+// WAIT for result before next dispatch
 
 Task(description: "File Epic: Database Layer", prompt: <above template>)
-// Wait for result...
+// WAIT for result before next dispatch
 
 Task(description: "File Epic: API Endpoints", prompt: <above template>)
-// Wait for result...
+// WAIT for result before next dispatch
 ```
 
 **Execute sequentially** — each subagent must return before dispatching the next.

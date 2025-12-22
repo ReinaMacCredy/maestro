@@ -1,6 +1,6 @@
 ---
 name: review-beads
-version: "1.1.1"
+version: "1.1.2"
 description: Review, proofread, and refine filed Beads epics and issues
 argument-hint: [optional: specific epic or issue IDs to focus on]
 ---
@@ -8,6 +8,18 @@ argument-hint: [optional: specific epic or issue IDs to focus on]
 # Review and Refine Beads Issues
 
 You are tasked with thoroughly reviewing, proofreading, and polishing the filed Beads epics and issues to ensure workers have a smooth implementation experience.
+
+## Execution Pattern
+
+Dispatch a subagent to perform the review work, keeping main context clean:
+
+> **IMPORTANT:** You MUST actually invoke the Task tool. Do not just describe dispatching — execute it.
+
+```
+Task(description: "Review beads issues", prompt: <Steps 1-6 below>)
+```
+
+**After subagent returns, main agent MUST output the HANDOFF block.** This is mandatory — do not skip.
 
 ## Step 1: Load Current Issues
 
@@ -206,19 +218,23 @@ You may iterate on refinements up to 5 times if asked. Track iterations:
 
 After 5 iterations, respond: "I don't think we can do much better than this. The issues are thoroughly reviewed, well-documented, and ready for workers to implement."
 
-## Completion
+## Completion (MANDATORY)
 
-After presenting the review report:
+After presenting the review report, you MUST complete these steps:
 
-Say: "Issues reviewed. Run `/conductor-implement` to start execution."
+### 1. Suggest Next Action
 
-Then persist the handoff metadata to the epic:
+Say: **"Issues reviewed. Run `/conductor-implement` to start execution."**
+
+### 2. Persist Handoff Metadata
 
 ```bash
 bd update <epic-id> --notes "HANDOFF_READY: true. PLAN: conductor/tracks/<id>/plan.md"
 ```
 
-Then output the HANDOFF block:
+### 3. Output HANDOFF Block (REQUIRED)
+
+**You MUST output this block — do not skip:**
 
 ```markdown
 ## HANDOFF
@@ -232,4 +248,4 @@ Then output the HANDOFF block:
 Copy the command above to start a new session.
 ```
 
-Say: "Ready for execution. Copy this HANDOFF for next session."
+Say: **"Ready for execution. Copy this HANDOFF for next session."**

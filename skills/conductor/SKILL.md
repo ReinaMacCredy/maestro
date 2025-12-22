@@ -1,6 +1,6 @@
 ---
 name: conductor
-version: "1.1.1"
+version: "1.1.2"
 description: Context-driven development methodology. Understands projects set up with Conductor (via Gemini CLI or Claude Code). Use when working with conductor/ directories, tracks, specs, plans, or when user mentions context-driven development.
 license: Apache-2.0
 compatibility: Works with Claude Code, Gemini CLI, Amp Code, Codex, and any Agent Skills compatible CLI
@@ -120,6 +120,20 @@ After creating design.md, spec.md and plan.md:
 1. Present the plan for review
 2. Address any feedback
 3. When approved, say: "Plan approved. Say `fb` to convert into beads issues."
+
+## Epic Completion Behavior
+
+When `/conductor-implement` completes an epic:
+
+**Present explicit choice to user (do not auto-continue):**
+
+```
+Epic complete. Choose:
+1. Say `rb` to review remaining beads (recommended: fewer mistakes, but uses more tokens)
+2. Handoff to next epic: Start epic <next-epic-id>
+```
+
+This ensures quality gates between epics and prevents error propagation.
 
 ## Conductor Directory Structure
 
