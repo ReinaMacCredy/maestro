@@ -1,0 +1,135 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://conductor.dev/schemas/refresh_state.schema.json",
+  "title": "Refresh State",
+  "description": "State file for tracking Conductor context refresh history",
+  "type": "object",
+  "required": ["last_refresh", "scope"],
+  "properties": {
+    "last_refresh": {
+      "type": "string",
+      "description": "ISO 8601 timestamp of the last refresh",
+      "format": "date-time"
+    },
+    "scope": {
+      "type": "string",
+      "description": "Scope of the last refresh operation",
+      "enum": ["all", "tech", "product", "workflow", "track"]
+    },
+    "track_id": {
+      "type": "string",
+      "description": "Track ID if scope was 'track'",
+      "pattern": "^[a-z0-9_]+_[0-9]{8}$"
+    },
+    "changes_applied": {
+      "type": "array",
+      "description": "List of changes made during the refresh",
+      "items": {
+        "type": "object",
+        "required": ["file", "changes"],
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "File that was updated"
+          },
+          "changes": {
+            "type": "array",
+            "description": "List of changes made to the file",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "drift_detected": {
+      "type": "object",
+      "description": "Drift analysis results",
+      "properties": {
+        "tech": {
+          "type": "object",
+          "properties": {
+            "added": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "removed": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "updated": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "product": {
+          "type": "object",
+          "properties": {
+            "shipped_features": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "new_components": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "workflow": {
+          "type": "object",
+          "properties": {
+            "new_tools": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "process_changes": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "next_refresh_hint": {
+      "type": "string",
+      "description": "Suggested next refresh date (2 days from last refresh)",
+      "format": "date-time"
+    },
+    "refresh_count": {
+      "type": "integer",
+      "description": "Total number of refreshes performed",
+      "minimum": 1,
+      "default": 1
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "last_refresh": "2024-12-22T10:00:00Z",
+      "scope": "all",
+      "changes_applied": [
+        {"file": "tech-stack.md", "changes": ["added React 19", "removed webpack"]},
+        {"file": "product.md", "changes": ["added authentication feature"]}
+      ],
+      "next_refresh_hint": "2024-12-24T10:00:00Z",
+      "refresh_count": 1
+    },
+    {
+      "last_refresh": "2024-12-22T14:30:00Z",
+      "scope": "tech",
+      "changes_applied": [
+        {"file": "tech-stack.md", "changes": ["updated Node.js to v22"]}
+      ],
+      "drift_detected": {
+        "tech": {
+          "added": ["vitest"],
+          "removed": ["jest"],
+          "updated": ["typescript 5.3 -> 5.4"]
+        }
+      },
+      "next_refresh_hint": "2024-12-24T14:30:00Z",
+      "refresh_count": 3
+    }
+  ]
+}

@@ -19,10 +19,14 @@ workflows/
 ├── implement.md           # Task implementation workflow
 ├── status.md              # Progress reporting workflow
 ├── revert.md              # Git-aware revert workflow
+├── validate.md            # Project validation workflow
+├── refresh.md             # Context refresh workflow
+├── revise.md              # Spec/plan revision workflow
 └── schemas/
     ├── metadata.schema.json        # Track metadata structure
     ├── implement_state.schema.json # Implementation state tracking
-    └── setup_state.schema.json     # Setup progress state
+    ├── setup_state.schema.json     # Setup progress state
+    └── refresh_state.schema.json   # Context refresh state
 ```
 
 ## How to Use

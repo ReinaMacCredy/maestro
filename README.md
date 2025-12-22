@@ -290,6 +290,15 @@ flowchart TB
             VINIT --> VCLAIM --> VRESERVE
             VRESERVE -.-> VMSG -.-> VDONE
         end
+
+        subgraph REVISE["REVISION LOOP"]
+            direction TB
+            ISSUE{"Issue Found"}
+            REVISE_CMD["/conductor-revise"]
+            UPDATE_DOCS["Update spec/plan"]
+            
+            ISSUE -->|spec/plan issue| REVISE_CMD --> UPDATE_DOCS
+        end
     end
 
     subgraph FINISH["FINISH PHASE"]
@@ -299,12 +308,20 @@ flowchart TB
         BRANCH --> DOCSYNC
     end
 
+    subgraph MAINTENANCE["MAINTENANCE"]
+        direction LR
+        REFRESH["/conductor-refresh"]
+    end
+
     RB -->|"HANDOFF"| CHECK
     WORK -->|"tdd"| TDD_LOOP
     WORK -->|"parallel"| PARALLEL
     WORK -->|"multi-agent"| VILLAGE
+    VERIFY -->|"issue"| ISSUE
+    UPDATE_DOCS --> WORK
     COLLECT --> VERIFY
     MORE -->|no| BRANCH
+    DOCSYNC -.->|"stale docs"| REFRESH
 ```
 
 ### Session-Based Flow
@@ -386,6 +403,8 @@ Outside the automated flow:
 | `/conductor-newtrack [id]` | Create spec + plan from design |
 | `/conductor-implement [id]` | Execute ONE EPIC from track's plan |
 | `/conductor-status` | View progress |
+| `/conductor-revise` | Update spec/plan when implementation reveals issues |
+| `/conductor-refresh` | Sync context docs with current codebase |
 | `/doc-sync` | Sync AGENTS.md from completed threads |
 | `/ground <pattern>` | Verify patterns against current truth |
 | `/decompose-task <phase>` | Break phases into atomic beads |
@@ -403,6 +422,7 @@ Outside the automated flow:
 | Understand the philosophy and workflow | [TUTORIAL.md](./TUTORIAL.md) |
 | Set up a new project | [SETUP_GUIDE.md](./SETUP_GUIDE.md) |
 | Configure global agent (CLAUDE.md/AGENTS.md) | [docs/GLOBAL_CONFIG_TEMPLATE.md](./docs/GLOBAL_CONFIG_TEMPLATE.md) |
+| Use commands manually without skills | [docs/manual-workflow-guide.md](./docs/manual-workflow-guide.md) |
 | See all skills at a glance | [Skills table above](#the-skills) |
 
 ### Repository Structure

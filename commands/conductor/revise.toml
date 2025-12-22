@@ -1,0 +1,82 @@
+description = "Update spec/plan when implementation reveals issues"
+prompt = """
+## 1.0 SYSTEM DIRECTIVE
+Update specifications and plans when implementation reveals issues, requirements change, or scope adjustments are needed.
+
+## 2.0 IDENTIFY ACTIVE TRACK
+1. Read `conductor/tracks.md` to find the in-progress track ([~])
+2. If no active track, ask user which track to revise
+3. Load `conductor/tracks/<track_id>/spec.md` and `plan.md` for context
+
+## 3.0 DETERMINE REVISION TYPE
+Ask user what needs revision:
+> "What needs to be revised?"
+> A) **Spec** - Requirements changed or were misunderstood
+> B) **Plan** - Tasks need to be added, removed, or modified
+> C) **Both** - Significant scope change affecting spec and plan
+
+## 4.0 GATHER REVISION CONTEXT
+Ask targeted questions based on revision type:
+
+**For Spec Revisions:**
+- What was discovered during implementation?
+- Which requirements were wrong/incomplete?
+- Are there new requirements to add?
+
+**For Plan Revisions:**
+- Which tasks are affected?
+- Are there new tasks to add?
+- Should any tasks be removed or reordered?
+
+## 5.0 CREATE REVISION RECORD
+Create/append to `conductor/tracks/<track_id>/revisions.md`:
+
+```markdown
+## Revision [N] - [Date]
+
+**Type:** Spec | Plan | Both
+**Trigger:** [What prompted the revision]
+**Phase:** [Current phase when revision occurred]
+**Task:** [Current task when revision occurred]
+
+### Changes Made
+[List of changes]
+
+### Rationale
+[Why these changes were necessary]
+```
+
+## 6.0 UPDATE DOCUMENTS
+1. Present proposed changes to spec.md and/or plan.md
+2. Ask for approval
+3. Apply changes:
+   - New tasks: Insert with `[ ]`
+   - Removed tasks: Mark as `[-] [REMOVED: reason]`
+   - Modified tasks: Update description
+4. Add revision marker at top of updated files:
+   ```markdown
+   > **Last Revised:** [Date] - See [revisions.md](revisions.md) for history
+   ```
+
+## 7.0 UPDATE STATE
+If `implement_state.json` exists, add revision tracking:
+```json
+{
+  "last_revision": "ISO timestamp",
+  "revision_count": n
+}
+```
+
+## 8.0 COMMIT
+```bash
+git add conductor/tracks/<track_id>/
+git commit -m "conductor(revise): Update spec/plan for <track_id>"
+```
+
+## 9.0 ANNOUNCE
+Report what was revised:
+> "Revision complete for track `<track_id>`:"
+> - Spec: [updated/unchanged]
+> - Plan: [+N tasks, -M tasks, ~P modified]
+> "Run `/conductor:implement` to continue with updated plan."
+"""

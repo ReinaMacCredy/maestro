@@ -18,6 +18,8 @@ Context-Driven Development for Claude Code. Measure twice, code once.
 | `implement [track_id]` | Execute tasks from track's plan following TDD workflow |
 | `status` | Display progress overview |
 | `revert` | Git-aware revert of tracks, phases, or tasks |
+| `revise` | Update spec/plan when implementation reveals issues |
+| `refresh` | Sync context docs with current codebase |
 
 ---
 
@@ -398,3 +400,213 @@ Reset status markers in plan.md from `[x]` to `[ ]` for reverted items.
 - `[ ]` - Pending/New
 - `[~]` - In Progress
 - `[x]` - Completed
+- `[!]` - Blocked (with reason)
+- `[-]` - Skipped (with reason)
+
+---
+
+## Workflow: Revise
+
+**Trigger:** `/conductor-revise`
+
+Use this command when implementation reveals issues, requirements change, or the plan needs adjustment mid-track.
+
+### 1. Identify Active Track
+- Find current track (marked `[~]` in tracks.md)
+- If no active track, ask user which track to revise
+- Load `spec.md` and `plan.md` for context
+
+### 2. Determine Revision Type
+Ask user what needs revision:
+
+```
+What needs to be revised?
+1. Spec - Requirements changed or were misunderstood
+2. Plan - Tasks need to be added, removed, or modified
+3. Both - Significant scope change affecting spec and plan
+```
+
+### 3. Gather Revision Context
+Ask targeted questions based on revision type:
+
+**For Spec Revisions:**
+- What was discovered during implementation?
+- Which requirements were wrong/incomplete?
+- Are there new requirements to add?
+
+**For Plan Revisions:**
+- Which tasks are affected?
+- Are there new tasks to add?
+- Should any tasks be removed or reordered?
+
+### 4. Create Revision Record
+Create/append to `conductor/tracks/<track_id>/revisions.md`:
+
+```markdown
+## Revision [N] - [Date]
+
+**Type:** Spec | Plan | Both
+**Trigger:** [What prompted the revision]
+**Phase:** [Current phase when revision occurred]
+**Task:** [Current task when revision occurred]
+
+### Changes Made
+[List of changes]
+
+### Rationale
+[Why these changes were necessary]
+```
+
+### 5. Update Documents
+1. Present proposed changes to `spec.md` and/or `plan.md`
+2. Ask for approval
+3. Apply changes:
+   - New tasks: Insert with `[ ]`
+   - Removed tasks: Mark as `[-] [REMOVED: reason]`
+   - Modified tasks: Update description
+4. Add revision marker at top of updated files:
+   ```markdown
+   > **Last Revised:** [Date] - See [revisions.md](revisions.md) for history
+   ```
+
+### 6. Commit
+```bash
+git add conductor/tracks/<track_id>/
+git commit -m "conductor(revise): Update spec/plan for <track_id>"
+```
+
+### 7. Announce
+Report what was revised and suggest `/conductor-implement` to continue.
+
+---
+
+## Workflow: Refresh
+
+**Trigger:** `/conductor-refresh [scope]`
+
+Use this command when context documentation has become stale due to codebase evolution, new dependencies, or shipped features.
+
+### 1. Verify Setup
+Check `conductor/` exists with core files. If not, suggest `/conductor-setup`.
+
+### 2. Determine Scope
+If no argument provided, ask:
+
+```
+What would you like to refresh?
+1. all - Full refresh of all context documents
+2. tech - Update tech-stack.md (dependencies, frameworks)
+3. product - Update product.md (shipped features, evolved goals)
+4. workflow - Update workflow.md (process changes)
+5. track [id] - Refresh specific track's spec/plan
+```
+
+### 3. Analyze Drift
+
+**For `tech` scope:**
+Use package manager CLI commands to detect outdated/changed dependencies:
+
+```bash
+# Node.js - check outdated packages
+npm outdated --json 2>/dev/null || yarn outdated --json 2>/dev/null || pnpm outdated --json 2>/dev/null
+
+# Python - check outdated packages
+pip list --outdated --format=json 2>/dev/null || uv pip list --outdated 2>/dev/null
+
+# Go - check for updates
+go list -u -m all 2>/dev/null
+
+# Rust - check outdated crates
+cargo outdated --format json 2>/dev/null
+
+# Ruby - check outdated gems
+bundle outdated --parseable 2>/dev/null
+```
+
+Then compare output against `conductor/tech-stack.md` to detect:
+- Added dependencies (in lockfile but not documented)
+- Removed dependencies (documented but not in lockfile)
+- Version drift (major/minor version mismatches)
+
+**For `product` scope:**
+- Check completed tracks `[x]` in `tracks.md` vs features in `product.md`
+- Identify shipped features not documented
+
+**For `workflow` scope:**
+- Check `.github/workflows/` for CI/CD changes
+- Detect new linting/testing tools
+- Identify process drift
+
+**For `track` scope:**
+- Compare track's `spec.md` and `plan.md` against actual implementation
+
+### 4. Present Drift Report
+```markdown
+## Context Refresh Analysis
+
+**Last setup:** [date from setup_state.json]
+**Days since setup:** [N days]
+
+### Tech Stack Drift
+- **Added:** [new packages/frameworks detected]
+- **Removed:** [packages in docs but not in codebase]
+- **Version changes:** [major version updates]
+
+### Product Drift
+- **Shipped features:** [completed tracks not in product.md]
+- **New components:** [directories/modules not documented]
+
+### Recommended Updates
+1. [Specific update 1]
+2. [Specific update 2]
+```
+
+### 5. Confirm Updates
+Ask user:
+```
+Apply these updates?
+1. All recommended updates
+2. Select specific updates
+3. Cancel
+```
+
+### 6. Apply Updates
+For each confirmed update:
+1. Create backup: `<file>.md.bak`
+2. Apply changes to relevant files
+3. Add refresh marker at top:
+   ```markdown
+   > **Last Refreshed:** [Date] - Context synced with codebase
+   ```
+
+### 7. Update State
+Create/update `conductor/refresh_state.json`:
+```json
+{
+  "last_refresh": "ISO timestamp",
+  "scope": "all|tech|product|workflow|track",
+  "changes_applied": [
+    {"file": "tech-stack.md", "changes": ["added X", "removed Y"]}
+  ],
+  "next_refresh_hint": "ISO timestamp (2 days from now)"
+}
+```
+
+### 8. Commit
+```bash
+git add conductor/
+git commit -m "conductor(refresh): Sync context with codebase
+
+Scope: [scope]
+- [key changes summary]"
+```
+
+### 9. Announce
+```
+Context refresh complete:
+- tech-stack.md: [updated/unchanged]
+- product.md: [updated/unchanged]
+- workflow.md: [updated/unchanged]
+
+Next suggested refresh: [date 2 days from now]
+```

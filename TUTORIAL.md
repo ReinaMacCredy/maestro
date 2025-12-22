@@ -130,6 +130,15 @@ flowchart TB
             VINIT --> VCLAIM --> VRESERVE
             VRESERVE -.-> VMSG -.-> VDONE
         end
+
+        subgraph REVISE["REVISION LOOP"]
+            direction TB
+            ISSUE{"Issue Found"}
+            REVISE_CMD["/conductor-revise"]
+            UPDATE_DOCS["Update spec/plan"]
+            
+            ISSUE -->|spec/plan issue| REVISE_CMD --> UPDATE_DOCS
+        end
     end
 
     subgraph FINISH["FINISH PHASE"]
@@ -139,12 +148,20 @@ flowchart TB
         BRANCH --> DOCSYNC
     end
 
+    subgraph MAINTENANCE["MAINTENANCE"]
+        direction LR
+        REFRESH["/conductor-refresh"]
+    end
+
     RB -->|"HANDOFF"| CHECK
     WORK -->|"tdd"| TDD_LOOP
     WORK -->|"parallel"| PARALLEL
     WORK -->|"multi-agent"| VILLAGE
+    VERIFY -->|"issue"| ISSUE
+    UPDATE_DOCS --> WORK
     COLLECT --> VERIFY
     MORE -->|no| BRANCH
+    DOCSYNC -.->|"stale docs"| REFRESH
 ```
 
 ---

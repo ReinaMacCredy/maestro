@@ -1,6 +1,6 @@
 ---
 name: conductor
-version: "1.1.3"
+version: "1.2.0"
 description: Context-driven development methodology. Understands projects set up with Conductor (via Gemini CLI or Claude Code). Use when working with conductor/ directories, tracks, specs, plans, or when user mentions context-driven development.
 license: Apache-2.0
 compatibility: Works with Claude Code, Gemini CLI, Amp Code, Codex, and any Agent Skills compatible CLI
@@ -73,6 +73,8 @@ Users can invoke these commands directly:
 | `/conductor-implement [id]` | Execute ONE EPIC from track's plan |
 | `/conductor-status` | Display progress overview |
 | `/conductor-revert` | Git-aware revert of work |
+| `/conductor-revise` | Update spec/plan when implementation reveals issues |
+| `/conductor-refresh` | Sync context docs with current codebase |
 
 ## Intent Mapping
 
@@ -91,6 +93,8 @@ When users express these intents, invoke the corresponding workflow:
 | "Skip this task" | Skip current task | `/conductor-skip` |
 | "Archive completed tracks" | Archive tracks | `/conductor-archive` |
 | "Export project summary" | Generate export | `/conductor-export` |
+| "Docs are outdated" / "Sync with codebase" | Refresh context | `/conductor-refresh` |
+| "Spec is wrong" / "Plan needs update" | Revise spec/plan | `/conductor-revise` |
 
 ## Context Loading
 
@@ -112,6 +116,7 @@ When skill is active:
 2. **On task completion**: Suggest next task or phase verification
 3. **On blocked detection**: Alert user and suggest alternatives
 4. **On all tasks complete**: Congratulate and offer archive/cleanup
+5. **On stale context**: If setup >2 days old or significant changes detected, suggest `/conductor-refresh`
 
 ## After Track Creation
 
@@ -147,13 +152,18 @@ conductor/
 ├── workflow.md             # Development standards (TDD, commits, coverage)
 ├── tracks.md               # Master track list with status markers
 ├── setup_state.json        # Setup progress tracking
+├── refresh_state.json      # Context refresh tracking (created by /conductor-refresh)
 ├── code_styleguides/       # Language-specific style guides
+├── archive/                # Archived completed tracks
+├── exports/                # Exported summaries
 └── tracks/
     └── <track_id>/         # Format: shortname_YYYYMMDD
         ├── metadata.json   # Track type, status, dates
         ├── design.md       # High-level design (created via /conductor-design)
         ├── spec.md         # Requirements and acceptance criteria
-        └── plan.md         # Phased task list with status
+        ├── plan.md         # Phased task list with status
+        ├── revisions.md    # Revision history log (if any)
+        └── implement_state.json  # Implementation resume state (if in progress)
 ```
 
 ## Status Markers

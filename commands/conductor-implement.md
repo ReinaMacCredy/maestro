@@ -227,14 +227,45 @@ Skip for simple tasks.
 4. Run tests, confirm they pass
 5. Refactor if needed (keep tests passing)
 
-### 8.4 Commit Changes
+### 8.4 Self-Check & Issue Handling
+
+After implementing the task (or completing the TDD cycle):
+
+- Run tests, linting, and type checks.
+- If issues are found, analyze the root cause using this decision tree.
+
+**Issue Analysis Decision Tree:**
+
+| Issue Type | Indicators | Action |
+|------------|------------|--------|
+| **Implementation Bug** | Typo, logic error, missing import, test assertion wrong | Fix directly and continue |
+| **Spec Issue** | Requirement wrong, missing, impossible, edge case not covered | Trigger Revise workflow for spec → update `spec.md` → log in `revisions.md` → then fix |
+| **Plan Issue** | Missing task, wrong order, task too big/small, dependency missing | Trigger Revise workflow for plan → update `plan.md` → log in `revisions.md` → continue |
+| **Blocked** | External dependency, need user input, waiting on API | Mark as blocked, suggest `/conductor-block` |
+
+**Agent MUST announce:**
+
+> This issue reveals [spec/plan problem \| implementation bug]. [Triggering revision \| Fixing directly].
+
+**For Spec/Plan Issues:**
+
+1. Create or append to `conductor/tracks/<track_id>/revisions.md` with:
+   - Revision number, date, type (Spec/Plan/Both)
+   - What triggered the revision
+   - Current phase/task when issue occurred
+   - Changes made and rationale
+2. Update the relevant document (`spec.md` or `plan.md`).
+3. Add a "Last Revised: <date>" marker at the top of the updated file.
+4. Commit the revision before continuing to implementation.
+
+### 8.5 Commit Changes
 
 ```bash
 git add .
 git commit -m "feat(<scope>): <description>"
 ```
 
-### 8.5 Complete Task in Beads (Source of Truth)
+### 8.6 Complete Task in Beads (Source of Truth)
 
 **Beads (`bd`) is the Single Source of Truth for task status.**
 
@@ -248,7 +279,7 @@ EOF
 
 If this command fails, stop and report the error. Do not proceed until beads status is updated.
 
-### 8.6 Update plan.md (Best-Effort Sync)
+### 8.7 Update plan.md (Best-Effort Sync)
 
 Mark corresponding task in plan.md as complete:
 - Change `[ ]` to `[x]`
@@ -256,7 +287,7 @@ Mark corresponding task in plan.md as complete:
 
 **Note**: This is for human readability only. If `bd close` succeeded but this update fails, log a warning but do not fail the workflow - Beads status is authoritative.
 
-### 8.7 Check for More Tasks (Epic-Scoped)
+### 8.8 Check for More Tasks (Epic-Scoped)
 
 ```bash
 # Only check for tasks within the current epic
@@ -281,6 +312,7 @@ When all tasks in `$CURRENT_EPIC` are closed:
 2. **Run verification:**
    - Run full test suite
    - Present manual verification steps to user
+   - If issues are found, apply the Issue Analysis Decision Tree from **8.4 Self-Check & Issue Handling**
    - Ask for explicit confirmation: "Does this work as expected?"
 
 3. **Create checkpoint commit:**
