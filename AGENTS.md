@@ -1,7 +1,7 @@
 # AGENTS.md - Maestro Plugin
 
 ## Overview
-Claude Code plugin bundling workflow skills: Conductor (planning), Beads (issue tracking), and Superpowers (TDD, debugging, code review).
+Claude Code plugin bundling workflow skills: Conductor (planning), Design (Double Diamond sessions), Beads (issue tracking), and Superpowers (TDD, debugging, code review).
 
 ## Build/Test Commands
 No build required - this is a skill/documentation plugin. Validate JSON:
@@ -14,8 +14,11 @@ cat .claude-plugin/plugin.json | jq .   # Validate plugin manifest
 skills/           # 16 skill directories, each with SKILL.md (frontmatter + instructions)
   beads/          # Issue tracking skill with references/ subdirectory
   conductor/      # Planning methodology (includes /conductor-design)
+  design/         # Double Diamond design sessions (ds trigger)
   ...             # TDD, debugging, code review, etc.
 commands/         # Slash command definitions (.md files)
+workflows/        # Workflow definitions
+  party-mode/     # Multi-agent collaborative design review (A/P/C [P] option)
 lib/              # Shared utilities (skills-core.js)
 .claude-plugin/   # Plugin manifest (plugin.json, marketplace.json)
 conductor/        # Unified save location for plans and tracks
@@ -52,7 +55,7 @@ bd update <epic-id> --notes "HANDOFF_READY: true. PLAN: <plan-path>"
 
 | Skill | Trigger | Description |
 |-------|---------|-------------|
-| `design` | `ds` | Design session with mandatory grounding and fb handoff |
+| `design` | `ds` | Double Diamond design session with A/P/C checkpoints and Party Mode option |
 | `conductor` | `/conductor-setup`, `/conductor-design`, `/conductor-newtrack`, `/conductor-implement`, `/conductor-status`, `/conductor-revert`, `/conductor-revise`, `/conductor-refresh` | Structured planning and execution through specs and plans |
 | `file-beads` | `fb` | File beads from plan (parallel subagents per epic) |
 | `review-beads` | `rb` | Review beads (parallel + cross-epic validation) |

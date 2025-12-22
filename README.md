@@ -118,7 +118,7 @@ trace                              # Root cause tracing
 
 | Category | Skills |
 |----------|--------|
-| **Core Workflow** | conductor, design, beads, file-beads (parallel), review-beads (parallel) |
+| **Core Workflow** | conductor, design (Double Diamond + Party Mode), beads, file-beads (parallel), review-beads (parallel) |
 | **Development** | test-driven-development, using-git-worktrees, finishing-a-development-branch |
 | **Utilities** | codemaps, doc-sync, dispatching-parallel-agents, subagent-driven-development |
 | **Meta** | using-superpowers, verification-before-completion, writing-skills, sharing-skills |
@@ -132,6 +132,83 @@ trace                              # Root cause tracing
 ### Conductor (Planning & Design)
 
 **What it does**: Structured design and planning flow that turns ideas into `design.md`, `spec.md` and `plan.md`.
+
+**Design Sessions (Double Diamond)**: `/conductor-design` (or `ds` trigger) runs a Double Diamond design session with four phases: DISCOVER → DEFINE → DEVELOP → DELIVER. Each phase ends with A/P/C checkpoints:
+- **[A] Advanced**: Deeper analysis, assumption audit
+- **[P] Party**: Multi-agent collaborative review (see `workflows/party-mode/`)
+- **[C] Continue**: Proceed to next phase
+
+```mermaid
+flowchart TB
+    subgraph PIPELINE["WORKFLOW PIPELINE"]
+        direction TB
+        
+        subgraph SETUP["SETUP"]
+            TRIGGER["ds / /conductor-design"]
+            CHECK["Verify conductor/<br/>(product.md, tech-stack.md, workflow.md)"]
+        end
+        
+        subgraph DIAMOND1["DIAMOND 1: UNDERSTAND PROBLEM"]
+            DISCOVER["DISCOVER (Diverge)<br/>• Explore problem space<br/>• 5 Whys, edge cases<br/>• Mini-ground: codebase check"]
+            DEFINE["DEFINE (Converge)<br/>• Problem statement<br/>• Success criteria<br/>• YAGNI filtering"]
+        end
+        
+        subgraph DIAMOND2["DIAMOND 2: DESIGN SOLUTION"]
+            DEVELOP["DEVELOP (Diverge)<br/>• 3+ approaches<br/>• Trade-off analysis<br/>• Wild/10x option"]
+            DELIVER["DELIVER (Converge)<br/>• Architecture, Components<br/>• Data Model, User Flow<br/>• FULL GROUNDING required"]
+        end
+        
+        subgraph HANDOFF["HANDOFF"]
+            DESIGNMD["design.md saved to<br/>conductor/tracks/{id}/"]
+            NEXT["Next: fb to file beads<br/>or /conductor-newtrack"]
+        end
+    end
+    
+    subgraph APC["A/P/C CHECKPOINTS"]
+        A["[A] Advanced<br/>Deeper analysis"]
+        P["[P] Party Mode<br/>12 Expert Agents"]
+        C["[C] Continue<br/>Next phase"]
+        BACK["[↩ Back]<br/>Revisit prior phase"]
+    end
+    
+    subgraph AGENTS["PARTY MODE: 12 AGENTS (BMAD v6)"]
+        subgraph PRODUCT["Product Module"]
+            PM["📋 John (PM)"]
+            ANALYST["📊 Mary (Analyst)"]
+            UX["🎨 Sally (UX)"]
+        end
+        
+        subgraph TECHNICAL["Technical Module"]
+            ARCH["🏗️ Winston (Architect)"]
+            DEV["💻 Amelia (Developer)"]
+            QA["🧪 Murat (QA)"]
+            DOCS["📚 Paige (Docs)"]
+        end
+        
+        subgraph CREATIVE["Creative Module"]
+            STORY["📖 Sophia (Storyteller)"]
+            BRAIN["🧠 Carson (Brainstorm)"]
+            DESIGN["🎯 Maya (Design Thinking)"]
+            STRAT["⚡ Victor (Strategist)"]
+            SOLVER["🔬 Dr. Quinn (Solver)"]
+        end
+    end
+    
+    TRIGGER --> CHECK
+    CHECK --> DISCOVER
+    DISCOVER --> APC
+    APC --> DEFINE
+    DEFINE --> APC
+    APC --> DEVELOP
+    DEVELOP --> APC
+    APC --> DELIVER
+    DELIVER --> APC
+    APC --> DESIGNMD
+    DESIGNMD --> NEXT
+    
+    P -.-> AGENTS
+    AGENTS -.->|"Synthesize & Return"| APC
+```
 
 **Triggers**:
 ```
@@ -238,13 +315,13 @@ REPEAT  → Next failing test
 flowchart TB
     subgraph PLANNING["PLANNING PHASE"]
         direction LR
-        DS["ds"]
         CS["/conductor-setup"]
+        DS["ds (Double Diamond)"]
         CNT["/conductor-newtrack"]
         FB["fb"]
         RB["rb"]
         
-        DS --> CS --> CNT --> FB --> RB
+        CS --> DS --> CNT --> FB --> RB
     end
 
     subgraph EXECUTION["EXECUTION PHASE"]
@@ -333,13 +410,15 @@ flowchart TB
 flowchart LR
     subgraph SESSION1["SESSION 1 (Planning)"]
         direction TB
-        design["ds → design session"]
+        setup["/conductor-setup"]
+        design["ds → Double Diamond design"]
         ground["ground decisions"]
         newtrack["/conductor-newtrack"]
         fb["fb → creates beads"]
         rb1["rb → review issues"]
         handoff["outputs HANDOFF block"]
         
+        setup --> design
         design --> ground
         ground --> newtrack
         newtrack --> fb
@@ -402,7 +481,8 @@ Outside the automated flow:
 | Command | Description |
 |---------|-------------|
 | `/conductor-setup` | Initialize Conductor for project |
-| `/conductor-design [desc]` | Design through collaborative dialogue |
+| `/conductor-design [desc]` | Design through Double Diamond dialogue (A/P/C checkpoints, Party Mode) |
+| `ds` | Start design session (alias for `/conductor-design`) |
 | `/conductor-newtrack [id]` | Create spec + plan from design |
 | `/conductor-implement [id]` | Execute ONE EPIC from track's plan |
 | `/conductor-status` | View progress |

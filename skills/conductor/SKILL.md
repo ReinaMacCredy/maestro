@@ -103,7 +103,7 @@ Users can invoke these commands directly:
 | Command | Description |
 |---------|-------------|
 | `/conductor-setup` | Initialize project with product.md, tech-stack.md, workflow.md |
-| `/conductor-design [desc]` | Design a feature/bug through collaborative dialogue (replaces `bs`) |
+| `/conductor-design [desc]` | Design a feature/bug through Double Diamond dialogue (`ds` is the shorthand trigger) |
 | `/conductor-newtrack [id or desc]` | Create spec and plan from design.md (or interactive if no design) |
 | `/conductor-implement [id]` | Execute ONE EPIC from track's plan |
 | `/conductor-status` | Display progress overview |

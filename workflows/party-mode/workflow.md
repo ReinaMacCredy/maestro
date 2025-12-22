@@ -2,6 +2,8 @@
 
 Multi-agent collaborative design workflow using LLM-as-orchestrator pattern.
 
+Triggered from A/P/C checkpoints in the design session (`skills/design/SKILL.md`) used by `/conductor-design` or `ds` (`skills/conductor/SKILL.md`).
+
 ## Purpose
 
 Party Mode brings multiple expert perspectives into design sessions. When triggered via [P] at A/P/C checkpoints, 2-3 relevant agents provide multi-perspective feedback, cross-talk, and synthesis before returning to the main flow.
@@ -31,7 +33,7 @@ Party Mode brings multiple expert perspectives into design sessions. When trigge
 | strategist | Victor | ⚡ | creative | Business strategy, competitive analysis, positioning |
 | solver | Dr. Quinn | 🔬 | creative | Problem decomposition, root cause analysis, systematic solutions |
 
-**Agent Files:** `agents/{module}/{id}.md`
+**Agent Files:** `workflows/party-mode/agents/{module}/{id}.md`
 
 ---
 
@@ -161,7 +163,7 @@ Resume main Double Diamond flow with synthesized insights.
 
 ## Custom Agents
 
-Users can add custom agents in `custom/` directory. See `custom/README.md` for format.
+Users can add custom agents in `workflows/party-mode/custom/` directory. See `workflows/party-mode/custom/README.md` for format.
 
 Custom agents are discovered automatically and added to selection pool with `custom` module tag.
 

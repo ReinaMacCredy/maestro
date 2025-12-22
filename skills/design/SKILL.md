@@ -1,6 +1,6 @@
 ---
 name: design
-version: "2.0.0"
+version: "2.1.0"
 description: Design Session - collaborative brainstorming to turn ideas into designs using Double Diamond methodology. Use when user types "ds" or wants to explore/design a feature before implementation.
 license: Apache-2.0
 compatibility: Works with Claude Code, Amp Code, Codex, and any Agent Skills compatible CLI
@@ -22,6 +22,7 @@ Turn ideas into fully-formed designs through collaborative dialogue using the Do
 
 Trigger on:
 - User types `ds`
+- User runs `/conductor-design`
 - User wants to brainstorm or explore an idea
 - User says "design a feature" or "let's think through X"
 - Before creating a conductor track
@@ -36,11 +37,81 @@ The session flows through four phases, alternating between divergent and converg
       ◇                ◇                ◇                ◇
      / \              / \              / \              / \
     /   \            /   \            /   \            /   \
-   /     \          /     \          /     \          /     \
-  /       \        /       \        /       \        /       \
- -----------      -----------      -----------      -----------
- Explore the      Frame the        Explore          Finalize
-   Problem        Problem          Solutions        the Design
+   -----------      -----------      -----------      -----------
+   Explore the      Frame the        Explore          Finalize
+     Problem        Problem          Solutions        the Design
+```
+
+```mermaid
+flowchart TB
+    subgraph PIPELINE["WORKFLOW PIPELINE"]
+        direction TB
+        
+        subgraph SETUP["SETUP"]
+            TRIGGER["ds / /conductor-design"]
+            CHECK["Verify conductor/<br/>(product.md, tech-stack.md, workflow.md)"]
+        end
+        
+        subgraph DIAMOND1["DIAMOND 1: UNDERSTAND PROBLEM"]
+            DISCOVER["DISCOVER (Diverge)<br/>• Explore problem space<br/>• 5 Whys, edge cases<br/>• Mini-ground: codebase check"]
+            DEFINE["DEFINE (Converge)<br/>• Problem statement<br/>• Success criteria<br/>• YAGNI filtering"]
+        end
+        
+        subgraph DIAMOND2["DIAMOND 2: DESIGN SOLUTION"]
+            DEVELOP["DEVELOP (Diverge)<br/>• 3+ approaches<br/>• Trade-off analysis<br/>• Wild/10x option"]
+            DELIVER["DELIVER (Converge)<br/>• Architecture, Components<br/>• Data Model, User Flow<br/>• FULL GROUNDING required"]
+        end
+        
+        subgraph HANDOFF["HANDOFF"]
+            DESIGNMD["design.md saved to<br/>conductor/tracks/{id}/"]
+            NEXT["Next: fb to file beads<br/>or /conductor-newtrack"]
+        end
+    end
+    
+    subgraph APC["A/P/C CHECKPOINTS"]
+        A["[A] Advanced<br/>Deeper analysis"]
+        P["[P] Party Mode<br/>12 Expert Agents"]
+        C["[C] Continue<br/>Next phase"]
+        BACK["[↩ Back]<br/>Revisit prior phase"]
+    end
+    
+    subgraph AGENTS["PARTY MODE: 12 AGENTS (BMAD v6)"]
+        subgraph PRODUCT["Product Module"]
+            PM["📋 John (PM)"]
+            ANALYST["📊 Mary (Analyst)"]
+            UX["🎨 Sally (UX)"]
+        end
+        
+        subgraph TECHNICAL["Technical Module"]
+            ARCH["🏗️ Winston (Architect)"]
+            DEV["💻 Amelia (Developer)"]
+            QA["🧪 Murat (QA)"]
+            DOCS["📚 Paige (Docs)"]
+        end
+        
+        subgraph CREATIVE["Creative Module"]
+            STORY["📖 Sophia (Storyteller)"]
+            BRAIN["🧠 Carson (Brainstorm)"]
+            DESIGN["🎯 Maya (Design Thinking)"]
+            STRAT["⚡ Victor (Strategist)"]
+            SOLVER["🔬 Dr. Quinn (Solver)"]
+        end
+    end
+    
+    TRIGGER --> CHECK
+    CHECK --> DISCOVER
+    DISCOVER --> APC
+    APC --> DEFINE
+    DEFINE --> APC
+    APC --> DEVELOP
+    DEVELOP --> APC
+    APC --> DELIVER
+    DELIVER --> APC
+    APC --> DESIGNMD
+    DESIGNMD --> NEXT
+    
+    P -.-> AGENTS
+    AGENTS -.->|"Synthesize & Return"| APC
 ```
 
 ## The Process
@@ -145,6 +216,8 @@ User can say "revisit [PHASE]" at any time to return to an earlier phase. When l
 3. When approved, say: **"Design approved. Say `fb` to convert into beads issues."**
 
 If a track doesn't exist yet, suggest running `/conductor-newtrack <description>` first.
+
+For the full implementation workflow after design, see `skills/conductor/SKILL.md`.
 
 ## Key Principles
 

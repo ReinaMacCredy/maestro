@@ -73,95 +73,74 @@ Everything else in the plugin supports this core pipeline.
 
 ```mermaid
 flowchart TB
-    subgraph PLANNING["PLANNING PHASE"]
-        direction LR
-        DS["ds"]
-        CS["/conductor-setup"]
-        CNT["/conductor-newtrack"]
-        FB["fb"]
-        RB["rb"]
+    subgraph PIPELINE["WORKFLOW PIPELINE"]
+        direction TB
         
-        DS --> CS --> CNT --> FB --> RB
-    end
-
-    subgraph EXECUTION["EXECUTION PHASE"]
-        subgraph MAIN_LOOP["MAIN AGENT LOOP"]
-            direction TB
-            CHECK["bd ready"]
-            CLAIM["bd update --status in_progress"]
-            WORK["Execute Task"]
-            VERIFY["Verify"]
-            UPDATE["bd checkpoint"]
-            MORE{More?}
-            
-            CHECK --> CLAIM --> WORK --> VERIFY
-            VERIFY -->|pass| UPDATE --> MORE
-            VERIFY -->|fail| WORK
-            MORE -->|yes| CHECK
+        subgraph SETUP["SETUP"]
+            TRIGGER["ds / /conductor-design"]
+            CHECK["Verify conductor/<br/>(product.md, tech-stack.md, workflow.md)"]
         end
-
-        subgraph TDD_LOOP["TDD MICRO-LOOP"]
-            direction LR
-            RED["RED"]
-            GREEN["GREEN"]
-            REFACTOR["REFACTOR"]
-            RED --> GREEN --> REFACTOR --> RED
+        
+        subgraph DIAMOND1["DIAMOND 1: UNDERSTAND PROBLEM"]
+            DISCOVER["DISCOVER (Diverge)<br/>• Explore problem space<br/>• 5 Whys, edge cases<br/>• Mini-ground: codebase check"]
+            DEFINE["DEFINE (Converge)<br/>• Problem statement<br/>• Success criteria<br/>• YAGNI filtering"]
         end
-
-        subgraph PARALLEL["PARALLEL DISPATCH"]
-            direction TB
-            SPAWN["dispatch"]
-            SUB1["Agent 1"]
-            SUB2["Agent 2"]
-            SUB3["Agent N"]
-            COLLECT["Collect"]
-            
-            SPAWN --> SUB1 & SUB2 & SUB3 --> COLLECT
+        
+        subgraph DIAMOND2["DIAMOND 2: DESIGN SOLUTION"]
+            DEVELOP["DEVELOP (Diverge)<br/>• 3+ approaches<br/>• Trade-off analysis<br/>• Wild/10x option"]
+            DELIVER["DELIVER (Converge)<br/>• Architecture, Components<br/>• Data Model, User Flow<br/>• FULL GROUNDING required"]
         end
-
-        subgraph VILLAGE["BEADS VILLAGE"]
-            direction TB
-            VINIT["bv init"]
-            VCLAIM["bv claim"]
-            VRESERVE["bv reserve"]
-            VMSG["bv msg"]
-            VDONE["bv done"]
-            
-            VINIT --> VCLAIM --> VRESERVE
-            VRESERVE -.-> VMSG -.-> VDONE
-        end
-
-        subgraph REVISE["REVISION LOOP"]
-            direction TB
-            ISSUE{"Issue Found"}
-            REVISE_CMD["/conductor-revise"]
-            UPDATE_DOCS["Update spec/plan"]
-            
-            ISSUE -->|spec/plan issue| REVISE_CMD --> UPDATE_DOCS
+        
+        subgraph HANDOFF["HANDOFF"]
+            DESIGNMD["design.md saved to<br/>conductor/tracks/{id}/"]
+            NEXT["Next: fb to file beads<br/>or /conductor-newtrack"]
         end
     end
-
-    subgraph FINISH["FINISH PHASE"]
-        direction LR
-        BRANCH["finish branch"]
-        DOCSYNC["doc-sync"]
-        BRANCH --> DOCSYNC
+    
+    subgraph APC["A/P/C CHECKPOINTS"]
+        A["[A] Advanced<br/>Deeper analysis"]
+        P["[P] Party Mode<br/>12 Expert Agents"]
+        C["[C] Continue<br/>Next phase"]
+        BACK["[↩ Back]<br/>Revisit prior phase"]
     end
-
-    subgraph MAINTENANCE["MAINTENANCE"]
-        direction LR
-        REFRESH["/conductor-refresh"]
+    
+    subgraph AGENTS["PARTY MODE: 12 AGENTS (BMAD v6)"]
+        subgraph PRODUCT["Product Module"]
+            PM["📋 John (PM)"]
+            ANALYST["📊 Mary (Analyst)"]
+            UX["🎨 Sally (UX)"]
+        end
+        
+        subgraph TECHNICAL["Technical Module"]
+            ARCH["🏗️ Winston (Architect)"]
+            DEV["💻 Amelia (Developer)"]
+            QA["🧪 Murat (QA)"]
+            DOCS["📚 Paige (Docs)"]
+        end
+        
+        subgraph CREATIVE["Creative Module"]
+            STORY["📖 Sophia (Storyteller)"]
+            BRAIN["🧠 Carson (Brainstorm)"]
+            DESIGN["🎯 Maya (Design Thinking)"]
+            STRAT["⚡ Victor (Strategist)"]
+            SOLVER["🔬 Dr. Quinn (Solver)"]
+        end
     end
-
-    RB -->|"HANDOFF"| CHECK
-    WORK -->|"tdd"| TDD_LOOP
-    WORK -->|"parallel"| PARALLEL
-    WORK -->|"multi-agent"| VILLAGE
-    VERIFY -->|"issue"| ISSUE
-    UPDATE_DOCS --> WORK
-    COLLECT --> VERIFY
-    MORE -->|no| BRANCH
-    DOCSYNC -.->|"stale docs"| REFRESH
+    
+    TRIGGER --> CHECK
+    CHECK --> DISCOVER
+    DISCOVER --> APC
+    APC --> DEFINE
+    DEFINE --> APC
+    APC --> DEVELOP
+    DEVELOP --> APC
+    APC --> DELIVER
+    DELIVER --> APC
+    APC --> DESIGNMD
+    DESIGNMD --> NEXT
+    
+    P -.-> AGENTS
+    AGENTS -.->|"Synthesize & Return"| APC
 ```
 
 ---
@@ -173,6 +152,111 @@ flowchart TB
 **Why you need it**: It forces you to clarify scope, risks, and phases before the agent starts coding. Without this, you waste tokens rewriting half-baked designs.
 
 **Key insight**: Conductor is for *project-level* thinking — tracks, specs, and plans. Not micro-tasks.
+
+#### Design Sessions (Double Diamond)
+
+Before creating specs, use `/conductor-design` (or say `ds`) to run a Double Diamond design session:
+
+```
+    DISCOVER          DEFINE           DEVELOP          DELIVER
+   (Diverge)        (Converge)        (Diverge)        (Converge)
+      ◇                ◇                ◇                ◇
+     / \              / \              / \              / \
+    /   \            /   \            /   \            /   \
+   -----------      -----------      -----------      -----------
+   Explore the      Frame the        Explore          Finalize
+     Problem        Problem          Solutions        the Design
+```
+
+```mermaid
+flowchart TB
+    subgraph PIPELINE["WORKFLOW PIPELINE"]
+        direction TB
+        
+        subgraph SETUP["SETUP"]
+            TRIGGER["ds / /conductor-design"]
+            CHECK["Verify conductor/<br/>(product.md, tech-stack.md, workflow.md)"]
+        end
+        
+        subgraph DIAMOND1["DIAMOND 1: UNDERSTAND PROBLEM"]
+            DISCOVER["DISCOVER (Diverge)<br/>• Explore problem space<br/>• 5 Whys, edge cases<br/>• Mini-ground: codebase check"]
+            DEFINE["DEFINE (Converge)<br/>• Problem statement<br/>• Success criteria<br/>• YAGNI filtering"]
+        end
+        
+        subgraph DIAMOND2["DIAMOND 2: DESIGN SOLUTION"]
+            DEVELOP["DEVELOP (Diverge)<br/>• 3+ approaches<br/>• Trade-off analysis<br/>• Wild/10x option"]
+            DELIVER["DELIVER (Converge)<br/>• Architecture, Components<br/>• Data Model, User Flow<br/>• FULL GROUNDING required"]
+        end
+        
+        subgraph HANDOFF["HANDOFF"]
+            DESIGNMD["design.md saved to<br/>conductor/tracks/{id}/"]
+            NEXT["Next: fb to file beads<br/>or /conductor-newtrack"]
+        end
+    end
+    
+    subgraph APC["A/P/C CHECKPOINTS"]
+        A["[A] Advanced<br/>Deeper analysis"]
+        P["[P] Party Mode<br/>12 Expert Agents"]
+        C["[C] Continue<br/>Next phase"]
+        BACK["[↩ Back]<br/>Revisit prior phase"]
+    end
+    
+    subgraph AGENTS["PARTY MODE: 12 AGENTS (BMAD v6)"]
+        subgraph PRODUCT["Product Module"]
+            PM["📋 John (PM)"]
+            ANALYST["📊 Mary (Analyst)"]
+            UX["🎨 Sally (UX)"]
+        end
+        
+        subgraph TECHNICAL["Technical Module"]
+            ARCH["🏗️ Winston (Architect)"]
+            DEV["💻 Amelia (Developer)"]
+            QA["🧪 Murat (QA)"]
+            DOCS["📚 Paige (Docs)"]
+        end
+        
+        subgraph CREATIVE["Creative Module"]
+            STORY["📖 Sophia (Storyteller)"]
+            BRAIN["🧠 Carson (Brainstorm)"]
+            DESIGN["🎯 Maya (Design Thinking)"]
+            STRAT["⚡ Victor (Strategist)"]
+            SOLVER["🔬 Dr. Quinn (Solver)"]
+        end
+    end
+    
+    TRIGGER --> CHECK
+    CHECK --> DISCOVER
+    DISCOVER --> APC
+    APC --> DEFINE
+    DEFINE --> APC
+    APC --> DEVELOP
+    DEVELOP --> APC
+    APC --> DELIVER
+    DELIVER --> APC
+    APC --> DESIGNMD
+    DESIGNMD --> NEXT
+    
+    P -.-> AGENTS
+    AGENTS -.->|"Synthesize & Return"| APC
+```
+
+Each phase ends with **A/P/C checkpoints**:
+- **[A] Advanced** — Deeper analysis, challenge assumptions
+- **[P] Party** — Multi-agent collaborative review (see Party Mode below)
+- **[C] Continue** — Proceed to next phase
+- **[↩ Back]** — Return to previous phase
+
+#### Party Mode (Multi-Agent Review)
+
+When you select `[P]` at an A/P/C checkpoint, Party Mode activates 2-3 expert agents for collaborative feedback:
+
+| Module | Agents |
+|--------|--------|
+| **Product** | John (PM), Mary (Analyst), Sally (UX) |
+| **Technical** | Winston (Architect), Amelia (Developer), Murat (QA), Paige (Docs) |
+| **Creative** | Sophia (Storyteller), Carson (Brainstorm), Maya (Design Thinking), Victor (Strategist), Dr. Quinn (Solver) |
+
+Agents respond in character, cross-talk, then synthesize insights. See `workflows/party-mode/workflow.md` for details.
 
 **For humans**:
 - Think of it as the "measure twice, cut once" step
@@ -728,7 +812,7 @@ Beyond the core workflow, Maestro includes specialist skills for specific situat
 
 | Skill | Trigger | When to Use |
 |-------|---------|-------------|
-| `design` | `ds` | Brainstorm ideas into designs with mandatory grounding and fb handoff. |
+| `design` | `ds` | Explore ideas with Double Diamond methodology, A/P/C checkpoints, and optional Party Mode. |
 | `conductor` | `/conductor-newtrack` | When you have a design and need spec.md + plan.md. |
 | `conductor` | `/conductor-implement` | Execute ONE epic from track, then choose: rb or handoff. |
 
@@ -986,7 +1070,8 @@ git push
 | Phrase | Skill Activated |
 |--------|-----------------|
 | `/conductor-setup` | conductor (setup) |
-| `/conductor-design` | conductor (design) |
+| `ds` | design (Double Diamond design session) |
+| `/conductor-design` | conductor (design with A/P/C + Party Mode) |
 | `/conductor-newtrack` | conductor (new track) |
 | `/conductor-implement` | conductor (implement) |
 | `/conductor-status` | conductor (status) |

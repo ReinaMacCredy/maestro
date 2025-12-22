@@ -216,7 +216,7 @@ Add maestro triggers to your global config:
 ```markdown
 ## Maestro Workflow
 
-**Planning:** `/conductor-design` → `/conductor-setup` → `/conductor-newtrack`
+**Planning:** `/conductor-setup` → `/conductor-design` (or `ds`) → `/conductor-newtrack`
 
 **Execution:** `fb` → `rb` → `/conductor-implement` → `tdd` → `finish branch`
 
@@ -239,8 +239,9 @@ Required: bd CLI
 Optional: beads-village MCP
 
 Key triggers:
-  /conductor-design          # Design before implementing
-  /conductor-setup           # Initialize project planning
+  /conductor-setup           # Initialize project planning (once)
+  ds                         # Double Diamond design session (A/P/C, Party Mode)
+  /conductor-design "X"      # Same as ds, with description
   /conductor-newtrack "X"    # Create new feature track
   fb                         # File beads from plan
   rb                         # Review beads
@@ -264,7 +265,7 @@ Next: Read TUTORIAL.md for complete workflow guide.
 | Install plugin | `/plugin install maestro` |
 | Global config template | [docs/GLOBAL_CONFIG_TEMPLATE.md](./docs/GLOBAL_CONFIG_TEMPLATE.md) |
 | Initialize planning | `/conductor-setup` |
-| Design feature | `/conductor-design "description"` |
+| Design feature | `/conductor-design "description"` or `ds` |
 | New track from design | `/conductor-newtrack` |
 | Execute track | `/conductor-implement` |
 | View progress | `/conductor-status` |
