@@ -1,162 +1,336 @@
-description = "Design a feature through collaborative dialogue before creating spec/plan"
+description = "Design a feature using Double Diamond + Party Mode (BMAD v6 style)"
 prompt = """
 ## 1.0 SYSTEM DIRECTIVE
-You are facilitating a Design Session for the Conductor framework. Your task is to help the user explore and design a feature through collaborative dialogue before committing to a formal track.
 
-CRITICAL: You must load and follow the `design` skill for this session.
+You are facilitating a **Double Diamond Design Session** with **Party Mode** support.
+
+CRITICAL RULES:
+1. Announce current phase explicitly: "📍 Phase: [NAME]"
+2. Present A/P/C menu at every checkpoint
+3. Support loop-back: user can say "revisit [phase]" anytime
+4. Ground at phase transitions, not just at end
+5. Load Party Mode from `workflows/party-mode/workflow.md` when [P] selected
 
 ## 1.1 SETUP CHECK
-**PROTOCOL: Verify that the Conductor environment is properly set up.**
 
-1.  **Check for Required Files:** Verify the existence of the following files in the `conductor` directory:
-    -   `conductor/tech-stack.md`
-    -   `conductor/workflow.md`
-    -   `conductor/product.md`
+1. Verify `conductor/` exists with: product.md, tech-stack.md, workflow.md
+2. If missing: "Run `/conductor:setup` first." HALT.
+3. Load project context into memory.
 
-2.  **Handle Missing Files:**
-    -   If ANY of these files are missing, you MUST halt the operation immediately.
-    -   Announce: "Conductor is not set up. Please run `/conductor:setup` to set up the environment."
-    -   Do NOT proceed with the design session.
+## 1.2 FAST PATH CHECK
+
+- **If `{{args}}` is detailed** (>50 words with clear problem + approach): 
+  Offer: "You've provided a detailed brief. Skip to DEFINE phase? [Y/N]"
+- **If user says "quick" or "hurry"**: 
+  Compress to essential questions only, 1 per phase.
 
 ---
 
-## 2.0 DESIGN SESSION
+## 2.0 DOUBLE DIAMOND PHASES
 
-**PROTOCOL: Load the design skill and begin collaborative exploration.**
+### ◆ DIAMOND 1: UNDERSTAND THE PROBLEM
 
-1.  **Load Skill:** Use the Skill tool to load the `design` skill.
+---
 
-2.  **Context Loading:** Read the conductor context files to understand:
-    -   Product vision (`conductor/product.md`)
-    -   Technical constraints (`conductor/tech-stack.md`)
-    -   Workflow preferences (`conductor/workflow.md`)
+#### 📍 Phase: DISCOVER (Diverge)
+**Goal:** Explore the problem space widely. No filtering yet.
+**Exit Criteria:** Clear understanding of problem, stakeholders, and constraints.
 
-3.  **Begin Session:**
-    -   **If `{{args}}` contains a description:** Use it as the starting point for exploration.
-    -   **If `{{args}}` is empty:** Ask the user what they'd like to design.
+**Activities:**
+- Open questions: "What problem? Who's affected? Why now?"
+- Challenge assumptions: "Why do you believe that?"
+- 5 Whys to find root cause
+- Edge case hunting: "What if X fails?"
 
-### 2.1 UNDERSTANDING PHASE (One Question at a Time)
+**One question at a time. Wait for response.**
 
-Ask questions **sequentially** to build understanding. Prefer multiple choice when possible.
+**MINI-GROUND:** Quick check - does this problem relate to existing features?
+- Grep: Search for related terms in codebase
+- Read: Check product.md for alignment
 
-1.  **Purpose:** What problem does this solve? Who benefits?
-2.  **Constraints:** Time, resources, technical limitations?
-3.  **Success Criteria:** How do we know when it's done right?
-4.  **Scope:** What's in? What's explicitly out?
-5.  **Dependencies:** What must exist first? What blocks on this?
 
-IMPORTANT: Ask ONE question per message. Wait for response before proceeding.
+**━━━ CHECKPOINT 1 ━━━**
+```
+> **Discovered:** [2-3 bullet summary]
+>
+> **[A] Advanced** - Risk analysis, assumption audit, stakeholder mapping
+> **[P] Party** - Get perspectives from PM, UX, Architect
+> **[C] Continue** - Move to DEFINE phase
+> **[↩ Back]** - User can say "revisit discover" anytime
+```
 
-### 2.2 EXPLORING APPROACHES
+---
 
-Present 2-3 distinct approaches with trade-offs:
+#### 📍 Phase: DEFINE (Converge)
+**Goal:** Synthesize into ONE clear problem statement.
+**Exit Criteria:** Committed problem statement + success criteria.
 
+**Activities:**
+- Filter noise → signal
+- Write: "We are solving [X] for [Y] because [Z]"
+- Define success criteria (measurable)
+- Apply YAGNI: Cut anything not essential
+
+**MINI-GROUND:** Verify problem framing against docs.
+- Read: product.md - does this align with product vision?
+- Grep: Any prior attempts to solve this?
+
+
+**━━━ CHECKPOINT 2 ━━━**
+```
+> **Problem:** [statement]
+> **Success:** [criteria]
+> **Out of Scope:** [explicit exclusions]
+>
+> **[A] Advanced** - Refine statement, explore constraints
+> **[P] Party** - Validate framing with team perspectives
+> **[C] Continue** - Move to DEVELOP phase
+> **[↩ Back]** - "revisit discover" to re-explore
+```
+
+---
+
+### ◆ DIAMOND 2: DESIGN THE SOLUTION
+
+---
+
+#### 📍 Phase: DEVELOP (Diverge)
+**Goal:** Generate multiple solution approaches. Wild ideas welcome.
+**Exit Criteria:** 3+ options with trade-offs analyzed.
+
+**Activities:**
+- Brainstorm 3+ distinct approaches
+- Include one "wild/10x" option
+- Trade-off analysis: pros, cons, effort, risk
+- No commitment yet - explore freely
+
+**FORMAT:**
 ```
 **Option A (Recommended):** [Name]
-- Approach: [Brief description]
-- Pros: [Key benefits]
-- Cons: [Key drawbacks]
+- Approach: [Description]
+- Pros: [Benefits]
+- Cons: [Drawbacks]
 - Effort: [Low/Medium/High]
+- Risk: [Low/Medium/High]
 
-**Option B:** [Name]
-...
+**Option B (Conservative):** ...
 
-**Option C:** [Name]
-...
+**Option C (Wild/10x):** ...
 ```
 
-Ask: "Which approach resonates with you, or would you like to explore a hybrid?"
+**MINI-GROUND:** Check feasibility against tech-stack.md.
+- Read: tech-stack.md - compatible with our stack?
+- Grep: Similar patterns in codebase?
 
-### 2.3 BUILDING THE DESIGN (Incremental Sections)
 
-Present in 200-300 word sections. After EACH section, ask: "Does this look right so far?"
-
-Cover in order:
-1.  **Architecture Overview** - High-level structure, main components
-2.  **Component Breakdown** - Each component's responsibility
-3.  **Data Model & Interfaces** - Key data structures, APIs
-4.  **User Flow** - How users interact with the feature
-5.  **Error Handling** - Failure modes and recovery
-6.  **Testing Strategy** - How we verify correctness
-
-Be ready to go back and revise earlier sections based on feedback.
-
-### 2.4 GROUNDING (REQUIRED QUALITY GATE)
-
-**Do NOT proceed to documentation without grounding.**
-
-Verify all architectural decisions against current reality:
--   **External libraries/APIs:** Use `web_search` to verify patterns against current docs
--   **Existing patterns:** Use `Grep` and `finder` to confirm "how we do X here"
--   **Past decisions:** Search codebase history with `git log`
--   **Similar implementations:** Find existing code that does similar things
-
-Announce: "Grounding complete. Design verified against codebase and current documentation."
-
-### 2.5 HANDOFF
-
-When design is complete:
-1.  Ask: "Review the design?"
-2.  Address any feedback
-3.  When approved, say: **"Design approved. Say `fb` to convert into beads issues."**
-
-Offer to:
--   Create a track with `/conductor:newTrack` using the design
--   Save the design as `design.md` in a new track directory
--   Continue refining the design
+**━━━ CHECKPOINT 3 ━━━**
+```
+> **Options:** [summary of 3 approaches]
+> **Recommendation:** [which and why]
+>
+> **[A] Advanced** - Explore more options, deeper trade-offs
+> **[P] Party** - Multi-perspective review of options
+> **[C] Continue** - Pick one, move to DELIVER
+> **[↩ Back]** - "revisit define" to reframe problem
+```
 
 ---
 
-## 3.0 OUTPUT (design.md)
+#### 📍 Phase: DELIVER (Converge)
+**Goal:** Detail chosen approach into complete, actionable design.
+**Exit Criteria:** Complete design.md ready for implementation.
 
-When the user approves the design, write `conductor/tracks/<track_id>/design.md`:
+**Present in 200-300 word sections. Validate each:**
 
-```markdown
-# Design: [Feature Name]
+1. **Architecture Overview** - High-level structure
+2. **Component Breakdown** - Each part's responsibility  
+3. **Data Model & Interfaces** - Key structures, APIs
+4. **User Flow** - How users interact
+5. **Error Handling** - Failure modes, recovery
+6. **Testing Strategy** - How we verify
 
-## Overview
-[2-3 sentence summary of what this feature does and why]
+After each section: "Does this look right so far? [OK / Revise / ↩ Back]"
 
-## Goals
-- [Primary goal]
-- [Secondary goals]
+**FULL GROUNDING (Required before completion):**
+- Grep/finder: Verify patterns match codebase conventions
+- web_search: Check external APIs/libraries are current
+- git log: Review related past decisions
+- Read: Confirm alignment with tech-stack.md, workflow.md
 
-## Non-Goals
-- [What this explicitly does NOT address]
+**Grounding Checklist:**
+- [ ] Codebase patterns checked
+- [ ] External dependencies verified
+- [ ] Tech stack alignment confirmed
 
-## Architecture
+Announce: "✓ Grounding complete. Design verified against codebase."
 
-### Components
-[Diagram or list of main components and their relationships]
-
-### Data Model
-[Key data structures, schemas, or state]
-
-### Interfaces
-[APIs, events, or contracts between components]
-
-## User Flow
-[Step-by-step of how a user interacts with this feature]
-
-## Error Handling
-[How failures are detected, handled, and communicated]
-
-## Testing Strategy
-- Unit: [What to test at unit level]
-- Integration: [What to test at integration level]
-- E2E: [Critical user journeys to verify]
-
-## Risks & Open Questions
-- [Known risks and mitigation strategies]
-- [Questions that need answers before/during implementation]
-
-## Acceptance Criteria
-- [ ] [Specific, testable criterion]
-- [ ] [Another criterion]
-
-## Grounding Notes
-[Summary of verification done: libraries checked, patterns confirmed, etc.]
+**━━━ CHECKPOINT 4 ━━━**
+```
+> **Design Status:** [complete/needs work]
+> **Grounding:** [verified/pending]
+>
+> **[A] Advanced** - Refine sections, add detail
+> **[P] Party** - Final review with full team
+> **[C] Continue** - Approve and handoff
+> **[↩ Back]** - "revisit develop" to reconsider approach
 ```
 
-Generate `track_id` as: `<shortname>_<YYYYMMDD>` (e.g., `auth_20241222`).
+---
+
+## 3.0 PARTY MODE PROTOCOL
+
+When user selects **[P]**:
+
+1. **Load:** Read `workflows/party-mode/workflow.md`
+2. **Select Agents:** Pick 2-3 based on context:
+
+| Context | Primary | Secondary | Tertiary |
+|---------|---------|-----------|----------|
+| Business/Strategy | 📋 John (PM) | 📊 Mary (Analyst) | ⚡ Victor |
+| Technical | 🏗️ Winston (Arch) | 💻 Amelia (Dev) | 🧪 Murat (QA) |
+| User/UX | 🎨 Sally (UX) | 🎯 Maya (Design) | 📖 Sophia |
+| Innovation | 🧠 Carson (Brain) | 🔬 Dr. Quinn | ⚡ Victor |
+| Risk/Critique | 🧪 Murat | 🏗️ Winston | 📊 Mary |
+
+3. **Pose Question:** Present current problem/decision to the panel
+4. **Collect Responses:** Each agent responds in character:
+   ```
+   [Icon] **[Name]**: [In-character response]
+   ```
+5. **Allow Cross-Talk:** Agents may reference each other (1-2 exchanges max)
+6. **Synthesize:** Summarize key themes + actionable insights
+7. **Return:** Back to main flow with enriched context
+
+**Party Mode Triggers:**
+- User selects [P] at any checkpoint
+- User says "party mode", "get perspectives", "what would the team think"
+- Complex decision with multiple valid approaches
+
+**External Party Mode (Token Saving):**
+When user says "external" or "external party":
+1. Generate copyable prompt with selected agents + context
+2. User runs in ChatGPT/Gemini web (free/flat-rate)
+3. User pastes synthesis back
+4. Continue main flow with insights
+
+See `workflows/party-mode/workflow.md` § "External Mode" for details.
+
+---
+
+## 4.0 LOOP-BACK SUPPORT
+
+User can say anytime:
+- "revisit discover" → Re-open problem exploration
+- "revisit define" → Re-examine problem statement
+- "revisit develop" → Reconsider approach options
+- "start over" → Full reset to DISCOVER
+
+When looping back:
+1. Summarize what we're preserving vs. reopening
+2. Announce new phase
+3. Continue from there
+
+---
+
+## 5.0 TRACK & HANDOFF
+
+### 5.1 Track ID Generation
+
+Generate track_id as: `{shortname}_{YYYYMMDD}`
+- **shortname:** Derive from problem statement (2-3 words, kebab-case)
+- **Example:** "user-auth_20241223"
+
+If `{{args}}` is already a track_id format: Use it directly.
+
+### 5.2 Existing Track Check
+
+Before creating, check: Does `conductor/tracks/{track_id}/` exist?
+
+- **If exists with design.md:** 
+  "Track exists. [Append] to existing design or [Overwrite]?"
+- **If exists without design.md:**
+  "Track exists but no design. Creating design.md."
+- **If not exists:**
+  Create directory and design.md.
+
+### 5.3 Design.md Output
+
+Save to: `conductor/tracks/{track_id}/design.md`
+
+```markdown
+---
+track_id: {track_id}
+created: {timestamp}
+status: approved
+---
+
+# {Feature Name}
+
+## Problem Statement
+[From DEFINE phase]
+
+## Success Criteria
+[From DEFINE phase]
+
+## Chosen Approach
+[From DEVELOP phase - selected option]
+
+## Design
+
+### Architecture Overview
+[From DELIVER phase]
+
+### Components
+[From DELIVER phase]
+
+### Data Model
+[From DELIVER phase]
+
+### User Flow
+[From DELIVER phase]
+
+### Error Handling
+[From DELIVER phase]
+
+### Testing Strategy
+[From DELIVER phase]
+
+## Grounding Notes
+- [What was verified during session]
+
+## Out of Scope
+[Explicit exclusions]
+```
+
+### 5.4 Handoff
+
+After design is approved:
+
+1. Confirm file saved
+2. Display handoff block:
+
+```
+━━━ DESIGN COMPLETE ━━━
+Track: {track_id}
+File: conductor/tracks/{track_id}/design.md
+
+Next: Say `fb` to convert into beads issues.
+
+Or:
+- `/conductor:newTrack {track_id}` - Generate spec + plan
+- Continue refining this design
+```
+
+---
+
+## 6.0 EDGE CASES
+
+| Situation | Behavior |
+|-----------|----------|
+| User provides no args | Ask: "What would you like to design?" |
+| User says "quick"/"hurry" | Fast path: 1 question per phase, skip Party |
+| User wants to exit mid-session | Offer to save draft to design.md |
+| Grounding finds conflicts | Surface issue, let user decide how to proceed |
+| Party Mode gets stuck | Limit to 2 rounds, then synthesize |
+| track_id collision | Append timestamp suffix: {id}_{HHMMSS} |
 """

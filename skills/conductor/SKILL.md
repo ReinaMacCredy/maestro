@@ -1,6 +1,6 @@
 ---
 name: conductor
-version: "1.3.0"
+version: "1.4.0"
 description: Context-driven development methodology. Understands projects set up with Conductor (via Gemini CLI, Claude Code, Amp Code, Codex, or any Agent Skills compatible CLI). Use when working with conductor/ directories, tracks, specs, plans, or when user mentions context-driven development.
 license: Apache-2.0
 compatibility: Works with Claude Code, Gemini CLI, Amp Code, Codex, and any Agent Skills compatible CLI
@@ -45,6 +45,41 @@ Conductor implements the Knowledge & Vibes 4-phase framework:
 2. **Plan**: "Does this plan fit our architecture and constraints?"
 3. **Implement**: "Can this be tested independently?"
 4. **Reflect**: "Would I bet my job on this code?"
+
+## Double Diamond → Conductor Mapping
+
+The `/conductor-design` command uses Double Diamond methodology with four phases:
+
+```
+Double Diamond         Conductor Phase       Output
+─────────────────────────────────────────────────────────
+DISCOVER (Diverge)  →  Requirements        Problem space explored
+DEFINE (Converge)   →  Requirements        Problem statement defined
+DEVELOP (Diverge)   →  Plan               Solutions explored
+DELIVER (Converge)  →  Plan               design.md finalized
+```
+
+### Phase Details
+
+| DD Phase | Purpose | Activities | Exit Criteria |
+|----------|---------|------------|---------------|
+| **DISCOVER** | Explore problem space | Ask about pain, users, impact, constraints | Problem articulated, users identified |
+| **DEFINE** | Frame the problem | Problem statement, success criteria, scope, approaches | Statement agreed, approach selected |
+| **DEVELOP** | Explore solutions | Architecture, components, data model, user flow | Architecture understood, interfaces defined |
+| **DELIVER** | Finalize design | Full grounding, acceptance criteria, risks | Design verified and approved |
+
+### A/P/C Checkpoints
+
+At the end of each phase, users choose:
+- **[A] Advanced** - Deeper analysis, assumption audit
+- **[P] Party** - Multi-agent feedback (see `workflows/party-mode/`)
+- **[C] Continue** - Proceed to next phase
+- **[↩ Back]** - Return to previous phase
+
+### Grounding Requirements
+
+- **Mini-grounding** at each phase transition (codebase/API verification)
+- **Full grounding** before DELIVER completion (all decisions verified)
 
 **Interoperability:** This skill understands conductor projects created by either:
 - Gemini CLI extension (`/conductor:setup`, `/conductor:newTrack`, etc.)

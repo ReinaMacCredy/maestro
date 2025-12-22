@@ -1,7 +1,7 @@
 ---
 name: design
-version: "1.1.3"
-description: Design Session - collaborative brainstorming to turn ideas into designs. Use when user types "ds" or wants to explore/design a feature before implementation.
+version: "2.0.0"
+description: Design Session - collaborative brainstorming to turn ideas into designs using Double Diamond methodology. Use when user types "ds" or wants to explore/design a feature before implementation.
 license: Apache-2.0
 compatibility: Works with Claude Code, Amp Code, Codex, and any Agent Skills compatible CLI
 metadata:
@@ -10,11 +10,13 @@ metadata:
     - design
     - planning
     - exploration
+    - double-diamond
+    - party-mode
 ---
 
 # Design Session (ds)
 
-Turn ideas into fully-formed designs through collaborative dialogue.
+Turn ideas into fully-formed designs through collaborative dialogue using the Double Diamond methodology.
 
 ## When to Use
 
@@ -24,47 +26,115 @@ Trigger on:
 - User says "design a feature" or "let's think through X"
 - Before creating a conductor track
 
+## Double Diamond Framework
+
+The session flows through four phases, alternating between divergent and convergent thinking:
+
+```
+    DISCOVER          DEFINE           DEVELOP          DELIVER
+   (Diverge)        (Converge)        (Diverge)        (Converge)
+      ◇                ◇                ◇                ◇
+     / \              / \              / \              / \
+    /   \            /   \            /   \            /   \
+   /     \          /     \          /     \          /     \
+  /       \        /       \        /       \        /       \
+ -----------      -----------      -----------      -----------
+ Explore the      Frame the        Explore          Finalize
+   Problem        Problem          Solutions        the Design
+```
+
 ## The Process
 
-### 1. Understand the Context
+### Phase 1: DISCOVER (Diverge)
 
-First, check out the current project state:
-- Read existing docs, files, recent commits
-- Understand what already exists
-- Know the tech stack and constraints
+**Goal:** Understand the problem deeply before jumping to solutions.
 
-### 2. Explore the Idea
+- Explore the problem space broadly
+- Ask about pain points, users, impact, constraints
+- One question at a time, prefer multiple choice
+- **Exit:** Problem clearly articulated, users identified
 
-Ask questions **one at a time** to refine the idea:
-- Prefer multiple choice questions when possible
-- Only one question per message
-- Focus on: purpose, constraints, success criteria
+### Phase 2: DEFINE (Converge)
 
-### 3. Present Approaches
+**Goal:** Synthesize discoveries into a clear problem statement.
 
-Propose 2-3 different approaches with trade-offs:
-- Lead with your recommended option
-- Explain the reasoning
-- Let the user choose
+- Create a one-sentence problem statement
+- Define success criteria (measurable)
+- Bound the scope (in/out)
+- Present 2-3 approaches with trade-offs
+- **Exit:** Problem statement agreed, approach selected
 
-### 4. Build the Design
+### Phase 3: DEVELOP (Diverge)
 
-Present the design in small sections (200-300 words each):
+**Goal:** Design the solution architecture and components.
+
+- Present design in 200-300 word sections
+- Cover: architecture, components, data model, user flow, errors, testing
 - Ask after each section: "Does this look right so far?"
-- Cover: architecture, components, data flow, error handling
-- Be ready to go back and clarify
+- Be ready to revise earlier sections
+- **Exit:** Architecture understood, components defined
 
-### 5. Ground the Design (REQUIRED)
+### Phase 4: DELIVER (Converge)
 
-**This is a quality gate - do NOT proceed without grounding.**
+**Goal:** Finalize the design and prepare for implementation.
 
-Before finalizing, verify all architectural decisions against current reality:
+- **Full Grounding (required)** - verify against codebase and current docs
+- Ensure acceptance criteria are testable
+- Document risks and open questions
+- **Exit:** Design verified and approved
 
-- **External libraries/APIs**: Use `web_search` to verify patterns against current docs
-- **Existing patterns**: Use `Grep` and `finder` to confirm "how we do X here"
-- **Past decisions**: Search codebase history with `git log`
+## A/P/C Checkpoints
 
-Do NOT proceed to documentation until grounding confirms design is based on verified, current information—not assumptions or outdated training data.
+At the end of each phase, present the checkpoint menu:
+
+```
+📍 End of [PHASE] phase.
+
+Choose:
+[A] Advanced - deeper analysis, assumption audit
+[P] Party - multi-perspective feedback from expert agents
+[C] Continue - proceed to next phase
+[↩ Back] - return to previous phase
+```
+
+### [A] Advanced Mode
+
+Phase-specific deep dives:
+- **DISCOVER:** Challenge assumptions, explore biases, consider alternative users
+- **DEFINE:** Stress-test scope, challenge metrics, identify hidden dependencies
+- **DEVELOP:** Deep-dive components, explore alternatives, security/performance review
+- **DELIVER:** Edge case audit, security check, documentation completeness
+
+### [P] Party Mode
+
+Invokes multi-agent collaborative review. See `workflows/party-mode/workflow.md`.
+
+Selects 3 relevant agents based on topic:
+- **Primary:** Best expertise match
+- **Secondary:** Complementary perspective
+- **Tertiary:** Devil's advocate
+
+Agents respond in character, cross-talk, then synthesize insights.
+
+## Loop-Back Support
+
+User can say "revisit [PHASE]" at any time to return to an earlier phase. When looping back:
+
+1. Summarize what was established
+2. Ask what to reconsider
+3. Update subsequent phases if decisions change
+
+## Grounding Requirements
+
+**Mini-grounding** at each phase transition:
+- DISCOVER → DEFINE: Check for similar problems in codebase
+- DEFINE → DEVELOP: Verify external APIs/libraries
+- DEVELOP → DELIVER: Confirm existing patterns and conventions
+
+**Full grounding** before DELIVER completion:
+- Verify all architectural decisions against current reality
+- Use `web_search`, `Grep`, `finder`, `git log`
+- Do NOT proceed to documentation without grounding
 
 ## After the Design
 
@@ -84,3 +154,4 @@ If a track doesn't exist yet, suggest running `/conductor-newtrack <description>
 - **Explore alternatives** - Always propose 2-3 approaches
 - **Incremental validation** - Present in sections, validate each
 - **Be flexible** - Go back when something doesn't make sense
+- **Ground everything** - Verify before finalizing
