@@ -233,13 +233,15 @@ REPEAT  → Next failing test
 flowchart LR
     subgraph SESSION1["SESSION 1 (Planning)"]
         direction TB
-        design["/conductor-design"]
+        design["ds → design session"]
+        ground["ground decisions"]
         newtrack["/conductor-newtrack"]
         fb["fb → creates beads"]
         rb1["rb → review issues"]
         handoff["outputs HANDOFF block"]
         
-        design --> newtrack
+        design --> ground
+        ground --> newtrack
         newtrack --> fb
         fb --> rb1
         rb1 --> handoff
@@ -250,11 +252,15 @@ flowchart LR
         paste["User pastes HANDOFF"]
         implement["/conductor-implement"]
         tdd["claims tasks → TDD → verify"]
-        epic1done["Epic 1 complete → HANDOFF"]
+        choice{"Epic complete"}
+        rb2["rb → review beads"]
+        handoff2["HANDOFF to next epic"]
         
         paste --> implement
         implement --> tdd
-        tdd --> epic1done
+        tdd --> choice
+        choice -->|"fewer mistakes"| rb2
+        choice -->|"continue"| handoff2
     end
     
     subgraph SESSION3["SESSION 3 (Epic 2...)"]
@@ -270,8 +276,18 @@ flowchart LR
     end
     
     handoff -.-> paste
-    epic1done -.-> paste2
+    rb2 -.-> handoff2
+    handoff2 -.-> paste2
 ```
+
+### Epic Completion: Quality Gate
+
+After completing each epic, `/conductor-implement` presents an explicit choice:
+
+1. **`rb` (recommended)** — Review remaining beads to catch mistakes before they propagate. Uses more tokens but reduces errors.
+2. **Handoff** — Continue directly to next epic with `Start epic <next-epic-id>`
+
+This prevents auto-continuation and gives you control between epics.
 
 ### Manual Specialist Tools
 

@@ -291,6 +291,40 @@ REPEAT  → Next failing test
 
 ---
 
+### Epic Execution Flow
+
+When implementing with `/conductor-implement`, work happens **one epic at a time**:
+
+```
+Epic 1: Authentication
+├── [x] Setup OAuth config
+├── [x] Create user model
+└── [x] Implement login flow
+        ↓
+    EPIC COMPLETE
+        ↓
+    ┌─────────────────────────────────────────┐
+    │  Choose your next action:               │
+    │                                         │
+    │  1. `rb` — Review remaining beads       │
+    │     (recommended: catches mistakes)     │
+    │                                         │
+    │  2. Start epic bd-XXX                   │
+    │     (continue to next epic)             │
+    └─────────────────────────────────────────┘
+```
+
+**Why this matters**:
+
+| Option | When to use | Trade-off |
+|--------|-------------|-----------|
+| **`rb` first** | Complex plans, many epics remaining | More tokens, fewer mistakes |
+| **Direct handoff** | Simple plans, confident in beads quality | Faster, but errors may propagate |
+
+**For agents**: After completing an epic, STOP and present this choice. Do not auto-continue.
+
+---
+
 ## Entry Points (You Don't Always Start at the Beginning)
 
 The full pipeline assumes you're starting fresh. But you can jump in anywhere.
@@ -596,8 +630,9 @@ Beyond the core workflow, Maestro includes specialist skills for specific situat
 
 | Skill | Trigger | When to Use |
 |-------|---------|-------------|
-| `conductor` | `/conductor-design` | Before any creative work. Explores intent and requirements before implementation. |
+| `design` | `ds` | Brainstorm ideas into designs with mandatory grounding and fb handoff. |
 | `conductor` | `/conductor-newtrack` | When you have a design and need spec.md + plan.md. |
+| `conductor` | `/conductor-implement` | Execute ONE epic from track, then choose: rb or handoff. |
 
 ---
 
