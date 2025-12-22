@@ -229,6 +229,86 @@ REPEAT  → Next failing test
 
 ## Workflow Pipeline
 
+### Complete Workflow Architecture
+
+```mermaid
+flowchart TB
+    subgraph PLANNING["PLANNING PHASE"]
+        direction LR
+        DS["ds"]
+        CS["/conductor-setup"]
+        CNT["/conductor-newtrack"]
+        FB["fb"]
+        RB["rb"]
+        
+        DS --> CS --> CNT --> FB --> RB
+    end
+
+    subgraph EXECUTION["EXECUTION PHASE"]
+        subgraph MAIN_LOOP["MAIN AGENT LOOP"]
+            direction TB
+            CHECK["bd ready"]
+            CLAIM["bd update --status in_progress"]
+            WORK["Execute Task"]
+            VERIFY["Verify"]
+            UPDATE["bd checkpoint"]
+            MORE{More?}
+            
+            CHECK --> CLAIM --> WORK --> VERIFY
+            VERIFY -->|pass| UPDATE --> MORE
+            VERIFY -->|fail| WORK
+            MORE -->|yes| CHECK
+        end
+
+        subgraph TDD_LOOP["TDD MICRO-LOOP"]
+            direction LR
+            RED["RED"]
+            GREEN["GREEN"]
+            REFACTOR["REFACTOR"]
+            RED --> GREEN --> REFACTOR --> RED
+        end
+
+        subgraph PARALLEL["PARALLEL DISPATCH"]
+            direction TB
+            SPAWN["dispatch"]
+            SUB1["Agent 1"]
+            SUB2["Agent 2"]
+            SUB3["Agent N"]
+            COLLECT["Collect"]
+            
+            SPAWN --> SUB1 & SUB2 & SUB3 --> COLLECT
+        end
+
+        subgraph VILLAGE["BEADS VILLAGE"]
+            direction TB
+            VINIT["bv init"]
+            VCLAIM["bv claim"]
+            VRESERVE["bv reserve"]
+            VMSG["bv msg"]
+            VDONE["bv done"]
+            
+            VINIT --> VCLAIM --> VRESERVE
+            VRESERVE -.-> VMSG -.-> VDONE
+        end
+    end
+
+    subgraph FINISH["FINISH PHASE"]
+        direction LR
+        BRANCH["finish branch"]
+        DOCSYNC["doc-sync"]
+        BRANCH --> DOCSYNC
+    end
+
+    RB -->|"HANDOFF"| CHECK
+    WORK -->|"tdd"| TDD_LOOP
+    WORK -->|"parallel"| PARALLEL
+    WORK -->|"multi-agent"| VILLAGE
+    COLLECT --> VERIFY
+    MORE -->|no| BRANCH
+```
+
+### Session-Based Flow
+
 ```mermaid
 flowchart LR
     subgraph SESSION1["SESSION 1 (Planning)"]
