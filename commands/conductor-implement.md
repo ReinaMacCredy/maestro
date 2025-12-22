@@ -163,20 +163,19 @@ For each task:
 
 ### 8.1 Claim Task
 
-**Single-agent mode:**
+Get next ready task and claim it:
+
 ```bash
-# Claim the task by updating status
+# 1. Find next ready task in epic
+bd ready --json | jq --arg epic "$CURRENT_EPIC" '[.[] | select(.parent == $epic)][0]'
+
+# 2. Claim it
 bd update <issue-id> --status in_progress --json
 ```
 
-**Multi-agent mode (Village):**
-```bash
-# Atomic claim prevents race conditions with other agents
-claim
-# Returns the claimed issue-id
-```
+**In Village mode (multi-agent):** Use `claim` MCP tool instead for atomic assignment.
 
-**After claiming, update with thread URL:**
+**After claiming, record thread URL:**
 
 This step is REQUIRED - doc-sync relies on thread URLs to extract knowledge.
 
