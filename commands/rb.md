@@ -8,11 +8,12 @@ Load the `review-beads` skill to review, proofread, and polish filed Beads issue
 
 **What this does:**
 1. Loads the review-beads skill
-2. Dispatches a subagent to review all issues
-3. Checks clarity, completeness, dependencies, scope, priority
-4. Fixes common issues (vague titles, missing context, etc.)
-5. Validates dependency graph
-6. Outputs HANDOFF block for execution session
+2. Gets all epics via `bd list -t epic`
+3. Dispatches parallel subagents - each reviews one epic
+4. Checks clarity, completeness, dependencies, scope, priority
+5. Fixes common issues (vague titles, missing context, etc.)
+6. Cross-epic validation (cycles, orphans, critical path)
+7. Outputs HANDOFF block for execution session
 
 ## Usage
 

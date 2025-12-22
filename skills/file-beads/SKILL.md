@@ -1,17 +1,13 @@
 ---
 name: file-beads
-version: "1.1.2"
+version: "1.2.0"
 description: File detailed Beads epics and issues from a plan
 argument-hint: <plan-description-or-context>
 ---
 
 # File Beads Epics and Issues from Plan
 
-Convert a plan into Beads epics and issues using **sequential subagents** to keep the main context clean.
-
-> **Why Sequential?** The `bd` CLI does not have file locking or atomic ID generation.
-> Parallel `bd create` calls cause race conditions (ID collisions, data corruption).
-> Each epic must complete before the next begins.
+Convert a plan into Beads epics and issues using **parallel subagents** for speed.
 
 ## Phase 1: Analyze Plan
 
@@ -31,31 +27,48 @@ If no plan provided, check:
 | Cross-epic hints | Tasks that depend on other epics (by name, not ID) |
 | Priority | 0-4 scale |
 
-## Phase 2: Sequential Dispatch
+## Phase 2: Create Epics First (Sequential)
 
-Dispatch one subagent per epic. **Wait for each to complete before starting the next** to avoid ID collisions.
+Create all epics FIRST to get stable IDs before parallelizing child issues:
+
+```bash
+bd create "Epic: Authentication" -t epic -p 1 --json
+# Returns: {"id": "bd-1", ...}
+
+bd create "Epic: Database Layer" -t epic -p 1 --json
+# Returns: {"id": "bd-2", ...}
+
+bd create "Epic: API Endpoints" -t epic -p 2 --json
+# Returns: {"id": "bd-3", ...}
+```
+
+Record the epic ID mapping:
+```
+Authentication → bd-1
+Database Layer → bd-2
+API Endpoints → bd-3
+```
+
+## Phase 3: Parallel Dispatch for Child Issues
+
+Now dispatch **ALL subagents in parallel** — each fills one epic with child issues.
 
 ### Subagent Prompt Template
 
 ```markdown
-File Epic: "<EPIC_TITLE>"
+Fill Epic: "<EPIC_TITLE>" (ID: bd-<EPIC_ID>)
 
 ## Your Task
-Create one epic and all its child issues in Beads.
+Create all child issues for this epic. The epic already exists.
 
 ## Epic Context
 <PASTE_EPIC_SECTION_FROM_PLAN>
 
 ## Steps
 
-1. Create the epic:
+1. For each task, create an issue with parent dependency:
    ```bash
-   bd create "Epic: <title>" -t epic -p <priority> --json
-   ```
-
-2. For each task, create an issue with parent dependency:
-   ```bash
-   bd create "<task title>" -t <type> -p <priority> --deps bd-<epic-id> --json
+   bd create "<task title>" -t <type> -p <priority> --deps bd-<EPIC_ID> --json
    ```
    
    Include in each issue:
@@ -63,7 +76,7 @@ Create one epic and all its child issues in Beads.
    - Acceptance criteria
    - Technical notes if relevant
 
-3. Link intra-epic dependencies:
+2. Link intra-epic dependencies:
    ```bash
    bd dep add bd-<child> bd-<blocker> --type blocks --json
    ```
@@ -73,7 +86,7 @@ Create one epic and all its child issues in Beads.
 Return ONLY this JSON (no other text):
 ```json
 {
-  "epicId": "bd-XXX",
+  "epicId": "bd-<EPIC_ID>",
   "epicTitle": "<title>",
   "issues": [
     {"id": "bd-XXX", "title": "...", "deps": ["bd-XXX"]}
@@ -85,33 +98,29 @@ Return ONLY this JSON (no other text):
 ```
 ```
 
-### Dispatch Example
+### Parallel Dispatch Example
 
 > **IMPORTANT:** You MUST actually invoke the Task tool. Do not just describe or write about dispatching — execute it.
 
 ```
-Task(description: "File Epic: Authentication", prompt: <above template>)
-// WAIT for result before next dispatch
-
-Task(description: "File Epic: Database Layer", prompt: <above template>)
-// WAIT for result before next dispatch
-
-Task(description: "File Epic: API Endpoints", prompt: <above template>)
-// WAIT for result before next dispatch
+// Dispatch ALL at once — epics already exist with stable IDs
+Task(description: "Fill Epic: Authentication (bd-1)", prompt: <above template>)
+Task(description: "Fill Epic: Database Layer (bd-2)", prompt: <above template>)
+Task(description: "Fill Epic: API Endpoints (bd-3)", prompt: <above template>)
 ```
 
-**Execute sequentially** — each subagent must return before dispatching the next.
+**All subagents run in parallel** — no waiting between dispatches.
 
-## Phase 3: Collect & Link Cross-Epic Dependencies
+## Phase 4: Collect & Link Cross-Epic Dependencies
 
-When subagents return:
+When ALL subagents return:
 
 1. Parse JSON results from each subagent
 2. Build ID lookup table:
    ```
-   "Authentication" → bd-101
-   "Database Layer" → bd-102
-   "Setup user table" → bd-105
+   "Authentication" → bd-1
+   "Setup user table" → bd-5
+   "Create auth middleware" → bd-8
    ```
 
 3. Resolve cross-epic dependencies:
@@ -119,7 +128,7 @@ When subagents return:
    bd dep add bd-<from> bd-<to> --type blocks --json
    ```
 
-## Phase 4: Verify & Summarize
+## Phase 5: Verify & Summarize
 
 Run verification:
 
@@ -149,7 +158,7 @@ Present to user:
 | Database Layer | 5 | 1 |
 | API Endpoints | 3 | 0 (blocked) |
 
-**Start with:** bd-105 (Setup user table), bd-108 (Init auth config)
+**Start with:** bd-5 (Setup user table), bd-8 (Init auth config)
 
 **Cross-epic deps linked:** 2
 ```
@@ -171,11 +180,10 @@ After parallel agents finish filing beads:
 | 3 | Nice-to-haves, polish |
 | 4 | Backlog, future |
 
-## Why Sequential?
+## Why This Approach?
 
-- **No race conditions** — `bd` CLI lacks file locking; serial execution prevents ID collisions
+- **Epics first (sequential)** — Prevents ID collisions; epic IDs are stable before parallelization
+- **Child issues (parallel)** — Each subagent works on a different epic, no conflicts
+- **Fast execution** — All epics fill simultaneously
 - **Context hygiene** — `bd create` output stays in subagent contexts
-- **Reliable linking** — Cross-epic dependencies resolve correctly since all IDs are stable
-- **Clean summary** — Main agent only sees results, not noise
-
-
+- **Reliable linking** — Cross-epic dependencies resolve correctly since all epic IDs known upfront

@@ -1,251 +1,233 @@
 ---
 name: review-beads
-version: "1.1.2"
+version: "1.2.0"
 description: Review, proofread, and refine filed Beads epics and issues
 argument-hint: [optional: specific epic or issue IDs to focus on]
 ---
 
 # Review and Refine Beads Issues
 
-You are tasked with thoroughly reviewing, proofreading, and polishing the filed Beads epics and issues to ensure workers have a smooth implementation experience.
+Review, proofread, and polish filed Beads epics and issues using **parallel subagents** for speed.
 
-## Execution Pattern
+## Phase 1: Load & Distribute
 
-Dispatch a subagent to perform the review work, keeping main context clean:
-
-> **IMPORTANT:** You MUST actually invoke the Task tool. Do not just describe dispatching — execute it.
-
-```
-Task(description: "Review beads issues", prompt: <Steps 1-6 below>)
-```
-
-**After subagent returns, main agent MUST output the HANDOFF block.** This is mandatory — do not skip.
-
-## Step 1: Load Current Issues
-
-First, get the current state:
+Get all epics and prepare for parallel review:
 
 ```bash
-bd list --json
-bd ready --json
+bd list -t epic --json
 ```
 
-If specific IDs were provided (`$ARGUMENTS`), focus on those. Otherwise, review all issues.
+If specific IDs were provided (`$ARGUMENTS`), focus on those. Otherwise, review all epics.
 
-## Step 2: Systematic Review Checklist
+**For each epic, gather its child issues:**
+```bash
+bd show <epic-id> --json
+```
+
+## Phase 2: Parallel Epic Reviews
+
+Dispatch **ALL subagents in parallel** — each reviews one epic and its children.
+
+### Subagent Prompt Template
+
+```markdown
+Review Epic: "<EPIC_TITLE>" (ID: bd-<EPIC_ID>)
+
+## Your Task
+Review and refine this epic and all its child issues.
+
+## Issues to Review
+<LIST_OF_ISSUE_IDS_AND_TITLES>
+
+## Review Checklist
 
 For EACH issue, verify:
 
 ### Clarity
-
 - [ ] Title is action-oriented and specific
 - [ ] Description is clear and unambiguous
-- [ ] A developer unfamiliar with the codebase could understand the task
+- [ ] A developer unfamiliar with the codebase could understand
 - [ ] No jargon without explanation
 
 ### Completeness
-
 - [ ] Acceptance criteria are defined and testable
-- [ ] Technical implementation hints are provided where helpful
-- [ ] Relevant file paths or modules are mentioned
-- [ ] Edge cases and error handling are considered
+- [ ] Technical implementation hints provided where helpful
+- [ ] Relevant file paths or modules mentioned
+- [ ] Edge cases and error handling considered
 
 ### Dependencies
-
 - [ ] All blocking dependencies are linked
-- [ ] No circular dependencies exist
 - [ ] Dependencies are minimal (not over-constrained)
-- [ ] Ready issues exist for parallel work
 
 ### Scope
-
 - [ ] Issue is appropriately sized (not too large)
-- [ ] Large issues are broken into subtasks
 - [ ] No duplicate or overlapping issues
 
 ### Priority
-
 - [ ] Priority reflects actual importance
-- [ ] Critical path items are prioritized correctly
-- [ ] Dependencies and priorities align
 
-## Step 3: Common Issues to Fix
+## Common Fixes
 
-Watch for and correct:
-
-1. **Vague titles**: "Fix bug" -> "Fix null pointer in UserService.getProfile when user not found"
-2. **Missing context**: Add relevant file paths, function names, or module references
+1. **Vague titles**: "Fix bug" → "Fix null pointer in UserService.getProfile"
+2. **Missing context**: Add relevant file paths, function names
 3. **Implicit knowledge**: Make assumptions explicit
 4. **Missing acceptance criteria**: Add "Done when..." statements
-5. **Over-coupling**: Break dependencies that aren't strictly necessary
-6. **Under-specified**: Add technical notes for complex tasks
-7. **Duplicate work**: Merge or link related issues
-8. **Missing dependencies**: Link issues that should be sequenced
-9. **Wrong priorities**: Adjust based on critical path analysis
-10. **Typos and grammar**: Fix for professionalism
 
-## Step 4: Update Issues
-
-Use bd update to fix issues:
+## Update Commands
 
 ```bash
 bd update <id> --title "Improved title" --json
-bd update <id> --priority <new-priority> --json
 bd update <id> --description "New description" --json
 bd update <id> --acceptance "Acceptance criteria" --json
+bd update <id> --priority <new-priority> --json
 ```
 
-Manage dependencies separately with `bd dep`:
+## Return Format
 
-```bash
-bd dep add <issue-id> <dependency-id> --json   # Add dependency
-bd dep remove <issue-id> <dependency-id> --json # Remove dependency
-bd dep tree <issue-id> --json                   # View dependency tree
-bd dep cycles --json                            # Check for circular deps
+Return ONLY this JSON (no other text):
+```json
+{
+  "epicId": "bd-<EPIC_ID>",
+  "epicTitle": "<title>",
+  "issuesReviewed": 5,
+  "issuesUpdated": 3,
+  "changes": [
+    {"id": "bd-XXX", "change": "Clarified title"},
+    {"id": "bd-XXX", "change": "Added acceptance criteria"}
+  ],
+  "concerns": [
+    {"id": "bd-XXX", "issue": "Needs user input on scope"}
+  ],
+  "crossEpicIssues": [
+    {"id": "bd-XXX", "issue": "May conflict with Epic Y task Z"}
+  ]
+}
+```
 ```
 
-For major rewrites, close and recreate:
+### Parallel Dispatch Example
 
-```bash
-bd close <id> --reason "Replaced by <new-id>" --json
-bd create "Better title" -t <type> -p <priority> --deps <dep-id> --json
+> **IMPORTANT:** You MUST actually invoke the Task tool. Do not just describe or write about dispatching — execute it.
+
+```
+// Dispatch ALL at once
+Task(description: "Review Epic: Authentication (bd-1)", prompt: <above template>)
+Task(description: "Review Epic: Database Layer (bd-2)", prompt: <above template>)
+Task(description: "Review Epic: API Endpoints (bd-3)", prompt: <above template>)
 ```
 
-## Step 5: Dependency Graph Validation
+**All subagents run in parallel** — no waiting between dispatches.
 
-After refinements, validate:
+## Phase 3: Cross-Epic Validation
+
+When ALL subagents return, perform cross-epic validation:
+
+### 3.1 Check for Cycles
 
 ```bash
-bd list --json                    # View all issues
-bd list --status open --json      # View only open issues
-bd ready --json                   # View unblocked issues ready for work
-bd dep cycles --json              # Check for circular dependencies
-bd dep tree <epic-id> --json      # View dependency tree for an epic
+bd dep cycles --json
+```
+
+If cycles found, fix them:
+```bash
+bd dep remove bd-<from> bd-<to> --json
+```
+
+### 3.2 Validate Cross-Epic Links
+
+Review `crossEpicIssues` from all subagents:
+- Check if flagged conflicts are real
+- Verify cross-epic dependencies make sense
+- Add missing cross-epic deps if needed:
+  ```bash
+  bd dep add bd-<from> bd-<to> --type blocks --json
+  ```
+
+### 3.3 Check for Orphans
+
+```bash
+bd list --json
+```
+
+Verify:
+- All issues belong to an epic (have parent dep)
+- No dangling references to deleted issues
+
+### 3.4 Verify Critical Path
+
+```bash
+bd ready --json
 ```
 
 Check:
+- Some issues are ready (unblocked)
+- Critical path items have correct priorities
+- Parallelization opportunities preserved
 
-- No orphaned issues (except entry points)
-- No circular dependencies
-- Critical path is clear
-- Parallelization opportunities are preserved
+## Phase 4: Summary & Handoff
 
-## Step 6: Final Quality Gate
+### Summary Format
 
-Before completing, ensure:
+Present combined results:
 
-1. **Readability**: Any developer can pick up any ready issue
-2. **Traceability**: Issues link to epics, epics link to the plan
-3. **Testability**: Each issue has clear "done" criteria
-4. **Parallelism**: Multiple issues can be worked simultaneously
-5. **Completeness**: No gaps in the plan coverage
+```
+## Review Summary
 
-## Step 7: Workflow Integration Check
+**Epics reviewed:** 3
+**Issues reviewed:** 15
+**Issues updated:** 8
 
-For closed/completed issues, verify workflow integration:
+| Epic | Reviewed | Updated | Concerns |
+|------|----------|---------|----------|
+| Authentication | 5 | 3 | 1 |
+| Database Layer | 6 | 4 | 0 |
+| API Endpoints | 4 | 1 | 2 |
 
-### Thread URL Verification
+**Cross-epic validation:**
+- Cycles: 0
+- Orphans: 0
+- Cross-deps verified: 4
 
-```bash
-bd show <id> --json | jq -r '.notes // "" | scan("THREAD: [^\n]+")'
+**Remaining concerns:**
+- bd-12: Needs user input on scope
+- bd-18: May conflict with auth middleware
+
+**Ready for implementation:** 6 issues
 ```
 
-- If closed issue is **missing thread URL**: Flag as incomplete
-  - "Issue <id> closed but missing THREAD: - cannot sync to docs"
-- Thread URLs enable doc-sync to extract knowledge from implementation
-
-### Doc-Sync Readiness
-
-When all issues in an epic are closed with thread URLs:
-
-1. Check epic status:
-   ```bash
-   bd show <epic-id> --json
-   # Verify all child issues have THREAD: in notes
-   ```
-
-2. Prompt user: "All issues complete with thread URLs. Run doc-sync to update AGENTS.md? (y/n)"
-
-3. If yes: Trigger doc-sync workflow with epic ID
-
-### Auto-Archive Prompt
-
-When epic is complete (all issues closed):
-
-1. Prompt: "Epic complete. Archive to conductor/archive/? (y/n)"
-
-2. If yes:
-   ```bash
-   mv conductor/tracks/<id>/ conductor/archive/<id>/
-   ```
-
-3. Update epic notes:
-   ```bash
-   bd update <epic-id> --notes "ARCHIVED: conductor/archive/<id>/"
-   ```
-
-## Output Format
-
-Provide a review report:
-
-### Summary
-
-- Total issues reviewed: X
-- Issues updated: Y
-- Issues created: Z
-- Issues closed/merged: W
-
-### Changes Made
-
-- List significant updates with rationale
-
-### Remaining Concerns
-
-- Any issues that need user input
-- Ambiguities that couldn't be resolved
-
-### Ready for Implementation
-
-- List of ready issues workers can start with
-- Suggested execution order for optimal flow
-
-## Iteration Tracking
-
-You may iterate on refinements up to 5 times if asked. Track iterations:
-
-- Iteration 1: Initial review pass
-- Iteration 2-5: Deeper refinements based on feedback
-
-After 5 iterations, respond: "I don't think we can do much better than this. The issues are thoroughly reviewed, well-documented, and ready for workers to implement."
-
-## Completion (MANDATORY)
-
-After presenting the review report, you MUST complete these steps:
-
-### 1. Suggest Next Action
-
-Say: **"Issues reviewed. Run `/conductor-implement` to start execution."**
-
-### 2. Persist Handoff Metadata
-
-```bash
-bd update <epic-id> --notes "HANDOFF_READY: true. PLAN: conductor/tracks/<id>/plan.md"
-```
-
-### 3. Output HANDOFF Block (REQUIRED)
+### HANDOFF Block (REQUIRED)
 
 **You MUST output this block — do not skip:**
 
 ```markdown
 ## HANDOFF
 
-**Command:** `Start epic <epic-id>`
-**Epic:** <epic-id> - <epic title>
-**Plan:** conductor/tracks/<id>/plan.md
+**Command:** `Start epic <first-epic-id>`
+**Epics:** <count> epics reviewed
 **Ready issues:** <count>
-**First task:** <first-issue-id> - <title>
+**First task:** <first-ready-issue-id> - <title>
 
 Copy the command above to start a new session.
 ```
 
-Say: **"Ready for execution. Copy this HANDOFF for next session."**
+### Completion Message
+
+Say: **"Issues reviewed. Run `/conductor-implement` to start execution."**
+
+## Priority Guide
+
+| Priority | Use For |
+|----------|---------|
+| 0 | Critical path blockers, security |
+| 1 | Core functionality, high value |
+| 2 | Standard work (default) |
+| 3 | Nice-to-haves, polish |
+| 4 | Backlog, future |
+
+## Why This Approach?
+
+- **Parallel reviews** — Each epic reviewed simultaneously
+- **Cross-epic validation** — Catches inter-epic issues after parallel phase
+- **No conflicts** — Each subagent updates different epic's issues
+- **Fast execution** — All epics reviewed at once
+- **Comprehensive** — Both intra-epic and cross-epic quality checks

@@ -118,7 +118,7 @@ trace                              # Root cause tracing
 
 | Category | Skills |
 |----------|--------|
-| **Core Workflow** | conductor, design, beads, file-beads, review-beads |
+| **Core Workflow** | conductor, design, beads, file-beads (parallel), review-beads (parallel) |
 | **Development** | test-driven-development, using-git-worktrees, finishing-a-development-branch |
 | **Utilities** | codemaps, doc-sync, dispatching-parallel-agents, subagent-driven-development |
 | **Meta** | using-superpowers, verification-before-completion, writing-skills, sharing-skills |
@@ -180,8 +180,8 @@ bd dep tree bd-123
 
 **Skill triggers**:
 ```
-fb                          # File beads from plan
-rb                          # Review filed beads
+fb                          # File beads from plan (parallel subagents)
+rb                          # Review filed beads (parallel + cross-epic validation)
 bd status                   # Check project status
 ```
 

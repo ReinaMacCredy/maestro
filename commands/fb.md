@@ -9,10 +9,11 @@ Load the `file-beads` skill to convert a plan into Beads epics and issues.
 **What this does:**
 1. Loads the file-beads skill
 2. Analyzes the plan (from context or conductor/tracks/)
-3. Dispatches sequential subagents to create epics
-4. Links cross-epic dependencies
-5. Summarizes what was created
-6. Suggests `rb` to review and refine
+3. Creates all epics first (sequential, for stable IDs)
+4. Dispatches parallel subagents to fill each epic with child issues
+5. Links cross-epic dependencies
+6. Summarizes what was created
+7. Suggests `rb` to review and refine
 
 ## Usage
 

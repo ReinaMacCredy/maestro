@@ -58,8 +58,8 @@ bd sync
 
 | Phrase | Skill | Description |
 |--------|-------|-------------|
-| `fb`, `file beads` | `file-beads` | Convert plan to bd issues |
-| `rb`, `review beads` | `review-beads` | Review and refine issues |
+| `fb`, `file beads` | `file-beads` | Convert plan to bd issues (parallel subagents) |
+| `rb`, `review beads` | `review-beads` | Review and refine issues (parallel subagents) |
 | `bd ready` | `beads` | Check available work |
 | `bd status` | `beads` | Show ready + in_progress |
 | `bd checkpoint` | `beads` | Update notes before compaction |
@@ -145,8 +145,8 @@ MCP server for task coordination via `npx beads-village`.
 | Skill | Trigger | Description |
 |-------|---------|-------------|
 | `beads` | `bd ready`, `bd status` | Issue tracking for multi-session work |
-| `file-beads` | `fb` | File beads from plan |
-| `review-beads` | `rb` | Review and refine beads issues |
+| `file-beads` | `fb` | File beads from plan (parallel subagents per epic) |
+| `review-beads` | `rb` | Review and refine beads issues (parallel + cross-epic validation) |
 | `codemaps` | — | Token-aware architecture documentation |
 | `conductor` | `/conductor-design`, `/conductor-newtrack` | Design and planning through dialogue |
 | `design` | `ds` | Design session - collaborative brainstorming with mandatory grounding and fb handoff |
