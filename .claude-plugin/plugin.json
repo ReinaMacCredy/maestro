@@ -1,6 +1,6 @@
 {
   "name": "maestro",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Personal AI agent workflow skills for Claude Code - includes brainstorming, debugging, code review, test-driven development, and multi-session task tracking with Beads",
   "author": {
     "name": "Reina MacCredy"
