@@ -1,6 +1,6 @@
 ---
 name: dispatching-parallel-agents
-version: "1.1.1"
+version: "1.1.2"
 description: Use when facing 2+ independent tasks that can be worked on without shared state or sequential dependencies
 ---
 

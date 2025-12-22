@@ -1,6 +1,6 @@
 ---
 name: design
-version: "1.1.2"
+version: "1.1.3"
 description: Design Session - collaborative brainstorming to turn ideas into designs. Use when user types "ds" or wants to explore/design a feature before implementation.
 license: Apache-2.0
 compatibility: Works with Claude Code, Amp Code, Codex, and any Agent Skills compatible CLI

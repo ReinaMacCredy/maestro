@@ -1,6 +1,6 @@
 ---
 name: finishing-a-development-branch
-version: "1.1.1"
+version: "1.1.2"
 description: Use when implementation is complete, all tests pass, and you need to decide how to integrate the work - guides completion of development work by presenting structured options for merge, PR, or cleanup
 ---
 

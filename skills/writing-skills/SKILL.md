@@ -1,6 +1,6 @@
 ---
 name: writing-skills
-version: "1.1.1"
+version: "1.1.2"
 description: Use when creating new skills, editing existing skills, or verifying skills work before deployment
 ---
 

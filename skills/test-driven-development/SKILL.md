@@ -1,6 +1,6 @@
 ---
 name: test-driven-development
-version: "1.1.1"
+version: "1.1.2"
 description: Use when implementing any feature or bugfix, before writing implementation code
 ---
 

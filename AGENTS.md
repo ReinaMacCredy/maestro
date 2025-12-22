@@ -43,8 +43,9 @@ bd update <epic-id> --notes "HANDOFF_READY: true. PLAN: <plan-path>"
 - SKILL.md must match directory name in frontmatter `name` field
 
 ## Versioning
-- **Patch bump** (x.x.1 → x.x.2): Small updates, fixes, minor tweaks
+- **Major bump** (1.x.x → 2.x.x): Breaking changes (renamed skills, removed features, changed triggers) or significant redesigns
 - **Minor bump** (x.1.x → x.2.x): Big updates, new features, significant changes
+- **Patch bump** (x.x.1 → x.x.2): Small updates, fixes, minor tweaks
 - After updating skills, update `.claude-plugin/plugin.json` & `.claude-plugin/marketplace.json` version with the same bump type
 
 ## Key Skills
