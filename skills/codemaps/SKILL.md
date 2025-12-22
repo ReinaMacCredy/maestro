@@ -1,5 +1,6 @@
 ---
 name: codemaps
+version: "1.1.1"
 description: Create token-aware architecture documentation for AI agent context. Use when starting work on unfamiliar codebase or before planning features that touch multiple areas.
 ---
 

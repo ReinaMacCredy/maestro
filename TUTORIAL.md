@@ -613,7 +613,7 @@ Beyond the core workflow, Maestro includes specialist skills for specific situat
 
 ---
 
-### Debugging
+### Debugging (external: superpowers plugin)
 
 | Skill | Trigger | When to Use |
 |-------|---------|-------------|
@@ -622,7 +622,7 @@ Beyond the core workflow, Maestro includes specialist skills for specific situat
 
 ---
 
-### Code Review
+### Code Review (external: superpowers plugin)
 
 | Skill | Trigger | When to Use |
 |-------|---------|-------------|

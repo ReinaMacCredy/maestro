@@ -11,7 +11,7 @@ cat .claude-plugin/plugin.json | jq .   # Validate plugin manifest
 
 ## Architecture
 ```
-skills/           # 15 skill directories, each with SKILL.md (frontmatter + instructions)
+skills/           # 16 skill directories, each with SKILL.md (frontmatter + instructions)
   beads/          # Issue tracking skill with references/ subdirectory
   conductor/      # Planning methodology (includes /conductor-design)
   ...             # TDD, debugging, code review, etc.
@@ -42,10 +42,16 @@ bd update <epic-id> --notes "HANDOFF_READY: true. PLAN: <plan-path>"
 - Skill directories: kebab-case (`test-driven-development`, `using-git-worktrees`)
 - SKILL.md must match directory name in frontmatter `name` field
 
+## Versioning
+- **Patch bump** (x.x.1 → x.x.2): Small updates, fixes, minor tweaks
+- **Minor bump** (x.1.x → x.2.x): Big updates, new features, significant changes
+- After updating skills, update `.claude-plugin/plugin.json` version with the same bump type
+
 ## Key Skills
 
 | Skill | Trigger | Description |
 |-------|---------|-------------|
-| `conductor` | `ds`, `/conductor-design`, `/conductor-newtrack` | Design and planning through dialogue |
+| `design` | `ds` | Design session - collaborative brainstorming before implementation |
+| `conductor` | `/conductor-design`, `/conductor-newtrack`, `/conductor-implement` | Structured planning and execution through specs and plans |
 | `doc-sync` | `doc-sync`, `/doc-sync` | Sync AGENTS.md from completed thread knowledge |
 | `beads` | `bd ready`, `bd status` | Issue tracking for multi-session work |

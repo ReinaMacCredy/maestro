@@ -1,5 +1,6 @@
 ---
 name: file-beads
+version: "1.1.1"
 description: File detailed Beads epics and issues from a plan
 argument-hint: <plan-description-or-context>
 ---

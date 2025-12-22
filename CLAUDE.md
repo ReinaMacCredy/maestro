@@ -16,12 +16,12 @@ This is a skills-based plugin (no build required) - all functionality is deliver
 ### Directory Structure
 
 ```
-skills/                    # 24 skill directories, each with SKILL.md
+skills/                    # 16 skill directories, each with SKILL.md
   ├── beads/              # Issue tracking (main + file-beads/review-beads)
   ├── conductor/          # Planning methodology (includes /conductor-design)
+  ├── design/             # Design sessions (ds trigger)
   ├── test-driven-development/
-  ├── systematic-debugging/
-  └── ...                 # Other workflow skills
+  └── ...                 # See SETUP_GUIDE.md for full list
 
 commands/                 # Slash command definitions (.md files)
   ├── conductor/          # /conductor-setup, /conductor-newtrack, etc.

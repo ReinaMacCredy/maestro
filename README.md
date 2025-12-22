@@ -118,11 +118,12 @@ trace                              # Root cause tracing
 
 | Category | Skills |
 |----------|--------|
-| **Core Workflow** | conductor, beads, file-beads, review-beads |
+| **Core Workflow** | conductor, design, beads, file-beads, review-beads |
 | **Development** | test-driven-development, using-git-worktrees, finishing-a-development-branch |
-| **Debugging** | systematic-debugging, root-cause-tracing, condition-based-waiting, defense-in-depth |
-| **Code Review** | requesting-code-review, receiving-code-review |
+| **Utilities** | codemaps, doc-sync, dispatching-parallel-agents, subagent-driven-development |
 | **Meta** | using-superpowers, verification-before-completion, writing-skills, sharing-skills |
+| **Debugging** *(external: superpowers plugin)* | systematic-debugging, root-cause-tracing, condition-based-waiting, defense-in-depth |
+| **Code Review** *(external: superpowers plugin)* | requesting-code-review, receiving-code-review |
 
 ---
 
@@ -204,7 +205,7 @@ REPEAT  → Next failing test
 
 **Key insight**: If you didn't watch the test fail, you don't know if it tests the right thing.
 
-### Debugging
+### Debugging (external: superpowers plugin)
 
 **Skills**:
 
@@ -215,7 +216,7 @@ REPEAT  → Next failing test
 
 **Key insight**: Evidence before assertions. Show the error, show the fix working.
 
-### Code Review
+### Code Review (external: superpowers plugin)
 
 | Trigger | Skill | Use When |
 |---------|-------|----------|
@@ -303,12 +304,12 @@ maestro/
 ├── SETUP_GUIDE.md         # Installation guide
 ├── TUTORIAL.md            # Complete workflow guide
 ├── AGENTS.md              # Agent instructions
-├── skills/                # 15 skill directories
+├── skills/                # 16 skill directories
 │   ├── conductor/         # Planning methodology
+│   ├── design/            # Design sessions (ds trigger)
 │   ├── beads/             # Issue tracking (+ file-beads, review-beads)
 │   ├── test-driven-development/
-│   ├── systematic-debugging/
-│   └── ...
+│   └── ...                # See SETUP_GUIDE.md for full list
 ├── commands/              # 25+ slash commands
 ├── agents/                # Agent definitions
 ├── workflows/             # Workflow definitions

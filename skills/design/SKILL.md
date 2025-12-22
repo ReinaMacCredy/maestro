@@ -1,10 +1,10 @@
 ---
 name: design
+version: "1.1.1"
 description: Design Session - collaborative brainstorming to turn ideas into designs. Use when user types "ds" or wants to explore/design a feature before implementation.
 license: Apache-2.0
 compatibility: Works with Claude Code, Amp Code, Codex, and any Agent Skills compatible CLI
 metadata:
-  version: "0.2.0"
   keywords:
     - brainstorming
     - design
@@ -56,19 +56,19 @@ Present the design in small sections (200-300 words each):
 
 ## After the Design
 
-### Save the Design
+### Create the Track
 
-Write validated design to: `conductor/tracks/<track_id>/design.md`
+After design validation, create the track and save:
 
-Or if no track exists yet: `conductor/plans/YYYY-MM-DD-<topic>-design.md`
+1. Run `/conductor-newtrack <description>` to create the track
+2. Design is saved to: `conductor/tracks/<track_id>/design.md`
+3. Spec and plan are generated from the design
 
 ### Next Steps
 
 After design is complete, say:
 
-> "Design complete. Next steps:
-> - `/conductor-newtrack` to create spec and plan from this design
-> - Or continue exploring if something needs more thought"
+> "Design complete. Run `/conductor-newtrack <description>` to create the track with spec and plan."
 
 ## Key Principles
 

@@ -1,5 +1,6 @@
 ---
 name: using-superpowers
+version: "1.1.1"
 description: Use when starting any conversation - establishes how to find and use skills, requiring Skill tool invocation before ANY response including clarifying questions
 ---
 

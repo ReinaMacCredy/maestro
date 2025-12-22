@@ -58,9 +58,41 @@ git clone https://github.com/ReinaMacCredy/maestro.git ~/.config/amp/plugins/mae
 /skills       # Codex
 ```
 
-You should see 13 skills: `beads`, `codemaps`, `conductor`, `dispatching-parallel-agents`, `doc-sync`, `finishing-a-development-branch`, `sharing-skills`, `subagent-driven-development`, `test-driven-development`, `using-git-worktrees`, `using-superpowers`, `verification-before-completion`, `writing-skills`.
+You should see 16 skills: `beads`, `file-beads`, `review-beads`, `codemaps`, `conductor`, `design`, `dispatching-parallel-agents`, `doc-sync`, `finishing-a-development-branch`, `sharing-skills`, `subagent-driven-development`, `test-driven-development`, `using-git-worktrees`, `using-superpowers`, `verification-before-completion`, `writing-skills`.
 
-## Step 2: Install Beads Village
+## Step 2: Install Superpowers Plugin (Recommended)
+
+The **superpowers plugin** provides additional skills for debugging and code review workflows:
+
+- `systematic-debugging`, `root-cause-tracing`, `condition-based-waiting`, `defense-in-depth`
+- `requesting-code-review`, `receiving-code-review`
+- `brainstorming`, `writing-plans`, `executing-plans`
+
+### Claude Code
+
+```bash
+/plugin install https://github.com/obra/superpowers
+```
+
+### Amp
+
+```bash
+amp plugin add https://github.com/obra/superpowers.git
+```
+
+### Manual
+
+```bash
+# Claude Code
+git clone https://github.com/obra/superpowers.git ~/.claude/plugins/superpowers
+
+# Amp
+git clone https://github.com/obra/superpowers.git ~/.config/amp/plugins/superpowers
+```
+
+**Source:** https://github.com/obra/superpowers
+
+## Step 3: Install Beads Village
 
 ```bash
 npx beads-village    # Recommended
@@ -68,7 +100,7 @@ npx beads-village    # Recommended
 # or: pip install beads-village
 ```
 
-## Step 3: Install CLI Tools (Optional)
+## Step 4: Install CLI Tools (Optional)
 
 The plugin provides skills (mental models + workflows). For full functionality, install these optional CLI tools:
 
@@ -110,7 +142,7 @@ curl -fsSL https://raw.githubusercontent.com/Dicklesworthstone/coding_agent_sess
 curl -fsSL https://raw.githubusercontent.com/Dicklesworthstone/ultimate_bug_scanner/master/install.sh | bash -s -- --easy-mode
 ```
 
-## Step 4: Configure MCP Servers (Optional)
+## Step 5: Configure MCP Servers (Optional)
 
 ### Beads Village - Multi-Agent Coordination
 
@@ -169,7 +201,7 @@ claude mcp add morph-fast-tools -s user -e MORPH_API_KEY=<key> -e ALL_TOOLS=true
 claude mcp add exa -s user -e EXA_API_KEY=<key> -- npx -y @anthropic-labs/exa-mcp-server
 ```
 
-## Step 5: Configure Global Agent
+## Step 6: Configure Global Agent
 
 Add maestro triggers to your global config:
 
@@ -195,7 +227,7 @@ Add maestro triggers to your global config:
 
 For the full workflow reference, see [docs/GLOBAL_CONFIG_TEMPLATE.md](./docs/GLOBAL_CONFIG_TEMPLATE.md).
 
-## Step 6: Done
+## Step 7: Done
 
 ```
 Global setup complete!

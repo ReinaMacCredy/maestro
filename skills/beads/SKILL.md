@@ -1,6 +1,6 @@
 ---
 name: beads
-version: "1.1.0"
+version: "1.1.1"
 description: Track complex, multi-session work with dependency graphs using beads issue tracker. Use when work spans multiple sessions, has complex dependencies, or requires persistent context across compaction cycles. For simple single-session linear tasks, TodoWrite remains appropriate.
 ---
 

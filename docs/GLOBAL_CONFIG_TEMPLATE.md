@@ -69,12 +69,10 @@ bd sync
 | Phrase | Skill | Description |
 |--------|-------|-------------|
 | `tdd` | `test-driven-development` | Enter TDD mode |
-| `ct`, `claim task` | `execution-workflow` | Claim + implement next task |
 | `git worktree` | `using-git-worktrees` | Create isolated feature branch |
 | `finish branch` | `finishing-a-development-branch` | Finalize and prepare for merge |
-| `execute plan` | `plan-executor` | Execute implementation plan |
 
-### Debugging
+### Debugging (external: superpowers plugin)
 
 | Phrase | Skill | Description |
 |--------|-------|-------------|
@@ -87,15 +85,6 @@ bd sync
 | Phrase | Skill | Description |
 |--------|-------|-------------|
 | `ds` | `design` | Design session - collaborative brainstorming |
-| `bs`, `brainstorm` | `brainstorming` | Deep exploration, creative design |
-| `spike [topic]` | `spike-workflow` | Time-boxed research |
-| `retro` | `retro-workflow` | Capture lessons learned |
-
-### Memory & Meta
-
-| Phrase | Skill | Description |
-|--------|-------|-------------|
-| `/compact` | `memory-update` | Archive scratch, migrate facts |
 
 ---
 
@@ -108,19 +97,16 @@ PLANNING
   fb → bd issues
 
 EXECUTION
-  bd ready → ct → TDD cycle → bd checkpoint → finish branch
-
-RETROSPECTIVE
-  bd close → retro → history/retros/
+  bd ready → bd update <id> --status in_progress → TDD cycle → bd checkpoint → finish branch
 ```
 
 ## Workflow Chains
 
 | Scenario | Flow |
 |----------|------|
-| Standard | `/conductor-newtrack` → `fb` → `bd ready` → `ct` |
-| With exploration | `bs` → `/conductor-newtrack` → `fb` |
-| Resume work | `bd status` → `ct` |
+| Standard | `/conductor-newtrack` → `fb` → `bd ready` → `bd update <id> --status in_progress` |
+| With exploration | `ds` → `/conductor-newtrack` → `fb` |
+| Resume work | `bd status` → `bd update <id> --status in_progress` |
 
 ---
 
@@ -154,7 +140,7 @@ MCP server for task coordination via `npx beads-village`.
 
 ---
 
-## Available Skills (15)
+## Available Skills (16)
 
 | Skill | Trigger | Description |
 |-------|---------|-------------|
@@ -163,6 +149,7 @@ MCP server for task coordination via `npx beads-village`.
 | `review-beads` | `rb` | Review and refine beads issues |
 | `codemaps` | — | Token-aware architecture documentation |
 | `conductor` | `/conductor-design`, `/conductor-newtrack` | Design and planning through dialogue |
+| `design` | `ds` | Design session - collaborative brainstorming |
 | `dispatching-parallel-agents` | `dispatch` | 2+ independent parallel tasks |
 | `doc-sync` | `doc-sync`, `/doc-sync` | Sync AGENTS.md from completed threads |
 | `finishing-a-development-branch` | `finish branch` | Complete work: merge/PR/cleanup |
@@ -200,7 +187,6 @@ MCP server for task coordination via `npx beads-village`.
 |------|------|
 | Conductor | `conductor/{product,tech-stack,workflow,tracks}.md` |
 | Tracks | `conductor/tracks/<id>/{design,spec,plan}.md` |
-| Design Docs | `conductor/plans/*.md` |
 | Beads | `.beads/` |
 | Village | `.beads-village/`, `.reservations/`, `.mail/` |
 

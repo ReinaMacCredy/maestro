@@ -1,6 +1,6 @@
 ---
 name: doc-sync
-version: "1.1.0"
+version: "1.1.1"
 description: "Sync AGENTS.md files by extracting knowledge from completed work threads. Use after closing an epic or manually with doc-sync command."
 ---
 

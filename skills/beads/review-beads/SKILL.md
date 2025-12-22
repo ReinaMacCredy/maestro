@@ -1,5 +1,6 @@
 ---
 name: review-beads
+version: "1.1.1"
 description: Review, proofread, and refine filed Beads epics and issues
 argument-hint: [optional: specific epic or issue IDs to focus on]
 ---
