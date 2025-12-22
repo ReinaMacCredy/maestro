@@ -1,5 +1,7 @@
 # Spec: Double Diamond + Party Mode
 
+> **Last Revised:** 2024-12-23 - See [revisions.md](revisions.md) for history
+
 ## Overview
 
 Enhance the `/conductor:design` command with a Double Diamond methodology and multi-agent Party Mode for collaborative design sessions. This brings BMAD v6 patterns into Maestro's Conductor workflow.
@@ -29,6 +31,10 @@ Enhance the `/conductor:design` command with a Double Diamond methodology and mu
   - Technical: Architect (Winston), Developer (Amelia), QA (Murat), Docs (Paige)
   - Creative: Storyteller (Sophia), Brainstorm (Carson), Design (Maya), Strategist (Victor), Solver (Dr. Quinn)
 - **FR3.4:** Use hybrid MD + YAML frontmatter format for agents
+- **FR3.5:** Agent personas MUST match BMAD-METHOD repository exactly
+  - Role field uses `+` separator (not `&`)
+  - Identity/communication_style verbatim from BMAD source
+  - Source: `src/modules/bmm/agents/` and `src/modules/cis/agents/`
 
 ### FR4: Agent Selection & Cross-Talk
 - **FR4.1:** Implement relevance analysis for agent selection

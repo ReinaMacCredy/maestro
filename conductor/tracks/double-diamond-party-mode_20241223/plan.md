@@ -1,103 +1,111 @@
 # Plan: Double Diamond + Party Mode
 
+> **Last Revised:** 2024-12-23 - See [revisions.md](revisions.md) for history
+
 ## Phase 1: Foundation - Party Mode Workflow Structure
 *Output: Core workflow files and agent framework*
 
-- [ ] Task 1.1: Create Party Mode workflow directory structure
-  - [ ] Create `workflows/party-mode/` directory
-  - [ ] Create `workflows/party-mode/agents/product/` directory
-  - [ ] Create `workflows/party-mode/agents/technical/` directory
-  - [ ] Create `workflows/party-mode/agents/creative/` directory
-  - [ ] Create `workflows/party-mode/custom/` directory
+- [x] Task 1.1: Create Party Mode workflow directory structure
+  - [x] Create `workflows/party-mode/` directory
+  - [x] Create `workflows/party-mode/agents/product/` directory
+  - [x] Create `workflows/party-mode/agents/technical/` directory
+  - [x] Create `workflows/party-mode/agents/creative/` directory
+  - [x] Create `workflows/party-mode/custom/` directory
 
-- [ ] Task 1.2: Create workflow.md (all-in-one orchestration)
-  - [ ] Write Purpose and Prerequisites sections
-  - [ ] Write Agent Manifest table (12 agents)
-  - [ ] Write Selection Rules (Primary/Secondary/Tertiary logic)
-  - [ ] Write Cross-Talk Patterns section
-  - [ ] Write Response Format section
-  - [ ] Write Session Flow section
+- [x] Task 1.2: Create workflow.md (all-in-one orchestration)
+  - [x] Write Purpose and Prerequisites sections
+  - [x] Write Agent Manifest table (12 agents)
+  - [x] Write Selection Rules (Primary/Secondary/Tertiary logic)
+  - [x] Write Cross-Talk Patterns section
+  - [x] Write Response Format section
+  - [x] Write Session Flow section
 
-- [ ] Task 1.3: Create manifest.yaml (agent registry)
-  - [ ] Define agent schema (id, name, icon, module, expertise, path)
-  - [ ] Register all 12 built-in agents
-  - [ ] Add custom agent discovery rules
+- [x] Task 1.3: Create manifest.yaml (agent registry)
+  - [x] Define agent schema (id, name, icon, module, expertise, path)
+  - [x] Register all 12 built-in agents
+  - [x] Add custom agent discovery rules
 
-- [ ] Task: Conductor - User Manual Verification 'Phase 1' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 1' (Protocol in workflow.md)
 
 ## Phase 2: Agent Personas - Product Module
 *Output: 3 product-focused agent files*
 
-- [ ] Task 2.1: Create PM agent (John)
-  - [ ] Write YAML frontmatter (name, title, icon, role, identity, communication_style, principles)
-  - [ ] Write extended instructions in markdown body
-  - [ ] Define when this agent speaks
-  - [ ] Define response patterns and cross-talk behaviors
+- [x] Task 2.1: Create PM agent (John)
+  - [x] Write YAML frontmatter (name, title, icon, role, identity, communication_style, principles)
+  - [x] Write extended instructions in markdown body
+  - [x] Define when this agent speaks
+  - [x] Define response patterns and cross-talk behaviors
 
-- [ ] Task 2.2: Create Analyst agent (Mary)
-  - [ ] Write YAML frontmatter
-  - [ ] Write extended instructions
-  - [ ] Define response patterns
+- [x] Task 2.2: Create Analyst agent (Mary)
+  - [x] Write YAML frontmatter
+  - [x] Write extended instructions
+  - [x] Define response patterns
 
-- [ ] Task 2.3: Create UX agent (Sally)
-  - [ ] Write YAML frontmatter
-  - [ ] Write extended instructions
-  - [ ] Define response patterns
+- [x] Task 2.3: Create UX agent (Sally)
+  - [x] Write YAML frontmatter
+  - [x] Write extended instructions
+  - [x] Define response patterns
 
-- [ ] Task: Conductor - User Manual Verification 'Phase 2' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 2' (Protocol in workflow.md)
 
 ## Phase 3: Agent Personas - Technical Module
 *Output: 4 technical-focused agent files*
 
-- [ ] Task 3.1: Create Architect agent (Winston)
-  - [ ] Write YAML frontmatter
-  - [ ] Write extended instructions
-  - [ ] Define response patterns
+- [x] Task 3.1: Create Architect agent (Winston)
+  - [x] Write YAML frontmatter
+  - [x] Write extended instructions
+  - [x] Define response patterns
 
-- [ ] Task 3.2: Create Developer agent (Amelia)
-  - [ ] Write YAML frontmatter
-  - [ ] Write extended instructions
-  - [ ] Define response patterns
+- [x] Task 3.2: Create Developer agent (Amelia)
+  - [x] Write YAML frontmatter
+  - [x] Write extended instructions
+  - [x] Define response patterns
 
-- [ ] Task 3.3: Create QA agent (Murat)
-  - [ ] Write YAML frontmatter
-  - [ ] Write extended instructions
-  - [ ] Define response patterns
+- [x] Task 3.3: Create QA agent (Murat)
+  - [x] Write YAML frontmatter
+  - [x] Write extended instructions
+  - [x] Define response patterns
 
-- [ ] Task 3.4: Create Docs agent (Paige)
-  - [ ] Write YAML frontmatter
-  - [ ] Write extended instructions
-  - [ ] Define response patterns
+- [x] Task 3.4: Create Docs agent (Paige)
+  - [x] Write YAML frontmatter
+  - [x] Write extended instructions
+  - [x] Define response patterns
 
-- [ ] Task: Conductor - User Manual Verification 'Phase 3' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 3' (Protocol in workflow.md)
 
 ## Phase 4: Agent Personas - Creative Module
 *Output: 5 creative-focused agent files*
 
-- [ ] Task 4.1: Create Storyteller agent (Sophia)
-  - [ ] Write YAML frontmatter
-  - [ ] Write extended instructions
-  - [ ] Define response patterns
+- [x] Task 4.1: Create Storyteller agent (Sophia)
+  - [x] Write YAML frontmatter
+  - [x] Write extended instructions
+  - [x] Define response patterns
 
-- [ ] Task 4.2: Create Brainstorm agent (Carson)
-  - [ ] Write YAML frontmatter
-  - [ ] Write extended instructions
-  - [ ] Define response patterns
+- [x] Task 4.2: Create Brainstorm agent (Carson)
+  - [x] Write YAML frontmatter
+  - [x] Write extended instructions
+  - [x] Define response patterns
 
-- [ ] Task 4.3: Create Design Thinking agent (Maya)
-  - [ ] Write YAML frontmatter
-  - [ ] Write extended instructions
-  - [ ] Define response patterns
+- [x] Task 4.3: Create Design Thinking agent (Maya)
+  - [x] Write YAML frontmatter
+  - [x] Write extended instructions
+  - [x] Define response patterns
 
-- [ ] Task 4.4: Create Strategist agent (Victor)
-  - [ ] Write YAML frontmatter
-  - [ ] Write extended instructions
-  - [ ] Define response patterns
+- [x] Task 4.4: Create Strategist agent (Victor)
+  - [x] Write YAML frontmatter
+  - [x] Write extended instructions
+  - [x] Define response patterns
 
-- [ ] Task 4.5: Create Problem Solver agent (Dr. Quinn)
-  - [ ] Write YAML frontmatter
-  - [ ] Write extended instructions
-  - [ ] Define response patterns
+- [x] Task 4.5: Create Problem Solver agent (Dr. Quinn)
+  - [x] Write YAML frontmatter
+  - [x] Write extended instructions
+  - [x] Define response patterns
+
+- [x] Task 4.6: Verify all agents match BMAD-METHOD repository
+  - [x] Compare role fields (use `+` not `&`)
+  - [x] Compare identity fields verbatim
+  - [x] Compare communication_style verbatim
+  - [x] Source: https://github.com/bmad-code-org/BMAD-METHOD
 
 - [ ] Task: Conductor - User Manual Verification 'Phase 4' (Protocol in workflow.md)
 
