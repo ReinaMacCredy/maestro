@@ -51,7 +51,7 @@ bd update <epic-id> --notes "HANDOFF_READY: true. PLAN: <plan-path>"
 
 | Skill | Trigger | Description |
 |-------|---------|-------------|
-| `design` | `ds` | Design session - collaborative brainstorming before implementation |
+| `design` | `ds` | Design session with mandatory grounding and fb handoff |
 | `conductor` | `/conductor-design`, `/conductor-newtrack`, `/conductor-implement` | Structured planning and execution through specs and plans |
 | `doc-sync` | `doc-sync`, `/doc-sync` | Sync AGENTS.md from completed thread knowledge |
 | `beads` | `bd ready`, `bd status` | Issue tracking for multi-session work |

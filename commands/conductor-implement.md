@@ -5,7 +5,7 @@ argument-hint: [track_id or "Start epic <epic-id>"]
 
 # Conductor Implement
 
-**IMPORTANT: This command implements ONE EPIC per run.** When the epic is complete, the command stops and outputs a handoff block for the next epic (if any).
+**IMPORTANT: This command implements ONE EPIC per run.** When the epic is complete, the command prompts the user to either review remaining beads (`rb`) or hand off to the next epic (`Start epic <next-epic-id>`).
 
 Implement: $ARGUMENTS
 

@@ -287,14 +287,14 @@ The implement workflow executes tasks from a single epic using Beads for issue t
 5. **Update Status** - Mark track as in-progress in tracks.md
 6. **Task Loop** - Claim → TDD → Commit → Close → Repeat (epic-scoped only)
 7. **Epic Completion** - Close epic, run tests, get user confirmation
-8. **Handoff** - Output handoff block for next epic (if any)
+8. **User Choice** - Present explicit choice: `rb` to review beads OR `Start epic <next-epic-id>` to handoff
 9. **Track Completion** - Only when ALL epics done
 
 ### Key Details
 
 - **One epic per run** - Command stops after completing one epic
 - **Epic-scoped tasks** - Only processes tasks that are children of current epic
-- **Handoff block** - Outputs structured handoff for next session
+- **Explicit user choice** - After epic completion, user chooses `rb` (fewer mistakes) or handoff to next epic
 - **Thread linking is critical** for doc-sync integration (uses `bd comment` for atomic append)
 - **Beads is source of truth** for task status; plan.md updates are best-effort
 - **Resume** with `/conductor-implement Start epic <epic-id>`

@@ -84,7 +84,7 @@ bd sync
 
 | Phrase | Skill | Description |
 |--------|-------|-------------|
-| `ds` | `design` | Design session - collaborative brainstorming |
+| `ds` | `design` | Design session - collaborative brainstorming with mandatory grounding and fb handoff |
 
 ---
 
@@ -149,7 +149,7 @@ MCP server for task coordination via `npx beads-village`.
 | `review-beads` | `rb` | Review and refine beads issues |
 | `codemaps` | — | Token-aware architecture documentation |
 | `conductor` | `/conductor-design`, `/conductor-newtrack` | Design and planning through dialogue |
-| `design` | `ds` | Design session - collaborative brainstorming |
+| `design` | `ds` | Design session with mandatory grounding and fb handoff |
 | `dispatching-parallel-agents` | `dispatch` | 2+ independent parallel tasks |
 | `doc-sync` | `doc-sync`, `/doc-sync` | Sync AGENTS.md from completed threads |
 | `finishing-a-development-branch` | `finish branch` | Complete work: merge/PR/cleanup |
