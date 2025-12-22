@@ -36,7 +36,7 @@ Conductor implements the Knowledge & Vibes 4-phase framework:
 |-------|---------|---------------------|
 | **Requirements** | Understand problem completely before code | `/conductor-design` → `design.md` → review |
 | **Plan** | Create detailed plan BEFORE writing code | `/conductor-newtrack` uses `design.md` → `spec.md` + `plan.md` |
-| **Implement** | Build incrementally with TDD | `bd ready` → TDD cycle |
+| **Implement** | Build incrementally with TDD | `bd ready` → TDD cycle (one epic per run) |
 | **Reflect** | Verify before shipping | `verification-before-completion` + `bd close` |
 
 **Key Questions per Phase:**
@@ -70,7 +70,7 @@ Users can invoke these commands directly:
 | `/conductor-setup` | Initialize project with product.md, tech-stack.md, workflow.md |
 | `/conductor-design [desc]` | Design a feature/bug through collaborative dialogue (replaces `bs`) |
 | `/conductor-newtrack [id or desc]` | Create spec and plan from design.md (or interactive if no design) |
-| `/conductor-implement [id]` | Execute tasks from track's plan |
+| `/conductor-implement [id]` | Execute ONE EPIC from track's plan |
 | `/conductor-status` | Display progress overview |
 | `/conductor-revert` | Git-aware revert of work |
 

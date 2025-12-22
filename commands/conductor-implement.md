@@ -1,11 +1,38 @@
 ---
-description: Execute tasks from a track using beads for tracking
+description: Execute ONE EPIC from a track using beads for tracking
 argument-hint: [track_id or "Start epic <epic-id>"]
 ---
 
 # Conductor Implement
 
-Implement track: $ARGUMENTS
+**IMPORTANT: This command implements ONE EPIC per run.** When the epic is complete, the command stops and outputs a handoff block for the next epic (if any).
+
+Implement: $ARGUMENTS
+
+## Beads Chain Integration
+
+This command follows the **Beads dependency chain** to execute work in the correct order:
+
+```
+Track (conductor/tracks/<id>/)
+  │
+  ├── Epic 1 (bd-101)           ◄── ONE EPIC PER RUN
+  │   ├── Task A (bd-102)       ◄── child of Epic 1
+  │   ├── Task B (bd-103)       ◄── child of Epic 1, blocks Task C
+  │   └── Task C (bd-104)       ◄── blocked by Task B
+  │
+  ├── Epic 2 (bd-105)           ◄── NEXT RUN (via handoff)
+  │   └── ...
+  │
+  └── Epic 3 (bd-106)           ◄── blocked by Epic 2
+      └── ...
+```
+
+**Chain rules:**
+- `bd ready --json` returns only **unblocked** tasks
+- Tasks with `parent == $CURRENT_EPIC` are in scope
+- `bd dep tree <epic-id>` shows the full chain
+- Cross-epic dependencies handled via handoff blocks
 
 ## 0. Pre-flight Checks (Always Run)
 
@@ -21,32 +48,48 @@ command -v jq >/dev/null 2>&1 || { echo >&2 "Error: jq is required but not insta
 
 If missing, tell user to run `/conductor-setup` first.
 
-## 1. Handoff Detection
+## 1. Select Epic
 
-If `$ARGUMENTS` matches `Start epic <epic-id>`:
+**This command always works on ONE EPIC at a time.**
+
+### 1.1 If `$ARGUMENTS` matches `Start epic <epic-id>`:
 
 1. **Load epic from beads:**
    ```bash
    bd show <epic-id> --json
    ```
 
-2. **Parse notes for plan location:**
+2. **Store epic-id for scoping:**
+   ```bash
+   CURRENT_EPIC="<epic-id>"
+   ```
+
+3. **Parse notes for plan location:**
    Look for `PLAN: <path>` in notes field
    
-3. **Read the plan:**
+4. **Read the plan:**
    ```bash
    cat <plan-path>
    ```
 
-4. **Get ready tasks:**
+5. **Proceed to Step 4** (Load Context)
+
+### 1.2 If `$ARGUMENTS` is a track_id or empty:
+
+1. **Find the track** in `conductor/tracks.md`
+2. **List epics for this track:**
    ```bash
-   bd ready --json
+   bd list --type epic --json | jq '[.[] | select(.status != "closed")]'
    ```
-   Filter to tasks that are children of this epic
 
-5. **Begin execution** at Step 6 with epic context loaded
+3. **If multiple epics:** Present list and ask user which epic to implement
+4. **If one epic:** Use that epic
+5. **If no epics:** Say "No epics found. Run `fb` first to file beads from plan."
 
-If no handoff detected, proceed to Step 2.
+6. **Store selected epic:**
+   ```bash
+   CURRENT_EPIC="<selected-epic-id>"
+   ```
 
 ## 2. Select Track
 
@@ -85,25 +128,55 @@ Read into context:
 
 In `conductor/tracks.md`, change `## [ ] Track:` to `## [~] Track:` for selected track.
 
-## 6. Find Available Tasks
+## 6. Visualize Epic Chain
+
+Before starting work, show the dependency chain:
 
 ```bash
-bd ready --json
+# Show epic's dependency tree
+bd dep tree $CURRENT_EPIC
 ```
+
+**Present chain to user:**
+```
+Epic: Authentication (bd-101)
+├── [ready] Setup OAuth config (bd-102)
+├── [ready] Create user model (bd-103)
+├── [blocked] Implement login flow (bd-104) ← blocked by bd-102, bd-103
+└── [blocked] Add JWT refresh (bd-105) ← blocked by bd-104
+```
+
+## 7. Find Available Tasks (Epic-Scoped)
+
+```bash
+# Get ready tasks and filter to current epic's children only
+bd ready --json | jq --arg epic "$CURRENT_EPIC" '[.[] | select(.parent == $epic)]'
+```
+
+**CRITICAL:** Only work on tasks that are children of `$CURRENT_EPIC`. Do not process tasks from other epics.
 
 Present available tasks to user and claim the next one.
 
-## 7. Execute Task Loop
+## 8. Execute Task Loop
 
 For each task:
 
-### 7.1 Claim Task
+### 8.1 Claim Task
 
+**Single-agent mode:**
 ```bash
+# Claim the task by updating status
 bd update <issue-id> --status in_progress --json
 ```
 
-**CRITICAL: Record thread URL for doc-sync integration**
+**Multi-agent mode (Village):**
+```bash
+# Atomic claim prevents race conditions with other agents
+claim
+# Returns the claimed issue-id
+```
+
+**After claiming, update with thread URL:**
 
 This step is REQUIRED - doc-sync relies on thread URLs to extract knowledge.
 
@@ -139,7 +212,7 @@ Mark the task as in-progress in the human-readable plan:
 [ ] Task title  →  [~] Task title
 ```
 
-### 7.2 Setup Isolation (Optional)
+### 8.2 Setup Isolation (Optional)
 
 For complex tasks, create isolated worktree:
 - Load `using-git-worktrees` skill
@@ -147,7 +220,7 @@ For complex tasks, create isolated worktree:
 
 Skip for simple tasks.
 
-### 7.3 TDD Workflow (if workflow.md specifies)
+### 8.3 TDD Workflow (if workflow.md specifies)
 
 1. Write failing tests for the task
 2. Run tests, confirm they fail
@@ -155,14 +228,14 @@ Skip for simple tasks.
 4. Run tests, confirm they pass
 5. Refactor if needed (keep tests passing)
 
-### 7.4 Commit Changes
+### 8.4 Commit Changes
 
 ```bash
 git add .
 git commit -m "feat(<scope>): <description>"
 ```
 
-### 7.5 Complete Task in Beads (Source of Truth)
+### 8.5 Complete Task in Beads (Source of Truth)
 
 **Beads (`bd`) is the Single Source of Truth for task status.**
 
@@ -176,7 +249,7 @@ EOF
 
 If this command fails, stop and report the error. Do not proceed until beads status is updated.
 
-### 7.6 Update plan.md (Best-Effort Sync)
+### 8.6 Update plan.md (Best-Effort Sync)
 
 Mark corresponding task in plan.md as complete:
 - Change `[ ]` to `[x]`
@@ -184,26 +257,68 @@ Mark corresponding task in plan.md as complete:
 
 **Note**: This is for human readability only. If `bd close` succeeded but this update fails, log a warning but do not fail the workflow - Beads status is authoritative.
 
-### 7.7 Check for More Tasks
+### 8.7 Check for More Tasks (Epic-Scoped)
 
 ```bash
-bd ready --json
+# Only check for tasks within the current epic
+bd ready --json | jq --arg epic "$CURRENT_EPIC" '[.[] | select(.parent == $epic)]'
 ```
 
-- If more tasks ready: Continue loop (step 7.1)
-- If no tasks ready but some blocked: Show blockers and wait
-- If all tasks done: Proceed to completion
+- If more tasks ready **in this epic**: Continue loop (step 8.1)
+- If no tasks ready but some blocked **in this epic**: Show blockers and wait
+- If all tasks in this epic done: **Proceed to Epic Completion (Step 9)**
 
-## 8. Phase Verification
+**DO NOT** continue to tasks from other epics.
 
-At end of each phase (epic completion):
+## 9. Epic Completion
 
-1. Run full test suite
-2. Present manual verification steps to user
-3. Ask for explicit confirmation: "Does this work as expected?"
-4. Create checkpoint commit: `conductor(checkpoint): Phase <name> complete`
+When all tasks in `$CURRENT_EPIC` are closed:
 
-## 9. Track Completion
+1. **Close the epic:**
+   ```bash
+   bd close $CURRENT_EPIC --reason "All tasks completed" --json
+   ```
+
+2. **Run verification:**
+   - Run full test suite
+   - Present manual verification steps to user
+   - Ask for explicit confirmation: "Does this work as expected?"
+
+3. **Create checkpoint commit:**
+   ```bash
+   git commit --allow-empty -m "conductor(checkpoint): Epic $CURRENT_EPIC complete"
+   ```
+
+## 9. Next Epic Handoff
+
+After epic completion, check for remaining epics:
+
+```bash
+bd list --type epic --json | jq '[.[] | select(.status != "closed")]'
+```
+
+### 9.1 If more epics exist:
+
+Output handoff block:
+
+```
+---
+HANDOFF: Epic complete. Next epic ready.
+
+To continue implementation in a new session:
+/conductor-implement Start epic <next-epic-id>
+
+Or paste this message to a new thread.
+---
+```
+
+**STOP HERE.** Do not automatically continue to the next epic.
+
+### 9.2 If no more epics:
+
+Proceed to Track Completion (Step 10).
+
+## 10. Track Completion
 
 When all beads closed:
 

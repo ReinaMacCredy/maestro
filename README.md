@@ -245,19 +245,32 @@ flowchart LR
         rb1 --> handoff
     end
     
-    subgraph SESSION2["SESSION 2 (Execution)"]
+    subgraph SESSION2["SESSION 2 (Epic 1)"]
         direction TB
-        paste["User pastes HANDOFF block"]
+        paste["User pastes HANDOFF"]
         implement["/conductor-implement"]
         tdd["claims tasks → TDD → verify"]
-        complete["track complete"]
+        epic1done["Epic 1 complete → HANDOFF"]
         
         paste --> implement
         implement --> tdd
-        tdd --> complete
+        tdd --> epic1done
+    end
+    
+    subgraph SESSION3["SESSION 3 (Epic 2...)"]
+        direction TB
+        paste2["User pastes HANDOFF"]
+        implement2["/conductor-implement"]
+        tdd2["claims tasks → TDD → verify"]
+        complete["track complete"]
+        
+        paste2 --> implement2
+        implement2 --> tdd2
+        tdd2 --> complete
     end
     
     handoff -.-> paste
+    epic1done -.-> paste2
 ```
 
 ### Manual Specialist Tools
@@ -275,7 +288,7 @@ Outside the automated flow:
 | `/conductor-setup` | Initialize Conductor for project |
 | `/conductor-design [desc]` | Design through collaborative dialogue |
 | `/conductor-newtrack [id]` | Create spec + plan from design |
-| `/conductor-implement [id]` | Execute tasks using beads |
+| `/conductor-implement [id]` | Execute ONE EPIC from track's plan |
 | `/conductor-status` | View progress |
 | `/doc-sync` | Sync AGENTS.md from completed threads |
 | `/ground <pattern>` | Verify patterns against current truth |

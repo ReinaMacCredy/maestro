@@ -35,3 +35,6 @@ __pycache__/
 demo.yml
 tmp/
 conductor/plans
+
+# bv (beads viewer) local config and caches
+.bv/

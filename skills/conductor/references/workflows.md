@@ -276,23 +276,28 @@ Append to `conductor/tracks.md`:
 
 ### Summary
 
-The implement workflow executes tasks from a track using Beads for issue tracking:
+**IMPORTANT: This workflow implements ONE EPIC per run.**
+
+The implement workflow executes tasks from a single epic using Beads for issue tracking:
 
 1. **Pre-flight** - Verify jq installed, conductor setup complete
-2. **Select Track** - Find target track (explicit or first incomplete)
-3. **Check Beads** - Ensure issues exist for the track (run `fb` first if not)
+2. **Select Epic** - Identify target epic (from handoff or select from track)
+3. **Check Beads** - Ensure issues exist (run `fb` first if not)
 4. **Load Context** - Read design.md, spec.md, plan.md, workflow.md
 5. **Update Status** - Mark track as in-progress in tracks.md
-6. **Task Loop** - Claim → TDD → Commit → Close → Repeat
-7. **Phase Verification** - Run tests, get user confirmation
-8. **Track Completion** - Mark complete, offer archive options
+6. **Task Loop** - Claim → TDD → Commit → Close → Repeat (epic-scoped only)
+7. **Epic Completion** - Close epic, run tests, get user confirmation
+8. **Handoff** - Output handoff block for next epic (if any)
+9. **Track Completion** - Only when ALL epics done
 
 ### Key Details
 
+- **One epic per run** - Command stops after completing one epic
+- **Epic-scoped tasks** - Only processes tasks that are children of current epic
+- **Handoff block** - Outputs structured handoff for next session
 - **Thread linking is critical** for doc-sync integration (uses `bd comment` for atomic append)
 - **Beads is source of truth** for task status; plan.md updates are best-effort
-- **Handoff support** via `bd comment` with IN_PROGRESS/NEXT/THREAD fields
-- **Resume** with `/conductor-implement <track_id>` - finds in-progress issues automatically
+- **Resume** with `/conductor-implement Start epic <epic-id>`
 
 ---
 

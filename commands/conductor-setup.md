@@ -60,7 +60,55 @@ This file tracks all major work items. Each track has its own spec and plan.
 1. Based on project context, propose an initial track (MVP for greenfield, first feature for brownfield)
 2. On approval, create track using the newtrack workflow
 
-## 9. Finalize
+## 9. Enhance AI Agent Integration
+
+Check if AGENTS.md (or CLAUDE.md) exists and offer to add beads workflow instructions:
+
+1. **Check for existing file:**
+   ```bash
+   if [ -f "AGENTS.md" ] || [ -f "CLAUDE.md" ]; then
+     AGENT_FILE=$([ -f "AGENTS.md" ] && echo "AGENTS.md" || echo "CLAUDE.md")
+   fi
+   ```
+
+2. **Check if beads instructions exist:**
+   ```bash
+   grep -q "beads" "$AGENT_FILE" 2>/dev/null
+   ```
+
+3. **If file exists but no beads instructions:**
+   
+   Present to user:
+   ```
+   We found $AGENT_FILE in this project but it doesn't include beads_viewer instructions.
+   
+   Adding these helps AI coding agents understand how to use your issue tracking workflow.
+   
+   Preview of content to add:
+   
+   ## Beads Workflow Integration
+   
+   This project uses [beads_viewer](https://github.com/Dicklesworthstone/beads_viewer) for issue tracking. 
+   Issues are stored in `.beads/` and tracked in git.
+   
+   ### Key Commands
+   - `bd ready --json` - Find available tasks
+   - `bd update <id> --status in_progress` - Claim a task
+   - `bd close <id> --reason "summary"` - Complete a task
+   - `bd list --json` - List all issues
+   
+   ### Rules
+   - Always commit `.beads/` with code changes
+   - Use `--json` flag for structured output
+   - Beads is source of truth for task status
+   
+   Add this to $AGENT_FILE? [Yes, add it / No thanks / Don't ask again]
+   ```
+
+4. **If user approves:** Append content to agent file
+5. **If "Don't ask again":** Add `"skip_beads_integration": true` to `conductor/setup_state.json`
+
+## 10. Finalize
 
 1. Write `conductor/setup_state.json`: `{"last_successful_step": "complete"}`
 2. Commit: `git add conductor && git commit -m "conductor(setup): Initialize conductor"`
