@@ -45,7 +45,7 @@ bd update <epic-id> --notes "HANDOFF_READY: true. PLAN: <plan-path>"
 ## Versioning
 - **Patch bump** (x.x.1 → x.x.2): Small updates, fixes, minor tweaks
 - **Minor bump** (x.1.x → x.2.x): Big updates, new features, significant changes
-- After updating skills, update `.claude-plugin/plugin.json` version with the same bump type
+- After updating skills, update `.claude-plugin/plugin.json` & `.claude-plugin/marketplace.json` version with the same bump type
 
 ## Key Skills
 
