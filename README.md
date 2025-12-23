@@ -150,25 +150,22 @@ flowchart TB
         
         subgraph DIAMOND1["DIAMOND 1: UNDERSTAND PROBLEM"]
             DISCOVER["DISCOVER (Diverge)<br/>• Explore problem space<br/>• 5 Whys, edge cases<br/>• Mini-ground: codebase check"]
+            APC1{"A/P/C"}
             DEFINE["DEFINE (Converge)<br/>• Problem statement<br/>• Success criteria<br/>• YAGNI filtering"]
+            APC2{"A/P/C"}
         end
         
         subgraph DIAMOND2["DIAMOND 2: DESIGN SOLUTION"]
             DEVELOP["DEVELOP (Diverge)<br/>• 3+ approaches<br/>• Trade-off analysis<br/>• Wild/10x option"]
+            APC3{"A/P/C"}
             DELIVER["DELIVER (Converge)<br/>• Architecture, Components<br/>• Data Model, User Flow<br/>• FULL GROUNDING required"]
+            APC4{"A/P/C"}
         end
         
         subgraph HANDOFF["HANDOFF"]
             DESIGNMD["design.md saved to<br/>conductor/tracks/{id}/"]
             NEXT["Next: fb to file beads<br/>or /conductor-newtrack"]
         end
-    end
-    
-    subgraph APC["A/P/C CHECKPOINTS"]
-        A["[A] Advanced<br/>Deeper analysis"]
-        P["[P] Party Mode<br/>12 Expert Agents"]
-        C["[C] Continue<br/>Next phase"]
-        BACK["[↩ Back]<br/>Revisit prior phase"]
     end
     
     subgraph AGENTS["PARTY MODE: 12 AGENTS (BMAD v6)"]
@@ -196,18 +193,22 @@ flowchart TB
     
     TRIGGER --> CHECK
     CHECK --> DISCOVER
-    DISCOVER --> APC
-    APC --> DEFINE
-    DEFINE --> APC
-    APC --> DEVELOP
-    DEVELOP --> APC
-    APC --> DELIVER
-    DELIVER --> APC
-    APC --> DESIGNMD
+    DISCOVER --> APC1
+    APC1 -->|C| DEFINE
+    APC1 -.->|Back| DISCOVER
+    DEFINE --> APC2
+    APC2 -->|C| DEVELOP
+    APC2 -.->|Back| DISCOVER
+    DEVELOP --> APC3
+    APC3 -->|C| DELIVER
+    APC3 -.->|Back| DEFINE
+    DELIVER --> APC4
+    APC4 -->|C| DESIGNMD
+    APC4 -.->|Back| DEVELOP
     DESIGNMD --> NEXT
     
-    P -.-> AGENTS
-    AGENTS -.->|"Synthesize & Return"| APC
+    APC1 & APC2 & APC3 & APC4 -.->|P| AGENTS
+    AGENTS -.->|"Synthesize"| APC1 & APC2 & APC3 & APC4
 ```
 
 **Triggers**:

@@ -117,7 +117,6 @@ git status              # Check what changed
 git add <files>         # Stage code changes
 bd sync                 # Commit beads changes
 git commit -m "..."     # Commit code
-bd sync                 # Commit any new beads changes
 git push                # Push to remote
 ```
 
