@@ -40,7 +40,13 @@ Or install a specific skill:
 $skill-installer conductor from ReinaMacCredy/maestro
 ```
 
-### Amp / Cursor / Other Agent Skills-compatible tools
+### Amp
+
+```bash
+amp skill add https://github.com/ReinaMacCredy/maestro --global
+```
+
+### Cursor / Windsurf / Other tools
 
 Tell your AI agent:
 ```
@@ -76,11 +82,9 @@ See [SETUP_GUIDE.md](./SETUP_GUIDE.md) for detailed instructions.
 
 ```
 /conductor-setup                   # 1. Initialize project (once)
-/conductor-design "feature"        # 2. Design through dialogue → design.md
-/conductor-newtrack                # 3. Create spec.md + plan.md
-fb                                 # 4. File beads from plan
-rb                                 # 5. Review beads
-/conductor-implement               # 6. Execute with TDD + beads tracking
+ds                                 # 2. Design session → design.md
+/conductor-newtrack                # 3. Create spec + plan + beads + review
+/conductor-implement               # 4. Execute with TDD
 ```
 
 ### Quick Start (Existing Project)
@@ -170,24 +174,24 @@ flowchart TB
     
     subgraph AGENTS["PARTY MODE: 12 AGENTS (BMAD v6)"]
         subgraph PRODUCT["Product Module"]
-            PM["📋 John (PM)"]
-            ANALYST["📊 Mary (Analyst)"]
-            UX["🎨 Sally (UX)"]
+            PM["John (PM)"]
+            ANALYST["Mary (Analyst)"]
+            UX["Sally (UX)"]
         end
         
         subgraph TECHNICAL["Technical Module"]
-            ARCH["🏗️ Winston (Architect)"]
-            DEV["💻 Amelia (Developer)"]
-            QA["🧪 Murat (QA)"]
-            DOCS["📚 Paige (Docs)"]
+            ARCH["Winston (Architect)"]
+            DEV["Amelia (Developer)"]
+            QA["Murat (QA)"]
+            DOCS["Paige (Docs)"]
         end
         
         subgraph CREATIVE["Creative Module"]
-            STORY["📖 Sophia (Storyteller)"]
-            BRAIN["🧠 Carson (Brainstorm)"]
-            DESIGN["🎯 Maya (Design Thinking)"]
-            STRAT["⚡ Victor (Strategist)"]
-            SOLVER["🔬 Dr. Quinn (Solver)"]
+            STORY["Sophia (Storyteller)"]
+            BRAIN["Carson (Brainstorm)"]
+            DESIGN["Maya (Design Thinking)"]
+            STRAT["Victor (Strategist)"]
+            SOLVER["Dr. Quinn (Solver)"]
         end
     end
     
@@ -556,7 +560,7 @@ Outside the automated flow:
 |-------------------|------|
 | Understand the philosophy and workflow | [TUTORIAL.md](./TUTORIAL.md) |
 | Set up a new project | [SETUP_GUIDE.md](./SETUP_GUIDE.md) |
-| Configure global agent (CLAUDE.md/AGENTS.md) | [docs/GLOBAL_CONFIG_TEMPLATE.md](./docs/GLOBAL_CONFIG_TEMPLATE.md) |
+| Configure global agent | [docs/GLOBAL_CONFIG.md](./docs/GLOBAL_CONFIG.md) |
 | Use commands manually without skills | [docs/manual-workflow-guide.md](./docs/manual-workflow-guide.md) |
 | See all skills at a glance | [Skills table above](#the-skills) |
 

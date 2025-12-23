@@ -1,139 +1,120 @@
 # Setup Guide
 
-**For AI agents setting up maestro globally.**
+**For AI agents setting up Maestro.**
 
-## Step 1: Install Plugin/Skills
+<!--
+AGENT-QUICK-SETUP
 
-### Claude Code
+Execute these steps in order:
 
+1. Install plugin:
+   - Claude Code: /plugin install https://github.com/ReinaMacCredy/maestro
+   - Amp: amp skill add https://github.com/ReinaMacCredy/maestro --global
+   - Codex: $skill-installer ReinaMacCredy/maestro
+   - Other: git clone to skill directory
+
+2. Read docs/GLOBAL_CONFIG.md, apply config block to user's global config
+
+3. Check if `bd` CLI exists (run: which bd)
+   - If exists: Setup complete
+   - If not: Tell user to install CLI tools manually
+
+4. Report what was installed and what needs manual installation
+-->
+
+## Step 1: Install Plugin
+
+Install using your tool's method:
+
+| Tool | Command |
+|------|---------|
+| Claude Code | `/plugin install https://github.com/ReinaMacCredy/maestro` |
+| Amp | `amp skill add https://github.com/ReinaMacCredy/maestro --global` |
+| Codex | `$skill-installer ReinaMacCredy/maestro` |
+
+**Manual fallback** (any tool):
 ```bash
-# Plugin install (recommended)
-/plugin install https://github.com/ReinaMacCredy/maestro
-
-# Or via CLI
-claude plugin add https://github.com/ReinaMacCredy/maestro.git
+git clone https://github.com/ReinaMacCredy/maestro.git <skill-directory>
 ```
 
-Verify: `/plugin list` should show `maestro`
+Skill directories:
+- Claude Code: `~/.claude/skills/maestro`
+- Amp: `~/.config/agents/skills/maestro`
+- Codex: `~/.codex/skills/maestro`
 
-### OpenAI Codex
+**Verify:** Run `/skill list` or check skill directory exists.
 
-```
-$skill-installer ReinaMacCredy/maestro
-```
+## Step 2: Install Superpowers (Recommended)
 
-Or install specific skills:
-```
-$skill-installer conductor from ReinaMacCredy/maestro
-$skill-installer beads from ReinaMacCredy/maestro
-```
+Provides debugging and code review skills.
 
-Skills install to `~/.codex/skills/`
+| Tool | Command |
+|------|---------|
+| Claude Code | `/plugin install https://github.com/obra/superpowers` |
+| Amp | `amp skill add https://github.com/obra/superpowers --global` |
 
-### Amp
+## Step 3: Configure Global Agent
 
+Read [docs/GLOBAL_CONFIG.md](./docs/GLOBAL_CONFIG.md) and apply the config block to user's global config.
+
+The file contains:
+- Config paths for each tool
+- Default config block with BEGIN/END markers
+- Optional Beads Village block
+
+## Step 4: Check CLI Tools
+
+Check if `bd` CLI is installed:
 ```bash
-# Add via git URL
-amp plugin add https://github.com/ReinaMacCredy/maestro.git
+which bd && echo "CLI installed" || echo "CLI not found"
 ```
 
-### Manual (any agent)
+If not found, inform user to install manually (see Manual Installation below).
 
-Clone skills to your agent's skill directory:
+## Step 5: Report Results
+
+Tell user:
+```
+Maestro setup complete.
+
+Installed:
+- Maestro plugin (skills loaded)
+- Global config updated
+
+For full functionality, install CLI tools:
+  curl -fsSL https://raw.githubusercontent.com/Dicklesworthstone/mcp_agent_mail/main/scripts/install.sh | bash -s -- --dir "$HOME/mcp_agent_mail" --yes
+
+Skills work without CLI - use TodoWrite for session tracking.
+
+Next: Run /conductor-setup in your project to initialize planning.
+```
+
+---
+
+<!-- HUMAN-ONLY: Manual installation reference below -->
+
+## Manual Installation
+
+### CLI Tools
+
+**Beads CLI (bd, bv)** - Persistent issue tracking:
 ```bash
-# Claude Code
-git clone https://github.com/ReinaMacCredy/maestro.git ~/.claude/plugins/maestro
-
-# Codex
-git clone https://github.com/ReinaMacCredy/maestro.git /tmp/maestro && cp -r /tmp/maestro/skills/* ~/.codex/skills/
-
-# Amp
-git clone https://github.com/ReinaMacCredy/maestro.git ~/.config/amp/plugins/maestro
-```
-
-### Verify Installation
-
-```
-/skill list   # Claude Code / Amp
-/skills       # Codex
-```
-
-You should see 16 skills: `beads`, `file-beads`, `review-beads`, `codemaps`, `conductor`, `design`, `dispatching-parallel-agents`, `doc-sync`, `finishing-a-development-branch`, `sharing-skills`, `subagent-driven-development`, `test-driven-development`, `using-git-worktrees`, `using-superpowers`, `verification-before-completion`, `writing-skills`.
-
-## Step 2: Install Superpowers Plugin (Recommended)
-
-The **superpowers plugin** provides additional skills for debugging and code review workflows:
-
-- `systematic-debugging`, `root-cause-tracing`, `condition-based-waiting`, `defense-in-depth`
-- `requesting-code-review`, `receiving-code-review`
-- `brainstorming`, `writing-plans`, `executing-plans`
-
-### Claude Code
-
-```bash
-/plugin install https://github.com/obra/superpowers
-```
-
-### Amp
-
-```bash
-amp plugin add https://github.com/obra/superpowers.git
-```
-
-### Manual
-
-```bash
-# Claude Code
-git clone https://github.com/obra/superpowers.git ~/.claude/plugins/superpowers
-
-# Amp
-git clone https://github.com/obra/superpowers.git ~/.config/amp/plugins/superpowers
-```
-
-**Source:** https://github.com/obra/superpowers
-
-## Step 3: Install Beads Village
-
-```bash
-npx beads-village    # Recommended
-# or: npm install -g beads-village
-# or: pip install beads-village
-```
-
-## Step 4: Install CLI Tools (Optional)
-
-The plugin provides skills (mental models + workflows). For full functionality, install these optional CLI tools:
-
-### System Dependencies
-
-```bash
-# jq - required for conductor-implement and beads parsing
-# macOS
-brew install jq
-
-# Ubuntu/Debian
-sudo apt-get install jq
-
-# Fedora
-sudo dnf install jq
-```
-
-### Beads CLI (`bd`) - Recommended
-
-Persistent issue tracking across sessions:
-
-```bash
-# Agent Mail installer (includes bd, bv, am)
 curl -fsSL https://raw.githubusercontent.com/Dicklesworthstone/mcp_agent_mail/main/scripts/install.sh | bash -s -- --dir "$HOME/mcp_agent_mail" --yes
 ```
 
 Verify:
 ```bash
-bd --version && bv --version && echo "✓ Beads installed"
+bd --version && bv --version
 ```
 
-### Other Tools (Optional)
+**System dependencies:**
+```bash
+# jq - required for beads parsing
+brew install jq        # macOS
+sudo apt install jq    # Ubuntu/Debian
+```
 
+**Other tools (optional):**
 ```bash
 # CASS - session search
 curl -fsSL https://raw.githubusercontent.com/Dicklesworthstone/coding_agent_session_search/main/install.sh | bash -s -- --easy-mode
@@ -142,22 +123,18 @@ curl -fsSL https://raw.githubusercontent.com/Dicklesworthstone/coding_agent_sess
 curl -fsSL https://raw.githubusercontent.com/Dicklesworthstone/ultimate_bug_scanner/master/install.sh | bash -s -- --easy-mode
 ```
 
-## Step 5: Configure MCP Servers (Optional)
+### MCP Servers
 
-### Beads Village - Multi-Agent Coordination
+**Beads Village** - Multi-agent coordination:
 
-Prerequisites:
-- `pip install beads` (beads CLI already installed in Step 2)
-- Node.js 16+
-
-**Install for Claude Code:**
 ```bash
-claude mcp add beads-village -s user -- npx beads-village
-```
+# Install package
+npx beads-village
 
-**Install for Amp:**
-Add to `~/.config/amp/settings.json`:
-```json
+# Add to Claude Code
+claude mcp add beads-village -s user -- npx beads-village
+
+# Add to Amp (~/.config/amp/settings.json)
 {
   "mcpServers": {
     "beads-village": {
@@ -168,130 +145,45 @@ Add to `~/.config/amp/settings.json`:
 }
 ```
 
-**Install for Codex:**
-Add to `~/.codex/config.toml` under `[mcp]`:
-```toml
-[mcp.beads-village]
-command = "npx"
-args = ["beads-village"]
-```
-
-**Verify:**
-```bash
-# Check MCP server responds
-/mcp  # Should show beads-village with tools: init, claim, done, reserve, release, msg, inbox, status, assign
-```
-
-**Source:** https://github.com/LNS2905/mcp-beads-village
-
-### Enhanced Search (Optional)
-
-For enhanced search capabilities:
-
-**Get API keys:**
-- Morph (Warp-Grep): https://morphllm.com
-- Exa (web/code search): https://dashboard.exa.ai
-
-**Install:**
+**Enhanced Search (optional):**
 ```bash
 # Warp-Grep - parallel codebase search
 claude mcp add morph-fast-tools -s user -e MORPH_API_KEY=<key> -e ALL_TOOLS=true -- npx -y @morphllm/morphmcp
 
-# Exa - real-time web and code search
+# Exa - real-time web search
 claude mcp add exa -s user -e EXA_API_KEY=<key> -- npx -y @anthropic-labs/exa-mcp-server
 ```
 
-## Step 6: Configure Global Agent
-
-Add maestro triggers to your global config:
-
-| Tool | Config File |
-|------|-------------|
-| Claude Code | `~/.claude/CLAUDE.md` |
-| Amp | `~/.config/amp/AGENTS.md` |
-| Codex | `~/.codex/AGENTS.md` |
-
-**Append** this snippet to your existing global config:
-
-```markdown
-## Maestro Workflow
-
-**Planning:** `/conductor-setup` → `/conductor-design` (or `ds`) → `/conductor-newtrack`
-
-**Execution:** `/conductor-newtrack` → `/conductor-implement` → `tdd` → `finish branch`
-
-**Maintenance:** `/conductor-revise` (update spec/plan), `/conductor-refresh` (sync stale docs)
-
-**Utilities:** `/doc-sync`, `/compact`, `dispatch`, `git worktree`
-
-**Review:** `rb`, `review code`
-```
-
-For the full workflow reference, see [docs/GLOBAL_CONFIG_TEMPLATE.md](./docs/GLOBAL_CONFIG_TEMPLATE.md).
-
-## Step 7: Done
-
-```
-Global setup complete!
-
-Installed: maestro plugin (global)
-Required: bd CLI
-Optional: beads-village MCP
-
-Key triggers:
-  /conductor-setup           # Initialize project planning (once)
-  ds                         # Double Diamond design session (A/P/C, Party Mode)
-  /conductor-design "X"      # Same as ds, with description
-  /conductor-newtrack "X"    # spec + plan + beads + review (--no-beads for plan only)
-  fb                         # Advanced: re-file beads or when using --no-beads
-  rb                         # Advanced: re-review beads or when using --no-beads
-  bd ready --json            # See available work
-  /conductor-implement       # Execute tasks with TDD
-  /conductor-revise          # Update spec/plan mid-track
-  /conductor-refresh         # Sync docs with codebase
-  tdd                        # Enter TDD mode
-
-Per-project setup (when starting a new project):
-  bd init                    # Initialize beads database
-  git add .beads/ && git commit -m "Initialize beads"
-
-Next: Read TUTORIAL.md for complete workflow guide.
-```
+---
 
 ## Quick Reference
 
 | What | How |
 |------|-----|
-| Install plugin | `/plugin install maestro` |
-| Global config template | [docs/GLOBAL_CONFIG_TEMPLATE.md](./docs/GLOBAL_CONFIG_TEMPLATE.md) |
+| Install plugin | See Step 1 above |
+| Global config | [docs/GLOBAL_CONFIG.md](./docs/GLOBAL_CONFIG.md) |
 | Initialize planning | `/conductor-setup` |
-| Design feature | `/conductor-design "description"` or `ds` |
-| New track from design | `/conductor-newtrack` |
-| Execute track | `/conductor-implement` |
-| View progress | `/conductor-status` |
-| Revert work | `/conductor-revert` |
-| Revise spec/plan | `/conductor-revise` |
-| Refresh stale docs | `/conductor-refresh` |
+| Design feature | `ds` or `/conductor-design` |
+| Create track | `/conductor-newtrack` |
+| Execute tasks | `/conductor-implement` |
+| Enter TDD mode | `tdd` |
 | See available work | `bd ready --json` |
-| Start TDD | Say `tdd` |
-| Multi-agent coordination | `init`, `claim`, `done` via beads-village MCP |
 | Full documentation | [TUTORIAL.md](./TUTORIAL.md) |
 
 ## Troubleshooting
 
 | Problem | Solution |
 |---------|----------|
-| Skills not loading | Run `/plugin list` to verify installation |
-| `bd: command not found` | Install via Agent Mail installer (Step 3) |
-| Agent ignores workflow | Use trigger phrase explicitly: `tdd`, `debug`, `/conductor-design` |
-| MCP tools not working | Check `/mcp` shows the server, verify API key |
+| Skills not loading | Check `/skill list` or skill directory |
+| `bd: command not found` | Install CLI tools (see Manual Installation) |
+| Agent ignores workflow | Use trigger explicitly: `tdd`, `ds`, `/conductor-design` |
+| MCP not working | Check `/mcp` shows the server |
 
 ## Without CLI Tools
 
-The plugin still provides value without `bd`:
-- Skills work as mental models and methodologies
+The plugin works without `bd`:
+- Skills provide methodology and workflows
 - Use `TodoWrite` for session-local task tracking
 - Track issues manually in GitHub Issues or markdown
-- Full TDD, debugging, and code review workflows still apply
 
 **The skills are the methodology; the CLIs are the persistence layer.**

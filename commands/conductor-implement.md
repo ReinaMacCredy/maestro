@@ -29,6 +29,7 @@ Track (conductor/tracks/<id>/)
 ```
 
 **Chain rules:**
+
 - `bd ready --json` returns only **unblocked** tasks
 - Tasks with `parent == $CURRENT_EPIC` are in scope
 - `bd dep tree <epic-id>` shows the full chain
@@ -37,11 +38,13 @@ Track (conductor/tracks/<id>/)
 ## 0. Pre-flight Checks (Always Run)
 
 **Check required tools:**
+
 ```bash
 command -v jq >/dev/null 2>&1 || { echo >&2 "Error: jq is required but not installed. Please install it:\n  macOS: brew install jq\n  Ubuntu/Debian: sudo apt-get install jq\n  Fedora: sudo dnf install jq"; exit 1; }
 ```
 
 **Check these files exist:**
+
 - `conductor/product.md`
 - `conductor/tech-stack.md`
 - `conductor/workflow.md`
@@ -55,19 +58,21 @@ If missing, tell user to run `/conductor-setup` first.
 ### 1.1 If `$ARGUMENTS` matches `Start epic <epic-id>`:
 
 1. **Load epic from beads:**
+
    ```bash
    bd show <epic-id> --json
    ```
 
 2. **Store epic-id for scoping:**
+
    ```bash
    CURRENT_EPIC="<epic-id>"
    ```
 
 3. **Parse notes for plan location:**
    Look for `PLAN: <path>` in notes field
-   
 4. **Read the plan:**
+
    ```bash
    cat <plan-path>
    ```
@@ -78,6 +83,7 @@ If missing, tell user to run `/conductor-setup` first.
 
 1. **Find the track** in `conductor/tracks.md`
 2. **List epics for this track:**
+
    ```bash
    bd list --type epic --json | jq '[.[] | select(.status != "closed")]'
    ```
@@ -106,11 +112,13 @@ bd list --json
 ```
 
 - **Filter results to this track** by checking for:
+
   - Issues with `track_id` matching current track in metadata, OR
   - Issues tagged with `track:<track_id>`, OR
   - Child issues of an epic associated with this track
 
-- If no beads found **for this track**: 
+- If no beads found **for this track**:
+
   - Say: "No issues found for this track. Run `fb` first to file beads from plan.md."
   - Exit
 
@@ -119,6 +127,7 @@ bd list --json
 ## 4. Load Context
 
 Read into context:
+
 - `conductor/tracks/<track_id>/design.md` (if exists)
 - `conductor/tracks/<track_id>/spec.md`
 - `conductor/tracks/<track_id>/plan.md`
@@ -141,6 +150,7 @@ bd dep tree $CURRENT_EPIC
 ```
 
 **Present chain to user:**
+
 ```
 Epic: Authentication (bd-101)
 ├── [ready] Setup OAuth config (bd-102)
@@ -183,6 +193,7 @@ bd update <issue-id> --status in_progress --json
 This step is REQUIRED - doc-sync relies on thread URLs to extract knowledge.
 
 **Before proceeding, verify:**
+
 - [ ] You have the current Amp thread URL (check Environment section or `$AMP_THREAD_URL`)
 - [ ] The URL is valid (format: `https://ampcode.com/threads/T-...` or `http://localhost:.../threads/T-...`)
 
@@ -202,6 +213,7 @@ fi
 **If thread URL is unavailable:** Continue with a warning. Thread linking enables doc-sync traceability but is not required for task execution.
 
 Read task details:
+
 ```bash
 bd show <issue-id>
 ```
@@ -210,6 +222,7 @@ Announce: "Working on: <issue-title>"
 
 **Update plan.md status:**
 Mark the task as in-progress in the human-readable plan:
+
 ```
 [ ] Task title  →  [~] Task title
 ```
@@ -217,6 +230,7 @@ Mark the task as in-progress in the human-readable plan:
 ### 8.2 Setup Isolation (Optional)
 
 For complex tasks, create isolated worktree:
+
 - Load `using-git-worktrees` skill
 - Create worktree for the task
 
@@ -243,12 +257,12 @@ After implementing the task (or completing the TDD cycle):
 
 **Issue Analysis Decision Tree:**
 
-| Issue Type | Indicators | Action |
-|------------|------------|--------|
-| **Implementation Bug** | Typo, logic error, missing import, test assertion wrong | Fix directly and continue |
-| **Spec Issue** | Requirement wrong, missing, impossible, edge case not covered | Trigger Revise workflow for spec → update `spec.md` → log in `revisions.md` → then fix |
-| **Plan Issue** | Missing task, wrong order, task too big/small, dependency missing | Trigger Revise workflow for plan → update `plan.md` → log in `revisions.md` → continue |
-| **Blocked** | External dependency, need user input, waiting on API | Mark as blocked, suggest `/conductor-block` |
+| Issue Type             | Indicators                                                        | Action                                                                                 |
+| ---------------------- | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **Implementation Bug** | Typo, logic error, missing import, test assertion wrong           | Fix directly and continue                                                              |
+| **Spec Issue**         | Requirement wrong, missing, impossible, edge case not covered     | Trigger Revise workflow for spec → update `spec.md` → log in `revisions.md` → then fix |
+| **Plan Issue**         | Missing task, wrong order, task too big/small, dependency missing | Trigger Revise workflow for plan → update `plan.md` → log in `revisions.md` → continue |
+| **Blocked**            | External dependency, need user input, waiting on API              | Mark as blocked, suggest `/conductor-block`                                            |
 
 **Agent MUST announce:**
 
@@ -289,6 +303,7 @@ If this command fails, stop and report the error. Do not proceed until beads sta
 ### 8.7 Update plan.md (Best-Effort Sync)
 
 Mark corresponding task in plan.md as complete:
+
 - Change `[ ]` to `[x]`
 - Append commit SHA
 
@@ -312,11 +327,13 @@ bd ready --json | jq --arg epic "$CURRENT_EPIC" '[.[] | select(.parent == $epic)
 When all tasks in `$CURRENT_EPIC` are closed:
 
 1. **Close the epic:**
+
    ```bash
    bd close $CURRENT_EPIC --reason "All tasks completed" --json
    ```
 
 2. **Run verification:**
+
    - Run full test suite
    - Present manual verification steps to user
    - If issues are found, apply the Issue Analysis Decision Tree from **8.4 Self-Check & Issue Handling**
@@ -371,6 +388,7 @@ bd sync
 ```
 
 To resume in new session:
+
 ```
 /conductor-implement <track_id>
 ```
@@ -380,11 +398,13 @@ The command will find in-progress and ready issues automatically.
 ## Status Reference
 
 **Beads statuses:**
+
 - `open` - Not started
 - `in_progress` - Currently working
 - `closed` - Completed
 
 **Plan.md markers:**
+
 - `[ ]` - Pending
 - `[~]` - In Progress
 - `[x]` - Completed

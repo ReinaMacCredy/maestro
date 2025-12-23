@@ -235,4 +235,4 @@ bd update <id> --notes "COMPLETED: X. IN PROGRESS: Y. NEXT: Z"
 - [SETUP_GUIDE.md](SETUP_GUIDE.md) - Installation instructions for different environments
 - [TUTORIAL.md](TUTORIAL.md) - Complete workflow guide with examples
 - [AGENTS.md](AGENTS.md) - Current project-specific agent instructions
-- [docs/GLOBAL_CONFIG_TEMPLATE.md](docs/GLOBAL_CONFIG_TEMPLATE.md) - Global configuration template
+- [docs/GLOBAL_CONFIG.md](docs/GLOBAL_CONFIG.md) - Global configuration for agents
