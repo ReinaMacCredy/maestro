@@ -736,7 +736,7 @@ Implements bd-001, progress on bd-002.
 git push
 ```
 
-#### Step 4: Sync documentation (after epic completion)
+#### Step 4: Sync documentation (after track completion)
 
 When you complete a track (all epics done), run:
 
