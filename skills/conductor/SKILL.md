@@ -302,62 +302,58 @@ See [references/CODEMAPS_TEMPLATE.md](references/CODEMAPS_TEMPLATE.md) for codem
 | File | Required | Created By | Purpose |
 |------|----------|------------|---------|
 | `design.md` | Optional | `/conductor-design` | High-level design |
-| `spec.md` | Yes | `/conductor-newtrack` | Requirements |
-| `plan.md` | Yes | `/conductor-newtrack` | Implementation tasks |
-| `metadata.json` | Yes | `/conductor-newtrack` | Track metadata |
-| `.track-progress.json` | Yes | `/conductor-newtrack` | Workflow state |
-| `.fb-progress.json` | Conditional | `file-beads` skill | Beads filing state (only if beads filed) |
+| `spec.md` | Yes (with plan.md) | `/conductor-newtrack` | Requirements |
+| `plan.md` | Yes (with spec.md) | `/conductor-newtrack` | Implementation tasks |
+| `metadata.json` | Yes | `/conductor-newtrack` Phase 1.3 | Track metadata |
+| `.track-progress.json` | Yes | `/conductor-newtrack` Phase 1.3 | Workflow state |
+| `.fb-progress.json` | Yes | `/conductor-newtrack` Phase 1.3 | Beads filing state |
 
-### Edge Cases That Cause Missing Files
+**CRITICAL:** All 3 state files (metadata.json, .track-progress.json, .fb-progress.json) are created at the START of `/conductor-newtrack` in Phase 1.3, BEFORE spec/plan generation.
 
-| Scenario | Cause | Missing Files |
-|----------|-------|---------------|
-| Manual creation | User created files directly | All state files |
-| Interrupted workflow | Session compacted mid-workflow | Some state files |
-| `--no-beads` flag | Intentional skip | `.fb-progress.json` only |
-| Subagent failure | `file-beads` crashed | `.fb-progress.json` |
-| Design-only | `/conductor-design` without `/conductor-newtrack` | spec, plan, all state |
+### State File Creation Timeline
 
-### Auto-Repair on Session Start
+```
+/conductor-newtrack Phase 1.3 (FIRST):
+├── Create metadata.json (status: initializing)
+├── Create .track-progress.json (status: initializing)
+└── Create .fb-progress.json (status: pending)
 
-When loading a track, validate and repair missing state:
+/conductor-newtrack Phase 2.4 (After spec/plan):
+├── Update metadata.json (status: planned, artifacts.spec/plan: true)
+└── Update .track-progress.json (status: plan_done)
 
-```bash
-# Check for incomplete track (has content but missing state)
-if [[ -f "plan.md" && ! -f "metadata.json" ]]; then
-  # Track needs repair
-fi
+file-beads skill:
+├── Validate all 3 state files exist (HALT if missing)
+└── Update .fb-progress.json (status: in_progress → complete)
 ```
 
-**Repair Actions:**
+### Validation Rules
 
-1. **Missing `metadata.json`**: Create with inferred values from existing files
-2. **Missing `.track-progress.json`**: Create with `status: "plan_done"` if spec+plan exist
-3. **Missing `.fb-progress.json`**: Create with `status: "pending"` if beads not filed
+| Rule | Enforcement |
+|------|-------------|
+| spec.md and plan.md must exist together | HALT if one without other |
+| State files must exist before file-beads | HALT if missing |
+| track_id mismatch | Auto-fix to match directory name |
+| Corrupted JSON | HALT (do not auto-repair) |
 
-### Repair Template: metadata.json
+### Auto-Fix Behaviors
 
-```json
-{
-  "track_id": "<inferred-from-directory>",
-  "type": "feature",
-  "status": "new",
-  "priority": "medium",
-  "depends_on": [],
-  "estimated_hours": null,
-  "created_at": "<file-mtime-of-oldest-file>",
-  "updated_at": "<now>",
-  "description": "<extracted-from-spec-overview>",
-  "has_design": true,
-  "threads": [],
-  "artifacts": {
-    "design": <design.md-exists>,
-    "spec": <spec.md-exists>,
-    "plan": <plan.md-exists>,
-    "beads": false
-  }
-}
-```
+| Issue | Action |
+|-------|--------|
+| `metadata.json.track_id` != directory name | Auto-fix: update to directory name |
+| `.track-progress.json.trackId` != directory name | Auto-fix: update to directory name |
+| `.fb-progress.json.trackId` != directory name | Auto-fix: update to directory name |
+| Missing state files | HALT with message: "Run /conductor-newtrack first" |
+
+### /conductor-newtrack Creates All State Files
+
+When `/conductor-newtrack` runs on an EXISTING track (with design.md, spec.md, plan.md but missing state files), it will:
+
+1. **Phase 1.3:** Create all 3 state files immediately
+2. **Phase 2:** Skip spec/plan generation if files exist
+3. **Phase 3:** Proceed to file beads
+
+This enables auto-repair of tracks created before this fix.
 
 ### Repair Template: .fb-progress.json
 

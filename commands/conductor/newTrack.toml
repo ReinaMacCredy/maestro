@@ -41,6 +41,122 @@ Parse `{{args}}` for flags and track identifier:
     -   Announce: "Conductor is not set up. Please run `/conductor:setup` to set up the environment."
     -   Do NOT proceed to New Track Initialization.
 
+## 1.3 STATE FILES INITIALIZATION (MANDATORY FIRST STEP)
+
+**CRITICAL: Create/validate ALL state files BEFORE any other operations.**
+
+After resolving track_id (from `track_input` or existing design.md):
+
+### 1.3.1 Create Track Directory
+```bash
+mkdir -p conductor/tracks/<track_id>/
+```
+
+### 1.3.2 Create/Validate metadata.json
+
+**If file exists:** Validate and auto-fix track_id if mismatched:
+```bash
+# Check if valid JSON
+if ! jq empty "conductor/tracks/<track_id>/metadata.json" 2>/dev/null; then
+  echo "⚠️ Corrupted metadata.json - will recreate"
+  mv "conductor/tracks/<track_id>/metadata.json" "conductor/tracks/<track_id>/metadata.json.corrupted"
+fi
+
+# Auto-fix track_id mismatch
+CURRENT_ID=$(jq -r '.track_id // empty' "conductor/tracks/<track_id>/metadata.json" 2>/dev/null)
+if [ -n "$CURRENT_ID" ] && [ "$CURRENT_ID" != "<track_id>" ]; then
+  echo "ℹ️ Auto-fixing track_id: $CURRENT_ID → <track_id>"
+  jq --arg id "<track_id>" '.track_id = $id' "conductor/tracks/<track_id>/metadata.json" > tmp && mv tmp "conductor/tracks/<track_id>/metadata.json"
+fi
+```
+
+**If file missing:** Create with initial values:
+```json
+{
+  "track_id": "<track_id>",
+  "type": "feature",
+  "status": "initializing",
+  "priority": "medium",
+  "depends_on": [],
+  "estimated_hours": null,
+  "created_at": "<current-timestamp>",
+  "updated_at": "<current-timestamp>",
+  "description": "<from track_input or design.md title>",
+  "has_design": <true if design.md exists>,
+  "threads": [
+    {
+      "id": "<current-thread-id>",
+      "action": "newtrack",
+      "timestamp": "<current-timestamp>"
+    }
+  ],
+  "artifacts": {
+    "design": <true if design.md exists>,
+    "spec": false,
+    "plan": false,
+    "beads": false
+  }
+}
+```
+
+### 1.3.3 Create/Validate .track-progress.json
+
+**If file exists:** Validate JSON and auto-fix trackId if mismatched.
+
+**If file missing:** Create with initial values:
+```json
+{
+  "trackId": "<track_id>",
+  "status": "initializing",
+  "specCreatedAt": null,
+  "planCreatedAt": null,
+  "threadId": "<current-thread-id>"
+}
+```
+
+### 1.3.4 Create/Validate .fb-progress.json
+
+**If file exists:** Validate JSON and auto-fix trackId if mismatched.
+
+**If file missing:** Create with pending status:
+```json
+{
+  "trackId": "<track_id>",
+  "status": "pending",
+  "startedAt": null,
+  "threadId": null,
+  "resumeFrom": "phase1",
+  "epics": [],
+  "issues": [],
+  "crossTrackDeps": [],
+  "lastError": null
+}
+```
+
+### 1.3.5 Checkpoint: Verify State Files
+
+```bash
+STATE_OK=true
+for FILE in metadata.json .track-progress.json .fb-progress.json; do
+  if [ ! -f "conductor/tracks/<track_id>/$FILE" ]; then
+    echo "❌ CRITICAL: Failed to create $FILE"
+    STATE_OK=false
+  elif ! jq empty "conductor/tracks/<track_id>/$FILE" 2>/dev/null; then
+    echo "❌ CRITICAL: $FILE is not valid JSON"
+    STATE_OK=false
+  fi
+done
+
+if [ "$STATE_OK" = "false" ]; then
+  echo "HALT: State files could not be created. Check permissions."
+  exit 1
+fi
+
+echo "✓ State files initialized"
+```
+
+**If checkpoint fails:** HALT immediately. Do NOT proceed to spec/plan generation.
+
 ---
 
 ## 2.0 NEW TRACK INITIALIZATION
@@ -158,53 +274,36 @@ Parse `{{args}}` for flags and track identifier:
     > "Estimated hours to complete? (Enter number or skip)"
     - If user provides a number, store in `estimated_hours`
     - If user skips, set to null
-6.  **Create Directory:** Create a new directory: `conductor/tracks/<track_id>/`
-7.  **Capture Thread ID:** Extract the current Amp thread ID from the environment (Amp Thread URL). Parse the thread ID from the URL format `http://...threads/T-xxxxx`.
-8.  **Create `metadata.json`:** Create a metadata file at `conductor/tracks/<track_id>/metadata.json` with content like:
-    ```json
-    {
-      "track_id": "<track_id>",
-      "type": "feature",
-      "status": "new",
-      "priority": "medium",
-      "depends_on": [],
-      "estimated_hours": null,
-      "created_at": "YYYY-MM-DDTHH:MM:SSZ",
-      "updated_at": "YYYY-MM-DDTHH:MM:SSZ",
-      "description": "<Initial user description>",
-      "has_design": true,
-      "threads": [
-        {
-          "id": "<thread-id-from-environment>",
-          "action": "newtrack",
-          "timestamp": "YYYY-MM-DDTHH:MM:SSZ"
-        }
-      ],
-      "artifacts": {
-        "design": false,
-        "spec": true,
-        "plan": true,
-        "beads": false
-      }
-    }
+
+6.  **UPDATE `metadata.json`:** (Already created in Phase 1.3)
+    Update the existing metadata.json with values from steps 3-5:
+    ```bash
+    jq --arg priority "<priority>" \
+       --argjson depends '<depends_on_array>' \
+       --argjson hours '<estimated_hours_or_null>' \
+       --arg status "new" \
+       '. + {priority: $priority, depends_on: $depends, estimated_hours: $hours, status: $status}' \
+       "conductor/tracks/<track_id>/metadata.json" > tmp && mv tmp "conductor/tracks/<track_id>/metadata.json"
     ```
-    *   Set `has_design: true` and `artifacts.design: true` if design.md exists.
-    *   Populate other fields with actual values from steps 3-5. Use the current timestamp.
-    *   If thread ID cannot be extracted, omit the threads array or leave it empty.
-9.  **Create Checkpoint File:** Create `.track-progress.json` at `conductor/tracks/<track_id>/.track-progress.json`:
-    ```json
-    {
-      "trackId": "<track_id>",
-      "status": "plan_done",
-      "specCreatedAt": "YYYY-MM-DDTHH:MM:SSZ",
-      "planCreatedAt": "YYYY-MM-DDTHH:MM:SSZ",
-      "threadId": "<current-thread-id>"
-    }
-    ```
-10.  **Write Files:**
+
+7.  **Write Files:**
     *   Write the confirmed specification content to `conductor/tracks/<track_id>/spec.md`.
     *   Write the confirmed plan content to `conductor/tracks/<track_id>/plan.md`.
-11.  **Update Tracks File:**
+
+8.  **UPDATE State Files After spec/plan Created:**
+    ```bash
+    # Update metadata.json artifacts
+    jq '.artifacts.spec = true | .artifacts.plan = true | .status = "planned"' \
+       "conductor/tracks/<track_id>/metadata.json" > tmp && mv tmp "conductor/tracks/<track_id>/metadata.json"
+    
+    # Update .track-progress.json
+    jq --arg specTime "<current-timestamp>" \
+       --arg planTime "<current-timestamp>" \
+       '.status = "plan_done" | .specCreatedAt = $specTime | .planCreatedAt = $planTime' \
+       "conductor/tracks/<track_id>/.track-progress.json" > tmp && mv tmp "conductor/tracks/<track_id>/.track-progress.json"
+    ```
+
+9.  **Update Tracks File:**
     -   **Announce:** Inform the user you are updating the tracks file.
     -   **Append Section:** Append a new section for the track to the end of `conductor/tracks.md`. The format MUST be:
         ```markdown
@@ -245,7 +344,19 @@ If beads should be filed:
 
 ### 3.2 Invoke File-Beads Subagent
 
-1.  **Update checkpoint:** Set `.track-progress.json` status to `fb_started`.
+1.  **Update state files for fb start:**
+    ```bash
+    # Update .track-progress.json
+    jq '.status = "fb_started"' \
+       "conductor/tracks/<track_id>/.track-progress.json" > tmp && mv tmp "conductor/tracks/<track_id>/.track-progress.json"
+    
+    # Update .fb-progress.json (already created in Phase 1.3)
+    jq --arg time "<current-timestamp>" \
+       --arg thread "<current-thread-id>" \
+       '.status = "in_progress" | .startedAt = $time | .threadId = $thread' \
+       "conductor/tracks/<track_id>/.fb-progress.json" > tmp && mv tmp "conductor/tracks/<track_id>/.fb-progress.json"
+    ```
+
 2.  **Spawn Task subagent:**
     ```
     Task(
