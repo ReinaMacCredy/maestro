@@ -97,7 +97,7 @@ flowchart TB
         
         subgraph HANDOFF["HANDOFF"]
             DESIGNMD["design.md saved to<br/>conductor/tracks/{id}/"]
-            NEXT["Next: fb to file beads<br/>or /conductor-newtrack"]
+            NEXT["Next: /conductor-newtrack {track_id}<br/>(spec + plan + beads + review)"]
         end
     end
     
@@ -500,11 +500,22 @@ Read the generated spec and plan. Adjust if needed. This is your last chance to 
 
 ---
 
-### Phase 2: Filing (Beads)
+### Phase 2: Filing (Beads) — Now Automatic
 
-**Goal**: Convert the plan into trackable, dependency-aware issues.
+**Note**: `/conductor-newtrack` now automatically runs `fb` and `rb` via subagents after generating spec.md and plan.md. You typically don't need to run these manually.
 
-#### Step 1: File beads from plan
+#### What happens automatically
+
+After `/conductor-newtrack` generates the plan:
+1. **Subagent 1**: Runs `fb` (file-beads) to create issues with dependencies
+2. **Subagent 2**: Runs `rb` (review-beads) to validate and refine issues
+
+#### When to use `fb` manually (advanced)
+
+Use `fb` directly only when:
+- Re-filing from an **existing** plan (not just created by newtrack)
+- Converting external specs (Notion, PRD, GitHub issues) to beads
+- Recovering after manual plan edits
 
 ```
 fb
@@ -515,18 +526,7 @@ The `file-beads` skill reads `plan.md` and creates beads issues with:
 - Dependencies encoded (`blocks`, `parent-child`)
 - Priorities set
 
-#### Step 2: Review filed beads
-
-```
-rb
-```
-
-The `review-beads` skill lets you:
-- Check issue quality
-- Adjust priorities
-- Add missing dependencies
-
-#### Step 3: See what's ready
+#### See what's ready
 
 ```bash
 bd ready --json
@@ -766,8 +766,8 @@ Beyond the core workflow, Maestro includes specialist skills for specific situat
 
 | Skill | Trigger | When to Use |
 |-------|---------|-------------|
-| `beads/file-beads` | `fb` | Convert Conductor plan to beads issues. |
-| `beads/review-beads` | `rb` | Review and refine filed beads issues. |
+| `beads/file-beads` | `fb` | Convert existing plans to beads (advanced: runs automatically after newtrack). |
+| `beads/review-beads` | `rb` | Review and refine beads (advanced: runs automatically after newtrack). |
 
 ---
 
@@ -816,7 +816,7 @@ Some skills work best with optional CLI tools. The skills still provide value wi
 /conductor-newtrack "user invitations feature"
   → Answer clarifying questions
   → Review spec.md and plan.md
-fb                                  # File beads from plan
+  → (automatic) fb + rb via subagents
 bd ready --json                     # See what's unblocked
 bd update bd-001 --status in_progress
   → TDD loop for each task

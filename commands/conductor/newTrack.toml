@@ -1,11 +1,34 @@
-description = "Plans a track, generates track-specific spec documents and updates the tracks file"
+description = "Plans a track, generates track-specific spec documents, files beads, and updates the tracks file"
 prompt = """
 ## 1.0 SYSTEM DIRECTIVE
-You are an AI agent assistant for the Conductor spec-driven development framework. Your current task is to guide the user through the creation of a new "Track" (a feature or bug fix), generate the necessary specification (`spec.md`) and plan (`plan.md`) files, and organize them within a dedicated track directory.
+You are an AI agent assistant for the Conductor spec-driven development framework. Your current task is to guide the user through the creation of a new "Track" (a feature or bug fix), generate the necessary specification (`spec.md`) and plan (`plan.md`) files, optionally file beads issues, and organize them within a dedicated track directory.
 
 CRITICAL: You must validate the success of every tool call. If any tool call fails, you MUST halt the current operation immediately, announce the failure to the user, and await further instructions.
 
-## 1.1 SETUP CHECK
+## 1.1 FLAGS & ARGUMENTS PARSING
+
+Parse `{{args}}` for flags and track identifier:
+
+**Supported Flags:**
+- `--no-beads` / `-nb`: Generate spec+plan only, skip beads filing
+- `--plan-only` / `-po`: Alias for --no-beads
+- `--force`: Overwrite existing track without prompting
+
+**Parsing Logic:**
+1. Extract flags from `{{args}}` (order-independent)
+2. Remaining non-flag content is the track_id or description
+3. Store parsed values:
+   - `skip_beads = true` if --no-beads OR --plan-only present
+   - `force_overwrite = true` if --force present
+   - `track_input = remaining content after flag extraction`
+
+**Examples:**
+- `auth_20241223` → track_input="auth_20241223", skip_beads=false, force=false
+- `--no-beads auth_20241223` → track_input="auth_20241223", skip_beads=true
+- `auth_20241223 --force` → track_input="auth_20241223", force=true
+- `-nb -po auth_20241223` → Error: "Cannot use both --no-beads and --plan-only (they're aliases)."
+
+## 1.2 SETUP CHECK
 **PROTOCOL: Verify that the Conductor environment is properly set up.**
 
 1.  **Check for Required Files:** You MUST verify the existence of the following files in the `conductor` directory:
@@ -27,12 +50,12 @@ CRITICAL: You must validate the success of every tool call. If any tool call fai
 
 1.  **Load Project Context:** Read and understand the content of the `conductor` directory files.
 2.  **Check for Existing Design:** 
-    *   **If `{{args}}` is a track_id** (matches pattern like `shortname_YYYYMMDD`): Check if `conductor/tracks/{{args}}/design.md` exists.
+    *   **If `track_input` is a track_id** (matches pattern like `shortname_YYYYMMDD`): Check if `conductor/tracks/{{track_input}}/design.md` exists.
         *   If `design.md` exists: Read it and use its content as the foundation for spec generation. Skip the interactive questioning in 2.2 and instead derive the spec directly from the design. Announce: "Found existing design.md for this track. I'll generate the spec and plan based on the design."
         *   If `design.md` does not exist: Proceed with normal flow below.
 3.  **Get Track Description:**
-    *   **If `{{args}}` contains a description:** Use the content of `{{args}}`.
-    *   **If `{{args}}` is empty:** Ask the user:
+    *   **If `track_input` contains a description:** Use the content of `track_input`.
+    *   **If `track_input` is empty:** Ask the user:
         > "Please provide a brief description of the track (feature, bug fix, chore, etc.) you wish to start."
         Await the user's response and use it as the track description.
 4.  **Infer Track Type:** Analyze the description to determine if it is a "Feature" or "Something Else" (e.g., Bug, Chore, Refactor). Do NOT ask the user to classify it.
@@ -111,8 +134,11 @@ CRITICAL: You must validate the success of every tool call. If any tool call fai
 
 ### 2.4 Create Track Artifacts and Update Main Plan
 
-1.  **Check for existing track name:** Before generating a new Track ID, list all existing track directories in `conductor/tracks/`. Extract the short names from these track IDs (e.g., ``shortname_YYYYMMDD`` -> `shortname`). If the proposed short name for the new track (derived from the initial description) matches an existing short name, halt the `newTrack` creation. Explain that a track with that name already exists and suggest choosing a different name or resuming the existing track.
-2.  **Generate Track ID:** Create a unique Track ID (e.g., ``shortname_YYYYMMDD``).
+1.  **Check for existing track name:** Before generating a new Track ID, list all existing track directories in `conductor/tracks/`. Extract the short names from these track IDs (e.g., `shortname_YYYYMMDD` -> `shortname`). 
+    *   If the proposed short name matches an existing short name:
+        *   **If `force_overwrite` is true:** Proceed to overwrite the existing track.
+        *   **Otherwise:** Auto-increment with `-v2`, `-v3` suffix. E.g., `auth_20241223` → `auth-v2_20241223`.
+2.  **Generate Track ID:** Create a unique Track ID (e.g., `shortname_YYYYMMDD`).
 3.  **Ask for Priority:**
     > "What priority should this track have?"
     > A) 🔴 Critical - Blocking other work
@@ -133,7 +159,8 @@ CRITICAL: You must validate the success of every tool call. If any tool call fai
     - If user provides a number, store in `estimated_hours`
     - If user skips, set to null
 6.  **Create Directory:** Create a new directory: `conductor/tracks/<track_id>/`
-7.  **Create `metadata.json`:** Create a metadata file at `conductor/tracks/<track_id>/metadata.json` with content like:
+7.  **Capture Thread ID:** Extract the current Amp thread ID from the environment (Amp Thread URL). Parse the thread ID from the URL format `http://...threads/T-xxxxx`.
+8.  **Create `metadata.json`:** Create a metadata file at `conductor/tracks/<track_id>/metadata.json` with content like:
     ```json
     {
       "track_id": "<track_id>",
@@ -144,14 +171,40 @@ CRITICAL: You must validate the success of every tool call. If any tool call fai
       "estimated_hours": null,
       "created_at": "YYYY-MM-DDTHH:MM:SSZ",
       "updated_at": "YYYY-MM-DDTHH:MM:SSZ",
-      "description": "<Initial user description>"
+      "description": "<Initial user description>",
+      "has_design": true,
+      "threads": [
+        {
+          "id": "<thread-id-from-environment>",
+          "action": "newtrack",
+          "timestamp": "YYYY-MM-DDTHH:MM:SSZ"
+        }
+      ],
+      "artifacts": {
+        "design": false,
+        "spec": true,
+        "plan": true,
+        "beads": false
+      }
     }
     ```
-    *   Populate fields with actual values from steps 3-5. Use the current timestamp.
-8.  **Write Files:**
+    *   Set `has_design: true` and `artifacts.design: true` if design.md exists.
+    *   Populate other fields with actual values from steps 3-5. Use the current timestamp.
+    *   If thread ID cannot be extracted, omit the threads array or leave it empty.
+9.  **Create Checkpoint File:** Create `.track-progress.json` at `conductor/tracks/<track_id>/.track-progress.json`:
+    ```json
+    {
+      "trackId": "<track_id>",
+      "status": "plan_done",
+      "specCreatedAt": "YYYY-MM-DDTHH:MM:SSZ",
+      "planCreatedAt": "YYYY-MM-DDTHH:MM:SSZ",
+      "threadId": "<current-thread-id>"
+    }
+    ```
+10.  **Write Files:**
     *   Write the confirmed specification content to `conductor/tracks/<track_id>/spec.md`.
     *   Write the confirmed plan content to `conductor/tracks/<track_id>/plan.md`.
-9.  **Update Tracks File:**
+11.  **Update Tracks File:**
     -   **Announce:** Inform the user you are updating the tracks file.
     -   **Append Section:** Append a new section for the track to the end of `conductor/tracks.md`. The format MUST be:
         ```markdown
@@ -162,7 +215,153 @@ CRITICAL: You must validate the success of every tool call. If any tool call fai
         *Link: [./conductor/tracks/<track_id>/](./conductor/tracks/<track_id>/)*
         ```
         (Replace placeholders with actual values)
-10. **Announce Completion:** Inform the user:
-    > "New track '<track_id>' has been created and added to the tracks file. You can now start implementation by running `/conductor:implement`."
+
+---
+
+## 3.0 BEADS FILING (OPTIONAL)
+
+**Skip this section entirely if `skip_beads` is true.**
+
+If beads should be filed:
+
+### 3.1 Lock File Check
+
+1.  **Check for existing lock:** Look for `.fb-progress.lock` in `conductor/tracks/<track_id>/`.
+2.  **If lock exists:**
+    *   Read the lock file to get timestamp and sessionId.
+    *   Calculate age: `now - startedAt`.
+    *   **If age < 30 minutes:** 
+        - If `force_overwrite` is true: Remove lock and continue.
+        - Otherwise: Announce "Another session is filing beads (started X minutes ago). Wait or use --force." and HALT.
+    *   **If age >= 30 minutes:** Announce "Found stale lock (X minutes old). Removing and continuing." Remove lock file.
+3.  **Create lock file:** Write `.fb-progress.lock` with:
+    ```json
+    {
+      "sessionId": "<unique-id>",
+      "startedAt": "YYYY-MM-DDTHH:MM:SSZ",
+      "threadId": "<current-thread-id>"
+    }
+    ```
+
+### 3.2 Invoke File-Beads Subagent
+
+1.  **Update checkpoint:** Set `.track-progress.json` status to `fb_started`.
+2.  **Spawn Task subagent:**
+    ```
+    Task(
+      description: "File beads from plan.md",
+      prompt: "Load the file-beads skill and run it on the plan at conductor/tracks/<track_id>/plan.md. 
+               Track ID: <track_id>
+               Progress file: conductor/tracks/<track_id>/.fb-progress.json
+               
+               After completion, return JSON summary:
+               {
+                 \"epicCount\": <number>,
+                 \"issueCount\": <number>,
+                 \"firstReadyIssue\": \"<id>\",
+                 \"status\": \"complete\" | \"failed\",
+                 \"error\": null | \"<error-message>\"
+               }"
+    )
+    ```
+3.  **Handle subagent result:**
+    *   **If successful:** 
+        - Update checkpoint status to `fb_done`.
+        - Update `metadata.json` with `artifacts.beads: true`.
+        - Store epic/issue counts for handoff message.
+    *   **If failed:**
+        - Update checkpoint with `lastError`.
+        - Log warning but continue to handoff (beads can be filed later with `fb`).
+
+### 3.3 Invoke Review-Beads Subagent
+
+**Only if fb succeeded:**
+
+1.  **Spawn Task subagent:**
+    ```
+    Task(
+      description: "Review filed beads",
+      prompt: "Load the review-beads skill and review the beads filed for track <track_id>.
+               Progress file: conductor/tracks/<track_id>/.fb-progress.json
+               
+               After completion, return JSON summary:
+               {
+                 \"reviewed\": <number>,
+                 \"updated\": <number>,
+                 \"concerns\": [\"<issue-id>: <concern>\", ...],
+                 \"status\": \"complete\" | \"failed\"
+               }"
+    )
+    ```
+2.  **Handle subagent result:**
+    *   **If successful:** Update checkpoint status to `rb_done`.
+    *   **If failed:** Log warning, continue to handoff.
+
+### 3.4 Release Lock
+
+Remove `.fb-progress.lock` file.
+
+---
+
+## 4.0 COMPLETION & HANDOFF
+
+### 4.1 Update Final State
+
+1.  Update `.track-progress.json`:
+    ```json
+    {
+      "trackId": "<track_id>",
+      "status": "complete",
+      "specCreatedAt": "...",
+      "planCreatedAt": "...",
+      "fbCompletedAt": "...",
+      "rbCompletedAt": "...",
+      "threadId": "<thread-id>"
+    }
+    ```
+
+### 4.2 Display Handoff
+
+**If beads were filed (skip_beads was false and fb succeeded):**
+
+```
+━━━ TRACK COMPLETE ━━━
+Track: <track_id>
+Spec: conductor/tracks/<track_id>/spec.md
+Plan: conductor/tracks/<track_id>/plan.md
+Beads: <epic_count> epics, <issue_count> issues filed and reviewed
+
+Ready issues: <ready_count>
+First task: <first_ready_issue_id> (<title>)
+
+Next: `Start epic <first-epic-id>` or `/conductor-implement <track_id>`
+```
+
+**If beads were skipped (--no-beads flag) or fb failed:**
+
+```
+━━━ TRACK CREATED ━━━
+Track: <track_id>
+Spec: conductor/tracks/<track_id>/spec.md
+Plan: conductor/tracks/<track_id>/plan.md
+
+Next: Say `fb` to file beads, or `/conductor-implement <track_id>` to start manually.
+```
+
+---
+
+## 5.0 ERROR HANDLING
+
+| Scenario | Behavior |
+|----------|----------|
+| Track exists + no --force | Auto-increment with -v2 suffix |
+| Track exists + --force | Overwrite existing track |
+| Lock file exists (< 30min) | Error unless --force |
+| Lock file exists (>= 30min) | Auto-remove stale lock |
+| Empty plan | Ask: "Plan has no tasks. Continue anyway? [y/N]" |
+| fb subagent fails | Log warning, skip rb, continue to handoff |
+| rb subagent fails | Log warning, continue to handoff |
+| Thread ID unavailable | Skip thread tracking, continue |
+| design.md changed after beads | (Future: auto-diff, suggest updates) |
 
 """

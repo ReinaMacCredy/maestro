@@ -1,6 +1,6 @@
 ---
 name: conductor
-version: "1.4.0"
+version: "1.5.0"
 description: Context-driven development methodology. Understands projects set up with Conductor (via Gemini CLI, Claude Code, Amp Code, Codex, or any Agent Skills compatible CLI). Use when working with conductor/ directories, tracks, specs, plans, or when user mentions context-driven development.
 license: Apache-2.0
 compatibility: Works with Claude Code, Gemini CLI, Amp Code, Codex, and any Agent Skills compatible CLI
@@ -104,7 +104,7 @@ Users can invoke these commands directly:
 |---------|-------------|
 | `/conductor-setup` | Initialize project with product.md, tech-stack.md, workflow.md |
 | `/conductor-design [desc]` | Design a feature/bug through Double Diamond dialogue (`ds` is the shorthand trigger) |
-| `/conductor-newtrack [id or desc]` | Create spec and plan from design.md (or interactive if no design) |
+| `/conductor-newtrack [id or desc]` | Create spec + plan from design.md, file beads, and review via subagents. Flags: `--no-beads`/`-nb`, `--plan-only`/`-po`, `--force` |
 | `/conductor-implement [id]` | Execute ONE EPIC from track's plan |
 | `/conductor-status` | Display progress overview |
 | `/conductor-revert` | Git-aware revert of work |
@@ -159,7 +159,7 @@ After creating design.md, spec.md and plan.md:
 
 1. Present the plan for review
 2. Address any feedback
-3. When approved, say: "Plan approved. Say `fb` to convert into beads issues."
+3. When approved, say: "Track created. Beads filed and reviewed. Run `bd ready` to see available work, or `/conductor-implement` to start."
 
 ## Epic Completion Behavior
 

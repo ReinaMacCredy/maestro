@@ -1,5 +1,5 @@
 ---
-description: Create spec and plan from design.md (or interactive if no design)
+description: Create spec and plan from design.md, then auto-file and review beads issues
 argument-hint: [track_id or description]
 ---
 
@@ -115,4 +115,4 @@ Append to `conductor/tracks.md`:
 
 ## 8. Announce
 
-"Plan approved. Say `fb` to file issues."
+"Track created. Beads filed and reviewed. Run `bd ready` to see available work."

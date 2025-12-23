@@ -164,7 +164,7 @@ flowchart TB
         
         subgraph HANDOFF["HANDOFF"]
             DESIGNMD["design.md saved to<br/>conductor/tracks/{id}/"]
-            NEXT["Next: fb to file beads<br/>or /conductor-newtrack"]
+            NEXT["Next: /conductor-newtrack {track_id}<br/>(spec + plan + beads + review)"]
         end
     end
     
@@ -414,17 +414,13 @@ flowchart LR
         setup["/conductor-setup"]
         design["ds → Double Diamond design"]
         ground["ground decisions"]
-        newtrack["/conductor-newtrack"]
-        fb["fb → creates beads"]
-        rb1["rb → review issues"]
+        newtrack["/conductor-newtrack<br/>(spec + plan + beads + review)"]
         handoff["outputs HANDOFF block"]
         
         setup --> design
         design --> ground
         ground --> newtrack
-        newtrack --> fb
-        fb --> rb1
-        rb1 --> handoff
+        newtrack --> handoff
     end
     
     subgraph SESSION2["SESSION 2 (Epic 1)"]

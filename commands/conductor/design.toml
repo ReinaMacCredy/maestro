@@ -318,11 +318,12 @@ After design is approved:
 Track: {track_id}
 File: conductor/tracks/{track_id}/design.md
 
-Next: Say `fb` to convert into beads issues.
+Next: `/conductor-newtrack {track_id}`
+      (generates spec + plan + files beads + reviews)
 
 Or:
-- `/conductor:newTrack {track_id}` - Generate spec + plan
-- Continue refining this design
+  `/conductor-newtrack {track_id} --no-beads` — spec + plan only
+  Continue refining this design
 ```
 
 ---
@@ -336,5 +337,5 @@ Or:
 | User wants to exit mid-session | Offer to save draft to design.md |
 | Grounding finds conflicts | Surface issue, let user decide how to proceed |
 | Party Mode gets stuck | Limit to 2 rounds, then synthesize |
-| track_id collision | Append timestamp suffix: {id}_{HHMMSS} |
+| track_id collision | Auto-increment with `-v2` suffix: {id}-v2_{YYYYMMDD} |
 """

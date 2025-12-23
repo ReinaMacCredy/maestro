@@ -30,5 +30,5 @@ Agent: [loads design skill]
 ## After Design
 
 When design is approved:
-- Say `fb` to file beads issues from the plan
-- Or run `/conductor-newtrack <description>` if track doesn't exist yet
+- Run `/conductor-newtrack` to generate spec + plan + file beads + review (automatic)
+- Use `fb` manually if you need to re-file beads from an existing plan

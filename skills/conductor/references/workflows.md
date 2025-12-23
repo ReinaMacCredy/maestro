@@ -120,7 +120,7 @@ Ask: "Create track now (spec + plan)?"
 - **Yes**: Execute newtrack workflow for this track_id
 
 ### 9. Final Message
-"Plan approved. Say `fb` to file issues."
+"Track created. Beads filed and reviewed. Run `bd ready` to see available work."
 
 ---
 
@@ -266,7 +266,7 @@ Append to `conductor/tracks.md`:
 ```
 
 ### 8. Announce
-"Plan approved. Say `fb` to file issues."
+"Track created. Beads filed and reviewed. Run `bd ready` to see available work."
 
 ---
 

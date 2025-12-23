@@ -142,7 +142,7 @@ After `design.md` is written and reviewed:
 
 After track creation (or when user chooses not to create immediately):
 
-> "Plan approved. Say `fb` to file issues."
+> "Design approved. Run `/conductor-newtrack {track_id}` to generate spec, plan, file beads, and review."
 
 ## Key Principles
 

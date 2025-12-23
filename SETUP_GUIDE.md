@@ -218,7 +218,7 @@ Add maestro triggers to your global config:
 
 **Planning:** `/conductor-setup` → `/conductor-design` (or `ds`) → `/conductor-newtrack`
 
-**Execution:** `fb` → `rb` → `/conductor-implement` → `tdd` → `finish branch`
+**Execution:** `/conductor-newtrack` → `/conductor-implement` → `tdd` → `finish branch`
 
 **Maintenance:** `/conductor-revise` (update spec/plan), `/conductor-refresh` (sync stale docs)
 
@@ -242,9 +242,9 @@ Key triggers:
   /conductor-setup           # Initialize project planning (once)
   ds                         # Double Diamond design session (A/P/C, Party Mode)
   /conductor-design "X"      # Same as ds, with description
-  /conductor-newtrack "X"    # Create new feature track
-  fb                         # File beads from plan
-  rb                         # Review beads
+  /conductor-newtrack "X"    # spec + plan + beads + review (--no-beads for plan only)
+  fb                         # Advanced: re-file beads or when using --no-beads
+  rb                         # Advanced: re-review beads or when using --no-beads
   bd ready --json            # See available work
   /conductor-implement       # Execute tasks with TDD
   /conductor-revise          # Update spec/plan mid-track

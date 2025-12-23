@@ -30,3 +30,10 @@ Status markers:
 - `[ ]` — Not started
 - `[~]` — In progress
 - `[x]` — Completed
+
+---
+
+## [ ] Track: Merge newTrack and File Beads
+*ID: merge-newtrack-fb_20241223*
+*Link: [spec](conductor/tracks/merge-newtrack-fb_20241223/spec.md) | [plan](conductor/tracks/merge-newtrack-fb_20241223/plan.md)*
+*Priority: high*

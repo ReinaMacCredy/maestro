@@ -1,6 +1,6 @@
 ---
 name: design
-version: "2.1.0"
+version: "2.2.0"
 description: Design Session - collaborative brainstorming to turn ideas into designs using Double Diamond methodology. Use when user types "ds" or wants to explore/design a feature before implementation.
 license: Apache-2.0
 compatibility: Works with Claude Code, Amp Code, Codex, and any Agent Skills compatible CLI
@@ -69,7 +69,7 @@ flowchart TB
 
         subgraph HANDOFF["HANDOFF"]
             DESIGNMD["design.md saved to<br/>conductor/tracks/{id}/"]
-            NEXT["Next: fb to file beads<br/>or /conductor-newtrack"]
+            NEXT["Next: /conductor-newtrack {track_id}<br/>(spec + plan + beads + review)"]
         end
     end
 
@@ -219,7 +219,7 @@ User can say "revisit [PHASE]" at any time to return to an earlier phase. When l
 
 1. Ask: "Review the design?"
 2. Address any feedback
-3. When approved, say: **"Design approved. Say `fb` to convert into beads issues."**
+3. When approved, say: **"Design approved. Run `/conductor-newtrack {track_id}` to generate spec, plan, and file beads."**
 
 If a track doesn't exist yet, suggest running `/conductor-newtrack <description>` first.
 

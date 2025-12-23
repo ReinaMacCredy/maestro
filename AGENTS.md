@@ -23,17 +23,31 @@ lib/              # Shared utilities (skills-core.js)
 .claude-plugin/   # Plugin manifest (plugin.json, marketplace.json)
 conductor/        # Unified save location for plans and tracks
   tracks/<id>/    # Active work (design.md + spec.md + plan.md per track)
+    .fb-progress.json   # Beads filing state (resume capability)
+    .fb-progress.lock   # Concurrent session lock (30min timeout)
+    .track-progress.json # Spec/plan generation checkpoints
+    metadata.json       # Track info + thread IDs for audit trail
   archive/        # Completed work
 ```
 
 ## Handoff Mechanism (Planning → Execution)
 
-**Planning session outputs:**
-```bash
-bd update <epic-id> --notes "HANDOFF_READY: true. PLAN: <plan-path>"
+**Unified flow via `/conductor-newtrack`:**
+```
+ds → design.md → /conductor-newtrack → spec.md + plan.md + beads + review
 ```
 
-**Execution session starts with:** `Start epic <epic-id>`
+**Flags:**
+- `--no-beads` / `-nb`: Skip beads filing (spec + plan only)
+- `--plan-only` / `-po`: Alias for --no-beads
+- `--force`: Overwrite existing track or remove stale locks
+
+**State files:**
+- `.fb-progress.json`: Beads filing state with resume capability
+- `.fb-progress.lock`: Concurrent session lock (30min timeout)
+- `.track-progress.json`: Spec/plan generation checkpoints
+
+**Execution session starts with:** `Start epic <epic-id>` or `/conductor-implement <track-id>`
 
 ## Code Style
 - Skills: Markdown with YAML frontmatter (`name`, `description` required)
@@ -57,8 +71,8 @@ bd update <epic-id> --notes "HANDOFF_READY: true. PLAN: <plan-path>"
 |-------|---------|-------------|
 | `design` | `ds` | Double Diamond design session with A/P/C checkpoints and Party Mode option |
 | `conductor` | `/conductor-setup`, `/conductor-design`, `/conductor-newtrack`, `/conductor-implement`, `/conductor-status`, `/conductor-revert`, `/conductor-revise`, `/conductor-refresh` | Structured planning and execution through specs and plans |
-| `file-beads` | `fb` | File beads from plan (parallel subagents per epic) |
-| `review-beads` | `rb` | Review beads (parallel + cross-epic validation) |
+| `file-beads` | `fb` | File beads from plan (batched in groups of 5, checkpointed for resume) |
+| `review-beads` | `rb` | Review beads (parallel + cross-epic validation, dual tracking: progress file + beads label) |
 | `doc-sync` | `doc-sync`, `/doc-sync` | Sync AGENTS.md from completed thread knowledge |
 | `beads` | `bd ready`, `bd status` | Issue tracking for multi-session work |
 

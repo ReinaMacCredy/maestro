@@ -17,7 +17,7 @@ Add this to your global config file after installing maestro plugin.
 
 **Planning:** `/conductor-setup` → `ds` (Double Diamond design) → `/conductor-newtrack`
 
-**Execution:** `fb` → `rb` → `/conductor-implement` (uses TDD) → `finish branch`
+**Execution:** `/conductor-newtrack` → `/conductor-implement` → `tdd` → `finish branch`
 
 **Maintenance:** `/conductor-revise` (update spec/plan), `/conductor-refresh` (sync stale docs)
 
@@ -100,8 +100,7 @@ bd sync
 PLANNING
   /conductor-setup → product.md, tech-stack.md, workflow.md
   ds (or /conductor-design) → Double Diamond design → design.md
-  /conductor-newtrack → spec.md + plan.md
-  fb → bd issues
+  /conductor-newtrack → spec.md + plan.md + beads + review (automatic)
 
 EXECUTION
   bd ready → bd update <id> --status in_progress → TDD cycle → bd checkpoint → finish branch
@@ -111,8 +110,8 @@ EXECUTION
 
 | Scenario | Flow |
 |----------|------|
-| Standard | `/conductor-setup` → `ds` → `/conductor-newtrack` → `fb` → `bd ready` |
-| Skip design | `/conductor-newtrack` → `fb` → `bd ready` → `bd update <id> --status in_progress` |
+| Standard | `/conductor-setup` → `ds` → `/conductor-newtrack` → `bd ready` |
+| Skip design | `/conductor-newtrack` → `bd ready` → `bd update <id> --status in_progress` |
 | Resume work | `bd status` → `bd update <id> --status in_progress` |
 
 ---
@@ -152,7 +151,7 @@ MCP server for task coordination via `npx beads-village`.
 | Skill | Trigger | Description |
 |-------|---------|-------------|
 | `beads` | `bd ready`, `bd status` | Issue tracking for multi-session work |
-| `file-beads` | `fb` | File beads from plan (parallel subagents per epic) |
+| `file-beads` | `fb` | File beads from plan (usually automatic via /conductor-newtrack) |
 | `review-beads` | `rb` | Review and refine beads issues (parallel + cross-epic validation) |
 | `codemaps` | — | Token-aware architecture documentation |
 | `conductor` | `/conductor-setup`, `/conductor-design`, `/conductor-newtrack`, `/conductor-implement`, `/conductor-status`, `/conductor-revert`, `/conductor-revise`, `/conductor-refresh` | Structured planning and execution through specs and plans |
