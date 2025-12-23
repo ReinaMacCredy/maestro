@@ -1,0 +1,153 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get commits since last tag
+        id: commits
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "last_tag=$LAST_TAG" >> $GITHUB_OUTPUT
+          
+          if [ "$LAST_TAG" = "v0.0.0" ]; then
+            COMMITS=$(git log --pretty=format:"%s" --no-merges)
+          else
+            COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"%s" --no-merges)
+          fi
+          
+          echo "commits<<EOF" >> $GITHUB_OUTPUT
+          echo "$COMMITS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Determine version bump
+        id: bump
+        run: |
+          COMMITS="${{ steps.commits.outputs.commits }}"
+          
+          # Check for breaking changes
+          if echo "$COMMITS" | grep -qE '^[a-z]+!:|BREAKING CHANGE:'; then
+            echo "type=major" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Check for features
+          if echo "$COMMITS" | grep -qE '^feat(\(.+\))?:'; then
+            echo "type=minor" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Check for fixes
+          if echo "$COMMITS" | grep -qE '^fix(\(.+\))?:'; then
+            echo "type=patch" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # No version bump needed (docs, chore, etc.)
+          echo "type=none" >> $GITHUB_OUTPUT
+
+      - name: Calculate new version
+        id: version
+        if: steps.bump.outputs.type != 'none'
+        run: |
+          CURRENT=$(jq -r '.version' .claude-plugin/plugin.json)
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+          
+          case "${{ steps.bump.outputs.type }}" in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+          
+          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          echo "new=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v${NEW_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Update version in plugin.json
+        if: steps.bump.outputs.type != 'none'
+        run: |
+          jq '.version = "${{ steps.version.outputs.new }}"' .claude-plugin/plugin.json > tmp.json
+          mv tmp.json .claude-plugin/plugin.json
+
+      - name: Update version in marketplace.json
+        if: steps.bump.outputs.type != 'none'
+        run: |
+          jq '.plugins[0].version = "${{ steps.version.outputs.new }}"' .claude-plugin/marketplace.json > tmp.json
+          mv tmp.json .claude-plugin/marketplace.json
+
+      - name: Install git-cliff
+        run: |
+          curl -sSfL https://github.com/orhun/git-cliff/releases/download/v2.7.0/git-cliff-2.7.0-x86_64-unknown-linux-gnu.tar.gz | tar xz
+          sudo mv git-cliff-2.7.0/git-cliff /usr/local/bin/
+
+      - name: Generate changelog
+        run: |
+          if [ "${{ steps.bump.outputs.type }}" != "none" ]; then
+            git-cliff --tag ${{ steps.version.outputs.tag }} -o CHANGELOG.md
+          else
+            git-cliff -o CHANGELOG.md
+          fi
+
+      - name: Commit and tag
+        if: steps.bump.outputs.type != 'none'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add CHANGELOG.md .claude-plugin/plugin.json .claude-plugin/marketplace.json
+          git commit -m "chore(release): ${{ steps.version.outputs.tag }} [skip ci]"
+          git tag ${{ steps.version.outputs.tag }}
+          git push origin main --tags
+
+      - name: Commit changelog only
+        if: steps.bump.outputs.type == 'none'
+        run: |
+          if git diff --quiet CHANGELOG.md; then
+            echo "No changelog changes"
+            exit 0
+          fi
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add CHANGELOG.md
+          git commit -m "docs: update changelog [skip ci]"
+          git push origin main
+
+      - name: Create GitHub Release
+        if: steps.bump.outputs.type != 'none'
+        uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191 # v2.0.8
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Release ${{ steps.version.outputs.tag }}
+          body_path: CHANGELOG.md
+          generate_release_notes: false

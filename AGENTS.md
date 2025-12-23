@@ -60,10 +60,22 @@ ds → design.md → /conductor-newtrack → spec.md + plan.md + beads + review
 - SKILL.md must match directory name in frontmatter `name` field
 
 ## Versioning
-- **Major bump** (1.x.x → 2.x.x): Breaking changes (renamed skills, removed features, changed triggers) or significant redesigns
-- **Minor bump** (x.1.x → x.2.x): Big updates, new features, significant changes
-- **Patch bump** (x.x.1 → x.x.2): Small updates, fixes, minor tweaks
-- After updating skills, update `.claude-plugin/plugin.json` & `.claude-plugin/marketplace.json` version with the same bump type
+
+### Plugin Version (Automated)
+Plugin version in `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` is **auto-bumped by CI** based on conventional commits:
+- `feat:` → minor bump (1.5.0 → 1.6.0)
+- `fix:` → patch bump (1.5.0 → 1.5.1)
+- `feat!:` or `BREAKING CHANGE:` → major bump (1.5.0 → 2.0.0)
+- `docs:`, `chore:` → changelog only, no version bump
+
+### Skill Versions (Manual)
+Individual skill versions in SKILL.md frontmatter remain **manually updated**:
+- **Major bump** (1.x.x → 2.x.x): Breaking changes, renamed triggers, removed features
+- **Minor bump** (x.1.x → x.2.x): New features, significant changes
+- **Patch bump** (x.x.1 → x.x.2): Small fixes, tweaks
+
+### Escape Hatch
+Add `[skip ci]` to commit message to bypass all automation (changelog + version bump).
 
 ## Key Skills
 
