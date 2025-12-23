@@ -124,6 +124,9 @@ Read into context:
 - `conductor/tracks/<track_id>/plan.md`
 - `conductor/workflow.md`
 
+**Load TDD skill:**
+Load the `test-driven-development` skill. This provides full TDD rigor (Iron Law, rationalizations to avoid, verification checklist) for section 8.3.
+
 ## 5. Update Track Status
 
 In `conductor/tracks.md`, change `## [ ] Track:` to `## [~] Track:` for selected track.
@@ -219,13 +222,17 @@ For complex tasks, create isolated worktree:
 
 Skip for simple tasks.
 
-### 8.3 TDD Workflow (if workflow.md specifies)
+### 8.3 TDD Workflow
 
-1. Write failing tests for the task
-2. Run tests, confirm they fail
-3. Implement minimum code to make tests pass
-4. Run tests, confirm they pass
-5. Refactor if needed (keep tests passing)
+1. **If TDD skill loaded** (context contains "Iron Law" or "RED-GREEN-REFACTOR"):
+   Follow the skill's RED-GREEN-REFACTOR cycle with full rigor.
+
+2. **Fallback** (skill unavailable):
+   1. Write failing tests for the task
+   2. Run tests, confirm they fail
+   3. Implement minimum code to make tests pass
+   4. Run tests, confirm they pass
+   5. Refactor if needed (keep tests passing)
 
 ### 8.4 Self-Check & Issue Handling
 
