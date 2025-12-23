@@ -26,7 +26,7 @@ If a skill is in this plugin, it's because I actively use it.
 
 **Or via agent prompt:**
 ```
-Follow https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/SETUP_GUIDE.md to set up maestro for this project.
+Follow https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/SETUP_GUIDE.md to install Maestro.
 ```
 
 ### OpenAI Codex
@@ -50,7 +50,7 @@ amp skill add https://github.com/ReinaMacCredy/maestro --global
 
 Tell your AI agent:
 ```
-Follow https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/SETUP_GUIDE.md to set up maestro for this project.
+Follow https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/SETUP_GUIDE.md to install Maestro.
 ```
 
 ### Manual Setup
