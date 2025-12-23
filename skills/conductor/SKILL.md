@@ -110,7 +110,7 @@ Users can invoke these commands directly:
 | `/conductor-revert` | Git-aware revert of work |
 | `/conductor-revise` | Update spec/plan when implementation reveals issues |
 | `/conductor-refresh` | Sync context docs with current codebase |
-| `/conductor-finish [id]` | Complete track: extract learnings, compact beads, archive. Flag: `--with-pr` |
+| `/conductor-finish [id]` | Complete track: extract learnings, compact beads, archive. Flags: `--with-pr`, `--skip-codemaps` |
 
 ## Intent Mapping
 
@@ -141,6 +141,7 @@ When this skill activates, automatically load:
 3. `conductor/workflow.md` - Follow the methodology
 4. `conductor/tracks.md` - Current work status
 5. `conductor/AGENTS.md` - Learnings from completed tracks
+6. `conductor/CODEMAPS/` - Architecture documentation for codebase orientation
 
 For active tracks, also load:
 - `conductor/tracks/<track_id>/design.md` (if exists)
@@ -220,6 +221,10 @@ conductor/
 ├── setup_state.json        # Setup progress tracking
 ├── refresh_state.json      # Context refresh tracking (created by /conductor-refresh)
 ├── AGENTS.md               # Learnings hub (auto-updated by /conductor-finish)
+├── CODEMAPS/               # Architecture documentation
+│   ├── .meta.json          # Generation metadata
+│   ├── overview.md         # Project-level architecture (always generated)
+│   └── [module].md         # Per-module codemaps (skills.md, api.md, etc.)
 ├── code_styleguides/       # Language-specific style guides
 ├── archive/                # Archived completed tracks
 ├── exports/                # Exported summaries
@@ -233,6 +238,152 @@ conductor/
         ├── implement_state.json  # Implementation resume state (if in progress)
         ├── LEARNINGS.md    # Extracted learnings (created by /conductor-finish)
         └── finish-state.json  # Finish resume state (if interrupted)
+```
+
+## CODEMAPS Integration
+
+Conductor generates and maintains architecture documentation in `conductor/CODEMAPS/`:
+
+### Trigger Points
+
+| Command | CODEMAPS Action |
+|---------|-----------------|
+| `/conductor-setup` | Generate initial codemaps |
+| `/conductor-finish` | Auto-regenerate (code just changed) |
+| `/conductor-refresh` | Manual regenerate (scope: `codemaps`) |
+| `ds` | Load for context during design sessions |
+
+### Generated Files
+
+- `overview.md` - Project summary, directory structure, key files, data flow (always generated)
+- `[module].md` - Per-module codemaps for significant areas (skills.md, api.md, database.md, etc.)
+- `.meta.json` - Generation metadata including timestamps and user modification tracking
+
+### .meta.json Structure
+
+```json
+{
+  "generated": "2024-12-24T10:30:00Z",
+  "generator": "/conductor-setup",
+  "project_type": "plugin",
+  "files": {
+    "overview.md": { "generated": true, "user_modified": false },
+    "skills.md": { "generated": true, "user_modified": true }
+  }
+}
+```
+
+### User Modification Tracking
+
+Before overwriting during `/conductor-finish` or `/conductor-refresh`:
+1. Compare file mtime to `.meta.json` generated timestamp
+2. If `user_modified: true`, warn user before overwriting
+
+### Scale Limits
+
+- Directory scan depth: Top 2 levels only
+- Key files per codemap: Max 50 files
+- Module codemaps: Max 10 files
+
+### Monorepo Support
+
+Detects `packages/`, `apps/`, or workspaces in package.json and generates per-package codemaps.
+
+### Skipping Regeneration
+
+Use `--skip-codemaps` with `/conductor-finish` to skip CODEMAPS regeneration (useful for batch finishing).
+
+See [references/CODEMAPS_TEMPLATE.md](references/CODEMAPS_TEMPLATE.md) for codemap templates.
+
+## Track Integrity Validation
+
+### Required Files Per Track
+
+| File | Required | Created By | Purpose |
+|------|----------|------------|---------|
+| `design.md` | Optional | `/conductor-design` | High-level design |
+| `spec.md` | Yes | `/conductor-newtrack` | Requirements |
+| `plan.md` | Yes | `/conductor-newtrack` | Implementation tasks |
+| `metadata.json` | Yes | `/conductor-newtrack` | Track metadata |
+| `.track-progress.json` | Yes | `/conductor-newtrack` | Workflow state |
+| `.fb-progress.json` | Conditional | `file-beads` skill | Beads filing state (only if beads filed) |
+
+### Edge Cases That Cause Missing Files
+
+| Scenario | Cause | Missing Files |
+|----------|-------|---------------|
+| Manual creation | User created files directly | All state files |
+| Interrupted workflow | Session compacted mid-workflow | Some state files |
+| `--no-beads` flag | Intentional skip | `.fb-progress.json` only |
+| Subagent failure | `file-beads` crashed | `.fb-progress.json` |
+| Design-only | `/conductor-design` without `/conductor-newtrack` | spec, plan, all state |
+
+### Auto-Repair on Session Start
+
+When loading a track, validate and repair missing state:
+
+```bash
+# Check for incomplete track (has content but missing state)
+if [[ -f "plan.md" && ! -f "metadata.json" ]]; then
+  # Track needs repair
+fi
+```
+
+**Repair Actions:**
+
+1. **Missing `metadata.json`**: Create with inferred values from existing files
+2. **Missing `.track-progress.json`**: Create with `status: "plan_done"` if spec+plan exist
+3. **Missing `.fb-progress.json`**: Create with `status: "pending"` if beads not filed
+
+### Repair Template: metadata.json
+
+```json
+{
+  "track_id": "<inferred-from-directory>",
+  "type": "feature",
+  "status": "new",
+  "priority": "medium",
+  "depends_on": [],
+  "estimated_hours": null,
+  "created_at": "<file-mtime-of-oldest-file>",
+  "updated_at": "<now>",
+  "description": "<extracted-from-spec-overview>",
+  "has_design": true,
+  "threads": [],
+  "artifacts": {
+    "design": <design.md-exists>,
+    "spec": <spec.md-exists>,
+    "plan": <plan.md-exists>,
+    "beads": false
+  }
+}
+```
+
+### Repair Template: .fb-progress.json
+
+```json
+{
+  "trackId": "<track-id>",
+  "status": "pending",
+  "startedAt": null,
+  "threadId": null,
+  "resumeFrom": "phase1",
+  "epics": [],
+  "issues": [],
+  "crossTrackDeps": [],
+  "lastError": null
+}
+```
+
+### /conductor-status Integration
+
+When `/conductor-status` runs, include integrity check:
+
+```
+Track: codemaps-integration_20241223
+Status: new (repaired: missing metadata.json, .track-progress.json)
+Files: design.md ✓, spec.md ✓, plan.md ✓
+Beads: Not filed (run `fb` to file)
 ```
 
 ## Status Markers

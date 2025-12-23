@@ -16,7 +16,8 @@ Track ready. Run `/conductor-finish`?
 ```
 
 **Flags:**
-- `--with-pr` - Chain to finish-branch skill after Phase 4
+- `--with-pr` - Chain to finish-branch skill after Phase 5
+- `--skip-codemaps` - Skip CODEMAPS regeneration (Phase 5)
 
 ## Validation
 
@@ -78,7 +79,7 @@ Write `conductor/tracks/<id>/LEARNINGS.md`:
 
 ### Progress
 ```
-Phase 1/4: Extracting from 3 threads...
+Phase 1/5: Extracting from 3 threads...
   → LEARNINGS.md: +12 lines
 ```
 
@@ -106,7 +107,7 @@ For each candidate:
 
 ### Progress
 ```
-Phase 2/4: Compacting 5 beads...
+Phase 2/5: Compacting 5 beads...
   → 5 summaries applied
 ```
 
@@ -177,7 +178,7 @@ Ask: `Review changes? [Y/n]`
 
 ### Progress
 ```
-Phase 3/4: Merging to conductor/AGENTS.md...
+Phase 3/5: Merging to conductor/AGENTS.md...
   → +5 lines (2 commands, 1 gotcha)
 ```
 
@@ -244,9 +245,84 @@ bd cleanup --older-than 0 --limit "$excess" --force
 
 ### Progress
 ```
-Phase 4/4: Preparing archive...
+Phase 4/5: Preparing archive...
   
-✓ Track completed. Commit: abc123
+✓ Track archived. Commit: abc123
+```
+
+---
+
+## Phase 5: CODEMAPS Regeneration
+
+**Purpose:** Update architecture documentation to reflect code changes from this track
+
+### Skip Check
+
+If `--skip-codemaps` flag provided:
+```
+Phase 5/5: Skipped (--skip-codemaps)
+```
+
+Proceed directly to completion.
+
+### User Modification Check
+
+1. Read `conductor/CODEMAPS/.meta.json`
+2. For each file in `.meta.json.files`:
+   - Get file mtime from filesystem
+   - Compare to `.meta.json.generated` timestamp
+   - If file mtime > generated timestamp, set `user_modified: true`
+
+3. If any files have `user_modified: true`:
+```
+⚠ User-modified CODEMAPS files detected:
+  - overview.md (modified 2024-12-24)
+  - skills.md (modified 2024-12-24)
+
+Overwrite? [Y/n]
+```
+
+If user declines, skip regeneration.
+
+### Regeneration
+
+1. Analyze current project structure (same as `/conductor-setup` Phase 7)
+2. Regenerate `overview.md` (always)
+3. Regenerate module codemaps for significant areas
+4. Update `.meta.json`:
+   ```json
+   {
+     "generated": "<new ISO timestamp>",
+     "generator": "/conductor-finish",
+     "project_type": "<detected type>",
+     "files": {
+       "overview.md": { "generated": true, "user_modified": false },
+       ...
+     }
+   }
+   ```
+
+### Scale Limits
+
+Same as `/conductor-setup`:
+- Directory depth: Top 2 levels only
+- Key files per codemap: Max 50 files
+- Module codemaps: Max 10 files
+
+### Progress
+```
+Phase 5/5: Regenerating CODEMAPS...
+  → overview.md: updated
+  → skills.md: updated
+  → .meta.json: updated
+```
+
+### Smart Skip
+
+If no `conductor/CODEMAPS/` exists:
+```
+No CODEMAPS found. Skipping Phase 5.
+Consider running /conductor-refresh with scope codemaps.
 ```
 
 ---
@@ -269,7 +345,8 @@ Update after each phase:
 {
   "phase": 3,
   "startedAt": "2024-12-23T10:30:00Z",
-  "completed": ["thread-compaction", "beads-compaction"]
+  "completed": ["thread-compaction", "beads-compaction"],
+  "skipCodemaps": false
 }
 ```
 
@@ -301,6 +378,7 @@ State file corrupted. Restarting from Phase 1.
 | Phase 2 | bd compact fails | Log warning, skip issue, continue |
 | Phase 3 | Merge fails | **Stop workflow** |
 | Phase 4 | Commit fails | Report error, suggest manual fix |
+| Phase 5 | CODEMAPS regeneration fails | Log warning, continue to completion |
 
 ---
 
@@ -312,13 +390,13 @@ State file corrupted. Restarting from Phase 1.
 Validating track... ✓
   ⚠ 2 beads still open. Continue? (y/n) y
 
-Phase 1/4: Extracting from 3 threads...
+Phase 1/5: Extracting from 3 threads...
   → LEARNINGS.md: +12 lines
-Phase 2/4: Compacting 5 beads...
+Phase 2/5: Compacting 5 beads...
   → 5 summaries applied
-Phase 3/4: Merging to conductor/AGENTS.md...
+Phase 3/5: Merging to conductor/AGENTS.md...
   → +5 lines (2 commands, 1 gotcha)
-Phase 4/4: Preparing archive...
+Phase 4/5: Preparing archive...
 
 Review changes? [Y/n] y
   [shows git diff]
@@ -329,6 +407,10 @@ Archive choice:
 [K] Keep - don't archive yet
 > S
 
+Phase 5/5: Regenerating CODEMAPS...
+  → overview.md: updated
+  → skills.md: updated
+
 ✓ Track completed. Commit: abc123
 ```
 
@@ -338,7 +420,7 @@ Archive choice:
 
 When `--with-pr` flag provided:
 
-After Phase 4 completes, chain to `finishing-a-development-branch` skill:
+After Phase 5 completes, chain to `finishing-a-development-branch` skill:
 1. Pass track context
 2. Let skill handle PR creation options
 3. Report final status
@@ -356,3 +438,6 @@ After Phase 4 completes, chain to `finishing-a-development-branch` skill:
 | User runs finish twice | Idempotent - safe to re-run |
 | Open beads/epics | Warn, ask to continue |
 | Git dirty state | Warn user, ask to stash or continue |
+| No conductor/CODEMAPS/ | Skip Phase 5, suggest /conductor-refresh |
+| User-modified CODEMAPS files | Warn, ask to overwrite |
+| --skip-codemaps flag | Skip Phase 5 entirely |

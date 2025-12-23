@@ -1,0 +1,63 @@
+{
+  "trackId": "codemaps-integration_20241223",
+  "status": "planned",
+  "startedAt": "2024-12-24T00:00:00.000Z",
+  "threadId": "T-019b4c60-0ac0-74a7-803c-56aaa9987c9c",
+  "resumeFrom": "phase2",
+  "plannedEpics": [
+    {
+      "planRef": "Epic 1",
+      "title": "Epic: Core Infrastructure",
+      "priority": 1,
+      "tasks": [
+        {"ref": "1.1", "title": "Move CODEMAPS_TEMPLATE.md to conductor/references/", "type": "task", "priority": 2},
+        {"ref": "1.2", "title": "Move demo CODEMAPS/ directory to conductor/CODEMAPS/", "type": "task", "priority": 2},
+        {"ref": "1.3", "title": "Create .meta.json schema with generation metadata", "type": "task", "priority": 2},
+        {"ref": "1.4", "title": "Update conductor SKILL.md with CODEMAPS docs and --skip-codemaps flag", "type": "task", "priority": 2}
+      ]
+    },
+    {
+      "planRef": "Epic 2",
+      "title": "Epic: Setup Integration",
+      "priority": 1,
+      "deps": ["Epic 1"],
+      "tasks": [
+        {"ref": "2.1", "title": "Add Phase 7: CODEMAPS Generation to setup.md workflow", "type": "task", "priority": 1},
+        {"ref": "2.2", "title": "Add scale limits to setup workflow (2 levels, 50 files, 10 module maps)", "type": "task", "priority": 2},
+        {"ref": "2.3", "title": "Add monorepo detection and per-package codemap generation", "type": "task", "priority": 2},
+        {"ref": "2.4", "title": "Update output artifacts section in setup.md to include CODEMAPS/", "type": "task", "priority": 2}
+      ]
+    },
+    {
+      "planRef": "Epic 3",
+      "title": "Epic: Finish & Refresh Integration",
+      "priority": 1,
+      "deps": ["Epic 2"],
+      "tasks": [
+        {"ref": "3.1", "title": "Add CODEMAPS regeneration as Phase 5 to finish-workflow.md", "type": "task", "priority": 1},
+        {"ref": "3.2", "title": "Add --skip-codemaps flag handling to finish workflow", "type": "task", "priority": 2},
+        {"ref": "3.3", "title": "Add user-modification check (mtime vs .meta.json timestamp)", "type": "task", "priority": 2},
+        {"ref": "3.4", "title": "Add codemaps as scope option to refresh.md", "type": "task", "priority": 2},
+        {"ref": "3.5", "title": "Add error handling for refresh without conductor/ directory", "type": "task", "priority": 3}
+      ]
+    },
+    {
+      "planRef": "Epic 4",
+      "title": "Epic: Design Session Integration & Cleanup",
+      "priority": 1,
+      "deps": ["Epic 2"],
+      "tasks": [
+        {"ref": "4.1", "title": "Add CODEMAPS loading at session start in design SKILL.md", "type": "task", "priority": 1},
+        {"ref": "4.2", "title": "Delete skills/codemaps/ directory", "type": "task", "priority": 2},
+        {"ref": "4.3", "title": "Update README.md - move codemaps to Conductor output section", "type": "docs", "priority": 2},
+        {"ref": "4.4", "title": "Update AGENTS.md - remove codemaps from skills list", "type": "docs", "priority": 2},
+        {"ref": "4.5", "title": "Update TUTORIAL.md - fix any codemaps references", "type": "docs", "priority": 3}
+      ]
+    }
+  ],
+  "epics": [],
+  "issues": [],
+  "crossTrackDeps": [],
+  "lastError": null,
+  "notes": "JSON populated from plan. Run fb again (or resume) to actually file beads."
+}

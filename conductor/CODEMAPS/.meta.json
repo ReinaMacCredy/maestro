@@ -1,0 +1,10 @@
+{
+  "generated": "2024-12-24T00:30:00Z",
+  "generator": "/conductor-setup",
+  "project_type": "plugin",
+  "files": {
+    "overview.md": { "generated": true, "user_modified": false },
+    "skills.md": { "generated": true, "user_modified": false },
+    "conductor.md": { "generated": true, "user_modified": false }
+  }
+}

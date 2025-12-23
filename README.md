@@ -135,7 +135,7 @@ trace                              # Root cause tracing
 |----------|--------|
 | **Core Workflow** | conductor, design (Double Diamond + Party Mode), beads, file-beads (parallel), review-beads (parallel) |
 | **Development** | test-driven-development, using-git-worktrees, finishing-a-development-branch |
-| **Utilities** | codemaps, dispatching-parallel-agents, subagent-driven-development |
+| **Utilities** | dispatching-parallel-agents, subagent-driven-development |
 | **Meta** | verification-before-completion, writing-skills, sharing-skills |
 
 ---

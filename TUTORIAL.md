@@ -853,7 +853,7 @@ Some skills work best with optional CLI tools. The skills still provide value wi
 |-------|--------------|---------------|
 | `beads` | `bd` | Persistent issue database, `bd ready`, `bd show` |
 | `beads` | `bv` | Graph visualization, priority recommendations |
-| `codemaps` | — | Token-aware architecture docs (no external CLI needed) |
+| `conductor` | `/conductor-refresh` | CODEMAPS: Token-aware architecture docs (generated in conductor/CODEMAPS/) |
 | `ground` | — | Verification protocol: verify patterns against repo/web/history before implementation |
 
 **If you have `bd` installed**: Commands like `bd ready --json` work directly.

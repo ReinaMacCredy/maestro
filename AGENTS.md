@@ -11,9 +11,9 @@ cat .claude-plugin/plugin.json | jq .   # Validate plugin manifest
 
 ## Architecture
 ```
-skills/           # 16 skill directories, each with SKILL.md (frontmatter + instructions)
+skills/           # 15 skill directories, each with SKILL.md (frontmatter + instructions)
   beads/          # Issue tracking skill with references/ subdirectory
-  conductor/      # Planning methodology (includes /conductor-design)
+  conductor/      # Planning methodology (includes /conductor-design, CODEMAPS generation)
   design/         # Double Diamond design sessions (ds trigger)
   ...             # TDD, debugging, code review, etc.
 commands/         # Slash command definitions (.md files)
@@ -27,6 +27,7 @@ conductor/        # Unified save location for plans and tracks
     .fb-progress.lock   # Concurrent session lock (30min timeout)
     .track-progress.json # Spec/plan generation checkpoints
     metadata.json       # Track info + thread IDs for audit trail
+  CODEMAPS/       # Architecture documentation (overview.md, module codemaps)
   archive/        # Completed work
 ```
 

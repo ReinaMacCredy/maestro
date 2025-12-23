@@ -18,6 +18,7 @@ Use `/conductor-refresh` when context documentation has become stale due to:
 | `tech` | `tech-stack.md` | Dependency files, new frameworks |
 | `product` | `product.md` | Completed tracks, README changes |
 | `workflow` | `workflow.md` | CI/CD configs, tooling changes |
+| `codemaps` | `CODEMAPS/` | Architecture documentation regeneration |
 | `track [id]` | Specific track | Spec/plan vs implementation |
 
 ## Analysis Details
@@ -60,6 +61,34 @@ Detect:
 - **New tools:** Added CI/CD, linters, formatters
 - **Process changes:** Coverage requirements, review policies
 
+### CODEMAPS Analysis
+
+Check `conductor/CODEMAPS/` for staleness:
+
+1. **Existence check:** If no `conductor/CODEMAPS/` exists, generate fresh
+2. **Age check:** Compare `.meta.json.generated` timestamp to recent code changes
+3. **User modification check:** For each file in `.meta.json.files`:
+   - Get file mtime from filesystem
+   - Compare to `.meta.json.generated` timestamp
+   - If file mtime > generated timestamp, set `user_modified: true`
+
+Regeneration:
+- If no CODEMAPS/, generate from scratch (same as `/conductor-setup` Phase 7)
+- If user-modified files detected, warn before overwriting:
+  ```
+  ⚠ User-modified CODEMAPS files detected:
+    - overview.md (modified 2024-12-24)
+    - skills.md (modified 2024-12-24)
+  
+  Overwrite? [Y/n]
+  ```
+- Use templates from `skills/conductor/references/CODEMAPS_TEMPLATE.md`
+
+Scale Limits:
+- Directory depth: Top 2 levels only
+- Key files per codemap: Max 50 files
+- Module codemaps: Max 10 files
+
 ## Staleness Detection
 
 Triggered by `/conductor-validate` or proactively on session start:
@@ -91,9 +120,14 @@ Triggered by `/conductor-validate` or proactively on session start:
 
 ```
 Check:
-- [ ] conductor/ directory exists
+- [ ] conductor/ directory exists (REQUIRED - error and halt if missing)
 - [ ] Core files present (product.md, tech-stack.md, workflow.md, tracks.md)
 - [ ] Git working directory clean (warn if dirty)
+```
+
+If conductor/ directory does not exist:
+```
+❌ No conductor/ directory found. Run `/conductor-setup` first.
 ```
 
 ### 2. Scope Selection
@@ -105,7 +139,8 @@ What would you like to refresh?
 2. tech - Dependencies only
 3. product - Product vision only
 4. workflow - Process only
-5. track [id] - Specific track
+5. codemaps - Architecture documentation
+6. track [id] - Specific track
 ```
 
 ### 3. Analysis Phase
@@ -160,10 +195,13 @@ Scope: [scope]
 
 | Scenario | Action |
 |----------|--------|
+| No conductor/ directory | Error: "No conductor/ directory found. Run `/conductor-setup` first." |
 | Setup incomplete | Halt, suggest `/conductor-setup` |
 | Git dirty | Warn, offer to stash or abort |
 | No changes detected | Report "Context is current" |
 | Backup failed | Abort, report error |
+| No CODEMAPS/ for codemaps scope | Generate fresh (not an error) |
+| User-modified CODEMAPS files | Warn, ask to overwrite |
 
 ## Integration with Validate
 

@@ -1,0 +1,64 @@
+# Maestro Plugin - Architecture Overview
+
+AI workflow plugin for structured development: planning (Conductor), issue tracking (Beads), and execution (TDD).
+
+## Key Entry Points
+
+| Entry | Purpose |
+|-------|---------|
+| `ds` / `/conductor-design` | Start Double Diamond design session |
+| `/conductor-newtrack` | Generate spec + plan + beads from design |
+| `/conductor-implement` | Execute tasks with TDD |
+| `fb` / `rb` | File/review beads from plan |
+
+## Directory Structure
+
+```
+maestro/
+├── skills/           # 15 skill directories (SKILL.md each)
+├── commands/         # Slash command definitions (.md)
+├── workflows/        # Multi-step workflow definitions
+├── conductor/        # Project context + tracks
+│   ├── product.md, tech-stack.md, workflow.md
+│   └── tracks/<id>/  # design.md, spec.md, plan.md per track
+├── agents/           # Agent persona definitions
+└── .beads/           # Issue tracker storage
+```
+
+## Data Flow
+
+```
+ds → design.md → /conductor-newtrack → spec.md + plan.md
+                                              ↓
+                                       fb → .beads/ (epics + issues)
+                                              ↓
+                              /conductor-implement → TDD cycle → done
+```
+
+## Core Skills
+
+| Skill | Trigger | Role |
+|-------|---------|------|
+| `conductor` | `/conductor-*` | Planning methodology |
+| `design` | `ds` | Double Diamond + Party Mode |
+| `beads` | `bd` CLI | Issue tracking across sessions |
+| `file-beads` | `fb` | Batch-file issues from plan |
+| `review-beads` | `rb` | Validate filed issues |
+| `test-driven-development` | `tdd` | RED-GREEN-REFACTOR |
+
+## Common Tasks
+
+| Task | How |
+|------|-----|
+| Start new feature | `ds` → design → `/conductor-newtrack` |
+| Find work | `bd ready --json` |
+| Execute task | `/conductor-implement` (auto-claims from beads) |
+| Add a skill | Create `skills/<name>/SKILL.md` with frontmatter |
+| Add a command | Create `commands/<name>.md` |
+
+## Gotchas
+
+- `bv` without `--robot-*` flags launches TUI and hangs agents
+- `bd` should use `--json` for structured output
+- Skills require YAML frontmatter with `name` and `description`
+- Never write production code without a failing test first (TDD iron law)
