@@ -4,6 +4,66 @@
 
 Context-driven development with TDD execution.
 
+## Complete Pipeline Architecture
+
+```mermaid
+flowchart TB
+    subgraph PIPELINE["COMPLETE PIPELINE WORKFLOW"]
+        direction TB
+        
+        subgraph PLANNING["PLANNING LOOP"]
+            DS["ds (Design Session)"]
+            DISCOVER["DISCOVER"]
+            DEFINE["DEFINE"]
+            DEVELOP["DEVELOP"]
+            DELIVER["DELIVER"]
+            APC{{"A/P/C"}}
+            DESIGNMD["design.md"]
+        end
+        
+        subgraph SPEC["SPEC GENERATION"]
+            NEWTRACK["/conductor-newtrack"]
+            SPECMD["spec.md"]
+            PLANMD["plan.md"]
+        end
+        
+        subgraph BEADS["ISSUE FILING"]
+            FB["fb"]
+            RB["rb"]
+        end
+        
+        subgraph EXECUTION["AGENT EXECUTION LOOP"]
+            READY["bd ready"]
+            CLAIM["claim"]
+            TDD["TDD: RED-GREEN-REFACTOR"]
+            CLOSE["bd close"]
+        end
+        
+        subgraph FINISH["COMPLETION"]
+            VERIFY["Verification"]
+            BRANCH["finish branch"]
+            DOCSYNC["doc-sync"]
+        end
+    end
+    
+    subgraph BMAD["PARTY MODE: 12 BMAD AGENTS"]
+        PRODUCT["Product: John, Mary, Sally"]
+        TECHNICAL["Technical: Winston, Amelia, Murat, Paige"]
+        CREATIVE["Creative: Sophia, Carson, Maya, Victor, Dr. Quinn"]
+    end
+    
+    DS --> DISCOVER --> DEFINE --> DEVELOP --> DELIVER --> APC
+    APC -->|"C"| DESIGNMD
+    APC -->|"P"| BMAD
+    BMAD --> APC
+    DESIGNMD --> NEWTRACK --> SPECMD --> PLANMD --> FB --> RB --> READY
+    READY --> CLAIM --> TDD --> CLOSE
+    CLOSE -->|"More?"| READY
+    CLOSE -->|"Done"| VERIFY --> BRANCH --> DOCSYNC
+```
+
+For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../docs/PIPELINE_ARCHITECTURE.md).
+
 ## 4-Phase Framework
 
 | Phase | Purpose | Output |

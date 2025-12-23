@@ -314,96 +314,150 @@ REPEAT  → Next failing test
 
 ```mermaid
 flowchart TB
-    subgraph PLANNING["PLANNING PHASE"]
-        direction LR
-        CS["/conductor-setup"]
-        DS["ds (Double Diamond)"]
-        CNT["/conductor-newtrack"]
-        FB["fb"]
-        RB["rb"]
+    subgraph PIPELINE["COMPLETE PIPELINE WORKFLOW"]
+        direction TB
         
-        CS --> DS --> CNT --> FB --> RB
-    end
-
-    subgraph EXECUTION["EXECUTION PHASE"]
-        subgraph MAIN_LOOP["MAIN AGENT LOOP"]
-            direction TB
-            CHECK["bd ready"]
+        subgraph PLANNING["PLANNING LOOP"]
+            DS["ds (Design Session)"]
+            DISCOVER["DISCOVER<br/>Explore Problem"]
+            DEFINE["DEFINE<br/>Frame Problem"]
+            DEVELOP["DEVELOP<br/>Explore Solutions"]
+            DELIVER["DELIVER<br/>Finalize Design"]
+            APC{{"A/P/C"}}
+            DESIGNMD["design.md"]
+        end
+        
+        subgraph SPEC["SPEC GENERATION"]
+            NEWTRACK["/conductor-newtrack"]
+            SPECMD["spec.md"]
+            PLANMD["plan.md"]
+        end
+        
+        subgraph BEADS["ISSUE FILING LOOP"]
+            FB["fb (file-beads)"]
+            EPIC["Create Epic"]
+            ISSUES["Create Issues<br/>(batches of 5)"]
+            DEPS["Wire Dependencies"]
+            RB["rb (review-beads)"]
+        end
+        
+        subgraph DISPATCH["PARALLEL AGENT DISPATCH"]
+            COORDINATOR["Coordinator Agent"]
+            
+            subgraph WORKERS["WORKER AGENTS (Task tool)"]
+                W1["Agent 1<br/>Independent Task"]
+                W2["Agent 2<br/>Independent Task"]
+                W3["Agent 3<br/>Independent Task"]
+                WN["Agent N<br/>Independent Task"]
+            end
+            
+            MERGE["Merge Results"]
+        end
+        
+        subgraph AGENT_LOOP["AGENT EXECUTION LOOP"]
+            READY["bd ready"]
             CLAIM["bd update --status in_progress"]
-            WORK["Execute Task"]
-            VERIFY["Verify"]
-            UPDATE["bd checkpoint"]
-            MORE{More?}
             
-            CHECK --> CLAIM --> WORK --> VERIFY
-            VERIFY -->|pass| UPDATE --> MORE
-            VERIFY -->|fail| WORK
-            MORE -->|yes| CHECK
-        end
-
-        subgraph TDD_LOOP["TDD MICRO-LOOP"]
-            direction LR
-            RED["RED"]
-            GREEN["GREEN"]
-            REFACTOR["REFACTOR"]
-            RED --> GREEN --> REFACTOR --> RED
-        end
-
-        subgraph PARALLEL["PARALLEL DISPATCH"]
-            direction TB
-            SPAWN["dispatch"]
-            SUB1["Agent 1"]
-            SUB2["Agent 2"]
-            SUB3["Agent N"]
-            COLLECT["Collect"]
+            subgraph TDD["TDD CYCLE"]
+                RED["RED: Write Failing Test"]
+                GREEN["GREEN: Make It Pass"]
+                REFACTOR["REFACTOR: Clean Up"]
+            end
             
-            SPAWN --> SUB1 & SUB2 & SUB3 --> COLLECT
+            CLOSE["bd close"]
+            SYNC["bd sync"]
         end
-
-        subgraph VILLAGE["BEADS VILLAGE"]
-            direction TB
-            VINIT["bv init"]
-            VCLAIM["bv claim"]
-            VRESERVE["bv reserve"]
-            VMSG["bv msg"]
-            VDONE["bv done"]
-            
-            VINIT --> VCLAIM --> VRESERVE
-            VRESERVE -.-> VMSG -.-> VDONE
-        end
-
-        subgraph REVISE["REVISION LOOP"]
-            direction TB
-            ISSUE{"Issue Found"}
-            REVISE_CMD["/conductor-revise"]
-            UPDATE_DOCS["Update spec/plan"]
-            
-            ISSUE -->|spec/plan issue| REVISE_CMD --> UPDATE_DOCS
+        
+        subgraph FINISH["COMPLETION"]
+            VERIFY["Verification"]
+            BRANCH["finish branch"]
+            DOCSYNC["doc-sync"]
         end
     end
-
-    subgraph FINISH["FINISH PHASE"]
-        direction LR
-        BRANCH["finish branch"]
-        DOCSYNC["doc-sync"]
-        BRANCH --> DOCSYNC
+    
+    subgraph BMAD["PARTY MODE: 12 BMAD AGENTS"]
+        subgraph PRODUCT["Product Module"]
+            PM["John (PM)"]
+            ANALYST["Mary (Analyst)"]
+            UX["Sally (UX)"]
+        end
+        
+        subgraph TECHNICAL["Technical Module"]
+            ARCH["Winston (Architect)"]
+            DEV["Amelia (Developer)"]
+            QA["Murat (QA)"]
+            DOCS["Paige (Docs)"]
+        end
+        
+        subgraph CREATIVE["Creative Module"]
+            STORY["Sophia (Storyteller)"]
+            BRAIN["Carson (Brainstorm)"]
+            DESIGN["Maya (Design Thinking)"]
+            STRAT["Victor (Strategist)"]
+            SOLVER["Dr. Quinn (Solver)"]
+        end
     end
-
-    subgraph MAINTENANCE["MAINTENANCE"]
-        direction LR
-        REFRESH["/conductor-refresh"]
-    end
-
-    RB -->|"HANDOFF"| CHECK
-    WORK -->|"tdd"| TDD_LOOP
-    WORK -->|"parallel"| PARALLEL
-    WORK -->|"multi-agent"| VILLAGE
-    VERIFY -->|"issue"| ISSUE
-    UPDATE_DOCS --> WORK
-    COLLECT --> VERIFY
-    MORE -->|no| BRANCH
-    DOCSYNC -.->|"stale docs"| REFRESH
+    
+    DS --> DISCOVER
+    DISCOVER --> DEFINE
+    DEFINE --> DEVELOP
+    DEVELOP --> DELIVER
+    DELIVER --> APC
+    APC -->|"C"| DESIGNMD
+    APC -->|"P"| BMAD
+    BMAD -->|"Synthesize"| APC
+    DESIGNMD --> NEWTRACK
+    
+    NEWTRACK --> SPECMD
+    SPECMD --> PLANMD
+    PLANMD --> FB
+    
+    FB --> EPIC
+    EPIC --> ISSUES
+    ISSUES --> DEPS
+    DEPS --> RB
+    RB --> READY
+    
+    READY --> CLAIM
+    CLAIM --> COORDINATOR
+    COORDINATOR --> W1 & W2 & W3 & WN
+    W1 & W2 & W3 & WN --> MERGE
+    MERGE --> RED
+    RED --> GREEN
+    GREEN --> REFACTOR
+    REFACTOR -->|"More tests?"| RED
+    REFACTOR -->|"Done"| CLOSE
+    CLOSE --> SYNC
+    SYNC -->|"More issues?"| READY
+    SYNC -->|"All done"| VERIFY
+    
+    VERIFY --> BRANCH
+    BRANCH --> DOCSYNC
+    
+    classDef planning fill:#1a365d,stroke:#63b3ed,color:#e2e8f0
+    classDef spec fill:#234e52,stroke:#4fd1c5,color:#e2e8f0
+    classDef beads fill:#553c9a,stroke:#b794f4,color:#e2e8f0
+    classDef dispatch fill:#742a2a,stroke:#fc8181,color:#e2e8f0
+    classDef agent fill:#744210,stroke:#f6ad55,color:#e2e8f0
+    classDef tdd fill:#2d3748,stroke:#a0aec0,color:#e2e8f0
+    classDef finish fill:#22543d,stroke:#68d391,color:#e2e8f0
+    classDef product fill:#285e61,stroke:#4fd1c5,color:#e2e8f0
+    classDef technical fill:#2c5282,stroke:#63b3ed,color:#e2e8f0
+    classDef creative fill:#744210,stroke:#f6ad55,color:#e2e8f0
+    
+    class DS,DISCOVER,DEFINE,DEVELOP,DELIVER,APC,DESIGNMD planning
+    class NEWTRACK,SPECMD,PLANMD spec
+    class FB,EPIC,ISSUES,DEPS,RB beads
+    class COORDINATOR,W1,W2,W3,WN,MERGE dispatch
+    class READY,CLAIM,CLOSE,SYNC agent
+    class RED,GREEN,REFACTOR tdd
+    class VERIFY,BRANCH,DOCSYNC finish
+    class PM,ANALYST,UX product
+    class ARCH,DEV,QA,DOCS technical
+    class STORY,BRAIN,DESIGN,STRAT,SOLVER creative
 ```
+
+For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](./docs/PIPELINE_ARCHITECTURE.md).
 
 ### Session-Based Flow
 

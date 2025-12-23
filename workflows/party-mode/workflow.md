@@ -4,6 +4,64 @@ Multi-agent collaborative design workflow using LLM-as-orchestrator pattern.
 
 Triggered from A/P/C checkpoints in the design session (`skills/design/SKILL.md`) used by `/conductor-design` or `ds` (`skills/conductor/SKILL.md`).
 
+## Complete Pipeline Integration
+
+```mermaid
+flowchart TB
+    subgraph DESIGN_SESSION["DESIGN SESSION (Double Diamond)"]
+        DISCOVER["DISCOVER"] --> DEFINE["DEFINE"] --> DEVELOP["DEVELOP"] --> DELIVER["DELIVER"]
+        DISCOVER & DEFINE & DEVELOP & DELIVER --> APC{{"A/P/C"}}
+    end
+    
+    subgraph PARTY["PARTY MODE"]
+        SELECT["Select 3 Agents"]
+        RESPOND["Agent Responses<br/>(150-300 words each)"]
+        CROSSTALK["Cross-Talk<br/>(1-2 exchanges)"]
+        SYNTHESIZE["Synthesize Insights"]
+        
+        SELECT --> RESPOND --> CROSSTALK --> SYNTHESIZE
+    end
+    
+    subgraph BMAD["12 BMAD AGENTS"]
+        subgraph PRODUCT["Product Module"]
+            PM["John (PM)"]
+            ANALYST["Mary (Analyst)"]
+            UX["Sally (UX)"]
+        end
+        
+        subgraph TECHNICAL["Technical Module"]
+            ARCH["Winston (Architect)"]
+            DEV["Amelia (Developer)"]
+            QA["Murat (QA)"]
+            DOCS["Paige (Docs)"]
+        end
+        
+        subgraph CREATIVE["Creative Module"]
+            STORY["Sophia (Storyteller)"]
+            BRAIN["Carson (Brainstorm)"]
+            DESIGN["Maya (Design Thinking)"]
+            STRAT["Victor (Strategist)"]
+            SOLVER["Dr. Quinn (Solver)"]
+        end
+    end
+    
+    APC -->|"P"| SELECT
+    SELECT --> BMAD
+    BMAD --> RESPOND
+    SYNTHESIZE --> APC
+    APC -->|"C"| NEXT["Continue to Next Phase"]
+    
+    classDef product fill:#285e61,stroke:#4fd1c5,color:#e2e8f0
+    classDef technical fill:#2c5282,stroke:#63b3ed,color:#e2e8f0
+    classDef creative fill:#744210,stroke:#f6ad55,color:#e2e8f0
+    
+    class PM,ANALYST,UX product
+    class ARCH,DEV,QA,DOCS technical
+    class STORY,BRAIN,DESIGN,STRAT,SOLVER creative
+```
+
+For complete pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../docs/PIPELINE_ARCHITECTURE.md).
+
 ## Purpose
 
 Party Mode brings multiple expert perspectives into design sessions. When triggered via [P] at A/P/C checkpoints, 2-3 relevant agents provide multi-perspective feedback, cross-talk, and synthesis before returning to the main flow.

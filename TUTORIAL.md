@@ -73,76 +73,150 @@ Everything else in the plugin supports this core pipeline.
 
 ```mermaid
 flowchart TB
-    subgraph PIPELINE["WORKFLOW PIPELINE"]
+    subgraph PIPELINE["COMPLETE PIPELINE WORKFLOW"]
         direction TB
         
-        subgraph SETUP["SETUP"]
-            TRIGGER["ds / /conductor-design"]
-            CHECK["Verify conductor/<br/>(product.md, tech-stack.md, workflow.md)"]
+        subgraph PLANNING["PLANNING LOOP"]
+            DS["ds (Design Session)"]
+            DISCOVER["DISCOVER<br/>Explore Problem"]
+            DEFINE["DEFINE<br/>Frame Problem"]
+            DEVELOP["DEVELOP<br/>Explore Solutions"]
+            DELIVER["DELIVER<br/>Finalize Design"]
+            APC{{"A/P/C"}}
+            DESIGNMD["design.md"]
         end
         
-        subgraph DIAMOND1["DIAMOND 1: UNDERSTAND PROBLEM"]
-            DISCOVER["DISCOVER (Diverge)<br/>• Explore problem space<br/>• 5 Whys, edge cases<br/>• Mini-ground: codebase check"]
-            APC1{"A/P/C"}
-            DEFINE["DEFINE (Converge)<br/>• Problem statement<br/>• Success criteria<br/>• YAGNI filtering"]
-            APC2{"A/P/C"}
+        subgraph SPEC["SPEC GENERATION"]
+            NEWTRACK["/conductor-newtrack"]
+            SPECMD["spec.md"]
+            PLANMD["plan.md"]
         end
         
-        subgraph DIAMOND2["DIAMOND 2: DESIGN SOLUTION"]
-            DEVELOP["DEVELOP (Diverge)<br/>• 3+ approaches<br/>• Trade-off analysis<br/>• Wild/10x option"]
-            APC3{"A/P/C"}
-            DELIVER["DELIVER (Converge)<br/>• Architecture, Components<br/>• Data Model, User Flow<br/>• FULL GROUNDING required"]
-            APC4{"A/P/C"}
+        subgraph BEADS["ISSUE FILING LOOP"]
+            FB["fb (file-beads)"]
+            EPIC["Create Epic"]
+            ISSUES["Create Issues<br/>(batches of 5)"]
+            DEPS["Wire Dependencies"]
+            RB["rb (review-beads)"]
         end
         
-        subgraph HANDOFF["HANDOFF"]
-            DESIGNMD["design.md saved to<br/>conductor/tracks/{id}/"]
-            NEXT["Next: /conductor-newtrack {track_id}<br/>(spec + plan + beads + review)"]
+        subgraph DISPATCH["PARALLEL AGENT DISPATCH"]
+            COORDINATOR["Coordinator Agent"]
+            
+            subgraph WORKERS["WORKER AGENTS (Task tool)"]
+                W1["Agent 1<br/>Independent Task"]
+                W2["Agent 2<br/>Independent Task"]
+                W3["Agent 3<br/>Independent Task"]
+                WN["Agent N<br/>Independent Task"]
+            end
+            
+            MERGE["Merge Results"]
+        end
+        
+        subgraph AGENT_LOOP["AGENT EXECUTION LOOP"]
+            READY["bd ready"]
+            CLAIM["bd update --status in_progress"]
+            
+            subgraph TDD["TDD CYCLE"]
+                RED["RED: Write Failing Test"]
+                GREEN["GREEN: Make It Pass"]
+                REFACTOR["REFACTOR: Clean Up"]
+            end
+            
+            CLOSE["bd close"]
+            SYNC["bd sync"]
+        end
+        
+        subgraph FINISH["COMPLETION"]
+            VERIFY["Verification"]
+            BRANCH["finish branch"]
+            DOCSYNC["doc-sync"]
         end
     end
     
-    subgraph AGENTS["PARTY MODE: 12 AGENTS (BMAD v6)"]
+    subgraph BMAD["PARTY MODE: 12 BMAD AGENTS"]
         subgraph PRODUCT["Product Module"]
-            PM["📋 John (PM)"]
-            ANALYST["📊 Mary (Analyst)"]
-            UX["🎨 Sally (UX)"]
+            PM["John (PM)"]
+            ANALYST["Mary (Analyst)"]
+            UX["Sally (UX)"]
         end
         
         subgraph TECHNICAL["Technical Module"]
-            ARCH["🏗️ Winston (Architect)"]
-            DEV["💻 Amelia (Developer)"]
-            QA["🧪 Murat (QA)"]
-            DOCS["📚 Paige (Docs)"]
+            ARCH["Winston (Architect)"]
+            DEV["Amelia (Developer)"]
+            QA["Murat (QA)"]
+            DOCS["Paige (Docs)"]
         end
         
         subgraph CREATIVE["Creative Module"]
-            STORY["📖 Sophia (Storyteller)"]
-            BRAIN["🧠 Carson (Brainstorm)"]
-            DESIGN["🎯 Maya (Design Thinking)"]
-            STRAT["⚡ Victor (Strategist)"]
-            SOLVER["🔬 Dr. Quinn (Solver)"]
+            STORY["Sophia (Storyteller)"]
+            BRAIN["Carson (Brainstorm)"]
+            DESIGN["Maya (Design Thinking)"]
+            STRAT["Victor (Strategist)"]
+            SOLVER["Dr. Quinn (Solver)"]
         end
     end
     
-    TRIGGER --> CHECK
-    CHECK --> DISCOVER
-    DISCOVER --> APC1
-    APC1 -->|C| DEFINE
-    APC1 -.->|Back| DISCOVER
-    DEFINE --> APC2
-    APC2 -->|C| DEVELOP
-    APC2 -.->|Back| DISCOVER
-    DEVELOP --> APC3
-    APC3 -->|C| DELIVER
-    APC3 -.->|Back| DEFINE
-    DELIVER --> APC4
-    APC4 -->|C| DESIGNMD
-    APC4 -.->|Back| DEVELOP
-    DESIGNMD --> NEXT
+    DS --> DISCOVER
+    DISCOVER --> DEFINE
+    DEFINE --> DEVELOP
+    DEVELOP --> DELIVER
+    DELIVER --> APC
+    APC -->|"C"| DESIGNMD
+    APC -->|"P"| BMAD
+    BMAD -->|"Synthesize"| APC
+    DESIGNMD --> NEWTRACK
     
-    APC1 & APC2 & APC3 & APC4 -.->|P| AGENTS
-    AGENTS -.->|"Synthesize"| APC1 & APC2 & APC3 & APC4
+    NEWTRACK --> SPECMD
+    SPECMD --> PLANMD
+    PLANMD --> FB
+    
+    FB --> EPIC
+    EPIC --> ISSUES
+    ISSUES --> DEPS
+    DEPS --> RB
+    RB --> READY
+    
+    READY --> CLAIM
+    CLAIM --> COORDINATOR
+    COORDINATOR --> W1 & W2 & W3 & WN
+    W1 & W2 & W3 & WN --> MERGE
+    MERGE --> RED
+    RED --> GREEN
+    GREEN --> REFACTOR
+    REFACTOR -->|"More tests?"| RED
+    REFACTOR -->|"Done"| CLOSE
+    CLOSE --> SYNC
+    SYNC -->|"More issues?"| READY
+    SYNC -->|"All done"| VERIFY
+    
+    VERIFY --> BRANCH
+    BRANCH --> DOCSYNC
+    
+    classDef planning fill:#1a365d,stroke:#63b3ed,color:#e2e8f0
+    classDef spec fill:#234e52,stroke:#4fd1c5,color:#e2e8f0
+    classDef beads fill:#553c9a,stroke:#b794f4,color:#e2e8f0
+    classDef dispatch fill:#742a2a,stroke:#fc8181,color:#e2e8f0
+    classDef agent fill:#744210,stroke:#f6ad55,color:#e2e8f0
+    classDef tdd fill:#2d3748,stroke:#a0aec0,color:#e2e8f0
+    classDef finish fill:#22543d,stroke:#68d391,color:#e2e8f0
+    classDef product fill:#285e61,stroke:#4fd1c5,color:#e2e8f0
+    classDef technical fill:#2c5282,stroke:#63b3ed,color:#e2e8f0
+    classDef creative fill:#744210,stroke:#f6ad55,color:#e2e8f0
+    
+    class DS,DISCOVER,DEFINE,DEVELOP,DELIVER,APC,DESIGNMD planning
+    class NEWTRACK,SPECMD,PLANMD spec
+    class FB,EPIC,ISSUES,DEPS,RB beads
+    class COORDINATOR,W1,W2,W3,WN,MERGE dispatch
+    class READY,CLAIM,CLOSE,SYNC agent
+    class RED,GREEN,REFACTOR tdd
+    class VERIFY,BRANCH,DOCSYNC finish
+    class PM,ANALYST,UX product
+    class ARCH,DEV,QA,DOCS technical
+    class STORY,BRAIN,DESIGN,STRAT,SOLVER creative
 ```
+
+For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](./docs/PIPELINE_ARCHITECTURE.md).
 Each phase ends with **A/P/C checkpoints**:
 - **[A] Advanced** — Deeper analysis, challenge assumptions
 - **[P] Party** — Multi-agent collaborative review (see Party Mode below)

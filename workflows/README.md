@@ -2,6 +2,72 @@
 
 This directory contains the **single source of truth** for all Conductor workflow logic.
 
+## Complete Pipeline Architecture
+
+```mermaid
+flowchart TB
+    subgraph PIPELINE["COMPLETE PIPELINE WORKFLOW"]
+        direction TB
+        
+        subgraph PLANNING["PLANNING LOOP"]
+            DS["ds (Design Session)"]
+            DISCOVER["DISCOVER"]
+            DEFINE["DEFINE"]
+            DEVELOP["DEVELOP"]
+            DELIVER["DELIVER"]
+            APC{{"A/P/C"}}
+            DESIGNMD["design.md"]
+        end
+        
+        subgraph SPEC["SPEC GENERATION"]
+            NEWTRACK["/conductor-newtrack"]
+            SPECMD["spec.md"]
+            PLANMD["plan.md"]
+        end
+        
+        subgraph BEADS["ISSUE FILING"]
+            FB["fb (file-beads)"]
+            RB["rb (review-beads)"]
+        end
+        
+        subgraph DISPATCH["PARALLEL AGENT DISPATCH"]
+            COORDINATOR["Coordinator"]
+            WORKERS["Worker Agents 1..N"]
+            MERGE["Merge Results"]
+        end
+        
+        subgraph EXECUTION["AGENT EXECUTION LOOP"]
+            READY["bd ready"]
+            CLAIM["claim task"]
+            TDD["TDD: RED-GREEN-REFACTOR"]
+            CLOSE["bd close"]
+        end
+        
+        subgraph FINISH["COMPLETION"]
+            VERIFY["Verification"]
+            BRANCH["finish branch"]
+            DOCSYNC["doc-sync"]
+        end
+    end
+    
+    subgraph BMAD["PARTY MODE: 12 BMAD AGENTS"]
+        PRODUCT["Product: John (PM), Mary (Analyst), Sally (UX)"]
+        TECHNICAL["Technical: Winston (Architect), Amelia (Developer), Murat (QA), Paige (Docs)"]
+        CREATIVE["Creative: Sophia, Carson, Maya, Victor, Dr. Quinn"]
+    end
+    
+    DS --> DISCOVER --> DEFINE --> DEVELOP --> DELIVER --> APC
+    APC -->|"C"| DESIGNMD
+    APC -->|"P"| BMAD
+    BMAD --> APC
+    DESIGNMD --> NEWTRACK --> SPECMD --> PLANMD --> FB --> RB --> READY
+    READY --> CLAIM --> COORDINATOR --> WORKERS --> MERGE --> TDD --> CLOSE
+    CLOSE -->|"More?"| READY
+    CLOSE -->|"Done"| VERIFY --> BRANCH --> DOCSYNC
+```
+
+For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../docs/PIPELINE_ARCHITECTURE.md).
+
 ## Purpose
 
 The workflow definitions in this directory are designed to be:
@@ -22,6 +88,9 @@ workflows/
 ├── validate.md            # Project validation workflow
 ├── refresh.md             # Context refresh workflow
 ├── revise.md              # Spec/plan revision workflow
+├── party-mode/            # Multi-agent collaborative review
+│   ├── workflow.md        # Party Mode orchestration
+│   └── agents/            # 12 BMAD agent definitions
 └── schemas/
     ├── metadata.schema.json        # Track metadata structure
     ├── implement_state.schema.json # Implementation state tracking
