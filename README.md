@@ -31,14 +31,27 @@ Follow https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/SETUP_GUIDE.
 
 ### OpenAI Codex
 
-```
-$skill-installer ReinaMacCredy/maestro
+**Quick install/update (one command):**
+```bash
+curl -fsSL https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/scripts/install-codex.sh | bash
 ```
 
-Or install a specific skill:
+**Install (recommended, updateable):**
+```bash
+git clone https://github.com/ReinaMacCredy/maestro.git ~/.codex/skills/maestro
 ```
-$skill-installer conductor from ReinaMacCredy/maestro
+
+**Update:**
+```bash
+git -C ~/.codex/skills/maestro pull
 ```
+
+**Install a specific skill only (optional):**
+```bash
+python ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py --repo ReinaMacCredy/maestro --path skills/conductor
+```
+
+Restart Codex to pick up new skills.
 
 ### Amp
 

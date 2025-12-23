@@ -10,7 +10,7 @@ Execute these steps in order:
 1. Install plugin:
    - Claude Code: /plugin install https://github.com/ReinaMacCredy/maestro
    - Amp: amp skill add https://github.com/ReinaMacCredy/maestro --global
-   - Codex: $skill-installer ReinaMacCredy/maestro
+   - Codex: git clone https://github.com/ReinaMacCredy/maestro.git ~/.codex/skills/maestro
    - Other: git clone to skill directory
 
 2. Read docs/GLOBAL_CONFIG.md, apply config block to user's global config
@@ -30,7 +30,19 @@ Install using your tool's method:
 |------|---------|
 | Claude Code | `/plugin install https://github.com/ReinaMacCredy/maestro` |
 | Amp | `amp skill add https://github.com/ReinaMacCredy/maestro --global` |
-| Codex | `$skill-installer ReinaMacCredy/maestro` |
+| Codex | `git clone https://github.com/ReinaMacCredy/maestro.git ~/.codex/skills/maestro` |
+
+Quick install/update (Codex, one command):
+```bash
+curl -fsSL https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/scripts/install-codex.sh | bash
+```
+
+To update later (Codex):
+```bash
+git -C ~/.codex/skills/maestro pull
+```
+
+Restart Codex to pick up new skills.
 
 **Manual fallback** (any tool):
 ```bash
