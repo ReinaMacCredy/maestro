@@ -42,7 +42,7 @@ flowchart TB
         subgraph FINISH["COMPLETION"]
             VERIFY["Verification"]
             BRANCH["finish branch"]
-            DOCSYNC["doc-sync"]
+            FINISH_CMD["/conductor-finish"]
         end
     end
     
@@ -59,7 +59,7 @@ flowchart TB
     DESIGNMD --> NEWTRACK --> SPECMD --> PLANMD --> FB --> RB --> READY
     READY --> CLAIM --> TDD --> CLOSE
     CLOSE -->|"More?"| READY
-    CLOSE -->|"Done"| VERIFY --> BRANCH --> DOCSYNC
+    CLOSE -->|"Done"| VERIFY --> BRANCH --> FINISH_CMD
 ```
 
 For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../docs/PIPELINE_ARCHITECTURE.md).

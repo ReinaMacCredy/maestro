@@ -190,7 +190,7 @@ bd update <issue-id> --status in_progress --json
 
 **After claiming, record thread URL:**
 
-This step is REQUIRED - doc-sync relies on thread URLs to extract knowledge.
+This step is REQUIRED - `/conductor-finish` relies on thread URLs to extract knowledge.
 
 **Before proceeding, verify:**
 
@@ -210,7 +210,7 @@ else
 fi
 ```
 
-**If thread URL is unavailable:** Continue with a warning. Thread linking enables doc-sync traceability but is not required for task execution.
+**If thread URL is unavailable:** Continue with a warning. Thread linking enables `/conductor-finish` traceability but is not required for task execution.
 
 Read task details:
 

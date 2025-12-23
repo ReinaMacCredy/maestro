@@ -10,6 +10,10 @@ Master list of all development tracks.
 *ID: double-diamond-party-mode_20241223*
 *Link: [spec](conductor/tracks/double-diamond-party-mode_20241223/spec.md) | [plan](conductor/tracks/double-diamond-party-mode_20241223/plan.md)*
 
+## [~] Track: /conductor-finish Integration
+*ID: conductor-finish*
+*Link: [design](conductor/tracks/conductor-finish/design.md) | [spec](conductor/tracks/conductor-finish/spec.md) | [plan](conductor/tracks/conductor-finish/plan.md)*
+
 ## Completed Tracks
 
 *Completed tracks are archived to `conductor/archive/`.*

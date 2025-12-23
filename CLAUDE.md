@@ -27,7 +27,6 @@ commands/                 # Slash command definitions (.md files)
   ├── conductor/          # /conductor-setup, /conductor-design, /conductor-newtrack, etc.
   ├── compact.md
   ├── decompose-task.md
-  ├── doc-sync.md
   └── ground.md
 
 workflows/                # Conductor workflow definitions (format-agnostic)
