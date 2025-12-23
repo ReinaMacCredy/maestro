@@ -1,8 +1,0 @@
-{
-  "id": "conductor-finish",
-  "type": "feature",
-  "status": "designed",
-  "createdAt": "2024-12-23",
-  "description": "Integrate doc-sync into conductor as /conductor-finish command",
-  "designThreadId": "T-019b4b29-7199-75dc-912a-c7328a626a41"
-}
