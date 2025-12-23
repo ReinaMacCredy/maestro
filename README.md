@@ -561,6 +561,7 @@ Outside the automated flow:
 | Understand the philosophy and workflow | [TUTORIAL.md](./TUTORIAL.md) |
 | Set up a new project | [SETUP_GUIDE.md](./SETUP_GUIDE.md) |
 | Configure global agent | [docs/GLOBAL_CONFIG.md](./docs/GLOBAL_CONFIG.md) |
+| Understand the pipeline architecture | [docs/PIPELINE_ARCHITECTURE.md](./docs/PIPELINE_ARCHITECTURE.md) |
 | Use commands manually without skills | [docs/manual-workflow-guide.md](./docs/manual-workflow-guide.md) |
 | See all skills at a glance | [Skills table above](#the-skills) |
 
