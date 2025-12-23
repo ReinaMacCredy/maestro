@@ -1,0 +1,122 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.6.0] - 2025-12-23
+
+
+### Added
+
+
+- Initial release of my-workflow skills v1.0.0
+- Add various new skills and methodologies, including root cause tracing, testing patterns, and workflow definitions.
+- Establish conductor workflow management system with commands, workflows, schemas, and code style guides, and update conductor skill definition
+- Add version metadata to skill definitions, include `demo.yml` in gitignore, and update writing skills documentation.
+- Introduce a detailed plan format for the plan executor and update skill references in subagent development.
+- Add `ground` and `decompose-task` commands, introduce `codemaps` skill, and update workflow management skills.
+- Add a comprehensive tutorial, a setup guide, and a new Claude code setup template, while updating the main README, a skill, and a command.
+- Introduce parallel subagent dispatch for filing beads, add plan auto-archiving, and update tutorial path.
+- Introduces multi-agent coordination capabilities with the Beads Village MCP server, enabling concurrent AI agent work on the same codebase by managing task claiming and file locking.
+- Introduces multi-agent coordination capabilities with the Beads Village MCP server, enabling concurrent AI agent work on the same codebase by managing task claiming and file locking.
+- Introduce doc-sync skill and remove deprecated memory search functionality.
+- Rename project and plugin from `my-workflow` to `maestro` and add Beads Village installation to setup guide.
+- Add MIT license and append new project link to README
+- Replace `session-start` and `session-end` commands with a new `compact` command structure, including detailed scoring rubrics and a judge prompt.
+- Revise workflow pipeline diagram to illustrate new two-session process.
+- Add description and owner details to marketplace configuration
+- Add Maestro Plugin global config template and adjust gitignore for docs and conductor plans
+- Enhance installation instructions in README and add local template reference to global config.
+- Add post-completion instructions and workflow prompts for beads, brainstorming, and conductor skills.
+- Remove `systematic-debugging` and `execution-workflow` skill references and triggers, and simplify `git-worktrees` skill mention.
+- Add auto-cleanup phase to doc-sync skill workflow and update commit logic
+- Restructure design document storage to `conductor/design`, consolidate skills, and introduce an execution handoff pattern.
+- Add detailed session protocol, categorized trigger phrases, and Beads CLI/multi-agent documentation to global config template.
+- Introduce a dedicated `ds` skill for design sessions and update related documentation.
+- Update plugin and marketplace versions to 1.1.0.
+- Implement doc-sync auto-cleanup, archive old design documents, and update skill versions.
+- Update Conductor workflow to process one epic at a time with refined `/conductor-implement` logic and task scoping.
+- Enhance conductor workflow with user control, mandatory grounding, and clearer skill execution
+- Enhance conductor workflow with user control, mandatory grounding, and clearer skill execution
+- Add `fb` and `rb` commands for Beads issue management and update plugin version.
+- Parallelize `file-beads` and `review-beads` subagent dispatch, and add cross-epic validation to `review-beads`.
+- Add documentation for conductor implement (ci) and conductor setup (ct) commands
+- Update `maestro` plugin version in `marketplace.json` and document its versioning in `AGENTS.md`.
+- Introduce manual workflow guide, `refresh` and `revise` commands/workflows, and update conductor plugin configurations and documentation.
+- Implement Double Diamond design process and Party Mode
+- Update mermaid diagrams with BMAD v6-style workflow
+- Merge /conductor-newtrack and fb into unified flow
+- Rework tutorial workflow diagram and add new conductor, pipeline architecture, and command documentation.
+- Add instruction to load TDD skill and implement conditional TDD workflow.
+- Add GitHub Actions CI/CD for changelog and versioning
+- Add /conductor-finish command with doc-sync integration
+
+
+### Changed
+
+
+- Restructure agent skills for plan execution and workflow, introduce hooks, and consolidate code review into a dedicated agent.
+- Remove retro and spike workflows, updating conductor and tutorial documentation to reflect verification phase.
+- Delete numerous workflow command definition files.
+- Remove deprecated skills, update beads and other skill documentation, and add new conductor plans.
+- Restructure Conductor commands and introduce new core configuration and plan files.
+- Remove `execution-workflow` and `brainstorming` skills, add `conductor-design` command, and update related skill and conductor documentation.
+- Rename `ds` skill to `design` and increment versions for multiple skills.
+- Restructure beads skills to top-level and update plugin configuration
+- Reorganize commands and add maintenance workflows
+
+
+### Documentation
+
+
+- Add K&V integration design plan
+- Convert workflow pipeline diagram from plain text to Mermaid format.
+- Update README with correct links and author attributions for conductor and beads projects.
+- Update setup guide with global agent configuration, revised tool dependencies, and key triggers.
+- Refine setup guide by clarifying global installation, updating skill lists, and reorganizing project initialization steps.
+- Update README with new installation methods and add local reference path for global config template.
+- Add Claude Code-specific documentation, update agent installation instructions, and refresh tutorial links.
+- Enhance agent setup instructions, add dedicated `CLAUDE.md` documentation, and update command references.
+- Refine task claiming instructions and clarify thread URL recording.
+- Clarify the description for the `design` task type in the global config template.
+- Update README and TUTORIAL with new epic completion flow
+- Add complete workflow architecture diagram to README and TUTORIAL.
+- Standardize formatting and improve readability across skill documentation files.
+- Streamline setup guide, global configuration, and workflow documentation, including agent installation and diagram updates.
+- Add link to pipeline architecture documentation to README.
+- Simplify Maestro installation instructions in README.
+- Remove superpowers plugin references, simplify setup flow
+- Update README and SETUP_GUIDE, add install-codex script
+
+
+### Fixed
+
+
+- Update author field to object format
+- Apply Gemini code review feedback
+- Address Copilot PR review comments
+- Use env block for COMMITS to prevent shell interpretation
+
+
+### Complete
+
+
+- 11 learnings extracted
+
+
+### Conductor
+
+
+- Sync context with codebase
+- Update Double Diamond track spec and plan
+- Update spec/plan for BMAD alignment
+
+
+### Doc-sync
+
+
+- Add conductor structure and handoff mechanism
+
+
