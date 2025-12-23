@@ -22,6 +22,7 @@ maestro/
 ├── commands/              # Slash command definitions (.md)
 ├── agents/                # Agent definitions
 ├── workflows/             # Workflow definitions
+│   └── party-mode/        # Multi-agent design feedback (agents, manifest, workflow)
 ├── hooks/                 # Lifecycle hooks
 ├── lib/                   # Shared utilities
 ├── templates/             # Templates

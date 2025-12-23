@@ -15,7 +15,7 @@ Add this to your global config file after installing maestro plugin.
 
 ## Core Triggers
 
-**Planning:** `ds`(design) → `/conductor-setup` → `/conductor-newtrack`
+**Planning:** `/conductor-setup` → `ds` (Double Diamond design) → `/conductor-newtrack`
 
 **Execution:** `fb` → `rb` → `/conductor-implement` (uses TDD) → `finish branch`
 
@@ -52,7 +52,7 @@ bd sync
 | Phrase | Skill | Description |
 |--------|-------|-------------|
 | `/conductor-setup` | `conductor` | Initialize project context |
-| `/conductor-design [desc]` | `conductor` | Design feature through collaborative dialogue |
+| `/conductor-design [desc]` | `conductor` | Design through Double Diamond dialogue (A/P/C checkpoints, Party Mode) |
 | `/conductor-newtrack [desc]` | `conductor` | Create feature/bug track with spec + plan |
 | `/conductor-implement [id]` | `conductor` | Execute track tasks with TDD |
 | `/conductor-status` | `conductor` | Display progress overview |
@@ -90,7 +90,7 @@ bd sync
 
 | Phrase | Skill | Description |
 |--------|-------|-------------|
-| `ds` | `design` | Design session - collaborative brainstorming with mandatory grounding and fb handoff |
+| `ds` | `design` | Double Diamond design session with A/P/C checkpoints and optional Party Mode |
 
 ---
 
@@ -99,6 +99,7 @@ bd sync
 ```
 PLANNING
   /conductor-setup → product.md, tech-stack.md, workflow.md
+  ds (or /conductor-design) → Double Diamond design → design.md
   /conductor-newtrack → spec.md + plan.md
   fb → bd issues
 
@@ -110,8 +111,8 @@ EXECUTION
 
 | Scenario | Flow |
 |----------|------|
-| Standard | `/conductor-newtrack` → `fb` → `bd ready` → `bd update <id> --status in_progress` |
-| With exploration | `ds` → `/conductor-newtrack` → `fb` |
+| Standard | `/conductor-setup` → `ds` → `/conductor-newtrack` → `fb` → `bd ready` |
+| Skip design | `/conductor-newtrack` → `fb` → `bd ready` → `bd update <id> --status in_progress` |
 | Resume work | `bd status` → `bd update <id> --status in_progress` |
 
 ---
@@ -155,7 +156,7 @@ MCP server for task coordination via `npx beads-village`.
 | `review-beads` | `rb` | Review and refine beads issues (parallel + cross-epic validation) |
 | `codemaps` | — | Token-aware architecture documentation |
 | `conductor` | `/conductor-setup`, `/conductor-design`, `/conductor-newtrack`, `/conductor-implement`, `/conductor-status`, `/conductor-revert`, `/conductor-revise`, `/conductor-refresh` | Structured planning and execution through specs and plans |
-| `design` | `ds` | Design session - collaborative brainstorming with mandatory grounding and fb handoff |
+| `design` | `ds` | Double Diamond design session with A/P/C checkpoints and Party Mode option |
 | `dispatching-parallel-agents` | `dispatch` | 2+ independent parallel tasks |
 | `doc-sync` | `doc-sync`, `/doc-sync` | Sync AGENTS.md from completed threads |
 | `finishing-a-development-branch` | `finish branch` | Complete work: merge/PR/cleanup |

@@ -23,6 +23,7 @@ A plugin that provides structured AI-assisted development capabilities through p
 - [ ] Support all major Agent Skills-compatible tools
 - [ ] Enable context-driven development with persistent memory
 - [ ] Package organizational knowledge into portable, version-controlled skills
+- [~] Double Diamond design process with Party Mode multi-agent feedback
 
 ## Success Metrics
 

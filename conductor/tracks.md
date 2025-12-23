@@ -4,7 +4,11 @@ Master list of all development tracks.
 
 ## Active Tracks
 
-*No active tracks yet. Create one with `/conductor-newtrack "description"`.*
+---
+
+## [~] Track: Double Diamond + Party Mode
+*ID: double-diamond-party-mode_20241223*
+*Link: [spec](conductor/tracks/double-diamond-party-mode_20241223/spec.md) | [plan](conductor/tracks/double-diamond-party-mode_20241223/plan.md)*
 
 ## Completed Tracks
 
