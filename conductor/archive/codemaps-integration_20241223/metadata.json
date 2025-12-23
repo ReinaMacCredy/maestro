@@ -14,7 +14,7 @@
     "design": true,
     "spec": true,
     "plan": true,
-    "beads": false
+    "beads": true
   },
   "_repaired": {
     "reason": "Missing state files - track created manually or workflow interrupted",
