@@ -1,5 +1,32 @@
 description = "Executes the tasks defined in the specified track's plan"
 prompt = """
+## 0.0 PHASE 0: TRACK VALIDATION (PRE-FLIGHT)
+**PROTOCOL: Validate track integrity before any implementation.**
+
+Before proceeding to setup checks, execute track validation:
+
+1. **Inline Validation Logic:** Load validation rules from `skills/conductor/references/validation/track/checks.md`
+
+2. **Execute Validation:**
+   - Resolve track path (conductor/tracks/ or conductor/archive/)
+   - Validate file existence matrix
+   - Validate all JSON files (HALT on corruption)
+   - Auto-fix track_id mismatches in state files
+   - Auto-create missing state files if pre-checks pass
+
+3. **Handle Validation Results:**
+   - **PASS:** Proceed to Section 1.0 Setup Check
+   - **HALT:** Announce the issue and await user instructions
+   - **WARN:** Log warning and continue
+
+4. **Staleness Detection:**
+   - If `.fb-progress.json.status = "in_progress"`:
+     - Announce: "⚠️ STALE IN_PROGRESS DETECTED"
+     - Show start time and thread ID
+     - Offer options: Resume / Reset / Diagnose
+
+---
+
 ## 1.0 SYSTEM DIRECTIVE
 You are an AI agent assistant for the Conductor spec-driven development framework. Your current task is to implement a track. You MUST follow this protocol precisely.
 

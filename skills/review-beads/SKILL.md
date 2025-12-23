@@ -11,7 +11,17 @@ Review, proofread, and polish filed Beads epics and issues using **parallel suba
 
 ## Phase 0: Pre-Check & Track Discovery
 
-### 0.1 Scan for Track Context
+### 0.1 Track Integrity Validation
+
+Before any operations, validate track integrity per `skills/conductor/references/validation/track/checks.md`:
+
+1. **Validate JSON files:** All state files must parse correctly (HALT on corruption)
+2. **track_id validation:** Auto-fix mismatches in state files (directory name is source of truth)
+3. **File existence matrix:** Verify track has valid file combination
+
+**If validation fails:** HALT and report the issue.
+
+### 0.2 Scan for Track Context
 
 If `$ARGUMENTS` contains a track_id:
 - Look for `.fb-progress.json` at `conductor/tracks/<track_id>/.fb-progress.json`
@@ -30,7 +40,7 @@ Found beads in multiple tracks:
 Which track to review? [1/2/all]
 ```
 
-### 0.2 Check Track Directory Exists
+### 0.3 Check Track Directory Exists
 
 Before reading progress file, verify the track directory exists:
 
@@ -46,7 +56,7 @@ test -d conductor/tracks/<track_id>
 - Use `bd list -t epic --json` to find epics directly
 - Skip progress file operations
 
-### 0.3 Check Progress File Status
+### 0.4 Check Progress File Status
 
 Read `.fb-progress.json` from track directory:
 
@@ -65,7 +75,7 @@ cat conductor/tracks/<track_id>/.fb-progress.json
 
 **If proceeding:** Extract epic IDs from progress file for focused review.
 
-### 0.4 Sync Stale Progress (Edge Case 4)
+### 0.5 Sync Stale Progress (Edge Case 4)
 
 Before proceeding, compare progress file against current beads state:
 
@@ -88,7 +98,7 @@ bd list -t epic --json
 
 Update progress file with corrected epic list and new `lastVerified` timestamp.
 
-### 0.5 Initialize Review State
+### 0.6 Initialize Review State
 
 Create/update `.fb-progress.json` with review tracking:
 

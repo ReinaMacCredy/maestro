@@ -297,6 +297,11 @@ See [references/CODEMAPS_TEMPLATE.md](references/CODEMAPS_TEMPLATE.md) for codem
 
 ## Track Integrity Validation
 
+For detailed validation logic, see:
+- `skills/conductor/references/validation/track/checks.md` - Core validation logic
+- `skills/conductor/references/validation/track/snippets.md` - State file templates
+- `skills/conductor/references/validation/track/recovery.md` - Troubleshooting guide
+
 ### Required Files Per Track
 
 | File | Required | Created By | Purpose |

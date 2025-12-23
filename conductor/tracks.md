@@ -6,17 +6,25 @@ Master list of all development tracks.
 
 ---
 
-## [~] Track: Double Diamond + Party Mode
-*ID: double-diamond-party-mode_20241223*
-*Link: [spec](conductor/tracks/double-diamond-party-mode_20241223/spec.md) | [plan](conductor/tracks/double-diamond-party-mode_20241223/plan.md)*
+## [ ] Track: Conductor Track Validation System
+*ID: state-files-phase1_20241224*
+*Link: [design](conductor/tracks/state-files-phase1_20241224/design.md) | [spec](conductor/tracks/state-files-phase1_20241224/spec.md) | [plan](conductor/tracks/state-files-phase1_20241224/plan.md)*
+*Priority: critical*
 
-## [~] Track: /conductor-finish Integration
-*ID: conductor-finish*
-*Link: [design](conductor/tracks/conductor-finish/design.md) | [spec](conductor/tracks/conductor-finish/spec.md) | [plan](conductor/tracks/conductor-finish/plan.md)*
+---
 
 ## Completed Tracks
 
 *Completed tracks are archived to `conductor/archive/`.*
+
+## [x] Track: Double Diamond + Party Mode
+*ID: double-diamond-party-mode_20241223*
+
+## [x] Track: /conductor-finish Integration
+*ID: conductor-finish*
+
+## [x] Track: Merge newTrack and File Beads
+*ID: merge-newtrack-fb_20241223*
 
 ---
 
@@ -35,9 +43,4 @@ Status markers:
 - `[~]` — In progress
 - `[x]` — Completed
 
----
 
-## [ ] Track: Merge newTrack and File Beads
-*ID: merge-newtrack-fb_20241223*
-*Link: [spec](conductor/tracks/merge-newtrack-fb_20241223/spec.md) | [plan](conductor/tracks/merge-newtrack-fb_20241223/plan.md)*
-*Priority: high*
