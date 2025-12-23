@@ -67,8 +67,6 @@ See [SETUP_GUIDE.md](./SETUP_GUIDE.md) for detailed instructions.
   - [Conductor (Planning)](#conductor-planning)
   - [Beads (Issue Tracking)](#beads-issue-tracking)
   - [TDD (Execution)](#tdd-execution)
-  - [Debugging](#debugging)
-  - [Code Review](#code-review)
 - [Workflow Pipeline](#workflow-pipeline)
 - [Slash Commands](#slash-commands)
 - [Documentation](#documentation)
@@ -125,9 +123,7 @@ trace                              # Root cause tracing
 | **Core Workflow** | conductor, design (Double Diamond + Party Mode), beads, file-beads (parallel), review-beads (parallel) |
 | **Development** | test-driven-development, using-git-worktrees, finishing-a-development-branch |
 | **Utilities** | codemaps, doc-sync, dispatching-parallel-agents, subagent-driven-development |
-| **Meta** | using-superpowers, verification-before-completion, writing-skills, sharing-skills |
-| **Debugging** *(external: superpowers plugin)* | systematic-debugging, root-cause-tracing, condition-based-waiting, defense-in-depth |
-| **Code Review** *(external: superpowers plugin)* | requesting-code-review, receiving-code-review |
+| **Meta** | verification-before-completion, writing-skills, sharing-skills |
 
 ---
 
@@ -289,26 +285,6 @@ REPEAT  → Next failing test
 **Iron law**: No production code without a failing test first.
 
 **Key insight**: If you didn't watch the test fail, you don't know if it tests the right thing.
-
-### Debugging (external: superpowers plugin)
-
-**Skills**:
-
-| Trigger | Skill | Use When |
-|---------|-------|----------|
-| `trace` | root-cause-tracing | Need to find original trigger |
-| `flaky` | condition-based-waiting | Race conditions, timing issues |
-
-**Key insight**: Evidence before assertions. Show the error, show the fix working.
-
-### Code Review (external: superpowers plugin)
-
-| Trigger | Skill | Use When |
-|---------|-------|----------|
-| `review code` | requesting-code-review | Before merging, after major work |
-| — | receiving-code-review | When handling feedback |
-
-**Key insight**: Require technical rigor, not performative agreement.
 
 ---
 
@@ -624,7 +600,6 @@ The plugin still provides value without `bd`:
 ## Credits
 
 Built on foundations from:
-- [superpowers](https://github.com/obra/superpowers) by Jesse Vincent
 - [conductor](https://github.com/NguyenSiTrung/conductor) by NguyenSiTrung
 - [beads](https://github.com/steveyegge/beads) by Steve Yegge
 - [beads-village](https://github.com/LNS2905/mcp-beads-village) by LNS2905

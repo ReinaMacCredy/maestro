@@ -44,16 +44,7 @@ Skill directories:
 
 **Verify:** Run `/skill list` or check skill directory exists.
 
-## Step 2: Install Superpowers (Recommended)
-
-Provides debugging and code review skills.
-
-| Tool | Command |
-|------|---------|
-| Claude Code | `/plugin install https://github.com/obra/superpowers` |
-| Amp | `amp skill add https://github.com/obra/superpowers --global` |
-
-## Step 3: Configure Global Agent
+## Step 2: Configure Global Agent
 
 Read [docs/GLOBAL_CONFIG.md](./docs/GLOBAL_CONFIG.md) and apply the config block to user's global config.
 
@@ -62,7 +53,7 @@ The file contains:
 - Default config block with BEGIN/END markers
 - Optional Beads Village block
 
-## Step 4: Check CLI Tools
+## Step 3: Check CLI Tools
 
 Check if `bd` CLI is installed:
 ```bash
@@ -71,7 +62,7 @@ which bd && echo "CLI installed" || echo "CLI not found"
 
 If not found, inform user to install manually (see Manual Installation below).
 
-## Step 5: Report Results
+## Step 4: Report Results
 
 Tell user:
 ```
