@@ -1,0 +1,19 @@
+{
+  "trackId": "conductor-finish",
+  "status": "complete",
+  "reviewStatus": "complete",
+  "startedAt": "2024-12-23T12:00:00Z",
+  "threadId": "T-019b4b29-7199-75dc-912a-c7328a626a41",
+  "resumeFrom": "phase3",
+  "epics": [
+    {"id": "my-workflow:3-lr89", "title": "Epic: Core Infrastructure", "status": "created"},
+    {"id": "my-workflow:3-84x2", "title": "Epic: Conductor SKILL.md Updates", "status": "created"},
+    {"id": "my-workflow:3-xzr2", "title": "Epic: finish-workflow.md Implementation", "status": "created"},
+    {"id": "my-workflow:3-0gcj", "title": "Epic: Delete doc-sync Skill", "status": "created"},
+    {"id": "my-workflow:3-d0bg", "title": "Epic: Update Related Documentation", "status": "created"},
+    {"id": "my-workflow:3-u4rv", "title": "Epic: Verification and Testing", "status": "created"}
+  ],
+  "issues": [],
+  "crossTrackDeps": [],
+  "lastError": null
+}

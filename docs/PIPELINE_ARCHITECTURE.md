@@ -63,7 +63,7 @@ flowchart TB
         subgraph FINISH["COMPLETION"]
             VERIFY["Verification"]
             BRANCH["finish branch"]
-            DOCSYNC["doc-sync"]
+            FINISH_CMD["/conductor-finish"]
         end
     end
     
@@ -124,7 +124,7 @@ flowchart TB
     SYNC -->|"All done"| VERIFY
     
     VERIFY --> BRANCH
-    BRANCH --> DOCSYNC
+    BRANCH --> FINISH_CMD
     
     classDef planning fill:#1a365d,stroke:#63b3ed,color:#e2e8f0
     classDef spec fill:#234e52,stroke:#4fd1c5,color:#e2e8f0
@@ -144,7 +144,7 @@ flowchart TB
     class COORDINATOR,W1,W2,W3,WN,MERGE dispatch
     class READY,CLAIM,CLOSE,SYNC agent
     class RED,GREEN,REFACTOR tdd
-    class VERIFY,BRANCH,DOCSYNC finish
+    class VERIFY,BRANCH,FINISH_CMD finish
     class PM,ANALYST,UX product
     class ARCH,DEV,QA,DOCS technical
     class STORY,BRAIN,DESIGN,STRAT,SOLVER creative
@@ -410,9 +410,9 @@ flowchart TB
     subgraph FINISH["FINISH"]
         F_VERIFY["Verification"]
         F_BRANCH["finish branch"]
-        F_DOCSYNC["doc-sync"]
+        F_FINISH_CMD["/conductor-finish"]
         
-        F_VERIFY --> F_BRANCH --> F_DOCSYNC
+        F_VERIFY --> F_BRANCH --> F_FINISH_CMD
     end
     
     S1_HANDOFF -.-> S2_PASTE
@@ -433,7 +433,7 @@ flowchart TB
 | TDD | `tdd` | RED → GREEN → REFACTOR |
 | Parallel Dispatch | `dispatch` | 2+ independent tasks |
 | Village | `bv init` | Multi-agent coordination |
-| Completion | `finish branch` → `doc-sync` | Finalize work |
+| Completion | `finish branch` → `/conductor-finish` | Finalize work |
 
 ---
 

@@ -135,7 +135,7 @@ trace                              # Root cause tracing
 |----------|--------|
 | **Core Workflow** | conductor, design (Double Diamond + Party Mode), beads, file-beads (parallel), review-beads (parallel) |
 | **Development** | test-driven-development, using-git-worktrees, finishing-a-development-branch |
-| **Utilities** | codemaps, doc-sync, dispatching-parallel-agents, subagent-driven-development |
+| **Utilities** | codemaps, dispatching-parallel-agents, subagent-driven-development |
 | **Meta** | verification-before-completion, writing-skills, sharing-skills |
 
 ---
@@ -364,7 +364,7 @@ flowchart TB
         subgraph FINISH["COMPLETION"]
             VERIFY["Verification"]
             BRANCH["finish branch"]
-            DOCSYNC["doc-sync"]
+            FINISH_CMD["/conductor-finish"]
         end
     end
     
@@ -425,7 +425,7 @@ flowchart TB
     SYNC -->|"All done"| VERIFY
     
     VERIFY --> BRANCH
-    BRANCH --> DOCSYNC
+    BRANCH --> FINISH_CMD
     
     classDef planning fill:#1a365d,stroke:#63b3ed,color:#e2e8f0
     classDef spec fill:#234e52,stroke:#4fd1c5,color:#e2e8f0
@@ -444,7 +444,7 @@ flowchart TB
     class COORDINATOR,W1,W2,W3,WN,MERGE dispatch
     class READY,CLAIM,CLOSE,SYNC agent
     class RED,GREEN,REFACTOR tdd
-    class VERIFY,BRANCH,DOCSYNC finish
+    class VERIFY,BRANCH,FINISH_CMD finish
     class PM,ANALYST,UX product
     class ARCH,DEV,QA,DOCS technical
     class STORY,BRAIN,DESIGN,STRAT,SOLVER creative
@@ -533,7 +533,7 @@ Outside the automated flow:
 | `/conductor-revert` | Git-aware revert of work |
 | `/conductor-revise` | Update spec/plan when implementation reveals issues |
 | `/conductor-refresh` | Sync context docs with current codebase |
-| `/doc-sync` | Sync AGENTS.md from completed threads |
+| `/conductor-finish [id]` | Complete track: extract learnings, compact beads, archive |
 | `/ground <pattern>` | Verify patterns against current truth |
 | `/decompose-task <phase>` | Break phases into atomic beads |
 | `/compact` | Checkpoint and compact session |

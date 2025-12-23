@@ -130,7 +130,7 @@ flowchart TB
         subgraph FINISH["COMPLETION"]
             VERIFY["Verification"]
             BRANCH["finish branch"]
-            DOCSYNC["doc-sync"]
+            FINISH_CMD["/conductor-finish"]
         end
     end
     
@@ -191,7 +191,7 @@ flowchart TB
     SYNC -->|"All done"| VERIFY
     
     VERIFY --> BRANCH
-    BRANCH --> DOCSYNC
+    BRANCH --> FINISH_CMD
     
     classDef planning fill:#1a365d,stroke:#63b3ed,color:#e2e8f0
     classDef spec fill:#234e52,stroke:#4fd1c5,color:#e2e8f0
@@ -210,7 +210,7 @@ flowchart TB
     class COORDINATOR,W1,W2,W3,WN,MERGE dispatch
     class READY,CLAIM,CLOSE,SYNC agent
     class RED,GREEN,REFACTOR tdd
-    class VERIFY,BRANCH,DOCSYNC finish
+    class VERIFY,BRANCH,FINISH_CMD finish
     class PM,ANALYST,UX product
     class ARCH,DEV,QA,DOCS technical
     class STORY,BRAIN,DESIGN,STRAT,SOLVER creative
@@ -738,19 +738,19 @@ git push
 
 #### Step 4: Sync documentation (after epic completion)
 
-When you close an epic (not every session), capture learnings:
+When you complete a track (all epics done), run:
 
 ```
-doc-sync
+/conductor-finish
 ```
 
-The `doc-sync` skill:
-1. Finds closed issues with thread URLs in notes
-2. Reads each thread to extract patterns, commands, decisions
-3. Updates relevant AGENTS.md files with new knowledge
-4. Shows diff for your review before committing
+The `/conductor-finish` command:
+1. Extracts learnings from work threads → `LEARNINGS.md`
+2. Generates AI summaries for closed beads
+3. Merges knowledge to `conductor/AGENTS.md`
+4. Archives the track with S/H/K choice
 
-**Why this matters**: Lessons learned during implementation often get lost when context compacts. Doc-sync preserves them in version-controlled AGENTS.md files.
+**Why this matters**: Lessons learned during implementation often get lost when context compacts. `/conductor-finish` preserves them in version-controlled AGENTS.md files.
 
 ---
 
@@ -1064,7 +1064,7 @@ git push
 | `write skill` | writing-skills |
 | `share skill` | sharing-skills |
 | `review code` | requesting-code-review |
-| `doc-sync`, `/doc-sync` | doc-sync |
+| `doc-sync`, `/conductor-finish` | conductor (finish workflow) |
 | `init`, `claim`, `done` | beads-village (multi-agent) |
 | `/ground` | grounding (context alignment) |
 | `/decompose-task` | task decomposition |

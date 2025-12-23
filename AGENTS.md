@@ -82,10 +82,9 @@ Add `[skip ci]` to commit message to bypass all automation (changelog + version 
 | Skill | Trigger | Description |
 |-------|---------|-------------|
 | `design` | `ds` | Double Diamond design session with A/P/C checkpoints and Party Mode option |
-| `conductor` | `/conductor-setup`, `/conductor-design`, `/conductor-newtrack`, `/conductor-implement`, `/conductor-status`, `/conductor-revert`, `/conductor-revise`, `/conductor-refresh` | Structured planning and execution through specs and plans |
+| `conductor` | `/conductor-setup`, `/conductor-design`, `/conductor-newtrack`, `/conductor-implement`, `/conductor-status`, `/conductor-revert`, `/conductor-revise`, `/conductor-refresh`, `/conductor-finish` | Structured planning and execution through specs and plans |
 | `file-beads` | `fb` | File beads from plan (batched in groups of 5, checkpointed for resume) |
 | `review-beads` | `rb` | Review beads (parallel + cross-epic validation, dual tracking: progress file + beads label) |
-| `doc-sync` | `doc-sync`, `/doc-sync` | Sync AGENTS.md from completed thread knowledge |
 | `beads` | `bd ready`, `bd status` | Issue tracking for multi-session work |
 
 <!-- bv-agent-instructions-v1 -->
@@ -112,7 +111,7 @@ bd close <id> --reason="Completed"
 bd close <id1> <id2>  # Close multiple issues at once
 bd sync               # Commit and push changes
 
-# Cleanup commands (used by doc-sync Phase 7)
+# Cleanup commands (used by /conductor-finish Phase 2)
 bd compact --analyze --json      # Find issues needing summary
 bd compact --apply --id <id> --summary "text"  # Add AI summary
 bd count --status closed --json  # Count closed issues

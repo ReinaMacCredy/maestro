@@ -297,7 +297,7 @@ The implement workflow executes tasks from a single epic using Beads for issue t
 - **One epic per run** - Command stops after completing one epic
 - **Epic-scoped tasks** - Only processes tasks that are children of current epic
 - **Explicit user choice** - After epic completion, user chooses `rb` (fewer mistakes) or handoff to next epic
-- **Thread linking is critical** for doc-sync integration (uses `bd comment` for atomic append)
+- **Thread linking is critical** for `/conductor-finish` integration (uses `bd comment` for atomic append)
 - **Beads is source of truth** for task status; plan.md updates are best-effort
 - **Resume** with `/conductor-implement Start epic <epic-id>`
 

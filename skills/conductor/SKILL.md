@@ -1,6 +1,6 @@
 ---
 name: conductor
-version: "1.5.0"
+version: "1.6.0"
 description: Context-driven development methodology. Understands projects set up with Conductor (via Gemini CLI, Claude Code, Amp Code, Codex, or any Agent Skills compatible CLI). Use when working with conductor/ directories, tracks, specs, plans, or when user mentions context-driven development.
 license: Apache-2.0
 compatibility: Works with Claude Code, Gemini CLI, Amp Code, Codex, and any Agent Skills compatible CLI
@@ -110,6 +110,7 @@ Users can invoke these commands directly:
 | `/conductor-revert` | Git-aware revert of work |
 | `/conductor-revise` | Update spec/plan when implementation reveals issues |
 | `/conductor-refresh` | Sync context docs with current codebase |
+| `/conductor-finish [id]` | Complete track: extract learnings, compact beads, archive. Flag: `--with-pr` |
 
 ## Intent Mapping
 
@@ -130,6 +131,7 @@ When users express these intents, invoke the corresponding workflow:
 | "Export project summary" | Generate export | `/conductor-export` |
 | "Docs are outdated" / "Sync with codebase" | Refresh context | `/conductor-refresh` |
 | "Spec is wrong" / "Plan needs update" | Revise spec/plan | `/conductor-revise` |
+| "Finish track" / "Complete track" / "doc-sync" | Complete and archive track | `/conductor-finish` |
 
 ## Context Loading
 
@@ -138,6 +140,7 @@ When this skill activates, automatically load:
 2. `conductor/tech-stack.md` - Know the tech constraints
 3. `conductor/workflow.md` - Follow the methodology
 4. `conductor/tracks.md` - Current work status
+5. `conductor/AGENTS.md` - Learnings from completed tracks
 
 For active tracks, also load:
 - `conductor/tracks/<track_id>/design.md` (if exists)
@@ -175,6 +178,34 @@ Epic complete. Choose:
 
 This ensures quality gates between epics and prevents error propagation.
 
+## Track Completion
+
+When all epics are closed and all beads resolved, the track is ready to finish.
+
+### Auto-Trigger
+
+After closing the last epic, prompt:
+```
+Track ready. Run `/conductor-finish`?
+```
+
+### /conductor-finish Workflow
+
+Runs 4 phases (see [references/finish-workflow.md](references/finish-workflow.md)):
+
+1. **Thread Compaction** - Extract learnings from work threads → `LEARNINGS.md`
+2. **Beads Compaction** - Generate AI summaries for closed issues
+3. **Knowledge Merge** - Dedupe and merge to `conductor/AGENTS.md`
+4. **Archive** - S/H/K choice, single commit, cleanup beads
+
+### ready_to_finish Status
+
+Set `metadata.json` status to `"ready_to_finish"` when:
+- All child beads are closed
+- All epics in plan.md are marked complete
+
+This triggers the auto-prompt for `/conductor-finish`.
+
 ## Conductor Directory Structure
 
 When you see this structure, the project uses Conductor:
@@ -188,6 +219,7 @@ conductor/
 ├── tracks.md               # Master track list with status markers
 ├── setup_state.json        # Setup progress tracking
 ├── refresh_state.json      # Context refresh tracking (created by /conductor-refresh)
+├── AGENTS.md               # Learnings hub (auto-updated by /conductor-finish)
 ├── code_styleguides/       # Language-specific style guides
 ├── archive/                # Archived completed tracks
 ├── exports/                # Exported summaries
@@ -198,7 +230,9 @@ conductor/
         ├── spec.md         # Requirements and acceptance criteria
         ├── plan.md         # Phased task list with status
         ├── revisions.md    # Revision history log (if any)
-        └── implement_state.json  # Implementation resume state (if in progress)
+        ├── implement_state.json  # Implementation resume state (if in progress)
+        ├── LEARNINGS.md    # Extracted learnings (created by /conductor-finish)
+        └── finish-state.json  # Finish resume state (if interrupted)
 ```
 
 ## Status Markers
@@ -243,6 +277,7 @@ The only differences are command syntax:
 | `/conductor:revert` | `/conductor-revert` |
 | `/conductor:revise` | `/conductor-revise` |
 | `/conductor:refresh` | `/conductor-refresh` |
+| `/conductor:finish` | `/conductor-finish` |
 
 Files, workflows, and state management are fully compatible.
 
