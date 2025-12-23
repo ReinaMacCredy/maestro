@@ -42,8 +42,9 @@ jobs:
 
       - name: Determine version bump
         id: bump
+        env:
+          COMMITS: ${{ steps.commits.outputs.commits }}
         run: |
-          COMMITS="${{ steps.commits.outputs.commits }}"
           
           # Check for breaking changes
           if echo "$COMMITS" | grep -qE '^[a-z]+!:|BREAKING CHANGE:'; then
