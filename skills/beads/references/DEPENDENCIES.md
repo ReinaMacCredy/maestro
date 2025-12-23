@@ -6,32 +6,32 @@ Deep dive into bd's four dependency types: blocks, related, parent-child, and di
 
 - [Overview](#overview) - Four types at a glance, which affect bd ready?
 - [blocks - Hard Blocker](#blocks---hard-blocker)
-  - [When to Use](#when-to-use) - Prerequisites, sequential steps, build order
+  - [When To Use](#when-to-use) - Prerequisites, sequential steps, build order
   - [When NOT to Use](#when-not-to-use) - Soft preferences, parallel work
   - [Examples](#examples) - API development, migrations, library dependencies
   - [Creating blocks Dependencies](#creating-blocks-dependencies)
   - [Common Patterns](#common-patterns) - Build foundation first, migration sequences, testing gates
   - [Automatic Unblocking](#automatic-unblocking)
 - [related - Soft Link](#related---soft-link)
-  - [When to Use](#when-to-use-1) - Context, related features, parallel work
+  - [When To Use](#when-to-use-1) - Context, related features, parallel work
   - [When NOT to Use](#when-not-to-use-1)
   - [Examples](#examples-1) - Feature context, research links, parallel development
   - [Creating related Dependencies](#creating-related-dependencies)
   - [Common Patterns](#common-patterns-1) - Context clusters, research threads, feature families
 - [parent-child - Hierarchical](#parent-child---hierarchical)
-  - [When to Use](#when-to-use-2) - Epics/subtasks, phases
+  - [When To Use](#when-to-use-2) - Epics/subtasks, phases
   - [When NOT to Use](#when-not-to-use-2)
   - [Examples](#examples-2) - Epic with subtasks, phased projects
   - [Creating parent-child Dependencies](#creating-parent-child-dependencies)
   - [Combining with blocks](#combining-with-blocks)
   - [Common Patterns](#common-patterns-2) - Epic decomposition, nested hierarchies
 - [discovered-from - Provenance](#discovered-from---provenance)
-  - [When to Use](#when-to-use-3) - Side quests, research findings
-  - [Why This Matters](#why-this-matters)
-  - [Examples](#examples-3) - Bug discovered during feature work, research branches
-  - [Creating discovered-from Dependencies](#creating-discovered-from-dependencies)
-  - [Common Patterns](#common-patterns-3) - Discovery during implementation, research expansion
-  - [Combining with blocks](#combining-with-blocks-1)
+  - [When To Use](#when-to-use-3) - Side quests, research findings
+- [Why This Matters](#why-this-matters)
+- [Examples](#examples-3) - Bug discovered during feature work, research branches
+- [Creating discovered-from Dependencies](#creating-discovered-from-dependencies)
+- [Common Patterns](#common-patterns-3) - Discovery during implementation, research expansion
+- [Combining with blocks](#combining-with-blocks-1)
 - [Decision Guide](#decision-guide)
   - [Decision Tree](#decision-tree)
   - [Quick Reference by Situation](#quick-reference-by-situation)
@@ -63,7 +63,7 @@ bd supports four dependency types that serve different purposes in organizing an
 
 **Effect**: Issue B disappears from `bd ready` until issue A is closed.
 
-### When to Use
+### When To Use
 
 Use `blocks` when work literally cannot proceed:
 
@@ -186,7 +186,7 @@ This is why `blocks` is powerful - bd maintains ready state automatically.
 
 **Effect**: No impact on `bd ready`. Pure informational link.
 
-### When to Use
+### When To Use
 
 Use `related` for context and discoverability:
 
@@ -282,7 +282,7 @@ Related links show what areas it covers.
 
 **Effect**: No impact on `bd ready`. Creates hierarchical structure.
 
-### When to Use
+### When To Use
 
 Use `parent-child` for breaking down large work:
 
@@ -394,7 +394,7 @@ Multiple levels of hierarchy for complex projects.
 
 **Effect**: No impact on `bd ready`. Tracks origin and provides context.
 
-### When to Use
+### When To Use
 
 Use `discovered-from` to preserve discovery context:
 

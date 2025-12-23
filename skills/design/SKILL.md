@@ -18,9 +18,10 @@ metadata:
 
 Turn ideas into fully-formed designs through collaborative dialogue using the Double Diamond methodology.
 
-## When to Use
+## When To Use
 
 Trigger on:
+
 - User types `ds`
 - User runs `/conductor-design`
 - User wants to brainstorm or explore an idea
@@ -46,46 +47,46 @@ The session flows through four phases, alternating between divergent and converg
 flowchart TB
     subgraph PIPELINE["WORKFLOW PIPELINE"]
         direction TB
-        
+
         subgraph SETUP["SETUP"]
             TRIGGER["ds / /conductor-design"]
             CHECK["Verify conductor/<br/>(product.md, tech-stack.md, workflow.md)"]
         end
-        
+
         subgraph DIAMOND1["DIAMOND 1: UNDERSTAND PROBLEM"]
             DISCOVER["DISCOVER (Diverge)<br/>• Explore problem space<br/>• 5 Whys, edge cases<br/>• Mini-ground: codebase check"]
             APC1{"A/P/C"}
             DEFINE["DEFINE (Converge)<br/>• Problem statement<br/>• Success criteria<br/>• YAGNI filtering"]
             APC2{"A/P/C"}
         end
-        
+
         subgraph DIAMOND2["DIAMOND 2: DESIGN SOLUTION"]
             DEVELOP["DEVELOP (Diverge)<br/>• 3+ approaches<br/>• Trade-off analysis<br/>• Wild/10x option"]
             APC3{"A/P/C"}
             DELIVER["DELIVER (Converge)<br/>• Architecture, Components<br/>• Data Model, User Flow<br/>• FULL GROUNDING required"]
             APC4{"A/P/C"}
         end
-        
+
         subgraph HANDOFF["HANDOFF"]
             DESIGNMD["design.md saved to<br/>conductor/tracks/{id}/"]
             NEXT["Next: fb to file beads<br/>or /conductor-newtrack"]
         end
     end
-    
+
     subgraph AGENTS["PARTY MODE: 12 AGENTS (BMAD v6)"]
         subgraph PRODUCT["Product Module"]
             PM["📋 John (PM)"]
             ANALYST["📊 Mary (Analyst)"]
             UX["🎨 Sally (UX)"]
         end
-        
+
         subgraph TECHNICAL["Technical Module"]
             ARCH["🏗️ Winston (Architect)"]
             DEV["💻 Amelia (Developer)"]
             QA["🧪 Murat (QA)"]
             DOCS["📚 Paige (Docs)"]
         end
-        
+
         subgraph CREATIVE["Creative Module"]
             STORY["📖 Sophia (Storyteller)"]
             BRAIN["🧠 Carson (Brainstorm)"]
@@ -94,7 +95,7 @@ flowchart TB
             SOLVER["🔬 Dr. Quinn (Solver)"]
         end
     end
-    
+
     TRIGGER --> CHECK
     CHECK --> DISCOVER
     DISCOVER --> APC1
@@ -110,7 +111,7 @@ flowchart TB
     APC4 -->|C| DESIGNMD
     APC4 -.->|Back| DEVELOP
     DESIGNMD --> NEXT
-    
+
     APC1 & APC2 & APC3 & APC4 -.->|P| AGENTS
     AGENTS -.->|"Synthesize"| APC1 & APC2 & APC3 & APC4
 ```
@@ -172,6 +173,7 @@ Choose:
 ### [A] Advanced Mode
 
 Phase-specific deep dives:
+
 - **DISCOVER:** Challenge assumptions, explore biases, consider alternative users
 - **DEFINE:** Stress-test scope, challenge metrics, identify hidden dependencies
 - **DEVELOP:** Deep-dive components, explore alternatives, security/performance review
@@ -182,6 +184,7 @@ Phase-specific deep dives:
 Invokes multi-agent collaborative review. See `workflows/party-mode/workflow.md`.
 
 Selects 3 relevant agents based on topic:
+
 - **Primary:** Best expertise match
 - **Secondary:** Complementary perspective
 - **Tertiary:** Devil's advocate
@@ -199,11 +202,13 @@ User can say "revisit [PHASE]" at any time to return to an earlier phase. When l
 ## Grounding Requirements
 
 **Mini-grounding** at each phase transition:
+
 - DISCOVER → DEFINE: Check for similar problems in codebase
 - DEFINE → DEVELOP: Verify external APIs/libraries
 - DEVELOP → DELIVER: Confirm existing patterns and conventions
 
 **Full grounding** before DELIVER completion:
+
 - Verify all architectural decisions against current reality
 - Use `web_search`, `Grep`, `finder`, `git log`
 - Do NOT proceed to documentation without grounding
