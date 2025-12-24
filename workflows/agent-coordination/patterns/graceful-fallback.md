@@ -30,7 +30,7 @@ All agent_mail calls should use ~3-second mental timeout:
 
 When coordination fails, show:
 
-```
+```text
 ⚠️ Agent coordination unavailable - proceeding without file locks
 ```
 

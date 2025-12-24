@@ -32,7 +32,7 @@ Extract file patterns from task descriptions using heuristics above.
 
 ### 2. Reserve Files (3s timeout)
 
-```
+```python
 file_reservation_paths(
   project_key: <workspace>,
   agent_name: <coordinator>,
@@ -54,7 +54,7 @@ Use Task tool for each parallel agent.
 
 ### 5. Release on Completion
 
-```
+```python
 release_file_reservations(
   project_key: <workspace>,
   agent_name: <coordinator>
@@ -66,13 +66,13 @@ On failure: log warning (TTL expires anyway).
 ## Visible Feedback
 
 Show user before dispatch:
-```
+```text
 🔒 Reserved: skills/foo/SKILL.md, skills/bar/SKILL.md (1h)
 Dispatching 3 agents...
 ```
 
 Show user after completion:
-```
+```text
 🔓 Released reservations
 ```
 
@@ -83,6 +83,6 @@ If `file_reservation_paths` returns conflicts:
 - Skip those files (don't block dispatch)
 - Warn user which agents may have limited scope
 
-```
+```text
 ⚠️ skills/beads/SKILL.md reserved by GreenCastle - skipping
 ```

@@ -41,16 +41,16 @@ Enable parallel agents to avoid file collisions and share context via agent_mail
 
 Users see what's happening without needing to act:
 
-```
+```text
 🔒 Reserved: skills/foo/SKILL.md, skills/bar/SKILL.md (1h)
 Dispatching 3 agents...
 ```
 
-```
+```text
 🔓 Released reservations
 ```
 
-```
+```text
 ⚠️ Agent coordination unavailable - proceeding without file locks
 ```
 

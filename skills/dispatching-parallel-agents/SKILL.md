@@ -196,13 +196,13 @@ From debugging session (2025-10-03):
 When agent_mail MCP is available, file reservations prevent conflicts:
 
 **Before dispatch:**
-```
+```text
 🔒 Reserved: skills/foo/SKILL.md, skills/bar/SKILL.md (1h)
 Dispatching 3 agents...
 ```
 
 **After completion:**
-```
+```text
 🔓 Released reservations
 ```
 

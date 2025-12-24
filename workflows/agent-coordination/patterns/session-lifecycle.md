@@ -11,7 +11,7 @@ Session lifecycle is **best-effort**. Agent compliance varies, but even partial 
 On first response in a new session:
 
 1. **Register agent**
-   ```
+   ```python
    register_agent(
      project_key: "<workspace>",
      program: "amp",
@@ -20,7 +20,7 @@ On first response in a new session:
    ```
 
 2. **Check inbox for handoff**
-   ```
+   ```python
    fetch_inbox(
      project_key: "<workspace>",
      agent_name: "<your_name>"
@@ -34,7 +34,7 @@ On first response in a new session:
 Before ending (user says bye, task complete, context compaction imminent):
 
 1. **Send handoff message**
-   ```
+   ```python
    send_message(
      project_key: "<workspace>",
      sender_name: "<your_name>",
@@ -45,7 +45,7 @@ Before ending (user says bye, task complete, context compaction imminent):
    ```
 
 2. **Release any file reservations**
-   ```
+   ```python
    release_file_reservations(
      project_key: "<workspace>",
      agent_name: "<your_name>"

@@ -154,13 +154,12 @@ Parse task descriptions for file patterns:
 
 ## Visible Feedback
 Show user:
-```
+```text
 🔒 Reserved: skills/foo/SKILL.md, skills/bar/SKILL.md (1h)
 Dispatching 3 agents...
 ```
-```
+```text
 🔓 Released reservations
-```
 ```
 
 ### patterns/subagent-prompt.md
@@ -202,7 +201,7 @@ Guidance for AGENTS.md to enable session handoff.
 
 ### Session Start
 On first response, register and check for handoff:
-1. Call `macro_start_session` with project path
+1. Call `register_agent` with project path
 2. Check inbox for handoff messages from previous sessions
 3. Summarize any relevant context before proceeding
 

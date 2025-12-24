@@ -4,15 +4,17 @@ Master list of all development tracks.
 
 ## Active Tracks
 
-## [ ] Track: Integrate agent_mail MCP into Workflow
-*ID: agent-coordination_20251224*
-*Link: [spec](conductor/tracks/agent-coordination_20251224/spec.md) | [plan](conductor/tracks/agent-coordination_20251224/plan.md)*
+*No active tracks.*
 
 ---
 
 ## Completed Tracks
 
 *Completed tracks are archived to `conductor/archive/`.*
+
+## [x] Track: Integrate agent_mail MCP into Workflow
+*ID: agent-coordination_20251224*
+*Archived: [conductor/archive/agent-coordination_20251224/](conductor/archive/agent-coordination_20251224/)*
 
 ## [x] Track: /conductor-finish Phase 4 Revision
 *ID: finish-phase4-revision_20251224*
