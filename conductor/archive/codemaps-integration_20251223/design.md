@@ -32,7 +32,7 @@ Merge codemaps functionality into Conductor:
 
 ### Before
 
-```
+```text
 skills/codemaps/           # Standalone skill
   SKILL.md
   references/
@@ -43,7 +43,7 @@ CODEMAPS/                  # At project root (if manually created)
 
 ### After
 
-```
+```text
 skills/codemaps/           # DELETED
 
 conductor/
@@ -98,7 +98,7 @@ flowchart TB
 
 ### Design Session Integration
 
-```
+```text
 ds (design session)
     ↓
 Check for conductor/CODEMAPS/

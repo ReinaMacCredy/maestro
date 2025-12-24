@@ -140,7 +140,7 @@ Acceptance Criteria:
 
 Copy this into notes field for complex technical features:
 
-```markdown
+````markdown
 IMPLEMENTATION GUIDE FOR FUTURE SESSIONS:
 
 WORKING CODE (tested):
@@ -148,7 +148,7 @@ WORKING CODE (tested):
 # Paste actual code that works
 # Include imports and setup
 # Show what it returns
-````
+```
 
 API RESPONSE SAMPLE:
 
@@ -172,7 +172,6 @@ RESEARCH CONTEXT:
 - What alternatives considered?
 - Key discoveries?
 - Links to relevant docs/examples?
-
 ````
 
 ## Anti-Patterns
@@ -182,7 +181,7 @@ RESEARCH CONTEXT:
 Title: Fix typo in README
 Notes: IMPLEMENTATION GUIDE
 WORKING CODE: Open README.md, change "teh" to "the"...
-````
+```
 
 **Problem:** Wastes tokens on obvious work.
 

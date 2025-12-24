@@ -6,7 +6,7 @@
 **File:** `workflows/schemas/finish_state.schema.json`
 
 Create JSON Schema with:
-- `$schema`: "http://json-schema.org/draft-07/schema#"
+- `$schema`: `http://json-schema.org/draft-07/schema#`
 - `phase`: integer, minimum 0, maximum 6
 - `completed`: array of strings, enum values
 - `startedAt`: string (ISO date-time)

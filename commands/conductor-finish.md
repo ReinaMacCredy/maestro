@@ -8,7 +8,7 @@ Complete a track by extracting learnings, compacting beads, refreshing context d
 
 ## Usage
 
-```
+```bash
 /conductor-finish <track_id>
 /conductor-finish              # uses active track
 ```
@@ -74,7 +74,7 @@ Complete a track by extracting learnings, compacting beads, refreshing context d
 ## Resume Capability
 
 State file `finish-state.json` enables resuming interrupted runs:
-```
+```text
 Previous run interrupted at Phase X. Resume? [Y/n]
 ```
 

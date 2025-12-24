@@ -291,7 +291,7 @@ For smaller projects, a single file may suffice:
 # Project Codemap
 
 ## Stack
-Next.js 16 + Prisma + PostgreSQL + Tailwind
+Next.js 15.1 + Prisma + PostgreSQL + Tailwind
 
 ## Structure
 app/           → Pages (app router)

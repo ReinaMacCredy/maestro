@@ -266,6 +266,7 @@ Phase 4/6: Refreshing context docs...
    ```bash
    bd count --status closed --json
    ```
+   # Target threshold of 150 keeps beads manageable while preserving recent history
    If count > 150:
    ```bash
    excess=$((closed_count - 150))

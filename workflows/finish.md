@@ -29,11 +29,20 @@ Complete a track by extracting learnings, compacting beads, refreshing context d
 ### State Values
 | Field | Type | Description |
 |-------|------|-------------|
-| `trackId` | string | Track identifier |
+| `trackId` | string | Track identifier (required) |
 | `phase` | number | Current phase (0-6) |
+| `startedAt` | string | ISO 8601 timestamp when workflow started (required) |
 | `completed` | array | List of completed phase names |
+| `completedAt` | string/null | ISO 8601 timestamp when workflow completed |
 | `skipCodemaps` | boolean | Skip Phase 6 |
 | `skipRefresh` | boolean | Skip Phase 4 |
+| `archiveChoice` | string/null | User's archive choice ("archive" or "keep") |
+| `contextRefresh` | object | Phase 4 sub-phase progress |
+| `threadsProcessed` | array | Thread IDs processed in Phase 1 |
+| `beadsCompacted` | integer | Number of beads compacted in Phase 2 |
+| `learningsAdded` | integer | Number of learning items added in Phase 3 |
+| `lastError` | string/null | Last error message if workflow failed |
+| `commitSha` | string/null | Git commit SHA for the finish commit |
 
 ## Workflow Phases
 

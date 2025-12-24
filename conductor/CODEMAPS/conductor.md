@@ -23,8 +23,8 @@ conductor/
     ├── design.md           # From ds / /conductor-design
     ├── spec.md             # From /conductor-newtrack
     ├── plan.md             # From /conductor-newtrack
-    ├── .fb-progress.json      # Beads filing state
-    └── metadata.json   # Track info + thread IDs
+    ├── .fb-progress.json   # Beads filing state
+    └── metadata.json       # Track info + thread IDs
 
 ## Command Flow
 

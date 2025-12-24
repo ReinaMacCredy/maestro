@@ -639,8 +639,9 @@ State file corrupted. Restarting from Phase 1.
 | Phase 1 | Thread read fails           | Log warning, skip thread, continue  |
 | Phase 2 | bd compact fails            | Log warning, skip issue, continue   |
 | Phase 3 | Merge fails                 | **Stop workflow**                   |
-| Phase 4 | Commit fails                | Report error, suggest manual fix    |
-| Phase 5 | CODEMAPS regeneration fails | Log warning, continue to completion |
+| Phase 4 | Context refresh fails       | Report error, suggest manual fix    |
+| Phase 5 | Archive/commit fails        | Report error, suggest manual fix    |
+| Phase 6 | CODEMAPS regeneration fails | Log warning, continue to completion |
 
 ---
 

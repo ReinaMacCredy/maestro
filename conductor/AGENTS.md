@@ -25,6 +25,12 @@ Contains reusable learnings from completed tracks.
 - Delete operations must wait for reference replacements - deleting too early causes broken references
 - Phase 3 (Knowledge Merge) is required - if it fails, stop workflow
 - Phases 1 & 2 are best-effort - failures should log warnings but continue
+- Context Refresh (Phase 4) can be skipped with --skip-refresh flag
+- User input A/K must be mapped to JSON values "archive"/"keep"
+- Atomic writes use $$ (PID) suffix for temp files to prevent collisions
+- CODEMAPS loaded at design session start for codebase context
+- docs: and chore: commits don't bump version (changelog only)
+- Skill versions in SKILL.md frontmatter are manually updated (not automated)
 
 ## Patterns
 
@@ -38,12 +44,3 @@ Contains reusable learnings from completed tracks.
 - **A/P/C Checkpoints:** At each phase end: [A] Advanced, [P] Party (multi-agent), [C] Continue
 - **Unified Track Creation:** /conductor-newtrack includes spec, plan, beads filing, AND review in one flow
 - **Conventional Commits Versioning:** feat: → minor, fix: → patch, feat!: → major
-
-## Gotchas
-
-- Context Refresh (Phase 4) can be skipped with --skip-refresh flag
-- User input A/K must be mapped to JSON values "archive"/"keep"
-- Atomic writes use $$ (PID) suffix for temp files to prevent collisions
-- CODEMAPS loaded at design session start for codebase context
-- docs: and chore: commits don't bump version (changelog only)
-- Skill versions in SKILL.md frontmatter are manually updated (not automated)

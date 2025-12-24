@@ -83,7 +83,7 @@ workflows/
 ├── setup.md               # Project initialization workflow
 ├── newtrack.md            # Track creation workflow
 ├── implement.md           # Task implementation workflow
-├── finish.md              # Track completion workflow (6 phases)
+├── finish.md              # Track completion workflow (7 phases: Phase 0-6)
 ├── status.md              # Progress reporting workflow
 ├── revert.md              # Git-aware revert workflow
 ├── validate.md            # Project validation workflow

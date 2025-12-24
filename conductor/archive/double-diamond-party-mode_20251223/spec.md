@@ -64,7 +64,7 @@ Enhance the `/conductor:design` command with a Double Diamond methodology and mu
 ### FR7: Conductor Integration
 
 - **FR7.1:** Output design.md compatible with newTrack parsing
-- **FR7.2:** Generate track*id as `{shortname}*{YYYYMMDD}`
+- **FR7.2:** Generate track_id as `{shortname}_{YYYYMMDD}`
 - **FR7.3:** Handle existing track detection (append vs overwrite)
 - **FR7.4:** Provide handoff message with track_id for `fb` command
 - **FR7.5:** Map Double Diamond to Conductor phases in skills/conductor/SKILL.md
