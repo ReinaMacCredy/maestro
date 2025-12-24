@@ -81,6 +81,7 @@ See [SETUP_GUIDE.md](./SETUP_GUIDE.md) for detailed instructions.
   - [Beads (Issue Tracking)](#beads-issue-tracking)
   - [TDD (Execution)](#tdd-execution)
 - [Workflow Pipeline](#workflow-pipeline)
+- [Understanding Handoff](#understanding-handoff)
 - [Slash Commands](#slash-commands)
 - [Documentation](#documentation)
 - [Troubleshooting](#troubleshooting)
@@ -204,6 +205,12 @@ flowchart TB
         end
     end
     
+    subgraph VALIDATION["VALIDATION (Phase 0)"]
+        VALIDATE["/conductor-validate"]
+        V_FLOW["Checks: path → dir → files → JSON → state → track_id → staleness"]
+        V_OUT{{"PASS / HALT / Auto-repair"}}
+    end
+    
     TRIGGER --> CHECK
     CHECK --> DISCOVER
     DISCOVER --> APC1
@@ -222,6 +229,9 @@ flowchart TB
     
     APC1 & APC2 & APC3 & APC4 -.->|P| AGENTS
     AGENTS -.->|"Synthesize"| APC1 & APC2 & APC3 & APC4
+    
+    VALIDATE --> V_FLOW --> V_OUT
+    NEXT -.->|"Phase 0"| VALIDATE
 ```
 
 **Triggers**:
@@ -391,10 +401,27 @@ flowchart TB
         subgraph CREATIVE["Creative Module"]
             STORY["Sophia (Storyteller)"]
             BRAIN["Carson (Brainstorm)"]
-            DESIGN["Maya (Design Thinking)"]
+            DESIGNM["Maya (Design Thinking)"]
             STRAT["Victor (Strategist)"]
             SOLVER["Dr. Quinn (Solver)"]
         end
+    end
+    
+    subgraph VALIDATION["VALIDATION SYSTEM (Phase 0)"]
+        direction TB
+        VALIDATE["/conductor-validate"]
+        
+        subgraph CHECKS["Validation Checks"]
+            V01["0.1 Resolve track path"]
+            V02["0.2 Check directory"]
+            V03["0.3 File existence matrix"]
+            V04["0.4 Validate JSON"]
+            V05["0.5 Auto-create state"]
+            V06["0.6 Auto-fix track_id"]
+            V07["0.7 Staleness detection"]
+        end
+        
+        OUTCOMES{{"PASS / HALT / Auto-repair"}}
     end
     
     DS --> DISCOVER
@@ -433,6 +460,13 @@ flowchart TB
     VERIFY --> BRANCH
     BRANCH --> FINISH_CMD
     
+    VALIDATE --> V01 --> V02 --> V03 --> V04 --> V05 --> V06 --> V07 --> OUTCOMES
+    
+    NEWTRACK -.->|"Phase 0"| VALIDATE
+    FB -.->|"Phase 0"| VALIDATE
+    RB -.->|"Phase 0"| VALIDATE
+    READY -.->|"Phase 0"| VALIDATE
+    
     classDef planning fill:#1a365d,stroke:#63b3ed,color:#e2e8f0
     classDef spec fill:#234e52,stroke:#4fd1c5,color:#e2e8f0
     classDef beads fill:#553c9a,stroke:#b794f4,color:#e2e8f0
@@ -443,6 +477,7 @@ flowchart TB
     classDef product fill:#285e61,stroke:#4fd1c5,color:#e2e8f0
     classDef technical fill:#2c5282,stroke:#63b3ed,color:#e2e8f0
     classDef creative fill:#744210,stroke:#f6ad55,color:#e2e8f0
+    classDef validation fill:#4a1d6e,stroke:#9f7aea,color:#e2e8f0
     
     class DS,DISCOVER,DEFINE,DEVELOP,DELIVER,APC,DESIGNMD planning
     class NEWTRACK,SPECMD,PLANMD spec
@@ -453,7 +488,8 @@ flowchart TB
     class VERIFY,BRANCH,FINISH_CMD finish
     class PM,ANALYST,UX product
     class ARCH,DEV,QA,DOCS technical
-    class STORY,BRAIN,DESIGN,STRAT,SOLVER creative
+    class STORY,BRAIN,DESIGNM,STRAT,SOLVER creative
+    class VALIDATE,V01,V02,V03,V04,V05,V06,V07,OUTCOMES validation
 ```
 
 For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](./docs/PIPELINE_ARCHITECTURE.md).
@@ -517,6 +553,61 @@ After completing each epic, `/conductor-implement` presents an explicit choice:
 2. **Handoff** — Continue directly to next epic with `Start epic <next-epic-id>`
 
 This prevents auto-continuation and gives you control between epics.
+
+---
+
+## Understanding Handoff
+
+**Handoff** is how work survives between AI agent sessions. It's the structured transfer of context that ensures no progress is lost when a session ends.
+
+### Why Handoff Matters
+
+AI coding assistants have a fundamental limitation: **sessions end, but projects continue**. Without handoff:
+- Context windows fill up and compact, losing conversation history
+- Sessions crash, timeout, or simply get closed
+- Tomorrow's session has no memory of today's decisions
+
+### How Maestro Handles Handoff
+
+Every artifact in Maestro is a handoff checkpoint:
+
+| Artifact | What It Preserves |
+|----------|-------------------|
+| `design.md` | Architecture decisions and trade-offs |
+| `spec.md` | Requirements and acceptance criteria |
+| `plan.md` | Step-by-step tasks with status markers |
+| `.beads/` | Issue state, dependencies, and notes |
+
+**The handoff flow:**
+```
+Session 1 (Planning):
+  ds → design.md
+  /conductor-newtrack → spec.md + plan.md + beads
+  rb → reviewed beads
+  → HANDOFF
+
+Session 2+ (Execution):
+  /conductor-implement → execute Epic 1 → HANDOFF
+  /conductor-implement → execute Epic 2 → HANDOFF
+  ...one epic per session
+```
+
+### Handoff in Practice
+
+**At session end:**
+```bash
+bd update <id> --notes "COMPLETED: X. NEXT: Y."
+git add -A && git commit -m "progress"
+git push
+```
+
+**At session start:**
+```bash
+bd ready --json          # What's unblocked?
+bd show <id>             # Read context from notes
+```
+
+The notes field in beads is your session-to-session memory. Write it like you're leaving instructions for yourself in two weeks.
 
 ### Manual Specialist Tools
 
@@ -599,6 +690,14 @@ maestro/
 | Tests pass immediately | You wrote code first. Delete it. Start with failing test. |
 | Context compacted, lost state | Run `bd show <issue-id>` — notes field has recovery context |
 | Plan seems incomplete | Use `rb` (review-beads) to check and refine issues |
+
+### Tips & Tricks
+
+| Tip | Details |
+|-----|---------|
+| **Plan before each epic** | Switch to plan mode before `/conductor-implement`. Claude Code: `Shift+Tab`, Codex: `/create-plan` |
+| **Handoff in Amp** | Use handoff command (command palette) or reference threads with `@T-<id>` |
+| **Handoff in Claude Code/Codex** | Run `/compact` before session end — beads notes survive, conversation doesn't |
 
 ### Agent-Specific Rules
 

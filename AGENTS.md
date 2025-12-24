@@ -33,6 +33,18 @@ conductor/        # Unified save location for plans and tracks
 
 ## Handoff Mechanism (Planning → Execution)
 
+**What is Handoff?**
+Handoff is the structured transition of work between AI agent sessions or phases. Since agent threads have limited context and sessions may expire, handoff ensures continuity by:
+- Capturing decisions, context, and progress in persistent files (`design.md`, `spec.md`, `plan.md`)
+- Creating trackable work items (beads/issues) that survive session boundaries
+- Enabling any future session to resume work without losing context
+
+**Why Handoff Matters:**
+- **Context Preservation**: Threads get compacted or abandoned; handoff artifacts persist
+- **Multi-Session Work**: Complex tasks span multiple sessions; handoff bridges them
+- **Human-AI Collaboration**: Humans can review artifacts between sessions
+- **Resumability**: Any agent can pick up where another left off using `bd ready`
+
 **Unified flow via `/conductor-newtrack`:**
 ```
 ds → design.md → /conductor-newtrack → spec.md + plan.md + beads + review

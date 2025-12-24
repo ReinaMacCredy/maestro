@@ -84,10 +84,27 @@ flowchart TB
         subgraph CREATIVE["Creative Module"]
             STORY["Sophia<br/>Storyteller"]
             BRAIN["Carson<br/>Brainstormer"]
-            DESIGN["Maya<br/>Design Thinker"]
+            DESIGNM["Maya<br/>Design Thinker"]
             STRAT["Victor<br/>Strategist"]
             SOLVER["Dr. Quinn<br/>Problem Solver"]
         end
+    end
+    
+    subgraph VALIDATION["VALIDATION SYSTEM (Phase 0)"]
+        direction TB
+        VALIDATE["/conductor-validate"]
+        
+        subgraph CHECKS["Validation Checks"]
+            V01["0.1 Resolve track path"]
+            V02["0.2 Check directory"]
+            V03["0.3 File existence matrix"]
+            V04["0.4 Validate JSON"]
+            V05["0.5 Auto-create state"]
+            V06["0.6 Auto-fix track_id"]
+            V07["0.7 Staleness detection"]
+        end
+        
+        OUTCOMES{{"PASS / HALT / Auto-repair"}}
     end
     
     DS --> DISCOVER
@@ -126,6 +143,13 @@ flowchart TB
     VERIFY --> BRANCH
     BRANCH --> FINISH_CMD
     
+    VALIDATE --> V01 --> V02 --> V03 --> V04 --> V05 --> V06 --> V07 --> OUTCOMES
+    
+    NEWTRACK -.->|"Phase 0"| VALIDATE
+    FB -.->|"Phase 0"| VALIDATE
+    RB -.->|"Phase 0"| VALIDATE
+    READY -.->|"Phase 0"| VALIDATE
+    
     classDef planning fill:#1a365d,stroke:#63b3ed,color:#e2e8f0
     classDef spec fill:#234e52,stroke:#4fd1c5,color:#e2e8f0
     classDef beads fill:#553c9a,stroke:#b794f4,color:#e2e8f0
@@ -137,6 +161,7 @@ flowchart TB
     classDef product fill:#285e61,stroke:#4fd1c5,color:#e2e8f0
     classDef technical fill:#2c5282,stroke:#63b3ed,color:#e2e8f0
     classDef creative fill:#744210,stroke:#f6ad55,color:#e2e8f0
+    classDef validation fill:#4a1d6e,stroke:#9f7aea,color:#e2e8f0
     
     class DS,DISCOVER,DEFINE,DEVELOP,DELIVER,APC,DESIGNMD planning
     class NEWTRACK,SPECMD,PLANMD spec
@@ -147,7 +172,8 @@ flowchart TB
     class VERIFY,BRANCH,FINISH_CMD finish
     class PM,ANALYST,UX product
     class ARCH,DEV,QA,DOCS technical
-    class STORY,BRAIN,DESIGN,STRAT,SOLVER creative
+    class STORY,BRAIN,DESIGNM,STRAT,SOLVER creative
+    class VALIDATE,V01,V02,V03,V04,V05,V06,V07,OUTCOMES validation
 ```
 
 ---

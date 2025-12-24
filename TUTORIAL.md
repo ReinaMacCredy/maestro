@@ -23,6 +23,82 @@ You're using AI coding agents to write code. That's great. But you've probably n
 
 ---
 
+## What is Handoff?
+
+**Handoff** is the structured transfer of work between AI sessions. It's the core concept that makes multi-session development possible.
+
+### The Fundamental Problem
+
+AI coding assistants forget everything between sessions:
+
+| What Happens | The Problem |
+|--------------|-------------|
+| Context window fills up | Earlier conversation gets "compacted" (forgotten) |
+| Session ends (timeout, crash, closed) | All context is lost |
+| New session starts | Agent has no memory of previous work |
+| You re-explain everything | Wastes time, loses nuance |
+
+### How Handoff Solves It
+
+Handoff persists work context in **files that outlive sessions**:
+
+```
+Session 1 (Planning):
+  ds → design.md
+  /conductor-newtrack → spec.md + plan.md + beads
+  rb → reviewed beads
+  → HANDOFF (planning complete, ready for execution)
+
+Session 2+ (Execution):
+  /conductor-implement → execute Epic 1
+  → HANDOFF (epic complete)
+
+Session 3+:
+  /conductor-implement → execute Epic 2
+  → HANDOFF (epic complete)
+  ...continue until all epics done
+```
+
+Every artifact is a **checkpoint**. Handoff happens after planning completes, then again after each epic.
+
+### Handoff Artifacts in Maestro
+
+| Artifact | What It Preserves | Created By |
+|----------|-------------------|------------|
+| `design.md` | Architecture decisions, trade-offs | `/conductor-design` |
+| `spec.md` | Requirements, acceptance criteria | `/conductor-newtrack` |
+| `plan.md` | Task breakdown, status markers | `/conductor-newtrack` |
+| `.beads/` | Issues, dependencies, notes | `fb` (file-beads) |
+
+### The Handoff Protocol
+
+**At session end:**
+```bash
+bd update <id> --notes "COMPLETED: X. IN PROGRESS: Y. NEXT: Z."
+git add -A && git commit -m "progress on feature"
+git push
+```
+
+**At session start:**
+```bash
+bd ready --json          # What's unblocked?
+bd show <id>             # Read notes for full context
+```
+
+The **notes field** is your session-to-session memory. Write it like leaving instructions for yourself in two weeks with zero context.
+
+### Why This Works Without Amp
+
+This pattern works with any AI coding tool:
+- **Claude Code**: Uses `.beads/` and conductor files
+- **Cursor/Windsurf**: Same files, same workflow
+- **GitHub Copilot**: Can read the same markdown artifacts
+- **Any future tool**: Files are plain markdown and JSON
+
+**The key insight**: Your project's state lives in **git**, not in any AI's memory.
+
+---
+
 ## What Problem Does Each Skill Solve?
 
 | Problem | What Happens | Skill That Fixes It |
@@ -151,10 +227,27 @@ flowchart TB
         subgraph CREATIVE["Creative Module"]
             STORY["Sophia (Storyteller)"]
             BRAIN["Carson (Brainstorm)"]
-            DESIGN["Maya (Design Thinking)"]
+            DESIGNM["Maya (Design Thinking)"]
             STRAT["Victor (Strategist)"]
             SOLVER["Dr. Quinn (Solver)"]
         end
+    end
+    
+    subgraph VALIDATION["VALIDATION SYSTEM (Phase 0)"]
+        direction TB
+        VALIDATE["/conductor-validate"]
+        
+        subgraph CHECKS["Validation Checks"]
+            V01["0.1 Resolve track path"]
+            V02["0.2 Check directory"]
+            V03["0.3 File existence matrix"]
+            V04["0.4 Validate JSON"]
+            V05["0.5 Auto-create state"]
+            V06["0.6 Auto-fix track_id"]
+            V07["0.7 Staleness detection"]
+        end
+        
+        OUTCOMES{{"PASS / HALT / Auto-repair"}}
     end
     
     DS --> DISCOVER
@@ -193,6 +286,13 @@ flowchart TB
     VERIFY --> BRANCH
     BRANCH --> FINISH_CMD
     
+    VALIDATE --> V01 --> V02 --> V03 --> V04 --> V05 --> V06 --> V07 --> OUTCOMES
+    
+    NEWTRACK -.->|"Phase 0"| VALIDATE
+    FB -.->|"Phase 0"| VALIDATE
+    RB -.->|"Phase 0"| VALIDATE
+    READY -.->|"Phase 0"| VALIDATE
+    
     classDef planning fill:#1a365d,stroke:#63b3ed,color:#e2e8f0
     classDef spec fill:#234e52,stroke:#4fd1c5,color:#e2e8f0
     classDef beads fill:#553c9a,stroke:#b794f4,color:#e2e8f0
@@ -203,6 +303,7 @@ flowchart TB
     classDef product fill:#285e61,stroke:#4fd1c5,color:#e2e8f0
     classDef technical fill:#2c5282,stroke:#63b3ed,color:#e2e8f0
     classDef creative fill:#744210,stroke:#f6ad55,color:#e2e8f0
+    classDef validation fill:#4a1d6e,stroke:#9f7aea,color:#e2e8f0
     
     class DS,DISCOVER,DEFINE,DEVELOP,DELIVER,APC,DESIGNMD planning
     class NEWTRACK,SPECMD,PLANMD spec
@@ -213,7 +314,8 @@ flowchart TB
     class VERIFY,BRANCH,FINISH_CMD finish
     class PM,ANALYST,UX product
     class ARCH,DEV,QA,DOCS technical
-    class STORY,BRAIN,DESIGN,STRAT,SOLVER creative
+    class STORY,BRAIN,DESIGNM,STRAT,SOLVER creative
+    class VALIDATE,V01,V02,V03,V04,V05,V06,V07,OUTCOMES validation
 ```
 
 For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](./docs/PIPELINE_ARCHITECTURE.md).
@@ -1088,6 +1190,40 @@ git push
 | `init`, `claim`, `done` | beads-village (multi-agent) |
 | `/ground` | grounding (context alignment) |
 | `/decompose-task` | task decomposition |
+
+---
+
+## Part 7: Tips & Tricks
+
+### Plan Before Each Epic
+
+Before running `/conductor-implement`, switch to plan mode first. This lets the agent read the epic context and plan its approach before writing code.
+
+| Tool | How to Enable Plan Mode |
+|------|-------------------------|
+| Claude Code | Press `Shift+Tab` to toggle plan mode |
+| Codex | Use `/create-plan` skill |
+| Other tools | Check for plan/think mode in settings |
+
+**Why it matters**: Agents perform better when they understand context before acting. Plan mode forces the agent to read beads, review dependencies, and strategize before writing code.
+
+### Handoff Across Tools
+
+Different tools handle session transitions differently:
+
+**Amp** has a dedicated handoff tool for context management. Use the handoff command from the command palette to draft a new thread with relevant files and context. Amp works best with small, focused threads. You can also reference other threads by pasting a URL or `@T-<thread-id>`.
+
+Examples:
+- "Execute phase one of the created plan"
+- "Apply the same fix from @T-abc123 to this issue"
+
+**Claude Code / Codex**: These tools don't have handoff. Run `/compact` before ending session to checkpoint progress. Your beads notes survive; conversation doesn't.
+
+| Tool | Handoff Method |
+|------|----------------|
+| Amp | Handoff command (command palette) or reference threads with `@T-<id>` |
+| Claude Code | `/compact` before session end |
+| Codex | `/compact` before session end |
 
 ---
 
