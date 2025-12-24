@@ -126,9 +126,9 @@
         "commit_frequency": "task",
         "summary_method": "git_notes"
       },
-      "initial_track_id": "mvp_20240115",
-      "setup_started_at": "2024-01-15T09:00:00Z",
-      "setup_completed_at": "2024-01-15T10:30:00Z"
+      "initial_track_id": "mvp_20250115",
+      "setup_started_at": "2025-01-15T09:00:00Z",
+      "setup_completed_at": "2025-01-15T10:30:00Z"
     }
   ]
 }

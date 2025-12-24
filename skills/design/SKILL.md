@@ -42,7 +42,7 @@ Check for `conductor/CODEMAPS/` directory:
 3. Display: `📚 Loaded CODEMAPS for context`
 
 **If missing:**
-1. Display: `⚠️ No CODEMAPS found. Consider running /conductor-refresh with scope codemaps.`
+1. Display: `⚠️ No CODEMAPS found. Run /conductor-setup to generate initial CODEMAPS.`
 2. Continue session normally (CODEMAPS are optional but recommended)
 
 ### 2. Verify Conductor Setup

@@ -24,8 +24,8 @@ Show menu of recent revertible items:
 ## What would you like to revert?
 
 ### In Progress Items
-1. [~] Task: "Add user authentication" (track: auth_20241215)
-2. [~] Phase: "Backend API" (track: auth_20241215)
+1. [~] Task: "Add user authentication" (track: auth_20251215)
+2. [~] Phase: "Backend API" (track: auth_20251215)
 
 ### Recently Completed
 3. [x] Task: "Create login form" (abc1234)

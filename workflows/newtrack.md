@@ -19,10 +19,10 @@ Create a new track (feature, bug fix, or chore) with comprehensive specification
 | `--force` | | Overwrite existing track or remove stale locks |
 
 **Examples:**
-- `auth_20241223` → track_input="auth_20241223", skip_beads=false, force=false
-- `--no-beads auth_20241223` → skip_beads=true
-- `auth_20241223 --force` → force=true
-- `-nb -po auth_20241223` → Error: "Cannot use both --no-beads and --plan-only (they're aliases)."
+- `auth_20251223` → track_input="auth_20251223", skip_beads=false, force=false
+- `--no-beads auth_20251223` → skip_beads=true
+- `auth_20251223 --force` → force=true
+- `-nb -po auth_20251223` → Error: "Cannot use both --no-beads and --plan-only (they're aliases)."
 
 ## State Management
 

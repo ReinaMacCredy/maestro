@@ -60,7 +60,7 @@ ds → design.md → /conductor-newtrack → spec.md + plan.md
 | Complete track | `/conductor-finish` (extracts learnings, archives) |
 | Add a skill | Create `skills/<name>/SKILL.md` with frontmatter |
 | Add a command | Create `commands/<name>.md` |
-| Regenerate CODEMAPS | `/conductor-refresh` with scope `codemaps` |
+| Regenerate CODEMAPS | `/conductor-finish` (Phase 6: CODEMAPS Regeneration) |
 
 ## Gotchas
 

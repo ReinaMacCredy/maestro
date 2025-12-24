@@ -1,0 +1,190 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://conductor.dev/schemas/finish_state.schema.json",
+  "title": "Finish State",
+  "description": "State file for tracking /conductor-finish workflow progress with resume capability",
+  "type": "object",
+  "required": ["trackId", "phase", "startedAt"],
+  "properties": {
+    "trackId": {
+      "type": "string",
+      "description": "ID of the track being finished",
+      "pattern": "^[a-z0-9_-]+_[0-9]{8}$",
+      "examples": ["auth-v2_20251223", "bug-fix_20251224"]
+    },
+    "phase": {
+      "type": "integer",
+      "description": "Current phase number (0=pre-flight, 1-6=phases)",
+      "minimum": 0,
+      "maximum": 6
+    },
+    "completed": {
+      "type": "array",
+      "description": "List of completed phase names",
+      "items": {
+        "type": "string",
+        "enum": [
+          "pre-flight",
+          "thread-compaction",
+          "beads-compaction",
+          "knowledge-merge",
+          "context-refresh",
+          "archive",
+          "codemaps"
+        ]
+      },
+      "default": []
+    },
+    "startedAt": {
+      "type": "string",
+      "description": "ISO 8601 timestamp when workflow started",
+      "format": "date-time"
+    },
+    "completedAt": {
+      "type": ["string", "null"],
+      "description": "ISO 8601 timestamp when workflow completed",
+      "format": "date-time",
+      "default": null
+    },
+    "skipCodemaps": {
+      "type": "boolean",
+      "description": "Whether to skip Phase 6 (CODEMAPS regeneration)",
+      "default": false
+    },
+    "skipRefresh": {
+      "type": "boolean",
+      "description": "Whether to skip Phase 4 (Context Refresh)",
+      "default": false
+    },
+    "archiveChoice": {
+      "type": ["string", "null"],
+      "description": "User's archive choice (A=Archive, K=Keep)",
+      "enum": ["archive", "keep", null],
+      "default": null
+    },
+    "contextRefresh": {
+      "type": "object",
+      "description": "Phase 4 sub-phase progress",
+      "properties": {
+        "productMd": {
+          "type": "string",
+          "enum": ["pending", "updated", "skipped"],
+          "default": "pending"
+        },
+        "techStackMd": {
+          "type": "string",
+          "enum": ["pending", "updated", "skipped", "no-new-deps"],
+          "default": "pending"
+        },
+        "tracksMd": {
+          "type": "string",
+          "enum": ["pending", "updated", "skipped", "not-found"],
+          "default": "pending"
+        },
+        "workflowMd": {
+          "type": "string",
+          "enum": ["pending", "updated", "skipped", "no-changes"],
+          "default": "pending"
+        }
+      },
+      "additionalProperties": false
+    },
+    "threadsProcessed": {
+      "type": "array",
+      "description": "Thread IDs processed in Phase 1",
+      "items": {
+        "type": "string",
+        "pattern": "^T-[a-f0-9-]+$"
+      },
+      "default": []
+    },
+    "beadsCompacted": {
+      "type": "integer",
+      "description": "Number of beads compacted in Phase 2",
+      "minimum": 0,
+      "default": 0
+    },
+    "learningsAdded": {
+      "type": "integer",
+      "description": "Number of learning items added in Phase 3",
+      "minimum": 0,
+      "default": 0
+    },
+    "lastError": {
+      "type": ["string", "null"],
+      "description": "Last error message if workflow failed",
+      "default": null
+    },
+    "commitSha": {
+      "type": ["string", "null"],
+      "description": "Git commit SHA for the finish commit",
+      "pattern": "^[a-f0-9]{7,40}$",
+      "default": null
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "trackId": "auth-v2_20251223",
+      "phase": 0,
+      "completed": [],
+      "startedAt": "2025-12-23T10:30:00Z",
+      "completedAt": null,
+      "skipCodemaps": false,
+      "skipRefresh": false,
+      "archiveChoice": null
+    },
+    {
+      "trackId": "bug-fix_20251224",
+      "phase": 4,
+      "completed": [
+        "pre-flight",
+        "thread-compaction",
+        "beads-compaction",
+        "knowledge-merge"
+      ],
+      "startedAt": "2025-12-24T09:00:00Z",
+      "completedAt": null,
+      "skipCodemaps": false,
+      "skipRefresh": false,
+      "archiveChoice": null,
+      "contextRefresh": {
+        "productMd": "updated",
+        "techStackMd": "no-new-deps",
+        "tracksMd": "pending",
+        "workflowMd": "pending"
+      },
+      "threadsProcessed": ["T-abc123", "T-def456"],
+      "beadsCompacted": 5,
+      "learningsAdded": 3
+    },
+    {
+      "trackId": "feature-x_20251225",
+      "phase": 6,
+      "completed": [
+        "pre-flight",
+        "thread-compaction",
+        "beads-compaction",
+        "knowledge-merge",
+        "context-refresh",
+        "archive",
+        "codemaps"
+      ],
+      "startedAt": "2025-12-25T10:00:00Z",
+      "completedAt": "2025-12-25T10:45:00Z",
+      "skipCodemaps": false,
+      "skipRefresh": false,
+      "archiveChoice": "archive",
+      "contextRefresh": {
+        "productMd": "updated",
+        "techStackMd": "updated",
+        "tracksMd": "updated",
+        "workflowMd": "no-changes"
+      },
+      "threadsProcessed": ["T-xyz789"],
+      "beadsCompacted": 8,
+      "learningsAdded": 5,
+      "commitSha": "abc1234"
+    }
+  ]
+}

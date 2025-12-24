@@ -23,10 +23,10 @@ Parse `{{args}}` for flags and track identifier:
    - `track_input = remaining content after flag extraction`
 
 **Examples:**
-- `auth_20241223` → track_input="auth_20241223", skip_beads=false, force=false
-- `--no-beads auth_20241223` → track_input="auth_20241223", skip_beads=true
-- `auth_20241223 --force` → track_input="auth_20241223", force=true
-- `-nb -po auth_20241223` → Error: "Cannot use both --no-beads and --plan-only (they're aliases)."
+- `auth_20251223` → track_input="auth_20251223", skip_beads=false, force=false
+- `--no-beads auth_20251223` → track_input="auth_20251223", skip_beads=true
+- `auth_20251223 --force` → track_input="auth_20251223", force=true
+- `-nb -po auth_20251223` → track_input="auth_20251223", skip_beads=true (redundant but valid)
 
 ## 1.2 SETUP CHECK
 **PROTOCOL: Verify that the Conductor environment is properly set up.**
@@ -45,7 +45,12 @@ Parse `{{args}}` for flags and track identifier:
 
 **CRITICAL: Create/validate ALL state files BEFORE any other operations.**
 
-After resolving track_id (from `track_input` or existing design.md):
+**Track ID Resolution:**
+- If `track_input` was provided in 1.1 → use that as track_id
+- If resuming and design.md exists → extract track_id from its YAML header
+- Otherwise → **SKIP Phase 1.3 entirely** and proceed to Phase 2 (track_id will be generated in Phase 2.4)
+
+**If track_id is known**, proceed with state file initialization:
 
 ### 1.3.1 Create Track Directory
 ```bash
@@ -66,7 +71,7 @@ fi
 CURRENT_ID=$(jq -r '.track_id // empty' "conductor/tracks/<track_id>/metadata.json" 2>/dev/null)
 if [ -n "$CURRENT_ID" ] && [ "$CURRENT_ID" != "<track_id>" ]; then
   echo "ℹ️ Auto-fixing track_id: $CURRENT_ID → <track_id>"
-  jq --arg id "<track_id>" '.track_id = $id' "conductor/tracks/<track_id>/metadata.json" > tmp && mv tmp "conductor/tracks/<track_id>/metadata.json"
+  jq --arg id "<track_id>" '.track_id = $id' "conductor/tracks/<track_id>/metadata.json" > "conductor/tracks/<track_id>/metadata.json.tmp.$$" && mv "conductor/tracks/<track_id>/metadata.json.tmp.$$" "conductor/tracks/<track_id>/metadata.json"
 fi
 ```
 
@@ -253,7 +258,7 @@ echo "✓ State files initialized"
 1.  **Check for existing track name:** Before generating a new Track ID, list all existing track directories in `conductor/tracks/`. Extract the short names from these track IDs (e.g., `shortname_YYYYMMDD` -> `shortname`). 
     *   If the proposed short name matches an existing short name:
         *   **If `force_overwrite` is true:** Proceed to overwrite the existing track.
-        *   **Otherwise:** Auto-increment with `-v2`, `-v3` suffix. E.g., `auth_20241223` → `auth-v2_20241223`.
+        *   **Otherwise:** Auto-increment with `-v2`, `-v3` suffix. E.g., `auth_20251223` → `auth-v2_20251223`.
 2.  **Generate Track ID:** Create a unique Track ID (e.g., `shortname_YYYYMMDD`).
 3.  **Ask for Priority:**
     > "What priority should this track have?"

@@ -10,7 +10,7 @@
       "type": "string",
       "description": "ID of the track (must match directory name)",
       "pattern": "^[a-z0-9-]+_[0-9]{8}$",
-      "examples": ["auth-v2_20241223", "bug-fix_20241224"]
+      "examples": ["auth-v2_20251223", "bug-fix_20251224"]
     },
     "status": {
       "type": "string",
@@ -45,27 +45,33 @@
       "type": "string",
       "description": "ISO 8601 timestamp when this state file was last updated",
       "format": "date-time"
+    },
+    "rbCompletedAt": {
+      "type": ["string", "null"],
+      "description": "ISO 8601 timestamp when review-beads (rb) completed",
+      "format": "date-time",
+      "default": null
     }
   },
   "additionalProperties": false,
   "examples": [
     {
-      "trackId": "auth-v2_20241223",
+      "trackId": "auth-v2_20251223",
       "status": "initializing",
       "specCreatedAt": null,
       "planCreatedAt": null,
       "threadId": "T-019b4c5e-39ff-7275-91b6-14855ba2492e",
-      "createdAt": "2024-12-23T10:30:00Z",
-      "updatedAt": "2024-12-23T10:30:00Z"
+      "createdAt": "2025-12-23T10:30:00Z",
+      "updatedAt": "2025-12-23T10:30:00Z"
     },
     {
-      "trackId": "bug-fix_20241224",
+      "trackId": "bug-fix_20251224",
       "status": "complete",
-      "specCreatedAt": "2024-12-24T09:00:00Z",
-      "planCreatedAt": "2024-12-24T09:15:00Z",
+      "specCreatedAt": "2025-12-24T09:00:00Z",
+      "planCreatedAt": "2025-12-24T09:15:00Z",
       "threadId": "T-019b4cca-03cc-736f-9d83-60a0d36d29af",
-      "createdAt": "2024-12-24T08:45:00Z",
-      "updatedAt": "2024-12-24T09:15:00Z"
+      "createdAt": "2025-12-24T08:45:00Z",
+      "updatedAt": "2025-12-24T09:15:00Z"
     }
   ]
 }

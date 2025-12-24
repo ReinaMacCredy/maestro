@@ -19,7 +19,7 @@ If no plan provided, check:
 - Recent `/conductor-design` output in current context
 - `conductor/tracks/` for design.md, spec.md, and plan.md files
 
-**Extract track ID** from plan path (e.g., `conductor/tracks/auth_20241223/plan.md` → `auth_20241223`).
+**Extract track ID** from plan path (e.g., `conductor/tracks/auth_20251223/plan.md` → `auth_20251223`).
 
 ### 0.2 Check for Existing Progress
 
@@ -281,10 +281,10 @@ When ALL subagents return:
    ```
 
 4. **Detect cross-track dependencies:**
-   - If a task references another conductor track (e.g., "depends on api_20241223")
+   - If a task references another conductor track (e.g., "depends on api_20251223")
    - Record in `crossTrackDeps` array:
      ```json
-     {"from": "bd-3", "to": "api_20241223:bd-7"}
+     {"from": "bd-3", "to": "api_20251223:bd-7"}
      ```
    - Attempt to update both tracks' progress files
 
@@ -328,7 +328,7 @@ Check:
   "issues": ["bd-4", "bd-5", "bd-6", ...],
   
   "crossTrackDeps": [
-    {"from": "bd-3", "to": "api_20241223:bd-7"}
+    {"from": "bd-3", "to": "api_20251223:bd-7"}
   ],
   
   "resumeFrom": null,

@@ -1,0 +1,31 @@
+{
+  "track_id": "state-files-phase1_20251224",
+  "type": "feature",
+  "status": "archived",
+  "priority": "critical",
+  "depends_on": [],
+  "estimated_hours": null,
+  "created_at": "2025-12-23T20:11:17Z",
+  "updated_at": "2025-12-23T20:16:42Z",
+  "description": "Conductor Track Validation System",
+  "has_design": true,
+  "threads": [
+    {
+      "id": "T-019b4c5e-39ff-7275-91b6-14855ba2492e",
+      "action": "design",
+      "timestamp": "2025-12-23T20:11:17Z"
+    },
+    {
+      "id": "T-019b4cca-03cc-736f-9d83-60a0d36d29af",
+      "action": "newtrack",
+      "timestamp": "2025-12-23T20:11:17Z"
+    }
+  ],
+  "artifacts": {
+    "design": true,
+    "spec": true,
+    "plan": true,
+    "beads": true
+  },
+  "repairs": []
+}

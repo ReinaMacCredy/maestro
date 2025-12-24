@@ -92,14 +92,14 @@ Present results in this format:
 - [✗] workflow.md (MISSING)
 
 ### Tracks (X total)
-- [✓] auth_20241215 - All files present
-- [⚠] profile_20241216 - metadata.json missing 'created_at'
+- [✓] auth_20251215 - All files present
+- [⚠] profile_20251216 - metadata.json missing 'created_at'
 
 ### Orphan Tracks
-- [!] old_feature_20241201 - Not in tracks.md
+- [!] old_feature_20251201 - Not in tracks.md
 
 ### Status Mismatches
-- [!] auth_20241215 - tracks.md says [~], metadata says "completed"
+- [!] auth_20251215 - tracks.md says [~], metadata says "completed"
 
 ### Recommendations
 1. Run `/conductor-setup` to regenerate missing workflow.md

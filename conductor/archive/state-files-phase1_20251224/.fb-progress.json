@@ -1,0 +1,91 @@
+{
+  "trackId": "state-files-phase1_20251224",
+  "status": "complete",
+  "startedAt": "2025-12-24T03:19:14Z",
+  "completedAt": "2025-12-23T20:23:56Z",
+  "threadId": "T-019b4cdd-0bde-7329-be4b-4c3d7a9fcfbe",
+  "lastVerified": "2025-12-24T03:27:00Z",
+  "reviewStatus": "complete",
+  "reviewedAt": "2025-12-24T03:27:00Z",
+  "epics": [
+    {
+      "id": "my-workflow:3-48w",
+      "title": "Epic: Phase 1 - Create JSON Schemas",
+      "status": "complete",
+      "reviewed": true,
+      "reviewedAt": "2025-12-24T03:27:00Z"
+    },
+    {
+      "id": "my-workflow:3-o57",
+      "title": "Epic: Phase 2 - Reorganize Validation Files",
+      "status": "complete",
+      "reviewed": true,
+      "reviewedAt": "2025-12-24T03:27:00Z"
+    },
+    {
+      "id": "my-workflow:3-6i5",
+      "title": "Epic: Phase 3 - Create Track Validation Files",
+      "status": "complete",
+      "reviewed": true,
+      "reviewedAt": "2025-12-24T03:27:00Z"
+    },
+    {
+      "id": "my-workflow:3-549",
+      "title": "Epic: Phase 4 - Update workflows/validate.md",
+      "status": "complete",
+      "reviewed": true,
+      "reviewedAt": "2025-12-24T03:27:00Z"
+    },
+    {
+      "id": "my-workflow:3-2rb",
+      "title": "Epic: Phase 5 - Update Commands",
+      "status": "complete",
+      "reviewed": true,
+      "reviewedAt": "2025-12-24T03:27:00Z"
+    },
+    {
+      "id": "my-workflow:3-b99",
+      "title": "Epic: Phase 6 - Update Skills",
+      "status": "complete",
+      "reviewed": true,
+      "reviewedAt": "2025-12-24T03:27:00Z"
+    },
+    {
+      "id": "my-workflow:3-der",
+      "title": "Epic: Phase 7 - Final Verification",
+      "status": "complete",
+      "reviewed": true,
+      "reviewedAt": "2025-12-24T03:27:00Z"
+    }
+  ],
+  "issues": [
+    "my-workflow:3-3jp",
+    "my-workflow:3-5b3",
+    "my-workflow:3-7wf",
+    "my-workflow:3-l4b",
+    "my-workflow:3-2hc",
+    "my-workflow:3-0sx",
+    "my-workflow:3-ode",
+    "my-workflow:3-3li",
+    "my-workflow:3-dug",
+    "my-workflow:3-o69",
+    "my-workflow:3-597",
+    "my-workflow:3-zu8",
+    "my-workflow:3-x5r",
+    "my-workflow:3-vxe",
+    "my-workflow:3-hiz",
+    "my-workflow:3-d3o",
+    "my-workflow:3-5si",
+    "my-workflow:3-ikl",
+    "my-workflow:3-2cw",
+    "my-workflow:3-psi",
+    "my-workflow:3-53e",
+    "my-workflow:3-d8y",
+    "my-workflow:3-3tg",
+    "my-workflow:3-6ds",
+    "my-workflow:3-gu6"
+  ],
+  "crossTrackDeps": [],
+  "resumeFrom": null,
+  "lastError": null
+}

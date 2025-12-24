@@ -32,12 +32,12 @@ LLMs are trained on snapshots of documentation from months or years ago:
 
 ## Decision Rule
 
-| Truth Type | Tool | Use When |
-|------------|------|----------|
-| **Repo truth** | `Grep`, `finder` | "How do we do X here?" |
-| **Web truth** | `web_search`, `read_web_page` | External libs/APIs/docs |
-| **History truth** | `find_thread` | "Did we solve this before?" |
-| **Task truth** | `bd` commands | "What should I do next?" |
+| Truth Type        | Tool                          | Use When                    |
+| ----------------- | ----------------------------- | --------------------------- |
+| **Repo truth**    | `Grep`, `finder`              | "How do we do X here?"      |
+| **Web truth**     | `web_search`, `read_web_page` | External libs/APIs/docs     |
+| **History truth** | `find_thread`                 | "Did we solve this before?" |
+| **Task truth**    | `bd` commands                 | "What should I do next?"    |
 
 ---
 
@@ -46,6 +46,7 @@ LLMs are trained on snapshots of documentation from months or years ago:
 ### Grep / finder (Repo Discovery)
 
 Use when the answer exists in the current codebase:
+
 - "Where is X implemented?"
 - "What pattern does this project use for Y?"
 - "How does data flow from A → B?"
@@ -61,13 +62,14 @@ finder "how authentication middleware validates tokens"
 ### web_search / read_web_page (External Grounding)
 
 Use when truth depends on **current** external information:
+
 - Library/framework docs that change (APIs, deprecations)
 - Vendor integrations, auth flows, latest patterns
 - Finding real-world examples
 
 ```bash
 # Search for current docs
-web_search "stripe API create customer 2024"
+web_search "stripe API create customer 2025"
 
 # Read specific documentation
 read_web_page "https://docs.library.io/api/method"
@@ -76,6 +78,7 @@ read_web_page "https://docs.library.io/api/method"
 ### find_thread (History)
 
 Use when you suspect we've solved it before:
+
 - "Have we seen this bug before?"
 - "What conventions do we follow for X?"
 - "What did we decide about Y?"
@@ -88,6 +91,7 @@ find_thread "similar error message"
 ### bd Commands (Task Graph)
 
 Use when the question is about work state:
+
 - "What should I work on next?"
 - "What's blocking this issue?"
 - "What's the current priority?"
@@ -130,10 +134,11 @@ PATTERN: <the verified pattern to use>
 ```
 
 Output:
+
 ```
 GROUNDING: Stripe customer creation API
 SOURCE: web (stripe.com/docs)
-STATUS: ✅ Current (v2024-11-20)
+STATUS: ✅ Current (v2025-11-20)
 PATTERN: stripe.customers.create({ email, metadata })
 ```
 
@@ -144,6 +149,7 @@ PATTERN: stripe.customers.create({ email, metadata })
 ```
 
 Output:
+
 ```
 GROUNDING: Error handling pattern
 SOURCE: repo (src/lib/errors.ts)
@@ -158,6 +164,7 @@ PATTERN: throw new AppError(code, message, { cause })
 ```
 
 Output:
+
 ```
 GROUNDING: Authentication strategy decision
 SOURCE: history (find_thread)

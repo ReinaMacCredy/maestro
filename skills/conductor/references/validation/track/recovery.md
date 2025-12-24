@@ -4,25 +4,29 @@ Troubleshooting guide for common track integrity issues.
 
 ## Quick Fixes
 
-| Issue | Fix |
-|-------|-----|
-| Missing metadata.json | Run `/conductor-validate <track_id>` to auto-create |
-| Missing .track-progress.json | Run `/conductor-validate <track_id>` to auto-create |
-| Missing .fb-progress.json | Run `/conductor-validate <track_id>` to auto-create |
-| track_id mismatch in state files | Auto-fixed by validation |
-| track_id mismatch in content files | Manual edit required |
-| Corrupted JSON | Restore from git or recreate |
-| Stale in_progress status | Use diagnose mode, then reset or resume |
+| Issue                              | Fix                                                 |
+| ---------------------------------- | --------------------------------------------------- |
+| Missing metadata.json              | Run `/conductor-validate <track_id>` to auto-create |
+| Missing .track-progress.json       | Run `/conductor-validate <track_id>` to auto-create |
+| Missing .fb-progress.json          | Run `/conductor-validate <track_id>` to auto-create |
+| track_id mismatch in state files   | Auto-fixed by validation                            |
+| track_id mismatch in content files | Manual edit required                                |
+| Corrupted JSON                     | Restore from git or recreate                        |
+| Stale in_progress status           | Use diagnose mode, then reset or resume             |
+| Failed filing status               | See Scenario 6: inspect error, then resume or reset |
+| Stale complete status              | Run `rb <track_id>` to re-verify beads              |
 
 ## Recovery Scenarios
 
 ### Scenario 1: Copied Track
 
 **Symptoms:**
+
 - track_id in files doesn't match directory name
 - Usually happens after `cp -r` or manual copy
 
 **Recovery:**
+
 ```bash
 # Option A: Let validation auto-fix state files
 /conductor-validate <new_track_id>
@@ -34,11 +38,13 @@ mv conductor/tracks/<new_name> conductor/tracks/<original_name>
 ### Scenario 2: Interrupted Workflow
 
 **Symptoms:**
+
 - `.fb-progress.json.status = "in_progress"`
 - Beads partially filed
 - Thread that started it no longer active
 
 **Recovery:**
+
 ```bash
 # 1. Diagnose current state
 /conductor-validate <track_id> --diagnose
@@ -52,19 +58,22 @@ bd list --labels "track:<track_id>"
 ```
 
 **Reset command:**
+
 ```bash
 jq '.status = "pending" | .resumeFrom = "phase1" | .startedAt = null | .threadId = null' \
-  "$TRACK_DIR/.fb-progress.json" > "$TRACK_DIR/.fb-progress.json.tmp"
-mv "$TRACK_DIR/.fb-progress.json.tmp" "$TRACK_DIR/.fb-progress.json"
+  "$TRACK_DIR/.fb-progress.json" > "$TRACK_DIR/.fb-progress.json.tmp.$$"
+mv "$TRACK_DIR/.fb-progress.json.tmp.$$" "$TRACK_DIR/.fb-progress.json"
 ```
 
 ### Scenario 3: Manual Track Creation
 
 **Symptoms:**
+
 - spec.md and plan.md exist
 - No state files (metadata.json, .track-progress.json, .fb-progress.json)
 
 **Recovery:**
+
 ```bash
 # Auto-create state files (if pre-checks pass)
 /conductor-validate <track_id>
@@ -76,10 +85,12 @@ mv "$TRACK_DIR/.fb-progress.json.tmp" "$TRACK_DIR/.fb-progress.json"
 ### Scenario 4: Orphan Beads
 
 **Symptoms:**
+
 - Beads reference track that no longer exists
 - `.fb-progress.json` lists beads but they're deleted
 
 **Recovery:**
+
 ```bash
 # 1. Find orphan beads
 bd list --labels "track:<track_id>"
@@ -93,10 +104,12 @@ bd close <bead_id> --reason "Orphaned from deleted track"
 ### Scenario 5: spec.md XOR plan.md
 
 **Symptoms:**
+
 - HALT: spec.md exists without plan.md (or vice versa)
 - Invalid partial state
 
 **Recovery:**
+
 ```bash
 # Option A: Create the missing file
 # spec.md exists → create plan.md from spec
@@ -109,6 +122,77 @@ rm "$TRACK_DIR/spec.md"  # or plan.md
 # Keep only design.md, remove spec/plan
 ```
 
+### Scenario 6: Failed Filing Run
+
+**Symptoms:**
+
+- `.fb-progress.json.status = "failed"`
+- `lastError` field contains error message
+- Beads may be partially filed
+
+**Recovery:**
+
+```bash
+# 1. Diagnose current state
+/conductor-validate <track_id> --diagnose
+
+# 2. Inspect the error
+jq '.lastError' conductor/tracks/<track_id>/.fb-progress.json
+
+# 3. Check what was filed
+bd list --labels "track:<track_id>"
+
+# 4. Choose action:
+#    Resume - retry from last checkpoint
+#    Reset  - clear progress and start fresh
+```
+
+**Resume command:**
+
+```bash
+fb <track_id>
+```
+
+**Reset command:**
+
+```bash
+jq '.status = "pending" | .resumeFrom = "phase1" | .startedAt = null | .threadId = null | .lastError = null' \
+  "$TRACK_DIR/.fb-progress.json" > "$TRACK_DIR/.fb-progress.json.tmp.$$"
+mv "$TRACK_DIR/.fb-progress.json.tmp.$$" "$TRACK_DIR/.fb-progress.json"
+```
+
+### Scenario 7: Stale Complete Status
+
+**Symptoms:**
+
+- `.fb-progress.json.status = "complete"`
+- `lastVerified` timestamp older than 7 days
+- Beads may have drifted from progress file
+
+**Recovery:**
+
+```bash
+# 1. Re-verify beads against progress file
+rb <track_id>
+
+# This will:
+# - Sync progress file with current beads state
+# - Update lastVerified timestamp
+# - Flag any discrepancies
+```
+
+**If beads were deleted externally:**
+
+```bash
+# Check what beads still exist
+bd list --labels "track:<track_id>"
+
+# Compare with progress file
+jq '.epics[].id' conductor/tracks/<track_id>/.fb-progress.json
+
+# rb will auto-correct the progress file
+```
+
 ## Diagnose Mode
 
 Full diagnostic report without making changes:
@@ -118,6 +202,7 @@ Full diagnostic report without making changes:
 ```
 
 **Output includes:**
+
 - File listing with sizes and dates
 - State file contents (pretty-printed)
 - All detected issues with severity
@@ -133,18 +218,19 @@ jq '.repairs' conductor/tracks/<track_id>/metadata.json
 ```
 
 **Example output:**
+
 ```json
 [
   {
-    "timestamp": "2024-12-24T10:30:00Z",
+    "timestamp": "2025-12-24T10:30:00Z",
     "action": "auto-fix",
     "field": "track_id",
-    "from": "old-track_20241223",
-    "to": "new-track_20241224",
+    "from": "old-track_20251223",
+    "to": "new-track_20251224",
     "by": "T-019b4cec-3f99-70ad-a0c6-617e57d5c0ad"
   },
   {
-    "timestamp": "2024-12-24T10:25:00Z",
+    "timestamp": "2025-12-24T10:25:00Z",
     "action": "auto-create",
     "field": "file",
     "from": null,
@@ -158,12 +244,12 @@ jq '.repairs' conductor/tracks/<track_id>/metadata.json
 
 These require manual intervention:
 
-| Issue | Why Not Auto-Fixable | Manual Action |
-|-------|---------------------|---------------|
-| Corrupted JSON | Can't parse to fix | Restore from git or recreate |
-| Content file track_id mismatch | May indicate copy error | Edit headers manually |
-| Files > 30 days old | Risk of stale data | Review and create manually |
-| Missing spec+plan together | Fundamental design issue | Create via /conductor-newtrack |
+| Issue                          | Why Not Auto-Fixable     | Manual Action                  |
+| ------------------------------ | ------------------------ | ------------------------------ |
+| Corrupted JSON                 | Can't parse to fix       | Restore from git or recreate   |
+| Content file track_id mismatch | May indicate copy error  | Edit headers manually          |
+| Files > 30 days old            | Risk of stale data       | Review and create manually     |
+| Missing spec+plan together     | Fundamental design issue | Create via /conductor-newtrack |
 
 ## Prevention
 

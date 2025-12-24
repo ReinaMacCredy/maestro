@@ -10,7 +10,7 @@ conductor/
 ├── workflow.md             # Development standards (TDD, commits, coverage)
 ├── tracks.md               # Master track list with status markers
 ├── setup_state.json        # Setup progress tracking
-├── refresh_state.json      # Context refresh tracking (created by /conductor-refresh)
+├── AGENTS.md               # Learnings hub (auto-updated by /conductor-finish)
 ├── code_styleguides/       # Language-specific style guides
 ├── archive/                # Archived completed tracks
 ├── exports/                # Exported summaries
@@ -55,7 +55,7 @@ Throughout conductor files:
 | `conductor/tracks/<id>/blockers.md` | Block history log |
 | `conductor/tracks/<id>/skipped.md` | Skipped tasks log |
 | `conductor/tracks/<id>/revisions.md` | Revision history log |
-| `conductor/refresh_state.json` | Context refresh tracking |
+| `conductor/tracks/<id>/finish-state.json` | Finish resume state |
 | `conductor/archive/` | Archived completed tracks |
 | `conductor/exports/` | Exported summaries |
 
@@ -72,7 +72,7 @@ The only differences are command syntax:
 | `/conductor:implement` | `/conductor-implement` |
 | `/conductor:status` | `/conductor-status` |
 | `/conductor:revert` | `/conductor-revert` |
-| `/conductor:refresh` | `/conductor-refresh` |
 | `/conductor:revise` | `/conductor-revise` |
+| `/conductor:finish` | `/conductor-finish` |
 
 Files, workflows, and state management are fully compatible.

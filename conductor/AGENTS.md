@@ -28,7 +28,22 @@ Contains reusable learnings from completed tracks.
 
 ## Patterns
 
-- **4-Phase Workflow:** Thread Compaction → Beads Compaction → Knowledge Merge → Archive
+- **6-Phase Finish Workflow:** Pre-flight → Thread Compaction → Beads Compaction → Knowledge Merge → Context Refresh → Archive → CODEMAPS
 - **Smart Skip:** Each phase checks if work exists before running
 - **Resume Capability:** State files track progress for interrupted workflows
-- **S/H/K Archive Choice:** Soft (metadata only) / Hard (move to archive/) / Keep (stay active)
+- **A/K Archive Choice:** Archive (move to archive/) / Keep (stay active)
+- **State Files First:** Create metadata.json, .track-progress.json, .fb-progress.json in Phase 1.3 BEFORE spec/plan generation
+- **Collective State Validation:** Treat 3 state files as atomic unit - HAS_STATE = 0 (none), 1 (partial), 2 (all)
+- **Double Diamond Phases:** DISCOVER (diverge) → DEFINE (converge) → DEVELOP (diverge) → DELIVER (converge)
+- **A/P/C Checkpoints:** At each phase end: [A] Advanced, [P] Party (multi-agent), [C] Continue
+- **Unified Track Creation:** /conductor-newtrack includes spec, plan, beads filing, AND review in one flow
+- **Conventional Commits Versioning:** feat: → minor, fix: → patch, feat!: → major
+
+## Gotchas
+
+- Context Refresh (Phase 4) can be skipped with --skip-refresh flag
+- User input A/K must be mapped to JSON values "archive"/"keep"
+- Atomic writes use $$ (PID) suffix for temp files to prevent collisions
+- CODEMAPS loaded at design session start for codebase context
+- docs: and chore: commits don't bump version (changelog only)
+- Skill versions in SKILL.md frontmatter are manually updated (not automated)

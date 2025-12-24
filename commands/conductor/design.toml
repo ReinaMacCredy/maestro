@@ -238,7 +238,7 @@ When looping back:
 
 Generate track_id as: `{shortname}_{YYYYMMDD}`
 - **shortname:** Derive from problem statement (2-3 words, kebab-case)
-- **Example:** "user-auth_20241223"
+- **Example:** "user-auth_20251223"
 
 If `{{args}}` is already a track_id format: Use it directly.
 

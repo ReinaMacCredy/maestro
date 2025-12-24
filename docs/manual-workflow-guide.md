@@ -172,7 +172,7 @@ conductor/tracks/<shortname_YYYYMMDD>/
 └── plan.md         # Implementation plan
 ```
 
-**Track ID format**: `<shortname>_<YYYYMMDD>` (e.g., `auth_20241219`)
+**Track ID format**: `<shortname>_<YYYYMMDD>` (e.g., `auth_20251219`)
 
 ---
 
@@ -188,7 +188,7 @@ conductor/tracks/<shortname_YYYYMMDD>/
 Step 1: Run the command
    /conductor:implement
    # or specify track
-   /conductor:implement auth_20241219
+   /conductor:implement auth_20251219
 
 Step 2: Track selection (if not specified)
    - First non-completed track is auto-selected
@@ -458,31 +458,38 @@ Step 4: Report generated
 
 ---
 
-### 13. `/conductor:refresh` (or `/conductor-refresh`)
+### 13. `/conductor:finish` (or `/conductor-finish`)
 
-**Purpose**: Sync context docs with current codebase.
+**Purpose**: Complete a track with learnings extraction, context refresh, and archival.
+
+> **Note**: `/conductor-refresh` is deprecated. Use `/conductor-finish` which includes context refresh as Phase 4.
 
 **When to use**: 
-- Codebase changed outside Conductor
-- Documentation drift detected
+- Track implementation is complete
+- All beads closed, tests passing
+- Ready to archive and extract learnings
 
 **Manual workflow**:
 
 ```
 Step 1: Run the command
-   /conductor:refresh
+   /conductor:finish
 
-Step 2: Codebase analysis
-   - Scans for changes since last refresh
+Step 2: Pre-flight validation
+   - Verifies all beads closed
+   - Checks tests passing
 
-Step 3: Review proposed updates
-   - product.md changes
-   - tech-stack.md changes
-   - code_styleguides/ updates
+Step 3: Extract learnings
+   - Reviews completed work
+   - Updates AGENTS.md with discoveries
 
-Step 4: Approve changes
-   - Applied incrementally
-   - State saved in refresh_state.json
+Step 4: Context refresh (formerly /conductor-refresh)
+   - Syncs product.md, tech-stack.md
+   - Updates code_styleguides/
+
+Step 5: Archive track
+   - Moves to conductor/archive/
+   - Preserves metadata
 ```
 
 ---
@@ -493,7 +500,6 @@ Step 4: Approve changes
 |------|---------|----------|
 | `setup_state.json` | Setup progress | `conductor/` |
 | `implement_state.json` | Implementation resume | `conductor/tracks/<id>/` |
-| `refresh_state.json` | Refresh progress | `conductor/` |
 | `metadata.json` | Track configuration | `conductor/tracks/<id>/` |
 
 ## Tips for Manual Usage

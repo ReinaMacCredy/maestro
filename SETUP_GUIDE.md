@@ -169,6 +169,7 @@ claude mcp add exa -s user -e EXA_API_KEY=<key> -- npx -y @anthropic-labs/exa-mc
 | Design feature | `ds` or `/conductor-design` |
 | Create track | `/conductor-newtrack` |
 | Execute tasks | `/conductor-implement` |
+| Validate track health | `/conductor-validate` |
 | Enter TDD mode | `tdd` |
 | See available work | `bd ready --json` |
 | Full documentation | [TUTORIAL.md](./TUTORIAL.md) |

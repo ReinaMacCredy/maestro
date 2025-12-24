@@ -22,7 +22,7 @@ Bash code templates for state file operations. Use with atomic write pattern.
 
 ```bash
 NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-cat > "$TRACK_DIR/metadata.json.tmp" << EOF
+cat > "$TRACK_DIR/metadata.json.tmp.$$" << EOF
 {
   "track_id": "$TRACK_ID",
   "type": "feature",
@@ -33,7 +33,7 @@ cat > "$TRACK_DIR/metadata.json.tmp" << EOF
   "repairs": []
 }
 EOF
-mv "$TRACK_DIR/metadata.json.tmp" "$TRACK_DIR/metadata.json"
+mv "$TRACK_DIR/metadata.json.tmp.$$" "$TRACK_DIR/metadata.json"
 ```
 
 ### .track-progress.json
@@ -66,7 +66,7 @@ PLAN_ISO=$(date -r $PLAN_MTIME -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "$NO
 # Get thread ID from environment or use null
 THREAD_ID="${AMP_THREAD_ID:-null}"
 
-cat > "$TRACK_DIR/.track-progress.json.tmp" << EOF
+cat > "$TRACK_DIR/.track-progress.json.tmp.$$" << EOF
 {
   "trackId": "$TRACK_ID",
   "status": "complete",
@@ -77,7 +77,7 @@ cat > "$TRACK_DIR/.track-progress.json.tmp" << EOF
   "updatedAt": "$NOW"
 }
 EOF
-mv "$TRACK_DIR/.track-progress.json.tmp" "$TRACK_DIR/.track-progress.json"
+mv "$TRACK_DIR/.track-progress.json.tmp.$$" "$TRACK_DIR/.track-progress.json"
 ```
 
 ### .fb-progress.json
@@ -101,7 +101,7 @@ mv "$TRACK_DIR/.track-progress.json.tmp" "$TRACK_DIR/.track-progress.json"
 **Create command:**
 
 ```bash
-cat > "$TRACK_DIR/.fb-progress.json.tmp" << EOF
+cat > "$TRACK_DIR/.fb-progress.json.tmp.$$" << EOF
 {
   "trackId": "$TRACK_ID",
   "status": "pending",
@@ -116,7 +116,7 @@ cat > "$TRACK_DIR/.fb-progress.json.tmp" << EOF
   "lastError": null
 }
 EOF
-mv "$TRACK_DIR/.fb-progress.json.tmp" "$TRACK_DIR/.fb-progress.json"
+mv "$TRACK_DIR/.fb-progress.json.tmp.$$" "$TRACK_DIR/.fb-progress.json"
 ```
 
 ## Atomic Write Pattern
@@ -128,8 +128,8 @@ Always use temp file + rename to prevent corruption:
 echo '{"key": "value"}' > "$FILE"
 
 # ✅ CORRECT - Atomic operation
-echo '{"key": "value"}' > "$FILE.tmp"
-mv "$FILE.tmp" "$FILE"
+echo '{"key": "value"}' > "$FILE.tmp.$$"
+mv "$FILE.tmp.$$" "$FILE"
 ```
 
 For jq updates:
@@ -139,7 +139,7 @@ For jq updates:
 jq '.key = "value"' "$FILE" > "$FILE"
 
 # ✅ CORRECT - Read complete, then atomic write
-jq '.key = "value"' "$FILE" > "$FILE.tmp" && mv "$FILE.tmp" "$FILE"
+jq '.key = "value"' "$FILE" > "$FILE.tmp.$$" && mv "$FILE.tmp.$$" "$FILE"
 ```
 
 ## Repair Log Entry
@@ -170,7 +170,7 @@ add_repair_log() {
        to: $to,
        by: $by
      }] + (.repairs // []))[:10]' \
-     "$FILE" > "$FILE.tmp" && mv "$FILE.tmp" "$FILE"
+     "$FILE" > "$FILE.tmp.$$" && mv "$FILE.tmp.$$" "$FILE"
 }
 
 # Usage:
@@ -190,7 +190,7 @@ auto_create_state_files() {
   # metadata.json
   if [[ ! -f "$TRACK_DIR/metadata.json" ]]; then
     echo "Creating metadata.json for $TRACK_ID"
-    cat > "$TRACK_DIR/metadata.json.tmp" << EOF
+    cat > "$TRACK_DIR/metadata.json.tmp.$$" << EOF
 {
   "track_id": "$TRACK_ID",
   "type": "feature",
@@ -208,7 +208,7 @@ auto_create_state_files() {
   }]
 }
 EOF
-    mv "$TRACK_DIR/metadata.json.tmp" "$TRACK_DIR/metadata.json"
+    mv "$TRACK_DIR/metadata.json.tmp.$$" "$TRACK_DIR/metadata.json"
   fi
   
   # .track-progress.json
@@ -220,7 +220,7 @@ EOF
     SPEC_ISO=$(date -r $SPEC_MTIME -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "$NOW")
     PLAN_ISO=$(date -r $PLAN_MTIME -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "$NOW")
     
-    cat > "$TRACK_DIR/.track-progress.json.tmp" << EOF
+    cat > "$TRACK_DIR/.track-progress.json.tmp.$$" << EOF
 {
   "trackId": "$TRACK_ID",
   "status": "complete",
@@ -231,13 +231,13 @@ EOF
   "updatedAt": "$NOW"
 }
 EOF
-    mv "$TRACK_DIR/.track-progress.json.tmp" "$TRACK_DIR/.track-progress.json"
+    mv "$TRACK_DIR/.track-progress.json.tmp.$$" "$TRACK_DIR/.track-progress.json"
   fi
   
   # .fb-progress.json
   if [[ ! -f "$TRACK_DIR/.fb-progress.json" ]]; then
     echo "Creating .fb-progress.json for $TRACK_ID"
-    cat > "$TRACK_DIR/.fb-progress.json.tmp" << EOF
+    cat > "$TRACK_DIR/.fb-progress.json.tmp.$$" << EOF
 {
   "trackId": "$TRACK_ID",
   "status": "pending",
@@ -252,12 +252,12 @@ EOF
   "lastError": null
 }
 EOF
-    mv "$TRACK_DIR/.fb-progress.json.tmp" "$TRACK_DIR/.fb-progress.json"
+    mv "$TRACK_DIR/.fb-progress.json.tmp.$$" "$TRACK_DIR/.fb-progress.json"
   fi
 }
 
 # Usage:
-auto_create_state_files "conductor/tracks/my-track_20241224"
+auto_create_state_files "conductor/tracks/my-track_20251224"
 ```
 
 ## Update State File Status
@@ -272,11 +272,11 @@ update_track_status() {
   if [[ -f "$TRACK_DIR/metadata.json" ]]; then
     jq --arg status "$NEW_STATUS" --arg now "$NOW" \
        '.status = $status | .updated_at = $now' \
-       "$TRACK_DIR/metadata.json" > "$TRACK_DIR/metadata.json.tmp"
-    mv "$TRACK_DIR/metadata.json.tmp" "$TRACK_DIR/metadata.json"
+       "$TRACK_DIR/metadata.json" > "$TRACK_DIR/metadata.json.tmp.$$"
+    mv "$TRACK_DIR/metadata.json.tmp.$$" "$TRACK_DIR/metadata.json"
   fi
 }
 
 # Usage:
-update_track_status "conductor/tracks/my-track_20241224" "in_progress"
+update_track_status "conductor/tracks/my-track_20251224" "in_progress"
 ```

@@ -10,7 +10,7 @@
       "type": "string",
       "description": "ID of the track (must match directory name)",
       "pattern": "^[a-z0-9-]+_[0-9]{8}$",
-      "examples": ["auth-v2_20241223", "bug-fix_20241224"]
+      "examples": ["auth-v2_20251223", "bug-fix_20251224"]
     },
     "status": {
       "type": "string",
@@ -39,7 +39,22 @@
     "resumeFrom": {
       "type": ["string", "null"],
       "description": "Checkpoint for resuming interrupted filing",
-      "enum": ["phase1", "phase2", "phase2_epic_1", "phase2_epic_2", "phase2_epic_3", "phase2_epic_4", "phase2_epic_5", "phase3", "phase3_batch_1", "phase3_batch_2", "phase3_batch_3", "phase4", "phase5", null],
+      "enum": [
+        "phase1",
+        "phase2",
+        "phase2_epic_1",
+        "phase2_epic_2",
+        "phase2_epic_3",
+        "phase2_epic_4",
+        "phase2_epic_5",
+        "phase3",
+        "phase3_batch_1",
+        "phase3_batch_2",
+        "phase3_batch_3",
+        "phase4",
+        "phase5",
+        null
+      ],
       "default": "phase1"
     },
     "epics": {
@@ -105,7 +120,7 @@
           },
           "to": {
             "type": "string",
-            "description": "Target track:bead ID (e.g., api_20241223:bd-7)"
+            "description": "Target track:bead ID (e.g., api_20251223:bd-7)"
           }
         },
         "additionalProperties": false
@@ -146,12 +161,18 @@
       "description": "Last verification timestamp for stale detection",
       "format": "date-time",
       "default": null
+    },
+    "reviewedAt": {
+      "type": ["string", "null"],
+      "description": "ISO 8601 timestamp when review was completed (set by rb skill)",
+      "format": "date-time",
+      "default": null
     }
   },
   "additionalProperties": false,
   "examples": [
     {
-      "trackId": "auth-v2_20241223",
+      "trackId": "auth-v2_20251223",
       "status": "pending",
       "startedAt": null,
       "completedAt": null,
@@ -164,10 +185,10 @@
       "lastError": null
     },
     {
-      "trackId": "bug-fix_20241224",
+      "trackId": "bug-fix_20251224",
       "status": "complete",
-      "startedAt": "2024-12-24T09:30:00Z",
-      "completedAt": "2024-12-24T09:45:00Z",
+      "startedAt": "2025-12-24T09:30:00Z",
+      "completedAt": "2025-12-24T09:45:00Z",
       "threadId": "T-019b4cca-03cc-736f-9d83-60a0d36d29af",
       "resumeFrom": null,
       "epics": [
@@ -175,27 +196,25 @@
           "id": "bd-1",
           "title": "Epic: Authentication",
           "status": "complete",
-          "createdAt": "2024-12-24T09:31:00Z",
+          "createdAt": "2025-12-24T09:31:00Z",
           "reviewed": true,
-          "reviewedAt": "2024-12-24T10:00:00Z"
+          "reviewedAt": "2025-12-24T10:00:00Z"
         },
         {
           "id": "bd-2",
           "title": "Epic: Database Layer",
           "status": "complete",
-          "createdAt": "2024-12-24T09:32:00Z",
+          "createdAt": "2025-12-24T09:32:00Z",
           "reviewed": true,
-          "reviewedAt": "2024-12-24T10:05:00Z"
+          "reviewedAt": "2025-12-24T10:05:00Z"
         }
       ],
       "issues": ["bd-4", "bd-5", "bd-6", "bd-7", "bd-8"],
-      "crossTrackDeps": [
-        {"from": "bd-3", "to": "api_20241223:bd-7"}
-      ],
+      "crossTrackDeps": [{ "from": "bd-3", "to": "api_20251223:bd-7" }],
       "lastBatchCompleted": 2,
       "lastError": null,
       "reviewStatus": "complete",
-      "lastVerified": "2024-12-24T10:10:00Z"
+      "lastVerified": "2025-12-24T10:10:00Z"
     }
   ]
 }

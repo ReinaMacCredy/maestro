@@ -34,8 +34,8 @@ find conductor/tracks -name ".fb-progress.json" -type f 2>/dev/null
 **If multiple tracks found:**
 ```
 Found beads in multiple tracks:
-1. auth_20241223 (5 epics, filed 2h ago)
-2. api_20241223 (3 epics, filed 1d ago)
+1. auth_20251223 (5 epics, filed 2h ago)
+2. api_20251223 (3 epics, filed 1d ago)
 
 Which track to review? [1/2/all]
 ```

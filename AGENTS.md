@@ -11,7 +11,7 @@ cat .claude-plugin/plugin.json | jq .   # Validate plugin manifest
 
 ## Architecture
 ```
-skills/           # 15 skill directories, each with SKILL.md (frontmatter + instructions)
+skills/           # Skill directories, each with SKILL.md (frontmatter + instructions)
   beads/          # Issue tracking skill with references/ subdirectory
   conductor/      # Planning methodology (includes /conductor-design, CODEMAPS generation)
   design/         # Double Diamond design sessions (ds trigger)
@@ -83,7 +83,7 @@ Add `[skip ci]` to commit message to bypass all automation (changelog + version 
 | Skill | Trigger | Description |
 |-------|---------|-------------|
 | `design` | `ds` | Double Diamond design session with A/P/C checkpoints and Party Mode option |
-| `conductor` | `/conductor-setup`, `/conductor-design`, `/conductor-newtrack`, `/conductor-implement`, `/conductor-status`, `/conductor-revert`, `/conductor-revise`, `/conductor-refresh`, `/conductor-finish` | Structured planning and execution through specs and plans |
+| `conductor` | `/conductor-setup`, `/conductor-design`, `/conductor-newtrack`, `/conductor-implement`, `/conductor-status`, `/conductor-revert`, `/conductor-revise`, `/conductor-finish`, `/conductor-validate`, `/conductor-block`, `/conductor-skip` | Structured planning and execution through specs and plans |
 | `file-beads` | `fb` | File beads from plan (batched in groups of 5, checkpointed for resume) |
 | `review-beads` | `rb` | Review beads (parallel + cross-epic validation, dual tracking: progress file + beads label) |
 | `beads` | `bd ready`, `bd status` | Issue tracking for multi-session work |

@@ -6,8 +6,10 @@ Two validation subsystems for Conductor tracks.
 
 | Folder | Purpose | Used By |
 |--------|---------|---------|
-| `track/` | Track integrity validation (state files, track_id, file existence) | `/conductor-validate`, `/conductor-implement`, `/conductor-finish`, `fb`, `rb` |
+| `track/` | Track integrity validation (state files, track_id, file existence) | `/conductor-validate`, `/conductor-implement`, `fb`, `rb` |
 | `quality/` | Compaction quality evaluation (reserved for future LLM scoring) | Reserved |
+
+> **Note:** `/conductor-finish` uses inline Phase 0 validation, not track/checks.md.
 
 ## Quick Reference
 
