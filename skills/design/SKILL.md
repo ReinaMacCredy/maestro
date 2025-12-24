@@ -37,17 +37,20 @@ When starting a design session:
 Check for `conductor/CODEMAPS/` directory:
 
 **If exists:**
+
 1. Load `overview.md` (always)
 2. Load relevant module codemaps based on topic (skills.md, api.md, etc.)
 3. Display: `📚 Loaded CODEMAPS for context`
 
 **If missing:**
+
 1. Display: `⚠️ No CODEMAPS found. Run /conductor-setup to generate initial CODEMAPS.`
 2. Continue session normally (CODEMAPS are optional but recommended)
 
 ### 2. Verify Conductor Setup
 
 Check for `conductor/` directory with core files:
+
 - `product.md` - Product vision
 - `tech-stack.md` - Technical constraints
 - `workflow.md` - Development standards
@@ -73,7 +76,7 @@ The session flows through four phases, alternating between divergent and converg
 flowchart TB
     subgraph PIPELINE["COMPLETE PIPELINE WORKFLOW"]
         direction TB
-        
+
         subgraph PLANNING["PLANNING LOOP"]
             DS["ds (Design Session)"]
             DISCOVER["DISCOVER<br/>Explore Problem"]
@@ -81,15 +84,15 @@ flowchart TB
             DEVELOP["DEVELOP<br/>Explore Solutions"]
             DELIVER["DELIVER<br/>Finalize Design"]
             APC{{"A/P/C"}}
-            DESIGNMD["design.md"]
+            DESIGND["design.md"]
         end
-        
+
         subgraph SPEC["SPEC GENERATION"]
             NEWTRACK["/conductor-newtrack"]
             SPECMD["spec.md"]
             PLANMD["plan.md"]
         end
-        
+
         subgraph BEADS["ISSUE FILING LOOP"]
             FB["fb (file-beads)"]
             EPIC["Create Epic"]
@@ -97,84 +100,84 @@ flowchart TB
             DEPS["Wire Dependencies"]
             RB["rb (review-beads)"]
         end
-        
+
         subgraph DISPATCH["PARALLEL AGENT DISPATCH"]
             COORDINATOR["Coordinator Agent"]
-            
+
             subgraph WORKERS["WORKER AGENTS (Task tool)"]
                 W1["Agent 1<br/>Independent Task"]
                 W2["Agent 2<br/>Independent Task"]
                 W3["Agent 3<br/>Independent Task"]
                 WN["Agent N<br/>Independent Task"]
             end
-            
+
             MERGE["Merge Results"]
         end
-        
+
         subgraph AGENT_LOOP["AGENT EXECUTION LOOP"]
             READY["bd ready"]
             CLAIM["bd update --status in_progress"]
-            
+
             subgraph TDD["TDD CYCLE"]
                 RED["RED: Write Failing Test"]
                 GREEN["GREEN: Make It Pass"]
                 REFACTOR["REFACTOR: Clean Up"]
             end
-            
+
             CLOSE["bd close"]
             SYNC["bd sync"]
         end
-        
+
         subgraph FINISH["COMPLETION"]
             VERIFY["Verification"]
             BRANCH["finish branch"]
             FINISH_CMD["/conductor-finish"]
         end
     end
-    
+
     subgraph BMAD["PARTY MODE: 12 BMAD AGENTS"]
         subgraph PRODUCT["Product Module"]
             PM["John (PM)"]
             ANALYST["Mary (Analyst)"]
             UX["Sally (UX)"]
         end
-        
+
         subgraph TECHNICAL["Technical Module"]
             ARCH["Winston (Architect)"]
             DEV["Amelia (Developer)"]
             QA["Murat (QA)"]
             DOCS["Paige (Docs)"]
         end
-        
+
         subgraph CREATIVE["Creative Module"]
             STORY["Sophia (Storyteller)"]
             BRAIN["Carson (Brainstorm)"]
-            DESIGNM["Maya (Design Thinking)"]
+            DESIGN["Maya (Design Thinking)"]
             STRAT["Victor (Strategist)"]
             SOLVER["Dr. Quinn (Solver)"]
         end
     end
-    
+
     DS --> DISCOVER
     DISCOVER --> DEFINE
     DEFINE --> DEVELOP
     DEVELOP --> DELIVER
     DELIVER --> APC
-    APC -->|"C"| DESIGNMD
+    APC -->|"C"| DESIGND
     APC -->|"P"| BMAD
     BMAD -->|"Synthesize"| APC
-    DESIGNMD --> NEWTRACK
-    
+    DESIGND --> NEWTRACK
+
     NEWTRACK --> SPECMD
     SPECMD --> PLANMD
     PLANMD --> FB
-    
+
     FB --> EPIC
     EPIC --> ISSUES
     ISSUES --> DEPS
     DEPS --> RB
     RB --> READY
-    
+
     READY --> CLAIM
     CLAIM --> COORDINATOR
     COORDINATOR --> W1 & W2 & W3 & WN
@@ -187,10 +190,10 @@ flowchart TB
     CLOSE --> SYNC
     SYNC -->|"More issues?"| READY
     SYNC -->|"All done"| VERIFY
-    
+
     VERIFY --> BRANCH
     BRANCH --> FINISH_CMD
-    
+
     classDef planning fill:#1a365d,stroke:#63b3ed,color:#e2e8f0
     classDef spec fill:#234e52,stroke:#4fd1c5,color:#e2e8f0
     classDef beads fill:#553c9a,stroke:#b794f4,color:#e2e8f0
@@ -201,8 +204,8 @@ flowchart TB
     classDef product fill:#285e61,stroke:#4fd1c5,color:#e2e8f0
     classDef technical fill:#2c5282,stroke:#63b3ed,color:#e2e8f0
     classDef creative fill:#744210,stroke:#f6ad55,color:#e2e8f0
-    
-    class DS,DISCOVER,DEFINE,DEVELOP,DELIVER,APC,DESIGNMD planning
+
+    class DS,DISCOVER,DEFINE,DEVELOP,DELIVER,APC,DESIGND planning
     class NEWTRACK,SPECMD,PLANMD spec
     class FB,EPIC,ISSUES,DEPS,RB beads
     class COORDINATOR,W1,W2,W3,WN,MERGE dispatch
@@ -211,7 +214,7 @@ flowchart TB
     class VERIFY,BRANCH,FINISH_CMD finish
     class PM,ANALYST,UX product
     class ARCH,DEV,QA,DOCS technical
-    class STORY,BRAIN,DESIGNM,STRAT,SOLVER creative
+    class STORY,BRAIN,DESIGN,STRAT,SOLVER creative
 ```
 
 For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../../docs/PIPELINE_ARCHITECTURE.md).

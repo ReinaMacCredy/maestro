@@ -31,12 +31,12 @@ You're using AI coding agents to write code. That's great. But you've probably n
 
 AI coding assistants forget everything between sessions:
 
-| What Happens | The Problem |
-|--------------|-------------|
-| Context window fills up | Earlier conversation gets "compacted" (forgotten) |
-| Session ends (timeout, crash, closed) | All context is lost |
-| New session starts | Agent has no memory of previous work |
-| You re-explain everything | Wastes time, loses nuance |
+| What Happens                          | The Problem                                       |
+| ------------------------------------- | ------------------------------------------------- |
+| Context window fills up               | Earlier conversation gets "compacted" (forgotten) |
+| Session ends (timeout, crash, closed) | All context is lost                               |
+| New session starts                    | Agent has no memory of previous work              |
+| You re-explain everything             | Wastes time, loses nuance                         |
 
 ### How Handoff Solves It
 
@@ -63,16 +63,17 @@ Every artifact is a **checkpoint**. Handoff happens after planning completes, th
 
 ### Handoff Artifacts in Maestro
 
-| Artifact | What It Preserves | Created By |
-|----------|-------------------|------------|
-| `design.md` | Architecture decisions, trade-offs | `/conductor-design` |
-| `spec.md` | Requirements, acceptance criteria | `/conductor-newtrack` |
-| `plan.md` | Task breakdown, status markers | `/conductor-newtrack` |
-| `.beads/` | Issues, dependencies, notes | `fb` (file-beads) |
+| Artifact    | What It Preserves                  | Created By            |
+| ----------- | ---------------------------------- | --------------------- |
+| `design.md` | Architecture decisions, trade-offs | `/conductor-design`   |
+| `spec.md`   | Requirements, acceptance criteria  | `/conductor-newtrack` |
+| `plan.md`   | Task breakdown, status markers     | `/conductor-newtrack` |
+| `.beads/`   | Issues, dependencies, notes        | `fb` (file-beads)     |
 
 ### The Handoff Protocol
 
 **At session end:**
+
 ```bash
 bd update <id> --notes "COMPLETED: X. IN PROGRESS: Y. NEXT: Z."
 git add -A && git commit -m "progress on feature"
@@ -80,6 +81,7 @@ git push
 ```
 
 **At session start:**
+
 ```bash
 bd ready --json          # What's unblocked?
 bd show <id>             # Read notes for full context
@@ -90,6 +92,7 @@ The **notes field** is your session-to-session memory. Write it like leaving ins
 ### Why This Works Without Amp
 
 This pattern works with any AI coding tool:
+
 - **Claude Code**: Uses `.beads/` and conductor files
 - **Cursor/Windsurf**: Same files, same workflow
 - **GitHub Copilot**: Can read the same markdown artifacts
@@ -101,14 +104,14 @@ This pattern works with any AI coding tool:
 
 ## What Problem Does Each Skill Solve?
 
-| Problem | What Happens | Skill That Fixes It |
-|---------|--------------|---------------------|
-| **Amnesia** | Agent forgets tasks between sessions | `beads` — persistent issue tracking |
-| **Fuzzy planning** | Vague discussions, no written spec | `conductor` — structured specs + plans |
-| **No visibility** | Can't see dependencies or blockers | `beads` — dependency-aware graph |
-| **Tests as afterthought** | Tests written after code, prove nothing | `test-driven-development` — RED-GREEN-REFACTOR |
-| **Messy handoffs** | Can't resume where you left off | `beads` notes — session-surviving context |
-| **Conflicts in multi-agent** | Multiple agents edit same files | `beads` + Village — file locking and task claiming |
+| Problem                      | What Happens                            | Skill That Fixes It                                |
+| ---------------------------- | --------------------------------------- | -------------------------------------------------- |
+| **Amnesia**                  | Agent forgets tasks between sessions    | `beads` — persistent issue tracking                |
+| **Fuzzy planning**           | Vague discussions, no written spec      | `conductor` — structured specs + plans             |
+| **No visibility**            | Can't see dependencies or blockers      | `beads` — dependency-aware graph                   |
+| **Tests as afterthought**    | Tests written after code, prove nothing | `test-driven-development` — RED-GREEN-REFACTOR     |
+| **Messy handoffs**           | Can't resume where you left off         | `beads` notes — session-surviving context          |
+| **Conflicts in multi-agent** | Multiple agents edit same files         | `beads` + Village — file locking and task claiming |
 
 These skills work together as a system, not a bag of independent tools.
 
@@ -151,7 +154,7 @@ Everything else in the plugin supports this core pipeline.
 flowchart TB
     subgraph PIPELINE["COMPLETE PIPELINE WORKFLOW"]
         direction TB
-        
+
         subgraph PLANNING["PLANNING LOOP"]
             DS["ds (Design Session)"]
             DISCOVER["DISCOVER<br/>Explore Problem"]
@@ -159,15 +162,15 @@ flowchart TB
             DEVELOP["DEVELOP<br/>Explore Solutions"]
             DELIVER["DELIVER<br/>Finalize Design"]
             APC{{"A/P/C"}}
-            DESIGNMD["design.md"]
+            DESIGND["design.md"]
         end
-        
+
         subgraph SPEC["SPEC GENERATION"]
             NEWTRACK["/conductor-newtrack"]
             SPECMD["spec.md"]
             PLANMD["plan.md"]
         end
-        
+
         subgraph BEADS["ISSUE FILING LOOP"]
             FB["fb (file-beads)"]
             EPIC["Create Epic"]
@@ -175,68 +178,68 @@ flowchart TB
             DEPS["Wire Dependencies"]
             RB["rb (review-beads)"]
         end
-        
+
         subgraph DISPATCH["PARALLEL AGENT DISPATCH"]
             COORDINATOR["Coordinator Agent"]
-            
+
             subgraph WORKERS["WORKER AGENTS (Task tool)"]
                 W1["Agent 1<br/>Independent Task"]
                 W2["Agent 2<br/>Independent Task"]
                 W3["Agent 3<br/>Independent Task"]
                 WN["Agent N<br/>Independent Task"]
             end
-            
+
             MERGE["Merge Results"]
         end
-        
+
         subgraph AGENT_LOOP["AGENT EXECUTION LOOP"]
             READY["bd ready"]
             CLAIM["bd update --status in_progress"]
-            
+
             subgraph TDD["TDD CYCLE"]
                 RED["RED: Write Failing Test"]
                 GREEN["GREEN: Make It Pass"]
                 REFACTOR["REFACTOR: Clean Up"]
             end
-            
+
             CLOSE["bd close"]
             SYNC["bd sync"]
         end
-        
+
         subgraph FINISH["COMPLETION"]
             VERIFY["Verification"]
             BRANCH["finish branch"]
             FINISH_CMD["/conductor-finish"]
         end
     end
-    
+
     subgraph BMAD["PARTY MODE: 12 BMAD AGENTS"]
         subgraph PRODUCT["Product Module"]
             PM["John (PM)"]
             ANALYST["Mary (Analyst)"]
             UX["Sally (UX)"]
         end
-        
+
         subgraph TECHNICAL["Technical Module"]
             ARCH["Winston (Architect)"]
             DEV["Amelia (Developer)"]
             QA["Murat (QA)"]
             DOCS["Paige (Docs)"]
         end
-        
+
         subgraph CREATIVE["Creative Module"]
             STORY["Sophia (Storyteller)"]
             BRAIN["Carson (Brainstorm)"]
-            DESIGNM["Maya (Design Thinking)"]
+            DESIGN["Maya (Design Thinking)"]
             STRAT["Victor (Strategist)"]
             SOLVER["Dr. Quinn (Solver)"]
         end
     end
-    
+
     subgraph VALIDATION["VALIDATION SYSTEM (Phase 0)"]
         direction TB
         VALIDATE["/conductor-validate"]
-        
+
         subgraph CHECKS["Validation Checks"]
             V01["0.1 Resolve track path"]
             V02["0.2 Check directory"]
@@ -246,30 +249,30 @@ flowchart TB
             V06["0.6 Auto-fix track_id"]
             V07["0.7 Staleness detection"]
         end
-        
+
         OUTCOMES{{"PASS / HALT / Auto-repair"}}
     end
-    
+
     DS --> DISCOVER
     DISCOVER --> DEFINE
     DEFINE --> DEVELOP
     DEVELOP --> DELIVER
     DELIVER --> APC
-    APC -->|"C"| DESIGNMD
+    APC -->|"C"| DESIGND
     APC -->|"P"| BMAD
     BMAD -->|"Synthesize"| APC
-    DESIGNMD --> NEWTRACK
-    
+    DESIGND --> NEWTRACK
+
     NEWTRACK --> SPECMD
     SPECMD --> PLANMD
     PLANMD --> FB
-    
+
     FB --> EPIC
     EPIC --> ISSUES
     ISSUES --> DEPS
     DEPS --> RB
     RB --> READY
-    
+
     READY --> CLAIM
     CLAIM --> COORDINATOR
     COORDINATOR --> W1 & W2 & W3 & WN
@@ -282,17 +285,17 @@ flowchart TB
     CLOSE --> SYNC
     SYNC -->|"More issues?"| READY
     SYNC -->|"All done"| VERIFY
-    
+
     VERIFY --> BRANCH
     BRANCH --> FINISH_CMD
-    
+
     VALIDATE --> V01 --> V02 --> V03 --> V04 --> V05 --> V06 --> V07 --> OUTCOMES
-    
+
     NEWTRACK -.->|"Phase 0"| VALIDATE
     FB -.->|"Phase 0"| VALIDATE
     RB -.->|"Phase 0"| VALIDATE
     READY -.->|"Phase 0"| VALIDATE
-    
+
     classDef planning fill:#1a365d,stroke:#63b3ed,color:#e2e8f0
     classDef spec fill:#234e52,stroke:#4fd1c5,color:#e2e8f0
     classDef beads fill:#553c9a,stroke:#b794f4,color:#e2e8f0
@@ -304,8 +307,8 @@ flowchart TB
     classDef technical fill:#2c5282,stroke:#63b3ed,color:#e2e8f0
     classDef creative fill:#744210,stroke:#f6ad55,color:#e2e8f0
     classDef validation fill:#4a1d6e,stroke:#9f7aea,color:#e2e8f0
-    
-    class DS,DISCOVER,DEFINE,DEVELOP,DELIVER,APC,DESIGNMD planning
+
+    class DS,DISCOVER,DEFINE,DEVELOP,DELIVER,APC,DESIGND planning
     class NEWTRACK,SPECMD,PLANMD spec
     class FB,EPIC,ISSUES,DEPS,RB beads
     class COORDINATOR,W1,W2,W3,WN,MERGE dispatch
@@ -314,12 +317,13 @@ flowchart TB
     class VERIFY,BRANCH,FINISH_CMD finish
     class PM,ANALYST,UX product
     class ARCH,DEV,QA,DOCS technical
-    class STORY,BRAIN,DESIGNM,STRAT,SOLVER creative
+    class STORY,BRAIN,DESIGN,STRAT,SOLVER creative
     class VALIDATE,V01,V02,V03,V04,V05,V06,V07,OUTCOMES validation
 ```
 
 For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](./docs/PIPELINE_ARCHITECTURE.md).
 Each phase ends with **A/P/C checkpoints**:
+
 - **[A] Advanced** — Deeper analysis, challenge assumptions
 - **[P] Party** — Multi-agent collaborative review (see Party Mode below)
 - **[C] Continue** — Proceed to next phase
@@ -329,11 +333,11 @@ Each phase ends with **A/P/C checkpoints**:
 
 When you select `[P]` at an A/P/C checkpoint, Party Mode activates 2-3 expert agents for collaborative feedback:
 
-| Module | Agents |
-|--------|--------|
-| **Product** | John (PM), Mary (Analyst), Sally (UX) |
-| **Technical** | Winston (Architect), Amelia (Developer), Murat (QA), Paige (Docs) |
-| **Creative** | Sophia (Storyteller), Carson (Brainstorm), Maya (Design Thinking), Victor (Strategist), Dr. Quinn (Solver) |
+| Module        | Agents                                                                                                     |
+| ------------- | ---------------------------------------------------------------------------------------------------------- |
+| **Product**   | John (PM), Mary (Analyst), Sally (UX)                                                                      |
+| **Technical** | Winston (Architect), Amelia (Developer), Murat (QA), Paige (Docs)                                          |
+| **Creative**  | Sophia (Storyteller), Carson (Brainstorm), Maya (Design Thinking), Victor (Strategist), Dr. Quinn (Solver) |
 
 Agents respond in character, cross-talk, then synthesize insights. See `workflows/party-mode/workflow.md` for details.
 
@@ -341,23 +345,25 @@ Agents respond in character, cross-talk, then synthesize insights. See `workflow
 
 During design sessions, use these phrases to get more thorough analysis:
 
-| Say This | Agent Will |
-|----------|------------|
-| "stress test this design" | Challenge assumptions, find failure modes |
-| "what could go wrong?" | Identify edge cases and error scenarios |
-| "consider concurrent access" | Think about race conditions, locks |
-| "what if the user does X wrong?" | Explore invalid input handling |
-| "scale this to 10x" | Find performance bottlenecks |
-| "security review" | Check for vulnerabilities |
+| Say This                         | Agent Will                                |
+| -------------------------------- | ----------------------------------------- |
+| "stress test this design"        | Challenge assumptions, find failure modes |
+| "what could go wrong?"           | Identify edge cases and error scenarios   |
+| "consider concurrent access"     | Think about race conditions, locks        |
+| "what if the user does X wrong?" | Explore invalid input handling            |
+| "scale this to 10x"              | Find performance bottlenecks              |
+| "security review"                | Check for vulnerabilities                 |
 
 **Pro tip**: During A/P/C checkpoints, select **[A] Advanced** for automatic stress testing, or **[P] Party** to get multiple expert agents challenging your design. You can also just say "stress test" at any point to trigger edge case analysis.
 
 **For humans**:
+
 - Think of it as the "measure twice, cut once" step
 - You'll answer 3-5 clarifying questions, then get a structured spec and phased plan
 - The output lives in `conductor/tracks/<track_id>/` and persists across sessions
 
 **For agents**:
+
 - When user says "new feature" or "build X", prefer `/conductor-newtrack <description>`
 - Always ask clarifying questions before generating specs
 - Confirm summaries before generating large artifacts
@@ -365,12 +371,12 @@ During design sessions, use these phrases to get more thorough analysis:
 
 **The 4-Phase Framework**:
 
-| Phase | Question to Answer | Conductor Output |
-|-------|-------------------|------------------|
-| **Requirements** | "Does the AI understand what we're building?" | Questions → `spec.md` |
-| **Plan** | "Does this plan fit our architecture?" | `spec.md` → `plan.md` |
-| **Implement** | "Can this be tested independently?" | Execute via beads + TDD |
-| **Reflect** | "Would I bet my job on this code?" | Verify + close |
+| Phase            | Question to Answer                            | Conductor Output        |
+| ---------------- | --------------------------------------------- | ----------------------- |
+| **Requirements** | "Does the AI understand what we're building?" | Questions → `spec.md`   |
+| **Plan**         | "Does this plan fit our architecture?"        | `spec.md` → `plan.md`   |
+| **Implement**    | "Can this be tested independently?"           | Execute via beads + TDD |
+| **Reflect**      | "Would I bet my job on this code?"            | Verify + close          |
 
 **Directory Structure**:
 
@@ -400,11 +406,13 @@ conductor/
 **Key insight**: Beads is the execution queue; Conductor is the blueprint.
 
 **For humans**:
+
 - Think of it as a todo list that understands "I can't do X until Y is done"
 - Issues live in `.beads/` and get committed with your code
 - Come back in 2 weeks, run `bd ready`, and pick up where you left off
 
 **For agents**:
+
 - After Conductor creates `plan.md`, immediately use `fb` (file-beads) to convert it to issues
 - At session start: `bd ready --json` to see what's unblocked
 - At session end: Update notes with COMPLETED/IN_PROGRESS/NEXT format
@@ -430,11 +438,11 @@ bd dep add bd-new bd-current --type discovered-from  # Found during work
 
 **What Survives Compaction**:
 
-| Survives | Doesn't Survive |
-|----------|-----------------|
+| Survives                            | Doesn't Survive      |
+| ----------------------------------- | -------------------- |
 | All bead data (issues, notes, deps) | Conversation history |
-| Complete work history | TodoWrite lists |
-| Key decisions in notes | Recent discussion |
+| Complete work history               | TodoWrite lists      |
+| Key decisions in notes              | Recent discussion    |
 
 **Writing Good Notes** (for post-compaction recovery):
 
@@ -457,11 +465,13 @@ NEXT: Immediate next action
 **Key insight**: Single-agent workflows work fine without Village. Multi-agent workflows require it.
 
 **For humans**:
+
 - Think of it as "mutex locks for AI agents"
 - One agent reserves a file, others wait or work on something else
 - Tasks are claimed atomically — no two agents grab the same work
 
 **For agents**:
+
 - At session start: `init` to join workspace with your role
 - Before work: `claim` to atomically get a task (replaces manual selection)
 - Before editing: `reserve` to lock files
@@ -499,11 +509,13 @@ status                             # See team state and locks
 **Key insight**: If you didn't watch the test fail, you don't know if it tests the right thing.
 
 **For humans**:
+
 - Every feature starts with a failing test
 - Code is written to make the test pass, nothing more
 - Refactoring happens only after tests are green
 
 **For agents**:
+
 - **Iron Law**: No production code without a failing test first
 - Write code before the test? Delete it. Start over.
 - Don't keep it as "reference" or "adapt" it — delete means delete
@@ -563,7 +575,7 @@ REPEAT  → Next failing test
                     bd-002 becomes ready
 ```
 
-**The Bridge Sentence**: Conductor turns ideas into structured documents. File-beads converts plans into trackable issues. Beads becomes your source of truth for "what's next." TDD describes *how* to execute each issue safely.
+**The Bridge Sentence**: Conductor turns ideas into structured documents. File-beads converts plans into trackable issues. Beads becomes your source of truth for "what's next." TDD describes _how_ to execute each issue safely.
 
 ---
 
@@ -592,9 +604,9 @@ Epic 1: Authentication
 
 **Why this matters**:
 
-| Option | When to use | Trade-off |
-|--------|-------------|-----------|
-| **`rb` first** | Complex plans, many epics remaining | More tokens, fewer mistakes |
+| Option             | When to use                              | Trade-off                        |
+| ------------------ | ---------------------------------------- | -------------------------------- |
+| **`rb` first**     | Complex plans, many epics remaining      | More tokens, fewer mistakes      |
 | **Direct handoff** | Simple plans, confident in beads quality | Faster, but errors may propagate |
 
 **For agents**: After completing an epic, STOP and present this choice. Do not auto-continue.
@@ -607,17 +619,18 @@ The full pipeline assumes you're starting fresh. But you can jump in anywhere.
 
 ### Skip-Ahead Table
 
-| You Already Have | Skip To | Trigger |
-|------------------|---------|---------|
-| An idea to explore | Design first | `/conductor-design` → conductor/tracks/<id>/design.md |
-| A plan (markdown, PRD, spec) | File beads directly | `fb` (file-beads skill) |
-| Existing issues/tasks | Claim and execute | `bd ready` → `bd update` |
-| A bug to fix | Debug first | `debug` → `systematic-debugging` |
-| Code that needs tests | Add tests | `tdd` skill |
+| You Already Have             | Skip To             | Trigger                                               |
+| ---------------------------- | ------------------- | ----------------------------------------------------- |
+| An idea to explore           | Design first        | `/conductor-design` → conductor/tracks/<id>/design.md |
+| A plan (markdown, PRD, spec) | File beads directly | `fb` (file-beads skill)                               |
+| Existing issues/tasks        | Claim and execute   | `bd ready` → `bd update`                              |
+| A bug to fix                 | Debug first         | `debug` → `systematic-debugging`                      |
+| Code that needs tests        | Add tests           | `tdd` skill                                           |
 
 ### Why This Matters: Token Economics
 
 Conductor generates context files (`spec.md`, `plan.md`). These files:
+
 - Get loaded every session when working on a track
 - Consume tokens in your context window
 - Are valuable for complex, multi-phase features
@@ -625,6 +638,7 @@ Conductor generates context files (`spec.md`, `plan.md`). These files:
 **If you already have a plan from elsewhere** (Notion doc, GitHub issue, PRD from PM), skip Conductor and go straight to `fb` to convert it into beads. Don't regenerate what already exists.
 
 **Rule of thumb**:
+
 - **Complex feature, starting from scratch** → Full Conductor flow
 - **Clear task, plan exists** → `fb` to file beads, then execute
 - **Single bug or small fix** → Direct to `debug` or `tdd`
@@ -663,6 +677,7 @@ Here's how everything fits together in a real coding session.
 ```
 
 This creates:
+
 - `conductor/product.md` — Product vision
 - `conductor/tech-stack.md` — Technology choices
 - `conductor/workflow.md` — Development standards
@@ -674,11 +689,13 @@ This creates:
 ```
 
 The agent will:
+
 1. Ask 3-5 clarifying questions based on track type
 2. Generate `spec.md` with requirements and acceptance criteria
 3. Generate `plan.md` with phased tasks
 
 **Output structure**:
+
 ```
 conductor/tracks/auth_20251215/
 ├── spec.md    # WHAT we're building
@@ -698,12 +715,14 @@ Read the generated spec and plan. Adjust if needed. This is your last chance to 
 #### What happens automatically
 
 After `/conductor-newtrack` generates the plan:
+
 1. **Subagent 1**: Runs `fb` (file-beads) to create issues with dependencies
 2. **Subagent 2**: Runs `rb` (review-beads) to validate and refine issues
 
 #### When to use `fb` manually (advanced)
 
 Use `fb` directly only when:
+
 - Re-filing from an **existing** plan (not just created by newtrack)
 - Converting external specs (Notion, PRD, GitHub issues) to beads
 - Recovering after manual plan edits
@@ -713,6 +732,7 @@ fb
 ```
 
 The `file-beads` skill reads `plan.md` and creates beads issues with:
+
 - One issue per task
 - Dependencies encoded (`blocks`, `parent-child`)
 - Priorities set
@@ -743,8 +763,8 @@ Read the issue's description, design, and acceptance criteria.
 #### Step 2: RED — Write failing test
 
 ```typescript
-test('OAuth callback exchanges code for tokens', async () => {
-  const result = await handleOAuthCallback({ code: 'test-code' });
+test("OAuth callback exchanges code for tokens", async () => {
+  const result = await handleOAuthCallback({ code: "test-code" });
   expect(result.accessToken).toBeDefined();
   expect(result.refreshToken).toBeDefined();
 });
@@ -762,8 +782,8 @@ npm test -- --grep "OAuth callback"
 ```typescript
 async function handleOAuthCallback({ code }) {
   const response = await fetch(tokenEndpoint, {
-    method: 'POST',
-    body: new URLSearchParams({ code, grant_type: 'authorization_code' })
+    method: "POST",
+    body: new URLSearchParams({ code, grant_type: "authorization_code" }),
   });
   const data = await response.json();
   return { accessToken: data.access_token, refreshToken: data.refresh_token };
@@ -862,6 +882,7 @@ When you complete a track (all epics done), run:
 ```
 
 The `/conductor-finish` command:
+
 1. Extracts learnings from work threads → `LEARNINGS.md`
 2. Generates AI summaries for closed beads
 3. Merges knowledge to `conductor/AGENTS.md`
@@ -889,6 +910,7 @@ bd show bd-002
 ```
 
 The notes field tells you:
+
 - What was completed
 - What's in progress
 - What to do next
@@ -906,61 +928,61 @@ Beyond the core workflow, Maestro includes specialist skills for specific situat
 
 ### Planning & Exploration
 
-| Skill | Trigger | When to Use |
-|-------|---------|-------------|
-| `design` | `ds` | Explore ideas with Double Diamond methodology, A/P/C checkpoints, and optional Party Mode. |
-| `conductor` | `/conductor-newtrack` | When you have a design and need spec.md + plan.md. |
-| `conductor` | `/conductor-implement` | Execute ONE epic from track, then choose: rb or handoff. |
+| Skill       | Trigger                | When to Use                                                                                |
+| ----------- | ---------------------- | ------------------------------------------------------------------------------------------ |
+| `design`    | `ds`                   | Explore ideas with Double Diamond methodology, A/P/C checkpoints, and optional Party Mode. |
+| `conductor` | `/conductor-newtrack`  | When you have a design and need spec.md + plan.md.                                         |
+| `conductor` | `/conductor-implement` | Execute ONE epic from track, then choose: rb or handoff.                                   |
 
 ---
 
 ### Development
 
-| Skill | Trigger | When to Use |
-|-------|---------|-------------|
-| `test-driven-development` | `tdd` | Every feature and bugfix. RED-GREEN-REFACTOR, no exceptions. |
-| `using-git-worktrees` | — | Starting feature work that needs isolation from current workspace. |
-| `finishing-a-development-branch` | — | Implementation complete, tests pass, ready to integrate. |
-| `subagent-driven-development` | — | Coordinating multiple subagents on independent tasks. |
-| `dispatching-parallel-agents` | `dispatch` | 2+ independent tasks that can run in parallel. |
+| Skill                            | Trigger    | When to Use                                                        |
+| -------------------------------- | ---------- | ------------------------------------------------------------------ |
+| `test-driven-development`        | `tdd`      | Every feature and bugfix. RED-GREEN-REFACTOR, no exceptions.       |
+| `using-git-worktrees`            | —          | Starting feature work that needs isolation from current workspace. |
+| `finishing-a-development-branch` | —          | Implementation complete, tests pass, ready to integrate.           |
+| `subagent-driven-development`    | —          | Coordinating multiple subagents on independent tasks.              |
+| `dispatching-parallel-agents`    | `dispatch` | 2+ independent tasks that can run in parallel.                     |
 
 ---
 
 ### Debugging (external: superpowers plugin)
 
-| Skill | Trigger | When to Use |
-|-------|---------|-------------|
-| `root-cause-tracing` | `trace` | Errors deep in execution. Traces backward through call stack. |
-| `defense-in-depth` | — | Invalid data causes failures deep in execution. Validate at every layer. |
+| Skill                | Trigger | When to Use                                                              |
+| -------------------- | ------- | ------------------------------------------------------------------------ |
+| `root-cause-tracing` | `trace` | Errors deep in execution. Traces backward through call stack.            |
+| `defense-in-depth`   | —       | Invalid data causes failures deep in execution. Validate at every layer. |
 
 ---
 
 ### Code Review (external: superpowers plugin)
 
-| Skill | Trigger | When to Use |
-|-------|---------|-------------|
-| `requesting-code-review` | `review code` | Completing tasks, before merging. Get structured review of your work. |
-| `receiving-code-review` | — | When receiving feedback. Requires verification, not blind implementation. |
+| Skill                    | Trigger       | When to Use                                                               |
+| ------------------------ | ------------- | ------------------------------------------------------------------------- |
+| `requesting-code-review` | `review code` | Completing tasks, before merging. Get structured review of your work.     |
+| `receiving-code-review`  | —             | When receiving feedback. Requires verification, not blind implementation. |
 
 ---
 
 ### Meta / Quality
 
-| Skill | Trigger | When to Use |
-|-------|---------|-------------|
-| `using-superpowers` | — | Session initialization. Establishes how to find and use skills. |
-| `verification-before-completion` | — | Before claiming work is complete. Evidence before assertions. |
-| `writing-skills` | `write skill` | Creating or editing skills. |
-| `sharing-skills` | `share skill` | Contributing skills upstream via PR. |
+| Skill                            | Trigger       | When to Use                                                     |
+| -------------------------------- | ------------- | --------------------------------------------------------------- |
+| `using-superpowers`              | —             | Session initialization. Establishes how to find and use skills. |
+| `verification-before-completion` | —             | Before claiming work is complete. Evidence before assertions.   |
+| `writing-skills`                 | `write skill` | Creating or editing skills.                                     |
+| `sharing-skills`                 | `share skill` | Contributing skills upstream via PR.                            |
 
 ---
 
 ### Beads Helpers
 
-| Skill | Trigger | When to Use |
-|-------|---------|-------------|
-| `beads/file-beads` | `fb` | Convert existing plans to beads (advanced: runs automatically after newtrack). |
-| `beads/review-beads` | `rb` | Review and refine beads (advanced: runs automatically after newtrack). |
+| Skill                | Trigger | When to Use                                                                    |
+| -------------------- | ------- | ------------------------------------------------------------------------------ |
+| `beads/file-beads`   | `fb`    | Convert existing plans to beads (advanced: runs automatically after newtrack). |
+| `beads/review-beads` | `rb`    | Review and refine beads (advanced: runs automatically after newtrack).         |
 
 ---
 
@@ -968,12 +990,12 @@ Beyond the core workflow, Maestro includes specialist skills for specific situat
 
 Some skills work best with optional CLI tools. The skills still provide value without them (as mental models), but CLIs make them concrete.
 
-| Skill | Optional CLI | What CLI Adds |
-|-------|--------------|---------------|
-| `beads` | `bd` | Persistent issue database, `bd ready`, `bd show` |
-| `beads` | `bv` | Graph visualization, priority recommendations |
-| `conductor` | `/conductor-finish` | CODEMAPS: Token-aware architecture docs (regenerated in Phase 6) |
-| `ground` | — | Verification protocol: verify patterns against repo/web/history before implementation |
+| Skill       | Optional CLI        | What CLI Adds                                                                         |
+| ----------- | ------------------- | ------------------------------------------------------------------------------------- |
+| `beads`     | `bd`                | Persistent issue database, `bd ready`, `bd show`                                      |
+| `beads`     | `bv`                | Graph visualization, priority recommendations                                         |
+| `conductor` | `/conductor-finish` | CODEMAPS: Token-aware architecture docs (regenerated in Phase 6)                      |
+| `ground`    | —                   | Verification protocol: verify patterns against repo/web/history before implementation |
 
 **If you have `bd` installed**: Commands like `bd ready --json` work directly.
 
@@ -987,18 +1009,18 @@ Some skills work best with optional CLI tools. The skills still provide value wi
 
 ### Troubleshooting
 
-| Problem | Solution |
-|---------|----------|
-| `bd: command not found` | Install via K&V setup or add `~/.local/bin` to PATH |
-| Agent ignores the workflow | Say trigger phrase explicitly: `tdd`, `debug`, `/conductor-design` |
-| Plan seems incomplete | Use `rb` (review-beads) to check and refine issues |
-| Tests pass immediately | You wrote code first. Delete it. Start with failing test. |
-| Context compacted, lost state | Run `bd show <issue-id>` — notes field has recovery context |
-| Too many issues, overwhelmed | Run `bd ready` for unblocked only, or `bd blocked` to clear bottlenecks |
-| Conductor files eating tokens | Skip Conductor if you already have a plan. Use `fb` directly. |
-| Track in inconsistent state | Run `/conductor-validate <track-id>` — auto-repairs state files |
-| Missing state files | Validation auto-creates if spec.md + plan.md exist and are valid |
-| Corrupted JSON in track | Validation HALTs — manual intervention required |
+| Problem                       | Solution                                                                |
+| ----------------------------- | ----------------------------------------------------------------------- |
+| `bd: command not found`       | Install via K&V setup or add `~/.local/bin` to PATH                     |
+| Agent ignores the workflow    | Say trigger phrase explicitly: `tdd`, `debug`, `/conductor-design`      |
+| Plan seems incomplete         | Use `rb` (review-beads) to check and refine issues                      |
+| Tests pass immediately        | You wrote code first. Delete it. Start with failing test.               |
+| Context compacted, lost state | Run `bd show <issue-id>` — notes field has recovery context             |
+| Too many issues, overwhelmed  | Run `bd ready` for unblocked only, or `bd blocked` to clear bottlenecks |
+| Conductor files eating tokens | Skip Conductor if you already have a plan. Use `fb` directly.           |
+| Track in inconsistent state   | Run `/conductor-validate <track-id>` — auto-repairs state files         |
+| Missing state files           | Validation auto-creates if spec.md + plan.md exist and are valid        |
+| Corrupted JSON in track       | Validation HALTs — manual intervention required                         |
 
 ---
 
@@ -1007,6 +1029,7 @@ Some skills work best with optional CLI tools. The skills still provide value wi
 **Problem**: "Build user invitations for our SaaS."
 
 **Flow**:
+
 ```
 /conductor-setup                    # First time only
 /conductor-newtrack "user invitations feature"
@@ -1028,6 +1051,7 @@ bd update bd-001 --status in_progress
 **Problem**: "Intermittent 500 in the billing endpoint."
 
 **Flow**:
+
 ```
 bd create "Investigate billing 500 errors" -t bug -p 0
 bd update bd-xyz --status in_progress
@@ -1050,6 +1074,7 @@ bd close bd-xyz --reason "Fixed race condition in invoice calculation"
 **Problem**: "We have 20 half-done tasks and no idea what to prioritize."
 
 **Flow**:
+
 ```
 bd list                             # See everything
 bd blocked --json                   # Find what's stuck
@@ -1070,6 +1095,7 @@ bd ready --json                     # Now see what's actually actionable
 **Problem**: "PM gave us a detailed spec in Notion. Just execute it."
 
 **Flow**:
+
 ```
 # Skip Conductor entirely
 fb                                  # File beads from existing plan
@@ -1089,6 +1115,7 @@ bd ready --json
 **Problem**: "We keep making the same mistakes. How do we learn?"
 
 **Flow**:
+
 ```
 # Capture patterns as you go
 # If pattern is reusable:
@@ -1107,6 +1134,7 @@ share skill                         # Optional: PR to upstream
 ### For Agents: Copy-Paste Triggers
 
 **Session Start**:
+
 ```
 bd ready --json                     # What's unblocked?
 bd list --status in_progress --json # What's active?
@@ -1114,6 +1142,7 @@ bd show <id>                        # Read context
 ```
 
 **Planning**:
+
 ```
 /conductor-setup                    # Initialize project (once)
 /conductor-newtrack "description"   # New feature/bug track
@@ -1123,6 +1152,7 @@ rb                                  # Review beads
 ```
 
 **Execution**:
+
 ```
 tdd                                 # Enter TDD mode
 debug                               # Systematic debugging
@@ -1131,6 +1161,7 @@ dispatch                            # Parallel subagents
 ```
 
 **Progress**:
+
 ```bash
 bd update <id> --status in_progress
 bd update <id> --notes "COMPLETED: X. IN PROGRESS: Y. NEXT: Z."
@@ -1138,6 +1169,7 @@ bd close <id> --reason "summary"
 ```
 
 **Session End**:
+
 ```bash
 git add -A && git commit -m "message"
 git push
@@ -1166,30 +1198,30 @@ git push
 
 ### Trigger Phrase Cheatsheet
 
-| Phrase | Skill Activated |
-|--------|-----------------|
-| `/conductor-setup` | conductor (setup) |
-| `ds` | design (Double Diamond design session) |
-| `/conductor-design` | conductor (design with A/P/C + Party Mode) |
-| `/conductor-newtrack` | conductor (new track) |
-| `/conductor-implement` | conductor (implement) |
-| `/conductor-status` | conductor (status) |
-| `/conductor-revert` | conductor (revert) |
-| `/conductor-revise` | conductor (revise spec/plan) |
-| `/conductor-finish` | conductor (complete track: learnings, refresh, archive) |
-| `tdd` | test-driven-development |
-| `trace`, `find source` | root-cause-tracing |
-| `flaky`, `race condition` | condition-based-waiting |
-| `fb`, `file beads` | beads/file-beads |
-| `rb`, `review beads` | beads/review-beads |
-| `dispatch` | dispatching-parallel-agents |
-| `write skill` | writing-skills |
-| `share skill` | sharing-skills |
-| `review code` | requesting-code-review |
-| `doc-sync`, `/conductor-finish` | conductor (finish workflow) |
-| `init`, `claim`, `done` | beads-village (multi-agent) |
-| `/ground` | grounding (context alignment) |
-| `/decompose-task` | task decomposition |
+| Phrase                          | Skill Activated                                         |
+| ------------------------------- | ------------------------------------------------------- |
+| `/conductor-setup`              | conductor (setup)                                       |
+| `ds`                            | design (Double Diamond design session)                  |
+| `/conductor-design`             | conductor (design with A/P/C + Party Mode)              |
+| `/conductor-newtrack`           | conductor (new track)                                   |
+| `/conductor-implement`          | conductor (implement)                                   |
+| `/conductor-status`             | conductor (status)                                      |
+| `/conductor-revert`             | conductor (revert)                                      |
+| `/conductor-revise`             | conductor (revise spec/plan)                            |
+| `/conductor-finish`             | conductor (complete track: learnings, refresh, archive) |
+| `tdd`                           | test-driven-development                                 |
+| `trace`, `find source`          | root-cause-tracing                                      |
+| `flaky`, `race condition`       | condition-based-waiting                                 |
+| `fb`, `file beads`              | beads/file-beads                                        |
+| `rb`, `review beads`            | beads/review-beads                                      |
+| `dispatch`                      | dispatching-parallel-agents                             |
+| `write skill`                   | writing-skills                                          |
+| `share skill`                   | sharing-skills                                          |
+| `review code`                   | requesting-code-review                                  |
+| `doc-sync`, `/conductor-finish` | conductor (finish workflow)                             |
+| `init`, `claim`, `done`         | beads-village (multi-agent)                             |
+| `/ground`                       | grounding (context alignment)                           |
+| `/decompose-task`               | task decomposition                                      |
 
 ---
 
@@ -1199,10 +1231,10 @@ git push
 
 Before running `/conductor-implement`, switch to plan mode first. This lets the agent read the epic context and plan its approach before writing code.
 
-| Tool | How to Enable Plan Mode |
-|------|-------------------------|
+| Tool        | How to Enable Plan Mode               |
+| ----------- | ------------------------------------- |
 | Claude Code | Press `Shift+Tab` to toggle plan mode |
-| Codex | Use `/create-plan` skill |
+| Codex       | Use `/create-plan` skill              |
 | Other tools | Check for plan/think mode in settings |
 
 **Why it matters**: Agents perform better when they understand context before acting. Plan mode forces the agent to read beads, review dependencies, and strategize before writing code.
@@ -1214,17 +1246,18 @@ Different tools handle session transitions differently:
 **Amp** has a dedicated handoff tool for context management. Use the handoff command from the command palette to draft a new thread with relevant files and context. Amp works best with small, focused threads. You can also reference other threads by pasting a URL or `@T-<thread-id>`.
 
 Examples:
+
 - "Execute phase one of the created plan"
 - "Apply the same fix from @T-abc123 to this issue"
 
 **Claude Code / Codex**: These tools don't have handoff. Run `/compact` before ending session to checkpoint progress. Your beads notes survive; conversation doesn't.
 
-| Tool | Handoff Method |
-|------|----------------|
-| Amp | Handoff command (command palette) or reference threads with `@T-<id>` |
-| Claude Code | `/compact` before session end |
-| Codex | `/compact` before session end |
+| Tool        | Handoff Method                                                        |
+| ----------- | --------------------------------------------------------------------- |
+| Amp         | Handoff command (command palette) or reference threads with `@T-<id>` |
+| Claude Code | `/compact` before session end                                         |
+| Codex       | `/compact` before session end                                         |
 
 ---
 
-*Built on foundations from [superpowers](https://github.com/obra/superpowers), [conductor](https://github.com/NguyenSiTrung/conductor), [beads](https://github.com/steveyegge/beads), and [Knowledge & Vibes](https://github.com/kyleobrien91/knowledge-and-vibes).*
+_Built on foundations from [superpowers](https://github.com/obra/superpowers), [conductor](https://github.com/NguyenSiTrung/conductor), [beads](https://github.com/steveyegge/beads), and [Knowledge & Vibes](https://github.com/kyleobrien91/knowledge-and-vibes)._

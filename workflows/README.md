@@ -8,7 +8,7 @@ This directory contains the **single source of truth** for all Conductor workflo
 flowchart TB
     subgraph PIPELINE["COMPLETE PIPELINE WORKFLOW"]
         direction TB
-        
+
         subgraph PLANNING["PLANNING LOOP"]
             DS["ds (Design Session)"]
             DISCOVER["DISCOVER"]
@@ -16,64 +16,64 @@ flowchart TB
             DEVELOP["DEVELOP"]
             DELIVER["DELIVER"]
             APC{{"A/P/C"}}
-            DESIGNMD["design.md"]
+            DESIGND["design.md"]
         end
-        
+
         subgraph SPEC["SPEC GENERATION"]
             NEWTRACK["/conductor-newtrack"]
             SPECMD["spec.md"]
             PLANMD["plan.md"]
         end
-        
+
         subgraph BEADS["ISSUE FILING"]
             FB["fb (file-beads)"]
             RB["rb (review-beads)"]
         end
-        
+
         subgraph DISPATCH["PARALLEL AGENT DISPATCH"]
             COORDINATOR["Coordinator"]
             WORKERS["Worker Agents 1..N"]
             MERGE["Merge Results"]
         end
-        
+
         subgraph EXECUTION["AGENT EXECUTION LOOP"]
             READY["bd ready"]
             CLAIM["claim task"]
             TDD["TDD: RED-GREEN-REFACTOR"]
             CLOSE["bd close"]
         end
-        
+
         subgraph FINISH["COMPLETION"]
             VERIFY["Verification"]
             BRANCH["finish branch"]
             FINISH_CMD["/conductor-finish"]
         end
     end
-    
+
     subgraph BMAD["PARTY MODE: 12 BMAD AGENTS"]
         PRODUCT["Product: John (PM), Mary (Analyst), Sally (UX)"]
         TECHNICAL["Technical: Winston (Architect), Amelia (Developer), Murat (QA), Paige (Docs)"]
         CREATIVE["Creative: Sophia, Carson, Maya, Victor, Dr. Quinn"]
     end
-    
+
     subgraph VALIDATION["VALIDATION SYSTEM (Phase 0)"]
         direction TB
         VALIDATE["/conductor-validate"]
         V_CHECKS["0.1-0.7: Path → Dir → Files → JSON → State → ID → Stale"]
         OUTCOMES{{"PASS / HALT / Auto-repair"}}
     end
-    
+
     DS --> DISCOVER --> DEFINE --> DEVELOP --> DELIVER --> APC
-    APC -->|"C"| DESIGNMD
+    APC -->|"C"| DESIGND
     APC -->|"P"| BMAD
     BMAD --> APC
-    DESIGNMD --> NEWTRACK --> SPECMD --> PLANMD --> FB --> RB --> READY
+    DESIGND --> NEWTRACK --> SPECMD --> PLANMD --> FB --> RB --> READY
     READY --> CLAIM --> COORDINATOR --> WORKERS --> MERGE --> TDD --> CLOSE
     CLOSE -->|"More?"| READY
     CLOSE -->|"Done"| VERIFY --> BRANCH --> FINISH_CMD
-    
+
     VALIDATE --> V_CHECKS --> OUTCOMES
-    
+
     NEWTRACK -.->|"Phase 0"| VALIDATE
     FB -.->|"Phase 0"| VALIDATE
     RB -.->|"Phase 0"| VALIDATE
@@ -85,6 +85,7 @@ For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../docs
 ## Purpose
 
 The workflow definitions in this directory are designed to be:
+
 - **Format-agnostic**: Written in markdown, can be referenced by TOML commands, Claude skills, or any other implementation
 - **Centralized**: One place to update workflow logic that applies across all implementations
 - **Consistent**: Ensures all AI agents follow the same protocols
@@ -119,7 +120,9 @@ workflows/
 ## How to Use
 
 ### For TOML Commands (Gemini CLI)
+
 Reference these workflows in your prompt sections:
+
 ```toml
 prompt = """
 Follow the workflow defined in ~/.gemini/extensions/conductor/workflows/setup.md
@@ -127,13 +130,17 @@ Follow the workflow defined in ~/.gemini/extensions/conductor/workflows/setup.md
 ```
 
 ### For Claude Skills/Commands
+
 Import the workflow logic in your markdown prompts:
+
 ```markdown
 # Reference: workflows/implement.md
+
 Execute the task implementation workflow as defined.
 ```
 
 ### For Other Implementations
+
 Read and adapt the workflow steps for your specific implementation while maintaining the core logic.
 
 ## Maintaining Consistency
@@ -148,12 +155,14 @@ When updating workflow logic:
 ## Schema Validation
 
 JSON schemas in the `schemas/` directory define the structure of state files:
+
 - Use these for validation in your implementation
 - Ensures all implementations produce compatible state files
 
 ## Core Principles
 
 All workflows share these principles:
+
 1. **Validate tool calls**: Every operation must be verified
 2. **Resume capability**: State files enable resumable operations
 3. **User confirmation**: Critical actions require explicit approval

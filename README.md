@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 This plugin is my **personal source of truth** for structured AI-assisted development.
-It contains the exact skills, workflows, and patterns I use across *every* project — continuously updated as I discover better ways to work.
+It contains the exact skills, workflows, and patterns I use across _every_ project — continuously updated as I discover better ways to work.
 
 Think of this as the **official, up-to-date playbook** for context-driven development:
 how I plan features, how I track work across sessions, how I debug systematically, and how the whole system stays reliable.
@@ -20,11 +20,13 @@ If a skill is in this plugin, it's because I actively use it.
 ### Claude Code
 
 **Plugin install (recommended):**
+
 ```
 /plugin install https://github.com/ReinaMacCredy/maestro
 ```
 
 **Or via agent prompt:**
+
 ```
 Follow https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/SETUP_GUIDE.md to install Maestro.
 ```
@@ -32,21 +34,25 @@ Follow https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/SETUP_GUIDE.
 ### OpenAI Codex
 
 **Quick install/update (one command):**
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/scripts/install-codex.sh | bash
 ```
 
 **Install (recommended, updateable):**
+
 ```bash
 git clone https://github.com/ReinaMacCredy/maestro.git ~/.codex/skills/maestro
 ```
 
 **Update:**
+
 ```bash
 git -C ~/.codex/skills/maestro pull
 ```
 
 **Install a specific skill only (optional):**
+
 ```bash
 python ~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py --repo ReinaMacCredy/maestro --path skills/conductor
 ```
@@ -62,6 +68,7 @@ amp skill add https://github.com/ReinaMacCredy/maestro --global
 ### Cursor / Windsurf / Other tools
 
 Tell your AI agent:
+
 ```
 Follow https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/SETUP_GUIDE.md to install Maestro.
 ```
@@ -132,12 +139,12 @@ trace                              # Root cause tracing (external: superpowers)
 
 ## The Skills
 
-| Category | Skills |
-|----------|--------|
-| **Core Workflow** | conductor, design (Double Diamond + Party Mode), beads, file-beads (parallel), review-beads (parallel) |
-| **Development** | test-driven-development, using-git-worktrees, finishing-a-development-branch |
-| **Utilities** | dispatching-parallel-agents, subagent-driven-development, [agent-coordination](workflows/agent-coordination/) |
-| **Meta** | verification-before-completion, writing-skills, sharing-skills |
+| Category          | Skills                                                                                                        |
+| ----------------- | ------------------------------------------------------------------------------------------------------------- |
+| **Core Workflow** | conductor, design (Double Diamond + Party Mode), beads, file-beads (parallel), review-beads (parallel)        |
+| **Development**   | test-driven-development, using-git-worktrees, finishing-a-development-branch                                  |
+| **Utilities**     | dispatching-parallel-agents, subagent-driven-development, [agent-coordination](workflows/agent-coordination/) |
+| **Meta**          | verification-before-completion, writing-skills, sharing-skills                                                |
 
 ---
 
@@ -148,6 +155,7 @@ trace                              # Root cause tracing (external: superpowers)
 **What it does**: Structured design and planning flow that turns ideas into `design.md`, `spec.md` and `plan.md`.
 
 **Design Sessions (Double Diamond)**: `/conductor-design` (or `ds` trigger) runs a Double Diamond design session with four phases: DISCOVER → DEFINE → DEVELOP → DELIVER. Each phase ends with A/P/C checkpoints:
+
 - **[A] Advanced**: Deeper analysis, assumption audit
 - **[P] Party**: Multi-agent collaborative review (see `workflows/party-mode/`)
 - **[C] Continue**: Proceed to next phase
@@ -156,61 +164,61 @@ trace                              # Root cause tracing (external: superpowers)
 flowchart TB
     subgraph PIPELINE["WORKFLOW PIPELINE"]
         direction TB
-        
+
         subgraph SETUP["SETUP"]
             TRIGGER["ds / /conductor-design"]
             CHECK["Verify conductor/<br/>(product.md, tech-stack.md, workflow.md)"]
         end
-        
+
         subgraph DIAMOND1["DIAMOND 1: UNDERSTAND PROBLEM"]
             DISCOVER["DISCOVER (Diverge)<br/>• Explore problem space<br/>• 5 Whys, edge cases<br/>• Mini-ground: codebase check"]
             APC1{"A/P/C"}
             DEFINE["DEFINE (Converge)<br/>• Problem statement<br/>• Success criteria<br/>• YAGNI filtering"]
             APC2{"A/P/C"}
         end
-        
+
         subgraph DIAMOND2["DIAMOND 2: DESIGN SOLUTION"]
             DEVELOP["DEVELOP (Diverge)<br/>• 3+ approaches<br/>• Trade-off analysis<br/>• Wild/10x option"]
             APC3{"A/P/C"}
             DELIVER["DELIVER (Converge)<br/>• Architecture, Components<br/>• Data Model, User Flow<br/>• FULL GROUNDING required"]
             APC4{"A/P/C"}
         end
-        
+
         subgraph HANDOFF["HANDOFF"]
-            DESIGNMD["design.md saved to<br/>conductor/tracks/{id}/"]
+            DESIGND["design.md saved to<br/>conductor/tracks/{id}/"]
             NEXT["Next: /conductor-newtrack {track_id}<br/>(spec + plan + beads + review)"]
         end
     end
-    
+
     subgraph AGENTS["PARTY MODE: 12 AGENTS (BMAD v6)"]
         subgraph PRODUCT["Product Module"]
             PM["John (PM)"]
             ANALYST["Mary (Analyst)"]
             UX["Sally (UX)"]
         end
-        
+
         subgraph TECHNICAL["Technical Module"]
             ARCH["Winston (Architect)"]
             DEV["Amelia (Developer)"]
             QA["Murat (QA)"]
             DOCS["Paige (Docs)"]
         end
-        
+
         subgraph CREATIVE["Creative Module"]
             STORY["Sophia (Storyteller)"]
             BRAIN["Carson (Brainstorm)"]
-            DESIGNM["Maya (Design Thinking)"]
+            DESIGN["Maya (Design Thinking)"]
             STRAT["Victor (Strategist)"]
             SOLVER["Dr. Quinn (Solver)"]
         end
     end
-    
+
     subgraph VALIDATION["VALIDATION (Phase 0)"]
         VALIDATE["/conductor-validate"]
         V_FLOW["Checks: path → dir → files → JSON → state → track_id → staleness"]
         V_OUT{{"PASS / HALT / Auto-repair"}}
     end
-    
+
     TRIGGER --> CHECK
     CHECK --> DISCOVER
     DISCOVER --> APC1
@@ -223,18 +231,19 @@ flowchart TB
     APC3 -->|C| DELIVER
     APC3 -.->|Back| DEFINE
     DELIVER --> APC4
-    APC4 -->|C| DESIGNMD
+    APC4 -->|C| DESIGND
     APC4 -.->|Back| DEVELOP
-    DESIGNMD --> NEXT
-    
+    DESIGND --> NEXT
+
     APC1 & APC2 & APC3 & APC4 -.->|P| AGENTS
     AGENTS -.->|"Synthesize"| APC1 & APC2 & APC3 & APC4
-    
+
     VALIDATE --> V_FLOW --> V_OUT
     NEXT -.->|"Phase 0"| VALIDATE
 ```
 
 **Triggers**:
+
 ```
 /conductor-setup                   # Initialize project (once)
 /conductor-design "description"    # Design through dialogue → design.md
@@ -247,6 +256,7 @@ flowchart TB
 ```
 
 **Output structure**:
+
 ```
 conductor/
 ├── product.md              # Product vision
@@ -272,6 +282,7 @@ conductor/
 **What it does**: Persistent issue tracking across sessions with dependency graphs.
 
 **Commands** (requires `bd` CLI):
+
 ```bash
 # Finding work
 bd ready --json              # What's unblocked?
@@ -289,6 +300,7 @@ bd dep tree bd-123
 ```
 
 **Skill triggers**:
+
 ```
 fb                          # File beads from plan (parallel subagents)
 rb                          # Review filed beads (parallel + cross-epic validation)
@@ -304,6 +316,7 @@ bd status                   # Check project status
 **Trigger**: Say `tdd` to enter TDD mode.
 
 **The cycle**:
+
 ```
 RED     → Write one failing test (watch it fail)
 GREEN   → Write minimal code to pass (watch it pass)
@@ -325,7 +338,7 @@ REPEAT  → Next failing test
 flowchart TB
     subgraph PIPELINE["COMPLETE PIPELINE WORKFLOW"]
         direction TB
-        
+
         subgraph PLANNING["PLANNING LOOP"]
             DS["ds (Design Session)"]
             DISCOVER["DISCOVER<br/>Explore Problem"]
@@ -333,15 +346,15 @@ flowchart TB
             DEVELOP["DEVELOP<br/>Explore Solutions"]
             DELIVER["DELIVER<br/>Finalize Design"]
             APC{{"A/P/C"}}
-            DESIGNMD["design.md"]
+            DESIGND["design.md"]
         end
-        
+
         subgraph SPEC["SPEC GENERATION"]
             NEWTRACK["/conductor-newtrack"]
             SPECMD["spec.md"]
             PLANMD["plan.md"]
         end
-        
+
         subgraph BEADS["ISSUE FILING LOOP"]
             FB["fb (file-beads)"]
             EPIC["Create Epic"]
@@ -349,68 +362,68 @@ flowchart TB
             DEPS["Wire Dependencies"]
             RB["rb (review-beads)"]
         end
-        
+
         subgraph DISPATCH["PARALLEL AGENT DISPATCH"]
             COORDINATOR["Coordinator Agent"]
-            
+
             subgraph WORKERS["WORKER AGENTS (Task tool)"]
                 W1["Agent 1<br/>Independent Task"]
                 W2["Agent 2<br/>Independent Task"]
                 W3["Agent 3<br/>Independent Task"]
                 WN["Agent N<br/>Independent Task"]
             end
-            
+
             MERGE["Merge Results"]
         end
-        
+
         subgraph AGENT_LOOP["AGENT EXECUTION LOOP"]
             READY["bd ready"]
             CLAIM["bd update --status in_progress"]
-            
+
             subgraph TDD["TDD CYCLE"]
                 RED["RED: Write Failing Test"]
                 GREEN["GREEN: Make It Pass"]
                 REFACTOR["REFACTOR: Clean Up"]
             end
-            
+
             CLOSE["bd close"]
             SYNC["bd sync"]
         end
-        
+
         subgraph FINISH["COMPLETION"]
             VERIFY["Verification"]
             BRANCH["finish branch"]
             FINISH_CMD["/conductor-finish"]
         end
     end
-    
+
     subgraph BMAD["PARTY MODE: 12 BMAD AGENTS"]
         subgraph PRODUCT["Product Module"]
             PM["John (PM)"]
             ANALYST["Mary (Analyst)"]
             UX["Sally (UX)"]
         end
-        
+
         subgraph TECHNICAL["Technical Module"]
             ARCH["Winston (Architect)"]
             DEV["Amelia (Developer)"]
             QA["Murat (QA)"]
             DOCS["Paige (Docs)"]
         end
-        
+
         subgraph CREATIVE["Creative Module"]
             STORY["Sophia (Storyteller)"]
             BRAIN["Carson (Brainstorm)"]
-            DESIGNM["Maya (Design Thinking)"]
+            DESIGN["Maya (Design Thinking)"]
             STRAT["Victor (Strategist)"]
             SOLVER["Dr. Quinn (Solver)"]
         end
     end
-    
+
     subgraph VALIDATION["VALIDATION SYSTEM (Phase 0)"]
         direction TB
         VALIDATE["/conductor-validate"]
-        
+
         subgraph CHECKS["Validation Checks"]
             V01["0.1 Resolve track path"]
             V02["0.2 Check directory"]
@@ -420,30 +433,30 @@ flowchart TB
             V06["0.6 Auto-fix track_id"]
             V07["0.7 Staleness detection"]
         end
-        
+
         OUTCOMES{{"PASS / HALT / Auto-repair"}}
     end
-    
+
     DS --> DISCOVER
     DISCOVER --> DEFINE
     DEFINE --> DEVELOP
     DEVELOP --> DELIVER
     DELIVER --> APC
-    APC -->|"C"| DESIGNMD
+    APC -->|"C"| DESIGND
     APC -->|"P"| BMAD
     BMAD -->|"Synthesize"| APC
-    DESIGNMD --> NEWTRACK
-    
+    DESIGND --> NEWTRACK
+
     NEWTRACK --> SPECMD
     SPECMD --> PLANMD
     PLANMD --> FB
-    
+
     FB --> EPIC
     EPIC --> ISSUES
     ISSUES --> DEPS
     DEPS --> RB
     RB --> READY
-    
+
     READY --> CLAIM
     CLAIM --> COORDINATOR
     COORDINATOR --> W1 & W2 & W3 & WN
@@ -456,17 +469,17 @@ flowchart TB
     CLOSE --> SYNC
     SYNC -->|"More issues?"| READY
     SYNC -->|"All done"| VERIFY
-    
+
     VERIFY --> BRANCH
     BRANCH --> FINISH_CMD
-    
+
     VALIDATE --> V01 --> V02 --> V03 --> V04 --> V05 --> V06 --> V07 --> OUTCOMES
-    
+
     NEWTRACK -.->|"Phase 0"| VALIDATE
     FB -.->|"Phase 0"| VALIDATE
     RB -.->|"Phase 0"| VALIDATE
     READY -.->|"Phase 0"| VALIDATE
-    
+
     classDef planning fill:#1a365d,stroke:#63b3ed,color:#e2e8f0
     classDef spec fill:#234e52,stroke:#4fd1c5,color:#e2e8f0
     classDef beads fill:#553c9a,stroke:#b794f4,color:#e2e8f0
@@ -478,8 +491,8 @@ flowchart TB
     classDef technical fill:#2c5282,stroke:#63b3ed,color:#e2e8f0
     classDef creative fill:#744210,stroke:#f6ad55,color:#e2e8f0
     classDef validation fill:#4a1d6e,stroke:#9f7aea,color:#e2e8f0
-    
-    class DS,DISCOVER,DEFINE,DEVELOP,DELIVER,APC,DESIGNMD planning
+
+    class DS,DISCOVER,DEFINE,DEVELOP,DELIVER,APC,DESIGND planning
     class NEWTRACK,SPECMD,PLANMD spec
     class FB,EPIC,ISSUES,DEPS,RB beads
     class COORDINATOR,W1,W2,W3,WN,MERGE dispatch
@@ -488,7 +501,7 @@ flowchart TB
     class VERIFY,BRANCH,FINISH_CMD finish
     class PM,ANALYST,UX product
     class ARCH,DEV,QA,DOCS technical
-    class STORY,BRAIN,DESIGNM,STRAT,SOLVER creative
+    class STORY,BRAIN,DESIGN,STRAT,SOLVER creative
     class VALIDATE,V01,V02,V03,V04,V05,V06,V07,OUTCOMES validation
 ```
 
@@ -505,13 +518,13 @@ flowchart LR
         ground["ground decisions"]
         newtrack["/conductor-newtrack<br/>(spec + plan + beads + review)"]
         handoff["outputs HANDOFF block"]
-        
+
         setup --> design
         design --> ground
         ground --> newtrack
         newtrack --> handoff
     end
-    
+
     subgraph SESSION2["SESSION 2 (Epic 1)"]
         direction TB
         paste["User pastes HANDOFF"]
@@ -520,26 +533,26 @@ flowchart LR
         choice{"Epic complete"}
         rb2["rb → review beads"]
         handoff2["HANDOFF to next epic"]
-        
+
         paste --> implement
         implement --> tdd
         tdd --> choice
         choice -->|"fewer mistakes"| rb2
         choice -->|"continue"| handoff2
     end
-    
+
     subgraph SESSION3["SESSION 3 (Epic 2...)"]
         direction TB
         paste2["User pastes HANDOFF"]
         implement2["/conductor-implement"]
         tdd2["claims tasks → TDD → verify"]
         complete["track complete"]
-        
+
         paste2 --> implement2
         implement2 --> tdd2
         tdd2 --> complete
     end
-    
+
     handoff -.-> paste
     rb2 -.-> handoff2
     handoff2 -.-> paste2
@@ -563,6 +576,7 @@ This prevents auto-continuation and gives you control between epics.
 ### Why Handoff Matters
 
 AI coding assistants have a fundamental limitation: **sessions end, but projects continue**. Without handoff:
+
 - Context windows fill up and compact, losing conversation history
 - Sessions crash, timeout, or simply get closed
 - Tomorrow's session has no memory of today's decisions
@@ -571,14 +585,15 @@ AI coding assistants have a fundamental limitation: **sessions end, but projects
 
 Every artifact in Maestro is a handoff checkpoint:
 
-| Artifact | What It Preserves |
-|----------|-------------------|
-| `design.md` | Architecture decisions and trade-offs |
-| `spec.md` | Requirements and acceptance criteria |
-| `plan.md` | Step-by-step tasks with status markers |
-| `.beads/` | Issue state, dependencies, and notes |
+| Artifact    | What It Preserves                      |
+| ----------- | -------------------------------------- |
+| `design.md` | Architecture decisions and trade-offs  |
+| `spec.md`   | Requirements and acceptance criteria   |
+| `plan.md`   | Step-by-step tasks with status markers |
+| `.beads/`   | Issue state, dependencies, and notes   |
 
 **The handoff flow:**
+
 ```
 Session 1 (Planning):
   ds → design.md
@@ -595,6 +610,7 @@ Session 2+ (Execution):
 ### Handoff in Practice
 
 **At session end:**
+
 ```bash
 bd update <id> --notes "COMPLETED: X. NEXT: Y."
 git add -A && git commit -m "progress"
@@ -602,6 +618,7 @@ git push
 ```
 
 **At session start:**
+
 ```bash
 bd ready --json          # What's unblocked?
 bd show <id>             # Read context from notes
@@ -612,6 +629,7 @@ The notes field in beads is your session-to-session memory. Write it like you're
 ### Manual Specialist Tools
 
 Outside the automated flow (external: superpowers plugin):
+
 - `debug` — Systematic debugging
 - `trace` — Root cause tracing
 
@@ -619,24 +637,24 @@ Outside the automated flow (external: superpowers plugin):
 
 ## Slash Commands
 
-| Command | Description |
-|---------|-------------|
-| `/conductor-setup` | Initialize Conductor for project |
-| `/conductor-design [desc]` | Design through Double Diamond dialogue (A/P/C checkpoints, Party Mode) |
-| `ds` | Start design session (alias for `/conductor-design`) |
-| `/conductor-newtrack [id]` | Create spec + plan from design |
-| `/conductor-implement [id]` | Execute ONE EPIC from track's plan |
-| `/conductor-status` | View progress |
-| `/conductor-revert` | Git-aware revert of work |
-| `/conductor-revise` | Update spec/plan when implementation reveals issues |
-| `/conductor-finish [id]` | Complete track: learnings, context refresh, archive (6 phases) |
-| `/conductor-validate [id]` | Validate track health and state consistency |
-| `/conductor-block [id] [reason]` | Mark a task as blocked |
-| `/conductor-skip [id] [reason]` | Skip a task with documented reason |
-| `/ground <pattern>` | Verify patterns against current truth |
-| `/decompose-task <phase>` | Break phases into atomic beads |
-| `/compact` | Checkpoint and compact session |
-| `review code` | Request code review (external: superpowers plugin) |
+| Command                          | Description                                                            |
+| -------------------------------- | ---------------------------------------------------------------------- |
+| `/conductor-setup`               | Initialize Conductor for project                                       |
+| `/conductor-design [desc]`       | Design through Double Diamond dialogue (A/P/C checkpoints, Party Mode) |
+| `ds`                             | Start design session (alias for `/conductor-design`)                   |
+| `/conductor-newtrack [id]`       | Create spec + plan from design                                         |
+| `/conductor-implement [id]`      | Execute ONE EPIC from track's plan                                     |
+| `/conductor-status`              | View progress                                                          |
+| `/conductor-revert`              | Git-aware revert of work                                               |
+| `/conductor-revise`              | Update spec/plan when implementation reveals issues                    |
+| `/conductor-finish [id]`         | Complete track: learnings, context refresh, archive (6 phases)         |
+| `/conductor-validate [id]`       | Validate track health and state consistency                            |
+| `/conductor-block [id] [reason]` | Mark a task as blocked                                                 |
+| `/conductor-skip [id] [reason]`  | Skip a task with documented reason                                     |
+| `/ground <pattern>`              | Verify patterns against current truth                                  |
+| `/decompose-task <phase>`        | Break phases into atomic beads                                         |
+| `/compact`                       | Checkpoint and compact session                                         |
+| `review code`                    | Request code review (external: superpowers plugin)                     |
 
 ---
 
@@ -644,14 +662,14 @@ Outside the automated flow (external: superpowers plugin):
 
 ### Start Here
 
-| If you want to... | Read |
-|-------------------|------|
-| Understand the philosophy and workflow | [TUTORIAL.md](./TUTORIAL.md) |
-| Set up a new project | [SETUP_GUIDE.md](./SETUP_GUIDE.md) |
-| Configure global agent | [docs/GLOBAL_CONFIG.md](./docs/GLOBAL_CONFIG.md) |
-| Understand the pipeline architecture | [docs/PIPELINE_ARCHITECTURE.md](./docs/PIPELINE_ARCHITECTURE.md) |
-| Use commands manually without skills | [docs/manual-workflow-guide.md](./docs/manual-workflow-guide.md) |
-| See all skills at a glance | [Skills table above](#the-skills) |
+| If you want to...                      | Read                                                             |
+| -------------------------------------- | ---------------------------------------------------------------- |
+| Understand the philosophy and workflow | [TUTORIAL.md](./TUTORIAL.md)                                     |
+| Set up a new project                   | [SETUP_GUIDE.md](./SETUP_GUIDE.md)                               |
+| Configure global agent                 | [docs/GLOBAL_CONFIG.md](./docs/GLOBAL_CONFIG.md)                 |
+| Understand the pipeline architecture   | [docs/PIPELINE_ARCHITECTURE.md](./docs/PIPELINE_ARCHITECTURE.md) |
+| Use commands manually without skills   | [docs/manual-workflow-guide.md](./docs/manual-workflow-guide.md) |
+| See all skills at a glance             | [Skills table above](#the-skills)                                |
 
 ### Repository Structure
 
@@ -681,33 +699,35 @@ maestro/
 
 ### Common Issues
 
-| Issue | Fix |
-|-------|-----|
-| Skills not loading | Run `/plugin list` to verify installation |
-| `bd: command not found` | Install via Agent Mail installer (see SETUP_GUIDE.md) |
-| `bv` hangs | You forgot `--robot-*` flag. Kill and restart with flag |
-| Agent ignores workflow | Use trigger phrase explicitly: `tdd`, `debug`, `/conductor-design` |
-| Tests pass immediately | You wrote code first. Delete it. Start with failing test. |
-| Context compacted, lost state | Run `bd show <issue-id>` — notes field has recovery context |
-| Plan seems incomplete | Use `rb` (review-beads) to check and refine issues |
+| Issue                         | Fix                                                                |
+| ----------------------------- | ------------------------------------------------------------------ |
+| Skills not loading            | Run `/plugin list` to verify installation                          |
+| `bd: command not found`       | Install via Agent Mail installer (see SETUP_GUIDE.md)              |
+| `bv` hangs                    | You forgot `--robot-*` flag. Kill and restart with flag            |
+| Agent ignores workflow        | Use trigger phrase explicitly: `tdd`, `debug`, `/conductor-design` |
+| Tests pass immediately        | You wrote code first. Delete it. Start with failing test.          |
+| Context compacted, lost state | Run `bd show <issue-id>` — notes field has recovery context        |
+| Plan seems incomplete         | Use `rb` (review-beads) to check and refine issues                 |
 
 ### Tips & Tricks
 
-| Tip | Details |
-|-----|---------|
-| **Plan before each epic** | Switch to plan mode before `/conductor-implement`. Claude Code: `Shift+Tab`, Codex: `/create-plan` |
-| **Handoff in Amp** | Use handoff command (command palette) or reference threads with `@T-<id>` |
-| **Handoff in Claude Code/Codex** | Run `/compact` before session end — beads notes survive, conversation doesn't |
+| Tip                              | Details                                                                                            |
+| -------------------------------- | -------------------------------------------------------------------------------------------------- |
+| **Plan before each epic**        | Switch to plan mode before `/conductor-implement`. Claude Code: `Shift+Tab`, Codex: `/create-plan` |
+| **Handoff in Amp**               | Use handoff command (command palette) or reference threads with `@T-<id>`                          |
+| **Handoff in Claude Code/Codex** | Run `/compact` before session end — beads notes survive, conversation doesn't                      |
 
 ### Agent-Specific Rules
 
 **Critical**: These tools have TUI modes that will hang AI agents:
+
 - `bv` → Always use `bv --robot-*` flags
 - `cass` → Always use `cass --robot` or `--json` flags
 
 ### Without CLI Tools
 
 The plugin still provides value without `bd`:
+
 - Skills work as mental models and methodologies
 - Use `TodoWrite` for session-local task tracking
 - Track issues manually in GitHub Issues or markdown
@@ -720,6 +740,7 @@ The plugin still provides value without `bd`:
 ## Credits
 
 Built on foundations from:
+
 - [conductor](https://github.com/NguyenSiTrung/conductor) by NguyenSiTrung
 - [beads](https://github.com/steveyegge/beads) by Steve Yegge
 - [beads-village](https://github.com/LNS2905/mcp-beads-village) by LNS2905
