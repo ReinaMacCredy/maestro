@@ -4,7 +4,9 @@ Master list of all development tracks.
 
 ## Active Tracks
 
-*No active tracks.*
+## [ ] Track: Integrate agent_mail MCP into Workflow
+*ID: agent-coordination_20251224*
+*Link: [spec](conductor/tracks/agent-coordination_20251224/spec.md) | [plan](conductor/tracks/agent-coordination_20251224/plan.md)*
 
 ---
 

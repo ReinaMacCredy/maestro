@@ -237,6 +237,18 @@ Done!
 - Dispatch fix subagent with specific instructions
 - Don't try to fix manually (context pollution)
 
+## Coordination (Optional)
+
+When agent_mail MCP is available, the coordinator can reserve files before dispatching subagents.
+
+See [workflows/agent-coordination/patterns/parallel-dispatch.md](../../workflows/agent-coordination/patterns/parallel-dispatch.md) for the reserve → dispatch → release flow.
+
+**Key points:**
+- Coordinator reserves files before dispatch
+- Subagents receive coordination block in prompt
+- Conflicts = warn + skip (optimistic approach)
+- If MCP unavailable, proceed normally—coordination is optional
+
 ## Integration
 
 **Required workflow skills:**

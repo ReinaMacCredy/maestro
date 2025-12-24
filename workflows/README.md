@@ -105,6 +105,10 @@ workflows/
 ├── party-mode/            # Multi-agent collaborative review
 │   ├── workflow.md        # Party Mode orchestration
 │   └── agents/            # 12 BMAD agent definitions
+├── agent-coordination/    # Multi-agent file coordination (via agent_mail MCP)
+│   ├── workflow.md        # Core protocol
+│   ├── patterns/          # parallel-dispatch, subagent-prompt, session-lifecycle, graceful-fallback
+│   └── examples/          # Annotated dispatch examples
 └── schemas/
     ├── metadata.schema.json        # Track metadata structure
     ├── implement_state.schema.json # Implementation state tracking

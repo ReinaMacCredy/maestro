@@ -136,7 +136,7 @@ trace                              # Root cause tracing (external: superpowers)
 |----------|--------|
 | **Core Workflow** | conductor, design (Double Diamond + Party Mode), beads, file-beads (parallel), review-beads (parallel) |
 | **Development** | test-driven-development, using-git-worktrees, finishing-a-development-branch |
-| **Utilities** | dispatching-parallel-agents, subagent-driven-development |
+| **Utilities** | dispatching-parallel-agents, subagent-driven-development, [agent-coordination](workflows/agent-coordination/) |
 | **Meta** | verification-before-completion, writing-skills, sharing-skills |
 
 ---

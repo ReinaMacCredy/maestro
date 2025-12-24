@@ -1,0 +1,30 @@
+{
+  "track_id": "agent-coordination_20251224",
+  "type": "feature",
+  "status": "planned",
+  "priority": "medium",
+  "depends_on": [],
+  "estimated_hours": 1.5,
+  "created_at": "2024-12-24T14:00:00Z",
+  "updated_at": "2024-12-24T14:00:00Z",
+  "description": "Integrate agent_mail MCP into workflow for multi-agent coordination",
+  "has_design": true,
+  "threads": [
+    {
+      "id": "T-019b50ab-f012-723c-a571-50d152969714",
+      "action": "design",
+      "timestamp": "2024-12-24T13:00:00Z"
+    },
+    {
+      "id": "T-019b50ab-f012-723c-a571-50d152969714",
+      "action": "newtrack",
+      "timestamp": "2024-12-24T14:00:00Z"
+    }
+  ],
+  "artifacts": {
+    "design": true,
+    "spec": true,
+    "plan": true,
+    "beads": true
+  }
+}
