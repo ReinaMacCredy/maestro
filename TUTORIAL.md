@@ -235,6 +235,21 @@ When you select `[P]` at an A/P/C checkpoint, Party Mode activates 2-3 expert ag
 
 Agents respond in character, cross-talk, then synthesize insights. See `workflows/party-mode/workflow.md` for details.
 
+#### Design Tips: Getting Better Edge Case Coverage
+
+During design sessions, use these phrases to get more thorough analysis:
+
+| Say This | Agent Will |
+|----------|------------|
+| "stress test this design" | Challenge assumptions, find failure modes |
+| "what could go wrong?" | Identify edge cases and error scenarios |
+| "consider concurrent access" | Think about race conditions, locks |
+| "what if the user does X wrong?" | Explore invalid input handling |
+| "scale this to 10x" | Find performance bottlenecks |
+| "security review" | Check for vulnerabilities |
+
+**Pro tip**: During A/P/C checkpoints, select **[A] Advanced** for automatic stress testing, or **[P] Party** to get multiple expert agents challenging your design. You can also just say "stress test" at any point to trigger edge case analysis.
+
 **For humans**:
 - Think of it as the "measure twice, cut once" step
 - You'll answer 3-5 clarifying questions, then get a structured spec and phased plan
@@ -263,9 +278,9 @@ conductor/
 ├── tech-stack.md       # Technology choices
 ├── workflow.md         # Development standards (TDD, commits)
 ├── tracks.md           # Master track list with status
-├── refresh_state.json  # Context refresh tracking
+├── AGENTS.md           # Learnings hub (auto-updated by /conductor-finish)
 └── tracks/
-    └── auth_20241215/  # Track directory
+    └── auth_20251215/  # Track directory
         ├── design.md   # High-level design (from /conductor-design)
         ├── spec.md     # Requirements and acceptance criteria
         ├── plan.md     # Phased task list with status
@@ -563,7 +578,7 @@ The agent will:
 
 **Output structure**:
 ```
-conductor/tracks/auth_20241215/
+conductor/tracks/auth_20251215/
 ├── spec.md    # WHAT we're building
 └── plan.md    # HOW we'll build it (phases + tasks)
 ```
@@ -748,7 +763,9 @@ The `/conductor-finish` command:
 1. Extracts learnings from work threads → `LEARNINGS.md`
 2. Generates AI summaries for closed beads
 3. Merges knowledge to `conductor/AGENTS.md`
-4. Archives the track with S/H/K choice
+4. Refreshes context docs (product.md, tech-stack.md, tracks.md, workflow.md)
+5. Archives the track with A/K choice (Archive/Keep)
+6. Regenerates CODEMAPS
 
 **Why this matters**: Lessons learned during implementation often get lost when context compacts. `/conductor-finish` preserves them in version-controlled AGENTS.md files.
 
@@ -853,7 +870,7 @@ Some skills work best with optional CLI tools. The skills still provide value wi
 |-------|--------------|---------------|
 | `beads` | `bd` | Persistent issue database, `bd ready`, `bd show` |
 | `beads` | `bv` | Graph visualization, priority recommendations |
-| `codemaps` | — | Token-aware architecture docs (no external CLI needed) |
+| `conductor` | `/conductor-finish` | CODEMAPS: Token-aware architecture docs (regenerated in Phase 6) |
 | `ground` | — | Verification protocol: verify patterns against repo/web/history before implementation |
 
 **If you have `bd` installed**: Commands like `bd ready --json` work directly.
@@ -877,6 +894,9 @@ Some skills work best with optional CLI tools. The skills still provide value wi
 | Context compacted, lost state | Run `bd show <issue-id>` — notes field has recovery context |
 | Too many issues, overwhelmed | Run `bd ready` for unblocked only, or `bd blocked` to clear bottlenecks |
 | Conductor files eating tokens | Skip Conductor if you already have a plan. Use `fb` directly. |
+| Track in inconsistent state | Run `/conductor-validate <track-id>` — auto-repairs state files |
+| Missing state files | Validation auto-creates if spec.md + plan.md exist and are valid |
+| Corrupted JSON in track | Validation HALTs — manual intervention required |
 
 ---
 
@@ -1054,7 +1074,7 @@ git push
 | `/conductor-status` | conductor (status) |
 | `/conductor-revert` | conductor (revert) |
 | `/conductor-revise` | conductor (revise spec/plan) |
-| `/conductor-refresh` | conductor (sync docs with codebase) |
+| `/conductor-finish` | conductor (complete track: learnings, refresh, archive) |
 | `tdd` | test-driven-development |
 | `trace`, `find source` | root-cause-tracing |
 | `flaky`, `race condition` | condition-based-waiting |

@@ -19,7 +19,7 @@ If no plan provided, check:
 - Recent `/conductor-design` output in current context
 - `conductor/tracks/` for design.md, spec.md, and plan.md files
 
-**Extract track ID** from plan path (e.g., `conductor/tracks/auth_20241223/plan.md` → `auth_20241223`).
+**Extract track ID** from plan path (e.g., `conductor/tracks/auth_20251223/plan.md` → `auth_20251223`).
 
 ### 0.2 Check for Existing Progress
 
@@ -37,23 +37,62 @@ cat conductor/tracks/<track_id>/.fb-progress.json 2>/dev/null
    - Read `epics` array to get already-created epics
    - Announce: "Resuming from checkpoint: <resumeFrom>"
    - Skip to appropriate phase
+4. **If `status: "pending"`:**
+   - Fresh start, proceed to Phase 1
 
-### 0.3 Create Initial Progress File
+### 0.3 Validate Required State Files
 
-If no progress file exists, create `.fb-progress.json`:
+**MANDATORY:** Verify all prerequisite state files exist before proceeding.
 
-```json
-{
-  "trackId": "<track_id>",
-  "status": "in_progress",
-  "startedAt": "<timestamp>",
-  "threadId": "<current-thread-id>",
-  "resumeFrom": "phase1",
-  "epics": [],
-  "issues": [],
-  "crossTrackDeps": [],
-  "lastError": null
-}
+```bash
+TRACK_PATH="conductor/tracks/<track_id>"
+
+# Check required files
+MISSING=""
+[ ! -f "$TRACK_PATH/metadata.json" ] && MISSING="$MISSING metadata.json"
+[ ! -f "$TRACK_PATH/.track-progress.json" ] && MISSING="$MISSING .track-progress.json"
+[ ! -f "$TRACK_PATH/.fb-progress.json" ] && MISSING="$MISSING .fb-progress.json"
+[ ! -f "$TRACK_PATH/plan.md" ] && MISSING="$MISSING plan.md"
+
+if [ -n "$MISSING" ]; then
+  echo "❌ Cannot file beads. Missing:$MISSING"
+  echo ""
+  echo "Fix: Run /conductor-newtrack <track_id> first"
+  exit 1
+fi
+
+# Validate JSON files
+for FILE in metadata.json .track-progress.json .fb-progress.json; do
+  if ! jq empty "$TRACK_PATH/$FILE" 2>/dev/null; then
+    echo "❌ Corrupted: $FILE"
+    exit 1
+  fi
+done
+
+# Auto-fix trackId mismatch
+DIR_NAME=$(basename "$TRACK_PATH")
+for FILE in .fb-progress.json; do
+  CURRENT_ID=$(jq -r '.trackId // empty' "$TRACK_PATH/$FILE")
+  if [ -n "$CURRENT_ID" ] && [ "$CURRENT_ID" != "$DIR_NAME" ]; then
+    echo "ℹ️ Auto-fixing trackId in $FILE: $CURRENT_ID → $DIR_NAME"
+    jq --arg id "$DIR_NAME" '.trackId = $id' "$TRACK_PATH/$FILE" > tmp && mv tmp "$TRACK_PATH/$FILE"
+  fi
+done
+
+echo "✓ State files validated"
+```
+
+**If any file missing or corrupted:** HALT. Do NOT auto-create.
+
+### 0.4 Update Progress to In-Progress
+
+Update `.fb-progress.json` to mark start:
+
+```bash
+jq --arg time "<current-timestamp>" \
+   --arg thread "<current-thread-id>" \
+   '.status = "in_progress" | .startedAt = $time | .threadId = $thread | .resumeFrom = "phase1"' \
+   "conductor/tracks/<track_id>/.fb-progress.json" > tmp && mv tmp "conductor/tracks/<track_id>/.fb-progress.json"
 ```
 
 ## Phase 1: Analyze Plan
@@ -242,10 +281,10 @@ When ALL subagents return:
    ```
 
 4. **Detect cross-track dependencies:**
-   - If a task references another conductor track (e.g., "depends on api_20241223")
+   - If a task references another conductor track (e.g., "depends on api_20251223")
    - Record in `crossTrackDeps` array:
      ```json
-     {"from": "bd-3", "to": "api_20241223:bd-7"}
+     {"from": "bd-3", "to": "api_20251223:bd-7"}
      ```
    - Attempt to update both tracks' progress files
 
@@ -289,7 +328,7 @@ Check:
   "issues": ["bd-4", "bd-5", "bd-6", ...],
   
   "crossTrackDeps": [
-    {"from": "bd-3", "to": "api_20241223:bd-7"}
+    {"from": "bd-3", "to": "api_20251223:bd-7"}
   ],
   
   "resumeFrom": null,

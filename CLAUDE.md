@@ -156,8 +156,8 @@ bd dep tree <id>             # Show dependency graph
 # Update spec/plan when issues discovered
 /conductor-revise
 
-# Sync context docs with codebase
-/conductor-refresh
+# Complete track: extract learnings, refresh context, archive
+/conductor-finish
 
 # Git-aware revert of work
 /conductor-revert
@@ -185,7 +185,7 @@ git add -A && git commit && git push
 | `/conductor-status` | conductor | View progress overview |
 | `/conductor-revert` | conductor | Git-aware revert of work |
 | `/conductor-revise` | conductor | Update spec/plan when issues discovered |
-| `/conductor-refresh` | conductor | Sync context docs with codebase |
+| `/conductor-finish` | conductor | Complete track: extract learnings, refresh context, archive |
 | `fb` | file-beads | Convert plan to beads issues |
 | `rb` | review-beads | Review/refine filed beads |
 | `tdd` | test-driven-development | Enter TDD mode |

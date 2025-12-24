@@ -209,18 +209,18 @@
   "additionalProperties": false,
   "examples": [
     {
-      "track_id": "user_auth_20240115",
+      "track_id": "user_auth_20250115",
       "status": "in_progress",
       "current_phase": {
         "name": "Phase 2: Backend Implementation",
         "index": 1,
-        "started_at": "2024-01-15T11:00:00Z"
+        "started_at": "2025-01-15T11:00:00Z"
       },
       "current_task": {
         "name": "Implement JWT token generation",
         "phase_index": 1,
         "task_index": 0,
-        "started_at": "2024-01-15T11:30:00Z",
+        "started_at": "2025-01-15T11:30:00Z",
         "tdd_stage": "green"
       },
       "completed_phases": [0],
@@ -229,13 +229,13 @@
           "phase_index": 0,
           "task_index": 0,
           "commit_sha": "abc1234",
-          "completed_at": "2024-01-15T10:00:00Z"
+          "completed_at": "2025-01-15T10:00:00Z"
         },
         {
           "phase_index": 0,
           "task_index": 1,
           "commit_sha": "def5678",
-          "completed_at": "2024-01-15T10:45:00Z"
+          "completed_at": "2025-01-15T10:45:00Z"
         }
       ],
       "phase_checkpoints": [
@@ -243,7 +243,7 @@
           "phase_index": 0,
           "phase_name": "Phase 1: Setup",
           "checkpoint_sha": "aaa1111",
-          "verified_at": "2024-01-15T10:50:00Z",
+          "verified_at": "2025-01-15T10:50:00Z",
           "verification_method": "both"
         }
       ],
@@ -253,9 +253,9 @@
         "failed": 0,
         "skipped": 1,
         "coverage_percentage": 85.5,
-        "last_run_at": "2024-01-15T11:25:00Z"
+        "last_run_at": "2025-01-15T11:25:00Z"
       },
-      "started_at": "2024-01-15T09:00:00Z"
+      "started_at": "2025-01-15T09:00:00Z"
     }
   ]
 }

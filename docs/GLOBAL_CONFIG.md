@@ -41,8 +41,7 @@ Context-driven development with TDD execution.
 
 **Maintenance:**
 - `/conductor-revise` - Update spec/plan mid-implementation
-- `/conductor-refresh` - Sync docs with codebase
-- `/conductor-finish` - Complete track: extract learnings, archive
+- `/conductor-finish` - Complete track (learnings, context refresh, archive)
 
 **Beads:**
 - `fb` - File beads from plan

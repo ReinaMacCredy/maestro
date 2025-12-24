@@ -83,10 +83,10 @@ workflows/
 ├── setup.md               # Project initialization workflow
 ├── newtrack.md            # Track creation workflow
 ├── implement.md           # Task implementation workflow
+├── finish.md              # Track completion workflow (7 phases: Phase 0-6)
 ├── status.md              # Progress reporting workflow
 ├── revert.md              # Git-aware revert workflow
 ├── validate.md            # Project validation workflow
-├── refresh.md             # Context refresh workflow
 ├── revise.md              # Spec/plan revision workflow
 ├── party-mode/            # Multi-agent collaborative review
 │   ├── workflow.md        # Party Mode orchestration
@@ -95,7 +95,7 @@ workflows/
     ├── metadata.schema.json        # Track metadata structure
     ├── implement_state.schema.json # Implementation state tracking
     ├── setup_state.schema.json     # Setup progress state
-    └── refresh_state.schema.json   # Context refresh state
+    └── finish_state.schema.json    # Finish workflow state (Phase 0-6)
 ```
 
 ## How to Use

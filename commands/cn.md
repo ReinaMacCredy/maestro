@@ -22,9 +22,9 @@ Load the `conductor` skill and execute the `/conductor-newtrack` workflow.
 
 ```
 cn "Add user authentication"     # New track from description
-cn auth_20241223                  # Resume existing track
-cn auth_20241223 --no-beads       # Skip beads filing
-cn auth_20241223 --force          # Overwrite existing
+cn auth_20251223                  # Resume existing track
+cn auth_20251223 --no-beads       # Skip beads filing
+cn auth_20251223 --force          # Overwrite existing
 ```
 
 ## Flags

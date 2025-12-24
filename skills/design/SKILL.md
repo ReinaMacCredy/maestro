@@ -28,6 +28,32 @@ Trigger on:
 - User says "design a feature" or "let's think through X"
 - Before creating a conductor track
 
+## Session Initialization
+
+When starting a design session:
+
+### 1. Load CODEMAPS for Context
+
+Check for `conductor/CODEMAPS/` directory:
+
+**If exists:**
+1. Load `overview.md` (always)
+2. Load relevant module codemaps based on topic (skills.md, api.md, etc.)
+3. Display: `📚 Loaded CODEMAPS for context`
+
+**If missing:**
+1. Display: `⚠️ No CODEMAPS found. Run /conductor-setup to generate initial CODEMAPS.`
+2. Continue session normally (CODEMAPS are optional but recommended)
+
+### 2. Verify Conductor Setup
+
+Check for `conductor/` directory with core files:
+- `product.md` - Product vision
+- `tech-stack.md` - Technical constraints
+- `workflow.md` - Development standards
+
+If missing, suggest: `Run /conductor-setup first for full context.`
+
 ## Double Diamond Framework
 
 The session flows through four phases, alternating between divergent and convergent thinking:

@@ -1,0 +1,77 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://conductor.dev/schemas/track_progress.schema.json",
+  "title": "Track Progress State",
+  "description": "State file for tracking spec/plan generation progress within a track",
+  "type": "object",
+  "required": ["trackId", "status"],
+  "properties": {
+    "trackId": {
+      "type": "string",
+      "description": "ID of the track (must match directory name)",
+      "pattern": "^[a-z0-9-]+_[0-9]{8}$",
+      "examples": ["auth-v2_20251223", "bug-fix_20251224"]
+    },
+    "status": {
+      "type": "string",
+      "description": "Current workflow status",
+      "enum": ["initializing", "spec_done", "plan_done", "complete"],
+      "default": "initializing"
+    },
+    "specCreatedAt": {
+      "type": ["string", "null"],
+      "description": "ISO 8601 timestamp when spec.md was created",
+      "format": "date-time",
+      "default": null
+    },
+    "planCreatedAt": {
+      "type": ["string", "null"],
+      "description": "ISO 8601 timestamp when plan.md was created",
+      "format": "date-time",
+      "default": null
+    },
+    "threadId": {
+      "type": ["string", "null"],
+      "description": "Thread ID that created/last modified this track (format: T-uuid)",
+      "pattern": "^T-[a-f0-9-]+$",
+      "default": null
+    },
+    "createdAt": {
+      "type": "string",
+      "description": "ISO 8601 timestamp when this state file was created",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "description": "ISO 8601 timestamp when this state file was last updated",
+      "format": "date-time"
+    },
+    "rbCompletedAt": {
+      "type": ["string", "null"],
+      "description": "ISO 8601 timestamp when review-beads (rb) completed",
+      "format": "date-time",
+      "default": null
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "trackId": "auth-v2_20251223",
+      "status": "initializing",
+      "specCreatedAt": null,
+      "planCreatedAt": null,
+      "threadId": "T-019b4c5e-39ff-7275-91b6-14855ba2492e",
+      "createdAt": "2025-12-23T10:30:00Z",
+      "updatedAt": "2025-12-23T10:30:00Z"
+    },
+    {
+      "trackId": "bug-fix_20251224",
+      "status": "complete",
+      "specCreatedAt": "2025-12-24T09:00:00Z",
+      "planCreatedAt": "2025-12-24T09:15:00Z",
+      "threadId": "T-019b4cca-03cc-736f-9d83-60a0d36d29af",
+      "createdAt": "2025-12-24T08:45:00Z",
+      "updatedAt": "2025-12-24T09:15:00Z"
+    }
+  ]
+}

@@ -170,12 +170,12 @@ bd list --notes-contains "TODO" --json                  # Search in notes
 
 ```bash
 # Date range filters (YYYY-MM-DD or RFC3339)
-bd list --created-after 2024-01-01 --json               # Created after date
-bd list --created-before 2024-12-31 --json              # Created before date
-bd list --updated-after 2024-06-01 --json               # Updated after date
-bd list --updated-before 2024-12-31 --json              # Updated before date
-bd list --closed-after 2024-01-01 --json                # Closed after date
-bd list --closed-before 2024-12-31 --json               # Closed before date
+bd list --created-after 2025-01-01 --json               # Created after date
+bd list --created-before 2025-12-31 --json              # Created before date
+bd list --updated-after 2025-06-01 --json               # Updated after date
+bd list --updated-before 2025-12-31 --json              # Updated before date
+bd list --closed-after 2025-01-01 --json                # Closed after date
+bd list --closed-before 2025-12-31 --json               # Closed before date
 ```
 
 ### Empty/Null Checks
@@ -223,6 +223,7 @@ bd --no-daemon --no-auto-flush --no-auto-import <command>
 ```
 
 **What it does:**
+
 - Disables daemon (uses direct SQLite mode)
 - Disables auto-export to JSONL
 - Disables auto-import from JSONL
@@ -276,6 +277,7 @@ bd --actor alice <command>
 ```
 
 **See also:**
+
 - [TROUBLESHOOTING.md - Sandboxed environments](TROUBLESHOOTING.md#sandboxed-environments-codex-claude-code-etc) for detailed sandbox troubleshooting
 - [DAEMON.md](DAEMON.md) for daemon mode details
 
@@ -359,6 +361,7 @@ bd sync  # Now uses resurrect mode by default
 - **`strict`** - Fail import immediately if a child's parent is missing. Use when database integrity is critical.
 
 **When to use:**
+
 - Use `allow` (default) for daily imports and auto-sync
 - Use `resurrect` when importing from databases with deleted parents
 - Use `strict` for controlled imports requiring guaranteed parent existence

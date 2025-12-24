@@ -21,8 +21,9 @@ Initialize a new or existing project with the Conductor methodology, creating al
 | `"2.2_product_guidelines"` | Guidelines complete | Section 2.3 |
 | `"2.3_tech_stack"` | Tech stack complete | Section 2.4 |
 | `"2.4_code_styleguides"` | Styleguides complete | Section 2.5 |
-| `"2.5_workflow"` | Workflow complete | Phase 3.0 |
-| `"3.3_initial_track_generated"` | Setup complete | Halt |
+| `"2.5_workflow"` | Workflow complete | Phase 6.0 |
+| `"3.3_initial_track_generated"` | Track generated | Phase 7.0 |
+| `"4.1_codemaps_generated"` | Setup complete | Halt |
 
 ## Workflow Steps
 
@@ -127,6 +128,60 @@ For each document, follow the Interactive Generation Protocol:
    - Commit all files: `conductor(setup): Add conductor setup files`
    - Announce next steps: `/conductor:implement`
 
+### Phase 7: CODEMAPS Generation
+
+Generate architecture documentation to help agents orient quickly.
+
+1. **Check for Existing CODEMAPS**
+   - If `conductor/CODEMAPS/` exists:
+     - Prompt: "CODEMAPS exists. Regenerate? [Y/n]"
+     - If no, skip to Finalize
+   - If not exists, proceed
+
+2. **Detect Project Structure**
+   - **Monorepo Detection**:
+     - Check for `packages/`, `apps/` directories
+     - Check `package.json` for `workspaces` field
+     - If monorepo: generate per-package codemaps
+   - **Standard Project**: generate single overview + module codemaps
+
+3. **Generate CODEMAPS**
+   - Create `conductor/CODEMAPS/` directory
+   - **Always Generate**: `overview.md` with:
+     - Project summary (from product.md)
+     - Directory structure (top 2 levels only)
+     - Key entry points
+     - Data flow diagram (Mermaid)
+   - **Conditionally Generate**: Module codemaps for significant areas:
+     - Scan for: `src/`, `api/`, `lib/`, `skills/`, `components/`, `services/`
+     - Create `[module].md` for each significant area
+     - Use templates from `skills/conductor/references/CODEMAPS_TEMPLATE.md`
+   - **Scale Limits**:
+     - Directory depth: Top 2 levels only
+     - Key files per codemap: Max 50 files
+     - Module codemaps: Max 10 files
+   - **Monorepo Mode**:
+     - Create `overview.md` at root
+     - Create `[package-name].md` for each package
+
+4. **Create Metadata**
+   - Generate `conductor/CODEMAPS/.meta.json`:
+     ```json
+     {
+       "generated": "<ISO timestamp>",
+       "generator": "/conductor-setup",
+       "project_type": "<detected type>",
+       "files": {
+         "overview.md": { "generated": true, "user_modified": false },
+         "[module].md": { "generated": true, "user_modified": false }
+       }
+     }
+     ```
+
+5. **Announce**
+   - Display: "✅ Generated CODEMAPS: overview.md, [module codemaps...]"
+   - **State on Complete**: `"4.1_codemaps_generated"`
+
 ## Interactive Generation Protocol
 
 Used for all document generation phases:
@@ -179,6 +234,10 @@ conductor/
 ├── tracks.md
 ├── code_styleguides/
 │   └── [selected guides].md
+├── CODEMAPS/
+│   ├── .meta.json
+│   ├── overview.md
+│   └── [module].md
 └── tracks/
     └── <track_id>/
         ├── metadata.json

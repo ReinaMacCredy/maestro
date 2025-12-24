@@ -50,6 +50,31 @@ For each track's `plan.md`:
 1. Check `conductor/setup_state.json` if exists - verify valid JSON
 2. Check each `conductor/tracks/<track_id>/implement_state.json` if exists - verify valid JSON
 
+### 2.7 Track Integrity Validation (Per-Track)
+For each track, inline and execute validation logic from `skills/conductor/references/validation/track/checks.md`:
+
+1. **File Existence Matrix:**
+   - Empty directory → SKIP + warn
+   - design.md only → PASS (design-only state)
+   - spec.md + plan.md, no state files → Auto-create state files
+   - spec.md XOR plan.md → HALT (invalid state)
+
+2. **track_id Validation:**
+   - Directory name is source of truth
+   - Auto-fix mismatches in: metadata.json, .track-progress.json, .fb-progress.json
+   - Warn (don't auto-fix) mismatches in: design.md, spec.md, plan.md headers
+
+3. **State File Validation:**
+   - Validate JSON structure for all state files
+   - HALT on corrupted JSON
+
+4. **Staleness Detection:**
+   - Warn if .fb-progress.json.status = "in_progress"
+   - Offer: Resume / Reset / Diagnose options
+
+5. **Audit Trail:**
+   - Log all repairs to metadata.json.repairs[] (last 10 entries)
+
 ---
 
 ## 3.0 REPORT GENERATION
@@ -67,14 +92,14 @@ Present results in this format:
 - [✗] workflow.md (MISSING)
 
 ### Tracks (X total)
-- [✓] auth_20241215 - All files present
-- [⚠] profile_20241216 - metadata.json missing 'created_at'
+- [✓] auth_20251215 - All files present
+- [⚠] profile_20251216 - metadata.json missing 'created_at'
 
 ### Orphan Tracks
-- [!] old_feature_20241201 - Not in tracks.md
+- [!] old_feature_20251201 - Not in tracks.md
 
 ### Status Mismatches
-- [!] auth_20241215 - tracks.md says [~], metadata says "completed"
+- [!] auth_20251215 - tracks.md says [~], metadata says "completed"
 
 ### Recommendations
 1. Run `/conductor-setup` to regenerate missing workflow.md

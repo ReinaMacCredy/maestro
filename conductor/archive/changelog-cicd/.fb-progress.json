@@ -1,0 +1,52 @@
+{
+  "trackId": "changelog-cicd_20251223",
+  "status": "complete",
+  "startedAt": "2025-12-23T00:00:00Z",
+  "completedAt": "2025-12-23T18:48:30Z",
+  "threadId": "T-019b4af5-bff8-74cb-951d-aa5b1c2ad30a",
+  "resumeFrom": null,
+  "epics": [
+    {
+      "id": "my-workflow:3-ylt",
+      "title": "Epic: git-cliff Configuration",
+      "status": "complete",
+      "reviewed": false
+    },
+    {
+      "id": "my-workflow:3-kam",
+      "title": "Epic: Release Workflow",
+      "status": "complete",
+      "reviewed": false
+    },
+    {
+      "id": "my-workflow:3-uu4",
+      "title": "Epic: PR Validation",
+      "status": "complete",
+      "reviewed": false
+    },
+    {
+      "id": "my-workflow:3-jrq6",
+      "title": "Epic: Documentation Updates",
+      "status": "complete",
+      "reviewed": false
+    }
+  ],
+  "issues": [
+    "my-workflow:3-ylt.1",
+    "my-workflow:3-ylt.2",
+    "my-workflow:3-kam.1",
+    "my-workflow:3-kam.2",
+    "my-workflow:3-kam.3",
+    "my-workflow:3-kam.4",
+    "my-workflow:3-kam.5",
+    "my-workflow:3-kam.6",
+    "my-workflow:3-kam.7",
+    "my-workflow:3-uu4.1",
+    "my-workflow:3-uu4.2",
+    "my-workflow:3-uu4.3",
+    "my-workflow:3-jrq6.1",
+    "my-workflow:3-jrq6.2"
+  ],
+  "crossTrackDeps": [],
+  "lastError": null
+}

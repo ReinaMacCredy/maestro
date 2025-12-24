@@ -23,6 +23,7 @@ Measure twice, code once.
 ## Overview
 
 Conductor enables context-driven development by:
+
 1. Establishing project context (product vision, tech stack, workflow)
 2. Organizing work into "tracks" (features, bugs, improvements)
 3. Creating specs and phased implementation plans
@@ -32,12 +33,12 @@ Conductor enables context-driven development by:
 
 Conductor implements the Knowledge & Vibes 4-phase framework:
 
-| Phase | Purpose | Conductor Equivalent |
-|-------|---------|---------------------|
-| **Requirements** | Understand problem completely before code | `/conductor-design` → `design.md` → review |
-| **Plan** | Create detailed plan BEFORE writing code | `/conductor-newtrack` uses `design.md` → `spec.md` + `plan.md` |
-| **Implement** | Build incrementally with TDD | `bd ready` → TDD cycle (one epic per run) |
-| **Reflect** | Verify before shipping | `verification-before-completion` + `bd close` |
+| Phase            | Purpose                                   | Conductor Equivalent                                           |
+| ---------------- | ----------------------------------------- | -------------------------------------------------------------- |
+| **Requirements** | Understand problem completely before code | `/conductor-design` → `design.md` → review                     |
+| **Plan**         | Create detailed plan BEFORE writing code  | `/conductor-newtrack` uses `design.md` → `spec.md` + `plan.md` |
+| **Implement**    | Build incrementally with TDD              | `bd ready` → TDD cycle (one epic per run)                      |
+| **Reflect**      | Verify before shipping                    | `verification-before-completion` + `bd close`                  |
 
 **Key Questions per Phase:**
 
@@ -61,16 +62,17 @@ DELIVER (Converge)  →  Plan               design.md finalized
 
 ### Phase Details
 
-| DD Phase | Purpose | Activities | Exit Criteria |
-|----------|---------|------------|---------------|
-| **DISCOVER** | Explore problem space | Ask about pain, users, impact, constraints | Problem articulated, users identified |
-| **DEFINE** | Frame the problem | Problem statement, success criteria, scope, approaches | Statement agreed, approach selected |
-| **DEVELOP** | Explore solutions | Architecture, components, data model, user flow | Architecture understood, interfaces defined |
-| **DELIVER** | Finalize design | Full grounding, acceptance criteria, risks | Design verified and approved |
+| DD Phase     | Purpose               | Activities                                             | Exit Criteria                               |
+| ------------ | --------------------- | ------------------------------------------------------ | ------------------------------------------- |
+| **DISCOVER** | Explore problem space | Ask about pain, users, impact, constraints             | Problem articulated, users identified       |
+| **DEFINE**   | Frame the problem     | Problem statement, success criteria, scope, approaches | Statement agreed, approach selected         |
+| **DEVELOP**  | Explore solutions     | Architecture, components, data model, user flow        | Architecture understood, interfaces defined |
+| **DELIVER**  | Finalize design       | Full grounding, acceptance criteria, risks             | Design verified and approved                |
 
 ### A/P/C Checkpoints
 
 At the end of each phase, users choose:
+
 - **[A] Advanced** - Deeper analysis, assumption audit
 - **[P] Party** - Multi-agent feedback (see `workflows/party-mode/`)
 - **[C] Continue** - Proceed to next phase
@@ -82,6 +84,7 @@ At the end of each phase, users choose:
 - **Full grounding** before DELIVER completion (all decisions verified)
 
 **Interoperability:** This skill understands conductor projects created by either:
+
 - Gemini CLI extension (`/conductor:setup`, `/conductor:newTrack`, etc.)
 - Claude Code commands (`/conductor-setup`, `/conductor-newtrack`, etc.)
 
@@ -90,6 +93,7 @@ Both tools use the same `conductor/` directory structure.
 ## When to Use This Skill
 
 Automatically engage when:
+
 - Project has a `conductor/` directory
 - User mentions specs, plans, tracks, or context-driven development
 - User asks about project status or implementation progress
@@ -100,49 +104,50 @@ Automatically engage when:
 
 Users can invoke these commands directly:
 
-| Command | Description |
-|---------|-------------|
-| `/conductor-setup` | Initialize project with product.md, tech-stack.md, workflow.md |
-| `/conductor-design [desc]` | Design a feature/bug through Double Diamond dialogue (`ds` is the shorthand trigger) |
+| Command                            | Description                                                                                                                        |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `/conductor-setup`                 | Initialize project with product.md, tech-stack.md, workflow.md                                                                     |
+| `/conductor-design [desc]`         | Design a feature/bug through Double Diamond dialogue (`ds` is the shorthand trigger)                                               |
 | `/conductor-newtrack [id or desc]` | Create spec + plan from design.md, file beads, and review via subagents. Flags: `--no-beads`/`-nb`, `--plan-only`/`-po`, `--force` |
-| `/conductor-implement [id]` | Execute ONE EPIC from track's plan |
-| `/conductor-status` | Display progress overview |
-| `/conductor-revert` | Git-aware revert of work |
-| `/conductor-revise` | Update spec/plan when implementation reveals issues |
-| `/conductor-refresh` | Sync context docs with current codebase |
-| `/conductor-finish [id]` | Complete track: extract learnings, compact beads, archive. Flag: `--with-pr` |
+| `/conductor-implement [id]`        | Execute ONE EPIC from track's plan                                                                                                 |
+| `/conductor-status`                | Display progress overview                                                                                                          |
+| `/conductor-revert`                | Git-aware revert of work                                                                                                           |
+| `/conductor-revise`                | Update spec/plan when implementation reveals issues                                                                                |
+| `/conductor-finish [id]`           | Complete track: extract learnings, compact beads, archive. Flags: `--with-pr`, `--skip-codemaps`, `--skip-refresh`                 |
 
 ## Intent Mapping
 
 When users express these intents, invoke the corresponding workflow:
 
-| User Intent | Action | Command |
-|-------------|--------|---------|
-| "Set up this project" / "Initialize conductor" | Run setup workflow | `/conductor-setup` |
-| "Design a feature" / "Brainstorm X" | Create design through dialogue | `/conductor-design [desc]` |
-| "Create a new feature" / "Add a track for X" | Create track from design | `/conductor-newtrack [id]` |
-| "Start working" / "Implement the feature" | Begin implementation | `/conductor-implement` |
-| "What's the status?" / "Show progress" | Display status | `/conductor-status` |
-| "Undo that" / "Revert the last task" | Revert work | `/conductor-revert` |
-| "Check for issues" / "Validate the project" | Run validation | `/conductor-validate` |
-| "This is blocked" / "Can't proceed" | Mark as blocked | `/conductor-block` |
-| "Skip this task" | Skip current task | `/conductor-skip` |
-| "Archive completed tracks" | Archive tracks | `/conductor-archive` |
-| "Export project summary" | Generate export | `/conductor-export` |
-| "Docs are outdated" / "Sync with codebase" | Refresh context | `/conductor-refresh` |
-| "Spec is wrong" / "Plan needs update" | Revise spec/plan | `/conductor-revise` |
-| "Finish track" / "Complete track" / "doc-sync" | Complete and archive track | `/conductor-finish` |
+| User Intent                                    | Action                         | Command                    |
+| ---------------------------------------------- | ------------------------------ | -------------------------- |
+| "Set up this project" / "Initialize conductor" | Run setup workflow             | `/conductor-setup`         |
+| "Design a feature" / "Brainstorm X"            | Create design through dialogue | `/conductor-design [desc]` |
+| "Create a new feature" / "Add a track for X"   | Create track from design       | `/conductor-newtrack [id]` |
+| "Start working" / "Implement the feature"      | Begin implementation           | `/conductor-implement`     |
+| "What's the status?" / "Show progress"         | Display status                 | `/conductor-status`        |
+| "Undo that" / "Revert the last task"           | Revert work                    | `/conductor-revert`        |
+| "Check for issues" / "Validate the project"    | Run validation                 | `/conductor-validate`      |
+| "This is blocked" / "Can't proceed"            | Mark as blocked                | `/conductor-block`         |
+| "Skip this task"                               | Skip current task              | `/conductor-skip`          |
+| "Archive completed tracks"                     | Archive tracks                 | `/conductor-archive`       |
+| "Export project summary"                       | Generate export                | `/conductor-export`        |
+| "Spec is wrong" / "Plan needs update"          | Revise spec/plan               | `/conductor-revise`        |
+| "Finish track" / "Complete track" / "doc-sync" | Complete and archive track     | `/conductor-finish`        |
 
 ## Context Loading
 
 When this skill activates, automatically load:
+
 1. `conductor/product.md` - Understand the product
 2. `conductor/tech-stack.md` - Know the tech constraints
 3. `conductor/workflow.md` - Follow the methodology
 4. `conductor/tracks.md` - Current work status
 5. `conductor/AGENTS.md` - Learnings from completed tracks
+6. `conductor/CODEMAPS/` - Architecture documentation for codebase orientation
 
 For active tracks, also load:
+
 - `conductor/tracks/<track_id>/design.md` (if exists)
 - `conductor/tracks/<track_id>/spec.md`
 - `conductor/tracks/<track_id>/plan.md`
@@ -150,11 +155,12 @@ For active tracks, also load:
 ## Proactive Behaviors
 
 When skill is active:
+
 1. **On new session**: Check for in-progress tracks, offer to resume
 2. **On task completion**: Suggest next task or phase verification
 3. **On blocked detection**: Alert user and suggest alternatives
 4. **On all tasks complete**: Congratulate and offer archive/cleanup
-5. **On stale context**: If setup >2 days old or significant changes detected, suggest `/conductor-refresh`
+5. **On stale context**: If setup >2 days old or significant changes detected, suggest running `/conductor-finish` when track completes (which includes Context Refresh)
 
 ## After Track Creation
 
@@ -185,22 +191,33 @@ When all epics are closed and all beads resolved, the track is ready to finish.
 ### Auto-Trigger
 
 After closing the last epic, prompt:
+
 ```
 Track ready. Run `/conductor-finish`?
 ```
 
 ### /conductor-finish Workflow
 
-Runs 4 phases (see [references/finish-workflow.md](references/finish-workflow.md)):
+Runs 6 phases (see [references/finish-workflow.md](references/finish-workflow.md)):
 
+0. **Pre-Flight Validation** - Check for stale state, validate track integrity
 1. **Thread Compaction** - Extract learnings from work threads → `LEARNINGS.md`
 2. **Beads Compaction** - Generate AI summaries for closed issues
 3. **Knowledge Merge** - Dedupe and merge to `conductor/AGENTS.md`
-4. **Archive** - S/H/K choice, single commit, cleanup beads
+4. **Context Refresh** - Update product.md, tech-stack.md, tracks.md, workflow.md
+5. **Archive** - A/K choice (Archive/Keep), single commit, cleanup beads
+6. **CODEMAPS Regeneration** - Update architecture documentation
+
+**Flags:**
+
+- `--with-pr` - Chain to finish-branch skill after Phase 6
+- `--skip-codemaps` - Skip CODEMAPS regeneration (Phase 6)
+- `--skip-refresh` - Skip Context Refresh (Phase 4)
 
 ### ready_to_finish Status
 
 Set `metadata.json` status to `"ready_to_finish"` when:
+
 - All child beads are closed
 - All epics in plan.md are marked complete
 
@@ -218,8 +235,12 @@ conductor/
 ├── workflow.md             # Development standards (TDD, commits, coverage)
 ├── tracks.md               # Master track list with status markers
 ├── setup_state.json        # Setup progress tracking
-├── refresh_state.json      # Context refresh tracking (created by /conductor-refresh)
+├── finish_state.json       # Finish workflow tracking (created by /conductor-finish)
 ├── AGENTS.md               # Learnings hub (auto-updated by /conductor-finish)
+├── CODEMAPS/               # Architecture documentation
+│   ├── .meta.json          # Generation metadata
+│   ├── overview.md         # Project-level architecture (always generated)
+│   └── [module].md         # Per-module codemaps (skills.md, api.md, etc.)
 ├── code_styleguides/       # Language-specific style guides
 ├── archive/                # Archived completed tracks
 ├── exports/                # Exported summaries
@@ -235,9 +256,158 @@ conductor/
         └── finish-state.json  # Finish resume state (if interrupted)
 ```
 
+## CODEMAPS Integration
+
+Conductor generates and maintains architecture documentation in `conductor/CODEMAPS/`:
+
+### Trigger Points
+
+| Command             | CODEMAPS Action                         |
+| ------------------- | --------------------------------------- |
+| `/conductor-setup`  | Generate initial codemaps               |
+| `/conductor-finish` | Auto-regenerate (Phase 6)               |
+| `ds`                | Load for context during design sessions |
+
+### Generated Files
+
+- `overview.md` - Project summary, directory structure, key files, data flow (always generated)
+- `[module].md` - Per-module codemaps for significant areas (skills.md, api.md, database.md, etc.)
+- `.meta.json` - Generation metadata including timestamps and user modification tracking
+
+### .meta.json Structure
+
+```json
+{
+  "generated": "2025-12-24T10:30:00Z",
+  "generator": "/conductor-setup",
+  "project_type": "plugin",
+  "files": {
+    "overview.md": { "generated": true, "user_modified": false },
+    "skills.md": { "generated": true, "user_modified": true }
+  }
+}
+```
+
+### User Modification Tracking
+
+Before overwriting during `/conductor-finish`:
+
+1. Compare file mtime to `.meta.json` generated timestamp
+2. If `user_modified: true`, warn user before overwriting
+
+### Scale Limits
+
+- Directory scan depth: Top 2 levels only
+- Key files per codemap: Max 50 files
+- Module codemaps: Max 10 files
+
+### Monorepo Support
+
+Detects `packages/`, `apps/`, or workspaces in package.json and generates per-package codemaps.
+
+### Skipping Regeneration
+
+Use `--skip-codemaps` with `/conductor-finish` to skip CODEMAPS regeneration (useful for batch finishing).
+
+See [references/CODEMAPS_TEMPLATE.md](references/CODEMAPS_TEMPLATE.md) for codemap templates.
+
+## Track Integrity Validation
+
+For detailed validation logic, see:
+
+- `skills/conductor/references/validation/track/checks.md` - Core validation logic
+- `skills/conductor/references/validation/track/snippets.md` - State file templates
+- `skills/conductor/references/validation/track/recovery.md` - Troubleshooting guide
+
+### Required Files Per Track
+
+| File                   | Required           | Created By                      | Purpose              |
+| ---------------------- | ------------------ | ------------------------------- | -------------------- |
+| `design.md`            | Optional           | `/conductor-design`             | High-level design    |
+| `spec.md`              | Yes (with plan.md) | `/conductor-newtrack`           | Requirements         |
+| `plan.md`              | Yes (with spec.md) | `/conductor-newtrack`           | Implementation tasks |
+| `metadata.json`        | Yes                | `/conductor-newtrack` Phase 1.3 | Track metadata       |
+| `.track-progress.json` | Yes                | `/conductor-newtrack` Phase 1.3 | Workflow state       |
+| `.fb-progress.json`    | Yes                | `/conductor-newtrack` Phase 1.3 | Beads filing state   |
+
+**CRITICAL:** All 3 state files (metadata.json, .track-progress.json, .fb-progress.json) are created at the START of `/conductor-newtrack` in Phase 1.3, BEFORE spec/plan generation.
+
+### State File Creation Timeline
+
+```
+/conductor-newtrack Phase 1.3 (FIRST):
+├── Create metadata.json (status: initializing)
+├── Create .track-progress.json (status: initializing)
+└── Create .fb-progress.json (status: pending)
+
+/conductor-newtrack Phase 2.4 (After spec/plan):
+├── Update metadata.json (status: planned, artifacts.spec/plan: true)
+└── Update .track-progress.json (status: plan_done)
+
+file-beads skill:
+├── Validate all 3 state files exist (HALT if missing)
+└── Update .fb-progress.json (status: in_progress → complete)
+```
+
+### Validation Rules
+
+| Rule                                     | Enforcement                      |
+| ---------------------------------------- | -------------------------------- |
+| spec.md and plan.md must exist together  | HALT if one without other        |
+| State files must exist before file-beads | HALT if missing                  |
+| track_id mismatch                        | Auto-fix to match directory name |
+| Corrupted JSON                           | HALT (do not auto-repair)        |
+
+### Auto-Fix Behaviors
+
+| Issue                                            | Action                                             |
+| ------------------------------------------------ | -------------------------------------------------- |
+| `metadata.json.track_id` != directory name       | Auto-fix: update to directory name                 |
+| `.track-progress.json.trackId` != directory name | Auto-fix: update to directory name                 |
+| `.fb-progress.json.trackId` != directory name    | Auto-fix: update to directory name                 |
+| Missing state files                              | HALT with message: "Run /conductor-newtrack first" |
+
+### /conductor-newtrack Creates All State Files
+
+When `/conductor-newtrack` runs on an EXISTING track (with design.md, spec.md, plan.md but missing state files), it will:
+
+1. **Phase 1.3:** Create all 3 state files immediately
+2. **Phase 2:** Skip spec/plan generation if files exist
+3. **Phase 3:** Proceed to file beads
+
+This enables auto-repair of tracks created before this fix.
+
+### Repair Template: .fb-progress.json
+
+```json
+{
+  "trackId": "<track-id>",
+  "status": "pending",
+  "startedAt": null,
+  "threadId": null,
+  "resumeFrom": "phase1",
+  "epics": [],
+  "issues": [],
+  "crossTrackDeps": [],
+  "lastError": null
+}
+```
+
+### /conductor-status Integration
+
+When `/conductor-status` runs, include integrity check:
+
+```
+Track: codemaps-integration_20251223
+Status: new (repaired: missing metadata.json, .track-progress.json)
+Files: design.md ✓, spec.md ✓, plan.md ✓
+Beads: Not filed (run `fb` to file)
+```
+
 ## Status Markers
 
 Throughout conductor files:
+
 - `[ ]` - Pending/New
 - `[~]` - In Progress
 - `[x]` - Completed (often followed by 7-char commit SHA)
@@ -267,17 +437,16 @@ When implementing tasks, follow `conductor/workflow.md` which typically specifie
 Projects set up with Gemini CLI's Conductor extension use identical structure.
 The only differences are command syntax:
 
-| Gemini CLI | Claude Code |
-|------------|-------------|
-| `/conductor:setup` | `/conductor-setup` |
-| `/conductor:design` | `/conductor-design` |
-| `/conductor:newTrack` | `/conductor-newtrack` |
+| Gemini CLI             | Claude Code            |
+| ---------------------- | ---------------------- |
+| `/conductor:setup`     | `/conductor-setup`     |
+| `/conductor:design`    | `/conductor-design`    |
+| `/conductor:newTrack`  | `/conductor-newtrack`  |
 | `/conductor:implement` | `/conductor-implement` |
-| `/conductor:status` | `/conductor-status` |
-| `/conductor:revert` | `/conductor-revert` |
-| `/conductor:revise` | `/conductor-revise` |
-| `/conductor:refresh` | `/conductor-refresh` |
-| `/conductor:finish` | `/conductor-finish` |
+| `/conductor:status`    | `/conductor-status`    |
+| `/conductor:revert`    | `/conductor-revert`    |
+| `/conductor:revise`    | `/conductor-revise`    |
+| `/conductor:finish`    | `/conductor-finish`    |
 
 Files, workflows, and state management are fully compatible.
 
@@ -287,13 +456,15 @@ When you see `conductor/tracks.md` with content like:
 
 ```markdown
 ## [~] Track: Add user authentication
-*Link: [conductor/tracks/auth_20241215/](conductor/tracks/auth_20241215/)*
+
+_Link: [conductor/tracks/auth_20251215/](conductor/tracks/auth_20251215/)_
 ```
 
 You know:
+
 - This is a Conductor project
 - There's an in-progress track for authentication
-- Spec and plan are in `conductor/tracks/auth_20241215/`
+- Spec and plan are in `conductor/tracks/auth_20251215/`
 - Follow the workflow in `conductor/workflow.md`
 
 ## References

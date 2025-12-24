@@ -115,8 +115,8 @@ tdd                                # Enter TDD mode
 ### When Stuck
 
 ```
-debug                              # Systematic debugging
-trace                              # Root cause tracing
+debug                              # Systematic debugging (external: superpowers)
+trace                              # Root cause tracing (external: superpowers)
 /conductor-design                  # Design alternatives
 ```
 
@@ -135,7 +135,7 @@ trace                              # Root cause tracing
 |----------|--------|
 | **Core Workflow** | conductor, design (Double Diamond + Party Mode), beads, file-beads (parallel), review-beads (parallel) |
 | **Development** | test-driven-development, using-git-worktrees, finishing-a-development-branch |
-| **Utilities** | codemaps, dispatching-parallel-agents, subagent-driven-development |
+| **Utilities** | dispatching-parallel-agents, subagent-driven-development |
 | **Meta** | verification-before-completion, writing-skills, sharing-skills |
 
 ---
@@ -233,7 +233,7 @@ flowchart TB
 /conductor-status                  # View progress
 /conductor-revert                  # Git-aware revert of work
 /conductor-revise                  # Update spec/plan mid-track
-/conductor-refresh                 # Sync context docs with codebase
+/conductor-finish                  # Complete track: learnings, context refresh, archive
 ```
 
 **Output structure**:
@@ -243,10 +243,16 @@ conductor/
 ├── tech-stack.md           # Technology choices
 ├── workflow.md             # Development standards
 ├── tracks.md               # Master track list
+├── AGENTS.md               # Learnings hub (auto-updated by /conductor-finish)
+├── CODEMAPS/               # Token-aware architecture docs
+│   ├── overview.md         # System architecture overview
+│   └── <module>.md         # Per-module codemaps
+├── archive/                # Completed tracks
 └── tracks/<track_id>/
     ├── design.md           # High-level design (from /conductor-design)
     ├── spec.md             # Requirements + acceptance
-    └── plan.md             # Phased task list
+    ├── plan.md             # Phased task list
+    └── LEARNINGS.md        # Track learnings (created by /conductor-finish)
 ```
 
 **Key insight**: Spend tokens once on a good plan; reuse it many times.
@@ -514,7 +520,7 @@ This prevents auto-continuation and gives you control between epics.
 
 ### Manual Specialist Tools
 
-Outside the automated flow:
+Outside the automated flow (external: superpowers plugin):
 - `debug` — Systematic debugging
 - `trace` — Root cause tracing
 
@@ -532,12 +538,14 @@ Outside the automated flow:
 | `/conductor-status` | View progress |
 | `/conductor-revert` | Git-aware revert of work |
 | `/conductor-revise` | Update spec/plan when implementation reveals issues |
-| `/conductor-refresh` | Sync context docs with current codebase |
-| `/conductor-finish [id]` | Complete track: extract learnings, compact beads, archive |
+| `/conductor-finish [id]` | Complete track: learnings, context refresh, archive (6 phases) |
+| `/conductor-validate [id]` | Validate track health and state consistency |
+| `/conductor-block [id] [reason]` | Mark a task as blocked |
+| `/conductor-skip [id] [reason]` | Skip a task with documented reason |
 | `/ground <pattern>` | Verify patterns against current truth |
 | `/decompose-task <phase>` | Break phases into atomic beads |
 | `/compact` | Checkpoint and compact session |
-| `/review` | Request code review |
+| `review code` | Request code review (external: superpowers plugin) |
 
 ---
 
@@ -562,7 +570,7 @@ maestro/
 ├── SETUP_GUIDE.md         # Installation guide
 ├── TUTORIAL.md            # Complete workflow guide
 ├── AGENTS.md              # Agent instructions
-├── skills/                # 16 skill directories
+├── skills/                # Skill directories (conductor, design, beads, tdd, etc.)
 │   ├── conductor/         # Planning methodology
 │   ├── design/            # Design sessions (ds trigger)
 │   ├── beads/             # Issue tracking (+ file-beads, review-beads)

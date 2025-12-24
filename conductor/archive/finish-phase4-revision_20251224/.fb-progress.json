@@ -1,0 +1,20 @@
+{
+  "trackId": "finish-phase4-revision_20251224",
+  "status": "complete",
+  "startedAt": "2025-12-23T21:02:17Z",
+  "completedAt": "2025-12-23T21:10:00Z",
+  "threadId": "T-019b4cd3-fb30-71a0-a49d-2abb1aaa9d60",
+  "resumeFrom": null,
+  "epics": [
+    {"id": "my-workflow:3-cmp", "title": "Epic 1: Schema & State Infrastructure", "status": "created"},
+    {"id": "my-workflow:3-rbc", "title": "Epic 2: Phase 0 - Validation Pre-Flight", "status": "created"},
+    {"id": "my-workflow:3-eyg", "title": "Epic 3: Phase 4 - Context Refresh", "status": "created"},
+    {"id": "my-workflow:3-68k", "title": "Epic 4: Phase 5 - Archive Simplification", "status": "created"},
+    {"id": "my-workflow:3-8oj", "title": "Epic 5: Phase Renumbering & Flags", "status": "created"},
+    {"id": "my-workflow:3-pjs", "title": "Epic 6: Documentation Sync", "status": "created"}
+  ],
+  "issues": ["my-workflow:3-sjl", "my-workflow:3-7bw", "my-workflow:3-mk5", "my-workflow:3-ymd", "my-workflow:3-68k.1", "my-workflow:3-68k.2", "my-workflow:3-8oj.1", "my-workflow:3-8oj.3", "my-workflow:3-8oj.4", "my-workflow:3-pjs.1", "my-workflow:3-pjs.2", "my-workflow:3-pjs.3"],
+  "crossTrackDeps": [],
+  "lastBatchCompleted": null,
+  "lastError": null
+}

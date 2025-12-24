@@ -1,25 +1,51 @@
 # Validation Reference Files
 
-Reserved quality rubrics and judge prompts for compaction quality evaluation.
+Two validation subsystems for Conductor tracks.
 
-## Status: Reserved
+## Subsystems
 
-These files are **not currently used** by `/conductor-finish`. They are retained for potential future use in automated quality scoring.
+| Folder | Purpose | Used By |
+|--------|---------|---------|
+| `track/` | Track integrity validation (state files, track_id, file existence) | `/conductor-validate`, `/conductor-implement`, `fb`, `rb` |
+| `quality/` | Compaction quality evaluation (reserved for future LLM scoring) | Reserved |
 
-## Files
+> **Note:** `/conductor-finish` uses inline Phase 0 validation, not track/checks.md.
 
-| File | Purpose |
-|------|---------|
-| `judge-prompt.md` | Prompt template for LLM-based quality evaluation |
-| `rubrics.md` | 6-dimension scoring rubric (Accuracy, Context Awareness, etc.) |
+## Quick Reference
 
-## Potential Future Use
+### Track Validation (Pre-flight checks)
 
-These rubrics could be used to:
-1. Score AI-generated summaries in Phase 2
-2. Evaluate LEARNINGS.md extraction quality
-3. Validate conductor/AGENTS.md merge quality
+```
+track/
+├── README.md      # Quick reference
+├── checks.md      # Validation logic (inline by commands)
+├── snippets.md    # Bash code templates
+└── recovery.md    # Troubleshooting guide
+```
 
-## History
+Key files for inline reference:
+- **checks.md** - Core validation logic, inline in command Phase 0
+- **snippets.md** - State file templates for auto-creation
 
-Moved from `commands/compact/` during `/conductor-finish` integration (2024-12).
+### Quality Validation (Reserved)
+
+```
+quality/
+├── README.md        # Status and potential future use
+├── judge-prompt.md  # LLM judge prompt template
+└── rubrics.md       # 6-dimension scoring rubric
+```
+
+Not currently used. Reserved for automated quality scoring of compaction summaries.
+
+## Usage Pattern
+
+Commands that perform track operations should include Phase 0 validation:
+
+```markdown
+## Phase 0: Track Validation
+
+Inline `skills/conductor/references/validation/track/checks.md` and execute.
+```
+
+See [track/checks.md](track/checks.md) for the full validation logic.

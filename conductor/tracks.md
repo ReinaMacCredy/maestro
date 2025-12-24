@@ -4,19 +4,41 @@ Master list of all development tracks.
 
 ## Active Tracks
 
+*No active tracks.*
+
 ---
-
-## [~] Track: Double Diamond + Party Mode
-*ID: double-diamond-party-mode_20241223*
-*Link: [spec](conductor/tracks/double-diamond-party-mode_20241223/spec.md) | [plan](conductor/tracks/double-diamond-party-mode_20241223/plan.md)*
-
-## [~] Track: /conductor-finish Integration
-*ID: conductor-finish*
-*Link: [design](conductor/tracks/conductor-finish/design.md) | [spec](conductor/tracks/conductor-finish/spec.md) | [plan](conductor/tracks/conductor-finish/plan.md)*
 
 ## Completed Tracks
 
 *Completed tracks are archived to `conductor/archive/`.*
+
+## [x] Track: /conductor-finish Phase 4 Revision
+*ID: finish-phase4-revision_20251224*
+*Archived: [conductor/archive/finish-phase4-revision_20251224/](conductor/archive/finish-phase4-revision_20251224/)*
+
+## [x] Track: Conductor Track Validation System
+*ID: state-files-phase1_20251224*
+*Archived: [conductor/archive/state-files-phase1_20251224/](conductor/archive/state-files-phase1_20251224/)*
+
+## [x] Track: Double Diamond + Party Mode
+*ID: double-diamond-party-mode_20251223*
+*Archived: [conductor/archive/double-diamond-party-mode_20251223/](conductor/archive/double-diamond-party-mode_20251223/)*
+
+## [x] Track: /conductor-finish Integration
+*ID: conductor-finish*
+*Archived: [conductor/archive/conductor-finish/](conductor/archive/conductor-finish/)*
+
+## [x] Track: Merge newTrack and File Beads
+*ID: merge-newtrack-fb_20251223*
+*Archived: [conductor/archive/merge-newtrack-fb_20251223/](conductor/archive/merge-newtrack-fb_20251223/)*
+
+## [x] Track: Changelog CI/CD
+*ID: changelog-cicd*
+*Archived: [conductor/archive/changelog-cicd/](conductor/archive/changelog-cicd/)*
+
+## [x] Track: CODEMAPS Integration
+*ID: codemaps-integration_20251223*
+*Archived: [conductor/archive/codemaps-integration_20251223/](conductor/archive/codemaps-integration_20251223/)*
 
 ---
 
@@ -35,9 +57,4 @@ Status markers:
 - `[~]` — In progress
 - `[x]` — Completed
 
----
 
-## [ ] Track: Merge newTrack and File Beads
-*ID: merge-newtrack-fb_20241223*
-*Link: [spec](conductor/tracks/merge-newtrack-fb_20241223/spec.md) | [plan](conductor/tracks/merge-newtrack-fb_20241223/plan.md)*
-*Priority: high*
