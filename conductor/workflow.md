@@ -52,6 +52,23 @@ flowchart TB
         CREATIVE["Creative: Sophia, Carson, Maya, Victor, Dr. Quinn"]
     end
     
+    subgraph VALIDATION["VALIDATION SYSTEM (Phase 0)"]
+        direction TB
+        VALIDATE["/conductor-validate"]
+        
+        subgraph CHECKS["Validation Checks"]
+            V01["0.1 Resolve track path"]
+            V02["0.2 Check directory"]
+            V03["0.3 File existence matrix"]
+            V04["0.4 Validate JSON"]
+            V05["0.5 Auto-create state"]
+            V06["0.6 Auto-fix track_id"]
+            V07["0.7 Staleness detection"]
+        end
+        
+        OUTCOMES{{"PASS / HALT / Auto-repair"}}
+    end
+    
     DS --> DISCOVER --> DEFINE --> DEVELOP --> DELIVER --> APC
     APC -->|"C"| DESIGNMD
     APC -->|"P"| BMAD
@@ -60,6 +77,13 @@ flowchart TB
     READY --> CLAIM --> TDD --> CLOSE
     CLOSE -->|"More?"| READY
     CLOSE -->|"Done"| VERIFY --> BRANCH --> FINISH_CMD
+    
+    VALIDATE --> V01 --> V02 --> V03 --> V04 --> V05 --> V06 --> V07 --> OUTCOMES
+    
+    NEWTRACK -.->|"Phase 0"| VALIDATE
+    FB -.->|"Phase 0"| VALIDATE
+    RB -.->|"Phase 0"| VALIDATE
+    READY -.->|"Phase 0"| VALIDATE
 ```
 
 For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../docs/PIPELINE_ARCHITECTURE.md).

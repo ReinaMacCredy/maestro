@@ -12,6 +12,10 @@ Master list of all development tracks.
 
 *Completed tracks are archived to `conductor/archive/`.*
 
+## [x] Track: Integrate agent_mail MCP into Workflow
+*ID: agent-coordination_20251224*
+*Archived: [conductor/archive/agent-coordination_20251224/](conductor/archive/agent-coordination_20251224/)*
+
 ## [x] Track: /conductor-finish Phase 4 Revision
 *ID: finish-phase4-revision_20251224*
 *Archived: [conductor/archive/finish-phase4-revision_20251224/](conductor/archive/finish-phase4-revision_20251224/)*

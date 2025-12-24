@@ -1,6 +1,6 @@
 ---
 name: dispatching-parallel-agents
-version: "1.1.2"
+version: "1.2.0"
 description: Use when facing 2+ independent tasks that can be worked on without shared state or sequential dependencies
 ---
 
@@ -190,3 +190,24 @@ From debugging session (2025-10-03):
 - All investigations completed concurrently
 - All fixes integrated successfully
 - Zero conflicts between agent changes
+
+## Coordination (Optional)
+
+When agent_mail MCP is available, file reservations prevent conflicts:
+
+**Before dispatch:**
+```text
+🔒 Reserved: skills/foo/SKILL.md, skills/bar/SKILL.md (1h)
+Dispatching 3 agents...
+```
+
+**After completion:**
+```text
+🔓 Released reservations
+```
+
+See [workflows/agent-coordination/](../../workflows/agent-coordination/) for full protocol:
+- [parallel-dispatch.md](../../workflows/agent-coordination/patterns/parallel-dispatch.md) - Reserve → dispatch → release flow
+- [graceful-fallback.md](../../workflows/agent-coordination/patterns/graceful-fallback.md) - Handle MCP unavailability
+
+If MCP is unavailable, proceed normally—coordination is optional.

@@ -1,0 +1,23 @@
+{
+  "trackId": "agent-coordination_20251224",
+  "status": "complete",
+  "startedAt": "2024-12-24T14:00:00Z",
+  "completedAt": "2024-12-24T14:45:00Z",
+  "threadId": "T-019b50ab-f012-723c-a571-50d152969714",
+  "resumeFrom": null,
+  "epics": [
+    {"id": "my-workflow:3-bci", "title": "Epic: Workflow Container", "status": "complete", "reviewed": false},
+    {"id": "my-workflow:3-7a3", "title": "Epic: Skill Integration", "status": "complete", "reviewed": false},
+    {"id": "my-workflow:3-1sd", "title": "Epic: Documentation", "status": "complete", "reviewed": false},
+    {"id": "my-workflow:3-a80", "title": "Epic: Verification", "status": "complete", "reviewed": false}
+  ],
+  "issues": [
+    "my-workflow:3-bci.1", "my-workflow:3-bci.2", "my-workflow:3-bci.3", 
+    "my-workflow:3-bci.4", "my-workflow:3-bci.5", "my-workflow:3-bci.6",
+    "my-workflow:3-3vj", "my-workflow:3-0i6",
+    "my-workflow:3-1sd.1", "my-workflow:3-1sd.2", "my-workflow:3-1sd.3", "my-workflow:3-1sd.4",
+    "my-workflow:3-j7m", "my-workflow:3-3fi", "my-workflow:3-7pt"
+  ],
+  "crossTrackDeps": [],
+  "lastError": null
+}

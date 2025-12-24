@@ -56,6 +56,13 @@ flowchart TB
         CREATIVE["Creative: Sophia, Carson, Maya, Victor, Dr. Quinn"]
     end
     
+    subgraph VALIDATION["VALIDATION SYSTEM (Phase 0)"]
+        direction TB
+        VALIDATE["/conductor-validate"]
+        V_CHECKS["0.1-0.7: Path → Dir → Files → JSON → State → ID → Stale"]
+        OUTCOMES{{"PASS / HALT / Auto-repair"}}
+    end
+    
     DS --> DISCOVER --> DEFINE --> DEVELOP --> DELIVER --> APC
     APC -->|"C"| DESIGNMD
     APC -->|"P"| BMAD
@@ -64,6 +71,13 @@ flowchart TB
     READY --> CLAIM --> COORDINATOR --> WORKERS --> MERGE --> TDD --> CLOSE
     CLOSE -->|"More?"| READY
     CLOSE -->|"Done"| VERIFY --> BRANCH --> FINISH_CMD
+    
+    VALIDATE --> V_CHECKS --> OUTCOMES
+    
+    NEWTRACK -.->|"Phase 0"| VALIDATE
+    FB -.->|"Phase 0"| VALIDATE
+    RB -.->|"Phase 0"| VALIDATE
+    READY -.->|"Phase 0"| VALIDATE
 ```
 
 For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../docs/PIPELINE_ARCHITECTURE.md).
@@ -91,6 +105,10 @@ workflows/
 ├── party-mode/            # Multi-agent collaborative review
 │   ├── workflow.md        # Party Mode orchestration
 │   └── agents/            # 12 BMAD agent definitions
+├── agent-coordination/    # Multi-agent file coordination (via agent_mail MCP)
+│   ├── workflow.md        # Core protocol
+│   ├── patterns/          # parallel-dispatch, subagent-prompt, session-lifecycle, graceful-fallback
+│   └── examples/          # Annotated dispatch examples
 └── schemas/
     ├── metadata.schema.json        # Track metadata structure
     ├── implement_state.schema.json # Implementation state tracking

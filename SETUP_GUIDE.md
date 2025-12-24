@@ -191,3 +191,47 @@ The plugin works without `bd`:
 - Track issues manually in GitHub Issues or markdown
 
 **The skills are the methodology; the CLIs are the persistence layer.**
+
+---
+
+## Understanding Handoff
+
+**Handoff** is how work context transfers between AI agent sessions. Since sessions have limited memory and can end unexpectedly, handoff ensures your progress survives.
+
+### The Problem
+
+- AI context windows are limited and get compacted
+- Sessions crash, timeout, or get closed
+- Complex features take multiple sessions to complete
+
+### The Solution
+
+Maestro persists work in files that survive session boundaries:
+
+```
+Session 1 (Planning):
+  ds → design.md
+  /conductor-newtrack → spec.md + plan.md + beads
+  rb → reviewed beads
+  → HANDOFF
+
+Session 2+ (Execution):
+  /conductor-implement → execute one epic → HANDOFF
+  ...repeat until all epics done
+```
+
+Each file is a checkpoint. Handoff happens after planning, then after each epic.
+
+### In Practice
+
+```bash
+# End of session: save context
+bd update <id> --notes "COMPLETED: X. NEXT: Y."
+git commit -am "progress" && git push
+
+# Start of session: resume
+bd ready --json    # See what's unblocked
+bd show <id>       # Read notes for context
+```
+
+For detailed explanation, see [docs/manual-workflow-guide.md](./docs/manual-workflow-guide.md#understanding-handoff).

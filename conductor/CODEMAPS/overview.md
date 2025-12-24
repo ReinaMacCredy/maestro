@@ -11,6 +11,7 @@ AI workflow plugin for structured development: planning (Conductor), issue track
 | `/conductor-implement` | Execute tasks with TDD |
 | `/conductor-finish` | Complete track, extract learnings, archive |
 | `fb` / `rb` | File/review beads from plan |
+| `workflows/agent-coordination/` | Multi-agent file coordination (optional) |
 
 ## Directory Structure
 
@@ -61,6 +62,7 @@ ds → design.md → /conductor-newtrack → spec.md + plan.md
 | Add a skill | Create `skills/<name>/SKILL.md` with frontmatter |
 | Add a command | Create `commands/<name>.md` |
 | Regenerate CODEMAPS | `/conductor-finish` (Phase 6: CODEMAPS Regeneration) |
+| Coordinate parallel agents | See `workflows/agent-coordination/` (optional, requires agent_mail MCP) |
 
 ## Gotchas
 

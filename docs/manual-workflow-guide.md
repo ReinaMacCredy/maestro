@@ -2,6 +2,70 @@
 
 This guide explains how to work with Conductor commands manually without relying on skills or auto-activation. Use this when you need precise control over the workflow or when skills don't behave as expected.
 
+## Understanding Handoff
+
+**Handoff** is the structured transfer of work context between AI agent sessions. It solves a fundamental problem: AI agents have limited memory and sessions expire, but real software projects span days, weeks, or months.
+
+### The Problem Handoff Solves
+
+When working with AI coding assistants:
+- **Context windows are limited** - Agents can only "remember" recent conversation
+- **Sessions end unexpectedly** - Crashes, timeouts, or simply closing the terminal
+- **Work spans multiple sessions** - Complex features take many conversations to complete
+- **Multiple agents may collaborate** - Different sessions may work on related tasks
+
+Without handoff, each new session starts from scratch, losing all previous decisions, progress, and context.
+
+### How Handoff Works
+
+Handoff persists work context in files that survive session boundaries:
+
+| Artifact | Purpose | Survives |
+|----------|---------|----------|
+| `design.md` | High-level architecture decisions | ✓ |
+| `spec.md` | Requirements and acceptance criteria | ✓ |
+| `plan.md` | Step-by-step implementation tasks | ✓ |
+| Beads/Issues | Trackable work items with status | ✓ |
+
+**The handoff flow:**
+```
+Session 1 (Planning):
+  ds → design.md
+  /conductor-newtrack → spec.md + plan.md + beads
+  rb → reviewed beads
+  → HANDOFF (planning complete)
+
+Session 2+ (Execution):
+  /conductor-implement → execute Epic 1 → HANDOFF
+  /conductor-implement → execute Epic 2 → HANDOFF
+  ...one epic per session until done
+```
+
+### Why This Matters (Even Without Amp)
+
+This pattern applies to any AI-assisted development:
+
+1. **Resumability** - Any future session can continue work by reading the artifacts
+2. **Auditability** - Decisions are documented, not lost in chat history
+3. **Collaboration** - Humans can review and modify plans between sessions
+4. **Reliability** - Progress isn't lost if a session fails mid-task
+
+> **Tip**: Different tools handle handoff differently:
+> - **Amp**: Use handoff command from command palette, or reference threads with `@T-<id>`
+> - **Claude Code / Codex**: Run `/compact` before ending session
+
+### Conductor's Handoff Implementation
+
+In this workflow, handoff happens through:
+
+```
+ds → design.md → /conductor-newtrack → spec.md + plan.md + beads
+```
+
+Each artifact is a checkpoint. If a session ends after creating `design.md`, the next session runs `/conductor-newtrack` to continue. If it ends after creating `plan.md`, the next session runs `/conductor-implement` to execute tasks.
+
+---
+
 ## Why Manual Mode?
 
 Skills are convenient but can sometimes:
@@ -38,36 +102,36 @@ Step 2: Answer project type questions
 
 Step 3: Complete each section (max 5 questions each)
    a) Product Guide → creates product.md
-   b) Product Guidelines → creates product-guidelines.md
-   c) Tech Stack → creates tech-stack.md
-   d) Code Styleguides → copies to code_styleguides/
-   e) Workflow → creates workflow.md
+   b) Tech Stack → creates tech-stack.md
+   c) Workflow → creates workflow.md
 
-Step 4: Create initial track
+Step 4: Create initial track (optional)
    - Approve track proposal
    - Review generated spec.md and plan.md
 
 Step 5: Verify artifacts
    conductor/
-   ├── setup_state.json
    ├── product.md
-   ├── product-guidelines.md
    ├── tech-stack.md
    ├── workflow.md
    ├── tracks.md
+   ├── AGENTS.md           # Learnings hub
+   ├── CODEMAPS/           # Architecture documentation
    └── tracks/<track_id>/
        ├── metadata.json
+       ├── .track-progress.json
        ├── design.md
        ├── spec.md
        └── plan.md
 ```
 
-**State file**: `conductor/setup_state.json`
-- Resume from any step if interrupted
-- Check `last_successful_step` to see progress
+**State files**: Track-level state in `conductor/tracks/<track_id>/`
+- `.track-progress.json` - Spec/plan generation checkpoints
+- `.fb-progress.json` - Beads filing state (resume capability)
+- `.fb-progress.lock` - Concurrent session lock (30min timeout)
 
 **Troubleshooting**:
-- If setup stalls: Check `setup_state.json` for current state
+- If setup stalls: Check state files for current progress
 - To restart: Delete `conductor/` directory and re-run
 
 ---
@@ -181,6 +245,10 @@ conductor/tracks/<shortname_YYYYMMDD>/
 **Purpose**: Execute tasks from a track's plan.
 
 **When to use**: After approving a track's plan.
+
+> **Tip**: Before running this command, switch to plan mode first. This lets the agent read epic context before writing code.
+> - Claude Code: Press `Shift+Tab` to toggle plan mode
+> - Codex: Use `/create-plan` skill
 
 **Manual workflow**:
 
@@ -431,34 +499,7 @@ Step 4: Tracks moved to conductor/archive/
 
 ---
 
-### 12. `/conductor:export` (or `/conductor-export`)
-
-**Purpose**: Generate project summary report.
-
-**When to use**: Documentation, handoff, review.
-
-**Manual workflow**:
-
-```
-Step 1: Run the command
-   /conductor:export
-
-Step 2: Select export format
-   A) Markdown summary
-   B) JSON data
-   C) Both
-
-Step 3: Choose scope
-   A) Full project
-   B) Specific tracks
-
-Step 4: Report generated
-   - Output to conductor/exports/ or console
-```
-
----
-
-### 13. `/conductor:finish` (or `/conductor-finish`)
+### 12. `/conductor:finish` (or `/conductor-finish`)
 
 **Purpose**: Complete a track with learnings extraction, context refresh, and archival.
 

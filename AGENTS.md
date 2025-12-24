@@ -33,6 +33,18 @@ conductor/        # Unified save location for plans and tracks
 
 ## Handoff Mechanism (Planning → Execution)
 
+**What is Handoff?**
+Handoff is the structured transition of work between AI agent sessions or phases. Since agent threads have limited context and sessions may expire, handoff ensures continuity by:
+- Capturing decisions, context, and progress in persistent files (`design.md`, `spec.md`, `plan.md`)
+- Creating trackable work items (beads/issues) that survive session boundaries
+- Enabling any future session to resume work without losing context
+
+**Why Handoff Matters:**
+- **Context Preservation**: Threads get compacted or abandoned; handoff artifacts persist
+- **Multi-Session Work**: Complex tasks span multiple sessions; handoff bridges them
+- **Human-AI Collaboration**: Humans can review artifacts between sessions
+- **Resumability**: Any agent can pick up where another left off using `bd ready`
+
 **Unified flow via `/conductor-newtrack`:**
 ```
 ds → design.md → /conductor-newtrack → spec.md + plan.md + beads + review
@@ -155,3 +167,39 @@ git push                # Push to remote
 - Always `bd sync` before ending session
 
 <!-- end-bv-agent-instructions -->
+
+---
+
+## Agent Coordination (Optional)
+
+When `agent_mail` MCP is available, agents can coordinate file access and share context.
+
+### Session Protocol
+
+**Session start:**
+```bash
+# Check inbox for context from previous sessions
+fetch_inbox(project_key, agent_name)
+```
+
+**Session end:**
+```bash
+# Send handoff message for next session
+send_message(project_key, sender_name, to, subject, body_md)
+```
+
+### Parallel Dispatch
+
+Before dispatching parallel subagents:
+1. Reserve files with `file_reservation_paths`
+2. Inject coordination block into Task prompts
+3. Release reservations after completion
+
+See [workflows/agent-coordination/](workflows/agent-coordination/) for full protocol.
+
+### Failure Handling
+
+If MCP is unavailable:
+- Proceed without coordination (work completion is mandatory)
+- Show `⚠️ Agent coordination unavailable` warning
+- Don't block on optional features
