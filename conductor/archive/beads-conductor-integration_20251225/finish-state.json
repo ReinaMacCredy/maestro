@@ -1,0 +1,8 @@
+{
+  "trackId": "beads-conductor-integration_20251225",
+  "phase": 0,
+  "startedAt": "2025-12-25T13:30:00Z",
+  "completed": ["pre-flight"],
+  "skipCodemaps": false,
+  "skipRefresh": false
+}

@@ -1,0 +1,12 @@
+{
+  "trackId": "beads-conductor-integration_20251225",
+  "status": "plan_done",
+  "startedAt": "2025-12-25T10:00:00Z",
+  "completedPhases": ["design", "spec", "plan"],
+  "currentPhase": null,
+  "specGenerated": true,
+  "planGenerated": true,
+  "lastUpdated": "2025-12-25T17:00:00Z",
+  "partyModeRounds": 6,
+  "oracleAuditCompleted": true
+}

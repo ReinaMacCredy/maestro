@@ -48,6 +48,10 @@ Master list of all development tracks.
 *ID: beads-consolidation_20251225*
 *Archived: [conductor/archive/beads-consolidation_20251225/](conductor/archive/beads-consolidation_20251225/)*
 
+## [x] Track: Beads-Conductor Integration
+*ID: beads-conductor-integration_20251225*
+*Archived: [conductor/archive/beads-conductor-integration_20251225/](conductor/archive/beads-conductor-integration_20251225/)*
+
 ---
 
 ## Track Format
