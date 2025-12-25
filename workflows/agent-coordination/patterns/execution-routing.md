@@ -50,7 +50,7 @@ TIER2_PASS = (
 |-----------|-----------|
 | files > 15 AND tasks > 3 | Large scope benefits from parallelism |
 | est_tool_calls > 40 | High tool volume = good parallel candidate |
-| est_time > 30min AND independent_ratio > 0.6 | Long task with mostly independent work |
+| est_time > 30 min AND independent_ratio > 0.6 | Long task with mostly independent work |
 
 ## Routing Decision
 
@@ -130,44 +130,44 @@ When result is SINGLE_AGENT:
 
 ### Example 1: Small Feature → SINGLE_AGENT
 
-```
+```text
 Task: Add validation to user form
 Epics: 1
 [PARALLEL]: No
 Domains: 1 (frontend)
 Independent tasks: 2
 
-TIER 1: 0 + 0 + 0 + 0 = 0 → FAIL
+TIER 1: 0 + 0 + 0 + 0 = 0 -> FAIL
 Result: SINGLE_AGENT
 ```
 
 ### Example 2: Multi-Epic Feature → PARALLEL_DISPATCH
 
-```
+```text
 Task: Context Engineering Integration
 Epics: 8
 [PARALLEL]: Yes (Epics 1, 2, 8)
 Domains: 4 (workflows, skills, conductor, docs)
 Independent tasks: 7
 
-TIER 1: 2 + 3 + 2 + 1 = 8 → PASS
+TIER 1: 2 + 3 + 2 + 1 = 8 -> PASS
 
 Files: 20, Tasks: 15
-TIER 2: (20 > 15 AND 15 > 3) = true → PASS
+TIER 2: (20 > 15 AND 15 > 3) = true -> PASS
 
 Result: PARALLEL_DISPATCH
 ```
 
 ### Example 3: Medium Feature, Low Independence → SINGLE_AGENT
 
-```
+```text
 Task: Add authentication middleware
 Epics: 2
 [PARALLEL]: No
 Domains: 2 (backend, auth)
 Independent tasks: 3
 
-TIER 1: 2 + 0 + 0 + 0 = 2 → FAIL
+TIER 1: 2 + 0 + 0 + 0 = 2 -> FAIL
 Result: SINGLE_AGENT
 ```
 

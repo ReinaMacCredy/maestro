@@ -266,7 +266,7 @@ validate_context_contract() {
   fi
   
   # Check Intent is not empty
-  INTENT_CONTENT=$(sed -n '/## Intent/,/^## /p' "$FILE" | grep -v "^## " | grep -v "^\[PRESERVE\]" | tr -d '[:space:]')
+  INTENT_CONTENT=$(sed -n '/## Intent/,/^## /p' "$FILE" | grep -v "^## " | tr -d '[:space:]')
   if [[ -z "$INTENT_CONTENT" ]]; then
     echo "ERROR: Intent section is empty"
     return 1

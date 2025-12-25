@@ -6,7 +6,7 @@ Session context format for preserving critical information across compaction cyc
 
 All anchored state files must begin with:
 
-```
+```html
 <!-- session-context v1 -->
 ```
 
@@ -29,9 +29,9 @@ What we're building and why.
 
 What we've explicitly decided NOT to do.
 
-- ❌ [Approach we ruled out] — [Why]
-- ❌ [Technology we won't use] — [Reason]
-- ⚠️ [Constraint] — [Impact]
+- RULED_OUT: [Approach we ruled out] -- [Why]
+- RULED_OUT: [Technology we won't use] -- [Reason]
+- CONSTRAINT: [Constraint] -- [Impact]
 
 ## Decisions Made (with Why)
 
@@ -88,12 +88,12 @@ Before saving anchored state:
 
 ### Enforcement
 
-```
-✅ VALID:
+```text
+VALID:
 ## Intent [PRESERVE]
 - **Goal**: Implement user authentication with OAuth2
 
-❌ INVALID:
+INVALID:
 ## Intent [PRESERVE]
 [Empty or placeholder text]
 ```
@@ -142,7 +142,7 @@ Non-PRESERVE sections can be summarized when token budget is low.
 
 ## Constraints & Ruled-Out [PRESERVE]
 
-- ❌ 
+- RULED_OUT: 
 
 ## Decisions Made (with Why)
 

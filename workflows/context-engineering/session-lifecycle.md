@@ -8,7 +8,7 @@ Context management across session boundaries using RECALL and ROUTE phases.
 
 Every session follows a lifecycle:
 
-```
+```text
 ┌─────────┐     ┌─────────┐     ┌─────────────┐
 │ RECALL  │ ──► │  ROUTE  │ ──► │  Execution  │
 └─────────┘     └─────────┘     └─────────────┘
@@ -36,9 +36,9 @@ Parse the context file for required fields:
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `Intent` | Yes | What the session is trying to accomplish |
-| `Track ID` | Yes | Current track identifier |
-| `Decisions` | Yes | Key decisions made in prior sessions |
+| `Version Header` | Yes | Must contain `<!-- session-context v1 -->` |
+| `Intent` [PRESERVE] | Yes | What the session is trying to accomplish. Must be non-empty. |
+| `Constraints & Ruled-Out` [PRESERVE] | Yes | What has been explicitly ruled out. Must be non-empty. |
 
 **Validation:**
 - All required fields must be present
@@ -49,7 +49,7 @@ Parse the context file for required fields:
 
 Calculate and display context utilization:
 
-```
+```text
 ┌─────────────────────────────────────┐
 │          Token Budget               │
 ├─────────────────┬───────────────────┤
@@ -64,29 +64,44 @@ Calculate and display context utilization:
 
 | Usable % | Action |
 |----------|--------|
-| ≥20% | Proceed normally |
-| <20% | ⚠️ WARN: Low context budget. Consider compacting session-context.md |
-| <10% | 🛑 FORCE: Compress context before proceeding. Archive stale decisions. |
+| >=20% | Proceed normally |
+| <20% | WARN: Low context budget. Consider compacting session-context.md |
+| <10% | FORCE: Compress context before proceeding. Archive stale decisions. |
 
 ### Step 5: Cold Start (Missing Context)
 
 If `.conductor/session-context.md` does not exist, create skeleton:
 
 ```markdown
-# Session Context
+<!-- session-context v1 -->
 
-## Intent
-<!-- Describe what this session should accomplish -->
+## Intent [PRESERVE]
+
+- **Goal**: [Describe what this session should accomplish]
+- **Why**: [Motivation/problem being solved]
+- **Success criteria**: [How we know we're done]
+
+## Constraints & Ruled-Out [PRESERVE]
+
+- [Ruled out approach] -- [Why]
 
 ## Track ID
+
 <!-- Current track: e.g., feature-auth_20251226 -->
 
-## Decisions
-<!-- Key decisions from prior sessions -->
-- None yet
+## Decisions Made (with Why)
 
-## Notes
-<!-- Session-specific context -->
+| Decision | Why | Date |
+|----------|-----|------|
+| None yet | - | - |
+
+## Current State
+
+[Current progress]
+
+## Next Steps
+
+1. [Next action]
 ```
 
 ---
@@ -97,7 +112,7 @@ Decision tree for routing to design vs execution workflows.
 
 ### Routing Logic
 
-```
+```text
 ┌──────────────────────┐
 │   Analyze Intent     │
 └──────────┬───────────┘
@@ -153,9 +168,9 @@ When intent has clear implementation path:
 
 The RECALL phase integrates with preflight as the first step:
 
-```
+```text
 Preflight Sequence:
-1. RECALL ← Load session-context.md
+1. RECALL <- Load session-context.md
 2. Mode detect (SA/MA)
 3. Validate bd availability
 4. Create/update session state
@@ -167,13 +182,13 @@ Location: [../conductor/preflight-beads.md](../conductor/preflight-beads.md)
 
 During implementation, ROUTE is re-evaluated at Phase 2b to ensure correct path:
 
-```
+```text
 /conductor-implement Phases:
-├── Phase 1: Preflight (includes RECALL)
-├── Phase 2a: Load track context
-├── Phase 2b: ROUTE evaluation ← Verify execution path is correct
-├── Phase 3: TDD execution
-└── Phase 4: Close and sync
+|-- Phase 1: Preflight (includes RECALL)
+|-- Phase 2a: Load track context
+|-- Phase 2b: ROUTE evaluation <- Verify execution path is correct
+|-- Phase 3: TDD execution
++-- Phase 4: Close and sync
 ```
 
 **Phase 2b Checks:**

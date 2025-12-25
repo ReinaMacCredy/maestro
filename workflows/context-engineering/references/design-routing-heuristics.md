@@ -35,20 +35,20 @@ Maximum possible score: **18 points**
 
 ## 3. COMPLEXITY_EXPLAINER Display Format
 
-```
-┌─ COMPLEXITY EXPLAINER ─────────────────┐
-│ Factor              │ Score │          │
-│ Multiple epics      │   0   │          │
-│ Cross-module        │   2   │ ✓        │
-│ New abstractions    │   0   │          │
-│ External deps       │   0   │          │
-│ Files > 5           │   1   │ ✓        │
-│ Unclear scope       │   2   │ ✓        │
-│ Security/auth       │   0   │          │
-│ Data migration      │   0   │          │
-├─────────────────────┼───────┼──────────┤
-│ TOTAL               │   5   │ ASK USER │
-└─────────────────────────────────────────┘
+```text
++- COMPLEXITY EXPLAINER ----------------------+
+| Factor              | Score |              |
+| Multiple epics      |   0   |              |
+| Cross-module        |   2   | [x]          |
+| New abstractions    |   0   |              |
+| External deps       |   0   |              |
+| Files > 5           |   1   | [x]          |
+| Unclear scope       |   2   | [x]          |
+| Security/auth       |   0   |              |
+| Data migration      |   0   |              |
++---------------------+-------+--------------+
+| TOTAL               |   5   | ASK USER     |
++---------------------------------------------+
 ```
 
 ---
@@ -75,14 +75,14 @@ This ensures user agency while preventing analysis paralysis.
 
 ### Escalation Flow
 
-```
+```text
 SPEED MODE (Phase 1)
-       │
-       ▼ User types [E]
-       │
+       |
+       v User types [E]
+       |
 FULL MODE (Phase 2 - DEFINE)
-       │
-       ▼ Continue with remaining phases
+       |
+       v Continue with remaining phases
 ```
 
 ---
@@ -93,20 +93,20 @@ FULL MODE (Phase 2 - DEFINE)
 
 **Request**: "Add logging to existing function"
 
-```
-┌─ COMPLEXITY EXPLAINER ─────────────────┐
-│ Factor              │ Score │          │
-│ Multiple epics      │   0   │          │
-│ Cross-module        │   0   │          │
-│ New abstractions    │   0   │          │
-│ External deps       │   0   │          │
-│ Files > 5           │   0   │          │
-│ Unclear scope       │   0   │          │
-│ Security/auth       │   0   │          │
-│ Data migration      │   0   │          │
-├─────────────────────┼───────┼──────────┤
-│ TOTAL               │   1   │ SPEED    │
-└─────────────────────────────────────────┘
+```text
++- COMPLEXITY EXPLAINER ----------------------+
+| Factor              | Score |              |
+| Multiple epics      |   0   |              |
+| Cross-module        |   0   |              |
+| New abstractions    |   0   |              |
+| External deps       |   0   |              |
+| Files > 5           |   0   |              |
+| Unclear scope       |   0   |              |
+| Security/auth       |   0   |              |
+| Data migration      |   0   |              |
++---------------------+-------+--------------+
+| TOTAL               |   1   | SPEED        |
++---------------------------------------------+
 ```
 
 **Route**: → SPEED MODE
@@ -117,20 +117,20 @@ FULL MODE (Phase 2 - DEFINE)
 
 **Request**: "Add new API endpoint with auth"
 
-```
-┌─ COMPLEXITY EXPLAINER ─────────────────┐
-│ Factor              │ Score │          │
-│ Multiple epics      │   0   │          │
-│ Cross-module        │   0   │          │
-│ New abstractions    │   0   │          │
-│ External deps       │   0   │          │
-│ Files > 5           │   1   │ ✓        │
-│ Unclear scope       │   2   │ ✓        │
-│ Security/auth       │   2   │ ✓        │
-│ Data migration      │   0   │          │
-├─────────────────────┼───────┼──────────┤
-│ TOTAL               │   5   │ ASK USER │
-└─────────────────────────────────────────┘
+```text
++- COMPLEXITY EXPLAINER ----------------------+
+| Factor              | Score |              |
+| Multiple epics      |   0   |              |
+| Cross-module        |   0   |              |
+| New abstractions    |   0   |              |
+| External deps       |   0   |              |
+| Files > 5           |   1   | [x]          |
+| Unclear scope       |   2   | [x]          |
+| Security/auth       |   2   | [x]          |
+| Data migration      |   0   |              |
++---------------------+-------+--------------+
+| TOTAL               |   5   | ASK USER     |
++---------------------------------------------+
 ```
 
 **Route**: → ASK USER ("Score is 5 (soft zone). [S]peed or [F]ull?")
@@ -141,20 +141,20 @@ FULL MODE (Phase 2 - DEFINE)
 
 **Request**: "New authentication system"
 
-```
-┌─ COMPLEXITY EXPLAINER ─────────────────┐
-│ Factor              │ Score │          │
-│ Multiple epics      │   3   │ ✓        │
-│ Cross-module        │   2   │ ✓        │
-│ New abstractions    │   3   │ ✓        │
-│ External deps       │   0   │          │
-│ Files > 5           │   1   │ ✓        │
-│ Unclear scope       │   0   │          │
-│ Security/auth       │   2   │ ✓        │
-│ Data migration      │   0   │          │
-├─────────────────────┼───────┼──────────┤
-│ TOTAL               │  11   │ FULL     │
-└─────────────────────────────────────────┘
+```text
++- COMPLEXITY EXPLAINER ----------------------+
+| Factor              | Score |              |
+| Multiple epics      |   3   | [x]          |
+| Cross-module        |   2   | [x]          |
+| New abstractions    |   3   | [x]          |
+| External deps       |   0   |              |
+| Files > 5           |   1   | [x]          |
+| Unclear scope       |   0   |              |
+| Security/auth       |   2   | [x]          |
+| Data migration      |   0   |              |
++---------------------+-------+--------------+
+| TOTAL               |  11   | FULL         |
++---------------------------------------------+
 ```
 
 **Route**: → FULL MODE (4 phases with A/P/C checkpoints)
@@ -165,20 +165,20 @@ FULL MODE (Phase 2 - DEFINE)
 
 **Request**: "Migrate user data to new schema"
 
-```
-┌─ COMPLEXITY EXPLAINER ─────────────────┐
-│ Factor              │ Score │          │
-│ Multiple epics      │   0   │          │
-│ Cross-module        │   2   │ ✓        │
-│ New abstractions    │   0   │          │
-│ External deps       │   0   │          │
-│ Files > 5           │   1   │ ✓        │
-│ Unclear scope       │   2   │ ✓        │
-│ Security/auth       │   0   │          │
-│ Data migration      │   3   │ ✓        │
-├─────────────────────┼───────┼──────────┤
-│ TOTAL               │   8   │ FULL     │
-└─────────────────────────────────────────┘
+```text
++- COMPLEXITY EXPLAINER ----------------------+
+| Factor              | Score |              |
+| Multiple epics      |   0   |              |
+| Cross-module        |   2   | [x]          |
+| New abstractions    |   0   |              |
+| External deps       |   0   |              |
+| Files > 5           |   1   | [x]          |
+| Unclear scope       |   2   | [x]          |
+| Security/auth       |   0   |              |
+| Data migration      |   3   | [x]          |
++---------------------+-------+--------------+
+| TOTAL               |   8   | FULL         |
++---------------------------------------------+
 ```
 
 **Route**: → FULL MODE

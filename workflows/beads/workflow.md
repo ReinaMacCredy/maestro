@@ -240,12 +240,12 @@ Report blockers and suggest next steps.
 Update bd notes at these checkpoints (don't wait for session end):
 
 **Critical triggers:**
-- ⚠️ **Context running low** - User says "running out of context" / "approaching compaction" / "close to token limit"
-- 📊 **Token budget > 70%** - Proactively checkpoint when approaching limits
-- 🎯 **Major milestone reached** - Completed significant piece of work
-- 🚧 **Hit a blocker** - Can't proceed, need to capture what was tried
-- 🔄 **Task transition** - Switching issues or about to close this one
-- ❓ **Before user input** - About to ask decision that might change direction
+- **Context running low** - User says "running out of context" / "approaching compaction" / "close to token limit"
+- **Token budget > 70%** - Proactively checkpoint when approaching limits
+- **Major milestone reached** - Completed significant piece of work
+- **Hit a blocker** - Can't proceed, need to capture what was tried
+- **Task transition** - Switching issues or about to close this one
+- **Before user input** - About to ask decision that might change direction
 
 **Proactive monitoring during session:**
 - At 70% token usage: "We're at 70% token usage - good time to checkpoint bd notes?"
@@ -295,7 +295,7 @@ Monitor for signs of context degradation during work loops. When detected, trigg
 
 ### Trigger Rule
 
-**If 2+ signals fire within a task → trigger context compression**
+If 2+ signals fire within a task, trigger context compression.
 
 This prevents single false positives from causing unnecessary compression while catching genuine degradation.
 

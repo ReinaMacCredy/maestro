@@ -877,14 +877,18 @@ Before saving, validate PRESERVE sections are not empty:
 validate_preserve_sections() {
   local CONTEXT_FILE="$1"
   
-  # Check Intent section
-  if ! grep -A5 "## Intent" "$CONTEXT_FILE" | grep -qE '\S'; then
+  # Check Intent section (using sed to extract full section)
+  local intent_content
+  intent_content=$(sed -n '/^## Intent/,/^## /p' "$CONTEXT_FILE" | grep -v "^##" | tr -d '[:space:]')
+  if [[ -z "$intent_content" ]]; then
     echo "ERROR: Intent [PRESERVE] section is empty"
     return 1
   fi
   
   # Check Constraints section
-  if ! grep -A5 "## Constraints" "$CONTEXT_FILE" | grep -qE '\S'; then
+  local constraints_content
+  constraints_content=$(sed -n '/^## Constraints/,/^## /p' "$CONTEXT_FILE" | grep -v "^##" | tr -d '[:space:]')
+  if [[ -z "$constraints_content" ]]; then
     echo "ERROR: Constraints [PRESERVE] section is empty"
     return 1
   fi

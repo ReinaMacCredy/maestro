@@ -89,10 +89,10 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
 
 2. **Evaluate TIER 2** (if TIER 1 passes):
    
-   ```
+   ```python
    (files > 15 AND tasks > 3) OR
    (est_tool_calls > 40) OR
-   (est_time > 30min AND independent_ratio > 0.6)
+   (est_time > 30 min AND independent_ratio > 0.6)
    ```
 
 3. **Route Decision:**
