@@ -15,6 +15,8 @@ Contains reusable learnings from completed tracks.
 
 ## Commands
 
+- `tail -n +N file` - Strip first N-1 lines (useful for removing YAML frontmatter)
+- `rm -rf skills/X .claude/skills/X` - Delete both hard-linked paths when removing skills
 - `bd compact --analyze --json` - Find beads needing summaries
 - `bd compact --apply --id <id> --summary "<text>"` - Apply AI summary to bead
 - `bd count --status closed --json` - Count closed beads for cleanup threshold
@@ -22,6 +24,8 @@ Contains reusable learnings from completed tracks.
 
 ## Gotchas
 
+- Hard-linked directories (skills/ ↔ .claude/skills/) - updating one updates both, but explicitly delete both
+- Thin skill stubs must include keyword-rich descriptions for AI trigger matching
 - Delete operations must wait for reference replacements - deleting too early causes broken references
 - Phase 3 (Knowledge Merge) is required - if it fails, stop workflow
 - Phases 1 & 2 are best-effort - failures should log warnings but continue
