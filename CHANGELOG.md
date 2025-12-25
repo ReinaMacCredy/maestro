@@ -5,13 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.9.0] - 2025-12-25
+
+
+### Added
+
+
+- Add molecular chemistry features and extensive reference documentation to the beads skill.
+
+
+### Changed
+
+
+- Consolidate beads, file-beads, review-beads into unified skill + workflow
 
 
 ### Documentation
 
 
 - Enhance workflow documentation with commit types, code review, session protocol, and verification steps.
+- Update changelog [skip ci]
+- Update beads skill reference files with new and reordered entries.
+
+
+### Complete
+
+
+- 4 learnings extracted
 
 ## [1.8.0] - 2025-12-24
 
