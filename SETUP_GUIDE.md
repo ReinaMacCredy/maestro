@@ -204,26 +204,53 @@ The plugin works without `bd`:
 - Sessions crash, timeout, or get closed
 - Complex features take multiple sessions to complete
 
-### The Solution
+### The Solution (Beads-Conductor Integration)
 
-Maestro persists work in files that survive session boundaries:
+With PR #6, Conductor commands **automatically manage beads** via a facade pattern. Zero manual `bd` commands in the happy path:
 
 ```
 Session 1 (Planning):
   ds → design.md
-  /conductor-newtrack → spec.md + plan.md + beads
-  rb → reviewed beads
-  → HANDOFF
+  /conductor-newtrack → spec.md + plan.md + AUTO: epic + issues
+  → HANDOFF (auto-generated)
 
 Session 2+ (Execution):
-  /conductor-implement → execute one epic → HANDOFF
+  /conductor-implement → AUTO: claim → TDD → close → sync
   ...repeat until all epics done
 ```
 
-Each file is a checkpoint. Handoff happens after planning, then after each epic.
+### Dual-Mode Architecture
+
+| Mode | Description | Used When |
+|------|-------------|-----------|
+| **SA** (Single-Agent) | Direct `bd` CLI calls | Default, one agent |
+| **MA** (Multi-Agent) | Village MCP server | Parallel agents coordinating |
+
+Mode is detected at session start (preflight) and locked for the session.
+
+### State Files (Auto-Managed)
+
+| File | Location | Purpose |
+|------|----------|---------|
+| `session-state_<agent>.json` | `.conductor/` | Per-agent session tracking |
+| `session-lock_<track>.json` | `.conductor/` | Concurrent session prevention |
+| `.fb-progress.json` | `tracks/<id>/` | planTasks mapping (plan ID ↔ bead ID) |
+| `pending_*.jsonl` | `.conductor/` | Failed operations for replay |
 
 ### In Practice
 
+**With Conductor (recommended - zero manual bd):**
+```bash
+# Start
+/conductor-implement    # Auto-claims from beads
+
+# Work (with TDD checkpoints)
+tdd                     # RED → GREEN → REFACTOR (auto-logged)
+
+# End - automatic sync on session close
+```
+
+**Manual fallback:**
 ```bash
 # End of session: save context
 bd update <id> --notes "COMPLETED: X. NEXT: Y."
