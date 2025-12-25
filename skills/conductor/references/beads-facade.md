@@ -258,7 +258,7 @@ Updates the TDD phase for a task (opt-in via `--tdd` flag).
 - Updates bead notes: `IN_PROGRESS: <phase> phase`
 
 **Notes Format:**
-```
+```text
 IN_PROGRESS: RED phase - writing failing test
 IN_PROGRESS: GREEN phase - making test pass
 IN_PROGRESS: REFACTOR phase - cleaning up code
@@ -348,7 +348,7 @@ type ErrorCode =
 
 Standard retry behavior for transient failures:
 
-```
+```text
 Attempt 1: Immediate
 Attempt 2: Wait 1s
 Attempt 3: Wait 2s

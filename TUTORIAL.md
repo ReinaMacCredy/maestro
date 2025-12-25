@@ -93,7 +93,7 @@ The **notes field** is your session-to-session memory. Write it like leaving ins
 
 Here's an actual handoff block from a beads consolidation project. This context was passed from Session 1 (planning) to Session 2 (implementation):
 
-```
+```text
 Continuing work from thread T-019b5488-3fb5-732f-821f-3c52476097da.
 
 @conductor/tracks/beads-consolidation_20251225/plan.md
@@ -141,7 +141,7 @@ First ready task: my-workflow:3-902n - Create workflows/beads/ directory
 
 This handoff passes context from design/filing to the review phase:
 
-```
+```text
 Continuing work from thread T-019b5487-c1f9-73dd-9620-0a746d3687c5.
 
 @conductor/tracks/beads-consolidation_20251225/plan.md
@@ -225,7 +225,7 @@ When using Conductor commands, **you never need to run manual bd commands** in t
 
 ### How It Works
 
-```
+```text
 /conductor-implement auth_20251225
 │
 ├─ Preflight
@@ -263,7 +263,7 @@ The integration uses these files (auto-managed):
 |------|---------|
 | `.conductor/session-state_<agent>.json` | Per-agent tracking (mode, current task, TDD phase) |
 | `.conductor/session-lock_<track>.json` | Prevents concurrent sessions on same track |
-| `tracks/<id>/.fb-progress.json` | Bidirectional mapping: plan task IDs ↔ bead IDs |
+| `conductor/tracks/<id>/.fb-progress.json` | Bidirectional mapping: plan task IDs ↔ bead IDs |
 
 ### SA vs MA Mode
 

@@ -57,7 +57,7 @@ scan_tracks() {
 
 **Output:**
 
-```
+```text
 Scanning tracks for beads migration...
 
 Tracks needing migration:
@@ -96,7 +96,7 @@ analyze_track() {
 
 **Output:**
 
-```
+```text
 Analyzing: auth_20251220
 
 Plan structure:
@@ -116,7 +116,7 @@ Tasks to create:
 
 Present migration plan to user:
 
-```
+```text
 ━━━ MIGRATION PLAN: auth_20251220 ━━━
 
 Actions:
@@ -186,10 +186,13 @@ execute_create() {
     echo "Created: $TASK_ID → $BEAD_ID"
   done
   
-  # Output mapping
-  echo "${!PLAN_TASKS[@]}" | tr ' ' '\n' | while read -r k; do
-    echo "\"$k\": \"${PLAN_TASKS[$k]}\""
-  done | jq -s 'from_entries'
+  # Output mapping - use process substitution to preserve array scope
+  # Build JSON array directly to avoid fragile string construction
+  {
+    for k in "${!PLAN_TASKS[@]}"; do
+      echo "{\"key\": \"$k\", \"value\": \"${PLAN_TASKS[$k]}\"}"
+    done
+  } | jq -s 'from_entries'
 }
 ```
 
@@ -206,9 +209,12 @@ execute_link() {
     TASK_ID=$(echo "$task" | jq -r '.id')
     TITLE=$(echo "$task" | jq -r '.title')
     
-    # Find matching bead by title
-    MATCH=$(bd list --json | jq -r --arg title "$TITLE" \
-      '.[] | select(.title == $title or (.title | test($title; "i"))) | .id' | head -1)
+    # Escape special regex characters in title for safe matching
+    ESCAPED_TITLE=$(echo "$TITLE" | sed 's/[.[\*^$()+?{|\\]/\\&/g')
+    
+    # Find matching bead by title (exact match or case-insensitive)
+    MATCH=$(bd list --json | jq -r --arg title "$TITLE" --arg escaped "$ESCAPED_TITLE" \
+      '.[] | select(.title == $title or (.title | test($escaped; "i"))) | .id' | head -1)
     
     if [[ -n "$MATCH" ]]; then
       PLAN_TASKS["$TASK_ID"]="$MATCH"
@@ -249,12 +255,16 @@ verify_migration() {
     ERRORS+=("Empty planTasks mapping")
   fi
   
-  # Verify each bead exists
-  jq -r '.planTasks | to_entries[] | .value' "$FB_PROGRESS" | while read -r bead_id; do
-    if ! bd show "$bead_id" --json >/dev/null 2>&1; then
+  # Verify each bead exists - fetch all beads once for efficiency
+  ALL_BEAD_IDS=$(bd list --json 2>/dev/null | jq -r '.[].id' | sort)
+  PLAN_BEAD_IDS=$(jq -r '.planTasks | to_entries[] | .value' "$FB_PROGRESS" | sort)
+  
+  # Find beads in plan that don't exist
+  while read -r bead_id; do
+    if ! echo "$ALL_BEAD_IDS" | grep -q "^${bead_id}$"; then
       ERRORS+=("Bead not found: $bead_id")
     fi
-  done
+  done <<< "$PLAN_BEAD_IDS"
   
   if [[ ${#ERRORS[@]} -gt 0 ]]; then
     echo "Verification FAILED:"
@@ -300,7 +310,7 @@ EOF
 
 ## Output Format
 
-```
+```text
 ━━━ MIGRATION COMPLETE ━━━
 
 Track: auth_20251220
@@ -327,7 +337,7 @@ Next: `/conductor-implement auth_20251220` to continue work
 
 With `--dry-run`, show what would happen without changes:
 
-```
+```text
 ━━━ DRY RUN: auth_20251220 ━━━
 
 Would create:

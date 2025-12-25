@@ -176,7 +176,7 @@ bd update <id> --status in_progress
 ```bash
 bd close <id> --reason completed  # Close current task
 bd sync                           # Sync beads to git
-git add . && git commit -m "..."  # Commit code changes
+git add <files> && git commit -m "..."  # Commit code changes
 git push                          # Push to remote
 ```
 

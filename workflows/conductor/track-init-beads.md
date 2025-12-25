@@ -28,7 +28,7 @@ This workflow runs during `/conductor-newtrack` after spec and plan are confirme
 
 ## Flow Diagram
 
-```
+```text
 ┌────────────────────────────────────────────────────────────────┐
 │                    TRACK INIT BEADS FLOW                        │
 ├────────────────────────────────────────────────────────────────┤

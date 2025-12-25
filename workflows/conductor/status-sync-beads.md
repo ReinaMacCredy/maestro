@@ -24,7 +24,7 @@ This workflow runs during `/conductor-status` to:
 
 ## Flow Diagram
 
-```
+```text
 ┌────────────────────────────────────────────────────────────────┐
 │                    STATUS SYNC FLOW                             │
 ├────────────────────────────────────────────────────────────────┤
@@ -307,7 +307,7 @@ reconcile_to_conductor() {
 
 ## Output Format
 
-```
+```text
 ━━━ STATUS SYNC: auth_20251225 ━━━
 
 Conductor State:

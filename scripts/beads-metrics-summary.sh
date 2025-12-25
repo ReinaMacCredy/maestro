@@ -12,11 +12,18 @@
 set -e
 
 METRICS_FILE=".conductor/metrics.jsonl"
-DAYS="${1:-7}"
+DAYS=7
 
 # Parse --days flag
 if [[ "$1" == "--days" ]]; then
-  DAYS="${2:-7}"
+  if [[ -n "$2" && "$2" =~ ^[0-9]+$ ]]; then
+    DAYS="$2"
+  else
+    echo "Error: --days requires a positive integer argument." >&2
+    exit 1
+  fi
+elif [[ -n "$1" && "$1" =~ ^[0-9]+$ ]]; then
+  DAYS="$1"
 fi
 
 # Check if metrics file exists
@@ -26,9 +33,9 @@ if [[ ! -f "$METRICS_FILE" ]]; then
   exit 0
 fi
 
-# Calculate cutoff date
+# Calculate cutoff date (DAYS is validated as integer above)
 if [[ "$(uname)" == "Darwin" ]]; then
-  CUTOFF=$(date -v-${DAYS}d +%Y-%m-%dT00:00:00Z)
+  CUTOFF=$(date -v-"${DAYS}"d +%Y-%m-%dT00:00:00Z)
 else
   CUTOFF=$(date -d "${DAYS} days ago" +%Y-%m-%dT00:00:00Z)
 fi
@@ -96,7 +103,7 @@ if [[ "$TDD_CYCLES" -gt 0 ]]; then
   for phase in RED GREEN REFACTOR; do
     AVG=$(jq -r --arg cutoff "$CUTOFF" --arg phase "$phase" '
       select(.timestamp >= $cutoff and .event == "tdd_cycle" and .phase == $phase) | .duration
-    ' "$METRICS_FILE" 2>/dev/null | awk '{s+=$1; c++} END {if(c>0) printf "%.0f", s/c; else print "0"}')
+    ' "$METRICS_FILE" 2>/dev/null | jq -s 'if length > 0 then add / length | round else 0 end')
     if [[ "$AVG" != "0" ]]; then
       printf "    %-12s %5s\n" "$phase" "${AVG}s"
     fi
@@ -125,7 +132,7 @@ HANDOFFS=$(jq -r --arg cutoff "$CUTOFF" '
 
 if [[ "$HANDOFFS" -gt 0 ]]; then
   echo ""
-  echo "⚠️  Expired Handoffs: $HANDOFFS"
+  echo "WARNING: Expired Handoffs: $HANDOFFS"
   echo "   Consider checking agent availability"
 fi
 

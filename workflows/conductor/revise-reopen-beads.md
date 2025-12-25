@@ -35,7 +35,7 @@ This workflow triggers when:
 
 ## Flow Diagram
 
-```
+```text
 ┌────────────────────────────────────────────────────────────────┐
 │                    REVISE REOPEN FLOW                           │
 ├────────────────────────────────────────────────────────────────┤
@@ -238,7 +238,7 @@ update_mapping() {
 
 ### Notes Format for Reopened Beads
 
-```
+```text
 ORIGINAL COMPLETION:
 COMPLETED: Implemented feature X
 KEY DECISION: Used approach Y
@@ -341,7 +341,7 @@ revise_reopen_workflow() {
 
 ## Output Format
 
-```
+```text
 ━━━ REVISE REOPEN: auth_20251225 ━━━
 
 Reason: spec revision - added 2FA requirement

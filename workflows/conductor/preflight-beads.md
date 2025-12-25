@@ -27,7 +27,7 @@ Preflight runs at the start of any Conductor command that interacts with Beads. 
 
 ## Mode Detection Algorithm
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────────┐
 │                     MODE DETECTION FLOW                          │
 ├──────────────────────────────────────────────────────────────────┤
@@ -365,14 +365,14 @@ fi
 
 ### Success Output
 
-```
+```text
 Preflight: bd v0.5.2 ✓, Village ✗ → SA mode
 Session: Created state file for T-abc123 (SA mode)
 ```
 
 ### With Recovery
 
-```
+```text
 Preflight: bd v0.5.2 ✓, Village ✓ → MA mode
 WARN: Found 2 pending update operations
       Replaying...
@@ -384,7 +384,7 @@ Session: Resuming MA mode (locked at 2025-12-25T10:00:00Z)
 
 ### With Active Session Warning
 
-```
+```text
 Preflight: bd v0.5.2 ✓
 
 ⚠️  ACTIVE SESSION DETECTED
@@ -555,7 +555,7 @@ cleanup_session() {
 | bd fails mid-session | Retry 3x → persist → warn |
 
 **Degraded MA Mode Warning:**
-```
+```text
 ⚠️ Village MCP unavailable. Operating in degraded mode.
 - File reservations: SKIPPED (cannot enforce)
 - Task claiming: Using bd update (no atomic guarantee)

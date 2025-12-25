@@ -157,7 +157,7 @@ Compare Conductor state (plan.md) with Beads state (bd list):
 
 ### Enhanced Report Section
 
-```
+```text
 BEADS SYNC
 ──────────
 Epic: my-workflow:3-abc1

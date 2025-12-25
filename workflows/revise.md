@@ -212,7 +212,7 @@ revise_reopen_workflow "$TRACK_ID" "spec revision"
 
 When reopening closed beads, preserve completion history:
 
-```
+```text
 ORIGINAL COMPLETION:
 COMPLETED: Implemented feature X
 KEY DECISION: Used approach Y
