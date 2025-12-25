@@ -100,6 +100,77 @@ Automatically engage when:
 - Files like `conductor/tracks.md`, `conductor/product.md` exist
 - User wants to organize development work
 
+## Beads-Conductor Integration
+
+Conductor integrates with Beads issue tracking to achieve **zero manual bd commands** in the happy path.
+
+### Dual-Mode Architecture
+
+```
+Session Start
+     │
+     ▼
+┌─────────────┐
+│  PREFLIGHT  │ ─── Mode detect ───┬─► SA Mode (bd CLI)
+└─────────────┘                    │
+                                   └─► MA Mode (Village MCP)
+```
+
+| Mode | Description | When Used |
+|------|-------------|-----------|
+| **SA** | Single-Agent: Direct `bd` CLI | Default, one agent per codebase |
+| **MA** | Multi-Agent: Village MCP | Multiple agents coordinating |
+
+### Preflight Behavior
+
+Every Beads-integrated command runs preflight first:
+
+1. **Check bd availability** → HALT if unavailable (no silent skip)
+2. **Detect mode** (SA or MA) and lock for session
+3. **Create session state file** (`.conductor/session-state_<agent>.json`)
+4. **Recover pending operations** from crashed sessions
+5. **Detect concurrent sessions** via heartbeat protocol
+
+### Session Lifecycle
+
+| Phase | SA Mode | MA Mode |
+|-------|---------|---------|
+| **Claim** | `bd update <id> --status in_progress` | `init()` → `claim()` (atomic) |
+| **Reserve** | N/A | `reserve(path, ttl)` before file edits |
+| **Close** | `bd close <id> --reason <reason>` | `done(id, reason)` |
+| **Sync** | `bd sync` at session end | Automatic via Village |
+
+### Close Reasons
+
+- `completed` - Task finished successfully
+- `skipped` - Task skipped (not needed)
+- `blocked` - Task blocked, cannot proceed
+
+### TDD Checkpoints (Opt-in)
+
+Enable with `--tdd` flag on `/conductor-implement`:
+
+```
+RED → GREEN → REFACTOR
+```
+
+Each phase updates bead notes: `IN_PROGRESS: <phase> phase`
+
+### Subagent Rules
+
+When dispatching subagents via Task tool:
+
+- ✅ **Read-only**: `bd show`, `bd ready`, `bd list`
+- ❌ **Blocked**: `bd update`, `bd close`, `bd create`
+
+Subagents return structured results; main agent centralizes writes.
+
+### References
+
+- [Beads Facade](skills/conductor/references/beads-facade.md) - API contract
+- [Beads Integration](skills/conductor/references/beads-integration.md) - All 13 integration points
+- [Preflight Workflow](workflows/conductor/preflight-beads.md) - Preflight details
+
 ## Slash Commands
 
 Users can invoke these commands directly:

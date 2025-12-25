@@ -6,6 +6,8 @@ Complete a track by extracting learnings, compacting beads, refreshing context d
 ## Prerequisites
 - Track exists in `conductor/tracks/<track_id>/`
 - Ideally: all epics closed, all beads resolved
+- Beads CLI (`bd`) available (checked by preflight)
+- For MA mode: Village MCP server (optional)
 
 ## Flags & Arguments
 
@@ -40,7 +42,9 @@ Complete a track by extracting learnings, compacting beads, refreshing context d
 | `contextRefresh` | object | Phase 4 sub-phase progress |
 | `threadsProcessed` | array | Thread IDs processed in Phase 1 |
 | `beadsCompacted` | integer | Number of beads compacted in Phase 2 |
+| `beadsCleaned` | integer | Number of beads cleaned up in Phase 5 |
 | `learningsAdded` | integer | Number of learning items added in Phase 3 |
+| `sessionMode` | string/null | SA or MA mode for cleanup |
 | `lastError` | string/null | Last error message if workflow failed |
 | `commitSha` | string/null | Git commit SHA for the finish commit |
 
@@ -59,10 +63,36 @@ Complete a track by extracting learnings, compacting beads, refreshing context d
 4. Smart skip if no threads found
 
 ### Phase 2: Beads Compaction
-1. Find candidates: `bd compact --analyze --json`
-2. Generate AI summaries for closed issues
-3. Apply: `bd compact --apply --id <id> --summary "<text>"`
-4. Smart skip if no candidates
+
+**Purpose:** Generate AI summaries for closed beads to preserve context after cleanup.
+
+1. **Find Candidates**
+   ```bash
+   bd compact --analyze --json
+   ```
+   Returns closed issues needing summary.
+
+2. **Generate AI Summaries**
+   For each candidate, generate a summary:
+   ```
+   COMPLETED: <concise summary of what was done>
+   IMPACT: <what this change enables>
+   ```
+
+3. **Apply Summaries**
+   ```bash
+   bd compact --apply --id <id> --summary "<text>"
+   ```
+   Retry up to 3 times on failure, log warning and continue.
+
+4. **Smart Skip**
+   If no candidates found, log info and continue:
+   ```
+   Phase 2: No beads need compaction (skipped)
+   ```
+
+5. **Update State**
+   Record count in `finish-state.json.beadsCompacted`
 
 ### Phase 3: Knowledge Merge
 1. Parse LEARNINGS.md (Commands, Gotchas, Patterns)
@@ -80,12 +110,57 @@ Complete a track by extracting learnings, compacting beads, refreshing context d
 | `tracks.md` | Move entry to Completed section |
 | `workflow.md` | Detect CI/CD changes, prompt to update |
 
-### Phase 5: Archive
-1. Prompt user: **[A]** Archive or **[K]** Keep
-2. If Archive: move to `conductor/archive/`
-3. Update metadata.json with docSync record
-4. Commit all changes
-5. Cleanup beads if count > 150
+### Phase 5: Archive & Beads Cleanup
+
+1. **Prompt User**
+   ```
+   Archive track? [A]rchive / [K]eep
+   ```
+
+2. **Archive (if selected)**
+   - Move track to `conductor/archive/`
+   - Update metadata.json with docSync record
+
+3. **Beads Cleanup**
+   
+   Check if cleanup is needed (threshold: >150 closed issues):
+   ```bash
+   CLOSED_COUNT=$(bd count --status closed --json | jq '.count')
+   if [[ $CLOSED_COUNT -gt 150 ]]; then
+     REMOVE_COUNT=$((CLOSED_COUNT - 150))
+     bd cleanup --older-than 0 --limit $REMOVE_COUNT --force
+   fi
+   ```
+   
+   **Formula:** Remove `closed_count - 150` oldest issues.
+
+4. **Village State Cleanup (MA mode)**
+   
+   If session was in MA mode:
+   ```bash
+   # Clean up session state files
+   rm -f .conductor/session-state_${AGENT_ID}.json
+   
+   # Process and archive any remaining handoffs
+   for handoff in .conductor/handoff_*.json; do
+     if [[ -f "$handoff" ]]; then
+       mkdir -p .conductor/archived_handoffs
+       mv "$handoff" .conductor/archived_handoffs/
+     fi
+   done
+   ```
+
+5. **Commit All Changes**
+   ```bash
+   git add .
+   git commit -m "conductor(finish): Complete track <track_id>"
+   ```
+
+6. **Sync Beads**
+   ```bash
+   bd sync
+   ```
+   Retry up to 3 times on failure.
 
 ### Phase 6: CODEMAPS Regeneration
 *Skip if `--skip-codemaps` flag or no CODEMAPS exist*
@@ -130,9 +205,21 @@ conductor/
 │   └── <track_id>/
 │       └── finish-state.json (temporary)
 └── CODEMAPS/ (regenerated)
+
+.conductor/
+├── session-state_<agent-id>.json (removed on finish)
+├── session-lock_<track-id>.json (removed on finish)
+├── archived_handoffs/ (MA mode - processed handoffs)
+└── metrics.jsonl (finish event logged)
+
+.beads/
+└── issues.json (compacted and cleaned)
 ```
 
 ## See Also
 
 - [Full workflow reference](../skills/conductor/references/finish-workflow.md) for detailed phase instructions
+- [Beads Integration](../skills/conductor/references/beads-integration.md) - Points 9 (Compact) and 10 (Cleanup)
+- [Beads Facade](../skills/conductor/references/beads-facade.md) - syncToGit API contract
+- [Beads Session](conductor/beads-session.md) - Session cleanup protocol
 - [finish_state.schema.json](schemas/finish_state.schema.json) for state file schema

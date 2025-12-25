@@ -1,6 +1,6 @@
 ---
 name: beads
-version: "2.1.0"
+version: "2.2.0"
 description: >
   Tracks complex, multi-session work using the Beads issue tracker and dependency graphs, and provides
   persistent memory that survives conversation compaction. Use when work spans multiple sessions, has
@@ -51,6 +51,59 @@ Graph-based issue tracker that survives conversation compaction. Provides persis
 - 🔍 **Smart Discovery**: Auto-finds ready work (`bd ready`), blocked work (`bd blocked`)
 - 📝 **Audit Trails**: Complete history of status changes, notes, and decisions
 - 🏷️ **Rich Metadata**: Priority (P0-P4), types (bug/feature/task/epic), labels, assignees
+
+## Conductor Integration
+
+When used with Conductor, beads operations are **automated via a facade pattern**:
+
+### Facade Abstraction
+
+Conductor commands call beads through a unified facade that:
+- Handles mode detection (SA vs MA)
+- Manages retry logic and error recovery
+- Persists failed operations for later replay
+- Abstracts differences between CLI and Village MCP
+
+**In the happy path, you never run manual bd commands** - Conductor handles:
+- `preflight` → bd availability check
+- `track-init` → create epic + issues from plan.md
+- `claim` → bd update --status in_progress
+- `close` → bd close --reason completed
+- `sync` → bd sync with retry
+
+### SA vs MA Mode
+
+| Mode | Description | Operations |
+|------|-------------|------------|
+| **SA** (Single-Agent) | Direct `bd` CLI calls | Standard bd commands |
+| **MA** (Multi-Agent) | Village MCP server | Atomic claims, file reservations, handoffs |
+
+Mode is detected at session start and locked for the session.
+
+### planTasks Mapping
+
+`.fb-progress.json` contains bidirectional mapping between plan task IDs and bead IDs:
+
+```json
+{
+  "planTasks": { "1.1.1": "bd-42", "1.2.1": "bd-43" },
+  "beadToTask": { "bd-42": "1.1.1", "bd-43": "1.2.1" }
+}
+```
+
+This enables:
+- Track which plan tasks have beads
+- Navigate from bead to plan context
+- Detect orphan beads after plan revisions
+
+### When Manual bd IS Appropriate
+
+- Direct issue creation outside Conductor flow
+- Ad-hoc queries (`bd search`, `bd list`)
+- Debugging (`bd show <id>`)
+- Recovery from failed automated operations
+
+See [Beads Integration](../conductor/references/beads-integration.md) for all 13 integration points.
 
 ## Essential Commands Quick Reference
 

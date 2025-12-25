@@ -172,3 +172,75 @@ Issue Analysis Decision Tree:
 | Track completed | Warn, suggest creating new track |
 | No changes needed | Report "No revision required" |
 | Conflicting changes | Present conflicts, ask for resolution |
+
+---
+
+## Beads Integration
+
+When revising specs/plans, affected beads must be updated.
+
+### Triggering Bead Updates
+
+After plan changes are applied, run the [revise-reopen-beads.md](conductor/revise-reopen-beads.md) workflow:
+
+1. **Identify affected beads:**
+   - Tasks added → create new beads
+   - Tasks modified → update bead notes
+   - Tasks removed → close orphan beads
+
+2. **Handle closed beads:**
+   - If bead exists and is closed → reopen with history
+   - If bead was deleted (cleaned up) → create new with lineage
+
+3. **Update mapping:**
+   - Add new task → bead mappings to `.fb-progress.json`
+   - Preserve `beadToTask` reverse mapping
+
+### Bead Reopen Flow
+
+```bash
+# After plan changes
+revise_reopen_workflow "$TRACK_ID" "spec revision"
+
+# Reports:
+#   - X beads reopened
+#   - Y new beads created  
+#   - Z mappings updated
+```
+
+### History Preservation
+
+When reopening closed beads, preserve completion history:
+
+```
+ORIGINAL COMPLETION:
+COMPLETED: Implemented feature X
+KEY DECISION: Used approach Y
+
+---
+REOPENED: 2025-12-25T10:00:00Z
+REASON: spec revision - requirements changed
+```
+
+### Lineage for Cleaned-Up Beads
+
+When original bead was deleted by cleanup:
+
+```json
+{
+  "title": "Rework: Original task title",
+  "description": "Reopened from cleaned-up my-workflow:3-old1",
+  "metadata": {
+    "originalBeadId": "my-workflow:3-old1",
+    "reopenedAt": "2025-12-25T10:00:00Z"
+  }
+}
+```
+
+---
+
+## References
+
+- [Revise Reopen Beads](conductor/revise-reopen-beads.md) - Detailed reopen workflow
+- [Status Sync Beads](conductor/status-sync-beads.md) - Discrepancy detection
+- [Beads Integration](../skills/conductor/references/beads-integration.md) - Point 13

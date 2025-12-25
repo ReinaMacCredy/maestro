@@ -60,6 +60,11 @@ fi
 
 Check file combinations and determine action. State files are treated collectively.
 
+**State Files:**
+- `metadata.json` - Track metadata
+- `.track-progress.json` - Workflow state
+- `.fb-progress.json` - Beads filing state (planTasks mapping)
+
 | design.md | spec.md | plan.md | state files  | Action                          |
 | --------- | ------- | ------- | ------------ | ------------------------------- |
 | ✗         | ✗       | ✗       | ✗            | SKIP + warn (empty)             |
@@ -68,6 +73,8 @@ Check file combinations and determine action. State files are treated collective
 | ✗         | ✗       | ✓       | ✗            | HALT (plan without spec)        |
 | ✗/✓       | ✓       | ✓       | none/partial | Auto-create missing state files |
 | ✗/✓       | ✓       | ✓       | all present  | Validate and PASS               |
+
+**See also:** [Beads Validation](../beads/checks.md) for `.fb-progress.json` schema validation and planTasks mapping checks.
 
 ```bash
 HAS_DESIGN=$([[ -f "$TRACK_DIR/design.md" ]] && echo 1 || echo 0)
@@ -389,6 +396,78 @@ All repairs logged to `metadata.json.repairs[]`:
 
 Keep last 10 entries. See `snippets.md` for implementation.
 
+## Step 0.8: Session Lock Detection
+
+Detect concurrent sessions on the same track to prevent conflicts.
+
+```bash
+SESSION_LOCK="$TRACK_DIR/.session-lock.json"
+
+if [[ -f "$SESSION_LOCK" ]]; then
+  LOCK_AGENT=$(jq -r '.agentId // "unknown"' "$SESSION_LOCK")
+  LOCK_TIME=$(jq -r '.lockedAt // "unknown"' "$SESSION_LOCK")
+  LAST_HEARTBEAT=$(jq -r '.lastHeartbeat // empty' "$SESSION_LOCK")
+  
+  # Check heartbeat freshness (stale if > 10 min ago)
+  if [[ -n "$LAST_HEARTBEAT" ]]; then
+    HEARTBEAT_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$LAST_HEARTBEAT" +%s 2>/dev/null || \
+                      date -d "$LAST_HEARTBEAT" +%s 2>/dev/null || echo 0)
+    NOW_EPOCH=$(date +%s)
+    STALE_THRESHOLD=$((NOW_EPOCH - 600))  # 10 minutes
+    
+    if [[ $HEARTBEAT_EPOCH -lt $STALE_THRESHOLD && $HEARTBEAT_EPOCH -gt 0 ]]; then
+      # Stale lock - auto-unlock
+      echo "WARN: Stale session lock detected (no heartbeat for >10 min)"
+      echo "      Agent: $LOCK_AGENT"
+      echo "      Locked: $LOCK_TIME"
+      echo "      Last heartbeat: $LAST_HEARTBEAT"
+      
+      if [[ $DIAGNOSE_MODE -eq 1 ]]; then
+        echo "DIAGNOSE: Would auto-remove stale session lock"
+      else
+        echo "Auto-removing stale session lock"
+        rm "$SESSION_LOCK"
+      fi
+    else
+      # Active lock - prompt user
+      echo ""
+      echo "⚠️  ACTIVE SESSION DETECTED"
+      echo "   Track: $TRACK_ID"
+      echo "   Agent: $LOCK_AGENT"
+      echo "   Locked: $LOCK_TIME"
+      echo "   Last heartbeat: $LAST_HEARTBEAT"
+      echo ""
+      echo "Options:"
+      echo "  [C]ontinue - Proceed anyway (risk conflicts)"
+      echo "  [W]ait - Wait for other session to finish"
+      echo "  [F]orce - Force unlock (other session will error)"
+      echo ""
+      # Require explicit user action
+    fi
+  fi
+fi
+```
+
+**Heartbeat Protocol:**
+- Active sessions update `.session-lock.json.lastHeartbeat` every 5 minutes
+- Lock considered stale if heartbeat > 10 minutes ago
+- Auto-remove stale locks on detection
+
+**Lock File Schema:**
+```json
+{
+  "agentId": "T-abc123",
+  "lockedAt": "2025-12-25T10:00:00Z",
+  "lastHeartbeat": "2025-12-25T10:25:00Z",
+  "trackId": "beads-integration_20251225",
+  "pid": 12345
+}
+```
+
+**See also:** [Beads Integration](../../beads-integration.md#session-lock) for full session lock protocol.
+
+---
+
 ## HALT Conditions
 
 These require manual intervention:
@@ -397,6 +476,7 @@ These require manual intervention:
 - spec.md XOR plan.md (one without the other)
 - Content files older than 30 days with missing state files
 - track_id mismatch in content file headers
+- Active session lock with recent heartbeat (unless user forces)
 
 ## PASS Conditions
 

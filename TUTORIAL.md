@@ -89,6 +89,112 @@ bd show <id>             # Read notes for full context
 
 The **notes field** is your session-to-session memory. Write it like leaving instructions for yourself in two weeks with zero context.
 
+### Real-World Handoff Example
+
+Here's an actual handoff block from a beads consolidation project. This context was passed from Session 1 (planning) to Session 2 (implementation):
+
+```
+Continuing work from thread T-019b5488-3fb5-732f-821f-3c52476097da.
+
+@conductor/tracks/beads-consolidation_20251225/plan.md
+@conductor/tracks/beads-consolidation_20251225/spec.md
+@conductor/tracks/beads-consolidation_20251225/design.md
+@skills/beads/SKILL.md
+
+- I completed a design session (ds) to consolidate 3 beads-related skills
+  (beads, file-beads, review-beads) into a unified architecture
+- I then ran file-beads (fb) to create 5 epics with 19 tasks total
+- I ran review-beads (rb) which reviewed all 19 issues, added descriptions,
+  acceptance criteria, and cross-epic dependencies
+- All issues now have the "reviewed" label and proper blocking dependencies
+
+Key decisions from design:
+- Merge all 3 skills into 1 thin skill entry point at skills/beads/SKILL.md
+- Move all logic to workflows/beads/ directory
+- Keep workflow.md lowercase (main entry point), UPPERCASE for supporting docs
+- Delete skills/file-beads/, skills/review-beads/ after migration
+
+5 epics to implement in order:
+- my-workflow:3-9f7: Create Workflow Structure (6 tasks)
+- my-workflow:3-v3g: Create Thin Skill (1 task)
+- my-workflow:3-lyy: Delete Old Skills (4 tasks) - blocked by epics 1-2
+- my-workflow:3-2nr: Update Documentation (3 tasks)
+- my-workflow:3-qfm: Verification (5 tasks) - blocked by epics 1-4
+
+First ready task: my-workflow:3-902n - Create workflows/beads/ directory
+```
+
+**What makes this effective:**
+
+| Element | Purpose |
+| ------- | ------- |
+| File references (`@path`) | Points to persistent artifacts the new session can read |
+| Completed steps | Shows what's already done (ds, fb, rb) |
+| Key decisions | Preserves architectural choices that shouldn't be re-debated |
+| Epic summary with IDs | Concrete next steps with beads references |
+| Blocking info | Execution order is clear |
+| First ready task | Immediate action item |
+
+**The pattern**: Summarize what happened, reference the files, list the decisions, identify next action.
+
+### Another Example: Planning to Review Handoff
+
+This handoff passes context from design/filing to the review phase:
+
+```
+Continuing work from thread T-019b5487-c1f9-73dd-9620-0a746d3687c5.
+
+@conductor/tracks/beads-consolidation_20251225/plan.md
+@conductor/tracks/beads-consolidation_20251225/spec.md
+@conductor/tracks/beads-consolidation_20251225/design.md
+@skills/beads/SKILL.md
+@skills/file-beads/SKILL.md
+@skills/review-beads/SKILL.md
+
+I completed a design session (ds) to consolidate 3 beads-related skills
+(beads, file-beads, review-beads) into a unified architecture.
+
+Key decisions from the design session:
+- Merge all 3 skills into 1 thin skill entry point at skills/beads/SKILL.md
+- Move all logic to workflows/beads/ directory
+- Rename file-beads.md to FILE_BEADS.md and review-beads.md to REVIEW_BEADS.md
+- Put FILE_BEADS.md and REVIEW_BEADS.md inside workflows/beads/references/
+- Keep workflow.md lowercase (main entry point), UPPERCASE for supporting docs
+- Delete skills/file-beads/, skills/review-beads/ after migration
+- Update 14 documentation files that reference file-beads/review-beads
+
+Final structure:
+- skills/beads/SKILL.md - thin stub with Entry Points table
+- workflows/beads/workflow.md - main beads logic (bd trigger)
+- workflows/beads/references/FILE_BEADS.md - fb logic
+- workflows/beads/references/REVIEW_BEADS.md - rb logic
+
+5 epics created:
+- my-workflow:3-9f7: Create Workflow Structure (6 tasks)
+- my-workflow:3-v3g: Create Thin Skill (1 task)
+- my-workflow:3-lyy: Delete Old Skills (4 tasks)
+- my-workflow:3-2nr: Update Documentation (3 tasks)
+- my-workflow:3-qfm: Verification (5 tasks)
+
+Hard links exist between skills/ and .claude/skills/ (same inode) -
+updating one updates both.
+
+Now I want to run rb (review-beads) to review and refine the filed beads
+before implementation.
+
+rb
+```
+
+**Key differences from implementation handoff:**
+
+| Element | Purpose |
+| ------- | ------- |
+| More file references | Review needs access to original skill files being consolidated |
+| Detailed key decisions | Reviewer needs full context to validate beads match design intent |
+| Final structure preview | Shows target state for validation |
+| Technical note (hard links) | Prevents errors during implementation |
+| Explicit next action (`rb`) | Tells receiving session exactly what to do |
+
 ### Why This Works Without Amp
 
 This pattern works with any AI coding tool:
@@ -99,6 +205,74 @@ This pattern works with any AI coding tool:
 - **Any future tool**: Files are plain markdown and JSON
 
 **The key insight**: Your project's state lives in **git**, not in any AI's memory.
+
+---
+
+## Beads-Conductor Integration: Zero Manual Commands
+
+When using Conductor commands, **you never need to run manual bd commands** in the happy path. Conductor automates the entire beads lifecycle through a facade pattern.
+
+### Automatic Integration Points
+
+| Conductor Command | What Beads Does (Automatically) |
+|-------------------|--------------------------------|
+| All commands | Preflight: checks bd availability, detects mode (SA/MA), creates session state |
+| `/conductor-newtrack` | Creates epic + issues from plan.md, wires dependencies, updates planTasks mapping |
+| `/conductor-implement` | Claims task, tracks TDD checkpoints (if `--tdd`), closes on completion |
+| `/conductor-finish` | Compacts closed issues with AI summaries, cleans up old issues (>150 threshold) |
+| `/conductor-status` | Syncs Conductor state with beads state, detects discrepancies |
+| `/conductor-revise` | Reopens affected beads when spec/plan changes |
+
+### How It Works
+
+```
+/conductor-implement auth_20251225
+│
+├─ Preflight
+│   └─ Check bd available, detect SA mode, create session state
+│
+├─ Claim Task
+│   └─ (automatic) bd update <id> --status in_progress
+│
+├─ Work with TDD (if --tdd flag)
+│   ├─ RED checkpoint: bd update --notes "RED phase..."
+│   ├─ GREEN checkpoint: bd update --notes "GREEN phase..."
+│   └─ REFACTOR checkpoint: bd update --notes "REFACTOR phase..."
+│
+├─ Close Task
+│   └─ (automatic) bd close <id> --reason completed
+│
+└─ Sync (at session end)
+    └─ (automatic) bd sync with retry
+```
+
+### When Manual bd IS Appropriate
+
+You only need manual `bd` commands for:
+
+- **Ad-hoc queries**: `bd search`, `bd list`, `bd show <id>`
+- **Direct issue creation** outside Conductor flow
+- **Debugging**: checking issue state, dependencies
+- **Recovery** from failed automated operations
+
+### Session State Files
+
+The integration uses these files (auto-managed):
+
+| File | Purpose |
+|------|---------|
+| `.conductor/session-state_<agent>.json` | Per-agent tracking (mode, current task, TDD phase) |
+| `.conductor/session-lock_<track>.json` | Prevents concurrent sessions on same track |
+| `tracks/<id>/.fb-progress.json` | Bidirectional mapping: plan task IDs ↔ bead IDs |
+
+### SA vs MA Mode
+
+| Mode | When | Operations |
+|------|------|------------|
+| **SA** (Single-Agent) | Default | Direct `bd` CLI calls |
+| **MA** (Multi-Agent) | Village MCP available | Atomic claims, file reservations, handoffs |
+
+Mode is detected at session start and locked for the session.
 
 ---
 

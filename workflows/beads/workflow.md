@@ -755,6 +755,92 @@ Use JSON output when you need to parse results programmatically or extract speci
 - bd auto-imports JSONL when newer than DB (after git pull)
 - Manual operations: `bd export`, `bd import`
 
+## Conductor Integration
+
+When using Beads with Conductor workflows, the integration is automated through a facade layer. This section documents when manual `bd` commands are still appropriate and the constraints when working in multi-agent mode.
+
+### Automated vs Manual bd Commands
+
+**Conductor handles automatically:**
+
+| Action | Conductor Command | Beads Action |
+|--------|-------------------|--------------|
+| Session init | `/conductor-implement` | Mode detection, session state |
+| Claim task | `/conductor-implement` | `bd update --status in_progress` |
+| TDD checkpoints | `--tdd` flag | Notes update at each phase |
+| Close task | Task completion | `bd close --reason <reason>` |
+| Sync | Session end | `bd sync` |
+| Track init | `/conductor-newtrack` | Create epic + issues |
+
+**Manual bd is appropriate for:**
+
+| Scenario | Command | Why Manual |
+|----------|---------|------------|
+| Create side quest | `bd create` | Discovered work outside plan |
+| Check blockers | `bd blocked --json` | Diagnostic, not workflow |
+| View dependencies | `bd dep tree <id>` | Debugging |
+| Ad-hoc notes | `bd update --notes` | Context capture |
+| Recovery | `bd sync` | After crash or error |
+
+### Conductor-Managed Session
+
+When Conductor is managing a session:
+
+1. **Don't manually claim tasks** - Use `/conductor-implement` which handles preflight, claim, and session state
+2. **Don't manually close tasks** - Conductor closes with proper reason and notes format
+3. **Don't skip sync** - Conductor syncs at session end with retry logic
+
+### MA Mode Constraints
+
+In multi-agent mode (Village MCP), additional constraints apply:
+
+**Atomic Operations:**
+- Task claiming is atomic via `claim()` - prevents race conditions
+- File reservations are enforced - cannot edit without `reserve()`
+
+**Subagent Restrictions:**
+- Subagents (Task tool) have **read-only** bd access
+- Allowed: `bd show`, `bd ready`, `bd list`
+- Blocked: `bd update`, `bd close`, `bd create`
+- Main agent processes bead writes from subagent results
+
+**Coordination:**
+- Use `inbox()` to check messages before starting
+- Use `msg()` to communicate with team
+- Use `status()` to see who's online and file locks
+
+### planTasks Mapping
+
+Conductor tracks the relationship between plan tasks and beads:
+
+```json
+// .fb-progress.json
+{
+  "planTasks": {
+    "1.1.1": "my-workflow:3-51f9",
+    "1.1.2": "my-workflow:3-kt2n"
+  },
+  "beadToTask": {
+    "my-workflow:3-51f9": "1.1.1",
+    "my-workflow:3-kt2n": "1.1.2"
+  }
+}
+```
+
+This enables:
+- Bidirectional lookup between plan and beads
+- Status sync detection (plan says done but bead is open)
+- Automatic task selection based on ready beads
+
+### References
+
+- [Beads Session Workflow](../conductor/beads-session.md) - Full SA/MA session protocol
+- [Beads Preflight](../conductor/preflight-beads.md) - Mode detection and session init
+- [Beads Facade](../../skills/conductor/references/beads-facade.md) - API contract
+- [Beads Integration](../../skills/conductor/references/beads-integration.md) - All 13 integration points
+
+---
+
 ## Reference Files
 
 Detailed information organized by topic:
