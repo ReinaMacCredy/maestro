@@ -94,11 +94,11 @@ flowchart TB
         end
 
         subgraph BEADS["ISSUE FILING LOOP"]
-            FB["fb (file-beads)"]
+            FB["fb"]
             EPIC["Create Epic"]
             ISSUES["Create Issues<br/>(batches of 5)"]
             DEPS["Wire Dependencies"]
-            RB["rb (review-beads)"]
+            RB["rb"]
         end
 
         subgraph DISPATCH["PARALLEL AGENT DISPATCH"]

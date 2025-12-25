@@ -68,7 +68,7 @@ Every artifact is a **checkpoint**. Handoff happens after planning completes, th
 | `design.md` | Architecture decisions, trade-offs | `/conductor-design`   |
 | `spec.md`   | Requirements, acceptance criteria  | `/conductor-newtrack` |
 | `plan.md`   | Task breakdown, status markers     | `/conductor-newtrack` |
-| `.beads/`   | Issues, dependencies, notes        | `fb` (file-beads)     |
+| `.beads/`   | Issues, dependencies, notes        | `fb` (file beads)     |
 
 ### The Handoff Protocol
 
@@ -172,11 +172,11 @@ flowchart TB
         end
 
         subgraph BEADS["ISSUE FILING LOOP"]
-            FB["fb (file-beads)"]
+            FB["fb"]
             EPIC["Create Epic"]
             ISSUES["Create Issues<br/>(batches of 5)"]
             DEPS["Wire Dependencies"]
-            RB["rb (review-beads)"]
+            RB["rb"]
         end
 
         subgraph DISPATCH["PARALLEL AGENT DISPATCH"]
@@ -413,7 +413,7 @@ conductor/
 
 **For agents**:
 
-- After Conductor creates `plan.md`, immediately use `fb` (file-beads) to convert it to issues
+- After Conductor creates `plan.md`, immediately use `fb` (file beads) to convert it to issues
 - At session start: `bd ready --json` to see what's unblocked
 - At session end: Update notes with COMPLETED/IN_PROGRESS/NEXT format
 - Always commit `.beads/` with code changes
@@ -550,7 +550,7 @@ REPEAT  → Next failing test
 │  Questions → spec.md → plan.md                              │
 └─────────────────────────────────────────────────────────────┘
                            ↓
-                    fb (file-beads)
+                    fb (file beads)
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
 │                        BEADS                                 │
@@ -575,7 +575,7 @@ REPEAT  → Next failing test
                     bd-002 becomes ready
 ```
 
-**The Bridge Sentence**: Conductor turns ideas into structured documents. File-beads converts plans into trackable issues. Beads becomes your source of truth for "what's next." TDD describes _how_ to execute each issue safely.
+**The Bridge Sentence**: Conductor turns ideas into structured documents. File beads (`fb`) converts plans into trackable issues. Beads becomes your source of truth for "what's next." TDD describes _how_ to execute each issue safely.
 
 ---
 
@@ -622,7 +622,7 @@ The full pipeline assumes you're starting fresh. But you can jump in anywhere.
 | You Already Have             | Skip To             | Trigger                                               |
 | ---------------------------- | ------------------- | ----------------------------------------------------- |
 | An idea to explore           | Design first        | `/conductor-design` → conductor/tracks/<id>/design.md |
-| A plan (markdown, PRD, spec) | File beads directly | `fb` (file-beads skill)                               |
+| A plan (markdown, PRD, spec) | File beads directly | `fb` (beads skill)                                    |
 | Existing issues/tasks        | Claim and execute   | `bd ready` → `bd update`                              |
 | A bug to fix                 | Debug first         | `debug` → `systematic-debugging`                      |
 | Code that needs tests        | Add tests           | `tdd` skill                                           |
@@ -716,8 +716,8 @@ Read the generated spec and plan. Adjust if needed. This is your last chance to 
 
 After `/conductor-newtrack` generates the plan:
 
-1. **Subagent 1**: Runs `fb` (file-beads) to create issues with dependencies
-2. **Subagent 2**: Runs `rb` (review-beads) to validate and refine issues
+1. **Subagent 1**: Runs `fb` (file beads) to create issues with dependencies
+2. **Subagent 2**: Runs `rb` (review beads) to validate and refine issues
 
 #### When to use `fb` manually (advanced)
 
@@ -731,7 +731,7 @@ Use `fb` directly only when:
 fb
 ```
 
-The `file-beads` skill reads `plan.md` and creates beads issues with:
+The beads skill reads `plan.md` and creates beads issues with:
 
 - One issue per task
 - Dependencies encoded (`blocks`, `parent-child`)
@@ -979,10 +979,10 @@ Beyond the core workflow, Maestro includes specialist skills for specific situat
 
 ### Beads Helpers
 
-| Skill                | Trigger | When to Use                                                                    |
-| -------------------- | ------- | ------------------------------------------------------------------------------ |
-| `beads/file-beads`   | `fb`    | Convert existing plans to beads (advanced: runs automatically after newtrack). |
-| `beads/review-beads` | `rb`    | Review and refine beads (advanced: runs automatically after newtrack).         |
+| Skill                | Trigger | When to Use                                                                     |
+| -------------------- | ------- | ------------------------------------------------------------------------------- |
+| `beads` (file)       | `fb`    | Convert existing plans to beads (runs automatically after newtrack).            |
+| `beads` (review)     | `rb`    | Review and refine beads (runs automatically after newtrack).                    |
 
 ---
 
@@ -1013,7 +1013,7 @@ Some skills work best with optional CLI tools. The skills still provide value wi
 | ----------------------------- | ----------------------------------------------------------------------- |
 | `bd: command not found`       | Install via K&V setup or add `~/.local/bin` to PATH                     |
 | Agent ignores the workflow    | Say trigger phrase explicitly: `tdd`, `debug`, `/conductor-design`      |
-| Plan seems incomplete         | Use `rb` (review-beads) to check and refine issues                      |
+| Plan seems incomplete         | Use `rb` (review beads) to check and refine issues                      |
 | Tests pass immediately        | You wrote code first. Delete it. Start with failing test.               |
 | Context compacted, lost state | Run `bd show <issue-id>` — notes field has recovery context             |
 | Too many issues, overwhelmed  | Run `bd ready` for unblocked only, or `bd blocked` to clear bottlenecks |
@@ -1212,8 +1212,8 @@ git push
 | `tdd`                           | test-driven-development                                 |
 | `trace`, `find source`          | root-cause-tracing                                      |
 | `flaky`, `race condition`       | condition-based-waiting                                 |
-| `fb`, `file beads`              | beads/file-beads                                        |
-| `rb`, `review beads`            | beads/review-beads                                      |
+| `fb`, `file beads`              | beads (file)                                            |
+| `rb`, `review beads`            | beads (review)                                          |
 | `dispatch`                      | dispatching-parallel-agents                             |
 | `write skill`                   | writing-skills                                          |
 | `share skill`                   | sharing-skills                                          |

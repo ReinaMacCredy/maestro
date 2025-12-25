@@ -30,9 +30,7 @@ Instructions for the agent...
 CORE WORKFLOW          DEVELOPMENT              UTILITIES
 ├── conductor          ├── test-driven-dev      ├── codemaps
 ├── design             ├── using-git-worktrees  ├── dispatching-parallel-agents
-├── beads              └── finishing-branch     └── subagent-driven-dev
-├── file-beads
-└── review-beads
+└── beads              └── finishing-branch     └── subagent-driven-dev
 ```
 
 ## Adding a Skill

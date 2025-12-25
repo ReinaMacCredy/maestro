@@ -4,10 +4,10 @@ description: File beads epics and issues from a plan
 
 # File Beads (fb)
 
-Load the `file-beads` skill to convert a plan into Beads epics and issues.
+Load the `beads` skill to convert a plan into Beads epics and issues.
 
 **What this does:**
-1. Loads the file-beads skill
+1. Loads the beads skill
 2. Analyzes the plan (from context or conductor/tracks/)
 3. Creates all epics first (sequential, for stable IDs)
 4. Dispatches parallel subagents to fill each epic with child issues
@@ -23,7 +23,7 @@ Say `fb` after completing a design session or when you have a plan ready.
 
 ```
 User: fb
-Agent: [loads file-beads skill]
+Agent: [loads beads skill]
        Analyzing plan from conductor/tracks/...
        [creates epics and issues]
        Beads filed. Say `rb` to review and refine.

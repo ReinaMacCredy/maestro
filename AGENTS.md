@@ -96,9 +96,7 @@ Add `[skip ci]` to commit message to bypass all automation (changelog + version 
 |-------|---------|-------------|
 | `design` | `ds` | Double Diamond design session with A/P/C checkpoints and Party Mode option |
 | `conductor` | `/conductor-setup`, `/conductor-design`, `/conductor-newtrack`, `/conductor-implement`, `/conductor-status`, `/conductor-revert`, `/conductor-revise`, `/conductor-finish`, `/conductor-validate`, `/conductor-block`, `/conductor-skip` | Structured planning and execution through specs and plans |
-| `file-beads` | `fb` | File beads from plan (batched in groups of 5, checkpointed for resume) |
-| `review-beads` | `rb` | Review beads (parallel + cross-epic validation, dual tracking: progress file + beads label) |
-| `beads` | `bd ready`, `bd status` | Issue tracking for multi-session work |
+| `beads` | `fb`, `rb`, `bd ready`, `bd status` | Issue tracking: file beads from plan, review beads, multi-session work |
 
 <!-- bv-agent-instructions-v1 -->
 

@@ -1,7 +1,7 @@
 # CLI Command Reference
 
 **For:** AI agents and developers using bd command-line interface
-**Version:** 0.21.0+
+**Version:** 0.34.0+
 
 ## Quick Navigation
 
@@ -10,7 +10,9 @@
 - [Dependencies & Labels](#dependencies--labels)
 - [Filtering & Search](#filtering--search)
 - [Advanced Operations](#advanced-operations)
+- [Molecular Chemistry](#molecular-chemistry)
 - [Database Management](#database-management)
+- [Editor Integration](#editor-integration)
 
 ## Basic Operations
 
@@ -62,6 +64,14 @@ bd create "Add support for OAuth 2.0" -d "Implement RFC 6749 (OAuth 2.0 spec)" -
 
 # Create multiple issues from markdown file
 bd create -f feature-plan.md --json
+
+# Create with description from file (avoids shell escaping issues)
+bd create "Issue title" --body-file=description.md --json
+bd create "Issue title" --body-file description.md -p 1 --json
+
+# Read description from stdin
+echo "Description text" | bd create "Issue title" --body-file=- --json
+cat description.md | bd create "Issue title" --body-file - -p 1 --json
 
 # Create epic with hierarchical child tasks
 bd create "Auth System" -t epic -p 1 --json         # Returns: bd-a3f8e9
@@ -276,11 +286,6 @@ bd --db /path/to/.beads/beads.db <command>
 bd --actor alice <command>
 ```
 
-**See also:**
-
-- [TROUBLESHOOTING.md - Sandboxed environments](TROUBLESHOOTING.md#sandboxed-environments-codex-claude-code-etc) for detailed sandbox troubleshooting
-- [DAEMON.md](DAEMON.md) for daemon mode details
-
 ## Advanced Operations
 
 ### Cleanup
@@ -367,8 +372,6 @@ bd sync  # Now uses resurrect mode by default
 - Use `strict` for controlled imports requiring guaranteed parent existence
 - Use `skip` rarely - only for selective imports
 
-See [CONFIG.md](CONFIG.md#example-import-orphan-handling) and [TROUBLESHOOTING.md](TROUBLESHOOTING.md#import-fails-with-missing-parent-errors) for more details.
-
 ### Migration
 
 ```bash
@@ -399,8 +402,6 @@ bd info --schema --json                                # Get schema, tables, con
 These invariants prevent data loss and would have caught issues like GH #201 (missing issue_prefix after migration).
 
 ### Daemon Management
-
-See [docs/DAEMON.md](DAEMON.md) for complete daemon management reference.
 
 ```bash
 # List all running daemons
@@ -552,10 +553,159 @@ bd sync  # Force immediate sync, bypass debounce
 
 **ALWAYS run `bd sync` at end of agent sessions** to ensure changes are committed/pushed immediately.
 
+## Molecular Chemistry
+
+Beads uses a chemistry metaphor for template-based workflows.
+
+### Phase Transitions
+
+| Phase | State | Storage | Command |
+|-------|-------|---------|---------|
+| Solid | Proto | `.beads/` | `bd mol catalog` |
+| Liquid | Mol | `.beads/` | `bd pour` |
+| Vapor | Wisp | `.beads-wisp/` | `bd wisp create` |
+
+### Proto/Template Commands
+
+```bash
+# List available protos (templates)
+bd mol catalog --json
+
+# Show proto structure and variables
+bd mol show <proto-name> --json
+
+# Extract proto from ad-hoc epic
+bd mol distill <epic-id> --json
+```
+
+### Pour (Proto to Mol)
+
+```bash
+# Instantiate proto as persistent mol (solid → liquid)
+bd pour <proto-name> --var key=value --json
+
+# Preview what would be created
+bd pour <proto-name> --var key=value --dry-run
+
+# Assign root issue
+bd pour <proto-name> --var key=value --assignee alice --json
+
+# Attach additional protos during pour
+bd pour <proto-name> --attach <other-proto> --json
+```
+
+### Wisp Commands
+
+```bash
+# Instantiate proto as ephemeral wisp (solid → vapor)
+bd wisp create <proto-name> --var key=value --json
+
+# List all wisps
+bd wisp list --json
+bd wisp list --all --json  # Include closed
+
+# Garbage collect orphaned wisps
+bd wisp gc --json
+bd wisp gc --age 24h --json  # Custom age threshold
+bd wisp gc --dry-run  # Preview what would be cleaned
+```
+
+### Bonding (Combining Work)
+
+```bash
+# Polymorphic combine - handles proto+proto, proto+mol, mol+mol
+bd mol bond <A> <B> --json
+
+# Bond types
+bd mol bond <A> <B> --type sequential --json  # B runs after A (default)
+bd mol bond <A> <B> --type parallel --json    # B runs alongside A
+bd mol bond <A> <B> --type conditional --json # B runs only if A fails
+
+# Phase control
+bd mol bond <A> <B> --pour --json  # Force persistent spawn
+bd mol bond <A> <B> --wisp --json  # Force ephemeral spawn
+
+# Preview bonding
+bd mol bond <A> <B> --dry-run
+```
+
+### Squash (Wisp to Digest)
+
+```bash
+# Compress wisp to permanent digest
+bd mol squash <wisp-id> --json
+
+# With agent-provided summary
+bd mol squash <wisp-id> --summary "Work completed" --json
+
+# Preview
+bd mol squash <wisp-id> --dry-run
+
+# Keep wisp children after squash
+bd mol squash <wisp-id> --keep-children --json
+```
+
+### Burn (Discard Wisp)
+
+```bash
+# Delete wisp without digest (destructive)
+bd mol burn <wisp-id> --json
+
+# Preview
+bd mol burn <wisp-id> --dry-run
+
+# Skip confirmation
+bd mol burn <wisp-id> --force --json
+```
+
+**Note:** Most mol commands require `--no-daemon` flag when daemon is running.
+
+## Editor Integration
+
+### Setup Commands
+
+```bash
+# Setup editor integration (choose based on your editor)
+bd setup factory  # Factory.ai Droid - creates/updates AGENTS.md (universal standard)
+bd setup claude   # Claude Code - installs SessionStart/PreCompact hooks
+bd setup cursor   # Cursor IDE - creates .cursor/rules/beads.mdc
+bd setup aider    # Aider - creates .aider.conf.yml
+
+# Check if integration is installed
+bd setup factory --check
+bd setup claude --check
+bd setup cursor --check
+bd setup aider --check
+
+# Remove integration
+bd setup factory --remove
+bd setup claude --remove
+bd setup cursor --remove
+bd setup aider --remove
+```
+
+**Claude Code options:**
+
+```bash
+bd setup claude            # Install globally (~/.claude/settings.json)
+bd setup claude --project  # Install for this project only
+bd setup claude --stealth  # Use stealth mode (flush only, no git operations)
+```
+
+**What each setup does:**
+
+- **Factory.ai** (`bd setup factory`): Creates or updates AGENTS.md with beads workflow instructions (works with multiple AI tools using the AGENTS.md standard)
+- **Claude Code** (`bd setup claude`): Adds hooks to Claude Code's settings.json that run `bd prime` on SessionStart and PreCompact events
+- **Cursor** (`bd setup cursor`): Creates `.cursor/rules/beads.mdc` with workflow instructions
+- **Aider** (`bd setup aider`): Creates `.aider.conf.yml` with bd workflow instructions
+
 ## See Also
 
-- [AGENTS.md](../AGENTS.md) - Main agent workflow guide
-- [DAEMON.md](DAEMON.md) - Daemon management and event-driven mode
-- [GIT_INTEGRATION.md](GIT_INTEGRATION.md) - Git workflows and merge strategies
-- [LABELS.md](../LABELS.md) - Label system guide
-- [README.md](../README.md) - User documentation
+- [AGENTS.md](AGENTS.md) - Agent workflow guide
+- [CONFIG.md](CONFIG.md) - Configuration system
+- [DAEMON.md](DAEMON.md) - Daemon management
+- [GIT_INTEGRATION.md](GIT_INTEGRATION.md) - Git workflow and merge strategies
+- [LABELS.md](LABELS.md) - Label patterns and filtering
+- [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Common issues and solutions
+- [DEPENDENCIES.md](DEPENDENCIES.md) - Dependency types and patterns
+- [WORKFLOWS.md](WORKFLOWS.md) - Common workflow patterns

@@ -44,6 +44,10 @@ Master list of all development tracks.
 *ID: codemaps-integration_20251223*
 *Archived: [conductor/archive/codemaps-integration_20251223/](conductor/archive/codemaps-integration_20251223/)*
 
+## [x] Track: Beads Skill Consolidation
+*ID: beads-consolidation_20251225*
+*Archived: [conductor/archive/beads-consolidation_20251225/](conductor/archive/beads-consolidation_20251225/)*
+
 ---
 
 ## Track Format

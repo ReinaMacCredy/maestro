@@ -344,7 +344,7 @@ For detailed validation logic, see:
 ├── Update metadata.json (status: planned, artifacts.spec/plan: true)
 └── Update .track-progress.json (status: plan_done)
 
-file-beads skill:
+beads skill (fb):
 ├── Validate all 3 state files exist (HALT if missing)
 └── Update .fb-progress.json (status: in_progress → complete)
 ```
@@ -354,7 +354,7 @@ file-beads skill:
 | Rule                                     | Enforcement                      |
 | ---------------------------------------- | -------------------------------- |
 | spec.md and plan.md must exist together  | HALT if one without other        |
-| State files must exist before file-beads | HALT if missing                  |
+| State files must exist before fb         | HALT if missing                  |
 | track_id mismatch                        | Auto-fix to match directory name |
 | Corrupted JSON                           | HALT (do not auto-repair)        |
 

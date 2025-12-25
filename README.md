@@ -141,7 +141,7 @@ trace                              # Root cause tracing (external: superpowers)
 
 | Category          | Skills                                                                                                        |
 | ----------------- | ------------------------------------------------------------------------------------------------------------- |
-| **Core Workflow** | conductor, design (Double Diamond + Party Mode), beads, file-beads (parallel), review-beads (parallel)        |
+| **Core Workflow** | conductor, design (Double Diamond + Party Mode), beads                                                        |
 | **Development**   | test-driven-development, using-git-worktrees, finishing-a-development-branch                                  |
 | **Utilities**     | dispatching-parallel-agents, subagent-driven-development, [agent-coordination](workflows/agent-coordination/) |
 | **Meta**          | verification-before-completion, writing-skills, sharing-skills                                                |
@@ -356,11 +356,11 @@ flowchart TB
         end
 
         subgraph BEADS["ISSUE FILING LOOP"]
-            FB["fb (file-beads)"]
+            FB["fb"]
             EPIC["Create Epic"]
             ISSUES["Create Issues<br/>(batches of 5)"]
             DEPS["Wire Dependencies"]
-            RB["rb (review-beads)"]
+            RB["rb"]
         end
 
         subgraph DISPATCH["PARALLEL AGENT DISPATCH"]
@@ -682,7 +682,7 @@ maestro/
 ├── skills/                # Skill directories (conductor, design, beads, tdd, etc.)
 │   ├── conductor/         # Planning methodology
 │   ├── design/            # Design sessions (ds trigger)
-│   ├── beads/             # Issue tracking (+ file-beads, review-beads)
+│   ├── beads/             # Issue tracking (fb, rb triggers)
 │   ├── test-driven-development/
 │   └── ...                # See SETUP_GUIDE.md for full list
 ├── commands/              # 25+ slash commands
@@ -707,7 +707,7 @@ maestro/
 | Agent ignores workflow        | Use trigger phrase explicitly: `tdd`, `debug`, `/conductor-design` |
 | Tests pass immediately        | You wrote code first. Delete it. Start with failing test.          |
 | Context compacted, lost state | Run `bd show <issue-id>` — notes field has recovery context        |
-| Plan seems incomplete         | Use `rb` (review-beads) to check and refine issues                 |
+| Plan seems incomplete         | Use `rb` (review beads) to check and refine issues                 |
 
 ### Tips & Tricks
 

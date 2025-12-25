@@ -1,0 +1,19 @@
+{
+  "track_id": "beads-consolidation_20251225",
+  "type": "refactor",
+  "status": "completed",
+  "created_at": "2025-12-25T00:00:00Z",
+  "completed_at": "2025-12-25T08:25:00Z",
+  "design_thread_id": null,
+  "artifacts": {
+    "design": true,
+    "spec": true,
+    "plan": true
+  },
+  "docSync": {
+    "at": "2025-12-25T08:25:00Z",
+    "threads": ["T-019b546b-98dc-7305-87eb-4858759fa127", "T-019b5488-3fb5-732f-821f-3c52476097da", "T-019b548e-ea62-7098-a331-ddcfb2d07e2a"],
+    "itemsAdded": 4,
+    "archiveChoice": "archive"
+  }
+}

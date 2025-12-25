@@ -17,7 +17,7 @@ This is a skills-based plugin (no build required) - all functionality is deliver
 
 ```
 skills/                    # 16 skill directories, each with SKILL.md
-  ├── beads/              # Issue tracking (main + file-beads/review-beads)
+  ├── beads/              # Issue tracking (fb, rb triggers)
   ├── conductor/          # Planning methodology (includes /conductor-design)
   ├── design/             # Design sessions (ds trigger)
   ├── test-driven-development/
@@ -186,8 +186,8 @@ git add -A && git commit && git push
 | `/conductor-revert` | conductor | Git-aware revert of work |
 | `/conductor-revise` | conductor | Update spec/plan when issues discovered |
 | `/conductor-finish` | conductor | Complete track: extract learnings, refresh context, archive |
-| `fb` | file-beads | Convert plan to beads issues |
-| `rb` | review-beads | Review/refine filed beads |
+| `fb` | beads | Convert plan to beads issues |
+| `rb` | beads | Review/refine filed beads |
 | `tdd` | test-driven-development | Enter TDD mode |
 | `finish branch` | finishing-a-development-branch | Complete and merge work |
 | `dispatch` | dispatching-parallel-agents | Run independent tasks in parallel |
@@ -206,7 +206,7 @@ The `workflows/` directory contains **single source of truth** for Conductor log
 ### Skill Naming
 - Directory names: kebab-case (`test-driven-development`)
 - SKILL.md frontmatter `name` field must match directory name
-- Triggers can be shorthand (`fb` for file-beads, `rb` for review-beads)
+- Triggers can be shorthand (`fb` for file beads, `rb` for review beads)
 
 ### TDD Methodology
 **Iron law**: No production code without a failing test first.
