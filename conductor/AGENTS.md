@@ -57,3 +57,8 @@ Contains reusable learnings from completed tracks.
 - **A/P/C Checkpoints:** At each phase end: [A] Advanced, [P] Party (multi-agent), [C] Continue
 - **Unified Track Creation:** /conductor-newtrack includes spec, plan, beads filing, AND review in one flow
 - **Conventional Commits Versioning:** feat: → minor, fix: → patch, feat!: → major
+- **COMPLEXITY_EXPLAINER:** Score-based design routing (SPEED <4, ASK 4-6, FULL >6)
+- **Execution Routing:** TIER 1 (weighted score) + TIER 2 (compound conditions) → SINGLE_AGENT or PARALLEL_DISPATCH
+- **RECALL/REMEMBER:** Session lifecycle with anchored format for cross-session context
+- **Degradation Signals:** tool_repeat, backtrack, quality_drop, contradiction → 2+ signals triggers compression
+- **Anchored Format:** [PRESERVE] markers for Intent and Constraints sections that survive compression
