@@ -44,13 +44,14 @@ Handoff persists work context in **files that outlive sessions**:
 
 ```
 Session 1 (Planning):
+  Preflight: Mode detect (SA/MA), validate bd
   ds → design.md
-  /conductor-newtrack → spec.md + plan.md + beads
-  rb → reviewed beads
+  /conductor-newtrack → spec.md + plan.md + AUTO: epic + issues
   → HANDOFF (planning complete, ready for execution)
 
 Session 2+ (Execution):
-  /conductor-implement → execute Epic 1
+  Preflight: Resume session state
+  /conductor-implement → AUTO: claim → TDD → close → sync
   → HANDOFF (epic complete)
 
 Session 3+:
@@ -63,12 +64,14 @@ Every artifact is a **checkpoint**. Handoff happens after planning completes, th
 
 ### Handoff Artifacts in Maestro
 
-| Artifact    | What It Preserves                  | Created By            |
-| ----------- | ---------------------------------- | --------------------- |
-| `design.md` | Architecture decisions, trade-offs | `/conductor-design`   |
-| `spec.md`   | Requirements, acceptance criteria  | `/conductor-newtrack` |
-| `plan.md`   | Task breakdown, status markers     | `/conductor-newtrack` |
-| `.beads/`   | Issues, dependencies, notes        | `fb` (file beads)     |
+| Artifact | What It Preserves | Created By |
+| -------- | ----------------- | ---------- |
+| `design.md` | Architecture decisions, trade-offs | `/conductor-design` |
+| `spec.md` | Requirements, acceptance criteria | `/conductor-newtrack` |
+| `plan.md` | Task breakdown, status markers | `/conductor-newtrack` |
+| `.beads/` | Issues, dependencies, notes | Auto via facade |
+| `.fb-progress.json` | planTasks mapping (plan ID ↔ bead ID) | Auto via facade |
+| `session-state_*.json` | Per-agent mode, current task, TDD phase | Auto via facade |
 
 ### The Handoff Protocol
 
@@ -329,6 +332,13 @@ flowchart TB
     subgraph PIPELINE["COMPLETE PIPELINE WORKFLOW"]
         direction TB
 
+        subgraph PREFLIGHT["PREFLIGHT (All Commands)"]
+            PF_START["Session Start"]
+            PF_MODE["Mode Detection<br/>(SA/MA)"]
+            PF_BD["Validate bd CLI"]
+            PF_STATE["Create Session State"]
+        end
+
         subgraph PLANNING["PLANNING LOOP"]
             DS["ds (Design Session)"]
             DISCOVER["DISCOVER<br/>Explore Problem"]
@@ -339,52 +349,55 @@ flowchart TB
             DESIGND["design.md"]
         end
 
-        subgraph SPEC["SPEC GENERATION"]
+        subgraph SPEC["SPEC GENERATION + BEADS"]
             NEWTRACK["/conductor-newtrack"]
             SPECMD["spec.md"]
             PLANMD["plan.md"]
+            AUTO_FB["Auto: Create Epic + Issues"]
+            FB_PROGRESS[".fb-progress.json<br/>(planTasks mapping)"]
         end
 
-        subgraph BEADS["ISSUE FILING LOOP"]
-            FB["fb"]
-            EPIC["Create Epic"]
-            ISSUES["Create Issues<br/>(batches of 5)"]
-            DEPS["Wire Dependencies"]
-            RB["rb"]
+        subgraph AGENT_LOOP["AGENT EXECUTION LOOP"]
+            READY["bd ready"]
+            AUTO_CLAIM["Auto: bd update --status in_progress"]
+
+            subgraph TDD["TDD CYCLE (--tdd flag)"]
+                RED["RED: Write Failing Test<br/>(checkpoint)"]
+                GREEN["GREEN: Make It Pass<br/>(checkpoint)"]
+                REFACTOR["REFACTOR: Clean Up<br/>(checkpoint)"]
+            end
+
+            AUTO_CLOSE["Auto: bd close --reason completed"]
+            AUTO_SYNC["Auto: bd sync (with retry)"]
         end
 
         subgraph DISPATCH["PARALLEL AGENT DISPATCH"]
             COORDINATOR["Coordinator Agent"]
 
-            subgraph WORKERS["WORKER AGENTS (Task tool)"]
-                W1["Agent 1<br/>Independent Task"]
-                W2["Agent 2<br/>Independent Task"]
-                W3["Agent 3<br/>Independent Task"]
-                WN["Agent N<br/>Independent Task"]
+            subgraph WORKERS["WORKER AGENTS (read-only bd)"]
+                W1["Agent 1"]
+                W2["Agent 2"]
+                WN["Agent N"]
             end
 
             MERGE["Merge Results"]
-        end
-
-        subgraph AGENT_LOOP["AGENT EXECUTION LOOP"]
-            READY["bd ready"]
-            CLAIM["bd update --status in_progress"]
-
-            subgraph TDD["TDD CYCLE"]
-                RED["RED: Write Failing Test"]
-                GREEN["GREEN: Make It Pass"]
-                REFACTOR["REFACTOR: Clean Up"]
-            end
-
-            CLOSE["bd close"]
-            SYNC["bd sync"]
         end
 
         subgraph FINISH["COMPLETION"]
             VERIFY["Verification"]
             BRANCH["finish branch"]
             FINISH_CMD["/conductor-finish"]
+            COMPACT["Auto: Compact closed issues"]
+            CLEANUP["Auto: Cleanup >150 closed"]
         end
+    end
+
+    subgraph FACADE["BEADS-CONDUCTOR FACADE"]
+        direction LR
+        SA["SA Mode<br/>Direct bd CLI"]
+        MA["MA Mode<br/>Village MCP"]
+        HEARTBEAT["Heartbeat<br/>(5 min updates)"]
+        PENDING["Pending Ops<br/>(crash recovery)"]
     end
 
     subgraph BMAD["PARTY MODE: 12 BMAD AGENTS"]
@@ -418,14 +431,17 @@ flowchart TB
             V01["0.1 Resolve track path"]
             V02["0.2 Check directory"]
             V03["0.3 File existence matrix"]
-            V04["0.4 Validate JSON"]
+            V04["0.4 Validate JSON + beads"]
             V05["0.5 Auto-create state"]
             V06["0.6 Auto-fix track_id"]
-            V07["0.7 Staleness detection"]
+            V07["0.7 Staleness + sync detection"]
         end
 
         OUTCOMES{{"PASS / HALT / Auto-repair"}}
     end
+
+    PF_START --> PF_MODE --> PF_BD --> PF_STATE
+    PF_STATE --> DS
 
     DS --> DISCOVER
     DISCOVER --> DEFINE
@@ -439,37 +455,39 @@ flowchart TB
 
     NEWTRACK --> SPECMD
     SPECMD --> PLANMD
-    PLANMD --> FB
+    PLANMD --> AUTO_FB
+    AUTO_FB --> FB_PROGRESS
+    FB_PROGRESS --> READY
 
-    FB --> EPIC
-    EPIC --> ISSUES
-    ISSUES --> DEPS
-    DEPS --> RB
-    RB --> READY
-
-    READY --> CLAIM
-    CLAIM --> COORDINATOR
-    COORDINATOR --> W1 & W2 & W3 & WN
-    W1 & W2 & W3 & WN --> MERGE
+    READY --> AUTO_CLAIM
+    AUTO_CLAIM --> COORDINATOR
+    COORDINATOR --> W1 & W2 & WN
+    W1 & W2 & WN --> MERGE
     MERGE --> RED
     RED --> GREEN
     GREEN --> REFACTOR
     REFACTOR -->|"More tests?"| RED
-    REFACTOR -->|"Done"| CLOSE
-    CLOSE --> SYNC
-    SYNC -->|"More issues?"| READY
-    SYNC -->|"All done"| VERIFY
+    REFACTOR -->|"Done"| AUTO_CLOSE
+    AUTO_CLOSE --> AUTO_SYNC
+    AUTO_SYNC -->|"More issues?"| READY
+    AUTO_SYNC -->|"All done"| VERIFY
 
     VERIFY --> BRANCH
     BRANCH --> FINISH_CMD
+    FINISH_CMD --> COMPACT --> CLEANUP
 
     VALIDATE --> V01 --> V02 --> V03 --> V04 --> V05 --> V06 --> V07 --> OUTCOMES
 
     NEWTRACK -.->|"Phase 0"| VALIDATE
-    FB -.->|"Phase 0"| VALIDATE
-    RB -.->|"Phase 0"| VALIDATE
+    AUTO_FB -.->|"Phase 0"| VALIDATE
     READY -.->|"Phase 0"| VALIDATE
 
+    PF_MODE -.-> FACADE
+    AUTO_CLAIM -.-> FACADE
+    AUTO_CLOSE -.-> FACADE
+    AUTO_SYNC -.-> FACADE
+
+    classDef preflight fill:#1e3a5f,stroke:#60a5fa,color:#e2e8f0
     classDef planning fill:#1a365d,stroke:#63b3ed,color:#e2e8f0
     classDef spec fill:#234e52,stroke:#4fd1c5,color:#e2e8f0
     classDef beads fill:#553c9a,stroke:#b794f4,color:#e2e8f0
@@ -477,18 +495,20 @@ flowchart TB
     classDef agent fill:#744210,stroke:#f6ad55,color:#e2e8f0
     classDef tdd fill:#2d3748,stroke:#a0aec0,color:#e2e8f0
     classDef finish fill:#22543d,stroke:#68d391,color:#e2e8f0
+    classDef facade fill:#4c1d95,stroke:#a78bfa,color:#e2e8f0
     classDef product fill:#285e61,stroke:#4fd1c5,color:#e2e8f0
     classDef technical fill:#2c5282,stroke:#63b3ed,color:#e2e8f0
     classDef creative fill:#744210,stroke:#f6ad55,color:#e2e8f0
     classDef validation fill:#4a1d6e,stroke:#9f7aea,color:#e2e8f0
 
+    class PF_START,PF_MODE,PF_BD,PF_STATE preflight
     class DS,DISCOVER,DEFINE,DEVELOP,DELIVER,APC,DESIGND planning
-    class NEWTRACK,SPECMD,PLANMD spec
-    class FB,EPIC,ISSUES,DEPS,RB beads
-    class COORDINATOR,W1,W2,W3,WN,MERGE dispatch
-    class READY,CLAIM,CLOSE,SYNC agent
+    class NEWTRACK,SPECMD,PLANMD,AUTO_FB,FB_PROGRESS spec
+    class COORDINATOR,W1,W2,WN,MERGE dispatch
+    class READY,AUTO_CLAIM,AUTO_CLOSE,AUTO_SYNC agent
     class RED,GREEN,REFACTOR tdd
-    class VERIFY,BRANCH,FINISH_CMD finish
+    class VERIFY,BRANCH,FINISH_CMD,COMPACT,CLEANUP finish
+    class SA,MA,HEARTBEAT,PENDING facade
     class PM,ANALYST,UX product
     class ARCH,DEV,QA,DOCS technical
     class STORY,BRAIN,DESIGN,STRAT,SOLVER creative
@@ -718,38 +738,45 @@ REPEAT  → Next failing test
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
+│                    PREFLIGHT (automatic)                     │
+│  Mode detect (SA/MA) → Validate bd → Create session state   │
+└─────────────────────────────────────────────────────────────┘
+                           ↓
+┌─────────────────────────────────────────────────────────────┐
 │                      CONDUCTOR                               │
 │  /conductor-newtrack "Add user auth"                        │
 │       ↓                                                      │
 │  Questions → spec.md → plan.md                              │
+│       ↓                                                      │
+│  AUTO: Create epic + issues (.fb-progress.json)             │
 └─────────────────────────────────────────────────────────────┘
                            ↓
-                    fb (file beads)
-                           ↓
 ┌─────────────────────────────────────────────────────────────┐
-│                        BEADS                                 │
+│                    BEADS (via facade)                        │
 │  bd-001: Set up OAuth credentials                           │
 │  bd-002: Implement auth flow (blocked by bd-001)            │
 │  bd-003: Add token refresh (blocked by bd-002)              │
 └─────────────────────────────────────────────────────────────┘
                            ↓
                     bd ready → pick bd-001
-                    claim                    # Atomic task selection (multi-agent)
-                    reserve                  # Lock files before editing
+                    AUTO: claim (bd update --status in_progress)
+                    reserve (MA mode only)
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
-│                         TDD                                  │
+│                    TDD (--tdd flag)                          │
 │  RED:    test('OAuth credentials are configured')           │
 │  GREEN:  Implement credential loading                        │
 │  REFACTOR: Extract config helper                            │
+│  (each phase: AUTO checkpoint to beads notes)               │
 └─────────────────────────────────────────────────────────────┘
                            ↓
-                    done bd-001              # Releases locks, notifies team
+                    AUTO: close (bd close --reason completed)
+                    AUTO: sync (bd sync with retry)
                            ↓
                     bd-002 becomes ready
 ```
 
-**The Bridge Sentence**: Conductor turns ideas into structured documents. File beads (`fb`) converts plans into trackable issues. Beads becomes your source of truth for "what's next." TDD describes _how_ to execute each issue safely.
+**The Bridge Sentence**: Conductor turns ideas into structured documents. The facade automatically converts plans into trackable beads issues. Beads becomes your source of truth for "what's next." TDD describes _how_ to execute each issue safely.
 
 ---
 
