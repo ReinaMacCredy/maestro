@@ -108,8 +108,16 @@ workflows/
 │   └── agents/            # 12 BMAD agent definitions
 ├── agent-coordination/    # Multi-agent file coordination (via agent_mail MCP)
 │   ├── workflow.md        # Core protocol
-│   ├── patterns/          # parallel-dispatch, subagent-prompt, session-lifecycle, graceful-fallback
+│   ├── patterns/          # parallel-dispatch, subagent-prompt, session-lifecycle, graceful-fallback, execution-routing
 │   └── examples/          # Annotated dispatch examples
+├── context-engineering/   # Session lifecycle and routing for context management
+│   ├── session-lifecycle.md  # RECALL + ROUTE orchestration
+│   └── references/        # anchored-state-format.md, design-routing-heuristics.md
+├── conductor/             # Conductor-specific workflow extensions
+│   ├── beads-session.md   # Beads claim/close/sync protocol
+│   ├── preflight-beads.md # Session initialization
+│   ├── checkpoint.md      # Progress checkpointing facade
+│   └── remember.md        # Handoff protocol facade
 └── schemas/
     ├── metadata.schema.json        # Track metadata structure
     ├── implement_state.schema.json # Implementation state tracking

@@ -209,6 +209,146 @@ EOF
 
 echo "Session: Created state file for $AGENT_ID ($MODE mode)"
 
+---
+
+## Step 5b: RECALL Session Context
+
+Load prior session context to enable cross-session continuity.
+
+### Load Context File
+
+```bash
+CONTEXT_FILE=".conductor/session-context.md"
+
+if [[ -f "$CONTEXT_FILE" ]]; then
+  echo "RECALL: Loading session context..."
+  
+  # Validate version header
+  if ! head -1 "$CONTEXT_FILE" | grep -q "session-context v1"; then
+    echo "WARN: Context file missing version header. May be outdated."
+  fi
+  
+  # Verify context contract (PRESERVE sections exist and are non-empty)
+  validate_context_contract "$CONTEXT_FILE"
+  if [[ $? -ne 0 ]]; then
+    echo "WARN: Context contract validation failed"
+  fi
+  
+  # Display key context
+  INTENT=$(sed -n '/## Intent/,/^## /p' "$CONTEXT_FILE" | head -10)
+  CURRENT_STATE=$(sed -n '/## Current State/,/^## /p' "$CONTEXT_FILE" | head -5)
+  
+  echo "   Intent: $(echo "$INTENT" | head -2 | tail -1)"
+  echo "   State: $(echo "$CURRENT_STATE" | head -2 | tail -1)"
+  echo "RECALL: Context loaded ✓"
+else
+  # Cold start - create skeleton
+  create_context_skeleton "$CONTEXT_FILE"
+  echo "RECALL: Cold start - created skeleton context"
+fi
+```
+
+### Context Contract Validation
+
+```bash
+validate_context_contract() {
+  local FILE="$1"
+  
+  # Check required PRESERVE sections
+  if ! grep -q "## Intent" "$FILE"; then
+    echo "ERROR: Missing Intent [PRESERVE] section"
+    return 1
+  fi
+  
+  if ! grep -q "## Constraints" "$FILE"; then
+    echo "ERROR: Missing Constraints [PRESERVE] section"
+    return 1
+  fi
+  
+  # Check Intent is not empty
+  INTENT_CONTENT=$(sed -n '/## Intent/,/^## /p' "$FILE" | grep -v "^## " | grep -v "^\[PRESERVE\]" | tr -d '[:space:]')
+  if [[ -z "$INTENT_CONTENT" ]]; then
+    echo "ERROR: Intent section is empty"
+    return 1
+  fi
+  
+  return 0
+}
+```
+
+### Cold Start Skeleton
+
+```bash
+create_context_skeleton() {
+  local FILE="$1"
+  
+  mkdir -p "$(dirname "$FILE")"
+  
+  cat > "$FILE" << 'EOF'
+<!-- session-context v1 -->
+
+## Intent [PRESERVE]
+
+_What we're building and why (fill in at session start)_
+
+## Constraints & Ruled-Out [PRESERVE]
+
+_What we've explicitly decided NOT to do_
+
+## Decisions Made
+
+| Decision | Why | When |
+|----------|-----|------|
+
+## Files Modified
+
+_Files touched this session_
+
+## Open Questions / TODOs
+
+- [ ] 
+
+## Current State
+
+_Where we are now_
+
+## Next Steps
+
+_What to do next_
+EOF
+}
+```
+
+### Token Budget Display
+
+```bash
+display_token_budget() {
+  # Note: Token budget is tracked by the agent runtime, not this script
+  # This is a documentation of what the agent should display
+  
+  echo ""
+  echo "┌─ TOKEN BUDGET ─────────────────────────┐"
+  echo "│ Available:  [from runtime]             │"
+  echo "│ Prompt:     [from runtime]             │"
+  echo "│ Reserved:   [from runtime]             │"
+  echo "│ Usable:     [calculated]               │"
+  echo "├─────────────────────────────────────────┤"
+  echo "│ Status:     [OK/WARN/CRITICAL]         │"
+  echo "└─────────────────────────────────────────┘"
+  
+  # Thresholds:
+  # - <20% usable → WARN (suggest checkpoint)
+  # - <10% usable → CRITICAL (force compression)
+}
+```
+
+### Integration
+
+→ [Anchored State Format](../context-engineering/references/anchored-state-format.md) for template
+→ [Session Lifecycle](../context-engineering/session-lifecycle.md) for full RECALL/ROUTE flow
+
+---
+
 # Create session lock if working on a track (atomic using mkdir)
 if [[ -n "$TRACK_ID" ]]; then
   LOCK_DIR=".conductor/session-lock_${TRACK_ID}.lock"

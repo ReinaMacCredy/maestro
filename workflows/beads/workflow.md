@@ -271,6 +271,57 @@ Progress Checkpoint:
 
 ---
 
+## Degradation Signals
+
+Monitor for signs of context degradation during work loops. When detected, trigger context compression to preserve session quality.
+
+### Signal Types
+
+| Signal | Definition | Threshold |
+|--------|------------|-----------|
+| `tool_repeat` | Same tool called on same target | Per-tool (see below) |
+| `backtrack` | Revisiting a completed task | 1 occurrence |
+| `quality_drop` | Test failures increase OR new lint errors appear | 1 occurrence |
+| `contradiction` | Output conflicts with documented Decisions | 1 occurrence |
+
+### Per-Tool Thresholds
+
+| Tool | Threshold | Rationale |
+|------|-----------|-----------|
+| `file_write` / `edit_file` | 3 | Repeated edits suggest confusion |
+| `bash` / `Bash` | 3 | Repeated commands suggest trial-and-error |
+| `search` / `Grep` / `finder` | 5 | Searching is naturally iterative |
+| `file_read` / `Read` | 10 | Reading is cheap, often needed |
+
+### Trigger Rule
+
+**If 2+ signals fire within a task → trigger context compression**
+
+This prevents single false positives from causing unnecessary compression while catching genuine degradation.
+
+### Evaluation Timing
+
+Evaluate degradation signals:
+- **After each task completion** (implement.md Phase 3, step 6)
+- **At token budget thresholds** (70%, 85%, 90%)
+- **Before major phase transitions**
+
+### Compression Action
+
+When triggered:
+1. Checkpoint current state to bd notes
+2. Summarize completed work
+3. Archive verbose context (tool outputs, intermediate states)
+4. Reload essential context only (Intent, Decisions, Current State)
+
+### Integration
+
+This section extends Progress Checkpointing with degradation detection. See:
+- [implement.md](../implement.md#phase-3-track-implementation) step 6 for evaluation hook
+- [session-lifecycle.md](../context-engineering/session-lifecycle.md) for RECALL/REMEMBER integration
+
+---
+
 ### Database Selection
 
 bd automatically selects the appropriate database:

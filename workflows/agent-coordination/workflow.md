@@ -20,6 +20,7 @@ Enable parallel agents to avoid file collisions and share context via agent_mail
 
 | Pattern | Purpose |
 |---------|---------|
+| [execution-routing](patterns/execution-routing.md) | Decide SINGLE_AGENT vs PARALLEL_DISPATCH |
 | [parallel-dispatch](patterns/parallel-dispatch.md) | Reserve → dispatch → release flow |
 | [subagent-prompt](patterns/subagent-prompt.md) | Coordination block for Task prompts |
 | [session-lifecycle](patterns/session-lifecycle.md) | Session start/end handoff |
