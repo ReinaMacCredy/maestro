@@ -183,33 +183,183 @@ This workflow uses multiple state files:
 
 **Skip if `--no-beads` or `--plan-only` flag set.**
 
-1. **Check Lock File**
-   - If `.fb-progress.lock` exists:
-     - Age < 30min: Error unless `--force`
-     - Age >= 30min: Remove stale lock
-   - Create new lock file
+This phase uses the [track-init-beads.md](conductor/track-init-beads.md) workflow.
 
-2. **Spawn Beads (fb) Subagent**
-   ```
-   Task(
-     description: "File beads from plan.md",
-     prompt: "Load beads skill, run fb on plan..."
-   )
-   ```
-   - Updates `.track-progress.json` status to `fb_started` → `fb_done`
-   - Updates `metadata.json` with `artifacts.beads: true`
+#### Step 1: Check Lock File
 
-3. **Spawn Beads (rb) Subagent** (if fb succeeded)
-   ```
-   Task(
-     description: "Review filed beads",
-     prompt: "Load beads skill, run rb to review beads..."
-   )
-   ```
-   - Updates `.track-progress.json` status to `rb_done`
+```bash
+FB_LOCK="conductor/tracks/${TRACK_ID}/.fb-progress.lock"
 
-4. **Release Lock**
-   - Remove `.fb-progress.lock`
+if [[ -f "$FB_LOCK" ]]; then
+  FILE_TIME=$(stat -f %m "$FB_LOCK" 2>/dev/null || stat -c %Y "$FB_LOCK")
+  LOCK_AGE=$(( $(date +%s) - FILE_TIME ))
+  
+  if [[ $LOCK_AGE -lt 1800 ]]; then  # < 30 min
+    if [[ "$FORCE" != "true" ]]; then
+      echo "ERROR: Lock file exists (${LOCK_AGE}s old). Use --force to override."
+      exit 1
+    fi
+  fi
+  rm "$FB_LOCK"
+fi
+
+# Create new lock
+echo "{\"agentId\": \"$THREAD_ID\", \"lockedAt\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" > "$FB_LOCK"
+```
+
+#### Step 2: Validate Plan Structure
+
+Run plan validation from [track-init-beads.md](conductor/track-init-beads.md):
+
+1. **Parse tasks** from plan.md
+2. **Validate** structure (unique IDs, valid deps)
+3. **On validation failure:**
+   - If `--strict`: HALT immediately
+   - Else: Show R/S/M prompt
+
+**R/S/M Prompt (Structure Issues):**
+```
+⚠️ Plan structure issues detected:
+- <issue 1>
+- <issue 2>
+
+Options:
+  [R]eformat - Auto-fix and continue
+  [S]kip - Skip beads filing (plan-only)
+  [M]anual - Abort for manual fix
+
+Choice [R/S/M]:
+```
+
+#### Step 3: Check Existing Beads
+
+Detect if beads already exist for this track:
+
+```bash
+FB_PROGRESS="conductor/tracks/${TRACK_ID}/.fb-progress.json"
+
+if [[ -f "$FB_PROGRESS" ]]; then
+  EXISTING_COUNT=$(jq '.issues // [] | length' "$FB_PROGRESS")
+  
+  if [[ "$EXISTING_COUNT" -gt 0 ]]; then
+    # Show R/S/M prompt for existing beads
+  fi
+fi
+```
+
+**R/S/M Prompt (Existing Beads):**
+```
+Existing beads found for track:
+- 1 epic, 12 issues
+- Last updated: 2025-12-24
+
+Options:
+  [R]eplace - Delete existing, create fresh
+  [S]kip - Keep existing, skip filing
+  [M]erge - Link new tasks to existing beads
+
+Choice [R/S/M]:
+```
+
+| Choice | Action |
+|--------|--------|
+| **R**eplace | Close existing beads, create new |
+| **S**kip | Keep existing, update mapping only |
+| **M**erge | Match tasks by title, create only new ones |
+
+#### Step 4: Create Epic
+
+```bash
+# Extract title from plan header
+EPIC_TITLE="Epic: $(head -1 plan.md | sed 's/^# //')"
+
+# Create epic bead
+bd create "$EPIC_TITLE" -t epic -p 0
+```
+
+#### Step 5: Create Issues
+
+For each task in plan.md:
+
+```bash
+bd create "<task-title>" -t task -p <priority>
+bd dep add <issue-id> <epic-id>
+```
+
+**Priority Mapping:**
+
+| Plan Phase | Priority |
+|------------|----------|
+| Phase 1 (Foundation) | P0 (0) |
+| Phase 2 (Core) | P0 (0) |
+| Phase 3 (Extensions) | P1 (1) |
+| Phase 4 (Polish) | P2 (2) |
+
+#### Step 6: Wire Dependencies
+
+Link issues based on `depends:` in plan tasks:
+
+```bash
+# For each task with dependencies
+bd dep add <issue-id> <dependency-issue-id>
+```
+
+#### Step 7: Update .fb-progress.json
+
+Create the progress file with planTasks mapping:
+
+```json
+{
+  "trackId": "<track-id>",
+  "status": "complete",
+  "startedAt": "...",
+  "threadId": "<thread-id>",
+  "epics": ["<epic-id>"],
+  "issues": ["<issue-1>", "<issue-2>", ...],
+  "planTasks": {
+    "1.1.1": "<issue-id-1>",
+    "1.1.2": "<issue-id-2>"
+  },
+  "beadToTask": {
+    "<issue-id-1>": "1.1.1",
+    "<issue-id-2>": "1.1.2"
+  },
+  "lastVerified": "..."
+}
+```
+
+#### Step 8: Update metadata.json
+
+```bash
+jq '.artifacts.beads = true' metadata.json > tmp.$$ && mv tmp.$$ metadata.json
+```
+
+#### Step 9: Release Lock
+
+```bash
+rm "$FB_LOCK"
+```
+
+#### Alternative: Subagent Dispatch
+
+For complex tracks, dispatch subagents:
+
+```
+Task(
+  description: "File beads from plan.md",
+  prompt: "Load beads skill. Run fb on conductor/tracks/<track>/plan.md. 
+           Return epic ID and issue count."
+)
+```
+
+Then optionally:
+
+```
+Task(
+  description: "Review filed beads",
+  prompt: "Load beads skill. Run rb to review beads for track <track>."
+)
+```
 
 ### Phase 7: Completion & Handoff
 
@@ -253,6 +403,11 @@ This workflow uses multiple state files:
 | Lock file exists (< 30min) | Error unless --force |
 | Lock file exists (>= 30min) | Auto-remove stale lock |
 | Empty plan | Ask: "Plan has no tasks. Continue anyway? [y/N]" |
+| Plan validation fails + --strict | HALT with exit 1 |
+| Plan validation fails | Show R/S/M prompt |
+| Existing beads found | Show R/S/M prompt |
+| bd create fails | Retry 3x, then HALT |
+| Dependency wiring fails | Log warning, continue |
 | fb subagent fails | Log warning, skip rb, continue to handoff |
 | rb subagent fails | Log warning, continue to handoff |
 | Thread ID unavailable | Skip thread tracking, continue |
@@ -272,3 +427,9 @@ conductor/
         ├── .fb-progress.json (if beads filed)
         └── .fb-progress.lock (temporary, during filing)
 ```
+
+## References
+
+- [Track Init Beads Workflow](conductor/track-init-beads.md) - Detailed beads filing process
+- [Beads Facade](../skills/conductor/references/beads-facade.md) - API contract
+- [Beads Integration](../skills/conductor/references/beads-integration.md) - All 13 integration points

@@ -36,6 +36,7 @@ Context-driven development with TDD execution.
 **Execution:**
 - `bd ready --json` - Find available work
 - `/conductor-implement` - Execute epic with TDD
+- `/conductor-implement --tdd` - Execute with TDD checkpoints (RED/GREEN/REFACTOR tracking)
 - `tdd` - Enter TDD mode (RED-GREEN-REFACTOR)
 - `finish branch` - Finalize and merge/PR
 
@@ -50,6 +51,13 @@ Context-driven development with TDD execution.
 
 ### Session Protocol
 
+**Preflight (automatic):**
+Conductor commands run preflight automatically:
+- Checks `bd` availability (HALT if unavailable)
+- Detects mode (SA/MA) and locks for session
+- Creates session state file
+- Recovers pending operations from crashed sessions
+
 **Start:**
 ```bash
 bd ready --json                      # Find work
@@ -57,10 +65,16 @@ bd show <id>                         # Read context
 bd update <id> --status in_progress  # Claim
 ```
 
+**During Session:**
+- Heartbeat updates every 5 minutes (automatic)
+- TDD checkpoints tracked if `--tdd` flag used
+- Close tasks with reason: `completed`, `skipped`, or `blocked`
+
 **End:**
 ```bash
 bd update <id> --notes "COMPLETED: X. NEXT: Y"
-bd sync
+bd close <id> --reason completed     # Close current task
+bd sync                              # Sync to git
 ```
 
 ### Critical Rules

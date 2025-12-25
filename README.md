@@ -279,7 +279,12 @@ conductor/
 
 ### Beads (Issue Tracking)
 
-**What it does**: Persistent issue tracking across sessions with dependency graphs.
+**What it does**: Persistent issue tracking across sessions with dependency graphs. **Integrated with Conductor** via facade pattern for zero-manual-bd-commands workflow.
+
+**Conductor Integration** (automatic, no manual bd required):
+- `/conductor-newtrack` → creates epic + issues from plan.md
+- `/conductor-implement` → claims, TDD checkpoints, closes tasks
+- `/conductor-finish` → compacts summaries, cleans up old issues
 
 **Commands** (requires `bd` CLI):
 

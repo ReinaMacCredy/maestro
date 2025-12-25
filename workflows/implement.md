@@ -10,6 +10,7 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
   - `conductor/workflow.md`
   - `conductor/product.md`
 - At least one track exists in `conductor/tracks/`
+- Beads CLI (`bd`) available (checked by preflight)
 
 ## State Management
 
@@ -25,6 +26,28 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
 | `last_commit_sha` | string | Last implementation commit |
 
 ## Workflow Steps
+
+### Phase 0: Beads Preflight
+
+**REQUIRED:** Run before any implementation work.
+
+1. **Execute Preflight**
+   - Run [preflight-beads.md](conductor/preflight-beads.md) workflow
+   - Checks `bd` availability (HALT if unavailable)
+   - Detects mode (SA or MA) and locks for session
+   - Creates session state file
+   - Recovers pending operations from crashed sessions
+
+2. **Check Track Beads**
+   - Verify `.fb-progress.json` exists for track
+   - If missing: Prompt to run `/conductor-newtrack` or `/conductor-migrate-beads`
+
+3. **Output:**
+   ```
+   Preflight: bd v0.5.2 ✓, Village ✗ → SA mode
+   Session: Created state file for T-abc123
+   Track beads: 12 issues, 3 ready
+   ```
 
 ### Phase 1: Setup Verification
 
@@ -59,8 +82,25 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
      - `conductor/tracks/<track_id>/plan.md`
      - `conductor/tracks/<track_id>/spec.md`
      - `conductor/workflow.md`
+     - `.fb-progress.json` for planTasks mapping
 
-3. **Execute Tasks**
+3. **Claim Task (Beads Integration)**
+   
+   **SA Mode:**
+   ```bash
+   bd ready --json                           # Get available tasks
+   bd update <task-id> --status in_progress  # Claim task
+   ```
+   
+   **MA Mode:**
+   ```bash
+   claim()                                   # Atomic claim (race-safe)
+   reserve path="<file>"                     # Lock files before edit
+   ```
+   
+   See [beads-session.md](conductor/beads-session.md) for full protocol.
+
+4. **Execute Tasks**
    - Iterate through `plan.md` tasks sequentially
    - For each task, defer to `workflow.md` Task Workflow section
    - Follow TDD cycle if defined:
@@ -74,11 +114,46 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
      8. Update `plan.md`: `[~]` → `[x]` + SHA
      9. Commit plan update
 
-4. **Phase Completion**
+5. **TDD Checkpoints (if `--tdd` flag)**
+   
+   When `--tdd` is enabled, update bead notes at each phase:
+   
+   | Phase | Trigger | Notes Update |
+   |-------|---------|--------------|
+   | RED | Test written/fails | `IN_PROGRESS: RED phase - writing failing test` |
+   | GREEN | Test passes | `IN_PROGRESS: GREEN phase - making test pass` |
+   | REFACTOR | Code cleaned | `IN_PROGRESS: REFACTOR phase - cleaning up code` |
+   
+   ```bash
+   # After test passes (GREEN phase)
+   bd update <task-id> --notes "IN_PROGRESS: GREEN phase - making test pass"
+   ```
+
+6. **Close Task (Beads Integration)**
+   
+   After task completion:
+   
+   **SA Mode:**
+   ```bash
+   bd update <task-id> --notes "COMPLETED: <summary>. KEY DECISION: <if any>"
+   bd close <task-id> --reason completed
+   ```
+   
+   **MA Mode:**
+   ```bash
+   done taskId="<task-id>" reason="completed"  # Auto-releases reservations
+   ```
+   
+   **Close Reasons:**
+   - `completed` - Task finished successfully
+   - `skipped` - Task not needed (requirements changed)
+   - `blocked` - Cannot proceed, external dependency
+
+7. **Phase Completion**
    - Execute Phase Completion Protocol from `workflow.md`
    - Includes: test verification, manual verification, checkpoint commit
 
-5. **Finalize Track**
+8. **Finalize Track**
    - Update status `[~]` → `[x]` in `tracks.md`
    - Announce completion
 
@@ -121,6 +196,25 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
    - **Delete**: Confirm twice, remove, update `tracks.md`
    - **Skip**: No action
 
+### Phase 6: Beads Sync
+
+**REQUIRED:** Run at session end.
+
+1. **Sync to Git**
+   ```bash
+   bd sync
+   ```
+   
+2. **Retry on Failure**
+   - Retry up to 3 times with backoff (1s, 2s)
+   - On final failure: persist unsynced state to `.conductor/unsynced.json`
+   
+3. **Session Cleanup**
+   - Remove session lock file
+   - Update session state file
+
+See [beads-session.md](conductor/beads-session.md) for full sync protocol.
+
 ## Task Workflow Reference
 
 From `workflow.md`:
@@ -147,6 +241,10 @@ From `workflow.md`:
 | Test failure | Debug up to 2 attempts, then ask user |
 | File read error | Stop, report error |
 | Git conflict | Halt, provide resolution steps |
+| bd unavailable | HALT with install instructions |
+| bd command fails | Retry 3x, persist pending operations |
+| Claim conflict (MA) | Pick different task or wait |
+| Reservation conflict (MA) | Request access or pick different task |
 
 ## Output Artifacts
 
@@ -160,7 +258,15 @@ conductor/
 └── tracks/
     └── <track_id>/
         ├── plan.md (tasks marked complete)
-        └── implement_state.json (optional)
+        ├── implement_state.json (optional)
+        └── .fb-progress.json (planTasks mapping)
+
+.conductor/
+├── session-state_<agent-id>.json (session tracking)
+├── session-lock_<track-id>.json (concurrent session prevention)
+├── pending_updates.jsonl (failed operations for retry)
+├── pending_closes.jsonl (failed close operations)
+└── unsynced.json (sync failures)
 ```
 
 ## Git Artifacts
@@ -169,3 +275,10 @@ conductor/
 - Plan update commits: `conductor(plan): Mark task 'X' as complete`
 - Phase checkpoint commits: `conductor(checkpoint): Checkpoint end of Phase X`
 - Git notes attached to commits with detailed summaries
+
+## References
+
+- [Beads Session Workflow](conductor/beads-session.md) - Claim, close, sync protocol
+- [Beads Preflight](conductor/preflight-beads.md) - Session initialization
+- [Beads Facade](../skills/conductor/references/beads-facade.md) - API contract
+- [Beads Integration](../skills/conductor/references/beads-integration.md) - All 13 integration points

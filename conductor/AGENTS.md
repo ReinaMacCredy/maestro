@@ -21,6 +21,10 @@ Contains reusable learnings from completed tracks.
 - `bd compact --apply --id <id> --summary "<text>"` - Apply AI summary to bead
 - `bd count --status closed --json` - Count closed beads for cleanup threshold
 - `bd cleanup --older-than 0 --limit <n> --force` - Remove oldest closed beads
+- `bd update <id> --status in_progress` - Claim task in SA mode
+- `bd close <id> --reason completed|skipped|blocked` - Close with explicit reason
+- `bv --robot-status` - Check Village MCP status (use --robot-* flags to avoid TUI hang)
+- `/conductor-implement --tdd` - Enable RED/GREEN/REFACTOR checkpoint tracking
 
 ## Gotchas
 
@@ -35,6 +39,11 @@ Contains reusable learnings from completed tracks.
 - CODEMAPS loaded at design session start for codebase context
 - docs: and chore: commits don't bump version (changelog only)
 - Skill versions in SKILL.md frontmatter are manually updated (not automated)
+- HALT vs Degrade: `bd` unavailable = HALT; Village unavailable in MA = degrade to SA
+- Session lock staleness: heartbeat protocol (5 min updates); stale = >10 min without heartbeat
+- Subagent bd access: read-only (show, ready, list); writes return to main agent
+- Idempotency: `bd update` and `bd close` are idempotent; `bd create` is NOT
+- planTasks mapping: bidirectional - keep planTasks and beadToTask in sync
 
 ## Patterns
 

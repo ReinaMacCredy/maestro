@@ -1,0 +1,56 @@
+{
+  "track_id": "beads-conductor-integration_20251225",
+  "status": "archived",
+  "createdAt": "2025-12-25T10:00:00Z",
+  "updatedAt": "2025-12-25T17:00:00Z",
+  "threadIds": [
+    "T-019b54ca-82c0-7448-b1a0-8c84216f634b",
+    "T-019b54da-0989-74f1-9e40-31c7c3ba8ef0",
+    "T-019b5567-ee85-737c-85f0-b30b80e6cac1"
+  ],
+  "artifacts": {
+    "design": true,
+    "spec": true,
+    "plan": true
+  },
+  "designSession": {
+    "methodology": "Double Diamond",
+    "phases": ["DISCOVER", "DEFINE", "DEVELOP", "DELIVER"],
+    "partyModeInvocations": 12,
+    "advancedAnalyses": 8,
+    "agents": [
+      "Carson (Brainstorm)",
+      "Dr. Quinn (Solver)",
+      "Winston (Architect)",
+      "Amelia (Developer)",
+      "Murat (QA)",
+      "Mary (Analyst)",
+      "Victor (Strategist)",
+      "John (PM)",
+      "Maya (Design Thinking)",
+      "Sophia (Storyteller)",
+      "Sally (UX)"
+    ]
+  },
+  "beadsIntegration": {
+    "version": "1.0.0",
+    "mode": null,
+    "epics": [],
+    "lastSync": null
+  },
+  "oracleAudit": {
+    "filesToCreate": 11,
+    "filesToModify": 11,
+    "totalFiles": 22,
+    "estimatedLines": "2000-2800",
+    "p0Files": 12,
+    "p1Files": 5,
+    "p2Files": 5
+  },
+  "plan": {
+    "phases": 4,
+    "epics": 12,
+    "tasks": 31,
+    "estimatedLines": "2280-3300"
+  }
+}

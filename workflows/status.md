@@ -132,6 +132,65 @@ This workflow is read-only and does not modify any state.
 
 Status report is presented to user. No files are modified.
 
+---
+
+## Beads Status Sync
+
+When track has beads integration, `/conductor-status` also syncs with Beads state.
+
+### Additional Data Collection
+
+```bash
+# Query beads state for track
+bd list --json | jq --arg epic "$EPIC_ID" '.[] | select(.parent == $epic)'
+```
+
+### Discrepancy Detection
+
+Compare Conductor state (plan.md) with Beads state (bd list):
+
+| Discrepancy | Description | Suggestion |
+|-------------|-------------|------------|
+| `status_mismatch` | Plan says done, bead says open | Update the lagging source |
+| `missing_bead` | Task in plan, no bead | Run `/conductor-migrate-beads` |
+| `orphan_bead` | Bead exists, not in plan | Close bead or add to plan |
+
+### Enhanced Report Section
+
+```text
+BEADS SYNC
+──────────
+Epic: my-workflow:3-abc1
+Issues: 12 (8 closed, 2 in_progress, 2 open)
+
+⚠️ 2 discrepancies:
+  - Task 1.2.3: plan=done, bead=in_progress
+  - Task 2.1.1: in plan but no bead
+
+Reconciliation:
+  [B] Update Beads to match Conductor
+  [C] Update Conductor to match Beads
+  [M] Run /conductor-migrate-beads
+  [S] Skip
+```
+
+### Reconciliation Actions
+
+User can choose to:
+- **[B]** Update beads to match plan status
+- **[C]** Update plan to match bead status
+- **[M]** Run migration to create missing beads
+- **[S]** Skip (no action)
+
+See [status-sync-beads.md](conductor/status-sync-beads.md) for implementation details.
+
+---
+
+## References
+
+- [Status Sync Beads](conductor/status-sync-beads.md) - Detailed sync workflow
+- [Beads Integration](../skills/conductor/references/beads-integration.md) - Point 12
+
 ## Example Output
 
 ```

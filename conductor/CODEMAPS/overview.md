@@ -40,6 +40,21 @@ ds → design.md → /conductor-newtrack → spec.md + plan.md
                               /conductor-finish → LEARNINGS.md → archive
 ```
 
+## Beads-Conductor Integration
+
+Zero manual `bd` commands in the happy path:
+
+| Point | Conductor Command | Beads Action |
+|-------|-------------------|--------------|
+| Preflight | All | Mode detect (SA/MA), validate bd |
+| Claim | `/conductor-implement` | `bd update --status in_progress` |
+| Close | `/conductor-implement` | `bd close --reason completed` |
+| Sync | All (session end) | `bd sync` with retry |
+| Compact | `/conductor-finish` | AI summaries for closed issues |
+
+**SA Mode:** Direct `bd` CLI calls (default)
+**MA Mode:** Village MCP server for multi-agent coordination
+
 ## Core Skills
 
 | Skill | Trigger | Role |
