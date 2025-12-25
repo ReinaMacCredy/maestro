@@ -80,10 +80,19 @@ Graph-based issue tracker that survives conversation compaction. Provides persis
 For complete instructions, load the workflow file: `workflows/beads/workflow.md`
 
 Reference files in `workflows/beads/references/`:
+- `AGENTS.md` - Agent integration patterns
+- `BOUNDARIES.md` - Scope and boundary rules
 - `CLI_REFERENCE.md` - Complete command syntax
-- `WORKFLOWS.md` - Detailed workflow patterns
-- `DEPENDENCIES.md` - Dependency system deep dive
-- `DAEMON.md` - Daemon management
-- `GIT_INTEGRATION.md` - Git workflows
-- `TROUBLESHOOTING.md` - Common issues
 - `CONFIG.md` - Configuration system
+- `DAEMON.md` - Daemon management
+- `DEPENDENCIES.md` - Dependency system deep dive
+- `FILE_BEADS.md` - Filing beads from plans
+- `GIT_INTEGRATION.md` - Git workflows
+- `ISSUE_CREATION.md` - Creating issues properly
+- `LABELS.md` - Label system and usage
+- `RESUMABILITY.md` - Session resumption patterns
+- `REVIEW_BEADS.md` - Reviewing filed beads
+- `STATIC_DATA.md` - Static data handling
+- `TROUBLESHOOTING.md` - Common issues
+- `VILLAGE.md` - Multi-agent coordination
+- `WORKFLOWS.md` - Detailed workflow patterns
