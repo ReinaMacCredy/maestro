@@ -4,10 +4,10 @@ description: Review and refine beads issues
 
 # Review Beads (rb)
 
-Load the `review-beads` skill to review, proofread, and polish filed Beads issues.
+Load the `beads` skill to review, proofread, and polish filed Beads issues.
 
 **What this does:**
-1. Loads the review-beads skill
+1. Loads the beads skill
 2. Gets all epics via `bd list -t epic`
 3. Dispatches parallel subagents - each reviews one epic
 4. Checks clarity, completeness, dependencies, scope, priority
@@ -23,7 +23,7 @@ Say `rb` after filing beads with `fb`.
 
 ```
 User: rb
-Agent: [loads review-beads skill]
+Agent: [loads beads skill]
        [reviews and refines issues]
        Issues reviewed. Run `/conductor-implement` to start execution.
        

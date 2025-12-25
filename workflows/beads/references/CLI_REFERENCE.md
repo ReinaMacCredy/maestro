@@ -276,11 +276,6 @@ bd --db /path/to/.beads/beads.db <command>
 bd --actor alice <command>
 ```
 
-**See also:**
-
-- [TROUBLESHOOTING.md - Sandboxed environments](TROUBLESHOOTING.md#sandboxed-environments-codex-claude-code-etc) for detailed sandbox troubleshooting
-- [DAEMON.md](DAEMON.md) for daemon mode details
-
 ## Advanced Operations
 
 ### Cleanup
@@ -367,8 +362,6 @@ bd sync  # Now uses resurrect mode by default
 - Use `strict` for controlled imports requiring guaranteed parent existence
 - Use `skip` rarely - only for selective imports
 
-See [CONFIG.md](CONFIG.md#example-import-orphan-handling) and [TROUBLESHOOTING.md](TROUBLESHOOTING.md#import-fails-with-missing-parent-errors) for more details.
-
 ### Migration
 
 ```bash
@@ -399,8 +392,6 @@ bd info --schema --json                                # Get schema, tables, con
 These invariants prevent data loss and would have caught issues like GH #201 (missing issue_prefix after migration).
 
 ### Daemon Management
-
-See [docs/DAEMON.md](DAEMON.md) for complete daemon management reference.
 
 ```bash
 # List all running daemons
@@ -551,11 +542,3 @@ bd sync  # Force immediate sync, bypass debounce
 ```
 
 **ALWAYS run `bd sync` at end of agent sessions** to ensure changes are committed/pushed immediately.
-
-## See Also
-
-- [AGENTS.md](../AGENTS.md) - Main agent workflow guide
-- [DAEMON.md](DAEMON.md) - Daemon management and event-driven mode
-- [GIT_INTEGRATION.md](GIT_INTEGRATION.md) - Git workflows and merge strategies
-- [LABELS.md](../LABELS.md) - Label system guide
-- [README.md](../README.md) - User documentation

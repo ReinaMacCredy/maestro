@@ -26,8 +26,8 @@ flowchart TB
         end
 
         subgraph BEADS["ISSUE FILING"]
-            FB["fb (file-beads)"]
-            RB["rb (review-beads)"]
+            FB["fb"]
+            RB["rb"]
         end
 
         subgraph DISPATCH["PARALLEL AGENT DISPATCH"]

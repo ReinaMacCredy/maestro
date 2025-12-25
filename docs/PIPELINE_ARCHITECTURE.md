@@ -26,11 +26,11 @@ flowchart TB
         end
 
         subgraph BEADS["ISSUE FILING LOOP"]
-            FB["fb (file-beads)"]
+            FB["fb"]
             EPIC["Create Epic"]
             ISSUES["Create Issues<br/>(batches of 5)"]
             DEPS["Wire Dependencies"]
-            RB["rb (review-beads)"]
+            RB["rb"]
         end
 
         subgraph DISPATCH["PARALLEL AGENT DISPATCH"]
@@ -227,13 +227,13 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-    FB["fb (file-beads)"] --> BATCH["Process in batches of 5"]
+    FB["fb"] --> BATCH["Process in batches of 5"]
     BATCH --> EPIC["Create Epic"]
     EPIC --> ISSUES["Create Issues"]
     ISSUES --> DEPS["Wire Dependencies"]
     DEPS --> CHECKPOINT["Checkpoint Progress"]
     CHECKPOINT -->|"More phases?"| BATCH
-    CHECKPOINT -->|"Done"| RB["rb (review-beads)"]
+    CHECKPOINT -->|"Done"| RB["rb"]
     RB --> VALIDATE["Parallel Validation"]
     VALIDATE --> READY["bd ready"]
 ```

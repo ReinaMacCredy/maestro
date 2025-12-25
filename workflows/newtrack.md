@@ -189,21 +189,21 @@ This workflow uses multiple state files:
      - Age >= 30min: Remove stale lock
    - Create new lock file
 
-2. **Spawn File-Beads Subagent**
+2. **Spawn Beads (fb) Subagent**
    ```
    Task(
      description: "File beads from plan.md",
-     prompt: "Load file-beads skill, run on plan..."
+     prompt: "Load beads skill, run fb on plan..."
    )
    ```
    - Updates `.track-progress.json` status to `fb_started` → `fb_done`
    - Updates `metadata.json` with `artifacts.beads: true`
 
-3. **Spawn Review-Beads Subagent** (if fb succeeded)
+3. **Spawn Beads (rb) Subagent** (if fb succeeded)
    ```
    Task(
      description: "Review filed beads",
-     prompt: "Load review-beads skill, review beads..."
+     prompt: "Load beads skill, run rb to review beads..."
    )
    ```
    - Updates `.track-progress.json` status to `rb_done`

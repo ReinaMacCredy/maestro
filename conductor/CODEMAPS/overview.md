@@ -46,9 +46,7 @@ ds → design.md → /conductor-newtrack → spec.md + plan.md
 |-------|---------|------|
 | `conductor` | `/conductor-*` | Planning methodology + CODEMAPS |
 | `design` | `ds` | Double Diamond + Party Mode |
-| `beads` | `bd` CLI | Issue tracking across sessions |
-| `file-beads` | `fb` | Batch-file issues from plan |
-| `review-beads` | `rb` | Validate filed issues |
+| `beads` | `bd`, `fb`, `rb` | Issue tracking, file/review beads |
 | `test-driven-development` | `tdd` | RED-GREEN-REFACTOR |
 
 ## Common Tasks

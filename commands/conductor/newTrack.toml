@@ -366,7 +366,7 @@ If beads should be filed:
     ```
     Task(
       description: "File beads from plan.md",
-      prompt: "Load the file-beads skill and run it on the plan at conductor/tracks/<track_id>/plan.md. 
+      prompt: "Load the beads skill and run it on the plan at conductor/tracks/<track_id>/plan.md. 
                Track ID: <track_id>
                Progress file: conductor/tracks/<track_id>/.fb-progress.json
                
@@ -397,7 +397,7 @@ If beads should be filed:
     ```
     Task(
       description: "Review filed beads",
-      prompt: "Load the review-beads skill and review the beads filed for track <track_id>.
+      prompt: "Load the beads skill and review the beads filed for track <track_id>.
                Progress file: conductor/tracks/<track_id>/.fb-progress.json
                
                After completion, return JSON summary:

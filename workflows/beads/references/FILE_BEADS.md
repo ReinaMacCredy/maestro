@@ -1,10 +1,3 @@
----
-name: file-beads
-version: "2.0.0"
-description: File detailed Beads epics and issues from a plan
-argument-hint: <plan-description-or-context>
----
-
 # File Beads Epics and Issues from Plan
 
 Convert a plan into Beads epics and issues using **parallel subagents** for speed, with checkpointing for resume capability.
