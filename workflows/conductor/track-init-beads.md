@@ -108,16 +108,28 @@ Extract tasks from plan structure.
 parse_plan() {
   local PLAN_PATH="$1"
   
-  # Extract tasks matching pattern: "- [ ] X.Y.Z: Title" (colon optional, flexible whitespace)
-  grep -E '^\s*- \[ \] [0-9]+\.[0-9]+(\.[0-9]+)?:?\s*' "$PLAN_PATH" | while read -r line; do
+  # Extract tasks matching pattern: "- [x/ /~] X.Y.Z: Title" (colon optional, flexible whitespace)
+  # Captures open ([ ]), done ([x]), and in-progress ([~]) tasks
+  grep -E '^\s*- \[([ x~])\] [0-9]+\.[0-9]+(\.[0-9]+)?:?\s*' "$PLAN_PATH" | while read -r line; do
+    # Extract checkbox state (space=open, x=done, ~=in-progress)
+    CHECKBOX=$(echo "$line" | sed -E 's/.*- \[(.)\] .*/\1/')
+    
+    # Map checkbox to bead status
+    case "$CHECKBOX" in
+      " ") STATUS="open" ;;
+      "x") STATUS="closed" ;;
+      "~") STATUS="in_progress" ;;
+      *)   STATUS="open" ;;
+    esac
+    
     # Extract task ID (e.g., "1.1.1")
-    TASK_ID=$(echo "$line" | sed -E 's/.*- \[ \] ([0-9]+\.[0-9]+(\.[0-9]+)?):?\s*.*/\1/')
+    TASK_ID=$(echo "$line" | sed -E 's/.*- \[.\] ([0-9]+\.[0-9]+(\.[0-9]+)?):?\s*.*/\1/')
     
     # Extract title
-    TITLE=$(echo "$line" | sed -E 's/.*- \[ \] [0-9]+\.[0-9]+(\.[0-9]+)?:?\s*(.*)/\2/')
+    TITLE=$(echo "$line" | sed -E 's/.*- \[.\] [0-9]+\.[0-9]+(\.[0-9]+)?:?\s*(.*)/\2/')
     
     # Output as JSON
-    echo "{\"id\": \"$TASK_ID\", \"title\": \"$TITLE\"}"
+    echo "{\"id\": \"$TASK_ID\", \"title\": \"$TITLE\", \"status\": \"$STATUS\"}"
   done
 }
 ```

@@ -191,7 +191,8 @@ This phase uses the [track-init-beads.md](conductor/track-init-beads.md) workflo
 FB_LOCK="conductor/tracks/${TRACK_ID}/.fb-progress.lock"
 
 if [[ -f "$FB_LOCK" ]]; then
-  LOCK_AGE=$(( $(date +%s) - $(stat -f %m "$FB_LOCK") ))
+  FILE_TIME=$(stat -f %m "$FB_LOCK" 2>/dev/null || stat -c %Y "$FB_LOCK")
+  LOCK_AGE=$(( $(date +%s) - FILE_TIME ))
   
   if [[ $LOCK_AGE -lt 1800 ]]; then  # < 30 min
     if [[ "$FORCE" != "true" ]]; then
