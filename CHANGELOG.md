@@ -7,23 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.0] - 2025-12-26
 
-### BREAKING CHANGES
 
-- **Architecture Migration**: Moved from 3-layer (commands/, workflows/, skills/) to 2-layer (skills/, AGENTS.md) architecture
-- **Removed directories**: `commands/` and `workflows/` directories no longer exist
-- **Path changes**: All workflow files moved to `skills/*/references/`
-- **New skill**: Added `session-compaction` skill (previously `compact` command)
+### Added
 
-### Migration Guide
 
-See [docs/MIGRATION_V2.md](docs/MIGRATION_V2.md) for complete migration instructions.
+- Migrate to spec-compliant skills-only architecture
 
-**Key path changes:**
-- `workflows/beads/` → `skills/beads/references/`
-- `workflows/conductor/` → `skills/conductor/references/conductor/`
-- `workflows/*.md` → `skills/conductor/references/workflows/`
-- `workflows/party-mode/` → `skills/design/references/party-mode/`
-- `commands/*.md` → merged into skill references or deleted (pure aliases)
+
+### Changed
+
+
+- Move workflows/ to skills/*/references/
+- Remove commands/, merge to skills/
+- Complete spec-compliant migration, enhance link and anchor validation, and update skill and tutorial paths.
+- Update Party Mode workflow path, clarify skill-local directory structure, and refine migration verification steps.
+
+
+### Documentation
+
+
+- Update all references for new architecture
+- /conductor-finish spec-compliant-migration track
+
+
+### Fixed
+
+
+- Correct revisions.md relative path in workflows.md
 
 ## [1.11.0] - 2025-12-26
 
