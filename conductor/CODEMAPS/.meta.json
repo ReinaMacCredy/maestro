@@ -1,9 +1,9 @@
 {
-  "generated": "2025-12-25T13:45:00Z",
+  "generated": "2025-12-26T12:15:00Z",
   "generator": "/conductor-finish",
   "project_type": "plugin",
   "files": {
-    "overview.md": { "generated": true, "user_modified": false },
+    "overview.md": { "generated": true, "user_modified": true },
     "skills.md": { "generated": true, "user_modified": false },
     "conductor.md": { "generated": true, "user_modified": false }
   }

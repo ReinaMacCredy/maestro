@@ -15,6 +15,10 @@ Contains reusable learnings from completed tracks.
 
 ## Commands
 
+- `./scripts/validate-links.sh .` - Validate markdown links in codebase
+- `./scripts/validate-anchors.sh .` - Validate anchor references
+- `sed -i '' 's|old|new|g' file` - macOS in-place sed replacement
+- `rg "pattern" --type md -l` - Find files containing pattern
 - `tail -n +N file` - Strip first N-1 lines (useful for removing YAML frontmatter)
 - `rm -rf skills/X .claude/skills/X` - Delete both hard-linked paths when removing skills
 - `bd compact --analyze --json` - Find beads needing summaries
@@ -31,6 +35,9 @@ Contains reusable learnings from completed tracks.
 - Hard-linked directories (skills/ ↔ .claude/skills/) - updating one updates both, but explicitly delete both
 - Thin skill stubs must include keyword-rich descriptions for AI trigger matching
 - Delete operations must wait for reference replacements - deleting too early causes broken references
+- Relative paths change when files move - `references/X.md` becomes `./X.md` when you're already in references/
+- Archive files contain historical references - don't fix them (they're snapshots)
+- Party-mode agent paths need updating when workflow moves
 - Phase 3 (Knowledge Merge) is required - if it fails, stop workflow
 - Phases 1 & 2 are best-effort - failures should log warnings but continue
 - Context Refresh (Phase 4) can be skipped with --skip-refresh flag
