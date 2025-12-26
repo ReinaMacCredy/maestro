@@ -545,5 +545,5 @@ bd list --status open --json | jq '.[] | select(.priority <= 1)'
 
 - [Beads Facade](beads-facade.md) - Facade API contract
 - [Beads Validation](validation/beads/checks.md) - State file validation
-- [Design Document](../../../conductor/tracks/beads-conductor-integration_20251225/design.md)
-- [Beads Workflow](../../../workflows/beads/workflow.md) - Base beads usage
+- [Design Document](../../../conductor/archive/beads-conductor-integration_20251225/design.md)
+- [Beads Workflow](../../beads/references/workflow.md) - Base beads usage

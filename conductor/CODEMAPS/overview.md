@@ -11,15 +11,23 @@ AI workflow plugin for structured development: planning (Conductor), issue track
 | `/conductor-implement` | Execute tasks with TDD |
 | `/conductor-finish` | Complete track, extract learnings, archive |
 | `fb` / `rb` | File/review beads from plan |
-| `workflows/agent-coordination/` | Multi-agent file coordination (optional) |
+| `skills/dispatching-parallel-agents/` | Multi-agent file coordination (optional) |
 
 ## Directory Structure
 
 ```
 maestro/
-├── skills/           # 15 skill directories (SKILL.md each)
-├── commands/         # Slash command definitions (.md)
-├── workflows/        # Multi-step workflow definitions
+├── skills/           # 16 skill directories (SKILL.md + references/)
+│   ├── beads/references/         # Issue tracking workflows
+│   ├── conductor/references/     # Planning workflows + schemas
+│   │   ├── conductor/            # Beads integration workflows
+│   │   ├── workflows/            # setup, implement, finish, etc.
+│   │   └── schemas/              # JSON schemas
+│   ├── design/references/        # Double Diamond + Party Mode
+│   │   └── party-mode/           # Multi-agent design personas
+│   ├── dispatching-parallel-agents/references/
+│   │   └── agent-coordination/   # Multi-agent patterns
+│   └── session-compaction/       # Context compression
 ├── conductor/        # Project context + tracks
 │   ├── product.md, tech-stack.md, workflow.md
 │   ├── CODEMAPS/     # Architecture documentation (this directory)
@@ -72,10 +80,10 @@ Zero manual `bd` commands in the happy path:
 | Find work | `bd ready --json` |
 | Execute task | `/conductor-implement` (auto-claims from beads) |
 | Complete track | `/conductor-finish` (extracts learnings, archives) |
-| Add a skill | Create `skills/<name>/SKILL.md` with frontmatter |
-| Add a command | Create `commands/<name>.md` |
+| Add a skill | Create `skills/<name>/SKILL.md` with frontmatter + `references/` |
+| Add workflow docs | Add to `skills/<skill>/references/*.md` |
 | Regenerate CODEMAPS | `/conductor-finish` (Phase 6: CODEMAPS Regeneration) |
-| Coordinate parallel agents | See `workflows/agent-coordination/` (optional, requires agent_mail MCP) |
+| Coordinate parallel agents | See `skills/dispatching-parallel-agents/references/agent-coordination/` (optional, requires agent_mail MCP) |
 
 ## Gotchas
 

@@ -1,0 +1,19 @@
+{
+  "track_id": "spec-compliant-migration_20251226",
+  "title": "Spec-Compliant Skills-Only Architecture Migration",
+  "type": "refactor",
+  "status": "completed",
+  "created_at": "2025-12-26T00:00:00Z",
+  "updated_at": "2025-12-26T00:00:00Z",
+  "thread_ids": {
+    "design": "T-019b5a5c-71fd-7128-a8dc-1f67e4c1b141",
+    "newtrack": "T-019b5a5d-3de6-7035-ac67-f69d79a04a80"
+  },
+  "artifacts": {
+    "design": true,
+    "spec": true,
+    "plan": true
+  },
+  "version_target": "2.0.0",
+  "breaking_change": true
+}

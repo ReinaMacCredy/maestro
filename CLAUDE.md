@@ -17,24 +17,12 @@ This is a skills-based plugin (no build required) - all functionality is deliver
 
 ```
 skills/                    # 16 skill directories, each with SKILL.md
-  ├── beads/              # Issue tracking (fb, rb triggers)
-  ├── conductor/          # Planning methodology (includes /conductor-design)
-  ├── design/             # Design sessions (ds trigger)
+  ├── beads/              # Issue tracking (fb, rb triggers) with references/
+  ├── conductor/          # Planning methodology with references/
+  ├── design/             # Design sessions (ds trigger) with party-mode/
+  ├── session-compaction/ # Session context compression
   ├── test-driven-development/
   └── ...                 # See SETUP_GUIDE.md for full list
-
-commands/                 # Slash command definitions (.md files)
-  ├── conductor/          # /conductor-setup, /conductor-design, /conductor-newtrack, etc.
-  ├── compact.md
-  ├── decompose-task.md
-  └── ground.md
-
-workflows/                # Conductor workflow definitions (format-agnostic)
-  ├── setup.md           # Project initialization workflow
-  ├── newtrack.md        # Track creation workflow
-  ├── implement.md       # Task implementation workflow
-  ├── status.md          # Progress reporting workflow
-  └── schemas/           # JSON schemas for state files
 
 .claude-plugin/          # Plugin metadata
   ├── plugin.json        # Plugin manifest
@@ -108,10 +96,10 @@ When modifying skills:
 3. Keep skills self-contained
 4. Follow existing patterns in other skills
 
-When adding new commands:
-1. Create .md file in `commands/` or `commands/conductor/`
-2. Follow existing command structure
-3. Reference workflow definitions from `workflows/` when applicable
+When adding new skills:
+1. Create SKILL.md in `skills/<skill-name>/`
+2. Add references/ subdirectory for detailed documentation
+3. Follow existing skill patterns
 
 ### Beads Integration
 
@@ -197,11 +185,11 @@ git add -A && git commit && git push
 ### SessionStart Hook
 The `hooks/session-start.sh` script injects the `using-superpowers` skill content at session start, establishing skill discovery and usage patterns.
 
-### Workflow Definitions
-The `workflows/` directory contains **single source of truth** for Conductor logic:
-- Format-agnostic (markdown, referenced by TOML/Claude/etc.)
+### Skill Structure
+The `skills/*/references/` directories contain **single source of truth** for detailed logic:
+- Format-agnostic (markdown, referenced by SKILL.md)
 - Centralized workflow updates
-- JSON schemas in `workflows/schemas/` define state file structures
+- JSON schemas in `skills/conductor/references/schemas/` define state file structures
 
 ### Skill Naming
 - Directory names: kebab-case (`test-driven-development`)

@@ -414,4 +414,4 @@ The facade reads/writes these state files:
 
 - [Beads Integration Points](beads-integration.md)
 - [Beads Validation](validation/beads/checks.md)
-- [Design Document](../../../conductor/tracks/beads-conductor-integration_20251225/design.md)
+- [Design Document](../../../conductor/archive/beads-conductor-integration_20251225/design.md)

@@ -206,8 +206,8 @@ Dispatching 3 agents...
 🔓 Released reservations
 ```
 
-See [workflows/agent-coordination/](../../workflows/agent-coordination/) for full protocol:
-- [parallel-dispatch.md](../../workflows/agent-coordination/patterns/parallel-dispatch.md) - Reserve → dispatch → release flow
-- [graceful-fallback.md](../../workflows/agent-coordination/patterns/graceful-fallback.md) - Handle MCP unavailability
+See [references/agent-coordination/](references/agent-coordination/) for full protocol:
+- [parallel-dispatch.md](references/agent-coordination/patterns/parallel-dispatch.md) - Reserve → dispatch → release flow
+- [graceful-fallback.md](references/agent-coordination/patterns/graceful-fallback.md) - Handle MCP unavailability
 
 If MCP is unavailable, proceed normally—coordination is optional.

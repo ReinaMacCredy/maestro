@@ -14,11 +14,9 @@ cat .claude-plugin/plugin.json | jq .   # Validate plugin manifest
 skills/           # Skill directories, each with SKILL.md (frontmatter + instructions)
   beads/          # Issue tracking skill with references/ subdirectory
   conductor/      # Planning methodology (includes /conductor-design, CODEMAPS generation)
-  design/         # Double Diamond design sessions (ds trigger)
+  design/         # Double Diamond design sessions (ds trigger), includes party-mode
+  session-compaction/  # Session context compression
   ...             # TDD, debugging, code review, etc.
-commands/         # Slash command definitions (.md files)
-workflows/        # Workflow definitions
-  party-mode/     # Multi-agent collaborative design review (A/P/C [P] option)
 lib/              # Shared utilities (skills-core.js)
 .claude-plugin/   # Plugin manifest (plugin.json, marketplace.json)
 conductor/        # Unified save location for plans and tracks
@@ -214,8 +212,8 @@ Run `scripts/beads-metrics-summary.sh` for weekly summary.
 
 - [Beads Facade](skills/conductor/references/beads-facade.md) - API contract
 - [Beads Integration](skills/conductor/references/beads-integration.md) - All 13 integration points
-- [Preflight Workflow](workflows/conductor/preflight-beads.md) - Session initialization
-- [Session Workflow](workflows/conductor/beads-session.md) - Claim/close/sync protocol
+- [Preflight Workflow](skills/conductor/references/conductor/preflight-beads.md) - Session initialization
+- [Session Workflow](skills/conductor/references/conductor/beads-session.md) - Claim/close/sync protocol
 
 <!-- end-bv-agent-instructions -->
 
@@ -246,7 +244,7 @@ Before dispatching parallel subagents:
 2. Inject coordination block into Task prompts
 3. Release reservations after completion
 
-See [workflows/agent-coordination/](workflows/agent-coordination/) for full protocol.
+See [skills/dispatching-parallel-agents/references/agent-coordination/](skills/dispatching-parallel-agents/references/agent-coordination/) for full protocol.
 
 ### Failure Handling
 

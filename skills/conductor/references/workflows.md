@@ -262,7 +262,7 @@ Append to `conductor/tracks.md`:
 ---
 
 ## [ ] Track: [Description]
-*Link: [conductor/tracks/<track_id>/](conductor/tracks/<track_id>/)*
+*Link: [conductor/tracks/<track_id>/](../../../conductor/tracks/<track_id>/)*
 ```
 
 ### 8. Announce
@@ -274,7 +274,7 @@ Append to `conductor/tracks.md`:
 
 **Trigger:** `/conductor-implement [track_id]` or `/conductor-implement Start epic <epic-id>`
 
-**Authoritative Source:** See [commands/conductor-implement.md](../../../commands/conductor-implement.md) for complete execution steps.
+**Authoritative Source:** See [Implement Workflow](workflows/implement.md) for complete execution steps.
 
 ### Summary
 
@@ -469,7 +469,7 @@ Create/append to `conductor/tracks/<track_id>/revisions.md`:
    - Modified tasks: Update description
 4. Add revision marker at top of updated files:
    ```markdown
-   > **Last Revised:** [Date] - See [revisions.md](revisions.md) for history
+   > **Last Revised:** [Date] - See [revisions.md](./revisions.md) for history
    ```
 
 ### 6. Commit

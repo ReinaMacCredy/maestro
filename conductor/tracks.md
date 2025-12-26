@@ -12,6 +12,10 @@ Master list of all development tracks.
 
 *Completed tracks are archived to `conductor/archive/`.*
 
+## [x] Track: Spec-Compliant Skills-Only Architecture Migration
+*ID: spec-compliant-migration_20251226*
+*Archived: [conductor/archive/spec-compliant-migration_20251226/](conductor/archive/spec-compliant-migration_20251226/)*
+
 ## [x] Track: Integrate agent_mail MCP into Workflow
 *ID: agent-coordination_20251224*
 *Archived: [conductor/archive/agent-coordination_20251224/](conductor/archive/agent-coordination_20251224/)*

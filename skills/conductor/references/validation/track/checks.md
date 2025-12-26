@@ -117,7 +117,7 @@ fi
 
 All JSON files must be parseable. HALT on corruption.
 
-**Scope:** This step validates parseability and required fields only. Full JSON schema validation (against `workflows/schemas/*.json`) is the responsibility of higher-level tooling like `/conductor-validate`.
+**Scope:** This step validates parseability and required fields only. Full JSON schema validation (against `skills/conductor/references/workflows/schemas/*.json`) is the responsibility of higher-level tooling like `/conductor-validate`.
 
 ```bash
 for json_file in "$TRACK_DIR"/*.json "$TRACK_DIR"/.*json; do
