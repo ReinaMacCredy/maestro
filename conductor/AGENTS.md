@@ -29,6 +29,8 @@ Contains reusable learnings from completed tracks.
 - `bd close <id> --reason completed|skipped|blocked` - Close with explicit reason
 - `bv --robot-status` - Check Village MCP status (use --robot-* flags to avoid TUI hang)
 - `/conductor-implement --tdd` - Enable RED/GREEN/REFACTOR checkpoint tracking
+- `wc -l <file>.csv` - Verify CSV row counts match upstream when syncing data files
+- `curl -s https://raw.githubusercontent.com/.../file.csv` - Sync CSV data directly from upstream repo
 
 ## Gotchas
 

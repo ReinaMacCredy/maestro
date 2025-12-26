@@ -1,0 +1,182 @@
+# Party Mode Agent Manifest
+# Registry of all available agents for multi-perspective design sessions
+
+version: "1.0"
+
+modules:
+  product:
+    description: Product strategy, user experience, and market analysis
+    agents: [pm, analyst, ux]
+  technical:
+    description: Architecture, implementation, quality, and documentation
+    agents: [architect, developer, qa, docs]
+  creative:
+    description: Ideation, storytelling, design thinking, and problem solving
+    agents: [storyteller, brainstorm, design-thinking, strategist, solver]
+
+agents:
+  # === Product Module ===
+  - id: pm
+    name: John
+    icon: 📋
+    module: product
+    path: agents/product/pm.md
+    expertise:
+      - product strategy
+      - roadmaps
+      - prioritization
+      - stakeholder management
+      - business value
+      - MVP scoping
+
+  - id: analyst
+    name: Mary
+    icon: 📊
+    module: product
+    path: agents/product/analyst.md
+    expertise:
+      - data analysis
+      - metrics
+      - user research
+      - market insights
+      - A/B testing
+      - quantitative reasoning
+
+  - id: ux
+    name: Sally
+    icon: 🎨
+    module: product
+    path: agents/product/ux.md
+    expertise:
+      - user experience
+      - usability
+      - accessibility
+      - user research
+      - prototyping
+      - interaction design
+
+  # === Technical Module ===
+  - id: architect
+    name: Winston
+    icon: 🏗️
+    module: technical
+    path: agents/technical/architect.md
+    expertise:
+      - system design
+      - distributed systems
+      - scalability
+      - tech debt
+      - architecture patterns
+      - data modeling
+
+  - id: developer
+    name: Amelia
+    icon: 💻
+    module: technical
+    path: agents/technical/developer.md
+    expertise:
+      - implementation
+      - code quality
+      - developer experience
+      - pragmatism
+      - debugging
+      - tooling
+
+  - id: qa
+    name: Murat
+    icon: 🧪
+    module: technical
+    path: agents/technical/qa.md
+    expertise:
+      - testing strategy
+      - edge cases
+      - quality gates
+      - risk assessment
+      - automation
+      - regression prevention
+
+  - id: docs
+    name: Paige
+    icon: 📚
+    module: technical
+    path: agents/technical/docs.md
+    expertise:
+      - documentation
+      - API design
+      - developer onboarding
+      - clarity
+      - technical writing
+      - examples
+
+  # === Creative Module ===
+  - id: storyteller
+    name: Sophia
+    icon: 📖
+    module: creative
+    path: agents/creative/storyteller.md
+    expertise:
+      - narrative
+      - user stories
+      - communication
+      - empathy
+      - emotional design
+      - change management
+
+  - id: brainstorm
+    name: Carson
+    icon: 🧠
+    module: creative
+    path: agents/creative/brainstorm.md
+    expertise:
+      - ideation
+      - lateral thinking
+      - what-if scenarios
+      - volume over quality
+      - breaking constraints
+      - wild ideas
+
+  - id: design-thinking
+    name: Maya
+    icon: 🎯
+    module: creative
+    path: agents/creative/design-thinking.md
+    expertise:
+      - design methodology
+      - problem framing
+      - human-centered design
+      - prototyping
+      - iteration
+      - empathy mapping
+
+  - id: strategist
+    name: Victor
+    icon: ⚡
+    module: creative
+    path: agents/creative/strategist.md
+    expertise:
+      - business strategy
+      - competitive analysis
+      - positioning
+      - market timing
+      - partnerships
+      - go-to-market
+
+  - id: solver
+    name: Dr. Quinn
+    icon: 🔬
+    module: creative
+    path: agents/creative/solver.md
+    expertise:
+      - problem decomposition
+      - root cause analysis
+      - systematic solutions
+      - first principles
+      - debugging mindset
+      - scientific method
+
+# Custom Agent Discovery
+custom:
+  directory: custom/
+  template: custom/_template.md
+  auto_discover: true
+  module_tag: custom

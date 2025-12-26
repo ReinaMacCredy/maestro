@@ -1,0 +1,14 @@
+# Default Party Mode Team Configuration
+# Balanced team for general design sessions
+
+team_name,description,agents
+default,Balanced team for general design sessions,"pm,architect,dev"
+product-focused,Product strategy and user focus,"pm,analyst,ux-designer"
+technical-deep,Technical architecture and implementation,"architect,dev,tea"
+creative-exploration,Ideation and creative problem solving,"brainstorming-coach,design-thinking-coach,storyteller"
+innovation-strategy,Strategic innovation and business impact,"pm,innovation-strategist,analyst"
+quality-focused,Testing and documentation excellence,"tea,tech-writer,dev"
+rapid-delivery,Fast MVP and quick iterations,"quick-flow-solo-dev,dev,pm"
+presentation-ready,Pitch and presentation preparation,"presentation-master,storyteller,pm"
+problem-solving,Root cause analysis and systematic solutions,"creative-problem-solver,architect,analyst"
+full-stack-review,End-to-end technical review,"architect,dev,tea,tech-writer"
