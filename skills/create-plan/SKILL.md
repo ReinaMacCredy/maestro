@@ -1,10 +1,10 @@
 ---
 name: create-plan
-version: "1.0.0"
 description: Create a concise, actionable plan. Use when user explicitly asks for a plan related to a coding task.
 license: Apache-2.0
 compatibility: Works with Claude Code, Amp Code, Codex, and any Agent Skills compatible CLI
 metadata:
+  version: "1.0.0"
   short-description: Create a plan
   keywords:
     - plan

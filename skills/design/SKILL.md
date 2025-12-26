@@ -1,10 +1,10 @@
 ---
 name: design
-version: "2.3.0"
 description: Design Session - collaborative brainstorming to turn ideas into designs using Double Diamond methodology. Use when user types "ds" or wants to explore/design a feature before implementation.
 license: Apache-2.0
 compatibility: Works with Claude Code, Amp Code, Codex, and any Agent Skills compatible CLI
 metadata:
+  version: "2.3.0"
   keywords:
     - brainstorming
     - design

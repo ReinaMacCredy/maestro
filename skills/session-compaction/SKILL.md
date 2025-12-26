@@ -1,17 +1,20 @@
 ---
 name: session-compaction
-version: 1.0.0
 description: Compress session context using anchored iterative summarization. Use when context is getting long, before ending a session, or when you need to create a resumable checkpoint.
-triggers:
-  - compact
-  - /compact
-  - session compact
-  - compress context
+metadata:
+  version: "1.0.0"
 ---
 
 # Session Compaction
 
 Compress current session context using anchored iterative summarization.
+
+## Triggers
+
+- `compact`
+- `/compact`
+- `session compact`
+- `compress context`
 
 ## Usage
 

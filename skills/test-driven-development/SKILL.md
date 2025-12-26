@@ -1,7 +1,8 @@
 ---
 name: test-driven-development
-version: "1.1.2"
 description: Use when implementing any feature or bugfix, before writing implementation code
+metadata:
+  version: "1.1.2"
 ---
 
 # Test-Driven Development (TDD)

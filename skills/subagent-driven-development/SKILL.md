@@ -1,7 +1,8 @@
 ---
 name: subagent-driven-development
-version: "1.1.2"
 description: Use when executing implementation plans with independent tasks in the current session
+metadata:
+  version: "1.1.2"
 ---
 
 # Subagent-Driven Development

@@ -1,10 +1,10 @@
 ---
 name: conductor
-version: "1.6.0"
 description: Context-driven development methodology. Understands projects set up with Conductor (via Gemini CLI, Claude Code, Amp Code, Codex, or any Agent Skills compatible CLI). Use when working with conductor/ directories, tracks, specs, plans, or when user mentions context-driven development.
 license: Apache-2.0
 compatibility: Works with Claude Code, Gemini CLI, Amp Code, Codex, and any Agent Skills compatible CLI
 metadata:
+  version: "1.6.0"
   author: "Gemini CLI Extensions"
   repository: "https://github.com/gemini-cli-extensions/conductor"
   keywords:
