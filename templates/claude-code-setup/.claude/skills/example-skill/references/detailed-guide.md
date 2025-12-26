@@ -8,7 +8,7 @@ Reference files provide detailed documentation that the main SKILL.md can link t
 
 ## Pattern
 
-```
+```text
 skills/
   your-skill/
     SKILL.md           # Entry point (~100 lines max)

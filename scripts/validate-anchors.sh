@@ -43,7 +43,8 @@ while IFS= read -r file; do
         
         if ! grep -qiE "^#+[[:space:]]+.*$(echo "$anchor" | sed 's/-/ /g')" "$target" 2>/dev/null; then
             # Also check for exact anchor match in raw form
-            if ! grep -qiE "^#+[[:space:]]+" "$target" 2>/dev/null | grep -qi "${anchor//-/ }"; then
+            headings=$(grep -iE "^#+[[:space:]]+" "$target" 2>/dev/null || true)
+            if ! echo "$headings" | grep -qi "${anchor//-/ }"; then
                 # Relaxed check: just see if the anchor text appears in any heading
                 anchor_pattern=$(echo "$anchor" | sed 's/-/.*/g')
                 if ! grep -qiE "^#+[[:space:]]+.*$anchor_pattern" "$target" 2>/dev/null; then
@@ -56,9 +57,9 @@ while IFS= read -r file; do
 done < <(find "$DIR" -name "*.md" -type f 2>/dev/null)
 
 if [[ $ERRORS -eq 0 ]]; then
-    echo "✓ All anchors valid"
+    echo "All anchors valid"
     exit 0
 else
-    echo "✗ Found $ERRORS broken anchors"
+    echo "Found $ERRORS broken anchors"
     exit 1
 fi

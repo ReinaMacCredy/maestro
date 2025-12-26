@@ -2,7 +2,7 @@
   "track_id": "spec-compliant-migration_20251226",
   "title": "Spec-Compliant Skills-Only Architecture Migration",
   "type": "refactor",
-  "status": "planned",
+  "status": "completed",
   "created_at": "2025-12-26T00:00:00Z",
   "updated_at": "2025-12-26T00:00:00Z",
   "thread_ids": {

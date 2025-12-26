@@ -161,7 +161,7 @@ Key decisions from the design session:
 - Merge all 3 skills into 1 thin skill entry point at skills/beads/SKILL.md
 - Move all logic to skills/beads/references/ directory
 - Rename file-beads.md to FILE_BEADS.md and review-beads.md to REVIEW_BEADS.md
-- Put FILE_BEADS.md and REVIEW_BEADS.md inside skills/beads/references/references/
+- Put FILE_BEADS.md and REVIEW_BEADS.md inside skills/beads/references/
 - Keep workflow.md lowercase (main entry point), UPPERCASE for supporting docs
 - Delete skills/file-beads/, skills/review-beads/ after migration
 - Update 14 documentation files that reference file-beads/review-beads
@@ -169,8 +169,8 @@ Key decisions from the design session:
 Final structure:
 - skills/beads/SKILL.md - thin stub with Entry Points table
 - skills/beads/references/workflow.md - main beads logic (bd trigger)
-- skills/beads/references/references/FILE_BEADS.md - fb logic
-- skills/beads/references/references/REVIEW_BEADS.md - rb logic
+- skills/beads/references/FILE_BEADS.md - fb logic
+- skills/beads/references/REVIEW_BEADS.md - rb logic
 
 5 epics created:
 - my-workflow:3-9f7: Create Workflow Structure (6 tasks)

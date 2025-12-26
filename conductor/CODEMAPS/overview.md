@@ -11,7 +11,7 @@ AI workflow plugin for structured development: planning (Conductor), issue track
 | `/conductor-implement` | Execute tasks with TDD |
 | `/conductor-finish` | Complete track, extract learnings, archive |
 | `fb` / `rb` | File/review beads from plan |
-| `skills/agent-coordination/` | Multi-agent file coordination (optional) |
+| `skills/dispatching-parallel-agents/` | Multi-agent file coordination (optional) |
 
 ## Directory Structure
 
@@ -83,7 +83,7 @@ Zero manual `bd` commands in the happy path:
 | Add a skill | Create `skills/<name>/SKILL.md` with frontmatter + `references/` |
 | Add workflow docs | Add to `skills/<skill>/references/*.md` |
 | Regenerate CODEMAPS | `/conductor-finish` (Phase 6: CODEMAPS Regeneration) |
-| Coordinate parallel agents | See `skills/agent-coordination/` (optional, requires agent_mail MCP) |
+| Coordinate parallel agents | See `skills/dispatching-parallel-agents/references/agent-coordination/` (optional, requires agent_mail MCP) |
 
 ## Gotchas
 

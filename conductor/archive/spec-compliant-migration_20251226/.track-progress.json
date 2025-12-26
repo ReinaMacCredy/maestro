@@ -1,6 +1,6 @@
 {
   "trackId": "spec-compliant-migration_20251226",
-  "status": "plan_done",
+  "status": "complete",
   "currentPhase": "beads",
   "phases": {
     "design": "complete",

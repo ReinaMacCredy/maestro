@@ -39,9 +39,9 @@ while IFS= read -r file; do
 done < <(find "$DIR" -name "*.md" -type f 2>/dev/null)
 
 if [[ $ERRORS -eq 0 ]]; then
-    echo "✓ All links valid"
+    echo "All links valid"
     exit 0
 else
-    echo "✗ Found $ERRORS broken links"
+    echo "Found $ERRORS broken links"
     exit 1
 fi
