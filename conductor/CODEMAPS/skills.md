@@ -30,7 +30,28 @@ Instructions for the agent...
 CORE WORKFLOW          DEVELOPMENT              UTILITIES
 ├── conductor          ├── test-driven-dev      ├── codemaps
 ├── design             ├── using-git-worktrees  ├── dispatching-parallel-agents
-└── beads              └── finishing-branch     └── subagent-driven-dev
+│   └── bmad/          └── finishing-branch     └── subagent-driven-dev
+└── beads
+```
+
+## BMAD Integration (skills/design/references/bmad/)
+
+```
+bmad/
+├── agents/            # 16 expert agents
+│   ├── core/          # BMad Master (orchestrator)
+│   ├── bmm/           # 9 business/management agents
+│   └── cis/           # 6 creative/innovation agents
+├── workflows/         # 6 CIS workflows
+│   ├── party-mode/    # Multi-agent collaboration
+│   ├── brainstorming/ # 62 ideation techniques
+│   ├── design-thinking/
+│   ├── innovation-strategy/
+│   ├── problem-solving/
+│   └── storytelling/
+├── config.yaml        # Maestro-specific settings
+├── manifest.yaml      # Agent registry (16 agents)
+└── adapter.md         # Path transforms for upstream sync
 ```
 
 ## Adding a Skill
