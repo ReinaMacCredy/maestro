@@ -143,7 +143,7 @@ trace                              # Root cause tracing (external: superpowers)
 | ----------------- | ------------------------------------------------------------------------------------------------------------- |
 | **Core Workflow** | conductor, design (Double Diamond + Party Mode), beads                                                        |
 | **Development**   | test-driven-development, using-git-worktrees, finishing-a-development-branch                                  |
-| **Utilities**     | dispatching-parallel-agents, subagent-driven-development, [agent-coordination](workflows/agent-coordination/) |
+| **Utilities**     | dispatching-parallel-agents, subagent-driven-development, session-compaction                                  |
 | **Meta**          | verification-before-completion, writing-skills, sharing-skills                                                |
 
 ---
@@ -157,7 +157,7 @@ trace                              # Root cause tracing (external: superpowers)
 **Design Sessions (Double Diamond)**: `/conductor-design` (or `ds` trigger) runs a Double Diamond design session with four phases: DISCOVER → DEFINE → DEVELOP → DELIVER. Each phase ends with A/P/C checkpoints:
 
 - **[A] Advanced**: Deeper analysis, assumption audit
-- **[P] Party**: Multi-agent collaborative review (see `workflows/party-mode/`)
+- **[P] Party**: Multi-agent collaborative review (see `skills/design/references/party-mode/`)
 - **[C] Continue**: Proceed to next phase
 
 ```mermaid
@@ -715,14 +715,13 @@ maestro/
 ├── TUTORIAL.md            # Complete workflow guide
 ├── AGENTS.md              # Agent instructions
 ├── skills/                # Skill directories (conductor, design, beads, tdd, etc.)
-│   ├── conductor/         # Planning methodology
-│   ├── design/            # Design sessions (ds trigger)
+│   ├── conductor/         # Planning methodology with references/
+│   ├── design/            # Design sessions (ds trigger) with party-mode/
 │   ├── beads/             # Issue tracking (fb, rb triggers)
+│   ├── session-compaction/# Session context compression
 │   ├── test-driven-development/
 │   └── ...                # See SETUP_GUIDE.md for full list
-├── commands/              # 25+ slash commands
 ├── agents/                # Agent definitions
-├── workflows/             # Workflow definitions
 ├── hooks/                 # Lifecycle hooks
 ├── lib/                   # Shared utilities
 └── templates/             # Templates

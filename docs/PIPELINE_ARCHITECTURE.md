@@ -566,6 +566,6 @@ flowchart TB
 
 - [README.md](../README.md) - Overview and installation
 - [TUTORIAL.md](../TUTORIAL.md) - Complete workflow guide
-- [workflows/party-mode/workflow.md](../workflows/party-mode/workflow.md) - Party Mode details
+- [skills/design/references/party-mode/workflow.md](../skills/design/references/party-mode/workflow.md) - Party Mode details
 - [skills/design/SKILL.md](../skills/design/SKILL.md) - Double Diamond methodology
 - [skills/dispatching-parallel-agents/SKILL.md](../skills/dispatching-parallel-agents/SKILL.md) - Parallel dispatch

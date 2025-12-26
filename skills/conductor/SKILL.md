@@ -74,7 +74,7 @@ DELIVER (Converge)  →  Plan               design.md finalized
 At the end of each phase, users choose:
 
 - **[A] Advanced** - Deeper analysis, assumption audit
-- **[P] Party** - Multi-agent feedback (see `workflows/party-mode/`)
+- **[P] Party** - Multi-agent feedback (see `../design/references/party-mode/`)
 - **[C] Continue** - Proceed to next phase
 - **[↩ Back]** - Return to previous phase
 
@@ -167,9 +167,9 @@ Subagents return structured results; main agent centralizes writes.
 
 ### References
 
-- [Beads Facade](skills/conductor/references/beads-facade.md) - API contract
-- [Beads Integration](skills/conductor/references/beads-integration.md) - All 13 integration points
-- [Preflight Workflow](workflows/conductor/preflight-beads.md) - Preflight details
+- [Beads Facade](references/beads-facade.md) - API contract
+- [Beads Integration](references/beads-integration.md) - All 13 integration points
+- [Preflight Workflow](references/conductor/preflight-beads.md) - Preflight details
 
 ## Slash Commands
 

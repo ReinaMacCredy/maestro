@@ -19,9 +19,9 @@
 ```
 maestro/
 ├── skills/                # Skill directories (SKILL.md + references/)
-├── commands/              # Slash command definitions (.md)
+├── skills/conductor/references/commands/              # Slash command definitions (.md)
 ├── agents/                # Agent definitions
-├── workflows/             # Workflow definitions
+├── skills/conductor/references/workflows/             # Workflow definitions
 │   └── party-mode/        # Multi-agent design feedback (agents, manifest, workflow)
 ├── hooks/                 # Lifecycle hooks
 ├── lib/                   # Shared utilities

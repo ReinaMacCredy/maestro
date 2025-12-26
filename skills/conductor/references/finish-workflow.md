@@ -568,7 +568,7 @@ Run /conductor-setup to generate initial CODEMAPS.
 
 ### State File
 
-Schema: `workflows/schemas/finish_state.schema.json`
+Schema: `skills/conductor/references/schemas/finish_state.schema.json`
 
 Create `finish-state.json` at workflow start:
 

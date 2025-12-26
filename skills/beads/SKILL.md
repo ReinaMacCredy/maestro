@@ -15,11 +15,11 @@ Graph-based issue tracker that survives conversation compaction. Provides persis
 
 ## Entry Points
 
-| Trigger | Workflow | Action |
-|---------|----------|--------|
-| `bd`, `beads` | `workflows/beads/workflow.md` | Core CLI operations |
-| `fb`, `file-beads` | `workflows/beads/references/FILE_BEADS.md` | File beads from plan |
-| `rb`, `review-beads` | `workflows/beads/references/REVIEW_BEADS.md` | Review filed beads |
+| Trigger | Reference | Action |
+|---------|-----------|--------|
+| `bd`, `beads` | `references/workflow.md` | Core CLI operations |
+| `fb`, `file-beads` | `references/FILE_BEADS.md` | File beads from plan |
+| `rb`, `review-beads` | `references/REVIEW_BEADS.md` | Review filed beads |
 
 ## Load Workflow
 
@@ -130,9 +130,9 @@ See [Beads Integration](../conductor/references/beads-integration.md) for all 13
 
 ## Full Documentation
 
-For complete instructions, load the workflow file: `workflows/beads/workflow.md`
+For complete instructions, load the workflow file: `references/workflow.md`
 
-Reference files in `workflows/beads/references/`:
+Reference files in `references/`:
 - `AGENTS.md` - Agent integration patterns
 - `BOUNDARIES.md` - Scope and boundary rules
 - `CLI_REFERENCE.md` - Complete command syntax

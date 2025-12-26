@@ -11,15 +11,15 @@ AI workflow plugin for structured development: planning (Conductor), issue track
 | `/conductor-implement` | Execute tasks with TDD |
 | `/conductor-finish` | Complete track, extract learnings, archive |
 | `fb` / `rb` | File/review beads from plan |
-| `workflows/agent-coordination/` | Multi-agent file coordination (optional) |
+| `skills/agent-coordination/` | Multi-agent file coordination (optional) |
 
 ## Directory Structure
 
 ```
 maestro/
 ├── skills/           # 15 skill directories (SKILL.md each)
-├── commands/         # Slash command definitions (.md)
-├── workflows/        # Multi-step workflow definitions
+├── skills/conductor/references/commands/         # Slash command definitions (.md)
+├── skills/        # Multi-step workflow definitions
 ├── conductor/        # Project context + tracks
 │   ├── product.md, tech-stack.md, workflow.md
 │   ├── CODEMAPS/     # Architecture documentation (this directory)
@@ -73,9 +73,9 @@ Zero manual `bd` commands in the happy path:
 | Execute task | `/conductor-implement` (auto-claims from beads) |
 | Complete track | `/conductor-finish` (extracts learnings, archives) |
 | Add a skill | Create `skills/<name>/SKILL.md` with frontmatter |
-| Add a command | Create `commands/<name>.md` |
+| Add a command | Create `skills/conductor/references/commands/<name>.md` |
 | Regenerate CODEMAPS | `/conductor-finish` (Phase 6: CODEMAPS Regeneration) |
-| Coordinate parallel agents | See `workflows/agent-coordination/` (optional, requires agent_mail MCP) |
+| Coordinate parallel agents | See `skills/agent-coordination/` (optional, requires agent_mail MCP) |
 
 ## Gotchas
 

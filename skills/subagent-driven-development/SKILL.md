@@ -241,7 +241,7 @@ Done!
 
 When agent_mail MCP is available, the coordinator can reserve files before dispatching subagents.
 
-See [workflows/agent-coordination/patterns/parallel-dispatch.md](../../workflows/agent-coordination/patterns/parallel-dispatch.md) for the reserve → dispatch → release flow.
+See [../dispatching-parallel-agents/references/agent-coordination/patterns/parallel-dispatch.md](../dispatching-parallel-agents/references/agent-coordination/patterns/parallel-dispatch.md) for the reserve → dispatch → release flow.
 
 **Key points:**
 - Coordinator reserves files before dispatch

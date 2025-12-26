@@ -7,8 +7,8 @@ The planning and execution methodology.
 | File | Responsibility |
 |------|----------------|
 | `skills/conductor/SKILL.md` | Main conductor skill |
-| `commands/conductor-*.md` | Slash command definitions |
-| `workflows/*.md` | Multi-step workflow implementations |
+| `skills/conductor/references/commands/conductor-*.md` | Slash command definitions |
+| `skills/conductor/references/*.md` | Multi-step workflow implementations |
 | `conductor/` | Project-specific context storage |
 
 ## Conductor Directory Structure

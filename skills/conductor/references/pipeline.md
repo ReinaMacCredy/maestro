@@ -93,7 +93,7 @@ The workflow definitions in this directory are designed to be:
 ## Directory Structure
 
 ```
-workflows/
+skills/conductor/references/workflows/
 ├── README.md              # This file
 ├── setup.md               # Project initialization workflow
 ├── newtrack.md            # Track creation workflow
@@ -133,7 +133,7 @@ Reference these workflows in your prompt sections:
 
 ```toml
 prompt = """
-Follow the workflow defined in ~/.gemini/extensions/conductor/workflows/setup.md
+Follow the workflow defined in ~/.gemini/extensions/conductor/skills/conductor/references/workflows/setup.md
 """
 ```
 
@@ -142,7 +142,7 @@ Follow the workflow defined in ~/.gemini/extensions/conductor/workflows/setup.md
 Import the workflow logic in your markdown prompts:
 
 ```markdown
-# Reference: workflows/implement.md
+# Reference: skills/conductor/references/workflows/implement.md
 
 Execute the task implementation workflow as defined.
 ```

@@ -14,11 +14,9 @@ your-project/
     ├── settings.local.json      # Permissions (optional)
     ├── rules/                   # Constraints (auto-loaded)
     │   └── safety.md
-    ├── skills/                  # Capabilities (on-demand)
-    │   └── example-skill/
-    │       └── SKILL.md
-    └── commands/                # Slash commands (user-triggered)
-        └── example.md
+    └── skills/                  # Capabilities and workflows (on-demand)
+        └── example-skill/
+            └── SKILL.md
 ```
 
 ## Quick Start
@@ -29,7 +27,7 @@ your-project/
 # From your project root
 cp path/to/templates/claude-code-setup/CLAUDE.md ./CLAUDE.md
 cp path/to/templates/claude-code-setup/AGENTS.md ./AGENTS.md
-mkdir -p .claude/rules .claude/skills .claude/commands
+mkdir -p .claude/rules .claude/skills
 cp path/to/templates/claude-code-setup/.claude/rules/safety.md .claude/rules/
 ```
 
@@ -85,8 +83,7 @@ git commit -m "Add Claude Code configuration"
 | **Memory** | `CLAUDE.md` | Project context | Auto at startup |
 | **Workflow** | `AGENTS.md` | Agent instructions | Auto at startup |
 | **Rules** | `.claude/rules/*.md` | Constraints | Auto (can filter by path) |
-| **Skills** | `.claude/skills/*/SKILL.md` | Capabilities | When relevant |
-| **Commands** | `.claude/commands/*.md` | Workflows | On `/command` |
+| **Skills** | `.claude/skills/*/SKILL.md` | Capabilities and workflows | When relevant |
 
 ---
 
@@ -196,5 +193,4 @@ Do something with the arguments...
 | Session workflow | `AGENTS.md` | Agent behavior |
 | Safety constraints | `.claude/rules/` | Always enforced |
 | Coding conventions | `.claude/rules/` | Path-specific |
-| Detailed style guide | `.claude/skills/` | Auto-discovered |
-| Code generators | `.claude/commands/` | User-triggered |
+| Detailed workflows | `.claude/skills/` | Auto-discovered |

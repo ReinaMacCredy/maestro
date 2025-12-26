@@ -54,7 +54,6 @@ Before running destructive commands:
 | `AGENTS.md` | This file - workflow instructions | Session startup, tool usage |
 | `.claude/rules/` | Constraints and conventions | Auto-loaded, always follow |
 | `.claude/skills/` | Detailed guides and capabilities | Reference when relevant |
-| `.claude/commands/` | Slash commands | Invoke with `/command-name` |
 
 ### Rules (Auto-Loaded)
 
@@ -65,11 +64,6 @@ Rules in `.claude/rules/*.md` are automatically enforced:
 
 Skills in `.claude/skills/*/SKILL.md` provide detailed guidance:
 - [List your skills here]
-
-### Commands (User-Triggered)
-
-Slash commands in `.claude/commands/*.md`:
-- [List your commands here]
 
 ---
 

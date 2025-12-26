@@ -110,7 +110,7 @@ After loading context, evaluate task complexity to determine routing:
 - User can type `[E]` during SPEED mode to escalate to FULL
 - Escalation preserves current progress and enters DEFINE phase
 
-See [design-routing-heuristics.md](../../workflows/context-engineering/references/design-routing-heuristics.md) for full scoring details.
+See [design-routing-heuristics.md](references/design-routing-heuristics.md) for full scoring details.
 
 ### SPEED Mode Flow
 
@@ -355,7 +355,7 @@ Phase-specific deep dives:
 
 ### [P] Party Mode
 
-Invokes multi-agent collaborative review. See `workflows/party-mode/workflow.md`.
+Invokes multi-agent collaborative review. See `references/party-mode/workflow.md`.
 
 Selects 3 relevant agents based on topic:
 

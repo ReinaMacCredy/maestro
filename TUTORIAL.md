@@ -113,7 +113,7 @@ Continuing work from thread T-019b5488-3fb5-732f-821f-3c52476097da.
 
 Key decisions from design:
 - Merge all 3 skills into 1 thin skill entry point at skills/beads/SKILL.md
-- Move all logic to workflows/beads/ directory
+- Move all logic to skills/beads/references/ directory
 - Keep workflow.md lowercase (main entry point), UPPERCASE for supporting docs
 - Delete skills/file-beads/, skills/review-beads/ after migration
 
@@ -124,7 +124,7 @@ Key decisions from design:
 - my-workflow:3-2nr: Update Documentation (3 tasks)
 - my-workflow:3-qfm: Verification (5 tasks) - blocked by epics 1-4
 
-First ready task: my-workflow:3-902n - Create workflows/beads/ directory
+First ready task: my-workflow:3-902n - Create skills/beads/references/ directory
 ```
 
 **What makes this effective:**
@@ -159,18 +159,18 @@ I completed a design session (ds) to consolidate 3 beads-related skills
 
 Key decisions from the design session:
 - Merge all 3 skills into 1 thin skill entry point at skills/beads/SKILL.md
-- Move all logic to workflows/beads/ directory
+- Move all logic to skills/beads/references/ directory
 - Rename file-beads.md to FILE_BEADS.md and review-beads.md to REVIEW_BEADS.md
-- Put FILE_BEADS.md and REVIEW_BEADS.md inside workflows/beads/references/
+- Put FILE_BEADS.md and REVIEW_BEADS.md inside skills/beads/references/references/
 - Keep workflow.md lowercase (main entry point), UPPERCASE for supporting docs
 - Delete skills/file-beads/, skills/review-beads/ after migration
 - Update 14 documentation files that reference file-beads/review-beads
 
 Final structure:
 - skills/beads/SKILL.md - thin stub with Entry Points table
-- workflows/beads/workflow.md - main beads logic (bd trigger)
-- workflows/beads/references/FILE_BEADS.md - fb logic
-- workflows/beads/references/REVIEW_BEADS.md - rb logic
+- skills/beads/references/workflow.md - main beads logic (bd trigger)
+- skills/beads/references/references/FILE_BEADS.md - fb logic
+- skills/beads/references/references/REVIEW_BEADS.md - rb logic
 
 5 epics created:
 - my-workflow:3-9f7: Create Workflow Structure (6 tasks)
@@ -533,7 +533,7 @@ When you select `[P]` at an A/P/C checkpoint, Party Mode activates 2-3 expert ag
 | **Technical** | Winston (Architect), Amelia (Developer), Murat (QA), Paige (Docs)                                          |
 | **Creative**  | Sophia (Storyteller), Carson (Brainstorm), Maya (Design Thinking), Victor (Strategist), Dr. Quinn (Solver) |
 
-Agents respond in character, cross-talk, then synthesize insights. See `workflows/party-mode/workflow.md` for details.
+Agents respond in character, cross-talk, then synthesize insights. See `skills/design/references/party-mode/workflow.md` for details.
 
 #### Design Tips: Getting Better Edge Case Coverage
 

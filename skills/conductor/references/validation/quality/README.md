@@ -23,4 +23,4 @@ These rubrics could be used to:
 
 ## History
 
-Moved from `commands/compact/` during `/conductor-finish` integration (2025-12).
+Moved from `skills/conductor/references/commands/compact/` during `/conductor-finish` integration (2025-12).
