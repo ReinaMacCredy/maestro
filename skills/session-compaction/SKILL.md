@@ -1,13 +1,24 @@
-# /compact
+---
+name: session-compaction
+version: 1.0.0
+description: Compress session context using anchored iterative summarization. Use when context is getting long, before ending a session, or when you need to create a resumable checkpoint.
+triggers:
+  - compact
+  - /compact
+  - session compact
+  - compress context
+---
+
+# Session Compaction
 
 Compress current session context using anchored iterative summarization.
 
 ## Usage
 
 ```
-/compact              → compress + save to history/threads/YYYY-MM-DD-HH-MM-compact.md
-/compact path/to.md   → compress + save to custom path
-/compact --verbose    → show full quality scores
+compact              → compress + save to history/threads/YYYY-MM-DD-HH-MM-compact.md
+compact path/to.md   → compress + save to custom path
+compact --verbose    → show full quality scores
 ```
 
 ## Behavior
@@ -90,9 +101,8 @@ Create one question for each probe type based on session content:
 ### Answer and Grade
 
 1. Answer each probe using only the compacted summary
-2. Grade using [judge-prompt.md](./compact/judge-prompt.md) and [rubrics.md](./compact/rubrics.md)
-3. Compute dimension averages across all probes
-4. Compute overall score as unweighted average of 6 dimensions
+2. Grade each dimension on a 1-5 scale
+3. Compute overall score as unweighted average of 6 dimensions
 
 ### Quality Threshold
 
@@ -129,11 +139,3 @@ Key principles from Factory.ai research:
 - Generate probes that reference specific facts from the session
 - Ensure `history/threads/` directory exists before saving
 - Timestamp format: YYYY-MM-DD-HH-MM (24-hour, no seconds)
-
-## Replaces
-
-This command supersedes:
-- `commands/session-start.md` - No longer needed
-- `commands/session-end.md` - No longer needed
-
-Single unified command handles all session context management.
