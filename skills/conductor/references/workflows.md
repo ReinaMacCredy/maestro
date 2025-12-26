@@ -262,7 +262,7 @@ Append to `conductor/tracks.md`:
 ---
 
 ## [ ] Track: [Description]
-*Link: [conductor/tracks/<track_id>/](../../../conductor/tracks/)*
+*Link: [conductor/tracks/<track_id>/](../../../conductor/tracks/<track_id>/)*
 ```
 
 ### 8. Announce
@@ -274,7 +274,7 @@ Append to `conductor/tracks.md`:
 
 **Trigger:** `/conductor-implement [track_id]` or `/conductor-implement Start epic <epic-id>`
 
-**Authoritative Source:** See [commands/conductor-implement.md](./workflows/implement.md) for complete execution steps.
+**Authoritative Source:** See [Implement Workflow](workflows/implement.md) for complete execution steps.
 
 ### Summary
 
