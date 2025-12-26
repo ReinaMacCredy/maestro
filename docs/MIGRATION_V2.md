@@ -109,9 +109,9 @@ If you have custom tooling referencing old paths:
 After migration, verify:
 
 ```bash
-# Should return 0 results (excluding migration docs)
-rg "workflows/" --type md | grep -v "MIGRATION"
-rg "commands/" --type md | grep -v "MIGRATION"
+# Check active paths only (archive and CHANGELOG may contain historical references)
+rg "workflows/" skills docs README.md AGENTS.md --type md | grep -v "MIGRATION"
+rg "commands/" skills docs README.md AGENTS.md --type md | grep -v "MIGRATION"
 
 # Validate plugin
 cat .claude-plugin/plugin.json | jq .
@@ -119,6 +119,8 @@ cat .claude-plugin/plugin.json | jq .
 # Check links
 ./scripts/validate-links.sh .
 ```
+
+> **Note:** References in `conductor/archive/`, `CHANGELOG.md`, and architecture samples are expected—these document historical states and don't affect runtime.
 
 ## Rollback
 

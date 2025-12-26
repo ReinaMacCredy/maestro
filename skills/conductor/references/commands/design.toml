@@ -9,7 +9,7 @@ CRITICAL RULES:
 2. Present A/P/C menu at every checkpoint
 3. Support loop-back: user can say "revisit [phase]" anytime
 4. Ground at phase transitions, not just at end
-5. Load Party Mode from `workflows/party-mode/workflow.md` when [P] selected
+5. Load Party Mode from `skills/design/references/party-mode/workflow.md` when [P] selected
 
 ## 1.1 SETUP CHECK
 
@@ -181,7 +181,7 @@ Announce: "✓ Grounding complete. Design verified against codebase."
 
 When user selects **[P]**:
 
-1. **Load:** Read `workflows/party-mode/workflow.md`
+1. **Load:** Read `skills/design/references/party-mode/workflow.md`
 2. **Select Agents:** Pick 2-3 based on context:
 
 | Context | Primary | Secondary | Tertiary |
@@ -213,7 +213,7 @@ When user says "external" or "external party":
 3. User pastes synthesis back
 4. Continue main flow with insights
 
-See `workflows/party-mode/workflow.md` § "External Mode" for details.
+See `skills/design/references/party-mode/workflow.md` § "External Mode" for details.
 
 ---
 

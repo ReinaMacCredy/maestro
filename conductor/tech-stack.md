@@ -16,20 +16,24 @@
 
 ## Directory Structure
 
+> **Note:** References to `commands/` and `workflows/` below are skill-local subdirectories under `skills/conductor/references/`, not the deprecated top-level directories removed in v2.0.
+
 ```
 maestro/
-├── skills/                # Skill directories (SKILL.md + references/)
-├── skills/conductor/references/commands/              # Slash command definitions (.md)
-├── agents/                # Agent definitions
-├── skills/conductor/references/workflows/             # Workflow definitions
-│   └── party-mode/        # Multi-agent design feedback (agents, manifest, workflow)
-├── hooks/                 # Lifecycle hooks
-├── lib/                   # Shared utilities
-├── templates/             # Templates
-├── conductor/             # Planning output (tracks, plans, archive)
-├── .beads/                # Beads issue tracking data
-├── .claude-plugin/        # Plugin manifest
-└── .codex/                # Codex configuration
+├── skills/                          # Skill directories (SKILL.md + references/)
+│   ├── conductor/references/
+│   │   ├── commands/                # Command definitions (.toml)
+│   │   └── workflows/               # Workflow definitions
+│   └── design/references/
+│       └── party-mode/              # Multi-agent design feedback
+├── agents/                          # Agent definitions
+├── hooks/                           # Lifecycle hooks
+├── lib/                             # Shared utilities
+├── templates/                       # Templates
+├── conductor/                       # Planning output (tracks, plans, archive)
+├── .beads/                          # Beads issue tracking data
+├── .claude-plugin/                  # Plugin manifest
+└── .codex/                          # Codex configuration
 ```
 
 ## Compatible Agents
