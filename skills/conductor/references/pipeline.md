@@ -50,7 +50,7 @@ flowchart TB
         end
     end
 
-    subgraph BMAD["PARTY MODE: 12 BMAD AGENTS"]
+    subgraph BMAD["PARTY MODE: 16 BMAD AGENTS"]
         PRODUCT["Product: John (PM), Mary (Analyst), Sally (UX)"]
         TECHNICAL["Technical: Winston (Architect), Amelia (Developer), Murat (QA), Paige (Docs)"]
         CREATIVE["Creative: Sophia, Carson, Maya, Victor, Dr. Quinn"]
@@ -103,9 +103,9 @@ skills/conductor/references/workflows/
 ├── revert.md              # Git-aware revert workflow
 ├── validate.md            # Project validation workflow
 ├── revise.md              # Spec/plan revision workflow
-├── party-mode/            # Multi-agent collaborative review
+├── bmad/                  # Multi-agent collaborative review
 │   ├── workflow.md        # Party Mode orchestration
-│   └── agents/            # 12 BMAD agent definitions
+│   └── agents/            # 16 BMAD agent definitions
 ├── agent-coordination/    # Multi-agent file coordination (via agent_mail MCP)
 │   ├── workflow.md        # Core protocol
 │   ├── patterns/          # parallel-dispatch, subagent-prompt, session-lifecycle, graceful-fallback, execution-routing

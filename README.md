@@ -84,7 +84,7 @@ See [SETUP_GUIDE.md](./SETUP_GUIDE.md) for detailed instructions.
 - [Quick Start for Agents](#quick-start-for-agents)
 - [The Skills](#the-skills)
 - [Skill Reference](#skill-reference)
-  - [Conductor (Planning)](#conductor-planning)
+  - [Conductor (Planning & Design)](#conductor-planning--design)
   - [Beads (Issue Tracking)](#beads-issue-tracking)
   - [TDD (Execution)](#tdd-execution)
 - [Workflow Pipeline](#workflow-pipeline)
@@ -92,6 +92,7 @@ See [SETUP_GUIDE.md](./SETUP_GUIDE.md) for detailed instructions.
 - [Slash Commands](#slash-commands)
 - [Documentation](#documentation)
 - [Troubleshooting](#troubleshooting)
+- [Credits](#credits)
 
 ---
 
@@ -157,7 +158,7 @@ trace                              # Root cause tracing (external: superpowers)
 **Design Sessions (Double Diamond)**: `/conductor-design` (or `ds` trigger) runs a Double Diamond design session with four phases: DISCOVER → DEFINE → DEVELOP → DELIVER. Each phase ends with A/P/C checkpoints:
 
 - **[A] Advanced**: Deeper analysis, assumption audit
-- **[P] Party**: Multi-agent collaborative review (see `skills/design/references/party-mode/`)
+- **[P] Party**: Multi-agent collaborative review (see `skills/design/references/bmad/`)
 - **[C] Continue**: Proceed to next phase
 
 ```mermaid
@@ -190,26 +191,30 @@ flowchart TB
         end
     end
 
-    subgraph AGENTS["PARTY MODE: 12 AGENTS (BMAD v6)"]
-        subgraph PRODUCT["Product Module"]
-            PM["John (PM)"]
-            ANALYST["Mary (Analyst)"]
-            UX["Sally (UX)"]
+    subgraph AGENTS["PARTY MODE: 16 AGENTS (BMAD v6)"]
+        subgraph CORE["Core (1)"]
+            MASTER["BMad Master (Orchestrator)"]
         end
 
-        subgraph TECHNICAL["Technical Module"]
-            ARCH["Winston (Architect)"]
-            DEV["Amelia (Developer)"]
-            QA["Murat (QA)"]
-            DOCS["Paige (Docs)"]
+        subgraph BMM["BMM (9)"]
+            PM["PM"]
+            ANALYST["Analyst"]
+            ARCH["Architect"]
+            DEV["Developer"]
+            SM["Scrum Master"]
+            QA["QA"]
+            UX["UX Designer"]
+            DOCS["Tech Writer"]
+            QUICK["Quick Flow"]
         end
 
-        subgraph CREATIVE["Creative Module"]
-            STORY["Sophia (Storyteller)"]
-            BRAIN["Carson (Brainstorm)"]
-            DESIGN["Maya (Design Thinking)"]
-            STRAT["Victor (Strategist)"]
-            SOLVER["Dr. Quinn (Solver)"]
+        subgraph CIS["CIS (6)"]
+            BRAIN["Brainstorming Coach"]
+            SOLVER["Problem Solver"]
+            DESIGN["Design Thinking Coach"]
+            STRAT["Innovation Strategist"]
+            PRESENT["Presentation Master"]
+            STORY["Storyteller"]
         end
     end
 
@@ -337,197 +342,7 @@ REPEAT  → Next failing test
 
 ## Workflow Pipeline
 
-### Complete Workflow Architecture
-
-```mermaid
-flowchart TB
-    subgraph PIPELINE["COMPLETE PIPELINE WORKFLOW"]
-        direction TB
-
-        subgraph PREFLIGHT["PREFLIGHT (All Commands)"]
-            PF_START["Session Start"]
-            PF_MODE["Mode Detection<br/>(SA/MA)"]
-            PF_BD["Validate bd CLI"]
-            PF_STATE["Create Session State"]
-        end
-
-        subgraph PLANNING["PLANNING LOOP"]
-            DS["ds (Design Session)"]
-            DISCOVER["DISCOVER<br/>Explore Problem"]
-            DEFINE["DEFINE<br/>Frame Problem"]
-            DEVELOP["DEVELOP<br/>Explore Solutions"]
-            DELIVER["DELIVER<br/>Finalize Design"]
-            APC{{"A/P/C"}}
-            DESIGND["design.md"]
-        end
-
-        subgraph SPEC["SPEC GENERATION + BEADS"]
-            NEWTRACK["/conductor-newtrack"]
-            SPECMD["spec.md"]
-            PLANMD["plan.md"]
-            AUTO_FB["Auto: Create Epic + Issues"]
-            FB_PROGRESS[".fb-progress.json<br/>(planTasks mapping)"]
-        end
-
-        subgraph AGENT_LOOP["AGENT EXECUTION LOOP"]
-            READY["bd ready"]
-            AUTO_CLAIM["Auto: bd update --status in_progress"]
-
-            subgraph TDD["TDD CYCLE (--tdd flag)"]
-                RED["RED: Write Failing Test<br/>(checkpoint)"]
-                GREEN["GREEN: Make It Pass<br/>(checkpoint)"]
-                REFACTOR["REFACTOR: Clean Up<br/>(checkpoint)"]
-            end
-
-            AUTO_CLOSE["Auto: bd close --reason completed"]
-            AUTO_SYNC["Auto: bd sync (with retry)"]
-        end
-
-        subgraph DISPATCH["PARALLEL AGENT DISPATCH"]
-            COORDINATOR["Coordinator Agent"]
-
-            subgraph WORKERS["WORKER AGENTS (read-only bd)"]
-                W1["Agent 1"]
-                W2["Agent 2"]
-                WN["Agent N"]
-            end
-
-            MERGE["Merge Results"]
-        end
-
-        subgraph FINISH["COMPLETION"]
-            VERIFY["Verification"]
-            BRANCH["finish branch"]
-            FINISH_CMD["/conductor-finish"]
-            COMPACT["Auto: Compact closed issues"]
-            CLEANUP["Auto: Cleanup >150 closed"]
-        end
-    end
-
-    subgraph FACADE["BEADS-CONDUCTOR FACADE"]
-        direction LR
-        SA["SA Mode<br/>Direct bd CLI"]
-        MA["MA Mode<br/>Village MCP"]
-        HEARTBEAT["Heartbeat<br/>(5 min updates)"]
-        PENDING["Pending Ops<br/>(crash recovery)"]
-    end
-
-    subgraph BMAD["PARTY MODE: 12 BMAD AGENTS"]
-        subgraph PRODUCT["Product Module"]
-            PM["John (PM)"]
-            ANALYST["Mary (Analyst)"]
-            UX["Sally (UX)"]
-        end
-
-        subgraph TECHNICAL["Technical Module"]
-            ARCH["Winston (Architect)"]
-            DEV["Amelia (Developer)"]
-            QA["Murat (QA)"]
-            DOCS["Paige (Docs)"]
-        end
-
-        subgraph CREATIVE["Creative Module"]
-            STORY["Sophia (Storyteller)"]
-            BRAIN["Carson (Brainstorm)"]
-            DESIGN["Maya (Design Thinking)"]
-            STRAT["Victor (Strategist)"]
-            SOLVER["Dr. Quinn (Solver)"]
-        end
-    end
-
-    subgraph VALIDATION["VALIDATION SYSTEM (Phase 0)"]
-        direction TB
-        VALIDATE["/conductor-validate"]
-
-        subgraph CHECKS["Validation Checks"]
-            V01["0.1 Resolve track path"]
-            V02["0.2 Check directory"]
-            V03["0.3 File existence matrix"]
-            V04["0.4 Validate JSON + beads"]
-            V05["0.5 Auto-create state"]
-            V06["0.6 Auto-fix track_id"]
-            V07["0.7 Staleness + sync detection"]
-        end
-
-        OUTCOMES{{"PASS / HALT / Auto-repair"}}
-    end
-
-    PF_START --> PF_MODE --> PF_BD --> PF_STATE
-    PF_STATE --> DS
-
-    DS --> DISCOVER
-    DISCOVER --> DEFINE
-    DEFINE --> DEVELOP
-    DEVELOP --> DELIVER
-    DELIVER --> APC
-    APC -->|"C"| DESIGND
-    APC -->|"P"| BMAD
-    BMAD -->|"Synthesize"| APC
-    DESIGND --> NEWTRACK
-
-    NEWTRACK --> SPECMD
-    SPECMD --> PLANMD
-    PLANMD --> AUTO_FB
-    AUTO_FB --> FB_PROGRESS
-    FB_PROGRESS --> READY
-
-    READY --> AUTO_CLAIM
-    AUTO_CLAIM --> COORDINATOR
-    COORDINATOR --> W1 & W2 & WN
-    W1 & W2 & WN --> MERGE
-    MERGE --> RED
-    RED --> GREEN
-    GREEN --> REFACTOR
-    REFACTOR -->|"More tests?"| RED
-    REFACTOR -->|"Done"| AUTO_CLOSE
-    AUTO_CLOSE --> AUTO_SYNC
-    AUTO_SYNC -->|"More issues?"| READY
-    AUTO_SYNC -->|"All done"| VERIFY
-
-    VERIFY --> BRANCH
-    BRANCH --> FINISH_CMD
-    FINISH_CMD --> COMPACT --> CLEANUP
-
-    VALIDATE --> V01 --> V02 --> V03 --> V04 --> V05 --> V06 --> V07 --> OUTCOMES
-
-    NEWTRACK -.->|"Phase 0"| VALIDATE
-    AUTO_FB -.->|"Phase 0"| VALIDATE
-    READY -.->|"Phase 0"| VALIDATE
-
-    PF_MODE -.-> FACADE
-    AUTO_CLAIM -.-> FACADE
-    AUTO_CLOSE -.-> FACADE
-    AUTO_SYNC -.-> FACADE
-
-    classDef preflight fill:#1e3a5f,stroke:#60a5fa,color:#e2e8f0
-    classDef planning fill:#1a365d,stroke:#63b3ed,color:#e2e8f0
-    classDef spec fill:#234e52,stroke:#4fd1c5,color:#e2e8f0
-    classDef beads fill:#553c9a,stroke:#b794f4,color:#e2e8f0
-    classDef dispatch fill:#742a2a,stroke:#fc8181,color:#e2e8f0
-    classDef agent fill:#744210,stroke:#f6ad55,color:#e2e8f0
-    classDef tdd fill:#2d3748,stroke:#a0aec0,color:#e2e8f0
-    classDef finish fill:#22543d,stroke:#68d391,color:#e2e8f0
-    classDef facade fill:#4c1d95,stroke:#a78bfa,color:#e2e8f0
-    classDef product fill:#285e61,stroke:#4fd1c5,color:#e2e8f0
-    classDef technical fill:#2c5282,stroke:#63b3ed,color:#e2e8f0
-    classDef creative fill:#744210,stroke:#f6ad55,color:#e2e8f0
-    classDef validation fill:#4a1d6e,stroke:#9f7aea,color:#e2e8f0
-
-    class PF_START,PF_MODE,PF_BD,PF_STATE preflight
-    class DS,DISCOVER,DEFINE,DEVELOP,DELIVER,APC,DESIGND planning
-    class NEWTRACK,SPECMD,PLANMD,AUTO_FB,FB_PROGRESS spec
-    class COORDINATOR,W1,W2,WN,MERGE dispatch
-    class READY,AUTO_CLAIM,AUTO_CLOSE,AUTO_SYNC agent
-    class RED,GREEN,REFACTOR tdd
-    class VERIFY,BRANCH,FINISH_CMD,COMPACT,CLEANUP finish
-    class SA,MA,HEARTBEAT,PENDING facade
-    class PM,ANALYST,UX product
-    class ARCH,DEV,QA,DOCS technical
-    class STORY,BRAIN,DESIGN,STRAT,SOLVER creative
-    class VALIDATE,V01,V02,V03,V04,V05,V06,V07,OUTCOMES validation
-```
-
-### Beads-Conductor Lifecycle (Zero Manual Commands)
+### Beads-Conductor Lifecycle
 
 | Phase | Conductor Command | Beads Action (Automatic) |
 |-------|-------------------|--------------------------|
@@ -716,7 +531,7 @@ maestro/
 ├── AGENTS.md              # Agent instructions
 ├── skills/                # Skill directories (conductor, design, beads, tdd, etc.)
 │   ├── conductor/         # Planning methodology with references/
-│   ├── design/            # Design sessions (ds trigger) with party-mode/
+│   ├── design/            # Design sessions (ds trigger) with bmad/
 │   ├── beads/             # Issue tracking (fb, rb triggers)
 │   ├── session-compaction/# Session context compression
 │   ├── test-driven-development/
@@ -775,10 +590,12 @@ The plugin still provides value without `bd`:
 
 Built on foundations from:
 
-- [conductor](https://github.com/NguyenSiTrung/conductor) by NguyenSiTrung
-- [beads](https://github.com/steveyegge/beads) by Steve Yegge
-- [beads-village](https://github.com/LNS2905/mcp-beads-village) by LNS2905
-- [Knowledge & Vibes](https://github.com/kyleobrien91/knowledge-and-vibes) methodology
+- [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) - Multi-agent orchestration with 16 specialized personas
+- [superpowers](https://github.com/obra/superpowers) by Jesse Vincent - TDD, debugging, and code review skills
+- [conductor](https://github.com/NguyenSiTrung/conductor) by NguyenSiTrung - Context-driven planning
+- [beads](https://github.com/steveyegge/beads) by Steve Yegge - Persistent issue tracking
+- [beads-village](https://github.com/LNS2905/mcp-beads-village) by LNS2905 - Multi-agent coordination
+- [Knowledge & Vibes](https://github.com/kyleobrien91/knowledge-and-vibes) by Kyle O'Brien - Workflow patterns
 
 ## License
 

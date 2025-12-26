@@ -8,20 +8,20 @@ approved_by:
   - Winston (Architect)
   - Amelia (DEV)
   - Murat (QA)
-language: Vietnamese
+language: English
 ---
 
 # BMAD V6 Integration
 
 ## Problem Statement
 
-Design skill của Maestro chỉ có party mode đơn giản với 12 agents, thiếu creative workflows và khó sync với BMAD upstream.
+Maestro's design skill only has a simple party mode with 12 agents, lacks creative workflows, and is difficult to sync with BMAD upstream.
 
-**Chúng ta đang giải quyết:** Limited design exploration và party mode capabilities
+**We are solving:** Limited design exploration and party mode capabilities
 
-**Cho:** Developers sử dụng Maestro workflow
+**For:** Developers using Maestro workflow
 
-**Bởi vì:** Full BMAD v6 integration sẽ mang lại 16+ agents, 6 CIS workflows, và dễ dàng sync updates từ upstream.
+**Because:** Full BMAD v6 integration will bring 16+ agents, 6 CIS workflows, and easy syncing of updates from upstream.
 
 ## Success Criteria
 
@@ -34,7 +34,7 @@ Design skill của Maestro chỉ có party mode đơn giản với 12 agents, th
 | 5 | CIS workflows executable | Trigger each *workflow |
 | 6 | Double Diamond still works | Run `ds`, verify 4 phases |
 | 7 | A/P/C checkpoints functional | Verify [A], [P], [C] options |
-| 8 | Vietnamese communication | Agents respond in Vietnamese |
+| 8 | English communication | Agents respond in English |
 
 ## Chosen Approach
 
@@ -47,12 +47,12 @@ Design skill của Maestro chỉ có party mode đơn giản với 12 agents, th
 
 ### Why This Approach
 
-- Giữ được Conductor flow (ds → spec → plan → implement)
-- Giữ được Beads integration
-- Giữ được TDD cycle
-- Thêm 16 agents với deep expertise
-- Thêm 6 CIS workflows cho creative deep dives
-- Dễ sync với BMAD upstream
+- Keeps Conductor flow (ds → spec → plan → implement)
+- Keeps Beads integration
+- Keeps TDD cycle
+- Adds 16 agents with deep expertise
+- Adds 6 CIS workflows for creative deep dives
+- Easy to sync with BMAD upstream
 
 ## Design
 
@@ -60,7 +60,7 @@ Design skill của Maestro chỉ có party mode đơn giản với 12 agents, th
 
 ```
 skills/design/
-├── SKILL.md                           # Updated với BMAD integration
+├── SKILL.md                           # Updated with BMAD integration
 ├── references/
 │   ├── bmad/
 │   │   ├── config.yaml                # Maestro-specific config
@@ -103,28 +103,28 @@ skills/design/
 │   │   │   └── default-party.csv
 │   │   ├── manifest.yaml              # Agent registry
 │   │   └── adapter.md                 # Transform rules
-│   ├── double-diamond.md              # Giữ nguyên
+│   ├── double-diamond.md              # Keep as-is
 │   ├── grounding.md
 │   └── design-routing-heuristics.md
-└── DELETE: party-mode/                # Archive folder cũ
+└── DELETE: party-mode/                # Archive old folder
 ```
 
 ### Hybrid Strategy
 
 | Component | Strategy | Format | Sync Effort |
 |-----------|----------|--------|-------------|
-| 16 Agents | Fork & Rewrite | Native MD với YAML frontmatter | Manual review |
-| brain-methods.csv | Copy | CSV giữ nguyên | Copy paste |
-| storyteller-sidecar/ | Copy | MD files giữ nguyên | Copy paste |
+| 16 Agents | Fork & Rewrite | Native MD with YAML frontmatter | Manual review |
+| brain-methods.csv | Copy | CSV kept as-is | Copy paste |
+| storyteller-sidecar/ | Copy | MD files kept as-is | Copy paste |
 | 6 Workflows | Adapter | Keep v6 structure + adapter.md | Copy + update adapter |
-| manifest.yaml | Native | Maestro YAML format | Regenerate từ agents |
+| manifest.yaml | Native | Maestro YAML format | Regenerate from agents |
 | config.yaml | New | Maestro-specific | N/A |
 
 ### Agent Roster (16 Total)
 
 | Module | Agent | Icon | Role |
 |--------|-------|------|------|
-| **Core** | BMad Master | 🧙 | Orchestrator, điều phối party mode |
+| **Core** | BMad Master | 🧙 | Orchestrator, coordinates party mode |
 | **BMM** | PM (John) | 📋 | Product Manager |
 | | Analyst (Mary) | 📊 | Business Analyst |
 | | Architect (Winston) | 🏗️ | System Architect |
@@ -234,7 +234,7 @@ Score agents by topic/expertise
     ↓
 Select 2-3 relevant agents
     ↓
-Agent responses (in character, Vietnamese)
+Agent responses (in character, English)
     ↓
 Cross-talk (1-2 rounds max)
     ↓
@@ -281,7 +281,7 @@ Return to A/P/C menu
 
 - 16 agents (Core: 1, BMM: 9, CIS: 6)
 - 6 CIS workflows
-- Party Mode với BMad Master orchestration
+- Party Mode with BMad Master orchestration
 - brain-methods.csv (36 techniques)
 - storyteller-sidecar knowledge
 - Integration at ALL Conductor stages
@@ -301,10 +301,10 @@ Return to A/P/C menu
 ## Grounding Notes
 
 - [x] BMAD v6 repo structure verified
-- [x] 16 agents identified với full personas
+- [x] 16 agents identified with full personas
 - [x] 6 CIS workflows documented
-- [x] Integration points với Conductor verified
-- [x] No conflicts với existing Beads/TDD flow
+- [x] Integration points with Conductor verified
+- [x] No conflicts with existing Beads/TDD flow
 - [x] Sync workflow documented
 
 ## Risks & Mitigations

@@ -2,6 +2,54 @@
 
 This guide explains how to work with Conductor commands manually without relying on skills or auto-activation. Use this when you need precise control over the workflow or when skills don't behave as expected.
 
+---
+
+## Life in Threads
+
+Here's what a feature looks like as a cluster of interconnected threads:
+
+**Feature: BMAD V6 Integration**
+
+```mermaid
+flowchart TB
+    ds["019b5c14              💬28<br/><br/>Design Session<br/>Double Diamond<br/><br/>📊152k/0k"]
+
+    nt["019b5be9              💬1<br/><br/>conductor-newtrack<br/>spec + plan + beads<br/><br/>📊94k/0k"]
+
+    p1["Phase-1               💬1<br/><br/>Foundation<br/>Directory + Config<br/><br/>📊30k/0k"]
+    
+    p23["Phase-23              💬2<br/><br/>16 Agents<br/>Core + BMM + CIS<br/><br/>📊50k/0k"]
+    
+    p4["Phase-4               💬1<br/><br/>6 Workflows<br/>Party + CIS<br/><br/>📊40k/0k"]
+    
+    p56["Phase-56              💬1<br/><br/>Integration<br/>SKILL + Tests<br/><br/>📊26k/0k"]
+
+    fin["019b5baf              💬28<br/><br/>conductor-finish<br/>Archive + Learnings<br/><br/>📊152k/0k"]
+
+    ds --> nt
+    nt --> p1
+    nt --> p23
+    nt --> p4
+    nt --> p56
+    p1 --> fin
+    p56 --> fin
+
+    classDef box fill:#0d1117,stroke:#30363d,color:#8b949e,stroke-width:1px
+```
+
+**Short Threads Are Best**: Agents get drunk if you feed them too many tokens. Breaking into short threads == breaking into small tasks.
+
+| Thread | Purpose | Tokens | Messages |
+|--------|---------|--------|----------|
+| `019b5c14` | Design Session (ds) | 152k | 28 |
+| `019b5be9` | /conductor-newtrack | 94k | 1 |
+| `Phase 1-6` | /conductor-implement | ~146k | 6 |
+| `019b5baf` | /conductor-finish | 152k | 28 |
+
+Each thread does one thing, has just the right context, and no more.
+
+---
+
 ## Understanding Handoff
 
 **Handoff** is the structured transfer of work context between AI agent sessions. It solves a fundamental problem: AI agents have limited memory and sessions expire, but real software projects span days, weeks, or months.

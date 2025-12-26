@@ -44,7 +44,7 @@ bmad/
 │   └── cis/           # 6 creative/innovation agents
 ├── workflows/         # 6 CIS workflows
 │   ├── party-mode/    # Multi-agent collaboration
-│   ├── brainstorming/ # 62 ideation techniques
+│   ├── brainstorming/ # 36 ideation techniques
 │   ├── design-thinking/
 │   ├── innovation-strategy/
 │   ├── problem-solving/

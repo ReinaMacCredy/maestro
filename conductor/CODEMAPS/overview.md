@@ -24,7 +24,7 @@ maestro/
 │   │   ├── workflows/            # setup, implement, finish, etc.
 │   │   └── schemas/              # JSON schemas
 │   ├── design/references/        # Double Diamond + Party Mode
-│   │   └── party-mode/           # Multi-agent design personas
+│   │   └── bmad/                 # Multi-agent design personas
 │   ├── dispatching-parallel-agents/references/
 │   │   └── agent-coordination/   # Multi-agent patterns
 │   └── session-compaction/       # Context compression

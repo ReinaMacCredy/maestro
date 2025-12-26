@@ -23,6 +23,56 @@ You're using AI coding agents to write code. That's great. But you've probably n
 
 ---
 
+## Key Insights (Aha Moments)
+
+Before diving in, understand these principles:
+
+1. **"Spend tokens once on a good plan; reuse it many times."**
+   Long, fuzzy chats chew context. A structured spec+plan document is cheaper to revisit.
+
+2. **"Your project's state lives in git, not in Claude's memory."**
+   Chat history is ephemeral. Beads issues persist in `.beads/` and survive compaction.
+
+3. **"Beads are dependency-aware, not a flat todo list."**
+   You encode constraints once ("A blocks B"). All later sessions respect them.
+
+4. **"Skills are mental modes, not just commands."**
+   Invoking `tdd` or `debug` switches the agent into a specific methodology, not just runs a script.
+
+5. **"Evidence before assertions."**
+   Don't claim "tests pass" — show the passing output. Don't claim "fixed" — show the verification.
+
+---
+
+## What Problem Does Each Skill Solve?
+
+| Problem                      | What Happens                            | Skill That Fixes It                                |
+| ---------------------------- | --------------------------------------- | -------------------------------------------------- |
+| **Amnesia**                  | Agent forgets tasks between sessions    | `beads` — persistent issue tracking                |
+| **Fuzzy planning**           | Vague discussions, no written spec      | `conductor` — structured specs + plans             |
+| **No visibility**            | Can't see dependencies or blockers      | `beads` — dependency-aware graph                   |
+| **Tests as afterthought**    | Tests written after code, prove nothing | `test-driven-development` — RED-GREEN-REFACTOR     |
+| **Messy handoffs**           | Can't resume where you left off         | `beads` notes — session-surviving context          |
+| **Conflicts in multi-agent** | Multiple agents edit same files         | `beads` + Village — file locking and task claiming |
+
+These skills work together as a system, not a bag of independent tools.
+
+---
+
+## Part 2: The Core Workflow
+
+The spine of Maestro is three components working together:
+
+```
+Conductor (Planning) → Beads + Village (Tracking & Coordination) → TDD (Execution)
+```
+
+Everything else in the plugin supports this core pipeline.
+
+For detailed workflow architecture diagrams, see [docs/PIPELINE_ARCHITECTURE.md](./docs/PIPELINE_ARCHITECTURE.md).
+
+---
+
 ## What is Handoff?
 
 **Handoff** is the structured transfer of work between AI sessions. It's the core concept that makes multi-session development possible.
@@ -279,243 +329,8 @@ Mode is detected at session start and locked for the session.
 
 ---
 
-## What Problem Does Each Skill Solve?
+### A/P/C Checkpoints
 
-| Problem                      | What Happens                            | Skill That Fixes It                                |
-| ---------------------------- | --------------------------------------- | -------------------------------------------------- |
-| **Amnesia**                  | Agent forgets tasks between sessions    | `beads` — persistent issue tracking                |
-| **Fuzzy planning**           | Vague discussions, no written spec      | `conductor` — structured specs + plans             |
-| **No visibility**            | Can't see dependencies or blockers      | `beads` — dependency-aware graph                   |
-| **Tests as afterthought**    | Tests written after code, prove nothing | `test-driven-development` — RED-GREEN-REFACTOR     |
-| **Messy handoffs**           | Can't resume where you left off         | `beads` notes — session-surviving context          |
-| **Conflicts in multi-agent** | Multiple agents edit same files         | `beads` + Village — file locking and task claiming |
-
-These skills work together as a system, not a bag of independent tools.
-
----
-
-## Key Insights (Aha Moments)
-
-Before diving in, understand these principles:
-
-1. **"Spend tokens once on a good plan; reuse it many times."**
-   Long, fuzzy chats chew context. A structured spec+plan document is cheaper to revisit.
-
-2. **"Your project's state lives in git, not in Claude's memory."**
-   Chat history is ephemeral. Beads issues persist in `.beads/` and survive compaction.
-
-3. **"Beads are dependency-aware, not a flat todo list."**
-   You encode constraints once ("A blocks B"). All later sessions respect them.
-
-4. **"Skills are mental modes, not just commands."**
-   Invoking `tdd` or `debug` switches the agent into a specific methodology, not just runs a script.
-
-5. **"Evidence before assertions."**
-   Don't claim "tests pass" — show the passing output. Don't claim "fixed" — show the verification.
-
----
-
-## Part 2: The Core Workflow
-
-The spine of Maestro is three components working together:
-
-```
-Conductor (Planning) → Beads + Village (Tracking & Coordination) → TDD (Execution)
-```
-
-Everything else in the plugin supports this core pipeline.
-
-### Complete Workflow Architecture
-
-```mermaid
-flowchart TB
-    subgraph PIPELINE["COMPLETE PIPELINE WORKFLOW"]
-        direction TB
-
-        subgraph PREFLIGHT["PREFLIGHT (All Commands)"]
-            PF_START["Session Start"]
-            PF_MODE["Mode Detection<br/>(SA/MA)"]
-            PF_BD["Validate bd CLI"]
-            PF_STATE["Create Session State"]
-        end
-
-        subgraph PLANNING["PLANNING LOOP"]
-            DS["ds (Design Session)"]
-            DISCOVER["DISCOVER<br/>Explore Problem"]
-            DEFINE["DEFINE<br/>Frame Problem"]
-            DEVELOP["DEVELOP<br/>Explore Solutions"]
-            DELIVER["DELIVER<br/>Finalize Design"]
-            APC{{"A/P/C"}}
-            DESIGND["design.md"]
-        end
-
-        subgraph SPEC["SPEC GENERATION + BEADS"]
-            NEWTRACK["/conductor-newtrack"]
-            SPECMD["spec.md"]
-            PLANMD["plan.md"]
-            AUTO_FB["Auto: Create Epic + Issues"]
-            FB_PROGRESS[".fb-progress.json<br/>(planTasks mapping)"]
-        end
-
-        subgraph AGENT_LOOP["AGENT EXECUTION LOOP"]
-            READY["bd ready"]
-            AUTO_CLAIM["Auto: bd update --status in_progress"]
-
-            subgraph TDD["TDD CYCLE (--tdd flag)"]
-                RED["RED: Write Failing Test<br/>(checkpoint)"]
-                GREEN["GREEN: Make It Pass<br/>(checkpoint)"]
-                REFACTOR["REFACTOR: Clean Up<br/>(checkpoint)"]
-            end
-
-            AUTO_CLOSE["Auto: bd close --reason completed"]
-            AUTO_SYNC["Auto: bd sync (with retry)"]
-        end
-
-        subgraph DISPATCH["PARALLEL AGENT DISPATCH"]
-            COORDINATOR["Coordinator Agent"]
-
-            subgraph WORKERS["WORKER AGENTS (read-only bd)"]
-                W1["Agent 1"]
-                W2["Agent 2"]
-                WN["Agent N"]
-            end
-
-            MERGE["Merge Results"]
-        end
-
-        subgraph FINISH["COMPLETION"]
-            VERIFY["Verification"]
-            BRANCH["finish branch"]
-            FINISH_CMD["/conductor-finish"]
-            COMPACT["Auto: Compact closed issues"]
-            CLEANUP["Auto: Cleanup >150 closed"]
-        end
-    end
-
-    subgraph FACADE["BEADS-CONDUCTOR FACADE"]
-        direction LR
-        SA["SA Mode<br/>Direct bd CLI"]
-        MA["MA Mode<br/>Village MCP"]
-        HEARTBEAT["Heartbeat<br/>(5 min updates)"]
-        PENDING["Pending Ops<br/>(crash recovery)"]
-    end
-
-    subgraph BMAD["PARTY MODE: 12 BMAD AGENTS"]
-        subgraph PRODUCT["Product Module"]
-            PM["John (PM)"]
-            ANALYST["Mary (Analyst)"]
-            UX["Sally (UX)"]
-        end
-
-        subgraph TECHNICAL["Technical Module"]
-            ARCH["Winston (Architect)"]
-            DEV["Amelia (Developer)"]
-            QA["Murat (QA)"]
-            DOCS["Paige (Docs)"]
-        end
-
-        subgraph CREATIVE["Creative Module"]
-            STORY["Sophia (Storyteller)"]
-            BRAIN["Carson (Brainstorm)"]
-            DESIGN["Maya (Design Thinking)"]
-            STRAT["Victor (Strategist)"]
-            SOLVER["Dr. Quinn (Solver)"]
-        end
-    end
-
-    subgraph VALIDATION["VALIDATION SYSTEM (Phase 0)"]
-        direction TB
-        VALIDATE["/conductor-validate"]
-
-        subgraph CHECKS["Validation Checks"]
-            V01["0.1 Resolve track path"]
-            V02["0.2 Check directory"]
-            V03["0.3 File existence matrix"]
-            V04["0.4 Validate JSON + beads"]
-            V05["0.5 Auto-create state"]
-            V06["0.6 Auto-fix track_id"]
-            V07["0.7 Staleness + sync detection"]
-        end
-
-        OUTCOMES{{"PASS / HALT / Auto-repair"}}
-    end
-
-    PF_START --> PF_MODE --> PF_BD --> PF_STATE
-    PF_STATE --> DS
-
-    DS --> DISCOVER
-    DISCOVER --> DEFINE
-    DEFINE --> DEVELOP
-    DEVELOP --> DELIVER
-    DELIVER --> APC
-    APC -->|"C"| DESIGND
-    APC -->|"P"| BMAD
-    BMAD -->|"Synthesize"| APC
-    DESIGND --> NEWTRACK
-
-    NEWTRACK --> SPECMD
-    SPECMD --> PLANMD
-    PLANMD --> AUTO_FB
-    AUTO_FB --> FB_PROGRESS
-    FB_PROGRESS --> READY
-
-    READY --> AUTO_CLAIM
-    AUTO_CLAIM --> COORDINATOR
-    COORDINATOR --> W1 & W2 & WN
-    W1 & W2 & WN --> MERGE
-    MERGE --> RED
-    RED --> GREEN
-    GREEN --> REFACTOR
-    REFACTOR -->|"More tests?"| RED
-    REFACTOR -->|"Done"| AUTO_CLOSE
-    AUTO_CLOSE --> AUTO_SYNC
-    AUTO_SYNC -->|"More issues?"| READY
-    AUTO_SYNC -->|"All done"| VERIFY
-
-    VERIFY --> BRANCH
-    BRANCH --> FINISH_CMD
-    FINISH_CMD --> COMPACT --> CLEANUP
-
-    VALIDATE --> V01 --> V02 --> V03 --> V04 --> V05 --> V06 --> V07 --> OUTCOMES
-
-    NEWTRACK -.->|"Phase 0"| VALIDATE
-    AUTO_FB -.->|"Phase 0"| VALIDATE
-    READY -.->|"Phase 0"| VALIDATE
-
-    PF_MODE -.-> FACADE
-    AUTO_CLAIM -.-> FACADE
-    AUTO_CLOSE -.-> FACADE
-    AUTO_SYNC -.-> FACADE
-
-    classDef preflight fill:#1e3a5f,stroke:#60a5fa,color:#e2e8f0
-    classDef planning fill:#1a365d,stroke:#63b3ed,color:#e2e8f0
-    classDef spec fill:#234e52,stroke:#4fd1c5,color:#e2e8f0
-    classDef beads fill:#553c9a,stroke:#b794f4,color:#e2e8f0
-    classDef dispatch fill:#742a2a,stroke:#fc8181,color:#e2e8f0
-    classDef agent fill:#744210,stroke:#f6ad55,color:#e2e8f0
-    classDef tdd fill:#2d3748,stroke:#a0aec0,color:#e2e8f0
-    classDef finish fill:#22543d,stroke:#68d391,color:#e2e8f0
-    classDef facade fill:#4c1d95,stroke:#a78bfa,color:#e2e8f0
-    classDef product fill:#285e61,stroke:#4fd1c5,color:#e2e8f0
-    classDef technical fill:#2c5282,stroke:#63b3ed,color:#e2e8f0
-    classDef creative fill:#744210,stroke:#f6ad55,color:#e2e8f0
-    classDef validation fill:#4a1d6e,stroke:#9f7aea,color:#e2e8f0
-
-    class PF_START,PF_MODE,PF_BD,PF_STATE preflight
-    class DS,DISCOVER,DEFINE,DEVELOP,DELIVER,APC,DESIGND planning
-    class NEWTRACK,SPECMD,PLANMD,AUTO_FB,FB_PROGRESS spec
-    class COORDINATOR,W1,W2,WN,MERGE dispatch
-    class READY,AUTO_CLAIM,AUTO_CLOSE,AUTO_SYNC agent
-    class RED,GREEN,REFACTOR tdd
-    class VERIFY,BRANCH,FINISH_CMD,COMPACT,CLEANUP finish
-    class SA,MA,HEARTBEAT,PENDING facade
-    class PM,ANALYST,UX product
-    class ARCH,DEV,QA,DOCS technical
-    class STORY,BRAIN,DESIGN,STRAT,SOLVER creative
-    class VALIDATE,V01,V02,V03,V04,V05,V06,V07,OUTCOMES validation
-```
-
-For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](./docs/PIPELINE_ARCHITECTURE.md).
 Each phase ends with **A/P/C checkpoints**:
 
 - **[A] Advanced** — Deeper analysis, challenge assumptions
@@ -527,13 +342,13 @@ Each phase ends with **A/P/C checkpoints**:
 
 When you select `[P]` at an A/P/C checkpoint, Party Mode activates 2-3 expert agents for collaborative feedback:
 
-| Module        | Agents                                                                                                     |
-| ------------- | ---------------------------------------------------------------------------------------------------------- |
-| **Product**   | John (PM), Mary (Analyst), Sally (UX)                                                                      |
-| **Technical** | Winston (Architect), Amelia (Developer), Murat (QA), Paige (Docs)                                          |
-| **Creative**  | Sophia (Storyteller), Carson (Brainstorm), Maya (Design Thinking), Victor (Strategist), Dr. Quinn (Solver) |
+| Module    | Agents                                                                                             |
+| --------- | -------------------------------------------------------------------------------------------------- |
+| **Core**  | BMad Master (Orchestrator)                                                                         |
+| **BMM**   | John (PM), Mary (Analyst), Winston (Architect), Amelia (Dev), Bob (SM), Murat (QA), Sally (UX), Paige (Docs), Barry (Quick Flow) |
+| **CIS**   | Carson (Brainstorm), Dr. Quinn (Problem Solver), Maya (Design Thinking), Victor (Innovation), Caravaggio (Presentation), Sophia (Storyteller) |
 
-Agents respond in character, cross-talk, then synthesize insights. See `skills/design/references/party-mode/workflow.md` for details.
+Agents respond in character, cross-talk, then synthesize insights. See `skills/design/references/bmad/workflows/party-mode/workflow.md` for details.
 
 #### Design Tips: Getting Better Edge Case Coverage
 
@@ -814,7 +629,7 @@ Epic 1: Authentication
 
 ---
 
-## Entry Points (You Don't Always Start at the Beginning)
+### Entry Points (You Don't Always Start at the Beginning)
 
 The full pipeline assumes you're starting fresh. But you can jump in anywhere.
 
@@ -1118,6 +933,72 @@ The notes field tells you:
 - Any blockers or decisions
 
 No need to re-explain context. It's all in beads.
+
+---
+
+## Life in Threads
+
+Here's what a feature looks like as a cluster of interconnected threads:
+
+**Feature: BMAD V6 Integration**
+
+```mermaid
+flowchart TB
+    ds["019b5c14              💬28<br/><br/>Design Session<br/>Double Diamond<br/><br/>📊152k/0k"]
+
+    nt["019b5be9              💬1<br/><br/>conductor-newtrack<br/>spec + plan + beads<br/><br/>📊94k/0k"]
+
+    p1["Phase-1               💬1<br/><br/>Foundation<br/>Directory + Config<br/><br/>📊30k/0k"]
+    
+    p23["Phase-23              💬2<br/><br/>16 Agents<br/>Core + BMM + CIS<br/><br/>📊50k/0k"]
+    
+    p4["Phase-4               💬1<br/><br/>6 Workflows<br/>Party + CIS<br/><br/>📊40k/0k"]
+    
+    p56["Phase-56              💬1<br/><br/>Integration<br/>SKILL + Tests<br/><br/>📊26k/0k"]
+
+    fin["019b5baf              💬28<br/><br/>conductor-finish<br/>Archive + Learnings<br/><br/>📊152k/0k"]
+
+    ds --> nt
+    nt --> p1
+    nt --> p23
+    nt --> p4
+    nt --> p56
+    p1 --> fin
+    p56 --> fin
+
+    classDef box fill:#0d1117,stroke:#30363d,color:#8b949e,stroke-width:1px
+```
+
+Look at all those tiny threads! The biggest is 152k tokens with 28 messages. The average is around 80k tokens. Add them all up and you're close to **~550k tokens** — but split across **6 focused threads**.
+
+### Short Threads Are Best
+
+**Agents get drunk if you feed them too many tokens.** They mess up, fall over, and pick fights with you.
+
+**Breaking into short threads == breaking into small tasks.**
+
+| Thread | Purpose | Tokens | Messages |
+|--------|---------|--------|----------|
+| `019b5c14` | Design Session (ds) | 152k | 28 |
+| `019b5be9` | /conductor-newtrack | 94k | 1 |
+| `Phase 1-6` | /conductor-implement | ~146k | 6 |
+| `019b5baf` | /conductor-finish | 152k | 28 |
+
+### The Flow (Bottom → Top)
+
+1. **`ds`** — Design Session using Double Diamond. DISCOVER → DEFINE → DEVELOP → DELIVER.
+2. **`/conductor-newtrack`** — One message creates spec.md, plan.md, and files beads.
+3. **`/conductor-implement`** — Each phase is discrete. Phases run parallel when independent.
+4. **`/conductor-finish`** — Archive learnings, update CODEMAPS, merge knowledge.
+
+Each thread does one thing, has just the right context, and no more.
+
+### Context Sharing Between Threads
+
+- **Thread mentions**: Reference threads by ID using `@@`
+- **Handoff**: Use `/conductor-newtrack` to pass design → spec → plan
+- **Git state**: Run `git diff` or inspect previous commits
+- **Artifacts**: `design.md`, `spec.md`, `plan.md` persist across sessions
 
 ---
 
@@ -1461,4 +1342,4 @@ Examples:
 
 ---
 
-_Built on foundations from [superpowers](https://github.com/obra/superpowers), [conductor](https://github.com/NguyenSiTrung/conductor), [beads](https://github.com/steveyegge/beads), and [Knowledge & Vibes](https://github.com/kyleobrien91/knowledge-and-vibes)._
+_Built on foundations from [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD), [superpowers](https://github.com/obra/superpowers), [conductor](https://github.com/NguyenSiTrung/conductor), [beads](https://github.com/steveyegge/beads), and [Knowledge & Vibes](https://github.com/kyleobrien91/knowledge-and-vibes)._

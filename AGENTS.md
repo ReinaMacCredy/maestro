@@ -14,7 +14,7 @@ cat .claude-plugin/plugin.json | jq .   # Validate plugin manifest
 skills/           # Skill directories, each with SKILL.md (frontmatter + instructions)
   beads/          # Issue tracking skill with references/ subdirectory
   conductor/      # Planning methodology (includes /conductor-design, CODEMAPS generation)
-  design/         # Double Diamond design sessions (ds trigger), includes party-mode
+  design/         # Double Diamond design sessions (ds trigger), includes bmad/
   session-compaction/  # Session context compression
   ...             # TDD, debugging, code review, etc.
 lib/              # Shared utilities (skills-core.js)
