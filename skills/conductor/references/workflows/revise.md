@@ -91,7 +91,7 @@ Create/append to `conductor/tracks/<track_id>/revisions.md`:
 3. Apply changes
 4. Add revision marker at top of spec:
    ```markdown
-   > **Last Revised:** [Date] - See [revisions.md](revisions.md) for history
+   > **Last Revised:** [Date] - See [revisions.md](../revisions.md) for history
    ```
 
 ### 6. Update Plan (if applicable)
@@ -104,7 +104,7 @@ Create/append to `conductor/tracks/<track_id>/revisions.md`:
    - Modified tasks: Update description, keep status
 4. Add revision marker at top of plan:
    ```markdown
-   > **Last Revised:** [Date] - See [revisions.md](revisions.md) for history
+   > **Last Revised:** [Date] - See [revisions.md](../revisions.md) for history
    ```
 
 ### 7. Update Implementation State
@@ -181,7 +181,7 @@ When revising specs/plans, affected beads must be updated.
 
 ### Triggering Bead Updates
 
-After plan changes are applied, run the [revise-reopen-beads.md](conductor/revise-reopen-beads.md) workflow:
+After plan changes are applied, run the [revise-reopen-beads.md](../conductor/revise-reopen-beads.md) workflow:
 
 1. **Identify affected beads:**
    - Tasks added → create new beads
@@ -241,6 +241,6 @@ When original bead was deleted by cleanup:
 
 ## References
 
-- [Revise Reopen Beads](conductor/revise-reopen-beads.md) - Detailed reopen workflow
-- [Status Sync Beads](conductor/status-sync-beads.md) - Discrepancy detection
-- [Beads Integration](../skills/conductor/references/beads-integration.md) - Point 13
+- [Revise Reopen Beads](../conductor/revise-reopen-beads.md) - Detailed reopen workflow
+- [Status Sync Beads](../conductor/status-sync-beads.md) - Discrepancy detection
+- [Beads Integration](../beads-integration.md) - Point 13

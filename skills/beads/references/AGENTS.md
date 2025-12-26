@@ -2,7 +2,7 @@
 
 This file provides core instructions for AI agents using beads.
 
-See the [workflow.md](../workflow.md) file for full beads skill instructions.
+See the [workflow.md](workflow.md) file for full beads skill instructions.
 
 ## Landing the Plane (Session Completion)
 
@@ -61,7 +61,7 @@ git push                  # Push to remote
 
 ## See Also
 
-- [workflow.md](../workflow.md) - Complete beads skill documentation
+- [workflow.md](workflow.md) - Complete beads skill documentation
 - [CLI_REFERENCE.md](CLI_REFERENCE.md) - Full command reference
 - [WORKFLOWS.md](WORKFLOWS.md) - Common workflow patterns
 - [DAEMON.md](DAEMON.md) - Daemon management

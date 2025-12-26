@@ -80,7 +80,7 @@ flowchart TB
     READY -.->|"Phase 0"| VALIDATE
 ```
 
-For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../docs/PIPELINE_ARCHITECTURE.md).
+For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../../../docs/PIPELINE_ARCHITECTURE.md).
 
 ## Purpose
 

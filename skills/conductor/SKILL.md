@@ -528,7 +528,7 @@ When you see `conductor/tracks.md` with content like:
 ```markdown
 ## [~] Track: Add user authentication
 
-_Link: [conductor/tracks/auth_20251215/](conductor/tracks/auth_20251215/)_
+_Link: [conductor/tracks/auth_20251215/_
 ```
 
 You know:

@@ -41,7 +41,7 @@ Ask these questions to decide:
 
 **When in doubt**: Use bd. Better to have persistent memory you don't need than to lose context you needed.
 
-**For detailed decision criteria and examples, read:** [references/BOUNDARIES.md](references/BOUNDARIES.md)
+**For detailed decision criteria and examples, read:** [references/BOUNDARIES.md](./BOUNDARIES.md)
 
 ## Surviving Compaction Events
 
@@ -100,7 +100,7 @@ NEXT: Implement rate limiting (5 attempts/15min) once expiry decided
 Working on auth. Made some progress. More to do.
 ```
 
-**For complete compaction recovery workflow, read:** [references/WORKFLOWS.md](references/WORKFLOWS.md#compaction-survival)
+**For complete compaction recovery workflow, read:** [references/WORKFLOWS.md](./WORKFLOWS.md#compaction-survival)
 
 ## Session Start Protocol
 
@@ -132,7 +132,7 @@ Session Start:
 
 This establishes immediate shared context about available and active work without requiring user prompting.
 
-**For detailed collaborative handoff process, read:** [references/WORKFLOWS.md](references/WORKFLOWS.md#session-handoff)
+**For detailed collaborative handoff process, read:** [references/WORKFLOWS.md](./WORKFLOWS.md#session-handoff)
 
 ### Multi-Agent Session Start
 
@@ -317,8 +317,8 @@ When triggered:
 ### Integration
 
 This section extends Progress Checkpointing with degradation detection. See:
-- [implement.md](../implement.md#phase-3-track-implementation) step 6 for evaluation hook
-- [session-lifecycle.md](../context-engineering/session-lifecycle.md) for RECALL/REMEMBER integration
+- [implement.md](../../conductor/references/workflows/implement.md#phase-3-track-implementation) step 6 for evaluation hook
+- [session-lifecycle.md](../../design/references/session-lifecycle.md) for RECALL/REMEMBER integration
 
 ---
 
@@ -340,7 +340,7 @@ bd automatically selects the appropriate database:
 - If not found, uses `~/.beads/default.db`
 - Shell cwd can reset between commands - use absolute paths with --db when operating on non-local databases
 
-**For complete session start workflows, read:** [references/WORKFLOWS.md](references/WORKFLOWS.md#session-start)
+**For complete session start workflows, read:** [references/WORKFLOWS.md](./WORKFLOWS.md#session-start)
 
 ## Core Operations
 
@@ -444,7 +444,7 @@ bd list --type bug
 bd list --assignee alice
 ```
 
-**For complete CLI reference with all flags and examples, read:** [references/CLI_REFERENCE.md](references/CLI_REFERENCE.md)
+**For complete CLI reference with all flags and examples, read:** [references/CLI_REFERENCE.md](./CLI_REFERENCE.md)
 
 ## Field Usage Reference
 
@@ -459,7 +459,7 @@ Quick guide for when and how to use each bd field:
 | **status** | Workflow state (open→in_progress→closed) | As work progresses | When changing phases |
 | **priority** | Urgency level (0=highest, 3=lowest) | At creation | Adjust if priorities shift |
 
-**Key pattern**: Notes field is your "read me first" at session start. See [WORKFLOWS.md](references/WORKFLOWS.md#session-handoff) for session handoff details.
+**Key pattern**: Notes field is your "read me first" at session start. See [WORKFLOWS.md](./WORKFLOWS.md#session-handoff) for session handoff details.
 
 ---
 
@@ -534,7 +534,7 @@ bd dep add auth-epic auth-flow --type parent-child
 bd dep add auth-setup auth-flow
 ```
 
-**For detailed dependency patterns and types, read:** [references/DEPENDENCIES.md](references/DEPENDENCIES.md)
+**For detailed dependency patterns and types, read:** [references/DEPENDENCIES.md](./DEPENDENCIES.md)
 
 ## Dependency Types Reference
 
@@ -545,7 +545,7 @@ bd supports four dependency types:
 3. **parent-child** - Hierarchical (epic/subtask relationship)
 4. **discovered-from** - Provenance (issue B discovered while working on A)
 
-**For complete guide on when to use each type with examples and patterns, read:** [references/DEPENDENCIES.md](references/DEPENDENCIES.md)
+**For complete guide on when to use each type with examples and patterns, read:** [references/DEPENDENCIES.md](./DEPENDENCIES.md)
 
 ## Integration with TodoWrite
 
@@ -593,7 +593,7 @@ NEXT: Need user input on token expiry time (1hr vs 24hr trade-off)."
 
 **Don't duplicate**: TodoWrite tracks execution, Beads captures meaning and context.
 
-**For patterns on transitioning between tools mid-session, read:** [references/BOUNDARIES.md](references/BOUNDARIES.md#integration-patterns)
+**For patterns on transitioning between tools mid-session, read:** [references/BOUNDARIES.md](./BOUNDARIES.md#integration-patterns)
 
 ## Common Patterns
 
@@ -649,7 +649,7 @@ Starting work after time away:
 4. Run `bd show issue-id` on issue to work on
 5. Update status and begin work
 
-**For complete workflow walkthroughs with checklists, read:** [references/WORKFLOWS.md](references/WORKFLOWS.md)
+**For complete workflow walkthroughs with checklists, read:** [references/WORKFLOWS.md](./WORKFLOWS.md)
 
 ## Issue Creation
 
@@ -684,13 +684,13 @@ Creating Issue:
 - ✅ Acceptance: "User tokens persist across sessions and refresh automatically"
 - ❌ Wrong: "Use JWT tokens with 1-hour expiry" (that's design, not acceptance)
 
-**For detailed guidance on when to ask vs create, issue quality, resumability patterns, and design vs acceptance criteria, read:** [references/ISSUE_CREATION.md](references/ISSUE_CREATION.md)
+**For detailed guidance on when to ask vs create, issue quality, resumability patterns, and design vs acceptance criteria, read:** [references/ISSUE_CREATION.md](./ISSUE_CREATION.md)
 
 ## Alternative Use Cases
 
 bd is primarily for work tracking, but can also serve as queryable database for static reference data (glossaries, terminology) with adaptations.
 
-**For guidance on using bd for reference databases and static data, read:** [references/STATIC_DATA.md](references/STATIC_DATA.md)
+**For guidance on using bd for reference databases and static data, read:** [references/STATIC_DATA.md](./STATIC_DATA.md)
 
 ## Statistics and Monitoring
 
@@ -799,7 +799,7 @@ Use JSON output when you need to parse results programmatically or extract speci
 - Use `bd show issue-id` to see full dependency tree
 - Use `bd dep tree issue-id` for visualization
 - Dependencies are directional: `bd dep add from-id to-id` means from-id blocks to-id
-- See [references/DEPENDENCIES.md](references/DEPENDENCIES.md#common-mistakes)
+- See [references/DEPENDENCIES.md](./DEPENDENCIES.md#common-mistakes)
 
 **If database seems out of sync:**
 - bd auto-syncs JSONL after each operation (5s debounce)
@@ -885,10 +885,10 @@ This enables:
 
 ### References
 
-- [Beads Session Workflow](../conductor/beads-session.md) - Full SA/MA session protocol
-- [Beads Preflight](../conductor/preflight-beads.md) - Mode detection and session init
-- [Beads Facade](../../skills/conductor/references/beads-facade.md) - API contract
-- [Beads Integration](../../skills/conductor/references/beads-integration.md) - All 13 integration points
+- [Beads Session Workflow](../../conductor/references/conductor/beads-session.md) - Full SA/MA session protocol
+- [Beads Preflight](../../conductor/references/conductor/preflight-beads.md) - Mode detection and session init
+- [Beads Facade](../../conductor/references/beads-facade.md) - API contract
+- [Beads Integration](../../conductor/references/beads-integration.md) - All 13 integration points
 
 ---
 
@@ -898,10 +898,10 @@ Detailed information organized by topic:
 
 | Reference | Read When |
 |-----------|-----------|
-| [references/BOUNDARIES.md](references/BOUNDARIES.md) | Need detailed decision criteria for bd vs TodoWrite, or integration patterns |
-| [references/CLI_REFERENCE.md](references/CLI_REFERENCE.md) | Need complete command reference, flag details, or examples |
-| [references/WORKFLOWS.md](references/WORKFLOWS.md) | Need step-by-step workflows with checklists for common scenarios |
-| [references/DEPENDENCIES.md](references/DEPENDENCIES.md) | Need deep understanding of dependency types or relationship patterns |
-| [references/ISSUE_CREATION.md](references/ISSUE_CREATION.md) | Need guidance on when to ask vs create issues, issue quality, or design vs acceptance criteria |
-| [references/STATIC_DATA.md](references/STATIC_DATA.md) | Want to use bd for reference databases, glossaries, or static data instead of work tracking |
-| [references/VILLAGE.md](references/VILLAGE.md) | Need multi-agent coordination tools, conflict resolution, or team protocols |
+| [references/BOUNDARIES.md](./BOUNDARIES.md) | Need detailed decision criteria for bd vs TodoWrite, or integration patterns |
+| [references/CLI_REFERENCE.md](./CLI_REFERENCE.md) | Need complete command reference, flag details, or examples |
+| [references/WORKFLOWS.md](./WORKFLOWS.md) | Need step-by-step workflows with checklists for common scenarios |
+| [references/DEPENDENCIES.md](./DEPENDENCIES.md) | Need deep understanding of dependency types or relationship patterns |
+| [references/ISSUE_CREATION.md](./ISSUE_CREATION.md) | Need guidance on when to ask vs create issues, issue quality, or design vs acceptance criteria |
+| [references/STATIC_DATA.md](./STATIC_DATA.md) | Want to use bd for reference databases, glossaries, or static data instead of work tracking |
+| [references/VILLAGE.md](./VILLAGE.md) | Need multi-agent coordination tools, conflict resolution, or team protocols |

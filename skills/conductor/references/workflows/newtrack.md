@@ -183,7 +183,7 @@ This workflow uses multiple state files:
 
 **Skip if `--no-beads` or `--plan-only` flag set.**
 
-This phase uses the [track-init-beads.md](conductor/track-init-beads.md) workflow.
+This phase uses the [track-init-beads.md](../conductor/track-init-beads.md) workflow.
 
 #### Step 1: Check Lock File
 
@@ -209,7 +209,7 @@ echo "{\"agentId\": \"$THREAD_ID\", \"lockedAt\": \"$(date -u +%Y-%m-%dT%H:%M:%S
 
 #### Step 2: Validate Plan Structure
 
-Run plan validation from [track-init-beads.md](conductor/track-init-beads.md):
+Run plan validation from [track-init-beads.md](../conductor/track-init-beads.md):
 
 1. **Parse tasks** from plan.md
 2. **Validate** structure (unique IDs, valid deps)
@@ -430,6 +430,6 @@ conductor/
 
 ## References
 
-- [Track Init Beads Workflow](conductor/track-init-beads.md) - Detailed beads filing process
-- [Beads Facade](../skills/conductor/references/beads-facade.md) - API contract
-- [Beads Integration](../skills/conductor/references/beads-integration.md) - All 13 integration points
+- [Track Init Beads Workflow](../conductor/track-init-beads.md) - Detailed beads filing process
+- [Beads Facade](../beads-facade.md) - API contract
+- [Beads Integration](../beads-integration.md) - All 13 integration points

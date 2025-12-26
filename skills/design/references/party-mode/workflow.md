@@ -60,7 +60,7 @@ flowchart TB
     class STORY,BRAIN,DESIGN,STRAT,SOLVER creative
 ```
 
-For complete pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../docs/PIPELINE_ARCHITECTURE.md).
+For complete pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../../../../docs/PIPELINE_ARCHITECTURE.md).
 
 ## Purpose
 
@@ -91,7 +91,7 @@ Party Mode brings multiple expert perspectives into design sessions. When trigge
 | strategist      | Victor    | ⚡   | creative  | Business strategy, competitive analysis, positioning               |
 | solver          | Dr. Quinn | 🔬   | creative  | Problem decomposition, root cause analysis, systematic solutions   |
 
-**Agent Files:** `workflows/party-mode/agents/{module}/{id}.md`
+**Agent Files:** `skills/design/references/party-mode/agents/{module}/{id}.md`
 
 ---
 
@@ -233,7 +233,7 @@ Resume main Double Diamond flow with synthesized insights.
 
 ## Custom Agents
 
-Users can add custom agents in `workflows/party-mode/custom/` directory. See `workflows/party-mode/custom/README.md` for format.
+Users can add custom agents in `skills/design/references/party-mode/custom/` directory. See `skills/design/references/party-mode/custom/README.md` for format.
 
 Custom agents are discovered automatically and added to selection pool with `custom` module tag.
 
@@ -281,7 +281,7 @@ Paste the synthesis back here when done.
 Create a persistent Party Mode assistant:
 
 1. Create new Custom GPT or Gemini Gem
-2. Upload agent files from `workflows/party-mode/agents/` as knowledge
+2. Upload agent files from `skills/design/references/party-mode/agents/` as knowledge
 3. Use this system prompt:
 
 ```

@@ -152,7 +152,7 @@ When intent requires exploration, design, or specification:
 
 When intent has clear implementation path:
 
-→ Reference: [execution-routing.md](execution-routing.md)
+→ Reference: [execution-routing.md](./execution-routing.md)
 
 **Triggers:**
 - spec.md and plan.md exist
@@ -176,7 +176,7 @@ Preflight Sequence:
 4. Create/update session state
 ```
 
-Location: [../conductor/preflight-beads.md](../conductor/preflight-beads.md)
+Location: [../conductor/preflight-beads.md](../../conductor/references/conductor/preflight-beads.md)
 
 ### implement.md: ROUTE Evaluation at Phase 2b
 
@@ -196,7 +196,7 @@ During implementation, ROUTE is re-evaluated at Phase 2b to ensure correct path:
 - Detect if design revision needed (→ /conductor-revise)
 - Validate beads are filed and ready
 
-Location: [../implement.md](../implement.md)
+Location: [../implement.md](../../conductor/references/workflows/implement.md)
 
 ---
 

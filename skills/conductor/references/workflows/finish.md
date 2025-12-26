@@ -218,8 +218,8 @@ conductor/
 
 ## See Also
 
-- [Full workflow reference](../skills/conductor/references/finish-workflow.md) for detailed phase instructions
-- [Beads Integration](../skills/conductor/references/beads-integration.md) - Points 9 (Compact) and 10 (Cleanup)
-- [Beads Facade](../skills/conductor/references/beads-facade.md) - syncToGit API contract
-- [Beads Session](conductor/beads-session.md) - Session cleanup protocol
-- [finish_state.schema.json](schemas/finish_state.schema.json) for state file schema
+- [Full workflow reference](../finish-workflow.md) for detailed phase instructions
+- [Beads Integration](../beads-integration.md) - Points 9 (Compact) and 10 (Cleanup)
+- [Beads Facade](../beads-facade.md) - syncToGit API contract
+- [Beads Session](../conductor/beads-session.md) - Session cleanup protocol
+- [finish_state.schema.json](../schemas/finish_state.schema.json) for state file schema

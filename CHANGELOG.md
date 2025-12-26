@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2025-12-26
+
+### BREAKING CHANGES
+
+- **Architecture Migration**: Moved from 3-layer (commands/, workflows/, skills/) to 2-layer (skills/, AGENTS.md) architecture
+- **Removed directories**: `commands/` and `workflows/` directories no longer exist
+- **Path changes**: All workflow files moved to `skills/*/references/`
+- **New skill**: Added `session-compaction` skill (previously `compact` command)
+
+### Migration Guide
+
+See [docs/MIGRATION_V2.md](docs/MIGRATION_V2.md) for complete migration instructions.
+
+**Key path changes:**
+- `workflows/beads/` → `skills/beads/references/`
+- `workflows/conductor/` → `skills/conductor/references/conductor/`
+- `workflows/*.md` → `skills/conductor/references/workflows/`
+- `workflows/party-mode/` → `skills/design/references/party-mode/`
+- `commands/*.md` → merged into skill references or deleted (pure aliases)
+
 ## [1.11.0] - 2025-12-26
 
 

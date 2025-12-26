@@ -32,7 +32,7 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
 **REQUIRED:** Run before any implementation work.
 
 1. **Execute Preflight**
-   - Run [preflight-beads.md](conductor/preflight-beads.md) workflow
+   - Run [preflight-beads.md](../conductor/preflight-beads.md) workflow
    - Checks `bd` availability (HALT if unavailable)
    - Detects mode (SA or MA) and locks for session
    - Creates session state file
@@ -128,9 +128,9 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
 
 6. **Branch Logic:**
    - **SINGLE_AGENT:** Continue to Phase 3 (sequential execution)
-   - **PARALLEL_DISPATCH:** Use [parallel-dispatch.md](agent-coordination/patterns/parallel-dispatch.md) pattern
+   - **PARALLEL_DISPATCH:** Use [parallel-dispatch.md](../../../dispatching-parallel-agents/references/agent-coordination/patterns/parallel-dispatch.md) pattern
 
-See [execution-routing.md](agent-coordination/patterns/execution-routing.md) for full scoring details.
+See [execution-routing.md](../../../dispatching-parallel-agents/references/agent-coordination/patterns/execution-routing.md) for full scoring details.
 
 ### Phase 3: Track Implementation
 
@@ -158,7 +158,7 @@ See [execution-routing.md](agent-coordination/patterns/execution-routing.md) for
    reserve path="<file>"                     # Lock files before edit
    ```
    
-   See [beads-session.md](conductor/beads-session.md) for full protocol.
+   See [beads-session.md](../conductor/beads-session.md) for full protocol.
 
 4. **Execute Tasks**
    - Iterate through `plan.md` tasks sequentially
@@ -202,7 +202,7 @@ See [execution-routing.md](agent-coordination/patterns/execution-routing.md) for
    
    **Action:** If 2+ signals fire → trigger context compression
    
-   See [Degradation Signals](beads/workflow.md#degradation-signals) for full details.
+   See [Degradation Signals](../../../beads/references/workflow.md#degradation-signals) for full details.
 
 7. **Close Task (Beads Integration)**
    
@@ -288,7 +288,7 @@ See [execution-routing.md](agent-coordination/patterns/execution-routing.md) for
    - Remove session lock file
    - Update session state file
 
-See [beads-session.md](conductor/beads-session.md) for full sync protocol.
+See [beads-session.md](../conductor/beads-session.md) for full sync protocol.
 
 ## Task Workflow Reference
 
@@ -353,7 +353,7 @@ conductor/
 
 ## References
 
-- [Beads Session Workflow](conductor/beads-session.md) - Claim, close, sync protocol
-- [Beads Preflight](conductor/preflight-beads.md) - Session initialization
-- [Beads Facade](../skills/conductor/references/beads-facade.md) - API contract
-- [Beads Integration](../skills/conductor/references/beads-integration.md) - All 13 integration points
+- [Beads Session Workflow](../conductor/beads-session.md) - Claim, close, sync protocol
+- [Beads Preflight](../conductor/preflight-beads.md) - Session initialization
+- [Beads Facade](../beads-facade.md) - API contract
+- [Beads Integration](../beads-integration.md) - All 13 integration points

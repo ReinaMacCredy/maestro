@@ -344,8 +344,8 @@ display_token_budget() {
 
 ### Integration
 
-→ [Anchored State Format](../context-engineering/references/anchored-state-format.md) for template
-→ [Session Lifecycle](../context-engineering/session-lifecycle.md) for full RECALL/ROUTE flow
+→ [Anchored State Format](../../../design/references/anchored-state-format.md) for template
+→ [Session Lifecycle](../../../design/references/session-lifecycle.md) for full RECALL/ROUTE flow
 
 ---
 
@@ -750,6 +750,6 @@ If preflight fails → HALT command.
 
 ## References
 
-- [Beads Facade](../skills/conductor/references/beads-facade.md) - API contract
-- [Beads Integration](../skills/conductor/references/beads-integration.md) - All 13 points
-- [Track Validation](../skills/conductor/references/validation/track/checks.md) - Session lock detection
+- [Beads Facade](../beads-facade.md) - API contract
+- [Beads Integration](../beads-integration.md) - All 13 points
+- [Track Validation](../validation/track/checks.md) - Session lock detection
