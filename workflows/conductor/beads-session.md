@@ -838,6 +838,83 @@ cleanup_expired_handoffs() {
 
 ---
 
+## Anchored Format (SA Mode)
+
+For single-agent sessions, use anchored format to save session context for cross-session continuity.
+
+### Save Location
+
+`.conductor/session-context.md`
+
+### When to Save
+
+- **Session end** - Before closing session
+- **Token budget critical** - When >85% token usage
+- **Major milestone** - After significant progress
+- **Before handoff** - When switching tracks or agents
+
+### Format Reference
+
+→ [Anchored State Format](../context-engineering/references/anchored-state-format.md)
+
+### Required Sections
+
+| Section | [PRESERVE] | Purpose |
+|---------|------------|---------|
+| Intent | ✓ | What we're building and why |
+| Constraints & Ruled-Out | ✓ | What we've explicitly decided NOT to do |
+| Decisions Made | | Key architectural/design decisions (with Why) |
+| Files Modified | | List of files touched this session |
+| Open Questions / TODOs | | Things to address |
+| Current State | | Where we are now |
+| Next Steps | | What to do next |
+
+### PRESERVE Validation
+
+Before saving, validate PRESERVE sections are not empty:
+
+```bash
+validate_preserve_sections() {
+  local CONTEXT_FILE="$1"
+  
+  # Check Intent section (using sed to extract full section)
+  local intent_content
+  intent_content=$(sed -n '/^## Intent/,/^## /p' "$CONTEXT_FILE" | grep -v "^##" | tr -d '[:space:]')
+  if [[ -z "$intent_content" ]]; then
+    echo "ERROR: Intent [PRESERVE] section is empty"
+    return 1
+  fi
+  
+  # Check Constraints section
+  local constraints_content
+  constraints_content=$(sed -n '/^## Constraints/,/^## /p' "$CONTEXT_FILE" | grep -v "^##" | tr -d '[:space:]')
+  if [[ -z "$constraints_content" ]]; then
+    echo "ERROR: Constraints [PRESERVE] section is empty"
+    return 1
+  fi
+  
+  return 0
+}
+```
+
+### SA vs MA Handoff Comparison
+
+| Aspect | SA Mode | MA Mode |
+|--------|---------|---------|
+| Storage | `.conductor/session-context.md` | `.conductor/handoff_*.json` |
+| Format | Anchored markdown with [PRESERVE] | Structured JSON |
+| Audience | Same agent, future session | Different agent, same session |
+| TTL | Persistent until overwritten | 24 hours |
+| Recovery | RECALL at session start | `inbox()` check |
+
+### Integration
+
+This extends the Handoff Protocol for SA mode. See:
+- [Session Lifecycle](../context-engineering/session-lifecycle.md) - RECALL phase loads this file
+- [Checkpoint Facade](checkpoint.md) - For progress checkpointing triggers
+
+---
+
 ## References
 
 - [Preflight Workflow](preflight-beads.md) - Session initialization

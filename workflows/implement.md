@@ -72,6 +72,66 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
    - **If all complete**:
      - Announce all tasks done, halt
 
+### Phase 2b: Execution Routing
+
+**Purpose:** Determine whether to execute tasks sequentially (SINGLE_AGENT) or in parallel (PARALLEL_DISPATCH).
+
+1. **Evaluate TIER 1** (weighted score):
+   
+   | Factor | Weight |
+   |--------|--------|
+   | Epics > 1 | +2 |
+   | [PARALLEL] markers in plan | +3 |
+   | Domains > 2 | +2 |
+   | Independent tasks > 5 | +1 |
+   
+   **Threshold:** Score >= 5 to proceed to TIER 2
+
+2. **Evaluate TIER 2** (if TIER 1 passes):
+   
+   ```python
+   (files > 15 AND tasks > 3) OR
+   (est_tool_calls > 40) OR
+   (est_time > 30 min AND independent_ratio > 0.6)
+   ```
+
+3. **Route Decision:**
+   
+   | TIER 1 | TIER 2 | Result |
+   |--------|--------|--------|
+   | FAIL | - | SINGLE_AGENT |
+   | PASS | FAIL | SINGLE_AGENT |
+   | PASS | PASS | PARALLEL_DISPATCH |
+
+4. **Display Feedback:**
+   ```text
+   ┌─ EXECUTION ROUTING ────────────────────┐
+   │ TIER 1 Score: 6/8                      │
+   │ TIER 2: PASS                           │
+   │ Result: PARALLEL_DISPATCH              │
+   └────────────────────────────────────────┘
+   ```
+
+5. **Update State:**
+   
+   Add to `implement_state.json`:
+   ```json
+   {
+     "execution_mode": "PARALLEL_DISPATCH",
+     "routing_evaluation": {
+       "tier1_score": 6,
+       "tier1_pass": true,
+       "tier2_pass": true
+     }
+   }
+   ```
+
+6. **Branch Logic:**
+   - **SINGLE_AGENT:** Continue to Phase 3 (sequential execution)
+   - **PARALLEL_DISPATCH:** Use [parallel-dispatch.md](agent-coordination/patterns/parallel-dispatch.md) pattern
+
+See [execution-routing.md](agent-coordination/patterns/execution-routing.md) for full scoring details.
+
 ### Phase 3: Track Implementation
 
 1. **Update Status**
@@ -129,7 +189,22 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
    bd update <task-id> --notes "IN_PROGRESS: GREEN phase - making test pass"
    ```
 
-6. **Close Task (Beads Integration)**
+6. **Degradation Evaluation (after each task)**
+   
+   After each task completion, evaluate degradation signals:
+   
+   | Signal | Threshold | Trigger |
+   |--------|-----------|---------|
+   | `tool_repeat` | file_write: 3, bash: 3, search: 5, file_read: 10 | Same tool on same target exceeds threshold |
+   | `backtrack` | 1 | Revisiting completed task |
+   | `quality_drop` | 1 | Test failures increase OR new lint errors |
+   | `contradiction` | 1 | Output conflicts with prior Decisions |
+   
+   **Action:** If 2+ signals fire → trigger context compression
+   
+   See [Degradation Signals](beads/workflow.md#degradation-signals) for full details.
+
+7. **Close Task (Beads Integration)**
    
    After task completion:
    
@@ -149,11 +224,11 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
    - `skipped` - Task not needed (requirements changed)
    - `blocked` - Cannot proceed, external dependency
 
-7. **Phase Completion**
+8. **Phase Completion**
    - Execute Phase Completion Protocol from `workflow.md`
    - Includes: test verification, manual verification, checkpoint commit
 
-8. **Finalize Track**
+9. **Finalize Track**
    - Update status `[~]` → `[x]` in `tracks.md`
    - Announce completion
 

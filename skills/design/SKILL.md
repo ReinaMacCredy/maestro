@@ -1,6 +1,6 @@
 ---
 name: design
-version: "2.2.0"
+version: "2.3.0"
 description: Design Session - collaborative brainstorming to turn ideas into designs using Double Diamond methodology. Use when user types "ds" or wants to explore/design a feature before implementation.
 license: Apache-2.0
 compatibility: Works with Claude Code, Amp Code, Codex, and any Agent Skills compatible CLI
@@ -56,6 +56,77 @@ Check for `conductor/` directory with core files:
 - `workflow.md` - Development standards
 
 If missing, suggest: `Run /conductor-setup first for full context.`
+
+### 3. Complexity Scoring (Design Routing)
+
+After loading context, evaluate task complexity to determine routing:
+
+**Scoring Criteria** (max 18 points):
+
+| Factor | Weight | Check |
+|--------|--------|-------|
+| Multiple epics | +3 | Work spans multiple epics |
+| Cross-module | +2 | Changes touch multiple modules |
+| New abstractions | +3 | Creating new patterns/interfaces |
+| External deps | +2 | New external dependencies |
+| Files > 5 | +1 | Touching more than 5 files |
+| Unclear scope | +2 | Scope not well-defined |
+| Security/auth | +2 | Involves security or authentication |
+| Data migration | +3 | Database or data migration |
+
+**Display COMPLEXITY_EXPLAINER:**
+
+```text
+┌─ COMPLEXITY EXPLAINER ─────────────────┐
+│ Factor              │ Score │          │
+├─────────────────────┼───────┼──────────┤
+│ Multiple epics      │   0   │          │
+│ Cross-module        │   2   │ ✓        │
+│ New abstractions    │   0   │          │
+│ External deps       │   0   │          │
+│ Files > 5           │   1   │ ✓        │
+│ Unclear scope       │   0   │          │
+│ Security/auth       │   0   │          │
+│ Data migration      │   0   │          │
+├─────────────────────┼───────┼──────────┤
+│ TOTAL               │   3   │ SPEED    │
+└─────────────────────────────────────────┘
+```
+
+**Routing Decision:**
+
+| Score | Route | Description |
+|-------|-------|-------------|
+| < 4 | SPEED MODE | 1-phase quick design, minimal ceremony |
+| 4-6 | ASK USER | Soft zone: "[S]peed or [F]ull?" |
+| > 6 | FULL MODE | 4-phase Double Diamond with A/P/C |
+
+**Soft Zone Behavior (score 4-6):**
+- Prompt: "Score is X (soft zone). [S]peed or [F]ull?"
+- After 2 prompts without response → default to FULL
+- Track prompt count in session
+
+**Escalation:**
+- User can type `[E]` during SPEED mode to escalate to FULL
+- Escalation preserves current progress and enters DEFINE phase
+
+See [design-routing-heuristics.md](../../workflows/context-engineering/references/design-routing-heuristics.md) for full scoring details.
+
+### SPEED Mode Flow
+
+For simple tasks (score < 4):
+
+1. **Quick Discovery** - 2-3 clarifying questions max
+2. **Output** - Generate design.md directly
+3. **Handoff** - "Design complete. Run `/conductor-newtrack` to continue."
+
+No A/P/C checkpoints in SPEED mode (unless user escalates with `[E]`).
+
+### FULL Mode Flow
+
+For complex tasks (score > 6 or user-selected):
+
+Proceed with full Double Diamond (4 phases, A/P/C checkpoints).
 
 ## Double Diamond Framework
 
