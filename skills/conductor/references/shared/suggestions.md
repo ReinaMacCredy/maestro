@@ -213,9 +213,9 @@ function formatSuggestionBox(status, lines, suggestion):
     # Calculate width
     allLines = [status + " completed"] + lines + ["→ Next: " + suggestion.primary]
     if suggestion.alt:
-        allLines.push("  Alt: " + suggestion.alt)
+        allLines.append("  Alt: " + suggestion.alt)
     
-    width = max(len(line) for line in allLines) + 4  # 2 padding each side
+    width = max(len(line) for line in allLines) + 4  # 1 border + 1 space per side (total +4)
     width = max(width, 40)  # minimum width
     
     # Build box
@@ -224,8 +224,8 @@ function formatSuggestionBox(status, lines, suggestion):
     
     result = [top]
     for line in allLines:
-        result.push("│ " + line.padEnd(width - 2) + " │")
-    result.push(bottom)
+        result.append("│ " + line.ljust(width - 4) + " │")
+    result.append(bottom)
     
-    return result.join("\n")
+    return "\n".join(result)
 ```

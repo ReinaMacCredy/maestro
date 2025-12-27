@@ -49,8 +49,8 @@ function validateTransition(currentState, targetState):
         }
     
     if transition.type == "STRICT":
-        if transition is not in VALID_STRICT:
-            HALT("Cannot transition from {currentState} to {targetState}")
+        # STRICT transitions are valid if they exist in TRANSITIONS table
+        pass
     else:  # SOFT
         WARN("Unusual transition: {currentState} → {targetState}")
     

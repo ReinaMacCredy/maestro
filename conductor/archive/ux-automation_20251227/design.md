@@ -163,9 +163,14 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
 
         # If still exists, try -v3, etc.
         SUFFIX=2
+        MAX_RETRIES=10
         while git show-ref --verify --quiet "refs/heads/$NEW_BRANCH"; do
             SUFFIX=$((SUFFIX + 1))
             NEW_BRANCH="feat/${track_id}-v${SUFFIX}"
+            if [ "$SUFFIX" -gt "$MAX_RETRIES" ]; then
+                echo "Error: Too many existing branches for ${track_id}" >&2
+                exit 1
+            fi
         done
 
         echo "Branch feat/${track_id} exists. Using ${NEW_BRANCH}"

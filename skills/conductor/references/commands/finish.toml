@@ -237,7 +237,7 @@ Phase 4/6: Refreshing context docs...
    - Check for open beads: `bd list --labels "track:<track_id>" --status open --json`
    - If open beads found AND `forceArchive` is false:
      ```
-     ⚠️ Cannot archive: N beads still open.
+     WARNING: Cannot archive: N beads still open.
      
      Open beads:
      - [id]: title
@@ -248,7 +248,7 @@ Phase 4/6: Refreshing context docs...
      HALT
    - If open beads found AND `forceArchive` is true:
      ```
-     ⚠️ Warning: Archiving with N open beads.
+     WARNING: Archiving with N open beads.
      ```
 
 2. **Show Git Diff:**
