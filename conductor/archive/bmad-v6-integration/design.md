@@ -93,7 +93,7 @@ skills/design/
 │   │   │   ├── brainstorming/
 │   │   │   │   ├── workflow.md
 │   │   │   │   ├── steps/
-│   │   │   │   ├── brain-methods.csv  # 36 techniques
+│   │   │   │   ├── brain-methods.csv  # 62 techniques
 │   │   │   │   └── template.md
 │   │   │   ├── design-thinking/
 │   │   │   ├── innovation-strategy/
@@ -129,7 +129,7 @@ skills/design/
 | | Analyst (Mary) | 📊 | Business Analyst |
 | | Architect (Winston) | 🏗️ | System Architect |
 | | DEV (Amelia) | 💻 | Developer |
-| | SM (Sarah) | 🏃 | Scrum Master |
+| | SM (Bob) | 🏃 | Scrum Master |
 | | TEA (Murat) | 🧪 | Test Engineer |
 | | UX Designer (Sally) | 🎨 | UX/UI Designer |
 | | Tech Writer (Paige) | 📝 | Documentation |
@@ -138,7 +138,7 @@ skills/design/
 | | Creative Problem Solver (Dr. Quinn) | 🔬 | Problem decomposition |
 | | Design Thinking Coach (Maya) | 🎯 | Design methodology |
 | | Innovation Strategist (Victor) | 💡 | Strategic innovation |
-| | Presentation Master (Leo) | 🎤 | Presentations |
+| | Presentation Master (Caravaggio) | 🎨 | Visual Communication |
 | | Storyteller (Sophia) | 📖 | Narrative design |
 
 ### Agent Format (Native MD)
@@ -282,7 +282,7 @@ Return to A/P/C menu
 - 16 agents (Core: 1, BMM: 9, CIS: 6)
 - 6 CIS workflows
 - Party Mode with BMad Master orchestration
-- brain-methods.csv (36 techniques)
+- brain-methods.csv (62 techniques)
 - storyteller-sidecar knowledge
 - Integration at ALL Conductor stages
 - Adapter layer for v6 compatibility

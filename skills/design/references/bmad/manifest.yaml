@@ -124,7 +124,7 @@ agents:
 
   - id: tech-writer
     name: Paige
-    icon: 📝
+    icon: 📚
     module: bmm
     path: agents/bmm/tech-writer.md
     expertise:
@@ -137,7 +137,7 @@ agents:
 
   - id: quick-flow-solo-dev
     name: Barry
-    icon: ⚡
+    icon: 🚀
     module: bmm
     path: agents/bmm/quick-flow-solo-dev.md
     expertise:
@@ -156,7 +156,7 @@ agents:
     path: agents/cis/brainstorming-coach.md
     expertise:
       - ideation facilitation
-      - 36 techniques
+      - 62 techniques
       - lateral thinking
       - volume over quality
       - breaking constraints
@@ -177,7 +177,7 @@ agents:
 
   - id: design-thinking-coach
     name: Maya
-    icon: 🎯
+    icon: 🎨
     module: cis
     path: agents/cis/design-thinking-coach.md
     expertise:
@@ -190,7 +190,7 @@ agents:
 
   - id: innovation-strategist
     name: Victor
-    icon: 💡
+    icon: ⚡
     module: cis
     path: agents/cis/innovation-strategist.md
     expertise:

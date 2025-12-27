@@ -11,7 +11,7 @@
 
 ## Gotchas
 
-- **Agent names/icons differ from upstream** - SM is Bob (not Sarah), Presentation Master is Caravaggio 🎨 (not Leo 🎤) - always verify against official BMAD repo
+- **Agent names/icons differ from upstream** - SM is Bob (not Sarah), Presentation Master is Caravaggio 🎨 (not Leo 🎤), tech-writer is 📚 (not 📝), quick-flow-solo-dev is 🚀 (not ⚡), design-thinking-coach is Maya 🎨 with title "Design Thinking Maestro", innovation-strategist is Victor ⚡ with title "Disruptive Innovation Oracle" - always verify against official BMAD repo
 - **Sidecar structure matters** - Upstream has `storyteller-sidecar/` with only 2 files (`stories-told.md`, `story-preferences.md`); extra knowledge files are Maestro enhancements
 - **Language switch mid-implementation** - Original design specified Vietnamese, switched to English for broader compatibility - update ALL agent files, config.yaml, SKILL.md, README.md
 - **Manifest format differs** - BMAD v6 uses `.agent.yaml` files; Maestro uses native MD with YAML frontmatter

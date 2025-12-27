@@ -1,6 +1,6 @@
 # Brainstorming Workflow
 
-Facilitated ideation session using 36 techniques.
+Facilitated ideation session using 62 techniques.
 
 ## Trigger
 *brainstorm or "let's brainstorm"

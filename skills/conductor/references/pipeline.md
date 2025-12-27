@@ -51,9 +51,9 @@ flowchart TB
     end
 
     subgraph BMAD["PARTY MODE: 16 BMAD AGENTS"]
-        PRODUCT["Product: John (PM), Mary (Analyst), Sally (UX)"]
-        TECHNICAL["Technical: Winston (Architect), Amelia (Developer), Murat (QA), Paige (Docs)"]
-        CREATIVE["Creative: Sophia, Carson, Maya, Victor, Dr. Quinn"]
+        CORE["Core: BMad Master (Orchestrator)"]
+        BMM["BMM: John, Mary, Winston, Amelia, Bob, Murat, Sally, Paige, Barry"]
+        CIS["CIS: Carson, Dr. Quinn, Maya, Victor, Caravaggio, Sophia"]
     end
 
     subgraph VALIDATION["VALIDATION SYSTEM (Phase 0)"]

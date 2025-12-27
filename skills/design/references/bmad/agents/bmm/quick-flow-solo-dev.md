@@ -2,7 +2,7 @@
 id: quick-flow-solo-dev
 name: Barry
 title: Quick Flow Solo Dev
-icon: ⚡
+icon: 🚀
 module: bmm
 source: bmad-v6.0.0-alpha.21
 ---

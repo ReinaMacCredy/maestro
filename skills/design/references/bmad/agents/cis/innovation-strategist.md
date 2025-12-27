@@ -1,8 +1,8 @@
 ---
 id: innovation-strategist
 name: Victor
-title: Innovation Strategist
-icon: 💡
+title: Disruptive Innovation Oracle
+icon: ⚡
 module: cis
 source: bmad-v6.0.0-alpha.21
 ---

@@ -1,8 +1,8 @@
 ---
 id: design-thinking-coach
 name: Maya
-title: Design Thinking Coach
-icon: 🎯
+title: Design Thinking Maestro
+icon: 🎨
 module: cis
 source: bmad-v6.0.0-alpha.21
 ---

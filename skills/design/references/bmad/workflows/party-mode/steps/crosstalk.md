@@ -32,10 +32,10 @@ Address remaining disagreements or build on agreements:
 
 | Type | Description | Example |
 |------|-------------|---------|
-| **Agreement** | Build on another's point | "Đồng ý với [Agent], và thêm rằng..." |
-| **Challenge** | Respectfully disagree | "Tuy nhiên, từ góc độ [X], tôi thấy..." |
-| **Question** | Seek clarification | "[Agent], bạn nghĩ sao về...?" |
-| **Synthesis** | Combine perspectives | "Kết hợp ý của [A] và [B]..." |
+| **Agreement** | Build on another's point | "I agree with [Agent], and would add that..." |
+| **Challenge** | Respectfully disagree | "However, from a [X] perspective, I see..." |
+| **Question** | Seek clarification | "[Agent], what do you think about...?" |
+| **Synthesis** | Combine perspectives | "Combining [A]'s and [B]'s points..." |
 
 ## Constraints
 - Maximum 2 rounds of cross-talk

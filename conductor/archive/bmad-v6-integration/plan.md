@@ -58,7 +58,7 @@ Estimated effort: 12-16 hours.
 - [ ] 2.2.2 Create `agents/bmm/analyst.md` - Mary (Business Analyst)
 - [ ] 2.2.3 Create `agents/bmm/architect.md` - Winston (System Architect)
 - [ ] 2.2.4 Create `agents/bmm/dev.md` - Amelia (Developer)
-- [ ] 2.2.5 Create `agents/bmm/sm.md` - Sarah (Scrum Master)
+- [ ] 2.2.5 Create `agents/bmm/sm.md` - Bob (Scrum Master)
 - [ ] 2.2.6 Create `agents/bmm/tea.md` - Murat (Test Engineer)
 - [ ] 2.2.7 Create `agents/bmm/ux-designer.md` - Sally (UX Designer)
 - [ ] 2.2.8 Create `agents/bmm/tech-writer.md` - Paige (Technical Writer)
@@ -82,7 +82,7 @@ Estimated effort: 12-16 hours.
 - [ ] 3.1.2 Create `agents/cis/creative-problem-solver.md` - Dr. Quinn (🔬)
 - [ ] 3.1.3 Create `agents/cis/design-thinking-coach.md` - Maya (🎯)
 - [ ] 3.1.4 Create `agents/cis/innovation-strategist.md` - Victor (💡)
-- [ ] 3.1.5 Create `agents/cis/presentation-master.md` - Leo (🎤)
+- [ ] 3.1.5 Create `agents/cis/presentation-master.md` - Caravaggio (🎨)
 
 ### 3.2 Storyteller Agent with Sidecar
 
@@ -93,7 +93,7 @@ Estimated effort: 12-16 hours.
 
 ### 3.3 Brainstorming Resources
 
-- [ ] 3.3.1 Create `workflows/brainstorming/brain-methods.csv` (36 techniques)
+- [ ] 3.3.1 Create `workflows/brainstorming/brain-methods.csv` (62 techniques)
 - [ ] 3.3.2 Create `workflows/brainstorming/template.md`
 
 ### 3.4 Phase 3 Verification
@@ -224,7 +224,7 @@ Estimated effort: 12-16 hours.
 ### 6.6 Documentation
 
 - [ ] 6.6.1 Update CODEMAPS overview with new structure
-- [ ] 6.6.2 Document Vietnamese communication requirement
+- [ ] ~~6.6.2 Document Vietnamese communication requirement~~ *(Changed to language-adaptive - see LEARNINGS.md)*
 - [ ] 6.6.3 Document sync workflow with BMAD upstream
 
 ### 6.7 Phase 6 Verification

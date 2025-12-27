@@ -40,7 +40,8 @@ Each agent provides their perspective following this format:
    - Offer alternatives when critiquing
    - Focus on improving the design
 
-4. **Vietnamese Communication**
-   - All responses in Vietnamese
-   - Technical terms may remain in English
-   - Maintain professional tone
+4. **Language Adaptation**
+   - Respond in the same language the user is using
+   - Technical terms may remain in English for clarity
+   - Match the user's communication style and formality level
+   - Maintain professional tone appropriate to the language

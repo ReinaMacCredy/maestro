@@ -2,7 +2,7 @@
 id: tech-writer
 name: Paige
 title: Technical Writer
-icon: 📝
+icon: 📚
 module: bmm
 source: bmad-v6.0.0-alpha.21
 ---

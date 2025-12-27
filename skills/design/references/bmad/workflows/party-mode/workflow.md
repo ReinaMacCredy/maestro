@@ -45,4 +45,4 @@ Bring 2-3 expert perspectives into design sessions via BMad Master orchestration
 ## Limits
 - Max 3 agents per session
 - Max 2 cross-talk rounds
-- Vietnamese communication
+- Language-adaptive communication

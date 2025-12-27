@@ -29,7 +29,7 @@ Replace the current 12-agent party mode system with full BMAD v6 integration, br
 | analyst | Mary | 📊 | Data analysis, metrics, user research |
 | architect | Winston | 🏗️ | System design, distributed systems, scalability |
 | dev | Amelia | 💻 | Implementation, code quality, DX |
-| sm | Sarah | 🏃 | Scrum, agile processes |
+| sm | Bob | 🏃 | Scrum, agile processes |
 | tea | Murat | 🧪 | Testing strategy, quality gates |
 | ux-designer | Sally | 🎨 | User experience, accessibility |
 | tech-writer | Paige | 📝 | Documentation, API design |
@@ -38,11 +38,11 @@ Replace the current 12-agent party mode system with full BMAD v6 integration, br
 **FR-1.3: CIS Module (6 agents)**
 | ID | Name | Icon | Expertise |
 |----|------|------|-----------|
-| brainstorming-coach | Carson | 🧠 | Ideation facilitation, 36 techniques |
+| brainstorming-coach | Carson | 🧠 | Ideation facilitation, 62 techniques |
 | creative-problem-solver | Dr. Quinn | 🔬 | Problem decomposition, root cause |
 | design-thinking-coach | Maya | 🎯 | Design methodology, empathy mapping |
 | innovation-strategist | Victor | 💡 | Strategic innovation |
-| presentation-master | Leo | 🎤 | Presentations, pitch decks |
+| presentation-master | Caravaggio | 🎨 | Visual communication, pitch decks |
 | storyteller | Sophia | 📖 | Narrative design (with sidecar knowledge) |
 
 **FR-1.4: Agent Format**
@@ -110,7 +110,7 @@ Current phase: [PHASE]
 Topic: [Topic]
 Consulting: [Icon] [Name], [Icon] [Name], [Icon] [Name]
 
-[Icon] **[Name]**: [Response in character, Vietnamese]
+[Icon] **[Name]**: [Response in character]
 ...
 
 📍 **Party Mode Synthesis**
@@ -122,7 +122,7 @@ Tensions to resolve: ...
 **FR-3.4: Limits**
 - Max 3 agents per session
 - Max 2 cross-talk rounds
-- Vietnamese communication
+- Language-adaptive communication
 
 ### FR-4: Integration Points
 
@@ -145,7 +145,7 @@ Tensions to resolve: ...
 
 **FR-5.2: config.yaml**
 - Maestro-specific configuration
-- Language settings (Vietnamese default)
+- Language settings (user's language)
 - Limits (max agents, max rounds)
 
 **FR-5.3: adapter.md**
@@ -168,8 +168,8 @@ Tensions to resolve: ...
 | Party mode loops | Max 2 rounds, then synthesize |
 
 ### NFR-3: Language
-- All agent responses in Vietnamese
-- UI prompts and synthesis in Vietnamese
+- All agent responses match user's language
+- UI prompts and synthesis in user's language
 
 ### NFR-4: Token Efficiency
 - External mode option for token-intensive sessions
@@ -186,7 +186,7 @@ Tensions to resolve: ...
 | AC-5 | 6 CIS workflows executable | Trigger each *workflow, verify steps run |
 | AC-6 | Double Diamond still works | Run `ds`, verify 4 phases complete |
 | AC-7 | A/P/C checkpoints functional | Verify [A], [P], [C] options present |
-| AC-8 | Vietnamese communication | Agents respond in Vietnamese |
+| AC-8 | Language-adaptive communication | Agents respond in user's language |
 | AC-9 | Old party-mode archived | Verify party-mode-backup/ exists |
 | AC-10 | manifest.yaml valid | Parse YAML, verify 16 agents listed |
 
