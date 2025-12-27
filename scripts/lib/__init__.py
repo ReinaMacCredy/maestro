@@ -2,6 +2,7 @@
 
 import re
 from pathlib import Path
+from typing import Optional
 
 import yaml
 
@@ -17,7 +18,7 @@ def parse_frontmatter(content: str) -> dict:
     return {}
 
 
-def find_conductor_root() -> Path | None:
+def find_conductor_root() -> Optional[Path]:
     """Find conductor/ directory by walking up from cwd."""
     current = Path.cwd()
     while current != current.parent:

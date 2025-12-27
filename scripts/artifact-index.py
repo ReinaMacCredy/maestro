@@ -16,6 +16,7 @@ import sqlite3
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).parent))
 from lib import find_conductor_root, get_db_path, parse_frontmatter
@@ -70,7 +71,7 @@ def init_db(db_path: Path) -> sqlite3.Connection:
     return conn
 
 
-def extract_summary(content: str) -> str | None:
+def extract_summary(content: str) -> Optional[str]:
     """Extract summary section from handoff."""
     match = re.search(r"## Summary\s*\n\s*(.+?)(?:\n##|\Z)", content, re.DOTALL)
     if match:

@@ -16,12 +16,13 @@ import sqlite3
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).parent))
 from lib import find_conductor_root, get_db_path, parse_frontmatter
 
 
-def parse_handoff_date(file_path: Path) -> datetime | None:
+def parse_handoff_date(file_path: Path) -> Optional[datetime]:
     """Parse date from handoff file frontmatter, falling back to filename.
     
     Prefers the 'date' field in YAML frontmatter for robustness.
