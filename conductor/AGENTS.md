@@ -36,6 +36,10 @@ Contains reusable learnings from completed tracks.
 - `uv run scripts/artifact-query.py <query>` - Search archived handoffs with FTS5
 - `uv run scripts/artifact-cleanup.py --dry-run` - Preview handoffs to delete
 - `./scripts/install-global-hooks.sh` - Install Claude Code hooks to ~/.claude/hooks/
+- `git branch --show-current` - Get current branch for preflight checks
+- `git status --porcelain` - Check for dirty state (empty = clean)
+- `git show-ref --verify --quiet "refs/heads/$BRANCH"` - Check if branch exists
+- `jq '.workflow.state = "ARCHIVED"' metadata.json > "metadata.json.tmp.$$" && mv "metadata.json.tmp.$$" metadata.json` - Update workflow state atomically
 
 ## Gotchas
 
@@ -65,6 +69,12 @@ Contains reusable learnings from completed tracks.
 - artifact-cleanup.py parses dates from filenames (YYYY-MM-DD-HH-MM-trigger.md), not frontmatter
 - Concurrent sessions on same codebase may conflict - documented limitation (last writer wins)
 - Amp Code doesn't support hooks - use manual `continuity load/save/handoff` commands
+- State machine uses STRICT vs SOFT enforcement - STRICT transitions HALT, SOFT only WARN
+- Default branch names differ by repo: check for BOTH `main` AND `master`
+- Auto-archive removes A/K prompt entirely - use `--keep` flag to prevent archiving
+- Open beads cause HALT at finish unless `--force` is used
+- Branch suffix auto-increments (-v2, -v3) if branch already exists
+- `workflow.state` for machine logic, `status` field for human readability
 
 ## Patterns
 

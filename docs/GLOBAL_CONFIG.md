@@ -49,6 +49,7 @@ Context-driven development with TDD execution.
 **Maintenance:**
 - `/conductor-revise` - Update spec/plan mid-implementation
 - `/conductor-finish` - Complete track (learnings, context refresh, archive)
+- `/doc-sync` - Extract knowledge to AGENTS.md
 
 **Beads:**
 - `fb` - File beads from plan
@@ -140,8 +141,31 @@ bv --robot-status  # Check team state
 
 ---
 
-## Language & Git
+## Amp-Specific: Continuity Protocol
 
-**Current year is 2025.** Always use 2025 for dates, not 2024.
+Amp doesn't support automatic hooks like Claude Code. Add this section to `~/.config/amp/AGENTS.md`:
 
+```markdown
+## Continuity Protocol
+
+Amp doesn't support automatic hooks - use manual commands.
+
+### Session Start
+Run `continuity load` at the start of every session.
+
+### After Significant Changes
+Run `continuity save` after making significant changes.
+
+### Session End
+Run `continuity handoff` before ending the session.
+
+### Commands Reference
+| Command | When |
+|---------|------|
+| `continuity load` | Session start |
+| `continuity save` | After milestones |
+| `continuity handoff` | Session end |
+| `continuity status` | Check state |
+| `continuity search <keyword>` | Find past context |
+```
 

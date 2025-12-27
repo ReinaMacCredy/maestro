@@ -1,0 +1,34 @@
+{
+  "trackId": "ux-automation_20251227",
+  "status": "complete",
+  "startedAt": "2025-12-27T20:26:00Z",
+  "threadId": "T-019b5ebb-e559-70f9-a41d-6d9831e5b05b",
+  "resumeFrom": null,
+  "planTasks": {
+    "epic1": "my-workflow:3-40yr.1",
+    "epic2": "my-workflow:3-40yr.2",
+    "epic3": "my-workflow:3-40yr.3",
+    "epic4": "my-workflow:3-40yr.4",
+    "epic5": "my-workflow:3-40yr.5",
+    "epic6": "my-workflow:3-40yr.6"
+  },
+  "beadToTask": {
+    "my-workflow:3-40yr.1": "epic1",
+    "my-workflow:3-40yr.2": "epic2",
+    "my-workflow:3-40yr.3": "epic3",
+    "my-workflow:3-40yr.4": "epic4",
+    "my-workflow:3-40yr.5": "epic5",
+    "my-workflow:3-40yr.6": "epic6"
+  },
+  "epics": ["my-workflow:3-40yr"],
+  "issues": [
+    "my-workflow:3-40yr.1",
+    "my-workflow:3-40yr.2",
+    "my-workflow:3-40yr.3",
+    "my-workflow:3-40yr.4",
+    "my-workflow:3-40yr.5",
+    "my-workflow:3-40yr.6"
+  ],
+  "crossTrackDeps": [],
+  "lastError": null
+}

@@ -1,0 +1,17 @@
+# CODEOWNERS - Define code ownership for review requirements
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for everything
+* @ReinaMacCredy
+
+# Skills require careful review
+/skills/ @ReinaMacCredy
+
+# Plugin configuration
+/.claude-plugin/ @ReinaMacCredy
+
+# Workflows and CI/CD
+/.github/ @ReinaMacCredy
+
+# Hooks
+/hooks/ @ReinaMacCredy

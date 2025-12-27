@@ -68,7 +68,7 @@ for FILE in .fb-progress.json; do
   CURRENT_ID=$(jq -r '.trackId // empty' "$TRACK_PATH/$FILE")
   if [ -n "$CURRENT_ID" ] && [ "$CURRENT_ID" != "$DIR_NAME" ]; then
     echo "ℹ️ Auto-fixing trackId in $FILE: $CURRENT_ID → $DIR_NAME"
-    jq --arg id "$DIR_NAME" '.trackId = $id' "$TRACK_PATH/$FILE" > tmp && mv tmp "$TRACK_PATH/$FILE"
+    jq --arg id "$DIR_NAME" '.trackId = $id' "$TRACK_PATH/$FILE" > "$TRACK_PATH/$FILE.tmp.$$" && mv "$TRACK_PATH/$FILE.tmp.$$" "$TRACK_PATH/$FILE"
   fi
 done
 
@@ -85,7 +85,7 @@ Update `.fb-progress.json` to mark start:
 jq --arg time "<current-timestamp>" \
    --arg thread "<current-thread-id>" \
    '.status = "in_progress" | .startedAt = $time | .threadId = $thread | .resumeFrom = "phase1"' \
-   "conductor/tracks/<track_id>/.fb-progress.json" > tmp && mv tmp "conductor/tracks/<track_id>/.fb-progress.json"
+   "conductor/tracks/<track_id>/.fb-progress.json" > "conductor/tracks/<track_id>/.fb-progress.json.tmp.$$" && mv "conductor/tracks/<track_id>/.fb-progress.json.tmp.$$" "conductor/tracks/<track_id>/.fb-progress.json"
 ```
 
 ## Phase 1: Analyze Plan
@@ -355,7 +355,23 @@ Present to user:
 After parallel agents finish filing beads:
 
 1. Summarize what was created (epic ID, issue count)
-2. Say: "Beads filed. Say `rb` to review and refine."
+2. Update workflow state in metadata.json:
+   ```bash
+   jq --arg timestamp "<current-timestamp>" \
+      '.workflow.state = "FILED" | .workflow.history += [{"state": "FILED", "at": $timestamp, "command": "fb"}]' \
+      "conductor/tracks/<track_id>/metadata.json" > "conductor/tracks/<track_id>/metadata.json.tmp.$$" && mv "conductor/tracks/<track_id>/metadata.json.tmp.$$" "conductor/tracks/<track_id>/metadata.json"
+   ```
+3. Display completion with suggestion:
+   ```
+   ┌─────────────────────────────────────────┐
+   │ ✓ Beads filed                           │
+   │                                         │
+   │ Epics: N                                │
+   │ Issues: N                               │
+   │                                         │
+   │ → Next: rb (review beads)               │
+   └─────────────────────────────────────────┘
+   ```
 
 ## Priority Guide
 

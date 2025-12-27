@@ -41,6 +41,49 @@ Parse `{{args}}` for flags and track identifier:
     -   Announce: "Conductor is not set up. Please run `/conductor:setup` to set up the environment."
     -   Do NOT proceed to New Track Initialization.
 
+## 1.2.5 GIT PREFLIGHT
+**PROTOCOL: Check git branch before creating track artifacts.**
+
+**Reference:** See `skills/conductor/references/shared/git-preflight.md` for full logic.
+
+1. **Get Current Branch:**
+   ```bash
+   BRANCH=$(git branch --show-current 2>/dev/null)
+   ```
+   - If not a git repo or detached HEAD: WARN and continue
+
+2. **Check if on Main/Master:**
+   - If `$BRANCH` == "main" OR `$BRANCH` == "master":
+     
+     a. **Check for Uncommitted Changes:**
+        ```bash
+        if [ -n "$(git status --porcelain)" ]; then
+            echo "⚠️ Uncommitted changes on $BRANCH."
+            echo "   Commit or stash changes before creating a track."
+            # HALT
+        fi
+        ```
+     
+     b. **Generate Branch Name:**
+        - `NEW_BRANCH="feat/${track_id}"`
+        - If branch exists: try `feat/${track_id}-v2`, `-v3`, etc.
+     
+     c. **Prompt for Branch Creation:**
+        ```
+        On $BRANCH. Create branch '$NEW_BRANCH'? [Y/n]
+        ```
+        - Y (default): `git fetch origin && git checkout -b "$NEW_BRANCH"`
+        - n: Stay on current branch, continue
+     
+     d. **Store Branch Name:**
+        - Set `preflight_branch = $NEW_BRANCH` for later storage in metadata.json
+
+3. **If on Feature Branch:**
+   - Proceed silently, set `preflight_branch = $BRANCH`
+
+4. **Workflow Variable:**
+   Store `preflight_branch` for use in Phase 1.3 metadata.json creation.
+
 ## 1.3 STATE FILES INITIALIZATION (MANDATORY FIRST STEP)
 
 **CRITICAL: Create/validate ALL state files BEFORE any other operations.**
@@ -100,6 +143,15 @@ fi
     "spec": false,
     "plan": false,
     "beads": false
+  },
+  "workflow": {
+    "state": "INIT",
+    "history": [
+      {"state": "INIT", "at": "<current-timestamp>", "command": "newtrack"}
+    ],
+    "branch": "<preflight_branch or null>",
+    "archived": false,
+    "keep": false
   }
 }
 ```
@@ -288,7 +340,7 @@ echo "✓ State files initialized"
        --argjson hours '<estimated_hours_or_null>' \
        --arg status "new" \
        '. + {priority: $priority, depends_on: $depends, estimated_hours: $hours, status: $status}' \
-       "conductor/tracks/<track_id>/metadata.json" > tmp && mv tmp "conductor/tracks/<track_id>/metadata.json"
+       "conductor/tracks/<track_id>/metadata.json" > "conductor/tracks/<track_id>/metadata.json.tmp.$$" && mv "conductor/tracks/<track_id>/metadata.json.tmp.$$" "conductor/tracks/<track_id>/metadata.json"
     ```
 
 7.  **Write Files:**
@@ -297,15 +349,16 @@ echo "✓ State files initialized"
 
 8.  **UPDATE State Files After spec/plan Created:**
     ```bash
-    # Update metadata.json artifacts
-    jq '.artifacts.spec = true | .artifacts.plan = true | .status = "planned"' \
-       "conductor/tracks/<track_id>/metadata.json" > tmp && mv tmp "conductor/tracks/<track_id>/metadata.json"
-    
+    # Update metadata.json artifacts and workflow state
+    jq --arg timestamp "<current-timestamp>" \
+       '.artifacts.spec = true | .artifacts.plan = true | .status = "planned" | .workflow.state = "TRACKED" | .workflow.history += [{"state": "TRACKED", "at": $timestamp, "command": "newtrack"}]' \
+       "conductor/tracks/<track_id>/metadata.json" > "conductor/tracks/<track_id>/metadata.json.tmp.$$" && mv "conductor/tracks/<track_id>/metadata.json.tmp.$$" "conductor/tracks/<track_id>/metadata.json"
+
     # Update .track-progress.json
     jq --arg specTime "<current-timestamp>" \
        --arg planTime "<current-timestamp>" \
        '.status = "plan_done" | .specCreatedAt = $specTime | .planCreatedAt = $planTime' \
-       "conductor/tracks/<track_id>/.track-progress.json" > tmp && mv tmp "conductor/tracks/<track_id>/.track-progress.json"
+       "conductor/tracks/<track_id>/.track-progress.json" > "conductor/tracks/<track_id>/.track-progress.json.tmp.$$" && mv "conductor/tracks/<track_id>/.track-progress.json.tmp.$$" "conductor/tracks/<track_id>/.track-progress.json"
     ```
 
 9.  **Update Tracks File:**
@@ -353,13 +406,13 @@ If beads should be filed:
     ```bash
     # Update .track-progress.json
     jq '.status = "fb_started"' \
-       "conductor/tracks/<track_id>/.track-progress.json" > tmp && mv tmp "conductor/tracks/<track_id>/.track-progress.json"
-    
+       "conductor/tracks/<track_id>/.track-progress.json" > "conductor/tracks/<track_id>/.track-progress.json.tmp.$$" && mv "conductor/tracks/<track_id>/.track-progress.json.tmp.$$" "conductor/tracks/<track_id>/.track-progress.json"
+
     # Update .fb-progress.json (already created in Phase 1.3)
     jq --arg time "<current-timestamp>" \
        --arg thread "<current-thread-id>" \
        '.status = "in_progress" | .startedAt = $time | .threadId = $thread' \
-       "conductor/tracks/<track_id>/.fb-progress.json" > tmp && mv tmp "conductor/tracks/<track_id>/.fb-progress.json"
+       "conductor/tracks/<track_id>/.fb-progress.json" > "conductor/tracks/<track_id>/.fb-progress.json.tmp.$$" && mv "conductor/tracks/<track_id>/.fb-progress.json.tmp.$$" "conductor/tracks/<track_id>/.fb-progress.json"
     ```
 
 2.  **Spawn Task subagent:**
@@ -438,30 +491,37 @@ Remove `.fb-progress.lock` file.
 
 ### 4.2 Display Handoff
 
+**Reference:** See `skills/conductor/references/shared/suggestions.md` for suggestion format.
+
 **If beads were filed (skip_beads was false and fb succeeded):**
 
 ```
-━━━ TRACK COMPLETE ━━━
-Track: <track_id>
-Spec: conductor/tracks/<track_id>/spec.md
-Plan: conductor/tracks/<track_id>/plan.md
-Beads: <epic_count> epics, <issue_count> issues filed and reviewed
-
-Ready issues: <ready_count>
-First task: <first_ready_issue_id> (<title>)
-
-Next: `Start epic <first-epic-id>` or `/conductor-implement <track_id>`
+┌─────────────────────────────────────────────────────┐
+│ ✓ Track created                                     │
+│                                                     │
+│ Track: <track_id>                                   │
+│ Spec: conductor/tracks/<track_id>/spec.md           │
+│ Plan: conductor/tracks/<track_id>/plan.md           │
+│ Beads: <epic_count> epics, <issue_count> issues     │
+│                                                     │
+│ → Next: rb (review beads)                           │
+│   Alt: bd ready (start work)                        │
+└─────────────────────────────────────────────────────┘
 ```
 
 **If beads were skipped (--no-beads flag) or fb failed:**
 
 ```
-━━━ TRACK CREATED ━━━
-Track: <track_id>
-Spec: conductor/tracks/<track_id>/spec.md
-Plan: conductor/tracks/<track_id>/plan.md
-
-Next: Say `fb` to file beads, or `/conductor-implement <track_id>` to start manually.
+┌─────────────────────────────────────────────────────┐
+│ ✓ Track created                                     │
+│                                                     │
+│ Track: <track_id>                                   │
+│ Spec: conductor/tracks/<track_id>/spec.md           │
+│ Plan: conductor/tracks/<track_id>/plan.md           │
+│                                                     │
+│ → Next: fb (file beads)                             │
+│   Alt: /conductor-implement <track_id>              │
+└─────────────────────────────────────────────────────┘
 ```
 
 ---
