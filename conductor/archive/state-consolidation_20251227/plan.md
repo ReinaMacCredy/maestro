@@ -151,7 +151,7 @@
 
 #### Phase 1: Implement Integration
 
-- [ ] **3.1** Update `skills/conductor/references/workflows/implement.md`
+- [x] **3.1** Update `skills/conductor/references/workflows/implement.md`
   - Add Phase 0.5: Continuity Load
   - Include track binding check
   - Include auto-archive on track switch
@@ -159,7 +159,7 @@
 
 #### Phase 2: Finish Integration
 
-- [ ] **3.2** Update `skills/conductor/references/finish-workflow.md`
+- [x] **3.2** Update `skills/conductor/references/finish-workflow.md`
   - Add Phase 6.5: Continuity Handoff
   - Create handoff with trigger=track-complete
   - Delete LEDGER.md after archive
@@ -167,7 +167,7 @@
 
 #### Phase 3: Design Session Integration
 
-- [ ] **3.3** Update `skills/design/SKILL.md`
+- [x] **3.3** Update `skills/design/SKILL.md`
   - Add continuity load at Session Initialization
   - Load LEDGER.md if exists
   - Display prior context
@@ -175,21 +175,21 @@
 
 #### Phase 4: Continuity Skill Updates
 
-- [ ] **3.4** Update `skills/continuity/SKILL.md`
+- [x] **3.4** Update `skills/continuity/SKILL.md`
   - Add "Conductor Integration" section
   - Document auto-triggers
   - Document track binding
   - Document non-blocking guarantee
   - ~40 lines
 
-- [ ] **3.5** Update `skills/continuity/references/ledger-format.md`
+- [x] **3.5** Update `skills/continuity/references/ledger-format.md`
   - Document bound_track semantics
   - Add Track Binding section
   - ~20 lines
 
 #### Phase 5: Documentation
 
-- [ ] **3.6** Update `conductor/AGENTS.md`
+- [x] **3.6** Update `conductor/AGENTS.md`
   - Add gotcha about track-switch auto-archive
   - Add pattern about continuity chain
   - ~10 lines

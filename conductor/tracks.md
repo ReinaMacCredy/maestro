@@ -4,17 +4,17 @@ Master list of all development tracks.
 
 ## Active Tracks
 
-## [ ] Track: State Consolidation + Continuity Integration
-*ID: state-consolidation_20251227*
-*Link: [design](conductor/tracks/state-consolidation_20251227/design.md) | [spec](conductor/tracks/state-consolidation_20251227/spec.md) | [plan](conductor/tracks/state-consolidation_20251227/plan.md)*
-
-Consolidate state files (3→1 per track) and integrate continuity with Conductor workflow.
-
 ---
 
 ## Completed Tracks
 
 *Completed tracks are archived to `conductor/archive/`.*
+
+## [x] Track: State Consolidation + Continuity Integration
+*ID: state-consolidation_20251227*
+*Archived: [conductor/archive/state-consolidation_20251227/](conductor/archive/state-consolidation_20251227/)*
+
+Consolidate state files (3→1 per track) and integrate continuity with Conductor workflow.
 
 ## [x] Track: Doc-Sync Feature
 *ID: doc-sync_20251227*

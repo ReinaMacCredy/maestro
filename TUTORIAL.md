@@ -120,8 +120,8 @@ Every artifact is a **checkpoint**. Handoff happens after planning completes, th
 | `spec.md` | Requirements, acceptance criteria | `/conductor-newtrack` |
 | `plan.md` | Task breakdown, status markers | `/conductor-newtrack` |
 | `.beads/` | Issues, dependencies, notes | Auto via facade |
-| `.fb-progress.json` | planTasks mapping (plan ID ↔ bead ID) | Auto via facade |
-| `session-state_*.json` | Per-agent mode, current task, TDD phase | Auto via facade |
+| `metadata.json` | Track state + planTasks mapping | `/conductor-newtrack` |
+| `LEDGER.md` | Session state (mode, bound_track, bound_bead, tdd_phase) | Auto via facade |
 
 ### The Handoff Protocol
 
@@ -314,9 +314,9 @@ The integration uses these files (auto-managed):
 
 | File | Purpose |
 |------|---------|
-| `.conductor/session-state_<agent>.json` | Per-agent tracking (mode, current task, TDD phase) |
+| `conductor/sessions/active/LEDGER.md` | Session state in frontmatter (mode, bound_track, bound_bead, tdd_phase) |
 | `.conductor/session-lock_<track>.json` | Prevents concurrent sessions on same track |
-| `conductor/tracks/<id>/.fb-progress.json` | Bidirectional mapping: plan task IDs ↔ bead IDs |
+| `conductor/tracks/<id>/metadata.json` | Track state + bidirectional mapping: plan task IDs ↔ bead IDs |
 
 ### SA vs MA Mode
 
@@ -563,7 +563,7 @@ REPEAT  → Next failing test
 │       ↓                                                      │
 │  Questions → spec.md → plan.md                              │
 │       ↓                                                      │
-│  AUTO: Create epic + issues (.fb-progress.json)             │
+│  AUTO: Create epic + issues (metadata.json.beads)           │
 └─────────────────────────────────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────────┐

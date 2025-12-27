@@ -232,9 +232,8 @@ Mode is detected at session start (preflight) and locked for the session.
 
 | File | Location | Purpose |
 |------|----------|---------|
-| `session-state_<agent>.json` | `.conductor/` | Per-agent session tracking |
+| `LEDGER.md` | `conductor/sessions/active/` | Session state in frontmatter (mode, bound_track, bound_bead, tdd_phase) |
 | `session-lock_<track>.json` | `.conductor/` | Concurrent session prevention |
-| `.fb-progress.json` | `tracks/<id>/` | planTasks mapping (plan ID ↔ bead ID) |
 | `pending_*.jsonl` | `.conductor/` | Failed operations for replay |
 
 ### In Practice

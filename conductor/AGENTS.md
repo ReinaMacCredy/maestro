@@ -43,6 +43,8 @@ Contains reusable learnings from completed tracks.
 - `/doc-sync` - Sync documentation with code changes
 - `/doc-sync --dry-run` - Preview doc changes without applying
 - `/doc-sync --force` - Apply all doc changes without prompts
+- `sed -n '/^---$/,/^---$/p' "$FILE" | grep '^field:' | cut -d' ' -f2` - Extract YAML frontmatter field value
+- `bd close id1 id2 id3 --reason completed` - Close multiple beads at once
 
 ## Gotchas
 
@@ -82,6 +84,9 @@ Contains reusable learnings from completed tracks.
 - Doc-sync errors are non-blocking - workflow continues even if doc-sync fails
 - Minor doc changes (path renames, function renames) are auto-applied
 - Major doc changes (new features, removed features) prompt user
+- Track-switch auto-archives LEDGER.md - switching tracks preserves previous session context in archive
+- Continuity operations in Conductor are non-blocking - failures log warnings but never halt commands
+- bound_track/bound_bead in LEDGER.md frontmatter replace deprecated session-state_*.json files
 
 ## Patterns
 
@@ -100,3 +105,6 @@ Contains reusable learnings from completed tracks.
 - **RECALL/REMEMBER:** Session lifecycle with anchored format for cross-session context
 - **Degradation Signals:** tool_repeat, backtrack, quality_drop, contradiction → 2+ signals triggers compression
 - **Anchored Format:** [PRESERVE] markers for Intent and Constraints sections that survive compression
+- **Continuity Chain:** `/conductor-implement` (Phase 0.5: load) → work → `/conductor-finish` (Phase 6.5: handoff)
+- **State File Consolidation:** Replace N separate state files with sections in a single consolidated file (e.g., metadata.json.beads replaces .fb-progress.json)
+- **Track Binding Flow:** null → bound_track → bound_bead → null (lifecycle matches Conductor workflow)

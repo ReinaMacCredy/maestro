@@ -21,7 +21,7 @@
     "beads": true
   },
   "workflow": {
-    "state": "REVIEWED",
+    "state": "ARCHIVED",
     "history": [
       {
         "state": "INIT",
@@ -50,7 +50,7 @@
       }
     ],
     "branch": null,
-    "archived": false,
+    "archived": true,
     "keep": false
   }
 }

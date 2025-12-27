@@ -127,7 +127,7 @@ Every Beads-integrated command runs preflight first:
 
 1. **Check bd availability** → HALT if unavailable (no silent skip)
 2. **Detect mode** (SA or MA) and lock for session
-3. **Create session state file** (`.conductor/session-state_<agent>.json`)
+3. **Create/update session state** in `conductor/sessions/active/LEDGER.md`
 4. **Recover pending operations** from crashed sessions
 5. **Detect concurrent sessions** via heartbeat protocol
 
