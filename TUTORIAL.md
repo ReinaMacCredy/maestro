@@ -950,7 +950,7 @@ flowchart TB
 
     p1["Phase-1               💬1<br/><br/>Foundation<br/>Directory + Config<br/><br/>📊30k/0k"]
     
-    p23["Phase-23              💬2<br/><br/>16 Agents<br/>Core + BMM + CIS<br/><br/>📊50k/0k"]
+    p23["Phase-23              💬2<br/><br/>25 Agents<br/>Core + BMM + CIS + BMB + BMGD<br/><br/>📊50k/0k"]
     
     p4["Phase-4               💬1<br/><br/>6 Workflows<br/>Party + CIS<br/><br/>📊40k/0k"]
     

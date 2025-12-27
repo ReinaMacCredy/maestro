@@ -1,6 +1,6 @@
 # Pipeline Architecture
 
-Complete workflow pipeline with all loops, agent dispatch patterns, the 16 BMAD agents, and Beads-Conductor facade integration.
+Complete workflow pipeline with all loops, agent dispatch patterns, the 25 BMAD agents, and Beads-Conductor facade integration.
 
 ## Complete Pipeline Overview
 
@@ -77,7 +77,7 @@ flowchart TB
         PENDING["Pending Ops<br/>(crash recovery)"]
     end
 
-    subgraph BMAD["PARTY MODE: 16 BMAD AGENTS"]
+    subgraph BMAD["PARTY MODE: 25 BMAD AGENTS"]
         subgraph CORE["Core Module"]
             MASTER["BMad Master 🧙<br/>Orchestrator"]
         end
@@ -101,6 +101,21 @@ flowchart TB
             STRAT["Victor<br/>Strategist"]
             PRESENT["Caravaggio<br/>Presentation"]
             STORY["Sophia<br/>Storyteller"]
+        end
+
+        subgraph BMB["BMB Module"]
+            AGENT_B["Bond 🤖<br/>Agent Builder"]
+            MODULE_B["Morgan 🏗️<br/>Module Builder"]
+            WORKFLOW_B["Wendy 🔄<br/>Workflow Builder"]
+        end
+
+        subgraph BMGD["BMGD Module"]
+            GAME_ARCH["Cloud Dragonborn 🏛️<br/>Game Architect"]
+            GAME_DESIGN["Samus Shepard 🎲<br/>Game Designer"]
+            GAME_DEV["Link Freeman 🕹️<br/>Game Developer"]
+            GAME_QA["GLaDOS 🧪<br/>Game QA"]
+            GAME_SM["Max 🎯<br/>Game Scrum Master"]
+            GAME_SOLO["Indie 🎮<br/>Game Solo Dev"]
         end
     end
 
@@ -181,6 +196,8 @@ flowchart TB
     classDef core fill:#1e3a5f,stroke:#60a5fa,color:#e2e8f0
     classDef bmm fill:#2c5282,stroke:#63b3ed,color:#e2e8f0
     classDef cis fill:#744210,stroke:#f6ad55,color:#e2e8f0
+    classDef bmb fill:#065f46,stroke:#34d399,color:#e2e8f0
+    classDef bmgd fill:#7c2d12,stroke:#fb923c,color:#e2e8f0
     classDef validation fill:#4a1d6e,stroke:#9f7aea,color:#e2e8f0
 
     class PF_START,PF_MODE,PF_BD,PF_STATE preflight
@@ -194,6 +211,8 @@ flowchart TB
     class PM,ANALYST,UX,ARCH,DEV,SM,QA,DOCS,QUICK bmm
     class MASTER core
     class STORY,BRAIN,DESIGN,STRAT,SOLVER,PRESENT cis
+    class AGENT_B,MODULE_B,WORKFLOW_B bmb
+    class GAME_ARCH,GAME_DESIGN,GAME_DEV,GAME_QA,GAME_SM,GAME_SOLO bmgd
     class VALIDATE,V01,V02,V03,V04,V05,V06,V07,OUTCOMES validation
 ```
 
@@ -450,7 +469,7 @@ flowchart TB
 
 ---
 
-## The 16 BMAD Agents (Party Mode)
+## The 25 BMAD Agents (Party Mode)
 
 Invoked via **[P] Party** at any A/P/C checkpoint.
 
@@ -484,6 +503,25 @@ Invoked via **[P] Party** at any A/P/C checkpoint.
 | Strategist     | Victor     | Long-term vision, trade-offs, positioning |
 | Presentation   | Caravaggio | Visual design, slides, demos              |
 | Storyteller    | Sophia     | Narrative, user journey, empathy          |
+
+### BMB Module
+
+| Agent           | Name   | Focus                                          |
+| --------------- | ------ | ---------------------------------------------- |
+| Agent Builder   | Bond 🤖   | Agent design patterns, BMAD compliance      |
+| Module Builder  | Morgan 🏗️ | Module architecture, system integration     |
+| Workflow Builder| Wendy 🔄  | Process design, state management, automation|
+
+### BMGD Module
+
+| Agent           | Name             | Focus                                     |
+| --------------- | ---------------- | ----------------------------------------- |
+| Game Architect  | Cloud Dragonborn 🏛️ | Engine design, multiplayer architecture|
+| Game Designer   | Samus Shepard 🎲    | Mechanics, player psychology, narrative |
+| Game Developer  | Link Freeman 🕹️     | Unity, Unreal, cross-platform shipping  |
+| Game QA         | GLaDOS 🧪           | Test automation, performance profiling  |
+| Game Scrum Master| Max 🎯            | Sprint orchestration, GDD to stories    |
+| Game Solo Dev   | Indie 🎮            | Quick flow, rapid prototyping, shipping |
 
 ### Agent Selection
 

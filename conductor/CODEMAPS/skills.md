@@ -38,7 +38,7 @@ CORE WORKFLOW          DEVELOPMENT              UTILITIES
 
 ```
 bmad/
-├── agents/            # 16 expert agents
+├── agents/            # 25 expert agents
 │   ├── core/          # BMad Master (orchestrator)
 │   ├── bmm/           # 9 business/management agents
 │   └── cis/           # 6 creative/innovation agents
@@ -50,7 +50,7 @@ bmad/
 │   ├── problem-solving/
 │   └── storytelling/
 ├── config.yaml        # Maestro-specific settings
-├── manifest.yaml      # Agent registry (16 agents)
+├── manifest.yaml      # Agent registry (25 agents)
 └── adapter.md         # Path transforms for upstream sync
 ```
 

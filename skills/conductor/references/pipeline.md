@@ -50,7 +50,7 @@ flowchart TB
         end
     end
 
-    subgraph BMAD["PARTY MODE: 16 BMAD AGENTS"]
+    subgraph BMAD["PARTY MODE: 25 BMAD AGENTS"]
         CORE["Core: BMad Master (Orchestrator)"]
         BMM["BMM: John, Mary, Winston, Amelia, Bob, Murat, Sally, Paige, Barry"]
         CIS["CIS: Carson, Dr. Quinn, Maya, Victor, Caravaggio, Sophia"]
@@ -105,7 +105,7 @@ skills/conductor/references/workflows/
 ├── revise.md              # Spec/plan revision workflow
 ├── bmad/                  # Multi-agent collaborative review
 │   ├── workflow.md        # Party Mode orchestration
-│   └── agents/            # 16 BMAD agent definitions
+│   └── agents/            # 25 BMAD agent definitions
 ├── agent-coordination/    # Multi-agent file coordination (via agent_mail MCP)
 │   ├── workflow.md        # Core protocol
 │   ├── patterns/          # parallel-dispatch, subagent-prompt, session-lifecycle, graceful-fallback, execution-routing

@@ -4,14 +4,14 @@ Integration of BMAD v6 agent system with Maestro's design skill.
 
 ## Overview
 
-This directory contains 16 expert agents and 6 CIS workflows integrated from BMAD v6.
+This directory contains 25 expert agents and 6 CIS workflows integrated from BMAD v6.
 
 ## Directory Structure
 
 ```
 bmad/
 ├── config.yaml           # Maestro-specific configuration
-├── manifest.yaml         # Agent registry (16 agents)
+├── manifest.yaml         # Agent registry (25 agents)
 ├── adapter.md            # Path transformation rules for v6 sync
 ├── agents/
 │   ├── core/             # Orchestrator (1 agent)
@@ -45,6 +45,8 @@ bmad/
 | Core | 1 | BMad Master orchestrates Party Mode sessions |
 | BMM | 9 | Business, Management, Methodology experts |
 | CIS | 6 | Creative, Ideation, Storytelling experts |
+| BMB | 3 | BMAD Method Builder experts |
+| BMGD | 6 | Game Development experts |
 
 ## Workflow Triggers
 

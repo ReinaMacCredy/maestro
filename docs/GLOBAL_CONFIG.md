@@ -36,7 +36,7 @@ Context-driven development with TDD execution.
 
 **Design Session (A/P/C Checkpoints):**
 - `[A]` Advanced - deeper analysis, assumption audit
-- `[P]` Party - multi-agent review (16 BMAD agents: Core/BMM/CIS)
+- `[P]` Party - multi-agent review (25 BMAD agents: Core/BMM/CIS/BMB/BMGD)
 - `[C]` Continue - proceed to next phase
 
 **Execution:**

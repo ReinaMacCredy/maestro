@@ -206,7 +206,7 @@ flowchart TB
         end
     end
 
-    subgraph BMAD["PARTY MODE: 16 BMAD AGENTS"]
+    subgraph BMAD["PARTY MODE: 25 BMAD AGENTS"]
         subgraph CORE["Core Module"]
             MASTER["BMad Master (Orchestrator)"]
         end
@@ -230,6 +230,21 @@ flowchart TB
             STRAT["Victor (Innovation)"]
             CARAVAGGIO["Caravaggio (Presentation)"]
             STORY["Sophia (Storyteller)"]
+        end
+
+        subgraph BMB["BMB Module (3 agents)"]
+            BOND["Bond (Agent Builder)"]
+            MORGAN["Morgan (Module Builder)"]
+            WENDY["Wendy (Workflow Builder)"]
+        end
+
+        subgraph BMGD["BMGD Module (6 agents)"]
+            CLOUD["Cloud Dragonborn (Game Architect)"]
+            SAMUS["Samus Shepard (Game Designer)"]
+            LINK["Link Freeman (Game Dev)"]
+            GLADOS["GLaDOS (Game QA)"]
+            MAX["Max (Game Scrum Master)"]
+            INDIE["Indie (Game Solo Dev)"]
         end
     end
 
@@ -279,6 +294,8 @@ flowchart TB
     classDef core fill:#5b21b6,stroke:#a78bfa,color:#e2e8f0
     classDef bmm fill:#285e61,stroke:#4fd1c5,color:#e2e8f0
     classDef cis fill:#744210,stroke:#f6ad55,color:#e2e8f0
+    classDef bmb fill:#4c1d95,stroke:#c4b5fd,color:#e2e8f0
+    classDef bmgd fill:#7c2d12,stroke:#fdba74,color:#e2e8f0
 
     class DS,DISCOVER,DEFINE,DEVELOP,DELIVER,APC,DESIGND planning
     class NEWTRACK,SPECMD,PLANMD spec
@@ -290,6 +307,8 @@ flowchart TB
     class MASTER core
     class PM,ANALYST,ARCH,DEV,SM,QA,UX,DOCS,BARRY bmm
     class BRAIN,SOLVER,DESIGN,STRAT,CARAVAGGIO,STORY cis
+    class BOND,MORGAN,WENDY bmb
+    class CLOUD,SAMUS,LINK,GLADOS,MAX,INDIE bmgd
 ```
 
 For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../../docs/PIPELINE_ARCHITECTURE.md).
@@ -361,10 +380,12 @@ Phase-specific deep dives:
 
 Invokes multi-agent collaborative review using BMAD v6 integration. See `references/bmad/workflows/party-mode/workflow.md`.
 
-**16 Agents Available:**
+**25 Agents Available:**
 - **Core (1):** BMad Master (🧙) - Orchestrator
-- **BMM (9):** PM, Analyst, Architect, Developer, Scrum Master, Test Engineer, UX Designer, Tech Writer, Quick Flow
+- **BMM (9):** PM, Analyst, Architect, Developer, Scrum Master, Test Architect, UX Designer, Tech Writer, Quick Flow Solo Dev
 - **CIS (6):** Brainstorming Coach, Problem Solver, Design Thinking Coach, Innovation Strategist, Presentation Master, Storyteller
+- **BMB (3):** Agent Builder, Module Builder, Workflow Builder
+- **BMGD (6):** Game Architect, Game Designer, Game Dev, Game QA, Game Scrum Master, Game Solo Dev
 
 **Selection:** BMad Master selects 2-3 agents based on topic relevance:
 - **Primary:** Best expertise match

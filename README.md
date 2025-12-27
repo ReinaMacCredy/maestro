@@ -191,7 +191,7 @@ flowchart TB
         end
     end
 
-    subgraph AGENTS["PARTY MODE: 16 AGENTS (BMAD v6)"]
+    subgraph AGENTS["PARTY MODE: 25 AGENTS (BMAD v6)"]
         subgraph CORE["Core (1)"]
             MASTER["BMad Master (Orchestrator)"]
         end
@@ -215,6 +215,21 @@ flowchart TB
             STRAT["Innovation Strategist"]
             PRESENT["Presentation Master"]
             STORY["Storyteller"]
+        end
+
+        subgraph BMB["BMB (3)"]
+            AGENT_BUILDER["Agent Builder"]
+            MODULE_BUILDER["Module Builder"]
+            WORKFLOW_BUILDER["Workflow Builder"]
+        end
+
+        subgraph BMGD["BMGD (6)"]
+            GAME_ARCH["Game Architect"]
+            GAME_DESIGNER["Game Designer"]
+            GAME_DEV["Game Developer"]
+            GAME_QA["Game QA"]
+            GAME_SM["Game Scrum Master"]
+            GAME_SOLO["Game Solo Dev"]
         end
     end
 
