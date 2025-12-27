@@ -1,3 +1,15 @@
+# =============================================================================
+# Validate PR Workflow
+# =============================================================================
+# Purpose: Validates pull requests before merge
+#
+# Checks performed:
+#   1. Version sync - Ensures plugin.json and marketplace.json versions match
+#   2. Changelog preview - Shows what will be added to CHANGELOG.md on merge
+#
+# Runs on: All pull requests targeting the main branch
+# =============================================================================
+
 name: Validate PR
 
 on:
@@ -30,10 +42,8 @@ jobs:
           
           echo "✓ Versions are in sync"
 
-      - name: Install git-cliff
-        run: |
-          curl -sSfL https://github.com/orhun/git-cliff/releases/download/v2.7.0/git-cliff-2.7.0-x86_64-unknown-linux-gnu.tar.gz | tar xz
-          sudo mv git-cliff-2.7.0/git-cliff /usr/local/bin/
+      - name: Setup git-cliff
+        uses: ./.github/actions/setup-git-cliff
 
       - name: Changelog preview
         run: |

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/ReinaMacCredy/my-workflow/blob/main/README.md
+    about: Check the documentation before opening an issue
+  - name: Discussions
+    url: https://github.com/ReinaMacCredy/my-workflow/discussions
+    about: Ask questions or discuss ideas
