@@ -31,6 +31,11 @@ Contains reusable learnings from completed tracks.
 - `/conductor-implement --tdd` - Enable RED/GREEN/REFACTOR checkpoint tracking
 - `wc -l <file>.csv` - Verify CSV row counts match upstream when syncing data files
 - `curl -s https://raw.githubusercontent.com/.../file.csv` - Sync CSV data directly from upstream repo
+- `uv run scripts/artifact-index.py` - Build/rebuild SQLite FTS5 index of handoffs
+- `uv run scripts/artifact-index.py --verify` - Check index integrity
+- `uv run scripts/artifact-query.py <query>` - Search archived handoffs with FTS5
+- `uv run scripts/artifact-cleanup.py --dry-run` - Preview handoffs to delete
+- `./scripts/install-global-hooks.sh` - Install Claude Code hooks to ~/.claude/hooks/
 
 ## Gotchas
 
@@ -53,6 +58,13 @@ Contains reusable learnings from completed tracks.
 - Subagent bd access: read-only (show, ready, list); writes return to main agent
 - Idempotency: `bd update` and `bd close` are idempotent; `bd create` is NOT
 - planTasks mapping: bidirectional - keep planTasks and beadToTask in sync
+- Claude Code hooks must exit 0 even on error (try/catch + graceful exit) to avoid crashing Claude
+- LEDGER.md in conductor/sessions/active/ is gitignored (personal), archive/*.md is committed (shared)
+- Stale ledgers (>24h) are auto-archived on SessionStart to avoid confusion from old context
+- FTS5 snippet function: `snippet(handoffs_fts, 2, '>>>', '<<<', '...', 50)` for match highlighting
+- artifact-cleanup.py parses dates from filenames (YYYY-MM-DD-HH-MM-trigger.md), not frontmatter
+- Concurrent sessions on same codebase may conflict - documented limitation (last writer wins)
+- Amp Code doesn't support hooks - use manual `continuity load/save/handoff` commands
 
 ## Patterns
 

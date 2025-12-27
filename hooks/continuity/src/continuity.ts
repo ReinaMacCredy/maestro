@@ -17,6 +17,8 @@ import * as path from "path";
 const VERSION = "1.0.0";
 const STALE_THRESHOLD_HOURS = 24;
 
+let directoriesEnsured = false;
+
 interface HookOutput {
   hookSpecificOutput?: {
     hookEventName: string;
@@ -38,6 +40,8 @@ function findConductorRoot(): string | null {
 }
 
 function ensureDirectories(conductorRoot: string): void {
+  if (directoriesEnsured) return;
+  
   const dirs = [
     path.join(conductorRoot, "sessions", "active"),
     path.join(conductorRoot, "sessions", "archive"),
@@ -49,6 +53,8 @@ function ensureDirectories(conductorRoot: string): void {
       fs.mkdirSync(dir, { recursive: true });
     }
   }
+  
+  directoriesEnsured = true;
 }
 
 function isStale(mtime: Date): boolean {
@@ -58,7 +64,7 @@ function isStale(mtime: Date): boolean {
 }
 
 function formatTimestamp(): string {
-  return new Date().toISOString().replace(/[:.]/g, "-").slice(0, 16);
+  return new Date().toISOString().replace("T", "-").replace(/[:.]/g, "-").slice(0, 16);
 }
 
 function getLatestHandoff(archiveDir: string): string | null {

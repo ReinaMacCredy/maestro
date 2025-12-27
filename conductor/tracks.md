@@ -4,16 +4,15 @@ Master list of all development tracks.
 
 ## Active Tracks
 
-## [~] Track: Continuity Integration
-*ID: continuity-integration_20251227*
-*Link: [spec](conductor/tracks/continuity-integration_20251227/spec.md) | [plan](conductor/tracks/continuity-integration_20251227/plan.md)*
-*Description: Integrate Continuous-Claude patterns for automatic session state preservation*
-
 ---
 
 ## Completed Tracks
 
 *Completed tracks are archived to `conductor/archive/`.*
+
+## [x] Track: Continuity Integration
+*ID: continuity-integration_20251227*
+*Archived: [conductor/archive/continuity-integration_20251227/](conductor/archive/continuity-integration_20251227/)*
 
 ## [x] Track: BMAD V6 Integration
 *ID: bmad-v6-integration*
