@@ -70,6 +70,7 @@ Zero manual `bd` commands in the happy path:
 | `conductor` | `/conductor-*` | Planning methodology + CODEMAPS |
 | `design` | `ds` | Double Diamond + Party Mode |
 | `beads` | `bd`, `fb`, `rb` | Issue tracking, file/review beads |
+| `continuity` | `continuity load/save/handoff` | Session state preservation |
 | `test-driven-development` | `tdd` | RED-GREEN-REFACTOR |
 
 ## Common Tasks
