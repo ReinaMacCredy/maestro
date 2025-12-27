@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2025-12-27
+
+
+### Added
+
+
+- Add workflow state machine with smart suggestions and auto-archive
+- Establish comprehensive GitHub project configuration with issue/PR templates, security policy, dependabot, and enhanced workflows.
+
+
+### Fixed
+
+
+- Improve shell script robustness and temp file safety
+- Replace emoji warnings with text and update GitHub repository URLs in issue templates.
+
+
+### Complete
+
+
+- 11 learnings extracted, state machine and UX automation archived
+
 ## [2.2.0] - 2025-12-27
 
 

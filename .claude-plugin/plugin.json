@@ -1,6 +1,6 @@
 {
   "name": "maestro",
-  "version": "2.2.0",
+  "version": "3.0.0",
   "description": "Personal AI agent workflow skills - includes conductor planning with integrated beads issue tracking, design sessions, TDD, and multi-session task coordination via facade pattern (SA/MA modes)",
   "author": {
     "name": "Reina MacCredy"
