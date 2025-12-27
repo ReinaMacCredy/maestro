@@ -1,0 +1,366 @@
+# BMAD Agent Manifest
+# Registry of all 25 agents for Maestro BMAD integration
+
+version: "2.0"
+source: bmad-v6.0.0-alpha.21
+total_agents: 25
+
+modules:
+  core:
+    description: Orchestration and coordination
+    agents: [bmad-master]
+  bmm:
+    description: Business, management, and methodology agents
+    agents: [pm, analyst, architect, dev, sm, tea, ux-designer, tech-writer, quick-flow-solo-dev]
+  cis:
+    description: Creative, ideation, and storytelling agents
+    agents: [brainstorming-coach, creative-problem-solver, design-thinking-coach, innovation-strategist, presentation-master, storyteller]
+  bmb:
+    description: BMAD builders - agents, modules, and workflows
+    agents: [agent-builder, module-builder, workflow-builder]
+  bmgd:
+    description: Game development agents
+    agents: [game-architect, game-designer, game-dev, game-qa, game-scrum-master, game-solo-dev]
+
+agents:
+  # === Core Module (1 Agent) ===
+  - id: bmad-master
+    name: BMad Master
+    icon: 🧙
+    module: core
+    path: agents/core/bmad-master.md
+    expertise:
+      - orchestration
+      - agent selection
+      - cross-talk coordination
+      - synthesis
+      - party mode facilitation
+
+  # === BMM Module (9 Agents) ===
+  - id: pm
+    name: John
+    icon: 📋
+    module: bmm
+    path: agents/bmm/pm.md
+    expertise:
+      - product strategy
+      - roadmaps
+      - prioritization
+      - stakeholder management
+      - business value
+      - MVP scoping
+
+  - id: analyst
+    name: Mary
+    icon: 📊
+    module: bmm
+    path: agents/bmm/analyst.md
+    expertise:
+      - market research
+      - competitive analysis
+      - requirements elicitation
+      - data-driven insights
+      - stakeholder interviews
+
+  - id: architect
+    name: Winston
+    icon: 🏗️
+    module: bmm
+    path: agents/bmm/architect.md
+    expertise:
+      - system design
+      - distributed systems
+      - scalability
+      - tech debt
+      - architecture patterns
+      - boring technology
+
+  - id: dev
+    name: Amelia
+    icon: 💻
+    module: bmm
+    path: agents/bmm/dev.md
+    expertise:
+      - implementation
+      - test-driven development
+      - code quality
+      - pragmatism
+      - debugging
+      - red-green-refactor
+
+  - id: sm
+    name: Bob
+    icon: 🏃
+    module: bmm
+    path: agents/bmm/sm.md
+    expertise:
+      - scrum
+      - agile processes
+      - sprint planning
+      - story preparation
+      - team dynamics
+      - developer-ready specs
+
+  - id: tea
+    name: Murat
+    icon: 🧪
+    module: bmm
+    path: agents/bmm/tea.md
+    expertise:
+      - testing strategy
+      - CI/CD pipelines
+      - quality gates
+      - risk assessment
+      - automation
+      - regression prevention
+
+  - id: ux-designer
+    name: Sally
+    icon: 🎨
+    module: bmm
+    path: agents/bmm/ux-designer.md
+    expertise:
+      - user experience
+      - usability
+      - accessibility
+      - user research
+      - prototyping
+      - interaction design
+
+  - id: tech-writer
+    name: Paige
+    icon: 📚
+    module: bmm
+    path: agents/bmm/tech-writer.md
+    expertise:
+      - documentation
+      - API design
+      - developer onboarding
+      - CommonMark
+      - technical writing
+      - mermaid diagrams
+
+  - id: quick-flow-solo-dev
+    name: Barry
+    icon: 🚀
+    module: bmm
+    path: agents/bmm/quick-flow-solo-dev.md
+    expertise:
+      - rapid development
+      - solo workflow
+      - mvp building
+      - iteration speed
+      - pragmatic solutions
+      - shipping fast
+
+  # === CIS Module (6 Agents) ===
+  - id: brainstorming-coach
+    name: Carson
+    icon: 🧠
+    module: cis
+    path: agents/cis/brainstorming-coach.md
+    expertise:
+      - ideation facilitation
+      - 36+ techniques
+      - lateral thinking
+      - psychological safety
+      - wild ideas
+      - YES AND
+
+  - id: creative-problem-solver
+    name: Dr. Quinn
+    icon: 🔬
+    module: cis
+    path: agents/cis/creative-problem-solver.md
+    expertise:
+      - problem decomposition
+      - root cause analysis
+      - TRIZ
+      - first principles
+      - systems thinking
+      - scientific method
+
+  - id: design-thinking-coach
+    name: Maya
+    icon: 🎨
+    module: cis
+    path: agents/cis/design-thinking-coach.md
+    expertise:
+      - design methodology
+      - problem framing
+      - human-centered design
+      - prototyping
+      - empathy mapping
+      - 5-phase process
+
+  - id: innovation-strategist
+    name: Victor
+    icon: ⚡
+    module: cis
+    path: agents/cis/innovation-strategist.md
+    expertise:
+      - strategic innovation
+      - business strategy
+      - Jobs-to-be-Done
+      - Blue Ocean Strategy
+      - market timing
+      - business model innovation
+
+  - id: presentation-master
+    name: Caravaggio
+    icon: 🎨
+    module: cis
+    path: agents/cis/presentation-master.md
+    expertise:
+      - excalidraw presentations
+      - visual storytelling
+      - diagram creation
+      - visual hierarchy
+      - pitch visualization
+      - information design
+
+  - id: storyteller
+    name: Sophia
+    icon: 📖
+    module: cis
+    path: agents/cis/storyteller/storyteller.md
+    expertise:
+      - narrative design
+      - user stories
+      - communication
+      - empathy
+      - emotional design
+      - change management
+    sidecar: agents/cis/storyteller/sidecar/
+
+  # === BMB Module (3 Agents) ===
+  - id: agent-builder
+    name: Bond
+    icon: 🤖
+    module: bmb
+    path: agents/bmb/agent-builder.md
+    expertise:
+      - agent design patterns
+      - BMAD compliance
+      - persona development
+      - menu structure
+      - agent validation
+
+  - id: module-builder
+    name: Morgan
+    icon: 🏗️
+    module: bmb
+    path: agents/bmb/module-builder.md
+    expertise:
+      - module architecture
+      - BMAD integration
+      - end-to-end development
+      - documentation
+      - scalable design
+
+  - id: workflow-builder
+    name: Wendy
+    icon: 🔄
+    module: bmb
+    path: agents/bmb/workflow-builder.md
+    expertise:
+      - workflow architecture
+      - process design
+      - state management
+      - error handling
+      - workflow optimization
+
+  # === BMGD Module (6 Agents) ===
+  - id: game-architect
+    name: Cloud Dragonborn
+    icon: 🏛️
+    module: bmgd
+    path: agents/bmgd/game-architect.md
+    expertise:
+      - game engine design
+      - multiplayer architecture
+      - performance budgeting
+      - 60fps optimization
+      - cross-platform
+
+  - id: game-designer
+    name: Samus Shepard
+    icon: 🎲
+    module: bmgd
+    path: agents/bmgd/game-designer.md
+    expertise:
+      - game mechanics
+      - player psychology
+      - narrative design
+      - core loop
+      - GDD creation
+
+  - id: game-dev
+    name: Link Freeman
+    icon: 🕹️
+    module: bmgd
+    path: agents/bmgd/game-dev.md
+    expertise:
+      - Unity
+      - Unreal
+      - performance optimization
+      - test-driven development
+      - cross-platform shipping
+
+  - id: game-qa
+    name: GLaDOS
+    icon: 🧪
+    module: bmgd
+    path: agents/bmgd/game-qa.md
+    expertise:
+      - game testing
+      - automated frameworks
+      - performance profiling
+      - playtesting
+      - bug-free shipping
+
+  - id: game-scrum-master
+    name: Max
+    icon: 🎯
+    module: bmgd
+    path: agents/bmgd/game-scrum-master.md
+    expertise:
+      - game dev scrum
+      - GDD to stories
+      - multi-disciplinary teams
+      - playable increments
+      - sprint orchestration
+
+  - id: game-solo-dev
+    name: Indie
+    icon: 🎮
+    module: bmgd
+    path: agents/bmgd/game-solo-dev.md
+    expertise:
+      - indie development
+      - rapid prototyping
+      - Quick Flow
+      - game feel
+      - solo workflow
+
+# Selection algorithm hints
+selection:
+  topic_mapping:
+    api_design: [architect, tech-writer, dev]
+    user_onboarding: [ux-designer, storyteller, pm]
+    performance: [architect, tea, creative-problem-solver]
+    feature_prioritization: [pm, analyst, innovation-strategist]
+    creative_block: [brainstorming-coach, design-thinking-coach, storyteller]
+    technical_debt: [architect, dev, sm]
+    testing_strategy: [tea, dev, architect]
+    documentation: [tech-writer, dev, ux-designer]
+    mvp_scope: [pm, quick-flow-solo-dev, analyst]
+    presentation: [presentation-master, storyteller, pm]
+    # New mappings for BMB and BMGD
+    agent_creation: [agent-builder, workflow-builder, module-builder]
+    module_creation: [module-builder, agent-builder, architect]
+    workflow_creation: [workflow-builder, module-builder, sm]
+    game_design: [game-designer, game-architect, storyteller]
+    game_development: [game-dev, game-solo-dev, game-architect]
+    game_testing: [game-qa, game-dev, tea]
+    game_production: [game-scrum-master, game-designer, sm]

@@ -74,7 +74,7 @@ DELIVER (Converge)  →  Plan               design.md finalized
 At the end of each phase, users choose:
 
 - **[A] Advanced** - Deeper analysis, assumption audit
-- **[P] Party** - Multi-agent feedback (see `../design/references/party-mode/`)
+- **[P] Party** - Multi-agent feedback (see `../design/references/bmad/`)
 - **[C] Continue** - Proceed to next phase
 - **[↩ Back]** - Return to previous phase
 

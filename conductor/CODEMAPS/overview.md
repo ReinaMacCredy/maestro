@@ -17,14 +17,14 @@ AI workflow plugin for structured development: planning (Conductor), issue track
 
 ```
 maestro/
-├── skills/           # 16 skill directories (SKILL.md + references/)
+├── skills/           # 14 skill directories (SKILL.md + references/)
 │   ├── beads/references/         # Issue tracking workflows
 │   ├── conductor/references/     # Planning workflows + schemas
 │   │   ├── conductor/            # Beads integration workflows
 │   │   ├── workflows/            # setup, implement, finish, etc.
 │   │   └── schemas/              # JSON schemas
 │   ├── design/references/        # Double Diamond + Party Mode
-│   │   └── party-mode/           # Multi-agent design personas
+│   │   └── bmad/                 # Multi-agent design personas
 │   ├── dispatching-parallel-agents/references/
 │   │   └── agent-coordination/   # Multi-agent patterns
 │   └── session-compaction/       # Context compression

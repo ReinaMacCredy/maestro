@@ -4,13 +4,17 @@ Master list of all development tracks.
 
 ## Active Tracks
 
-*No active tracks.*
+*(No active tracks)*
 
 ---
 
 ## Completed Tracks
 
 *Completed tracks are archived to `conductor/archive/`.*
+
+## [x] Track: BMAD V6 Integration
+*ID: bmad-v6-integration*
+*Archived: [conductor/archive/bmad-v6-integration/](conductor/archive/bmad-v6-integration/)*
 
 ## [x] Track: Spec-Compliant Skills-Only Architecture Migration
 *ID: spec-compliant-migration_20251226*

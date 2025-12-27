@@ -25,7 +25,7 @@ maestro/
 │   │   ├── commands/                # Command definitions (.toml)
 │   │   └── workflows/               # Workflow definitions
 │   └── design/references/
-│       └── party-mode/              # Multi-agent design feedback
+│       └── bmad/                    # Multi-agent design feedback
 ├── agents/                          # Agent definitions
 ├── hooks/                           # Lifecycle hooks
 ├── lib/                             # Shared utilities

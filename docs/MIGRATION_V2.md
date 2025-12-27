@@ -36,7 +36,7 @@ skills/             # Complete skills with references/
   design/
     SKILL.md
     references/
-      party-mode/   # Old workflows/party-mode/
+      bmad/         # Old workflows/party-mode/
   dispatching-parallel-agents/
     references/
       agent-coordination/  # Old workflows/agent-coordination/
@@ -61,7 +61,7 @@ skills/             # Complete skills with references/
 | `workflows/conductor/*` | `skills/conductor/references/conductor/*` |
 | `workflows/*.md` (setup, implement, etc.) | `skills/conductor/references/workflows/*.md` |
 | `workflows/schemas/*` | `skills/conductor/references/schemas/*` |
-| `workflows/party-mode/*` | `skills/design/references/party-mode/*` |
+| `workflows/party-mode/*` | `skills/design/references/bmad/*` |
 | `workflows/agent-coordination/*` | `skills/dispatching-parallel-agents/references/agent-coordination/*` |
 | `workflows/context-engineering/*` | `skills/design/references/*` |
 

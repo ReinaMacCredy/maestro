@@ -17,8 +17,7 @@ node_modules/
 .env
 .env.local
 
-# Beads local data (users have their own)
-.beads/
+# Beads (tracked; runtime files ignored via `.beads/.gitignore`)
 .beads-village/
 
 # Memory (user-specific)

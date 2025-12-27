@@ -16,10 +16,10 @@ This is a skills-based plugin (no build required) - all functionality is deliver
 ### Directory Structure
 
 ```
-skills/                    # 16 skill directories, each with SKILL.md
+skills/                    # 14 skill directories, each with SKILL.md
   ├── beads/              # Issue tracking (fb, rb triggers) with references/
   ├── conductor/          # Planning methodology with references/
-  ├── design/             # Design sessions (ds trigger) with party-mode/
+  ├── design/             # Design sessions (ds trigger) with bmad/
   ├── session-compaction/ # Session context compression
   ├── test-driven-development/
   └── ...                 # See SETUP_GUIDE.md for full list

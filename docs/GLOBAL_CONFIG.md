@@ -21,7 +21,8 @@ Apply the config block below to user's global config at:
 ## Default Config
 
 <!-- BEGIN maestro-config -->
-
+<!-- version: 2.0.0 | bmad-v6 | 2025-12-27 -->
+**Current year is 2025.** Always use 2025 for dates, not 2024.
 ## Maestro Workflow
 
 Context-driven development with TDD execution.
@@ -29,9 +30,14 @@ Context-driven development with TDD execution.
 ### Triggers
 
 **Planning:**
-- `ds` or `/conductor-design` - Double Diamond design session
+- `ds` or `/conductor-design` - Double Diamond design session with A/P/C checkpoints
 - `/conductor-setup` - Initialize project context (once per project)
 - `/conductor-newtrack` - Create spec + plan + beads from design
+
+**Design Session (A/P/C Checkpoints):**
+- `[A]` Advanced - deeper analysis, assumption audit
+- `[P]` Party - multi-agent review (25 BMAD agents: Core/BMM/CIS/BMB/BMGD)
+- `[C]` Continue - proceed to next phase
 
 **Execution:**
 - `bd ready --json` - Find available work
@@ -131,3 +137,11 @@ bv --robot-status  # Check team state
 | `bd: command not found` | See SETUP_GUIDE.md Step 4 |
 | `bv` hangs | Use `--robot-*` flags |
 | Skills not loading | Check plugin settings |
+
+---
+
+## Language & Git
+
+**Current year is 2025.** Always use 2025 for dates, not 2024.
+
+

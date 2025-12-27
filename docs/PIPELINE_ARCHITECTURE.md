@@ -1,6 +1,6 @@
 # Pipeline Architecture
 
-Complete workflow pipeline with all loops, agent dispatch patterns, the 12 BMAD agents, and Beads-Conductor facade integration.
+Complete workflow pipeline with all loops, agent dispatch patterns, the 25 BMAD agents, and Beads-Conductor facade integration.
 
 ## Complete Pipeline Overview
 
@@ -77,26 +77,45 @@ flowchart TB
         PENDING["Pending Ops<br/>(crash recovery)"]
     end
 
-    subgraph BMAD["PARTY MODE: 12 BMAD AGENTS"]
-        subgraph PRODUCT["Product Module"]
+    subgraph BMAD["PARTY MODE: 25 BMAD AGENTS"]
+        subgraph CORE["Core Module"]
+            MASTER["BMad Master 🧙<br/>Orchestrator"]
+        end
+
+        subgraph BMM["BMM Module"]
             PM["John<br/>Product Manager"]
             ANALYST["Mary<br/>Business Analyst"]
-            UX["Sally<br/>UX Researcher"]
-        end
-
-        subgraph TECHNICAL["Technical Module"]
             ARCH["Winston<br/>Architect"]
             DEV["Amelia<br/>Developer"]
+            SM["Bob<br/>Scrum Master"]
             QA["Murat<br/>QA Engineer"]
+            UX["Sally<br/>UX Researcher"]
             DOCS["Paige<br/>Tech Writer"]
+            QUICK["Barry<br/>Quick Flow"]
         end
 
-        subgraph CREATIVE["Creative Module"]
-            STORY["Sophia<br/>Storyteller"]
+        subgraph CIS["CIS Module"]
             BRAIN["Carson<br/>Brainstormer"]
+            SOLVER["Dr. Quinn<br/>Problem Solver"]
             DESIGN["Maya<br/>Design Thinker"]
             STRAT["Victor<br/>Strategist"]
-            SOLVER["Dr. Quinn<br/>Problem Solver"]
+            PRESENT["Caravaggio<br/>Presentation"]
+            STORY["Sophia<br/>Storyteller"]
+        end
+
+        subgraph BMB["BMB Module"]
+            AGENT_B["Bond 🤖<br/>Agent Builder"]
+            MODULE_B["Morgan 🏗️<br/>Module Builder"]
+            WORKFLOW_B["Wendy 🔄<br/>Workflow Builder"]
+        end
+
+        subgraph BMGD["BMGD Module"]
+            GAME_ARCH["Cloud Dragonborn 🏛️<br/>Game Architect"]
+            GAME_DESIGN["Samus Shepard 🎲<br/>Game Designer"]
+            GAME_DEV["Link Freeman 🕹️<br/>Game Developer"]
+            GAME_QA["GLaDOS 🧪<br/>Game QA"]
+            GAME_SM["Max 🎯<br/>Game Scrum Master"]
+            GAME_SOLO["Indie 🎮<br/>Game Solo Dev"]
         end
     end
 
@@ -174,9 +193,11 @@ flowchart TB
     classDef finish fill:#22543d,stroke:#68d391,color:#e2e8f0
     classDef facade fill:#4c1d95,stroke:#a78bfa,color:#e2e8f0
     classDef bmad fill:#553c9a,stroke:#b794f4,color:#e2e8f0
-    classDef product fill:#285e61,stroke:#4fd1c5,color:#e2e8f0
-    classDef technical fill:#2c5282,stroke:#63b3ed,color:#e2e8f0
-    classDef creative fill:#744210,stroke:#f6ad55,color:#e2e8f0
+    classDef core fill:#1e3a5f,stroke:#60a5fa,color:#e2e8f0
+    classDef bmm fill:#2c5282,stroke:#63b3ed,color:#e2e8f0
+    classDef cis fill:#744210,stroke:#f6ad55,color:#e2e8f0
+    classDef bmb fill:#065f46,stroke:#34d399,color:#e2e8f0
+    classDef bmgd fill:#7c2d12,stroke:#fb923c,color:#e2e8f0
     classDef validation fill:#4a1d6e,stroke:#9f7aea,color:#e2e8f0
 
     class PF_START,PF_MODE,PF_BD,PF_STATE preflight
@@ -187,9 +208,11 @@ flowchart TB
     class RED,GREEN,REFACTOR tdd
     class VERIFY,BRANCH,FINISH_CMD,COMPACT,CLEANUP finish
     class SA,MA,HEARTBEAT,PENDING facade
-    class PM,ANALYST,UX product
-    class ARCH,DEV,QA,DOCS technical
-    class STORY,BRAIN,DESIGN,STRAT,SOLVER creative
+    class PM,ANALYST,UX,ARCH,DEV,SM,QA,DOCS,QUICK bmm
+    class MASTER core
+    class STORY,BRAIN,DESIGN,STRAT,SOLVER,PRESENT cis
+    class AGENT_B,MODULE_B,WORKFLOW_B bmb
+    class GAME_ARCH,GAME_DESIGN,GAME_DEV,GAME_QA,GAME_SM,GAME_SOLO bmgd
     class VALIDATE,V01,V02,V03,V04,V05,V06,V07,OUTCOMES validation
 ```
 
@@ -446,36 +469,59 @@ flowchart TB
 
 ---
 
-## The 12 BMAD Agents (Party Mode)
+## The 25 BMAD Agents (Party Mode)
 
 Invoked via **[P] Party** at any A/P/C checkpoint.
 
-### Product Module
+### Core Module
 
-| Agent   | Name  | Focus                                          |
-| ------- | ----- | ---------------------------------------------- |
-| PM      | John  | Product priorities, roadmap, stakeholder needs |
-| Analyst | Mary  | Requirements, metrics, business value          |
-| UX      | Sally | User needs, flows, accessibility               |
+| Agent       | Name        | Focus                                          |
+| ----------- | ----------- | ---------------------------------------------- |
+| Orchestrator| BMad Master 🧙 | Agent coordination, workflow orchestration  |
 
-### Technical Module
+### BMM Module
 
-| Agent     | Name    | Focus                                     |
-| --------- | ------- | ----------------------------------------- |
-| Architect | Winston | System design, patterns, scalability      |
-| Developer | Amelia  | Implementation, code quality, performance |
-| QA        | Murat   | Testing, edge cases, reliability          |
-| Docs      | Paige   | Documentation, API specs, tutorials       |
+| Agent     | Name    | Focus                                          |
+| --------- | ------- | ---------------------------------------------- |
+| PM        | John    | Product priorities, roadmap, stakeholder needs |
+| Analyst   | Mary    | Requirements, metrics, business value          |
+| Architect | Winston | System design, patterns, scalability           |
+| Developer | Amelia  | Implementation, code quality, performance      |
+| SM        | Bob     | Sprint planning, ceremonies, team facilitation |
+| QA        | Murat   | Testing, edge cases, reliability               |
+| UX        | Sally   | User needs, flows, accessibility               |
+| Docs      | Paige   | Documentation, API specs, tutorials            |
+| Quick Flow| Barry   | Rapid prototyping, MVP, fast iteration         |
 
-### Creative Module
+### CIS Module
 
-| Agent          | Name      | Focus                                     |
-| -------------- | --------- | ----------------------------------------- |
-| Storyteller    | Sophia    | Narrative, user journey, empathy          |
-| Brainstormer   | Carson    | Wild ideas, 10x thinking, innovation      |
-| Design Thinker | Maya      | Methodology, process, iteration           |
-| Strategist     | Victor    | Long-term vision, trade-offs, positioning |
-| Problem Solver | Dr. Quinn | Root cause analysis, debugging, solutions |
+| Agent          | Name       | Focus                                     |
+| -------------- | ---------- | ----------------------------------------- |
+| Brainstormer   | Carson     | Wild ideas, 10x thinking, innovation      |
+| Problem Solver | Dr. Quinn  | Root cause analysis, debugging, solutions |
+| Design Thinker | Maya       | Methodology, process, iteration           |
+| Strategist     | Victor     | Long-term vision, trade-offs, positioning |
+| Presentation   | Caravaggio | Visual design, slides, demos              |
+| Storyteller    | Sophia     | Narrative, user journey, empathy          |
+
+### BMB Module
+
+| Agent           | Name   | Focus                                          |
+| --------------- | ------ | ---------------------------------------------- |
+| Agent Builder   | Bond 🤖   | Agent design patterns, BMAD compliance      |
+| Module Builder  | Morgan 🏗️ | Module architecture, system integration     |
+| Workflow Builder| Wendy 🔄  | Process design, state management, automation|
+
+### BMGD Module
+
+| Agent           | Name             | Focus                                     |
+| --------------- | ---------------- | ----------------------------------------- |
+| Game Architect  | Cloud Dragonborn 🏛️ | Engine design, multiplayer architecture|
+| Game Designer   | Samus Shepard 🎲    | Mechanics, player psychology, narrative |
+| Game Developer  | Link Freeman 🕹️     | Unity, Unreal, cross-platform shipping  |
+| Game QA         | GLaDOS 🧪           | Test automation, performance profiling  |
+| Game Scrum Master| Max 🎯            | Sprint orchestration, GDD to stories    |
+| Game Solo Dev   | Indie 🎮            | Quick flow, rapid prototyping, shipping |
 
 ### Agent Selection
 
@@ -566,6 +612,6 @@ flowchart TB
 
 - [README.md](../README.md) - Overview and installation
 - [TUTORIAL.md](../TUTORIAL.md) - Complete workflow guide
-- [skills/design/references/party-mode/workflow.md](../skills/design/references/party-mode/workflow.md) - Party Mode details
+- [skills/design/references/bmad/workflows/party-mode/workflow.md](../skills/design/references/bmad/workflows/party-mode/workflow.md) - Party Mode details
 - [skills/design/SKILL.md](../skills/design/SKILL.md) - Double Diamond methodology
 - [skills/dispatching-parallel-agents/SKILL.md](../skills/dispatching-parallel-agents/SKILL.md) - Parallel dispatch

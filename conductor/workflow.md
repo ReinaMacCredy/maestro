@@ -46,10 +46,12 @@ flowchart TB
         end
     end
 
-    subgraph BMAD["PARTY MODE: 12 BMAD AGENTS"]
-        PRODUCT["Product: John, Mary, Sally"]
-        TECHNICAL["Technical: Winston, Amelia, Murat, Paige"]
-        CREATIVE["Creative: Sophia, Carson, Maya, Victor, Dr. Quinn"]
+    subgraph BMAD["PARTY MODE: 25 BMAD AGENTS"]
+        CORE["Core: BMad Master (Orchestrator)"]
+        BMM["BMM: John, Mary, Winston, Amelia, Bob, Murat, Sally, Paige, Barry"]
+        CIS["CIS: Carson, Dr. Quinn, Maya, Victor, Caravaggio, Sophia"]
+        BMB["BMB: Agent Builder, Module Builder, Workflow Builder"]
+        BMGD["BMGD: Game Architect, Game Designer, Game Dev, Game QA, Game SM, Game Solo Dev"]
     end
 
     subgraph VALIDATION["VALIDATION SYSTEM (Phase 0)"]

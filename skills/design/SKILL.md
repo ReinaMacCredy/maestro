@@ -206,26 +206,45 @@ flowchart TB
         end
     end
 
-    subgraph BMAD["PARTY MODE: 12 BMAD AGENTS"]
-        subgraph PRODUCT["Product Module"]
+    subgraph BMAD["PARTY MODE: 25 BMAD AGENTS"]
+        subgraph CORE["Core Module"]
+            MASTER["BMad Master (Orchestrator)"]
+        end
+
+        subgraph BMM["BMM Module (9 agents)"]
             PM["John (PM)"]
             ANALYST["Mary (Analyst)"]
-            UX["Sally (UX)"]
-        end
-
-        subgraph TECHNICAL["Technical Module"]
             ARCH["Winston (Architect)"]
             DEV["Amelia (Developer)"]
+            SM["Bob (Scrum Master)"]
             QA["Murat (QA)"]
-            DOCS["Paige (Docs)"]
+            UX["Sally (UX Designer)"]
+            DOCS["Paige (Tech Writer)"]
+            BARRY["Barry (Quick Flow)"]
         end
 
-        subgraph CREATIVE["Creative Module"]
-            STORY["Sophia (Storyteller)"]
+        subgraph CIS["CIS Module (6 agents)"]
             BRAIN["Carson (Brainstorm)"]
+            SOLVER["Dr. Quinn (Problem Solver)"]
             DESIGN["Maya (Design Thinking)"]
-            STRAT["Victor (Strategist)"]
-            SOLVER["Dr. Quinn (Solver)"]
+            STRAT["Victor (Innovation)"]
+            CARAVAGGIO["Caravaggio (Presentation)"]
+            STORY["Sophia (Storyteller)"]
+        end
+
+        subgraph BMB["BMB Module (3 agents)"]
+            BOND["Bond (Agent Builder)"]
+            MORGAN["Morgan (Module Builder)"]
+            WENDY["Wendy (Workflow Builder)"]
+        end
+
+        subgraph BMGD["BMGD Module (6 agents)"]
+            CLOUD["Cloud Dragonborn (Game Architect)"]
+            SAMUS["Samus Shepard (Game Designer)"]
+            LINK["Link Freeman (Game Dev)"]
+            GLADOS["GLaDOS (Game QA)"]
+            MAX["Max (Game Scrum Master)"]
+            INDIE["Indie (Game Solo Dev)"]
         end
     end
 
@@ -272,9 +291,11 @@ flowchart TB
     classDef agent fill:#744210,stroke:#f6ad55,color:#e2e8f0
     classDef tdd fill:#2d3748,stroke:#a0aec0,color:#e2e8f0
     classDef finish fill:#22543d,stroke:#68d391,color:#e2e8f0
-    classDef product fill:#285e61,stroke:#4fd1c5,color:#e2e8f0
-    classDef technical fill:#2c5282,stroke:#63b3ed,color:#e2e8f0
-    classDef creative fill:#744210,stroke:#f6ad55,color:#e2e8f0
+    classDef core fill:#5b21b6,stroke:#a78bfa,color:#e2e8f0
+    classDef bmm fill:#285e61,stroke:#4fd1c5,color:#e2e8f0
+    classDef cis fill:#744210,stroke:#f6ad55,color:#e2e8f0
+    classDef bmb fill:#4c1d95,stroke:#c4b5fd,color:#e2e8f0
+    classDef bmgd fill:#7c2d12,stroke:#fdba74,color:#e2e8f0
 
     class DS,DISCOVER,DEFINE,DEVELOP,DELIVER,APC,DESIGND planning
     class NEWTRACK,SPECMD,PLANMD spec
@@ -283,9 +304,11 @@ flowchart TB
     class READY,CLAIM,CLOSE,SYNC agent
     class RED,GREEN,REFACTOR tdd
     class VERIFY,BRANCH,FINISH_CMD finish
-    class PM,ANALYST,UX product
-    class ARCH,DEV,QA,DOCS technical
-    class STORY,BRAIN,DESIGN,STRAT,SOLVER creative
+    class MASTER core
+    class PM,ANALYST,ARCH,DEV,SM,QA,UX,DOCS,BARRY bmm
+    class BRAIN,SOLVER,DESIGN,STRAT,CARAVAGGIO,STORY cis
+    class BOND,MORGAN,WENDY bmb
+    class CLOUD,SAMUS,LINK,GLADOS,MAX,INDIE bmgd
 ```
 
 For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../../docs/PIPELINE_ARCHITECTURE.md).
@@ -355,15 +378,30 @@ Phase-specific deep dives:
 
 ### [P] Party Mode
 
-Invokes multi-agent collaborative review. See `references/party-mode/workflow.md`.
+Invokes multi-agent collaborative review using BMAD v6 integration. See `references/bmad/workflows/party-mode/workflow.md`.
 
-Selects 3 relevant agents based on topic:
+**25 Agents Available:**
+- **Core (1):** BMad Master (🧙) - Orchestrator
+- **BMM (9):** PM, Analyst, Architect, Developer, Scrum Master, Test Architect, UX Designer, Tech Writer, Quick Flow Solo Dev
+- **CIS (6):** Brainstorming Coach, Problem Solver, Design Thinking Coach, Innovation Strategist, Presentation Master, Storyteller
+- **BMB (3):** Agent Builder, Module Builder, Workflow Builder
+- **BMGD (6):** Game Architect, Game Designer, Game Dev, Game QA, Game Scrum Master, Game Solo Dev
 
+**Selection:** BMad Master selects 2-3 agents based on topic relevance:
 - **Primary:** Best expertise match
 - **Secondary:** Complementary perspective
 - **Tertiary:** Devil's advocate
 
-Agents respond in character, cross-talk, then synthesize insights.
+**CIS Workflow Triggers:**
+- `*brainstorm` - 36 ideation techniques
+- `*design-thinking` - 5-phase human-centered design
+- `*innovate` - Strategic innovation planning
+- `*problem-solve` - Systematic problem resolution
+- `*story` - Narrative design
+
+**Language:** Agents respond in English.
+
+Agents respond in character, cross-talk (max 2 rounds), then synthesize insights.
 
 ## Loop-Back Support
 
