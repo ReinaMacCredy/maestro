@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2025-12-27
+
+
+### Added
+
+
+- Add session state preservation across sessions and compactions
+
+
+### Changed
+
+
+- Improve continuity hook ledger management with structured parsing and serialization, add Python script `lib` directory, and adjust CI/CD release trigger.
+- Improve continuity hook ledger management with structured parsing and serialization, add Python script `lib` directory, and adjust CI/CD release trigger.
+- Update Python type hints to use `Optional` for nullable types.
+
+
+### Conductor
+
+
+- Complete track continuity-integration_20251227
+- Update overview.md with continuity skill
+
 ## [2.1.0] - 2025-12-27
 
 
