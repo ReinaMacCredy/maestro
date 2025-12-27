@@ -89,10 +89,10 @@ AGENT_ID="${AGENT_ID:-$THREAD_ID}"
 LEDGER_FILE="conductor/sessions/active/LEDGER.md"
 
 if [[ -f "$LEDGER_FILE" ]]; then
-  # Extract frontmatter fields using sed/grep
-  LOCKED_MODE=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^mode:' | cut -d' ' -f2)
-  HEARTBEAT=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^heartbeat:' | cut -d' ' -f2)
-  BOUND_TRACK=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^bound_track:' | cut -d' ' -f2)
+  # Extract frontmatter fields (using cut -d: -f2- to handle values with spaces)
+  LOCKED_MODE=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^mode:' | cut -d: -f2- | sed 's/^ *//')
+  HEARTBEAT=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^heartbeat:' | cut -d: -f2- | sed 's/^ *//')
+  BOUND_TRACK=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^bound_track:' | cut -d: -f2- | sed 's/^ *//')
   
   if [[ -n "$LOCKED_MODE" && "$LOCKED_MODE" != "null" ]]; then
     echo "Session: Resuming $LOCKED_MODE mode (bound to track: ${BOUND_TRACK:-none})"
@@ -615,13 +615,13 @@ update_heartbeat() {
     # Extract body (everything after second ---)
     BODY=$(sed -n '/^---$/,/^---$/!p' "$LEDGER_FILE" | tail -n +2)
     
-    # Extract other frontmatter fields
-    SESSION_ID=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^session_id:' | cut -d' ' -f2)
-    PLATFORM=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^platform:' | cut -d' ' -f2)
-    BOUND_TRACK=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^bound_track:' | cut -d' ' -f2)
-    BOUND_BEAD=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^bound_bead:' | cut -d' ' -f2)
-    MODE=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^mode:' | cut -d' ' -f2)
-    TDD_PHASE=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^tdd_phase:' | cut -d' ' -f2)
+    # Extract other frontmatter fields (using cut -d: -f2- to handle values with spaces)
+    SESSION_ID=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^session_id:' | cut -d: -f2- | sed 's/^ *//')
+    PLATFORM=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^platform:' | cut -d: -f2- | sed 's/^ *//')
+    BOUND_TRACK=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^bound_track:' | cut -d: -f2- | sed 's/^ *//')
+    BOUND_BEAD=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^bound_bead:' | cut -d: -f2- | sed 's/^ *//')
+    MODE=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^mode:' | cut -d: -f2- | sed 's/^ *//')
+    TDD_PHASE=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^tdd_phase:' | cut -d: -f2- | sed 's/^ *//')
     
     cat > "$TEMP_FILE" << EOF
 ---
