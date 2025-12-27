@@ -20,7 +20,7 @@ skills/                    # 14 skill directories, each with SKILL.md
   ├── beads/              # Issue tracking (fb, rb triggers) with references/
   ├── conductor/          # Planning methodology with references/
   ├── design/             # Design sessions (ds trigger) with bmad/
-  ├── session-compaction/ # Session context compression
+  ├── continuity/       # Session state preservation (replaces session-compaction)
   ├── test-driven-development/
   └── ...                 # See SETUP_GUIDE.md for full list
 

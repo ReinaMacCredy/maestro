@@ -27,7 +27,7 @@ maestro/
 │   │   └── bmad/                 # Multi-agent design personas
 │   ├── dispatching-parallel-agents/references/
 │   │   └── agent-coordination/   # Multi-agent patterns
-│   └── session-compaction/       # Context compression
+│   └── continuity/            # Session state preservation
 ├── conductor/        # Project context + tracks
 │   ├── product.md, tech-stack.md, workflow.md
 │   ├── CODEMAPS/     # Architecture documentation (this directory)
@@ -70,6 +70,7 @@ Zero manual `bd` commands in the happy path:
 | `conductor` | `/conductor-*` | Planning methodology + CODEMAPS |
 | `design` | `ds` | Double Diamond + Party Mode |
 | `beads` | `bd`, `fb`, `rb` | Issue tracking, file/review beads |
+| `continuity` | `continuity load/save/handoff` | Session state preservation |
 | `test-driven-development` | `tdd` | RED-GREEN-REFACTOR |
 
 ## Common Tasks

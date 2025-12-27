@@ -4,13 +4,15 @@ Master list of all development tracks.
 
 ## Active Tracks
 
-*(No active tracks)*
-
 ---
 
 ## Completed Tracks
 
 *Completed tracks are archived to `conductor/archive/`.*
+
+## [x] Track: Continuity Integration
+*ID: continuity-integration_20251227*
+*Archived: [conductor/archive/continuity-integration_20251227/](conductor/archive/continuity-integration_20251227/)*
 
 ## [x] Track: BMAD V6 Integration
 *ID: bmad-v6-integration*

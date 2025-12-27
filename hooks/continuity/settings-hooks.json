@@ -1,0 +1,48 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${HOME}/.claude/hooks/dist/continuity.js\" SessionStart"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "manual|auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${HOME}/.claude/hooks/dist/continuity.js\" PreCompact"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|edit_file|create_file",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${HOME}/.claude/hooks/dist/continuity.js\" PostToolUse"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${HOME}/.claude/hooks/dist/continuity.js\" Stop"
+          }
+        ]
+      }
+    ]
+  }
+}

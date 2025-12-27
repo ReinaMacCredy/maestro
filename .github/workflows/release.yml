@@ -15,7 +15,7 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
-    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    if: github.actor != 'github-actions[bot]'
     
     steps:
       - name: Checkout
@@ -125,7 +125,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
           git add CHANGELOG.md .claude-plugin/plugin.json .claude-plugin/marketplace.json
-          git commit -m "chore(release): ${{ steps.version.outputs.tag }} [skip ci]"
+          git commit -m "chore(release): ${{ steps.version.outputs.tag }}"
           git tag ${{ steps.version.outputs.tag }}
           git push origin main --tags
 
@@ -141,7 +141,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
           git add CHANGELOG.md
-          git commit -m "docs: update changelog [skip ci]"
+          git commit -m "docs: update changelog"
           git push origin main
 
       - name: Create GitHub Release
