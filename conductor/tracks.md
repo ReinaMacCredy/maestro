@@ -10,6 +10,16 @@ Master list of all development tracks.
 
 *Completed tracks are archived to `conductor/archive/`.*
 
+## [x] Track: State Consolidation + Continuity Integration
+*ID: state-consolidation_20251227*
+*Archived: [conductor/archive/state-consolidation_20251227/](conductor/archive/state-consolidation_20251227/)*
+
+Consolidate state files (3→1 per track) and integrate continuity with Conductor workflow.
+
+## [x] Track: Doc-Sync Feature
+*ID: doc-sync_20251227*
+*Archived: [conductor/archive/doc-sync_20251227/](conductor/archive/doc-sync_20251227/)*
+
 ## [x] Track: UX Automation & State Machine
 *ID: ux-automation_20251227*
 *Archived: [conductor/archive/ux-automation_20251227/](conductor/archive/ux-automation_20251227/)*

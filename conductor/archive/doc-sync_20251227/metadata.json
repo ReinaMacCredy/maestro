@@ -1,0 +1,15 @@
+{
+  "track_id": "doc-sync_20251227",
+  "type": "feature",
+  "status": "ready",
+  "created": "2025-12-27T00:00:00Z",
+  "artifacts": {
+    "design": true,
+    "spec": true,
+    "plan": true
+  },
+  "workflow": {
+    "state": "READY",
+    "lastCommand": "/conductor-newtrack"
+  }
+}

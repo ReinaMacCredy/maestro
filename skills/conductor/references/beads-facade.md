@@ -108,7 +108,7 @@ Creates an epic and issues from a plan.md file.
    - Creates issue: `bd create "<title>" -t task -p <priority>`
    - Links to epic: `bd dep add <issueId> <epicId>`
    - Links dependencies: `bd dep add <issueId> <depIssueId>`
-3. Updates `.fb-progress.json` with planTasks mapping
+3. Updates `metadata.json.beads` section with planTasks mapping
 
 **Error Codes:**
 - `EPIC_EXISTS`: Epic with same title already exists
@@ -254,7 +254,7 @@ Updates the TDD phase for a task (opt-in via `--tdd` flag).
 ```
 
 **Behavior:**
-- Updates session state: `session-state_<agent>.json.tddPhase = phase`
+- Updates LEDGER.md frontmatter: `tdd_phase: <phase>`
 - Updates bead notes: `IN_PROGRESS: <phase> phase`
 
 **Notes Format:**
@@ -378,8 +378,8 @@ The facade reads/writes these state files:
 
 | File | Location | Purpose |
 |------|----------|---------|
-| `session-state_<agent>.json` | `.conductor/` | Per-agent session tracking |
-| `.fb-progress.json` | `tracks/<id>/` | planTasks mapping |
+| `LEDGER.md` | `conductor/sessions/active/` | Session tracking (mode, tdd_phase, bound_track) |
+| `metadata.json.beads` | `tracks/<id>/` | planTasks mapping, filing status |
 | `pending_updates.jsonl` | `.conductor/` | Failed update operations |
 | `pending_closes.jsonl` | `.conductor/` | Failed close operations |
 | `unsynced.json` | `.conductor/` | Unsynced bead IDs |
@@ -398,7 +398,7 @@ The facade reads/writes these state files:
 # Example: Track Init
 1. Parse plan.md tasks
 2. Call createEpicFromPlan()
-3. Update .fb-progress.json with mapping
+3. Update metadata.json.beads with mapping
 
 # Example: Task Execution
 1. Call claimTask(taskId, mode)

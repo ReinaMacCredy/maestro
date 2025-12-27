@@ -25,6 +25,8 @@ A plugin that provides structured AI-assisted development capabilities through p
 - [ ] Package organizational knowledge into portable, version-controlled skills
 - [~] Double Diamond design process with Party Mode multi-agent feedback
 - [x] BMAD v6 integration with 16 expert agents (completed 2025-12-27)
+- [x] State consolidation: 3→1 state files per track, session state in LEDGER.md (completed 2025-12-27)
+- [x] Continuity-Conductor integration: auto-load/handoff at implement/finish (completed 2025-12-27)
 
 ## Success Metrics
 

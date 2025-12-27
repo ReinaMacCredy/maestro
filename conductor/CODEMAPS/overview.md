@@ -10,6 +10,7 @@ AI workflow plugin for structured development: planning (Conductor), issue track
 | `/conductor-newtrack` | Generate spec + plan + beads from design |
 | `/conductor-implement` | Execute tasks with TDD |
 | `/conductor-finish` | Complete track, extract learnings, archive |
+| `/doc-sync` | Sync documentation with code changes |
 | `fb` / `rb` | File/review beads from plan |
 | `skills/dispatching-parallel-agents/` | Multi-agent file coordination (optional) |
 
@@ -17,7 +18,7 @@ AI workflow plugin for structured development: planning (Conductor), issue track
 
 ```
 maestro/
-├── skills/           # 14 skill directories (SKILL.md + references/)
+├── skills/           # 15 skill directories (SKILL.md + references/)
 │   ├── beads/references/         # Issue tracking workflows
 │   ├── conductor/references/     # Planning workflows + schemas
 │   │   ├── conductor/            # Beads integration workflows
@@ -25,6 +26,7 @@ maestro/
 │   │   └── schemas/              # JSON schemas
 │   ├── design/references/        # Double Diamond + Party Mode
 │   │   └── bmad/                 # Multi-agent design personas
+│   ├── doc-sync/references/      # Documentation sync with code changes
 │   ├── dispatching-parallel-agents/references/
 │   │   └── agent-coordination/   # Multi-agent patterns
 │   └── continuity/            # Session state preservation

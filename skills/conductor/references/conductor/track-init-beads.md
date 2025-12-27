@@ -14,7 +14,7 @@ This workflow runs during `/conductor-newtrack` after spec and plan are confirme
 4. **Create** epic from track title
 5. **Create** issues from tasks
 6. **Wire** dependencies between issues
-7. **Update** `.fb-progress.json` with planTasks mapping
+7. **Update** `metadata.json.beads` section with planTasks mapping
 
 ---
 
@@ -75,7 +75,7 @@ This workflow runs during `/conductor-newtrack` after spec and plan are confirme
 │            │                                                    │
 │            ▼                                                    │
 │   ┌─────────────────┐                                           │
-│   │  Update Mapping │ ─── .fb-progress.json                     │
+│   │  Update Mapping │ ─── metadata.json.beads                 │
 │   └─────────────────┘                                           │
 │                                                                 │
 └────────────────────────────────────────────────────────────────┘
@@ -251,11 +251,11 @@ Detect if beads already exist for this track.
 check_existing_beads() {
   local TRACK_ID="$1"
   
-  # Check .fb-progress.json
-  FB_PROGRESS="conductor/tracks/${TRACK_ID}/.fb-progress.json"
-  if [[ -f "$FB_PROGRESS" ]]; then
-    EXISTING_EPICS=$(jq -r '.epics // [] | length' "$FB_PROGRESS")
-    EXISTING_ISSUES=$(jq -r '.issues // [] | length' "$FB_PROGRESS")
+  # Check metadata.json.beads section
+  METADATA="conductor/tracks/${TRACK_ID}/metadata.json"
+  if [[ -f "$METADATA" ]]; then
+    EXISTING_EPICS=$(jq -r '.beads.epics // [] | length' "$METADATA")
+    EXISTING_ISSUES=$(jq -r '.beads.issues // [] | length' "$METADATA")
     
     if [[ "$EXISTING_EPICS" -gt 0 || "$EXISTING_ISSUES" -gt 0 ]]; then
       echo "EXISTING_BEADS"
@@ -303,10 +303,10 @@ Choice [R/S/M]:
 ```bash
 merge_with_existing() {
   local TASKS_JSON="$1"
-  local FB_PROGRESS="$2"
+  local METADATA="$2"
   
-  # Load existing planTasks mapping
-  EXISTING_MAPPING=$(jq '.planTasks // {}' "$FB_PROGRESS")
+  # Load existing planTasks mapping from metadata.json.beads
+  EXISTING_MAPPING=$(jq '.beads.planTasks // {}' "$METADATA")
   
   echo "$TASKS_JSON" | jq -c '.[]' | while read -r task; do
     TASK_ID=$(echo "$task" | jq -r '.id')
@@ -438,39 +438,35 @@ wire_dependencies() {
 
 ---
 
-## Step 9: Update .fb-progress.json
+## Step 9: Update metadata.json.beads
 
-Update the progress file with mapping.
+Update the beads section with mapping.
 
 ```bash
-update_fb_progress() {
+update_beads_section() {
   local TRACK_ID="$1"
   local EPIC_ID="$2"
   local PLAN_TASKS_MAPPING="$3"
-  local THREAD_ID="$4"
   
-  FB_PROGRESS="conductor/tracks/${TRACK_ID}/.fb-progress.json"
+  METADATA="conductor/tracks/${TRACK_ID}/metadata.json"
   NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   
-  # Create or update .fb-progress.json
-  cat > "$FB_PROGRESS" << EOF
-{
-  "trackId": "$TRACK_ID",
-  "status": "complete",
-  "startedAt": "$NOW",
-  "threadId": "$THREAD_ID",
-  "resumeFrom": null,
-  "epics": ["$EPIC_ID"],
-  "issues": $(echo "$PLAN_TASKS_MAPPING" | jq '[.[]]'),
-  "planTasks": $PLAN_TASKS_MAPPING,
-  "beadToTask": $(echo "$PLAN_TASKS_MAPPING" | jq 'to_entries | map({key: .value, value: .key}) | from_entries'),
-  "crossTrackDeps": [],
-  "lastError": null,
-  "lastVerified": "$NOW"
-}
-EOF
+  # Update metadata.json.beads section
+  jq --arg epicId "$EPIC_ID" \
+     --arg now "$NOW" \
+     --argjson planTasks "$PLAN_TASKS_MAPPING" \
+     --argjson beadToTask "$(echo "$PLAN_TASKS_MAPPING" | jq 'to_entries | map({key: .value, value: .key}) | from_entries')" \
+     --argjson issues "$(echo "$PLAN_TASKS_MAPPING" | jq '[.[]]')" \
+     '.beads.status = "complete" |
+      .beads.epicId = $epicId |
+      .beads.epics = [{"id": $epicId, "title": "Epic", "status": "complete", "createdAt": $now, "reviewed": false}] |
+      .beads.issues = $issues |
+      .beads.planTasks = $planTasks |
+      .beads.beadToTask = $beadToTask |
+      .artifacts.beads = true' \
+     "$METADATA" > "$METADATA.tmp.$$" && mv "$METADATA.tmp.$$" "$METADATA"
   
-  echo "Updated: $FB_PROGRESS"
+  echo "Updated: $METADATA"
 }
 ```
 
@@ -518,7 +514,7 @@ PLAN_TASKS_MAPPING=$(create_issues "$TASKS" "$EPIC_ID")
 wire_dependencies "$TASKS" "$PLAN_TASKS_MAPPING"
 
 # Step 9: Update mapping
-update_fb_progress "$TRACK_ID" "$EPIC_ID" "$PLAN_TASKS_MAPPING" "$THREAD_ID"
+update_beads_section "$TRACK_ID" "$EPIC_ID" "$PLAN_TASKS_MAPPING"
 
 echo "Track init complete: $TRACK_ID"
 echo "Epic: $EPIC_ID"
@@ -535,7 +531,7 @@ echo "Issues: $(echo "$PLAN_TASKS_MAPPING" | jq 'length')"
 | Validation failed + strict | HALT with exit 1 |
 | bd create fails | Retry 3x, then HALT |
 | Dependency wiring fails | Log warning, continue |
-| .fb-progress.json write fails | HALT with error |
+| metadata.json update fails | HALT with error |
 
 ---
 

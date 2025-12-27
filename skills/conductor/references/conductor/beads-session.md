@@ -18,7 +18,7 @@ This workflow covers the session lifecycle after preflight completes:
 ## Prerequisites
 
 - Preflight completed successfully (see [preflight-beads.md](preflight-beads.md))
-- Session state file exists (`.conductor/session-state_<agent>.json`)
+- LEDGER.md exists with session state in frontmatter (`conductor/sessions/active/LEDGER.md`)
 - Mode locked (SA or MA)
 
 ---
@@ -39,7 +39,7 @@ This workflow covers the session lifecycle after preflight completes:
 │   bd update <id> --status in_progress                           │
 │        │                                                        │
 │        ▼                                                        │
-│   Update session state (currentTask = <id>)                     │
+│   Update LEDGER.md (bound_bead = <id>)                         │
 │        │                                                        │
 │        ▼                                                        │
 │   ┌─────────────────────────────────────┐                       │
@@ -51,7 +51,7 @@ This workflow covers the session lifecycle after preflight completes:
 │   bd close <id> --reason <reason>                               │
 │        │                                                        │
 │        ▼                                                        │
-│   Update session state (currentTask = null)                     │
+│   Update LEDGER.md (bound_bead = null)                         │
 │        │                                                        │
 │        ▼                                                        │
 │   bd sync (at session end)                                      │
@@ -101,6 +101,8 @@ This workflow covers the session lifecycle after preflight completes:
 ### SA Mode Claim
 
 ```bash
+LEDGER_FILE="conductor/sessions/active/LEDGER.md"
+
 # 1. Get ready tasks
 READY=$(bd ready --json)
 if [[ $(echo "$READY" | jq 'length') -eq 0 ]]; then
@@ -118,12 +120,10 @@ if [[ $? -ne 0 ]]; then
   exit 1
 fi
 
-# 4. Update session state
+# 4. Update LEDGER.md frontmatter with bound_bead
 NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-jq --arg task "$TASK_ID" --arg ts "$NOW" \
-  '.currentTask = $task | .lastUpdated = $ts' \
-  "$SESSION_FILE" > "$SESSION_FILE.tmp.$$"
-mv "$SESSION_FILE.tmp.$$" "$SESSION_FILE"
+update_ledger_field "bound_bead" "$TASK_ID"
+update_ledger_field "heartbeat" "$NOW"
 
 echo "Claimed: $TASK_ID"
 ```
@@ -160,10 +160,10 @@ For executing multiple independent tasks:
 # SA Mode: claim multiple tasks at once
 bd update task-1 task-2 task-3 --status in_progress
 
-# Update session state with array
-jq --argjson tasks '["task-1", "task-2", "task-3"]' \
-  '.currentTasks = $tasks' "$SESSION_FILE" > "$SESSION_FILE.tmp.$$"
-mv "$SESSION_FILE.tmp.$$" "$SESSION_FILE"
+# Note: LEDGER.md bound_bead tracks single active task
+# For parallel tasks, bound_bead contains first task ID
+# Other task IDs tracked in Working Set section of LEDGER body
+update_ledger_field "bound_bead" "task-1"
 ```
 
 ---
@@ -187,12 +187,10 @@ update_tdd_phase() {
   local TASK_ID="$1"
   local PHASE="$2"  # RED, GREEN, or REFACTOR
   
-  # 1. Update session state
+  # 1. Update LEDGER.md frontmatter
   NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-  jq --arg phase "$PHASE" --arg ts "$NOW" \
-    '.tddPhase = $phase | .lastUpdated = $ts' \
-    "$SESSION_FILE" > "$SESSION_FILE.tmp.$$"
-  mv "$SESSION_FILE.tmp.$$" "$SESSION_FILE"
+  update_ledger_field "tdd_phase" "$PHASE"
+  update_ledger_field "heartbeat" "$NOW"
   
   # 2. Update bead notes
   case "$PHASE" in
@@ -270,12 +268,11 @@ close_task() {
     return $?
   fi
   
-  # 4. Update session state
+  # 4. Update LEDGER.md frontmatter
   NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-  jq --arg ts "$NOW" \
-    '.currentTask = null | .tddPhase = null | .lastUpdated = $ts' \
-    "$SESSION_FILE" > "$SESSION_FILE.tmp.$$"
-  mv "$SESSION_FILE.tmp.$$" "$SESSION_FILE"
+  update_ledger_field "bound_bead" "null"
+  update_ledger_field "tdd_phase" "null"
+  update_ledger_field "heartbeat" "$NOW"
   
   echo "Closed: $TASK_ID ($REASON)"
 }
@@ -610,33 +607,89 @@ done taskId="bd-42" reason="completed"
 
 ## Session State Updates
 
-### State File Location
+### State Location
 
-`.conductor/session-state_<agent-id>.json`
+Session state is stored in LEDGER.md frontmatter at `conductor/sessions/active/LEDGER.md`.
 
 ### Schema
 
-```json
-{
-  "agentId": "T-abc123",
-  "mode": "SA",
-  "modeLockedAt": "2025-12-25T10:00:00Z",
-  "trackId": "feature_20251225",
-  "currentTask": "bd-42",
-  "currentTasks": null,
-  "tddPhase": "GREEN",
-  "lastUpdated": "2025-12-25T12:00:00Z"
-}
+```yaml
+---
+updated: 2025-12-27T10:30:00Z
+session_id: T-abc123
+platform: claude
+bound_track: feature_20251225
+bound_bead: bd-42
+mode: SA
+tdd_phase: GREEN
+heartbeat: 2025-12-25T12:00:00Z
+---
 ```
 
 ### Update Points
 
 | Event | Fields Updated |
 |-------|----------------|
-| Claim task | `currentTask`, `lastUpdated` |
-| TDD phase change | `tddPhase`, `lastUpdated` |
-| Close task | `currentTask=null`, `tddPhase=null`, `lastUpdated` |
-| Heartbeat | `lastUpdated` |
+| Claim task | `bound_bead`, `heartbeat` |
+| TDD phase change | `tdd_phase`, `heartbeat` |
+| Close task | `bound_bead=null`, `tdd_phase=null`, `heartbeat` |
+| Heartbeat | `heartbeat`, `updated` |
+
+### Helper Function
+
+```bash
+update_ledger_field() {
+  local FIELD="$1"
+  local VALUE="$2"
+  LEDGER_FILE="conductor/sessions/active/LEDGER.md"
+  
+  if [[ ! -f "$LEDGER_FILE" ]]; then
+    echo "WARN: LEDGER.md not found"
+    return 1
+  fi
+  
+  TEMP_FILE="$LEDGER_FILE.tmp.$$"
+  
+  # Extract body (everything after second ---)
+  BODY=$(sed -n '/^---$/,/^---$/!p' "$LEDGER_FILE" | tail -n +2)
+  
+  # Read all frontmatter fields (using cut -d: -f2- to handle values with spaces)
+  SESSION_ID=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^session_id:' | cut -d: -f2- | sed 's/^ *//')
+  PLATFORM=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^platform:' | cut -d: -f2- | sed 's/^ *//')
+  BOUND_TRACK=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^bound_track:' | cut -d: -f2- | sed 's/^ *//')
+  BOUND_BEAD=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^bound_bead:' | cut -d: -f2- | sed 's/^ *//')
+  MODE=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^mode:' | cut -d: -f2- | sed 's/^ *//')
+  TDD_PHASE=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^tdd_phase:' | cut -d: -f2- | sed 's/^ *//')
+  HEARTBEAT=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^heartbeat:' | cut -d: -f2- | sed 's/^ *//')
+  
+  # Override the specified field
+  case "$FIELD" in
+    bound_track) BOUND_TRACK="$VALUE" ;;
+    bound_bead) BOUND_BEAD="$VALUE" ;;
+    mode) MODE="$VALUE" ;;
+    tdd_phase) TDD_PHASE="$VALUE" ;;
+    heartbeat) HEARTBEAT="$VALUE" ;;
+  esac
+  
+  NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  
+  cat > "$TEMP_FILE" << EOF
+---
+updated: $NOW
+session_id: $SESSION_ID
+platform: $PLATFORM
+bound_track: $BOUND_TRACK
+bound_bead: $BOUND_BEAD
+mode: $MODE
+tdd_phase: $TDD_PHASE
+heartbeat: $HEARTBEAT
+---
+$BODY
+EOF
+  
+  mv "$TEMP_FILE" "$LEDGER_FILE"
+}
+```
 
 ---
 

@@ -16,26 +16,26 @@ If no plan provided, check:
 
 ### 0.2 Check for Existing Progress
 
-Look for `.fb-progress.json` in track directory:
+Check `metadata.json.beads` section in track directory:
 
 ```bash
-cat conductor/tracks/<track_id>/.fb-progress.json 2>/dev/null
+jq '.beads' conductor/tracks/<track_id>/metadata.json 2>/dev/null
 ```
 
-**If progress file exists:**
+**If beads section exists:**
 1. Read `status` field
 2. **If `status: "complete"`:** Announce "Beads already filed for this track. Use `--force` to re-file." HALT.
 3. **If `status: "in_progress"` or `"failed"`:** 
-   - Read `resumeFrom` field to identify checkpoint
+   - Read `resumeFrom` field to identify checkpoint (if present)
    - Read `epics` array to get already-created epics
-   - Announce: "Resuming from checkpoint: <resumeFrom>"
+   - Announce: "Resuming from checkpoint"
    - Skip to appropriate phase
 4. **If `status: "pending"`:**
    - Fresh start, proceed to Phase 1
 
-### 0.3 Validate Required State Files
+### 0.3 Validate Required State
 
-**MANDATORY:** Verify all prerequisite state files exist before proceeding.
+**MANDATORY:** Verify metadata.json exists and has required sections.
 
 ```bash
 TRACK_PATH="conductor/tracks/<track_id>"
@@ -43,8 +43,6 @@ TRACK_PATH="conductor/tracks/<track_id>"
 # Check required files
 MISSING=""
 [ ! -f "$TRACK_PATH/metadata.json" ] && MISSING="$MISSING metadata.json"
-[ ! -f "$TRACK_PATH/.track-progress.json" ] && MISSING="$MISSING .track-progress.json"
-[ ! -f "$TRACK_PATH/.fb-progress.json" ] && MISSING="$MISSING .fb-progress.json"
 [ ! -f "$TRACK_PATH/plan.md" ] && MISSING="$MISSING plan.md"
 
 if [ -n "$MISSING" ]; then
@@ -54,38 +52,33 @@ if [ -n "$MISSING" ]; then
   exit 1
 fi
 
-# Validate JSON files
-for FILE in metadata.json .track-progress.json .fb-progress.json; do
-  if ! jq empty "$TRACK_PATH/$FILE" 2>/dev/null; then
-    echo "❌ Corrupted: $FILE"
-    exit 1
-  fi
-done
+# Validate JSON
+if ! jq empty "$TRACK_PATH/metadata.json" 2>/dev/null; then
+  echo "❌ Corrupted: metadata.json"
+  exit 1
+fi
 
-# Auto-fix trackId mismatch
-DIR_NAME=$(basename "$TRACK_PATH")
-for FILE in .fb-progress.json; do
-  CURRENT_ID=$(jq -r '.trackId // empty' "$TRACK_PATH/$FILE")
-  if [ -n "$CURRENT_ID" ] && [ "$CURRENT_ID" != "$DIR_NAME" ]; then
-    echo "ℹ️ Auto-fixing trackId in $FILE: $CURRENT_ID → $DIR_NAME"
-    jq --arg id "$DIR_NAME" '.trackId = $id' "$TRACK_PATH/$FILE" > "$TRACK_PATH/$FILE.tmp.$$" && mv "$TRACK_PATH/$FILE.tmp.$$" "$TRACK_PATH/$FILE"
-  fi
-done
+# Ensure beads section exists
+if ! jq -e '.beads' "$TRACK_PATH/metadata.json" > /dev/null 2>&1; then
+  echo "ℹ️ Adding beads section to metadata.json"
+  jq '.beads = {"status": "pending", "epicId": null, "epics": [], "issues": [], "planTasks": {}, "beadToTask": {}, "crossTrackDeps": [], "reviewStatus": null, "reviewedAt": null}' \
+    "$TRACK_PATH/metadata.json" > "$TRACK_PATH/metadata.json.tmp.$$" && mv "$TRACK_PATH/metadata.json.tmp.$$" "$TRACK_PATH/metadata.json"
+fi
 
-echo "✓ State files validated"
+echo "✓ State validated"
 ```
 
-**If any file missing or corrupted:** HALT. Do NOT auto-create.
+**If metadata.json missing or corrupted:** HALT. Do NOT auto-create.
 
 ### 0.4 Update Progress to In-Progress
 
-Update `.fb-progress.json` to mark start:
+Update `metadata.json.beads` to mark start:
 
 ```bash
 jq --arg time "<current-timestamp>" \
    --arg thread "<current-thread-id>" \
-   '.status = "in_progress" | .startedAt = $time | .threadId = $thread | .resumeFrom = "phase1"' \
-   "conductor/tracks/<track_id>/.fb-progress.json" > "conductor/tracks/<track_id>/.fb-progress.json.tmp.$$" && mv "conductor/tracks/<track_id>/.fb-progress.json.tmp.$$" "conductor/tracks/<track_id>/.fb-progress.json"
+   '.beads.status = "in_progress" | .beads.startedAt = $time' \
+   "conductor/tracks/<track_id>/metadata.json" > "conductor/tracks/<track_id>/metadata.json.tmp.$$" && mv "conductor/tracks/<track_id>/metadata.json.tmp.$$" "conductor/tracks/<track_id>/metadata.json"
 ```
 
 ## Phase 1: Analyze Plan
@@ -113,30 +106,31 @@ bd create "Epic: Authentication" -t epic -p 1 --json
 # Returns: {"id": "bd-1", ...}
 ```
 
-**After EACH epic creation, update progress file:**
+**After EACH epic creation, update metadata.json.beads:**
 
 ```json
 {
-  "trackId": "<track_id>",
-  "status": "in_progress",
-  "epics": [
-    {
-      "id": "bd-1",
-      "title": "Epic: Authentication",
-      "status": "created",
-      "createdAt": "<timestamp>",
-      "reviewed": false
-    },
-    {
-      "id": "bd-2",
-      "title": "Epic: Database Layer",
-      "status": "created",
-      "createdAt": "<timestamp>",
-      "reviewed": false
-    }
-  ],
-  "resumeFrom": "phase2_epic_3",
-  ...
+  "beads": {
+    "status": "in_progress",
+    "epicId": "bd-1",
+    "epics": [
+      {
+        "id": "bd-1",
+        "title": "Epic: Authentication",
+        "status": "created",
+        "createdAt": "<timestamp>",
+        "reviewed": false
+      },
+      {
+        "id": "bd-2",
+        "title": "Epic: Database Layer",
+        "status": "created",
+        "createdAt": "<timestamp>",
+        "reviewed": false
+      }
+    ],
+    ...
+  }
 }
 ```
 
@@ -238,15 +232,16 @@ For each subagent result:
    - Update progress file with issues
    - Record cross-epic dependencies for Phase 4
 
-**Update progress file after each batch:**
+**Update metadata.json.beads after each batch:**
 
 ```json
 {
-  "status": "in_progress",
-  "resumeFrom": "phase3_batch_2",
-  "epics": [...],
-  "issues": ["bd-4", "bd-5", "bd-6", ...],
-  "lastBatchCompleted": 1
+  "beads": {
+    "status": "in_progress",
+    "epics": [...],
+    "issues": ["bd-4", "bd-5", "bd-6", ...],
+    ...
+  }
 }
 ```
 
@@ -297,35 +292,32 @@ Check:
 - No dependency cycles
 - Some issues are ready (unblocked)
 
-### Update Final Progress File
+### Update Final metadata.json.beads
 
 ```json
 {
-  "trackId": "<track_id>",
-  "status": "complete",
-  "startedAt": "<start-timestamp>",
-  "completedAt": "<end-timestamp>",
-  "threadId": "<thread-id>",
-  "lastVerified": "<timestamp>",
-  
-  "epics": [
-    {
-      "id": "bd-1",
-      "title": "Epic: Authentication",
-      "status": "complete",
-      "createdAt": "<timestamp>",
-      "reviewed": false
-    }
-  ],
-  
-  "issues": ["bd-4", "bd-5", "bd-6", ...],
-  
-  "crossTrackDeps": [
-    {"from": "bd-3", "to": "api_20251223:bd-7"}
-  ],
-  
-  "resumeFrom": null,
-  "lastError": null
+  "beads": {
+    "status": "complete",
+    "startedAt": "<start-timestamp>",
+    "epicId": "<primary-epic-id>",
+    "epics": [
+      {
+        "id": "bd-1",
+        "title": "Epic: Authentication",
+        "status": "complete",
+        "createdAt": "<timestamp>",
+        "reviewed": false
+      }
+    ],
+    "issues": ["bd-4", "bd-5", "bd-6", ...],
+    "planTasks": {"1.1.1": "bd-4", "1.1.2": "bd-5", ...},
+    "beadToTask": {"bd-4": "1.1.1", "bd-5": "1.1.2", ...},
+    "crossTrackDeps": [
+      {"from": "bd-3", "to": "api_20251223:bd-7"}
+    ],
+    "reviewStatus": null,
+    "reviewedAt": null
+  }
 }
 ```
 

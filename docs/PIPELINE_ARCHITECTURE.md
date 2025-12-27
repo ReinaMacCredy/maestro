@@ -280,9 +280,9 @@ Mode is detected at session start and locked for the session.
 
 | File | Location | Purpose |
 |------|----------|---------|
-| `session-state_<agent>.json` | `.conductor/` | Per-agent session tracking |
+| `LEDGER.md` | `conductor/sessions/active/` | Session state in frontmatter (mode, bound_track, bound_bead, tdd_phase) |
 | `session-lock_<track>.json` | `.conductor/` | Concurrent session prevention |
-| `.fb-progress.json` | `tracks/<id>/` | Bidirectional planTasks mapping |
+| `metadata.json` | `tracks/<id>/` | Track info + generation + beads (includes planTasks mapping) |
 | `pending_*.jsonl` | `.conductor/` | Failed operations for replay |
 | `metrics.jsonl` | `.conductor/` | Usage metrics (append-only) |
 

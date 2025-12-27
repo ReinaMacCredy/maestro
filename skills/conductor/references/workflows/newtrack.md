@@ -26,12 +26,12 @@ Create a new track (feature, bug fix, or chore) with comprehensive specification
 
 ## State Management
 
-This workflow uses multiple state files:
+This workflow uses consolidated state in `metadata.json`:
 
-| File | Purpose |
-|------|---------|
-| `.track-progress.json` | Spec/plan generation state |
-| `.fb-progress.json` | Beads filing state (resume capability) |
+| Section | Purpose |
+|---------|---------|
+| `metadata.json.generation` | Spec/plan generation state |
+| `metadata.json.beads` | Beads filing state (resume capability) |
 | `.fb-progress.lock` | Concurrent session lock (30min timeout) |
 
 ## Workflow Steps
@@ -162,15 +162,7 @@ This workflow uses multiple state files:
    ```
 
 6. **Create `.track-progress.json`**
-   ```json
-   {
-     "trackId": "<track_id>",
-     "status": "plan_done",
-     "specCreatedAt": "...",
-     "planCreatedAt": "...",
-     "threadId": "<thread-id>"
-   }
-   ```
+   *(Deprecated - now stored in metadata.json.generation)*
 
 7. **Write Files**
    - `spec.md`: confirmed specification
@@ -304,27 +296,30 @@ Link issues based on `depends:` in plan tasks:
 bd dep add <issue-id> <dependency-issue-id>
 ```
 
-#### Step 7: Update .fb-progress.json
+#### Step 7: Update metadata.json.beads
 
-Create the progress file with planTasks mapping:
+Update the beads section in metadata.json with planTasks mapping:
 
 ```json
 {
-  "trackId": "<track-id>",
-  "status": "complete",
-  "startedAt": "...",
-  "threadId": "<thread-id>",
-  "epics": ["<epic-id>"],
-  "issues": ["<issue-1>", "<issue-2>", ...],
-  "planTasks": {
-    "1.1.1": "<issue-id-1>",
-    "1.1.2": "<issue-id-2>"
-  },
-  "beadToTask": {
-    "<issue-id-1>": "1.1.1",
-    "<issue-id-2>": "1.1.2"
-  },
-  "lastVerified": "..."
+  "beads": {
+    "status": "complete",
+    "startedAt": "...",
+    "epicId": "<epic-id>",
+    "epics": [{"id": "<epic-id>", "title": "...", "status": "created", "createdAt": "..."}],
+    "issues": ["<issue-1>", "<issue-2>", ...],
+    "planTasks": {
+      "1.1.1": "<issue-id-1>",
+      "1.1.2": "<issue-id-2>"
+    },
+    "beadToTask": {
+      "<issue-id-1>": "1.1.1",
+      "<issue-id-2>": "1.1.2"
+    },
+    "crossTrackDeps": [],
+    "reviewStatus": null,
+    "reviewedAt": null
+  }
 }
 ```
 
@@ -364,7 +359,7 @@ Task(
 ### Phase 7: Completion & Handoff
 
 1. **Update Final State**
-   - Set `.track-progress.json` status to `complete`
+   - Update `metadata.json.generation.status` to `complete`
 
 2. **Display Handoff**
 
@@ -420,11 +415,9 @@ conductor/
 ├── tracks.md (updated)
 └── tracks/
     └── <track_id>/
-        ├── metadata.json
+        ├── metadata.json (includes generation + beads sections)
         ├── spec.md
         ├── plan.md
-        ├── .track-progress.json
-        ├── .fb-progress.json (if beads filed)
         └── .fb-progress.lock (temporary, during filing)
 ```
 

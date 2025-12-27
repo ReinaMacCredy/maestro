@@ -375,9 +375,10 @@ Present combined results:
    │                                         │
    │ Epics reviewed: N                       │
    │ Issues updated: N                       │
-   │ Ready for work: N                       │
+   │ Ready to start: N epics in parallel     │
    │                                         │
-   │ → Next: bd ready (start work)           │
+   │ → Next: Start epic {first-epic-id}      │
+   │   Or: bd ready (show all ready tasks)   │
    │   Alt: /conductor-implement <track_id>  │
    └─────────────────────────────────────────┘
    ```

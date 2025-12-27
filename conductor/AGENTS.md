@@ -40,6 +40,11 @@ Contains reusable learnings from completed tracks.
 - `git status --porcelain` - Check for dirty state (empty = clean)
 - `git show-ref --verify --quiet "refs/heads/$BRANCH"` - Check if branch exists
 - `jq '.workflow.state = "ARCHIVED"' metadata.json > "metadata.json.tmp.$$" && mv "metadata.json.tmp.$$" metadata.json` - Update workflow state atomically
+- `/doc-sync` - Sync documentation with code changes
+- `/doc-sync --dry-run` - Preview doc changes without applying
+- `/doc-sync --force` - Apply all doc changes without prompts
+- `sed -n '/^---$/,/^---$/p' "$FILE" | grep '^field:' | cut -d' ' -f2` - Extract YAML frontmatter field value
+- `bd close id1 id2 id3 --reason completed` - Close multiple beads at once
 
 ## Gotchas
 
@@ -75,6 +80,13 @@ Contains reusable learnings from completed tracks.
 - Open beads cause HALT at finish unless `--force` is used
 - Branch suffix auto-increments (-v2, -v3) if branch already exists
 - `workflow.state` for machine logic, `status` field for human readability
+- Doc-sync runs as Phase 7 in `/conductor-finish` (after CODEMAPS)
+- Doc-sync errors are non-blocking - workflow continues even if doc-sync fails
+- Minor doc changes (path renames, function renames) are auto-applied
+- Major doc changes (new features, removed features) prompt user
+- Track-switch auto-archives LEDGER.md - switching tracks preserves previous session context in archive
+- Continuity operations in Conductor are non-blocking - failures log warnings but never halt commands
+- bound_track/bound_bead in LEDGER.md frontmatter replace deprecated session-state_*.json files
 
 ## Patterns
 
@@ -82,7 +94,7 @@ Contains reusable learnings from completed tracks.
 - **Smart Skip:** Each phase checks if work exists before running
 - **Resume Capability:** State files track progress for interrupted workflows
 - **A/K Archive Choice:** Archive (move to archive/) / Keep (stay active)
-- **State Files First:** Create metadata.json, .track-progress.json, .fb-progress.json in Phase 1.3 BEFORE spec/plan generation
+- **State Files First:** Create metadata.json with generation and beads sections in Phase 1.3 BEFORE spec/plan generation
 - **Collective State Validation:** Treat 3 state files as atomic unit - HAS_STATE = 0 (none), 1 (partial), 2 (all)
 - **Double Diamond Phases:** DISCOVER (diverge) → DEFINE (converge) → DEVELOP (diverge) → DELIVER (converge)
 - **A/P/C Checkpoints:** At each phase end: [A] Advanced, [P] Party (multi-agent), [C] Continue
@@ -93,3 +105,6 @@ Contains reusable learnings from completed tracks.
 - **RECALL/REMEMBER:** Session lifecycle with anchored format for cross-session context
 - **Degradation Signals:** tool_repeat, backtrack, quality_drop, contradiction → 2+ signals triggers compression
 - **Anchored Format:** [PRESERVE] markers for Intent and Constraints sections that survive compression
+- **Continuity Chain:** `/conductor-implement` (Phase 0.5: load) → work → `/conductor-finish` (Phase 6.5: handoff)
+- **State File Consolidation:** Replace N separate state files with sections in a single consolidated file (e.g., metadata.json.beads replaces .fb-progress.json)
+- **Track Binding Flow:** null → bound_track → bound_bead → null (lifecycle matches Conductor workflow)
