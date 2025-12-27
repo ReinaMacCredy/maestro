@@ -15,7 +15,7 @@ skills/           # Skill directories, each with SKILL.md (frontmatter + instruc
   beads/          # Issue tracking skill with references/ subdirectory
   conductor/      # Planning methodology (includes /conductor-design, CODEMAPS generation)
   design/         # Double Diamond design sessions (ds trigger), includes bmad/
-  session-compaction/  # Session context compression
+  continuity/     # Session state preservation (replaces session-compaction)
   ...             # TDD, debugging, code review, etc.
 lib/              # Shared utilities (skills-core.js)
 .claude-plugin/   # Plugin manifest (plugin.json, marketplace.json)
@@ -216,6 +216,47 @@ Run `scripts/beads-metrics-summary.sh` for weekly summary.
 - [Session Workflow](skills/conductor/references/conductor/beads-session.md) - Claim/close/sync protocol
 
 <!-- end-bv-agent-instructions -->
+
+---
+
+## Continuity (Session Preservation)
+
+Automatic session state preservation across sessions and compactions.
+
+### Claude Code (Automatic)
+
+When hooks are installed at `~/.claude/hooks/`:
+- **SessionStart**: Auto-loads LEDGER.md + last handoff
+- **PreCompact**: Auto-creates handoff before compaction
+- **PostToolUse**: Tracks modified files
+- **Stop**: Archives session on exit
+
+Install hooks: `./scripts/install-global-hooks.sh`
+
+### Amp Code (Manual)
+
+Run these commands during your session:
+- `continuity load` - At session start
+- `continuity save` - After significant changes
+- `continuity handoff` - Before ending session
+
+See [skills/continuity/references/amp-setup.md](skills/continuity/references/amp-setup.md) for full setup.
+
+### Data Storage
+
+```
+conductor/sessions/
+├── active/LEDGER.md    # Current session state (gitignored)
+└── archive/*.md        # Archived handoffs (committed)
+```
+
+### Search History
+
+```bash
+uv run scripts/artifact-query.py <query>   # FTS5 search
+uv run scripts/artifact-index.py           # Rebuild index
+uv run scripts/artifact-cleanup.py         # Remove old handoffs
+```
 
 ---
 

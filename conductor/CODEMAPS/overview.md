@@ -27,7 +27,7 @@ maestro/
 │   │   └── bmad/                 # Multi-agent design personas
 │   ├── dispatching-parallel-agents/references/
 │   │   └── agent-coordination/   # Multi-agent patterns
-│   └── session-compaction/       # Context compression
+│   └── continuity/            # Session state preservation
 ├── conductor/        # Project context + tracks
 │   ├── product.md, tech-stack.md, workflow.md
 │   ├── CODEMAPS/     # Architecture documentation (this directory)

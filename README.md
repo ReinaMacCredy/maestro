@@ -144,7 +144,7 @@ trace                              # Root cause tracing (external: superpowers)
 | ----------------- | ------------------------------------------------------------------------------------------------------------- |
 | **Core Workflow** | conductor, design (Double Diamond + Party Mode), beads                                                        |
 | **Development**   | test-driven-development, using-git-worktrees, finishing-a-development-branch                                  |
-| **Utilities**     | dispatching-parallel-agents, subagent-driven-development, session-compaction                                  |
+| **Utilities**     | dispatching-parallel-agents, subagent-driven-development, continuity                                          |
 | **Meta**          | verification-before-completion, writing-skills, sharing-skills                                                |
 
 ---
@@ -548,7 +548,7 @@ maestro/
 │   ├── conductor/         # Planning methodology with references/
 │   ├── design/            # Design sessions (ds trigger) with bmad/
 │   ├── beads/             # Issue tracking (fb, rb triggers)
-│   ├── session-compaction/# Session context compression
+│   ├── continuity/        # Session state preservation (replaces session-compaction)
 │   ├── test-driven-development/
 │   └── ...                # See SETUP_GUIDE.md for full list
 ├── agents/                # Agent definitions

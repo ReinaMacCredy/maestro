@@ -23,7 +23,8 @@ Initialize a new or existing project with the Conductor methodology, creating al
 | `"2.4_code_styleguides"` | Styleguides complete | Section 2.5 |
 | `"2.5_workflow"` | Workflow complete | Phase 6.0 |
 | `"3.3_initial_track_generated"` | Track generated | Phase 7.0 |
-| `"4.1_codemaps_generated"` | Setup complete | Halt |
+| `"4.1_codemaps_generated"` | CODEMAPS complete | Phase 8.0 |
+| `"5.1_continuity_configured"` | Setup complete | Halt |
 
 ## Workflow Steps
 
@@ -127,6 +128,45 @@ For each document, follow the Interactive Generation Protocol:
 4. **Finalize**
    - Commit all files: `conductor(setup): Add conductor setup files`
    - Announce next steps: `/conductor:implement`
+
+### Phase 8: Continuity Setup
+
+Set up session state preservation for cross-session context.
+
+1. **Detect Platform**
+   - **Claude Code**: Check for `~/.claude/` directory
+   - **Amp Code**: Check for `~/.config/amp/` directory
+   - **Codex**: Neither of the above
+
+2. **Create Sessions Structure**
+   - Create `conductor/sessions/active/`
+   - Create `conductor/sessions/archive/`
+   - Create `conductor/.cache/`
+   - Add `.gitkeep` files to empty directories
+   - Create `conductor/sessions/.gitignore`:
+     ```
+     # Session state is personal, not shared
+     active/LEDGER.md
+     ```
+   - Create `conductor/.cache/.gitignore`:
+     ```
+     # Cache files are regenerable
+     *
+     !.gitignore
+     ```
+
+3. **Platform-Specific Setup**
+   - **Claude Code**:
+     - Check if hooks exist at `~/.claude/hooks/dist/continuity.js`
+     - If not, prompt: "Run `./scripts/install-global-hooks.sh` for auto context loading"
+   - **Amp Code**:
+     - Check if `~/.config/amp/AGENTS.md` exists
+     - Prompt: "Add Continuity Protocol to ~/.config/amp/AGENTS.md (see skills/continuity/references/amp-setup.md)"
+   - **Codex**:
+     - Display: "Use `continuity load/save/handoff` commands manually"
+
+4. **Update State**
+   - **State on Complete**: `"5.1_continuity_configured"`
 
 ### Phase 7: CODEMAPS Generation
 

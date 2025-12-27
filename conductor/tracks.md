@@ -4,7 +4,10 @@ Master list of all development tracks.
 
 ## Active Tracks
 
-*(No active tracks)*
+## [~] Track: Continuity Integration
+*ID: continuity-integration_20251227*
+*Link: [spec](conductor/tracks/continuity-integration_20251227/spec.md) | [plan](conductor/tracks/continuity-integration_20251227/plan.md)*
+*Description: Integrate Continuous-Claude patterns for automatic session state preservation*
 
 ---
 

@@ -1,0 +1,4 @@
+# Cache files - do not commit
+*
+!.gitignore
+!.gitkeep
