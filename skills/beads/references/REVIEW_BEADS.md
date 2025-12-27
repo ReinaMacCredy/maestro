@@ -361,16 +361,38 @@ Present combined results:
 
 **You MUST output this block — do not skip:**
 
-```markdown
-## HANDOFF
+1. Update workflow state in metadata.json:
+   ```bash
+   jq --arg timestamp "<current-timestamp>" \
+      '.workflow.state = "REVIEWED" | .workflow.history += [{"state": "REVIEWED", "at": $timestamp, "command": "rb"}]' \
+      "conductor/tracks/<track_id>/metadata.json" > tmp && mv tmp "conductor/tracks/<track_id>/metadata.json"
+   ```
 
-**Command:** `Start epic <first-epic-id>`
-**Epics:** <count> epics reviewed
-**Ready issues:** <count>
-**First task:** <first-ready-issue-id> - <title>
+2. Display completion with suggestion:
+   ```
+   ┌─────────────────────────────────────────┐
+   │ ✓ Beads reviewed                        │
+   │                                         │
+   │ Epics reviewed: N                       │
+   │ Issues updated: N                       │
+   │ Ready for work: N                       │
+   │                                         │
+   │ → Next: bd ready (start work)           │
+   │   Alt: /conductor-implement <track_id>  │
+   └─────────────────────────────────────────┘
+   ```
 
-Copy the command above to start a new session.
-```
+3. Include handoff info:
+   ```markdown
+   ## HANDOFF
+
+   **Command:** `Start epic <first-epic-id>`
+   **Epics:** <count> epics reviewed
+   **Ready issues:** <count>
+   **First task:** <first-ready-issue-id> - <title>
+
+   Copy the command above to start a new session.
+   ```
 
 ### 4.4 Completion Message
 

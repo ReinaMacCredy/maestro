@@ -311,20 +311,32 @@ status: approved
 After design is approved:
 
 1. Confirm file saved
-2. Display handoff block:
+2. Update workflow state (if track exists):
+   ```bash
+   if [ -f "conductor/tracks/<track_id>/metadata.json" ]; then
+     jq --arg timestamp "<current-timestamp>" \
+        '.workflow.state = "DESIGNED" | .workflow.history += [{"state": "DESIGNED", "at": $timestamp, "command": "ds"}]' \
+        "conductor/tracks/<track_id>/metadata.json" > tmp && mv tmp "conductor/tracks/<track_id>/metadata.json"
+   fi
+   ```
+3. Display handoff block with suggestion:
 
 ```
-━━━ DESIGN COMPLETE ━━━
-Track: {track_id}
-File: conductor/tracks/{track_id}/design.md
-
-Next: `/conductor-newtrack {track_id}`
-      (generates spec + plan + files beads + reviews)
-
-Or:
-  `/conductor-newtrack {track_id} --no-beads` — spec + plan only
-  Continue refining this design
+┌─────────────────────────────────────────────────────┐
+│ ✓ Design session completed                          │
+│                                                     │
+│ Track: {track_id}                                   │
+│ File: conductor/tracks/{track_id}/design.md         │
+│                                                     │
+│ → Next: /conductor-newtrack {track_id}              │
+│   Alt: ds (refine design)                           │
+└─────────────────────────────────────────────────────┘
 ```
+
+Options:
+- `/conductor-newtrack {track_id}` — generates spec + plan + files beads + reviews
+- `/conductor-newtrack {track_id} --no-beads` — spec + plan only
+- Continue refining this design
 
 ---
 

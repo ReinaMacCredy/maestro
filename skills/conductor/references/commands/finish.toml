@@ -39,6 +39,8 @@ prompt = """
    - `--with-pr`: Set flag for Phase 6 chaining
    - `--skip-codemaps`: Set `skipCodemaps: true`
    - `--skip-refresh`: Set `skipRefresh: true`
+   - `--keep`: Set `keepTrack: true` (prevent auto-archive, set state to DONE instead of ARCHIVED)
+   - `--force`: Set `forceArchive: true` (archive even if beads are open)
 
 ---
 
@@ -227,42 +229,65 @@ Phase 4/6: Refreshing context docs...
 ---
 
 ## 5.0 PHASE 5: ARCHIVE
-**PROTOCOL: Prompt for archive choice and finalize.**
+**PROTOCOL: Auto-archive by default, with --keep flag to prevent archiving.**
 
-1. **Show Git Diff:**
+**Reference:** See `skills/conductor/references/shared/state-machine.md` for state transitions.
+
+1. **Pre-Archive Validation:**
+   - Check for open beads: `bd list --labels "track:<track_id>" --status open --json`
+   - If open beads found AND `forceArchive` is false:
+     ```
+     ⚠️ Cannot archive: N beads still open.
+     
+     Open beads:
+     - [id]: title
+     - [id]: title
+     
+     Use --force to archive anyway, or close open beads first.
+     ```
+     HALT
+   - If open beads found AND `forceArchive` is true:
+     ```
+     ⚠️ Warning: Archiving with N open beads.
+     ```
+
+2. **Show Git Diff:**
    ```bash
    git diff -- "conductor/"
    ```
    Ask: "Review changes? [Y/n]"
 
-2. **Archive Choice (A/K):**
-   ```
-   Archive choice:
-   [A] Archive - move to conductor/archive/
-   [K] Keep - stay active in tracks/
-   > 
-   ```
+3. **Handle Archive Choice (Auto-Archive by Default):**
+   
+   **If `keepTrack` is true (--keep flag):**
+   - No folder movement
+   - Track stays in `tracks/`
+   - Update `metadata.json`:
+     ```bash
+     jq --arg timestamp "<current-timestamp>" \
+        '.workflow.state = "DONE" | .workflow.keep = true | .workflow.history += [{"state": "DONE", "at": $timestamp, "command": "finish"}]' \
+        "conductor/tracks/<track_id>/metadata.json" > tmp && mv tmp "conductor/tracks/<track_id>/metadata.json"
+     ```
+   
+   **Else (default - auto-archive):**
+   - Check if `conductor/archive/<track_id>` exists
+   - If exists: auto-suffix with `-v2`, `-v3`, etc.
+   - Move track folder to `conductor/archive/`
+   - Update links in tracks.md (change `tracks/` to `archive/`)
+   - Update `metadata.json`:
+     ```bash
+     jq --arg timestamp "<current-timestamp>" \
+        '.workflow.state = "ARCHIVED" | .workflow.archived = true | .workflow.history += [{"state": "ARCHIVED", "at": $timestamp, "command": "finish"}]' \
+        "conductor/archive/<track_id>/metadata.json" > tmp && mv tmp "conductor/archive/<track_id>/metadata.json"
+     ```
 
-3. **Handle Choice:**
-   - **A (Archive):**
-     - Check if `conductor/archive/<track_id>` exists
-     - If exists: Prompt "Overwrite / Rename with suffix / Abort"
-     - Move track folder to `conductor/archive/`
-     - Update links in tracks.md
-   - **K (Keep):**
-     - No folder movement
-     - Track stays in `tracks/`
-
-4. **Update metadata.json:**
-   Add docSync record with archiveChoice.
-
-5. **Commit:**
+4. **Commit:**
    ```bash
    git add conductor/ skills/ .beads/
    git commit -m "complete(<track_id>): N learnings extracted"
    ```
 
-6. **Beads Cleanup:**
+5. **Beads Cleanup:**
    ```bash
    bd count --status closed --json
    ```
@@ -273,14 +298,22 @@ Phase 4/6: Refreshing context docs...
    bd cleanup --older-than 0 --limit "$excess" --force
    ```
 
-7. **Update State:**
+6. **Update State:**
    Add `"archive"` to completed array.
-   Set `archiveChoice` and `commitSha`.
+   Set `archiveChoice` ("archive" or "keep") and `commitSha`.
 
-8. **Progress:**
+7. **Progress:**
+   
+   **If archived:**
    ```
-   Phase 5/6: Preparing archive...
-   ✓ Track archived. Commit: abc1234
+   Phase 5/6: Archiving...
+   ✓ Track archived to conductor/archive/<track_id>/
+   ```
+   
+   **If kept:**
+   ```
+   Phase 5/6: Keeping in tracks/...
+   ✓ Track marked DONE (kept in tracks/)
    ```
 
 ---
@@ -341,15 +374,37 @@ Run /conductor-setup to generate initial CODEMAPS.
    - Let skill handle PR creation
 
 3. **Final Announcement:**
-   ```
-   ✓ Track completed.
+
+   **Reference:** See `skills/conductor/references/shared/suggestions.md` for suggestion format.
    
-   Summary:
-   - Threads processed: N
-   - Beads compacted: N
-   - Learnings added: N
-   - Archive choice: Archive/Keep
-   - Commit: abc1234
+   ```
+   ┌─────────────────────────────────────────────────────┐
+   │ ✓ Track completed                                   │
+   │                                                     │
+   │ Summary:                                            │
+   │ - Threads processed: N                              │
+   │ - Beads compacted: N                                │
+   │ - Learnings added: N                                │
+   │ - Location: conductor/archive/<track_id>/           │
+   │                                                     │
+   │ → Next: ds (start new work)                         │
+   └─────────────────────────────────────────────────────┘
+   ```
+   
+   **If --keep was used:**
+   ```
+   ┌─────────────────────────────────────────────────────┐
+   │ ✓ Track marked DONE                                 │
+   │                                                     │
+   │ Summary:                                            │
+   │ - Threads processed: N                              │
+   │ - Beads compacted: N                                │
+   │ - Learnings added: N                                │
+   │ - Location: conductor/tracks/<track_id>/            │
+   │                                                     │
+   │ → Next: ds (start new work)                         │
+   │   Alt: /conductor-finish (archive later)            │
+   └─────────────────────────────────────────────────────┘
    ```
 
 ---

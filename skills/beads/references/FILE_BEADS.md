@@ -355,7 +355,23 @@ Present to user:
 After parallel agents finish filing beads:
 
 1. Summarize what was created (epic ID, issue count)
-2. Say: "Beads filed. Say `rb` to review and refine."
+2. Update workflow state in metadata.json:
+   ```bash
+   jq --arg timestamp "<current-timestamp>" \
+      '.workflow.state = "FILED" | .workflow.history += [{"state": "FILED", "at": $timestamp, "command": "fb"}]' \
+      "conductor/tracks/<track_id>/metadata.json" > tmp && mv tmp "conductor/tracks/<track_id>/metadata.json"
+   ```
+3. Display completion with suggestion:
+   ```
+   ┌─────────────────────────────────────────┐
+   │ ✓ Beads filed                           │
+   │                                         │
+   │ Epics: N                                │
+   │ Issues: N                               │
+   │                                         │
+   │ → Next: rb (review beads)               │
+   └─────────────────────────────────────────┘
+   ```
 
 ## Priority Guide
 

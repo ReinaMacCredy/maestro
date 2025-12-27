@@ -204,6 +204,68 @@
         }
       },
       "default": []
+    },
+    "workflow": {
+      "type": "object",
+      "description": "Workflow state machine tracking for the track",
+      "properties": {
+        "state": {
+          "type": "string",
+          "description": "Current workflow state",
+          "enum": ["INIT", "DESIGNED", "TRACKED", "FILED", "REVIEWED", "IMPLEMENTING", "DONE", "ARCHIVED"],
+          "default": "INIT"
+        },
+        "history": {
+          "type": "array",
+          "description": "Log of state transitions",
+          "items": {
+            "type": "object",
+            "required": ["state", "at", "command"],
+            "properties": {
+              "state": {
+                "type": "string",
+                "description": "The state transitioned to",
+                "enum": ["INIT", "DESIGNED", "TRACKED", "FILED", "REVIEWED", "IMPLEMENTING", "DONE", "ARCHIVED"]
+              },
+              "at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the transition occurred"
+              },
+              "command": {
+                "type": "string",
+                "description": "The command that triggered the transition",
+                "enum": ["newtrack", "ds", "fb", "rb", "implement", "finish"]
+              }
+            },
+            "additionalProperties": false
+          },
+          "default": []
+        },
+        "branch": {
+          "type": ["string", "null"],
+          "description": "Git branch created via preflight (e.g., feat/track-id)",
+          "default": null
+        },
+        "archived": {
+          "type": "boolean",
+          "description": "Whether the track has been archived",
+          "default": false
+        },
+        "keep": {
+          "type": "boolean",
+          "description": "Whether --keep flag was used to prevent archiving",
+          "default": false
+        }
+      },
+      "additionalProperties": false,
+      "default": {
+        "state": "INIT",
+        "history": [],
+        "branch": null,
+        "archived": false,
+        "keep": false
+      }
     }
   },
   "additionalProperties": false,
@@ -234,6 +296,20 @@
         "spec": true,
         "plan": true,
         "beads": true
+      },
+      "workflow": {
+        "state": "IMPLEMENTING",
+        "history": [
+          {"state": "INIT", "at": "2025-01-15T10:00:00Z", "command": "newtrack"},
+          {"state": "DESIGNED", "at": "2025-01-15T10:30:00Z", "command": "ds"},
+          {"state": "TRACKED", "at": "2025-01-15T11:00:00Z", "command": "newtrack"},
+          {"state": "FILED", "at": "2025-01-15T11:15:00Z", "command": "fb"},
+          {"state": "REVIEWED", "at": "2025-01-15T11:20:00Z", "command": "rb"},
+          {"state": "IMPLEMENTING", "at": "2025-01-15T11:30:00Z", "command": "implement"}
+        ],
+        "branch": "feat/user-auth_20250115",
+        "archived": false,
+        "keep": false
       }
     },
     {
@@ -251,6 +327,19 @@
         "spec": true,
         "plan": true,
         "beads": false
+      },
+      "workflow": {
+        "state": "ARCHIVED",
+        "history": [
+          {"state": "INIT", "at": "2025-01-20T09:00:00Z", "command": "newtrack"},
+          {"state": "TRACKED", "at": "2025-01-20T09:30:00Z", "command": "newtrack"},
+          {"state": "IMPLEMENTING", "at": "2025-01-20T10:00:00Z", "command": "implement"},
+          {"state": "DONE", "at": "2025-01-20T11:00:00Z", "command": "implement"},
+          {"state": "ARCHIVED", "at": "2025-01-20T11:30:00Z", "command": "finish"}
+        ],
+        "branch": null,
+        "archived": true,
+        "keep": false
       }
     }
   ]

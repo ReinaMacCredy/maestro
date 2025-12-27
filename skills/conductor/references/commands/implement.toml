@@ -139,15 +139,21 @@ CRITICAL: You must validate the success of every tool call. If any tool call fai
 
 5.  **Execute Tasks and Update Track Plan:**
     a. **Announce:** State that you will now execute the tasks from the track's `plan.md` by following the procedures in `workflow.md`.
-    b. **Iterate Through Tasks:** You MUST now loop through each task in the track's `plan.md` one by one.
-    c. **For Each Task, You MUST:**
+    b. **Update Workflow State to IMPLEMENTING:**
+       ```bash
+       jq --arg timestamp "<current-timestamp>" \
+          '.workflow.state = "IMPLEMENTING" | .workflow.history += [{"state": "IMPLEMENTING", "at": $timestamp, "command": "implement"}]' \
+          "conductor/tracks/<track_id>/metadata.json" > tmp && mv tmp "conductor/tracks/<track_id>/metadata.json"
+       ```
+    c. **Iterate Through Tasks:** You MUST now loop through each task in the track's `plan.md` one by one.
+    d. **For Each Task, You MUST:**
         i. **Defer to Workflow:** The `workflow.md` file is the **single source of truth** for the entire task lifecycle. You MUST now read and execute the procedures defined in the "Task Workflow" section of the `workflow.md` file you have in your context. Follow its steps for implementation, testing, and committing precisely.
         ii. **Update Implementation State:** After marking task in progress, update `implement_state.json`:
             - Set `current_phase` to the current phase name
             - Set `current_task_index` to the current task number
             - Set `last_updated` to current timestamp
             - Set `status` to "in_progress"
-    d. **Handle Blocked Tasks:**
+    e. **Handle Blocked Tasks:**
         - If a task is marked with `[!]`, announce: "⚠️ Task is blocked: [reason]"
         - Ask user:
           > "This task is marked as blocked. What would you like to do?
@@ -159,8 +165,29 @@ CRITICAL: You must validate the success of every tool call. If any tool call fai
 6.  **Finalize Track:**
     -   After all tasks in the track's local `plan.md` are completed, you MUST update the track's status in the tracks file.
     -   This requires finding the specific heading for the track (e.g., `## [~] Track: <Description>`) and replacing it with the completed status (e.g., `## [x] Track: <Description>`).
+    -   **Update Workflow State:**
+        ```bash
+        jq --arg timestamp "<current-timestamp>" \
+           '.workflow.state = "DONE" | .workflow.history += [{"state": "DONE", "at": $timestamp, "command": "implement"}]' \
+           "conductor/tracks/<track_id>/metadata.json" > tmp && mv tmp "conductor/tracks/<track_id>/metadata.json"
+        ```
     -   **Clean Up State:** Delete the `conductor/tracks/<track_id>/implement_state.json` file as implementation is complete.
-    -   Announce that the track is fully complete and the tracks file has been updated.
+    -   **Display Completion:**
+        
+        **Reference:** See `skills/conductor/references/shared/suggestions.md` for suggestion format.
+        
+        ```
+        ┌─────────────────────────────────────────────────────┐
+        │ ✓ Track implementation complete                     │
+        │                                                     │
+        │ Track: <track_id>                                   │
+        │ Epics: N/N completed                                │
+        │ Tasks: N/N completed                                │
+        │                                                     │
+        │ → Next: finish branch                               │
+        │   Alt: /conductor-finish (extract learnings)        │
+        └─────────────────────────────────────────────────────┘
+        ```
 
 ---
 
