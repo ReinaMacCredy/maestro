@@ -17,7 +17,7 @@ AI workflow plugin for structured development: planning (Conductor), issue track
 
 ```
 maestro/
-├── skills/           # 16 skill directories (SKILL.md + references/)
+├── skills/           # 14 skill directories (SKILL.md + references/)
 │   ├── beads/references/         # Issue tracking workflows
 │   ├── conductor/references/     # Planning workflows + schemas
 │   │   ├── conductor/            # Beads integration workflows
