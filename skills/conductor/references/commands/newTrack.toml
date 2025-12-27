@@ -340,7 +340,7 @@ echo "✓ State files initialized"
        --argjson hours '<estimated_hours_or_null>' \
        --arg status "new" \
        '. + {priority: $priority, depends_on: $depends, estimated_hours: $hours, status: $status}' \
-       "conductor/tracks/<track_id>/metadata.json" > tmp && mv tmp "conductor/tracks/<track_id>/metadata.json"
+       "conductor/tracks/<track_id>/metadata.json" > "conductor/tracks/<track_id>/metadata.json.tmp.$$" && mv "conductor/tracks/<track_id>/metadata.json.tmp.$$" "conductor/tracks/<track_id>/metadata.json"
     ```
 
 7.  **Write Files:**
@@ -352,13 +352,13 @@ echo "✓ State files initialized"
     # Update metadata.json artifacts and workflow state
     jq --arg timestamp "<current-timestamp>" \
        '.artifacts.spec = true | .artifacts.plan = true | .status = "planned" | .workflow.state = "TRACKED" | .workflow.history += [{"state": "TRACKED", "at": $timestamp, "command": "newtrack"}]' \
-       "conductor/tracks/<track_id>/metadata.json" > tmp && mv tmp "conductor/tracks/<track_id>/metadata.json"
-    
+       "conductor/tracks/<track_id>/metadata.json" > "conductor/tracks/<track_id>/metadata.json.tmp.$$" && mv "conductor/tracks/<track_id>/metadata.json.tmp.$$" "conductor/tracks/<track_id>/metadata.json"
+
     # Update .track-progress.json
     jq --arg specTime "<current-timestamp>" \
        --arg planTime "<current-timestamp>" \
        '.status = "plan_done" | .specCreatedAt = $specTime | .planCreatedAt = $planTime' \
-       "conductor/tracks/<track_id>/.track-progress.json" > tmp && mv tmp "conductor/tracks/<track_id>/.track-progress.json"
+       "conductor/tracks/<track_id>/.track-progress.json" > "conductor/tracks/<track_id>/.track-progress.json.tmp.$$" && mv "conductor/tracks/<track_id>/.track-progress.json.tmp.$$" "conductor/tracks/<track_id>/.track-progress.json"
     ```
 
 9.  **Update Tracks File:**
@@ -406,13 +406,13 @@ If beads should be filed:
     ```bash
     # Update .track-progress.json
     jq '.status = "fb_started"' \
-       "conductor/tracks/<track_id>/.track-progress.json" > tmp && mv tmp "conductor/tracks/<track_id>/.track-progress.json"
-    
+       "conductor/tracks/<track_id>/.track-progress.json" > "conductor/tracks/<track_id>/.track-progress.json.tmp.$$" && mv "conductor/tracks/<track_id>/.track-progress.json.tmp.$$" "conductor/tracks/<track_id>/.track-progress.json"
+
     # Update .fb-progress.json (already created in Phase 1.3)
     jq --arg time "<current-timestamp>" \
        --arg thread "<current-thread-id>" \
        '.status = "in_progress" | .startedAt = $time | .threadId = $thread' \
-       "conductor/tracks/<track_id>/.fb-progress.json" > tmp && mv tmp "conductor/tracks/<track_id>/.fb-progress.json"
+       "conductor/tracks/<track_id>/.fb-progress.json" > "conductor/tracks/<track_id>/.fb-progress.json.tmp.$$" && mv "conductor/tracks/<track_id>/.fb-progress.json.tmp.$$" "conductor/tracks/<track_id>/.fb-progress.json"
     ```
 
 2.  **Spawn Task subagent:**

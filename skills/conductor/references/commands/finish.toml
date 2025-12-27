@@ -266,7 +266,7 @@ Phase 4/6: Refreshing context docs...
      ```bash
      jq --arg timestamp "<current-timestamp>" \
         '.workflow.state = "DONE" | .workflow.keep = true | .workflow.history += [{"state": "DONE", "at": $timestamp, "command": "finish"}]' \
-        "conductor/tracks/<track_id>/metadata.json" > tmp && mv tmp "conductor/tracks/<track_id>/metadata.json"
+        "conductor/tracks/<track_id>/metadata.json" > "conductor/tracks/<track_id>/metadata.json.tmp.$$" && mv "conductor/tracks/<track_id>/metadata.json.tmp.$$" "conductor/tracks/<track_id>/metadata.json"
      ```
    
    **Else (default - auto-archive):**
@@ -278,7 +278,7 @@ Phase 4/6: Refreshing context docs...
      ```bash
      jq --arg timestamp "<current-timestamp>" \
         '.workflow.state = "ARCHIVED" | .workflow.archived = true | .workflow.history += [{"state": "ARCHIVED", "at": $timestamp, "command": "finish"}]' \
-        "conductor/archive/<track_id>/metadata.json" > tmp && mv tmp "conductor/archive/<track_id>/metadata.json"
+        "conductor/archive/<track_id>/metadata.json" > "conductor/archive/<track_id>/metadata.json.tmp.$$" && mv "conductor/archive/<track_id>/metadata.json.tmp.$$" "conductor/archive/<track_id>/metadata.json"
      ```
 
 4. **Commit:**

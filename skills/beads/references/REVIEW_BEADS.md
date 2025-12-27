@@ -365,7 +365,7 @@ Present combined results:
    ```bash
    jq --arg timestamp "<current-timestamp>" \
       '.workflow.state = "REVIEWED" | .workflow.history += [{"state": "REVIEWED", "at": $timestamp, "command": "rb"}]' \
-      "conductor/tracks/<track_id>/metadata.json" > tmp && mv tmp "conductor/tracks/<track_id>/metadata.json"
+      "conductor/tracks/<track_id>/metadata.json" > "conductor/tracks/<track_id>/metadata.json.tmp.$$" && mv "conductor/tracks/<track_id>/metadata.json.tmp.$$" "conductor/tracks/<track_id>/metadata.json"
    ```
 
 2. Display completion with suggestion:

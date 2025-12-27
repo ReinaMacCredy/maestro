@@ -316,7 +316,7 @@ After design is approved:
    if [ -f "conductor/tracks/<track_id>/metadata.json" ]; then
      jq --arg timestamp "<current-timestamp>" \
         '.workflow.state = "DESIGNED" | .workflow.history += [{"state": "DESIGNED", "at": $timestamp, "command": "ds"}]' \
-        "conductor/tracks/<track_id>/metadata.json" > tmp && mv tmp "conductor/tracks/<track_id>/metadata.json"
+        "conductor/tracks/<track_id>/metadata.json" > "conductor/tracks/<track_id>/metadata.json.tmp.$$" && mv "conductor/tracks/<track_id>/metadata.json.tmp.$$" "conductor/tracks/<track_id>/metadata.json"
    fi
    ```
 3. Display handoff block with suggestion:

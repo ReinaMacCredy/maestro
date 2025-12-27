@@ -39,7 +39,7 @@ Contains reusable learnings from completed tracks.
 - `git branch --show-current` - Get current branch for preflight checks
 - `git status --porcelain` - Check for dirty state (empty = clean)
 - `git show-ref --verify --quiet "refs/heads/$BRANCH"` - Check if branch exists
-- `jq '.workflow.state = "ARCHIVED"' metadata.json > tmp && mv tmp metadata.json` - Update workflow state atomically
+- `jq '.workflow.state = "ARCHIVED"' metadata.json > "metadata.json.tmp.$$" && mv "metadata.json.tmp.$$" metadata.json` - Update workflow state atomically
 
 ## Gotchas
 

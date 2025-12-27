@@ -143,7 +143,7 @@ CRITICAL: You must validate the success of every tool call. If any tool call fai
        ```bash
        jq --arg timestamp "<current-timestamp>" \
           '.workflow.state = "IMPLEMENTING" | .workflow.history += [{"state": "IMPLEMENTING", "at": $timestamp, "command": "implement"}]' \
-          "conductor/tracks/<track_id>/metadata.json" > tmp && mv tmp "conductor/tracks/<track_id>/metadata.json"
+          "conductor/tracks/<track_id>/metadata.json" > "conductor/tracks/<track_id>/metadata.json.tmp.$$" && mv "conductor/tracks/<track_id>/metadata.json.tmp.$$" "conductor/tracks/<track_id>/metadata.json"
        ```
     c. **Iterate Through Tasks:** You MUST now loop through each task in the track's `plan.md` one by one.
     d. **For Each Task, You MUST:**
@@ -169,7 +169,7 @@ CRITICAL: You must validate the success of every tool call. If any tool call fai
         ```bash
         jq --arg timestamp "<current-timestamp>" \
            '.workflow.state = "DONE" | .workflow.history += [{"state": "DONE", "at": $timestamp, "command": "implement"}]' \
-           "conductor/tracks/<track_id>/metadata.json" > tmp && mv tmp "conductor/tracks/<track_id>/metadata.json"
+           "conductor/tracks/<track_id>/metadata.json" > "conductor/tracks/<track_id>/metadata.json.tmp.$$" && mv "conductor/tracks/<track_id>/metadata.json.tmp.$$" "conductor/tracks/<track_id>/metadata.json"
         ```
     -   **Clean Up State:** Delete the `conductor/tracks/<track_id>/implement_state.json` file as implementation is complete.
     -   **Display Completion:**

@@ -156,9 +156,19 @@ if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
     # 0.5.4 Prompt for branch creation
     NEW_BRANCH="feat/${track_id}"
     
-    # Check if branch exists
+    # Check if branch exists, use versioned suffix if needed
     if git show-ref --verify --quiet "refs/heads/$NEW_BRANCH"; then
+        # Try with -v2 suffix
         NEW_BRANCH="feat/${track_id}-v2"
+
+        # If still exists, try -v3, etc.
+        SUFFIX=2
+        while git show-ref --verify --quiet "refs/heads/$NEW_BRANCH"; do
+            SUFFIX=$((SUFFIX + 1))
+            NEW_BRANCH="feat/${track_id}-v${SUFFIX}"
+        done
+
+        echo "Branch feat/${track_id} exists. Using ${NEW_BRANCH}"
     fi
     
     echo "On $BRANCH. Create branch '$NEW_BRANCH'? [Y/n]"
