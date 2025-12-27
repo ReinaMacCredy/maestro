@@ -83,12 +83,14 @@ Mode is detected at session start and locked for the session.
 
 ### planTasks Mapping
 
-`.fb-progress.json` contains bidirectional mapping between plan task IDs and bead IDs:
+`metadata.json.beads` contains bidirectional mapping between plan task IDs and bead IDs:
 
 ```json
 {
-  "planTasks": { "1.1.1": "bd-42", "1.2.1": "bd-43" },
-  "beadToTask": { "bd-42": "1.1.1", "bd-43": "1.2.1" }
+  "beads": {
+    "planTasks": { "1.1.1": "bd-42", "1.2.1": "bd-43" },
+    "beadToTask": { "bd-42": "1.1.1", "bd-43": "1.2.1" }
+  }
 }
 ```
 

@@ -32,6 +32,18 @@ Trigger on:
 
 When starting a design session:
 
+### 0. Load Continuity Context
+
+Check for prior session context:
+
+1. Run `continuity load` workflow
+2. If `conductor/sessions/active/LEDGER.md` exists:
+   - Display prior context summary
+   - Show: `📋 Prior context: <goal summary>`
+3. If missing: Start fresh session
+
+**Non-blocking:** Continue normally if no prior context exists.
+
 ### 1. Load CODEMAPS for Context
 
 Check for `conductor/CODEMAPS/` directory:

@@ -13,7 +13,7 @@ When `--tdd` flag is enabled on `/conductor-implement`, this workflow tracks TDD
 3. **REFACTOR** - Code cleaned up
 
 Each phase transition updates:
-- Session state file (`tddPhase` field)
+- LEDGER.md frontmatter (`tdd_phase` field)
 - Bead notes (checkpoint format)
 
 ---
@@ -21,7 +21,7 @@ Each phase transition updates:
 ## Prerequisites
 
 - Session established (preflight complete)
-- Task claimed (`currentTask` set in session state)
+- Task claimed (`bound_bead` set in LEDGER.md frontmatter)
 - `--tdd` flag provided to `/conductor-implement`
 
 ---
@@ -165,14 +165,10 @@ update_tdd_checkpoint() {
   local TASK_ID="$1"
   local PHASE="$2"  # RED, GREEN, or REFACTOR
   
-  # 1. Update session state
+  # 1. Update LEDGER.md frontmatter
   NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-  SESSION_FILE=".conductor/session-state_${AGENT_ID}.json"
-  
-  jq --arg phase "$PHASE" --arg ts "$NOW" \
-    '.tddPhase = $phase | .lastUpdated = $ts' \
-    "$SESSION_FILE" > "$SESSION_FILE.tmp.$$"
-  mv "$SESSION_FILE.tmp.$$" "$SESSION_FILE"
+  update_ledger_field "tdd_phase" "$PHASE"
+  update_ledger_field "heartbeat" "$NOW"
   
   # 2. Build notes message
   case "$PHASE" in
@@ -204,17 +200,19 @@ Each phase has a standardized notes format:
 | GREEN | `IN_PROGRESS: GREEN phase - making test pass` |
 | REFACTOR | `IN_PROGRESS: REFACTOR phase - cleaning up code` |
 
-### Session State Update
+### LEDGER.md Frontmatter Update
 
-```json
-{
-  "agentId": "T-abc123",
-  "mode": "SA",
-  "trackId": "feature_20251225",
-  "currentTask": "my-workflow:3-xyz",
-  "tddPhase": "GREEN",
-  "lastUpdated": "2025-12-25T12:00:00Z"
-}
+```yaml
+---
+updated: 2025-12-27T10:30:00Z
+session_id: T-abc123
+platform: claude
+bound_track: feature_20251225
+bound_bead: my-workflow:3-xyz
+mode: SA
+tdd_phase: GREEN
+heartbeat: 2025-12-25T12:00:00Z
+---
 ```
 
 ---
@@ -353,8 +351,7 @@ validate_phase_order() {
 
 TASK_ID="$1"
 TDD_ENABLED="${TDD_ENABLED:-true}"
-AGENT_ID="${AGENT_ID:-$THREAD_ID}"
-SESSION_FILE=".conductor/session-state_${AGENT_ID}.json"
+LEDGER_FILE="conductor/sessions/active/LEDGER.md"
 
 # Skip check
 if [[ "$TDD_ENABLED" != "true" ]]; then

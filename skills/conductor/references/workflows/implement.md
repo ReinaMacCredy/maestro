@@ -39,7 +39,7 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
    - Recovers pending operations from crashed sessions
 
 2. **Check Track Beads**
-   - Verify `.fb-progress.json` exists for track
+   - Verify `metadata.json` exists with `beads` section for track
    - If missing: Prompt to run `/conductor-newtrack` or `/conductor-migrate-beads`
 
 3. **Output:**
@@ -48,6 +48,35 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
    Session: Created state file for T-abc123
    Track beads: 12 issues, 3 ready
    ```
+
+### Phase 0.5: Continuity Load
+
+**Purpose:** Load prior session context and handle track binding.
+
+1. **Load LEDGER.md**
+   - Run `continuity load` workflow
+   - Read `conductor/sessions/active/LEDGER.md` if exists
+   - Display prior context summary
+
+2. **Check Track Binding**
+   - If `bound_track` exists in LEDGER frontmatter:
+     - Compare with current track
+     - If different: Auto-archive current LEDGER before proceeding
+     - Display: `Previous session: <track> → Archived`
+   - If same track: Resume context
+   - If no bound_track: Fresh session
+
+3. **Bind to Track**
+   - Update LEDGER frontmatter: `bound_track: <track_id>`
+   - Update `heartbeat` timestamp
+   
+4. **Output:**
+   ```
+   Continuity: Loaded prior context (3 decisions, 5 modified files)
+   Session: Binding to track auth_20251227
+   ```
+
+**Non-blocking:** If LEDGER.md missing or corrupted, create fresh session.
 
 ### Phase 1: Setup Verification
 
@@ -142,7 +171,7 @@ See [execution-routing.md](../../../dispatching-parallel-agents/references/agent
      - `conductor/tracks/<track_id>/plan.md`
      - `conductor/tracks/<track_id>/spec.md`
      - `conductor/workflow.md`
-     - `.fb-progress.json` for planTasks mapping
+     - `metadata.json.beads` for planTasks mapping
 
 3. **Claim Task (Beads Integration)**
    
@@ -328,16 +357,18 @@ conductor/
 ├── tracks.md (updated statuses)
 ├── product.md (possibly updated)
 ├── tech-stack.md (possibly updated)
+├── sessions/
+│   └── active/
+│       └── LEDGER.md (session state in frontmatter)
 ├── archive/ (if archiving)
 │   └── <track_id>/
 └── tracks/
     └── <track_id>/
         ├── plan.md (tasks marked complete)
-        ├── implement_state.json (optional)
-        └── .fb-progress.json (planTasks mapping)
+        ├── metadata.json (planTasks mapping in beads section)
+        └── implement_state.json (optional)
 
 .conductor/
-├── session-state_<agent-id>.json (session tracking)
 ├── session-lock_<track-id>.json (concurrent session prevention)
 ├── pending_updates.jsonl (failed operations for retry)
 ├── pending_closes.jsonl (failed close operations)

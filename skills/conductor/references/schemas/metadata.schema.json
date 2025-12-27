@@ -266,6 +266,170 @@
         "archived": false,
         "keep": false
       }
+    },
+    "generation": {
+      "type": "object",
+      "description": "Spec/plan generation progress (consolidated from .track-progress.json)",
+      "properties": {
+        "status": {
+          "type": "string",
+          "description": "Current generation status",
+          "enum": ["initializing", "spec_done", "plan_done", "complete"],
+          "default": "initializing"
+        },
+        "specCreatedAt": {
+          "type": ["string", "null"],
+          "description": "ISO 8601 timestamp when spec.md was created",
+          "format": "date-time",
+          "default": null
+        },
+        "planCreatedAt": {
+          "type": ["string", "null"],
+          "description": "ISO 8601 timestamp when plan.md was created",
+          "format": "date-time",
+          "default": null
+        },
+        "rbCompletedAt": {
+          "type": ["string", "null"],
+          "description": "ISO 8601 timestamp when review-beads (rb) completed",
+          "format": "date-time",
+          "default": null
+        }
+      },
+      "additionalProperties": false,
+      "default": {
+        "status": "initializing",
+        "specCreatedAt": null,
+        "planCreatedAt": null,
+        "rbCompletedAt": null
+      }
+    },
+    "beads": {
+      "type": "object",
+      "description": "Beads filing state (consolidated from .fb-progress.json)",
+      "properties": {
+        "status": {
+          "type": "string",
+          "description": "Current beads filing status",
+          "enum": ["pending", "in_progress", "complete", "failed"],
+          "default": "pending"
+        },
+        "epicId": {
+          "type": ["string", "null"],
+          "description": "Primary epic bead ID for this track",
+          "default": null
+        },
+        "epics": {
+          "type": "array",
+          "description": "List of created epics",
+          "items": {
+            "type": "object",
+            "required": ["id", "title", "status", "createdAt"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Bead ID (e.g., my-workflow:3-xyz)"
+              },
+              "title": {
+                "type": "string",
+                "description": "Epic title"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["created", "filled", "complete"],
+                "description": "Epic creation status"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When epic was created"
+              },
+              "reviewed": {
+                "type": "boolean",
+                "description": "Whether epic has been reviewed",
+                "default": false
+              },
+              "reviewedAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When epic was reviewed",
+                "default": null
+              }
+            },
+            "additionalProperties": false
+          },
+          "default": []
+        },
+        "issues": {
+          "type": "array",
+          "description": "List of created issue bead IDs",
+          "items": {
+            "type": "string",
+            "description": "Bead ID (e.g., my-workflow:3-abc)"
+          },
+          "default": []
+        },
+        "planTasks": {
+          "type": "object",
+          "description": "Mapping from plan task ID to bead ID",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {}
+        },
+        "beadToTask": {
+          "type": "object",
+          "description": "Reverse mapping from bead ID to plan task ID",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {}
+        },
+        "crossTrackDeps": {
+          "type": "array",
+          "description": "Cross-track dependencies that need manual linking",
+          "items": {
+            "type": "object",
+            "required": ["from", "to"],
+            "properties": {
+              "from": {
+                "type": "string",
+                "description": "Source bead ID"
+              },
+              "to": {
+                "type": "string",
+                "description": "Target track:bead ID (e.g., api_20251223:bd-7)"
+              }
+            },
+            "additionalProperties": false
+          },
+          "default": []
+        },
+        "reviewStatus": {
+          "type": ["string", "null"],
+          "description": "Review status from rb skill",
+          "enum": ["in_progress", "complete", null],
+          "default": null
+        },
+        "reviewedAt": {
+          "type": ["string", "null"],
+          "description": "ISO 8601 timestamp when review was completed",
+          "format": "date-time",
+          "default": null
+        }
+      },
+      "additionalProperties": false,
+      "default": {
+        "status": "pending",
+        "epicId": null,
+        "epics": [],
+        "issues": [],
+        "planTasks": {},
+        "beadToTask": {},
+        "crossTrackDeps": [],
+        "reviewStatus": null,
+        "reviewedAt": null
+      }
     }
   },
   "additionalProperties": false,

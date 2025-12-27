@@ -23,8 +23,7 @@ conductor/
     ├── design.md           # From ds / /conductor-design
     ├── spec.md             # From /conductor-newtrack
     ├── plan.md             # From /conductor-newtrack
-    ├── .fb-progress.json   # Beads filing state
-    └── metadata.json       # Track info + thread IDs
+    └── metadata.json       # Track info + thread IDs + generation + beads
 
 ## Command Flow
 
@@ -44,10 +43,7 @@ ds (design session) → creates tracks/<id>/design.md
 
 | File | Purpose |
 |------|---------|
-| `.fb-progress.json` | Resume beads filing if interrupted |
-| `.fb-progress.lock` | Prevents concurrent filing (30min timeout) |
-| `.track-progress.json` | Spec/plan generation checkpoints |
-| `metadata.json` | Track info, thread IDs for audit |
+| `metadata.json` | Track info, thread IDs, generation, and beads state |
 
 ## Common Tasks
 

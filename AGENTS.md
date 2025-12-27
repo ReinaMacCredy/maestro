@@ -21,10 +21,7 @@ lib/              # Shared utilities (skills-core.js)
 .claude-plugin/   # Plugin manifest (plugin.json, marketplace.json)
 conductor/        # Unified save location for plans and tracks
   tracks/<id>/    # Active work (design.md + spec.md + plan.md per track)
-    .fb-progress.json   # Beads filing state (resume capability)
-    .fb-progress.lock   # Concurrent session lock (30min timeout)
-    .track-progress.json # Spec/plan generation checkpoints
-    metadata.json       # Track info + thread IDs for audit trail
+    metadata.json       # Track info + thread IDs + generation + beads state
   CODEMAPS/       # Architecture documentation (overview.md, module codemaps)
   archive/        # Completed work
 ```
@@ -54,9 +51,7 @@ ds → design.md → /conductor-newtrack → spec.md + plan.md + beads + review
 - `--force`: Overwrite existing track or remove stale locks
 
 **State files:**
-- `.fb-progress.json`: Beads filing state with resume capability
-- `.fb-progress.lock`: Concurrent session lock (30min timeout)
-- `.track-progress.json`: Spec/plan generation checkpoints
+- `metadata.json`: Track info, thread IDs, generation state, and beads filing state
 
 **Execution session starts with:** `Start epic <epic-id>` or `/conductor-implement <track-id>`
 
@@ -95,6 +90,7 @@ Add `[skip ci]` to commit message to bypass all automation (changelog + version 
 | `design` | `ds` | Double Diamond design session with A/P/C checkpoints and Party Mode option |
 | `conductor` | `/conductor-setup`, `/conductor-design`, `/conductor-newtrack`, `/conductor-implement`, `/conductor-status`, `/conductor-revert`, `/conductor-revise`, `/conductor-finish`, `/conductor-validate`, `/conductor-block`, `/conductor-skip` | Structured planning and execution through specs and plans |
 | `beads` | `fb`, `rb`, `bd ready`, `bd status` | Issue tracking: file beads from plan, review beads, multi-session work |
+| `doc-sync` | `/doc-sync`, after `/conductor-finish` | Auto-sync documentation with code changes |
 
 <!-- bv-agent-instructions-v1 -->
 
@@ -182,9 +178,8 @@ git push                          # Push to remote
 
 | File | Location | Purpose |
 |------|----------|---------|
-| `session-state_<agent>.json` | `.conductor/` | Per-agent session tracking |
+| `LEDGER.md` | `conductor/sessions/active/` | Session state in frontmatter (mode, bound_track, bound_bead, tdd_phase) |
 | `session-lock_<track>.json` | `.conductor/` | Concurrent session prevention |
-| `.fb-progress.json` | `tracks/<id>/` | planTasks mapping (plan ID ↔ bead ID) |
 | `pending_*.jsonl` | `.conductor/` | Failed operations for replay |
 | `metrics.jsonl` | `.conductor/` | Usage metrics (append-only) |
 
@@ -206,7 +201,7 @@ Run `scripts/beads-metrics-summary.sh` for weekly summary.
 - **Priority**: P0=critical, P1=high, P2=medium, P3=low, P4=backlog (use numbers, not words)
 - **Types**: task, bug, feature, epic, question, docs
 - **Blocking**: `bd dep add <issue> <depends-on>` to add dependencies
-- **planTasks Mapping**: Bidirectional mapping between plan task IDs and bead IDs in `.fb-progress.json`
+- **planTasks Mapping**: Bidirectional mapping between plan task IDs and bead IDs in `metadata.json.beads`
 
 ### References
 

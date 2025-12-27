@@ -58,43 +58,26 @@ fi
 
 ## Step 0.3: File Existence Matrix
 
-Check file combinations and determine action. State files are treated collectively.
+Check file combinations and determine action.
 
-**State Files:**
-- `metadata.json` - Track metadata
-- `.track-progress.json` - Workflow state
-- `.fb-progress.json` - Beads filing state (planTasks mapping)
+**State File:** `metadata.json` - Contains all track state including `generation` and `beads` sections.
 
-| design.md | spec.md | plan.md | state files  | Action                          |
-| --------- | ------- | ------- | ------------ | ------------------------------- |
-| ✗         | ✗       | ✗       | ✗            | SKIP + warn (empty)             |
-| ✓         | ✗       | ✗       | ✗            | PASS (design-only state)        |
-| ✗         | ✓       | ✗       | ✗            | HALT (spec without plan)        |
-| ✗         | ✗       | ✓       | ✗            | HALT (plan without spec)        |
-| ✗/✓       | ✓       | ✓       | none/partial | Auto-create missing state files |
-| ✗/✓       | ✓       | ✓       | all present  | Validate and PASS               |
+| design.md | spec.md | plan.md | metadata.json | Action                     |
+| --------- | ------- | ------- | ------------- | -------------------------- |
+| ✗         | ✗       | ✗       | ✗             | SKIP + warn (empty)        |
+| ✓         | ✗       | ✗       | ✗             | PASS (design-only state)   |
+| ✗         | ✓       | ✗       | ✗             | HALT (spec without plan)   |
+| ✗         | ✗       | ✓       | ✗             | HALT (plan without spec)   |
+| ✗/✓       | ✓       | ✓       | ✗             | Auto-create metadata.json  |
+| ✗/✓       | ✓       | ✓       | ✓             | Validate and PASS          |
 
-**See also:** [Beads Validation](../beads/checks.md) for `.fb-progress.json` schema validation and planTasks mapping checks.
+**See also:** [Beads Validation](../beads/checks.md) for `metadata.json.beads` schema validation and planTasks mapping checks.
 
 ```bash
 HAS_DESIGN=$([[ -f "$TRACK_DIR/design.md" ]] && echo 1 || echo 0)
 HAS_SPEC=$([[ -f "$TRACK_DIR/spec.md" ]] && echo 1 || echo 0)
 HAS_PLAN=$([[ -f "$TRACK_DIR/plan.md" ]] && echo 1 || echo 0)
-
-# Check all 3 state files collectively
 HAS_METADATA=$([[ -f "$TRACK_DIR/metadata.json" ]] && echo 1 || echo 0)
-HAS_TRACK_PROGRESS=$([[ -f "$TRACK_DIR/.track-progress.json" ]] && echo 1 || echo 0)
-HAS_FB_PROGRESS=$([[ -f "$TRACK_DIR/.fb-progress.json" ]] && echo 1 || echo 0)
-
-# Collective state: 0=none, 1=partial, 2=all
-STATE_COUNT=$((HAS_METADATA + HAS_TRACK_PROGRESS + HAS_FB_PROGRESS))
-if [[ $STATE_COUNT -eq 0 ]]; then
-  HAS_STATE=0  # none
-elif [[ $STATE_COUNT -eq 3 ]]; then
-  HAS_STATE=2  # all
-else
-  HAS_STATE=1  # partial (some missing)
-fi
 
 # Check XOR condition (invalid state)
 if [[ $HAS_SPEC -eq 1 && $HAS_PLAN -eq 0 ]]; then
@@ -117,10 +100,10 @@ fi
 
 All JSON files must be parseable. HALT on corruption.
 
-**Scope:** This step validates parseability and required fields only. Full JSON schema validation (against `skills/conductor/references/workflows/schemas/*.json`) is the responsibility of higher-level tooling like `/conductor-validate`.
+**Scope:** This step validates parseability and required fields only. Full JSON schema validation (against `skills/conductor/references/schemas/*.json`) is the responsibility of higher-level tooling like `/conductor-validate`.
 
 ```bash
-for json_file in "$TRACK_DIR"/*.json "$TRACK_DIR"/.*json; do
+for json_file in "$TRACK_DIR"/*.json; do
   [[ -f "$json_file" ]] || continue
 
   # Check parseability
@@ -129,34 +112,29 @@ for json_file in "$TRACK_DIR"/*.json "$TRACK_DIR"/.*json; do
     exit 1
   fi
 
-  # Check required fields based on file type
+  # Check required fields for metadata.json
   BASENAME=$(basename "$json_file")
-  case "$BASENAME" in
-    metadata.json)
-      if [[ -z "$(jq -r '.track_id // empty' "$json_file")" ]]; then
-        echo "WARN: metadata.json missing track_id field"
-      fi
-      if [[ -z "$(jq -r '.status // empty' "$json_file")" ]]; then
-        echo "WARN: metadata.json missing status field"
-      fi
-      ;;
-    .track-progress.json)
-      if [[ -z "$(jq -r '.trackId // empty' "$json_file")" ]]; then
-        echo "WARN: .track-progress.json missing trackId field"
-      fi
-      ;;
-    .fb-progress.json)
-      if [[ -z "$(jq -r '.trackId // empty' "$json_file")" ]]; then
-        echo "WARN: .fb-progress.json missing trackId field"
-      fi
-      ;;
-  esac
+  if [[ "$BASENAME" == "metadata.json" ]]; then
+    if [[ -z "$(jq -r '.track_id // empty' "$json_file")" ]]; then
+      echo "WARN: metadata.json missing track_id field"
+    fi
+    if [[ -z "$(jq -r '.status // empty' "$json_file")" ]]; then
+      echo "WARN: metadata.json missing status field"
+    fi
+    # Optional: check generation and beads sections exist
+    if [[ "$(jq 'has("generation")' "$json_file")" != "true" ]]; then
+      echo "WARN: metadata.json missing generation section"
+    fi
+    if [[ "$(jq 'has("beads")' "$json_file")" != "true" ]]; then
+      echo "WARN: metadata.json missing beads section"
+    fi
+  fi
 done
 ```
 
-## Step 0.5: Auto-Create Missing State Files
+## Step 0.5: Auto-Create Missing metadata.json
 
-When spec.md + plan.md exist but state files are missing (none or partial):
+When spec.md + plan.md exist but metadata.json is missing:
 
 **Pre-checks (all must pass):**
 
@@ -165,8 +143,8 @@ When spec.md + plan.md exist but state files are missing (none or partial):
 3. No track_id mismatch in headers (if headers exist) - check BOTH files
 
 ```bash
-# Trigger: spec+plan exist and any state file is missing
-if [[ $HAS_SPEC -eq 1 && $HAS_PLAN -eq 1 && $HAS_STATE -lt 2 ]]; then
+# Trigger: spec+plan exist but metadata.json is missing
+if [[ $HAS_SPEC -eq 1 && $HAS_PLAN -eq 1 && $HAS_METADATA -eq 0 ]]; then
   # Pre-check 1: Both files have content
   if [[ ! -s "$TRACK_DIR/spec.md" || ! -s "$TRACK_DIR/plan.md" ]]; then
     echo "HALT: Empty spec.md or plan.md in $TRACK_ID"
@@ -208,21 +186,17 @@ if [[ $HAS_SPEC -eq 1 && $HAS_PLAN -eq 1 && $HAS_STATE -lt 2 ]]; then
 
   # All pre-checks passed
   if [[ $DIAGNOSE_MODE -eq 1 ]]; then
-    echo "DIAGNOSE: Would auto-create missing state files for $TRACK_ID"
-    [[ $HAS_METADATA -eq 0 ]] && echo "  - Would create: metadata.json"
-    [[ $HAS_TRACK_PROGRESS -eq 0 ]] && echo "  - Would create: .track-progress.json"
-    [[ $HAS_FB_PROGRESS -eq 0 ]] && echo "  - Would create: .fb-progress.json"
+    echo "DIAGNOSE: Would auto-create metadata.json for $TRACK_ID"
   else
-    echo "Auto-creating missing state files for $TRACK_ID"
-    # See snippets.md for auto_create_state_files function
-    # It handles creating only the missing files
+    echo "Auto-creating metadata.json for $TRACK_ID"
+    # See snippets.md for auto_create_metadata function
   fi
 fi
 ```
 
 ## Step 0.6: Auto-Fix track_id Mismatches
 
-Directory name is source of truth. Auto-fix mismatches in state files.
+Directory name is source of truth. Auto-fix mismatches in metadata.json.
 
 ```bash
 # Fix metadata.json
@@ -236,34 +210,6 @@ if [[ -f "$TRACK_DIR/metadata.json" ]]; then
       jq --arg id "$TRACK_ID" '.track_id = $id' "$TRACK_DIR/metadata.json" > "$TRACK_DIR/metadata.json.tmp.$$"
       mv "$TRACK_DIR/metadata.json.tmp.$$" "$TRACK_DIR/metadata.json"
       # Log repair (see snippets.md for audit trail)
-    fi
-  fi
-fi
-
-# Fix .track-progress.json
-if [[ -f "$TRACK_DIR/.track-progress.json" ]]; then
-  CURRENT_ID=$(jq -r '.trackId // empty' "$TRACK_DIR/.track-progress.json")
-  if [[ -n "$CURRENT_ID" && "$CURRENT_ID" != "$TRACK_ID" ]]; then
-    if [[ $DIAGNOSE_MODE -eq 1 ]]; then
-      echo "DIAGNOSE: Would fix trackId in .track-progress.json: $CURRENT_ID → $TRACK_ID"
-    else
-      echo "Auto-fixing trackId in .track-progress.json: $CURRENT_ID → $TRACK_ID"
-      jq --arg id "$TRACK_ID" '.trackId = $id' "$TRACK_DIR/.track-progress.json" > "$TRACK_DIR/.track-progress.json.tmp.$$"
-      mv "$TRACK_DIR/.track-progress.json.tmp.$$" "$TRACK_DIR/.track-progress.json"
-    fi
-  fi
-fi
-
-# Fix .fb-progress.json
-if [[ -f "$TRACK_DIR/.fb-progress.json" ]]; then
-  CURRENT_ID=$(jq -r '.trackId // empty' "$TRACK_DIR/.fb-progress.json")
-  if [[ -n "$CURRENT_ID" && "$CURRENT_ID" != "$TRACK_ID" ]]; then
-    if [[ $DIAGNOSE_MODE -eq 1 ]]; then
-      echo "DIAGNOSE: Would fix trackId in .fb-progress.json: $CURRENT_ID → $TRACK_ID"
-    else
-      echo "Auto-fixing trackId in .fb-progress.json: $CURRENT_ID → $TRACK_ID"
-      jq --arg id "$TRACK_ID" '.trackId = $id' "$TRACK_DIR/.fb-progress.json" > "$TRACK_DIR/.fb-progress.json.tmp.$$"
-      mv "$TRACK_DIR/.fb-progress.json.tmp.$$" "$TRACK_DIR/.fb-progress.json"
     fi
   fi
 fi
@@ -283,21 +229,22 @@ done
 
 ## Step 0.7: Staleness Detection
 
-Detect three types of staleness: `in_progress`, `failed`, and stale `complete`.
+Detect three types of staleness: `in_progress`, `failed`, and stale `complete` in metadata.json.beads.
 
 ```bash
-if [[ -f "$TRACK_DIR/.fb-progress.json" ]]; then
-  FB_STATUS=$(jq -r '.status // empty' "$TRACK_DIR/.fb-progress.json")
+if [[ -f "$TRACK_DIR/metadata.json" ]]; then
+  BEADS_STATUS=$(jq -r '.beads.status // empty' "$TRACK_DIR/metadata.json")
 
   # Case 1: Stale in_progress
-  if [[ "$FB_STATUS" == "in_progress" ]]; then
-    STARTED_AT=$(jq -r '.startedAt // "unknown"' "$TRACK_DIR/.fb-progress.json")
-    THREAD_ID=$(jq -r '.threadId // "unknown"' "$TRACK_DIR/.fb-progress.json")
+  if [[ "$BEADS_STATUS" == "in_progress" ]]; then
+    # Get thread from workflow history
+    LAST_THREAD=$(jq -r '.threads[-1].id // "unknown"' "$TRACK_DIR/metadata.json")
+    UPDATED_AT=$(jq -r '.updated_at // "unknown"' "$TRACK_DIR/metadata.json")
     echo ""
     echo "⚠️  STALE IN_PROGRESS DETECTED"
     echo "   Track: $TRACK_ID"
-    echo "   Started: $STARTED_AT"
-    echo "   Thread: $THREAD_ID"
+    echo "   Updated: $UPDATED_AT"
+    echo "   Thread: $LAST_THREAD"
     echo ""
     echo "Options:"
     echo "  [R]esume - Continue from last checkpoint"
@@ -308,14 +255,12 @@ if [[ -f "$TRACK_DIR/.fb-progress.json" ]]; then
   fi
 
   # Case 2: Failed status
-  if [[ "$FB_STATUS" == "failed" ]]; then
-    LAST_ERROR=$(jq -r '.lastError // "unknown"' "$TRACK_DIR/.fb-progress.json")
-    STARTED_AT=$(jq -r '.startedAt // "unknown"' "$TRACK_DIR/.fb-progress.json")
+  if [[ "$BEADS_STATUS" == "failed" ]]; then
+    UPDATED_AT=$(jq -r '.updated_at // "unknown"' "$TRACK_DIR/metadata.json")
     echo ""
     echo "⚠️  FAILED STATUS DETECTED"
     echo "   Track: $TRACK_ID"
-    echo "   Started: $STARTED_AT"
-    echo "   Error: $LAST_ERROR"
+    echo "   Updated: $UPDATED_AT"
     echo ""
     echo "Options:"
     echo "  [R]esume - Retry from last checkpoint (fb $TRACK_ID)"
@@ -324,20 +269,20 @@ if [[ -f "$TRACK_DIR/.fb-progress.json" ]]; then
     echo ""
   fi
 
-  # Case 3: Stale complete (lastVerified > 7 days old)
-  if [[ "$FB_STATUS" == "complete" ]]; then
-    LAST_VERIFIED=$(jq -r '.lastVerified // empty' "$TRACK_DIR/.fb-progress.json")
-    if [[ -n "$LAST_VERIFIED" ]]; then
-      # Convert lastVerified to epoch
-      VERIFIED_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$LAST_VERIFIED" +%s 2>/dev/null || \
-                       date -d "$LAST_VERIFIED" +%s 2>/dev/null || echo 0)
+  # Case 3: Stale complete (reviewedAt > 7 days old)
+  if [[ "$BEADS_STATUS" == "complete" ]]; then
+    REVIEWED_AT=$(jq -r '.beads.reviewedAt // empty' "$TRACK_DIR/metadata.json")
+    if [[ -n "$REVIEWED_AT" ]]; then
+      # Convert reviewedAt to epoch
+      VERIFIED_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$REVIEWED_AT" +%s 2>/dev/null || \
+                       date -d "$REVIEWED_AT" +%s 2>/dev/null || echo 0)
       SEVEN_DAYS_AGO=$(date -v-7d +%s 2>/dev/null || date -d '7 days ago' +%s)
 
       if [[ $VERIFIED_EPOCH -lt $SEVEN_DAYS_AGO && $VERIFIED_EPOCH -gt 0 ]]; then
         echo ""
         echo "ℹ️  STALE COMPLETE STATUS"
         echo "   Track: $TRACK_ID"
-        echo "   Last verified: $LAST_VERIFIED"
+        echo "   Last reviewed: $REVIEWED_AT"
         echo ""
         echo "   Consider running 'rb $TRACK_ID' to re-verify beads."
         echo ""
@@ -358,15 +303,19 @@ if [[ $DIAGNOSE_MODE -eq 1 ]]; then
   echo "Files:"
   ls -la "$TRACK_DIR"
   echo ""
-  echo "State Files:"
-  for f in metadata.json .track-progress.json .fb-progress.json; do
-    if [[ -f "$TRACK_DIR/$f" ]]; then
-      echo "--- $f ---"
-      jq '.' "$TRACK_DIR/$f"
-    else
-      echo "--- $f: MISSING ---"
-    fi
-  done
+  echo "State File:"
+  if [[ -f "$TRACK_DIR/metadata.json" ]]; then
+    echo "--- metadata.json ---"
+    jq '.' "$TRACK_DIR/metadata.json"
+    echo ""
+    echo "--- metadata.json.generation ---"
+    jq '.generation // "MISSING"' "$TRACK_DIR/metadata.json"
+    echo ""
+    echo "--- metadata.json.beads ---"
+    jq '.beads // "MISSING"' "$TRACK_DIR/metadata.json"
+  else
+    echo "--- metadata.json: MISSING ---"
+  fi
   echo ""
   echo "Issues Found:"
   # All checks above run but use "DIAGNOSE:" prefix and skip writes
@@ -474,7 +423,7 @@ These require manual intervention:
 
 - Corrupted JSON files
 - spec.md XOR plan.md (one without the other)
-- Content files older than 30 days with missing state files
+- Content files older than 30 days with missing metadata.json
 - track_id mismatch in content file headers
 - Active session lock with recent heartbeat (unless user forces)
 
@@ -484,5 +433,5 @@ Validation succeeds when:
 
 - All JSON files parse correctly
 - File existence matrix is valid
-- track_id matches across all state files
+- track_id matches in metadata.json
 - No unresolved HALT conditions

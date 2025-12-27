@@ -156,60 +156,43 @@ fi
 }
 ```
 
-### 1.3.3 Create/Validate .track-progress.json
+### 1.3.3 Initialize generation section in metadata.json
 
-**If file exists:** Validate JSON and auto-fix trackId if mismatched.
-
-**If file missing:** Create with initial values:
-```json
-{
-  "trackId": "<track_id>",
-  "status": "initializing",
-  "specCreatedAt": null,
-  "planCreatedAt": null,
-  "threadId": "<current-thread-id>"
-}
+**If section missing:** Add default generation section:
+```bash
+jq '.generation = {"status": "initializing", "specCreatedAt": null, "planCreatedAt": null, "rbCompletedAt": null}' \
+  "conductor/tracks/<track_id>/metadata.json" > "conductor/tracks/<track_id>/metadata.json.tmp.$$" && mv "conductor/tracks/<track_id>/metadata.json.tmp.$$" "conductor/tracks/<track_id>/metadata.json"
 ```
 
-### 1.3.4 Create/Validate .fb-progress.json
+### 1.3.4 Initialize beads section in metadata.json
 
-**If file exists:** Validate JSON and auto-fix trackId if mismatched.
-
-**If file missing:** Create with pending status:
-```json
-{
-  "trackId": "<track_id>",
-  "status": "pending",
-  "startedAt": null,
-  "threadId": null,
-  "resumeFrom": "phase1",
-  "epics": [],
-  "issues": [],
-  "crossTrackDeps": [],
-  "lastError": null
-}
+**If section missing:** Add default beads section:
+```bash
+jq '.beads = {"status": "pending", "epicId": null, "epics": [], "issues": [], "planTasks": {}, "beadToTask": {}, "crossTrackDeps": [], "reviewStatus": null, "reviewedAt": null}' \
+  "conductor/tracks/<track_id>/metadata.json" > "conductor/tracks/<track_id>/metadata.json.tmp.$$" && mv "conductor/tracks/<track_id>/metadata.json.tmp.$$" "conductor/tracks/<track_id>/metadata.json"
 ```
 
-### 1.3.5 Checkpoint: Verify State Files
+### 1.3.5 Checkpoint: Verify State
 
 ```bash
 STATE_OK=true
-for FILE in metadata.json .track-progress.json .fb-progress.json; do
-  if [ ! -f "conductor/tracks/<track_id>/$FILE" ]; then
-    echo "❌ CRITICAL: Failed to create $FILE"
-    STATE_OK=false
-  elif ! jq empty "conductor/tracks/<track_id>/$FILE" 2>/dev/null; then
-    echo "❌ CRITICAL: $FILE is not valid JSON"
-    STATE_OK=false
-  fi
-done
+if [ ! -f "conductor/tracks/<track_id>/metadata.json" ]; then
+  echo "❌ CRITICAL: Failed to create metadata.json"
+  STATE_OK=false
+elif ! jq -e '.generation' "conductor/tracks/<track_id>/metadata.json" > /dev/null 2>&1; then
+  echo "❌ CRITICAL: metadata.json missing generation section"
+  STATE_OK=false
+elif ! jq -e '.beads' "conductor/tracks/<track_id>/metadata.json" > /dev/null 2>&1; then
+  echo "❌ CRITICAL: metadata.json missing beads section"
+  STATE_OK=false
+fi
 
 if [ "$STATE_OK" = "false" ]; then
-  echo "HALT: State files could not be created. Check permissions."
+  echo "HALT: State could not be initialized. Check permissions."
   exit 1
 fi
 
-echo "✓ State files initialized"
+echo "✓ State initialized in metadata.json"
 ```
 
 **If checkpoint fails:** HALT immediately. Do NOT proceed to spec/plan generation.
@@ -347,18 +330,12 @@ echo "✓ State files initialized"
     *   Write the confirmed specification content to `conductor/tracks/<track_id>/spec.md`.
     *   Write the confirmed plan content to `conductor/tracks/<track_id>/plan.md`.
 
-8.  **UPDATE State Files After spec/plan Created:**
+8.  **UPDATE State After spec/plan Created:**
     ```bash
-    # Update metadata.json artifacts and workflow state
+    # Update metadata.json artifacts, workflow state, and generation section
     jq --arg timestamp "<current-timestamp>" \
-       '.artifacts.spec = true | .artifacts.plan = true | .status = "planned" | .workflow.state = "TRACKED" | .workflow.history += [{"state": "TRACKED", "at": $timestamp, "command": "newtrack"}]' \
+       '.artifacts.spec = true | .artifacts.plan = true | .status = "planned" | .workflow.state = "TRACKED" | .workflow.history += [{"state": "TRACKED", "at": $timestamp, "command": "newtrack"}] | .generation.status = "plan_done" | .generation.specCreatedAt = $timestamp | .generation.planCreatedAt = $timestamp' \
        "conductor/tracks/<track_id>/metadata.json" > "conductor/tracks/<track_id>/metadata.json.tmp.$$" && mv "conductor/tracks/<track_id>/metadata.json.tmp.$$" "conductor/tracks/<track_id>/metadata.json"
-
-    # Update .track-progress.json
-    jq --arg specTime "<current-timestamp>" \
-       --arg planTime "<current-timestamp>" \
-       '.status = "plan_done" | .specCreatedAt = $specTime | .planCreatedAt = $planTime' \
-       "conductor/tracks/<track_id>/.track-progress.json" > "conductor/tracks/<track_id>/.track-progress.json.tmp.$$" && mv "conductor/tracks/<track_id>/.track-progress.json.tmp.$$" "conductor/tracks/<track_id>/.track-progress.json"
     ```
 
 9.  **Update Tracks File:**
@@ -402,17 +379,13 @@ If beads should be filed:
 
 ### 3.2 Invoke File-Beads Subagent
 
-1.  **Update state files for fb start:**
+1.  **Update state for fb start:**
     ```bash
-    # Update .track-progress.json
-    jq '.status = "fb_started"' \
-       "conductor/tracks/<track_id>/.track-progress.json" > "conductor/tracks/<track_id>/.track-progress.json.tmp.$$" && mv "conductor/tracks/<track_id>/.track-progress.json.tmp.$$" "conductor/tracks/<track_id>/.track-progress.json"
-
-    # Update .fb-progress.json (already created in Phase 1.3)
+    # Update metadata.json.generation and metadata.json.beads
     jq --arg time "<current-timestamp>" \
        --arg thread "<current-thread-id>" \
-       '.status = "in_progress" | .startedAt = $time | .threadId = $thread' \
-       "conductor/tracks/<track_id>/.fb-progress.json" > "conductor/tracks/<track_id>/.fb-progress.json.tmp.$$" && mv "conductor/tracks/<track_id>/.fb-progress.json.tmp.$$" "conductor/tracks/<track_id>/.fb-progress.json"
+       '.generation.status = "fb_started" | .beads.status = "in_progress" | .beads.startedAt = $time' \
+       "conductor/tracks/<track_id>/metadata.json" > "conductor/tracks/<track_id>/metadata.json.tmp.$$" && mv "conductor/tracks/<track_id>/metadata.json.tmp.$$" "conductor/tracks/<track_id>/metadata.json"
     ```
 
 2.  **Spawn Task subagent:**
@@ -421,7 +394,7 @@ If beads should be filed:
       description: "File beads from plan.md",
       prompt: "Load the beads skill and run it on the plan at conductor/tracks/<track_id>/plan.md. 
                Track ID: <track_id>
-               Progress file: conductor/tracks/<track_id>/.fb-progress.json
+               State location: conductor/tracks/<track_id>/metadata.json (beads section)
                
                After completion, return JSON summary:
                {
@@ -451,7 +424,7 @@ If beads should be filed:
     Task(
       description: "Review filed beads",
       prompt: "Load the beads skill and review the beads filed for track <track_id>.
-               Progress file: conductor/tracks/<track_id>/.fb-progress.json
+               State location: conductor/tracks/<track_id>/metadata.json (beads section)
                
                After completion, return JSON summary:
                {
@@ -476,17 +449,11 @@ Remove `.fb-progress.lock` file.
 
 ### 4.1 Update Final State
 
-1.  Update `.track-progress.json`:
-    ```json
-    {
-      "trackId": "<track_id>",
-      "status": "complete",
-      "specCreatedAt": "...",
-      "planCreatedAt": "...",
-      "fbCompletedAt": "...",
-      "rbCompletedAt": "...",
-      "threadId": "<thread-id>"
-    }
+1.  Update `metadata.json.generation`:
+    ```bash
+    jq --arg timestamp "<current-timestamp>" \
+       '.generation.status = "complete" | .generation.rbCompletedAt = $timestamp' \
+       "conductor/tracks/<track_id>/metadata.json" > "conductor/tracks/<track_id>/metadata.json.tmp.$$" && mv "conductor/tracks/<track_id>/metadata.json.tmp.$$" "conductor/tracks/<track_id>/metadata.json"
     ```
 
 ### 4.2 Display Handoff

@@ -127,6 +127,20 @@ conductor/
 
 See [references/ledger-format.md](references/ledger-format.md)
 
+### Conductor Session Fields
+
+When integrated with Conductor, LEDGER.md frontmatter includes session state:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bound_track` | string \| null | Currently active track ID |
+| `bound_bead` | string \| null | Currently claimed bead/task ID |
+| `mode` | `SA` \| `MA` | Session mode (Single-Agent or Multi-Agent) |
+| `tdd_phase` | `RED` \| `GREEN` \| `REFACTOR` \| null | Current TDD phase |
+| `heartbeat` | ISO 8601 | Last activity timestamp |
+
+These fields replace the deprecated `.conductor/session-state_*.json` files.
+
 ## Handoff Format
 
 See [references/handoff-format.md](references/handoff-format.md)
@@ -159,3 +173,46 @@ This installs TypeScript hooks to `~/.claude/hooks/`.
 ## Stale Detection
 
 Ledgers older than 24 hours are automatically archived on next session start.
+
+## Conductor Integration
+
+Continuity is automatically chained into Conductor workflows.
+
+### Auto-Triggers
+
+| Workflow | Phase | Action |
+|----------|-------|--------|
+| `/conductor-implement` | Phase 0.5 | `continuity load` + track binding |
+| `/conductor-finish` | Phase 6.5 | `continuity handoff track-complete` |
+| `ds` (Design Session) | Initialization | `continuity load` (display prior context) |
+
+### Track Binding
+
+When working on a Conductor track, LEDGER.md binds to that track:
+
+| Event | Frontmatter Update |
+|-------|-------------------|
+| `/conductor-implement <track>` | `bound_track: <track>` |
+| `bd update <id> --status in_progress` | `bound_bead: <id>` |
+| `bd close <id>` | `bound_bead: null` |
+| `/conductor-finish` | `bound_track: null, bound_bead: null` |
+
+### Track Switch Auto-Archive
+
+If you switch tracks (bound_track differs from new track):
+1. Current LEDGER.md is auto-archived to `conductor/sessions/archive/`
+2. New LEDGER.md is created with new track binding
+3. Previous context is preserved in archive
+
+### Non-Blocking Guarantee
+
+Continuity operations never block Conductor commands:
+- Missing LEDGER.md → create fresh session
+- Corrupted LEDGER.md → archive and create fresh
+- Archive write fails → log warning, continue
+
+### See Also
+
+- [ledger-format.md](references/ledger-format.md) - Full LEDGER.md format with Conductor fields
+- [preflight-beads.md](../conductor/references/conductor/preflight-beads.md) - Session initialization
+- [beads-session.md](../conductor/references/conductor/beads-session.md) - Session lifecycle

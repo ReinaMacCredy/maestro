@@ -1,10 +1,12 @@
 # Track Validation Snippets
 
-Bash code templates for state file operations. Use with atomic write pattern.
+Bash code templates for metadata.json operations. Use with atomic write pattern.
 
-## State File Templates
+## State File Template
 
-### metadata.json
+### metadata.json (Consolidated)
+
+Contains all track state including `generation` and `beads` sections.
 
 ```json
 {
@@ -14,6 +16,24 @@ Bash code templates for state file operations. Use with atomic write pattern.
   "created_at": "${ISO_TIMESTAMP}",
   "updated_at": "${ISO_TIMESTAMP}",
   "description": "",
+  "priority": "medium",
+  "generation": {
+    "status": "initializing",
+    "specCreatedAt": null,
+    "planCreatedAt": null,
+    "rbCompletedAt": null
+  },
+  "beads": {
+    "status": "pending",
+    "epicId": null,
+    "epics": [],
+    "issues": [],
+    "planTasks": {},
+    "beadToTask": {},
+    "crossTrackDeps": [],
+    "reviewStatus": null,
+    "reviewedAt": null
+  },
   "repairs": []
 }
 ```
@@ -30,93 +50,28 @@ cat > "$TRACK_DIR/metadata.json.tmp.$$" << EOF
   "created_at": "$NOW",
   "updated_at": "$NOW",
   "description": "",
+  "priority": "medium",
+  "generation": {
+    "status": "initializing",
+    "specCreatedAt": null,
+    "planCreatedAt": null,
+    "rbCompletedAt": null
+  },
+  "beads": {
+    "status": "pending",
+    "epicId": null,
+    "epics": [],
+    "issues": [],
+    "planTasks": {},
+    "beadToTask": {},
+    "crossTrackDeps": [],
+    "reviewStatus": null,
+    "reviewedAt": null
+  },
   "repairs": []
 }
 EOF
 mv "$TRACK_DIR/metadata.json.tmp.$$" "$TRACK_DIR/metadata.json"
-```
-
-### .track-progress.json
-
-```json
-{
-  "trackId": "${TRACK_ID}",
-  "status": "complete",
-  "specCreatedAt": "${SPEC_MTIME_ISO}",
-  "planCreatedAt": "${PLAN_MTIME_ISO}",
-  "threadId": "${THREAD_ID}",
-  "createdAt": "${ISO_TIMESTAMP}",
-  "updatedAt": "${ISO_TIMESTAMP}"
-}
-```
-
-**Create command:**
-
-```bash
-NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-# Get file modification times (macOS)
-SPEC_MTIME=$(stat -f %m "$TRACK_DIR/spec.md" 2>/dev/null)
-PLAN_MTIME=$(stat -f %m "$TRACK_DIR/plan.md" 2>/dev/null)
-
-# Convert to ISO (macOS)
-SPEC_ISO=$(date -r $SPEC_MTIME -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "$NOW")
-PLAN_ISO=$(date -r $PLAN_MTIME -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "$NOW")
-
-# Get thread ID from environment or use null
-THREAD_ID="${AMP_THREAD_ID:-null}"
-
-cat > "$TRACK_DIR/.track-progress.json.tmp.$$" << EOF
-{
-  "trackId": "$TRACK_ID",
-  "status": "complete",
-  "specCreatedAt": "$SPEC_ISO",
-  "planCreatedAt": "$PLAN_ISO",
-  "threadId": $([[ "$THREAD_ID" == "null" ]] && echo "null" || echo "\"$THREAD_ID\""),
-  "createdAt": "$NOW",
-  "updatedAt": "$NOW"
-}
-EOF
-mv "$TRACK_DIR/.track-progress.json.tmp.$$" "$TRACK_DIR/.track-progress.json"
-```
-
-### .fb-progress.json
-
-```json
-{
-  "trackId": "${TRACK_ID}",
-  "status": "pending",
-  "startedAt": null,
-  "completedAt": null,
-  "threadId": null,
-  "resumeFrom": "phase1",
-  "epics": [],
-  "issues": [],
-  "crossTrackDeps": [],
-  "lastBatchCompleted": null,
-  "lastError": null
-}
-```
-
-**Create command:**
-
-```bash
-cat > "$TRACK_DIR/.fb-progress.json.tmp.$$" << EOF
-{
-  "trackId": "$TRACK_ID",
-  "status": "pending",
-  "startedAt": null,
-  "completedAt": null,
-  "threadId": null,
-  "resumeFrom": "phase1",
-  "epics": [],
-  "issues": [],
-  "crossTrackDeps": [],
-  "lastBatchCompleted": null,
-  "lastError": null
-}
-EOF
-mv "$TRACK_DIR/.fb-progress.json.tmp.$$" "$TRACK_DIR/.fb-progress.json"
 ```
 
 ## Atomic Write Pattern
@@ -177,19 +132,36 @@ add_repair_log() {
 add_repair_log "$TRACK_DIR/metadata.json" "auto-fix" "track_id" "old-id" "new-id"
 ```
 
-## Auto-Create All State Files
+## Auto-Create metadata.json
 
-Combined script for creating all missing state files:
+Create metadata.json with generation and beads sections initialized:
 
 ```bash
-auto_create_state_files() {
+auto_create_metadata() {
   local TRACK_DIR="$1"
   local TRACK_ID=$(basename "$TRACK_DIR")
   local NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   
-  # metadata.json
   if [[ ! -f "$TRACK_DIR/metadata.json" ]]; then
     echo "Creating metadata.json for $TRACK_ID"
+    
+    # Get file modification times if spec/plan exist
+    local SPEC_ISO="null"
+    local PLAN_ISO="null"
+    local GEN_STATUS="initializing"
+    
+    if [[ -f "$TRACK_DIR/spec.md" ]]; then
+      SPEC_MTIME=$(stat -f %m "$TRACK_DIR/spec.md" 2>/dev/null || stat -c %Y "$TRACK_DIR/spec.md")
+      SPEC_ISO="\"$(date -r $SPEC_MTIME -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "$NOW")\""
+      GEN_STATUS="spec_done"
+    fi
+    
+    if [[ -f "$TRACK_DIR/plan.md" ]]; then
+      PLAN_MTIME=$(stat -f %m "$TRACK_DIR/plan.md" 2>/dev/null || stat -c %Y "$TRACK_DIR/plan.md")
+      PLAN_ISO="\"$(date -r $PLAN_MTIME -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "$NOW")\""
+      GEN_STATUS="plan_done"
+    fi
+    
     cat > "$TRACK_DIR/metadata.json.tmp.$$" << EOF
 {
   "track_id": "$TRACK_ID",
@@ -198,6 +170,24 @@ auto_create_state_files() {
   "created_at": "$NOW",
   "updated_at": "$NOW",
   "description": "Auto-created by validation",
+  "priority": "medium",
+  "generation": {
+    "status": "$GEN_STATUS",
+    "specCreatedAt": $SPEC_ISO,
+    "planCreatedAt": $PLAN_ISO,
+    "rbCompletedAt": null
+  },
+  "beads": {
+    "status": "pending",
+    "epicId": null,
+    "epics": [],
+    "issues": [],
+    "planTasks": {},
+    "beadToTask": {},
+    "crossTrackDeps": [],
+    "reviewStatus": null,
+    "reviewedAt": null
+  },
   "repairs": [{
     "timestamp": "$NOW",
     "action": "auto-create",
@@ -210,57 +200,86 @@ auto_create_state_files() {
 EOF
     mv "$TRACK_DIR/metadata.json.tmp.$$" "$TRACK_DIR/metadata.json"
   fi
-  
-  # .track-progress.json
-  if [[ ! -f "$TRACK_DIR/.track-progress.json" ]]; then
-    echo "Creating .track-progress.json for $TRACK_ID"
-    # Get file times
-    SPEC_MTIME=$(stat -f %m "$TRACK_DIR/spec.md" 2>/dev/null || stat -c %Y "$TRACK_DIR/spec.md")
-    PLAN_MTIME=$(stat -f %m "$TRACK_DIR/plan.md" 2>/dev/null || stat -c %Y "$TRACK_DIR/plan.md")
-    SPEC_ISO=$(date -r $SPEC_MTIME -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "$NOW")
-    PLAN_ISO=$(date -r $PLAN_MTIME -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "$NOW")
-    
-    cat > "$TRACK_DIR/.track-progress.json.tmp.$$" << EOF
-{
-  "trackId": "$TRACK_ID",
-  "status": "complete",
-  "specCreatedAt": "$SPEC_ISO",
-  "planCreatedAt": "$PLAN_ISO",
-  "threadId": null,
-  "createdAt": "$NOW",
-  "updatedAt": "$NOW"
 }
-EOF
-    mv "$TRACK_DIR/.track-progress.json.tmp.$$" "$TRACK_DIR/.track-progress.json"
-  fi
+
+# Usage:
+auto_create_metadata "conductor/tracks/my-track_20251224"
+```
+
+## Update Generation Status
+
+Update the generation section after spec/plan creation:
+
+```bash
+update_generation_status() {
+  local TRACK_DIR="$1"
+  local NEW_STATUS="$2"
+  local FIELD="$3"  # specCreatedAt, planCreatedAt, or rbCompletedAt
+  local NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   
-  # .fb-progress.json
-  if [[ ! -f "$TRACK_DIR/.fb-progress.json" ]]; then
-    echo "Creating .fb-progress.json for $TRACK_ID"
-    cat > "$TRACK_DIR/.fb-progress.json.tmp.$$" << EOF
-{
-  "trackId": "$TRACK_ID",
-  "status": "pending",
-  "startedAt": null,
-  "completedAt": null,
-  "threadId": null,
-  "resumeFrom": "phase1",
-  "epics": [],
-  "issues": [],
-  "crossTrackDeps": [],
-  "lastBatchCompleted": null,
-  "lastError": null
-}
-EOF
-    mv "$TRACK_DIR/.fb-progress.json.tmp.$$" "$TRACK_DIR/.fb-progress.json"
+  if [[ -f "$TRACK_DIR/metadata.json" ]]; then
+    jq --arg status "$NEW_STATUS" --arg field "$FIELD" --arg now "$NOW" \
+       '.generation.status = $status | .generation[$field] = $now | .updated_at = $now' \
+       "$TRACK_DIR/metadata.json" > "$TRACK_DIR/metadata.json.tmp.$$"
+    mv "$TRACK_DIR/metadata.json.tmp.$$" "$TRACK_DIR/metadata.json"
   fi
 }
 
 # Usage:
-auto_create_state_files "conductor/tracks/my-track_20251224"
+update_generation_status "conductor/tracks/my-track_20251224" "spec_done" "specCreatedAt"
+update_generation_status "conductor/tracks/my-track_20251224" "plan_done" "planCreatedAt"
+update_generation_status "conductor/tracks/my-track_20251224" "complete" "rbCompletedAt"
 ```
 
-## Update State File Status
+## Update Beads Status
+
+Update the beads section during filing:
+
+```bash
+update_beads_status() {
+  local TRACK_DIR="$1"
+  local NEW_STATUS="$2"
+  local NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  
+  if [[ -f "$TRACK_DIR/metadata.json" ]]; then
+    jq --arg status "$NEW_STATUS" --arg now "$NOW" \
+       '.beads.status = $status | .updated_at = $now' \
+       "$TRACK_DIR/metadata.json" > "$TRACK_DIR/metadata.json.tmp.$$"
+    mv "$TRACK_DIR/metadata.json.tmp.$$" "$TRACK_DIR/metadata.json"
+  fi
+}
+
+# Usage:
+update_beads_status "conductor/tracks/my-track_20251224" "in_progress"
+update_beads_status "conductor/tracks/my-track_20251224" "complete"
+```
+
+## Add Bead to planTasks Mapping
+
+Add a bead ID to the planTasks mapping (bidirectional):
+
+```bash
+add_plan_task_mapping() {
+  local TRACK_DIR="$1"
+  local PLAN_TASK_ID="$2"
+  local BEAD_ID="$3"
+  local NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  
+  if [[ -f "$TRACK_DIR/metadata.json" ]]; then
+    jq --arg taskId "$PLAN_TASK_ID" --arg beadId "$BEAD_ID" --arg now "$NOW" \
+       '.beads.planTasks[$taskId] = $beadId | .beads.beadToTask[$beadId] = $taskId | .updated_at = $now' \
+       "$TRACK_DIR/metadata.json" > "$TRACK_DIR/metadata.json.tmp.$$"
+    mv "$TRACK_DIR/metadata.json.tmp.$$" "$TRACK_DIR/metadata.json"
+  fi
+}
+
+# Usage:
+add_plan_task_mapping "conductor/tracks/my-track_20251224" "1.1" "bd-42"
+```
+
+## Update Track Status
+
+Update the top-level track status:
 
 ```bash
 update_track_status() {
@@ -268,7 +287,6 @@ update_track_status() {
   local NEW_STATUS="$2"
   local NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   
-  # Update metadata.json
   if [[ -f "$TRACK_DIR/metadata.json" ]]; then
     jq --arg status "$NEW_STATUS" --arg now "$NOW" \
        '.status = $status | .updated_at = $now' \

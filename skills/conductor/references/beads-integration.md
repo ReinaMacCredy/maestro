@@ -40,7 +40,7 @@ Session Start
 1. Check `bd` availability → HALT if unavailable
 2. Check Village MCP availability
 3. Lock mode (SA or MA) for session
-4. Create/recover session state file
+4. Create/update LEDGER.md with session state in frontmatter
 5. Detect stale agents (MA mode)
 
 **HALT Conditions:**
@@ -110,12 +110,10 @@ release(path="src/auth.ts")
 - If no test files detected → skip checkpoints
 - If `--tdd` flag not provided → skip checkpoints
 
-**Session State Update:**
-```json
-{
-  "tddPhase": "GREEN",
-  "lastUpdated": "2025-12-25T12:00:00Z"
-}
+**LEDGER.md Frontmatter Update:**
+```yaml
+tdd_phase: GREEN
+heartbeat: 2025-12-25T12:00:00Z
 ```
 
 ---
@@ -215,7 +213,7 @@ bd cleanup --older-than 0 --limit <n> --force  # Remove oldest
 3. Create epic: `bd create "<title>" -t epic`
 4. Create issues for each task
 5. Wire dependencies between issues
-6. Update `.fb-progress.json` with planTasks mapping
+6. Update `metadata.json.beads` section with planTasks mapping
 
 **R/S/M Prompt (on malformed plan):**
 ```
@@ -286,68 +284,68 @@ Plan structure issue detected:
 
 ## State Files
 
-### Session State (`session-state_<agent-id>.json`)
+### Session State (LEDGER.md)
 
-**Location:** `.conductor/`
+**Location:** `conductor/sessions/active/`
 
-```json
-{
-  "agentId": "T-abc123",
-  "mode": "SA",
-  "modeLockedAt": "2025-12-25T10:00:00Z",
-  "trackId": "beads-integration_20251225",
-  "currentTask": "bd-42",
-  "tddPhase": "GREEN",
-  "lastUpdated": "2025-12-25T12:00:00Z"
-}
+Session tracking is now stored in LEDGER.md frontmatter:
+
+```yaml
+---
+updated: 2025-12-25T12:00:00Z
+session_id: T-abc123
+platform: amp
+bound_track: beads-integration_20251225
+bound_bead: bd-42
+mode: SA
+tdd_phase: GREEN
+heartbeat: 2025-12-25T12:00:00Z
+---
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| agentId | string | Thread/agent identifier |
+| bound_track | string \| null | Current track |
+| bound_bead | string \| null | Claimed task ID |
 | mode | "SA" \| "MA" | Locked session mode |
-| modeLockedAt | ISO 8601 | When mode was locked |
-| trackId | string \| null | Current track |
-| currentTask | string \| null | Claimed task ID |
-| tddPhase | "RED" \| "GREEN" \| "REFACTOR" \| null | TDD phase |
-| lastUpdated | ISO 8601 | Last activity timestamp |
+| tdd_phase | "RED" \| "GREEN" \| "REFACTOR" \| null | TDD phase |
+| heartbeat | ISO 8601 | Last activity timestamp |
 
 ---
 
-### Beads Progress (`.fb-progress.json`)
+### Beads State (metadata.json.beads)
 
-**Location:** `tracks/<track-id>/`
+**Location:** `tracks/<track-id>/metadata.json`
 
 ```json
 {
-  "trackId": "beads-integration_20251225",
-  "status": "complete",
-  "startedAt": "2025-12-25T19:39:00Z",
-  "threadId": "T-abc123",
-  "resumeFrom": null,
-  "epics": ["my-workflow:3-1w8y"],
-  "issues": ["my-workflow:3-51f9", "my-workflow:3-kt2n"],
-  "planTasks": {
-    "1.1.1": "my-workflow:3-51f9",
-    "1.1.2": "my-workflow:3-kt2n"
-  },
-  "beadToTask": {
-    "my-workflow:3-51f9": "1.1.1",
-    "my-workflow:3-kt2n": "1.1.2"
-  },
-  "crossTrackDeps": [],
-  "lastError": null,
-  "lastVerified": "2025-12-25T12:00:00Z"
+  "beads": {
+    "status": "complete",
+    "startedAt": "2025-12-25T19:39:00Z",
+    "epicId": "my-workflow:3-1w8y",
+    "epics": [{"id": "my-workflow:3-1w8y", "title": "...", "status": "complete", "createdAt": "...", "reviewed": true}],
+    "issues": ["my-workflow:3-51f9", "my-workflow:3-kt2n"],
+    "planTasks": {
+      "1.1.1": "my-workflow:3-51f9",
+      "1.1.2": "my-workflow:3-kt2n"
+    },
+    "beadToTask": {
+      "my-workflow:3-51f9": "1.1.1",
+      "my-workflow:3-kt2n": "1.1.2"
+    },
+    "crossTrackDeps": [],
+    "reviewStatus": "complete",
+    "reviewedAt": "2025-12-25T12:00:00Z"
+  }
 }
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| trackId | string | Track identifier |
 | status | "pending" \| "in_progress" \| "complete" \| "failed" | Filing status |
 | planTasks | Record<string, string> | Plan ID → Bead ID |
 | beadToTask | Record<string, string> | Bead ID → Plan ID (reverse) |
-| lastVerified | ISO 8601 | Last sync verification |
+| reviewedAt | ISO 8601 | Last review timestamp |
 
 ---
 

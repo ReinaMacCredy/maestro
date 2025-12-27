@@ -40,6 +40,9 @@ Contains reusable learnings from completed tracks.
 - `git status --porcelain` - Check for dirty state (empty = clean)
 - `git show-ref --verify --quiet "refs/heads/$BRANCH"` - Check if branch exists
 - `jq '.workflow.state = "ARCHIVED"' metadata.json > "metadata.json.tmp.$$" && mv "metadata.json.tmp.$$" metadata.json` - Update workflow state atomically
+- `/doc-sync` - Sync documentation with code changes
+- `/doc-sync --dry-run` - Preview doc changes without applying
+- `/doc-sync --force` - Apply all doc changes without prompts
 
 ## Gotchas
 
@@ -75,6 +78,10 @@ Contains reusable learnings from completed tracks.
 - Open beads cause HALT at finish unless `--force` is used
 - Branch suffix auto-increments (-v2, -v3) if branch already exists
 - `workflow.state` for machine logic, `status` field for human readability
+- Doc-sync runs as Phase 7 in `/conductor-finish` (after CODEMAPS)
+- Doc-sync errors are non-blocking - workflow continues even if doc-sync fails
+- Minor doc changes (path renames, function renames) are auto-applied
+- Major doc changes (new features, removed features) prompt user
 
 ## Patterns
 
@@ -82,7 +89,7 @@ Contains reusable learnings from completed tracks.
 - **Smart Skip:** Each phase checks if work exists before running
 - **Resume Capability:** State files track progress for interrupted workflows
 - **A/K Archive Choice:** Archive (move to archive/) / Keep (stay active)
-- **State Files First:** Create metadata.json, .track-progress.json, .fb-progress.json in Phase 1.3 BEFORE spec/plan generation
+- **State Files First:** Create metadata.json with generation and beads sections in Phase 1.3 BEFORE spec/plan generation
 - **Collective State Validation:** Treat 3 state files as atomic unit - HAS_STATE = 0 (none), 1 (partial), 2 (all)
 - **Double Diamond Phases:** DISCOVER (diverge) → DEFINE (converge) → DEVELOP (diverge) → DELIVER (converge)
 - **A/P/C Checkpoints:** At each phase end: [A] Advanced, [P] Party (multi-agent), [C] Continue

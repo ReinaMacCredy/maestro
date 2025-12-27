@@ -90,13 +90,13 @@ The **directory name is the canonical source of truth** for track_id.
 
 ### Auto-Fix Behavior
 
-State files with mismatched track_id are automatically corrected:
+State stored in `metadata.json` sections are automatically corrected:
 
-| File                   | Field      | Auto-Fix   |
+| Section | Field | Auto-Fix |
 | ---------------------- | ---------- | ---------- |
-| `metadata.json`        | `track_id` | ✓ Auto-fix |
-| `.track-progress.json` | `trackId`  | ✓ Auto-fix |
-| `.fb-progress.json`    | `trackId`  | ✓ Auto-fix |
+| `metadata.json` | `track_id` | ✓ Auto-fix |
+| `metadata.json.generation` | (section) | ✓ Auto-create if missing |
+| `metadata.json.beads` | (section) | ✓ Auto-create if missing |
 
 ### Warn-Only Behavior
 
@@ -116,28 +116,38 @@ Content file mismatches often indicate a copied track that needs manual review.
 # Directory name = source of truth
 TRACK_ID=$(basename "$TRACK_DIR")
 
-# Check each state file
-for file in metadata.json .track-progress.json .fb-progress.json; do
-  CURRENT=$(jq -r '.track_id // .trackId' "$TRACK_DIR/$file")
-  if [[ "$CURRENT" != "$TRACK_ID" ]]; then
-    # Auto-fix: update to match directory name
-    # Log repair to metadata.json.repairs[]
-  fi
-done
+# Check metadata.json track_id
+CURRENT=$(jq -r '.track_id' "$TRACK_DIR/metadata.json")
+if [[ "$CURRENT" != "$TRACK_ID" ]]; then
+  # Auto-fix: update to match directory name
+  # Log repair to metadata.json.repairs[]
+fi
+
+# Ensure generation section exists (auto-create if missing)
+if ! jq -e '.generation' "$TRACK_DIR/metadata.json" > /dev/null 2>&1; then
+  jq '.generation = {"status": "initializing", "specCreatedAt": null, "planCreatedAt": null, "rbCompletedAt": null}' \
+    "$TRACK_DIR/metadata.json" > "$TRACK_DIR/metadata.json.tmp.$$" && mv "$TRACK_DIR/metadata.json.tmp.$$" "$TRACK_DIR/metadata.json"
+fi
+
+# Ensure beads section exists (auto-create if missing)
+if ! jq -e '.beads' "$TRACK_DIR/metadata.json" > /dev/null 2>&1; then
+  jq '.beads = {"status": "pending", "epicId": null, "epics": [], "issues": [], "planTasks": {}, "beadToTask": {}, "crossTrackDeps": [], "reviewStatus": null, "reviewedAt": null}' \
+    "$TRACK_DIR/metadata.json" > "$TRACK_DIR/metadata.json.tmp.$$" && mv "$TRACK_DIR/metadata.json.tmp.$$" "$TRACK_DIR/metadata.json"
+fi
 ```
 
 ---
 
 ## State File Validation
 
-### State File Types
+### State Management
 
-| File                   | Purpose                                   | Required     |
+| Location | Purpose | Required |
 | ---------------------- | ----------------------------------------- | ------------ |
-| `metadata.json`        | Track metadata (type, status, created_at) | ✓ Required   |
-| `.track-progress.json` | Spec/plan generation progress             | Auto-created |
-| `.fb-progress.json`    | Beads filing progress                     | Auto-created |
-| `implement_state.json` | Implementation progress                   | Optional     |
+| `metadata.json` | Track metadata (type, status, created_at) | ✓ Required |
+| `metadata.json.generation` | Spec/plan generation progress | Auto-created |
+| `metadata.json.beads` | Beads filing progress | Auto-created |
+| `implement_state.json` | Implementation progress | Optional |
 
 ### File Existence Matrix
 
@@ -152,7 +162,7 @@ done
 
 ### Auto-Create Conditions
 
-When spec.md + plan.md exist but state files are missing, auto-create if:
+When spec.md + plan.md exist but `metadata.json.generation` section is missing, auto-create if:
 
 1. **Content check**: Both files have content (size > 0)
 2. **Age check**: Both files < 30 days old
@@ -177,8 +187,9 @@ If any pre-check fails: HALT with explanation.
 
 | Issue                            | Repair Action                  |
 | -------------------------------- | ------------------------------ |
-| Missing state files              | Auto-create with defaults      |
-| track_id mismatch in state files | Update to match directory name |
+| Missing generation section       | Auto-create with defaults      |
+| Missing beads section            | Auto-create with defaults      |
+| track_id mismatch in metadata    | Update to match directory name |
 | Missing `created_at`             | Add current timestamp          |
 | Missing `updated_at`             | Add current timestamp          |
 

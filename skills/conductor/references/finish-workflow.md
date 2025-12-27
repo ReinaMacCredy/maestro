@@ -19,8 +19,9 @@ Track ready. Run `/conductor-finish`?
 
 **Flags:**
 
-- `--with-pr` - Chain to finish-branch skill after Phase 6
+- `--with-pr` - Chain to finish-branch skill after Phase 7
 - `--skip-codemaps` - Skip CODEMAPS regeneration (Phase 6)
+- `--skip-doc-sync` - Skip doc-sync (Phase 7)
 - `--skip-refresh` - Skip Context Refresh (Phase 4)
 
 ## Validation
@@ -564,6 +565,54 @@ Run /conductor-setup to generate initial CODEMAPS.
 
 ---
 
+## Phase 6.5: Continuity Handoff
+
+**Purpose:** Create handoff for track completion and clean up session state.
+
+### Trigger Conditions
+
+Run Phase 6.5 when track is being archived (archiveChoice = "archive").
+
+### Workflow
+
+1. **Create Handoff**
+   - Run `continuity handoff track-complete`
+   - Creates archived handoff: `conductor/sessions/archive/YYYY-MM-DD-HH-MM-track-complete.md`
+   - Includes: track summary, key decisions, learnings reference
+
+2. **Clear LEDGER Binding**
+   - Update LEDGER.md frontmatter:
+     ```yaml
+     bound_track: null
+     bound_bead: null
+     tdd_phase: null
+     ```
+   - Keep `mode` and `session_id` for continuity
+
+3. **Archive LEDGER (if archive chosen)**
+   - If user chose Archive in Phase 5:
+     - Copy LEDGER.md content to handoff archive
+     - Delete `conductor/sessions/active/LEDGER.md`
+   - If user chose Keep:
+     - Clear bindings only, keep LEDGER.md active
+
+### Progress
+
+```
+Phase 6.5: Continuity handoff...
+  → Handoff created: 2025-12-27-14-30-track-complete.md
+  → LEDGER.md: bindings cleared
+```
+
+### Skip Check
+
+If `archiveChoice = "keep"`:
+- Clear bindings only
+- Do not delete LEDGER.md
+- Do not create track-complete handoff
+
+---
+
 ## Resume Capability
 
 ### State File
@@ -680,6 +729,84 @@ Phase 6/6: Regenerating CODEMAPS...
 
 ✓ Track completed. Commit: abc123
 ```
+
+---
+
+## Phase 7: Doc-Sync
+
+**Purpose:** Synchronize documentation with code changes from this track
+
+### Skip Check
+
+If `--skip-doc-sync` flag provided:
+
+```
+Phase 7: Skipped (--skip-doc-sync)
+```
+
+Proceed directly to completion.
+
+### Trigger Conditions
+
+Run Phase 7 when ALL of:
+- Phase 6 (CODEMAPS) completed successfully
+- Project has `.md` files with code references
+- `--skip-doc-sync` flag NOT passed
+
+### Skip Conditions
+
+Skip Phase 7 if ANY of:
+- `--skip-doc-sync` flag passed
+- No markdown files found in project
+- No code changes detected in track
+- Track is documentation-only (no code files changed)
+
+### Workflow
+
+1. **Scan** - Find `.md` files with code references
+2. **Detect** - Get code changes from git diff + beads
+3. **Update** - Auto-apply minor, prompt for major
+
+### Progress
+
+```
+Phase 7: Doc-Sync
+  📄 Scanning docs... 5 found
+  📊 Detecting changes... 3 found
+  ✅ Auto-updated: 2 path changes
+  ❓ New feature detected: Add section to README.md? [Y/n] Y
+  ✅ Added section
+Phase 7: Doc-Sync ✅
+```
+
+### Error Handling
+
+Doc-sync errors are **non-blocking**:
+
+```
+⚠️  Phase 7 (Doc-Sync) encountered errors:
+    - README.md: Could not parse code block at line 45
+    
+Continuing to completion...
+```
+
+### State Update
+
+Update `finish-state.json`:
+
+```json
+{
+  "phase": 7,
+  "completed": [..., "doc-sync"],
+  "docSync": {
+    "filesScanned": 5,
+    "minorUpdates": 2,
+    "majorUpdates": 1
+  }
+}
+```
+
+See [doc-sync skill](../../doc-sync/SKILL.md) for full documentation.
 
 ---
 

@@ -10,7 +10,7 @@ Reference for workflow state → next action suggestions.
 | `DESIGNED` | `/conductor-newtrack {id}` | `ds (refine design)` |
 | `TRACKED` | `fb (file beads)` | `bd ready (if beads exist)` |
 | `FILED` | `rb (review beads)` | — |
-| `REVIEWED` | `bd ready (start work)` | — |
+| `REVIEWED` | `Start epic {next-epic-id}` | `bd ready (show all ready tasks)` |
 | `IMPLEMENTING` | `Start epic {next-epic-id}` or `{next-task-title}` | `finish branch (if all done)` |
 | `DONE` | `finish branch` | — |
 | `ARCHIVED` | `ds (start new work)` | — |
@@ -70,6 +70,12 @@ function getSuggestion(workflowState, trackId, beadsData):
             }
         
         case "REVIEWED":
+            nextEpic = findNextReadyEpic(beadsData)
+            if nextEpic:
+                return {
+                    primary: "Start epic " + nextEpic.id,
+                    alt: "bd ready (show all ready tasks)"
+                }
             return {
                 primary: "bd ready (start work)",
                 alt: null
@@ -156,10 +162,14 @@ function getSuggestion(workflowState, trackId, beadsData):
 ┌─────────────────────────────────────────┐
 │ ✓ Beads reviewed                        │
 │                                         │
-│ Reviewed: 12                            │
-│ Updated: 3                              │
+│ Epics reviewed: 3                       │
+│ Issues updated: 8                       │
+│ Ready to start: 2 epics in parallel     │
 │                                         │
-│ → Next: bd ready (start work)           │
+│ → Next: Start epic my-workflow:3-1h6u   │
+│   Or: bd ready (show all ready tasks)   │
+│   Alt: /conductor-implement             │
+│         state-consolidation_20251227    │
 └─────────────────────────────────────────┘
 ```
 
