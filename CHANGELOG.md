@@ -5,13 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.1.0] - 2025-12-27
+
+
+### Added
+
+
+- Implement language-adaptive communication, update agent details, and expand brainstorming techniques.
+- Add new BMB and BMGD agents, update existing agent definitions, and refine documentation.
+- Remove `party-mode-backup` content, introduce `.beads` data management system, and add new link validation scripts.
 
 
 ### Changed
 
 
 - Standardize skill metadata by moving version and triggers into structured fields.
+
+
+### Documentation
+
+
+- Update changelog [skip ci]
+
+
+### Complete
+
+
+- 2 learnings extracted
 
 ## [2.0.0] - 2025-12-26
 
