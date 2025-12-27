@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# /// script
+# dependencies = ["pyyaml"]
+# ///
 """
 Artifact Query - Search archived handoffs using FTS5.
 
@@ -12,21 +15,8 @@ import sqlite3
 import sys
 from pathlib import Path
 
-
-def find_conductor_root() -> Path | None:
-    """Find conductor/ directory by walking up from cwd."""
-    current = Path.cwd()
-    while current != current.parent:
-        conductor = current / "conductor"
-        if conductor.is_dir():
-            return conductor
-        current = current.parent
-    return None
-
-
-def get_db_path(conductor_root: Path) -> Path:
-    """Get path to SQLite database."""
-    return conductor_root / ".cache" / "artifact-index.db"
+sys.path.insert(0, str(Path(__file__).parent))
+from lib import find_conductor_root, get_db_path
 
 
 def search(conn: sqlite3.Connection, query: str, limit: int = 10) -> list[dict]:

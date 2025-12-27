@@ -244,7 +244,7 @@ See [skills/continuity/references/amp-setup.md](skills/continuity/references/amp
 
 ### Data Storage
 
-```
+```text
 conductor/sessions/
 ├── active/LEDGER.md    # Current session state (gitignored)
 └── archive/*.md        # Archived handoffs (committed)

@@ -43,7 +43,7 @@ Since Amp doesn't auto-trigger hooks:
 
 ### 1. Session Start
 
-```
+```bash
 continuity load
 ```
 
@@ -55,7 +55,7 @@ This loads:
 
 After significant milestones:
 
-```
+```bash
 continuity save
 ```
 
@@ -66,7 +66,7 @@ This updates:
 
 ### 3. Session End
 
-```
+```bash
 continuity handoff
 ```
 
@@ -78,7 +78,7 @@ This:
 
 Add this to your Amp startup prompt or first message:
 
-```
+```text
 Remember to run `continuity load` at session start and `continuity handoff` at session end.
 ```
 
@@ -98,7 +98,7 @@ Remember to run `continuity load` at session start and `continuity handoff` at s
 
 Run manually:
 
-```
+```bash
 continuity load
 ```
 
@@ -106,7 +106,7 @@ continuity load
 
 Run manually:
 
-```
+```bash
 continuity save
 ```
 
@@ -114,13 +114,13 @@ continuity save
 
 Check for handoffs:
 
-```
+```bash
 continuity status
 ```
 
 Or search:
 
-```
+```bash
 continuity search <keyword>
 ```
 

@@ -203,7 +203,7 @@ Phased implementation of Continuous-Claude patterns into Maestro workflow.
 
 ## Dependencies Graph
 
-```
+```text
 Epic 1 (Skill & Dirs)
     │
     ├──► Epic 2 (Claude Hooks)

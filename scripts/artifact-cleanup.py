@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# /// script
+# dependencies = ["pyyaml"]
+# ///
 """
 Artifact Cleanup - Remove old handoffs and sync index.
 
@@ -9,33 +12,32 @@ Usage:
 """
 
 import argparse
-import os
 import sqlite3
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-
-def find_conductor_root() -> Path | None:
-    """Find conductor/ directory by walking up from cwd."""
-    current = Path.cwd()
-    while current != current.parent:
-        conductor = current / "conductor"
-        if conductor.is_dir():
-            return conductor
-        current = current.parent
-    return None
+sys.path.insert(0, str(Path(__file__).parent))
+from lib import find_conductor_root, get_db_path, parse_frontmatter
 
 
-def get_db_path(conductor_root: Path) -> Path:
-    """Get path to SQLite database."""
-    return conductor_root / ".cache" / "artifact-index.db"
-
-
-def parse_handoff_date(filename: str) -> datetime | None:
-    """Parse date from handoff filename (YYYY-MM-DD-HH-MM-trigger.md)."""
+def parse_handoff_date(file_path: Path) -> datetime | None:
+    """Parse date from handoff file frontmatter, falling back to filename.
+    
+    Prefers the 'date' field in YAML frontmatter for robustness.
+    Falls back to filename parsing (YYYY-MM-DD-HH-MM-trigger.md) if frontmatter missing.
+    """
     try:
-        parts = filename.replace(".md", "").split("-")
+        content = file_path.read_text(encoding="utf-8", errors="ignore")
+        frontmatter = parse_frontmatter(content)
+        if "date" in frontmatter:
+            date_str = str(frontmatter["date"])
+            return datetime.fromisoformat(date_str.replace("Z", "+00:00")).replace(tzinfo=None)
+    except (OSError, ValueError):
+        pass
+    
+    try:
+        parts = file_path.name.replace(".md", "").split("-")
         if len(parts) >= 5:
             return datetime(
                 int(parts[0]), int(parts[1]), int(parts[2]),
@@ -66,7 +68,7 @@ def cleanup(
     
     for handoff_path in sorted(archive_dir.glob("*.md")):
         filename = handoff_path.name
-        file_date = parse_handoff_date(filename)
+        file_date = parse_handoff_date(handoff_path)
         
         if file_date and file_date < cutoff:
             if not dry_run:
@@ -94,7 +96,8 @@ def sync_index(archive_dir: Path, db_path: Path, dry_run: bool = False) -> list[
     
     conn = sqlite3.connect(db_path)
     
-    for (filename,) in conn.execute("SELECT filename FROM handoffs"):
+    rows = conn.execute("SELECT filename FROM handoffs").fetchall()
+    for (filename,) in rows:
         if not (archive_dir / filename).exists():
             orphaned.append(filename)
             if not dry_run:

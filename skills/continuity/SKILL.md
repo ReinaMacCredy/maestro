@@ -48,7 +48,7 @@ When hooks are installed at `~/.claude/hooks/`:
 
 Load session context from LEDGER.md and last handoff:
 
-```
+```bash
 continuity load
 ```
 
@@ -62,7 +62,7 @@ continuity load
 
 Update LEDGER.md with current state:
 
-```
+```bash
 continuity save
 ```
 
@@ -76,7 +76,7 @@ continuity save
 
 Create handoff file and archive current session:
 
-```
+```bash
 continuity handoff [reason]
 ```
 
@@ -88,7 +88,7 @@ continuity handoff [reason]
 
 Display health check:
 
-```
+```bash
 continuity status
 ```
 
@@ -102,7 +102,7 @@ continuity status
 
 Search archived handoffs:
 
-```
+```bash
 continuity search <query>
 ```
 
@@ -112,7 +112,7 @@ continuity search <query>
 
 ## Data Storage
 
-```
+```text
 conductor/
 ├── sessions/
 │   ├── active/

@@ -76,7 +76,8 @@ commit_parsers = [
     { message = "^chore", skip = true },
     { message = "^ci", skip = true },
     { message = "^build", skip = true },
-    # Skip bot commits with [skip ci]
+    { message = "^docs: update changelog", skip = true },
+    # Skip bot commits with [skip ci] (legacy)
     { message = "\\[skip ci\\]", skip = true },
 ]
 

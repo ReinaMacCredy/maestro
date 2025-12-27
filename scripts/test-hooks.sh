@@ -73,10 +73,10 @@ echo ""
 # Test 1: Version command
 test_start
 output=$(node "$CONTINUITY_JS" --version 2>&1)
-if [[ "$output" == *"v1.0.0"* ]]; then
+if [[ "$output" =~ v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
     pass "Version command outputs version"
 else
-    fail "Version command" "contains v1.0.0" "$output"
+    fail "Version command" "semantic version (vX.Y.Z)" "$output"
 fi
 
 # Test 2: SessionStart without ledger
@@ -144,7 +144,8 @@ fi
 test_start
 setup
 export CLAUDE_TOOL_INPUT='{"file_path": "/path/to/test.ts"}'
-node "$CONTINUITY_JS" PostToolUse 2>&1 || true
+exit_code=0
+node "$CONTINUITY_JS" PostToolUse 2>&1 || exit_code=$?
 
 if [[ -f "${TEST_DIR}/conductor/sessions/active/LEDGER.md" ]]; then
     content=$(cat "${TEST_DIR}/conductor/sessions/active/LEDGER.md")
@@ -153,6 +154,8 @@ if [[ -f "${TEST_DIR}/conductor/sessions/active/LEDGER.md" ]]; then
     else
         fail "PostToolUse" "file path in ledger" "$content"
     fi
+elif [[ $exit_code -ne 0 ]]; then
+    fail "PostToolUse" "hook to execute successfully" "exit code $exit_code"
 else
     fail "PostToolUse" "LEDGER.md created" "file not created"
 fi

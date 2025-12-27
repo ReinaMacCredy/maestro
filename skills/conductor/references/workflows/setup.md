@@ -144,12 +144,12 @@ Set up session state preservation for cross-session context.
    - Create `conductor/.cache/`
    - Add `.gitkeep` files to empty directories
    - Create `conductor/sessions/.gitignore`:
-     ```
+     ```gitignore
      # Session state is personal, not shared
      active/LEDGER.md
      ```
    - Create `conductor/.cache/.gitignore`:
-     ```
+     ```gitignore
      # Cache files are regenerable
      *
      !.gitignore

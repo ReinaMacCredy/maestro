@@ -26,6 +26,82 @@ interface HookOutput {
   };
 }
 
+interface LedgerData {
+  frontmatter: Record<string, string>;
+  modifiedFiles: string[];
+  otherContent: string;
+}
+
+function parseLedger(content: string): LedgerData {
+  const data: LedgerData = {
+    frontmatter: {},
+    modifiedFiles: [],
+    otherContent: "",
+  };
+
+  const fmMatch = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+  if (fmMatch) {
+    for (const line of fmMatch[1].split("\n")) {
+      const colonIdx = line.indexOf(":");
+      if (colonIdx > 0) {
+        const key = line.slice(0, colonIdx).trim();
+        const value = line.slice(colonIdx + 1).trim();
+        data.frontmatter[key] = value;
+      }
+    }
+    content = fmMatch[2];
+  }
+
+  const modifiedMatch = content.match(/\*\*Modified:\*\*\n((?:- `[^`]+`\n?)*)/);
+  if (modifiedMatch) {
+    const fileMatches = modifiedMatch[1].matchAll(/- `([^`]+)`/g);
+    for (const m of fileMatches) {
+      data.modifiedFiles.push(m[1]);
+    }
+    data.otherContent = content.replace(modifiedMatch[0], "{{MODIFIED_PLACEHOLDER}}");
+  } else {
+    data.otherContent = content;
+  }
+
+  return data;
+}
+
+function quoteYamlValue(value: string): string {
+  if (
+    value === "" ||
+    value.includes(":") ||
+    value.includes("#") ||
+    value.includes("\n") ||
+    value.includes("'") ||
+    value.includes('"') ||
+    value.startsWith(" ") ||
+    value.endsWith(" ") ||
+    /^[@`?|>&*!%[\]{}]/.test(value) ||
+    /^(true|false|null|yes|no|on|off)$/i.test(value)
+  ) {
+    return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n")}"`;
+  }
+  return value;
+}
+
+function serializeLedger(data: LedgerData): string {
+  const fmLines = Object.entries(data.frontmatter).map(([k, v]) => `${k}: ${quoteYamlValue(v)}`);
+  const frontmatter = `---\n${fmLines.join("\n")}\n---\n`;
+
+  const modifiedSection = data.modifiedFiles.length > 0
+    ? `**Modified:**\n${data.modifiedFiles.map(f => `- \`${f}\``).join("\n")}\n`
+    : "";
+
+  let body = data.otherContent;
+  if (body.includes("{{MODIFIED_PLACEHOLDER}}")) {
+    body = body.replace("{{MODIFIED_PLACEHOLDER}}", modifiedSection);
+  } else if (modifiedSection) {
+    body += `\n## Working Set\n\n${modifiedSection}`;
+  }
+
+  return frontmatter + body;
+}
+
 function findConductorRoot(): string | null {
   let dir = process.cwd();
   const root = path.parse(dir).root;
@@ -214,42 +290,28 @@ function handlePostToolUse(): void {
   
   ensureDirectories(conductorRoot);
   
-  let content: string;
+  let data: LedgerData;
   if (fs.existsSync(ledgerPath)) {
-    content = fs.readFileSync(ledgerPath, "utf-8");
-    
-    if (content.includes("**Modified:**")) {
-      if (!content.includes(filePath)) {
-        content = content.replace(
-          "**Modified:**",
-          `**Modified:**\n- \`${filePath}\``
-        );
-      }
-    } else {
-      content += `\n\n## Working Set\n\n**Modified:**\n- \`${filePath}\`\n`;
-    }
-    
-    content = content.replace(
-      /updated: .+/,
-      `updated: ${new Date().toISOString()}`
-    );
+    const content = fs.readFileSync(ledgerPath, "utf-8");
+    data = parseLedger(content);
   } else {
-    content = `---
-updated: ${new Date().toISOString()}
-session_id: ${process.env.CLAUDE_SESSION_ID || "unknown"}
-platform: claude
----
-
-# Session Ledger
-
-## Working Set
-
-**Modified:**
-- \`${filePath}\`
-`;
+    data = {
+      frontmatter: {
+        updated: new Date().toISOString(),
+        session_id: process.env.CLAUDE_SESSION_ID || "unknown",
+        platform: "claude",
+      },
+      modifiedFiles: [],
+      otherContent: "\n# Session Ledger\n",
+    };
   }
-  
-  fs.writeFileSync(ledgerPath, content, "utf-8");
+
+  if (!data.modifiedFiles.includes(filePath)) {
+    data.modifiedFiles.push(filePath);
+  }
+  data.frontmatter.updated = new Date().toISOString();
+
+  fs.writeFileSync(ledgerPath, serializeLedger(data), "utf-8");
 }
 
 function handleStop(): void {

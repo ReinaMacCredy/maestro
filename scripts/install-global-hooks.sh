@@ -109,7 +109,12 @@ merge_settings() {
         jq -s '
             .[0] as $existing |
             .[1].hooks as $new_hooks |
-            $existing | .hooks = ((.hooks // {}) * $new_hooks)
+            $existing | .hooks = (
+                ($new_hooks | keys) | reduce .[] as $event (
+                    ($existing.hooks // {});
+                    .[$event] = (((.[$event] // []) + $new_hooks[$event]) | unique)
+                )
+            )
         ' "$CLAUDE_SETTINGS" "$hooks_config" > "$temp_file"
         
         mv "$temp_file" "$CLAUDE_SETTINGS"

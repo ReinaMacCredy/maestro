@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# /// script
+# dependencies = ["pyyaml"]
+# ///
 """
 Artifact Index - Build searchable index of session handoffs.
 
@@ -8,30 +11,14 @@ Usage:
 """
 
 import argparse
-import os
 import re
 import sqlite3
 import sys
 from datetime import datetime
 from pathlib import Path
 
-
-def find_conductor_root() -> Path | None:
-    """Find conductor/ directory by walking up from cwd."""
-    current = Path.cwd()
-    while current != current.parent:
-        conductor = current / "conductor"
-        if conductor.is_dir():
-            return conductor
-        current = current.parent
-    return None
-
-
-def get_db_path(conductor_root: Path) -> Path:
-    """Get path to SQLite database."""
-    cache_dir = conductor_root / ".cache"
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    return cache_dir / "artifact-index.db"
+sys.path.insert(0, str(Path(__file__).parent))
+from lib import find_conductor_root, get_db_path, parse_frontmatter
 
 
 def init_db(db_path: Path) -> sqlite3.Connection:
@@ -81,18 +68,6 @@ def init_db(db_path: Path) -> sqlite3.Connection:
     """)
     conn.commit()
     return conn
-
-
-def parse_frontmatter(content: str) -> dict:
-    """Parse YAML frontmatter from markdown content."""
-    frontmatter = {}
-    match = re.match(r"^---\s*\n(.*?)\n---\s*\n", content, re.DOTALL)
-    if match:
-        for line in match.group(1).split("\n"):
-            if ":" in line:
-                key, value = line.split(":", 1)
-                frontmatter[key.strip()] = value.strip()
-    return frontmatter
 
 
 def extract_summary(content: str) -> str | None:
@@ -168,7 +143,7 @@ def main():
         print("Error: No conductor/ directory found", file=sys.stderr)
         sys.exit(1)
     
-    db_path = get_db_path(conductor_root)
+    db_path = get_db_path(conductor_root, ensure_cache=True)
     archive_dir = conductor_root / "sessions" / "archive"
     
     conn = init_db(db_path)
@@ -182,7 +157,7 @@ def main():
         if db_count == file_count and orphaned == 0:
             print("Status:   OK")
         else:
-            print("Status:   Needs rebuild")
+            print("Status:   Needs rebuild (run without --verify to fix)")
     else:
         indexed, skipped = index_handoffs(conn, archive_dir)
         print(f"Indexed: {indexed} new handoffs")

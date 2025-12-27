@@ -12,7 +12,7 @@ Handoffs are archived session states for cross-session context transfer.
 
 ## Filename Format
 
-```
+```text
 2025-12-27-10-30-manual.md
 2025-12-27-14-45-pre-compact.md
 2025-12-27-18-00-session-end.md
