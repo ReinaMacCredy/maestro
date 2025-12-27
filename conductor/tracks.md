@@ -10,6 +10,10 @@ Master list of all development tracks.
 
 *Completed tracks are archived to `conductor/archive/`.*
 
+## [x] Track: UX Automation & State Machine
+*ID: ux-automation_20251227*
+*Archived: [conductor/archive/ux-automation_20251227/](conductor/archive/ux-automation_20251227/)*
+
 ## [x] Track: Continuity Integration
 *ID: continuity-integration_20251227*
 *Archived: [conductor/archive/continuity-integration_20251227/](conductor/archive/continuity-integration_20251227/)*

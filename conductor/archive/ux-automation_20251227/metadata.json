@@ -3,12 +3,12 @@
   "title": "UX Automation & State Machine",
   "description": "Add workflow state machine to Conductor for smart suggestions and auto-archive",
   "type": "feature",
-  "status": "planned",
+  "status": "complete",
   "priority": "high",
   "depends_on": [],
   "estimated_hours": 7.5,
   "created_at": "2025-12-27T20:00:00Z",
-  "updated_at": "2025-12-27T20:00:00Z",
+  "updated_at": "2025-12-27T21:50:00Z",
   "design_thread": "T-019b5ebb-e559-70f9-a41d-6d9831e5b05b",
   "artifacts": {
     "design": true,
@@ -20,17 +20,18 @@
     "issue_count": 6
   },
   "workflow": {
-    "state": "DONE",
+    "state": "ARCHIVED",
     "history": [
       {"state": "INIT", "at": "2025-12-27T20:00:00Z", "command": "newtrack"},
       {"state": "DESIGNED", "at": "2025-12-27T20:00:00Z", "command": "ds"},
       {"state": "TRACKED", "at": "2025-12-27T20:15:00Z", "command": "newtrack"},
       {"state": "FILED", "at": "2025-12-27T20:26:00Z", "command": "fb"},
       {"state": "IMPLEMENTING", "at": "2025-12-27T21:00:00Z", "command": "implement"},
-      {"state": "DONE", "at": "2025-12-27T21:45:00Z", "command": "implement"}
+      {"state": "DONE", "at": "2025-12-27T21:45:00Z", "command": "implement"},
+      {"state": "ARCHIVED", "at": "2025-12-27T21:50:00Z", "command": "finish"}
     ],
     "branch": null,
-    "archived": false,
+    "archived": true,
     "keep": false
   }
 }
