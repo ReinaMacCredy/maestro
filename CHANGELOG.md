@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.0] - 2025-12-28
+
+
+### Added
+
+
+- LEDGER.log format documentation
+- Add inline grounding triggers at phase transitions
+
+
+### Changed
+
+
+- Move prompts from subagent-dev
+- Move coordination from dispatching
+- Move continuity to ledger/
+- Move doc-sync references
+- Extract TDD content to conductor
+- Extract verification content to conductor
+- Extract finishing-branch to conductor
+- Move discipline rules to AGENTS.md
+- Split skills into cycle/gates, gate/rollback, branch-options/cleanup as plan
+
+
+### Documentation
+
+
+- Sync documentation with skill integration
+
+
+### Fixed
+
+
+- Update writing-skills references to conductor
+- Copy full SKILL.md files instead of extracting summaries
+- Update broken continuity references to conductor/ledger
+- Strip whitespace in shell commands per gemini-code-assist review
+- Convert bold text to proper ### headings (MD036)
+
 ## [3.4.0] - 2025-12-28
 
 
