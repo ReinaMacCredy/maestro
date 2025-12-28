@@ -30,9 +30,24 @@ Instructions for the agent...
 CORE WORKFLOW          DEVELOPMENT              UTILITIES
 ├── conductor          ├── test-driven-dev      ├── codemaps
 ├── design             ├── using-git-worktrees  ├── dispatching-parallel-agents
-│   └── bmad/          └── finishing-branch     └── subagent-driven-dev
+│   ├── bmad/          └── finishing-branch     └── subagent-driven-dev
+│   └── grounding/
 └── beads
 ```
+
+## Grounding System (skills/design/references/grounding/)
+
+```
+grounding/
+├── tiers.md           # Light/Mini/Standard/Full tier definitions
+├── router.md          # Cascading router (repo → web → history)
+├── cache.md           # Session cache (5 min TTL)
+├── sanitization.md    # Query sanitization for external calls
+├── schema.json        # Result schema v1.1
+└── impact-scan-prompt.md  # Subagent template for DELIVER phase
+```
+
+**Enforcement Levels:** Advisory ⚠️ → Gatekeeper 🚫 → Mandatory 🔒
 
 ## BMAD Integration (skills/design/references/bmad/)
 
