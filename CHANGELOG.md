@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.0] - 2025-12-28
+
+
+### Added
+
+
+- Add tiered grounding system with enforcement
+- Refine grounding system by removing emojis from enforcement levels, detailing mandatory skip requirements, and updating grounding sources.
+
+
+### Documentation
+
+
+- Add grounding system to skills codemap
+
 ## [3.3.0] - 2025-12-28
 
 
