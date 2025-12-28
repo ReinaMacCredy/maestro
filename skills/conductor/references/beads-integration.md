@@ -94,10 +94,10 @@ release(path="src/auth.ts")
 
 ---
 
-### Point 4-6: TDD Checkpoints (Opt-in)
+### Point 4-6: TDD Checkpoints (Default)
 
 **Trigger:** Test phase transitions  
-**Conductor Command:** `/conductor-implement --tdd`  
+**Conductor Command:** `/conductor-implement` (TDD enabled by default)  
 **Beads Action:** Checkpoint notes update
 
 | Point | Phase | Notes Format |
@@ -108,7 +108,7 @@ release(path="src/auth.ts")
 
 **Skip Logic:**
 - If no test files detected → skip checkpoints
-- If `--tdd` flag not provided → skip checkpoints
+- If `--no-tdd` flag provided → skip checkpoints
 
 **LEDGER.md Frontmatter Update:**
 ```yaml
@@ -446,7 +446,7 @@ bd ready --json ──► Select task
 bd update <id> --status in_progress
     │
     ▼
-Work on task (with TDD checkpoints if --tdd)
+Work on task (with TDD checkpoints by default)
     │
     ▼
 bd close <id> --reason completed

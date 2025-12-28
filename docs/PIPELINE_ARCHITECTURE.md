@@ -38,7 +38,7 @@ flowchart TB
             READY["bd ready"]
             AUTO_CLAIM["Auto: bd update --status in_progress"]
 
-            subgraph TDD["TDD CYCLE (--tdd flag)"]
+            subgraph TDD["TDD CYCLE (default, --no-tdd to disable)"]
                 RED["RED: Write Failing Test"]
                 GREEN["GREEN: Make It Pass"]
                 REFACTOR["REFACTOR: Clean Up"]
@@ -229,7 +229,7 @@ The facade pattern abstracts all beads operations behind Conductor commands. Zer
 | Preflight | All commands | Mode detect (SA/MA), validate `bd`, create session state |
 | Track Init | `/conductor-newtrack` | Create epic + issues from plan.md, wire dependencies |
 | Claim | `/conductor-implement` | `bd update --status in_progress` |
-| TDD Checkpoints | `--tdd` flag | `bd update --notes "RED/GREEN/REFACTOR..."` |
+| TDD Checkpoints | Default (disable with `--no-tdd`) | `bd update --notes "RED/GREEN/REFACTOR..."` |
 | Close | `/conductor-implement` | `bd close --reason completed\|skipped\|blocked` |
 | Sync | All (session end) | `bd sync` with retry, pending ops recovery |
 | Compact | `/conductor-finish` | AI summaries for closed issues |

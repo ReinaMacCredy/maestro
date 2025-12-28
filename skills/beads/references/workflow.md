@@ -818,7 +818,7 @@ When using Beads with Conductor workflows, the integration is automated through 
 |--------|-------------------|--------------|
 | Session init | `/conductor-implement` | Mode detection, session state |
 | Claim task | `/conductor-implement` | `bd update --status in_progress` |
-| TDD checkpoints | `--tdd` flag | Notes update at each phase |
+| TDD checkpoints | Default (use `--no-tdd` to disable) | Notes update at each phase |
 | Close task | Task completion | `bd close --reason <reason>` |
 | Sync | Session end | `bd sync` |
 | Track init | `/conductor-newtrack` | Create epic + issues |

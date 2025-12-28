@@ -146,9 +146,9 @@ Every Beads-integrated command runs preflight first:
 - `skipped` - Task skipped (not needed)
 - `blocked` - Task blocked, cannot proceed
 
-### TDD Checkpoints (Opt-in)
+### TDD Checkpoints (Default On)
 
-Enable with `--tdd` flag on `/conductor-implement`:
+TDD is enabled by default. Use `--no-tdd` flag to disable:
 
 ```
 RED → GREEN → REFACTOR

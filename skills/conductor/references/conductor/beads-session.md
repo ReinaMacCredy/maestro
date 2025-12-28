@@ -44,7 +44,7 @@ This workflow covers the session lifecycle after preflight completes:
 │        ▼                                                        │
 │   ┌─────────────────────────────────────┐                       │
 │   │  Work on task                       │                       │
-│   │  (with TDD checkpoints if --tdd)    │                       │
+│   │  (with TDD checkpoints by default)   │                       │
 │   └─────────────────────────────────────┘                       │
 │        │                                                        │
 │        ▼                                                        │
@@ -82,7 +82,7 @@ This workflow covers the session lifecycle after preflight completes:
 │        ▼                                                        │
 │   ┌─────────────────────────────────────┐                       │
 │   │  Work on task                       │                       │
-│   │  (with TDD checkpoints if --tdd)    │                       │
+│   │  (with TDD checkpoints by default)   │                       │
 │   └─────────────────────────────────────┘                       │
 │        │                                                        │
 │        ▼                                                        │
@@ -168,9 +168,9 @@ update_ledger_field "bound_bead" "task-1"
 
 ---
 
-## Phase 2: Work with TDD Checkpoints (Opt-in)
+## Phase 2: Work with TDD Checkpoints (Default)
 
-TDD checkpoints are enabled via `--tdd` flag on `/conductor-implement`.
+TDD checkpoints are enabled by default. Use `--no-tdd` to disable.
 
 ### Checkpoint Triggers
 
@@ -212,14 +212,14 @@ update_tdd_phase() {
 ### Skip Logic
 
 Skip TDD checkpoints when:
-- `--tdd` flag not provided
+- `--no-tdd` flag provided
 - No test files detected in workspace
 - Task is documentation-only
 
 ```bash
 should_skip_tdd() {
-  # Check for --tdd flag
-  if [[ "$TDD_FLAG" != "true" ]]; then
+  # Check for --no-tdd flag
+  if [[ "$NO_TDD_FLAG" == "true" ]]; then
     return 0  # Skip
   fi
   

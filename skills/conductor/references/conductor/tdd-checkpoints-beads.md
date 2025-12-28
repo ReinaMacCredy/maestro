@@ -1,12 +1,12 @@
 # TDD Checkpoints Beads Workflow
 
-**Purpose:** Track RED/GREEN/REFACTOR phases in Beads during TDD-driven implementation. Opt-in via `--tdd` flag.
+**Purpose:** Track RED/GREEN/REFACTOR phases in Beads during TDD-driven implementation. Enabled by default. Use `--no-tdd` to disable.
 
 ---
 
 ## Overview
 
-When `--tdd` flag is enabled on `/conductor-implement`, this workflow tracks TDD phase transitions in Beads:
+By default (unless `--no-tdd` is provided) on `/conductor-implement`, this workflow tracks TDD phase transitions in Beads:
 
 1. **RED** - Test written, fails
 2. **GREEN** - Test passes
@@ -22,7 +22,7 @@ Each phase transition updates:
 
 - Session established (preflight complete)
 - Task claimed (`bound_bead` set in LEDGER.md frontmatter)
-- `--tdd` flag provided to `/conductor-implement`
+- `/conductor-implement` called without `--no-tdd` flag
 
 ---
 
@@ -31,16 +31,16 @@ Each phase transition updates:
 ### Command Usage
 
 ```bash
-/conductor-implement <track-id> --tdd
+/conductor-implement <track-id>
 ```
 
 ### Flag Detection
 
 ```bash
-TDD_ENABLED=false
+TDD_ENABLED=true
 for arg in "$@"; do
-  if [[ "$arg" == "--tdd" ]]; then
-    TDD_ENABLED=true
+  if [[ "$arg" == "--no-tdd" ]]; then
+    TDD_ENABLED=false
   fi
 done
 ```
@@ -53,7 +53,7 @@ TDD checkpoints are skipped when:
 
 | Condition | Action |
 |-----------|--------|
-| `--tdd` flag not provided | Skip all checkpoints |
+| `--no-tdd` flag provided | Skip all checkpoints |
 | No test files detected | Skip with warning |
 | Task is documentation-only | Skip silently |
 | Task type is `docs` or `chore` | Skip silently |
@@ -224,7 +224,7 @@ heartbeat: 2025-12-25T12:00:00Z
 ```markdown
 ## During Task Execution
 
-If `--tdd` enabled and not skipped:
+If TDD enabled (default) and not skipped:
 
 1. **RED Phase**
    - Write failing test

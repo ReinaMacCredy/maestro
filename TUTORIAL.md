@@ -271,7 +271,7 @@ When using Conductor commands, **you never need to run manual bd commands** in t
 |-------------------|--------------------------------|
 | All commands | Preflight: checks bd availability, detects mode (SA/MA), creates session state |
 | `/conductor-newtrack` | Creates epic + issues from plan.md, wires dependencies, updates planTasks mapping |
-| `/conductor-implement` | Claims task, tracks TDD checkpoints (if `--tdd`), closes on completion |
+| `/conductor-implement` | Claims task, tracks TDD checkpoints by default (use `--no-tdd` to disable), closes on completion |
 | `/conductor-finish` | Compacts closed issues with AI summaries, cleans up old issues (>150 threshold) |
 | `/conductor-status` | Syncs Conductor state with beads state, detects discrepancies |
 | `/conductor-revise` | Reopens affected beads when spec/plan changes |
@@ -287,7 +287,7 @@ When using Conductor commands, **you never need to run manual bd commands** in t
 ├─ Claim Task
 │   └─ (automatic) bd update <id> --status in_progress
 │
-├─ Work with TDD (if --tdd flag)
+├─ Work with TDD (default, use --no-tdd to disable)
 │   ├─ RED checkpoint: bd update --notes "RED phase..."
 │   ├─ GREEN checkpoint: bd update --notes "GREEN phase..."
 │   └─ REFACTOR checkpoint: bd update --notes "REFACTOR phase..."
@@ -578,7 +578,7 @@ REPEAT  → Next failing test
                     reserve (MA mode only)
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
-│                    TDD (--tdd flag)                          │
+│                    TDD (default, --no-tdd to disable)         │
 │  RED:    test('OAuth credentials are configured')           │
 │  GREEN:  Implement credential loading                        │
 │  REFACTOR: Extract config helper                            │

@@ -163,7 +163,7 @@ bd update <id> --status in_progress
 
 **During Session:**
 - Update heartbeat every 5 minutes (automatic)
-- Use `--tdd` flag for RED/GREEN/REFACTOR checkpoints
+- TDD checkpoints enabled by default (use `--no-tdd` to disable)
 - Close tasks with reason: `completed`, `skipped`, or `blocked`
 
 **Session End:**

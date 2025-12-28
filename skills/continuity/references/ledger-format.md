@@ -42,7 +42,7 @@ heartbeat: 2025-12-27T10:25:00Z
 | `bound_track` | string \| null | Currently active track ID |
 | `bound_bead` | string \| null | Currently claimed bead/task ID |
 | `mode` | `SA` \| `MA` | Session mode (Single-Agent or Multi-Agent) |
-| `tdd_phase` | `RED` \| `GREEN` \| `REFACTOR` \| null | Current TDD phase if using --tdd |
+| `tdd_phase` | `RED` \| `GREEN` \| `REFACTOR` \| null | Current TDD phase (default on, use --no-tdd to disable) |
 | `heartbeat` | ISO 8601 | Last activity timestamp for session liveness |
 
 **Mode locking:** Once set at session start, `mode` should not change mid-session.

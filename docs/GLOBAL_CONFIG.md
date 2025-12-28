@@ -41,8 +41,7 @@ Context-driven development with TDD execution.
 
 **Execution:**
 - `bd ready --json` - Find available work
-- `/conductor-implement` - Execute epic with TDD
-- `/conductor-implement --tdd` - Execute with TDD checkpoints (RED/GREEN/REFACTOR tracking)
+- `/conductor-implement` - Execute with TDD checkpoints by default (use `--no-tdd` to disable)
 - `tdd` - Enter TDD mode (RED-GREEN-REFACTOR)
 - `finish branch` - Finalize and merge/PR
 
@@ -74,7 +73,7 @@ bd update <id> --status in_progress  # Claim
 
 **During Session:**
 - Heartbeat updates every 5 minutes (automatic)
-- TDD checkpoints tracked if `--tdd` flag used
+- TDD checkpoints tracked by default (use `--no-tdd` to disable)
 - Close tasks with reason: `completed`, `skipped`, or `blocked`
 
 **End:**

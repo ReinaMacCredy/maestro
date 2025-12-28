@@ -28,7 +28,7 @@ Contains reusable learnings from completed tracks.
 - `bd update <id> --status in_progress` - Claim task in SA mode
 - `bd close <id> --reason completed|skipped|blocked` - Close with explicit reason
 - `bv --robot-status` - Check Village MCP status (use --robot-* flags to avoid TUI hang)
-- `/conductor-implement --tdd` - Enable RED/GREEN/REFACTOR checkpoint tracking
+- `/conductor-implement` - Execute with TDD checkpoints by default (use `--no-tdd` to disable)
 - `wc -l <file>.csv` - Verify CSV row counts match upstream when syncing data files
 - `curl -s https://raw.githubusercontent.com/.../file.csv` - Sync CSV data directly from upstream repo
 - `uv run scripts/artifact-index.py` - Build/rebuild SQLite FTS5 index of handoffs

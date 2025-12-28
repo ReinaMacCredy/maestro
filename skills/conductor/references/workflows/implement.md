@@ -192,7 +192,7 @@ See [execution-routing.md](../../../dispatching-parallel-agents/references/agent
 4. **Execute Tasks**
    - Iterate through `plan.md` tasks sequentially
    - For each task, defer to `workflow.md` Task Workflow section
-   - Follow TDD cycle if defined:
+   - Follow TDD cycle (default, use `--no-tdd` to disable):
      1. Mark task `[~]` in progress
      2. Write failing tests (Red)
      3. Implement to pass (Green)
@@ -203,9 +203,9 @@ See [execution-routing.md](../../../dispatching-parallel-agents/references/agent
      8. Update `plan.md`: `[~]` → `[x]` + SHA
      9. Commit plan update
 
-5. **TDD Checkpoints (if `--tdd` flag)**
+5. **TDD Checkpoints (default, skip with `--no-tdd`)**
    
-   When `--tdd` is enabled, update bead notes at each phase:
+   Unless `--no-tdd` is provided, update bead notes at each phase:
    
    | Phase | Trigger | Notes Update |
    |-------|---------|--------------|

@@ -236,7 +236,7 @@ done(<taskId>, reason="<reason>")  # Auto-releases reservations
 
 ### updateTddPhase()
 
-Updates the TDD phase for a task (opt-in via `--tdd` flag).
+Updates the TDD phase for a task (enabled by default, disable with `--no-tdd`).
 
 **Input:**
 ```typescript
@@ -403,7 +403,7 @@ The facade reads/writes these state files:
 # Example: Task Execution
 1. Call claimTask(taskId, mode)
 2. Work on task
-3. If --tdd: call updateTddPhase() at each phase
+3. Unless --no-tdd: call updateTddPhase() at each phase
 4. Call closeTask(taskId, reason)
 5. Call syncToGit() at session end
 ```
