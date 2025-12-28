@@ -27,7 +27,7 @@ Grounding prevents designs based on outdated or hallucinated information by:
 | FULL | DISCOVER→DEFINE | Mini | Advisory ⚠️ |
 | FULL | DEFINE→DEVELOP | Mini | Advisory ⚠️ |
 | FULL | DEVELOP→DELIVER | Standard | Gatekeeper 🚫 |
-| FULL | DELIVER→Complete | Full | Mandatory 🔒 |
+| FULL | DELIVER→Complete | Full + Impact Scan | Mandatory 🔒 |
 
 See [grounding/tiers.md](grounding/tiers.md) for detailed tier definitions.
 
@@ -49,6 +49,7 @@ See [grounding/tiers.md](grounding/tiers.md) for detailed tier definitions.
 ### Mandatory 🔒
 - Grounding must run AND pass
 - Blocks if: not run, all fail, or low confidence
+- **No skip allowed**; `MANUAL_VERIFY` requires explicit user confirmation with justification
 - Use: Final delivery gate
 
 ---

@@ -10,7 +10,7 @@ mode: FULL
 
 ## Problem Statement
 
-Grounding trong Design skill hiện tại là optional, reactive, và single-source — dẫn đến thiết kế dựa trên thông tin outdated hoặc hallucinated, chỉ phát hiện lỗi ở giai đoạn cuối (DELIVER) khi đã tốn effort.
+Grounding within the Design skill is currently optional, reactive, and single-source — this leads to designs based on outdated or hallucinated information, with errors only discovered in the final (DELIVER) phase after significant effort has already been spent.
 
 ## Success Criteria
 
@@ -183,14 +183,26 @@ def execute_cascade(sources: list[Source], question: str) -> GroundingResult:
 ### Merge Protocol (Grounding + Impact Scan)
 
 ```python
+CONFIDENCE_LEVELS = ["none", "low", "medium", "high"]
+
+def confidence_rank(level: str) -> int:
+    """Convert confidence level to numeric rank for comparison."""
+    return {"low": 1, "medium": 2, "high": 3}.get(level, 0)
+
+def confidence_from_rank(rank: int) -> str:
+    """Convert numeric rank back to confidence level string."""
+    return CONFIDENCE_LEVELS[rank]
+
 def merge_grounding_and_impact(
     grounding: GroundingResult,
     impact: ImpactScanResult
 ) -> DeliverPhaseResult:
+    combined_rank = min(confidence_rank(grounding.confidence), confidence_rank(impact.confidence))
+    combined_confidence = confidence_from_rank(combined_rank)
     return DeliverPhaseResult(
         grounding=grounding,
         impact=impact,
-        combined_confidence=min(grounding.confidence, impact.confidence),
+        combined_confidence=combined_confidence,
         blocking=grounding.blocking or impact.has_high_risk_files
     )
 ```

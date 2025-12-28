@@ -47,7 +47,7 @@ grounding/
 └── impact-scan-prompt.md  # Subagent template for DELIVER phase
 ```
 
-**Enforcement Levels:** Advisory ⚠️ → Gatekeeper 🚫 → Mandatory 🔒
+**Enforcement Levels:** Advisory (warn) → Gatekeeper (block if missing) → Mandatory (block if fails)
 
 ## BMAD Integration (skills/design/references/bmad/)
 

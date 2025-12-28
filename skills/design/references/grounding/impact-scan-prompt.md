@@ -46,7 +46,7 @@ For each file, determine:
 
 ## Output Format
 
-Return a structured analysis:
+Return a structured analysis with a **Confidence** level (high | medium | low) indicating certainty in the impact assessment.
 
 ### Files Affected
 
@@ -151,19 +151,16 @@ async def full_grounding_with_impact(
     design: Design,
     context: GroundingContext
 ) -> DeliverPhaseResult:
-    """Execute full grounding and impact scan in parallel."""
+    """Execute full grounding first, then impact scan with grounding results."""
     
-    # Run in parallel
-    grounding_task = asyncio.create_task(
-        execute_full_grounding(design, context)
-    )
-    impact_task = asyncio.create_task(
-        run_impact_scan(design.summary, context)
-    )
+    # First: run full grounding
+    grounding_result = await execute_full_grounding(design, context)
     
-    grounding_result, impact_result = await asyncio.gather(
-        grounding_task,
-        impact_task
+    # Then: run impact scan with grounding results
+    impact_result = await run_impact_scan(
+        design.summary,
+        grounding_result,
+        context.project_context
     )
     
     # Merge results
@@ -175,19 +172,30 @@ async def full_grounding_with_impact(
 ## Merge Protocol
 
 ```python
+def confidence_from_rank(rank: int) -> str:
+    """Convert confidence rank back to string enum."""
+    rank_to_confidence = {
+        confidence_rank("low"): "low",
+        confidence_rank("medium"): "medium",
+        confidence_rank("high"): "high",
+    }
+    return rank_to_confidence.get(rank, "low")
+
 def merge_grounding_and_impact(
     grounding: GroundingResult,
     impact: ImpactScanResult
 ) -> DeliverPhaseResult:
     """Merge grounding and impact scan results."""
     
+    combined_rank = min(
+        confidence_rank(grounding.overall_confidence),
+        confidence_rank(impact.confidence)
+    )
+    
     return DeliverPhaseResult(
         grounding=grounding,
         impact=impact,
-        combined_confidence=min(
-            confidence_rank(grounding.overall_confidence),
-            confidence_rank(impact.confidence)
-        ),
+        combined_confidence=confidence_from_rank(combined_rank),
         blocking=(
             grounding.blocking or 
             impact.has_high_risk_files

@@ -23,7 +23,7 @@ SENSITIVE_PATTERNS = [
     (r'AUTH[=:]\s*\S+', '[REDACTED:auth]'),
     
     # Bearer tokens
-    (r'Bearer\s+[A-Za-z0-9\-._~+/]+=*', 'Bearer [REDACTED]'),
+    (r'Bearer\s+[A-Za-z0-9\-._~+/]+={0,2}', 'Bearer [REDACTED]'),
     
     # Base64 encoded secrets (long alphanumeric strings)
     (r'[A-Za-z0-9+/]{40,}={0,2}', '[REDACTED:encoded]'),
@@ -178,6 +178,9 @@ def query_source(
 ## Testing Sanitization
 
 ```python
+# Note: These tests verify sanitization (secret removal) only.
+# Query normalization (case, punctuation) is handled separately in cache.md
+
 def test_sanitization():
     test_cases = [
         ("API_KEY=abc123", "API_KEY=[REDACTED:api-key]"),

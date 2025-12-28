@@ -20,7 +20,7 @@
         "DISCOVER→DEFINE",
         "DEFINE→DEVELOP",
         "DEVELOP→DELIVER",
-        "DELIVER→COMPLETE"
+        "DELIVER→Complete"
       ]
     },
     "grounding_type": {
@@ -188,8 +188,37 @@
     },
     "enforcement_action": {
       "type": "string",
-      "enum": ["PROCEED", "WARN", "RUN_GROUNDING", "MANUAL_VERIFY", "RETRY_GROUNDING"],
+      "enum": ["PROCEED", "WARN", "RUN_GROUNDING", "MANUAL_VERIFY", "RETRY_GROUNDING", "SKIPPED"],
       "description": "The enforcement action taken or required"
+    },
+    "skip_override": {
+      "type": "object",
+      "description": "Details when a mandatory check is skipped with manual verification",
+      "properties": {
+        "skipped": {
+          "type": "boolean",
+          "description": "Whether the check was skipped"
+        },
+        "reason": {
+          "type": "string",
+          "description": "User-provided justification for skipping"
+        },
+        "verification_method": {
+          "type": "string",
+          "enum": ["human_review", "external_tool", "prior_knowledge", "time_constraint"],
+          "description": "How the user verified the decision"
+        },
+        "acknowledged_risks": {
+          "type": "boolean",
+          "description": "Whether the user acknowledged potential risks"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the skip was authorized"
+        }
+      },
+      "required": ["skipped", "reason", "acknowledged_risks"]
     },
     "notes": {
       "type": "string",
@@ -199,6 +228,20 @@
       "type": "string",
       "enum": ["GR-001", "GR-002", "GR-003", "GR-004", "GR-005"],
       "description": "Error code if applicable"
+    },
+    "manual_override": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether user bypassed mandatory grounding with explicit override"
+    },
+    "override_reason": {
+      "type": "string",
+      "description": "User-provided reason for manual override (required if manual_override is true)"
+    },
+    "override_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when override was applied"
     }
   },
   "examples": [

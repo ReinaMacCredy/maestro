@@ -115,17 +115,42 @@ Before finalizing, the system automatically:
 | `MANUAL_VERIFY` | All sources failed |
 | `RETRY_GROUNDING` | Low confidence at DELIVER→Complete |
 
-**If blocked:**
+**If blocked (Mandatory enforcement):**
 ```
 ┌─ GROUNDING REQUIRED ─────────────────────┐
 │ ❌ Cannot proceed: [reason]              │
 │                                          │
-│ Action: [RUN_GROUNDING|MANUAL_VERIFY]    │
+│ Action: RUN_GROUNDING                    │
 │ Run: /ground <design summary>            │
 │                                          │
-│ Or: [S]kip with manual verification      │
+│ [R]un grounding  [C]ancel                │
 └──────────────────────────────────────────┘
 ```
+
+#### Skip with Manual Verification
+
+Skip is only available for non-mandatory enforcement levels:
+
+| Enforcement Level | Skip Behavior |
+|-------------------|---------------|
+| Advisory | Skip logged, proceeds immediately |
+| Gatekeeper | Skip requires reason, logged with warning |
+| Mandatory | **Skip not available** - must run grounding or cancel |
+
+**Skip (when available) is recorded in `skip_override` field:**
+```json
+{
+  "enforcement_action": "SKIPPED",
+  "skip_override": {
+    "skipped": true,
+    "reason": "Verified via external API documentation",
+    "verification_method": "external_tool",
+    "timestamp": "2025-12-28T10:30:00Z"
+  }
+}
+```
+
+> ⚠️ **Audit Trail**: All skipped checks are logged for review. Excessive skips may indicate process issues.
 
 ### Manual Grounding
 

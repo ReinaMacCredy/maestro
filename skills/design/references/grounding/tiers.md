@@ -78,7 +78,11 @@ Complete verification. Blocks on failure or low confidence.
 
 - Grounding must be run AND pass
 - Blocks if: not run, all sources fail, or confidence too low
-- Requires manual override or retry
+- **Skip requires explicit justification**: Unlike advisory/gatekeeper, mandatory checks require:
+  - `reason`: User-provided justification for skipping
+  - `verification_method`: One of `human_review`, `external_tool`, `prior_knowledge`, `time_constraint`
+  - `acknowledged_risks`: Must be `true` to proceed
+- All skips logged in `skip_override` field for audit compliance (see [schema.json](schema.json))
 - Use case: Final delivery gate
 
 ---

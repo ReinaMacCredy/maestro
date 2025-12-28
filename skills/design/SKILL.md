@@ -476,7 +476,7 @@ See [references/grounding.md](references/grounding.md) for complete documentatio
 |-------|--------|----------|
 | Advisory | ⚠️ | Log skip, warn, proceed |
 | Gatekeeper | 🚫 | Block if grounding not run |
-| Mandatory | 🔒 | Block if fails or low confidence |
+| Mandatory | 🔒 | Block if fails or low confidence; no skip allowed |
 
 ### Enforcement Actions
 
@@ -485,12 +485,21 @@ See [references/grounding.md](references/grounding.md) for complete documentatio
 | `PROCEED` | Grounding passed | Continue to next phase |
 | `WARN` | Advisory skip | Show warning, continue |
 | `RUN_GROUNDING` | Gatekeeper/Mandatory skip | Block until grounding runs |
-| `MANUAL_VERIFY` | All sources failed | Block, require manual verification |
+| `MANUAL_VERIFY` | All sources failed | Block, require explicit user confirmation with justification |
 | `RETRY_GROUNDING` | Low confidence at Mandatory | Block, require retry |
+
+> **Note:** `MANUAL_VERIFY` is not a bypass—it requires the user to explicitly confirm independent verification and creates an audit trail.
 
 ### Blocking Behavior
 
-When blocked at DEVELOP→DELIVER or DELIVER→Complete:
+When blocked at DEVELOP→DELIVER or DELIVER→Complete, the UI displays a dynamic message based on the failure type. The reason, action, and available options vary by failure type and enforcement level.
+
+**UI options by enforcement level:**
+- **Advisory**: `[R]un grounding`, `[S]kip with warning`, `[C]ancel`
+- **Gatekeeper**: `[R]un grounding`, `[S]kip with warning` (logs warning), `[C]ancel`
+- **Mandatory**: `[R]un grounding`, `[C]ancel` (no skip option)
+
+**Example blocking messages:**
 
 ```
 ┌─ GROUNDING REQUIRED ─────────────────────┐
@@ -499,9 +508,47 @@ When blocked at DEVELOP→DELIVER or DELIVER→Complete:
 │ Action: RUN_GROUNDING                    │
 │ Run: /ground <design summary>            │
 │                                          │
-│ Or: [S]kip with manual verification      │
+│ [R]un grounding  [C]ancel                │
 └──────────────────────────────────────────┘
 ```
+
+```
+┌─ VERIFICATION REQUIRED ──────────────────┐
+│ ❌ Cannot proceed: All sources failed    │
+│                                          │
+│ Action: MANUAL_VERIFY                    │
+│ Options:                                 │
+│   • Retry with different query           │
+│   • SKIP_GROUNDING: <reason>             │
+│     (Mandatory only - requires reason)   │
+└──────────────────────────────────────────┘
+```
+
+```
+┌─ RETRY REQUIRED ─────────────────────────┐
+│ ⚠️ Cannot proceed: Confidence too low    │
+│   (score: 0.42, required: 0.70)          │
+│                                          │
+│ Action: RETRY_GROUNDING                  │
+│ Suggestion: Refine query or add sources  │
+└──────────────────────────────────────────┘
+```
+
+**Manual Override (Mandatory enforcement only):**
+
+When all automated sources fail, user may override with explicit confirmation:
+
+1. User must type: `SKIP_GROUNDING: <reason>`
+2. Override is logged to `grounding/<transition>.json` with:
+   - `"manual_override": true`
+   - `"override_reason": "<user reason>"`
+   - `"timestamp": "<ISO timestamp>"`
+3. Design document receives warning banner:
+   ```
+   ⚠️ GROUNDING SKIPPED - Manual verification claimed by user
+   ```
+
+This provides an escape hatch for edge cases (network outage, novel domain) while maintaining auditability.
 
 ### Impact Scan at DELIVER
 

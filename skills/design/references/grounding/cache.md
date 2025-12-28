@@ -14,6 +14,10 @@ Prevents duplicate grounding queries within a session.
 ## Cache Structure
 
 ```python
+import hashlib
+import re
+import time
+
 class GroundingCache:
     def __init__(self, ttl_seconds: int = 300):
         self.cache: dict[str, CacheEntry] = {}
@@ -52,13 +56,18 @@ class GroundingCache:
         return hashlib.sha256(normalized.encode()).hexdigest()[:16]
     
     def normalize_query(self, query: str) -> str:
-        """Normalize query for consistent hashing."""
+        """Normalize query for consistent hashing.
+        
+        Preserves code-significant symbols (++, ::, [], <>) to avoid
+        collisions like C++ -> C or std::vector -> stdvector.
+        """
         # Lowercase
         q = query.lower()
         # Remove extra whitespace
         q = ' '.join(q.split())
-        # Remove punctuation (optional - keeps semantic meaning)
-        q = re.sub(r'[^\w\s]', '', q)
+        # Preserve code-significant symbols, only strip trailing punctuation
+        # that doesn't change meaning (e.g., "auth?" -> "auth")
+        q = re.sub(r'[?!.,;:]+$', '', q)
         return q
 ```
 
@@ -67,6 +76,8 @@ class GroundingCache:
 ## Cache Entry
 
 ```python
+from dataclasses import dataclass
+
 @dataclass
 class CacheEntry:
     result: GroundingResult
@@ -118,13 +129,16 @@ def should_invalidate(entry: CacheEntry, context: GroundingContext) -> bool:
 
 ## Cache Key Generation
 
-Query normalization ensures similar queries hit the same cache entry:
+Query normalization ensures similar queries hit the same cache entry while preserving code semantics:
 
 | Original Query | Normalized | Hash |
 |----------------|------------|------|
 | "How does auth work?" | "how does auth work" | `a1b2c3...` |
 | "how does AUTH work" | "how does auth work" | `a1b2c3...` |
 | "How does auth work??" | "how does auth work" | `a1b2c3...` |
+| "C++ templates" | "c++ templates" | `d4e5f6...` |
+| "std::vector usage" | "std::vector usage" | `g7h8i9...` |
+| "array[] syntax" | "array[] syntax" | `j0k1l2...` |
 
 ---
 
@@ -133,7 +147,11 @@ Query normalization ensures similar queries hit the same cache entry:
 Bypass cache when:
 
 ```python
-def should_bypass_cache(query: str, context: GroundingContext) -> bool:
+def should_bypass_cache(
+    query: str,
+    context: GroundingContext,
+    cache: GroundingCache
+) -> bool:
     """Determine if cache should be bypassed."""
     
     # User requested fresh
@@ -176,9 +194,13 @@ class CacheMetrics:
 def grounding_with_cache(
     query: str, 
     tier: str, 
-    cache: GroundingCache
+    cache: GroundingCache,
+    context: GroundingContext
 ) -> GroundingResult:
-    """Execute grounding with cache check."""
+    """Execute grounding with cache check.
+    
+    Uses route_grounding() and execute_cascade() from router.md.
+    """
     
     # Check cache first
     cached = cache.get(query)

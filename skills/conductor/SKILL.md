@@ -84,16 +84,16 @@ Grounding is **automatic** at phase transitions with tiered intensity:
 
 | Mode | Phase Transition | Tier | Enforcement |
 |------|------------------|------|-------------|
-| SPEED | Any | Light | Advisory ⚠️ |
-| FULL | DISCOVER→DEFINE | Mini | Advisory ⚠️ |
-| FULL | DEFINE→DEVELOP | Mini | Advisory ⚠️ |
-| FULL | DEVELOP→DELIVER | Standard | Gatekeeper 🚫 |
-| FULL | DELIVER→Complete | Full + Impact Scan | Mandatory 🔒 |
+| SPEED | Any | Light | Advisory |
+| FULL | DISCOVER→DEFINE | Mini | Advisory |
+| FULL | DEFINE→DEVELOP | Mini | Advisory |
+| FULL | DEVELOP→DELIVER | Standard | Gatekeeper |
+| FULL | DELIVER→Complete | Full + Impact Scan | Mandatory |
 
 **Enforcement levels:**
-- **Advisory ⚠️** - Log skip, warn, proceed
-- **Gatekeeper 🚫** - Block if grounding not run
-- **Mandatory 🔒** - Block if fails or low confidence
+- **Advisory** - Log skip, warn, proceed
+- **Gatekeeper** - Block if grounding not run
+- **Mandatory** - Block if fails or low confidence
 
 **Documentation:**
 - [Grounding overview](../design/references/grounding.md)
