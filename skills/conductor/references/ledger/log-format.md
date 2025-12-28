@@ -49,7 +49,7 @@ echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) | EVENT | DATA" >> LEDGER.log
 
 ```bash
 # Find completed issues
-grep "COMPLETED" LEDGER.log | cut -d'|' -f3
+grep "COMPLETED" LEDGER.log | cut -d'|' -f3 | tr -d ' '
 
 # Find current session
 tail -n1 LEDGER.log | grep SESSION_START

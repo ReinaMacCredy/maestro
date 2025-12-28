@@ -112,10 +112,9 @@ ds                                 # 2. Design session → design.md
 ```bash
 # Start
 bd ready --json                    # What's available?
-/conductor-implement               # Execute next task (auto-claims from beads)
+/conductor-implement               # Execute next task (auto-claims, TDD enabled by default)
 
-# Work (with TDD)
-tdd                                # Enter TDD mode
+# TDD is automatic in /conductor-implement
 # RED → GREEN → REFACTOR
 
 # Session ends automatically tracked via beads
@@ -140,12 +139,13 @@ trace                              # Root cause tracing (external: superpowers)
 
 ## The Skills
 
-| Category          | Skills                                                                                                        |
-| ----------------- | ------------------------------------------------------------------------------------------------------------- |
-| **Core Workflow** | conductor, design (Double Diamond + Party Mode), beads                                                        |
-| **Development**   | test-driven-development, using-git-worktrees, finishing-a-development-branch                                  |
-| **Utilities**     | dispatching-parallel-agents, subagent-driven-development, continuity                                          |
-| **Meta**          | verification-before-completion, writing-skills, sharing-skills                                                |
+| Category          | Skills                                                                                 |
+| ----------------- | -------------------------------------------------------------------------------------- |
+| **Core Workflow** | conductor, design (Double Diamond + Party Mode + Grounding), beads                     |
+| **Development**   | using-git-worktrees                                                                    |
+| **Meta**          | writing-skills, sharing-skills                                                         |
+
+> **Note:** v3.0 consolidated 15 → 6 skills. TDD, verification, continuity, doc-sync, and parallel dispatch are now in `conductor/references/`.
 
 ---
 
@@ -336,9 +336,9 @@ bd status                   # Check project status
 
 ### TDD (Execution)
 
-**What it does**: RED-GREEN-REFACTOR methodology for safe implementation.
+**What it does**: RED-GREEN-REFACTOR methodology for safe implementation (integrated into conductor).
 
-**Trigger**: Say `tdd` to enter TDD mode.
+**Trigger**: TDD is auto-enabled in `/conductor-implement`. Use `--no-tdd` to disable.
 
 **The cycle**:
 
@@ -544,13 +544,13 @@ maestro/
 ├── SETUP_GUIDE.md         # Installation guide
 ├── TUTORIAL.md            # Complete workflow guide
 ├── AGENTS.md              # Agent instructions
-├── skills/                # Skill directories (conductor, design, beads, tdd, etc.)
-│   ├── conductor/         # Planning methodology with references/
-│   ├── design/            # Design sessions (ds trigger) with bmad/
+├── skills/                # 6 skill directories
+│   ├── conductor/         # Planning + execution (TDD, verification, doc-sync, etc. in references/)
+│   ├── design/            # Design sessions (ds trigger) with bmad/ and grounding/
 │   ├── beads/             # Issue tracking (fb, rb triggers)
-│   ├── continuity/        # Session state preservation (replaces session-compaction)
-│   ├── test-driven-development/
-│   └── ...                # See SETUP_GUIDE.md for full list
+│   ├── using-git-worktrees/  # Isolated dev environments
+│   ├── writing-skills/    # Skill creation guide
+│   └── sharing-skills/    # Upstream contribution
 ├── agents/                # Agent definitions
 ├── hooks/                 # Lifecycle hooks
 ├── lib/                   # Shared utilities
@@ -568,7 +568,7 @@ maestro/
 | Skills not loading            | Run `/plugin list` to verify installation                          |
 | `bd: command not found`       | Install via Agent Mail installer (see SETUP_GUIDE.md)              |
 | `bv` hangs                    | You forgot `--robot-*` flag. Kill and restart with flag            |
-| Agent ignores workflow        | Use trigger phrase explicitly: `tdd`, `debug`, `/conductor-design` |
+| Agent ignores workflow        | Use trigger phrase explicitly: `debug`, `/conductor-design`    |
 | Tests pass immediately        | You wrote code first. Delete it. Start with failing test.          |
 | Context compacted, lost state | Run `bd show <issue-id>` — notes field has recovery context        |
 | Plan seems incomplete         | Use `rb` (review beads) to check and refine issues                 |

@@ -68,7 +68,7 @@ Resume with bd-44 (first uncompleted).
 
 ```bash
 # Last claimed but not completed
-last_claimed=$(grep "CLAIMED" LEDGER.log | tail -1 | awk -F'|' '{print $3}')
+last_claimed=$(grep "CLAIMED" LEDGER.log | tail -1 | awk -F'|' '{print $3}' | tr -d ' ')
 is_completed=$(grep "COMPLETED.*$last_claimed" LEDGER.log)
 
 if [ -z "$is_completed" ]; then
@@ -84,7 +84,7 @@ If crashed during TDD cycle:
 
 ```bash
 # Find last TDD phase
-last_phase=$(grep "TDD_PHASE.*bd-42" LEDGER.log | tail -1 | awk -F'|' '{print $3}')
+last_phase=$(grep "TDD_PHASE.*bd-42" LEDGER.log | tail -1 | awk -F'|' '{print $3}' | tr -d ' ')
 
 case $last_phase in
     RED) echo "Resume: write implementation" ;;
