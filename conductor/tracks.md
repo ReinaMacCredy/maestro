@@ -4,6 +4,12 @@ Master list of all development tracks.
 
 ## Active Tracks
 
+## [ ] Track: Grounding Trigger Implementation
+*ID: grounding-v2_20251228*
+*Link: [spec](conductor/tracks/grounding-v2_20251228/spec.md) | [plan](conductor/tracks/grounding-v2_20251228/plan.md)*
+
+Add explicit grounding execution instructions to design skill phase transitions.
+
 ---
 
 ## Completed Tracks

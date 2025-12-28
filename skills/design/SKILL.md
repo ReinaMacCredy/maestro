@@ -336,6 +336,31 @@ For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../../d
 - One question at a time, prefer multiple choice
 - **Exit:** Problem clearly articulated, users identified
 
+#### Transition: DISCOVER → DEFINE
+
+**GROUNDING EXECUTION (Mini, Advisory ⚠️):**
+
+1. **Run:** `finder` with query: "similar problems to [problem statement]"
+2. **Calculate confidence:**
+   - 3+ matches → HIGH
+   - 1-3 matches → MEDIUM
+   - 0 matches → LOW
+   - Timeout (5s) → MEDIUM + warning
+   - Error → LOW
+3. **Display:**
+   ```
+   ┌─ GROUNDING (Mini) ──────────────────────┐
+   │ Query: [problem summary]                │
+   │ Found: [N] matches                      │
+   │ Confidence: [HIGH/MEDIUM/LOW]           │
+   │ Status: ✓ Complete                      │
+   └─────────────────────────────────────────┘
+   ```
+4. **On skip:** Log warning, display `⚠️ Grounding skipped`, proceed (Advisory allows skip)
+5. **Proceed** to A/P/C checkpoint
+
+---
+
 ### Phase 2: DEFINE (Converge)
 
 **Goal:** Synthesize discoveries into a clear problem statement.
@@ -345,6 +370,33 @@ For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../../d
 - Bound the scope (in/out)
 - Present 2-3 approaches with trade-offs
 - **Exit:** Problem statement agreed, approach selected
+
+#### Transition: DEFINE → DEVELOP
+
+**GROUNDING EXECUTION (Mini, Advisory ⚠️):**
+
+1. **Run:**
+   - `finder` with query: "existing patterns for [selected approach]"
+   - `Grep` for key terms from problem statement
+2. **Calculate confidence:**
+   - 3+ matches → HIGH
+   - 1-3 matches → MEDIUM
+   - 0 matches → LOW
+   - Timeout (5s) → MEDIUM + warning
+   - Error → LOW
+3. **Display:**
+   ```
+   ┌─ GROUNDING (Mini) ──────────────────────┐
+   │ Query: [approach summary]               │
+   │ Found: [N] matches                      │
+   │ Confidence: [HIGH/MEDIUM/LOW]           │
+   │ Status: ✓ Complete                      │
+   └─────────────────────────────────────────┘
+   ```
+4. **On skip:** Log warning, display `⚠️ Grounding skipped`, proceed (Advisory allows skip)
+5. **Proceed** to A/P/C checkpoint
+
+---
 
 ### Phase 3: DEVELOP (Diverge)
 
@@ -356,6 +408,43 @@ For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../../d
 - Be ready to revise earlier sections
 - **Exit:** Architecture understood, components defined
 
+#### Transition: DEVELOP → DELIVER
+
+**GROUNDING EXECUTION (Standard, Gatekeeper 🚫):**
+
+1. **Run in sequence:**
+   - `Grep` for patterns mentioned in design
+   - `finder` for affected files
+   - `web_search` if external APIs/libraries referenced (skip if none)
+2. **Timeout:** 10s soft, 15s hard
+3. **Calculate confidence:**
+   - 3+ matches → HIGH
+   - 1-3 matches → MEDIUM
+   - 0 matches → LOW
+   - Timeout → MEDIUM (degraded) + warning
+   - Error → LOW
+4. **Display:**
+   ```
+   ┌─ GROUNDING (Standard) ──────────────────┐
+   │ Sources: repo ✓ | web ✓/⊘              │
+   │ Found: [N] matches                      │
+   │ Confidence: [HIGH/MEDIUM/LOW]           │
+   │ Status: ✓ Complete                      │
+   └─────────────────────────────────────────┘
+   ```
+5. **HALT if not run:**
+   ```
+   ┌─ GROUNDING REQUIRED ────────────────────┐
+   │ 🚫 Cannot proceed without grounding     │
+   │                                         │
+   │ [R]un grounding  [S]kip with warning    │
+   └─────────────────────────────────────────┘
+   ```
+6. **On skip:** Display warning banner, log for audit, proceed
+7. **Proceed** to A/P/C checkpoint only after grounding complete or user skips
+
+---
+
 ### Phase 4: DELIVER (Converge)
 
 **Goal:** Finalize the design and prepare for implementation.
@@ -364,6 +453,48 @@ For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../../d
 - Ensure acceptance criteria are testable
 - Document risks and open questions
 - **Exit:** Design verified and approved
+
+#### Transition: DELIVER → Complete
+
+**GROUNDING EXECUTION (Full + Impact Scan, Mandatory 🔒):**
+
+1. **Run in parallel:**
+   - **Full cascade:** repo (`Grep`, `finder`) → web (`web_search`) → history (`find_thread`)
+   - **Impact scan:** `finder` for all files mentioned in design
+2. **Timeout:** 45s soft, 60s hard
+3. **Calculate confidence:**
+   - 3+ matches from cascade → HIGH
+   - 1-3 matches → MEDIUM
+   - 0 matches or all sources failed → LOW
+   - Timeout → MEDIUM (degraded) + warning
+4. **Display:**
+   ```
+   ┌─ GROUNDING (Full) ──────────────────────┐
+   │ Sources: repo ✓ | web ✓ | history ✓    │
+   │ Impact: [N] files identified            │
+   │ Confidence: [HIGH/MEDIUM/LOW]           │
+   │ Status: ✓ Verified                      │
+   └─────────────────────────────────────────┘
+   ```
+5. **BLOCK if:**
+   - Grounding not run
+   - Confidence = LOW
+   - All sources failed
+   
+   Display:
+   ```
+   ┌─ GROUNDING REQUIRED ────────────────────┐
+   │ 🔒 Cannot proceed: [reason]             │
+   │                                         │
+   │ To override, type:                      │
+   │ SKIP_GROUNDING: <your justification>    │
+   └─────────────────────────────────────────┘
+   ```
+6. **On empty justification:** Reject, require actual reason
+7. **On valid skip:** Log override with reason, add warning banner to design, proceed
+8. **Proceed** to design approval only after grounding verified or user provides justification
+
+---
 
 ## A/P/C Checkpoints
 

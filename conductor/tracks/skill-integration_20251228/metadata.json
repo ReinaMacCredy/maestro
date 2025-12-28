@@ -1,0 +1,24 @@
+{
+  "id": "skill-integration_20251228",
+  "title": "Skill Integration - Merge 15 to 6 skills",
+  "type": "feature",
+  "status": "active",
+  "created": "2025-12-28",
+  "thread_ids": [],
+  "generation": {
+    "design": "complete",
+    "spec": "complete",
+    "plan": "complete",
+    "beads": "pending"
+  },
+  "workflow": {
+    "state": "PLANNING_COMPLETE",
+    "current_phase": null,
+    "current_task": null
+  },
+  "beads": {
+    "epic_id": "my-workflow:3-keva",
+    "filed": true,
+    "issue_count": 16
+  }
+}

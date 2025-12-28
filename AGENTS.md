@@ -312,10 +312,14 @@ These thoughts mean STOP—you're rationalizing:
 | "This is just a simple question" | Questions are tasks. Check for skills. |
 | "I need more context first" | Skill check comes BEFORE clarifying questions. |
 | "Let me explore the codebase first" | Skills tell you HOW to explore. Check first. |
+| "I can check git/files quickly" | Files lack conversation context. Check for skills. |
+| "Let me gather information first" | Skills tell you HOW to gather information. |
 | "This doesn't need a formal skill" | If a skill exists, use it. |
 | "I remember this skill" | Skills evolve. Read current version. |
+| "This doesn't count as a task" | Action = task. Check for skills. |
 | "The skill is overkill" | Simple things become complex. Use it. |
 | "I'll just do this one thing first" | Check BEFORE doing anything. |
+| "This feels productive" | Undisciplined action wastes time. Skills prevent this. |
 
 ### Skill Priority
 
@@ -324,9 +328,15 @@ When multiple skills could apply:
 1. **Process skills first** (`/conductor-design`) - determine HOW to approach
 2. **Implementation skills second** (`frontend-design`, `mcp-builder`) - guide execution
 
+"Let's build X" → /conductor-design first, then implementation skills.
+
 ### Skill Types
 
 - **Rigid** (TDD): Follow exactly. Don't adapt away discipline.
 - **Flexible** (patterns): Adapt principles to context.
 
 The skill itself tells you which.
+
+### User Instructions
+
+Instructions say WHAT, not HOW. "Add X" or "Fix Y" doesn't mean skip workflows.
