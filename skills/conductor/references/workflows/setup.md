@@ -161,7 +161,7 @@ Set up session state preservation for cross-session context.
      - If not, prompt: "Run `./scripts/install-global-hooks.sh` for auto context loading"
    - **Amp Code**:
      - Check if `~/.config/amp/AGENTS.md` exists
-     - Prompt: "Add Continuity Protocol to ~/.config/amp/AGENTS.md (see skills/continuity/references/amp-setup.md)"
+     - Prompt: "Add Continuity Protocol to ~/.config/amp/AGENTS.md (see skills/conductor/references/ledger/amp-setup.md)"
    - **Codex**:
      - Display: "Use `continuity load/save/handoff` commands manually"
 

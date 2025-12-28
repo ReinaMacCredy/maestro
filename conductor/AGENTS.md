@@ -45,6 +45,8 @@ Contains reusable learnings from completed tracks.
 - `/doc-sync --force` - Apply all doc changes without prompts
 - `sed -n '/^---$/,/^---$/p' "$FILE" | grep '^field:' | cut -d' ' -f2` - Extract YAML frontmatter field value
 - `bd close id1 id2 id3 --reason completed` - Close multiple beads at once
+- `touch conductor/sessions/active/LEDGER.log` - Initialize append-only session log (gitignored)
+- `ls skills/conductor/references/` - Verify reference structure after migration
 
 ## Gotchas
 
@@ -93,6 +95,7 @@ Contains reusable learnings from completed tracks.
 - Grounding: Network failure → graceful fallback to repo-only mode
 - Grounding: Conflict resolution → auto-prefer highest confidence BUT show conflict summary in output
 - Grounding: Implementation order matters → router depends on tiers, enforcement depends on grounding result
+- Extraction fidelity: Initial skill extraction may lose philosophical content (e.g., "Why Order Matters"). Fix: copy full SKILL.md first, then split.
 
 ## Patterns
 
@@ -118,3 +121,4 @@ Contains reusable learnings from completed tracks.
 - **Cascading Router:** REPO → WEB → HISTORY, stop early on high confidence
 - **Enforcement Levels:** Advisory (log) → Gatekeeper (block if missing) → Mandatory (block if fails/low confidence)
 - **Impact Scan Subagent:** Parallel execution with full grounding at DELIVER phase
+- **Inline Grounding Triggers:** Explicit execution steps at phase transitions (finder/Grep/web_search with confidence calculation and enforcement behavior)

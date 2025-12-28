@@ -12,24 +12,27 @@ AI workflow plugin for structured development: planning (Conductor), issue track
 | `/conductor-finish` | Complete track, extract learnings, archive |
 | `/doc-sync` | Sync documentation with code changes |
 | `fb` / `rb` | File/review beads from plan |
-| `skills/dispatching-parallel-agents/` | Multi-agent file coordination (optional) |
 
 ## Directory Structure
 
 ```
 maestro/
-├── skills/           # 15 skill directories (SKILL.md + references/)
+├── skills/           # 6 skill directories (SKILL.md + references/)
 │   ├── beads/references/         # Issue tracking workflows
-│   ├── conductor/references/     # Planning workflows + schemas
-│   │   ├── conductor/            # Beads integration workflows
-│   │   ├── workflows/            # setup, implement, finish, etc.
-│   │   └── schemas/              # JSON schemas
+│   ├── conductor/references/     # Planning + execution (absorbed 9 skills)
+│   │   ├── prompts/              # Agent prompts
+│   │   ├── coordination/         # Multi-agent coordination
+│   │   ├── tdd/                  # TDD cycle + gates
+│   │   ├── verification/         # Pre-completion gates
+│   │   ├── doc-sync/             # Doc sync workflows
+│   │   ├── ledger/               # Session state (LEDGER.log)
+│   │   └── finish/               # Branch completion
 │   ├── design/references/        # Double Diamond + Party Mode
-│   │   └── bmad/                 # Multi-agent design personas
-│   ├── doc-sync/references/      # Documentation sync with code changes
-│   ├── dispatching-parallel-agents/references/
-│   │   └── agent-coordination/   # Multi-agent patterns
-│   └── continuity/            # Session state preservation
+│   │   ├── bmad/                 # Multi-agent design personas
+│   │   └── grounding/            # Tiered grounding system
+│   ├── using-git-worktrees/      # Isolated dev environments
+│   ├── writing-skills/           # Skill creation guide
+│   └── sharing-skills/           # Upstream contribution
 ├── conductor/        # Project context + tracks
 │   ├── product.md, tech-stack.md, workflow.md
 │   ├── CODEMAPS/     # Architecture documentation (this directory)
@@ -69,11 +72,12 @@ Zero manual `bd` commands in the happy path:
 
 | Skill | Trigger | Role |
 |-------|---------|------|
-| `conductor` | `/conductor-*` | Planning methodology + CODEMAPS |
-| `design` | `ds` | Double Diamond + Party Mode |
+| `conductor` | `/conductor-*` | Planning + execution (absorbed TDD, verification, continuity) |
+| `design` | `ds` | Double Diamond + Party Mode + Grounding |
 | `beads` | `bd`, `fb`, `rb` | Issue tracking, file/review beads |
-| `continuity` | `continuity load/save/handoff` | Session state preservation |
-| `test-driven-development` | `tdd` | RED-GREEN-REFACTOR |
+| `using-git-worktrees` | - | Isolated dev environments |
+| `writing-skills` | - | Skill creation guide |
+| `sharing-skills` | - | Upstream contribution |
 
 ## Common Tasks
 
@@ -86,7 +90,7 @@ Zero manual `bd` commands in the happy path:
 | Add a skill | Create `skills/<name>/SKILL.md` with frontmatter + `references/` |
 | Add workflow docs | Add to `skills/<skill>/references/*.md` |
 | Regenerate CODEMAPS | `/conductor-finish` (Phase 6: CODEMAPS Regeneration) |
-| Coordinate parallel agents | See `skills/dispatching-parallel-agents/references/agent-coordination/` (optional, requires agent_mail MCP) |
+| Coordinate parallel agents | See `skills/conductor/references/coordination/` |
 
 ## Gotchas
 

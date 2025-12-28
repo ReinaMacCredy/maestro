@@ -130,6 +130,26 @@ If issues occur, revert to v1.x:
 git checkout v1.11.0
 ```
 
+---
+
+## Note: v3.0 Skill Integration (2025-12-28)
+
+After v2.0, a further consolidation merged 9 skills into conductor:
+
+| v2.0 Path | v3.0 Path |
+|-----------|-----------|
+| `skills/dispatching-parallel-agents/references/agent-coordination/*` | `skills/conductor/references/coordination/*` |
+| `skills/continuity/*` | `skills/conductor/references/ledger/*` |
+| `skills/test-driven-development/*` | `skills/conductor/references/tdd/*` |
+| `skills/verification-before-completion/*` | `skills/conductor/references/verification/*` |
+| `skills/finishing-a-development-branch/*` | `skills/conductor/references/finish/*` |
+| `skills/doc-sync/*` | `skills/conductor/references/doc-sync/*` |
+| `skills/subagent-driven-development/*` | `skills/conductor/references/prompts/*` |
+| `skills/using-superpowers/*` | `AGENTS.md` (discipline rules) |
+| `skills/create-plan/*` | Deleted (absorbed into conductor) |
+
+Final skill count: 6 (conductor, design, beads, using-git-worktrees, writing-skills, sharing-skills)
+
 ## Questions
 
 Open an issue at https://github.com/ReinaMacCredy/maestro/issues

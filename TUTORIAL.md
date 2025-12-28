@@ -51,7 +51,7 @@ Before diving in, understand these principles:
 | **Amnesia**                  | Agent forgets tasks between sessions    | `beads` — persistent issue tracking                |
 | **Fuzzy planning**           | Vague discussions, no written spec      | `conductor` — structured specs + plans             |
 | **No visibility**            | Can't see dependencies or blockers      | `beads` — dependency-aware graph                   |
-| **Tests as afterthought**    | Tests written after code, prove nothing | `test-driven-development` — RED-GREEN-REFACTOR     |
+| **Tests as afterthought**    | Tests written after code, prove nothing | `conductor` — TDD is auto-enabled in `/conductor-implement` |
 | **Messy handoffs**           | Can't resume where you left off         | `beads` notes — session-surviving context          |
 | **Conflicts in multi-agent** | Multiple agents edit same files         | `beads` + Village — file locking and task claiming |
 
@@ -1022,11 +1022,10 @@ Beyond the core workflow, Maestro includes specialist skills for specific situat
 
 | Skill                            | Trigger    | When to Use                                                        |
 | -------------------------------- | ---------- | ------------------------------------------------------------------ |
-| `test-driven-development`        | `tdd`      | Every feature and bugfix. RED-GREEN-REFACTOR, no exceptions.       |
+| `conductor`                      | `/conductor-implement --no-tdd` | TDD is auto-enabled by default. Use `--no-tdd` to disable. |
 | `using-git-worktrees`            | —          | Starting feature work that needs isolation from current workspace. |
-| `finishing-a-development-branch` | —          | Implementation complete, tests pass, ready to integrate.           |
-| `subagent-driven-development`    | —          | Coordinating multiple subagents on independent tasks.              |
-| `dispatching-parallel-agents`    | `dispatch` | 2+ independent tasks that can run in parallel.                     |
+
+> **Note:** v3.0 consolidated TDD, finishing-branch, subagent-dev, and dispatching into `conductor/references/`.
 
 ---
 

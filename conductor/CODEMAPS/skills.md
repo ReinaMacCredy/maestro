@@ -28,12 +28,28 @@ Instructions for the agent...
 
 ```
 CORE WORKFLOW          DEVELOPMENT              UTILITIES
-├── conductor          ├── test-driven-dev      ├── codemaps
-├── design             ├── using-git-worktrees  ├── dispatching-parallel-agents
-│   ├── bmad/          └── finishing-branch     └── subagent-driven-dev
-│   └── grounding/
+├── conductor          ├── using-git-worktrees  ├── sharing-skills
+│   ├── references/    └── writing-skills       
+│   │   ├── prompts/          
+│   │   ├── coordination/     
+│   │   ├── tdd/              
+│   │   ├── verification/     
+│   │   ├── doc-sync/         
+│   │   ├── ledger/           
+│   │   └── finish/           
+├── design             
+│   ├── bmad/          
+│   └── grounding/     
 └── beads
 ```
+
+**6 Core Skills (after skill-integration_20251228):**
+- **conductor**: Planning + execution (absorbed 9 skills into references/)
+- **design**: Double Diamond + Party Mode + Grounding
+- **beads**: Issue tracking + persistent memory
+- **using-git-worktrees**: Isolated development environments
+- **writing-skills**: Skill creation guide
+- **sharing-skills**: Upstream contribution
 
 ## Grounding System (skills/design/references/grounding/)
 
