@@ -67,7 +67,7 @@ Check for `conductor/` directory with core files:
 - `tech-stack.md` - Technical constraints
 - `workflow.md` - Development standards
 
-If missing, suggest: `Run /conductor-setup first for full context.`
+If missing: Display `⚠️ Conductor not set up. Run /conductor-setup first.` and **HALT**.
 
 ### 3. Complexity Scoring (Design Routing)
 
