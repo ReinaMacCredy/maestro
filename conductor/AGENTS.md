@@ -118,3 +118,4 @@ Contains reusable learnings from completed tracks.
 - **Cascading Router:** REPO → WEB → HISTORY, stop early on high confidence
 - **Enforcement Levels:** Advisory (log) → Gatekeeper (block if missing) → Mandatory (block if fails/low confidence)
 - **Impact Scan Subagent:** Parallel execution with full grounding at DELIVER phase
+- **Inline Grounding Triggers:** Explicit execution steps at phase transitions (finder/Grep/web_search with confidence calculation and enforcement behavior)

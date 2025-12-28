@@ -575,6 +575,38 @@ Grounding is **automatic** at phase transitions with tiered intensity based on m
 - **Standard:** Cascade (repo → web → history), 10s - full verification
 - **Full:** All sources + Impact Scan subagent, 45s - complete validation
 
+### Grounding State Tracking
+
+Track grounding completion across phases in session memory:
+
+```
+grounding_state = {
+    "DISCOVER→DEFINE": { "completed": true, "confidence": "HIGH", "timestamp": "..." },
+    "DEFINE→DEVELOP": { "completed": true, "confidence": "MEDIUM", "timestamp": "..." },
+    "DEVELOP→DELIVER": null,  // Not yet reached
+    "DELIVER→Complete": null
+}
+```
+
+**Update state after each grounding execution:**
+1. Set `completed: true`
+2. Record confidence level (HIGH/MEDIUM/LOW)
+3. Store timestamp
+
+**Display state block at each transition:**
+```
+┌─ GROUNDING STATE ──────────────────────────┐
+│ ✓ DISCOVER→DEFINE: HIGH                    │
+│ ✓ DEFINE→DEVELOP: MEDIUM                   │
+│ ○ DEVELOP→DELIVER: pending                 │
+│ ○ DELIVER→Complete: pending                │
+└────────────────────────────────────────────┘
+```
+
+**On loop-back ("revisit [PHASE]"):**
+1. Reset grounding state for that transition and all subsequent
+2. Display "(reset)" marker in state block
+
 ### Phase-Specific Grounding
 
 **DISCOVER → DEFINE:**
@@ -691,6 +723,73 @@ At DELIVER→Complete, runs in parallel with full grounding:
 4. Blocks if high-risk files detected without review
 
 See [references/grounding/impact-scan-prompt.md](references/grounding/impact-scan-prompt.md).
+
+### Edge Case Handling
+
+#### Truncation (100+ matches)
+
+When grounding returns many results:
+```
+┌─ GROUNDING (Mini) ──────────────────────────┐
+│ Query: [problem summary]                    │
+│ Found: 100+ matches (showing top 10)        │
+│ Confidence: HIGH                            │
+│ Note: Results truncated for display         │
+└─────────────────────────────────────────────┘
+```
+
+#### Empty Justification Rejection
+
+If user types `SKIP_GROUNDING:` or `SKIP_GROUNDING: ` (empty/whitespace):
+```
+┌─ INVALID JUSTIFICATION ────────────────────┐
+│ ❌ Justification cannot be empty            │
+│                                            │
+│ Please provide a reason:                   │
+│ SKIP_GROUNDING: <actual reason here>       │
+└────────────────────────────────────────────┘
+```
+
+#### Conditional Tool Skipping
+
+Skip tools when not applicable:
+- **No external refs in design:** Skip `web_search`, use repo-only
+- **No history context needed:** Skip `find_thread`
+
+Display which tools were skipped:
+```
+┌─ GROUNDING (Standard) ─────────────────────┐
+│ Sources: repo ✓ | web ⊘ (no external refs) │
+│ Confidence: HIGH                           │
+└────────────────────────────────────────────┘
+```
+
+#### Loop-Back State Reset
+
+When user says "revisit [PHASE]":
+1. Reset grounding state for that transition and all subsequent
+2. Display updated state:
+```
+┌─ GROUNDING STATE (reset) ──────────────────┐
+│ ✓ DISCOVER→DEFINE: HIGH                    │
+│ ○ DEFINE→DEVELOP: reset (was MEDIUM)       │
+│ ○ DEVELOP→DELIVER: pending                 │
+│ ○ DELIVER→Complete: pending                │
+└────────────────────────────────────────────┘
+```
+
+#### Network Failure Handling
+
+When `web_search` fails due to network error:
+```
+┌─ GROUNDING (Standard, degraded) ───────────┐
+│ Sources: repo ✓ | web ✗ (network error)    │
+│ Confidence: MEDIUM (degraded)              │
+│ Note: Web verification skipped             │
+└────────────────────────────────────────────┘
+```
+
+Proceed with degraded confidence; do not block on optional sources.
 
 ## After the Design
 

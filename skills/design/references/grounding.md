@@ -7,6 +7,12 @@ argument-hint: <question-or-pattern>
 
 Verify truth is **in the repo**, **on the web**, or **in prior sessions** before implementation.
 
+**Trigger Mechanism:** Grounding is triggered via inline execution blocks in [SKILL.md](../SKILL.md) at each phase transition. Each transition block includes:
+- Tool execution steps (finder, Grep, web_search)
+- Confidence calculation rules
+- Display block templates
+- Enforcement behavior (halt/warn/block)
+
 ---
 
 ## Overview

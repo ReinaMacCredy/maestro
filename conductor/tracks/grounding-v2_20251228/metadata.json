@@ -16,8 +16,8 @@
     "plan": "complete"
   },
   "workflow": {
-    "state": "READY",
-    "phase": "implementation"
+    "state": "COMPLETE",
+    "phase": "ready_to_finish"
   },
   "beads": {
     "status": "complete",
