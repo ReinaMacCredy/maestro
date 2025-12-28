@@ -16,6 +16,12 @@ Add explicit grounding execution instructions to design skill phase transitions.
 
 *Completed tracks are archived to `conductor/archive/`.*
 
+## [x] Track: Skill Integration
+*ID: skill-integration_20251228*
+*Archived: [conductor/archive/skill-integration_20251228/](conductor/archive/skill-integration_20251228/)*
+
+Consolidate 15 skills into 6 by merging 9 skills into conductor/references/.
+
 ## [x] Track: Grounding System Redesign
 *ID: grounding-system-redesign_20251228*
 *Archived: [conductor/archive/grounding-system-redesign_20251228/](conductor/archive/grounding-system-redesign_20251228/)*
