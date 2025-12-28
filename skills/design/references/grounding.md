@@ -3,180 +3,236 @@ description: Verify patterns against current truth before implementation
 argument-hint: <question-or-pattern>
 ---
 
-# Ground — Verification Protocol
+# Ground — Tiered Verification Protocol
 
-Use this command when you're about to implement something and need to verify the truth is **in the repo**, **on the web**, or **in prior sessions**.
+Verify truth is **in the repo**, **on the web**, or **in prior sessions** before implementation.
 
 ---
 
-## Why Grounding Matters
+## Overview
 
-**AI-generated code follows training data, which may be outdated, deprecated, or wrong.**
+Grounding prevents designs based on outdated or hallucinated information by:
+- **Automatic execution** at phase transitions
+- **Tiered intensity** based on mode and phase
+- **Enforcement levels** from advisory to mandatory
+- **Cascading sources** with fallback logic
 
-LLMs are trained on snapshots of documentation from months or years ago:
+---
 
-- **Deprecated APIs**: Using `library.oldMethod()` when `library.newMethod()` replaced it
-- **Outdated patterns**: The "recommended approach" from 2023 might be an anti-pattern today
-- **Hallucinated methods**: Confidently inventing methods that never existed
-- **Wrong defaults**: Configuration options and parameters change across versions
+## Tiered System
 
-**Grounding pulls your code back to reality.**
+| Mode | Phase Transition | Tier | Enforcement |
+|------|------------------|------|-------------|
+| SPEED | Any | Light | Advisory ⚠️ |
+| FULL | DISCOVER→DEFINE | Mini | Advisory ⚠️ |
+| FULL | DEFINE→DEVELOP | Mini | Advisory ⚠️ |
+| FULL | DEVELOP→DELIVER | Standard | Gatekeeper 🚫 |
+| FULL | DELIVER→Complete | Full | Mandatory 🔒 |
+
+See [grounding/tiers.md](grounding/tiers.md) for detailed tier definitions.
+
+---
+
+## Enforcement Levels
+
+### Advisory ⚠️
+- Grounding skip is logged
+- Warning displayed, proceed allowed
+- Use: Early exploration
+
+### Gatekeeper 🚫
+- Grounding must be run
+- Blocks if skipped
+- Low confidence still proceeds with warning
+- Use: Pre-delivery validation
+
+### Mandatory 🔒
+- Grounding must run AND pass
+- Blocks if: not run, all fail, or low confidence
+- Use: Final delivery gate
+
+---
+
+## Source Routing
+
+Priority chain: **repo → web → history**
+
+| Source | Best For | Tools |
+|--------|----------|-------|
+| repo | Patterns, conventions, existing code | Grep, finder, Read |
+| web | APIs, libraries, current documentation | web_search, read_web_page |
+| history | Past decisions, context | find_thread, git log |
+
+See [grounding/router.md](grounding/router.md) for cascading logic.
 
 ---
 
 ## Usage
 
+### Manual Command
+
 ```
 /ground <question-or-pattern>
 ```
 
-## Decision Rule
+### Automatic Triggers
 
-| Truth Type        | Tool                          | Use When                    |
-| ----------------- | ----------------------------- | --------------------------- |
-| **Repo truth**    | `Grep`, `finder`              | "How do we do X here?"      |
-| **Web truth**     | `web_search`, `read_web_page` | External libs/APIs/docs     |
-| **History truth** | `find_thread`                 | "Did we solve this before?" |
-| **Task truth**    | `bd` commands                 | "What should I do next?"    |
-
----
-
-## When to Use What
-
-### Grep / finder (Repo Discovery)
-
-Use when the answer exists in the current codebase:
-
-- "Where is X implemented?"
-- "What pattern does this project use for Y?"
-- "How does data flow from A → B?"
-
-```bash
-# Find pattern usage
-Grep "pattern-name" --path src/
-
-# Semantic search for concept
-finder "how authentication middleware validates tokens"
-```
-
-### web_search / read_web_page (External Grounding)
-
-Use when truth depends on **current** external information:
-
-- Library/framework docs that change (APIs, deprecations)
-- Vendor integrations, auth flows, latest patterns
-- Finding real-world examples
-
-```bash
-# Search for current docs
-web_search "stripe API create customer 2025"
-
-# Read specific documentation
-read_web_page "https://docs.library.io/api/method"
-```
-
-### find_thread (History)
-
-Use when you suspect we've solved it before:
-
-- "Have we seen this bug before?"
-- "What conventions do we follow for X?"
-- "What did we decide about Y?"
-
-```bash
-# Find related thread
-find_thread "similar error message"
-```
-
-### bd Commands (Task Graph)
-
-Use when the question is about work state:
-
-- "What should I work on next?"
-- "What's blocking this issue?"
-- "What's the current priority?"
-
-```bash
-bd ready              # Available work
-bd blocked            # What's stuck
-bd show <id>          # Issue details
-```
-
----
-
-## Protocol
-
-1. **Identify** what needs grounding (library, API, pattern, decision)
-2. **Determine** truth source (repo/web/history/task)
-3. **Query** using appropriate tool
-4. **Verify** information is current
-5. **Return** verified pattern with source
+Grounding runs automatically at phase transitions in design sessions.
 
 ---
 
 ## Output Format
 
 ```
-GROUNDING: <what was verified>
-SOURCE: <repo|web|history|task>
-STATUS: ✅ Current | ⚠️ Outdated | ❌ Not found
-PATTERN: <the verified pattern to use>
+┌─ GROUNDING RESULT ─────────────────────┐
+│ Tier: standard                         │
+│ Phase: DEVELOP→DELIVER                 │
+│ Duration: 1.2s                         │
+├────────────────────────────────────────┤
+│ Source: repo (Grep)                    │
+│ Answer: JWT middleware in src/auth/    │
+│ Confidence: HIGH                       │
+├────────────────────────────────────────┤
+│ ⚠️ CONFLICT DETECTED                   │
+│ Web source suggests: OAuth2 flow       │
+│ Using: repo (higher confidence)        │
+│ Review recommended before DELIVER      │
+└────────────────────────────────────────┘
 ```
+
+---
+
+## Conflict Handling
+
+When sources disagree:
+1. Use highest confidence answer
+2. Display conflict summary
+3. Recommend review before DELIVER
+4. Log conflict for audit
+
+---
+
+## Error Catalog
+
+| Code | Message | Action |
+|------|---------|--------|
+| GR-001 | All sources failed | Manual verification required |
+| GR-002 | Timeout exceeded | Retry or skip (if advisory) |
+| GR-003 | Low confidence | Additional verification needed |
+| GR-004 | Conflict detected | Review conflict summary |
+| GR-005 | Query sanitized | Sensitive content removed |
+
+---
+
+## Performance Limits
+
+All limits are **soft** (warn + continue):
+
+| Tier | Target | Hard Limit |
+|------|--------|------------|
+| Light | 3s | 5s |
+| Mini | 5s | 8s |
+| Standard | 10s | 15s |
+| Full | 45s | 60s |
+
+---
+
+## Session Cache
+
+- TTL: 5 minutes
+- Hash-based key from normalized query
+- Prevents duplicate queries in same session
+- Invalidates on conflict or low confidence
+
+See [grounding/cache.md](grounding/cache.md) for caching logic.
+
+---
+
+## Query Sanitization
+
+Before external queries:
+- Remove secrets (API keys, passwords, tokens)
+- Anonymize internal paths
+- Log sanitization events (GR-005)
+
+See [grounding/sanitization.md](grounding/sanitization.md) for patterns.
+
+---
+
+## Resilience
+
+| Scenario | Behavior |
+|----------|----------|
+| Primary times out | Try next source |
+| Primary fails | Try next source |
+| All timeout | Return partial + warning |
+| All fail | Block + manual verify |
+| Network unavailable | Repo-only mode |
 
 ---
 
 ## Examples
 
-### Example 1: Library API
+### Example 1: Library API (Web Source)
 
 ```
 /ground how to create Stripe customer with new API
 ```
 
-Output:
-
 ```
 GROUNDING: Stripe customer creation API
 SOURCE: web (stripe.com/docs)
-STATUS: ✅ Current (v2025-11-20)
+CONFIDENCE: HIGH
 PATTERN: stripe.customers.create({ email, metadata })
 ```
 
-### Example 2: Project Convention
+### Example 2: Project Convention (Repo Source)
 
 ```
 /ground how do we handle errors in this codebase
 ```
 
-Output:
-
 ```
 GROUNDING: Error handling pattern
 SOURCE: repo (src/lib/errors.ts)
-STATUS: ✅ Current
+CONFIDENCE: HIGH
 PATTERN: throw new AppError(code, message, { cause })
 ```
 
-### Example 3: Prior Decision
+### Example 3: Prior Decision (History Source)
 
 ```
 /ground did we decide on auth strategy
 ```
 
-Output:
-
 ```
 GROUNDING: Authentication strategy decision
 SOURCE: history (find_thread)
-STATUS: ✅ Current
+CONFIDENCE: HIGH
 PATTERN: JWT with refresh tokens, 15min access / 7day refresh
 ```
 
 ---
 
-## Defaults (Safe)
+## Track-Level Storage
 
-- **Repo first** for "how do we do X here?"
-- **Web only** when you need external/current facts
-- **History first** for "what did we decide?"
-- **Task graph** for "what should I do next?"
+Grounding results are stored per-track:
+
+```
+conductor/tracks/{track-id}/grounding/
+├── discover-define.json
+├── define-develop.json
+├── develop-deliver.json
+├── deliver-complete.json
+└── impact-scan.md
+```
+
+---
+
+## Related Documentation
+
+- [grounding/tiers.md](grounding/tiers.md) - Tier definitions and decision matrix
+- [grounding/router.md](grounding/router.md) - Cascading router logic
+- [grounding/cache.md](grounding/cache.md) - Session cache specification
+- [grounding/sanitization.md](grounding/sanitization.md) - Query sanitization rules
+- [grounding/impact-scan-prompt.md](grounding/impact-scan-prompt.md) - Impact scan subagent

@@ -151,28 +151,66 @@ CRITICAL RULES:
 
 After each section: "Does this look right so far? [OK / Revise / ↩ Back]"
 
-**FULL GROUNDING (Required before completion):**
-- Grep/finder: Verify patterns match codebase conventions
-- web_search: Check external APIs/libraries are current
-- git log: Review related past decisions
-- Read: Confirm alignment with tech-stack.md, workflow.md
+**TIERED GROUNDING (Automatic at phase transitions):**
+
+| Phase Transition | Tier | Enforcement |
+|------------------|------|-------------|
+| DISCOVER→DEFINE | Mini | Advisory ⚠️ |
+| DEFINE→DEVELOP | Mini | Advisory ⚠️ |
+| DEVELOP→DELIVER | Standard | Gatekeeper 🚫 |
+| DELIVER→Complete | Full + Impact Scan | Mandatory 🔒 |
+
+**FULL GROUNDING + IMPACT SCAN (Required at DELIVER→Complete):**
+
+1. **Full Grounding (parallel):**
+   - Grep/finder: Verify patterns match codebase conventions
+   - web_search: Check external APIs/libraries are current
+   - git log: Review related past decisions
+   - Read: Confirm alignment with tech-stack.md, workflow.md
+
+2. **Impact Scan (parallel):**
+   - Identify all files affected by design
+   - Return: file list, change types, risks, dependencies
+   - Flag high-risk files for review
+
+**Enforcement at DELIVER:**
+- ❌ **Blocks if:** Grounding not run (action: RUN_GROUNDING)
+- ❌ **Blocks if:** All sources fail (action: MANUAL_VERIFY)
+- ❌ **Blocks if:** Low confidence (action: RETRY_GROUNDING)
+- ⚠️ **Warns if:** Conflicts detected (shows conflict summary)
 
 **Grounding Checklist:**
-- [ ] Codebase patterns checked
-- [ ] External dependencies verified
-- [ ] Tech stack alignment confirmed
+- [ ] Codebase patterns checked (repo source)
+- [ ] External dependencies verified (web source)
+- [ ] Tech stack alignment confirmed (repo source)
+- [ ] Impact scan completed (subagent)
+- [ ] High-risk files reviewed
 
 Announce: "✓ Grounding complete. Design verified against codebase."
+Or if blocked: Show enforcement action with instructions.
 
 **━━━ CHECKPOINT 4 ━━━**
 ```
 > **Design Status:** [complete/needs work]
-> **Grounding:** [verified/pending]
+> **Grounding:** [✅ verified | 🚫 blocked | ⚠️ conflicts]
+> **Impact Scan:** [X files affected, Y high-risk]
 >
 > **[A] Advanced** - Refine sections, add detail
 > **[P] Party** - Final review with full team
-> **[C] Continue** - Approve and handoff
+> **[C] Continue** - Approve and handoff (requires grounding ✅)
 > **[↩ Back]** - "revisit develop" to reconsider approach
+```
+
+**If Grounding Blocked:**
+```
+┌─ GROUNDING REQUIRED ─────────────────────┐
+│ ❌ Cannot proceed: [reason]              │
+│                                          │
+│ Action: [RUN_GROUNDING|MANUAL_VERIFY]    │
+│ Run: /ground <design summary>            │
+│                                          │
+│ Or: [S]kip with manual verification      │
+└──────────────────────────────────────────┘
 ```
 
 ---

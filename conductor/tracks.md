@@ -10,6 +10,12 @@ Master list of all development tracks.
 
 *Completed tracks are archived to `conductor/archive/`.*
 
+## [x] Track: Grounding System Redesign
+*ID: grounding-system-redesign_20251228*
+*Archived: [conductor/archive/grounding-system-redesign_20251228/](conductor/archive/grounding-system-redesign_20251228/)*
+
+Tiered grounding with enforcement, cascading router, and impact scan integration.
+
 ## [x] Track: State Consolidation + Continuity Integration
 *ID: state-consolidation_20251227*
 *Archived: [conductor/archive/state-consolidation_20251227/](conductor/archive/state-consolidation_20251227/)*

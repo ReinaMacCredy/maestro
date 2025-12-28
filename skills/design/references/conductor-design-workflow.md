@@ -78,18 +78,65 @@ Follow this collaborative dialogue process:
 - Ask after each section: "Does this look right so far?"
 - Cover: architecture, components, data flow, error handling, testing
 
-## 6. Ground the Design (Required)
+## 6. Tiered Grounding (Automatic)
 
-Before finalizing, verify all architectural decisions against current reality.
+Grounding runs **automatically** at phase transitions with tiered intensity.
 
-**Preferred:** Use `/ground <question>` command which automatically selects the right verification approach.
+### Grounding Matrix
+
+| Phase Transition | Tier | Enforcement |
+|------------------|------|-------------|
+| DISCOVER→DEFINE | Mini | Advisory ⚠️ |
+| DEFINE→DEVELOP | Mini | Advisory ⚠️ |
+| DEVELOP→DELIVER | Standard | Gatekeeper 🚫 |
+| DELIVER→Complete | Full + Impact Scan | Mandatory 🔒 |
+
+### Full Grounding at DELIVER (Required)
+
+Before finalizing, the system automatically:
+
+1. **Full Grounding (parallel):**
+   - `Grep`/`finder`: Verify patterns match codebase conventions
+   - `web_search`: Check external APIs/libraries are current
+   - `git log`: Review related past decisions
+   - `Read`: Confirm alignment with tech-stack.md, workflow.md
+
+2. **Impact Scan (parallel):**
+   - Identify all files affected by design
+   - Return: file list, change types, risks, dependencies
+   - Flag high-risk files for review
+
+### Enforcement
+
+| Action | When |
+|--------|------|
+| `PROCEED` | Grounding passed |
+| `RUN_GROUNDING` | Grounding skipped at DEVELOP→DELIVER |
+| `MANUAL_VERIFY` | All sources failed |
+| `RETRY_GROUNDING` | Low confidence at DELIVER→Complete |
+
+**If blocked:**
+```
+┌─ GROUNDING REQUIRED ─────────────────────┐
+│ ❌ Cannot proceed: [reason]              │
+│                                          │
+│ Action: [RUN_GROUNDING|MANUAL_VERIFY]    │
+│ Run: /ground <design summary>            │
+│                                          │
+│ Or: [S]kip with manual verification      │
+└──────────────────────────────────────────┘
+```
+
+### Manual Grounding
+
+**Preferred:** Use `/ground <question>` which automatically selects the right verification approach.
 
 **Manual alternatives:**
 - For external libraries/APIs: Use `web_search` to verify patterns against current docs
 - For existing patterns: Use `Grep` and `finder` to confirm "how we do X here"
 - For prior decisions: Use `find_thread` to check "did we solve this before?"
 
-Do NOT proceed until grounding confirms the design is based on verified, current information.
+See [grounding.md](grounding.md) for complete documentation.
 
 ## 7. Write design.md
 

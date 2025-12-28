@@ -423,19 +423,96 @@ User can say "revisit [PHASE]" at any time to return to an earlier phase. When l
 2. Ask what to reconsider
 3. Update subsequent phases if decisions change
 
-## Grounding Requirements
+## Tiered Grounding System
 
-**Mini-grounding** at each phase transition:
+Grounding is **automatic** at phase transitions with tiered intensity based on mode.
 
-- DISCOVER → DEFINE: Check for similar problems in codebase
-- DEFINE → DEVELOP: Verify external APIs/libraries
-- DEVELOP → DELIVER: Confirm existing patterns and conventions
+### Grounding Matrix
 
-**Full grounding** before DELIVER completion:
+| Mode | Phase Transition | Tier | Enforcement |
+|------|------------------|------|-------------|
+| SPEED | Any | Light | Advisory ⚠️ |
+| FULL | DISCOVER→DEFINE | Mini | Advisory ⚠️ |
+| FULL | DEFINE→DEVELOP | Mini | Advisory ⚠️ |
+| FULL | DEVELOP→DELIVER | Standard | Gatekeeper 🚫 |
+| FULL | DELIVER→Complete | Full + Impact Scan | Mandatory 🔒 |
 
-- Verify all architectural decisions against current reality
-- Use `web_search`, `Grep`, `finder`, `git log`
-- Do NOT proceed to documentation without grounding
+### Tier Descriptions
+
+- **Light:** 1 source (repo), 3s timeout - quick verification
+- **Mini:** 1-2 sources, 5s timeout - basic alignment check
+- **Standard:** Cascade (repo → web → history), 10s - full verification
+- **Full:** All sources + Impact Scan subagent, 45s - complete validation
+
+### Phase-Specific Grounding
+
+**DISCOVER → DEFINE:**
+- Check for similar problems in codebase
+- Source: repo (Grep, finder)
+
+**DEFINE → DEVELOP:**
+- Verify external APIs/libraries are current
+- Source: web if external refs, else repo
+
+**DEVELOP → DELIVER:**
+- Confirm existing patterns and conventions
+- Source: cascade (repo → web → history)
+- **Blocks if skipped** (Gatekeeper)
+
+**DELIVER → Complete:**
+- Full architectural verification + impact scan
+- Source: all + parallel impact scan subagent
+- **Blocks if fails or low confidence** (Mandatory)
+
+See [references/grounding.md](references/grounding.md) for complete documentation.
+
+---
+
+## Grounding Enforcement
+
+### Enforcement Levels
+
+| Level | Symbol | Behavior |
+|-------|--------|----------|
+| Advisory | ⚠️ | Log skip, warn, proceed |
+| Gatekeeper | 🚫 | Block if grounding not run |
+| Mandatory | 🔒 | Block if fails or low confidence |
+
+### Enforcement Actions
+
+| Action | When | Result |
+|--------|------|--------|
+| `PROCEED` | Grounding passed | Continue to next phase |
+| `WARN` | Advisory skip | Show warning, continue |
+| `RUN_GROUNDING` | Gatekeeper/Mandatory skip | Block until grounding runs |
+| `MANUAL_VERIFY` | All sources failed | Block, require manual verification |
+| `RETRY_GROUNDING` | Low confidence at Mandatory | Block, require retry |
+
+### Blocking Behavior
+
+When blocked at DEVELOP→DELIVER or DELIVER→Complete:
+
+```
+┌─ GROUNDING REQUIRED ─────────────────────┐
+│ ❌ Cannot proceed: Grounding not run     │
+│                                          │
+│ Action: RUN_GROUNDING                    │
+│ Run: /ground <design summary>            │
+│                                          │
+│ Or: [S]kip with manual verification      │
+└──────────────────────────────────────────┘
+```
+
+### Impact Scan at DELIVER
+
+At DELIVER→Complete, runs in parallel with full grounding:
+
+1. Analyzes design to identify affected files
+2. Returns: file list, change types, risks, dependencies
+3. Merges with grounding result
+4. Blocks if high-risk files detected without review
+
+See [references/grounding/impact-scan-prompt.md](references/grounding/impact-scan-prompt.md).
 
 ## After the Design
 

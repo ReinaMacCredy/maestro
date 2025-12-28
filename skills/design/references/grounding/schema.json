@@ -1,0 +1,235 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "grounding-result-v1.1",
+  "title": "Grounding Result Schema v1.1",
+  "description": "Schema for grounding results with tiered routing, caching, and conflict detection",
+  "type": "object",
+  "required": [
+    "phase_transition",
+    "grounding_type",
+    "timestamp",
+    "routing",
+    "queries",
+    "overall_confidence"
+  ],
+  "properties": {
+    "phase_transition": {
+      "type": "string",
+      "description": "The phase transition that triggered grounding",
+      "enum": [
+        "DISCOVER→DEFINE",
+        "DEFINE→DEVELOP",
+        "DEVELOP→DELIVER",
+        "DELIVER→COMPLETE"
+      ]
+    },
+    "grounding_type": {
+      "type": "string",
+      "description": "The tier of grounding executed",
+      "enum": ["light", "mini", "standard", "full"]
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of grounding execution"
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Duration of grounding execution in milliseconds"
+    },
+    "routing": {
+      "type": "object",
+      "description": "Information about source routing and fallback",
+      "required": ["sources_tried", "sources_succeeded", "fallback_used"],
+      "properties": {
+        "sources_tried": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["repo", "web", "history"]
+          },
+          "description": "Sources attempted in order"
+        },
+        "sources_succeeded": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["repo", "web", "history"]
+          },
+          "description": "Sources that returned results"
+        },
+        "fallback_used": {
+          "type": "boolean",
+          "description": "Whether fallback to secondary source occurred"
+        }
+      }
+    },
+    "queries": {
+      "type": "array",
+      "description": "Individual grounding queries executed",
+      "items": {
+        "type": "object",
+        "required": ["intent", "question", "source", "confidence"],
+        "properties": {
+          "intent": {
+            "type": "string",
+            "description": "The type of verification being performed",
+            "enum": [
+              "pattern_check",
+              "api_verify",
+              "convention_lookup",
+              "decision_recall",
+              "dependency_check"
+            ]
+          },
+          "question": {
+            "type": "string",
+            "description": "The grounding question asked"
+          },
+          "source": {
+            "type": "string",
+            "enum": ["repo", "web", "history"],
+            "description": "The source that provided the answer"
+          },
+          "tool": {
+            "type": "string",
+            "description": "The tool used to query the source",
+            "enum": [
+              "Grep",
+              "finder",
+              "Read",
+              "glob",
+              "web_search",
+              "read_web_page",
+              "find_thread",
+              "git_log"
+            ]
+          },
+          "result_summary": {
+            "type": "string",
+            "description": "Summary of what was found"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["high", "medium", "low", "none"],
+            "description": "Confidence level of the result"
+          },
+          "cached": {
+            "type": "boolean",
+            "description": "Whether result came from cache"
+          },
+          "cache_age_seconds": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Age of cached result in seconds (if cached)"
+          },
+          "sanitized": {
+            "type": "boolean",
+            "description": "Whether query was sanitized before external call"
+          },
+          "redaction_count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of secrets redacted (if sanitized)"
+          }
+        }
+      }
+    },
+    "conflicts": {
+      "type": "array",
+      "description": "Conflicts detected between sources",
+      "items": {
+        "type": "object",
+        "required": ["source1", "source2", "answer1", "answer2"],
+        "properties": {
+          "source1": {
+            "type": "string",
+            "enum": ["repo", "web", "history"]
+          },
+          "source2": {
+            "type": "string",
+            "enum": ["repo", "web", "history"]
+          },
+          "answer1": {
+            "type": "string",
+            "description": "Answer from first source"
+          },
+          "answer2": {
+            "type": "string",
+            "description": "Answer from second source"
+          },
+          "recommendation": {
+            "type": "string",
+            "description": "Suggested action for conflict resolution"
+          }
+        }
+      }
+    },
+    "overall_confidence": {
+      "type": "string",
+      "enum": ["high", "medium", "low", "none"],
+      "description": "Overall confidence of grounding results"
+    },
+    "all_sources_failed": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether all attempted sources failed"
+    },
+    "blocking": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether this result blocks phase transition"
+    },
+    "enforcement_level": {
+      "type": "string",
+      "enum": ["advisory", "gatekeeper", "mandatory"],
+      "description": "The enforcement level applied"
+    },
+    "enforcement_action": {
+      "type": "string",
+      "enum": ["PROCEED", "WARN", "RUN_GROUNDING", "MANUAL_VERIFY", "RETRY_GROUNDING"],
+      "description": "The enforcement action taken or required"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Additional notes or warnings"
+    },
+    "error_code": {
+      "type": "string",
+      "enum": ["GR-001", "GR-002", "GR-003", "GR-004", "GR-005"],
+      "description": "Error code if applicable"
+    }
+  },
+  "examples": [
+    {
+      "phase_transition": "DISCOVER→DEFINE",
+      "grounding_type": "mini",
+      "timestamp": "2025-12-28T10:30:00Z",
+      "duration_ms": 1200,
+      "routing": {
+        "sources_tried": ["repo", "web"],
+        "sources_succeeded": ["repo"],
+        "fallback_used": true
+      },
+      "queries": [
+        {
+          "intent": "pattern_check",
+          "question": "How does this repo handle auth?",
+          "source": "repo",
+          "tool": "Grep",
+          "result_summary": "Found JWT middleware in src/auth/",
+          "confidence": "high",
+          "cached": false
+        }
+      ],
+      "conflicts": [],
+      "overall_confidence": "high",
+      "all_sources_failed": false,
+      "blocking": false,
+      "enforcement_level": "advisory",
+      "enforcement_action": "PROCEED",
+      "notes": ""
+    }
+  ]
+}

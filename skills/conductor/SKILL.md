@@ -78,10 +78,28 @@ At the end of each phase, users choose:
 - **[C] Continue** - Proceed to next phase
 - **[↩ Back]** - Return to previous phase
 
-### Grounding Requirements
+### Tiered Grounding System
 
-- **Mini-grounding** at each phase transition (codebase/API verification)
-- **Full grounding** before DELIVER completion (all decisions verified)
+Grounding is **automatic** at phase transitions with tiered intensity:
+
+| Mode | Phase Transition | Tier | Enforcement |
+|------|------------------|------|-------------|
+| SPEED | Any | Light | Advisory ⚠️ |
+| FULL | DISCOVER→DEFINE | Mini | Advisory ⚠️ |
+| FULL | DEFINE→DEVELOP | Mini | Advisory ⚠️ |
+| FULL | DEVELOP→DELIVER | Standard | Gatekeeper 🚫 |
+| FULL | DELIVER→Complete | Full + Impact Scan | Mandatory 🔒 |
+
+**Enforcement levels:**
+- **Advisory ⚠️** - Log skip, warn, proceed
+- **Gatekeeper 🚫** - Block if grounding not run
+- **Mandatory 🔒** - Block if fails or low confidence
+
+**Documentation:**
+- [Grounding overview](../design/references/grounding.md)
+- [Tier definitions](../design/references/grounding/tiers.md)
+- [Cascading router](../design/references/grounding/router.md)
+- [Impact scan](../design/references/grounding/impact-scan-prompt.md)
 
 **Interoperability:** This skill understands conductor projects created by either:
 
