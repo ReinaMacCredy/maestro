@@ -1,0 +1,83 @@
+{
+  "track_id": "grounding-v2_20251228",
+  "title": "Grounding Trigger Implementation",
+  "type": "feature",
+  "status": "ready",
+  "created": "2025-12-28",
+  "updated": "2025-12-28",
+  "description": "Add explicit grounding execution instructions to design skill phase transitions",
+  "thread_ids": [
+    "T-019b6591-25d4-7649-8e21-2e44159050eb",
+    "T-019b65a1-10d2-7008-aaa5-824a9ed5a35d"
+  ],
+  "generation": {
+    "design": "complete",
+    "spec": "complete",
+    "plan": "complete"
+  },
+  "workflow": {
+    "state": "ARCHIVED",
+    "phase": "complete"
+  },
+  "beads": {
+    "status": "complete",
+    "epicId": "my-workflow:3-ngzc",
+    "epics": [
+      {
+        "id": "my-workflow:3-ngzc",
+        "title": "Epic: Grounding Trigger Implementation",
+        "status": "created",
+        "createdAt": "2025-12-28T23:01:56Z",
+        "reviewed": false
+      }
+    ],
+    "issues": [
+      "my-workflow:3-hlxp",
+      "my-workflow:3-ecw4",
+      "my-workflow:3-5o1i",
+      "my-workflow:3-flvy",
+      "my-workflow:3-n5s3",
+      "my-workflow:3-zzax",
+      "my-workflow:3-nyun",
+      "my-workflow:3-wccf",
+      "my-workflow:3-2lqq",
+      "my-workflow:3-nxzd",
+      "my-workflow:3-h5m8",
+      "my-workflow:3-1gro",
+      "my-workflow:3-mpba"
+    ],
+    "planTasks": {
+      "1.1": "my-workflow:3-hlxp",
+      "1.2": "my-workflow:3-ecw4",
+      "1.3": "my-workflow:3-5o1i",
+      "1.4": "my-workflow:3-flvy",
+      "2.1": "my-workflow:3-n5s3",
+      "2.2": "my-workflow:3-zzax",
+      "3.1": "my-workflow:3-nyun",
+      "3.2": "my-workflow:3-wccf",
+      "3.3": "my-workflow:3-2lqq",
+      "3.4": "my-workflow:3-nxzd",
+      "3.5": "my-workflow:3-h5m8",
+      "4.1": "my-workflow:3-1gro",
+      "4.2": "my-workflow:3-mpba"
+    },
+    "beadToTask": {
+      "my-workflow:3-hlxp": "1.1",
+      "my-workflow:3-ecw4": "1.2",
+      "my-workflow:3-5o1i": "1.3",
+      "my-workflow:3-flvy": "1.4",
+      "my-workflow:3-n5s3": "2.1",
+      "my-workflow:3-zzax": "2.2",
+      "my-workflow:3-nyun": "3.1",
+      "my-workflow:3-wccf": "3.2",
+      "my-workflow:3-2lqq": "3.3",
+      "my-workflow:3-nxzd": "3.4",
+      "my-workflow:3-h5m8": "3.5",
+      "my-workflow:3-1gro": "4.1",
+      "my-workflow:3-mpba": "4.2"
+    },
+    "crossTrackDeps": [],
+    "reviewStatus": null,
+    "reviewedAt": null
+  }
+}
