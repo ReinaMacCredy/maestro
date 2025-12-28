@@ -235,7 +235,7 @@ Run these commands during your session:
 - `continuity save` - After significant changes
 - `continuity handoff` - Before ending session
 
-See [skills/continuity/references/amp-setup.md](skills/continuity/references/amp-setup.md) for full setup.
+See [skills/conductor/references/ledger/amp-setup.md](skills/conductor/references/ledger/amp-setup.md) for full setup.
 
 ### Data Storage
 

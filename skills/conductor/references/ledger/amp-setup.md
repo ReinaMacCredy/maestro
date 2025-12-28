@@ -126,6 +126,6 @@ continuity search <keyword>
 
 ## Installing the Skill
 
-The continuity skill is automatically available when the `skills/continuity/` directory exists.
+The continuity content is available in `skills/conductor/references/ledger/`.
 
 No special installation needed for Amp - just use the manual commands.
