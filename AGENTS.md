@@ -1,7 +1,7 @@
 # AGENTS.md - Maestro Plugin
 
 ## Overview
-Claude Code plugin bundling workflow skills: Conductor (planning), Design (Double Diamond sessions), Beads (issue tracking), and Superpowers (TDD, debugging, code review).
+Claude Code plugin bundling workflow skills: Conductor (planning), Design (Double Diamond sessions), Beads (issue tracking), Orchestrator (multi-agent parallel execution), and Superpowers (TDD, debugging, code review).
 
 ## Build/Test Commands
 No build required - this is a skill/documentation plugin. Validate JSON:
@@ -15,6 +15,7 @@ skills/           # Skill directories, each with SKILL.md (frontmatter + instruc
   beads/          # Issue tracking skill with references/ subdirectory
   conductor/      # Planning methodology (includes /conductor-design, CODEMAPS generation, handoff system)
   design/         # Double Diamond design sessions (ds trigger), includes bmad/
+  orchestrator/   # Multi-agent parallel execution with autonomous workers
   continuity/     # DEPRECATED: Stub redirecting to handoff system
   ...             # TDD, debugging, code review, etc.
 lib/              # Shared utilities (skills-core.js)
@@ -90,6 +91,7 @@ Add `[skip ci]` to commit message to bypass all automation (changelog + version 
 |-------|---------|-------------|
 | `design` | `ds` | Double Diamond design session with A/P/C checkpoints and Party Mode option |
 | `conductor` | `/conductor-setup`, `/conductor-design`, `/conductor-newtrack`, `/conductor-implement`, `/conductor-status`, `/conductor-revert`, `/conductor-revise`, `/conductor-finish`, `/conductor-validate`, `/conductor-block`, `/conductor-skip` | Structured planning and execution through specs and plans |
+| `orchestrator` | `/conductor-orchestrate`, "run parallel", "spawn workers" | Multi-agent parallel execution with autonomous workers |
 | `beads` | `fb`, `rb`, `bd ready`, `bd status` | Issue tracking: file beads from plan, review beads, multi-session work |
 | `doc-sync` | `/doc-sync`, after `/conductor-finish` | Auto-sync documentation with code changes |
 
@@ -228,7 +230,7 @@ Git-committed, shareable session context preservation across sessions and compac
 | `/create_handoff` | Create handoff file with current context |
 | `/resume_handoff` | Find and load most recent handoff |
 
-### Automatic Triggers
+### Automatic Triggers (Claude Code with Hooks)
 
 | Trigger | When | Automatic |
 |---------|------|-----------|
@@ -238,6 +240,46 @@ Git-committed, shareable session context preservation across sessions and compac
 | `pre-finish` | At start of `/conductor-finish` | ✅ |
 | `manual` | User runs `/create_handoff` | ❌ |
 | `idle` | 30min inactivity gap | ✅ (prompted) |
+
+### ⚠️ Amp Hybrid Handoff Protocol
+
+**Amp lacks hooks, so automatic triggers don't fire.** Use these manual alternatives:
+
+#### Option A: Use Full Workflow Commands (Recommended)
+Commands embed handoff logic - no manual action needed:
+
+| Instead of... | Use... | Auto-Handoff |
+|---------------|--------|--------------|
+| `ds` → `fb` → manual beads | `ds` → `/conductor-newtrack` | ✅ `design-end` |
+| Manual `bd update/close` | `/conductor-implement` | ✅ `epic-start/end` |
+| Just `bd sync` | `/conductor-finish` | ✅ `pre-finish` |
+
+#### Option B: Manual Handoff Points
+If using raw `bd` commands, create handoffs manually:
+
+```bash
+# After design session ends
+/create_handoff design-end
+
+# Before starting each epic
+/create_handoff epic-start
+
+# After closing each epic  
+/create_handoff epic-end
+
+# Before ending session
+/create_handoff manual
+```
+
+#### Quick Reference
+
+| Session Phase | Action Required |
+|---------------|-----------------|
+| **Start** | `/resume_handoff` to load prior context |
+| **After DS** | Use `/conductor-newtrack` OR `/create_handoff design-end` |
+| **Epic Start** | Use `/conductor-implement` OR `/create_handoff epic-start` |
+| **Epic End** | Embedded in `/conductor-implement` OR `/create_handoff epic-end` |
+| **Session End** | `/create_handoff manual` if not using `/conductor-finish` |
 
 ### Data Storage
 

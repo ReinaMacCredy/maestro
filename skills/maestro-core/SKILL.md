@@ -15,9 +15,10 @@ metadata:
 |-------|-------|------|
 | 1 | maestro-core | Routing, fallback policy |
 | 2 | conductor | Track orchestration, research protocol |
-| 3 | design | Double Diamond |
-| 4 | beads | Issue tracking |
-| 5 | specialized | worktrees, sharing, writing |
+| 3 | orchestrator | Multi-agent parallel execution |
+| 4 | design | Double Diamond |
+| 5 | beads | Issue tracking |
+| 6 | specialized | worktrees, sharing, writing |
 
 ## Fallback Policy
 
@@ -36,8 +37,9 @@ metadata:
 | `ds`, `/conductor-design` | design → conductor |
 | `/conductor-setup` | conductor |
 | `/conductor-newtrack` | conductor |
-| `/conductor-implement` | conductor |
-| `/conductor-finish` | conductor |
+| `ci`, `/conductor-implement` | conductor |
+| `co`,`/conductor-orchestrate` | orchestrator |
+| `cf`,`/conductor-finish` | conductor |
 | `/conductor-status`, `-revert`, `-revise` | conductor |
 | `/conductor-validate` | conductor |
 | `/conductor-block`, `-skip` | conductor → beads |
@@ -76,6 +78,7 @@ metadata:
 | "create skill", "write skill", "build skill" | writing-skills |
 | "share skill", "contribute skill", "PR skill" | sharing-skills |
 | "worktree", "isolated branch", "parallel branch" | using-git-worktrees |
+| "run parallel", "spawn workers", "dispatch agents" | orchestrator |
 
 ## Research Routing
 
@@ -117,6 +120,12 @@ ELSE IF "handoff" or "save session" or "resume session"
 
 ELSE IF "sync docs" or "update documentation"
   → doc-sync
+
+ELSE IF "run parallel" or "spawn workers" or "dispatch agents"
+  → orchestrator
+
+ELSE IF plan.md has "Track Assignments" section
+  → orchestrator
 
 ELSE IF "track" or "create task"
   → IF conductor/ exists → conductor
@@ -233,6 +242,7 @@ ds → DELIVER → [design] → newtrack → [spec] → [plan] → implement →
 | `/conductor-design` | `design/SKILL.md` + `design/references/` |
 | `/conductor-newtrack` | `conductor/references/workflows/newtrack.md` |
 | `/conductor-implement` | `conductor/references/workflows/implement.md` |
+| `/conductor-orchestrate` | `orchestrator/SKILL.md` + `orchestrator/references/workflow.md` |
 | `/conductor-finish` | `conductor/references/finish-workflow.md` |
 | `/create_handoff`, `/resume_handoff` | `conductor/references/handoff/` |
 | `/doc-sync` | `conductor/references/doc-sync/` |

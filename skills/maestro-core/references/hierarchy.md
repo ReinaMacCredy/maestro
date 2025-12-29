@@ -1,23 +1,25 @@
 # Skill Hierarchy
 
-## 5-Level Priority
+## 6-Level Priority
 
 | Level | Skill | Role | Decides |
 |-------|-------|------|---------|
 | 1 | maestro-core | Central orchestrator | Routing, fallback policy, hierarchy |
 | 2 | conductor | Track orchestrator | Workflow state, track lifecycle, beads integration |
-| 3 | design | Design sessions | Double Diamond phases, Party Mode, research verification |
-| 4 | beads | Issue tracking | Dependencies, multi-session persistence |
-| 5 | specialized | Tools | worktrees, sharing, writing-skills |
+| 3 | orchestrator | Multi-agent parallel | Worker dispatch, Agent Mail coordination, cross-track deps |
+| 4 | design | Design sessions | Double Diamond phases, Party Mode, research verification |
+| 5 | beads | Issue tracking | Dependencies, multi-session persistence |
+| 6 | specialized | Tools | worktrees, sharing, writing-skills |
 
 ### Conflict Resolution
 
 When skills disagree, **higher level wins**:
 
 1. maestro-core defines HALT/DEGRADE → all skills follow
-2. conductor owns workflow state → design/beads defer
-3. design owns session flow → beads handles issues only
-4. specialized skills are leaf nodes → no conflicts
+2. conductor owns workflow state → orchestrator/design/beads defer
+3. orchestrator owns parallel dispatch → workers execute independently
+4. design owns session flow → beads handles issues only
+5. specialized skills are leaf nodes → no conflicts
 
 ## HALT vs DEGRADE Policy
 
@@ -28,6 +30,7 @@ When skills disagree, **higher level wins**:
 | `bd` CLI unavailable | Yes | **HALT** | ❌ Cannot proceed: bd CLI not found. Install beads_viewer. |
 | `conductor/` missing | No | **DEGRADE** | ⚠️ Conductor unavailable. Standalone mode. |
 | Village MCP unavailable | No | **DEGRADE** | ⚠️ Village unavailable. Using single-agent mode. |
+| Agent Mail MCP unavailable | No | **DEGRADE** | ⚠️ Agent coordination unavailable. Falling back to sequential. |
 | CODEMAPS missing | No | **DEGRADE** | ⚠️ No CODEMAPS found. Context limited. |
 | `product.md` missing | No | **DEGRADE** | ⚠️ No product context. Run /conductor-setup. |
 | Network unavailable | No | **DEGRADE** | ⚠️ Network unavailable. Web research skipped. |
@@ -84,6 +87,7 @@ Skills check their specific dependencies:
 | Skill | Checks | On Failure |
 |-------|--------|------------|
 | conductor | metadata.json, plan.md | HALT (corrupted) or DEGRADE (missing) |
+| orchestrator | Agent Mail MCP, plan.md Track Assignments | DEGRADE (sequential mode) |
 | design | conductor/, CODEMAPS | DEGRADE (standalone mode) |
 | beads | bd CLI, .beads/ | HALT (no bd) or DEGRADE (empty .beads) |
 | worktrees | git, .gitignore | HALT (no git) or DEGRADE (missing .gitignore) |
