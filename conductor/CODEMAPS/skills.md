@@ -35,7 +35,7 @@ ORCHESTRATION          CORE WORKFLOW          DEVELOPMENT              UTILITIES
 │                          │   ├── tdd/              
 │                          │   ├── verification/     
 │                          │   ├── doc-sync/         
-│                          │   ├── ledger/           
+│                          │   ├── handoff/          
 │                          │   └── finish/           
 │                      ├── design             
 │                      │   └── bmad/          

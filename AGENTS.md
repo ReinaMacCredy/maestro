@@ -13,15 +13,16 @@ cat .claude-plugin/plugin.json | jq .   # Validate plugin manifest
 ```
 skills/           # Skill directories, each with SKILL.md (frontmatter + instructions)
   beads/          # Issue tracking skill with references/ subdirectory
-  conductor/      # Planning methodology (includes /conductor-design, CODEMAPS generation)
+  conductor/      # Planning methodology (includes /conductor-design, CODEMAPS generation, handoff system)
   design/         # Double Diamond design sessions (ds trigger), includes bmad/
-  continuity/     # Session state preservation (replaces session-compaction)
+  continuity/     # DEPRECATED: Stub redirecting to handoff system
   ...             # TDD, debugging, code review, etc.
 lib/              # Shared utilities (skills-core.js)
 .claude-plugin/   # Plugin manifest (plugin.json, marketplace.json)
 conductor/        # Unified save location for plans and tracks
   tracks/<id>/    # Active work (design.md + spec.md + plan.md per track)
-    metadata.json       # Track info + thread IDs + generation + beads state
+    metadata.json       # Track info + thread IDs + generation + beads + validation state
+  handoffs/       # Session handoffs (git-committed, shareable)
   CODEMAPS/       # Architecture documentation (overview.md, module codemaps)
   archive/        # Completed work
 ```
@@ -178,7 +179,9 @@ git push                          # Push to remote
 
 | File | Location | Purpose |
 |------|----------|---------|
-| `LEDGER.md` | `conductor/sessions/active/` | Session state in frontmatter (mode, bound_track, bound_bead, tdd_phase) |
+| `metadata.json` | `conductor/tracks/<id>/` | Track info, validation state, beads mapping |
+| `*.md handoffs` | `conductor/handoffs/<track>/` | Session handoffs (git-committed, shareable) |
+| `index.md` | `conductor/handoffs/<track>/` | Handoff log per track |
 | `session-lock_<track>.json` | `.conductor/` | Concurrent session prevention |
 | `pending_*.jsonl` | `.conductor/` | Failed operations for replay |
 | `metrics.jsonl` | `.conductor/` | Usage metrics (append-only) |
@@ -214,35 +217,39 @@ Run `scripts/beads-metrics-summary.sh` for weekly summary.
 
 ---
 
-## Continuity (Session Preservation)
+## Handoff System (Session Preservation)
 
-Automatic session state preservation across sessions and compactions.
+Git-committed, shareable session context preservation across sessions and compactions.
 
-### Claude Code (Automatic)
+### Commands
 
-When hooks are installed at `~/.claude/hooks/`:
-- **SessionStart**: Auto-loads LEDGER.md + last handoff
-- **PreCompact**: Auto-creates handoff before compaction
-- **PostToolUse**: Tracks modified files
-- **Stop**: Archives session on exit
+| Command | Description |
+|---------|-------------|
+| `/create_handoff` | Create handoff file with current context |
+| `/resume_handoff` | Find and load most recent handoff |
 
-Install hooks: `./scripts/install-global-hooks.sh`
+### Automatic Triggers
 
-### All Agents (Automatic)
-
-Session continuity is automatic via Conductor workflow entry points:
-- `ds` → loads prior context
-- `/conductor-implement` → loads + binds to track/bead
-- `/conductor-finish` → handoff + archive
-
-No manual commands needed. See [docs/GLOBAL_CONFIG.md](docs/GLOBAL_CONFIG.md#session-lifecycle) for details.
+| Trigger | When | Automatic |
+|---------|------|-----------|
+| `design-end` | After `/conductor-newtrack` | ✅ |
+| `epic-start` | Before each epic in `/conductor-implement` | ✅ |
+| `epic-end` | After each epic closes | ✅ |
+| `pre-finish` | At start of `/conductor-finish` | ✅ |
+| `manual` | User runs `/create_handoff` | ❌ |
+| `idle` | 30min inactivity gap | ✅ (prompted) |
 
 ### Data Storage
 
 ```text
-conductor/sessions/
-├── active/LEDGER.md    # Current session state (gitignored)
-└── archive/*.md        # Archived handoffs (committed)
+conductor/handoffs/
+├── general/              # Non-track handoffs
+│   ├── index.md          # Handoff log
+│   └── *.md              # Individual handoff files
+└── <track-id>/           # Per-track handoffs
+    ├── index.md          # Handoff log
+    ├── *.md              # Individual handoff files
+    └── archive/          # After /conductor-finish
 ```
 
 ### Search History
@@ -252,6 +259,8 @@ uv run scripts/artifact-query.py <query>   # FTS5 search
 uv run scripts/artifact-index.py           # Rebuild index
 uv run scripts/artifact-cleanup.py         # Remove old handoffs
 ```
+
+See [docs/handoff-system.md](docs/handoff-system.md) for full documentation.
 
 ---
 

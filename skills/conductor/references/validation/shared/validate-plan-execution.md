@@ -12,7 +12,7 @@ Before beginning validation, establish context:
 
 1. **Confirm TDD phase**: Implementation must be in REFACTOR or complete
 2. **Locate plan file**: `conductor/tracks/<track-id>/plan.md`
-3. **Identify current task/epic**: From LEDGER `bound_bead` or beads status
+3. **Identify current task/epic**: From track's `metadata.json` or beads status
 4. **Prepare verification environment**: Ensure clean working state
 
 ## Validation Process
@@ -204,30 +204,37 @@ Before marking Gate 4 complete:
 - [ ] No blocking issues remain
 - [ ] Manual testing items identified
 
-## LEDGER Integration
+## metadata.json Integration
 
-Update the LEDGER.md file according to the central format:
+Update the track's `metadata.json` file:
 
 ```text
 ON VALIDATION START:
-  Update frontmatter:
-    validation.current_gate: plan-execution
+  Update metadata.json.validation:
+    "current_gate": "plan-execution"
 
 ON VALIDATION COMPLETE (PASS):
-  Update frontmatter:
-    validation.gates_passed: [..., plan-execution]
-    validation.current_gate: null
-    validation.retries: 0
+  Update metadata.json.validation:
+    "gates_passed": [..., "plan-execution"]
+    "current_gate": null
+    "retries": 0
 
 ON VALIDATION COMPLETE (FAIL):
-  Update frontmatter:
-    validation.last_failure: "<failure reason>"
-    validation.retries: <current + 1>
+  Update metadata.json.validation:
+    "last_failure": "<failure reason>"
+    "retries": <current + 1>
+```
 
-Add entry to ## Validation History table:
-| Gate | Status | Time | Notes |
-|------|--------|------|-------|
-| plan-execution | [PASS]/[WARN]/[FAIL] | HH:MM | <details> |
+Example metadata.json.validation state:
+```json
+{
+  "validation": {
+    "gates_passed": ["design", "spec", "plan-structure", "plan-execution"],
+    "current_gate": null,
+    "retries": 0,
+    "last_failure": null
+  }
+}
 ```
 
 ## Relationship to Other Commands
@@ -255,8 +262,8 @@ RED → GREEN → REFACTOR → Gate 4 Validation
 
 **TDD Phase Check:**
 ```bash
-# Confirm LEDGER shows REFACTOR phase
-grep "tdd_phase" conductor/sessions/active/LEDGER.md
+# Confirm metadata.json shows REFACTOR phase
+cat conductor/tracks/<track-id>/metadata.json | jq '.tdd.phase'
 ```
 
 ## Failure Modes

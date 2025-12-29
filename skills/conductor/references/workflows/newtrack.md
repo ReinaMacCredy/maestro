@@ -92,7 +92,7 @@ This workflow uses consolidated state in `metadata.json`:
    
    - **Load gate**: `../validation/shared/validate-spec.md`
    - **Run validation**: Check spec vs design.md for requirement capture
-   - **Update LEDGER**: Add `spec` to `validation.gates_passed` or log failure
+   - **Update metadata.json**: Add `spec` to `validation.gates_passed` or log failure
    - **Behavior**: WARN on failure (both SPEED and FULL modes), continue to plan generation
 
    ```text
@@ -104,7 +104,7 @@ This workflow uses consolidated state in `metadata.json`:
    │ ✓ No scope creep (items not in design)          │
    │ ✓ Requirements are unambiguous                  │
    │                                                 │
-   │ LEDGER updated: gates_passed: [..., spec]       │
+   │ metadata.json: gates_passed: [..., spec]        │
    └─────────────────────────────────────────────────┘
    ```
 
@@ -141,7 +141,7 @@ This workflow uses consolidated state in `metadata.json`:
    
    - **Load gate**: `../validation/shared/validate-plan-structure.md`
    - **Run validation**: Check tasks have acceptance criteria, atomic tasks, verification section
-   - **Update LEDGER**: Add `plan-structure` to `validation.gates_passed` or log failure
+   - **Update metadata.json**: Add `plan-structure` to `validation.gates_passed` or log failure
    - **Behavior**: WARN on failure (both SPEED and FULL modes), continue to artifact creation
 
    ```text
@@ -153,7 +153,7 @@ This workflow uses consolidated state in `metadata.json`:
    │ ✓ Tasks are atomic (1-2 hours)                  │
    │ ✓ "Automated Verification" section exists       │
    │                                                 │
-   │ LEDGER updated: gates_passed: [..., plan-structure] │
+   │ metadata.json: gates_passed: [..., plan-structure] │
    └─────────────────────────────────────────────────┘
    ```
 
@@ -405,7 +405,28 @@ Task(
 1. **Update Final State**
    - Update `metadata.json.generation.status` to `complete`
 
-2. **Display Handoff**
+2. **Create Design-End Handoff**
+   
+   Automatically create handoff with trigger `design-end`:
+   
+   ```
+   handoff_dir = conductor/handoffs/<track_id>/
+   
+   1. Create handoff directory if not exists
+   2. Create index.md if not exists
+   3. Create handoff file: YYYY-MM-DD_HH-MM-SS-mmm_<track>_design-end.md
+   4. Include:
+      - Key design decisions from design.md
+      - Spec summary and approach rationale
+      - Constraints identified
+      - Next steps: "Start implementation with `bd ready`"
+   5. Append to index.md
+   6. Touch conductor/.last_activity
+   ```
+   
+   See [../handoff/create.md](../handoff/create.md) for full workflow.
+
+3. **Display Handoff**
 
    **If beads were filed:**
    ```

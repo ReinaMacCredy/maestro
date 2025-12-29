@@ -280,9 +280,10 @@ Mode is detected at session start and locked for the session.
 
 | File | Location | Purpose |
 |------|----------|---------|
-| `LEDGER.md` | `conductor/sessions/active/` | Session state in frontmatter (mode, bound_track, bound_bead, tdd_phase) |
+| `metadata.json` | `conductor/tracks/<id>/` | Track info + validation + beads (includes planTasks mapping) |
+| `*.md handoffs` | `conductor/handoffs/<track>/` | Session handoffs (git-committed, shareable) |
+| `index.md` | `conductor/handoffs/<track>/` | Handoff log per track |
 | `session-lock_<track>.json` | `.conductor/` | Concurrent session prevention |
-| `metadata.json` | `tracks/<id>/` | Track info + generation + beads (includes planTasks mapping) |
 | `pending_*.jsonl` | `.conductor/` | Failed operations for replay |
 | `metrics.jsonl` | `.conductor/` | Usage metrics (append-only) |
 

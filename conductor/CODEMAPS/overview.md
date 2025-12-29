@@ -26,7 +26,7 @@ maestro/
 │   │   ├── tdd/                  # TDD cycle + gates
 │   │   ├── verification/         # Pre-completion gates
 │   │   ├── doc-sync/             # Doc sync workflows
-│   │   ├── ledger/               # Session state (LEDGER.log)
+│   │   ├── handoff/              # Session handoff system
 │   │   └── finish/               # Branch completion
 │   ├── design/references/        # Double Diamond + Party Mode
 │   │   └── bmad/                 # Multi-agent design personas
@@ -107,7 +107,7 @@ Zero manual `bd` commands in the happy path:
 Gate files: `skills/conductor/references/validation/shared/*.md`
 Lifecycle routing: `skills/conductor/references/validation/lifecycle.md`
 
-LEDGER integration:
+Validation state (metadata.json):
 ```yaml
 validation:
   gates_passed: [design, spec, plan-structure]

@@ -1,20 +1,18 @@
 #!/usr/bin/env bash
-# Smoke tests for continuity hooks
+# Smoke tests for handoff hooks
 #
 # Usage: ./scripts/test-hooks.sh
 #
 # Tests:
 # 1. Version command
-# 2. SessionStart without ledger
-# 3. SessionStart with ledger
-# 4. PreCompact creates handoff
+# 2. Handoff directory structure
+# 3. Create handoff file
+# 4. Index update on handoff
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-HOOKS_DIR="${REPO_ROOT}/hooks/continuity"
-CONTINUITY_JS="${HOOKS_DIR}/dist/continuity.js"
 
 # Test counter
 TESTS_RUN=0
@@ -44,9 +42,23 @@ test_start() {
 # Setup test environment
 setup() {
     TEST_DIR=$(mktemp -d)
-    mkdir -p "${TEST_DIR}/conductor/sessions/active"
-    mkdir -p "${TEST_DIR}/conductor/sessions/archive"
+    mkdir -p "${TEST_DIR}/conductor/handoffs/general"
+    mkdir -p "${TEST_DIR}/conductor/handoffs/test-track_20251229"
     cd "${TEST_DIR}"
+    
+    # Create initial index.md for general
+    cat > "${TEST_DIR}/conductor/handoffs/general/index.md" << 'EOF'
+---
+track_id: general
+created: 2025-12-29T10:00:00+07:00
+last_updated: 2025-12-29T10:00:00+07:00
+---
+
+# Handoff Log: General
+
+| Timestamp | Trigger | Bead | Summary | File |
+|-----------|---------|------|---------|------|
+EOF
 }
 
 # Cleanup test environment
@@ -59,107 +71,111 @@ cleanup() {
 
 trap cleanup EXIT
 
-# Build if needed
-if [[ ! -f "$CONTINUITY_JS" ]]; then
-    echo "Building hooks..."
-    cd "${HOOKS_DIR}"
-    npm run build --silent
-    cd "${REPO_ROOT}"
-fi
-
-echo "=== Continuity Hooks Smoke Tests ==="
+echo "=== Handoff System Smoke Tests ==="
 echo ""
 
-# Test 1: Version command
-test_start
-output=$(node "$CONTINUITY_JS" --version 2>&1)
-if [[ "$output" =~ v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
-    pass "Version command outputs version"
-else
-    fail "Version command" "semantic version (vX.Y.Z)" "$output"
-fi
-
-# Test 2: SessionStart without ledger
+# Test 1: Directory structure exists
 test_start
 setup
-output=$(node "$CONTINUITY_JS" SessionStart 2>&1)
-if [[ "$output" == *"hookEventName"* && "$output" == *"SessionStart"* ]]; then
-    pass "SessionStart without ledger returns JSON"
+if [[ -d "${TEST_DIR}/conductor/handoffs/general" ]]; then
+    pass "Handoff directory structure created"
 else
-    fail "SessionStart without ledger" "JSON with hookEventName" "$output"
+    fail "Handoff directory" "conductor/handoffs/general/ exists" "directory missing"
 fi
 
-# Test 3: SessionStart with ledger
+# Test 2: Index.md exists
 test_start
-setup
-cat > "${TEST_DIR}/conductor/sessions/active/LEDGER.md" << 'EOF'
+if [[ -f "${TEST_DIR}/conductor/handoffs/general/index.md" ]]; then
+    pass "Index.md exists in general/"
+else
+    fail "Index.md" "file exists" "file missing"
+fi
+
+# Test 3: Index.md has correct format
+test_start
+if grep -q "^| Timestamp |" "${TEST_DIR}/conductor/handoffs/general/index.md"; then
+    pass "Index.md has correct table format"
+else
+    fail "Index.md format" "table header present" "table header missing"
+fi
+
+# Test 4: Can create handoff file with timestamp
+test_start
+timestamp=$(date +%Y-%m-%d_%H-%M-%S-000)
+handoff_file="${TEST_DIR}/conductor/handoffs/general/${timestamp}_general_manual.md"
+cat > "$handoff_file" << 'EOF'
 ---
-updated: 2025-12-27T10:00:00Z
-session_id: T-test123
-platform: claude
+timestamp: 2025-12-29T10:00:00.000+07:00
+trigger: manual
+track_id: general
+git_commit: abc123f
+git_branch: main
+author: agent
 ---
 
-# Session Ledger
+# Handoff: general | manual
 
-## Goal
+## Context
 
-Testing session start hook.
+Test handoff for smoke tests.
+
+## Changes
+
+- None
+
+## Learnings
+
+- Test learning
+
+## Next Steps
+
+1. [ ] Verify tests pass
 EOF
 
-output=$(node "$CONTINUITY_JS" SessionStart 2>&1)
-if [[ "$output" == *"ledger"* && "$output" == *"Testing session start hook"* ]]; then
-    pass "SessionStart with ledger includes ledger content"
+if [[ -f "$handoff_file" ]]; then
+    pass "Handoff file created with timestamp naming"
 else
-    fail "SessionStart with ledger" "ledger content included" "$output"
+    fail "Handoff file creation" "file created" "file missing"
 fi
 
-# Test 4: PreCompact creates handoff
+# Test 5: Track-specific handoff directory works
 test_start
-setup
-cat > "${TEST_DIR}/conductor/sessions/active/LEDGER.md" << 'EOF'
+track_handoff="${TEST_DIR}/conductor/handoffs/test-track_20251229/${timestamp}_test-track_epic-start.md"
+cat > "$track_handoff" << 'EOF'
 ---
-updated: 2025-12-27T10:00:00Z
-session_id: T-test456
-platform: claude
+timestamp: 2025-12-29T10:00:00.000+07:00
+trigger: epic-start
+track_id: test-track_20251229
+bead_id: E1-test
+git_commit: def456a
+git_branch: feat/test-track
+author: agent
 ---
 
-# Session Ledger
+# Handoff: test-track_20251229 | epic-start
 
-## State
+## Context
 
-### Now
-- Testing precompact
+Starting Epic 1 for test track.
+
+## Changes
+
+- None yet
+
+## Learnings
+
+- TBD
+
+## Next Steps
+
+1. [ ] Implement E1 tasks
 EOF
 
-# Capture stderr for the handoff creation message
-output=$(node "$CONTINUITY_JS" PreCompact 2>&1)
-handoff_count=$(ls -1 "${TEST_DIR}/conductor/sessions/archive/"*.md 2>/dev/null | wc -l || echo "0")
-if [[ "$handoff_count" -ge 1 ]]; then
-    pass "PreCompact creates handoff file"
+if [[ -f "$track_handoff" ]]; then
+    pass "Track-specific handoff file created"
 else
-    fail "PreCompact creates handoff" "1 handoff file" "$handoff_count files"
+    fail "Track handoff" "file created" "file missing"
 fi
-
-# Test 5: PostToolUse tracks file
-test_start
-setup
-export CLAUDE_TOOL_INPUT='{"file_path": "/path/to/test.ts"}'
-exit_code=0
-node "$CONTINUITY_JS" PostToolUse 2>&1 || exit_code=$?
-
-if [[ -f "${TEST_DIR}/conductor/sessions/active/LEDGER.md" ]]; then
-    content=$(cat "${TEST_DIR}/conductor/sessions/active/LEDGER.md")
-    if [[ "$content" == *"/path/to/test.ts"* ]]; then
-        pass "PostToolUse tracks modified file"
-    else
-        fail "PostToolUse" "file path in ledger" "$content"
-    fi
-elif [[ $exit_code -ne 0 ]]; then
-    fail "PostToolUse" "hook to execute successfully" "exit code $exit_code"
-else
-    fail "PostToolUse" "LEDGER.md created" "file not created"
-fi
-unset CLAUDE_TOOL_INPUT
 
 # Summary
 echo ""

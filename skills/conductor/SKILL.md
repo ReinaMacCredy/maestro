@@ -155,7 +155,7 @@ Every Beads-integrated command runs preflight first:
 
 1. **Check bd availability** → HALT if unavailable (no silent skip)
 2. **Detect mode** (SA or MA) and lock for session
-3. **Create/update session state** in `conductor/sessions/active/LEDGER.md`
+3. **Update `metadata.json.last_activity`** timestamp
 4. **Recover pending operations** from crashed sessions
 5. **Detect concurrent sessions** via heartbeat protocol
 
@@ -215,6 +215,25 @@ This skill only executes - it does not route. Available commands:
 | `/conductor-revert` | Git-aware revert of work |
 | `/conductor-revise` | Update spec/plan when issues arise |
 | `/conductor-finish` | Complete track: extract learnings, archive |
+| `/create_handoff` | Create handoff file for session context |
+| `/resume_handoff` | Load handoff and resume session context |
+
+### Handoff System
+
+Conductor uses a HumanLayer-inspired handoff system for cross-session context preservation.
+
+| Trigger | When | Automatic |
+|---------|------|-----------|
+| `design-end` | After `/conductor-newtrack` completes | ✅ |
+| `epic-start` | Before each epic in `/conductor-implement` | ✅ |
+| `epic-end` | After each epic closes | ✅ |
+| `pre-finish` | At start of `/conductor-finish` | ✅ |
+| `manual` | User runs `/create_handoff` | ❌ |
+| `idle` | 30min inactivity gap detected | ✅ (prompted) |
+
+Handoffs are stored in `conductor/handoffs/<track-id>/` (git-committed, shareable).
+
+See [references/handoff/](references/handoff/) for full documentation.
 
 ## Context Loading
 
@@ -322,12 +341,18 @@ conductor/
 │   ├── .meta.json          # Generation metadata
 │   ├── overview.md         # Project-level architecture (always generated)
 │   └── [module].md         # Per-module codemaps (skills.md, api.md, etc.)
+├── handoffs/               # Session handoffs (git-committed)
+│   ├── general/            # Non-track handoffs
+│   │   └── index.md        # Handoff log
+│   └── <track_id>/         # Per-track handoffs
+│       ├── index.md        # Handoff log
+│       └── *.md            # Individual handoff files
 ├── code_styleguides/       # Language-specific style guides
 ├── archive/                # Archived completed tracks
 ├── exports/                # Exported summaries
 └── tracks/
     └── <track_id>/         # Format: shortname_YYYYMMDD
-        ├── metadata.json   # Track type, status, dates
+        ├── metadata.json   # Track type, status, dates, validation state
         ├── design.md       # High-level design (created via /conductor-design)
         ├── spec.md         # Requirements and acceptance criteria
         ├── plan.md         # Phased task list with status
@@ -545,4 +570,10 @@ You know:
 
 ## References
 
-For detailed workflow documentation, see [references/workflows.md](references/workflows.md).
+For detailed workflow documentation, see [references/workflows.md](references/workflows.md) (index) and the authoritative per-command docs in [references/workflows/](references/workflows/).
+
+**Key workflow files:**
+- [workflows/newtrack.md](references/workflows/newtrack.md) - Track creation with validation gates
+- [workflows/implement.md](references/workflows/implement.md) - Task execution
+- [finish-workflow.md](references/finish-workflow.md) - Track completion
+- [tdd/cycle.md](references/tdd/cycle.md) - TDD cycle with validation gate

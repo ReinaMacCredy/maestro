@@ -143,30 +143,37 @@ Before marking Gate 1 complete:
 □ Recommendations actionable and specific
 ```
 
-## LEDGER Integration
+## metadata.json Integration
 
-Update the LEDGER.md file according to the central format:
+Update the track's `metadata.json` file:
 
 ```text
 ON VALIDATION START:
-  Update frontmatter:
-    validation.current_gate: design
+  Update metadata.json.validation:
+    "current_gate": "design"
 
 ON VALIDATION COMPLETE (PASS):
-  Update frontmatter:
-    validation.gates_passed: [..., design]
-    validation.current_gate: null
-    validation.retries: 0
+  Update metadata.json.validation:
+    "gates_passed": [..., "design"]
+    "current_gate": null
+    "retries": 0
 
 ON VALIDATION COMPLETE (FAIL):
-  Update frontmatter:
-    validation.last_failure: "<failure reason>"
-    validation.retries: <current + 1>
+  Update metadata.json.validation:
+    "last_failure": "<failure reason>"
+    "retries": <current + 1>
+```
 
-Add entry to ## Validation History table:
-| Gate | Status | Time | Notes |
-|------|--------|------|-------|
-| design | [PASS]/[WARN]/[FAIL] | HH:MM | <details> |
+Example metadata.json.validation state:
+```json
+{
+  "validation": {
+    "gates_passed": ["design"],
+    "current_gate": null,
+    "retries": 0,
+    "last_failure": null
+  }
+}
 ```
 
 ## Relationship to Other Commands

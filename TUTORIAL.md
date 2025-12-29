@@ -120,8 +120,8 @@ Every artifact is a **checkpoint**. Handoff happens after planning completes, th
 | `spec.md` | Requirements, acceptance criteria | `/conductor-newtrack` |
 | `plan.md` | Task breakdown, status markers | `/conductor-newtrack` |
 | `.beads/` | Issues, dependencies, notes | Auto via facade |
-| `metadata.json` | Track state + planTasks mapping | `/conductor-newtrack` |
-| `LEDGER.md` | Session state (mode, bound_track, bound_bead, tdd_phase) | Auto via facade |
+| `metadata.json` | Track state + validation + planTasks mapping | `/conductor-newtrack` |
+| `conductor/handoffs/` | Session handoffs (git-committed, shareable) | Auto via triggers |
 
 ### The Handoff Protocol
 

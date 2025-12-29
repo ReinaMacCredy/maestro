@@ -182,7 +182,7 @@ After REFACTOR completes for a task/bead, run plan execution validation:
 
 1. **Load gate**: `../validation/shared/validate-plan-execution.md`
 2. **Run validation**: Check implementation vs plan.md, run verification commands
-3. **Update LEDGER**: Add to `validation.gates_passed` or `validation.last_failure`
+3. **Update metadata.json**: Add to `validation.gates_passed` or `validation.last_failure`
 4. **Behavior by mode**:
    - **SPEED mode**: WARN on failure, continue
    - **FULL mode**: HALT on failure, retry up to 2x, then escalate
@@ -196,7 +196,7 @@ After REFACTOR completes for a task/bead, run plan execution validation:
 │ ✓ Verification commands pass                   │
 │ ✓ Code matches plan specification              │
 │                                                │
-│ LEDGER: gates_passed: [..., plan-execution]    │
+│ metadata.json: gates_passed: [..., plan-execution] │
 └────────────────────────────────────────────────┘
 ```
 

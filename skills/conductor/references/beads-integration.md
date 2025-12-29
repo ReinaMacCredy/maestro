@@ -40,7 +40,7 @@ Session Start
 1. Check `bd` availability → HALT if unavailable
 2. Check Village MCP availability
 3. Lock mode (SA or MA) for session
-4. Create/update LEDGER.md with session state in frontmatter
+4. Update metadata.json.session with session state
 5. Detect stale agents (MA mode)
 
 **HALT Conditions:**
@@ -110,10 +110,14 @@ release(path="src/auth.ts")
 - If no test files detected → skip checkpoints
 - If `--no-tdd` flag provided → skip checkpoints
 
-**LEDGER.md Frontmatter Update:**
-```yaml
-tdd_phase: GREEN
-heartbeat: 2025-12-25T12:00:00Z
+**metadata.json Session Update:**
+```json
+{
+  "session": {
+    "tdd_phase": "GREEN",
+    "heartbeat": "2025-12-25T12:00:00Z"
+  }
+}
 ```
 
 ---
@@ -284,28 +288,28 @@ Plan structure issue detected:
 
 ## State Files
 
-### Session State (LEDGER.md)
+### Session State (metadata.json.session)
 
-**Location:** `conductor/sessions/active/`
+**Location:** `conductor/tracks/<track_id>/metadata.json`
 
-Session tracking is now stored in LEDGER.md frontmatter:
+Session tracking is stored in the metadata.json session section:
 
-```yaml
----
-updated: 2025-12-25T12:00:00Z
-session_id: T-abc123
-platform: amp
-bound_track: beads-integration_20251225
-bound_bead: bd-42
-mode: SA
-tdd_phase: GREEN
-heartbeat: 2025-12-25T12:00:00Z
----
+```json
+{
+  "session": {
+    "updated": "2025-12-25T12:00:00Z",
+    "session_id": "T-abc123",
+    "platform": "amp",
+    "bound_bead": "bd-42",
+    "mode": "SA",
+    "tdd_phase": "GREEN",
+    "heartbeat": "2025-12-25T12:00:00Z"
+  }
+}
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| bound_track | string \| null | Current track |
 | bound_bead | string \| null | Claimed task ID |
 | mode | "SA" \| "MA" | Locked session mode |
 | tdd_phase | "RED" \| "GREEN" \| "REFACTOR" \| null | TDD phase |
