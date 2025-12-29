@@ -314,9 +314,9 @@ The integration uses these files (auto-managed):
 
 | File | Purpose |
 |------|---------|
-| `conductor/sessions/active/LEDGER.md` | Session state in frontmatter (mode, bound_track, bound_bead, tdd_phase) |
+| `conductor/handoffs/<track>/` | Session handoffs (git-committed, shareable) |
+| `conductor/tracks/<id>/metadata.json` | Track state, validation, bidirectional mapping: plan task IDs ↔ bead IDs |
 | `.conductor/session-lock_<track>.json` | Prevents concurrent sessions on same track |
-| `conductor/tracks/<id>/metadata.json` | Track state + bidirectional mapping: plan task IDs ↔ bead IDs |
 
 ### SA vs MA Mode
 
