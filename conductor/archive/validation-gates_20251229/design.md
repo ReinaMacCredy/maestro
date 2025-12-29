@@ -20,7 +20,7 @@ Tích hợp 5 validation gates vào Maestro lifecycle, routing qua maestro-core,
 
 ## Architecture
 
-```
+```text
 conductor/references/validation/
 ├── lifecycle.md                      # Gate routing + LEDGER integration
 ├── shared/

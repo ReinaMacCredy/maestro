@@ -51,7 +51,7 @@ For each task, verify:
 | Dependencies | Valid task IDs if declared | ✅/❌ |
 
 **Task quality formula:**
-```
+```text
 Task Quality = (criteria_present + complexity_valid + deliverable_clear) / 3
 Minimum threshold: 0.8 (80%)
 ```
@@ -69,7 +69,7 @@ For each epic, verify:
 | Parallelization | Independent tasks identified | ✅/❌ |
 
 **Epic quality formula:**
-```
+```text
 Epic Quality = (atomic_tasks + valid_deps + logical_order + coherent_scope) / 4
 Minimum threshold: 0.75 (75%)
 ```
@@ -195,21 +195,28 @@ Before marking Gate 3 complete:
 
 ## LEDGER Integration
 
-Record validation results in session LEDGER:
+Update the LEDGER.md file according to the central format:
 
-```markdown
-## Gate 3: Plan Structure Validation
+```text
+ON VALIDATION START:
+  Update frontmatter:
+    validation.current_gate: plan-structure
 
-**Timestamp:** 2025-12-29T10:30:00Z
-**Result:** PASS | FAIL
+ON VALIDATION COMPLETE (PASS):
+  Update frontmatter:
+    validation.gates_passed: [..., plan-structure]
+    validation.current_gate: null
+    validation.retries: 0
 
-**Metrics:**
-- Task Quality: X%
-- Epic Quality: Y%
-- Verification: Present/Missing
+ON VALIDATION COMPLETE (FAIL):
+  Update frontmatter:
+    validation.last_failure: "<failure reason>"
+    validation.retries: <current + 1>
 
-**Issues:** <count> issues found
-**Blocking:** <list any blocking issues>
+Add entry to ## Validation History table:
+| Gate | Status | Time | Notes |
+|------|--------|------|-------|
+| plan-structure | [PASS]/[WARN]/[FAIL] | HH:MM | <details> |
 ```
 
 ## Relationship to Other Commands

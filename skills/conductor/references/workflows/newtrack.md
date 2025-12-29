@@ -95,9 +95,9 @@ This workflow uses consolidated state in `metadata.json`:
    - **Update LEDGER**: Add `spec` to `validation.gates_passed` or log failure
    - **Behavior**: WARN on failure (both SPEED and FULL modes), continue to plan generation
 
-   ```
+   ```text
    ┌─ VALIDATION GATE: spec ─────────────────────────┐
-   │ Status: ✅ PASS | ⚠️ WARN                       │
+   │ Status: [PASS] | [WARN]                         │
    │                                                 │
    │ Checks:                                         │
    │ ✓ All design decisions captured                 │
@@ -144,9 +144,9 @@ This workflow uses consolidated state in `metadata.json`:
    - **Update LEDGER**: Add `plan-structure` to `validation.gates_passed` or log failure
    - **Behavior**: WARN on failure (both SPEED and FULL modes), continue to artifact creation
 
-   ```
+   ```text
    ┌─ VALIDATION GATE: plan-structure ───────────────┐
-   │ Status: ✅ PASS | ⚠️ WARN                       │
+   │ Status: [PASS] | [WARN]                         │
    │                                                 │
    │ Checks:                                         │
    │ ✓ All tasks have acceptance criteria            │

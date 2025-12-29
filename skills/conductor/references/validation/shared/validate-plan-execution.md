@@ -159,10 +159,10 @@ If automated verification passes, these require manual verification:
 
 **Every verification command MUST be run fresh:**
 
-```
-✅ CORRECT: Run command → Read output → Report result
-❌ WRONG: Assume previous run still valid
-❌ WRONG: Report success without running
+```text
+[OK] CORRECT: Run command → Read output → Report result
+[X] WRONG: Assume previous run still valid
+[X] WRONG: Report success without running
 ```
 
 Reference: [Verification Gate](../verification/gate.md) - "No completion claims without fresh verification evidence"
@@ -206,31 +206,28 @@ Before marking Gate 4 complete:
 
 ## LEDGER Integration
 
-Update session LEDGER with validation results:
+Update the LEDGER.md file according to the central format:
 
-```markdown
-## Gate 4: Plan Execution Validation
+```text
+ON VALIDATION START:
+  Update frontmatter:
+    validation.current_gate: plan-execution
 
-**Timestamp:** 2025-12-29T14:30:00Z
-**Task:** T1.1, T1.2, T1.3
-**Result:** PASS | PARTIAL | FAIL
+ON VALIDATION COMPLETE (PASS):
+  Update frontmatter:
+    validation.gates_passed: [..., plan-execution]
+    validation.current_gate: null
+    validation.retries: 0
 
-**Verification Results:**
-- Tests: PASS (45/45)
-- Typecheck: PASS
-- Lint: PASS
-- Build: PASS
+ON VALIDATION COMPLETE (FAIL):
+  Update frontmatter:
+    validation.last_failure: "<failure reason>"
+    validation.retries: <current + 1>
 
-**Deliverables:** 2/3 complete
-**Criteria Met:** 80%
-
-**Blocking Issues:**
-- Missing duplicate email validation
-- Missing down migration
-
-**Next Actions:**
-- Complete blocking issues
-- Re-run Gate 4 validation
+Add entry to ## Validation History table:
+| Gate | Status | Time | Notes |
+|------|--------|------|-------|
+| plan-execution | [PASS]/[WARN]/[FAIL] | HH:MM | <details> |
 ```
 
 ## Relationship to Other Commands
@@ -249,7 +246,7 @@ Gate 4 validates after each task/epic completion during `/conductor-implement`.
 
 Gate 4 runs after TDD REFACTOR phase:
 
-```
+```text
 RED → GREEN → REFACTOR → Gate 4 Validation
                               ↓
                     Pass? → Next task

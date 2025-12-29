@@ -1,4 +1,5 @@
 ---
+name: Gate 1 Design Validation
 description: Gate 1 - Validates design.md against product.md, tech-stack.md, and CODEMAPS for alignment and consistency
 ---
 
@@ -8,7 +9,7 @@ Validates design decisions against product strategy, technology constraints, and
 
 ## Initial Setup
 
-```
+```text
 BEFORE validation begins:
 
 1. LOCATE: Find conductor/tracks/<track-id>/design.md
@@ -23,7 +24,7 @@ BEFORE validation begins:
 
 Run parallel research tasks to gather validation context:
 
-```
+```text
 PARALLEL RESEARCH TASKS:
 
 Task A - Product Alignment:
@@ -46,7 +47,7 @@ Task C - Pattern Consistency:
 
 Apply validation checks against design.md:
 
-```
+```text
 VALIDATION CHECKS:
 
 1. Product Alignment Check:
@@ -70,7 +71,7 @@ VALIDATION CHECKS:
 
 ### Step 3: Generate Validation Report
 
-```
+```text
 OUTPUT FORMAT:
 
 ## Design Validation Report
@@ -83,23 +84,23 @@ OUTPUT FORMAT:
 
 | Design Element | Product Requirement | Status | Notes |
 |----------------|---------------------|--------|-------|
-| <goal-1> | <product-ref> | ✅/⚠️/❌ | <details> |
-| <goal-2> | <product-ref> | ✅/⚠️/❌ | <details> |
+| <goal-1> | <product-ref> | [PASS]/[WARN]/[FAIL] | <details> |
+| <goal-2> | <product-ref> | [PASS]/[WARN]/[FAIL] | <details> |
 
 ### Tech-Stack Compliance
 
 | Technology | Approved Version | Design Version | Status |
 |------------|------------------|----------------|--------|
-| <tech-1> | <approved> | <proposed> | ✅/❌ |
-| <tech-2> | <approved> | <proposed> | ✅/❌ |
+| <tech-1> | <approved> | <proposed> | [PASS]/[FAIL] |
+| <tech-2> | <approved> | <proposed> | [PASS]/[FAIL] |
 
 ### Pattern Consistency
 
 | Pattern Area | CODEMAPS Reference | Compliance | Notes |
 |--------------|-------------------|------------|-------|
-| Naming | <codemap-file> | ✅/⚠️/❌ | <details> |
-| Structure | <codemap-file> | ✅/⚠️/❌ | <details> |
-| APIs | <codemap-file> | ✅/⚠️/❌ | <details> |
+| Naming | <codemap-file> | [PASS]/[WARN]/[FAIL] | <details> |
+| Structure | <codemap-file> | [PASS]/[WARN]/[FAIL] | <details> |
+| APIs | <codemap-file> | [PASS]/[WARN]/[FAIL] | <details> |
 
 ### Issues Found
 
@@ -116,7 +117,7 @@ OUTPUT FORMAT:
 
 ## Important Guidelines
 
-```
+```text
 MANDATORY RULES:
 
 1. NEVER skip product.md check - design without product alignment is waste
@@ -130,7 +131,7 @@ MANDATORY RULES:
 
 Before marking Gate 1 complete:
 
-```
+```text
 □ product.md read and goals extracted
 □ tech-stack.md read and constraints noted
 □ Relevant CODEMAPS identified and scanned
@@ -144,18 +145,28 @@ Before marking Gate 1 complete:
 
 ## LEDGER Integration
 
-```
-ON VALIDATION START:
-  Update LEDGER.md frontmatter:
-    validation_gate: 1
-    validation_status: in_progress
-    validation_started: <timestamp>
+Update the LEDGER.md file according to the central format:
 
-ON VALIDATION COMPLETE:
-  Update LEDGER.md frontmatter:
-    validation_status: <PASS|WARN|FAIL>
-    validation_completed: <timestamp>
-    validation_issues: <count>
+```text
+ON VALIDATION START:
+  Update frontmatter:
+    validation.current_gate: design
+
+ON VALIDATION COMPLETE (PASS):
+  Update frontmatter:
+    validation.gates_passed: [..., design]
+    validation.current_gate: null
+    validation.retries: 0
+
+ON VALIDATION COMPLETE (FAIL):
+  Update frontmatter:
+    validation.last_failure: "<failure reason>"
+    validation.retries: <current + 1>
+
+Add entry to ## Validation History table:
+| Gate | Status | Time | Notes |
+|------|--------|------|-------|
+| design | [PASS]/[WARN]/[FAIL] | HH:MM | <details> |
 ```
 
 ## Relationship to Other Commands
@@ -169,7 +180,7 @@ ON VALIDATION COMPLETE:
 
 ## Failure Handling
 
-```
+```text
 IF Gate 1 FAILS:
 
 1. DO NOT proceed to spec generation
@@ -190,14 +201,14 @@ IF Gate 1 WARNS:
 
 Following the Iron Law from gate.md:
 
-```
+```text
 NO GATE PASSAGE WITHOUT EVIDENCE:
 
-✅ "Product alignment verified" + table showing each mapping
-✅ "Tech-stack compliant" + table showing each technology check
-✅ "Patterns consistent" + CODEMAPS references checked
+[PASS] "Product alignment verified" + table showing each mapping
+[PASS] "Tech-stack compliant" + table showing each technology check
+[PASS] "Patterns consistent" + CODEMAPS references checked
 
-❌ "Design looks good"
-❌ "Should be aligned"
-❌ "Probably consistent"
+[FAIL] "Design looks good"
+[FAIL] "Should be aligned"
+[FAIL] "Probably consistent"
 ```

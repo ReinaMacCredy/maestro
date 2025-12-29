@@ -2,26 +2,26 @@
 
 ## Overview
 
-Tích hợp 5 validation gates vào Maestro lifecycle để verify design alignment và implementation completeness. Gates routing qua maestro-core, logic nằm trong `conductor/references/validation/`.
+Integrate 5 validation gates into Maestro lifecycle to verify design alignment and implementation completeness. Gates route through maestro-core, logic resides in `conductor/references/validation/`.
 
 ## Functional Requirements
 
 ### FR1: Validation Gate Registry
 
-- **FR1.1**: Hệ thống phải hỗ trợ 5 validation gates:
-  - Gate 1: validate-design (sau DELIVER)
-  - Gate 2: validate-spec (sau spec.md generation)
-  - Gate 3: validate-plan-structure (sau plan.md generation)
-  - Gate 4: validate-plan-execution (sau TDD REFACTOR)
-  - Gate 5: validate-completion (trước /conductor-finish)
+- **FR1.1**: System must support 5 validation gates:
+  - Gate 1: validate-design (after DELIVER)
+  - Gate 2: validate-spec (after spec.md generation)
+  - Gate 3: validate-plan-structure (after plan.md generation)
+  - Gate 4: validate-plan-execution (after TDD REFACTOR)
+  - Gate 5: validate-completion (before /conductor-finish)
 
-- **FR1.2**: Mỗi gate phải có file riêng trong `conductor/references/validation/shared/`
+- **FR1.2**: Each gate must have its own file in `conductor/references/validation/shared/`
 
-- **FR1.3**: Gate lifecycle routing phải được định nghĩa trong `conductor/references/validation/lifecycle.md`
+- **FR1.3**: Gate lifecycle routing must be defined in `conductor/references/validation/lifecycle.md`
 
 ### FR2: LEDGER Integration
 
-- **FR2.1**: LEDGER.md frontmatter phải có `validation` section:
+- **FR2.1**: LEDGER.md frontmatter must have `validation` section:
   ```yaml
   validation:
     gates_passed: []
@@ -30,21 +30,21 @@ Tích hợp 5 validation gates vào Maestro lifecycle để verify design alignm
     last_failure: null
   ```
 
-- **FR2.2**: LEDGER.md body phải có `## Validation History` section để log failures
+- **FR2.2**: LEDGER.md body must have `## Validation History` section to log failures
 
-- **FR2.3**: Mỗi gate pass/fail phải update LEDGER state
+- **FR2.3**: Each gate pass/fail must update LEDGER state
 
 ### FR3: Behavior Matrix
 
-- **FR3.1**: SPEED mode: Tất cả gates chỉ WARN, không HALT
+- **FR3.1**: SPEED mode: All gates only WARN, no HALT
 - **FR3.2**: FULL mode:
   - design, plan-execution, completion: HALT + retry (max 2)
   - spec, plan-structure: WARN + continue
-- **FR3.3**: Sau max retries (2): Escalate với message "Human review needed"
+- **FR3.3**: After max retries (2): Escalate with message "Human review needed"
 
 ### FR4: Content Format
 
-- **FR4.1**: Tất cả gate files phải theo humanlayer format:
+- **FR4.1**: All gate files must follow humanlayer format:
   - Initial Setup
   - Validation Process (3 steps)
   - Important Guidelines
@@ -61,15 +61,15 @@ Tích hợp 5 validation gates vào Maestro lifecycle để verify design alignm
 ## Non-Functional Requirements
 
 ### NFR1: Performance
-- Validation phải complete trong < 30 seconds mỗi gate
+- Validation must complete in < 30 seconds per gate
 
 ### NFR2: Maintainability
-- Không tạo skill mới, dùng existing conductor/references/
+- No new skill creation, use existing conductor/references/
 - Reuse existing gate.md verification logic
 
 ### NFR3: Compatibility
-- Hoạt động với cả SPEED và FULL mode
-- Không break existing workflow
+- Works with both SPEED and FULL mode
+- Does not break existing workflow
 
 ## Acceptance Criteria
 

@@ -52,8 +52,8 @@ For HALT gates in FULL mode:
 2. **Second attempt fails**: Log to LEDGER, increment retries, one more chance
 3. **Third attempt fails**: Escalate with message:
 
-```
-⚠️ Validation failed 2x. Human review needed.
+```text
+WARNING: Validation failed 2x. Human review needed.
 
 Gate: [gate-name]
 Failures:
@@ -69,12 +69,12 @@ When validation sources are missing:
 
 | Missing File | Behavior |
 |--------------|----------|
-| product.md | WARN: "⚠️ product.md not found. Skipping product alignment check." |
-| tech-stack.md | WARN: "⚠️ tech-stack.md not found. Skipping tech-stack compliance check." |
-| CODEMAPS/ | WARN: "⚠️ CODEMAPS not found. Skipping pattern consistency check." |
-| design.md | HALT: "❌ design.md required for spec validation." |
-| spec.md | HALT: "❌ spec.md required for plan validation." |
-| plan.md | HALT: "❌ plan.md required for execution validation." |
+| product.md | WARN: "WARNING: product.md not found. Skipping product alignment check." |
+| tech-stack.md | WARN: "WARNING: tech-stack.md not found. Skipping tech-stack compliance check." |
+| CODEMAPS/ | WARN: "WARNING: CODEMAPS not found. Skipping pattern consistency check." |
+| design.md | HALT: "ERROR: design.md required for spec validation." |
+| spec.md | HALT: "ERROR: spec.md required for plan validation." |
+| plan.md | HALT: "ERROR: plan.md required for execution validation." |
 
 **Aggregate warnings**: Collect all missing file warnings and report them together at the end of validation.
 

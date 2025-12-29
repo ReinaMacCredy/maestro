@@ -120,20 +120,33 @@ Before approving for `/conductor-finish`:
 
 ## LEDGER Integration
 
-When validation completes:
+Update the LEDGER.md file according to the central format:
 
-```yaml
-# Update LEDGER.md
-validation_gate: completion
-validation_status: READY | NOT_READY
-blockers:
-  - "description of blocker"
-last_validated: 2025-12-29T10:00:00Z
+```text
+ON VALIDATION START:
+  Update frontmatter:
+    validation.current_gate: completion
+
+ON VALIDATION COMPLETE (PASS):
+  Update frontmatter:
+    validation.gates_passed: [..., completion]
+    validation.current_gate: null
+    validation.retries: 0
+
+ON VALIDATION COMPLETE (FAIL):
+  Update frontmatter:
+    validation.last_failure: "<failure reason>"
+    validation.retries: <current + 1>
+
+Add entry to ## Validation History table:
+| Gate | Status | Time | Notes |
+|------|--------|------|-------|
+| completion | [PASS]/[WARN]/[FAIL] | HH:MM | <details> |
 ```
 
 ## Relationship to Other Commands
 
-```
+```text
 All implementation complete
         ↓
 All beads closed (bd close)

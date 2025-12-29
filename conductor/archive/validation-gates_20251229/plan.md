@@ -126,10 +126,10 @@
 
 ### 4.2 Update conductor/AGENTS.md
 - [x] Add validation-related learnings
-- [x] Add validation commands to Commands section
+- [x] Add validation patterns and gotchas (no new commands - uses existing bd commands)
 
 **Acceptance Criteria:**
-- AGENTS.md has validation patterns
+- AGENTS.md has validation patterns and gotchas
 
 ---
 

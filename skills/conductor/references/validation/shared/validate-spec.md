@@ -1,4 +1,5 @@
 ---
+name: Gate 2 Spec Validation
 description: Gate 2 - Validates spec.md against design.md for requirement capture, completeness, and clarity
 ---
 
@@ -8,7 +9,7 @@ Validates specification against design decisions for complete and accurate requi
 
 ## Initial Setup
 
-```
+```text
 BEFORE validation begins:
 
 1. VERIFY: Gate 1 (validate-design) has PASSED
@@ -24,7 +25,7 @@ BEFORE validation begins:
 
 Map design decisions to spec requirements:
 
-```
+```text
 REQUIREMENT MAPPING:
 
 For EACH decision in design.md:
@@ -41,7 +42,7 @@ Build Traceability Matrix:
 
 Verify nothing was lost or added inappropriately:
 
-```
+```text
 COMPLETENESS CHECKS:
 
 1. Missing Items (Design → Spec):
@@ -67,7 +68,7 @@ COMPLETENESS CHECKS:
 
 Ensure spec is implementable without ambiguity:
 
-```
+```text
 CLARITY CHECKS:
 
 1. Requirement Quality:
@@ -90,7 +91,7 @@ CLARITY CHECKS:
 
 ## Generate Validation Report
 
-```
+```text
 OUTPUT FORMAT:
 
 ## Spec Validation Report
@@ -104,23 +105,23 @@ OUTPUT FORMAT:
 
 | Design Decision | Spec Requirement(s) | Coverage | Notes |
 |-----------------|---------------------|----------|-------|
-| <decision-1> | <req-ids> | ✅/⚠️/❌ | <details> |
-| <decision-2> | <req-ids> | ✅/⚠️/❌ | <details> |
+| <decision-1> | <req-ids> | [PASS]/[WARN]/[FAIL] | <details> |
+| <decision-2> | <req-ids> | [PASS]/[WARN]/[FAIL] | <details> |
 
 ### Scope Check
 
 | Check Type | Count | Status | Details |
 |------------|-------|--------|---------|
-| Missing Items | <n> | ✅/❌ | <list if any> |
-| Scope Creep | <n> | ✅/❌ | <list if any> |
-| Ambiguous Reqs | <n> | ✅/❌ | <list if any> |
+| Missing Items | <n> | [PASS]/[FAIL] | <list if any> |
+| Scope Creep | <n> | [PASS]/[FAIL] | <list if any> |
+| Ambiguous Reqs | <n> | [PASS]/[FAIL] | <list if any> |
 
 ### Clarity Assessment
 
 | Requirement | Testable | Unambiguous | Has Criteria | Status |
 |-------------|----------|-------------|--------------|--------|
-| <req-1> | ✅/❌ | ✅/❌ | ✅/❌ | <overall> |
-| <req-2> | ✅/❌ | ✅/❌ | ✅/❌ | <overall> |
+| <req-1> | [PASS]/[FAIL] | [PASS]/[FAIL] | [PASS]/[FAIL] | <overall> |
+| <req-2> | [PASS]/[FAIL] | [PASS]/[FAIL] | [PASS]/[FAIL] | <overall> |
 
 ### Issues Found
 
@@ -138,7 +139,7 @@ OUTPUT FORMAT:
 
 ## Important Guidelines
 
-```
+```text
 MANDATORY RULES:
 
 1. NEVER validate spec without passing Gate 1
@@ -153,7 +154,7 @@ MANDATORY RULES:
 
 Before marking Gate 2 complete:
 
-```
+```text
 □ Gate 1 (validate-design) status verified as PASS
 □ design.md read and decisions extracted
 □ spec.md read and requirements mapped
@@ -168,20 +169,28 @@ Before marking Gate 2 complete:
 
 ## LEDGER Integration
 
-```
-ON VALIDATION START:
-  Update LEDGER.md frontmatter:
-    validation_gate: 2
-    validation_status: in_progress
-    validation_started: <timestamp>
-    gate1_status: <inherited>
+Update the LEDGER.md file according to the central format:
 
-ON VALIDATION COMPLETE:
-  Update LEDGER.md frontmatter:
-    validation_status: <PASS|WARN|FAIL>
-    validation_completed: <timestamp>
-    validation_issues: <count>
-    spec_coverage: <percentage>
+```text
+ON VALIDATION START:
+  Update frontmatter:
+    validation.current_gate: spec
+
+ON VALIDATION COMPLETE (PASS):
+  Update frontmatter:
+    validation.gates_passed: [..., spec]
+    validation.current_gate: null
+    validation.retries: 0
+
+ON VALIDATION COMPLETE (FAIL):
+  Update frontmatter:
+    validation.last_failure: "<failure reason>"
+    validation.retries: <current + 1>
+
+Add entry to ## Validation History table:
+| Gate | Status | Time | Notes |
+|------|--------|------|-------|
+| spec | [PASS]/[WARN]/[FAIL] | HH:MM | <details> |
 ```
 
 ## Relationship to Other Commands
@@ -195,7 +204,7 @@ ON VALIDATION COMPLETE:
 
 ## Failure Handling
 
-```
+```text
 IF Gate 2 FAILS:
 
 1. DO NOT proceed to plan generation
@@ -220,21 +229,21 @@ IF Gate 2 WARNS:
 
 Following the Iron Law from gate.md:
 
-```
+```text
 NO GATE PASSAGE WITHOUT EVIDENCE:
 
-✅ "All design decisions covered" + traceability matrix
-✅ "No scope creep detected" + spec-to-design mapping
-✅ "Requirements are clear" + testability assessment
+[PASS] "All design decisions covered" + traceability matrix
+[PASS] "No scope creep detected" + spec-to-design mapping
+[PASS] "Requirements are clear" + testability assessment
 
-❌ "Spec looks complete"
-❌ "Should cover everything"
-❌ "Requirements seem clear"
+[FAIL] "Spec looks complete"
+[FAIL] "Should cover everything"
+[FAIL] "Requirements seem clear"
 ```
 
 ## Traceability Matrix Format
 
-```
+```text
 | Design Decision ID | Design Description | Spec Req IDs | Coverage Notes |
 |--------------------|-------------------|--------------|----------------|
 | D-001 | User authentication | R-001, R-002 | Full coverage |
