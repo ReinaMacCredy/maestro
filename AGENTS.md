@@ -331,7 +331,7 @@ Before dispatching parallel subagents:
 2. Inject coordination block into Task prompts
 3. Release reservations after completion
 
-See [skills/conductor/references/coordination/](skills/conductor/references/coordination/) for full protocol.
+See [skills/orchestrator/references/](skills/orchestrator/references/) for full protocol.
 
 ### Failure Handling
 

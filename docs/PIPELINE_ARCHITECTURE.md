@@ -615,4 +615,4 @@ flowchart TB
 - [TUTORIAL.md](../TUTORIAL.md) - Complete workflow guide
 - [skills/design/references/bmad/workflows/party-mode/workflow.md](../skills/design/references/bmad/workflows/party-mode/workflow.md) - Party Mode details
 - [skills/design/SKILL.md](../skills/design/SKILL.md) - Double Diamond methodology
-- [skills/conductor/references/coordination/](../skills/conductor/references/coordination/) - Parallel agent coordination
+- [skills/orchestrator/references/](../skills/orchestrator/references/) - Parallel agent coordination (Orchestrator skill)

@@ -98,7 +98,7 @@ Zero manual `bd` commands in the happy path:
 | Add a skill | Create `skills/<name>/SKILL.md` with frontmatter + `references/` |
 | Add workflow docs | Add to `skills/<skill>/references/*.md` |
 | Regenerate CODEMAPS | `/conductor-finish` (Phase 6: CODEMAPS Regeneration) |
-| Coordinate parallel agents | See `skills/conductor/references/coordination/` |
+| Coordinate parallel agents | `/conductor-orchestrate` or `skills/orchestrator/references/` |
 
 ## Validation Gates
 

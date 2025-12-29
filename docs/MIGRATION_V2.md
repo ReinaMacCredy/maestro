@@ -138,7 +138,7 @@ After v2.0, a further consolidation merged 9 skills into conductor:
 
 | v2.0 Path | v3.0 Path |
 |-----------|-----------|
-| `skills/dispatching-parallel-agents/references/agent-coordination/*` | `skills/conductor/references/coordination/*` |
+| `skills/dispatching-parallel-agents/references/agent-coordination/*` | `skills/orchestrator/references/*` |
 | `skills/continuity/*` | `skills/conductor/references/ledger/*` |
 | `skills/test-driven-development/*` | `skills/conductor/references/tdd/*` |
 | `skills/verification-before-completion/*` | `skills/conductor/references/verification/*` |
