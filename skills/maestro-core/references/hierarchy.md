@@ -6,7 +6,7 @@
 |-------|-------|------|---------|
 | 1 | maestro-core | Central orchestrator | Routing, fallback policy, hierarchy |
 | 2 | conductor | Track orchestrator | Workflow state, track lifecycle, beads integration |
-| 3 | design | Design sessions | Double Diamond phases, Party Mode, grounding |
+| 3 | design | Design sessions | Double Diamond phases, Party Mode, research verification |
 | 4 | beads | Issue tracking | Dependencies, multi-session persistence |
 | 5 | specialized | Tools | worktrees, sharing, writing-skills |
 
@@ -30,7 +30,7 @@ When skills disagree, **higher level wins**:
 | Village MCP unavailable | No | **DEGRADE** | ⚠️ Village unavailable. Using single-agent mode. |
 | CODEMAPS missing | No | **DEGRADE** | ⚠️ No CODEMAPS found. Context limited. |
 | `product.md` missing | No | **DEGRADE** | ⚠️ No product context. Run /conductor-setup. |
-| Network unavailable | No | **DEGRADE** | ⚠️ Network unavailable. Web grounding skipped. |
+| Network unavailable | No | **DEGRADE** | ⚠️ Network unavailable. Web research skipped. |
 
 ### HALT Criteria
 

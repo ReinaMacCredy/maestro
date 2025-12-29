@@ -37,7 +37,7 @@ Task tool (general-purpose):
     6. Self-review (see below)
     7. Report back
 
-    ## Grounding External Dependencies
+    ## Verify External Dependencies
 
     **Before using any external library, API, or framework:**
 
@@ -47,12 +47,12 @@ Task tool (general-purpose):
     - **Existing patterns**: Use `Grep`/`finder` to confirm "how we do X here"
     - **Past decisions**: Check memory or project docs for prior context
 
-    Signs you need grounding:
+    Signs you need verification:
     - Using a library you haven't verified in this codebase
     - Calling an API method from memory (not from docs)
     - Following a pattern that "should" work but you haven't confirmed
 
-    Skip grounding for:
+    Skip verification for:
     - Standard library features
     - Already-used patterns visible in the codebase
     - Pure logic with no external dependencies

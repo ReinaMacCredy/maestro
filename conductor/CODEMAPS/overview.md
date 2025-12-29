@@ -20,6 +20,7 @@ maestro/
 ├── skills/           # 6 skill directories (SKILL.md + references/)
 │   ├── beads/references/         # Issue tracking workflows
 │   ├── conductor/references/     # Planning + execution (absorbed 9 skills)
+│   │   ├── research/             # Research protocol (replaces grounding)
 │   │   ├── prompts/              # Agent prompts
 │   │   ├── coordination/         # Multi-agent coordination
 │   │   ├── tdd/                  # TDD cycle + gates
@@ -28,8 +29,7 @@ maestro/
 │   │   ├── ledger/               # Session state (LEDGER.log)
 │   │   └── finish/               # Branch completion
 │   ├── design/references/        # Double Diamond + Party Mode
-│   │   ├── bmad/                 # Multi-agent design personas
-│   │   └── grounding/            # Tiered grounding system
+│   │   └── bmad/                 # Multi-agent design personas
 │   ├── using-git-worktrees/      # Isolated dev environments
 │   ├── writing-skills/           # Skill creation guide
 │   └── sharing-skills/           # Upstream contribution
@@ -72,8 +72,8 @@ Zero manual `bd` commands in the happy path:
 
 | Skill | Trigger | Role |
 |-------|---------|------|
-| `conductor` | `/conductor-*` | Planning + execution (absorbed TDD, verification, continuity) |
-| `design` | `ds` | Double Diamond + Party Mode + Grounding |
+| `conductor` | `/conductor-*`, `/research` | Planning + execution + **research protocol** |
+| `design` | `ds` | Double Diamond + Party Mode + Research verification |
 | `beads` | `bd`, `fb`, `rb` | Issue tracking, file/review beads |
 | `using-git-worktrees` | - | Isolated dev environments |
 | `writing-skills` | - | Skill creation guide |

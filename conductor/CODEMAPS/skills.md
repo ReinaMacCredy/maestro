@@ -30,7 +30,7 @@ Instructions for the agent...
 ORCHESTRATION          CORE WORKFLOW          DEVELOPMENT              UTILITIES
 ├── maestro-core       ├── conductor          ├── using-git-worktrees  ├── sharing-skills
 │   └── references/    │   ├── references/    └── writing-skills       
-│       ├── hierarchy.md   │   ├── prompts/          
+│       ├── hierarchy.md   │   ├── research/        ← NEW
 │       └── routing.md     │   ├── coordination/     
 │                          │   ├── tdd/              
 │                          │   ├── verification/     
@@ -38,15 +38,14 @@ ORCHESTRATION          CORE WORKFLOW          DEVELOPMENT              UTILITIES
 │                          │   ├── ledger/           
 │                          │   └── finish/           
 │                      ├── design             
-│                      │   ├── bmad/          
-│                      │   └── grounding/     
+│                      │   └── bmad/          
 │                      └── beads
 ```
 
 **7 Core Skills (after maestro-core_20251229):**
 - **maestro-core**: Central orchestrator (hierarchy, HALT/DEGRADE, routing)
-- **conductor**: Planning + execution (absorbed 9 skills into references/)
-- **design**: Double Diamond + Party Mode + Grounding
+- **conductor**: Planning + execution + **research protocol**
+- **design**: Double Diamond + Party Mode + Research verification
 - **beads**: Issue tracking + persistent memory
 - **using-git-worktrees**: Isolated development environments
 - **writing-skills**: Skill creation guide + dependency documentation
@@ -57,26 +56,34 @@ ORCHESTRATION          CORE WORKFLOW          DEVELOPMENT              UTILITIES
 | Level | Skill | Role |
 |-------|-------|------|
 | 1 | maestro-core | Routing decisions, fallback policy |
-| 2 | conductor | Track orchestration, workflow state |
+| 2 | conductor | Track orchestration, workflow state, **research** |
 | 3 | design | Design sessions (Double Diamond) |
 | 4 | beads | Issue tracking, dependencies |
 | 5 | specialized | worktrees, sharing, writing |
 
 **Higher levels override lower levels on conflicts.**
 
-## Grounding System (skills/design/references/grounding/)
+## Research Protocol (skills/conductor/references/research/)
+
+> **Replaces the old grounding system with parallel sub-agents.**
 
 ```
-grounding/
-├── tiers.md           # Light/Mini/Standard/Full tier definitions
-├── router.md          # Cascading router (repo → web → history)
-├── cache.md           # Session cache (5 min TTL)
-├── sanitization.md    # Query sanitization for external calls
-├── schema.json        # Result schema v1.1
-└── impact-scan-prompt.md  # Subagent template for DELIVER phase
+research/
+├── protocol.md        # Main research protocol (always runs)
+├── agents/            # Parallel sub-agents
+│   ├── codebase-locator.md    # Find WHERE files exist
+│   ├── codebase-analyzer.md   # Understand HOW code works
+│   ├── pattern-finder.md      # Find existing conventions
+│   └── web-researcher.md      # External docs (when needed)
+└── hooks/             # Auto-trigger integration points
+    ├── discover-hook.md   # ds start → research context
+    ├── grounding-hook.md  # DEVELOP→DELIVER verification
+    └── newtrack-hook.md   # Pre-spec research
 ```
 
-**Enforcement Levels:** Advisory (warn) → Gatekeeper (block if missing) → Mandatory (block if fails)
+**Key Difference from Old Grounding:**
+- ❌ OLD: Sequential (Grep → finder → web), tiered, skip conditions
+- ✅ NEW: Parallel agents, always runs, no skip conditions
 
 ## BMAD Integration (skills/design/references/bmad/)
 
@@ -108,7 +115,7 @@ bmad/
 ## Skill Loading
 
 Skills are loaded when:
-- User says trigger phrase (e.g., `ds`, `tdd`, `debug`)
+- User says trigger phrase (e.g., `ds`, `tdd`, `debug`, `/research`)
 - User runs slash command (e.g., `/conductor-setup`)
 - Agent recognizes matching context
 
@@ -117,3 +124,4 @@ Skills are loaded when:
 - Directory name must be kebab-case
 - `name` in frontmatter must match directory name
 - Keep skills self-contained; minimize cross-references
+- Research ALWAYS runs (no skip conditions)

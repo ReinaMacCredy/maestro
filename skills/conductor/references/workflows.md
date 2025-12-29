@@ -208,6 +208,47 @@ If missing, halt and suggest `/conductor-setup`.
 - If `design.md` does NOT exist:
   - Fall back to full interactive questioning (step 4)
 
+### 3.5. Pre-Spec Research (NEW)
+
+> **Auto-trigger before spec generation for more accurate specifications.**
+> See [research/hooks/newtrack-hook.md](research/hooks/newtrack-hook.md) for full protocol.
+
+**Research Protocol:**
+
+1. Extract from design.md:
+   - Components to be created/modified
+   - Integration points mentioned
+   - Dependencies identified
+
+2. Spawn parallel research agents:
+   ```
+   ┌─────────────┬─────────────┬─────────────┬─────────────┐
+   │  Locator    │  Analyzer   │  Pattern    │  Impact     │
+   │  (files)    │  (deps)     │  (similar)  │  (scope)    │
+   └─────────────┴─────────────┴─────────────┴─────────────┘
+   ```
+
+3. Display research summary:
+   ```
+   ┌─ PRE-SPEC RESEARCH ────────────────────────┐
+   │ AFFECTED FILES:                            │
+   │ • [path/file.ts] - Will be modified        │
+   ├────────────────────────────────────────────┤
+   │ PATTERNS TO FOLLOW:                        │
+   │ • Error handling: AppError pattern         │
+   ├────────────────────────────────────────────┤
+   │ IMPACT: 8 files, 3 modules, MEDIUM risk    │
+   └────────────────────────────────────────────┘
+   ```
+
+4. Inject findings into spec generation context
+
+**⚠️ Research ALWAYS runs. No skip conditions.**
+
+Parallel agents are fast and accurate specs require context.
+
+**Timeout:** 20s max
+
 ### 4. Generate Spec
 - **If using design.md:**
   - Generate `spec.md` by structuring content from design:

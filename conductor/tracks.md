@@ -4,11 +4,15 @@ Master list of all development tracks.
 
 ## Active Tracks
 
-## [ ] Track: Grounding Trigger Implementation
-*ID: grounding-v2_20251228*
-*Link: [spec](conductor/tracks/grounding-v2_20251228/spec.md) | [plan](conductor/tracks/grounding-v2_20251228/plan.md)*
+## [x] Track: Research Protocol Integration
+*ID: research-protocol_20251229*
 
-Add explicit grounding execution instructions to design skill phase transitions.
+Replaced grounding system with parallel research sub-agents. Research ALWAYS runs at:
+- `ds` start (DISCOVER phase)
+- DEVELOP→DELIVER transition
+- `/conductor-newtrack` (pre-spec)
+
+**Supersedes:** grounding-v2_20251228, grounding-system-redesign_20251228
 
 ---
 
@@ -34,11 +38,13 @@ Central orchestration skill with 5-level hierarchy, HALT/DEGRADE policies, and t
 
 Consolidate 15 skills into 6 by merging 9 skills into conductor/references/.
 
-## [x] Track: Grounding System Redesign
+## [x] Track: Grounding System Redesign (SUPERSEDED)
 *ID: grounding-system-redesign_20251228*
 *Archived: [conductor/archive/grounding-system-redesign_20251228/](conductor/archive/grounding-system-redesign_20251228/)*
+*Superseded by: research-protocol_20251229*
 
 Tiered grounding with enforcement, cascading router, and impact scan integration.
+**Note:** Replaced by Research Protocol with parallel sub-agents.
 
 ## [x] Track: State Consolidation + Continuity Integration
 *ID: state-consolidation_20251227*

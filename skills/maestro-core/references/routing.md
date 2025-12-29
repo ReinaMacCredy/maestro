@@ -9,6 +9,10 @@
 | "design a feature" | Any | design | Design intent |
 | "let's think through X" | Any | design | Exploration intent |
 | "brainstorm X" | Any | design | Exploration intent |
+| "research codebase" | Any | conductor (research) | Research protocol |
+| "/research" | Any | conductor (research) | Explicit research command |
+| "understand this code" | Any | conductor (research) | Documentation intent |
+| "document how X works" | Any | conductor (research) | Documentation intent |
 | "track this work" | `conductor/` exists | conductor | Track-aware context |
 | "track this work" | no `conductor/` | beads | Standalone tracking |
 | "create task for" | `conductor/` exists | conductor | Workflow integration |
@@ -25,8 +29,11 @@
 ## Context-Aware Routing Logic
 
 ```
-IF explicit command (ds, /conductor-*, bd)
+IF explicit command (ds, /conductor-*, bd, /research)
   → Route to named skill
+
+ELSE IF "research" or "understand code" or "document how"
+  → Route to conductor/references/research/protocol.md
 
 ELSE IF "design" or "brainstorm" or "think through"
   → Route to design

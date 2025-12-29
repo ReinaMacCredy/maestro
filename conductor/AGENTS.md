@@ -93,12 +93,11 @@ Contains reusable learnings from completed tracks.
 - Track-switch auto-archives LEDGER.md - switching tracks preserves previous session context in archive
 - Continuity operations in Conductor are non-blocking - failures log warnings but never halt commands
 - bound_track/bound_bead in LEDGER.md frontmatter replace deprecated session-state_*.json files
-- Grounding: All sources fail at MANDATORY → block with `MANUAL_VERIFY`, not silent proceed
-- Grounding: Timeout → return partial results + warning (soft limits), not hard failure
-- Grounding: Subagent timeout → fall back to grounding-only, skip impact scan
-- Grounding: Network failure → graceful fallback to repo-only mode
-- Grounding: Conflict resolution → auto-prefer highest confidence BUT show conflict summary in output
-- Grounding: Implementation order matters → router depends on tiers, enforcement depends on grounding result
+- Research: All agents fail → block with `MANUAL_VERIFY`, not silent proceed
+- Research: Timeout → return partial results + warning (soft limits), not hard failure
+- Research: Network failure → graceful fallback to repo-only mode
+- Research: Conflict resolution → auto-prefer highest confidence BUT show conflict summary
+- Research: ALWAYS runs - no skip conditions (parallel agents are fast)
 - Extraction fidelity: Initial skill extraction may lose philosophical content (e.g., "Why Order Matters"). Fix: copy full SKILL.md first, then split.
 - Continuity skill is in marketplace plugin, not local skills/ - can't add direct local dependency checks
 - Session start detection without hooks requires implicit trigger (maestro-core loading on first message)
@@ -126,10 +125,9 @@ Contains reusable learnings from completed tracks.
 - **Continuity Chain:** `/conductor-implement` (Phase 0.5: load) → work → `/conductor-finish` (Phase 6.5: handoff)
 - **State File Consolidation:** Replace N separate state files with sections in a single consolidated file (e.g., metadata.json.beads replaces .fb-progress.json)
 - **Track Binding Flow:** null → bound_track → bound_bead → null (lifecycle matches Conductor workflow)
-- **Tiered Grounding:** Light (1 source, 3s) → Mini (1-2, 5s) → Standard (cascade, 10s) → Full (all + impact scan, 45s)
-- **Cascading Router:** REPO → WEB → HISTORY, stop early on high confidence
+- **Research Protocol:** Parallel agents (Locator + Analyzer + Pattern + Web + Impact) replace sequential grounding
+- **Always-On Research:** No skip conditions - research runs at ds, DEVELOP→DELIVER, and newtrack
 - **Enforcement Levels:** Advisory (log) → Gatekeeper (block if missing) → Mandatory (block if fails/low confidence)
-- **Impact Scan Subagent:** Parallel execution with full grounding at DELIVER phase
-- **Inline Grounding Triggers:** Explicit execution steps at phase transitions (finder/Grep/web_search with confidence calculation and enforcement behavior)
+- **Impact Agent:** Parallel execution with full research at DELIVER phase
 - **Layered Auto-Load:** AGENTS.md → maestro-core → Conductor → ledger operations (defense in depth for hookless agents)
 - **Workflow-Aware Continuity:** Continuity tied to entry points (`ds`, `/conductor-implement`, `/conductor-finish`) not generic session events

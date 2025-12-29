@@ -47,6 +47,8 @@ See [hierarchy.md](references/hierarchy.md) for full matrix.
 | Trigger | Context | Routes To |
 |---------|---------|-----------|
 | `ds`, "design a feature" | Any | design |
+| "research codebase", "/research" | Any | conductor (research) |
+| "understand this code" | Any | conductor (research) |
 | "track this work" | conductor/ exists | conductor |
 | "track this work" | no conductor/ | beads |
 | "create task for" | conductor/ exists | conductor |

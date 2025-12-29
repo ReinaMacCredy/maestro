@@ -73,7 +73,7 @@ DELIVER (Converge)  →  Plan               design.md finalized
 | **DISCOVER** | Explore problem space | Ask about pain, users, impact, constraints             | Problem articulated, users identified       |
 | **DEFINE**   | Frame the problem     | Problem statement, success criteria, scope, approaches | Statement agreed, approach selected         |
 | **DEVELOP**  | Explore solutions     | Architecture, components, data model, user flow        | Architecture understood, interfaces defined |
-| **DELIVER**  | Finalize design       | Full grounding, acceptance criteria, risks             | Design verified and approved                |
+| **DELIVER**  | Finalize design       | Full research verification, acceptance criteria, risks | Design verified and approved                |
 
 ### A/P/C Checkpoints
 
@@ -84,28 +84,32 @@ At the end of each phase, users choose:
 - **[C] Continue** - Proceed to next phase
 - **[↩ Back]** - Return to previous phase
 
-### Tiered Grounding System
+### Research-Based Verification System
 
-Grounding is **automatic** at phase transitions with tiered intensity:
+> **NEW:** Replaces tiered grounding with parallel research agents for faster, more comprehensive verification.
 
-| Mode | Phase Transition | Tier | Enforcement |
-|------|------------------|------|-------------|
-| SPEED | Any | Light | Advisory |
-| FULL | DISCOVER→DEFINE | Mini | Advisory |
-| FULL | DEFINE→DEVELOP | Mini | Advisory |
-| FULL | DEVELOP→DELIVER | Standard | Gatekeeper |
-| FULL | DELIVER→Complete | Full + Impact Scan | Mandatory |
+Verification is **automatic** at phase transitions using parallel sub-agents:
+
+| Mode | Phase Transition | Agents | Enforcement |
+|------|------------------|--------|-------------|
+| SPEED | Any | 1 (Locator) | Advisory |
+| FULL | DISCOVER→DEFINE | 2 (Locator + Pattern) | Advisory |
+| FULL | DEFINE→DEVELOP | 2 (Locator + Pattern) | Advisory |
+| FULL | DEVELOP→DELIVER | 4 (Locator + Analyzer + Pattern + Web) | Gatekeeper |
+| FULL | DELIVER→Complete | 5 (All agents + Impact) | Mandatory |
 
 **Enforcement levels:**
 - **Advisory** - Log skip, warn, proceed
-- **Gatekeeper** - Block if grounding not run
+- **Gatekeeper** - Block if verification not run
 - **Mandatory** - Block if fails or low confidence
 
-**Documentation:**
-- [Grounding overview](../design/references/grounding.md)
-- [Tier definitions](../design/references/grounding/tiers.md)
-- [Cascading router](../design/references/grounding/router.md)
-- [Impact scan](../design/references/grounding/impact-scan-prompt.md)
+**Research Protocol:**
+- [Protocol overview](references/research/protocol.md)
+- [Agents](references/research/agents/)
+- [Integration hooks](references/research/hooks/)
+
+**Legacy Grounding (deprecated):**
+- [Grounding overview](../design/references/grounding.md) - Now routes to research protocol
 
 **Interoperability:** This skill understands conductor projects created by either:
 

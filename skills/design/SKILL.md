@@ -77,6 +77,42 @@ If missing: Display `Conductor unavailable. Standalone mode. Run /conductor-setu
 
 > **Note:** In standalone mode, CODEMAPS and product context are skipped. Double Diamond still works but without project-specific context.
 
+### 2.5. Auto-Research Context (NEW)
+
+**BEFORE asking user any questions**, run parallel research to ground context:
+
+See [conductor/references/research/hooks/discover-hook.md](../conductor/references/research/hooks/discover-hook.md) for full protocol.
+
+**Quick Summary:**
+
+1. Extract topic from user's initial message
+2. Spawn parallel agents:
+   - **Locator**: Find related files
+   - **Pattern**: Find similar features
+   - **CODEMAPS**: Load relevant modules
+3. Display research context:
+
+```
+┌─ RESEARCH CONTEXT ─────────────────────────┐
+│ Topic: {extracted topic}                   │
+│ Duration: Xs                               │
+├────────────────────────────────────────────┤
+│ EXISTING RELATED CODE:                     │
+│ • [path/file.ts] - Description             │
+├────────────────────────────────────────────┤
+│ SIMILAR FEATURES:                          │
+│ • [FeatureName] in [location]              │
+└────────────────────────────────────────────┘
+```
+
+4. Proceed to DISCOVER with research context
+
+**⚠️ Research ALWAYS runs. No skip conditions.**
+
+Parallel agents are fast and context is always valuable.
+
+**Timeout:** 10s max, partial results OK
+
 ### 3. Complexity Scoring (Design Routing)
 
 After loading context, evaluate task complexity to determine routing:
@@ -346,7 +382,9 @@ For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../../d
 
 #### Transition: DISCOVER → DEFINE
 
-**GROUNDING EXECUTION (Mini, Advisory ⚠️):**
+**RESEARCH VERIFICATION (Mini, Advisory ⚠️):**
+
+> **Deprecated:** "Grounding" terminology replaced by "Research Verification"
 
 1. **Run:** `finder` with query: "similar problems to [problem statement]"
 2. **Calculate confidence:**
@@ -357,14 +395,14 @@ For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../../d
    - Error → LOW
 3. **Display:**
    ```
-   ┌─ GROUNDING (Mini) ──────────────────────┐
+   ┌─ RESEARCH (Mini) ───────────────────────┐
    │ Query: [problem summary]                │
    │ Found: [N] matches                      │
    │ Confidence: [HIGH/MEDIUM/LOW]           │
    │ Status: ✓ Complete                      │
    └─────────────────────────────────────────┘
    ```
-4. **On skip:** Log warning, display `⚠️ Grounding skipped`, proceed (Advisory allows skip)
+4. **On skip:** Log warning, display `⚠️ Research skipped`, proceed (Advisory allows skip)
 5. **Proceed** to A/P/C checkpoint
 
 ---
@@ -381,7 +419,9 @@ For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../../d
 
 #### Transition: DEFINE → DEVELOP
 
-**GROUNDING EXECUTION (Mini, Advisory ⚠️):**
+**RESEARCH VERIFICATION (Mini, Advisory ⚠️):**
+
+> **Deprecated:** "Grounding" terminology replaced by "Research Verification"
 
 1. **Run:**
    - `finder` with query: "existing patterns for [selected approach]"
@@ -394,14 +434,14 @@ For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../../d
    - Error → LOW
 3. **Display:**
    ```
-   ┌─ GROUNDING (Mini) ──────────────────────┐
+   ┌─ RESEARCH (Mini) ───────────────────────┐
    │ Query: [approach summary]               │
    │ Found: [N] matches                      │
    │ Confidence: [HIGH/MEDIUM/LOW]           │
    │ Status: ✓ Complete                      │
    └─────────────────────────────────────────┘
    ```
-4. **On skip:** Log warning, display `⚠️ Grounding skipped`, proceed (Advisory allows skip)
+4. **On skip:** Log warning, display `⚠️ Research skipped`, proceed (Advisory allows skip)
 5. **Proceed** to A/P/C checkpoint
 
 ---
@@ -418,38 +458,60 @@ For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../../d
 
 #### Transition: DEVELOP → DELIVER
 
-**GROUNDING EXECUTION (Standard, Gatekeeper 🚫):**
+**RESEARCH-BASED VERIFICATION (Gatekeeper 🚫):**
 
-1. **Run in sequence:**
-   - `Grep` for patterns mentioned in design
-   - `finder` for affected files
-   - `web_search` if external APIs/libraries referenced (skip if none)
-2. **Timeout:** 10s soft, 15s hard
+> **NEW:** Replaces sequential grounding with parallel research agents.
+> See [conductor/references/research/hooks/grounding-hook.md](../conductor/references/research/hooks/grounding-hook.md) for full protocol.
+
+1. **Spawn parallel agents:**
+   ```
+   ┌─────────────┬─────────────┬─────────────┐
+   │  Locator    │  Analyzer   │  Pattern    │  (parallel)
+   │  (files)    │  (deps)     │  (similar)  │
+   └─────────────┴─────────────┴─────────────┘
+   ```
+   - **Locator**: Verify proposed file locations exist
+   - **Analyzer**: Confirm interfaces match design
+   - **Pattern**: Verify proposed patterns match conventions
+   - **Web** (if external deps): Verify API/library documentation
+
+2. **Timeout:** 15s total (parallel execution)
+
 3. **Calculate confidence:**
-   - 3+ matches → HIGH
-   - 1-3 matches → MEDIUM
-   - 0 matches → LOW
-   - Timeout → MEDIUM (degraded) + warning
-   - Error → LOW
+   - 3+ verifications pass → HIGH
+   - 1-3 pass → MEDIUM
+   - 0 pass or conflicts → LOW
+
 4. **Display:**
    ```
-   ┌─ GROUNDING (Standard) ──────────────────┐
-   │ Sources: repo ✓ | web ✓/⊘              │
-   │ Found: [N] matches                      │
-   │ Confidence: [HIGH/MEDIUM/LOW]           │
-   │ Status: ✓ Complete                      │
-   └─────────────────────────────────────────┘
+   ┌─ VERIFICATION RESULT ──────────────────────┐
+   │ Phase: DEVELOP → DELIVER                   │
+   │ Agents: 4 spawned, 4 completed             │
+   │ Duration: 12s                              │
+   ├────────────────────────────────────────────┤
+   │ VERIFIED:                                  │
+   │ ✓ [src/auth/jwt.ts] exists, interface OK   │
+   │ ✓ Error handling matches project pattern   │
+   ├────────────────────────────────────────────┤
+   │ CONFLICTS:                                 │
+   │ ⚠ Design uses `AuthError`, codebase uses   │
+   │   `AuthenticationError` - recommend align  │
+   ├────────────────────────────────────────────┤
+   │ Confidence: HIGH (3/4 verified)            │
+   └────────────────────────────────────────────┘
    ```
+
 5. **HALT if not run:**
    ```
-   ┌─ GROUNDING REQUIRED ────────────────────┐
-   │ 🚫 Cannot proceed without grounding     │
+   ┌─ VERIFICATION REQUIRED ─────────────────┐
+   │ 🚫 Cannot proceed without verification  │
    │                                         │
-   │ [R]un grounding  [S]kip with warning    │
+   │ [R]un verification  [S]kip with warning │
    └─────────────────────────────────────────┘
    ```
+
 6. **On skip:** Display warning banner, log for audit, proceed
-7. **Proceed** to A/P/C checkpoint only after grounding complete or user skips
+7. **Proceed** to A/P/C checkpoint only after verification complete or user skips
 
 ---
 
@@ -457,50 +519,79 @@ For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../../d
 
 **Goal:** Finalize the design and prepare for implementation.
 
-- **Full Grounding (required)** - verify against codebase and current docs
+- **Full Research Verification (required)** - verify against codebase and current docs
 - Ensure acceptance criteria are testable
 - Document risks and open questions
 - **Exit:** Design verified and approved
 
 #### Transition: DELIVER → Complete
 
-**GROUNDING EXECUTION (Full + Impact Scan, Mandatory 🔒):**
+**FULL RESEARCH VERIFICATION (Mandatory 🔒):**
 
-1. **Run in parallel:**
-   - **Full cascade:** repo (`Grep`, `finder`) → web (`web_search`) → history (`find_thread`)
-   - **Impact scan:** `finder` for all files mentioned in design
-2. **Timeout:** 45s soft, 60s hard
+> **NEW:** Replaces sequential grounding with comprehensive parallel research.
+> See [conductor/references/research/hooks/grounding-hook.md](../conductor/references/research/hooks/grounding-hook.md) for full protocol.
+
+1. **Spawn ALL research agents in parallel:**
+   ```
+   ┌─────────────┬─────────────┬─────────────┬─────────────┬─────────────┐
+   │  Locator    │  Analyzer   │  Pattern    │  Impact     │  Web        │
+   │  (all)      │  (deep)     │  (verify)   │  (scope)    │  (if ext)   │
+   └─────────────┴─────────────┴─────────────┴─────────────┴─────────────┘
+   ```
+   - **Locator**: All affected files identified
+   - **Analyzer**: Deep interface/dependency analysis
+   - **Pattern**: Verify ALL patterns match conventions
+   - **Impact**: Full scope assessment (files, modules, risk)
+   - **Web** (if external deps): Verify external API docs
+
+2. **Timeout:** 20s total (parallel execution)
+
 3. **Calculate confidence:**
-   - 3+ matches from cascade → HIGH
-   - 1-3 matches → MEDIUM
-   - 0 matches or all sources failed → LOW
-   - Timeout → MEDIUM (degraded) + warning
+   - All agents pass, no conflicts → HIGH
+   - Minor conflicts or warnings → MEDIUM
+   - Major conflicts or agent failures → LOW
+
 4. **Display:**
    ```
-   ┌─ GROUNDING (Full) ──────────────────────┐
-   │ Sources: repo ✓ | web ✓ | history ✓    │
-   │ Impact: [N] files identified            │
-   │ Confidence: [HIGH/MEDIUM/LOW]           │
-   │ Status: ✓ Verified                      │
-   └─────────────────────────────────────────┘
+   ┌─ FULL VERIFICATION ─────────────────────────┐
+   │ Phase: DELIVER → Complete                   │
+   │ Agents: 5 spawned, 5 completed              │
+   │ Duration: 18s                               │
+   ├──────────────────────────────────────────────┤
+   │ VERIFIED:                                   │
+   │ ✓ All file locations confirmed              │
+   │ ✓ Interfaces compatible                     │
+   │ ✓ Patterns match conventions                │
+   │ ✓ External APIs documented                  │
+   ├──────────────────────────────────────────────┤
+   │ IMPACT ASSESSMENT:                          │
+   │ • Files: 12                                 │
+   │ • Modules: 4                                │
+   │ • Risk: MEDIUM                              │
+   ├──────────────────────────────────────────────┤
+   │ Confidence: HIGH                            │
+   │ Status: ✓ Ready for implementation          │
+   └──────────────────────────────────────────────┘
    ```
+
 5. **BLOCK if:**
-   - Grounding not run
+   - Verification not run
    - Confidence = LOW
-   - All sources failed
+   - Major conflicts detected
    
    Display:
    ```
-   ┌─ GROUNDING REQUIRED ────────────────────┐
-   │ 🔒 Cannot proceed: [reason]             │
-   │                                         │
-   │ To override, type:                      │
-   │ SKIP_GROUNDING: <your justification>    │
-   └─────────────────────────────────────────┘
+   ┌─ VERIFICATION REQUIRED ─────────────────────┐
+   │ 🔒 Cannot proceed: [reason]                 │
+   │                                             │
+   │ To override, type:                          │
+   │ SKIP_VERIFICATION: <your justification>     │
+   └─────────────────────────────────────────────┘
    ```
+
 6. **On empty justification:** Reject, require actual reason
 7. **On valid skip:** Log override with reason, add warning banner to design, proceed
-8. **Proceed** to design approval only after grounding verified or user provides justification
+8. **Proceed** to design approval only after verification passed or user provides justification
 
 ---
 
@@ -562,33 +653,49 @@ User can say "revisit [PHASE]" at any time to return to an earlier phase. When l
 2. Ask what to reconsider
 3. Update subsequent phases if decisions change
 
-## Tiered Grounding System
+## Research-Based Verification System
 
-Grounding is **automatic** at phase transitions with tiered intensity based on mode.
+> ⚠️ **The tiered grounding system has been replaced by the Research Protocol.**
+> 
+> See [conductor/references/research/protocol.md](../conductor/references/research/protocol.md) for complete documentation.
 
-### Grounding Matrix
+### Overview
 
-| Mode | Phase Transition | Tier | Enforcement |
-|------|------------------|------|-------------|
-| SPEED | Any | Light | Advisory ⚠️ |
-| FULL | DISCOVER→DEFINE | Mini | Advisory ⚠️ |
-| FULL | DEFINE→DEVELOP | Mini | Advisory ⚠️ |
-| FULL | DEVELOP→DELIVER | Standard | Gatekeeper 🚫 |
-| FULL | DELIVER→Complete | Full + Impact Scan | Mandatory 🔒 |
+Research verification uses **parallel sub-agents** instead of sequential grounding:
 
-### Tier Descriptions
+| Mode | Phase Transition | Agents | Enforcement |
+|------|------------------|--------|-------------|
+| SPEED | Any | 1 (Locator) | Advisory ⚠️ |
+| FULL | DISCOVER→DEFINE | 2 (Locator + Pattern) | Advisory ⚠️ |
+| FULL | DEFINE→DEVELOP | 2 (Locator + Pattern) | Advisory ⚠️ |
+| FULL | DEVELOP→DELIVER | 4 (All agents) | Gatekeeper 🚫 |
+| FULL | DELIVER→Complete | 5 (All + Impact) | Mandatory 🔒 |
 
-- **Light:** 1 source (repo), 3s timeout - quick verification
-- **Mini:** 1-2 sources, 5s timeout - basic alignment check
-- **Standard:** Cascade (repo → web → history), 10s - full verification
-- **Full:** All sources + Impact Scan subagent, 45s - complete validation
+### Key Changes from Old Grounding
 
-### Grounding State Tracking
+- ❌ OLD: Sequential execution (Grep → finder → web)
+- ✅ NEW: Parallel sub-agents (faster, more comprehensive)
 
-Track grounding completion across phases in session memory:
+- ❌ OLD: Skip conditions (SPEED mode, "quick", timeout)
+- ✅ NEW: Research ALWAYS runs (no skip conditions)
+
+- ❌ OLD: Tiered intensity (Light/Mini/Standard/Full)
+- ✅ NEW: Always full agent dispatch
+
+### Enforcement Levels (Preserved)
+
+| Level | Symbol | Behavior |
+|-------|--------|----------|
+| Advisory | ⚠️ | Log skip, warn, proceed |
+| Gatekeeper | 🚫 | Block if verification not run |
+| Mandatory | 🔒 | Block if fails or low confidence |
+
+### Research State Tracking
+
+Track verification completion across phases in session memory:
 
 ```
-grounding_state = {
+research_state = {
     "DISCOVER→DEFINE": { "completed": true, "confidence": "HIGH", "timestamp": "..." },
     "DEFINE→DEVELOP": { "completed": true, "confidence": "MEDIUM", "timestamp": "..." },
     "DEVELOP→DELIVER": null,  // Not yet reached
@@ -596,208 +703,14 @@ grounding_state = {
 }
 ```
 
-**Update state after each grounding execution:**
-1. Set `completed: true`
-2. Record confidence level (HIGH/MEDIUM/LOW)
-3. Store timestamp
+### Documentation
 
-**Display state block at each transition:**
-```
-┌─ GROUNDING STATE ──────────────────────────┐
-│ ✓ DISCOVER→DEFINE: HIGH                    │
-│ ✓ DEFINE→DEVELOP: MEDIUM                   │
-│ ○ DEVELOP→DELIVER: pending                 │
-│ ○ DELIVER→Complete: pending                │
-└────────────────────────────────────────────┘
-```
-
-**On loop-back ("revisit [PHASE]"):**
-1. Reset grounding state for that transition and all subsequent
-2. Display "(reset)" marker in state block
-
-### Phase-Specific Grounding
-
-**DISCOVER → DEFINE:**
-- Check for similar problems in codebase
-- Source: repo (Grep, finder)
-
-**DEFINE → DEVELOP:**
-- Verify external APIs/libraries are current
-- Source: web if external refs, else repo
-
-**DEVELOP → DELIVER:**
-- Confirm existing patterns and conventions
-- Source: cascade (repo → web → history)
-- **Blocks if skipped** (Gatekeeper)
-
-**DELIVER → Complete:**
-- Full architectural verification + impact scan
-- Source: all + parallel impact scan subagent
-- **Blocks if fails or low confidence** (Mandatory)
-
-See [references/grounding.md](references/grounding.md) for complete documentation.
+- [Research Protocol](../conductor/references/research/protocol.md) - Main documentation
+- [Agents](../conductor/references/research/agents/) - Sub-agent definitions
+- [Hooks](../conductor/references/research/hooks/) - Integration points
+- [grounding.md](references/grounding.md) - Deprecated, redirects to research
 
 ---
-
-## Grounding Enforcement
-
-### Enforcement Levels
-
-| Level | Symbol | Behavior |
-|-------|--------|----------|
-| Advisory | ⚠️ | Log skip, warn, proceed |
-| Gatekeeper | 🚫 | Block if grounding not run |
-| Mandatory | 🔒 | Block if fails or low confidence; no skip allowed |
-
-### Enforcement Actions
-
-| Action | When | Result |
-|--------|------|--------|
-| `PROCEED` | Grounding passed | Continue to next phase |
-| `WARN` | Advisory skip | Show warning, continue |
-| `RUN_GROUNDING` | Gatekeeper/Mandatory skip | Block until grounding runs |
-| `MANUAL_VERIFY` | All sources failed | Block, require explicit user confirmation with justification |
-| `RETRY_GROUNDING` | Low confidence at Mandatory | Block, require retry |
-
-> **Note:** `MANUAL_VERIFY` is not a bypass—it requires the user to explicitly confirm independent verification and creates an audit trail.
-
-### Blocking Behavior
-
-When blocked at DEVELOP→DELIVER or DELIVER→Complete, the UI displays a dynamic message based on the failure type. The reason, action, and available options vary by failure type and enforcement level.
-
-**UI options by enforcement level:**
-- **Advisory**: `[R]un grounding`, `[S]kip with warning`, `[C]ancel`
-- **Gatekeeper**: `[R]un grounding`, `[S]kip with warning` (logs warning), `[C]ancel`
-- **Mandatory**: `[R]un grounding`, `[C]ancel` (no skip option)
-
-**Example blocking messages:**
-
-```
-┌─ GROUNDING REQUIRED ─────────────────────┐
-│ ❌ Cannot proceed: Grounding not run     │
-│                                          │
-│ Action: RUN_GROUNDING                    │
-│ Run: /ground <design summary>            │
-│                                          │
-│ [R]un grounding  [C]ancel                │
-└──────────────────────────────────────────┘
-```
-
-```
-┌─ VERIFICATION REQUIRED ──────────────────┐
-│ ❌ Cannot proceed: All sources failed    │
-│                                          │
-│ Action: MANUAL_VERIFY                    │
-│ Options:                                 │
-│   • Retry with different query           │
-│   • SKIP_GROUNDING: <reason>             │
-│     (Mandatory only - requires reason)   │
-└──────────────────────────────────────────┘
-```
-
-```
-┌─ RETRY REQUIRED ─────────────────────────┐
-│ ⚠️ Cannot proceed: Confidence too low    │
-│   (score: 0.42, required: 0.70)          │
-│                                          │
-│ Action: RETRY_GROUNDING                  │
-│ Suggestion: Refine query or add sources  │
-└──────────────────────────────────────────┘
-```
-
-**Manual Override (Mandatory enforcement only):**
-
-When all automated sources fail, user may override with explicit confirmation:
-
-1. User must type: `SKIP_GROUNDING: <reason>`
-2. Override is logged to `grounding/<transition>.json` with:
-   - `"manual_override": true`
-   - `"override_reason": "<user reason>"`
-   - `"timestamp": "<ISO timestamp>"`
-3. Design document receives warning banner:
-   ```
-   ⚠️ GROUNDING SKIPPED - Manual verification claimed by user
-   ```
-
-This provides an escape hatch for edge cases (network outage, novel domain) while maintaining auditability.
-
-### Impact Scan at DELIVER
-
-At DELIVER→Complete, runs in parallel with full grounding:
-
-1. Analyzes design to identify affected files
-2. Returns: file list, change types, risks, dependencies
-3. Merges with grounding result
-4. Blocks if high-risk files detected without review
-
-See [references/grounding/impact-scan-prompt.md](references/grounding/impact-scan-prompt.md).
-
-### Edge Case Handling
-
-#### Truncation (100+ matches)
-
-When grounding returns many results:
-```
-┌─ GROUNDING (Mini) ──────────────────────────┐
-│ Query: [problem summary]                    │
-│ Found: 100+ matches (showing top 10)        │
-│ Confidence: HIGH                            │
-│ Note: Results truncated for display         │
-└─────────────────────────────────────────────┘
-```
-
-#### Empty Justification Rejection
-
-If user types `SKIP_GROUNDING:` or `SKIP_GROUNDING: ` (empty/whitespace):
-```
-┌─ INVALID JUSTIFICATION ────────────────────┐
-│ ❌ Justification cannot be empty            │
-│                                            │
-│ Please provide a reason:                   │
-│ SKIP_GROUNDING: <actual reason here>       │
-└────────────────────────────────────────────┘
-```
-
-#### Conditional Tool Skipping
-
-Skip tools when not applicable:
-- **No external refs in design:** Skip `web_search`, use repo-only
-- **No history context needed:** Skip `find_thread`
-
-Display which tools were skipped:
-```
-┌─ GROUNDING (Standard) ─────────────────────┐
-│ Sources: repo ✓ | web ⊘ (no external refs) │
-│ Confidence: HIGH                           │
-└────────────────────────────────────────────┘
-```
-
-#### Loop-Back State Reset
-
-When user says "revisit [PHASE]":
-1. Reset grounding state for that transition and all subsequent
-2. Display updated state:
-```
-┌─ GROUNDING STATE (reset) ──────────────────┐
-│ ✓ DISCOVER→DEFINE: HIGH                    │
-│ ○ DEFINE→DEVELOP: reset (was MEDIUM)       │
-│ ○ DEVELOP→DELIVER: pending                 │
-│ ○ DELIVER→Complete: pending                │
-└────────────────────────────────────────────┘
-```
-
-#### Network Failure Handling
-
-When `web_search` fails due to network error:
-```
-┌─ GROUNDING (Standard, degraded) ───────────┐
-│ Sources: repo ✓ | web ✗ (network error)    │
-│ Confidence: MEDIUM (degraded)              │
-│ Note: Web verification skipped             │
-└────────────────────────────────────────────┘
-```
-
-Proceed with degraded confidence; do not block on optional sources.
 
 ## After the Design
 
@@ -819,4 +732,4 @@ For the full implementation workflow after design, see `skills/conductor/SKILL.m
 - **Explore alternatives** - Always propose 2-3 approaches
 - **Incremental validation** - Present in sections, validate each
 - **Be flexible** - Go back when something doesn't make sense
-- **Ground everything** - Verify before finalizing
+- **Research everything** - Verify with parallel agents before finalizing

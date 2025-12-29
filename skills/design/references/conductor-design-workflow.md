@@ -78,11 +78,13 @@ Follow this collaborative dialogue process:
 - Ask after each section: "Does this look right so far?"
 - Cover: architecture, components, data flow, error handling, testing
 
-## 6. Tiered Grounding (Automatic)
+## 6. Tiered Research Verification (Automatic)
 
-Grounding runs **automatically** at phase transitions with tiered intensity.
+> **Deprecated:** "Grounding" terminology replaced by "Research Verification"
 
-### Grounding Matrix
+Research verification runs **automatically** at phase transitions with tiered intensity.
+
+### Research Verification Matrix
 
 | Phase Transition | Tier | Enforcement |
 |------------------|------|-------------|
@@ -91,11 +93,11 @@ Grounding runs **automatically** at phase transitions with tiered intensity.
 | DEVELOP→DELIVER | Standard | Gatekeeper 🚫 |
 | DELIVER→Complete | Full + Impact Scan | Mandatory 🔒 |
 
-### Full Grounding at DELIVER (Required)
+### Full Research Verification at DELIVER (Required)
 
 Before finalizing, the system automatically:
 
-1. **Full Grounding (parallel):**
+1. **Full Research (parallel):**
    - `Grep`/`finder`: Verify patterns match codebase conventions
    - `web_search`: Check external APIs/libraries are current
    - `git log`: Review related past decisions
@@ -110,20 +112,20 @@ Before finalizing, the system automatically:
 
 | Action | When |
 |--------|------|
-| `PROCEED` | Grounding passed |
-| `RUN_GROUNDING` | Grounding skipped at DEVELOP→DELIVER |
+| `PROCEED` | Research passed |
+| `RUN_RESEARCH` | Research skipped at DEVELOP→DELIVER |
 | `MANUAL_VERIFY` | All sources failed |
-| `RETRY_GROUNDING` | Low confidence at DELIVER→Complete |
+| `RETRY_RESEARCH` | Low confidence at DELIVER→Complete |
 
 **If blocked (Mandatory enforcement):**
 ```
-┌─ GROUNDING REQUIRED ─────────────────────┐
+┌─ RESEARCH REQUIRED ──────────────────────┐
 │ ❌ Cannot proceed: [reason]              │
 │                                          │
-│ Action: RUN_GROUNDING                    │
-│ Run: /ground <design summary>            │
+│ Action: RUN_RESEARCH                     │
+│ Run: /research <design summary>          │
 │                                          │
-│ [R]un grounding  [C]ancel                │
+│ [R]un research  [C]ancel                 │
 └──────────────────────────────────────────┘
 ```
 
@@ -135,7 +137,7 @@ Skip is only available for non-mandatory enforcement levels:
 |-------------------|---------------|
 | Advisory | Skip logged, proceeds immediately |
 | Gatekeeper | Skip requires reason, logged with warning |
-| Mandatory | **Skip not available** - must run grounding or cancel |
+| Mandatory | **Skip not available** - must run research or cancel |
 
 **Skip (when available) is recorded in `skip_override` field:**
 ```json
@@ -161,7 +163,7 @@ Skip is only available for non-mandatory enforcement levels:
 - For existing patterns: Use `Grep` and `finder` to confirm "how we do X here"
 - For prior decisions: Use `find_thread` to check "did we solve this before?"
 
-See [grounding.md](grounding.md) for complete documentation.
+See [grounding.md](grounding.md) (deprecated, redirects to research protocol) or [conductor/references/research/protocol.md](../../conductor/references/research/protocol.md) for complete documentation.
 
 ## 7. Write design.md
 
