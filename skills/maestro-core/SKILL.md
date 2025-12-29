@@ -7,7 +7,7 @@ metadata:
 
 # Maestro Core - Central Orchestrator
 
-> **SINGLE SOURCE OF TRUTH for all routing decisions.**
+> **Load this skill first when using any Maestro skill. Defines hierarchy, fallback policies, and routing.**
 
 ## Skill Hierarchy
 
@@ -146,6 +146,18 @@ See [conductor/references/handoff/idle-detection.md](../conductor/references/han
 | Multi-session | Single-session |
 | Dependencies | Linear |
 | Survives compaction | Conversation-scoped |
+
+## Prerequisites Pattern
+
+All Maestro skills should load maestro-core first:
+
+```markdown
+## Prerequisites
+
+**REQUIRED SUB-SKILL:** [maestro-core](../maestro-core/SKILL.md)
+
+Load maestro-core first for orchestration context.
+```
 
 ## References
 
