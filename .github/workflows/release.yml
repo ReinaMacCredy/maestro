@@ -120,8 +120,14 @@ jobs:
             exit 0
           fi
           
-          # Check for features or fixes -> patch bump
-          if echo "$COMMITS" | grep -qE '^(feat|fix)(\(.+\))?:'; then
+          # Check for features -> minor bump
+          if echo "$COMMITS" | grep -qE '^feat(\(.+\))?:'; then
+            echo "type=minor" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Check for fixes -> patch bump
+          if echo "$COMMITS" | grep -qE '^fix(\(.+\))?:'; then
             echo "type=patch" >> $GITHUB_OUTPUT
             exit 0
           fi
