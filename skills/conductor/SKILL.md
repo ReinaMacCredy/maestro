@@ -199,40 +199,22 @@ Subagents return structured results; main agent centralizes writes.
 - [Beads Integration](references/beads-integration.md) - All 13 integration points
 - [Preflight Workflow](references/conductor/preflight-beads.md) - Preflight details
 
-## Slash Commands
+## Command Routing
 
-Users can invoke these commands directly:
+> **Routing is handled by maestro-core.** See [maestro-core/references/routing.md](../maestro-core/references/routing.md) for the SINGLE SOURCE OF TRUTH.
 
-| Command                            | Description                                                                                                                        |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `/conductor-setup`                 | Initialize project with product.md, tech-stack.md, workflow.md                                                                     |
-| `/conductor-design [desc]`         | Design a feature/bug through Double Diamond dialogue (`ds` is the shorthand trigger)                                               |
-| `/conductor-newtrack [id or desc]` | Create spec + plan from design.md, file beads, and review via subagents. Flags: `--no-beads`/`-nb`, `--plan-only`/`-po`, `--force` |
-| `/conductor-implement [id]`        | Execute ONE EPIC from track's plan                                                                                                 |
-| `/conductor-status`                | Display progress overview                                                                                                          |
-| `/conductor-revert`                | Git-aware revert of work                                                                                                           |
-| `/conductor-revise`                | Update spec/plan when implementation reveals issues                                                                                |
-| `/conductor-finish [id]`           | Complete track: extract learnings, compact beads, archive. Flags: `--with-pr`, `--skip-codemaps`, `--skip-refresh`                 |
+This skill only executes - it does not route. Available commands:
 
-## Intent Mapping
-
-When users express these intents, invoke the corresponding workflow:
-
-| User Intent                                    | Action                         | Command                    |
-| ---------------------------------------------- | ------------------------------ | -------------------------- |
-| "Set up this project" / "Initialize conductor" | Run setup workflow             | `/conductor-setup`         |
-| "Design a feature" / "Brainstorm X"            | Create design through dialogue | `/conductor-design [desc]` |
-| "Create a new feature" / "Add a track for X"   | Create track from design       | `/conductor-newtrack [id]` |
-| "Start working" / "Implement the feature"      | Begin implementation           | `/conductor-implement`     |
-| "What's the status?" / "Show progress"         | Display status                 | `/conductor-status`        |
-| "Undo that" / "Revert the last task"           | Revert work                    | `/conductor-revert`        |
-| "Check for issues" / "Validate the project"    | Run validation                 | `/conductor-validate`      |
-| "This is blocked" / "Can't proceed"            | Mark as blocked                | `/conductor-block`         |
-| "Skip this task"                               | Skip current task              | `/conductor-skip`          |
-| "Archive completed tracks"                     | Archive tracks                 | `/conductor-archive`       |
-| "Export project summary"                       | Generate export                | `/conductor-export`        |
-| "Spec is wrong" / "Plan needs update"          | Revise spec/plan               | `/conductor-revise`        |
-| "Finish track" / "Complete track" / "doc-sync" | Complete and archive track     | `/conductor-finish`        |
+| Command | Description |
+|---------|-------------|
+| `/conductor-setup` | Initialize project with product.md, tech-stack.md, workflow.md |
+| `/conductor-design` | Design a feature through Double Diamond dialogue |
+| `/conductor-newtrack` | Create spec + plan from design.md, file beads |
+| `/conductor-implement` | Execute ONE EPIC from track's plan |
+| `/conductor-status` | Display progress overview |
+| `/conductor-revert` | Git-aware revert of work |
+| `/conductor-revise` | Update spec/plan when issues arise |
+| `/conductor-finish` | Complete track: extract learnings, archive |
 
 ## Context Loading
 
