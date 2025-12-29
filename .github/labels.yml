@@ -8,7 +8,7 @@
 
 - name: "release:minor"
   color: "fbca04"
-  description: "Minor version bump (1.5.x → 1.6.0) - new features, breaking API changes"
+  description: "Minor version bump (1.5.x → 1.6.0) - new features, non-breaking API changes"
 
 - name: "release:patch"
   color: "0e8a16"
