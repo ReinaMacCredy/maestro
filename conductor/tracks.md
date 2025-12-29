@@ -10,6 +10,12 @@ Master list of all development tracks.
 
 ## Completed Tracks
 
+## [x] Track: Orchestrator Skill
+*ID: orchestrator-skill_20251230*
+*Archived: [conductor/archive/orchestrator-skill_20251230/](conductor/archive/orchestrator-skill_20251230/)*
+
+Multi-agent parallel execution with autonomous workers. Mode B workers self claim/close beads. Commands: `/conductor-orchestrate`, triggers "run parallel", "spawn workers".
+
 ## [x] Track: HumanLayer-Inspired Handoff System
 *ID: handoff-system_20251229*
 *Archived: [conductor/archive/handoff-system_20251229/](conductor/archive/handoff-system_20251229/)*
@@ -45,7 +51,7 @@ Session continuity automatic via workflow entry points (ds, /conductor-implement
 *ID: maestro-core*
 *Archived: [conductor/archive/maestro-core/](conductor/archive/maestro-core/)*
 
-Central orchestration skill with 5-level hierarchy, HALT/DEGRADE policies, and trigger routing rules.
+Central orchestration skill with 6-level hierarchy, HALT/DEGRADE policies, and trigger routing rules.
 
 ## [x] Track: Skill Integration
 *ID: skill-integration_20251228*
