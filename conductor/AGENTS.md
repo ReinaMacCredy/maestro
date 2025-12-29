@@ -15,6 +15,7 @@ Contains reusable learnings from completed tracks.
 
 ## Commands
 
+- `bd dep add <child> <parent>` - Wire dependencies after bead creation (not auto-mapped from plan)
 - `./scripts/validate-links.sh .` - Validate markdown links in codebase
 - `./scripts/validate-anchors.sh .` - Validate anchor references
 - `sed -i '' 's|old|new|g' file` - macOS in-place sed replacement
@@ -50,6 +51,9 @@ Contains reusable learnings from completed tracks.
 
 ## Gotchas
 
+- Skill prerequisite pattern uses markdown `**REQUIRED SUB-SKILL:**` not frontmatter `requires:`
+- Design skill's HALT on missing conductor/ was adoption blocker - changed to DEGRADE (standalone mode)
+- Lean orchestrator pattern: keep SKILL.md ≤100 lines, move detailed logic to references/
 - Hard-linked directories (skills/ ↔ .claude/skills/) - updating one updates both, but explicitly delete both
 - Thin skill stubs must include keyword-rich descriptions for AI trigger matching
 - Delete operations must wait for reference replacements - deleting too early causes broken references
@@ -99,6 +103,8 @@ Contains reusable learnings from completed tracks.
 
 ## Patterns
 
+- **5-Level Skill Hierarchy:** maestro-core > conductor > design > beads > specialized (higher level wins on conflicts)
+- **Context-Aware Routing:** Check explicit commands first, then context (conductor/ exists?) for routing
 - **6-Phase Finish Workflow:** Pre-flight → Thread Compaction → Beads Compaction → Knowledge Merge → Context Refresh → Archive → CODEMAPS
 - **Smart Skip:** Each phase checks if work exists before running
 - **Resume Capability:** State files track progress for interrupted workflows

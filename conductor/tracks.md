@@ -16,6 +16,12 @@ Add explicit grounding execution instructions to design skill phase transitions.
 
 *Completed tracks are archived to `conductor/archive/`.*
 
+## [x] Track: maestro-core
+*ID: maestro-core*
+*Archived: [conductor/archive/maestro-core/](conductor/archive/maestro-core/)*
+
+Central orchestration skill with 5-level hierarchy, HALT/DEGRADE policies, and trigger routing rules.
+
 ## [x] Track: Skill Integration
 *ID: skill-integration_20251228*
 *Archived: [conductor/archive/skill-integration_20251228/](conductor/archive/skill-integration_20251228/)*

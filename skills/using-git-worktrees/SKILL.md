@@ -5,6 +5,12 @@ metadata:
   version: "1.1.2"
 ---
 
+## Prerequisites
+
+**REQUIRED SUB-SKILL:** [maestro-core](../maestro-core/SKILL.md)
+
+Load maestro-core first for orchestration context (hierarchy, HALT/DEGRADE policies, trigger routing).
+
 # Using Git Worktrees
 
 ## Overview

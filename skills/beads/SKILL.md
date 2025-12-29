@@ -10,6 +10,12 @@ metadata:
   version: "2.2.0"
 ---
 
+## Prerequisites
+
+**REQUIRED SUB-SKILL:** [maestro-core](../maestro-core/SKILL.md)
+
+Load maestro-core first for orchestration context (hierarchy, HALT/DEGRADE policies, trigger routing).
+
 # Beads - Persistent Task Memory for AI Agents
 
 Graph-based issue tracker that survives conversation compaction. Provides persistent memory for multi-session work with complex dependencies.

@@ -29,6 +29,11 @@ Contribute skills from your local branch back to the upstream repository.
 
 ## Prerequisites
 
+**REQUIRED SUB-SKILL:** [maestro-core](../maestro-core/SKILL.md)
+
+Load maestro-core first for orchestration context (hierarchy, HALT/DEGRADE policies, trigger routing).
+
+**Additional requirements:**
 - `gh` CLI installed and authenticated
 - Working directory is `~/.config/superpowers/skills/` (your local clone)
 - **REQUIRED:** Skill has been tested using writing-skills TDD process
