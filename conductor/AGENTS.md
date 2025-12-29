@@ -102,6 +102,7 @@ Contains reusable learnings from completed tracks.
 - Extraction fidelity: Initial skill extraction may lose philosophical content (e.g., "Why Order Matters"). Fix: copy full SKILL.md first, then split.
 - Continuity skill is in marketplace plugin, not local skills/ - can't add direct local dependency checks
 - Session start detection without hooks requires implicit trigger (maestro-core loading on first message)
+- Ad-hoc queries (not triggering `ds`, `/conductor-implement`, etc.) do NOT load Ledger history - intentional low-overhead behavior for casual chats
 
 ## Patterns
 

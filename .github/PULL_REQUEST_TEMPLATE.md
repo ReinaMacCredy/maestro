@@ -4,6 +4,12 @@
 
 ## Type of Change
 
+<!-- Add the appropriate release label to this PR -->
+<!-- release:patch = bug fixes, small improvements (3.5.0 → 3.5.1) -->
+<!-- release:minor = new features, breaking API (3.5.0 → 3.6.0) -->
+<!-- release:major = major rewrites (3.5.0 → 4.0.0) -->
+<!-- release:skip = no version bump needed -->
+
 - [ ] Bug fix (non-breaking change that fixes an issue)
 - [ ] New feature (non-breaking change that adds functionality)
 - [ ] Breaking change (fix or feature that would cause existing functionality to change)
