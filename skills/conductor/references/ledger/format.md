@@ -47,6 +47,31 @@ heartbeat: 2025-12-27T10:25:00Z
 
 **Mode locking:** Once set at session start, `mode` should not change mid-session.
 
+## Validation Fields (Optional)
+
+When validation gates are active, these fields track validation state:
+
+```yaml
+---
+validation:
+  gates_passed: [design, spec]
+  current_gate: plan-structure
+  retries: 0
+  last_failure: null
+---
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `validation.gates_passed` | array | Gates that have passed for this track |
+| `validation.current_gate` | string \| null | Gate currently being validated |
+| `validation.retries` | number | Retry count for current gate (resets on pass) |
+| `validation.last_failure` | string \| null | Reason for last failure |
+
+**Gate names:** `design`, `spec`, `plan-structure`, `plan-execution`, `completion`
+
+**Retry behavior:** Max 2 retries for HALT gates (design, plan-execution, completion in FULL mode). After max retries, escalates to human.
+
 **Heartbeat protocol:** Updated every 5 minutes during active work. Sessions with heartbeat >10 min old are considered stale.
 
 ## Full Template
@@ -61,6 +86,11 @@ bound_bead: my-workflow:3-xyz
 mode: SA
 tdd_phase: null
 heartbeat: 2025-12-27T10:25:00Z
+validation:
+  gates_passed: []
+  current_gate: null
+  retries: 0
+  last_failure: null
 ---
 
 # Session Ledger
@@ -108,6 +138,12 @@ What we're trying to accomplish in this session.
 
 - Unresolved question 1?
 - Unresolved question 2?
+
+## Validation History
+
+| Gate | Status | Time | Notes |
+|------|--------|------|-------|
+| design | ✅ PASS | 10:15 | All checks passed |
 ```
 
 ## Section Details
@@ -192,6 +228,29 @@ Unresolved items:
 - Should we use sliding window for refresh tokens?
 - What's the token expiry for mobile clients?
 ```
+
+### Validation History
+
+Log all validation gate events:
+
+```markdown
+## Validation History
+
+| Gate | Status | Time | Notes |
+|------|--------|------|-------|
+| design | ✅ PASS | 10:15 | All checks passed |
+| spec | ⚠️ WARN | 10:20 | Missing edge case coverage |
+| plan-structure | ✅ PASS | 10:25 | - |
+| plan-execution | ❌ FAIL | 11:00 | Test coverage 60%, required 80% |
+| plan-execution | ✅ PASS | 11:30 | Retry successful |
+```
+
+**Status icons:**
+- ✅ PASS - Gate passed
+- ⚠️ WARN - Gate warned but continued
+- ❌ FAIL - Gate failed, required retry
+
+**Time format:** HH:MM (24-hour, local time)
 
 ## Staleness
 

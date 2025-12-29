@@ -44,7 +44,33 @@ Never block, only warn.
 
 ## Phase 0: Validation Pre-Flight
 
-**Purpose:** Check for stale state files and validate track integrity before running phases.
+**Purpose:** Check for stale state files, validate track integrity, and run completion validation gate before running phases.
+
+### Validation Gate: validate-completion
+
+**Before any other pre-flight checks**, run completion validation:
+
+1. **Load gate**: `validation/shared/validate-completion.md`
+2. **Run validation**: Check all beads closed, plan complete, git clean, docs updated
+3. **Update LEDGER**: Add `completion` to `validation.gates_passed` or log failure
+4. **Behavior by mode**:
+   - **SPEED mode**: WARN on failure, continue with pre-flight
+   - **FULL mode**: HALT on failure, retry up to 2x, then escalate
+
+```
+┌─ VALIDATION GATE: completion ──────────────────┐
+│ Status: ✅ READY | ⚠️ WARN | ❌ NOT READY      │
+│                                                │
+│ Beads: 12 closed, 0 open, 0 in_progress        │
+│ Plan: All phases [x]                           │
+│ Git: No uncommitted changes                    │
+│ Docs: README, CHANGELOG updated                │
+│                                                │
+│ LEDGER: gates_passed: [..., completion]        │
+└────────────────────────────────────────────────┘
+```
+
+See [validate-completion.md](validation/shared/validate-completion.md) for full validation process.
 
 ### Resume Detection
 

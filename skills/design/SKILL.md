@@ -593,6 +593,32 @@ For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../../d
 7. **On valid skip:** Log override with reason, add warning banner to design, proceed
 8. **Proceed** to design approval only after verification passed or user provides justification
 
+#### Validation Gate: validate-design
+
+After research verification passes, run the design validation gate:
+
+1. **Load gate**: `../conductor/references/validation/shared/validate-design.md`
+2. **Run validation**: Check design vs product.md, tech-stack.md, CODEMAPS
+3. **Update LEDGER**: Add to `validation.gates_passed` or `validation.last_failure`
+4. **Behavior by mode**:
+   - **SPEED mode**: WARN on failure, continue to A/P/C
+   - **FULL mode**: HALT on failure, retry up to 2x, then escalate
+
+```text
+┌─ VALIDATION GATE: design ──────────────────────┐
+│ Status: [PASS] | [WARN] | [FAIL]               │
+│                                                │
+│ Checks:                                        │
+│ [OK] Product alignment verified                │
+│ [OK] Tech-stack constraints respected          │
+│ [OK] Pattern consistency confirmed             │
+│                                                │
+│ LEDGER updated: gates_passed: [design]         │
+└────────────────────────────────────────────────┘
+```
+
+See [validate-design.md](../conductor/references/validation/shared/validate-design.md) for full validation process.
+
 ---
 
 ## A/P/C Checkpoints

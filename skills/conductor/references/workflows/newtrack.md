@@ -86,6 +86,28 @@ This workflow uses consolidated state in `metadata.json`:
    - Present draft for review
    - Loop until approved
 
+6. **Validation Gate: validate-spec**
+   
+   After spec.md is confirmed, run spec validation:
+   
+   - **Load gate**: `../validation/shared/validate-spec.md`
+   - **Run validation**: Check spec vs design.md for requirement capture
+   - **Update LEDGER**: Add `spec` to `validation.gates_passed` or log failure
+   - **Behavior**: WARN on failure (both SPEED and FULL modes), continue to plan generation
+
+   ```text
+   ┌─ VALIDATION GATE: spec ─────────────────────────┐
+   │ Status: [PASS] | [WARN]                         │
+   │                                                 │
+   │ Checks:                                         │
+   │ ✓ All design decisions captured                 │
+   │ ✓ No scope creep (items not in design)          │
+   │ ✓ Requirements are unambiguous                  │
+   │                                                 │
+   │ LEDGER updated: gates_passed: [..., spec]       │
+   └─────────────────────────────────────────────────┘
+   ```
+
 ### Phase 4: Plan Generation
 
 1. **Announce Goal**
@@ -112,6 +134,28 @@ This workflow uses consolidated state in `metadata.json`:
 5. **User Confirmation**
    - Present draft for review
    - Loop until approved
+
+6. **Validation Gate: validate-plan-structure**
+   
+   After plan.md is confirmed, run plan structure validation:
+   
+   - **Load gate**: `../validation/shared/validate-plan-structure.md`
+   - **Run validation**: Check tasks have acceptance criteria, atomic tasks, verification section
+   - **Update LEDGER**: Add `plan-structure` to `validation.gates_passed` or log failure
+   - **Behavior**: WARN on failure (both SPEED and FULL modes), continue to artifact creation
+
+   ```text
+   ┌─ VALIDATION GATE: plan-structure ───────────────┐
+   │ Status: [PASS] | [WARN]                         │
+   │                                                 │
+   │ Checks:                                         │
+   │ ✓ All tasks have acceptance criteria            │
+   │ ✓ Tasks are atomic (1-2 hours)                  │
+   │ ✓ "Automated Verification" section exists       │
+   │                                                 │
+   │ LEDGER updated: gates_passed: [..., plan-structure] │
+   └─────────────────────────────────────────────────┘
+   ```
 
 ### Phase 5: Create Artifacts
 

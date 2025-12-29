@@ -92,6 +92,32 @@ Zero manual `bd` commands in the happy path:
 | Regenerate CODEMAPS | `/conductor-finish` (Phase 6: CODEMAPS Regeneration) |
 | Coordinate parallel agents | See `skills/conductor/references/coordination/` |
 
+## Validation Gates
+
+5 validation gates integrated into the Maestro lifecycle:
+
+| Gate | Trigger | Enforcement |
+|------|---------|-------------|
+| `design` | After DELIVER phase | SPEED=WARN, FULL=HALT |
+| `spec` | After spec.md generation | WARN (both modes) |
+| `plan-structure` | After plan.md generation | WARN (both modes) |
+| `plan-execution` | After TDD REFACTOR | SPEED=WARN, FULL=HALT |
+| `completion` | Before /conductor-finish | SPEED=WARN, FULL=HALT |
+
+Gate files: `skills/conductor/references/validation/shared/*.md`
+Lifecycle routing: `skills/conductor/references/validation/lifecycle.md`
+
+LEDGER integration:
+```yaml
+validation:
+  gates_passed: [design, spec, plan-structure]
+  current_gate: plan-execution
+  retries: 0
+  last_failure: null
+```
+
+Max 2 retries before escalating to human review.
+
 ## Gotchas
 
 - `bv` without `--robot-*` flags launches TUI and hangs agents
