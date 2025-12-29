@@ -27,29 +27,42 @@ Instructions for the agent...
 ## Skill Categories
 
 ```
-CORE WORKFLOW          DEVELOPMENT              UTILITIES
-├── conductor          ├── using-git-worktrees  ├── sharing-skills
-│   ├── references/    └── writing-skills       
-│   │   ├── prompts/          
-│   │   ├── coordination/     
-│   │   ├── tdd/              
-│   │   ├── verification/     
-│   │   ├── doc-sync/         
-│   │   ├── ledger/           
-│   │   └── finish/           
-├── design             
-│   ├── bmad/          
-│   └── grounding/     
-└── beads
+ORCHESTRATION          CORE WORKFLOW          DEVELOPMENT              UTILITIES
+├── maestro-core       ├── conductor          ├── using-git-worktrees  ├── sharing-skills
+│   └── references/    │   ├── references/    └── writing-skills       
+│       ├── hierarchy.md   │   ├── prompts/          
+│       └── routing.md     │   ├── coordination/     
+│                          │   ├── tdd/              
+│                          │   ├── verification/     
+│                          │   ├── doc-sync/         
+│                          │   ├── ledger/           
+│                          │   └── finish/           
+│                      ├── design             
+│                      │   ├── bmad/          
+│                      │   └── grounding/     
+│                      └── beads
 ```
 
-**6 Core Skills (after skill-integration_20251228):**
+**7 Core Skills (after maestro-core_20251229):**
+- **maestro-core**: Central orchestrator (hierarchy, HALT/DEGRADE, routing)
 - **conductor**: Planning + execution (absorbed 9 skills into references/)
 - **design**: Double Diamond + Party Mode + Grounding
 - **beads**: Issue tracking + persistent memory
 - **using-git-worktrees**: Isolated development environments
-- **writing-skills**: Skill creation guide
+- **writing-skills**: Skill creation guide + dependency documentation
 - **sharing-skills**: Upstream contribution
+
+## Skill Hierarchy (maestro-core)
+
+| Level | Skill | Role |
+|-------|-------|------|
+| 1 | maestro-core | Routing decisions, fallback policy |
+| 2 | conductor | Track orchestration, workflow state |
+| 3 | design | Design sessions (Double Diamond) |
+| 4 | beads | Issue tracking, dependencies |
+| 5 | specialized | worktrees, sharing, writing |
+
+**Higher levels override lower levels on conflicts.**
 
 ## Grounding System (skills/design/references/grounding/)
 
