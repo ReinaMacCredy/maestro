@@ -21,11 +21,13 @@ Apply the config block below to user's global config at:
 ## Default Config
 
 <!-- BEGIN maestro-config -->
-<!-- version: 2.0.0 | bmad-v6 | 2025-12-27 -->
-**Current year is 2025.** Always use 2025 for dates, not 2024.
+<!-- version: 2.1.0 | bmad-v6 | 2025-12-29 -->
+
 ## Maestro Workflow
 
 Context-driven development with TDD execution.
+
+**First message:** Load `maestro-core` skill for orchestration context.
 
 ### Triggers
 
@@ -100,6 +102,42 @@ Maestro project if any exist:
 
 When detected, use Conductor commands instead of ad-hoc planning.
 
+
+## Session Lifecycle (All Agents)
+
+Session continuity is **automatic** via Conductor workflow entry points. No manual commands needed.
+
+### Entry Points
+
+| Trigger | Ledger Action |
+|---------|---------------|
+| `ds` | Load prior context before DISCOVER phase |
+| `/conductor-implement` | Load + bind to track/bead |
+| `/conductor-finish` | Handoff + archive |
+
+### First Message Behavior
+
+When a session starts with Conductor triggers (`ds`, `/conductor-implement`), context from the previous session loads automatically via LEDGER.md.
+
+### Non-Conductor Work
+
+For ad-hoc tasks outside Conductor workflows, ledger operations are skipped. This avoids overhead for trivial tasks.
+
+### Manual Commands (Optional)
+
+If you need to manage session state manually:
+
+| Command | When |
+|---------|------|
+| `continuity load` | Manually load previous context |
+| `continuity save` | Save checkpoint after milestones |
+| `continuity handoff` | Manually archive session |
+| `continuity status` | Check session state |
+
+These commands are rarely needed—Conductor handles continuity automatically.
+
+
+
 For complete workflow guide, see [TUTORIAL.md](../TUTORIAL.md).
 
 <!-- END maestro-config -->
@@ -139,37 +177,3 @@ bv --robot-status  # Check team state
 | Skills not loading | Check plugin settings |
 
 ---
-
-## Session Lifecycle (All Agents)
-
-Session continuity is **automatic** via Conductor workflow entry points. No manual commands needed.
-
-### Entry Points
-
-| Trigger | Ledger Action |
-|---------|---------------|
-| `ds` | Load prior context before DISCOVER phase |
-| `/conductor-implement` | Load + bind to track/bead |
-| `/conductor-finish` | Handoff + archive |
-
-### First Message Behavior
-
-When a session starts with Conductor triggers (`ds`, `/conductor-implement`), context from the previous session loads automatically via LEDGER.md.
-
-### Non-Conductor Work
-
-For ad-hoc tasks outside Conductor workflows, ledger operations are skipped. This avoids overhead for trivial tasks.
-
-### Manual Commands (Optional)
-
-If you need to manage session state manually:
-
-| Command | When |
-|---------|------|
-| `continuity load` | Manually load previous context |
-| `continuity save` | Save checkpoint after milestones |
-| `continuity handoff` | Manually archive session |
-| `continuity status` | Check session state |
-
-These commands are rarely needed—Conductor handles continuity automatically.
-
