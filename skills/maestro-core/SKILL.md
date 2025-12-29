@@ -2,7 +2,7 @@
 name: maestro-core
 description: Use when any Maestro skill loads - provides skill hierarchy, HALT/DEGRADE policies, and trigger routing rules for orchestration decisions
 metadata:
-  version: "1.1.0"
+  version: "1.2.0"
 ---
 
 # Maestro Core - Central Orchestrator
@@ -29,6 +29,8 @@ metadata:
 
 ## Command Routing
 
+### Conductor Commands
+
 | Command | Routes To |
 |---------|-----------|
 | `ds`, `/conductor-design` | design → conductor |
@@ -37,9 +39,43 @@ metadata:
 | `/conductor-implement` | conductor |
 | `/conductor-finish` | conductor |
 | `/conductor-status`, `-revert`, `-revise` | conductor |
+| `/conductor-validate` | conductor |
 | `/conductor-block`, `-skip` | conductor → beads |
+| `/conductor-archive` | conductor |
+| `/conductor-export` | conductor |
 | `/research` | conductor (research) |
-| `bd`, `fb`, `rb` | beads |
+
+### Handoff Commands
+
+| Command | Routes To |
+|---------|-----------|
+| `/create_handoff` | conductor (handoff) |
+| `/resume_handoff` | conductor (handoff) |
+| `/conductor-handoff` | conductor (handoff) |
+
+### Doc-Sync Commands
+
+| Command | Routes To |
+|---------|-----------|
+| `/doc-sync` | doc-sync |
+| `/doc-sync --dry-run` | doc-sync (preview) |
+| `/doc-sync --force` | doc-sync (apply all) |
+
+### Beads Commands
+
+| Command | Routes To |
+|---------|-----------|
+| `bd`, `bd ready`, `bd show` | beads |
+| `fb`, `file-beads` | beads (file beads from plan) |
+| `rb`, `review-beads` | beads (review filed beads) |
+
+### Specialized Skills
+
+| Trigger | Routes To |
+|---------|-----------|
+| "create skill", "write skill", "build skill" | writing-skills |
+| "share skill", "contribute skill", "PR skill" | sharing-skills |
+| "worktree", "isolated branch", "parallel branch" | using-git-worktrees |
 
 ## Research Routing
 
@@ -64,12 +100,102 @@ metadata:
 
 ## Routing Logic
 
+### Command-Based Routing
+
 ```
-IF explicit command → named skill
-ELSE IF "design/brainstorm" → design
-ELSE IF "research/understand" → conductor (research)
-ELSE IF "track/task" → conductor (if exists) ELSE beads
-ELSE IF "blocking/ready" → beads
+IF explicit command (/conductor-*, /doc-sync, /create_handoff, etc.)
+  → Route to named skill/workflow
+
+ELSE IF "design" or "brainstorm" or "think through"
+  → design
+
+ELSE IF "research" or "understand code" or "document how"
+  → conductor (research protocol)
+
+ELSE IF "handoff" or "save session" or "resume session"
+  → conductor (handoff)
+
+ELSE IF "sync docs" or "update documentation"
+  → doc-sync
+
+ELSE IF "track" or "create task"
+  → IF conductor/ exists → conductor
+    ELSE → beads
+
+ELSE IF "blocking" or "ready" or "dependencies"
+  → beads
+
+ELSE IF "create skill" or "write skill"
+  → writing-skills
+
+ELSE IF "share skill" or "contribute"
+  → sharing-skills
+
+ELSE IF "worktree" or "isolated branch"
+  → using-git-worktrees
+```
+
+### Cross-Cutting Flows (Always-On)
+
+These flows run automatically at specific workflow points:
+
+#### Research Protocol Flow
+
+```
+ds (session start)
+  → Auto-Research Context (Locator + Pattern + CODEMAPS)
+      ↓
+DISCOVER → DEFINE (Advisory ⚠️)
+  → Locator + Pattern agents
+      ↓
+DEFINE → DEVELOP (Advisory ⚠️)
+  → Locator + Pattern agents
+      ↓
+DEVELOP → DELIVER (Gatekeeper 🚫)
+  → All 4 agents (Locator + Analyzer + Pattern + Web)
+      ↓
+DELIVER → Complete (Mandatory 🔒)
+  → All 5 agents (+ Impact)
+      ↓
+Pre-newtrack
+  → Full research verification
+```
+
+**Rule:** Research ALWAYS runs. No skip conditions. Parallel agents are fast.
+
+#### Validation Gates Flow
+
+```
+ds → ... → DELIVER
+              ↓
+         [design gate] ────→ SPEED=WARN, FULL=HALT
+              ↓
+    /conductor-newtrack
+              ↓
+         [spec gate] ────→ WARN only
+              ↓
+         [plan-structure gate] ────→ WARN only
+              ↓
+    /conductor-implement
+              ↓
+         TDD: RED → GREEN → REFACTOR
+              ↓
+         [plan-execution gate] ────→ SPEED=WARN, FULL=HALT
+              ↓
+    /conductor-finish
+              ↓
+         [completion gate] ────→ SPEED=WARN, FULL=HALT
+              ↓
+         Archive track
+```
+
+**State tracking in metadata.json:**
+```yaml
+validation:
+  gates_passed: [design, spec, plan-structure]
+  current_gate: plan-execution
+  retries: 0          # max 2 before human escalation
+  last_failure: null
 ```
 
 ## Double Diamond Routing
@@ -108,6 +234,8 @@ ds → DELIVER → [design] → newtrack → [spec] → [plan] → implement →
 | `/conductor-newtrack` | `conductor/references/workflows/newtrack.md` |
 | `/conductor-implement` | `conductor/references/workflows/implement.md` |
 | `/conductor-finish` | `conductor/references/finish-workflow.md` |
+| `/create_handoff`, `/resume_handoff` | `conductor/references/handoff/` |
+| `/doc-sync` | `conductor/references/doc-sync/` |
 | TDD cycle | `conductor/references/tdd/cycle.md` |
 
 **Validation gate implementations:**
