@@ -92,34 +92,45 @@ Will this be done in this session?
 
 ## Orchestrator Invocation Points
 
-### When to Use Orchestrator
+### Wrapper Pattern: /conductor-implement Auto-Routes
 
-| Trigger | Context | Action |
-|---------|---------|--------|
-| `/conductor-orchestrate` | Explicit command | Load orchestrator skill |
-| "run parallel", "spawn workers" | Natural language | Route to orchestrator |
-| plan.md has Track Assignments | Auto-detect | Suggest orchestrator |
-| Epic has 3+ independent tracks | During planning | Recommend parallel execution |
-
-### Orchestrator vs Implement Decision
+**`/conductor-implement` is a wrapper** that automatically routes to `/conductor-orchestrate` when parallel execution is appropriate.
 
 ```
-Does plan.md have "Track Assignments" section?
-  YES → Use /conductor-orchestrate
-  NO ↓
-
-Are there 3+ independent tracks that can run in parallel?
-  YES → Recommend adding Track Assignments to plan.md
-  NO ↓
-
-Is Agent Mail MCP available?
-  NO → Use /conductor-implement (sequential)
-  YES ↓
-
-Would parallel execution save significant time?
-  YES → Use /conductor-orchestrate
-  NO → Use /conductor-implement
+/conductor-implement
+        ↓
+  [Phase 2b: Routing]
+        ↓
+  ┌─────────────────────────────────────────┐
+  │ Has "## Track Assignments" in plan.md?  │
+  │   YES → PARALLEL_DISPATCH               │
+  │   NO  → Check TIER 1/2 scoring          │
+  └─────────────────────────────────────────┘
+        ↓
+  ┌─────────────────────────────────────────┐
+  │ PARALLEL_DISPATCH?                      │
+  │   YES → Hand off to orchestrator        │
+  │   NO  → Continue sequential (Phase 3)   │
+  └─────────────────────────────────────────┘
 ```
+
+### User Should Use `/conductor-implement` (Not `/conductor-orchestrate`)
+
+| User Types | Result |
+|------------|--------|
+| `/conductor-implement` | Auto-routes based on plan.md |
+| `/conductor-orchestrate` | Also works (direct orchestrator) |
+| `ci` | Alias for /conductor-implement |
+| `co` | Alias for /conductor-orchestrate |
+
+**Recommendation:** Always use `/conductor-implement` (or `ci`). It will route to orchestrator automatically when Track Assignments exist.
+
+### Routing Priority
+
+1. **Track Assignments exists** → PARALLEL_DISPATCH (immediate)
+2. **Agent Mail unavailable** → SINGLE_AGENT (cannot coordinate)
+3. **TIER 1 + TIER 2 pass** → PARALLEL_DISPATCH
+4. **Otherwise** → SINGLE_AGENT
 
 ### Orchestrator Fallback
 
@@ -127,24 +138,24 @@ When orchestrator cannot proceed:
 
 | Condition | Fallback |
 |-----------|----------|
-| Agent Mail unavailable | DEGRADE to /conductor-implement |
-| No Track Assignments | Suggest adding to plan.md or use /conductor-implement |
-| Single track only | Use /conductor-implement directly |
+| Agent Mail unavailable | DEGRADE to sequential in same agent |
 | Worker spawn fails | Retry once, then DEGRADE to sequential |
 
 ### Orchestrator Workflow Integration
 
 ```
-/conductor-design → /conductor-newtrack → /conductor-orchestrate
-                                              ↓
-                                    ┌─────────┴─────────┐
-                                    │   OR (fallback)   │
-                                    ↓                   ↓
-                           /conductor-orchestrate    /conductor-implement
-                                    │                   │
-                                    ├───────────────────┘
-                                    ↓
-                           /conductor-finish
+/conductor-design → /conductor-newtrack → /conductor-implement
+                                                   ↓
+                                          [Phase 2b Routing]
+                                                   ↓
+                                    ┌──────────────┴──────────────┐
+                                    ↓                             ↓
+                           PARALLEL_DISPATCH               SINGLE_AGENT
+                           (orchestrator)                  (sequential)
+                                    │                             │
+                                    └──────────────┬──────────────┘
+                                                   ↓
+                                          /conductor-finish
 ```
 
 ### Cross-Track Dependency Handling

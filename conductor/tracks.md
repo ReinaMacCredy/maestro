@@ -4,7 +4,11 @@ Master list of all development tracks.
 
 ## Active Tracks
 
-*No active tracks.*
+## [~] Track: Test Routing
+*ID: test-routing_20251230*
+*Link: [spec](conductor/tracks/test-routing_20251230/spec.md) | [plan](conductor/tracks/test-routing_20251230/plan.md)*
+
+Test track to verify /conductor-implement auto-routes to orchestrator.
 
 ---
 

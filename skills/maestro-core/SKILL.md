@@ -37,8 +37,8 @@ metadata:
 | `ds`, `/conductor-design` | design → conductor |
 | `/conductor-setup` | conductor |
 | `/conductor-newtrack` | conductor |
-| `ci`, `/conductor-implement` | conductor |
-| `co`,`/conductor-orchestrate` | orchestrator |
+| `ci`, `/conductor-implement` | conductor (auto-routes to orchestrator if Track Assignments exist) |
+| `co`,`/conductor-orchestrate` | orchestrator (direct) |
 | `cf`,`/conductor-finish` | conductor |
 | `/conductor-status`, `-revert`, `-revise` | conductor |
 | `/conductor-validate` | conductor |

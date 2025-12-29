@@ -17,10 +17,13 @@ Load maestro-core first for orchestration context.
 
 ## When to Use
 
+**Primary:** `/conductor-implement` auto-routes here when:
 - Plan.md has **Track Assignments** section
-- User runs `/conductor-orchestrate`
+- TIER 1 + TIER 2 scoring passes
+
+**Direct:** Also available via:
+- User runs `/conductor-orchestrate` or `co`
 - User says "run parallel", "spawn workers", "dispatch agents"
-- Epic has multiple independent tracks
 
 ## Architecture
 

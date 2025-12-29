@@ -113,7 +113,35 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
 
 **Purpose:** Determine whether to execute tasks sequentially (SINGLE_AGENT) or in parallel (PARALLEL_DISPATCH).
 
-1. **Evaluate TIER 1** (weighted score):
+> **Note:** `/conductor-implement` is a wrapper that auto-routes to `/conductor-orchestrate` when parallel execution is appropriate.
+
+1. **Check Track Assignments (Priority 1)**
+   
+   ```python
+   plan = Read("conductor/tracks/<track-id>/plan.md")
+   
+   if "## Track Assignments" in plan:
+       # Explicit parallel execution requested
+       return PARALLEL_DISPATCH
+   ```
+   
+   **If Track Assignments section exists → immediately route to orchestrator.**
+
+2. **Check Agent Mail Availability (Priority 2)**
+   
+   ```python
+   try:
+       ensure_project(human_key=PROJECT_PATH)
+       AGENT_MAIL_AVAILABLE = True
+   except McpUnavailable:
+       AGENT_MAIL_AVAILABLE = False
+       # Cannot do parallel without coordination
+       return SINGLE_AGENT
+   ```
+   
+   **If Agent Mail unavailable → fall back to sequential.**
+
+3. **Evaluate TIER 1** (weighted score, only if no Track Assignments):
    
    | Factor | Weight |
    |--------|--------|
@@ -124,7 +152,7 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
    
    **Threshold:** Score >= 5 to proceed to TIER 2
 
-2. **Evaluate TIER 2** (if TIER 1 passes):
+4. **Evaluate TIER 2** (if TIER 1 passes):
    
    ```python
    (files > 15 AND tasks > 3) OR
@@ -132,42 +160,61 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
    (est_time > 30 min AND independent_ratio > 0.6)
    ```
 
-3. **Route Decision:**
+5. **Route Decision:**
    
-   | TIER 1 | TIER 2 | Result |
-   |--------|--------|--------|
-   | FAIL | - | SINGLE_AGENT |
-   | PASS | FAIL | SINGLE_AGENT |
-   | PASS | PASS | PARALLEL_DISPATCH |
+   | Condition | Result |
+   |-----------|--------|
+   | Track Assignments exists | PARALLEL_DISPATCH |
+   | Agent Mail unavailable | SINGLE_AGENT |
+   | TIER 1 FAIL | SINGLE_AGENT |
+   | TIER 1 PASS, TIER 2 FAIL | SINGLE_AGENT |
+   | TIER 1 PASS, TIER 2 PASS | PARALLEL_DISPATCH |
 
-4. **Display Feedback:**
+6. **Display Feedback:**
    ```text
    ┌─ EXECUTION ROUTING ────────────────────┐
-   │ TIER 1 Score: 6/8                      │
-   │ TIER 2: PASS                           │
+   │ Track Assignments: YES                 │
+   │ Agent Mail: Available                  │
    │ Result: PARALLEL_DISPATCH              │
+   │ → Routing to /conductor-orchestrate    │
+   └────────────────────────────────────────┘
+   ```
+   
+   Or for sequential:
+   ```text
+   ┌─ EXECUTION ROUTING ────────────────────┐
+   │ Track Assignments: NO                  │
+   │ TIER 1 Score: 3/8                      │
+   │ Result: SINGLE_AGENT                   │
+   │ → Continuing sequential execution      │
    └────────────────────────────────────────┘
    ```
 
-5. **Update State:**
+7. **Update State:**
    
    Add to `implement_state.json`:
    ```json
    {
      "execution_mode": "PARALLEL_DISPATCH",
+     "routing_trigger": "track_assignments",
      "routing_evaluation": {
-       "tier1_score": 6,
-       "tier1_pass": true,
-       "tier2_pass": true
+       "has_track_assignments": true,
+       "agent_mail_available": true,
+       "tier1_score": null,
+       "tier1_pass": null,
+       "tier2_pass": null
      }
    }
    ```
 
-6. **Branch Logic:**
+8. **Branch Logic:**
    - **SINGLE_AGENT:** Continue to Phase 3 (sequential execution)
-   - **PARALLEL_DISPATCH:** Use [parallel-dispatch.md](../../../dispatching-parallel-agents/references/agent-coordination/patterns/parallel-dispatch.md) pattern
+   - **PARALLEL_DISPATCH:** Hand off to [orchestrator skill](../../../orchestrator/SKILL.md)
+     - Load orchestrator workflow
+     - Orchestrator spawns workers via Task()
+     - Main agent monitors via Agent Mail
 
-See [execution-routing.md](../../../dispatching-parallel-agents/references/agent-coordination/patterns/execution-routing.md) for full scoring details.
+See [orchestrator workflow](../../../orchestrator/references/workflow.md) for parallel execution protocol.
 
 ### Phase 3: Track Implementation
 
