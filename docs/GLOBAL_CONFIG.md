@@ -29,6 +29,14 @@ Context-driven development with TDD execution.
 
 **First message:** Load `maestro-core` skill for orchestration context.
 
+### Project Detection
+
+Maestro project if any exist:
+- `conductor/` directory
+- `.beads/` directory
+
+When detected, use Conductor commands instead of ad-hoc planning.
+
 ### Triggers
 
 **Planning:**
@@ -36,21 +44,15 @@ Context-driven development with TDD execution.
 - `/conductor-setup` - Initialize project context (once per project)
 - `/conductor-newtrack` - Create spec + plan + beads from design
 
-**Design Session (A/P/C Checkpoints):**
-- `[A]` Advanced - deeper analysis, assumption audit
-- `[P]` Party - multi-agent review (25 BMAD agents: Core/BMM/CIS/BMB/BMGD)
-- `[C]` Continue - proceed to next phase
-
 **Execution:**
 - `bd ready --json` - Find available work
-- `/conductor-implement` - Execute with TDD checkpoints by default (use `--no-tdd` to disable)
+- `/conductor-implement` - Execute epic with TDD checkpoints (use `--no-tdd` to disable)
 - `tdd` - Enter TDD mode (RED-GREEN-REFACTOR)
 - `finish branch` - Finalize and merge/PR
 
 **Maintenance:**
 - `/conductor-revise` - Update spec/plan mid-implementation
 - `/conductor-finish` - Complete track (learnings, context refresh, archive)
-- `/doc-sync` - Sync documentation with code changes
 
 **Beads:**
 - `fb` - File beads from plan
@@ -85,6 +87,18 @@ bd close <id> --reason completed     # Close current task
 bd sync                              # Sync to git
 ```
 
+### Session Lifecycle
+
+Session continuity is **automatic** via Conductor workflow entry points:
+
+| Entry Point | Ledger Action |
+|-------------|---------------|
+| `ds` | Load prior context before DISCOVER |
+| `/conductor-implement` | Load + bind to track/bead |
+| `/conductor-finish` | Handoff + archive |
+
+No manual commands needed. Ad-hoc work outside Conductor skips ledger operations.
+
 ### Critical Rules
 
 - Use `--json` with `bd` for structured output
@@ -93,50 +107,6 @@ bd sync                              # Sync to git
 - Always commit `.beads/` with code changes
 
 > **Note:** Skills work without CLI tools. Use `TodoWrite` for session-local tracking if `bd` is not installed.
-
-### Project Detection
-
-Maestro project if any exist:
-- `conductor/` directory
-- `.beads/` directory
-
-When detected, use Conductor commands instead of ad-hoc planning.
-
-
-## Session Lifecycle (All Agents)
-
-Session continuity is **automatic** via Conductor workflow entry points. No manual commands needed.
-
-### Entry Points
-
-| Trigger | Ledger Action |
-|---------|---------------|
-| `ds` | Load prior context before DISCOVER phase |
-| `/conductor-implement` | Load + bind to track/bead |
-| `/conductor-finish` | Handoff + archive |
-
-### First Message Behavior
-
-When a session starts with Conductor triggers (`ds`, `/conductor-implement`), context from the previous session loads automatically via LEDGER.md.
-
-### Non-Conductor Work
-
-For ad-hoc tasks outside Conductor workflows, ledger operations are skipped. This avoids overhead for trivial tasks.
-
-### Manual Commands (Optional)
-
-If you need to manage session state manually:
-
-| Command | When |
-|---------|------|
-| `continuity load` | Manually load previous context |
-| `continuity save` | Save checkpoint after milestones |
-| `continuity handoff` | Manually archive session |
-| `continuity status` | Check session state |
-
-These commands are rarely needed—Conductor handles continuity automatically.
-
-
 
 For complete workflow guide, see [TUTORIAL.md](../TUTORIAL.md).
 
