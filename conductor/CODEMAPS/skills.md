@@ -30,20 +30,21 @@ Instructions for the agent...
 ORCHESTRATION          CORE WORKFLOW          DEVELOPMENT              UTILITIES
 ├── maestro-core       ├── conductor          ├── using-git-worktrees  ├── sharing-skills
 │   └── references/    │   ├── references/    └── writing-skills       
-│       ├── hierarchy.md   │   ├── research/        ← NEW
+│       ├── hierarchy.md   │   ├── research/        
 │       └── routing.md     │   ├── coordination/     
-│                          │   ├── tdd/              
-│                          │   ├── verification/     
-│                          │   ├── doc-sync/         
-│                          │   ├── handoff/          
+├── orchestrator           │   ├── tdd/              
+│   └── references/        │   ├── verification/     
+│       ├── patterns/      │   ├── doc-sync/         
+│       └── examples/      │   ├── handoff/          
 │                          │   └── finish/           
 │                      ├── design             
 │                      │   └── bmad/          
 │                      └── beads
 ```
 
-**7 Core Skills (after maestro-core_20251229):**
+**8 Core Skills (after orchestrator_20251230):**
 - **maestro-core**: Central orchestrator (hierarchy, HALT/DEGRADE, routing)
+- **orchestrator**: Multi-agent parallel execution with autonomous workers
 - **conductor**: Planning + execution + **research protocol**
 - **design**: Double Diamond + Party Mode + Research verification
 - **beads**: Issue tracking + persistent memory
@@ -57,9 +58,10 @@ ORCHESTRATION          CORE WORKFLOW          DEVELOPMENT              UTILITIES
 |-------|-------|------|
 | 1 | maestro-core | Routing decisions, fallback policy |
 | 2 | conductor | Track orchestration, workflow state, **research** |
-| 3 | design | Design sessions (Double Diamond) |
-| 4 | beads | Issue tracking, dependencies |
-| 5 | specialized | worktrees, sharing, writing |
+| 3 | orchestrator | **Multi-agent parallel execution** |
+| 4 | design | Design sessions (Double Diamond) |
+| 5 | beads | Issue tracking, dependencies |
+| 6 | specialized | worktrees, sharing, writing |
 
 **Higher levels override lower levels on conflicts.**
 
@@ -115,9 +117,9 @@ bmad/
 ## Skill Loading
 
 Skills are loaded when:
-- User says trigger phrase (e.g., `ds`, `tdd`, `debug`, `/research`)
-- User runs slash command (e.g., `/conductor-setup`)
-- Agent recognizes matching context
+- User says trigger phrase (e.g., `ds`, `tdd`, `debug`, `/research`, "spawn workers")
+- User runs slash command (e.g., `/conductor-setup`, `/conductor-orchestrate`)
+- Agent recognizes matching context (e.g., plan.md has Track Assignments)
 
 ## Gotchas
 

@@ -49,6 +49,8 @@ Contains reusable learnings from completed tracks.
 - `/create_handoff` - Create handoff file manually
 - `/resume_handoff` - Load most recent handoff for track
 - `ls skills/conductor/references/` - Verify reference structure after migration
+- `/conductor-orchestrate` - Spawn parallel workers for track execution (Mode B workers)
+- `bv --robot-triage --graph-root <epic-id>` - Prepare beads for orchestration ("dọn cỗ")
 
 ## Gotchas
 
@@ -103,10 +105,13 @@ Contains reusable learnings from completed tracks.
 - Continuity skill is in marketplace plugin, not local skills/ - can't add direct local dependency checks
 - Session start detection without hooks requires implicit trigger (maestro-core loading on first message)
 - Ad-hoc queries (not triggering `ds`, `/conductor-implement`, etc.) do NOT load handoff history - intentional low-overhead behavior for casual chats
+- Agent Mail MCP Failure: If Agent Mail unavailable, graceful fallback to sequential `/conductor-implement`
+- Runtime Testing: Integration tests (Agent Mail, worker spawn) require live MCP - skip with `--reason skipped`
+- Worker Autonomy: Orchestrator workers CAN self claim/close beads (differs from standard subagent rules)
 
 ## Patterns
 
-- **5-Level Skill Hierarchy:** maestro-core > conductor > design > beads > specialized (higher level wins on conflicts)
+- **6-Level Skill Hierarchy:** maestro-core > conductor > orchestrator > design > beads > specialized (higher level wins on conflicts)
 - **Context-Aware Routing:** Check explicit commands first, then context (conductor/ exists?) for routing
 - **6-Phase Finish Workflow:** Pre-flight → Thread Compaction → Beads Compaction → Knowledge Merge → Context Refresh → Archive → CODEMAPS
 - **Smart Skip:** Each phase checks if work exists before running

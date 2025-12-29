@@ -8,7 +8,8 @@ AI workflow plugin for structured development: planning (Conductor), issue track
 |-------|---------|
 | `ds` / `/conductor-design` | Start Double Diamond design session |
 | `/conductor-newtrack` | Generate spec + plan + beads from design |
-| `/conductor-implement` | Execute tasks with TDD |
+| `/conductor-implement` | Execute tasks with TDD (sequential) |
+| `/conductor-orchestrate` | Execute tracks in parallel with workers |
 | `/conductor-finish` | Complete track, extract learnings, archive |
 | `/doc-sync` | Sync documentation with code changes |
 | `fb` / `rb` | File/review beads from plan |
@@ -17,7 +18,7 @@ AI workflow plugin for structured development: planning (Conductor), issue track
 
 ```
 maestro/
-├── skills/           # 6 skill directories (SKILL.md + references/)
+├── skills/           # 7 skill directories (SKILL.md + references/)
 │   ├── beads/references/         # Issue tracking workflows
 │   ├── conductor/references/     # Planning + execution (absorbed 9 skills)
 │   │   ├── research/             # Research protocol (replaces grounding)
@@ -30,6 +31,9 @@ maestro/
 │   │   └── finish/               # Branch completion
 │   ├── design/references/        # Double Diamond + Party Mode
 │   │   └── bmad/                 # Multi-agent design personas
+│   ├── orchestrator/references/  # Multi-agent parallel execution
+│   │   ├── patterns/             # Parallel dispatch, lifecycle, fallback
+│   │   └── examples/             # Three-agent dispatch example
 │   ├── using-git-worktrees/      # Isolated dev environments
 │   ├── writing-skills/           # Skill creation guide
 │   └── sharing-skills/           # Upstream contribution
@@ -49,6 +53,8 @@ ds → design.md → /conductor-newtrack → spec.md + plan.md
                                        fb → .beads/ (epics + issues)
                                               ↓
                               /conductor-implement → TDD cycle → done
+                                     OR
+                              /conductor-orchestrate → parallel workers → done
                                               ↓
                               /conductor-finish → LEARNINGS.md → archive
 ```
@@ -73,6 +79,7 @@ Zero manual `bd` commands in the happy path:
 | Skill | Trigger | Role |
 |-------|---------|------|
 | `conductor` | `/conductor-*`, `/research` | Planning + execution + **research protocol** |
+| `orchestrator` | `/conductor-orchestrate`, "spawn workers" | **Multi-agent parallel execution** |
 | `design` | `ds` | Double Diamond + Party Mode + Research verification |
 | `beads` | `bd`, `fb`, `rb` | Issue tracking, file/review beads |
 | `using-git-worktrees` | - | Isolated dev environments |
@@ -85,7 +92,8 @@ Zero manual `bd` commands in the happy path:
 |------|-----|
 | Start new feature | `ds` → design → `/conductor-newtrack` |
 | Find work | `bd ready --json` |
-| Execute task | `/conductor-implement` (auto-claims from beads) |
+| Execute task (sequential) | `/conductor-implement` (auto-claims from beads) |
+| Execute tracks (parallel) | `/conductor-orchestrate` (spawns worker agents) |
 | Complete track | `/conductor-finish` (extracts learnings, archives) |
 | Add a skill | Create `skills/<name>/SKILL.md` with frontmatter + `references/` |
 | Add workflow docs | Add to `skills/<skill>/references/*.md` |

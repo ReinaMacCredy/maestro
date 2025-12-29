@@ -9,7 +9,7 @@
 *~
 .idea/
 .vscode/
-
+.claude
 # Dependencies
 node_modules/
 

@@ -5,9 +5,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 **Maestro** is a Claude Code plugin providing structured AI-assisted development workflows. It combines:
-- **Conductor**: Structured planning methodology that produces spec.md and plan.md files
+- **Conductor**: Structured planning methodology that produces design.md, spec.md and plan.md files
 - **Beads**: Persistent issue tracking across sessions with dependency graphs
-- **TDD/Debugging/Review**: Systematic development methodologies
+- **Orchestrator**: Multi-agent parallel execution with worker dispatch
+- **TDD/Verification**: Integrated execution with validation gates
 
 This is a skills-based plugin (no build required) - all functionality is delivered through markdown skill definitions.
 
@@ -16,13 +17,16 @@ This is a skills-based plugin (no build required) - all functionality is deliver
 ### Directory Structure
 
 ```
-skills/                    # 14 skill directories, each with SKILL.md
+skills/                    # 9 skill directories, each with SKILL.md
+  ├── maestro-core/       # Central orchestrator - routing, fallbacks, hierarchy
+  ├── conductor/          # Planning + execution + research protocol (references/)
+  ├── orchestrator/       # Multi-agent parallel execution (references/)
+  ├── design/             # Double Diamond sessions (ds trigger) with bmad/
   ├── beads/              # Issue tracking (fb, rb triggers) with references/
-  ├── conductor/          # Planning methodology with references/
-  ├── design/             # Design sessions (ds trigger) with bmad/
-  ├── continuity/       # Session state preservation (replaces session-compaction)
-  ├── test-driven-development/
-  └── ...                 # See SETUP_GUIDE.md for full list
+  ├── continuity/         # DEPRECATED: Stub redirecting to handoff system
+  ├── using-git-worktrees/
+  ├── writing-skills/
+  └── sharing-skills/
 
 .claude-plugin/          # Plugin metadata
   ├── plugin.json        # Plugin manifest
@@ -30,60 +34,67 @@ skills/                    # 14 skill directories, each with SKILL.md
 
 hooks/                   # Lifecycle hooks
   ├── hooks.json         # Hook configuration
-  └── session-start.sh   # SessionStart hook (injects using-superpowers)
+  └── session-start.sh   # SessionStart hook
 
 lib/                     # Shared utilities
   └── skills-core.js     # Skill utility functions
 
-conductor/               # Conductor context (created per-project when initialized)
+conductor/               # Project context + tracks (created per-project)
   ├── product.md
   ├── tech-stack.md
   ├── workflow.md
   ├── tracks.md
-  └── tracks/<id>/      # Feature/bug tracks
-      ├── design.md     # High-level design (from /conductor-design)
-      ├── spec.md       # Requirements + acceptance criteria
-      └── plan.md       # Phased task list
+  ├── CODEMAPS/          # Architecture documentation (auto-regenerated)
+  │   └── overview.md    # System architecture overview
+  ├── handoffs/          # Session handoffs (git-committed)
+  ├── archive/           # Completed tracks
+  └── tracks/<id>/       # Active feature/bug tracks
+      ├── design.md      # High-level design (from ds)
+      ├── spec.md        # Requirements + acceptance criteria
+      ├── plan.md        # Phased task list
+      └── metadata.json  # Track state, thread IDs, validation
 
 .beads/                  # Beads issue database (git-tracked)
 ```
 
-### Skill Structure
+### Skill Hierarchy
 
-Each skill follows a consistent pattern:
-- **SKILL.md**: YAML frontmatter (`name`, `description`) + markdown instructions
-- **Optional references/**: Supporting documentation
-- Skills are self-contained, minimal cross-references
+| Level | Skill | Role |
+|-------|-------|------|
+| 1 | maestro-core | Routing, fallback policy, hierarchy |
+| 2 | conductor | Track orchestration, research protocol |
+| 3 | orchestrator | Multi-agent parallel execution |
+| 4 | design | Double Diamond sessions |
+| 5 | beads | Issue tracking |
+| 6 | specialized | worktrees, sharing, writing |
 
 ### Workflow Integration
 
-The plugin uses a **two-session workflow**:
+The plugin uses a **session-based workflow**:
 
 **Session 1 (Planning):**
 ```
-/conductor-design → /conductor-newtrack → fb (file beads) → rb (review beads) → HANDOFF block
+ds → design.md → /conductor-newtrack → spec.md + plan.md + beads + review → HANDOFF
 ```
 
-**Session 2 (Execution):**
+**Session 2+ (Execution per Epic):**
 ```
-HANDOFF block → /conductor-implement → tdd → verify → close → finish branch
+/resume_handoff → /conductor-implement → TDD → verify → close → HANDOFF
+```
+
+**Or Parallel Execution:**
+```
+/conductor-orchestrate → spawns worker agents → parallel TDD → merge
 ```
 
 ## Key Commands
 
 ### Validation
 ```bash
-# Validate plugin manifest
-cat .claude-plugin/plugin.json | jq .
-
-# Check beads database status
-bd status --json
-
-# List available work
-bd ready --json
-
-# Show issue details
-bd show <issue-id>
+cat .claude-plugin/plugin.json | jq .   # Validate plugin manifest
+bd status --json                        # Check beads database status
+bd ready --json                         # List available work
+bd show <issue-id>                      # Show issue details
 ```
 
 ### Development Workflow
@@ -123,73 +134,90 @@ bd dep tree <id>             # Show dependency graph
 
 **Never use bare `bv` command** - it launches TUI and will hang. Always use `bv --robot-*` flags.
 
-### Conductor Workflow
+### Conductor Commands
 
-```bash
-# Initialize project planning (once per project)
-/conductor-setup
+| Command | Shortcut | Description |
+|---------|----------|-------------|
+| `/conductor-setup` | - | Initialize project planning (once) |
+| `/conductor-design` | `ds` | Design through Double Diamond dialogue |
+| `/conductor-newtrack` | - | Create spec + plan + beads from design |
+| `/conductor-implement` | `ci` | Execute ONE EPIC with TDD |
+| `/conductor-orchestrate` | `co` | Execute tracks in parallel with workers |
+| `/conductor-finish` | `cf` | Complete track: learnings, archive |
+| `/conductor-status` | - | View progress overview |
+| `/conductor-revise` | - | Update spec/plan mid-implementation |
+| `/conductor-revert` | - | Git-aware revert of work |
+| `/conductor-validate` | - | Validate track health and state |
+| `/conductor-block` | - | Mark task as blocked |
+| `/conductor-skip` | - | Skip task with documented reason |
 
-# Design a feature through dialogue
-/conductor-design "feature description"
+### Handoff Commands
 
-# Create spec + plan from design
-/conductor-newtrack
+| Command | Description |
+|---------|-------------|
+| `/create_handoff` | Create handoff file with current context |
+| `/resume_handoff` | Find and load most recent handoff |
 
-# Execute track tasks
-/conductor-implement
+### Research Protocol
 
-# Check progress
-/conductor-status
+| Command | Description |
+|---------|-------------|
+| `/research` | Verify patterns against codebase |
 
-# Update spec/plan when issues discovered
-/conductor-revise
-
-# Complete track: extract learnings, refresh context, archive
-/conductor-finish
-
-# Git-aware revert of work
-/conductor-revert
-```
+Research runs automatically at design phase transitions using parallel agents: Locator, Analyzer, Pattern, Web, Impact.
 
 ### Git Integration
 
 ```bash
-# Beads are git-tracked, commit with code changes
-git add .beads/ && git commit -m "Update beads"
-
-# Session end protocol
-bd sync                     # Sync beads with remote
-git add -A && git commit && git push
+git add .beads/ && git commit -m "Update beads"  # Commit beads with code
+bd sync                                           # Sync beads to git
+git add -A && git commit && git push             # Session end protocol
 ```
 
 ## Workflow Triggers
 
-| Trigger | Skill/Command | Use When |
-|---------|---------------|----------|
-| `/conductor-setup` | conductor | Initialize project planning (once) |
-| `/conductor-design` | conductor | Design a feature through collaborative dialogue |
+| Trigger | Skill | Use When |
+|---------|-------|----------|
+| `ds` | design | Start Double Diamond design session |
 | `/conductor-newtrack` | conductor | Create spec + plan from design |
 | `/conductor-implement` | conductor | Execute ONE EPIC from track's plan |
-| `/conductor-status` | conductor | View progress overview |
-| `/conductor-revert` | conductor | Git-aware revert of work |
-| `/conductor-revise` | conductor | Update spec/plan when issues discovered |
-| `/conductor-finish` | conductor | Complete track: extract learnings, refresh context, archive |
+| `/conductor-orchestrate` | orchestrator | Execute tracks in parallel |
+| `/conductor-finish` | conductor | Complete track and archive |
 | `fb` | beads | Convert plan to beads issues |
 | `rb` | beads | Review/refine filed beads |
-| `tdd` | test-driven-development | Enter TDD mode |
-| `finish branch` | finishing-a-development-branch | Complete and merge work |
-| `dispatch` | dispatching-parallel-agents | Run independent tasks in parallel |
+| `tdd` | conductor | Enter TDD mode (RED-GREEN-REFACTOR) |
+| `finish branch` | conductor | Complete and merge work |
 
 ## Important Patterns
 
-### SessionStart Hook
-The `hooks/session-start.sh` script injects the `using-superpowers` skill content at session start, establishing skill discovery and usage patterns.
-
 ### Skill Structure
-The `skills/*/references/` directories contain **single source of truth** for detailed logic:
-- Format-agnostic (markdown, referenced by SKILL.md)
-- Centralized workflow updates
-- JSON schemas in `skills/conductor/references/schemas/` define state file structures
+Each skill follows a consistent pattern:
+- **SKILL.md**: YAML frontmatter (`name`, `description`, `version`) + markdown instructions
+- **Optional references/**: Supporting documentation (single source of truth)
+- Skills are self-contained, minimal cross-references
+- All Maestro skills should load maestro-core first for orchestration context
+
+### Validation Gates
+
+5 validation gates integrated into the lifecycle:
+
+| Gate | Trigger Point | Enforcement |
+|------|---------------|-------------|
+| design | After DELIVER phase | SPEED=WARN, FULL=HALT |
+| spec | After spec.md generation | WARN |
+| plan-structure | After plan.md generation | WARN |
+| plan-execution | After TDD REFACTOR | SPEED=WARN, FULL=HALT |
+| completion | Before /conductor-finish | SPEED=WARN, FULL=HALT |
+
+Max 2 retries before escalating to human review.
+
+### Fallback Policy
+
+| Condition | Action |
+|-----------|--------|
+| `bd` unavailable | HALT |
+| `conductor/` missing | DEGRADE |
+| Village MCP unavailable | DEGRADE |
 
 ### Skill Naming
 - Directory names: kebab-case (`test-driven-development`)
@@ -202,11 +230,16 @@ The `skills/*/references/` directories contain **single source of truth** for de
 - GREEN: Minimal code to pass
 - REFACTOR: Clean up while staying green
 
+TDD is auto-enabled in `/conductor-implement`. Use `--no-tdd` to disable.
+
 ### Session Resumability
 Beads survive context compaction. Store recovery context in issue notes:
 ```bash
 bd update <id> --notes "COMPLETED: X. IN PROGRESS: Y. NEXT: Z"
 ```
+
+### CODEMAPS
+Architecture documentation in `conductor/CODEMAPS/` is auto-regenerated by `/conductor-finish` (Phase 6).
 
 ## Code Quality Standards
 
@@ -219,7 +252,8 @@ bd update <id> --notes "COMPLETED: X. IN PROGRESS: Y. NEXT: Z"
 ## Related Documentation
 
 - [README.md](README.md) - Full plugin overview and usage guide
-- [SETUP_GUIDE.md](SETUP_GUIDE.md) - Installation instructions for different environments
+- [SETUP_GUIDE.md](SETUP_GUIDE.md) - Installation instructions
 - [TUTORIAL.md](TUTORIAL.md) - Complete workflow guide with examples
-- [AGENTS.md](AGENTS.md) - Current project-specific agent instructions
-- [docs/GLOBAL_CONFIG.md](docs/GLOBAL_CONFIG.md) - Global configuration for agents
+- [AGENTS.md](AGENTS.md) - Project-specific agent instructions
+- [docs/GLOBAL_CONFIG.md](docs/GLOBAL_CONFIG.md) - Global agent configuration
+- [conductor/CODEMAPS/overview.md](conductor/CODEMAPS/overview.md) - Architecture overview
