@@ -89,15 +89,9 @@ bd sync                              # Sync to git
 
 ### Session Lifecycle
 
-Session continuity is **automatic** via Conductor workflow entry points:
+Session continuity is **automatic** via Conductor workflow entry points (`ds`, `/conductor-implement`, `/conductor-finish`). No manual commands needed.
 
-| Entry Point | Ledger Action |
-|-------------|---------------|
-| `ds` | Load prior context before DISCOVER |
-| `/conductor-implement` | Load + bind to track/bead |
-| `/conductor-finish` | Handoff + archive |
-
-No manual commands needed. Ad-hoc work outside Conductor skips ledger operations.
+> Details in `maestro-core` skill.
 
 ### Critical Rules
 
