@@ -235,7 +235,7 @@ Session continuity is automatic via Conductor workflow entry points:
 - `/conductor-implement` → loads + binds to track/bead
 - `/conductor-finish` → handoff + archive
 
-No manual commands needed. See [docs/GLOBAL_CONFIG.md](docs/GLOBAL_CONFIG.md#session-lifecycle-all-agents) for details.
+No manual commands needed. See [docs/GLOBAL_CONFIG.md](docs/GLOBAL_CONFIG.md) for details.
 
 ### Data Storage
 

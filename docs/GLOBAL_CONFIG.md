@@ -23,6 +23,8 @@ Apply the config block below to user's global config at:
 <!-- BEGIN maestro-config -->
 <!-- version: 2.1.0 | bmad-v6 | 2025-12-29 -->
 
+**Current year is 2025.** Always use 2025 for dates, not 2024.
+
 ## Maestro Workflow
 
 Context-driven development with TDD execution.

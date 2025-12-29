@@ -98,13 +98,13 @@ Embed ledger operations into Conductor workflow entry points:
 
 ```mermaid
 flowchart LR
-    DS["ds"] --> DS_LOAD["📥 ledger load"]
+    DS["ds"] --> DS_LOAD["ledger load"]
     DS_LOAD --> DESIGN["DISCOVER..."]
     
-    IMPL["/conductor-implement"] --> IMPL_LOAD["📥 ledger load + bind"]
+    IMPL["/conductor-implement"] --> IMPL_LOAD["ledger load + bind"]
     IMPL_LOAD --> EXEC["TDD cycle..."]
     
-    FINISH["/conductor-finish"] --> FINISH_HAND["📤 ledger handoff"]
+    FINISH["/conductor-finish"] --> FINISH_HAND["ledger handoff"]
     FINISH_HAND --> ARCHIVE["Archive track"]
 ```
 

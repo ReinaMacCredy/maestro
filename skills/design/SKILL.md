@@ -73,7 +73,7 @@ Check for `conductor/` directory with core files:
 - `tech-stack.md` - Technical constraints
 - `workflow.md` - Development standards
 
-If missing: Display `⚠️ Conductor unavailable. Standalone mode.` and continue session.
+If missing: Display `Conductor unavailable. Standalone mode. Run /conductor-setup to enable full features.` and continue session.
 
 > **Note:** In standalone mode, CODEMAPS and product context are skipped. Double Diamond still works but without project-specific context.
 

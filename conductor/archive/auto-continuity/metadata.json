@@ -3,8 +3,9 @@
   "title": "Auto-Continuity for Hookless Agents",
   "type": "feature",
   "status": "completed",
-  "created": "2025-12-29",
-  "completed": "2025-12-29",
+  "priority": "normal",
+  "created_at": "2025-12-29T00:00:00Z",
+  "updated_at": "2025-12-29T00:00:00Z",
   "thread_ids": ["T-019b693d-e4e7-7664-b1d4-4a0c47f32ed2", "T-019b694d-83dd-7299-a32a-bf4fab15aa18"],
   "generation": {
     "status": "plan_done",

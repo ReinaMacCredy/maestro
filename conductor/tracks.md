@@ -4,12 +4,6 @@ Master list of all development tracks.
 
 ## Active Tracks
 
-## [x] Track: Auto-Continuity for Hookless Agents
-*ID: auto-continuity*
-*Archived: [conductor/archive/auto-continuity/](conductor/archive/auto-continuity/)*
-
-Session continuity automatic via workflow entry points (ds, /conductor-implement, /conductor-finish).
-
 ## [ ] Track: Grounding Trigger Implementation
 *ID: grounding-v2_20251228*
 *Link: [spec](conductor/tracks/grounding-v2_20251228/spec.md) | [plan](conductor/tracks/grounding-v2_20251228/plan.md)*
@@ -21,6 +15,12 @@ Add explicit grounding execution instructions to design skill phase transitions.
 ## Completed Tracks
 
 *Completed tracks are archived to `conductor/archive/`.*
+
+## [x] Track: Auto-Continuity for All Agents
+*ID: auto-continuity*
+*Archived: [conductor/archive/auto-continuity/](conductor/archive/auto-continuity/)*
+
+Session continuity automatic via workflow entry points (ds, /conductor-implement, /conductor-finish).
 
 ## [x] Track: maestro-core
 *ID: maestro-core*

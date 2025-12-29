@@ -1,6 +1,6 @@
 # Amp Code Setup
 
-> **⚠️ DEPRECATED (2025-12-29)**
+> **DEPRECATED (2025-12-29)**
 >
 > This document is kept for historical reference only.
 > 
@@ -9,7 +9,7 @@
 > - `/conductor-implement` → loads + binds to track/bead
 > - `/conductor-finish` → handoff + archive
 >
-> See [docs/GLOBAL_CONFIG.md](../../../../docs/GLOBAL_CONFIG.md#session-lifecycle-all-agents) for current approach.
+> See [docs/GLOBAL_CONFIG.md](../../../../docs/GLOBAL_CONFIG.md) for current approach.
 
 ---
 

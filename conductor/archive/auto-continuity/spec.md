@@ -1,12 +1,12 @@
-# Spec: Auto-Continuity for Hookless Agents
+# Spec: Auto-Continuity for All Agents
 
 ## Overview
 
-Make session continuity automatic for hookless agents (Amp, Gemini CLI, Codex) by embedding ledger operations into Conductor workflow entry points.
+Make session continuity automatic for all agents (Amp, Gemini CLI, Codex) by embedding ledger operations into Conductor workflow entry points.
 
 ## Problem
 
-Users on hookless agents must manually run `continuity load`, `continuity save`, and `continuity handoff` commands. These are easily forgotten, causing context loss across sessions.
+Users currently must manually run `continuity load`, `continuity save`, and `continuity handoff` commands. These are easily forgotten, causing context loss across sessions.
 
 ## Solution
 
