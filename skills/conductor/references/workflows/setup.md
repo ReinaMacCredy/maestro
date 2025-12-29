@@ -133,12 +133,7 @@ For each document, follow the Interactive Generation Protocol:
 
 Set up session state preservation for cross-session context.
 
-1. **Detect Platform**
-   - **Claude Code**: Check for `~/.claude/` directory
-   - **Amp Code**: Check for `~/.config/amp/` directory
-   - **Codex**: Neither of the above
-
-2. **Create Sessions Structure**
+1. **Create Sessions Structure**
    - Create `conductor/sessions/active/`
    - Create `conductor/sessions/archive/`
    - Create `conductor/.cache/`
@@ -155,17 +150,12 @@ Set up session state preservation for cross-session context.
      !.gitignore
      ```
 
-3. **Platform-Specific Setup**
-   - **Claude Code**:
-     - Check if hooks exist at `~/.claude/hooks/dist/continuity.js`
-     - If not, prompt: "Run `./scripts/install-global-hooks.sh` for auto context loading"
-   - **Amp Code**:
-     - Check if `~/.config/amp/AGENTS.md` exists
-     - Prompt: "Add Continuity Protocol to ~/.config/amp/AGENTS.md (see skills/conductor/references/ledger/amp-setup.md)"
-   - **Codex**:
-     - Display: "Use `continuity load/save/handoff` commands manually"
+2. **Announce Automatic Continuity**
+   - Display: "✅ Session continuity is automatic via workflow entry points."
+   - Explain: `ds`, `/conductor-implement`, and `/conductor-finish` handle ledger operations automatically.
+   - **Claude Code bonus**: "Hooks at `~/.claude/hooks/` provide additional auto-save on tool use."
 
-4. **Update State**
+3. **Update State**
    - **State on Complete**: `"5.1_continuity_configured"`
 
 ### Phase 7: CODEMAPS Generation

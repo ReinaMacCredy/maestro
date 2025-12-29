@@ -81,6 +81,22 @@ All Maestro skills should load maestro-core first:
 Load maestro-core first for orchestration context.
 ```
 
+## Session Lifecycle
+
+Session continuity is **automatic** via Conductor workflow entry points:
+
+| Entry Point | Ledger Action |
+|-------------|---------------|
+| `ds` | Load prior context before DISCOVER phase |
+| `/conductor-implement` | Load + bind to track/bead |
+| `/conductor-finish` | Handoff + archive |
+
+**No manual commands needed.** Conductor handles ledger operations at workflow boundaries.
+
+For non-Conductor (ad-hoc) work, ledger operations are skipped to avoid overhead.
+
+See [conductor/references/ledger/](../conductor/references/ledger/) for implementation details.
+
 ## References
 
 - [hierarchy.md](references/hierarchy.md) - 5-level details, HALT/DEGRADE matrix

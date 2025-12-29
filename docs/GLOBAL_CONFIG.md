@@ -140,31 +140,36 @@ bv --robot-status  # Check team state
 
 ---
 
-## Amp-Specific: Continuity Protocol
+## Session Lifecycle (All Agents)
 
-Amp doesn't support automatic hooks like Claude Code. Add this section to `~/.config/amp/AGENTS.md`:
+Session continuity is **automatic** via Conductor workflow entry points. No manual commands needed.
 
-```markdown
-## Continuity Protocol
+### Entry Points
 
-Amp doesn't support automatic hooks - use manual commands.
+| Trigger | Ledger Action |
+|---------|---------------|
+| `ds` | Load prior context before DISCOVER phase |
+| `/conductor-implement` | Load + bind to track/bead |
+| `/conductor-finish` | Handoff + archive |
 
-### Session Start
-Run `continuity load` at the start of every session.
+### First Message Behavior
 
-### After Significant Changes
-Run `continuity save` after making significant changes.
+When a session starts with Conductor triggers (`ds`, `/conductor-implement`), context from the previous session loads automatically via LEDGER.md.
 
-### Session End
-Run `continuity handoff` before ending the session.
+### Non-Conductor Work
 
-### Commands Reference
+For ad-hoc tasks outside Conductor workflows, ledger operations are skipped. This avoids overhead for trivial tasks.
+
+### Manual Commands (Optional)
+
+If you need to manage session state manually:
+
 | Command | When |
 |---------|------|
-| `continuity load` | Session start |
-| `continuity save` | After milestones |
-| `continuity handoff` | Session end |
-| `continuity status` | Check state |
-| `continuity search <keyword>` | Find past context |
-```
+| `continuity load` | Manually load previous context |
+| `continuity save` | Save checkpoint after milestones |
+| `continuity handoff` | Manually archive session |
+| `continuity status` | Check session state |
+
+These commands are rarely needed—Conductor handles continuity automatically.
 
