@@ -15,6 +15,7 @@ Contains reusable learnings from completed tracks.
 
 ## Commands
 
+- `bd dep add <child> <parent>` - Wire dependencies after bead creation (not auto-mapped from plan)
 - `./scripts/validate-links.sh .` - Validate markdown links in codebase
 - `./scripts/validate-anchors.sh .` - Validate anchor references
 - `sed -i '' 's|old|new|g' file` - macOS in-place sed replacement
@@ -50,6 +51,9 @@ Contains reusable learnings from completed tracks.
 
 ## Gotchas
 
+- Skill prerequisite pattern uses markdown `**REQUIRED SUB-SKILL:**` not frontmatter `requires:`
+- Design skill's HALT on missing conductor/ was adoption blocker - changed to DEGRADE (standalone mode)
+- Lean orchestrator pattern: keep SKILL.md ≤100 lines, move detailed logic to references/
 - Hard-linked directories (skills/ ↔ .claude/skills/) - updating one updates both, but explicitly delete both
 - Thin skill stubs must include keyword-rich descriptions for AI trigger matching
 - Delete operations must wait for reference replacements - deleting too early causes broken references
@@ -75,7 +79,7 @@ Contains reusable learnings from completed tracks.
 - FTS5 snippet function: `snippet(handoffs_fts, 2, '>>>', '<<<', '...', 50)` for match highlighting
 - artifact-cleanup.py parses dates from filenames (YYYY-MM-DD-HH-MM-trigger.md), not frontmatter
 - Concurrent sessions on same codebase may conflict - documented limitation (last writer wins)
-- Amp Code doesn't support hooks - use manual `continuity load/save/handoff` commands
+- Session continuity is automatic via workflow entry points (ds, /conductor-implement, /conductor-finish)
 - State machine uses STRICT vs SOFT enforcement - STRICT transitions HALT, SOFT only WARN
 - Default branch names differ by repo: check for BOTH `main` AND `master`
 - Auto-archive removes A/K prompt entirely - use `--keep` flag to prevent archiving
@@ -96,9 +100,14 @@ Contains reusable learnings from completed tracks.
 - Grounding: Conflict resolution → auto-prefer highest confidence BUT show conflict summary in output
 - Grounding: Implementation order matters → router depends on tiers, enforcement depends on grounding result
 - Extraction fidelity: Initial skill extraction may lose philosophical content (e.g., "Why Order Matters"). Fix: copy full SKILL.md first, then split.
+- Continuity skill is in marketplace plugin, not local skills/ - can't add direct local dependency checks
+- Session start detection without hooks requires implicit trigger (maestro-core loading on first message)
+- Ad-hoc queries (not triggering `ds`, `/conductor-implement`, etc.) do NOT load Ledger history - intentional low-overhead behavior for casual chats
 
 ## Patterns
 
+- **5-Level Skill Hierarchy:** maestro-core > conductor > design > beads > specialized (higher level wins on conflicts)
+- **Context-Aware Routing:** Check explicit commands first, then context (conductor/ exists?) for routing
 - **6-Phase Finish Workflow:** Pre-flight → Thread Compaction → Beads Compaction → Knowledge Merge → Context Refresh → Archive → CODEMAPS
 - **Smart Skip:** Each phase checks if work exists before running
 - **Resume Capability:** State files track progress for interrupted workflows
@@ -122,3 +131,5 @@ Contains reusable learnings from completed tracks.
 - **Enforcement Levels:** Advisory (log) → Gatekeeper (block if missing) → Mandatory (block if fails/low confidence)
 - **Impact Scan Subagent:** Parallel execution with full grounding at DELIVER phase
 - **Inline Grounding Triggers:** Explicit execution steps at phase transitions (finder/Grep/web_search with confidence calculation and enforcement behavior)
+- **Layered Auto-Load:** AGENTS.md → maestro-core → Conductor → ledger operations (defense in depth for hookless agents)
+- **Workflow-Aware Continuity:** Continuity tied to entry points (`ds`, `/conductor-implement`, `/conductor-finish`) not generic session events

@@ -14,6 +14,12 @@ metadata:
     - party-mode
 ---
 
+## Prerequisites
+
+**REQUIRED SUB-SKILL:** [maestro-core](../maestro-core/SKILL.md)
+
+Load maestro-core first for orchestration context (hierarchy, HALT/DEGRADE policies, trigger routing).
+
 # Design Session (ds)
 
 Turn ideas into fully-formed designs through collaborative dialogue using the Double Diamond methodology.
@@ -67,7 +73,9 @@ Check for `conductor/` directory with core files:
 - `tech-stack.md` - Technical constraints
 - `workflow.md` - Development standards
 
-If missing: Display `⚠️ Conductor not set up. Run /conductor-setup first.` and **HALT**.
+If missing: Display `Conductor unavailable. Standalone mode. Run /conductor-setup to enable full features.` and continue session.
+
+> **Note:** In standalone mode, CODEMAPS and product context are skipped. Double Diamond still works but without project-specific context.
 
 ### 3. Complexity Scoring (Design Routing)
 

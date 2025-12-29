@@ -1,5 +1,20 @@
 # Amp Code Setup
 
+> **DEPRECATED (2025-12-29)**
+>
+> This document is kept for historical reference only.
+> 
+> **Session continuity is now automatic** via Conductor workflow entry points:
+> - `ds` → loads prior context
+> - `/conductor-implement` → loads + binds to track/bead
+> - `/conductor-finish` → handoff + archive
+>
+> See [docs/GLOBAL_CONFIG.md](../../../../docs/GLOBAL_CONFIG.md) for current approach.
+
+---
+
+**Historical Content (Pre-Auto-Continuity)**
+
 Amp Code doesn't support hooks like Claude Code, so we use manual commands with reminders.
 
 ## Configuration

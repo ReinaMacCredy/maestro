@@ -4,11 +4,14 @@
 # Purpose: Automatically version and release on push to main
 #
 # How it works:
-#   1. Analyzes commits since last tag using Conventional Commits
-#   2. Determines version bump type:
+#   1. Checks PR labels first (if merged via PR):
+#      - label "release:major" -> major bump (1.x.x → 2.0.0)
+#      - label "release:minor" -> minor bump (1.5.x → 1.6.0)
+#      - label "release:patch" -> patch bump (1.5.0 → 1.5.1)
+#      - label "release:skip" -> no version bump
+#   2. Falls back to commit analysis if no PR labels:
 #      - BREAKING CHANGE or feat!:/fix!: -> major bump
-#      - feat: -> minor bump
-#      - fix: -> patch bump
+#      - feat: or fix: -> patch bump
 #      - Other (docs, chore, etc.) -> no bump
 #   3. Updates plugin.json and marketplace.json versions
 #   4. Generates CHANGELOG.md using git-cliff
@@ -45,6 +48,23 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Get PR labels
+        id: pr_labels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get the PR associated with the current commit (handles squash/rebase merges)
+          PR_NUMBER=$(gh api repos/${{ github.repository }}/commits/${{ github.sha }}/pulls --jq '.[0].number' 2>/dev/null || echo "")
+          
+          if [ -n "$PR_NUMBER" ]; then
+            LABELS=$(gh pr view "$PR_NUMBER" --json labels -q '.labels[].name' | tr '\n' ' ')
+            echo "labels=$LABELS" >> $GITHUB_OUTPUT
+            echo "Found PR #$PR_NUMBER with labels: $LABELS"
+          else
+            echo "labels=" >> $GITHUB_OUTPUT
+            echo "No PR found for this commit"
+          fi
+
       - name: Get commits since last tag
         id: commits
         run: |
@@ -65,21 +85,48 @@ jobs:
         id: bump
         env:
           COMMITS: ${{ steps.commits.outputs.commits }}
+          PR_LABELS: ${{ steps.pr_labels.outputs.labels }}
         run: |
           
-          # Check for breaking changes
+          # Priority 1: Check PR labels
+          if echo "$PR_LABELS" | grep -q 'release:major'; then
+            echo "type=major" >> $GITHUB_OUTPUT
+            echo "Version bump: major (from PR label)"
+            exit 0
+          fi
+          
+          if echo "$PR_LABELS" | grep -q 'release:minor'; then
+            echo "type=minor" >> $GITHUB_OUTPUT
+            echo "Version bump: minor (from PR label)"
+            exit 0
+          fi
+          
+          if echo "$PR_LABELS" | grep -q 'release:patch'; then
+            echo "type=patch" >> $GITHUB_OUTPUT
+            echo "Version bump: patch (from PR label)"
+            exit 0
+          fi
+          
+          if echo "$PR_LABELS" | grep -q 'release:skip'; then
+            echo "type=none" >> $GITHUB_OUTPUT
+            echo "Version bump: none (from PR label release:skip)"
+            exit 0
+          fi
+          
+          # Priority 2: Fall back to commit analysis
+          # Check for breaking changes -> major bump
           if echo "$COMMITS" | grep -qE '^[a-z]+!:|BREAKING CHANGE:'; then
             echo "type=major" >> $GITHUB_OUTPUT
             exit 0
           fi
           
-          # Check for features
+          # Check for features -> minor bump
           if echo "$COMMITS" | grep -qE '^feat(\(.+\))?:'; then
             echo "type=minor" >> $GITHUB_OUTPUT
             exit 0
           fi
           
-          # Check for fixes
+          # Check for fixes -> patch bump
           if echo "$COMMITS" | grep -qE '^fix(\(.+\))?:'; then
             echo "type=patch" >> $GITHUB_OUTPUT
             exit 0

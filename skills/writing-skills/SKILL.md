@@ -5,6 +5,12 @@ metadata:
   version: "1.1.2"
 ---
 
+## Prerequisites
+
+**REQUIRED SUB-SKILL:** [maestro-core](../maestro-core/SKILL.md)
+
+Load maestro-core first for orchestration context (hierarchy, HALT/DEGRADE policies, trigger routing).
+
 # Writing Skills
 
 ## Overview
@@ -152,6 +158,71 @@ Concrete results
 ```
 
 ## Claude Search Optimization (CSO)
+
+## Skill Dependencies
+
+When a skill requires another skill to be loaded first, declare it in the Prerequisites section.
+
+### The Prerequisites Pattern
+
+Add a Prerequisites section immediately after the frontmatter, before the main heading:
+
+```markdown
+---
+name: my-skill
+description: Use when...
+---
+
+## Prerequisites
+
+**REQUIRED SUB-SKILL:** [maestro-core](../maestro-core/SKILL.md)
+
+Load maestro-core first for orchestration context.
+
+**Additional requirements:**
+- gh CLI installed
+- Some other tool
+
+# My Skill
+
+...
+```
+
+### Maestro Core Integration
+
+All Maestro skills (conductor, design, beads, worktrees, sharing, writing) should reference maestro-core as a prerequisite. This establishes:
+
+- **Skill hierarchy**: 5-level priority for conflict resolution
+- **HALT/DEGRADE policy**: When to stop vs gracefully degrade
+- **Trigger routing**: How to disambiguate overlapping triggers
+
+### Hierarchy Levels
+
+| Level | Skills | Role |
+|-------|--------|------|
+| 1 | maestro-core | Routing decisions, fallback policy |
+| 2 | conductor | Track orchestration, workflow state |
+| 3 | design | Design sessions (Double Diamond) |
+| 4 | beads | Issue tracking, dependencies |
+| 5 | specialized | worktrees, sharing, writing |
+
+Higher levels override lower levels on conflicts.
+
+### HALT vs DEGRADE Guidelines
+
+**HALT when:**
+- Dependency blocks ALL functionality
+- No fallback exists
+- Corrupted state that can't recover
+
+**DEGRADE when:**
+- Feature is optional
+- Fallback behavior available
+- Work can continue with reduced functionality
+
+**Message formats:**
+- HALT: `❌ Cannot proceed: [reason]. [fix instruction].`
+- DEGRADE: `⚠️ [Feature] unavailable. [Fallback behavior].`
 
 **Critical for discovery:** Future Claude needs to FIND your skill
 

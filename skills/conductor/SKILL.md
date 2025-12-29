@@ -16,6 +16,12 @@ metadata:
     - workflow
 ---
 
+## Prerequisites
+
+**REQUIRED SUB-SKILL:** [maestro-core](../maestro-core/SKILL.md)
+
+Load maestro-core first for orchestration context (hierarchy, HALT/DEGRADE policies, trigger routing).
+
 # Conductor: Context-Driven Development
 
 Measure twice, code once.

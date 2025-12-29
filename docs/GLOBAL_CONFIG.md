@@ -21,11 +21,23 @@ Apply the config block below to user's global config at:
 ## Default Config
 
 <!-- BEGIN maestro-config -->
-<!-- version: 2.0.0 | bmad-v6 | 2025-12-27 -->
+<!-- version: 2.1.0 | bmad-v6 | 2025-12-29 -->
+
 **Current year is 2025.** Always use 2025 for dates, not 2024.
+
 ## Maestro Workflow
 
 Context-driven development with TDD execution.
+
+**First message:** Load `maestro-core` skill for orchestration context.
+
+### Project Detection
+
+Maestro project if any exist:
+- `conductor/` directory
+- `.beads/` directory
+
+When detected, use Conductor commands instead of ad-hoc planning.
 
 ### Triggers
 
@@ -34,21 +46,15 @@ Context-driven development with TDD execution.
 - `/conductor-setup` - Initialize project context (once per project)
 - `/conductor-newtrack` - Create spec + plan + beads from design
 
-**Design Session (A/P/C Checkpoints):**
-- `[A]` Advanced - deeper analysis, assumption audit
-- `[P]` Party - multi-agent review (25 BMAD agents: Core/BMM/CIS/BMB/BMGD)
-- `[C]` Continue - proceed to next phase
-
 **Execution:**
 - `bd ready --json` - Find available work
-- `/conductor-implement` - Execute with TDD checkpoints by default (use `--no-tdd` to disable)
+- `/conductor-implement` - Execute epic with TDD checkpoints (use `--no-tdd` to disable)
 - `tdd` - Enter TDD mode (RED-GREEN-REFACTOR)
 - `finish branch` - Finalize and merge/PR
 
 **Maintenance:**
 - `/conductor-revise` - Update spec/plan mid-implementation
 - `/conductor-finish` - Complete track (learnings, context refresh, archive)
-- `/doc-sync` - Sync documentation with code changes
 
 **Beads:**
 - `fb` - File beads from plan
@@ -83,6 +89,12 @@ bd close <id> --reason completed     # Close current task
 bd sync                              # Sync to git
 ```
 
+### Session Lifecycle
+
+Session continuity is **automatic** via Conductor workflow entry points (`ds`, `/conductor-implement`, `/conductor-finish`). No manual commands needed.
+
+> Details in `maestro-core` skill.
+
 ### Critical Rules
 
 - Use `--json` with `bd` for structured output
@@ -91,14 +103,6 @@ bd sync                              # Sync to git
 - Always commit `.beads/` with code changes
 
 > **Note:** Skills work without CLI tools. Use `TodoWrite` for session-local tracking if `bd` is not installed.
-
-### Project Detection
-
-Maestro project if any exist:
-- `conductor/` directory
-- `.beads/` directory
-
-When detected, use Conductor commands instead of ad-hoc planning.
 
 For complete workflow guide, see [TUTORIAL.md](../TUTORIAL.md).
 
@@ -139,32 +143,3 @@ bv --robot-status  # Check team state
 | Skills not loading | Check plugin settings |
 
 ---
-
-## Amp-Specific: Continuity Protocol
-
-Amp doesn't support automatic hooks like Claude Code. Add this section to `~/.config/amp/AGENTS.md`:
-
-```markdown
-## Continuity Protocol
-
-Amp doesn't support automatic hooks - use manual commands.
-
-### Session Start
-Run `continuity load` at the start of every session.
-
-### After Significant Changes
-Run `continuity save` after making significant changes.
-
-### Session End
-Run `continuity handoff` before ending the session.
-
-### Commands Reference
-| Command | When |
-|---------|------|
-| `continuity load` | Session start |
-| `continuity save` | After milestones |
-| `continuity handoff` | Session end |
-| `continuity status` | Check state |
-| `continuity search <keyword>` | Find past context |
-```
-

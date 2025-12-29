@@ -23,6 +23,7 @@ Track ready. Run `/conductor-finish`?
 - `--skip-codemaps` - Skip CODEMAPS regeneration (Phase 6)
 - `--skip-doc-sync` - Skip doc-sync (Phase 7)
 - `--skip-refresh` - Skip Context Refresh (Phase 4)
+- `--keep` - Keep track in `tracks/` instead of auto-archiving
 
 ## Validation
 
@@ -394,30 +395,23 @@ Update `finish-state.json`:
 
 **Purpose:** Archive track, commit changes, cleanup beads
 
-### Archive Choice (A/K)
+### Auto-Archive (Default)
 
-Prompt user:
+By default, tracks are automatically archived without prompting:
+
+1. Move track folder to `conductor/archive/`
+2. Update links in `tracks.md`
+3. Set `"archiveChoice": "archive"` in `metadata.json` and `finish-state.json`
+
+### Keep Flag
+
+Use `--keep` flag to skip archiving:
 
 ```
-Archive choice:
-[A] Archive - move to conductor/archive/
-[K] Keep - stay active in tracks/
->
+/conductor-finish --keep
 ```
 
-| Choice | Action                                                               |
-| ------ | -------------------------------------------------------------------- |
-| **A**  | Move track folder to `conductor/archive/`, update links in tracks.md |
-| **K**  | No change, track stays in `tracks/` (don't mark complete)            |
-
-### Input Mapping
-
-Map user selection to JSON values:
-
-- User enters `A` or `a` → `"archiveChoice": "archive"`
-- User enters `K` or `k` → `"archiveChoice": "keep"`
-
-Store this value in both `metadata.json` and `finish-state.json`.
+This keeps the track in `tracks/` without moving to archive.
 
 ### Folder Conflict Handling
 
@@ -713,16 +707,8 @@ Phase 4/6: Refreshing context docs...
   → tech-stack.md: skipped (no new deps)
   → tracks.md: moved to Completed
   → workflow.md: skipped (no changes)
-Phase 5/6: Preparing archive...
-
-Review changes? [Y/n] y
-  [shows git diff]
-
-Archive choice:
-[A] Archive - move to conductor/archive/
-[K] Keep - stay active in tracks/
-> A
-
+Phase 5/6: Archiving track...
+  → Moved to conductor/archive/
 Phase 6/6: Regenerating CODEMAPS...
   → overview.md: updated
   → skills.md: updated

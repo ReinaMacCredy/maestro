@@ -1,0 +1,19 @@
+# GitHub Labels for Release Management
+# Sync with: gh label sync --help or use github-label-sync
+
+# Release version control
+- name: "release:major"
+  color: "d73a4a"
+  description: "Major version bump (1.x.x → 2.0.0) - breaking changes, major rewrites"
+
+- name: "release:minor"
+  color: "fbca04"
+  description: "Minor version bump (1.5.x → 1.6.0) - new features, non-breaking API changes"
+
+- name: "release:patch"
+  color: "0e8a16"
+  description: "Patch version bump (1.5.0 → 1.5.1) - bug fixes, small improvements"
+
+- name: "release:skip"
+  color: "cfd3d7"
+  description: "Skip version bump - docs, chore, no release needed"

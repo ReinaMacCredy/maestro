@@ -228,14 +228,14 @@ When hooks are installed at `~/.claude/hooks/`:
 
 Install hooks: `./scripts/install-global-hooks.sh`
 
-### Amp Code (Manual)
+### All Agents (Automatic)
 
-Run these commands during your session:
-- `continuity load` - At session start
-- `continuity save` - After significant changes
-- `continuity handoff` - Before ending session
+Session continuity is automatic via Conductor workflow entry points:
+- `ds` → loads prior context
+- `/conductor-implement` → loads + binds to track/bead
+- `/conductor-finish` → handoff + archive
 
-See [skills/conductor/references/ledger/amp-setup.md](skills/conductor/references/ledger/amp-setup.md) for full setup.
+No manual commands needed. See [docs/GLOBAL_CONFIG.md](docs/GLOBAL_CONFIG.md#session-lifecycle) for details.
 
 ### Data Storage
 

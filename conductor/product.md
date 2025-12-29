@@ -28,6 +28,8 @@ A plugin that provides structured AI-assisted development capabilities through p
 - [x] State consolidation: 3→1 state files per track, session state in LEDGER.md (completed 2025-12-27)
 - [x] Continuity-Conductor integration: auto-load/handoff at implement/finish (completed 2025-12-27)
 - [x] Skill integration: 15→6 skills, 9 merged into conductor/references/ (completed 2025-12-28)
+- [x] maestro-core: Central orchestration skill with 5-level hierarchy, HALT/DEGRADE policies (completed 2025-12-29)
+- [x] Auto-continuity: Session continuity automatic via workflow entry points for all agents (completed 2025-12-29)
 
 ## Success Metrics
 
