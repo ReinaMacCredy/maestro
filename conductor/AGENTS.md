@@ -131,3 +131,7 @@ Contains reusable learnings from completed tracks.
 - **Impact Agent:** Parallel execution with full research at DELIVER phase
 - **Layered Auto-Load:** AGENTS.md → maestro-core → Conductor → ledger operations (defense in depth for hookless agents)
 - **Workflow-Aware Continuity:** Continuity tied to entry points (`ds`, `/conductor-implement`, `/conductor-finish`) not generic session events
+- **5 Validation Gates:** design (DELIVER) → spec (newtrack) → plan-structure (newtrack) → plan-execution (TDD) → completion (finish)
+- **Gate Behavior Matrix:** SPEED mode = all WARN; FULL mode = design/plan-execution/completion HALT + retry (max 2)
+- **LEDGER Validation State:** Track gates_passed, current_gate, retries, last_failure in frontmatter
+- **Humanlayer Format:** Gates use Initial Setup → 3-step Validation Process → Guidelines → Checklist → LEDGER Integration

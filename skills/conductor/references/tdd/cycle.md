@@ -176,6 +176,32 @@ After green only:
 
 Keep tests green. Don't add behavior.
 
+### Validation Gate: validate-plan-execution
+
+After REFACTOR completes for a task/bead, run plan execution validation:
+
+1. **Load gate**: `../validation/shared/validate-plan-execution.md`
+2. **Run validation**: Check implementation vs plan.md, run verification commands
+3. **Update LEDGER**: Add to `validation.gates_passed` or `validation.last_failure`
+4. **Behavior by mode**:
+   - **SPEED mode**: WARN on failure, continue
+   - **FULL mode**: HALT on failure, retry up to 2x, then escalate
+
+```
+┌─ VALIDATION GATE: plan-execution ──────────────┐
+│ Status: ✅ PASS | ⚠️ WARN | ❌ FAIL            │
+│                                                │
+│ Implementation Status:                         │
+│ ✓ All plan phases completed                    │
+│ ✓ Verification commands pass                   │
+│ ✓ Code matches plan specification              │
+│                                                │
+│ LEDGER: gates_passed: [..., plan-execution]    │
+└────────────────────────────────────────────────┘
+```
+
+See [validate-plan-execution.md](../validation/shared/validate-plan-execution.md) for full validation process.
+
 ### Repeat
 
 Next failing test for next feature.

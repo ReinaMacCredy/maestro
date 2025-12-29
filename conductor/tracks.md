@@ -4,6 +4,14 @@ Master list of all development tracks.
 
 ## Active Tracks
 
+## [ ] Track: Validation Gates
+*ID: validation-gates_20251229*
+*Link: [design](conductor/tracks/validation-gates_20251229/design.md) | [spec](conductor/tracks/validation-gates_20251229/spec.md) | [plan](conductor/tracks/validation-gates_20251229/plan.md)*
+
+Add 5 validation gates to Maestro lifecycle: design, spec, plan-structure, plan-execution, completion.
+
+---
+
 ## [x] Track: Research Protocol Integration
 *ID: research-protocol_20251229*
 
