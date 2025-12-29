@@ -2,187 +2,173 @@
 name: maestro-core
 description: Use when any Maestro skill loads - provides skill hierarchy, HALT/DEGRADE policies, and trigger routing rules for orchestration decisions
 metadata:
-  version: "1.1.0"
+  version: "1.2.0"
 ---
 
 # Maestro Core - Central Orchestrator
 
-Load this skill first when using any Maestro skill. Defines hierarchy, fallback policies, and routing.
+> **Load this skill first when using any Maestro skill. Defines hierarchy, fallback policies, and routing.**
 
-## Quick Start
-
-```
-1. Check skill hierarchy (who decides?)
-2. Apply HALT/DEGRADE policy
-3. Route to correct skill
-```
-
-## Skill Hierarchy (5 Levels)
+## Skill Hierarchy
 
 | Level | Skill | Role |
 |-------|-------|------|
-| 1 | maestro-core | Routing decisions, fallback policy |
-| 2 | conductor | Track orchestration, workflow state |
-| 3 | design | Design sessions (Double Diamond) |
-| 4 | beads | Issue tracking, dependencies |
+| 1 | maestro-core | Routing, fallback policy |
+| 2 | conductor | Track orchestration, research protocol |
+| 3 | design | Double Diamond |
+| 4 | beads | Issue tracking |
 | 5 | specialized | worktrees, sharing, writing |
-
-Higher levels override lower levels on conflicts. See [hierarchy.md](references/hierarchy.md).
 
 ## Fallback Policy
 
-| Condition | Action | Message |
-|-----------|--------|---------|
-| `bd` CLI unavailable | HALT | ❌ Cannot proceed: bd CLI not found. Install beads_viewer. |
-| `conductor/` missing | DEGRADE | ⚠️ Conductor unavailable. Standalone mode. |
-| Village MCP unavailable | DEGRADE | ⚠️ Village unavailable. Using single-agent mode. |
-| CODEMAPS missing | DEGRADE | ⚠️ No CODEMAPS found. Context limited. |
-
-**Rule:** HALT only for dependencies that block ALL functionality. DEGRADE for optional features.
-
-See [hierarchy.md](references/hierarchy.md) for full matrix.
+| Condition | Action |
+|-----------|--------|
+| `bd` unavailable | HALT |
+| `conductor/` missing | DEGRADE |
+| Village MCP unavailable | DEGRADE |
 
 ## Command Routing
 
-> **This is the SINGLE SOURCE OF TRUTH for all routing decisions.**
-> Conductor and other skills only execute - they do not route.
-
 ### Conductor Commands
 
-| Command | Routes To | Execution |
-|---------|-----------|-----------|
-| `/conductor-setup` | conductor | Initialize project context |
-| `/conductor-design` | design → conductor | Double Diamond → save design.md |
-| `/conductor-newtrack` | conductor | Generate spec + plan + file beads |
-| `/conductor-implement` | conductor | Execute ONE epic with TDD |
-| `/conductor-status` | conductor | Display progress overview |
-| `/conductor-revert` | conductor | Git-aware revert |
-| `/conductor-revise` | conductor | Update spec/plan mid-track |
-| `/conductor-finish` | conductor | Complete track, extract learnings |
-| `/conductor-validate` | conductor | Run validation checks |
-| `/conductor-block` | conductor → beads | Mark task as blocked |
-| `/conductor-skip` | conductor → beads | Skip current task |
-| `/conductor-archive` | conductor | Archive completed tracks |
-| `/conductor-export` | conductor | Generate export summary |
+| Command | Routes To |
+|---------|-----------|
+| `ds`, `/conductor-design` | design → conductor |
+| `/conductor-setup` | conductor |
+| `/conductor-newtrack` | conductor |
+| `/conductor-implement` | conductor |
+| `/conductor-finish` | conductor |
+| `/conductor-status`, `-revert`, `-revise` | conductor |
+| `/conductor-validate` | conductor |
+| `/conductor-block`, `-skip` | conductor → beads |
+| `/conductor-archive` | conductor |
+| `/conductor-export` | conductor |
+| `/research` | conductor (research) |
 
-### Intent Mapping (Natural Language → Command)
+### Handoff Commands
 
-| User Intent | Routes To | Command |
-|-------------|-----------|---------|
-| "Set up this project" / "Initialize conductor" | conductor | `/conductor-setup` |
-| "Design a feature" / "Brainstorm X" | design | `/conductor-design` |
-| "Create a new feature" / "Add a track for X" | conductor | `/conductor-newtrack` |
-| "Start working" / "Implement the feature" | conductor | `/conductor-implement` |
-| "What's the status?" / "Show progress" | conductor | `/conductor-status` |
-| "Undo that" / "Revert the last task" | conductor | `/conductor-revert` |
-| "Check for issues" / "Validate the project" | conductor | `/conductor-validate` |
-| "This is blocked" / "Can't proceed" | conductor | `/conductor-block` |
-| "Skip this task" | conductor | `/conductor-skip` |
-| "Archive completed tracks" | conductor | `/conductor-archive` |
-| "Export project summary" | conductor | `/conductor-export` |
-| "Spec is wrong" / "Plan needs update" | conductor | `/conductor-revise` |
-| "Finish track" / "Complete track" | conductor | `/conductor-finish` |
+| Command | Routes To |
+|---------|-----------|
+| `/create_handoff` | conductor (handoff) |
+| `/resume_handoff` | conductor (handoff) |
+| `/conductor-handoff` | conductor (handoff) |
 
-### Trigger Disambiguation
+### Doc-Sync Commands
 
-| Trigger | Context | Routes To |
-|---------|---------|-----------|
-| `ds` | Any | design |
-| `/conductor-*` | Any | conductor (see table above) |
-| "design a feature" / "brainstorm" / "think through" | Any | design |
-| "research codebase" / "/research" / "understand this code" | Any | conductor (research) |
-| "track this work" / "create task for" | `conductor/` exists | conductor |
-| "track this work" / "create task for" | no `conductor/` | beads |
-| "what's blocking" / "what's ready" | Any | beads |
-| `bd ready`, `bd show`, `fb`, `rb` | Any | beads |
-| worktree creation | Implementation start | using-git-worktrees |
-| "share this skill" | Any | sharing-skills |
-| "create a skill" | Any | writing-skills |
+| Command | Routes To |
+|---------|-----------|
+| `/doc-sync` | doc-sync |
+| `/doc-sync --dry-run` | doc-sync (preview) |
+| `/doc-sync --force` | doc-sync (apply all) |
 
-### Routing Logic
+### Beads Commands
+
+| Command | Routes To |
+|---------|-----------|
+| `bd`, `bd ready`, `bd show` | beads |
+| `fb`, `file-beads` | beads (file beads from plan) |
+| `rb`, `review-beads` | beads (review filed beads) |
+
+### Specialized Skills
+
+| Trigger | Routes To |
+|---------|-----------|
+| "create skill", "write skill", "build skill" | writing-skills |
+| "share skill", "contribute skill", "PR skill" | sharing-skills |
+| "worktree", "isolated branch", "parallel branch" | using-git-worktrees |
+
+## Research Routing
+
+| Trigger | Routes To | Agents |
+|---------|-----------|--------|
+| `/research`, "research codebase" | conductor | Parallel sub-agents |
+| "understand this code" | conductor | Locator + Analyzer |
+| "document how X works" | conductor | Pattern + Analyzer |
+| DISCOVER→DEFINE transition | conductor | Locator + Pattern |
+| DEVELOP→DELIVER transition | conductor | All 4 agents |
+| Pre-newtrack | conductor | All 4 agents + Impact |
+
+### Research Agents
+
+| Agent | Role |
+|-------|------|
+| Locator | Find WHERE files exist |
+| Analyzer | Understand HOW code works |
+| Pattern | Find existing conventions |
+| Web | External docs (when needed) |
+| Impact | Assess change impact (DELIVER only) |
+
+## Routing Logic
+
+### Command-Based Routing
 
 ```
-IF explicit command (ds, /conductor-*, bd, /research)
-  → Route to named skill
-
-ELSE IF "research" or "understand code" or "document how"
-  → Route to conductor (research protocol)
+IF explicit command (/conductor-*, /doc-sync, /create_handoff, etc.)
+  → Route to named skill/workflow
 
 ELSE IF "design" or "brainstorm" or "think through"
-  → Route to design
+  → design
+
+ELSE IF "research" or "understand code" or "document how"
+  → conductor (research protocol)
+
+ELSE IF "handoff" or "save session" or "resume session"
+  → conductor (handoff)
+
+ELSE IF "sync docs" or "update documentation"
+  → doc-sync
 
 ELSE IF "track" or "create task"
   → IF conductor/ exists → conductor
     ELSE → beads
 
 ELSE IF "blocking" or "ready" or "dependencies"
-  → Route to beads
+  → beads
 
-ELSE IF implementation context
-  → IF worktree needed → using-git-worktrees
-    ELSE → conductor
+ELSE IF "create skill" or "write skill"
+  → writing-skills
+
+ELSE IF "share skill" or "contribute"
+  → sharing-skills
+
+ELSE IF "worktree" or "isolated branch"
+  → using-git-worktrees
 ```
 
-## Beads vs TodoWrite
+### Cross-Cutting Flows (Always-On)
 
-| Scenario | Use |
-|----------|-----|
-| Multi-session work | Beads |
-| Complex dependencies | Beads |
-| Must survive compaction | Beads |
-| Single-session tasks | TodoWrite |
-| Linear execution | TodoWrite |
-| Conversation-scoped only | TodoWrite |
+These flows run automatically at specific workflow points:
 
-**Rule:** If resuming in 2 weeks would be hard without bd, use bd.
-
-## Double Diamond Routing
-
-| Trigger | Routes To | Phase |
-|---------|-----------|-------|
-| `ds` | design | Start DISCOVER |
-| `/conductor-design` | design | Start DISCOVER |
-| "design a feature" / "brainstorm" | design | Start DISCOVER |
-| `[A]` at checkpoint | design | Advanced analysis |
-| `[P]` at checkpoint | design (Party Mode) | Multi-agent feedback |
-| `[C]` at checkpoint | design | Continue to next phase |
-| `[↩ Back]` at checkpoint | design | Return to previous phase |
-| Design approved | conductor | Save design.md |
-
-### Phase Flow
+#### Research Protocol Flow
 
 ```
-DISCOVER (Diverge) → DEFINE (Converge) → DEVELOP (Diverge) → DELIVER (Converge)
-     ↓                    ↓                    ↓                    ↓
-  A/P/C               A/P/C                A/P/C               A/P/C
+ds (session start)
+  → Auto-Research Context (Locator + Pattern + CODEMAPS)
+      ↓
+DISCOVER → DEFINE (Advisory ⚠️)
+  → Locator + Pattern agents
+      ↓
+DEFINE → DEVELOP (Advisory ⚠️)
+  → Locator + Pattern agents
+      ↓
+DEVELOP → DELIVER (Gatekeeper 🚫)
+  → All 4 agents (Locator + Analyzer + Pattern + Web)
+      ↓
+DELIVER → Complete (Mandatory 🔒)
+  → All 5 agents (+ Impact)
+      ↓
+Pre-newtrack
+  → Full research verification
 ```
 
-### Complexity-Based Routing
+**Rule:** Research ALWAYS runs. No skip conditions. Parallel agents are fast.
 
-| Score | Route | Description |
-|-------|-------|-------------|
-| < 4 | SPEED MODE | 1-phase quick design, minimal ceremony |
-| 4-6 | ASK USER | "[S]peed or [F]ull?" |
-| > 6 | FULL MODE | 4-phase Double Diamond with A/P/C |
-
-## Validation System Lifecycle
-
-5 validation gates integrated into workflow:
-
-| Gate | Trigger Point | Enforcement |
-|------|---------------|-------------|
-| `design` | After DELIVER phase | SPEED=WARN, FULL=HALT |
-| `spec` | After spec.md generation | WARN (both modes) |
-| `plan-structure` | After plan.md generation | WARN (both modes) |
-| `plan-execution` | After TDD REFACTOR | SPEED=WARN, FULL=HALT |
-| `completion` | Before `/conductor-finish` | SPEED=WARN, FULL=HALT |
-
-### Gate Routing
+#### Validation Gates Flow
 
 ```
 ds → ... → DELIVER
               ↓
-         [design gate] ────→ HALT if fails (FULL mode)
+         [design gate] ────→ SPEED=WARN, FULL=HALT
               ↓
     /conductor-newtrack
               ↓
@@ -194,17 +180,16 @@ ds → ... → DELIVER
               ↓
          TDD: RED → GREEN → REFACTOR
               ↓
-         [plan-execution gate] ────→ HALT if fails (FULL mode)
+         [plan-execution gate] ────→ SPEED=WARN, FULL=HALT
               ↓
     /conductor-finish
               ↓
-         [completion gate] ────→ HALT if fails (FULL mode)
+         [completion gate] ────→ SPEED=WARN, FULL=HALT
               ↓
          Archive track
 ```
 
-### LEDGER Validation State
-
+**State tracking in metadata.json:**
 ```yaml
 validation:
   gates_passed: [design, spec, plan-structure]
@@ -212,6 +197,83 @@ validation:
   retries: 0          # max 2 before human escalation
   last_failure: null
 ```
+
+## Double Diamond Routing
+
+```
+DISCOVER → DEFINE → DEVELOP → DELIVER
+    ↓         ↓         ↓         ↓
+  A/P/C     A/P/C     A/P/C     A/P/C
+```
+
+| Score | Route |
+|-------|-------|
+| < 4 | SPEED (1-phase) |
+| 4-6 | ASK USER |
+| > 6 | FULL (4-phase) |
+
+## Validation Gates
+
+```
+ds → DELIVER → [design] → newtrack → [spec] → [plan] → implement → TDD → [execution] → finish → [completion]
+```
+
+| Gate | Enforcement |
+|------|-------------|
+| design, execution, completion | SPEED=WARN, FULL=HALT |
+| spec, plan-structure | WARN only |
+
+## Authoritative Workflow Docs
+
+> **Single Source of Truth:** Each command has a detailed workflow file that defines the full behavior including validation gates. Always load the authoritative doc, not summaries.
+
+| Command | Authoritative Doc |
+|---------|-------------------|
+| `/conductor-setup` | `conductor/references/workflows/setup.md` |
+| `/conductor-design` | `design/SKILL.md` + `design/references/` |
+| `/conductor-newtrack` | `conductor/references/workflows/newtrack.md` |
+| `/conductor-implement` | `conductor/references/workflows/implement.md` |
+| `/conductor-finish` | `conductor/references/finish-workflow.md` |
+| `/create_handoff`, `/resume_handoff` | `conductor/references/handoff/` |
+| `/doc-sync` | `conductor/references/doc-sync/` |
+| TDD cycle | `conductor/references/tdd/cycle.md` |
+
+**Validation gate implementations:**
+- `validate-design` → `design/SKILL.md` (DELIVER section)
+- `validate-spec`, `validate-plan-structure` → `conductor/references/workflows/newtrack.md`
+- `validate-plan-execution` → `conductor/references/tdd/cycle.md`
+- `validate-completion` → `conductor/references/finish-workflow.md`
+
+**Note:** `conductor/references/workflows.md` is an index only. Do not use it for workflow execution.
+
+## Session Lifecycle
+
+| Entry | Action |
+|-------|--------|
+| `ds` | Load context |
+| `/conductor-implement` | Load + bind track/bead |
+| `/conductor-finish` | Handoff + archive |
+
+### Idle Detection
+
+On every user message, before routing:
+
+1. Check `conductor/.last_activity` mtime
+2. If gap > 30min (configurable in `workflow.md`):
+   ```
+   ⏰ It's been X minutes. Create handoff? [Y/n/skip]
+   ```
+3. Y = create handoff, n = skip once, skip = disable for session
+
+See [conductor/references/handoff/idle-detection.md](../conductor/references/handoff/idle-detection.md).
+
+## Beads vs TodoWrite
+
+| Use Beads | Use TodoWrite |
+|-----------|---------------|
+| Multi-session | Single-session |
+| Dependencies | Linear |
+| Survives compaction | Conversation-scoped |
 
 ## Prerequisites Pattern
 
@@ -225,23 +287,7 @@ All Maestro skills should load maestro-core first:
 Load maestro-core first for orchestration context.
 ```
 
-## Session Lifecycle
-
-Session continuity is **automatic** via Conductor workflow entry points:
-
-| Entry Point | Ledger Action |
-|-------------|---------------|
-| `ds` | Load prior context before DISCOVER phase |
-| `/conductor-implement` | Load + bind to track/bead |
-| `/conductor-finish` | Handoff + archive |
-
-**No manual commands needed.** Conductor handles ledger operations at workflow boundaries.
-
-For non-Conductor (ad-hoc) work, ledger operations are skipped to avoid overhead.
-
-See [conductor/references/ledger/](../conductor/references/ledger/) for implementation details.
-
 ## References
 
-- [hierarchy.md](references/hierarchy.md) - 5-level details, HALT/DEGRADE matrix
-- [routing.md](references/routing.md) - Worktree invocation, edge cases, extended details
+- [hierarchy.md](references/hierarchy.md) - HALT/DEGRADE matrix
+- [routing.md](references/routing.md) - Worktree, edge cases

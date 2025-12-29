@@ -1,6 +1,6 @@
 # Validation Lifecycle
 
-Gate routing and LEDGER integration for the 5 validation gates.
+Gate routing and metadata.json integration for the 5 validation gates.
 
 ## Gate Registry
 
@@ -12,16 +12,19 @@ Gate routing and LEDGER integration for the 5 validation gates.
 | 4. plan-execution | TDD REFACTOR complete | `shared/validate-plan-execution.md` | SPEED=WARN, FULL=HALT |
 | 5. completion | before /conductor-finish | `shared/validate-completion.md` | SPEED=WARN, FULL=HALT |
 
-## LEDGER State
+## metadata.json State
 
-Track validation progress in LEDGER.md frontmatter:
+Track validation progress in `metadata.json.validation`:
 
-```yaml
-validation:
-  gates_passed: [design, spec]
-  current_gate: plan-structure
-  retries: 1
-  last_failure: null
+```json
+{
+  "validation": {
+    "gates_passed": ["design", "spec"],
+    "current_gate": "plan-structure",
+    "retries": 1,
+    "last_failure": null
+  }
+}
 ```
 
 ### State Fields
@@ -48,8 +51,8 @@ validation:
 
 For HALT gates in FULL mode:
 
-1. **First attempt fails**: Log to LEDGER, increment retries, return to previous phase
-2. **Second attempt fails**: Log to LEDGER, increment retries, one more chance
+1. **First attempt fails**: Log to metadata.json, increment retries, return to previous phase
+2. **Second attempt fails**: Log to metadata.json, increment retries, one more chance
 3. **Third attempt fails**: Escalate with message:
 
 ```text
@@ -95,7 +98,7 @@ After DELIVER phase complete:
 ```
 → Load shared/validate-design.md
 → Run validation
-→ Update LEDGER.md validation state
+→ Update metadata.json validation state
 → HALT or WARN based on mode
 ```
 
@@ -105,7 +108,7 @@ After spec.md generation:
 ```
 → Load shared/validate-spec.md
 → Run validation
-→ Update LEDGER.md validation state
+→ Update metadata.json validation state
 → WARN (both modes)
 ```
 
@@ -113,7 +116,7 @@ After plan.md generation:
 ```
 → Load shared/validate-plan-structure.md
 → Run validation
-→ Update LEDGER.md validation state
+→ Update metadata.json validation state
 → WARN (both modes)
 ```
 
@@ -123,7 +126,7 @@ After REFACTOR phase complete:
 ```
 → Load shared/validate-plan-execution.md
 → Run validation
-→ Update LEDGER.md validation state
+→ Update metadata.json validation state
 → HALT or WARN based on mode
 ```
 
@@ -133,13 +136,13 @@ Before Phase 0 (preflight):
 ```
 → Load shared/validate-completion.md
 → Run validation
-→ Update LEDGER.md validation state
+→ Update metadata.json validation state
 → HALT or WARN based on mode
 ```
 
 ## Validation History
 
-Log all validation events to LEDGER.md body:
+Log all validation events to metadata.json:
 
 ```markdown
 ## Validation History
@@ -156,5 +159,5 @@ Log all validation events to LEDGER.md body:
 ## References
 
 - [gate.md](../verification/gate.md) - Core verification principles
-- [format.md](../ledger/format.md) - LEDGER.md format specification
+- [metadata.schema.json](../schemas/metadata.schema.json) - metadata.json schema
 - [shared/](shared/) - Individual gate implementations

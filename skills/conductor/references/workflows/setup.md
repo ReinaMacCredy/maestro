@@ -129,20 +129,29 @@ For each document, follow the Interactive Generation Protocol:
    - Commit all files: `conductor(setup): Add conductor setup files`
    - Announce next steps: `/conductor:implement`
 
-### Phase 8: Continuity Setup
+### Phase 8: Handoffs Setup
 
-Set up session state preservation for cross-session context.
+Set up handoff system for cross-session context preservation.
 
-1. **Create Sessions Structure**
-   - Create `conductor/sessions/active/`
-   - Create `conductor/sessions/archive/`
+1. **Create Handoffs Structure**
+   - Create `conductor/handoffs/general/`
+   - Create `conductor/handoffs/general/index.md` with empty table:
+     ```markdown
+     ---
+     track_id: general
+     created: <ISO timestamp>
+     last_updated: <ISO timestamp>
+     ---
+     
+     # Handoff Log: General
+     
+     Handoffs for work outside of specific tracks.
+     
+     | Timestamp | Trigger | Bead | Summary | File |
+     |-----------|---------|------|---------|------|
+     ```
    - Create `conductor/.cache/`
    - Add `.gitkeep` files to empty directories
-   - Create `conductor/sessions/.gitignore`:
-     ```gitignore
-     # Session state is personal, not shared
-     active/LEDGER.md
-     ```
    - Create `conductor/.cache/.gitignore`:
      ```gitignore
      # Cache files are regenerable
@@ -150,13 +159,13 @@ Set up session state preservation for cross-session context.
      !.gitignore
      ```
 
-2. **Announce Automatic Continuity**
-   - Display: "✅ Session continuity is automatic via workflow entry points."
-   - Explain: `ds`, `/conductor-implement`, and `/conductor-finish` handle ledger operations automatically.
-   - **Claude Code bonus**: "Hooks at `~/.claude/hooks/` provide additional auto-save on tool use."
+2. **Announce Handoff System**
+   - Display: "✅ Handoff system initialized."
+   - Explain: `/create_handoff` for manual handoffs, automatic triggers at workflow points.
+   - See [references/handoff/](references/handoff/) for full documentation.
 
 3. **Update State**
-   - **State on Complete**: `"5.1_continuity_configured"`
+   - **State on Complete**: `"5.1_handoffs_configured"`
 
 ### Phase 7: CODEMAPS Generation
 
@@ -268,6 +277,9 @@ conductor/
 │   ├── .meta.json
 │   ├── overview.md
 │   └── [module].md
+├── handoffs/
+│   └── general/
+│       └── index.md
 └── tracks/
     └── <track_id>/
         ├── metadata.json

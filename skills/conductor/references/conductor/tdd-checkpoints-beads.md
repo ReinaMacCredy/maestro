@@ -13,7 +13,7 @@ By default (unless `--no-tdd` is provided) on `/conductor-implement`, this workf
 3. **REFACTOR** - Code cleaned up
 
 Each phase transition updates:
-- LEDGER.md frontmatter (`tdd_phase` field)
+- metadata.json (`tdd_phase` field)
 - Bead notes (checkpoint format)
 
 ---
@@ -21,7 +21,7 @@ Each phase transition updates:
 ## Prerequisites
 
 - Session established (preflight complete)
-- Task claimed (`bound_bead` set in LEDGER.md frontmatter)
+- Task claimed (`bound_bead` set in metadata.json)
 - `/conductor-implement` called without `--no-tdd` flag
 
 ---
@@ -165,10 +165,10 @@ update_tdd_checkpoint() {
   local TASK_ID="$1"
   local PHASE="$2"  # RED, GREEN, or REFACTOR
   
-  # 1. Update LEDGER.md frontmatter
+  # 1. Update metadata.json session state
   NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-  update_ledger_field "tdd_phase" "$PHASE"
-  update_ledger_field "heartbeat" "$NOW"
+  update_metadata_session "tdd_phase" "$PHASE"
+  update_metadata_session "heartbeat" "$NOW"
   
   # 2. Build notes message
   case "$PHASE" in
@@ -200,19 +200,16 @@ Each phase has a standardized notes format:
 | GREEN | `IN_PROGRESS: GREEN phase - making test pass` |
 | REFACTOR | `IN_PROGRESS: REFACTOR phase - cleaning up code` |
 
-### LEDGER.md Frontmatter Update
+### metadata.json Update
 
-```yaml
----
-updated: 2025-12-27T10:30:00Z
-session_id: T-abc123
-platform: claude
-bound_track: feature_20251225
-bound_bead: my-workflow:3-xyz
-mode: SA
-tdd_phase: GREEN
-heartbeat: 2025-12-25T12:00:00Z
----
+```json
+{
+  "session": {
+    "bound_bead": "my-workflow:3-xyz",
+    "tdd_phase": "GREEN",
+    "heartbeat": "2025-12-25T12:00:00Z"
+  }
+}
 ```
 
 ---
@@ -351,7 +348,6 @@ validate_phase_order() {
 
 TASK_ID="$1"
 TDD_ENABLED="${TDD_ENABLED:-true}"
-LEDGER_FILE="conductor/sessions/active/LEDGER.md"
 
 # Skip check
 if [[ "$TDD_ENABLED" != "true" ]]; then

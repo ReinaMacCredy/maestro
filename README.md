@@ -145,7 +145,7 @@ trace                              # Root cause tracing (external: superpowers)
 | **Development**   | using-git-worktrees                                                                    |
 | **Meta**          | writing-skills, sharing-skills                                                         |
 
-> **Note:** v3.0 consolidated 15 → 6 skills. TDD, verification, continuity, doc-sync, and parallel dispatch are now in `conductor/references/`.
+> **Note:** v3.0 consolidated 15 → 6 skills. TDD, verification, handoff, doc-sync, and parallel dispatch are now in `conductor/references/`.
 
 ---
 

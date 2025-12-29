@@ -11,7 +11,7 @@ Validates that a track is ready for `/conductor-finish`. All implementation work
 ### Context Determination
 
 1. **Track Location**
-   - From LEDGER.md `bound_track` if in active session
+   - From track's `metadata.json` if in active session
    - From provided path argument
    - Auto-detect from current directory
 
@@ -37,9 +37,9 @@ Validates that a track is ready for `/conductor-finish`. All implementation work
 
 ### Step 1: Context Discovery
 
-- Read `conductor/sessions/active/LEDGER.md` for bound track
+- Locate `conductor/tracks/<track-id>/metadata.json` for track context
 - Locate `conductor/tracks/<track-id>/plan.md`
-- Identify track metadata from `metadata.json`
+- Identify validation state from `metadata.json.validation`
 
 ### Step 2: Systematic Validation
 
@@ -118,30 +118,37 @@ Before approving for `/conductor-finish`:
 - [ ] Documentation updated
 - [ ] Ready for `/conductor-finish`
 
-## LEDGER Integration
+## metadata.json Integration
 
-Update the LEDGER.md file according to the central format:
+Update the track's `metadata.json` file:
 
 ```text
 ON VALIDATION START:
-  Update frontmatter:
-    validation.current_gate: completion
+  Update metadata.json.validation:
+    "current_gate": "completion"
 
 ON VALIDATION COMPLETE (PASS):
-  Update frontmatter:
-    validation.gates_passed: [..., completion]
-    validation.current_gate: null
-    validation.retries: 0
+  Update metadata.json.validation:
+    "gates_passed": [..., "completion"]
+    "current_gate": null
+    "retries": 0
 
 ON VALIDATION COMPLETE (FAIL):
-  Update frontmatter:
-    validation.last_failure: "<failure reason>"
-    validation.retries: <current + 1>
+  Update metadata.json.validation:
+    "last_failure": "<failure reason>"
+    "retries": <current + 1>
+```
 
-Add entry to ## Validation History table:
-| Gate | Status | Time | Notes |
-|------|--------|------|-------|
-| completion | [PASS]/[WARN]/[FAIL] | HH:MM | <details> |
+Example metadata.json.validation state:
+```json
+{
+  "validation": {
+    "gates_passed": ["design", "spec", "plan-structure", "plan-execution", "completion"],
+    "current_gate": null,
+    "retries": 0,
+    "last_failure": null
+  }
+}
 ```
 
 ## Relationship to Other Commands

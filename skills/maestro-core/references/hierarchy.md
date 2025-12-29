@@ -94,11 +94,11 @@ When multiple skills apply:
 
 ```
 1. Always load maestro-core first
-2. maestro-core triggers ledger check if workflow context exists (ds, /conductor-implement)
+2. maestro-core triggers handoff load if workflow context exists (ds, /conductor-implement)
 3. Load primary skill (conductor/design/beads)
 4. Load specialized skills as needed
 ```
 
 Primary skill is determined by user intent (see routing.md).
 
-**Ledger check:** At step 2, if a Conductor workflow entry point is detected, prior session context is loaded from LEDGER.md before proceeding.
+**Handoff load:** At step 2, if a Conductor workflow entry point is detected, prior session context is loaded via `/resume_handoff` before proceeding.

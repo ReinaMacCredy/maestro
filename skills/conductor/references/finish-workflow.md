@@ -44,7 +44,28 @@ Never block, only warn.
 
 ## Phase 0: Validation Pre-Flight
 
-**Purpose:** Check for stale state files, validate track integrity, and run completion validation gate before running phases.
+**Purpose:** Check for stale state files, validate track integrity, create pre-finish handoff, and run completion validation gate before running phases.
+
+### Pre-Finish Handoff
+
+Before any validation checks, create handoff with trigger `pre-finish`:
+
+```
+handoff_dir = conductor/handoffs/<track_id>/
+
+1. Load most recent handoff for context
+2. Create handoff file: YYYY-MM-DD_HH-MM-SS-mmm_<track>_pre-finish.md
+3. Include:
+   - Track completion summary
+   - All changes made across all epics
+   - Consolidated learnings
+   - Follow-up work needed
+   - Verification status
+4. Append to index.md
+5. Touch conductor/.last_activity
+```
+
+See [handoff/triggers.md](handoff/triggers.md) for trigger details.
 
 ### Validation Gate: validate-completion
 
@@ -52,7 +73,7 @@ Never block, only warn.
 
 1. **Load gate**: `validation/shared/validate-completion.md`
 2. **Run validation**: Check all beads closed, plan complete, git clean, docs updated
-3. **Update LEDGER**: Add `completion` to `validation.gates_passed` or log failure
+3. **Update metadata.json**: Add `completion` to `validation.gates_passed` or log failure
 4. **Behavior by mode**:
    - **SPEED mode**: WARN on failure, continue with pre-flight
    - **FULL mode**: HALT on failure, retry up to 2x, then escalate
@@ -66,7 +87,7 @@ Never block, only warn.
 │ Git: No uncommitted changes                    │
 │ Docs: README, CHANGELOG updated                │
 │                                                │
-│ LEDGER: gates_passed: [..., completion]        │
+│ metadata.json: gates_passed: [..., completion]  │
 └────────────────────────────────────────────────┘
 ```
 
@@ -585,9 +606,9 @@ Run /conductor-setup to generate initial CODEMAPS.
 
 ---
 
-## Phase 6.5: Continuity Handoff
+## Phase 6.5: Handoff Archive
 
-**Purpose:** Create handoff for track completion and clean up session state.
+**Purpose:** Archive handoff files for completed track.
 
 ### Trigger Conditions
 
@@ -595,41 +616,35 @@ Run Phase 6.5 when track is being archived (archiveChoice = "archive").
 
 ### Workflow
 
-1. **Create Handoff**
-   - Run `continuity handoff track-complete`
-   - Creates archived handoff: `conductor/sessions/archive/YYYY-MM-DD-HH-MM-track-complete.md`
-   - Includes: track summary, key decisions, learnings reference
+1. **Move Handoff Files to Archive**
+   - Create `conductor/handoffs/<track_id>/archive/` directory
+   - Move all handoff files (except index.md) to archive/
+   - Update index.md: mark entries as archived
 
-2. **Clear LEDGER Binding**
-   - Update LEDGER.md frontmatter:
-     ```yaml
-     bound_track: null
-     bound_bead: null
-     tdd_phase: null
-     ```
-   - Keep `mode` and `session_id` for continuity
+2. **Update Index Status**
+   ```markdown
+   | Timestamp | Trigger | Bead | Summary | File | Archived |
+   |-----------|---------|------|---------|------|----------|
+   | 10:00:00.123 | design-end | - | RS256 decision | [→](./archive/...) | ✅ |
+   ```
 
-3. **Archive LEDGER (if archive chosen)**
-   - If user chose Archive in Phase 5:
-     - Copy LEDGER.md content to handoff archive
-     - Delete `conductor/sessions/active/LEDGER.md`
-   - If user chose Keep:
-     - Clear bindings only, keep LEDGER.md active
+3. **Clean Up Last Activity**
+   - Remove `conductor/.last_activity` marker if track was bound
 
 ### Progress
 
 ```
-Phase 6.5: Continuity handoff...
-  → Handoff created: 2025-12-27-14-30-track-complete.md
-  → LEDGER.md: bindings cleared
+Phase 6.5: Archiving handoffs...
+  → 5 handoff files moved to archive/
+  → index.md updated
 ```
 
 ### Skip Check
 
 If `archiveChoice = "keep"`:
-- Clear bindings only
-- Do not delete LEDGER.md
-- Do not create track-complete handoff
+- Keep handoff files in place
+- Do not mark as archived
+- Maintain active handoff chain for future work
 
 ---
 

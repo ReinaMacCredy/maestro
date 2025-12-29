@@ -46,7 +46,8 @@ Contains reusable learnings from completed tracks.
 - `/doc-sync --force` - Apply all doc changes without prompts
 - `sed -n '/^---$/,/^---$/p' "$FILE" | grep '^field:' | cut -d' ' -f2` - Extract YAML frontmatter field value
 - `bd close id1 id2 id3 --reason completed` - Close multiple beads at once
-- `touch conductor/sessions/active/LEDGER.log` - Initialize append-only session log (gitignored)
+- `/create_handoff` - Create handoff file manually
+- `/resume_handoff` - Load most recent handoff for track
 - `ls skills/conductor/references/` - Verify reference structure after migration
 
 ## Gotchas
@@ -74,12 +75,13 @@ Contains reusable learnings from completed tracks.
 - Idempotency: `bd update` and `bd close` are idempotent; `bd create` is NOT
 - planTasks mapping: bidirectional - keep planTasks and beadToTask in sync
 - Claude Code hooks must exit 0 even on error (try/catch + graceful exit) to avoid crashing Claude
-- LEDGER.md in conductor/sessions/active/ is gitignored (personal), archive/*.md is committed (shared)
-- Stale ledgers (>24h) are auto-archived on SessionStart to avoid confusion from old context
+- Handoffs in conductor/handoffs/<track>/ are git-committed (shareable), archived on /conductor-finish
+- Stale handoffs (>7 days) trigger warning on /resume_handoff
 - FTS5 snippet function: `snippet(handoffs_fts, 2, '>>>', '<<<', '...', 50)` for match highlighting
 - artifact-cleanup.py parses dates from filenames (YYYY-MM-DD-HH-MM-trigger.md), not frontmatter
 - Concurrent sessions on same codebase may conflict - documented limitation (last writer wins)
 - Session continuity is automatic via workflow entry points (ds, /conductor-implement, /conductor-finish)
+- Validation state tracked in metadata.json.validation, not LEDGER.md
 - State machine uses STRICT vs SOFT enforcement - STRICT transitions HALT, SOFT only WARN
 - Default branch names differ by repo: check for BOTH `main` AND `master`
 - Auto-archive removes A/K prompt entirely - use `--keep` flag to prevent archiving
@@ -90,9 +92,8 @@ Contains reusable learnings from completed tracks.
 - Doc-sync errors are non-blocking - workflow continues even if doc-sync fails
 - Minor doc changes (path renames, function renames) are auto-applied
 - Major doc changes (new features, removed features) prompt user
-- Track-switch auto-archives LEDGER.md - switching tracks preserves previous session context in archive
-- Continuity operations in Conductor are non-blocking - failures log warnings but never halt commands
-- bound_track/bound_bead in LEDGER.md frontmatter replace deprecated session-state_*.json files
+- Track-switch auto-archives handoffs - switching tracks preserves previous session context
+- Handoff operations in Conductor are non-blocking - failures log warnings but never halt commands
 - Research: All agents fail → block with `MANUAL_VERIFY`, not silent proceed
 - Research: Timeout → return partial results + warning (soft limits), not hard failure
 - Research: Network failure → graceful fallback to repo-only mode
@@ -101,7 +102,7 @@ Contains reusable learnings from completed tracks.
 - Extraction fidelity: Initial skill extraction may lose philosophical content (e.g., "Why Order Matters"). Fix: copy full SKILL.md first, then split.
 - Continuity skill is in marketplace plugin, not local skills/ - can't add direct local dependency checks
 - Session start detection without hooks requires implicit trigger (maestro-core loading on first message)
-- Ad-hoc queries (not triggering `ds`, `/conductor-implement`, etc.) do NOT load Ledger history - intentional low-overhead behavior for casual chats
+- Ad-hoc queries (not triggering `ds`, `/conductor-implement`, etc.) do NOT load handoff history - intentional low-overhead behavior for casual chats
 
 ## Patterns
 
@@ -129,9 +130,11 @@ Contains reusable learnings from completed tracks.
 - **Always-On Research:** No skip conditions - research runs at ds, DEVELOP→DELIVER, and newtrack
 - **Enforcement Levels:** Advisory (log) → Gatekeeper (block if missing) → Mandatory (block if fails/low confidence)
 - **Impact Agent:** Parallel execution with full research at DELIVER phase
-- **Layered Auto-Load:** AGENTS.md → maestro-core → Conductor → ledger operations (defense in depth for hookless agents)
-- **Workflow-Aware Continuity:** Continuity tied to entry points (`ds`, `/conductor-implement`, `/conductor-finish`) not generic session events
+- **Layered Auto-Load:** AGENTS.md → maestro-core → Conductor → handoff operations (defense in depth for hookless agents)
+- **Workflow-Aware Continuity:** Handoffs tied to entry points (`ds`, `/conductor-implement`, `/conductor-finish`) not generic session events
+- **6 Handoff Triggers:** design-end, epic-start, epic-end, pre-finish, manual, idle - each fires at specific integration points
+- **Hybrid Handoff Files:** Individual files per handoff (`YYYY-MM-DD_HH-MM-SS-mmm_<track>_<trigger>.md`) + index.md for consolidated log
 - **5 Validation Gates:** design (DELIVER) → spec (newtrack) → plan-structure (newtrack) → plan-execution (TDD) → completion (finish)
 - **Gate Behavior Matrix:** SPEED mode = all WARN; FULL mode = design/plan-execution/completion HALT + retry (max 2)
-- **LEDGER Validation State:** Track gates_passed, current_gate, retries, last_failure in frontmatter
-- **Humanlayer Format:** Gates use Initial Setup → 3-step Validation Process → Guidelines → Checklist → LEDGER Integration
+- **Validation State in metadata.json:** Track gates_passed, current_gate, retries, last_failure in metadata.json.validation
+- **Humanlayer Format:** Gates use Initial Setup → 3-step Validation Process → Guidelines → Checklist → Handoff Integration

@@ -11,7 +11,7 @@ Preflight runs at the start of any Conductor command that interacts with Beads. 
 1. Checks `bd` CLI availability (HALT if unavailable)
 2. Checks Village MCP availability (for MA mode)
 3. Locks mode (SA or MA) for the session
-4. Creates/recovers session state file
+4. Creates/recovers session state in metadata.json
 5. Handles concurrent session detection
 6. Recovers from stale/crashed sessions
 
@@ -32,7 +32,7 @@ Preflight runs at the start of any Conductor command that interacts with Beads. 
 │                     MODE DETECTION FLOW                          │
 ├──────────────────────────────────────────────────────────────────┤
 │                                                                   │
-│   1. Check for existing LEDGER.md frontmatter                    │
+│   1. Check metadata.json.last_activity                           │
 │      ├── Found + mode locked → Use existing mode                 │
 │      └── Not found → Continue to step 2                          │
 │                                                                   │
@@ -49,7 +49,7 @@ Preflight runs at the start of any Conductor command that interacts with Beads. 
 
 ### Mode Selection Precedence
 
-1. **Existing LEDGER.md frontmatter** → use locked mode
+1. **Existing metadata.json session state** → use locked mode
 2. **User preference** (`preferences.json`) → use preferred mode
 3. **Village available + no preference** → default to MA
 4. **Fallback** → SA mode
@@ -82,22 +82,26 @@ echo "Preflight: bd $BD_VERSION ✓"
 
 ## Step 1: Check Existing Session State
 
-Session state is stored in LEDGER.md frontmatter at `conductor/sessions/active/LEDGER.md`.
+Session state is stored in metadata.json at `conductor/tracks/<track_id>/metadata.json`.
 
 ```bash
 AGENT_ID="${AGENT_ID:-$THREAD_ID}"
-LEDGER_FILE="conductor/sessions/active/LEDGER.md"
+TRACK_ID="${TRACK_ID:-}"
 
-if [[ -f "$LEDGER_FILE" ]]; then
-  # Extract frontmatter fields (using cut -d: -f2- to handle values with spaces)
-  LOCKED_MODE=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^mode:' | cut -d: -f2- | sed 's/^ *//')
-  HEARTBEAT=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^heartbeat:' | cut -d: -f2- | sed 's/^ *//')
-  BOUND_TRACK=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^bound_track:' | cut -d: -f2- | sed 's/^ *//')
+if [[ -n "$TRACK_ID" ]]; then
+  METADATA_FILE="conductor/tracks/${TRACK_ID}/metadata.json"
   
-  if [[ -n "$LOCKED_MODE" && "$LOCKED_MODE" != "null" ]]; then
-    echo "Session: Resuming $LOCKED_MODE mode (bound to track: ${BOUND_TRACK:-none})"
-    MODE="$LOCKED_MODE"
-    # Skip to Step 4
+  if [[ -f "$METADATA_FILE" ]]; then
+    # Extract session fields from metadata.json
+    LOCKED_MODE=$(jq -r '.session.mode // empty' "$METADATA_FILE")
+    LAST_ACTIVITY=$(jq -r '.last_activity // empty' "$METADATA_FILE")
+    BOUND_BEAD=$(jq -r '.session.bound_bead // empty' "$METADATA_FILE")
+    
+    if [[ -n "$LOCKED_MODE" && "$LOCKED_MODE" != "null" ]]; then
+      echo "Session: Resuming $LOCKED_MODE mode (track: $TRACK_ID)"
+      MODE="$LOCKED_MODE"
+      # Skip to Step 4
+    fi
   fi
 fi
 ```
@@ -191,77 +195,43 @@ fi
 
 ---
 
-## Step 5: Create/Update Session State
+## Step 5: Update Session State
 
-Session state is stored in LEDGER.md frontmatter. Create or update it:
+Session state is stored in metadata.json. Update it and touch activity marker:
 
 ```bash
-mkdir -p conductor/sessions/active
-
 NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-LEDGER_FILE="conductor/sessions/active/LEDGER.md"
 
-if [[ -f "$LEDGER_FILE" ]]; then
-  # Update existing LEDGER frontmatter with session fields
-  # Use a temp file for atomic update
-  TEMP_FILE="$LEDGER_FILE.tmp.$$"
+if [[ -n "$TRACK_ID" ]]; then
+  METADATA_FILE="conductor/tracks/${TRACK_ID}/metadata.json"
   
-  # Extract body (everything after second ---)
-  BODY=$(sed -n '/^---$/,/^---$/!p' "$LEDGER_FILE" | tail -n +2)
-  
-  # Get existing frontmatter values we want to preserve
-  SESSION_ID=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^session_id:' | cut -d' ' -f2)
-  PLATFORM=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^platform:' | cut -d' ' -f2)
-  
-  cat > "$TEMP_FILE" << EOF
----
-updated: $NOW
-session_id: ${SESSION_ID:-$AGENT_ID}
-platform: ${PLATFORM:-amp}
-bound_track: ${TRACK_ID:-null}
-bound_bead: null
-mode: $MODE
-tdd_phase: null
-heartbeat: $NOW
----
-$BODY
-EOF
-  
-  mv "$TEMP_FILE" "$LEDGER_FILE"
-else
-  # Create new LEDGER with session state in frontmatter
-  cat > "$LEDGER_FILE" << EOF
----
-updated: $NOW
-session_id: $AGENT_ID
-platform: amp
-bound_track: ${TRACK_ID:-null}
-bound_bead: null
-mode: $MODE
-tdd_phase: null
-heartbeat: $NOW
----
-
-# Session Ledger
-
-## Goal
-
-_Session goal will be set when work starts_
-
-## State
-
-### Done
-_Nothing yet_
-
-### Now
-_Starting session_
-
-### Next
-_To be determined_
-EOF
+  if [[ -f "$METADATA_FILE" ]]; then
+    # Update metadata.json with session fields
+    TEMP_FILE="$METADATA_FILE.tmp.$$"
+    
+    jq --arg now "$NOW" \
+       --arg mode "$MODE" \
+       --arg agent "$AGENT_ID" \
+       '. + {
+         last_activity: $now,
+         session: {
+           mode: $mode,
+           agent_id: $agent,
+           bound_bead: (.session.bound_bead // null),
+           tdd_phase: (.session.tdd_phase // null),
+           started_at: (.session.started_at // $now)
+         }
+       }' "$METADATA_FILE" > "$TEMP_FILE"
+    
+    mv "$TEMP_FILE" "$METADATA_FILE"
+  fi
 fi
 
-echo "Session: LEDGER.md updated for $AGENT_ID ($MODE mode)"
+# Touch global activity marker
+mkdir -p conductor
+touch conductor/.last_activity
+
+echo "Session: metadata.json updated for $AGENT_ID ($MODE mode)"
 ```
 
 ---
@@ -270,36 +240,28 @@ echo "Session: LEDGER.md updated for $AGENT_ID ($MODE mode)"
 
 Load prior session context to enable cross-session continuity.
 
-### Load Context File
+### Load Context from Handoffs
 
 ```bash
-CONTEXT_FILE=".conductor/session-context.md"
+HANDOFF_DIR="conductor/handoffs/${TRACK_ID}"
 
-if [[ -f "$CONTEXT_FILE" ]]; then
-  echo "RECALL: Loading session context..."
+if [[ -n "$TRACK_ID" && -d "$HANDOFF_DIR" ]]; then
+  # Find most recent handoff
+  LATEST_HANDOFF=$(ls -t "$HANDOFF_DIR"/*.md 2>/dev/null | head -1)
   
-  # Validate version header
-  if ! head -1 "$CONTEXT_FILE" | grep -q "session-context v1"; then
-    echo "WARN: Context file missing version header. May be outdated."
+  if [[ -n "$LATEST_HANDOFF" ]]; then
+    echo "RECALL: Loading handoff context..."
+    
+    # Display key context from handoff
+    INTENT=$(sed -n '/## Intent/,/^## /p' "$LATEST_HANDOFF" | head -10)
+    CURRENT_STATE=$(sed -n '/## Current State/,/^## /p' "$LATEST_HANDOFF" | head -5)
+    
+    echo "   Intent: $(echo "$INTENT" | head -2 | tail -1)"
+    echo "   State: $(echo "$CURRENT_STATE" | head -2 | tail -1)"
+    echo "RECALL: Context loaded ✓"
   fi
-  
-  # Verify context contract (PRESERVE sections exist and are non-empty)
-  validate_context_contract "$CONTEXT_FILE"
-  if [[ $? -ne 0 ]]; then
-    echo "WARN: Context contract validation failed"
-  fi
-  
-  # Display key context
-  INTENT=$(sed -n '/## Intent/,/^## /p' "$CONTEXT_FILE" | head -10)
-  CURRENT_STATE=$(sed -n '/## Current State/,/^## /p' "$CONTEXT_FILE" | head -5)
-  
-  echo "   Intent: $(echo "$INTENT" | head -2 | tail -1)"
-  echo "   State: $(echo "$CURRENT_STATE" | head -2 | tail -1)"
-  echo "RECALL: Context loaded ✓"
 else
-  # Cold start - create skeleton
-  create_context_skeleton "$CONTEXT_FILE"
-  echo "RECALL: Cold start - created skeleton context"
+  echo "RECALL: No prior handoff found"
 fi
 ```
 
@@ -328,49 +290,6 @@ validate_context_contract() {
   fi
   
   return 0
-}
-```
-
-### Cold Start Skeleton
-
-```bash
-create_context_skeleton() {
-  local FILE="$1"
-  
-  mkdir -p "$(dirname "$FILE")"
-  
-  cat > "$FILE" << 'EOF'
-<!-- session-context v1 -->
-
-## Intent [PRESERVE]
-
-_What we're building and why (fill in at session start)_
-
-## Constraints & Ruled-Out [PRESERVE]
-
-_What we've explicitly decided NOT to do_
-
-## Decisions Made
-
-| Decision | Why | When |
-|----------|-----|------|
-
-## Files Modified
-
-_Files touched this session_
-
-## Open Questions / TODOs
-
-- [ ] 
-
-## Current State
-
-_Where we are now_
-
-## Next Steps
-
-_What to do next_
-EOF
 }
 ```
 
@@ -504,23 +423,25 @@ if [[ "$MODE" == "MA" ]]; then
   # Check for orphan handoff files (>12 hours old)
   TWELVE_HOURS_AGO=$(date -v-12H +%s 2>/dev/null || date -d '12 hours ago' +%s)
   
-  for handoff in .conductor/handoff_*.json; do
-    [[ -f "$handoff" ]] || continue
+  for handoff_dir in conductor/handoffs/*/; do
+    [[ -d "$handoff_dir" ]] || continue
     
-    FILE_MTIME=$(stat -f %m "$handoff" 2>/dev/null || stat -c %Y "$handoff")
-    if [[ $FILE_MTIME -lt $TWELVE_HOURS_AGO ]]; then
-      FROM=$(basename "$handoff" | sed 's/handoff_\(.*\)_to_.*/\1/')
-      TO=$(basename "$handoff" | sed 's/.*_to_\(.*\)\.json/\1/')
-      CONTENT=$(jq -r '.content // "No content"' "$handoff")
+    for handoff in "$handoff_dir"*.md; do
+      [[ -f "$handoff" ]] || continue
       
-      echo ""
-      echo "⚠️ Orphan handoff detected:"
-      echo "   From: $FROM → To: $TO"
-      echo "   Age: >12 hours"
-      echo "   Content: $CONTENT"
-      echo "   Action: Target agent has not been online. Consider reassigning."
-      echo ""
-    fi
+      FILE_MTIME=$(stat -f %m "$handoff" 2>/dev/null || stat -c %Y "$handoff")
+      if [[ $FILE_MTIME -lt $TWELVE_HOURS_AGO ]]; then
+        TRACK=$(basename "$(dirname "$handoff")")
+        
+        echo ""
+        echo "⚠️ Orphan handoff detected:"
+        echo "   Track: $TRACK"
+        echo "   File: $(basename "$handoff")"
+        echo "   Age: >12 hours"
+        echo "   Action: Consider archiving or resuming."
+        echo ""
+      fi
+    done
   done
 fi
 ```
@@ -529,7 +450,7 @@ fi
 
 ## Step 8: Stale Agent Detection (MA Mode)
 
-In MA mode, stale agents are detected via LEDGER.md heartbeat field. However, since each agent has its own LEDGER.md, detection relies on session lock files which are still used for concurrent session prevention.
+In MA mode, stale agents are detected via session lock heartbeat. Detection relies on session lock files for concurrent session prevention.
 
 ```bash
 if [[ "$MODE" == "MA" ]]; then
@@ -566,7 +487,7 @@ fi
 
 ```text
 Preflight: bd v0.5.2 ✓, Village ✗ → SA mode
-Session: LEDGER.md updated for T-abc123 (SA mode)
+Session: metadata.json updated for T-abc123 (SA mode)
 ```
 
 ### With Recovery
@@ -578,7 +499,7 @@ WARN: Found 2 pending update operations
       Replaying: T-abc_1703509200_update_bd-42
       Skip (already applied): T-abc_1703509260_update_bd-43
       Pending updates replayed
-Session: Resuming MA mode (bound to track: auth_20251225)
+Session: Resuming MA mode (track: auth_20251225)
 ```
 
 ### With Active Session Warning
@@ -601,46 +522,29 @@ Options:
 
 ## Heartbeat Protocol
 
-Active sessions update heartbeat every 5 minutes via LEDGER.md frontmatter:
+Active sessions update heartbeat every 5 minutes via activity marker:
 
 ```bash
 update_heartbeat() {
   NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-  LEDGER_FILE="conductor/sessions/active/LEDGER.md"
   
-  if [[ -f "$LEDGER_FILE" ]]; then
-    # Update heartbeat and updated fields in frontmatter
-    TEMP_FILE="$LEDGER_FILE.tmp.$$"
+  # Touch activity marker
+  touch conductor/.last_activity
+  
+  # Update metadata.json if track is bound
+  if [[ -n "$TRACK_ID" ]]; then
+    METADATA_FILE="conductor/tracks/${TRACK_ID}/metadata.json"
     
-    # Extract body (everything after second ---)
-    BODY=$(sed -n '/^---$/,/^---$/!p' "$LEDGER_FILE" | tail -n +2)
-    
-    # Extract other frontmatter fields (using cut -d: -f2- to handle values with spaces)
-    SESSION_ID=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^session_id:' | cut -d: -f2- | sed 's/^ *//')
-    PLATFORM=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^platform:' | cut -d: -f2- | sed 's/^ *//')
-    BOUND_TRACK=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^bound_track:' | cut -d: -f2- | sed 's/^ *//')
-    BOUND_BEAD=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^bound_bead:' | cut -d: -f2- | sed 's/^ *//')
-    MODE=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^mode:' | cut -d: -f2- | sed 's/^ *//')
-    TDD_PHASE=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^tdd_phase:' | cut -d: -f2- | sed 's/^ *//')
-    
-    cat > "$TEMP_FILE" << EOF
----
-updated: $NOW
-session_id: $SESSION_ID
-platform: $PLATFORM
-bound_track: $BOUND_TRACK
-bound_bead: $BOUND_BEAD
-mode: $MODE
-tdd_phase: $TDD_PHASE
-heartbeat: $NOW
----
-$BODY
-EOF
-    
-    mv "$TEMP_FILE" "$LEDGER_FILE"
+    if [[ -f "$METADATA_FILE" ]]; then
+      TEMP_FILE="$METADATA_FILE.tmp.$$"
+      
+      jq --arg now "$NOW" '.last_activity = $now' "$METADATA_FILE" > "$TEMP_FILE"
+      mv "$TEMP_FILE" "$METADATA_FILE"
+    fi
   fi
   
   # Update session lock (still JSON for concurrent session detection)
+  SESSION_LOCK=".conductor/session-lock_${TRACK_ID}.json"
   if [[ -f "$SESSION_LOCK" ]]; then
     jq --arg ts "$NOW" '.lastHeartbeat = $ts' "$SESSION_LOCK" > "$SESSION_LOCK.tmp.$$"
     mv "$SESSION_LOCK.tmp.$$" "$SESSION_LOCK"
@@ -654,9 +558,8 @@ Run this in the background to keep the session alive:
 
 ```bash
 start_heartbeat_loop() {
-  LEDGER_FILE="conductor/sessions/active/LEDGER.md"
   (
-    while [[ -f "$LEDGER_FILE" ]]; do
+    while [[ -f "conductor/.last_activity" ]]; do
       sleep 300  # 5 minutes
       update_heartbeat
     done
@@ -740,39 +643,27 @@ Run the metrics summary script:
 
 ```bash
 cleanup_session() {
-  LEDGER_FILE="conductor/sessions/active/LEDGER.md"
+  SESSION_LOCK=".conductor/session-lock_${TRACK_ID}.json"
   
   # Remove session lock
   if [[ -f "$SESSION_LOCK" ]]; then
     rm "$SESSION_LOCK"
   fi
   
-  # Clear bound_bead in LEDGER (keep for continuity, clear active task)
+  # Clear session fields in metadata.json (keep for continuity, clear active state)
   NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-  if [[ -f "$LEDGER_FILE" ]]; then
-    TEMP_FILE="$LEDGER_FILE.tmp.$$"
-    BODY=$(sed -n '/^---$/,/^---$/!p' "$LEDGER_FILE" | tail -n +2)
+  if [[ -n "$TRACK_ID" ]]; then
+    METADATA_FILE="conductor/tracks/${TRACK_ID}/metadata.json"
     
-    SESSION_ID=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^session_id:' | cut -d' ' -f2)
-    PLATFORM=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^platform:' | cut -d' ' -f2)
-    BOUND_TRACK=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^bound_track:' | cut -d' ' -f2)
-    MODE=$(sed -n '/^---$/,/^---$/p' "$LEDGER_FILE" | grep '^mode:' | cut -d' ' -f2)
-    
-    cat > "$TEMP_FILE" << EOF
----
-updated: $NOW
-session_id: $SESSION_ID
-platform: $PLATFORM
-bound_track: $BOUND_TRACK
-bound_bead: null
-mode: $MODE
-tdd_phase: null
-heartbeat: $NOW
----
-$BODY
-EOF
-    
-    mv "$TEMP_FILE" "$LEDGER_FILE"
+    if [[ -f "$METADATA_FILE" ]]; then
+      TEMP_FILE="$METADATA_FILE.tmp.$$"
+      
+      jq --arg now "$NOW" \
+         '.last_activity = $now | .session.bound_bead = null | .session.tdd_phase = null' \
+         "$METADATA_FILE" > "$TEMP_FILE"
+      
+      mv "$TEMP_FILE" "$METADATA_FILE"
+    fi
   fi
   
   # Sync beads to git
@@ -809,7 +700,7 @@ EOF
 ⚠️ Village MCP unavailable. Operating in degraded mode.
 - File reservations: SKIPPED (cannot enforce)
 - Task claiming: Using bd update (no atomic guarantee)
-- Handoffs: Written to .conductor/handoff_*.json
+- Handoffs: Written to conductor/handoffs/<track>/
 ```
 
 ---
@@ -818,14 +709,13 @@ EOF
 
 | File | Location | Purpose |
 |------|----------|---------|
-| `LEDGER.md` | `conductor/sessions/active/` | Session state in frontmatter (mode, bound_track, bound_bead, tdd_phase, heartbeat) |
+| `metadata.json` | `conductor/tracks/<track>/` | Track + session state (mode, bound_bead, tdd_phase, last_activity) |
+| `.last_activity` | `conductor/` | Global activity marker (touch for heartbeat) |
 | `session-lock_<track-id>.json` | `.conductor/` | Concurrent session prevention |
 | `preferences.json` | `.conductor/` | User mode preferences |
 | `pending_updates.jsonl` | `.conductor/` | Failed update ops for replay |
 | `pending_closes.jsonl` | `.conductor/` | Failed close ops for replay |
-| `handoff_<from>_to_<to>.json` | `.conductor/` | MA handoff messages |
-
-**Note:** `session-state_<agent-id>.json` files are deprecated. Session state is now stored in LEDGER.md frontmatter.
+| Handoff files | `conductor/handoffs/<track>/` | Context preservation between sessions |
 
 ---
 
@@ -851,7 +741,7 @@ All Conductor commands that interact with Beads:
 Run preflight-beads workflow:
 1. Check bd availability
 2. Detect/lock mode
-3. Create session state
+3. Update metadata.json session state
 4. Recover pending operations
 5. Check for conflicts
 

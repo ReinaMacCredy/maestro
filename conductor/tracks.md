@@ -4,8 +4,21 @@ Master list of all development tracks.
 
 ## Active Tracks
 
+*No active tracks.*
+
+---
+
+## Completed Tracks
+
+## [x] Track: HumanLayer-Inspired Handoff System
+*ID: handoff-system_20251229*
+*Archived: [conductor/archive/handoff-system_20251229/](conductor/archive/handoff-system_20251229/)*
+
+Replaced LEDGER.md/continuity with git-committed handoffs. Commands: `/create_handoff`, `/resume_handoff`. 6 triggers: design-end, epic-start, epic-end, pre-finish, manual, idle.
+
 ## [x] Track: Research Protocol Integration
 *ID: research-protocol_20251229*
+*Archived: [conductor/archive/research-protocol_20251229/](conductor/archive/research-protocol_20251229/)*
 
 Replaced grounding system with parallel research sub-agents. Research ALWAYS runs at:
 - `ds` start (DISCOVER phase)
@@ -13,10 +26,6 @@ Replaced grounding system with parallel research sub-agents. Research ALWAYS run
 - `/conductor-newtrack` (pre-spec)
 
 **Supersedes:** grounding-v2_20251228, grounding-system-redesign_20251228
-
----
-
-## Completed Tracks
 
 *Completed tracks are archived to `conductor/archive/`.*
 

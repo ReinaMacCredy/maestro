@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Smoke tests for continuity hooks
+# Smoke tests for handoff hooks
 #
 # Usage: ./scripts/test-hooks.sh
 #
@@ -8,13 +8,14 @@
 # 2. SessionStart without ledger
 # 3. SessionStart with ledger
 # 4. PreCompact creates handoff
+# 5. PostToolUse tracks file
+# 6. Handoff directory structure
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-HOOKS_DIR="${REPO_ROOT}/hooks/continuity"
-CONTINUITY_JS="${HOOKS_DIR}/dist/continuity.js"
+CONTINUITY_JS="${REPO_ROOT}/hooks/continuity/dist/continuity.js"
 
 # Test counter
 TESTS_RUN=0
@@ -46,7 +47,22 @@ setup() {
     TEST_DIR=$(mktemp -d)
     mkdir -p "${TEST_DIR}/conductor/sessions/active"
     mkdir -p "${TEST_DIR}/conductor/sessions/archive"
+    mkdir -p "${TEST_DIR}/conductor/handoffs/general"
     cd "${TEST_DIR}"
+    
+    # Create initial index.md for general
+    cat > "${TEST_DIR}/conductor/handoffs/general/index.md" << 'EOF'
+---
+track_id: general
+created: 2025-12-29T10:00:00+07:00
+last_updated: 2025-12-29T10:00:00+07:00
+---
+
+# Handoff Log: General
+
+| Timestamp | Trigger | Bead | Summary | File |
+|-----------|---------|------|---------|------|
+EOF
 }
 
 # Cleanup test environment
@@ -59,15 +75,7 @@ cleanup() {
 
 trap cleanup EXIT
 
-# Build if needed
-if [[ ! -f "$CONTINUITY_JS" ]]; then
-    echo "Building hooks..."
-    cd "${HOOKS_DIR}"
-    npm run build --silent
-    cd "${REPO_ROOT}"
-fi
-
-echo "=== Continuity Hooks Smoke Tests ==="
+echo "=== Handoff System Smoke Tests ==="
 echo ""
 
 # Test 1: Version command
@@ -128,6 +136,7 @@ platform: claude
 ## State
 
 ### Now
+
 - Testing precompact
 EOF
 
@@ -159,7 +168,15 @@ elif [[ $exit_code -ne 0 ]]; then
 else
     fail "PostToolUse" "LEDGER.md created" "file not created"
 fi
-unset CLAUDE_TOOL_INPUT
+
+# Test 6: Handoff directory structure exists
+test_start
+setup
+if [[ -d "${TEST_DIR}/conductor/handoffs/general" ]]; then
+    pass "Handoff directory structure created"
+else
+    fail "Handoff directory" "conductor/handoffs/general/ exists" "directory missing"
+fi
 
 # Summary
 echo ""

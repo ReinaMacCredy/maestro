@@ -49,34 +49,42 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
    Track beads: 12 issues, 3 ready
    ```
 
-### Phase 0.5: Continuity Load
+### Phase 0.5: Handoff Load
 
-**Purpose:** Load prior session context and handle track binding.
+**Purpose:** Load prior session context via handoff system.
 
-1. **Load LEDGER.md**
-   - Run `continuity load` workflow
-   - Read `conductor/sessions/active/LEDGER.md` if exists
-   - Display prior context summary
+1. **Load Most Recent Handoff**
+   - Run `/resume_handoff` workflow internally
+   - Check `conductor/handoffs/<track_id>/` for latest handoff
+   - If found: Display context summary
+   - If not found: Fresh session (no prior context)
 
-2. **Check Track Binding**
-   - If `bound_track` exists in LEDGER frontmatter:
-     - Compare with current track
-     - If different: Auto-archive current LEDGER before proceeding
-     - Display: `Previous session: <track> → Archived`
-   - If same track: Resume context
-   - If no bound_track: Fresh session
-
-3. **Bind to Track**
-   - Update LEDGER frontmatter: `bound_track: <track_id>`
-   - Update `heartbeat` timestamp
+2. **Create Epic-Start Handoff**
    
-4. **Output:**
+   Before starting each epic, create handoff with trigger `epic-start`:
+   
    ```
-   Continuity: Loaded prior context (3 decisions, 5 modified files)
+   handoff_dir = conductor/handoffs/<track_id>/
+   
+   1. Create handoff file: YYYY-MM-DD_HH-MM-SS-mmm_<track>_<epic-id>_epic-start.md
+   2. Include:
+      - Epic scope from plan.md
+      - Dependencies from beads
+      - Prior context loaded
+      - Expected deliverables
+   3. Append to index.md
+   4. Touch conductor/.last_activity
+   ```
+   
+   See [../handoff/triggers.md](../handoff/triggers.md) for trigger details.
+
+3. **Output:**
+   ```
+   Handoff: Loaded prior context (3 decisions, 5 modified files)
    Session: Binding to track auth_20251227
    ```
 
-**Non-blocking:** If LEDGER.md missing or corrupted, create fresh session.
+**Non-blocking:** If no handoff found, create fresh session.
 
 ### Phase 1: Setup Verification
 
@@ -192,16 +200,17 @@ See [execution-routing.md](../../../dispatching-parallel-agents/references/agent
 4. **Execute Tasks**
    - Iterate through `plan.md` tasks sequentially
    - For each task, defer to `workflow.md` Task Workflow section
-   - Follow TDD cycle (default, use `--no-tdd` to disable):
+   - Follow TDD cycle from [tdd/cycle.md](../tdd/cycle.md) (default, use `--no-tdd` to disable):
      1. Mark task `[~]` in progress
      2. Write failing tests (Red)
      3. Implement to pass (Green)
      4. Refactor
-     5. Verify coverage (>80%)
-     6. Commit with conventional message
-     7. Attach git note summary
-     8. Update `plan.md`: `[~]` → `[x]` + SHA
-     9. Commit plan update
+     5. **Run validation gate: validate-plan-execution** (see [tdd/cycle.md](../tdd/cycle.md#validation-gate-validate-plan-execution))
+     6. Verify coverage (>80%)
+     7. Commit with conventional message
+     8. Attach git note summary
+     9. Update `plan.md`: `[~]` → `[x]` + SHA
+     10. Commit plan update
 
 5. **TDD Checkpoints (default, skip with `--no-tdd`)**
    
@@ -257,9 +266,29 @@ See [execution-routing.md](../../../dispatching-parallel-agents/references/agent
    - Execute Phase Completion Protocol from `workflow.md`
    - Includes: test verification, manual verification, checkpoint commit
 
-9. **Finalize Track**
-   - Update status `[~]` → `[x]` in `tracks.md`
-   - Announce completion
+9. **Create Epic-End Handoff**
+   
+   After each epic closes, create handoff with trigger `epic-end`:
+   
+   ```
+   handoff_dir = conductor/handoffs/<track_id>/
+   
+   1. Create handoff file: YYYY-MM-DD_HH-MM-SS-mmm_<track>_<epic-id>_epic-end.md
+   2. Include:
+      - Work completed in epic
+      - Files changed (git diff)
+      - Learnings discovered
+      - Close reason (completed/skipped/blocked)
+      - Next epic to tackle
+   3. Append to index.md
+   4. Touch conductor/.last_activity
+   ```
+   
+   See [../handoff/triggers.md](../handoff/triggers.md) for trigger details.
+
+10. **Finalize Track**
+    - Update status `[~]` → `[x]` in `tracks.md`
+    - Announce completion
 
 ### Phase 4: Documentation Sync
 
@@ -357,15 +386,16 @@ conductor/
 ├── tracks.md (updated statuses)
 ├── product.md (possibly updated)
 ├── tech-stack.md (possibly updated)
-├── sessions/
-│   └── active/
-│       └── LEDGER.md (session state in frontmatter)
+├── handoffs/
+│   └── <track_id>/
+│       ├── index.md (handoff log)
+│       └── *.md (epic-start/end handoffs)
 ├── archive/ (if archiving)
 │   └── <track_id>/
 └── tracks/
     └── <track_id>/
         ├── plan.md (tasks marked complete)
-        ├── metadata.json (planTasks mapping in beads section)
+        ├── metadata.json (planTasks mapping + validation state)
         └── implement_state.json (optional)
 
 .conductor/
@@ -388,3 +418,5 @@ conductor/
 - [Beads Preflight](../conductor/preflight-beads.md) - Session initialization
 - [Beads Facade](../beads-facade.md) - API contract
 - [Beads Integration](../beads-integration.md) - All 13 integration points
+- [Handoff Triggers](../handoff/triggers.md) - Epic-start/end trigger details
+- [Create Handoff](../handoff/create.md) - Handoff creation workflow

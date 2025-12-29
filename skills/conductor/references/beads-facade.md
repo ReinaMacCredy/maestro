@@ -254,7 +254,7 @@ Updates the TDD phase for a task (enabled by default, disable with `--no-tdd`).
 ```
 
 **Behavior:**
-- Updates LEDGER.md frontmatter: `tdd_phase: <phase>`
+- Updates metadata.json: `tdd_phase: <phase>`
 - Updates bead notes: `IN_PROGRESS: <phase> phase`
 
 **Notes Format:**
@@ -378,7 +378,7 @@ The facade reads/writes these state files:
 
 | File | Location | Purpose |
 |------|----------|---------|
-| `LEDGER.md` | `conductor/sessions/active/` | Session tracking (mode, tdd_phase, bound_track) |
+| `metadata.json` | `conductor/tracks/<track_id>/` | Track state (session, validation, beads) |
 | `metadata.json.beads` | `tracks/<id>/` | planTasks mapping, filing status |
 | `pending_updates.jsonl` | `.conductor/` | Failed update operations |
 | `pending_closes.jsonl` | `.conductor/` | Failed close operations |

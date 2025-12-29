@@ -232,7 +232,9 @@ Mode is detected at session start (preflight) and locked for the session.
 
 | File | Location | Purpose |
 |------|----------|---------|
-| `LEDGER.md` | `conductor/sessions/active/` | Session state in frontmatter (mode, bound_track, bound_bead, tdd_phase) |
+| `metadata.json` | `conductor/tracks/<id>/` | Track info, validation state, beads mapping |
+| `*.md handoffs` | `conductor/handoffs/<track>/` | Session handoffs (git-committed, shareable) |
+| `index.md` | `conductor/handoffs/<track>/` | Handoff log per track |
 | `session-lock_<track>.json` | `.conductor/` | Concurrent session prevention |
 | `pending_*.jsonl` | `.conductor/` | Failed operations for replay |
 
