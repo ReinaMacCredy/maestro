@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0] - 2025-12-29
+
+
+### Added
+
+
+- Replace LEDGER.md with HumanLayer-inspired handoff system
+- Add `continuity.js` hook tests for `SessionStart`, `PreCompact`, `PostToolUse` and remove legacy handoff file and index format tests.
+- Document new Maestro Core commands, detailed routing logic, and validation gates.
+
+
+### Documentation
+
+
+- Fix TUTORIAL.md state files table - replace LEDGER.md with handoffs
+- Clarify Maestro Core's role and add prerequisite pattern for dependent skills.
+
 ## [3.9.0] - 2025-12-29
 
 
