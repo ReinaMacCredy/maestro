@@ -133,6 +133,57 @@ bv --robot-status  # Check team state
 
 ---
 
+## ⚠️ Amp Hybrid Handoff Protocol
+
+Amp doesn't support automatic hooks - handoffs must be created manually or via workflow commands.
+
+### Option A: Use Full Workflow Commands (Recommended)
+Commands embed handoff logic - no manual action needed:
+
+| Instead of... | Use... | Auto-Handoff |
+|---------------|--------|--------------|
+| `ds` → `fb` → manual beads | `ds` → `/conductor-newtrack` | ✅ `design-end` |
+| Manual `bd update/close` | `/conductor-implement` | ✅ `epic-start/end` |
+| Just `bd sync` | `/conductor-finish` | ✅ `pre-finish` |
+
+### Option B: Manual Handoff Points
+If using raw `bd` commands, create handoffs manually:
+
+```bash
+# After design session ends
+/create_handoff design-end
+
+# Before starting each epic
+/create_handoff epic-start
+
+# After closing each epic  
+/create_handoff epic-end
+
+# Before ending session
+/create_handoff manual
+```
+
+### Quick Reference
+
+| Session Phase | Action Required |
+|---------------|-----------------|
+| **Start** | `/resume_handoff` to load prior context |
+| **After DS** | Use `/conductor-newtrack` OR `/create_handoff design-end` |
+| **Epic Start** | Use `/conductor-implement` OR `/create_handoff epic-start` |
+| **Epic End** | Embedded in `/conductor-implement` OR `/create_handoff epic-end` |
+| **Session End** | `/create_handoff manual` if not using `/conductor-finish` |
+
+### Legacy Commands (DEPRECATED)
+| Command | Replacement |
+|---------|-------------|
+| `continuity load` | `/resume_handoff` |
+| `continuity save` | `/create_handoff manual` |
+| `continuity handoff` | `/create_handoff manual` |
+| `continuity status` | Check `conductor/handoffs/<track>/index.md` |
+| `continuity search <keyword>` | `uv run scripts/artifact-query.py <query>` |
+
+---
+
 ## Troubleshooting
 
 | Problem | Solution |
