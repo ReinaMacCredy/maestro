@@ -108,6 +108,9 @@ metadata:
 ```
 IF explicit command (/conductor-*, /doc-sync, /create_handoff, etc.)
   → Route to named skill/workflow
+  → EXCEPTION: `ci`/`/conductor-implement` checks Track Assignments first
+    → If Track Assignments in plan.md → orchestrator
+    → Else → conductor (sequential)
 
 ELSE IF "design" or "brainstorm" or "think through"
   → design
