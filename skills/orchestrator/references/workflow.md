@@ -114,7 +114,7 @@ Poll for updates while workers execute, **and re-dispatch when new beads become 
 wave = 1
 active_workers = initial_workers  # From Phase 3
 
-while active_workers or has_ready_beads():
+while active_workers or has_ready_beads(EPIC_ID):
   # Wait for current wave to complete
   wait_for_workers(active_workers)
   
@@ -130,7 +130,7 @@ while active_workers or has_ready_beads():
     handle_blocker(blocker)
   
   # Query for newly-ready beads (unblocked by completed work)
-  ready_beads = bash("bd ready --json | jq '[.[] | select(.epic == \"<epic-id>\")]'")
+  ready_beads = bash(f"bd ready --json | jq '[.[] | select(.epic == \"{EPIC_ID}\")]'")
   
   if ready_beads:
     wave += 1

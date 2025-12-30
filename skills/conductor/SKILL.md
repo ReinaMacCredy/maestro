@@ -222,32 +222,39 @@ This skill only executes - it does not route. Available commands:
 
 **CRITICAL:** When `ci` or `/conductor-implement` is triggered, BEFORE executing:
 
-1. **Read the track's plan.md**
-2. **Check for `## Track Assignments` section**
-3. **If found → LOAD orchestrator skill and hand off execution**
+1. **Read the track's metadata.json**
+2. **Check if `orchestrated=true`** → If so, skip orchestration (already done), continue sequential
+3. **Read the track's plan.md**
+4. **Check for `## Track Assignments` section**
+5. **If found AND `orchestrated=false` → LOAD orchestrator skill and hand off execution**
 
 ```
 ci / /conductor-implement
         ↓
-  Read plan.md
+  Read metadata.json
         ↓
-  Contains "## Track Assignments"?
+  orchestrated = true?
         ↓
   ┌─────┴─────┐
   YES         NO
   ↓           ↓
-  Load        Continue
-  orchestrator sequential
-  skill       (Phase 3)
+  Continue    Read plan.md
+  sequential  Contains "## Track Assignments"?
+  (Phase 3)   ┌─────┴─────┐
+              YES         NO
+              ↓           ↓
+              Load        Continue
+              orchestrator sequential
+              skill       (Phase 3)
 ```
 
-**When Track Assignments detected:**
-```
+**When Track Assignments detected (and not already orchestrated):**
+```text
 I'll load the orchestrator skill for parallel execution.
 [Load skill: orchestrator]
 ```
 
-This ensures parallel execution when the plan specifies Track Assignments.
+This ensures parallel execution only happens once when the plan specifies Track Assignments.
 
 ### Handoff System
 

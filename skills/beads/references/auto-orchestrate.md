@@ -141,9 +141,10 @@ def merge_smallest_two_tracks(tracks):
 | Track | Beads | Depends On |
 |-------|-------|------------|
 | 1 | bd-2, bd-4 | - |
-| 2 | bd-3, bd-5 | - |
+| 2 | bd-3 | - |
+| 3 | bd-5 | bd-2, bd-3 |
 
-**Note:** `bd-5` depends on both `bd-2` and `bd-3`, but is assigned to Track 2 (primary blocker is `bd-2`, but since Track 1 already has `bd-4`, algorithm may assign based on load balancing).
+**Note:** `bd-5` depends on both `bd-2` and `bd-3`. The algorithm treats the first entry in `blocked_by` (here `bd-2`) as the primary blocker and ensures `bd-5` is scheduled only after that track completes, but it may place `bd-5` on its own track (Track 3 here) when it has multiple blockers from different tracks.
 
 ### Output Format
 
@@ -308,15 +309,15 @@ def query_ready_beads(epic_id):
 
 ```text
 ┌─ WAVE EXECUTION ───────────────────────┐
-│ Wave 1: 3 beads (bd-2, bd-3, bd-4)     │
-│   → Spawned 3 workers                  │
-│   → All completed ✓                    │
-├────────────────────────────────────────┤
-│ Wave 2: 2 beads (bd-5, bd-6)           │
+│ Wave 1: 2 beads (bd-2, bd-3)           │
 │   → Spawned 2 workers                  │
 │   → All completed ✓                    │
 ├────────────────────────────────────────┤
-│ Wave 3: 1 bead (bd-7)                  │
+│ Wave 2: 2 beads (bd-4, bd-5)           │
+│   → Spawned 2 workers                  │
+│   → All completed ✓                    │
+├────────────────────────────────────────┤
+│ Wave 3: 1 bead (bd-6)                  │
 │   → Spawned 1 worker                   │
 │   → Completed ✓                        │
 ├────────────────────────────────────────┤

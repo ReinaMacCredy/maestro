@@ -421,6 +421,12 @@
           "type": "boolean",
           "description": "Whether auto-orchestration has been triggered for this track",
           "default": false
+        },
+        "orchestratedAt": {
+          "type": ["string", "null"],
+          "description": "ISO 8601 timestamp when auto-orchestration was triggered",
+          "format": "date-time",
+          "default": null
         }
       },
       "additionalProperties": false,
@@ -434,7 +440,8 @@
         "crossTrackDeps": [],
         "reviewStatus": null,
         "reviewedAt": null,
-        "orchestrated": false
+        "orchestrated": false,
+        "orchestratedAt": null
       }
     }
   },

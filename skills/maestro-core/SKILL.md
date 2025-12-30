@@ -108,9 +108,10 @@ metadata:
 ```
 IF explicit command (/conductor-*, /doc-sync, /create_handoff, etc.)
   → Route to named skill/workflow
-  → EXCEPTION: `ci`/`/conductor-implement` checks Track Assignments first
-    → If Track Assignments in plan.md → orchestrator
-    → Else → conductor (sequential)
+  → EXCEPTION: `ci`/`/conductor-implement` checks `orchestrated` flag first
+    → If `orchestrated=true` → conductor (sequential; continue implementation)
+    → ELSE IF Track Assignments in plan.md → orchestrator (auto-orchestrate)
+    → ELSE → conductor (sequential)
 
 ELSE IF "design" or "brainstorm" or "think through"
   → design
@@ -270,12 +271,14 @@ ds → DELIVER → [design] → newtrack → [spec] → [plan] → implement →
 
 ### Auto-Load Handoffs (First Message)
 
-**On first message of any session**, before processing the user's request:
+**On the first user message of a new conversation session**, before processing the user's request:
+
+> "First message" means the initial user input when a new session/thread starts. This is detected by the absence of prior conversation context in the current thread.
 
 1. Check if `conductor/handoffs/` exists
 2. Scan for recent handoffs (< 7 days old)
 3. If found:
-   ```
+   ```text
    📋 Prior session context found:
    
    • [track-name] (2h ago) - trigger: summary
@@ -286,12 +289,12 @@ ds → DELIVER → [design] → newtrack → [spec] → [plan] → implement →
 5. Proceed with user's request
 
 **Skip conditions:**
-- User explicitly says "fresh start" or "new session"
+- User clearly requests a new/clean session (e.g., "fresh start", "start fresh", "new session", "new chat", "reset"). Match case-insensitively based on user intent.
 - No `conductor/` directory exists
 - All handoffs are > 7 days old (show stale warning instead)
 
 **Stale handoff behavior:**
-```
+```text
 ⚠️ Stale handoff found (12 days old):
    [track-name] - design-end
 

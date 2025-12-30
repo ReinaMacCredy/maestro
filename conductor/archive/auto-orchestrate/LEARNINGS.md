@@ -12,7 +12,7 @@
 - Auto-orchestration: `fb` Phase 6 triggers orchestration automatically after beads are filed
 - `metadata.json.beads.orchestrated` flag ensures idempotency - re-running `fb` skips if already orchestrated
 - Agent Mail MCP Failure: If Agent Mail unavailable, graceful fallback to sequential `/conductor-implement`
-- Worker Autonomy: Orchestrator workers CAN self claim/close beads (differs from standard subagent rules)
+- Worker Autonomy: Orchestrator workers CAN self-claim/close beads (differs from standard subagent rules)
 - Wave Execution: After wave N workers complete, query `bd ready --json` and spawn wave N+1 for newly-unblocked beads until no more ready beads exist
 
 ## Patterns

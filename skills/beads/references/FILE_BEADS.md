@@ -418,9 +418,12 @@ Output structure:
 ### 6.3 Mark Orchestrated
 
 ```bash
-jq '.beads.orchestrated = true' \
-  "conductor/tracks/<track_id>/metadata.json" > "conductor/tracks/<track_id>/metadata.json.tmp.$$" && \
-  mv "conductor/tracks/<track_id>/metadata.json.tmp.$$" "conductor/tracks/<track_id>/metadata.json"
+TRACK_PATH="conductor/tracks/<track_id>"
+tmp_file="$(mktemp "${TRACK_PATH}/metadata.json.tmp.XXXXXX")"
+
+jq '.beads.orchestrated = true | .beads.orchestratedAt = (now | todate)' \
+  "${TRACK_PATH}/metadata.json" > "$tmp_file" && \
+  mv "$tmp_file" "${TRACK_PATH}/metadata.json"
 ```
 
 ### 6.4 Dispatch Workers
@@ -433,7 +436,7 @@ See [auto-orchestrate.md](auto-orchestrate.md) for full protocol.
 
 If Agent Mail MCP unavailable:
 
-```
+```text
 ⚠️ Agent coordination unavailable - falling back to sequential execution
 ```
 
@@ -443,12 +446,25 @@ Route to `/conductor-implement` instead of parallel dispatch.
 
 After all workers complete, spawn `rb` sub-agent:
 
-```
+```python
 Task(
   description: "Final review: rb for epic <epic-id>",
-  prompt: "Run rb to review all completed beads for epic <epic-id>. Verify completeness and quality."
+  prompt: """
+Run rb to review all completed beads for epic <epic-id>.
+
+## Your Task
+1. Verify all beads are properly closed
+2. Check for any orphaned work or missing implementations
+3. Validate acceptance criteria from spec.md
+4. Report any issues or concerns
+
+## Expected Output
+Summary of review findings and overall quality assessment.
+"""
 )
 ```
+
+This is a synchronous wait - the main agent blocks until rb completes, then collects the review findings.
 
 Present completion summary after rb finishes.
 
