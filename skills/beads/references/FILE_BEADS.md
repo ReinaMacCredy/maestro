@@ -365,6 +365,93 @@ After parallel agents finish filing beads:
    └─────────────────────────────────────────┘
    ```
 
+## Phase 6: Auto-Orchestration
+
+> **Automatic worker dispatch after beads are filed.**
+
+After Phase 5 completes successfully, automatically trigger orchestration.
+
+### 6.0 Idempotency Check
+
+```bash
+# Check if already orchestrated
+orchestrated=$(jq -r '.beads.orchestrated // false' "conductor/tracks/<track_id>/metadata.json")
+if [ "$orchestrated" = "true" ]; then
+  echo "ℹ️ Already orchestrated - skipping Phase 6"
+  # Skip to summary
+fi
+```
+
+### 6.1 Query Dependency Graph
+
+```bash
+bv --robot-triage --graph-root <epic-id> --json
+```
+
+Output structure:
+```json
+{
+  "quick_ref": { "open_count": 5, "blocked_count": 2, "ready_count": 3 },
+  "beads": [
+    { "id": "bd-1", "ready": true, "blocked_by": [] },
+    { "id": "bd-2", "ready": false, "blocked_by": ["bd-1"] }
+  ]
+}
+```
+
+### 6.2 Generate Track Assignments
+
+**Algorithm:**
+1. Group ready beads (no blockers) into parallel tracks
+2. Beads with blockers assigned to track of their primary blocker
+3. Respect `max_workers` limit (default: 3)
+4. If tracks exceed limit, merge smallest two
+
+**Output format:**
+
+| Track | Beads | Depends On |
+|-------|-------|------------|
+| 1 | bd-1, bd-2 | - |
+| 2 | bd-3 | - |
+| 3 | bd-4, bd-5 | bd-2, bd-3 |
+
+### 6.3 Mark Orchestrated
+
+```bash
+jq '.beads.orchestrated = true' \
+  "conductor/tracks/<track_id>/metadata.json" > "conductor/tracks/<track_id>/metadata.json.tmp.$$" && \
+  mv "conductor/tracks/<track_id>/metadata.json.tmp.$$" "conductor/tracks/<track_id>/metadata.json"
+```
+
+### 6.4 Dispatch Workers
+
+Call orchestrator with auto-generated Track Assignments.
+
+See [auto-orchestrate.md](auto-orchestrate.md) for full protocol.
+
+### 6.5 Agent Mail Fallback
+
+If Agent Mail MCP unavailable:
+
+```
+⚠️ Agent coordination unavailable - falling back to sequential execution
+```
+
+Route to `/conductor-implement` instead of parallel dispatch.
+
+## Phase 7: Final Review
+
+After all workers complete, spawn `rb` sub-agent:
+
+```
+Task(
+  description: "Final review: rb for epic <epic-id>",
+  prompt: "Run rb to review all completed beads for epic <epic-id>. Verify completeness and quality."
+)
+```
+
+Present completion summary after rb finishes.
+
 ## Priority Guide
 
 | Priority | Use For |

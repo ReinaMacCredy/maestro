@@ -210,13 +210,44 @@ This skill only executes - it does not route. Available commands:
 | `/conductor-setup` | Initialize project with product.md, tech-stack.md, workflow.md |
 | `/conductor-design` | Design a feature through Double Diamond dialogue |
 | `/conductor-newtrack` | Create spec + plan from design.md, file beads |
-| `/conductor-implement` | Execute ONE EPIC from track's plan |
+| `/conductor-implement` | Execute track (auto-routes to orchestrator if parallel) |
 | `/conductor-status` | Display progress overview |
 | `/conductor-revert` | Git-aware revert of work |
 | `/conductor-revise` | Update spec/plan when issues arise |
 | `/conductor-finish` | Complete track: extract learnings, archive |
 | `/create_handoff` | Create handoff file for session context |
 | `/resume_handoff` | Load handoff and resume session context |
+
+### `/conductor-implement` Auto-Routing
+
+**CRITICAL:** When `ci` or `/conductor-implement` is triggered, BEFORE executing:
+
+1. **Read the track's plan.md**
+2. **Check for `## Track Assignments` section**
+3. **If found → LOAD orchestrator skill and hand off execution**
+
+```
+ci / /conductor-implement
+        ↓
+  Read plan.md
+        ↓
+  Contains "## Track Assignments"?
+        ↓
+  ┌─────┴─────┐
+  YES         NO
+  ↓           ↓
+  Load        Continue
+  orchestrator sequential
+  skill       (Phase 3)
+```
+
+**When Track Assignments detected:**
+```
+I'll load the orchestrator skill for parallel execution.
+[Load skill: orchestrator]
+```
+
+This ensures parallel execution when the plan specifies Track Assignments.
 
 ### Handoff System
 

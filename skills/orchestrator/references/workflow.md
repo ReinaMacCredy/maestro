@@ -2,9 +2,9 @@
 
 6-phase protocol for multi-agent parallel execution.
 
-## Phase 1: Read Plan
+## Phase 1: Read Plan (or Accept Auto-Generated)
 
-Parse Track Assignments from plan.md:
+**Option A: From plan.md (manual orchestration)**
 
 ```python
 # Read from conductor track
@@ -23,6 +23,22 @@ TRACKS = parse_track_assignments(plan)
 CROSS_DEPS = metadata.beads.crossTrackDeps
 # [{ from: "1.2.3", to: "2.1.1" }]
 ```
+
+**Option B: From auto-orchestration (fb Phase 6)**
+
+```python
+# Assignments passed directly from fb
+TRACKS = auto_generated_tracks  # Already in correct format
+# [
+#   { track: 1, agent: "BlueLake", tasks: ["1.1.1", "1.1.2"], scope: "skills/orchestrator/**", depends_on: [] },
+#   { track: 2, agent: "GreenCastle", tasks: ["2.1.1", "2.2.1"], scope: "skills/maestro-core/**", depends_on: ["1.2.3"] },
+# ]
+
+EPIC_ID = auto_generated_epic_id
+CROSS_DEPS = auto_generated_cross_deps
+```
+
+Both options produce the same TRACKS structure for Phase 3.
 
 ### Parsing Track Assignments Table
 
@@ -231,6 +247,49 @@ send_message(
 
 ```python
 bash("bd close <epic-id> --reason 'All tracks complete'")
+```
+
+## Phase 7: Final Review
+
+After all workers complete and epic is closed, spawn `rb` sub-agent for final quality review.
+
+### Spawn rb Sub-Agent
+
+```python
+Task(
+  description="Final review: rb for epic <epic-id>",
+  prompt="""
+Run rb to review all completed beads for epic <epic-id>.
+
+## Your Task
+1. Verify all beads are properly closed
+2. Check for any orphaned work or missing implementations
+3. Validate acceptance criteria from spec.md
+4. Report any issues or concerns
+
+## Expected Output
+Summary of review findings and overall quality assessment.
+"""
+)
+```
+
+### Review Completion
+
+After rb finishes:
+1. Collect review findings
+2. Present completion summary to user
+3. Suggest next steps (e.g., `/conductor-finish`)
+
+```
+┌─────────────────────────────────────────┐
+│ ✓ Auto-Orchestration Complete           │
+│                                         │
+│ Workers: 3 complete                     │
+│ Beads: 26 closed                        │
+│ Review: Passed                          │
+│                                         │
+│ → Next: /conductor-finish               │
+└─────────────────────────────────────────┘
 ```
 
 ## Graceful Fallback

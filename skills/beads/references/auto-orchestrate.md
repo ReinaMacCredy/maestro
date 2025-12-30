@@ -1,0 +1,383 @@
+# Auto-Orchestration After Beads Filing
+
+## Overview
+
+Auto-orchestration triggers **automatically after `fb` completes** filing beads from a plan. It analyzes the dependency graph, generates Track Assignments, and dispatches parallel workers—eliminating manual orchestration setup.
+
+### When It Triggers
+
+1. `fb` completes successfully (all beads filed)
+2. `metadata.json.beads.orchestrated` is `false` or absent
+3. Epic has multiple beads (single-bead epics skip orchestration)
+
+### What It Does
+
+1. Queries dependency graph via `bv --robot-triage`
+2. Generates Track Assignments from ready/blocked beads
+3. Marks `metadata.json.beads.orchestrated = true`
+4. Dispatches workers via orchestrator skill
+5. Spawns `rb` sub-agent for final review after workers complete
+
+## Graph Analysis Algorithm
+
+### Query Command
+
+```bash
+bv --robot-triage --graph-root <epic-id> --json
+```
+
+### Output Structure
+
+```json
+{
+  "quick_ref": "Epic bd-1: 5 beads, 3 ready, 2 blocked",
+  "beads": [
+    {
+      "id": "bd-1",
+      "title": "Epic: Feature X",
+      "type": "epic",
+      "priority": 2,
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "bd-2",
+      "title": "Add API endpoint",
+      "type": "task",
+      "priority": 2,
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "bd-3",
+      "title": "Add database schema",
+      "type": "task",
+      "priority": 2,
+      "ready": true,
+      "blocked_by": []
+    },
+    {
+      "id": "bd-4",
+      "title": "Add frontend component",
+      "type": "task",
+      "priority": 2,
+      "ready": false,
+      "blocked_by": ["bd-2"]
+    },
+    {
+      "id": "bd-5",
+      "title": "Integration tests",
+      "type": "task",
+      "priority": 2,
+      "ready": false,
+      "blocked_by": ["bd-2", "bd-3"]
+    }
+  ]
+}
+```
+
+### Key Fields
+
+| Field | Description |
+|-------|-------------|
+| `id` | Bead identifier (e.g., `bd-2`) |
+| `ready` | `true` if no blockers, can start immediately |
+| `blocked_by` | Array of bead IDs that must complete first |
+
+## Track Assignment Generation
+
+### Algorithm
+
+```python
+def generate_track_assignments(beads, max_workers=3):
+    # Filter out epic itself (only process child tasks)
+    tasks = [b for b in beads if b.type != 'epic']
+    
+    # Group ready beads (no blockers)
+    ready = [b for b in tasks if b.ready]
+    blocked = [b for b in tasks if not b.ready]
+    
+    # Create initial tracks from ready beads
+    # Each ready bead starts its own track
+    tracks = [[b.id] for b in ready]
+    track_map = {b.id: i for i, b in enumerate(ready)}
+    
+    # Assign blocked beads to track of primary blocker
+    for b in blocked:
+        primary_blocker = b.blocked_by[0]
+        if primary_blocker in track_map:
+            track_idx = track_map[primary_blocker]
+            tracks[track_idx].append(b.id)
+            track_map[b.id] = track_idx
+        else:
+            # Blocker not in any track (cross-epic dep)
+            # Create new track for this bead
+            tracks.append([b.id])
+            track_map[b.id] = len(tracks) - 1
+    
+    # Merge if exceeds max_workers
+    while len(tracks) > max_workers:
+        merge_smallest_two_tracks(tracks)
+    
+    return tracks
+
+def merge_smallest_two_tracks(tracks):
+    # Sort by length, merge two smallest
+    tracks.sort(key=len)
+    smallest = tracks.pop(0)
+    tracks[0] = tracks[0] + smallest
+```
+
+### Example Transformation
+
+**Input beads:**
+- `bd-2`: ready (no blockers)
+- `bd-3`: ready (no blockers)
+- `bd-4`: blocked by `bd-2`
+- `bd-5`: blocked by `bd-2`, `bd-3`
+
+**Generated tracks (max_workers=3):**
+
+| Track | Beads | Depends On |
+|-------|-------|------------|
+| 1 | bd-2, bd-4 | - |
+| 2 | bd-3, bd-5 | - |
+
+**Note:** `bd-5` depends on both `bd-2` and `bd-3`, but is assigned to Track 2 (primary blocker is `bd-2`, but since Track 1 already has `bd-4`, algorithm may assign based on load balancing).
+
+### Output Format
+
+```markdown
+## Track Assignments
+
+| Track | Beads | Depends On |
+|-------|-------|------------|
+| 1 | bd-2, bd-4 | - |
+| 2 | bd-3 | - |
+| 3 | bd-5 | bd-2, bd-3 |
+```
+
+## Idempotency Check
+
+Before running auto-orchestration, check:
+
+```javascript
+// Read metadata.json
+const metadata = JSON.parse(fs.readFileSync('conductor/tracks/<track>/metadata.json'));
+
+// Check if already orchestrated
+if (metadata.beads?.orchestrated === true) {
+    console.log("Already orchestrated, skipping");
+    return;
+}
+
+// Proceed with orchestration...
+
+// After successful dispatch, mark as orchestrated
+metadata.beads.orchestrated = true;
+metadata.beads.orchestratedAt = new Date().toISOString();
+fs.writeFileSync('conductor/tracks/<track>/metadata.json', JSON.stringify(metadata, null, 2));
+```
+
+### metadata.json.beads Structure
+
+```json
+{
+  "beads": {
+    "status": "complete",
+    "epicId": "bd-1",
+    "epics": ["bd-1"],
+    "issues": ["bd-2", "bd-3", "bd-4", "bd-5"],
+    "planTasks": {
+      "1.1": "bd-2",
+      "1.2": "bd-3",
+      "1.3": "bd-4",
+      "1.4": "bd-5"
+    },
+    "orchestrated": false,
+    "orchestratedAt": null,
+    "reviewStatus": null
+  }
+}
+```
+
+## Worker Dispatch
+
+After generating Track Assignments, call orchestrator:
+
+### Dispatch Flow
+
+```
+1. Generate Track Assignments markdown
+2. Inject into plan.md (or pass directly to orchestrator)
+3. Call orchestrator skill with:
+   - track_id
+   - assignments table
+   - max_workers limit
+4. Orchestrator spawns workers per track
+5. Workers execute beads in dependency order
+6. Main agent monitors via bv --robot-status
+```
+
+### Orchestrator Integration
+
+```markdown
+<!-- AUTO-GENERATED: Do not edit manually -->
+## Track Assignments
+
+| Track | Beads | Depends On |
+|-------|-------|------------|
+| 1 | bd-2, bd-4 | - |
+| 2 | bd-3 | - |
+| 3 | bd-5 | bd-2, bd-3 |
+
+_Generated by auto-orchestration at 2025-12-30T10:00:00Z_
+```
+
+### Worker Task Prompt Template
+
+Each worker receives:
+
+```markdown
+## Task: Execute Track {N} Beads
+
+Execute the following beads in order, respecting dependencies:
+- {bead-ids}
+
+### Protocol
+1. For each bead: `bd show <id>` → implement → `bd close <id> --reason completed`
+2. Use TDD cycle (RED-GREEN-REFACTOR) unless `--no-tdd`
+3. Return structured result when complete
+
+### Blocked Beads
+Wait for dependencies before starting:
+- {bead-id}: blocked by {blockers}
+```
+
+## Final Review Phase
+
+After all workers complete, spawn `rb` sub-agent:
+
+### Trigger Condition
+
+```python
+# Check all tracks completed
+all_workers_done = all(worker.status == 'completed' for worker in workers)
+
+if all_workers_done:
+    spawn_rb_subagent(track_id)
+```
+
+### rb Sub-Agent Task
+
+```markdown
+## Task: Review Completed Beads
+
+Run `rb` (review beads) to verify:
+1. All beads properly closed
+2. Code quality meets standards
+3. Tests pass
+4. No regressions introduced
+
+### On Success
+Mark track ready for `/conductor-finish`
+
+### On Issues Found
+Report issues, reopen affected beads if needed
+```
+
+### Post-Review State
+
+```json
+{
+  "beads": {
+    "orchestrated": true,
+    "orchestratedAt": "2025-12-30T10:00:00Z",
+    "reviewStatus": "passed",
+    "reviewedAt": "2025-12-30T12:30:00Z"
+  }
+}
+```
+
+## Fallback: Sequential Execution
+
+If Agent Mail MCP is unavailable (no parallel workers):
+
+### Detection
+
+```bash
+# Check if agent_mail MCP available
+mcp list | grep agent_mail
+```
+
+### Fallback Behavior
+
+```markdown
+⚠️ Agent Mail unavailable - falling back to sequential execution
+
+Instead of parallel workers, execute beads sequentially:
+1. Get ready beads: `bd ready --json`
+2. For each ready bead:
+   a. Claim: `bd update <id> --status in_progress`
+   b. Implement with TDD
+   c. Close: `bd close <id> --reason completed`
+3. Repeat until all beads closed
+4. Run `rb` for final review
+```
+
+### Sequential vs Parallel Comparison
+
+| Aspect | Parallel (Orchestrator) | Sequential (Fallback) |
+|--------|------------------------|----------------------|
+| Speed | Fast (concurrent) | Slow (one at a time) |
+| Resource use | Multiple agents | Single agent |
+| Coordination | Via Agent Mail | None needed |
+| Error isolation | Per-track | Shared context |
+
+## Complete Flow Diagram
+
+```
+fb completes
+    │
+    ▼
+Check metadata.json.beads.orchestrated
+    │
+    ├── true ──► Skip (already done)
+    │
+    └── false
+          │
+          ▼
+    Query: bv --robot-triage --graph-root <epic-id> --json
+          │
+          ▼
+    Generate Track Assignments
+          │
+          ▼
+    Check Agent Mail available?
+          │
+          ├── Yes ──► Dispatch parallel workers
+          │               │
+          │               ▼
+          │           Workers execute tracks
+          │               │
+          │               ▼
+          │           All workers complete
+          │               │
+          │               ▼
+          │           Spawn rb sub-agent
+          │               │
+          │               ▼
+          │           Review complete
+          │
+          └── No ──► Sequential /conductor-implement
+                          │
+                          ▼
+                      Run rb manually
+```
+
+## References
+
+- [Orchestrator Skill](../../orchestrator/SKILL.md) - Multi-agent dispatch
+- [Beads Integration](../../conductor/references/beads-integration.md) - Conductor-beads integration
+- [Review Beads](REVIEW_BEADS.md) - `rb` command reference
+- [File Beads](FILE_BEADS.md) - `fb` command reference
