@@ -416,6 +416,17 @@
           "description": "ISO 8601 timestamp when review was completed",
           "format": "date-time",
           "default": null
+        },
+        "orchestrated": {
+          "type": "boolean",
+          "description": "Whether auto-orchestration has been triggered for this track",
+          "default": false
+        },
+        "orchestratedAt": {
+          "type": ["string", "null"],
+          "description": "ISO 8601 timestamp when auto-orchestration was triggered",
+          "format": "date-time",
+          "default": null
         }
       },
       "additionalProperties": false,
@@ -428,7 +439,9 @@
         "beadToTask": {},
         "crossTrackDeps": [],
         "reviewStatus": null,
-        "reviewedAt": null
+        "reviewedAt": null,
+        "orchestrated": false,
+        "orchestratedAt": null
       }
     }
   },

@@ -52,12 +52,30 @@ ds → design.md → /conductor-newtrack → spec.md + plan.md
                                               ↓
                                        fb → .beads/ (epics + issues)
                                               ↓
-                              /conductor-implement → TDD cycle → done
-                                     OR
-                              /conductor-orchestrate → parallel workers → done
-                                              ↓
+                                    [auto-orchestrate?]
+                                     ╱             ╲
+                                   YES              NO
+                                   ↓                ↓
+                         auto-analyze graph    manual choice
+                                   ↓                ↓
+                      spawn parallel workers   /conductor-implement
+                                   ↓                ↓
+                           workers complete    TDD cycle
+                                   ↓                ↓
+                               rb review         done
+                                   ↓                ↓
                               /conductor-finish → LEARNINGS.md → archive
 ```
+
+### Auto-Orchestration (New)
+
+After `fb` completes filing beads, Phase 6 triggers automatically:
+1. Query graph: `bv --robot-triage --graph-root <epic-id> --json`
+2. Generate Track Assignments from ready/blocked beads
+3. Spawn workers via Task() for parallel execution
+4. After workers complete, spawn `rb` sub-agent for final review
+
+Idempotency: `metadata.json.beads.orchestrated = true` prevents re-running.
 
 ## Beads-Conductor Integration
 

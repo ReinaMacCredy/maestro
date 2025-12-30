@@ -2,9 +2,9 @@
 
 6-phase protocol for multi-agent parallel execution.
 
-## Phase 1: Read Plan
+## Phase 1: Read Plan (or Accept Auto-Generated)
 
-Parse Track Assignments from plan.md:
+**Option A: From plan.md (manual orchestration)**
 
 ```python
 # Read from conductor track
@@ -23,6 +23,22 @@ TRACKS = parse_track_assignments(plan)
 CROSS_DEPS = metadata.beads.crossTrackDeps
 # [{ from: "1.2.3", to: "2.1.1" }]
 ```
+
+**Option B: From auto-orchestration (fb Phase 6)**
+
+```python
+# Assignments passed directly from fb
+TRACKS = auto_generated_tracks  # Already in correct format
+# [
+#   { track: 1, agent: "BlueLake", tasks: ["1.1.1", "1.1.2"], scope: "skills/orchestrator/**", depends_on: [] },
+#   { track: 2, agent: "GreenCastle", tasks: ["2.1.1", "2.2.1"], scope: "skills/maestro-core/**", depends_on: ["1.2.3"] },
+# ]
+
+EPIC_ID = auto_generated_epic_id
+CROSS_DEPS = auto_generated_cross_deps
+```
+
+Both options produce the same TRACKS structure for Phase 3.
 
 ### Parsing Track Assignments Table
 
@@ -90,18 +106,17 @@ See [worker-prompt.md](worker-prompt.md) for complete template.
 
 Workers check inbox for dependency completion before starting blocked beads.
 
-## Phase 4: Monitor Progress
+## Phase 4: Monitor Progress + Wave Re-dispatch
 
-Poll for updates while workers execute:
+Poll for updates while workers execute, **and re-dispatch when new beads become ready**:
 
 ```python
-while not all_complete:
-  # Check for progress messages
-  messages = search_messages(
-    project_key="<path>",
-    query=epic_id,
-    limit=20
-  )
+wave = 1
+active_workers = initial_workers  # From Phase 3
+
+while active_workers or has_ready_beads(EPIC_ID):
+  # Wait for current wave to complete
+  wait_for_workers(active_workers)
   
   # Check for blockers
   blockers = fetch_inbox(
@@ -110,12 +125,55 @@ while not all_complete:
     urgent_only=True
   )
   
-  # Check bead status
-  status = bash("bv --robot-triage --graph-root <epic-id> | jq '.quick_ref'")
+  # Handle any blockers
+  for blocker in blockers:
+    handle_blocker(blocker)
   
-  # Wait before next poll
-  sleep(30)  # 30 second interval
+  # Query for newly-ready beads (unblocked by completed work)
+  ready_beads = bash(f"bd ready --json | jq '[.[] | select(.epic == \"{EPIC_ID}\")]'")
+  
+  if ready_beads:
+    wave += 1
+    print(f"Wave {wave}: {len(ready_beads)} beads now ready")
+    
+    # Generate new track assignments for this wave
+    new_tracks = generate_track_assignments(ready_beads)
+    
+    # Spawn new workers
+    active_workers = spawn_workers(new_tracks)
+    
+    # Update metadata
+    update_wave_state(wave, ready_beads)
+  else:
+    active_workers = []  # No more work
 ```
+
+### Wave Execution Display
+
+```text
+┌─ WAVE EXECUTION ───────────────────────┐
+│ Wave 1: 3 beads (bd-2, bd-3, bd-4)     │
+│   → Spawned 3 workers                  │
+│   → All completed ✓                    │
+├────────────────────────────────────────┤
+│ Wave 2: 2 beads (bd-5, bd-6)           │
+│   → Spawned 2 workers                  │
+│   → All completed ✓                    │
+├────────────────────────────────────────┤
+│ All waves complete                     │
+└────────────────────────────────────────┘
+```
+
+### Why Wave Re-dispatch Matters
+
+Without re-dispatch:
+- Wave 1 workers complete → beads 2.1, 3.1 become unblocked
+- Main agent falls back to sequential execution ❌
+
+With re-dispatch:
+- Wave 1 workers complete → check `bd ready --json`
+- Newly-ready beads found → spawn Wave 2 workers ✓
+- Continues until no more ready beads
 
 ### Progress Indicators
 
@@ -231,6 +289,49 @@ send_message(
 
 ```python
 bash("bd close <epic-id> --reason 'All tracks complete'")
+```
+
+## Phase 7: Final Review
+
+After all workers complete and epic is closed, spawn `rb` sub-agent for final quality review.
+
+### Spawn rb Sub-Agent
+
+```python
+Task(
+  description="Final review: rb for epic <epic-id>",
+  prompt="""
+Run rb to review all completed beads for epic <epic-id>.
+
+## Your Task
+1. Verify all beads are properly closed
+2. Check for any orphaned work or missing implementations
+3. Validate acceptance criteria from spec.md
+4. Report any issues or concerns
+
+## Expected Output
+Summary of review findings and overall quality assessment.
+"""
+)
+```
+
+### Review Completion
+
+After rb finishes:
+1. Collect review findings
+2. Present completion summary to user
+3. Suggest next steps (e.g., `/conductor-finish`)
+
+```
+┌─────────────────────────────────────────┐
+│ ✓ Auto-Orchestration Complete           │
+│                                         │
+│ Workers: 3 complete                     │
+│ Beads: 26 closed                        │
+│ Review: Passed                          │
+│                                         │
+│ → Next: /conductor-finish               │
+└─────────────────────────────────────────┘
 ```
 
 ## Graceful Fallback

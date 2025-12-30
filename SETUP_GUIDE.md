@@ -212,11 +212,13 @@ With PR #6, Conductor commands **automatically manage beads** via a facade patte
 Session 1 (Planning):
   ds → design.md
   /conductor-newtrack → spec.md + plan.md + AUTO: epic + issues
+  fb → files beads → AUTO: orchestration spawns parallel workers
   → HANDOFF (auto-generated)
 
 Session 2+ (Execution):
-  /conductor-implement → AUTO: claim → TDD → close → sync
-  ...repeat until all epics done
+  Workers execute in parallel (wave execution)
+  → rb runs for final review
+  → /conductor-implement for any remaining work
 ```
 
 ### Dual-Mode Architecture

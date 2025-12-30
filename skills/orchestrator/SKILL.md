@@ -25,6 +25,23 @@ Load maestro-core first for orchestration context.
 - User runs `/conductor-orchestrate` or `co`
 - User says "run parallel", "spawn workers", "dispatch agents"
 
+## Auto-Orchestration Integration
+
+When triggered from `fb` (file beads) auto-orchestration:
+
+1. Track Assignments are **auto-generated** from beads dependency graph
+2. No manual Track Assignments section needed in plan.md
+3. Orchestrator receives assignments via in-memory call, not file parsing
+
+### Auto-Generated vs Manual
+
+| Source | How Detected | Behavior |
+|--------|--------------|----------|
+| Auto-generated | Called from fb Phase 6 | Assignments passed in-memory |
+| Manual | User runs `/conductor-orchestrate` | Parse from plan.md |
+
+Both flows converge at Phase 3 (Spawn Workers).
+
 ## Architecture
 
 ```

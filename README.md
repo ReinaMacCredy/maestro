@@ -104,7 +104,8 @@ See [SETUP_GUIDE.md](./SETUP_GUIDE.md) for detailed instructions.
 /conductor-setup                   # 1. Initialize project (once)
 ds                                 # 2. Design session → design.md
 /conductor-newtrack                # 3. Create spec + plan + beads + review
-/conductor-implement               # 4. Execute with TDD
+                                   #    → Auto-orchestration spawns parallel workers
+/conductor-implement               # 4. Execute with TDD (or manual if needed)
 ```
 
 ### Quick Start (Existing Project)
@@ -141,11 +142,11 @@ trace                              # Root cause tracing (external: superpowers)
 
 | Category          | Skills                                                                                 |
 | ----------------- | -------------------------------------------------------------------------------------- |
-| **Core Workflow** | conductor, design (Double Diamond + Party Mode + Grounding), beads                     |
+| **Core Workflow** | conductor, design (Double Diamond + Party Mode + Grounding), beads, orchestrator |
 | **Development**   | using-git-worktrees                                                                    |
 | **Meta**          | writing-skills, sharing-skills                                                         |
 
-> **Note:** v3.0 consolidated 15 → 6 skills. TDD, verification, handoff, doc-sync, and parallel dispatch are now in `conductor/references/`.
+> **Note:** v3.0 consolidated 15 → 6 skills. v3.1 added `orchestrator` for parallel execution with auto-orchestration after `fb`. TDD, verification, handoff, doc-sync are in `conductor/references/`.
 
 ---
 
@@ -328,9 +329,17 @@ bd dep tree bd-123
 
 ```
 fb                          # File beads from plan (parallel subagents)
+                            # → Auto-orchestration: spawns workers after filing
 rb                          # Review filed beads (parallel + cross-epic validation)
 bd status                   # Check project status
 ```
+
+**Auto-Orchestration** (after `fb` completes):
+1. Analyzes dependency graph via `bv --robot-triage --graph-root <epic-id> --json`
+2. Generates Track Assignments for parallel execution
+3. Spawns workers via orchestrator (wave execution)
+4. Runs `rb` for final review after all waves complete
+5. Fallback: If Agent Mail unavailable, uses sequential `/conductor-implement`
 
 **Key insight**: Beads survive context compaction; chat history doesn't.
 
@@ -360,9 +369,10 @@ REPEAT  → Next failing test
 ### Beads-Conductor Lifecycle
 
 | Phase | Conductor Command | Beads Action (Automatic) |
-|-------|-------------------|--------------------------|
+|-------|-------------------|--------------------------| 
 | Preflight | All commands | Mode detect (SA/MA), validate `bd`, create session state |
 | Track Init | `/conductor-newtrack` | Create epic + issues from plan.md, wire dependencies |
+| Auto-Orchestrate | `fb` (Phase 6) | Analyze graph → spawn workers → wave execution → `rb` |
 | Claim | `/conductor-implement` | `bd update --status in_progress` |
 | TDD Checkpoints | Default (disable with `--no-tdd`) | `bd update --notes "RED/GREEN/REFACTOR..."` |
 | Close | `/conductor-implement` | `bd close --reason completed\|skipped\|blocked` |
@@ -515,7 +525,7 @@ Outside the automated flow (external: superpowers plugin):
 | `/conductor-finish [id]`         | Complete track: learnings, context refresh, archive (6 phases)         |
 | `/conductor-validate [id]`       | Validate track health and state consistency                            |
 | `/conductor-block [id] [reason]` | Mark a task as blocked                                                 |
-| `/conductor-skip [id] [reason]`  | Skip a task with documented reason                                     |
+| `/conductor-orchestrate`         | Spawn parallel workers for track execution                             |
 | `/ground <pattern>`              | Verify patterns against current truth                                  |
 | `/decompose-task <phase>`        | Break phases into atomic beads                                         |
 | `/compact`                       | Checkpoint and compact session                                         |

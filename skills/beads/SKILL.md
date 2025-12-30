@@ -25,7 +25,7 @@ Graph-based issue tracker that survives conversation compaction. Provides persis
 | Trigger | Reference | Action |
 |---------|-----------|--------|
 | `bd`, `beads` | `references/workflow.md` | Core CLI operations |
-| `fb`, `file-beads` | `references/FILE_BEADS.md` | File beads from plan |
+| `fb`, `file-beads` | `references/FILE_BEADS.md` | File beads from plan → auto-orchestration |
 | `rb`, `review-beads` | `references/REVIEW_BEADS.md` | Review filed beads |
 
 ## Load Workflow
@@ -58,6 +58,7 @@ Graph-based issue tracker that survives conversation compaction. Provides persis
 - 🔍 **Smart Discovery**: Auto-finds ready work (`bd ready`), blocked work (`bd blocked`)
 - 📝 **Audit Trails**: Complete history of status changes, notes, and decisions
 - 🏷️ **Rich Metadata**: Priority (P0-P4), types (bug/feature/task/epic), labels, assignees
+- 🚀 **Auto-Orchestration**: After `fb` completes, automatically spawns parallel workers via orchestrator
 
 ## Conductor Integration
 
@@ -143,6 +144,7 @@ For complete instructions, load the workflow file: `references/workflow.md`
 
 Reference files in `references/`:
 - `AGENTS.md` - Agent integration patterns
+- `auto-orchestrate.md` - Auto-orchestration after fb
 - `BOUNDARIES.md` - Scope and boundary rules
 - `CLI_REFERENCE.md` - Complete command syntax
 - `CONFIG.md` - Configuration system

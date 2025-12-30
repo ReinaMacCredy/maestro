@@ -153,7 +153,12 @@ bd cleanup --older-than 0 --limit <n> --force  # Remove oldest closed
 
 ### Session Protocol
 
-**Session Start:**
+**Session Start (automatic handoff load):**
+On first message of any session, before processing request:
+1. Check `conductor/handoffs/` for recent handoffs (< 7 days)
+2. If found, auto-load and display: `📋 Prior session context: [track] (Xh ago)`
+3. Skip if user says "fresh start" or no conductor/ exists
+
 ```bash
 # Preflight runs automatically via Conductor commands
 # If manual, check bd availability first:

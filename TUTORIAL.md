@@ -51,6 +51,7 @@ Before diving in, understand these principles:
 | **Amnesia**                  | Agent forgets tasks between sessions    | `beads` — persistent issue tracking                |
 | **Fuzzy planning**           | Vague discussions, no written spec      | `conductor` — structured specs + plans             |
 | **No visibility**            | Can't see dependencies or blockers      | `beads` — dependency-aware graph                   |
+| **Manual orchestration**     | Have to manually assign parallel tasks  | `beads` + `orchestrator` — auto-orchestration after `fb` |
 | **Tests as afterthought**    | Tests written after code, prove nothing | `conductor` — TDD is auto-enabled in `/conductor-implement` |
 | **Messy handoffs**           | Can't resume where you left off         | `beads` notes — session-surviving context          |
 | **Conflicts in multi-agent** | Multiple agents edit same files         | `beads` + Village — file locking and task claiming |
@@ -64,7 +65,7 @@ These skills work together as a system, not a bag of independent tools.
 The spine of Maestro is three components working together:
 
 ```
-Conductor (Planning) → Beads + Village (Tracking & Coordination) → TDD (Execution)
+Conductor (Planning) → Beads + Village (Tracking & Coordination) → Orchestrator (Parallel) → TDD (Execution)
 ```
 
 Everything else in the plugin supports this core pipeline.
@@ -97,15 +98,18 @@ Session 1 (Planning):
   Preflight: Mode detect (SA/MA), validate bd
   ds → design.md
   /conductor-newtrack → spec.md + plan.md + AUTO: epic + issues
-  → HANDOFF (planning complete, ready for execution)
+  fb → files beads → AUTO: orchestration spawns parallel workers
+  → HANDOFF (planning complete, workers dispatched)
 
 Session 2+ (Execution):
-  Preflight: Resume session state
-  /conductor-implement → AUTO: claim → TDD → close → sync
+  Workers execute in parallel (wave execution)
+  → After each wave, newly-unblocked beads spawn more workers
+  → rb runs for final review after all waves
+  → /conductor-implement for any remaining work
   → HANDOFF (epic complete)
 
 Session 3+:
-  /conductor-implement → execute Epic 2
+  /conductor-implement → execute remaining epics
   → HANDOFF (epic complete)
   ...continue until all epics done
 ```
@@ -1293,8 +1297,9 @@ git push
 | `tdd`                           | test-driven-development                                 |
 | `trace`, `find source`          | root-cause-tracing                                      |
 | `flaky`, `race condition`       | condition-based-waiting                                 |
-| `fb`, `file beads`              | beads (file)                                            |
+| `fb`, `file beads`              | beads (file) → auto-orchestration                       |
 | `rb`, `review beads`            | beads (review)                                          |
+| `/conductor-orchestrate`        | orchestrator (parallel workers)                         |
 | `dispatch`                      | dispatching-parallel-agents                             |
 | `write skill`                   | writing-skills                                          |
 | `share skill`                   | sharing-skills                                          |

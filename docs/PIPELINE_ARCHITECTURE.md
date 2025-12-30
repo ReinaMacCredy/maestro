@@ -34,6 +34,14 @@ flowchart TB
             FB_PROGRESS[".fb-progress.json"]
         end
 
+        subgraph AUTO_ORCH["AUTO-ORCHESTRATION (after fb)"]
+            GRAPH["Analyze Graph\u003cbr/\u003ebv --robot-triage"]
+            TRACKS["Generate Track Assignments"]
+            WAVES["Wave Execution Loop"]
+            SPAWN["Spawn Workers"]
+            RB_FINAL["rb Final Review"]
+        end
+
         subgraph AGENT_LOOP["AGENT EXECUTION LOOP"]
             READY["bd ready"]
             AUTO_CLAIM["Auto: bd update --status in_progress"]
