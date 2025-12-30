@@ -51,6 +51,7 @@ Contains reusable learnings from completed tracks.
 - `ls skills/conductor/references/` - Verify reference structure after migration
 - `/conductor-orchestrate` - Spawn parallel workers for track execution (Mode B workers)
 - `bv --robot-triage --graph-root <epic-id>` - Prepare beads for orchestration ("dọn cỗ")
+- `bv --robot-triage --graph-root <epic-id> --json` - Get JSON output for auto-orchestration graph analysis
 
 ## Gotchas
 
@@ -108,6 +109,8 @@ Contains reusable learnings from completed tracks.
 - Agent Mail MCP Failure: If Agent Mail unavailable, graceful fallback to sequential `/conductor-implement`
 - Runtime Testing: Integration tests (Agent Mail, worker spawn) require live MCP - skip with `--reason skipped`
 - Worker Autonomy: Orchestrator workers CAN self claim/close beads (differs from standard subagent rules)
+- Auto-orchestration: fb Phase 6 triggers orchestration automatically after beads are filed
+- `metadata.json.beads.orchestrated` flag ensures idempotency - re-running fb skips if already orchestrated
 
 ## Patterns
 
