@@ -63,6 +63,12 @@ When detected, use Conductor commands instead of ad-hoc planning.
 
 ### Session Protocol
 
+**First message (automatic handoff load):**
+On first message of any session, before processing request:
+1. Check `conductor/handoffs/` for recent handoffs (< 7 days)
+2. If found, auto-load and display: `📋 Prior session context: [track] (Xh ago)`
+3. Skip if user says "fresh start" or no conductor/ exists
+
 **Preflight (automatic):**
 Conductor commands run preflight automatically:
 - Checks `bd` availability (HALT if unavailable)

@@ -212,9 +212,10 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
    - **PARALLEL_DISPATCH:** Hand off to [orchestrator skill](../../../orchestrator/SKILL.md)
      - Load orchestrator workflow
      - Orchestrator spawns workers via Task()
+     - **Wave re-dispatch:** After each wave completes, query `bd ready --json` and spawn new workers for newly-unblocked beads
      - Main agent monitors via Agent Mail
 
-See [orchestrator workflow](../../../orchestrator/references/workflow.md) for parallel execution protocol.
+See [orchestrator workflow](../../../orchestrator/references/workflow.md) for parallel execution protocol (including wave re-dispatch).
 
 ### Phase 3: Track Implementation
 

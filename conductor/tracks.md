@@ -14,6 +14,12 @@ Test track to verify /conductor-implement auto-routes to orchestrator.
 
 ## Completed Tracks
 
+## [x] Track: Auto-Orchestration After Filing Beads
+*ID: auto-orchestrate*
+*Archived: [conductor/archive/auto-orchestrate/](conductor/archive/auto-orchestrate/)*
+
+Automatic orchestration trigger after `fb` completes. Analyzes beads dependency graph via `bv --robot-triage`, generates Track Assignments, spawns parallel workers with wave re-dispatch, runs `rb` for final review. Fallback to sequential if Agent Mail unavailable.
+
 ## [x] Track: Orchestrator Skill
 *ID: orchestrator-skill_20251230*
 *Archived: [conductor/archive/orchestrator-skill_20251230/](conductor/archive/orchestrator-skill_20251230/)*

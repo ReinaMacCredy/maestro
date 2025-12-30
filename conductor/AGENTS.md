@@ -146,3 +146,4 @@ Contains reusable learnings from completed tracks.
 - **Gate Behavior Matrix:** SPEED mode = all WARN; FULL mode = design/plan-execution/completion HALT + retry (max 2)
 - **Validation State in metadata.json:** Track gates_passed, current_gate, retries, last_failure in metadata.json.validation
 - **Humanlayer Format:** Gates use Initial Setup → 3-step Validation Process → Guidelines → Checklist → Handoff Integration
+- **Wave Execution:** Auto-orchestration uses re-dispatch loop - after wave N workers complete, query `bd ready --json` and spawn wave N+1 for newly-unblocked beads until no more ready beads exist

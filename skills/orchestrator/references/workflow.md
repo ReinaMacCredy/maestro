@@ -106,18 +106,17 @@ See [worker-prompt.md](worker-prompt.md) for complete template.
 
 Workers check inbox for dependency completion before starting blocked beads.
 
-## Phase 4: Monitor Progress
+## Phase 4: Monitor Progress + Wave Re-dispatch
 
-Poll for updates while workers execute:
+Poll for updates while workers execute, **and re-dispatch when new beads become ready**:
 
 ```python
-while not all_complete:
-  # Check for progress messages
-  messages = search_messages(
-    project_key="<path>",
-    query=epic_id,
-    limit=20
-  )
+wave = 1
+active_workers = initial_workers  # From Phase 3
+
+while active_workers or has_ready_beads():
+  # Wait for current wave to complete
+  wait_for_workers(active_workers)
   
   # Check for blockers
   blockers = fetch_inbox(
@@ -126,12 +125,55 @@ while not all_complete:
     urgent_only=True
   )
   
-  # Check bead status
-  status = bash("bv --robot-triage --graph-root <epic-id> | jq '.quick_ref'")
+  # Handle any blockers
+  for blocker in blockers:
+    handle_blocker(blocker)
   
-  # Wait before next poll
-  sleep(30)  # 30 second interval
+  # Query for newly-ready beads (unblocked by completed work)
+  ready_beads = bash("bd ready --json | jq '[.[] | select(.epic == \"<epic-id>\")]'")
+  
+  if ready_beads:
+    wave += 1
+    print(f"Wave {wave}: {len(ready_beads)} beads now ready")
+    
+    # Generate new track assignments for this wave
+    new_tracks = generate_track_assignments(ready_beads)
+    
+    # Spawn new workers
+    active_workers = spawn_workers(new_tracks)
+    
+    # Update metadata
+    update_wave_state(wave, ready_beads)
+  else:
+    active_workers = []  # No more work
 ```
+
+### Wave Execution Display
+
+```text
+┌─ WAVE EXECUTION ───────────────────────┐
+│ Wave 1: 3 beads (bd-2, bd-3, bd-4)     │
+│   → Spawned 3 workers                  │
+│   → All completed ✓                    │
+├────────────────────────────────────────┤
+│ Wave 2: 2 beads (bd-5, bd-6)           │
+│   → Spawned 2 workers                  │
+│   → All completed ✓                    │
+├────────────────────────────────────────┤
+│ All waves complete                     │
+└────────────────────────────────────────┘
+```
+
+### Why Wave Re-dispatch Matters
+
+Without re-dispatch:
+- Wave 1 workers complete → beads 2.1, 3.1 become unblocked
+- Main agent falls back to sequential execution ❌
+
+With re-dispatch:
+- Wave 1 workers complete → check `bd ready --json`
+- Newly-ready beads found → spawn Wave 2 workers ✓
+- Continues until no more ready beads
 
 ### Progress Indicators
 

@@ -263,9 +263,42 @@ ds → DELIVER → [design] → newtrack → [spec] → [plan] → implement →
 
 | Entry | Action |
 |-------|--------|
+| **Session start** | Auto-load handoffs (see below) |
 | `ds` | Load context |
 | `/conductor-implement` | Load + bind track/bead |
 | `/conductor-finish` | Handoff + archive |
+
+### Auto-Load Handoffs (First Message)
+
+**On first message of any session**, before processing the user's request:
+
+1. Check if `conductor/handoffs/` exists
+2. Scan for recent handoffs (< 7 days old)
+3. If found:
+   ```
+   📋 Prior session context found:
+   
+   • [track-name] (2h ago) - trigger: summary
+   
+   Loading context...
+   ```
+4. Load the most recent handoff silently
+5. Proceed with user's request
+
+**Skip conditions:**
+- User explicitly says "fresh start" or "new session"
+- No `conductor/` directory exists
+- All handoffs are > 7 days old (show stale warning instead)
+
+**Stale handoff behavior:**
+```
+⚠️ Stale handoff found (12 days old):
+   [track-name] - design-end
+
+Load anyway? [Y/n/skip]
+```
+
+This ensures session continuity in Amp without requiring manual `/resume_handoff`.
 
 ### Idle Detection
 

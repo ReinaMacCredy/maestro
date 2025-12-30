@@ -45,12 +45,14 @@
     "orchestrated": false
   },
   "validation": {
-    "gates_passed": [],
+    "gates_passed": ["completion"],
     "current_gate": null,
     "retries": 0,
     "last_failure": null
   },
   "workflow": {
-    "state": "PLANNED"
+    "state": "ARCHIVED",
+    "archived": true,
+    "archivedAt": "2025-12-30T12:15:00+07:00"
   }
 }

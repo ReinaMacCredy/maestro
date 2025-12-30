@@ -15,6 +15,23 @@ The handoff system replaces the previous LEDGER.md/continuity approach with a gi
 
 ## Quick Start
 
+### Automatic Session Resume (Amp)
+
+On session start, handoffs are automatically loaded:
+
+```
+📋 Prior session context found:
+
+• auto-orchestrate (2h ago) - pre-finish: Track complete
+
+Loading context...
+```
+
+Skip conditions:
+- User says "fresh start" or "new session"
+- No `conductor/` directory exists
+- All handoffs are > 7 days old (shows stale warning)
+
 ### Create a Handoff
 
 ```bash

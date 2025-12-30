@@ -254,17 +254,108 @@ Wait for dependencies before starting:
 - {bead-id}: blocked by {blockers}
 ```
 
+## Re-dispatch Loop (Wave Execution)
+
+After workers complete a wave, **check for newly-unblocked beads and dispatch again**.
+
+### Why This Matters
+
+When beads have dependencies:
+- Wave 1: Ready beads (1.1, 1.2, 1.3) execute in parallel
+- Wave 1 completes → beads 2.1, 3.1 become unblocked
+- **Without re-dispatch:** Agent falls back to sequential execution ❌
+- **With re-dispatch:** New parallel wave spawns automatically ✓
+
+### Re-dispatch Algorithm
+
+```python
+def execute_with_redispatch(epic_id, max_workers=3):
+    wave = 1
+    
+    while True:
+        # Get currently ready beads
+        ready_beads = query_ready_beads(epic_id)
+        
+        if not ready_beads:
+            # No more work - all beads completed or blocked
+            break
+        
+        print(f"Wave {wave}: Dispatching {len(ready_beads)} beads")
+        
+        # Generate tracks for this wave
+        tracks = generate_track_assignments(ready_beads, max_workers)
+        
+        # Spawn workers for this wave
+        workers = spawn_workers(tracks)
+        
+        # Wait for all workers to complete
+        wait_for_completion(workers)
+        
+        wave += 1
+    
+    # All waves complete - spawn rb for final review
+    spawn_rb_subagent(epic_id)
+
+def query_ready_beads(epic_id):
+    """Query beads that are ready (not blocked, not closed)"""
+    result = bash(f"bd ready --json")
+    beads = json.loads(result)
+    # Filter to this epic's beads only
+    return [b for b in beads if b['epic'] == epic_id]
+```
+
+### Wave Execution Display
+
+```text
+┌─ WAVE EXECUTION ───────────────────────┐
+│ Wave 1: 3 beads (bd-2, bd-3, bd-4)     │
+│   → Spawned 3 workers                  │
+│   → All completed ✓                    │
+├────────────────────────────────────────┤
+│ Wave 2: 2 beads (bd-5, bd-6)           │
+│   → Spawned 2 workers                  │
+│   → All completed ✓                    │
+├────────────────────────────────────────┤
+│ Wave 3: 1 bead (bd-7)                  │
+│   → Spawned 1 worker                   │
+│   → Completed ✓                        │
+├────────────────────────────────────────┤
+│ All waves complete → Running rb        │
+└────────────────────────────────────────┘
+```
+
+### State Tracking
+
+Track wave progress in `metadata.json`:
+
+```json
+{
+  "beads": {
+    "orchestrated": true,
+    "orchestratedAt": "2025-12-30T10:00:00Z",
+    "waves": [
+      {"wave": 1, "beads": ["bd-2", "bd-3", "bd-4"], "completedAt": "..."},
+      {"wave": 2, "beads": ["bd-5", "bd-6"], "completedAt": "..."},
+      {"wave": 3, "beads": ["bd-7"], "completedAt": "..."}
+    ],
+    "currentWave": null,
+    "reviewStatus": "passed"
+  }
+}
+```
+
 ## Final Review Phase
 
-After all workers complete, spawn `rb` sub-agent:
+After **all waves** complete, spawn `rb` sub-agent:
 
 ### Trigger Condition
 
 ```python
-# Check all tracks completed
-all_workers_done = all(worker.status == 'completed' for worker in workers)
+# Check all waves completed (no more ready beads)
+ready_beads = query_ready_beads(epic_id)
+all_waves_done = len(ready_beads) == 0
 
-if all_workers_done:
+if all_waves_done:
     spawn_rb_subagent(track_id)
 ```
 
@@ -347,32 +438,52 @@ Check metadata.json.beads.orchestrated
     └── false
           │
           ▼
-    Query: bv --robot-triage --graph-root <epic-id> --json
-          │
-          ▼
-    Generate Track Assignments
-          │
-          ▼
     Check Agent Mail available?
           │
-          ├── Yes ──► Dispatch parallel workers
+          ├── No ──► Sequential /conductor-implement
           │               │
           │               ▼
-          │           Workers execute tracks
-          │               │
-          │               ▼
-          │           All workers complete
-          │               │
-          │               ▼
-          │           Spawn rb sub-agent
-          │               │
-          │               ▼
-          │           Review complete
+          │           Run rb manually
           │
-          └── No ──► Sequential /conductor-implement
-                          │
-                          ▼
-                      Run rb manually
+          └── Yes
+                │
+                ▼
+    ┌─────────────────────────────────────┐
+    │         WAVE EXECUTION LOOP         │
+    └─────────────────────────────────────┘
+                │
+                ▼
+    Query: bd ready --json (filter to epic)
+                │
+                ├── No ready beads ──► Exit loop
+                │
+                └── Ready beads exist
+                      │
+                      ▼
+                Generate Track Assignments for wave
+                      │
+                      ▼
+                Dispatch parallel workers
+                      │
+                      ▼
+                Workers execute tracks
+                      │
+                      ▼
+                All workers complete
+                      │
+                      ▼
+                Update metadata.json.beads.waves
+                      │
+                      └──► Loop back to query
+                │
+                ▼
+    All waves complete
+                │
+                ▼
+    Spawn rb sub-agent
+                │
+                ▼
+    Review complete
 ```
 
 ## References
