@@ -5,13 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [4.2.0] - 2025-12-30
+
+
+### Added
+
+
+- Add auto-orchestration after filing beads (fb)
+- Auto-orchestration after filing beads
 
 
 ### Changed
 
 
 - Migrate agent coordination patterns and documentation from conductor to orchestrator skill.
+
+
+### Documentation
+
+
+- Update changelog
+- Update CODEMAPS to reflect auto-orchestration in beads skill
+- Add auto-orchestration to all documentation
+
+
+### Fixed
+
+
+- Add explicit orchestrator auto-loading instruction to conductor skill
+- Update maestro-core routing to note ci/implement exception
+- Address Gemini bot review comments on PR #21
 
 ## [4.1.0] - 2025-12-29
 
