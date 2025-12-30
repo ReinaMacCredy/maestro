@@ -47,7 +47,7 @@ ORCHESTRATION          CORE WORKFLOW          DEVELOPMENT              UTILITIES
 - **orchestrator**: Multi-agent parallel execution with autonomous workers
 - **conductor**: Planning + execution + **research protocol**
 - **design**: Double Diamond + Party Mode + Research verification
-- **beads**: Issue tracking + persistent memory
+- **beads**: Issue tracking + persistent memory + **auto-orchestration trigger**
 - **using-git-worktrees**: Isolated development environments
 - **writing-skills**: Skill creation guide + dependency documentation
 - **sharing-skills**: Upstream contribution
