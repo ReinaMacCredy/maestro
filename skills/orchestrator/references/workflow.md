@@ -77,24 +77,40 @@ send_message(
 
 ## Phase 3: Spawn Worker Subagents
 
+### Agent Routing
+
+Before spawning, determine agent type based on task intent. See [agent-routing.md](agent-routing.md) for:
+- Routing tables by category (Research, Review, Planning, Execution, Debug)
+- Spawn patterns for each agent type
+- File reservation patterns
+
+### Spawn Logic
+
 Spawn all workers in parallel using Task() tool:
 
 ```python
 # For each track in TRACKS:
-Task(
-  description="Worker {agent}: Track {track_n} - {description}",
-  prompt=worker_prompt.format(
-    AGENT_NAME=track.agent,
-    TRACK_N=track.track,
-    EPIC_ID=epic_id,
-    TASK_LIST=", ".join(track.tasks),
-    BEAD_LIST=", ".join([planTasks[t] for t in track.tasks]),
-    FILE_SCOPE=track.scope,
-    ORCHESTRATOR=orchestrator_name,
-    PROJECT_PATH=project_path,
-    DEPENDS_ON=track.depends_on
-  )
-)
+# 1. Determine agent type from task intent (see agent-routing.md)
+# 2. Select appropriate spawn pattern
+# 3. Apply file reservation pattern based on category
+
+for track in TRACKS:
+    agent_type = route_intent(track.description)  # Research, Execution, etc.
+    spawn_pattern = get_spawn_pattern(agent_type)  # From agent-routing.md
+    
+    Task(
+      description=spawn_pattern.format(
+        AGENT_NAME=track.agent,
+        TRACK_N=track.track,
+        EPIC_ID=epic_id,
+        TASK_LIST=", ".join(track.tasks),
+        BEAD_LIST=", ".join([planTasks[t] for t in track.tasks]),
+        FILE_SCOPE=track.scope,
+        ORCHESTRATOR=orchestrator_name,
+        PROJECT_PATH=project_path,
+        DEPENDS_ON=track.depends_on
+      )
+    )
 ```
 
 See [worker-prompt.md](worker-prompt.md) for complete template.
@@ -373,3 +389,11 @@ Orchestrator maintains state in `implement_state.json`:
   "last_poll": "2025-12-30T02:15:00Z"
 }
 ```
+
+## References
+
+- [agent-routing.md](agent-routing.md) - Agent routing tables, spawn patterns, file reservations
+- [worker-prompt.md](worker-prompt.md) - Worker template with mandatory summary
+- [summary-protocol.md](summary-protocol.md) - Required summary format for all agents
+- [intent-routing.md](intent-routing.md) - Intent → agent type mappings
+- [Agent Directory](../agents/README.md) - Available agent types and profiles

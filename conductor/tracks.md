@@ -14,6 +14,12 @@ Test track to verify /conductor-implement auto-routes to orchestrator.
 
 ## Completed Tracks
 
+## [x] Track: Continuous-Claude-v2 Integration
+*ID: cc-v2-integration*
+*Archived: [conductor/archive/cc-v2-integration/](conductor/archive/cc-v2-integration/)*
+
+Full merge of Continuous-Claude-v2 patterns into Maestro. Created 15 specialized agents in 5 categories (research/review/planning/execution/debug), thin router in AGENTS.md for token efficiency, Agent Mail as primary handoff storage. Orchestrated with 3 parallel waves, 5 epics, 35 beads.
+
 ## [x] Track: Auto-Orchestration After Filing Beads
 *ID: auto-orchestrate*
 *Archived: [conductor/archive/auto-orchestrate/](conductor/archive/auto-orchestrate/)*

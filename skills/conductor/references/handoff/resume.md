@@ -15,35 +15,43 @@ Reference for the `/resume_handoff` command.
 /resume_handoff [path|track|none]
        │
        ▼
-┌─────────────────────┐
-│  1. Parse Input     │
-└─────────────────────┘
+┌─────────────────────────────┐
+│  1. Parse Input             │
+└─────────────────────────────┘
        │
        ▼
-┌─────────────────────┐
-│  2. Smart Discovery │
-└─────────────────────┘
+┌─────────────────────────────┐
+│  2. Try Agent Mail Lookup   │ ◀── PRIMARY (new)
+│     (summarize_thread)      │
+└─────────────────────────────┘
+       │
+       ▼ (if unavailable/no results)
+┌─────────────────────────────┐
+│  3. Smart Discovery (files) │ ◀── FALLBACK
+└─────────────────────────────┘
        │
        ▼
-┌─────────────────────┐
-│  3. Load Handoff    │
-└─────────────────────┘
+┌─────────────────────────────┐
+│  4. Load Handoff Content    │
+└─────────────────────────────┘
        │
        ▼
-┌─────────────────────┐
-│  4. Validate State  │
-└─────────────────────┘
+┌─────────────────────────────┐
+│  5. Validate State          │
+└─────────────────────────────┘
        │
        ▼
-┌─────────────────────┐
-│  5. Present Analysis│
-└─────────────────────┘
+┌─────────────────────────────┐
+│  6. Present Analysis        │
+└─────────────────────────────┘
        │
        ▼
-┌─────────────────────┐
-│  6. Create Todos    │
-└─────────────────────┘
+┌─────────────────────────────┐
+│  7. Create Todos            │
+└─────────────────────────────┘
 ```
+
+**Key change:** Agent Mail is now the **primary** source for handoff context via `summarize_thread()`. File-based discovery is the fallback.
 
 ## Step 1: Parse Input
 
@@ -68,7 +76,93 @@ ELSE (no argument)
 
 Examples: `auth-system_20251229`, `fix-bug_20251215`
 
-## Step 2: Smart Discovery
+## Step 2: Agent Mail Lookup (Primary)
+
+**Primary source** - try Agent Mail first for FTS5-indexed handoff context.
+
+### Check Availability
+
+```python
+try:
+    health_check(reason="handoff resume")
+    agent_mail_available = True
+except:
+    agent_mail_available = False
+    # Skip to Step 3 (file-based discovery)
+```
+
+### Build Thread ID
+
+```python
+if mode == "track":
+    thread_id = f"handoff-{track_id}"
+elif mode == "discover":
+    # Search for any handoff threads
+    thread_id = None  # Will search all
+else:  # explicit path
+    # Extract track from path, fall back to file-based
+    pass
+```
+
+### Summarize Thread
+
+```python
+if agent_mail_available and thread_id:
+    summary = summarize_thread(
+        project_key=absolute_workspace_path,
+        thread_id=thread_id,
+        include_examples=True,  # Get sample messages
+        llm_mode=True           # Refine with AI
+    )
+    
+    if summary and summary.get("summary"):
+        # Use Agent Mail context
+        context_source = "agent_mail"
+        handoff_context = summary
+    else:
+        # No results, fall back to files
+        context_source = "files"
+```
+
+### Search for Recent Handoffs
+
+If no specific thread or discovery mode:
+
+```python
+# Search for recent handoff messages
+results = search_messages(
+    project_key=absolute_workspace_path,
+    query="HANDOFF",
+    limit=10
+)
+
+if results:
+    # Present list of available handoff threads
+    threads = extract_unique_threads(results)
+    # Proceed to selection
+```
+
+### Success Output
+
+```
+📬 Loading context from Agent Mail...
+   Thread: handoff-auth-system_20251229
+   Messages: 5 handoffs found
+   
+✅ Context loaded via Agent Mail (FTS5)
+```
+
+### Fallback to Files
+
+If Agent Mail unavailable or no results:
+
+```
+⚠️ Agent Mail unavailable - falling back to file-based discovery
+```
+
+Proceed to Step 3.
+
+## Step 3: Smart Discovery (Fallback)
 
 ### Mode: Explicit
 
@@ -115,7 +209,7 @@ ELSE (no handoffs found)
   → Show: "No handoffs found. Use /create_handoff first."
 ```
 
-## Step 3: Load Handoff
+## Step 4: Load Handoff Content
 
 ### Parse File
 
@@ -161,7 +255,7 @@ If YAML parsing fails:
    ⚠️ Malformed frontmatter in handoff. Using filename metadata.
 ```
 
-## Step 4: Validate State
+## Step 5: Validate State
 
 ### Git Branch Check
 
@@ -246,7 +340,7 @@ Combine all warnings into drift summary:
 Proceed with resume? [Y/n]
 ```
 
-## Step 5: Present Analysis
+## Step 6: Present Analysis
 
 ### Display Format
 
@@ -287,7 +381,7 @@ Completed E1: Core JWT module.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-## Step 6: Create Todos
+## Step 7: Create Todos
 
 ### Extract from Next Steps
 
@@ -374,6 +468,8 @@ echo "⚠️ Index repaired: ${handoff_dir}/index.md"
 
 | Scenario | Action |
 |----------|--------|
+| Agent Mail unavailable | Log warning, fall back to file-based discovery |
+| Agent Mail no results | Fall back to file-based discovery |
 | No handoffs found | Show message, suggest `/create_handoff` |
 | File not found | Error: "Handoff file not found: <path>" |
 | Malformed YAML | Warn, infer from filename |
@@ -384,6 +480,47 @@ echo "⚠️ Index repaired: ${handoff_dir}/index.md"
 | No conductor/ dir | Error: "Run /conductor-setup first" |
 
 ## Example Sessions
+
+### Auto-Resume via Agent Mail (Primary)
+
+```
+User: /resume_handoff
+
+Agent: 📬 Loading context from Agent Mail...
+       Thread: handoff-auth-system_20251229
+       
+✅ Context loaded via Agent Mail (FTS5)
+
+📋 Resuming: auth-system_20251229 | epic-end
+🕐 Last handoff: 2 hours ago
+🔀 Branch: feat/auth-system @ def456a
+
+Summary (from 5 handoffs):
+- Participants: BlueLake
+- Key points: JWT core complete, RS256 implemented, Redis revocation working
+- Action items: Start E2, wire login handler
+
+✅ Loaded 3 tasks from summary.
+```
+
+### Agent Mail Unavailable (Fallback)
+
+```
+User: /resume_handoff
+
+Agent: 📬 Checking Agent Mail...
+⚠️ Agent Mail unavailable - falling back to file-based discovery
+
+Auto-resuming from auth-system_20251229...
+
+📋 Resuming: auth-system_20251229 | epic-end
+🕐 Created: 2 hours ago
+🔀 Branch: feat/auth-system @ def456a
+
+[... full analysis from files ...]
+
+✅ Loaded 3 tasks from Next Steps.
+```
 
 ### Auto-Resume (Single Track)
 

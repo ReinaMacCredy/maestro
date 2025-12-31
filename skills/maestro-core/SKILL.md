@@ -336,7 +336,79 @@ All Maestro skills should load maestro-core first:
 Load maestro-core first for orchestration context.
 ```
 
+## Thin Router Pattern
+
+Main thread stays clean: understand intent → route to specialist → display summary.
+
+**Key principle:** Sub-agents do actual work and report via Agent Mail.
+
+### Responsibilities
+
+| Main Thread | Sub-Agent |
+|-------------|-----------|
+| Understand intent | File reading |
+| Route to specialist | Code analysis |
+| Display summaries | Implementation |
+| Confirm destructive actions | Security review |
+| Handle errors | Research |
+| Aggregate results | Testing |
+
+### Intent-Based Routing
+
+Route based on user intent keywords:
+
+| Intent Keywords | Agent Type |
+|-----------------|------------|
+| `research`, `find`, `locate` | Research agent |
+| `review`, `audit`, `security` | Review agent |
+| `implement`, `build`, `create` | Execution agent |
+| `fix`, `debug`, `investigate` | Debug agent |
+| `test`, `verify`, `validate` | Testing agent |
+
+See [orchestrator/references/intent-routing.md](../orchestrator/references/intent-routing.md) for complete mappings.
+
+### Sub-Agent Protocol
+
+Sub-agents MUST call `send_message()` before returning with:
+- Status (SUCCEEDED/PARTIAL/FAILED)
+- Files changed
+- Key decisions
+- Issues (if any)
+
+See [delegation.md](references/delegation.md) for full responsibility matrix.
+
+## Amp-Specific Notes
+
+Amp lacks automatic hooks. Key differences from Claude Code:
+
+| Feature | Claude Code | Amp |
+|---------|-------------|-----|
+| Pre-commit hooks | Automatic | Manual |
+| Handoff triggers | Automatic | Use workflow commands |
+| Session detection | Hooks | First-message check |
+
+### Amp Handoff Protocol
+
+Use workflow commands that embed handoff logic:
+
+| Phase | Command | Auto-Handoff |
+|-------|---------|--------------|
+| After design | `/conductor-newtrack` | ✅ design-end |
+| Epic execution | `/conductor-implement` | ✅ epic-start/end |
+| Session end | `/conductor-finish` | ✅ pre-finish |
+| Manual | `/create_handoff` | ❌ explicit |
+
+### First-Message Auto-Load
+
+On session start, before routing:
+1. Check `conductor/handoffs/` for recent handoffs (< 7 days)
+2. Auto-load if found (skip if user says "fresh start")
+3. Display brief context summary
+
+This ensures session continuity without hooks.
+
 ## References
 
+- [delegation.md](references/delegation.md) - Main/sub-agent responsibility matrix
 - [hierarchy.md](references/hierarchy.md) - HALT/DEGRADE matrix
 - [routing.md](references/routing.md) - Worktree, edge cases

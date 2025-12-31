@@ -42,7 +42,8 @@ Research runs automatically at:
 ## Documentation
 
 - [Research Protocol](../../conductor/references/research/protocol.md)
-- [Agents](../../conductor/references/research/agents/)
+- [Research agents](../../conductor/references/research/agents/) (legacy location)
+- [Agent directory](../../orchestrator/agents/) (all agent types)
 - [Hooks](../../conductor/references/research/hooks/)
 
 ---

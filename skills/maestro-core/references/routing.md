@@ -2,6 +2,76 @@
 
 > **Main routing logic is in [SKILL.md](../SKILL.md).** This file contains extended details.
 
+## Agent Delegation Rules
+
+When to delegate work to sub-agents vs handle directly in main thread.
+
+### Delegate When
+
+| Condition | Action | Why |
+|-----------|--------|-----|
+| File reading needed | Spawn Research agent | Keep main thread clean |
+| Code modification | Spawn Execution agent | Isolate changes |
+| Multiple files affected | Spawn specialist(s) | Parallel efficiency |
+| Security-sensitive | Spawn Security agent | Specialized analysis |
+| Testing required | Spawn Testing agent | Isolation |
+
+### Handle Directly When
+
+| Condition | Action | Why |
+|-----------|--------|-----|
+| Single quick answer | Main responds | Low overhead |
+| User confirmation needed | Main handles | Interactive |
+| Error aggregation | Main handles | Context needed |
+| Routing decision | Main handles | Orchestration role |
+
+### Delegation Flow
+
+```
+User Request
+     │
+     ▼
+┌─────────────────────────┐
+│ Main Thread: Classify   │
+│ - Parse intent          │
+│ - Check complexity      │
+│ - Identify file scope   │
+└───────────┬─────────────┘
+            │
+     ┌──────┴──────┐
+     ▼             ▼
+ [Simple]     [Complex]
+     │             │
+     ▼             ▼
+ Respond     Delegate
+ Directly    to Agent(s)
+```
+
+### Intent → Agent Mapping
+
+See [orchestrator/references/intent-routing.md](../../orchestrator/references/intent-routing.md) for complete intent-to-agent mappings:
+
+| Intent Keywords | Agent Type |
+|-----------------|------------|
+| `research`, `find`, `locate` | Research |
+| `review`, `audit`, `security` | Review |
+| `implement`, `build`, `create` | Execution |
+| `fix`, `debug`, `investigate` | Debug |
+| `test`, `verify`, `validate` | Testing |
+| `refactor`, `improve`, `optimize` | Refactor |
+| `document`, `explain` | Docs |
+
+### Thin Router Pattern
+
+Main thread acts as thin router:
+
+1. **Understand** - Parse intent, identify task type
+2. **Route** - Spawn appropriate sub-agent(s)
+3. **Monitor** - Track via Agent Mail
+4. **Summarize** - Display results to user
+
+See [delegation.md](delegation.md) for full responsibility matrix.
+
 ## Worktree Invocation Points
 
 ### When to Create Worktree

@@ -54,6 +54,8 @@ Research protocol spawns parallel sub-agents to comprehensively document the cod
 | [pattern-finder](agents/pattern-finder.md) | Find existing patterns | When looking for conventions |
 | [web-researcher](agents/web-researcher.md) | External docs/APIs | Only if explicitly needed |
 
+> **Note:** Research agents are also available in [orchestrator/agents/research/](../../../orchestrator/agents/research/) with Agent Mail integration.
+
 ## Execution Flow
 
 ```
@@ -193,6 +195,7 @@ Before generating spec.md:
 
 ## Related
 
-- [agents/](agents/) - Sub-agent prompt definitions
+- [agents/](agents/) - Research agent definitions (legacy)
+- [orchestrator/agents/](../../../orchestrator/agents/) - Full agent directory
 - [hooks/](hooks/) - Integration hook specifications
 - [../grounding.md](../grounding.md) - Original grounding (being replaced)

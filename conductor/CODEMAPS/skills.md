@@ -65,27 +65,50 @@ ORCHESTRATION          CORE WORKFLOW          DEVELOPMENT              UTILITIES
 
 **Higher levels override lower levels on conflicts.**
 
-## Research Protocol (skills/conductor/references/research/)
+## Research Protocol (skills/orchestrator/agents/)
 
-> **Replaces the old grounding system with parallel sub-agents.**
+> **Agent directory for multi-agent parallel execution.**
 
 ```
-research/
-├── protocol.md        # Main research protocol (always runs)
-├── agents/            # Parallel sub-agents
+agents/
+├── README.md              # Agent index + routing table
+├── research/              # Information gathering agents
 │   ├── codebase-locator.md    # Find WHERE files exist
 │   ├── codebase-analyzer.md   # Understand HOW code works
 │   ├── pattern-finder.md      # Find existing conventions
-│   └── web-researcher.md      # External docs (when needed)
-└── hooks/             # Auto-trigger integration points
-    ├── discover-hook.md   # ds start → research context
-    ├── grounding-hook.md  # DEVELOP→DELIVER verification
-    └── newtrack-hook.md   # Pre-spec research
+│   ├── impact-assessor.md     # Assess change impact
+│   ├── web-researcher.md      # External docs
+│   └── github-researcher.md   # GitHub-specific research
+├── review/                # Code quality agents
+│   ├── security-reviewer.md   # Security vulnerability analysis
+│   ├── code-reviewer.md       # Code quality review
+│   ├── pr-reviewer.md         # Pull request review
+│   └── spec-reviewer.md       # Specification validation
+├── planning/              # Design decision agents
+│   ├── plan-agent.md          # Create plans
+│   └── validate-agent.md      # Validate plans/specs
+├── execution/             # Implementation agents
+│   ├── implement-agent.md     # TDD implementation
+│   └── worker-agent.md        # Autonomous worker
+└── debug/                 # Investigation agents
+    └── debug-agent.md         # Root cause analysis
 ```
 
-**Key Difference from Old Grounding:**
-- ❌ OLD: Sequential (Grep → finder → web), tiered, skip conditions
-- ✅ NEW: Parallel agents, always runs, no skip conditions
+**All agents include mandatory `send_message()` call before returning.**
+
+## Thin Router Pattern (AGENTS.md)
+
+Main thread stays clean: understand intent → route to specialist → display summary.
+
+```
+User Request → AGENTS.md (routing) → Task(agent) → send_message() → Summary
+```
+
+**Key files:**
+- `AGENTS.md` - Thin router section (~70 lines)
+- `skills/orchestrator/references/intent-routing.md` - Intent → agent mapping
+- `skills/orchestrator/references/agent-routing.md` - Spawn patterns
+- `skills/maestro-core/references/delegation.md` - Responsibility matrix
 
 ## BMAD Integration (skills/design/references/bmad/)
 

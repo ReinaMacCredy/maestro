@@ -28,20 +28,28 @@ Reference for the `/create_handoff` command.
 └─────────────────────┘
        │
        ▼
+┌─────────────────────────────┐
+│  4. Send to Agent Mail      │ ◀── PRIMARY (new)
+│     (if available)          │
+└─────────────────────────────┘
+       │
+       ▼
+┌─────────────────────────────┐
+│  5. Write Markdown File     │ ◀── SECONDARY (for git)
+└─────────────────────────────┘
+       │
+       ▼
 ┌─────────────────────┐
-│  4. Write Handoff   │
+│  6. Update Index    │
 └─────────────────────┘
        │
        ▼
 ┌─────────────────────┐
-│  5. Update Index    │
-└─────────────────────┘
-       │
-       ▼
-┌─────────────────────┐
-│  6. Touch Activity  │
+│  7. Touch Activity  │
 └─────────────────────┘
 ```
+
+**Key change:** Agent Mail is now the **primary** storage for handoffs. Markdown files remain for git history and offline access.
 
 ## Step 1: Detect Context
 
@@ -165,7 +173,66 @@ fi
 - **[P]roceed**: Write handoff with warning comment
 - **[A]bort**: Cancel handoff creation
 
-## Step 4: Write Handoff File
+## Step 4: Send to Agent Mail
+
+**Primary storage** - send handoff to Agent Mail first for FTS5 search and cross-session context.
+
+### Check Agent Mail Availability
+
+```python
+try:
+    # Verify MCP server is available
+    health_check(reason="handoff creation")
+    agent_mail_available = True
+except:
+    agent_mail_available = False
+    # Log warning: "⚠️ Agent Mail unavailable - using markdown-only"
+```
+
+### Build Message
+
+Use the schema from [agent-mail-format.md](agent-mail-format.md):
+
+```python
+message = {
+    "project_key": absolute_workspace_path,  # e.g., "/Users/alice/project"
+    "sender_name": agent_name,               # e.g., "BlueLake"
+    "to": ["Human"],                         # or orchestrator name
+    "subject": f"[HANDOFF:{trigger}] {track_id} - {brief_context}",
+    "body_md": format_body(context, changes, learnings, next_steps),
+    "thread_id": f"handoff-{track_id}",      # or "handoff-general"
+    "importance": "high" if trigger in AUTO_TRIGGERS else "normal"
+}
+```
+
+### Auto-Triggers (high importance)
+
+```python
+AUTO_TRIGGERS = ["design-end", "epic-start", "epic-end", "pre-finish"]
+```
+
+### Send Message
+
+```python
+if agent_mail_available:
+    result = send_message(**message)
+    # Store message ID for reference
+    agent_mail_message_id = result["deliveries"][0]["payload"]["id"]
+```
+
+### Fallback Behavior
+
+If Agent Mail unavailable:
+
+```text
+⚠️ Agent Mail unavailable - handoff stored in markdown only
+```
+
+Continue to Step 5 regardless of Agent Mail availability.
+
+## Step 5: Write Markdown File
+
+**Secondary storage** - write markdown for git history and offline access.
 
 ### Filename Generation
 
@@ -219,7 +286,7 @@ For each section, the agent should:
 - Use checkbox format `[ ]`
 - Order by priority
 
-## Step 5: Update Index
+## Step 6: Update Index
 
 ### Append Entry
 
@@ -249,7 +316,7 @@ for file in "${handoff_dir}"/*.md; do
 done
 ```
 
-## Step 6: Touch Activity Marker
+## Step 7: Touch Activity Marker
 
 ```bash
 # Update last activity timestamp
@@ -264,6 +331,7 @@ This enables idle detection (see [idle-detection.md](idle-detection.md)).
 |----------|--------|
 | No `conductor/` directory | Create `conductor/handoffs/general/` first |
 | Git not available | Use "unknown" for commit/branch |
+| Agent Mail unavailable | Log warning, continue with markdown-only |
 | Index write fails | Log warning, handoff file still created |
 | Secrets detected | Prompt user: [P]roceed / [A]bort |
 | Handoff dir doesn't exist | Create it with index.md |
@@ -279,9 +347,29 @@ Agent: Creating handoff...
 📍 Context: Track auth-system_20251229 (in_progress)
 📍 Branch: feat/auth-system @ abc123f
 
-Writing: conductor/handoffs/auth-system_20251229/2025-12-29_10-00-00-123_auth-system_manual.md
+📤 Sending to Agent Mail... ✅
+📝 Writing: conductor/handoffs/auth-system_20251229/2025-12-29_10-00-00-123_auth-system_manual.md
 
 ✅ Handoff created successfully.
+   → Agent Mail: thread handoff-auth-system_20251229
+   → Markdown: 2025-12-29_10-00-00-123_auth-system_manual.md
+📝 Index updated.
+```
+
+### Agent Mail Unavailable
+
+```
+User: /create_handoff
+
+Agent: Creating handoff...
+
+📍 Context: Track auth-system_20251229 (in_progress)
+📍 Branch: feat/auth-system @ abc123f
+
+⚠️ Agent Mail unavailable - using markdown-only
+📝 Writing: conductor/handoffs/auth-system_20251229/2025-12-29_10-00-00-123_auth-system_manual.md
+
+✅ Handoff created (markdown only).
 📝 Index updated.
 ```
 

@@ -52,6 +52,9 @@ Contains reusable learnings from completed tracks.
 - `/conductor-orchestrate` - Spawn parallel workers for track execution (Mode B workers)
 - `bv --robot-triage --graph-root <epic-id>` - Prepare beads for orchestration ("dọn cỗ")
 - `bv --robot-triage --graph-root <epic-id> --json` - Get JSON output for auto-orchestration graph analysis
+- `bd list --json | jq '. | length'` - Count beads reliably (returns array, not object)
+- `grep -l "send_message" skills/orchestrator/agents/**/*.md | wc -l` - Verify all agents have mandatory Agent Mail save
+- `mcp__mcp_agent_mail__register_agent` - Register orchestrator identity before spawning workers
 
 ## Gotchas
 
@@ -111,6 +114,11 @@ Contains reusable learnings from completed tracks.
 - Worker Autonomy: Orchestrator workers CAN self claim/close beads (differs from standard subagent rules)
 - Auto-orchestration: fb Phase 6 triggers orchestration automatically after beads are filed
 - `metadata.json.beads.orchestrated` flag ensures idempotency - re-running fb skips if already orchestrated
+- Duplicate beads during parallel filing: Issues created multiple times require manual closure with reason "Duplicate of X"
+- Epic status not auto-updating: Epics remain `open` after all child tasks closed; manually close with `bd close <epic-id> --reason completed`
+- jq array parsing: `bd list --json` returns array, not object; use `jq '. | length'` not `jq '.issues | length'`
+- Metadata state sync: After `fb` filing, must run `bd sync` before implementation to ensure database state is current
+- Agent Mail primary, markdown secondary: Send handoffs to Agent Mail first for FTS5 search, write markdown for git history
 
 ## Patterns
 
@@ -147,3 +155,8 @@ Contains reusable learnings from completed tracks.
 - **Validation State in metadata.json:** Track gates_passed, current_gate, retries, last_failure in metadata.json.validation
 - **Humanlayer Format:** Gates use Initial Setup → 3-step Validation Process → Guidelines → Checklist → Handoff Integration
 - **Wave Execution:** Auto-orchestration uses re-dispatch loop - after wave N workers complete, query `bd ready --json` and spawn wave N+1 for newly-unblocked beads until no more ready beads exist
+- **Parallel Wave Execution:** Spawn independent tracks in waves, monitor Agent Mail for completion, re-dispatch when dependencies met
+- **5-Category Agent Directory:** research/ review/ planning/ execution/ debug/ under skills/orchestrator/agents/
+- **Mandatory send_message():** All sub-agents MUST call send_message() before returning with Status/Files/Decisions/Issues format
+- **First-Message Context Load:** fetch_inbox() on session start to load prior context without hooks (Amp-specific)
+- **Thin Router Pattern:** Main thread only routes and displays summaries, sub-agents do actual work and report via Agent Mail

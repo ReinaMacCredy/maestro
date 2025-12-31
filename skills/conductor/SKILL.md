@@ -105,7 +105,8 @@ Verification is **automatic** at phase transitions using parallel sub-agents:
 
 **Research Protocol:**
 - [Protocol overview](references/research/protocol.md)
-- [Agents](references/research/agents/)
+- [Research agents](references/research/agents/) (legacy location)
+- [Agent directory](../orchestrator/agents/) (all agent types)
 - [Integration hooks](references/research/hooks/)
 
 **Legacy Grounding (deprecated):**
