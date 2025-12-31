@@ -49,12 +49,10 @@ Research protocol spawns parallel sub-agents to comprehensively document the cod
 
 | Agent | Purpose | When to Use |
 |-------|---------|-------------|
-| [codebase-locator](agents/codebase-locator.md) | Find WHERE files/components live | First - discovery |
-| [codebase-analyzer](agents/codebase-analyzer.md) | Understand HOW code works | After locator finds targets |
-| [pattern-finder](agents/pattern-finder.md) | Find existing patterns | When looking for conventions |
-| [web-researcher](agents/web-researcher.md) | External docs/APIs | Only if explicitly needed |
-
-> **Note:** Research agents are also available in [orchestrator/agents/research/](../../../orchestrator/agents/research/) with Agent Mail integration.
+| [codebase-locator](../../../orchestrator/agents/research/codebase-locator.md) | Find WHERE files/components live | First - discovery |
+| [codebase-analyzer](../../../orchestrator/agents/research/codebase-analyzer.md) | Understand HOW code works | After locator finds targets |
+| [pattern-finder](../../../orchestrator/agents/research/pattern-finder.md) | Find existing patterns | When looking for conventions |
+| [web-researcher](../../../orchestrator/agents/research/web-researcher.md) | External docs/APIs | Only if explicitly needed |
 
 ## Execution Flow
 
@@ -195,7 +193,6 @@ Before generating spec.md:
 
 ## Related
 
-- [agents/](agents/) - Research agent definitions (legacy)
-- [orchestrator/agents/](../../../orchestrator/agents/) - Full agent directory
+- [Research agents](../../../orchestrator/agents/research/) - Research agent definitions
 - [hooks/](hooks/) - Integration hook specifications
-- [../grounding.md](../grounding.md) - Original grounding (being replaced)
+- [grounding.md](../../../design/references/grounding.md) - Deprecated redirect

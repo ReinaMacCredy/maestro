@@ -730,9 +730,8 @@ research_state = {
 ### Documentation
 
 - [Research Protocol](../conductor/references/research/protocol.md) - Main documentation
-- [Research agents](../conductor/references/research/agents/) - Research-specific agents (legacy)
-- [Agent directory](../orchestrator/agents/) - All specialized agents
-- [Hooks](../conductor/references/research/hooks/) - Integration points
+- [Research agents](../orchestrator/agents/research/) - Research-specific agents
+- [Integration hooks](../conductor/references/research/hooks/) - Hook integration points
 - [grounding.md](references/grounding.md) - Deprecated, redirects to research
 
 ---
