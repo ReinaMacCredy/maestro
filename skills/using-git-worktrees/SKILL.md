@@ -7,9 +7,7 @@ metadata:
 
 ## Prerequisites
 
-**REQUIRED SUB-SKILL:** [maestro-core](../maestro-core/SKILL.md)
-
-Load maestro-core first for orchestration context (hierarchy, HALT/DEGRADE policies, trigger routing).
+Routing and fallback policies are defined in [AGENTS.md](../../AGENTS.md).
 
 # Using Git Worktrees
 

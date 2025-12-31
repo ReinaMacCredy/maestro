@@ -29,9 +29,7 @@ Contribute skills from your local branch back to the upstream repository.
 
 ## Prerequisites
 
-**REQUIRED SUB-SKILL:** [maestro-core](../maestro-core/SKILL.md)
-
-Load maestro-core first for orchestration context (hierarchy, HALT/DEGRADE policies, trigger routing).
+Routing and fallback policies are defined in [AGENTS.md](../../AGENTS.md).
 
 **Additional requirements:**
 - `gh` CLI installed and authenticated

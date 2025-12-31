@@ -1,8 +1,6 @@
 # Maestro - Global Configuration
 
-## For Agents
-
-Apply the config block below to user's global config at:
+Apply to global config:
 
 | Tool | Path |
 |------|------|
@@ -12,24 +10,20 @@ Apply the config block below to user's global config at:
 | Gemini CLI | `~/.gemini/GEMINI.md` |
 | Cursor | `~/.cursor/rules/maestro.md` |
 
-**Steps:**
-1. Check for existing `<!-- BEGIN maestro-config -->`. If found, replace content. If not, append.
-2. If `.beads-village/` exists, also apply the Village block.
+Replace existing `<!-- BEGIN maestro-config -->` block or append. Add Village block if `.beads-village/` exists.
 
 ---
 
-## Default Config
+## Config Block
 
 <!-- BEGIN maestro-config -->
-<!-- version: 2.1.0 | bmad-v6 | 2025-12-29 -->
-
-**Current year is 2025.** Always use 2025 for dates, not 2024.
+<!-- version: 2.2.0 | bmad-v6 | 2026-1-1 -->
 
 ## Maestro Workflow
 
 Context-driven development with TDD execution.
 
-**First message:** Load `maestro-core` skill for orchestration context.
+**First message:** Check `conductor/handoffs/` for prior session context.
 
 ### Project Detection
 
@@ -99,7 +93,7 @@ bd sync                              # Sync to git
 
 Session continuity is **automatic** via Conductor workflow entry points (`ds`, `/conductor-implement`, `/conductor-finish`). No manual commands needed.
 
-> Details in `maestro-core` skill.
+> Details in project AGENTS.md.
 
 ### Critical Rules
 
@@ -116,9 +110,7 @@ For complete workflow guide, see [TUTORIAL.md](../TUTORIAL.md).
 
 ---
 
-## Optional: Beads Village (Multi-Agent)
-
-Apply this block only if `.beads-village/` exists.
+## Village Block (if `.beads-village/` exists)
 
 <!-- BEGIN maestro-village -->
 
@@ -139,64 +131,21 @@ bv --robot-status  # Check team state
 
 ---
 
-## ⚠️ Amp Hybrid Handoff Protocol
+## Amp Handoff Protocol
 
-Amp doesn't support automatic hooks - handoffs must be created manually or via workflow commands.
+Amp requires manual handoffs. Use workflow commands for automatic handling:
 
-### Option A: Use Full Workflow Commands (Recommended)
-Commands embed handoff logic - no manual action needed:
+| Workflow | Command | Auto-Handoff |
+|----------|---------|--------------|
+| Design → Track | `ds` → `/conductor-newtrack` | ✅ |
+| Implementation | `/conductor-implement` | ✅ |
+| Finish | `/conductor-finish` | ✅ |
 
-| Instead of... | Use... | Auto-Handoff |
-|---------------|--------|--------------|
-| `ds` → `fb` → manual beads | `ds` → `/conductor-newtrack` | ✅ `design-end` |
-| Manual `bd update/close` | `/conductor-implement` | ✅ `epic-start/end` |
-| Just `bd sync` | `/conductor-finish` | ✅ `pre-finish` |
+Manual alternative: `/create_handoff <type>` at each phase.
 
-### Option B: Manual Handoff Points
-If using raw `bd` commands, create handoffs manually:
+### Legacy → New
 
-```bash
-# After design session ends
-/create_handoff design-end
-
-# Before starting each epic
-/create_handoff epic-start
-
-# After closing each epic  
-/create_handoff epic-end
-
-# Before ending session
-/create_handoff manual
-```
-
-### Quick Reference
-
-| Session Phase | Action Required |
-|---------------|-----------------|
-| **Start** | `/resume_handoff` to load prior context |
-| **After DS** | Use `/conductor-newtrack` OR `/create_handoff design-end` |
-| **Epic Start** | Use `/conductor-implement` OR `/create_handoff epic-start` |
-| **Epic End** | Embedded in `/conductor-implement` OR `/create_handoff epic-end` |
-| **Session End** | `/create_handoff manual` if not using `/conductor-finish` |
-
-### Legacy Commands (DEPRECATED)
-| Command | Replacement |
-|---------|-------------|
-| `continuity load` | `/resume_handoff` |
-| `continuity save` | `/create_handoff manual` |
-| `continuity handoff` | `/create_handoff manual` |
-| `continuity status` | Check `conductor/handoffs/<track>/index.md` |
-| `continuity search <keyword>` | `uv run scripts/artifact-query.py <query>` |
-
----
-
-## Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| Triggers not working | Verify plugin installed: `/plugin list` |
-| `bd: command not found` | See SETUP_GUIDE.md Step 4 |
-| `bv` hangs | Use `--robot-*` flags |
-| Skills not loading | Check plugin settings |
-
----
+| Old | New |
+|-----|-----|
+| `continuity load/save/handoff` | `/resume_handoff`, `/create_handoff manual` |
+| `continuity status` | `conductor/handoffs/<track>/index.md` |

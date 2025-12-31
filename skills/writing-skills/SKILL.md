@@ -7,9 +7,7 @@ metadata:
 
 ## Prerequisites
 
-**REQUIRED SUB-SKILL:** [maestro-core](../maestro-core/SKILL.md)
-
-Load maestro-core first for orchestration context (hierarchy, HALT/DEGRADE policies, trigger routing).
+Routing and fallback policies are defined in [AGENTS.md](../../AGENTS.md).
 
 # Writing Skills
 
@@ -175,9 +173,7 @@ description: Use when...
 
 ## Prerequisites
 
-**REQUIRED SUB-SKILL:** [maestro-core](../maestro-core/SKILL.md)
-
-Load maestro-core first for orchestration context.
+Routing and fallback policies are defined in [AGENTS.md](../../AGENTS.md).
 
 **Additional requirements:**
 - gh CLI installed
@@ -187,27 +183,6 @@ Load maestro-core first for orchestration context.
 
 ...
 ```
-
-### Maestro Core Integration
-
-All Maestro skills (conductor, design, beads, worktrees, sharing, writing) should reference maestro-core as a prerequisite. This establishes:
-
-- **Skill hierarchy**: 6-level priority for conflict resolution
-- **HALT/DEGRADE policy**: When to stop vs gracefully degrade
-- **Trigger routing**: How to disambiguate overlapping triggers
-
-### Hierarchy Levels
-
-| Level | Skill | Role |
-|-------|-------|------|
-| 1 | maestro-core | Routing, fallback policy |
-| 2 | conductor | Track orchestration, workflow state |
-| 3 | orchestrator | Multi-agent parallel execution |
-| 4 | design | Design sessions (Double Diamond) |
-| 5 | beads | Issue tracking, dependencies |
-| 6 | specialized | worktrees, sharing, writing |
-
-Higher levels override lower levels on conflicts.
 
 ### HALT vs DEGRADE Guidelines
 

@@ -11,9 +11,7 @@ metadata:
 
 ## Prerequisites
 
-**REQUIRED SUB-SKILL:** [maestro-core](../maestro-core/SKILL.md)
-
-Load maestro-core first for orchestration context.
+Routing and fallback policies are defined in [AGENTS.md](../../AGENTS.md).
 
 ## When to Use
 

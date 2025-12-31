@@ -18,9 +18,7 @@ metadata:
 
 ## Prerequisites
 
-**REQUIRED SUB-SKILL:** [maestro-core](../maestro-core/SKILL.md)
-
-Load maestro-core first for orchestration context (hierarchy, HALT/DEGRADE policies, trigger routing).
+Routing and fallback policies are defined in [AGENTS.md](../../AGENTS.md).
 
 # Conductor: Context-Driven Development
 
@@ -202,7 +200,7 @@ Subagents return structured results; main agent centralizes writes.
 
 ## Command Routing
 
-> **Routing is handled by maestro-core.** See [maestro-core/references/routing.md](../maestro-core/references/routing.md) for the SINGLE SOURCE OF TRUTH.
+> **Routing is handled by AGENTS.md.** See [AGENTS.md](../../AGENTS.md) for fallback policies.
 
 This skill only executes - it does not route. Available commands:
 
