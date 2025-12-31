@@ -17,7 +17,7 @@ Routing and fallback policies are defined in [AGENTS.md](../../AGENTS.md).
 
 **Primary:** `/conductor-implement` auto-routes here when:
 - Plan.md has **Track Assignments** section
-- TIER 1 + TIER 2 scoring passes
+- Complexity scoring passes (see [design routing heuristics](../design/references/design-routing-heuristics.md))
 
 **Direct:** Also available via:
 - User runs `/conductor-orchestrate` or `co`

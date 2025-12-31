@@ -36,7 +36,7 @@ ls -d worktrees 2>/dev/null      # Alternative
 ### 2. Check CLAUDE.md
 
 ```bash
-grep -i "worktree.*director" CLAUDE.md 2>/dev/null
+grep -i "worktree.*directory" CLAUDE.md 2>/dev/null
 ```
 
 **If preference specified:** Use it without asking.

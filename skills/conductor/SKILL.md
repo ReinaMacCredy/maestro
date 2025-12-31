@@ -372,7 +372,7 @@ conductor/
 ├── workflow.md             # Development standards (TDD, commits, coverage)
 ├── tracks.md               # Master track list with status markers
 ├── setup_state.json        # Setup progress tracking
-├── finish_state.json       # Finish workflow tracking (created by /conductor-finish)
+├── finish-state.json       # Finish workflow tracking (created by /conductor-finish)
 ├── AGENTS.md               # Learnings hub (auto-updated by /conductor-finish)
 ├── CODEMAPS/               # Architecture documentation
 │   ├── .meta.json          # Generation metadata
@@ -537,7 +537,7 @@ When `/conductor-status` runs, include integrity check:
 
 ```
 Track: codemaps-integration_20251223
-Status: new (repaired: missing metadata.json, .track-progress.json)
+Status: new (repaired: missing metadata.json, implement_state.json)
 Files: design.md ✓, spec.md ✓, plan.md ✓
 Beads: Not filed (run `fb` to file)
 ```

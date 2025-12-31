@@ -36,11 +36,11 @@ Trigger on:
 
 When starting a design session:
 
-### 0. Load Continuity Context
+### 0. Load Prior Session Context
 
 Check for prior session context:
 
-1. Run `continuity load` workflow
+1. Run `/resume_handoff` command
 2. If prior handoffs exist in `conductor/handoffs/`:
    - Display prior context summary
    - Show: `📋 Prior context: <goal summary>`

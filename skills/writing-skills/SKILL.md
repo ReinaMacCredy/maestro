@@ -105,8 +105,9 @@ skills/
 
 **Frontmatter (YAML):**
 
-- Only two fields supported: `name` and `description`
-- Max 1024 characters total
+- Required fields: `name` and `description`
+- Optional fields: `metadata` (containing `version`, `keywords`, `author`, `repository`), `license`, `compatibility`
+- Max 1024 characters for description
 - `name`: Use letters, numbers, and hyphens only (no parentheses, special chars)
 - `description`: Third-person, describes ONLY when to use (NOT what it does)
   - Start with "Use when..." to focus on triggering conditions
@@ -650,7 +651,7 @@ Run same scenarios WITH skill. Agent should now comply.
 
 Agent found new rationalization? Add explicit counter. Re-test until bulletproof.
 
-**Testing methodology:** See @testing-skills-with-subagents.md for the complete testing methodology:
+**Testing methodology:** See [testing-skills-with-subagents.md](testing-skills-with-subagents.md) for the complete testing methodology:
 
 - How to write pressure scenarios
 - Pressure types (time, sunk cost, authority, exhaustion)

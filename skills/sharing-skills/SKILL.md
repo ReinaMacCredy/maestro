@@ -89,7 +89,7 @@ git push -u origin "add-${skill_name}-skill"
 ```bash
 # Create PR to upstream using gh CLI
 gh pr create \
-  --repo upstream-org/upstream-repo \
+  --repo <YOUR-UPSTREAM-ORG>/<YOUR-UPSTREAM-REPO> \
   --title "Add ${skill_name} skill" \
   --body "$(cat <<'EOF'
 ## Summary
@@ -134,7 +134,7 @@ git push -u origin "add-async-patterns-skill"
 
 # 6. Create PR
 gh pr create \
-  --repo upstream-org/upstream-repo \
+  --repo <YOUR-UPSTREAM-ORG>/<YOUR-UPSTREAM-REPO> \
   --title "Add async-patterns skill" \
   --body "## Summary
 Patterns for handling asynchronous operations correctly in tests and application code.
