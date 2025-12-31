@@ -885,8 +885,8 @@ This enables:
 
 ### References
 
-- [Beads Session Workflow](../../conductor/references/conductor/beads-session.md) - Full SA/MA session protocol
-- [Beads Preflight](../../conductor/references/conductor/preflight-beads.md) - Mode detection and session init
+- [Beads Session Workflow](../../conductor/references/beads-session.md) - Full SA/MA session protocol
+- [Beads Preflight](../../conductor/references/preflight-beads.md) - Mode detection and session init
 - [Beads Facade](../../conductor/references/beads-facade.md) - API contract
 - [Beads Integration](../../conductor/references/beads-integration.md) - All 13 integration points
 

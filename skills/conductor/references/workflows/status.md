@@ -182,13 +182,13 @@ User can choose to:
 - **[M]** Run migration to create missing beads
 - **[S]** Skip (no action)
 
-See [status-sync-beads.md](../conductor/status-sync-beads.md) for implementation details.
+See [status-sync-beads.md](../status-sync-beads.md) for implementation details.
 
 ---
 
 ## References
 
-- [Status Sync Beads](../conductor/status-sync-beads.md) - Detailed sync workflow
+- [Status Sync Beads](../status-sync-beads.md) - Detailed sync workflow
 - [Beads Integration](../beads-integration.md) - Point 12
 
 ## Example Output

@@ -116,5 +116,5 @@ Run `scripts/beads-metrics-summary.sh` for weekly summary.
 
 - [Beads Facade](../../conductor/references/beads-facade.md) - API contract
 - [Beads Integration](../../conductor/references/beads-integration.md) - All 13 integration points
-- [Preflight Workflow](../../conductor/references/conductor/preflight-beads.md) - Session initialization
-- [Session Workflow](../../conductor/references/conductor/beads-session.md) - Claim/close/sync protocol
+- [Preflight Workflow](../../conductor/references/preflight-beads.md) - Session initialization
+- [Session Workflow](../../conductor/references/beads-session.md) - Claim/close/sync protocol

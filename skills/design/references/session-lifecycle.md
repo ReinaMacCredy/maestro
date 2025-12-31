@@ -176,7 +176,7 @@ Preflight Sequence:
 4. Create/update session state
 ```
 
-Location: [../conductor/preflight-beads.md](../../conductor/references/conductor/preflight-beads.md)
+Location: [../conductor/preflight-beads.md](../../conductor/references/preflight-beads.md)
 
 ### implement.md: ROUTE Evaluation at Phase 2b
 

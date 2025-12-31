@@ -195,7 +195,7 @@ Subagents return structured results; main agent centralizes writes.
 
 - [Beads Facade](references/beads-facade.md) - API contract
 - [Beads Integration](references/beads-integration.md) - All 13 integration points
-- [Preflight Workflow](references/conductor/preflight-beads.md) - Preflight details
+- [Preflight Workflow](references/preflight-beads.md) - Preflight details
 
 ## Command Routing
 
