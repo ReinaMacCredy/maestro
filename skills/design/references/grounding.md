@@ -51,8 +51,8 @@ Research runs automatically at:
 
 The following files are kept for reference but no longer used:
 
-- [tiers.md](grounding/tiers.md) - Old tier definitions
-- [router.md](grounding/router.md) - Old cascading logic
-- [cache.md](grounding/cache.md) - Old caching (now handled by research)
-- [sanitization.md](grounding/sanitization.md) - Moved to research protocol
-- [impact-scan-prompt.md](grounding/impact-scan-prompt.md) - Now part of Impact agent
+- [tiers.md](grounding-archive/tiers.md) - Old tier definitions
+- [router.md](grounding-archive/router.md) - Old cascading logic
+- [cache.md](grounding-archive/cache.md) - Old caching (now handled by research)
+- [sanitization.md](grounding-archive/sanitization.md) - Moved to research protocol
+- [impact-scan-prompt.md](grounding-archive/impact-scan-prompt.md) - Now part of Impact agent

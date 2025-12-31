@@ -386,7 +386,7 @@ For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../../d
 
 > **Deprecated:** "Grounding" terminology replaced by "Research Verification"
 
-1. **Run:** `finder` with query: "similar problems to [problem statement]"
+1. **Run:** `Locator agent` or `finder(amp)` with query: "similar problems to [problem statement]"
 2. **Calculate confidence:**
    - 3+ matches → HIGH
    - 1-3 matches → MEDIUM
@@ -424,8 +424,8 @@ For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../../d
 > **Deprecated:** "Grounding" terminology replaced by "Research Verification"
 
 1. **Run:**
-   - `finder` with query: "existing patterns for [selected approach]"
-   - `Grep` for key terms from problem statement
+   - Locator agent with query: "existing patterns for [selected approach]"
+   - Pattern agent for key terms from problem statement
 2. **Calculate confidence:**
    - 3+ matches → HIGH
    - 1-3 matches → MEDIUM
@@ -699,8 +699,8 @@ Research verification uses **parallel sub-agents** instead of sequential groundi
 
 ### Key Changes from Old Grounding
 
-- ❌ OLD: Sequential execution (Grep → finder → web)
-- ✅ NEW: Parallel sub-agents (faster, more comprehensive)
+- [DEPRECATED] OLD: Sequential execution (Grep, Locator, Web in sequence)
+- [CURRENT] NEW: Parallel sub-agents (Locator, Analyzer, Pattern, Web, Impact)
 
 - ❌ OLD: Skip conditions (SPEED mode, "quick", timeout)
 - ✅ NEW: Research ALWAYS runs (no skip conditions)

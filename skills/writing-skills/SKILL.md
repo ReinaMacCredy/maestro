@@ -192,19 +192,20 @@ Load maestro-core first for orchestration context.
 
 All Maestro skills (conductor, design, beads, worktrees, sharing, writing) should reference maestro-core as a prerequisite. This establishes:
 
-- **Skill hierarchy**: 5-level priority for conflict resolution
+- **Skill hierarchy**: 6-level priority for conflict resolution
 - **HALT/DEGRADE policy**: When to stop vs gracefully degrade
 - **Trigger routing**: How to disambiguate overlapping triggers
 
 ### Hierarchy Levels
 
-| Level | Skills | Role |
-|-------|--------|------|
-| 1 | maestro-core | Routing decisions, fallback policy |
+| Level | Skill | Role |
+|-------|-------|------|
+| 1 | maestro-core | Routing, fallback policy |
 | 2 | conductor | Track orchestration, workflow state |
-| 3 | design | Design sessions (Double Diamond) |
-| 4 | beads | Issue tracking, dependencies |
-| 5 | specialized | worktrees, sharing, writing |
+| 3 | orchestrator | Multi-agent parallel execution |
+| 4 | design | Design sessions (Double Diamond) |
+| 5 | beads | Issue tracking, dependencies |
+| 6 | specialized | worktrees, sharing, writing |
 
 Higher levels override lower levels on conflicts.
 
