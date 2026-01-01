@@ -82,4 +82,4 @@ See [beads-integration.md](references/beads-integration.md) for all 13 integrati
 - [design](../design/SKILL.md) - Double Diamond design sessions
 - [beads](../beads/SKILL.md) - Issue tracking
 - [orchestrator](../orchestrator/SKILL.md) - Parallel execution
-- [maestro-core](https://github.com/anthropics/maestro) - Routing policies in AGENTS.md
+- [maestro-core](../maestro-core/SKILL.md) - Routing policies in AGENTS.md

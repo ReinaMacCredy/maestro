@@ -72,4 +72,4 @@ See [apc-checkpoints.md](references/apc-checkpoints.md) for details.
 
 - [conductor](../conductor/SKILL.md) - Track creation and implementation
 - [beads](../beads/SKILL.md) - Issue tracking after design
-- [maestro-core](https://github.com/anthropics/maestro) - Routing policies in AGENTS.md
+- [maestro-core](../maestro-core/SKILL.md) - Routing policies in AGENTS.md
