@@ -88,7 +88,7 @@ flowchart TB
     READY -.->|"Phase 0"| VALIDATE
 ```
 
-For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../docs/PIPELINE_ARCHITECTURE.md).
+For detailed pipeline documentation, see [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
 
 ## 4-Phase Framework
 

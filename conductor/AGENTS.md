@@ -64,6 +64,10 @@ Contains reusable learnings from completed tracks.
 - `ln -s ../skills .claude/skills` - Create symlink for single source of truth (delete contents first)
 - `python3 skills/skill-creator/scripts/quick_validate.py skills/<name>` - Validate skill structure and frontmatter
 - `wc -l skills/*/SKILL.md` - Check line counts across all skills
+- `wc -l *.md docs/*.md` - Line count verification across multiple directories
+- `bd list --parent=<epic-id> --status=open --json | jq 'length'` - Check for lingering beads before epic close
+- `summarize_thread(thread_id=TRACK_THREAD)` - Read track context before each bead (worker protocol)
+- `send_message(to=[self], thread_id=TRACK_THREAD)` - Self-message learnings for next bead (track thread pattern)
 
 ## Gotchas
 
@@ -135,6 +139,11 @@ Contains reusable learnings from completed tracks.
 - Stale threshold is 10 minutes since last heartbeat
 - Scripts use stdlib only (no external dependencies) - claudekit-skills pattern
 - Test imports need sys.path.insert for the scripts directory when running pytest
+- Missing files should use `bd close --reason skipped`, not `--reason blocked`
+- Code blocks with `# comments` may be incorrectly parsed as H1 headings by link validators
+- Track threads are ephemeral (scoped to single epic) - don't expect cross-epic persistence
+- Auto-detect routing requires `metadata.json.beads.planTasks` populated by fb - verify before routing
+- Lingering beads can remain after all epic work done - always verify before closing epic
 
 ## Patterns
 
@@ -185,3 +194,6 @@ Contains reusable learnings from completed tracks.
 - **Hub-and-Spoke Skill Architecture:** maestro-core as central router (~100 lines), all spokes <100 lines each
 - **Reference Extraction:** Move detailed content (>100 lines) to references/ subdirectory, keep SKILL.md as concise router
 - **Bidirectional Related Links:** Each skill links to related skills; related skills link back for discoverability
+- **Track Thread Pattern:** Workers use `track:{AGENT_NAME}:{EPIC_ID}` for bead-to-bead context passing
+- **Per-Bead Loop Protocol:** START (register, read thread, reserve, claim) → WORK → COMPLETE (close, save context, release) → NEXT
+- **Auto-Detect Parallel Routing:** Check planTasks independence → if ≥2 independent beads → route to orchestrator

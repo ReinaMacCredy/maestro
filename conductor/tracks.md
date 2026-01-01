@@ -38,6 +38,12 @@ Add Phase 0 (Preflight) to Orchestrator for multi-session coordination. Auto-reg
 
 Full merge of Continuous-Claude-v2 patterns into Maestro. Created 15 specialized agents in 5 categories (research/review/planning/execution/debug), thin router in AGENTS.md for token efficiency, Agent Mail as primary handoff storage. Orchestrated with 3 parallel waves, 5 epics, 35 beads.
 
+## [x] Track: Orchestrator Skill Improvements
+*ID: orchestrator-improvements_20260101*
+*Archived: [conductor/archive/orchestrator-improvements_20260101/](archive/orchestrator-improvements_20260101/)*
+
+Track threads for bead-to-bead context, per-bead execution loop, AGENTS.md tool preferences, auto-detect parallel routing (≥2 independent beads → orchestrator), enhanced monitoring with bv --robot-triage, lingering beads verification before epic close.
+
 ## [x] Track: Auto-Orchestration After Filing Beads
 *ID: auto-orchestrate*
 *Archived: [conductor/archive/auto-orchestrate/](archive/auto-orchestrate/)*

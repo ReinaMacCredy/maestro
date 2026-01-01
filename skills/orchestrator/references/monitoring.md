@@ -14,7 +14,11 @@ Orchestrator monitors workers through Agent Mail messages. Workers report:
 
 ```python
 while not all_complete:
-    # 1. Check inbox for urgent messages
+    # 1. PRIMARY: Use bv --robot-triage for status
+    status = bash(f"bv --robot-triage --graph-root {epic_id} --json")
+    quick_ref = json.loads(status)['quick_ref']
+    
+    # 2. SECONDARY: Check inbox for urgent messages
     urgent = fetch_inbox(
         project_key=project_path,
         agent_name=orchestrator_name,
@@ -22,26 +26,35 @@ while not all_complete:
         include_bodies=True
     )
     
-    # 2. Handle blockers immediately
+    # 3. Handle blockers immediately
     for msg in urgent:
         handle_blocker(msg)
     
-    # 3. Search for progress in epic thread
+    # 4. Search for progress in epic thread
     progress = search_messages(
         project_key=project_path,
         query=f"thread:{epic_id} COMPLETE",
         limit=50
     )
     
-    # 4. Check bead status
-    status = bv_robot_triage(epic_id)
-    
     # 5. Update state and log progress
-    update_state(progress, status)
+    update_state(progress, quick_ref)
     
     # 6. Wait before next poll
     sleep(30)  # 30 second interval
 ```
+
+## Quick Status Extraction
+
+Primary method using bv:
+
+```bash
+bv --robot-triage --graph-root <epic-id> --json | jq '.quick_ref'
+```
+
+Returns: `{ open_count, in_progress_count, blocked_count, completed_count }`
+
+This provides a fast snapshot of epic progress without parsing individual messages.
 
 ## Message Types
 

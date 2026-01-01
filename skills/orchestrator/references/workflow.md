@@ -481,6 +481,29 @@ send_message(
 
 ## Phase 7: Epic Completion
 
+### Verify All Child Beads Closed
+
+Before closing epic, verify no lingering beads:
+
+```python
+# Check for open child beads
+open_beads = bash(f"bd list --parent={epic_id} --status=open --json | jq 'length'")
+
+if int(open_beads) > 0:
+    # List lingering beads
+    lingering = bash(f"bd list --parent={epic_id} --status=open --json")
+    print(f"⚠️ Lingering beads found: {open_beads}")
+    print(lingering)
+    
+    # Prompt user
+    choice = prompt("[C]lose all / [S]kip / [A]bort?")
+    if choice == 'C':
+        bash(f"bd close $(bd list --parent={epic_id} --status=open --json | jq -r '.[].id') --reason completed")
+    elif choice == 'A':
+        raise Exception("Aborted: lingering beads")
+    # Skip continues to close epic
+```
+
 ### Verify All Complete
 
 ```python

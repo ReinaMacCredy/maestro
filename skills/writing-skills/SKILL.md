@@ -64,6 +64,5 @@ After writing ANY skill, complete deployment before creating another. Untested s
 
 ## Related
 
-- [test-driven-development](../test-driven-development/SKILL.md) - Core TDD cycle this adapts
 - [sharing-skills](../sharing-skills/SKILL.md) - Contributing skills upstream
 - [maestro-core](../maestro-core/SKILL.md) - Workflow routing and skill hierarchy

@@ -127,7 +127,39 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
    
    **If Track Assignments section exists → immediately route to orchestrator.**
 
-2. **Check Agent Mail Availability (Priority 2)**
+2. **Auto-Detect from Beads (Priority 2)**
+   
+   When no explicit Track Assignments exist, auto-detect parallel opportunities from metadata.json:
+   
+   ```python
+   metadata = Read("conductor/tracks/<track-id>/metadata.json")
+   
+   # Check if beads section has planTasks mapping
+   if "beads" in metadata and "planTasks" in metadata["beads"]:
+       # Get bead IDs from metadata
+       bead_ids = list(metadata["beads"]["planTasks"].values())
+       
+       # Verify with bd list at runtime (source of truth)
+       live_beads_raw = bash("bd list --json")
+       live_beads = {b['id']: b for b in json.loads(live_beads_raw)}
+       
+       # Analyze dependency graph for independent beads
+       independent_beads = []
+       for bead_id in bead_ids:
+           if bead_id in live_beads and not live_beads[bead_id].get("dependencies"):
+               independent_beads.append(bead_id)
+       
+       # Threshold: 2+ independent beads triggers auto-orchestration
+       if len(independent_beads) >= 2:
+           # Group by file scope (same directory = same track)
+           tracks = group_by_file_scope(independent_beads)
+           # Auto-generate Track Assignments and route to orchestrator
+           return PARALLEL_DISPATCH
+   ```
+   
+   See [auto-routing.md](../../../orchestrator/references/auto-routing.md) for full algorithm.
+
+3. **Check Agent Mail Availability (Priority 3)**
    
    ```python
    try:
@@ -141,7 +173,7 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
    
    **If Agent Mail unavailable → fall back to sequential.**
 
-3. **Evaluate TIER 1** (weighted score, only if no Track Assignments):
+4. **Evaluate TIER 1** (weighted score, only if no Track Assignments or auto-detect):
    
    | Factor | Weight |
    |--------|--------|
@@ -152,7 +184,7 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
    
    **Threshold:** Score >= 5 to proceed to TIER 2
 
-4. **Evaluate TIER 2** (if TIER 1 passes):
+5. **Evaluate TIER 2** (if TIER 1 passes):
    
    ```python
    (files > 15 AND tasks > 3) OR
@@ -160,17 +192,18 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
    (est_time > 30 min AND independent_ratio > 0.6)
    ```
 
-5. **Route Decision:**
+6. **Route Decision:**
    
    | Condition | Result |
    |-----------|--------|
    | Track Assignments exists | PARALLEL_DISPATCH |
+   | Auto-detect: ≥2 independent beads | PARALLEL_DISPATCH |
    | Agent Mail unavailable | SINGLE_AGENT |
    | TIER 1 FAIL | SINGLE_AGENT |
    | TIER 1 PASS, TIER 2 FAIL | SINGLE_AGENT |
    | TIER 1 PASS, TIER 2 PASS | PARALLEL_DISPATCH |
 
-6. **Display Feedback:**
+7. **Display Feedback:**
    ```text
    ┌─ EXECUTION ROUTING ────────────────────┐
    │ Track Assignments: YES                 │
@@ -190,7 +223,7 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
    └────────────────────────────────────────┘
    ```
 
-7. **Update State:**
+8. **Update State:**
    
    Add to `implement_state.json`:
    ```json
@@ -199,6 +232,8 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
      "routing_trigger": "track_assignments",
      "routing_evaluation": {
        "has_track_assignments": true,
+       "auto_detect_triggered": false,
+       "independent_beads_count": null,
        "agent_mail_available": true,
        "tier1_score": null,
        "tier1_pass": null,
@@ -207,7 +242,7 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
    }
    ```
 
-8. **Branch Logic:**
+9. **Branch Logic:**
    - **SINGLE_AGENT:** Continue to Phase 3 (sequential execution)
    - **PARALLEL_DISPATCH:** Hand off to [orchestrator skill](../../../orchestrator/SKILL.md)
      - Load orchestrator workflow

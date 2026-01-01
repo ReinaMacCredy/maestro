@@ -1,267 +1,184 @@
-# Setup Guide
-
-**For AI agents setting up Maestro.**
+# Maestro Setup Guide
 
 <!--
 AGENT-QUICK-SETUP
 
-Execute these steps in order:
-
-1. Install plugin:
-   - Claude Code: /plugin install https://github.com/ReinaMacCredy/maestro
-   - Amp: amp skill add https://github.com/ReinaMacCredy/maestro --global
-   - Codex: git clone https://github.com/ReinaMacCredy/maestro.git ~/.codex/skills/maestro
-   - Other: git clone to skill directory
-
-2. Read docs/GLOBAL_CONFIG.md, apply config block to user's global config
-
-3. Check if `bd` CLI exists (run: which bd)
-   - If exists: Setup complete
-   - If not: Tell user to install CLI tools manually
-
-4. Report what was installed and what needs manual installation
+1. Install plugin (use tool's method or git clone)
+2. Apply config block to user's global config (paths table below)
+3. Check `which bd` - if missing, install CLI tools
+4. Verify: skills loaded, bd available, bv optional
+5. Report results to user
 -->
 
-## Step 1: Install Plugin
-
-Install using your tool's method:
+## Plugin Installation
 
 | Tool | Command |
 |------|---------|
 | Claude Code | `/plugin install https://github.com/ReinaMacCredy/maestro` |
 | Amp | `amp skill add https://github.com/ReinaMacCredy/maestro --global` |
-| Codex | `git clone https://github.com/ReinaMacCredy/maestro.git ~/.codex/skills/maestro` |
+| Codex | `curl -fsSL https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/scripts/install-codex.sh \| bash` |
+| Manual | `git clone https://github.com/ReinaMacCredy/maestro.git <skill-directory>` |
 
-Quick install/update (Codex, one command):
-```bash
-curl -fsSL https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/scripts/install-codex.sh | bash
-```
-
-To update later (Codex):
-```bash
-git -C ~/.codex/skills/maestro pull
-```
-
-Restart Codex to pick up new skills.
-
-**Manual fallback** (any tool):
-```bash
-git clone https://github.com/ReinaMacCredy/maestro.git <skill-directory>
-```
-
-Skill directories:
-- Claude Code: `~/.claude/skills/maestro`
-- Amp: `~/.config/agents/skills/maestro`
-- Codex: `~/.codex/skills/maestro`
-
-**Verify:** Run `/skill list` or check skill directory exists.
-
-## Step 2: Configure Global Agent
-
-Read [docs/GLOBAL_CONFIG.md](./docs/GLOBAL_CONFIG.md) and apply the config block to user's global config.
-
-The file contains:
-- Config paths for each tool
-- Default config block with BEGIN/END markers
-- Optional Beads Village block
-
-## Step 3: Check CLI Tools
-
-Check if `bd` CLI is installed:
-```bash
-which bd && echo "CLI installed" || echo "CLI not found"
-```
-
-If not found, inform user to install manually (see Manual Installation below).
-
-## Step 4: Report Results
-
-Tell user:
-```
-Maestro setup complete.
-
-Installed:
-- Maestro plugin (skills loaded)
-- Global config updated
-
-For full functionality, install CLI tools:
-  curl -fsSL https://raw.githubusercontent.com/Dicklesworthstone/mcp_agent_mail/main/scripts/install.sh | bash -s -- --dir "$HOME/mcp_agent_mail" --yes
-
-Skills work without CLI - use TodoWrite for session tracking.
-
-Next: Run /conductor-setup in your project to initialize planning.
-```
+**Skill directories:** `~/.claude/skills/maestro` | `~/.config/agents/skills/maestro` | `~/.codex/skills/maestro`
 
 ---
 
-<!-- HUMAN-ONLY: Manual installation reference below -->
+## Global Config
 
-## Manual Installation
+Apply config block to user's global config file:
 
-### CLI Tools
+| Tool | Config Path |
+|------|-------------|
+| Claude Code | `~/.claude/CLAUDE.md` |
+| Amp | `~/.config/amp/AGENTS.md` |
+| Codex | `~/.codex/AGENTS.md` |
+| Gemini CLI | `~/.gemini/GEMINI.md` |
+| Cursor | `~/.cursor/rules/maestro.md` |
 
-**Beads CLI (bd, bv)** - Persistent issue tracking:
+Replace existing `<!-- BEGIN maestro-config -->` block or append:
+
+<!-- BEGIN maestro-config -->
+<!-- version: 2.2.0 | bmad-v6 | 2026-1-1 -->
+
+## Maestro Workflow
+
+Context-driven development with TDD execution.
+
+**First message:** Check `conductor/handoffs/` for prior session context.
+
+### Project Detection
+
+Maestro project if any exist:
+- `conductor/` directory
+- `.beads/` directory
+
+When detected, use Conductor commands instead of ad-hoc planning.
+
+### Triggers
+
+**Planning:**
+- `ds` or `/conductor-design` - Double Diamond design session with A/P/C checkpoints
+- `/conductor-setup` - Initialize project context (once per project)
+- `/conductor-newtrack` - Create spec + plan + beads from design
+
+**Execution:**
+- `bd ready --json` - Find available work
+- `/conductor-implement` - Execute epic with TDD checkpoints (use `--no-tdd` to disable)
+- `tdd` - Enter TDD mode (RED-GREEN-REFACTOR)
+- `finish branch` - Finalize and merge/PR
+
+**Maintenance:**
+- `/conductor-revise` - Update spec/plan mid-implementation
+- `/conductor-finish` - Complete track (learnings, context refresh, archive)
+
+**Beads:**
+- `fb` - File beads from plan
+- `rb` - Review beads
+- `bd status` - Show ready + in_progress
+
+### Session Protocol
+
+**First message (automatic handoff load):**
+1. Check `conductor/handoffs/` for recent handoffs (< 7 days)
+2. If found, auto-load and display: `📋 Prior session context: [track] (Xh ago)`
+3. Skip if user says "fresh start" or no conductor/ exists
+
+**Start:** `bd ready --json` → `bd show <id>` → `bd update <id> --status in_progress`
+
+**End:** `bd update <id> --notes "COMPLETED: X. NEXT: Y"` → `bd close <id> --reason completed` → `bd sync`
+
+### Critical Rules
+
+- Use `--json` with `bd` for structured output
+- Use `--robot-*` with `bv` (bare `bv` hangs)
+- Never write production code without failing test first
+- Always commit `.beads/` with code changes
+
+> **Note:** Skills work without CLI tools. Use `TodoWrite` for session-local tracking if `bd` is not installed.
+
+<!-- END maestro-config -->
+
+---
+
+<!-- BEGIN maestro-village -->
+
+### Beads Village
+
+MCP server for multi-agent coordination via `npx beads-village`.
+
+**Session Start:** `bv --robot-status`
+
+**Tools:** `init`, `claim`, `done`, `reserve`, `release`, `msg`, `inbox`, `status`
+
+**Paths:** `.beads-village/`, `.reservations/`, `.mail/`
+
+<!-- END maestro-village -->
+
+---
+
+## CLI Tools Installation
+
+**Beads CLI (bd, bv):**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Dicklesworthstone/mcp_agent_mail/main/scripts/install.sh | bash -s -- --dir "$HOME/mcp_agent_mail" --yes
 ```
 
-Verify:
+**System dependency:**
 ```bash
-bd --version && bv --version
-```
-
-**System dependencies:**
-```bash
-# jq - required for beads parsing
 brew install jq        # macOS
 sudo apt install jq    # Ubuntu/Debian
 ```
 
-**Other tools (optional):**
-```bash
-# CASS - session search
-curl -fsSL https://raw.githubusercontent.com/Dicklesworthstone/coding_agent_session_search/main/install.sh | bash -s -- --easy-mode
+---
 
-# UBS - bug scanner
-curl -fsSL https://raw.githubusercontent.com/Dicklesworthstone/ultimate_bug_scanner/master/install.sh | bash -s -- --easy-mode
-```
+## MCP Server Config
 
-### MCP Servers
-
-**Beads Village** - Multi-agent coordination:
+**Beads Village** (multi-agent coordination):
 
 ```bash
-# Install package
-npx beads-village
-
-# Add to Claude Code
+# Claude Code
 claude mcp add beads-village -s user -- npx beads-village
 
-# Add to Amp (~/.config/amp/settings.json)
-{
-  "mcpServers": {
-    "beads-village": {
-      "command": "npx",
-      "args": ["beads-village"]
-    }
-  }
-}
+# Amp (~/.config/amp/settings.json)
+{ "mcpServers": { "beads-village": { "command": "npx", "args": ["beads-village"] } } }
 ```
 
-**Enhanced Search (optional):**
-```bash
-# Warp-Grep - parallel codebase search
-claude mcp add morph-fast-tools -s user -e MORPH_API_KEY=<key> -e ALL_TOOLS=true -- npx -y @morphllm/morphmcp
+---
 
-# Exa - real-time web search
-claude mcp add exa -s user -e EXA_API_KEY=<key> -- npx -y @anthropic-labs/exa-mcp-server
-```
+## Verification Checklist
+
+| Check | Command | Expected |
+|-------|---------|----------|
+| Plugin loaded | `/skill list` or check skill directory | Skills visible |
+| Beads CLI | `bd --version` | Version output |
+| Village CLI | `bv --version` | Version output |
+| MCP server | `/mcp` (Claude) | beads-village listed |
 
 ---
 
 ## Quick Reference
 
-| What | How |
-|------|-----|
-| Install plugin | See Step 1 above |
-| Global config | [docs/GLOBAL_CONFIG.md](./docs/GLOBAL_CONFIG.md) |
-| Initialize planning | `/conductor-setup` |
+| Action | Command |
+|--------|---------|
+| Initialize project | `/conductor-setup` |
 | Design feature | `ds` or `/conductor-design` |
 | Create track | `/conductor-newtrack` |
 | Execute tasks | `/conductor-implement` |
-| Validate track health | `/conductor-validate` |
 | Enter TDD mode | `tdd` |
 | See available work | `bd ready --json` |
-| Full documentation | [TUTORIAL.md](./TUTORIAL.md) |
+| Validate track | `/conductor-validate` |
+| Complete track | `/conductor-finish` |
+
+---
 
 ## Troubleshooting
 
 | Problem | Solution |
 |---------|----------|
-| Skills not loading | Check `/skill list` or skill directory |
-| `bd: command not found` | Install CLI tools (see Manual Installation) |
+| Skills not loading | Check `/skill list` or skill directory exists |
+| `bd: command not found` | Run CLI tools installation above |
 | Agent ignores workflow | Use trigger explicitly: `tdd`, `ds`, `/conductor-design` |
-| MCP not working | Check `/mcp` shows the server |
+| MCP not working | Check `/mcp` shows beads-village |
+| Handoff not loading | Check `conductor/handoffs/` exists with recent files |
 
-## Without CLI Tools
-
-The plugin works without `bd`:
-- Skills provide methodology and workflows
-- Use `TodoWrite` for session-local task tracking
-- Track issues manually in GitHub Issues or markdown
-
-**The skills are the methodology; the CLIs are the persistence layer.**
-
----
-
-## Understanding Handoff
-
-**Handoff** is how work context transfers between AI agent sessions. Since sessions have limited memory and can end unexpectedly, handoff ensures your progress survives.
-
-### The Problem
-
-- AI context windows are limited and get compacted
-- Sessions crash, timeout, or get closed
-- Complex features take multiple sessions to complete
-
-### The Solution (Beads-Conductor Integration)
-
-With PR #6, Conductor commands **automatically manage beads** via a facade pattern. Zero manual `bd` commands in the happy path:
-
-```
-Session 1 (Planning):
-  ds → design.md
-  /conductor-newtrack → spec.md + plan.md + AUTO: epic + issues
-  fb → files beads → AUTO: orchestration spawns parallel workers
-  → HANDOFF (auto-generated)
-
-Session 2+ (Execution):
-  Workers execute in parallel (wave execution)
-  → rb runs for final review
-  → /conductor-implement for any remaining work
-```
-
-### Dual-Mode Architecture
-
-| Mode | Description | Used When |
-|------|-------------|-----------|
-| **SA** (Single-Agent) | Direct `bd` CLI calls | Default, one agent |
-| **MA** (Multi-Agent) | Village MCP server | Parallel agents coordinating |
-
-Mode is detected at session start (preflight) and locked for the session.
-
-### State Files (Auto-Managed)
-
-| File | Location | Purpose |
-|------|----------|---------|
-| `metadata.json` | `conductor/tracks/<id>/` | Track info, validation state, beads mapping |
-| `*.md handoffs` | `conductor/handoffs/<track>/` | Session handoffs (git-committed, shareable) |
-| `index.md` | `conductor/handoffs/<track>/` | Handoff log per track |
-| `session-lock_<track>.json` | `.conductor/` | Concurrent session prevention |
-| `pending_*.jsonl` | `.conductor/` | Failed operations for replay |
-
-### In Practice
-
-**With Conductor (recommended - zero manual bd):**
-```bash
-# Start
-/conductor-implement    # Auto-claims from beads
-
-# Work (with TDD checkpoints)
-tdd                     # RED → GREEN → REFACTOR (auto-logged)
-
-# End - automatic sync on session close
-```
-
-**Manual fallback:**
-```bash
-# End of session: save context
-bd update <id> --notes "COMPLETED: X. NEXT: Y."
-git commit -am "progress" && git push
-
-# Start of session: resume
-bd ready --json    # See what's unblocked
-bd show <id>       # Read notes for context
-```
-
-For detailed explanation, see [docs/manual-workflow-guide.md](./docs/manual-workflow-guide.md#understanding-handoff).
+**Skills work without CLI** - methodology and workflows still apply, use `TodoWrite` for task tracking.
