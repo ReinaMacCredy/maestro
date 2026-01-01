@@ -32,6 +32,8 @@ description: Multi-agent parallel execution with autonomous workers. Use when pl
 | Monitor | `fetch_inbox`, `search_messages` |
 | Resolve blockers | `reply_message` |
 | Complete | Verify via `bv`, send summary, `bd close epic` |
+| Track threads | `summarize_thread(thread_id=TRACK_THREAD)` |
+| Auto-routing | Auto-detect parallel via `metadata.json.beads` |
 
 ## 8-Phase Workflow
 
@@ -41,6 +43,7 @@ description: Multi-agent parallel execution with autonomous workers. Use when pl
 3. **Initialize** - ensure_project, register orchestrator + all workers
 4. **Spawn Workers** - Task() for each track (parallel)
 5. **Monitor + Verify** - fetch_inbox, verify worker summaries
+   - Workers use track threads (`TRACK_THREAD`) for bead-to-bead context
 6. **Resolve** - reply_message for blockers
 7. **Complete** - Send summary, close epic, `rb` review
 
@@ -79,6 +82,7 @@ See [references/intent-routing.md](references/intent-routing.md) for mappings.
 | Preflight/session brain | [preflight.md](references/preflight.md) |
 | Intent routing | [intent-routing.md](references/intent-routing.md) |
 | Summary format | [summary-protocol.md](references/summary-protocol.md) |
+| Auto-routing | [auto-routing.md](references/auto-routing.md) |
 
 ## Related
 

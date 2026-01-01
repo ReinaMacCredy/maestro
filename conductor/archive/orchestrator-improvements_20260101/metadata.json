@@ -1,12 +1,13 @@
 {
   "track_id": "orchestrator-improvements_20260101",
   "type": "feature",
-  "status": "ready",
+  "status": "complete",
   "priority": "medium",
   "depends_on": [],
   "estimated_hours": 4,
   "created_at": "2026-01-01T12:00:00Z",
-  "updated_at": "2026-01-01T12:00:00Z",
+  "updated_at": "2026-01-01T13:00:00Z",
+  "completed_at": "2026-01-01T13:00:00Z",
   "description": "Improve orchestrator skill with track threads, per-bead loop, auto-detect parallel routing",
   "has_design": true,
   "threads": [
@@ -14,6 +15,11 @@
       "id": "T-019b7983-7c29-707c-a976-807c3bcf8af2",
       "action": "newtrack",
       "timestamp": "2026-01-01T12:00:00Z"
+    },
+    {
+      "id": "T-019b798e-9d2a-70da-8ffe-b26a9a6f9ef0",
+      "action": "implement",
+      "timestamp": "2026-01-01T12:30:00Z"
     }
   ],
   "artifacts": {
@@ -23,7 +29,7 @@
     "beads": true
   },
   "workflow": {
-    "state": "READY"
+    "state": "ARCHIVED"
   },
   "generation": {
     "status": "complete",
