@@ -61,6 +61,9 @@ Contains reusable learnings from completed tracks.
 - `python skills/orchestrator/scripts/session_identity.py generate <agent>` - Generate session ID with timestamp
 - `python skills/orchestrator/scripts/session_identity.py parse <session_id>` - Parse session ID into components
 - `python skills/orchestrator/scripts/session_cleanup.py find-stale '<sessions_json>' --threshold 10` - Find stale sessions
+- `ln -s ../skills .claude/skills` - Create symlink for single source of truth (delete contents first)
+- `python3 skills/skill-creator/scripts/quick_validate.py skills/<name>` - Validate skill structure and frontmatter
+- `wc -l skills/*/SKILL.md` - Check line counts across all skills
 
 ## Gotchas
 
@@ -179,3 +182,6 @@ Contains reusable learnings from completed tracks.
 - **Hybrid Identity:** Internal format for uniqueness, display format for humans
 - **Takeover Prompt:** [T]ake over / [W]ait / [I]gnore options for stale sessions
 - **Conflict Types:** Track conflicts, file reservation overlaps, bead claim conflicts
+- **Hub-and-Spoke Skill Architecture:** maestro-core as central router (~100 lines), all spokes <100 lines each
+- **Reference Extraction:** Move detailed content (>100 lines) to references/ subdirectory, keep SKILL.md as concise router
+- **Bidirectional Related Links:** Each skill links to related skills; related skills link back for discoverability
