@@ -64,6 +64,7 @@ Contains reusable learnings from completed tracks.
 - `ln -s ../skills .claude/skills` - Create symlink for single source of truth (delete contents first)
 - `python3 skills/skill-creator/scripts/quick_validate.py skills/<name>` - Validate skill structure and frontmatter
 - `wc -l skills/*/SKILL.md` - Check line counts across all skills
+- `wc -l *.md docs/*.md` - Line count verification across multiple directories
 
 ## Gotchas
 
@@ -135,6 +136,8 @@ Contains reusable learnings from completed tracks.
 - Stale threshold is 10 minutes since last heartbeat
 - Scripts use stdlib only (no external dependencies) - claudekit-skills pattern
 - Test imports need sys.path.insert for the scripts directory when running pytest
+- Missing files should use `bd close --reason skipped`, not `--reason blocked`
+- Code blocks with `# comments` may be incorrectly parsed as H1 headings by link validators
 
 ## Patterns
 
