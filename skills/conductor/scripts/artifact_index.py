@@ -6,11 +6,13 @@
 Artifact Index - Build searchable index of session handoffs.
 
 Usage:
-    uv run scripts/artifact-index.py           # Build/rebuild index
-    uv run scripts/artifact-index.py --verify  # Verify index integrity
+    uv run skills/conductor/scripts/artifact_index.py           # Build/rebuild index
+    uv run skills/conductor/scripts/artifact_index.py --verify  # Verify index integrity
+    uv run skills/conductor/scripts/artifact_index.py --json    # Output as JSON
 """
 
 import argparse
+import json
 import re
 import sqlite3
 import sys
@@ -18,8 +20,35 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-sys.path.insert(0, str(Path(__file__).parent))
-from lib import find_conductor_root, get_db_path, parse_frontmatter
+import yaml
+
+
+def find_conductor_root() -> Optional[Path]:
+    """Find conductor/ directory by walking up from cwd."""
+    current = Path.cwd()
+    while current != current.parent:
+        conductor = current / "conductor"
+        if conductor.is_dir():
+            return conductor
+        current = current.parent
+    return None
+
+
+def get_db_path(conductor_root: Path, ensure_cache: bool = False) -> Path:
+    cache_dir = conductor_root / ".cache"
+    if ensure_cache:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir / "artifact-index.db"
+
+
+def parse_frontmatter(content: str) -> dict:
+    try:
+        match = re.match(r"^---\s*\n(.*?)\n---\s*\n", content, re.DOTALL)
+        if match:
+            return yaml.safe_load(match.group(1)) or {}
+    except (yaml.YAMLError, ValueError):
+        pass
+    return {}
 
 
 def init_db(db_path: Path) -> sqlite3.Connection:
@@ -137,11 +166,15 @@ def verify_index(conn: sqlite3.Connection, archive_dir: Path) -> tuple[int, int,
 def main():
     parser = argparse.ArgumentParser(description="Build artifact index")
     parser.add_argument("--verify", action="store_true", help="Verify index integrity")
+    parser.add_argument("--json", action="store_true", help="Output as JSON")
     args = parser.parse_args()
     
     conductor_root = find_conductor_root()
     if not conductor_root:
-        print("Error: No conductor/ directory found", file=sys.stderr)
+        if args.json:
+            print(json.dumps({"error": "No conductor/ directory found"}))
+        else:
+            print("Error: No conductor/ directory found", file=sys.stderr)
         sys.exit(1)
     
     db_path = get_db_path(conductor_root, ensure_cache=True)
@@ -151,19 +184,37 @@ def main():
     
     if args.verify:
         db_count, file_count, orphaned = verify_index(conn, archive_dir)
-        print(f"Database: {db_count} handoffs indexed")
-        print(f"Archive:  {file_count} files")
-        if orphaned:
-            print(f"Warning:  {orphaned} orphaned entries (files deleted)")
-        if db_count == file_count and orphaned == 0:
-            print("Status:   OK")
+        status = "ok" if (db_count == file_count and orphaned == 0) else "needs_rebuild"
+        
+        if args.json:
+            print(json.dumps({
+                "db_count": db_count,
+                "file_count": file_count,
+                "orphaned": orphaned,
+                "status": status
+            }))
         else:
-            print("Status:   Needs rebuild (run without --verify to fix)")
+            print(f"Database: {db_count} handoffs indexed")
+            print(f"Archive:  {file_count} files")
+            if orphaned:
+                print(f"Warning:  {orphaned} orphaned entries (files deleted)")
+            if status == "ok":
+                print("Status:   OK")
+            else:
+                print("Status:   Needs rebuild (run without --verify to fix)")
     else:
         indexed, skipped = index_handoffs(conn, archive_dir)
-        print(f"Indexed: {indexed} new handoffs")
-        print(f"Skipped: {skipped} already indexed")
-        print(f"Database: {db_path}")
+        
+        if args.json:
+            print(json.dumps({
+                "indexed": indexed,
+                "skipped": skipped,
+                "db_path": str(db_path)
+            }))
+        else:
+            print(f"Indexed: {indexed} new handoffs")
+            print(f"Skipped: {skipped} already indexed")
+            print(f"Database: {db_path}")
     
     conn.close()
 

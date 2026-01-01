@@ -6,20 +6,50 @@
 Artifact Cleanup - Remove old handoffs and sync index.
 
 Usage:
-    uv run scripts/artifact-cleanup.py               # Cleanup older than 30 days
-    uv run scripts/artifact-cleanup.py --max-age 7   # Cleanup older than 7 days
-    uv run scripts/artifact-cleanup.py --dry-run     # Show what would be deleted
+    uv run skills/conductor/scripts/artifact_cleanup.py               # Cleanup older than 30 days
+    uv run skills/conductor/scripts/artifact_cleanup.py --max-age 7   # Cleanup older than 7 days
+    uv run skills/conductor/scripts/artifact_cleanup.py --dry-run     # Show what would be deleted
+    uv run skills/conductor/scripts/artifact_cleanup.py --json        # Output JSON
 """
 
 import argparse
+import json
+import re
 import sqlite3
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-sys.path.insert(0, str(Path(__file__).parent))
-from lib import find_conductor_root, get_db_path, parse_frontmatter
+import yaml
+
+
+def find_conductor_root() -> Optional[Path]:
+    """Find conductor/ directory by walking up from cwd."""
+    current = Path.cwd()
+    while current != current.parent:
+        conductor = current / "conductor"
+        if conductor.is_dir():
+            return conductor
+        current = current.parent
+    return None
+
+
+def get_db_path(conductor_root: Path, ensure_cache: bool = False) -> Path:
+    cache_dir = conductor_root / ".cache"
+    if ensure_cache:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir / "artifact-index.db"
+
+
+def parse_frontmatter(content: str) -> dict:
+    try:
+        match = re.match(r"^---\s*\n(.*?)\n---\s*\n", content, re.DOTALL)
+        if match:
+            return yaml.safe_load(match.group(1)) or {}
+    except (yaml.YAMLError, ValueError):
+        pass
+    return {}
 
 
 def parse_handoff_date(file_path: Path) -> Optional[datetime]:
@@ -115,21 +145,35 @@ def main():
     parser = argparse.ArgumentParser(description="Cleanup old handoffs")
     parser.add_argument("--max-age", type=int, default=30, help="Max age in days (default: 30)")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be deleted")
+    parser.add_argument("--json", action="store_true", help="Output JSON")
     args = parser.parse_args()
     
     conductor_root = find_conductor_root()
     if not conductor_root:
-        print("Error: No conductor/ directory found", file=sys.stderr)
+        if args.json:
+            print(json.dumps({"error": "No conductor/ directory found"}))
+        else:
+            print("Error: No conductor/ directory found", file=sys.stderr)
         sys.exit(1)
     
     archive_dir = conductor_root / "sessions" / "archive"
     db_path = get_db_path(conductor_root)
     
-    if args.dry_run:
-        print("DRY RUN - No files will be deleted\n")
-    
     deleted, kept = cleanup(archive_dir, db_path, args.max_age, args.dry_run)
     orphaned = sync_index(archive_dir, db_path, args.dry_run)
+    
+    if args.json:
+        print(json.dumps({
+            "deleted": deleted,
+            "kept": kept,
+            "orphaned": orphaned,
+            "max_age_days": args.max_age,
+            "dry_run": args.dry_run
+        }))
+        return
+    
+    if args.dry_run:
+        print("DRY RUN - No files will be deleted\n")
     
     print(f"Cutoff: {args.max_age} days ago")
     print(f"Archive: {archive_dir}")

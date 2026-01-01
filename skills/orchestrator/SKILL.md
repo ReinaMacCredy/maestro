@@ -105,13 +105,9 @@ Orchestrator supports two modes based on task complexity and Agent Mail availabi
 ```python
 # Auto-select mode based on conditions
 if not agent_mail_available():
-    mode = "LIGHT"  # Fallback
-elif has_cross_track_deps(TRACKS):
-    mode = "FULL"   # Need coordination
-elif max_estimated_duration(TRACKS) < 10:  # minutes
-    mode = "LIGHT"  # Simple tasks
+    mode = "LIGHT"  # Fallback only when unavailable
 else:
-    mode = "FULL"   # Default for complex work
+    mode = "FULL"   # Always use Agent Mail coordination when available
 ```
 
 ### Light Mode Behavior

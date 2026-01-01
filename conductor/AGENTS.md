@@ -32,10 +32,12 @@ Contains reusable learnings from completed tracks.
 - `/conductor-implement` - Execute with TDD checkpoints by default (use `--no-tdd` to disable)
 - `wc -l <file>.csv` - Verify CSV row counts match upstream when syncing data files
 - `curl -s https://raw.githubusercontent.com/.../file.csv` - Sync CSV data directly from upstream repo
-- `uv run scripts/artifact-index.py` - Build/rebuild SQLite FTS5 index of handoffs
-- `uv run scripts/artifact-index.py --verify` - Check index integrity
-- `uv run scripts/artifact-query.py <query>` - Search archived handoffs with FTS5
-- `uv run scripts/artifact-cleanup.py --dry-run` - Preview handoffs to delete
+- `uv run skills/conductor/scripts/artifact_index.py` - Build/rebuild SQLite FTS5 index of handoffs
+- `uv run skills/conductor/scripts/artifact_index.py --verify` - Check index integrity
+- `uv run skills/conductor/scripts/artifact_query.py <query>` - Search archived handoffs with FTS5
+- `uv run skills/conductor/scripts/artifact_query.py <query> --json` - JSON output for scripting
+- `uv run skills/conductor/scripts/artifact_cleanup.py --dry-run` - Preview handoffs to delete
+- `uv run skills/beads/scripts/track_assigner.py <beads.json> --json` - Generate track assignments from beads
 - `./scripts/install-global-hooks.sh` - Install Claude Code hooks to ~/.claude/hooks/
 - `git branch --show-current` - Get current branch for preflight checks
 - `git status --porcelain` - Check for dirty state (empty = clean)
