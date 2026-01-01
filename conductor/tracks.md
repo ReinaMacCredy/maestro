@@ -14,6 +14,12 @@ Test track to verify /conductor-implement auto-routes to orchestrator.
 
 ## Completed Tracks
 
+## [x] Track: Scripts Restructure
+*ID: scripts-restructure*
+*Archived: [conductor/archive/scripts-restructure/](archive/scripts-restructure/)*
+
+Restructured Python scripts to match claudekit-skills pattern. Moved artifact-*.py to skills/conductor/scripts/, extracted track_assigner.py to skills/beads/scripts/. All scripts self-contained with --json flag support.
+
 ## [x] Track: Orchestrator Session Brain
 *ID: session-brain*
 *Archived: [conductor/archive/session-brain/](archive/session-brain/)*
