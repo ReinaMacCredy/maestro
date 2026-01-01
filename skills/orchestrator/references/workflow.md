@@ -1,6 +1,52 @@
 # Orchestrator Workflow
 
-6-phase protocol for multi-agent parallel execution.
+7-phase protocol for multi-agent parallel execution.
+
+## Mode Selection (Pre-Phase)
+
+Before starting phases, determine coordination mode:
+
+```python
+# Auto-select mode based on conditions
+def select_mode(TRACKS, CROSS_DEPS):
+    # Check Agent Mail availability
+    try:
+        health_check()
+        agent_mail_available = True
+    except:
+        agent_mail_available = False
+    
+    # Mode selection logic
+    if not agent_mail_available:
+        return "LIGHT"  # Fallback - no Agent Mail
+    elif len(CROSS_DEPS) > 0:
+        return "FULL"   # Need coordination for cross-track deps
+    elif all(estimate_duration(t) < 10 for t in TRACKS):
+        return "LIGHT"  # Simple short tasks
+    else:
+        return "FULL"   # Default for complex work
+
+MODE = select_mode(TRACKS, CROSS_DEPS)
+```
+
+| Mode | Phases Used | Agent Mail | Heartbeats |
+|------|-------------|------------|------------|
+| **LIGHT** | 1, 4, 7 (skip 2, 3, 5, 6) | No | No |
+| **FULL** | All 7 phases | Yes | Yes (>10 min) |
+
+## Phase Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Phase 1: Read Plan         - Parse Track Assignments                      │
+│  Phase 2: Validate          - Health check Agent Mail (FULL only)          │
+│  Phase 3: Initialize        - Register orchestrator, create epic (FULL)    │
+│  Phase 4: Spawn Workers     - Task() for each track (parallel)             │
+│  Phase 5: Monitor + Verify  - Poll inbox, verify summaries (FULL only)     │
+│  Phase 6: Handle Issues     - Resolve blockers, file conflicts (FULL only) │
+│  Phase 7: Complete          - Verify, send summary, close epic, rb review  │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
 ## Phase 1: Read Plan (or Accept Auto-Generated)
 
@@ -29,16 +75,11 @@ CROSS_DEPS = metadata.beads.crossTrackDeps
 ```python
 # Assignments passed directly from fb
 TRACKS = auto_generated_tracks  # Already in correct format
-# [
-#   { track: 1, agent: "BlueLake", tasks: ["1.1.1", "1.1.2"], scope: "skills/orchestrator/**", depends_on: [] },
-#   { track: 2, agent: "GreenCastle", tasks: ["2.1.1", "2.2.1"], scope: "skills/maestro-core/**", depends_on: ["1.2.3"] },
-# ]
-
 EPIC_ID = auto_generated_epic_id
 CROSS_DEPS = auto_generated_cross_deps
 ```
 
-Both options produce the same TRACKS structure for Phase 3.
+Both options produce the same TRACKS structure for Phase 4.
 
 ### Parsing Track Assignments Table
 
@@ -49,14 +90,39 @@ Both options produce the same TRACKS structure for Phase 3.
 
 Map tasks to bead IDs using `metadata.json.beads.planTasks`.
 
-## Phase 2: Initialize Agent Mail
+## Phase 2: Validate Agent Mail (NEW)
+
+**Before spawning workers, verify Agent Mail is functional:**
+
+```python
+# Health check - HALT if unavailable
+try:
+    health_result = health_check(reason="Pre-spawn orchestrator validation")
+    if not health_result.healthy:
+        raise Exception("Agent Mail unhealthy")
+except Exception as e:
+    print("⚠️ Agent Mail unavailable - falling back to sequential")
+    return implement_sequential(track_id)  # Route to /conductor-implement
+```
+
+**Why this matters:** Your demo showed workers executing without Agent Mail registration. This gate prevents that scenario.
+
+### Validation Checklist
+
+| Check | Action on Fail |
+|-------|----------------|
+| `health_check()` succeeds | Fall back to sequential |
+| `ensure_project()` succeeds | Fall back to sequential |
+| `register_agent()` succeeds | Fall back to sequential |
+
+## Phase 3: Initialize Agent Mail
 
 ```python
 # 1. Ensure project exists
 ensure_project(human_key="<absolute-project-path>")
 
 # 2. Register orchestrator
-register_agent(
+orchestrator_result = register_agent(
   project_key="<path>",
   name="<OrchestratorName>",  # Auto-generated or from config
   program="amp",
@@ -64,18 +130,40 @@ register_agent(
   task_description="Orchestrator for <epic-id>"
 )
 
-# 3. Create epic thread
+# 3. Store orchestrator name for workers
+ORCHESTRATOR_NAME = orchestrator_result.name
+
+# 4. Create epic thread (notify all workers will be spawned)
 send_message(
   project_key="<path>",
-  sender_name="<OrchestratorName>",
-  to=["<all-worker-names>"],
+  sender_name=ORCHESTRATOR_NAME,
+  to=["<all-worker-names>"],  # Note: workers don't exist yet, this creates thread
   thread_id="<epic-id>",
   subject="EPIC STARTED: <title>",
-  body_md="Spawning workers for tracks..."
+  body_md="""
+Spawning workers for parallel execution.
+
+## Track Assignments
+| Track | Agent | Scope |
+|-------|-------|-------|
+| 1 | BlueLake | skills/orchestrator/** |
+| 2 | GreenCastle | skills/maestro-core/** |
+
+Workers: Follow 4-step protocol in worker-prompt.md
+"""
 )
 ```
 
-## Phase 3: Spawn Worker Subagents
+## Phase 4: Spawn Worker Subagents
+
+### Mode-Specific Behavior
+
+| Aspect | LIGHT Mode | FULL Mode |
+|--------|------------|-----------|
+| Worker prompt | Light template (no Agent Mail) | Full 4-step template |
+| Pre-registration | Skip | Required |
+| File reservations | Skip (rely on scope isolation) | Via macro_start_session |
+| Result collection | Task() return values | Agent Mail messages |
 
 ### Agent Routing
 
@@ -84,36 +172,85 @@ Before spawning, determine agent type based on task intent. See [agent-routing.m
 - Spawn patterns for each agent type
 - File reservation patterns
 
-### Spawn Logic
+### Spawn Logic (FULL Mode)
 
 Spawn all workers in parallel using Task() tool:
 
 ```python
-# For each track in TRACKS:
-# 1. Determine agent type from task intent (see agent-routing.md)
-# 2. Select appropriate spawn pattern
-# 3. Apply file reservation pattern based on category
+# Track expected workers for Phase 5 verification
+expected_workers = []
 
 for track in TRACKS:
-    agent_type = route_intent(track.description)  # Research, Execution, etc.
-    spawn_pattern = get_spawn_pattern(agent_type)  # From agent-routing.md
+    agent_type = route_intent(track.description)
+    spawn_pattern = get_spawn_pattern(agent_type)
+    
+    expected_workers.append(track.agent)
     
     Task(
-      description=spawn_pattern.format(
+      description=f"Worker {track.agent}: Track {track.track}",
+      prompt=spawn_pattern.format(
         AGENT_NAME=track.agent,
         TRACK_N=track.track,
         EPIC_ID=epic_id,
         TASK_LIST=", ".join(track.tasks),
         BEAD_LIST=", ".join([planTasks[t] for t in track.tasks]),
         FILE_SCOPE=track.scope,
-        ORCHESTRATOR=orchestrator_name,
+        ORCHESTRATOR=ORCHESTRATOR_NAME,  # From Phase 3
         PROJECT_PATH=project_path,
-        DEPENDS_ON=track.depends_on
+        DEPENDS_ON=track.depends_on,
+        MODEL=model,
+        MODE="FULL"  # Workers know to use Agent Mail
       )
     )
 ```
 
-See [worker-prompt.md](worker-prompt.md) for complete template.
+### Spawn Logic (LIGHT Mode)
+
+Simplified spawn without Agent Mail:
+
+```python
+# Collect results directly from Task() returns
+worker_results = []
+
+for track in TRACKS:
+    result = Task(
+      description=f"Worker {track.agent}: Track {track.track}",
+      prompt=f"""
+You are {track.agent}, a worker for Track {track.track}.
+
+## Assignment
+- **Beads**: {track.beads}
+- **File Scope**: {track.scope}
+
+## Protocol (LIGHT MODE - No Agent Mail)
+
+1. **Execute beads:**
+   ```bash
+   bd update <bead-id> --status in_progress
+   # ... do work ...
+   bd close <bead-id> --reason completed
+   ```
+
+2. **Return structured result:**
+   ```python
+   return {{
+       "status": "SUCCEEDED",
+       "files_changed": [...],
+       "key_decisions": [...],
+       "issues": [],
+       "beads_closed": [...]
+   }}
+   ```
+
+NO Agent Mail registration, messaging, or heartbeats required.
+"""
+    )
+    worker_results.append(result)
+
+# Skip to Phase 7 with collected results
+```
+
+See [worker-prompt.md](worker-prompt.md) for the 4-step worker protocol (FULL mode).
 
 ### Parallel vs Sequential
 
@@ -122,46 +259,72 @@ See [worker-prompt.md](worker-prompt.md) for complete template.
 
 Workers check inbox for dependency completion before starting blocked beads.
 
-## Phase 4: Monitor Progress + Wave Re-dispatch
+## Phase 5: Monitor Progress + Verify Summaries (ENHANCED)
 
-Poll for updates while workers execute, **and re-dispatch when new beads become ready**:
+Poll for updates while workers execute, **verify all workers sent summaries**, and re-dispatch when new beads become ready:
 
 ```python
 wave = 1
-active_workers = initial_workers  # From Phase 3
+active_workers = initial_workers  # From Phase 4
+workers_with_summaries = set()
 
 while active_workers or has_ready_beads(EPIC_ID):
-  # Wait for current wave to complete
-  wait_for_workers(active_workers)
-  
-  # Check for blockers
-  blockers = fetch_inbox(
-    project_key="<path>",
-    agent_name="<OrchestratorName>",
-    urgent_only=True
-  )
-  
-  # Handle any blockers
-  for blocker in blockers:
-    handle_blocker(blocker)
-  
-  # Query for newly-ready beads (unblocked by completed work)
-  ready_beads = bash(f"bd ready --json | jq '[.[] | select(.epic == \"{EPIC_ID}\")]'")
-  
-  if ready_beads:
-    wave += 1
-    print(f"Wave {wave}: {len(ready_beads)} beads now ready")
+    # Wait for current wave to complete
+    wait_for_workers(active_workers)
     
-    # Generate new track assignments for this wave
-    new_tracks = generate_track_assignments(ready_beads)
+    # ──────────────────────────────────────────────────────────
+    # NEW: Verify workers sent summaries via Agent Mail
+    # ──────────────────────────────────────────────────────────
+    inbox = fetch_inbox(
+        project_key="<path>",
+        agent_name=ORCHESTRATOR_NAME,
+        include_bodies=True,
+        limit=50
+    )
     
-    # Spawn new workers
-    active_workers = spawn_workers(new_tracks)
+    for msg in inbox:
+        if "[TRACK COMPLETE]" in msg.subject:
+            # Extract agent name from message
+            agent = msg.sender_name
+            workers_with_summaries.add(agent)
+            print(f"✓ Received summary from {agent}")
     
-    # Update metadata
-    update_wave_state(wave, ready_beads)
-  else:
-    active_workers = []  # No more work
+    # Check for missing summaries
+    missing = set(expected_workers) - workers_with_summaries
+    if missing and not active_workers:
+        print(f"⚠️ Missing summaries from: {', '.join(missing)}")
+        # Log but don't block - workers may have used fallback mode
+    
+    # ──────────────────────────────────────────────────────────
+    
+    # Check for blockers
+    blockers = fetch_inbox(
+        project_key="<path>",
+        agent_name=ORCHESTRATOR_NAME,
+        urgent_only=True
+    )
+    
+    for blocker in blockers:
+        handle_blocker(blocker)
+    
+    # Query for newly-ready beads (unblocked by completed work)
+    ready_beads = bash(f"bd ready --json | jq '[.[] | select(.epic == \"{EPIC_ID}\")]'")
+    
+    if ready_beads:
+        wave += 1
+        print(f"Wave {wave}: {len(ready_beads)} beads now ready")
+        
+        # Generate new track assignments for this wave
+        new_tracks = generate_track_assignments(ready_beads)
+        expected_workers.extend([t.agent for t in new_tracks])
+        
+        # Spawn new workers
+        active_workers = spawn_workers(new_tracks)
+        
+        # Update metadata
+        update_wave_state(wave, ready_beads)
+    else:
+        active_workers = []  # No more work
 ```
 
 ### Wave Execution Display
@@ -171,12 +334,34 @@ while active_workers or has_ready_beads(EPIC_ID):
 │ Wave 1: 3 beads (bd-2, bd-3, bd-4)     │
 │   → Spawned 3 workers                  │
 │   → All completed ✓                    │
+│   → Summaries: 3/3 ✓                   │
 ├────────────────────────────────────────┤
 │ Wave 2: 2 beads (bd-5, bd-6)           │
 │   → Spawned 2 workers                  │
 │   → All completed ✓                    │
+│   → Summaries: 2/2 ✓                   │
 ├────────────────────────────────────────┤
 │ All waves complete                     │
+│ Total summaries: 5/5 ✓                 │
+└────────────────────────────────────────┘
+```
+
+### Summary Verification Report (NEW)
+
+After all workers complete:
+
+```text
+┌─ SUMMARY VERIFICATION ─────────────────┐
+│ Expected: 5 workers                    │
+│ Received: 5 summaries                  │
+├────────────────────────────────────────┤
+│ ✓ BlueLake     - SUCCEEDED             │
+│ ✓ GreenCastle  - SUCCEEDED             │
+│ ✓ RedStone     - SUCCEEDED             │
+│ ✓ PurpleMoon   - PARTIAL (1 blocker)   │
+│ ✓ OrangeStar   - SUCCEEDED             │
+├────────────────────────────────────────┤
+│ Status: All workers reported           │
 └────────────────────────────────────────┘
 ```
 
@@ -200,7 +385,7 @@ With re-dispatch:
 └── Track 3 (RedStone): 2/15 [~]
 ```
 
-## Phase 5: Handle Cross-Track Issues
+## Phase 6: Handle Cross-Track Issues
 
 ### Blocker Resolution
 
@@ -214,7 +399,7 @@ blocker = fetch_inbox(urgent_only=True)[0]
 reply_message(
   project_key="<path>",
   message_id=blocker.id,
-  sender_name="<OrchestratorName>",
+  sender_name=ORCHESTRATOR_NAME,
   body_md="Resolution: ..."
 )
 ```
@@ -226,7 +411,7 @@ When two workers need same file:
 ```python
 send_message(
   project_key="<path>",
-  sender_name="<OrchestratorName>",
+  sender_name=ORCHESTRATOR_NAME,
   to=["<Holder>"],
   thread_id="<epic-id>",
   subject="File conflict resolution",
@@ -239,7 +424,7 @@ send_message(
 When Track 1 completes task needed by Track 2:
 
 ```python
-# Worker 1 sends:
+# Worker 1 sends (handled by worker protocol):
 send_message(
   to=["<Worker2>"],
   thread_id="<epic-id>",
@@ -248,7 +433,7 @@ send_message(
 )
 ```
 
-## Phase 6: Epic Completion
+## Phase 7: Epic Completion
 
 ### Verify All Complete
 
@@ -260,14 +445,19 @@ assert status.open_count == 0
 # Or via bd
 open_beads = bash("bd list --status=open --parent=<epic-id> --json | jq 'length'")
 assert open_beads == "0"
+
+# NEW: Verify summary coverage
+missing_summaries = set(expected_workers) - workers_with_summaries
+if missing_summaries:
+    print(f"⚠️ Workers without summaries: {missing_summaries}")
 ```
 
-### Send Summary
+### Send Epic Complete Summary
 
 ```python
 send_message(
   project_key="<path>",
-  sender_name="<OrchestratorName>",
+  sender_name=ORCHESTRATOR_NAME,
   to=all_workers,
   thread_id=epic_id,
   subject="EPIC COMPLETE: <title>",
@@ -277,6 +467,7 @@ send_message(
 - **Duration**: X hours
 - **Tracks**: 3 complete
 - **Beads**: 26 closed
+- **Summaries received**: 3/3 ✓
 
 ### Per-Track Summary
 
@@ -307,11 +498,7 @@ send_message(
 bash("bd close <epic-id> --reason 'All tracks complete'")
 ```
 
-## Phase 7: Final Review
-
-After all workers complete and epic is closed, spawn `rb` sub-agent for final quality review.
-
-### Spawn rb Sub-Agent
+### Spawn rb Sub-Agent for Final Review
 
 ```python
 Task(
@@ -342,7 +529,8 @@ After rb finishes:
 ┌─────────────────────────────────────────┐
 │ ✓ Auto-Orchestration Complete           │
 │                                         │
-│ Workers: 3 complete                     │
+│ Workers: 3 spawned, 3 complete          │
+│ Summaries: 3/3 received ✓               │
 │ Beads: 26 closed                        │
 │ Review: Passed                          │
 │                                         │
@@ -352,24 +540,25 @@ After rb finishes:
 
 ## Graceful Fallback
 
-If Agent Mail MCP is unavailable:
+If Agent Mail MCP is unavailable at any phase:
 
 ```python
 try:
-  ensure_project(...)
+    ensure_project(...)
 except McpUnavailable:
-  print("⚠️ Agent coordination unavailable - falling back to sequential")
-  # Route to standard /conductor-implement
-  return implement_sequential(track_id)
+    print("⚠️ Agent coordination unavailable - falling back to sequential")
+    # Route to standard /conductor-implement
+    return implement_sequential(track_id)
 ```
 
 ## Timing Constraints
 
 | Constraint | Value | Action on Breach |
 |------------|-------|------------------|
-| Worker heartbeat | Every 5 min | Mark worker as stale after 10 min |
+| Worker heartbeat | Every 5 min (optional for <10min tasks) | Mark worker as stale after 10 min |
 | Cross-dep timeout | 30 min | Escalate to orchestrator |
 | Monitor interval | 30 sec | Poll inbox and beads |
+| Summary timeout | 2 min after Task completes | Log warning, continue |
 | Total epic timeout | None | Manual intervention |
 
 ## State Tracking
@@ -380,11 +569,17 @@ Orchestrator maintains state in `implement_state.json`:
 {
   "execution_mode": "PARALLEL_DISPATCH",
   "orchestrator_name": "PurpleMountain",
+  "expected_workers": ["BlueLake", "GreenCastle", "RedStone"],
+  "workers_with_summaries": ["BlueLake", "GreenCastle"],
   "workers": {
-    "BlueLake": { "track": 1, "status": "complete", "beads_closed": 6 },
-    "GreenCastle": { "track": 2, "status": "in_progress", "current_bead": "my-workflow:3-3cmw.14" },
-    "RedStone": { "track": 3, "status": "waiting", "blocked_by": "my-workflow:3-3cmw.14" }
+    "BlueLake": { "track": 1, "status": "complete", "beads_closed": 6, "summary_received": true },
+    "GreenCastle": { "track": 2, "status": "complete", "beads_closed": 5, "summary_received": true },
+    "RedStone": { "track": 3, "status": "in_progress", "current_bead": "my-workflow:3-3cmw.14", "summary_received": false }
   },
+  "waves": [
+    { "wave": 1, "beads": ["bd-2", "bd-3", "bd-4"], "status": "complete" },
+    { "wave": 2, "beads": ["bd-5", "bd-6"], "status": "complete" }
+  ],
   "started_at": "2025-12-30T01:30:00Z",
   "last_poll": "2025-12-30T02:15:00Z"
 }
@@ -393,7 +588,7 @@ Orchestrator maintains state in `implement_state.json`:
 ## References
 
 - [agent-routing.md](agent-routing.md) - Agent routing tables, spawn patterns, file reservations
-- [worker-prompt.md](worker-prompt.md) - Worker template with mandatory summary
+- [worker-prompt.md](worker-prompt.md) - 4-step worker protocol with mandatory summary
 - [summary-protocol.md](summary-protocol.md) - Required summary format for all agents
 - [intent-routing.md](intent-routing.md) - Intent → agent type mappings
 - [Agent Directory](../agents/README.md) - Available agent types and profiles

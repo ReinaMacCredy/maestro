@@ -87,20 +87,58 @@ Both flows converge at Phase 3 (Spawn Workers).
 |--------|---------------------|----------------------|
 | Execution | Sequential, main agent | Parallel, worker subagents |
 | bd access | Main agent only | **Workers CAN claim/close** |
-| Coordination | N/A | Agent Mail MCP |
+| Coordination | N/A | Agent Mail MCP (Full) or Task return (Light) |
 | File locking | N/A | file_reservation_paths |
 | Context | In-memory | Track threads (persistent) |
 
-## 6-Phase Workflow
+## Coordination Modes
+
+Orchestrator supports two modes based on task complexity and Agent Mail availability:
+
+| Mode | Agent Mail | Heartbeats | Use Case |
+|------|------------|------------|----------|
+| **Light** | Not required | No | Simple parallel tasks, no cross-deps, tasks <10 min |
+| **Full** | Required | Yes (>10 min) | Complex coordination, blockers, cross-track deps |
+
+### Mode Selection
+
+```python
+# Auto-select mode based on conditions
+if not agent_mail_available():
+    mode = "LIGHT"  # Fallback
+elif has_cross_track_deps(TRACKS):
+    mode = "FULL"   # Need coordination
+elif max_estimated_duration(TRACKS) < 10:  # minutes
+    mode = "LIGHT"  # Simple tasks
+else:
+    mode = "FULL"   # Default for complex work
+```
+
+### Light Mode Behavior
+
+- Workers execute via Task() and return structured results
+- No Agent Mail registration, messaging, or heartbeats
+- Orchestrator collects results from Task() return values
+- Cross-track deps handled via Task() sequencing (spawn dependent tracks after blockers complete)
+
+### Full Mode Behavior
+
+- Full Agent Mail protocol (register, message, heartbeat)
+- Real-time progress monitoring via fetch_inbox
+- Cross-track dependency notifications
+- Blocker resolution via reply_message
+
+## 7-Phase Workflow
 
 See [references/workflow.md](references/workflow.md) for full protocol:
 
 1. **Read Plan** - Parse Track Assignments from plan.md
-2. **Initialize** - ensure_project, register_agent
-3. **Spawn Workers** - Task() for each track (parallel, with routing)
-4. **Monitor** - fetch_inbox, search_messages
-5. **Resolve** - reply_message for blockers
-6. **Complete** - Verify, send summary, close epic
+2. **Validate** - Health check Agent Mail (HALT if unavailable)
+3. **Initialize** - ensure_project, register_agent, create epic thread
+4. **Spawn Workers** - Task() for each track (parallel, with routing)
+5. **Monitor + Verify** - fetch_inbox, verify worker summaries
+6. **Resolve** - reply_message for blockers, file conflicts
+7. **Complete** - Verify, send summary, close epic, rb review
 
 ## Agent Routing
 
@@ -136,20 +174,71 @@ See [agents/README.md](agents/README.md) for complete agent index and profiles.
 
 ## Worker Protocol
 
-Workers are **autonomous** - they have full control:
+Workers follow different protocols based on coordination mode:
 
-- ✅ `register_agent()` - Identify themselves
-- ✅ `bd update/close` - Claim and close beads
-- ✅ `file_reservation_paths()` - Reserve files before edit
-- ✅ `send_message()` - Report progress, save context (MANDATORY before return)
+### Full Mode (4-Step Protocol)
 
-See [references/worker-prompt.md](references/worker-prompt.md) for complete worker template.
+```
+┌─────────────────────────────────────────────────────────────┐
+│  STEP 1: INITIALIZE (macro_start_session - FIRST action)   │
+│  STEP 2: EXECUTE    (bd update/close - claim and work)     │
+│  STEP 3: REPORT     (send_message - MANDATORY summary)     │
+│  STEP 4: CLEANUP    (release_file_reservations)            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Key rules:**
+- ✅ STEP 1 must be FIRST action (orchestrator pre-registered you)
+- ✅ STEP 3 must happen BEFORE returning (non-negotiable)
+- ✅ Workers CAN use `bd update` and `bd close` directly
+- ⏭️ Heartbeats only for tasks >10 minutes
+
+### Light Mode (3-Step Protocol)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  STEP 1: EXECUTE  (bd update/close - claim and work)       │
+│  STEP 2: RETURN   (structured result via Task() return)    │
+│  STEP 3: (none)   (no Agent Mail, no reservations)         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Light mode rules:**
+- ❌ No Agent Mail registration or messaging
+- ❌ No file reservations (rely on file scope isolation)
+- ❌ No heartbeats
+- ✅ Return structured summary via Task() return value
+
+### Task Return Format (Light Mode Fallback)
+
+When Agent Mail unavailable, workers return structured results:
+
+```python
+return {
+    "status": "SUCCEEDED",  # or "PARTIAL" or "FAILED"
+    "files_changed": [
+        {"path": "path/to/file.ts", "action": "added"},
+        {"path": "path/to/other.ts", "action": "modified"}
+    ],
+    "key_decisions": [
+        {"decision": "Used X pattern", "rationale": "because Y"}
+    ],
+    "issues": [],  # Empty if none
+    "beads_closed": ["bd-101", "bd-102"]
+}
+```
+
+Orchestrator collects these returns and aggregates into final summary.
+
+See [references/worker-prompt.md](references/worker-prompt.md) for complete protocol details.
 
 ## Agent Mail Protocol
 
-### Orchestrator Self-Registration
+### Orchestrator Registration (Phase 2)
 
-On spawn, the orchestrator MUST register itself with Agent Mail:
+On spawn, the orchestrator MUST:
+1. Register itself
+2. **Pre-register ALL workers** before spawning them
 
 ```python
 # 1. Ensure project exists
@@ -163,7 +252,21 @@ register_agent(
     model="claude-sonnet-4-20250514",
     task_description=f"Orchestrator for epic {epic_id}"
 )
+
+# 3. Pre-register ALL workers (CRITICAL - do this BEFORE spawning)
+for track in TRACKS:
+    register_agent(
+        project_key="/path/to/project",
+        name=track.agent,  # e.g., "BlueStar", "GreenMountain"
+        program="amp",
+        model="claude-sonnet-4-20250514",
+        task_description=f"Worker for Track {track.track}"
+    )
+
+# Now send_message to workers will succeed
 ```
+
+> **Why pre-register?** `send_message` validates recipients exist. Without pre-registration, messaging workers fails with "recipients not registered" error.
 
 ### Inbox Fetch Pattern
 
