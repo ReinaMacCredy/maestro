@@ -1,0 +1,17 @@
+{
+  "track_id": "orchestrator-demo",
+  "created_at": "2025-01-01T00:00:00Z",
+  "completed_at": "2026-01-01T00:56:00Z",
+  "status": "completed",
+  "beads": {
+    "epicId": "my-workflow:3-b9rb",
+    "filed": true,
+    "orchestrated": true
+  },
+  "validation": {
+    "gates_passed": ["design", "spec", "plan-structure", "plan-execution", "completion"],
+    "current_gate": null,
+    "retries": 0,
+    "last_failure": null
+  }
+}
