@@ -177,5 +177,5 @@ Research stored in track metadata:
 ## Related
 
 - [protocol.md](../protocol.md) - Main research protocol
-- [agents/](../agents/) - Agent definitions
+- [agents/](../../../../orchestrator/agents/) - Agent definitions
 - [../../workflows.md](../../workflows.md) - Newtrack workflow

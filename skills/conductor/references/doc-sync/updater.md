@@ -358,4 +358,4 @@ Undo with: git checkout -- <files>
 
 ---
 
-*See [SKILL.md](../SKILL.md) for full workflow.*
+*See [SKILL.md](../../SKILL.md) for full workflow.*

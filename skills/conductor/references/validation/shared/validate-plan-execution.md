@@ -165,7 +165,7 @@ If automated verification passes, these require manual verification:
 [X] WRONG: Report success without running
 ```
 
-Reference: [Verification Gate](../verification/gate.md) - "No completion claims without fresh verification evidence"
+Reference: [Verification Gate](../../verification/gate.md) - "No completion claims without fresh verification evidence"
 
 ### Git Diff Analysis
 

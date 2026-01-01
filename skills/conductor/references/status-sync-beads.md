@@ -334,6 +334,6 @@ Reconciliation Options:
 
 ## References
 
-- [Beads Integration](../beads-integration.md) - Point 12
-- [Beads Facade](../beads-facade.md) - API contract
+- [Beads Integration](beads-integration.md) - Point 12
+- [Beads Facade](beads-facade.md) - API contract
 - [Revise Reopen](revise-reopen-beads.md) - Reopening closed beads

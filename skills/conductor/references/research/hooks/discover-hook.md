@@ -138,5 +138,5 @@ Research results stored in session memory for use throughout design:
 ## Related
 
 - [protocol.md](../protocol.md) - Main research protocol
-- [agents/](../agents/) - Agent definitions
-- [../../design/SKILL.md](../../../design/SKILL.md) - Design skill integration
+- [agents/](../../../../orchestrator/agents/) - Agent definitions
+- [Design SKILL.md](../../../../design/SKILL.md) - Design skill integration

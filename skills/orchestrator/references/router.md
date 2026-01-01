@@ -89,4 +89,4 @@ SUCCEEDED | PARTIAL | FAILED
 
 ## Delegation Matrix
 
-See [delegation.md](delegation.md) for full responsibility matrix.
+See [agent-routing.md](agent-routing.md) for responsibility matrix and spawn patterns.

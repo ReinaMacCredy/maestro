@@ -162,7 +162,7 @@ Set up handoff system for cross-session context preservation.
 2. **Announce Handoff System**
    - Display: "✅ Handoff system initialized."
    - Explain: `/create_handoff` for manual handoffs, automatic triggers at workflow points.
-   - See [references/handoff/](references/handoff/) for full documentation.
+   - See [../handoff/](../handoff/) for full documentation.
 
 3. **Update State**
    - **State on Complete**: `"5.1_handoffs_configured"`

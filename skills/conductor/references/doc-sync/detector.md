@@ -288,4 +288,4 @@ Action: Prompt "Update createUser examples in docs/api.md?"
 
 ---
 
-*See [SKILL.md](../SKILL.md) for full workflow.*
+*See [SKILL.md](../../SKILL.md) for full workflow.*

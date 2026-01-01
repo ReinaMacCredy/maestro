@@ -26,7 +26,7 @@ Required [PRESERVE] sections:
 - **Intent** - What we're building and why
 - **Constraints & Ruled-Out** - What we decided NOT to do
 
-→ [Template](../../../design/references/anchored-state-format.md)
+→ [Template](../../design/references/anchored-state-format.md)
 
 ## MA Mode (JSON Handoff)
 
@@ -36,5 +36,5 @@ Use when passing context to another agent.
 
 ## See Also
 
-- [Session Lifecycle](../../../design/references/session-lifecycle.md) - RECALL/REMEMBER
+- [Session Lifecycle](../../design/references/session-lifecycle.md) - RECALL/REMEMBER
 - [Checkpoint Facade](checkpoint.md) - Progress checkpointing

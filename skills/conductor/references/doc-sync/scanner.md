@@ -128,8 +128,11 @@ Detect links pointing to source files:
 ```
 
 **Examples matched:**
-- `[source](src/index.ts)` → src/index.ts
-- `[utils](./lib/utils.js#L42)` → ./lib/utils.js
+
+```text
+[source](src/index.ts) → src/index.ts
+[utils](./lib/utils.js#L42) → ./lib/utils.js
+```
 
 ### 5. Code Blocks with File Comments
 
@@ -222,4 +225,4 @@ On subsequent scans, only re-scan files with changed hashes.
 
 ---
 
-*See [SKILL.md](../SKILL.md) for full workflow.*
+*See [SKILL.md](../../SKILL.md) for full workflow.*

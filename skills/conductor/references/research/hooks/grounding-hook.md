@@ -150,4 +150,4 @@ Routes to research protocol instead of old grounding.
 ## Related
 
 - [protocol.md](../protocol.md) - Main research protocol
-- [agents/](../agents/) - Agent definitions
+- [agents/](../../../../orchestrator/agents/) - Agent definitions

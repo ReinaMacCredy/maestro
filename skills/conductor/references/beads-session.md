@@ -889,7 +889,7 @@ For single-agent sessions, use anchored format to save session context for cross
 
 ### Format Reference
 
-→ [Anchored State Format](../../../design/references/anchored-state-format.md)
+→ [Anchored State Format](../../design/references/anchored-state-format.md)
 
 ### Required Sections
 
@@ -944,7 +944,7 @@ validate_preserve_sections() {
 ### Integration
 
 This extends the Handoff Protocol for SA mode. See:
-- [Session Lifecycle](../../../design/references/session-lifecycle.md) - RECALL phase loads this file
+- [Session Lifecycle](../../design/references/session-lifecycle.md) - RECALL phase loads this file
 - [Checkpoint Facade](checkpoint.md) - For progress checkpointing triggers
 
 ---
@@ -952,6 +952,6 @@ This extends the Handoff Protocol for SA mode. See:
 ## References
 
 - [Preflight Workflow](preflight-beads.md) - Session initialization
-- [Beads Facade](../beads-facade.md) - API contract
-- [Beads Integration](../beads-integration.md) - All 13 points
+- [Beads Facade](beads-facade.md) - API contract
+- [Beads Integration](beads-integration.md) - All 13 points
 - [TDD Checkpoints](tdd-checkpoints-beads.md) - Detailed TDD workflow

@@ -410,6 +410,6 @@ echo "Total time: $((REFACTOR_END - RED_START)) seconds"
 ## References
 
 - [Beads Session Workflow](beads-session.md) - Session lifecycle
-- [Implement Workflow](../workflows/implement.md) - Task execution
-- [Beads Facade](../beads-facade.md) - updateTddPhase API
-- [Beads Integration](../beads-integration.md) - Points 4-6
+- [Implement Workflow](workflows/implement.md) - Task execution
+- [Beads Facade](beads-facade.md) - updateTddPhase API
+- [Beads Integration](beads-integration.md) - Points 4-6

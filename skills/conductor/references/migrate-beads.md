@@ -369,6 +369,6 @@ No changes made. Remove --dry-run to execute.
 
 ## References
 
-- [Track Init Beads](conductor/track-init-beads.md) - New track beads
-- [Status Sync Beads](conductor/status-sync-beads.md) - Discrepancy detection
+- [Track Init Beads](track-init-beads.md) - New track beads
+- [Status Sync Beads](status-sync-beads.md) - Discrepancy detection
 - [Beads Integration](beads-integration.md) - Integration points

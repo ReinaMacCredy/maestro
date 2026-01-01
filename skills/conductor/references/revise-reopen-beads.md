@@ -361,6 +361,6 @@ Summary:
 
 ## References
 
-- [Beads Integration](../beads-integration.md) - Point 13
+- [Beads Integration](beads-integration.md) - Point 13
 - [Status Sync](status-sync-beads.md) - Discrepancy detection
-- [Beads Facade](../beads-facade.md) - API contract
+- [Beads Facade](beads-facade.md) - API contract

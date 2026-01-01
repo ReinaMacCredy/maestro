@@ -555,7 +555,7 @@ First ready: my-workflow:3-def2 - Create beads-facade.md
 
 ## References
 
-- [Beads Facade](../beads-facade.md) - API contract
-- [Beads Integration](../beads-integration.md) - All 13 points
+- [Beads Facade](beads-facade.md) - API contract
+- [Beads Integration](beads-integration.md) - All 13 points
 - [Preflight Workflow](preflight-beads.md) - Session initialization
 - [Session Workflow](beads-session.md) - Claim/close/sync

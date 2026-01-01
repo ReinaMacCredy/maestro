@@ -293,4 +293,4 @@ Run without --dry-run to apply.
 
 ---
 
-*See [SKILL.md](../SKILL.md) for full workflow.*
+*See [SKILL.md](../../SKILL.md) for full workflow.*

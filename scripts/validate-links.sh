@@ -51,6 +51,7 @@ KEY_LINE_PATTERN = re.compile(r"^[A-Za-z0-9_]+:\s*")
 
 EXCLUDE_DIRS = {
     ".git",
+    ".claude",  # hard-link mirror of skills/ - links designed for skills/ context
     "node_modules",
     ".bv",
     ".beads-village",
