@@ -1,114 +1,87 @@
 # AGENTS.md - Maestro Plugin
 
-## Overview
-Claude Code plugin bundling workflow skills: Conductor (planning), Design (Double Diamond sessions), Beads (issue tracking), Orchestrator (multi-agent parallel execution), and Superpowers (TDD, debugging, code review).
+Workflow skills plugin: Conductor, Design, Beads, Orchestrator, Superpowers.
 
-## Build/Test Commands
-No build required - this is a skill/documentation plugin. Validate JSON:
-```bash
-cat .claude-plugin/plugin.json | jq .   # Validate plugin manifest
-```
+## Project Detection
 
-## Architecture
-```
-skills/           # Skill directories, each with SKILL.md (frontmatter + instructions)
-  beads/          # Issue tracking skill with references/ subdirectory
-  conductor/      # Planning methodology (includes /conductor-design, CODEMAPS generation, handoff system)
-  design/         # Double Diamond design sessions (ds trigger), includes bmad/
-  orchestrator/   # Multi-agent parallel execution with autonomous workers
-  ...             # TDD, debugging, code review, etc.
-lib/              # Shared utilities (skills-core.js)
-.claude-plugin/   # Plugin manifest (plugin.json, marketplace.json)
-conductor/        # Unified save location for plans and tracks
-  tracks/<id>/    # Active work (design.md + spec.md + plan.md per track)
-  handoffs/       # Session handoffs (git-committed, shareable)
-  CODEMAPS/       # Architecture documentation (overview.md, module codemaps)
-  archive/        # Completed work
-```
-
-## Handoff Mechanism
-
-Handoff preserves context between sessions via persistent files (`design.md`, `spec.md`, `plan.md`) and trackable beads.
-
-**Flow:** `ds → design.md → /conductor-newtrack → spec.md + plan.md + beads`
-
-**Commands:**
-- `/create_handoff` - Save current context
-- `/resume_handoff` - Load most recent handoff
-- `/conductor-implement <track-id>` - Start execution
-
-See [docs/handoff-system.md](docs/handoff-system.md) for full documentation.
-
-## Code Style
-- Skills: Markdown with YAML frontmatter (`name`, `description` required)
-- Skill directories: kebab-case (`test-driven-development`, `using-git-worktrees`)
-- SKILL.md must match directory name in frontmatter `name` field
-
-## Versioning
-- **Plugin version**: Auto-bumped by CI (`feat:` → minor, `fix:` → patch, `feat!:` → major)
-- **Skill versions**: Manual update in SKILL.md frontmatter
-- **Escape hatch**: `[skip ci]` in commit message
-
-## Key Skills
-
-| Skill | Trigger | Description |
-|-------|---------|-------------|
-| `design` | `ds` | Double Diamond design session |
-| `conductor` | `/conductor-*` | Structured planning and execution |
-| `orchestrator` | `/conductor-orchestrate`, "run parallel" | Multi-agent parallel execution |
-| `beads` | `fb`, `rb`, `bd ready` | Issue tracking |
-
-## Quick Reference
-
-| Task | Command |
-|------|---------|
-| Start design | `ds` |
-| Create track from design | `/conductor-newtrack` |
-| Find ready work | `bd ready` |
-| Start implementation | `/conductor-implement <track>` |
-| Finish track | `/conductor-finish` |
-
-## Fallback Policy
-
-| Condition | Action |
+| Condition | Result |
 |-----------|--------|
-| `bd` unavailable | HALT |
-| `conductor/` missing | DEGRADE (standalone mode) |
-| Village MCP unavailable | DEGRADE |
+| `conductor/` exists | Use Conductor workflow |
+| `.beads/` exists | Use Beads tracking |
+| Neither | Standalone mode |
 
-## Session Lifecycle
+## Decision Trees
 
-### Auto-Load Handoffs (First Message)
+### bd vs TodoWrite
 
-On first user message of a new session, before processing:
+```
+bd available?
+├─ YES → Use bd CLI
+└─ NO  → HALT (do not use TodoWrite as fallback)
+```
 
-1. Check if `conductor/handoffs/` exists
-2. Scan for recent handoffs (< 7 days old)
-3. If found: Display `📋 Prior context: [track] (Xh ago)` and load silently
-4. Proceed with user's request
+### SA vs MA Mode
 
-**Skip if:** User says "fresh start", no `conductor/`, or all handoffs > 7 days (show stale warning).
+```
+plan.md has "## Track Assignments"?
+├─ YES → MA mode (load orchestrator skill)
+└─ NO  → SA mode (sequential TDD)
+```
 
-### Idle Detection
+## Commands Quick Reference
 
-On every user message, before routing:
+### Planning
 
-1. Check `conductor/.last_activity` mtime
-2. If gap > 30min (configurable in `workflow.md`):
-   ```
-   ⏰ It's been X minutes. Create handoff? [Y/n/skip]
-   ```
-3. **Y** = create handoff with `idle` trigger, **n** = skip once, **skip** = disable for session
+| Trigger | Action |
+|---------|--------|
+| `ds` | Design session (Double Diamond) |
+| `/conductor-setup` | Initialize project context |
+| `/conductor-newtrack` | Create spec + plan + beads from design |
 
-See [conductor/references/handoff/idle-detection.md](skills/conductor/references/handoff/idle-detection.md).
+### Execution
+
+| Trigger | Action |
+|---------|--------|
+| `bd ready --json` | Find available work |
+| `/conductor-implement <track>` | Execute track with TDD |
+| `/conductor-implement --no-tdd` | Execute without TDD |
+| `tdd` | Enter TDD mode |
+| `finish branch` | Finalize and merge/PR |
+
+### Beads
+
+| Command | Action |
+|---------|--------|
+| `fb` | File beads from plan |
+| `rb` | Review beads |
+| `bd status` | Show ready + in_progress |
+| `bd show <id>` | Read task context |
+| `bd update <id> --status in_progress` | Claim task |
+| `bd close <id> --reason <completed\|skipped\|blocked>` | Close task |
+| `bd sync` | Sync to git |
+
+### Handoffs
+
+| Command | Action |
+|---------|--------|
+| `/create_handoff` | Save session context |
+| `/resume_handoff` | Load session context |
+
+### Maintenance
+
+| Trigger | Action |
+|---------|--------|
+| `/conductor-revise` | Update spec/plan mid-work |
+| `/conductor-finish` | Complete track, extract learnings |
+| `/conductor-status` | Display progress overview |
 
 ## Session Protocol
 
-### Session Identity
+### First Message
 
-- Format: `{BaseAgent}-{timestamp}` (internal), `{BaseAgent} (session HH:MM)` (display)
-- Registered with Agent Mail on `/conductor-implement` or `/conductor-orchestrate`
-- Skipped for `ds`, `bd ready`, `bd show`, `bd list`
+1. Check `conductor/handoffs/` for recent handoffs (< 7 days)
+2. If found: `📋 Prior context: [track] (Xh ago)`
+3. Skip if: "fresh start", no `conductor/`, or handoffs > 7 days
 
 ### Preflight Triggers
 
@@ -119,47 +92,116 @@ See [conductor/references/handoff/idle-detection.md](skills/conductor/references
 | `ds` | ❌ Skip |
 | `bd ready/show/list` | ❌ Skip |
 
-### Stale Threshold
+### Session Start
 
-10 minutes since last activity → takeover prompt
+```bash
+bd ready --json                      # Find work
+bd show <id>                         # Read context
+bd update <id> --status in_progress  # Claim
+```
 
----
+### During Session
+
+- Heartbeat every 5 min (automatic)
+- TDD checkpoints tracked by default
+- Idle > 30min → prompt for handoff
+
+### Session End
+
+```bash
+bd update <id> --notes "COMPLETED: X. NEXT: Y"
+bd close <id> --reason completed
+bd sync
+```
+
+### Session Identity
+
+- Format: `{BaseAgent}-{timestamp}` (internal)
+- Registered on `/conductor-implement` or `/conductor-orchestrate`
+- Stale threshold: 10 min → takeover prompt
+
+## Fallback Policy
+
+| Condition | Action |
+|-----------|--------|
+| `bd` unavailable | HALT |
+| `conductor/` missing | DEGRADE (standalone) |
+| Village MCP unavailable | DEGRADE |
 
 ## Skill Discipline
 
-**Check for skills BEFORE ANY RESPONSE.** Even 1% chance means invoke the Skill tool first.
+**RULE:** Check skills BEFORE ANY RESPONSE. 1% chance = invoke Skill tool.
 
-### The Rule
-
-If a skill might apply, you MUST read it. This is not negotiable.
-
-### Red Flags (Stop - You're Rationalizing)
+### Red Flags (Rationalizing)
 
 | Thought | Reality |
 |---------|---------|
-| "This is just a simple question" | Questions are tasks. Check for skills. |
-| "I need more context first" | Skill check comes BEFORE clarifying questions. |
-| "Let me explore the codebase first" | Skills tell you HOW to explore. Check first. |
-| "This doesn't need a formal skill" | If a skill exists, use it. |
-| "I remember this skill" | Skills evolve. Read current version. |
-| "The skill is overkill" | Simple things become complex. Use it. |
+| "Just a simple question" | Questions are tasks. Check. |
+| "Need more context first" | Skill check BEFORE clarifying. |
+| "Let me explore first" | Skills tell HOW to explore. |
+| "Doesn't need formal skill" | If skill exists, use it. |
+| "I remember this skill" | Skills evolve. Re-read. |
+| "Skill is overkill" | Simple → complex. Use it. |
 
 ### Skill Priority
 
-1. **Process skills first** (`ds`, `/conductor-design`) - determine HOW to approach
-2. **Implementation skills second** (`frontend-design`, `mcp-builder`) - guide execution
+1. **Process skills** (`ds`, `/conductor-design`) → determine approach
+2. **Implementation skills** (`frontend-design`, `mcp-builder`) → guide execution
 
 ### Skill Types
 
-- **Rigid** (TDD): Follow exactly
-- **Flexible** (patterns): Adapt to context
+| Type | Behavior |
+|------|----------|
+| Rigid (TDD) | Follow exactly |
+| Flexible (patterns) | Adapt to context |
 
----
+## Directory Structure
+
+```
+conductor/
+├── product.md, tech-stack.md, workflow.md  # Context
+├── CODEMAPS/                               # Architecture
+├── handoffs/                               # Session context
+└── tracks/<id>/                            # Per-track
+    ├── design.md, spec.md, plan.md
+    └── metadata.json
+```
+
+## Build/Test
+
+```bash
+cat .claude-plugin/plugin.json | jq .   # Validate manifest
+```
+
+## Code Style
+
+- Skills: Markdown + YAML frontmatter (`name`, `description` required)
+- Directories: kebab-case
+- SKILL.md name must match directory
+
+## Versioning
+
+| Type | Method |
+|------|--------|
+| Plugin | CI auto-bump (`feat:` minor, `fix:` patch, `feat!:` major) |
+| Skill | Manual frontmatter update |
+| Skip CI | `[skip ci]` in commit |
+
+## Critical Rules
+
+- Use `--json` with `bd` for structured output
+- Use `--robot-*` with `bv` (bare `bv` hangs)
+- Never write production code without failing test first
+- Always commit `.beads/` with code changes
 
 ## Detailed References
 
-For detailed workflows, load the appropriate skill or see:
-- [Beads workflow](skills/beads/references/workflow-integration.md)
-- [Handoff system](docs/handoff-system.md)
-- [Agent coordination](skills/orchestrator/references/agent-coordination.md)
-- [Router](skills/orchestrator/references/router.md)
+| Topic | Path |
+|-------|------|
+| Beads workflow | [skills/beads/references/workflow-integration.md](skills/beads/references/workflow-integration.md) |
+| Handoff system | [skills/conductor/references/handoff/](skills/conductor/references/handoff/) |
+| Agent coordination | [skills/orchestrator/references/agent-coordination.md](skills/orchestrator/references/agent-coordination.md) |
+| Router | [skills/orchestrator/references/router.md](skills/orchestrator/references/router.md) |
+| Beads integration | [skills/conductor/references/beads-integration.md](skills/conductor/references/beads-integration.md) |
+| TDD checkpoints | [skills/conductor/references/tdd-checkpoints-beads.md](skills/conductor/references/tdd-checkpoints-beads.md) |
+| Idle detection | [skills/conductor/references/handoff/idle-detection.md](skills/conductor/references/handoff/idle-detection.md) |
