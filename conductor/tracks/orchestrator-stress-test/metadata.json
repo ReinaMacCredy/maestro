@@ -1,0 +1,33 @@
+{
+  "track_id": "orchestrator-stress-test",
+  "type": "test",
+  "status": "planned",
+  "created_at": "2026-01-01T16:30:00+07:00",
+  "updated_at": "2026-01-01T16:30:00+07:00",
+  "generation": {
+    "status": "initializing",
+    "design_source": "design.md",
+    "started_at": "2026-01-01T16:30:00+07:00"
+  },
+  "beads": {
+    "status": "complete",
+    "epicId": "my-workflow:3-js8k",
+    "epics": ["my-workflow:3-js8k"],
+    "issues": ["my-workflow:3-js8k.1", "my-workflow:3-js8k.2", "my-workflow:3-js8k.3", "my-workflow:3-js8k.4", "my-workflow:3-js8k.5"],
+    "planTasks": {},
+    "beadToTask": {},
+    "crossTrackDeps": [],
+    "reviewStatus": null,
+    "reviewedAt": null,
+    "orchestrated": false
+  },
+  "validation": {
+    "gates_passed": [],
+    "current_gate": null,
+    "retries": 0,
+    "last_failure": null
+  },
+  "workflow": {
+    "state": "PLANNING"
+  }
+}

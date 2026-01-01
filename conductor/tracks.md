@@ -14,6 +14,12 @@ Test track to verify /conductor-implement auto-routes to orchestrator.
 
 ## Completed Tracks
 
+## [x] Track: Skill Restructure to Anthropic Standard
+*ID: skill-restructure*
+*Archived: [conductor/archive/skill-restructure/](archive/skill-restructure/)*
+
+Restructured 7 skills to Anthropic's skill-creator standard using Hub-and-Spoke architecture. Created maestro-core hub (62 lines), refactored all spokes to <100 lines with references/ extraction. Total: 939 lines (70% reduction from ~3116).
+
 ## [x] Track: Scripts Restructure
 *ID: scripts-restructure*
 *Archived: [conductor/archive/scripts-restructure/](archive/scripts-restructure/)*

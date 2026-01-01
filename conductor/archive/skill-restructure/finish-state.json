@@ -1,0 +1,8 @@
+{
+  "trackId": "skill-restructure",
+  "phase": 0,
+  "startedAt": "2026-01-01T09:00:00Z",
+  "completed": ["pre-flight"],
+  "skipCodemaps": false,
+  "skipRefresh": false
+}
