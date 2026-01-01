@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.4.0] - 2026-01-01
+
+
+### Added
+
+
+- Add orchestrator agents, update conductor integration documentation, and refine skill configurations.
+- Remove `maestro-core` skill, centralizing routing and policy in `AGENTS.md` and adding new orchestrator references.
+- Introduce 7-phase orchestrator workflow with mode selection and add orchestrator demo files
+- Add orchestrator mode test track and associated issues for parallel worker validation.
+- Centralize routing in AGENTS.md, remove maestro-core, and update handoff documentation.
+- Add Session Brain (Phase 0 Preflight) to Orchestrator
+- Restructure scripts to match claudekit-skills pattern
+
+
+### Changed
+
+
+- Remove deprecated skills and consolidate agent definitions
+- Flatten conductor/references/conductor/ to reduce nesting
+
+
+### Documentation
+
+
+- Refine skill frontmatter requirements, correct file references and a grep typo, and generalize upstream repository placeholders.
+- Update documentation links from relative to absolute URLs across various reference and skill files.
+
 ## [4.3.0] - 2025-12-31
 
 
