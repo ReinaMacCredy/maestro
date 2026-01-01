@@ -13,6 +13,7 @@ description: Multi-agent parallel execution with autonomous workers. Use when pl
 - **Workers own their beads** - can `bd claim/close` directly (unlike sequential mode)
 - **File reservations prevent conflicts** - reserve before edit, release on complete
 - **Summary before exit** - all workers MUST send completion message
+- **TDD by default** - workers follow RED → GREEN → REFACTOR cycle (use `--no-tdd` to disable)
 
 ## When to Use
 

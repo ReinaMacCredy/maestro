@@ -101,8 +101,26 @@ thread_summary = summarize_thread(
 bash(f"bd update {bead_id} --status in_progress")
 ```
 
-#### 2.2 WORK
-- Implement the task
+#### 2.2 WORK (TDD by default)
+
+Follow TDD cycle for each implementation task (skip with `--no-tdd` flag passed to worker).
+
+See [conductor TDD cycle](../../conductor/references/tdd/cycle.md) for full methodology.
+
+**Phase updates (track in bead notes):**
+
+| Phase | Bead Note | Action |
+|-------|-----------|--------|
+| RED | `IN_PROGRESS: RED phase - writing failing test` | Write test, verify fails |
+| GREEN | `IN_PROGRESS: GREEN phase - making test pass` | Minimal code to pass |
+| REFACTOR | `IN_PROGRESS: REFACTOR phase - cleaning up` | Clean code, stay green |
+
+```python
+# Example: Update bead notes at each phase
+bash(f"bd update {bead_id} --notes 'IN_PROGRESS: RED phase - writing failing test'")
+```
+
+**During execution:**
 - Check inbox periodically for blockers
 - Track files you change and decisions you make
 

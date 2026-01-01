@@ -210,6 +210,13 @@ Workers: Follow 4-step protocol in worker-prompt.md
 | Pre-registration | Skip | Required |
 | File reservations | Skip (rely on scope isolation) | Via macro_start_session |
 | Result collection | Task() return values | Agent Mail messages |
+| TDD | Yes (default) | Yes (default) |
+
+**TDD enforcement:** Workers follow RED → GREEN → REFACTOR cycle by default. Pass `--no-tdd` to disable.
+
+See [conductor TDD references](../../conductor/references/tdd/) for:
+- [cycle.md](../../conductor/references/tdd/cycle.md) - Full RED/GREEN/REFACTOR workflow
+- [gates.md](../../conductor/references/tdd/gates.md) - Enforcement gates and anti-patterns
 
 ### Agent Routing
 
