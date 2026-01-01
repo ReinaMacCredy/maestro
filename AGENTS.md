@@ -1,6 +1,6 @@
 # AGENTS.md - Maestro Plugin
 
-Workflow skills plugin: Conductor, Design, Beads, Orchestrator, Superpowers.
+Workflow skills plugin: Conductor, Design, Beads, Orchestrator.
 
 ## Project Detection
 

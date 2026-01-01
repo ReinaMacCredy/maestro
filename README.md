@@ -22,7 +22,7 @@ amp skill add https://github.com/ReinaMacCredy/maestro --global
 
 **Codex:**
 ```bash
-git clone https://github.com/ReinaMacCredy/maestro.git ~/.codex/skills/maestro
+curl -fsSL https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/scripts/install-codex.sh | bash
 ```
 
 → Full installation: [SETUP_GUIDE.md](./SETUP_GUIDE.md)
@@ -80,7 +80,6 @@ ds                            # Design session → design.md
 
 Built on:
 - [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) — Multi-agent orchestration
-- [superpowers](https://github.com/obra/superpowers) — TDD, debugging, code review
 - [conductor](https://github.com/NguyenSiTrung/conductor) — Context-driven planning
 - [beads](https://github.com/steveyegge/beads) — Persistent issue tracking
 - [beads-village](https://github.com/LNS2905/mcp-beads-village) — Multi-agent coordination

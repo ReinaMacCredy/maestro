@@ -320,11 +320,8 @@ tdd                         # Execute with TDD
 
 ### Bug Investigation
 
-Use systematic debugging (requires external superpowers plugin):
-
 ```
 bd create "Investigate billing 500" -t bug -p 0
-debug                       # Systematic debugging methodology
 tdd                         # Fix with TDD
 bd close <id>
 ```
@@ -405,10 +402,6 @@ Before `/conductor-implement`, switch to plan mode (Shift+Tab in Claude Code) to
 | Claude Code | `/compact` before session end |
 | Codex | `/compact` before session end |
 
-### External Skills
-
-Some debugging and tracing skills (`systematic-debugging`, `root-cause-tracing`, `condition-based-waiting`) are part of the external [superpowers plugin](https://github.com/obra/superpowers), not bundled here. Install separately if needed.
-
 ---
 
-*Built on foundations from [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD), [superpowers](https://github.com/obra/superpowers), [conductor](https://github.com/NguyenSiTrung/conductor), [beads](https://github.com/steveyegge/beads), and [Knowledge & Vibes](https://github.com/kyleobrien91/knowledge-and-vibes).*
+*Built on foundations from [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD), [conductor](https://github.com/NguyenSiTrung/conductor), [beads](https://github.com/steveyegge/beads), and [Knowledge & Vibes](https://github.com/kyleobrien91/knowledge-and-vibes).*

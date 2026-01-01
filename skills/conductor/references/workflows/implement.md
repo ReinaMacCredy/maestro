@@ -140,14 +140,13 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
        bead_ids = list(metadata["beads"]["planTasks"].values())
        
        # Verify with bd list at runtime (source of truth)
-       bead_list = bash("bd list --json")
+       live_beads_raw = bash("bd list --json")
+       live_beads = {b['id']: b for b in json.loads(live_beads_raw)}
        
        # Analyze dependency graph for independent beads
        independent_beads = []
        for bead_id in bead_ids:
-           bead_info = bash(f"bd show {bead_id} --json")
-           deps = bead_info.get("dependencies", [])
-           if len(deps) == 0:
+           if bead_id in live_beads and not live_beads[bead_id].get("dependencies"):
                independent_beads.append(bead_id)
        
        # Threshold: 2+ independent beads triggers auto-orchestration

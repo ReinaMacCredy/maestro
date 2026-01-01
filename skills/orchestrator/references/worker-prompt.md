@@ -62,12 +62,6 @@ result = macro_start_session(
 # If session init fails, HALT immediately
 if not result.success:
     return {"status": "FAILED", "reason": "Agent Mail session init failed"}
-
-# Read track thread for prior bead context
-thread_summary = summarize_thread(
-  project_key="{PROJECT_PATH}",
-  thread_id="{TRACK_THREAD}"
-)
 ```
 
 **Why this matters:** 

@@ -30,8 +30,6 @@
 | `fb` | File beads from plan.md tasks | `beads` |
 | `rb` | Review beads (status check) | `beads` |
 | `tdd` | Enter RED-GREEN-REFACTOR cycle | `test-driven-development` |
-| `debug` | Systematic debugging workflow | `superpowers` (external) |
-| `trace` | Root cause tracing | `superpowers` (external) |
 | `finish branch` | Complete dev work, merge/PR options | `finishing-a-development-branch` |
 | `run parallel` | Trigger multi-agent parallel execution | `orchestrator` |
 
@@ -200,7 +198,7 @@ skills/
 
 | Issue | Cause | Fix |
 |-------|-------|-----|
-| `bd` command not found | Beads CLI not installed | Install via `npm install -g beads-cli` |
+| `bd` command not found | Beads CLI not installed | Install via command in [SETUP_GUIDE.md](./SETUP_GUIDE.md) |
 | `bv` hangs | Missing `--robot-*` flag | Always use `bv --robot-status` not bare `bv` |
 | No beads found | Plan not filed | Run `fb` to file beads from plan.md |
 | Track validation fails | Missing artifacts | Ensure `design.md`, `spec.md`, `plan.md` exist |
