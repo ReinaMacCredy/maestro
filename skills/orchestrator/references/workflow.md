@@ -1,6 +1,51 @@
 # Orchestrator Workflow
 
-7-phase protocol for multi-agent parallel execution.
+8-phase protocol for multi-agent parallel execution.
+
+## Phase 0: Preflight (Session Brain)
+
+Before mode selection, run session coordination preflight.
+
+**Trigger conditions:**
+- `/conductor-implement`
+- `/conductor-orchestrate`
+
+**Skip conditions:**
+- `ds` (design sessions always fresh)
+- `bd ready`, `bd show`, `bd list` (query commands)
+
+### 4-Step Protocol
+
+1. **IDENTITY**: Generate session ID, register with Agent Mail
+2. **DETECT**: fetch_inbox() for messages from last 30 min, parse [SESSION START], [HEARTBEAT], [SESSION END]
+3. **DISPLAY**: Show active sessions, warn on conflicts (track/files/beads)
+4. **PROCEED**: No conflicts → continue; Conflicts → prompt user; Stale → takeover prompt
+
+### Timeout Behavior
+
+Agent Mail timeout: 3 seconds
+On timeout: Warn and proceed without coordination
+
+### Message Subjects
+
+- `[SESSION START] {display_name}` - Sent on preflight completion
+- `[HEARTBEAT] Track {track}` - Sent every 5 min during work
+- `[SESSION END] {display_name}` - Sent on session completion
+
+### Conflict Types
+
+| Type | Detection | User Options |
+|------|-----------|--------------|
+| Track | Same track as active session | [P]roceed / [S]witch / [W]ait |
+| File | Overlapping file reservations | [P]roceed / [W]ait |
+| Bead | Same bead claimed | Shows "claimed by X" |
+
+### Stale Session Handling
+
+Threshold: 10 minutes since last activity
+Options: [T]ake over / [W]ait / [I]gnore
+
+See [preflight.md](preflight.md) for details.
 
 ## Mode Selection (Pre-Phase)
 
@@ -38,6 +83,7 @@ MODE = select_mode(TRACKS, CROSS_DEPS)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
+│  Phase 0: Preflight         - Session identity, detect active sessions     │
 │  Phase 1: Read Plan         - Parse Track Assignments                      │
 │  Phase 2: Validate          - Health check Agent Mail (FULL only)          │
 │  Phase 3: Initialize        - Register orchestrator, create epic (FULL)    │

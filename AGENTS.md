@@ -102,6 +102,27 @@ On every user message, before routing:
 
 See [conductor/references/handoff/idle-detection.md](skills/conductor/references/handoff/idle-detection.md).
 
+## Session Protocol
+
+### Session Identity
+
+- Format: `{BaseAgent}-{timestamp}` (internal), `{BaseAgent} (session HH:MM)` (display)
+- Registered with Agent Mail on `/conductor-implement` or `/conductor-orchestrate`
+- Skipped for `ds`, `bd ready`, `bd show`, `bd list`
+
+### Preflight Triggers
+
+| Command | Preflight |
+|---------|-----------|
+| `/conductor-implement` | ✅ Yes |
+| `/conductor-orchestrate` | ✅ Yes |
+| `ds` | ❌ Skip |
+| `bd ready/show/list` | ❌ Skip |
+
+### Stale Threshold
+
+10 minutes since last activity → takeover prompt
+
 ---
 
 ## Skill Discipline

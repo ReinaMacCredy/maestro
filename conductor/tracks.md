@@ -14,6 +14,12 @@ Test track to verify /conductor-implement auto-routes to orchestrator.
 
 ## Completed Tracks
 
+## [x] Track: Orchestrator Session Brain
+*ID: session-brain*
+*Archived: [conductor/archive/session-brain/](archive/session-brain/)*
+
+Add Phase 0 (Preflight) to Orchestrator for multi-session coordination. Auto-registers session identity, detects active sessions via Agent Mail, warns on conflicts, prompts for stale session takeover. Scripts: session_identity.py, preflight.py, session_cleanup.py.
+
 ## [x] Track: Continuous-Claude-v2 Integration
 *ID: cc-v2-integration*
 *Archived: [conductor/archive/cc-v2-integration/](archive/cc-v2-integration/)*

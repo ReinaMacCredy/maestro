@@ -1,0 +1,58 @@
+{
+  "track_id": "session-brain",
+  "type": "feature",
+  "status": "new",
+  "priority": "medium",
+  "depends_on": [],
+  "estimated_hours": 8,
+  "created_at": "2026-01-01T12:00:00Z",
+  "updated_at": "2026-01-01T12:00:00Z",
+  "description": "Add multi-session coordination to Orchestrator via Phase 0 Preflight",
+  "has_design": true,
+  "threads": [
+    {
+      "id": "T-019b7857-3344-72bc-8b29-79dc350f56a5",
+      "action": "design",
+      "timestamp": "2026-01-01T12:00:00Z"
+    }
+  ],
+  "artifacts": {
+    "design": true,
+    "spec": true,
+    "plan": true,
+    "beads": true
+  },
+  "generation": {
+    "status": "plan_done",
+    "startedAt": "2026-01-01T12:00:00Z",
+    "completedAt": null
+  },
+  "beads": {
+    "status": "complete",
+    "epicId": "my-workflow:3-h3zl",
+    "epics": [{"id": "my-workflow:3-h3zl", "title": "Epic: Orchestrator Session Brain", "status": "open"}],
+    "issues": ["my-workflow:3-0tfw", "my-workflow:3-emkf", "my-workflow:3-d30v", "my-workflow:3-7afs"],
+    "planTasks": {
+      "1": "my-workflow:3-0tfw",
+      "2": "my-workflow:3-emkf",
+      "3": "my-workflow:3-d30v",
+      "4": "my-workflow:3-7afs"
+    },
+    "beadToTask": {
+      "my-workflow:3-0tfw": "1",
+      "my-workflow:3-emkf": "2",
+      "my-workflow:3-d30v": "3",
+      "my-workflow:3-7afs": "4"
+    },
+    "crossTrackDeps": [],
+    "reviewStatus": null,
+    "reviewedAt": null,
+    "orchestrated": false
+  },
+  "validation": {
+    "gates_passed": ["design"],
+    "current_gate": null,
+    "retries": 0,
+    "last_failure": null
+  }
+}

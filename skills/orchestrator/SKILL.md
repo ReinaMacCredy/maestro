@@ -128,10 +128,11 @@ else:
 - Cross-track dependency notifications
 - Blocker resolution via reply_message
 
-## 7-Phase Workflow
+## 8-Phase Workflow
 
 See [references/workflow.md](references/workflow.md) for full protocol:
 
+0. **Preflight** - Session identity, detect active sessions, conflict warnings (NEW)
 1. **Read Plan** - Parse Track Assignments from plan.md
 2. **Validate** - Health check Agent Mail (HALT if unavailable)
 3. **Initialize** - ensure_project, register_agent, create epic thread
@@ -165,6 +166,22 @@ The orchestrator routes tasks to specialized agents based on intent keywords. Se
 | Debug | Debugger, Tracer | [agents/debug/](agents/debug/) |
 
 See [agents/README.md](agents/README.md) for complete agent index and profiles.
+
+## Session Brain (Phase 0)
+
+The orchestrator includes a "session brain" that coordinates multiple Amp sessions:
+
+- **Auto-registration**: Sessions register identity with Agent Mail on startup
+- **Conflict detection**: Warns when sessions work on same track/files/beads
+- **Stale takeover**: Prompts to take over inactive sessions (>10 min)
+- **Always-on**: Preflight runs automatically on /conductor-implement and /conductor-orchestrate
+
+### Session Identity Format
+
+- Internal: `{BaseAgent}-{timestamp}` (unique, e.g., `BlueLake-1735689600`)
+- Display: `{BaseAgent} (session HH:MM)` (human-readable, e.g., `BlueLake (session 10:30)`)
+
+See [references/preflight.md](references/preflight.md) for protocol details.
 
 ### Routing Reference
 
@@ -374,8 +391,28 @@ Routes to standard `/conductor-implement` instead.
 
 ## References
 
-- [workflow.md](references/workflow.md) - 6-phase protocol
+- [workflow.md](references/workflow.md) - 8-phase protocol
 - [worker-prompt.md](references/worker-prompt.md) - Worker template
 - [preparation.md](references/preparation.md) - bv --robot-triage preparation
 - [monitoring.md](references/monitoring.md) - Agent Mail monitoring
 - [patterns/](references/patterns/) - Coordination patterns
+
+## Directory Structure
+
+```
+skills/orchestrator/
+├── SKILL.md           # This file
+├── agents/            # Agent profiles by category
+│   ├── research/      # Locator, Analyzer, Pattern, Web, GitHub
+│   ├── review/        # CodeReview, SecurityAudit, PerformanceReview
+│   ├── planning/      # Architect, Planner
+│   ├── execution/     # Implementer, Modifier, Fixer, Refactorer
+│   └── debug/         # Debugger, Tracer
+├── references/        # Workflow documentation
+│   ├── workflow.md    # 8-phase protocol
+│   ├── preflight.md   # Session Brain preflight
+│   ├── worker-prompt.md
+│   └── patterns/
+└── scripts/           # Session brain utilities
+    └── preflight.py   # Preflight protocol implementation
+```

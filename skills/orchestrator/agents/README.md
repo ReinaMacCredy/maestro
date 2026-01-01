@@ -101,3 +101,14 @@ Agents are referenced in plan.md Track Assignments:
 ```
 
 Each worker loads the appropriate agent prompts for their task type.
+
+## Session Brain Role
+
+The Orchestrator acts as the "session brain" for multi-session coordination:
+
+- Detects active sessions via Agent Mail inbox analysis
+- Manages session identity registration
+- Coordinates file reservations and bead claiming
+- Handles stale session takeover
+
+This enables multiple Amp sessions to work on the same project without conflicts.
