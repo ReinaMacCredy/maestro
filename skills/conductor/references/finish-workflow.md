@@ -142,7 +142,7 @@ If no existing state file, create `finish-state.json`:
 ### Progress
 
 ```
-Phase 0/6: Pre-flight validation...
+Phase 0/8: Pre-flight validation...
   → Track integrity: ✓
   → No stale state file
 ```
@@ -202,7 +202,7 @@ Write `conductor/tracks/<id>/LEARNINGS.md`:
 ### Progress
 
 ```
-Phase 1/6: Extracting from 3 threads...
+Phase 1/8: Extracting from 3 threads...
   → LEARNINGS.md: +12 lines
 ```
 
@@ -233,7 +233,7 @@ For each candidate:
 ### Progress
 
 ```
-Phase 2/6: Compacting 5 beads...
+Phase 2/8: Compacting 5 beads...
   → 5 summaries applied
 ```
 
@@ -311,7 +311,7 @@ Ask: `Review changes? [Y/n]`
 ### Progress
 
 ```
-Phase 3/6: Merging to conductor/AGENTS.md...
+Phase 3/8: Merging to conductor/AGENTS.md...
   → +5 lines (2 commands, 1 gotcha)
 ```
 
@@ -330,7 +330,7 @@ If Phase 3 fails, stop workflow. Do not proceed to Phase 4.
 If `--skip-refresh` provided:
 
 ```
-Phase 4/6: Skipped (--skip-refresh)
+Phase 4/8: Skipped (--skip-refresh)
 ```
 
 Proceed directly to Phase 5.
@@ -406,7 +406,7 @@ Proceed directly to Phase 5.
 ### Progress
 
 ```
-Phase 4/6: Refreshing context docs...
+Phase 4/8: Refreshing context docs...
   → product.md: +1 shipped feature
   → tech-stack.md: skipped (no new deps)
   → tracks.md: moved to Completed
@@ -500,25 +500,12 @@ git commit -m "complete(track_id): N learnings extracted"
 
 Note: `.beads/` is gitignored at the project root. Beads changes are committed separately via `bd sync`.
 
-### Beads Cleanup
-
-Check closed count:
-
-```bash
-bd count --status closed --json
-```
-
-If count > 150:
-
-```bash
-excess=$((closed_count - 150))
-bd cleanup --older-than 0 --limit "$excess" --force
-```
+**Note:** Beads cleanup (closed > 150) was moved to Phase 8 to run after doc-sync extracts learnings.
 
 ### Progress
 
 ```
-Phase 5/6: Preparing archive...
+Phase 5/8: Preparing archive...
 
 ✓ Track archived. Commit: abc123
 ```
@@ -534,7 +521,7 @@ Phase 5/6: Preparing archive...
 If `--skip-codemaps` flag provided:
 
 ```
-Phase 6/6: Skipped (--skip-codemaps)
+Phase 6/8: Skipped (--skip-codemaps)
 ```
 
 Proceed directly to completion.
@@ -589,7 +576,7 @@ Same as `/conductor-setup`:
 ### Progress
 
 ```
-Phase 6/6: Regenerating CODEMAPS...
+Phase 6/8: Regenerating CODEMAPS...
   → overview.md: updated
   → skills.md: updated
   → .meta.json: updated
@@ -726,6 +713,8 @@ State file corrupted. Restarting from Phase 1.
 | Phase 4 | Context refresh fails       | Report error, suggest manual fix    |
 | Phase 5 | Archive/commit fails        | Report error, suggest manual fix    |
 | Phase 6 | CODEMAPS regeneration fails | Log warning, continue to completion |
+| Phase 7 | Doc-sync fails              | Log warning, continue to completion |
+| Phase 8 | Health check/cleanup fails  | Log warning, continue to completion |
 
 ---
 
@@ -737,22 +726,28 @@ State file corrupted. Restarting from Phase 1.
 Validating track... ✓
   ⚠ 2 beads still open. Continue? (y/n) y
 
-Phase 1/6: Extracting from 3 threads...
+Phase 1/8: Extracting from 3 threads...
   → LEARNINGS.md: +12 lines
-Phase 2/6: Compacting 5 beads...
+Phase 2/8: Compacting 5 beads...
   → 5 summaries applied
-Phase 3/6: Merging to conductor/AGENTS.md...
+Phase 3/8: Merging to conductor/AGENTS.md...
   → +5 lines (2 commands, 1 gotcha)
-Phase 4/6: Refreshing context docs...
+Phase 4/8: Refreshing context docs...
   → product.md: +1 shipped feature
   → tech-stack.md: skipped (no new deps)
   → tracks.md: moved to Completed
   → workflow.md: skipped (no changes)
-Phase 5/6: Archiving track...
+Phase 5/8: Archiving track...
   → Moved to conductor/archive/
-Phase 6/6: Regenerating CODEMAPS...
+Phase 6/8: Regenerating CODEMAPS...
   → overview.md: updated
   → skills.md: updated
+Phase 7/8: Doc-Sync...
+  → 2 path changes auto-updated
+Phase 8/8: Health Check & Cleanup...
+  → Status: 45 open, 12 in_progress, 150 closed
+  → Cleaned: 8 beads, 2 wisps
+  → Health check passed
 
 ✓ Track completed. Commit: abc123
 ```
@@ -834,6 +829,96 @@ Update `finish-state.json`:
 ```
 
 See [doc-sync reference](./doc-sync/) for full documentation.
+
+---
+
+## Phase 8: Health Check & Final Cleanup
+
+**Purpose:** Run beads health diagnostics and auto-cleanup stale data after all phases complete.
+
+### Health Check
+
+Run beads status to verify database integrity:
+
+```bash
+bd status --json
+```
+
+Report summary:
+
+```
+Phase 8: Health Check & Cleanup
+  📊 Database: 45 open, 12 in_progress, 158 closed
+  ✅ No orphaned issues
+  ✅ No broken dependencies
+```
+
+If issues detected, log warnings but continue:
+
+```
+  ⚠️  3 orphaned issues found (no parent)
+  ⚠️  2 broken dependency links
+```
+
+### Auto-Cleanup
+
+After doc-sync extracts learnings, cleanup stale closed beads:
+
+1. **Check closed count:**
+   ```bash
+   bd count --status closed --json
+   ```
+
+2. **If count > 150, cleanup excess:**
+   ```bash
+   excess=$((closed_count - 150))
+   bd cleanup --older-than 0 --limit "$excess" --force --json
+   ```
+
+3. **Report cleanup:**
+   ```
+   🧹 Cleaned up 8 oldest closed beads (158 → 150)
+   ```
+
+### Wisp Garbage Collection
+
+Clean up orphaned wisps:
+
+```bash
+bd wisp gc --age 24h --json
+```
+
+### Progress
+
+```
+Phase 8: Health Check & Cleanup
+  📊 Status: 45 open, 12 in_progress, 150 closed
+  🧹 Cleaned: 8 beads, 2 wisps
+  ✅ Health check passed
+```
+
+### Skip Conditions
+
+Skip if:
+- No beads database (`.beads/` missing)
+- `bd` CLI unavailable
+
+### State Update
+
+Update `finish-state.json`:
+
+```json
+{
+  "phase": 8,
+  "completed": [..., "health-cleanup"],
+  "healthCleanup": {
+    "status": "passed",
+    "beadsCleaned": 8,
+    "wispsGarbageCollected": 2,
+    "warnings": []
+  }
+}
+```
 
 ---
 
