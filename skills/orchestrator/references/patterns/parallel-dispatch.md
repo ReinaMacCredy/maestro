@@ -24,7 +24,7 @@ Execute independent tracks concurrently using Task tool with Agent Mail coordina
 | Track | Agent | Tasks | File Scope | Depends On |
 |-------|-------|-------|------------|------------|
 | 1 | BlueLake | 1.1.*, 1.2.* | skills/orchestrator/** | - |
-| 2 | GreenCastle | 2.1.*, 2.2.* | skills/maestro-core/** | 1.2.3 |
+| 2 | GreenCastle | 2.1.*, 2.2.* | skills/design/** | 1.2.3 |
 | 3 | RedStone | 3.1.*, 4.* | conductor/CODEMAPS/** | 2.2.2 |
 ```
 
@@ -66,7 +66,7 @@ All Task() calls are made in a single assistant message for parallel execution.
 Each track has exclusive file scope:
 
 - Track 1: `skills/orchestrator/**`
-- Track 2: `skills/maestro-core/**`
+- Track 2: `skills/design/**`
 - Track 3: `conductor/CODEMAPS/**`
 
 Workers reserve their scope via `file_reservation_paths()`.

@@ -54,7 +54,7 @@ mode: autonomous
 | Track | Agent | Tasks | File Scope | Depends On |
 |-------|-------|-------|------------|------------|
 | 1 | BlueLake | 1.1.*, 1.2.* | skills/orchestrator/** | - |
-| 2 | GreenCastle | 2.1.*, 2.2.* | skills/maestro-core/** | 1.2.3 |
+| 2 | GreenCastle | 2.1.*, 2.2.* | skills/design/** | 1.2.3 |
 | 3 | RedStone | 3.*, 4.* | conductor/CODEMAPS/** | 2.2.2 |
 ```
 
@@ -95,7 +95,7 @@ mode: autonomous
 | Track | Agent | Tasks | File Scope | Depends On |
 |-------|-------|-------|------------|------------|
 | 1 | BlueLake | 1.1.*, 1.2.* | skills/orchestrator/** | - |
-| 2 | GreenCastle | 2.1.*, 2.2.* | skills/maestro-core/** | 1.2.3 |
+| 2 | GreenCastle | 2.1.*, 2.2.* | skills/design/** | 1.2.3 |
 | 3 | RedStone | 3.*, 4.* | conductor/CODEMAPS/** | 2.2.2 |
 
 ### Cross-Track Dependencies

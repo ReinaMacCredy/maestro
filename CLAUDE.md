@@ -17,13 +17,11 @@ This is a skills-based plugin (no build required) - all functionality is deliver
 ### Directory Structure
 
 ```
-skills/                    # 9 skill directories, each with SKILL.md
-  ├── maestro-core/       # Central orchestrator - routing, fallbacks, hierarchy
+skills/                    # 8 skill directories, each with SKILL.md
   ├── conductor/          # Planning + execution + research protocol (references/)
   ├── orchestrator/       # Multi-agent parallel execution (references/)
   ├── design/             # Double Diamond sessions (ds trigger) with bmad/
   ├── beads/              # Issue tracking (fb, rb triggers) with references/
-  ├── continuity/         # DEPRECATED: Stub redirecting to handoff system
   ├── using-git-worktrees/
   ├── writing-skills/
   └── sharing-skills/
@@ -61,12 +59,13 @@ conductor/               # Project context + tracks (created per-project)
 
 | Level | Skill | Role |
 |-------|-------|------|
-| 1 | maestro-core | Routing, fallback policy, hierarchy |
-| 2 | conductor | Track orchestration, research protocol |
-| 3 | orchestrator | Multi-agent parallel execution |
-| 4 | design | Double Diamond sessions |
-| 5 | beads | Issue tracking |
-| 6 | specialized | worktrees, sharing, writing |
+| 1 | conductor | Track orchestration, research protocol |
+| 2 | orchestrator | Multi-agent parallel execution |
+| 3 | design | Double Diamond sessions |
+| 4 | beads | Issue tracking |
+| 5 | specialized | worktrees, sharing, writing |
+
+Routing and fallback policies are defined in [AGENTS.md](AGENTS.md).
 
 ### Workflow Integration
 
@@ -195,7 +194,6 @@ Each skill follows a consistent pattern:
 - **SKILL.md**: YAML frontmatter (`name`, `description`, `version`) + markdown instructions
 - **Optional references/**: Supporting documentation (single source of truth)
 - Skills are self-contained, minimal cross-references
-- All Maestro skills should load maestro-core first for orchestration context
 
 ### Validation Gates
 

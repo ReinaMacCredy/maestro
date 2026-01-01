@@ -80,8 +80,6 @@ Follow this collaborative dialogue process:
 
 ## 6. Tiered Research Verification (Automatic)
 
-> **Deprecated:** "Grounding" terminology replaced by "Research Verification"
-
 Research verification runs **automatically** at phase transitions with tiered intensity.
 
 ### Research Verification Matrix
@@ -163,7 +161,7 @@ Skip is only available for non-mandatory enforcement levels:
 - For existing patterns: Use `Grep` and `finder` to confirm "how we do X here"
 - For prior decisions: Use `find_thread` to check "did we solve this before?"
 
-See [grounding.md](grounding.md) (deprecated, redirects to research protocol) or [conductor/references/research/protocol.md](../../conductor/references/research/protocol.md) for complete documentation.
+See [conductor/references/research/protocol.md](../../conductor/references/research/protocol.md) for complete documentation.
 
 ## 7. Write design.md
 

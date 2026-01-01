@@ -1055,7 +1055,6 @@ Beyond the core workflow, Maestro includes specialist skills for specific situat
 
 | Skill                            | Trigger       | When to Use                                                     |
 | -------------------------------- | ------------- | --------------------------------------------------------------- |
-| `using-superpowers`              | —             | Session initialization. Establishes how to find and use skills. |
 | `verification-before-completion` | —             | Before claiming work is complete. Evidence before assertions.   |
 | `writing-skills`                 | `write skill` | Creating or editing skills.                                     |
 | `sharing-skills`                 | `share skill` | Contributing skills upstream via PR.                            |

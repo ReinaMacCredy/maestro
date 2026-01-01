@@ -63,11 +63,12 @@ Add 5 validation gates to Maestro lifecycle: design, spec, plan-structure, plan-
 
 Session continuity automatic via workflow entry points (ds, /conductor-implement, /conductor-finish).
 
-## [x] Track: maestro-core
+## [x] Track: maestro-core (REMOVED)
 *ID: maestro-core*
 *Archived: [conductor/archive/maestro-core/](conductor/archive/maestro-core/)*
 
 Central orchestration skill with 6-level hierarchy, HALT/DEGRADE policies, and trigger routing rules.
+**Note:** Skill removed in v4.3.1 - routing centralized in AGENTS.md.
 
 ## [x] Track: Skill Integration
 *ID: skill-integration_20251228*

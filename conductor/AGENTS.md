@@ -107,7 +107,7 @@ Contains reusable learnings from completed tracks.
 - Research: ALWAYS runs - no skip conditions (parallel agents are fast)
 - Extraction fidelity: Initial skill extraction may lose philosophical content (e.g., "Why Order Matters"). Fix: copy full SKILL.md first, then split.
 - Continuity skill is in marketplace plugin, not local skills/ - can't add direct local dependency checks
-- Session start detection without hooks requires implicit trigger (maestro-core loading on first message)
+- Session start detection without hooks requires implicit trigger (workflow command loading on first message)
 - Ad-hoc queries (not triggering `ds`, `/conductor-implement`, etc.) do NOT load handoff history - intentional low-overhead behavior for casual chats
 - Agent Mail MCP Failure: If Agent Mail unavailable, graceful fallback to sequential `/conductor-implement`
 - Runtime Testing: Integration tests (Agent Mail, worker spawn) require live MCP - skip with `--reason skipped`
@@ -122,7 +122,7 @@ Contains reusable learnings from completed tracks.
 
 ## Patterns
 
-- **6-Level Skill Hierarchy:** maestro-core > conductor > orchestrator > design > beads > specialized (higher level wins on conflicts)
+- **5-Level Skill Hierarchy:** conductor > orchestrator > design > beads > specialized (higher level wins on conflicts)
 - **Context-Aware Routing:** Check explicit commands first, then context (conductor/ exists?) for routing
 - **6-Phase Finish Workflow:** Pre-flight → Thread Compaction → Beads Compaction → Knowledge Merge → Context Refresh → Archive → CODEMAPS
 - **Smart Skip:** Each phase checks if work exists before running
@@ -146,7 +146,7 @@ Contains reusable learnings from completed tracks.
 - **Always-On Research:** No skip conditions - research runs at ds, DEVELOP→DELIVER, and newtrack
 - **Enforcement Levels:** Advisory (log) → Gatekeeper (block if missing) → Mandatory (block if fails/low confidence)
 - **Impact Agent:** Parallel execution with full research at DELIVER phase
-- **Layered Auto-Load:** AGENTS.md → maestro-core → Conductor → handoff operations (defense in depth for hookless agents)
+- **Layered Auto-Load:** AGENTS.md → Conductor → handoff operations (defense in depth for hookless agents)
 - **Workflow-Aware Continuity:** Handoffs tied to entry points (`ds`, `/conductor-implement`, `/conductor-finish`) not generic session events
 - **6 Handoff Triggers:** design-end, epic-start, epic-end, pre-finish, manual, idle - each fires at specific integration points
 - **Hybrid Handoff Files:** Individual files per handoff (`YYYY-MM-DD_HH-MM-SS-mmm_<track>_<trigger>.md`) + index.md for consolidated log

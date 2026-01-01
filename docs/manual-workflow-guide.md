@@ -551,8 +551,6 @@ Step 4: Tracks moved to conductor/archive/
 
 **Purpose**: Complete a track with learnings extraction, context refresh, and archival.
 
-> **Note**: `/conductor-refresh` is deprecated. Use `/conductor-finish` which includes context refresh as Phase 4.
-
 **When to use**: 
 - Track implementation is complete
 - All beads closed, tests passing

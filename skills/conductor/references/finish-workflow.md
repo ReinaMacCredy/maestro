@@ -833,7 +833,7 @@ Update `finish-state.json`:
 }
 ```
 
-See [doc-sync skill](../../doc-sync/SKILL.md) for full documentation.
+See [doc-sync reference](./doc-sync/) for full documentation.
 
 ---
 

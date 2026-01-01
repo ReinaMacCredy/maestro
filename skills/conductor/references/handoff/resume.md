@@ -2,6 +2,8 @@
 
 Reference for the `/resume_handoff` command.
 
+> **Note:** Session continuity in this codebase is **Conductor-only**. The handoff system replaces the standalone `continuity` skill from the marketplace plugin. Use `/create_handoff` and `/resume_handoff` commands instead of legacy `continuity save/load`.
+
 ## Command Aliases
 
 - `/resume_handoff` - Primary command

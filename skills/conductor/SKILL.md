@@ -106,9 +106,6 @@ Verification is **automatic** at phase transitions using parallel sub-agents:
 - [Research agents](../orchestrator/agents/research/) (all research agents)
 - [Integration hooks](references/research/hooks/)
 
-**Legacy Grounding (deprecated):**
-- [Grounding overview](../design/references/grounding.md) - Now routes to research protocol
-
 **Interoperability:** This skill understands conductor projects created by either:
 
 - Gemini CLI extension (`/conductor:setup`, `/conductor:newTrack`, etc.)
@@ -215,6 +212,8 @@ This skill only executes - it does not route. Available commands:
 | `/conductor-finish` | Complete track: extract learnings, archive |
 | `/create_handoff` | Create handoff file for session context |
 | `/resume_handoff` | Load handoff and resume session context |
+
+> **Note:** Session continuity in this codebase is **Conductor-only**. The handoff system (`/create_handoff`, `/resume_handoff`) replaces the standalone `continuity` skill from the marketplace plugin. Do not use legacy `continuity save/load` commands.
 
 ### `/conductor-implement` Auto-Routing
 

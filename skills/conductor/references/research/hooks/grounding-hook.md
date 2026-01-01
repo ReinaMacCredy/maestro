@@ -150,5 +150,4 @@ Routes to research protocol instead of old grounding.
 ## Related
 
 - [protocol.md](../protocol.md) - Main research protocol
-- [../../grounding.md](../../../design/references/grounding.md) - Original grounding (deprecated)
 - [agents/](../agents/) - Agent definitions

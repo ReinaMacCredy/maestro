@@ -73,7 +73,7 @@ Plan.md Track Assignments specifies worker assignments:
 | Track | Agent | Tasks | File Scope | Depends On |
 |-------|-------|-------|------------|------------|
 | 1 | BlueLake | 1.1.*, 1.2.* | skills/orchestrator/** | - |
-| 2 | GreenCastle | 2.1.*, 2.2.* | skills/maestro-core/** | 1.2.3 |
+| 2 | GreenCastle | 2.1.*, 2.2.* | skills/design/** | 1.2.3 |
 
 Orchestrator parses this table to build worker assignments.
 

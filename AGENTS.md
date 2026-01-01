@@ -57,7 +57,6 @@ See [docs/handoff-system.md](docs/handoff-system.md) for full documentation.
 | `conductor` | `/conductor-*` | Structured planning and execution |
 | `orchestrator` | `/conductor-orchestrate`, "run parallel" | Multi-agent parallel execution |
 | `beads` | `fb`, `rb`, `bd ready` | Issue tracking |
-| `doc-sync` | `/doc-sync` | Auto-sync documentation with code |
 
 ## Quick Reference
 
@@ -76,6 +75,32 @@ See [docs/handoff-system.md](docs/handoff-system.md) for full documentation.
 | `bd` unavailable | HALT |
 | `conductor/` missing | DEGRADE (standalone mode) |
 | Village MCP unavailable | DEGRADE |
+
+## Session Lifecycle
+
+### Auto-Load Handoffs (First Message)
+
+On first user message of a new session, before processing:
+
+1. Check if `conductor/handoffs/` exists
+2. Scan for recent handoffs (< 7 days old)
+3. If found: Display `📋 Prior context: [track] (Xh ago)` and load silently
+4. Proceed with user's request
+
+**Skip if:** User says "fresh start", no `conductor/`, or all handoffs > 7 days (show stale warning).
+
+### Idle Detection
+
+On every user message, before routing:
+
+1. Check `conductor/.last_activity` mtime
+2. If gap > 30min (configurable in `workflow.md`):
+   ```
+   ⏰ It's been X minutes. Create handoff? [Y/n/skip]
+   ```
+3. **Y** = create handoff with `idle` trigger, **n** = skip once, **skip** = disable for session
+
+See [conductor/references/handoff/idle-detection.md](skills/conductor/references/handoff/idle-detection.md).
 
 ---
 
@@ -116,4 +141,4 @@ For detailed workflows, load the appropriate skill or see:
 - [Beads workflow](skills/beads/references/workflow-integration.md)
 - [Handoff system](docs/handoff-system.md)
 - [Agent coordination](skills/orchestrator/references/agent-coordination.md)
-- [R`outer](skills/orchestrator/references/router.md)
+- [Router](skills/orchestrator/references/router.md)

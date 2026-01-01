@@ -154,12 +154,12 @@ handoff:
 
 ## Integration Point
 
-### Location: maestro-core
+### Location: AGENTS.md / Conductor
 
 Idle detection runs at the **start of message processing**, before any other skill:
 
 ```markdown
-# In maestro-core SKILL.md
+# In AGENTS.md or Conductor entry points
 
 ## Session Lifecycle
 
@@ -174,9 +174,9 @@ On user message:
 2. Continue with normal routing...
 ```
 
-### Why maestro-core?
+### Why AGENTS.md?
 
-- Runs before any other skill
+- Runs before any skill loads
 - Works outside Conductor workflows
 - Universal coverage for all sessions
 - Single integration point

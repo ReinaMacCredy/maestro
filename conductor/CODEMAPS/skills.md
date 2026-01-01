@@ -27,23 +27,26 @@ Instructions for the agent...
 ## Skill Categories
 
 ```
-ORCHESTRATION          CORE WORKFLOW          DEVELOPMENT              UTILITIES
-├── maestro-core       ├── conductor          ├── using-git-worktrees  ├── sharing-skills
-│   └── references/    │   ├── references/    └── writing-skills       
-│       ├── hierarchy.md   │   ├── research/        
-│       └── routing.md     │   ├── coordination/     
-├── orchestrator           │   ├── tdd/              
-│   └── references/        │   ├── verification/     
-│       ├── patterns/      │   ├── doc-sync/         
-│       └── examples/      │   ├── handoff/          
-│                          │   └── finish/           
-│                      ├── design             
-│                      │   └── bmad/          
-│                      └── beads
+CORE WORKFLOW              DEVELOPMENT              UTILITIES
+├── conductor              ├── using-git-worktrees  ├── sharing-skills
+│   ├── references/        └── writing-skills       
+│   ├── research/            
+│   ├── coordination/     
+│   ├── tdd/              
+│   ├── verification/     
+│   ├── doc-sync/         
+│   ├── handoff/          
+│   └── finish/           
+├── orchestrator           
+│   └── references/        
+│       ├── patterns/      
+│       └── examples/      
+├── design             
+│   └── bmad/          
+└── beads
 ```
 
-**8 Core Skills (after orchestrator_20251230):**
-- **maestro-core**: Central orchestrator (hierarchy, HALT/DEGRADE, routing)
+**7 Core Skills:**
 - **orchestrator**: Multi-agent parallel execution with autonomous workers
 - **conductor**: Planning + execution + **research protocol**
 - **design**: Double Diamond + Party Mode + Research verification
@@ -52,16 +55,17 @@ ORCHESTRATION          CORE WORKFLOW          DEVELOPMENT              UTILITIES
 - **writing-skills**: Skill creation guide + dependency documentation
 - **sharing-skills**: Upstream contribution
 
-## Skill Hierarchy (maestro-core)
+## Skill Hierarchy
+
+Routing and fallback policies are defined in [AGENTS.md](../AGENTS.md).
 
 | Level | Skill | Role |
 |-------|-------|------|
-| 1 | maestro-core | Routing decisions, fallback policy |
-| 2 | conductor | Track orchestration, workflow state, **research** |
-| 3 | orchestrator | **Multi-agent parallel execution** |
-| 4 | design | Design sessions (Double Diamond) |
-| 5 | beads | Issue tracking, dependencies |
-| 6 | specialized | worktrees, sharing, writing |
+| 1 | conductor | Track orchestration, workflow state, **research** |
+| 2 | orchestrator | **Multi-agent parallel execution** |
+| 3 | design | Design sessions (Double Diamond) |
+| 4 | beads | Issue tracking, dependencies |
+| 5 | specialized | worktrees, sharing, writing |
 
 **Higher levels override lower levels on conflicts.**
 
@@ -108,7 +112,6 @@ User Request → AGENTS.md (routing) → Task(agent) → send_message() → Summ
 - `AGENTS.md` - Thin router section (~70 lines)
 - `skills/orchestrator/references/intent-routing.md` - Intent → agent mapping
 - `skills/orchestrator/references/agent-routing.md` - Spawn patterns
-- `skills/maestro-core/references/delegation.md` - Responsibility matrix
 
 ## BMAD Integration (skills/design/references/bmad/)
 

@@ -195,4 +195,3 @@ Before generating spec.md:
 
 - [Research agents](../../../orchestrator/agents/research/) - Research agent definitions
 - [hooks/](hooks/) - Integration hook specifications
-- [grounding.md](../../../design/references/grounding.md) - Deprecated redirect

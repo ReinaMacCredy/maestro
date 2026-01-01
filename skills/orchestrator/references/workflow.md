@@ -63,7 +63,7 @@ TRACKS = parse_track_assignments(plan)
 # Result:
 # [
 #   { track: 1, agent: "BlueLake", tasks: ["1.1.1", "1.1.2"], scope: "skills/orchestrator/**", depends_on: [] },
-#   { track: 2, agent: "GreenCastle", tasks: ["2.1.1", "2.2.1"], scope: "skills/maestro-core/**", depends_on: ["1.2.3"] },
+#   { track: 2, agent: "GreenCastle", tasks: ["2.1.1", "2.2.1"], scope: "skills/design/**", depends_on: ["1.2.3"] },
 # ]
 
 CROSS_DEPS = metadata.beads.crossTrackDeps
@@ -86,7 +86,7 @@ Both options produce the same TRACKS structure for Phase 4.
 | Track | Agent | Tasks | File Scope | Depends On |
 |-------|-------|-------|------------|------------|
 | 1 | BlueLake | 1.1.*, 1.2.* | skills/orchestrator/** | - |
-| 2 | GreenCastle | 2.1.*, 2.2.* | skills/maestro-core/** | 1.2.3 |
+| 2 | GreenCastle | 2.1.*, 2.2.* | skills/design/** | 1.2.3 |
 
 Map tasks to bead IDs using `metadata.json.beads.planTasks`.
 
@@ -147,7 +147,7 @@ Spawning workers for parallel execution.
 | Track | Agent | Scope |
 |-------|-------|-------|
 | 1 | BlueLake | skills/orchestrator/** |
-| 2 | GreenCastle | skills/maestro-core/** |
+| 2 | GreenCastle | skills/design/** |
 
 Workers: Follow 4-step protocol in worker-prompt.md
 """
@@ -476,7 +476,7 @@ send_message(
 - Created SKILL.md, workflow.md, worker-prompt.md
 
 #### Track 2 (GreenCastle)
-- Updated maestro-core hierarchy
+- Updated conductor routing
 - Added /conductor-orchestrate routing
 
 #### Track 3 (RedStone)
@@ -486,7 +486,7 @@ send_message(
 ### Files Changed
 - skills/orchestrator/SKILL.md
 - skills/orchestrator/references/*.md
-- skills/maestro-core/SKILL.md
+- skills/conductor/SKILL.md
 - ...
 """
 )

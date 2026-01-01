@@ -203,18 +203,14 @@ When `/conductor-finish` runs:
 2. `index.md` entries marked as archived
 3. Historical reference preserved
 
-## Migration from Continuity
+## Command Reference
 
-The old continuity system (LEDGER.md) is deprecated.
+| Command | Description |
+|---------|-------------|
+| `/resume_handoff` | Load prior session context |
+| `/create_handoff` | Save current session context |
 
-| Old | New |
-|-----|-----|
-| `continuity load` | `/resume_handoff` |
-| `continuity save` | `/create_handoff` |
-| `continuity handoff` | `/create_handoff` |
-| `conductor/sessions/active/LEDGER.md` | `conductor/handoffs/<track>/` |
-
-Validation state moved from LEDGER.md frontmatter to `metadata.json.validation`.
+Validation state stored in `metadata.json.validation`.
 
 ## Reference Files
 

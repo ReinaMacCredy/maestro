@@ -115,8 +115,8 @@ Research context is passed to spec generation:
 **NONE. Research ALWAYS runs.**
 
 Removed all previous skip conditions:
-- ~~`--skip-research` flag~~ → Deprecated, ignored
-- ~~Track is a hotfix~~ → Research still runs (smaller scope)
+- `--skip-research` flag is no longer supported
+- Track hotfixes still run research (smaller scope)
 
 **Rationale:** Pre-spec research ensures accurate specifications.
 

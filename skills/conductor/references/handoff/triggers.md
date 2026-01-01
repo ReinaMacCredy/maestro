@@ -171,7 +171,7 @@ Before starting finish workflow:
 **Integration:**
 
 ```markdown
-# In maestro-core session lifecycle
+# In AGENTS.md or Conductor entry point
 
 On user message:
   IF conductor/.last_activity exists

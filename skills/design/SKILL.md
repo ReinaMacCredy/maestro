@@ -382,8 +382,6 @@ For detailed pipeline documentation, see [docs/PIPELINE_ARCHITECTURE.md](../../d
 
 **RESEARCH VERIFICATION (Mini, Advisory ⚠️):**
 
-> **Deprecated:** "Grounding" terminology replaced by "Research Verification"
-
 1. **Run:** `Locator agent` or `finder(amp)` with query: "similar problems to [problem statement]"
 2. **Calculate confidence:**
    - 3+ matches → HIGH
@@ -695,18 +693,7 @@ Research verification uses **parallel sub-agents** instead of sequential groundi
 | FULL | DEVELOP→DELIVER | 4 (All agents) | Gatekeeper 🚫 |
 | FULL | DELIVER→Complete | 5 (All + Impact) | Mandatory 🔒 |
 
-### Key Changes from Old Grounding
-
-- [DEPRECATED] OLD: Sequential execution (Grep, Locator, Web in sequence)
-- [CURRENT] NEW: Parallel sub-agents (Locator, Analyzer, Pattern, Web, Impact)
-
-- ❌ OLD: Skip conditions (SPEED mode, "quick", timeout)
-- ✅ NEW: Research ALWAYS runs (no skip conditions)
-
-- ❌ OLD: Tiered intensity (Light/Mini/Standard/Full)
-- ✅ NEW: Always full agent dispatch
-
-### Enforcement Levels (Preserved)
+### Enforcement Levels
 
 | Level | Symbol | Behavior |
 |-------|--------|----------|
@@ -732,7 +719,6 @@ research_state = {
 - [Research Protocol](../conductor/references/research/protocol.md) - Main documentation
 - [Research agents](../orchestrator/agents/research/) - Research-specific agents
 - [Integration hooks](../conductor/references/research/hooks/) - Hook integration points
-- [grounding.md](references/grounding.md) - Deprecated, redirects to research
 
 ---
 

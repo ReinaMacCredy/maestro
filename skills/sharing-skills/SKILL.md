@@ -33,7 +33,7 @@ Routing and fallback policies are defined in [AGENTS.md](../../AGENTS.md).
 
 **Additional requirements:**
 - `gh` CLI installed and authenticated
-- Working directory is `~/.config/superpowers/skills/` (your local clone)
+- Working directory is your local skills clone (e.g., `~/.claude/skills/` or plugin directory)
 - **REQUIRED:** Skill has been tested using writing-skills TDD process
 
 ## Sharing Workflow
@@ -41,7 +41,7 @@ Routing and fallback policies are defined in [AGENTS.md](../../AGENTS.md).
 ### 1. Ensure You're on Main and Synced
 
 ```bash
-cd ~/.config/superpowers/skills/
+cd <your-skills-directory>  # e.g., ~/.claude/skills/
 git checkout main
 git pull upstream main
 git push origin main  # Push to your fork
@@ -110,7 +110,7 @@ Here's a complete example of sharing a skill called "async-patterns":
 
 ```bash
 # 1. Sync with upstream
-cd ~/.config/superpowers/skills/
+cd <your-skills-directory>  # e.g., ~/.claude/skills/
 git checkout main
 git pull upstream main
 git push origin main
@@ -152,7 +152,7 @@ Once your PR is merged:
 
 1. Sync your local main branch:
 ```bash
-cd ~/.config/superpowers/skills/
+cd <your-skills-directory>  # e.g., ~/.claude/skills/
 git checkout main
 git pull upstream main
 git push origin main

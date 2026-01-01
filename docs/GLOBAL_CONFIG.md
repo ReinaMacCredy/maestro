@@ -143,9 +143,9 @@ Amp requires manual handoffs. Use workflow commands for automatic handling:
 
 Manual alternative: `/create_handoff <type>` at each phase.
 
-### Legacy → New
+### Legacy → New (Historical Reference)
 
-| Old | New |
+| Old (Deprecated) | New |
 |-----|-----|
 | `continuity load/save/handoff` | `/resume_handoff`, `/create_handoff manual` |
 | `continuity status` | `conductor/handoffs/<track>/index.md` |

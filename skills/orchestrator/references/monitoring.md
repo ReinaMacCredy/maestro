@@ -100,17 +100,17 @@ Track 2 can now proceed with bd-201 (Task 2.1.1).
 Workers report when stuck:
 
 ```markdown
-Subject: [BLOCKER] Track 2: File conflict on maestro-core/SKILL.md
+Subject: [BLOCKER] Track 2: File conflict on design/SKILL.md
 
 ## Problem
-Cannot edit skills/maestro-core/SKILL.md - file is reserved by Track 1.
+Cannot edit skills/design/SKILL.md - file is reserved by Track 1.
 
 ## Current Reservations
 - skills/orchestrator/** (Track 1, BlueLake)
-- skills/maestro-core/** (Track 2, GreenCastle) ← conflict
+- skills/design/** (Track 2, GreenCastle) ← conflict
 
 ## Request
-Please coordinate release of maestro-core files.
+Please coordinate release of design files.
 ```
 
 ## Handling Blockers
