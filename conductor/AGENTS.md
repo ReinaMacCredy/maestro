@@ -66,6 +66,8 @@ Contains reusable learnings from completed tracks.
 - `bd list --parent=<epic-id> --status=open --json | jq 'length'` - Check for lingering beads before epic close
 - `summarize_thread(thread_id=TRACK_THREAD)` - Read track context before each bead (worker protocol)
 - `send_message(to=[self], thread_id=TRACK_THREAD)` - Self-message learnings for next bead (track thread pattern)
+- `rg -i "single.?agent|multi.?agent" --type md -l | grep -v CHANGELOG | grep -v archive` - Search for SA/MA references during cleanup
+- `rg -i "village|\.beads-village|bv --robot" --type md -l | grep -v archive` - Search for Village references during cleanup
 
 ## Gotchas
 
@@ -86,7 +88,7 @@ Contains reusable learnings from completed tracks.
 - CODEMAPS loaded at design session start for codebase context
 - docs: and chore: commits don't bump version (changelog only)
 - Skill versions in SKILL.md frontmatter are manually updated (not automated)
-- HALT vs Degrade: `bd` unavailable = HALT; Agent Mail unavailable = degrade to sequential
+- HALT vs Degrade: `bd` unavailable = HALT; Agent Mail unavailable = HALT (no fallback since v5.0)
 - Session lock staleness: heartbeat protocol (5 min updates); stale = >10 min without heartbeat
 - Subagent bd access: read-only (show, ready, list); writes return to main agent
 - Idempotency: `bd update` and `bd close` are idempotent; `bd create` is NOT
@@ -122,7 +124,7 @@ Contains reusable learnings from completed tracks.
 - Continuity skill is in marketplace plugin, not local skills/ - can't add direct local dependency checks
 - Session start detection without hooks requires implicit trigger (workflow command loading on first message)
 - Ad-hoc queries (not triggering `ds`, `/conductor-implement`, etc.) do NOT load handoff history - intentional low-overhead behavior for casual chats
-- Agent Mail MCP Failure: If Agent Mail unavailable, graceful fallback to sequential `/conductor-implement`
+- Agent Mail MCP Failure: HALT - Agent Mail required for orchestrator coordination (no fallback since v5.0)
 - Runtime Testing: Integration tests (Agent Mail, worker spawn) require live MCP - skip with `--reason skipped`
 - Worker Autonomy: Orchestrator workers CAN self claim/close beads (differs from standard subagent rules)
 - Auto-orchestration: fb Phase 6 triggers orchestration automatically after beads are filed

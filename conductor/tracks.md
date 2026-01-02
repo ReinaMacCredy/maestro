@@ -4,11 +4,23 @@ Master list of all development tracks.
 
 ## Active Tracks
 
+## [ ] Track: Pre-Orchestration Token Optimization
+*ID: pre-orchestration-optimization*
+*Link: [spec](tracks/pre-orchestration-optimization/spec.md) | [plan](tracks/pre-orchestration-optimization/plan.md)*
+
+Reduce token consumption before parallel worker execution by 60-75%. Solutions: lazy skill loading, trust plan.md fast-path, conditional preflight/handoff, normalized Agent Mail protocol.
+
 ## Completed Tracks
 
 ## [x] Track: Test Routing
 *ID: test-routing_20251230*
 *Status: Completed - test track for routing validation*
+
+## [x] Track: Unified SA/MA into FULL Mode
+*ID: unify-modes*
+*Archived: [conductor/archive/unify-modes/](archive/unify-modes/)*
+
+Merged SA (Single-Agent) and MA (Multi-Agent) execution modes into unified FULL mode. All execution routes through orchestrator with Agent Mail coordination. Removed Village MCP entirely. ~55 files modified, breaking change to fallback policy (HALT on Agent Mail failure).
 
 ## [x] Track: File-Scope Parallel Detection
 *ID: file-scope-parallel_20260102*

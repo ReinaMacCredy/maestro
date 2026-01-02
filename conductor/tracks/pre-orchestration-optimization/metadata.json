@@ -1,0 +1,63 @@
+{
+  "id": "pre-orchestration-optimization",
+  "title": "Pre-Orchestration Token Optimization",
+  "type": "refactor",
+  "status": "planning",
+  "priority": "medium",
+  "createdAt": "2026-01-02T00:00:00Z",
+  "threadId": "T-019b7e70-dcc5-7580-ba6e-24c6c8c8632d",
+  "artifacts": {
+    "design": true,
+    "spec": true,
+    "plan": true,
+    "beads": false
+  },
+  "generation": {
+    "status": "complete",
+    "phases": ["design", "spec", "plan"]
+  },
+  "workflow": {
+    "state": "PLANNED",
+    "history": [
+      {"state": "DESIGNING", "at": "2026-01-02T00:00:00Z", "command": "ds"},
+      {"state": "PLANNED", "at": "2026-01-02T00:00:00Z", "command": "cn"}
+    ]
+  },
+  "beads": {
+    "status": "pending",
+    "epicId": null,
+    "epics": [],
+    "issues": [],
+    "planTasks": {},
+    "beadToTask": {},
+    "fileScopes": {
+      "1.1.1": ["skills/conductor/references/workflows/implement.md"],
+      "1.1.2": ["skills/conductor/references/workflows/implement.md"],
+      "1.2.1": ["skills/conductor/references/workflows/implement.md"],
+      "2.1.1": ["skills/conductor/references/preflight-beads.md"],
+      "2.1.2": ["skills/conductor/references/preflight-beads.md"],
+      "2.2.1": ["skills/conductor/references/workflows/implement.md"],
+      "2.2.2": ["skills/conductor/references/workflows/handoff.md"],
+      "3.1.1": ["skills/orchestrator/references/workflow.md"],
+      "3.1.2": ["skills/orchestrator/references/workflow.md"],
+      "3.2.1": ["skills/orchestrator/references/workflow.md"],
+      "3.2.2": ["skills/orchestrator/references/worker-prompt.md"],
+      "3.3.1": ["skills/orchestrator/references/agent-mail.md"],
+      "3.3.2": ["skills/orchestrator/references/worker-prompt.md"],
+      "4.1.1": ["skills/orchestrator/SKILL.md"],
+      "4.1.2": ["skills/orchestrator/SKILL.md"],
+      "4.2.1": ["skills/orchestrator/SKILL.md"],
+      "4.3.1": ["skills/orchestrator/references/architecture.md"]
+    },
+    "crossTrackDeps": [],
+    "orchestrated": true,
+    "reviewStatus": null,
+    "reviewedAt": null
+  },
+  "validation": {
+    "gates_passed": [],
+    "current_gate": null,
+    "retries": 0,
+    "last_failure": null
+  }
+}
