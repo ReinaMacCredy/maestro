@@ -235,7 +235,7 @@ flowchart TB
 |-----------|--------|
 | `bd` unavailable | HALT |
 | `conductor/` missing | DEGRADE (standalone) |
-| Agent Mail unavailable | DEGRADE (sequential) |
+| Agent Mail unavailable | HALT |
 
 ### Close Reasons
 
