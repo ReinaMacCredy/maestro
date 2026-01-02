@@ -94,6 +94,33 @@ All workers MUST follow this exact sequence:
 
 See [references/worker-prompt.md](references/worker-prompt.md) for full template.
 
+## Protocol Layer (v2)
+
+Worker Protocol v2 introduces self-propulsion, heartbeats, and structured messaging.
+
+### Key Additions
+
+| Feature | Description | Reference |
+|---------|-------------|-----------|
+| Self-propulsion | Workers drive themselves without external prompts | [worker-protocol-v2.md](references/worker-protocol-v2.md) |
+| 7-step startup | Structured initialization sequence | [worker-protocol-v2.md](references/worker-protocol-v2.md#7-step-startup-sequence) |
+| Heartbeat | 5-minute interval status signals | [worker-protocol-v2.md](references/worker-protocol-v2.md#heartbeat-protocol) |
+| PING/PONG | Orchestrator liveness checks | [worker-protocol-v2.md](references/worker-protocol-v2.md#pingpong-handling) |
+| BLOCKED handling | Graceful blocker reporting | [worker-protocol-v2.md](references/worker-protocol-v2.md#blocked-behavior) |
+
+### Message Catalog Summary
+
+| Pattern | Purpose | Sender |
+|---------|---------|--------|
+| `[HEARTBEAT]` | Worker status signal | Worker |
+| `[PING]` | Liveness check request | Orchestrator |
+| `[PONG]` | Liveness confirmation | Worker |
+| `[BLOCKED]` | Cannot proceed | Worker |
+| `[TRACK COMPLETE]` | Track finished | Worker |
+| `[DEP]` | Dependency satisfied | Worker/Orchestrator |
+
+See [worker-protocol-v2.md](references/worker-protocol-v2.md) for full protocol specification.
+
 ## Agent Routing
 
 | Intent Keywords | Agent Type | File Reservation |
@@ -135,6 +162,8 @@ Load references only when needed:
 | Coordination modes | [coordination-modes.md](references/coordination-modes.md) |
 | Agent Mail protocol | [agent-mail.md](references/agent-mail.md) |
 | Worker prompt template | [worker-prompt.md](references/worker-prompt.md) |
+| Worker prompt v2 | [worker-prompt-v2.md](references/worker-prompt-v2.md) |
+| Worker protocol v2 | [worker-protocol-v2.md](references/worker-protocol-v2.md) |
 | Preflight/session brain | [preflight.md](references/preflight.md) |
 | Intent routing | [intent-routing.md](references/intent-routing.md) |
 | Summary format | [summary-protocol.md](references/summary-protocol.md) |

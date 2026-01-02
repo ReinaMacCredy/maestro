@@ -73,9 +73,19 @@ Contains reusable learnings from completed tracks.
 - `bd dep tree <epic-id>` - View dependency tree for epic
 - `bd close <id1> --reason completed && bd update <id2> --status in_progress` - Chain close and claim in one command
 - `oracle(task="6-dimension design audit", files=[...])` - Amp's built-in oracle tool for design review
+- `bd update <id> --assignee <agent>` - Assign task to worker (orchestrator pre-assignment)
+- `bd list --assignee=self --status open` - Worker query for assigned beads
+- `bd list --stale=30m --status in_progress` - Find stuck tasks for patrol
+- `bd update <id> --status in_progress --expect-status open` - Atomic claim (race safety)
+- `bd create "title" --wisp` - Create ephemeral bead for patrol/monitoring
+- `bd burn <wisp-id>` - Delete ephemeral bead
+- `bd squash <wisp-id> --title "..."` - Convert wisp to permanent bead
+- `bd heartbeat <bead-id>` - Send worker heartbeat (5 min interval)
+- `bd list --heartbeat-stale --status in_progress` - Find workers without recent heartbeat
 
 ## Gotchas
 
+- Parallel worker spawn exhausts file descriptors: When 6+ workers call `macro_start_session()` simultaneously, Agent Mail archive lock contention causes `OSError: Too many open files`. Fix: stagger spawns in batches of 3.
 - Skill prerequisite pattern uses markdown `**REQUIRED SUB-SKILL:**` not frontmatter `requires:`
 - Design skill's HALT on missing conductor/ was adoption blocker - changed to DEGRADE (standalone mode)
 - Lean orchestrator pattern: keep SKILL.md ≤100 lines, move detailed logic to references/
@@ -222,3 +232,12 @@ Contains reusable learnings from completed tracks.
 - **Worker 4-Step Protocol:** REGISTER (macro_start_session) → EXECUTE (claim/work/close) → REPORT (send_message) → CLEANUP (release_file_reservations)
 - **Lazy References:** Trigger-based reference loading - SKILL.md always loaded, phase-specific references (agent-mail.md, worker-prompt.md) loaded on demand
 - **Triage Cache:** Store bead triage results in `metadata.beads.triageCache` with TTL to skip redundant `bv --robot-triage` calls
+- **Hybrid Hook Pattern:** Agent Mail for signals (WAKE, ASSIGN), Beads for state ownership (--assignee field) - adapts Gas Town to ephemeral Amp sessions
+- **Self-Propulsion Mandate:** Workers check inbox on start, query assigned beads, execute immediately without waiting for commands
+- **Typed Message Protocol:** 11 message types (ASSIGN, WAKE, PING, PONG, PROGRESS, BLOCKED, COMPLETED, FAILED, STEAL, RELEASE, ESCALATE) with YAML frontmatter
+- **Wisps (Ephemeral Beads):** For patrol/monitoring without polluting git history - created with `--wisp`, deleted with `bd burn`
+- **Witness Patrol:** Integrated monitoring loop with 4 checks - stale tasks, unblocked deps, load balance, orphaned tasks
+- **7-Step Worker Startup:** INITIALIZE → INBOX CHECK → THREAD LOCATE → BEADS QUERY → CLAIM → RESERVE → EXECUTE
+- **Atomic Claiming:** `--expect-status=open` flag for race-free bead claiming in parallel environments
+- **Work Stealing:** STEAL message from idle workers, orchestrator reassigns tasks from overloaded workers
+- **Refinery Gate:** Post-completion review via rb before merge - validates acceptance criteria and code quality

@@ -208,6 +208,104 @@ Workers: Follow 4-step protocol in worker-prompt.md
 
 ## Phase 4: Spawn Worker Subagents
 
+### Pre-Dispatch: Assign in Beads
+
+**Before spawning workers, update bead assignments:**
+
+```python
+# For each track, assign beads to worker
+for track in TRACKS:
+    for bead_id in track.beads:
+        bash(f"bd update {bead_id} --assignee {track.agent}")
+```
+
+This ensures:
+- Beads show correct assignee before worker starts
+- Other sessions can see who owns what
+- Auto-routing skips already-assigned tasks
+
+### Typed ASSIGN Message Format
+
+After updating beads, send typed ASSIGN message to each worker:
+
+```python
+for track in TRACKS:
+    send_message(
+        project_key=PROJECT_KEY,
+        sender_name=ORCHESTRATOR_NAME,
+        to=[track.agent],
+        thread_id=EPIC_ID,
+        subject="[ASSIGN] Track {track.letter}: {track.title}",
+        body_md=f"""
+## Assignment
+
+- **Epic**: {EPIC_ID}
+- **Track**: {track.letter} ({track.title})
+- **Tasks**: {', '.join(track.tasks)}
+- **Beads**: {', '.join(track.beads)}
+- **File Scope**: {track.scope}
+- **Orchestrator**: {ORCHESTRATOR_NAME}
+- **Project Path**: {PROJECT_KEY}
+
+## Context from Design/Spec
+
+{track.context}
+
+## ⚠️ CRITICAL: 4-Step Protocol
+
+1. **INITIALIZE**: `macro_start_session()` with file_reservation_paths
+2. **EXECUTE**: `bd update <bead> --status in_progress`, do work, `bd close`
+3. **REPORT**: `send_message()` to orchestrator (MANDATORY)
+4. **CLEANUP**: `release_file_reservations()`
+"""
+    )
+```
+
+### Epic Thread Creation
+
+The orchestrator creates an epic thread before worker dispatch:
+
+```python
+# Create epic thread - orchestrator sends to self
+send_message(
+    project_key=PROJECT_KEY,
+    sender_name=ORCHESTRATOR_NAME,
+    to=[ORCHESTRATOR_NAME],
+    thread_id=EPIC_ID,
+    subject=f"[EPIC START] {epic_title}",
+    body_md=f"""
+## Epic Started: {epic_title}
+
+Spawning {len(TRACKS)} workers for parallel execution.
+
+### Track Assignments
+| Track | Agent | Tasks | File Scope |
+|-------|-------|-------|------------|
+{track_table_rows}
+
+Workers join this thread via their ASSIGN message.
+"""
+)
+```
+
+### Worker Pre-Registration
+
+Workers self-register via `macro_start_session` when they start. The orchestrator does NOT pre-register—each worker's first action is:
+
+```python
+# Worker's first step (in their prompt)
+session = macro_start_session(
+    human_key=PROJECT_PATH,
+    program="amp",
+    model=MODEL,
+    file_reservation_paths=ASSIGNED_FILE_SCOPE,
+    task_description=f"Worker for Track {TRACK_LETTER}: {TRACK_TITLE}"
+)
+WORKER_NAME = session.agent.name
+```
+
+The worker then receives their ASSIGN message in their inbox on startup.
+
 ### Mode-Specific Behavior
 
 | Aspect | LIGHT Mode | FULL Mode |
@@ -235,13 +333,28 @@ Before spawning, determine agent type based on task intent. See [agent-routing.m
 
 ### Spawn Logic (FULL Mode)
 
-Spawn all workers in parallel using Task() tool:
+**⚠️ CRITICAL: Stagger Spawns to Prevent Resource Exhaustion**
+
+When spawning multiple workers, avoid launching all simultaneously. Agent Mail uses file locks for archive operations, and concurrent lock acquisition can exhaust file descriptors (OSError: Too many open files).
+
+**Staggering Strategy:**
+- Spawn workers in batches of 2-3 at a time
+- Wait for each batch to initialize before spawning next
+- For 6+ workers: spawn 3, wait, spawn 3 more
 
 ```python
-# Track expected workers for Phase 5 verification
+import os
+
+# Staggered spawn - configurable batch size to prevent file descriptor exhaustion
+# Tune based on host environment's ulimit settings
+MAX_CONCURRENT_SPAWNS = int(os.environ.get("MAX_CONCURRENT_SPAWNS", 3))
 expected_workers = []
 
-for track in TRACKS:
+for i in range(0, len(TRACKS), MAX_CONCURRENT_SPAWNS):
+    batch = TRACKS[i:i + MAX_CONCURRENT_SPAWNS]
+    
+    # Spawn this batch in parallel
+    for track in batch:
     agent_type = route_intent(track.description)
     spawn_pattern = get_spawn_pattern(agent_type)
     
@@ -263,6 +376,12 @@ for track in TRACKS:
         MODE="FULL"  # Workers know to use Agent Mail
       )
     )
+    
+    # Wait for batch to initialize before spawning next batch
+    # This prevents file descriptor exhaustion from concurrent lock acquisition
+    if i + MAX_CONCURRENT_SPAWNS < len(TRACKS):
+        print(f"⏳ Batch {i//MAX_CONCURRENT_SPAWNS + 1} spawned, waiting for initialization...")
+        # The wait happens naturally as Task() calls return
 ```
 
 ### Spawn Logic (LIGHT Mode)
@@ -664,6 +783,12 @@ Orchestrator maintains state in `implement_state.json`:
   "last_poll": "2025-12-30T02:15:00Z"
 }
 ```
+
+## Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MAX_CONCURRENT_SPAWNS` | `3` | Maximum workers to spawn per batch. Tune based on `ulimit -n` (file descriptors). Lower on constrained systems. |
 
 ## References
 

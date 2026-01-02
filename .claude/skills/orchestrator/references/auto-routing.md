@@ -153,6 +153,131 @@ If auto-detection finds < 2 independent beads:
 If Agent Mail unavailable:
 - Fall back to sequential execution regardless of bead count
 
+## Assignee Check in Bead Triage
+
+When triaging beads for auto-routing, check the `assignee` field to prevent conflicts:
+
+### Skip Already-Assigned Tasks
+
+```python
+def get_available_beads(epic_id: str) -> list:
+    """Get beads available for assignment, excluding already-assigned."""
+    beads = bash(f"bd list --parent={epic_id} --json")
+    
+    available = []
+    for bead in beads:
+        # Skip if already assigned to another worker
+        if bead.get("assignee") and bead["assignee"] != current_agent:
+            continue
+        # Skip if not in ready status
+        if bead.get("status") != "ready":
+            continue
+        available.append(bead)
+    
+    return available
+```
+
+### Triage Algorithm with Assignee Filter
+
+1. **Query beads**: `bd list --parent=<epic-id> --json`
+2. **Filter by assignee**: Skip beads where `assignee` is set (already claimed)
+3. **Filter by status**: Only include `ready` beads
+4. **Filter by dependencies**: Only include beads with no unresolved blockers
+5. **Group by file scope**: Cluster remaining beads for parallel dispatch
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                       Bead Triage                            │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+               ┌───────────────────────────────┐
+               │    Has assignee field set?    │
+               └───────────────────────────────┘
+                     │               │
+                    YES              NO
+                     │               │
+                     ▼               ▼
+               ┌──────────┐   ┌────────────────┐
+               │ SKIP     │   │ Check status   │
+               │ (claimed)│   │ == "ready"     │
+               └──────────┘   └────────────────┘
+                                   │
+                                   ▼
+                        ┌──────────────────────┐
+                        │ Check dependencies   │
+                        │ all resolved?        │
+                        └──────────────────────┘
+                              │           │
+                             YES          NO
+                              │           │
+                              ▼           ▼
+                        ┌──────────┐  ┌──────────┐
+                        │ INCLUDE  │  │ SKIP     │
+                        │ (ready)  │  │ (blocked)│
+                        └──────────┘  └──────────┘
+```
+
+### Handle Reassignment Scenarios
+
+When a worker fails or times out, the orchestrator may need to reassign:
+
+```python
+def reassign_bead(bead_id: str, new_agent: str, reason: str):
+    """Reassign a bead from a stale/failed worker to a new worker."""
+    
+    # 1. Clear old assignee and update status
+    bash(f"bd update {bead_id} --assignee {new_agent} --status ready")
+    
+    # 2. Notify new worker via ASSIGN message
+    send_message(
+        project_key=PROJECT_KEY,
+        sender_name=ORCHESTRATOR_NAME,
+        to=[new_agent],
+        thread_id=EPIC_ID,
+        subject=f"[REASSIGN] {bead_id}",
+        body_md=f"""
+## Reassignment Notice
+
+**Bead**: {bead_id}
+**Reason**: {reason}
+**Previous Worker**: Timed out / Failed
+
+Please pick up this task following the 4-step protocol.
+"""
+    )
+    
+    # 3. Log reassignment
+    bash(f"bd update {bead_id} --notes 'Reassigned to {new_agent}: {reason}'")
+```
+
+### Reassignment Triggers
+
+| Trigger | Detection | Action |
+|---------|-----------|--------|
+| Worker timeout | No heartbeat for 10+ min | Prompt orchestrator for reassign |
+| Worker crash | Task() returns error | Auto-reassign to new worker |
+| Worker blocked | BLOCKED message received | Manual reassign or resolve blocker |
+| Explicit release | Worker sends RELEASE message | Return bead to ready pool |
+
+### State After Reassignment
+
+```json
+{
+  "bead_id": "my-workflow:3-zyci.4.1",
+  "assignee": "GreenCastle",
+  "previous_assignees": ["BlueLake"],
+  "reassignment_history": [
+    {
+      "from": "BlueLake",
+      "to": "GreenCastle", 
+      "reason": "timeout",
+      "timestamp": "2025-12-30T02:15:00Z"
+    }
+  ]
+}
+```
+
 ## Related
 
 - [implement.md](../../conductor/references/workflows/implement.md) - Execution routing Phase 2b

@@ -1,0 +1,260 @@
+# /conductor-patrol Command
+
+description = "Scan for stale beads, orphaned tasks, and session issues with optional takeover/cleanup actions"
+prompt = """
+## 1.0 SYSTEM DIRECTIVE
+You are executing the patrol command for the Conductor workflow. This command scans the current state of beads and sessions to identify issues requiring attention.
+
+---
+
+## 2.0 SCAN PHASE
+
+### 2.1 Session Scan
+
+1. **Check for Active Sessions**
+   ```bash
+   ls -la .conductor/session-lock_*.json 2>/dev/null
+   ```
+
+2. **For Each Session Lock:**
+   - Read lock file to get session metadata
+   - Check if session is stale (last_heartbeat > 10 minutes ago)
+   - Check if session is orphaned (no matching agent in Agent Mail)
+
+3. **Output Session Status:**
+   ```
+   ┌─ SESSION SCAN ───────────────────────────────┐
+   │ Active Sessions: 2                           │
+   │                                              │
+   │ [1] T-abc123 (GreenHill)                     │
+   │     └─ Status: ACTIVE (heartbeat 2m ago)     │
+   │                                              │
+   │ [2] T-def456 (BlueLake)                      │
+   │     └─ Status: STALE (heartbeat 45m ago)     │
+   │     └─ ⚠️ May need takeover                  │
+   │                                              │
+   └──────────────────────────────────────────────┘
+   ```
+
+### 2.2 Stale Bead Detection
+
+1. **Query for Stale Beads:**
+   ```bash
+   bd list --stale=30m --status in_progress --json
+   ```
+
+2. **Categorize by Staleness:**
+   | Duration | Category |
+   |----------|----------|
+   | 30-60m | Warning |
+   | 60-120m | Critical |
+   | >2h | Abandoned |
+
+3. **Output Stale Beads:**
+   ```
+   ┌─ STALE BEADS ────────────────────────────────┐
+   │ Found: 3 stale tasks                         │
+   │                                              │
+   │ ⚠️  my-workflow:3-zyci.2.1                   │
+   │     └─ Assignee: PinkHill                    │
+   │     └─ Stale: 45m (WARNING)                  │
+   │                                              │
+   │ ❌ my-workflow:3-zyci.3.2                    │
+   │     └─ Assignee: GreenCastle                 │
+   │     └─ Stale: 2h 15m (ABANDONED)             │
+   │                                              │
+   └──────────────────────────────────────────────┘
+   ```
+
+### 2.3 Orphaned Task Detection
+
+1. **Query for Orphans:**
+   ```bash
+   bd list --status in_progress --json | jq '.[] | select(.assignee == null or .assignee == "")'
+   ```
+
+2. **Output Orphans:**
+   ```
+   ┌─ ORPHANED TASKS ─────────────────────────────┐
+   │ Found: 1 orphaned task                       │
+   │                                              │
+   │ 🔷 my-workflow:3-zyci.4.1                    │
+   │     └─ No assignee                           │
+   │     └─ Status: in_progress                   │
+   │                                              │
+   └──────────────────────────────────────────────┘
+   ```
+
+### 2.4 Blocked Task Detection
+
+1. **Query for Blocked:**
+   ```bash
+   bd list --status blocked --json
+   ```
+
+2. **Check if Blockers Resolved:**
+   - For each blocked task, check if dependencies are now complete
+   - If all dependencies complete, mark as unblocked candidate
+
+---
+
+## 3.0 ACTION PHASE
+
+After scan completes, present options based on findings:
+
+### 3.1 No Issues Found
+```
+┌─ PATROL COMPLETE ───────────────────────────────┐
+│ ✓ No issues found                               │
+│                                                 │
+│ • 0 stale beads                                 │
+│ • 0 orphaned tasks                              │
+│ • 0 stale sessions                              │
+└─────────────────────────────────────────────────┘
+```
+
+### 3.2 Issues Found - Present Options
+
+```
+┌─ PATROL FINDINGS ───────────────────────────────┐
+│ Issues requiring attention:                     │
+│                                                 │
+│ [T] TAKEOVER - Claim stale/orphaned tasks       │
+│ [C] CLEANUP - Remove stale session locks        │
+│ [P] PING - Send status check to stale workers   │
+│ [R] REASSIGN - Move tasks to available workers  │
+│ [S] SKIP - Take no action                       │
+│                                                 │
+│ Select action(s) [T/C/P/R/S]:                   │
+└─────────────────────────────────────────────────┘
+```
+
+### 3.3 Takeover Action
+
+When user selects [T]:
+
+1. **For Each Stale/Orphaned Task:**
+   ```bash
+   # Release from original assignee
+   bd update <bead-id> --assignee null --notes "Released by patrol"
+   
+   # Claim for current agent
+   bd claim <bead-id>
+   
+   # Transfer file reservations
+   release_file_reservations(agent="OldWorker")
+   file_reservation_paths(agent="CurrentAgent", paths=[...])
+   ```
+
+2. **Announce Takeover:**
+   ```
+   ✓ Took over 2 tasks:
+     • my-workflow:3-zyci.2.1 (from PinkHill)
+     • my-workflow:3-zyci.4.1 (orphaned)
+   ```
+
+### 3.4 Cleanup Action
+
+When user selects [C]:
+
+1. **Remove Stale Session Locks:**
+   ```bash
+   rm .conductor/session-lock_T-def456.json
+   ```
+
+2. **Clear Pending Operations:**
+   ```bash
+   # Archive stale pending ops
+   mv .conductor/pending_updates.jsonl .conductor/archive/
+   ```
+
+3. **Announce Cleanup:**
+   ```
+   ✓ Cleaned up:
+     • 1 stale session lock
+     • 3 pending operations archived
+   ```
+
+### 3.5 Ping Action
+
+When user selects [P]:
+
+1. **Send Status Check Messages:**
+   ```python
+   for bead in stale_beads:
+       send_message(
+           to=[bead.assignee],
+           subject="[PING] Status check",
+           body=f"Task {bead.id} appears stale. Please respond with status.",
+           ack_required=True
+       )
+   ```
+
+2. **Announce Pings:**
+   ```
+   ✓ Sent ping to:
+     • PinkHill (1 stale task)
+     • GreenCastle (1 stale task)
+   ```
+
+### 3.6 Reassign Action
+
+When user selects [R]:
+
+1. **Get Available Workers:**
+   ```bash
+   # Check Agent Mail for active agents
+   fetch_inbox(agent_name="Orchestrator", limit=1)  # Test connectivity
+   ```
+
+2. **Present Reassignment Options:**
+   ```
+   Available workers:
+   [1] BlueLake (0 tasks)
+   [2] RedFox (1 task)
+   
+   Reassign my-workflow:3-zyci.2.1 to [1/2]:
+   ```
+
+3. **Execute Reassignment:**
+   ```bash
+   bd update <bead-id> --assignee BlueLake
+   send_message(to=["BlueLake"], subject="[ASSIGN] Task assigned", ...)
+   ```
+
+---
+
+## 4.0 PATROL FLAGS
+
+| Flag | Description |
+|------|-------------|
+| `--stale` | Only show stale beads |
+| `--orphans` | Only show orphaned tasks |
+| `--sessions` | Only show session status |
+| `--auto` | Automatically cleanup without prompts |
+| `--json` | Output in JSON format |
+
+---
+
+## 5.0 EXAMPLES
+
+### Basic Patrol
+```
+/conductor-patrol
+```
+
+### Stale-Only Check
+```
+/conductor-patrol --stale
+```
+
+### Automatic Cleanup
+```
+/conductor-patrol --auto
+```
+
+### JSON Output for Scripts
+```
+/conductor-patrol --json
+```
+"""
