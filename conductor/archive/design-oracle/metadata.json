@@ -2,10 +2,10 @@
   "id": "design-oracle",
   "title": "Auto Oracle Design Review",
   "created": "2025-01-02",
-  "status": "planned",
+  "status": "archived",
   "workflow": {
-    "state": "PLANNED",
-    "phase": "PLAN",
+    "state": "ARCHIVED",
+    "phase": "FINISHED",
     "checkpoint": null
   },
   "generation": {

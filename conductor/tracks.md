@@ -4,13 +4,15 @@ Master list of all development tracks.
 
 ## Active Tracks
 
-## [ ] Track: Pre-Orchestration Token Optimization
-*ID: pre-orchestration-optimization*
-*Link: [spec](tracks/pre-orchestration-optimization/spec.md) | [plan](tracks/pre-orchestration-optimization/plan.md)*
-
-Reduce token consumption before parallel worker execution by 60-75%. Solutions: lazy skill loading, trust plan.md fast-path, conditional preflight/handoff, normalized Agent Mail protocol.
+*(No active tracks)*
 
 ## Completed Tracks
+
+## [x] Track: Pre-Orchestration Token Optimization
+*ID: pre-orchestration-optimization*
+*Archived: [conductor/archive/pre-orchestration-optimization/](archive/pre-orchestration-optimization/)*
+
+Reduced token consumption before parallel worker execution by 60-75% (~8-12k → ~3-4k pre-spawn). Implemented: lazy skill loading (trigger-based references), trust plan.md fast-path (skip group_by_file_scope), conditional preflight/handoff, workers self-register via macro_start_session.
 
 ## [x] Track: Test Routing
 *ID: test-routing_20251230*

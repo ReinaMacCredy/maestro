@@ -148,6 +148,19 @@ Skills are loaded when:
 - User runs slash command (e.g., `/conductor-setup`, `/conductor-orchestrate`)
 - Agent recognizes matching context (e.g., plan.md has Track Assignments)
 
+**Lazy References (Token Optimization):**
+
+Orchestrator uses trigger-based reference loading to reduce pre-spawn tokens:
+
+| Phase | Reference Loaded |
+|-------|------------------|
+| Always | SKILL.md only (~400 tokens) |
+| Phase 3 (Initialize) | agent-mail.md |
+| Phase 4 (Spawn) | worker-prompt.md |
+| Phase 6 (Handle Issues) | agent-coordination.md |
+
+See `skills/orchestrator/SKILL.md` `## Lazy References` section.
+
 ## Gotchas
 
 - Directory name must be kebab-case

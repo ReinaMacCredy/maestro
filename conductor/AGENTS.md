@@ -68,6 +68,11 @@ Contains reusable learnings from completed tracks.
 - `send_message(to=[self], thread_id=TRACK_THREAD)` - Self-message learnings for next bead (track thread pattern)
 - `rg -i "single.?agent|multi.?agent" --type md -l | grep -v CHANGELOG | grep -v archive` - Search for SA/MA references during cleanup
 - `rg -i "village|\.beads-village|bv --robot" --type md -l | grep -v archive` - Search for Village references during cleanup
+- `macro_start_session()` - Single MCP call for orchestrator/worker initialization (replaces ensure_project + register_agent)
+- `bd list --parent <epic-id> --json | jq '[.[] | select(.status == "open")]'` - Filter beads by status
+- `bd dep tree <epic-id>` - View dependency tree for epic
+- `bd close <id1> --reason completed && bd update <id2> --status in_progress` - Chain close and claim in one command
+- `oracle(task="6-dimension design audit", files=[...])` - Amp's built-in oracle tool for design review
 
 ## Gotchas
 
@@ -148,6 +153,15 @@ Contains reusable learnings from completed tracks.
 - Lingering beads can remain after all epic work done - always verify before closing epic
 - Epic as blocker shows high dependency count: Even when tasks are Wave 1 ready, `dependency_type: blocks` inflates count - verify tasks not blocked by *other* tasks
 - File scope extraction: Tasks with same files → sequential; different files → parallel candidates
+- Orchestrator pre-registration is wasteful: Workers should self-register via `macro_start_session` in Step 1
+- EPIC START message must go to orchestrator itself (`to=[ORCHESTRATOR_NAME]`) not workers who don't exist yet
+- Preflight triage runs even when beads are already filed - check `metadata.beads.status == "complete"` first
+- Handoff load runs for fresh sessions - skip when `conductor/handoffs/<track>/` is empty
+- Track Assignments parsing redundant when already present - use `parse_track_assignments_table()` directly
+- Confirmation prompt re-analyzes file scopes - should use pre-parsed track data
+- Skill files live at `.claude/skills/` not `skills/` - verification scripts must use correct paths
+- Idempotent Oracle updates: When `## Oracle Audit` section exists, find start marker → find next `##` → replace entire section
+- Platform detection for Oracle: Check for oracle tool availability before deciding dispatch method (Amp vs Task)
 
 ## Patterns
 
@@ -205,3 +219,6 @@ Contains reusable learnings from completed tracks.
 - **9-Step Handoff RESUME:** Parse → Agent Mail → File Discovery → Load → Beads Context → Validate → Present → Todos → Activity
 - **Hybrid Handoff Storage:** Agent Mail for search (FTS5), markdown for git history
 - **Two-Stage File Scope Analysis:** Stage 1 at `/conductor-newtrack` (suggest parallelism), Stage 2 at `/conductor-implement` (confirm with Y/n prompt)
+- **Worker 4-Step Protocol:** REGISTER (macro_start_session) → EXECUTE (claim/work/close) → REPORT (send_message) → CLEANUP (release_file_reservations)
+- **Lazy References:** Trigger-based reference loading - SKILL.md always loaded, phase-specific references (agent-mail.md, worker-prompt.md) loaded on demand
+- **Triage Cache:** Store bead triage results in `metadata.beads.triageCache` with TTL to skip redundant `bv --robot-triage` calls
