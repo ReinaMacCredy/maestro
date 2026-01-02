@@ -100,7 +100,7 @@ Contains reusable learnings from completed tracks.
 - planTasks mapping: bidirectional - keep planTasks and beadToTask in sync
 - Claude Code hooks must exit 0 even on error (try/catch + graceful exit) to avoid crashing Claude
 - Handoffs in conductor/handoffs/<track>/ are git-committed (shareable), archived on /conductor-finish
-- Stale handoffs (>7 days) trigger warning on /resume_handoff
+- Stale handoffs (>7 days) trigger warning on /conductor-handoff resume
 - Auto-detect mode uses 7-day threshold: first message + recent handoff = RESUME, else CREATE
 - Handoff Beads sync saves context to bd notes for compaction-proof resumability
 - FTS5 snippet function: `snippet(handoffs_fts, 2, '>>>', '<<<', '...', 50)` for match highlighting

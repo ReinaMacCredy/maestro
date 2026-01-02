@@ -215,7 +215,7 @@ bd update <id> --status in_progress
 
 ## Common Patterns
 
-### Single-Agent Session
+### Standard Session
 
 ```bash
 bd ready --json                      # Find work
@@ -227,7 +227,7 @@ bd sync
 /conductor-handoff
 ```
 
-### Multi-Agent Parallel
+### Parallel Execution
 
 ```bash
 /conductor-orchestrate              # Spawn workers via Agent Mail

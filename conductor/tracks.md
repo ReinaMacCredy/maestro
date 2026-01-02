@@ -22,7 +22,7 @@ Reduced token consumption before parallel worker execution by 60-75% (~8-12k →
 *ID: unify-modes*
 *Archived: [conductor/archive/unify-modes/](archive/unify-modes/)*
 
-Merged SA (Single-Agent) and MA (Multi-Agent) execution modes into unified FULL mode. All execution routes through orchestrator with Agent Mail coordination. Removed Village MCP entirely. ~55 files modified, breaking change to fallback policy (HALT on Agent Mail failure).
+Merged execution modes into unified FULL mode. All execution routes through orchestrator with Agent Mail coordination. Removed Village MCP entirely. ~55 files modified, breaking change to fallback policy (HALT on Agent Mail failure).
 
 ## [x] Track: File-Scope Parallel Detection
 *ID: file-scope-parallel_20260102*
@@ -70,7 +70,7 @@ Track threads for bead-to-bead context, per-bead execution loop, AGENTS.md tool 
 *ID: auto-orchestrate*
 *Archived: [conductor/archive/auto-orchestrate/](archive/auto-orchestrate/)*
 
-Automatic orchestration trigger after `fb` completes. Analyzes beads dependency graph, generates Track Assignments, spawns parallel workers with wave re-dispatch, runs `rb` for final review. Fallback to sequential if Agent Mail unavailable.
+Automatic orchestration trigger after `fb` completes. Analyzes beads dependency graph, generates Track Assignments, spawns parallel workers with wave re-dispatch, runs `rb` for final review. HALT if Agent Mail unavailable.
 
 ## [x] Track: Orchestrator Skill
 *ID: orchestrator-skill_20251230*
@@ -82,7 +82,7 @@ Multi-agent parallel execution with autonomous workers. Mode B workers self clai
 *ID: handoff-system_20251229*
 *Archived: [conductor/archive/handoff-system_20251229/](archive/handoff-system_20251229/)*
 
-Replaced LEDGER.md/continuity with git-committed handoffs. Commands: `/create_handoff`, `/resume_handoff`. 6 triggers: design-end, epic-start, epic-end, pre-finish, manual, idle.
+Replaced LEDGER.md/continuity with git-committed handoffs. Command: `/conductor-handoff` (auto-detect, create, resume modes). 6 triggers: design-end, epic-start, epic-end, pre-finish, manual, idle.
 
 ## [x] Track: Research Protocol Integration
 *ID: research-protocol_20251229*
