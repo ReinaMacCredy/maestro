@@ -158,32 +158,38 @@ except Exception as e:
 | Check | Action on Fail |
 |-------|----------------|
 | `health_check()` succeeds | Fall back to sequential |
-| `ensure_project()` succeeds | Fall back to sequential |
-| `register_agent()` succeeds | Fall back to sequential |
+| `macro_start_session()` succeeds | Fall back to sequential |
 
 ## Phase 3: Initialize Agent Mail
 
-```python
-# 1. Ensure project exists
-ensure_project(human_key="<absolute-project-path>")
+Use `macro_start_session` to combine project setup, agent registration, and file reservations in a single call:
 
-# 2. Register orchestrator
-orchestrator_result = register_agent(
-  project_key="<path>",
-  name="<OrchestratorName>",  # Auto-generated or from config
+```python
+# Initialize orchestrator with single macro call
+session = macro_start_session(
+  human_key="<absolute-project-path>",
   program="amp",
   model="<model>",
-  task_description="Orchestrator for <epic-id>"
+  task_description="Orchestrator for <epic-id>",
+  file_reservation_paths=["conductor/tracks/<track-id>/**"],  # Reserve planning files
+  inbox_limit=10  # Get recent messages
 )
 
-# 3. Store orchestrator name for workers
-ORCHESTRATOR_NAME = orchestrator_result.name
+# Extract session info
+ORCHESTRATOR_NAME = session.agent.name
+PROJECT_KEY = session.project.human_key
 
-# 4. Create epic thread (notify all workers will be spawned)
+# Check for any conflicts from recent inbox
+for msg in session.inbox:
+    if "[SESSION START]" in msg.subject:
+        print(f"⚠️ Active session detected: {msg.subject}")
+
+# Create epic thread - send to self (orchestrator)
+# Workers join thread via macro_start_session when spawned
 send_message(
-  project_key="<path>",
+  project_key=PROJECT_KEY,
   sender_name=ORCHESTRATOR_NAME,
-  to=["<all-worker-names>"],  # Note: workers don't exist yet, this creates thread
+  to=[ORCHESTRATOR_NAME],  # Send to self - workers join via macro_start_session
   thread_id="<epic-id>",
   subject="EPIC STARTED: <title>",
   body_md="""
@@ -207,10 +213,12 @@ Workers: Follow 4-step protocol in worker-prompt.md
 | Aspect | LIGHT Mode | FULL Mode |
 |--------|------------|-----------|
 | Worker prompt | Light template (no Agent Mail) | Full 4-step template |
-| Pre-registration | Skip | Required |
+| Worker registration | Skip | Self-register via `macro_start_session` |
 | File reservations | Skip (rely on scope isolation) | Via macro_start_session |
 | Result collection | Task() return values | Agent Mail messages |
 | TDD | Yes (default) | Yes (default) |
+
+**Note:** Workers self-register when they start. The orchestrator does NOT pre-register workers—each worker calls `macro_start_session` as their first step, which handles registration automatically.
 
 **TDD enforcement:** Workers follow RED → GREEN → REFACTOR cycle by default. Pass `--no-tdd` to disable.
 
@@ -616,7 +624,7 @@ If Agent Mail MCP is unavailable at any phase:
 
 ```python
 try:
-    ensure_project(...)
+    session = macro_start_session(human_key=project_path, program="amp", model=model)
 except McpUnavailable:
     print("⚠️ Agent coordination unavailable - falling back to sequential")
     # Route to standard /conductor-implement

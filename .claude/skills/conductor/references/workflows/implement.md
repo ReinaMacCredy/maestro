@@ -56,6 +56,25 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
 
 Reference: [workflows/handoff.md](handoff.md) for full workflow.
 
+0. **Check for Existing Handoffs**
+   
+   ```bash
+   handoff_dir="conductor/handoffs/${track_id}/"
+   
+   # Skip handoff load if directory missing or empty
+   if [[ ! -d "$handoff_dir" ]] || [[ -z "$(ls -A "$handoff_dir" 2>/dev/null)" ]]; then
+       echo "ℹ️ No prior handoff - fresh session"
+       # Skip directly to Phase 1
+       return
+   fi
+   ```
+   
+   **Fresh Session Conditions:**
+   - `conductor/handoffs/<track>/` directory does not exist
+   - Directory exists but contains no files
+   
+   When either condition is true, skip handoff load entirely and proceed to Phase 1.
+
 1. **Load Most Recent Handoff**
    - Run `/conductor-handoff resume` workflow internally
    - Try Agent Mail first (`summarize_thread`), fall back to files
@@ -131,11 +150,72 @@ Reference: [workflows/handoff.md](handoff.md) for full workflow.
    plan = Read("conductor/tracks/<track-id>/plan.md")
    
    if "## Track Assignments" in plan:
-       # Explicit parallel execution requested
-       return PARALLEL_DISPATCH
-   ```
+       # Explicit parallel execution requested - parse table directly
+       # Skip group_by_file_scope() entirely
+       tracks = parse_track_assignments_table(plan)
+       return PARALLEL_DISPATCH, tracks
    
-   **If Track Assignments section exists → immediately route to orchestrator.**
+   def parse_track_assignments_table(plan_content: str) -> list[Track]:
+       """Parse Track Assignments table directly, bypassing file scope analysis.
+       
+       Table format:
+       | Track | Tasks | File Scope | Depends On |
+       |-------|-------|------------|------------|
+       | A     | 1.1.1 | path/to/file.md | - |
+       | B     | 1.2.1, 1.2.2 | other/path.py | A |
+       """
+       lines = plan_content.split("\n")
+       in_table = False
+       tracks = []
+       
+       for line in lines:
+           if "## Track Assignments" in line:
+               in_table = True
+               continue
+           if in_table and line.startswith("|") and not line.startswith("| Track") and not line.startswith("|---"):
+               parts = [p.strip() for p in line.split("|")[1:-1]]
+               if len(parts) >= 4:
+                   track_id, tasks, file_scope, depends_on = parts[0], parts[1], parts[2], parts[3]
+                   tracks.append(Track(
+                       id=track_id,
+                       tasks=tasks.split(", "),
+                       files=[file_scope],
+                       depends_on=depends_on if depends_on != "-" else None
+                   ))
+           elif in_table and line.startswith("##"):
+               break  # End of Track Assignments section
+           
+           return tracks
+           
+           def validate_tasks_against_beads(tracks: list[Track], metadata_path: str) -> list[str]:
+           """Validate that all task IDs in tracks exist in metadata.json.beads.planTasks.
+           
+           Returns list of unknown task IDs for warning display.
+           """
+           metadata = json.loads(Read(metadata_path))
+           plan_tasks = metadata.get("beads", {}).get("planTasks", {})
+           known_task_ids = set(plan_tasks.keys())
+           
+           unknown_tasks = []
+           for track in tracks:
+               for task_id in track.tasks:
+                   if task_id not in known_task_ids:
+                       unknown_tasks.append(task_id)
+           
+           return unknown_tasks
+           
+           # After parsing Track Assignments, validate task IDs
+           tracks = parse_track_assignments_table(plan)
+           unknown = validate_tasks_against_beads(
+               tracks, 
+               f"conductor/tracks/{track_id}/metadata.json"
+           )
+           if unknown:
+               print(f"⚠️ WARNING: Track Assignments references unknown tasks: {unknown}")
+               print("   These task IDs do not exist in metadata.json.beads.planTasks")
+           ```
+           
+           **If Track Assignments section exists → parse table directly and skip all file scope analysis.**
 
 2. **Auto-Detect from Beads (Priority 2)**
    
@@ -195,20 +275,24 @@ Reference: [workflows/handoff.md](handoff.md) for full workflow.
 
 5. **Confirmation Prompt (before parallel dispatch):**
    
-   When routing to PARALLEL_DISPATCH, display confirmation before spawning workers:
+   When routing to PARALLEL_DISPATCH, display confirmation before spawning workers.
+   
+   **Key:** The `tracks` variable is already populated from Phase 2b Step 1 (`parse_track_assignments_table()`) 
+   or Step 2 (auto-detect). Confirmation simply displays pre-parsed track info—no re-analysis needed.
    
    ```python
    if decision == PARALLEL_DISPATCH:
-       # Group tasks by file scope (see parallel-grouping.md)
-       tracks = group_by_file_scope(independent_beads)
+       # tracks already populated from earlier routing step:
+       # - Priority 1: parse_track_assignments_table() output
+       # - Priority 2: group_by_file_scope() output (auto-detect path)
+       # No additional parsing or analysis here—just display.
        
-       # Display grouped tracks
+       # Display grouped tracks (pre-parsed from plan.md)
        print("""
        📊 Parallel execution detected:
        """)
-       for i, track in enumerate(tracks, 1):
-           files_summary = summarize_files(track.files)  # e.g., "src/api/" or "auth.ts, login.ts"
-           print(f"- Track {i}: {len(track.beads)} task(s) ({files_summary})")
+       for track in tracks:
+           print(f"- Track {track.id}: {len(track.tasks)} task(s) ({track.files[0]})")
        
        # Show dependencies if any
        if has_dependent_tracks(tracks):

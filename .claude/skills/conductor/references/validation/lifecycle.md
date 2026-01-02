@@ -21,7 +21,36 @@ The design gate runs **progressively at each checkpoint**, not just at DELIVER:
 | CP1 | DISCOVER | Product alignment, no duplicate features | WARN |
 | CP2 | DEFINE | Problem clear, success measurable, scope explicit | WARN |
 | CP3 | DEVELOP | 3+ options, tech-stack alignment, risk analysis | WARN |
-| CP4 | DELIVER | Full validation + grounding + impact scan | HALT |
+| CP4 | DELIVER | Full validation + grounding + impact scan + **Oracle audit** | HALT |
+
+### Oracle Audit at CP4
+
+At CP4 (DELIVER), an **Oracle audit runs automatically** before the A/P/C menu:
+
+**Platform Detection:**
+- **Amp**: Uses built-in `oracle(task=..., files=[...])` tool
+- **Claude Code / Gemini / Codex**: Spawns Oracle agent via `Task` from `agents/review/oracle.md`
+
+**6-Dimension Audit:**
+| Dimension | Checks |
+|-----------|--------|
+| Completeness | All requirements addressed? Missing features? |
+| Feasibility | Can this be built with current tech-stack? |
+| Risks | What could break? Security/perf/reliability? |
+| Dependencies | What other files/systems affected? |
+| Ordering | Correct implementation sequence? |
+| Alignment | Traces to product.md? Testable acceptance criteria? |
+
+**Output:**
+- Appends `## Oracle Audit` section to design.md (idempotent - overwrites if exists)
+- Verdict: APPROVED or NEEDS_REVISION
+- Critical issues and warnings listed
+
+**Mode Behavior:**
+| Mode | On Critical Gap |
+|------|-----------------|
+| FULL | HALT - fix before proceeding |
+| SPEED | WARN - log but allow continue |
 
 ## metadata.json State
 

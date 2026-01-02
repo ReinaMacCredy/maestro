@@ -50,7 +50,174 @@ Preflight runs at the start of any Conductor command that interacts with Beads. 
 
 ---
 
-## Step 0: Check bd Availability
+## Step 0: Check Cached Beads State
+
+Before running any triage or discovery, check if beads have already been filed for this track.
+
+### Triage Cache Structure
+
+The triage cache is stored in `metadata.beads.triageCache`:
+
+```json
+{
+  "beads": {
+    "status": "complete",
+    "triageCache": {
+      "cachedAt": "2026-01-02T12:00:00Z",
+      "ttlSeconds": 3600,
+      "results": [
+        {
+          "id": "my-workflow:3-abc1",
+          "status": "ready",
+          "title": "Task 1",
+          "dependencies": []
+        }
+      ],
+      "counts": {
+        "ready": 3,
+        "in_progress": 1,
+        "blocked": 0,
+        "closed": 2
+      }
+    }
+  }
+}
+```
+
+### Check Cache Before Triage
+
+```bash
+TRACK_ID="${TRACK_ID:-}"
+SKIP_TRIAGE=false
+CACHED_RESULTS=""
+
+if [[ -n "$TRACK_ID" ]]; then
+  METADATA_FILE="conductor/tracks/${TRACK_ID}/metadata.json"
+  
+  if [[ -f "$METADATA_FILE" ]]; then
+    BEADS_STATUS=$(jq -r '.beads.status // empty' "$METADATA_FILE")
+    
+    if [[ "$BEADS_STATUS" == "complete" ]]; then
+      # Check if triage cache exists and is valid
+      CACHE_EXISTS=$(jq -r '.beads.triageCache.cachedAt // empty' "$METADATA_FILE")
+      
+      if [[ -n "$CACHE_EXISTS" ]]; then
+        CACHED_AT=$(jq -r '.beads.triageCache.cachedAt' "$METADATA_FILE")
+        TTL_SECONDS=$(jq -r '.beads.triageCache.ttlSeconds // 3600' "$METADATA_FILE")
+        
+        # Calculate cache age
+        CACHED_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$CACHED_AT" +%s 2>/dev/null || \
+                       date -d "$CACHED_AT" +%s 2>/dev/null || echo 0)
+        NOW_EPOCH=$(date +%s)
+        CACHE_AGE=$((NOW_EPOCH - CACHED_EPOCH))
+        
+        if [[ $CACHE_AGE -lt $TTL_SECONDS ]]; then
+          echo "✓ Using cached triage state from metadata.json"
+          echo "  Cache age: ${CACHE_AGE}s (TTL: ${TTL_SECONDS}s)"
+          echo "  Beads already filed for track: $TRACK_ID"
+          
+          # Read cached results for use in subsequent steps
+          CACHED_RESULTS=$(jq -c '.beads.triageCache.results' "$METADATA_FILE")
+          SKIP_TRIAGE=true
+        else
+          echo "⚠ Triage cache expired (age: ${CACHE_AGE}s > TTL: ${TTL_SECONDS}s)"
+          echo "  Will refresh triage data..."
+        fi
+      else
+        echo "✓ Using cached bead state from metadata.json"
+        echo "  Beads already filed for track: $TRACK_ID"
+        # Skip bv --robot-triage - beads are already populated
+        SKIP_TRIAGE=true
+      fi
+    fi
+  fi
+fi
+```
+
+### Store Triage Results in Cache
+
+After running `bv --robot-triage`, store results in the cache:
+
+```bash
+store_triage_cache() {
+  local TRACK_ID="$1"
+  local TRIAGE_OUTPUT="$2"
+  local TTL_SECONDS="${3:-3600}"  # Default 1 hour TTL
+  
+  METADATA_FILE="conductor/tracks/${TRACK_ID}/metadata.json"
+  
+  if [[ ! -f "$METADATA_FILE" ]]; then
+    echo "ERROR: metadata.json not found for track: $TRACK_ID"
+    return 1
+  fi
+  
+  NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  TEMP_FILE="$METADATA_FILE.tmp.$$"
+  
+  # Parse triage output and compute counts
+  READY_COUNT=$(echo "$TRIAGE_OUTPUT" | jq '[.[] | select(.status == "ready")] | length')
+  IN_PROGRESS_COUNT=$(echo "$TRIAGE_OUTPUT" | jq '[.[] | select(.status == "in_progress")] | length')
+  BLOCKED_COUNT=$(echo "$TRIAGE_OUTPUT" | jq '[.[] | select(.status == "blocked")] | length')
+  CLOSED_COUNT=$(echo "$TRIAGE_OUTPUT" | jq '[.[] | select(.status == "closed")] | length')
+  
+  # Update metadata.json with triage cache
+  jq --arg now "$NOW" \
+     --argjson ttl "$TTL_SECONDS" \
+     --argjson results "$TRIAGE_OUTPUT" \
+     --argjson ready "$READY_COUNT" \
+     --argjson in_progress "$IN_PROGRESS_COUNT" \
+     --argjson blocked "$BLOCKED_COUNT" \
+     --argjson closed "$CLOSED_COUNT" \
+     '.beads.triageCache = {
+        cachedAt: $now,
+        ttlSeconds: $ttl,
+        results: $results,
+        counts: {
+          ready: $ready,
+          in_progress: $in_progress,
+          blocked: $blocked,
+          closed: $closed
+        }
+      }' "$METADATA_FILE" > "$TEMP_FILE"
+  
+  mv "$TEMP_FILE" "$METADATA_FILE"
+  echo "✓ Triage cache stored (TTL: ${TTL_SECONDS}s)"
+}
+
+# Usage after bv --robot-triage:
+# TRIAGE_OUTPUT=$(bv --robot-triage 2>/dev/null)
+# if [[ $? -eq 0 && -n "$TRIAGE_OUTPUT" ]]; then
+#   store_triage_cache "$TRACK_ID" "$TRIAGE_OUTPUT"
+# fi
+```
+
+### Invalidate Cache on Bead State Change
+
+```bash
+invalidate_triage_cache() {
+  local TRACK_ID="$1"
+  
+  METADATA_FILE="conductor/tracks/${TRACK_ID}/metadata.json"
+  
+  if [[ -f "$METADATA_FILE" ]]; then
+    TEMP_FILE="$METADATA_FILE.tmp.$$"
+    
+    jq 'del(.beads.triageCache)' "$METADATA_FILE" > "$TEMP_FILE"
+    mv "$TEMP_FILE" "$METADATA_FILE"
+    
+    echo "✓ Triage cache invalidated"
+  fi
+}
+
+# Call invalidate_triage_cache when:
+# - bd update changes bead status
+# - bd close is called
+# - New beads are filed
+```
+
+---
+
+## Step 0b: Check bd Availability
 
 **CRITICAL:** This step HALTS if bd is unavailable. No silent skip.
 

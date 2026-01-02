@@ -80,10 +80,30 @@ The session flows through four phases, alternating between divergent and converg
 - Document risks and open questions
 - Validate design against product.md and tech-stack.md
 
+**Oracle Audit (auto-triggered before A/P/C):**
+
+```
+Platform Detection:
+  IF oracle tool available (Amp):
+    → oracle(task="6-dimension design audit", files=[design.md, ...])
+  ELSE (Claude Code / Gemini / Codex):
+    → Task(description="Oracle Design Review", prompt="[oracle.md template]")
+
+Oracle appends "## Oracle Audit" section to design.md with:
+  - 6-dimension summary (Completeness, Feasibility, Risks, Dependencies, Ordering, Alignment)
+  - Critical issues (must fix before proceeding)
+  - Warnings (recommended to address)
+  - Verdict: APPROVED or NEEDS_REVISION
+
+On Critical Gap:
+  - FULL mode: HALT - fix before proceeding
+  - SPEED mode: WARN - log but allow continue
+```
+
 **Validation (CP4):** Full gate - SPEED=WARN, FULL=HALT.
 **Research:** Full grounding + impact scan runs here.
 
-**Exit:** Design verified and approved.
+**Exit:** Design verified and approved (Oracle audit passed).
 
 ## Loop-Back Support
 

@@ -87,7 +87,8 @@ agents/
 │   ├── security-reviewer.md   # Security vulnerability analysis
 │   ├── code-reviewer.md       # Code quality review
 │   ├── pr-reviewer.md         # Pull request review
-│   └── spec-reviewer.md       # Specification validation
+│   ├── spec-reviewer.md       # Specification validation
+│   └── oracle.md              # 6-dimension design audit at CP4
 ├── planning/              # Design decision agents
 │   ├── plan-agent.md          # Create plans
 │   └── validate-agent.md      # Validate plans/specs

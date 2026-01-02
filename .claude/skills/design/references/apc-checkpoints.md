@@ -58,6 +58,26 @@ Agents respond in English, cross-talk (max 2 rounds), then synthesize insights.
 
 Proceed to the next phase. **Validation runs at each checkpoint; research runs at session start and CP3.**
 
+### CP4 (DELIVER) Special Behavior
+
+At CP4, **Oracle audit runs automatically before showing the A/P/C menu**:
+
+1. Detect platform (Amp or Claude Code/Gemini/Codex)
+2. Invoke Oracle review (6-dimension audit)
+3. Oracle appends `## Oracle Audit` section to design.md
+4. Based on verdict:
+   - **APPROVED**: Show A/P/C menu as normal
+   - **NEEDS_REVISION + FULL mode**: HALT - display issues, prompt to fix before proceeding
+   - **NEEDS_REVISION + SPEED mode**: WARN - log issues, show A/P/C menu
+
+```
+📍 End of DELIVER phase.
+
+Oracle Audit: ✅ APPROVED (or ⚠️ NEEDS_REVISION)
+
+[Show A/P/C menu]
+```
+
 See [validation/lifecycle.md](../../conductor/references/validation/lifecycle.md) for checkpoint-specific validation.
 
 ## [↩ Back]

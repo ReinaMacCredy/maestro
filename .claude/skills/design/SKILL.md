@@ -40,7 +40,7 @@ Turn ideas into fully-formed designs through collaborative dialogue.
 2. **Research** - Spawn research agents BEFORE DISCOVER (mandatory) → [research-verification.md](references/research-verification.md)
 3. **Route** - Score complexity (< 4 = SPEED, > 6 = FULL) → [design-routing-heuristics.md](references/design-routing-heuristics.md)
 4. **Execute** - Double Diamond phases with A/P/C checkpoints → [double-diamond.md](references/double-diamond.md)
-5. **Validate** - Progressive validation at each checkpoint (CP1-4) → [validation/lifecycle.md](../conductor/references/validation/lifecycle.md)
+5. **Validate** - Progressive validation at each checkpoint (CP1-4); **Oracle audit at CP4** → [validation/lifecycle.md](../conductor/references/validation/lifecycle.md)
 6. **Handoff** - Suggest next steps: `cn` (newtrack), `ci` (implement), `fb` (file beads)
 
 ### Research & Validation Triggers
@@ -51,7 +51,7 @@ Turn ideas into fully-formed designs through collaborative dialogue.
 | CP1 (DISCOVER) | - | WARN (product alignment) |
 | CP2 (DEFINE) | - | WARN (problem clarity) |
 | CP3 (DEVELOP) | grounding-hook (Locator + Analyzer + Pattern) | WARN (tech-stack) |
-| CP4 (DELIVER) | Full + impact scan | SPEED=WARN, FULL=HALT |
+| CP4 (DELIVER) | Full + impact scan + **Oracle audit** | SPEED=WARN, FULL=HALT |
 
 ## A/P/C Checkpoints
 

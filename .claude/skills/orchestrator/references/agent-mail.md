@@ -3,36 +3,27 @@
 ## Orchestrator Registration (Phase 2)
 
 On spawn, the orchestrator MUST:
-1. Register itself
-2. **Pre-register ALL workers** before spawning them
+1. Register itself via `macro_start_session`
+2. Workers self-register via `macro_start_session` on startup
 
 ```python
-# 1. Ensure project exists
-ensure_project(human_key="/path/to/project")
-
-# 2. Register orchestrator identity
-register_agent(
-    project_key="/path/to/project",
-    name="OrchestratorName",  # Auto-generated adjective+noun
+# Orchestrator initialization
+macro_start_session(
+    human_key="/path/to/project",
     program="amp",
     model="claude-sonnet-4-20250514",
     task_description=f"Orchestrator for epic {epic_id}"
 )
 
-# 3. Pre-register ALL workers (CRITICAL - do this BEFORE spawning)
-for track in TRACKS:
-    register_agent(
-        project_key="/path/to/project",
-        name=track.agent,  # e.g., "BlueStar", "GreenMountain"
-        program="amp",
-        model="claude-sonnet-4-20250514",
-        task_description=f"Worker for Track {track.track}"
-    )
-
-# Now send_message to workers will succeed
+# Workers self-register on startup (no pre-registration needed)
+# Each worker calls macro_start_session which handles:
+# - ensure_project (idempotent)
+# - register_agent (auto-generates name)
+# - file_reservation_paths (optional)
+# - fetch_inbox (returns prior context)
 ```
 
-> **Why pre-register?** `send_message` validates recipients exist. Without pre-registration, messaging workers fails with "recipients not registered" error.
+> **Why self-register?** Workers calling `macro_start_session` handles all setup atomically. The orchestrator only needs to register itself—workers register on spawn. Use `auto_contact_if_blocked=True` on `send_message` to auto-establish contact with newly-registered workers.
 
 ## Inbox Fetch Pattern
 

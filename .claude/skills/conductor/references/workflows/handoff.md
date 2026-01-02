@@ -22,6 +22,9 @@ Reference for `/conductor-handoff` command - session continuity with Beads sync 
 ```
 IF session_first_message AND recent_handoff_exists(<7d)
   → RESUME mode
+ELSE IF session_first_message AND handoff_exists(>=7d)
+  → Skip with message: "⚠️ Stale handoff (>7 days) - skipping"
+  → CREATE mode (fresh start)
 ELSE
   → CREATE mode
 ```
@@ -303,6 +306,18 @@ fi
 
 ### Step 6: Validate State
 
+**7-Day Freshness Check:** ⭐ NEW
+```bash
+handoff_age_days=$(( ($(date +%s) - $(stat -f%m "$handoff_path" 2>/dev/null || stat -c%Y "$handoff_path")) / 86400 ))
+
+if [ "$handoff_age_days" -gt 7 ]; then
+    echo "⚠️ Stale handoff (>7 days) - skipping"
+    echo "   Age: ${handoff_age_days} days"
+    echo "   Recommend: Start fresh with /conductor-handoff create"
+    return  # Skip stale handoff
+fi
+```
+
 **Git validation:**
 ```bash
 current_branch=$(git branch --show-current)
@@ -313,7 +328,7 @@ if [ "$current_branch" != "$handoff_branch" ]; then
 fi
 ```
 
-**Staleness check:** Warn if handoff > 7 days old.
+**Staleness check:** Skip handoffs > 7 days old with message "⚠️ Stale handoff (>7 days) - skipping".
 
 ### Step 7: Present Analysis
 
@@ -417,7 +432,7 @@ search_messages(project_key, query="HANDOFF:design-end AND auth-system")
 | No handoffs found | Suggest `/conductor-handoff create` |
 | Parallel workers running | Prompt: Wait / Proceed / Cancel |
 | Branch mismatch | Warn, ask to continue |
-| Stale handoff (>7d) | Warn, ask to continue |
+| Stale handoff (>7d) | Skip with info message "⚠️ Stale handoff (>7 days) - skipping" |
 | Secrets detected | Prompt: Proceed / Abort |
 
 ---

@@ -67,6 +67,33 @@ See [implement.md Phase 2b](../conductor/references/workflows/implement.md) for 
 
 See [references/workflow.md](references/workflow.md) for full protocol.
 
+## Worker 4-Step Protocol
+
+All workers MUST follow this exact sequence:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  STEP 1: INITIALIZE  - macro_start_session() FIRST         │
+│  STEP 2: EXECUTE     - claim beads, do work, close beads   │
+│  STEP 3: REPORT      - send_message() to orchestrator      │
+│  STEP 4: CLEANUP     - release_file_reservations()         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+| Step | Tool | Required |
+|------|------|----------|
+| 1 | `macro_start_session()` | ✅ FIRST |
+| 2 | `bd update`, `bd close` | ✅ |
+| 3 | `send_message()` | ✅ LAST |
+| 4 | `release_file_reservations()` | ✅ |
+
+**Critical rules:**
+- ❌ Never start work before `macro_start_session()`
+- ❌ Never return without `send_message()` to orchestrator
+- ❌ Never touch files outside assigned scope
+
+See [references/worker-prompt.md](references/worker-prompt.md) for full template.
+
 ## Agent Routing
 
 | Intent Keywords | Agent Type | File Reservation |
@@ -88,7 +115,18 @@ See [references/intent-routing.md](references/intent-routing.md) for mappings.
 | Ignore file reservation conflicts | Wait or resolve before proceeding |
 | Use orchestration for simple tasks | Use sequential `/conductor-implement` |
 
-## References
+## Lazy References
+
+Load references only when needed:
+
+| Phase | Trigger Condition | Reference |
+|-------|-------------------|-----------|
+| Always | On skill load | SKILL.md (this file) |
+| Phase 3 (Initialize) | Setting up Agent Mail, project registration | [agent-mail.md](references/agent-mail.md) |
+| Phase 4 (Spawn) | Before dispatching worker agents | [worker-prompt.md](references/worker-prompt.md) |
+| Phase 6 (Handle Issues) | Cross-track dependencies, blocker resolution | [agent-coordination.md](references/agent-coordination.md) |
+
+### All References
 
 | Topic | File |
 |-------|------|
