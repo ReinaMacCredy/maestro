@@ -5,13 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [5.0.0] - 2026-01-02
+
+
+### Added
+
+
+- Unified /conductor-handoff command with Beads sync
+- Add file-scope parallel detection
+- Unify SA/MA into FULL mode
+- Pre-Orchestration Token Optimization
+- Implement an adaptive A/P/C system for design checkpoints and add new code style guides.
+- Unify execution modes and handoff commands under `/conductor-handoff`, and update fallback policy to halt on Agent Mail failure.
 
 
 ### Changed
 
 
 - Migrate skill definitions to the `.claude/skills` directory.
+
+
+### Documentation
+
+
+- Update changelog
+
+
+### Fixed
+
+
+- Update preflight timeout handling to HALT instead of DEGRADE
+- Update documented system behavior for Agent Mail unavailability from degrade to halt
+
+
+### Conductor
+
+
+- Archive file-scope-parallel_20260102
 
 ## [4.7.0] - 2026-01-01
 
