@@ -49,7 +49,7 @@ See [implement.md Phase 2b](../conductor/references/workflows/implement.md) for 
 | Spawn workers | `Task()` for each track |
 | Monitor | `fetch_inbox`, `search_messages` |
 | Resolve blockers | `reply_message` |
-| Complete | Verify via `bv`, send summary, `bd close epic` |
+| Complete | Send summary, `bd close epic` |
 | Track threads | `summarize_thread(thread_id=TRACK_THREAD)` |
 | Auto-routing | Auto-detect parallel via `metadata.json.beads` |
 

@@ -5,10 +5,9 @@ When used with Conductor, beads operations are **automated via a facade pattern*
 ## Facade Abstraction
 
 Conductor commands call beads through a unified facade that:
-- Handles mode detection (SA vs MA)
+- Validates bd availability
 - Manages retry logic and error recovery
 - Persists failed operations for later replay
-- Abstracts differences between CLI and Village MCP
 
 **In the happy path, you never run manual bd commands** - Conductor handles:
 - `preflight` → bd availability check
@@ -16,15 +15,6 @@ Conductor commands call beads through a unified facade that:
 - `claim` → bd update --status in_progress
 - `close` → bd close --reason completed
 - `sync` → bd sync with retry
-
-## SA vs MA Mode
-
-| Mode | Description | Operations |
-|------|-------------|------------|
-| **SA** (Single-Agent) | Direct `bd` CLI calls | Standard bd commands |
-| **MA** (Multi-Agent) | Village MCP server | Atomic claims, file reservations, handoffs |
-
-Mode is detected at session start and locked for the session.
 
 ## planTasks Mapping
 

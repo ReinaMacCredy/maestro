@@ -47,7 +47,7 @@
 |--------|---------------------|----------------------|
 | Execution | Sequential, main agent | Parallel, worker subagents |
 | bd access | Main agent only | **Workers CAN claim/close** |
-| Coordination | N/A | Agent Mail MCP (Full) or Task return (Light) |
+| Coordination | N/A | Agent Mail MCP |
 | File locking | N/A | file_reservation_paths |
 | Context | In-memory | Track threads (persistent) |
 

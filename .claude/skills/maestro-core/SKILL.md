@@ -53,7 +53,7 @@ ds → design.md → /conductor-newtrack → spec.md + plan.md → fb → beads 
 |-----------|--------|---------|
 | `bd` unavailable | HALT | `❌ Cannot proceed: bd CLI required` |
 | `conductor/` missing | DEGRADE | `⚠️ Standalone mode - limited features` |
-| Agent Mail unavailable | DEGRADE | `⚠️ Falling back to sequential execution` |
+| Agent Mail unavailable | HALT | `❌ Cannot proceed: Agent Mail required for coordination` |
 
 ## Quick Reference
 

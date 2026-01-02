@@ -6,11 +6,22 @@ Gate routing and metadata.json integration for the 5 validation gates.
 
 | Gate | Trigger | File | Enforcement |
 |------|---------|------|-------------|
-| 1. design | DELIVER complete | `shared/validate-design.md` | SPEED=WARN, FULL=HALT |
-| 2. spec | spec.md generated | `shared/validate-spec.md` | WARN (both modes) |
-| 3. plan-structure | plan.md generated | `shared/validate-plan-structure.md` | WARN (both modes) |
-| 4. plan-execution | TDD REFACTOR complete | `shared/validate-plan-execution.md` | SPEED=WARN, FULL=HALT |
-| 5. completion | before /conductor-finish | `shared/validate-completion.md` | SPEED=WARN, FULL=HALT |
+| 1. design | Each checkpoint (1-4) | `shared/validate-design.md` | WARN (progressive), HALT at CP4 |
+| 2. spec | spec.md generated | `shared/validate-spec.md` | WARN |
+| 3. plan-structure | plan.md generated | `shared/validate-plan-structure.md` | WARN |
+| 4. plan-execution | TDD REFACTOR complete | `shared/validate-plan-execution.md` | HALT |
+| 5. completion | before /conductor-finish | `shared/validate-completion.md` | HALT |
+
+### Design Gate: Per-Checkpoint Validation
+
+The design gate runs **progressively at each checkpoint**, not just at DELIVER:
+
+| Checkpoint | Phase | Checks | Enforcement |
+|------------|-------|--------|-------------|
+| CP1 | DISCOVER | Product alignment, no duplicate features | WARN |
+| CP2 | DEFINE | Problem clear, success measurable, scope explicit | WARN |
+| CP3 | DEVELOP | 3+ options, tech-stack alignment, risk analysis | WARN |
+| CP4 | DELIVER | Full validation + grounding + impact scan | HALT |
 
 ## metadata.json State
 
@@ -38,18 +49,25 @@ Track validation progress in `metadata.json.validation`:
 
 ## Behavior Matrix
 
-| Mode | Gate | On Fail | Behavior |
-|------|------|---------|----------|
-| SPEED | Any | WARN | Log warning, continue workflow |
-| FULL | design | HALT | Block, retry up to 2x, then escalate |
-| FULL | spec | WARN | Log warning, continue workflow |
-| FULL | plan-structure | WARN | Log warning, continue workflow |
-| FULL | plan-execution | HALT | Block, retry up to 2x, then escalate |
-| FULL | completion | HALT | Block, retry up to 2x, then escalate |
+| Gate | On Fail | Behavior |
+|------|---------|----------|
+| design | HALT | Block, retry up to 2x, then escalate |
+| spec | WARN | Log warning, continue workflow |
+| plan-structure | WARN | Log warning, continue workflow |
+| plan-execution | HALT | Block, retry up to 2x, then escalate |
+| completion | HALT | Block, retry up to 2x, then escalate |
+
+## Fallback Policy
+
+| Condition | Action |
+|-----------|--------|
+| `bd` unavailable | HALT - Cannot proceed without beads CLI |
+| Agent Mail unavailable | HALT - Cannot proceed without coordination |
+| `conductor/` missing | DEGRADE - Standalone mode, limited features |
 
 ## Retry Logic
 
-For HALT gates in FULL mode:
+For HALT gates:
 
 1. **First attempt fails**: Log to metadata.json, increment retries, return to previous phase
 2. **Second attempt fails**: Log to metadata.json, increment retries, one more chance
@@ -94,12 +112,21 @@ Override validation behavior with flags:
 
 ### 1. Design Session (ds)
 
-After DELIVER phase complete:
+**At each checkpoint (progressive validation):**
 ```
-→ Load shared/validate-design.md
-→ Run validation
-→ Update metadata.json validation state
-→ HALT or WARN based on mode
+→ CP1 (DISCOVER): Load validate-design.md (DISCOVER checks)
+→ CP2 (DEFINE): Load validate-design.md (DEFINE checks)
+→ CP3 (DEVELOP): Load validate-design.md (DEVELOP checks) + spawn research agents
+→ CP4 (DELIVER): Load validate-design.md (FULL checks) + grounding + impact scan
+→ Update metadata.json validation state at each checkpoint
+→ WARN at CP1-3, HALT at CP4
+```
+
+**Research triggers:**
+```
+→ Session start: discover-hook (Locator + Pattern + CODEMAPS)
+→ CP3 (DEVELOP): grounding-hook (Locator + Analyzer + Pattern)
+→ CP4 (DELIVER): Full grounding + impact scan
 ```
 
 ### 2. Track Creation (/conductor-newtrack)
@@ -109,7 +136,7 @@ After spec.md generation:
 → Load shared/validate-spec.md
 → Run validation
 → Update metadata.json validation state
-→ WARN (both modes)
+→ WARN
 ```
 
 After plan.md generation:
@@ -117,7 +144,7 @@ After plan.md generation:
 → Load shared/validate-plan-structure.md
 → Run validation
 → Update metadata.json validation state
-→ WARN (both modes)
+→ WARN
 ```
 
 ### 3. TDD Cycle
@@ -127,7 +154,7 @@ After REFACTOR phase complete:
 → Load shared/validate-plan-execution.md
 → Run validation
 → Update metadata.json validation state
-→ HALT or WARN based on mode
+→ HALT on failure
 ```
 
 ### 4. Track Finish (/conductor-finish)
@@ -137,7 +164,7 @@ Before Phase 0 (preflight):
 → Load shared/validate-completion.md
 → Run validation
 → Update metadata.json validation state
-→ HALT or WARN based on mode
+→ HALT on failure
 ```
 
 ## Validation History

@@ -56,7 +56,9 @@ Agents respond in English, cross-talk (max 2 rounds), then synthesize insights.
 
 ## [C] Continue
 
-Proceed to the next phase. Research verification runs automatically at phase transitions.
+Proceed to the next phase. **Validation runs at each checkpoint; research runs at session start and CP3.**
+
+See [validation/lifecycle.md](../../conductor/references/validation/lifecycle.md) for checkpoint-specific validation.
 
 ## [↩ Back]
 

@@ -252,14 +252,20 @@ Then continue to Step 3 (report) with status `PARTIAL` or `FAILED`.
 
 ---
 
-## Fallback Mode
+## Agent Mail Required (No Fallback)
 
 If Agent Mail is unavailable (macro_start_session fails):
 
-1. Log warning: "Agent Mail unavailable - operating in fallback mode"
-2. Skip file reservations (work carefully)
-3. Execute beads via bd CLI
-4. Return summary via Task return value (Step 3 becomes return value)
+```python
+# ❌ Agent Mail unavailable - HALT immediately
+print("❌ HALT: Cannot initialize session - Agent Mail unavailable")
+print("   Worker cannot proceed without:")
+print("   - File reservations (risk of conflicts)")
+print("   - Message capability (cannot report progress/blockers)")
+return {"status": "HALTED", "reason": "Agent Mail unavailable"}
+```
+
+**Do NOT fall back to local execution.** Parallel workers without Agent Mail coordination will cause file conflicts and cannot report status.
 
 ---
 

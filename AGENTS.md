@@ -20,13 +20,9 @@ bd available?
 └─ NO  → HALT (do not use TodoWrite as fallback)
 ```
 
-### SA vs MA Mode
+### Execution Mode
 
-```
-plan.md has "## Track Assignments"?
-├─ YES → MA mode (load orchestrator skill)
-└─ NO  → SA mode (sequential TDD)
-```
+Always FULL mode via orchestrator. Even single tasks spawn 1 worker for consistency.
 
 ## Commands Quick Reference
 
@@ -126,7 +122,7 @@ bd sync
 |-----------|--------|
 | `bd` unavailable | HALT |
 | `conductor/` missing | DEGRADE (standalone) |
-| Village MCP unavailable | DEGRADE |
+| Agent Mail unavailable | DEGRADE (sequential) |
 
 ## Skill Discipline
 
@@ -200,10 +196,10 @@ cat .claude-plugin/plugin.json | jq .   # Validate manifest
 
 | Topic | Path |
 |-------|------|
-| Beads workflow | [skills/beads/references/workflow-integration.md](skills/beads/references/workflow-integration.md) |
-| Handoff system | [skills/conductor/references/handoff/](skills/conductor/references/handoff/) |
-| Agent coordination | [skills/orchestrator/references/agent-coordination.md](skills/orchestrator/references/agent-coordination.md) |
-| Router | [skills/orchestrator/references/router.md](skills/orchestrator/references/router.md) |
-| Beads integration | [skills/conductor/references/beads-integration.md](skills/conductor/references/beads-integration.md) |
-| TDD checkpoints | [skills/conductor/references/tdd-checkpoints-beads.md](skills/conductor/references/tdd-checkpoints-beads.md) |
-| Idle detection | [skills/conductor/references/handoff/idle-detection.md](skills/conductor/references/handoff/idle-detection.md) |
+| Beads workflow | [.claude/skills/beads/references/workflow-integration.md](.claude/skills/beads/references/workflow-integration.md) |
+| Handoff system | [.claude/skills/conductor/references/workflows/handoff.md](.claude/skills/conductor/references/workflows/handoff.md) |
+| Agent coordination | [.claude/skills/orchestrator/references/agent-coordination.md](.claude/skills/orchestrator/references/agent-coordination.md) |
+| Router | [.claude/skills/orchestrator/references/router.md](.claude/skills/orchestrator/references/router.md) |
+| Beads integration | [.claude/skills/conductor/references/beads-integration.md](.claude/skills/conductor/references/beads-integration.md) |
+| TDD checkpoints | [.claude/skills/conductor/references/tdd-checkpoints-beads.md](.claude/skills/conductor/references/tdd-checkpoints-beads.md) |
+| Idle detection | [.claude/skills/conductor/references/workflows/handoff.md](.claude/skills/conductor/references/workflows/handoff.md) |

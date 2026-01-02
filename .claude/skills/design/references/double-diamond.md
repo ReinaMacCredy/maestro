@@ -15,12 +15,22 @@ The session flows through four phases, alternating between divergent and converg
 
 ## Phase Details
 
-| Phase | Purpose | Activities | Exit Criteria |
-|-------|---------|------------|---------------|
-| **DISCOVER** | Explore problem space | Ask about pain, users, impact, constraints | Problem articulated, users identified |
-| **DEFINE** | Frame the problem | Problem statement, success criteria, scope, approaches | Statement agreed, approach selected |
-| **DEVELOP** | Explore solutions | Architecture, components, data model, user flow | Architecture understood, interfaces defined |
-| **DELIVER** | Finalize design | Full research verification, acceptance criteria, risks | Design verified and approved |
+| Phase | Purpose | Activities | Research | Validation |
+|-------|---------|------------|----------|------------|
+| **DISCOVER** | Explore problem space | Ask about pain, users, impact, constraints | (at session start) | CP1: Product alignment |
+| **DEFINE** | Frame the problem | Problem statement, success criteria, scope | - | CP2: Problem clarity |
+| **DEVELOP** | Explore solutions | Architecture, components, data model, user flow | grounding-hook | CP3: Tech-stack |
+| **DELIVER** | Finalize design | Full verification, acceptance criteria, risks | Full + impact | CP4: Full gate |
+
+## Research & Validation Triggers
+
+| Checkpoint | Research | Validation |
+|------------|----------|------------|
+| Session start | discover-hook (Locator + Pattern + CODEMAPS) | - |
+| CP1 (DISCOVER) | - | WARN (product alignment) |
+| CP2 (DEFINE) | - | WARN (problem clarity) |
+| CP3 (DEVELOP) | grounding-hook (Locator + Analyzer + Pattern) | WARN (tech-stack) |
+| CP4 (DELIVER) | Full + impact scan | SPEED=WARN, FULL=HALT |
 
 ## Phase 1: DISCOVER (Diverge)
 
@@ -56,7 +66,8 @@ The session flows through four phases, alternating between divergent and converg
 - User flow/interactions
 - Integration points
 
-**Verification:** Run research verification before proceeding.
+**Validation (CP3):** WARN if options don't align with tech-stack.md.
+**Research:** grounding-hook runs here (Locator + Analyzer + Pattern).
 
 **Exit:** Architecture understood, interfaces defined.
 
@@ -68,6 +79,9 @@ The session flows through four phases, alternating between divergent and converg
 - Ensure acceptance criteria are testable
 - Document risks and open questions
 - Validate design against product.md and tech-stack.md
+
+**Validation (CP4):** Full gate - SPEED=WARN, FULL=HALT.
+**Research:** Full grounding + impact scan runs here.
 
 **Exit:** Design verified and approved.
 

@@ -19,16 +19,9 @@ flowchart TB
         BEADS[".beads/"]
     end
 
-    subgraph MODES["EXECUTION MODES"]
-        SA["SA: Single Agent"]
-        MA["MA: Multi-Agent"]
-    end
-
     DS --> DESIGN
     NEWTRACK --> SPEC
     NEWTRACK --> BEADS
-    IMPLEMENT -.-> SA
-    IMPLEMENT -.-> MA
 ```
 
 ## Skill Hierarchy
@@ -61,8 +54,7 @@ conductor → orchestrator → design → beads → specialized
 ```mermaid
 flowchart TB
     subgraph PREFLIGHT["PREFLIGHT"]
-        PF_START["Session Start"] --> PF_MODE["Mode Detect (SA/MA)"]
-        PF_MODE --> PF_BD["Validate bd CLI"]
+        PF_START["Session Start"] --> PF_BD["Validate bd CLI"]
     end
 
     subgraph PLANNING["PLANNING (Double Diamond)"]
@@ -118,8 +110,8 @@ Zero manual `bd` commands in the happy path. All beads operations abstracted beh
 ### Integration Points
 
 | Phase | Conductor Command | Beads Action (Automatic) |
-|-------|-------------------|--------------------------|
-| Preflight | All commands | Mode detect (SA/MA), validate `bd` |
+|-------|-------------------|--------------------------| 
+| Preflight | All commands | Validate `bd` CLI |
 | Track Init | `/conductor-newtrack` | Create epic + issues, wire deps |
 | Claim | `/conductor-implement` | `bd update --status in_progress` |
 | TDD | Default | `bd update --notes "RED/GREEN..."` |
@@ -128,26 +120,9 @@ Zero manual `bd` commands in the happy path. All beads operations abstracted beh
 | Compact | `/conductor-finish` | AI summaries for closed |
 | Cleanup | `/conductor-finish` | Remove oldest when >150 |
 
-### Dual-Mode Architecture
+### Unified Architecture
 
-```mermaid
-flowchart LR
-    subgraph FACADE["BEADS-CONDUCTOR FACADE"]
-        direction TB
-        PREFLIGHT["Preflight"] --> DETECT{{"Detect Mode"}}
-        DETECT --> SA["SA Mode: Direct bd CLI"]
-        DETECT --> MA["MA Mode: Village MCP"]
-    end
-
-    subgraph OPS["SHARED OPS"]
-        HEARTBEAT["Heartbeat (5 min)"]
-        PENDING["Pending Recovery"]
-    end
-
-    SA & MA -.-> OPS
-```
-
-**Mode Selection**: Locked at session start, cannot switch mid-session.
+Orchestrator uses Agent Mail for multi-agent coordination. All beads operations go through `bd` CLI.
 
 ## BMAD Agents (Party Mode)
 
@@ -260,7 +235,7 @@ flowchart TB
 |-----------|--------|
 | `bd` unavailable | HALT |
 | `conductor/` missing | DEGRADE (standalone) |
-| Village MCP unavailable | DEGRADE (SA mode) |
+| Agent Mail unavailable | DEGRADE (sequential) |
 
 ### Close Reasons
 
@@ -272,6 +247,6 @@ flowchart TB
 
 - [README.md](../README.md) — Overview and installation
 - [TUTORIAL.md](../TUTORIAL.md) — Complete workflow guide
-- [skills/conductor/](../skills/conductor/) — Planning skill
-- [skills/design/](../skills/design/) — Double Diamond + Party Mode
-- [skills/orchestrator/](../skills/orchestrator/) — Parallel execution
+- [.claude/skills/conductor/](../.claude/skills/conductor/) — Planning skill
+- [.claude/skills/design/](../.claude/skills/design/) — Double Diamond + Party Mode
+- [.claude/skills/orchestrator/](../.claude/skills/orchestrator/) — Parallel execution

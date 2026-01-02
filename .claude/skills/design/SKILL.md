@@ -37,10 +37,21 @@ Turn ideas into fully-formed designs through collaborative dialogue.
 
 0. **Load Core** - Load [maestro-core](../maestro-core/SKILL.md) for routing table and fallback policies
 1. **Initialize** - Load handoffs, CODEMAPS, verify conductor setup → [session-init.md](references/session-init.md)
-2. **Route** - Score complexity (< 4 = SPEED, > 6 = FULL) → [design-routing-heuristics.md](references/design-routing-heuristics.md)
-3. **Execute** - Double Diamond phases with A/P/C checkpoints → [double-diamond.md](references/double-diamond.md)
-4. **Verify** - Research verification at phase transitions → [research-verification.md](references/research-verification.md)
-5. **Handoff** - Suggest next steps: `cn` (newtrack), `ci` (implement), `fb` (file beads)
+2. **Research** - Spawn research agents BEFORE DISCOVER (mandatory) → [research-verification.md](references/research-verification.md)
+3. **Route** - Score complexity (< 4 = SPEED, > 6 = FULL) → [design-routing-heuristics.md](references/design-routing-heuristics.md)
+4. **Execute** - Double Diamond phases with A/P/C checkpoints → [double-diamond.md](references/double-diamond.md)
+5. **Validate** - Progressive validation at each checkpoint (CP1-4) → [validation/lifecycle.md](../conductor/references/validation/lifecycle.md)
+6. **Handoff** - Suggest next steps: `cn` (newtrack), `ci` (implement), `fb` (file beads)
+
+### Research & Validation Triggers
+
+| Trigger Point | Research | Validation |
+|---------------|----------|------------|
+| Session start | discover-hook (Locator + Pattern + CODEMAPS) | - |
+| CP1 (DISCOVER) | - | WARN (product alignment) |
+| CP2 (DEFINE) | - | WARN (problem clarity) |
+| CP3 (DEVELOP) | grounding-hook (Locator + Analyzer + Pattern) | WARN (tech-stack) |
+| CP4 (DELIVER) | Full + impact scan | SPEED=WARN, FULL=HALT |
 
 ## A/P/C Checkpoints
 

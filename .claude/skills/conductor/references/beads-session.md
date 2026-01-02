@@ -1,6 +1,6 @@
 # Beads Session Workflow
 
-**Purpose:** Manage the complete session lifecycle for Beads-integrated Conductor commands. Handles claim, work, close, and sync operations in both SA and MA modes.
+**Purpose:** Manage the complete session lifecycle for Beads-integrated Conductor commands. Handles claim, work, close, and sync operations.
 
 ---
 
@@ -19,15 +19,14 @@ This workflow covers the session lifecycle after preflight completes:
 
 - Preflight completed successfully (see [preflight-beads.md](preflight-beads.md))
 - Track's `metadata.json` exists with session state
-- Mode locked (SA or MA)
 
 ---
 
-## SA Mode Flow
+## Sequential Session Flow
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│                      SA MODE SESSION FLOW                       │
+│                    SEQUENTIAL SESSION FLOW                      │
 ├────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │   bd ready --json                                               │
@@ -61,23 +60,25 @@ This workflow covers the session lifecycle after preflight completes:
 
 ---
 
-## MA Mode Flow
+## Parallel Session Flow (via Orchestrator)
+
+For parallel execution, workers use Agent Mail for coordination. See [orchestrator skill](../../orchestrator/SKILL.md) for the full protocol.
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│                      MA MODE SESSION FLOW                       │
+│                  PARALLEL SESSION FLOW (ORCHESTRATOR)           │
 ├────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│   init(team="<team>", role="<role>")                            │
+│   register_agent(project, program, model)                       │
 │        │                                                        │
 │        ▼                                                        │
-│   inbox() ──► Check for messages                                │
+│   fetch_inbox() ──► Check for messages                          │
 │        │                                                        │
 │        ▼                                                        │
-│   claim() ──► Atomic task claim (race-safe)                     │
+│   bd update <id> --status in_progress                           │
 │        │                                                        │
 │        ▼                                                        │
-│   reserve(path="<file>") ──► Lock files before edit             │
+│   file_reservation_paths(paths=[...]) ──► Reserve files         │
 │        │                                                        │
 │        ▼                                                        │
 │   ┌─────────────────────────────────────┐                       │
@@ -86,10 +87,13 @@ This workflow covers the session lifecycle after preflight completes:
 │   └─────────────────────────────────────┘                       │
 │        │                                                        │
 │        ▼                                                        │
-│   done(taskId, reason="<reason>") ──► Auto-releases             │
+│   bd close <id> --reason <reason>                               │
 │        │                                                        │
 │        ▼                                                        │
-│   msg(content="Task done") ──► Notify team (optional)           │
+│   release_file_reservations()                                   │
+│        │                                                        │
+│        ▼                                                        │
+│   send_message(summary) ──► Notify coordinator                  │
 │                                                                 │
 └────────────────────────────────────────────────────────────────┘
 ```
@@ -98,7 +102,7 @@ This workflow covers the session lifecycle after preflight completes:
 
 ## Phase 1: Claim Task
 
-### SA Mode Claim
+### Sequential Claim
 
 ```bash
 TRACK_DIR="conductor/tracks/<track_id>"
@@ -133,42 +137,34 @@ touch conductor/.last_activity
 echo "Claimed: $TASK_ID"
 ```
 
-### MA Mode Claim
+### Parallel Claim (via Orchestrator)
+
+For parallel execution via orchestrator, workers use Agent Mail for coordination:
 
 ```bash
-# 1. Join team (if not already)
-init team="$TEAM" role="$ROLE"
+# 1. Register with Agent Mail
+register_agent project="$PROJECT" program="claude-code" model="opus"
 
-# 2. Check inbox for messages
-MESSAGES=$(inbox)
-if [[ -n "$MESSAGES" ]]; then
-  echo "Messages from team:"
-  echo "$MESSAGES"
-fi
+# 2. Check inbox for assigned tasks
+MESSAGES=$(fetch_inbox)
 
-# 3. Atomic claim (prevents race conditions)
-CLAIMED=$(claim)
-if [[ -z "$CLAIMED" ]]; then
-  echo "No tasks available to claim"
-  exit 0
-fi
+# 3. Claim using standard bd update
+bd update "$TASK_ID" --status in_progress
 
-TASK_ID=$(echo "$CLAIMED" | jq -r '.id')
-echo "Claimed: $TASK_ID"
+# 4. Reserve files before editing
+file_reservation_paths paths='["src/feature.ts"]' ttl_seconds=3600
+
+echo "Claimed: $TASK_ID with file reservations"
 ```
 
 ### Parallel Task Claiming
 
-For executing multiple independent tasks:
+For executing multiple independent tasks via orchestrator, each worker is assigned specific tasks and uses file reservations to prevent conflicts:
 
 ```bash
-# SA Mode: claim multiple tasks at once
-bd update task-1 task-2 task-3 --status in_progress
-
-# Note: metadata.json.session.bound_bead tracks single active task
-# For parallel tasks, bound_bead contains first task ID
-# Other task IDs tracked in separate session context
-jq '.session.bound_bead = "task-1"' "$METADATA_FILE" > "$METADATA_FILE.tmp" && mv "$METADATA_FILE.tmp" "$METADATA_FILE"
+# Workers claim their assigned task and reserve files
+bd update $TASK_ID --status in_progress
+file_reservation_paths paths='["src/feature/*.ts"]' ttl_seconds=3600
 ```
 
 ---
@@ -254,7 +250,7 @@ should_skip_tdd() {
 | `skipped` | Task not needed (requirements changed) | `SKIPPED: <why not needed>` |
 | `blocked` | Cannot proceed, external dependency | `BLOCKED: <what's blocking>` |
 
-### SA Mode Close
+### Sequential Close
 
 ```bash
 close_task() {
@@ -290,14 +286,15 @@ close_task() {
 }
 ```
 
-### MA Mode Close
+### Parallel Close (via Orchestrator)
 
 ```bash
-# done() auto-releases file reservations
-done taskId="$TASK_ID" reason="$REASON"
+# Close task and release file reservations
+bd close "$TASK_ID" --reason "$REASON"
+release_file_reservations
 
-# Optional: notify team
-msg content="Completed $TASK_ID: $SUMMARY"
+# Notify coordinator
+send_message to='["Coordinator"]' subject="Task Complete: $TASK_ID" body_md="Completed with reason: $REASON"
 ```
 
 ### Notes Format by Reason
@@ -565,18 +562,18 @@ When done, return structured result:
 
 ---
 
-## File Reservations (MA Mode)
+## File Reservations
 
 ### Reserve Before Edit
 
 ```bash
-# Before editing a file
-reserve path="src/auth.ts" ttl=10  # 10 minute TTL
+# Before editing a file (via Agent Mail)
+file_reservation_paths(paths=["src/auth.ts"], ttl_seconds=600)  # 10 minute TTL
 
 # Edit file...
 
-# After done (or auto-release via done())
-release path="src/auth.ts"
+# After done
+release_file_reservations()
 ```
 
 ### Conflict Resolution
@@ -682,14 +679,14 @@ update_session_field() {
 | Claim failed | Retry 3x, then HALT with error |
 | Close failed | Retry 3x, persist to pending_closes.jsonl |
 | Sync failed | Retry 3x, persist unsynced state |
-| Village unavailable (MA) | Degrade to SA with warning |
-| Reservation conflict (MA) | Request access or pick different task |
+| Agent Mail unavailable | HALT - Cannot proceed without coordination |
+| Reservation conflict | Wait for release or pick different task |
 
 ---
 
 ## Complete Session Example
 
-### SA Mode Session
+### Sequential Session
 
 ```bash
 # 1. Preflight (from preflight-beads.md)
@@ -721,40 +718,37 @@ sync_to_git
 cleanup_session
 ```
 
-### MA Mode Session
+### Parallel Session (via Orchestrator)
 
 ```bash
-# 1. Preflight (from preflight-beads.md)
-source preflight-beads.sh
+# 1. Register with Agent Mail
+register_agent project="$PROJECT" program="claude-code" model="opus"
 
-# 2. Join team
-init team="platform" role="be"
+# 2. Check inbox for assigned task
+fetch_inbox
 
-# 3. Check messages
-inbox
+# 3. Claim task
+bd update "$TASK_ID" --status in_progress
 
-# 4. Claim (atomic)
-TASK=$(claim)
-TASK_ID=$(echo "$TASK" | jq -r '.id')
+# 4. Reserve files
+file_reservation_paths paths='["src/feature.ts"]' ttl_seconds=3600
 
-# 5. Reserve files
-reserve path="src/feature.ts"
-
-# 6. Work
+# 5. Work
 # ... implementation ...
 
-# 7. Done (auto-releases reservations)
-done taskId="$TASK_ID" reason="completed"
+# 6. Close and release
+bd close "$TASK_ID" --reason completed
+release_file_reservations
 
-# 8. Notify team
-msg content="Completed $TASK_ID"
+# 7. Notify coordinator
+send_message to='["Coordinator"]' subject="Complete: $TASK_ID" body_md="Task finished"
 ```
 
 ---
 
-## Handoff Protocol (MA Mode)
+## Handoff Protocol
 
-When one agent needs to pass context to another, use file-based handoffs.
+When one agent needs to pass context to another, use the Conductor handoff system.
 
 ### Handoff File Format
 
@@ -872,9 +866,9 @@ cleanup_expired_handoffs() {
 
 ---
 
-## Anchored Format (SA Mode)
+## Anchored Format (Session Context)
 
-For single-agent sessions, use anchored format to save session context for cross-session continuity.
+Use anchored format to save session context for cross-session continuity.
 
 ### Save Location
 
@@ -931,19 +925,19 @@ validate_preserve_sections() {
 }
 ```
 
-### SA vs MA Handoff Comparison
+### Handoff Comparison
 
-| Aspect | SA Mode | MA Mode |
-|--------|---------|---------|
-| Storage | `.conductor/session-context.md` | `.conductor/handoff_*.json` |
-| Format | Anchored markdown with [PRESERVE] | Structured JSON |
-| Audience | Same agent, future session | Different agent, same session |
-| TTL | Persistent until overwritten | 24 hours |
-| Recovery | RECALL at session start | `inbox()` check |
+| Aspect | Sequential | Parallel (Orchestrator) |
+|--------|------------|-------------------------|
+| Storage | `.conductor/session-context.md` | Agent Mail messages |
+| Format | Anchored markdown with [PRESERVE] | Structured JSON via MCP |
+| Audience | Same agent, future session | Workers + Coordinator |
+| TTL | Persistent until overwritten | Per-session |
+| Recovery | RECALL at session start | `fetch_inbox()` check |
 
 ### Integration
 
-This extends the Handoff Protocol for SA mode. See:
+See:
 - [Session Lifecycle](../../design/references/session-lifecycle.md) - RECALL phase loads this file
 - [Checkpoint Facade](checkpoint.md) - For progress checkpointing triggers
 

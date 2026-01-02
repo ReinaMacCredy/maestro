@@ -112,11 +112,14 @@ Routing and fallback policies are defined in [AGENTS.md](../../AGENTS.md).
 - Dependency blocks ALL functionality
 - No fallback exists
 - Corrupted state that can't recover
+- Agent Mail unavailable (for orchestrator/multi-agent work)
+- `bd` CLI unavailable
 
 **DEGRADE when:**
 - Feature is optional
 - Fallback behavior available
 - Work can continue with reduced functionality
+- `conductor/` missing (standalone mode)
 
 **Message formats:**
 - HALT: `❌ Cannot proceed: [reason]. [fix instruction].`

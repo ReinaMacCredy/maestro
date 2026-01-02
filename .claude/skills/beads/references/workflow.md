@@ -5,7 +5,7 @@
 
 bd is a graph-based issue tracker for persistent memory across sessions. Use for multi-session work with complex dependencies; use TodoWrite for simple single-session tasks.
 
-**Multi-Agent Mode**: When working in a team (multiple Claude instances on same codebase), bd coordinates through file reservations, task claiming, and agent messaging to prevent conflicts. Single-agent mode remains the default.
+**Parallel Execution**: When using the orchestrator skill, multiple agents coordinate through Agent Mail for file reservations and messaging. Single-agent mode remains the default.
 
 ## When to Use bd vs TodoWrite
 
@@ -133,90 +133,6 @@ Session Start:
 This establishes immediate shared context about available and active work without requiring user prompting.
 
 **For detailed collaborative handoff process, read:** [references/WORKFLOWS.md](./WORKFLOWS.md#session-handoff)
-
-### Multi-Agent Session Start
-
-When multiple agents work on the same codebase, use Village coordination.
-
-**MANDATORY**: Complete ALL steps IN ORDER before modifying any code:
-
-```
-Multi-Agent Session Start:
-- [ ] 1. Run init team="<team>" role="<role>" to join workspace
-- [ ] 2. Run status to see online agents and active locks
-- [ ] 3. Run inbox to check for messages from other agents
-- [ ] 4. Run claim to atomically get next task (prevents race conditions)
-- [ ] 5. Report: "Joined as <role>, claimed <task-id>"
-```
-
-**Critical**: Skipping steps or reordering risks conflicts with other agents. The `claim` command provides atomic task assignment - never use manual `bd update` in multi-agent mode.
-
-**Roles**: `fe` (frontend), `be` (backend), `devops`, `docs`, or custom
-
-**Leader mode**: Add `leader=true` to init for assign privileges
-
-### Role-Based Task Filtering
-
-Tasks can be filtered by role when claiming:
-
-```bash
-init team="platform" role="be"    # Join as backend
-claim                              # Gets only backend-appropriate tasks
-claim role="any"                   # Override to claim any role
-```
-
-**Leader mode:**
-```bash
-init team="platform" role="be" leader=true
-assign id="bd-42" to="alice"      # Leader-only: assign task to agent
-```
-
-## File Reservations
-
-Prevent edit conflicts by reserving files before modifying them.
-
-**When to reserve:**
-| Action | Reserve? |
-|--------|----------|
-| Editing existing file | Yes |
-| Creating new file | No |
-| Reading file | No |
-
-**Commands:**
-```bash
-reserve path="src/auth.ts"         # Lock file (10 min TTL default)
-reserve path="src/auth.ts" ttl=20  # Custom TTL in minutes
-release path="src/auth.ts"         # Release when done
-```
-
-**Conflict resolution workflow:**
-1. Try to reserve file
-2. If locked by another agent:
-   - Run `status` to see who holds lock
-   - Run `msg to="<agent>" content="Need access to <file>"` to request
-   - Check `inbox` for response
-   - Either wait for release or claim different task
-
-**Auto-release**: `done` command releases all your reservations
-
-## Agent Communication
-
-Coordinate with other agents in the workspace.
-
-**Commands:**
-```bash
-msg to="frontend" content="API endpoint ready for integration"  # Direct
-msg content="Taking lunch break, releasing all locks"           # Broadcast
-inbox                             # Read your messages
-inbox global=true                 # Read all team messages
-status                            # See online agents and their locks
-```
-
-**When to communicate:**
-- Blocked on a file another agent holds
-- Completed work that unblocks others
-- Need to hand off context
-- Taking a break / going offline
 
 **Note**: bd auto-discovers the database:
 - Uses `.beads/*.db` in current project if exists
@@ -841,58 +757,13 @@ When Conductor is managing a session:
 2. **Don't manually close tasks** - Conductor closes with proper reason and notes format
 3. **Don't skip sync** - Conductor syncs at session end with retry logic
 
-### MA Mode Constraints
+### Parallel Execution with Orchestrator
 
-In multi-agent mode (Village MCP), additional constraints apply:
-
-**Atomic Operations:**
-- Task claiming is atomic via `claim()` - prevents race conditions
-- File reservations are enforced - cannot edit without `reserve()`
-
-**Subagent Restrictions:**
-- Subagents (Task tool) have **read-only** bd access
-- Allowed: `bd show`, `bd ready`, `bd list`
-- Blocked: `bd update`, `bd close`, `bd create`
-- Main agent processes bead writes from subagent results
-
-**Coordination:**
-- Use `inbox()` to check messages before starting
-- Use `msg()` to communicate with team
-- Use `status()` to see who's online and file locks
-
-### planTasks Mapping
-
-Conductor tracks the relationship between plan tasks and beads:
-
-```json
-// .fb-progress.json
-{
-  "planTasks": {
-    "1.1.1": "my-workflow:3-51f9",
-    "1.1.2": "my-workflow:3-kt2n"
-  },
-  "beadToTask": {
-    "my-workflow:3-51f9": "1.1.1",
-    "my-workflow:3-kt2n": "1.1.2"
-  }
-}
-```
-
-This enables:
-- Bidirectional lookup between plan and beads
-- Status sync detection (plan says done but bead is open)
-- Automatic task selection based on ready beads
-
-### References
-
-- [Beads Session Workflow](../../conductor/references/beads-session.md) - Full SA/MA session protocol
-- [Beads Preflight](../../conductor/references/preflight-beads.md) - Mode detection and session init
-- [Beads Facade](../../conductor/references/beads-facade.md) - API contract
-- [Beads Integration](../../conductor/references/beads-integration.md) - All 13 integration points
+For independent tasks that can be worked simultaneously, use `/conductor-implement` which auto-routes to the orchestrator skill when parallel execution is beneficial. See the [orchestrator skill](../../orchestrator/SKILL.md) for details.
 
 ---
 
-## Reference Files
+## Troubleshooting Workflows
 
 Detailed information organized by topic:
 
@@ -904,4 +775,3 @@ Detailed information organized by topic:
 | [references/DEPENDENCIES.md](./DEPENDENCIES.md) | Need deep understanding of dependency types or relationship patterns |
 | [references/ISSUE_CREATION.md](./ISSUE_CREATION.md) | Need guidance on when to ask vs create issues, issue quality, or design vs acceptance criteria |
 | [references/STATIC_DATA.md](./STATIC_DATA.md) | Want to use bd for reference databases, glossaries, or static data instead of work tracking |
-| [references/VILLAGE.md](./VILLAGE.md) | Need multi-agent coordination tools, conflict resolution, or team protocols |

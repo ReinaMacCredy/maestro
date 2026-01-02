@@ -54,12 +54,11 @@ See [structure.md](references/structure.md) for full details.
 
 ## Beads Integration
 
-| Mode | When | Commands |
-|------|------|----------|
-| SA (Single-Agent) | Default | Direct `bd` CLI |
-| MA (Multi-Agent) | Coordinated | Village MCP |
-
-Close reasons: `completed`, `skipped`, `blocked`
+All execution routes through orchestrator with Agent Mail coordination:
+- Workers claim beads via `bd update --status in_progress`
+- Workers close beads via `bd close --reason completed|skipped|blocked`
+- File reservations via `file_reservation_paths`
+- Communication via `send_message`/`fetch_inbox`
 
 See [beads-integration.md](references/beads-integration.md) for all 13 integration points.
 

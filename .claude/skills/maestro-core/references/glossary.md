@@ -46,11 +46,9 @@ Key terms for Maestro workflow.
 | **HALT** | Stop execution, require fix |
 | **DEGRADE** | Continue with reduced functionality |
 
-## Modes
+## Design Paths
 
-| Mode | Description |
+| Path | Description |
 |------|-------------|
-| **SA** | Single-Agent: Direct bd CLI |
-| **MA** | Multi-Agent: Village MCP coordination |
 | **SPEED** | Fast design path (score < 4) |
 | **FULL** | Complete Double Diamond (score > 6) |

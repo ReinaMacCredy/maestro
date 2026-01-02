@@ -399,32 +399,6 @@ bd sync --merge
 bd init --contributor  # Interactive wizard
 ```
 
-### Team Branch Pattern
-
-```
-┌──────────────┐
-│ Team Member  │────┐
-│   (main)     │    │
-└──────────────┘    │
-                    ▼
-┌──────────────┐   ┌─────────────────┐
-│ Team Member  │─▶│  Shared Repo    │
-│   (main)     │   │ (beads-metadata)│
-└──────────────┘   └─────────────────┘
-```
-
-**Best for:**
-
-- Teams on protected branches
-- Managed git workflows
-- Review-before-merge policies
-
-**Setup:**
-
-```bash
-bd init --team  # Interactive wizard
-```
-
 ## Sync Timing and Control
 
 ### Automatic Sync (Default)

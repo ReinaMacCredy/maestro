@@ -1,6 +1,6 @@
 # Preflight Beads Workflow
 
-**Purpose:** Initialize Beads integration at session/command start. Detects mode (SA/MA), validates availability, and manages session state.
+**Purpose:** Initialize Beads integration at session/command start. Validates availability, registers with Agent Mail, and manages session state.
 
 ---
 
@@ -9,8 +9,8 @@
 Preflight runs at the start of any Conductor command that interacts with Beads. It:
 
 1. Checks `bd` CLI availability (HALT if unavailable)
-2. Checks Village MCP availability (for MA mode)
-3. Locks mode (SA or MA) for the session
+2. Checks Agent Mail availability (HALT if unavailable)
+3. Registers agent with Agent Mail
 4. Creates/recovers session state in metadata.json
 5. Handles concurrent session detection
 6. Recovers from stale/crashed sessions
@@ -21,38 +21,32 @@ Preflight runs at the start of any Conductor command that interacts with Beads. 
 
 - `bd` CLI installed and in PATH
 - Project has `.beads/` directory (or uses `~/.beads/`)
-- For MA mode: Village MCP server available
+- Agent Mail MCP server available
 
 ---
 
-## Mode Detection Algorithm
+## Session Initialization Flow
 
 ```text
 ┌──────────────────────────────────────────────────────────────────┐
-│                     MODE DETECTION FLOW                          │
+│                   SESSION INITIALIZATION FLOW                     │
 ├──────────────────────────────────────────────────────────────────┤
 │                                                                   │
-│   1. Check metadata.json.last_activity                           │
-│      ├── Found + mode locked → Use existing mode                 │
-│      └── Not found → Continue to step 2                          │
+│   1. Check bd CLI availability                                    │
+│      ├── Available → Continue                                     │
+│      └── Unavailable → HALT                                       │
 │                                                                   │
-│   2. Check user preferences                                       │
-│      ├── preferences.json has mode → Use preferred mode          │
-│      └── No preference → Continue to step 3                      │
+│   2. Check Agent Mail availability                                │
+│      ├── Available → Continue                                     │
+│      └── Unavailable → HALT                                       │
 │                                                                   │
-│   3. Check Village MCP availability                               │
-│      ├── Available → MA mode (multi-agent)                       │
-│      └── Unavailable → SA mode (single-agent)                    │
+│   3. Register agent with Agent Mail                               │
+│      └── ensure_project + register_agent                          │
+│                                                                   │
+│   4. Load/create session state in metadata.json                   │
 │                                                                   │
 └──────────────────────────────────────────────────────────────────┘
 ```
-
-### Mode Selection Precedence
-
-1. **Existing metadata.json session state** → use locked mode
-2. **User preference** (`preferences.json`) → use preferred mode
-3. **Village available + no preference** → default to MA
-4. **Fallback** → SA mode
 
 ---
 
@@ -108,46 +102,25 @@ fi
 
 ---
 
-## Step 2: Check User Preferences
+## Step 2: Check Agent Mail Availability
 
-```bash
-PREF_FILE=".conductor/preferences.json"
-
-if [[ -f "$PREF_FILE" ]]; then
-  PREFERRED_MODE=$(jq -r '.preferredMode // empty' "$PREF_FILE")
-  if [[ "$PREFERRED_MODE" == "MA" || "$PREFERRED_MODE" == "SA" ]]; then
-    echo "Preference: Using $PREFERRED_MODE mode"
-    MODE="$PREFERRED_MODE"
-    # Continue to Step 4
-  fi
-fi
+```python
+try:
+    ensure_project(human_key=PROJECT_PATH)
+    register_agent(
+        project_key=PROJECT_PATH,
+        program="amp",
+        model="claude-sonnet-4-20250514"
+    )
+    print("Agent Mail: Available ✓")
+except McpUnavailable:
+    print("HALT: Agent Mail unavailable")
+    exit(1)
 ```
 
 ---
 
-## Step 3: Check Village MCP Availability
-
-```bash
-# Check if Village MCP server is available
-VILLAGE_STATUS=$(bv --robot-status 2>&1)
-VILLAGE_EXIT=$?
-
-if [[ $VILLAGE_EXIT -eq 0 ]]; then
-  echo "Village MCP: Available ✓"
-  VILLAGE_AVAILABLE=1
-  MODE="${MODE:-MA}"
-else
-  echo "Village MCP: Unavailable (SA mode)"
-  VILLAGE_AVAILABLE=0
-  MODE="${MODE:-SA}"
-fi
-```
-
-**Note:** Use `--robot-*` flags with `bv` to avoid TUI mode.
-
----
-
-## Step 4: Session Lock Check
+## Step 3: Session Lock Check
 
 Detect concurrent sessions on the same track.
 
@@ -195,7 +168,7 @@ fi
 
 ---
 
-## Step 5: Update Session State
+## Step 4: Update Session State
 
 Session state is stored in metadata.json. Update it and touch activity marker:
 
@@ -210,12 +183,10 @@ if [[ -n "$TRACK_ID" ]]; then
     TEMP_FILE="$METADATA_FILE.tmp.$$"
     
     jq --arg now "$NOW" \
-       --arg mode "$MODE" \
        --arg agent "$AGENT_ID" \
        '. + {
          last_activity: $now,
          session: {
-           mode: $mode,
            agent_id: $agent,
            bound_bead: (.session.bound_bead // null),
            tdd_phase: (.session.tdd_phase // null),
@@ -231,12 +202,12 @@ fi
 mkdir -p conductor
 touch conductor/.last_activity
 
-echo "Session: metadata.json updated for $AGENT_ID ($MODE mode)"
+echo "Session: metadata.json updated for $AGENT_ID"
 ```
 
 ---
 
-## Step 5b: RECALL Session Context
+## Step 4b: RECALL Session Context
 
 Load prior session context to enable cross-session continuity.
 
@@ -486,20 +457,20 @@ fi
 ### Success Output
 
 ```text
-Preflight: bd v0.5.2 ✓, Village ✗ → SA mode
-Session: metadata.json updated for T-abc123 (SA mode)
+Preflight: bd v0.5.2 ✓, Agent Mail ✓
+Session: metadata.json updated for T-abc123
 ```
 
 ### With Recovery
 
 ```text
-Preflight: bd v0.5.2 ✓, Village ✓ → MA mode
+Preflight: bd v0.5.2 ✓, Agent Mail ✓
 WARN: Found 2 pending update operations
       Replaying...
       Replaying: T-abc_1703509200_update_bd-42
       Skip (already applied): T-abc_1703509260_update_bd-43
       Pending updates replayed
-Session: Resuming MA mode (track: auth_20251225)
+Session: Resuming track: auth_20251225
 ```
 
 ### With Active Session Warning
@@ -607,8 +578,8 @@ log_metric() {
 
 # Log during preflight
 log_preflight_metrics() {
-  # Log mode detection
-  log_metric "ma_attempt" "\"mode\": \"$MODE\", \"village_available\": $VILLAGE_AVAILABLE"
+  # Log session start
+  log_metric "session_start" "\"agent_id\": \"$AGENT_ID\""
   
   # Log if recovering from crashed session
   if [[ -f ".conductor/pending_updates.jsonl" || -f ".conductor/pending_closes.jsonl" ]]; then
@@ -621,7 +592,7 @@ log_preflight_metrics() {
 
 | Event | When Logged | Extra Fields |
 |-------|-------------|--------------|
-| `ma_attempt` | Preflight mode detection | `mode`, `village_available` |
+| `session_start` | Preflight complete | `agent_id` |
 | `pending_recovery` | Replaying pending operations | `updates`, `closes` |
 | `tdd_cycle` | TDD phase transition | `taskId`, `phase`, `duration` |
 | `manual_bd` | Manual bd command (outside Conductor) | `command` |
@@ -682,26 +653,17 @@ cleanup_session() {
 | Session lock active (<10 min) | Prompt C/W/F |
 | Session lock stale (>10 min) | Auto-unlock + warn |
 | Pending operations exist | Replay with idempotency check |
-| Village unavailable (MA mode) | Degrade to SA + warn |
+| Agent Mail unavailable | HALT |
 
 ---
 
-## HALT vs Degrade
+## HALT Conditions
 
 | Condition | Action |
 |-----------|--------|
-| bd unavailable | HALT |
-| Village unavailable, started as SA | Continue SA |
-| Village unavailable, started as MA | Degrade to SA with warning |
+| bd unavailable | HALT with install instructions |
+| Agent Mail unavailable | HALT - required for coordination |
 | bd fails mid-session | Retry 3x → persist → warn |
-
-**Degraded MA Mode Warning:**
-```text
-⚠️ Village MCP unavailable. Operating in degraded mode.
-- File reservations: SKIPPED (cannot enforce)
-- Task claiming: Using bd update (no atomic guarantee)
-- Handoffs: Written to conductor/handoffs/<track>/
-```
 
 ---
 
@@ -709,10 +671,9 @@ cleanup_session() {
 
 | File | Location | Purpose |
 |------|----------|---------|
-| `metadata.json` | `conductor/tracks/<track>/` | Track + session state (mode, bound_bead, tdd_phase, last_activity) |
+| `metadata.json` | `conductor/tracks/<track>/` | Track + session state (bound_bead, tdd_phase, last_activity) |
 | `.last_activity` | `conductor/` | Global activity marker (touch for heartbeat) |
 | `session-lock_<track-id>.json` | `.conductor/` | Concurrent session prevention |
-| `preferences.json` | `.conductor/` | User mode preferences |
 | `pending_updates.jsonl` | `.conductor/` | Failed update ops for replay |
 | `pending_closes.jsonl` | `.conductor/` | Failed close ops for replay |
 | Handoff files | `conductor/handoffs/<track>/` | Context preservation between sessions |

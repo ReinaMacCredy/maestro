@@ -131,7 +131,7 @@ bd dep add <child> <blocker> --type blocks  # Add dependency
 bd dep tree <id>             # Show dependency graph
 ```
 
-**Never use bare `bv` command** - it launches TUI and will hang. Always use `bv --robot-*` flags.
+
 
 ### Conductor Commands
 
@@ -216,7 +216,7 @@ Max 2 retries before escalating to human review.
 |-----------|--------|
 | `bd` unavailable | HALT |
 | `conductor/` missing | DEGRADE |
-| Village MCP unavailable | DEGRADE |
+| Agent Mail unavailable | HALT |
 
 ### Skill Naming
 - Directory names: kebab-case (`test-driven-development`)

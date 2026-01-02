@@ -17,7 +17,29 @@ CRITICAL RULES:
 2. If missing: "Run `/conductor:setup` first." HALT.
 3. Load project context into memory.
 
-## 1.2 FAST PATH CHECK
+## 1.2 RESEARCH TRIGGER (Before DISCOVER)
+
+**MANDATORY: Spawn research agents BEFORE any design work begins.**
+
+Load: `skills/conductor/references/research/hooks/discover-hook.md`
+
+```
+┌─ RESEARCH: Session Start ───────────────────────┐
+│ Status: [RUNNING | COMPLETE | FAILED]           │
+│                                                 │
+│ Agents Spawned:                                 │
+│ • Locator: Finding related files...             │
+│ • Pattern: Finding existing patterns...         │
+│ • CODEMAPS: Loading architecture context...     │
+│                                                 │
+│ [Wait for completion before DISCOVER]           │
+└─────────────────────────────────────────────────┘
+```
+
+**On COMPLETE:** Display research summary, proceed to DISCOVER with context.
+**On FAILED:** WARN, proceed with limited context.
+
+## 1.3 FAST PATH CHECK
 
 - **If `{{args}}` is detailed** (>50 words with clear problem + approach): 
   Offer: "You've provided a detailed brief. Skip to DEFINE phase? [Y/N]"
@@ -49,9 +71,17 @@ CRITICAL RULES:
 - Read: Check product.md for alignment
 
 
-**━━━ CHECKPOINT 1 ━━━**
+**━━━ CHECKPOINT 1 + VALIDATION ━━━**
+
+**VALIDATE before checkpoint display:**
+- Load: `skills/conductor/references/validation/shared/validate-design.md` (partial - DISCOVER checks only)
+- Check: Problem relates to product.md vision?
+- Check: Not duplicating existing feature?
+- Result: [✓ PASS | ⚠ WARN: reason]
+
 ```
 > **Discovered:** [2-3 bullet summary]
+> **Validation:** [✓ aligned | ⚠ warning]
 >
 > **[A] Advanced** - Risk analysis, assumption audit, stakeholder mapping
 > **[P] Party** - Get perspectives from PM, UX, Architect
@@ -76,11 +106,20 @@ CRITICAL RULES:
 - Grep: Any prior attempts to solve this?
 
 
-**━━━ CHECKPOINT 2 ━━━**
+**━━━ CHECKPOINT 2 + VALIDATION ━━━**
+
+**VALIDATE before checkpoint display:**
+- Load: `skills/conductor/references/validation/shared/validate-design.md` (partial - DEFINE checks only)
+- Check: Problem statement is clear and measurable?
+- Check: Success criteria are testable?
+- Check: Scope is explicit (in/out)?
+- Result: [✓ PASS | ⚠ WARN: reason]
+
 ```
 > **Problem:** [statement]
 > **Success:** [criteria]
 > **Out of Scope:** [explicit exclusions]
+> **Validation:** [✓ complete | ⚠ missing: X]
 >
 > **[A] Advanced** - Refine statement, explore constraints
 > **[P] Party** - Validate framing with team perspectives
@@ -123,10 +162,25 @@ CRITICAL RULES:
 - Grep: Similar patterns in codebase?
 
 
-**━━━ CHECKPOINT 3 ━━━**
+**━━━ CHECKPOINT 3 + VALIDATION + RESEARCH ━━━**
+
+**RESEARCH before checkpoint (spawn parallel agents):**
+- Load: `skills/conductor/references/research/hooks/grounding-hook.md`
+- Spawn: Locator + Analyzer + Pattern agents
+- Verify: Options are technically feasible
+
+**VALIDATE before checkpoint display:**
+- Load: `skills/conductor/references/validation/shared/validate-design.md` (partial - DEVELOP checks only)
+- Check: 3+ options presented with trade-offs?
+- Check: Options align with tech-stack.md?
+- Check: Risk/effort analysis complete?
+- Result: [✓ PASS | ⚠ WARN: reason]
+
 ```
 > **Options:** [summary of 3 approaches]
 > **Recommendation:** [which and why]
+> **Research:** [X files found, Y patterns match]
+> **Validation:** [✓ feasible | ⚠ concern: X]
 >
 > **[A] Advanced** - Explore more options, deeper trade-offs
 > **[P] Party** - Multi-perspective review of options
@@ -204,18 +258,27 @@ Or if blocked: Show enforcement action with instructions.
 
 #### Phase: VALIDATION GATE (Gate 1: validate-design)
 **Goal:** Validate design against product, tech-stack, and existing patterns.
-**Trigger:** User selects [C] Continue at CHECKPOINT 4.
+**Trigger:** Runs progressively at each checkpoint (CP1-4). Full gate at CP4.
 
-**PROTOCOL:**
+**PROGRESSIVE VALIDATION:**
+| Checkpoint | Checks | Enforcement |
+|------------|--------|-------------|
+| CP1 (DISCOVER) | Product alignment, no duplicate features | WARN |
+| CP2 (DEFINE) | Problem clear, success measurable, scope explicit | WARN |
+| CP3 (DEVELOP) | 3+ options, tech-stack alignment, risk analysis | WARN |
+| CP4 (DELIVER) | Full validation + grounding + impact scan | SPEED=WARN, FULL=HALT |
+
+**PROTOCOL (at each checkpoint):**
 1. **Load validation gate:** Read `skills/conductor/references/validation/shared/validate-design.md`
-2. **Execute validation process** as defined in the gate file
-3. **Determine enforcement based on mode:**
-   - SPEED mode → WARN only (log issues, continue)
-   - FULL mode → HALT on failures (block until resolved)
+2. **Execute checkpoint-specific checks** (see table above)
+3. **Determine enforcement:**
+   - CP1-3: Always WARN (log issues, continue)
+   - CP4 SPEED mode → WARN only
+   - CP4 FULL mode → HALT on failures
 
 **Validation Output:**
 ```
-┌─ VALIDATION: Gate 1 (design) ─────────────────────┐
+┌─ VALIDATION: Gate 1 (design) @ CP[N] ─────────────┐
 │ Status: [PASS | WARN | FAIL]                      │
 │                                                   │
 │ Product Alignment: [✓ | ⚠ | ✗]                    │
@@ -226,9 +289,10 @@ Or if blocked: Show enforcement action with instructions.
 └───────────────────────────────────────────────────┘
 ```
 
-**On PASS:** Update `metadata.json.validation.gates_passed` to include "design", proceed to handoff.
-**On WARN:** Log warning, proceed to handoff.
-**On FAIL (FULL mode):** Block, show issues, offer:
+**On CP1-3 PASS/WARN:** Log status, continue to next phase.
+**On CP4 PASS:** Update `metadata.json.validation.gates_passed` to include "design", proceed to handoff.
+**On CP4 WARN:** Log warning, proceed to handoff.
+**On CP4 FAIL (FULL mode):** Block, show issues, offer:
 - **[R] Retry** - Return to DELIVER phase to fix issues
 - **[S] Skip** - Force continue (requires `--no-validate` flag)
 

@@ -9,22 +9,28 @@
 
 Beads-Conductor integration achieves **zero manual bd commands** in the happy path by automating issue tracking throughout the Conductor workflow.
 
-### Dual-Mode Architecture
+### Unified Architecture
+
+All execution routes through orchestrator with Agent Mail coordination:
 
 ```
 Session Start
      │
      ▼
 ┌─────────────┐
-│  PREFLIGHT  │ ─── Mode detect ───┬─► SA Mode (bd CLI)
-└─────────────┘                    │
-                                   └─► MA Mode (Village MCP)
+│  PREFLIGHT  │ ─── Check bd + Agent Mail availability
+└─────────────┘
+     │
+     ▼
+┌─────────────┐
+│  REGISTER   │ ─── register_agent with Agent Mail
+└─────────────┘
+     │
+     ▼
+┌─────────────┐
+│   EXECUTE   │ ─── bd CLI + file_reservation_paths
+└─────────────┘
 ```
-
-| Mode | Description | When Used |
-|------|-------------|-----------|
-| **SA** | Single-Agent: Direct `bd` CLI | Default, one agent per codebase |
-| **MA** | Multi-Agent: Village MCP | Multiple agents coordinating |
 
 ---
 
@@ -34,22 +40,23 @@ Session Start
 
 **Trigger:** Session/command start  
 **Conductor Command:** All  
-**Beads Action:** Mode detect, validate, recover
+**Beads Action:** Validate availability, register agent
 
 **Behavior:**
 1. Check `bd` availability → HALT if unavailable
-2. Check Village MCP availability
-3. Lock mode (SA or MA) for session
+2. Check Agent Mail availability → HALT if unavailable
+3. Register agent with Agent Mail
 4. Update metadata.json.session with session state
-5. Detect stale agents (MA mode)
+5. Recover pending operations
 
 **HALT Conditions:**
 - `bd` CLI not found
 - `bd` CLI returns error on `bd version`
+- Agent Mail unavailable
 
 **Output:**
 ```
-Preflight: bd v0.5.2 ✓, Village ✗ → SA mode
+Preflight: bd v0.5.2 ✓, Agent Mail ✓
 ```
 
 ---
@@ -58,39 +65,33 @@ Preflight: bd v0.5.2 ✓, Village ✗ → SA mode
 
 **Trigger:** Starting task execution  
 **Conductor Command:** `/conductor-implement`  
-**Beads Action:** Join team (MA) or claim task (SA)
+**Beads Action:** Claim task with Agent Mail coordination
 
-| Mode | Action |
-|------|--------|
-| SA | `bd update <taskId> --status in_progress` |
-| MA | `init(team, role)` → `claim(taskId)` |
-
-**Race Condition Handling (MA):**
-- First claim wins (by `modeLockedAt` timestamp)
-- Tie-breaker: lexicographic agent ID
+| Action | Command |
+|--------|---------|
+| Claim task | `bd update <taskId> --status in_progress` |
+| Reserve files | `file_reservation_paths(paths=[...])` |
 
 ---
 
-### Point 3: Reserve (MA only)
+### Point 3: Reserve
 
 **Trigger:** Before file edits  
 **Conductor Command:** Task tool dispatch  
-**Beads Action:** Lock files
+**Beads Action:** Lock files via Agent Mail
 
 **Protocol:**
-```bash
-reserve(path="src/auth.ts", ttl=10)  # 10 min TTL
+```python
+file_reservation_paths(paths=["src/auth.ts"], ttl_seconds=600)  # 10 min TTL
 # ... edit file ...
-release(path="src/auth.ts")
+release_file_reservations()
 ```
 
 **Conflict Resolution:**
-1. If locked by another agent → check `status()`
-2. Send message: `msg(to=<agent>, content="Need access to <file>")`
-3. Check `inbox()` for response
+1. If locked by another agent → check reservation status
+2. Send message: `send_message(to=<agent>, subject="Need access to <file>")`
+3. Check `fetch_inbox()` for response
 4. Wait or pick different task
-
-**Note:** Subagents inherit main agent's reservations. Subagents cannot make new reservations.
 
 ---
 
@@ -128,10 +129,11 @@ release(path="src/auth.ts")
 **Conductor Command:** `/conductor-implement`  
 **Beads Action:** Complete task with reason
 
-| Mode | Action |
-|------|--------|
-| SA | `bd close <taskId> --reason <reason>` |
-| MA | `done(taskId, reason=<reason>)` |
+| Action | Command |
+|--------|---------|
+| Update notes | `bd update <taskId> --notes "..."` |
+| Close task | `bd close <taskId> --reason <reason>` |
+| Release files | `release_file_reservations()` |
 
 **Close Reasons:**
 - `completed` - Task finished successfully
@@ -301,7 +303,6 @@ Session tracking is stored in the metadata.json session section:
     "session_id": "T-abc123",
     "platform": "amp",
     "bound_bead": "bd-42",
-    "mode": "SA",
     "tdd_phase": "GREEN",
     "heartbeat": "2025-12-25T12:00:00Z"
   }
@@ -311,7 +312,6 @@ Session tracking is stored in the metadata.json session section:
 | Field | Type | Description |
 |-------|------|-------------|
 | bound_bead | string \| null | Claimed task ID |
-| mode | "SA" \| "MA" | Locked session mode |
 | tdd_phase | "RED" \| "GREEN" \| "REFACTOR" \| null | TDD phase |
 | heartbeat | ISO 8601 | Last activity timestamp |
 
@@ -436,12 +436,15 @@ Main agent processes `beadUpdates` after subagent returns.
 
 ---
 
-## SA vs MA Mode Flows
+## Session Flow
 
-### SA Mode (Single-Agent)
+All execution uses Agent Mail coordination:
 
 ```
 Preflight
+    │
+    ▼
+register_agent(project, program, model)
     │
     ▼
 bd ready --json ──► Select task
@@ -450,71 +453,33 @@ bd ready --json ──► Select task
 bd update <id> --status in_progress
     │
     ▼
+file_reservation_paths(paths=[...]) ──► Reserve files
+    │
+    ▼
 Work on task (with TDD checkpoints by default)
     │
     ▼
 bd close <id> --reason completed
     │
     ▼
+release_file_reservations()
+    │
+    ▼
+send_message(summary) ──► Notify coordinator
+    │
+    ▼
 bd sync
-```
-
-### MA Mode (Multi-Agent)
-
-```
-Preflight
-    │
-    ▼
-init(team="platform", role="be")
-    │
-    ▼
-inbox() ──► Check for messages
-    │
-    ▼
-claim() ──► Atomic task claim
-    │
-    ▼
-reserve(path="src/file.ts")
-    │
-    ▼
-Work on task
-    │
-    ▼
-done(taskId, reason="completed") ──► Auto-releases reservations
-    │
-    ▼
-msg(content="Task done") ──► Notify team
 ```
 
 ---
 
-## HALT vs Degrade
+## HALT Conditions
 
 | Condition | Action |
 |-----------|--------|
 | bd unavailable | HALT |
-| Village unavailable, started as SA | Continue SA |
-| Village unavailable, started as MA | Degrade to SA with warning |
+| Agent Mail unavailable | HALT |
 | bd fails mid-session | Retry 3x → persist → warn |
-
-**Degraded MA Mode:**
-```
-⚠️ Village MCP unavailable. Operating in degraded mode.
-- File reservations: SKIPPED (cannot enforce)
-- Task claiming: Using bd update (no atomic guarantee)
-- Handoffs: Written to .conductor/handoff_*.json
-```
-
----
-
-## Mode Upgrade Preconditions
-
-To upgrade from SA → MA mid-session:
-
-1. No in-progress tasks
-2. `bd sync` succeeds
-3. Village MCP responds to ping
-4. User confirms: "Upgrade to multi-agent mode? [Y/n]"
 
 ---
 

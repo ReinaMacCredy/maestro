@@ -26,9 +26,8 @@ Contains reusable learnings from completed tracks.
 - `bd compact --apply --id <id> --summary "<text>"` - Apply AI summary to bead
 - `bd count --status closed --json` - Count closed beads for cleanup threshold
 - `bd cleanup --older-than 0 --limit <n> --force` - Remove oldest closed beads
-- `bd update <id> --status in_progress` - Claim task in SA mode
+- `bd update <id> --status in_progress` - Claim task
 - `bd close <id> --reason completed|skipped|blocked` - Close with explicit reason
-- `bv --robot-status` - Check Village MCP status (use --robot-* flags to avoid TUI hang)
 - `/conductor-implement` - Execute with TDD checkpoints by default (use `--no-tdd` to disable)
 - `wc -l <file>.csv` - Verify CSV row counts match upstream when syncing data files
 - `curl -s https://raw.githubusercontent.com/.../file.csv` - Sync CSV data directly from upstream repo
@@ -52,9 +51,7 @@ Contains reusable learnings from completed tracks.
 - `/conductor-handoff create` - Force CREATE mode with Beads sync and progress tracking
 - `/conductor-handoff resume` - Force RESUME mode with Beads context loading
 - `ls skills/conductor/references/` - Verify reference structure after migration
-- `/conductor-orchestrate` - Spawn parallel workers for track execution (Mode B workers)
-- `bv --robot-triage --graph-root <epic-id>` - Prepare beads for orchestration ("dọn cỗ")
-- `bv --robot-triage --graph-root <epic-id> --json` - Get JSON output for auto-orchestration graph analysis
+- `/conductor-orchestrate` - Spawn parallel workers for track execution
 - `bd list --json | jq '. | length'` - Count beads reliably (returns array, not object)
 - `grep -l "send_message" skills/orchestrator/agents/**/*.md | wc -l` - Verify all agents have mandatory Agent Mail save
 - `mcp__mcp_agent_mail__register_agent` - Register orchestrator identity before spawning workers
@@ -89,7 +86,7 @@ Contains reusable learnings from completed tracks.
 - CODEMAPS loaded at design session start for codebase context
 - docs: and chore: commits don't bump version (changelog only)
 - Skill versions in SKILL.md frontmatter are manually updated (not automated)
-- HALT vs Degrade: `bd` unavailable = HALT; Village unavailable in MA = degrade to SA
+- HALT vs Degrade: `bd` unavailable = HALT; Agent Mail unavailable = degrade to sequential
 - Session lock staleness: heartbeat protocol (5 min updates); stale = >10 min without heartbeat
 - Subagent bd access: read-only (show, ready, list); writes return to main agent
 - Idempotency: `bd update` and `bd close` are idempotent; `bd create` is NOT
@@ -165,7 +162,7 @@ Contains reusable learnings from completed tracks.
 - **Unified Track Creation:** /conductor-newtrack includes spec, plan, beads filing, AND review in one flow
 - **Conventional Commits Versioning:** feat: → minor, fix: → patch, feat!: → major
 - **COMPLEXITY_EXPLAINER:** Score-based design routing (SPEED <4, ASK 4-6, FULL >6)
-- **Execution Routing:** TIER 1 (weighted score) + TIER 2 (compound conditions) → SINGLE_AGENT or PARALLEL_DISPATCH
+- **Execution Routing:** Always FULL mode via orchestrator (even 1 task spawns 1 worker for consistency)
 - **RECALL/REMEMBER:** Session lifecycle with anchored format for cross-session context
 - **Degradation Signals:** tool_repeat, backtrack, quality_drop, contradiction → 2+ signals triggers compression
 - **Anchored Format:** [PRESERVE] markers for Intent and Constraints sections that survive compression
@@ -180,7 +177,7 @@ Contains reusable learnings from completed tracks.
 - **Workflow-Aware Continuity:** Handoffs tied to entry points (`ds`, `/conductor-implement`, `/conductor-finish`) not generic session events
 - **6 Handoff Triggers:** design-end, epic-start, epic-end, pre-finish, manual, idle - each fires at specific integration points
 - **Hybrid Handoff Files:** Individual files per handoff (`YYYY-MM-DD_HH-MM-SS-mmm_<track>_<trigger>.md`) + index.md for consolidated log
-- **5 Validation Gates:** design (DELIVER) → spec (newtrack) → plan-structure (newtrack) → plan-execution (TDD) → completion (finish)
+- **5 Validation Gates:** design (CP1-4 progressive; CP4 full gate) → spec (newtrack) → plan-structure (newtrack) → plan-execution (TDD) → completion (finish)
 - **Gate Behavior Matrix:** SPEED mode = all WARN; FULL mode = design/plan-execution/completion HALT + retry (max 2)
 - **Validation State in metadata.json:** Track gates_passed, current_gate, retries, last_failure in metadata.json.validation
 - **Humanlayer Format:** Gates use Initial Setup → 3-step Validation Process → Guidelines → Checklist → Handoff Integration

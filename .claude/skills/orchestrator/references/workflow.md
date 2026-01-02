@@ -514,15 +514,11 @@ if int(open_beads) > 0:
 ### Verify All Complete
 
 ```python
-# Check via beads
-status = bash("bv --robot-triage --graph-root <epic-id> | jq '.quick_ref'")
-assert status.open_count == 0
-
-# Or via bd
+# Check via bd CLI
 open_beads = bash("bd list --status=open --parent=<epic-id> --json | jq 'length'")
 assert open_beads == "0"
 
-# NEW: Verify summary coverage
+# NEW: Verify summary coverage via Agent Mail
 missing_summaries = set(expected_workers) - workers_with_summaries
 if missing_summaries:
     print(f"⚠️ Workers without summaries: {missing_summaries}")

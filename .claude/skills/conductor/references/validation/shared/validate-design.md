@@ -1,13 +1,51 @@
 ---
 name: Gate 1 Design Validation
-description: Gate 1 - Validates design.md against product.md, tech-stack.md, and CODEMAPS for alignment and consistency
+description: Gate 1 - Progressive validation at each checkpoint (CP1-4); validates design against product.md, tech-stack.md, and CODEMAPS
 ---
 
-# Validate Design (Gate 1)
+# Validate Design (Gate 1) - Progressive
 
-Validates design decisions against product strategy, technology constraints, and existing patterns.
+Validates design decisions progressively at each checkpoint. **Run subset of checks based on current checkpoint.**
 
-## Initial Setup
+## Checkpoint-Specific Validation
+
+| Checkpoint | Checks to Run | Enforcement |
+|------------|---------------|-------------|
+| CP1 (DISCOVER) | Product alignment only | WARN |
+| CP2 (DEFINE) | Problem clarity, success criteria | WARN |
+| CP3 (DEVELOP) | Tech-stack compliance, pattern consistency | WARN |
+| CP4 (DELIVER) | ALL checks (full validation) | SPEED=WARN, FULL=HALT |
+
+### CP1: DISCOVER Validation
+
+Run only **Product Alignment Check** (subset):
+- [ ] Problem relates to product.md vision
+- [ ] Not duplicating existing feature
+- [ ] Users mentioned align with product personas
+
+### CP2: DEFINE Validation
+
+Run only **Problem Clarity Check**:
+- [ ] Problem statement is clear and specific
+- [ ] Success criteria are measurable and testable
+- [ ] Scope is explicit (in/out defined)
+- [ ] Approach selection has rationale
+
+### CP3: DEVELOP Validation
+
+Run **Tech-Stack + Pattern Checks**:
+- [ ] 3+ options presented with trade-offs
+- [ ] Recommended approach aligns with tech-stack.md
+- [ ] Risk/effort analysis complete
+- [ ] Architecture fits existing patterns
+
+### CP4: DELIVER Validation (Full Gate)
+
+Run **ALL checks** from sections below, plus research verification.
+
+---
+
+## Full Validation Process (CP4 Only)
 
 ```text
 BEFORE validation begins:
@@ -145,20 +183,38 @@ Before marking Gate 1 complete:
 
 ## metadata.json Integration
 
-Update the track's `metadata.json` file:
+### Progressive Validation (CP1-3)
+
+For checkpoints 1-3, only update current_gate but do NOT add to gates_passed:
 
 ```text
-ON VALIDATION START:
+ON CP1-3 VALIDATION START:
+  Update metadata.json.validation:
+    "current_gate": "design-cpN"  (e.g., "design-cp1")
+
+ON CP1-3 VALIDATION COMPLETE (PASS/WARN):
+  Update metadata.json.validation:
+    "current_gate": null
+  Log: "CP[N] validation: [PASS|WARN]"
+  Continue to next phase (do not add to gates_passed yet)
+```
+
+### Full Validation (CP4 Only)
+
+Only CP4 updates gates_passed:
+
+```text
+ON CP4 VALIDATION START:
   Update metadata.json.validation:
     "current_gate": "design"
 
-ON VALIDATION COMPLETE (PASS):
+ON CP4 VALIDATION COMPLETE (PASS):
   Update metadata.json.validation:
     "gates_passed": [..., "design"]
     "current_gate": null
     "retries": 0
 
-ON VALIDATION COMPLETE (FAIL):
+ON CP4 VALIDATION COMPLETE (FAIL):
   Update metadata.json.validation:
     "last_failure": "<failure reason>"
     "retries": <current + 1>

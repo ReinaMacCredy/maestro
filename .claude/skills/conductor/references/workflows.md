@@ -29,7 +29,7 @@ Validation gates are triggered at specific workflow points. See [validation/life
 
 | Gate | Trigger | Authoritative Doc |
 |------|---------|-------------------|
-| `validate-design` | After DELIVER phase | [design/SKILL.md](../../design/SKILL.md) |
+| `validate-design` | Each checkpoint (CP1-4); CP4 full gate | [validation/lifecycle.md](validation/lifecycle.md) |
 | `validate-spec` | After spec.md generation | [workflows/newtrack.md](workflows/newtrack.md#phase-3) |
 | `validate-plan-structure` | After plan.md generation | [workflows/newtrack.md](workflows/newtrack.md#phase-4) |
 | `validate-plan-execution` | After TDD REFACTOR | [tdd/cycle.md](tdd/cycle.md) |

@@ -59,7 +59,6 @@ ds                            # Design session → design.md
 ## Key Rules
 
 - Use `--json` with `bd` for structured output
-- Use `--robot-*` with `bv` (bare `bv` hangs agents)
 - Never write production code without failing test first
 - Always commit `.beads/` with code changes
 
@@ -82,7 +81,7 @@ Built on:
 - [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) — Multi-agent orchestration
 - [conductor](https://github.com/NguyenSiTrung/conductor) — Context-driven planning
 - [beads](https://github.com/steveyegge/beads) — Persistent issue tracking
-- [beads-village](https://github.com/LNS2905/mcp-beads-village) — Multi-agent coordination
+- [Agent Mail](https://github.com/anthropics/agent-mail) — Multi-agent coordination
 - [Knowledge & Vibes](https://github.com/kyleobrien91/knowledge-and-vibes) — Workflow patterns
 
 ---

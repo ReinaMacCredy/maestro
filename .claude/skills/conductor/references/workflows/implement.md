@@ -34,7 +34,8 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
 1. **Execute Preflight**
    - Run [preflight-beads.md](../preflight-beads.md) workflow
    - Checks `bd` availability (HALT if unavailable)
-   - Detects mode (SA or MA) and locks for session
+   - Checks Agent Mail availability (HALT if unavailable)
+   - Registers agent with Agent Mail
    - Creates session state file
    - Recovers pending operations from crashed sessions
 
@@ -44,7 +45,7 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
 
 3. **Output:**
    ```
-   Preflight: bd v0.5.2 ✓, Village ✗ → SA mode
+   Preflight: bd v0.5.2 ✓, Agent Mail ✓
    Session: Created state file for T-abc123
    Track beads: 12 issues, 3 ready
    ```
@@ -120,7 +121,7 @@ Reference: [workflows/handoff.md](handoff.md) for full workflow.
 
 ### Phase 2b: Execution Routing
 
-**Purpose:** Determine whether to execute tasks sequentially (SINGLE_AGENT) or in parallel (PARALLEL_DISPATCH).
+**Purpose:** Determine whether to execute tasks sequentially or in parallel via orchestrator.
 
 > **Note:** `/conductor-implement` is a wrapper that auto-routes to `/conductor-orchestrate` when parallel execution is appropriate.
 
@@ -176,43 +177,23 @@ Reference: [workflows/handoff.md](handoff.md) for full workflow.
        AGENT_MAIL_AVAILABLE = True
    except McpUnavailable:
        AGENT_MAIL_AVAILABLE = False
-       # Cannot do parallel without coordination
-       return SINGLE_AGENT
+       # Cannot do parallel without coordination - HALT
+       print("HALT: Agent Mail required for coordination")
+       exit(1)
    ```
    
-   **If Agent Mail unavailable → fall back to sequential.**
+   **If Agent Mail unavailable → HALT (required for coordination).**
 
-4. **Evaluate TIER 1** (weighted score, only if no Track Assignments or auto-detect):
-   
-   | Factor | Weight |
-   |--------|--------|
-   | Epics > 1 | +2 |
-   | [PARALLEL] markers in plan | +3 |
-   | Domains > 2 | +2 |
-   | Independent tasks > 5 | +1 |
-   
-   **Threshold:** Score >= 5 to proceed to TIER 2
-
-5. **Evaluate TIER 2** (if TIER 1 passes):
-   
-   ```python
-   (files > 15 AND tasks > 3) OR
-   (est_tool_calls > 40) OR
-   (est_time > 30 min AND independent_ratio > 0.6)
-   ```
-
-6. **Route Decision:**
+4. **Route Decision:**
    
    | Condition | Result |
    |-----------|--------|
    | Track Assignments exists | PARALLEL_DISPATCH |
    | Auto-detect: ≥2 independent beads | PARALLEL_DISPATCH |
-   | Agent Mail unavailable | SINGLE_AGENT |
-   | TIER 1 FAIL | SINGLE_AGENT |
-   | TIER 1 PASS, TIER 2 FAIL | SINGLE_AGENT |
-   | TIER 1 PASS, TIER 2 PASS | PARALLEL_DISPATCH |
+   | Agent Mail unavailable | HALT |
+   | Single bead or dependent beads | Sequential via orchestrator |
 
-7. **Confirmation Prompt (before parallel dispatch):**
+5. **Confirmation Prompt (before parallel dispatch):**
    
    When routing to PARALLEL_DISPATCH, display confirmation before spawning workers:
    
@@ -311,7 +292,7 @@ Reference: [workflows/handoff.md](handoff.md) for full workflow.
    ```
 
 9. **Branch Logic:**
-   - **SINGLE_AGENT:** Continue to Phase 3 (sequential execution)
+   - **Sequential:** Continue to Phase 3 (single bead execution)
    - **PARALLEL_DISPATCH:** Hand off to [orchestrator skill](../../../orchestrator/SKILL.md)
      - Load orchestrator workflow
      - Orchestrator spawns workers via Task()
@@ -334,16 +315,11 @@ See [orchestrator workflow](../../../orchestrator/references/workflow.md) for pa
 
 3. **Claim Task (Beads Integration)**
    
-   **SA Mode:**
+   Workers claim tasks via `bd` CLI with Agent Mail coordination:
    ```bash
    bd ready --json                           # Get available tasks
    bd update <task-id> --status in_progress  # Claim task
-   ```
-   
-   **MA Mode:**
-   ```bash
-   claim()                                   # Atomic claim (race-safe)
-   reserve path="<file>"                     # Lock files before edit
+   file_reservation_paths(paths=["<file>"])  # Reserve files before edit
    ```
    
    See [beads-session.md](../beads-session.md) for full protocol.
@@ -397,15 +373,10 @@ See [orchestrator workflow](../../../orchestrator/references/workflow.md) for pa
    
    After task completion:
    
-   **SA Mode:**
    ```bash
    bd update <task-id> --notes "COMPLETED: <summary>. KEY DECISION: <if any>"
    bd close <task-id> --reason completed
-   ```
-   
-   **MA Mode:**
-   ```bash
-   done taskId="<task-id>" reason="completed"  # Auto-releases reservations
+   release_file_reservations()  # Release reserved files
    ```
    
    **Close Reasons:**

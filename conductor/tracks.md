@@ -4,15 +4,11 @@ Master list of all development tracks.
 
 ## Active Tracks
 
-## [~] Track: Test Routing
-*ID: test-routing_20251230*
-*Link: [spec](tracks/test-routing_20251230/spec.md) | [plan](tracks/test-routing_20251230/plan.md)*
-
-Test track to verify /conductor-implement auto-routes to orchestrator.
-
----
-
 ## Completed Tracks
+
+## [x] Track: Test Routing
+*ID: test-routing_20251230*
+*Status: Completed - test track for routing validation*
 
 ## [x] Track: File-Scope Parallel Detection
 *ID: file-scope-parallel_20260102*
@@ -54,13 +50,13 @@ Full merge of Continuous-Claude-v2 patterns into Maestro. Created 15 specialized
 *ID: orchestrator-improvements_20260101*
 *Archived: [conductor/archive/orchestrator-improvements_20260101/](archive/orchestrator-improvements_20260101/)*
 
-Track threads for bead-to-bead context, per-bead execution loop, AGENTS.md tool preferences, auto-detect parallel routing (≥2 independent beads → orchestrator), enhanced monitoring with bv --robot-triage, lingering beads verification before epic close.
+Track threads for bead-to-bead context, per-bead execution loop, AGENTS.md tool preferences, auto-detect parallel routing (≥2 independent beads → orchestrator), enhanced monitoring, lingering beads verification before epic close.
 
 ## [x] Track: Auto-Orchestration After Filing Beads
 *ID: auto-orchestrate*
 *Archived: [conductor/archive/auto-orchestrate/](archive/auto-orchestrate/)*
 
-Automatic orchestration trigger after `fb` completes. Analyzes beads dependency graph via `bv --robot-triage`, generates Track Assignments, spawns parallel workers with wave re-dispatch, runs `rb` for final review. Fallback to sequential if Agent Mail unavailable.
+Automatic orchestration trigger after `fb` completes. Analyzes beads dependency graph, generates Track Assignments, spawns parallel workers with wave re-dispatch, runs `rb` for final review. Fallback to sequential if Agent Mail unavailable.
 
 ## [x] Track: Orchestrator Skill
 *ID: orchestrator-skill_20251230*

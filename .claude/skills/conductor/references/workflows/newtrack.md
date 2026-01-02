@@ -511,12 +511,12 @@ Task(
    Track: <track_id>
    Spec: conductor/tracks/<track_id>/spec.md
    Plan: conductor/tracks/<track_id>/plan.md
-   Beads: X epics, Y issues filed and reviewed
+   Beads: X epics, Y issues filed
 
    Ready issues: Z
    First task: <first-ready-issue-id> - <title>
 
-   Next: `Start epic <first-epic-id>` or `/conductor-implement <track_id>`
+   Next: `rb` to review beads, or `/conductor-implement <track_id>` to start
    ```
 
    **If beads were skipped:**

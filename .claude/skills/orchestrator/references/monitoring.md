@@ -14,31 +14,31 @@ Orchestrator monitors workers through Agent Mail messages. Workers report:
 
 ```python
 while not all_complete:
-    # 1. PRIMARY: Use bv --robot-triage for status
-    status = bash(f"bv --robot-triage --graph-root {epic_id} --json")
-    quick_ref = json.loads(status)['quick_ref']
-    
-    # 2. SECONDARY: Check inbox for urgent messages
-    urgent = fetch_inbox(
+    # 1. PRIMARY: Check inbox for worker messages
+    inbox = fetch_inbox(
         project_key=project_path,
         agent_name=orchestrator_name,
-        urgent_only=True,
-        include_bodies=True
+        include_bodies=True,
+        limit=50
     )
     
-    # 3. Handle blockers immediately
+    # 2. Handle urgent blockers immediately
+    urgent = [m for m in inbox if m.importance in ["urgent", "high"]]
     for msg in urgent:
         handle_blocker(msg)
     
-    # 4. Search for progress in epic thread
+    # 3. Search for progress/completion in epic thread
     progress = search_messages(
         project_key=project_path,
         query=f"thread:{epic_id} COMPLETE",
         limit=50
     )
     
+    # 4. Get bead status via bd CLI
+    bead_status = bash(f"bd list --parent={epic_id} --json")
+    
     # 5. Update state and log progress
-    update_state(progress, quick_ref)
+    update_state(progress, bead_status)
     
     # 6. Wait before next poll
     sleep(30)  # 30 second interval
@@ -46,15 +46,20 @@ while not all_complete:
 
 ## Quick Status Extraction
 
-Primary method using bv:
+Primary method using `bd` and Agent Mail:
 
-```bash
-bv --robot-triage --graph-root <epic-id> --json | jq '.quick_ref'
+```python
+# Get bead status
+status = bash(f"bd list --parent={epic_id} --json")
+
+# Get thread summary for worker activity
+thread_summary = summarize_thread(
+    project_key=project_path,
+    thread_id=epic_id
+)
 ```
 
-Returns: `{ open_count, in_progress_count, blocked_count, completed_count }`
-
-This provides a fast snapshot of epic progress without parsing individual messages.
+This provides a complete snapshot combining bead state with worker activity.
 
 ## Message Types
 
@@ -242,14 +247,15 @@ All workers complete when:
 
 ```python
 def all_complete():
-    # 1. Check worker state
+    # 1. Check worker state via Agent Mail messages
     for worker in state.workers.values():
         if worker.status not in ["complete", "error"]:
             return False
     
-    # 2. Verify via beads
-    status = bv_robot_triage(epic_id)
-    if status.open_count > 0:
+    # 2. Verify via bd CLI
+    bead_list = bash(f"bd list --parent={epic_id} --json")
+    open_beads = [b for b in bead_list if b["status"] == "open"]
+    if len(open_beads) > 0:
         return False
     
     return True

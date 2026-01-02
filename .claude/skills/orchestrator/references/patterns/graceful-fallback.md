@@ -1,19 +1,19 @@
-# Graceful Fallback Pattern
+# Agent Mail Availability Policy
 
-Handle Agent Mail MCP failures without blocking work.
+Agent Mail is **required** for parallel orchestration. No fallback.
 
 ## Core Principle
 
-**Coordination is optional; work completion is mandatory.**
+**Coordination is mandatory for parallel execution.**
 
-Never let MCP unavailability block the epic.
+Without Agent Mail, parallel workers cannot coordinate safely.
 
-## Fallback Hierarchy
+## Availability Check
 
 ```
 Agent Mail available? 
   YES → Parallel dispatch with coordination
-  NO  → Sequential execution via /conductor-implement
+  NO  → HALT (cannot proceed without coordination)
 ```
 
 ## Detection
@@ -22,11 +22,20 @@ Check Agent Mail availability at orchestration start:
 
 ```python
 try:
+    result = health_check(reason="Orchestrator preflight")
+    if not result.healthy:
+        raise McpUnavailable("Agent Mail not healthy")
     ensure_project(human_key=PROJECT_PATH)
     AGENT_MAIL_AVAILABLE = True
 except McpUnavailable:
-    AGENT_MAIL_AVAILABLE = False
-    print("⚠️ Agent coordination unavailable - falling back to sequential")
+    # CRITICAL: Do NOT fall back to sequential
+    print("❌ HALT: Agent Mail unavailable - cannot orchestrate")
+    print("   Parallel execution requires Agent Mail for:")
+    print("   - Worker registration and identity")
+    print("   - File reservation to prevent conflicts")
+    print("   - Cross-track dependency notifications")
+    print("   - Progress monitoring and blocker resolution")
+    return {"status": "HALTED", "reason": "Agent Mail unavailable"}
 ```
 
 ## Failure Responses
@@ -35,86 +44,110 @@ except McpUnavailable:
 
 | Operation | On Failure | Action |
 |-----------|------------|--------|
-| `ensure_project` | DEGRADE | Route to /conductor-implement |
-| `register_agent` | Proceed | Log warning, continue without identity |
-| `send_message` (epic start) | Proceed | Workers won't get thread context |
-| Monitor loop fails | Proceed | Use bd CLI for status instead |
+| `health_check` | HALT | Cannot proceed with orchestration |
+| `ensure_project` | HALT | Cannot proceed with orchestration |
+| `register_agent` | HALT | Workers need identity for coordination |
+| `send_message` (epic start) | HALT | Workers need thread context |
+| Monitor loop fails | Log + Retry | Use `fetch_inbox` with backoff |
 
 ### Worker Level
 
 | Operation | On Failure | Action |
 |-----------|------------|--------|
-| `register_agent` | Proceed | Work without identity |
-| `file_reservation_paths` | Proceed | Risk of conflicts accepted |
-| `send_message` (progress) | Proceed | Progress not tracked in thread |
-| `send_message` (dep notify) | Escalate | Orchestrator must handle |
+| `macro_start_session` | HALT | Cannot work without session |
+| `file_reservation_paths` | HALT | Cannot risk file conflicts |
+| `send_message` (progress) | Log + Continue | Non-critical |
+| `send_message` (dep notify) | HALT | Must notify dependencies |
 
-## Warning Format
+## Error Format
 
 **Orchestrator:**
 ```text
-⚠️ Agent coordination unavailable - falling back to sequential execution
+❌ HALT: Agent Mail unavailable - cannot orchestrate
+
+Parallel execution requires Agent Mail for:
+- Worker registration and identity
+- File reservation to prevent conflicts
+- Cross-track dependency notifications
+- Progress monitoring and blocker resolution
+
+Options:
+1. Wait for Agent Mail to become available
+2. Run sequential: /conductor-implement (no parallel workers)
 ```
 
 **Worker:**
 ```text
-⚠️ Could not reserve files - proceeding without coordination
+❌ HALT: Cannot initialize session - Agent Mail unavailable
+
+Worker cannot proceed without:
+- File reservations (risk of conflicts)
+- Message capability (cannot report progress/blockers)
+
+Returning control to orchestrator.
 ```
 
-Keep warnings brief; don't alarm about optional features.
+## No Sequential Fallback
 
-## Sequential Fallback
-
-When Agent Mail unavailable, route to `/conductor-implement`:
-
+Previous behavior (REMOVED):
 ```python
+# ❌ DO NOT DO THIS
 if not AGENT_MAIL_AVAILABLE:
-    return conductor_implement(track_id)
+    return conductor_implement(track_id)  # Silent degradation
 ```
 
-This executes tasks sequentially in the main agent thread.
+Current behavior (REQUIRED):
+```python
+# ✅ HALT explicitly
+if not AGENT_MAIL_AVAILABLE:
+    print("❌ HALT: Agent Mail required for orchestration")
+    return {"status": "HALTED", "reason": "Agent Mail unavailable"}
+```
 
-## Partial Failures
+## Partial Failures (Mid-Orchestration)
 
-If Agent Mail becomes unavailable mid-orchestration:
+If Agent Mail becomes unavailable after workers are spawned:
 
-1. **Active workers continue** - They have their beads, can complete
-2. **Cross-track deps stall** - Workers can't notify each other
-3. **Orchestrator intervenes** - Check bd CLI for completion, manually unblock
+1. **Active workers continue current bead** - Finish what's in progress
+2. **Workers HALT after current bead** - Cannot claim next safely
+3. **Orchestrator logs and waits** - Retry Agent Mail periodically
+4. **Recovery when available** - Resume monitoring, workers re-register
 
 ```python
-# Fallback monitoring via bd CLI
+# Mid-orchestration failure handling
 while not all_complete:
-    status = bash(f"bd list --parent={EPIC_ID} --status=open --json | jq 'length'")
-    if status == "0":
-        all_complete = True
-    else:
-        sleep(60)  # Longer interval without Agent Mail
+    try:
+        status = fetch_inbox(project_key=PROJECT_PATH, agent_name=ORCHESTRATOR)
+        # Normal monitoring continues
+    except McpUnavailable:
+        print("⚠️ Agent Mail unavailable - waiting for recovery")
+        sleep(60)
+        continue  # Retry, don't fall back
 ```
 
 ## Recovery
 
-If Agent Mail becomes available after partial failure:
+If Agent Mail becomes available after failure:
 
-1. Next MCP call succeeds automatically
-2. Orchestrator resumes monitoring
-3. Workers can send pending notifications
-4. No need to retry failed calls
+1. Orchestrator re-establishes connection via `health_check`
+2. Workers can re-register and continue
+3. Resume normal monitoring loop
+4. Check `bd status` to reconcile any missed updates
 
-## Risk Acceptance
+## Why No Fallback?
 
-When proceeding without coordination:
-
-| Risk | Mitigation |
-|------|------------|
-| File conflicts | Workers have scoped file patterns |
-| Lost progress | bd CLI shows bead status |
-| Stale workers | Check bd status directly |
-| Lost handoffs | Session ends without context save |
+| Risk | Why HALT is correct |
+|------|---------------------|
+| File conflicts | Parallel workers WILL conflict without reservations |
+| Lost progress | No way to detect worker completion/failure |
+| Stale workers | Cannot detect or recover stale workers |
+| Silent failures | Users expect parallel execution, not degraded mode |
+| Data corruption | Concurrent edits without coordination = corruption |
 
 ## Implementation Notes
 
+- Health check before any orchestration: `health_check(reason="...")`
 - Timeout on MCP calls: ~3 seconds
-- Don't retry failed calls (wastes time)
-- Log failures for debugging
-- Prioritize work completion over coordination
+- Retry Agent Mail 3 times with exponential backoff before HALT
+- Log all failures with timestamps for debugging
+- Return structured error for user decision
