@@ -43,6 +43,7 @@ Measure twice, code once.
 ```
 conductor/
 ├── product.md, tech-stack.md, workflow.md  # Project context
+├── code_styleguides/                       # Language-specific style rules
 ├── CODEMAPS/                               # Architecture docs
 ├── handoffs/                               # Session context
 └── tracks/<track_id>/                      # Per-track work

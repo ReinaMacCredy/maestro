@@ -396,6 +396,42 @@ See [orchestrator workflow](../../../orchestrator/references/workflow.md) for pa
      - `conductor/tracks/<track_id>/spec.md`
      - `conductor/workflow.md`
      - `metadata.json.beads` for planTasks mapping
+   - **Load Styleguides (Smart)**:
+     - Always load: `conductor/code_styleguides/general.md`
+     - Detect languages from `metadata.json.beads.fileScopes`:
+       ```python
+       # Extract extensions from all fileScopes
+       extensions = set()
+       for task_id, paths in metadata["beads"]["fileScopes"].items():
+           for path in paths:
+               ext = get_extension(path)  # e.g., ".py", ".ts"
+               if ext:
+                   extensions.add(ext)
+       
+       # Map extensions to styleguides
+       STYLEGUIDE_MAP = {
+           ".py": "python.md",
+           ".ts": "typescript.md",
+           ".tsx": "typescript.md",
+           ".js": "javascript.md",
+           ".jsx": "javascript.md",
+           ".go": "go.md",
+           ".html": "html-css.md",
+           ".css": "html-css.md",
+           ".scss": "html-css.md",
+       }
+       
+       # Load only relevant styleguides
+       styleguides = ["general.md"]
+       for ext in extensions:
+           if ext in STYLEGUIDE_MAP:
+               styleguides.append(STYLEGUIDE_MAP[ext])
+       
+       # Deduplicate and load
+       for guide in set(styleguides):
+           Read(f"conductor/code_styleguides/{guide}")
+       ```
+     - Fallback: If no fileScopes, load based on `tech-stack.md` languages
 
 3. **Claim Task (Beads Integration)**
    

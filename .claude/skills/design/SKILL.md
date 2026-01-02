@@ -15,6 +15,8 @@ Turn ideas into fully-formed designs through collaborative dialogue.
 | `/conductor-design` | Start design session (alias) |
 | "design a feature" | Start design session |
 | "let's think through X" | Start design session |
+| "integrate deeply into flow" | Suggest design session |
+| "rethink UX", "this flow feels wrong" | Suggest design session |
 
 ## Quick Reference
 
@@ -53,16 +55,82 @@ Turn ideas into fully-formed designs through collaborative dialogue.
 | CP3 (DEVELOP) | grounding-hook (Locator + Analyzer + Pattern) | WARN (tech-stack) |
 | CP4 (DELIVER) | Full + impact scan + **Oracle audit** | SPEED=WARN, FULL=HALT |
 
-## A/P/C Checkpoints
+## Adaptive A/P/C System
 
-At end of each phase (FULL mode only):
+A/P/C checkpoints now work **adaptively** across the entire workflow, not just in FULL DS mode.
+
+### State Ladder
+
+```
+INLINE → MICRO_APC → NUDGE → DS_FULL → DS_BRANCH → BRANCH_MERGE
+```
+
+| State | Description | Trigger |
+|-------|-------------|---------|
+| **INLINE** | Normal flow (conductor/beads) | Default |
+| **MICRO_APC** | Lightweight checkpoint at boundaries | End of spec/plan section |
+| **NUDGE** | Suggest upgrade to DS | 3+ design iterations |
+| **DS_FULL** | Full Double Diamond with A/P/C | `ds` command or upgrade |
+| **DS_BRANCH** | DS attached to design branch | Design rethink in track |
+| **BRANCH_MERGE** | Apply branch changes | Branch complete |
+
+### Micro A/P/C (Outside DS)
+
+At natural checkpoint boundaries (end of spec section, plan step, etc.):
+
+```
+Design checkpoint:
+[A] Advanced – deeper exploration (upgrades to DS)
+[P] Party – multi-perspective feedback (upgrades to DS)
+[C] Continue inline
+```
+
+### Design Mode Nudge
+
+After 3+ iterations on the same design topic without resolution:
+
+```
+We've iterated on this flow several times.
+Want to switch into a structured Design Session with A/P/C checkpoints?
+
+[Start Design Session] (recommended)
+[Not now]
+```
+
+### Branch-aware DS
+
+When in implementation (`ci`) and design needs major rethink:
+
+```
+This change diverges from the original design.
+[A] Explore alternatives in a design branch
+[P] Get opinions first
+[C] Keep current plan
+```
+
+Branch merge options at completion:
+- **[M1]** Replace current design/plan
+- **[M2]** Create new implementation track
+- **[M3]** Keep as documented alternative
+
+### A/P/C in DS (FULL mode)
+
+At end of each phase:
 
 - **[A] Advanced** - Phase-specific deep dive
 - **[P] Party** - Multi-agent feedback (BMAD v6) → [bmad/](references/bmad/)
 - **[C] Continue** - Proceed to next phase
 - **[↩ Back]** - Return to previous phase
 
-See [apc-checkpoints.md](references/apc-checkpoints.md) for details.
+### Priority Rules
+
+1. **Explicit commands** (`ds`) always win
+2. **Active DS/Branch** blocks passive triggers
+3. **Branch safety** preferred when in implementation
+4. **Micro A/P/C** at checkpoint boundaries
+5. **Nudge** after 3+ iterations
+
+See [apc-checkpoints.md](references/apc-checkpoints.md) and [adaptive-apc-system.ts](references/adaptive-apc-system.ts) for implementation details.
 
 ## Mode Comparison
 

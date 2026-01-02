@@ -188,6 +188,19 @@ bd close <id> --reason "summary"
 git add -A && git commit && git push
 ```
 
+## Quality Gates
+
+Before marking any task complete, verify:
+
+- [ ] All tests pass
+- [ ] Code coverage meets requirements (>80%)
+- [ ] Code follows project's code style guidelines (as defined in `code_styleguides/`)
+- [ ] All public functions/methods are documented (e.g., docstrings, JSDoc, GoDoc)
+- [ ] Type safety is enforced (e.g., type hints, TypeScript types, Go types)
+- [ ] No linting or static analysis errors (using the project's configured tools)
+- [ ] Documentation updated if needed
+- [ ] No security vulnerabilities introduced
+
 ## Verification Before Completion
 
 **Evidence before assertions**:
