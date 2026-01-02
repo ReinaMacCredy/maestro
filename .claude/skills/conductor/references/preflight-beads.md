@@ -1,6 +1,6 @@
 # Preflight Beads Workflow
 
-**Purpose:** Initialize Beads integration at session/command start. Detects mode (SA/MA), validates availability, and manages session state.
+**Purpose:** Initialize Beads integration at session/command start. Validates availability, registers with Agent Mail, and manages session state.
 
 ---
 
@@ -9,8 +9,8 @@
 Preflight runs at the start of any Conductor command that interacts with Beads. It:
 
 1. Checks `bd` CLI availability (HALT if unavailable)
-2. Checks Village MCP availability (for MA mode)
-3. Locks mode (SA or MA) for the session
+2. Checks Agent Mail availability (HALT if unavailable)
+3. Registers agent with Agent Mail
 4. Creates/recovers session state in metadata.json
 5. Handles concurrent session detection
 6. Recovers from stale/crashed sessions
@@ -21,42 +21,203 @@ Preflight runs at the start of any Conductor command that interacts with Beads. 
 
 - `bd` CLI installed and in PATH
 - Project has `.beads/` directory (or uses `~/.beads/`)
-- For MA mode: Village MCP server available
+- Agent Mail MCP server available
 
 ---
 
-## Mode Detection Algorithm
+## Session Initialization Flow
 
 ```text
 ┌──────────────────────────────────────────────────────────────────┐
-│                     MODE DETECTION FLOW                          │
+│                   SESSION INITIALIZATION FLOW                     │
 ├──────────────────────────────────────────────────────────────────┤
 │                                                                   │
-│   1. Check metadata.json.last_activity                           │
-│      ├── Found + mode locked → Use existing mode                 │
-│      └── Not found → Continue to step 2                          │
+│   1. Check bd CLI availability                                    │
+│      ├── Available → Continue                                     │
+│      └── Unavailable → HALT                                       │
 │                                                                   │
-│   2. Check user preferences                                       │
-│      ├── preferences.json has mode → Use preferred mode          │
-│      └── No preference → Continue to step 3                      │
+│   2. Check Agent Mail availability                                │
+│      ├── Available → Continue                                     │
+│      └── Unavailable → HALT                                       │
 │                                                                   │
-│   3. Check Village MCP availability                               │
-│      ├── Available → MA mode (multi-agent)                       │
-│      └── Unavailable → SA mode (single-agent)                    │
+│   3. Register agent with Agent Mail                               │
+│      └── ensure_project + register_agent                          │
+│                                                                   │
+│   4. Load/create session state in metadata.json                   │
 │                                                                   │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-### Mode Selection Precedence
+---
 
-1. **Existing metadata.json session state** → use locked mode
-2. **User preference** (`preferences.json`) → use preferred mode
-3. **Village available + no preference** → default to MA
-4. **Fallback** → SA mode
+## Step 0: Check Cached Beads State
+
+Before running any triage or discovery, check if beads have already been filed for this track.
+
+### Triage Cache Structure
+
+The triage cache is stored in `metadata.beads.triageCache`:
+
+```json
+{
+  "beads": {
+    "status": "complete",
+    "triageCache": {
+      "cachedAt": "2026-01-02T12:00:00Z",
+      "ttlSeconds": 3600,
+      "results": [
+        {
+          "id": "my-workflow:3-abc1",
+          "status": "ready",
+          "title": "Task 1",
+          "dependencies": []
+        }
+      ],
+      "counts": {
+        "ready": 3,
+        "in_progress": 1,
+        "blocked": 0,
+        "closed": 2
+      }
+    }
+  }
+}
+```
+
+### Check Cache Before Triage
+
+```bash
+TRACK_ID="${TRACK_ID:-}"
+SKIP_TRIAGE=false
+CACHED_RESULTS=""
+
+if [[ -n "$TRACK_ID" ]]; then
+  METADATA_FILE="conductor/tracks/${TRACK_ID}/metadata.json"
+  
+  if [[ -f "$METADATA_FILE" ]]; then
+    BEADS_STATUS=$(jq -r '.beads.status // empty' "$METADATA_FILE")
+    
+    if [[ "$BEADS_STATUS" == "complete" ]]; then
+      # Check if triage cache exists and is valid
+      CACHE_EXISTS=$(jq -r '.beads.triageCache.cachedAt // empty' "$METADATA_FILE")
+      
+      if [[ -n "$CACHE_EXISTS" ]]; then
+        CACHED_AT=$(jq -r '.beads.triageCache.cachedAt' "$METADATA_FILE")
+        TTL_SECONDS=$(jq -r '.beads.triageCache.ttlSeconds // 3600' "$METADATA_FILE")
+        
+        # Calculate cache age
+        CACHED_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$CACHED_AT" +%s 2>/dev/null || \
+                       date -d "$CACHED_AT" +%s 2>/dev/null || echo 0)
+        NOW_EPOCH=$(date +%s)
+        CACHE_AGE=$((NOW_EPOCH - CACHED_EPOCH))
+        
+        if [[ $CACHE_AGE -lt $TTL_SECONDS ]]; then
+          echo "✓ Using cached triage state from metadata.json"
+          echo "  Cache age: ${CACHE_AGE}s (TTL: ${TTL_SECONDS}s)"
+          echo "  Beads already filed for track: $TRACK_ID"
+          
+          # Read cached results for use in subsequent steps
+          CACHED_RESULTS=$(jq -c '.beads.triageCache.results' "$METADATA_FILE")
+          SKIP_TRIAGE=true
+        else
+          echo "⚠ Triage cache expired (age: ${CACHE_AGE}s > TTL: ${TTL_SECONDS}s)"
+          echo "  Will refresh triage data..."
+        fi
+      else
+        echo "✓ Using cached bead state from metadata.json"
+        echo "  Beads already filed for track: $TRACK_ID"
+        # Skip bv --robot-triage - beads are already populated
+        SKIP_TRIAGE=true
+      fi
+    fi
+  fi
+fi
+```
+
+### Store Triage Results in Cache
+
+After running `bv --robot-triage`, store results in the cache:
+
+```bash
+store_triage_cache() {
+  local TRACK_ID="$1"
+  local TRIAGE_OUTPUT="$2"
+  local TTL_SECONDS="${3:-3600}"  # Default 1 hour TTL
+  
+  METADATA_FILE="conductor/tracks/${TRACK_ID}/metadata.json"
+  
+  if [[ ! -f "$METADATA_FILE" ]]; then
+    echo "ERROR: metadata.json not found for track: $TRACK_ID"
+    return 1
+  fi
+  
+  NOW=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  TEMP_FILE="$METADATA_FILE.tmp.$$"
+  
+  # Parse triage output and compute counts
+  READY_COUNT=$(echo "$TRIAGE_OUTPUT" | jq '[.[] | select(.status == "ready")] | length')
+  IN_PROGRESS_COUNT=$(echo "$TRIAGE_OUTPUT" | jq '[.[] | select(.status == "in_progress")] | length')
+  BLOCKED_COUNT=$(echo "$TRIAGE_OUTPUT" | jq '[.[] | select(.status == "blocked")] | length')
+  CLOSED_COUNT=$(echo "$TRIAGE_OUTPUT" | jq '[.[] | select(.status == "closed")] | length')
+  
+  # Update metadata.json with triage cache
+  jq --arg now "$NOW" \
+     --argjson ttl "$TTL_SECONDS" \
+     --argjson results "$TRIAGE_OUTPUT" \
+     --argjson ready "$READY_COUNT" \
+     --argjson in_progress "$IN_PROGRESS_COUNT" \
+     --argjson blocked "$BLOCKED_COUNT" \
+     --argjson closed "$CLOSED_COUNT" \
+     '.beads.triageCache = {
+        cachedAt: $now,
+        ttlSeconds: $ttl,
+        results: $results,
+        counts: {
+          ready: $ready,
+          in_progress: $in_progress,
+          blocked: $blocked,
+          closed: $closed
+        }
+      }' "$METADATA_FILE" > "$TEMP_FILE"
+  
+  mv "$TEMP_FILE" "$METADATA_FILE"
+  echo "✓ Triage cache stored (TTL: ${TTL_SECONDS}s)"
+}
+
+# Usage after bv --robot-triage:
+# TRIAGE_OUTPUT=$(bv --robot-triage 2>/dev/null)
+# if [[ $? -eq 0 && -n "$TRIAGE_OUTPUT" ]]; then
+#   store_triage_cache "$TRACK_ID" "$TRIAGE_OUTPUT"
+# fi
+```
+
+### Invalidate Cache on Bead State Change
+
+```bash
+invalidate_triage_cache() {
+  local TRACK_ID="$1"
+  
+  METADATA_FILE="conductor/tracks/${TRACK_ID}/metadata.json"
+  
+  if [[ -f "$METADATA_FILE" ]]; then
+    TEMP_FILE="$METADATA_FILE.tmp.$$"
+    
+    jq 'del(.beads.triageCache)' "$METADATA_FILE" > "$TEMP_FILE"
+    mv "$TEMP_FILE" "$METADATA_FILE"
+    
+    echo "✓ Triage cache invalidated"
+  fi
+}
+
+# Call invalidate_triage_cache when:
+# - bd update changes bead status
+# - bd close is called
+# - New beads are filed
+```
 
 ---
 
-## Step 0: Check bd Availability
+## Step 0b: Check bd Availability
 
 **CRITICAL:** This step HALTS if bd is unavailable. No silent skip.
 
@@ -108,46 +269,25 @@ fi
 
 ---
 
-## Step 2: Check User Preferences
+## Step 2: Check Agent Mail Availability
 
-```bash
-PREF_FILE=".conductor/preferences.json"
-
-if [[ -f "$PREF_FILE" ]]; then
-  PREFERRED_MODE=$(jq -r '.preferredMode // empty' "$PREF_FILE")
-  if [[ "$PREFERRED_MODE" == "MA" || "$PREFERRED_MODE" == "SA" ]]; then
-    echo "Preference: Using $PREFERRED_MODE mode"
-    MODE="$PREFERRED_MODE"
-    # Continue to Step 4
-  fi
-fi
+```python
+try:
+    ensure_project(human_key=PROJECT_PATH)
+    register_agent(
+        project_key=PROJECT_PATH,
+        program="amp",
+        model="claude-sonnet-4-20250514"
+    )
+    print("Agent Mail: Available ✓")
+except McpUnavailable:
+    print("HALT: Agent Mail unavailable")
+    exit(1)
 ```
 
 ---
 
-## Step 3: Check Village MCP Availability
-
-```bash
-# Check if Village MCP server is available
-VILLAGE_STATUS=$(bv --robot-status 2>&1)
-VILLAGE_EXIT=$?
-
-if [[ $VILLAGE_EXIT -eq 0 ]]; then
-  echo "Village MCP: Available ✓"
-  VILLAGE_AVAILABLE=1
-  MODE="${MODE:-MA}"
-else
-  echo "Village MCP: Unavailable (SA mode)"
-  VILLAGE_AVAILABLE=0
-  MODE="${MODE:-SA}"
-fi
-```
-
-**Note:** Use `--robot-*` flags with `bv` to avoid TUI mode.
-
----
-
-## Step 4: Session Lock Check
+## Step 3: Session Lock Check
 
 Detect concurrent sessions on the same track.
 
@@ -195,7 +335,7 @@ fi
 
 ---
 
-## Step 5: Update Session State
+## Step 4: Update Session State
 
 Session state is stored in metadata.json. Update it and touch activity marker:
 
@@ -210,12 +350,10 @@ if [[ -n "$TRACK_ID" ]]; then
     TEMP_FILE="$METADATA_FILE.tmp.$$"
     
     jq --arg now "$NOW" \
-       --arg mode "$MODE" \
        --arg agent "$AGENT_ID" \
        '. + {
          last_activity: $now,
          session: {
-           mode: $mode,
            agent_id: $agent,
            bound_bead: (.session.bound_bead // null),
            tdd_phase: (.session.tdd_phase // null),
@@ -231,12 +369,12 @@ fi
 mkdir -p conductor
 touch conductor/.last_activity
 
-echo "Session: metadata.json updated for $AGENT_ID ($MODE mode)"
+echo "Session: metadata.json updated for $AGENT_ID"
 ```
 
 ---
 
-## Step 5b: RECALL Session Context
+## Step 4b: RECALL Session Context
 
 Load prior session context to enable cross-session continuity.
 
@@ -486,20 +624,20 @@ fi
 ### Success Output
 
 ```text
-Preflight: bd v0.5.2 ✓, Village ✗ → SA mode
-Session: metadata.json updated for T-abc123 (SA mode)
+Preflight: bd v0.5.2 ✓, Agent Mail ✓
+Session: metadata.json updated for T-abc123
 ```
 
 ### With Recovery
 
 ```text
-Preflight: bd v0.5.2 ✓, Village ✓ → MA mode
+Preflight: bd v0.5.2 ✓, Agent Mail ✓
 WARN: Found 2 pending update operations
       Replaying...
       Replaying: T-abc_1703509200_update_bd-42
       Skip (already applied): T-abc_1703509260_update_bd-43
       Pending updates replayed
-Session: Resuming MA mode (track: auth_20251225)
+Session: Resuming track: auth_20251225
 ```
 
 ### With Active Session Warning
@@ -607,8 +745,8 @@ log_metric() {
 
 # Log during preflight
 log_preflight_metrics() {
-  # Log mode detection
-  log_metric "ma_attempt" "\"mode\": \"$MODE\", \"village_available\": $VILLAGE_AVAILABLE"
+  # Log session start
+  log_metric "session_start" "\"agent_id\": \"$AGENT_ID\""
   
   # Log if recovering from crashed session
   if [[ -f ".conductor/pending_updates.jsonl" || -f ".conductor/pending_closes.jsonl" ]]; then
@@ -621,7 +759,7 @@ log_preflight_metrics() {
 
 | Event | When Logged | Extra Fields |
 |-------|-------------|--------------|
-| `ma_attempt` | Preflight mode detection | `mode`, `village_available` |
+| `session_start` | Preflight complete | `agent_id` |
 | `pending_recovery` | Replaying pending operations | `updates`, `closes` |
 | `tdd_cycle` | TDD phase transition | `taskId`, `phase`, `duration` |
 | `manual_bd` | Manual bd command (outside Conductor) | `command` |
@@ -682,26 +820,17 @@ cleanup_session() {
 | Session lock active (<10 min) | Prompt C/W/F |
 | Session lock stale (>10 min) | Auto-unlock + warn |
 | Pending operations exist | Replay with idempotency check |
-| Village unavailable (MA mode) | Degrade to SA + warn |
+| Agent Mail unavailable | HALT |
 
 ---
 
-## HALT vs Degrade
+## HALT Conditions
 
 | Condition | Action |
 |-----------|--------|
-| bd unavailable | HALT |
-| Village unavailable, started as SA | Continue SA |
-| Village unavailable, started as MA | Degrade to SA with warning |
+| bd unavailable | HALT with install instructions |
+| Agent Mail unavailable | HALT - required for coordination |
 | bd fails mid-session | Retry 3x → persist → warn |
-
-**Degraded MA Mode Warning:**
-```text
-⚠️ Village MCP unavailable. Operating in degraded mode.
-- File reservations: SKIPPED (cannot enforce)
-- Task claiming: Using bd update (no atomic guarantee)
-- Handoffs: Written to conductor/handoffs/<track>/
-```
 
 ---
 
@@ -709,10 +838,9 @@ cleanup_session() {
 
 | File | Location | Purpose |
 |------|----------|---------|
-| `metadata.json` | `conductor/tracks/<track>/` | Track + session state (mode, bound_bead, tdd_phase, last_activity) |
+| `metadata.json` | `conductor/tracks/<track>/` | Track + session state (bound_bead, tdd_phase, last_activity) |
 | `.last_activity` | `conductor/` | Global activity marker (touch for heartbeat) |
 | `session-lock_<track-id>.json` | `.conductor/` | Concurrent session prevention |
-| `preferences.json` | `.conductor/` | User mode preferences |
 | `pending_updates.jsonl` | `.conductor/` | Failed update ops for replay |
 | `pending_closes.jsonl` | `.conductor/` | Failed close ops for replay |
 | Handoff files | `conductor/handoffs/<track>/` | Context preservation between sessions |

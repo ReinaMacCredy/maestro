@@ -171,9 +171,8 @@ The RECALL phase integrates with preflight as the first step:
 ```text
 Preflight Sequence:
 1. RECALL <- Load session-context.md
-2. Mode detect (SA/MA)
-3. Validate bd availability
-4. Create/update session state
+2. Validate bd availability
+3. Create/update session state
 ```
 
 Location: [../conductor/preflight-beads.md](../../conductor/references/preflight-beads.md)

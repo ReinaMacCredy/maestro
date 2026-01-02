@@ -17,8 +17,7 @@
 | `/conductor-finish` | Complete track, extract learnings, archive | `LEARNINGS.md`, archived track |
 | `/conductor-validate` | Run validation checks on current track | Validation report |
 | `/conductor-orchestrate` | Spawn parallel workers for multi-agent execution | Worker coordination |
-| `/create_handoff` | Save session context for continuity | `conductor/handoffs/<track>/` |
-| `/resume_handoff` | Load prior session context | Restored state |
+| `/conductor-handoff` | Save/load session context for continuity | `conductor/handoffs/<track>/` |
 
 ---
 
@@ -84,24 +83,6 @@ bd sync                              # Commit to git
 
 ---
 
-## bv CLI Quick Reference (Village MCP)
-
-> Multi-agent coordination. **Always use `--robot-*` flags** (bare `bv` hangs).
-
-| Command | Description |
-|---------|-------------|
-| `bv --robot-status` | Check team state |
-| `bv --robot-triage` | Auto-assign ready work to agents |
-| `bv init` | Initialize village in `.beads-village/` |
-| `bv claim <id>` | Claim bead for current agent |
-| `bv done <id>` | Mark bead complete |
-| `bv reserve <path>` | Reserve file for editing |
-| `bv release <path>` | Release file reservation |
-| `bv msg <agent> <text>` | Send message to agent |
-| `bv inbox` | Check messages |
-
----
-
 ## Directory Structure
 
 ```
@@ -128,11 +109,6 @@ conductor/
 ├── index.json              # Bead database
 ├── <id>.md                 # Individual bead files
 └── schema.json             # Bead schema
-
-.beads-village/             # Multi-agent state (if using Village)
-├── agents/                 # Agent registrations
-├── .reservations/          # File reservations
-└── .mail/                  # Inter-agent messages
 
 skills/
 ├── beads/                  # Issue tracking skill
@@ -173,12 +149,13 @@ skills/
 
 ```bash
 # Save context
-/create_handoff                    # Auto-detect trigger
-/create_handoff manual             # Explicit trigger
+/conductor-handoff                 # Auto-detect mode
+/conductor-handoff create          # Force create
+/conductor-handoff create manual   # Explicit trigger
 
 # Load context
-/resume_handoff                    # Load most recent
-/resume_handoff <track>            # Load specific track
+/conductor-handoff resume          # Load most recent
+/conductor-handoff resume <track>  # Load specific track
 ```
 
 ---
@@ -189,7 +166,7 @@ skills/
 |-----------|--------|--------------|
 | `bd` unavailable | **HALT** | Cannot proceed without beads CLI |
 | `conductor/` missing | **DEGRADE** | Standalone mode, no structured workflow |
-| Village MCP unavailable | **DEGRADE** | Fall back to single-agent mode |
+| Agent Mail unavailable | **HALT** | Cannot proceed without Agent Mail for coordination |
 | Handoff stale (>7 days) | **WARN** | Show warning, suggest fresh start |
 
 ---
@@ -199,15 +176,14 @@ skills/
 | Issue | Cause | Fix |
 |-------|-------|-----|
 | `bd` command not found | Beads CLI not installed | Install via command in [SETUP_GUIDE.md](./SETUP_GUIDE.md) |
-| `bv` hangs | Missing `--robot-*` flag | Always use `bv --robot-status` not bare `bv` |
 | No beads found | Plan not filed | Run `fb` to file beads from plan.md |
 | Track validation fails | Missing artifacts | Ensure `design.md`, `spec.md`, `plan.md` exist |
 | Handoff not loading | Wrong directory | Check `conductor/handoffs/` exists |
 | Orchestrator not triggering | No Track Assignments | Add `## Track Assignments` section to plan.md |
 | Tests not running | TDD skipped | Remove `--no-tdd` flag or run `tdd` explicitly |
-| File conflicts in MA mode | Reservation missing | Run `bv reserve <path>` before editing |
+| File conflicts in parallel mode | Reservation missing | Use Agent Mail `file_reservation_paths` |
 | Stale bead status | Not synced | Run `bd sync` to update git |
-| Session context lost | No handoff created | Always `/create_handoff` before ending session |
+| Session context lost | No handoff created | Always `/conductor-handoff` before ending session |
 
 ---
 
@@ -239,7 +215,7 @@ bd update <id> --status in_progress
 
 ## Common Patterns
 
-### Single-Agent Session
+### Standard Session
 
 ```bash
 bd ready --json                      # Find work
@@ -248,18 +224,18 @@ bd update BEAD-001 --status in_progress
 # ... implement ...
 bd close BEAD-001 --reason completed
 bd sync
-/create_handoff
+/conductor-handoff
 ```
 
-### Multi-Agent Parallel
+### Parallel Execution
 
 ```bash
-/conductor-orchestrate              # Spawn workers
-bv --robot-status                   # Check team state
-bv reserve src/api/*.ts             # Reserve files
-# ... work ...
-bv release src/api/*.ts             # Release files
-bv done BEAD-001                    # Mark complete
+/conductor-orchestrate              # Spawn workers via Agent Mail
+# Workers coordinate via Agent Mail MCP:
+#   file_reservation_paths          # Reserve files before editing
+#   send_message                    # Report progress
+#   release_file_reservations       # Release when done
+bd close BEAD-001 --reason completed  # Mark complete
 ```
 
 ### Mid-Session Revision
@@ -277,4 +253,4 @@ bd ready --json                     # See updated work
 - [TUTORIAL.md](TUTORIAL.md) — Full workflow walkthrough
 - [AGENTS.md](AGENTS.md) — Project configuration
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — System architecture
-- [skills/conductor/references/handoff/](skills/conductor/references/handoff/) — Handoff system details
+- [.claude/skills/conductor/references/workflows/handoff.md](.claude/skills/conductor/references/workflows/handoff.md) — Handoff system details

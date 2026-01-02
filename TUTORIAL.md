@@ -199,14 +199,15 @@ Six triggers create handoffs at key moments:
 | `epic-start` | Before each epic | ✅ |
 | `epic-end` | After each epic closes | ✅ |
 | `pre-finish` | At start of `/conductor-finish` | ✅ |
-| `manual` | User runs `/create_handoff` | ❌ |
+| `manual` | User runs `/conductor-handoff` | ❌ |
 | `idle` | 30min gap detected | ✅ (prompted) |
 
 ### Commands
 
 ```bash
-/create_handoff    # Save current session context
-/resume_handoff    # Load prior session context
+/conductor-handoff         # Auto-detect mode (create or resume)
+/conductor-handoff create  # Save current session context
+/conductor-handoff resume  # Load prior session context
 ```
 
 ### Writing Good Handoff Notes
@@ -265,7 +266,7 @@ Agent: Planning complete. 12 issues created across 3 epics:
   - E2: API endpoints (5 tasks, blocked by E1)
   - E3: Email integration (4 tasks, blocked by E2)
 
-User: /create_handoff
+User: /conductor-handoff
 
 Agent: Handoff saved to conductor/handoffs/invitations/...
 ```
@@ -347,7 +348,7 @@ Validate and auto-repair:
 | See what's ready | `bd ready --json` |
 | Start implementation | `/conductor-implement` |
 | Check progress | `/conductor-status` |
-| Save context | `/create_handoff` |
+| Save context | `/conductor-handoff` |
 | Complete track | `/conductor-finish` |
 
 ### For Agents: Triggers
@@ -365,8 +366,7 @@ Validate and auto-repair:
 | `fb`, `file beads` | Create beads from plan |
 | `rb`, `review beads` | Review and refine beads |
 | `tdd` | Enter TDD mode |
-| `/create_handoff` | Save session context |
-| `/resume_handoff` | Load session context |
+| `/conductor-handoff` | Save/load session context |
 | `/conductor-orchestrate` | Parallel workers |
 
 ### Critical Rules

@@ -1,16 +1,16 @@
 # Beads Facade Contract
 
-**Version:** 1.0.0  
+**Version:** 2.0.0  
 **Purpose:** Single integration layer between Conductor and Beads.
 
 ---
 
 ## Overview
 
-The Beads Facade provides a unified interface for Conductor workflows to interact with Beads issue tracking. It abstracts the difference between:
+The Beads Facade provides a unified interface for Conductor workflows to interact with Beads issue tracking. It provides:
 
-- **SA Mode (Single-Agent):** Direct `bd` CLI calls
-- **MA Mode (Multi-Agent):** Village MCP server calls
+- **Direct `bd` CLI calls** - Primary interface for all operations
+- **Agent Mail coordination** - For multi-agent parallel execution via orchestrator
 
 All Conductor components use this facade instead of calling `bd` directly.
 
@@ -43,33 +43,6 @@ Checks if Beads is available and returns version info.
 
 // Failure  
 { "available": false, "error": "BD_UNAVAILABLE: bd command not found" }
-```
-
----
-
-### detectMode()
-
-Determines whether to use SA or MA mode.
-
-**Returns:**
-```typescript
-{
-  mode: 'SA' | 'MA';
-  reason: string;
-  villageAvailable?: boolean;
-}
-```
-
-**Mode Selection Precedence:**
-1. Existing session-state file → use locked mode
-2. User preference (`preferences.json`) → use preferred mode
-3. Village available + no preference → MA
-4. Fallback → SA
-
-**Example:**
-```json
-{ "mode": "SA", "reason": "Village MCP unavailable" }
-{ "mode": "MA", "reason": "Village available, user preference" }
 ```
 
 ---
@@ -149,7 +122,6 @@ Claims a task for the current session.
 ```typescript
 {
   taskId: string;           // Bead ID to claim
-  mode: 'SA' | 'MA';        // Current session mode
 }
 ```
 
@@ -162,16 +134,16 @@ Claims a task for the current session.
 }
 ```
 
-**Behavior by Mode:**
+**Behavior:**
+```bash
+bd update <taskId> --status in_progress
+```
 
-| Mode | Action |
-|------|--------|
-| SA | `bd update <taskId> --status in_progress` |
-| MA | Village `claim(<taskId>)` (atomic) |
-
-**Race Condition Handling (MA):**
-- First claim wins (by `modeLockedAt` timestamp)
-- Tie-breaker: lexicographic agent ID
+**Conflict Handling (Parallel Execution):**
+When using orchestrator for parallel execution:
+- File reservations via Agent Mail prevent conflicts
+- First claim wins (by reservation timestamp)
+- Conflicts resolved via `file_reservation_paths` MCP tool
 
 **Error Codes:**
 - `CLAIM_CONFLICT`: Task claimed by another agent
@@ -183,7 +155,7 @@ Claims a task for the current session.
 { "success": true }
 
 // Conflict
-{ "success": false, "alreadyClaimed": true, "claimedBy": "T-def456" }
+{ "success": false, "alreadyClaimed": true, "claimedBy": "GreenCastle" }
 ```
 
 ---
@@ -211,12 +183,11 @@ Closes a task with a reason.
 
 **Behavior:**
 ```bash
-# SA Mode
 bd close <taskId> --reason "<reason>"
 bd update <taskId> --notes "<notes>"
 
-# MA Mode
-done(<taskId>, reason="<reason>")  # Auto-releases reservations
+# For parallel execution (via orchestrator)
+# Agent Mail auto-releases file reservations on close
 ```
 
 **Retry Logic:**
@@ -392,8 +363,7 @@ The facade reads/writes these state files:
 # Example: Preflight
 1. Call checkAvailability()
 2. If unavailable → HALT
-3. Call detectMode()
-4. Lock mode in session-state
+3. Initialize session state
 
 # Example: Track Init
 1. Parse plan.md tasks

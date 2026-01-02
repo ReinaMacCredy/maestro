@@ -89,8 +89,9 @@ Based on conflict detection:
 Preflight is skipped when:
 1. Command is read-only (`bd ready`, `bd show`, `bd list`)
 2. Command is design phase (`ds`, `/conductor-design`)
-3. Agent Mail is unavailable (degrade to single-session mode)
-4. Explicit `--skip-preflight` flag passed
+3. Explicit `--skip-preflight` flag passed
+
+**Note:** If Agent Mail is unavailable during preflight, orchestrator HALTs (does not degrade).
 
 ## Agent Mail Integration
 
@@ -130,18 +131,18 @@ Agent Mail operations timeout after 3 seconds:
 try:
     result = register_agent(...)  # 3s timeout
 except TimeoutError:
-    # Degrade to single-session mode
-    print("⚠️ Agent Mail timeout - proceeding without session detection")
-    mode = "DEGRADED"
+    # HALT - Agent Mail is required
+    print("❌ Cannot proceed: Agent Mail timeout")
+    return {"mode": "HALT", "error": "Agent Mail timeout"}
 ```
 
 ### Unavailable Service
 
 ```python
 if not agent_mail_available():
-    print("⚠️ Agent Mail unavailable - single-session mode")
-    # Continue without multi-session awareness
-    return {"mode": "DEGRADED", "sessions": []}
+    print("❌ Cannot proceed: Agent Mail required for orchestration")
+    # HALT - do not proceed without Agent Mail
+    return {"mode": "HALT", "error": "Agent Mail unavailable"}
 ```
 
 ## Display Formats

@@ -78,7 +78,7 @@ ds → design.md → /conductor-newtrack → spec.md + plan.md + beads + review 
 
 **Session 2+ (Execution per Epic):**
 ```
-/resume_handoff → /conductor-implement → TDD → verify → close → HANDOFF
+/conductor-handoff resume → /conductor-implement → TDD → verify → close → HANDOFF
 ```
 
 **Or Parallel Execution:**
@@ -131,7 +131,7 @@ bd dep add <child> <blocker> --type blocks  # Add dependency
 bd dep tree <id>             # Show dependency graph
 ```
 
-**Never use bare `bv` command** - it launches TUI and will hang. Always use `bv --robot-*` flags.
+
 
 ### Conductor Commands
 
@@ -154,8 +154,9 @@ bd dep tree <id>             # Show dependency graph
 
 | Command | Description |
 |---------|-------------|
-| `/create_handoff` | Create handoff file with current context |
-| `/resume_handoff` | Find and load most recent handoff |
+| `/conductor-handoff` | Unified handoff (auto-detect create/resume) |
+| `/conductor-handoff create` | Force create handoff with current context |
+| `/conductor-handoff resume` | Find and load most recent handoff |
 
 ### Research Protocol
 
@@ -215,7 +216,7 @@ Max 2 retries before escalating to human review.
 |-----------|--------|
 | `bd` unavailable | HALT |
 | `conductor/` missing | DEGRADE |
-| Village MCP unavailable | DEGRADE |
+| Agent Mail unavailable | HALT |
 
 ### Skill Naming
 - Directory names: kebab-case (`test-driven-development`)

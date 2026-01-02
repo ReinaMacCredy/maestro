@@ -53,6 +53,7 @@ ds (design session) → creates tracks/<id>/design.md
 | Start design | `ds` or `/conductor-design` |
 | Create track from design | `/conductor-newtrack` |
 | Execute work | `/conductor-implement` |
+| Session handoff | `/conductor-handoff` |
 | Check status | `/conductor-status` |
 | Update mid-track | `/conductor-revise` |
 | Undo work | `/conductor-revert` |

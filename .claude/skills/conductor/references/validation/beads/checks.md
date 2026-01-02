@@ -315,8 +315,6 @@ fi
 | Field | Validation |
 |-------|------------|
 | agentId | Must match filename |
-| mode | Must be "SA" or "MA" |
-| modeLockedAt | Valid ISO 8601 |
 | trackId | Must match active track or null |
 | currentTask | Must exist in beads or null |
 | tddPhase | Must be RED/GREEN/REFACTOR or null |

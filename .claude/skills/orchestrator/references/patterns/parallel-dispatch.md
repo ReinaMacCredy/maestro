@@ -11,7 +11,7 @@ Execute independent tracks concurrently using Task tool with Agent Mail coordina
 ## Prerequisites
 
 - Beads filed from plan (`fb` command)
-- Agent Mail MCP available (or fallback to sequential)
+- Agent Mail MCP available (HALT if unavailable)
 - Track Assignments in plan.md
 
 ## Pattern
@@ -81,15 +81,15 @@ When Track 2 depends on Task 1.2.3 from Track 1:
 
 If dependency times out (30 min), orchestrator intervenes.
 
-## Fallback
+## Agent Mail Failure
 
 If Agent Mail unavailable:
 
 ```text
-⚠️ Agent coordination unavailable - falling back to sequential
+❌ Cannot proceed: Agent Mail required for parallel execution
 ```
 
-Routes to `/conductor-implement` instead.
+HALT execution. Do not fall back to sequential - user must fix Agent Mail availability first.
 
 ## See Also
 

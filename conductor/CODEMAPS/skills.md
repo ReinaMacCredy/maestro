@@ -47,8 +47,8 @@ CORE WORKFLOW              DEVELOPMENT              UTILITIES
 ```
 
 **7 Core Skills:**
-- **orchestrator**: Multi-agent parallel execution with autonomous workers
-- **conductor**: Planning + execution + **research protocol**
+- **orchestrator**: Multi-agent parallel execution with autonomous workers + **file-scope routing**
+- **conductor**: Planning + execution + **research protocol** + **file-scope detection**
 - **design**: Double Diamond + Party Mode + Research verification
 - **beads**: Issue tracking + persistent memory + **auto-orchestration trigger**
 - **using-git-worktrees**: Isolated development environments
@@ -87,7 +87,8 @@ agents/
 │   ├── security-reviewer.md   # Security vulnerability analysis
 │   ├── code-reviewer.md       # Code quality review
 │   ├── pr-reviewer.md         # Pull request review
-│   └── spec-reviewer.md       # Specification validation
+│   ├── spec-reviewer.md       # Specification validation
+│   └── oracle.md              # 6-dimension design audit at CP4
 ├── planning/              # Design decision agents
 │   ├── plan-agent.md          # Create plans
 │   └── validate-agent.md      # Validate plans/specs
@@ -146,6 +147,19 @@ Skills are loaded when:
 - User says trigger phrase (e.g., `ds`, `tdd`, `debug`, `/research`, "spawn workers")
 - User runs slash command (e.g., `/conductor-setup`, `/conductor-orchestrate`)
 - Agent recognizes matching context (e.g., plan.md has Track Assignments)
+
+**Lazy References (Token Optimization):**
+
+Orchestrator uses trigger-based reference loading to reduce pre-spawn tokens:
+
+| Phase | Reference Loaded |
+|-------|------------------|
+| Always | SKILL.md only (~400 tokens) |
+| Phase 3 (Initialize) | agent-mail.md |
+| Phase 4 (Spawn) | worker-prompt.md |
+| Phase 6 (Handle Issues) | agent-coordination.md |
+
+See `skills/orchestrator/SKILL.md` `## Lazy References` section.
 
 ## Gotchas
 

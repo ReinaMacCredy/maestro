@@ -265,6 +265,35 @@ echo "✓ State initialized in metadata.json"
     > "Does this accurately capture the requirements? Please suggest any changes or confirm."
     Await user feedback and revise the `spec.md` content until confirmed.
 
+### 2.2.5 VALIDATION GATE (Gate 2: validate-spec)
+
+**Trigger:** User confirms spec.md content.
+
+**PROTOCOL:**
+1. **Load validation gate:** Read `skills/conductor/references/validation/shared/validate-spec.md`
+2. **Execute validation** - check spec against design.md for:
+   - Requirement capture completeness
+   - Design decision alignment
+   - Clarity and testability
+3. **Enforcement:** WARN only (both modes) - log issues but continue
+
+**Validation Output:**
+```
+┌─ VALIDATION: Gate 2 (spec) ───────────────────────┐
+│ Status: [PASS | WARN]                             │
+│                                                   │
+│ Requirement Capture: [✓ | ⚠]                      │
+│ Design Alignment: [✓ | ⚠]                         │
+│ Clarity: [✓ | ⚠]                                  │
+│                                                   │
+│ [Warnings - if any]                               │
+└───────────────────────────────────────────────────┘
+```
+
+**On PASS/WARN:** Update `metadata.json.validation.gates_passed` to include "spec", proceed to plan generation.
+
+---
+
 ### 2.3 Interactive Plan Generation (`plan.md`)
 
 1.  **State Your Goal:** Once `spec.md` is approved, announce:
@@ -287,6 +316,35 @@ echo "✓ State initialized in metadata.json"
     >
     > "Does this plan look correct and cover all the necessary steps based on the spec and our workflow? Please suggest any changes or confirm."
     Await user feedback and revise the `plan.md` content until confirmed.
+
+### 2.3.5 VALIDATION GATE (Gate 3: validate-plan-structure)
+
+**Trigger:** User confirms plan.md content.
+
+**PROTOCOL:**
+1. **Load validation gate:** Read `skills/conductor/references/validation/shared/validate-plan-structure.md`
+2. **Execute validation** - check plan structure for:
+   - Task hierarchy completeness
+   - Epic structure validity
+   - Verification section presence
+3. **Enforcement:** WARN only (both modes) - log issues but continue
+
+**Validation Output:**
+```
+┌─ VALIDATION: Gate 3 (plan-structure) ─────────────┐
+│ Status: [PASS | WARN]                             │
+│                                                   │
+│ Task Structure: [✓ | ⚠]                           │
+│ Epic Structure: [✓ | ⚠]                           │
+│ Verification Sections: [✓ | ⚠]                    │
+│                                                   │
+│ [Warnings - if any]                               │
+└───────────────────────────────────────────────────┘
+```
+
+**On PASS/WARN:** Update `metadata.json.validation.gates_passed` to include "plan-structure", proceed to artifact creation.
+
+---
 
 ### 2.4 Create Track Artifacts and Update Main Plan
 

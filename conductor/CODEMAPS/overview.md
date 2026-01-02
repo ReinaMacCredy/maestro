@@ -70,8 +70,8 @@ ds → design.md → /conductor-newtrack → spec.md + plan.md
 ### Auto-Orchestration (New)
 
 After `fb` completes filing beads, Phase 6 triggers automatically:
-1. Query graph: `bv --robot-triage --graph-root <epic-id> --json`
-2. Generate Track Assignments from ready/blocked beads
+1. Query graph: `bd list --json` to get ready/blocked beads
+2. Generate Track Assignments from dependency analysis
 3. Spawn workers via Task() for parallel execution
 4. After workers complete, spawn `rb` sub-agent for final review
 
@@ -83,14 +83,11 @@ Zero manual `bd` commands in the happy path:
 
 | Point | Conductor Command | Beads Action |
 |-------|-------------------|--------------|
-| Preflight | All | Mode detect (SA/MA), validate bd |
+| Preflight | All | Validate bd CLI |
 | Claim | `/conductor-implement` | `bd update --status in_progress` |
 | Close | `/conductor-implement` | `bd close --reason completed` |
 | Sync | All (session end) | `bd sync` with retry |
 | Compact | `/conductor-finish` | AI summaries for closed issues |
-
-**SA Mode:** Direct `bd` CLI calls (default)
-**MA Mode:** Village MCP server for multi-agent coordination
 
 ## Core Skills
 
@@ -146,7 +143,6 @@ Max 2 retries before escalating to human review.
 
 ## Gotchas
 
-- `bv` without `--robot-*` flags launches TUI and hangs agents
 - `bd` should use `--json` for structured output
 - Skills require YAML frontmatter with `name` and `description`
 - Never write production code without a failing test first (TDD iron law)

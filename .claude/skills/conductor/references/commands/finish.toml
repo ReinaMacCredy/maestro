@@ -3,6 +3,43 @@ prompt = """
 ## 0.0 PHASE 0: VALIDATION PRE-FLIGHT
 **PROTOCOL: Check for resume state and validate track integrity.**
 
+### 0.1 VALIDATION GATE (Gate 5: validate-completion)
+
+**Trigger:** Before any other pre-flight checks.
+
+**PROTOCOL:**
+1. **Load validation gate:** Read `skills/conductor/references/validation/shared/validate-completion.md`
+2. **Execute validation** - verify track is ready for finish:
+   - All beads closed or accounted for
+   - Implementation complete per plan.md
+   - Repository in clean state
+3. **Determine enforcement based on mode:**
+   - SPEED mode → WARN only (log issues, continue)
+   - FULL mode → HALT on failures (block until resolved)
+
+**Validation Output:**
+```
+┌─ VALIDATION: Gate 5 (completion) ─────────────────┐
+│ Status: [PASS | WARN | FAIL]                      │
+│                                                   │
+│ Beads Status: [✓ | ⚠ | ✗]                         │
+│ Implementation: [✓ | ⚠ | ✗]                       │
+│ Repository State: [✓ | ⚠ | ✗]                     │
+│                                                   │
+│ [Issues found - if any]                           │
+└───────────────────────────────────────────────────┘
+```
+
+**On PASS:** Update `metadata.json.validation.gates_passed` to include "completion", proceed to finish.
+**On WARN:** Log warning, proceed to finish.
+**On FAIL (FULL mode):** Block, show issues, offer:
+- **[R] Retry** - Return to resolve issues
+- **[S] Skip** - Force continue (requires `--force` flag)
+
+---
+
+### 0.2 Resume State Check
+
 1. **Check for Existing State:**
    - Look for `conductor/tracks/<track_id>/finish-state.json`
    - If found and valid:

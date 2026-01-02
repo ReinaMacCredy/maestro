@@ -1,40 +1,43 @@
 # Remember Facade
 
-<!-- remember v1 -->
+<!-- remember v2 -->
 
 Quick entry point for handoff protocol operations.
 
 ## Primary Reference
 
-→ [Handoff Protocol](beads-session.md#handoff-protocol-ma-mode)
-→ [Anchored Format (SA Mode)](beads-session.md#anchored-format-sa-mode)
+→ [Handoff Workflow](workflows/handoff.md)
+→ [Session Lifecycle](../../design/references/session-lifecycle.md)
 
-## Quick Reference: SA vs MA
+## Handoff Storage
 
-| Aspect | SA Mode | MA Mode |
-|--------|---------|---------|
-| Storage | `.conductor/session-context.md` | `.conductor/handoff_*.json` |
-| Format | Anchored markdown | Structured JSON |
-| Audience | Same agent, future session | Different agent |
-| TTL | Persistent | 24 hours |
+| Aspect | Description |
+|--------|-------------|
+| Storage | `conductor/handoffs/<track>/` |
+| Format | Structured JSON + Markdown summary |
+| Audience | Same or different agent |
+| TTL | 7 days (configurable) |
 
-## SA Mode (Anchored Format)
+## Handoff Format
 
-Save to: `.conductor/session-context.md`
+Save to: `conductor/handoffs/<track>/handoff_<timestamp>.json`
 
-Required [PRESERVE] sections:
+Required sections:
 - **Intent** - What we're building and why
+- **Progress** - Current state and completed work
+- **Next Steps** - What remains to be done
 - **Constraints & Ruled-Out** - What we decided NOT to do
 
-→ [Template](../../design/references/anchored-state-format.md)
+→ [Template](handoff/template.md)
 
-## MA Mode (JSON Handoff)
+## Session Context
 
-Save to: `.conductor/handoff_<from>_to_<to>.json`
-
-Use when passing context to another agent.
+For within-session context, use `conductor/tracks/<track>/metadata.json`:
+- Tracks current task, TDD phase, validation state
+- Automatically updated by Conductor workflows
 
 ## See Also
 
 - [Session Lifecycle](../../design/references/session-lifecycle.md) - RECALL/REMEMBER
 - [Checkpoint Facade](checkpoint.md) - Progress checkpointing
+- [Handoff Workflow](workflows/handoff.md) - Full handoff protocol

@@ -1,6 +1,6 @@
 ---
 name: conductor
-description: Context-driven development methodology. Understands projects set up with Conductor (via Gemini CLI, Claude Code, Amp Code, Codex, or any Agent Skills compatible CLI). Use when working with conductor/ directories, tracks, specs, plans, or when user mentions context-driven development.
+description: Context-driven development methodology. Understands projects set up with Conductor (via Gemini CLI, Claude Code, Amp Code, Codex, or any Agent Skills compatible CLI). Use when working with conductor/ directories, tracks, specs, plans, or when user mentions context-driven development. MUST load maestro-core skill first for routing.
 ---
 
 # Conductor: Context-Driven Development
@@ -18,8 +18,7 @@ Measure twice, code once.
 | `/conductor-status` | Display progress overview | [structure.md](references/structure.md) |
 | `/conductor-revise` | Update spec/plan mid-work | [revisions.md](references/revisions.md) |
 | `/conductor-finish` | Complete track, extract learnings | [finish-workflow.md](references/finish-workflow.md) |
-| `/create_handoff` | Save session context | [handoff/](references/handoff/) |
-| `/resume_handoff` | Load session context | [handoff/](references/handoff/) |
+| `/conductor-handoff` | Unified handoff (auto-detect create/resume) | [workflows/handoff.md](references/workflows/handoff.md) |
 
 ## Quick Reference
 
@@ -32,6 +31,7 @@ Measure twice, code once.
 
 ## Core Principles
 
+- **Load core first** - Load [maestro-core](../maestro-core/SKILL.md) for routing table and fallback policies
 - **Design before code** - `/conductor-design` → `/conductor-newtrack` → implement
 - **TDD by default** - RED → GREEN → REFACTOR (use `--no-tdd` to disable)
 - **Beads integration** - Zero manual `bd` commands in happy path
@@ -43,6 +43,7 @@ Measure twice, code once.
 ```
 conductor/
 ├── product.md, tech-stack.md, workflow.md  # Project context
+├── code_styleguides/                       # Language-specific style rules
 ├── CODEMAPS/                               # Architecture docs
 ├── handoffs/                               # Session context
 └── tracks/<track_id>/                      # Per-track work
@@ -54,12 +55,11 @@ See [structure.md](references/structure.md) for full details.
 
 ## Beads Integration
 
-| Mode | When | Commands |
-|------|------|----------|
-| SA (Single-Agent) | Default | Direct `bd` CLI |
-| MA (Multi-Agent) | Coordinated | Village MCP |
-
-Close reasons: `completed`, `skipped`, `blocked`
+All execution routes through orchestrator with Agent Mail coordination:
+- Workers claim beads via `bd update --status in_progress`
+- Workers close beads via `bd close --reason completed|skipped|blocked`
+- File reservations via `file_reservation_paths`
+- Communication via `send_message`/`fetch_inbox`
 
 See [beads-integration.md](references/beads-integration.md) for all 13 integration points.
 
@@ -67,8 +67,16 @@ See [beads-integration.md](references/beads-integration.md) for all 13 integrati
 
 1. Read `metadata.json` - check `orchestrated` flag
 2. Read `plan.md` - check for `## Track Assignments`
-3. If found → Load [orchestrator skill](../orchestrator/SKILL.md) for parallel execution
-4. Else → Sequential execution with TDD
+3. Check `beads.fileScopes` - file-scope based grouping (see [file-scope-extractor](references/file-scope-extractor.md))
+4. If parallel detected (≥2 non-overlapping groups) → Load [orchestrator skill](../orchestrator/SKILL.md)
+5. Else → Sequential execution with TDD
+
+### File Scope Detection
+
+`/conductor-newtrack` Phase 4.5 extracts file paths from tasks and groups them:
+- Tasks touching same files → sequential (same track)
+- Tasks touching different files → parallel (separate tracks)
+- See [parallel-grouping](references/parallel-grouping.md) for algorithm
 
 ## Anti-Patterns
 

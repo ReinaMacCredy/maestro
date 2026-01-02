@@ -4,15 +4,37 @@ Master list of all development tracks.
 
 ## Active Tracks
 
-## [~] Track: Test Routing
-*ID: test-routing_20251230*
-*Link: [spec](tracks/test-routing_20251230/spec.md) | [plan](tracks/test-routing_20251230/plan.md)*
-
-Test track to verify /conductor-implement auto-routes to orchestrator.
-
----
+*(No active tracks)*
 
 ## Completed Tracks
+
+## [x] Track: Pre-Orchestration Token Optimization
+*ID: pre-orchestration-optimization*
+*Archived: [conductor/archive/pre-orchestration-optimization/](archive/pre-orchestration-optimization/)*
+
+Reduced token consumption before parallel worker execution by 60-75% (~8-12k → ~3-4k pre-spawn). Implemented: lazy skill loading (trigger-based references), trust plan.md fast-path (skip group_by_file_scope), conditional preflight/handoff, workers self-register via macro_start_session.
+
+## [x] Track: Test Routing
+*ID: test-routing_20251230*
+*Status: Completed - test track for routing validation*
+
+## [x] Track: Unified SA/MA into FULL Mode
+*ID: unify-modes*
+*Archived: [conductor/archive/unify-modes/](archive/unify-modes/)*
+
+Merged execution modes into unified FULL mode. All execution routes through orchestrator with Agent Mail coordination. Removed Village MCP entirely. ~55 files modified, breaking change to fallback policy (HALT on Agent Mail failure).
+
+## [x] Track: File-Scope Parallel Detection
+*ID: file-scope-parallel_20260102*
+*Archived: [conductor/archive/file-scope-parallel_20260102/](archive/file-scope-parallel_20260102/)*
+
+Auto-detect parallelization opportunities based on file scope analysis. Two-stage system: Stage 1 at `/conductor-newtrack` extracts file scopes and generates Track Assignments for ≥2 non-overlapping groups; Stage 2 at `/conductor-implement` shows confirmation prompt before parallel dispatch.
+
+## [x] Track: Unified Handoff System
+*ID: handoff-unify_20260102*
+*Archived: [conductor/archive/handoff-unify_20260102/](archive/handoff-unify_20260102/)*
+
+Consolidated scattered handoff system (6 files, ~1100 lines) into unified `/conductor-handoff` command (2 files, ~330 lines) with auto-detect mode, Beads sync, parallel check, and progress tracking in metadata.json.handoff section.
 
 ## [x] Track: Skill Restructure to Anthropic Standard
 *ID: skill-restructure*
@@ -42,13 +64,13 @@ Full merge of Continuous-Claude-v2 patterns into Maestro. Created 15 specialized
 *ID: orchestrator-improvements_20260101*
 *Archived: [conductor/archive/orchestrator-improvements_20260101/](archive/orchestrator-improvements_20260101/)*
 
-Track threads for bead-to-bead context, per-bead execution loop, AGENTS.md tool preferences, auto-detect parallel routing (≥2 independent beads → orchestrator), enhanced monitoring with bv --robot-triage, lingering beads verification before epic close.
+Track threads for bead-to-bead context, per-bead execution loop, AGENTS.md tool preferences, auto-detect parallel routing (≥2 independent beads → orchestrator), enhanced monitoring, lingering beads verification before epic close.
 
 ## [x] Track: Auto-Orchestration After Filing Beads
 *ID: auto-orchestrate*
 *Archived: [conductor/archive/auto-orchestrate/](archive/auto-orchestrate/)*
 
-Automatic orchestration trigger after `fb` completes. Analyzes beads dependency graph via `bv --robot-triage`, generates Track Assignments, spawns parallel workers with wave re-dispatch, runs `rb` for final review. Fallback to sequential if Agent Mail unavailable.
+Automatic orchestration trigger after `fb` completes. Analyzes beads dependency graph, generates Track Assignments, spawns parallel workers with wave re-dispatch, runs `rb` for final review. HALT if Agent Mail unavailable.
 
 ## [x] Track: Orchestrator Skill
 *ID: orchestrator-skill_20251230*
@@ -60,7 +82,7 @@ Multi-agent parallel execution with autonomous workers. Mode B workers self clai
 *ID: handoff-system_20251229*
 *Archived: [conductor/archive/handoff-system_20251229/](archive/handoff-system_20251229/)*
 
-Replaced LEDGER.md/continuity with git-committed handoffs. Commands: `/create_handoff`, `/resume_handoff`. 6 triggers: design-end, epic-start, epic-end, pre-finish, manual, idle.
+Replaced LEDGER.md/continuity with git-committed handoffs. Command: `/conductor-handoff` (auto-detect, create, resume modes). 6 triggers: design-end, epic-start, epic-end, pre-finish, manual, idle.
 
 ## [x] Track: Research Protocol Integration
 *ID: research-protocol_20251229*

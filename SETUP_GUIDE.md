@@ -6,7 +6,7 @@ AGENT-QUICK-SETUP
 1. Install plugin (use tool's method or git clone)
 2. Apply config block to user's global config (paths table below)
 3. Check `which bd` - if missing, install CLI tools
-4. Verify: skills loaded, bd available, bv optional
+4. Verify: skills loaded, bd available, Agent Mail configured
 5. Report results to user
 -->
 
@@ -90,7 +90,6 @@ When detected, use Conductor commands instead of ad-hoc planning.
 ### Critical Rules
 
 - Use `--json` with `bd` for structured output
-- Use `--robot-*` with `bv` (bare `bv` hangs)
 - Never write production code without failing test first
 - Always commit `.beads/` with code changes
 
@@ -100,25 +99,9 @@ When detected, use Conductor commands instead of ad-hoc planning.
 
 ---
 
-<!-- BEGIN maestro-village -->
-
-### Beads Village
-
-MCP server for multi-agent coordination via `npx beads-village`.
-
-**Session Start:** `bv --robot-status`
-
-**Tools:** `init`, `claim`, `done`, `reserve`, `release`, `msg`, `inbox`, `status`
-
-**Paths:** `.beads-village/`, `.reservations/`, `.mail/`
-
-<!-- END maestro-village -->
-
----
-
 ## CLI Tools Installation
 
-**Beads CLI (bd, bv):**
+**Beads CLI (bd):**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Dicklesworthstone/mcp_agent_mail/main/scripts/install.sh | bash -s -- --dir "$HOME/mcp_agent_mail" --yes
 ```
@@ -133,14 +116,14 @@ sudo apt install jq    # Ubuntu/Debian
 
 ## MCP Server Config
 
-**Beads Village** (multi-agent coordination):
+**Agent Mail** (multi-agent coordination):
 
 ```bash
 # Claude Code
-claude mcp add beads-village -s user -- npx beads-village
+claude mcp add agent-mail -s user -- npx @anthropic-ai/agent-mail
 
 # Amp (~/.config/amp/settings.json)
-{ "mcpServers": { "beads-village": { "command": "npx", "args": ["beads-village"] } } }
+{ "mcpServers": { "agent-mail": { "command": "npx", "args": ["@anthropic-ai/agent-mail"] } } }
 ```
 
 ---
@@ -151,8 +134,7 @@ claude mcp add beads-village -s user -- npx beads-village
 |-------|---------|----------|
 | Plugin loaded | `/skill list` or check skill directory | Skills visible |
 | Beads CLI | `bd --version` | Version output |
-| Village CLI | `bv --version` | Version output |
-| MCP server | `/mcp` (Claude) | beads-village listed |
+| Agent Mail MCP | `/mcp` (Claude) | agent-mail listed |
 
 ---
 
@@ -178,7 +160,7 @@ claude mcp add beads-village -s user -- npx beads-village
 | Skills not loading | Check `/skill list` or skill directory exists |
 | `bd: command not found` | Run CLI tools installation above |
 | Agent ignores workflow | Use trigger explicitly: `tdd`, `ds`, `/conductor-design` |
-| MCP not working | Check `/mcp` shows beads-village |
+| Agent Mail not working | Check `/mcp` shows agent-mail |
 | Handoff not loading | Check `conductor/handoffs/` exists with recent files |
 
 **Skills work without CLI** - methodology and workflows still apply, use `TodoWrite` for task tracking.

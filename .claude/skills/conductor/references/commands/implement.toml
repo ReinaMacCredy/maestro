@@ -162,6 +162,41 @@ CRITICAL: You must validate the success of every tool call. If any tool call fai
           > C) Stop implementation here"
         - If B, change `[!]` to `[~]` and proceed
 
+### 5.5 VALIDATION GATE (Gate 4: validate-plan-execution)
+
+**Trigger:** All tasks in plan.md completed (before Finalize Track).
+
+**PROTOCOL:**
+1. **Load validation gate:** Read `skills/conductor/references/validation/shared/validate-plan-execution.md`
+2. **Execute validation** - verify implementation matches plan:
+   - All plan tasks have corresponding implementation
+   - TDD coverage requirements met
+   - Acceptance criteria verified
+3. **Determine enforcement based on mode:**
+   - SPEED mode → WARN only (log issues, continue)
+   - FULL mode → HALT on failures (block until resolved)
+
+**Validation Output:**
+```
+┌─ VALIDATION: Gate 4 (plan-execution) ─────────────┐
+│ Status: [PASS | WARN | FAIL]                      │
+│                                                   │
+│ Task Completion: [✓ | ⚠ | ✗]                      │
+│ TDD Coverage: [✓ | ⚠ | ✗]                         │
+│ Acceptance Criteria: [✓ | ⚠ | ✗]                  │
+│                                                   │
+│ [Issues found - if any]                           │
+└───────────────────────────────────────────────────┘
+```
+
+**On PASS:** Update `metadata.json.validation.gates_passed` to include "plan-execution", proceed to finalize.
+**On WARN:** Log warning, proceed to finalize.
+**On FAIL (FULL mode):** Block, show issues, offer:
+- **[R] Retry** - Return to fix issues
+- **[S] Skip** - Force continue (requires `--no-validate` flag)
+
+---
+
 6.  **Finalize Track:**
     -   After all tasks in the track's local `plan.md` are completed, you MUST update the track's status in the tracks file.
     -   This requires finding the specific heading for the track (e.g., `## [~] Track: <Description>`) and replacing it with the completed status (e.g., `## [x] Track: <Description>`).

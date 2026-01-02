@@ -3,12 +3,36 @@
 When `/conductor-implement` runs without explicit Track Assignments in plan.md,
 the system can auto-detect opportunities for parallel execution.
 
+## Detection Priority
+
+| Priority | Check | Trigger |
+|----------|-------|---------|
+| 1 | Track Assignments in plan.md | Explicit parallel dispatch |
+| **1.5** | **fileScopes in metadata.json** | **File-scope grouping** |
+| 2 | beads.planTasks with ≥2 independent | Bead dependency analysis |
+
 ## Detection Algorithm
 
-1. **Check metadata.json.beads.planTasks** - Maps plan tasks to bead IDs
-2. **Verify with `bd list --json`** - Runtime source of truth
-3. **Analyze dependency graph** - Find beads with no blockers
-4. **Threshold: ≥2 independent beads** - Triggers auto-orchestration
+1. **Check Track Assignments** - Explicit parallel routing (Priority 1)
+2. **Check metadata.json.beads.fileScopes** - File-scope based routing (Priority 1.5)
+3. **Check metadata.json.beads.planTasks** - Maps plan tasks to bead IDs
+4. **Verify with `bd list --json`** - Runtime source of truth
+5. **Analyze dependency graph** - Find beads with no blockers
+6. **Threshold: ≥2 independent beads** - Triggers auto-orchestration
+
+## Priority 1.5: File Scope Routing
+
+If `metadata.json.beads.fileScopes` exists:
+
+1. **Load file scopes** from metadata.json
+2. **Run parallel-grouping** algorithm (see [parallel-grouping.md](../../conductor/references/parallel-grouping.md))
+3. **Check threshold**: ≥2 non-overlapping groups → PARALLEL_DISPATCH
+4. **Generate Track Assignments** dynamically if not present in plan.md
+
+### Algorithm Reference
+
+- **Extraction**: [file-scope-extractor.md](../../conductor/references/file-scope-extractor.md)
+- **Grouping**: [parallel-grouping.md](../../conductor/references/parallel-grouping.md)
 
 ## Flow
 
@@ -19,35 +43,43 @@ the system can auto-detect opportunities for parallel execution.
                               │
                               ▼
               ┌───────────────────────────────┐
-              │ Check Track Assignments?      │
+              │ Priority 1: Track Assignments?│
               └───────────────────────────────┘
                     │               │
                    YES              NO
                     │               │
                     ▼               ▼
            PARALLEL_DISPATCH   ┌─────────────────────┐
-                               │ Check metadata.json │
-                               │ beads.planTasks?    │
+                               │ Priority 1.5:       │
+                               │ beads.fileScopes?   │
                                └─────────────────────┘
                                     │           │
                                   EXISTS      MISSING
                                     │           │
                                     ▼           ▼
-                         ┌──────────────┐   TIER 1/2
-                         │ Count beads  │   evaluation
-                         │ with no deps │
-                         └──────────────┘
-                               │
-                               ▼
-                    ┌──────────────────────┐
-                    │ Independent ≥ 2?     │
-                    └──────────────────────┘
-                         │           │
-                        YES          NO
-                         │           │
-                         ▼           ▼
-               PARALLEL_DISPATCH   TIER 1/2
-                                   evaluation
+                         ┌──────────────┐   ┌─────────────────────┐
+                         │ Run parallel │   │ Priority 2:         │
+                         │ grouping     │   │ beads.planTasks?    │
+                         └──────────────┘   └─────────────────────┘
+                               │                 │           │
+                               ▼               EXISTS      MISSING
+                    ┌──────────────────────┐     │           │
+                    │ Groups ≥ 2?          │     ▼           ▼
+                    └──────────────────────┘ ┌──────────────┐ TIER 1/2
+                         │           │       │ Count beads  │ evaluation
+                        YES          NO      │ with no deps │
+                         │           │       └──────────────┘
+                         ▼           ▼             │
+               PARALLEL_DISPATCH   TIER 1/2        ▼
+                                   evaluation  ┌──────────────────────┐
+                                               │ Independent ≥ 2?     │
+                                               └──────────────────────┘
+                                                    │           │
+                                                   YES          NO
+                                                    │           │
+                                                    ▼           ▼
+                                          PARALLEL_DISPATCH   TIER 1/2
+                                                              evaluation
 ```
 
 ## Auto-Generated Track Assignments

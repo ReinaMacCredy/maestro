@@ -16,6 +16,7 @@
 | [code-reviewer](review/code-reviewer.md) | review | Code quality and best practices |
 | [pr-reviewer](review/pr-reviewer.md) | review | Pull request review |
 | [spec-reviewer](review/spec-reviewer.md) | review | Specification validation |
+| [oracle](review/oracle.md) | review | 6-dimension design audit at CP4 |
 | [plan-agent](planning/plan-agent.md) | planning | Create implementation plans |
 | [validate-agent](planning/validate-agent.md) | planning | Validate plans and specs |
 | [implement-agent](execution/implement-agent.md) | execution | Execute implementation tasks |
@@ -39,6 +40,7 @@ Agents that validate work quality:
 - **code-reviewer**: Style, patterns, maintainability
 - **pr-reviewer**: Full PR review workflow
 - **spec-reviewer**: Spec completeness and consistency
+- **oracle**: 6-dimension design audit at CP4 (DELIVER)
 
 ### Planning (`planning/`)
 Agents that create and validate plans:

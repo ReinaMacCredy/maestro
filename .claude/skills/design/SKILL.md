@@ -1,6 +1,6 @@
 ---
 name: design
-description: Design Session - collaborative brainstorming to turn ideas into designs using Double Diamond methodology. Use when user types "ds" or wants to explore/design a feature before implementation.
+description: Design Session - collaborative brainstorming to turn ideas into designs using Double Diamond methodology. Use when user types "ds" or wants to explore/design a feature before implementation. MUST load maestro-core skill first for routing.
 ---
 
 # Design Session (ds)
@@ -15,6 +15,8 @@ Turn ideas into fully-formed designs through collaborative dialogue.
 | `/conductor-design` | Start design session (alias) |
 | "design a feature" | Start design session |
 | "let's think through X" | Start design session |
+| "integrate deeply into flow" | Suggest design session |
+| "rethink UX", "this flow feels wrong" | Suggest design session |
 
 ## Quick Reference
 
@@ -35,22 +37,100 @@ Turn ideas into fully-formed designs through collaborative dialogue.
 
 ## Session Flow
 
+0. **Load Core** - Load [maestro-core](../maestro-core/SKILL.md) for routing table and fallback policies
 1. **Initialize** - Load handoffs, CODEMAPS, verify conductor setup → [session-init.md](references/session-init.md)
-2. **Route** - Score complexity (< 4 = SPEED, > 6 = FULL) → [design-routing-heuristics.md](references/design-routing-heuristics.md)
-3. **Execute** - Double Diamond phases with A/P/C checkpoints → [double-diamond.md](references/double-diamond.md)
-4. **Verify** - Research verification at phase transitions → [research-verification.md](references/research-verification.md)
-5. **Handoff** - "Run `/conductor-newtrack` to generate spec, plan, and file beads."
+2. **Research** - Spawn research agents BEFORE DISCOVER (mandatory) → [research-verification.md](references/research-verification.md)
+3. **Route** - Score complexity (< 4 = SPEED, > 6 = FULL) → [design-routing-heuristics.md](references/design-routing-heuristics.md)
+4. **Execute** - Double Diamond phases with A/P/C checkpoints → [double-diamond.md](references/double-diamond.md)
+5. **Validate** - Progressive validation at each checkpoint (CP1-4); **Oracle audit at CP4** → [validation/lifecycle.md](../conductor/references/validation/lifecycle.md)
+6. **Handoff** - Suggest next steps: `cn` (newtrack), `ci` (implement), `fb` (file beads)
 
-## A/P/C Checkpoints
+### Research & Validation Triggers
 
-At end of each phase (FULL mode only):
+| Trigger Point | Research | Validation |
+|---------------|----------|------------|
+| Session start | discover-hook (Locator + Pattern + CODEMAPS) | - |
+| CP1 (DISCOVER) | - | WARN (product alignment) |
+| CP2 (DEFINE) | - | WARN (problem clarity) |
+| CP3 (DEVELOP) | grounding-hook (Locator + Analyzer + Pattern) | WARN (tech-stack) |
+| CP4 (DELIVER) | Full + impact scan + **Oracle audit** | SPEED=WARN, FULL=HALT |
+
+## Adaptive A/P/C System
+
+A/P/C checkpoints now work **adaptively** across the entire workflow, not just in FULL DS mode.
+
+### State Ladder
+
+```
+INLINE → MICRO_APC → NUDGE → DS_FULL → DS_BRANCH → BRANCH_MERGE
+```
+
+| State | Description | Trigger |
+|-------|-------------|---------|
+| **INLINE** | Normal flow (conductor/beads) | Default |
+| **MICRO_APC** | Lightweight checkpoint at boundaries | End of spec/plan section |
+| **NUDGE** | Suggest upgrade to DS | 3+ design iterations |
+| **DS_FULL** | Full Double Diamond with A/P/C | `ds` command or upgrade |
+| **DS_BRANCH** | DS attached to design branch | Design rethink in track |
+| **BRANCH_MERGE** | Apply branch changes | Branch complete |
+
+### Micro A/P/C (Outside DS)
+
+At natural checkpoint boundaries (end of spec section, plan step, etc.):
+
+```
+Design checkpoint:
+[A] Advanced – deeper exploration (upgrades to DS)
+[P] Party – multi-perspective feedback (upgrades to DS)
+[C] Continue inline
+```
+
+### Design Mode Nudge
+
+After 3+ iterations on the same design topic without resolution:
+
+```
+We've iterated on this flow several times.
+Want to switch into a structured Design Session with A/P/C checkpoints?
+
+[Start Design Session] (recommended)
+[Not now]
+```
+
+### Branch-aware DS
+
+When in implementation (`ci`) and design needs major rethink:
+
+```
+This change diverges from the original design.
+[A] Explore alternatives in a design branch
+[P] Get opinions first
+[C] Keep current plan
+```
+
+Branch merge options at completion:
+- **[M1]** Replace current design/plan
+- **[M2]** Create new implementation track
+- **[M3]** Keep as documented alternative
+
+### A/P/C in DS (FULL mode)
+
+At end of each phase:
 
 - **[A] Advanced** - Phase-specific deep dive
 - **[P] Party** - Multi-agent feedback (BMAD v6) → [bmad/](references/bmad/)
 - **[C] Continue** - Proceed to next phase
 - **[↩ Back]** - Return to previous phase
 
-See [apc-checkpoints.md](references/apc-checkpoints.md) for details.
+### Priority Rules
+
+1. **Explicit commands** (`ds`) always win
+2. **Active DS/Branch** blocks passive triggers
+3. **Branch safety** preferred when in implementation
+4. **Micro A/P/C** at checkpoint boundaries
+5. **Nudge** after 3+ iterations
+
+See [apc-checkpoints.md](references/apc-checkpoints.md) and [adaptive-apc-system.ts](references/adaptive-apc-system.ts) for implementation details.
 
 ## Mode Comparison
 
@@ -68,8 +148,21 @@ See [apc-checkpoints.md](references/apc-checkpoints.md) for details.
 - ❌ Asking multiple questions at once
 - ❌ Over-engineering simple features (use SPEED mode)
 
+## Next Steps (after design.md created)
+
+| Command | Description |
+|---------|-------------|
+| `cn` | `/conductor-newtrack` - Create spec + plan from design |
+| `ci` | `/conductor-implement` - Execute track |
+| `fb` | File beads from plan |
+
+See [maestro-core](../maestro-core/SKILL.md) for full routing table.
+
+## Dependencies
+
+**Auto-loads:** [maestro-core](../maestro-core/SKILL.md) for routing and fallback policies.
+
 ## Related
 
 - [conductor](../conductor/SKILL.md) - Track creation and implementation
 - [beads](../beads/SKILL.md) - Issue tracking after design
-- [maestro-core](../maestro-core/SKILL.md) - Routing policies in AGENTS.md

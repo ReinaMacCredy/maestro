@@ -1,6 +1,6 @@
 ---
 name: orchestrator
-description: Multi-agent parallel execution with autonomous workers. Use when plan.md has Track Assignments section or user triggers /conductor-orchestrate, "run parallel", "spawn workers".
+description: Multi-agent parallel execution with autonomous workers. Use when plan.md has Track Assignments section or user triggers /conductor-orchestrate, "run parallel", "spawn workers". MUST load maestro-core skill first for routing.
 ---
 
 # Orchestrator - Multi-Agent Parallel Execution
@@ -9,6 +9,7 @@ description: Multi-agent parallel execution with autonomous workers. Use when pl
 
 ## Core Principles
 
+- **Load core first** - Load [maestro-core](../maestro-core/SKILL.md) for routing table and fallback policies
 - **Pre-register workers** before spawning (Agent Mail validates recipients)
 - **Workers own their beads** - can `bd claim/close` directly (unlike sequential mode)
 - **File reservations prevent conflicts** - reserve before edit, release on complete
@@ -20,8 +21,24 @@ description: Multi-agent parallel execution with autonomous workers. Use when pl
 | Trigger | Condition |
 |---------|-----------|
 | Auto-routed | `/conductor-implement` when plan has Track Assignments |
+| File-scope | `/conductor-implement` when ≥2 non-overlapping file groups detected |
 | Direct | `/conductor-orchestrate` or `co` |
 | Phrase | "run parallel", "spawn workers", "dispatch agents" |
+
+## Confirmation Prompt
+
+Before spawning parallel workers, orchestrator displays a confirmation:
+
+```
+📊 Parallel execution detected:
+- Track A: 2 tasks (src/api/)
+- Track B: 2 tasks (lib/)
+- Track C: 1 task (schemas/)
+
+Run parallel? [Y/n]:
+```
+
+See [implement.md Phase 2b](../conductor/references/workflows/implement.md) for full confirmation flow.
 
 ## Quick Reference
 
@@ -32,7 +49,7 @@ description: Multi-agent parallel execution with autonomous workers. Use when pl
 | Spawn workers | `Task()` for each track |
 | Monitor | `fetch_inbox`, `search_messages` |
 | Resolve blockers | `reply_message` |
-| Complete | Verify via `bv`, send summary, `bd close epic` |
+| Complete | Send summary, `bd close epic` |
 | Track threads | `summarize_thread(thread_id=TRACK_THREAD)` |
 | Auto-routing | Auto-detect parallel via `metadata.json.beads` |
 
@@ -49,6 +66,33 @@ description: Multi-agent parallel execution with autonomous workers. Use when pl
 7. **Complete** - Send summary, close epic, `rb` review
 
 See [references/workflow.md](references/workflow.md) for full protocol.
+
+## Worker 4-Step Protocol
+
+All workers MUST follow this exact sequence:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  STEP 1: INITIALIZE  - macro_start_session() FIRST         │
+│  STEP 2: EXECUTE     - claim beads, do work, close beads   │
+│  STEP 3: REPORT      - send_message() to orchestrator      │
+│  STEP 4: CLEANUP     - release_file_reservations()         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+| Step | Tool | Required |
+|------|------|----------|
+| 1 | `macro_start_session()` | ✅ FIRST |
+| 2 | `bd update`, `bd close` | ✅ |
+| 3 | `send_message()` | ✅ LAST |
+| 4 | `release_file_reservations()` | ✅ |
+
+**Critical rules:**
+- ❌ Never start work before `macro_start_session()`
+- ❌ Never return without `send_message()` to orchestrator
+- ❌ Never touch files outside assigned scope
+
+See [references/worker-prompt.md](references/worker-prompt.md) for full template.
 
 ## Agent Routing
 
@@ -71,7 +115,18 @@ See [references/intent-routing.md](references/intent-routing.md) for mappings.
 | Ignore file reservation conflicts | Wait or resolve before proceeding |
 | Use orchestration for simple tasks | Use sequential `/conductor-implement` |
 
-## References
+## Lazy References
+
+Load references only when needed:
+
+| Phase | Trigger Condition | Reference |
+|-------|-------------------|-----------|
+| Always | On skill load | SKILL.md (this file) |
+| Phase 3 (Initialize) | Setting up Agent Mail, project registration | [agent-mail.md](references/agent-mail.md) |
+| Phase 4 (Spawn) | Before dispatching worker agents | [worker-prompt.md](references/worker-prompt.md) |
+| Phase 6 (Handle Issues) | Cross-track dependencies, blocker resolution | [agent-coordination.md](references/agent-coordination.md) |
+
+### All References
 
 | Topic | File |
 |-------|------|

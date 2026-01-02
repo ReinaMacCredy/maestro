@@ -47,12 +47,12 @@ Before ANY other action, initialize your session with Agent Mail using `macro_st
 
 ```python
 # This MUST be your FIRST action - before reading files, before claiming beads
-# NOTE: Orchestrator has ALREADY registered you - this just starts your session
+# macro_start_session handles SELF-REGISTRATION (creates/updates agent profile)
 result = macro_start_session(
   human_key="{PROJECT_PATH}",
   program="amp",
   model="{MODEL}",
-  agent_name="{AGENT_NAME}",  # Already registered by orchestrator
+  agent_name="{AGENT_NAME}",  # Optional - if omitted, auto-generates unique name
   file_reservation_paths=["{FILE_SCOPE}"],
   file_reservation_ttl_seconds=3600,
   task_description="Worker for Track {TRACK_N}: {TRACK_DESCRIPTION}",
@@ -62,11 +62,24 @@ result = macro_start_session(
 # If session init fails, HALT immediately
 if not result.success:
     return {"status": "FAILED", "reason": "Agent Mail session init failed"}
+
+# DISCOVER EPIC THREAD: Use fetch_inbox (already returned in result.inbox) to find epic thread
+# The orchestrator sends an initial message to the epic thread that workers can locate
+inbox = result.inbox  # Inbox already fetched by macro_start_session
+epic_thread = None
+for msg in inbox:
+    if "{EPIC_ID}" in msg.get("thread_id", "") or "[EPIC]" in msg.get("subject", ""):
+        epic_thread = msg.get("thread_id")
+        break
+
+# Alternative: Use fetch_inbox directly if you need more messages
+# additional_msgs = fetch_inbox(project_key="{PROJECT_PATH}", agent_name="{AGENT_NAME}", limit=20)
 ```
 
 **Why this matters:** 
-- Orchestrator pre-registers all workers before spawning (see workflow.md Phase 2)
-- `macro_start_session` updates your profile, reserves files, and fetches inbox
+- `macro_start_session` handles self-registration (creates/updates agent profile)
+- Workers use the inbox (returned in `result.inbox`) to discover the epic thread
+- The orchestrator sends initial messages to the epic thread that workers can locate
 - Without this, you cannot send messages or see dependency notifications
 
 ---
@@ -252,14 +265,20 @@ Then continue to Step 3 (report) with status `PARTIAL` or `FAILED`.
 
 ---
 
-## Fallback Mode
+## Agent Mail Required (No Fallback)
 
 If Agent Mail is unavailable (macro_start_session fails):
 
-1. Log warning: "Agent Mail unavailable - operating in fallback mode"
-2. Skip file reservations (work carefully)
-3. Execute beads via bd CLI
-4. Return summary via Task return value (Step 3 becomes return value)
+```python
+# ❌ Agent Mail unavailable - HALT immediately
+print("❌ HALT: Cannot initialize session - Agent Mail unavailable")
+print("   Worker cannot proceed without:")
+print("   - File reservations (risk of conflicts)")
+print("   - Message capability (cannot report progress/blockers)")
+return {"status": "HALTED", "reason": "Agent Mail unavailable"}
+```
+
+**Do NOT fall back to local execution.** Parallel workers without Agent Mail coordination will cause file conflicts and cannot report status.
 
 ---
 

@@ -8,7 +8,7 @@ Conductor commands automatically manage beads lifecycle via a **facade pattern**
 
 | Integration Point | Conductor Command | Beads Action |
 |-------------------|-------------------|--------------|
-| Preflight | All commands | Mode detect (SA/MA), validate bd |
+| Preflight | All commands | Validate bd availability |
 | Track Init | `/conductor-newtrack` | Create epic + issues from plan.md |
 | Claim | `/conductor-implement` | `bd update --status in_progress` |
 | Close | `/conductor-implement` | `bd close --reason completed` |
@@ -17,15 +17,6 @@ Conductor commands automatically manage beads lifecycle via a **facade pattern**
 | Cleanup | `/conductor-finish` | Remove oldest when >150 closed |
 
 **Zero manual bd commands** in the happy path - Conductor handles everything.
-
-## Dual-Mode Architecture
-
-| Mode | Description | Used When |
-|------|-------------|-----------|
-| **SA** (Single-Agent) | Direct `bd` CLI calls | Default, one agent |
-| **MA** (Multi-Agent) | Village MCP server | Parallel agents coordinating |
-
-Mode is detected at session start and locked for the session.
 
 ## Essential Commands
 
@@ -97,7 +88,6 @@ git push                          # Push to remote
 Usage events are logged to `.conductor/metrics.jsonl`:
 
 ```jsonl
-{"event": "ma_attempt", "mode": "MA", "timestamp": "2025-12-25T10:00:00Z"}
 {"event": "tdd_cycle", "taskId": "bd-42", "phase": "GREEN", "duration": 180, "timestamp": "..."}
 {"event": "manual_bd", "command": "bd show", "timestamp": "..."}
 ```

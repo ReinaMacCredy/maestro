@@ -5,14 +5,15 @@ description: >
   persistent memory that survives conversation compaction. Use when work spans multiple sessions, has
   complex dependencies, or needs persistent context across compaction cycles. Trigger with phrases like
   "create task for", "what's ready to work on", "show task", "track this work", "what's blocking", or
-  "update status".
+  "update status". MUST load maestro-core skill first for routing.
 metadata:
   version: "2.2.0"
 ---
 
 ## Prerequisites
 
-Routing and fallback policies are defined in [AGENTS.md](../../AGENTS.md).
+- **Load maestro-core first** - [maestro-core](../maestro-core/SKILL.md) for routing table and fallback policies
+- Routing and fallback policies are defined in [AGENTS.md](../../AGENTS.md).
 
 # Beads - Persistent Task Memory for AI Agents
 

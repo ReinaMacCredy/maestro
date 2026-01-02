@@ -78,18 +78,22 @@ Follow this collaborative dialogue process:
 - Ask after each section: "Does this look right so far?"
 - Cover: architecture, components, data flow, error handling, testing
 
-## 6. Tiered Research Verification (Automatic)
+## 6. Research & Validation Triggers
 
-Research verification runs **automatically** at phase transitions with tiered intensity.
+Research and validation run at **specific trigger points**, not at every phase transition.
 
-### Research Verification Matrix
+### Trigger Points
 
-| Phase Transition | Tier | Enforcement |
-|------------------|------|-------------|
-| DISCOVER→DEFINE | Mini | Advisory ⚠️ |
-| DEFINE→DEVELOP | Mini | Advisory ⚠️ |
-| DEVELOP→DELIVER | Standard | Gatekeeper 🚫 |
-| DELIVER→Complete | Full + Impact Scan | Mandatory 🔒 |
+| Trigger | Research | Validation |
+|---------|----------|------------|
+| Session start | discover-hook (Locator + Pattern + CODEMAPS) | - |
+| CP1 (DISCOVER) | - | WARN (product alignment) |
+| CP2 (DEFINE) | - | WARN (problem clarity) |
+| CP3 (DEVELOP) | grounding-hook (Locator + Analyzer + Pattern) | WARN (tech-stack) |
+| CP4 (DELIVER) | Full + impact scan | SPEED=WARN, FULL=HALT |
+
+> **Note:** Research does NOT run at DISCOVER→DEFINE or DEFINE→DEVELOP transitions.
+> Validation runs at every checkpoint (CP1-4), research only at session start, CP3, and CP4.
 
 ### Full Research Verification at DELIVER (Required)
 

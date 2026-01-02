@@ -26,9 +26,8 @@ Contains reusable learnings from completed tracks.
 - `bd compact --apply --id <id> --summary "<text>"` - Apply AI summary to bead
 - `bd count --status closed --json` - Count closed beads for cleanup threshold
 - `bd cleanup --older-than 0 --limit <n> --force` - Remove oldest closed beads
-- `bd update <id> --status in_progress` - Claim task in SA mode
+- `bd update <id> --status in_progress` - Claim task
 - `bd close <id> --reason completed|skipped|blocked` - Close with explicit reason
-- `bv --robot-status` - Check Village MCP status (use --robot-* flags to avoid TUI hang)
 - `/conductor-implement` - Execute with TDD checkpoints by default (use `--no-tdd` to disable)
 - `wc -l <file>.csv` - Verify CSV row counts match upstream when syncing data files
 - `curl -s https://raw.githubusercontent.com/.../file.csv` - Sync CSV data directly from upstream repo
@@ -48,12 +47,11 @@ Contains reusable learnings from completed tracks.
 - `/doc-sync --force` - Apply all doc changes without prompts
 - `sed -n '/^---$/,/^---$/p' "$FILE" | grep '^field:' | cut -d' ' -f2` - Extract YAML frontmatter field value
 - `bd close id1 id2 id3 --reason completed` - Close multiple beads at once
-- `/create_handoff` - Create handoff file manually
-- `/resume_handoff` - Load most recent handoff for track
+- `/conductor-handoff` - Unified handoff command with auto-detect (replaces /create_handoff and /resume_handoff)
+- `/conductor-handoff create` - Force CREATE mode with Beads sync and progress tracking
+- `/conductor-handoff resume` - Force RESUME mode with Beads context loading
 - `ls skills/conductor/references/` - Verify reference structure after migration
-- `/conductor-orchestrate` - Spawn parallel workers for track execution (Mode B workers)
-- `bv --robot-triage --graph-root <epic-id>` - Prepare beads for orchestration ("dọn cỗ")
-- `bv --robot-triage --graph-root <epic-id> --json` - Get JSON output for auto-orchestration graph analysis
+- `/conductor-orchestrate` - Spawn parallel workers for track execution
 - `bd list --json | jq '. | length'` - Count beads reliably (returns array, not object)
 - `grep -l "send_message" skills/orchestrator/agents/**/*.md | wc -l` - Verify all agents have mandatory Agent Mail save
 - `mcp__mcp_agent_mail__register_agent` - Register orchestrator identity before spawning workers
@@ -68,6 +66,13 @@ Contains reusable learnings from completed tracks.
 - `bd list --parent=<epic-id> --status=open --json | jq 'length'` - Check for lingering beads before epic close
 - `summarize_thread(thread_id=TRACK_THREAD)` - Read track context before each bead (worker protocol)
 - `send_message(to=[self], thread_id=TRACK_THREAD)` - Self-message learnings for next bead (track thread pattern)
+- `rg -i "single.?agent|multi.?agent" --type md -l | grep -v CHANGELOG | grep -v archive` - Search for SA/MA references during cleanup
+- `rg -i "village|\.beads-village|bv --robot" --type md -l | grep -v archive` - Search for Village references during cleanup
+- `macro_start_session()` - Single MCP call for orchestrator/worker initialization (replaces ensure_project + register_agent)
+- `bd list --parent <epic-id> --json | jq '[.[] | select(.status == "open")]'` - Filter beads by status
+- `bd dep tree <epic-id>` - View dependency tree for epic
+- `bd close <id1> --reason completed && bd update <id2> --status in_progress` - Chain close and claim in one command
+- `oracle(task="6-dimension design audit", files=[...])` - Amp's built-in oracle tool for design review
 
 ## Gotchas
 
@@ -88,14 +93,16 @@ Contains reusable learnings from completed tracks.
 - CODEMAPS loaded at design session start for codebase context
 - docs: and chore: commits don't bump version (changelog only)
 - Skill versions in SKILL.md frontmatter are manually updated (not automated)
-- HALT vs Degrade: `bd` unavailable = HALT; Village unavailable in MA = degrade to SA
+- HALT vs Degrade: `bd` unavailable = HALT; Agent Mail unavailable = HALT (no fallback since v5.0)
 - Session lock staleness: heartbeat protocol (5 min updates); stale = >10 min without heartbeat
 - Subagent bd access: read-only (show, ready, list); writes return to main agent
 - Idempotency: `bd update` and `bd close` are idempotent; `bd create` is NOT
 - planTasks mapping: bidirectional - keep planTasks and beadToTask in sync
 - Claude Code hooks must exit 0 even on error (try/catch + graceful exit) to avoid crashing Claude
 - Handoffs in conductor/handoffs/<track>/ are git-committed (shareable), archived on /conductor-finish
-- Stale handoffs (>7 days) trigger warning on /resume_handoff
+- Stale handoffs (>7 days) trigger warning on /conductor-handoff resume
+- Auto-detect mode uses 7-day threshold: first message + recent handoff = RESUME, else CREATE
+- Handoff Beads sync saves context to bd notes for compaction-proof resumability
 - FTS5 snippet function: `snippet(handoffs_fts, 2, '>>>', '<<<', '...', 50)` for match highlighting
 - artifact-cleanup.py parses dates from filenames (YYYY-MM-DD-HH-MM-trigger.md), not frontmatter
 - Concurrent sessions on same codebase may conflict - documented limitation (last writer wins)
@@ -122,7 +129,7 @@ Contains reusable learnings from completed tracks.
 - Continuity skill is in marketplace plugin, not local skills/ - can't add direct local dependency checks
 - Session start detection without hooks requires implicit trigger (workflow command loading on first message)
 - Ad-hoc queries (not triggering `ds`, `/conductor-implement`, etc.) do NOT load handoff history - intentional low-overhead behavior for casual chats
-- Agent Mail MCP Failure: If Agent Mail unavailable, graceful fallback to sequential `/conductor-implement`
+- Agent Mail MCP Failure: HALT - Agent Mail required for orchestrator coordination (no fallback since v5.0)
 - Runtime Testing: Integration tests (Agent Mail, worker spawn) require live MCP - skip with `--reason skipped`
 - Worker Autonomy: Orchestrator workers CAN self claim/close beads (differs from standard subagent rules)
 - Auto-orchestration: fb Phase 6 triggers orchestration automatically after beads are filed
@@ -144,6 +151,17 @@ Contains reusable learnings from completed tracks.
 - Track threads are ephemeral (scoped to single epic) - don't expect cross-epic persistence
 - Auto-detect routing requires `metadata.json.beads.planTasks` populated by fb - verify before routing
 - Lingering beads can remain after all epic work done - always verify before closing epic
+- Epic as blocker shows high dependency count: Even when tasks are Wave 1 ready, `dependency_type: blocks` inflates count - verify tasks not blocked by *other* tasks
+- File scope extraction: Tasks with same files → sequential; different files → parallel candidates
+- Orchestrator pre-registration is wasteful: Workers should self-register via `macro_start_session` in Step 1
+- EPIC START message must go to orchestrator itself (`to=[ORCHESTRATOR_NAME]`) not workers who don't exist yet
+- Preflight triage runs even when beads are already filed - check `metadata.beads.status == "complete"` first
+- Handoff load runs for fresh sessions - skip when `conductor/handoffs/<track>/` is empty
+- Track Assignments parsing redundant when already present - use `parse_track_assignments_table()` directly
+- Confirmation prompt re-analyzes file scopes - should use pre-parsed track data
+- Skill files live at `.claude/skills/` not `skills/` - verification scripts must use correct paths
+- Idempotent Oracle updates: When `## Oracle Audit` section exists, find start marker → find next `##` → replace entire section
+- Platform detection for Oracle: Check for oracle tool availability before deciding dispatch method (Amp vs Task)
 
 ## Patterns
 
@@ -160,7 +178,7 @@ Contains reusable learnings from completed tracks.
 - **Unified Track Creation:** /conductor-newtrack includes spec, plan, beads filing, AND review in one flow
 - **Conventional Commits Versioning:** feat: → minor, fix: → patch, feat!: → major
 - **COMPLEXITY_EXPLAINER:** Score-based design routing (SPEED <4, ASK 4-6, FULL >6)
-- **Execution Routing:** TIER 1 (weighted score) + TIER 2 (compound conditions) → SINGLE_AGENT or PARALLEL_DISPATCH
+- **Execution Routing:** Always FULL mode via orchestrator (even 1 task spawns 1 worker for consistency)
 - **RECALL/REMEMBER:** Session lifecycle with anchored format for cross-session context
 - **Degradation Signals:** tool_repeat, backtrack, quality_drop, contradiction → 2+ signals triggers compression
 - **Anchored Format:** [PRESERVE] markers for Intent and Constraints sections that survive compression
@@ -175,7 +193,7 @@ Contains reusable learnings from completed tracks.
 - **Workflow-Aware Continuity:** Handoffs tied to entry points (`ds`, `/conductor-implement`, `/conductor-finish`) not generic session events
 - **6 Handoff Triggers:** design-end, epic-start, epic-end, pre-finish, manual, idle - each fires at specific integration points
 - **Hybrid Handoff Files:** Individual files per handoff (`YYYY-MM-DD_HH-MM-SS-mmm_<track>_<trigger>.md`) + index.md for consolidated log
-- **5 Validation Gates:** design (DELIVER) → spec (newtrack) → plan-structure (newtrack) → plan-execution (TDD) → completion (finish)
+- **5 Validation Gates:** design (CP1-4 progressive; CP4 full gate) → spec (newtrack) → plan-structure (newtrack) → plan-execution (TDD) → completion (finish)
 - **Gate Behavior Matrix:** SPEED mode = all WARN; FULL mode = design/plan-execution/completion HALT + retry (max 2)
 - **Validation State in metadata.json:** Track gates_passed, current_gate, retries, last_failure in metadata.json.validation
 - **Humanlayer Format:** Gates use Initial Setup → 3-step Validation Process → Guidelines → Checklist → Handoff Integration
@@ -197,3 +215,10 @@ Contains reusable learnings from completed tracks.
 - **Track Thread Pattern:** Workers use `track:{AGENT_NAME}:{EPIC_ID}` for bead-to-bead context passing
 - **Per-Bead Loop Protocol:** START (register, read thread, reserve, claim) → WORK → COMPLETE (close, save context, release) → NEXT
 - **Auto-Detect Parallel Routing:** Check planTasks independence → if ≥2 independent beads → route to orchestrator
+- **9-Step Handoff CREATE:** Detect → Parallel Check → Metadata → Secrets → Agent Mail → Beads Sync → Markdown → metadata.json → Activity
+- **9-Step Handoff RESUME:** Parse → Agent Mail → File Discovery → Load → Beads Context → Validate → Present → Todos → Activity
+- **Hybrid Handoff Storage:** Agent Mail for search (FTS5), markdown for git history
+- **Two-Stage File Scope Analysis:** Stage 1 at `/conductor-newtrack` (suggest parallelism), Stage 2 at `/conductor-implement` (confirm with Y/n prompt)
+- **Worker 4-Step Protocol:** REGISTER (macro_start_session) → EXECUTE (claim/work/close) → REPORT (send_message) → CLEANUP (release_file_reservations)
+- **Lazy References:** Trigger-based reference loading - SKILL.md always loaded, phase-specific references (agent-mail.md, worker-prompt.md) loaded on demand
+- **Triage Cache:** Store bead triage results in `metadata.beads.triageCache` with TTL to skip redundant `bv --robot-triage` calls

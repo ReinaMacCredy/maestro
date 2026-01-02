@@ -11,32 +11,47 @@
 - Plan.md with Track Assignments section
 - Beads filed from plan (`fb` command)
 - `bd` CLI available
+- Agent Mail available (verified via `health_check`)
 
 ## Preparation Steps
 
-### 1. Triage Beads
+### 1. Initialize Agent Mail
 
-Use `bv --robot-triage` to assess bead readiness:
+Before any orchestration, verify Agent Mail is available:
+
+```python
+result = health_check(reason="Orchestrator preflight - preparation phase")
+if not result.healthy:
+    print("❌ HALT: Agent Mail unavailable - cannot orchestrate")
+    return {"status": "HALTED", "reason": "Agent Mail unavailable"}
+
+ensure_project(human_key=PROJECT_PATH)
+```
+
+### 2. Triage Beads
+
+Use `bd ready` to assess bead readiness:
 
 ```bash
-bv --robot-triage --graph-root <epic-id> --json
+bd ready --json
 ```
 
 Output structure:
 ```json
 {
-  "quick_ref": {
-    "open_count": 26,
-    "blocked_count": 5,
-    "ready_count": 21
-  },
-  "beads": [
+  "ready": [
     {
       "id": "my-workflow:3-3cmw.1",
       "title": "Task 1.1.1",
       "status": "open",
-      "blocked_by": [],
-      "ready": true
+      "blocked_by": []
+    }
+  ],
+  "blocked": [
+    {
+      "id": "my-workflow:3-3cmw.5",
+      "title": "Task 1.2.1",
+      "blocked_by": ["my-workflow:3-3cmw.1"]
     }
   ]
 }
@@ -66,7 +81,20 @@ If dependencies missing, add them:
 bd dep add <child-bead> <parent-bead>
 ```
 
-### 4. Assign Beads to Workers
+### 4. Register Workers with Agent Mail
+
+Before spawning, pre-register all workers:
+
+```python
+for track in tracks:
+    register_agent(
+        project_key=PROJECT_PATH,
+        program="amp",
+        model=MODEL,
+        name=track.agent_name,
+        task_description=f"Worker for Track {track.number}: {track.description}"
+    )
+```
 
 Plan.md Track Assignments specifies worker assignments:
 
@@ -77,7 +105,23 @@ Plan.md Track Assignments specifies worker assignments:
 
 Orchestrator parses this table to build worker assignments.
 
-### 5. Validate Ready State
+### 5. Reserve Files for Workers
+
+Set up file reservations to prevent conflicts:
+
+```python
+for track in tracks:
+    file_reservation_paths(
+        project_key=PROJECT_PATH,
+        agent_name=track.agent_name,
+        paths=[track.file_scope],
+        ttl_seconds=7200,
+        exclusive=True,
+        reason=f"Track {track.number}: {track.description}"
+    )
+```
+
+### 6. Validate Ready State
 
 Before spawning workers, verify:
 
@@ -87,7 +131,7 @@ bd list --parent=<epic-id> --json | jq 'length'
 # Expected: matches plan task count
 
 # At least one bead per track is ready
-bv --robot-triage --graph-root <epic-id> --json | jq '.beads[] | select(.ready) | .id'
+bd ready --json | jq '.ready[].id'
 ```
 
 ## Preparation Output
@@ -143,5 +187,7 @@ Worker will wait for dependency notification via Agent Mail.
 
 1. **File beads before orchestration** - Run `fb` before `/conductor-orchestrate`
 2. **Wire dependencies explicitly** - Cross-track deps need `bd dep add`
-3. **Use --robot-triage** - Never use bare `bv` (launches TUI, hangs agents)
-4. **Check readiness** - At least one bead per track should be ready initially
+3. **Use `bd ready --json`** - For structured bead status output
+4. **Pre-register workers** - Use `register_agent` before spawning
+5. **Reserve files early** - Use `file_reservation_paths` to prevent conflicts
+6. **Check readiness** - At least one bead per track should be ready initially

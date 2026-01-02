@@ -157,6 +157,83 @@ This workflow uses consolidated state in `metadata.json`:
    └─────────────────────────────────────────────────┘
    ```
 
+### Phase 4.5: File Scope Analysis
+
+After plan is confirmed, analyze tasks for parallel execution potential.
+
+1. **Extract File Scopes**
+   
+   Call [file-scope-extractor](../file-scope-extractor.md) on plan tasks:
+   
+   ```python
+   for task in plan_tasks:
+       file_scopes[task.id] = extract_files(task)
+   ```
+   
+   - Parse explicit file declarations (`File: ...`)
+   - Extract backtick-wrapped paths
+   - Infer from task titles where possible
+
+2. **Group by File Overlap**
+   
+   Call [parallel-grouping](../parallel-grouping.md) algorithm:
+   
+   ```python
+   tracks = group_by_file_scope(tasks_with_scopes)
+   ```
+   
+   - Tasks touching same files → same track (sequential)
+   - Tasks touching different files → separate tracks (parallel)
+
+3. **Check Parallel Threshold**
+   
+   | Groups Found | Action |
+   |--------------|--------|
+   | 0-1 | Skip (sequential execution) |
+   | ≥2 | Generate Track Assignments |
+
+4. **Generate Track Assignments** (if ≥2 groups)
+   
+   Append section to plan.md:
+   
+   ```markdown
+   ## Track Assignments
+   
+   | Track | Beads | Depends On |
+   |-------|-------|------------|
+   | A | 1.1, 1.2 | - |
+   | B | 2.1, 2.2 | - |
+   | C | 3.1 | 1.2 |
+   ```
+
+5. **Update metadata.json**
+   
+   ```json
+   {
+     "beads": {
+       "fileScopes": {
+         "1.1": ["src/api/auth.ts"],
+         "2.1": ["lib/utils/**"]
+       }
+     },
+     "orchestrated": true
+   }
+   ```
+   
+   - Add `fileScopes` to beads section
+   - Set `orchestrated: true` to signal parallel mode
+
+6. **Display Confirmation**
+   
+   ```
+   📊 Parallel execution detected:
+   - Track A: 2 tasks (src/api/)
+   - Track B: 2 tasks (lib/)
+   - Track C: 1 task (schemas/)
+   
+   Track Assignments added to plan.md.
+   ```
+
 ### Phase 5: Create Artifacts
 
 1. **Generate Track ID**
@@ -434,12 +511,12 @@ Task(
    Track: <track_id>
    Spec: conductor/tracks/<track_id>/spec.md
    Plan: conductor/tracks/<track_id>/plan.md
-   Beads: X epics, Y issues filed and reviewed
+   Beads: X epics, Y issues filed
 
    Ready issues: Z
    First task: <first-ready-issue-id> - <title>
 
-   Next: `Start epic <first-epic-id>` or `/conductor-implement <track_id>`
+   Next: `rb` to review beads, or `/conductor-implement <track_id>` to start
    ```
 
    **If beads were skipped:**

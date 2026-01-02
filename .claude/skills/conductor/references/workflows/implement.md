@@ -34,7 +34,8 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
 1. **Execute Preflight**
    - Run [preflight-beads.md](../preflight-beads.md) workflow
    - Checks `bd` availability (HALT if unavailable)
-   - Detects mode (SA or MA) and locks for session
+   - Checks Agent Mail availability (HALT if unavailable)
+   - Registers agent with Agent Mail
    - Creates session state file
    - Recovers pending operations from crashed sessions
 
@@ -44,45 +45,73 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
 
 3. **Output:**
    ```
-   Preflight: bd v0.5.2 ✓, Village ✗ → SA mode
+   Preflight: bd v0.5.2 ✓, Agent Mail ✓
    Session: Created state file for T-abc123
    Track beads: 12 issues, 3 ready
    ```
 
 ### Phase 0.5: Handoff Load
 
-**Purpose:** Load prior session context via handoff system.
+**Purpose:** Load prior session context via unified handoff system.
+
+Reference: [workflows/handoff.md](handoff.md) for full workflow.
+
+0. **Check for Existing Handoffs**
+   
+   ```bash
+   handoff_dir="conductor/handoffs/${track_id}/"
+   
+   # Skip handoff load if directory missing or empty
+   if [[ ! -d "$handoff_dir" ]] || [[ -z "$(ls -A "$handoff_dir" 2>/dev/null)" ]]; then
+       echo "ℹ️ No prior handoff - fresh session"
+       # Skip directly to Phase 1
+       return
+   fi
+   ```
+   
+   **Fresh Session Conditions:**
+   - `conductor/handoffs/<track>/` directory does not exist
+   - Directory exists but contains no files
+   
+   When either condition is true, skip handoff load entirely and proceed to Phase 1.
 
 1. **Load Most Recent Handoff**
-   - Run `/resume_handoff` workflow internally
-   - Check `conductor/handoffs/<track_id>/` for latest handoff
+   - Run `/conductor-handoff resume` workflow internally
+   - Try Agent Mail first (`summarize_thread`), fall back to files
    - If found: Display context summary
    - If not found: Fresh session (no prior context)
 
-2. **Create Epic-Start Handoff**
+2. **Load Beads Context**
    
-   Before starting each epic, create handoff with trigger `epic-start`:
+   ```bash
+   epic_id=$(jq -r '.beads.epicId' "conductor/tracks/${track_id}/metadata.json")
    
+   # Get progress
+   completed=$(bd list --parent=$epic_id --status=closed --json | jq 'length')
+   total=$(bd list --parent=$epic_id --json | jq 'length')
+   progress=$((completed * 100 / total))
+   
+   # Get ready tasks
+   ready=$(bd ready --json | jq -r '.[] | select(.parent == "'$epic_id'") | .title')
    ```
-   handoff_dir = conductor/handoffs/<track_id>/
-   
-   1. Create handoff file: YYYY-MM-DD_HH-MM-SS-mmm_<track>_<epic-id>_epic-start.md
-   2. Include:
-      - Epic scope from plan.md
-      - Dependencies from beads
-      - Prior context loaded
-      - Expected deliverables
-   3. Append to index.md
-   4. Touch conductor/.last_activity
-   ```
-   
-   See [../handoff/triggers.md](../handoff/triggers.md) for trigger details.
 
-3. **Output:**
+3. **Display Progress**
+   
    ```
-   Handoff: Loaded prior context (3 decisions, 5 modified files)
-   Session: Binding to track auth_20251227
+   ┌─ HANDOFF RESUME ─────────────────────────┐
+   │ Track: auth-system_20251229              │
+   │ Progress: 45% (5/12 tasks)               │
+   │ Ready: E2-login-endpoint                 │
+   │ Last handoff: 2h ago (epic-end)          │
+   │ Loaded: 3 decisions, 5 files             │
+   └──────────────────────────────────────────┘
    ```
+
+4. **Create Epic-Start Handoff**
+   
+   Before starting each epic, run `/conductor-handoff create` with trigger `epic-start`:
+   - Includes Beads sync (Step 5 in CREATE workflow)
+   - Updates metadata.json.handoff (Step 7 in CREATE workflow)
 
 **Non-blocking:** If no handoff found, create fresh session.
 
@@ -111,7 +140,7 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
 
 ### Phase 2b: Execution Routing
 
-**Purpose:** Determine whether to execute tasks sequentially (SINGLE_AGENT) or in parallel (PARALLEL_DISPATCH).
+**Purpose:** Determine whether to execute tasks sequentially or in parallel via orchestrator.
 
 > **Note:** `/conductor-implement` is a wrapper that auto-routes to `/conductor-orchestrate` when parallel execution is appropriate.
 
@@ -121,11 +150,72 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
    plan = Read("conductor/tracks/<track-id>/plan.md")
    
    if "## Track Assignments" in plan:
-       # Explicit parallel execution requested
-       return PARALLEL_DISPATCH
-   ```
+       # Explicit parallel execution requested - parse table directly
+       # Skip group_by_file_scope() entirely
+       tracks = parse_track_assignments_table(plan)
+       return PARALLEL_DISPATCH, tracks
    
-   **If Track Assignments section exists → immediately route to orchestrator.**
+   def parse_track_assignments_table(plan_content: str) -> list[Track]:
+       """Parse Track Assignments table directly, bypassing file scope analysis.
+       
+       Table format:
+       | Track | Tasks | File Scope | Depends On |
+       |-------|-------|------------|------------|
+       | A     | 1.1.1 | path/to/file.md | - |
+       | B     | 1.2.1, 1.2.2 | other/path.py | A |
+       """
+       lines = plan_content.split("\n")
+       in_table = False
+       tracks = []
+       
+       for line in lines:
+           if "## Track Assignments" in line:
+               in_table = True
+               continue
+           if in_table and line.startswith("|") and not line.startswith("| Track") and not line.startswith("|---"):
+               parts = [p.strip() for p in line.split("|")[1:-1]]
+               if len(parts) >= 4:
+                   track_id, tasks, file_scope, depends_on = parts[0], parts[1], parts[2], parts[3]
+                   tracks.append(Track(
+                       id=track_id,
+                       tasks=tasks.split(", "),
+                       files=[file_scope],
+                       depends_on=depends_on if depends_on != "-" else None
+                   ))
+           elif in_table and line.startswith("##"):
+               break  # End of Track Assignments section
+           
+           return tracks
+           
+           def validate_tasks_against_beads(tracks: list[Track], metadata_path: str) -> list[str]:
+           """Validate that all task IDs in tracks exist in metadata.json.beads.planTasks.
+           
+           Returns list of unknown task IDs for warning display.
+           """
+           metadata = json.loads(Read(metadata_path))
+           plan_tasks = metadata.get("beads", {}).get("planTasks", {})
+           known_task_ids = set(plan_tasks.keys())
+           
+           unknown_tasks = []
+           for track in tracks:
+               for task_id in track.tasks:
+                   if task_id not in known_task_ids:
+                       unknown_tasks.append(task_id)
+           
+           return unknown_tasks
+           
+           # After parsing Track Assignments, validate task IDs
+           tracks = parse_track_assignments_table(plan)
+           unknown = validate_tasks_against_beads(
+               tracks, 
+               f"conductor/tracks/{track_id}/metadata.json"
+           )
+           if unknown:
+               print(f"⚠️ WARNING: Track Assignments references unknown tasks: {unknown}")
+               print("   These task IDs do not exist in metadata.json.beads.planTasks")
+           ```
+           
+           **If Track Assignments section exists → parse table directly and skip all file scope analysis.**
 
 2. **Auto-Detect from Beads (Priority 2)**
    
@@ -167,43 +257,86 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
        AGENT_MAIL_AVAILABLE = True
    except McpUnavailable:
        AGENT_MAIL_AVAILABLE = False
-       # Cannot do parallel without coordination
-       return SINGLE_AGENT
+       # Cannot do parallel without coordination - HALT
+       print("HALT: Agent Mail required for coordination")
+       exit(1)
    ```
    
-   **If Agent Mail unavailable → fall back to sequential.**
+   **If Agent Mail unavailable → HALT (required for coordination).**
 
-4. **Evaluate TIER 1** (weighted score, only if no Track Assignments or auto-detect):
-   
-   | Factor | Weight |
-   |--------|--------|
-   | Epics > 1 | +2 |
-   | [PARALLEL] markers in plan | +3 |
-   | Domains > 2 | +2 |
-   | Independent tasks > 5 | +1 |
-   
-   **Threshold:** Score >= 5 to proceed to TIER 2
-
-5. **Evaluate TIER 2** (if TIER 1 passes):
-   
-   ```python
-   (files > 15 AND tasks > 3) OR
-   (est_tool_calls > 40) OR
-   (est_time > 30 min AND independent_ratio > 0.6)
-   ```
-
-6. **Route Decision:**
+4. **Route Decision:**
    
    | Condition | Result |
    |-----------|--------|
    | Track Assignments exists | PARALLEL_DISPATCH |
    | Auto-detect: ≥2 independent beads | PARALLEL_DISPATCH |
-   | Agent Mail unavailable | SINGLE_AGENT |
-   | TIER 1 FAIL | SINGLE_AGENT |
-   | TIER 1 PASS, TIER 2 FAIL | SINGLE_AGENT |
-   | TIER 1 PASS, TIER 2 PASS | PARALLEL_DISPATCH |
+   | Agent Mail unavailable | HALT |
+   | Single bead or dependent beads | Sequential via orchestrator |
 
-7. **Display Feedback:**
+5. **Confirmation Prompt (before parallel dispatch):**
+   
+   When routing to PARALLEL_DISPATCH, display confirmation before spawning workers.
+   
+   **Key:** The `tracks` variable is already populated from Phase 2b Step 1 (`parse_track_assignments_table()`) 
+   or Step 2 (auto-detect). Confirmation simply displays pre-parsed track info—no re-analysis needed.
+   
+   ```python
+   if decision == PARALLEL_DISPATCH:
+       # tracks already populated from earlier routing step:
+       # - Priority 1: parse_track_assignments_table() output
+       # - Priority 2: group_by_file_scope() output (auto-detect path)
+       # No additional parsing or analysis here—just display.
+       
+       # Display grouped tracks (pre-parsed from plan.md)
+       print("""
+       📊 Parallel execution detected:
+       """)
+       for track in tracks:
+           print(f"- Track {track.id}: {len(track.tasks)} task(s) ({track.files[0]})")
+       
+       # Show dependencies if any
+       if has_dependent_tracks(tracks):
+           print("\nDependencies:")
+           for track in tracks:
+               if track.depends_on:
+                   print(f"- Track {track.id} depends on Track {track.depends_on}")
+       
+       print("\nRun parallel? [Y/n]: ")
+       
+       # Handle response
+       response = get_user_input()
+       if response.lower() in ['', 'y', 'yes']:
+           # Route to orchestrator
+           return route_to_orchestrator(tracks)
+       else:
+           # Fall back to sequential
+           print("→ Continuing with sequential execution")
+           return SINGLE_AGENT
+   ```
+   
+   **Prompt Format:**
+   ```text
+   📊 Parallel execution detected:
+   - Track 1: 2 tasks (src/api/auth.ts, src/api/login.ts)
+   - Track 2: 1 task (src/db/models/)
+   - Track 3: 1 task (lib/validation.ts)
+   
+   Dependencies:
+   - Track 3 depends on Track 1
+   
+   Run parallel? [Y/n]:
+   ```
+   
+   **Response Handling:**
+   | Input | Action |
+   |-------|--------|
+   | `Y`, `y`, `yes`, `[Enter]` | Route to `/conductor-orchestrate` |
+   | `N`, `n`, `no` | Continue sequential execution |
+   | Other | Re-prompt once, then default to `N` |
+   
+   See [parallel-grouping.md](../parallel-grouping.md) for grouping algorithm.
+
+8. **Display Feedback:**
    ```text
    ┌─ EXECUTION ROUTING ────────────────────┐
    │ Track Assignments: YES                 │
@@ -223,7 +356,7 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
    └────────────────────────────────────────┘
    ```
 
-8. **Update State:**
+9. **Update State:**
    
    Add to `implement_state.json`:
    ```json
@@ -243,7 +376,7 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
    ```
 
 9. **Branch Logic:**
-   - **SINGLE_AGENT:** Continue to Phase 3 (sequential execution)
+   - **Sequential:** Continue to Phase 3 (single bead execution)
    - **PARALLEL_DISPATCH:** Hand off to [orchestrator skill](../../../orchestrator/SKILL.md)
      - Load orchestrator workflow
      - Orchestrator spawns workers via Task()
@@ -263,19 +396,50 @@ See [orchestrator workflow](../../../orchestrator/references/workflow.md) for pa
      - `conductor/tracks/<track_id>/spec.md`
      - `conductor/workflow.md`
      - `metadata.json.beads` for planTasks mapping
+   - **Load Styleguides (Smart)**:
+     - Always load: `conductor/code_styleguides/general.md`
+     - Detect languages from `metadata.json.beads.fileScopes`:
+       ```python
+       # Extract extensions from all fileScopes
+       extensions = set()
+       for task_id, paths in metadata["beads"]["fileScopes"].items():
+           for path in paths:
+               ext = get_extension(path)  # e.g., ".py", ".ts"
+               if ext:
+                   extensions.add(ext)
+       
+       # Map extensions to styleguides
+       STYLEGUIDE_MAP = {
+           ".py": "python.md",
+           ".ts": "typescript.md",
+           ".tsx": "typescript.md",
+           ".js": "javascript.md",
+           ".jsx": "javascript.md",
+           ".go": "go.md",
+           ".html": "html-css.md",
+           ".css": "html-css.md",
+           ".scss": "html-css.md",
+       }
+       
+       # Load only relevant styleguides
+       styleguides = ["general.md"]
+       for ext in extensions:
+           if ext in STYLEGUIDE_MAP:
+               styleguides.append(STYLEGUIDE_MAP[ext])
+       
+       # Deduplicate and load
+       for guide in set(styleguides):
+           Read(f"conductor/code_styleguides/{guide}")
+       ```
+     - Fallback: If no fileScopes, load based on `tech-stack.md` languages
 
 3. **Claim Task (Beads Integration)**
    
-   **SA Mode:**
+   Workers claim tasks via `bd` CLI with Agent Mail coordination:
    ```bash
    bd ready --json                           # Get available tasks
    bd update <task-id> --status in_progress  # Claim task
-   ```
-   
-   **MA Mode:**
-   ```bash
-   claim()                                   # Atomic claim (race-safe)
-   reserve path="<file>"                     # Lock files before edit
+   file_reservation_paths(paths=["<file>"])  # Reserve files before edit
    ```
    
    See [beads-session.md](../beads-session.md) for full protocol.
@@ -329,15 +493,10 @@ See [orchestrator workflow](../../../orchestrator/references/workflow.md) for pa
    
    After task completion:
    
-   **SA Mode:**
    ```bash
    bd update <task-id> --notes "COMPLETED: <summary>. KEY DECISION: <if any>"
    bd close <task-id> --reason completed
-   ```
-   
-   **MA Mode:**
-   ```bash
-   done taskId="<task-id>" reason="completed"  # Auto-releases reservations
+   release_file_reservations()  # Release reserved files
    ```
    
    **Close Reasons:**
@@ -501,5 +660,4 @@ conductor/
 - [Beads Preflight](../preflight-beads.md) - Session initialization
 - [Beads Facade](../beads-facade.md) - API contract
 - [Beads Integration](../beads-integration.md) - All 13 integration points
-- [Handoff Triggers](../handoff/triggers.md) - Epic-start/end trigger details
-- [Create Handoff](../handoff/create.md) - Handoff creation workflow
+- [Unified Handoff Workflow](handoff.md) - CREATE/RESUME modes, Beads sync, progress tracking

@@ -1,0 +1,91 @@
+{
+  "track_id": "handoff-unify_20260102",
+  "type": "refactor",
+  "status": "complete",
+  "created_at": "2026-01-02T10:00:00Z",
+  "updated_at": "2026-01-02T10:00:00Z",
+  "description": "Consolidate scattered handoff system into unified command with Beads sync and progress tracking",
+  "priority": "medium",
+  "has_design": true,
+  "artifacts": {
+    "design": true,
+    "spec": true,
+    "plan": true,
+    "beads": false
+  },
+  "workflow": {
+    "state": "ARCHIVED",
+    "history": [
+      {
+        "state": "INIT",
+        "at": "2026-01-02T10:00:00Z",
+        "command": "newtrack"
+      },
+      {
+        "state": "DESIGNED",
+        "at": "2026-01-02T10:00:00Z",
+        "command": "ds"
+      },
+      {
+        "state": "TRACKED",
+        "at": "2026-01-02T10:00:00Z",
+        "command": "newtrack"
+      },
+      {
+        "state": "FILED",
+        "at": "2026-01-02T16:22:29Z",
+        "command": "fb"
+      }
+    ],
+    "branch": null,
+    "archived": true,
+    "keep": false
+  },
+  "generation": {
+    "status": "complete",
+    "specCreatedAt": "2026-01-02T10:00:00Z",
+    "planCreatedAt": "2026-01-02T10:00:00Z",
+    "rbCompletedAt": null
+  },
+  "beads": {
+    "status": "complete",
+    "epicId": "my-workflow:3-lzks",
+    "epics": [
+      {
+        "id": "my-workflow:3-lzks",
+        "title": "Unified Handoff System",
+        "status": "created",
+        "createdAt": "2026-01-02T16:22:29Z"
+      }
+    ],
+    "issues": [
+      "my-workflow:3-lzks.1",
+      "my-workflow:3-lzks.2",
+      "my-workflow:3-lzks.3",
+      "my-workflow:3-lzks.4",
+      "my-workflow:3-lzks.5",
+      "my-workflow:3-lzks.6"
+    ],
+    "planTasks": {
+      "1.1": "my-workflow:3-lzks.1",
+      "2.1": "my-workflow:3-lzks.2",
+      "3.1": "my-workflow:3-lzks.3",
+      "4.1": "my-workflow:3-lzks.4",
+      "5.1": "my-workflow:3-lzks.5",
+      "6.1": "my-workflow:3-lzks.6"
+    },
+    "beadToTask": {
+      "my-workflow:3-lzks.1": "1.1",
+      "my-workflow:3-lzks.2": "2.1",
+      "my-workflow:3-lzks.3": "3.1",
+      "my-workflow:3-lzks.4": "4.1",
+      "my-workflow:3-lzks.5": "5.1",
+      "my-workflow:3-lzks.6": "6.1"
+    },
+    "crossTrackDeps": [],
+    "reviewStatus": null,
+    "reviewedAt": null,
+    "orchestrated": false,
+    "orchestratedAt": null
+  }
+}

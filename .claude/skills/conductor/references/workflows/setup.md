@@ -7,6 +7,7 @@ Initialize a new or existing project with the Conductor methodology, creating al
 - Git installed and available
 - Write access to the project directory
 - User available for interactive input
+- **Load maestro-core first** for routing table and fallback policies
 
 ## State Management
 

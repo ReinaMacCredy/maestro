@@ -1,0 +1,66 @@
+{
+  "id": "design-oracle",
+  "title": "Auto Oracle Design Review",
+  "created": "2025-01-02",
+  "status": "archived",
+  "workflow": {
+    "state": "ARCHIVED",
+    "phase": "FINISHED",
+    "checkpoint": null
+  },
+  "generation": {
+    "design": true,
+    "spec": true,
+    "plan": true
+  },
+  "validation": {
+    "gates_passed": ["design", "spec", "plan-structure"],
+    "current_gate": null,
+    "retries": 0,
+    "last_failure": null
+  },
+  "artifacts": {
+    "beads": true
+  },
+  "beads": {
+    "status": "complete",
+    "epicId": "my-workflow:3-wvcm",
+    "epics": [{"id": "my-workflow:3-wvcm", "title": "Epic: Auto Oracle Design Review", "status": "open"}],
+    "issues": ["my-workflow:3-bhe1", "my-workflow:3-tkj2", "my-workflow:3-dv19", "my-workflow:3-0xvq", "my-workflow:3-f17o", "my-workflow:3-7r3m", "my-workflow:3-hmts"],
+    "planTasks": {
+      "1.1.1": "my-workflow:3-bhe1",
+      "1.2.1": "my-workflow:3-tkj2",
+      "2.1.1": "my-workflow:3-dv19",
+      "2.2.1": "my-workflow:3-0xvq",
+      "2.3.1": "my-workflow:3-f17o",
+      "3.1.1": "my-workflow:3-7r3m",
+      "4.1.1": "my-workflow:3-hmts"
+    },
+    "beadToTask": {
+      "my-workflow:3-bhe1": "1.1.1",
+      "my-workflow:3-tkj2": "1.2.1",
+      "my-workflow:3-dv19": "2.1.1",
+      "my-workflow:3-0xvq": "2.2.1",
+      "my-workflow:3-f17o": "2.3.1",
+      "my-workflow:3-7r3m": "3.1.1",
+      "my-workflow:3-hmts": "4.1.1"
+    },
+    "orchestrated": true,
+    "fileScopes": {
+      "1.1.1": ["skills/orchestrator/agents/review/oracle.md"],
+      "1.2.1": ["skills/orchestrator/agents/README.md"],
+      "2.1.1": ["skills/design/references/double-diamond.md"],
+      "2.2.1": ["skills/design/references/apc-checkpoints.md"],
+      "2.3.1": ["skills/design/SKILL.md"],
+      "3.1.1": ["skills/conductor/references/validation/lifecycle.md"],
+      "4.1.1": ["conductor/CODEMAPS/skills.md"]
+    }
+  },
+  "oracleAudit": {
+    "ran": true,
+    "timestamp": "2025-01-02",
+    "verdict": "APPROVED",
+    "critical_issues": 0,
+    "warnings": 2
+  }
+}

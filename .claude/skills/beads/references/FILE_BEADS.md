@@ -432,15 +432,15 @@ Call orchestrator with auto-generated Track Assignments.
 
 See [auto-orchestrate.md](auto-orchestrate.md) for full protocol.
 
-### 6.5 Agent Mail Fallback
+### 6.5 Agent Mail Requirement
 
 If Agent Mail MCP unavailable:
 
 ```text
-⚠️ Agent coordination unavailable - falling back to sequential execution
+❌ Cannot proceed: Agent Mail required for parallel execution
 ```
 
-Route to `/conductor-implement` instead of parallel dispatch.
+HALT auto-orchestration. User must fix Agent Mail availability before proceeding with parallel dispatch.
 
 ## Phase 7: Final Review
 

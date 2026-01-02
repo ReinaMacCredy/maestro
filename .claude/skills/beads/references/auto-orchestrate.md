@@ -404,10 +404,12 @@ mcp list | grep agent_mail
 
 ### Fallback Behavior
 
-```markdown
-⚠️ Agent Mail unavailable - falling back to sequential execution
+When Agent Mail is unavailable, the system halts orchestration (per maestro-core fallback policy). Manual sequential execution is possible:
 
-Instead of parallel workers, execute beads sequentially:
+```markdown
+⚠️ Agent Mail unavailable - orchestration halted
+
+Manual sequential execution if needed:
 1. Get ready beads: `bd ready --json`
 2. For each ready bead:
    a. Claim: `bd update <id> --status in_progress`
@@ -416,15 +418,6 @@ Instead of parallel workers, execute beads sequentially:
 3. Repeat until all beads closed
 4. Run `rb` for final review
 ```
-
-### Sequential vs Parallel Comparison
-
-| Aspect | Parallel (Orchestrator) | Sequential (Fallback) |
-|--------|------------------------|----------------------|
-| Speed | Fast (concurrent) | Slow (one at a time) |
-| Resource use | Multiple agents | Single agent |
-| Coordination | Via Agent Mail | None needed |
-| Error isolation | Per-track | Shared context |
 
 ## Complete Flow Diagram
 

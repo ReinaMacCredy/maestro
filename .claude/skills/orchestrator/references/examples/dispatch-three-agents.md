@@ -30,16 +30,18 @@ EPIC_ID = metadata["beads"]["epicId"]  # "my-workflow:3-3cmw"
 ## Phase 2: Initialize Agent Mail
 
 ```python
+# Initialize project and register orchestrator
 ensure_project(human_key="/path/to/workspace")
 
 register_agent(
   project_key="/path/to/workspace",
   name="PurpleMountain",
   program="amp",
-  model="claude-4-sonnet",
+  model="claude-sonnet-4-20250514",
   task_description="Orchestrator for my-workflow:3-3cmw"
 )
 
+# Announce epic start to all workers
 send_message(
   project_key="/path/to/workspace",
   sender_name="PurpleMountain",

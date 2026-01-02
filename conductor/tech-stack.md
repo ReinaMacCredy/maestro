@@ -49,7 +49,6 @@ maestro/
 ## Key Dependencies
 
 - **bd CLI**: Beads issue tracking command-line tool
-- **bv CLI**: Beads Village multi-agent coordination
 - **Git**: Version control for skills and `.beads/` state
 - **jq**: JSON processor for parsing CLI output (used by conductor-implement and validation commands)
 

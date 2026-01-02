@@ -5,15 +5,15 @@
 
 ## Overview
 
-Research verification uses **parallel sub-agents** instead of sequential grounding:
+Research verification uses **parallel sub-agents** at specific trigger points (not every phase transition):
 
-| Mode | Phase Transition | Agents | Enforcement |
-|------|------------------|--------|-------------|
-| SPEED | Any | 1 (Locator) | Advisory ⚠️ |
-| FULL | DISCOVER→DEFINE | 2 (Locator + Pattern) | Advisory ⚠️ |
-| FULL | DEFINE→DEVELOP | 2 (Locator + Pattern) | Advisory ⚠️ |
-| FULL | DEVELOP→DELIVER | 4 (All agents) | Gatekeeper 🚫 |
-| FULL | DELIVER→Complete | 5 (All + Impact) | Mandatory 🔒 |
+| Trigger Point | Agents | Enforcement |
+|---------------|--------|-------------|
+| Session start (before DISCOVER) | Locator + Pattern + CODEMAPS | Advisory ⚠️ |
+| CP3 (DEVELOP) | Locator + Analyzer + Pattern | Gatekeeper 🚫 |
+| CP4 (DELIVER) | All 5 + Impact scan | Mandatory 🔒 |
+
+**Note:** Research does NOT run at every phase transition. Only at session start, CP3, and CP4.
 
 ## Enforcement Levels
 
@@ -35,18 +35,33 @@ Five specialized agents run in parallel:
 | **Impact** | Full scope assessment (files, modules, risk) |
 | **Web** | Verify external API docs (if external deps) |
 
-## DEVELOP → DELIVER Verification
+## Session Start Research (Before DISCOVER)
+
+**Advisory enforcement (⚠️):**
+
+Spawns automatically when `ds` starts, BEFORE entering DISCOVER phase:
+
+1. Load: `conductor/references/research/hooks/discover-hook.md`
+2. Spawn agents: Locator + Pattern + CODEMAPS loader
+3. Timeout: 10s max
+4. Display research summary
+5. On skip: Display warning, proceed to DISCOVER
+
+This provides context for the entire design session.
+
+## CP3 (DEVELOP) Research
 
 **Gatekeeper enforcement (🚫):**
 
-1. Spawn 4 agents in parallel (Locator, Analyzer, Pattern, Web)
-2. Timeout: 15s max
-3. Calculate confidence based on agent results
-4. Display verification summary
-5. **HALT if not run** - show verification required prompt
-6. On skip: Display warning banner, log for audit, proceed
+1. Load: `conductor/references/research/hooks/grounding-hook.md`
+2. Spawn 3 agents in parallel (Locator, Analyzer, Pattern)
+3. Timeout: 15s max
+4. Calculate confidence based on agent results
+5. Display verification summary
+6. **HALT if not run** - show verification required prompt
+7. On skip: Display warning banner, log for audit, proceed
 
-## DELIVER → Complete Verification
+## CP4 (DELIVER) Full Verification
 
 **Mandatory enforcement (🔒):**
 
@@ -64,30 +79,32 @@ Five specialized agents run in parallel:
 
 ## Research State Tracking
 
-Track verification completion across phases in session memory:
+Track verification completion in session memory:
 
 ```json
 {
-  "DISCOVER→DEFINE": { "completed": true, "confidence": "HIGH", "timestamp": "..." },
-  "DEFINE→DEVELOP": { "completed": true, "confidence": "MEDIUM", "timestamp": "..." },
-  "DEVELOP→DELIVER": null,
-  "DELIVER→Complete": null
+  "session_start": { "completed": true, "confidence": "HIGH", "timestamp": "..." },
+  "CP3_DEVELOP": { "completed": true, "confidence": "MEDIUM", "timestamp": "..." },
+  "CP4_DELIVER": null
 }
 ```
 
-## Validation Gate: validate-design
+## Progressive Validation (runs at every checkpoint)
 
-After research verification passes, run the design validation gate:
+In addition to research, validation runs at EVERY checkpoint (CP1-4):
 
-1. Load gate: `conductor/references/validation/shared/validate-design.md`
-2. Run validation: Check design vs product.md, tech-stack.md, CODEMAPS
-3. Update metadata.json: Add to `validation.gates_passed` or `validation.last_failure`
-4. Behavior by mode:
-   - **SPEED mode**: WARN on failure, continue to A/P/C
-   - **FULL mode**: HALT on failure, retry up to 2x, then escalate
+| Checkpoint | Validation Checks | Enforcement |
+|------------|------------------|-------------|
+| CP1 (DISCOVER) | Product alignment, no duplicate features | WARN |
+| CP2 (DEFINE) | Problem clear, success measurable, scope explicit | WARN |
+| CP3 (DEVELOP) | 3+ options, tech-stack alignment, risk analysis | WARN |
+| CP4 (DELIVER) | Full validation + grounding + impact scan | SPEED=WARN, FULL=HALT |
+
+See [validation/lifecycle.md](../../conductor/references/validation/lifecycle.md) for complete validation gate details.
 
 ## Documentation
 
 - [Research Protocol](../../conductor/references/research/protocol.md) - Main documentation
 - [Research agents](../../orchestrator/agents/research/) - Research-specific agents
 - [Integration hooks](../../conductor/references/research/hooks/) - Hook integration points
+- [Validation lifecycle](../../conductor/references/validation/lifecycle.md) - Per-checkpoint validation
