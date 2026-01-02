@@ -1,7 +1,7 @@
 {
   "track_id": "file-scope-parallel_20260102",
   "type": "feature",
-  "status": "new",
+  "status": "archived",
   "priority": "high",
   "depends_on": [],
   "estimated_hours": 4,
@@ -51,13 +51,28 @@
       "my-workflow:3-yvsi": "3.3"
     },
     "fileScopes": {
-      "1.1": ["conductor/references/file-scope-extractor.md"],
-      "1.2": ["conductor/references/schemas/metadata.schema.json"],
-      "2.1": ["conductor/references/parallel-grouping.md"],
-      "2.2": ["conductor/references/workflows/implement.md"],
-      "3.1": ["conductor/references/workflows/newtrack.md"],
-      "3.2": ["orchestrator/references/auto-routing.md"],
-      "3.3": ["conductor/SKILL.md", "orchestrator/SKILL.md"]
+      "1.1": [
+        "conductor/references/file-scope-extractor.md"
+      ],
+      "1.2": [
+        "conductor/references/schemas/metadata.schema.json"
+      ],
+      "2.1": [
+        "conductor/references/parallel-grouping.md"
+      ],
+      "2.2": [
+        "conductor/references/workflows/implement.md"
+      ],
+      "3.1": [
+        "conductor/references/workflows/newtrack.md"
+      ],
+      "3.2": [
+        "orchestrator/references/auto-routing.md"
+      ],
+      "3.3": [
+        "conductor/SKILL.md",
+        "orchestrator/SKILL.md"
+      ]
     }
   },
   "validation": {
@@ -65,5 +80,10 @@
     "current_gate": null,
     "retries": 0,
     "last_failure": null
+  },
+  "workflow": {
+    "state": "ARCHIVED",
+    "archived": true,
+    "keep": false
   }
 }

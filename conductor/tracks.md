@@ -14,6 +14,12 @@ Test track to verify /conductor-implement auto-routes to orchestrator.
 
 ## Completed Tracks
 
+## [x] Track: File-Scope Parallel Detection
+*ID: file-scope-parallel_20260102*
+*Archived: [conductor/archive/file-scope-parallel_20260102/](archive/file-scope-parallel_20260102/)*
+
+Auto-detect parallelization opportunities based on file scope analysis. Two-stage system: Stage 1 at `/conductor-newtrack` extracts file scopes and generates Track Assignments for ≥2 non-overlapping groups; Stage 2 at `/conductor-implement` shows confirmation prompt before parallel dispatch.
+
 ## [x] Track: Unified Handoff System
 *ID: handoff-unify_20260102*
 *Archived: [conductor/archive/handoff-unify_20260102/](archive/handoff-unify_20260102/)*

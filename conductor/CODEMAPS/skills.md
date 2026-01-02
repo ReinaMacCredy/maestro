@@ -47,8 +47,8 @@ CORE WORKFLOW              DEVELOPMENT              UTILITIES
 ```
 
 **7 Core Skills:**
-- **orchestrator**: Multi-agent parallel execution with autonomous workers
-- **conductor**: Planning + execution + **research protocol**
+- **orchestrator**: Multi-agent parallel execution with autonomous workers + **file-scope routing**
+- **conductor**: Planning + execution + **research protocol** + **file-scope detection**
 - **design**: Double Diamond + Party Mode + Research verification
 - **beads**: Issue tracking + persistent memory + **auto-orchestration trigger**
 - **using-git-worktrees**: Isolated development environments

@@ -147,6 +147,8 @@ Contains reusable learnings from completed tracks.
 - Track threads are ephemeral (scoped to single epic) - don't expect cross-epic persistence
 - Auto-detect routing requires `metadata.json.beads.planTasks` populated by fb - verify before routing
 - Lingering beads can remain after all epic work done - always verify before closing epic
+- Epic as blocker shows high dependency count: Even when tasks are Wave 1 ready, `dependency_type: blocks` inflates count - verify tasks not blocked by *other* tasks
+- File scope extraction: Tasks with same files → sequential; different files → parallel candidates
 
 ## Patterns
 
@@ -203,3 +205,4 @@ Contains reusable learnings from completed tracks.
 - **9-Step Handoff CREATE:** Detect → Parallel Check → Metadata → Secrets → Agent Mail → Beads Sync → Markdown → metadata.json → Activity
 - **9-Step Handoff RESUME:** Parse → Agent Mail → File Discovery → Load → Beads Context → Validate → Present → Todos → Activity
 - **Hybrid Handoff Storage:** Agent Mail for search (FTS5), markdown for git history
+- **Two-Stage File Scope Analysis:** Stage 1 at `/conductor-newtrack` (suggest parallelism), Stage 2 at `/conductor-implement` (confirm with Y/n prompt)
