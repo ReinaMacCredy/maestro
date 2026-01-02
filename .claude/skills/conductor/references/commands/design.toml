@@ -200,6 +200,40 @@ Or if blocked: Show enforcement action with instructions.
 > **[↩ Back]** - "revisit develop" to reconsider approach
 ```
 
+---
+
+#### Phase: VALIDATION GATE (Gate 1: validate-design)
+**Goal:** Validate design against product, tech-stack, and existing patterns.
+**Trigger:** User selects [C] Continue at CHECKPOINT 4.
+
+**PROTOCOL:**
+1. **Load validation gate:** Read `skills/conductor/references/validation/shared/validate-design.md`
+2. **Execute validation process** as defined in the gate file
+3. **Determine enforcement based on mode:**
+   - SPEED mode → WARN only (log issues, continue)
+   - FULL mode → HALT on failures (block until resolved)
+
+**Validation Output:**
+```
+┌─ VALIDATION: Gate 1 (design) ─────────────────────┐
+│ Status: [PASS | WARN | FAIL]                      │
+│                                                   │
+│ Product Alignment: [✓ | ⚠ | ✗]                    │
+│ Tech-Stack Compliance: [✓ | ⚠ | ✗]                │
+│ Pattern Consistency: [✓ | ⚠ | ✗]                  │
+│                                                   │
+│ [Issues found - if any]                           │
+└───────────────────────────────────────────────────┘
+```
+
+**On PASS:** Update `metadata.json.validation.gates_passed` to include "design", proceed to handoff.
+**On WARN:** Log warning, proceed to handoff.
+**On FAIL (FULL mode):** Block, show issues, offer:
+- **[R] Retry** - Return to DELIVER phase to fix issues
+- **[S] Skip** - Force continue (requires `--no-validate` flag)
+
+---
+
 **If Grounding Blocked:**
 ```
 ┌─ GROUNDING REQUIRED ─────────────────────┐

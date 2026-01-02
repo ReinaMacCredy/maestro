@@ -67,8 +67,16 @@ See [beads-integration.md](references/beads-integration.md) for all 13 integrati
 
 1. Read `metadata.json` - check `orchestrated` flag
 2. Read `plan.md` - check for `## Track Assignments`
-3. If found → Load [orchestrator skill](../orchestrator/SKILL.md) for parallel execution
-4. Else → Sequential execution with TDD
+3. Check `beads.fileScopes` - file-scope based grouping (see [file-scope-extractor](references/file-scope-extractor.md))
+4. If parallel detected (≥2 non-overlapping groups) → Load [orchestrator skill](../orchestrator/SKILL.md)
+5. Else → Sequential execution with TDD
+
+### File Scope Detection
+
+`/conductor-newtrack` Phase 4.5 extracts file paths from tasks and groups them:
+- Tasks touching same files → sequential (same track)
+- Tasks touching different files → parallel (separate tracks)
+- See [parallel-grouping](references/parallel-grouping.md) for algorithm
 
 ## Anti-Patterns
 

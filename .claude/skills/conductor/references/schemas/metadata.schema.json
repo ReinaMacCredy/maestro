@@ -514,6 +514,25 @@
           "description": "ISO 8601 timestamp when auto-orchestration was triggered",
           "format": "date-time",
           "default": null
+        },
+        "fileScopes": {
+          "type": "object",
+          "description": "Mapping from plan task ID to file paths/globs for conflict detection",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of file paths or glob patterns for this task"
+          },
+          "default": {},
+          "examples": [
+            {
+              "1.1": ["schemas/metadata.schema.json", "schemas/validation.ts"],
+              "2.1": ["lib/utils/**"],
+              "3.1": ["**/*.config.js"]
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -528,7 +547,8 @@
         "reviewStatus": null,
         "reviewedAt": null,
         "orchestrated": false,
-        "orchestratedAt": null
+        "orchestratedAt": null,
+        "fileScopes": {}
       }
     }
   },

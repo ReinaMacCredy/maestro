@@ -212,7 +212,66 @@ Reference: [workflows/handoff.md](handoff.md) for full workflow.
    | TIER 1 PASS, TIER 2 FAIL | SINGLE_AGENT |
    | TIER 1 PASS, TIER 2 PASS | PARALLEL_DISPATCH |
 
-7. **Display Feedback:**
+7. **Confirmation Prompt (before parallel dispatch):**
+   
+   When routing to PARALLEL_DISPATCH, display confirmation before spawning workers:
+   
+   ```python
+   if decision == PARALLEL_DISPATCH:
+       # Group tasks by file scope (see parallel-grouping.md)
+       tracks = group_by_file_scope(independent_beads)
+       
+       # Display grouped tracks
+       print("""
+       📊 Parallel execution detected:
+       """)
+       for i, track in enumerate(tracks, 1):
+           files_summary = summarize_files(track.files)  # e.g., "src/api/" or "auth.ts, login.ts"
+           print(f"- Track {i}: {len(track.beads)} task(s) ({files_summary})")
+       
+       # Show dependencies if any
+       if has_dependent_tracks(tracks):
+           print("\nDependencies:")
+           for track in tracks:
+               if track.depends_on:
+                   print(f"- Track {track.id} depends on Track {track.depends_on}")
+       
+       print("\nRun parallel? [Y/n]: ")
+       
+       # Handle response
+       response = get_user_input()
+       if response.lower() in ['', 'y', 'yes']:
+           # Route to orchestrator
+           return route_to_orchestrator(tracks)
+       else:
+           # Fall back to sequential
+           print("→ Continuing with sequential execution")
+           return SINGLE_AGENT
+   ```
+   
+   **Prompt Format:**
+   ```text
+   📊 Parallel execution detected:
+   - Track 1: 2 tasks (src/api/auth.ts, src/api/login.ts)
+   - Track 2: 1 task (src/db/models/)
+   - Track 3: 1 task (lib/validation.ts)
+   
+   Dependencies:
+   - Track 3 depends on Track 1
+   
+   Run parallel? [Y/n]:
+   ```
+   
+   **Response Handling:**
+   | Input | Action |
+   |-------|--------|
+   | `Y`, `y`, `yes`, `[Enter]` | Route to `/conductor-orchestrate` |
+   | `N`, `n`, `no` | Continue sequential execution |
+   | Other | Re-prompt once, then default to `N` |
+   
+   See [parallel-grouping.md](../parallel-grouping.md) for grouping algorithm.
+
+8. **Display Feedback:**
    ```text
    ┌─ EXECUTION ROUTING ────────────────────┐
    │ Track Assignments: YES                 │
@@ -232,7 +291,7 @@ Reference: [workflows/handoff.md](handoff.md) for full workflow.
    └────────────────────────────────────────┘
    ```
 
-8. **Update State:**
+9. **Update State:**
    
    Add to `implement_state.json`:
    ```json

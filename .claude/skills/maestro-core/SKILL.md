@@ -23,17 +23,29 @@ ds → design.md → /conductor-newtrack → spec.md + plan.md → fb → beads 
 
 ## Routing Table
 
-| Trigger | Skill | Description |
-|---------|-------|-------------|
-| `ds`, `/conductor-design` | [design](../design/SKILL.md) | Double Diamond design sessions |
-| `/conductor-setup` | [conductor](../conductor/SKILL.md) | Initialize project |
-| `cn`, `/conductor-newtrack` | [conductor](../conductor/SKILL.md) | Create spec + plan from design |
-| `ci`, `/conductor-implement` | [conductor](../conductor/SKILL.md) | Execute track (auto-routes to orchestrator) |
-| `co`, `/conductor-orchestrate` | [orchestrator](../orchestrator/SKILL.md) | Parallel execution |
-| `/conductor-finish` | [conductor](../conductor/SKILL.md) | Complete track |
-| `fb`, `file-beads` | [beads](../beads/SKILL.md) | File beads from plan |
-| `rb`, `review-beads` | [beads](../beads/SKILL.md) | Review filed beads |
-| `bd ready` | [beads](../beads/SKILL.md) | Find available work |
+**CRITICAL:** After loading `maestro-core`, you MUST explicitly load the target skill via `skill(name="...")` before proceeding. This table only provides routing - it does NOT auto-load skills.
+
+| Trigger | Skill to Load | Description |
+|---------|---------------|-------------|
+| `ds`, `/conductor-design` | `skill(name="design")` | Double Diamond design sessions |
+| `/conductor-setup` | `skill(name="conductor")` | Initialize project |
+| `cn`, `/conductor-newtrack` | `skill(name="conductor")` | Create spec + plan from design |
+| `ci`, `/conductor-implement` | `skill(name="conductor")` | Execute track (auto-routes to orchestrator) |
+| `co`, `/conductor-orchestrate` | `skill(name="orchestrator")` | Parallel execution |
+| `/conductor-finish` | `skill(name="conductor")` | Complete track |
+| `fb`, `file-beads` | `skill(name="beads")` | File beads from plan |
+| `rb`, `review-beads` | `skill(name="beads")` | Review filed beads |
+| `bd ready` | `skill(name="beads")` | Find available work |
+
+### Routing Flow
+
+```
+1. User triggers command (e.g., `ci`)
+2. Load maestro-core → get routing table
+3. Look up trigger → find target skill
+4. MUST call skill tool to load target skill
+5. Follow loaded skill instructions
+```
 
 ## Fallback Policies
 

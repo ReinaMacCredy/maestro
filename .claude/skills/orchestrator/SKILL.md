@@ -21,8 +21,24 @@ description: Multi-agent parallel execution with autonomous workers. Use when pl
 | Trigger | Condition |
 |---------|-----------|
 | Auto-routed | `/conductor-implement` when plan has Track Assignments |
+| File-scope | `/conductor-implement` when ≥2 non-overlapping file groups detected |
 | Direct | `/conductor-orchestrate` or `co` |
 | Phrase | "run parallel", "spawn workers", "dispatch agents" |
+
+## Confirmation Prompt
+
+Before spawning parallel workers, orchestrator displays a confirmation:
+
+```
+📊 Parallel execution detected:
+- Track A: 2 tasks (src/api/)
+- Track B: 2 tasks (lib/)
+- Track C: 1 task (schemas/)
+
+Run parallel? [Y/n]:
+```
+
+See [implement.md Phase 2b](../conductor/references/workflows/implement.md) for full confirmation flow.
 
 ## Quick Reference
 
