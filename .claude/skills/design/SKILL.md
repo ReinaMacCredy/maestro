@@ -1,6 +1,6 @@
 ---
 name: design
-description: Design Session - collaborative brainstorming to turn ideas into designs using Double Diamond methodology. Use when user types "ds" or wants to explore/design a feature before implementation.
+description: Design Session - collaborative brainstorming to turn ideas into designs using Double Diamond methodology. Use when user types "ds" or wants to explore/design a feature before implementation. MUST load maestro-core skill first for routing.
 ---
 
 # Design Session (ds)
@@ -35,11 +35,12 @@ Turn ideas into fully-formed designs through collaborative dialogue.
 
 ## Session Flow
 
+0. **Load Core** - Load [maestro-core](../maestro-core/SKILL.md) for routing table and fallback policies
 1. **Initialize** - Load handoffs, CODEMAPS, verify conductor setup → [session-init.md](references/session-init.md)
 2. **Route** - Score complexity (< 4 = SPEED, > 6 = FULL) → [design-routing-heuristics.md](references/design-routing-heuristics.md)
 3. **Execute** - Double Diamond phases with A/P/C checkpoints → [double-diamond.md](references/double-diamond.md)
 4. **Verify** - Research verification at phase transitions → [research-verification.md](references/research-verification.md)
-5. **Handoff** - "Run `/conductor-newtrack` to generate spec, plan, and file beads."
+5. **Handoff** - Suggest next steps: `cn` (newtrack), `ci` (implement), `fb` (file beads)
 
 ## A/P/C Checkpoints
 
@@ -68,8 +69,21 @@ See [apc-checkpoints.md](references/apc-checkpoints.md) for details.
 - ❌ Asking multiple questions at once
 - ❌ Over-engineering simple features (use SPEED mode)
 
+## Next Steps (after design.md created)
+
+| Command | Description |
+|---------|-------------|
+| `cn` | `/conductor-newtrack` - Create spec + plan from design |
+| `ci` | `/conductor-implement` - Execute track |
+| `fb` | File beads from plan |
+
+See [maestro-core](../maestro-core/SKILL.md) for full routing table.
+
+## Dependencies
+
+**Auto-loads:** [maestro-core](../maestro-core/SKILL.md) for routing and fallback policies.
+
 ## Related
 
 - [conductor](../conductor/SKILL.md) - Track creation and implementation
 - [beads](../beads/SKILL.md) - Issue tracking after design
-- [maestro-core](../maestro-core/SKILL.md) - Routing policies in AGENTS.md

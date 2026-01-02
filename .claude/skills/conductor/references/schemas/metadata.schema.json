@@ -304,6 +304,93 @@
         "rbCompletedAt": null
       }
     },
+    "handoff": {
+      "type": "object",
+      "description": "Handoff state tracking for session continuity",
+      "properties": {
+        "status": {
+          "type": "string",
+          "description": "Current handoff status",
+          "enum": ["active", "handed_off"],
+          "default": "active"
+        },
+        "section_count": {
+          "type": "integer",
+          "description": "Number of handoff sections created for this track",
+          "minimum": 0,
+          "default": 0
+        },
+        "progress_percent": {
+          "type": "integer",
+          "description": "Track progress percentage at last handoff (0-100)",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 0
+        },
+        "last_handoff": {
+          "type": ["string", "null"],
+          "description": "ISO 8601 timestamp of last handoff",
+          "format": "date-time",
+          "default": null
+        },
+        "history": {
+          "type": "array",
+          "description": "Log of handoff events",
+          "items": {
+            "type": "object",
+            "required": ["section", "timestamp", "trigger"],
+            "properties": {
+              "section": {
+                "type": "integer",
+                "description": "Handoff section number"
+              },
+              "timestamp": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When the handoff was created"
+              },
+              "trigger": {
+                "type": "string",
+                "description": "What triggered the handoff",
+                "enum": ["design-end", "epic-start", "epic-end", "pre-finish", "manual", "idle"]
+              },
+              "bead_id": {
+                "type": ["string", "null"],
+                "description": "Associated bead ID (for epic triggers)"
+              },
+              "phase_at_handoff": {
+                "type": ["string", "null"],
+                "description": "Implementation phase at handoff time"
+              },
+              "tasks_completed": {
+                "type": "integer",
+                "description": "Number of tasks completed at handoff",
+                "minimum": 0
+              },
+              "tasks_total": {
+                "type": "integer",
+                "description": "Total number of tasks in track",
+                "minimum": 0
+              },
+              "file": {
+                "type": "string",
+                "description": "Handoff markdown filename"
+              }
+            },
+            "additionalProperties": false
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false,
+      "default": {
+        "status": "active",
+        "section_count": 0,
+        "progress_percent": 0,
+        "last_handoff": null,
+        "history": []
+      }
+    },
     "beads": {
       "type": "object",
       "description": "Beads filing state (consolidated from .fb-progress.json)",

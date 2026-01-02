@@ -51,38 +51,47 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
 
 ### Phase 0.5: Handoff Load
 
-**Purpose:** Load prior session context via handoff system.
+**Purpose:** Load prior session context via unified handoff system.
+
+Reference: [workflows/handoff.md](handoff.md) for full workflow.
 
 1. **Load Most Recent Handoff**
-   - Run `/resume_handoff` workflow internally
-   - Check `conductor/handoffs/<track_id>/` for latest handoff
+   - Run `/conductor-handoff resume` workflow internally
+   - Try Agent Mail first (`summarize_thread`), fall back to files
    - If found: Display context summary
    - If not found: Fresh session (no prior context)
 
-2. **Create Epic-Start Handoff**
+2. **Load Beads Context**
    
-   Before starting each epic, create handoff with trigger `epic-start`:
+   ```bash
+   epic_id=$(jq -r '.beads.epicId' "conductor/tracks/${track_id}/metadata.json")
    
+   # Get progress
+   completed=$(bd list --parent=$epic_id --status=closed --json | jq 'length')
+   total=$(bd list --parent=$epic_id --json | jq 'length')
+   progress=$((completed * 100 / total))
+   
+   # Get ready tasks
+   ready=$(bd ready --json | jq -r '.[] | select(.parent == "'$epic_id'") | .title')
    ```
-   handoff_dir = conductor/handoffs/<track_id>/
-   
-   1. Create handoff file: YYYY-MM-DD_HH-MM-SS-mmm_<track>_<epic-id>_epic-start.md
-   2. Include:
-      - Epic scope from plan.md
-      - Dependencies from beads
-      - Prior context loaded
-      - Expected deliverables
-   3. Append to index.md
-   4. Touch conductor/.last_activity
-   ```
-   
-   See [../handoff/triggers.md](../handoff/triggers.md) for trigger details.
 
-3. **Output:**
+3. **Display Progress**
+   
    ```
-   Handoff: Loaded prior context (3 decisions, 5 modified files)
-   Session: Binding to track auth_20251227
+   ┌─ HANDOFF RESUME ─────────────────────────┐
+   │ Track: auth-system_20251229              │
+   │ Progress: 45% (5/12 tasks)               │
+   │ Ready: E2-login-endpoint                 │
+   │ Last handoff: 2h ago (epic-end)          │
+   │ Loaded: 3 decisions, 5 files             │
+   └──────────────────────────────────────────┘
    ```
+
+4. **Create Epic-Start Handoff**
+   
+   Before starting each epic, run `/conductor-handoff create` with trigger `epic-start`:
+   - Includes Beads sync (Step 5 in CREATE workflow)
+   - Updates metadata.json.handoff (Step 7 in CREATE workflow)
 
 **Non-blocking:** If no handoff found, create fresh session.
 
@@ -501,5 +510,4 @@ conductor/
 - [Beads Preflight](../preflight-beads.md) - Session initialization
 - [Beads Facade](../beads-facade.md) - API contract
 - [Beads Integration](../beads-integration.md) - All 13 integration points
-- [Handoff Triggers](../handoff/triggers.md) - Epic-start/end trigger details
-- [Create Handoff](../handoff/create.md) - Handoff creation workflow
+- [Unified Handoff Workflow](handoff.md) - CREATE/RESUME modes, Beads sync, progress tracking

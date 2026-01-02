@@ -17,8 +17,7 @@
 | `/conductor-finish` | Complete track, extract learnings, archive | `LEARNINGS.md`, archived track |
 | `/conductor-validate` | Run validation checks on current track | Validation report |
 | `/conductor-orchestrate` | Spawn parallel workers for multi-agent execution | Worker coordination |
-| `/create_handoff` | Save session context for continuity | `conductor/handoffs/<track>/` |
-| `/resume_handoff` | Load prior session context | Restored state |
+| `/conductor-handoff` | Save/load session context for continuity | `conductor/handoffs/<track>/` |
 
 ---
 
@@ -173,12 +172,13 @@ skills/
 
 ```bash
 # Save context
-/create_handoff                    # Auto-detect trigger
-/create_handoff manual             # Explicit trigger
+/conductor-handoff                 # Auto-detect mode
+/conductor-handoff create          # Force create
+/conductor-handoff create manual   # Explicit trigger
 
 # Load context
-/resume_handoff                    # Load most recent
-/resume_handoff <track>            # Load specific track
+/conductor-handoff resume          # Load most recent
+/conductor-handoff resume <track>  # Load specific track
 ```
 
 ---
@@ -207,7 +207,7 @@ skills/
 | Tests not running | TDD skipped | Remove `--no-tdd` flag or run `tdd` explicitly |
 | File conflicts in MA mode | Reservation missing | Run `bv reserve <path>` before editing |
 | Stale bead status | Not synced | Run `bd sync` to update git |
-| Session context lost | No handoff created | Always `/create_handoff` before ending session |
+| Session context lost | No handoff created | Always `/conductor-handoff` before ending session |
 
 ---
 
@@ -248,7 +248,7 @@ bd update BEAD-001 --status in_progress
 # ... implement ...
 bd close BEAD-001 --reason completed
 bd sync
-/create_handoff
+/conductor-handoff
 ```
 
 ### Multi-Agent Parallel

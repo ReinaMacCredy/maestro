@@ -27,7 +27,7 @@ ds → design.md → /conductor-newtrack → spec.md + plan.md → fb → beads 
 |---------|-------|-------------|
 | `ds`, `/conductor-design` | [design](../design/SKILL.md) | Double Diamond design sessions |
 | `/conductor-setup` | [conductor](../conductor/SKILL.md) | Initialize project |
-| `/conductor-newtrack` | [conductor](../conductor/SKILL.md) | Create spec + plan from design |
+| `cn`, `/conductor-newtrack` | [conductor](../conductor/SKILL.md) | Create spec + plan from design |
 | `ci`, `/conductor-implement` | [conductor](../conductor/SKILL.md) | Execute track (auto-routes to orchestrator) |
 | `co`, `/conductor-orchestrate` | [orchestrator](../orchestrator/SKILL.md) | Parallel execution |
 | `/conductor-finish` | [conductor](../conductor/SKILL.md) | Complete track |

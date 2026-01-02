@@ -1,6 +1,6 @@
 ---
 name: conductor
-description: Context-driven development methodology. Understands projects set up with Conductor (via Gemini CLI, Claude Code, Amp Code, Codex, or any Agent Skills compatible CLI). Use when working with conductor/ directories, tracks, specs, plans, or when user mentions context-driven development.
+description: Context-driven development methodology. Understands projects set up with Conductor (via Gemini CLI, Claude Code, Amp Code, Codex, or any Agent Skills compatible CLI). Use when working with conductor/ directories, tracks, specs, plans, or when user mentions context-driven development. MUST load maestro-core skill first for routing.
 ---
 
 # Conductor: Context-Driven Development
@@ -18,8 +18,7 @@ Measure twice, code once.
 | `/conductor-status` | Display progress overview | [structure.md](references/structure.md) |
 | `/conductor-revise` | Update spec/plan mid-work | [revisions.md](references/revisions.md) |
 | `/conductor-finish` | Complete track, extract learnings | [finish-workflow.md](references/finish-workflow.md) |
-| `/create_handoff` | Save session context | [handoff/](references/handoff/) |
-| `/resume_handoff` | Load session context | [handoff/](references/handoff/) |
+| `/conductor-handoff` | Unified handoff (auto-detect create/resume) | [workflows/handoff.md](references/workflows/handoff.md) |
 
 ## Quick Reference
 
@@ -32,6 +31,7 @@ Measure twice, code once.
 
 ## Core Principles
 
+- **Load core first** - Load [maestro-core](../maestro-core/SKILL.md) for routing table and fallback policies
 - **Design before code** - `/conductor-design` → `/conductor-newtrack` → implement
 - **TDD by default** - RED → GREEN → REFACTOR (use `--no-tdd` to disable)
 - **Beads integration** - Zero manual `bd` commands in happy path

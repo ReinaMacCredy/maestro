@@ -1,6 +1,6 @@
 ---
 name: orchestrator
-description: Multi-agent parallel execution with autonomous workers. Use when plan.md has Track Assignments section or user triggers /conductor-orchestrate, "run parallel", "spawn workers".
+description: Multi-agent parallel execution with autonomous workers. Use when plan.md has Track Assignments section or user triggers /conductor-orchestrate, "run parallel", "spawn workers". MUST load maestro-core skill first for routing.
 ---
 
 # Orchestrator - Multi-Agent Parallel Execution
@@ -9,6 +9,7 @@ description: Multi-agent parallel execution with autonomous workers. Use when pl
 
 ## Core Principles
 
+- **Load core first** - Load [maestro-core](../maestro-core/SKILL.md) for routing table and fallback policies
 - **Pre-register workers** before spawning (Agent Mail validates recipients)
 - **Workers own their beads** - can `bd claim/close` directly (unlike sequential mode)
 - **File reservations prevent conflicts** - reserve before edit, release on complete

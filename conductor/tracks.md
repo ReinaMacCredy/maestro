@@ -14,6 +14,12 @@ Test track to verify /conductor-implement auto-routes to orchestrator.
 
 ## Completed Tracks
 
+## [x] Track: Unified Handoff System
+*ID: handoff-unify_20260102*
+*Archived: [conductor/archive/handoff-unify_20260102/](archive/handoff-unify_20260102/)*
+
+Consolidated scattered handoff system (6 files, ~1100 lines) into unified `/conductor-handoff` command (2 files, ~330 lines) with auto-detect mode, Beads sync, parallel check, and progress tracking in metadata.json.handoff section.
+
 ## [x] Track: Skill Restructure to Anthropic Standard
 *ID: skill-restructure*
 *Archived: [conductor/archive/skill-restructure/](archive/skill-restructure/)*

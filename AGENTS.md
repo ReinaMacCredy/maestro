@@ -64,8 +64,8 @@ plan.md has "## Track Assignments"?
 
 | Command | Action |
 |---------|--------|
-| `/create_handoff` | Save session context |
-| `/resume_handoff` | Load session context |
+| `/conductor-handoff` | Save session context |
+| `/conductor-handoff resume` | Load session context |
 
 ### Maintenance
 
@@ -129,6 +129,8 @@ bd sync
 | Village MCP unavailable | DEGRADE |
 
 ## Skill Discipline
+
+**RULE:** Load [maestro-core](.claude/skills/maestro-core/SKILL.md) FIRST before any workflow skill for routing table and fallback policies.
 
 **RULE:** Check skills BEFORE ANY RESPONSE. 1% chance = invoke Skill tool.
 

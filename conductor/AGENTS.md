@@ -48,8 +48,9 @@ Contains reusable learnings from completed tracks.
 - `/doc-sync --force` - Apply all doc changes without prompts
 - `sed -n '/^---$/,/^---$/p' "$FILE" | grep '^field:' | cut -d' ' -f2` - Extract YAML frontmatter field value
 - `bd close id1 id2 id3 --reason completed` - Close multiple beads at once
-- `/create_handoff` - Create handoff file manually
-- `/resume_handoff` - Load most recent handoff for track
+- `/conductor-handoff` - Unified handoff command with auto-detect (replaces /create_handoff and /resume_handoff)
+- `/conductor-handoff create` - Force CREATE mode with Beads sync and progress tracking
+- `/conductor-handoff resume` - Force RESUME mode with Beads context loading
 - `ls skills/conductor/references/` - Verify reference structure after migration
 - `/conductor-orchestrate` - Spawn parallel workers for track execution (Mode B workers)
 - `bv --robot-triage --graph-root <epic-id>` - Prepare beads for orchestration ("dọn cỗ")
@@ -96,6 +97,8 @@ Contains reusable learnings from completed tracks.
 - Claude Code hooks must exit 0 even on error (try/catch + graceful exit) to avoid crashing Claude
 - Handoffs in conductor/handoffs/<track>/ are git-committed (shareable), archived on /conductor-finish
 - Stale handoffs (>7 days) trigger warning on /resume_handoff
+- Auto-detect mode uses 7-day threshold: first message + recent handoff = RESUME, else CREATE
+- Handoff Beads sync saves context to bd notes for compaction-proof resumability
 - FTS5 snippet function: `snippet(handoffs_fts, 2, '>>>', '<<<', '...', 50)` for match highlighting
 - artifact-cleanup.py parses dates from filenames (YYYY-MM-DD-HH-MM-trigger.md), not frontmatter
 - Concurrent sessions on same codebase may conflict - documented limitation (last writer wins)
@@ -197,3 +200,6 @@ Contains reusable learnings from completed tracks.
 - **Track Thread Pattern:** Workers use `track:{AGENT_NAME}:{EPIC_ID}` for bead-to-bead context passing
 - **Per-Bead Loop Protocol:** START (register, read thread, reserve, claim) → WORK → COMPLETE (close, save context, release) → NEXT
 - **Auto-Detect Parallel Routing:** Check planTasks independence → if ≥2 independent beads → route to orchestrator
+- **9-Step Handoff CREATE:** Detect → Parallel Check → Metadata → Secrets → Agent Mail → Beads Sync → Markdown → metadata.json → Activity
+- **9-Step Handoff RESUME:** Parse → Agent Mail → File Discovery → Load → Beads Context → Validate → Present → Todos → Activity
+- **Hybrid Handoff Storage:** Agent Mail for search (FTS5), markdown for git history
