@@ -81,9 +81,7 @@ Built on:
 - [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) — Multi-agent orchestration
 - [conductor](https://github.com/NguyenSiTrung/conductor) — Context-driven planning
 - [beads](https://github.com/steveyegge/beads) — Persistent issue tracking
-- [Agent Mail](https://github.com/anthropics/agent-mail) — Multi-agent coordination
-- [Knowledge & Vibes](https://github.com/kyleobrien91/knowledge-and-vibes) — Workflow patterns
-
+- [Agent Mail](https://github.com/Dicklesworthstone/mcp_agent_mail) — Multi-agent coordination
 ---
 
 ## License
