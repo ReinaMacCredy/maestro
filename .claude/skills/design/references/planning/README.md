@@ -12,5 +12,5 @@ Documentation for the 6-phase risk-based planning pipeline.
 
 ## Related
 
-- [maestro-core routing](../../../maestro-core/SKILL.md) - `pl` trigger
-- [orchestrator](../../../orchestrator/SKILL.md) - Track thread integration
+- [maestro-core routing](../../maestro-core/SKILL.md) - `pl` trigger
+- [orchestrator](../../orchestrator/SKILL.md) - Track thread integration

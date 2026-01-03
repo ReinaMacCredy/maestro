@@ -1,24 +1,26 @@
 ---
 name: design
-description: Design Session - collaborative brainstorming to turn ideas into designs using Double Diamond methodology. Use when user types "ds" or wants to explore/design a feature before implementation. MUST load maestro-core skill first for routing.
+description: Design Session - collaborative brainstorming to turn ideas into designs using Double Diamond methodology OR 6-phase planning pipeline. Use when user types "ds", "pl", "/plan", or wants to explore/design a feature before implementation. MUST load maestro-core skill first for routing.
 ---
 
-# Design Session (ds)
+# Design & Planning
 
-Turn ideas into fully-formed designs through collaborative dialogue.
+Turn ideas into fully-formed designs through collaborative dialogue or structured planning.
 
 ## Entry Points
 
 | Trigger | Action |
 |---------|--------|
-| `ds` | Start design session |
+| `ds` | Start design session (Double Diamond) |
 | `/conductor-design` | Start design session (alias) |
+| `pl`, `/plan` | Start planning pipeline (6-phase) |
 | "design a feature" | Start design session |
 | "let's think through X" | Start design session |
-| "integrate deeply into flow" | Suggest design session |
-| "rethink UX", "this flow feels wrong" | Suggest design session |
+| "plan feature X" | Start planning pipeline |
 
 ## Quick Reference
+
+### Double Diamond (ds)
 
 | Phase | Purpose | Exit Criteria |
 |-------|---------|---------------|
@@ -26,6 +28,19 @@ Turn ideas into fully-formed designs through collaborative dialogue.
 | DEFINE | Frame problem | Approach selected |
 | DEVELOP | Explore solutions | Interfaces defined |
 | DELIVER | Finalize design | Design verified |
+
+### Planning Pipeline (pl)
+
+| Phase | Tool | Output |
+|-------|------|--------|
+| 1. Discovery | Parallel Task() agents | design.md Section 2 |
+| 2. Synthesis | Oracle | design.md Section 3 (Gap + Risk Map) |
+| 3. Verification | Spikes via Task() | design.md Section 5 |
+| 4. Decomposition | fb (file-beads) | .beads/*.md |
+| 5. Validation | bv + Oracle | Validated dependency graph |
+| 6. Track Planning | bv --robot-plan | plan.md Track Assignments |
+
+See [planning/pipeline.md](references/planning/pipeline.md) for full details.
 
 ## Core Principles
 

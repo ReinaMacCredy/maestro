@@ -212,4 +212,4 @@ Tracked in `metadata.json`:
 
 - [spikes.md](spikes.md) - Spike workflow details
 - [design-template.md](design-template.md) - Unified design.md format
-- [../../workflows/newtrack.md](../workflows/newtrack.md) - Track creation
+- [../../conductor/references/workflows/newtrack.md](../../conductor/references/workflows/newtrack.md) - Track creation

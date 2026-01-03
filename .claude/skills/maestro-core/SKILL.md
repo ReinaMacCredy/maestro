@@ -18,7 +18,7 @@ Higher rank wins on conflicts.
 ## Workflow Chain
 
 ```
-ds → design.md → /conductor-newtrack → spec.md + plan.md → fb → beads → ci/co → implementation
+ds/pl → design.md → /conductor-newtrack → spec.md + plan.md → fb → beads → ci/co → implementation
 ```
 
 ## Routing Table
@@ -28,6 +28,7 @@ ds → design.md → /conductor-newtrack → spec.md + plan.md → fb → beads 
 | Trigger | Skill to Load | Description |
 |---------|---------------|-------------|
 | `ds`, `/conductor-design` | `skill(name="design")` | Double Diamond design sessions |
+| `pl`, `/plan`, "plan feature" | `skill(name="design")` | 6-phase risk-based planning |
 | `/conductor-setup` | `skill(name="conductor")` | Initialize project |
 | `cn`, `/conductor-newtrack` | `skill(name="conductor")` | Create spec + plan from design |
 | `ci`, `/conductor-implement` | `skill(name="conductor")` | Execute track (auto-routes to orchestrator) |
@@ -36,7 +37,6 @@ ds → design.md → /conductor-newtrack → spec.md + plan.md → fb → beads 
 | `fb`, `file-beads` | `skill(name="beads")` | File beads from plan |
 | `rb`, `review-beads` | `skill(name="beads")` | Review filed beads |
 | `bd ready` | `skill(name="beads")` | Find available work |
-| `pl`, `/plan`, "plan feature" | `skill(name="conductor")` | 6-phase risk-based planning |
 | `/handoff`, `/conductor-handoff` | `skill(name="handoff")` | Session handoff (self-contained) |
 
 ### Routing Flow

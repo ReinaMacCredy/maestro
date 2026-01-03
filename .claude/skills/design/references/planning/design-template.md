@@ -186,4 +186,4 @@ Summarized here for orchestrator reference:
 
 - [pipeline.md](pipeline.md) - 6-phase planning flow
 - [spikes.md](spikes.md) - Spike workflow
-- [../../workflows/newtrack.md](../workflows/newtrack.md) - Track creation from design
+- [../../conductor/references/workflows/newtrack.md](../../conductor/references/workflows/newtrack.md) - Track creation from design

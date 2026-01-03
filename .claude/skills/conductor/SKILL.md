@@ -1,6 +1,6 @@
 ---
 name: conductor
-description: Context-driven development methodology. Trigger with pl, /plan, ci, /conductor-implement, cn, /conductor-newtrack, or /conductor-* commands. Use when working with conductor/ directories, tracks, specs, plans, or when user mentions context-driven development.
+description: Context-driven development methodology. Trigger with ci, /conductor-implement, cn, /conductor-newtrack, or /conductor-* commands. Use when working with conductor/ directories, tracks, specs, plans, or when user mentions context-driven development.
 ---
 
 # Conductor: Context-Driven Development
@@ -13,7 +13,6 @@ Measure twice, code once.
 |---------|--------|-----------|
 | `/conductor-setup` | Initialize project context | [workflows/setup.md](references/workflows/setup.md) |
 | `/conductor-design` | Design feature (Double Diamond) | [design skill](../design/SKILL.md) |
-| `pl`, `/plan` | 6-phase risk-based planning pipeline | [planning/PIPELINE.md](references/planning/PIPELINE.md) |
 | `/conductor-newtrack` | Create spec + plan from design | [workflows/newtrack.md](references/workflows/newtrack.md) |
 | `/conductor-implement` | Execute track (auto-routes if parallel) | [workflows/implement.md](references/workflows/implement.md) |
 | `/conductor-status` | Display progress overview | [structure.md](references/structure.md) |
