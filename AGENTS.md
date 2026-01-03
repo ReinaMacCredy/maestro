@@ -181,9 +181,11 @@ cat .claude-plugin/plugin.json | jq .   # Validate manifest
 
 | Type | Method |
 |------|--------|
-| Plugin | CI auto-bump (`feat:` minor, `fix:` patch, `feat!:` major) |
+| Plugin | CI auto-bump (`feat:` minor, `fix:` patch, `feat!:` major while 0.x) |
 | Skill | Manual frontmatter update |
 | Skip CI | `[skip ci]` in commit |
+
+**Pre-1.0 Semantics**: While version is 0.x.x, breaking changes (`feat!:` or `release:major`) bump MINOR not MAJOR. This prevents accidental 1.0.0 release. See [CHANGELOG-legacy.md](CHANGELOG-legacy.md) for pre-0.5.0 history.
 
 ## Critical Rules
 

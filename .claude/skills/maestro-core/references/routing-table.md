@@ -7,7 +7,7 @@ Complete trigger → skill mapping.
 | Trigger | Skill | Priority | Notes |
 |---------|-------|----------|-------|
 | `ds` | design | 3 | Also: `/conductor-design` (exploratory) |
-| `pl` | planning | 3 | Also: `/plan` (execution-focused) |
+| `pl` | conductor | 1 | Also: `/plan` (execution-focused) |
 | `/conductor-setup` | conductor | 1 | Initialize project |
 | `/conductor-newtrack` | conductor | 1 | Create track from design |
 | `ci`, `/conductor-implement` | conductor | 1 | May route to orchestrator |

@@ -144,9 +144,15 @@ jobs:
           
           case "${{ steps.bump.outputs.type }}" in
             major)
-              MAJOR=$((MAJOR + 1))
-              MINOR=0
-              PATCH=0
+              # Pre-1.0 semver: major bumps MINOR while in 0.x
+              if [ "$MAJOR" -eq 0 ]; then
+                MINOR=$((MINOR + 1))
+                PATCH=0
+              else
+                MAJOR=$((MAJOR + 1))
+                MINOR=0
+                PATCH=0
+              fi
               ;;
             minor)
               MINOR=$((MINOR + 1))

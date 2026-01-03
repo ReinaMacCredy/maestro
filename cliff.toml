@@ -50,7 +50,7 @@ date_order = false
 sort_commits = "oldest"
 
 # Regex for git tags
-tag_pattern = "v[0-9].*"
+tag_pattern = "v0.*"
 
 # Skip commits with messages matching these patterns
 skip_tags = ""

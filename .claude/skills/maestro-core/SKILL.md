@@ -36,7 +36,7 @@ ds → design.md → /conductor-newtrack → spec.md + plan.md → fb → beads 
 | `fb`, `file-beads` | `skill(name="beads")` | File beads from plan |
 | `rb`, `review-beads` | `skill(name="beads")` | Review filed beads |
 | `bd ready` | `skill(name="beads")` | Find available work |
-| `pl`, `/plan`, "plan feature" | `skill(name="planning")` | 6-phase risk-based planning |
+| `pl`, `/plan`, "plan feature" | `skill(name="conductor")` | 6-phase risk-based planning |
 
 ### Routing Flow
 
