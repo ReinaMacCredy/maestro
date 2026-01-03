@@ -27,10 +27,10 @@ Complete trigger → skill mapping.
 | Phrase | Skill | Example |
 |--------|-------|---------|
 | "design a feature" | design | "Let's design a login feature" |
-| "plan feature" | planning | "Plan the auth implementation" |
-| "plan implementation" | planning | "I need to plan this feature" |
-| "execution plan" | planning | "Create an execution plan" |
-| "risk-based plan" | planning | "Give me a risk-based plan" |
+| "plan feature" | conductor | "Plan the auth implementation" |
+| "plan implementation" | conductor | "I need to plan this feature" |
+| "execution plan" | conductor | "Create an execution plan" |
+| "risk-based plan" | conductor | "Give me a risk-based plan" |
 | "run parallel" | orchestrator | "Run these tasks in parallel" |
 | "spawn workers" | orchestrator | "Spawn workers for Track A" |
 | "create task" | beads | "Create task for fixing auth" |

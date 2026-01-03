@@ -1,6 +1,6 @@
 ---
 name: conductor
-description: Context-driven development methodology. Understands projects set up with Conductor (via Gemini CLI, Claude Code, Amp Code, Codex, or any Agent Skills compatible CLI). Use when working with conductor/ directories, tracks, specs, plans, or when user mentions context-driven development. MUST load maestro-core skill first for routing.
+description: Context-driven development methodology. Trigger with pl, /plan, ci, /conductor-implement, cn, /conductor-newtrack, or /conductor-* commands. Use when working with conductor/ directories, tracks, specs, plans, or when user mentions context-driven development.
 ---
 
 # Conductor: Context-Driven Development
