@@ -37,6 +37,7 @@ ds → design.md → /conductor-newtrack → spec.md + plan.md → fb → beads 
 | `rb`, `review-beads` | `skill(name="beads")` | Review filed beads |
 | `bd ready` | `skill(name="beads")` | Find available work |
 | `pl`, `/plan`, "plan feature" | `skill(name="conductor")` | 6-phase risk-based planning |
+| `/handoff`, `/conductor-handoff` | `skill(name="handoff")` | Session handoff (self-contained) |
 
 ### Routing Flow
 
@@ -70,6 +71,7 @@ ds → design.md → /conductor-newtrack → spec.md + plan.md → fb → beads 
 - [conductor](../conductor/SKILL.md) - Context-driven development
 - [orchestrator](../orchestrator/SKILL.md) - Multi-agent parallel execution
 - [beads](../beads/SKILL.md) - Issue tracking and dependency graphs
+- [handoff](../handoff/SKILL.md) - Session cycling and context preservation
 - [writing-skills](../writing-skills/SKILL.md) - Creating new skills
 - [sharing-skills](../sharing-skills/SKILL.md) - Contributing skills upstream
 - [using-git-worktrees](../using-git-worktrees/SKILL.md) - Isolated workspaces
