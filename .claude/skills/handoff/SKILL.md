@@ -15,13 +15,13 @@ Hand off your current session while preserving work context.
 
 | Command | Action |
 |---------|--------|
-| `/handoff` | Auto-detect mode (create or resume) |
-| `/handoff [message]` | Create handoff with context notes |
-| `/handoff create` | Force CREATE mode |
-| `/handoff resume` | Force RESUME mode |
-| `/handoff resume <track>` | Resume specific track |
+| `ho` | Auto-detect mode (create or resume) |
+| `ho [message]` | Create handoff with context notes |
+| `ho create` | Force CREATE mode |
+| `ho resume` | Force RESUME mode |
+| `ho resume <track>` | Resume specific track |
 
-**Aliases:** `/conductor-handoff` → `/handoff`
+**Aliases:** `ho`, `/handoff`, `/conductor-handoff`
 
 ## When to Use
 
@@ -34,13 +34,13 @@ Hand off your current session while preserving work context.
 
 ```bash
 # Simple handoff
-/handoff
+ho
 
 # With context notes
-/handoff "Found bug in auth.go line 145"
+ho "Found bug in auth.go line 145"
 
 # Resume in new session
-/handoff resume
+ho resume
 ```
 
 ## What Persists vs Resets
