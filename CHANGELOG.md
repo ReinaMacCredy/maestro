@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Move planning pipeline documentation and references from conductor to design skill
 
+
+### Documentation
+
+
+- Update changelog
+- Update handoff skill documentation to use `ho` as the primary command alias.
+
 ## [0.8.0] - 2026-01-03
 
 
