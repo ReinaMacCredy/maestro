@@ -139,6 +139,7 @@ Load references only when needed:
 | Intent routing | [intent-routing.md](references/intent-routing.md) |
 | Summary format | [summary-protocol.md](references/summary-protocol.md) |
 | Auto-routing | [auto-routing.md](references/auto-routing.md) |
+| Track threads | [track-threads.md](references/track-threads.md) |
 
 ## Related
 

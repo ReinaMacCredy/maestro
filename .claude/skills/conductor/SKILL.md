@@ -13,6 +13,7 @@ Measure twice, code once.
 |---------|--------|-----------|
 | `/conductor-setup` | Initialize project context | [workflows/setup.md](references/workflows/setup.md) |
 | `/conductor-design` | Design feature (Double Diamond) | [design skill](../design/SKILL.md) |
+| `pl`, `/plan` | 6-phase risk-based planning pipeline | [planning/PIPELINE.md](references/planning/PIPELINE.md) |
 | `/conductor-newtrack` | Create spec + plan from design | [workflows/newtrack.md](references/workflows/newtrack.md) |
 | `/conductor-implement` | Execute track (auto-routes if parallel) | [workflows/implement.md](references/workflows/implement.md) |
 | `/conductor-status` | Display progress overview | [structure.md](references/structure.md) |
@@ -46,9 +47,10 @@ conductor/
 ├── code_styleguides/                       # Language-specific style rules
 ├── CODEMAPS/                               # Architecture docs
 ├── handoffs/                               # Session context
+├── spikes/                                 # Research spikes (pl output)
 └── tracks/<track_id>/                      # Per-track work
     ├── design.md, spec.md, plan.md         # Planning artifacts
-    └── metadata.json                       # State tracking
+    └── metadata.json                       # State tracking (includes planning state)
 ```
 
 See [structure.md](references/structure.md) for full details.

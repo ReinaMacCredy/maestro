@@ -6,7 +6,8 @@ Complete trigger → skill mapping.
 
 | Trigger | Skill | Priority | Notes |
 |---------|-------|----------|-------|
-| `ds` | design | 3 | Also: `/conductor-design` |
+| `ds` | design | 3 | Also: `/conductor-design` (exploratory) |
+| `pl` | planning | 3 | Also: `/plan` (execution-focused) |
 | `/conductor-setup` | conductor | 1 | Initialize project |
 | `/conductor-newtrack` | conductor | 1 | Create track from design |
 | `ci`, `/conductor-implement` | conductor | 1 | May route to orchestrator |
@@ -26,6 +27,10 @@ Complete trigger → skill mapping.
 | Phrase | Skill | Example |
 |--------|-------|---------|
 | "design a feature" | design | "Let's design a login feature" |
+| "plan feature" | planning | "Plan the auth implementation" |
+| "plan implementation" | planning | "I need to plan this feature" |
+| "execution plan" | planning | "Create an execution plan" |
+| "risk-based plan" | planning | "Give me a risk-based plan" |
 | "run parallel" | orchestrator | "Run these tasks in parallel" |
 | "spawn workers" | orchestrator | "Spawn workers for Track A" |
 | "create task" | beads | "Create task for fixing auth" |
@@ -40,6 +45,18 @@ Complete trigger → skill mapping.
 4. Context detection (conductor/ exists)
 
 ## Conditional Routing
+
+### Design (`ds`) vs Planning (`pl`)
+
+| Aspect | `ds` (Design) | `pl` (Planning) |
+|--------|---------------|-----------------|
+| Intent | Exploratory, discover requirements | Execution-focused, task breakdown |
+| Output | design.md (problem + solution space) | plan.md (actionable tasks) |
+| Process | Double Diamond (diverge/converge) | 6-phase risk-based pipeline |
+| When | Unclear requirements, new features | Known scope, ready to implement |
+| Keywords | "explore", "brainstorm", "what if" | "plan", "implement", "execute" |
+
+Both entry points converge to `/conductor-newtrack` for spec/plan generation.
 
 ### `/conductor-implement` Auto-Route
 

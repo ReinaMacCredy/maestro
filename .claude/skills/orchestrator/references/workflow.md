@@ -127,6 +127,192 @@ CROSS_DEPS = auto_generated_cross_deps
 
 Both options produce the same TRACKS structure for Phase 4.
 
+**Option C: From Planning Pipeline (pl mode)**
+
+When orchestration is triggered from the planning pipeline (`pl` command), spike learnings from design.md Section 5 are extracted and injected into worker prompts:
+
+```python
+# Extract spike learnings from design.md
+design_md = Read("conductor/tracks/<track-id>/design.md")
+spike_learnings = parse_section_5(design_md)
+# Result:
+# {
+#   "overall": ["Learning 1", "Learning 2"],
+#   "by_scope": {
+#     "skills/orchestrator/**": ["Orchestrator-specific learning"],
+#     "skills/conductor/**": ["Conductor-specific learning"]
+#   }
+# }
+
+# Map learnings to tracks by file scope
+for track in TRACKS:
+    track.spike_learnings = spike_learnings.get("overall", [])
+    scope_learnings = spike_learnings.get("by_scope", {}).get(track.scope, [])
+    track.spike_learnings.extend(scope_learnings)
+```
+
+**Spike Learning Injection:**
+
+The planning pipeline extracts learnings from design.md Section 5 and:
+1. Parses overall learnings (apply to all tracks)
+2. Matches scope-specific learnings to tracks by file scope patterns
+3. Injects combined learnings into `{SPIKE_LEARNINGS}` placeholder in worker prompts
+
+This ensures workers start with context from spike/discovery phases.
+
+### Parsing design.md Section 5 (Spike Results)
+
+Extract spike learnings with structured format:
+
+```python
+def parse_spike_results(design_md: str) -> list[dict]:
+    """Parse Section 5: Spike Results from design.md"""
+    spikes = []
+    section_5 = extract_section(design_md, "## 5. Spike Results")
+    
+    for spike_block in section_5.split("### Spike:"):
+        if not spike_block.strip():
+            continue
+        spike = {
+            "spike_id": extract_field(spike_block, "id") or generate_id(),
+            "question": spike_block.split("\n")[0].strip(),
+            "result": extract_field(spike_block, "Result"),  # YES/NO
+            "learnings": extract_list(spike_block, "Learnings"),
+            "code_path": extract_field(spike_block, "Code reference")
+        }
+        spikes.append(spike)
+    return spikes
+
+# Example output:
+# [
+#   {
+#     "spike_id": "spike-001",
+#     "question": "Can Stripe SDK work with Node 18?",
+#     "result": "YES",
+#     "learnings": ["Use stripe@12.x for Node 18", "Webhook verification needs raw body"],
+#     "code_path": "conductor/spikes/billing/spike-001/"
+#   }
+# ]
+```
+
+### Mapping Spikes to Beads by File Scope
+
+Match spike code paths to bead file scopes from metadata.json:
+
+```python
+def map_spikes_to_beads(spikes: list, metadata: dict) -> dict[str, list]:
+    """Map spike learnings to beads by file scope matching"""
+    bead_learnings = {}
+    
+    for bead_id, bead_info in metadata["beads"]["planTasks"].items():
+        file_scope = bead_info.get("fileScope", "")
+        matching_learnings = []
+        
+        for spike in spikes:
+            code_path = spike.get("code_path", "")
+            # Match by package/domain patterns
+            # e.g., spike in conductor/spikes/billing/ → beads with packages/api/**
+            if scope_matches(code_path, file_scope):
+                matching_learnings.extend(spike["learnings"])
+        
+        if matching_learnings:
+            bead_learnings[bead_id] = matching_learnings
+    
+    return bead_learnings
+
+def scope_matches(spike_path: str, bead_scope: str) -> bool:
+    """Heuristic matching between spike path and bead file scope"""
+    # Extract domain from spike path: conductor/spikes/<track>/<domain>/
+    spike_domain = spike_path.split("/")[2] if len(spike_path.split("/")) > 2 else ""
+    
+    # Match against bead scope patterns
+    return (
+        spike_domain in bead_scope or
+        fnmatch(spike_path, f"*{bead_scope.replace('**', '*')}*")
+    )
+```
+
+### Injecting into Worker Prompt
+
+Add spike learnings to worker prompt template under dedicated section:
+
+```python
+def inject_spike_learnings(worker_prompt: str, bead_id: str, bead_learnings: dict) -> str:
+    """Inject spike learnings into worker prompt {SPIKE_LEARNINGS} placeholder"""
+    learnings = bead_learnings.get(bead_id, [])
+    
+    if not learnings:
+        section = "No spike learnings applicable to this bead."
+    else:
+        section = format_learnings_section(learnings, spikes)
+    
+    return worker_prompt.replace("{SPIKE_LEARNINGS}", section)
+
+def format_learnings_section(learnings: list, spikes: list) -> str:
+    """Format spike learnings for worker prompt"""
+    lines = ["## Spike Learnings", ""]
+    
+    for spike in spikes:
+        if any(l in learnings for l in spike["learnings"]):
+            lines.append(f"### Spike: {spike['question']}")
+            lines.append(f"**Result**: {spike['result']}")
+            lines.append(f"**Code reference**: `{spike['code_path']}`")
+            lines.append("")
+            lines.append("#### Key Learnings")
+            for learning in spike["learnings"]:
+                if learning in learnings:
+                    lines.append(f"- {learning}")
+            lines.append("")
+    
+    return "\n".join(lines)
+```
+
+**Rendered output in worker prompt:**
+
+```markdown
+## Spike Learnings
+
+### Spike: Can Stripe SDK work with Node 18?
+**Result**: YES
+**Code reference**: `conductor/spikes/billing/spike-001/`
+
+#### Key Learnings
+- Use stripe@12.x for Node 18
+- Webhook verification needs raw body
+```
+
+### Fallback Chain for Missing Spike Code
+
+When spike code reference is missing or inaccessible:
+
+| Priority | Source | Action |
+|----------|--------|--------|
+| Primary | Embedded in bead description | Use directly from metadata.beads.planTasks[bead_id].spikeContext |
+| Secondary | design.md Section 5 | Parse and extract learnings |
+| Tertiary | Oracle reconstruct | `oracle(task="reconstruct spike learnings", context=spike_path)` |
+
+```python
+def get_spike_learnings(bead_id: str, metadata: dict, design_md: str) -> list:
+    """Get spike learnings with fallback chain"""
+    # Primary: Embedded in bead
+    bead_info = metadata["beads"]["planTasks"].get(bead_id, {})
+    if spike_context := bead_info.get("spikeContext"):
+        return spike_context
+    
+    # Secondary: design.md Section 5
+    spikes = parse_spike_results(design_md)
+    bead_learnings = map_spikes_to_beads(spikes, metadata)
+    if learnings := bead_learnings.get(bead_id):
+        return learnings
+    
+    # Tertiary: Oracle reconstruct from spike code
+    spike_path = bead_info.get("relatedSpikePath")
+    if spike_path and path_exists(spike_path):
+        return oracle_reconstruct_learnings(spike_path)
+    
+    return []  # No learnings available
+```
+
 ### Parsing Track Assignments Table
 
 | Track | Agent | Tasks | File Scope | Depends On |

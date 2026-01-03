@@ -73,6 +73,8 @@ Contains reusable learnings from completed tracks.
 - `bd dep tree <epic-id>` - View dependency tree for epic
 - `bd close <id1> --reason completed && bd update <id2> --status in_progress` - Chain close and claim in one command
 - `oracle(task="6-dimension design audit", files=[...])` - Amp's built-in oracle tool for design review
+- `bd close <spike-id> --reason "YES: <approach>"` - Close spike with structured result (YES/NO/PARTIAL)
+- `register_agent(name="PurpleMountain", ...)` - Manual agent registration when auto-generation fails
 
 ## Gotchas
 
@@ -162,6 +164,10 @@ Contains reusable learnings from completed tracks.
 - Skill files live at `.claude/skills/` not `skills/` - verification scripts must use correct paths
 - Idempotent Oracle updates: When `## Oracle Audit` section exists, find start marker → find next `##` → replace entire section
 - Platform detection for Oracle: Check for oracle tool availability before deciding dispatch method (Amp vs Task)
+- Agent registration may fail on unique name generation - fallback to manual `register_agent()` with explicit name
+- Worker completion messages can fail silently if name generation fails - bead still closes via `bd` command
+- Track thread format: `track:<agent>:<epic>` - colon-delimited, not slash
+- Spike learnings injection uses `{SPIKE_LEARNINGS}` placeholder in worker prompts
 
 ## Patterns
 

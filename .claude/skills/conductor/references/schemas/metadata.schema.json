@@ -267,6 +267,147 @@
         "keep": false
       }
     },
+    "planning": {
+      "type": "object",
+      "description": "Planning pipeline state (pl mode only - 6-phase risk-based planning)",
+      "properties": {
+        "state": {
+          "type": "string",
+          "description": "Current planning pipeline phase",
+          "enum": ["unplanned", "discovery", "synthesized", "verified", "decomposed", "validated", "track_planned", "executing", "complete"],
+          "default": "unplanned"
+        },
+        "design_path": {
+          "type": "string",
+          "description": "Which design path was used",
+          "enum": ["ds", "pl"],
+          "default": "ds"
+        },
+        "phases_completed": {
+          "type": "array",
+          "description": "List of completed planning phases",
+          "items": { "type": "string" },
+          "default": []
+        },
+        "spikes": {
+          "type": "array",
+          "description": "Technical spikes performed during discovery/verification",
+          "items": {
+            "type": "object",
+            "required": ["id", "question"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Unique spike identifier (e.g., spike-001)"
+              },
+              "question": {
+                "type": "string",
+                "description": "The question being investigated"
+              },
+              "result": {
+                "type": "string",
+                "description": "Outcome of the spike",
+                "enum": ["YES", "NO", "PARTIAL", "TIMEOUT"]
+              },
+              "path": {
+                "type": "string",
+                "description": "File path to spike documentation"
+              },
+              "completedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When spike was completed"
+              }
+            },
+            "additionalProperties": false
+          },
+          "default": []
+        },
+        "risk_map": {
+          "type": "object",
+          "description": "Component classification by risk level",
+          "properties": {
+            "high": {
+              "type": "array",
+              "description": "High-risk components requiring spikes",
+              "items": { "type": "string" },
+              "default": []
+            },
+            "medium": {
+              "type": "array",
+              "description": "Medium-risk components requiring validation",
+              "items": { "type": "string" },
+              "default": []
+            },
+            "low": {
+              "type": "array",
+              "description": "Low-risk components with known patterns",
+              "items": { "type": "string" },
+              "default": []
+            }
+          },
+          "additionalProperties": false,
+          "default": {
+            "high": [],
+            "medium": [],
+            "low": []
+          }
+        },
+        "validation": {
+          "type": "object",
+          "description": "Gate validation tracking",
+          "properties": {
+            "gates_passed": {
+              "type": "array",
+              "description": "List of validation gates that have passed",
+              "items": { "type": "string" },
+              "default": []
+            },
+            "current_gate": {
+              "type": ["string", "null"],
+              "description": "Current validation gate being processed",
+              "default": null
+            },
+            "retries": {
+              "type": "integer",
+              "description": "Number of retry attempts for current gate",
+              "minimum": 0,
+              "default": 0
+            },
+            "last_failure": {
+              "type": ["string", "null"],
+              "description": "Description of last validation failure",
+              "default": null
+            }
+          },
+          "additionalProperties": false,
+          "default": {
+            "gates_passed": [],
+            "current_gate": null,
+            "retries": 0,
+            "last_failure": null
+          }
+        }
+      },
+      "additionalProperties": false,
+      "default": {
+        "state": "unplanned",
+        "design_path": "ds",
+        "phases_completed": [],
+        "spikes": [],
+        "risk_map": {
+          "high": [],
+          "medium": [],
+          "low": []
+        },
+        "validation": {
+          "gates_passed": [],
+          "current_gate": null,
+          "retries": 0,
+          "last_failure": null
+        }
+      }
+    },
     "generation": {
       "type": "object",
       "description": "Spec/plan generation progress (consolidated from .track-progress.json)",

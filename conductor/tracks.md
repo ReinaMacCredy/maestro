@@ -8,6 +8,12 @@ Master list of all development tracks.
 
 ## Completed Tracks
 
+## [x] Track: Planning Pipeline + Orchestrator Enhancement
+*ID: planning-integration*
+*Completed: 2026-01-03*
+
+Integrated dual routing (`ds` vs `pl`) for design/planning workflows. Added 6-phase planning pipeline with risk-based spikes, track thread protocol (`track:<agent>:<epic>`) for bead-to-bead context preservation, and spike learnings injection into worker prompts. 18 beads completed via parallel orchestration (3 tracks).
+
 ## [x] Track: Pre-Orchestration Token Optimization
 *ID: pre-orchestration-optimization*
 *Archived: [conductor/archive/pre-orchestration-optimization/](archive/pre-orchestration-optimization/)*

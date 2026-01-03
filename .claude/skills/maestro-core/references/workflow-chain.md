@@ -5,15 +5,33 @@ Complete pipeline from idea to implementation.
 ## Phase Flow
 
 ```
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│   DESIGN    │───▶│    SPEC     │───▶│    PLAN     │───▶│  IMPLEMENT  │
-│     ds      │    │  newtrack   │    │     fb      │    │   ci / co   │
-└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
-       │                  │                  │                  │
-       ▼                  ▼                  ▼                  ▼
-  design.md          spec.md            plan.md            code + tests
-                    + plan.md           + beads
+┌─────────────┐         ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│   DESIGN    │────┐    │    SPEC     │───▶│    PLAN     │───▶│  IMPLEMENT  │
+│     ds      │    │    │  newtrack   │    │     fb      │    │   ci / co   │
+└─────────────┘    │    └─────────────┘    └─────────────┘    └─────────────┘
+       │           │           │                  │                  │
+       ▼           │           ▼                  ▼                  ▼
+  design.md        │      spec.md            plan.md            code + tests
+       │           │     + plan.md           + beads
+       │           │           ▲
+       │           │           │
+┌─────────────┐    │           │
+│  PLANNING   │────┘           │
+│     pl      │────────────────┘
+└─────────────┘
+       │
+       ▼
+  design.md (execution-focused)
 ```
+
+### Dual Entry Points
+
+| Entry | Trigger | Focus | When to Use |
+|-------|---------|-------|-------------|
+| Design | `ds` | Exploratory | Unclear requirements, discovery needed |
+| Planning | `pl` | Execution | Known scope, ready to implement |
+
+Both paths produce `design.md` and flow into `/conductor-newtrack`.
 
 ## Commands Per Phase
 

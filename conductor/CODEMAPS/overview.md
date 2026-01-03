@@ -7,6 +7,7 @@ AI workflow plugin for structured development: planning (Conductor), issue track
 | Entry | Purpose |
 |-------|---------|
 | `ds` / `/conductor-design` | Start Double Diamond design session |
+| `pl` / `/plan` | Start 6-phase risk-based planning pipeline |
 | `/conductor-newtrack` | Generate spec + plan + beads from design |
 | `/conductor-implement` | Execute tasks with TDD (sequential) |
 | `/conductor-orchestrate` | Execute tracks in parallel with workers |
@@ -22,6 +23,7 @@ maestro/
 │   ├── beads/references/         # Issue tracking workflows
 │   ├── conductor/references/     # Planning + execution (absorbed 9 skills)
 │   │   ├── research/             # Research protocol (replaces grounding)
+│   │   ├── planning/             # 6-phase planning pipeline (pl command)
 │   │   ├── prompts/              # Agent prompts
 │   │   ├── coordination/         # Multi-agent coordination
 │   │   ├── tdd/                  # TDD cycle + gates
@@ -40,6 +42,7 @@ maestro/
 ├── conductor/        # Project context + tracks
 │   ├── product.md, tech-stack.md, workflow.md
 │   ├── CODEMAPS/     # Architecture documentation (this directory)
+│   ├── spikes/       # Research spikes (pl output)
 │   └── tracks/<id>/  # design.md, spec.md, plan.md per track
 ├── agents/           # Agent persona definitions
 └── .beads/           # Issue tracker storage
@@ -48,23 +51,23 @@ maestro/
 ## Data Flow
 
 ```
-ds → design.md → /conductor-newtrack → spec.md + plan.md
-                                              ↓
-                                       fb → .beads/ (epics + issues)
-                                              ↓
-                                    [auto-orchestrate?]
-                                     ╱             ╲
-                                   YES              NO
-                                   ↓                ↓
-                         auto-analyze graph    manual choice
-                                   ↓                ↓
-                      spawn parallel workers   /conductor-implement
-                                   ↓                ↓
-                           workers complete    TDD cycle
-                                   ↓                ↓
-                               rb review         done
-                                   ↓                ↓
-                              /conductor-finish → LEARNINGS.md → archive
+ds → design.md ─┬→ /conductor-newtrack → spec.md + plan.md
+                │                              ↓
+pl → spike.md ──┘                       fb → .beads/ (epics + issues)
+                                               ↓
+                                     [auto-orchestrate?]
+                                      ╱             ╲
+                                    YES              NO
+                                    ↓                ↓
+                          auto-analyze graph    manual choice
+                                    ↓                ↓
+                       spawn parallel workers   /conductor-implement
+                                    ↓                ↓
+                            workers complete    TDD cycle
+                                    ↓                ↓
+                                rb review         done
+                                    ↓                ↓
+                               /conductor-finish → LEARNINGS.md → archive
 ```
 
 ### Auto-Orchestration (New)

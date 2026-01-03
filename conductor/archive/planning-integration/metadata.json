@@ -1,0 +1,69 @@
+{
+  "track": "planning-integration",
+  "title": "Planning Pipeline + Orchestrator Enhancement",
+  "created": "2026-01-03",
+  "workflow": {
+    "state": "ARCHIVED",
+    "mode": "full",
+    "design_path": "ds"
+  },
+  "validation": {
+    "gates_passed": [
+      "design",
+      "spec",
+      "plan-structure",
+      "implementation"
+    ],
+    "current_gate": null,
+    "retries": 0,
+    "last_failure": null
+  },
+  "artifacts": {
+    "design": true,
+    "spec": true,
+    "plan": true,
+    "beads": true
+  },
+  "beads": {
+    "status": "complete",
+    "fileScopes": {
+      "1.1.1": [
+        "skills/maestro-core/SKILL.md"
+      ],
+      "1.1.2": [
+        "skills/maestro-core/references/routing-table.md"
+      ],
+      "1.1.3": [
+        "skills/maestro-core/references/workflow-chain.md"
+      ],
+      "1.2.2": [
+        "skills/conductor/references/planning/pipeline.md"
+      ],
+      "1.2.3": [
+        "skills/conductor/references/planning/design-template.md"
+      ],
+      "1.2.4": [
+        "skills/conductor/references/planning/spikes.md"
+      ],
+      "3.1.1": [
+        "skills/orchestrator/references/track-threads.md"
+      ],
+      "3.1.2": [
+        "skills/orchestrator/SKILL.md"
+      ],
+      "3.2.1": [
+        "skills/orchestrator/references/worker-prompt.md"
+      ],
+      "3.2.2": [
+        "skills/orchestrator/references/workflow.md"
+      ]
+    },
+    "orchestrated": true
+  },
+  "source": {
+    "external_files": [
+      "external/planning.md",
+      "external/orchestrator.md"
+    ]
+  }
+}
