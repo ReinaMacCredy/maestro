@@ -85,27 +85,27 @@ Skills aren't scripts—they're methodologies the agent adopts:
 ```mermaid
 flowchart LR
     subgraph Planning
-        A[ds] --> B[design.md]
-        B --> C[/conductor-newtrack]
-        C --> D[spec.md + plan.md]
-        D --> E[fb: file beads]
+        A["ds"] --> B["design.md"]
+        B --> C["newtrack"]
+        C --> D["spec.md + plan.md"]
+        D --> E["fb: file beads"]
     end
     
     subgraph Execution
-        E --> F[bd ready --json]
-        F --> G[/conductor-implement]
-        G --> H{TDD Cycle}
-        H --> I[RED: Write failing test]
-        I --> J[GREEN: Make it pass]
-        J --> K[REFACTOR: Clean up]
-        K --> L[bd close]
+        E --> F["bd ready"]
+        F --> G["implement"]
+        G --> H{"TDD Cycle"}
+        H --> I["RED: failing test"]
+        I --> J["GREEN: make pass"]
+        J --> K["REFACTOR"]
+        K --> L["bd close"]
         L --> F
     end
     
     subgraph Completion
-        L --> M[/conductor-finish]
-        M --> N[Extract learnings]
-        N --> O[Archive track]
+        L --> M["finish"]
+        M --> N["Extract learnings"]
+        N --> O["Archive track"]
     end
     
     style A fill:#1a1a2e,stroke:#e94560,color:#fff
