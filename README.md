@@ -31,6 +31,17 @@ curl -fsSL https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/scripts/
 
 ## Quick Start
 
+```mermaid
+flowchart LR
+    A["/conductor-setup"] --> B["ds"]
+    B --> C["/conductor-newtrack"]
+    C --> D["/conductor-implement"]
+    D --> E["/conductor-finish"]
+    
+    style A fill:#1a1a2e,stroke:#e94560,color:#fff
+    style D fill:#1a1a2e,stroke:#0f3460,color:#fff
+```
+
 ```
 /conductor-setup              # Initialize project (once)
 ds                            # Design session → design.md

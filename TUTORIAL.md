@@ -82,6 +82,37 @@ Skills aren't scripts—they're methodologies the agent adopts:
 
 ## The Complete Workflow
 
+```mermaid
+flowchart LR
+    subgraph Planning
+        A[ds] --> B[design.md]
+        B --> C[/conductor-newtrack]
+        C --> D[spec.md + plan.md]
+        D --> E[fb: file beads]
+    end
+    
+    subgraph Execution
+        E --> F[bd ready --json]
+        F --> G[/conductor-implement]
+        G --> H{TDD Cycle}
+        H --> I[RED: Write failing test]
+        I --> J[GREEN: Make it pass]
+        J --> K[REFACTOR: Clean up]
+        K --> L[bd close]
+        L --> F
+    end
+    
+    subgraph Completion
+        L --> M[/conductor-finish]
+        M --> N[Extract learnings]
+        N --> O[Archive track]
+    end
+    
+    style A fill:#1a1a2e,stroke:#e94560,color:#fff
+    style G fill:#1a1a2e,stroke:#0f3460,color:#fff
+    style M fill:#1a1a2e,stroke:#16213e,color:#fff
+```
+
 ```
 ds → /conductor-newtrack → /conductor-implement → /conductor-finish
 ```

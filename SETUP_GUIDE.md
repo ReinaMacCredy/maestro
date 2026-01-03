@@ -140,6 +140,17 @@ claude mcp add agent-mail -s user -- npx @anthropic-ai/agent-mail
 
 ## Quick Reference
 
+```mermaid
+flowchart TD
+    A["/conductor-setup"] --> B["ds"]
+    B --> C["/conductor-newtrack"]
+    C --> D["/conductor-implement"]
+    D --> E["/conductor-finish"]
+    
+    style A fill:#1a1a2e,stroke:#e94560,color:#fff
+    style D fill:#1a1a2e,stroke:#0f3460,color:#fff
+```
+
 | Action | Command |
 |--------|---------|
 | Initialize project | `/conductor-setup` |
