@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 - Add Mermaid flowcharts to visualize workflow steps in documentation.
+- Update changelog
+- Standardize Mermaid flowchart labels with quotes and concise text.
 
 ## [0.6.0] - 2026-01-03
 
