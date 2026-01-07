@@ -10,3 +10,4 @@ Handoffs for work outside of specific tracks.
 
 | Timestamp | Trigger | Bead | Summary | File |
 |-----------|---------|------|---------|------|
+| 2026-01-08 01:43 | manual | - | MCPorter toolboxes integration complete | [->](./2026-01-08_01-43_mcporter-toolboxes.md) |

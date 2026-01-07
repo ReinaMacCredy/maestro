@@ -64,6 +64,7 @@ ds/pl → design.md → /conductor-newtrack → spec.md + plan.md → fb → bea
 | Complete workflow | [workflow-chain.md](references/workflow-chain.md) |
 | All routing rules | [routing-table.md](references/routing-table.md) |
 | Terms and concepts | [glossary.md](references/glossary.md) |
+| CLI toolboxes | [toolboxes.md](references/toolboxes.md) |
 
 ## Related Skills
 

@@ -75,6 +75,9 @@ Contains reusable learnings from completed tracks.
 - `oracle(task="6-dimension design audit", files=[...])` - Amp's built-in oracle tool for design review
 - `bd close <spike-id> --reason "YES: <approach>"` - Close spike with structured result (YES/NO/PARTIAL)
 - `register_agent(name="PurpleMountain", ...)` - Manual agent registration when auto-generation fails
+- `npx mcporter generate-cli <server> --bundle .claude/toolboxes/<name>/<name>.js` - Generate CLI from MCP server
+- `.claude/toolboxes/agent-mail/agent-mail.js health-check` - Test Agent Mail CLI
+- `npx mcporter generate-cli --from .claude/toolboxes/<name>/<name>.js` - Regenerate CLI from existing
 
 ## Gotchas
 
@@ -168,6 +171,11 @@ Contains reusable learnings from completed tracks.
 - Worker completion messages can fail silently if name generation fails - bead still closes via `bd` command
 - Track thread format: `track:<agent>:<epic>` - colon-delimited, not slash
 - Spike learnings injection uses `{SPIKE_LEARNINGS}` placeholder in worker prompts
+- MCPorter CLI uses `--kebab-case` for arguments (e.g., `--human-key` not `human_key:`)
+- MCPorter arrays must be JSON strings: `--to '["Agent1", "Agent2"]'`
+- MCPorter env vars use `${VAR}` syntax in mcporter.json (not `$VAR`)
+- Generated MCPorter .js files are ~1.4MB bundled - this is normal
+- MCP server must be running during CLI generation (not at runtime)
 
 ## Patterns
 
@@ -229,3 +237,4 @@ Contains reusable learnings from completed tracks.
 - **Worker 4-Step Protocol:** REGISTER (macro_start_session) → EXECUTE (claim/work/close) → REPORT (send_message) → CLEANUP (release_file_reservations)
 - **Lazy References:** Trigger-based reference loading - SKILL.md always loaded, phase-specific references (agent-mail.md, worker-prompt.md) loaded on demand
 - **Triage Cache:** Store bead triage results in `metadata.beads.triageCache` with TTL to skip redundant `bv --robot-triage` calls
+- **Toolbox Pattern:** One subfolder per tool in `.claude/toolboxes/<tool>/<tool>.js`, shared config at `mcporter.json`

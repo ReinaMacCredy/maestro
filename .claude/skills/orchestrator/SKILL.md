@@ -134,6 +134,7 @@ Load references only when needed:
 | Architecture | [architecture.md](references/architecture.md) |
 | Coordination modes | [coordination-modes.md](references/coordination-modes.md) |
 | Agent Mail protocol | [agent-mail.md](references/agent-mail.md) |
+| Agent Mail CLI | [agent-mail-cli.md](references/agent-mail-cli.md) |
 | Worker prompt template | [worker-prompt.md](references/worker-prompt.md) |
 | Preflight/session brain | [preflight.md](references/preflight.md) |
 | Intent routing | [intent-routing.md](references/intent-routing.md) |
