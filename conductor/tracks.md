@@ -8,6 +8,12 @@ Master list of all development tracks.
 
 ## Completed Tracks
 
+## [x] Track: DS-PL Integration
+*ID: ds-pl-integration*
+*Completed: 2025-01-05*
+
+Integrated Planning Pipeline (`pl`) into Design Session (`ds`). After DELIVER phase (CP4) with Oracle APPROVED verdict in FULL mode, `pl` 6-phase pipeline runs automatically. SPEED mode suggests `cn` instead of auto-trigger.
+
 ## [x] Track: Planning Pipeline + Orchestrator Enhancement
 *ID: planning-integration*
 *Completed: 2026-01-03*

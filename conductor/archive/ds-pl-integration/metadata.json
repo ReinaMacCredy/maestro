@@ -1,0 +1,13 @@
+{
+  "track_id": "ds-pl-integration",
+  "created": "2025-01-04T00:00:00+07:00",
+  "status": "completed",
+  "workflow": {
+    "state": "ARCHIVED"
+  },
+  "planning": {
+    "state": "track_planned",
+    "phases_completed": ["discovery", "synthesis", "verification", "decomposition", "validation", "track_planning"],
+    "triggered_by": "ds-auto"
+  }
+}

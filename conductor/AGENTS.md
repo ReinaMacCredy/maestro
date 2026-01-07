@@ -180,6 +180,7 @@ Contains reusable learnings from completed tracks.
 - **State Files First:** Create metadata.json with generation and beads sections in Phase 1.3 BEFORE spec/plan generation
 - **Collective State Validation:** Treat 3 state files as atomic unit - HAS_STATE = 0 (none), 1 (partial), 2 (all)
 - **Double Diamond Phases:** DISCOVER (diverge) → DEFINE (converge) → DEVELOP (diverge) → DELIVER (converge)
+- **DS-PL Auto-Chain:** FULL mode ds → CP4 APPROVED → auto-trigger pl (6 phases); SPEED mode → suggest `cn`
 - **A/P/C Checkpoints:** At each phase end: [A] Advanced, [P] Party (multi-agent), [C] Continue
 - **Unified Track Creation:** /conductor-newtrack includes spec, plan, beads filing, AND review in one flow
 - **Conventional Commits Versioning:** feat: → minor, fix: → patch, feat!: → major
