@@ -1,0 +1,28 @@
+{
+  "id": "skills-arch-refactor",
+  "title": "Skills Architecture Refactor",
+  "created": "2026-01-08",
+  "status": "planning",
+  "complexity": 7,
+  "mode": "FULL",
+  "generation": {
+    "design": "2026-01-08T15:00:00Z",
+    "spec": "2026-01-08T15:05:00Z",
+    "plan": "2026-01-08T15:10:00Z"
+  },
+  "beads": {
+    "status": "pending",
+    "planTasks": {},
+    "orchestrated": false
+  },
+  "workflow": {
+    "state": "PLANNING",
+    "phase": 8,
+    "checkpoints": {
+      "design": true,
+      "spec": true,
+      "plan": true,
+      "beads": false
+    }
+  }
+}

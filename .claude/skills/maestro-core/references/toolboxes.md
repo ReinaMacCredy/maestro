@@ -56,4 +56,4 @@ npx mcporter generate-cli --from .claude/toolboxes/<tool>/<tool>.js
 ## See Also
 
 - [.claude/toolboxes/README.md](../../../.claude/toolboxes/README.md) - Full documentation
-- [orchestrator/references/agent-mail-cli.md](../../orchestrator/references/agent-mail-cli.md) - Agent Mail CLI reference
+- Load the [orchestrator skill](../../orchestrator/SKILL.md) for Agent Mail CLI reference

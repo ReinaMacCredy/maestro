@@ -51,7 +51,7 @@ For each track's `plan.md`:
 2. Check each `conductor/tracks/<track_id>/implement_state.json` if exists - verify valid JSON
 
 ### 2.7 Track Integrity Validation (Per-Track)
-For each track, inline and execute validation logic from `skills/conductor/references/validation/track/checks.md`:
+For each track, inline and execute validation logic from `skills/conductor/references/validation/track-checks.md`:
 
 1. **File Existence Matrix:**
    - Empty directory → SKIP + warn

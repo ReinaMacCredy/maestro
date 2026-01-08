@@ -6,7 +6,7 @@ Quick entry point for progress checkpointing operations.
 
 ## Primary Reference
 
-→ [Progress Checkpointing](../../beads/references/workflow.md#progress-checkpointing)
+> Load the [tracking skill](../../tracking/SKILL.md) for progress checkpointing
 
 ## Quick Reference
 
@@ -23,7 +23,7 @@ Quick entry point for progress checkpointing operations.
 
 ### Degradation Signals
 
-→ [Degradation Signals](../../beads/references/workflow.md#degradation-signals)
+> Load the [tracking skill](../../tracking/SKILL.md) for degradation signals
 
 | Signal | Threshold |
 |--------|-----------|
@@ -36,5 +36,6 @@ Quick entry point for progress checkpointing operations.
 
 ## See Also
 
-- [Session Lifecycle](../../design/references/session-lifecycle.md) - RECALL/REMEMBER
 - [Remember Facade](remember.md) - Handoff protocol
+
+> Load the [designing skill](../../designing/SKILL.md) for session lifecycle (RECALL/REMEMBER)

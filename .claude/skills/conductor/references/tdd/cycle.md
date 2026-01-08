@@ -180,7 +180,7 @@ Keep tests green. Don't add behavior.
 
 After REFACTOR completes for a task/bead, run plan execution validation:
 
-1. **Load gate**: `../validation/shared/validate-plan-execution.md`
+1. **Load gate**: `../validation/validate-plan-execution.md`
 2. **Run validation**: Check implementation vs plan.md, run verification commands
 3. **Update metadata.json**: Add to `validation.gates_passed` or `validation.last_failure`
 4. **Behavior by mode**:
@@ -200,7 +200,7 @@ After REFACTOR completes for a task/bead, run plan execution validation:
 └────────────────────────────────────────────────┘
 ```
 
-See [validate-plan-execution.md](../validation/shared/validate-plan-execution.md) for full validation process.
+See [validate-plan-execution.md](../validation/validate-plan-execution.md) for full validation process.
 
 ### Repeat
 

@@ -8,7 +8,7 @@ prompt = """
 **Trigger:** Before any other pre-flight checks.
 
 **PROTOCOL:**
-1. **Load validation gate:** Read `skills/conductor/references/validation/shared/validate-completion.md`
+1. **Load validation gate:** Read `skills/conductor/references/validation/validate-completion.md`
 2. **Execute validation** - verify track is ready for finish:
    - All beads closed or accounted for
    - Implementation complete per plan.md

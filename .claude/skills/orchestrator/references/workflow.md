@@ -408,9 +408,7 @@ Workers: Follow 4-step protocol in worker-prompt.md
 
 **TDD enforcement:** Workers follow RED → GREEN → REFACTOR cycle by default. Pass `--no-tdd` to disable.
 
-See [conductor TDD references](../../conductor/references/tdd/) for:
-- [cycle.md](../../conductor/references/tdd/cycle.md) - Full RED/GREEN/REFACTOR workflow
-- [gates.md](../../conductor/references/tdd/gates.md) - Enforcement gates and anti-patterns
+> **Cross-skill reference:** Load the [conductor skill](../../conductor/SKILL.md) for detailed TDD methodology (cycle, gates, enforcement).
 
 ### Agent Routing
 

@@ -231,4 +231,4 @@ All repairs are logged to `metadata.json.repairs[]`:
 | **Default**  | (none)       | Auto-repair + HALT on unfixable |
 | **Diagnose** | `--diagnose` | Report only, no modifications   |
 
-For detailed validation logic, see `skills/conductor/references/validation/track/checks.md`.
+For detailed validation logic, see `skills/conductor/references/validation/track-checks.md`.

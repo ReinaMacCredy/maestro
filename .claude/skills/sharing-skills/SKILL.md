@@ -7,7 +7,7 @@ description: Use when you've developed a broadly useful skill and want to contri
 
 ## Core Principles
 
-1. **Test before share** - Only share skills validated via writing-skills TDD process
+1. **Test before share** - Only share skills validated via creating-skills TDD process
 2. **One skill per PR** - Each skill independently reviewable
 3. **Broadly useful** - Not project-specific or experimental
 
@@ -47,7 +47,7 @@ gh pr create --repo <UPSTREAM_ORG>/<UPSTREAM_REPO> \
 
 - `gh` CLI installed and authenticated
 - Working directory is your local skills clone
-- Skill tested using writing-skills TDD process
+- Skill tested using creating-skills TDD process
 
 ## Anti-Patterns
 
@@ -62,5 +62,5 @@ gh pr create --repo <UPSTREAM_ORG>/<UPSTREAM_REPO> \
 
 ## Related
 
-- [writing-skills](../writing-skills/SKILL.md) - REQUIRED: Create well-tested skills before sharing
+- [creating-skills](../creating-skills/SKILL.md) - REQUIRED: Create well-tested skills before sharing
 - [maestro-core](../maestro-core/SKILL.md) - Workflow routing and skill hierarchy

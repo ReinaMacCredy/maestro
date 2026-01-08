@@ -212,6 +212,8 @@ Run parallel? [Y/n]:
 
 ## Related
 
-- [auto-routing.md](../../orchestrator/references/auto-routing.md) - Detection flow
 - [implement.md](workflows/implement.md) - Execution routing
-- [workflow.md](../../orchestrator/references/workflow.md) - Orchestrator workflow
+
+> 💡 **For orchestrator details:** Load `orchestrator` skill, then see:
+> - `references/auto-routing.md` - Detection flow
+> - `references/workflow.md` - Orchestrator workflow

@@ -1,6 +1,6 @@
 # AGENTS.md - Maestro Plugin
 
-Workflow skills plugin: Conductor, Design, Beads, Orchestrator.
+Workflow skills plugin: Conductor, Designing, Tracking, Orchestrator.
 
 ## Project Detection
 
@@ -198,7 +198,7 @@ cat .claude-plugin/plugin.json | jq .   # Validate manifest
 
 | Topic | Path |
 |-------|------|
-| Beads workflow | [.claude/skills/beads/references/workflow-integration.md](.claude/skills/beads/references/workflow-integration.md) |
+| Beads workflow | [.claude/skills/tracking/references/workflow-integration.md](.claude/skills/tracking/references/workflow-integration.md) |
 | Handoff system | [.claude/skills/conductor/references/workflows/handoff.md](.claude/skills/conductor/references/workflows/handoff.md) |
 | Agent coordination | [.claude/skills/orchestrator/references/agent-coordination.md](.claude/skills/orchestrator/references/agent-coordination.md) |
 | Router | [.claude/skills/orchestrator/references/router.md](.claude/skills/orchestrator/references/router.md) |

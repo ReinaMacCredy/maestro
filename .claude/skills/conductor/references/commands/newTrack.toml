@@ -270,7 +270,7 @@ echo "✓ State initialized in metadata.json"
 **Trigger:** User confirms spec.md content.
 
 **PROTOCOL:**
-1. **Load validation gate:** Read `skills/conductor/references/validation/shared/validate-spec.md`
+1. **Load validation gate:** Read `skills/conductor/references/validation/validate-spec.md`
 2. **Execute validation** - check spec against design.md for:
    - Requirement capture completeness
    - Design decision alignment
@@ -322,7 +322,7 @@ echo "✓ State initialized in metadata.json"
 **Trigger:** User confirms plan.md content.
 
 **PROTOCOL:**
-1. **Load validation gate:** Read `skills/conductor/references/validation/shared/validate-plan-structure.md`
+1. **Load validation gate:** Read `skills/conductor/references/validation/validate-plan-structure.md`
 2. **Execute validation** - check plan structure for:
    - Task hierarchy completeness
    - Epic structure validity

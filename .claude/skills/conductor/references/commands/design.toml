@@ -21,7 +21,7 @@ CRITICAL RULES:
 
 **MANDATORY: Spawn research agents BEFORE any design work begins.**
 
-Load: `skills/conductor/references/research/hooks/discover-hook.md`
+Load: `skills/conductor/references/research/discover-hook.md`
 
 ```
 ┌─ RESEARCH: Session Start ───────────────────────┐
@@ -74,7 +74,7 @@ Load: `skills/conductor/references/research/hooks/discover-hook.md`
 **━━━ CHECKPOINT 1 + VALIDATION ━━━**
 
 **VALIDATE before checkpoint display:**
-- Load: `skills/conductor/references/validation/shared/validate-design.md` (partial - DISCOVER checks only)
+- Load: `skills/conductor/references/validation/validate-design.md` (partial - DISCOVER checks only)
 - Check: Problem relates to product.md vision?
 - Check: Not duplicating existing feature?
 - Result: [✓ PASS | ⚠ WARN: reason]
@@ -109,7 +109,7 @@ Load: `skills/conductor/references/research/hooks/discover-hook.md`
 **━━━ CHECKPOINT 2 + VALIDATION ━━━**
 
 **VALIDATE before checkpoint display:**
-- Load: `skills/conductor/references/validation/shared/validate-design.md` (partial - DEFINE checks only)
+- Load: `skills/conductor/references/validation/validate-design.md` (partial - DEFINE checks only)
 - Check: Problem statement is clear and measurable?
 - Check: Success criteria are testable?
 - Check: Scope is explicit (in/out)?
@@ -165,12 +165,12 @@ Load: `skills/conductor/references/research/hooks/discover-hook.md`
 **━━━ CHECKPOINT 3 + VALIDATION + RESEARCH ━━━**
 
 **RESEARCH before checkpoint (spawn parallel agents):**
-- Load: `skills/conductor/references/research/hooks/grounding-hook.md`
+- Load: `skills/conductor/references/research/grounding-hook.md`
 - Spawn: Locator + Analyzer + Pattern agents
 - Verify: Options are technically feasible
 
 **VALIDATE before checkpoint display:**
-- Load: `skills/conductor/references/validation/shared/validate-design.md` (partial - DEVELOP checks only)
+- Load: `skills/conductor/references/validation/validate-design.md` (partial - DEVELOP checks only)
 - Check: 3+ options presented with trade-offs?
 - Check: Options align with tech-stack.md?
 - Check: Risk/effort analysis complete?
@@ -269,7 +269,7 @@ Or if blocked: Show enforcement action with instructions.
 | CP4 (DELIVER) | Full validation + grounding + impact scan | SPEED=WARN, FULL=HALT |
 
 **PROTOCOL (at each checkpoint):**
-1. **Load validation gate:** Read `skills/conductor/references/validation/shared/validate-design.md`
+1. **Load validation gate:** Read `skills/conductor/references/validation/validate-design.md`
 2. **Execute checkpoint-specific checks** (see table above)
 3. **Determine enforcement:**
    - CP1-3: Always WARN (log issues, continue)

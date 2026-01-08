@@ -144,7 +144,7 @@ Reference: [handoff skill](../../../handoff/SKILL.md) for full workflow.
 
 > **Note:** `/conductor-implement` auto-routes to `/conductor-orchestrate` when parallel execution is appropriate.
 
-See **[auto-routing.md](../../../orchestrator/references/auto-routing.md)** for the complete detection algorithm.
+> 💡 **For auto-routing details:** Load `orchestrator` skill, then see `references/auto-routing.md`
 
 #### Detection Priority
 
@@ -180,7 +180,7 @@ Run parallel? [Y/n]:
 - **Sequential:** Continue to Phase 3
 - **PARALLEL_DISPATCH:** Hand off to [orchestrator skill](../../../orchestrator/SKILL.md)
 
-See [orchestrator workflow](../../../orchestrator/references/workflow.md) for parallel execution protocol.
+> 💡 **For orchestrator workflow:** Load `orchestrator` skill, then see `references/workflow.md`
 
 ### Phase 3: Track Implementation
 
@@ -284,7 +284,7 @@ See [orchestrator workflow](../../../orchestrator/references/workflow.md) for pa
    
    **Action:** If 2+ signals fire → trigger context compression
    
-   See [Degradation Signals](../../../beads/references/workflow.md#degradation-signals) for full details.
+   > 💡 **For degradation details:** Load `tracking` skill, then see `references/workflow.md#degradation-signals`
 
 7. **Close Task (Beads Integration)**
    

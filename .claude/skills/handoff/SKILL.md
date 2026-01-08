@@ -20,6 +20,7 @@ Hand off your current session while preserving work context.
 | `ho create` | Force CREATE mode |
 | `ho resume` | Force RESUME mode |
 | `ho resume <track>` | Resume specific track |
+| `/conductor-finish` | Complete track (extract learnings, archive, handoff) |
 
 **Aliases:** `ho`, `/handoff`, `/conductor-handoff`
 
@@ -98,5 +99,5 @@ conductor/handoffs/
 
 ## Related Skills
 
-- [beads](../beads/SKILL.md) - Issue tracking
+- [tracking](../tracking/SKILL.md) - Issue tracking
 - [maestro-core](../maestro-core/SKILL.md) - Workflow routing

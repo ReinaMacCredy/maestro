@@ -883,7 +883,7 @@ Use anchored format to save session context for cross-session continuity.
 
 ### Format Reference
 
-→ [Anchored State Format](../../design/references/anchored-state-format.md)
+> Load the [designing skill](../../designing/SKILL.md) for Anchored State Format details
 
 ### Required Sections
 
@@ -938,7 +938,7 @@ validate_preserve_sections() {
 ### Integration
 
 See:
-- [Session Lifecycle](../../design/references/session-lifecycle.md) - RECALL phase loads this file
+- → Load [designing skill](../../designing/SKILL.md) for Session Lifecycle (RECALL phase loads this file)
 - [Checkpoint Facade](checkpoint.md) - For progress checkpointing triggers
 
 ---

@@ -5,7 +5,7 @@ prompt = """
 
 Before proceeding to setup checks, execute track validation:
 
-1. **Inline Validation Logic:** Load validation rules from `skills/conductor/references/validation/track/checks.md`
+1. **Inline Validation Logic:** Load validation rules from `skills/conductor/references/validation/track-checks.md`
 
 2. **Execute Validation:**
    - Resolve track path (conductor/tracks/ or conductor/archive/)
@@ -167,7 +167,7 @@ CRITICAL: You must validate the success of every tool call. If any tool call fai
 **Trigger:** All tasks in plan.md completed (before Finalize Track).
 
 **PROTOCOL:**
-1. **Load validation gate:** Read `skills/conductor/references/validation/shared/validate-plan-execution.md`
+1. **Load validation gate:** Read `skills/conductor/references/validation/validate-plan-execution.md`
 2. **Execute validation** - verify implementation matches plan:
    - All plan tasks have corresponding implementation
    - TDD coverage requirements met

@@ -511,6 +511,6 @@ bd list --status open --json | jq '.[] | select(.priority <= 1)'
 ## References
 
 - [Beads Facade](beads-facade.md) - Facade API contract
-- [Beads Validation](validation/beads/checks.md) - State file validation
+- [Beads Validation](validation/beads-checks.md) - State file validation
 - [Design Document](../../../conductor/archive/beads-conductor-integration_20251225/design.md)
-- [Beads Workflow](../../beads/references/workflow.md) - Base beads usage
+- → Load [tracking skill](../../tracking/SKILL.md) for full beads workflow

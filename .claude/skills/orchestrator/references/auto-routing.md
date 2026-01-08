@@ -25,14 +25,17 @@ the system can auto-detect opportunities for parallel execution.
 If `metadata.json.beads.fileScopes` exists:
 
 1. **Load file scopes** from metadata.json
-2. **Run parallel-grouping** algorithm (see [parallel-grouping.md](../../conductor/references/parallel-grouping.md))
+2. **Run parallel-grouping** algorithm (load [conductor skill](../../conductor/SKILL.md) for details)
 3. **Check threshold**: ≥2 non-overlapping groups → PARALLEL_DISPATCH
 4. **Generate Track Assignments** dynamically if not present in plan.md
 
 ### Algorithm Reference
 
-- **Extraction**: [file-scope-extractor.md](../../conductor/references/file-scope-extractor.md)
-- **Grouping**: [parallel-grouping.md](../../conductor/references/parallel-grouping.md)
+> **Cross-skill reference:** Load the [conductor](../../conductor/SKILL.md) skill for file-scope-extractor and parallel-grouping algorithms.
+
+**Summary of algorithms:**
+- **Extraction**: Parse `### Files:` sections from plan.md tasks, extract glob patterns
+- **Grouping**: Cluster tasks by non-overlapping file scopes, merge small groups
 
 ## Flow
 
@@ -155,6 +158,8 @@ If Agent Mail unavailable:
 
 ## Related
 
-- [implement.md](../../conductor/references/workflows/implement.md) - Execution routing Phase 2b
+> **Cross-skill reference:** Load the [conductor](../../conductor/SKILL.md) skill for implementation routing (Phase 2b).
+
 - [workflow.md](workflow.md) - Orchestrator workflow
-- [FILE_BEADS.md](../../beads/references/FILE_BEADS.md) - How planTasks is populated
+
+> **Cross-skill reference:** Load the [tracking](../../tracking/SKILL.md) skill for FILE_BEADS and planTasks mapping.

@@ -10,15 +10,26 @@ Central hub for Maestro workflow skills. Routes triggers, defines hierarchy, and
 ## Skill Hierarchy
 
 ```
-conductor (1) > orchestrator (2) > design (3) > beads (4) > specialized (5)
+conductor (1) > orchestrator (2) > designing (3) > tracking (4) > specialized (5)
 ```
 
 Higher rank wins on conflicts.
 
+## Ownership Matrix
+
+| Skill | Owns | Primary Triggers |
+|-------|------|------------------|
+| conductor | Implementation only | `ci`, `/conductor-implement` |
+| orchestrator | Parallel execution | `co`, `/conductor-orchestrate` |
+| designing | Phases 1-8 (design → track creation) | `ds`, `cn`, `/conductor-newtrack`, `/conductor-design` |
+| tracking | Task/bead management | `bd *`, `fb`, `rb` |
+| handoff | Session cycling | `ho`, `/conductor-finish`, `/conductor-handoff` |
+| creating-skills | Skill authoring | "create skill", "write skill" |
+
 ## Workflow Chain
 
 ```
-ds/pl → design.md → /conductor-newtrack → spec.md + plan.md → fb → beads → ci/co → implementation
+ds/cn → design.md → /conductor-newtrack → spec.md + plan.md → fb → tracking → ci/co → implementation
 ```
 
 ## Routing Table
@@ -31,10 +42,10 @@ See **[routing-table.md](references/routing-table.md)** for complete trigger →
 
 | Trigger | Skill |
 |---------|-------|
-| `ds` | design |
+| `ds`, `cn` | designing |
 | `ci` | conductor |
 | `co` | orchestrator |
-| `fb`, `rb`, `bd *` | beads |
+| `fb`, `rb`, `bd *` | tracking |
 | `ho` | handoff |
 
 ### Routing Flow
@@ -66,11 +77,11 @@ See **[routing-table.md](references/routing-table.md)** for complete trigger →
 
 ## Related Skills
 
-- [design](../design/SKILL.md) - Double Diamond design sessions
-- [conductor](../conductor/SKILL.md) - Context-driven development
+- [designing](../designing/SKILL.md) - Double Diamond design sessions (phases 1-8)
+- [conductor](../conductor/SKILL.md) - Implementation execution
 - [orchestrator](../orchestrator/SKILL.md) - Multi-agent parallel execution
-- [beads](../beads/SKILL.md) - Issue tracking and dependency graphs
+- [tracking](../tracking/SKILL.md) - Issue tracking and dependency graphs
 - [handoff](../handoff/SKILL.md) - Session cycling and context preservation
-- [writing-skills](../writing-skills/SKILL.md) - Creating new skills
+- [creating-skills](../creating-skills/SKILL.md) - Skill authoring and best practices
 - [sharing-skills](../sharing-skills/SKILL.md) - Contributing skills upstream
 - [using-git-worktrees](../using-git-worktrees/SKILL.md) - Isolated workspaces

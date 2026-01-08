@@ -60,7 +60,7 @@ Contains reusable learnings from completed tracks.
 - `python skills/orchestrator/scripts/session_identity.py parse <session_id>` - Parse session ID into components
 - `python skills/orchestrator/scripts/session_cleanup.py find-stale '<sessions_json>' --threshold 10` - Find stale sessions
 - `ln -s ../skills .claude/skills` - Create symlink for single source of truth (delete contents first)
-- `python3 skills/skill-creator/scripts/quick_validate.py skills/<name>` - Validate skill structure and frontmatter
+- `python3 skills/creating-skills/scripts/quick_validate.py skills/<name>` - Validate skill structure and frontmatter
 - `wc -l skills/*/SKILL.md` - Check line counts across all skills
 - `wc -l *.md docs/*.md` - Line count verification across multiple directories
 - `bd list --parent=<epic-id> --status=open --json | jq 'length'` - Check for lingering beads before epic close
@@ -84,7 +84,7 @@ Contains reusable learnings from completed tracks.
 ## Gotchas
 
 - Skill prerequisite pattern uses markdown `**REQUIRED SUB-SKILL:**` not frontmatter `requires:`
-- Design skill's HALT on missing conductor/ was adoption blocker - changed to DEGRADE (standalone mode)
+- Designing skill's HALT on missing conductor/ was adoption blocker - changed to DEGRADE (standalone mode)
 - Lean orchestrator pattern: keep SKILL.md ≤100 lines, move detailed logic to references/
 - Hard-linked directories (skills/ ↔ .claude/skills/) - updating one updates both, but explicitly delete both
 - Thin skill stubs must include keyword-rich descriptions for AI trigger matching
@@ -181,7 +181,7 @@ Contains reusable learnings from completed tracks.
 
 ## Patterns
 
-- **5-Level Skill Hierarchy:** conductor > orchestrator > design > beads > specialized (higher level wins on conflicts)
+- **5-Level Skill Hierarchy:** conductor > orchestrator > designing > tracking > specialized (higher level wins on conflicts)
 - **Context-Aware Routing:** Check explicit commands first, then context (conductor/ exists?) for routing
 - **6-Phase Finish Workflow:** Pre-flight → Thread Compaction → Beads Compaction → Knowledge Merge → Context Refresh → Archive → CODEMAPS
 - **Smart Skip:** Each phase checks if work exists before running

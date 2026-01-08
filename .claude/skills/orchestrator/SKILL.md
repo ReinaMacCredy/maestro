@@ -146,4 +146,4 @@ Load references only when needed:
 
 - [maestro-core](../maestro-core/SKILL.md) - Routing and fallback policies
 - [conductor](../conductor/SKILL.md) - Track management, `/conductor-implement`
-- [beads](../beads/SKILL.md) - Issue tracking, `bd` commands
+- [tracking](../tracking/SKILL.md) - Issue tracking, `bd` commands

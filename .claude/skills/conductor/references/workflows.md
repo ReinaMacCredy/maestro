@@ -15,7 +15,7 @@ Context-Driven Development for Claude Code. Measure twice, code once.
 | Command | Description | Authoritative Doc |
 |---------|-------------|-------------------|
 | `setup` | Initialize project with product.md, tech-stack.md, workflow.md | [workflows/setup.md](workflows/setup.md) |
-| `design` | Design a feature/bug through collaborative dialogue | See [design skill](../../design/SKILL.md) |
+| `design` | Design a feature/bug through collaborative dialogue | See [designing skill](../../designing/SKILL.md) |
 | `newtrack` | Create spec and plan from design.md, file beads | [workflows/newtrack.md](workflows/newtrack.md) |
 | `implement` | Execute tasks from track's plan following TDD workflow | [workflows/implement.md](workflows/implement.md) |
 | `status` | Display progress overview | [workflows/status.md](workflows/status.md) (inline below) |

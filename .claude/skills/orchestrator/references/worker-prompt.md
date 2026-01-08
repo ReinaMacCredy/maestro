@@ -127,7 +127,12 @@ bash(f"bd update {bead_id} --status in_progress")
 
 Follow TDD cycle for each implementation task (skip with `--no-tdd` flag passed to worker).
 
-See [conductor TDD cycle](../../conductor/references/tdd/cycle.md) for full methodology.
+> **Cross-skill reference:** Load the [conductor](../../conductor/SKILL.md) skill for full TDD methodology.
+
+**TDD Cycle Summary:**
+1. **RED**: Write a failing test that defines expected behavior
+2. **GREEN**: Write minimal code to make the test pass
+3. **REFACTOR**: Clean up code while keeping tests green
 
 **Phase updates (track in bead notes):**
 

@@ -1,38 +1,40 @@
 ---
 name: conductor
-description: Context-driven development methodology. Trigger with ci, /conductor-implement, cn, /conductor-newtrack, or /conductor-* commands. Use when working with conductor/ directories, tracks, specs, plans, or when user mentions context-driven development.
+description: Implementation execution for context-driven development. Trigger with ci, /conductor-implement, or /conductor-* commands. Use when executing tracks with specs/plans. For design phases, see designing skill. For session handoffs, see handoff skill.
 ---
 
-# Conductor: Context-Driven Development
+# Conductor: Implementation Execution
 
-Measure twice, code once.
+Execute tracks with TDD and parallel routing.
 
 ## Entry Points
 
 | Trigger | Action | Reference |
 |---------|--------|-----------|
 | `/conductor-setup` | Initialize project context | [workflows/setup.md](references/workflows/setup.md) |
-| `/conductor-design` | Design feature (Double Diamond) | [design skill](../design/SKILL.md) |
-| `/conductor-newtrack` | Create spec + plan from design | [workflows/newtrack.md](references/workflows/newtrack.md) |
 | `/conductor-implement` | Execute track (auto-routes if parallel) | [workflows/implement.md](references/workflows/implement.md) |
 | `/conductor-status` | Display progress overview | [structure.md](references/structure.md) |
 | `/conductor-revise` | Update spec/plan mid-work | [revisions.md](references/revisions.md) |
-| `/conductor-finish` | Complete track, extract learnings | [finish-workflow.md](references/finish-workflow.md) |
-| `/conductor-handoff` | Unified handoff (auto-detect create/resume) | [handoff skill](../handoff/SKILL.md) |
+
+## Related Skills (Not Owned by Conductor)
+
+| For... | Use Skill | Triggers |
+|--------|-----------|----------|
+| Design phases (1-8) | [designing](../designing/SKILL.md) | `ds`, `cn`, `/conductor-design`, `/conductor-newtrack` |
+| Session handoffs | [handoff](../handoff/SKILL.md) | `ho`, `/conductor-finish`, `/conductor-handoff` |
 
 ## Quick Reference
 
-| Phase | Purpose | Output |
-|-------|---------|--------|
-| Requirements | Understand problem | design.md |
-| Plan | Create detailed plan | spec.md + plan.md |
-| Implement | Build with TDD | Code + tests |
-| Reflect | Verify before shipping | LEARNINGS.md |
+| Phase | Purpose | Output | Skill |
+|-------|---------|--------|-------|
+| Requirements | Understand problem | design.md | designing |
+| Plan | Create spec + plan | spec.md + plan.md | designing |
+| **Implement** | Build with TDD | Code + tests | **conductor** |
+| Reflect | Verify before shipping | LEARNINGS.md | handoff |
 
 ## Core Principles
 
 - **Load core first** - Load [maestro-core](../maestro-core/SKILL.md) for routing table and fallback policies
-- **Design before code** - `/conductor-design` → `/conductor-newtrack` → implement
 - **TDD by default** - RED → GREEN → REFACTOR (use `--no-tdd` to disable)
 - **Beads integration** - Zero manual `bd` commands in happy path
 - **Parallel routing** - `## Track Assignments` in plan.md triggers orchestrator
@@ -74,21 +76,21 @@ See [beads-integration.md](references/beads-integration.md) for all 13 integrati
 
 ### File Scope Detection
 
-`/conductor-newtrack` Phase 4.5 extracts file paths from tasks and groups them:
+File scopes determine parallel routing (see [parallel-grouping](references/parallel-grouping.md)):
 - Tasks touching same files → sequential (same track)
 - Tasks touching different files → parallel (separate tracks)
-- See [parallel-grouping](references/parallel-grouping.md) for algorithm
 
 ## Anti-Patterns
 
-- ❌ Skipping design phase for complex features
-- ❌ Creating spec/plan without metadata.json
 - ❌ Manual `bd` commands when workflow commands exist
 - ❌ Ignoring validation gate failures
+- ❌ Using conductor for design (use [designing](../designing/SKILL.md) instead)
+- ❌ Using conductor for handoffs (use [handoff](../handoff/SKILL.md) instead)
 
 ## Related
 
-- [design](../design/SKILL.md) - Double Diamond design sessions
-- [beads](../beads/SKILL.md) - Issue tracking
+- [designing](../designing/SKILL.md) - Double Diamond design + track creation
+- [handoff](../handoff/SKILL.md) - Session cycling and finish workflow
+- [tracking](../tracking/SKILL.md) - Issue tracking (beads)
 - [orchestrator](../orchestrator/SKILL.md) - Parallel execution
-- [maestro-core](../maestro-core/SKILL.md) - Routing policies in AGENTS.md
+- [maestro-core](../maestro-core/SKILL.md) - Routing policies

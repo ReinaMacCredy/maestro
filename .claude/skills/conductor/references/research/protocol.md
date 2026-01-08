@@ -8,8 +8,8 @@ Research protocol spawns parallel sub-agents to comprehensively document the cod
 
 | Hook | Trigger | Agents | Timeout | Mode | Purpose |
 |------|---------|--------|---------|------|---------|
-| [research-start](hooks/research-start.md) | Phase 1 start | 4 (Locator+Pattern+CODEMAPS+Architecture) | 20s | ALL | Ground context before DISCOVER |
-| [research-verify](hooks/research-verify.md) | Phase 3→4 | 4 (Analyzer+Pattern+Impact+Web) | 15s | FULL only | Verify design against codebase |
+| [research-start](./research-start.md) | Phase 1 start | 4 (Locator+Pattern+CODEMAPS+Architecture) | 20s | ALL | Ground context before DISCOVER |
+| [research-verify](./research-verify.md) | Phase 3→4 | 4 (Analyzer+Pattern+Impact+Web) | 15s | FULL only | Verify design against codebase |
 
 ### Timing Improvement
 
@@ -270,6 +270,6 @@ When spawning agents via Task tool:
 
 ## Related
 
-- [hooks/research-start.md](hooks/research-start.md) - Phase 1 research hook
-- [hooks/research-verify.md](hooks/research-verify.md) - Phase 3→4 verification hook
+- [research-start.md](./research-start.md) - Phase 1 research hook
+- [research-verify.md](./research-verify.md) - Phase 3→4 verification hook
 - [Research agents](../../../orchestrator/agents/research/) - Agent definitions
