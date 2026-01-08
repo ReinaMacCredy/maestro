@@ -186,13 +186,39 @@ Default: [O] after 30s
 
 See [pipeline.md](references/pipeline.md#phase-8-ready-complete)
 
+## `pl` Entry Gate
+
+⚠️ **MANDATORY:** Before running `pl`, detect input and bootstrap if needed:
+
+```
+pl triggered
+    │
+    ▼
+Input detection (priority order):
+    1. design.md exists? → ALIAS mode (skip discovery)
+    2. PRD file exists?  → STANDALONE mode (parse PRD)
+    3. User file attached? → STANDALONE mode
+    4. No input?         → BOOTSTRAP mode (prompt → create track)
+```
+
+| Input Source | Mode | Action |
+|--------------|------|--------|
+| design.md | ALIAS | Skip Phase 5, run 6-10 |
+| PRD file | STANDALONE | Parse PRD, run 5-10 |
+| User file | STANDALONE | Use as context, run 5-10 |
+| None | BOOTSTRAP | Prompt → create track → run 5-10 |
+
+**BOOTSTRAP creates:** `conductor/tracks/<id>/` with design.md + metadata.json
+
 ## `pl` Compatibility
 
-| Scenario | Behavior |
-|----------|----------|
-| `pl` after Phase 4 completes | Not needed - phases 5-10 run automatically after `ds` in FULL mode |
-| `pl` standalone (with design.md) | **ALIAS** - Runs Phases 5-10 only |
-| `pl` without design.md | **ERROR** - Requires design.md from phases 1-4 |
+| Scenario | Mode | Behavior |
+|----------|------|----------|
+| `pl` after `ds` Phase 4 | NO-OP | Not needed - phases 5-10 auto-run in FULL mode |
+| `pl` with design.md | ALIAS | Skip Phase 5 discovery, run 6-10 |
+| `pl` with PRD file | STANDALONE | Parse PRD, run full 5-10 |
+| `pl` with user request | STANDALONE | Run full discovery, phases 5-10 |
+| `pl` without any input | ERROR | Prompt for input source |
 
 ## Anti-Patterns
 

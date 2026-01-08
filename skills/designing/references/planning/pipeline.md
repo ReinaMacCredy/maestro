@@ -2,7 +2,119 @@
 
 > **6-phase automated pipeline from validated design to execution-ready state.**
 
-The `pl` trigger activates when `design.md` exists and runs phases 5-10 of the unified pipeline.
+The `pl` trigger runs phases 5-10 with flexible input sources.
+
+## ⚠️ MANDATORY: Input Detection & Track Bootstrap
+
+**Before running Phase 5, YOU MUST detect input and bootstrap track if needed:**
+
+```python
+# REQUIRED - Input detection at pl entry:
+def detect_pl_input():
+    # Priority 1: design.md from ds (phases 1-4)
+    if file_exists("conductor/tracks/<track-id>/design.md"):
+        return "ALIAS", "conductor/tracks/<track-id>/design.md"
+    
+    # Priority 2: PRD file (user-provided)
+    if file_exists("conductor/tracks/<track-id>/prd.md"):
+        return "STANDALONE", "conductor/tracks/<track-id>/prd.md"
+    
+    # Priority 3: User provided file in message
+    if user_provided_file:
+        return "STANDALONE", user_provided_file
+    
+    # Priority 4: No input - prompt user and bootstrap
+    return "BOOTSTRAP", None
+
+mode, input_file = detect_pl_input()
+
+if mode == "BOOTSTRAP":
+    # Prompt user for planning context
+    print("""
+    📋 Planning Pipeline (phases 5-10)
+    
+    What do you want to plan?
+    
+    Provide:
+    - Feature description
+    - Requirements/goals
+    - Any constraints
+    """)
+    
+    # Wait for user input
+    user_description = get_user_input()
+    
+    # Create track with artifacts
+    track_id = generate_track_id()
+    create_track_artifacts(track_id, user_description)
+```
+
+## Track Bootstrap (STANDALONE Mode)
+
+When no input exists, **create minimal artifacts before Phase 5**:
+
+```python
+def create_track_artifacts(track_id, user_description):
+    """Create conductor track with minimal artifacts for pl pipeline."""
+    
+    track_dir = f"conductor/tracks/{track_id}"
+    mkdir(track_dir)
+    
+    # 1. Create design.md (minimal - from user description)
+    create_file(f"{track_dir}/design.md", f"""
+# Design: {extract_title(user_description)}
+
+## 1. Problem Statement
+{user_description}
+
+## 2. Goals
+- [To be refined in Phase 5 Discovery]
+
+## 3. Approach
+- [To be determined after Phase 6 Synthesis]
+
+## 4. Risks
+- [To be assessed in Phase 6]
+""")
+    
+    # 2. Create metadata.json
+    create_file(f"{track_dir}/metadata.json", {
+        "id": track_id,
+        "created_at": now(),
+        "source": "pl-bootstrap",
+        "planning": {
+            "state": "discovery",
+            "phases_completed": []
+        }
+    })
+    
+    # 3. spec.md and plan.md created AFTER Phase 6 (Synthesis)
+    
+    return track_id
+```
+
+## Input Source Handling
+
+| Source | Mode | Track Exists? | Phase 5 (Discovery) |
+|--------|------|---------------|---------------------|
+| **design.md** | ALIAS | Yes | Skip - use existing research |
+| **PRD file** | STANDALONE | Yes | Parse PRD, run discovery |
+| **User description** | BOOTSTRAP | **Create** | Run full discovery |
+
+### Phase Flow by Mode
+
+```
+ALIAS mode (design.md exists):
+  Skip → Phase 6 → Phase 7 → ... → Phase 10
+
+STANDALONE mode (PRD exists):
+  Phase 5 (parse PRD) → Phase 6 → ... → Phase 10
+
+BOOTSTRAP mode (no input):
+  Prompt → Create artifacts → Phase 5 → Phase 6 → ... → Phase 10
+```
+
+**Anti-pattern:** Do NOT skip input detection. Always validate or bootstrap before Phase 5.
 
 ## Overview Diagram
 
@@ -55,7 +167,9 @@ The `pl` trigger activates when `design.md` exists and runs phases 5-10 of the u
 | **Timeout** | 15 seconds per agent |
 | **Fallback** | Graceful degradation to manual research |
 
-### Parallel Agents
+### ⚠️ MANDATORY: Parallel Agent Dispatch
+
+**YOU MUST spawn 3 parallel `Task()` subagents. This is NOT optional.**
 
 Three agents spawn concurrently:
 
@@ -68,11 +182,43 @@ Three agents spawn concurrently:
 ### Agent Dispatch
 
 ```python
-# Spawn all three in parallel
-Task(description="Locator: Find files for X", prompt="...")
-Task(description="Librarian: Find patterns for X", prompt="...")
-Task(description="Web: Search docs for X", prompt="...")
+# REQUIRED - Spawn all three in parallel (NOT inline):
+Task(
+    description="Locator: Find files for <feature>",
+    prompt="""
+    Search codebase for files related to: <feature>
+    Use finder tool to locate:
+    - Relevant source files
+    - Test files
+    - Config files
+    Return: File paths with line numbers and brief descriptions.
+    """
+)
+Task(
+    description="Librarian: Find patterns for <feature>",
+    prompt="""
+    Search codebase for existing patterns related to: <feature>
+    Use finder tool to identify:
+    - Similar implementations
+    - Reusable utilities
+    - Naming conventions
+    Return: Pattern examples with file paths.
+    """
+)
+Task(
+    description="Web: Search docs for <feature>",
+    prompt="""
+    Search external documentation for: <feature>
+    Use web_search tool to find:
+    - Library docs (if external deps)
+    - Best practices
+    - Similar projects
+    Return: URLs with summaries.
+    """
+)
 ```
+
+**Anti-pattern:** Do NOT perform discovery inline without `Task()`. The parallel dispatch is required for efficiency.
 
 ### Timeout and Fallback Behavior
 
@@ -169,7 +315,9 @@ oracle(
 | **Tool** | `Task()` |
 | **Timeout** | 30 minutes default (escalate on timeout) |
 
-### Spike Execution
+### ⚠️ MANDATORY: Spike Execution for HIGH Risk Items
+
+**If risk-map.md contains HIGH risk items, YOU MUST spawn `Task()` for each. This is NOT optional.**
 
 For each HIGH risk item, spawn a Task():
 
@@ -235,6 +383,36 @@ After spike completion, update design.md Section 5:
 - **Impact on approach**: Confirmed, no design changes needed
 ```
 
+### ⚠️ MANDATORY: Oracle Spike Aggregation
+
+**After ALL spikes complete, YOU MUST call Oracle to synthesize results:**
+
+```python
+# REQUIRED - Aggregate spike results via Oracle:
+oracle(
+    task="Synthesize spike results and update approach",
+    context="""
+    Spikes completed. For each spike:
+    1. Extract YES/NO/PARTIAL result
+    2. Capture key learnings
+    3. Update approach if NO/PARTIAL found
+    4. Downgrade risk level for validated items
+    
+    Return: Updated approach with spike learnings integrated.
+    """,
+    files=[
+        "conductor/tracks/<id>/design.md",
+        "conductor/tracks/<id>/risk-map.md",
+        "conductor/spikes/<track>/**/LEARNINGS.md"
+    ]
+)
+```
+
+**Oracle updates:**
+1. design.md Section 5 with detailed spike results
+2. design.md Section 3 with revised approach (if spike found blocker)
+3. risk-map.md - downgrade verified items from HIGH → LOW
+
 ---
 
 ## Phase 8: DECOMPOSITION
@@ -244,8 +422,26 @@ After spike completion, update design.md Section 5:
 | **Purpose** | Create beads from design with embedded spike learnings |
 | **Inputs** | Validated design, spec.md, spike results |
 | **Outputs** | Filed beads in `.beads/` |
-| **Tool** | `bd create` |
+| **Skill** | `tracking` |
 | **Command** | `fb` (file beads) |
+
+### ⚠️ MANDATORY: Load Tracking Skill First
+
+**Before running `fb`, YOU MUST load the tracking skill:**
+
+```python
+# REQUIRED - Load tracking skill before file-beads:
+skill("tracking")  # Loads fb, rb, bd commands
+
+# Then file beads with spike learnings
+fb  # Creates beads from plan with embedded learnings
+```
+
+**Why?** The tracking skill provides:
+- `fb` command for filing beads
+- `rb` command for reviewing beads
+- `bd` commands for bead operations
+- Spike learnings injection into bead descriptions
 
 ### File-Beads with Learnings
 
