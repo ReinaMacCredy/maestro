@@ -323,7 +323,7 @@ See [orchestrator workflow](../../../orchestrator/references/workflow.md) for pa
    4. Touch conductor/.last_activity
    ```
    
-   See [../handoff/triggers.md](../handoff/triggers.md) for trigger details.
+   See [handoff skill](../../../handoff/SKILL.md) for trigger details.
 
 10. **Finalize Track**
     - Update status `[~]` → `[x]` in `tracks.md`

@@ -501,7 +501,7 @@ Task(
    6. Touch conductor/.last_activity
    ```
    
-   See [../handoff/create.md](../handoff/create.md) for full workflow.
+   See [handoff skill](../../../handoff/SKILL.md) for full workflow.
 
 3. **Display Handoff**
 

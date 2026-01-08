@@ -65,7 +65,7 @@ handoff_dir = conductor/handoffs/<track_id>/
 5. Touch conductor/.last_activity
 ```
 
-See [handoff/triggers.md](handoff/triggers.md) for trigger details.
+See [handoff skill](../../handoff/SKILL.md) for trigger details.
 
 ### Validation Gate: validate-completion
 
