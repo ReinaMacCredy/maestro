@@ -78,6 +78,8 @@ Contains reusable learnings from completed tracks.
 - `npx mcporter generate-cli <server> --bundle .claude/toolboxes/<name>/<name>.js` - Generate CLI from MCP server
 - `.claude/toolboxes/agent-mail/agent-mail.js health-check` - Test Agent Mail CLI
 - `npx mcporter generate-cli --from .claude/toolboxes/<name>/<name>.js` - Regenerate CLI from existing
+- `cliff.toml tag_pattern = "v0.*"` - Filter changelog to specific version series (ignores 1-5.x history)
+- Update `plugin.json` + `marketplace.json` together for version reset
 
 ## Gotchas
 

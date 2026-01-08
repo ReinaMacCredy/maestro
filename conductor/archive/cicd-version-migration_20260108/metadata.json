@@ -2,11 +2,18 @@
   "track_id": "cicd-version-migration",
   "created_at": "2026-01-03T18:23:00+07:00",
   "workflow": {
-    "state": "PLANNED"
+    "state": "ARCHIVED"
   },
   "planning": {
     "state": "track_planned",
-    "phases_completed": ["discovery", "synthesis", "verification", "decomposition", "validation", "track_planning"],
+    "phases_completed": [
+      "discovery",
+      "synthesis",
+      "verification",
+      "decomposition",
+      "validation",
+      "track_planning"
+    ],
     "approach": "option-c-clean-break"
   },
   "beads": {
