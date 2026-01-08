@@ -5,73 +5,107 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.0] - 2026-01-08
+## [0.9.1] - 2026-01-08
+
 
 ### Added
 
+
+- Integrate Ralph autonomous AI agent loop
+
+## [0.9.0] - 2026-01-08
+
+
+### Added
+
+
 - Skills architecture refactor
-- Add standalone pl pipeline (phases 5-8)
+- Add standalone pl pipeline (phases 5-10)
 - Migrate from Agent Mail MCP to CLI toolbox
 - Add EXECUTION BLOCK format to enforce mandatory gates
 
+
 ### Changed
+
 
 - Move skills/ and toolboxes/ to root with symlinks from .claude/
 - Reorganize references with index pattern
 
+
 ### Documentation
+
 
 - Add handoff for skills-arch-refactor epic completion
 
+
 ### Fixed
+
 
 - Add MANDATORY gates for pl pipeline (Task spawn, Oracle calls, skill load)
 
+
 ### Complete
+
 
 - 8 learnings extracted
 
 ## [0.8.5] - 2026-01-08
 
+
 ### Changed
+
 
 - Consolidate duplicate content and remove deprecated files
 - Consolidate Phase 2b routing to reference orchestrator docs
 
+
 ### Fixed
+
 
 - Update broken handoff references to point to handoff skill
 
 ## [0.8.4] - 2026-01-08
 
+
 ### Added
 
+
 - Unified 8-phase DS pipeline
-- Merge knowledge/ into doc-sync
+- Merge knowlegde/ into doc-sync
 
 ## [0.8.3] - 2026-01-07
 
+
 ### Added
+
 
 - Add CLAUDE.md agent configuration and update internal bead tracking files.
 
 ## [0.8.2] - 2026-01-07
 
+
 ### Added
+
 
 - Add MCPorter toolboxes for MCP-to-CLI conversion
 
 ## [0.8.1] - 2026-01-07
 
+
 ### Added
+
 
 - Implement automatic integration of Design Session (ds) with Planning Pipeline (pl) including design documentation and metadata.
 
+
 ### Changed
+
 
 - Move planning pipeline documentation and references from conductor to design skill
 
+
 ### Documentation
+
 
 - Update changelog
 - Update handoff skill documentation to use `ho` as the primary command alias.
@@ -80,17 +114,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.8.0] - 2026-01-03
 
+
 ### Added
+
 
 - Introduce `handoff` skill for session cycling and context management, supported by a new session wrapper script.
 
 ## [0.7.0] - 2026-01-03
 
+
 ### Added
+
 
 - Update conductor skill routing to include planning phrases and enhance its description with trigger commands.
 
+
 ### Documentation
+
 
 - Add Mermaid flowcharts to visualize workflow steps in documentation.
 - Update changelog
@@ -99,7 +139,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.0] - 2026-01-03
 
+
 ### Added
+
 
 - Initial release of my-workflow skills v1.0.0
 - Add various new skills and methodologies, including root cause tracing, testing patterns, and workflow definitions.
@@ -202,7 +244,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Remove orchestrator stress test demo and skills core utility
 - Migrate versioning from 5.x.x to 0.5.x
 
+
 ### Changed
+
 
 - Restructure agent skills for plan execution and workflow, introduce hooks, and consolidate code review into a dedicated agent.
 - Remove retro and spike workflows, updating conductor and tutorial documentation to reflect verification phase.
@@ -224,9 +268,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update Python type hints to use `Optional` for nullable types.
 - Move prompts from subagent-dev
 - Move coordination from dispatching
+- Move continuity to ledger/
 - Move doc-sync references
 - Extract TDD content to conductor
 - Extract verification content to conductor
+- Extract finishing-branch to conductor
 - Move discipline rules to AGENTS.md
 - Split skills into cycle/gates, gate/rollback, branch-options/cleanup as plan
 - Reorganize maestro-config block structure
@@ -237,7 +283,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Flatten conductor/references/conductor/ to reduce nesting
 - Migrate skill definitions to the `.claude/skills` directory.
 
+
 ### Documentation
+
 
 - Add K&V integration design plan
 - Convert workflow pipeline diagram from plain text to Mermaid format.
@@ -264,10 +312,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update CODEMAPS with beads-conductor integration
 - Update LIFECYCLE flow pipeline with Beads-Conductor integration
 - Update TUTORIAL.md pipeline diagram with Beads-Conductor integration
+- Update changelog [skip ci]
+- Update all references for new architecture
+- /conductor-finish spec-compliant-migration track
+- Update changelog [skip ci]
+- Add grounding system to skills codemap
+- Sync documentation with skill integration
+- Update CODEMAPS with maestro-core skill
 - Fix TUTORIAL.md state files table - replace LEDGER.md with handoffs
 - Clarify Maestro Core's role and add prerequisite pattern for dependent skills.
 - Update changelog
 - Update CODEMAPS to reflect auto-orchestration in beads skill
+- Add auto-orchestration to all documentation
 - Refine skill frontmatter requirements, correct file references and a grep typo, and generalize upstream repository placeholders.
 - Update documentation links from relative to absolute URLs across various reference and skill files.
 - Update maestro-core links to use relative paths in skill documentation.
@@ -276,7 +332,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update Agent Mail link and remove two project links from README.
 - Update changelog
 
+
 ### Fixed
+
 
 - Update author field to object format
 - Apply Gemini code review feedback
@@ -298,19 +356,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Convert bold text to proper ### headings (MD036)
 - Add maestro-core first-message instruction to maestro-config block
 - Correct SemVer labels - breaking changes belong in major, not minor
-- Clarify Maestro Core's role and add prerequisite pattern for dependent skills.
-- Update changelog
-- Update CODEMAPS with maestro-core skill
-- Fix TUTORIAL.md state files table - replace LEDGER.md with handoffs
-- Update all references for new architecture
-- /conductor-finish spec-compliant-migration track
-- Update changelog [skip ci]
-- Add grounding system to skills codemap
-- Sync documentation with skill integration
-- Update CODEMAPS with maestro-core skill
-- Fix TUTORIAL.md state files table - replace LEDGER.md with handoffs
-- Update all references for new architecture
-- /conductor-finish spec-compliant-migration track
-- Update changelog [skip ci]
-- Add grounding system to skills codemap
-- Sync documentation with skill integration
+- Address all PR review comments
+- Add explicit orchestrator auto-loading instruction to conductor skill
+- Update maestro-core routing to note ci/implement exception
+- Address Gemini bot review comments on PR #21
+- Broken links from docs rewrite
+- Address gemini-code-assist review comments
+- Update preflight timeout handling to HALT instead of DEGRADE
+- Update documented system behavior for Agent Mail unavailability from degrade to halt
+
+
+### Complete
+
+
+- 11 learnings extracted
+- 4 learnings extracted
+- 9 learnings extracted, full integration documented
+- 5 learnings extracted, archived
+- 2 learnings extracted
+- 11 learnings extracted, state machine and UX automation archived
+- Central orchestration skill with 5-level hierarchy
+
+
+### Conductor
+
+
+- Sync context with codebase
+- Update Double Diamond track spec and plan
+- Update spec/plan for BMAD alignment
+- Complete track continuity-integration_20251227
+- Update overview.md with continuity skill
+- Complete track orchestrator-improvements_20260101
+- Archive file-scope-parallel_20260102
+- Complete track planning-integration
+
+
+### Doc-sync
+
+
+- Add conductor structure and handoff mechanism
+
+
