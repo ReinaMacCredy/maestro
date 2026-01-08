@@ -115,21 +115,63 @@ MODES:
 | **Research Hook** | None (research-verify ran at Phase 3 end) |
 | **Mode** | Both SPEED and FULL |
 
-**Oracle Audit:**
+#### ⚠️ MANDATORY: Oracle Audit
+
+**YOU MUST call `oracle()` at Phase 4. This is NOT optional.**
+
+```python
+# REQUIRED - Execute this exact call:
+oracle(
+    task="6-dimension design audit for Phase 4 VERIFY",
+    context="""
+    Review the design.md against these 6 dimensions:
+    1. COMPLETENESS - All requirements addressed?
+    2. CONSISTENCY - No contradictions?
+    3. FEASIBILITY - Technically achievable?
+    4. TESTABILITY - Can be verified?
+    5. RISK - Blockers identified?
+    6. SCOPE - Appropriate boundaries?
+    
+    Return: APPROVED or NEEDS_REVISION with specific issues.
+    """,
+    files=["conductor/tracks/<track>/design.md"]
+)
 ```
-Oracle → APPROVED:     Continue to Phase 5
+
+**Oracle Response Handling:**
+```
+Oracle → APPROVED:       Continue to Phase 5
        → NEEDS_REVISION: [R] Revise / [S] Skip / [A] Abort
 ```
 
-**Spike Execution (HIGH risk items):**
-```
-For each HIGH risk item:
-  1. Create spike bead + conductor/spikes/<track>/<spike-id>/
-  2. Spawn Task() with time-box (default: 30 min)
-  3. Wait for completion
-  4. Capture result: YES/NO/PARTIAL/TIMEOUT
+#### ⚠️ MANDATORY: Spike Execution for HIGH Risk Items
 
-All YES → Continue
+**If risk assessment identifies HIGH risk items, YOU MUST spawn Task() for each:**
+
+```python
+# REQUIRED for each HIGH risk item:
+Task(
+    description=f"Spike: {risk_item.question}",
+    prompt=f"""
+    Time-box: 30 minutes
+    Output: conductor/spikes/<track>/<spike-id>/
+    
+    Question to answer: {risk_item.question}
+    
+    Success criteria:
+    - Working throwaway code demonstrating feasibility
+    - Answer documented: YES (approach works) or NO (blocker found)
+    - Learnings captured in spike/LEARNINGS.md
+    
+    On completion:
+    bd close <spike-bead-id> --reason "YES: <approach>" or "NO: <blocker>"
+    """
+)
+```
+
+**Spike Results:**
+```
+All YES → Continue to Phase 5
 Any NO/TIMEOUT → HALT for user decision
 ```
 
@@ -213,6 +255,34 @@ Oracle audit APPROVED. Ready to auto-generate:
 4. Fix issues with `bd dep add/remove`
 5. Oracle Final Review (beads completeness)
 
+#### ⚠️ MANDATORY: Oracle Beads Review
+
+**YOU MUST call `oracle()` after bv validation. This is NOT optional.**
+
+```python
+# REQUIRED - Execute this exact call:
+oracle(
+    task="Beads completeness review for Phase 6 VALIDATE",
+    context="""
+    Review the filed beads for:
+    1. COVERAGE - All design tasks have corresponding beads?
+    2. GRANULARITY - Beads are appropriately sized (not too large/small)?
+    3. DEPENDENCIES - All dependencies correctly wired?
+    4. CLARITY - Each bead has clear acceptance criteria?
+    5. TESTABILITY - Each bead can be verified when complete?
+    
+    Return: APPROVED or NEEDS_REVISION with specific issues.
+    """,
+    files=[".beads/"]
+)
+```
+
+**Oracle Response Handling:**
+```
+Oracle → APPROVED:       Continue to Phase 7
+       → NEEDS_REVISION: Fix beads → re-validate (max 2 retries)
+```
+
 ---
 
 ### Phase 7: ASSIGN (Execute)
@@ -261,6 +331,50 @@ Ready to execute. Found N tracks:
 
 **Single Track:**
 - Suggest: `Run 'ci' to start implementation`
+
+#### ⚠️ MANDATORY: Auto-Orchestration for Multiple Tracks
+
+**If ≥2 parallel tracks exist and user selects [O], YOU MUST spawn Task() for each track:**
+
+```python
+# REQUIRED for each track when [O] selected:
+for track in track_assignments:
+    Task(
+        description=f"Track {track.name}: {track.agent}",
+        prompt=f"""
+        Agent: {track.agent}
+        Track: {track.name}
+        File scope: {track.file_scope}
+        Beads: {', '.join(track.beads)}
+        
+        Execute beads in dependency order using TDD:
+        1. Register via macro_start_session()
+        2. For each bead:
+           - bd show <id> to read context
+           - bd update <id> --status in_progress
+           - Implement with RED-GREEN-REFACTOR
+           - bd close <id> --reason completed
+        3. Report completion via send_message()
+        
+        On completion:
+        send_message(
+            to=["Orchestrator"],
+            subject="Track {track.name} complete",
+            body="Completed beads: X, Y, Z. Files modified: ..."
+        )
+        """
+    )
+```
+
+**After all workers complete:**
+```python
+# REQUIRED after all Task() workers return:
+# 1. Run review beads
+Bash(cmd="rb")
+
+# 2. Summarize results
+print("All tracks complete. Run `/conductor-finish` to finalize.")
+```
 
 ---
 

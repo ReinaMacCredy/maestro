@@ -8,6 +8,14 @@ Doc-sync integrates at two points:
 1. **Auto-trigger** - Phase 7 in `/conductor-finish`
 2. **Manual trigger** - `/doc-sync` command
 
+### Data Sources
+
+Doc-sync now extracts knowledge from **two sources**:
+1. **Code Changes** - Git diff, file renames, function changes
+2. **Thread History** - Amp threads that touched track files (NEW)
+
+Both sources are merged by Oracle before applying updates.
+
 ---
 
 ## Phase 7 in /conductor-finish
@@ -50,29 +58,49 @@ function conductorFinishPhase7():
     log("⏭️  Skipping doc-sync (--skip-doc-sync)")
     return
     
-  # Run doc-sync
   log("📄 Phase 7: Doc-Sync")
   
-  # 1. Scan for docs with code refs
+  # === STEP 1: Code Scanner ===
+  log("   1/4 Scanning code changes...")
   docs = scanForDocs()
-  if docs.length == 0:
-    log("   No docs with code references found")
-    return
-    
-  # 2. Detect changes from this track
   changes = detectChanges(track.beads, track.gitRange)
-  if changes.length == 0:
-    log("   No code changes detected")
-    return
-    
-  # 3. Apply updates
-  results = applyUpdates(docs, changes)
   
-  # 4. Show summary
+  # === STEP 2: Thread Extraction (NEW) ===
+  log("   2/4 Extracting thread knowledge...")
+  threads = find_thread(
+    after: track.started_at,
+    file: track.files
+  )
+  
+  if threads.length > 0:
+    # Parallel extraction with Task agents
+    topics = extractTopicsParallel(threads)
+    # Oracle synthesizes
+    topics = oracleSynthesize(topics)
+  else:
+    topics = []
+  
+  # === STEP 3: Oracle Reconcile ===
+  log("   3/4 Reconciling sources...")
+  updates = oracleReconcile(
+    code_changes: changes,
+    thread_topics: topics,
+    current_docs: docs
+  )
+  
+  # === STEP 4: Apply Updates ===
+  log("   4/4 Applying updates...")
+  results = applyUpdates(updates)
+  
   showSummary(results)
-  
   log("✅ Phase 7: Doc-Sync complete")
 ```
+
+See also:
+- [extraction.md](extraction.md) - Thread extraction pipeline details
+- [reconcile.md](reconcile.md) - Oracle reconciliation logic
+- [prompts.md](prompts.md) - Prompt templates
+- [mapping.md](mapping.md) - Doc target mapping rules
 
 ### State Tracking
 

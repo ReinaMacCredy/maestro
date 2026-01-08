@@ -131,17 +131,17 @@ See [apc-checkpoints.md](references/apc-checkpoints.md) for implementation detai
 When risk assessment identifies HIGH risk items:
 
 ```
-HIGH risk items → Spawn spike Task()
+HIGH risk items → MUST spawn spike Task()
                        │
                        ▼
               For each HIGH risk:
               1. Create spike bead + dir
-              2. Spawn Task() with time-box
+              2. MUST spawn Task() with time-box
               3. Wait for completion
               4. Capture result (YES/NO)
                        │
                        ▼
-              Oracle aggregates spike results
+              MUST call oracle() for 6-dimension audit
                        │
                ┌───────┴───────┐
                │               │
@@ -150,6 +150,14 @@ HIGH risk items → Spawn spike Task()
                ▼               ▼
            Continue       HALT - user decision
 ```
+
+⚠️ **MANDATORY:** You MUST call `oracle()` at Phase 4 - see [unified-pipeline.md](references/unified-pipeline.md#phase-4-verify-converge)
+
+## Phase 6: VALIDATE - Oracle Beads Review
+
+⚠️ **MANDATORY:** After `bv` validation, you MUST call `oracle()` to review beads completeness.
+
+See [unified-pipeline.md](references/unified-pipeline.md#phase-6-validate-execute)
 
 ## Phase 8: READY - Auto-Orchestration
 
@@ -163,6 +171,10 @@ Ready to execute. Found N tracks:
 
 Default: [O] after 30s
 ```
+
+⚠️ **MANDATORY:** If user selects [O] and ≥2 tracks exist, you MUST spawn `Task()` for each track.
+
+See [unified-pipeline.md](references/unified-pipeline.md#phase-8-ready-complete)
 
 ## `pl` Compatibility
 
