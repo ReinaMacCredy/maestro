@@ -245,10 +245,12 @@ Contains reusable learnings from completed tracks.
 - **Lazy References:** Trigger-based reference loading - SKILL.md always loaded, phase-specific references (agent-mail.md, worker-prompt.md) loaded on demand
 - **Triage Cache:** Store bead triage results in `metadata.beads.triageCache` with TTL to skip redundant `bv --robot-triage` calls
 - **Toolbox Pattern:** One subfolder per tool in `toolboxes/<tool>/<tool>.js`, shared config at `mcporter.json`
-- **Unified 8-Phase Pipeline:** DISCOVER → DEFINE → DEVELOP → VERIFY → DECOMPOSE → VALIDATE → ASSIGN → READY (replaces DS+PL separation)
+- **Unified 10-Phase Pipeline:** ds (1-4: DISCOVER → DEFINE → DEVELOP → VERIFY) + pl (5-10: DISCOVERY → SYNTHESIS → VERIFICATION → DECOMPOSITION → VALIDATION → TRACK PLANNING)
 - **Research Consolidation:** 2 hooks (research-start, research-verify) replace 5 hooks (~35s max vs ~95s)
-- **Mode-Aware Execution:** SPEED (phases 1,2,4,8) vs FULL (all 8) based on complexity score
-- **`pl` as Alias:** `pl` now runs phases 5-8 only when design.md exists (not standalone)
+- **Mode-Aware Execution:** SPEED (phases 1,2,4,READY) vs FULL (all 1-10) based on complexity score
+- **`pl` Entry Modes:** STANDALONE (no design.md), ALIAS (with design.md, phase<5), NO-OP (already in phases 5-10)
 - **Ownership Matrix Pattern:** Each skill explicitly owns specific artifacts - no overlap (designing→design phases, conductor→implementation, orchestrator→workers, tracking→beads, handoff→session)
 - **Gerund Naming Convention:** Action-oriented skills use gerunds (designing, tracking, creating-skills) per Anthropic best practices
 - **Command Migration:** When moving commands between skills, update: (1) source skill entry points, (2) target skill entry points, (3) maestro-core routing table
+- **Oracle Deep Audit:** Use oracle() at end of large changes to catch stale references across files
+- **Parallel Worker Completion:** Workers may not update all instances - always grep for stale patterns after parallel execution
