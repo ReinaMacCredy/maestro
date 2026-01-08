@@ -1,31 +1,41 @@
 # Maestro: The Complete Guide
 
-> **For humans**: Read this to understand what these skills do and why they matter.
+> **For humans**: Read this to understand what Maestro does and why it matters.  
 > **For agents**: See the Quick Reference at the end for triggers.
 
 ---
 
 ## Why This Exists
 
-AI coding agents are powerful but forgetful. They lose context between sessions, let plans evaporate into chat, write tests as afterthoughts, and debug chaotically. Maestro solves these problems by giving agents a structured methodology: persistent planning artifacts, dependency-aware issue tracking, and consistent workflows that survive session boundaries.
+AI coding agents are powerful but forgetful. They:
+- **Lose context** between sessions (compaction, restarts)
+- **Let plans evaporate** into chat history
+- **Write tests as afterthoughts** (or not at all)
+- **Debug chaotically** without systematic approaches
+
+Maestro solves these problems by giving agents a **structured methodology**:
+- Persistent planning artifacts that survive sessions
+- Dependency-aware issue tracking
+- Consistent workflows with TDD enforcement
+- Context handoffs that bridge session boundaries
 
 ---
 
 ## Key Insights (The "Aha" Moments)
 
-1. **"Spend tokens once on a good plan; reuse it many times."**
+1. **"Spend tokens once on a good plan; reuse it many times."**  
    Long, fuzzy chats chew context. A structured spec+plan is cheaper to revisit.
 
-2. **"Your project's state lives in git, not in the agent's memory."**
+2. **"Your project's state lives in git, not in the agent's memory."**  
    Chat history is ephemeral. Beads issues persist in `.beads/` and survive compaction.
 
-3. **"Beads are dependency-aware, not a flat todo list."**
+3. **"Beads are dependency-aware, not a flat todo list."**  
    Encode constraints once ("A blocks B"). All later sessions respect them.
 
-4. **"Skills are mental modes, not just commands."**
-   Invoking `tdd` or `debug` switches the agent into a specific methodology.
+4. **"Skills are mental modes, not just commands."**  
+   Invoking `tdd` or `ds` switches the agent into a specific methodology.
 
-5. **"Evidence before assertions."**
+5. **"Evidence before assertions."**  
    Don't claim "tests pass"—show the output. Don't claim "fixed"—show the verification.
 
 ---
@@ -38,7 +48,7 @@ Conductor creates structured planning artifacts that persist across sessions:
 
 | Artifact | Purpose | Created By |
 |----------|---------|------------|
-| `design.md` | High-level architecture decisions | `ds` or `/conductor-design` |
+| `design.md` | High-level architecture decisions | `ds` |
 | `spec.md` | Requirements and acceptance criteria | `/conductor-newtrack` |
 | `plan.md` | Task breakdown with status markers | `/conductor-newtrack` |
 | `metadata.json` | Track state and validation info | `/conductor-newtrack` |
@@ -46,15 +56,20 @@ Conductor creates structured planning artifacts that persist across sessions:
 **Directory structure:**
 ```
 conductor/
-├── product.md, tech-stack.md, workflow.md  # Project context
-├── CODEMAPS/                               # Architecture docs
-├── handoffs/                               # Session context (git-committed)
-└── tracks/<track_id>/                      # Per-track work
-    ├── design.md, spec.md, plan.md
+├── product.md              # Product context
+├── tech-stack.md           # Technology choices
+├── workflow.md             # Workflow preferences
+├── CODEMAPS/               # Architecture docs
+├── handoffs/               # Session context
+│   └── <track>/
+└── tracks/<track-id>/      # Per-track work
+    ├── design.md
+    ├── spec.md
+    ├── plan.md
     └── metadata.json
 ```
 
-### Beads (Issue Tracking)
+### Beads/Tracking (Issue Management)
 
 Beads are persistent, dependency-aware issues that survive session boundaries:
 
@@ -72,30 +87,114 @@ The key insight: **notes survive compaction**. Write handoff context there.
 Skills aren't scripts—they're methodologies the agent adopts:
 
 | Skill | Trigger | What It Does |
-|-------|---------|--------------|
-| `design` | `ds` | Double Diamond design session |
-| `conductor` | `/conductor-*` | Structured planning and execution |
-| `beads` | `fb`, `rb` | File/review issues from plans |
-| `orchestrator` | `/conductor-orchestrate` | Multi-agent parallel execution |
+|-------|---------|--------------| 
+| **designing** | `ds` | Double Diamond design session |
+| **conductor** | `ci`, `tdd` | TDD implementation |
+| **tracking** | `fb`, `rb` | File/review beads |
+| **orchestrator** | `co` | Multi-agent parallel execution |
+| **handoff** | `ho` | Session context preservation |
 
 ---
 
-## The Complete Workflow
+## The 10-Phase Unified Pipeline
+
+Maestro uses a unified pipeline that combines design and planning:
+
+```mermaid
+flowchart LR
+    subgraph Design ["Design (ds)"]
+        P1["1. DISCOVER"] --> P2["2. DEFINE"]
+        P2 --> P3["3. DEVELOP"]
+        P3 --> P4["4. VERIFY"]
+    end
+    
+    subgraph Plan ["Plan (cn)"]
+        P4 --> P5["5. DECOMPOSE"]
+        P5 --> P6["6. VALIDATE"]
+        P6 --> P7["7. ASSIGN"]
+        P7 --> P8["8. READY"]
+    end
+    
+    subgraph Execute ["Execute (ci/co)"]
+        P8 --> P9["9. EXECUTE"]
+        P9 --> P10["10. FINISH"]
+    end
+```
+
+### Phase Details
+
+| # | Phase | Type | Purpose | Exit Criteria |
+|---|-------|------|---------|---------------|
+| 1 | **DISCOVER** | Diverge | Explore problem + research context | Problem articulated |
+| 2 | **DEFINE** | Converge | Frame problem + select approach | Approach selected |
+| 3 | **DEVELOP** | Diverge | Architecture + components | Interfaces defined |
+| 4 | **VERIFY** | Converge | Oracle audit + risk assessment | Oracle APPROVED |
+| 5 | **DECOMPOSE** | Execute | Create beads (`fb`) | Beads filed |
+| 6 | **VALIDATE** | Execute | Dependency check (`bv`) + Oracle review | Dependencies valid |
+| 7 | **ASSIGN** | Execute | Track assignments | Tracks assigned |
+| 8 | **READY** | Complete | Handoff to `ci`/`co` | Execution ready |
+| 9 | **EXECUTE** | Implement | Run implementation | All beads completed |
+| 10 | **FINISH** | Archive | Extract learnings | Track archived |
+
+### Mode Routing
+
+Complexity scoring determines execution mode:
+
+| Score | Mode | Phases | Behavior |
+|-------|------|--------|----------|
+| < 4 | **SPEED** | 1,2,4,8 | Skip beads, advisory verification |
+| 4-6 | **ASK** | User chooses | Optional A/P/C checkpoints |
+| > 6 | **FULL** | All 10 | Full A/P/C, mandatory verification |
+
+### A/P/C Checkpoints
+
+At the end of phases 1-4 (FULL mode), you'll see:
+
+```
+[A] Advanced - Phase-specific deep dive
+[P] Party    - Multi-agent feedback (BMAD v6)
+[C] Continue - Proceed to next phase
+[↩ Back]     - Return to previous phase
+```
+
+| After Phase | [A] Option |
+|-------------|------------|
+| 1 (DISCOVER) | Advanced assumption audit |
+| 2 (DEFINE) | Scope stress-test |
+| 3 (DEVELOP) | Architecture deep-dive |
+| 4 (VERIFY) | Oracle runs automatically |
+
+### Oracle Audit (Phase 4)
+
+At Phase 4, the Oracle performs a 6-dimension review:
+
+1. **Completeness** — All topics covered?
+2. **Accuracy** — Aligned with current project state?
+3. **Redundancy** — Overlapping content?
+4. **Missing pieces** — Important gaps?
+5. **Feasibility** — Can this be built?
+6. **Risk** — What could go wrong?
+
+The Oracle must APPROVE before proceeding. On HALT, address feedback first.
+
+---
+
+## Complete Workflow
 
 ```mermaid
 flowchart LR
     subgraph Planning
         A["ds"] --> B["design.md"]
-        B --> C["newtrack"]
-        C --> D["spec.md + plan.md"]
+        B --> C["cn"]
+        C --> D["spec + plan"]
         D --> E["fb: file beads"]
     end
     
     subgraph Execution
         E --> F["bd ready"]
-        F --> G["implement"]
+        F --> G["ci"]
         G --> H{"TDD Cycle"}
-        H --> I["RED: failing test"]
+        H --> I["RED: write test"]
         I --> J["GREEN: make pass"]
         J --> K["REFACTOR"]
         K --> L["bd close"]
@@ -103,90 +202,168 @@ flowchart LR
     end
     
     subgraph Completion
-        L --> M["finish"]
+        L --> M["/conductor-finish"]
         M --> N["Extract learnings"]
         N --> O["Archive track"]
     end
-    
-    style A fill:#1a1a2e,stroke:#e94560,color:#fff
-    style G fill:#1a1a2e,stroke:#0f3460,color:#fff
-    style M fill:#1a1a2e,stroke:#16213e,color:#fff
 ```
 
+**The flow:**
 ```
 ds → /conductor-newtrack → /conductor-implement → /conductor-finish
 ```
 
-### Phase 1: Design (`ds`)
+### Phase 1-4: Design (`ds`)
 
 Start with a Double Diamond design session:
 
 ```
 User: ds
-Agent: [loads design skill, begins collaborative dialogue]
+
+Agent: I'll help you design a new feature. What would you like to build?
+
+User: User invitation system for our SaaS
+
+Agent: [asks clarifying questions - one at a time]
+Agent: [explores 2-3 approaches with trade-offs]
+Agent: [presents design in sections for approval]
+Agent: Design captured in design.md. Ready to create track?
 ```
 
-The agent will:
-1. Ask clarifying questions (one at a time, multiple choice preferred)
-2. Explore 2-3 approaches with trade-offs
-3. Present design in digestible sections
-4. Write `design.md` when you're aligned
+**Output:** `conductor/tracks/<id>/design.md`
 
-**Output**: `conductor/tracks/<id>/design.md`
+### Phase 5-8: Create Track (`cn` or `/conductor-newtrack`)
 
-### Phase 2: Create Track (`/conductor-newtrack`)
-
-Convert the design into actionable artifacts:
+Convert design into actionable artifacts:
 
 ```
-User: /conductor-newtrack
-Agent: [reads design.md, creates spec + plan + beads]
+User: cn
+
+Agent: [reads design.md]
+Agent: [creates spec.md with acceptance criteria]
+Agent: [creates plan.md with task breakdown]
+Agent: [runs fb to create beads]
+Agent: [runs rb to review dependencies]
+
+Agent: Planning complete. 12 issues across 3 epics:
+  • E1: Database schema (3 tasks, unblocked)
+  • E2: API endpoints (5 tasks, blocked by E1)
+  • E3: Email integration (4 tasks, blocked by E2)
 ```
 
-The agent will:
-1. Generate `spec.md` with requirements and acceptance criteria
-2. Generate `plan.md` with task breakdown
-3. Automatically create beads via `fb` (file beads)
-4. Optionally run `rb` (review beads) to refine
+**Output:** `spec.md`, `plan.md`, beads in `.beads/`
 
-**Output**: `spec.md`, `plan.md`, `.beads/` issues
-
-### Phase 3: Implement (`/conductor-implement`)
+### Phase 9: Implement (`ci` or `/conductor-implement`)
 
 Execute the plan with TDD (enabled by default):
 
 ```
-User: /conductor-implement
-Agent: [claims bead, TDD cycle, closes bead, repeats]
+User: ci
+
+Agent: Executing E1: Database schema
+  [claims inv-001: Create invitations table]
+  [TDD: writes failing test]
+  [TDD: implements to pass]
+  [TDD: refactors]
+  [closes inv-001]
+  [claims inv-002...]
 ```
 
-The agent will:
-1. Run `bd ready --json` to find unblocked work
-2. Claim an issue with `bd update <id> --status in_progress`
-3. Execute RED → GREEN → REFACTOR cycle
-4. Close with `bd close <id> --reason completed`
-5. Commit and repeat
+**TDD Cycle:**
+1. **RED** — Write a failing test
+2. **GREEN** — Write minimal code to pass
+3. **REFACTOR** — Clean up while tests pass
 
-**Disable TDD**: Use `--no-tdd` flag when appropriate.
+Disable TDD with `--no-tdd` flag when appropriate.
 
-### Phase 4: Finish (`/conductor-finish`)
+### Phase 10: Finish (`/conductor-finish`)
 
 Complete the track and extract learnings:
 
 ```
 User: /conductor-finish
-Agent: [validates, extracts learnings, archives]
-```
 
-The agent will:
-1. Verify all beads closed and tests passing
-2. Extract learnings to `AGENTS.md`
-3. Sync documentation if needed
-4. Archive the track
+Agent: [verifies all beads closed]
+Agent: [verifies tests passing]
+Agent: [extracts learnings to AGENTS.md]
+Agent: [archives track]
+Agent: Track complete. Learnings extracted.
+```
 
 ---
 
-## Handoff: Preserving Context Across Sessions
+## Multi-Session Example
+
+### Session 1: Design and Planning
+
+```
+User: ds
+
+Agent: What would you like to design?
+
+User: User invitation system
+
+Agent: [Double Diamond session...]
+Agent: Design captured. Create track?
+
+User: yes
+
+Agent: [creates spec + plan + beads]
+Agent: Planning complete. 12 issues, 3 epics.
+       E1 ready (unblocked).
+
+User: ho
+
+Agent: 📋 Handoff saved: invitations (design-end)
+```
+
+### Session 2: First Epic
+
+```
+Agent: 📋 Prior context: invitations (2h ago)
+
+User: ci
+
+Agent: Executing E1: Database schema
+  [TDD cycle for inv-001]
+  [TDD cycle for inv-002]
+  [TDD cycle for inv-003]
+
+Agent: Epic E1 complete. 3/12 done. Continue to E2?
+
+User: no, stopping
+
+Agent: 📋 Handoff saved: invitations (epic-end)
+```
+
+### Session 3: Continue and Finish
+
+```
+Agent: 📋 Prior context: invitations E1 complete (16h ago)
+
+User: continue
+
+Agent: Executing E2: API endpoints (now unblocked)
+  [TDD cycles...]
+
+Agent: E2 complete. E3 next?
+
+User: yes
+
+Agent: [E3 TDD cycles...]
+Agent: All epics complete.
+
+User: /conductor-finish
+
+Agent: ✓ All beads closed
+       ✓ Tests passing
+       ✓ Learnings extracted
+       Track archived.
+```
+
+---
+
+## Handoff System
 
 ### The Problem
 
@@ -196,49 +373,31 @@ AI agents forget everything between sessions. Context windows fill up, sessions 
 
 Handoff persists context in **files that outlive sessions**:
 
-```
-Session 1 (Planning):
-  ds → design.md
-  /conductor-newtrack → spec.md + plan.md + beads
-  → HANDOFF (planning complete)
-
-Session 2+ (Execution):
-  /conductor-implement → execute epics
-  → HANDOFF (after each epic)
-
-Final Session:
-  /conductor-finish → archive + learnings
-```
-
-### Handoff Artifacts
-
 | Artifact | What It Preserves |
-|----------|------------------|
+|----------|-------------------|
 | `design.md` | Architecture decisions, trade-offs |
 | `spec.md` | Requirements, acceptance criteria |
-| `plan.md` | Tasks with `[x]`/`[ ]` status markers |
+| `plan.md` | Tasks with `[x]`/`[ ]` status |
 | `.beads/` | Issues with notes field (key!) |
 | `conductor/handoffs/` | Session snapshots |
 
 ### Handoff Triggers
 
-Six triggers create handoffs at key moments:
-
 | Trigger | When | Automatic |
 |---------|------|-----------|
 | `design-end` | After `/conductor-newtrack` | ✅ |
 | `epic-start` | Before each epic | ✅ |
-| `epic-end` | After each epic closes | ✅ |
-| `pre-finish` | At start of `/conductor-finish` | ✅ |
-| `manual` | User runs `/conductor-handoff` | ❌ |
+| `epic-end` | After epic closes | ✅ |
+| `pre-finish` | Start of `/conductor-finish` | ✅ |
+| `manual` | User runs `ho` | ❌ |
 | `idle` | 30min gap detected | ✅ (prompted) |
 
 ### Commands
 
 ```bash
-/conductor-handoff         # Auto-detect mode (create or resume)
-/conductor-handoff create  # Save current session context
-/conductor-handoff resume  # Load prior session context
+ho                    # Auto-detect (create or resume)
+/conductor-handoff create   # Force save
+/conductor-handoff resume   # Force load
 ```
 
 ### Writing Good Handoff Notes
@@ -246,95 +405,29 @@ Six triggers create handoffs at key moments:
 The beads **notes field** is your session-to-session memory:
 
 ```bash
-bd update <id> --notes "COMPLETED: Auth middleware. IN PROGRESS: Token refresh. NEXT: Add tests for edge cases."
+bd update <id> --notes "COMPLETED: Auth middleware. IN PROGRESS: Token refresh. NEXT: Add edge case tests."
 ```
 
 Write like you're leaving instructions for yourself in two weeks with zero context.
 
-### Session Protocol
-
-**At session end:**
-```bash
-bd update <id> --notes "COMPLETED: X. NEXT: Y."
-git add -A && git commit -m "progress on feature"
-git push
-```
-
-**At session start:**
-```bash
-bd ready --json      # What's unblocked?
-bd show <id>         # Read notes for context
-```
-
 ---
 
-## Session Walkthrough: Building User Invitations
+## BMAD/Party Mode
 
-### Session 1: Design and Planning
+**BMAD v6** provides multi-agent feedback through simulated expert personas.
 
-```
-User: ds
+When you select **[P] Party** at an A/P/C checkpoint:
 
-Agent: I'll help you design a new feature. What would you like to build?
+1. System spawns 3-5 expert personas
+2. Each reviews from their specialty (architect, PM, QA, etc.)
+3. Feedback is synthesized into actionable items
+4. You decide what to incorporate
 
-User: User invitation system for our SaaS
-
-Agent: [asks clarifying questions about email flow, permissions, expiry]
-Agent: [explores approaches: magic links vs codes, self-service vs admin-only]
-Agent: [presents design sections for approval]
-Agent: Design captured in design.md. Create track now?
-
-User: yes
-
-Agent: [runs /conductor-newtrack]
-Agent: [creates spec.md with 5 acceptance criteria]
-Agent: [creates plan.md with 3 epics, 12 tasks]
-Agent: [runs fb to create beads]
-Agent: [runs rb to review and add dependencies]
-
-Agent: Planning complete. 12 issues created across 3 epics:
-  - E1: Database schema (3 tasks, unblocked)
-  - E2: API endpoints (5 tasks, blocked by E1)
-  - E3: Email integration (4 tasks, blocked by E2)
-
-User: /conductor-handoff
-
-Agent: Handoff saved to conductor/handoffs/invitations/...
-```
-
-### Session 2: First Epic
-
-```
-Agent: [auto-loads handoff on session start]
-Agent: 📋 Prior context: invitations (2h ago)
-
-User: /conductor-implement
-
-Agent: Executing E1: Database schema
-  [claims inv-001: Create invitations table]
-  [TDD: writes test for schema, runs migration, refactors]
-  [closes inv-001]
-  [claims inv-002: Add foreign keys]
-  ...
-
-Agent: Epic E1 complete. 3/12 tasks done. Continue to E2?
-
-User: no, stopping for today
-
-Agent: [creates epic-end handoff]
-```
-
-### Session 3: Continue
-
-```
-Agent: 📋 Prior context: invitations E1 complete (16h ago)
-
-User: continue
-
-Agent: [runs /conductor-implement]
-Agent: Executing E2: API endpoints (now unblocked)
-  ...
-```
+**When to use Party:**
+- Major architectural decisions
+- Scope uncertainty
+- Risk assessment needed
+- Before committing to expensive approaches
 
 ---
 
@@ -342,29 +435,39 @@ Agent: Executing E2: API endpoints (now unblocked)
 
 ### Already Have a Plan
 
-Skip Conductor, go straight to beads:
+Skip design, go straight to beads:
 
-```
-fb                          # File beads from existing plan
-bd ready --json             # See what's unblocked
-tdd                         # Execute with TDD
+```bash
+fb                    # File beads from existing plan
+bd ready --json       # See what's unblocked
+ci                    # Execute with TDD
 ```
 
 ### Bug Investigation
 
-```
+```bash
 bd create "Investigate billing 500" -t bug -p 0
-tdd                         # Fix with TDD
-bd close <id>
+tdd                   # Fix with TDD
+bd close <id> --reason completed
 ```
 
 ### Track in Bad State
 
-Validate and auto-repair:
+Validate and see issues:
 
-```
+```bash
 /conductor-validate <track-id>
 ```
+
+### Parallel Execution
+
+When plan.md has Track Assignments:
+
+```bash
+co                    # Spawn parallel workers
+```
+
+Workers coordinate via Agent Mail, reserve files, report back.
 
 ---
 
@@ -375,47 +478,53 @@ Validate and auto-repair:
 | Task | Command |
 |------|---------|
 | Start design | `ds` |
-| Create track from design | `/conductor-newtrack` |
-| See what's ready | `bd ready --json` |
-| Start implementation | `/conductor-implement` |
-| Check progress | `/conductor-status` |
-| Save context | `/conductor-handoff` |
+| Create track | `cn` or `/conductor-newtrack` |
+| See ready work | `bd ready --json` |
+| Start implementation | `ci` or `/conductor-implement` |
+| Parallel workers | `co` or `/conductor-orchestrate` |
+| Autonomous mode | `ca` or `/conductor-autonomous` |
+| Save context | `ho` or `/conductor-handoff` |
 | Complete track | `/conductor-finish` |
 
 ### For Agents: Triggers
 
-| Trigger | Skill/Action |
-|---------|--------------|
-| `ds` | Design session (Double Diamond) |
-| `/conductor-setup` | Initialize project |
-| `/conductor-design` | Design with A/P/C checkpoints |
-| `/conductor-newtrack` | Create spec + plan + beads |
-| `/conductor-implement` | Execute track with TDD |
-| `/conductor-status` | Show progress |
-| `/conductor-revise` | Update spec/plan mid-work |
-| `/conductor-finish` | Complete and archive track |
-| `fb`, `file beads` | Create beads from plan |
-| `rb`, `review beads` | Review and refine beads |
-| `tdd` | Enter TDD mode |
-| `/conductor-handoff` | Save/load session context |
-| `/conductor-orchestrate` | Parallel workers |
+| Trigger | Skill | Action |
+|---------|-------|--------|
+| `ds` | designing | Double Diamond (phases 1-10) |
+| `cn` | designing | Create track (phases 5-10) |
+| `pl` | designing | Planning only (phases 5-10) |
+| `fb` | tracking | File beads from plan |
+| `rb` | tracking | Review beads |
+| `ci` | conductor | Execute track with TDD |
+| `co` | orchestrator | Spawn parallel workers |
+| `ca` | conductor | Autonomous (Ralph) mode |
+| `tdd` | conductor | RED-GREEN-REFACTOR cycle |
+| `ho` | handoff | Save/load session context |
+| `finish branch` | conductor | Finalize and merge/PR |
 
 ### Critical Rules
 
 1. **No production code without a failing test first** (use `--no-tdd` to disable)
 2. **Always checkpoint before session end** — notes field survives compaction
 3. **Commit `.beads/` with code** — it's your persistent memory
-4. **Evidence before assertions** — show test output, don't just say "tests pass"
+4. **Evidence before assertions** — show test output, don't just claim "tests pass"
+5. **Use `--json` with `bd`** — for structured output
+6. **Use `--robot-*` with `bv`** — bare `bv` hangs
 
-### Troubleshooting
+---
+
+## Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
 | Agent forgets context | Run `bd show <id>` for notes |
 | Plan seems incomplete | Run `rb` to review beads |
 | Tests pass immediately | You wrote code first. Delete it. Start with failing test. |
-| Too many issues | Run `bd ready` for unblocked only |
+| Too many issues | Run `bd ready --json` for unblocked only |
 | Track in bad state | Run `/conductor-validate <track-id>` |
+| Skill not loading | Use explicit trigger: `ds`, `ci`, `tdd` |
+| `bv` hangs | Use `bv --robot-stdout` (never bare `bv`) |
+| Agent Mail unavailable | Check `toolboxes/agent-mail/agent-mail.js health-check` |
 
 ---
 
@@ -423,16 +532,28 @@ Validate and auto-repair:
 
 ### Plan Before Each Epic
 
-Before `/conductor-implement`, switch to plan mode (Shift+Tab in Claude Code) to let the agent strategize.
+Before `ci`, let the agent strategize about the approach.
 
-### Handoff Across Tools
+### Use Handoffs Liberally
 
-| Tool | Handoff Method |
-|------|----------------|
-| Amp | Handoff command or `@T-<id>` references |
-| Claude Code | `/compact` before session end |
-| Codex | `/compact` before session end |
+Better to create too many handoffs than lose context.
+
+### Trust the Pipeline
+
+The 10-phase pipeline exists because it works. Don't skip phases unless you're in SPEED mode.
+
+### Review Beads Regularly
+
+Run `rb` periodically to catch dependency issues early.
 
 ---
 
-*Built on foundations from [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD), [conductor](https://github.com/NguyenSiTrung/conductor), [beads](https://github.com/steveyegge/beads), and [Knowledge & Vibes](https://github.com/kyleobrien91/knowledge-and-vibes).*
+## See Also
+
+- [SETUP_GUIDE.md](SETUP_GUIDE.md) — Installation instructions
+- [REFERENCE.md](REFERENCE.md) — Complete command reference
+- [AGENTS.md](AGENTS.md) — Agent configuration
+
+---
+
+*Built on foundations from [BMAD-METHOD](https://github.com/bmadcode/BMAD-METHOD), [conductor](https://github.com/cyanheads/conductor), [beads](https://github.com/beads-org/beads), and [Agent Mail](https://github.com/agent-mail/agent-mail).*

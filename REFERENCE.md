@@ -1,85 +1,185 @@
-# Maestro Plugin Quick Reference
+# Maestro Reference
 
-> Fast lookup for commands, triggers, and common patterns. ~300 lines.
+Quick-lookup for commands, triggers, and technical details.
 
 ---
 
 ## Commands
 
-| Command | Description | Output |
-|---------|-------------|--------|
-| `/conductor-setup` | Initialize project context (once per project) | `conductor/product.md`, `tech-stack.md`, `workflow.md` |
-| `/conductor-design` | Start Double Diamond design session (alias: `ds`) | `conductor/tracks/<id>/design.md` |
-| `/conductor-newtrack` | Create spec + plan + beads from design | `spec.md`, `plan.md`, beads filed |
-| `/conductor-implement` | Execute track with TDD (auto-routes if parallel) | Code + tests |
-| `/conductor-status` | Display progress overview | Status summary |
-| `/conductor-revise` | Update spec/plan mid-implementation | Updated artifacts |
-| `/conductor-finish` | Complete track, extract learnings, archive | `LEARNINGS.md`, archived track |
-| `/conductor-validate` | Run validation checks on current track | Validation report |
-| `/conductor-orchestrate` | Spawn parallel workers for multi-agent execution | Worker coordination |
-| `/conductor-handoff` | Save/load session context for continuity | `conductor/handoffs/<track>/` |
+| Command | Alias | Description | Phase |
+|---------|-------|-------------|-------|
+| `/conductor-setup` | - | Initialize project context | Setup |
+| `/conductor-design` | `ds` | Start Double Diamond design session | 1-8 |
+| `/conductor-newtrack` | `cn` | Create spec + plan + beads from design.md | 5-8 |
+| `/conductor-implement` | `ci` | Execute track with TDD | 9 |
+| `/conductor-orchestrate` | `co` | Spawn parallel workers | 9 |
+| `/conductor-autonomous` | `ca` | Ralph loop (autonomous) | 9 |
+| `/conductor-status` | - | Display progress overview | Any |
+| `/conductor-revise` | - | Update spec/plan mid-work | Any |
+| `/conductor-validate` | - | Verify beads, run `bv` | 6 |
+| `/conductor-finish` | - | Extract learnings, archive track | 10 |
+| `/conductor-handoff` | `ho` | Save/load session context | Any |
 
 ---
 
 ## Triggers
 
-| Trigger | What It Does | Loads Skill |
-|---------|--------------|-------------|
-| `ds` | Start Double Diamond design session | `design` |
-| `fb` | File beads from plan.md tasks | `beads` |
-| `rb` | Review beads (status check) | `beads` |
-| `tdd` | Enter RED-GREEN-REFACTOR cycle | `test-driven-development` |
-| `finish branch` | Complete dev work, merge/PR options | `finishing-a-development-branch` |
-| `run parallel` | Trigger multi-agent parallel execution | `orchestrator` |
+| Trigger | Skill | Action |
+|---------|-------|--------|
+| `ds` | designing | Double Diamond session (phases 1-10) |
+| `cn` | designing | Create track from design.md |
+| `pl` | designing | Planning phases (5-10) |
+| `fb` | tracking | File beads from plan |
+| `rb` | tracking | Review beads |
+| `tdd` | conductor | RED-GREEN-REFACTOR cycle |
+| `ci` | conductor | Execute track (auto-routes if parallel) |
+| `co` | orchestrator | Spawn parallel workers |
+| `ca` | conductor | Autonomous execution (Ralph) |
+| `ho` | handoff | Save/load session context |
+| `finish branch` | conductor | Finalize and merge/PR |
 
 ---
 
-## Skills Reference
+## Skills
 
-| Skill | Triggers | Description |
-|-------|----------|-------------|
-| **conductor** | `/conductor-*` commands | Context-driven development methodology |
-| **design** | `ds`, `/conductor-design` | Double Diamond brainstorming sessions |
-| **beads** | `fb`, `rb`, `bd ready` | Issue tracking with dependency graphs |
-| **orchestrator** | `/conductor-orchestrate`, `run parallel` | Multi-agent parallel execution |
-| **maestro-core** | Auto-loads with any Maestro skill | HALT/DEGRADE policies, routing rules |
-| **test-driven-development** | `tdd` | RED-GREEN-REFACTOR cycle enforcement |
+9 skills organized by workflow phase:
+
+### Core Routing
+
+| Skill | Description |
+|-------|-------------|
+| **maestro-core** | Central router. Skill hierarchy, HALT/DEGRADE policies, trigger mappings. Load FIRST before any workflow skill. |
+
+### Planning Skills
+
+| Skill | Description |
+|-------|-------------|
+| **designing** | Double Diamond design sessions. 10-phase unified pipeline with A/P/C checkpoints. Triggers: `ds`, `cn`, `pl`. |
+
+### Execution Skills
+
+| Skill | Description |
+|-------|-------------|
+| **conductor** | Implementation execution. TDD by default, beads integration, validation gates. Triggers: `ci`, `ca`, `tdd`. |
+| **orchestrator** | Multi-agent parallel execution. Spawns workers, Agent Mail coordination. Triggers: `co`, "run parallel". |
+| **tracking** | Issue tracking via beads. `bd` CLI wrapper, dependency graphs. Triggers: `fb`, `rb`, `bd *`. |
+
+### Session Skills
+
+| Skill | Description |
+|-------|-------------|
+| **handoff** | Session cycling. Context preservation, resume support. Triggers: `ho`, `/conductor-finish`. |
+
+### Utility Skills
+
+| Skill | Description |
+|-------|-------------|
+| **creating-skills** | Author new skills. SKILL.md structure, best practices. |
+| **sharing-skills** | Contribute skills upstream. Branch, commit, PR workflow. |
+| **using-git-worktrees** | Isolated workspaces. Smart directory selection, safety verification. |
+
+### Skill Hierarchy
+
+```
+conductor (1) > orchestrator (2) > designing (3) > tracking (4) > specialized (5)
+```
+
+Higher rank wins on conflicts.
 
 ---
 
-## bd CLI Quick Reference
+## Unified Pipeline (10 Phases)
 
-> Beads CLI for issue tracking. Always use `--json` for structured output.
+| # | Phase | Type | Purpose | Exit Criteria |
+|---|-------|------|---------|---------------|
+| 1 | **DISCOVER** | Diverge | Explore problem + research | Problem articulated |
+| 2 | **DEFINE** | Converge | Frame problem + approach | Approach selected |
+| 3 | **DEVELOP** | Diverge | Architecture + components | Interfaces defined |
+| 4 | **VERIFY** | Converge | Oracle audit + risk | Oracle APPROVED |
+| 5 | **DECOMPOSE** | Execute | Create beads (`fb`) | Beads filed |
+| 6 | **VALIDATE** | Execute | Dependency check (`bv`) | Dependencies valid |
+| 7 | **ASSIGN** | Execute | Track assignments | Tracks assigned |
+| 8 | **READY** | Complete | Handoff to `ci`/`co` | Execution ready |
+| 9 | **EXECUTE** | Implement | Run implementation | All beads completed |
+| 10 | **FINISH** | Archive | Extract learnings | Track archived |
+
+### Mode Routing
+
+| Score | Mode | Phases | A/P/C | Research |
+|-------|------|--------|-------|----------|
+| < 4 | **SPEED** | 1,2,4,8 | No | 1 hook |
+| 4-6 | **ASK** | User chooses | Optional | User chooses |
+| > 6 | **FULL** | 1-10 | Yes | 2 hooks |
+
+---
+
+## A/P/C Checkpoints
+
+**Advanced / Party / Continue** - decision points at end of phases 1-4 (FULL mode only).
+
+| Option | Action |
+|--------|--------|
+| **[A] Advanced** | Phase-specific deep dive |
+| **[P] Party** | Multi-agent feedback (BMAD v6 personas) |
+| **[C] Continue** | Proceed to next phase |
+| **[↩ Back]** | Return to previous phase |
+
+### Advanced Options by Phase
+
+| After Phase | A Option |
+|-------------|----------|
+| 1 (DISCOVER) | Advanced assumption audit |
+| 2 (DEFINE) | Scope stress-test |
+| 3 (DEVELOP) | Architecture deep-dive |
+| 4 (VERIFY) | Oracle runs BEFORE menu |
+
+### State Ladder
+
+```
+INLINE → MICRO_APC → NUDGE → DS_FULL → DS_BRANCH → BRANCH_MERGE
+```
+
+---
+
+## bd CLI Cheatsheet
 
 ### Essential Commands
 
-| Command | Description |
-|---------|-------------|
-| `bd ready --json` | Find work ready to start (no blockers) |
-| `bd show <id>` | Display bead details and context |
-| `bd update <id> --status in_progress` | Claim a bead and start work |
-| `bd update <id> --notes "message"` | Add notes to a bead |
-| `bd close <id> --reason completed` | Close bead (reasons: `completed`, `skipped`, `blocked`) |
-| `bd sync` | Sync beads to git |
-| `bd list` | List all beads |
-| `bd status` | Show ready + in_progress counts |
+| Command | Action |
+|---------|--------|
+| `bd ready --json` | Find available work |
+| `bd show <id>` | Read task context |
+| `bd update <id> --status in_progress` | Claim task |
+| `bd update <id> --notes "..."` | Add notes |
+| `bd close <id> --reason completed` | Close (completed/skipped/blocked) |
+| `bd status` | Show ready + in_progress |
+| `bd sync` | Sync to git |
 
 ### Session Pattern
 
 ```bash
-# Start session
+# Start
 bd ready --json                      # Find work
 bd show <id>                         # Read context
 bd update <id> --status in_progress  # Claim
 
-# During session
-bd update <id> --notes "PROGRESS: ..." # Update notes
+# During (heartbeat every 5 min)
+# ...work...
 
-# End session
+# End
 bd update <id> --notes "COMPLETED: X. NEXT: Y"
-bd close <id> --reason completed     # Close
-bd sync                              # Commit to git
+bd close <id> --reason completed
+bd sync
 ```
+
+### bv (Beads Validation)
+
+```bash
+bv --robot-stdout    # Machine-readable (NEVER run bare `bv`)
+bv --robot-status    # Status code only
+```
+
+**WARNING:** Bare `bv` hangs. Always use `--robot-*` flags.
 
 ---
 
@@ -88,169 +188,207 @@ bd sync                              # Commit to git
 ```
 conductor/
 ├── product.md              # Product context
-├── tech-stack.md           # Technology choices
-├── workflow.md             # Workflow config (idle threshold, etc.)
+├── tech-stack.md           # Technology decisions
+├── workflow.md             # Workflow preferences
+├── code_styleguides/       # Language-specific rules
 ├── CODEMAPS/               # Architecture documentation
-│   ├── overview.md         # High-level architecture
-│   └── <module>.md         # Per-module codemaps
-├── handoffs/               # Session context (git-committed)
-│   └── <track>/
-│       ├── index.md        # Handoff summary
-│       └── *.md            # Detailed context
-├── tracks/                 # Active work
-│   └── <track-id>/
-│       ├── design.md       # Design decisions
-│       ├── spec.md         # Requirements spec
-│       ├── plan.md         # Implementation plan
-│       └── metadata.json   # State tracking
-└── archive/                # Completed tracks
+├── handoffs/               # Session context
+│   ├── <track-id>/
+│   │   ├── index.md        # Handoff log
+│   │   └── YYYY-MM-DD_*.md # Individual handoffs
+│   └── general/
+├── spikes/                 # Research spikes
+└── tracks/<id>/            # Per-track work
+    ├── design.md           # Design document
+    ├── spec.md             # Specification
+    ├── plan.md             # Implementation plan
+    └── metadata.json       # State tracking
 
 .beads/
-├── index.json              # Bead database
-├── <id>.md                 # Individual bead files
-└── schema.json             # Bead schema
+├── beads.db                # SQLite database
+└── beads.jsonl             # Export format
 
-skills/
-├── beads/                  # Issue tracking skill
-├── conductor/              # Context-driven development
-├── design/                 # Double Diamond sessions
-├── orchestrator/           # Parallel execution
-├── maestro-core/           # Routing policies
-└── <other-skills>/         # Additional skills
-```
-
----
-
-## Workflow Phases
-
-| Phase | Command | Input | Output |
-|-------|---------|-------|--------|
-| **1. Setup** | `/conductor-setup` | — | `product.md`, `tech-stack.md`, `workflow.md` |
-| **2. Design** | `ds` or `/conductor-design` | Idea | `design.md` |
-| **3. Plan** | `/conductor-newtrack` | `design.md` | `spec.md`, `plan.md`, beads |
-| **4. Implement** | `/conductor-implement` | `plan.md`, beads | Code + tests |
-| **5. Finish** | `/conductor-finish` | Completed work | `LEARNINGS.md`, archive |
-
----
-
-## Handoff System
-
-### When to Create Handoffs
-
-| Trigger | When |
-|---------|------|
-| `design-end` | After design session completes |
-| `epic-start` | Before starting each epic |
-| `epic-end` | After closing each epic |
-| `manual` | Before ending any session |
-| `idle` | After 30min inactivity (auto-prompted) |
-
-### Commands
-
-```bash
-# Save context
-/conductor-handoff                 # Auto-detect mode
-/conductor-handoff create          # Force create
-/conductor-handoff create manual   # Explicit trigger
-
-# Load context
-/conductor-handoff resume          # Load most recent
-/conductor-handoff resume <track>  # Load specific track
+skills/                     # Project skills (symlink to .claude/skills/)
+.claude/skills/             # Actual skill location
 ```
 
 ---
 
 ## Fallback Policies
 
-| Condition | Action | What Happens |
-|-----------|--------|--------------|
-| `bd` unavailable | **HALT** | Cannot proceed without beads CLI |
-| `conductor/` missing | **DEGRADE** | Standalone mode, no structured workflow |
-| Agent Mail unavailable | **HALT** | Cannot proceed without Agent Mail for coordination |
-| Handoff stale (>7 days) | **WARN** | Show warning, suggest fresh start |
+| Condition | Action | Message |
+|-----------|--------|---------|
+| `bd` unavailable | **HALT** | `❌ Cannot proceed: bd CLI required` |
+| `conductor/` missing | **DEGRADE** | `⚠️ Standalone mode - limited features` |
+| Agent Mail unavailable | **HALT** | `❌ Cannot proceed: Agent Mail required` |
+
+### Decision Tree: bd vs TodoWrite
+
+```
+bd available?
+├─ YES → Use bd CLI
+└─ NO  → HALT (do NOT use TodoWrite as fallback)
+```
+
+---
+
+## Session Protocol
+
+### First Message
+
+1. Check `conductor/handoffs/` for recent handoffs (< 7 days)
+2. If found: `📋 Prior context: [track] (Xh ago)`
+3. Skip if: "fresh start", no `conductor/`, or handoffs > 7 days
+
+### Preflight Triggers
+
+| Command | Preflight |
+|---------|-----------|
+| `/conductor-implement` | ✅ Yes |
+| `/conductor-orchestrate` | ✅ Yes |
+| `ds` | ❌ Skip |
+| `bd ready/show/list` | ❌ Skip |
+
+### Session Identity
+
+- Format: `{BaseAgent}-{timestamp}` (internal)
+- Registered on `/conductor-implement` or `/conductor-orchestrate`
+- Stale threshold: 10 min → takeover prompt
+
+### Ralph (Autonomous Mode)
+
+| Phase | Action |
+|-------|--------|
+| Start | `ca` sets `ralph.active = true`, invokes ralph.sh |
+| During | Iterates stories, updates passes status |
+| End | `ralph.active = false`, `workflow.state = DONE` |
+
+**Exclusive Lock:** `ci`/`co` blocked while `ralph.active` is true.
+
+---
+
+## MCPorter Toolboxes
+
+CLI tools generated from MCP servers via [MCPorter](https://github.com/steipete/mcporter).
+
+### Location
+
+`toolboxes/<tool>/<tool>.js`
+
+### Available Tools
+
+| CLI | Source | Description |
+|-----|--------|-------------|
+| `agent-mail/agent-mail.js` | mcp-agent-mail | Agent coordination and messaging |
+
+### Usage
+
+```bash
+# From project root
+toolboxes/agent-mail/agent-mail.js <command> [args...]
+
+# Example: health check
+toolboxes/agent-mail/agent-mail.js health-check
+
+# Example: send message
+toolboxes/agent-mail/agent-mail.js send_message to:BlueLake subject:"Hello"
+```
+
+### Argument Syntax
+
+```bash
+# Colon-delimited
+agent-mail.js send_message to:BlueLake subject:"Hello"
+
+# Equals-delimited  
+agent-mail.js send_message to=BlueLake subject="Hello"
+
+# Function-call style
+agent-mail.js 'send_message(to: "BlueLake", subject: "Hello")'
+```
+
+---
+
+## Orchestrator Protocol
+
+### 8-Phase Protocol
+
+| Phase | Action |
+|-------|--------|
+| 0. Preflight | Session identity, detect active sessions |
+| 1. Read Plan | Parse Track Assignments from plan.md |
+| 2. Validate | Health check Agent Mail (HALT if unavailable) |
+| 3. Initialize | ensure_project, register orchestrator + workers |
+| 4. Spawn | Task() for each track (parallel) |
+| 5. Monitor | fetch_inbox, verify worker summaries |
+| 6. Resolve | reply_message for blockers |
+| 7. Complete | Send summary, close epic, `rb` review |
+
+### Worker 4-Step Protocol
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  STEP 1: INITIALIZE  - macro_start_session() FIRST         │
+│  STEP 2: EXECUTE     - claim beads, do work, close beads   │
+│  STEP 3: REPORT      - send_message() to orchestrator      │
+│  STEP 4: CLEANUP     - release_file_reservations()         │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ---
 
 ## Troubleshooting
 
-| Issue | Cause | Fix |
-|-------|-------|-----|
-| `bd` command not found | Beads CLI not installed | Install via command in [SETUP_GUIDE.md](./SETUP_GUIDE.md) |
-| No beads found | Plan not filed | Run `fb` to file beads from plan.md |
-| Track validation fails | Missing artifacts | Ensure `design.md`, `spec.md`, `plan.md` exist |
-| Handoff not loading | Wrong directory | Check `conductor/handoffs/` exists |
-| Orchestrator not triggering | No Track Assignments | Add `## Track Assignments` section to plan.md |
-| Tests not running | TDD skipped | Remove `--no-tdd` flag or run `tdd` explicitly |
-| File conflicts in parallel mode | Reservation missing | Use Agent Mail `file_reservation_paths` |
-| Stale bead status | Not synced | Run `bd sync` to update git |
-| Session context lost | No handoff created | Always `/conductor-handoff` before ending session |
+| Problem | Cause | Solution |
+|---------|-------|----------|
+| `bv` hangs | Missing `--robot-*` flag | Always use `bv --robot-stdout` |
+| Task not found | Stale beads cache | Run `bd sync` |
+| Agent Mail error | CLI not available | Check `toolboxes/agent-mail/agent-mail.js health-check` |
+| Parallel not detected | Missing Track Assignments | Add `## Track Assignments` to plan.md |
+| Handoff stale | > 7 days old | Create new handoff or use "fresh start" |
+| `ci`/`co` blocked | Ralph active | Wait for `ca` to complete |
+| Skill not loading | Wrong trigger | Check routing table in maestro-core |
+| File conflicts | Missing reservation | Use `file_reservation_paths` before editing |
 
----
-
-## Quick Start
+### Validation Checklist
 
 ```bash
-# 1. Initialize project (once)
-/conductor-setup
+# Verify beads CLI
+bd --version
 
-# 2. Design feature
-ds
-# ... complete Double Diamond session ...
+# Verify Agent Mail
+toolboxes/agent-mail/agent-mail.js health-check
 
-# 3. Create track
-/conductor-newtrack
+# Verify project structure
+ls conductor/
+ls .beads/
 
-# 4. Find and start work
-bd ready --json
-bd update <id> --status in_progress
-
-# 5. Implement with TDD
-/conductor-implement <track>
-
-# 6. Complete track
-/conductor-finish <track>
+# Validate plugin manifest
+cat .claude-plugin/plugin.json | jq .
 ```
 
 ---
 
-## Common Patterns
+## Critical Rules
 
-### Standard Session
-
-```bash
-bd ready --json                      # Find work
-bd show BEAD-001                     # Read context
-bd update BEAD-001 --status in_progress
-# ... implement ...
-bd close BEAD-001 --reason completed
-bd sync
-/conductor-handoff
-```
-
-### Parallel Execution
-
-```bash
-/conductor-orchestrate              # Spawn workers via Agent Mail
-# Workers coordinate via Agent Mail MCP:
-#   file_reservation_paths          # Reserve files before editing
-#   send_message                    # Report progress
-#   release_file_reservations       # Release when done
-bd close BEAD-001 --reason completed  # Mark complete
-```
-
-### Mid-Session Revision
-
-```bash
-/conductor-revise                   # Update spec/plan
-# System reopens affected beads automatically
-bd ready --json                     # See updated work
-```
+1. Use `--json` with `bd` for structured output
+2. Use `--robot-*` with `bv` (bare `bv` hangs)
+3. Never write production code without failing test first (TDD)
+4. Always commit `.beads/` with code changes
+5. Load `maestro-core` FIRST before any workflow skill
 
 ---
 
 ## See Also
 
-- [TUTORIAL.md](TUTORIAL.md) — Full workflow walkthrough
-- [AGENTS.md](AGENTS.md) — Project configuration
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — System architecture
-- [skills/conductor/references/workflows/handoff.md](skills/conductor/references/workflows/handoff.md) — Handoff system details
+| Topic | Path |
+|-------|------|
+| Full tutorial | [TUTORIAL.md](TUTORIAL.md) |
+| Agent guidance | [AGENTS.md](AGENTS.md) |
+| Beads workflow | [skills/tracking/references/workflow-integration.md](skills/tracking/references/workflow-integration.md) |
+| Handoff system | [skills/conductor/references/workflows/handoff.md](skills/conductor/references/workflows/handoff.md) |
+| Agent coordination | [skills/orchestrator/references/agent-coordination.md](skills/orchestrator/references/agent-coordination.md) |
+| TDD checkpoints | [skills/conductor/references/tdd-checkpoints-beads.md](skills/conductor/references/tdd-checkpoints-beads.md) |
+| Routing table | [skills/maestro-core/references/routing-table.md](skills/maestro-core/references/routing-table.md) |
+| Pipeline details | [skills/designing/references/pipeline.md](skills/designing/references/pipeline.md) |
+| Glossary | [skills/maestro-core/references/glossary.md](skills/maestro-core/references/glossary.md) |

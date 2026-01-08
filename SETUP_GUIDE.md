@@ -3,29 +3,29 @@
 <!--
 AGENT-QUICK-SETUP
 
-1. Install plugin (use tool's method or git clone)
-2. Apply config block to user's global config (paths table below)
-3. Check `which bd` - if missing, install CLI tools
+1. Install plugin using tool's method (see table below)
+2. Apply config block to user's global config file
+3. Check `bd --version` - if missing, install CLI tools
 4. Verify: skills loaded, bd available, Agent Mail configured
-5. Report results to user
+5. Run `ds` to confirm skill loading works
 -->
 
 ## Plugin Installation
 
 | Tool | Command |
 |------|---------|
-| Claude Code | `/plugin install https://github.com/ReinaMacCredy/maestro` |
-| Amp | `amp skill add https://github.com/ReinaMacCredy/maestro --global` |
-| Codex | `curl -fsSL https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/scripts/install-codex.sh \| bash` |
-| Manual | `git clone https://github.com/ReinaMacCredy/maestro.git <skill-directory>` |
-
-**Skill directories:** `~/skills/maestro` | `~/.config/agents/skills/maestro` | `~/.codex/skills/maestro`
+| **Claude Code** | `/plugin install https://github.com/ReinaMacCredy/maestro` |
+| **Amp** | `amp skill add https://github.com/ReinaMacCredy/maestro --global` |
+| Codex | `git clone https://github.com/ReinaMacCredy/maestro ~/.codex/plugins/maestro` |
+| Cursor | `git clone https://github.com/ReinaMacCredy/maestro ~/.cursor/plugins/maestro` |
+| Gemini CLI | `git clone https://github.com/ReinaMacCredy/maestro ~/.gemini/plugins/maestro` |
+| Manual | `git clone https://github.com/ReinaMacCredy/maestro <skill-directory>` |
 
 ---
 
 ## Global Config
 
-Apply config block to user's global config file:
+Apply the config block below to your agent's global config file:
 
 | Tool | Config Path |
 |------|-------------|
@@ -35,10 +35,10 @@ Apply config block to user's global config file:
 | Gemini CLI | `~/.gemini/GEMINI.md` |
 | Cursor | `~/.cursor/rules/maestro.md` |
 
-Replace existing `<!-- BEGIN maestro-config -->` block or append:
+Replace any existing `<!-- BEGIN maestro-config -->` block or append:
 
 <!-- BEGIN maestro-config -->
-<!-- version: 2.2.0 | bmad-v6 | 2026-1-1 -->
+<!-- version: 2.2.0 | bmad-v6 | 2026-01-09 -->
 
 ## Maestro Workflow
 
@@ -56,44 +56,35 @@ When detected, use Conductor commands instead of ad-hoc planning.
 
 ### Triggers
 
-**Planning:**
-- `ds` or `/conductor-design` - Double Diamond design session with A/P/C checkpoints
-- `/conductor-setup` - Initialize project context (once per project)
-- `/conductor-newtrack` - Create spec + plan + beads from design
-
-**Execution:**
-- `bd ready --json` - Find available work
-- `/conductor-implement` - Execute epic with TDD checkpoints (use `--no-tdd` to disable)
-- `tdd` - Enter TDD mode (RED-GREEN-REFACTOR)
-- `finish branch` - Finalize and merge/PR
-
-**Maintenance:**
-- `/conductor-revise` - Update spec/plan mid-implementation
-- `/conductor-finish` - Complete track (learnings, context refresh, archive)
-
-**Beads:**
-- `fb` - File beads from plan
-- `rb` - Review beads
-- `bd status` - Show ready + in_progress
+| Category | Triggers |
+|----------|----------|
+| **Design** | `ds` (design session), `cn` (new track), `pl` (planning) |
+| **Execute** | `ci` (implement), `co` (orchestrate), `ca` (autonomous), `tdd` |
+| **Track** | `fb` (file beads), `rb` (review beads), `bd *` (beads CLI) |
+| **Session** | `ho` (handoff), `finish branch` |
 
 ### Session Protocol
 
-**First message (automatic handoff load):**
-1. Check `conductor/handoffs/` for recent handoffs (< 7 days)
-2. If found, auto-load and display: `📋 Prior session context: [track] (Xh ago)`
-3. Skip if user says "fresh start" or no conductor/ exists
+**Start:**
+```bash
+bd ready --json                      # Find work
+bd show <id>                         # Read context
+bd update <id> --status in_progress  # Claim
+```
 
-**Start:** `bd ready --json` → `bd show <id>` → `bd update <id> --status in_progress`
-
-**End:** `bd update <id> --notes "COMPLETED: X. NEXT: Y"` → `bd close <id> --reason completed` → `bd sync`
+**End:**
+```bash
+bd update <id> --notes "COMPLETED: X. NEXT: Y"
+bd close <id> --reason completed
+bd sync
+```
 
 ### Critical Rules
 
 - Use `--json` with `bd` for structured output
+- Use `--robot-*` with `bv` (bare `bv` hangs)
 - Never write production code without failing test first
 - Always commit `.beads/` with code changes
-
-> **Note:** Skills work without CLI tools. Use `TodoWrite` for session-local tracking if `bd` is not installed.
 
 <!-- END maestro-config -->
 
@@ -101,30 +92,98 @@ When detected, use Conductor commands instead of ad-hoc planning.
 
 ## CLI Tools Installation
 
-**Beads CLI (bd):**
+### Beads CLI (bd)
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Dicklesworthstone/mcp_agent_mail/main/scripts/install.sh | bash -s -- --dir "$HOME/mcp_agent_mail" --yes
+# Via pip (recommended)
+pip install beads-cli
+
+# Or from source
+git clone https://github.com/beads-org/beads-cli
+cd beads-cli && pip install -e .
 ```
 
-**System dependency:**
+### System Dependencies
+
 ```bash
-brew install jq        # macOS
-sudo apt install jq    # Ubuntu/Debian
+# macOS
+brew install jq
+
+# Ubuntu/Debian
+sudo apt install jq
+```
+
+Verify installation:
+```bash
+bd --version
+# Expected: bd version 0.x.x
 ```
 
 ---
 
 ## MCP Server Config
 
-**Agent Mail** (multi-agent coordination):
+### Agent Mail (multi-agent coordination)
+
+**Claude Code:**
+```bash
+claude mcp add agent-mail -s user -- npx @anthropic-ai/agent-mail
+```
+
+**Amp** (`~/.config/amp/settings.json`):
+```json
+{
+  "mcpServers": {
+    "agent-mail": {
+      "command": "npx",
+      "args": ["@anthropic-ai/agent-mail"]
+    }
+  }
+}
+```
+
+**Codex** (`~/.codex/mcp.json`):
+```json
+{
+  "servers": {
+    "agent-mail": {
+      "command": "npx",
+      "args": ["@anthropic-ai/agent-mail"]
+    }
+  }
+}
+```
+
+---
+
+## MCPorter Toolboxes
+
+CLI wrappers generated from MCP servers via [MCPorter](https://github.com/steipete/mcporter).
+
+### Location
+
+```
+toolboxes/
+└── agent-mail/
+    └── agent-mail.js    # CLI wrapper for Agent Mail
+```
+
+### Usage
 
 ```bash
-# Claude Code
-claude mcp add agent-mail -s user -- npx @anthropic-ai/agent-mail
+# From project root
+toolboxes/agent-mail/agent-mail.js <command> [args...]
 
-# Amp (~/.config/amp/settings.json)
-{ "mcpServers": { "agent-mail": { "command": "npx", "args": ["@anthropic-ai/agent-mail"] } } }
+# Examples
+toolboxes/agent-mail/agent-mail.js health-check
+toolboxes/agent-mail/agent-mail.js send_message to:BlueLake subject:"Hello"
 ```
+
+### When to Use
+
+- Agent Mail MCP unavailable but CLI needed
+- Scripting multi-agent coordination
+- Debugging Agent Mail connectivity
 
 ---
 
@@ -132,16 +191,18 @@ claude mcp add agent-mail -s user -- npx @anthropic-ai/agent-mail
 
 | Check | Command | Expected |
 |-------|---------|----------|
-| Plugin loaded | `/skill list` or check skill directory | Skills visible |
+| Plugin loaded | `ds` | Design session starts |
 | Beads CLI | `bd --version` | Version output |
-| Agent Mail MCP | `/mcp` (Claude) | agent-mail listed |
+| Agent Mail (MCP) | `/mcp` (Claude Code) | `agent-mail` listed |
+| Agent Mail (CLI) | `toolboxes/agent-mail/agent-mail.js health-check` | OK response |
+| Project structure | `ls conductor/` | `product.md`, `tracks/`, etc. |
 
 ---
 
 ## Quick Reference
 
 ```mermaid
-flowchart TD
+flowchart LR
     A["/conductor-setup"] --> B["ds"]
     B --> C["/conductor-newtrack"]
     C --> D["/conductor-implement"]
@@ -154,13 +215,14 @@ flowchart TD
 | Action | Command |
 |--------|---------|
 | Initialize project | `/conductor-setup` |
-| Design feature | `ds` or `/conductor-design` |
-| Create track | `/conductor-newtrack` |
-| Execute tasks | `/conductor-implement` |
-| Enter TDD mode | `tdd` |
+| Design feature | `ds` |
+| Create track | `/conductor-newtrack` or `cn` |
+| Execute tasks | `/conductor-implement` or `ci` |
+| Parallel workers | `/conductor-orchestrate` or `co` |
+| Autonomous mode | `/conductor-autonomous` or `ca` |
 | See available work | `bd ready --json` |
-| Validate track | `/conductor-validate` |
 | Complete track | `/conductor-finish` |
+| Save context | `/conductor-handoff` or `ho` |
 
 ---
 
@@ -168,10 +230,20 @@ flowchart TD
 
 | Problem | Solution |
 |---------|----------|
-| Skills not loading | Check `/skill list` or skill directory exists |
-| `bd: command not found` | Run CLI tools installation above |
-| Agent ignores workflow | Use trigger explicitly: `tdd`, `ds`, `/conductor-design` |
-| Agent Mail not working | Check `/mcp` shows agent-mail |
+| Skills not loading | Check plugin directory exists; run `ds` to test |
+| `bd: command not found` | Install via `pip install beads-cli` |
+| Agent ignores workflow | Use explicit trigger: `ds`, `tdd`, `ci` |
+| Agent Mail not working | Check `/mcp` or run CLI health check |
 | Handoff not loading | Check `conductor/handoffs/` exists with recent files |
+| `bv` hangs | Always use `bv --robot-stdout` (never bare `bv`) |
 
-**Skills work without CLI** - methodology and workflows still apply, use `TodoWrite` for task tracking.
+> **Note:** Skills work without CLI tools, but `bd` is required for full functionality. See [REFERENCE.md](REFERENCE.md) for fallback policies.
+
+---
+
+## Next Steps
+
+1. Initialize your project: `/conductor-setup`
+2. Start your first design: `ds`
+3. Read the full tutorial: [TUTORIAL.md](TUTORIAL.md)
+4. Quick command lookup: [REFERENCE.md](REFERENCE.md)

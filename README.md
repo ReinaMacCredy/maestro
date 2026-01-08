@@ -1,17 +1,13 @@
 # Maestro
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+> Context-driven development for AI coding agents. Plan first, code once.
 
-**Context-driven development for AI coding agents.** Plan first, code once.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A skill plugin for structured AI-assisted development: persistent memory (Beads), structured planning (Conductor), and TDD methodology—refined daily through real builds.
-
----
-
-## Quick Install
+## Install
 
 **Claude Code:**
-```
+```bash
 /plugin install https://github.com/ReinaMacCredy/maestro
 ```
 
@@ -20,81 +16,85 @@ A skill plugin for structured AI-assisted development: persistent memory (Beads)
 amp skill add https://github.com/ReinaMacCredy/maestro --global
 ```
 
-**Codex:**
+<details>
+<summary>Other agents (Codex, Cursor, Gemini CLI)</summary>
+
+**Codex CLI:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/scripts/install-codex.sh | bash
+# Add to .codex/AGENTS.md
+git clone https://github.com/ReinaMacCredy/maestro ~/.codex/plugins/maestro
 ```
 
-→ Full installation: [SETUP_GUIDE.md](./SETUP_GUIDE.md)
+**Cursor:**
+```bash
+# Copy skills to .cursor/skills/
+git clone https://github.com/ReinaMacCredy/maestro ~/.cursor/plugins/maestro
+```
 
----
+**Gemini CLI:**
+```bash
+# Add to GEMINI.md
+git clone https://github.com/ReinaMacCredy/maestro ~/.gemini/plugins/maestro
+```
+
+</details>
 
 ## Quick Start
 
 ```mermaid
-flowchart LR
-    A["/conductor-setup"] --> B["ds"]
-    B --> C["/conductor-newtrack"]
-    C --> D["/conductor-implement"]
-    D --> E["/conductor-finish"]
-    
-    style A fill:#1a1a2e,stroke:#e94560,color:#fff
-    style D fill:#1a1a2e,stroke:#0f3460,color:#fff
+graph LR
+    A[ds] --> B[/conductor-newtrack]
+    B --> C[/conductor-implement]
+    C --> D[/conductor-finish]
 ```
 
-```
-/conductor-setup              # Initialize project (once)
-ds                            # Design session → design.md
-/conductor-newtrack           # Create spec + plan + beads
-/conductor-implement          # Execute with TDD
-```
-
-→ Complete guide: [TUTORIAL.md](./TUTORIAL.md)
-
----
+1. **`ds`** — Start a design session (Double Diamond methodology)
+2. **`/conductor-newtrack`** — Generate spec, plan, and beads from design
+3. **`/conductor-implement`** — Execute with TDD checkpoints
+4. **`/conductor-finish`** — Archive track and extract learnings
 
 ## Skills
 
 | Skill | Trigger | Purpose |
 |-------|---------|---------|
-| **conductor** | `/conductor-*` | Structured planning, TDD execution, handoffs |
-| **design** | `ds` | Double Diamond design sessions with A/P/C checkpoints |
-| **beads** | `fb`, `rb`, `bd` | Persistent issue tracking across sessions |
+| **conductor** | `/conductor-*` | Implementation execution, TDD |
+| **designing** | `ds` | Double Diamond design sessions |
+| **tracking** | `fb`, `rb`, `bd` | Persistent issue tracking |
 | **orchestrator** | `/conductor-orchestrate` | Multi-agent parallel execution |
-| **using-git-worktrees** | `/worktree` | Isolated development environments |
-| **writing-skills** | — | Skill creation guide |
+| **handoff** | `/conductor-handoff` | Session context preservation |
+| **maestro-core** | *(auto)* | Routing and fallback policies |
+| **creating-skills** | — | Skill authoring guide |
 | **sharing-skills** | — | Contribute skills upstream |
-
----
+| **using-git-worktrees** | `/worktree` | Isolated dev environments |
 
 ## Key Rules
 
-- Use `--json` with `bd` for structured output
-- Never write production code without failing test first
-- Always commit `.beads/` with code changes
-
----
+- **Design before code** — Run `ds` to explore before implementing
+- **TDD by default** — Never write production code without a failing test
+- **Beads track work** — Use `bd` CLI for persistent task management
+- **Handoffs preserve context** — Session state survives across restarts
+- **One question at a time** — Design sessions ask focused questions
 
 ## Documentation
 
-| Document | Description |
-|----------|-------------|
-| [SETUP_GUIDE.md](./SETUP_GUIDE.md) | Full installation instructions |
-| [TUTORIAL.md](./TUTORIAL.md) | Complete workflow guide |
-| [REFERENCE.md](./REFERENCE.md) | Commands, triggers, troubleshooting |
-| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | System architecture and pipeline |
-
----
+| Topic | Path |
+|-------|------|
+| Tutorial | [TUTORIAL.md](TUTORIAL.md) |
+| Setup Guide | [SETUP_GUIDE.md](SETUP_GUIDE.md) |
+| Reference | [REFERENCE.md](REFERENCE.md) |
+| Changelog | [CHANGELOG.md](CHANGELOG.md) |
+| Workflow Chain | [skills/maestro-core/references/workflow-chain.md](.claude/skills/maestro-core/references/workflow-chain.md) |
+| Routing Table | [skills/maestro-core/references/routing-table.md](.claude/skills/maestro-core/references/routing-table.md) |
 
 ## Credits
 
-Built on:
-- [BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD) — Multi-agent orchestration
-- [conductor](https://github.com/NguyenSiTrung/conductor) — Context-driven planning
-- [beads](https://github.com/steveyegge/beads) — Persistent issue tracking
-- [Agent Mail](https://github.com/Dicklesworthstone/mcp_agent_mail) — Multi-agent coordination
----
+Maestro builds on the shoulders of giants:
+
+- **[BMAD-METHOD](https://github.com/bmadcode/BMAD-METHOD)** — Multi-agent design methodology
+- **[conductor](https://github.com/cyanheads/conductor)** — Context-driven development patterns
+- **[beads](https://github.com/beads-org/beads)** — Issue tracking for AI agents
+- **[Agent Mail](https://github.com/agent-mail/agent-mail)** — Multi-agent coordination
 
 ## License
 
-MIT
+[MIT](LICENSE)
