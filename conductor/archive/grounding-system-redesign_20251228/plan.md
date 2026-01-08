@@ -1,167 +1,166 @@
-8-Phase#8-Phase 8-PhaseG8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase 8-PhaseS8-Phasey8-Phases8-Phaset8-Phasee8-Phasem8-Phase 8-PhaseR8-Phasee8-Phased8-Phasee8-Phases8-Phasei8-Phaseg8-Phasen8-Phase 8-Phase-8-Phase 8-PhaseI8-Phasem8-Phasep8-Phasel8-Phasee8-Phasem8-Phasee8-Phasen8-Phaset8-Phasea8-Phaset8-Phasei8-Phaseo8-Phasen8-Phase 8-PhaseP8-Phasel8-Phasea8-Phasen8-Phase
-8-Phase
-8-Phase#8-Phase#8-Phase 8-PhaseO8-Phasev8-Phasee8-Phaser8-Phasev8-Phasei8-Phasee8-Phasew8-Phase
-8-Phase
-8-PhaseI8-Phasem8-Phasep8-Phasel8-Phasee8-Phasem8-Phasee8-Phasen8-Phaset8-Phase 8-Phaset8-Phasei8-Phasee8-Phaser8-Phasee8-Phased8-Phase 8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase 8-Phases8-Phasey8-Phases8-Phaset8-Phasee8-Phasem8-Phase 8-Phasew8-Phasei8-Phaset8-Phaseh8-Phase 8-Phasee8-Phasen8-Phasef8-Phaseo8-Phaser8-Phasec8-Phasee8-Phasem8-Phasee8-Phasen8-Phaset8-Phase,8-Phase 8-Phasec8-Phasea8-Phases8-Phasec8-Phasea8-Phased8-Phasei8-Phasen8-Phaseg8-Phase 8-Phaser8-Phaseo8-Phaseu8-Phaset8-Phasee8-Phaser8-Phase,8-Phase 8-Phasei8-Phasem8-Phasep8-Phasea8-Phasec8-Phaset8-Phase 8-Phases8-Phasec8-Phasea8-Phasen8-Phase,8-Phase 8-Phasea8-Phasen8-Phased8-Phase 8-Phases8-Phaseu8-Phasep8-Phasep8-Phaseo8-Phaser8-Phaset8-Phasei8-Phasen8-Phaseg8-Phase 8-Phasei8-Phasen8-Phasef8-Phaser8-Phasea8-Phases8-Phaset8-Phaser8-Phaseu8-Phasec8-Phaset8-Phaseu8-Phaser8-Phasee8-Phase.8-Phase
-8-Phase
-8-Phase*8-Phase*8-PhaseD8-Phasee8-Phasel8-Phasei8-Phasev8-Phasee8-Phaser8-Phasey8-Phase 8-PhaseS8-Phaset8-Phaser8-Phasea8-Phaset8-Phasee8-Phaseg8-Phasey8-Phase:8-Phase*8-Phase*8-Phase 8-Phase28-Phase 8-PhaseP8-PhaseR8-Phases8-Phase 8-Phase(8-PhaseF8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasea8-Phaset8-Phasei8-Phaseo8-Phasen8-Phase 8-Phase+8-Phase 8-PhaseE8-Phasen8-Phasef8-Phaseo8-Phaser8-Phasec8-Phasee8-Phasem8-Phasee8-Phasen8-Phaset8-Phase)8-Phase
-8-Phase
-8-Phase-8-Phase-8-Phase-8-Phase
-8-Phase
-8-Phase#8-Phase#8-Phase 8-PhaseP8-PhaseR8-Phase18-Phase:8-Phase 8-PhaseF8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasea8-Phaset8-Phasei8-Phaseo8-Phasen8-Phase
-8-Phase
-8-Phase#8-Phase#8-Phase#8-Phase 8-PhaseE8-Phasep8-Phasei8-Phasec8-Phase 8-Phase18-Phase:8-Phase 8-PhaseG8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase 8-PhaseI8-Phasen8-Phasef8-Phaser8-Phasea8-Phases8-Phaset8-Phaser8-Phaseu8-Phasec8-Phaset8-Phaseu8-Phaser8-Phasee8-Phase
-8-Phase
-8-Phase#8-Phase#8-Phase#8-Phase#8-Phase 8-PhaseP8-Phaseh8-Phasea8-Phases8-Phasee8-Phase 8-Phase18-Phase.8-Phase18-Phase:8-Phase 8-PhaseF8-Phaseo8-Phasel8-Phased8-Phasee8-Phaser8-Phase 8-PhaseS8-Phaset8-Phaser8-Phaseu8-Phasec8-Phaset8-Phaseu8-Phaser8-Phasee8-Phase 8-Phase&8-Phase 8-PhaseS8-Phasec8-Phaseh8-Phasee8-Phasem8-Phasea8-Phase
-8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-Phase*8-Phase*8-Phase18-Phase.8-Phase18-Phase.8-Phase18-Phase*8-Phase*8-Phase 8-PhaseC8-Phaser8-Phasee8-Phasea8-Phaset8-Phasee8-Phase 8-Phase`8-Phases8-Phasek8-Phasei8-Phasel8-Phasel8-Phases8-Phase/8-Phased8-Phasee8-Phases8-Phasei8-Phaseg8-Phasen8-Phase/8-Phaser8-Phasee8-Phasef8-Phasee8-Phaser8-Phasee8-Phasen8-Phasec8-Phasee8-Phases8-Phase/8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase/8-Phase`8-Phase 8-Phased8-Phasei8-Phaser8-Phasee8-Phasec8-Phaset8-Phaseo8-Phaser8-Phasey8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-Phase*8-Phase*8-Phase18-Phase.8-Phase18-Phase.8-Phase28-Phase*8-Phase*8-Phase 8-PhaseC8-Phaser8-Phasee8-Phasea8-Phaset8-Phasee8-Phase 8-Phase`8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase/8-Phaset8-Phasei8-Phasee8-Phaser8-Phases8-Phase.8-Phasem8-Phased8-Phase`8-Phase 8-Phase-8-Phase 8-PhaseD8-Phasee8-Phasef8-Phasei8-Phasen8-Phasee8-Phase 8-PhaseL8-Phasei8-Phaseg8-Phaseh8-Phaset8-Phase/8-PhaseM8-Phasei8-Phasen8-Phasei8-Phase/8-PhaseS8-Phaset8-Phasea8-Phasen8-Phased8-Phasea8-Phaser8-Phased8-Phase/8-PhaseF8-Phaseu8-Phasel8-Phasel8-Phase 8-Phaset8-Phasei8-Phasee8-Phaser8-Phases8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseD8-Phaseo8-Phasec8-Phaseu8-Phasem8-Phasee8-Phasen8-Phaset8-Phase 8-Phasee8-Phasea8-Phasec8-Phaseh8-Phase 8-Phaset8-Phasei8-Phasee8-Phaser8-Phase:8-Phase 8-Phases8-Phaseo8-Phaseu8-Phaser8-Phasec8-Phasee8-Phases8-Phase,8-Phase 8-Phaset8-Phasei8-Phasem8-Phasee8-Phaseo8-Phaseu8-Phaset8-Phase,8-Phase 8-Phasee8-Phasen8-Phasef8-Phaseo8-Phaser8-Phasec8-Phasee8-Phasem8-Phasee8-Phasen8-Phaset8-Phase 8-Phasel8-Phasee8-Phasev8-Phasee8-Phasel8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseI8-Phasen8-Phasec8-Phasel8-Phaseu8-Phased8-Phasee8-Phase 8-Phased8-Phasee8-Phasec8-Phasei8-Phases8-Phasei8-Phaseo8-Phasen8-Phase 8-Phasem8-Phasea8-Phaset8-Phaser8-Phasei8-Phasex8-Phase 8-Phaset8-Phasea8-Phaseb8-Phasel8-Phasee8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-Phase*8-Phase*8-Phase18-Phase.8-Phase18-Phase.8-Phase38-Phase*8-Phase*8-Phase 8-PhaseC8-Phaser8-Phasee8-Phasea8-Phaset8-Phasee8-Phase 8-Phase`8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase/8-Phaser8-Phaseo8-Phaseu8-Phaset8-Phasee8-Phaser8-Phase.8-Phasem8-Phased8-Phase`8-Phase 8-Phase-8-Phase 8-PhaseC8-Phasea8-Phases8-Phasec8-Phasea8-Phased8-Phasei8-Phasen8-Phaseg8-Phase 8-Phaser8-Phaseo8-Phaseu8-Phaset8-Phasee8-Phaser8-Phase 8-Phasel8-Phaseo8-Phaseg8-Phasei8-Phasec8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseD8-Phaseo8-Phasec8-Phaseu8-Phasem8-Phasee8-Phasen8-Phaset8-Phase 8-Phaser8-Phaseo8-Phaseu8-Phaset8-Phasee8-Phase_8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase(8-Phase)8-Phase 8-Phasea8-Phasel8-Phaseg8-Phaseo8-Phaser8-Phasei8-Phaset8-Phaseh8-Phasem8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseD8-Phaseo8-Phasec8-Phaseu8-Phasem8-Phasee8-Phasen8-Phaset8-Phase 8-Phasee8-Phasex8-Phasee8-Phasec8-Phaseu8-Phaset8-Phasee8-Phase_8-Phasec8-Phasea8-Phases8-Phasec8-Phasea8-Phased8-Phasee8-Phase(8-Phase)8-Phase 8-Phasew8-Phasei8-Phaset8-Phaseh8-Phase 8-Phasef8-Phasea8-Phasel8-Phasel8-Phaseb8-Phasea8-Phasec8-Phasek8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseI8-Phasen8-Phasec8-Phasel8-Phaseu8-Phased8-Phasee8-Phase 8-Phasee8-Phasex8-Phaset8-Phasee8-Phaser8-Phasen8-Phasea8-Phasel8-Phase 8-Phaser8-Phasee8-Phasef8-Phasee8-Phaser8-Phasee8-Phasen8-Phasec8-Phasee8-Phase 8-Phased8-Phasee8-Phaset8-Phasee8-Phasec8-Phaset8-Phasei8-Phaseo8-Phasen8-Phase 8-Phaser8-Phaseu8-Phasel8-Phasee8-Phases8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-Phase*8-Phase*8-Phase18-Phase.8-Phase18-Phase.8-Phase48-Phase*8-Phase*8-Phase 8-PhaseC8-Phaser8-Phasee8-Phasea8-Phaset8-Phasee8-Phase 8-Phase`8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase/8-Phasec8-Phasea8-Phasec8-Phaseh8-Phasee8-Phase.8-Phasem8-Phased8-Phase`8-Phase 8-Phase-8-Phase 8-PhaseS8-Phasee8-Phases8-Phases8-Phasei8-Phaseo8-Phasen8-Phase 8-Phasec8-Phasea8-Phasec8-Phaseh8-Phasee8-Phase 8-Phases8-Phasep8-Phasee8-Phasec8-Phasei8-Phasef8-Phasei8-Phasec8-Phasea8-Phaset8-Phasei8-Phaseo8-Phasen8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseT8-PhaseT8-PhaseL8-Phase:8-Phase 8-Phase58-Phase 8-Phasem8-Phasei8-Phasen8-Phaseu8-Phaset8-Phasee8-Phases8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseH8-Phasea8-Phases8-Phaseh8-Phase 8-Phasea8-Phasel8-Phaseg8-Phaseo8-Phaser8-Phasei8-Phaset8-Phaseh8-Phasem8-Phase 8-Phasef8-Phaseo8-Phaser8-Phase 8-Phasec8-Phasea8-Phasec8-Phaseh8-Phasee8-Phase 8-Phasek8-Phasee8-Phasey8-Phases8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseC8-Phasea8-Phasec8-Phaseh8-Phasee8-Phase 8-Phasei8-Phasen8-Phasev8-Phasea8-Phasel8-Phasei8-Phased8-Phasea8-Phaset8-Phasei8-Phaseo8-Phasen8-Phase 8-Phaser8-Phaseu8-Phasel8-Phasee8-Phases8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-Phase*8-Phase*8-Phase18-Phase.8-Phase18-Phase.8-Phase58-Phase*8-Phase*8-Phase 8-PhaseC8-Phaser8-Phasee8-Phasea8-Phaset8-Phasee8-Phase 8-Phase`8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase/8-Phases8-Phasea8-Phasen8-Phasei8-Phaset8-Phasei8-Phasez8-Phasea8-Phaset8-Phasei8-Phaseo8-Phasen8-Phase.8-Phasem8-Phased8-Phase`8-Phase 8-Phase-8-Phase 8-PhaseQ8-Phaseu8-Phasee8-Phaser8-Phasey8-Phase 8-Phases8-Phasea8-Phasen8-Phasei8-Phaset8-Phasei8-Phasez8-Phasea8-Phaset8-Phasei8-Phaseo8-Phasen8-Phase 8-Phaser8-Phaseu8-Phasel8-Phasee8-Phases8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseR8-Phasee8-Phaseg8-Phasee8-Phasex8-Phase 8-Phasep8-Phasea8-Phaset8-Phaset8-Phasee8-Phaser8-Phasen8-Phases8-Phase 8-Phasef8-Phaseo8-Phaser8-Phase 8-Phases8-Phasee8-Phasec8-Phaser8-Phasee8-Phaset8-Phases8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseL8-Phaseo8-Phaseg8-Phaseg8-Phasei8-Phasen8-Phaseg8-Phase 8-Phaser8-Phasee8-Phaseq8-Phaseu8-Phasei8-Phaser8-Phasee8-Phasem8-Phasee8-Phasen8-Phaset8-Phases8-Phase 8-Phase(8-PhaseG8-PhaseR8-Phase-8-Phase08-Phase08-Phase58-Phase)8-Phase
-8-Phase
-8-Phase#8-Phase#8-Phase#8-Phase#8-Phase 8-PhaseP8-Phaseh8-Phasea8-Phases8-Phasee8-Phase 8-Phase18-Phase.8-Phase28-Phase:8-Phase 8-PhaseC8-Phaseo8-Phaser8-Phasee8-Phase 8-PhaseG8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase 8-PhaseR8-Phasee8-Phasew8-Phaser8-Phasei8-Phaset8-Phasee8-Phase
-8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-Phase*8-Phase*8-Phase18-Phase.8-Phase28-Phase.8-Phase18-Phase*8-Phase*8-Phase 8-PhaseR8-Phasee8-Phasew8-Phaser8-Phasei8-Phaset8-Phasee8-Phase 8-Phase`8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase.8-Phasem8-Phased8-Phase`8-Phase 8-Phase-8-Phase 8-PhaseI8-Phasen8-Phaset8-Phasee8-Phaseg8-Phaser8-Phasea8-Phaset8-Phasee8-Phase 8-Phaset8-Phasei8-Phasee8-Phaser8-Phasee8-Phased8-Phase 8-Phases8-Phasey8-Phases8-Phaset8-Phasee8-Phasem8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-Phased8-Phasee8-Phasep8-Phasee8-Phasen8-Phased8-Phases8-Phase:8-Phase 8-Phase18-Phase.8-Phase18-Phase.8-Phase28-Phase,8-Phase 8-Phase18-Phase.8-Phase18-Phase.8-Phase38-Phase,8-Phase 8-Phase18-Phase.8-Phase18-Phase.8-Phase48-Phase,8-Phase 8-Phase18-Phase.8-Phase18-Phase.8-Phase58-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseR8-Phasee8-Phasep8-Phasel8-Phasea8-Phasec8-Phasee8-Phase 8-Phasef8-Phasel8-Phasea8-Phaset8-Phase 8-Phased8-Phasee8-Phasec8-Phasei8-Phases8-Phasei8-Phaseo8-Phasen8-Phase 8-Phaset8-Phasea8-Phaseb8-Phasel8-Phasee8-Phase 8-Phasew8-Phasei8-Phaset8-Phaseh8-Phase 8-Phaset8-Phasei8-Phasee8-Phaser8-Phasee8-Phased8-Phase 8-Phaser8-Phaseo8-Phaseu8-Phaset8-Phasei8-Phasen8-Phaseg8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseA8-Phased8-Phased8-Phase 8-Phasee8-Phasen8-Phasef8-Phaseo8-Phaser8-Phasec8-Phasee8-Phasem8-Phasee8-Phasen8-Phaset8-Phase 8-Phases8-Phasee8-Phasec8-Phaset8-Phasei8-Phaseo8-Phasen8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseA8-Phased8-Phased8-Phase 8-Phaseo8-Phaseu8-Phaset8-Phasep8-Phaseu8-Phaset8-Phase 8-Phasef8-Phaseo8-Phaser8-Phasem8-Phasea8-Phaset8-Phase 8-Phasew8-Phasei8-Phaset8-Phaseh8-Phase 8-Phasec8-Phaseo8-Phasen8-Phasef8-Phasel8-Phasei8-Phasec8-Phaset8-Phase 8-Phasev8-Phasei8-Phases8-Phasei8-Phaseb8-Phasei8-Phasel8-Phasei8-Phaset8-Phasey8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseA8-Phased8-Phased8-Phase 8-Phasee8-Phaser8-Phaser8-Phaseo8-Phaser8-Phase 8-Phasec8-Phasea8-Phaset8-Phasea8-Phasel8-Phaseo8-Phaseg8-Phase 8-Phase(8-PhaseG8-PhaseR8-Phase-8-Phase08-Phase08-Phase18-Phase 8-Phaset8-Phaseo8-Phase 8-PhaseG8-PhaseR8-Phase-8-Phase08-Phase08-Phase58-Phase)8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-Phase*8-Phase*8-Phase18-Phase.8-Phase28-Phase.8-Phase28-Phase*8-Phase*8-Phase 8-PhaseC8-Phaser8-Phasee8-Phasea8-Phaset8-Phasee8-Phase 8-Phase`8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase/8-Phases8-Phasec8-Phaseh8-Phasee8-Phasem8-Phasea8-Phase.8-Phasej8-Phases8-Phaseo8-Phasen8-Phase`8-Phase 8-Phase-8-Phase 8-PhaseR8-Phasee8-Phases8-Phaseu8-Phasel8-Phaset8-Phase 8-Phases8-Phasec8-Phaseh8-Phasee8-Phasem8-Phasea8-Phase 8-Phasev8-Phase18-Phase.8-Phase18-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseI8-Phasen8-Phasec8-Phasel8-Phaseu8-Phased8-Phasee8-Phase 8-Phaser8-Phaseo8-Phaseu8-Phaset8-Phasei8-Phasen8-Phaseg8-Phase 8-Phases8-Phasee8-Phasec8-Phaset8-Phasei8-Phaseo8-Phasen8-Phase 8-Phase(8-Phases8-Phaseo8-Phaseu8-Phaser8-Phasec8-Phasee8-Phases8-Phase_8-Phaset8-Phaser8-Phasei8-Phasee8-Phased8-Phase,8-Phase 8-Phases8-Phaseo8-Phaseu8-Phaser8-Phasec8-Phasee8-Phases8-Phase_8-Phases8-Phaseu8-Phasec8-Phasec8-Phasee8-Phasee8-Phased8-Phasee8-Phased8-Phase,8-Phase 8-Phasef8-Phasea8-Phasel8-Phasel8-Phaseb8-Phasea8-Phasec8-Phasek8-Phase_8-Phaseu8-Phases8-Phasee8-Phased8-Phase)8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseI8-Phasen8-Phasec8-Phasel8-Phaseu8-Phased8-Phasee8-Phase 8-Phaseq8-Phaseu8-Phasee8-Phaser8-Phasei8-Phasee8-Phases8-Phase 8-Phasea8-Phaser8-Phaser8-Phasea8-Phasey8-Phase 8-Phasew8-Phasei8-Phaset8-Phaseh8-Phase 8-Phasec8-Phaseo8-Phasen8-Phasef8-Phasei8-Phased8-Phasee8-Phasen8-Phasec8-Phasee8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseI8-Phasen8-Phasec8-Phasel8-Phaseu8-Phased8-Phasee8-Phase 8-Phasec8-Phaseo8-Phasen8-Phasef8-Phasel8-Phasei8-Phasec8-Phaset8-Phases8-Phase 8-Phasea8-Phaser8-Phaser8-Phasea8-Phasey8-Phase
-8-Phase
-8-Phase#8-Phase#8-Phase#8-Phase#8-Phase 8-PhaseP8-Phaseh8-Phasea8-Phases8-Phasee8-Phase 8-Phase18-Phase.8-Phase38-Phase:8-Phase 8-PhaseV8-Phasee8-Phaser8-Phasei8-Phasef8-Phasei8-Phasec8-Phasea8-Phaset8-Phasei8-Phaseo8-Phasen8-Phase 8-Phase(8-PhaseP8-PhaseR8-Phase18-Phase)8-Phase
-8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-Phase*8-Phase*8-Phase18-Phase.8-Phase38-Phase.8-Phase18-Phase*8-Phase*8-Phase 8-PhaseR8-Phasee8-Phasev8-Phasei8-Phasee8-Phasew8-Phase 8-Phasea8-Phasel8-Phasel8-Phase 8-Phasen8-Phasee8-Phasew8-Phase 8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase/8-Phase 8-Phasef8-Phasei8-Phasel8-Phasee8-Phases8-Phase 8-Phasef8-Phaseo8-Phaser8-Phase 8-Phasec8-Phaseo8-Phasen8-Phases8-Phasei8-Phases8-Phaset8-Phasee8-Phasen8-Phasec8-Phasey8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-Phase*8-Phase*8-Phase18-Phase.8-Phase38-Phase.8-Phase28-Phase*8-Phase*8-Phase 8-PhaseV8-Phasee8-Phaser8-Phasei8-Phasef8-Phasey8-Phase 8-Phasec8-Phaser8-Phaseo8-Phases8-Phases8-Phase-8-Phaser8-Phasee8-Phasef8-Phasee8-Phaser8-Phasee8-Phasen8-Phasec8-Phasee8-Phases8-Phase 8-Phaseb8-Phasee8-Phaset8-Phasew8-Phasee8-Phasee8-Phasen8-Phase 8-Phasef8-Phasei8-Phasel8-Phasee8-Phases8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-Phase*8-Phase*8-Phase18-Phase.8-Phase38-Phase.8-Phase38-Phase*8-Phase*8-Phase 8-PhaseC8-Phaser8-Phasee8-Phasea8-Phaset8-Phasee8-Phase 8-PhaseP8-PhaseR8-Phase18-Phase:8-Phase 8-PhaseF8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasea8-Phaset8-Phasei8-Phaseo8-Phasen8-Phase
-8-Phase
-8-Phase-8-Phase-8-Phase-8-Phase
-8-Phase
-8-Phase#8-Phase#8-Phase 8-PhaseP8-PhaseR8-Phase28-Phase:8-Phase 8-PhaseE8-Phasen8-Phasef8-Phaseo8-Phaser8-Phasec8-Phasee8-Phasem8-Phasee8-Phasen8-Phaset8-Phase
-8-Phase
-8-Phase#8-Phase#8-Phase#8-Phase 8-PhaseE8-Phasep8-Phasei8-Phasec8-Phase 8-Phase28-Phase:8-Phase 8-PhaseE8-Phasen8-Phasef8-Phaseo8-Phaser8-Phasec8-Phasee8-Phasem8-Phasee8-Phasen8-Phaset8-Phase 8-Phase&8-Phase 8-PhaseI8-Phasen8-Phaset8-Phasee8-Phaseg8-Phaser8-Phasea8-Phaset8-Phasei8-Phaseo8-Phasen8-Phase
-8-Phase
-8-Phase#8-Phase#8-Phase#8-Phase#8-Phase 8-PhaseP8-Phaseh8-Phasea8-Phases8-Phasee8-Phase 8-Phase28-Phase.8-Phase18-Phase:8-Phase 8-PhaseI8-Phasem8-Phasep8-Phasea8-Phasec8-Phaset8-Phase 8-PhaseS8-Phasec8-Phasea8-Phasen8-Phase
-8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-Phase*8-Phase*8-Phase28-Phase.8-Phase18-Phase.8-Phase18-Phase*8-Phase*8-Phase 8-PhaseC8-Phaser8-Phasee8-Phasea8-Phaset8-Phasee8-Phase 8-Phase`8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase/8-Phasei8-Phasem8-Phasep8-Phasea8-Phasec8-Phaset8-Phase-8-Phases8-Phasec8-Phasea8-Phasen8-Phase-8-Phasep8-Phaser8-Phaseo8-Phasem8-Phasep8-Phaset8-Phase.8-Phasem8-Phased8-Phase`8-Phase 8-Phase-8-Phase 8-PhaseS8-Phaseu8-Phaseb8-Phasea8-Phaseg8-Phasee8-Phasen8-Phaset8-Phase 8-Phaset8-Phasee8-Phasem8-Phasep8-Phasel8-Phasea8-Phaset8-Phasee8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseI8-Phasen8-Phasep8-Phaseu8-Phaset8-Phase:8-Phase 8-Phased8-Phasee8-Phases8-Phasei8-Phaseg8-Phasen8-Phase 8-Phases8-Phaseu8-Phasem8-Phasem8-Phasea8-Phaser8-Phasey8-Phase,8-Phase 8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase 8-Phaser8-Phasee8-Phases8-Phaseu8-Phasel8-Phaset8-Phases8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseO8-Phaseu8-Phaset8-Phasep8-Phaseu8-Phaset8-Phase:8-Phase 8-Phasef8-Phasei8-Phasel8-Phasee8-Phases8-Phase 8-Phasea8-Phasef8-Phasef8-Phasee8-Phasec8-Phaset8-Phasee8-Phased8-Phase,8-Phase 8-Phasec8-Phaseh8-Phasea8-Phasen8-Phaseg8-Phasee8-Phase 8-Phaset8-Phasey8-Phasep8-Phasee8-Phases8-Phase,8-Phase 8-Phased8-Phasee8-Phasep8-Phasee8-Phasen8-Phased8-Phasee8-Phasen8-Phasec8-Phasei8-Phasee8-Phases8-Phase,8-Phase 8-Phaser8-Phasei8-Phases8-Phasek8-Phase,8-Phase 8-Phaseo8-Phaser8-Phased8-Phasee8-Phaser8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseC8-Phaseo8-Phasen8-Phases8-Phaset8-Phaser8-Phasea8-Phasei8-Phasen8-Phaset8-Phases8-Phase:8-Phase 8-Phase38-Phase08-Phases8-Phase 8-Phaset8-Phasei8-Phasem8-Phasee8-Phaseo8-Phaseu8-Phaset8-Phase,8-Phase 8-Phase18-Phase08-Phase08-Phase 8-Phasef8-Phasei8-Phasel8-Phasee8-Phases8-Phase 8-Phasem8-Phasea8-Phasex8-Phase,8-Phase 8-Phase48-Phase08-Phase08-Phase08-Phase 8-Phaset8-Phaseo8-Phasek8-Phasee8-Phasen8-Phases8-Phase
-8-Phase
-8-Phase#8-Phase#8-Phase#8-Phase#8-Phase 8-PhaseP8-Phaseh8-Phasea8-Phases8-Phasee8-Phase 8-Phase28-Phase.8-Phase28-Phase:8-Phase 8-PhaseD8-Phasee8-Phases8-Phasei8-Phaseg8-Phasen8-Phase 8-PhaseS8-Phasek8-Phasei8-Phasel8-Phasel8-Phase 8-PhaseI8-Phasen8-Phaset8-Phasee8-Phaseg8-Phaser8-Phasea8-Phaset8-Phasei8-Phaseo8-Phasen8-Phase
-8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-Phase*8-Phase*8-Phase28-Phase.8-Phase28-Phase.8-Phase18-Phase*8-Phase*8-Phase 8-PhaseU8-Phasep8-Phased8-Phasea8-Phaset8-Phasee8-Phase 8-Phase`8-Phased8-Phasee8-Phases8-Phasei8-Phaseg8-Phasen8-Phase/8-PhaseS8-PhaseK8-PhaseI8-PhaseL8-PhaseL8-Phase.8-Phasem8-Phased8-Phase`8-Phase 8-Phase-8-Phase 8-PhaseA8-Phased8-Phased8-Phase 8-Phaset8-Phasei8-Phasee8-Phaser8-Phasee8-Phased8-Phase 8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase 8-Phaset8-Phaseo8-Phase 8-Phasep8-Phaseh8-Phasea8-Phases8-Phasee8-Phase 8-Phaset8-Phaser8-Phasea8-Phasen8-Phases8-Phasei8-Phaset8-Phasei8-Phaseo8-Phasen8-Phases8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-Phased8-Phasee8-Phasep8-Phasee8-Phasen8-Phased8-Phases8-Phase:8-Phase 8-Phase18-Phase.8-Phase28-Phase.8-Phase18-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseD8-PhaseI8-PhaseS8-PhaseC8-PhaseO8-PhaseV8-PhaseE8-PhaseR8-Phase→8-PhaseD8-PhaseE8-PhaseF8-PhaseI8-PhaseN8-PhaseE8-Phase:8-Phase 8-PhaseM8-Phasei8-Phasen8-Phasei8-Phase 8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase 8-Phase(8-Phaser8-Phasee8-Phasep8-Phaseo8-Phase)8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseD8-PhaseE8-PhaseF8-PhaseI8-PhaseN8-PhaseE8-Phase→8-PhaseD8-PhaseE8-PhaseV8-PhaseE8-PhaseL8-PhaseO8-PhaseP8-Phase:8-Phase 8-PhaseM8-Phasei8-Phasen8-Phasei8-Phase 8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase 8-Phase(8-Phasew8-Phasee8-Phaseb8-Phase 8-Phasev8-Phasee8-Phaser8-Phasei8-Phasef8-Phasey8-Phase)8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseD8-PhaseE8-PhaseV8-PhaseE8-PhaseL8-PhaseO8-PhaseP8-Phase→8-PhaseD8-PhaseE8-PhaseL8-PhaseI8-PhaseV8-PhaseE8-PhaseR8-Phase:8-Phase 8-PhaseS8-Phaset8-Phasea8-Phasen8-Phased8-Phasea8-Phaser8-Phased8-Phase 8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase 8-Phase(8-Phaseg8-Phasea8-Phaset8-Phasee8-Phasek8-Phasee8-Phasee8-Phasep8-Phasee8-Phaser8-Phase)8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseD8-PhaseE8-PhaseL8-PhaseI8-PhaseV8-PhaseE8-PhaseR8-Phase→8-PhaseC8-Phaseo8-Phasem8-Phasep8-Phasel8-Phasee8-Phaset8-Phasee8-Phase:8-Phase 8-PhaseF8-Phaseu8-Phasel8-Phasel8-Phase 8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase 8-Phase+8-Phase 8-PhaseI8-Phasem8-Phasep8-Phasea8-Phasec8-Phaset8-Phase 8-Phases8-Phasec8-Phasea8-Phasen8-Phase 8-Phase(8-Phasem8-Phasea8-Phasen8-Phased8-Phasea8-Phaset8-Phaseo8-Phaser8-Phasey8-Phase)8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-Phase*8-Phase*8-Phase28-Phase.8-Phase28-Phase.8-Phase28-Phase*8-Phase*8-Phase 8-PhaseU8-Phasep8-Phased8-Phasea8-Phaset8-Phasee8-Phase 8-Phase`8-Phased8-Phasee8-Phases8-Phasei8-Phaseg8-Phasen8-Phase/8-PhaseS8-PhaseK8-PhaseI8-PhaseL8-PhaseL8-Phase.8-Phasem8-Phased8-Phase`8-Phase 8-Phase-8-Phase 8-PhaseA8-Phased8-Phased8-Phase 8-Phasee8-Phasen8-Phasef8-Phaseo8-Phaser8-Phasec8-Phasee8-Phasem8-Phasee8-Phasen8-Phaset8-Phase 8-Phases8-Phasee8-Phasec8-Phaset8-Phasei8-Phaseo8-Phasen8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseD8-Phaseo8-Phasec8-Phaseu8-Phasem8-Phasee8-Phasen8-Phaset8-Phase 8-Phasee8-Phasen8-Phasef8-Phaseo8-Phaser8-Phasec8-Phasee8-Phasem8-Phasee8-Phasen8-Phaset8-Phase 8-Phasel8-Phasee8-Phasev8-Phasee8-Phasel8-Phases8-Phase 8-Phasea8-Phasen8-Phased8-Phase 8-Phasea8-Phasec8-Phaset8-Phasei8-Phaseo8-Phasen8-Phases8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseD8-Phaseo8-Phasec8-Phaseu8-Phasem8-Phasee8-Phasen8-Phaset8-Phase 8-Phaseb8-Phasel8-Phaseo8-Phasec8-Phasek8-Phasei8-Phasen8-Phaseg8-Phase 8-Phaseb8-Phasee8-Phaseh8-Phasea8-Phasev8-Phasei8-Phaseo8-Phaser8-Phase
-8-Phase
-8-Phase#8-Phase#8-Phase#8-Phase#8-Phase 8-PhaseP8-Phaseh8-Phasea8-Phases8-Phasee8-Phase 8-Phase28-Phase.8-Phase38-Phase:8-Phase 8-PhaseC8-Phaseo8-Phasen8-Phased8-Phaseu8-Phasec8-Phaset8-Phaseo8-Phaser8-Phase 8-PhaseI8-Phasen8-Phaset8-Phasee8-Phaseg8-Phaser8-Phasea8-Phaset8-Phasei8-Phaseo8-Phasen8-Phase
-8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-Phase*8-Phase*8-Phase28-Phase.8-Phase38-Phase.8-Phase18-Phase*8-Phase*8-Phase 8-PhaseU8-Phasep8-Phased8-Phasea8-Phaset8-Phasee8-Phase 8-Phase`8-Phasec8-Phaseo8-Phasen8-Phased8-Phaseu8-Phasec8-Phaset8-Phaseo8-Phaser8-Phase/8-Phaser8-Phasee8-Phasef8-Phasee8-Phaser8-Phasee8-Phasen8-Phasec8-Phasee8-Phases8-Phase/8-Phasec8-Phaseo8-Phasem8-Phasem8-Phasea8-Phasen8-Phased8-Phases8-Phase/8-Phased8-Phasee8-Phases8-Phasei8-Phaseg8-Phasen8-Phase.8-Phaset8-Phaseo8-Phasem8-Phasel8-Phase`8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-Phased8-Phasee8-Phasep8-Phasee8-Phasen8-Phased8-Phases8-Phase:8-Phase 8-Phase28-Phase.8-Phase28-Phase.8-Phase18-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseA8-Phased8-Phased8-Phase 8-Phasee8-Phasen8-Phasef8-Phaseo8-Phaser8-Phasec8-Phasee8-Phasem8-Phasee8-Phasen8-Phaset8-Phase 8-Phasec8-Phaseh8-Phasee8-Phasec8-Phasek8-Phasep8-Phaseo8-Phasei8-Phasen8-Phaset8-Phases8-Phase 8-Phaset8-Phaseo8-Phase 8-PhaseD8-PhaseE8-PhaseL8-PhaseI8-PhaseV8-PhaseE8-PhaseR8-Phase 8-Phasep8-Phaseh8-Phasea8-Phases8-Phasee8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseU8-Phasep8-Phased8-Phasea8-Phaset8-Phasee8-Phase 8-PhaseF8-PhaseU8-PhaseL8-PhaseL8-Phase 8-PhaseG8-PhaseR8-PhaseO8-PhaseU8-PhaseN8-PhaseD8-PhaseI8-PhaseN8-PhaseG8-Phase 8-Phases8-Phasee8-Phasec8-Phaset8-Phasei8-Phaseo8-Phasen8-Phase 8-Phasew8-Phasei8-Phaset8-Phaseh8-Phase 8-Phasen8-Phasee8-Phasew8-Phase 8-Phaser8-Phasee8-Phaseq8-Phaseu8-Phasei8-Phaser8-Phasee8-Phasem8-Phasee8-Phasen8-Phaset8-Phases8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseA8-Phased8-Phased8-Phase 8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase 8-Phasec8-Phaseh8-Phasee8-Phasec8-Phasek8-Phasel8-Phasei8-Phases8-Phaset8-Phase 8-Phasew8-Phasei8-Phaset8-Phaseh8-Phase 8-Phaseb8-Phasel8-Phaseo8-Phasec8-Phasek8-Phasei8-Phasen8-Phaseg8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-Phase*8-Phase*8-Phase28-Phase.8-Phase38-Phase.8-Phase28-Phase*8-Phase*8-Phase 8-PhaseU8-Phasep8-Phased8-Phasea8-Phaset8-Phasee8-Phase 8-Phase`8-Phasec8-Phaseo8-Phasen8-Phased8-Phaseu8-Phasec8-Phaset8-Phaseo8-Phaser8-Phase/8-PhaseS8-PhaseK8-PhaseI8-PhaseL8-PhaseL8-Phase.8-Phasem8-Phased8-Phase`8-Phase 8-Phase-8-Phase 8-PhaseA8-Phased8-Phased8-Phase 8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase 8-Phaser8-Phasee8-Phasef8-Phasee8-Phaser8-Phasee8-Phasen8-Phasec8-Phasee8-Phases8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseL8-Phasei8-Phasen8-Phasek8-Phase 8-Phaset8-Phaseo8-Phase 8-Phasen8-Phasee8-Phasew8-Phase 8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase 8-Phased8-Phaseo8-Phasec8-Phaseu8-Phasem8-Phasee8-Phasen8-Phaset8-Phasea8-Phaset8-Phasei8-Phaseo8-Phasen8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseD8-Phaseo8-Phasec8-Phaseu8-Phasem8-Phasee8-Phasen8-Phaset8-Phase 8-Phaset8-Phasei8-Phasee8-Phaser8-Phasee8-Phased8-Phase 8-Phases8-Phasey8-Phases8-Phaset8-Phasee8-Phasem8-Phase 8-Phaseo8-Phasev8-Phasee8-Phaser8-Phasev8-Phasei8-Phasee8-Phasew8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-Phase*8-Phase*8-Phase28-Phase.8-Phase38-Phase.8-Phase38-Phase*8-Phase*8-Phase 8-PhaseU8-Phasep8-Phased8-Phasea8-Phaset8-Phasee8-Phase 8-Phase`8-Phasec8-Phaseo8-Phasen8-Phased8-Phaseu8-Phasec8-Phaset8-Phaseo8-Phaser8-Phase-8-Phased8-Phasee8-Phases8-Phasei8-Phaseg8-Phasen8-Phase-8-Phasew8-Phaseo8-Phaser8-Phasek8-Phasef8-Phasel8-Phaseo8-Phasew8-Phase.8-Phasem8-Phased8-Phase`8-Phase 8-Phase-8-Phase 8-PhaseF8-Phasei8-Phasen8-Phasea8-Phasel8-Phase 8-Phasei8-Phasen8-Phaset8-Phasee8-Phaseg8-Phaser8-Phasea8-Phaset8-Phasei8-Phaseo8-Phasen8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-Phased8-Phasee8-Phasep8-Phasee8-Phasen8-Phased8-Phases8-Phase:8-Phase 8-Phase28-Phase.8-Phase38-Phase.8-Phase18-Phase,8-Phase 8-Phase28-Phase.8-Phase38-Phase.8-Phase28-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseU8-Phasep8-Phased8-Phasea8-Phaset8-Phasee8-Phase 8-Phasew8-Phaseo8-Phaser8-Phasek8-Phasef8-Phasel8-Phaseo8-Phasew8-Phase 8-Phaset8-Phaseo8-Phase 8-Phasei8-Phasen8-Phasec8-Phasel8-Phaseu8-Phased8-Phasee8-Phase 8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase 8-Phasea8-Phaset8-Phase 8-Phaset8-Phaser8-Phasea8-Phasen8-Phases8-Phasei8-Phaset8-Phasei8-Phaseo8-Phasen8-Phases8-Phase
-8-Phase
-8-Phase#8-Phase#8-Phase#8-Phase#8-Phase 8-PhaseP8-Phaseh8-Phasea8-Phases8-Phasee8-Phase 8-Phase28-Phase.8-Phase48-Phase:8-Phase 8-PhaseR8-Phasee8-Phases8-Phasei8-Phasel8-Phasei8-Phasee8-Phasen8-Phasec8-Phasee8-Phase
-8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-Phase*8-Phase*8-Phase28-Phase.8-Phase48-Phase.8-Phase18-Phase*8-Phase*8-Phase 8-PhaseA8-Phased8-Phased8-Phase 8-Phaset8-Phasei8-Phasem8-Phasee8-Phaseo8-Phaseu8-Phaset8-Phase 8-Phaseh8-Phasea8-Phasen8-Phased8-Phasel8-Phasei8-Phasen8-Phaseg8-Phase 8-Phaset8-Phaseo8-Phase 8-Phase`8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase.8-Phasem8-Phased8-Phase`8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseS8-Phaseo8-Phasef8-Phaset8-Phase 8-Phasel8-Phasei8-Phasem8-Phasei8-Phaset8-Phases8-Phase 8-Phasew8-Phasei8-Phaset8-Phaseh8-Phase 8-Phasew8-Phasea8-Phaser8-Phasen8-Phasei8-Phasen8-Phaseg8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseP8-Phasea8-Phaser8-Phaset8-Phasei8-Phasea8-Phasel8-Phase 8-Phaser8-Phasee8-Phases8-Phaseu8-Phasel8-Phaset8-Phase 8-Phaser8-Phasee8-Phaset8-Phaseu8-Phaser8-Phasen8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-Phase*8-Phase*8-Phase28-Phase.8-Phase48-Phase.8-Phase28-Phase*8-Phase*8-Phase 8-PhaseA8-Phased8-Phased8-Phase 8-Phasef8-Phasea8-Phasel8-Phasel8-Phaseb8-Phasea8-Phasec8-Phasek8-Phase 8-Phaseb8-Phasee8-Phaseh8-Phasea8-Phasev8-Phasei8-Phaseo8-Phaser8-Phase 8-Phased8-Phaseo8-Phasec8-Phaseu8-Phasem8-Phasee8-Phasen8-Phaset8-Phasea8-Phaset8-Phasei8-Phaseo8-Phasen8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseN8-Phasee8-Phaset8-Phasew8-Phaseo8-Phaser8-Phasek8-Phase 8-Phasef8-Phasea8-Phasei8-Phasel8-Phaseu8-Phaser8-Phasee8-Phase 8-Phase→8-Phase 8-Phaser8-Phasee8-Phasep8-Phaseo8-Phase-8-Phaseo8-Phasen8-Phasel8-Phasey8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseS8-Phaseu8-Phaseb8-Phasea8-Phaseg8-Phasee8-Phasen8-Phaset8-Phase 8-Phaset8-Phasei8-Phasem8-Phasee8-Phaseo8-Phaseu8-Phaset8-Phase 8-Phase→8-Phase 8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase-8-Phaseo8-Phasen8-Phasel8-Phasey8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseA8-Phasel8-Phasel8-Phase-8-Phasef8-Phasea8-Phasei8-Phasel8-Phase 8-Phase→8-Phase 8-Phasem8-Phasea8-Phasen8-Phased8-Phasea8-Phaset8-Phaseo8-Phaser8-Phasey8-Phase 8-Phaseb8-Phasel8-Phaseo8-Phasec8-Phasek8-Phase
-8-Phase
-8-Phase#8-Phase#8-Phase#8-Phase#8-Phase 8-PhaseP8-Phaseh8-Phasea8-Phases8-Phasee8-Phase 8-Phase28-Phase.8-Phase58-Phase:8-Phase 8-PhaseV8-Phasee8-Phaser8-Phasei8-Phasef8-Phasei8-Phasec8-Phasea8-Phaset8-Phasei8-Phaseo8-Phasen8-Phase 8-Phase(8-PhaseP8-PhaseR8-Phase28-Phase)8-Phase
-8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-Phase*8-Phase*8-Phase28-Phase.8-Phase58-Phase.8-Phase18-Phase*8-Phase*8-Phase 8-PhaseT8-Phasee8-Phases8-Phaset8-Phase 8-Phasep8-Phaseh8-Phasea8-Phases8-Phasee8-Phase 8-Phaset8-Phaser8-Phasea8-Phasen8-Phases8-Phasei8-Phaset8-Phasei8-Phaseo8-Phasen8-Phase 8-Phaset8-Phaser8-Phasei8-Phaseg8-Phaseg8-Phasee8-Phaser8-Phases8-Phase 8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-Phase*8-Phase*8-Phase28-Phase.8-Phase58-Phase.8-Phase28-Phase*8-Phase*8-Phase 8-PhaseT8-Phasee8-Phases8-Phaset8-Phase 8-PhaseD8-PhaseE8-PhaseL8-PhaseI8-PhaseV8-PhaseE8-PhaseR8-Phase 8-Phaseb8-Phasel8-Phaseo8-Phasec8-Phasek8-Phases8-Phase 8-Phasew8-Phasei8-Phaset8-Phaseh8-Phaseo8-Phaseu8-Phaset8-Phase 8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-Phase*8-Phase*8-Phase28-Phase.8-Phase58-Phase.8-Phase38-Phase*8-Phase*8-Phase 8-PhaseT8-Phasee8-Phases8-Phaset8-Phase 8-Phasec8-Phaseo8-Phasen8-Phasef8-Phasel8-Phasei8-Phasec8-Phaset8-Phase 8-Phasev8-Phasei8-Phases8-Phasei8-Phaseb8-Phasei8-Phasel8-Phasei8-Phaset8-Phasey8-Phase 8-Phaseo8-Phaseu8-Phaset8-Phasep8-Phaseu8-Phaset8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-Phase*8-Phase*8-Phase28-Phase.8-Phase58-Phase.8-Phase48-Phase*8-Phase*8-Phase 8-PhaseC8-Phaser8-Phasee8-Phasea8-Phaset8-Phasee8-Phase 8-PhaseP8-PhaseR8-Phase28-Phase:8-Phase 8-PhaseE8-Phasen8-Phasef8-Phaseo8-Phaser8-Phasec8-Phasee8-Phasem8-Phasee8-Phasen8-Phaset8-Phase
-8-Phase
-8-Phase-8-Phase-8-Phase-8-Phase
-8-Phase
-8-Phase#8-Phase#8-Phase 8-PhaseE8-Phasep8-Phasei8-Phasec8-Phase 8-Phase38-Phase:8-Phase 8-PhaseD8-Phaseo8-Phasec8-Phaseu8-Phasem8-Phasee8-Phasen8-Phaset8-Phasea8-Phaset8-Phasei8-Phaseo8-Phasen8-Phase
-8-Phase
-8-Phase#8-Phase#8-Phase#8-Phase#8-Phase 8-PhaseP8-Phaseh8-Phasea8-Phases8-Phasee8-Phase 8-Phase38-Phase.8-Phase18-Phase:8-Phase 8-PhaseU8-Phases8-Phasee8-Phaser8-Phase 8-PhaseD8-Phaseo8-Phasec8-Phaseu8-Phasem8-Phasee8-Phasen8-Phaset8-Phasea8-Phaset8-Phasei8-Phaseo8-Phasen8-Phase
-8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-Phase*8-Phase*8-Phase38-Phase.8-Phase18-Phase.8-Phase18-Phase*8-Phase*8-Phase 8-PhaseC8-Phaser8-Phasee8-Phasea8-Phaset8-Phasee8-Phase 8-Phase`8-Phased8-Phaseo8-Phasec8-Phases8-Phase/8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase-8-Phaseu8-Phases8-Phasee8-Phaser8-Phase-8-Phaseg8-Phaseu8-Phasei8-Phased8-Phasee8-Phase.8-Phasem8-Phased8-Phase`8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseH8-Phaseo8-Phasew8-Phase 8-Phaset8-Phasei8-Phasee8-Phaser8-Phasee8-Phased8-Phase 8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase 8-Phasew8-Phaseo8-Phaser8-Phasek8-Phases8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseW8-Phaseh8-Phasea8-Phaset8-Phase 8-Phaset8-Phaseo8-Phase 8-Phasee8-Phasex8-Phasep8-Phasee8-Phasec8-Phaset8-Phase 8-Phasea8-Phaset8-Phase 8-Phasee8-Phasea8-Phasec8-Phaseh8-Phase 8-Phasep8-Phaseh8-Phasea8-Phases8-Phasee8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseH8-Phaseo8-Phasew8-Phase 8-Phaset8-Phaseo8-Phase 8-Phasei8-Phasen8-Phaset8-Phasee8-Phaser8-Phasep8-Phaser8-Phasee8-Phaset8-Phase 8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase 8-Phaseo8-Phaseu8-Phaset8-Phasep8-Phaseu8-Phaset8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-Phase*8-Phase*8-Phase38-Phase.8-Phase18-Phase.8-Phase28-Phase*8-Phase*8-Phase 8-PhaseC8-Phaser8-Phasee8-Phasea8-Phaset8-Phasee8-Phase 8-Phase`8-Phased8-Phaseo8-Phasec8-Phases8-Phase/8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase-8-Phasem8-Phasei8-Phaseg8-Phaser8-Phasea8-Phaset8-Phasei8-Phaseo8-Phasen8-Phase.8-Phasem8-Phased8-Phase`8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseC8-Phaseh8-Phasea8-Phasen8-Phaseg8-Phasee8-Phases8-Phase 8-Phasef8-Phaser8-Phaseo8-Phasem8-Phase 8-Phaseo8-Phasel8-Phased8-Phase 8-Phases8-Phasey8-Phases8-Phaset8-Phasee8-Phasem8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseN8-Phasee8-Phasew8-Phase 8-Phaseb8-Phasee8-Phaseh8-Phasea8-Phasev8-Phasei8-Phaseo8-Phaser8-Phase 8-Phaseo8-Phasev8-Phasee8-Phaser8-Phasev8-Phasei8-Phasee8-Phasew8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseF8-PhaseA8-PhaseQ8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-Phase*8-Phase*8-Phase38-Phase.8-Phase18-Phase.8-Phase38-Phase*8-Phase*8-Phase 8-PhaseC8-Phaser8-Phasee8-Phasea8-Phaset8-Phasee8-Phase 8-Phase`8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase/8-Phaset8-Phaser8-Phaseo8-Phaseu8-Phaseb8-Phasel8-Phasee8-Phases8-Phaseh8-Phaseo8-Phaseo8-Phaset8-Phasei8-Phasen8-Phaseg8-Phase.8-Phasem8-Phased8-Phase`8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseE8-Phaser8-Phaser8-Phaseo8-Phaser8-Phase 8-Phasec8-Phaseo8-Phased8-Phasee8-Phase 8-Phasee8-Phasex8-Phasep8-Phasel8-Phasea8-Phasen8-Phasea8-Phaset8-Phasei8-Phaseo8-Phasen8-Phases8-Phase 8-Phase(8-PhaseG8-PhaseR8-Phase-8-Phase08-Phase08-Phase18-Phase 8-Phaset8-Phaseo8-Phase 8-PhaseG8-PhaseR8-Phase-8-Phase08-Phase08-Phase58-Phase)8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseC8-Phaseo8-Phasem8-Phasem8-Phaseo8-Phasen8-Phase 8-Phasei8-Phases8-Phases8-Phaseu8-Phasee8-Phases8-Phase 8-Phasea8-Phasen8-Phased8-Phase 8-Phasef8-Phasei8-Phasex8-Phasee8-Phases8-Phase
-8-Phase 8-Phase 8-Phase-8-Phase 8-PhaseR8-Phasee8-Phases8-Phasei8-Phasel8-Phasei8-Phasee8-Phasen8-Phasec8-Phasee8-Phase 8-Phases8-Phasec8-Phasee8-Phasen8-Phasea8-Phaser8-Phasei8-Phaseo8-Phases8-Phase
-8-Phase
-8-Phase-8-Phase-8-Phase-8-Phase
-8-Phase
-8-Phase#8-Phase#8-Phase 8-PhaseT8-Phasea8-Phases8-Phasek8-Phase 8-PhaseS8-Phaseu8-Phasem8-Phasem8-Phasea8-Phaser8-Phasey8-Phase
-8-Phase
-8-Phase|8-Phase 8-PhaseE8-Phasep8-Phasei8-Phasec8-Phase 8-Phase|8-Phase 8-PhaseP8-Phaseh8-Phasea8-Phases8-Phasee8-Phase 8-Phase|8-Phase 8-PhaseT8-Phasea8-Phases8-Phasek8-Phases8-Phase 8-Phase|8-Phase 8-PhaseP8-Phaser8-Phasei8-Phaseo8-Phaser8-Phasei8-Phaset8-Phasey8-Phase 8-Phase|8-Phase
-8-Phase|8-Phase-8-Phase-8-Phase-8-Phase-8-Phase-8-Phase-8-Phase|8-Phase-8-Phase-8-Phase-8-Phase-8-Phase-8-Phase-8-Phase-8-Phase|8-Phase-8-Phase-8-Phase-8-Phase-8-Phase-8-Phase-8-Phase-8-Phase|8-Phase-8-Phase-8-Phase-8-Phase-8-Phase-8-Phase-8-Phase-8-Phase-8-Phase-8-Phase-8-Phase|8-Phase
-8-Phase|8-Phase 8-Phase18-Phase 8-Phase|8-Phase 8-Phase18-Phase.8-Phase18-Phase 8-Phase|8-Phase 8-Phase58-Phase 8-Phase|8-Phase 8-PhaseP8-Phase08-Phase 8-Phase|8-Phase
-8-Phase|8-Phase 8-Phase18-Phase 8-Phase|8-Phase 8-Phase18-Phase.8-Phase28-Phase 8-Phase|8-Phase 8-Phase28-Phase 8-Phase|8-Phase 8-PhaseP8-Phase08-Phase 8-Phase|8-Phase
-8-Phase|8-Phase 8-Phase18-Phase 8-Phase|8-Phase 8-Phase18-Phase.8-Phase38-Phase 8-Phase|8-Phase 8-Phase38-Phase 8-Phase|8-Phase 8-PhaseP8-Phase08-Phase 8-Phase|8-Phase
-8-Phase|8-Phase 8-Phase28-Phase 8-Phase|8-Phase 8-Phase28-Phase.8-Phase18-Phase 8-Phase|8-Phase 8-Phase18-Phase 8-Phase|8-Phase 8-PhaseP8-Phase08-Phase 8-Phase|8-Phase
-8-Phase|8-Phase 8-Phase28-Phase 8-Phase|8-Phase 8-Phase28-Phase.8-Phase28-Phase 8-Phase|8-Phase 8-Phase28-Phase 8-Phase|8-Phase 8-PhaseP8-Phase08-Phase 8-Phase|8-Phase
-8-Phase|8-Phase 8-Phase28-Phase 8-Phase|8-Phase 8-Phase28-Phase.8-Phase38-Phase 8-Phase|8-Phase 8-Phase38-Phase 8-Phase|8-Phase 8-PhaseP8-Phase08-Phase 8-Phase|8-Phase
-8-Phase|8-Phase 8-Phase28-Phase 8-Phase|8-Phase 8-Phase28-Phase.8-Phase48-Phase 8-Phase|8-Phase 8-Phase28-Phase 8-Phase|8-Phase 8-PhaseP8-Phase18-Phase 8-Phase|8-Phase
-8-Phase|8-Phase 8-Phase28-Phase 8-Phase|8-Phase 8-Phase28-Phase.8-Phase58-Phase 8-Phase|8-Phase 8-Phase48-Phase 8-Phase|8-Phase 8-PhaseP8-Phase08-Phase 8-Phase|8-Phase
-8-Phase|8-Phase 8-Phase38-Phase 8-Phase|8-Phase 8-Phase38-Phase.8-Phase18-Phase 8-Phase|8-Phase 8-Phase38-Phase 8-Phase|8-Phase 8-PhaseP8-Phase28-Phase 8-Phase|8-Phase
-8-Phase
-8-Phase*8-Phase*8-PhaseT8-Phaseo8-Phaset8-Phasea8-Phasel8-Phase:8-Phase 8-Phase28-Phase58-Phase 8-Phaset8-Phasea8-Phases8-Phasek8-Phases8-Phase*8-Phase*8-Phase
-8-Phase
-8-Phase-8-Phase-8-Phase-8-Phase
-8-Phase
-8-Phase#8-Phase#8-Phase 8-PhaseD8-Phasee8-Phasep8-Phasee8-Phasen8-Phased8-Phasee8-Phasen8-Phasec8-Phasei8-Phasee8-Phases8-Phase 8-PhaseG8-Phaser8-Phasea8-Phasep8-Phaseh8-Phase
-8-Phase
-8-Phase`8-Phase`8-Phase`8-Phase
-8-Phase18-Phase.8-Phase18-Phase.8-Phase28-Phase 8-Phase─8-Phase─8-Phase┐8-Phase
-8-Phase18-Phase.8-Phase18-Phase.8-Phase38-Phase 8-Phase─8-Phase─8-Phase┼8-Phase─8-Phase─8-Phase▶8-Phase 8-Phase18-Phase.8-Phase28-Phase.8-Phase18-Phase 8-Phase─8-Phase─8-Phase▶8-Phase 8-Phase28-Phase.8-Phase28-Phase.8-Phase18-Phase 8-Phase─8-Phase─8-Phase▶8-Phase 8-Phase28-Phase.8-Phase38-Phase.8-Phase18-Phase 8-Phase─8-Phase─8-Phase▶8-Phase 8-Phase28-Phase.8-Phase38-Phase.8-Phase38-Phase
-8-Phase18-Phase.8-Phase18-Phase.8-Phase48-Phase 8-Phase─8-Phase─8-Phase┤8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase│8-Phase
-8-Phase18-Phase.8-Phase18-Phase.8-Phase58-Phase 8-Phase─8-Phase─8-Phase┘8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase▼8-Phase
-8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase 8-Phase28-Phase.8-Phase38-Phase.8-Phase28-Phase
-8-Phase`8-Phase`8-Phase`8-Phase
-8-Phase
-8-Phase-8-Phase-8-Phase-8-Phase
-8-Phase
-8-Phase#8-Phase#8-Phase 8-PhaseV8-Phasee8-Phaser8-Phasei8-Phasef8-Phasei8-Phasec8-Phasea8-Phaset8-Phasei8-Phaseo8-Phasen8-Phase 8-PhaseC8-Phaseh8-Phasee8-Phasec8-Phasek8-Phasel8-Phasei8-Phases8-Phaset8-Phase
-8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-PhaseA8-Phasel8-Phasel8-Phase 8-Phaseg8-Phaser8-Phaseo8-Phaseu8-Phasen8-Phased8-Phasei8-Phasen8-Phaseg8-Phase/8-Phase 8-Phasef8-Phasei8-Phasel8-Phasee8-Phases8-Phase 8-Phasec8-Phaser8-Phasee8-Phasea8-Phaset8-Phasee8-Phased8-Phase 8-Phasea8-Phasen8-Phased8-Phase 8-Phasec8-Phaseo8-Phasen8-Phases8-Phasei8-Phases8-Phaset8-Phasee8-Phasen8-Phaset8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-PhaseS8-Phasec8-Phaseh8-Phasee8-Phasem8-Phasea8-Phase 8-Phasev8-Phase18-Phase.8-Phase18-Phase 8-Phasem8-Phasea8-Phaset8-Phasec8-Phaseh8-Phasee8-Phases8-Phase 8-Phased8-Phasee8-Phases8-Phasei8-Phaseg8-Phasen8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-PhaseS8-PhaseK8-PhaseI8-PhaseL8-PhaseL8-Phase.8-Phasem8-Phased8-Phase 8-Phaseh8-Phasea8-Phases8-Phase 8-Phasea8-Phasel8-Phasel8-Phase 8-Phasei8-Phasen8-Phaset8-Phasee8-Phaseg8-Phaser8-Phasea8-Phaset8-Phasei8-Phaseo8-Phasen8-Phase 8-Phasep8-Phaseo8-Phasei8-Phasen8-Phaset8-Phases8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-Phased8-Phasee8-Phases8-Phasei8-Phaseg8-Phasen8-Phase.8-Phaset8-Phaseo8-Phasem8-Phasel8-Phase 8-Phaseh8-Phasea8-Phases8-Phase 8-Phasee8-Phasen8-Phasef8-Phaseo8-Phaser8-Phasec8-Phasee8-Phasem8-Phasee8-Phasen8-Phaset8-Phase 8-Phasec8-Phaseh8-Phasee8-Phasec8-Phasek8-Phasep8-Phaseo8-Phasei8-Phasen8-Phaset8-Phases8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-PhaseC8-Phaser8-Phaseo8-Phases8-Phases8-Phase-8-Phaser8-Phasee8-Phasef8-Phasee8-Phaser8-Phasee8-Phasen8-Phasec8-Phasee8-Phases8-Phase 8-Phasev8-Phasea8-Phasel8-Phasei8-Phased8-Phasea8-Phaset8-Phasee8-Phased8-Phase
-8-Phase-8-Phase 8-Phase[8-Phase 8-Phase]8-Phase 8-PhaseP8-PhaseR8-Phase18-Phase 8-Phasem8-Phasee8-Phaser8-Phaseg8-Phasee8-Phased8-Phase 8-Phaseb8-Phasee8-Phasef8-Phaseo8-Phaser8-Phasee8-Phase 8-PhaseP8-PhaseR8-Phase28-Phase 8-Phases8-Phaset8-Phasea8-Phaser8-Phaset8-Phasee8-Phased8-Phase
-8-Phase
+# Grounding System Redesign - Implementation Plan
+
+## Overview
+
+Implement tiered grounding system with enforcement, cascading router, impact scan, and supporting infrastructure.
+
+**Delivery Strategy:** 2 PRs (Foundation + Enforcement)
+
+---
+
+## PR1: Foundation
+
+### Epic 1: Grounding Infrastructure
+
+#### Phase 1.1: Folder Structure & Schema
+
+- [ ] **1.1.1** Create `skills/design/references/grounding/` directory
+- [ ] **1.1.2** Create `grounding/tiers.md` - Define Light/Mini/Standard/Full tiers
+  - Document each tier: sources, timeout, enforcement level
+  - Include decision matrix table
+- [ ] **1.1.3** Create `grounding/router.md` - Cascading router logic
+  - Document route_grounding() algorithm
+  - Document execute_cascade() with fallback
+  - Include external reference detection rules
+- [ ] **1.1.4** Create `grounding/cache.md` - Session cache specification
+  - TTL: 5 minutes
+  - Hash algorithm for cache keys
+  - Cache invalidation rules
+- [ ] **1.1.5** Create `grounding/sanitization.md` - Query sanitization rules
+  - Regex patterns for secrets
+  - Logging requirements (GR-005)
+
+#### Phase 1.2: Core Grounding Rewrite
+
+- [ ] **1.2.1** Rewrite `grounding.md` - Integrate tiered system
+  - depends: 1.1.2, 1.1.3, 1.1.4, 1.1.5
+  - Replace flat decision table with tiered routing
+  - Add enforcement section
+  - Add output format with conflict visibility
+  - Add error catalog (GR-001 to GR-005)
+- [ ] **1.2.2** Create `grounding/schema.json` - Result schema v1.1
+  - Include routing section (sources_tried, sources_succeeded, fallback_used)
+  - Include queries array with confidence
+  - Include conflicts array
+
+#### Phase 1.3: Verification (PR1)
+
+- [ ] **1.3.1** Review all new grounding/ files for consistency
+- [ ] **1.3.2** Verify cross-references between files
+- [ ] **1.3.3** Create PR1: Foundation
+
+---
+
+## PR2: Enforcement
+
+### Epic 2: Enforcement & Integration
+
+#### Phase 2.1: Impact Scan
+
+- [ ] **2.1.1** Create `grounding/impact-scan-prompt.md` - Subagent template
+  - Input: design summary, grounding results
+  - Output: files affected, change types, dependencies, risk, order
+  - Constraints: 30s timeout, 100 files max, 4000 tokens
+
+#### Phase 2.2: Design Skill Integration
+
+- [ ] **2.2.1** Update `design/SKILL.md` - Add tiered grounding to phase transitions
+  - depends: 1.2.1
+  - DISCOVER→DEFINE: Mini grounding (repo)
+  - DEFINE→DEVELOP: Mini grounding (web verify)
+  - DEVELOP→DELIVER: Standard grounding (gatekeeper)
+  - DELIVER→Complete: Full grounding + Impact scan (mandatory)
+- [ ] **2.2.2** Update `design/SKILL.md` - Add enforcement section
+  - Document enforcement levels and actions
+  - Document blocking behavior
+
+#### Phase 2.3: Conductor Integration
+
+- [ ] **2.3.1** Update `conductor/references/commands/design.toml`
+  - depends: 2.2.1
+  - Add enforcement checkpoints to DELIVER phase
+  - Update FULL GROUNDING section with new requirements
+  - Add grounding checklist with blocking
+- [ ] **2.3.2** Update `conductor/SKILL.md` - Add grounding references
+  - Link to new grounding documentation
+  - Document tiered system overview
+- [ ] **2.3.3** Update `conductor-design-workflow.md` - Final integration
+  - depends: 2.3.1, 2.3.2
+  - Update workflow to include grounding at transitions
+
+#### Phase 2.4: Resilience
+
+- [ ] **2.4.1** Add timeout handling to `grounding.md`
+  - Soft limits with warning
+  - Partial result return
+- [ ] **2.4.2** Add fallback behavior documentation
+  - Network failure → repo-only
+  - Subagent timeout → grounding-only
+  - All-fail → mandatory block
+
+#### Phase 2.5: Verification (PR2)
+
+- [ ] **2.5.1** Test phase transition triggers grounding
+- [ ] **2.5.2** Test DELIVER blocks without grounding
+- [ ] **2.5.3** Test conflict visibility output
+- [ ] **2.5.4** Create PR2: Enforcement
+
+---
+
+## Epic 3: Documentation
+
+#### Phase 3.1: User Documentation
+
+- [ ] **3.1.1** Create `docs/grounding-user-guide.md`
+  - How tiered grounding works
+  - What to expect at each phase
+  - How to interpret grounding output
+- [ ] **3.1.2** Create `docs/grounding-migration.md`
+  - Changes from old system
+  - New behavior overview
+  - FAQ
+- [ ] **3.1.3** Create `grounding/troubleshooting.md`
+  - Error code explanations (GR-001 to GR-005)
+  - Common issues and fixes
+  - Resilience scenarios
+
+---
+
+## Task Summary
+
+| Epic | Phase | Tasks | Priority |
+|------|-------|-------|----------|
+| 1 | 1.1 | 5 | P0 |
+| 1 | 1.2 | 2 | P0 |
+| 1 | 1.3 | 3 | P0 |
+| 2 | 2.1 | 1 | P0 |
+| 2 | 2.2 | 2 | P0 |
+| 2 | 2.3 | 3 | P0 |
+| 2 | 2.4 | 2 | P1 |
+| 2 | 2.5 | 4 | P0 |
+| 3 | 3.1 | 3 | P2 |
+
+**Total: 25 tasks**
+
+---
+
+## Dependencies Graph
+
+```
+1.1.2 ──┐
+1.1.3 ──┼──▶ 1.2.1 ──▶ 2.2.1 ──▶ 2.3.1 ──▶ 2.3.3
+1.1.4 ──┤                              │
+1.1.5 ──┘                              ▼
+                                     2.3.2
+```
+
+---
+
+## Verification Checklist
+
+- [ ] All grounding/ files created and consistent
+- [ ] Schema v1.1 matches design
+- [ ] SKILL.md has all integration points
+- [ ] design.toml has enforcement checkpoints
+- [ ] Cross-references validated
+- [ ] PR1 merged before PR2 started

@@ -1,20 +1,20 @@
 ---
 name: designing
-description: Design Session - collaborative brainstorming to turn ideas into actionable implementation plans using the Unified Pipeline methodology. Use when user types "ds" or wants to explore/design a feature before implementation. "pl" triggers phases 5-10 (STANDALONE/ALIAS/NO-OP modes). MUST load maestro-core skill first for routing.
+description: Design Session - collaborative brainstorming to turn ideas into actionable implementation plans using the Unified Pipeline methodology. Use when user types "ds" or wants to explore/design a feature before implementation. "pl" triggers phases 5-8 (STANDALONE/ALIAS/NO-OP modes). MUST load maestro-core skill first for routing.
 ---
 
 # Design & Planning
 
-Turn ideas into fully-formed, implementation-ready designs through a unified 10-phase pipeline.
+Turn ideas into fully-formed, implementation-ready designs through a unified 8-phase pipeline.
 
 ## Entry Points
 
 | Trigger | Action |
 |---------|--------|
-| `ds` | Start unified pipeline (all 10 phases) |
+| `ds` | Start unified pipeline (all 8 phases) |
 | `/conductor-design` | Start unified pipeline (alias) |
 | `cn`, `/conductor-newtrack` | Create spec + plan + beads from existing design.md |
-| `pl`, `/plan` | Planning phases (5-10) - see pl Entry Modes below |
+| `pl`, `/plan` | Planning phases (5-8) - see pl Entry Modes below |
 | "design a feature" | Start unified pipeline |
 | "let's think through X" | Start unified pipeline |
 
@@ -43,7 +43,7 @@ Complexity scoring determines execution mode:
 |-------|------|--------|-------|----------|
 | < 4 | **SPEED** | 1,2,4,READY | No | 1 hook (start) |
 | 4-6 | **ASK** | User chooses | Optional | User chooses |
-| > 6 | **FULL** | 1-10 | Yes | 2 hooks |
+| > 6 | **FULL** | 1-8 | Yes | 2 hooks |
 
 ### Mode Comparison
 
@@ -82,7 +82,7 @@ See [pipeline.md](references/pipeline.md) for all execution blocks.
 1. **Initialize** - Load handoffs, CODEMAPS, verify conductor setup → [session-init.md](references/session-init.md)
 2. **Research** - ⛔ EXECUTION BLOCK at Phase 1 start (spawn 3 Task() agents)
 3. **Route** - Score complexity (< 4 = SPEED, > 6 = FULL) → [design-routing-heuristics.md](references/design-routing-heuristics.md)
-4. **Execute** - 10-phase pipeline with A/P/C checkpoints → [pipeline.md](references/pipeline.md)
+4. **Execute** - 8-phase pipeline with A/P/C checkpoints → [pipeline.md](references/pipeline.md)
 5. **Validate** - ⛔ EXECUTION BLOCK at Phase 4 (call oracle())
 6. **Complete** - Phase 8 auto-orchestration or manual `ci`
 
@@ -117,7 +117,7 @@ INLINE → MICRO_APC → NUDGE → DS_FULL → DS_BRANCH → BRANCH_MERGE
 | **INLINE** | Normal flow (conductor/beads) | Default |
 | **MICRO_APC** | Lightweight checkpoint at boundaries | End of spec/plan section |
 | **NUDGE** | Suggest upgrade to DS | 3+ design iterations |
-| **DS_FULL** | Full 10-phase with A/P/C | `ds` command or upgrade |
+| **DS_FULL** | Full 8-phase with A/P/C | `ds` command or upgrade |
 | **DS_BRANCH** | DS attached to design branch | Design rethink in track |
 | **BRANCH_MERGE** | Apply branch changes | Branch complete |
 
@@ -214,10 +214,10 @@ Input detection (priority order):
 
 | Input Source | Mode | Action |
 |--------------|------|--------|
-| design.md | ALIAS | Skip Phase 5, run 6-10 |
-| PRD file | STANDALONE | Parse PRD, run 5-10 |
-| User file | STANDALONE | Use as context, run 5-10 |
-| None | BOOTSTRAP | Prompt → create track → run 5-10 |
+| design.md | ALIAS | Skip Phase 5, run 6-8 |
+| PRD file | STANDALONE | Parse PRD, run 5-8 |
+| User file | STANDALONE | Use as context, run 5-8 |
+| None | BOOTSTRAP | Prompt → create track → run 5-8 |
 
 **BOOTSTRAP creates:** `conductor/tracks/<id>/` with design.md + metadata.json
 
@@ -225,10 +225,10 @@ Input detection (priority order):
 
 | Scenario | Mode | Behavior |
 |----------|------|----------|
-| `pl` after `ds` Phase 4 | NO-OP | Not needed - phases 5-10 auto-run in FULL mode |
-| `pl` with design.md | ALIAS | Skip Phase 5 discovery, run 6-10 |
-| `pl` with PRD file | STANDALONE | Parse PRD, run full 5-10 |
-| `pl` with user request | STANDALONE | Run full discovery, phases 5-10 |
+| `pl` after `ds` Phase 4 | NO-OP | Not needed - phases 5-8 auto-run in FULL mode |
+| `pl` with design.md | ALIAS | Skip Phase 5 discovery, run 6-8 |
+| `pl` with PRD file | STANDALONE | Parse PRD, run full 5-8 |
+| `pl` with user request | STANDALONE | Run full discovery, phases 5-8 |
 | `pl` without any input | ERROR | Prompt for input source |
 
 ## Anti-Patterns

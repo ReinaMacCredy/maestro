@@ -1,6 +1,6 @@
 # Unified DS Pipeline
 
-> **Single 10-phase pipeline from problem discovery through execution-ready state.**
+> **Single 8-phase pipeline from problem discovery through execution-ready state.**
 
 ## Overview Diagram
 
@@ -37,8 +37,8 @@
 └──────────────────────────────────────────────────────────────────────────────────────────┘
 
 MODES:
-  SPEED: 1 → 2 → 4 → READY  (skip 3; requires manual `pl` for phases 5-10)
-  FULL:  1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10
+  SPEED: 1 → 2 → 4 → READY  (skip 3; requires manual `pl` for phases 5-8)
+  FULL:  1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 ```
 
 ## Phase Details
@@ -680,7 +680,7 @@ Spawns at end of DEVELOP to validate design:
 
 ```
 SPEED (4 phases):  ds → DISCOVER → DEFINE → VERIFY → READY → ci
-FULL (10 phases):   ds → DISCOVER → DEFINE → DEVELOP → VERIFY →
+FULL (8 phases):   ds → DISCOVER → DEFINE → DEVELOP → VERIFY →
                        DECOMPOSE → VALIDATE → ASSIGN → READY → [O]/[S]
 
 Research:          2 hooks (start + verify), ~35s max
@@ -759,7 +759,7 @@ Continuing to Phase 5...
 
 Display progress at each phase transition:
 
-### FULL Mode (10 phases)
+### FULL Mode (8 phases)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐

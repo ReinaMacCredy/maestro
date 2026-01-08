@@ -1,8 +1,8 @@
-# Planning Pipeline (Phases 5-10)
+# Planning Pipeline (Phases 5-8)
 
-> **6-phase automated pipeline from validated design to execution-ready state.**
+> **4-phase automated pipeline from validated design to execution-ready state.**
 
-The `pl` trigger runs phases 5-10 with flexible input sources.
+The `pl` trigger runs phases 5-8 with flexible input sources.
 
 ## ⚠️ MANDATORY: Input Detection & Track Bootstrap
 
@@ -31,7 +31,7 @@ mode, input_file = detect_pl_input()
 if mode == "BOOTSTRAP":
     # Prompt user for planning context
     print("""
-    📋 Planning Pipeline (phases 5-10)
+    📋 Planning Pipeline (phases 5-8)
     
     What do you want to plan?
     
@@ -68,13 +68,13 @@ def create_track_artifacts(track_id, user_description):
 {user_description}
 
 ## 2. Goals
-- [To be refined in Phase 5 Discovery]
+- [To be refined in Phase 5]
 
 ## 3. Approach
-- [To be determined after Phase 6 Synthesis]
+- [To be determined after validation]
 
 ## 4. Risks
-- [To be assessed in Phase 6]
+- [To be assessed]
 """)
     
     # 2. Create metadata.json
@@ -83,35 +83,35 @@ def create_track_artifacts(track_id, user_description):
         "created_at": now(),
         "source": "pl-bootstrap",
         "planning": {
-            "state": "discovery",
+            "state": "decompose",
             "phases_completed": []
         }
     })
     
-    # 3. spec.md and plan.md created AFTER Phase 6 (Synthesis)
+    # 3. spec.md and plan.md created in later phases
     
     return track_id
 ```
 
 ## Input Source Handling
 
-| Source | Mode | Track Exists? | Phase 5 (Discovery) |
+| Source | Mode | Track Exists? | Phase 5 (DECOMPOSE) |
 |--------|------|---------------|---------------------|
-| **design.md** | ALIAS | Yes | Skip - use existing research |
-| **PRD file** | STANDALONE | Yes | Parse PRD, run discovery |
-| **User description** | BOOTSTRAP | **Create** | Run full discovery |
+| **design.md** | ALIAS | Yes | Use existing design |
+| **PRD file** | STANDALONE | Yes | Parse PRD |
+| **User description** | BOOTSTRAP | **Create** | Run full pipeline |
 
 ### Phase Flow by Mode
 
 ```
 ALIAS mode (design.md exists):
-  Skip → Phase 6 → Phase 7 → ... → Phase 10
+  Phase 5 → Phase 6 → Phase 7 → Phase 8
 
 STANDALONE mode (PRD exists):
-  Phase 5 (parse PRD) → Phase 6 → ... → Phase 10
+  Phase 5 → Phase 6 → Phase 7 → Phase 8
 
 BOOTSTRAP mode (no input):
-  Prompt → Create artifacts → Phase 5 → Phase 6 → ... → Phase 10
+  Prompt → Create artifacts → Phase 5 → Phase 6 → Phase 7 → Phase 8
 ```
 
 **Anti-pattern:** Do NOT skip input detection. Always validate or bootstrap before Phase 5.
@@ -120,302 +120,24 @@ BOOTSTRAP mode (no input):
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────────────┐
-│                           PLANNING PIPELINE (6 PHASES)                                   │
+│                           PLANNING PIPELINE (4 PHASES)                                   │
 ├──────────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                          │
-│       ┌───────────────┐     ┌───────────────┐     ┌───────────────┐                     │
-│       │   DISCOVERY   │ ──► │  SYNTHESIS    │ ──► │ VERIFICATION  │                     │
-│       │   (Phase 5)   │     │   (Phase 6)   │     │   (Phase 7)   │                     │
-│       │      🔬       │     │      🧬       │     │      ⚗️       │                     │
-│       └───────┬───────┘     └───────┬───────┘     └───────┬───────┘                     │
-│               │                     │                     │                              │
-│         finder, web_search    Oracle gap analysis   Task() spikes                        │
-│         Librarian (15s)       risk-map.md           spike learnings                      │
-│               │                spec.md                    │                              │
-│               ▼                     ▼                     ▼                              │
-│       ┌───────────────┐     ┌───────────────┐     ┌───────────────┐                     │
-│       │ DECOMPOSITION │ ──► │  VALIDATION   │ ──► │TRACK PLANNING │                     │
-│       │   (Phase 8)   │     │   (Phase 9)   │     │  (Phase 10)   │                     │
-│       │      📦       │     │      🔍       │     │      📋       │                     │
-│       └───────┬───────┘     └───────┬───────┘     └───────┬───────┘                     │
-│               │                     │                     │                              │
-│         bd create               bv --robot-*        plan.md Track                        │
-│         file-beads              Oracle review       Assignments table                    │
-│         embed learnings             │                     │                              │
-│               │                     │                     │                              │
-│               └─────────────────────┴─────────────────────┘                              │
-│                                     │                                                    │
-│                                     ▼                                                    │
-│                          ┌───────────────────┐                                          │
-│                          │       READY       │                                          │
-│                          │   [O] Orchestrate │                                          │
-│                          │   [S] Sequential  │                                          │
-│                          └───────────────────┘                                          │
+│       ┌───────────────┐     ┌───────────────┐     ┌───────────────┐     ┌───────────────┐│
+│       │  DECOMPOSE    │ ──► │   VALIDATE    │ ──► │    ASSIGN     │ ──► │    READY      ││
+│       │   (Phase 5)   │     │   (Phase 6)   │     │   (Phase 7)   │     │   (Phase 8)   ││
+│       │      📦       │     │      🔍       │     │      📋       │     │      🚀       ││
+│       └───────┬───────┘     └───────┬───────┘     └───────┬───────┘     └───────┬───────┘│
+│               │                     │                     │                     │        │
+│         fb (file beads)       bv + Oracle           track planning        [O]/[S] prompt │
+│         embed learnings       dependency check      plan.md generation                   │
 │                                                                                          │
 └──────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Phase 5: DISCOVERY
-
-| Aspect | Value |
-|--------|-------|
-| **Purpose** | Parallel research to gather implementation context |
-| **Inputs** | design.md sections 1-4 |
-| **Outputs** | Research context, file mappings, external references |
-| **Timeout** | 15 seconds per agent |
-| **Fallback** | Graceful degradation to manual research |
-
-### ⚠️ MANDATORY: Parallel Agent Dispatch
-
-**YOU MUST spawn 3 parallel `Task()` subagents. This is NOT optional.**
-
-Three agents spawn concurrently:
-
-| Agent | Tool | Purpose | Output |
-|-------|------|---------|--------|
-| Locator | `finder` | Find relevant codebase files | File paths, line numbers |
-| Librarian | `finder` | Identify existing patterns | Pattern examples, utilities |
-| Web | `web_search` | External documentation | Library docs, examples |
-
-### Agent Dispatch
-
-```python
-# REQUIRED - Spawn all three in parallel (NOT inline):
-Task(
-    description="Locator: Find files for <feature>",
-    prompt="""
-    Search codebase for files related to: <feature>
-    Use finder tool to locate:
-    - Relevant source files
-    - Test files
-    - Config files
-    Return: File paths with line numbers and brief descriptions.
-    """
-)
-Task(
-    description="Librarian: Find patterns for <feature>",
-    prompt="""
-    Search codebase for existing patterns related to: <feature>
-    Use finder tool to identify:
-    - Similar implementations
-    - Reusable utilities
-    - Naming conventions
-    Return: Pattern examples with file paths.
-    """
-)
-Task(
-    description="Web: Search docs for <feature>",
-    prompt="""
-    Search external documentation for: <feature>
-    Use web_search tool to find:
-    - Library docs (if external deps)
-    - Best practices
-    - Similar projects
-    Return: URLs with summaries.
-    """
-)
-```
-
-**Anti-pattern:** Do NOT perform discovery inline without `Task()`. The parallel dispatch is required for efficiency.
-
-### Timeout and Fallback Behavior
-
-| Condition | Action |
-|-----------|--------|
-| All agents complete | Aggregate results, continue |
-| Partial timeout | Use available results + log warning |
-| All timeout | DEGRADE: prompt for manual research |
-
-```
-⚠️ Discovery timeout - partial results available:
-• Locator: ✅ 12 files found
-• Librarian: ⏱️ timed out
-• Web: ✅ 3 references found
-
-[C] Continue with partial results
-[M] Manual research
-```
-
----
-
-## Phase 6: SYNTHESIS
-
-| Aspect | Value |
-|--------|-------|
-| **Purpose** | Gap analysis and risk assessment via Oracle |
-| **Inputs** | Discovery results, design.md |
-| **Outputs** | risk-map.md, spec.md |
-| **Tool** | Oracle |
-
-### Oracle Gap Analysis
-
-```python
-oracle(
-    task="Gap analysis and risk assessment",
-    context="""
-    Analyze design.md against discovery results:
-    1. Identify gaps between current state and required state
-    2. Assess risk level for each component (LOW/MEDIUM/HIGH)
-    3. Generate risk-map.md with verification strategy
-    4. Draft spec.md with implementation requirements
-    """,
-    files=[
-        "conductor/tracks/<id>/design.md",
-        "<discovery_results>"
-    ]
-)
-```
-
-### Risk Assessment Criteria
-
-| Risk Level | Criteria | Verification |
-|------------|----------|--------------|
-| **LOW** | Pattern exists in codebase | Proceed directly |
-| **MEDIUM** | Variation of existing pattern | Interface sketch |
-| **HIGH** | Novel or external integration | Spike required |
-
-### Outputs
-
-**risk-map.md:**
-```markdown
-# Risk Map: <Track ID>
-
-| Component | Risk | Reason | Verification |
-|-----------|------|--------|--------------|
-| Stripe SDK | HIGH | New external dependency | Spike |
-| User entity | LOW | Follows User pattern | Proceed |
-| Webhook handler | MEDIUM | Variant of existing | Interface sketch |
-```
-
-**spec.md:**
-```markdown
-# Spec: <Track ID>
-
-## Requirements
-- ...
-
-## Interfaces
-- ...
-
-## Dependencies
-- ...
-```
-
----
-
-## Phase 7: VERIFICATION
-
-| Aspect | Value |
-|--------|-------|
-| **Purpose** | Validate HIGH risk items via spikes |
-| **Inputs** | risk-map.md with HIGH items |
-| **Outputs** | Spike results, updated design.md Section 5 |
-| **Tool** | `Task()` |
-| **Timeout** | 30 minutes default (escalate on timeout) |
-
-### ⚠️ MANDATORY: Spike Execution for HIGH Risk Items
-
-**If risk-map.md contains HIGH risk items, YOU MUST spawn `Task()` for each. This is NOT optional.**
-
-For each HIGH risk item, spawn a Task():
-
-```python
-Task(
-    description=f"Spike: {risk_item.question}",
-    prompt=f"""
-    Time-box: 30 minutes
-    Output location: conductor/spikes/<track>/<spike-id>/
-    
-    Question to answer: {risk_item.question}
-    
-    Success criteria:
-    - Working throwaway code demonstrating feasibility
-    - Answer documented: YES (approach works) or NO (blocker found)
-    - Learnings captured in LEARNINGS.md
-    
-    On completion:
-    bd close <spike-bead-id> --reason "YES: <approach>" or "NO: <blocker>"
-    """
-)
-```
-
-### Spike Timeout Behavior
-
-| Duration | Use Case |
-|----------|----------|
-| 15 min | Simple API test |
-| 30 min | Integration test (default) |
-| 60 min | Complex external integration |
-
-| Result | Action |
-|--------|--------|
-| **YES** | Proceed with validated approach |
-| **NO (alternative)** | Update design with alternative |
-| **NO (blocker)** | HALT for user decision |
-| **TIMEOUT** | Escalate to user |
-
-```
-⏱️ Spike timeout after 30 minutes:
-• Question: Can Stripe SDK work with Node 18?
-• Partial findings: SDK installs, basic import works
-
-[C] Continue with partial (risky)
-[E] Extend time-box (+15 min)
-[A] Abort spike, require human review
-```
-
-### Spike Learnings Capture
-
-After spike completion, update design.md Section 5:
-
-```markdown
-## 5. Spike Results
-
-### Spike: Can Stripe SDK work with Node 18?
-- **Result**: YES
-- **Bead**: bd-12
-- **Learnings**: 
-  - Must use `stripe.webhooks.constructEvent()` for signature verification
-  - Raw body required (not parsed JSON)
-- **Code reference**: conductor/spikes/<track>/spike-001/
-- **Impact on approach**: Confirmed, no design changes needed
-```
-
-### ⚠️ MANDATORY: Oracle Spike Aggregation
-
-**After ALL spikes complete, YOU MUST call Oracle to synthesize results:**
-
-```python
-# REQUIRED - Aggregate spike results via Oracle:
-oracle(
-    task="Synthesize spike results and update approach",
-    context="""
-    Spikes completed. For each spike:
-    1. Extract YES/NO/PARTIAL result
-    2. Capture key learnings
-    3. Update approach if NO/PARTIAL found
-    4. Downgrade risk level for validated items
-    
-    Return: Updated approach with spike learnings integrated.
-    """,
-    files=[
-        "conductor/tracks/<id>/design.md",
-        "conductor/tracks/<id>/risk-map.md",
-        "conductor/spikes/<track>/**/LEARNINGS.md"
-    ]
-)
-```
-
-**Oracle updates:**
-1. design.md Section 5 with detailed spike results
-2. design.md Section 3 with revised approach (if spike found blocker)
-3. risk-map.md - downgrade verified items from HIGH → LOW
-
----
-
-## Phase 8: DECOMPOSITION
+## Phase 5: DECOMPOSE
 
 | Aspect | Value |
 |--------|-------|
@@ -481,12 +203,12 @@ Implementation uses validated approach
 
 ---
 
-## Phase 9: VALIDATION
+## Phase 6: VALIDATE
 
 | Aspect | Value |
 |--------|-------|
 | **Purpose** | Dependency validation + Oracle review of beads |
-| **Inputs** | Filed beads from Phase 8 |
+| **Inputs** | Filed beads from Phase 5 |
 | **Outputs** | Validated dependencies, Oracle approval |
 | **Tools** | `bv --robot-*`, Oracle |
 
@@ -525,13 +247,13 @@ oracle(
 
 | Result | Action |
 |--------|--------|
-| **APPROVED** | Continue to Phase 10 |
+| **APPROVED** | Continue to Phase 7 |
 | **NEEDS_REVISION** | Fix beads, re-validate |
 | **Cycle detected** | Auto-fix or HALT |
 
 ---
 
-## Phase 10: TRACK PLANNING
+## Phase 7: ASSIGN
 
 | Aspect | Value |
 |--------|-------|
@@ -559,6 +281,16 @@ bv --robot-plan
 | C | OrangePond | bd-14 | `schemas/**` | None |
 ```
 
+---
+
+## Phase 8: READY
+
+| Aspect | Value |
+|--------|-------|
+| **Purpose** | Handoff to implementation |
+| **Inputs** | Assigned tracks |
+| **Outputs** | Execution prompt |
+
 ### Execution Prompt
 
 After track planning:
@@ -582,12 +314,10 @@ Default: [O] after 30s
 
 | Phase | Tools |
 |-------|-------|
-| DISCOVERY | `finder`, Librarian, `web_search` |
-| SYNTHESIS | Oracle |
-| VERIFICATION | `Task()` |
-| DECOMPOSITION | `bd create` |
-| VALIDATION | `bv --robot-*`, Oracle |
-| TRACK PLANNING | `bv --robot-plan` |
+| DECOMPOSE | `fb`, `bd create` |
+| VALIDATE | `bv --robot-*`, Oracle |
+| ASSIGN | `bv --robot-plan` |
+| READY | None (prompt only) |
 
 ---
 
@@ -595,23 +325,21 @@ Default: [O] after 30s
 
 | Phase | Timeout | Fallback |
 |-------|---------|----------|
-| DISCOVERY | 15s per agent | Graceful degradation, use partial results |
-| SYNTHESIS | 30s | HALT (Oracle required) |
-| VERIFICATION | 30min per spike | Escalate to user |
-| DECOMPOSITION | None | Manual `fb` command |
-| VALIDATION | 30s | HALT (validation required) |
-| TRACK PLANNING | None | Manual assignment |
+| DECOMPOSE | None | Manual `fb` command |
+| VALIDATE | 30s | HALT (validation required) |
+| ASSIGN | None | Manual assignment |
+| READY | None | N/A |
 
 ---
 
 ## State Transitions
 
 ```
-DISCOVERY ──► SYNTHESIS ──► VERIFICATION ──► DECOMPOSITION ──► VALIDATION ──► TRACK_PLANNING
-    │             │              │                │                │                │
-    ▼             ▼              ▼                ▼                ▼                ▼
- context      risk-map       spikes           beads         validated          plan.md
- gathered     spec.md        complete         filed          beads           generated
+DECOMPOSE ──► VALIDATE ──► ASSIGN ──► READY
+    │             │           │          │
+    ▼             ▼           ▼          ▼
+  beads       validated    tracks     [O]/[S]
+  filed        beads      assigned    prompt
 ```
 
 ### metadata.json Tracking
@@ -619,8 +347,8 @@ DISCOVERY ──► SYNTHESIS ──► VERIFICATION ──► DECOMPOSITION ─
 ```json
 {
   "planning": {
-    "state": "track_planned",
-    "phases_completed": ["discovery", "synthesis", "verification", "decomposition", "validation", "track_planning"],
+    "state": "ready",
+    "phases_completed": ["decompose", "validate", "assign", "ready"],
     "spikes": [
       {
         "id": "spike-001",
@@ -641,6 +369,6 @@ DISCOVERY ──► SYNTHESIS ──► VERIFICATION ──► DECOMPOSITION ─
 |------|---------|
 | [spikes.md](spikes.md) | Detailed spike workflow |
 | [design-template.md](design-template.md) | Unified design.md template |
-| [../pipeline.md](../pipeline.md) | Full 10-phase DS+PL pipeline |
+| [../pipeline.md](../pipeline.md) | Full 8-phase DS+PL pipeline |
 | [../../conductor/SKILL.md](../../conductor/SKILL.md) | Track execution |
 | [../../orchestrator/SKILL.md](../../orchestrator/SKILL.md) | Parallel dispatch |
