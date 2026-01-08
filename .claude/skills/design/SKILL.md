@@ -180,10 +180,9 @@ See [unified-pipeline.md](references/unified-pipeline.md#phase-8-ready-complete)
 
 | Scenario | Behavior |
 |----------|----------|
-| `pl` after Phase 4 completes | **DEPRECATED** - Not needed, phases 5-8 run automatically |
+| `pl` after Phase 4 completes | Not needed - phases 5-8 run automatically after `ds` |
 | `pl` standalone (with design.md) | **ALIAS** - Runs Phases 5-8 only |
 | `pl` without design.md | **ERROR** - Requires design.md from phases 1-4 |
-| `ds --legacy` | Runs old 4-phase Double Diamond (deprecated) |
 
 ## Anti-Patterns
 

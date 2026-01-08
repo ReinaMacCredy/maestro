@@ -596,49 +596,12 @@ interface SpikeResult {
 
 ## Research Hooks
 
-### research-start (Phase 1)
+See **[Research Protocol](../../conductor/references/research/protocol.md)** for the complete 2-hook system.
 
-**Trigger:** Start of DISCOVER phase
-**Agents:** Locator, Pattern, CODEMAPS, Architecture
-**Duration:** ~15s
-**Output:** `research.start` in context
-
-```python
-Task(
-  description="Research: Gather initial context",
-  prompt="""
-  Parallel agents:
-  - Locator: Find files matching user request
-  - Pattern: Identify existing patterns in codebase
-  - CODEMAPS: Load architecture context
-  - Architecture: Understand system structure
-  
-  Return: Merged research result
-  """
-)
-```
-
-### research-verify (Phase 3→4)
-
-**Trigger:** End of DEVELOP phase (before VERIFY)
-**Agents:** Analyzer, Pattern, Impact, Web
-**Duration:** ~20s
-**Output:** `research.verify` in context
-
-```python
-Task(
-  description="Research: Verify design decisions",
-  prompt="""
-  Parallel agents:
-  - Analyzer: Deep analysis of proposed changes
-  - Pattern: Validate pattern usage
-  - Impact: Assess change impact
-  - Web: External docs, examples, best practices
-  
-  Return: Merged verification result
-  """
-)
-```
+| Hook | Trigger | Agents | Mode |
+|------|---------|--------|------|
+| research-start | Phase 1 (DISCOVER) | Locator, Pattern, CODEMAPS, Architecture | ALL |
+| research-verify | Phase 3→4 (DEVELOP→VERIFY) | Analyzer, Pattern, Impact, Web | FULL only |
 
 ---
 
@@ -649,10 +612,7 @@ Task(
 | [../SKILL.md](../SKILL.md) | Main design skill entry point |
 | [session-init.md](session-init.md) | INIT preflight procedures |
 | [apc-checkpoints.md](apc-checkpoints.md) | A/P/C checkpoint details |
-| [double-diamond.md](double-diamond.md) | Legacy Double Diamond (deprecated) |
-| [../../conductor/references/planning/pipeline.md](../../conductor/references/planning/pipeline.md) | Legacy planning pipeline (deprecated) |
-| [../../conductor/references/research/hooks/research-start.md](../../conductor/references/research/hooks/research-start.md) | Research-start hook details |
-| [../../conductor/references/research/hooks/research-verify.md](../../conductor/references/research/hooks/research-verify.md) | Research-verify hook details |
+| [../../conductor/references/research/protocol.md](../../conductor/references/research/protocol.md) | Research protocol (2-hook system) |
 
 ---
 

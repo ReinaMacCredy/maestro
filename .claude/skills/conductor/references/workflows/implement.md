@@ -54,7 +54,7 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
 
 **Purpose:** Load prior session context via unified handoff system.
 
-Reference: [workflows/handoff.md](handoff.md) for full workflow.
+Reference: [handoff skill](../../../handoff/SKILL.md) for full workflow.
 
 0. **Check for Existing Handoffs**
    
@@ -660,4 +660,4 @@ conductor/
 - [Beads Preflight](../preflight-beads.md) - Session initialization
 - [Beads Facade](../beads-facade.md) - API contract
 - [Beads Integration](../beads-integration.md) - All 13 integration points
-- [Unified Handoff Workflow](handoff.md) - CREATE/RESUME modes, Beads sync, progress tracking
+- [Handoff Skill](../../../handoff/SKILL.md) - CREATE/RESUME modes, Beads sync, progress tracking

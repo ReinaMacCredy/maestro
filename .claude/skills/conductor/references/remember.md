@@ -6,7 +6,7 @@ Quick entry point for handoff protocol operations.
 
 ## Primary Reference
 
-→ [Handoff Workflow](workflows/handoff.md)
+→ [Handoff Skill](../../handoff/SKILL.md)
 → [Session Lifecycle](../../design/references/session-lifecycle.md)
 
 ## Handoff Storage
@@ -40,4 +40,4 @@ For within-session context, use `conductor/tracks/<track>/metadata.json`:
 
 - [Session Lifecycle](../../design/references/session-lifecycle.md) - RECALL/REMEMBER
 - [Checkpoint Facade](checkpoint.md) - Progress checkpointing
-- [Handoff Workflow](workflows/handoff.md) - Full handoff protocol
+- [Handoff Skill](../../handoff/SKILL.md) - Full handoff protocol

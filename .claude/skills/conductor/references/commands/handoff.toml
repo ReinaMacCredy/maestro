@@ -32,7 +32,7 @@ ELSE
    - If no subcommand → Run auto-detect logic
 
 2. **Load Workflow:**
-   Reference: [workflows/handoff.md](../workflows/handoff.md)
+   Reference: [handoff skill](../../../handoff/SKILL.md)
    
    - CREATE mode: Execute 9-step create workflow
    - RESUME mode: Execute 9-step resume workflow
@@ -46,5 +46,5 @@ ELSE
 | CREATE | 9 | Parallel check, Beads sync, Agent Mail |
 | RESUME | 9 | Beads context, Progress %, Todo creation |
 
-See [workflows/handoff.md](../workflows/handoff.md) for full workflow details.
+See [handoff skill](../../../handoff/SKILL.md) for full workflow details.
 """

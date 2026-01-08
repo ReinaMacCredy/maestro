@@ -18,7 +18,7 @@ Measure twice, code once.
 | `/conductor-status` | Display progress overview | [structure.md](references/structure.md) |
 | `/conductor-revise` | Update spec/plan mid-work | [revisions.md](references/revisions.md) |
 | `/conductor-finish` | Complete track, extract learnings | [finish-workflow.md](references/finish-workflow.md) |
-| `/conductor-handoff` | Unified handoff (auto-detect create/resume) | [workflows/handoff.md](references/workflows/handoff.md) |
+| `/conductor-handoff` | Unified handoff (auto-detect create/resume) | [handoff skill](../handoff/SKILL.md) |
 
 ## Quick Reference
 
