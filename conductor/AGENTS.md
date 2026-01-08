@@ -81,6 +81,9 @@ Contains reusable learnings from completed tracks.
 - `cliff.toml tag_pattern = "v0.*"` - Filter changelog to specific version series (ignores 1-5.x history)
 - Update `plugin.json` + `marketplace.json` together for version reset
 - `git mv skills/old skills/new` - Rename skill while preserving git history
+- `ca` - Start Ralph autonomous execution (reads metadata.json.ralph.stories)
+- `/conductor-autonomous` - Alias for ca
+- `toolboxes/ralph/ralph.sh <track-path>` - Direct Ralph invocation
 
 ## Gotchas
 
@@ -183,6 +186,11 @@ Contains reusable learnings from completed tracks.
 - Skill directory name MUST match SKILL.md frontmatter `name:` field
 - When merging skills, resolve conflicting guidelines by preferring more specific/recent guidance
 - Redirect stubs needed for moved files to prevent broken links during transition
+- `ralph.active` lock prevents concurrent ci/co execution
+- `progress.txt` is in track directory, not project root
+- Ralph reads/writes `metadata.json.ralph.stories` directly
+- Stories must be populated by ds before ca is available
+- Max iterations default is 10, configurable via second argument
 
 ## Patterns
 
@@ -245,12 +253,14 @@ Contains reusable learnings from completed tracks.
 - **Lazy References:** Trigger-based reference loading - SKILL.md always loaded, phase-specific references (agent-mail.md, worker-prompt.md) loaded on demand
 - **Triage Cache:** Store bead triage results in `metadata.beads.triageCache` with TTL to skip redundant `bv --robot-triage` calls
 - **Toolbox Pattern:** One subfolder per tool in `toolboxes/<tool>/<tool>.js`, shared config at `mcporter.json`
-- **Unified 10-Phase Pipeline:** ds (1-4: DISCOVER → DEFINE → DEVELOP → VERIFY) + pl (5-10: DISCOVERY → SYNTHESIS → VERIFICATION → DECOMPOSITION → VALIDATION → TRACK PLANNING)
+- **Unified 8-Phase Pipeline:** ds (1-4: DISCOVER → DEFINE → DEVELOP → VERIFY) + pl (5-8: DISCOVERY → SYNTHESIS → DECOMPOSITION → VALIDATION)
 - **Research Consolidation:** 2 hooks (research-start, research-verify) replace 5 hooks (~35s max vs ~95s)
-- **Mode-Aware Execution:** SPEED (phases 1,2,4,READY) vs FULL (all 1-10) based on complexity score
-- **`pl` Entry Modes:** STANDALONE (no design.md), ALIAS (with design.md, phase<5), NO-OP (already in phases 5-10)
+- **Mode-Aware Execution:** SPEED (phases 1,2,4,READY) vs FULL (all 1-8) based on complexity score
+- **`pl` Entry Modes:** STANDALONE (no design.md), ALIAS (with design.md, phase<5), NO-OP (already in phases 5-8)
 - **Ownership Matrix Pattern:** Each skill explicitly owns specific artifacts - no overlap (designing→design phases, conductor→implementation, orchestrator→workers, tracking→beads, handoff→session)
 - **Gerund Naming Convention:** Action-oriented skills use gerunds (designing, tracking, creating-skills) per Anthropic best practices
 - **Command Migration:** When moving commands between skills, update: (1) source skill entry points, (2) target skill entry points, (3) maestro-core routing table
 - **Oracle Deep Audit:** Use oracle() at end of large changes to catch stale references across files
 - **Parallel Worker Completion:** Workers may not update all instances - always grep for stale patterns after parallel execution
+- **Ralph Stories Population:** ds extracts tasks from plan.md → populates metadata.ralph.stories → enables ca
+- **Exclusive Lock Pattern:** ralph.active = true blocks ci/co, prevents concurrent execution

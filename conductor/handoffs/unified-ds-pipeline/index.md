@@ -1,7 +1,8 @@
-# Handoff Index: unified-ds-pipeline
-
-## Handoffs
-
-| Date | Trigger | File |
-|------|---------|------|
-| 2026-01-08 14:17 | pre-finish | [2026-01-08_14-17-22-000_unified-ds-pipeline_pre-finish.md](2026-01-08_14-17-22-000_unified-ds-pipeline_pre-finish.md) |
+8-Phase#8-Phase 8-PhaseH8-Phasea8-Phasen8-Phased8-Phaseo8-Phasef8-Phasef8-Phase 8-PhaseI8-Phasen8-Phased8-Phasee8-Phasex8-Phase:8-Phase 8-Phaseu8-Phasen8-Phasei8-Phasef8-Phasei8-Phasee8-Phased8-Phase-8-Phased8-Phases8-Phase-8-Phasep8-Phasei8-Phasep8-Phasee8-Phasel8-Phasei8-Phasen8-Phasee8-Phase
+8-Phase
+8-Phase#8-Phase#8-Phase 8-PhaseH8-Phasea8-Phasen8-Phased8-Phaseo8-Phasef8-Phasef8-Phases8-Phase
+8-Phase
+8-Phase|8-Phase 8-PhaseD8-Phasea8-Phaset8-Phasee8-Phase 8-Phase|8-Phase 8-PhaseT8-Phaser8-Phasei8-Phaseg8-Phaseg8-Phasee8-Phaser8-Phase 8-Phase|8-Phase 8-PhaseF8-Phasei8-Phasel8-Phasee8-Phase 8-Phase|8-Phase
+8-Phase|8-Phase-8-Phase-8-Phase-8-Phase-8-Phase-8-Phase-8-Phase|8-Phase-8-Phase-8-Phase-8-Phase-8-Phase-8-Phase-8-Phase-8-Phase-8-Phase-8-Phase|8-Phase-8-Phase-8-Phase-8-Phase-8-Phase-8-Phase-8-Phase|8-Phase
+8-Phase|8-Phase 8-Phase28-Phase08-Phase28-Phase68-Phase-8-Phase08-Phase18-Phase-8-Phase08-Phase88-Phase 8-Phase18-Phase48-Phase:8-Phase18-Phase78-Phase 8-Phase|8-Phase 8-Phasep8-Phaser8-Phasee8-Phase-8-Phasef8-Phasei8-Phasen8-Phasei8-Phases8-Phaseh8-Phase 8-Phase|8-Phase 8-Phase[8-Phase28-Phase08-Phase28-Phase68-Phase-8-Phase08-Phase18-Phase-8-Phase08-Phase88-Phase_8-Phase18-Phase48-Phase-8-Phase18-Phase78-Phase-8-Phase28-Phase28-Phase-8-Phase08-Phase08-Phase08-Phase_8-Phaseu8-Phasen8-Phasei8-Phasef8-Phasei8-Phasee8-Phased8-Phase-8-Phased8-Phases8-Phase-8-Phasep8-Phasei8-Phasep8-Phasee8-Phasel8-Phasei8-Phasen8-Phasee8-Phase_8-Phasep8-Phaser8-Phasee8-Phase-8-Phasef8-Phasei8-Phasen8-Phasei8-Phases8-Phaseh8-Phase.8-Phasem8-Phased8-Phase]8-Phase(8-Phase28-Phase08-Phase28-Phase68-Phase-8-Phase08-Phase18-Phase-8-Phase08-Phase88-Phase_8-Phase18-Phase48-Phase-8-Phase18-Phase78-Phase-8-Phase28-Phase28-Phase-8-Phase08-Phase08-Phase08-Phase_8-Phaseu8-Phasen8-Phasei8-Phasef8-Phasei8-Phasee8-Phased8-Phase-8-Phased8-Phases8-Phase-8-Phasep8-Phasei8-Phasep8-Phasee8-Phasel8-Phasei8-Phasen8-Phasee8-Phase_8-Phasep8-Phaser8-Phasee8-Phase-8-Phasef8-Phasei8-Phasen8-Phasei8-Phases8-Phaseh8-Phase.8-Phasem8-Phased8-Phase)8-Phase 8-Phase|8-Phase
+8-Phase

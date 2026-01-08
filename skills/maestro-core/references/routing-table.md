@@ -12,6 +12,7 @@ Complete trigger → skill mapping.
 | `/conductor-newtrack` | designing | 3 | Create track from design |
 | `/conductor-design` | designing | 3 | Start design session |
 | `ci`, `/conductor-implement` | conductor | 1 | Implementation only |
+| `ca`, `/conductor-autonomous` | conductor | 1 | Autonomous execution (Ralph) |
 | `co`, `/conductor-orchestrate` | orchestrator | 2 | Parallel execution |
 | `/conductor-status` | conductor | 1 | Show progress |
 | `/conductor-finish` | handoff | 5 | Complete track |
@@ -33,6 +34,8 @@ Complete trigger → skill mapping.
 | "explore", "brainstorm" | designing | "Let's brainstorm the auth flow" |
 | "run parallel" | orchestrator | "Run these tasks in parallel" |
 | "spawn workers" | orchestrator | "Spawn workers for Track A" |
+| "run autonomous" | conductor | "Run autonomous with Ralph" |
+| "ralph mode" | conductor | "Start Ralph autonomous mode" |
 | "create task" | tracking | "Create task for fixing auth" |
 | "what's ready" | tracking | "What's ready to work on?" |
 | "what's blocking" | tracking | "What's blocking task X?" |

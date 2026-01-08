@@ -41,6 +41,7 @@ Always FULL mode via orchestrator. Even single tasks spawn 1 worker for consiste
 | `bd ready --json` | Find available work |
 | `/conductor-implement <track>` | Execute track with TDD |
 | `/conductor-implement --no-tdd` | Execute without TDD |
+| `ca`, `/conductor-autonomous` | Autonomous execution (Ralph loop) |
 | `tdd` | Enter TDD mode |
 | `finish branch` | Finalize and merge/PR |
 
@@ -115,6 +116,21 @@ bd sync
 - Format: `{BaseAgent}-{timestamp}` (internal)
 - Registered on `/conductor-implement` or `/conductor-orchestrate`
 - Stale threshold: 10 min → takeover prompt
+
+### Ralph (Autonomous Mode)
+
+| Phase | Action |
+|-------|--------|
+| Start | `ca` sets `ralph.active = true`, invokes ralph.sh |
+| During | Ralph iterates through stories, updates passes status |
+| End | `ralph.active = false`, `workflow.state = DONE` |
+
+**Exclusive Lock:** `ci`/`co` commands blocked while `ralph.active` is true.
+
+**Gotchas:**
+- `ralph.active` lock prevents concurrent `ci`/`co` execution
+- `progress.txt` is in track directory, not project root
+- Ralph reads/writes `metadata.json.ralph.stories` directly
 
 ## Fallback Policy
 
