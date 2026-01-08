@@ -54,8 +54,8 @@ workflows/beads/
 # DELETED
 skills/file-beads/              ❌
 skills/review-beads/            ❌
-.claude/skills/file-beads/      ❌
-.claude/skills/review-beads/    ❌
+skills/file-beads/      ❌
+skills/review-beads/    ❌
 ```
 
 ## Thin Skill Content
@@ -126,13 +126,13 @@ Remove broken links (12 lines):
 
 ## Hard Links
 
-Both `skills/` and `.claude/skills/` directories are hard-linked (same inode). Updating one updates both.
+Both `skills/` and `skills/` directories are hard-linked (same inode). Updating one updates both.
 
 ## Rollback Plan
 
 ```bash
 git checkout main -- skills/file-beads skills/review-beads
-git checkout main -- .claude/skills/file-beads .claude/skills/review-beads
+git checkout main -- skills/file-beads skills/review-beads
 git checkout main -- skills/beads
 rm -rf workflows/beads/
 ```

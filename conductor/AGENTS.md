@@ -21,7 +21,7 @@ Contains reusable learnings from completed tracks.
 - `sed -i '' 's|old|new|g' file` - macOS in-place sed replacement
 - `rg "pattern" --type md -l` - Find files containing pattern
 - `tail -n +N file` - Strip first N-1 lines (useful for removing YAML frontmatter)
-- `rm -rf skills/X .claude/skills/X` - Delete both hard-linked paths when removing skills
+- `rm -rf skills/X skills/X` - Delete both hard-linked paths when removing skills
 - `bd compact --analyze --json` - Find beads needing summaries
 - `bd compact --apply --id <id> --summary "<text>"` - Apply AI summary to bead
 - `bd count --status closed --json` - Count closed beads for cleanup threshold
@@ -75,19 +75,19 @@ Contains reusable learnings from completed tracks.
 - `oracle(task="6-dimension design audit", files=[...])` - Amp's built-in oracle tool for design review
 - `bd close <spike-id> --reason "YES: <approach>"` - Close spike with structured result (YES/NO/PARTIAL)
 - `register_agent(name="PurpleMountain", ...)` - Manual agent registration when auto-generation fails
-- `npx mcporter generate-cli <server> --bundle .claude/toolboxes/<name>/<name>.js` - Generate CLI from MCP server
-- `.claude/toolboxes/agent-mail/agent-mail.js health-check` - Test Agent Mail CLI
-- `npx mcporter generate-cli --from .claude/toolboxes/<name>/<name>.js` - Regenerate CLI from existing
+- `npx mcporter generate-cli <server> --bundle toolboxes/<name>/<name>.js` - Generate CLI from MCP server
+- `toolboxes/agent-mail/agent-mail.js health-check` - Test Agent Mail CLI
+- `npx mcporter generate-cli --from toolboxes/<name>/<name>.js` - Regenerate CLI from existing
 - `cliff.toml tag_pattern = "v0.*"` - Filter changelog to specific version series (ignores 1-5.x history)
 - Update `plugin.json` + `marketplace.json` together for version reset
-- `git mv .claude/skills/old .claude/skills/new` - Rename skill while preserving git history
+- `git mv skills/old skills/new` - Rename skill while preserving git history
 
 ## Gotchas
 
 - Skill prerequisite pattern uses markdown `**REQUIRED SUB-SKILL:**` not frontmatter `requires:`
 - Designing skill's HALT on missing conductor/ was adoption blocker - changed to DEGRADE (standalone mode)
 - Lean orchestrator pattern: keep SKILL.md ≤100 lines, move detailed logic to references/
-- Hard-linked directories (skills/ ↔ .claude/skills/) - updating one updates both, but explicitly delete both
+- Hard-linked directories (skills/ ↔ skills/) - updating one updates both, but explicitly delete both
 - Thin skill stubs must include keyword-rich descriptions for AI trigger matching
 - Delete operations must wait for reference replacements - deleting too early causes broken references
 - Relative paths change when files move - `references/X.md` becomes `./X.md` when you're already in references/
@@ -167,7 +167,7 @@ Contains reusable learnings from completed tracks.
 - Handoff load runs for fresh sessions - skip when `conductor/handoffs/<track>/` is empty
 - Track Assignments parsing redundant when already present - use `parse_track_assignments_table()` directly
 - Confirmation prompt re-analyzes file scopes - should use pre-parsed track data
-- Skill files live at `.claude/skills/` not `skills/` - verification scripts must use correct paths
+- Skill files live at `skills/` not `skills/` - verification scripts must use correct paths
 - Idempotent Oracle updates: When `## Oracle Audit` section exists, find start marker → find next `##` → replace entire section
 - Platform detection for Oracle: Check for oracle tool availability before deciding dispatch method (Amp vs Task)
 - Agent registration may fail on unique name generation - fallback to manual `register_agent()` with explicit name
@@ -244,7 +244,7 @@ Contains reusable learnings from completed tracks.
 - **Worker 4-Step Protocol:** REGISTER (macro_start_session) → EXECUTE (claim/work/close) → REPORT (send_message) → CLEANUP (release_file_reservations)
 - **Lazy References:** Trigger-based reference loading - SKILL.md always loaded, phase-specific references (agent-mail.md, worker-prompt.md) loaded on demand
 - **Triage Cache:** Store bead triage results in `metadata.beads.triageCache` with TTL to skip redundant `bv --robot-triage` calls
-- **Toolbox Pattern:** One subfolder per tool in `.claude/toolboxes/<tool>/<tool>.js`, shared config at `mcporter.json`
+- **Toolbox Pattern:** One subfolder per tool in `toolboxes/<tool>/<tool>.js`, shared config at `mcporter.json`
 - **Unified 8-Phase Pipeline:** DISCOVER → DEFINE → DEVELOP → VERIFY → DECOMPOSE → VALIDATE → ASSIGN → READY (replaces DS+PL separation)
 - **Research Consolidation:** 2 hooks (research-start, research-verify) replace 5 hooks (~35s max vs ~95s)
 - **Mode-Aware Execution:** SPEED (phases 1,2,4,8) vs FULL (all 8) based on complexity score

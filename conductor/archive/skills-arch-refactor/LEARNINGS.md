@@ -4,8 +4,8 @@
 
 ## Commands
 
-- `git mv .claude/skills/design .claude/skills/designing` - Rename skill while preserving git history
-- `git mv .claude/skills/beads .claude/skills/tracking` - Rename skill while preserving git history
+- `git mv skills/design skills/designing` - Rename skill while preserving git history
+- `git mv skills/beads skills/tracking` - Rename skill while preserving git history
 - Update SKILL.md frontmatter: `name: designing` (must match directory name)
 - Routing table updates in maestro-core propagate to all workflow skills
 

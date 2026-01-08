@@ -104,7 +104,7 @@
 
 ### 4.3 Update Templates
 - [ ] 4.3.1 Remove `templates/claude-code-setup/.claude/commands/`
-- [ ] 4.3.2 Create `templates/claude-code-setup/.claude/skills/audit/SKILL.md`
+- [ ] 4.3.2 Create `templates/claude-code-setup/skills/audit/SKILL.md`
 - [ ] 4.3.3 Update `templates/claude-code-setup/SETUP.md`
 - [ ] 4.3.4 Update `templates/claude-code-setup/README.md`
 - [ ] 4.3.5 Update `templates/claude-code-setup/AGENTS.md`

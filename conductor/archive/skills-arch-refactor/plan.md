@@ -19,8 +19,8 @@ Refactor Maestro skills for clear ownership, gerund naming, and flattened refere
 #### T1: Update maestro-core routing table
 **Effort:** S (30 min)  
 **Files:**
-- `.claude/skills/maestro-core/SKILL.md`
-- `.claude/skills/maestro-core/references/routing-table.md`
+- `skills/maestro-core/SKILL.md`
+- `skills/maestro-core/references/routing-table.md`
 
 **Steps:**
 1. Update skill hierarchy to include new names
@@ -38,12 +38,12 @@ Refactor Maestro skills for clear ownership, gerund naming, and flattened refere
 **Effort:** M (45 min)  
 **Depends:** T1  
 **Files:**
-- `.claude/skills/design/` → `.claude/skills/designing/`
+- `skills/design/` → `skills/designing/`
 - Update SKILL.md frontmatter (name: designing)
 - Update all internal references
 
 **Steps:**
-1. `git mv .claude/skills/design .claude/skills/designing`
+1. `git mv skills/design skills/designing`
 2. Update frontmatter: `name: designing`
 3. Rename `unified-pipeline.md` → `pipeline.md`
 4. Update internal links
@@ -56,8 +56,8 @@ Refactor Maestro skills for clear ownership, gerund naming, and flattened refere
 **Effort:** M (45 min)  
 **Depends:** T1  
 **Files:**
-- `.claude/skills/conductor/SKILL.md`
-- `.claude/skills/conductor/references/`
+- `skills/conductor/SKILL.md`
+- `skills/conductor/references/`
 
 **Steps:**
 1. Remove design phase references
@@ -73,11 +73,11 @@ Refactor Maestro skills for clear ownership, gerund naming, and flattened refere
 **Effort:** M (45 min)  
 **Depends:** T1  
 **Files:**
-- `.claude/skills/beads/` → `.claude/skills/tracking/`
+- `skills/beads/` → `skills/tracking/`
 - Update SKILL.md frontmatter
 
 **Steps:**
-1. `git mv .claude/skills/beads .claude/skills/tracking`
+1. `git mv skills/beads skills/tracking`
 2. Update frontmatter: `name: tracking`
 3. Update description to emphasize persistent memory
 4. Update internal references
@@ -90,12 +90,12 @@ Refactor Maestro skills for clear ownership, gerund naming, and flattened refere
 **Effort:** M (1 hr)  
 **Depends:** T1  
 **Files:**
-- `.claude/skills/skill-creator/` (delete after merge)
-- `.claude/skills/writing-skills/` (delete after merge)
-- `.claude/skills/creating-skills/` (new)
+- `skills/skill-creator/` (delete after merge)
+- `skills/writing-skills/` (delete after merge)
+- `skills/creating-skills/` (new)
 
 **Steps:**
-1. Create `.claude/skills/creating-skills/`
+1. Create `skills/creating-skills/`
 2. Merge SKILL.md content (resolve conflicts)
 3. Merge references/ directories
 4. Unify description field guidelines
@@ -111,9 +111,9 @@ Refactor Maestro skills for clear ownership, gerund naming, and flattened refere
 **Effort:** S (30 min)  
 **Depends:** T2, T3  
 **Files:**
-- `.claude/skills/designing/SKILL.md` (add cn, newtrack, design)
-- `.claude/skills/orchestrator/SKILL.md` (add orchestrate command)
-- `.claude/skills/handoff/SKILL.md` (add finish, handoff commands)
+- `skills/designing/SKILL.md` (add cn, newtrack, design)
+- `skills/orchestrator/SKILL.md` (add orchestrate command)
+- `skills/handoff/SKILL.md` (add finish, handoff commands)
 
 **Steps:**
 1. Add `/conductor-newtrack` docs to designing
@@ -130,8 +130,8 @@ Refactor Maestro skills for clear ownership, gerund naming, and flattened refere
 **Effort:** L (1.5 hr)  
 **Depends:** T2, T3  
 **Files:**
-- `.claude/skills/designing/references/`
-- `.claude/skills/conductor/references/`
+- `skills/designing/references/`
+- `skills/conductor/references/`
 - All cross-skill reference paths
 
 **Steps:**
@@ -141,7 +141,7 @@ Refactor Maestro skills for clear ownership, gerund naming, and flattened refere
 4. Eliminate `../design/` references in conductor
 5. Update all internal links
 
-**Acceptance:** `grep -r "../" .claude/skills/*/references/` returns only bmad/, agents/
+**Acceptance:** `grep -r "../" skills/*/references/` returns only bmad/, agents/
 
 ---
 
@@ -225,10 +225,10 @@ Wave 4: ───────────┴─ T8 ─┬─ T9 ─┬─ T10
 
 ## Verification Checklist
 
-- [ ] `ls .claude/skills/` shows: designing, conductor, orchestrator, tracking, handoff, creating-skills, maestro-core, using-git-worktrees, sharing-skills
-- [ ] `wc -l .claude/skills/*/SKILL.md` all ≤500 lines
-- [ ] `grep -r "design/" .claude/skills/` returns 0 (except designing/)
-- [ ] `grep -r "beads/" .claude/skills/` returns 0 (except tracking/)
+- [ ] `ls skills/` shows: designing, conductor, orchestrator, tracking, handoff, creating-skills, maestro-core, using-git-worktrees, sharing-skills
+- [ ] `wc -l skills/*/SKILL.md` all ≤500 lines
+- [ ] `grep -r "design/" skills/` returns 0 (except designing/)
+- [ ] `grep -r "beads/" skills/` returns 0 (except tracking/)
 - [ ] `ds`, `ci`, `co`, `bd`, `ho` triggers work correctly
 - [ ] CODEMAPS accurate
 - [ ] AGENTS.md consistent

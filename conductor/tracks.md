@@ -20,7 +20,7 @@ Refactored Maestro skills for clear ownership: design→designing, beads→track
 *Completed: 2026-01-08*
 *Link: [design](archive/mcporter-toolboxes/design.md) | [spec](archive/mcporter-toolboxes/spec.md) | [plan](archive/mcporter-toolboxes/plan.md)*
 
-Added `.claude/toolboxes/` directory for CLI tools generated from MCP servers using MCPorter. Agent Mail CLI is the first generated tool. Pattern documented for converting future MCP servers.
+Added `toolboxes/` directory for CLI tools generated from MCP servers using MCPorter. Agent Mail CLI is the first generated tool. Pattern documented for converting future MCP servers.
 
 ## [x] Track: DS-PL Integration
 *ID: ds-pl-integration*

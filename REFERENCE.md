@@ -253,4 +253,4 @@ bd ready --json                     # See updated work
 - [TUTORIAL.md](TUTORIAL.md) — Full workflow walkthrough
 - [AGENTS.md](AGENTS.md) — Project configuration
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — System architecture
-- [.claude/skills/conductor/references/workflows/handoff.md](.claude/skills/conductor/references/workflows/handoff.md) — Handoff system details
+- [skills/conductor/references/workflows/handoff.md](skills/conductor/references/workflows/handoff.md) — Handoff system details

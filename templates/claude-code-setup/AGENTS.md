@@ -53,7 +53,7 @@ Before running destructive commands:
 | `CLAUDE.md` | Project context, architecture | Understanding the codebase |
 | `AGENTS.md` | This file - workflow instructions | Session startup, tool usage |
 | `.claude/rules/` | Constraints and conventions | Auto-loaded, always follow |
-| `.claude/skills/` | Detailed guides and capabilities | Reference when relevant |
+| `skills/` | Detailed guides and capabilities | Reference when relevant |
 
 ### Rules (Auto-Loaded)
 
@@ -62,7 +62,7 @@ Rules in `.claude/rules/*.md` are automatically enforced:
 
 ### Skills (On-Demand)
 
-Skills in `.claude/skills/*/SKILL.md` provide detailed guidance:
+Skills in `skills/*/SKILL.md` provide detailed guidance:
 - [List your skills here]
 
 ---

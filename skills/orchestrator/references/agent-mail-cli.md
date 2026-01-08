@@ -4,16 +4,16 @@ CLI tool for agent coordination via Agent Mail MCP, generated using MCPorter.
 
 ## Location
 
-`.claude/toolboxes/agent-mail/agent-mail.js`
+`toolboxes/agent-mail/agent-mail.js`
 
 ## Quick Start
 
 ```bash
 # Check server status
-.claude/toolboxes/agent-mail/agent-mail.js health-check
+toolboxes/agent-mail/agent-mail.js health-check
 
 # List all tools
-.claude/toolboxes/agent-mail/agent-mail.js --help
+toolboxes/agent-mail/agent-mail.js --help
 ```
 
 ## Common Commands
@@ -22,7 +22,7 @@ CLI tool for agent coordination via Agent Mail MCP, generated using MCPorter.
 
 ```bash
 # Start a session (project + agent + inbox in one call)
-.claude/toolboxes/agent-mail/agent-mail.js macro-start-session \
+toolboxes/agent-mail/agent-mail.js macro-start-session \
   human_key:/path/to/project \
   program:claude-code \
   model:opus-4.5
@@ -32,7 +32,7 @@ CLI tool for agent coordination via Agent Mail MCP, generated using MCPorter.
 
 ```bash
 # Send message
-.claude/toolboxes/agent-mail/agent-mail.js send-message \
+toolboxes/agent-mail/agent-mail.js send-message \
   project_key:/path/to/project \
   sender_name:BlueLake \
   to:'["GreenCastle"]' \
@@ -40,12 +40,12 @@ CLI tool for agent coordination via Agent Mail MCP, generated using MCPorter.
   body_md:"Work complete"
 
 # Fetch inbox
-.claude/toolboxes/agent-mail/agent-mail.js fetch-inbox \
+toolboxes/agent-mail/agent-mail.js fetch-inbox \
   project_key:/path/to/project \
   agent_name:BlueLake
 
 # Reply to message
-.claude/toolboxes/agent-mail/agent-mail.js reply-message \
+toolboxes/agent-mail/agent-mail.js reply-message \
   project_key:/path/to/project \
   message_id:123 \
   sender_name:BlueLake \
@@ -56,14 +56,14 @@ CLI tool for agent coordination via Agent Mail MCP, generated using MCPorter.
 
 ```bash
 # Register agent
-.claude/toolboxes/agent-mail/agent-mail.js register-agent \
+toolboxes/agent-mail/agent-mail.js register-agent \
   project_key:/path/to/project \
   program:claude-code \
   model:opus-4.5 \
   task_description:"Working on feature X"
 
 # Who is an agent
-.claude/toolboxes/agent-mail/agent-mail.js whois \
+toolboxes/agent-mail/agent-mail.js whois \
   project_key:/path/to/project \
   agent_name:BlueLake
 ```
@@ -72,14 +72,14 @@ CLI tool for agent coordination via Agent Mail MCP, generated using MCPorter.
 
 ```bash
 # Reserve files
-.claude/toolboxes/agent-mail/agent-mail.js file-reservation-paths \
+toolboxes/agent-mail/agent-mail.js file-reservation-paths \
   project_key:/path/to/project \
   agent_name:BlueLake \
   paths:'["src/api/*.py"]' \
   ttl_seconds:3600
 
 # Release reservations
-.claude/toolboxes/agent-mail/agent-mail.js release-file-reservations \
+toolboxes/agent-mail/agent-mail.js release-file-reservations \
   project_key:/path/to/project \
   agent_name:BlueLake
 ```

@@ -40,37 +40,37 @@ EPIC-5: Validation & Testing
 
 | Task | File | Scope | Dependencies |
 |------|------|-------|--------------|
-| TASK-1.1 | `.claude/skills/design/references/unified-pipeline.md` | NEW | None |
-| TASK-1.3 | `.claude/skills/conductor/references/schemas/metadata.schema.json` | ADD pipeline section | None |
-| TASK-2.1 | `.claude/skills/conductor/references/research/hooks/research-start.md` | NEW | None |
-| TASK-2.2 | `.claude/skills/conductor/references/research/hooks/research-verify.md` | NEW | None |
+| TASK-1.1 | `skills/design/references/unified-pipeline.md` | NEW | None |
+| TASK-1.3 | `skills/conductor/references/schemas/metadata.schema.json` | ADD pipeline section | None |
+| TASK-2.1 | `skills/conductor/references/research/hooks/research-start.md` | NEW | None |
+| TASK-2.2 | `skills/conductor/references/research/hooks/research-verify.md` | NEW | None |
 
 ### Wave 2: Core Updates (Depends on Wave 1)
 
 | Task | File | Scope | Dependencies |
 |------|------|-------|--------------|
-| TASK-1.2 | `.claude/skills/design/SKILL.md` | UPDATE | TASK-1.1 |
-| TASK-1.4 | `.claude/skills/design/references/session-init.md` | UPDATE | TASK-1.1 |
-| TASK-2.4 | `.claude/skills/conductor/references/research/protocol.md` | UPDATE | TASK-2.1, TASK-2.2 |
-| TASK-3.1 | `.claude/skills/design/references/apc-checkpoints.md` | UPDATE | TASK-1.1 |
+| TASK-1.2 | `skills/design/SKILL.md` | UPDATE | TASK-1.1 |
+| TASK-1.4 | `skills/design/references/session-init.md` | UPDATE | TASK-1.1 |
+| TASK-2.4 | `skills/conductor/references/research/protocol.md` | UPDATE | TASK-2.1, TASK-2.2 |
+| TASK-3.1 | `skills/design/references/apc-checkpoints.md` | UPDATE | TASK-1.1 |
 
 ### Wave 3: Transitions & UX (Depends on Wave 2)
 
 | Task | File | Scope | Dependencies |
 |------|------|-------|--------------|
-| TASK-3.2 | `.claude/skills/design/references/unified-pipeline.md` | ADD section | TASK-1.2 |
-| TASK-3.3 | `.claude/skills/design/references/unified-pipeline.md` | ADD section | TASK-1.2 |
-| TASK-3.4 | `.claude/skills/design/references/unified-pipeline.md` | ADD section | TASK-1.2 |
+| TASK-3.2 | `skills/design/references/unified-pipeline.md` | ADD section | TASK-1.2 |
+| TASK-3.3 | `skills/design/references/unified-pipeline.md` | ADD section | TASK-1.2 |
+| TASK-3.4 | `skills/design/references/unified-pipeline.md` | ADD section | TASK-1.2 |
 
 ### Wave 4: Deprecation & Routing (Depends on Wave 2)
 
 | Task | File | Scope | Dependencies |
 |------|------|-------|--------------|
-| TASK-2.3 | `.claude/skills/conductor/references/research/hooks/` | DEPRECATE | TASK-2.4 |
-| TASK-4.1 | `.claude/skills/design/references/double-diamond.md` | DEPRECATE | TASK-1.1 |
-| TASK-4.2 | `.claude/skills/design/references/planning/pipeline.md` | DEPRECATE | TASK-1.1 |
-| TASK-4.3 | `.claude/skills/design/SKILL.md` | UPDATE pl section | TASK-1.2 |
-| TASK-4.4 | `.claude/skills/maestro-core/SKILL.md` | UPDATE routing | TASK-1.2 |
+| TASK-2.3 | `skills/conductor/references/research/hooks/` | DEPRECATE | TASK-2.4 |
+| TASK-4.1 | `skills/design/references/double-diamond.md` | DEPRECATE | TASK-1.1 |
+| TASK-4.2 | `skills/design/references/planning/pipeline.md` | DEPRECATE | TASK-1.1 |
+| TASK-4.3 | `skills/design/SKILL.md` | UPDATE pl section | TASK-1.2 |
+| TASK-4.4 | `skills/maestro-core/SKILL.md` | UPDATE routing | TASK-1.2 |
 
 ### Wave 5: Validation (Depends on Wave 4)
 
@@ -85,7 +85,7 @@ EPIC-5: Validation & Testing
 
 ### TASK-1.1: Create unified-pipeline.md
 
-**File:** `.claude/skills/design/references/unified-pipeline.md`
+**File:** `skills/design/references/unified-pipeline.md`
 
 **Content:**
 - 8-phase overview diagram
@@ -103,7 +103,7 @@ EPIC-5: Validation & Testing
 
 ### TASK-1.2: Update SKILL.md
 
-**File:** `.claude/skills/design/SKILL.md`
+**File:** `skills/design/SKILL.md`
 
 **Changes:**
 - Replace "Double Diamond (ds)" section with "Unified Pipeline"
@@ -121,7 +121,7 @@ EPIC-5: Validation & Testing
 
 ### TASK-1.3: Add pipeline to metadata schema
 
-**File:** `.claude/skills/conductor/references/schemas/metadata.schema.json`
+**File:** `skills/conductor/references/schemas/metadata.schema.json`
 
 **Changes:**
 - Add `pipeline` object with:
@@ -138,7 +138,7 @@ EPIC-5: Validation & Testing
 
 ### TASK-1.4: Update session-init.md
 
-**File:** `.claude/skills/design/references/session-init.md`
+**File:** `skills/design/references/session-init.md`
 
 **Changes:**
 - Rename section to "PREFLIGHT (INIT)"
@@ -154,7 +154,7 @@ EPIC-5: Validation & Testing
 
 ### TASK-2.1: Create research-start.md
 
-**File:** `.claude/skills/conductor/references/research/hooks/research-start.md`
+**File:** `skills/conductor/references/research/hooks/research-start.md`
 
 **Content:**
 - Trigger: Phase 1 (DISCOVER) start
@@ -172,7 +172,7 @@ EPIC-5: Validation & Testing
 
 ### TASK-2.2: Create research-verify.md
 
-**File:** `.claude/skills/conductor/references/research/hooks/research-verify.md`
+**File:** `skills/conductor/references/research/hooks/research-verify.md`
 
 **Content:**
 - Trigger: Phase 3→4 (DEVELOP→VERIFY)
@@ -190,7 +190,7 @@ EPIC-5: Validation & Testing
 
 ### TASK-3.1: Update apc-checkpoints.md
 
-**File:** `.claude/skills/design/references/apc-checkpoints.md`
+**File:** `skills/design/references/apc-checkpoints.md`
 
 **Changes:**
 - Update phase numbers (1-4 instead of DS phases)
@@ -206,7 +206,7 @@ EPIC-5: Validation & Testing
 
 ### TASK-3.2: Add auto-planning gate
 
-**File:** `.claude/skills/design/references/unified-pipeline.md`
+**File:** `skills/design/references/unified-pipeline.md`
 
 **Add section:**
 - Gate shown before Phase 5
@@ -217,7 +217,7 @@ EPIC-5: Validation & Testing
 
 ### TASK-3.3: Add Oracle revision loop
 
-**File:** `.claude/skills/design/references/unified-pipeline.md`
+**File:** `skills/design/references/unified-pipeline.md`
 
 **Add section:**
 - NEEDS_REVISION behavior
@@ -229,7 +229,7 @@ EPIC-5: Validation & Testing
 
 ### TASK-4.4: Update maestro-core routing
 
-**File:** `.claude/skills/maestro-core/SKILL.md`
+**File:** `skills/maestro-core/SKILL.md`
 
 **Changes:**
 - Update `ds` description: "Unified 8-phase pipeline"
@@ -244,9 +244,9 @@ EPIC-5: Validation & Testing
 
 | Track | Agent | Tasks | File Scope |
 |-------|-------|-------|------------|
-| A | BlueLake | 1.1, 1.2, 1.4 | `.claude/skills/design/**` |
-| B | GreenCastle | 1.3, 2.1, 2.2, 2.3, 2.4 | `.claude/skills/conductor/references/**` |
-| C | RedStone | 3.1, 3.2, 3.3, 3.4 | `.claude/skills/design/references/apc-*.md`, `unified-pipeline.md` |
+| A | BlueLake | 1.1, 1.2, 1.4 | `skills/design/**` |
+| B | GreenCastle | 1.3, 2.1, 2.2, 2.3, 2.4 | `skills/conductor/references/**` |
+| C | RedStone | 3.1, 3.2, 3.3, 3.4 | `skills/design/references/apc-*.md`, `unified-pipeline.md` |
 | D | PurpleBear | 4.1, 4.2, 4.3, 4.4 | Deprecation + routing |
 | E | Manual | 5.1, 5.2, 5.3, 5.4 | Testing (no files) |
 

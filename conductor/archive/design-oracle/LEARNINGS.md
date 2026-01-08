@@ -10,7 +10,7 @@
 
 ## Gotchas
 
-- **Verification paths**: Skill files live at `.claude/skills/` not `skills/` - verification scripts must use correct paths
+- **Verification paths**: Skill files live at `skills/` not `skills/` - verification scripts must use correct paths
 - **Idempotent updates**: When `## Oracle Audit` section exists, find start marker → find next `##` → replace entire section
 - **Platform detection**: Check for oracle tool availability before deciding dispatch method (Amp vs Task)
 

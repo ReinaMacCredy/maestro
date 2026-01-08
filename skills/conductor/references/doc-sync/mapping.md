@@ -7,7 +7,7 @@
 | Architecture | `AGENTS.md`, `docs/ARCHITECTURE.md` |
 | CLI commands | `packages/cli/AGENTS.md` |
 | SDK/API | `packages/sdk/AGENTS.md` |
-| Patterns | `.claude/skills/*/SKILL.md` |
+| Patterns | `skills/*/SKILL.md` |
 | Quick start | `README.md` |
 | Module dev | `packages/sdk/docs/MODULE_DEVELOPMENT.md` |
 | Troubleshooting | `docs/TROUBLESHOOTING.md` |

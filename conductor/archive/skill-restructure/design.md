@@ -104,7 +104,7 @@ skills/
 ├── sharing-skills/                # REFACTORED
 └── using-git-worktrees/           # REFACTORED
 
-.claude/skills/ → symlink to skills/
+skills/ → symlink to skills/
 ```
 
 ## Refactoring Map
@@ -134,8 +134,8 @@ NOT containing:
 ## Implementation Phases
 
 ### Phase 0: Directory Cleanup
-- Delete `.claude/skills/` contents
-- Create symlink: `.claude/skills/` → `skills/`
+- Delete `skills/` contents
+- Create symlink: `skills/` → `skills/`
 
 ### Phase 1: Foundation
 1. Clone `skill-creator` from Anthropic
@@ -230,4 +230,4 @@ Resolved concerns:
 - ✅ All internal links resolve
 - ✅ Bidirectional Related sections
 - ✅ Workflow triggers verified (ds, fb, bd ready)
-- ✅ .claude/skills/ symlink working
+- ✅ skills/ symlink working

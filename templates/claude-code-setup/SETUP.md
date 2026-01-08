@@ -83,7 +83,7 @@ git commit -m "Add Claude Code configuration"
 | **Memory** | `CLAUDE.md` | Project context | Auto at startup |
 | **Workflow** | `AGENTS.md` | Agent instructions | Auto at startup |
 | **Rules** | `.claude/rules/*.md` | Constraints | Auto (can filter by path) |
-| **Skills** | `.claude/skills/*/SKILL.md` | Capabilities and workflows | When relevant |
+| **Skills** | `skills/*/SKILL.md` | Capabilities and workflows | When relevant |
 
 ---
 
@@ -193,4 +193,4 @@ Do something with the arguments...
 | Session workflow | `AGENTS.md` | Agent behavior |
 | Safety constraints | `.claude/rules/` | Always enforced |
 | Coding conventions | `.claude/rules/` | Path-specific |
-| Detailed workflows | `.claude/skills/` | Auto-discovered |
+| Detailed workflows | `skills/` | Auto-discovered |

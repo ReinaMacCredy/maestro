@@ -42,7 +42,7 @@ Refactor 3 beads-related skills into a unified architecture with thin skill entr
 ### Non-Functional Requirements
 
 #### NFR1: Hard Link Handling
-- `skills/` and `.claude/skills/` are hard-linked
+- `skills/` and `skills/` are hard-linked
 - Updating one updates both automatically
 - Must delete both locations for removed skills
 

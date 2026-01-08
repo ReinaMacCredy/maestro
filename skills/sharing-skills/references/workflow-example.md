@@ -4,7 +4,7 @@ Here's a complete example of sharing a skill called "async-patterns":
 
 ```bash
 # 1. Sync with upstream
-cd <your-skills-directory>  # e.g., ~/.claude/skills/
+cd <your-skills-directory>  # e.g., ~/skills/
 git checkout main
 git pull upstream main
 git push origin main
@@ -46,7 +46,7 @@ Once your PR is merged:
 
 1. Sync your local main branch:
 ```bash
-cd <your-skills-directory>  # e.g., ~/.claude/skills/
+cd <your-skills-directory>  # e.g., ~/skills/
 git checkout main
 git pull upstream main
 git push origin main

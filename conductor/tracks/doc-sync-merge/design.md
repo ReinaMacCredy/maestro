@@ -35,15 +35,15 @@ These should be unified into a single pipeline in Phase 7 of `/conductor-finish`
 ## File Changes
 
 ### Create
-- `.claude/skills/conductor/references/doc-sync/extraction.md` - Thread extraction pipeline
-- `.claude/skills/conductor/references/doc-sync/reconcile.md` - Oracle merge logic
+- `skills/conductor/references/doc-sync/extraction.md` - Thread extraction pipeline
+- `skills/conductor/references/doc-sync/reconcile.md` - Oracle merge logic
 
 ### Migrate
 - `knowlegde/reference/doc-mapping.md` → `doc-sync/mapping.md`
 - `knowlegde/reference/extraction-prompts.md` → `doc-sync/prompts.md`
 
 ### Modify
-- `.claude/skills/conductor/references/doc-sync/integration.md` - Add thread extraction step
+- `skills/conductor/references/doc-sync/integration.md` - Add thread extraction step
 
 ### Delete
 - `knowlegde/` directory (after migration complete)

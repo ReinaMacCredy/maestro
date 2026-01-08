@@ -302,8 +302,8 @@ Oracle → APPROVED:       Continue to Phase 7
 
 | Track | Agent | Beads | File Scope |
 |-------|-------|-------|------------|
-| A | BlueLake | vou1.1, vou1.2 | .claude/skills/designing/** |
-| B | GreenCastle | vou1.3, vou1.4 | .claude/skills/conductor/** |
+| A | BlueLake | vou1.1, vou1.2 | skills/designing/** |
+| B | GreenCastle | vou1.3, vou1.4 | skills/conductor/** |
 ```
 
 ---

@@ -87,9 +87,9 @@ Refactor the Maestro workflow skills to establish clear ownership boundaries, el
 
 | ID | Criterion | Verification |
 |----|-----------|--------------|
-| AC-1 | All renames complete | `ls .claude/skills/` shows new names |
-| AC-2 | No cross-skill refs | `grep -r "../" .claude/skills/` returns empty |
+| AC-1 | All renames complete | `ls skills/` shows new names |
+| AC-2 | No cross-skill refs | `grep -r "../" skills/` returns empty |
 | AC-3 | Triggers work | Manual test: `ds`, `ci`, `co`, `bd`, `ho` |
-| AC-4 | SKILL.md ≤500 lines | `wc -l .claude/skills/*/SKILL.md` |
+| AC-4 | SKILL.md ≤500 lines | `wc -l skills/*/SKILL.md` |
 | AC-5 | CODEMAPS updated | Review `conductor/CODEMAPS/skills.md` |
 | AC-6 | AGENTS.md updated | Review root + conductor AGENTS.md |

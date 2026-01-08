@@ -14,7 +14,7 @@
 - **Extraction fidelity loss**: Initial extraction of TDD, Verification, and Finishing skills lost key philosophical content (e.g., "Why Order Matters", rationalization prevention). Fix: copy full SKILL.md first, then split.
 - **Broken references after deletion**: After deleting old skills, references in writing-skills/SKILL.md, AGENTS.md, and conductor workflows pointed to deleted paths. Always update references BEFORE deleting source files.
 - **LEDGER.log is gitignored**: `conductor/sessions/active/LEDGER.log` is correctly ignored by git (personal session state, not shared).
-- **Hard-linked skill directories**: skills/ ↔ .claude/skills/ are hard-linked; updates to one affect both, but both paths must be explicitly deleted.
+- **Hard-linked skill directories**: skills/ ↔ skills/ are hard-linked; updates to one affect both, but both paths must be explicitly deleted.
 
 ## Patterns
 

@@ -12,10 +12,10 @@ CLI tools generated from MCP servers using [MCPorter](https://github.com/steipet
 
 ```bash
 # Run any tool
-.claude/toolboxes/<tool>/<tool>.js <command> [args...]
+toolboxes/<tool>/<tool>.js <command> [args...]
 
 # Example: send message
-.claude/toolboxes/agent-mail/agent-mail.js send_message \
+toolboxes/agent-mail/agent-mail.js send_message \
   project_key:/path/to/project \
   sender_name:BlueLake \
   to:GreenCastle \
@@ -23,7 +23,7 @@ CLI tools generated from MCP servers using [MCPorter](https://github.com/steipet
   body_md:"Test message"
 
 # Get help
-.claude/toolboxes/agent-mail/agent-mail.js --help
+toolboxes/agent-mail/agent-mail.js --help
 ```
 
 ## Argument Syntax
@@ -60,11 +60,11 @@ agent-mail.js 'fetch_inbox(agent_name: "BlueLake")'
 
 2. Generate CLI:
    ```bash
-   mkdir -p .claude/toolboxes/new-server
+   mkdir -p toolboxes/new-server
    npx mcporter generate-cli new-server \
-     --output .claude/toolboxes/new-server/new-server.ts \
-     --bundle .claude/toolboxes/new-server/new-server.js
-   chmod +x .claude/toolboxes/new-server/new-server.js
+     --output toolboxes/new-server/new-server.ts \
+     --bundle toolboxes/new-server/new-server.js
+   chmod +x toolboxes/new-server/new-server.js
    ```
 
 3. Update this README
@@ -74,7 +74,7 @@ agent-mail.js 'fetch_inbox(agent_name: "BlueLake")'
 Each `.ts` file contains regeneration metadata:
 
 ```bash
-npx mcporter generate-cli --from .claude/toolboxes/agent-mail/agent-mail.js
+npx mcporter generate-cli --from toolboxes/agent-mail/agent-mail.js
 ```
 
 ## Requirements

@@ -126,7 +126,7 @@ bd sync
 
 ## Skill Discipline
 
-**RULE:** Load [maestro-core](.claude/skills/maestro-core/SKILL.md) FIRST before any workflow skill for routing table and fallback policies.
+**RULE:** Load [maestro-core](skills/maestro-core/SKILL.md) FIRST before any workflow skill for routing table and fallback policies.
 
 **RULE:** Check skills BEFORE ANY RESPONSE. 1% chance = invoke Skill tool.
 
@@ -198,10 +198,10 @@ cat .claude-plugin/plugin.json | jq .   # Validate manifest
 
 | Topic | Path |
 |-------|------|
-| Beads workflow | [.claude/skills/tracking/references/workflow-integration.md](.claude/skills/tracking/references/workflow-integration.md) |
-| Handoff system | [.claude/skills/conductor/references/workflows/handoff.md](.claude/skills/conductor/references/workflows/handoff.md) |
-| Agent coordination | [.claude/skills/orchestrator/references/agent-coordination.md](.claude/skills/orchestrator/references/agent-coordination.md) |
-| Router | [.claude/skills/orchestrator/references/router.md](.claude/skills/orchestrator/references/router.md) |
-| Beads integration | [.claude/skills/conductor/references/beads-integration.md](.claude/skills/conductor/references/beads-integration.md) |
-| TDD checkpoints | [.claude/skills/conductor/references/tdd-checkpoints-beads.md](.claude/skills/conductor/references/tdd-checkpoints-beads.md) |
-| Idle detection | [.claude/skills/conductor/references/workflows/handoff.md](.claude/skills/conductor/references/workflows/handoff.md) |
+| Beads workflow | [skills/tracking/references/workflow-integration.md](skills/tracking/references/workflow-integration.md) |
+| Handoff system | [skills/conductor/references/workflows/handoff.md](skills/conductor/references/workflows/handoff.md) |
+| Agent coordination | [skills/orchestrator/references/agent-coordination.md](skills/orchestrator/references/agent-coordination.md) |
+| Router | [skills/orchestrator/references/router.md](skills/orchestrator/references/router.md) |
+| Beads integration | [skills/conductor/references/beads-integration.md](skills/conductor/references/beads-integration.md) |
+| TDD checkpoints | [skills/conductor/references/tdd-checkpoints-beads.md](skills/conductor/references/tdd-checkpoints-beads.md) |
+| Idle detection | [skills/conductor/references/workflows/handoff.md](skills/conductor/references/workflows/handoff.md) |

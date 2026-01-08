@@ -11,8 +11,8 @@ Restructure 7 existing workflow skills to follow Anthropic's skill-creator stand
 ## Functional Requirements
 
 ### FR-1: Directory Cleanup
-- FR-1.1: Delete contents of `.claude/skills/`
-- FR-1.2: Create symlink `.claude/skills/` → `skills/`
+- FR-1.1: Delete contents of `skills/`
+- FR-1.2: Create symlink `skills/` → `skills/`
 - FR-1.3: Verify symlink resolves correctly
 
 ### FR-2: Clone Anthropic skill-creator
@@ -80,7 +80,7 @@ Restructure 7 existing workflow skills to follow Anthropic's skill-creator stand
 
 | ID | Criterion | Validation |
 |----|-----------|------------|
-| AC-1 | `.claude/skills/` is symlink to `skills/` | `ls -la .claude/skills` |
+| AC-1 | `skills/` is symlink to `skills/` | `ls -la .claude/skills` |
 | AC-2 | `skills/skill-creator/` exists with 7 files | `ls skills/skill-creator/` |
 | AC-3 | `skills/maestro-core/SKILL.md` ≤200 lines | `wc -l` |
 | AC-4 | All 7 refactored skills ≤500 lines | `wc -l skills/*/SKILL.md` |

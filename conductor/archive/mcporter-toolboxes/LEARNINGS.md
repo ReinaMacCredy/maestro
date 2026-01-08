@@ -8,18 +8,18 @@
 # Generate CLI from MCP server
 npx mcporter generate-cli <server-url-or-name> \
   --name <cli-name> \
-  --output .claude/toolboxes/<name>/<name>.ts \
-  --bundle .claude/toolboxes/<name>/<name>.js
+  --output toolboxes/<name>/<name>.ts \
+  --bundle toolboxes/<name>/<name>.js
 
 # Make executable
-chmod +x .claude/toolboxes/<name>/<name>.js
+chmod +x toolboxes/<name>/<name>.js
 
 # Regenerate from existing CLI
-npx mcporter generate-cli --from .claude/toolboxes/<name>/<name>.js
+npx mcporter generate-cli --from toolboxes/<name>/<name>.js
 
 # Test CLI
-.claude/toolboxes/<name>/<name>.js --help
-.claude/toolboxes/<name>/<name>.js health-check
+toolboxes/<name>/<name>.js --help
+toolboxes/<name>/<name>.js health-check
 ```
 
 ## Gotchas
@@ -32,8 +32,8 @@ npx mcporter generate-cli --from .claude/toolboxes/<name>/<name>.js
 
 ## Patterns
 
-- One subfolder per tool: `.claude/toolboxes/<tool>/<tool>.js`
-- Shared config: `.claude/toolboxes/mcporter.json`
+- One subfolder per tool: `toolboxes/<tool>/<tool>.js`
+- Shared config: `toolboxes/mcporter.json`
 - Keep .ts file for regeneration metadata
 
 ---

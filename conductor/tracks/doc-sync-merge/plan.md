@@ -4,24 +4,24 @@
 
 ### Wave 1 (Parallel)
 - [ ] **1.1** Create `extraction.md` - Thread extraction pipeline
-  - File: `.claude/skills/conductor/references/doc-sync/extraction.md`
+  - File: `skills/conductor/references/doc-sync/extraction.md`
   - Source: `knowlegde/SKILL.md` phases 1-3
   
 - [ ] **1.2** Create `reconcile.md` - Oracle merge logic
-  - File: `.claude/skills/conductor/references/doc-sync/reconcile.md`
+  - File: `skills/conductor/references/doc-sync/reconcile.md`
   - Source: `knowlegde/SKILL.md` phases 4-6
   
 - [ ] **1.3** Migrate `doc-mapping.md`
   - From: `knowlegde/reference/doc-mapping.md`
-  - To: `.claude/skills/conductor/references/doc-sync/mapping.md`
+  - To: `skills/conductor/references/doc-sync/mapping.md`
   
 - [ ] **1.4** Migrate `extraction-prompts.md`
   - From: `knowlegde/reference/extraction-prompts.md`
-  - To: `.claude/skills/conductor/references/doc-sync/prompts.md`
+  - To: `skills/conductor/references/doc-sync/prompts.md`
 
 ### Wave 2 (Sequential)
 - [ ] **1.5** Update `integration.md` - Add thread extraction step
-  - File: `.claude/skills/conductor/references/doc-sync/integration.md`
+  - File: `skills/conductor/references/doc-sync/integration.md`
   - Depends: 1.1, 1.2, 1.3, 1.4
 
 ### Wave 3 (Sequential)

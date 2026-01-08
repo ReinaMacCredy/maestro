@@ -10,7 +10,7 @@
 
 ### Phase 1: Setup
 
-- [x] **1.1** Create `.claude/toolboxes/` directory
+- [x] **1.1** Create `toolboxes/` directory
 - [x] **1.2** Create `mcporter.json` config with agent-mail server definition
 - [x] **1.3** Create `README.md` with toolboxes overview
 
@@ -41,12 +41,12 @@
 
 | Task | Files |
 |------|-------|
-| 1.1-1.3 | `.claude/toolboxes/*` |
-| 2.1-2.4 | `.claude/toolboxes/agent-mail.*` |
-| 3.1 | `.claude/skills/maestro-core/references/toolboxes.md` |
-| 3.2 | `.claude/skills/maestro-core/SKILL.md` |
-| 3.3 | `.claude/skills/orchestrator/references/agent-mail-cli.md` |
-| 4.1 | `.claude/skills/orchestrator/SKILL.md` |
+| 1.1-1.3 | `toolboxes/*` |
+| 2.1-2.4 | `toolboxes/agent-mail.*` |
+| 3.1 | `skills/maestro-core/references/toolboxes.md` |
+| 3.2 | `skills/maestro-core/SKILL.md` |
+| 3.3 | `skills/orchestrator/references/agent-mail-cli.md` |
+| 4.1 | `skills/orchestrator/SKILL.md` |
 | 5.2 | `conductor/tracks.md` |
 
 ## Notes

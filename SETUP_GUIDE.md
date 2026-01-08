@@ -19,7 +19,7 @@ AGENT-QUICK-SETUP
 | Codex | `curl -fsSL https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/scripts/install-codex.sh \| bash` |
 | Manual | `git clone https://github.com/ReinaMacCredy/maestro.git <skill-directory>` |
 
-**Skill directories:** `~/.claude/skills/maestro` | `~/.config/agents/skills/maestro` | `~/.codex/skills/maestro`
+**Skill directories:** `~/skills/maestro` | `~/.config/agents/skills/maestro` | `~/.codex/skills/maestro`
 
 ---
 
