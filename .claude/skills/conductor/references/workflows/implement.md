@@ -142,248 +142,45 @@ Reference: [handoff skill](../../../handoff/SKILL.md) for full workflow.
 
 **Purpose:** Determine whether to execute tasks sequentially or in parallel via orchestrator.
 
-> **Note:** `/conductor-implement` is a wrapper that auto-routes to `/conductor-orchestrate` when parallel execution is appropriate.
+> **Note:** `/conductor-implement` auto-routes to `/conductor-orchestrate` when parallel execution is appropriate.
 
-1. **Check Track Assignments (Priority 1)**
-   
-   ```python
-   plan = Read("conductor/tracks/<track-id>/plan.md")
-   
-   if "## Track Assignments" in plan:
-       # Explicit parallel execution requested - parse table directly
-       # Skip group_by_file_scope() entirely
-       tracks = parse_track_assignments_table(plan)
-       return PARALLEL_DISPATCH, tracks
-   
-   def parse_track_assignments_table(plan_content: str) -> list[Track]:
-       """Parse Track Assignments table directly, bypassing file scope analysis.
-       
-       Table format:
-       | Track | Tasks | File Scope | Depends On |
-       |-------|-------|------------|------------|
-       | A     | 1.1.1 | path/to/file.md | - |
-       | B     | 1.2.1, 1.2.2 | other/path.py | A |
-       """
-       lines = plan_content.split("\n")
-       in_table = False
-       tracks = []
-       
-       for line in lines:
-           if "## Track Assignments" in line:
-               in_table = True
-               continue
-           if in_table and line.startswith("|") and not line.startswith("| Track") and not line.startswith("|---"):
-               parts = [p.strip() for p in line.split("|")[1:-1]]
-               if len(parts) >= 4:
-                   track_id, tasks, file_scope, depends_on = parts[0], parts[1], parts[2], parts[3]
-                   tracks.append(Track(
-                       id=track_id,
-                       tasks=tasks.split(", "),
-                       files=[file_scope],
-                       depends_on=depends_on if depends_on != "-" else None
-                   ))
-           elif in_table and line.startswith("##"):
-               break  # End of Track Assignments section
-           
-           return tracks
-           
-           def validate_tasks_against_beads(tracks: list[Track], metadata_path: str) -> list[str]:
-           """Validate that all task IDs in tracks exist in metadata.json.beads.planTasks.
-           
-           Returns list of unknown task IDs for warning display.
-           """
-           metadata = json.loads(Read(metadata_path))
-           plan_tasks = metadata.get("beads", {}).get("planTasks", {})
-           known_task_ids = set(plan_tasks.keys())
-           
-           unknown_tasks = []
-           for track in tracks:
-               for task_id in track.tasks:
-                   if task_id not in known_task_ids:
-                       unknown_tasks.append(task_id)
-           
-           return unknown_tasks
-           
-           # After parsing Track Assignments, validate task IDs
-           tracks = parse_track_assignments_table(plan)
-           unknown = validate_tasks_against_beads(
-               tracks, 
-               f"conductor/tracks/{track_id}/metadata.json"
-           )
-           if unknown:
-               print(f"⚠️ WARNING: Track Assignments references unknown tasks: {unknown}")
-               print("   These task IDs do not exist in metadata.json.beads.planTasks")
-           ```
-           
-           **If Track Assignments section exists → parse table directly and skip all file scope analysis.**
+See **[auto-routing.md](../../../orchestrator/references/auto-routing.md)** for the complete detection algorithm.
 
-2. **Auto-Detect from Beads (Priority 2)**
-   
-   When no explicit Track Assignments exist, auto-detect parallel opportunities from metadata.json:
-   
-   ```python
-   metadata = Read("conductor/tracks/<track-id>/metadata.json")
-   
-   # Check if beads section has planTasks mapping
-   if "beads" in metadata and "planTasks" in metadata["beads"]:
-       # Get bead IDs from metadata
-       bead_ids = list(metadata["beads"]["planTasks"].values())
-       
-       # Verify with bd list at runtime (source of truth)
-       live_beads_raw = bash("bd list --json")
-       live_beads = {b['id']: b for b in json.loads(live_beads_raw)}
-       
-       # Analyze dependency graph for independent beads
-       independent_beads = []
-       for bead_id in bead_ids:
-           if bead_id in live_beads and not live_beads[bead_id].get("dependencies"):
-               independent_beads.append(bead_id)
-       
-       # Threshold: 2+ independent beads triggers auto-orchestration
-       if len(independent_beads) >= 2:
-           # Group by file scope (same directory = same track)
-           tracks = group_by_file_scope(independent_beads)
-           # Auto-generate Track Assignments and route to orchestrator
-           return PARALLEL_DISPATCH
-   ```
-   
-   See [auto-routing.md](../../../orchestrator/references/auto-routing.md) for full algorithm.
+#### Detection Priority
 
-3. **Check Agent Mail Availability (Priority 3)**
-   
-   ```python
-   try:
-       ensure_project(human_key=PROJECT_PATH)
-       AGENT_MAIL_AVAILABLE = True
-   except McpUnavailable:
-       AGENT_MAIL_AVAILABLE = False
-       # Cannot do parallel without coordination - HALT
-       print("HALT: Agent Mail required for coordination")
-       exit(1)
-   ```
-   
-   **If Agent Mail unavailable → HALT (required for coordination).**
+| Priority | Check | Trigger |
+|----------|-------|---------|
+| 1 | `## Track Assignments` in plan.md | Explicit parallel |
+| 1.5 | `beads.fileScopes` in metadata.json | File-scope grouping |
+| 2 | `beads.planTasks` with ≥2 independent | Bead dependency analysis |
 
-4. **Route Decision:**
-   
-   | Condition | Result |
-   |-----------|--------|
-   | Track Assignments exists | PARALLEL_DISPATCH |
-   | Auto-detect: ≥2 independent beads | PARALLEL_DISPATCH |
-   | Agent Mail unavailable | HALT |
-   | Single bead or dependent beads | Sequential via orchestrator |
+#### Route Decision
 
-5. **Confirmation Prompt (before parallel dispatch):**
-   
-   When routing to PARALLEL_DISPATCH, display confirmation before spawning workers.
-   
-   **Key:** The `tracks` variable is already populated from Phase 2b Step 1 (`parse_track_assignments_table()`) 
-   or Step 2 (auto-detect). Confirmation simply displays pre-parsed track info—no re-analysis needed.
-   
-   ```python
-   if decision == PARALLEL_DISPATCH:
-       # tracks already populated from earlier routing step:
-       # - Priority 1: parse_track_assignments_table() output
-       # - Priority 2: group_by_file_scope() output (auto-detect path)
-       # No additional parsing or analysis here—just display.
-       
-       # Display grouped tracks (pre-parsed from plan.md)
-       print("""
-       📊 Parallel execution detected:
-       """)
-       for track in tracks:
-           print(f"- Track {track.id}: {len(track.tasks)} task(s) ({track.files[0]})")
-       
-       # Show dependencies if any
-       if has_dependent_tracks(tracks):
-           print("\nDependencies:")
-           for track in tracks:
-               if track.depends_on:
-                   print(f"- Track {track.id} depends on Track {track.depends_on}")
-       
-       print("\nRun parallel? [Y/n]: ")
-       
-       # Handle response
-       response = get_user_input()
-       if response.lower() in ['', 'y', 'yes']:
-           # Route to orchestrator
-           return route_to_orchestrator(tracks)
-       else:
-           # Fall back to sequential
-           print("→ Continuing with sequential execution")
-           return SINGLE_AGENT
-   ```
-   
-   **Prompt Format:**
-   ```text
-   📊 Parallel execution detected:
-   - Track 1: 2 tasks (src/api/auth.ts, src/api/login.ts)
-   - Track 2: 1 task (src/db/models/)
-   - Track 3: 1 task (lib/validation.ts)
-   
-   Dependencies:
-   - Track 3 depends on Track 1
-   
-   Run parallel? [Y/n]:
-   ```
-   
-   **Response Handling:**
-   | Input | Action |
-   |-------|--------|
-   | `Y`, `y`, `yes`, `[Enter]` | Route to `/conductor-orchestrate` |
-   | `N`, `n`, `no` | Continue sequential execution |
-   | Other | Re-prompt once, then default to `N` |
-   
-   See [parallel-grouping.md](../parallel-grouping.md) for grouping algorithm.
+| Condition | Result |
+|-----------|--------|
+| Track Assignments exists | PARALLEL_DISPATCH |
+| ≥2 non-overlapping file scope groups | PARALLEL_DISPATCH |
+| ≥2 independent beads (no deps) | PARALLEL_DISPATCH |
+| Agent Mail unavailable | HALT |
+| Otherwise | Sequential execution |
 
-8. **Display Feedback:**
-   ```text
-   ┌─ EXECUTION ROUTING ────────────────────┐
-   │ Track Assignments: YES                 │
-   │ Agent Mail: Available                  │
-   │ Result: PARALLEL_DISPATCH              │
-   │ → Routing to /conductor-orchestrate    │
-   └────────────────────────────────────────┘
-   ```
-   
-   Or for sequential:
-   ```text
-   ┌─ EXECUTION ROUTING ────────────────────┐
-   │ Track Assignments: NO                  │
-   │ TIER 1 Score: 3/8                      │
-   │ Result: SINGLE_AGENT                   │
-   │ → Continuing sequential execution      │
-   └────────────────────────────────────────┘
-   ```
+#### Confirmation Prompt
 
-9. **Update State:**
-   
-   Add to `implement_state.json`:
-   ```json
-   {
-     "execution_mode": "PARALLEL_DISPATCH",
-     "routing_trigger": "track_assignments",
-     "routing_evaluation": {
-       "has_track_assignments": true,
-       "auto_detect_triggered": false,
-       "independent_beads_count": null,
-       "agent_mail_available": true,
-       "tier1_score": null,
-       "tier1_pass": null,
-       "tier2_pass": null
-     }
-   }
-   ```
+Before parallel dispatch:
+```text
+📊 Parallel execution detected:
+- Track A: 2 tasks (src/api/)
+- Track B: 1 task (lib/)
 
-9. **Branch Logic:**
-   - **Sequential:** Continue to Phase 3 (single bead execution)
-   - **PARALLEL_DISPATCH:** Hand off to [orchestrator skill](../../../orchestrator/SKILL.md)
-     - Load orchestrator workflow
-     - Orchestrator spawns workers via Task()
-     - **Wave re-dispatch:** After each wave completes, query `bd ready --json` and spawn new workers for newly-unblocked beads
-     - Main agent monitors via Agent Mail
+Run parallel? [Y/n]:
+```
 
-See [orchestrator workflow](../../../orchestrator/references/workflow.md) for parallel execution protocol (including wave re-dispatch).
+#### Branch Logic
+
+- **Sequential:** Continue to Phase 3
+- **PARALLEL_DISPATCH:** Hand off to [orchestrator skill](../../../orchestrator/SKILL.md)
+
+See [orchestrator workflow](../../../orchestrator/references/workflow.md) for parallel execution protocol.
 
 ### Phase 3: Track Implementation
 
