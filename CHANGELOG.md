@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-01-08
+
+
+### Added
+
+
+- Skills architecture refactor
+- Add standalone pl pipeline (phases 5-10)
+- Migrate from Agent Mail MCP to CLI toolbox
+- Add EXECUTION BLOCK format to enforce mandatory gates
+
+
+### Changed
+
+
+- Move skills/ and toolboxes/ to root with symlinks from .claude/
+- Reorganize references with index pattern
+
+
+### Documentation
+
+
+- Add handoff for skills-arch-refactor epic completion
+
+
+### Fixed
+
+
+- Add MANDATORY gates for pl pipeline (Task spawn, Oracle calls, skill load)
+
+
+### Complete
+
+
+- 8 learnings extracted
+
 ## [0.8.5] - 2026-01-08
 
 
