@@ -22,7 +22,7 @@ Check Agent Mail availability at orchestration start:
 
 ```bash
 # Check health
-if ! toolboxes/agent-mail/agent-mail.js health-check reason:"Orchestrator preflight"; then
+if ! toolboxes/agent-mail/agent-mail.js health-check --reason "Orchestrator preflight"; then
     # CRITICAL: Do NOT fall back to sequential
     echo "❌ HALT: Agent Mail unavailable - cannot orchestrate"
     echo "   Parallel execution requires Agent Mail for:"
@@ -33,7 +33,7 @@ if ! toolboxes/agent-mail/agent-mail.js health-check reason:"Orchestrator prefli
     exit 1
 fi
 
-toolboxes/agent-mail/agent-mail.js ensure-project human_key:"$PROJECT_PATH"
+toolboxes/agent-mail/agent-mail.js ensure-project --human-key "$PROJECT_PATH"
 ```
 
 ## Failure Responses
@@ -115,8 +115,8 @@ If Agent Mail becomes unavailable after workers are spawned:
 # Mid-orchestration failure handling
 while true; do
     if toolboxes/agent-mail/agent-mail.js fetch-inbox \
-        project_key:"$PROJECT_PATH" \
-        agent_name:"$ORCHESTRATOR" 2>/dev/null; then
+        --project-key "$PROJECT_PATH" \
+        --agent-name "$ORCHESTRATOR" 2>/dev/null; then
         # Normal monitoring continues
         break
     else
@@ -148,7 +148,7 @@ If Agent Mail becomes available after failure:
 
 ## Implementation Notes
 
-- Health check before any orchestration: `agent-mail.js health-check reason:"..."`
+- Health check before any orchestration: `bun toolboxes/agent-mail/agent-mail.js health-check --reason "..."`
 - Timeout on MCP calls: ~3 seconds
 - Retry Agent Mail 3 times with exponential backoff before HALT
 - Log all failures with timestamps for debugging

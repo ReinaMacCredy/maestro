@@ -54,10 +54,10 @@ toolboxes/agent-mail/agent-mail.js send-message \
 
 Workers follow the simplified 4-step protocol from [worker-prompt.md](../worker-prompt.md):
 
-1. **INITIALIZE** - `agent-mail.js macro-start-session` (FIRST action, no exceptions)
+1. **INITIALIZE** - `bun toolboxes/agent-mail/agent-mail.js macro-start-session` (FIRST action, no exceptions)
 2. **EXECUTE** - `bd update` → work → `bd close` for each bead
-3. **REPORT** - `agent-mail.js send-message` (MANDATORY before returning)
-4. **CLEANUP** - `agent-mail.js release-file-reservations`
+3. **REPORT** - `bun toolboxes/agent-mail/agent-mail.js send-message` (MANDATORY before returning)
+4. **CLEANUP** - `bun toolboxes/agent-mail/agent-mail.js release-file-reservations`
 
 ```bash
 # Pre-register ALL workers before spawning (prevents "recipient not found" errors)

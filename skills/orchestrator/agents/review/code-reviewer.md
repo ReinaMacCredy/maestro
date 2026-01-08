@@ -181,14 +181,13 @@ SUGGESTIONS:
 
 ### Reporting Review Complete
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="CodeReviewer",
-  to=["Orchestrator"],
-  subject="[Review] Code review complete",
-  body_md="""
-## Review Summary
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "CodeReviewer" \
+  --to '["Orchestrator"]' \
+  --subject "[Review] Code review complete" \
+  --body-md "## Review Summary
 
 **Overall Quality**: {quality_rating}
 
@@ -207,22 +206,19 @@ send_message(
 {top_suggestions}
 
 ## Verdict
-{verdict}: {reasoning}
-""",
-  thread_id="<review-thread>"
-)
+{verdict}: {reasoning}" \
+  --thread-id "<review-thread>"
 ```
 
 ### Reporting Blocking Issue
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="CodeReviewer",
-  to=["Orchestrator"],
-  subject="[Review] BLOCKING issue found",
-  body_md="""
-## Blocking Issue
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "CodeReviewer" \
+  --to '["Orchestrator"]' \
+  --subject "[Review] BLOCKING issue found" \
+  --body-md "## Blocking Issue
 
 **Type**: {issue_type}
 **Location**: {file_path}:{lines}
@@ -234,9 +230,7 @@ send_message(
 {blocking_reason}
 
 ## Required Fix
-{required_action}
-""",
-  importance="high",
-  thread_id="<review-thread>"
-)
+{required_action}" \
+  --importance "high" \
+  --thread-id "<review-thread>"
 ```

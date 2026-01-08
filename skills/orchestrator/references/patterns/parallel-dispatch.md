@@ -69,7 +69,7 @@ Each track has exclusive file scope:
 - Track 2: `skills/design/**`
 - Track 3: `conductor/CODEMAPS/**`
 
-Workers reserve their scope via `agent-mail.js file-reservation-paths`.
+Workers reserve their scope via `bun toolboxes/agent-mail/agent-mail.js file-reservation-paths`.
 
 ## Cross-Track Dependencies
 

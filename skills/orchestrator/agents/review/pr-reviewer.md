@@ -187,14 +187,13 @@ Check for:
 
 ### Reporting PR Review Complete
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="PRReviewer",
-  to=["Orchestrator"],
-  subject="[Review] PR #{pr_number} review complete",
-  body_md="""
-## PR Review Summary
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "PRReviewer" \
+  --to '["Orchestrator"]' \
+  --subject "[Review] PR #{pr_number} review complete" \
+  --body-md "## PR Review Summary
 
 **PR**: #{pr_number} - {title}
 **Verdict**: {verdict}
@@ -215,22 +214,19 @@ send_message(
 {suggestions}
 
 ## Recommendation
-{final_recommendation}
-""",
-  thread_id="<review-thread>"
-)
+{final_recommendation}" \
+  --thread-id "<review-thread>"
 ```
 
 ### Reporting Breaking Change
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="PRReviewer",
-  to=["Orchestrator"],
-  subject="[Review] BREAKING CHANGE detected in PR #{pr_number}",
-  body_md="""
-## Alert
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "PRReviewer" \
+  --to '["Orchestrator"]' \
+  --subject "[Review] BREAKING CHANGE detected in PR #{pr_number}" \
+  --body-md "## Alert
 Breaking change detected in PR.
 
 ## Change
@@ -245,9 +241,7 @@ Breaking change detected in PR.
 - Consumer notification
 
 ## Recommendation
-{recommendation}
-""",
-  importance="high",
-  thread_id="<review-thread>"
-)
+{recommendation}" \
+  --importance "high" \
+  --thread-id "<review-thread>"
 ```

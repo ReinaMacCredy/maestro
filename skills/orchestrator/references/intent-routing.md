@@ -157,7 +157,7 @@ Task(
 
 ## CRITICAL
 - Stay within file scope
-- Report via agent-mail.js send-message before returning
+- Report via `bun toolboxes/agent-mail/agent-mail.js send-message` before returning
 """,
     prompt=user_request
 )

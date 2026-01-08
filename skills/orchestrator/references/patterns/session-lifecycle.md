@@ -14,7 +14,7 @@ Each worker maintains its own session lifecycle:
 
 ```bash
 # 1. Register agent identity
-toolboxes/agent-mail/agent-mail.js register-agent \
+bun toolboxes/agent-mail/agent-mail.js register-agent \
   project_key:"$PROJECT_PATH" \
   name:"$AGENT_NAME" \
   program:"amp" \
@@ -22,7 +22,7 @@ toolboxes/agent-mail/agent-mail.js register-agent \
   task_description:"Worker for Track $TRACK_N"
 
 # 2. Check for cross-track dependency notifications
-toolboxes/agent-mail/agent-mail.js fetch-inbox \
+bun toolboxes/agent-mail/agent-mail.js fetch-inbox \
   project_key:"$PROJECT_PATH" \
   agent_name:"$AGENT_NAME" \
   include_bodies:true
@@ -36,7 +36,7 @@ toolboxes/agent-mail/agent-mail.js fetch-inbox \
 ```bash
 for bead_id in $ASSIGNED_BEADS; do
     # 1. Reserve files for this bead
-    toolboxes/agent-mail/agent-mail.js file-reservation-paths \
+    bun toolboxes/agent-mail/agent-mail.js file-reservation-paths \
       project_key:"$PROJECT_PATH" \
       agent_name:"$AGENT_NAME" \
       paths:"[\"$FILE_SCOPE\"]" \
@@ -52,7 +52,7 @@ for bead_id in $ASSIGNED_BEADS; do
     bd close "$bead_id" --reason completed
     
     # 5. Report completion
-    toolboxes/agent-mail/agent-mail.js send-message \
+    bun toolboxes/agent-mail/agent-mail.js send-message \
       project_key:"$PROJECT_PATH" \
       sender_name:"$AGENT_NAME" \
       to:"[\"$ORCHESTRATOR\"]" \
@@ -68,7 +68,7 @@ done
 
 ```bash
 # 1. Send track completion summary
-toolboxes/agent-mail/agent-mail.js send-message \
+bun toolboxes/agent-mail/agent-mail.js send-message \
   project_key:"$PROJECT_PATH" \
   sender_name:"$AGENT_NAME" \
   to:"[\"$ORCHESTRATOR\"]" \
@@ -81,7 +81,7 @@ toolboxes/agent-mail/agent-mail.js send-message \
 - **Duration**: $DURATION"
 
 # 2. Release file reservations
-toolboxes/agent-mail/agent-mail.js release-file-reservations \
+bun toolboxes/agent-mail/agent-mail.js release-file-reservations \
   project_key:"$PROJECT_PATH" \
   agent_name:"$AGENT_NAME"
 ```
@@ -91,10 +91,10 @@ toolboxes/agent-mail/agent-mail.js release-file-reservations \
 Workers send heartbeat every 5 minutes:
 
 ```bash
-toolboxes/agent-mail/agent-mail.js send-message \
+bun toolboxes/agent-mail/agent-mail.js send-message \
   project_key:"$PROJECT_PATH" \
   sender_name:"$AGENT_NAME" \
-  to:"[\"$ORCHESTRATOR\"]" \
+  to:'["$ORCHESTRATOR"]' \
   thread_id:"$EPIC_ID" \
   subject:"[HEARTBEAT] Track $TRACK_N" \
   body_md:"Still working. Current bead: $CURRENT_BEAD"
@@ -110,7 +110,7 @@ When completing a bead that other tracks depend on:
 # Check if this bead unblocks other tracks
 # If bead_id is in blocking_beads, notify waiting workers
 for worker in $WAITING_WORKERS; do
-    toolboxes/agent-mail/agent-mail.js send-message \
+    bun toolboxes/agent-mail/agent-mail.js send-message \
       project_key:"$PROJECT_PATH" \
       sender_name:"$AGENT_NAME" \
       to:"[\"$worker\"]" \
@@ -129,7 +129,7 @@ When multiple sessions may be active, workers use session announcement messages.
 Sent immediately after registration:
 
 ```bash
-toolboxes/agent-mail/agent-mail.js send-message \
+bun toolboxes/agent-mail/agent-mail.js send-message \
     project_key:"$PROJECT_PATH" \
     sender_name:"$AGENT_NAME" \
     to:'["Broadcast"]' \
@@ -149,7 +149,7 @@ toolboxes/agent-mail/agent-mail.js send-message \
 Sent every 5 minutes during active work:
 
 ```bash
-toolboxes/agent-mail/agent-mail.js send-message \
+bun toolboxes/agent-mail/agent-mail.js send-message \
     project_key:"$PROJECT_PATH" \
     sender_name:"$AGENT_NAME" \
     to:'["Broadcast"]' \
@@ -163,7 +163,7 @@ toolboxes/agent-mail/agent-mail.js send-message \
 Sent on normal session completion:
 
 ```bash
-toolboxes/agent-mail/agent-mail.js send-message \
+bun toolboxes/agent-mail/agent-mail.js send-message \
     project_key:"$PROJECT_PATH" \
     sender_name:"$AGENT_NAME" \
     to:'["Broadcast"]' \
@@ -241,7 +241,7 @@ takeover_session() {
     
     # 1. Force-release file reservations
     for reservation_id in $RESERVATION_IDS; do
-        toolboxes/agent-mail/agent-mail.js force-release-file-reservation \
+        bun toolboxes/agent-mail/agent-mail.js force-release-file-reservation \
             project_key:"$PROJECT_PATH" \
             agent_name:"$MY_AGENT_NAME" \
             file_reservation_id:"$reservation_id" \
@@ -255,7 +255,7 @@ takeover_session() {
     done
     
     # 3. Announce takeover
-    toolboxes/agent-mail/agent-mail.js send-message \
+    bun toolboxes/agent-mail/agent-mail.js send-message \
         project_key:"$PROJECT_PATH" \
         sender_name:"$MY_AGENT_NAME" \
         to:"[\"$stale_session_id\"]" \
@@ -302,22 +302,22 @@ Add to project AGENTS.md for worker sessions:
 ## Worker Session Protocol
 
 ### On Start
-1. Register: `agent-mail.js register-agent project_key:... name:$AGENT_NAME program:... model:...`
-2. Announce: `agent-mail.js send-message` with `[SESSION START]`
-3. Check inbox: `agent-mail.js fetch-inbox` for dependency notifications
-4. Reserve files: `agent-mail.js file-reservation-paths paths:'["$FILE_SCOPE"]'`
+1. Register: `bun toolboxes/agent-mail/agent-mail.js register-agent project_key:... name:$AGENT_NAME program:... model:...`
+2. Announce: `bun toolboxes/agent-mail/agent-mail.js send-message` with `[SESSION START]`
+3. Check inbox: `bun toolboxes/agent-mail/agent-mail.js fetch-inbox` for dependency notifications
+4. Reserve files: `bun toolboxes/agent-mail/agent-mail.js file-reservation-paths paths:'["$FILE_SCOPE"]'`
 
 ### During Work
 1. Claim bead: `bd update <id> --status in_progress`
 2. Do work
 3. Close bead: `bd close <id> --reason completed`
-4. Report: `agent-mail.js send-message` with completion details
-5. Heartbeat: `agent-mail.js send-message` with `[HEARTBEAT]` every 5 minutes
+4. Report: `bun toolboxes/agent-mail/agent-mail.js send-message` with completion details
+5. Heartbeat: `bun toolboxes/agent-mail/agent-mail.js send-message` with `[HEARTBEAT]` every 5 minutes
 
 ### On Complete
 1. Send track summary
-2. Announce: `agent-mail.js send-message` with `[SESSION END]`
-3. Release reservations: `agent-mail.js release-file-reservations`
+2. Announce: `bun toolboxes/agent-mail/agent-mail.js send-message` with `[SESSION END]`
+3. Release reservations: `bun toolboxes/agent-mail/agent-mail.js release-file-reservations`
 ```
 
 ## References

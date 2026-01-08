@@ -26,7 +26,7 @@ toolboxes/agent-mail/agent-mail.js send-message \
 ## Parallel Dispatch
 
 Before dispatching parallel subagents:
-1. Reserve files with `agent-mail.js file-reservation-paths`
+1. Reserve files with `bun toolboxes/agent-mail/agent-mail.js file-reservation-paths`
 2. Inject coordination block into Task prompts
 3. Release reservations after completion
 

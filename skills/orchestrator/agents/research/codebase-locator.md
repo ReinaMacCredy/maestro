@@ -107,14 +107,13 @@ NO MATCHES:
 
 ### Reporting Completion
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="LocatorAgent",
-  to=["Orchestrator"],
-  subject="[Research] Codebase locations found",
-  body_md="""
-## Locations Found
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "LocatorAgent" \
+  --to '["Orchestrator"]' \
+  --subject "[Research] Codebase locations found" \
+  --body-md "## Locations Found
 
 {formatted_locations}
 
@@ -123,31 +122,26 @@ send_message(
 {formatted_patterns}
 
 ## Confidence
-{confidence_level}
-""",
-  thread_id="<research-thread>"
-)
+{confidence_level}" \
+  --thread-id "<research-thread>"
 ```
 
 ### Reporting Partial Results
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="LocatorAgent",
-  to=["Orchestrator"],
-  subject="[Research] PARTIAL: Location search incomplete",
-  body_md="""
-## Status
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "LocatorAgent" \
+  --to '["Orchestrator"]' \
+  --subject "[Research] PARTIAL: Location search incomplete" \
+  --body-md "## Status
 Partial results due to: {reason}
 
 ## Locations Found (partial)
 {partial_locations}
 
 ## Recommendation
-{next_steps}
-""",
-  importance="normal",
-  thread_id="<research-thread>"
-)
+{next_steps}" \
+  --importance "normal" \
+  --thread-id "<research-thread>"
 ```

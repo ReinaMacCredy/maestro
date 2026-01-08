@@ -155,14 +155,13 @@ FREQUENCY:
 
 ### Reporting Patterns Found
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="PatternAgent",
-  to=["Orchestrator"],
-  subject="[Research] Patterns documented",
-  body_md="""
-## Pattern: {pattern_name}
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "PatternAgent" \
+  --to '["Orchestrator"]' \
+  --subject "[Research] Patterns documented" \
+  --body-md "## Pattern: {pattern_name}
 
 ### Examples Found
 {examples_count} examples in {directories}
@@ -174,22 +173,19 @@ send_message(
 {variations_list}
 
 ### Recommendation
-Follow {recommended_variation} pattern for consistency.
-""",
-  thread_id="<research-thread>"
-)
+Follow {recommended_variation} pattern for consistency." \
+  --thread-id "<research-thread>"
 ```
 
 ### Reporting No Patterns
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="PatternAgent",
-  to=["Orchestrator"],
-  subject="[Research] No existing pattern found",
-  body_md="""
-## Pattern: {pattern_name}
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "PatternAgent" \
+  --to '["Orchestrator"]' \
+  --subject "[Research] No existing pattern found" \
+  --body-md "## Pattern: {pattern_name}
 
 ### Status
 No existing examples found in codebase.
@@ -199,9 +195,7 @@ No existing examples found in codebase.
 - Patterns: {search_patterns}
 
 ### Recommendation
-New pattern will need to be established.
-""",
-  importance="normal",
-  thread_id="<research-thread>"
-)
+New pattern will need to be established." \
+  --importance "normal" \
+  --thread-id "<research-thread>"
 ```

@@ -159,14 +159,13 @@ NOTES:
 
 ### Reporting GitHub Research Complete
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="GitHubResearchAgent",
-  to=["Orchestrator"],
-  subject="[Research] GitHub research complete",
-  body_md="""
-## Topic
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "GitHubResearchAgent" \
+  --to '["Orchestrator"]' \
+  --subject "[Research] GitHub research complete" \
+  --body-md "## Topic
 {research_topic}
 
 ## Repository
@@ -185,22 +184,19 @@ send_message(
 {notable_prs}
 
 ## Recommendations
-{recommendations_based_on_findings}
-""",
-  thread_id="<research-thread>"
-)
+{recommendations_based_on_findings}" \
+  --thread-id "<research-thread>"
 ```
 
 ### Reporting Critical Issue Found
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="GitHubResearchAgent",
-  to=["Orchestrator"],
-  subject="[Research] ALERT: Critical GitHub issue found",
-  body_md="""
-## Alert
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "GitHubResearchAgent" \
+  --to '["Orchestrator"]' \
+  --subject "[Research] ALERT: Critical GitHub issue found" \
+  --body-md "## Alert
 Critical issue affecting this implementation found.
 
 ## Issue
@@ -213,9 +209,7 @@ Critical issue affecting this implementation found.
 {workaround_if_available}
 
 ## Recommendation
-{recommendation}
-""",
-  importance="high",
-  thread_id="<research-thread>"
-)
+{recommendation}" \
+  --importance "high" \
+  --thread-id "<research-thread>"
 ```

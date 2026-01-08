@@ -223,14 +223,13 @@ Generate phased plan with atomic tasks.
 
 ### Reporting Plan Complete
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="PlanAgent",
-  to=["Orchestrator"],
-  subject="[Planning] Implementation plan ready",
-  body_md="""
-## Plan Summary
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "PlanAgent" \
+  --to '["Orchestrator"]' \
+  --subject "[Planning] Implementation plan ready" \
+  --body-md "## Plan Summary
 
 **Feature**: {feature_name}
 **Phases**: {phase_count}
@@ -247,22 +246,19 @@ send_message(
 {risk_summary}
 
 ## Ready For
-Beads can be filed from this plan.
-""",
-  thread_id="<planning-thread>"
-)
+Beads can be filed from this plan." \
+  --thread-id "<planning-thread>"
 ```
 
 ### Reporting Blockers
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="PlanAgent",
-  to=["Orchestrator"],
-  subject="[Planning] BLOCKED: Cannot create plan",
-  body_md="""
-## Blocker
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "PlanAgent" \
+  --to '["Orchestrator"]' \
+  --subject "[Planning] BLOCKED: Cannot create plan" \
+  --body-md "## Blocker
 Unable to create complete plan.
 
 ## Reason
@@ -275,9 +271,7 @@ Unable to create complete plan.
 {what_is_needed}
 
 ## Partial Plan
-{partial_plan_if_available}
-""",
-  importance="high",
-  thread_id="<planning-thread>"
-)
+{partial_plan_if_available}" \
+  --importance "high" \
+  --thread-id "<planning-thread>"
 ```

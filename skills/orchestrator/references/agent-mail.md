@@ -1,5 +1,7 @@
 # Agent Mail Protocol
 
+> **Note:** All examples use CLI syntax (`--arg value`). MCP function calls are available as fallback but CLI is preferred for consistency.
+
 ## Orchestrator Registration (Phase 2)
 
 On spawn, the orchestrator MUST:

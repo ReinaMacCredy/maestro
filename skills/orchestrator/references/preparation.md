@@ -11,7 +11,7 @@
 - Plan.md with Track Assignments section
 - Beads filed from plan (`fb` command)
 - `bd` CLI available
-- Agent Mail available (verified via `agent-mail.js health-check`)
+- Agent Mail available (verified via `bun toolboxes/agent-mail/agent-mail.js health-check`)
 
 ## Preparation Steps
 
@@ -193,6 +193,6 @@ Worker will wait for dependency notification via Agent Mail.
 1. **File beads before orchestration** - Run `fb` before `/conductor-orchestrate`
 2. **Wire dependencies explicitly** - Cross-track deps need `bd dep add`
 3. **Use `bd ready --json`** - For structured bead status output
-4. **Pre-register workers** - Use `agent-mail.js register-agent` before spawning
-5. **Reserve files early** - Use `agent-mail.js file-reservation-paths` to prevent conflicts
+4. **Pre-register workers** - Use `bun toolboxes/agent-mail/agent-mail.js register-agent` before spawning
+5. **Reserve files early** - Use `bun toolboxes/agent-mail/agent-mail.js file-reservation-paths` to prevent conflicts
 6. **Check readiness** - At least one bead per track should be ready initially

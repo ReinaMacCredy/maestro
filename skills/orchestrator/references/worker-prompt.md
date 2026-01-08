@@ -52,7 +52,7 @@ Before ANY other action, initialize your session with Agent Mail using the CLI t
 ```bash
 # This MUST be your FIRST action - before reading files, before claiming beads
 # macro-start-session handles SELF-REGISTRATION (creates/updates agent profile)
-toolboxes/agent-mail/agent-mail.js macro-start-session \
+bun toolboxes/agent-mail/agent-mail.js macro-start-session \
   --human-key {PROJECT_PATH} \
   --program amp \
   --model {MODEL} \
@@ -84,7 +84,7 @@ for msg in inbox:
         break
 
 # Alternative: Use fetch-inbox directly if you need more messages
-# toolboxes/agent-mail/agent-mail.js fetch-inbox --project-key {PROJECT_PATH} --agent-name {AGENT_NAME} --limit 20
+# bun toolboxes/agent-mail/agent-mail.js fetch-inbox --project-key {PROJECT_PATH} --agent-name {AGENT_NAME} --limit 20
 ```
 
 **Why this matters:** 
@@ -113,15 +113,17 @@ else:
 For EACH bead in [{BEAD_LIST}]:
 
 #### 2.1 START
-```python
-# Read track thread via summarize_thread() for prior bead context
+```bash
+# Read track thread via CLI for prior bead context
 # This provides learnings, gotchas, and context from previous beads
-thread_summary = summarize_thread(
-  project_key="{PROJECT_PATH}",
-  thread_id="{TRACK_THREAD}"
-)
+bun toolboxes/agent-mail/agent-mail.js summarize-thread \
+  --project-key "{PROJECT_PATH}" \
+  --thread-id "{TRACK_THREAD}"
+```
 
-# Review prior context before starting work
+```python
+# Parse JSON output and review prior context before starting work
+thread_summary = json.loads(output)
 if thread_summary.get("key_points"):
     print(f"📋 Prior context: {len(thread_summary['key_points'])} learnings from previous beads")
 
@@ -165,7 +167,7 @@ bash(f"bd close {bead_id} --reason completed")
 
 # Save structured context to track thread (self-message)
 # This context is read by subsequent beads via summarize_thread()
-toolboxes/agent-mail/agent-mail.js send-message \
+bun toolboxes/agent-mail/agent-mail.js send-message \
   --project-key {PROJECT_PATH} \
   --sender-name {AGENT_NAME} \
   --to '["{AGENT_NAME}"]' \
@@ -205,7 +207,7 @@ toolboxes/agent-mail/agent-mail.js send-message \
 
 ```bash
 # CRITICAL: This call is REQUIRED before returning
-toolboxes/agent-mail/agent-mail.js send-message \
+bun toolboxes/agent-mail/agent-mail.js send-message \
   --project-key {PROJECT_PATH} \
   --sender-name {AGENT_NAME} \
   --to '["{ORCHESTRATOR}"]' \
@@ -244,7 +246,7 @@ None
 
 ```bash
 # Release all file reservations
-toolboxes/agent-mail/agent-mail.js release-file-reservations \
+bun toolboxes/agent-mail/agent-mail.js release-file-reservations \
   --project-key {PROJECT_PATH} \
   --agent-name {AGENT_NAME}
 ```
@@ -267,7 +269,7 @@ return {
 If you encounter a blocker during Step 2:
 
 ```bash
-toolboxes/agent-mail/agent-mail.js send-message \
+bun toolboxes/agent-mail/agent-mail.js send-message \
   --project-key {PROJECT_PATH} \
   --sender-name {AGENT_NAME} \
   --to '["{ORCHESTRATOR}"]' \
@@ -306,10 +308,10 @@ exit 1
 
 | Step | Action | Tool | Required |
 |------|--------|------|----------|
-| 1 | Register | `agent-mail.js macro-start-session` | ✅ FIRST |
+| 1 | Register | `bun toolboxes/agent-mail/agent-mail.js macro-start-session` | ✅ FIRST |
 | 2 | Execute | `bd update`, `bd close` | ✅ |
-| 3 | Report | `agent-mail.js send-message` | ✅ LAST |
-| 4 | Cleanup | `agent-mail.js release-file-reservations` | ✅ |
+| 3 | Report | `bun toolboxes/agent-mail/agent-mail.js send-message` | ✅ LAST |
+| 4 | Cleanup | `bun toolboxes/agent-mail/agent-mail.js release-file-reservations` | ✅ |
 
 ## What NOT To Do
 
@@ -324,7 +326,7 @@ exit 1
 For long-running tasks (>10 minutes), send periodic heartbeats:
 
 ```bash
-toolboxes/agent-mail/agent-mail.js send-message \
+bun toolboxes/agent-mail/agent-mail.js send-message \
   --project-key {PROJECT_PATH} \
   --sender-name {AGENT_NAME} \
   --to '["{ORCHESTRATOR}"]' \
@@ -375,7 +377,7 @@ You are BlueLake, an autonomous worker agent for Track 1.
 
 ### STEP 1: REGISTER (FIRST ACTION - NO EXCEPTIONS)
 
-toolboxes/agent-mail/agent-mail.js macro-start-session \
+bun toolboxes/agent-mail/agent-mail.js macro-start-session \
   --human-key /Users/dev/my-workflow \
   --program amp \
   --model claude-opus-4-5@20251101 \

@@ -262,7 +262,7 @@ When spawning multiple execution agents:
 
 1. **Non-overlapping scopes**: Spawn in parallel
 2. **Overlapping scopes**: Spawn sequentially or split scope
-3. **Same file**: Use `agent-mail.js file-reservation-paths` to serialize access
+3. **Same file**: Use `bun toolboxes/agent-mail/agent-mail.js file-reservation-paths` to serialize access
 
 ```python
 # Check for conflicts before spawn
@@ -295,4 +295,4 @@ This routing table is used in [workflow.md](workflow.md) Phase 3 (Spawn Workers)
 
 ## Summary Protocol Reference
 
-All spawn patterns include the mandatory `agent-mail.js send-message` call before returning. See [summary-protocol.md](summary-protocol.md) for the complete summary format.
+All spawn patterns include the mandatory `bun toolboxes/agent-mail/agent-mail.js send-message` call before returning. See [summary-protocol.md](summary-protocol.md) for the complete summary format.

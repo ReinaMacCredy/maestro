@@ -145,7 +145,7 @@ toolboxes/agent-mail/agent-mail.js send-message \
     --to "[\"$holder_agent_name\"]" \
     --subject "File conflict resolution" \
     --body-md "Worker $requester needs $file_path. Can you release?" \
-    --importance high
+    --importance "high"
 ```
 
 ### Cross-Track Dependency Timeout
@@ -164,7 +164,7 @@ toolboxes/agent-mail/agent-mail.js send-message \
     --to "[\"$blocking_worker\"]" \
     --subject "[PING] $dep_bead_id status?" \
     --body-md "Dependency timeout (30 min). Status update needed." \
-    --importance urgent
+    --importance "urgent"
 
 # If status == "open":
 # 3. Bead not started - escalate

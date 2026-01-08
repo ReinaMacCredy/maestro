@@ -144,14 +144,13 @@ NOTES:
 
 ### Reporting Research Complete
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="WebResearchAgent",
-  to=["Orchestrator"],
-  subject="[Research] External documentation found",
-  body_md="""
-## Topic
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "WebResearchAgent" \
+  --to '["Orchestrator"]' \
+  --subject "[Research] External documentation found" \
+  --body-md "## Topic
 {research_topic}
 
 ## Sources
@@ -164,28 +163,25 @@ send_message(
 {key_findings}
 
 ## Code Examples
-```
+\`\`\`
 {code_example}
-```
+\`\`\`
 Source: {example_source}
 
 ## Notes
-{version_and_freshness_notes}
-""",
-  thread_id="<research-thread>"
-)
+{version_and_freshness_notes}" \
+  --thread-id "<research-thread>"
 ```
 
 ### Reporting No Results
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="WebResearchAgent",
-  to=["Orchestrator"],
-  subject="[Research] External documentation not found",
-  body_md="""
-## Topic
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "WebResearchAgent" \
+  --to '["Orchestrator"]' \
+  --subject "[Research] External documentation not found" \
+  --body-md "## Topic
 {research_topic}
 
 ## Status
@@ -195,9 +191,7 @@ No reliable documentation found.
 {search_queries}
 
 ## Alternatives
-{alternative_suggestions}
-""",
-  importance="normal",
-  thread_id="<research-thread>"
-)
+{alternative_suggestions}" \
+  --importance "normal" \
+  --thread-id "<research-thread>"
 ```

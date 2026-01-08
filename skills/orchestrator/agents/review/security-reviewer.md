@@ -168,14 +168,13 @@ NO ISSUES FOUND:
 
 ### Reporting Security Review Complete
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="SecurityReviewer",
-  to=["Orchestrator"],
-  subject="[Review] Security review complete",
-  body_md="""
-## Security Review Summary
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "SecurityReviewer" \
+  --to '["Orchestrator"]' \
+  --subject "[Review] Security review complete" \
+  --body-md "## Security Review Summary
 
 | Severity | Count |
 |----------|-------|
@@ -191,22 +190,19 @@ send_message(
 {top_issues}
 
 ## Recommendation
-{overall_recommendation}
-""",
-  thread_id="<review-thread>"
-)
+{overall_recommendation}" \
+  --thread-id "<review-thread>"
 ```
 
 ### Reporting Critical Vulnerability
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="SecurityReviewer",
-  to=["Orchestrator"],
-  subject="[SECURITY] CRITICAL vulnerability found",
-  body_md="""
-## ALERT
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "SecurityReviewer" \
+  --to '["Orchestrator"]' \
+  --subject "[SECURITY] CRITICAL vulnerability found" \
+  --body-md "## ALERT
 Critical security vulnerability detected.
 
 ## Issue
@@ -219,10 +215,8 @@ Critical security vulnerability detected.
 {risk_description}
 
 ## Immediate Action Required
-{recommended_action}
-""",
-  importance="urgent",
-  ack_required=True,
-  thread_id="<review-thread>"
-)
+{recommended_action}" \
+  --importance "urgent" \
+  --ack-required \
+  --thread-id "<review-thread>"
 ```

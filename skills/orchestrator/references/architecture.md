@@ -48,7 +48,7 @@
 | Execution | Sequential, main agent | Parallel, worker subagents |
 | bd access | Main agent only | **Workers CAN claim/close** |
 | Coordination | N/A | Agent Mail CLI |
-| File locking | N/A | `agent-mail.js file-reservation-paths` |
+| File locking | N/A | `bun toolboxes/agent-mail/agent-mail.js file-reservation-paths` |
 | Context | In-memory | Track threads (persistent) |
 
 ## Auto-Orchestration Integration

@@ -224,14 +224,13 @@ Description: imperative, lowercase, no period
 
 ### Reporting Task Complete
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="ImplementAgent",
-  to=["Orchestrator"],
-  subject="[Implementation] Task complete: {task_id}",
-  body_md="""
-## Task Complete
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "ImplementAgent" \
+  --to '["Orchestrator"]' \
+  --subject "[Implementation] Task complete: {task_id}" \
+  --body-md "## Task Complete
 
 **Task**: {task_id} - {task_title}
 
@@ -252,22 +251,19 @@ send_message(
 - Types: ✓
 
 ### Commit
-{commit_sha}: {commit_message}
-""",
-  thread_id="<implementation-thread>"
-)
+{commit_sha}: {commit_message}" \
+  --thread-id "<implementation-thread>"
 ```
 
 ### Reporting Blocked
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="ImplementAgent",
-  to=["Orchestrator"],
-  subject="[Implementation] BLOCKED: {task_id}",
-  body_md="""
-## Blocked
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "ImplementAgent" \
+  --to '["Orchestrator"]' \
+  --subject "[Implementation] BLOCKED: {task_id}" \
+  --body-md "## Blocked
 
 **Task**: {task_id}
 **Phase**: {current_phase}
@@ -282,39 +278,34 @@ send_message(
 {what_is_needed}
 
 ### Partial Progress
-{progress_so_far}
-""",
-  importance="high",
-  thread_id="<implementation-thread>"
-)
+{progress_so_far}" \
+  --importance "high" \
+  --thread-id "<implementation-thread>"
 ```
 
 ### Reporting Test Failure
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="ImplementAgent",
-  to=["Orchestrator"],
-  subject="[Implementation] Test failure during {task_id}",
-  body_md="""
-## Test Failure
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "ImplementAgent" \
+  --to '["Orchestrator"]' \
+  --subject "[Implementation] Test failure during {task_id}" \
+  --body-md "## Test Failure
 
 **Task**: {task_id}
 **Test**: {test_name}
 
 ### Failure
-```
+\`\`\`
 {test_output}
-```
+\`\`\`
 
 ### Analysis
 {failure_analysis}
 
 ### Action
-{proposed_action}
-""",
-  importance="normal",
-  thread_id="<implementation-thread>"
-)
+{proposed_action}" \
+  --importance "normal" \
+  --thread-id "<implementation-thread>"
 ```

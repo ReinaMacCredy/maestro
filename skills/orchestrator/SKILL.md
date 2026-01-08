@@ -7,9 +7,29 @@ description: Multi-agent parallel execution with autonomous workers. Use when pl
 
 > **Spawn autonomous workers to execute tracks in parallel using Agent Mail coordination.**
 
+## Agent Mail: CLI Primary, MCP Fallback
+
+This skill uses a **lazy-load pattern** for Agent Mail:
+
+| Priority | Tool | When Available |
+|----------|------|----------------|
+| **Primary** | `bun toolboxes/agent-mail/agent-mail.js` | Always (via Bash) |
+| **Fallback** | MCP tools (via `mcp.json`) | When skill loaded + MCP server running |
+
+**Detection flow:**
+```
+1. Try CLI: bun toolboxes/agent-mail/agent-mail.js health-check
+   ↓ success? → Use CLI for all Agent Mail operations
+   ↓ fails?
+2. Fallback: MCP tools (lazy-loaded via skills/orchestrator/mcp.json)
+```
+
+**CLI benefits:** Zero token cost until used, no MCP server dependency.
+
 ## Core Principles
 
 - **Load core first** - Load [maestro-core](../maestro-core/SKILL.md) for routing table and fallback policies
+- **CLI first** - Use `bun toolboxes/agent-mail/agent-mail.js` CLI before falling back to MCP tools
 - **Pre-register workers** before spawning (Agent Mail validates recipients)
 - **Workers own their beads** - can `bd claim/close` directly (unlike sequential mode)
 - **File reservations prevent conflicts** - reserve before edit, release on complete
@@ -26,9 +46,9 @@ description: Multi-agent parallel execution with autonomous workers. Use when pl
 | Phrase | "run parallel", "spawn workers", "dispatch agents" |
 | **See also** | `ca` for [autonomous execution](../conductor/references/workflows/autonomous.md) |
 
-## Confirmation Prompt
+## Auto-Trigger Behavior
 
-Before spawning parallel workers, orchestrator displays a confirmation:
+Parallel execution starts **automatically** when detected - no confirmation needed:
 
 ```
 📊 Parallel execution detected:
@@ -36,22 +56,20 @@ Before spawning parallel workers, orchestrator displays a confirmation:
 - Track B: 2 tasks (lib/)
 - Track C: 1 task (schemas/)
 
-Run parallel? [Y/n]:
+⚡ Spawning workers...
 ```
-
-See [implement.md Phase 2b](../conductor/references/workflows/implement.md) for full confirmation flow.
 
 ## Quick Reference
 
 | Action | Tool |
 |--------|------|
 | Parse plan.md | `Read("conductor/tracks/<id>/plan.md")` |
-| Initialize | `agent-mail.js macro-start-session` |
+| Initialize | `bun toolboxes/agent-mail/agent-mail.js macro-start-session` |
 | Spawn workers | `Task()` for each track |
-| Monitor | `agent-mail.js fetch-inbox` |
-| Resolve blockers | `agent-mail.js reply-message` |
-| Complete | `agent-mail.js send-message`, `bd close epic` |
-| Track threads | `agent-mail.js summarize-thread` |
+| Monitor | `bun toolboxes/agent-mail/agent-mail.js fetch-inbox` |
+| Resolve blockers | `bun toolboxes/agent-mail/agent-mail.js reply-message` |
+| Complete | `bun toolboxes/agent-mail/agent-mail.js send-message`, `bd close epic` |
+| Track threads | `bun toolboxes/agent-mail/agent-mail.js summarize-thread` |
 | Auto-routing | Auto-detect parallel via `metadata.json.beads` |
 
 ## 8-Phase Orchestrator Protocol
@@ -73,20 +91,20 @@ See [references/workflow.md](references/workflow.md) for full protocol.
 All workers MUST follow this exact sequence:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  STEP 1: INITIALIZE  - macro_start_session() FIRST         │
-│  STEP 2: EXECUTE     - claim beads, do work, close beads   │
-│  STEP 3: REPORT      - send_message() to orchestrator      │
-│  STEP 4: CLEANUP     - release_file_reservations()         │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  STEP 1: INITIALIZE  - bun toolboxes/agent-mail/agent-mail.js macro-start-session   │
+│  STEP 2: EXECUTE     - claim beads, do work, close beads                            │
+│  STEP 3: REPORT      - bun toolboxes/agent-mail/agent-mail.js send-message          │
+│  STEP 4: CLEANUP     - bun toolboxes/agent-mail/agent-mail.js release-file-reservations │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
 | Step | Tool | Required |
 |------|------|----------|
-| 1 | `agent-mail.js macro-start-session` | ✅ FIRST |
+| 1 | `bun toolboxes/agent-mail/agent-mail.js macro-start-session` | ✅ FIRST |
 | 2 | `bd update`, `bd close` | ✅ |
-| 3 | `agent-mail.js send-message` | ✅ LAST |
-| 4 | `agent-mail.js release-file-reservations` | ✅ |
+| 3 | `bun toolboxes/agent-mail/agent-mail.js send-message` | ✅ LAST |
+| 4 | `bun toolboxes/agent-mail/agent-mail.js release-file-reservations` | ✅ |
 
 **Critical rules:**
 - ❌ Never start work before `macro-start-session`

@@ -54,7 +54,7 @@ Contains reusable learnings from completed tracks.
 - `/conductor-orchestrate` - Spawn parallel workers for track execution
 - `bd list --json | jq '. | length'` - Count beads reliably (returns array, not object)
 - `grep -l "send_message" skills/orchestrator/agents/**/*.md | wc -l` - Verify all agents have mandatory Agent Mail save
-- `mcp__mcp_agent_mail__register_agent` - Register orchestrator identity before spawning workers
+- `bun toolboxes/agent-mail/agent-mail.js register-agent` - Register orchestrator identity before spawning workers
 - `python skills/orchestrator/scripts/preflight.py detect '<inbox_json>'` - Detect active sessions from Agent Mail inbox
 - `python skills/orchestrator/scripts/session_identity.py generate <agent>` - Generate session ID with timestamp
 - `python skills/orchestrator/scripts/session_identity.py parse <session_id>` - Parse session ID into components
@@ -64,11 +64,11 @@ Contains reusable learnings from completed tracks.
 - `wc -l skills/*/SKILL.md` - Check line counts across all skills
 - `wc -l *.md docs/*.md` - Line count verification across multiple directories
 - `bd list --parent=<epic-id> --status=open --json | jq 'length'` - Check for lingering beads before epic close
-- `summarize_thread(thread_id=TRACK_THREAD)` - Read track context before each bead (worker protocol)
-- `send_message(to=[self], thread_id=TRACK_THREAD)` - Self-message learnings for next bead (track thread pattern)
+- `bun toolboxes/agent-mail/agent-mail.js summarize-thread --thread-id TRACK_THREAD` - Read track context before each bead (worker protocol)
+- `bun toolboxes/agent-mail/agent-mail.js send-message --to '["self"]' --thread-id TRACK_THREAD` - Self-message learnings for next bead (track thread pattern)
 - `rg -i "single.?agent|multi.?agent" --type md -l | grep -v CHANGELOG | grep -v archive` - Search for SA/MA references during cleanup
 - `rg -i "village|\.beads-village|bv --robot" --type md -l | grep -v archive` - Search for Village references during cleanup
-- `macro_start_session()` - Single MCP call for orchestrator/worker initialization (replaces ensure_project + register_agent)
+- `bun toolboxes/agent-mail/agent-mail.js macro-start-session` - Single CLI call for orchestrator/worker initialization (replaces ensure_project + register_agent)
 - `bd list --parent <epic-id> --json | jq '[.[] | select(.status == "open")]'` - Filter beads by status
 - `bd dep tree <epic-id>` - View dependency tree for epic
 - `bd close <id1> --reason completed && bd update <id2> --status in_progress` - Chain close and claim in one command
@@ -140,7 +140,7 @@ Contains reusable learnings from completed tracks.
 - Continuity skill is in marketplace plugin, not local skills/ - can't add direct local dependency checks
 - Session start detection without hooks requires implicit trigger (workflow command loading on first message)
 - Ad-hoc queries (not triggering `ds`, `/conductor-implement`, etc.) do NOT load handoff history - intentional low-overhead behavior for casual chats
-- Agent Mail MCP Failure: HALT - Agent Mail required for orchestrator coordination (no fallback since v5.0)
+- Agent Mail unavailable (CLI + MCP): HALT - Agent Mail required for orchestrator coordination
 - Runtime Testing: Integration tests (Agent Mail, worker spawn) require live MCP - skip with `--reason skipped`
 - Worker Autonomy: Orchestrator workers CAN self claim/close beads (differs from standard subagent rules)
 - Auto-orchestration: fb Phase 6 triggers orchestration automatically after beads are filed
@@ -169,7 +169,7 @@ Contains reusable learnings from completed tracks.
 - Preflight triage runs even when beads are already filed - check `metadata.beads.status == "complete"` first
 - Handoff load runs for fresh sessions - skip when `conductor/handoffs/<track>/` is empty
 - Track Assignments parsing redundant when already present - use `parse_track_assignments_table()` directly
-- Confirmation prompt re-analyzes file scopes - should use pre-parsed track data
+- Parallel execution auto-triggers (no confirmation) - uses pre-parsed track data
 - Skill files live at `skills/` not `skills/` - verification scripts must use correct paths
 - Idempotent Oracle updates: When `## Oracle Audit` section exists, find start marker → find next `##` → replace entire section
 - Platform detection for Oracle: Check for oracle tool availability before deciding dispatch method (Amp vs Task)
@@ -230,8 +230,8 @@ Contains reusable learnings from completed tracks.
 - **Wave Execution:** Auto-orchestration uses re-dispatch loop - after wave N workers complete, query `bd ready --json` and spawn wave N+1 for newly-unblocked beads until no more ready beads exist
 - **Parallel Wave Execution:** Spawn independent tracks in waves, monitor Agent Mail for completion, re-dispatch when dependencies met
 - **5-Category Agent Directory:** research/ review/ planning/ execution/ debug/ under skills/orchestrator/agents/
-- **Mandatory send_message():** All sub-agents MUST call send_message() before returning with Status/Files/Decisions/Issues format
-- **First-Message Context Load:** fetch_inbox() on session start to load prior context without hooks (Amp-specific)
+- **Mandatory send-message via CLI:** All sub-agents MUST call send-message before returning with Status/Files/Decisions/Issues format
+- **First-Message Context Load:** fetch-inbox CLI on session start to load prior context without hooks (Amp-specific)
 - **Thin Router Pattern:** Main thread only routes and displays summaries, sub-agents do actual work and report via Agent Mail
 - **Session Brain Pattern:** Phase 0 (Preflight) runs before existing orchestrator phases for multi-session coordination
 - **Advisory File Reservations:** Warn on file conflicts but don't block - user decides

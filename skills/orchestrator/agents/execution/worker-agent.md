@@ -24,10 +24,10 @@ You are {agent_name}, an autonomous worker agent for Track {track_number}: {trac
 ## Protocol
 
 1. Claim bead: `bd update <id> --status in_progress`
-2. Reserve files: file_reservation_paths()
+2. Reserve files: `bun toolboxes/agent-mail/agent-mail.js file-reservation-paths`
 3. Do the work (TDD if applicable)
 4. Close bead: `bd close <id> --reason completed`
-5. Release files: release_file_reservations()
+5. Release files: `bun toolboxes/agent-mail/agent-mail.js release-file-reservations`
 6. Report via Agent Mail
 
 ## Important Rules
@@ -88,9 +88,9 @@ Execute all beads. Report via Agent Mail when complete.
 | Tool | Purpose |
 |------|---------|
 | Bash (bd) | Claim/close beads |
-| file_reservation_paths | Reserve files |
-| release_file_reservations | Release files |
-| send_message | Report progress |
+| `bun toolboxes/agent-mail/agent-mail.js file-reservation-paths` | Reserve files |
+| `bun toolboxes/agent-mail/agent-mail.js release-file-reservations` | Release files |
+| `bun toolboxes/agent-mail/agent-mail.js send-message` | Report progress |
 | create_file / edit_file | Implement changes |
 
 ## Worker Lifecycle
@@ -100,64 +100,61 @@ Start
   │
   ▼
 ┌─────────────────┐
-│ Register Agent  │ register_agent(project_key, program, model, name)
-└────────┬────────┘
+│ Register Agent  │ bun toolboxes/agent-mail/agent-mail.js register-agent \
+└────────┬────────┘   --project-key "..." --program "..." --model "..." --name "..."
          │
          ▼
 ┌─────────────────┐
 │ For Each Bead   │
 ├─────────────────┤
 │ 1. Claim bead   │ bd update <id> --status in_progress
-│ 2. Reserve files│ file_reservation_paths()
+│ 2. Reserve files│ bun toolboxes/agent-mail/agent-mail.js file-reservation-paths
 │ 3. Do work      │ TDD cycle
 │ 4. Close bead   │ bd close <id> --reason completed
-│ 5. Report       │ send_message()
+│ 5. Report       │ bun toolboxes/agent-mail/agent-mail.js send-message
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│ Release All     │ release_file_reservations()
+│ Release All     │ bun toolboxes/agent-mail/agent-mail.js release-file-reservations
 └────────┬────────┘
          │
          ▼
 ┌─────────────────┐
-│ Final Report    │ send_message() with summary
+│ Final Report    │ bun toolboxes/agent-mail/agent-mail.js send-message (with summary)
 └─────────────────┘
 ```
 
 ## File Reservation Pattern
 
-```python
+```bash
 # Before editing files
-file_reservation_paths(
-  project_key="/path/to/project",
-  agent_name="GreenCastle",
-  paths=["skills/orchestrator/agents/research/*.md"],
-  ttl_seconds=3600,
-  exclusive=True,
-  reason="Implementing research agents"
-)
+bun toolboxes/agent-mail/agent-mail.js file-reservation-paths \
+  --project-key "/path/to/project" \
+  --agent-name "GreenCastle" \
+  --paths '["skills/orchestrator/agents/research/*.md"]' \
+  --ttl-seconds 3600 \
+  --exclusive true \
+  --reason "Implementing research agents"
 
 # After completing work
-release_file_reservations(
-  project_key="/path/to/project",
-  agent_name="GreenCastle"
-)
+bun toolboxes/agent-mail/agent-mail.js release-file-reservations \
+  --project-key "/path/to/project" \
+  --agent-name "GreenCastle"
 ```
 
 ## Heartbeat Pattern
 
 Send periodic updates during long tasks:
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="GreenCastle",
-  to=["PurpleSnow"],
-  subject="[Track 2] Heartbeat: Working on bd-qo6l.3",
-  body_md="Still working. Progress: 60%. ETA: 10 minutes.",
-  thread_id="epic-thread"
-)
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "GreenCastle" \
+  --to '["PurpleSnow"]' \
+  --subject "[Track 2] Heartbeat: Working on bd-qo6l.3" \
+  --body-md "Still working. Progress: 60%. ETA: 10 minutes." \
+  --thread-id "epic-thread"
 ```
 
 ## Error Handling
@@ -173,14 +170,13 @@ send_message(
 
 ### Reporting Bead Complete
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="GreenCastle",
-  to=["PurpleSnow"],
-  subject="[Track 2] Bead complete: {bead_id}",
-  body_md="""
-## Bead Complete
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "GreenCastle" \
+  --to '["PurpleSnow"]' \
+  --subject "[Track 2] Bead complete: {bead_id}" \
+  --body-md "## Bead Complete
 
 **Bead**: {bead_id} - {bead_title}
 
@@ -192,22 +188,19 @@ send_message(
 - Passing: ✓
 
 ### Next
-Moving to: {next_bead_id}
-""",
-  thread_id="<epic-thread>"
-)
+Moving to: {next_bead_id}" \
+  --thread-id "<epic-thread>"
 ```
 
 ### Reporting Track Complete
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="GreenCastle",
-  to=["PurpleSnow"],
-  subject="[Track 2] COMPLETE: Agent Directory",
-  body_md="""
-## Track Complete
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "GreenCastle" \
+  --to '["PurpleSnow"]' \
+  --subject "[Track 2] COMPLETE: Agent Directory" \
+  --body-md "## Track Complete
 
 **Status**: SUCCEEDED
 
@@ -224,22 +217,19 @@ send_message(
 {issues_or_none}
 
 ### Ready For
-Track 2 dependencies are now unblocked.
-""",
-  thread_id="<epic-thread>"
-)
+Track 2 dependencies are now unblocked." \
+  --thread-id "<epic-thread>"
 ```
 
 ### Reporting Blocker
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="GreenCastle",
-  to=["PurpleSnow"],
-  subject="[Track 2] BLOCKED: {blocker_type}",
-  body_md="""
-## Blocked
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "GreenCastle" \
+  --to '["PurpleSnow"]' \
+  --subject "[Track 2] BLOCKED: {blocker_type}" \
+  --body-md "## Blocked
 
 **Bead**: {current_bead}
 **Blocker**: {blocker_description}
@@ -251,24 +241,21 @@ send_message(
 {what_is_needed}
 
 ### Waiting For
-{dependency_or_input}
-""",
-  importance="high",
-  ack_required=True,
-  thread_id="<epic-thread>"
-)
+{dependency_or_input}" \
+  --importance "high" \
+  --ack-required true \
+  --thread-id "<epic-thread>"
 ```
 
 ### Requesting Help
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="GreenCastle",
-  to=["PurpleSnow"],
-  subject="[Track 2] Question: {topic}",
-  body_md="""
-## Question
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "GreenCastle" \
+  --to '["PurpleSnow"]' \
+  --subject "[Track 2] Question: {topic}" \
+  --body-md "## Question
 
 **Context**: {what_im_working_on}
 
@@ -283,9 +270,7 @@ send_message(
 {my_recommendation}
 
 ### Need
-{what_kind_of_answer}
-""",
-  ack_required=True,
-  thread_id="<epic-thread>"
-)
+{what_kind_of_answer}" \
+  --ack-required true \
+  --thread-id "<epic-thread>"
 ```

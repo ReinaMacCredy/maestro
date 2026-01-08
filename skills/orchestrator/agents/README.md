@@ -64,28 +64,26 @@ All agents include an Agent Mail section for coordination:
 ## Agent Mail
 
 ### Reporting Progress
-\`\`\`
-send_message(
-  project_key="/path/to/project",
-  sender_name="AgentName",
-  to=["PurpleSnow"],  # Orchestrator
-  subject="[Track N] Task completed: <task-id>",
-  body_md="...",
-  thread_id="<epic-thread>"
-)
+\`\`\`bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "AgentName" \
+  --to '["PurpleSnow"]' \
+  --subject "[Track N] Task completed: <task-id>" \
+  --body-md "..." \
+  --thread-id "<epic-thread>"
 \`\`\`
 
 ### Requesting Help
-\`\`\`
-send_message(
-  project_key="/path/to/project",
-  sender_name="AgentName",
-  to=["PurpleSnow"],
-  subject="[Track N] BLOCKED: <reason>",
-  body_md="...",
-  importance="high",
-  thread_id="<epic-thread>"
-)
+\`\`\`bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "AgentName" \
+  --to '["PurpleSnow"]' \
+  --subject "[Track N] BLOCKED: <reason>" \
+  --body-md "..." \
+  --importance "high" \
+  --thread-id "<epic-thread>"
 \`\`\`
 ```
 

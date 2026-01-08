@@ -165,15 +165,15 @@ Reference: [handoff skill](../../../handoff/SKILL.md) for full workflow.
 | Agent Mail unavailable | HALT |
 | Otherwise | Sequential execution |
 
-#### Confirmation Prompt
+#### Auto-Trigger
 
-Before parallel dispatch:
+Parallel dispatch starts automatically (no confirmation):
 ```text
 📊 Parallel execution detected:
 - Track A: 2 tasks (src/api/)
 - Track B: 1 task (lib/)
 
-Run parallel? [Y/n]:
+⚡ Spawning workers...
 ```
 
 #### Branch Logic

@@ -175,14 +175,13 @@ Plan is mostly valid but requires:
 
 ### Reporting Validation Complete
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="ValidateAgent",
-  to=["Orchestrator"],
-  subject="[Validation] {artifact_type} validation complete",
-  body_md="""
-## Validation Summary
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "ValidateAgent" \
+  --to '["Orchestrator"]' \
+  --subject "[Validation] {artifact_type} validation complete" \
+  --body-md "## Validation Summary
 
 **Artifact**: {artifact_name}
 **Status**: {status}
@@ -202,22 +201,19 @@ send_message(
 {verdict}
 
 ## Next Steps
-{recommended_actions}
-""",
-  thread_id="<validation-thread>"
-)
+{recommended_actions}" \
+  --thread-id "<validation-thread>"
 ```
 
 ### Reporting Invalid Artifact
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="ValidateAgent",
-  to=["Orchestrator"],
-  subject="[Validation] INVALID: Cannot proceed",
-  body_md="""
-## Validation Failed
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "ValidateAgent" \
+  --to '["Orchestrator"]' \
+  --subject "[Validation] INVALID: Cannot proceed" \
+  --body-md "## Validation Failed
 
 **Artifact**: {artifact_name}
 **Status**: INVALID
@@ -229,9 +225,7 @@ send_message(
 {required_fixes}
 
 ## Cannot Proceed Until
-{conditions_for_proceeding}
-""",
-  importance="high",
-  thread_id="<validation-thread>"
-)
+{conditions_for_proceeding}" \
+  --importance "high" \
+  --thread-id "<validation-thread>"
 ```

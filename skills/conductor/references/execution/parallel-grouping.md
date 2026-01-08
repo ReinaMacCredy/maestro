@@ -199,7 +199,7 @@ Track 2: [bead-2]          # src/db
 
 ### Output
 
-Returns track grouping for display in confirmation prompt:
+Returns track grouping for auto-trigger display:
 
 ```
 📊 Parallel execution detected:
@@ -207,7 +207,7 @@ Returns track grouping for display in confirmation prompt:
 - Track 2: 1 task (src/db/models/)
 - Track 3: 1 task (lib/)
 
-Run parallel? [Y/n]:
+⚡ Spawning workers...
 ```
 
 ## Related

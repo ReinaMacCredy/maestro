@@ -51,12 +51,12 @@ generate_session_id() {
         local session_id="${base_agent}-${timestamp}"
         
         # Try to register
-        if toolboxes/agent-mail/agent-mail.js register-agent \
-            project_key:"$PROJECT_PATH" \
-            name:"$session_id" \
-            program:"amp" \
-            model:"$MODEL" \
-            task_description:"Session registration" 2>/dev/null; then
+        if bun toolboxes/agent-mail/agent-mail.js register-agent \
+            --project-key "$PROJECT_PATH" \
+            --name "$session_id" \
+            --program "amp" \
+            --model "$MODEL" \
+            --task-description "Session registration" 2>/dev/null; then
             echo "$session_id"
             return 0
         fi
@@ -77,15 +77,15 @@ generate_session_id() {
 
 ## Agent Mail Profile Persistence
 
-Session identity is persisted via `agent-mail.js register-agent`:
+Session identity is persisted via `bun toolboxes/agent-mail/agent-mail.js register-agent`:
 
 ```bash
-toolboxes/agent-mail/agent-mail.js register-agent \
-    project_key:"$PROJECT_PATH" \
-    name:"BlueLake-1735689600" \
-    program:"amp" \
-    model:"claude-opus-4-5@20251101" \
-    task_description:"Track: cc-v2-integration, Epic: bd-100"
+bun toolboxes/agent-mail/agent-mail.js register-agent \
+    --project-key "$PROJECT_PATH" \
+    --name "BlueLake-1735689600" \
+    --program "amp" \
+    --model "claude-opus-4-5@20251101" \
+    --task-description "Track: cc-v2-integration, Epic: bd-100"
 ```
 
 ### Profile Fields
@@ -99,9 +99,9 @@ toolboxes/agent-mail/agent-mail.js register-agent \
 
 ### Profile Lifecycle
 
-1. **Created**: At session start via `agent-mail.js register-agent`
-2. **Updated**: On heartbeat via `agent-mail.js register-agent` (updates `last_active_ts`)
-3. **Queried**: Via `agent-mail.js whois` for session detection
+1. **Created**: At session start via `bun toolboxes/agent-mail/agent-mail.js register-agent --project-key ... --name ...`
+2. **Updated**: On heartbeat via `bun toolboxes/agent-mail/agent-mail.js register-agent` (updates `last_active_ts`)
+3. **Queried**: Via `bun toolboxes/agent-mail/agent-mail.js whois --project-key ... --agent-name ...` for session detection
 4. **Retained**: Profiles persist for audit trail
 
 ## Session Data Model
@@ -160,21 +160,21 @@ class Session:
 
 ```bash
 # Get session profile
-toolboxes/agent-mail/agent-mail.js whois \
-    project_key:"$PROJECT_PATH" \
-    agent_name:"BlueLake-1735689600" \
-    include_recent_commits:true
+bun toolboxes/agent-mail/agent-mail.js whois \
+    --project-key "$PROJECT_PATH" \
+    --agent-name "BlueLake-1735689600" \
+    --include-recent-commits true
 ```
 
 ### Via fetch_inbox
 
 ```bash
 # Scan for session start messages
-toolboxes/agent-mail/agent-mail.js fetch-inbox \
-    project_key:"$PROJECT_PATH" \
-    agent_name:"$MY_SESSION_ID" \
-    since_ts:"$TWO_HOURS_AGO" \
-    include_bodies:true
+bun toolboxes/agent-mail/agent-mail.js fetch-inbox \
+    --project-key "$PROJECT_PATH" \
+    --agent-name "$MY_SESSION_ID" \
+    --since-ts "$TWO_HOURS_AGO" \
+    --include-bodies true
 ```
 
 ## Session Messages
@@ -184,7 +184,7 @@ toolboxes/agent-mail/agent-mail.js fetch-inbox \
 Sent when a session begins:
 
 ```bash
-toolboxes/agent-mail/agent-mail.js send-message \
+bun toolboxes/agent-mail/agent-mail.js send-message \
     project_key:"$PROJECT_PATH" \
     sender_name:"$SESSION_ID" \
     to:'["Broadcast"]' \
@@ -202,7 +202,7 @@ toolboxes/agent-mail/agent-mail.js send-message \
 Sent every 5 minutes:
 
 ```bash
-toolboxes/agent-mail/agent-mail.js send-message \
+bun toolboxes/agent-mail/agent-mail.js send-message \
     project_key:"$PROJECT_PATH" \
     sender_name:"$SESSION_ID" \
     to:'["Broadcast"]' \
@@ -215,7 +215,7 @@ toolboxes/agent-mail/agent-mail.js send-message \
 Sent on normal completion:
 
 ```bash
-toolboxes/agent-mail/agent-mail.js send-message \
+bun toolboxes/agent-mail/agent-mail.js send-message \
     project_key:"$PROJECT_PATH" \
     sender_name:"$SESSION_ID" \
     to:'["Broadcast"]' \

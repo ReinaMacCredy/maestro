@@ -239,14 +239,13 @@ poolSize: Math.max(50, os.cpus().length * 10)
 
 ### Reporting Investigation Complete
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="DebugAgent",
-  to=["Orchestrator"],
-  subject="[Debug] Root cause identified: {issue_title}",
-  body_md="""
-## Debug Complete
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "DebugAgent" \
+  --to '["Orchestrator"]' \
+  --subject "[Debug] Root cause identified: {issue_title}" \
+  --body-md "## Debug Complete
 
 **Issue**: {issue_title}
 
@@ -263,22 +262,19 @@ send_message(
 {risk_level}
 
 ### Prevention
-{prevention_measures}
-""",
-  thread_id="<debug-thread>"
-)
+{prevention_measures}" \
+  --thread-id "<debug-thread>"
 ```
 
 ### Reporting Unable to Reproduce
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="DebugAgent",
-  to=["Orchestrator"],
-  subject="[Debug] Cannot reproduce: {issue_title}",
-  body_md="""
-## Unable to Reproduce
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "DebugAgent" \
+  --to '["Orchestrator"]' \
+  --subject "[Debug] Cannot reproduce: {issue_title}" \
+  --body-md "## Unable to Reproduce
 
 **Issue**: {issue_title}
 
@@ -292,23 +288,20 @@ send_message(
 {additional_info_needed}
 
 ### Suggestions
-{next_steps_to_try}
-""",
-  importance="normal",
-  thread_id="<debug-thread>"
-)
+{next_steps_to_try}" \
+  --importance "normal" \
+  --thread-id "<debug-thread>"
 ```
 
 ### Reporting Critical Bug
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="DebugAgent",
-  to=["Orchestrator"],
-  subject="[Debug] CRITICAL: {issue_title}",
-  body_md="""
-## Critical Bug Found
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "DebugAgent" \
+  --to '["Orchestrator"]' \
+  --subject "[Debug] CRITICAL: {issue_title}" \
+  --body-md "## Critical Bug Found
 
 **Issue**: {issue_title}
 **Severity**: Critical
@@ -323,10 +316,8 @@ send_message(
 {urgent_actions}
 
 ### Temporary Workaround
-{workaround_if_available}
-""",
-  importance="urgent",
-  ack_required=True,
-  thread_id="<debug-thread>"
-)
+{workaround_if_available}" \
+  --importance "urgent" \
+  --ack-required \
+  --thread-id "<debug-thread>"
 ```

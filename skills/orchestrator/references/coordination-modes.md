@@ -69,18 +69,18 @@ Orchestrator collects these returns and aggregates into final summary.
 ## Full Mode Behavior
 
 - Full Agent Mail protocol (register, message, heartbeat)
-- Real-time progress monitoring via `agent-mail.js fetch-inbox`
+- Real-time progress monitoring via `bun toolboxes/agent-mail/agent-mail.js fetch-inbox`
 - Cross-track dependency notifications
-- Blocker resolution via `agent-mail.js reply-message`
+- Blocker resolution via `bun toolboxes/agent-mail/agent-mail.js reply-message`
 
 ### Worker Protocol (4-Step)
 
 ```
 ┌───────────────────────────────────────────────────────────────────────┐
-│  STEP 1: INITIALIZE (agent-mail.js macro-start-session - FIRST)       │
+│  STEP 1: INITIALIZE (bun toolboxes/agent-mail/agent-mail.js macro-start-session - FIRST)       │
 │  STEP 2: EXECUTE    (bd update/close - claim and work)                │
-│  STEP 3: REPORT     (agent-mail.js send-message - MANDATORY summary)  │
-│  STEP 4: CLEANUP    (agent-mail.js release-file-reservations)         │
+│  STEP 3: REPORT     (bun toolboxes/agent-mail/agent-mail.js send-message - MANDATORY summary)  │
+│  STEP 4: CLEANUP    (bun toolboxes/agent-mail/agent-mail.js release-file-reservations)         │
 └───────────────────────────────────────────────────────────────────────┘
 ```
 

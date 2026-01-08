@@ -202,14 +202,13 @@ Runs after grounding completes, before spec/plan generation.
 
 ### Reporting Impact Assessment
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="ImpactAgent",
-  to=["Orchestrator"],
-  subject="[Research] Impact assessment complete",
-  body_md="""
-## Files Affected
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "ImpactAgent" \
+  --to '["Orchestrator"]' \
+  --subject "[Research] Impact assessment complete" \
+  --body-md "## Files Affected
 
 | Action | Count | High Risk |
 |--------|-------|-----------|
@@ -227,22 +226,19 @@ send_message(
 {warnings}
 
 ## Confidence
-{confidence_level}
-""",
-  thread_id="<research-thread>"
-)
+{confidence_level}" \
+  --thread-id "<research-thread>"
 ```
 
 ### Reporting High Risk
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="ImpactAgent",
-  to=["Orchestrator"],
-  subject="[Research] HIGH RISK: Impact assessment warning",
-  body_md="""
-## Alert
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "ImpactAgent" \
+  --to '["Orchestrator"]' \
+  --subject "[Research] HIGH RISK: Impact assessment warning" \
+  --body-md "## Alert
 High-risk files detected requiring careful review.
 
 ## High Risk Summary
@@ -251,9 +247,7 @@ High-risk files detected requiring careful review.
 ## Recommendation
 - Review with senior developer
 - Add extra test coverage
-- Consider staged rollout
-""",
-  importance="high",
-  thread_id="<research-thread>"
-)
+- Consider staged rollout" \
+  --importance "high" \
+  --thread-id "<research-thread>"
 ```

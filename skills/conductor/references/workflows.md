@@ -124,7 +124,7 @@ Quick entry point for handoff protocol operations.
 | Format | Structured JSON + Markdown summary |
 | TTL | 7 days (configurable) |
 
-→ [Handoff Template](handoff/template.md)
+→ See [handoff skill](../../handoff/SKILL.md) for templates and workflows
 
 ---
 

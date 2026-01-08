@@ -37,5 +37,7 @@ conductor/plans
 
 # bv (beads viewer) local config and caches
 .bv/
-mcp.json
+/mcp.json
+# Allow skill-level mcp.json for lazy-loading
+!skills/*/mcp.json
 tmp/ralph/

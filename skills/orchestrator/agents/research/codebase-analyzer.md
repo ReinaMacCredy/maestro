@@ -135,14 +135,13 @@ INTERFACES:
 
 ### Reporting Analysis Complete
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="AnalyzerAgent",
-  to=["Orchestrator"],
-  subject="[Research] Code analysis complete",
-  body_md="""
-## Component Analysis
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "AnalyzerAgent" \
+  --to '["Orchestrator"]' \
+  --subject "[Research] Code analysis complete" \
+  --body-md "## Component Analysis
 
 {component_summaries}
 
@@ -155,31 +154,26 @@ send_message(
 {interface_definitions}
 
 ## Confidence
-{confidence_level}
-""",
-  thread_id="<research-thread>"
-)
+{confidence_level}" \
+  --thread-id "<research-thread>"
 ```
 
 ### Reporting Complex Code
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="AnalyzerAgent",
-  to=["Orchestrator"],
-  subject="[Research] Complex code detected",
-  body_md="""
-## Warning
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "AnalyzerAgent" \
+  --to '["Orchestrator"]' \
+  --subject "[Research] Complex code detected" \
+  --body-md "## Warning
 Complex code pattern detected in: {file_paths}
 
 ## High-Level Summary
 {summary}
 
 ## Recommendation
-Consider additional review before modification.
-""",
-  importance="normal",
-  thread_id="<research-thread>"
-)
+Consider additional review before modification." \
+  --importance "normal" \
+  --thread-id "<research-thread>"
 ```

@@ -177,14 +177,13 @@ REQUIRED REVISIONS:
 
 ### Reporting Spec Review Complete
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="SpecReviewer",
-  to=["Orchestrator"],
-  subject="[Review] Spec review complete",
-  body_md="""
-## Spec Review Summary
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "SpecReviewer" \
+  --to '["Orchestrator"]' \
+  --subject "[Review] Spec review complete" \
+  --body-md "## Spec Review Summary
 
 **Spec**: {spec_title}
 **Verdict**: {verdict}
@@ -203,22 +202,19 @@ send_message(
 {required_revisions}
 
 ### Questions for Stakeholders
-{clarification_questions}
-""",
-  thread_id="<review-thread>"
-)
+{clarification_questions}" \
+  --thread-id "<review-thread>"
 ```
 
 ### Reporting Spec Approved
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="SpecReviewer",
-  to=["Orchestrator"],
-  subject="[Review] Spec APPROVED",
-  body_md="""
-## Spec Approved
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "SpecReviewer" \
+  --to '["Orchestrator"]' \
+  --subject "[Review] Spec APPROVED" \
+  --body-md "## Spec Approved
 
 **Spec**: {spec_title}
 
@@ -232,8 +228,6 @@ send_message(
 {any_notes_or_suggestions}
 
 ### Ready For
-Plan generation can proceed.
-""",
-  thread_id="<review-thread>"
-)
+Plan generation can proceed." \
+  --thread-id "<review-thread>"
 ```

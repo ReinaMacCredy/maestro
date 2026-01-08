@@ -208,14 +208,13 @@ When `## Oracle Audit` section exists in design.md:
 
 ### Reporting Audit Complete
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="Oracle",
-  to=["Orchestrator"],
-  subject="[Design] Oracle audit complete",
-  body_md="""
-## Oracle Audit Summary
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "Oracle" \
+  --to '["Orchestrator"]' \
+  --subject "[Design] Oracle audit complete" \
+  --body-md "## Oracle Audit Summary
 
 **Design**: {design_title}
 **Verdict**: {verdict}
@@ -237,22 +236,19 @@ send_message(
 {warning_count} recommendations
 
 ### Next Steps
-{next_steps}
-""",
-  thread_id="<design-thread>"
-)
+{next_steps}" \
+  --thread-id "<design-thread>"
 ```
 
 ### Reporting Critical Gap (FULL mode)
 
-```python
-send_message(
-  project_key="/path/to/project",
-  sender_name="Oracle",
-  to=["Orchestrator"],
-  subject="[Design] HALT - Critical gap found",
-  body_md="""
-## HALT
+```bash
+bun toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "/path/to/project" \
+  --sender-name "Oracle" \
+  --to '["Orchestrator"]' \
+  --subject "[Design] HALT - Critical gap found" \
+  --body-md "## HALT
 
 Critical gap detected during Oracle audit.
 
@@ -266,10 +262,8 @@ Critical gap detected during Oracle audit.
 Fix the issue before proceeding to implementation.
 
 ## Mode
-FULL - proceeding is blocked until resolved.
-""",
-  importance="urgent",
-  ack_required=True,
-  thread_id="<design-thread>"
-)
+FULL - proceeding is blocked until resolved." \
+  --importance "urgent" \
+  --ack-required \
+  --thread-id "<design-thread>"
 ```
