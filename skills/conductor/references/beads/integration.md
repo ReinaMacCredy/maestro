@@ -67,6 +67,8 @@ Preflight: bd v0.5.2 ✓, Agent Mail ✓
 **Conductor Command:** `/conductor-implement`  
 **Beads Action:** Claim task with Agent Mail coordination
 
+**Also applicable to:** `/conductor-autonomous` (Ralph uses bd for story beads)
+
 | Action | Command |
 |--------|---------|
 | Claim task | `bd update <taskId> --status in_progress` |

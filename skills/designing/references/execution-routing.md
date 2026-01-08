@@ -14,6 +14,7 @@ Score-based routing using complexity metrics:
 Context-aware routing:
 - SINGLE_AGENT: Default for most work
 - PARALLEL_DISPATCH: When 2+ independent tasks identified
+- AUTONOMOUS: `ca` explicit OR `ralph.enabled == true`
 
 ## Integration
 

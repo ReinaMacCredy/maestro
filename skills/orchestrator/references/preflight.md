@@ -76,6 +76,7 @@ Based on conflict detection:
 |---------|-----------|-------|
 | `/conductor-implement` | ✅ Yes | Always runs Phase 0 |
 | `/conductor-orchestrate` | ✅ Yes | Always runs Phase 0 |
+| `/conductor-autonomous` | ⚠️ Partial | Ralph has own lock via `ralph.active` |
 | `ds` | ❌ Skip | Design sessions don't conflict |
 | `bd ready` | ❌ Skip | Read-only command |
 | `bd show` | ❌ Skip | Read-only command |

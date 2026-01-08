@@ -158,6 +158,7 @@ Reference: [handoff skill](../../../handoff/SKILL.md) for full workflow.
 
 | Condition | Result |
 |-----------|--------|
+| `ca` command explicit | AUTONOMOUS (Ralph) |
 | Track Assignments exists | PARALLEL_DISPATCH |
 | ≥2 non-overlapping file scope groups | PARALLEL_DISPATCH |
 | ≥2 independent beads (no deps) | PARALLEL_DISPATCH |

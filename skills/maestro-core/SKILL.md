@@ -19,7 +19,7 @@ Higher rank wins on conflicts.
 
 | Skill | Owns | Primary Triggers |
 |-------|------|------------------|
-| conductor | Implementation only | `ci`, `/conductor-implement` |
+| conductor | Implementation + autonomous | `ci`, `ca`, `/conductor-implement`, `/conductor-autonomous` |
 | orchestrator | Parallel execution | `co`, `/conductor-orchestrate` |
 | designing | Phases 1-10 (design → track creation) | `ds`, `cn`, `/conductor-newtrack`, `/conductor-design` |
 | tracking | Task/bead management | `bd *`, `fb`, `rb` |
@@ -29,7 +29,7 @@ Higher rank wins on conflicts.
 ## Workflow Chain
 
 ```
-ds/cn → design.md → /conductor-newtrack → spec.md + plan.md → fb → tracking → ci/co → implementation
+ds/cn → design.md → /conductor-newtrack → spec.md + plan.md → fb → tracking → ci/co/ca → implementation
 ```
 
 ## Routing Table
@@ -44,6 +44,7 @@ See **[routing-table.md](references/routing-table.md)** for complete trigger →
 |---------|-------|
 | `ds`, `cn` | designing |
 | `ci` | conductor |
+| `ca` | conductor |
 | `co` | orchestrator |
 | `fb`, `rb`, `bd *` | tracking |
 | `ho` | handoff |

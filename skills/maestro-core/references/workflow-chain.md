@@ -7,7 +7,7 @@ Complete pipeline from idea to implementation.
 ```
 ┌─────────────┐         ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
 │   DESIGN    │────┐    │    SPEC     │───▶│    PLAN     │───▶│  IMPLEMENT  │
-│     ds      │    │    │  newtrack   │    │     fb      │    │   ci / co   │
+│     ds      │    │    │  newtrack   │    │     fb      │    │ ci / co / ca│
 └─────────────┘    │    └─────────────┘    └─────────────┘    └─────────────┘
        │           │           │                  │                  │
        ▼           │           ▼                  ▼                  ▼
@@ -51,6 +51,7 @@ Both paths produce `design.md` and flow into `/conductor-newtrack`.
 ### Implement Phase
 - `ci` or `/conductor-implement` - Sequential execution
 - `co` or `/conductor-orchestrate` - Parallel execution with workers
+- `ca` or `/conductor-autonomous` - Autonomous Ralph execution
 - `bd ready` - Find next available work
 - `/conductor-finish` - Complete and archive track
 
@@ -64,14 +65,15 @@ At each phase end in design:
 ## Execution Routing
 
 ```
-ci triggered
+ci/co/ca triggered
     │
     ▼
-Track Assignments in plan.md?
+Which command?
     │
- ┌──┴──┐
-YES    NO
- │      │
- ▼      ▼
- co    sequential
+ ┌──┼──────────┐
+ci  co         ca
+ │   │          │
+ ▼   ▼          ▼
+seq  parallel  autonomous
+     workers   (Ralph loop)
 ```

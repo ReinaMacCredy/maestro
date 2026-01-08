@@ -36,3 +36,12 @@ If Agent Mail CLI is unavailable:
 - Proceed without coordination (work completion is mandatory)
 - Show `⚠️ Agent coordination unavailable` warning
 - Don't block on optional features
+
+## Autonomous Mode (Ralph)
+
+For `ca` execution, coordination is handled differently:
+- Ralph uses exclusive `ralph.active` lock instead of file reservations
+- Spawns fresh Amp instances per iteration (not Task())
+- Progress tracked via `<track>/progress.txt`
+
+See [autonomous.md](../../conductor/references/workflows/autonomous.md) for details.

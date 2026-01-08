@@ -32,7 +32,7 @@
 │  │    📦     │  │   🔍    │  │   📋    │  │   🚀    │                                   │
 │  └─────┬─────┘  └────┬─────┘  └────┬────┘  └────┬────┘                                   │
 │        │             │             │            │                                        │
-│       fb           bv+Oracle    tracks     [O]/[S] prompt                                │
+│       fb           bv+Oracle    tracks     [O]/[S]/[R] prompt                                │
 │                                                                                          │
 └──────────────────────────────────────────────────────────────────────────────────────────┘
 
@@ -359,7 +359,7 @@ Oracle → APPROVED:       Continue to Phase 7
 | **Type** | Terminal state |
 | **Inputs** | Track assignments from Phase 7 |
 | **Outputs** | Orchestration decision |
-| **Checkpoint** | [O]/[S] prompt |
+| **Checkpoint** | [O]/[S]/[R] prompt |
 | **Mode** | Both SPEED and FULL |
 
 **Orchestration Prompt (≥2 tracks):**
@@ -370,7 +370,10 @@ Ready to execute. Found N tracks:
 
 [O] Orchestrate (spawn workers)    ← Default after 30s
 [S] Sequential (run ci manually)
+[R] Ralph (autonomous loop - ca)
 ```
+
+> **Note:** `[R]` is available when `ralph.enabled == true` in track `metadata.json`.
 
 **Single Track:**
 - Suggest: `Run 'ci' to start implementation`
@@ -510,7 +513,7 @@ DISCOVER ──────────→ DEFINE ──────────
 ```
 DISCOVER → DEFINE → DEVELOP → VERIFY → DECOMPOSE → VALIDATE → ASSIGN → READY
     │         │         │        │          │          │         │        │
- research  decisions  arch   Oracle+    fb beads    bv deps   tracks  [O]/[S]
+ research  decisions  arch   Oracle+    fb beads    bv deps   tracks  [O]/[S]/[R]
   -start              +verify spikes                +Oracle
 ```
 
@@ -741,7 +744,7 @@ Spawns at end of DEVELOP to validate design:
 ```
 SPEED (4 phases):  ds → DISCOVER → DEFINE → VERIFY → READY → ci
 FULL (10 phases):   ds → DISCOVER → DEFINE → DEVELOP → VERIFY →
-                       DECOMPOSE → VALIDATE → ASSIGN → READY → [O]/[S]
+                       DECOMPOSE → VALIDATE → ASSIGN → READY → [O]/[S]/[R]
 
 Research:          2 hooks (start + verify), ~35s max
 Checkpoints:       A/P/C at phases 1-4 (FULL only)

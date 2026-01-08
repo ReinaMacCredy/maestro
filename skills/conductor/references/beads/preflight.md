@@ -853,6 +853,8 @@ cleanup_session() {
 All Conductor commands that interact with Beads:
 
 - `/conductor-implement`
+- `/conductor-orchestrate`
+- `/conductor-autonomous`
 - `/conductor-newtrack` (when filing beads)
 - `/conductor-status`
 - `/conductor-finish`

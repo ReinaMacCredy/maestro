@@ -1,5 +1,8 @@
 # Coordination Modes
 
+> **Note:** For autonomous execution (`ca`), see [autonomous.md](../../conductor/references/workflows/autonomous.md).
+> Ralph is a third execution mode alongside `ci` (sequential) and `co` (parallel).
+
 Orchestrator supports two modes based on task complexity and Agent Mail availability.
 
 ## Mode Comparison

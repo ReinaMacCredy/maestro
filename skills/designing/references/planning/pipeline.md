@@ -129,7 +129,7 @@ BOOTSTRAP mode (no input):
 │       │      📦       │     │      🔍       │     │      📋       │     │      🚀       ││
 │       └───────┬───────┘     └───────┬───────┘     └───────┬───────┘     └───────┬───────┘│
 │               │                     │                     │                     │        │
-│         fb (file beads)       bv + Oracle           track planning        [O]/[S] prompt │
+│         fb (file beads)       bv + Oracle           track planning        [O]/[S]/[R] prompt │
 │         embed learnings       dependency check      plan.md generation                   │
 │                                                                                          │
 │       ┌───────────────┐     ┌───────────────┐                                            │
@@ -313,9 +313,12 @@ Estimated time: 2h
 
 [O] Orchestrate (parallel execution)
 [S] Sequential (single agent)
+[R] Ralph (autonomous loop - ca)
 
 Default: [O] after 30s
 ```
+
+> **Note:** `[R]` is available when `ralph.enabled == true` in track `metadata.json`.
 
 ---
 
@@ -351,7 +354,7 @@ Default: [O] after 30s
 DECOMPOSE ──► VALIDATE ──► ASSIGN ──► READY ──► EXECUTE ──► FINISH
     │             │           │          │          │          │
     ▼             ▼           ▼          ▼          ▼          ▼
-  beads       validated    tracks     [O]/[S]    beads      track
+  beads       validated    tracks     [O]/[S]/[R]    beads      track
   filed        beads      assigned    prompt    completed   archived
 ```
 

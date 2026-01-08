@@ -31,8 +31,8 @@ Turn ideas into fully-formed, implementation-ready designs through a unified 10-
 | 5 | **DECOMPOSE** | Execute | Create beads (fb) | Beads filed |
 | 6 | **VALIDATE** | Execute | Dependency check (bv) + Oracle review | Dependencies valid |
 | 7 | **ASSIGN** | Execute | Track assignments | Tracks assigned |
-| 8 | **READY** | Complete | Handoff to ci/orchestrate | Execution ready |
-| 9 | **EXECUTE** | Implement | Run ci/orchestrate on tracks | All beads completed |
+| 8 | **READY** | Complete | Handoff to ci/co/ca | Execution ready |
+| 9 | **EXECUTE** | Implement | Run ci/co/ca on tracks | All beads completed |
 | 10 | **FINISH** | Archive | Extract learnings + archive track | Track archived |
 
 See [pipeline.md](references/pipeline.md) for full details.
@@ -86,7 +86,7 @@ See [pipeline.md](references/pipeline.md) for all execution blocks.
 3. **Route** - Score complexity (< 4 = SPEED, > 6 = FULL) → [design-routing-heuristics.md](references/design-routing-heuristics.md)
 4. **Execute** - 10-phase pipeline with A/P/C checkpoints → [pipeline.md](references/pipeline.md)
 5. **Validate** - ⛔ EXECUTION BLOCK at Phase 4 (call oracle())
-6. **Complete** - Phase 8 (READY) triggers `ci`/`co` → Phase 9 (EXECUTE) → Phase 10 (FINISH)
+6. **Complete** - Phase 8 (READY) triggers `ci`/`co`/`ca` → Phase 9 (EXECUTE) → Phase 10 (FINISH)
 
 ### Research Hooks (Consolidated)
 
@@ -191,9 +191,12 @@ Ready to execute. Found N tracks:
 
 [O] Orchestrate (spawn workers)
 [S] Sequential (run ci manually)
+[R] Ralph (autonomous loop - ca)
 
 Default: [O] after 30s
 ```
+
+> **Note:** `[R]` is available when `ralph.enabled == true` in track `metadata.json`.
 
 ⚠️ **MANDATORY:** If user selects [O] and ≥2 tracks exist, you MUST spawn `Task()` for each track.
 
@@ -247,6 +250,7 @@ Input detection (priority order):
 |---------|-------------|-------|
 | `ci` | `/conductor-implement` - Execute track | Phase 9 (EXECUTE) |
 | `co` | `/conductor-orchestrate` - Spawn parallel workers | Phase 9 (EXECUTE) |
+| `ca` | `/conductor-autonomous` - Ralph loop | Phase 9 (EXECUTE) |
 | `/conductor-finish` | Archive track + extract learnings | Phase 10 (FINISH) |
 
 See [maestro-core](../maestro-core/SKILL.md) for full routing table.

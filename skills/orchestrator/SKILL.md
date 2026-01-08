@@ -19,11 +19,12 @@ description: Multi-agent parallel execution with autonomous workers. Use when pl
 ## When to Use
 
 | Trigger | Condition |
-|---------|-----------|
+|---------|-----------| 
 | Auto-routed | `/conductor-implement` when plan has Track Assignments |
 | File-scope | `/conductor-implement` when ≥2 non-overlapping file groups detected |
 | Direct | `/conductor-orchestrate` or `co` |
 | Phrase | "run parallel", "spawn workers", "dispatch agents" |
+| **See also** | `ca` for [autonomous execution](../conductor/references/workflows/autonomous.md) |
 
 ## Confirmation Prompt
 
