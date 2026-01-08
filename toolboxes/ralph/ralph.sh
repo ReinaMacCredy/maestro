@@ -89,8 +89,8 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   # Update current iteration in metadata
   jq --argjson iter "$i" '.ralph.currentIteration = $iter' "$METADATA_FILE" > "$METADATA_FILE.tmp" && mv "$METADATA_FILE.tmp" "$METADATA_FILE"
   
-  # Run amp with the ralph prompt, passing track path
-  OUTPUT=$(RALPH_TRACK_PATH="$TRACK_PATH" cat "$SCRIPT_DIR/prompt.md" | amp --dangerously-allow-all 2>&1 | tee /dev/stderr) || true
+  # Run amp with the ralph prompt, injecting track path into prompt
+  OUTPUT=$(sed "s|\$TRACK_PATH|$TRACK_PATH|g" "$SCRIPT_DIR/prompt.md" | amp --dangerously-allow-all 2>&1 | tee /dev/stderr) || true
   
   # Log iteration to progress file
   echo "" >> "$PROGRESS_FILE"
