@@ -1,20 +1,20 @@
 ---
 name: designing
-description: Design Session - collaborative brainstorming to turn ideas into actionable implementation plans using the Unified Pipeline methodology. Use when user types "ds" or wants to explore/design a feature before implementation. "pl" is an alias for phases 5-8 when design.md exists. MUST load maestro-core skill first for routing.
+description: Design Session - collaborative brainstorming to turn ideas into actionable implementation plans using the Unified Pipeline methodology. Use when user types "ds" or wants to explore/design a feature before implementation. "pl" triggers phases 5-10 (STANDALONE/ALIAS/NO-OP modes). MUST load maestro-core skill first for routing.
 ---
 
 # Design & Planning
 
-Turn ideas into fully-formed, implementation-ready designs through a unified 8-phase pipeline.
+Turn ideas into fully-formed, implementation-ready designs through a unified 10-phase pipeline.
 
 ## Entry Points
 
 | Trigger | Action |
 |---------|--------|
-| `ds` | Start unified pipeline (all 8 phases) |
+| `ds` | Start unified pipeline (all 10 phases) |
 | `/conductor-design` | Start unified pipeline (alias) |
 | `cn`, `/conductor-newtrack` | Create spec + plan + beads from existing design.md |
-| `pl`, `/plan` | Alias for phases 5-8 (requires existing design.md) |
+| `pl`, `/plan` | Planning phases (5-10) - see pl Entry Modes below |
 | "design a feature" | Start unified pipeline |
 | "let's think through X" | Start unified pipeline |
 
@@ -41,9 +41,9 @@ Complexity scoring determines execution mode:
 
 | Score | Mode | Phases | A/P/C | Research |
 |-------|------|--------|-------|----------|
-| < 4 | **SPEED** | 1,2,4,8 | No | 1 hook (start) |
+| < 4 | **SPEED** | 1,2,4,READY | No | 1 hook (start) |
 | 4-6 | **ASK** | User chooses | Optional | User chooses |
-| > 6 | **FULL** | 1-8 | Yes | 2 hooks |
+| > 6 | **FULL** | 1-10 | Yes | 2 hooks |
 
 ### Mode Comparison
 
@@ -71,7 +71,7 @@ Complexity scoring determines execution mode:
 1. **Initialize** - Load handoffs, CODEMAPS, verify conductor setup → [session-init.md](references/session-init.md)
 2. **Research** - Consolidated research at Phase 1 start → [pipeline.md](references/pipeline.md)
 3. **Route** - Score complexity (< 4 = SPEED, > 6 = FULL) → [design-routing-heuristics.md](references/design-routing-heuristics.md)
-4. **Execute** - 8-phase pipeline with A/P/C checkpoints → [pipeline.md](references/pipeline.md)
+4. **Execute** - 10-phase pipeline with A/P/C checkpoints → [pipeline.md](references/pipeline.md)
 5. **Validate** - Progressive validation; **Oracle audit at Phase 4** (see validation summary below)
 6. **Complete** - Phase 8 auto-orchestration or manual `ci`
 
@@ -106,7 +106,7 @@ INLINE → MICRO_APC → NUDGE → DS_FULL → DS_BRANCH → BRANCH_MERGE
 | **INLINE** | Normal flow (conductor/beads) | Default |
 | **MICRO_APC** | Lightweight checkpoint at boundaries | End of spec/plan section |
 | **NUDGE** | Suggest upgrade to DS | 3+ design iterations |
-| **DS_FULL** | Full 8-phase with A/P/C | `ds` command or upgrade |
+| **DS_FULL** | Full 10-phase with A/P/C | `ds` command or upgrade |
 | **DS_BRANCH** | DS attached to design branch | Design rethink in track |
 | **BRANCH_MERGE** | Apply branch changes | Branch complete |
 
@@ -190,8 +190,8 @@ See [pipeline.md](references/pipeline.md#phase-8-ready-complete)
 
 | Scenario | Behavior |
 |----------|----------|
-| `pl` after Phase 4 completes | Not needed - phases 5-8 run automatically after `ds` |
-| `pl` standalone (with design.md) | **ALIAS** - Runs Phases 5-8 only |
+| `pl` after Phase 4 completes | Not needed - phases 5-10 run automatically after `ds` in FULL mode |
+| `pl` standalone (with design.md) | **ALIAS** - Runs Phases 5-10 only |
 | `pl` without design.md | **ERROR** - Requires design.md from phases 1-4 |
 
 ## Anti-Patterns

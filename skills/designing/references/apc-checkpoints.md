@@ -2,7 +2,7 @@
 
 The Adaptive A/P/C system provides design checkpoints across the unified DS pipeline (phases 1-4).
 
-> **Note:** A/P/C checkpoints only appear in FULL mode for phases 1-4. Phases 5-8 (execution) are automated with no user checkpoints.
+> **Note:** A/P/C checkpoints only appear in FULL mode for phases 1-4. Phases 5-10 (planning/execution) are automated with no user checkpoints.
 
 ## State Machine Overview
 
@@ -24,7 +24,7 @@ INLINE ──┬──[checkpoint]──→ MICRO_APC ──[A/P]──→ DS_FU
 
 ## Unified Pipeline Phases
 
-The unified DS pipeline consolidates design and planning into 8 phases:
+The unified DS pipeline consolidates design and planning into 10 phases:
 
 | Phase | Name | A/P/C Checkpoint |
 |-------|------|------------------|
@@ -32,10 +32,10 @@ The unified DS pipeline consolidates design and planning into 8 phases:
 | 2 | DEFINE | ✅ End of phase (FULL mode) |
 | 3 | DEVELOP | ✅ End of phase (FULL mode) |
 | 4 | VERIFY | ✅ Oracle audit → A/P/C menu (FULL mode) |
-| 5-8 | Execution | ❌ Automated (no user checkpoints) |
+| 5-10 | Planning/Execution | ❌ Automated (no user checkpoints) |
 
 **Key changes from legacy DS + PL separation:**
-- No separate planning pipeline (`pl`) - integrated into phases 3-4
+- `pl` command now triggers phases 5-10 (STANDALONE/ALIAS/NO-OP modes)
 - Oracle audit runs at end of Phase 4 before A/P/C menu
 - SPEED mode skips A/P/C but still runs Oracle (warns instead of halts)
 
@@ -249,7 +249,7 @@ Oracle Audit: ✅ APPROVED
 Choose:
 [A] Advanced - deeper analysis, assumption audit
 [P] Party - multi-perspective feedback from expert agents
-[C] Continue - proceed to execution (phases 5-8 are automated)
+[C] Continue - proceed to planning/execution (phases 5-10 are automated)
 [↩ Back] - return to Phase 3
 ```
 
@@ -287,15 +287,15 @@ In SPEED mode, log warning and proceed:
 
 Oracle Audit: ⚠️ NEEDS_REVISION (logged, continuing in SPEED mode)
 
-[Proceed to execution phases 5-8]
+[Proceed to planning/execution phases 5-10]
 ```
 
 ---
 
-## Phases 5-8: Automated Execution
+## Phases 5-10: Automated Planning & Execution
 
 After Phase 4 checkpoint is passed:
-- Phases 5-8 run automatically with no A/P/C checkpoints
+- Phases 5-10 run automatically with no A/P/C checkpoints
 - TDD cycles and beads integration handle execution validation
 - User intervention only on errors/blockers
 

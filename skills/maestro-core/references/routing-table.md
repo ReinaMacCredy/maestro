@@ -43,7 +43,7 @@ Complete trigger → skill mapping.
 
 | Skill | Owns | Does NOT Own |
 |-------|------|--------------|
-| designing | Phases 1-8, design.md, spec.md, plan.md generation | Implementation |
+| designing | Phases 1-10, design.md, spec.md, plan.md generation | Implementation |
 | conductor | `ci` implementation execution | Design sessions, track creation |
 | orchestrator | Parallel worker coordination | Sequential implementation |
 | tracking | Bead CRUD, dependency graphs | Workflow routing |

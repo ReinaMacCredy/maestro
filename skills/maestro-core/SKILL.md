@@ -21,7 +21,7 @@ Higher rank wins on conflicts.
 |-------|------|------------------|
 | conductor | Implementation only | `ci`, `/conductor-implement` |
 | orchestrator | Parallel execution | `co`, `/conductor-orchestrate` |
-| designing | Phases 1-8 (design → track creation) | `ds`, `cn`, `/conductor-newtrack`, `/conductor-design` |
+| designing | Phases 1-10 (design → track creation) | `ds`, `cn`, `/conductor-newtrack`, `/conductor-design` |
 | tracking | Task/bead management | `bd *`, `fb`, `rb` |
 | handoff | Session cycling | `ho`, `/conductor-finish`, `/conductor-handoff` |
 | creating-skills | Skill authoring | "create skill", "write skill" |
@@ -77,7 +77,7 @@ See **[routing-table.md](references/routing-table.md)** for complete trigger →
 
 ## Related Skills
 
-- [designing](../designing/SKILL.md) - Double Diamond design sessions (phases 1-8)
+- [designing](../designing/SKILL.md) - Double Diamond design sessions (phases 1-10)
 - [conductor](../conductor/SKILL.md) - Implementation execution
 - [orchestrator](../orchestrator/SKILL.md) - Multi-agent parallel execution
 - [tracking](../tracking/SKILL.md) - Issue tracking and dependency graphs
