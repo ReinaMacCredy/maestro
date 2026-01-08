@@ -10,11 +10,21 @@ Third execution mode alongside `ci` (implement) and `co` (orchestrate).
 
 Invoke Ralph autonomous loop to iterate through stories with automated verification passes.
 
+## ⚠️ MANDATORY: Direct Shell Invocation
+
+**When `ca` is triggered, ALWAYS run the shell script directly:**
+
+```bash
+./toolboxes/ralph/ralph.sh <track-path> [max_iterations]
+```
+
+Do NOT use Task() or sub-agents. Ralph.sh spawns fresh Amp instances for each iteration - this is the core pattern.
+
 ## Prerequisites
 
 - Track exists with `metadata.json`
 - `ralph.enabled == true` in metadata.json
-- `ralph.stories` array is populated
+- `ralph.stories` object is populated
 - `ralph.active == false` (no other ca running)
 
 ## Preflight Checks
@@ -38,28 +48,33 @@ When `ralph.active == true`:
 
 ## Execution Flow
 
-```
-1. Set ralph.active = true (exclusive lock)
-2. Invoke: toolboxes/ralph/ralph.sh <track-path> [max_iterations]
-3. Ralph iterates through stories:
-   - Pick next story from ralph.stories
-   - Execute story implementation
-   - Run verification passes
-   - Update ralph.stories[id].passes status
-4. On completion signal or max iterations:
-   - Set ralph.active = false
-   - Update workflow.state = DONE
-   - Write final progress.txt
-```
+When user types `ca`:
 
-## Invocation
+1. **Find active track** - Look for track with `ralph.enabled == true`
+2. **Run preflight checks** - Validate prerequisites
+3. **Execute directly via Bash:**
 
 ```bash
-# Basic invocation
-toolboxes/ralph/ralph.sh conductor/tracks/<track_id>
+./toolboxes/ralph/ralph.sh conductor/tracks/<track_id> 10
+```
 
-# With iteration limit
-toolboxes/ralph/ralph.sh conductor/tracks/<track_id> 10
+4. Ralph.sh handles:
+   - Setting `ralph.active = true` (exclusive lock)
+   - Spawning fresh Amp instances per iteration
+   - Updating `ralph.stories[id].passes` status
+   - Releasing lock on completion/error
+
+## Invocation Examples
+
+```bash
+# Basic invocation (default 10 iterations)
+./toolboxes/ralph/ralph.sh conductor/tracks/<track_id>
+
+# With custom iteration limit
+./toolboxes/ralph/ralph.sh conductor/tracks/<track_id> 5
+
+# Example with real track
+./toolboxes/ralph/ralph.sh conductor/tracks/ralph-test_20260109 10
 ```
 
 ## State Updates
@@ -106,14 +121,16 @@ Story completion updates `ralph.stories[id].passes`:
 ```json
 {
   "ralph": {
-    "stories": [
-      { "id": "auth-login", "passes": true },
-      { "id": "auth-logout", "passes": true },
-      { "id": "session-mgmt", "passes": null }
-    ]
+    "stories": {
+      "auth-login": { "id": "auth-login", "title": "Login flow", "priority": 1, "passes": true, "beadId": "proj-abc1" },
+      "auth-logout": { "id": "auth-logout", "title": "Logout flow", "priority": 2, "passes": true, "beadId": "proj-def2" },
+      "session-mgmt": { "id": "session-mgmt", "title": "Session management", "priority": 3, "passes": false, "beadId": "proj-ghi3" }
+    }
   }
 }
 ```
+
+**Note:** `ralph.stories` is an **object keyed by story ID** (not an array). This enables direct lookup: `.ralph.stories[$id].passes = true`.
 
 ## Lock Behavior
 

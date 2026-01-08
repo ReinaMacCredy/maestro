@@ -102,6 +102,33 @@ Run `scripts/beads-metrics-summary.sh` for weekly summary.
 - **Blocking**: `bd dep add <issue> <depends-on>` to add dependencies
 - **planTasks Mapping**: Bidirectional mapping between plan task IDs and bead IDs in `metadata.json.beads`
 
+## Ralph Integration (Autonomous Mode)
+
+When `fb` (file beads) creates issues from plan.md, it also populates `metadata.json.ralph` for autonomous execution via `ca`:
+
+```json
+{
+  "ralph": {
+    "enabled": true,
+    "active": false,
+    "stories": {
+      "task-1": { "id": "task-1", "title": "Add auth endpoint", "priority": 1, "passes": false, "beadId": "my-project-abc1" },
+      "task-2": { "id": "task-2", "title": "Add login UI", "priority": 2, "passes": false, "beadId": "my-project-def2" }
+    }
+  }
+}
+```
+
+**Population rules:**
+- Stories keyed by `.planTasks` task ID (not bead ID)
+- `beadId` references the mapped bead for commit traceability
+- `passes: false` initially; set to `true` when story completes
+- `priority` derived from task order in plan.md
+
+**Idempotency:** Re-running `fb` preserves existing `passes` values - only new tasks are added with `passes: false`.
+
+**Usage:** Run `ca` to start Ralph autonomous loop after `fb` completes.
+
 ## References
 
 > **Cross-skill reference:** Load the [conductor](../../conductor/SKILL.md) skill for:

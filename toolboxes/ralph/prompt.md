@@ -71,6 +71,8 @@ If you discover a **reusable pattern** that future iterations should know, add i
 
 Only add patterns that are **general and reusable**, not story-specific details.
 
+**Note:** While progress.txt is append-only for story logs, the `## Codebase Patterns` section at the top may be edited to consolidate learnings across iterations.
+
 ## Update AGENTS.md Files
 
 Before committing, check if any edited files have learnings worth preserving in nearby AGENTS.md files:
@@ -109,26 +111,54 @@ Only update AGENTS.md if you have **genuinely reusable knowledge** that would he
 - Do NOT commit broken code
 - Keep changes focused and minimal
 - Follow existing code patterns
+- **Fixing related files is allowed:** If your story causes typecheck failures in other files, fix them - this is completing the story, not scope creep
+
+## Common Gotchas
+
+**Interactive prompts:** If a command requires interactive input, bypass it:
+```bash
+echo -e "\n\n" | npm run db:generate
+```
+
+**Schema/type changes:** After modifying types or schemas, check consuming files for errors:
+- Server actions
+- UI components using the types
+- Database queries
+
+**Context limits:** Each story must be small enough to complete in one context window. If you're running out of context, the story was too big - note this in progress.txt for future PRD splits.
 
 ## Browser Testing (Required for Frontend Stories)
 
 For any story that changes UI, you MUST verify it works in the browser:
 
-1. Load the `dev-browser` skill
+1. Load the `dev-browser` skill (or use Playwright/webapp-testing if available)
 2. Navigate to the relevant page
 3. Verify the UI changes work as expected
 4. Take a screenshot if helpful for the progress log
 
 A frontend story is NOT complete until browser verification passes.
 
+**Identifying UI stories:** Check the story's acceptance criteria or `type` field. Stories mentioning "UI", "component", "page", "button", "form", or visual elements require browser verification.
+
 ## Stop Condition
 
-After completing a story, check if ALL stories in `.ralph.stories[]` have `passes: true`.
+After completing a story, check if ALL stories in `.ralph.stories` (object values) have `passes: true`.
 
 If ALL stories are complete and passing, reply with:
 <promise>COMPLETE</promise>
 
-If there are still stories with `passes: false`, end your response normally (another iteration will pick up the next story).
+If there are still stories with `passes: false`, **emit a completion marker** for the finished story:
+<story-complete>STORY_ID</story-complete>
+
+Then end your response normally (another iteration will pick up the next story).
+
+**Example output when finishing a story:**
+```
+✅ Completed story auth-login
+<story-complete>auth-login</story-complete>
+
+Moving to next iteration...
+```
 
 ## Important
 
@@ -137,3 +167,40 @@ If there are still stories with `passes: false`, end your response normally (ano
 - Keep CI green
 - Read the Codebase Patterns section in progress.txt before starting
 - Reference `design.md` and `plan.md` for context when needed
+- **Learnings > Logs:** progress.txt should capture patterns and gotchas, not just what was done
+
+## Auto-Handoff
+
+Amp can be configured to auto-handoff at 90% context:
+```json
+// ~/.config/amp/settings.json
+"amp.experimental.autoHandoff": { "context": 90 }
+```
+
+This enables Ralph to handle stories that exceed a single context window by handing off to a fresh session mid-story.
+
+## Critical Concepts
+
+### Each Iteration = Fresh Context
+
+Each iteration spawns a **new Amp instance** with clean context. The only memory between iterations is:
+- Git history (commits from previous iterations)
+- `progress.txt` (learnings and context)
+- `metadata.json` (which stories are done)
+- `AGENTS.md` files (discovered patterns)
+
+### Feedback Loops
+
+Ralph only works if there are feedback loops:
+- Typecheck catches type errors
+- Tests verify behavior
+- CI must stay green - broken code compounds across iterations
+
+### Thread References
+
+Include the Amp thread URL in progress.txt:
+```
+Thread: https://ampcode.com/threads/$AMP_CURRENT_THREAD_ID
+```
+
+Future iterations can use `read_thread` tool to reference previous work if they need more context.

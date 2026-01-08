@@ -13,7 +13,7 @@ Execute tracks with TDD and parallel routing.
 |---------|--------|-----------|
 | `/conductor-setup` | Initialize project context | [workflows/setup.md](references/workflows/setup.md) |
 | `/conductor-implement` | Execute track (auto-routes if parallel) | [workflows/implement.md](references/workflows/implement.md) |
-| `ca`, `/conductor-autonomous` | Start autonomous Ralph execution | [workflows/autonomous.md](references/workflows/autonomous.md) |
+| `ca`, `/conductor-autonomous` | **Run ralph.sh directly** (no Task/sub-agents) | [workflows/autonomous.md](references/workflows/autonomous.md) |
 | `/conductor-status` | Display progress overview | [structure.md](references/structure.md) |
 | `/conductor-revise` | Update spec/plan mid-work | [workflows.md#revisions](references/workflows.md#revisions) |
 

@@ -58,3 +58,9 @@ Ralph maintains context across iterations through:
 - **progress.txt** - Logs what was done and learnings
 - **prd.json** - Tracks completion status of each story
 - **AGENTS.md** - Discovered patterns for future iterations
+
+## References
+
+- [Geoffrey Huntley's Ralph article](https://ghuntley.com/ralph/)
+- [Anthropic's agent harnesses research](https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents)
+- [Amp documentation](https://ampcode.com/manual)
