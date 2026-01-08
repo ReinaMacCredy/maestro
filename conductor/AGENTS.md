@@ -80,6 +80,7 @@ Contains reusable learnings from completed tracks.
 - `npx mcporter generate-cli --from .claude/toolboxes/<name>/<name>.js` - Regenerate CLI from existing
 - `cliff.toml tag_pattern = "v0.*"` - Filter changelog to specific version series (ignores 1-5.x history)
 - Update `plugin.json` + `marketplace.json` together for version reset
+- `git mv .claude/skills/old .claude/skills/new` - Rename skill while preserving git history
 
 ## Gotchas
 
@@ -178,6 +179,10 @@ Contains reusable learnings from completed tracks.
 - MCPorter env vars use `${VAR}` syntax in mcporter.json (not `$VAR`)
 - Generated MCPorter .js files are ~1.4MB bundled - this is normal
 - MCP server must be running during CLI generation (not at runtime)
+- Reference flattening required replacing deep cross-skill refs with skill loader pointers or self-contained content
+- Skill directory name MUST match SKILL.md frontmatter `name:` field
+- When merging skills, resolve conflicting guidelines by preferring more specific/recent guidance
+- Redirect stubs needed for moved files to prevent broken links during transition
 
 ## Patterns
 
@@ -244,3 +249,6 @@ Contains reusable learnings from completed tracks.
 - **Research Consolidation:** 2 hooks (research-start, research-verify) replace 5 hooks (~35s max vs ~95s)
 - **Mode-Aware Execution:** SPEED (phases 1,2,4,8) vs FULL (all 8) based on complexity score
 - **`pl` as Alias:** `pl` now runs phases 5-8 only when design.md exists (not standalone)
+- **Ownership Matrix Pattern:** Each skill explicitly owns specific artifacts - no overlap (designing→design phases, conductor→implementation, orchestrator→workers, tracking→beads, handoff→session)
+- **Gerund Naming Convention:** Action-oriented skills use gerunds (designing, tracking, creating-skills) per Anthropic best practices
+- **Command Migration:** When moving commands between skills, update: (1) source skill entry points, (2) target skill entry points, (3) maestro-core routing table

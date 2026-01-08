@@ -8,6 +8,13 @@ Master list of all development tracks.
 
 ## Completed Tracks
 
+## [x] Track: Skills Architecture Refactor
+*ID: skills-arch-refactor*
+*Completed: 2026-01-08*
+*Link: [design](archive/skills-arch-refactor/design.md) | [spec](archive/skills-arch-refactor/spec.md) | [plan](archive/skills-arch-refactor/plan.md)*
+
+Refactored Maestro skills for clear ownership: design→designing, beads→tracking, skill-creator+writing-skills→creating-skills. Ownership matrix established per Anthropic best practices. 10 tasks in 4 waves via orchestration.
+
 ## [x] Track: MCPorter Toolboxes Integration
 *ID: mcporter-toolboxes*
 *Completed: 2026-01-08*
