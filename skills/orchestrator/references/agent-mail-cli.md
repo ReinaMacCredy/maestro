@@ -23,9 +23,9 @@ toolboxes/agent-mail/agent-mail.js --help
 ```bash
 # Start a session (project + agent + inbox in one call)
 toolboxes/agent-mail/agent-mail.js macro-start-session \
-  human_key:/path/to/project \
-  program:claude-code \
-  model:opus-4.5
+  --human-key /path/to/project \
+  --program claude-code \
+  --model opus-4.5
 ```
 
 ### Messaging
@@ -33,23 +33,23 @@ toolboxes/agent-mail/agent-mail.js macro-start-session \
 ```bash
 # Send message
 toolboxes/agent-mail/agent-mail.js send-message \
-  project_key:/path/to/project \
-  sender_name:BlueLake \
-  to:'["GreenCastle"]' \
-  subject:"Status update" \
-  body_md:"Work complete"
+  --project-key /path/to/project \
+  --sender-name BlueLake \
+  --to '["GreenCastle"]' \
+  --subject "Status update" \
+  --body-md "Work complete"
 
 # Fetch inbox
 toolboxes/agent-mail/agent-mail.js fetch-inbox \
-  project_key:/path/to/project \
-  agent_name:BlueLake
+  --project-key /path/to/project \
+  --agent-name BlueLake
 
 # Reply to message
 toolboxes/agent-mail/agent-mail.js reply-message \
-  project_key:/path/to/project \
-  message_id:123 \
-  sender_name:BlueLake \
-  body_md:"Acknowledged"
+  --project-key /path/to/project \
+  --message-id 123 \
+  --sender-name BlueLake \
+  --body-md "Acknowledged"
 ```
 
 ### Agent Management
@@ -57,15 +57,15 @@ toolboxes/agent-mail/agent-mail.js reply-message \
 ```bash
 # Register agent
 toolboxes/agent-mail/agent-mail.js register-agent \
-  project_key:/path/to/project \
-  program:claude-code \
-  model:opus-4.5 \
-  task_description:"Working on feature X"
+  --project-key /path/to/project \
+  --program claude-code \
+  --model opus-4.5 \
+  --task-description "Working on feature X"
 
 # Who is an agent
 toolboxes/agent-mail/agent-mail.js whois \
-  project_key:/path/to/project \
-  agent_name:BlueLake
+  --project-key /path/to/project \
+  --agent-name BlueLake
 ```
 
 ### File Reservations
@@ -73,29 +73,46 @@ toolboxes/agent-mail/agent-mail.js whois \
 ```bash
 # Reserve files
 toolboxes/agent-mail/agent-mail.js file-reservation-paths \
-  project_key:/path/to/project \
-  agent_name:BlueLake \
-  paths:'["src/api/*.py"]' \
-  ttl_seconds:3600
+  --project-key /path/to/project \
+  --agent-name BlueLake \
+  --paths '["src/api/*.py"]' \
+  --ttl-seconds 3600
 
 # Release reservations
 toolboxes/agent-mail/agent-mail.js release-file-reservations \
-  project_key:/path/to/project \
-  agent_name:BlueLake
+  --project-key /path/to/project \
+  --agent-name BlueLake
 ```
 
 ## Argument Syntax
 
-```bash
-# Colon style
-command key:value
+The CLI uses standard `--flag value` format:
 
-# Equals style
-command key=value
+```bash
+# Flag with value (space-separated)
+command --flag value
 
 # JSON for arrays/objects
-command paths:'["file1.ts", "file2.ts"]'
+command --paths '["file1.ts", "file2.ts"]'
+
+# Boolean flags
+command --include-bodies true
+
+# String values with spaces (use quotes)
+command --body-md "Message with spaces"
 ```
+
+### Parameter Naming
+
+CLI flags use kebab-case (hyphens), which map to the MCP's snake_case parameters:
+
+| MCP Parameter | CLI Flag |
+|---------------|----------|
+| `project_key` | `--project-key` |
+| `sender_name` | `--sender-name` |
+| `body_md` | `--body-md` |
+| `include_bodies` | `--include-bodies` |
+| `ttl_seconds` | `--ttl-seconds` |
 
 ## Environment Variables
 

@@ -45,19 +45,19 @@ See [implement.md Phase 2b](../conductor/references/workflows/implement.md) for 
 | Action | Tool |
 |--------|------|
 | Parse plan.md | `Read("conductor/tracks/<id>/plan.md")` |
-| Initialize | `ensure_project`, `register_agent` |
+| Initialize | `agent-mail.js macro-start-session` |
 | Spawn workers | `Task()` for each track |
-| Monitor | `fetch_inbox`, `search_messages` |
-| Resolve blockers | `reply_message` |
-| Complete | Send summary, `bd close epic` |
-| Track threads | `summarize_thread(thread_id=TRACK_THREAD)` |
+| Monitor | `agent-mail.js fetch-inbox` |
+| Resolve blockers | `agent-mail.js reply-message` |
+| Complete | `agent-mail.js send-message`, `bd close epic` |
+| Track threads | `agent-mail.js summarize-thread` |
 | Auto-routing | Auto-detect parallel via `metadata.json.beads` |
 
 ## 8-Phase Workflow
 
 0. **Preflight** - Session identity, detect active sessions
 1. **Read Plan** - Parse Track Assignments from plan.md
-2. **Validate** - Health check Agent Mail (HALT if unavailable)
+2. **Validate** - Health check Agent Mail CLI (HALT if unavailable)
 3. **Initialize** - ensure_project, register orchestrator + all workers
 4. **Spawn Workers** - Task() for each track (parallel)
 5. **Monitor + Verify** - fetch_inbox, verify worker summaries
@@ -82,14 +82,14 @@ All workers MUST follow this exact sequence:
 
 | Step | Tool | Required |
 |------|------|----------|
-| 1 | `macro_start_session()` | ✅ FIRST |
+| 1 | `agent-mail.js macro-start-session` | ✅ FIRST |
 | 2 | `bd update`, `bd close` | ✅ |
-| 3 | `send_message()` | ✅ LAST |
-| 4 | `release_file_reservations()` | ✅ |
+| 3 | `agent-mail.js send-message` | ✅ LAST |
+| 4 | `agent-mail.js release-file-reservations` | ✅ |
 
 **Critical rules:**
-- ❌ Never start work before `macro_start_session()`
-- ❌ Never return without `send_message()` to orchestrator
+- ❌ Never start work before `macro-start-session`
+- ❌ Never return without `send-message` to orchestrator
 - ❌ Never touch files outside assigned scope
 
 See [references/worker-prompt.md](references/worker-prompt.md) for full template.

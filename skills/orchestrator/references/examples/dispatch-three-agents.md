@@ -29,48 +29,46 @@ EPIC_ID = metadata["beads"]["epicId"]  # "my-workflow:3-3cmw"
 
 ## Phase 2: Initialize Agent Mail
 
-```python
+```bash
 # Initialize project and register orchestrator
-ensure_project(human_key="/path/to/workspace")
+toolboxes/agent-mail/agent-mail.js ensure-project human_key:"/path/to/workspace"
 
-register_agent(
-  project_key="/path/to/workspace",
-  name="PurpleMountain",
-  program="amp",
-  model="claude-sonnet-4-20250514",
-  task_description="Orchestrator for my-workflow:3-3cmw"
-)
+toolboxes/agent-mail/agent-mail.js register-agent \
+  project_key:"/path/to/workspace" \
+  name:"PurpleMountain" \
+  program:"amp" \
+  model:"claude-opus-4-5@20251101" \
+  task_description:"Orchestrator for my-workflow:3-3cmw"
 
 # Announce epic start to all workers
-send_message(
-  project_key="/path/to/workspace",
-  sender_name="PurpleMountain",
-  to=["BlueLake", "GreenCastle", "RedStone"],
-  thread_id="my-workflow:3-3cmw",
-  subject="EPIC STARTED: Orchestrator Skill",
-  body_md="Spawning 3 workers for parallel execution..."
-)
+toolboxes/agent-mail/agent-mail.js send-message \
+  project_key:"/path/to/workspace" \
+  sender_name:"PurpleMountain" \
+  to:'["BlueLake", "GreenCastle", "RedStone"]' \
+  thread_id:"my-workflow:3-3cmw" \
+  subject:"EPIC STARTED: Orchestrator Skill" \
+  body_md:"Spawning 3 workers for parallel execution..."
 ```
 
 ## Phase 3: Spawn Workers
 
 Workers follow the simplified 4-step protocol from [worker-prompt.md](../worker-prompt.md):
 
-1. **INITIALIZE** - `macro_start_session()` (FIRST action, no exceptions)
+1. **INITIALIZE** - `agent-mail.js macro-start-session` (FIRST action, no exceptions)
 2. **EXECUTE** - `bd update` → work → `bd close` for each bead
-3. **REPORT** - `send_message()` (MANDATORY before returning)
-4. **CLEANUP** - `release_file_reservations()`
+3. **REPORT** - `agent-mail.js send-message` (MANDATORY before returning)
+4. **CLEANUP** - `agent-mail.js release-file-reservations`
 
-```python
+```bash
 # Pre-register ALL workers before spawning (prevents "recipient not found" errors)
-for track in TRACKS:
-    register_agent(
-        project_key="/path/to/workspace",
-        name=track.agent,
-        program="amp",
-        model="claude-sonnet-4-20250514",
-        task_description=f"Worker for Track {track.track}"
-    )
+for agent in BlueLake GreenCastle RedStone; do
+    toolboxes/agent-mail/agent-mail.js register-agent \
+        project_key:"/path/to/workspace" \
+        name:"$agent" \
+        program:"amp" \
+        model:"claude-opus-4-5@20251101" \
+        task_description:"Worker for Track"
+done
 
 # Now spawn workers in parallel
 Task(
@@ -89,33 +87,34 @@ You are BlueLake, an autonomous worker agent for Track 1.
 ## ⚠️ CRITICAL: 4-Step Protocol (MANDATORY)
 
 ### STEP 1: INITIALIZE (FIRST ACTION - NO EXCEPTIONS)
-macro_start_session(
-  human_key="/path/to/workspace",
-  program="amp",
-  model="claude-sonnet-4-20250514",
-  agent_name="BlueLake",
-  file_reservation_paths=["skills/orchestrator/**"],
-  task_description="Worker for Track 1"
-)
+toolboxes/agent-mail/agent-mail.js macro-start-session \\
+  human_key:"/path/to/workspace" \\
+  program:"amp" \\
+  model:"claude-opus-4-5@20251101" \\
+  agent_name:"BlueLake" \\
+  file_reservation_paths:'["skills/orchestrator/**"]' \\
+  task_description:"Worker for Track 1"
 
 ### STEP 2: EXECUTE
-for bead_id in ["my-workflow:3-3cmw.1", "my-workflow:3-3cmw.2", "my-workflow:3-3cmw.3"]:
-    bash(f"bd update {bead_id} --status in_progress")
+for bead_id in my-workflow:3-3cmw.1 my-workflow:3-3cmw.2 my-workflow:3-3cmw.3; do
+    bd update "$bead_id" --status in_progress
     # ... do work ...
-    bash(f"bd close {bead_id} --reason completed")
+    bd close "$bead_id" --reason completed
+done
 
-### STEP 3: REPORT (MANDATORY - send_message BEFORE returning)
-send_message(
-  project_key="/path/to/workspace",
-  sender_name="BlueLake",
-  to=["PurpleMountain"],
-  thread_id="my-workflow:3-3cmw",
-  subject="[TRACK COMPLETE] Track 1",
-  body_md="## Status\nSUCCEEDED\n\n## Files Changed\n- skills/orchestrator/SKILL.md (added)\n..."
-)
+### STEP 3: REPORT (MANDATORY - send-message BEFORE returning)
+toolboxes/agent-mail/agent-mail.js send-message \\
+  project_key:"/path/to/workspace" \\
+  sender_name:"BlueLake" \\
+  to:'["PurpleMountain"]' \\
+  thread_id:"my-workflow:3-3cmw" \\
+  subject:"[TRACK COMPLETE] Track 1" \\
+  body_md:"## Status SUCCEEDED - Files Changed: skills/orchestrator/SKILL.md (added)"
 
 ### STEP 4: CLEANUP
-release_file_reservations(project_key="/path/to/workspace", agent_name="BlueLake")
+toolboxes/agent-mail/agent-mail.js release-file-reservations \\
+  project_key:"/path/to/workspace" \\
+  agent_name:"BlueLake"
   """
 )
 
@@ -126,79 +125,79 @@ release_file_reservations(project_key="/path/to/workspace", agent_name="BlueLake
 
 ## Phase 4: Monitor Progress
 
-```python
-state = {
-  "BlueLake": { "status": "in_progress", "beads_closed": 0 },
-  "GreenCastle": { "status": "waiting", "blocked_by": "1.2.3" },
-  "RedStone": { "status": "waiting", "blocked_by": "2.2.2" }
-}
+```bash
+# Track state
+declare -A state
+state[BlueLake]="in_progress:0"
+state[GreenCastle]="waiting:1.2.3"
+state[RedStone]="waiting:2.2.2"
 
-while not all_complete():
+while true; do
     # Check for progress
-    messages = search_messages(
-        project_key="/path/to/workspace",
-        query="my-workflow:3-3cmw COMPLETE",
-        limit=50
-    )
+    messages=$(toolboxes/agent-mail/agent-mail.js search-messages \
+        project_key:"/path/to/workspace" \
+        query:"my-workflow:3-3cmw COMPLETE" \
+        limit:50)
     
-    # Update state from messages
-    for msg in messages:
-        if "[COMPLETE]" in msg.subject:
-            update_bead_count(msg)
-        if "[TRACK COMPLETE]" in msg.subject:
-            mark_track_complete(msg.sender)
+    # Update state from messages (parse JSON output)
+    # ...
     
     # Check for blockers
-    urgent = fetch_inbox(urgent_only=True)
-    for blocker in urgent:
-        handle_blocker(blocker)
+    urgent=$(toolboxes/agent-mail/agent-mail.js fetch-inbox \
+        project_key:"/path/to/workspace" \
+        agent_name:"PurpleMountain" \
+        urgent_only:true)
     
     # Display progress
-    print(f"📊 Epic Progress: {total_closed}/{total_beads}")
+    echo "📊 Epic Progress: $total_closed/$total_beads"
     
-    sleep(30)
+    sleep 30
+done
 ```
 
 ## Phase 5: Handle Blockers
 
 ### Cross-Track Dependency Timeout
 
-```python
+```bash
 # GreenCastle waiting >30 min for BlueLake
-send_message(
-  to=["BlueLake"],
-  subject="[PING] Task 1.2.3 status?",
-  body_md="GreenCastle waiting. Please update status.",
-  importance="urgent"
-)
+toolboxes/agent-mail/agent-mail.js send-message \
+  project_key:"/path/to/workspace" \
+  sender_name:"PurpleMountain" \
+  to:'["BlueLake"]' \
+  subject:"[PING] Task 1.2.3 status?" \
+  body_md:"GreenCastle waiting. Please update status." \
+  importance:"urgent"
 ```
 
 ### File Conflict
 
-```python
+```bash
 # RedStone needs AGENTS.md but BlueLake has it
-send_message(
-  to=["BlueLake"],
-  subject="File conflict: AGENTS.md",
-  body_md="RedStone needs AGENTS.md. Can you release?",
-  importance="high"
-)
+toolboxes/agent-mail/agent-mail.js send-message \
+  project_key:"/path/to/workspace" \
+  sender_name:"PurpleMountain" \
+  to:'["BlueLake"]' \
+  subject:"File conflict: AGENTS.md" \
+  body_md:"RedStone needs AGENTS.md. Can you release?" \
+  importance:"high"
 ```
 
 ## Phase 6: Complete
 
-```python
+```bash
 # Verify all beads closed
-status = bash("bd list --parent=my-workflow:3-3cmw --status=open --json | jq 'length'")
-assert status == "0"
+status=$(bd list --parent=my-workflow:3-3cmw --status=open --json | jq 'length')
+[ "$status" -eq 0 ] || exit 1
 
 # Send summary
-send_message(
-  to=["BlueLake", "GreenCastle", "RedStone"],
-  thread_id="my-workflow:3-3cmw",
-  subject="EPIC COMPLETE: Orchestrator Skill",
-  body_md="""
-## Summary
+toolboxes/agent-mail/agent-mail.js send-message \
+  project_key:"/path/to/workspace" \
+  sender_name:"PurpleMountain" \
+  to:'["BlueLake", "GreenCastle", "RedStone"]' \
+  thread_id:"my-workflow:3-3cmw" \
+  subject:"EPIC COMPLETE: Orchestrator Skill" \
+  body_md:"## Summary
 
 - **Duration**: 2.5 hours
 - **Tracks**: 3 complete
@@ -207,12 +206,10 @@ send_message(
 ### Per-Track
 - Track 1 (BlueLake): 6/6 ✅
 - Track 2 (GreenCastle): 5/5 ✅
-- Track 3 (RedStone): 15/15 ✅
-  """
-)
+- Track 3 (RedStone): 15/15 ✅"
 
 # Close epic
-bash("bd close my-workflow:3-3cmw --reason 'All tracks complete'")
+bd close my-workflow:3-3cmw --reason 'All tracks complete'
 ```
 
 ## Timeline

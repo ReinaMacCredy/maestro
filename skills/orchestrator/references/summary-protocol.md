@@ -38,28 +38,26 @@ SUCCEEDED | PARTIAL | FAILED
 
 ## Agent Mail Message Structure
 
-```python
-send_message(
-    project_key="/path/to/project",
-    sender_name="BlueLake",  # Agent's registered name
-    to=["Orchestrator"],     # Main thread's agent name
-    subject=f"Completed: {task_id} - {task_summary}",
-    body_md=summary_template,
-    importance="normal",     # high for failures
-    thread_id=epic_thread_id # Links to epic thread
-)
+```bash
+toolboxes/agent-mail/agent-mail.js send-message \
+    --project-key "/path/to/project" \
+    --sender-name "BlueLake" \
+    --to '["Orchestrator"]' \
+    --subject "Completed: $task_id - $task_summary" \
+    --body-md "$summary_template" \
+    --importance normal \
+    --thread-id "$epic_thread_id"
 ```
 
 ## Example: Successful Completion
 
-```python
-send_message(
-    project_key="/Users/dev/myproject",
-    sender_name="BlueLake",
-    to=["Orchestrator"],
-    subject="Completed: bd-101 - Add user authentication",
-    body_md="""
-## Status
+```bash
+toolboxes/agent-mail/agent-mail.js send-message \
+    --project-key "/Users/dev/myproject" \
+    --sender-name "BlueLake" \
+    --to '["Orchestrator"]' \
+    --subject "Completed: bd-101 - Add user authentication" \
+    --body-md "## Status
 SUCCEEDED
 
 ## Files Changed
@@ -72,23 +70,20 @@ SUCCEEDED
 - 15min token expiry: balances security/UX
 
 ## Issues (if any)
-None
-""",
-    importance="normal",
-    thread_id="epic-my-workflow-001"
-)
+None" \
+    --importance normal \
+    --thread-id "epic-my-workflow-001"
 ```
 
 ## Example: Partial Completion
 
-```python
-send_message(
-    project_key="/Users/dev/myproject",
-    sender_name="GreenCastle",
-    to=["Orchestrator"],
-    subject="Partial: bd-102 - Database migration",
-    body_md="""
-## Status
+```bash
+toolboxes/agent-mail/agent-mail.js send-message \
+    --project-key "/Users/dev/myproject" \
+    --sender-name "GreenCastle" \
+    --to '["Orchestrator"]' \
+    --subject "Partial: bd-102 - Database migration" \
+    --body-md "## Status
 PARTIAL
 
 ## Files Changed
@@ -100,23 +95,20 @@ PARTIAL
 
 ## Issues (if any)
 - Blocked by bd-100 (schema design not finalized)
-- Tests skipped pending schema approval
-""",
-    importance="high",
-    thread_id="epic-my-workflow-001"
-)
+- Tests skipped pending schema approval" \
+    --importance high \
+    --thread-id "epic-my-workflow-001"
 ```
 
 ## Example: Failed Task
 
-```python
-send_message(
-    project_key="/Users/dev/myproject",
-    sender_name="RedStone",
-    to=["Orchestrator"],
-    subject="Failed: bd-103 - Deploy to staging",
-    body_md="""
-## Status
+```bash
+toolboxes/agent-mail/agent-mail.js send-message \
+    --project-key "/Users/dev/myproject" \
+    --sender-name "RedStone" \
+    --to '["Orchestrator"]' \
+    --subject "Failed: bd-103 - Deploy to staging" \
+    --body-md "## Status
 FAILED
 
 ## Files Changed
@@ -128,11 +120,9 @@ N/A
 ## Issues (if any)
 - CI pipeline failed: missing DEPLOY_KEY secret
 - Cannot proceed without DevOps input
-- Marked bead as blocked
-""",
-    importance="high",
-    thread_id="epic-my-workflow-001"
-)
+- Marked bead as blocked" \
+    --importance high \
+    --thread-id "epic-my-workflow-001"
 ```
 
 ## Files Changed Format
@@ -156,7 +146,7 @@ Document decisions that:
 
 ## Thread Linking
 
-Always include `thread_id` to link messages to the epic:
+Always include `--thread-id` to link messages to the epic:
 - Enables thread summarization
 - Groups related work
 - Maintains conversation history

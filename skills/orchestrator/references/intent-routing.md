@@ -131,7 +131,7 @@ Some requests need multiple agents:
 
 ## Agent Spawn Template
 
-```python
+```bash
 Task(
     description=f"""You are {agent_name}, a {agent_type} specialist.
 
@@ -145,14 +145,19 @@ Task(
 {file_patterns}
 
 ## Protocol
-1. Reserve files before editing: file_reservation_paths(paths, exclusive=True)
+1. Reserve files before editing:
+   toolboxes/agent-mail/agent-mail.js file-reservation-paths \
+     project_key:"$PROJECT_PATH" \
+     agent_name:"$AGENT_NAME" \
+     paths:'["<scope>"]' \
+     exclusive:true
 2. Do the work
-3. Send summary via Agent Mail before returning
+3. Send summary via Agent Mail CLI before returning
 4. Return structured result
 
 ## CRITICAL
 - Stay within file scope
-- Report via send_message() before returning
+- Report via agent-mail.js send-message before returning
 """,
     prompt=user_request
 )

@@ -12,51 +12,47 @@ Orchestrator monitors workers through Agent Mail messages. Workers report:
 
 ## Monitoring Loop
 
-```python
-while not all_complete:
+```bash
+while not all_complete; do
     # 1. PRIMARY: Check inbox for worker messages
-    inbox = fetch_inbox(
-        project_key=project_path,
-        agent_name=orchestrator_name,
-        include_bodies=True,
-        limit=50
-    )
+    toolboxes/agent-mail/agent-mail.js fetch-inbox \
+        --project-key "$project_path" \
+        --agent-name "$orchestrator_name" \
+        --include-bodies true \
+        --limit 50
     
-    # 2. Handle urgent blockers immediately
-    urgent = [m for m in inbox if m.importance in ["urgent", "high"]]
-    for msg in urgent:
-        handle_blocker(msg)
+    # 2. Handle urgent blockers immediately (filter JSON output)
+    # urgent = messages with importance in ["urgent", "high"]
     
     # 3. Search for progress/completion in epic thread
-    progress = search_messages(
-        project_key=project_path,
-        query=f"thread:{epic_id} COMPLETE",
-        limit=50
-    )
+    toolboxes/agent-mail/agent-mail.js search-messages \
+        --project-key "$project_path" \
+        --query "thread:$epic_id COMPLETE" \
+        --limit 50
     
     # 4. Get bead status via bd CLI
-    bead_status = bash(f"bd list --parent={epic_id} --json")
+    bd list --parent="$epic_id" --json
     
     # 5. Update state and log progress
-    update_state(progress, bead_status)
+    # update_state(progress, bead_status)
     
     # 6. Wait before next poll
-    sleep(30)  # 30 second interval
+    sleep 30  # 30 second interval
+done
 ```
 
 ## Quick Status Extraction
 
 Primary method using `bd` and Agent Mail:
 
-```python
+```bash
 # Get bead status
-status = bash(f"bd list --parent={epic_id} --json")
+bd list --parent="$epic_id" --json
 
 # Get thread summary for worker activity
-thread_summary = summarize_thread(
-    project_key=project_path,
-    thread_id=epic_id
-)
+toolboxes/agent-mail/agent-mail.js summarize-thread \
+    --project-key "$project_path" \
+    --thread-id "$epic_id"
 ```
 
 This provides a complete snapshot combining bead state with worker activity.
@@ -135,62 +131,66 @@ Please coordinate release of design files.
 
 ### File Conflict
 
-```python
-# 1. Check reservations
-reservations = list_reservations(project_key)
+```bash
+# 1. Check reservations (via bd or Agent Mail)
+# reservations = list_reservations(project_key)
 
 # 2. Identify holder
-holder = find_reservation_holder(file_path, reservations)
+# holder = find_reservation_holder(file_path, reservations)
 
 # 3. Request release
-send_message(
-    to=[holder.agent_name],
-    subject="File conflict resolution",
-    body_md=f"Worker {requester} needs {file_path}. Can you release?",
-    importance="high"
-)
+toolboxes/agent-mail/agent-mail.js send-message \
+    --project-key "$project_key" \
+    --sender-name "$orchestrator_name" \
+    --to "[\"$holder_agent_name\"]" \
+    --subject "File conflict resolution" \
+    --body-md "Worker $requester needs $file_path. Can you release?" \
+    --importance high
 ```
 
 ### Cross-Track Dependency Timeout
 
 If waiting > 30 minutes:
 
-```python
+```bash
 # 1. Check if blocking bead is still in progress
-blocking_bead = bd_show(dep_bead_id)
+bd show "$dep_bead_id" --json
 
-if blocking_bead.status == "in_progress":
-    # 2. Ping the worker
-    send_message(
-        to=[blocking_worker],
-        subject=f"[PING] {dep_bead_id} status?",
-        body_md="Dependency timeout (30 min). Status update needed.",
-        importance="urgent"
-    )
-elif blocking_bead.status == "open":
-    # 3. Bead not started - escalate
-    log_warning(f"Blocking bead {dep_bead_id} never started")
+# If status == "in_progress":
+# 2. Ping the worker
+toolboxes/agent-mail/agent-mail.js send-message \
+    --project-key "$project_key" \
+    --sender-name "$orchestrator_name" \
+    --to "[\"$blocking_worker\"]" \
+    --subject "[PING] $dep_bead_id status?" \
+    --body-md "Dependency timeout (30 min). Status update needed." \
+    --importance urgent
+
+# If status == "open":
+# 3. Bead not started - escalate
+echo "WARNING: Blocking bead $dep_bead_id never started"
 ```
 
 ### Worker Stale Detection
 
 No heartbeat for 10 minutes:
 
-```python
+```bash
 # 1. Check last activity
-last_msg = search_messages(
-    query=f"from:{worker_name}",
-    limit=1
-)
-stale_minutes = minutes_since(last_msg.created_ts)
+toolboxes/agent-mail/agent-mail.js search-messages \
+    --project-key "$project_key" \
+    --query "from:$worker_name" \
+    --limit 1
 
-if stale_minutes > 10:
-    # 2. Mark worker as stale
-    state.workers[worker_name].status = "stale"
-    
-    # 3. Attempt to recover
-    # Option A: Wait for natural recovery
-    # Option B: Force release reservations and re-spawn
+# Calculate stale_minutes from last_msg.created_ts
+
+# if stale_minutes > 10:
+#   2. Mark worker as stale
+#   state.workers[worker_name].status = "stale"
+#   
+#   3. Attempt to recover
+#   Option A: Wait for natural recovery
+#   Option B: Force release reservations and re-spawn
 ```
 
 ## Progress Tracking
@@ -245,20 +245,20 @@ Estimated time remaining: 45 min
 
 All workers complete when:
 
-```python
-def all_complete():
-    # 1. Check worker state via Agent Mail messages
-    for worker in state.workers.values():
-        if worker.status not in ["complete", "error"]:
-            return False
-    
-    # 2. Verify via bd CLI
-    bead_list = bash(f"bd list --parent={epic_id} --json")
-    open_beads = [b for b in bead_list if b["status"] == "open"]
-    if len(open_beads) > 0:
-        return False
-    
-    return True
+```bash
+# Check completion logic:
+
+# 1. Check worker state via Agent Mail messages
+# for worker in state.workers.values():
+#     if worker.status not in ["complete", "error"]:
+#         return False
+
+# 2. Verify via bd CLI
+bd list --parent="$epic_id" --json
+# Filter for open_beads where status == "open"
+# if len(open_beads) > 0: return False
+
+# return True
 ```
 
 ## Agent Mail Tools Reference

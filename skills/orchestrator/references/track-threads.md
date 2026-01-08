@@ -29,21 +29,21 @@ Bead-to-bead context preservation using self-addressed messages.
 ## Per-Bead Loop
 
 ### 1. START BEAD
-```python
+```bash
 # Read prior context from track thread
-summary = summarize_thread(
-  project_key="<path>",
-  thread_id="track:<agent>:<epic>"
-)
+toolboxes/agent-mail/agent-mail.js summarize-thread \
+  --project-key "$PROJECT_PATH" \
+  --thread-id "track:$AGENT:$EPIC"
 
 # Reserve files
-file_reservation_paths(
-  paths=["<file-scope>"],
-  reason="<bead-id>"
-)
+toolboxes/agent-mail/agent-mail.js file-reservation-paths \
+  --project-key "$PROJECT_PATH" \
+  --agent-name "$AGENT" \
+  --paths '["<file-scope>"]' \
+  --reason "<bead-id>"
 
 # Claim bead
-bash("bd update <bead-id> --status in_progress")
+bd update <bead-id> --status in_progress
 ```
 
 ### 2. WORK ON BEAD
@@ -52,25 +52,27 @@ bash("bd update <bead-id> --status in_progress")
 - Escalate blockers to epic thread
 
 ### 3. COMPLETE BEAD
-```python
+```bash
 # Close bead
-bash("bd close <bead-id> --reason completed")
+bd close <bead-id> --reason completed
 
 # Report to orchestrator (epic thread)
-send_message(
-  to=["<Orchestrator>"],
-  thread_id="<epic-id>",
-  subject="[<bead-id>] COMPLETE",
-  body_md="Done: <summary>. Next: <next-bead-id>"
-)
+toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "$PROJECT_PATH" \
+  --sender-name "$AGENT" \
+  --to '["<Orchestrator>"]' \
+  --thread-id "<epic-id>" \
+  --subject "[<bead-id>] COMPLETE" \
+  --body-md "Done: <summary>. Next: <next-bead-id>"
 
 # Save context for next bead (track thread - self message)
-send_message(
-  to=["<self>"],
-  thread_id="track:<agent>:<epic>",
-  subject="<bead-id> Complete - Context for next",
-  body_md="""
-## Learnings
+toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "$PROJECT_PATH" \
+  --sender-name "$AGENT" \
+  --to '["<self>"]' \
+  --thread-id "track:$AGENT:$EPIC" \
+  --subject "<bead-id> Complete - Context for next" \
+  --body-md "## Learnings
 - What worked well
 - What was tricky
 
@@ -80,12 +82,12 @@ send_message(
 
 ## Next Notes
 - Context for next bead
-- Dependencies or setup needed
-"""
-)
+- Dependencies or setup needed"
 
 # Release files
-release_file_reservations()
+toolboxes/agent-mail/agent-mail.js release-file-reservations \
+  --project-key "$PROJECT_PATH" \
+  --agent-name "$AGENT"
 ```
 
 ### 4. NEXT BEAD
@@ -104,14 +106,15 @@ Messages to track thread MUST include:
 
 ## Example
 
-```python
+```bash
 # Worker BlueLake after completing bead bd-11
-send_message(
-  to=["BlueLake"],  # Self-message
-  thread_id="track:BlueLake:my-workflow:3-ktgt",
-  subject="bd-11 Complete - Context for bd-12",
-  body_md="""
-## Learnings
+toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key "$PROJECT_PATH" \
+  --sender-name "BlueLake" \
+  --to '["BlueLake"]' \
+  --thread-id "track:BlueLake:my-workflow:3-ktgt" \
+  --subject "bd-11 Complete - Context for bd-12" \
+  --body-md "## Learnings
 - Stripe SDK requires raw body for webhook verification
 - Use stripe.webhooks.constructEvent() not manual parsing
 
@@ -122,9 +125,7 @@ send_message(
 ## Next Notes
 - bd-12 needs to implement the actual event handlers
 - checkout.session.completed handler should create subscription record
-- Reference spike code in conductor/spikes/billing-spike/webhook-test/
-"""
-)
+- Reference spike code in conductor/spikes/billing-spike/webhook-test/"
 ```
 
 ## Benefits

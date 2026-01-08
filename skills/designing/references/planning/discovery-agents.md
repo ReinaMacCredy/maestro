@@ -20,7 +20,6 @@ Discovery uses parallel agents to gather context before planning. Each agent spe
 
 ```
 Tool: finder
-Timeout: 15s
 Scope: Project workspace
 ```
 
@@ -39,7 +38,6 @@ Scope: Project workspace
 
 ```
 Tool: Read + glob
-Timeout: 15s
 Scope: docs/, README.md, *.md files
 ```
 
@@ -59,7 +57,6 @@ Scope: docs/, README.md, *.md files
 
 ```
 Tool: web_search
-Timeout: 15s
 Scope: Internet
 ```
 
@@ -71,24 +68,24 @@ Scope: Internet
 
 **Output:** URLs, summaries, recommendations
 
-## Timeout Configuration
+## Execution Policy
 
-| Agent | Timeout | Rationale |
-|-------|---------|-----------|
-| finder | 15s | Codebase size varies; 15s covers large repos |
-| Librarian | 15s | File I/O bounded |
-| web_search | 15s | Network latency varies |
+**No timeout** - agents run until completion. Discovery is critical; don't cut off valuable research.
 
-**Total Discovery Budget:** 15s (parallel execution)
+| Agent | Execution | Rationale |
+|-------|-----------|-----------|
+| finder | Run to completion | Thorough codebase search |
+| Librarian | Run to completion | Complete documentation scan |
+| web_search | Run to completion | Full external research |
 
 ## Fallback Behavior
 
 ### Per-Agent Failure
 
-If an individual agent times out or fails:
+If an individual agent fails (exception, not timeout):
 
 ```
-1. Log warning: "[DISCOVERY] {agent} unavailable: {error}"
+1. Log warning: "[DISCOVERY] {agent} failed: {error}"
 2. Continue with results from other agents
 3. Mark agent section as "unavailable" in report
 ```
@@ -228,8 +225,9 @@ async def run_discovery(track_id: str) -> DiscoveryReport:
         Agent("web_search", query=build_research_query(track_id)),
     ]
     
+    # No timeout - run until all agents complete
     results = await asyncio.gather(
-        *[a.run(timeout=15) for a in agents],
+        *[a.run() for a in agents],
         return_exceptions=True
     )
     
@@ -237,7 +235,7 @@ async def run_discovery(track_id: str) -> DiscoveryReport:
     for agent, result in zip(agents, results):
         if isinstance(result, Exception):
             report.mark_unavailable(agent.name, str(result))
-            log.warning(f"[DISCOVERY] {agent.name} unavailable: {result}")
+            log.warning(f"[DISCOVERY] {agent.name} failed: {result}")
         else:
             report.add_section(agent.name, result)
     

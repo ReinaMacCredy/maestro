@@ -23,43 +23,40 @@ Preflight (Phase 0) runs before `/conductor-implement` or `/conductor-orchestrat
 
 Register agent identity and generate session ID:
 
-```python
+```bash
 # Generate unique session identity
-import time
-timestamp = int(time.time())
-session_id = f"{BASE_AGENT}-{timestamp}"
-display_name = f"{BASE_AGENT} (session {time.strftime('%H:%M')})"
+timestamp=$(date +%s)
+session_id="${BASE_AGENT}-${timestamp}"
+display_name="${BASE_AGENT} (session $(date +%H:%M))"
 
 # Register with Agent Mail
-register_agent(
-    project_key=PROJECT_PATH,
-    name=session_id,        # Internal: unique
-    program="amp",
-    model=MODEL,
-    task_description=f"Session started at {time.strftime('%H:%M')}"
-)
+toolboxes/agent-mail/agent-mail.js register-agent \
+    --project-key "$PROJECT_PATH" \
+    --name "$session_id" \
+    --program amp \
+    --model "$MODEL" \
+    --task-description "Session started at $(date +%H:%M)"
 ```
 
 ### Step 2: Detect
 
 Scan for active sessions:
 
-```python
-# Fetch inbox to discover other sessions
-messages = fetch_inbox(
-    project_key=PROJECT_PATH,
-    agent_name=session_id,
-    since_ts=datetime.now() - timedelta(hours=2),
-    include_bodies=True
-)
+```bash
+# Fetch inbox to discover other sessions (2-hour lookback)
+since_ts=$(date -u -v-2H +"%Y-%m-%dT%H:%M:%SZ")  # macOS
+# since_ts=$(date -u -d "2 hours ago" +"%Y-%m-%dT%H:%M:%SZ")  # Linux
 
-# Filter for session announcements
-active_sessions = []
-for msg in messages:
-    if "[SESSION START]" in msg.subject:
-        session_info = parse_session_start(msg)
-        if not is_stale(session_info):
-            active_sessions.append(session_info)
+toolboxes/agent-mail/agent-mail.js fetch-inbox \
+    --project-key "$PROJECT_PATH" \
+    --agent-name "$session_id" \
+    --since-ts "$since_ts" \
+    --include-bodies true
+
+# Filter for session announcements in output:
+# - Look for "[SESSION START]" in subject
+# - Parse session_info and check if not stale
+# - Build active_sessions list
 ```
 
 ### Step 3: Display
@@ -97,28 +94,26 @@ Preflight is skipped when:
 
 ### Registration
 
-```python
+```bash
 # Full registration with task context
-register_agent(
-    project_key=PROJECT_PATH,
-    name=session_id,
-    program="amp",
-    model="claude-sonnet-4-20250514",
-    task_description=f"Track: {track_id}, Started: {timestamp}"
-)
+toolboxes/agent-mail/agent-mail.js register-agent \
+    --project-key "$PROJECT_PATH" \
+    --name "$session_id" \
+    --program amp \
+    --model claude-opus-4-5@20251101 \
+    --task-description "Track: $track_id, Started: $timestamp"
 ```
 
 ### Inbox Fetch
 
-```python
+```bash
 # Fetch with 2-hour lookback for session detection
-messages = fetch_inbox(
-    project_key=PROJECT_PATH,
-    agent_name=session_id,
-    since_ts="2025-01-01T08:00:00Z",  # 2 hours ago
-    include_bodies=True,
-    limit=50
-)
+toolboxes/agent-mail/agent-mail.js fetch-inbox \
+    --project-key "$PROJECT_PATH" \
+    --agent-name "$session_id" \
+    --since-ts "2025-01-01T08:00:00Z" \
+    --include-bodies true \
+    --limit 50
 ```
 
 ## Error Handling
@@ -127,22 +122,34 @@ messages = fetch_inbox(
 
 Agent Mail operations timeout after 3 seconds:
 
-```python
-try:
-    result = register_agent(...)  # 3s timeout
-except TimeoutError:
+```bash
+# Timeout handling is built into the CLI toolbox
+# If timeout occurs, exit with error
+
+toolboxes/agent-mail/agent-mail.js register-agent \
+    --project-key "$PROJECT_PATH" \
+    --name "$session_id" \
+    --program amp \
+    --model "$MODEL"
+
+if [ $? -ne 0 ]; then
     # HALT - Agent Mail is required
-    print("❌ Cannot proceed: Agent Mail timeout")
-    return {"mode": "HALT", "error": "Agent Mail timeout"}
+    echo "❌ Cannot proceed: Agent Mail timeout"
+    exit 1
+fi
 ```
 
 ### Unavailable Service
 
-```python
-if not agent_mail_available():
-    print("❌ Cannot proceed: Agent Mail required for orchestration")
+```bash
+# Check Agent Mail availability via health-check
+toolboxes/agent-mail/agent-mail.js health-check --reason "Preflight check"
+
+if [ $? -ne 0 ]; then
+    echo "❌ Cannot proceed: Agent Mail required for orchestration"
     # HALT - do not proceed without Agent Mail
-    return {"mode": "HALT", "error": "Agent Mail unavailable"}
+    exit 1
+fi
 ```
 
 ## Display Formats

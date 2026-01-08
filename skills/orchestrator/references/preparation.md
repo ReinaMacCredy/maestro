@@ -11,7 +11,7 @@
 - Plan.md with Track Assignments section
 - Beads filed from plan (`fb` command)
 - `bd` CLI available
-- Agent Mail available (verified via `health_check`)
+- Agent Mail available (verified via `agent-mail.js health-check`)
 
 ## Preparation Steps
 
@@ -19,13 +19,16 @@
 
 Before any orchestration, verify Agent Mail is available:
 
-```python
-result = health_check(reason="Orchestrator preflight - preparation phase")
-if not result.healthy:
-    print("❌ HALT: Agent Mail unavailable - cannot orchestrate")
-    return {"status": "HALTED", "reason": "Agent Mail unavailable"}
+```bash
+# Check Agent Mail health
+result=$(toolboxes/agent-mail/agent-mail.js health-check reason:"Orchestrator preflight - preparation phase")
+if [ $? -ne 0 ]; then
+    echo "❌ HALT: Agent Mail unavailable - cannot orchestrate"
+    exit 1
+fi
 
-ensure_project(human_key=PROJECT_PATH)
+# Ensure project exists
+toolboxes/agent-mail/agent-mail.js ensure-project human_key:"$PROJECT_PATH"
 ```
 
 ### 2. Triage Beads
@@ -85,15 +88,16 @@ bd dep add <child-bead> <parent-bead>
 
 Before spawning, pre-register all workers:
 
-```python
-for track in tracks:
-    register_agent(
-        project_key=PROJECT_PATH,
-        program="amp",
-        model=MODEL,
-        name=track.agent_name,
-        task_description=f"Worker for Track {track.number}: {track.description}"
-    )
+```bash
+# Register each worker
+for track in tracks; do
+    toolboxes/agent-mail/agent-mail.js register-agent \
+        project_key:"$PROJECT_PATH" \
+        program:"amp" \
+        model:"$MODEL" \
+        name:"${track.agent_name}" \
+        task_description:"Worker for Track ${track.number}: ${track.description}"
+done
 ```
 
 Plan.md Track Assignments specifies worker assignments:
@@ -109,16 +113,17 @@ Orchestrator parses this table to build worker assignments.
 
 Set up file reservations to prevent conflicts:
 
-```python
-for track in tracks:
-    file_reservation_paths(
-        project_key=PROJECT_PATH,
-        agent_name=track.agent_name,
-        paths=[track.file_scope],
-        ttl_seconds=7200,
-        exclusive=True,
-        reason=f"Track {track.number}: {track.description}"
-    )
+```bash
+# Reserve files for each worker
+for track in tracks; do
+    toolboxes/agent-mail/agent-mail.js file-reservation-paths \
+        project_key:"$PROJECT_PATH" \
+        agent_name:"${track.agent_name}" \
+        paths:"[\"${track.file_scope}\"]" \
+        ttl_seconds:7200 \
+        exclusive:true \
+        reason:"Track ${track.number}: ${track.description}"
+done
 ```
 
 ### 6. Validate Ready State
@@ -188,6 +193,6 @@ Worker will wait for dependency notification via Agent Mail.
 1. **File beads before orchestration** - Run `fb` before `/conductor-orchestrate`
 2. **Wire dependencies explicitly** - Cross-track deps need `bd dep add`
 3. **Use `bd ready --json`** - For structured bead status output
-4. **Pre-register workers** - Use `register_agent` before spawning
-5. **Reserve files early** - Use `file_reservation_paths` to prevent conflicts
+4. **Pre-register workers** - Use `agent-mail.js register-agent` before spawning
+5. **Reserve files early** - Use `agent-mail.js file-reservation-paths` to prevent conflicts
 6. **Check readiness** - At least one bead per track should be ready initially

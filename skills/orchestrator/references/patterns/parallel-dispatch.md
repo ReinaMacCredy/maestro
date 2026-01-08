@@ -11,7 +11,7 @@ Execute independent tracks concurrently using Task tool with Agent Mail coordina
 ## Prerequisites
 
 - Beads filed from plan (`fb` command)
-- Agent Mail MCP available (HALT if unavailable)
+- Agent Mail CLI available (HALT if unavailable)
 - Track Assignments in plan.md
 
 ## Pattern
@@ -33,10 +33,10 @@ Execute independent tracks concurrently using Task tool with Agent Mail coordina
 ```
 1. Parse Track Assignments from plan.md
 2. Map tasks to bead IDs via metadata.json.beads.planTasks
-3. Initialize Agent Mail (ensure_project, register_agent)
+3. Initialize Agent Mail (ensure-project, register-agent)
 4. Reserve files for all tracks
 5. Spawn workers via Task() (parallel)
-6. Monitor via fetch_inbox, search_messages
+6. Monitor via fetch-inbox, search-messages
 7. Handle cross-track blockers
 8. Verify completion, close epic
 ```
@@ -69,7 +69,7 @@ Each track has exclusive file scope:
 - Track 2: `skills/design/**`
 - Track 3: `conductor/CODEMAPS/**`
 
-Workers reserve their scope via `file_reservation_paths()`.
+Workers reserve their scope via `agent-mail.js file-reservation-paths`.
 
 ## Cross-Track Dependencies
 

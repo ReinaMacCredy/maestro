@@ -52,7 +52,7 @@ This document defines how to route tasks to specialized agents based on intent, 
 
 ### Research Agent Spawn
 
-```python
+```bash
 Task(
     description=f"""You are {agent_name}, a Research specialist.
 
@@ -65,14 +65,17 @@ Task(
 ## Protocol
 1. Use finder, Grep, Read to explore codebase
 2. Do NOT modify any files
-3. Send summary via Agent Mail before returning:
-   send_message(project_key, agent_name, to=["Orchestrator"],
-     subject=f"Completed: {task_id}",
-     body_md=summary_template)
+3. Send summary via Agent Mail CLI before returning:
+   toolboxes/agent-mail/agent-mail.js send-message \
+     project_key:"$PROJECT_PATH" \
+     sender_name:"$AGENT_NAME" \
+     to:'["Orchestrator"]' \
+     subject:"Completed: {task_id}" \
+     body_md:"$SUMMARY"
 4. Return structured findings
 
 ## CRITICAL
-You MUST call send_message() before returning.
+You MUST send message via Agent Mail CLI before returning.
 """,
     prompt=user_request
 )
@@ -80,7 +83,7 @@ You MUST call send_message() before returning.
 
 ### Review Agent Spawn
 
-```python
+```bash
 Task(
     description=f"""You are {agent_name}, a Review specialist.
 
@@ -93,14 +96,17 @@ Task(
 ## Protocol
 1. Read and analyze code (do NOT modify)
 2. Document findings with file:line references
-3. Send summary via Agent Mail before returning:
-   send_message(project_key, agent_name, to=["Orchestrator"],
-     subject=f"Completed: {task_id}",
-     body_md=summary_template)
+3. Send summary via Agent Mail CLI before returning:
+   toolboxes/agent-mail/agent-mail.js send-message \
+     project_key:"$PROJECT_PATH" \
+     sender_name:"$AGENT_NAME" \
+     to:'["Orchestrator"]' \
+     subject:"Completed: {task_id}" \
+     body_md:"$SUMMARY"
 4. Return structured review
 
 ## CRITICAL
-You MUST call send_message() before returning.
+You MUST send message via Agent Mail CLI before returning.
 """,
     prompt=user_request
 )
@@ -108,7 +114,7 @@ You MUST call send_message() before returning.
 
 ### Planning Agent Spawn
 
-```python
+```bash
 Task(
     description=f"""You are {agent_name}, a Planning specialist.
 
@@ -122,18 +128,26 @@ Task(
 {file_patterns}
 
 ## Protocol
-1. Reserve files: file_reservation_paths(paths=["{file_scope}"], exclusive=True)
+1. Reserve files:
+   toolboxes/agent-mail/agent-mail.js file-reservation-paths \
+     project_key:"$PROJECT_PATH" \
+     agent_name:"$AGENT_NAME" \
+     paths:'["{file_scope}"]' \
+     exclusive:true
 2. Read existing plans/specs
 3. Create/update planning documents
-4. Send summary via Agent Mail before returning:
-   send_message(project_key, agent_name, to=["Orchestrator"],
-     subject=f"Completed: {task_id}",
-     body_md=summary_template)
+4. Send summary via Agent Mail CLI before returning:
+   toolboxes/agent-mail/agent-mail.js send-message \
+     project_key:"$PROJECT_PATH" \
+     sender_name:"$AGENT_NAME" \
+     to:'["Orchestrator"]' \
+     subject:"Completed: {task_id}" \
+     body_md:"$SUMMARY"
 5. Release reservations
 6. Return structured result
 
 ## CRITICAL
-You MUST call send_message() before returning.
+You MUST send message via Agent Mail CLI before returning.
 """,
     prompt=user_request
 )
@@ -141,7 +155,7 @@ You MUST call send_message() before returning.
 
 ### Execution Agent Spawn
 
-```python
+```bash
 Task(
     description=f"""You are {agent_name}, an Execution specialist.
 
@@ -158,22 +172,30 @@ Task(
 {bead_list}
 
 ## Protocol
-1. Reserve files: file_reservation_paths(paths=["{file_scope}"], exclusive=True)
+1. Reserve files:
+   toolboxes/agent-mail/agent-mail.js file-reservation-paths \
+     project_key:"$PROJECT_PATH" \
+     agent_name:"$AGENT_NAME" \
+     paths:'["{file_scope}"]' \
+     exclusive:true
 2. For each bead:
    - bd update <id> --status in_progress
    - Implement the code
    - Run tests/verification
    - bd close <id> --reason completed
-3. Send summary via Agent Mail before returning:
-   send_message(project_key, agent_name, to=["Orchestrator"],
-     subject=f"Completed: {task_id}",
-     body_md=summary_template)
+3. Send summary via Agent Mail CLI before returning:
+   toolboxes/agent-mail/agent-mail.js send-message \
+     project_key:"$PROJECT_PATH" \
+     sender_name:"$AGENT_NAME" \
+     to:'["Orchestrator"]' \
+     subject:"Completed: {task_id}" \
+     body_md:"$SUMMARY"
 4. Release reservations
 5. Return structured result
 
 ## CRITICAL
 - You CAN claim and close beads using bd CLI
-- You MUST call send_message() before returning
+- You MUST send message via Agent Mail CLI before returning
 """,
     prompt=user_request
 )
@@ -181,7 +203,7 @@ Task(
 
 ### Debug Agent Spawn
 
-```python
+```bash
 Task(
     description=f"""You are {agent_name}, a Debug specialist.
 
@@ -195,14 +217,17 @@ Task(
 1. Use systematic debugging approach
 2. Read logs, traces, code (do NOT modify unless fixing)
 3. Document root cause analysis
-4. Send summary via Agent Mail before returning:
-   send_message(project_key, agent_name, to=["Orchestrator"],
-     subject=f"Completed: {task_id}",
-     body_md=summary_template)
+4. Send summary via Agent Mail CLI before returning:
+   toolboxes/agent-mail/agent-mail.js send-message \
+     project_key:"$PROJECT_PATH" \
+     sender_name:"$AGENT_NAME" \
+     to:'["Orchestrator"]' \
+     subject:"Completed: {task_id}" \
+     body_md:"$SUMMARY"
 5. Return structured findings
 
 ## CRITICAL
-You MUST call send_message() before returning.
+You MUST send message via Agent Mail CLI before returning.
 """,
     prompt=user_request
 )
@@ -237,7 +262,7 @@ When spawning multiple execution agents:
 
 1. **Non-overlapping scopes**: Spawn in parallel
 2. **Overlapping scopes**: Spawn sequentially or split scope
-3. **Same file**: Use file_reservation_paths to serialize access
+3. **Same file**: Use `agent-mail.js file-reservation-paths` to serialize access
 
 ```python
 # Check for conflicts before spawn
@@ -270,4 +295,4 @@ This routing table is used in [workflow.md](workflow.md) Phase 3 (Spawn Workers)
 
 ## Summary Protocol Reference
 
-All spawn patterns include the mandatory `send_message()` call before returning. See [summary-protocol.md](summary-protocol.md) for the complete summary format.
+All spawn patterns include the mandatory `agent-mail.js send-message` call before returning. See [summary-protocol.md](summary-protocol.md) for the complete summary format.

@@ -47,41 +47,48 @@ You MUST follow these 4 steps in exact order. Skipping any step is a protocol vi
 
 ### STEP 1: INITIALIZE SESSION (FIRST ACTION - NO EXCEPTIONS)
 
-Before ANY other action, initialize your session with Agent Mail using `macro_start_session`:
+Before ANY other action, initialize your session with Agent Mail using the CLI toolbox:
+
+```bash
+# This MUST be your FIRST action - before reading files, before claiming beads
+# macro-start-session handles SELF-REGISTRATION (creates/updates agent profile)
+toolboxes/agent-mail/agent-mail.js macro-start-session \
+  --human-key {PROJECT_PATH} \
+  --program amp \
+  --model {MODEL} \
+  --agent-name {AGENT_NAME} \
+  --file-reservation-paths '["{FILE_SCOPE}"]' \
+  --file-reservation-ttl-seconds 3600 \
+  --task-description "Worker for Track {TRACK_N}: {TRACK_DESCRIPTION}" \
+  --inbox-limit 10
+
+# If session init fails (non-zero exit), HALT immediately
+# The command outputs JSON with session info and inbox
+```
 
 ```python
-# This MUST be your FIRST action - before reading files, before claiming beads
-# macro_start_session handles SELF-REGISTRATION (creates/updates agent profile)
-result = macro_start_session(
-  human_key="{PROJECT_PATH}",
-  program="amp",
-  model="{MODEL}",
-  agent_name="{AGENT_NAME}",  # Optional - if omitted, auto-generates unique name
-  file_reservation_paths=["{FILE_SCOPE}"],
-  file_reservation_ttl_seconds=3600,
-  task_description="Worker for Track {TRACK_N}: {TRACK_DESCRIPTION}",
-  inbox_limit=10
-)
+# Parse the JSON output
+import json
+result = json.loads(output)
 
-# If session init fails, HALT immediately
-if not result.success:
+if not result.get("success"):
     return {"status": "FAILED", "reason": "Agent Mail session init failed"}
 
-# DISCOVER EPIC THREAD: Use fetch_inbox (already returned in result.inbox) to find epic thread
+# DISCOVER EPIC THREAD: Use inbox (returned in result) to find epic thread
 # The orchestrator sends an initial message to the epic thread that workers can locate
-inbox = result.inbox  # Inbox already fetched by macro_start_session
+inbox = result.get("inbox", [])
 epic_thread = None
 for msg in inbox:
     if "{EPIC_ID}" in msg.get("thread_id", "") or "[EPIC]" in msg.get("subject", ""):
         epic_thread = msg.get("thread_id")
         break
 
-# Alternative: Use fetch_inbox directly if you need more messages
-# additional_msgs = fetch_inbox(project_key="{PROJECT_PATH}", agent_name="{AGENT_NAME}", limit=20)
+# Alternative: Use fetch-inbox directly if you need more messages
+# toolboxes/agent-mail/agent-mail.js fetch-inbox --project-key {PROJECT_PATH} --agent-name {AGENT_NAME} --limit 20
 ```
 
 **Why this matters:** 
-- `macro_start_session` handles self-registration (creates/updates agent profile)
+- `macro-start-session` CLI handles self-registration (creates/updates agent profile)
 - Workers use the inbox (returned in `result.inbox`) to discover the epic thread
 - The orchestrator sends initial messages to the epic thread that workers can locate
 - Without this, you cannot send messages or see dependency notifications
@@ -158,14 +165,13 @@ bash(f"bd close {bead_id} --reason completed")
 
 # Save structured context to track thread (self-message)
 # This context is read by subsequent beads via summarize_thread()
-send_message(
-  project_key="{PROJECT_PATH}",
-  sender_name="{AGENT_NAME}",
-  to=["{AGENT_NAME}"],  # Self-message
-  thread_id="{TRACK_THREAD}",
-  subject="[CONTEXT] Bead {bead_id} complete",
-  body_md="""
-## Learnings
+toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key {PROJECT_PATH} \
+  --sender-name {AGENT_NAME} \
+  --to '["{AGENT_NAME}"]' \
+  --thread-id {TRACK_THREAD} \
+  --subject "[CONTEXT] Bead {bead_id} complete" \
+  --body-md "## Learnings
 - What worked well: [specific technique or approach]
 - Pattern discovered: [reusable pattern for future beads]
 - Tool/API insight: [useful knowledge about tools used]
@@ -178,9 +184,7 @@ send_message(
 ## Next Notes
 - Setup needed: [any setup required for next bead]
 - Files to reference: [key files for context]
-- Open questions: [unresolved items for future beads]
-"""
-)
+- Open questions: [unresolved items for future beads]"
 ```
 
 #### 2.4 NEXT
@@ -197,18 +201,17 @@ send_message(
 
 ### STEP 3: REPORT (Send Summary via Agent Mail)
 
-**MANDATORY:** You MUST call `send_message()` before returning. This is non-negotiable.
+**MANDATORY:** You MUST send a message via CLI before returning. This is non-negotiable.
 
-```python
+```bash
 # CRITICAL: This call is REQUIRED before returning
-send_message(
-  project_key="{PROJECT_PATH}",
-  sender_name="{AGENT_NAME}",
-  to=["{ORCHESTRATOR}"],
-  thread_id="{EPIC_ID}",
-  subject="[TRACK COMPLETE] Track {TRACK_N}",
-  body_md="""
-## Status
+toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key {PROJECT_PATH} \
+  --sender-name {AGENT_NAME} \
+  --to '["{ORCHESTRATOR}"]' \
+  --thread-id {EPIC_ID} \
+  --subject "[TRACK COMPLETE] Track {TRACK_N}" \
+  --body-md "## Status
 SUCCEEDED
 
 ## Files Changed
@@ -227,9 +230,7 @@ None
 ## Track Details
 - **Agent**: {AGENT_NAME}
 - **Beads closed**: X
-- **Duration**: Xm
-  """
-)
+- **Duration**: Xm"
 ```
 
 **Status values:**
@@ -241,13 +242,14 @@ None
 
 ### STEP 4: CLEANUP (Release Reservations)
 
-```python
+```bash
 # Release all file reservations
-release_file_reservations(
-  project_key="{PROJECT_PATH}",
-  agent_name="{AGENT_NAME}"
-)
+toolboxes/agent-mail/agent-mail.js release-file-reservations \
+  --project-key {PROJECT_PATH} \
+  --agent-name {AGENT_NAME}
+```
 
+```python
 # Return structured summary (matches Agent Mail message)
 return {
     "status": "SUCCEEDED",
@@ -264,36 +266,36 @@ return {
 
 If you encounter a blocker during Step 2:
 
-```python
-send_message(
-  project_key="{PROJECT_PATH}",
-  sender_name="{AGENT_NAME}",
-  to=["{ORCHESTRATOR}"],
-  thread_id="{EPIC_ID}",
-  subject="[BLOCKER] Track {TRACK_N}: {BLOCKER_SUMMARY}",
-  body_md="Details of the blocker...",
-  importance="urgent"
-)
+```bash
+toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key {PROJECT_PATH} \
+  --sender-name {AGENT_NAME} \
+  --to '["{ORCHESTRATOR}"]' \
+  --thread-id {EPIC_ID} \
+  --subject "[BLOCKER] Track {TRACK_N}: {BLOCKER_SUMMARY}" \
+  --body-md "Details of the blocker..." \
+  --importance urgent
 
 # Mark bead as blocked
-bash(f"bd close {bead_id} --reason blocked")
+bd close {bead_id} --reason blocked
 ```
 
 Then continue to Step 3 (report) with status `PARTIAL` or `FAILED`.
 
 ---
 
-## Agent Mail Required (No Fallback)
+## Agent Mail CLI Required (No Fallback)
 
-If Agent Mail is unavailable (macro_start_session fails):
+If Agent Mail CLI is unavailable (macro-start-session fails):
 
-```python
-# ❌ Agent Mail unavailable - HALT immediately
-print("❌ HALT: Cannot initialize session - Agent Mail unavailable")
-print("   Worker cannot proceed without:")
-print("   - File reservations (risk of conflicts)")
-print("   - Message capability (cannot report progress/blockers)")
-return {"status": "HALTED", "reason": "Agent Mail unavailable"}
+```bash
+# ❌ Agent Mail CLI unavailable - HALT immediately
+echo "❌ HALT: Cannot initialize session - Agent Mail unavailable"
+echo "   Worker cannot proceed without:"
+echo "   - File reservations (risk of conflicts)"
+echo "   - Message capability (cannot report progress/blockers)"
+exit 1
+# Return: {"status": "HALTED", "reason": "Agent Mail unavailable"}
 ```
 
 **Do NOT fall back to local execution.** Parallel workers without Agent Mail coordination will cause file conflicts and cannot report status.
@@ -304,15 +306,15 @@ return {"status": "HALTED", "reason": "Agent Mail unavailable"}
 
 | Step | Action | Tool | Required |
 |------|--------|------|----------|
-| 1 | Register | `macro_start_session()` | ✅ FIRST |
+| 1 | Register | `agent-mail.js macro-start-session` | ✅ FIRST |
 | 2 | Execute | `bd update`, `bd close` | ✅ |
-| 3 | Report | `send_message()` | ✅ LAST |
-| 4 | Cleanup | `release_file_reservations()` | ✅ |
+| 3 | Report | `agent-mail.js send-message` | ✅ LAST |
+| 4 | Cleanup | `agent-mail.js release-file-reservations` | ✅ |
 
 ## What NOT To Do
 
-- ❌ Start working before calling `macro_start_session()`
-- ❌ Return without calling `send_message()`
+- ❌ Start working before calling `macro-start-session`
+- ❌ Return without calling `send-message`
 - ❌ Release reservations before completing all beads
 - ❌ Touch files outside your `{FILE_SCOPE}`
 - ❌ Ignore blockers - report them immediately
@@ -321,15 +323,14 @@ return {"status": "HALTED", "reason": "Agent Mail unavailable"}
 
 For long-running tasks (>10 minutes), send periodic heartbeats:
 
-```python
-send_message(
-  project_key="{PROJECT_PATH}",
-  sender_name="{AGENT_NAME}",
-  to=["{ORCHESTRATOR}"],
-  thread_id="{EPIC_ID}",
-  subject="[HEARTBEAT] Track {TRACK_N}",
-  body_md="Working on bead {current_bead}..."
-)
+```bash
+toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key {PROJECT_PATH} \
+  --sender-name {AGENT_NAME} \
+  --to '["{ORCHESTRATOR}"]' \
+  --thread-id {EPIC_ID} \
+  --subject "[HEARTBEAT] Track {TRACK_N}" \
+  --body-md "Working on bead {current_bead}..."
 ```
 
 **Skip heartbeats for tasks <10 minutes** - the overhead isn't worth it.
@@ -374,14 +375,13 @@ You are BlueLake, an autonomous worker agent for Track 1.
 
 ### STEP 1: REGISTER (FIRST ACTION - NO EXCEPTIONS)
 
-macro_start_session(
-  human_key="/Users/dev/my-workflow",
-  program="amp",
-  model="claude-sonnet-4-20250514",
-  agent_name="BlueLake",
-  file_reservation_paths=["skills/orchestrator/**"],
-  task_description="Worker for Track 1: Create orchestrator skill"
-)
+toolboxes/agent-mail/agent-mail.js macro-start-session \
+  --human-key /Users/dev/my-workflow \
+  --program amp \
+  --model claude-opus-4-5@20251101 \
+  --agent-name BlueLake \
+  --file-reservation-paths '["skills/orchestrator/**"]' \
+  --task-description "Worker for Track 1: Create orchestrator skill"
 
 ### STEP 2: EXECUTE
 ...

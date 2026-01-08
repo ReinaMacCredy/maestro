@@ -40,26 +40,31 @@ display_id = f"{BASE_AGENT} (session {time.strftime('%H:%M')})"
 
 If a session ID already exists (extremely rare with timestamps):
 
-```python
-def generate_session_id(base_agent: str, max_retries: int = 3) -> str:
-    """Generate unique session ID with collision retry."""
-    for attempt in range(max_retries):
-        timestamp = int(time.time()) + attempt  # Increment on retry
-        session_id = f"{base_agent}-{timestamp}"
-        
-        try:
-            register_agent(
-                project_key=PROJECT_PATH,
-                name=session_id,
-                program="amp",
-                model=MODEL,
-                task_description="Session registration"
-            )
-            return session_id  # Success
-        except AgentExistsError:
-            continue  # Retry with incremented timestamp
+```bash
+# Generate unique session ID with collision retry
+generate_session_id() {
+    local base_agent="$1"
+    local max_retries=3
     
-    raise RuntimeError(f"Failed to generate unique session ID after {max_retries} attempts")
+    for attempt in $(seq 0 $((max_retries - 1))); do
+        local timestamp=$(($(date +%s) + attempt))
+        local session_id="${base_agent}-${timestamp}"
+        
+        # Try to register
+        if toolboxes/agent-mail/agent-mail.js register-agent \
+            project_key:"$PROJECT_PATH" \
+            name:"$session_id" \
+            program:"amp" \
+            model:"$MODEL" \
+            task_description:"Session registration" 2>/dev/null; then
+            echo "$session_id"
+            return 0
+        fi
+    done
+    
+    echo "Failed to generate unique session ID after $max_retries attempts" >&2
+    return 1
+}
 ```
 
 ### Collision Scenarios
@@ -72,16 +77,15 @@ def generate_session_id(base_agent: str, max_retries: int = 3) -> str:
 
 ## Agent Mail Profile Persistence
 
-Session identity is persisted via `register_agent()`:
+Session identity is persisted via `agent-mail.js register-agent`:
 
-```python
-register_agent(
-    project_key=PROJECT_PATH,
-    name="BlueLake-1735689600",
-    program="amp",
-    model="claude-sonnet-4-20250514",
-    task_description="Track: cc-v2-integration, Epic: bd-100"
-)
+```bash
+toolboxes/agent-mail/agent-mail.js register-agent \
+    project_key:"$PROJECT_PATH" \
+    name:"BlueLake-1735689600" \
+    program:"amp" \
+    model:"claude-opus-4-5@20251101" \
+    task_description:"Track: cc-v2-integration, Epic: bd-100"
 ```
 
 ### Profile Fields
@@ -95,9 +99,9 @@ register_agent(
 
 ### Profile Lifecycle
 
-1. **Created**: At session start via `register_agent()`
-2. **Updated**: On heartbeat via `register_agent()` (updates `last_active_ts`)
-3. **Queried**: Via `whois()` for session detection
+1. **Created**: At session start via `agent-mail.js register-agent`
+2. **Updated**: On heartbeat via `agent-mail.js register-agent` (updates `last_active_ts`)
+3. **Queried**: Via `agent-mail.js whois` for session detection
 4. **Retained**: Profiles persist for audit trail
 
 ## Session Data Model
@@ -152,44 +156,25 @@ class Session:
 
 ## Querying Sessions
 
-### Via whois()
+### Via whois
 
-```python
+```bash
 # Get session profile
-profile = whois(
-    project_key=PROJECT_PATH,
-    agent_name="BlueLake-1735689600",
-    include_recent_commits=True
-)
-
-# Extract session info
-session = Session(
-    id=profile["name"],
-    display=format_display(profile["name"]),
-    base_agent=profile["name"].split("-")[0],
-    created_ts=profile["inception_ts"],
-    last_heartbeat=profile["last_active_ts"],
-    track=extract_track(profile["task_description"]),
-    # ... other fields from Agent Mail state
-)
+toolboxes/agent-mail/agent-mail.js whois \
+    project_key:"$PROJECT_PATH" \
+    agent_name:"BlueLake-1735689600" \
+    include_recent_commits:true
 ```
 
-### Via fetch_inbox()
+### Via fetch_inbox
 
-```python
+```bash
 # Scan for session start messages
-messages = fetch_inbox(
-    project_key=PROJECT_PATH,
-    agent_name=MY_SESSION_ID,
-    since_ts=two_hours_ago,
-    include_bodies=True
-)
-
-active_sessions = []
-for msg in messages:
-    if "[SESSION START]" in msg.subject:
-        session = parse_session_from_message(msg)
-        active_sessions.append(session)
+toolboxes/agent-mail/agent-mail.js fetch-inbox \
+    project_key:"$PROJECT_PATH" \
+    agent_name:"$MY_SESSION_ID" \
+    since_ts:"$TWO_HOURS_AGO" \
+    include_bodies:true
 ```
 
 ## Session Messages
@@ -198,55 +183,48 @@ for msg in messages:
 
 Sent when a session begins:
 
-```python
-send_message(
-    project_key=PROJECT_PATH,
-    sender_name=session_id,
-    to=["Broadcast"],  # Or specific orchestrator
-    subject="[SESSION START] BlueLake (session 10:30)",
-    body_md="""
-## Session Started
+```bash
+toolboxes/agent-mail/agent-mail.js send-message \
+    project_key:"$PROJECT_PATH" \
+    sender_name:"$SESSION_ID" \
+    to:'["Broadcast"]' \
+    subject:"[SESSION START] BlueLake (session 10:30)" \
+    body_md:"## Session Started
 
 - **ID**: BlueLake-1735689600
 - **Track**: cc-v2-integration
 - **Beads**: bd-101, bd-102
-- **Files**: skills/orchestrator/**
-"""
-)
+- **Files**: skills/orchestrator/**"
 ```
 
 ### HEARTBEAT
 
 Sent every 5 minutes:
 
-```python
-send_message(
-    project_key=PROJECT_PATH,
-    sender_name=session_id,
-    to=["Broadcast"],
-    subject="[HEARTBEAT] BlueLake (session 10:30)",
-    body_md="Working on bd-101. Files: skills/orchestrator/**"
-)
+```bash
+toolboxes/agent-mail/agent-mail.js send-message \
+    project_key:"$PROJECT_PATH" \
+    sender_name:"$SESSION_ID" \
+    to:'["Broadcast"]' \
+    subject:"[HEARTBEAT] BlueLake (session 10:30)" \
+    body_md:"Working on bd-101. Files: skills/orchestrator/**"
 ```
 
 ### SESSION END
 
 Sent on normal completion:
 
-```python
-send_message(
-    project_key=PROJECT_PATH,
-    sender_name=session_id,
-    to=["Broadcast"],
-    subject="[SESSION END] BlueLake (session 10:30)",
-    body_md="""
-## Session Complete
+```bash
+toolboxes/agent-mail/agent-mail.js send-message \
+    project_key:"$PROJECT_PATH" \
+    sender_name:"$SESSION_ID" \
+    to:'["Broadcast"]' \
+    subject:"[SESSION END] BlueLake (session 10:30)" \
+    body_md:"## Session Complete
 
 - **Duration**: 45 min
 - **Beads closed**: bd-101, bd-102
-- **Files released**: skills/orchestrator/**
-"""
-)
+- **Files released**: skills/orchestrator/**"
 ```
 
 ## Configuration

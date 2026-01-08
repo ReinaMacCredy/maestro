@@ -16,8 +16,8 @@ Before mode selection, run session coordination preflight.
 
 ### 4-Step Protocol
 
-1. **IDENTITY**: Generate session ID, register with Agent Mail
-2. **DETECT**: fetch_inbox() for messages from last 30 min, parse [SESSION START], [HEARTBEAT], [SESSION END]
+1. **IDENTITY**: Generate session ID, register with Agent Mail CLI
+2. **DETECT**: `fetch-inbox` CLI for messages from last 30 min, parse [SESSION START], [HEARTBEAT], [SESSION END]
 3. **DISPLAY**: Show active sessions, warn on conflicts (track/files/beads)
 4. **PROCEED**: No conflicts → continue; Conflicts → prompt user; Stale → takeover prompt
 
@@ -51,27 +51,17 @@ See [preflight.md](preflight.md) for details.
 
 Before starting phases, determine coordination mode:
 
-```python
+```bash
 # Auto-select mode based on conditions
-def select_mode(TRACKS, CROSS_DEPS):
-    # Check Agent Mail availability
-    try:
-        health_check()
-        agent_mail_available = True
-    except:
-        agent_mail_available = False
-    
-    # Mode selection logic
-    if not agent_mail_available:
-        return "LIGHT"  # Fallback - no Agent Mail
-    elif len(CROSS_DEPS) > 0:
-        return "FULL"   # Need coordination for cross-track deps
-    elif all(estimate_duration(t) < 10 for t in TRACKS):
-        return "LIGHT"  # Simple short tasks
-    else:
-        return "FULL"   # Default for complex work
-
-MODE = select_mode(TRACKS, CROSS_DEPS)
+# Check Agent Mail CLI availability
+toolboxes/agent-mail/agent-mail.js health-check
+if [ $? -ne 0 ]; then
+    MODE="LIGHT"  # Fallback - no Agent Mail CLI
+elif [ -n "$CROSS_DEPS" ]; then
+    MODE="FULL"   # Need coordination for cross-track deps
+else
+    MODE="FULL"   # Default for complex work
+fi
 ```
 
 | Mode | Phases Used | Agent Mail | Heartbeats |
@@ -324,17 +314,16 @@ Map tasks to bead IDs using `metadata.json.beads.planTasks`.
 
 ## Phase 2: Validate Agent Mail (NEW)
 
-**Before spawning workers, verify Agent Mail is functional:**
+**Before spawning workers, verify Agent Mail CLI is functional:**
 
-```python
+```bash
 # Health check - HALT if unavailable
-try:
-    health_result = health_check(reason="Pre-spawn orchestrator validation")
-    if not health_result.healthy:
-        raise Exception("Agent Mail unhealthy")
-except Exception as e:
-    print("⚠️ Agent Mail unavailable - falling back to sequential")
-    return implement_sequential(track_id)  # Route to /conductor-implement
+toolboxes/agent-mail/agent-mail.js health-check --reason "Pre-spawn orchestrator validation"
+if [ $? -ne 0 ]; then
+    echo "⚠️ Agent Mail CLI unavailable - falling back to sequential"
+    # Route to /conductor-implement
+    exit 1
+fi
 ```
 
 **Why this matters:** Your demo showed workers executing without Agent Mail registration. This gate prevents that scenario.
@@ -343,43 +332,49 @@ except Exception as e:
 
 | Check | Action on Fail |
 |-------|----------------|
-| `health_check()` succeeds | Fall back to sequential |
-| `macro_start_session()` succeeds | Fall back to sequential |
+| `health-check` succeeds | Fall back to sequential |
+| `macro-start-session` succeeds | Fall back to sequential |
 
 ## Phase 3: Initialize Agent Mail
 
-Use `macro_start_session` to combine project setup, agent registration, and file reservations in a single call:
+Use `macro-start-session` CLI to combine project setup, agent registration, and file reservations in a single call:
+
+```bash
+# Initialize orchestrator with single macro call
+toolboxes/agent-mail/agent-mail.js macro-start-session \
+  --human-key <absolute-project-path> \
+  --program amp \
+  --model <model> \
+  --task-description "Orchestrator for <epic-id>" \
+  --file-reservation-paths '["conductor/tracks/<track-id>/**"]' \
+  --inbox-limit 10
+```
 
 ```python
-# Initialize orchestrator with single macro call
-session = macro_start_session(
-  human_key="<absolute-project-path>",
-  program="amp",
-  model="<model>",
-  task_description="Orchestrator for <epic-id>",
-  file_reservation_paths=["conductor/tracks/<track-id>/**"],  # Reserve planning files
-  inbox_limit=10  # Get recent messages
-)
+# Parse JSON output
+import json
+session = json.loads(output)
 
 # Extract session info
-ORCHESTRATOR_NAME = session.agent.name
-PROJECT_KEY = session.project.human_key
+ORCHESTRATOR_NAME = session["agent"]["name"]
+PROJECT_KEY = session["project"]["human_key"]
 
 # Check for any conflicts from recent inbox
-for msg in session.inbox:
-    if "[SESSION START]" in msg.subject:
-        print(f"⚠️ Active session detected: {msg.subject}")
+for msg in session.get("inbox", []):
+    if "[SESSION START]" in msg.get("subject", ""):
+        print(f"⚠️ Active session detected: {msg['subject']}")
+```
 
+```bash
 # Create epic thread - send to self (orchestrator)
-# Workers join thread via macro_start_session when spawned
-send_message(
-  project_key=PROJECT_KEY,
-  sender_name=ORCHESTRATOR_NAME,
-  to=[ORCHESTRATOR_NAME],  # Send to self - workers join via macro_start_session
-  thread_id="<epic-id>",
-  subject="EPIC STARTED: <title>",
-  body_md="""
-Spawning workers for parallel execution.
+# Workers join thread via macro-start-session when spawned
+toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key ${PROJECT_KEY} \
+  --sender-name ${ORCHESTRATOR_NAME} \
+  --to '["${ORCHESTRATOR_NAME}"]' \
+  --thread-id <epic-id> \
+  --subject "EPIC STARTED: <title>" \
+  --body-md "Spawning workers for parallel execution.
 
 ## Track Assignments
 | Track | Agent | Scope |
@@ -387,9 +382,7 @@ Spawning workers for parallel execution.
 | 1 | BlueLake | skills/orchestrator/** |
 | 2 | GreenCastle | skills/design/** |
 
-Workers: Follow 4-step protocol in worker-prompt.md
-"""
-)
+Workers: Follow 4-step protocol in worker-prompt.md"
 ```
 
 ## Phase 4: Spawn Worker Subagents
@@ -399,12 +392,12 @@ Workers: Follow 4-step protocol in worker-prompt.md
 | Aspect | LIGHT Mode | FULL Mode |
 |--------|------------|-----------|
 | Worker prompt | Light template (no Agent Mail) | Full 4-step template |
-| Worker registration | Skip | Self-register via `macro_start_session` |
-| File reservations | Skip (rely on scope isolation) | Via macro_start_session |
+| Worker registration | Skip | Self-register via `macro-start-session` CLI |
+| File reservations | Skip (rely on scope isolation) | Via macro-start-session |
 | Result collection | Task() return values | Agent Mail messages |
 | TDD | Yes (default) | Yes (default) |
 
-**Note:** Workers self-register when they start. The orchestrator does NOT pre-register workers—each worker calls `macro_start_session` as their first step, which handles registration automatically.
+**Note:** Workers self-register when they start. The orchestrator does NOT pre-register workers—each worker calls `macro-start-session` CLI as their first step, which handles registration automatically.
 
 **TDD enforcement:** Workers follow RED → GREEN → REFACTOR cycle by default. Pass `--no-tdd` to disable.
 
@@ -518,19 +511,25 @@ while active_workers or has_ready_beads(EPIC_ID):
     wait_for_workers(active_workers)
     
     # ──────────────────────────────────────────────────────────
-    # NEW: Verify workers sent summaries via Agent Mail
+    # NEW: Verify workers sent summaries via Agent Mail CLI
     # ──────────────────────────────────────────────────────────
-    inbox = fetch_inbox(
-        project_key="<path>",
-        agent_name=ORCHESTRATOR_NAME,
-        include_bodies=True,
-        limit=50
-    )
+    # Fetch inbox using CLI
+    inbox_json=$(toolboxes/agent-mail/agent-mail.js fetch-inbox \
+        --project-key <path> \
+        --agent-name ${ORCHESTRATOR_NAME} \
+        --include-bodies true \
+        --limit 50)
+    ```
+    
+    ```python
+    # Parse inbox JSON
+    import json
+    inbox = json.loads(inbox_json)
     
     for msg in inbox:
-        if "[TRACK COMPLETE]" in msg.subject:
+        if "[TRACK COMPLETE]" in msg.get("subject", ""):
             # Extract agent name from message
-            agent = msg.sender_name
+            agent = msg.get("sender_name")
             workers_with_summaries.add(agent)
             print(f"✓ Received summary from {agent}")
     
@@ -539,15 +538,14 @@ while active_workers or has_ready_beads(EPIC_ID):
     if missing and not active_workers:
         print(f"⚠️ Missing summaries from: {', '.join(missing)}")
         # Log but don't block - workers may have used fallback mode
+    ```
     
-    # ──────────────────────────────────────────────────────────
-    
+    ```bash
     # Check for blockers
-    blockers = fetch_inbox(
-        project_key="<path>",
-        agent_name=ORCHESTRATOR_NAME,
-        urgent_only=True
-    )
+    blockers_json=$(toolboxes/agent-mail/agent-mail.js fetch-inbox \
+        --project-key <path> \
+        --agent-name ${ORCHESTRATOR_NAME} \
+        --urgent-only true)
     
     for blocker in blockers:
         handle_blocker(blocker)
@@ -636,46 +634,49 @@ With re-dispatch:
 
 When worker reports blocker:
 
-```python
-# 1. Read blocker message
-blocker = fetch_inbox(urgent_only=True)[0]
+```bash
+# 1. Read blocker message (urgent only)
+blocker_json=$(toolboxes/agent-mail/agent-mail.js fetch-inbox \
+  --project-key <path> \
+  --agent-name ${ORCHESTRATOR_NAME} \
+  --urgent-only true \
+  --limit 1)
 
 # 2. Assess and respond
-reply_message(
-  project_key="<path>",
-  message_id=blocker.id,
-  sender_name=ORCHESTRATOR_NAME,
-  body_md="Resolution: ..."
-)
+toolboxes/agent-mail/agent-mail.js reply-message \
+  --project-key <path> \
+  --message-id ${blocker_id} \
+  --sender-name ${ORCHESTRATOR_NAME} \
+  --body-md "Resolution: ..."
 ```
 
 ### File Conflict Resolution
 
 When two workers need same file:
 
-```python
-send_message(
-  project_key="<path>",
-  sender_name=ORCHESTRATOR_NAME,
-  to=["<Holder>"],
-  thread_id="<epic-id>",
-  subject="File conflict resolution",
-  body_md="<Requester> needs <files>. Can you release?"
-)
+```bash
+toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key <path> \
+  --sender-name ${ORCHESTRATOR_NAME} \
+  --to '["<Holder>"]' \
+  --thread-id <epic-id> \
+  --subject "File conflict resolution" \
+  --body-md "<Requester> needs <files>. Can you release?"
 ```
 
 ### Cross-Track Dependency Notification
 
 When Track 1 completes task needed by Track 2:
 
-```python
+```bash
 # Worker 1 sends (handled by worker protocol):
-send_message(
-  to=["<Worker2>"],
-  thread_id="<epic-id>",
-  subject="[DEP] 1.2.3 COMPLETE - Track 2 unblocked",
-  body_md="Task 1.2.3 complete. Track 2 can proceed with 2.1.1."
-)
+toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key <path> \
+  --sender-name ${WORKER_NAME} \
+  --to '["<Worker2>"]' \
+  --thread-id <epic-id> \
+  --subject "[DEP] 1.2.3 COMPLETE - Track 2 unblocked" \
+  --body-md "Task 1.2.3 complete. Track 2 can proceed with 2.1.1."
 ```
 
 ## Phase 7: Epic Completion
@@ -718,15 +719,14 @@ if missing_summaries:
 
 ### Send Epic Complete Summary
 
-```python
-send_message(
-  project_key="<path>",
-  sender_name=ORCHESTRATOR_NAME,
-  to=all_workers,
-  thread_id=epic_id,
-  subject="EPIC COMPLETE: <title>",
-  body_md="""
-## Summary
+```bash
+toolboxes/agent-mail/agent-mail.js send-message \
+  --project-key <path> \
+  --sender-name ${ORCHESTRATOR_NAME} \
+  --to '["Worker1", "Worker2", "Worker3"]' \
+  --thread-id ${epic_id} \
+  --subject "EPIC COMPLETE: <title>" \
+  --body-md "## Summary
 
 - **Duration**: X hours
 - **Tracks**: 3 complete
@@ -751,9 +751,7 @@ send_message(
 - skills/orchestrator/SKILL.md
 - skills/orchestrator/references/*.md
 - skills/conductor/SKILL.md
-- ...
-"""
-)
+- ..."
 ```
 
 ### Close Epic
@@ -804,15 +802,20 @@ After rb finishes:
 
 ## Graceful Fallback
 
-If Agent Mail MCP is unavailable at any phase:
+If Agent Mail CLI is unavailable at any phase:
 
-```python
-try:
-    session = macro_start_session(human_key=project_path, program="amp", model=model)
-except McpUnavailable:
-    print("⚠️ Agent coordination unavailable - falling back to sequential")
+```bash
+# Check Agent Mail CLI availability
+toolboxes/agent-mail/agent-mail.js macro-start-session \
+  --human-key ${project_path} \
+  --program amp \
+  --model ${model}
+
+if [ $? -ne 0 ]; then
+    echo "⚠️ Agent coordination unavailable - falling back to sequential"
     # Route to standard /conductor-implement
-    return implement_sequential(track_id)
+    exit 1
+fi
 ```
 
 ## Timing Constraints

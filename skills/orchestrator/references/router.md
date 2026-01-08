@@ -5,8 +5,11 @@ Main thread stays clean: understand intent → route to specialist → display s
 ## First Message Protocol
 
 On session start, before routing:
-```python
-fetch_inbox(project_key, agent_name)  # Load context from prior sessions
+```bash
+# Load context from prior sessions
+toolboxes/agent-mail/agent-mail.js fetch-inbox \
+  --project-key "$PROJECT_PATH" \
+  --agent-name "$AGENT_NAME"
 ```
 
 ## Intent → Agent Routing
@@ -31,7 +34,7 @@ fetch_inbox(project_key, agent_name)  # Load context from prior sessions
 
 ## Spawn Pattern
 
-```python
+```bash
 Task(
     description=f"""You are {agent_name}, a {agent_type} specialist.
 
@@ -43,14 +46,17 @@ Task(
 
 ## Protocol
 1. Do the work
-2. Send summary via Agent Mail before returning:
-   send_message(project_key, agent_name, to=["Orchestrator"],
-     subject=f"Completed: {task_summary}",
-     body_md=summary_template)
+2. Send summary via Agent Mail CLI before returning:
+   toolboxes/agent-mail/agent-mail.js send-message \
+     --project-key "$PROJECT_PATH" \
+     --sender-name "$AGENT_NAME" \
+     --to '["Orchestrator"]' \
+     --subject "Completed: {task_summary}" \
+     --body-md "$SUMMARY"
 3. Return structured result
 
 ## CRITICAL
-You MUST call send_message() before returning.
+You MUST send message via Agent Mail CLI before returning.
 """,
     prompt=user_request
 )

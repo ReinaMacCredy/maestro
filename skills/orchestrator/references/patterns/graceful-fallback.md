@@ -20,22 +20,20 @@ Agent Mail available?
 
 Check Agent Mail availability at orchestration start:
 
-```python
-try:
-    result = health_check(reason="Orchestrator preflight")
-    if not result.healthy:
-        raise McpUnavailable("Agent Mail not healthy")
-    ensure_project(human_key=PROJECT_PATH)
-    AGENT_MAIL_AVAILABLE = True
-except McpUnavailable:
+```bash
+# Check health
+if ! toolboxes/agent-mail/agent-mail.js health-check reason:"Orchestrator preflight"; then
     # CRITICAL: Do NOT fall back to sequential
-    print("❌ HALT: Agent Mail unavailable - cannot orchestrate")
-    print("   Parallel execution requires Agent Mail for:")
-    print("   - Worker registration and identity")
-    print("   - File reservation to prevent conflicts")
-    print("   - Cross-track dependency notifications")
-    print("   - Progress monitoring and blocker resolution")
-    return {"status": "HALTED", "reason": "Agent Mail unavailable"}
+    echo "❌ HALT: Agent Mail unavailable - cannot orchestrate"
+    echo "   Parallel execution requires Agent Mail for:"
+    echo "   - Worker registration and identity"
+    echo "   - File reservation to prevent conflicts"
+    echo "   - Cross-track dependency notifications"
+    echo "   - Progress monitoring and blocker resolution"
+    exit 1
+fi
+
+toolboxes/agent-mail/agent-mail.js ensure-project human_key:"$PROJECT_PATH"
 ```
 
 ## Failure Responses
@@ -48,7 +46,7 @@ except McpUnavailable:
 | `ensure_project` | HALT | Cannot proceed with orchestration |
 | `register_agent` | HALT | Workers need identity for coordination |
 | `send_message` (epic start) | HALT | Workers need thread context |
-| Monitor loop fails | Log + Retry | Use `fetch_inbox` with backoff |
+| Monitor loop fails | Log + Retry | Use `fetch-inbox` with backoff |
 
 ### Worker Level
 
@@ -113,23 +111,27 @@ If Agent Mail becomes unavailable after workers are spawned:
 3. **Orchestrator logs and waits** - Retry Agent Mail periodically
 4. **Recovery when available** - Resume monitoring, workers re-register
 
-```python
+```bash
 # Mid-orchestration failure handling
-while not all_complete:
-    try:
-        status = fetch_inbox(project_key=PROJECT_PATH, agent_name=ORCHESTRATOR)
+while true; do
+    if toolboxes/agent-mail/agent-mail.js fetch-inbox \
+        project_key:"$PROJECT_PATH" \
+        agent_name:"$ORCHESTRATOR" 2>/dev/null; then
         # Normal monitoring continues
-    except McpUnavailable:
-        print("⚠️ Agent Mail unavailable - waiting for recovery")
-        sleep(60)
+        break
+    else
+        echo "⚠️ Agent Mail unavailable - waiting for recovery"
+        sleep 60
         continue  # Retry, don't fall back
+    fi
+done
 ```
 
 ## Recovery
 
 If Agent Mail becomes available after failure:
 
-1. Orchestrator re-establishes connection via `health_check`
+1. Orchestrator re-establishes connection via `health-check`
 2. Workers can re-register and continue
 3. Resume normal monitoring loop
 4. Check `bd status` to reconcile any missed updates
@@ -146,7 +148,7 @@ If Agent Mail becomes available after failure:
 
 ## Implementation Notes
 
-- Health check before any orchestration: `health_check(reason="...")`
+- Health check before any orchestration: `agent-mail.js health-check reason:"..."`
 - Timeout on MCP calls: ~3 seconds
 - Retry Agent Mail 3 times with exponential backoff before HALT
 - Log all failures with timestamps for debugging

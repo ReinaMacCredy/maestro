@@ -12,105 +12,92 @@ Each worker maintains its own session lifecycle:
 
 ## Worker Session Start
 
-```python
+```bash
 # 1. Register agent identity
-register_agent(
-  project_key=PROJECT_PATH,
-  name=AGENT_NAME,  # e.g., "BlueLake"
-  program="amp",
-  model=MODEL,
-  task_description=f"Worker for Track {TRACK_N}"
-)
+toolboxes/agent-mail/agent-mail.js register-agent \
+  project_key:"$PROJECT_PATH" \
+  name:"$AGENT_NAME" \
+  program:"amp" \
+  model:"$MODEL" \
+  task_description:"Worker for Track $TRACK_N"
 
 # 2. Check for cross-track dependency notifications
-messages = fetch_inbox(
-  project_key=PROJECT_PATH,
-  agent_name=AGENT_NAME,
-  include_bodies=True
-)
+toolboxes/agent-mail/agent-mail.js fetch-inbox \
+  project_key:"$PROJECT_PATH" \
+  agent_name:"$AGENT_NAME" \
+  include_bodies:true
 
-# 3. Filter for dependency completions
-for msg in messages:
-    if "[DEP]" in msg.subject and "COMPLETE" in msg.subject:
-        # Dependency satisfied, can proceed
-        pass
+# 3. Filter for dependency completions (parse JSON output)
+# Look for [DEP] ... COMPLETE patterns in subject
 ```
 
 ## Worker Session Loop
 
-```python
-for bead_id in assigned_beads:
+```bash
+for bead_id in $ASSIGNED_BEADS; do
     # 1. Reserve files for this bead
-    file_reservation_paths(
-      project_key=PROJECT_PATH,
-      agent_name=AGENT_NAME,
-      paths=[FILE_SCOPE],
-      ttl_seconds=3600
-    )
+    toolboxes/agent-mail/agent-mail.js file-reservation-paths \
+      project_key:"$PROJECT_PATH" \
+      agent_name:"$AGENT_NAME" \
+      paths:"[\"$FILE_SCOPE\"]" \
+      ttl_seconds:3600
     
     # 2. Claim bead
-    bash(f"bd update {bead_id} --status in_progress")
+    bd update "$bead_id" --status in_progress
     
     # 3. Do work
-    implement_task(bead_id)
+    # implement_task "$bead_id"
     
     # 4. Close bead
-    bash(f"bd close {bead_id} --reason completed")
+    bd close "$bead_id" --reason completed
     
     # 5. Report completion
-    send_message(
-      project_key=PROJECT_PATH,
-      sender_name=AGENT_NAME,
-      to=[ORCHESTRATOR],
-      thread_id=EPIC_ID,
-      subject=f"[COMPLETE] {bead_id}",
-      body_md=f"Bead {bead_id} closed."
-    )
+    toolboxes/agent-mail/agent-mail.js send-message \
+      project_key:"$PROJECT_PATH" \
+      sender_name:"$AGENT_NAME" \
+      to:"[\"$ORCHESTRATOR\"]" \
+      thread_id:"$EPIC_ID" \
+      subject:"[COMPLETE] $bead_id" \
+      body_md:"Bead $bead_id closed."
     
-    # 6. Heartbeat (every 5 min)
-    if time_since_last_heartbeat() > 5 * 60:
-        send_heartbeat()
+    # 6. Heartbeat (every 5 min) - handled separately
+done
 ```
 
 ## Worker Session End
 
-```python
+```bash
 # 1. Send track completion summary
-send_message(
-  project_key=PROJECT_PATH,
-  sender_name=AGENT_NAME,
-  to=[ORCHESTRATOR],
-  thread_id=EPIC_ID,
-  subject=f"[TRACK COMPLETE] Track {TRACK_N}",
-  body_md=f"""
-## Track {TRACK_N} Complete
+toolboxes/agent-mail/agent-mail.js send-message \
+  project_key:"$PROJECT_PATH" \
+  sender_name:"$AGENT_NAME" \
+  to:"[\"$ORCHESTRATOR\"]" \
+  thread_id:"$EPIC_ID" \
+  subject:"[TRACK COMPLETE] Track $TRACK_N" \
+  body_md:"## Track $TRACK_N Complete
 
-- **Beads closed**: {len(assigned_beads)}
-- **Files changed**: {list(changed_files)}
-- **Duration**: {duration}
-  """
-)
+- **Beads closed**: $BEAD_COUNT
+- **Files changed**: $CHANGED_FILES
+- **Duration**: $DURATION"
 
 # 2. Release file reservations
-release_file_reservations(
-  project_key=PROJECT_PATH,
-  agent_name=AGENT_NAME
-)
+toolboxes/agent-mail/agent-mail.js release-file-reservations \
+  project_key:"$PROJECT_PATH" \
+  agent_name:"$AGENT_NAME"
 ```
 
 ## Heartbeat Protocol
 
 Workers send heartbeat every 5 minutes:
 
-```python
-send_message(
-  project_key=PROJECT_PATH,
-  sender_name=AGENT_NAME,
-  to=[ORCHESTRATOR],
-  thread_id=EPIC_ID,
-  subject=f"[HEARTBEAT] Track {TRACK_N}",
-  body_md=f"Still working. Current bead: {current_bead}"
-)
+```bash
+toolboxes/agent-mail/agent-mail.js send-message \
+  project_key:"$PROJECT_PATH" \
+  sender_name:"$AGENT_NAME" \
+  to:"[\"$ORCHESTRATOR\"]" \
+  thread_id:"$EPIC_ID" \
+  subject:"[HEARTBEAT] Track $TRACK_N" \
+  body_md:"Still working. Current bead: $CURRENT_BEAD"
 ```
 
 Orchestrator marks worker stale if no heartbeat for 10 minutes.
@@ -119,17 +106,18 @@ Orchestrator marks worker stale if no heartbeat for 10 minutes.
 
 When completing a bead that other tracks depend on:
 
-```python
+```bash
 # Check if this bead unblocks other tracks
-if bead_id in blocking_beads:
-    waiting_workers = find_waiting_workers(bead_id)
-    for worker in waiting_workers:
-        send_message(
-          to=[worker],
-          thread_id=EPIC_ID,
-          subject=f"[DEP] {bead_id} COMPLETE - unblocked",
-          body_md=f"You can now proceed with dependent beads."
-        )
+# If bead_id is in blocking_beads, notify waiting workers
+for worker in $WAITING_WORKERS; do
+    toolboxes/agent-mail/agent-mail.js send-message \
+      project_key:"$PROJECT_PATH" \
+      sender_name:"$AGENT_NAME" \
+      to:"[\"$worker\"]" \
+      thread_id:"$EPIC_ID" \
+      subject:"[DEP] $BEAD_ID COMPLETE - unblocked" \
+      body_md:"You can now proceed with dependent beads."
+done
 ```
 
 ## Multi-Session Awareness
@@ -140,59 +128,52 @@ When multiple sessions may be active, workers use session announcement messages.
 
 Sent immediately after registration:
 
-```python
-send_message(
-    project_key=PROJECT_PATH,
-    sender_name=AGENT_NAME,
-    to=["Broadcast"],  # Or orchestrator if known
-    thread_id=EPIC_ID,
-    subject=f"[SESSION START] {DISPLAY_NAME}",
-    body_md=f"""
-## Session Started
+```bash
+toolboxes/agent-mail/agent-mail.js send-message \
+    project_key:"$PROJECT_PATH" \
+    sender_name:"$AGENT_NAME" \
+    to:'["Broadcast"]' \
+    thread_id:"$EPIC_ID" \
+    subject:"[SESSION START] $DISPLAY_NAME" \
+    body_md:"## Session Started
 
-- **ID**: {SESSION_ID}
-- **Track**: {TRACK_ID}
-- **Beads**: {', '.join(assigned_beads)}
-- **Files**: {FILE_SCOPE}
-- **Started**: {timestamp}
-"""
-)
+- **ID**: $SESSION_ID
+- **Track**: $TRACK_ID
+- **Beads**: $ASSIGNED_BEADS
+- **Files**: $FILE_SCOPE
+- **Started**: $TIMESTAMP"
 ```
 
 ### HEARTBEAT Message
 
 Sent every 5 minutes during active work:
 
-```python
-send_message(
-    project_key=PROJECT_PATH,
-    sender_name=AGENT_NAME,
-    to=["Broadcast"],
-    thread_id=EPIC_ID,
-    subject=f"[HEARTBEAT] {DISPLAY_NAME}",
-    body_md=f"Working on {current_bead}. Files: {FILE_SCOPE}"
-)
+```bash
+toolboxes/agent-mail/agent-mail.js send-message \
+    project_key:"$PROJECT_PATH" \
+    sender_name:"$AGENT_NAME" \
+    to:'["Broadcast"]' \
+    thread_id:"$EPIC_ID" \
+    subject:"[HEARTBEAT] $DISPLAY_NAME" \
+    body_md:"Working on $CURRENT_BEAD. Files: $FILE_SCOPE"
 ```
 
 ### SESSION END Message
 
 Sent on normal session completion:
 
-```python
-send_message(
-    project_key=PROJECT_PATH,
-    sender_name=AGENT_NAME,
-    to=["Broadcast"],
-    thread_id=EPIC_ID,
-    subject=f"[SESSION END] {DISPLAY_NAME}",
-    body_md=f"""
-## Session Complete
+```bash
+toolboxes/agent-mail/agent-mail.js send-message \
+    project_key:"$PROJECT_PATH" \
+    sender_name:"$AGENT_NAME" \
+    to:'["Broadcast"]' \
+    thread_id:"$EPIC_ID" \
+    subject:"[SESSION END] $DISPLAY_NAME" \
+    body_md:"## Session Complete
 
-- **Duration**: {duration}
-- **Beads closed**: {', '.join(closed_beads)}
-- **Files released**: {FILE_SCOPE}
-"""
-)
+- **Duration**: $DURATION
+- **Beads closed**: $CLOSED_BEADS
+- **Files released**: $FILE_SCOPE"
 ```
 
 ### Stale Session Detection
@@ -253,40 +234,40 @@ When a stale session is detected, the new session can take over:
 
 #### Takeover Implementation
 
-```python
-def takeover_session(stale_session: Session) -> None:
-    """Take over a stale session's resources."""
+```bash
+# Take over a stale session's resources
+takeover_session() {
+    local stale_session_id="$1"
     
     # 1. Force-release file reservations
-    for reservation_id in stale_session.reservation_ids:
-        force_release_file_reservation(
-            project_key=PROJECT_PATH,
-            agent_name=MY_AGENT_NAME,
-            file_reservation_id=reservation_id,
-            note=f"Takeover by {MY_AGENT_NAME} - session stale for {stale_duration}",
-            notify_previous=True
-        )
+    for reservation_id in $RESERVATION_IDS; do
+        toolboxes/agent-mail/agent-mail.js force-release-file-reservation \
+            project_key:"$PROJECT_PATH" \
+            agent_name:"$MY_AGENT_NAME" \
+            file_reservation_id:"$reservation_id" \
+            note:"Takeover by $MY_AGENT_NAME - session stale for $STALE_DURATION" \
+            notify_previous:true
+    done
     
     # 2. Reset beads to open status
-    for bead_id in stale_session.beads_claimed:
-        bash(f"bd update {bead_id} --status open --notes 'Reset by {MY_AGENT_NAME} takeover'")
+    for bead_id in $BEADS_CLAIMED; do
+        bd update "$bead_id" --status open --notes "Reset by $MY_AGENT_NAME takeover"
+    done
     
     # 3. Announce takeover
-    send_message(
-        project_key=PROJECT_PATH,
-        sender_name=MY_AGENT_NAME,
-        to=[stale_session.id],  # Notify original owner if they return
-        subject=f"[TAKEOVER] Resources from {stale_session.display}",
-        body_md=f"""
-## Session Takeover
+    toolboxes/agent-mail/agent-mail.js send-message \
+        project_key:"$PROJECT_PATH" \
+        sender_name:"$MY_AGENT_NAME" \
+        to:"[\"$stale_session_id\"]" \
+        subject:"[TAKEOVER] Resources from $STALE_SESSION_DISPLAY" \
+        body_md:"## Session Takeover
 
-Took over resources from stale session {stale_session.display}.
+Took over resources from stale session $STALE_SESSION_DISPLAY.
 
-- **Reservations released**: {len(stale_session.reservation_ids)}
-- **Beads reset**: {', '.join(stale_session.beads_claimed)}
-- **Reason**: Inactive for {stale_duration}
-"""
-    )
+- **Reservations released**: $RESERVATION_COUNT
+- **Beads reset**: $BEADS_CLAIMED
+- **Reason**: Inactive for $STALE_DURATION"
+}
 ```
 
 ### Conflict Resolution
@@ -321,22 +302,22 @@ Add to project AGENTS.md for worker sessions:
 ## Worker Session Protocol
 
 ### On Start
-1. Register: `register_agent(project_key, AGENT_NAME, program, model)`
-2. Announce: `send_message` with `[SESSION START]`
-3. Check inbox: `fetch_inbox` for dependency notifications
-4. Reserve files: `file_reservation_paths(paths=[FILE_SCOPE])`
+1. Register: `agent-mail.js register-agent project_key:... name:$AGENT_NAME program:... model:...`
+2. Announce: `agent-mail.js send-message` with `[SESSION START]`
+3. Check inbox: `agent-mail.js fetch-inbox` for dependency notifications
+4. Reserve files: `agent-mail.js file-reservation-paths paths:'["$FILE_SCOPE"]'`
 
 ### During Work
 1. Claim bead: `bd update <id> --status in_progress`
 2. Do work
 3. Close bead: `bd close <id> --reason completed`
-4. Report: `send_message` with completion details
-5. Heartbeat: `send_message` with `[HEARTBEAT]` every 5 minutes
+4. Report: `agent-mail.js send-message` with completion details
+5. Heartbeat: `agent-mail.js send-message` with `[HEARTBEAT]` every 5 minutes
 
 ### On Complete
 1. Send track summary
-2. Announce: `send_message` with `[SESSION END]`
-3. Release reservations: `release_file_reservations`
+2. Announce: `agent-mail.js send-message` with `[SESSION END]`
+3. Release reservations: `agent-mail.js release-file-reservations`
 ```
 
 ## References
