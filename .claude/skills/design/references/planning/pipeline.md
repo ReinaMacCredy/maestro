@@ -1,215 +1,667 @@
-# Planning Pipeline
+# Unified DS Pipeline
 
-The 6-phase pipeline for risk-based feature planning.
+> **Single 8-phase pipeline from problem discovery through execution-ready state.**
 
-## Pipeline Overview
-
-```
-USER REQUEST → Discovery → Synthesis → Verification → Decomposition → Validation → Track Planning → Ready Plan
-```
-
-| Phase | Tool | Output |
-|-------|------|--------|
-| 1. Discovery | Parallel Task() agents | design.md Section 2 |
-| 2. Synthesis | Oracle | design.md Section 3 (Gap + Risk Map) |
-| 3. Verification | Spikes via Task() | design.md Section 5 |
-| 4. Decomposition | fb (file-beads) | .beads/*.md |
-| 5. Validation | bv + Oracle | Validated dependency graph |
-| 6. Track Planning | bv --robot-plan | plan.md Track Assignments |
-
-## Phase 1: Discovery
-
-Launch parallel sub-agents to gather codebase intelligence:
+## Overview Diagram
 
 ```
-Task() → Agent A: Architecture snapshot (Grep, finder, Read)
-Task() → Agent B: Pattern search (find similar existing code)
-Task() → Agent C: Constraints (package.json, tsconfig, deps)
-Web search → External patterns ("how do similar projects do this?")
+┌──────────────────────────────────────────────────────────────────────────────────────────┐
+│                              UNIFIED DS PIPELINE (8 PHASES)                              │
+├──────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                          │
+│  ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐                               │
+│  │DISCOVER │ →  │ DEFINE  │ →  │ DEVELOP │ →  │ VERIFY  │   ← DESIGN (Human-Driven)     │
+│  │(Diverge)│    │(Converge)    │(Diverge)│    │(Converge)                               │
+│  │   🔬    │    │   🎯    │    │   🏗️    │    │   ✅    │                               │
+│  └────┬────┘    └────┬────┘    └────┬────┘    └────┬────┘                               │
+│       │              │              │              │                                     │
+│      A/P/C         A/P/C         A/P/C         A/P/C + Oracle                            │
+│       │              │              │              │                                     │
+│  ╔════╧══════════════╧══════════════╧══════════════╧═════╗                               │
+│  ║             research-start      research-verify       ║   ← RESEARCH HOOKS            │
+│  ╚═══════════════════════════════════════════════════════╝                               │
+│                                        │                                                 │
+│                             ╔══════════╧══════════╗                                      │
+│                             ║  Auto-Plan Gate     ║                                      │
+│                             ║  [C]/[M]/[P]        ║                                      │
+│                             ╚══════════╤══════════╝                                      │
+│                                        │                                                 │
+│  ┌───────────┐  ┌──────────┐  ┌────────┐  ┌─────────┐                                   │
+│  │ DECOMPOSE │→ │ VALIDATE │→ │ ASSIGN │→ │  READY  │   ← EXECUTION (Automated)        │
+│  │ (Execute) │  │ (Execute)│  │(Execute)│  │(Complete)                                  │
+│  │    📦     │  │   🔍    │  │   📋    │  │   🚀    │                                   │
+│  └─────┬─────┘  └────┬─────┘  └────┬────┘  └────┬────┘                                   │
+│        │             │             │            │                                        │
+│       fb           bv+Oracle    tracks     [O]/[S] prompt                                │
+│                                                                                          │
+└──────────────────────────────────────────────────────────────────────────────────────────┘
+
+MODES:
+  SPEED: 1 → 2 → 4 → 8  (skip 3,5,6,7)
+  FULL:  1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 ```
 
-**Output**: design.md Section 2 with:
-- Architecture Snapshot (relevant packages, key modules, entry points)
-- Existing Patterns (similar implementations, reusable utilities)
-- Technical Constraints (versions, dependencies, build requirements)
-- External References (library docs, similar projects)
+## Phase Details
 
-## Phase 2: Synthesis
+### Phase 1: DISCOVER (Diverge)
 
-Feed Discovery to Oracle for gap analysis:
+| Aspect | Value |
+|--------|-------|
+| **Purpose** | Explore problem space + gather research context |
+| **Type** | Divergent thinking - expand possibilities |
+| **Inputs** | User request, CODEMAPS, existing codebase |
+| **Outputs** | Problem understanding, relevant files, patterns |
+| **Checkpoint** | CP1 (A/P/C in FULL mode) |
+| **Research Hook** | `research-start` fires here |
+| **Mode** | Both SPEED and FULL |
 
-```python
-oracle(
-  task="Analyze gap between current codebase and feature requirements",
-  context="Discovery attached. User wants: <feature>",
-  files=["conductor/tracks/<id>/design.md"]
-)
+**Research-Start Hook Agents:**
+- Locator - Find relevant files
+- Pattern - Identify existing patterns
+- CODEMAPS - Load architecture context
+- Architecture - Understand structure
+
+---
+
+### Phase 2: DEFINE (Converge)
+
+| Aspect | Value |
+|--------|-------|
+| **Purpose** | Frame problem + select approach |
+| **Type** | Convergent thinking - narrow to solution |
+| **Inputs** | Research from Phase 1 |
+| **Outputs** | Problem statement, success criteria, scope, approach |
+| **Checkpoint** | CP2 (A/P/C in FULL mode) |
+| **Research Hook** | None |
+| **Mode** | Both SPEED and FULL |
+
+**Decisions Set:**
+- `problem_statement`
+- `success_criteria[]`
+- `scope.in[]` / `scope.out[]`
+- `approach.selected` + `approach.rationale`
+
+---
+
+### Phase 3: DEVELOP (Diverge)
+
+| Aspect | Value |
+|--------|-------|
+| **Purpose** | Architecture + component design |
+| **Type** | Divergent thinking - explore implementations |
+| **Inputs** | Approach from Phase 2 |
+| **Outputs** | Architecture spec, component breakdown |
+| **Checkpoint** | CP3 (A/P/C in FULL mode) |
+| **Research Hook** | `research-verify` fires at end |
+| **Mode** | **FULL only** (SPEED skips to Phase 4) |
+
+**Research-Verify Hook Agents:**
+- Analyzer - Deep code analysis
+- Pattern - Validate pattern usage
+- Impact - Assess change impact
+- Web - External docs/examples
+
+---
+
+### Phase 4: VERIFY (Converge)
+
+| Aspect | Value |
+|--------|-------|
+| **Purpose** | Oracle audit + risk assessment + spike execution |
+| **Type** | Convergent thinking - validate design |
+| **Inputs** | Architecture from Phase 3, research results |
+| **Outputs** | Oracle verdict, risk map, spike results |
+| **Checkpoint** | CP4 (A/P/C in FULL mode, Oracle runs BEFORE menu) |
+| **Research Hook** | None (research-verify ran at Phase 3 end) |
+| **Mode** | Both SPEED and FULL |
+
+**Oracle Audit:**
+```
+Oracle → APPROVED:     Continue to Phase 5
+       → NEEDS_REVISION: [R] Revise / [S] Skip / [A] Abort
 ```
 
-**Oracle produces**:
-1. **Gap Analysis** - What exists vs what's needed
-2. **Approach Options** - 1-3 strategies with tradeoffs
-3. **Risk Assessment** - LOW / MEDIUM / HIGH per component
-
-**Output**: design.md Section 3 with Gap Analysis, Risk Map, Recommended Approach.
-
-### Risk Classification
-
-| Level | Criteria | Verification |
-|-------|----------|--------------|
-| LOW | Pattern exists in codebase | Proceed |
-| MEDIUM | Variation of existing pattern | Interface sketch, type-check |
-| HIGH | Novel or external integration | Spike required |
-
-### Risk Indicators
-
+**Spike Execution (HIGH risk items):**
 ```
-Pattern exists in codebase? ─── YES → LOW base
-                            └── NO  → MEDIUM+ base
+For each HIGH risk item:
+  1. Create spike bead + conductor/spikes/<track>/<spike-id>/
+  2. Spawn Task() with time-box (default: 30 min)
+  3. Wait for completion
+  4. Capture result: YES/NO/PARTIAL/TIMEOUT
 
-External dependency? ─── YES → HIGH
-                     └── NO  → Check blast radius
-
-Blast radius >5 files? ─── YES → HIGH
-                       └── NO  → MEDIUM
+All YES → Continue
+Any NO/TIMEOUT → HALT for user decision
 ```
 
-## Phase 3: Verification
+---
 
-For HIGH risk items, create and execute spikes.
+## Auto-Planning Confirmation Gate
 
-See [spikes.md](spikes.md) for full spike workflow.
+Before entering Phase 5 (DECOMPOSE), display confirmation:
 
-**Summary**:
-1. Create spike bead and directory
-2. Execute via Task() with time-box (30 min default)
-3. Capture result (YES/NO + learnings)
-4. Update design.md Section 5
+```
+Oracle audit APPROVED. Ready to auto-generate:
+• Beads (.beads/*.md)
+• Dependencies (bv validation)
+• Track assignments (plan.md)
 
-**Output**: design.md Section 5, validated approach.
+[C] Continue (auto-generate all)
+[M] Manual (stop here, I'll run fb/bv/cn)
+[P] Preview (show what would be generated)
 
-## Phase 4: Decomposition
-
-Load file-beads skill and create beads with embedded learnings:
-
-```bash
-skill("beads")
+Default: [C] after 30s
 ```
 
-Each bead MUST include:
-- **Spike learnings** embedded in description (if applicable)
-- **Reference to spike code** for HIGH risk items
-- **Clear acceptance criteria**
-- **File scope** for track assignment
+### Behavior
 
-**Output**: .beads/*.md with spike learnings embedded.
+| Choice | Action |
+|--------|--------|
+| **[C]** | Auto-generate beads, validate deps, assign tracks (phases 5-7) |
+| **[M]** | Stop, suggest: "Run `fb` to file beads, `bv` to validate, then `cn`" |
+| **[P]** | Show preview of beads/tracks that would be created, then prompt again |
 
-## Phase 5: Validation
+### Skip Conditions
 
-### Run bv Analysis
+Gate is skipped if:
+- SPEED mode (no beads/tracks)
+- `--auto` flag passed to `ds`
 
-```bash
-bv --robot-suggest   # Find missing dependencies
-bv --robot-insights  # Detect cycles, bottlenecks
-bv --robot-priority  # Validate priorities
+---
+
+### Phase 5: DECOMPOSE (Execute)
+
+| Aspect | Value |
+|--------|-------|
+| **Purpose** | Create beads from design |
+| **Type** | Automated execution |
+| **Inputs** | Validated design from Phase 4 |
+| **Outputs** | Filed beads in `.beads/` |
+| **Checkpoint** | None (automated) |
+| **Command** | `fb` (file beads) |
+| **Mode** | **FULL only** (SPEED skips) |
+
+**Auto-Plan Gate (before Phase 5):**
+```
+Oracle audit APPROVED. Ready to auto-generate:
+• Beads (.beads/*.md)
+• Dependencies (bv validation)
+• Track assignments (plan.md)
+
+[C] Continue (auto-generate all)
+[M] Manual (stop here, I'll run fb/bv/cn)
+[P] Preview (show what would be generated)
 ```
 
-### Fix Issues
+---
 
-```bash
-bd dep add <from> <to>      # Add missing deps
-bd dep remove <from> <to>   # Break cycles
-bd update <id> --priority X # Adjust priorities
-```
+### Phase 6: VALIDATE (Execute)
 
-### Oracle Final Review
+| Aspect | Value |
+|--------|-------|
+| **Purpose** | Dependency check + Oracle beads review |
+| **Type** | Automated execution |
+| **Inputs** | Filed beads from Phase 5 |
+| **Outputs** | Validated dependencies, Oracle approval |
+| **Checkpoint** | None (automated) |
+| **Commands** | `bv --robot-*`, Oracle |
+| **Mode** | **FULL only** (SPEED skips) |
 
-```python
-oracle(
-  task="Review plan completeness and clarity",
-  context="Plan ready. Check for gaps, unclear beads, missing deps.",
-  files=[".beads/"]
-)
-```
+**Validation Steps:**
+1. `bv --robot-suggest` - Find missing dependencies
+2. `bv --robot-insights` - Detect cycles
+3. `bv --robot-priority` - Validate priorities
+4. Fix issues with `bd dep add/remove`
+5. Oracle Final Review (beads completeness)
 
-**Output**: Validated dependency graph.
+---
 
-## Phase 6: Track Planning
+### Phase 7: ASSIGN (Execute)
 
-Creates execution-ready plan for orchestrator.
+| Aspect | Value |
+|--------|-------|
+| **Purpose** | Assign beads to tracks |
+| **Type** | Automated execution |
+| **Inputs** | Validated beads from Phase 6 |
+| **Outputs** | Track assignments in `plan.md` |
+| **Checkpoint** | None (automated) |
+| **Mode** | **FULL only** (SPEED skips) |
 
-### Step 1: Get Parallel Tracks
-
-```bash
-bv --robot-plan 2>/dev/null | jq '.plan.tracks'
-```
-
-### Step 2: Assign File Scopes
-
-For each track, determine file scope based on beads. Rules:
-- File scopes must NOT overlap between tracks
-- Use glob patterns: `packages/sdk/**`, `apps/server/**`
-- If overlap unavoidable, merge into single track
-
-### Step 3: Generate Agent Names
-
-Assign unique adjective+noun names:
-- BlueLake, GreenCastle, RedStone, PurpleBear, etc.
-- Names are memorable identifiers, NOT role descriptions
-
-### Step 4: Create Track Assignments
-
-Add to plan.md:
-
+**Track Assignment Output:**
 ```markdown
 ## Track Assignments
 
-| Track | Agent | Beads (in order) | File Scope |
-|-------|-------|------------------|------------|
-| A | BlueLake | bd-10 → bd-11 → bd-12 | `packages/sdk/**` |
-| B | GreenCastle | bd-20 → bd-21 | `packages/cli/**` |
-| C | RedStone | bd-30 → bd-31 → bd-32 | `apps/server/**` |
+| Track | Agent | Beads | File Scope |
+|-------|-------|-------|------------|
+| A | BlueLake | vou1.1, vou1.2 | .claude/skills/design/** |
+| B | GreenCastle | vou1.3, vou1.4 | .claude/skills/conductor/** |
 ```
 
-### Validation
+---
 
-```bash
-# No cycles in the graph
-bv --robot-insights 2>/dev/null | jq '.Cycles'
+### Phase 8: READY (Complete)
 
-# All beads assigned to tracks
-bv --robot-plan 2>/dev/null | jq '.plan.unassigned'
+| Aspect | Value |
+|--------|-------|
+| **Purpose** | Handoff to implementation |
+| **Type** | Terminal state |
+| **Inputs** | Track assignments from Phase 7 |
+| **Outputs** | Orchestration decision |
+| **Checkpoint** | [O]/[S] prompt |
+| **Mode** | Both SPEED and FULL |
+
+**Orchestration Prompt (≥2 tracks):**
+```
+Ready to execute. Found N tracks:
+• Track A (BlueLake): 4 beads
+• Track B (GreenCastle): 3 beads
+
+[O] Orchestrate (spawn workers)    ← Default after 30s
+[S] Sequential (run ci manually)
 ```
 
-**Output**: plan.md with Track Assignments, design.md Section 6.
+**Single Track:**
+- Suggest: `Run 'ci' to start implementation`
 
-## State Machine
+---
+
+## Mode Comparison
+
+| Aspect | SPEED | FULL |
+|--------|-------|------|
+| **Phases** | 1, 2, 4, 8 | All 8 |
+| **Total Phases** | 4 | 8 |
+| **A/P/C Checkpoints** | No | Yes (CP1-CP4) |
+| **Research Hooks** | 1 (start only) | 2 (start + verify) |
+| **Beads Created** | No | Yes (Phase 5) |
+| **Track Assignments** | No | Yes (Phase 7) |
+| **Oracle Audit** | Yes (Phase 4) | Yes (Phase 4 + Phase 6) |
+| **Spike Execution** | No | Yes (HIGH risk items) |
+| **Time Estimate** | ~5 min | ~15-30 min |
+| **Use Case** | Quick fixes, small features | Complex features, new systems |
+
+### SPEED Mode Flow
 
 ```
-unplanned → discovery → synthesized → verified → decomposed → validated → track_planned → executing → complete
+DISCOVER ──────────→ DEFINE ──────────→ VERIFY ──────────→ READY
+   │                   │                   │                 │
+ research-start     decisions          Oracle only      suggest ci
+                                       (no spikes)
 ```
 
-Tracked in `metadata.json`:
-```json
-{
-  "planning": {
-    "state": "track_planned",
-    "phases_completed": ["discovery", "synthesis", "verification", "decomposition", "validation", "track_planning"]
-  }
+### FULL Mode Flow
+
+```
+DISCOVER → DEFINE → DEVELOP → VERIFY → DECOMPOSE → VALIDATE → ASSIGN → READY
+    │         │         │        │          │          │         │        │
+ research  decisions  arch   Oracle+    fb beads    bv deps   tracks  [O]/[S]
+  -start              +verify spikes                +Oracle
+```
+
+---
+
+## Context Flow Specification
+
+The `pipeline_context` object accumulates through all phases:
+
+```typescript
+interface PipelineContext {
+  // Metadata
+  id: string;                              // Track ID
+  mode: "SPEED" | "FULL";                  // Execution mode
+  current_phase: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+  preflight_completed: boolean;            // INIT preflight done
+  started_at: ISO8601;
+  
+  // Research (accumulated)
+  research: {
+    start: ResearchStartResult | null;     // Phase 1
+    verify: ResearchVerifyResult | null;   // Phase 3 end
+  };
+  
+  // Decisions (accumulated)
+  decisions: {
+    problem_statement: string | null;      // Phase 2
+    success_criteria: string[] | null;     // Phase 2
+    scope: { in: string[], out: string[] } | null;  // Phase 2
+    approach: {                            // Phase 2
+      selected: string,
+      rationale: string,
+      alternatives: string[]
+    } | null;
+    architecture: ArchitectureSpec | null; // Phase 3
+    risk_assessment: RiskMap | null;       // Phase 4
+  };
+  
+  // Spikes (Phase 4)
+  spikes: {
+    required: SpikeRef[];                  // HIGH risk items
+    completed: SpikeResult[];              // Results
+    all_passed: boolean;                   // True if all YES
+  } | null;
+  
+  // Artifacts (accumulated)
+  artifacts: {
+    design_md: string;                     // Always present
+    spec_md: string | null;                // Phase 4+
+    plan_md: string | null;                // Phase 7+
+    beads: BeadRef[] | null;               // Phase 5+
+    track_assignments: TrackAssignment[] | null;  // Phase 7+
+  };
+  
+  // Validation state
+  validation: {
+    checkpoints_passed: ("CP1"|"CP2"|"CP3"|"CP4")[];
+    oracle_verdict: "APPROVED" | "NEEDS_REVISION" | null;
+    oracle_beads_review: "APPROVED" | "NEEDS_REVISION" | null;
+    retries: number;
+    max_retries: 2;
+    skip_accepted: boolean;                // User accepted Oracle skip
+  };
+  
+  // Orchestration (Phase 8)
+  orchestration: {
+    mode: "parallel" | "sequential" | null;
+    tracks: TrackAssignment[] | null;
+    workers_spawned: string[] | null;
+    workers_completed: string[] | null;
+  } | null;
+}
+
+interface SpikeRef {
+  id: string;
+  question: string;
+  risk_item: string;
+  time_box_minutes: number;
+  path: string;  // conductor/spikes/<track>/<spike-id>/
+}
+
+interface SpikeResult {
+  id: string;
+  result: "YES" | "NO" | "PARTIAL" | "TIMEOUT";
+  learnings: string[];
+  approach?: string;   // If YES
+  blocker?: string;    // If NO
 }
 ```
 
-## Validation Gates
+---
 
-| Gate | After Phase | Enforcement |
-|------|-------------|-------------|
-| discovery-complete | 1 | WARN |
-| risk-assessed | 2 | HALT if HIGH without spike |
-| spikes-resolved | 3 | HALT if unresolved |
-| execution-ready | 6 | HALT if missing learnings |
+## State Machine Transitions
 
-## Related
+### State Diagram
 
-- [spikes.md](spikes.md) - Spike workflow details
-- [design-template.md](design-template.md) - Unified design.md format
-- [../../conductor/references/workflows/newtrack.md](../../conductor/references/workflows/newtrack.md) - Track creation
+```
+                    ┌─────────────────────────────────────┐
+                    │              INIT                   │
+                    │         (preflight only)            │
+                    └──────────────┬──────────────────────┘
+                                   │ always
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                               DISCOVER                                       │
+│                            (Phase 1)                                         │
+└──────────────────────────────────┬──────────────────────────────────────────┘
+                                   │ CP1 pass (WARN OK)
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                DEFINE                                        │
+│                            (Phase 2)                                         │
+└──────────────────────────────────┬──────────────────────────────────────────┘
+                                   │
+                    ┌──────────────┴──────────────┐
+                    │                             │
+              CP2 + FULL                    CP2 + SPEED
+                    │                             │
+                    ▼                             │
+┌──────────────────────────────┐                  │
+│          DEVELOP             │                  │
+│         (Phase 3)            │                  │
+└──────────────┬───────────────┘                  │
+               │ CP3 pass (WARN OK)               │
+               ▼                                  │
+┌─────────────────────────────────────────────────┴───────────────────────────┐
+│                               VERIFY                                         │
+│                            (Phase 4)                                         │
+└──────────────────────────────────┬──────────────────────────────────────────┘
+                                   │
+                    ┌──────────────┴──────────────┐
+                    │                             │
+           CP4 APPROVED                    CP4 + SPEED
+              + FULL                              │
+                    │                             │
+                    ▼                             │
+┌──────────────────────────────┐                  │
+│         DECOMPOSE            │                  │
+│         (Phase 5)            │                  │
+└──────────────┬───────────────┘                  │
+               │ beads filed                      │
+               ▼                                  │
+┌──────────────────────────────┐                  │
+│          VALIDATE            │                  │
+│         (Phase 6)            │                  │
+└──────────────┬───────────────┘                  │
+               │ bv passes + Oracle               │
+               ▼                                  │
+┌──────────────────────────────┐                  │
+│           ASSIGN             │                  │
+│         (Phase 7)            │                  │
+└──────────────┬───────────────┘                  │
+               │ tracks assigned                  │
+               ▼                                  │
+┌─────────────────────────────────────────────────┴───────────────────────────┐
+│                                READY                                         │
+│                            (Phase 8)                                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Transition Rules
+
+| From | To | Condition | Context Update |
+|------|----|-----------|----------------|
+| INIT | DISCOVER | Always | `mode`, `id` set |
+| DISCOVER | DEFINE | CP1 pass (WARN OK) | `research.start` populated |
+| DEFINE | DEVELOP | CP2 pass + FULL mode | `decisions` set |
+| DEFINE | VERIFY | CP2 pass + SPEED mode | (skip DEVELOP) |
+| DEVELOP | VERIFY | CP3 pass (WARN OK) | `research.verify` populated |
+| VERIFY | DECOMPOSE | CP4 APPROVED + FULL | `oracle_verdict = APPROVED` |
+| VERIFY | READY | CP4 pass + SPEED mode | (skip 5,6,7) |
+| DECOMPOSE | VALIDATE | beads filed | `artifacts.beads` populated |
+| VALIDATE | ASSIGN | bv passes + Oracle | dependencies validated |
+| ASSIGN | READY | tracks assigned | `artifacts.track_assignments` populated |
+
+### Error Transitions
+
+| State | Error | Action |
+|-------|-------|--------|
+| VERIFY | Oracle NEEDS_REVISION | [R] Revise → retry (max 2) |
+| VERIFY | Spike NO/TIMEOUT | HALT for user decision |
+| VALIDATE | bv cycle detected | Auto-fix or HALT |
+| Any | Unrecoverable | [A] Abort → save progress |
+
+---
+
+## Research Hooks
+
+### research-start (Phase 1)
+
+**Trigger:** Start of DISCOVER phase
+**Agents:** Locator, Pattern, CODEMAPS, Architecture
+**Duration:** ~15s
+**Output:** `research.start` in context
+
+```python
+Task(
+  description="Research: Gather initial context",
+  prompt="""
+  Parallel agents:
+  - Locator: Find files matching user request
+  - Pattern: Identify existing patterns in codebase
+  - CODEMAPS: Load architecture context
+  - Architecture: Understand system structure
+  
+  Return: Merged research result
+  """
+)
+```
+
+### research-verify (Phase 3→4)
+
+**Trigger:** End of DEVELOP phase (before VERIFY)
+**Agents:** Analyzer, Pattern, Impact, Web
+**Duration:** ~20s
+**Output:** `research.verify` in context
+
+```python
+Task(
+  description="Research: Verify design decisions",
+  prompt="""
+  Parallel agents:
+  - Analyzer: Deep analysis of proposed changes
+  - Pattern: Validate pattern usage
+  - Impact: Assess change impact
+  - Web: External docs, examples, best practices
+  
+  Return: Merged verification result
+  """
+)
+```
+
+---
+
+## Related Files
+
+| File | Purpose |
+|------|---------|
+| [../SKILL.md](../SKILL.md) | Main design skill entry point |
+| [session-init.md](session-init.md) | INIT preflight procedures |
+| [apc-checkpoints.md](apc-checkpoints.md) | A/P/C checkpoint details |
+| [double-diamond.md](double-diamond.md) | Legacy Double Diamond (deprecated) |
+| [../../conductor/references/planning/pipeline.md](../../conductor/references/planning/pipeline.md) | Legacy planning pipeline (deprecated) |
+| [../../conductor/references/research/hooks/research-start.md](../../conductor/references/research/hooks/research-start.md) | Research-start hook details |
+| [../../conductor/references/research/hooks/research-verify.md](../../conductor/references/research/hooks/research-verify.md) | Research-verify hook details |
+
+---
+
+## Quick Reference
+
+```
+SPEED (4 phases):  ds → DISCOVER → DEFINE → VERIFY → READY → ci
+FULL (8 phases):   ds → DISCOVER → DEFINE → DEVELOP → VERIFY →
+                       DECOMPOSE → VALIDATE → ASSIGN → READY → [O]/[S]
+
+Research:          2 hooks (start + verify), ~35s max
+Checkpoints:       A/P/C at phases 1-4 (FULL only)
+Oracle:            Phase 4 (design) + Phase 6 (beads, FULL only)
+Spikes:            Phase 4 for HIGH risk items (FULL only)
+```
+
+---
+
+## Oracle Revision Loop
+
+When Oracle returns NEEDS_REVISION at Phase 4 (FULL mode only):
+
+```
+Oracle returns NEEDS_REVISION
+       │
+       ▼
+  1. HALT execution
+       │
+       ▼
+  2. Display Oracle issues with line references
+       │
+       ├──[R] Revise──→ User edits → Re-run Oracle (max 2 retries)
+       │
+       ├──[S] Skip──→ Log warning, continue (user accepts risk)
+       │
+       └──[A] Abort──→ Save progress, suggest resume later
+```
+
+### Prompt Template
+
+```
+⚠️ Oracle audit: NEEDS_REVISION
+
+Issues found:
+1. [Line 45] Missing error handling for edge case X
+2. [Line 78] Unclear acceptance criteria for feature Y
+
+[R] Revise - edit design.md and re-run Oracle
+[S] Skip - accept risk and continue
+[A] Abort - save progress for later
+
+Retries remaining: 2
+```
+
+### Behavior
+
+| Choice | Action |
+|--------|--------|
+| **[R]** | User edits design.md, Oracle re-runs (decrement retries) |
+| **[S]** | Log `skip_accepted: true` in metadata, show warning, continue |
+| **[A]** | Save `pipeline.current_phase: 4`, suggest `/conductor-handoff` |
+
+### Max Retries
+
+After 2 retries with NEEDS_REVISION:
+```
+Oracle still reports issues after 2 revision attempts.
+[S] Skip anyway (not recommended)
+[A] Abort and get human review
+```
+
+### SPEED Mode
+
+In SPEED mode, Oracle issues are logged as warnings but do not halt:
+```
+⚠️ Oracle warnings (SPEED mode - non-blocking):
+• Missing error handling for edge case X
+Continuing to Phase 5...
+```
+
+---
+
+## Phase Progress Indicator
+
+Display progress at each phase transition:
+
+### FULL Mode (8 phases)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 📍 Phase 3/8: DEVELOP                                       │
+│ ━━━━━━━━━━━━━━━━━━━━━━━━━━░░░░░░░░░░░░░░░░░░░░░ 37%        │
+│                                                             │
+│ ✅ DISCOVER  ✅ DEFINE  ▶️ DEVELOP  ○ VERIFY                │
+│ ○ DECOMPOSE  ○ VALIDATE  ○ ASSIGN  ○ READY                 │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### SPEED Mode (4 phases)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 📍 Phase 2/4: DEFINE (SPEED mode)                           │
+│ ━━━━━━━━━━━━━━━━━━━━━━━━━━░░░░░░░░░░░░░░░░░░░░░ 50%        │
+│                                                             │
+│ ✅ DISCOVER  ▶️ DEFINE  ○ VERIFY  ○ READY                  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Phase Transition Message
+
+At each phase transition:
+```
+────────────────────────────────────────────────────
+📍 Entering Phase 4: VERIFY
+   Purpose: Oracle audit + risk assessment
+   Duration: ~5 minutes
+────────────────────────────────────────────────────
+```
+
+### Compact Mode
+
+For minimal output, show single line:
+```
+📍 [3/8] DEVELOP ━━━━━━━━━░░░░░░░░░░░ 37%
+```

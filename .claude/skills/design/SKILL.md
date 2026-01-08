@@ -1,46 +1,60 @@
 ---
 name: design
-description: Design Session - collaborative brainstorming to turn ideas into designs using Double Diamond methodology OR 6-phase planning pipeline. Use when user types "ds", "pl", "/plan", or wants to explore/design a feature before implementation. MUST load maestro-core skill first for routing.
+description: Design Session - collaborative brainstorming to turn ideas into actionable implementation plans using the Unified Pipeline methodology. Use when user types "ds" or wants to explore/design a feature before implementation. "pl" is an alias for phases 5-8 when design.md exists. MUST load maestro-core skill first for routing.
 ---
 
 # Design & Planning
 
-Turn ideas into fully-formed designs through collaborative dialogue or structured planning.
+Turn ideas into fully-formed, implementation-ready designs through a unified 8-phase pipeline.
 
 ## Entry Points
 
 | Trigger | Action |
 |---------|--------|
-| `ds` | Start design session (Double Diamond) |
-| `/conductor-design` | Start design session (alias) |
-| `pl`, `/plan` | Start planning pipeline (6-phase) |
-| "design a feature" | Start design session |
-| "let's think through X" | Start design session |
-| "plan feature X" | Start planning pipeline |
+| `ds` | Start unified pipeline (all 8 phases) |
+| `/conductor-design` | Start unified pipeline (alias) |
+| `pl`, `/plan` | Alias for phases 5-8 (requires existing design.md) |
+| "design a feature" | Start unified pipeline |
+| "let's think through X" | Start unified pipeline |
 
 ## Quick Reference
 
-### Double Diamond (ds)
+### Unified Pipeline (8 Phases)
 
-| Phase | Purpose | Exit Criteria |
-|-------|---------|---------------|
-| DISCOVER | Explore problem | Problem articulated |
-| DEFINE | Frame problem | Approach selected |
-| DEVELOP | Explore solutions | Interfaces defined |
-| DELIVER | Finalize design | Design verified |
+| # | Phase | Type | Purpose | Exit Criteria |
+|---|-------|------|---------|---------------|
+| 1 | **DISCOVER** | Diverge | Explore problem + research context | Problem articulated |
+| 2 | **DEFINE** | Converge | Frame problem + select approach | Approach selected |
+| 3 | **DEVELOP** | Diverge | Architecture + components | Interfaces defined |
+| 4 | **VERIFY** | Converge | Oracle audit + risk assessment | Oracle APPROVED |
+| 5 | **DECOMPOSE** | Execute | Create beads (fb) | Beads filed |
+| 6 | **VALIDATE** | Execute | Dependency check (bv) + Oracle review | Dependencies valid |
+| 7 | **ASSIGN** | Execute | Track assignments | Tracks assigned |
+| 8 | **READY** | Complete | Handoff to ci/orchestrate | Execution ready |
 
-### Planning Pipeline (pl)
+See [unified-pipeline.md](references/unified-pipeline.md) for full details.
 
-| Phase | Tool | Output |
-|-------|------|--------|
-| 1. Discovery | Parallel Task() agents | design.md Section 2 |
-| 2. Synthesis | Oracle | design.md Section 3 (Gap + Risk Map) |
-| 3. Verification | Spikes via Task() | design.md Section 5 |
-| 4. Decomposition | fb (file-beads) | .beads/*.md |
-| 5. Validation | bv + Oracle | Validated dependency graph |
-| 6. Track Planning | bv --robot-plan | plan.md Track Assignments |
+## Mode Routing
 
-See [planning/pipeline.md](references/planning/pipeline.md) for full details.
+Complexity scoring determines execution mode:
+
+| Score | Mode | Phases | A/P/C | Research |
+|-------|------|--------|-------|----------|
+| < 4 | **SPEED** | 1,2,4,8 | No | 1 hook (start) |
+| 4-6 | **ASK** | User chooses | Optional | User chooses |
+| > 6 | **FULL** | 1-8 | Yes | 2 hooks |
+
+### Mode Comparison
+
+| Aspect | SPEED (< 4) | FULL (> 6) |
+|--------|-------------|------------|
+| Phases | 1,2,4,8 | All 8 |
+| A/P/C | No | Yes |
+| Research | 1 hook | 2 hooks |
+| Beads | No | Yes |
+| Tracks | No | Yes |
+| Verification | Advisory | Mandatory |
+| Use `[E]` to escalate | Yes | N/A |
 
 ## Core Principles
 
@@ -48,31 +62,28 @@ See [planning/pipeline.md](references/planning/pipeline.md) for full details.
 - **Multiple choice preferred** - Easier to answer
 - **YAGNI ruthlessly** - Remove unnecessary features
 - **Explore alternatives** - Always propose 2-3 approaches
-- **Research everything** - Verify with parallel agents before finalizing
+- **Research consolidated** - 2 strategic hooks, not 5
 
 ## Session Flow
 
 0. **Load Core** - Load [maestro-core](../maestro-core/SKILL.md) for routing table and fallback policies
 1. **Initialize** - Load handoffs, CODEMAPS, verify conductor setup → [session-init.md](references/session-init.md)
-2. **Research** - Spawn research agents BEFORE DISCOVER (mandatory) → [research-verification.md](references/research-verification.md)
+2. **Research** - Consolidated research at Phase 1 start → [unified-pipeline.md](references/unified-pipeline.md)
 3. **Route** - Score complexity (< 4 = SPEED, > 6 = FULL) → [design-routing-heuristics.md](references/design-routing-heuristics.md)
-4. **Execute** - Double Diamond phases with A/P/C checkpoints → [double-diamond.md](references/double-diamond.md)
-5. **Validate** - Progressive validation at each checkpoint (CP1-4); **Oracle audit at CP4** → [validation/lifecycle.md](../conductor/references/validation/lifecycle.md)
-6. **Handoff** - Suggest next steps: `cn` (newtrack), `ci` (implement), `fb` (file beads)
+4. **Execute** - 8-phase pipeline with A/P/C checkpoints → [unified-pipeline.md](references/unified-pipeline.md)
+5. **Validate** - Progressive validation; **Oracle audit at Phase 4** → [validation/lifecycle.md](../conductor/references/validation/lifecycle.md)
+6. **Complete** - Phase 8 auto-orchestration or manual `ci`
 
-### Research & Validation Triggers
+### Research Hooks (Consolidated)
 
-| Trigger Point | Research | Validation |
-|---------------|----------|------------|
-| Session start | discover-hook (Locator + Pattern + CODEMAPS) | - |
-| CP1 (DISCOVER) | - | WARN (product alignment) |
-| CP2 (DEFINE) | - | WARN (problem clarity) |
-| CP3 (DEVELOP) | grounding-hook (Locator + Analyzer + Pattern) | WARN (tech-stack) |
-| CP4 (DELIVER) | Full + impact scan + **Oracle audit** | SPEED=WARN, FULL=HALT |
+| Hook | Trigger | Agents | Purpose |
+|------|---------|--------|---------|
+| **research-start** | Phase 1 (DISCOVER) | Locator + Pattern + CODEMAPS + Architecture | All initial context |
+| **research-verify** | Phase 3→4 (DEVELOP→VERIFY) | Analyzer + Pattern + Impact + Web | Design verification |
 
 ## Adaptive A/P/C System
 
-A/P/C checkpoints now work **adaptively** across the entire workflow, not just in FULL DS mode.
+A/P/C checkpoints work **adaptively** across the entire workflow.
 
 ### State Ladder
 
@@ -85,57 +96,25 @@ INLINE → MICRO_APC → NUDGE → DS_FULL → DS_BRANCH → BRANCH_MERGE
 | **INLINE** | Normal flow (conductor/beads) | Default |
 | **MICRO_APC** | Lightweight checkpoint at boundaries | End of spec/plan section |
 | **NUDGE** | Suggest upgrade to DS | 3+ design iterations |
-| **DS_FULL** | Full Double Diamond with A/P/C | `ds` command or upgrade |
+| **DS_FULL** | Full 8-phase with A/P/C | `ds` command or upgrade |
 | **DS_BRANCH** | DS attached to design branch | Design rethink in track |
 | **BRANCH_MERGE** | Apply branch changes | Branch complete |
 
-### Micro A/P/C (Outside DS)
+### A/P/C in FULL Mode
 
-At natural checkpoint boundaries (end of spec section, plan step, etc.):
-
-```
-Design checkpoint:
-[A] Advanced – deeper exploration (upgrades to DS)
-[P] Party – multi-perspective feedback (upgrades to DS)
-[C] Continue inline
-```
-
-### Design Mode Nudge
-
-After 3+ iterations on the same design topic without resolution:
-
-```
-We've iterated on this flow several times.
-Want to switch into a structured Design Session with A/P/C checkpoints?
-
-[Start Design Session] (recommended)
-[Not now]
-```
-
-### Branch-aware DS
-
-When in implementation (`ci`) and design needs major rethink:
-
-```
-This change diverges from the original design.
-[A] Explore alternatives in a design branch
-[P] Get opinions first
-[C] Keep current plan
-```
-
-Branch merge options at completion:
-- **[M1]** Replace current design/plan
-- **[M2]** Create new implementation track
-- **[M3]** Keep as documented alternative
-
-### A/P/C in DS (FULL mode)
-
-At end of each phase:
+At end of phases 1-4:
 
 - **[A] Advanced** - Phase-specific deep dive
 - **[P] Party** - Multi-agent feedback (BMAD v6) → [bmad/](references/bmad/)
 - **[C] Continue** - Proceed to next phase
 - **[↩ Back]** - Return to previous phase
+
+| After Phase | A Option |
+|-------------|----------|
+| 1 (DISCOVER) | Advanced assumption audit |
+| 2 (DEFINE) | Scope stress-test |
+| 3 (DEVELOP) | Architecture deep-dive |
+| 4 (VERIFY) | Oracle runs BEFORE showing menu |
 
 ### Priority Rules
 
@@ -145,31 +124,69 @@ At end of each phase:
 4. **Micro A/P/C** at checkpoint boundaries
 5. **Nudge** after 3+ iterations
 
-See [apc-checkpoints.md](references/apc-checkpoints.md) and [adaptive-apc-system.ts](references/adaptive-apc-system.ts) for implementation details.
+See [apc-checkpoints.md](references/apc-checkpoints.md) for implementation details.
 
-## Mode Comparison
+## Phase 4: VERIFY - Spike Execution
 
-| Aspect | SPEED (< 4) | FULL (> 6) |
-|--------|-------------|------------|
-| Phases | 1 (quick) | 4 (all) |
-| A/P/C | No | Yes |
-| Verification | Advisory | Mandatory |
-| Use `[E]` to escalate | Yes | N/A |
+When risk assessment identifies HIGH risk items:
+
+```
+HIGH risk items → Spawn spike Task()
+                       │
+                       ▼
+              For each HIGH risk:
+              1. Create spike bead + dir
+              2. Spawn Task() with time-box
+              3. Wait for completion
+              4. Capture result (YES/NO)
+                       │
+                       ▼
+              Oracle aggregates spike results
+                       │
+               ┌───────┴───────┐
+               │               │
+        All spikes YES   Any spike NO
+               │               │
+               ▼               ▼
+           Continue       HALT - user decision
+```
+
+## Phase 8: READY - Auto-Orchestration
+
+```
+Ready to execute. Found N tracks:
+• Track A (BlueLake): 4 beads
+• Track B (GreenCastle): 3 beads
+
+[O] Orchestrate (spawn workers)
+[S] Sequential (run ci manually)
+
+Default: [O] after 30s
+```
+
+## `pl` Compatibility
+
+| Scenario | Behavior |
+|----------|----------|
+| `pl` after Phase 4 completes | **DEPRECATED** - Not needed, phases 5-8 run automatically |
+| `pl` standalone (with design.md) | **ALIAS** - Runs Phases 5-8 only |
+| `pl` without design.md | **ERROR** - Requires design.md from phases 1-4 |
+| `ds --legacy` | Runs old 4-phase Double Diamond (deprecated) |
 
 ## Anti-Patterns
 
 - ❌ Jumping to solutions before understanding the problem
-- ❌ Skipping verification at DELIVER phase
+- ❌ Skipping verification at Phase 4 (VERIFY)
 - ❌ Asking multiple questions at once
 - ❌ Over-engineering simple features (use SPEED mode)
+- ❌ Running `pl` after `ds` completes (no longer needed)
 
-## Next Steps (after design.md created)
+## Next Steps (after Phase 8)
 
 | Command | Description |
 |---------|-------------|
-| `cn` | `/conductor-newtrack` - Create spec + plan from design |
 | `ci` | `/conductor-implement` - Execute track |
-| `fb` | File beads from plan |
+| `co` | `/conductor-orchestrate` - Spawn parallel workers |
 
 See [maestro-core](../maestro-core/SKILL.md) for full routing table.
 
@@ -181,3 +198,4 @@ See [maestro-core](../maestro-core/SKILL.md) for full routing table.
 
 - [conductor](../conductor/SKILL.md) - Track creation and implementation
 - [beads](../beads/SKILL.md) - Issue tracking after design
+- [orchestrator](../orchestrator/SKILL.md) - Parallel execution in Phase 8

@@ -408,6 +408,247 @@
         }
       }
     },
+    "pipeline": {
+      "type": "object",
+      "description": "Unified 8-phase DS pipeline state (replaces separate ds + pl state machines)",
+      "properties": {
+        "version": {
+          "type": "integer",
+          "description": "Schema version for evolution",
+          "minimum": 1,
+          "default": 1
+        },
+        "current_phase": {
+          "type": ["integer", "null"],
+          "description": "Current phase (1-8), null if not started",
+          "minimum": 1,
+          "maximum": 8,
+          "default": null
+        },
+        "mode": {
+          "type": ["string", "null"],
+          "description": "Pipeline execution mode",
+          "enum": ["SPEED", "FULL", null],
+          "default": null
+        },
+        "preflight_completed": {
+          "type": "boolean",
+          "description": "Whether INIT preflight checks passed",
+          "default": false
+        },
+        "started_at": {
+          "type": ["string", "null"],
+          "description": "ISO 8601 timestamp when pipeline started",
+          "format": "date-time",
+          "default": null
+        },
+        "research": {
+          "type": "object",
+          "description": "Research hook execution state",
+          "properties": {
+            "start": {
+              "type": "object",
+              "description": "research-start hook state (Phase 1)",
+              "properties": {
+                "completed": {
+                  "type": "boolean",
+                  "description": "Whether hook completed",
+                  "default": false
+                },
+                "duration_ms": {
+                  "type": ["integer", "null"],
+                  "description": "Execution time in milliseconds",
+                  "minimum": 0,
+                  "default": null
+                }
+              },
+              "additionalProperties": false,
+              "default": { "completed": false, "duration_ms": null }
+            },
+            "verify": {
+              "type": "object",
+              "description": "research-verify hook state (Phase 3→4, FULL mode only)",
+              "properties": {
+                "completed": {
+                  "type": "boolean",
+                  "description": "Whether hook completed",
+                  "default": false
+                },
+                "duration_ms": {
+                  "type": ["integer", "null"],
+                  "description": "Execution time in milliseconds",
+                  "minimum": 0,
+                  "default": null
+                },
+                "skipped": {
+                  "type": "boolean",
+                  "description": "Whether hook was skipped (SPEED mode)",
+                  "default": false
+                }
+              },
+              "additionalProperties": false,
+              "default": { "completed": false, "duration_ms": null, "skipped": false }
+            }
+          },
+          "additionalProperties": false,
+          "default": {
+            "start": { "completed": false, "duration_ms": null },
+            "verify": { "completed": false, "duration_ms": null, "skipped": false }
+          }
+        },
+        "validation": {
+          "type": "object",
+          "description": "Checkpoint and Oracle validation state",
+          "properties": {
+            "checkpoints_passed": {
+              "type": "array",
+              "description": "A/P/C checkpoints that have passed",
+              "items": {
+                "type": "string",
+                "enum": ["CP1", "CP2", "CP3", "CP4"]
+              },
+              "default": []
+            },
+            "oracle_verdict": {
+              "type": ["string", "null"],
+              "description": "Oracle audit result at Phase 4",
+              "enum": ["APPROVED", "NEEDS_REVISION", null],
+              "default": null
+            },
+            "oracle_beads_review": {
+              "type": ["string", "null"],
+              "description": "Oracle beads completeness review at Phase 6",
+              "enum": ["APPROVED", "NEEDS_REVISION", null],
+              "default": null
+            },
+            "retries": {
+              "type": "integer",
+              "description": "Number of Oracle retry attempts",
+              "minimum": 0,
+              "maximum": 2,
+              "default": 0
+            },
+            "skip_accepted": {
+              "type": "boolean",
+              "description": "Whether user accepted skip on NEEDS_REVISION",
+              "default": false
+            }
+          },
+          "additionalProperties": false,
+          "default": {
+            "checkpoints_passed": [],
+            "oracle_verdict": null,
+            "oracle_beads_review": null,
+            "retries": 0,
+            "skip_accepted": false
+          }
+        },
+        "spikes": {
+          "type": ["object", "null"],
+          "description": "Spike execution state for HIGH risk items (Phase 4)",
+          "properties": {
+            "required": {
+              "type": "array",
+              "description": "HIGH risk items needing spikes",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string" },
+                  "question": { "type": "string" },
+                  "risk_item": { "type": "string" },
+                  "time_box_minutes": { "type": "integer", "default": 30 },
+                  "path": { "type": "string" }
+                },
+                "required": ["id", "question", "risk_item"]
+              },
+              "default": []
+            },
+            "completed": {
+              "type": "array",
+              "description": "Completed spike results",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": { "type": "string" },
+                  "result": { "type": "string", "enum": ["YES", "NO", "PARTIAL", "TIMEOUT"] },
+                  "learnings": { "type": "array", "items": { "type": "string" } },
+                  "approach": { "type": "string" },
+                  "blocker": { "type": "string" }
+                },
+                "required": ["id", "result"]
+              },
+              "default": []
+            },
+            "all_passed": {
+              "type": "boolean",
+              "description": "True if all spikes returned YES",
+              "default": false
+            }
+          },
+          "default": null
+        },
+        "orchestration": {
+          "type": ["object", "null"],
+          "description": "Phase 8 orchestration state",
+          "properties": {
+            "mode": {
+              "type": ["string", "null"],
+              "description": "Execution mode selected at Phase 8",
+              "enum": ["parallel", "sequential", null],
+              "default": null
+            },
+            "tracks": {
+              "type": "array",
+              "description": "Track assignments for parallel execution",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "track": { "type": "string" },
+                  "agent": { "type": "string" },
+                  "beads": { "type": "array", "items": { "type": "string" } },
+                  "file_scope": { "type": "string" }
+                }
+              },
+              "default": []
+            },
+            "workers_spawned": {
+              "type": "array",
+              "description": "Agent names that were spawned",
+              "items": { "type": "string" },
+              "default": []
+            },
+            "workers_completed": {
+              "type": "array",
+              "description": "Agent names that have completed",
+              "items": { "type": "string" },
+              "default": []
+            }
+          },
+          "default": null
+        }
+      },
+      "additionalProperties": false,
+      "default": {
+        "version": 1,
+        "current_phase": null,
+        "mode": null,
+        "preflight_completed": false,
+        "started_at": null,
+        "research": {
+          "start": { "completed": false, "duration_ms": null },
+          "verify": { "completed": false, "duration_ms": null, "skipped": false }
+        },
+        "validation": {
+          "checkpoints_passed": [],
+          "oracle_verdict": null,
+          "oracle_beads_review": null,
+          "retries": 0,
+          "skip_accepted": false
+        },
+        "spikes": null,
+        "orchestration": null
+      }
+    },
     "generation": {
       "type": "object",
       "description": "Spec/plan generation progress (consolidated from .track-progress.json)",

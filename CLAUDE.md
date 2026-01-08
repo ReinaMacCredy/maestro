@@ -12,24 +12,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a skills-based plugin (no build required) - all functionality is delivered through markdown skill definitions in `.claude/skills/`.
 
-## Architecture
-
-```
-.claude/skills/            # Skill directories with SKILL.md + optional references/
-  ├── conductor/          # Planning + execution + TDD
-  ├── orchestrator/       # Multi-agent parallel execution
-  ├── design/             # Double Diamond sessions (ds trigger)
-  ├── beads/              # Issue tracking (fb, rb triggers)
-  ├── maestro-core/       # Routing policies, fallback rules
-  ├── handoff/            # Session context persistence
-  └── ...                 # Additional specialized skills
-
-.claude-plugin/           # Plugin manifest (plugin.json)
-hooks/                    # Lifecycle hooks (session-start.sh)
-conductor/                # Per-project context (created by /conductor-setup)
-.beads/                   # Issue database (git-tracked)
-```
-
 **Key insight**: Beads operations are abstracted behind Conductor (facade pattern). In the happy path, you use `/conductor-*` commands and beads are managed automatically.
 
 ## Validation
@@ -48,27 +30,33 @@ When modifying skills:
 3. Keep skills self-contained with minimal cross-references
 4. Add supporting docs to `references/` subdirectory
 
-Skill structure:
-```
-.claude/skills/<skill-name>/
-├── SKILL.md          # YAML frontmatter + markdown instructions
-└── references/       # Optional supporting documentation
+## Session Close Protocol
+
+Before completing any session, run this checklist:
+
+```bash
+git status                  # Check what changed
+git add <files>             # Stage code changes
+bd sync                     # Commit beads changes
+git commit -m "..."         # Commit code
+bd sync                     # Commit any new beads changes
+git push                    # Push to remote
 ```
 
 ## Commands & Triggers
 
-| Command/Trigger | Description |
-|-----------------|-------------|
-| `/conductor-setup` | Initialize project (once) |
-| `ds` | Design session (Double Diamond) → `design.md` |
-| `/conductor-newtrack` | Create spec + plan + beads from design |
-| `/conductor-implement` | Execute epic with TDD |
-| `/conductor-orchestrate` | Parallel execution with workers |
-| `/conductor-finish` | Complete track, archive |
-| `tdd` | Enter RED-GREEN-REFACTOR cycle |
-| `fb` | File beads from plan.md |
-| `rb` | Review beads status |
-| `finish branch` | Complete dev work, merge/PR |
+| Command/Trigger | Description | Preflight |
+|-----------------|-------------|-----------|
+| `/conductor-setup` | Initialize project (once) | No |
+| `ds` | Design session (Double Diamond) | No |
+| `/conductor-newtrack` | Create spec + plan + beads from design | No |
+| `/conductor-implement` | Execute epic with TDD | Yes |
+| `/conductor-orchestrate` | Parallel execution with workers | Yes |
+| `/conductor-finish` | Complete track, archive | No |
+| `tdd` | Enter RED-GREEN-REFACTOR cycle | No |
+| `fb` | File beads from plan.md | No |
+| `rb` | Review beads status | No |
+| `finish branch` | Complete dev work, merge/PR | No |
 
 ## Beads CLI
 
@@ -81,6 +69,10 @@ bd update <id> --status in_progress      # Claim task
 bd close <id> --reason "Completed"       # Complete task
 bd sync                                  # Sync to git
 ```
+
+## Skill Loading Rule
+
+**Always load `maestro-core` FIRST** before any workflow skill for routing table and fallback policies.
 
 ## Fallback Policy
 

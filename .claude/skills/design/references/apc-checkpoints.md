@@ -1,6 +1,8 @@
 # A/P/C Checkpoints
 
-The Adaptive A/P/C system provides design checkpoints across the entire workflow, not just in FULL DS mode.
+The Adaptive A/P/C system provides design checkpoints across the unified DS pipeline (phases 1-4).
+
+> **Note:** A/P/C checkpoints only appear in FULL mode for phases 1-4. Phases 5-8 (execution) are automated with no user checkpoints.
 
 ## State Machine Overview
 
@@ -17,6 +19,25 @@ INLINE ──┬──[checkpoint]──→ MICRO_APC ──[A/P]──→ DS_FU
          │                                          │
          │←─────────────[complete]─────────────────←┤
 ```
+
+---
+
+## Unified Pipeline Phases
+
+The unified DS pipeline consolidates design and planning into 8 phases:
+
+| Phase | Name | A/P/C Checkpoint |
+|-------|------|------------------|
+| 1 | DISCOVER | ✅ End of phase (FULL mode) |
+| 2 | DEFINE | ✅ End of phase (FULL mode) |
+| 3 | DEVELOP | ✅ End of phase (FULL mode) |
+| 4 | VERIFY | ✅ Oracle audit → A/P/C menu (FULL mode) |
+| 5-8 | Execution | ❌ Automated (no user checkpoints) |
+
+**Key changes from legacy DS + PL separation:**
+- No separate planning pipeline (`pl`) - integrated into phases 3-4
+- Oracle audit runs at end of Phase 4 before A/P/C menu
+- SPEED mode skips A/P/C but still runs Oracle (warns instead of halts)
 
 ---
 
@@ -148,10 +169,10 @@ Design branch complete. How to apply?
 
 ## A/P/C in DS (DS_FULL / DS_BRANCH)
 
-At the end of each phase, present the checkpoint menu:
+At the end of each phase (1-4), present the checkpoint menu:
 
 ```
-📍 End of [PHASE] phase.
+📍 End of Phase [N] ([PHASE_NAME]).
 
 Choose:
 [A] Advanced - deeper analysis, assumption audit
@@ -164,12 +185,12 @@ Choose:
 
 Phase-specific deep dives:
 
-| Phase | Focus Areas |
-|-------|-------------|
-| **DISCOVER** | Challenge assumptions, explore biases, consider alternative users |
-| **DEFINE** | Stress-test scope, challenge metrics, identify hidden dependencies |
-| **DEVELOP** | Deep-dive components, explore alternatives, security/performance review |
-| **DELIVER** | Edge case audit, security check, documentation completeness |
+| Phase | Name | Focus Areas |
+|-------|------|-------------|
+| **1** | DISCOVER | Challenge assumptions, explore biases, consider alternative users |
+| **2** | DEFINE | Stress-test scope, challenge metrics, identify hidden dependencies |
+| **3** | DEVELOP | Deep-dive components, explore alternatives, security/performance review |
+| **4** | VERIFY | Edge case audit, security check, documentation completeness |
 
 ### [P] Party Mode
 
@@ -194,29 +215,93 @@ BMad Master selects 2-3 agents based on topic relevance:
 
 Proceed to the next phase. **Validation runs at each checkpoint; research runs at session start and CP3.**
 
-### CP4 (DELIVER) Special Behavior
+---
 
-At CP4, **Oracle audit runs automatically before showing the A/P/C menu**:
+## Phase 4 (VERIFY) - Oracle Integration
 
-1. Detect platform (Amp or Claude Code/Gemini/Codex)
-2. Invoke Oracle review (6-dimension audit)
-3. Oracle appends `## Oracle Audit` section to design.md
-4. Based on verdict:
-   - **APPROVED**: Show A/P/C menu as normal
-   - **NEEDS_REVISION + FULL mode**: HALT - display issues, prompt to fix before proceeding
-   - **NEEDS_REVISION + SPEED mode**: WARN - log issues, show A/P/C menu
+At the end of Phase 4, **Oracle audit runs automatically BEFORE showing the A/P/C menu**:
+
+### Flow
 
 ```
-📍 End of DELIVER phase.
-
-Oracle Audit: ✅ APPROVED (or ⚠️ NEEDS_REVISION)
-
-[Show A/P/C menu]
+Phase 4 work complete
+       ↓
+┌──────────────────────────────────────┐
+│  Oracle Audit (6-dimension review)   │
+│  - Appends ## Oracle Audit to design │
+└──────────────────────────────────────┘
+       ↓
+   Verdict?
+       ├── APPROVED ──────────→ Show A/P/C menu
+       │
+       └── NEEDS_REVISION
+              ├── FULL mode ──→ Show revision options [R]/[S]/[A]
+              └── SPEED mode ─→ WARN only, show A/P/C menu
 ```
 
-See [validation/lifecycle.md](../../conductor/references/validation/lifecycle.md) for checkpoint-specific validation.
+### Prompt Template (Phase 4)
 
-### [↩ Back]
+```
+📍 End of Phase 4 (VERIFY).
+
+Oracle Audit: ✅ APPROVED
+
+Choose:
+[A] Advanced - deeper analysis, assumption audit
+[P] Party - multi-perspective feedback from expert agents
+[C] Continue - proceed to execution (phases 5-8 are automated)
+[↩ Back] - return to Phase 3
+```
+
+### Oracle NEEDS_REVISION Flow (FULL mode)
+
+When Oracle returns `NEEDS_REVISION` in FULL mode, do NOT show A/P/C. Instead:
+
+```
+📍 End of Phase 4 (VERIFY).
+
+Oracle Audit: ⚠️ NEEDS_REVISION
+
+Issues found:
+- [Issue 1]
+- [Issue 2]
+
+Choose:
+[R] Revise - address issues and re-run Oracle
+[S] Skip - proceed despite issues (not recommended)
+[A] Advanced - deeper analysis before revision
+```
+
+| Choice | Action |
+|--------|--------|
+| **[R]** | Return to Phase 3/4 to address issues, re-run Oracle after |
+| **[S]** | Log warning, proceed to A/P/C menu |
+| **[A]** | Run Advanced mode analysis, then return to revision prompt |
+
+### Oracle NEEDS_REVISION Flow (SPEED mode)
+
+In SPEED mode, log warning and proceed:
+
+```
+📍 End of Phase 4 (VERIFY).
+
+Oracle Audit: ⚠️ NEEDS_REVISION (logged, continuing in SPEED mode)
+
+[Proceed to execution phases 5-8]
+```
+
+---
+
+## Phases 5-8: Automated Execution
+
+After Phase 4 checkpoint is passed:
+- Phases 5-8 run automatically with no A/P/C checkpoints
+- TDD cycles and beads integration handle execution validation
+- User intervention only on errors/blockers
+
+---
+
+## [↩ Back]
 
 Return to previous phase. When looping back:
 1. Summarize what was established

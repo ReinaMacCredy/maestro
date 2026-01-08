@@ -238,3 +238,7 @@ Contains reusable learnings from completed tracks.
 - **Lazy References:** Trigger-based reference loading - SKILL.md always loaded, phase-specific references (agent-mail.md, worker-prompt.md) loaded on demand
 - **Triage Cache:** Store bead triage results in `metadata.beads.triageCache` with TTL to skip redundant `bv --robot-triage` calls
 - **Toolbox Pattern:** One subfolder per tool in `.claude/toolboxes/<tool>/<tool>.js`, shared config at `mcporter.json`
+- **Unified 8-Phase Pipeline:** DISCOVER → DEFINE → DEVELOP → VERIFY → DECOMPOSE → VALIDATE → ASSIGN → READY (replaces DS+PL separation)
+- **Research Consolidation:** 2 hooks (research-start, research-verify) replace 5 hooks (~35s max vs ~95s)
+- **Mode-Aware Execution:** SPEED (phases 1,2,4,8) vs FULL (all 8) based on complexity score
+- **`pl` as Alias:** `pl` now runs phases 5-8 only when design.md exists (not standalone)

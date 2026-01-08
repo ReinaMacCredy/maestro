@@ -49,7 +49,7 @@ CORE WORKFLOW              DEVELOPMENT              UTILITIES
 **7 Core Skills:**
 - **orchestrator**: Multi-agent parallel execution with autonomous workers + **file-scope routing**
 - **conductor**: Planning + execution + **research protocol** + **file-scope detection**
-- **design**: Double Diamond + Party Mode + Research verification
+- **design**: Unified 8-phase pipeline (DISCOVER→DEFINE→DEVELOP→VERIFY→DECOMPOSE→VALIDATE→ASSIGN→READY)
 - **beads**: Issue tracking + persistent memory + **auto-orchestration trigger**
 - **using-git-worktrees**: Isolated development environments
 - **writing-skills**: Skill creation guide + dependency documentation
@@ -63,7 +63,7 @@ Routing and fallback policies are defined in [AGENTS.md](../AGENTS.md).
 |-------|-------|------|
 | 1 | conductor | Track orchestration, workflow state, **research** |
 | 2 | orchestrator | **Multi-agent parallel execution** |
-| 3 | design | Design sessions (Double Diamond) |
+| 3 | design | Unified 8-phase pipeline (replaces Double Diamond + PL) |
 | 4 | beads | Issue tracking, dependencies |
 | 5 | specialized | worktrees, sharing, writing |
 

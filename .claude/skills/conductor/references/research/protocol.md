@@ -1,8 +1,23 @@
-# Research Protocol — Parallel Sub-Agent Codebase Research
+# Research Protocol — Consolidated 2-Hook System
 
 ## Overview
 
-Research protocol spawns parallel sub-agents to comprehensively document the codebase AS-IS. Used at three integration points in the Maestro workflow.
+Research protocol spawns parallel sub-agents to comprehensively document the codebase AS-IS. The system uses **2 hooks** (down from 5) for faster, more focused research.
+
+### Hook Comparison
+
+| Hook | Trigger | Agents | Timeout | Mode | Purpose |
+|------|---------|--------|---------|------|---------|
+| [research-start](hooks/research-start.md) | Phase 1 start | 4 (Locator+Pattern+CODEMAPS+Architecture) | 20s | ALL | Ground context before DISCOVER |
+| [research-verify](hooks/research-verify.md) | Phase 3→4 | 4 (Analyzer+Pattern+Impact+Web) | 15s | FULL only | Verify design against codebase |
+
+### Timing Improvement
+
+| Metric | Old (5 hooks) | New (2 hooks) |
+|--------|---------------|---------------|
+| Worst case | ~95s | 35s max |
+| SPEED mode | ~45s | 20s max |
+| Hooks executed | 5 | 2 (or 1 in SPEED) |
 
 ## Critical Rule
 
@@ -15,13 +30,83 @@ Research protocol spawns parallel sub-agents to comprehensively document the cod
 - DO NOT recommend refactoring
 - ONLY describe what exists, where it exists, how it works
 
-## Integration Points
+## 2-Hook System
 
-| Hook | Trigger | Purpose | Agents |
-|------|---------|---------|--------|
-| [discover-hook](hooks/discover-hook.md) | `ds` starts | Ground context before DISCOVER | Locator + Pattern + CODEMAPS |
-| [grounding-hook](hooks/grounding-hook.md) | DEVELOP→DELIVER | Verify design against codebase | Locator + Analyzer + Pattern + Web |
-| [newtrack-hook](hooks/newtrack-hook.md) | `/conductor-newtrack` | Research before spec generation | All 5 agents |
+### Hook 1: research-start
+
+> **Trigger:** Phase 1 (DISCOVER) start  
+> **Runs in:** ALL modes (SPEED, BALANCED, THOROUGH)
+
+Consolidates old `discover-hook` and PL Phase 1 Discovery.
+
+```
+┌───────────────────────────────────────────────────────────────┐
+│                    RESEARCH-START (20s)                       │
+├───────────────────────────────────────────────────────────────┤
+│  ┌─────────┐  ┌─────────┐  ┌──────────┐  ┌──────────────┐    │
+│  │ Locator │  │ Pattern │  │ CODEMAPS │  │ Architecture │    │
+│  │  (5s)   │  │  (5s)   │  │  (3s)    │  │    (5s)      │    │
+│  └────┬────┘  └────┬────┘  └────┬─────┘  └──────┬───────┘    │
+│       │            │            │               │             │
+│       └────────────┴────────────┴───────────────┘             │
+│                          │                                    │
+│                     SYNTHESIZE                                │
+│                          │                                    │
+│              pipeline_context.research.start                  │
+└───────────────────────────────────────────────────────────────┘
+```
+
+| Agent | Purpose | Timeout |
+|-------|---------|---------|
+| Locator | Find WHERE files/components live | 5s soft |
+| Pattern | Find existing patterns/conventions | 5s soft |
+| CODEMAPS | Load architecture documentation | 3s soft |
+| Architecture | Analyze structural constraints | 5s soft |
+
+### Hook 2: research-verify
+
+> **Trigger:** Phase 3→4 (DEVELOP→VERIFY transition)  
+> **Runs in:** FULL modes only (BALANCED, THOROUGH)  
+> **SKIPPED in:** SPEED mode
+
+```
+┌───────────────────────────────────────────────────────────────┐
+│                   RESEARCH-VERIFY (15s)                       │
+├───────────────────────────────────────────────────────────────┤
+│  ┌──────────┐  ┌─────────┐  ┌────────┐  ┌─────────┐          │
+│  │ Analyzer │  │ Pattern │  │ Impact │  │   Web   │          │
+│  │   (5s)   │  │  (4s)   │  │  (4s)  │  │  (6s)   │          │
+│  └─────┬────┘  └────┬────┘  └───┬────┘  └────┬────┘          │
+│        │            │           │            │                │
+│        └────────────┴───────────┴────────────┘                │
+│                          │                                    │
+│                     AGGREGATE                                 │
+│                          │                                    │
+│             pipeline_context.research.verify                  │
+└───────────────────────────────────────────────────────────────┘
+```
+
+| Agent | Purpose | Timeout |
+|-------|---------|---------|
+| Analyzer | Deep code analysis of change locations | 5s |
+| Pattern | Verify patterns match conventions | 4s |
+| Impact | Assess blast radius, affected files | 4s |
+| Web | External docs/best practices | 6s |
+
+## Mode-Based Execution
+
+```
+SPEED mode:
+  research-start (20s) → DISCOVER → DEVELOP → SKIP → VERIFY
+                                              └── research-verify skipped
+
+BALANCED mode:
+  research-start (20s) → DISCOVER → DEVELOP → research-verify (15s) → VERIFY
+
+THOROUGH mode:
+  research-start (20s) → DISCOVER → DEVELOP → research-verify (15s) → VERIFY
+                                              └── + Oracle deep review if LOW confidence
+```
 
 ## CRITICAL: Always Spawn Agents
 
@@ -43,16 +128,17 @@ Research protocol spawns parallel sub-agents to comprehensively document the cod
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**No skip conditions exist. Research ALWAYS runs.**
+**Exception:** `research-verify` is skipped in SPEED mode by design.
 
 ## Research Agents
 
-| Agent | Purpose | When to Use |
-|-------|---------|-------------|
-| [codebase-locator](../../../orchestrator/agents/research/codebase-locator.md) | Find WHERE files/components live | First - discovery |
-| [codebase-analyzer](../../../orchestrator/agents/research/codebase-analyzer.md) | Understand HOW code works | After locator finds targets |
-| [pattern-finder](../../../orchestrator/agents/research/pattern-finder.md) | Find existing patterns | When looking for conventions |
-| [web-researcher](../../../orchestrator/agents/research/web-researcher.md) | External docs/APIs | Only if explicitly needed |
+| Agent | Purpose | When to Use | Hook |
+|-------|---------|-------------|------|
+| [codebase-locator](../../../orchestrator/agents/research/codebase-locator.md) | Find WHERE files/components live | First - discovery | start |
+| [pattern-finder](../../../orchestrator/agents/research/pattern-finder.md) | Find existing patterns | When looking for conventions | both |
+| [codebase-analyzer](../../../orchestrator/agents/research/codebase-analyzer.md) | Understand HOW code works | After locator finds targets | verify |
+| [impact-assessor](../../../orchestrator/agents/research/impact-assessor.md) | Assess blast radius | Before VERIFY phase | verify |
+| [web-researcher](../../../orchestrator/agents/research/web-researcher.md) | External docs/APIs | For library patterns | verify |
 
 ## Execution Flow
 
@@ -74,7 +160,7 @@ Research protocol spawns parallel sub-agents to comprehensively document the cod
 │     └─► Pattern agents (find conventions)                   │
 │                                                             │
 │  4. WAIT & SYNTHESIZE                                       │
-│     ├─► Wait for ALL agents to complete                     │
+│     ├─► Wait for ALL agents to complete (or timeout)        │
 │     ├─► Prioritize live codebase over docs                  │
 │     └─► Connect findings across components                  │
 │                                                             │
@@ -138,60 +224,52 @@ When spawning agents via Task tool:
 
 | Level | Criteria |
 |-------|----------|
-| HIGH | 3+ matches, clear patterns |
-| MEDIUM | 1-3 matches, some ambiguity |
-| LOW | 0 matches or conflicting info |
-
-## Integration with Existing Systems
-
-### Replaces Grounding at DEVELOP→DELIVER
-
-Old grounding:
-```
-finder → Grep → web_search (sequential)
-```
-
-New research:
-```
-┌─────────────┬─────────────┬─────────────┐
-│  Locator    │  Analyzer   │  Pattern    │  (parallel)
-└─────────────┴─────────────┴─────────────┘
-         ↓
-    Synthesize
-```
-
-### Enhances DISCOVER Phase
-
-Before asking user questions, auto-research:
-- Existing similar features
-- Related patterns
-- Affected components
-
-### Pre-Spec Research for Newtrack
-
-Before generating spec.md:
-- Research affected files
-- Find existing patterns to follow
-- Identify dependencies
+| HIGH | All agents complete, patterns match, no conflicts |
+| MEDIUM | Partial completion or some unknowns |
+| LOW | Major unknowns, violations, or agent failures |
 
 ## Performance
 
-| Hook | Target Duration | Max Agents |
-|------|-----------------|------------|
-| discover | 10s | 3 |
-| verification | 15s | 5 |
-| newtrack | 20s | 5 |
+| Hook | Target Duration | Max Agents | Mode |
+|------|-----------------|------------|------|
+| research-start | 20s | 4 | ALL |
+| research-verify | 15s | 4 | FULL only |
+| **Total (SPEED)** | **20s** | **4** | - |
+| **Total (FULL)** | **35s** | **8** | - |
 
 ## Error Handling
 
 | Scenario | Action |
 |----------|--------|
-| Agent timeout (30s) | Continue with partial results |
+| Agent timeout | Continue with partial results |
 | Agent error | Log, continue with other agents |
-| All agents fail | Fallback to manual research |
+| All agents fail | Fallback to minimal context |
 | No results | Display "No matches found" + proceed |
+
+**Important:** Research NEVER blocks the pipeline. Partial results are better than no results.
+
+## Migration from Old Hooks
+
+### Consolidated Hooks
+
+| Old Hook | New Hook |
+|----------|----------|
+| `discover-hook.md` | research-start |
+| PL Discovery (Phase 1) | research-start |
+| `grounding-hook.md` | research-verify |
+| `newtrack-hook.md` | Split between both |
+
+### Key Changes
+
+| Aspect | Old | New |
+|--------|-----|-----|
+| Total hooks | 5 | 2 |
+| Max duration | ~95s | 35s |
+| SPEED mode research | ~45s | 20s (1 hook) |
+| Agent reuse | Minimal | Maximum |
 
 ## Related
 
-- [Research agents](../../../orchestrator/agents/research/) - Research agent definitions
-- [hooks/](hooks/) - Integration hook specifications
+- [hooks/research-start.md](hooks/research-start.md) - Phase 1 research hook
+- [hooks/research-verify.md](hooks/research-verify.md) - Phase 3→4 verification hook
+- [Research agents](../../../orchestrator/agents/research/) - Agent definitions
