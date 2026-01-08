@@ -55,11 +55,36 @@ MODES:
 | **Research Hook** | `research-start` fires here |
 | **Mode** | Both SPEED and FULL |
 
-**Research-Start Hook Agents:**
-- Locator - Find relevant files
-- Pattern - Identify existing patterns
-- CODEMAPS - Load architecture context
-- Architecture - Understand structure
+#### ⛔ EXECUTION BLOCK: research-start (MANDATORY)
+
+**STOP. Before proceeding with Phase 1, you MUST execute these 3 parallel Task() calls NOW:**
+
+```
+Task(
+    description="Locator: Find relevant files for <topic>",
+    prompt="Search codebase using finder tool for files related to: <topic>. Return file paths with line numbers."
+)
+Task(
+    description="Pattern: Find existing patterns for <topic>",
+    prompt="Search codebase using finder tool for existing patterns related to: <topic>. Return pattern examples with file paths."
+)
+Task(
+    description="CODEMAPS: Load architecture context",
+    prompt="Read conductor/CODEMAPS/*.md files to understand architecture. Return relevant architectural context."
+)
+```
+
+**⚠️ DO NOT SKIP THIS. Spawn all 3 Task() calls in parallel BEFORE asking any questions.**
+
+Wait for Task() results, then display:
+```
+📋 Research Context Loaded:
+• Files: [list from Locator]
+• Patterns: [list from Pattern]  
+• Architecture: [summary from CODEMAPS]
+
+Proceeding to explore problem space...
+```
 
 ---
 
@@ -95,11 +120,30 @@ MODES:
 | **Research Hook** | `research-verify` fires at end |
 | **Mode** | **FULL only** (SPEED skips to Phase 4) |
 
-**Research-Verify Hook Agents:**
-- Analyzer - Deep code analysis
-- Pattern - Validate pattern usage
-- Impact - Assess change impact
-- Web - External docs/examples
+#### ⛔ EXECUTION BLOCK: research-verify (MANDATORY in FULL mode)
+
+**STOP. At the END of Phase 3, you MUST execute these 4 parallel Task() calls NOW:**
+
+```
+Task(
+    description="Analyzer: Deep code analysis for <feature>",
+    prompt="Analyze the proposed architecture against existing codebase. Check for conflicts, dependencies, and integration points."
+)
+Task(
+    description="Pattern: Validate pattern usage",
+    prompt="Verify the proposed patterns match existing codebase conventions. Flag any deviations."
+)
+Task(
+    description="Impact: Assess change impact",
+    prompt="Analyze which files/modules will be affected by this change. Return impact scope."
+)
+Task(
+    description="Web: External documentation",
+    prompt="Search web for best practices, library docs, or examples related to: <feature>. Use web_search tool."
+)
+```
+
+**⚠️ DO NOT SKIP THIS. Spawn all 4 Task() calls BEFORE entering Phase 4.**
 
 ---
 
@@ -115,12 +159,11 @@ MODES:
 | **Research Hook** | None (research-verify ran at Phase 3 end) |
 | **Mode** | Both SPEED and FULL |
 
-#### ⚠️ MANDATORY: Oracle Audit
+#### ⛔ EXECUTION BLOCK: Oracle Audit (MANDATORY)
 
-**YOU MUST call `oracle()` at Phase 4. This is NOT optional.**
+**STOP. You MUST execute this oracle() call NOW before showing any A/P/C menu:**
 
-```python
-# REQUIRED - Execute this exact call:
+```
 oracle(
     task="6-dimension design audit for Phase 4 VERIFY",
     context="""
@@ -138,25 +181,25 @@ oracle(
 )
 ```
 
+**⚠️ DO NOT SKIP THIS. The oracle() call is MANDATORY - execute it NOW.**
+
 **Oracle Response Handling:**
+- `APPROVED` → Display result, then show A/P/C menu, then continue to Phase 5
+- `NEEDS_REVISION` → Display issues, then show: `[R] Revise / [S] Skip / [A] Abort`
+
+#### ⛔ EXECUTION BLOCK: Spike Execution (MANDATORY for HIGH risk)
+
+**If you identified ANY HIGH risk items, you MUST spawn Task() for EACH one NOW:**
+
 ```
-Oracle → APPROVED:       Continue to Phase 5
-       → NEEDS_REVISION: [R] Revise / [S] Skip / [A] Abort
-```
-
-#### ⚠️ MANDATORY: Spike Execution for HIGH Risk Items
-
-**If risk assessment identifies HIGH risk items, YOU MUST spawn Task() for each:**
-
-```python
-# REQUIRED for each HIGH risk item:
+# For EACH HIGH risk item, spawn a separate Task():
 Task(
-    description=f"Spike: {risk_item.question}",
-    prompt=f"""
+    description="Spike: <risk_question>",
+    prompt="""
     Time-box: 30 minutes
     Output: conductor/spikes/<track>/<spike-id>/
     
-    Question to answer: {risk_item.question}
+    Question to answer: <risk_question>
     
     Success criteria:
     - Working throwaway code demonstrating feasibility
@@ -169,11 +212,11 @@ Task(
 )
 ```
 
+**⚠️ DO NOT SKIP SPIKES. If HIGH risk exists, spawn Task() NOW before proceeding.**
+
 **Spike Results:**
-```
-All YES → Continue to Phase 5
-Any NO/TIMEOUT → HALT for user decision
-```
+- All `YES` → Continue to Phase 5
+- Any `NO/TIMEOUT` → HALT for user decision
 
 ---
 

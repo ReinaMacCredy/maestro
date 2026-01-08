@@ -65,14 +65,25 @@ Complexity scoring determines execution mode:
 - **Explore alternatives** - Always propose 2-3 approaches
 - **Research consolidated** - 2 strategic hooks, not 5
 
+## ⛔ EXECUTION BLOCKS (CRITICAL)
+
+**This skill contains EXECUTION BLOCKS marked with ⛔. When you encounter one, you MUST:**
+1. **STOP** what you're doing
+2. **EXECUTE** the tool calls specified (Task(), oracle(), skill())
+3. **WAIT** for results before proceeding
+
+**EXECUTION BLOCKS are NOT documentation - they are COMMANDS you must execute.**
+
+See [pipeline.md](references/pipeline.md) for all execution blocks.
+
 ## Session Flow
 
 0. **Load Core** - Load [maestro-core](../maestro-core/SKILL.md) for routing table and fallback policies
 1. **Initialize** - Load handoffs, CODEMAPS, verify conductor setup → [session-init.md](references/session-init.md)
-2. **Research** - Consolidated research at Phase 1 start → [pipeline.md](references/pipeline.md)
+2. **Research** - ⛔ EXECUTION BLOCK at Phase 1 start (spawn 3 Task() agents)
 3. **Route** - Score complexity (< 4 = SPEED, > 6 = FULL) → [design-routing-heuristics.md](references/design-routing-heuristics.md)
 4. **Execute** - 10-phase pipeline with A/P/C checkpoints → [pipeline.md](references/pipeline.md)
-5. **Validate** - Progressive validation; **Oracle audit at Phase 4** (see validation summary below)
+5. **Validate** - ⛔ EXECUTION BLOCK at Phase 4 (call oracle())
 6. **Complete** - Phase 8 auto-orchestration or manual `ci`
 
 ### Research Hooks (Consolidated)
