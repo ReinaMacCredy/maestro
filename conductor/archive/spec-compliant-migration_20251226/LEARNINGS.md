@@ -43,7 +43,7 @@ Migrated Maestro from 3-layer architecture (commands/, workflows/, skills/) to s
 - `skills/design/references/execution-routing.md`
 - `skills/conductor/references/revisions.md`
 - `skills/dispatching-parallel-agents/references/agent-coordination/patterns/*.md`
-- `templates/claude-code-setup/.claude/skills/example-skill/references/detailed-guide.md`
+- `templates/claude-code-setup/skills/example-skill/references/detailed-guide.md`
 - `docs/MIGRATION_V2.md`
 
 ### Major Path Fixes

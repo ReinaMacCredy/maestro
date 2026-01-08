@@ -10,7 +10,7 @@ Complete templates for configuring Claude Code in any project.
 | [AGENTS.md](AGENTS.md) | Agent workflow instructions |
 | [SETUP.md](SETUP.md) | Setup guide |
 | [.claude/rules/safety.md](.claude/rules/safety.md) | Safety constraints |
-| [.claude/skills/example-skill/SKILL.md](.claude/skills/example-skill/SKILL.md) | Skill template |
+| [skills/example-skill/SKILL.md](skills/example-skill/SKILL.md) | Skill template |
 
 ## Quick Start
 
@@ -22,7 +22,7 @@ cp -r templates/claude-code-setup/* /path/to/your/project/
 # 1. Edit CLAUDE.md with your project details
 # 2. Edit AGENTS.md with your workflow
 # 3. Add rules to .claude/rules/
-# 4. Create skills in .claude/skills/
+# 4. Create skills in skills/
 ```
 
 See [SETUP.md](SETUP.md) for detailed instructions.
@@ -33,5 +33,5 @@ See [SETUP.md](SETUP.md) for detailed instructions.
 CLAUDE.md           → Project context (auto-loaded)
 AGENTS.md           → Workflow instructions (auto-loaded)
 .claude/rules/      → Constraints (auto-loaded, path-filtered)
-.claude/skills/     → Capabilities and workflows (on-demand discovery)
+skills/     → Capabilities and workflows (on-demand discovery)
 ```

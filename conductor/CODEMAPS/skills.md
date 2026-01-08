@@ -29,7 +29,7 @@ Instructions for the agent...
 ```
 CORE WORKFLOW              DEVELOPMENT              UTILITIES
 ├── conductor              ├── using-git-worktrees  ├── sharing-skills
-│   ├── references/        └── writing-skills       
+│   ├── references/        └── creating-skills       
 │   ├── research/            
 │   ├── coordination/     
 │   ├── tdd/              
@@ -41,18 +41,20 @@ CORE WORKFLOW              DEVELOPMENT              UTILITIES
 │   └── references/        
 │       ├── patterns/      
 │       └── examples/      
-├── design             
+├── designing             
 │   └── bmad/          
-└── beads
+└── tracking
 ```
 
-**7 Core Skills:**
-- **orchestrator**: Multi-agent parallel execution with autonomous workers + **file-scope routing**
+**9 Core Skills:**
 - **conductor**: Planning + execution + **research protocol** + **file-scope detection**
-- **design**: Unified 8-phase pipeline (DISCOVER→DEFINE→DEVELOP→VERIFY→DECOMPOSE→VALIDATE→ASSIGN→READY)
-- **beads**: Issue tracking + persistent memory + **auto-orchestration trigger**
+- **orchestrator**: Multi-agent parallel execution with autonomous workers + **file-scope routing**
+- **designing**: Unified 8-phase pipeline (DISCOVER→DEFINE→DEVELOP→VERIFY→DECOMPOSE→VALIDATE→ASSIGN→READY)
+- **tracking**: Issue tracking + persistent memory + **auto-orchestration trigger**
+- **handoff**: Session cycling and context preservation
+- **maestro-core**: Routing and fallback policies
+- **creating-skills**: Skill authoring guide + dependency documentation
 - **using-git-worktrees**: Isolated development environments
-- **writing-skills**: Skill creation guide + dependency documentation
 - **sharing-skills**: Upstream contribution
 
 ## Skill Hierarchy
@@ -63,9 +65,9 @@ Routing and fallback policies are defined in [AGENTS.md](../AGENTS.md).
 |-------|-------|------|
 | 1 | conductor | Track orchestration, workflow state, **research** |
 | 2 | orchestrator | **Multi-agent parallel execution** |
-| 3 | design | Unified 8-phase pipeline (replaces Double Diamond + PL) |
-| 4 | beads | Issue tracking, dependencies |
-| 5 | specialized | worktrees, sharing, writing |
+| 3 | designing | Unified 8-phase pipeline (replaces Double Diamond + PL) |
+| 4 | tracking | Issue tracking, dependencies |
+| 5 | specialized | worktrees, sharing, creating-skills |
 
 **Higher levels override lower levels on conflicts.**
 

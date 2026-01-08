@@ -19,8 +19,8 @@ AI workflow plugin for structured development: planning (Conductor), issue track
 
 ```
 maestro/
-├── skills/           # 7 skill directories (SKILL.md + references/)
-│   ├── beads/references/         # Issue tracking workflows
+├── skills/           # 9 skill directories (SKILL.md + references/)
+│   ├── tracking/references/         # Issue tracking workflows
 │   ├── conductor/references/     # Planning + execution (absorbed 9 skills)
 │   │   ├── research/             # Research protocol (replaces grounding)
 │   │   ├── planning/             # 6-phase planning pipeline (pl command)
@@ -31,13 +31,15 @@ maestro/
 │   │   ├── doc-sync/             # Doc sync workflows
 │   │   ├── handoff/              # Session handoff system
 │   │   └── finish/               # Branch completion
-│   ├── design/references/        # Double Diamond + Party Mode
+│   ├── designing/references/        # Double Diamond + Party Mode
 │   │   └── bmad/                 # Multi-agent design personas
 │   ├── orchestrator/references/  # Multi-agent parallel execution
 │   │   ├── patterns/             # Parallel dispatch, lifecycle, fallback
 │   │   └── examples/             # Three-agent dispatch example
+│   ├── maestro-core/             # Routing and fallback policies
+│   ├── handoff/                  # Session cycling and context preservation
 │   ├── using-git-worktrees/      # Isolated dev environments
-│   ├── writing-skills/           # Skill creation guide
+│   ├── creating-skills/          # Skill authoring guide
 │   └── sharing-skills/           # Upstream contribution
 ├── conductor/        # Project context + tracks
 │   ├── product.md, tech-stack.md, workflow.md
@@ -98,10 +100,12 @@ Zero manual `bd` commands in the happy path:
 |-------|---------|------|
 | `conductor` | `/conductor-*`, `/research` | Planning + execution + **research protocol** |
 | `orchestrator` | `/conductor-orchestrate`, "spawn workers" | **Multi-agent parallel execution** |
-| `design` | `ds` | Double Diamond + Party Mode + Research verification |
-| `beads` | `bd`, `fb`, `rb` | Issue tracking, file/review beads |
+| `designing` | `ds`, `cn` | Double Diamond + Party Mode + Research verification |
+| `tracking` | `bd`, `fb`, `rb` | Issue tracking, file/review beads |
+| `maestro-core` | All Maestro skills | Routing and fallback policies |
+| `handoff` | `ho`, `/conductor-finish` | Session cycling and context preservation |
+| `creating-skills` | "create skill", "write skill" | Skill authoring guide |
 | `using-git-worktrees` | - | Isolated dev environments |
-| `writing-skills` | - | Skill creation guide |
 | `sharing-skills` | - | Upstream contribution |
 
 ## Common Tasks

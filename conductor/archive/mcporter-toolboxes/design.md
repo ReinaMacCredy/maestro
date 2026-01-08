@@ -2,11 +2,11 @@
 
 ## Problem Statement
 
-Maestro skills currently rely on MCP runtime for Agent Mail coordination. We want to convert MCP servers to standalone CLIs using MCPorter, stored in `.claude/toolboxes/`, accessible to all skills. Agent Mail is the first conversion.
+Maestro skills currently rely on MCP runtime for Agent Mail coordination. We want to convert MCP servers to standalone CLIs using MCPorter, stored in `toolboxes/`, accessible to all skills. Agent Mail is the first conversion.
 
 ## Solution Overview
 
-Add a shared `.claude/toolboxes/` directory containing generated CLIs from MCP servers using MCPorter. Any skill can call these tools directly without MCP runtime dependency.
+Add a shared `toolboxes/` directory containing generated CLIs from MCP servers using MCPorter. Any skill can call these tools directly without MCP runtime dependency.
 
 ## Architecture
 
@@ -31,7 +31,7 @@ Add a shared `.claude/toolboxes/` directory containing generated CLIs from MCP s
 
 ### 1. MCPorter Configuration
 
-File: `.claude/toolboxes/mcporter.json`
+File: `toolboxes/mcporter.json`
 
 ```json
 {
@@ -54,24 +54,24 @@ File: `.claude/toolboxes/mcporter.json`
 npm install -g mcporter
 
 # Generate Agent Mail CLI
-mkdir -p .claude/toolboxes/agent-mail
+mkdir -p toolboxes/agent-mail
 npx mcporter generate-cli agent-mail \
   --name agent-mail \
-  --output .claude/toolboxes/agent-mail/agent-mail.ts \
-  --bundle .claude/toolboxes/agent-mail/agent-mail.js
+  --output toolboxes/agent-mail/agent-mail.ts \
+  --bundle toolboxes/agent-mail/agent-mail.js
 
 # Make executable
-chmod +x .claude/toolboxes/agent-mail/agent-mail.js
+chmod +x toolboxes/agent-mail/agent-mail.js
 ```
 
 ### 3. CLI Usage
 
 ```bash
 # List available tools
-.claude/toolboxes/agent-mail/agent-mail.js --help
+toolboxes/agent-mail/agent-mail.js --help
 
 # Send message
-.claude/toolboxes/agent-mail/agent-mail.js send_message \
+toolboxes/agent-mail/agent-mail.js send_message \
   project_key:/path/to/project \
   sender_name:BlueLake \
   to:GreenCastle \
@@ -79,13 +79,13 @@ chmod +x .claude/toolboxes/agent-mail/agent-mail.js
   body_md:"Work complete"
 
 # Fetch inbox
-.claude/toolboxes/agent-mail/agent-mail.js fetch_inbox \
+toolboxes/agent-mail/agent-mail.js fetch_inbox \
   project_key:/path/to/project \
   agent_name:BlueLake \
   --json
 
 # Register agent
-.claude/toolboxes/agent-mail.js register_agent \
+toolboxes/agent-mail.js register_agent \
   project_key:/path/to/project \
   program:claude-code \
   model:opus-4.5
@@ -101,7 +101,7 @@ Skills reference toolboxes via relative path from project root:
 Use the Agent Mail CLI for messaging:
 
 \`\`\`bash
-.claude/toolboxes/agent-mail.js send_message \
+toolboxes/agent-mail.js send_message \
   project_key:$PROJECT_KEY \
   sender_name:$AGENT_NAME \
   to:orchestrator \
@@ -121,7 +121,7 @@ Shared CLI tools generated from MCP servers using MCPorter.
 
 ## Location
 
-`.claude/toolboxes/`
+`toolboxes/`
 
 ## Available Tools
 
@@ -132,13 +132,13 @@ Shared CLI tools generated from MCP servers using MCPorter.
 ## Usage Pattern
 
 \`\`\`bash
-.claude/toolboxes/<tool>.js <command> arg1:value1 arg2:value2
+toolboxes/<tool>.js <command> arg1:value1 arg2:value2
 \`\`\`
 
 ## Regenerating Tools
 
 \`\`\`bash
-npx mcporter generate-cli --from .claude/toolboxes/<tool>.js
+npx mcporter generate-cli --from toolboxes/<tool>.js
 \`\`\`
 ```
 
@@ -146,7 +146,7 @@ npx mcporter generate-cli --from .claude/toolboxes/<tool>.js
 
 To add a new MCP server (e.g., Linear):
 
-1. Add to `.claude/toolboxes/mcporter.json`:
+1. Add to `toolboxes/mcporter.json`:
    ```json
    {
      "linear": {
@@ -162,8 +162,8 @@ To add a new MCP server (e.g., Linear):
 2. Generate CLI:
    ```bash
    npx mcporter generate-cli linear \
-     --output .claude/toolboxes/linear.ts \
-     --bundle .claude/toolboxes/linear.js
+     --output toolboxes/linear.ts \
+     --bundle toolboxes/linear.js
    ```
 
 3. Document in skill references
@@ -172,7 +172,7 @@ To add a new MCP server (e.g., Linear):
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
-| Location | `.claude/toolboxes/` | Sibling to skills, shared resource |
+| Location | `toolboxes/` | Sibling to skills, shared resource |
 | Format | Bundled .js | Works with Node, no compile step |
 | Auth | Env vars (`${VAR}`) | No secrets in repo |
 | Ownership | All skills | Not a separate skill, integrated capability |

@@ -11,23 +11,23 @@ Completed integration of MCPorter into Maestro for generating CLI tools from MCP
 ## What Was Done
 
 1. **Design Session (ds)** - Explored MCPorter integration options
-2. **Created `.claude/toolboxes/`** - New shared directory for generated CLIs
-3. **Generated Agent Mail CLI** - `.claude/toolboxes/agent-mail/agent-mail.js`
+2. **Created `toolboxes/`** - New shared directory for generated CLIs
+3. **Generated Agent Mail CLI** - `toolboxes/agent-mail/agent-mail.js`
 4. **Added documentation** - `toolboxes.md` in maestro-core, `agent-mail-cli.md` in orchestrator
 5. **Ran `/conductor-finish`** - Track archived, learnings extracted
 
 ## Key Files
 
 ```
-.claude/toolboxes/
+toolboxes/
 ├── agent-mail/
 │   ├── agent-mail.js     # Generated CLI (1.4MB)
 │   └── agent-mail.ts     # Source template
 ├── mcporter.json         # Config for all servers
 └── README.md
 
-.claude/skills/maestro-core/references/toolboxes.md
-.claude/skills/orchestrator/references/agent-mail-cli.md
+skills/maestro-core/references/toolboxes.md
+skills/orchestrator/references/agent-mail-cli.md
 conductor/archive/mcporter-toolboxes/  # Archived track
 ```
 
@@ -35,16 +35,16 @@ conductor/archive/mcporter-toolboxes/  # Archived track
 
 ```bash
 # Health check
-.claude/toolboxes/agent-mail/agent-mail.js health-check
+toolboxes/agent-mail/agent-mail.js health-check
 
 # Register agent
-.claude/toolboxes/agent-mail/agent-mail.js register-agent \
+toolboxes/agent-mail/agent-mail.js register-agent \
   --project-key "/path/to/project" \
   --program "claude-code" \
   --model "opus-4.5"
 
 # Send message
-.claude/toolboxes/agent-mail/agent-mail.js send-message \
+toolboxes/agent-mail/agent-mail.js send-message \
   --project-key "/path/to/project" \
   --sender-name "BlueLake" \
   --to '["GreenCastle"]' \
@@ -57,10 +57,10 @@ conductor/archive/mcporter-toolboxes/  # Archived track
 ```bash
 # 1. Add to mcporter.json
 # 2. Generate CLI
-mkdir -p .claude/toolboxes/<name>
+mkdir -p toolboxes/<name>
 npx mcporter generate-cli <server> \
-  --bundle .claude/toolboxes/<name>/<name>.js
-chmod +x .claude/toolboxes/<name>/<name>.js
+  --bundle toolboxes/<name>/<name>.js
+chmod +x toolboxes/<name>/<name>.js
 ```
 
 ## Pending Actions

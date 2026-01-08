@@ -247,6 +247,6 @@ flowchart TB
 
 - [README.md](../README.md) — Overview and installation
 - [TUTORIAL.md](../TUTORIAL.md) — Complete workflow guide
-- [.claude/skills/conductor/](../.claude/skills/conductor/) — Planning skill
-- [.claude/skills/design/](../.claude/skills/design/) — Double Diamond + Party Mode
-- [.claude/skills/orchestrator/](../.claude/skills/orchestrator/) — Parallel execution
+- [skills/conductor/](../skills/conductor/) — Planning skill
+- [skills/design/](../skills/design/) — Double Diamond + Party Mode
+- [skills/orchestrator/](../skills/orchestrator/) — Parallel execution

@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Orchestrator**: Multi-agent parallel execution
 - **Design**: Double Diamond brainstorming sessions
 
-This is a skills-based plugin (no build required) - all functionality is delivered through markdown skill definitions in `.claude/skills/`.
+This is a skills-based plugin (no build required) - all functionality is delivered through markdown skill definitions in `skills/`.
 
 **Key insight**: Beads operations are abstracted behind Conductor (facade pattern). In the happy path, you use `/conductor-*` commands and beads are managed automatically.
 
@@ -25,7 +25,7 @@ cat .claude-plugin/plugin.json | jq .   # Validate plugin manifest
 **No build or tests required.** All functionality is in markdown skill files.
 
 When modifying skills:
-1. Edit SKILL.md in `.claude/skills/<skill-name>/`
+1. Edit SKILL.md in `skills/<skill-name>/`
 2. Ensure YAML frontmatter `name` matches directory name
 3. Keep skills self-contained with minimal cross-references
 4. Add supporting docs to `references/` subdirectory

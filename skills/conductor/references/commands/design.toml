@@ -1,0 +1,498 @@
+description = "Design a feature using Double Diamond + Party Mode (BMAD v6 style)"
+prompt = """
+## 1.0 SYSTEM DIRECTIVE
+
+You are facilitating a **Double Diamond Design Session** with **Party Mode** support.
+
+CRITICAL RULES:
+1. Announce current phase explicitly: "Phase: [NAME]"
+2. Present A/P/C menu at every checkpoint
+3. Support loop-back: user can say "revisit [phase]" anytime
+4. Ground at phase transitions, not just at end
+5. Load Party Mode from `skills/design/references/bmad/workflows/party-mode/workflow.md` when [P] selected
+
+## 1.1 SETUP CHECK
+
+1. Verify `conductor/` exists with: product.md, tech-stack.md, workflow.md
+2. If missing: "Run `/conductor:setup` first." HALT.
+3. Load project context into memory.
+
+## 1.2 RESEARCH TRIGGER (Before DISCOVER)
+
+**MANDATORY: Spawn research agents BEFORE any design work begins.**
+
+Load: `skills/conductor/references/research/discover-hook.md`
+
+```
+┌─ RESEARCH: Session Start ───────────────────────┐
+│ Status: [RUNNING | COMPLETE | FAILED]           │
+│                                                 │
+│ Agents Spawned:                                 │
+│ • Locator: Finding related files...             │
+│ • Pattern: Finding existing patterns...         │
+│ • CODEMAPS: Loading architecture context...     │
+│                                                 │
+│ [Wait for completion before DISCOVER]           │
+└─────────────────────────────────────────────────┘
+```
+
+**On COMPLETE:** Display research summary, proceed to DISCOVER with context.
+**On FAILED:** WARN, proceed with limited context.
+
+## 1.3 FAST PATH CHECK
+
+- **If `{{args}}` is detailed** (>50 words with clear problem + approach): 
+  Offer: "You've provided a detailed brief. Skip to DEFINE phase? [Y/N]"
+- **If user says "quick" or "hurry"**: 
+  Compress to essential questions only, 1 per phase.
+
+---
+
+## 2.0 DOUBLE DIAMOND PHASES
+
+### ◆ DIAMOND 1: UNDERSTAND THE PROBLEM
+
+---
+
+#### Phase: DISCOVER (Diverge)
+**Goal:** Explore the problem space widely. No filtering yet.
+**Exit Criteria:** Clear understanding of problem, stakeholders, and constraints.
+
+**Activities:**
+- Open questions: "What problem? Who's affected? Why now?"
+- Challenge assumptions: "Why do you believe that?"
+- 5 Whys to find root cause
+- Edge case hunting: "What if X fails?"
+
+**One question at a time. Wait for response.**
+
+**MINI-GROUND:** Quick check - does this problem relate to existing features?
+- Grep: Search for related terms in codebase
+- Read: Check product.md for alignment
+
+
+**━━━ CHECKPOINT 1 + VALIDATION ━━━**
+
+**VALIDATE before checkpoint display:**
+- Load: `skills/conductor/references/validation/validate-design.md` (partial - DISCOVER checks only)
+- Check: Problem relates to product.md vision?
+- Check: Not duplicating existing feature?
+- Result: [✓ PASS | ⚠ WARN: reason]
+
+```
+> **Discovered:** [2-3 bullet summary]
+> **Validation:** [✓ aligned | ⚠ warning]
+>
+> **[A] Advanced** - Risk analysis, assumption audit, stakeholder mapping
+> **[P] Party** - Get perspectives from PM, UX, Architect
+> **[C] Continue** - Move to DEFINE phase
+> **[↩ Back]** - User can say "revisit discover" anytime
+```
+
+---
+
+#### Phase: DEFINE (Converge)
+**Goal:** Synthesize into ONE clear problem statement.
+**Exit Criteria:** Committed problem statement + success criteria.
+
+**Activities:**
+- Filter noise → signal
+- Write: "We are solving [X] for [Y] because [Z]"
+- Define success criteria (measurable)
+- Apply YAGNI: Cut anything not essential
+
+**MINI-GROUND:** Verify problem framing against docs.
+- Read: product.md - does this align with product vision?
+- Grep: Any prior attempts to solve this?
+
+
+**━━━ CHECKPOINT 2 + VALIDATION ━━━**
+
+**VALIDATE before checkpoint display:**
+- Load: `skills/conductor/references/validation/validate-design.md` (partial - DEFINE checks only)
+- Check: Problem statement is clear and measurable?
+- Check: Success criteria are testable?
+- Check: Scope is explicit (in/out)?
+- Result: [✓ PASS | ⚠ WARN: reason]
+
+```
+> **Problem:** [statement]
+> **Success:** [criteria]
+> **Out of Scope:** [explicit exclusions]
+> **Validation:** [✓ complete | ⚠ missing: X]
+>
+> **[A] Advanced** - Refine statement, explore constraints
+> **[P] Party** - Validate framing with team perspectives
+> **[C] Continue** - Move to DEVELOP phase
+> **[↩ Back]** - "revisit discover" to re-explore
+```
+
+---
+
+### ◆ DIAMOND 2: DESIGN THE SOLUTION
+
+---
+
+#### Phase: DEVELOP (Diverge)
+**Goal:** Generate multiple solution approaches. Wild ideas welcome.
+**Exit Criteria:** 3+ options with trade-offs analyzed.
+
+**Activities:**
+- Brainstorm 3+ distinct approaches
+- Include one "wild/10x" option
+- Trade-off analysis: pros, cons, effort, risk
+- No commitment yet - explore freely
+
+**FORMAT:**
+```
+**Option A (Recommended):** [Name]
+- Approach: [Description]
+- Pros: [Benefits]
+- Cons: [Drawbacks]
+- Effort: [Low/Medium/High]
+- Risk: [Low/Medium/High]
+
+**Option B (Conservative):** ...
+
+**Option C (Wild/10x):** ...
+```
+
+**MINI-GROUND:** Check feasibility against tech-stack.md.
+- Read: tech-stack.md - compatible with our stack?
+- Grep: Similar patterns in codebase?
+
+
+**━━━ CHECKPOINT 3 + VALIDATION + RESEARCH ━━━**
+
+**RESEARCH before checkpoint (spawn parallel agents):**
+- Load: `skills/conductor/references/research/grounding-hook.md`
+- Spawn: Locator + Analyzer + Pattern agents
+- Verify: Options are technically feasible
+
+**VALIDATE before checkpoint display:**
+- Load: `skills/conductor/references/validation/validate-design.md` (partial - DEVELOP checks only)
+- Check: 3+ options presented with trade-offs?
+- Check: Options align with tech-stack.md?
+- Check: Risk/effort analysis complete?
+- Result: [✓ PASS | ⚠ WARN: reason]
+
+```
+> **Options:** [summary of 3 approaches]
+> **Recommendation:** [which and why]
+> **Research:** [X files found, Y patterns match]
+> **Validation:** [✓ feasible | ⚠ concern: X]
+>
+> **[A] Advanced** - Explore more options, deeper trade-offs
+> **[P] Party** - Multi-perspective review of options
+> **[C] Continue** - Pick one, move to DELIVER
+> **[↩ Back]** - "revisit define" to reframe problem
+```
+
+---
+
+#### Phase: DELIVER (Converge)
+**Goal:** Detail chosen approach into complete, actionable design.
+**Exit Criteria:** Complete design.md ready for implementation.
+
+**Present in 200-300 word sections. Validate each:**
+
+1. **Architecture Overview** - High-level structure
+2. **Component Breakdown** - Each part's responsibility  
+3. **Data Model & Interfaces** - Key structures, APIs
+4. **User Flow** - How users interact
+5. **Error Handling** - Failure modes, recovery
+6. **Testing Strategy** - How we verify
+
+After each section: "Does this look right so far? [OK / Revise / ↩ Back]"
+
+**TIERED GROUNDING (Automatic at phase transitions):**
+
+| Phase Transition | Tier | Enforcement |
+|------------------|------|-------------|
+| DISCOVER→DEFINE | Mini | Advisory |
+| DEFINE→DEVELOP | Mini | Advisory |
+| DEVELOP→DELIVER | Standard | Gatekeeper |
+| DELIVER→Complete | Full + Impact Scan | Mandatory |
+
+**FULL GROUNDING + IMPACT SCAN (Required at DELIVER→Complete):**
+
+1. **Full Grounding (parallel):**
+   - Grep/finder: Verify patterns match codebase conventions
+   - Read: Confirm alignment with tech-stack.md, workflow.md
+   - glob: Find related files by pattern
+
+2. **Impact Scan (parallel):**
+   - Identify all files affected by design
+   - Return: file list, change types, risks, dependencies
+   - Flag high-risk files for review
+
+**Enforcement at DELIVER:**
+- **Blocks if:** Grounding not run (action: RUN_GROUNDING)
+- **Blocks if:** All sources fail (action: MANUAL_VERIFY)
+- **Blocks if:** Low confidence (action: RETRY_GROUNDING)
+- **Warns if:** Conflicts detected (shows conflict summary)
+
+**Grounding Checklist:**
+- [ ] Codebase patterns checked (repo source)
+- [ ] External dependencies verified (web source)
+- [ ] Tech stack alignment confirmed (repo source)
+- [ ] Impact scan completed (subagent)
+- [ ] High-risk files reviewed
+
+Announce: "[COMPLETE] Grounding complete. Design verified against codebase."
+Or if blocked: Show enforcement action with instructions.
+
+**━━━ CHECKPOINT 4 ━━━**
+```
+> **Design Status:** [complete/needs work]
+> **Grounding:** [verified | blocked | conflicts]
+> **Impact Scan:** [X files affected, Y high-risk]
+>
+> **[A] Advanced** - Refine sections, add detail
+> **[P] Party** - Final review with full team
+> **[C] Continue** - Approve and handoff (requires grounding)
+> **[↩ Back]** - "revisit develop" to reconsider approach
+```
+
+---
+
+#### Phase: VALIDATION GATE (Gate 1: validate-design)
+**Goal:** Validate design against product, tech-stack, and existing patterns.
+**Trigger:** Runs progressively at each checkpoint (CP1-4). Full gate at CP4.
+
+**PROGRESSIVE VALIDATION:**
+| Checkpoint | Checks | Enforcement |
+|------------|--------|-------------|
+| CP1 (DISCOVER) | Product alignment, no duplicate features | WARN |
+| CP2 (DEFINE) | Problem clear, success measurable, scope explicit | WARN |
+| CP3 (DEVELOP) | 3+ options, tech-stack alignment, risk analysis | WARN |
+| CP4 (DELIVER) | Full validation + grounding + impact scan | SPEED=WARN, FULL=HALT |
+
+**PROTOCOL (at each checkpoint):**
+1. **Load validation gate:** Read `skills/conductor/references/validation/validate-design.md`
+2. **Execute checkpoint-specific checks** (see table above)
+3. **Determine enforcement:**
+   - CP1-3: Always WARN (log issues, continue)
+   - CP4 SPEED mode → WARN only
+   - CP4 FULL mode → HALT on failures
+
+**Validation Output:**
+```
+┌─ VALIDATION: Gate 1 (design) @ CP[N] ─────────────┐
+│ Status: [PASS | WARN | FAIL]                      │
+│                                                   │
+│ Product Alignment: [✓ | ⚠ | ✗]                    │
+│ Tech-Stack Compliance: [✓ | ⚠ | ✗]                │
+│ Pattern Consistency: [✓ | ⚠ | ✗]                  │
+│                                                   │
+│ [Issues found - if any]                           │
+└───────────────────────────────────────────────────┘
+```
+
+**On CP1-3 PASS/WARN:** Log status, continue to next phase.
+**On CP4 PASS:** Update `metadata.json.validation.gates_passed` to include "design", proceed to handoff.
+**On CP4 WARN:** Log warning, proceed to handoff.
+**On CP4 FAIL (FULL mode):** Block, show issues, offer:
+- **[R] Retry** - Return to DELIVER phase to fix issues
+- **[S] Skip** - Force continue (requires `--no-validate` flag)
+
+---
+
+**If Grounding Blocked:**
+```
+┌─ GROUNDING REQUIRED ─────────────────────┐
+│ [BLOCKED] Cannot proceed: [reason]              │
+│                                          │
+│ Action: RUN_GROUNDING                    │
+│ Run: /ground <design summary>            │
+│                                          │
+│ [R] Retry grounding with different query │
+│ [C] Cancel design session                │
+└──────────────────────────────────────────┘
+
+Action mapping:
+- Grounding not run → RUN_GROUNDING
+- Low confidence → RETRY_GROUNDING
+- User chooses [C] → CANCEL_SESSION
+```
+
+> **Note on Mandatory Enforcement:** Skipping grounding is NOT allowed.
+> Users must either retry with a different query or cancel the session.
+> This maintains system integrity for mandatory checks.
+
+---
+
+## 3.0 PARTY MODE PROTOCOL
+
+When user selects **[P]**:
+
+1. **Load:** Read `skills/design/references/bmad/workflows/party-mode/workflow.md`
+2. **Select Agents:** Pick 2-3 based on context:
+
+| Context | Primary | Secondary | Tertiary |
+|---------|---------|-----------|----------|
+| Business/Strategy | John (PM) | Mary (Analyst) | Victor |
+| Technical | Winston (Arch) | Amelia (Dev) | Murat (QA) |
+| User/UX | Sally (UX) | Maya (Design) | Sophia |
+| Innovation | Carson (Brain) | Dr. Quinn | Victor |
+| Risk/Critique | Murat | Winston | Mary |
+
+3. **Pose Question:** Present current problem/decision to the panel
+4. **Collect Responses:** Each agent responds in character:
+   ```
+   [Icon] **[Name]**: [In-character response]
+   ```
+5. **Allow Cross-Talk:** Agents may reference each other (1-2 exchanges max)
+6. **Synthesize:** Summarize key themes + actionable insights
+7. **Return:** Back to main flow with enriched context
+
+**Party Mode Triggers:**
+- User selects [P] at any checkpoint
+- User says "party mode", "get perspectives", "what would the team think"
+- Complex decision with multiple valid approaches
+
+**External Party Mode (Token Saving):**
+When user says "external" or "external party":
+1. Generate copyable prompt with selected agents + context
+2. User runs in ChatGPT/Gemini web (free/flat-rate)
+3. User pastes synthesis back
+4. Continue main flow with insights
+
+See `skills/design/references/bmad/workflows/party-mode/workflow.md` § "External Mode" for details.
+
+---
+
+## 4.0 LOOP-BACK SUPPORT
+
+User can say anytime:
+- "revisit discover" → Re-open problem exploration
+- "revisit define" → Re-examine problem statement
+- "revisit develop" → Reconsider approach options
+- "start over" → Full reset to DISCOVER
+
+When looping back:
+1. Summarize what we're preserving vs. reopening
+2. Announce new phase
+3. Continue from there
+
+---
+
+## 5.0 TRACK & HANDOFF
+
+### 5.1 Track ID Generation
+
+Generate track_id as: `{shortname}_{YYYYMMDD}`
+- **shortname:** Derive from problem statement (2-3 words, kebab-case)
+- **Example:** "user-auth_20251223"
+
+If `{{args}}` is already a track_id format: Use it directly.
+
+### 5.2 Existing Track Check
+
+Before creating, check: Does `conductor/tracks/{track_id}/` exist?
+
+- **If exists with design.md:** 
+  "Track exists. [Append] to existing design or [Overwrite]?"
+- **If exists without design.md:**
+  "Track exists but no design. Creating design.md."
+- **If not exists:**
+  Create directory and design.md.
+
+### 5.3 Design.md Output
+
+Save to: `conductor/tracks/{track_id}/design.md`
+
+```markdown
+---
+track_id: {track_id}
+created: {timestamp}
+status: approved
+---
+
+# {Feature Name}
+
+## Problem Statement
+[From DEFINE phase]
+
+## Success Criteria
+[From DEFINE phase]
+
+## Chosen Approach
+[From DEVELOP phase - selected option]
+
+## Design
+
+### Architecture Overview
+[From DELIVER phase]
+
+### Components
+[From DELIVER phase]
+
+### Data Model
+[From DELIVER phase]
+
+### User Flow
+[From DELIVER phase]
+
+### Error Handling
+[From DELIVER phase]
+
+### Testing Strategy
+[From DELIVER phase]
+
+## Grounding Notes
+- [What was verified during session]
+
+## Risks & Open Questions
+- [Uncertainties identified during design]
+- [Potential issues for implementation phase]
+
+## Out of Scope
+[Explicit exclusions]
+```
+
+### 5.4 Handoff
+
+After design is approved:
+
+1. Confirm file saved
+2. Update workflow state (if track exists):
+   ```bash
+   if [ -f "conductor/tracks/<track_id>/metadata.json" ]; then
+     jq --arg timestamp "<current-timestamp>" \
+        '.workflow.state = "DESIGNED" | .workflow.history += [{"state": "DESIGNED", "at": $timestamp, "command": "ds"}]' \
+        "conductor/tracks/<track_id>/metadata.json" > "conductor/tracks/<track_id>/metadata.json.tmp.$$" && mv "conductor/tracks/<track_id>/metadata.json.tmp.$$" "conductor/tracks/<track_id>/metadata.json"
+   fi
+   ```
+3. Display handoff block with suggestion:
+
+```
+┌─────────────────────────────────────────────────────┐
+│ ✓ Design session completed                          │
+│                                                     │
+│ Track: {track_id}                                   │
+│ File: conductor/tracks/{track_id}/design.md         │
+│                                                     │
+│ → Next: /conductor-newtrack {track_id}              │
+│   Alt: ds (refine design)                           │
+└─────────────────────────────────────────────────────┘
+```
+
+Options:
+- `/conductor-newtrack {track_id}` — generates spec + plan + files beads + reviews
+- `/conductor-newtrack {track_id} --no-beads` — spec + plan only
+- Continue refining this design
+
+---
+
+## 6.0 EDGE CASES
+
+| Situation | Behavior |
+|-----------|----------|
+| User provides no args | Ask: "What would you like to design?" |
+| User says "quick"/"hurry" | Fast path: 1 question per phase, skip Party |
+| User wants to exit mid-session | Offer to save draft to design.md |
+| Grounding finds conflicts | Surface issue, let user decide how to proceed |
+| Party Mode gets stuck | Limit to 2 rounds, then synthesize |
+| track_id collision | Auto-increment with `-v2` suffix: {id}-v2_{YYYYMMDD} |
+"""

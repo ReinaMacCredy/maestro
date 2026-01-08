@@ -231,7 +231,7 @@ Always FULL mode via orchestrator. Even single tasks spawn 1 worker for consiste
 
 ### 2. conductor/SKILL.md
 
-**File:** `.claude/skills/conductor/SKILL.md`
+**File:** `skills/conductor/SKILL.md`
 **Lines:** 57-64
 
 **Remove:**
@@ -256,7 +256,7 @@ Workers use `bd` CLI for beads, Agent Mail for file reservations and messaging.
 
 ### 3. conductor/references/preflight-beads.md
 
-**File:** `.claude/skills/conductor/references/preflight-beads.md`
+**File:** `skills/conductor/references/preflight-beads.md`
 
 **Major rewrite:**
 - Remove Village MCP check (Step 3 lines 43-45)
@@ -275,7 +275,7 @@ Workers use `bd` CLI for beads, Agent Mail for file reservations and messaging.
 
 ### 4. conductor/references/workflows/implement.md
 
-**File:** `.claude/skills/conductor/references/workflows/implement.md`
+**File:** `skills/conductor/references/workflows/implement.md`
 **Lines:** 123-290 (Phase 2)
 
 **Remove:**
@@ -291,7 +291,7 @@ Workers use `bd` CLI for beads, Agent Mail for file reservations and messaging.
 
 ### 5. beads/references/VILLAGE.md
 
-**File:** `.claude/skills/beads/references/VILLAGE.md`
+**File:** `skills/beads/references/VILLAGE.md`
 
 **Action:** DELETE entire file (277 lines)
 
@@ -299,7 +299,7 @@ Workers use `bd` CLI for beads, Agent Mail for file reservations and messaging.
 
 ### 6. beads/references/workflow.md
 
-**File:** `.claude/skills/beads/references/workflow.md`
+**File:** `skills/beads/references/workflow.md`
 **Lines:** 137-152
 
 **Remove:**
@@ -323,7 +323,7 @@ When spawning workers, use Agent Mail coordination:
 
 ### 7. beads/references/conductor-integration.md
 
-**File:** `.claude/skills/beads/references/conductor-integration.md`
+**File:** `skills/beads/references/conductor-integration.md`
 **Lines:** 20-27
 
 **Remove entire SA vs MA Mode section**
@@ -332,7 +332,7 @@ When spawning workers, use Agent Mail coordination:
 
 ### 8. orchestrator/SKILL.md
 
-**File:** `.claude/skills/orchestrator/SKILL.md`
+**File:** `skills/orchestrator/SKILL.md`
 **Line:** 52
 
 **Remove:**
@@ -349,7 +349,7 @@ When spawning workers, use Agent Mail coordination:
 
 ### 9. orchestrator/references/workflow.md
 
-**File:** `.claude/skills/orchestrator/references/workflow.md`
+**File:** `skills/orchestrator/references/workflow.md`
 **Lines:** 517-519
 
 **Remove:**
@@ -485,10 +485,10 @@ Currently there's complex routing logic:
 - **TIER 2**: Compound conditions → SINGLE_AGENT/PARALLEL_DISPATCH
 
 **Files:**
-- `.claude/skills/design/references/execution-routing.md` - SINGLE_AGENT reference
-- `.claude/skills/orchestrator/references/auto-routing.md` - TIER 1/2 evaluation paths
-- `.claude/skills/design/references/session-lifecycle.md` - Mode detect reference
-- `.claude/skills/conductor/references/pipeline.md` - TIER references
+- `skills/design/references/execution-routing.md` - SINGLE_AGENT reference
+- `skills/orchestrator/references/auto-routing.md` - TIER 1/2 evaluation paths
+- `skills/design/references/session-lifecycle.md` - Mode detect reference
+- `skills/conductor/references/pipeline.md` - TIER references
 
 **Simplify to:**
 - Remove SINGLE_AGENT path
@@ -503,10 +503,10 @@ Currently there's complex routing logic:
 Multiple files have "fallback to sequential" logic that should become HALT:
 
 **Files with fallback logic:**
-1. `.claude/skills/beads/references/auto-orchestrate.md` - Line 394 "Fallback: Sequential Execution"
-2. `.claude/skills/orchestrator/references/patterns/parallel-dispatch.md` - Line 14 "fallback to sequential"
-3. `.claude/skills/orchestrator/references/preflight.md` - Lines 92, 133 "degrade to single-session"
-4. `.claude/skills/orchestrator/references/workflow.md` - Lines 151, 617-628 "falling back to sequential"
+1. `skills/beads/references/auto-orchestrate.md` - Line 394 "Fallback: Sequential Execution"
+2. `skills/orchestrator/references/patterns/parallel-dispatch.md` - Line 14 "fallback to sequential"
+3. `skills/orchestrator/references/preflight.md` - Lines 92, 133 "degrade to single-session"
+4. `skills/orchestrator/references/workflow.md` - Lines 151, 617-628 "falling back to sequential"
 
 **Change:**
 ```python
@@ -524,54 +524,54 @@ if not agent_mail_available:
 ### 17. Complete Updated File List
 
 #### Delete (1 file)
-1. `.claude/skills/beads/references/VILLAGE.md`
+1. `skills/beads/references/VILLAGE.md`
 
 #### Major Rewrite (8 files) - Most references
-1. `.claude/skills/conductor/references/preflight-beads.md` (31 refs)
-2. `.claude/skills/conductor/references/beads-session.md` (29 refs)
-3. `.claude/skills/conductor/references/beads-integration.md` (27 refs)
-4. `.claude/skills/conductor/references/workflows/implement.md` (18 refs)
-5. `.claude/skills/orchestrator/references/coordination-modes.md`
-6. `.claude/skills/orchestrator/references/workflow.md` (9 refs)
-7. `.claude/skills/orchestrator/references/auto-routing.md`
-8. `.claude/skills/design/references/execution-routing.md`
+1. `skills/conductor/references/preflight-beads.md` (31 refs)
+2. `skills/conductor/references/beads-session.md` (29 refs)
+3. `skills/conductor/references/beads-integration.md` (27 refs)
+4. `skills/conductor/references/workflows/implement.md` (18 refs)
+5. `skills/orchestrator/references/coordination-modes.md`
+6. `skills/orchestrator/references/workflow.md` (9 refs)
+7. `skills/orchestrator/references/auto-routing.md`
+8. `skills/design/references/execution-routing.md`
 
 #### High Reference Count (additional files)
-1. `.claude/skills/conductor/references/track-init-beads.md` (16 refs)
-2. `.claude/skills/conductor/references/beads-facade.md` (14 refs)
-3. `.claude/skills/conductor/references/finish-workflow.md` (13 refs)
-4. `.claude/skills/conductor/references/workflows/setup.md` (11 refs)
-5. `.claude/skills/conductor/references/workflows/finish.md` (9 refs)
-6. `.claude/skills/design/references/session-init.md` (7 refs)
-7. `.claude/skills/conductor/references/status-sync-beads.md` (7 refs)
-8. `.claude/skills/conductor/references/migrate-beads.md` (6 refs)
-9. `.claude/skills/beads/references/RESUMABILITY.md` (6 refs)
+1. `skills/conductor/references/track-init-beads.md` (16 refs)
+2. `skills/conductor/references/beads-facade.md` (14 refs)
+3. `skills/conductor/references/finish-workflow.md` (13 refs)
+4. `skills/conductor/references/workflows/setup.md` (11 refs)
+5. `skills/conductor/references/workflows/finish.md` (9 refs)
+6. `skills/design/references/session-init.md` (7 refs)
+7. `skills/conductor/references/status-sync-beads.md` (7 refs)
+8. `skills/conductor/references/migrate-beads.md` (6 refs)
+9. `skills/beads/references/RESUMABILITY.md` (6 refs)
 
 #### Update SA/MA/Mode References (18 files)
 1. `AGENTS.md` (root)
 2. `CLAUDE.md`
-3. `.claude/skills/conductor/SKILL.md`
-4. `.claude/skills/conductor/references/remember.md`
-5. `.claude/skills/conductor/references/validation/beads/checks.md`
-6. `.claude/skills/conductor/references/pipeline.md`
-7. `.claude/skills/beads/references/workflow.md`
-8. `.claude/skills/beads/references/workflow-integration.md`
-9. `.claude/skills/beads/references/conductor-integration.md`
-10. `.claude/skills/beads/references/WORKFLOWS.md`
-11. `.claude/skills/beads/references/auto-orchestrate.md`
-12. `.claude/skills/beads/references/FILE_BEADS.md`
-13. `.claude/skills/design/references/session-lifecycle.md`
-14. `.claude/skills/orchestrator/references/preflight.md`
-15. `.claude/skills/orchestrator/references/patterns/parallel-dispatch.md`
-16. `.claude/skills/orchestrator/references/architecture.md`
-17. `.claude/skills/conductor/references/doc-sync/integration.md`
-18. `.claude/skills/orchestrator/references/examples/dispatch-three-agents.md`
+3. `skills/conductor/SKILL.md`
+4. `skills/conductor/references/remember.md`
+5. `skills/conductor/references/validation/beads/checks.md`
+6. `skills/conductor/references/pipeline.md`
+7. `skills/beads/references/workflow.md`
+8. `skills/beads/references/workflow-integration.md`
+9. `skills/beads/references/conductor-integration.md`
+10. `skills/beads/references/WORKFLOWS.md`
+11. `skills/beads/references/auto-orchestrate.md`
+12. `skills/beads/references/FILE_BEADS.md`
+13. `skills/design/references/session-lifecycle.md`
+14. `skills/orchestrator/references/preflight.md`
+15. `skills/orchestrator/references/patterns/parallel-dispatch.md`
+16. `skills/orchestrator/references/architecture.md`
+17. `skills/conductor/references/doc-sync/integration.md`
+18. `skills/orchestrator/references/examples/dispatch-three-agents.md`
 
 #### Update Village/bv References (10 files)
-1. `.claude/skills/orchestrator/SKILL.md`
-2. `.claude/skills/orchestrator/references/preparation.md`
-3. `.claude/skills/orchestrator/references/monitoring.md`
-4. `.claude/skills/conductor/references/decompose-task.md`
+1. `skills/orchestrator/SKILL.md`
+2. `skills/orchestrator/references/preparation.md`
+3. `skills/orchestrator/references/monitoring.md`
+4. `skills/conductor/references/decompose-task.md`
 5. `SETUP_GUIDE.md`
 6. `README.md`
 7. `REFERENCE.md`
@@ -614,10 +614,10 @@ The `metadata.json` file stores session state with mode field. This needs updati
 ```
 
 **Files with metadata.json mode references:**
-1. `.claude/skills/conductor/references/preflight-beads.md` - Lines 96, 100, 508
-2. `.claude/skills/conductor/references/beads-session.md` - Line 634
-3. `.claude/skills/conductor/references/beads-integration.md` - Line 304
-4. `.claude/skills/conductor/references/beads-facade.md` - Lines 57, 152
+1. `skills/conductor/references/preflight-beads.md` - Lines 96, 100, 508
+2. `skills/conductor/references/beads-session.md` - Line 634
+3. `skills/conductor/references/beads-integration.md` - Line 304
+4. `skills/conductor/references/beads-facade.md` - Lines 57, 152
 
 ---
 
@@ -625,7 +625,7 @@ The `metadata.json` file stores session state with mode field. This needs updati
 
 Telemetry events reference mode:
 
-**File:** `.claude/skills/beads/references/workflow-integration.md`
+**File:** `skills/beads/references/workflow-integration.md`
 **Line 100:**
 ```json
 {"event": "ma_attempt", "mode": "MA", "timestamp": "..."}
@@ -642,7 +642,7 @@ Telemetry events reference mode:
 
 Village had "leader mode" for task assignment. This is removed.
 
-**File:** `.claude/skills/beads/references/workflow.md`
+**File:** `skills/beads/references/workflow.md`
 - References "Leader mode" - remove or replace with orchestrator role
 
 ---
@@ -660,7 +660,7 @@ Command files use SPEED/FULL for *design complexity*, not execution mode. These 
 
 ### 22. Schema Files - Update
 
-**File:** `.claude/skills/conductor/references/schemas/metadata.schema.json`
+**File:** `skills/conductor/references/schemas/metadata.schema.json`
 - No `session` field at root level (session state is in markdown refs)
 - No changes needed to schema
 
@@ -709,25 +709,25 @@ Command files use SPEED/FULL for *design complexity*, not execution mode. These 
 The Oracle identified these additional files not in previous lists:
 
 #### Graceful Fallback Patterns (4 files)
-1. `.claude/skills/orchestrator/references/patterns/graceful-fallback.md` - Lines 1, 11, 38, 66, 86
-2. `.claude/skills/orchestrator/references/patterns/parallel-dispatch.md` - Lines 14, 84, 98
-3. `.claude/skills/orchestrator/references/worker-prompt.md` - Lines 255, 259
-4. `.claude/skills/maestro-core/references/glossary.md` - Lines 42, 46, 47, 54
+1. `skills/orchestrator/references/patterns/graceful-fallback.md` - Lines 1, 11, 38, 66, 86
+2. `skills/orchestrator/references/patterns/parallel-dispatch.md` - Lines 14, 84, 98
+3. `skills/orchestrator/references/worker-prompt.md` - Lines 255, 259
+4. `skills/maestro-core/references/glossary.md` - Lines 42, 46, 47, 54
 
 #### Team/Role Concepts (beads workflow)
-1. `.claude/skills/beads/references/workflow.md` - Lines 137-170 (Multi-Agent Session, team/role/leader)
-2. `.claude/skills/beads/references/WORKFLOWS.md` - Lines 538-590 (Multi-Agent Workflows, team session)
-3. `.claude/skills/beads/references/GIT_INTEGRATION.md` - Lines 402, 425 (Team Branch Pattern)
-4. `.claude/skills/beads/references/CONFIG.md` - Line 398 (Team ID)
-5. `.claude/skills/beads/references/LABELS.md` - Line 398 (team-prefixed labels)
-6. `.claude/skills/beads/references/BOUNDARIES.md` - Lines 271, 291, 337 (role notes)
+1. `skills/beads/references/workflow.md` - Lines 137-170 (Multi-Agent Session, team/role/leader)
+2. `skills/beads/references/WORKFLOWS.md` - Lines 538-590 (Multi-Agent Workflows, team session)
+3. `skills/beads/references/GIT_INTEGRATION.md` - Lines 402, 425 (Team Branch Pattern)
+4. `skills/beads/references/CONFIG.md` - Line 398 (Team ID)
+5. `skills/beads/references/LABELS.md` - Line 398 (team-prefixed labels)
+6. `skills/beads/references/BOUNDARIES.md` - Lines 271, 291, 337 (role notes)
 
 #### Validation & Structure
-1. `.claude/skills/conductor/references/validation/lifecycle.md` - Lines 9, 44, 52 (HALT/DEGRADE)
-2. `.claude/skills/writing-skills/references/skill-structure.md` - Lines 98, 109-123 (HALT/DEGRADE guidelines)
+1. `skills/conductor/references/validation/lifecycle.md` - Lines 9, 44, 52 (HALT/DEGRADE)
+2. `skills/writing-skills/references/skill-structure.md` - Lines 98, 109-123 (HALT/DEGRADE guidelines)
 
 #### Maestro Core
-1. `.claude/skills/maestro-core/SKILL.md` - Lines 50-56 (Fallback Policies)
+1. `skills/maestro-core/SKILL.md` - Lines 50-56 (Fallback Policies)
 
 ---
 

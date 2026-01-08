@@ -11,8 +11,8 @@
 ## Gotchas
 
 - Metadata status desync: `metadata.json.beads.status` can be stale compared to actual bead existence
-- Symlink creation: Must delete `.claude/skills/` contents first before creating symlink
-- Hard-linked vs symlinked: skills/ and .claude/skills/ share content - updating one updates both
+- Symlink creation: Must delete `skills/` contents first before creating symlink
+- Hard-linked vs symlinked: skills/ and skills/ share content - updating one updates both
 
 ## Patterns
 

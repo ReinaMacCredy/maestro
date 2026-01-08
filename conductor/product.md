@@ -31,8 +31,9 @@ A plugin that provides structured AI-assisted development capabilities through p
 - [x] ~~maestro-core: Central orchestration skill with 5-level hierarchy, HALT/DEGRADE policies (completed 2025-12-29)~~ (removed - routing centralized in AGENTS.md)
 - [x] Auto-continuity: Session continuity automatic via workflow entry points for all agents (completed 2025-12-29)
 - [x] Auto Oracle Design Review: 6-dimension design audit at CP4 (DELIVER) with platform detection (completed 2026-01-02)
-- [x] MCPorter Toolboxes: CLI generation from MCP servers via MCPorter, stored in `.claude/toolboxes/` (completed 2026-01-08)
+- [x] MCPorter Toolboxes: CLI generation from MCP servers via MCPorter, stored in `toolboxes/` (completed 2026-01-08)
 - [x] Unified DS Pipeline: 8-phase pipeline (DS+PL merged), research consolidated from 5→2 hooks (~35s vs ~95s) (completed 2026-01-08)
+- [x] Skills Architecture Refactor: Clear ownership (design→designing, beads→tracking), gerund naming, skill-creator+writing-skills merged into creating-skills (completed 2026-01-08)
 
 ## Success Metrics
 

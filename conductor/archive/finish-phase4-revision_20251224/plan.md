@@ -16,7 +16,7 @@ Create JSON Schema with:
 **Verify:** Schema validates against example from finish-workflow.md
 
 ### [x] 1.2 Update finish-state.json example in finish-workflow.md
-**File:** `.claude/skills/conductor/references/finish-workflow.md`
+**File:** `skills/conductor/references/finish-workflow.md`
 
 Update lines 334-351:
 - Change phase max from 5 to 6
@@ -28,7 +28,7 @@ Update lines 334-351:
 ## Epic 2: Phase 0 - Validation Pre-Flight
 
 ### [x] 2.1 Add Phase 0 section to finish-workflow.md
-**File:** `.claude/skills/conductor/references/finish-workflow.md`
+**File:** `skills/conductor/references/finish-workflow.md`
 
 Insert after "## Validation" section (around line 35):
 ```markdown
@@ -55,7 +55,7 @@ Insert after "## Validation" section (around line 35):
 ## Epic 3: Phase 4 - Context Refresh
 
 ### [x] 3.1 Add Phase 4 section to finish-workflow.md
-**File:** `.claude/skills/conductor/references/finish-workflow.md`
+**File:** `skills/conductor/references/finish-workflow.md`
 
 Insert after Phase 3 (Knowledge Merge), before current Phase 4 (Archive):
 
@@ -124,7 +124,7 @@ Phase 4/6: Refreshing context docs...
 ## Epic 4: Phase 5 - Archive Simplification
 
 ### [x] 4.1 Revise Archive Choice in finish-workflow.md
-**File:** `.claude/skills/conductor/references/finish-workflow.md`
+**File:** `skills/conductor/references/finish-workflow.md`
 
 Replace S/H/K section (lines 194-209) with:
 
@@ -146,7 +146,7 @@ Archive choice:
 ```
 
 ### [x] 4.2 Update docSync record format
-**File:** `.claude/skills/conductor/references/finish-workflow.md`
+**File:** `skills/conductor/references/finish-workflow.md`
 
 Update metadata.json example (around line 214):
 - Change `"archiveChoice": "soft"` to `"archiveChoice": "archive"` or `"keep"`
@@ -157,7 +157,7 @@ Update metadata.json example (around line 214):
 ## Epic 5: Phase Renumbering & Flags
 
 ### [x] 5.1 Renumber all phase references
-**File:** `.claude/skills/conductor/references/finish-workflow.md`
+**File:** `skills/conductor/references/finish-workflow.md`
 
 - Current "Phase 4: Archive" → "Phase 5: Archive"
 - Current "Phase 5: CODEMAPS Regeneration" → "Phase 6: CODEMAPS Regeneration"
@@ -165,7 +165,7 @@ Update metadata.json example (around line 214):
 - Update error handling table phase references
 
 ### [x] 5.2 Update flag documentation
-**File:** `.claude/skills/conductor/references/finish-workflow.md`
+**File:** `skills/conductor/references/finish-workflow.md`
 
 Update Flags section (lines 18-20):
 ```markdown
@@ -176,7 +176,7 @@ Update Flags section (lines 18-20):
 ```
 
 ### [x] 5.3 Update SKILL.md phase count
-**File:** `.claude/skills/conductor/SKILL.md`
+**File:** `skills/conductor/SKILL.md`
 
 Find "/conductor-finish Workflow" section, update:
 - "Runs 4 phases" → "Runs 6 phases"
@@ -187,12 +187,12 @@ Find "/conductor-finish Workflow" section, update:
 ## Epic 6: Documentation Sync
 
 ### [x] 6.1 Update workflows.md if needed
-**File:** `.claude/skills/conductor/references/workflows.md`
+**File:** `skills/conductor/references/workflows.md`
 
 Search for references to finish phases and update any found.
 
 ### [x] 6.2 Update Full Progress Example
-**File:** `.claude/skills/conductor/references/finish-workflow.md`
+**File:** `skills/conductor/references/finish-workflow.md`
 
 Update example (lines 385-415) to show 6 phases:
 ```
@@ -205,7 +205,7 @@ Phase 6/6: Regenerating CODEMAPS...
 ```
 
 ### [x] 6.3 Update Edge Cases table
-**File:** `.claude/skills/conductor/references/finish-workflow.md`
+**File:** `skills/conductor/references/finish-workflow.md`
 
 Add new edge cases:
 - `--skip-refresh flag` → Skip Phase 4 entirely
@@ -217,7 +217,7 @@ Add new edge cases:
 ## Epic 7: Deprecate /conductor-refresh
 
 ### [x] 7.1 Add Phase 4.4 workflow.md update to finish-workflow.md
-**File:** `.claude/skills/conductor/references/finish-workflow.md`
+**File:** `skills/conductor/references/finish-workflow.md`
 
 Add to Phase 4 section:
 ```markdown
@@ -230,19 +230,19 @@ Add to Phase 4 section:
 ```
 
 ### [x] 7.2 Remove /conductor-refresh from SKILL.md
-**File:** `.claude/skills/conductor/SKILL.md`
+**File:** `skills/conductor/SKILL.md`
 
 - Remove from Slash Commands table
 - Remove from Intent Mapping table
 - Remove "Docs are outdated" / "Sync with codebase" intent
 
 ### [x] 7.3 Remove refresh workflow from workflows.md
-**File:** `.claude/skills/conductor/references/workflows.md`
+**File:** `skills/conductor/references/workflows.md`
 
 - Delete "## Workflow: Refresh" section (lines ~485-600)
 
 ### [x] 7.4 Update proactive behaviors in SKILL.md
-**File:** `.claude/skills/conductor/SKILL.md`
+**File:** `skills/conductor/SKILL.md`
 
 - Remove "suggest `/conductor-refresh`" from stale context behavior
 - Update to suggest running `/conductor-finish --skip-archive` or similar

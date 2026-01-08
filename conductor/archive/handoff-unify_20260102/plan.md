@@ -8,7 +8,7 @@
 - [x] Add defaults
 - [x] Update examples
 
-**File:** `.claude/skills/conductor/references/schemas/metadata.schema.json`
+**File:** `skills/conductor/references/schemas/metadata.schema.json`
 **Lines:** +50
 
 ## Phase 2: Command Definition
@@ -20,7 +20,7 @@
 - [x] Add short description
 - [x] Reference workflow file
 
-**File:** `.claude/skills/conductor/references/commands/handoff.toml` (NEW)
+**File:** `skills/conductor/references/commands/handoff.toml` (NEW)
 **Lines:** ~30
 
 ## Phase 3: Unified Workflow
@@ -54,7 +54,7 @@
 - [x] Document error handling
 - [x] Add examples
 
-**File:** `.claude/skills/conductor/references/workflows/handoff.md` (NEW)
+**File:** `skills/conductor/references/workflows/handoff.md` (NEW)
 **Lines:** ~300
 
 ## Phase 4: Implement Integration
@@ -65,7 +65,7 @@
 - [x] Add progress % calculation and display
 - [x] Update example output
 
-**File:** `.claude/skills/conductor/references/workflows/implement.md`
+**File:** `skills/conductor/references/workflows/implement.md`
 **Lines:** +15
 
 ## Phase 5: Cleanup
@@ -85,7 +85,7 @@
 - [x] Replace `/create_handoff` and `/resume_handoff` with `/conductor-handoff`
 - [x] Update handoff reference path
 
-**File:** `.claude/skills/conductor/SKILL.md`
+**File:** `skills/conductor/SKILL.md`
 **Lines:** ~5
 
 ## Phase 6: Documentation

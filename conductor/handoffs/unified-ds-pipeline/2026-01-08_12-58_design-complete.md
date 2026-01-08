@@ -59,10 +59,10 @@ conductor/tracks/unified-ds-pipeline/
 
 | Task ID | Title | File Scope |
 |---------|-------|------------|
-| `vou1.1` | Create unified-pipeline.md | `.claude/skills/design/references/` |
-| `vou1.3` | Add pipeline to metadata schema | `.claude/skills/conductor/references/schemas/` |
-| `kdn7.1` | Create research-start.md | `.claude/skills/conductor/references/research/hooks/` |
-| `kdn7.2` | Create research-verify.md | `.claude/skills/conductor/references/research/hooks/` |
+| `vou1.1` | Create unified-pipeline.md | `skills/design/references/` |
+| `vou1.3` | Add pipeline to metadata schema | `skills/conductor/references/schemas/` |
+| `kdn7.1` | Create research-start.md | `skills/conductor/references/research/hooks/` |
+| `kdn7.2` | Create research-verify.md | `skills/conductor/references/research/hooks/` |
 
 ## Next Session: `ci`
 

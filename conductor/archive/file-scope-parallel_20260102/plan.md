@@ -68,13 +68,13 @@
 
 ```bash
 # Verify new files created
-ls -la .claude/skills/conductor/references/file-scope-extractor.md
-ls -la .claude/skills/conductor/references/parallel-grouping.md
+ls -la skills/conductor/references/file-scope-extractor.md
+ls -la skills/conductor/references/parallel-grouping.md
 
 # Verify schema updated
-jq '.properties.beads.properties.fileScopes' .claude/skills/conductor/references/schemas/metadata.schema.json
+jq '.properties.beads.properties.fileScopes' skills/conductor/references/schemas/metadata.schema.json
 
 # Verify workflow updated
-grep -n "File Scope Analysis" .claude/skills/conductor/references/workflows/newtrack.md
-grep -n "confirmation prompt" .claude/skills/conductor/references/workflows/implement.md
+grep -n "File Scope Analysis" skills/conductor/references/workflows/newtrack.md
+grep -n "confirmation prompt" skills/conductor/references/workflows/implement.md
 ```

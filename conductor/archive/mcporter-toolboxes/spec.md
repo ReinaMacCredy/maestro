@@ -2,14 +2,14 @@
 
 ## Overview
 
-Add `.claude/toolboxes/` directory for CLI tools generated from MCP servers using MCPorter. Agent Mail is the first conversion.
+Add `toolboxes/` directory for CLI tools generated from MCP servers using MCPorter. Agent Mail is the first conversion.
 
 ## Requirements
 
 ### Functional
 
 1. **Toolboxes Directory**
-   - Create `.claude/toolboxes/` as shared resource
+   - Create `toolboxes/` as shared resource
    - Accessible from all skills
 
 2. **Agent Mail CLI**
@@ -37,7 +37,7 @@ Add `.claude/toolboxes/` directory for CLI tools generated from MCP servers usin
 ### CLI Invocation
 
 ```bash
-.claude/toolboxes/agent-mail.js <tool> [args...]
+toolboxes/agent-mail.js <tool> [args...]
 ```
 
 ### Argument Syntax (MCPorter standard)
@@ -83,7 +83,7 @@ agent-mail.js 'send_message(to: "BlueLake", subject: "Hello")'
 
 ## Acceptance Criteria
 
-1. [ ] `.claude/toolboxes/` directory exists
+1. [ ] `toolboxes/` directory exists
 2. [ ] `mcporter.json` config present with agent-mail definition
 3. [ ] `agent-mail.js` CLI generated and executable
 4. [ ] CLI can send messages when Agent Mail server is running

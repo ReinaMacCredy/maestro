@@ -12,12 +12,12 @@ Hybrid implementation: Foundation phase (pilot beads), then parallel rollout.
 
 ### Epic 0.1: Symlink Setup
 
-- [ ] **0.1.1** Backup `.claude/skills/` contents list
-- [ ] **0.1.2** Delete `.claude/skills/` directory contents
-- [ ] **0.1.3** Create symlink: `.claude/skills/` → `skills/`
-- [ ] **0.1.4** Verify symlink resolves: `ls -la .claude/skills/`
+- [ ] **0.1.1** Backup `skills/` contents list
+- [ ] **0.1.2** Delete `skills/` directory contents
+- [ ] **0.1.3** Create symlink: `skills/` → `skills/`
+- [ ] **0.1.4** Verify symlink resolves: `ls -la skills/`
 
-**Files:** `.claude/skills/`
+**Files:** `skills/`
 
 ---
 
@@ -168,7 +168,7 @@ Hybrid implementation: Foundation phase (pilot beads), then parallel rollout.
 
 | Track | Agent | Epics | File Scope | Depends On |
 |-------|-------|-------|------------|------------|
-| 0 | Main | 0.1 | .claude/skills/ | - |
+| 0 | Main | 0.1 | skills/ | - |
 | 1 | Main | 1.1, 1.2, 1.3 | skill-creator/**, maestro-core/**, beads/ | 0 |
 | A | Worker-A | 2.1, 2.2 | design/**, conductor/ | 1 |
 | B | Worker-B | 2.3 | orchestrator/ | 1 |
@@ -197,7 +197,7 @@ python skills/skill-creator/scripts/quick_validate.py skills/maestro-core
 grep -r "](references/" skills/ | head -20
 
 # Symlink check
-ls -la .claude/skills/
+ls -la skills/
 ```
 
 ---
@@ -206,7 +206,7 @@ ls -la .claude/skills/
 
 If issues found:
 1. Git restore individual SKILL.md files
-2. Symlink can be reverted: `rm .claude/skills && git checkout .claude/skills/`
+2. Symlink can be reverted: `rm .claude/skills && git checkout skills/`
 
 ---
 

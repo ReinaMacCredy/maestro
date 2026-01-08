@@ -96,70 +96,70 @@
         "~/.config/amp/AGENTS.md"
       ],
       "1.2.1": [
-        ".claude/skills/conductor/SKILL.md"
+        "skills/conductor/SKILL.md"
       ],
       "1.2.2": [
-        ".claude/skills/conductor/references/preflight-beads.md"
+        "skills/conductor/references/preflight-beads.md"
       ],
       "1.2.3": [
-        ".claude/skills/conductor/references/workflows/implement.md"
+        "skills/conductor/references/workflows/implement.md"
       ],
       "1.2.4": [
-        ".claude/skills/conductor/references/beads-session.md"
+        "skills/conductor/references/beads-session.md"
       ],
       "1.2.5": [
-        ".claude/skills/conductor/references/beads-integration.md"
+        "skills/conductor/references/beads-integration.md"
       ],
       "1.3.1": [
-        ".claude/skills/orchestrator/SKILL.md"
+        "skills/orchestrator/SKILL.md"
       ],
       "1.3.2": [
-        ".claude/skills/orchestrator/references/preparation.md"
+        "skills/orchestrator/references/preparation.md"
       ],
       "1.3.3": [
-        ".claude/skills/orchestrator/references/monitoring.md"
+        "skills/orchestrator/references/monitoring.md"
       ],
       "1.3.4": [
-        ".claude/skills/orchestrator/references/patterns/graceful-fallback.md"
+        "skills/orchestrator/references/patterns/graceful-fallback.md"
       ],
       "1.3.5": [
-        ".claude/skills/orchestrator/references/worker-prompt.md"
+        "skills/orchestrator/references/worker-prompt.md"
       ],
       "2.1.1": [
-        ".claude/skills/beads/references/workflow.md"
+        "skills/beads/references/workflow.md"
       ],
       "2.1.2": [
-        ".claude/skills/beads/references/WORKFLOWS.md"
+        "skills/beads/references/WORKFLOWS.md"
       ],
       "2.1.3": [
-        ".claude/skills/beads/references/workflow-integration.md"
+        "skills/beads/references/workflow-integration.md"
       ],
       "2.1.4": [
-        ".claude/skills/beads/references/conductor-integration.md"
+        "skills/beads/references/conductor-integration.md"
       ],
       "2.1.5": [
-        ".claude/skills/beads/references/auto-orchestrate.md"
+        "skills/beads/references/auto-orchestrate.md"
       ],
       "2.1.6": [
-        ".claude/skills/beads/references/GIT_INTEGRATION.md"
+        "skills/beads/references/GIT_INTEGRATION.md"
       ],
       "2.1.7": [
-        ".claude/skills/beads/references/CONFIG.md"
+        "skills/beads/references/CONFIG.md"
       ],
       "2.1.8": [
-        ".claude/skills/beads/references/LABELS.md"
+        "skills/beads/references/LABELS.md"
       ],
       "2.1.9": [
-        ".claude/skills/beads/references/BOUNDARIES.md"
+        "skills/beads/references/BOUNDARIES.md"
       ],
       "2.2.1": [
-        ".claude/skills/design/references/session-lifecycle.md"
+        "skills/design/references/session-lifecycle.md"
       ],
       "2.3.1": [
-        ".claude/skills/maestro-core/SKILL.md"
+        "skills/maestro-core/SKILL.md"
       ],
       "2.3.2": [
-        ".claude/skills/maestro-core/references/glossary.md"
+        "skills/maestro-core/references/glossary.md"
       ],
       "3.1.1": [
         "REFERENCE.md"
@@ -201,43 +201,43 @@
         "docs/VILLAGE.md"
       ],
       "4.1.1": [
-        ".claude/skills/conductor/references/remember.md"
+        "skills/conductor/references/remember.md"
       ],
       "4.1.2": [
-        ".claude/skills/conductor/references/pipeline.md"
+        "skills/conductor/references/pipeline.md"
       ],
       "4.1.3": [
-        ".claude/skills/conductor/references/beads-facade.md"
+        "skills/conductor/references/beads-facade.md"
       ],
       "4.1.4": [
-        ".claude/skills/conductor/references/track-init-beads.md"
+        "skills/conductor/references/track-init-beads.md"
       ],
       "4.1.5": [
-        ".claude/skills/conductor/references/decompose-task.md"
+        "skills/conductor/references/decompose-task.md"
       ],
       "4.1.6": [
-        ".claude/skills/conductor/references/doc-sync/integration.md"
+        "skills/conductor/references/doc-sync/integration.md"
       ],
       "4.2.1": [
-        ".claude/skills/conductor/references/validation/lifecycle.md"
+        "skills/conductor/references/validation/lifecycle.md"
       ],
       "4.2.2": [
-        ".claude/skills/conductor/references/validation/beads/checks.md"
+        "skills/conductor/references/validation/beads/checks.md"
       ],
       "4.3.1": [
-        ".claude/skills/writing-skills/references/skill-structure.md"
+        "skills/writing-skills/references/skill-structure.md"
       ],
       "4.4.1": [
-        ".claude/skills/orchestrator/references/examples/dispatch-three-agents.md"
+        "skills/orchestrator/references/examples/dispatch-three-agents.md"
       ],
       "4.4.2": [
-        ".claude/skills/orchestrator/references/patterns/parallel-dispatch.md"
+        "skills/orchestrator/references/patterns/parallel-dispatch.md"
       ],
       "4.4.3": [
-        ".claude/skills/orchestrator/references/architecture.md"
+        "skills/orchestrator/references/architecture.md"
       ],
       "4.4.4": [
-        ".claude/skills/orchestrator/references/preflight.md"
+        "skills/orchestrator/references/preflight.md"
       ],
       "4.5.1": [
         "templates/workflow.md"
@@ -246,7 +246,7 @@
         "templates/SETUP.md"
       ],
       "4.6.1": [
-        ".claude/skills/beads/references/FILE_BEADS.md"
+        "skills/beads/references/FILE_BEADS.md"
       ]
     },
     "orchestrated": true

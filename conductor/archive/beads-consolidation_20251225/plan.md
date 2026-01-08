@@ -83,11 +83,11 @@ Issue tracking for multi-session work with dependency graphs.
 ### Task 3.2: Delete skills/review-beads/
 - [ ] `rm -rf skills/review-beads/`
 
-### Task 3.3: Delete .claude/skills/file-beads/
-- [ ] `rm -rf .claude/skills/file-beads/`
+### Task 3.3: Delete skills/file-beads/
+- [ ] `rm -rf skills/file-beads/`
 
-### Task 3.4: Delete .claude/skills/review-beads/
-- [ ] `rm -rf .claude/skills/review-beads/`
+### Task 3.4: Delete skills/review-beads/
+- [ ] `rm -rf skills/review-beads/`
 
 **Verification:** `ls skills/ | grep -E "file-beads|review-beads"` returns empty
 

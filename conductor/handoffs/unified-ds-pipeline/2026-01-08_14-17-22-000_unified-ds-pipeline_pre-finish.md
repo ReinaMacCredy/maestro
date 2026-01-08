@@ -11,21 +11,21 @@ Successfully implemented the **Unified DS Pipeline** - merging the Design Sessio
 ## Changes Made
 
 ### New Files Created
-1. **`.claude/skills/design/references/unified-pipeline.md`** - Main pipeline documentation with 8-phase model
-2. **`.claude/skills/conductor/references/research/hooks/research-start.md`** - Consolidated research hook for Phase 1
-3. **`.claude/skills/conductor/references/research/hooks/research-verify.md`** - Consolidated research hook for Phase 3→4
+1. **`skills/design/references/unified-pipeline.md`** - Main pipeline documentation with 8-phase model
+2. **`skills/conductor/references/research/hooks/research-start.md`** - Consolidated research hook for Phase 1
+3. **`skills/conductor/references/research/hooks/research-verify.md`** - Consolidated research hook for Phase 3→4
 
 ### Files Updated
-1. **`.claude/skills/design/SKILL.md`** - Updated to 8-phase model, pl as alias
-2. **`.claude/skills/design/references/apc-checkpoints.md`** - Updated checkpoint locations for phases 1-4
-3. **`.claude/skills/conductor/references/research/protocol.md`** - Updated research protocol
-4. **`.claude/skills/conductor/references/schemas/metadata.schema.json`** - Added `pipeline` section
+1. **`skills/design/SKILL.md`** - Updated to 8-phase model, pl as alias
+2. **`skills/design/references/apc-checkpoints.md`** - Updated checkpoint locations for phases 1-4
+3. **`skills/conductor/references/research/protocol.md`** - Updated research protocol
+4. **`skills/conductor/references/schemas/metadata.schema.json`** - Added `pipeline` section
 
 ### Deprecations Applied
-1. **`.claude/skills/design/references/double-diamond.md`** - Redirects to unified-pipeline.md
-2. **`.claude/skills/design/references/planning/pipeline.md`** - Redirects to unified-pipeline.md
-3. **`.claude/skills/conductor/references/research/hooks/discover-hook.md`** - Deprecated
-4. **`.claude/skills/conductor/references/research/hooks/grounding-hook.md`** - Deprecated
+1. **`skills/design/references/double-diamond.md`** - Redirects to unified-pipeline.md
+2. **`skills/design/references/planning/pipeline.md`** - Redirects to unified-pipeline.md
+3. **`skills/conductor/references/research/hooks/discover-hook.md`** - Deprecated
+4. **`skills/conductor/references/research/hooks/grounding-hook.md`** - Deprecated
 
 ## Key Decisions
 

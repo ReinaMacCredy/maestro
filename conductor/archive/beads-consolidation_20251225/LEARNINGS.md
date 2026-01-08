@@ -5,11 +5,11 @@
 ## Commands
 
 - `tail -n +N file` - Strip first N-1 lines (useful for removing YAML frontmatter)
-- `rm -rf skills/X .claude/skills/X` - Delete both hard-linked paths when removing skills
+- `rm -rf skills/X skills/X` - Delete both hard-linked paths when removing skills
 
 ## Gotchas
 
-- `skills/` and `.claude/skills/` are hard-linked (same inode) - updating one updates both, but delete both for cleanliness
+- `skills/` and `skills/` are hard-linked (same inode) - updating one updates both, but delete both for cleanliness
 - Thin skill stubs must include keyword-rich descriptions for AI trigger matching
 - When moving reference files, strip YAML frontmatter to avoid duplicate metadata
 

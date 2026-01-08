@@ -346,7 +346,7 @@ Phase 8: READY
        │   │   description="Track A: BlueLake",  │
        │   │   prompt="""                        │
        │   │   Agent: BlueLake                   │
-       │   │   File scope: .claude/skills/...   │
+       │   │   File scope: skills/...   │
        │   │   Beads: vou1.1 → vou1.2 → vou1.4  │
        │   │   Execute in order, TDD mode.      │
        │   │   Report via Agent Mail.           │
@@ -393,16 +393,16 @@ Oracle audit APPROVED. Ready to auto-generate:
 
 | File | Change |
 |------|--------|
-| `.claude/skills/design/SKILL.md` | Update to 8-phase model, remove pl reference |
-| `.claude/skills/design/references/unified-pipeline.md` | NEW - main pipeline doc |
-| `.claude/skills/design/references/double-diamond.md` | Deprecate, redirect to unified |
-| `.claude/skills/design/references/planning/pipeline.md` | Deprecate, redirect to unified |
-| `.claude/skills/design/references/session-init.md` | Update to INIT preflight |
-| `.claude/skills/design/references/apc-checkpoints.md` | Update checkpoint locations |
-| `.claude/skills/conductor/references/research/hooks/research-start.md` | NEW - merged hook |
-| `.claude/skills/conductor/references/research/hooks/research-verify.md` | NEW - merged hook |
-| `.claude/skills/maestro-core/SKILL.md` | Update routing table |
-| `.claude/skills/conductor/references/schemas/metadata.schema.json` | Add `pipeline` section |
+| `skills/design/SKILL.md` | Update to 8-phase model, remove pl reference |
+| `skills/design/references/unified-pipeline.md` | NEW - main pipeline doc |
+| `skills/design/references/double-diamond.md` | Deprecate, redirect to unified |
+| `skills/design/references/planning/pipeline.md` | Deprecate, redirect to unified |
+| `skills/design/references/session-init.md` | Update to INIT preflight |
+| `skills/design/references/apc-checkpoints.md` | Update checkpoint locations |
+| `skills/conductor/references/research/hooks/research-start.md` | NEW - merged hook |
+| `skills/conductor/references/research/hooks/research-verify.md` | NEW - merged hook |
+| `skills/maestro-core/SKILL.md` | Update routing table |
+| `skills/conductor/references/schemas/metadata.schema.json` | Add `pipeline` section |
 
 ## 6. Acceptance Criteria
 

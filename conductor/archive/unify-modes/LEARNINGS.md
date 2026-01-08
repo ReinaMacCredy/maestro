@@ -13,7 +13,7 @@
 
 - **Agent Mail HALT policy:** After removing Village, Agent Mail unavailable = HALT (no fallback to sequential). This is intentional - coordination is required for parallel execution.
 - **Legitimate multi-agent references:** References to "multi-agent" in architecture docs describe orchestrator's parallel capability, not the deprecated SA/MA mode distinction. Don't remove these.
-- **Link validation with symlinks:** `skills/` and `.claude/skills/` are symlinked. Use `.claude/skills/` path in documentation for consistency.
+- **Link validation with symlinks:** `skills/` and `skills/` are symlinked. Use `skills/` path in documentation for consistency.
 - **bv commands removed:** All `bv --robot-*` commands replaced with `bd` CLI equivalents (`bd ready --json`, `bd list`, etc.)
 - **Village SKILL references cleanup:** When removing Village, also remove Village-related integration points from beads SKILL.md references.
 
