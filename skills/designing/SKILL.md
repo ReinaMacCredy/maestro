@@ -1,26 +1,26 @@
 ---
 name: designing
-description: Design Session - collaborative brainstorming to turn ideas into actionable implementation plans using the Unified Pipeline methodology. Use when user types "ds" or wants to explore/design a feature before implementation. "pl" triggers phases 5-8 (STANDALONE/ALIAS/NO-OP modes). MUST load maestro-core skill first for routing.
+description: Design Session - collaborative brainstorming to turn ideas into actionable implementation plans using the Unified Pipeline methodology. Use when user types "ds" or wants to explore/design a feature before implementation. "pl" triggers phases 5-10 (STANDALONE/ALIAS/NO-OP modes). MUST load maestro-core skill first for routing.
 ---
 
 # Design & Planning
 
-Turn ideas into fully-formed, implementation-ready designs through a unified 8-phase pipeline.
+Turn ideas into fully-formed, implementation-ready designs through a unified 10-phase pipeline.
 
 ## Entry Points
 
 | Trigger | Action |
 |---------|--------|
-| `ds` | Start unified pipeline (all 8 phases) |
+| `ds` | Start unified pipeline (all 10 phases) |
 | `/conductor-design` | Start unified pipeline (alias) |
 | `cn`, `/conductor-newtrack` | Create spec + plan + beads from existing design.md |
-| `pl`, `/plan` | Planning phases (5-8) - see pl Entry Modes below |
+| `pl`, `/plan` | Planning phases (5-10) - see pl Entry Modes below |
 | "design a feature" | Start unified pipeline |
 | "let's think through X" | Start unified pipeline |
 
 ## Quick Reference
 
-### Unified Pipeline (8 Phases)
+### Unified Pipeline (10 Phases)
 
 | # | Phase | Type | Purpose | Exit Criteria |
 |---|-------|------|---------|---------------|
@@ -32,6 +32,8 @@ Turn ideas into fully-formed, implementation-ready designs through a unified 8-p
 | 6 | **VALIDATE** | Execute | Dependency check (bv) + Oracle review | Dependencies valid |
 | 7 | **ASSIGN** | Execute | Track assignments | Tracks assigned |
 | 8 | **READY** | Complete | Handoff to ci/orchestrate | Execution ready |
+| 9 | **EXECUTE** | Implement | Run ci/orchestrate on tracks | All beads completed |
+| 10 | **FINISH** | Archive | Extract learnings + archive track | Track archived |
 
 See [pipeline.md](references/pipeline.md) for full details.
 
@@ -41,15 +43,15 @@ Complexity scoring determines execution mode:
 
 | Score | Mode | Phases | A/P/C | Research |
 |-------|------|--------|-------|----------|
-| < 4 | **SPEED** | 1,2,4,READY | No | 1 hook (start) |
+| < 4 | **SPEED** | 1,2,4,8 | No | 1 hook (start) |
 | 4-6 | **ASK** | User chooses | Optional | User chooses |
-| > 6 | **FULL** | 1-8 | Yes | 2 hooks |
+| > 6 | **FULL** | 1-10 | Yes | 2 hooks |
 
 ### Mode Comparison
 
 | Aspect | SPEED (< 4) | FULL (> 6) |
 |--------|-------------|------------|
-| Phases | 1,2,4,8 | All 8 |
+| Phases | 1,2,4,8 | All 10 |
 | A/P/C | No | Yes |
 | Research | 1 hook | 2 hooks |
 | Beads | No | Yes |
@@ -82,9 +84,9 @@ See [pipeline.md](references/pipeline.md) for all execution blocks.
 1. **Initialize** - Load handoffs, CODEMAPS, verify conductor setup → [session-init.md](references/session-init.md)
 2. **Research** - ⛔ EXECUTION BLOCK at Phase 1 start (spawn 3 Task() agents)
 3. **Route** - Score complexity (< 4 = SPEED, > 6 = FULL) → [design-routing-heuristics.md](references/design-routing-heuristics.md)
-4. **Execute** - 8-phase pipeline with A/P/C checkpoints → [pipeline.md](references/pipeline.md)
+4. **Execute** - 10-phase pipeline with A/P/C checkpoints → [pipeline.md](references/pipeline.md)
 5. **Validate** - ⛔ EXECUTION BLOCK at Phase 4 (call oracle())
-6. **Complete** - Phase 8 auto-orchestration or manual `ci`
+6. **Complete** - Phase 8 (READY) triggers `ci`/`co` → Phase 9 (EXECUTE) → Phase 10 (FINISH)
 
 ### Research Hooks (Consolidated)
 
@@ -100,7 +102,7 @@ See [pipeline.md](references/pipeline.md) for all execution blocks.
 | CP1 (DISCOVER) | Product alignment, no duplicate features | WARN |
 | CP2 (DEFINE) | Problem clear, success measurable, scope explicit | WARN |
 | CP3 (DEVELOP) | 3+ options, tech-stack alignment, risk analysis | WARN |
-| CP4 (DELIVER) | Full validation + grounding + impact scan | SPEED=WARN, FULL=HALT |
+| CP4 (VERIFY) | Full validation + grounding + impact scan | SPEED=WARN, FULL=HALT |
 
 ## Adaptive A/P/C System
 
@@ -117,7 +119,7 @@ INLINE → MICRO_APC → NUDGE → DS_FULL → DS_BRANCH → BRANCH_MERGE
 | **INLINE** | Normal flow (conductor/beads) | Default |
 | **MICRO_APC** | Lightweight checkpoint at boundaries | End of spec/plan section |
 | **NUDGE** | Suggest upgrade to DS | 3+ design iterations |
-| **DS_FULL** | Full 8-phase with A/P/C | `ds` command or upgrade |
+| **DS_FULL** | Full 10-phase with A/P/C | `ds` command or upgrade |
 | **DS_BRANCH** | DS attached to design branch | Design rethink in track |
 | **BRANCH_MERGE** | Apply branch changes | Branch complete |
 
@@ -214,10 +216,10 @@ Input detection (priority order):
 
 | Input Source | Mode | Action |
 |--------------|------|--------|
-| design.md | ALIAS | Skip Phase 5, run 6-8 |
-| PRD file | STANDALONE | Parse PRD, run 5-8 |
-| User file | STANDALONE | Use as context, run 5-8 |
-| None | BOOTSTRAP | Prompt → create track → run 5-8 |
+| design.md | ALIAS | Skip Phase 5, run 6-10 |
+| PRD file | STANDALONE | Parse PRD, run 5-10 |
+| User file | STANDALONE | Use as context, run 5-10 |
+| None | BOOTSTRAP | Prompt → create track → run 5-10 |
 
 **BOOTSTRAP creates:** `conductor/tracks/<id>/` with design.md + metadata.json
 
@@ -225,10 +227,10 @@ Input detection (priority order):
 
 | Scenario | Mode | Behavior |
 |----------|------|----------|
-| `pl` after `ds` Phase 4 | NO-OP | Not needed - phases 5-8 auto-run in FULL mode |
-| `pl` with design.md | ALIAS | Skip Phase 5 discovery, run 6-8 |
-| `pl` with PRD file | STANDALONE | Parse PRD, run full 5-8 |
-| `pl` with user request | STANDALONE | Run full discovery, phases 5-8 |
+| `pl` after `ds` Phase 4 | NO-OP | Not needed - phases 5-10 auto-run in FULL mode |
+| `pl` with design.md | ALIAS | Skip Phase 5 discovery, run 6-10 |
+| `pl` with PRD file | STANDALONE | Parse PRD, run full 5-10 |
+| `pl` with user request | STANDALONE | Run full discovery, phases 5-10 |
 | `pl` without any input | ERROR | Prompt for input source |
 
 ## Anti-Patterns
@@ -239,12 +241,13 @@ Input detection (priority order):
 - ❌ Over-engineering simple features (use SPEED mode)
 - ❌ Running `pl` after `ds` completes (no longer needed)
 
-## Next Steps (after Phase 8)
+## Next Steps (after Phase 8: READY)
 
-| Command | Description |
-|---------|-------------|
-| `ci` | `/conductor-implement` - Execute track |
-| `co` | `/conductor-orchestrate` - Spawn parallel workers |
+| Command | Description | Phase |
+|---------|-------------|-------|
+| `ci` | `/conductor-implement` - Execute track | Phase 9 (EXECUTE) |
+| `co` | `/conductor-orchestrate` - Spawn parallel workers | Phase 9 (EXECUTE) |
+| `/conductor-finish` | Archive track + extract learnings | Phase 10 (FINISH) |
 
 See [maestro-core](../maestro-core/SKILL.md) for full routing table.
 
@@ -256,4 +259,4 @@ See [maestro-core](../maestro-core/SKILL.md) for full routing table.
 
 - [conductor](../conductor/SKILL.md) - Track creation and implementation
 - [tracking](../tracking/SKILL.md) - Issue tracking after design
-- [orchestrator](../orchestrator/SKILL.md) - Parallel execution in Phase 8
+- [orchestrator](../orchestrator/SKILL.md) - Parallel execution in Phase 9 (EXECUTE)

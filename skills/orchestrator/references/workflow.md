@@ -1,6 +1,6 @@
 # Orchestrator Workflow
 
-8-phase protocol for multi-agent parallel execution.
+8-phase orchestrator protocol for multi-agent parallel execution.
 
 ## Phase 0: Preflight (Session Brain)
 

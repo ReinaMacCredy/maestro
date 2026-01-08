@@ -2,7 +2,7 @@
 
 ## Role
 
-Perform 6-dimension design audit at CP4 (DELIVER) checkpoint. Validates designs before implementation.
+Perform 6-dimension design audit at CP4 (VERIFY) checkpoint. Validates designs before implementation.
 
 ## Prompt Template
 
@@ -90,7 +90,7 @@ Analyze the design against these 6 dimensions:
 
 ### When to Spawn
 
-- At CP4 (DELIVER) checkpoint in design sessions
+- At CP4 (VERIFY) checkpoint in design sessions
 - Platform detection determines invocation method
 
 ### Platform Detection

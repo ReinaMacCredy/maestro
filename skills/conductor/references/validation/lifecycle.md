@@ -14,18 +14,18 @@ Gate routing and metadata.json integration for the 5 validation gates.
 
 ### Design Gate: Per-Checkpoint Validation
 
-The design gate runs **progressively at each checkpoint**, not just at DELIVER:
+The design gate runs **progressively at each checkpoint**, not just at VERIFY:
 
 | Checkpoint | Phase | Checks | Enforcement |
 |------------|-------|--------|-------------|
 | CP1 | DISCOVER | Product alignment, no duplicate features | WARN |
 | CP2 | DEFINE | Problem clear, success measurable, scope explicit | WARN |
 | CP3 | DEVELOP | 3+ options, tech-stack alignment, risk analysis | WARN |
-| CP4 | DELIVER | Full validation + grounding + impact scan + **Oracle audit** | HALT |
+| CP4 | VERIFY | Full validation + grounding + impact scan + **Oracle audit** | HALT |
 
 ### Oracle Audit at CP4
 
-At CP4 (DELIVER), an **Oracle audit runs automatically** before the A/P/C menu:
+At CP4 (VERIFY), an **Oracle audit runs automatically** before the A/P/C menu:
 
 **Platform Detection:**
 - **Amp**: Uses built-in `oracle(task=..., files=[...])` tool
@@ -146,7 +146,7 @@ Override validation behavior with flags:
 → CP1 (DISCOVER): Load validate-design.md (DISCOVER checks)
 → CP2 (DEFINE): Load validate-design.md (DEFINE checks)
 → CP3 (DEVELOP): Load validate-design.md (DEVELOP checks) + spawn research agents
-→ CP4 (DELIVER): Load validate-design.md (FULL checks) + grounding + impact scan
+→ CP4 (VERIFY): Load validate-design.md (FULL checks) + grounding + impact scan
 → Update metadata.json validation state at each checkpoint
 → WARN at CP1-3, HALT at CP4
 ```
@@ -155,7 +155,7 @@ Override validation behavior with flags:
 ```
 → Session start: discover-hook (Locator + Pattern + CODEMAPS)
 → CP3 (DEVELOP): grounding-hook (Locator + Analyzer + Pattern)
-→ CP4 (DELIVER): Full grounding + impact scan
+→ CP4 (VERIFY): Full grounding + impact scan
 ```
 
 ### 2. Track Creation (/conductor-newtrack)

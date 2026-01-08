@@ -29,7 +29,7 @@ Key terms for Maestro workflow.
 | DISCOVER | Diverge | Explore problem space |
 | DEFINE | Converge | Frame the problem |
 | DEVELOP | Diverge | Explore solutions |
-| DELIVER | Converge | Finalize design |
+| VERIFY | Converge | Finalize design |
 
 ## A/P/C Checkpoints
 

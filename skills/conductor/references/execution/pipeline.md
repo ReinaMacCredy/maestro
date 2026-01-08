@@ -14,7 +14,7 @@ flowchart TB
             DISCOVER["DISCOVER"]
             DEFINE["DEFINE"]
             DEVELOP["DEVELOP"]
-            DELIVER["DELIVER"]
+            VERIFY["VERIFY"]
             APC{{"A/P/C"}}
             DESIGND["design.md"]
         end
@@ -63,7 +63,7 @@ flowchart TB
         OUTCOMES{{"PASS / HALT / Auto-repair"}}
     end
 
-    DS --> DISCOVER --> DEFINE --> DEVELOP --> DELIVER --> APC
+    DS --> DISCOVER --> DEFINE --> DEVELOP --> VERIFY --> APC
     APC -->|"C"| DESIGND
     APC -->|"P"| BMAD
     BMAD --> APC

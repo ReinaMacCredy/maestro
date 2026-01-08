@@ -146,7 +146,7 @@ Summarized here for orchestrator reference:
 | 1. Problem Statement | DISCOVER phase | Discovery phase |
 | 2. Discovery | DISCOVER + research | Discovery phase (parallel agents) |
 | 3. Approach | DEFINE phase | Synthesis phase (Oracle) |
-| 4. Design | DEVELOP + DELIVER | From approach decisions |
+| 4. Design | DEVELOP + VERIFY | From approach decisions |
 | 5. Spike Results | Optional | Required for HIGH risk |
 | 6. Track Planning | Optional | Required for parallel execution |
 

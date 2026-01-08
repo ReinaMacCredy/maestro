@@ -16,7 +16,7 @@ type DesignSupportState =
   | 'BRANCH_MERGE';
 
 type DesignMode = 'SPEED' | 'FULL';
-type DSPhase = 'DISCOVER' | 'DEFINE' | 'DEVELOP' | 'DELIVER';
+type DSPhase = 'DISCOVER' | 'DEFINE' | 'DEVELOP' | 'VERIFY';
 type Checkpoint = 'CP1' | 'CP2' | 'CP3' | 'CP4';
 type APCChoice = 'A' | 'P' | 'C' | 'BACK';
 type MergeStrategy = 'overwrite' | 'new_track' | 'document_only';
@@ -562,13 +562,13 @@ function handleBranchMergeState(ctx: ConversationContext, event: Event, topicId:
 // =============================================================================
 
 function getNextPhase(current: DSPhase): DSPhase | null {
-  const order: DSPhase[] = ['DISCOVER', 'DEFINE', 'DEVELOP', 'DELIVER'];
+  const order: DSPhase[] = ['DISCOVER', 'DEFINE', 'DEVELOP', 'VERIFY'];
   const idx = order.indexOf(current);
   return idx < order.length - 1 ? order[idx + 1] : null;
 }
 
 function getPrevPhase(current: DSPhase): DSPhase | null {
-  const order: DSPhase[] = ['DISCOVER', 'DEFINE', 'DEVELOP', 'DELIVER'];
+  const order: DSPhase[] = ['DISCOVER', 'DEFINE', 'DEVELOP', 'VERIFY'];
   const idx = order.indexOf(current);
   return idx > 0 ? order[idx - 1] : null;
 }
@@ -689,7 +689,7 @@ function getAdvancedDescription(phase: DSPhase): string {
     case 'DISCOVER': return 'challenge assumptions, explore edge cases';
     case 'DEFINE': return 'stress-test problem definition';
     case 'DEVELOP': return 'deep dive on solution alternatives';
-    case 'DELIVER': return 'Oracle audit before finalizing';
+    case 'VERIFY': return 'Oracle audit before finalizing';
   }
 }
 

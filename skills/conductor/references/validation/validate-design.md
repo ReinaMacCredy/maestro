@@ -14,7 +14,7 @@ Validates design decisions progressively at each checkpoint. **Run subset of che
 | CP1 (DISCOVER) | Product alignment only | WARN |
 | CP2 (DEFINE) | Problem clarity, success criteria | WARN |
 | CP3 (DEVELOP) | Tech-stack compliance, pattern consistency | WARN |
-| CP4 (DELIVER) | ALL checks (full validation) | SPEED=WARN, FULL=HALT |
+| CP4 (VERIFY) | ALL checks (full validation) | SPEED=WARN, FULL=HALT |
 
 ### CP1: DISCOVER Validation
 
@@ -39,7 +39,7 @@ Run **Tech-Stack + Pattern Checks**:
 - [ ] Risk/effort analysis complete
 - [ ] Architecture fits existing patterns
 
-### CP4: DELIVER Validation (Full Gate)
+### CP4: VERIFY Validation (Full Gate)
 
 Run **ALL checks** from sections below, plus research verification.
 

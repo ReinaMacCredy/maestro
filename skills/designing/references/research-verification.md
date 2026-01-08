@@ -8,7 +8,7 @@ Research verification uses **parallel sub-agents** at specific trigger points (n
 |---------------|--------|-------------|
 | Session start (before DISCOVER) | Locator + Pattern + CODEMAPS | Advisory ⚠️ |
 | CP3 (DEVELOP) | Locator + Analyzer + Pattern | Gatekeeper 🚫 |
-| CP4 (DELIVER) | All 5 + Impact scan | Mandatory 🔒 |
+| CP4 (VERIFY) | All 5 + Impact scan | Mandatory 🔒 |
 
 **Note:** Research does NOT run at every phase transition. Only at session start, CP3, and CP4.
 
@@ -58,7 +58,7 @@ This provides context for the entire design session.
 6. **HALT if not run** - show verification required prompt
 7. On skip: Display warning banner, log for audit, proceed
 
-## CP4 (DELIVER) Full Verification
+## CP4 (VERIFY) Full Verification
 
 **Mandatory enforcement (🔒):**
 
@@ -82,7 +82,7 @@ Track verification completion in session memory:
 {
   "session_start": { "completed": true, "confidence": "HIGH", "timestamp": "..." },
   "CP3_DEVELOP": { "completed": true, "confidence": "MEDIUM", "timestamp": "..." },
-  "CP4_DELIVER": null
+  "CP4_VERIFY": null
 }
 ```
 
@@ -95,7 +95,7 @@ In addition to research, validation runs at EVERY checkpoint (CP1-4):
 | CP1 (DISCOVER) | Product alignment, no duplicate features | WARN |
 | CP2 (DEFINE) | Problem clear, success measurable, scope explicit | WARN |
 | CP3 (DEVELOP) | 3+ options, tech-stack alignment, risk analysis | WARN |
-| CP4 (DELIVER) | Full validation + grounding + impact scan | SPEED=WARN, FULL=HALT |
+| CP4 (VERIFY) | Full validation + grounding + impact scan | SPEED=WARN, FULL=HALT |
 
 ### Validation Gate Summary
 
@@ -104,7 +104,7 @@ In addition to research, validation runs at EVERY checkpoint (CP1-4):
 | CP1 (DISCOVER) | Product alignment | No duplicate features |
 | CP2 (DEFINE) | Problem clarity | Success measurable, scope explicit |
 | CP3 (DEVELOP) | Tech-stack alignment | 3+ options, risk analysis done |
-| CP4 (DELIVER) | Full validation | All prior gates + grounding + impact scan |
+| CP4 (VERIFY) | Full validation | All prior gates + grounding + impact scan |
 
 ## Documentation
 

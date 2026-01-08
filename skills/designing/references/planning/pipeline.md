@@ -1,8 +1,8 @@
-# Planning Pipeline (Phases 5-8)
+# Planning Pipeline (Phases 5-10)
 
-> **4-phase automated pipeline from validated design to execution-ready state.**
+> **6-phase automated pipeline from validated design through track completion.**
 
-The `pl` trigger runs phases 5-8 with flexible input sources.
+The `pl` trigger runs phases 5-10 with flexible input sources.
 
 ## ⚠️ MANDATORY: Input Detection & Track Bootstrap
 
@@ -31,7 +31,7 @@ mode, input_file = detect_pl_input()
 if mode == "BOOTSTRAP":
     # Prompt user for planning context
     print("""
-    📋 Planning Pipeline (phases 5-8)
+    📋 Planning Pipeline (phases 5-10)
     
     What do you want to plan?
     
@@ -105,13 +105,13 @@ def create_track_artifacts(track_id, user_description):
 
 ```
 ALIAS mode (design.md exists):
-  Phase 5 → Phase 6 → Phase 7 → Phase 8
+  Phase 5 → Phase 6 → Phase 7 → Phase 8 → Phase 9 → Phase 10
 
 STANDALONE mode (PRD exists):
-  Phase 5 → Phase 6 → Phase 7 → Phase 8
+  Phase 5 → Phase 6 → Phase 7 → Phase 8 → Phase 9 → Phase 10
 
 BOOTSTRAP mode (no input):
-  Prompt → Create artifacts → Phase 5 → Phase 6 → Phase 7 → Phase 8
+  Prompt → Create artifacts → Phase 5 → Phase 6 → Phase 7 → Phase 8 → Phase 9 → Phase 10
 ```
 
 **Anti-pattern:** Do NOT skip input detection. Always validate or bootstrap before Phase 5.
@@ -120,7 +120,7 @@ BOOTSTRAP mode (no input):
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────────────┐
-│                           PLANNING PIPELINE (4 PHASES)                                   │
+│                           PLANNING PIPELINE (6 PHASES)                                   │
 ├──────────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                          │
 │       ┌───────────────┐     ┌───────────────┐     ┌───────────────┐     ┌───────────────┐│
@@ -131,6 +131,15 @@ BOOTSTRAP mode (no input):
 │               │                     │                     │                     │        │
 │         fb (file beads)       bv + Oracle           track planning        [O]/[S] prompt │
 │         embed learnings       dependency check      plan.md generation                   │
+│                                                                                          │
+│       ┌───────────────┐     ┌───────────────┐                                            │
+│       │   EXECUTE     │ ──► │    FINISH     │                                            │
+│       │   (Phase 9)   │     │  (Phase 10)   │                                            │
+│       │      ⚙️       │     │      📁       │                                            │
+│       └───────┬───────┘     └───────┬───────┘                                            │
+│               │                     │                                                    │
+│         ci/co (TDD)         /conductor-finish                                            │
+│         implement beads     archive + learnings                                          │
 │                                                                                          │
 └──────────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -318,6 +327,8 @@ Default: [O] after 30s
 | VALIDATE | `bv --robot-*`, Oracle |
 | ASSIGN | `bv --robot-plan` |
 | READY | None (prompt only) |
+| EXECUTE | `ci`, `co`, `bd update/close` |
+| FINISH | `/conductor-finish`, `bd sync` |
 
 ---
 
@@ -329,17 +340,19 @@ Default: [O] after 30s
 | VALIDATE | 30s | HALT (validation required) |
 | ASSIGN | None | Manual assignment |
 | READY | None | N/A |
+| EXECUTE | None | Manual `ci` per track |
+| FINISH | None | Manual archive |
 
 ---
 
 ## State Transitions
 
 ```
-DECOMPOSE ──► VALIDATE ──► ASSIGN ──► READY
-    │             │           │          │
-    ▼             ▼           ▼          ▼
-  beads       validated    tracks     [O]/[S]
-  filed        beads      assigned    prompt
+DECOMPOSE ──► VALIDATE ──► ASSIGN ──► READY ──► EXECUTE ──► FINISH
+    │             │           │          │          │          │
+    ▼             ▼           ▼          ▼          ▼          ▼
+  beads       validated    tracks     [O]/[S]    beads      track
+  filed        beads      assigned    prompt    completed   archived
 ```
 
 ### metadata.json Tracking
@@ -347,8 +360,8 @@ DECOMPOSE ──► VALIDATE ──► ASSIGN ──► READY
 ```json
 {
   "planning": {
-    "state": "ready",
-    "phases_completed": ["decompose", "validate", "assign", "ready"],
+    "state": "finish",
+    "phases_completed": ["decompose", "validate", "assign", "ready", "execute", "finish"],
     "spikes": [
       {
         "id": "spike-001",
@@ -369,6 +382,6 @@ DECOMPOSE ──► VALIDATE ──► ASSIGN ──► READY
 |------|---------|
 | [spikes.md](spikes.md) | Detailed spike workflow |
 | [design-template.md](design-template.md) | Unified design.md template |
-| [../pipeline.md](../pipeline.md) | Full 8-phase DS+PL pipeline |
+| [../pipeline.md](../pipeline.md) | Full 10-phase DS+PL pipeline |
 | [../../conductor/SKILL.md](../../conductor/SKILL.md) | Track execution |
 | [../../orchestrator/SKILL.md](../../orchestrator/SKILL.md) | Parallel dispatch |

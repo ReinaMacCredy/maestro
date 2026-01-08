@@ -80,7 +80,7 @@ skills/orchestrator/
 │   ├── execution/     # Implementer, Modifier, Fixer, Refactorer
 │   └── debug/         # Debugger, Tracer
 ├── references/        # Workflow documentation
-│   ├── workflow.md    # 8-phase protocol
+│   ├── workflow.md    # 8-phase orchestrator protocol
 │   ├── preflight.md   # Session Brain preflight
 │   ├── worker-prompt.md
 │   └── patterns/

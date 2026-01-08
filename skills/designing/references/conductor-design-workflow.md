@@ -90,12 +90,12 @@ Research and validation run at **specific trigger points**, not at every phase t
 | CP1 (DISCOVER) | - | WARN (product alignment) |
 | CP2 (DEFINE) | - | WARN (problem clarity) |
 | CP3 (DEVELOP) | grounding-hook (Locator + Analyzer + Pattern) | WARN (tech-stack) |
-| CP4 (DELIVER) | Full + impact scan | SPEED=WARN, FULL=HALT |
+| CP4 (VERIFY) | Full + impact scan | SPEED=WARN, FULL=HALT |
 
 > **Note:** Research does NOT run at DISCOVER→DEFINE or DEFINE→DEVELOP transitions.
 > Validation runs at every checkpoint (CP1-4), research only at session start, CP3, and CP4.
 
-### Full Research Verification at DELIVER (Required)
+### Full Research Verification at VERIFY (Required)
 
 Before finalizing, the system automatically:
 
@@ -115,9 +115,9 @@ Before finalizing, the system automatically:
 | Action | When |
 |--------|------|
 | `PROCEED` | Research passed |
-| `RUN_RESEARCH` | Research skipped at DEVELOP→DELIVER |
+| `RUN_RESEARCH` | Research skipped at DEVELOP→VERIFY |
 | `MANUAL_VERIFY` | All sources failed |
-| `RETRY_RESEARCH` | Low confidence at DELIVER→Complete |
+| `RETRY_RESEARCH` | Low confidence at VERIFY→Complete |
 
 **If blocked (Mandatory enforcement):**
 ```

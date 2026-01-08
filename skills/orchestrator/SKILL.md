@@ -53,7 +53,7 @@ See [implement.md Phase 2b](../conductor/references/workflows/implement.md) for 
 | Track threads | `agent-mail.js summarize-thread` |
 | Auto-routing | Auto-detect parallel via `metadata.json.beads` |
 
-## 8-Phase Workflow
+## 8-Phase Orchestrator Protocol
 
 0. **Preflight** - Session identity, detect active sessions
 1. **Read Plan** - Parse Track Assignments from plan.md

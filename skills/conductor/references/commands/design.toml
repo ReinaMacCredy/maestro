@@ -184,13 +184,13 @@ Load: `skills/conductor/references/research/discover-hook.md`
 >
 > **[A] Advanced** - Explore more options, deeper trade-offs
 > **[P] Party** - Multi-perspective review of options
-> **[C] Continue** - Pick one, move to DELIVER
+> **[C] Continue** - Pick one, move to VERIFY
 > **[↩ Back]** - "revisit define" to reframe problem
 ```
 
 ---
 
-#### Phase: DELIVER (Converge)
+#### Phase: VERIFY (Converge)
 **Goal:** Detail chosen approach into complete, actionable design.
 **Exit Criteria:** Complete design.md ready for implementation.
 
@@ -211,10 +211,10 @@ After each section: "Does this look right so far? [OK / Revise / ↩ Back]"
 |------------------|------|-------------|
 | DISCOVER→DEFINE | Mini | Advisory |
 | DEFINE→DEVELOP | Mini | Advisory |
-| DEVELOP→DELIVER | Standard | Gatekeeper |
-| DELIVER→Complete | Full + Impact Scan | Mandatory |
+| DEVELOP→VERIFY | Standard | Gatekeeper |
+| VERIFY→Complete | Full + Impact Scan | Mandatory |
 
-**FULL GROUNDING + IMPACT SCAN (Required at DELIVER→Complete):**
+**FULL GROUNDING + IMPACT SCAN (Required at VERIFY→Complete):**
 
 1. **Full Grounding (parallel):**
    - Grep/finder: Verify patterns match codebase conventions
@@ -226,7 +226,7 @@ After each section: "Does this look right so far? [OK / Revise / ↩ Back]"
    - Return: file list, change types, risks, dependencies
    - Flag high-risk files for review
 
-**Enforcement at DELIVER:**
+**Enforcement at VERIFY:**
 - **Blocks if:** Grounding not run (action: RUN_GROUNDING)
 - **Blocks if:** All sources fail (action: MANUAL_VERIFY)
 - **Blocks if:** Low confidence (action: RETRY_GROUNDING)
@@ -266,7 +266,7 @@ Or if blocked: Show enforcement action with instructions.
 | CP1 (DISCOVER) | Product alignment, no duplicate features | WARN |
 | CP2 (DEFINE) | Problem clear, success measurable, scope explicit | WARN |
 | CP3 (DEVELOP) | 3+ options, tech-stack alignment, risk analysis | WARN |
-| CP4 (DELIVER) | Full validation + grounding + impact scan | SPEED=WARN, FULL=HALT |
+| CP4 (VERIFY) | Full validation + grounding + impact scan | SPEED=WARN, FULL=HALT |
 
 **PROTOCOL (at each checkpoint):**
 1. **Load validation gate:** Read `skills/conductor/references/validation/validate-design.md`
@@ -293,7 +293,7 @@ Or if blocked: Show enforcement action with instructions.
 **On CP4 PASS:** Update `metadata.json.validation.gates_passed` to include "design", proceed to handoff.
 **On CP4 WARN:** Log warning, proceed to handoff.
 **On CP4 FAIL (FULL mode):** Block, show issues, offer:
-- **[R] Retry** - Return to DELIVER phase to fix issues
+- **[R] Retry** - Return to VERIFY phase to fix issues
 - **[S] Skip** - Force continue (requires `--no-validate` flag)
 
 ---
@@ -423,22 +423,22 @@ status: approved
 ## Design
 
 ### Architecture Overview
-[From DELIVER phase]
+[From VERIFY phase]
 
 ### Components
-[From DELIVER phase]
+[From VERIFY phase]
 
 ### Data Model
-[From DELIVER phase]
+[From VERIFY phase]
 
 ### User Flow
-[From DELIVER phase]
+[From VERIFY phase]
 
 ### Error Handling
-[From DELIVER phase]
+[From VERIFY phase]
 
 ### Testing Strategy
-[From DELIVER phase]
+[From VERIFY phase]
 
 ## Grounding Notes
 - [What was verified during session]

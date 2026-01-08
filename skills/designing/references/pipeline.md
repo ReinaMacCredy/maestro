@@ -1,12 +1,12 @@
 # Unified DS Pipeline
 
-> **Single 8-phase pipeline from problem discovery through execution-ready state.**
+> **Single 10-phase pipeline from problem discovery through track completion.**
 
 ## Overview Diagram
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────────────────┐
-│                              UNIFIED DS PIPELINE (8 PHASES)                              │
+│                              UNIFIED DS PIPELINE (10 PHASES)                             │
 ├──────────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                          │
 │  ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐                               │
@@ -37,8 +37,8 @@
 └──────────────────────────────────────────────────────────────────────────────────────────┘
 
 MODES:
-  SPEED: 1 → 2 → 4 → READY  (skip 3; requires manual `pl` for phases 5-8)
-  FULL:  1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
+  SPEED: 1 → 2 → 4 → READY  (skip 3; requires manual `pl` for phases 5-10)
+  FULL:  1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10
 ```
 
 ## Phase Details
@@ -419,14 +419,74 @@ Bash(cmd="rb")
 print("All tracks complete. Run `/conductor-finish` to finalize.")
 ```
 
+### Phase 9: EXECUTE (Implement)
+
+| Aspect | Value |
+|--------|-------|
+| **Purpose** | Run implementation on all tracks |
+| **Type** | Implementation phase |
+| **Inputs** | Ready tracks from Phase 8 |
+| **Outputs** | Completed beads, working code |
+| **Trigger** | `ci` or `co` (orchestrate) |
+| **Mode** | FULL only |
+
+**Execution Flow:**
+```
+ci/co triggered
+    │
+    ├─ Single track: Run TDD on beads sequentially
+    │
+    └─ Multiple tracks: Spawn Task() workers in parallel
+           │
+           └─ Each worker: TDD loop per bead
+                  1. bd show <id>
+                  2. bd update <id> --status in_progress
+                  3. RED-GREEN-REFACTOR
+                  4. bd close <id> --reason completed
+```
+
+**Exit Criteria:**
+- All beads marked `completed`
+- All tests passing
+- Code committed
+
+### Phase 10: FINISH (Archive)
+
+| Aspect | Value |
+|--------|-------|
+| **Purpose** | Extract learnings and archive track |
+| **Type** | Terminal state |
+| **Inputs** | Completed execution from Phase 9 |
+| **Outputs** | LEARNINGS.md, archived track |
+| **Trigger** | `/conductor-finish` |
+| **Mode** | FULL only |
+
+**Finish Flow:**
+```
+/conductor-finish triggered
+    │
+    ├─ Extract learnings → LEARNINGS.md
+    │
+    ├─ Move track to conductor/archive/
+    │
+    ├─ bd sync (commit .beads/)
+    │
+    └─ Create handoff for next session
+```
+
+**Exit Criteria:**
+- LEARNINGS.md created
+- Track archived
+- Handoff saved
+
 ---
 
 ## Mode Comparison
 
 | Aspect | SPEED | FULL |
 |--------|-------|------|
-| **Phases** | 1, 2, 4, 8 | All 8 |
-| **Total Phases** | 4 | 8 |
+| **Phases** | 1, 2, 4, 10 | All 10 |
+| **Total Phases** | 4 | 10 |
 | **A/P/C Checkpoints** | No | Yes (CP1-CP4) |
 | **Research Hooks** | 1 (start only) | 2 (start + verify) |
 | **Beads Created** | No | Yes (Phase 5) |
@@ -680,7 +740,7 @@ Spawns at end of DEVELOP to validate design:
 
 ```
 SPEED (4 phases):  ds → DISCOVER → DEFINE → VERIFY → READY → ci
-FULL (8 phases):   ds → DISCOVER → DEFINE → DEVELOP → VERIFY →
+FULL (10 phases):   ds → DISCOVER → DEFINE → DEVELOP → VERIFY →
                        DECOMPOSE → VALIDATE → ASSIGN → READY → [O]/[S]
 
 Research:          2 hooks (start + verify), ~35s max
@@ -759,15 +819,16 @@ Continuing to Phase 5...
 
 Display progress at each phase transition:
 
-### FULL Mode (8 phases)
+### FULL Mode (10 phases)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ 📍 Phase 3/8: DEVELOP                                       │
-│ ━━━━━━━━━━━━━━━━━━━━━━━━━━░░░░░░░░░░░░░░░░░░░░░ 37%        │
+│ 📍 Phase 3/10: DEVELOP                                      │
+│ ━━━━━━━━━━━━━━━━━━━━━━━━━━░░░░░░░░░░░░░░░░░░░░░ 30%        │
 │                                                             │
 │ ✅ DISCOVER  ✅ DEFINE  ▶️ DEVELOP  ○ VERIFY                │
 │ ○ DECOMPOSE  ○ VALIDATE  ○ ASSIGN  ○ READY                 │
+│ ○ EXECUTE  ○ FINISH                                        │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -797,5 +858,5 @@ At each phase transition:
 
 For minimal output, show single line:
 ```
-📍 [3/8] DEVELOP ━━━━━━━━━░░░░░░░░░░░ 37%
+📍 [3/10] DEVELOP ━━━━━━━━━░░░░░░░░░░░ 30%
 ```

@@ -410,7 +410,7 @@
     },
     "pipeline": {
       "type": "object",
-      "description": "Unified 8-phase DS pipeline state (replaces separate ds + pl state machines)",
+      "description": "Unified 10-phase DS pipeline state (replaces separate ds + pl state machines)",
       "properties": {
         "version": {
           "type": "integer",

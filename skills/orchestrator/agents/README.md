@@ -40,7 +40,7 @@ Agents that validate work quality:
 - **code-reviewer**: Style, patterns, maintainability
 - **pr-reviewer**: Full PR review workflow
 - **spec-reviewer**: Spec completeness and consistency
-- **oracle**: 6-dimension design audit at CP4 (DELIVER)
+- **oracle**: 6-dimension design audit at CP4 (VERIFY)
 
 ### Planning (`planning/`)
 Agents that create and validate plans:

@@ -2,7 +2,7 @@
 
 ## Role
 
-Assess change impact and scope. Identify affected files, modules, and risk levels. Runs at DELIVER phase completion.
+Assess change impact and scope. Identify affected files, modules, and risk levels. Runs at VERIFY phase completion.
 
 ## Prompt Template
 
@@ -62,7 +62,7 @@ CONFIDENCE: high | medium | low
 
 ### When to Spawn
 
-- At DELIVER -> Complete phase transition
+- At VERIFY -> Complete phase transition
 - After full grounding completes
 - Before generating spec.md and plan.md
 
