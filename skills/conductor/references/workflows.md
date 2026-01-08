@@ -20,8 +20,8 @@ Context-Driven Development for Claude Code. Measure twice, code once.
 | `implement` | Execute tasks from track's plan following TDD workflow | [workflows/implement.md](workflows/implement.md) |
 | `status` | Display progress overview | [workflows/status.md](workflows/status.md) (inline below) |
 | `revert` | Git-aware revert of tracks, phases, or tasks | (inline below) |
-| `revise` | Update spec/plan when implementation reveals issues | [revisions.md](revisions.md) |
-| `finish` | Complete track: extract learnings, compact beads, archive | [finish-workflow.md](finish-workflow.md) |
+| `revise` | Update spec/plan when implementation reveals issues | [workflows.md#revisions](#revisions) |
+| `finish` | Complete track: extract learnings, compact beads, archive | [workflows.md#finish-workflow](#finish-workflow) |
 
 ## Validation Gates
 
@@ -33,7 +33,7 @@ Validation gates are triggered at specific workflow points. See [validation/life
 | `validate-spec` | After spec.md generation | [workflows/newtrack.md](workflows/newtrack.md#phase-3) |
 | `validate-plan-structure` | After plan.md generation | [workflows/newtrack.md](workflows/newtrack.md#phase-4) |
 | `validate-plan-execution` | After TDD REFACTOR | [tdd/cycle.md](tdd/cycle.md) |
-| `validate-completion` | Before /conductor-finish | [finish-workflow.md](finish-workflow.md) |
+| `validate-completion` | Before /conductor-finish | [workflows.md#finish-workflow](#finish-workflow) |
 
 ---
 
@@ -81,3 +81,60 @@ The sections below provide a quick overview. **For full behavior including valid
 - `[x]` - Completed
 - `[!]` - Blocked (with reason)
 - `[-]` - Skipped (with reason)
+
+---
+
+## finish-workflow
+
+> **⚠️ MOVED TO HANDOFF SKILL**
+> 
+> This workflow has moved to the [handoff skill](../../handoff/SKILL.md).
+> 
+> **Triggers:** `ho`, `/conductor-finish`, `/conductor-handoff`
+
+---
+
+## checkpoint
+
+Quick entry point for progress checkpointing operations.
+
+**Primary Reference:** [tracking skill](../../tracking/SKILL.md)
+
+| Trigger | Action |
+|---------|--------|
+| Token budget > 70% | Proactive checkpoint |
+| Token budget > 85% | Checkpoint + warn user |
+| Token budget > 90% | Auto-checkpoint |
+| Major milestone | Checkpoint notes |
+| Hit a blocker | Capture what was tried |
+
+**Degradation Signals:** 2+ signals → trigger compression
+
+---
+
+## remember
+
+Quick entry point for handoff protocol operations.
+
+**Primary Reference:** [handoff skill](../../handoff/SKILL.md)
+
+| Aspect | Description |
+|--------|-------------|
+| Storage | `conductor/handoffs/<track>/` |
+| Format | Structured JSON + Markdown summary |
+| TTL | 7 days (configurable) |
+
+→ [Handoff Template](handoff/template.md)
+
+---
+
+## revisions
+
+Guidelines for revising specs and plans mid-implementation.
+
+**When to Revise:**
+- New requirements discovered during implementation
+- Technical blockers requiring approach changes
+- User feedback invalidating assumptions
+
+**Workflow:** Use `/conductor-revise` → [workflows/revise.md](workflows/revise.md)

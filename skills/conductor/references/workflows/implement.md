@@ -32,7 +32,7 @@ Execute tasks from a track's plan following the defined workflow methodology (TD
 **REQUIRED:** Run before any implementation work.
 
 1. **Execute Preflight**
-   - Run [preflight-beads.md](../preflight-beads.md) workflow
+   - Run [preflight-beads.md](../beads/preflight.md) workflow
    - Checks `bd` availability (HALT if unavailable)
    - Checks Agent Mail availability (HALT if unavailable)
    - Registers agent with Agent Mail
@@ -239,7 +239,7 @@ Run parallel? [Y/n]:
    file_reservation_paths(paths=["<file>"])  # Reserve files before edit
    ```
    
-   See [beads-session.md](../beads-session.md) for full protocol.
+   See [beads/session.md](../beads/session.md) for full protocol.
 
 4. **Execute Tasks**
    - Iterate through `plan.md` tasks sequentially
@@ -385,7 +385,7 @@ Run parallel? [Y/n]:
    - Remove session lock file
    - Update session state file
 
-See [beads-session.md](../beads-session.md) for full sync protocol.
+See [beads/session.md](../beads/session.md) for full sync protocol.
 
 ## Task Workflow Reference
 
@@ -453,8 +453,8 @@ conductor/
 
 ## References
 
-- [Beads Session Workflow](../beads-session.md) - Claim, close, sync protocol
-- [Beads Preflight](../preflight-beads.md) - Session initialization
-- [Beads Facade](../beads-facade.md) - API contract
-- [Beads Integration](../beads-integration.md) - All 13 integration points
+- [Beads Session Workflow](../beads/session.md) - Claim, close, sync protocol
+- [Beads Preflight](../beads/preflight.md) - Session initialization
+- [Beads Facade](../beads/facade.md) - API contract
+- [Beads Integration](../beads/integration.md) - All 13 integration points
 - [Handoff Skill](../../../handoff/SKILL.md) - CREATE/RESUME modes, Beads sync, progress tracking

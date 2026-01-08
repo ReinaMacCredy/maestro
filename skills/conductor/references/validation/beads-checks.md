@@ -374,6 +374,6 @@ Action: Fix .fb-progress.json or run /conductor-migrate-beads
 
 ## References
 
-- [Beads Facade](../../beads-facade.md) - Facade API
-- [Beads Integration](../../beads-integration.md) - Integration points
+- [Beads Facade](../../beads/facade.md) - Facade API
+- [Beads Integration](../../beads/integration.md) - Integration points
 - [Track Validation](../track/checks.md) - Track-level validation

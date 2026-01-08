@@ -94,11 +94,11 @@ Extract tasks from plan structure.
 
 ### Epic 1.1: State Validation
 
-- [ ] 1.1.1: Create beads-facade.md
+- [ ] 1.1.1: Create facade.md
   - Define facade contract
   - **Est:** 140-180 lines
 
-- [ ] 1.1.2: Create beads-integration.md
+- [ ] 1.1.2: Create integration.md
   - Document integration points
 ```
 
@@ -138,9 +138,9 @@ parse_plan() {
 
 ```json
 [
-  {"id": "1.1.1", "title": "Create beads-facade.md", "priority": 0},
-  {"id": "1.1.2", "title": "Create beads-integration.md", "priority": 0},
-  {"id": "1.2.1", "title": "Create preflight-beads.md", "priority": 0, "depends": ["1.1.1", "1.1.2"]}
+  {"id": "1.1.1", "title": "Create facade.md", "priority": 0},
+  {"id": "1.1.2", "title": "Create integration.md", "priority": 0},
+  {"id": "1.2.1", "title": "Create preflight.md", "priority": 0, "depends": ["1.1.1", "1.1.2"]}
 ]
 ```
 
@@ -548,14 +548,14 @@ Issues: 12 created
 Dependencies: 8 wired
 
 Ready tasks: 4
-First ready: my-workflow:3-def2 - Create beads-facade.md
+First ready: my-workflow:3-def2 - Create facade.md
 ```
 
 ---
 
 ## References
 
-- [Beads Facade](beads-facade.md) - API contract
-- [Beads Integration](beads-integration.md) - All 13 points
-- [Preflight Workflow](preflight-beads.md) - Session initialization
-- [Session Workflow](beads-session.md) - Claim/close/sync
+- [Beads Facade](facade.md) - API contract
+- [Beads Integration](integration.md) - All 13 points
+- [Preflight Workflow](preflight.md) - Session initialization
+- [Session Workflow](session.md) - Claim/close/sync

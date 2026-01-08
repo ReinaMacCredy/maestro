@@ -181,7 +181,7 @@ When revising specs/plans, affected beads must be updated.
 
 ### Triggering Bead Updates
 
-After plan changes are applied, run the [revise-reopen-beads.md](../revise-reopen-beads.md) workflow:
+After plan changes are applied, run the [beads/revise-reopen.md](../beads/revise-reopen.md) workflow:
 
 1. **Identify affected beads:**
    - Tasks added → create new beads
@@ -241,6 +241,6 @@ When original bead was deleted by cleanup:
 
 ## References
 
-- [Revise Reopen Beads](../revise-reopen-beads.md) - Detailed reopen workflow
-- [Status Sync Beads](../status-sync-beads.md) - Discrepancy detection
-- [Beads Integration](../beads-integration.md) - Point 13
+- [Revise Reopen Beads](../beads/revise-reopen.md) - Detailed reopen workflow
+- [Status Sync Beads](../beads/status-sync.md) - Discrepancy detection
+- [Beads Integration](../beads/integration.md) - Point 13

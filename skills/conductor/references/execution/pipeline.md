@@ -114,8 +114,8 @@ skills/conductor/references/workflows/
 │   ├── session-lifecycle.md  # RECALL + ROUTE orchestration
 │   └── references/        # anchored-state-format.md, design-routing-heuristics.md
 ├── conductor/             # Conductor-specific workflow extensions
-│   ├── beads-session.md   # Beads claim/close/sync protocol
-│   ├── preflight-beads.md # Session initialization
+│   ├── beads/session.md   # Beads claim/close/sync protocol
+│   ├── beads/preflight.md # Session initialization
 │   ├── checkpoint.md      # Progress checkpointing facade
 │   └── remember.md        # Handoff protocol facade
 └── schemas/

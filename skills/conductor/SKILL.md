@@ -14,7 +14,7 @@ Execute tracks with TDD and parallel routing.
 | `/conductor-setup` | Initialize project context | [workflows/setup.md](references/workflows/setup.md) |
 | `/conductor-implement` | Execute track (auto-routes if parallel) | [workflows/implement.md](references/workflows/implement.md) |
 | `/conductor-status` | Display progress overview | [structure.md](references/structure.md) |
-| `/conductor-revise` | Update spec/plan mid-work | [revisions.md](references/revisions.md) |
+| `/conductor-revise` | Update spec/plan mid-work | [workflows.md#revisions](references/workflows.md#revisions) |
 
 ## Related Skills (Not Owned by Conductor)
 
@@ -64,19 +64,19 @@ All execution routes through orchestrator with Agent Mail coordination:
 - File reservations via `file_reservation_paths`
 - Communication via `send_message`/`fetch_inbox`
 
-See [beads-integration.md](references/beads-integration.md) for all 13 integration points.
+See [beads/integration.md](references/beads/integration.md) for all 13 integration points.
 
 ## `/conductor-implement` Auto-Routing
 
 1. Read `metadata.json` - check `orchestrated` flag
 2. Read `plan.md` - check for `## Track Assignments`
-3. Check `beads.fileScopes` - file-scope based grouping (see [file-scope-extractor](references/file-scope-extractor.md))
+3. Check `beads.fileScopes` - file-scope based grouping (see [execution/file-scope-extractor](references/execution/file-scope-extractor.md))
 4. If parallel detected (≥2 non-overlapping groups) → Load [orchestrator skill](../orchestrator/SKILL.md)
 5. Else → Sequential execution with TDD
 
 ### File Scope Detection
 
-File scopes determine parallel routing (see [parallel-grouping](references/parallel-grouping.md)):
+File scopes determine parallel routing (see [execution/parallel-grouping](references/execution/parallel-grouping.md)):
 - Tasks touching same files → sequential (same track)
 - Tasks touching different files → parallel (separate tracks)
 

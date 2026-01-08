@@ -413,7 +413,7 @@ fi
 }
 ```
 
-**See also:** [Beads Integration](../../beads-integration.md#session-lock) for full session lock protocol.
+**See also:** [Beads Integration](../../beads/integration.md#session-lock) for full session lock protocol.
 
 ---
 
