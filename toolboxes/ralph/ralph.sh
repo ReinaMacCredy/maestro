@@ -113,7 +113,8 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   
   # Check for story completion markers and update passes status
   # Format: <story-complete>STORY_ID</story-complete>
-  COMPLETED_STORIES=$(echo "$OUTPUT" | grep -oP '(?<=<story-complete>)[^<]+(?=</story-complete>)' || true)
+  # Note: Using sed for macOS compatibility (no grep -P)
+  COMPLETED_STORIES=$(echo "$OUTPUT" | sed -n 's/.*<story-complete>\([^<]*\)<\/story-complete>.*/\1/p' || true)
   if [ -n "$COMPLETED_STORIES" ]; then
     for STORY_ID in $COMPLETED_STORIES; do
       echo "Marking story complete: $STORY_ID"
