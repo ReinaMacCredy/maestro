@@ -7,7 +7,7 @@ AGENT-QUICK-SETUP
 2. Apply config block to user's global config file
 3. Check `bd --version` - if missing, install CLI tools
 4. Verify: skills loaded, bd available, Agent Mail configured
-5. Run `ds` to confirm skill loading works
+5. Run `@plan` to confirm skill loading works
 -->
 
 ## Plugin Installation
@@ -38,30 +38,29 @@ Apply the config block below to your agent's global config file:
 Replace any existing `<!-- BEGIN maestro-config -->` block or append:
 
 <!-- BEGIN maestro-config -->
-<!-- version: 2.2.0 | bmad-v6 | 2026-01-09 -->
+<!-- version: 3.0.0 | atlas | 2026-01-28 -->
 
 ## Maestro Workflow
 
-Context-driven development with TDD execution.
-
-**First message:** Check `conductor/handoffs/` for prior session context.
+Context-driven development with Atlas workflow system.
 
 ### Project Detection
 
 Maestro project if any exist:
-- `conductor/` directory
+- `.atlas/` directory
 - `.beads/` directory
 
-When detected, use Conductor commands instead of ad-hoc planning.
+When detected, use Atlas workflow commands.
 
 ### Triggers
 
 | Category | Triggers |
 |----------|----------|
-| **Design** | `ds` (design session), `cn` (new track), `pl` (planning) |
-| **Execute** | `ci` (implement), `co` (orchestrate), `ca` (autonomous), `tdd` |
+| **Planning** | `@plan`, `ultraplan`, `/atlas-plan` |
+| **Execution** | `/atlas-work`, `/ralph-loop`, `@tdd` |
+| **Research** | `@oracle`, `@explore`, `@librarian`, `@metis`, `@momus` |
 | **Track** | `fb` (file beads), `rb` (review beads), `bd *` (beads CLI) |
-| **Session** | `ho` (handoff), `finish branch` |
+| **Session** | `finish branch`, `/cancel-ralph` |
 
 ### Session Protocol
 
@@ -85,6 +84,7 @@ bd sync
 - Use `--robot-*` with `bv` (bare `bv` hangs)
 - Never write production code without failing test first
 - Always commit `.beads/` with code changes
+- Orchestrator never edits directly - always delegates
 
 <!-- END maestro-config -->
 
@@ -191,11 +191,11 @@ toolboxes/agent-mail/agent-mail.js send_message to:BlueLake subject:"Hello"
 
 | Check | Command | Expected |
 |-------|---------|----------|
-| Plugin loaded | `ds` | Design session starts |
+| Plugin loaded | `@plan test` | Interview mode starts |
 | Beads CLI | `bd --version` | Version output |
 | Agent Mail (MCP) | `/mcp` (Claude Code) | `agent-mail` listed |
 | Agent Mail (CLI) | `toolboxes/agent-mail/agent-mail.js health-check` | OK response |
-| Project structure | `ls conductor/` | `product.md`, `tracks/`, etc. |
+| Project structure | `ls .atlas/` | `plans/`, `drafts/`, etc. |
 
 ---
 
@@ -203,26 +203,28 @@ toolboxes/agent-mail/agent-mail.js send_message to:BlueLake subject:"Hello"
 
 ```mermaid
 flowchart LR
-    A["/conductor-setup"] --> B["ds"]
-    B --> C["/conductor-newtrack"]
-    C --> D["/conductor-implement"]
-    D --> E["/conductor-finish"]
-    
+    A["@plan"] --> B["Interview"]
+    B --> C["Plan Generated"]
+    C --> D["/atlas-work"]
+    D --> E["Execution"]
+
     style A fill:#1a1a2e,stroke:#e94560,color:#fff
     style D fill:#1a1a2e,stroke:#0f3460,color:#fff
 ```
 
 | Action | Command |
 |--------|---------|
-| Initialize project | `/conductor-setup` |
-| Design feature | `ds` |
-| Create track | `/conductor-newtrack` or `cn` |
-| Execute tasks | `/conductor-implement` or `ci` |
-| Parallel workers | `/conductor-orchestrate` or `co` |
-| Autonomous mode | `/conductor-autonomous` or `ca` |
+| Start planning interview | `@plan` or `/atlas-plan` |
+| Pre-planning consultation | `@metis` |
+| Plan review | `@momus` |
+| Execute plan | `/atlas-work` |
+| Autonomous mode | `/ralph-loop` |
+| Stop autonomous | `/cancel-ralph` |
 | See available work | `bd ready --json` |
-| Complete track | `/conductor-finish` |
-| Save context | `/conductor-handoff` or `ho` |
+| Strategic advice | `@oracle` |
+| Codebase search | `@explore` |
+| External research | `@librarian` |
+| TDD implementation | `@tdd` |
 
 ---
 
@@ -230,12 +232,12 @@ flowchart LR
 
 | Problem | Solution |
 |---------|----------|
-| Skills not loading | Check plugin directory exists; run `ds` to test |
+| Skills not loading | Check plugin directory exists; run `@plan test` |
 | `bd: command not found` | Install via `pip install beads-cli` |
-| Agent ignores workflow | Use explicit trigger: `ds`, `tdd`, `ci` |
+| Agent ignores workflow | Use explicit trigger: `@plan`, `@tdd`, `/atlas-work` |
 | Agent Mail not working | Check `/mcp` or run CLI health check |
-| Handoff not loading | Check `conductor/handoffs/` exists with recent files |
 | `bv` hangs | Always use `bv --robot-stdout` (never bare `bv`) |
+| Orchestrator editing directly | Bug - orchestrator must always delegate |
 
 > **Note:** Skills work without CLI tools, but `bd` is required for full functionality. See [REFERENCE.md](REFERENCE.md) for fallback policies.
 
@@ -243,7 +245,7 @@ flowchart LR
 
 ## Next Steps
 
-1. Initialize your project: `/conductor-setup`
-2. Start your first design: `ds`
+1. Start your first planning session: `@plan`
+2. Review the generated plan with: `@momus`
 3. Read the full tutorial: [TUTORIAL.md](TUTORIAL.md)
 4. Quick command lookup: [REFERENCE.md](REFERENCE.md)

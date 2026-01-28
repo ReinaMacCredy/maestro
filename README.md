@@ -43,37 +43,50 @@ git clone https://github.com/ReinaMacCredy/maestro ~/.gemini/plugins/maestro
 
 ```mermaid
 graph LR
-    A[ds] --> B[/conductor-newtrack]
-    B --> C[/conductor-implement]
-    C --> D[/conductor-finish]
+    A[@plan] --> B[Interview]
+    B --> C[Plan Generated]
+    C --> D[/atlas-work]
+    D --> E[Implementation]
 ```
 
-1. **`ds`** — Start a design session (Double Diamond methodology)
-2. **`/conductor-newtrack`** — Generate spec, plan, and beads from design
-3. **`/conductor-implement`** — Execute with TDD checkpoints
-4. **`/conductor-finish`** — Archive track and extract learnings
+1. **`@plan`** — Start an interview-driven planning session (Prometheus)
+2. **Review plan** — Metis identifies gaps, Momus reviews for quality
+3. **`/atlas-work`** — Execute via orchestrator with specialized agents
+4. **Verify** — Wisdom accumulated, learnings extracted
 
-## Skills
+## Skills & Agents
 
-| Skill | Trigger | Purpose |
+| Skill | Triggers | Purpose |
+|-------|----------|---------|
+| **atlas** | `@plan`, `/atlas-plan`, `/atlas-work` | Interview planning, orchestrated execution |
+| **orchestration** | `/atlas-work` | Task()-based delegation |
+| **git-master** | Atomic commits | Git operations specialist |
+| **playwright** | E2E tests | Browser automation |
+
+### Atlas Agents
+
+| Agent | Purpose | Trigger |
 |-------|---------|---------|
-| **conductor** | `/conductor-*` | Implementation execution, TDD |
-| **designing** | `ds` | Double Diamond design sessions |
-| **tracking** | `fb`, `rb`, `bd` | Persistent issue tracking |
-| **orchestrator** | `/conductor-orchestrate` | Multi-agent parallel execution |
-| **handoff** | `/conductor-handoff` | Session context preservation |
-| **maestro-core** | *(auto)* | Routing and fallback policies |
-| **creating-skills** | — | Skill authoring guide |
-| **sharing-skills** | — | Contribute skills upstream |
-| **using-git-worktrees** | `/worktree` | Isolated dev environments |
+| `atlas-prometheus` | Strategic planner, interview mode | `@plan` |
+| `atlas-orchestrator` | Master delegator (never works directly) | `/atlas-work` |
+| `atlas-leviathan` | Focused task executor | (orchestrator delegates) |
+| `atlas-kraken` | TDD implementation | `@tdd` |
+| `atlas-spark` | Quick fixes | (orchestrator delegates) |
+| `atlas-oracle` | Strategic advisor (opus) | `@oracle` |
+| `atlas-explore` | Codebase search | `@explore` |
+| `atlas-librarian` | External docs/research | `@librarian` |
+| `atlas-metis` | Pre-planning consultant | `@metis` |
+| `atlas-momus` | Plan reviewer | `@momus` |
+| `atlas-code-reviewer` | Code quality review | `@review` |
+| `atlas-document-writer` | Technical documentation | `@docs` |
 
 ## Key Rules
 
-- **Design before code** — Run `ds` to explore before implementing
+- **Interview before code** — Run `@plan` to explore before implementing
 - **TDD by default** — Never write production code without a failing test
 - **Beads track work** — Use `bd` CLI for persistent task management
-- **Handoffs preserve context** — Session state survives across restarts
-- **One question at a time** — Design sessions ask focused questions
+- **Orchestrator delegates** — Never works directly, always spawns agents
+- **Verify subagent claims** — Always verify, agents can make mistakes
 
 ## Documentation
 
@@ -83,8 +96,8 @@ graph LR
 | Setup Guide | [SETUP_GUIDE.md](SETUP_GUIDE.md) |
 | Reference | [REFERENCE.md](REFERENCE.md) |
 | Changelog | [CHANGELOG.md](CHANGELOG.md) |
-| Workflow Chain | [skills/maestro-core/references/workflow-chain.md](.claude/skills/maestro-core/references/workflow-chain.md) |
-| Routing Table | [skills/maestro-core/references/routing-table.md](.claude/skills/maestro-core/references/routing-table.md) |
+| Atlas Workflow | [.claude/skills/atlas/SKILL.md](.claude/skills/atlas/SKILL.md) |
+| Agent Definitions | [.claude/skills/atlas/references/agents/](.claude/skills/atlas/references/agents/) |
 
 ## Credits
 

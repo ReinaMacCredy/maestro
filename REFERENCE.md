@@ -6,138 +6,93 @@ Quick-lookup for commands, triggers, and technical details.
 
 ## Commands
 
-| Command | Alias | Description | Phase |
-|---------|-------|-------------|-------|
-| `/conductor-setup` | - | Initialize project context | Setup |
-| `/conductor-design` | `ds` | Start Double Diamond design session | 1-8 |
-| `/conductor-newtrack` | `cn` | Create spec + plan + beads from design.md | 5-8 |
-| `/conductor-implement` | `ci` | Execute track with TDD | 9 |
-| `/conductor-orchestrate` | `co` | Spawn parallel workers | 9 |
-| `/conductor-autonomous` | `ca` | Ralph loop (autonomous) | 9 |
-| `/conductor-status` | - | Display progress overview | Any |
-| `/conductor-revise` | - | Update spec/plan mid-work | Any |
-| `/conductor-validate` | - | Verify beads, run `bv` | 6 |
-| `/conductor-finish` | - | Extract learnings, archive track | 10 |
-| `/conductor-handoff` | `ho` | Save/load session context | Any |
+| Command | Alias | Description |
+|---------|-------|-------------|
+| `/atlas-plan` | `@plan` | Start Prometheus interview mode |
+| `/atlas-work` | - | Execute plan via orchestrator |
+| `/ralph-loop` | - | Autonomous execution loop |
+| `/cancel-ralph` | - | Stop Ralph loop |
 
 ---
 
 ## Triggers
 
-| Trigger | Skill | Action |
+| Trigger | Agent | Action |
 |---------|-------|--------|
-| `ds` | designing | Double Diamond session (phases 1-10) |
-| `cn` | designing | Create track from design.md |
-| `pl` | designing | Planning phases (5-10) |
-| `fb` | tracking | File beads from plan |
-| `rb` | tracking | Review beads |
-| `tdd` | conductor | RED-GREEN-REFACTOR cycle |
-| `ci` | conductor | Execute track (auto-routes if parallel) |
-| `co` | orchestrator | Spawn parallel workers |
-| `ca` | conductor | Autonomous execution (Ralph) |
-| `ho` | handoff | Save/load session context |
-| `finish branch` | conductor | Finalize and merge/PR |
+| `@plan`, `ultraplan` | atlas-prometheus | Interview-driven planning |
+| `/atlas-work` | atlas-orchestrator | Execute plan via delegation |
+| `/ralph-loop` | atlas-orchestrator | Autonomous loop |
+| `@oracle` | atlas-oracle | Strategic advice (opus) |
+| `@explore` | atlas-explore | Codebase search |
+| `@librarian` | atlas-librarian | External docs research |
+| `@metis` | atlas-metis | Pre-planning gap analysis |
+| `@momus` | atlas-momus | Plan review (approve with OKAY) |
+| `@tdd` | atlas-kraken | TDD implementation |
+| `@review` | atlas-code-reviewer | Code quality review |
+| `@docs` | atlas-document-writer | Technical documentation |
+| `fb` | - | File beads from plan |
+| `rb` | - | Review beads |
+| `finish branch` | - | Finalize and merge/PR |
 
 ---
 
 ## Skills
 
-9 skills organized by workflow phase:
+4 skills organized by workflow phase:
 
-### Core Routing
-
-| Skill | Description |
-|-------|-------------|
-| **maestro-core** | Central router. Skill hierarchy, HALT/DEGRADE policies, trigger mappings. Load FIRST before any workflow skill. |
-
-### Planning Skills
+### Core Workflow
 
 | Skill | Description |
 |-------|-------------|
-| **designing** | Double Diamond design sessions. 10-phase unified pipeline with A/P/C checkpoints. Triggers: `ds`, `cn`, `pl`. |
-
-### Execution Skills
-
-| Skill | Description |
-|-------|-------------|
-| **conductor** | Implementation execution. TDD by default, beads integration, validation gates. Triggers: `ci`, `ca`, `tdd`. |
-| **orchestrator** | Multi-agent parallel execution. Spawns workers, Agent Mail coordination. Triggers: `co`, "run parallel". |
-| **tracking** | Issue tracking via beads. `bd` CLI wrapper, dependency graphs. Triggers: `fb`, `rb`, `bd *`. |
-
-### Session Skills
-
-| Skill | Description |
-|-------|-------------|
-| **handoff** | Session cycling. Context preservation, resume support. Triggers: `ho`, `/conductor-finish`. |
+| **atlas** | Interview-driven planning and orchestrated execution. All `@keyword` triggers and `/atlas-*` commands. |
+| **orchestration** | Task()-based delegation for `/atlas-work`. Orchestrator never works directly. |
 
 ### Utility Skills
 
 | Skill | Description |
 |-------|-------------|
-| **creating-skills** | Author new skills. SKILL.md structure, best practices. |
-| **sharing-skills** | Contribute skills upstream. Branch, commit, PR workflow. |
-| **using-git-worktrees** | Isolated workspaces. Smart directory selection, safety verification. |
-
-### Skill Hierarchy
-
-```
-conductor (1) > orchestrator (2) > designing (3) > tracking (4) > specialized (5)
-```
-
-Higher rank wins on conflicts.
+| **git-master** | Git operations, atomic commits, rebasing. Loaded by implementation agents. |
+| **playwright** | Browser automation, E2E testing. Loaded by atlas-leviathan when needed. |
 
 ---
 
-## Unified Pipeline (10 Phases)
+## Atlas Agents
 
-| # | Phase | Type | Purpose | Exit Criteria |
-|---|-------|------|---------|---------------|
-| 1 | **DISCOVER** | Diverge | Explore problem + research | Problem articulated |
-| 2 | **DEFINE** | Converge | Frame problem + approach | Approach selected |
-| 3 | **DEVELOP** | Diverge | Architecture + components | Interfaces defined |
-| 4 | **VERIFY** | Converge | Oracle audit + risk | Oracle APPROVED |
-| 5 | **DECOMPOSE** | Execute | Create beads (`fb`) | Beads filed |
-| 6 | **VALIDATE** | Execute | Dependency check (`bv`) | Dependencies valid |
-| 7 | **ASSIGN** | Execute | Track assignments | Tracks assigned |
-| 8 | **READY** | Complete | Handoff to `ci`/`co` | Execution ready |
-| 9 | **EXECUTE** | Implement | Run implementation | All beads completed |
-| 10 | **FINISH** | Archive | Extract learnings | Track archived |
+12 specialized agents spawned via Task():
 
-### Mode Routing
+| Agent | Purpose | Model | Trigger |
+|-------|---------|-------|---------|
+| `atlas-prometheus` | Strategic planner, interview mode | sonnet | `@plan` |
+| `atlas-orchestrator` | Master delegator (never works directly) | sonnet | `/atlas-work` |
+| `atlas-leviathan` | Focused task executor | sonnet | (orchestrator) |
+| `atlas-kraken` | TDD implementation, heavy refactors | sonnet | `@tdd` |
+| `atlas-spark` | Quick fixes, simple changes | sonnet | (orchestrator) |
+| `atlas-oracle` | Strategic advisor | opus | `@oracle` |
+| `atlas-explore` | Codebase search | sonnet | `@explore` |
+| `atlas-librarian` | External docs research | sonnet | `@librarian` |
+| `atlas-metis` | Pre-planning consultant | sonnet | `@metis` |
+| `atlas-momus` | Plan reviewer | sonnet | `@momus` |
+| `atlas-code-reviewer` | Code quality review | sonnet | `@review` |
+| `atlas-document-writer` | Technical documentation | sonnet | `@docs` |
 
-| Score | Mode | Phases | A/P/C | Research |
-|-------|------|--------|-------|----------|
-| < 4 | **SPEED** | 1,2,4,8 | No | 1 hook |
-| 4-6 | **ASK** | User chooses | Optional | User chooses |
-| > 6 | **FULL** | 1-10 | Yes | 2 hooks |
+### Agent Chaining
 
----
+| From | Can Chain To |
+|------|--------------|
+| `atlas-prometheus` | atlas-metis, atlas-momus, atlas-oracle |
+| `atlas-orchestrator` | ALL implementing + read-only agents |
+| `atlas-leviathan` | NONE (terminal executor) |
+| `atlas-kraken` | NONE (terminal executor) |
+| `atlas-spark` | NONE (terminal executor) |
+| Read-only agents | NONE (atlas-oracle, atlas-explore, atlas-librarian, atlas-metis, atlas-momus, atlas-code-reviewer) |
 
-## A/P/C Checkpoints
+### Agent Selection (Orchestrator)
 
-**Advanced / Party / Continue** - decision points at end of phases 1-4 (FULL mode only).
-
-| Option | Action |
-|--------|--------|
-| **[A] Advanced** | Phase-specific deep dive |
-| **[P] Party** | Multi-agent feedback (BMAD v6 personas) |
-| **[C] Continue** | Proceed to next phase |
-| **[↩ Back]** | Return to previous phase |
-
-### Advanced Options by Phase
-
-| After Phase | A Option |
-|-------------|----------|
-| 1 (DISCOVER) | Advanced assumption audit |
-| 2 (DEFINE) | Scope stress-test |
-| 3 (DEVELOP) | Architecture deep-dive |
-| 4 (VERIFY) | Oracle runs BEFORE menu |
-
-### State Ladder
-
-```
-INLINE → MICRO_APC → NUDGE → DS_FULL → DS_BRANCH → BRANCH_MERGE
-```
+| Task Type | Agent | Rationale |
+|-----------|-------|-----------|
+| TDD, refactor, heavy, complex, multi-file | `atlas-kraken` | Red-green-refactor cycle |
+| Typo, config, small, simple, quick, minor | `atlas-spark` | Quick fix, minimal overhead |
+| Default | `atlas-leviathan` | General implementation |
 
 ---
 
@@ -186,30 +141,29 @@ bv --robot-status    # Status code only
 ## Directory Structure
 
 ```
-conductor/
-├── product.md              # Product context
-├── tech-stack.md           # Technology decisions
-├── workflow.md             # Workflow preferences
-├── code_styleguides/       # Language-specific rules
-├── CODEMAPS/               # Architecture documentation
-├── handoffs/               # Session context
-│   ├── <track-id>/
-│   │   ├── index.md        # Handoff log
-│   │   └── YYYY-MM-DD_*.md # Individual handoffs
-│   └── general/
-├── spikes/                 # Research spikes
-└── tracks/<id>/            # Per-track work
-    ├── design.md           # Design document
-    ├── spec.md             # Specification
-    ├── plan.md             # Implementation plan
-    └── metadata.json       # State tracking
+.atlas/
+├── plans/                    # Committed work plans
+├── drafts/                   # Interview drafts
+├── notepads/                 # Wisdom per plan
+└── boulder.json              # Active execution state
+
+.claude/
+├── agents/                   # Agent definitions (symlinks)
+├── commands/                 # Slash commands
+├── hooks/                    # Hook configuration
+├── plans/                    # Generated execution plans
+├── scripts/                  # Hook scripts
+└── skills/
+    └── atlas/                # Main workflow skill
+        └── references/
+            └── agents/       # Atlas agent definitions
 
 .beads/
-├── beads.db                # SQLite database
-└── beads.jsonl             # Export format
+├── beads.db                  # SQLite database
+└── beads.jsonl               # Export format
 
-skills/                     # Project skills (symlink to .claude/skills/)
-.claude/skills/             # Actual skill location
+toolboxes/
+└── agent-mail/               # CLI wrapper for Agent Mail
 ```
 
 ---
@@ -218,9 +172,9 @@ skills/                     # Project skills (symlink to .claude/skills/)
 
 | Condition | Action | Message |
 |-----------|--------|---------|
-| `bd` unavailable | **HALT** | `❌ Cannot proceed: bd CLI required` |
-| `conductor/` missing | **DEGRADE** | `⚠️ Standalone mode - limited features` |
-| Agent Mail unavailable | **HALT** | `❌ Cannot proceed: Agent Mail required` |
+| `bd` unavailable | **HALT** | `Cannot proceed: bd CLI required` |
+| `.atlas/` missing | **DEGRADE** | `Standalone mode - limited features` |
+| Agent Mail unavailable | **HALT** | `Cannot proceed: Agent Mail required` |
 
 ### Decision Tree: bd vs TodoWrite
 
@@ -236,34 +190,19 @@ bd available?
 
 ### First Message
 
-1. Check `conductor/handoffs/` for recent handoffs (< 7 days)
-2. If found: `📋 Prior context: [track] (Xh ago)`
-3. Skip if: "fresh start", no `conductor/`, or handoffs > 7 days
-
-### Preflight Triggers
-
-| Command | Preflight |
-|---------|-----------|
-| `/conductor-implement` | ✅ Yes |
-| `/conductor-orchestrate` | ✅ Yes |
-| `ds` | ❌ Skip |
-| `bd ready/show/list` | ❌ Skip |
-
-### Session Identity
-
-- Format: `{BaseAgent}-{timestamp}` (internal)
-- Registered on `/conductor-implement` or `/conductor-orchestrate`
-- Stale threshold: 10 min → takeover prompt
+1. Check `.atlas/plans/` for active plans
+2. If found: display plan status and available work
+3. Skip if: "fresh start", no `.atlas/`, or plans stale
 
 ### Ralph (Autonomous Mode)
 
 | Phase | Action |
 |-------|--------|
-| Start | `ca` sets `ralph.active = true`, invokes ralph.sh |
-| During | Iterates stories, updates passes status |
-| End | `ralph.active = false`, `workflow.state = DONE` |
+| Start | `/ralph-loop` activates autonomous execution |
+| During | Iterates tasks, delegates to agents, verifies results |
+| End | Detection of `<promise>DONE</promise>` stops loop |
 
-**Exclusive Lock:** `ci`/`co` blocked while `ralph.active` is true.
+**Exclusive Lock:** Manual commands blocked while Ralph is active.
 
 ---
 
@@ -300,7 +239,7 @@ toolboxes/agent-mail/agent-mail.js send_message to:BlueLake subject:"Hello"
 # Colon-delimited
 agent-mail.js send_message to:BlueLake subject:"Hello"
 
-# Equals-delimited  
+# Equals-delimited
 agent-mail.js send_message to=BlueLake subject="Hello"
 
 # Function-call style
@@ -311,28 +250,41 @@ agent-mail.js 'send_message(to: "BlueLake", subject: "Hello")'
 
 ## Orchestrator Protocol
 
-### 8-Phase Protocol
+### Execution Flow
 
 | Phase | Action |
 |-------|--------|
-| 0. Preflight | Session identity, detect active sessions |
-| 1. Read Plan | Parse Track Assignments from plan.md |
-| 2. Validate | Health check Agent Mail (HALT if unavailable) |
-| 3. Initialize | ensure_project, register orchestrator + workers |
-| 4. Spawn | Task() for each track (parallel) |
-| 5. Monitor | fetch_inbox, verify worker summaries |
-| 6. Resolve | reply_message for blockers |
-| 7. Complete | Send summary, close epic, `rb` review |
+| 1. Load Plan | Find most recent plan in `.claude/plans/` |
+| 2. Initialize | Create execution state in `.atlas/boulder.json` |
+| 3. Delegate | Task() to specialized agents (leviathan/kraken/spark) |
+| 4. Verify | Verify subagent results (agents can make mistakes) |
+| 5. Complete | Update plan checkboxes, extract wisdom |
 
-### Worker 4-Step Protocol
+### 7-Section Prompt Format
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  STEP 1: INITIALIZE  - macro_start_session() FIRST         │
-│  STEP 2: EXECUTE     - claim beads, do work, close beads   │
-│  STEP 3: REPORT      - send_message() to orchestrator      │
-│  STEP 4: CLEANUP     - release_file_reservations()         │
-└─────────────────────────────────────────────────────────────┘
+When spawning agents, orchestrator uses this format:
+
+```markdown
+## CONTEXT
+[Background and current state]
+
+## OBJECTIVE
+[Clear goal statement]
+
+## SCOPE
+[What's in/out of scope]
+
+## REQUIREMENTS
+[Specific acceptance criteria]
+
+## REQUIRED SKILLS
+[Skills and agent to use]
+
+## CONSTRAINTS
+[Technical/process constraints]
+
+## VERIFICATION
+[How to verify success]
 ```
 
 ---
@@ -344,11 +296,8 @@ agent-mail.js 'send_message(to: "BlueLake", subject: "Hello")'
 | `bv` hangs | Missing `--robot-*` flag | Always use `bv --robot-stdout` |
 | Task not found | Stale beads cache | Run `bd sync` |
 | Agent Mail error | CLI not available | Check `toolboxes/agent-mail/agent-mail.js health-check` |
-| Parallel not detected | Missing Track Assignments | Add `## Track Assignments` to plan.md |
-| Handoff stale | > 7 days old | Create new handoff or use "fresh start" |
-| `ci`/`co` blocked | Ralph active | Wait for `ca` to complete |
-| Skill not loading | Wrong trigger | Check routing table in maestro-core |
-| File conflicts | Missing reservation | Use `file_reservation_paths` before editing |
+| Orchestrator editing directly | Bug | Must always delegate via Task() |
+| Skill not loading | Wrong trigger | Check trigger table above |
 
 ### Validation Checklist
 
@@ -360,7 +309,7 @@ bd --version
 toolboxes/agent-mail/agent-mail.js health-check
 
 # Verify project structure
-ls conductor/
+ls .atlas/
 ls .beads/
 
 # Validate plugin manifest
@@ -375,7 +324,9 @@ cat .claude-plugin/plugin.json | jq .
 2. Use `--robot-*` with `bv` (bare `bv` hangs)
 3. Never write production code without failing test first (TDD)
 4. Always commit `.beads/` with code changes
-5. Load `maestro-core` FIRST before any workflow skill
+5. Orchestrator NEVER edits directly - always delegates via Task()
+6. Always verify subagent claims - agents can make mistakes
+7. Use 7-section prompts for Task() calls (50-200 lines)
 
 ---
 
@@ -385,10 +336,7 @@ cat .claude-plugin/plugin.json | jq .
 |-------|------|
 | Full tutorial | [TUTORIAL.md](TUTORIAL.md) |
 | Agent guidance | [AGENTS.md](AGENTS.md) |
-| Beads workflow | [skills/tracking/references/workflow-integration.md](skills/tracking/references/workflow-integration.md) |
-| Handoff system | [skills/conductor/references/workflows/handoff.md](skills/conductor/references/workflows/handoff.md) |
-| Agent coordination | [skills/orchestrator/references/agent-coordination.md](skills/orchestrator/references/agent-coordination.md) |
-| TDD checkpoints | [skills/conductor/references/tdd-checkpoints-beads.md](skills/conductor/references/tdd-checkpoints-beads.md) |
-| Routing table | [skills/maestro-core/references/routing-table.md](skills/maestro-core/references/routing-table.md) |
-| Pipeline details | [skills/designing/references/pipeline.md](skills/designing/references/pipeline.md) |
-| Glossary | [skills/maestro-core/references/glossary.md](skills/maestro-core/references/glossary.md) |
+| Atlas workflow | [.claude/skills/atlas/SKILL.md](.claude/skills/atlas/SKILL.md) |
+| Agent definitions | [.claude/skills/atlas/references/agents/](.claude/skills/atlas/references/agents/) |
+| Router & keywords | [.claude/skills/atlas/references/workflows/router.md](.claude/skills/atlas/references/workflows/router.md) |
+| Delegation guide | [.claude/skills/atlas/references/guides/delegation.md](.claude/skills/atlas/references/guides/delegation.md) |

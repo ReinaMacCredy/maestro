@@ -1,12 +1,12 @@
 # AGENTS.md - Maestro Plugin
 
-Workflow skills plugin: Conductor, Designing, Tracking, Orchestrator.
+Atlas workflow plugin: Interview-driven planning, Task()-based delegation, TDD execution.
 
 ## Project Detection
 
 | Condition | Result |
 |-----------|--------|
-| `conductor/` exists | Use Conductor workflow |
+| `.atlas/` exists | Use Atlas workflow |
 | `.beads/` exists | Use Beads tracking |
 | Neither | Standalone mode |
 
@@ -30,20 +30,30 @@ Always FULL mode via orchestrator. Even single tasks spawn 1 worker for consiste
 
 | Trigger | Action |
 |---------|--------|
-| `ds` | Design session (Double Diamond) |
-| `/conductor-setup` | Initialize project context |
-| `/conductor-newtrack` | Create spec + plan + beads from design |
+| `/atlas-plan <request>` | Start Prometheus interview mode |
+| `@plan`, `ultraplan` | Prometheus interview mode |
+| `@metis` | Pre-planning consultation |
+| `@momus` | Plan review |
 
 ### Execution
 
 | Trigger | Action |
 |---------|--------|
-| `bd ready --json` | Find available work |
-| `/conductor-implement <track>` | Execute track with TDD |
-| `/conductor-implement --no-tdd` | Execute without TDD |
-| `ca`, `/conductor-autonomous` | Autonomous execution (Ralph loop) |
-| `tdd` | Enter TDD mode |
+| `/atlas-work` | Execute plan via orchestrator |
+| `/ralph-loop` | Autonomous execution (Ralph loop) |
+| `/cancel-ralph` | Stop Ralph loop |
+| `@tdd` | Enter TDD mode (atlas-kraken) |
 | `finish branch` | Finalize and merge/PR |
+
+### Research
+
+| Trigger | Action |
+|---------|--------|
+| `@oracle` | Strategic advisor (opus) |
+| `@explore` | Codebase search |
+| `@librarian` | External docs/research |
+| `@review` | Code quality review |
+| `@docs` | Documentation writer |
 
 ### Beads
 
@@ -57,37 +67,13 @@ Always FULL mode via orchestrator. Even single tasks spawn 1 worker for consiste
 | `bd close <id> --reason <completed\|skipped\|blocked>` | Close task |
 | `bd sync` | Sync to git |
 
-### Handoffs
-
-| Command | Action |
-|---------|--------|
-| `/conductor-handoff` | Save session context |
-| `/conductor-handoff resume` | Load session context |
-
-### Maintenance
-
-| Trigger | Action |
-|---------|--------|
-| `/conductor-revise` | Update spec/plan mid-work |
-| `/conductor-finish` | Complete track, extract learnings |
-| `/conductor-status` | Display progress overview |
-
 ## Session Protocol
 
 ### First Message
 
-1. Check `conductor/handoffs/` for recent handoffs (< 7 days)
-2. If found: `📋 Prior context: [track] (Xh ago)`
-3. Skip if: "fresh start", no `conductor/`, or handoffs > 7 days
-
-### Preflight Triggers
-
-| Command | Preflight |
-|---------|-----------|
-| `/conductor-implement` | ✅ Yes |
-| `/conductor-orchestrate` | ✅ Yes |
-| `ds` | ❌ Skip |
-| `bd ready/show/list` | ❌ Skip |
+1. Check `.atlas/plans/` for active plans
+2. If found: display plan status and available work
+3. Skip if: "fresh start", no `.atlas/`, or plans stale
 
 ### Session Start
 
@@ -99,9 +85,8 @@ bd update <id> --status in_progress  # Claim
 
 ### During Session
 
-- Heartbeat every 5 min (automatic)
 - TDD checkpoints tracked by default
-- Idle > 30min → prompt for handoff
+- Orchestrator delegates ALL work (never edits directly)
 
 ### Session End
 
@@ -111,38 +96,27 @@ bd close <id> --reason completed
 bd sync
 ```
 
-### Session Identity
-
-- Format: `{BaseAgent}-{timestamp}` (internal)
-- Registered on `/conductor-implement` or `/conductor-orchestrate`
-- Stale threshold: 10 min → takeover prompt
-
 ### Ralph (Autonomous Mode)
 
 | Phase | Action |
 |-------|--------|
-| Start | `ca` sets `ralph.active = true`, invokes ralph.sh |
-| During | Ralph iterates through stories, updates passes status |
-| End | `ralph.active = false`, `workflow.state = DONE` |
+| Start | `/ralph-loop` activates autonomous execution |
+| During | Ralph iterates through tasks, updates progress |
+| End | Detection of `<promise>DONE</promise>` stops loop |
 
-**Exclusive Lock:** `ci`/`co` commands blocked while `ralph.active` is true.
-
-**Gotchas:**
-- `ralph.active` lock prevents concurrent `ci`/`co` execution
-- `progress.txt` is in track directory, not project root
-- Ralph reads/writes `metadata.json.ralph.stories` directly
+**Exclusive Lock:** Manual commands blocked while Ralph is active.
 
 ## Fallback Policy
 
 | Condition | Action |
 |-----------|--------|
 | `bd` unavailable | HALT |
-| `conductor/` missing | DEGRADE (standalone) |
+| `.atlas/` missing | DEGRADE (standalone) |
 | Agent Mail unavailable | HALT |
 
 ## Skill Discipline
 
-**RULE:** Load [maestro-core](skills/maestro-core/SKILL.md) FIRST before any workflow skill for routing table and fallback policies.
+**RULE:** Atlas skill auto-loads for all `@keyword` triggers and `/atlas-*` commands.
 
 **RULE:** Check skills BEFORE ANY RESPONSE. 1% chance = invoke Skill tool.
 
@@ -159,8 +133,9 @@ bd sync
 
 ### Skill Priority
 
-1. **Process skills** (`ds`, `/conductor-design`) → determine approach
-2. **Implementation skills** (`frontend-design`, `mcp-builder`) → guide execution
+1. **Atlas workflow** (`@plan`, `/atlas-plan`) → planning and execution
+2. **Specialized agents** (`@oracle`, `@explore`, `@librarian`) → research
+3. **Implementation** (`@tdd`, `/atlas-work`) → execution
 
 ### Skill Types
 
@@ -172,13 +147,22 @@ bd sync
 ## Directory Structure
 
 ```
-conductor/
-├── product.md, tech-stack.md, workflow.md  # Context
-├── CODEMAPS/                               # Architecture
-├── handoffs/                               # Session context
-└── tracks/<id>/                            # Per-track
-    ├── design.md, spec.md, plan.md
-    └── metadata.json
+.atlas/
+├── plans/                    # Committed work plans
+├── drafts/                   # Interview drafts
+├── notepads/                 # Wisdom per plan
+└── boulder.json              # Active execution state
+
+.claude/
+├── agents/                   # Agent definitions (symlinks)
+├── commands/                 # Slash commands
+├── hooks/                    # Hook configuration
+├── plans/                    # Generated execution plans
+├── scripts/                  # Hook scripts
+└── skills/
+    └── atlas/                # Main workflow skill
+        └── references/
+            └── agents/       # Atlas agent definitions
 ```
 
 ## Build/Test
@@ -201,7 +185,7 @@ cat .claude-plugin/plugin.json | jq .   # Validate manifest
 | Skill | Manual frontmatter update |
 | Skip CI | `[skip ci]` in commit |
 
-**Pre-1.0 Semantics**: While version is 0.x.x, breaking changes (`feat!:` or `release:major`) bump MINOR not MAJOR. This prevents accidental 1.0.0 release. See [CHANGELOG-legacy.md](CHANGELOG-legacy.md) for pre-0.5.0 history.
+**Pre-1.0 Semantics**: While version is 0.x.x, breaking changes (`feat!:` or `release:major`) bump MINOR not MAJOR. This prevents accidental 1.0.0 release.
 
 ## Critical Rules
 
@@ -209,15 +193,15 @@ cat .claude-plugin/plugin.json | jq .   # Validate manifest
 - Use `--robot-*` with `bv` (bare `bv` hangs)
 - Never write production code without failing test first
 - Always commit `.beads/` with code changes
+- Orchestrator NEVER edits directly - always delegates via Task()
 
 ## Detailed References
 
 | Topic | Path |
 |-------|------|
-| Beads workflow | [skills/tracking/references/workflow-integration.md](skills/tracking/references/workflow-integration.md) |
-| Handoff system | [skills/conductor/references/workflows/handoff.md](skills/conductor/references/workflows/handoff.md) |
-| Agent coordination | [skills/orchestrator/references/agent-coordination.md](skills/orchestrator/references/agent-coordination.md) |
-| Router | [skills/orchestrator/references/router.md](skills/orchestrator/references/router.md) |
-| Beads integration | [skills/conductor/references/beads-integration.md](skills/conductor/references/beads-integration.md) |
-| TDD checkpoints | [skills/conductor/references/tdd-checkpoints-beads.md](skills/conductor/references/tdd-checkpoints-beads.md) |
-| Idle detection | [skills/conductor/references/workflows/handoff.md](skills/conductor/references/workflows/handoff.md) |
+| Atlas workflow | [.claude/skills/atlas/SKILL.md](.claude/skills/atlas/SKILL.md) |
+| Agent definitions | [.claude/skills/atlas/references/agents/](.claude/skills/atlas/references/agents/) |
+| Router & keywords | [.claude/skills/atlas/references/workflows/router.md](.claude/skills/atlas/references/workflows/router.md) |
+| Planning workflow | [.claude/skills/atlas/references/workflows/prometheus.md](.claude/skills/atlas/references/workflows/prometheus.md) |
+| Execution workflow | [.claude/skills/atlas/references/workflows/execution.md](.claude/skills/atlas/references/workflows/execution.md) |
+| Delegation guide | [.claude/skills/atlas/references/guides/delegation.md](.claude/skills/atlas/references/guides/delegation.md) |

@@ -1,6 +1,6 @@
 # Maestro: The Complete Guide
 
-> **For humans**: Read this to understand what Maestro does and why it matters.  
+> **For humans**: Read this to understand what Maestro does and why it matters.
 > **For agents**: See the Quick Reference at the end for triggers.
 
 ---
@@ -14,59 +14,60 @@ AI coding agents are powerful but forgetful. They:
 - **Debug chaotically** without systematic approaches
 
 Maestro solves these problems by giving agents a **structured methodology**:
+- Interview-driven planning with specialized agents
 - Persistent planning artifacts that survive sessions
-- Dependency-aware issue tracking
-- Consistent workflows with TDD enforcement
-- Context handoffs that bridge session boundaries
+- Task()-based delegation with specialized executors
+- TDD enforcement and wisdom accumulation
 
 ---
 
 ## Key Insights (The "Aha" Moments)
 
-1. **"Spend tokens once on a good plan; reuse it many times."**  
-   Long, fuzzy chats chew context. A structured spec+plan is cheaper to revisit.
+1. **"Spend tokens once on a good plan; reuse it many times."**
+   Long, fuzzy chats chew context. A structured interview + plan is cheaper to revisit.
 
-2. **"Your project's state lives in git, not in the agent's memory."**  
+2. **"Your project's state lives in git, not in the agent's memory."**
    Chat history is ephemeral. Beads issues persist in `.beads/` and survive compaction.
 
-3. **"Beads are dependency-aware, not a flat todo list."**  
+3. **"Beads are dependency-aware, not a flat todo list."**
    Encode constraints once ("A blocks B"). All later sessions respect them.
 
-4. **"Skills are mental modes, not just commands."**  
-   Invoking `tdd` or `ds` switches the agent into a specific methodology.
+4. **"Agents are specialized, not general-purpose."**
+   Prometheus interviews, Oracle advises, Kraken does TDD. Each does one thing well.
 
-5. **"Evidence before assertions."**  
+5. **"Evidence before assertions."**
    Don't claim "tests pass"—show the output. Don't claim "fixed"—show the verification.
 
 ---
 
 ## Core Concepts
 
-### Conductor (Planning)
+### Atlas Workflow
 
-Conductor creates structured planning artifacts that persist across sessions:
+Atlas is the interview-driven planning and execution system:
 
-| Artifact | Purpose | Created By |
-|----------|---------|------------|
-| `design.md` | High-level architecture decisions | `ds` |
-| `spec.md` | Requirements and acceptance criteria | `/conductor-newtrack` |
-| `plan.md` | Task breakdown with status markers | `/conductor-newtrack` |
-| `metadata.json` | Track state and validation info | `/conductor-newtrack` |
+| Phase | Agent | Purpose |
+|-------|-------|---------|
+| **Planning** | `atlas-prometheus` | Interview to clarify requirements |
+| **Gap Analysis** | `atlas-metis` | Identify hidden requirements |
+| **Review** | `atlas-momus` | Validate plan quality |
+| **Execution** | `atlas-orchestrator` | Delegate to specialized agents |
+| **Implementation** | `atlas-leviathan/kraken/spark` | Do the actual work |
 
-**Directory structure:**
+**State directory:**
 ```
-conductor/
-├── product.md              # Product context
-├── tech-stack.md           # Technology choices
-├── workflow.md             # Workflow preferences
-├── CODEMAPS/               # Architecture docs
-├── handoffs/               # Session context
-│   └── <track>/
-└── tracks/<track-id>/      # Per-track work
-    ├── design.md
-    ├── spec.md
-    ├── plan.md
-    └── metadata.json
+.atlas/
+├── plans/                    # Committed work plans
+├── drafts/                   # Interview drafts
+├── notepads/                 # Wisdom per plan
+└── boulder.json              # Active execution state
+
+.claude/
+├── agents/                   # Agent definitions
+├── commands/                 # Slash commands
+├── plans/                    # Generated execution plans
+└── skills/
+    └── atlas/                # Main workflow skill
 ```
 
 ### Beads/Tracking (Issue Management)
@@ -82,100 +83,67 @@ bd close <id> --reason completed
 
 The key insight: **notes survive compaction**. Write handoff context there.
 
-### Skills (Mental Modes)
+### Atlas Agents
 
-Skills aren't scripts—they're methodologies the agent adopts:
+Agents are specialized—each does one thing well:
 
-| Skill | Trigger | What It Does |
-|-------|---------|--------------| 
-| **designing** | `ds` | Double Diamond design session |
-| **conductor** | `ci`, `tdd` | TDD implementation |
-| **tracking** | `fb`, `rb` | File/review beads |
-| **orchestrator** | `co` | Multi-agent parallel execution |
-| **handoff** | `ho` | Session context preservation |
+| Agent | Purpose | Trigger |
+|-------|---------|---------|
+| **atlas-prometheus** | Strategic planner, interview mode | `@plan` |
+| **atlas-orchestrator** | Master delegator (never works directly) | `/atlas-work` |
+| **atlas-leviathan** | General implementation | (orchestrator delegates) |
+| **atlas-kraken** | TDD implementation, heavy refactors | `@tdd` |
+| **atlas-spark** | Quick fixes, simple changes | (orchestrator delegates) |
+| **atlas-oracle** | Strategic advisor (opus) | `@oracle` |
+| **atlas-explore** | Codebase search | `@explore` |
+| **atlas-librarian** | External docs/research | `@librarian` |
+| **atlas-metis** | Pre-planning consultant | `@metis` |
+| **atlas-momus** | Plan reviewer (approves with "OKAY") | `@momus` |
 
 ---
 
-## The 10-Phase Unified Pipeline
+## The Atlas Pipeline
 
-Maestro uses a unified pipeline that combines design and planning:
+Maestro uses a structured pipeline combining planning and execution:
 
 ```mermaid
 flowchart LR
-    subgraph Design ["Design (ds)"]
-        P1["1. DISCOVER"] --> P2["2. DEFINE"]
-        P2 --> P3["3. DEVELOP"]
-        P3 --> P4["4. VERIFY"]
+    subgraph Planning ["Planning (@plan)"]
+        P1["1. Interview"] --> P2["2. Draft Plan"]
+        P2 --> P3["3. Gap Analysis"]
+        P3 --> P4["4. Review Loop"]
     end
-    
-    subgraph Plan ["Plan (cn)"]
-        P4 --> P5["5. DECOMPOSE"]
-        P5 --> P6["6. VALIDATE"]
-        P6 --> P7["7. ASSIGN"]
-        P7 --> P8["8. READY"]
-    end
-    
-    subgraph Execute ["Execute (ci/co)"]
-        P8 --> P9["9. EXECUTE"]
-        P9 --> P10["10. FINISH"]
+
+    subgraph Execution ["/atlas-work"]
+        P4 --> P5["5. Orchestrator"]
+        P5 --> P6["6. Delegate Tasks"]
+        P6 --> P7["7. Verify Results"]
+        P7 --> P8["8. Accumulate Wisdom"]
     end
 ```
 
 ### Phase Details
 
-| # | Phase | Type | Purpose | Exit Criteria |
-|---|-------|------|---------|---------------|
-| 1 | **DISCOVER** | Diverge | Explore problem + research context | Problem articulated |
-| 2 | **DEFINE** | Converge | Frame problem + select approach | Approach selected |
-| 3 | **DEVELOP** | Diverge | Architecture + components | Interfaces defined |
-| 4 | **VERIFY** | Converge | Oracle audit + risk assessment | Oracle APPROVED |
-| 5 | **DECOMPOSE** | Execute | Create beads (`fb`) | Beads filed |
-| 6 | **VALIDATE** | Execute | Dependency check (`bv`) + Oracle review | Dependencies valid |
-| 7 | **ASSIGN** | Execute | Track assignments | Tracks assigned |
-| 8 | **READY** | Complete | Handoff to `ci`/`co` | Execution ready |
-| 9 | **EXECUTE** | Implement | Run implementation | All beads completed |
-| 10 | **FINISH** | Archive | Extract learnings | Track archived |
+| # | Phase | Agent | Purpose |
+|---|-------|-------|---------|
+| 1 | **Interview** | atlas-prometheus | Ask clarifying questions |
+| 2 | **Draft Plan** | atlas-prometheus | Generate structured plan |
+| 3 | **Gap Analysis** | atlas-metis | Identify hidden requirements |
+| 4 | **Review Loop** | atlas-momus | Validate until "OKAY" |
+| 5 | **Orchestrate** | atlas-orchestrator | Load plan, delegate work |
+| 6 | **Execute** | atlas-leviathan/kraken/spark | Implement tasks |
+| 7 | **Verify** | atlas-orchestrator | Verify subagent claims |
+| 8 | **Wisdom** | atlas-orchestrator | Extract and persist learnings |
 
-### Mode Routing
+### Agent Selection
 
-Complexity scoring determines execution mode:
+When orchestrator delegates, it selects agents based on task type:
 
-| Score | Mode | Phases | Behavior |
-|-------|------|--------|----------|
-| < 4 | **SPEED** | 1,2,4,8 | Skip beads, advisory verification |
-| 4-6 | **ASK** | User chooses | Optional A/P/C checkpoints |
-| > 6 | **FULL** | All 10 | Full A/P/C, mandatory verification |
-
-### A/P/C Checkpoints
-
-At the end of phases 1-4 (FULL mode), you'll see:
-
-```
-[A] Advanced - Phase-specific deep dive
-[P] Party    - Multi-agent feedback (BMAD v6)
-[C] Continue - Proceed to next phase
-[↩ Back]     - Return to previous phase
-```
-
-| After Phase | [A] Option |
-|-------------|------------|
-| 1 (DISCOVER) | Advanced assumption audit |
-| 2 (DEFINE) | Scope stress-test |
-| 3 (DEVELOP) | Architecture deep-dive |
-| 4 (VERIFY) | Oracle runs automatically |
-
-### Oracle Audit (Phase 4)
-
-At Phase 4, the Oracle performs a 6-dimension review:
-
-1. **Completeness** — All topics covered?
-2. **Accuracy** — Aligned with current project state?
-3. **Redundancy** — Overlapping content?
-4. **Missing pieces** — Important gaps?
-5. **Feasibility** — Can this be built?
-6. **Risk** — What could go wrong?
-
-The Oracle must APPROVE before proceeding. On HALT, address feedback first.
+| Task Type | Agent | Rationale |
+|-----------|-------|-----------|
+| TDD, refactor, heavy | `atlas-kraken` | Red-green-refactor cycle |
+| Simple, typo, config | `atlas-spark` | Quick fix, minimal overhead |
+| General implementation | `atlas-leviathan` | Default executor |
 
 ---
 
@@ -184,290 +152,196 @@ The Oracle must APPROVE before proceeding. On HALT, address feedback first.
 ```mermaid
 flowchart LR
     subgraph Planning
-        A["ds"] --> B["design.md"]
-        B --> C["cn"]
-        C --> D["spec + plan"]
-        D --> E["fb: file beads"]
+        A["@plan"] --> B["Interview"]
+        B --> C["Draft Plan"]
+        C --> D["@metis: Gap Analysis"]
+        D --> E["@momus: Review"]
     end
-    
+
     subgraph Execution
-        E --> F["bd ready"]
-        F --> G["ci"]
-        G --> H{"TDD Cycle"}
-        H --> I["RED: write test"]
-        I --> J["GREEN: make pass"]
-        J --> K["REFACTOR"]
-        K --> L["bd close"]
-        L --> F
+        E --> F["/atlas-work"]
+        F --> G["Orchestrator"]
+        G --> H["Delegate to Agents"]
+        H --> I["TDD Cycle"]
+        I --> J["Verify"]
+        J --> K["bd close"]
     end
-    
+
     subgraph Completion
-        L --> M["/conductor-finish"]
-        M --> N["Extract learnings"]
-        N --> O["Archive track"]
+        K --> L["Wisdom Extraction"]
+        L --> M["Plan Complete"]
     end
 ```
 
 **The flow:**
 ```
-ds → /conductor-newtrack → /conductor-implement → /conductor-finish
+@plan → Interview → Plan → /atlas-work → Orchestrate → Execute → Verify
 ```
 
-### Phase 1-4: Design (`ds`)
+### Phase 1-4: Planning (`@plan`)
 
-Start with a Double Diamond design session:
-
-```
-User: ds
-
-Agent: I'll help you design a new feature. What would you like to build?
-
-User: User invitation system for our SaaS
-
-Agent: [asks clarifying questions - one at a time]
-Agent: [explores 2-3 approaches with trade-offs]
-Agent: [presents design in sections for approval]
-Agent: Design captured in design.md. Ready to create track?
-```
-
-**Output:** `conductor/tracks/<id>/design.md`
-
-### Phase 5-8: Create Track (`cn` or `/conductor-newtrack`)
-
-Convert design into actionable artifacts:
+Start with an interview-driven planning session:
 
 ```
-User: cn
+User: @plan
 
-Agent: [reads design.md]
-Agent: [creates spec.md with acceptance criteria]
-Agent: [creates plan.md with task breakdown]
-Agent: [runs fb to create beads]
-Agent: [runs rb to review dependencies]
+Agent (Prometheus): I'll help you plan this feature. Let me ask some questions:
+- What problem are you trying to solve?
+- Who are the users?
+- What are the constraints?
 
-Agent: Planning complete. 12 issues across 3 epics:
-  • E1: Database schema (3 tasks, unblocked)
-  • E2: API endpoints (5 tasks, blocked by E1)
-  • E3: Email integration (4 tasks, blocked by E2)
+User: [answers questions]
+
+Agent: [creates draft plan]
+Agent: Consulting Metis for gap analysis...
+Agent: Consulting Momus for review...
+Agent: Plan ready in .claude/plans/feature-name.md
 ```
 
-**Output:** `spec.md`, `plan.md`, beads in `.beads/`
+**Output:** Structured plan in `.claude/plans/`
 
-### Phase 9: Implement (`ci` or `/conductor-implement`)
+### Phase 5-8: Execution (`/atlas-work`)
 
-Execute the plan with TDD (enabled by default):
+Execute the plan via orchestrator:
 
 ```
-User: ci
+User: /atlas-work
 
-Agent: Executing E1: Database schema
-  [claims inv-001: Create invitations table]
-  [TDD: writes failing test]
-  [TDD: implements to pass]
-  [TDD: refactors]
-  [closes inv-001]
-  [claims inv-002...]
+Agent (Orchestrator): Loading plan from .claude/plans/feature-name.md
+  [delegates task 1 to atlas-leviathan]
+  [verifies task 1 results]
+  [delegates task 2 to atlas-kraken for TDD work]
+  [verifies task 2 results]
+  ...
+
+Agent: All tasks complete. Wisdom extracted to .atlas/notepads/
 ```
 
-**TDD Cycle:**
+**TDD Cycle (for atlas-kraken):**
 1. **RED** — Write a failing test
 2. **GREEN** — Write minimal code to pass
 3. **REFACTOR** — Clean up while tests pass
-
-Disable TDD with `--no-tdd` flag when appropriate.
-
-### Phase 10: Finish (`/conductor-finish`)
-
-Complete the track and extract learnings:
-
-```
-User: /conductor-finish
-
-Agent: [verifies all beads closed]
-Agent: [verifies tests passing]
-Agent: [extracts learnings to AGENTS.md]
-Agent: [archives track]
-Agent: Track complete. Learnings extracted.
-```
 
 ---
 
 ## Multi-Session Example
 
-### Session 1: Design and Planning
+### Session 1: Planning
 
 ```
-User: ds
+User: @plan Add user invitation system
 
-Agent: What would you like to design?
+Agent: [Interview questions...]
+Agent: [Creates draft plan]
+Agent: [Metis gap analysis]
+Agent: [Momus review → OKAY]
 
-User: User invitation system
-
-Agent: [Double Diamond session...]
-Agent: Design captured. Create track?
-
-User: yes
-
-Agent: [creates spec + plan + beads]
-Agent: Planning complete. 12 issues, 3 epics.
-       E1 ready (unblocked).
-
-User: ho
-
-Agent: 📋 Handoff saved: invitations (design-end)
+Agent: Plan ready. 12 tasks across 3 phases.
+       Run /atlas-work to execute.
 ```
 
-### Session 2: First Epic
+### Session 2: First Phase
 
 ```
-Agent: 📋 Prior context: invitations (2h ago)
+User: /atlas-work
 
-User: ci
+Agent: Loading plan...
+  [Orchestrator delegates Phase 1 tasks]
+  [atlas-leviathan: Database schema]
+  [atlas-leviathan: API types]
+  [Verification complete]
 
-Agent: Executing E1: Database schema
-  [TDD cycle for inv-001]
-  [TDD cycle for inv-002]
-  [TDD cycle for inv-003]
-
-Agent: Epic E1 complete. 3/12 done. Continue to E2?
-
-User: no, stopping
-
-Agent: 📋 Handoff saved: invitations (epic-end)
+Agent: Phase 1 complete. 4/12 tasks done.
+       Continue with next session or /ralph-loop for autonomous.
 ```
 
-### Session 3: Continue and Finish
+### Session 3: Autonomous Completion
 
 ```
-Agent: 📋 Prior context: invitations E1 complete (16h ago)
+User: /ralph-loop
 
-User: continue
+Agent: Starting autonomous execution...
+  [Phase 2: API endpoints via atlas-leviathan]
+  [Phase 3: Email integration via atlas-kraken]
+  [All tasks verified]
 
-Agent: Executing E2: API endpoints (now unblocked)
-  [TDD cycles...]
-
-Agent: E2 complete. E3 next?
-
-User: yes
-
-Agent: [E3 TDD cycles...]
-Agent: All epics complete.
-
-User: /conductor-finish
-
-Agent: ✓ All beads closed
-       ✓ Tests passing
-       ✓ Learnings extracted
-       Track archived.
+Agent: <promise>DONE</promise>
+       Plan complete. Wisdom extracted.
 ```
 
 ---
 
-## Handoff System
+## Autonomous Mode (Ralph Loop)
 
-### The Problem
-
-AI agents forget everything between sessions. Context windows fill up, sessions end, and the next agent starts from scratch.
-
-### The Solution
-
-Handoff persists context in **files that outlive sessions**:
-
-| Artifact | What It Preserves |
-|----------|-------------------|
-| `design.md` | Architecture decisions, trade-offs |
-| `spec.md` | Requirements, acceptance criteria |
-| `plan.md` | Tasks with `[x]`/`[ ]` status |
-| `.beads/` | Issues with notes field (key!) |
-| `conductor/handoffs/` | Session snapshots |
-
-### Handoff Triggers
-
-| Trigger | When | Automatic |
-|---------|------|-----------|
-| `design-end` | After `/conductor-newtrack` | ✅ |
-| `epic-start` | Before each epic | ✅ |
-| `epic-end` | After epic closes | ✅ |
-| `pre-finish` | Start of `/conductor-finish` | ✅ |
-| `manual` | User runs `ho` | ❌ |
-| `idle` | 30min gap detected | ✅ (prompted) |
-
-### Commands
+Ralph Loop enables autonomous execution until completion:
 
 ```bash
-ho                    # Auto-detect (create or resume)
-/conductor-handoff create   # Force save
-/conductor-handoff resume   # Force load
+/ralph-loop       # Start autonomous execution
+/cancel-ralph     # Stop if needed
 ```
 
-### Writing Good Handoff Notes
-
-The beads **notes field** is your session-to-session memory:
-
-```bash
-bd update <id> --notes "COMPLETED: Auth middleware. IN PROGRESS: Token refresh. NEXT: Add edge case tests."
-```
-
-Write like you're leaving instructions for yourself in two weeks with zero context.
-
----
-
-## BMAD/Party Mode
-
-**BMAD v6** provides multi-agent feedback through simulated expert personas.
-
-When you select **[P] Party** at an A/P/C checkpoint:
-
-1. System spawns 3-5 expert personas
-2. Each reviews from their specialty (architect, PM, QA, etc.)
-3. Feedback is synthesized into actionable items
-4. You decide what to incorporate
-
-**When to use Party:**
-- Major architectural decisions
-- Scope uncertainty
-- Risk assessment needed
-- Before committing to expensive approaches
+**How it works:**
+1. Orchestrator loads plan and executes tasks
+2. After each task, checks for `<promise>DONE</promise>`
+3. If not done, continues to next task
+4. Loop terminates when all tasks complete or cancelled
 
 ---
 
 ## Common Scenarios
 
+### Need Strategic Advice
+
+```
+User: @oracle Should we use WebSockets or SSE for real-time updates?
+
+Agent (Oracle): [Deep analysis using opus model]
+  - WebSockets: bidirectional, more complex
+  - SSE: simpler, sufficient for server→client
+  - Recommendation: SSE for your use case because...
+```
+
+### Need to Search Codebase
+
+```
+User: @explore Where is the authentication middleware?
+
+Agent (Explore): [Searches codebase]
+  Found in src/middleware/auth.ts:15
+  - Uses JWT validation
+  - Called from src/routes/api.ts:42
+```
+
+### Need External Documentation
+
+```
+User: @librarian How does Next.js 15 handle server components?
+
+Agent (Librarian): [Fetches external docs]
+  According to Next.js 15 documentation:
+  - Server components are the default
+  - Use 'use client' directive for client components
+  ...
+```
+
 ### Already Have a Plan
 
-Skip design, go straight to beads:
+Skip interview, go straight to execution:
 
 ```bash
-fb                    # File beads from existing plan
-bd ready --json       # See what's unblocked
-ci                    # Execute with TDD
+/atlas-work       # Execute existing plan
 ```
 
 ### Bug Investigation
 
-```bash
-bd create "Investigate billing 500" -t bug -p 0
-tdd                   # Fix with TDD
-bd close <id> --reason completed
 ```
+User: @tdd Fix the billing calculation bug
 
-### Track in Bad State
-
-Validate and see issues:
-
-```bash
-/conductor-validate <track-id>
+Agent (Kraken): [TDD approach]
+  RED: Writing failing test for edge case...
+  GREEN: Fixing calculation...
+  REFACTOR: Cleaning up...
 ```
-
-### Parallel Execution
-
-When plan.md has Track Assignments:
-
-```bash
-co                    # Spawn parallel workers
-```
-
-Workers coordinate via Agent Mail, reserve files, report back.
 
 ---
 
@@ -477,39 +351,47 @@ Workers coordinate via Agent Mail, reserve files, report back.
 
 | Task | Command |
 |------|---------|
-| Start design | `ds` |
-| Create track | `cn` or `/conductor-newtrack` |
-| See ready work | `bd ready --json` |
-| Start implementation | `ci` or `/conductor-implement` |
-| Parallel workers | `co` or `/conductor-orchestrate` |
-| Autonomous mode | `ca` or `/conductor-autonomous` |
-| Save context | `ho` or `/conductor-handoff` |
-| Complete track | `/conductor-finish` |
+| Start planning interview | `@plan` |
+| Pre-planning consultation | `@metis` |
+| Review a plan | `@momus` |
+| Execute plan | `/atlas-work` |
+| Autonomous execution | `/ralph-loop` |
+| Stop autonomous | `/cancel-ralph` |
+| Strategic advice | `@oracle` |
+| Search codebase | `@explore` |
+| External research | `@librarian` |
+| TDD implementation | `@tdd` |
+| Code review | `@review` |
+| Write documentation | `@docs` |
+| See available work | `bd ready --json` |
 
 ### For Agents: Triggers
 
-| Trigger | Skill | Action |
+| Trigger | Agent | Action |
 |---------|-------|--------|
-| `ds` | designing | Double Diamond (phases 1-10) |
-| `cn` | designing | Create track (phases 5-10) |
-| `pl` | designing | Planning only (phases 5-10) |
-| `fb` | tracking | File beads from plan |
-| `rb` | tracking | Review beads |
-| `ci` | conductor | Execute track with TDD |
-| `co` | orchestrator | Spawn parallel workers |
-| `ca` | conductor | Autonomous (Ralph) mode |
-| `tdd` | conductor | RED-GREEN-REFACTOR cycle |
-| `ho` | handoff | Save/load session context |
-| `finish branch` | conductor | Finalize and merge/PR |
+| `@plan`, `ultraplan` | atlas-prometheus | Interview-driven planning |
+| `/atlas-work` | atlas-orchestrator | Execute plan via delegation |
+| `/ralph-loop` | atlas-orchestrator | Autonomous loop |
+| `@oracle` | atlas-oracle | Strategic advice (opus) |
+| `@explore` | atlas-explore | Codebase search |
+| `@librarian` | atlas-librarian | External docs research |
+| `@metis` | atlas-metis | Pre-planning gap analysis |
+| `@momus` | atlas-momus | Plan review (approve with OKAY) |
+| `@tdd` | atlas-kraken | TDD implementation |
+| `@review` | atlas-code-reviewer | Code quality review |
+| `@docs` | atlas-document-writer | Technical documentation |
+| `fb` | - | File beads from plan |
+| `rb` | - | Review beads |
 
 ### Critical Rules
 
 1. **No production code without a failing test first** (use `--no-tdd` to disable)
-2. **Always checkpoint before session end** — notes field survives compaction
-3. **Commit `.beads/` with code** — it's your persistent memory
-4. **Evidence before assertions** — show test output, don't just claim "tests pass"
-5. **Use `--json` with `bd`** — for structured output
-6. **Use `--robot-*` with `bv`** — bare `bv` hangs
+2. **Orchestrator never edits directly** — always delegates via Task()
+3. **Verify subagent claims** — agents can make mistakes
+4. **Commit `.beads/` with code** — it's your persistent memory
+5. **Evidence before assertions** — show test output, don't just claim "tests pass"
+6. **Use `--json` with `bd`** — for structured output
+7. **Use `--robot-*` with `bv`** — bare `bv` hangs
 
 ---
 
@@ -518,11 +400,11 @@ Workers coordinate via Agent Mail, reserve files, report back.
 | Issue | Solution |
 |-------|----------|
 | Agent forgets context | Run `bd show <id>` for notes |
-| Plan seems incomplete | Run `rb` to review beads |
+| Plan seems incomplete | Run `@momus` to review |
 | Tests pass immediately | You wrote code first. Delete it. Start with failing test. |
 | Too many issues | Run `bd ready --json` for unblocked only |
-| Track in bad state | Run `/conductor-validate <track-id>` |
-| Skill not loading | Use explicit trigger: `ds`, `ci`, `tdd` |
+| Orchestrator editing directly | Bug - must always delegate |
+| Skill not loading | Use explicit trigger: `@plan`, `/atlas-work`, `@tdd` |
 | `bv` hangs | Use `bv --robot-stdout` (never bare `bv`) |
 | Agent Mail unavailable | Check `toolboxes/agent-mail/agent-mail.js health-check` |
 
@@ -530,17 +412,21 @@ Workers coordinate via Agent Mail, reserve files, report back.
 
 ## Tips
 
-### Plan Before Each Epic
+### Interview Thoroughly
 
-Before `ci`, let the agent strategize about the approach.
+The better the interview, the better the plan. Answer Prometheus's questions completely.
 
-### Use Handoffs Liberally
+### Use Metis for Gap Analysis
 
-Better to create too many handoffs than lose context.
+Before finalizing a plan, `@metis` identifies hidden requirements you might miss.
+
+### Use Momus for Review
+
+Before executing, `@momus` reviews the plan and approves with "OKAY" or requests changes.
 
 ### Trust the Pipeline
 
-The 10-phase pipeline exists because it works. Don't skip phases unless you're in SPEED mode.
+The Atlas pipeline exists because it works. Interview → Plan → Execute.
 
 ### Review Beads Regularly
 

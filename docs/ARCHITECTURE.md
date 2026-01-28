@@ -1,6 +1,6 @@
 # Architecture
 
-System architecture, skill hierarchy, and workflow pipeline for Maestro.
+System architecture, agent hierarchy, and workflow pipeline for Maestro.
 
 ## System Overview
 
@@ -8,88 +8,96 @@ System architecture, skill hierarchy, and workflow pipeline for Maestro.
 flowchart TB
     subgraph WORKFLOW["MAESTRO WORKFLOW"]
         direction TB
-        DS["ds (Design)"] --> NEWTRACK["/conductor-newtrack"]
-        NEWTRACK --> IMPLEMENT["/conductor-implement"]
-        IMPLEMENT --> FINISH["/conductor-finish"]
+        PLAN["@plan"] --> INTERVIEW["Interview"]
+        INTERVIEW --> METIS["@metis (Gap Analysis)"]
+        METIS --> MOMUS["@momus (Review)"]
+        MOMUS --> WORK["/atlas-work"]
+        WORK --> EXECUTE["Execution"]
     end
 
     subgraph ARTIFACTS["ARTIFACTS"]
-        DESIGN["design.md"]
-        SPEC["spec.md + plan.md"]
-        BEADS[".beads/"]
+        PLANS[".claude/plans/"]
+        DRAFTS[".atlas/drafts/"]
+        WISDOM[".atlas/notepads/"]
     end
 
-    DS --> DESIGN
-    NEWTRACK --> SPEC
-    NEWTRACK --> BEADS
+    INTERVIEW --> DRAFTS
+    MOMUS --> PLANS
+    EXECUTE --> WISDOM
 ```
 
-## Skill Hierarchy
+## Agent Hierarchy
 
-Five-level hierarchy with clear dependencies:
+12 specialized agents with clear delegation patterns:
 
-| Level | Skill | Purpose | Depends On |
-|-------|-------|---------|------------|
-| **1** | `conductor` | Orchestration, planning, execution | - |
-| **2** | `orchestrator` | Multi-agent parallel execution | conductor |
-| **3** | `design` | Double Diamond sessions, BMAD | conductor |
-| **4** | `beads` | Issue tracking, dependencies | conductor |
-| **5** | Specialized | git-worktrees, writing-skills | Any above |
+| Agent | Purpose | Model | Chains To |
+|-------|---------|-------|-----------|
+| `atlas-prometheus` | Strategic planner, interview mode | sonnet | metis, momus, oracle |
+| `atlas-orchestrator` | Master delegator (never works directly) | sonnet | ALL implementing + read-only agents |
+| `atlas-leviathan` | Focused task executor | sonnet | (terminal) |
+| `atlas-kraken` | TDD implementation | sonnet | (terminal) |
+| `atlas-spark` | Quick fixes | sonnet | (terminal) |
+| `atlas-oracle` | Strategic advisor | opus | (read-only) |
+| `atlas-explore` | Codebase search | sonnet | (read-only) |
+| `atlas-librarian` | External docs | sonnet | (read-only) |
+| `atlas-metis` | Pre-planning consultant | sonnet | (read-only) |
+| `atlas-momus` | Plan reviewer | sonnet | (read-only) |
+| `atlas-code-reviewer` | Code quality review | sonnet | (read-only) |
+| `atlas-document-writer` | Technical documentation | sonnet | (terminal) |
 
-### Skill Loading Rules
+### Agent Chaining Rules
 
 ```
-conductor → orchestrator → design → beads → specialized
-     ↑______________|___________|________|
-              (all depend on conductor)
+atlas-prometheus → atlas-metis, atlas-momus, atlas-oracle (consultation only)
+         ↓
+    [plan file]
+         ↓
+atlas-orchestrator → atlas-leviathan/kraken/spark + ALL read-only agents
+         ↓
+     [terminal executors - no further delegation]
 ```
 
-- **conductor** loads first for all `/conductor-*` commands
-- **orchestrator** auto-loads when `## Track Assignments` found in plan.md
-- **design** loads for `ds` or `/conductor-design`
-- **beads** loads for `fb`, `rb`, or `bd` commands
+- **Prometheus** chains to consultants during planning
+- **Orchestrator** delegates ALL work (never edits directly)
+- **Terminal agents** (leviathan, kraken, spark) do actual implementation
+- **Read-only agents** (oracle, explore, librarian, metis, momus, code-reviewer) only analyze
 
 ## Complete Pipeline
 
 ```mermaid
 flowchart TB
-    subgraph PREFLIGHT["PREFLIGHT"]
-        PF_START["Session Start"] --> PF_BD["Validate bd CLI"]
+    subgraph PLANNING["PLANNING (@plan)"]
+        PL_START["@plan"] --> PL_INTERVIEW["Interview"]
+        PL_INTERVIEW --> PL_DRAFT["Draft Plan"]
+        PL_DRAFT --> PL_METIS["Metis: Gap Analysis"]
+        PL_METIS --> PL_MOMUS["Momus: Review Loop"]
+        PL_MOMUS --> PL_OKAY{{"OKAY?"}}
+        PL_OKAY -->|"No"| PL_DRAFT
+        PL_OKAY -->|"Yes"| PL_DONE["Plan Ready"]
     end
 
-    subgraph PLANNING["PLANNING (Double Diamond)"]
-        DS["ds"] --> DISCOVER["DISCOVER"] --> DEFINE["DEFINE"]
-        DEFINE --> DEVELOP["DEVELOP"] --> DELIVER["DELIVER"]
-        DELIVER --> APC{{"A/P/C"}}
-        APC -->|"C"| DESIGND["design.md"]
-        APC -->|"P"| PARTY["Party Mode"]
-        PARTY --> APC
+    subgraph EXECUTION["/atlas-work"]
+        EX_LOAD["Load Plan"] --> EX_ORCH["Orchestrator"]
+        EX_ORCH --> EX_SELECT["Select Agent"]
+        EX_SELECT --> EX_TDD["TDD Cycle"]
+        EX_TDD --> EX_VERIFY["Verify Results"]
+        EX_VERIFY --> EX_MORE{{"More Tasks?"}}
+        EX_MORE -->|"Yes"| EX_SELECT
+        EX_MORE -->|"No"| EX_WISDOM["Extract Wisdom"]
     end
 
-    subgraph SPEC["SPEC GENERATION"]
-        NEWTRACK["/conductor-newtrack"]
-        SPECMD["spec.md + plan.md"]
-        AUTO_FB["Auto: Create Beads"]
-    end
+    PL_DONE --> EX_LOAD
+```
 
-    subgraph EXECUTION["EXECUTION"]
-        READY["bd ready"] --> CLAIM["Auto-claim"]
-        CLAIM --> TDD["TDD Cycle"]
-        TDD --> CLOSE["Auto-close"]
-        CLOSE --> MORE{{"More?"}}
-        MORE -->|"yes"| READY
-        MORE -->|"no"| VERIFY["Verify"]
-    end
+### Agent Selection Logic
 
-    subgraph FINISH["FINISH"]
-        BRANCH["finish branch"]
-        FINISH_CMD["/conductor-finish"]
-    end
-
-    PF_BD --> DS
-    DESIGND --> NEWTRACK
-    NEWTRACK --> SPECMD --> AUTO_FB --> READY
-    VERIFY --> BRANCH --> FINISH_CMD
+```mermaid
+flowchart TD
+    TASK["Task Description"] --> CHECK_TDD{{"Contains TDD/refactor/heavy?"}}
+    CHECK_TDD -->|"Yes"| KRAKEN["atlas-kraken"]
+    CHECK_TDD -->|"No"| CHECK_SIMPLE{{"Contains typo/simple/quick?"}}
+    CHECK_SIMPLE -->|"Yes"| SPARK["atlas-spark"]
+    CHECK_SIMPLE -->|"No"| LEVIATHAN["atlas-leviathan"]
 ```
 
 ### TDD Micro-Loop
@@ -103,150 +111,170 @@ flowchart LR
 
 **Iron Law**: No production code without a failing test first.
 
-## Beads Integration (Facade Pattern)
+## Planning Chain
 
-Zero manual `bd` commands in the happy path. All beads operations abstracted behind Conductor.
+```mermaid
+flowchart LR
+    TRIGGER["@plan"] --> PROMETHEUS["atlas-prometheus"]
+    PROMETHEUS --> METIS["atlas-metis"]
+    METIS --> MOMUS["atlas-momus"]
+    MOMUS --> PLAN["Plan File"]
+```
 
-### Integration Points
+### Phase Details
 
-| Phase | Conductor Command | Beads Action (Automatic) |
-|-------|-------------------|--------------------------| 
-| Preflight | All commands | Validate `bd` CLI |
-| Track Init | `/conductor-newtrack` | Create epic + issues, wire deps |
-| Claim | `/conductor-implement` | `bd update --status in_progress` |
-| TDD | Default | `bd update --notes "RED/GREEN..."` |
-| Close | `/conductor-implement` | `bd close --reason completed\|skipped\|blocked` |
-| Sync | Session end | `bd sync` with retry |
-| Compact | `/conductor-finish` | AI summaries for closed |
-| Cleanup | `/conductor-finish` | Remove oldest when >150 |
+| Phase | Agent | Purpose | Output |
+|-------|-------|---------|--------|
+| Interview | atlas-prometheus | Ask clarifying questions | `.atlas/drafts/` |
+| Gap Analysis | atlas-metis | Identify hidden requirements | Feedback |
+| Review Loop | atlas-momus | Validate plan quality | "OKAY" or revisions |
+| Finalize | atlas-prometheus | Generate plan | `.claude/plans/` |
 
-### Unified Architecture
+## Execution Chain
 
-Orchestrator uses Agent Mail for multi-agent coordination. All beads operations go through `bd` CLI.
+```mermaid
+flowchart LR
+    WORK["/atlas-work"] --> ORCH["atlas-orchestrator"]
+    ORCH --> TASK["Task()"]
+    TASK --> AGENT["leviathan/kraken/spark"]
+    AGENT --> VERIFY["Verify"]
+    VERIFY --> WISDOM["Wisdom"]
+```
 
-## BMAD Agents (Party Mode)
+### Orchestrator Protocol
 
-25 specialized agents invoked via **[P] Party** at A/P/C checkpoints.
+| Phase | Action |
+|-------|--------|
+| 1. Load | Find most recent plan in `.claude/plans/` |
+| 2. Initialize | Create `.atlas/boulder.json` execution state |
+| 3. Delegate | Task() to specialized agents with 7-section prompts |
+| 4. Verify | Verify subagent claims (agents can make mistakes) |
+| 5. Complete | Update plan checkboxes, extract wisdom to notepads |
 
-### Core Module (1)
+### 7-Section Prompt Format
 
-| Agent | Name | Focus |
-|-------|------|-------|
-| Orchestrator | BMad Master 🧙 | Agent coordination |
+When spawning agents, orchestrator uses:
 
-### BMM Module (9)
+```markdown
+## CONTEXT
+## OBJECTIVE
+## SCOPE
+## REQUIREMENTS
+## REQUIRED SKILLS
+## CONSTRAINTS
+## VERIFICATION
+```
 
-| Agent | Name | Focus |
-|-------|------|-------|
-| PM | John | Product priorities, roadmap |
-| Analyst | Mary | Requirements, metrics |
-| Architect | Winston | System design, patterns |
-| Developer | Amelia | Implementation, quality |
-| SM | Bob | Sprint planning, facilitation |
-| QA | Murat | Testing, edge cases |
-| UX | Sally | User needs, accessibility |
-| Docs | Paige | Documentation, tutorials |
-| Quick Flow | Barry | Rapid prototyping, MVP |
+## Autonomous Chain (Ralph Loop)
 
-### CIS Module (6)
+```mermaid
+flowchart LR
+    RALPH["/ralph-loop"] --> ORCH["atlas-orchestrator"]
+    ORCH --> EXECUTE["Execute Task"]
+    EXECUTE --> CHECK{{"DONE?"}}
+    CHECK -->|"No"| ORCH
+    CHECK -->|"Yes"| COMPLETE["<promise>DONE</promise>"]
+```
 
-| Agent | Name | Focus |
-|-------|------|-------|
-| Brainstormer | Carson | Wild ideas, 10x thinking |
-| Problem Solver | Dr. Quinn | Root cause, debugging |
-| Design Thinker | Maya | Methodology, iteration |
-| Strategist | Victor | Long-term vision |
-| Presentation | Caravaggio | Visual design, demos |
-| Storyteller | Sophia | Narrative, empathy |
-
-### BMB Module (3)
-
-| Agent | Name | Focus |
-|-------|------|-------|
-| Agent Builder | Bond 🤖 | Agent design patterns |
-| Module Builder | Morgan 🏗️ | System integration |
-| Workflow Builder | Wendy 🔄 | Process automation |
-
-### BMGD Module (6)
-
-| Agent | Name | Focus |
-|-------|------|-------|
-| Game Architect | Cloud Dragonborn 🏛️ | Engine, multiplayer |
-| Game Designer | Samus Shepard 🎲 | Mechanics, narrative |
-| Game Developer | Link Freeman 🕹️ | Unity, cross-platform |
-| Game QA | GLaDOS 🧪 | Test automation |
-| Game Scrum Master | Max 🎯 | Sprint orchestration |
-| Game Solo Dev | Indie 🎮 | Quick flow, shipping |
-
-### Agent Selection
-
-Party Mode selects 3 agents: **Primary** (best match), **Secondary** (complement), **Tertiary** (devil's advocate).
+| Phase | Action |
+|-------|--------|
+| Start | `/ralph-loop` activates autonomous execution |
+| During | Orchestrator iterates tasks, delegates, verifies |
+| End | Detection of `<promise>DONE</promise>` stops loop |
 
 ## Session Flow
 
 ```mermaid
 flowchart TB
     subgraph S1["SESSION 1: Planning"]
-        S1_DS["ds"] --> S1_NEWTRACK["/conductor-newtrack"]
-        S1_NEWTRACK --> S1_FB["beads created"]
+        S1_PLAN["@plan"] --> S1_INTERVIEW["Interview"]
+        S1_INTERVIEW --> S1_READY["Plan Ready"]
     end
 
     subgraph S2["SESSION 2+: Execution"]
-        S2_IMPLEMENT["/conductor-implement"]
-        S2_TDD["TDD Cycle"]
-        S2_IMPLEMENT --> S2_TDD
+        S2_WORK["/atlas-work"]
+        S2_EXECUTE["Execution"]
+        S2_WORK --> S2_EXECUTE
     end
 
-    subgraph S3["SESSION N: Finish"]
-        S3_VERIFY["Verify"] --> S3_BRANCH["finish branch"]
-        S3_BRANCH --> S3_FINISH["/conductor-finish"]
+    subgraph S3["SESSION N: Autonomous"]
+        S3_RALPH["/ralph-loop"]
+        S3_DONE["<promise>DONE</promise>"]
+        S3_RALPH --> S3_DONE
     end
 
-    S1_FB -.->|"handoff"| S2_IMPLEMENT
-    S2_TDD -.->|"handoff"| S3_VERIFY
+    S1_READY -.->|"handoff"| S2_WORK
+    S2_EXECUTE -.->|"handoff"| S3_RALPH
 ```
 
 ### Handoff Mechanism
 
 | Artifact | Preserves |
 |----------|-----------|
-| `design.md` | Architecture decisions |
-| `spec.md` | Requirements, criteria |
-| `plan.md` | Tasks with status |
+| `.claude/plans/` | Plan structure, task status |
+| `.atlas/notepads/` | Accumulated wisdom |
+| `.atlas/boulder.json` | Execution state |
 | `.beads/` | Issue state, notes |
 
-**At session end**: `bd update --notes "COMPLETED: X. NEXT: Y."`  
+**At session end**: `bd update --notes "COMPLETED: X. NEXT: Y."`
 **At session start**: `bd ready --json` → `bd show <id>`
+
+## Directory Structure
+
+```
+.atlas/
+├── plans/                    # Committed work plans
+├── drafts/                   # Interview drafts
+├── notepads/                 # Wisdom per plan
+├── boulder.json              # Active execution state
+└── ralph-loop.local.md       # Ralph autonomous loop state
+
+.claude/
+├── agents/                   # Agent definitions (symlinks)
+├── commands/                 # Slash commands (/atlas-plan, etc.)
+├── hooks/                    # Hook configuration
+├── plans/                    # Generated execution plans
+├── scripts/                  # Hook scripts
+└── skills/
+    └── atlas/                # Main workflow skill
+        └── references/
+            ├── agents/       # Atlas agent definitions
+            ├── workflows/    # Workflow documentation
+            └── guides/       # Usage guides
+
+.beads/
+├── beads.db                  # SQLite database
+└── beads.jsonl               # Export format
+
+toolboxes/
+└── agent-mail/               # CLI wrapper for Agent Mail
+```
 
 ## Quick Reference
 
 | Component | Trigger | Purpose |
 |-----------|---------|---------|
-| Design | `ds` | Double Diamond exploration |
-| Spec Gen | `/conductor-newtrack` | Create spec + plan + beads |
-| Execution | `/conductor-implement` | TDD cycle per task |
-| Parallel | `/conductor-orchestrate` | Multi-agent dispatch |
-| Finish | `/conductor-finish` | Complete track |
-| Validate | `/conductor-validate` | Health checks |
+| Planning | `@plan` | Interview-driven planning |
+| Gap Analysis | `@metis` | Pre-planning consultation |
+| Review | `@momus` | Plan validation |
+| Execution | `/atlas-work` | Orchestrated execution |
+| Autonomous | `/ralph-loop` | Run until complete |
+| Strategic | `@oracle` | High-IQ advice (opus) |
+| Search | `@explore` | Codebase search |
+| Research | `@librarian` | External docs |
+| TDD | `@tdd` | Test-driven implementation |
 
 ### Fallback Policy
 
 | Condition | Action |
 |-----------|--------|
 | `bd` unavailable | HALT |
-| `conductor/` missing | DEGRADE (standalone) |
+| `.atlas/` missing | DEGRADE (standalone) |
 | Agent Mail unavailable | HALT |
-
-### Close Reasons
-
-- `completed` — Task done successfully
-- `skipped` — Task not needed
-- `blocked` — Cannot proceed
 
 ## Related
 
 - [README.md](../README.md) — Overview and installation
 - [TUTORIAL.md](../TUTORIAL.md) — Complete workflow guide
-- [skills/conductor/](../skills/conductor/) — Planning skill
-- [skills/design/](../skills/design/) — Double Diamond + Party Mode
-- [skills/orchestrator/](../skills/orchestrator/) — Parallel execution
+- [.claude/skills/atlas/SKILL.md](../.claude/skills/atlas/SKILL.md) — Atlas workflow skill
+- [.claude/skills/atlas/references/agents/](../.claude/skills/atlas/references/agents/) — Agent definitions
