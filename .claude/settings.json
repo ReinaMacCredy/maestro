@@ -1,0 +1,46 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/scripts/keyword-detector.sh" },
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/scripts/registry-injector.sh" }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/scripts/prometheus-guard.sh" },
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/scripts/orchestrator-guard.sh" }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/scripts/git-diff-reporter.sh" },
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/scripts/comment-checker.sh" },
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/scripts/edit-recovery.sh" }
+        ]
+      },
+      {
+        "matcher": "Task",
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/scripts/verification-injector.sh" },
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/scripts/empty-task-detector.sh" }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/scripts/todo-enforcer.sh" },
+          { "type": "command", "command": "$CLAUDE_PROJECT_DIR/.claude/scripts/ralph-loop-handler.sh" }
+        ]
+      }
+    ]
+  }
+}

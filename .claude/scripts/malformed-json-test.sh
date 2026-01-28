@@ -1,0 +1,1 @@
+../../scripts/malformed-json-test.sh

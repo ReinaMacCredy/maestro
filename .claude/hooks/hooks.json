@@ -1,0 +1,66 @@
+{
+  "description": "Sisyphus workflow hooks",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/keyword-detector.sh" },
+          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/registry-injector.sh" }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator-guard.sh" }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/git-diff-reporter.sh" },
+          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/comment-checker.sh" },
+          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/edit-recovery.sh" }
+        ]
+      },
+      {
+        "matcher": "Task",
+        "hooks": [
+          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/verification-injector.sh" },
+          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/empty-task-detector.sh" },
+          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/plan-ready-handler.sh" },
+          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/momus-loop-handler.sh" }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/codex-completion-handler.sh" }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/self-chain-handler.sh" }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "prometheus|metis|momus",
+        "hooks": [
+          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/pipeline-transition.sh" }
+        ]
+      },
+      {
+        "hooks": [
+          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/subagent-complete.sh" }
+        ]
+      }
+    ]
+  }
+}

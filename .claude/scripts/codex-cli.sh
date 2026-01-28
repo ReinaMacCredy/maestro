@@ -1,0 +1,1 @@
+../../scripts/codex-cli.sh

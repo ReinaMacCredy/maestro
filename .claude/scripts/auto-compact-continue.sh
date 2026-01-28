@@ -1,0 +1,1 @@
+../../scripts/auto-compact-continue.sh

@@ -1,0 +1,1 @@
+../../scripts/codex-completion-handler.sh

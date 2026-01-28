@@ -18,6 +18,17 @@
     "conductor",
     "issue-tracking",
     "multi-agent",
-    "session-management"
-  ]
+    "session-management",
+    "automation",
+    "planning",
+    "workflow",
+    "orchestration",
+    "agents",
+    "delegation"
+  ],
+  "commands": "./commands/",
+  "agents": "./agents/",
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json",
+  "lspServers": "./.lsp.json"
 }

@@ -1,0 +1,1 @@
+../../scripts/verification-injector.sh

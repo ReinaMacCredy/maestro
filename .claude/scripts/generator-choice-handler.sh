@@ -1,0 +1,1 @@
+../../scripts/generator-choice-handler.sh

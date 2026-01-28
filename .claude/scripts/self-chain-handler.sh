@@ -1,0 +1,1 @@
+../../scripts/self-chain-handler.sh

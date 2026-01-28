@@ -1,0 +1,1 @@
+../../scripts/test-preflight-guards.sh

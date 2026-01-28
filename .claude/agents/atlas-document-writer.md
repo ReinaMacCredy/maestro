@@ -1,0 +1,1 @@
+../../skills/atlas/references/agents/atlas-document-writer.md

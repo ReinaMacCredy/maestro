@@ -1,0 +1,1 @@
+../../scripts/empty-task-detector.sh
