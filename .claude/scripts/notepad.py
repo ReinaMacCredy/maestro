@@ -2,7 +2,7 @@
 """
 Notepad Wisdom Manager
 
-Manages .sisyphus/notepads/{plan}/ directories for wisdom accumulation.
+Manages .atlas/notepads/{plan}/ directories for wisdom accumulation.
 """
 
 import sys
@@ -10,8 +10,8 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-SISYPHUS_DIR = Path(".sisyphus")
-NOTEPADS_DIR = SISYPHUS_DIR / "notepads"
+ATLAS_DIR = Path(".atlas")
+NOTEPADS_DIR = ATLAS_DIR / "notepads"
 
 NOTEPAD_FILES = ["learnings.md", "issues.md", "decisions.md", "problems.md"]
 

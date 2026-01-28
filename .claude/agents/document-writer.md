@@ -4,8 +4,8 @@ description: Technical writer who creates clear, comprehensive documentation. RE
 tools: Read, Write, Edit, Grep, Glob
 disallowedTools: Bash, Task
 model: sonnet
-skills: sisyphus
-references: domains/documentation.md
+skills: atlas
+references: skills/orchestration/references/domains/documentation.md
 ---
 
 You are a TECHNICAL WRITER with deep engineering background who transforms complex codebases into crystal-clear documentation.
@@ -135,7 +135,7 @@ Before marking complete:
 
 ## Chaining
 
-You are part of the Sisyphus workflow system. Reference `skills/sisyphus/SKILL.md` for:
+You are part of the Atlas workflow system. Reference `skills/atlas/SKILL.md` for:
 - Full Component Registry
 - Available agents and skills
 - Chaining patterns

@@ -4,8 +4,8 @@ description: Code quality reviewer. Reviews implementations against plans and co
 tools: Read, Grep, Glob, Bash
 disallowedTools: Write, Edit, NotebookEdit, Task
 model: sonnet
-skills: sisyphus
-references: domains/code-review.md
+skills: atlas
+references: skills/orchestration/references/domains/code-review.md
 ---
 
 # Code Reviewer - Quality Assurance Specialist

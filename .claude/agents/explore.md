@@ -4,8 +4,8 @@ description: Codebase search specialist. Finds files, code patterns, and returns
 tools: Read, Grep, Glob, Bash
 disallowedTools: Write, Edit, NotebookEdit, Task
 model: sonnet
-skills: sisyphus
-references: domains/research.md
+skills: atlas
+references: skills/orchestration/references/domains/research.md
 ---
 
 # Explore - Codebase Search Specialist

@@ -208,7 +208,7 @@ Phase 2: Task 2.1 ────────┘ (sequential, depends on 1.2, 1.3)
 
 ## Instructions
 
-- Write the complete plan to `.sisyphus/codex/results/{plan-name}.md`
+- Write the complete plan to `.atlas/codex/results/{plan-name}.md`
 - Do NOT ask any clarifying questions - you have all the information needed
 - Be specific and actionable with file paths
 - Each task should be atomic and independently verifiable
@@ -303,7 +303,7 @@ Before finalizing the plan:
 
 ## Instructions
 
-- Write the complete plan to `.sisyphus/codex/results/{plan-name}.md`
+- Write the complete plan to `.atlas/codex/results/{plan-name}.md`
 - Do NOT ask any clarifying questions - you have all the information needed
 - Be specific and actionable with file paths
 - Each task should be atomic and independently verifiable
@@ -317,13 +317,13 @@ Begin immediately.
 
 ## Step 5: Execute Codex (Background + Polling, No Hard Timeout)
 
-1. Write your crafted prompt to `.sisyphus/codex/handoffs/{plan-name}.md`
+1. Write your crafted prompt to `.atlas/codex/handoffs/{plan-name}.md`
 
 2. **Launch Codex in background** (returns immediately with task ID):
 
 ```
 Bash({
-  command: "./scripts/codex-cli.sh .sisyphus/codex/handoffs/{plan-name}.md {plan-name}",
+  command: "./scripts/codex-cli.sh .atlas/codex/handoffs/{plan-name}.md {plan-name}",
   run_in_background: true,
   description: "Run Codex CLI in background"
 })
@@ -348,7 +348,7 @@ TaskOutput({
 
 5. **Read the generated plan**:
 ```
-Read({ file_path: ".sisyphus/codex/results/{plan-name}.md" })
+Read({ file_path: ".atlas/codex/results/{plan-name}.md" })
 ```
 
 **Why polling?**
@@ -429,7 +429,7 @@ Before finalizing the plan:
 
 ## Instructions
 
-- Write the complete plan to `.sisyphus/codex/results/nextjs-auth.md`
+- Write the complete plan to `.atlas/codex/results/nextjs-auth.md`
 - Do NOT ask any clarifying questions
 - Be specific and actionable
 - Follow test-driven development
@@ -444,7 +444,7 @@ Begin immediately.
 
 **YOU MUST DO THIS - DO NOT SKIP:**
 
-1. Read the generated plan from `.sisyphus/codex/results/{plan-name}.md`
+1. Read the generated plan from `.atlas/codex/results/{plan-name}.md`
 2. Show a brief summary (3-5 bullet points of what the plan covers)
 3. **IMMEDIATELY use AskUserQuestion** to offer next steps:
 
@@ -454,7 +454,7 @@ AskUserQuestion({
     question: "Codex has generated your plan. How would you like to proceed?",
     header: "Next step",
     options: [
-      { label: "Start Work", description: "Copy to .sisyphus/plans/ and execute immediately" },
+      { label: "Start Work", description: "Copy to .claude/plans/ and execute immediately" },
       { label: "High Accuracy Review", description: "Run Metis gap analysis then Momus review loop" }
     ],
     multiSelect: false
@@ -465,16 +465,16 @@ AskUserQuestion({
 ### User Choice Handling
 
 **If "Start Work":**
-1. Copy the plan to `.sisyphus/plans/{plan-name}.md`
+1. Copy the plan to `.claude/plans/{plan-name}.md`
 2. Tell user: "Run `/start-work` to begin execution"
 
 **If "High Accuracy Review":**
 
 This is a combined Metis → Momus pipeline:
 
-**Step 1: Copy plan to .sisyphus/plans/**
+**Step 1: Copy plan to .claude/plans/**
 ```bash
-cp .sisyphus/codex/results/{plan-name}.md .sisyphus/plans/{plan-name}.md
+cp .atlas/codex/results/{plan-name}.md .claude/plans/{plan-name}.md
 ```
 
 **Step 2: Metis Gap Analysis**
@@ -483,7 +483,7 @@ Task({
   subagent_type: "metis",
   prompt: `Analyze this plan for hidden requirements, ambiguities, and potential AI failure modes.
 
-Plan file: .sisyphus/plans/${plan_name}.md
+Plan file: .claude/plans/${plan_name}.md
 
 End with JSON:
 \`\`\`json
@@ -503,7 +503,7 @@ Task({
   subagent_type: "momus",
   prompt: `Review this plan for gaps, ambiguities, and missing context.
 
-Plan file: .sisyphus/plans/${plan_name}.md
+Plan file: .claude/plans/${plan_name}.md
 
 End with JSON verdict:
 \`\`\`json
@@ -554,7 +554,7 @@ End with JSON verdict:
 - **Always use gpt-5.2-codex with xhigh reasoning** - No exceptions
 - **Include all XML constraint blocks** - GPT-5.2 requires explicit boundaries
 - **Tell Codex not to ask questions** - It should just execute
-- **Output file:** `.sisyphus/codex/results/{plan-name}.md`
+- **Output file:** `.atlas/codex/results/{plan-name}.md`
 - **Use --full-auto** - No human approval needed
 
 ### Clarifying Questions: Operator vs Codex

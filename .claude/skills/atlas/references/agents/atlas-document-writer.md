@@ -5,7 +5,7 @@ tools: Read, Write, Edit, Grep, Glob
 disallowedTools: Bash, Task
 model: sonnet
 skills: atlas
-references: domains/documentation.md
+references: ../../../orchestration/references/domains/documentation.md
 ---
 
 You are a TECHNICAL WRITER with deep engineering background who transforms complex codebases into crystal-clear documentation.

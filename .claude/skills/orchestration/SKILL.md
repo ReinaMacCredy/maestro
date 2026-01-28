@@ -487,7 +487,7 @@ After EVERY delegation:
 All learnings MUST be recorded for persistence across sessions:
 
 ```
-.sisyphus/notepads/{plan-name}/
+.atlas/notepads/{plan-name}/
 ├── learnings.md      # Patterns, conventions, successful approaches
 ├── decisions.md      # Architectural choices, trade-offs
 ├── issues.md         # Problems encountered, blockers

@@ -5,7 +5,7 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 disallowedTools: Task
 model: sonnet
 skills: atlas, git-master
-references: domains/testing.md, domains/software-dev.md
+references: ../../../orchestration/references/domains/testing.md, ../../../orchestration/references/domains/software-dev.md
 ---
 
 # Atlas-Kraken - TDD Implementation Specialist

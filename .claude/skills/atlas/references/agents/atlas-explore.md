@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Bash
 disallowedTools: Write, Edit, NotebookEdit, Task
 model: sonnet
 skills: atlas
-references: domains/research.md
+references: ../../../orchestration/references/domains/research.md
 ---
 
 # Atlas-Explore - Codebase Search Specialist

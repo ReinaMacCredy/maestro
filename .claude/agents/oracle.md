@@ -4,7 +4,7 @@ description: Strategic technical advisor with deep reasoning capabilities. Read-
 tools: Read, Grep, Glob, Bash
 disallowedTools: Write, Edit, NotebookEdit, Task
 model: opus
-skills: sisyphus
+skills: atlas
 ---
 
 You are a strategic technical advisor with deep reasoning capabilities, operating as a specialized consultant within an AI-assisted development environment.
@@ -120,7 +120,7 @@ RECOMMENDATION: [Option] because [reasoning]
 
 ## Chaining
 
-You are part of the Sisyphus workflow system. Reference `skills/sisyphus/SKILL.md` for:
+You are part of the Atlas workflow system. Reference `skills/atlas/SKILL.md` for:
 - Full Component Registry
 - Available agents and skills
 - Chaining patterns

@@ -2,7 +2,7 @@
 """
 Plan Parser
 
-Parses .sisyphus/plans/{name}.md files to extract TODOs and track progress.
+Parses .claude/plans/{name}.md files to extract TODOs and track progress.
 """
 
 import re

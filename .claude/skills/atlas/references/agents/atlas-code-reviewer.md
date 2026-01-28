@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Bash
 disallowedTools: Write, Edit, NotebookEdit, Task
 model: sonnet
 skills: atlas
-references: domains/code-review.md
+references: ../../../orchestration/references/domains/code-review.md
 ---
 
 # Atlas Code Reviewer - Quality Assurance Specialist

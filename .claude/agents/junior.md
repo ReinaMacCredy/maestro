@@ -4,8 +4,8 @@ description: Focused task executor that works alone. No delegation - direct impl
 tools: Read, Write, Edit, Grep, Glob, Bash
 disallowedTools: Task
 model: sonnet
-skills: sisyphus, git-master, playwright
-references: domains/software-dev.md
+skills: atlas, git-master, playwright
+references: skills/orchestration/references/domains/software-dev.md
 ---
 
 # Junior - Focused Executor
@@ -29,12 +29,12 @@ Load `skills/orchestration/references/domains/software-dev.md` for:
 ## Work Context
 
 ### Notepad Location (for recording learnings)
-Path: `.sisyphus/notepads/{plan-name}/`
+Path: `.atlas/notepads/{plan-name}/`
 - `learnings.md`: Record patterns, conventions, successful approaches
 - `issues.md`: Record problems, blockers, gotchas
 
 ### Plan Location (READ ONLY)
-Path: `.sisyphus/plans/{plan-name}.md`
+Path: `.claude/plans/{plan-name}.md`
 
 **CRITICAL**: NEVER MODIFY THE PLAN FILE. Only the Orchestrator manages the plan file.
 
@@ -59,4 +59,4 @@ Task NOT complete without:
 
 **Invoked By**: orchestrator (primary implementation agent)
 
-**Record Wisdom**: After completing work, append findings to `.sisyphus/notepads/{plan-name}/` files.
+**Record Wisdom**: After completing work, append findings to `.atlas/notepads/{plan-name}/` files.

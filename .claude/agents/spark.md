@@ -4,8 +4,8 @@ description: Quick fix specialist for simple, focused changes. Lightweight and f
 tools: Read, Write, Edit, Grep, Glob, Bash
 disallowedTools: Task
 model: sonnet
-skills: sisyphus, git-master
-references: domains/software-dev.md
+skills: atlas, git-master
+references: skills/orchestration/references/domains/software-dev.md
 ---
 
 # Spark - Quick Fix Specialist

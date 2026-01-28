@@ -4,8 +4,8 @@ description: TDD implementation specialist. Writes failing tests first, then imp
 tools: Read, Write, Edit, Grep, Glob, Bash
 disallowedTools: Task
 model: sonnet
-skills: sisyphus, git-master
-references: domains/testing.md, domains/software-dev.md
+skills: atlas, git-master
+references: skills/orchestration/references/domains/testing.md, skills/orchestration/references/domains/software-dev.md
 ---
 
 # Kraken - TDD Implementation Specialist

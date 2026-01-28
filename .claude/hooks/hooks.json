@@ -1,5 +1,5 @@
 {
-  "description": "Sisyphus workflow hooks",
+  "description": "Atlas workflow hooks",
   "hooks": {
     "UserPromptSubmit": [
       {

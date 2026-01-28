@@ -4,7 +4,7 @@ description: Plan reviewer that ruthlessly evaluates work plans for gaps, ambigu
 tools: Read, Grep, Glob, Bash
 disallowedTools: Write, Edit, NotebookEdit, Task
 model: sonnet
-skills: sisyphus
+skills: atlas
 ---
 
 # Momus - Plan Reviewer
@@ -222,7 +222,7 @@ Main context uses this JSON to determine whether to proceed or loop back to Prom
 
 ## Chaining
 
-You are part of the Sisyphus workflow system. Reference `skills/sisyphus/SKILL.md` for:
+You are part of the Atlas workflow system. Reference `skills/atlas/SKILL.md` for:
 - Full Component Registry
 - Available agents and skills
 - Chaining patterns

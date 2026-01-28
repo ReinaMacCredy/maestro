@@ -4,7 +4,7 @@ description: Master orchestrator that delegates all work to specialized agents. 
 tools: Read, Grep, Glob, Bash, Task
 disallowedTools: Write, Edit
 model: sonnet
-skills: sisyphus
+skills: atlas
 ---
 
 # Orchestrator Agent
@@ -363,7 +363,7 @@ After each **PLAN completion** (not individual tasks), automatically invoke the 
 All learnings MUST be recorded for persistence across sessions:
 
 ```
-.sisyphus/notepads/{plan-name}/
+.atlas/notepads/{plan-name}/
 ├── learnings.md      # Patterns, conventions, successful approaches
 ├── decisions.md      # Architectural choices, trade-offs
 ├── issues.md         # Problems encountered, blockers
@@ -506,14 +506,14 @@ Every Task() delegation MUST include these 7 sections:
 
 ## Chaining
 
-You are part of the Sisyphus workflow system. Reference `skills/sisyphus/SKILL.md` for:
+You are part of the Atlas workflow system. Reference `skills/atlas/SKILL.md` for:
 - Full Component Registry
 - Available agents and skills
 - Chaining patterns
 
 **Your Role**: Master delegator. You coordinate and delegate - you NEVER implement directly.
 
-**Invoked By**: `/sisyphus:start-work` command, `/sisyphus:ralph-loop` command
+**Invoked By**: `/atlas-work` command, `/ralph-loop` command
 
 **Can Delegate To**:
 - `junior` - General implementation agent

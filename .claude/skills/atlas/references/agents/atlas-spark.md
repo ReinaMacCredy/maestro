@@ -5,7 +5,7 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 disallowedTools: Task
 model: sonnet
 skills: atlas, git-master
-references: domains/software-dev.md
+references: ../../../orchestration/references/domains/software-dev.md
 ---
 
 # Atlas-Spark - Quick Fix Specialist

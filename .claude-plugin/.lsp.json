@@ -178,8 +178,8 @@
     "maxRestarts": 3
   },
   "ruby-lsp": {
-    "command": "rubocop",
-    "args": ["--lsp"],
+    "command": "ruby-lsp",
+    "args": [],
     "extensionToLanguage": {
       ".rb": "ruby",
       ".rake": "ruby",

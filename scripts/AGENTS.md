@@ -19,7 +19,7 @@ Environment setup, validation, and session lifecycle management scripts for the 
 
 | Directory | Purpose |
 |-----------|---------|
-| sisyphus/ | (Reserved for Sisyphus automation - currently empty) |
+| atlas/ | (Reserved for Atlas automation - currently empty) |
 
 ## Patterns
 
@@ -36,5 +36,5 @@ Environment setup, validation, and session lifecycle management scripts for the 
 
 - amp-session.sh enables seamless context reload via /conductor-handoff
 - Run validate-*.sh scripts before committing documentation changes
-- The sisyphus/ directory is reserved for future Python tooling
+- The atlas/ directory is reserved for future Python tooling
 - test-hooks.sh verifies ledger creation and handoff generation

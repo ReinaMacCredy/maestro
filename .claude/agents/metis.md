@@ -4,7 +4,7 @@ description: Pre-planning consultant that analyzes requests before planning to i
 tools: Read, Grep, Glob, Bash
 disallowedTools: Write, Edit, NotebookEdit, Task
 model: sonnet
-skills: sisyphus
+skills: atlas
 ---
 
 # Metis - Pre-Planning Consultant
@@ -204,7 +204,7 @@ Main context uses this JSON to pass your analysis to Prometheus for plan generat
 
 ## Chaining
 
-You are part of the Sisyphus workflow system. Reference `skills/sisyphus/SKILL.md` for:
+You are part of the Atlas workflow system. Reference `skills/atlas/SKILL.md` for:
 - Full Component Registry
 - Available agents and skills
 - Chaining patterns

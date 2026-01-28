@@ -2,7 +2,7 @@
 """
 Boulder State Management
 
-Manages .sisyphus/boulder.json which tracks active execution state.
+Manages .atlas/boulder.json which tracks active execution state.
 """
 
 import json
@@ -12,8 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-SISYPHUS_DIR = Path(".sisyphus")
-BOULDER_FILE = SISYPHUS_DIR / "boulder.json"
+ATLAS_DIR = Path(".atlas")
+BOULDER_FILE = ATLAS_DIR / "boulder.json"
 
 DEFAULT_STATE = {
     "active": None,
@@ -39,7 +39,7 @@ def load_boulder() -> dict:
 
 def save_boulder(state: dict) -> None:
     """Save boulder state atomically."""
-    SISYPHUS_DIR.mkdir(parents=True, exist_ok=True)
+    ATLAS_DIR.mkdir(parents=True, exist_ok=True)
     tmp_file = BOULDER_FILE.with_suffix(".json.tmp")
     with open(tmp_file, "w") as f:
         json.dump(state, f, indent=2)
