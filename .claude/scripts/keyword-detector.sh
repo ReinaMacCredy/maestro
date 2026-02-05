@@ -1,1 +1,0 @@
-../../scripts/keyword-detector.sh

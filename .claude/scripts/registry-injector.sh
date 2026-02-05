@@ -1,1 +1,0 @@
-../../scripts/registry-injector.sh

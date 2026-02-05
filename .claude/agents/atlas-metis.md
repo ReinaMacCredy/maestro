@@ -1,1 +1,0 @@
-../../skills/atlas/references/agents/atlas-metis.md

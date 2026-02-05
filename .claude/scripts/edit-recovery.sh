@@ -1,1 +1,0 @@
-../../scripts/edit-recovery.sh

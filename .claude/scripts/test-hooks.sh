@@ -1,1 +1,0 @@
-../../scripts/test-hooks.sh

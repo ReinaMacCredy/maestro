@@ -1,1 +1,0 @@
-../../scripts/diagnose-state.sh

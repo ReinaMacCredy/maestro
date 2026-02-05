@@ -1,7 +1,7 @@
 {
   "name": "maestro",
-  "version": "0.10.0",
-  "description": "Personal AI agent workflow skills - includes conductor planning with integrated beads issue tracking, design sessions, TDD, and multi-session task coordination via facade pattern (SA/MA modes)",
+  "version": "0.11.0",
+  "description": "AI agent workflow plugin for Claude Code. Interview-driven planning with Agent Teams execution.",
   "author": {
     "name": "Reina MacCredy"
   },
@@ -9,26 +9,15 @@
   "license": "MIT",
   "keywords": [
     "claude-code",
-    "skills",
     "workflow",
-    "tdd",
-    "debugging",
-    "code-review",
-    "beads",
-    "conductor",
-    "issue-tracking",
-    "multi-agent",
-    "session-management",
-    "automation",
     "planning",
-    "workflow",
+    "tdd",
     "orchestration",
     "agents",
-    "delegation"
+    "agent-teams"
   ],
-  "commands": "./commands/",
-  "agents": "./agents/",
-  "skills": "./skills/",
-  "hooks": "./hooks/hooks.json",
-  "lspServers": "./.lsp.json"
+  "commands": "./.claude/commands/",
+  "agents": "./.claude/agents/",
+  "skills": "./.claude/skills/",
+  "hooks": "./.claude/hooks/hooks.json"
 }

@@ -1,1 +1,0 @@
-../../scripts/plan-ready-handler.sh

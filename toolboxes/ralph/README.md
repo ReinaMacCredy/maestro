@@ -30,13 +30,7 @@ Ralph is an autonomous AI agent loop that runs Amp repeatedly until all PRD (Pro
 
 ## Maestro Integration
 
-Ralph integrates with the Maestro workflow via the `ca` (conductor autonomous) command:
-
-```bash
-ca  # Triggers autonomous execution using Ralph loop
-```
-
-This allows seamless handoff from design/planning phases to autonomous implementation.
+Ralph can integrate with Maestro v2 workflow for autonomous execution of plans.
 
 ## Files
 

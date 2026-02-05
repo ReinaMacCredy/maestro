@@ -1,1 +1,0 @@
-../../scripts/start-work.sh

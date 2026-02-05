@@ -1,1 +1,0 @@
-../../scripts/git-diff-reporter.sh

@@ -1,1 +1,0 @@
-../../scripts/comment-checker.sh

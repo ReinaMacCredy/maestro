@@ -1,1 +1,0 @@
-../../scripts/pipeline-transition.sh
