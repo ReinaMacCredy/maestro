@@ -1,0 +1,7 @@
+# Interview drafts (transient)
+drafts/*.md
+
+# Preserve directories
+!plans/
+!wisdom/
+!.gitignore
