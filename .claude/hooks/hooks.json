@@ -5,8 +5,8 @@
       {
         "matcher": "Write|Edit",
         "hooks": [
-          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/orchestrator-guard.sh" },
-          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/plan-protection.sh" }
+          { "type": "command", "command": "./.claude/scripts/orchestrator-guard.sh" },
+          { "type": "command", "command": "./.claude/scripts/plan-protection.sh" }
         ]
       }
     ],
@@ -14,19 +14,19 @@
       {
         "matcher": "Task",
         "hooks": [
-          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/verification-injector.sh" }
+          { "type": "command", "command": "./.claude/scripts/verification-injector.sh" }
         ]
       },
       {
         "matcher": "Write",
         "hooks": [
-          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/plan-validator.sh" }
+          { "type": "command", "command": "./.claude/scripts/plan-validator.sh" }
         ]
       },
       {
         "matcher": "Read",
         "hooks": [
-          { "type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/scripts/wisdom-injector.sh" }
+          { "type": "command", "command": "./.claude/scripts/wisdom-injector.sh" }
         ]
       }
     ]
