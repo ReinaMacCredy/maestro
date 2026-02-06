@@ -70,6 +70,7 @@ Enable Agent Teams in `~/.claude/settings.json`:
 | `spark` | Quick fixes | sonnet | No |
 | `oracle` | Strategic advisor | opus | No |
 | `explore` | Codebase search | sonnet | No |
+| `leviathan` | Deep plan reviewer | opus | No |
 | `wisdom-synthesizer` | Knowledge consolidator | haiku | No |
 | `progress-reporter` | Status tracker | haiku | No |
 
