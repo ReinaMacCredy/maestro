@@ -23,7 +23,7 @@ graph LR
     A["/design"] --> B[Team Research]
     B --> C[Interview]
     C --> D[Plan Generated]
-    D --> E[/work]
+    D --> E["/work"]
     E --> F[Team Execution]
 ```
 
