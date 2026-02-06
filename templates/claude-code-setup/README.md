@@ -10,7 +10,7 @@ Complete templates for configuring Claude Code in any project.
 | [AGENTS.md](AGENTS.md) | Agent workflow instructions |
 | [SETUP.md](SETUP.md) | Setup guide |
 | [.claude/rules/safety.md](.claude/rules/safety.md) | Safety constraints |
-| [skills/example-skill/SKILL.md](skills/example-skill/SKILL.md) | Skill template |
+| [.claude/skills/example-skill/SKILL.md](.claude/skills/example-skill/SKILL.md) | Skill template |
 
 ## Quick Start
 

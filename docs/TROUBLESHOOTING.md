@@ -114,3 +114,43 @@ ln -sf ../../scripts/<script-name>.sh <script-name>.sh
 ```bash
 chmod +x scripts/*.sh
 ```
+
+## Plan Rejected by /work Validation
+
+**Symptom**: `/work` refuses to execute and reports missing sections.
+
+**Cause**: Plan file is missing required sections (Objective, Tasks, Verification).
+
+**Fix**: Add missing sections or run `/plan-template` to scaffold a complete plan.
+
+## Stuck Worker During /work
+
+**Symptom**: A worker stops reporting progress during `/work` execution.
+
+**Cause**: Worker may be blocked, crashed, or stuck in a loop.
+
+**Fix**: The orchestrator has built-in stalled worker detection. If automatic recovery doesn't work, run `/reset` and then `/work --resume` to continue from where you left off.
+
+## /design --quick Producing Incomplete Plans
+
+**Symptom**: Quick mode generates a plan missing important details.
+
+**Cause**: Quick mode skips multi-round interview and plan review for speed.
+
+**Fix**: Run `/design` without `--quick` for complex features, or manually edit the generated plan.
+
+## Multiple Plans Confusion
+
+**Symptom**: `/work` executes the wrong plan.
+
+**Cause**: Multiple plan files exist in `.maestro/plans/`.
+
+**Fix**: `/work` now lists all plans for selection when multiple exist. Archive old plans or delete ones you don't need.
+
+## /work --resume Not Detecting Completed Tasks
+
+**Symptom**: `--resume` re-creates tasks that were already done.
+
+**Cause**: Completed tasks must be marked with `- [x]` in the plan file.
+
+**Fix**: Ensure completed tasks use `- [x]` checkbox syntax in the plan. The orchestrator marks tasks as it completes them.

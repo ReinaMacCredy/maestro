@@ -17,10 +17,18 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 10
+
     steps:
       - name: Checkout
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
@@ -29,6 +37,8 @@ jobs:
 
       - name: Check version sync
         run: |
+          set -euo pipefail
+
           PLUGIN_VERSION=$(jq -r '.version' .claude-plugin/plugin.json)
           MARKETPLACE_VERSION=$(jq -r '.plugins[0].version' .claude-plugin/marketplace.json)
           
@@ -47,11 +57,44 @@ jobs:
 
       - name: Changelog preview
         run: |
-          echo "## 📝 Changelog Preview" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Changes that will be added to CHANGELOG.md when this PR is merged:" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          git-cliff --unreleased --strip header 2>/dev/null || echo "No conventional commits found"
-          git-cliff --unreleased --strip header 2>/dev/null >> $GITHUB_STEP_SUMMARY || echo "No conventional commits found" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          set -euo pipefail
+
+          PREVIEW="$(git-cliff --unreleased --strip header 2>/dev/null || true)"
+          if [ -z "$PREVIEW" ]; then
+            PREVIEW="No conventional commits found"
+          fi
+
+          {
+            echo "## 📝 Changelog Preview"
+            echo ""
+            echo "Changes that will be added to CHANGELOG.md when this PR is merged:"
+            echo ""
+            echo '```'
+            echo "$PREVIEW"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  markdown-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Validate markdown links
+        run: ./scripts/validate-links.sh
+
+      - name: Validate markdown anchors
+        run: ./scripts/validate-anchors.sh
+
+  shell-syntax:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Check bash script syntax
+        run: bash -n scripts/*.sh

@@ -1,6 +1,9 @@
 # Interview drafts (transient)
 drafts/*.md
 
+# Design handoff state (transient)
+handoff/*.json
+
 # Preserve directories
 !plans/
 !wisdom/

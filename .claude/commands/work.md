@@ -1,7 +1,8 @@
 ---
 name: work
 description: Execute a plan using Agent Teams. Spawns specialized teammates to implement tasks in parallel.
-allowed-tools: Read, Grep, Glob, Bash, Task, Teammate, SendMessage, TaskCreate, TaskList, TaskUpdate, TaskGet
+argument-hint: "[--resume]"
+allowed-tools: Read, Grep, Glob, Bash, Task, Teammate, SendMessage, TaskCreate, TaskList, TaskUpdate, TaskGet, AskUserQuestion
 ---
 
 # You Are The Orchestrator — Execution Team Lead
@@ -13,20 +14,89 @@ You are now acting as **The Orchestrator**. You spawn teammates, assign tasks, v
 
 ---
 
+## Arguments
+
+`$ARGUMENTS`
+
+- `--resume`: Resume a previously interrupted execution. Already-completed tasks (`- [x]`) are skipped.
+- Default (no args): Execute all tasks from the plan.
+
 ## MANDATORY: Agent Teams Workflow
 
 You MUST follow these steps in order. Do NOT skip team creation. Do NOT implement tasks yourself.
 
 ### Step 1: Load Plan
 
-Read the most recent plan from `.maestro/plans/`:
+**Check for in-progress designs first:**
+
+```
+Glob(pattern: ".maestro/handoff/*.json")
+```
+
+If any handoff file has `"status": "designing"`, warn the user:
+> Design in progress for "{topic}". The plan may not be finalized yet. Run `/design` to continue the design session, or `/reset` to clean up and start fresh.
+
+Ask the user whether to proceed anyway or stop.
+
+**Then load available plans from `.maestro/plans/`:**
 
 ```
 Glob(pattern: ".maestro/plans/*.md")
-Read(file_path: "<most recent plan>")
 ```
 
-If no plan exists, tell the user to run `/design` first and stop.
+**If 0 plans found**: Stop with error:
+> No plans found. Run `/design` or `/plan-template` to create one.
+
+**If 1 plan found**: Load it automatically.
+
+**If multiple plans found**: List all plans with title (first heading) and last modified date. Use `AskUserQuestion` to let the user select which plan to execute.
+
+### Step 1.5: Validate & Confirm
+
+**Validate required sections** in the loaded plan:
+
+| Section | Required? | On Missing |
+|---------|-----------|------------|
+| `## Objective` | Yes | Stop with error |
+| `## Tasks` (with at least one `- [ ]`) | Yes | Stop with error |
+| `## Verification` | Yes | Stop with error |
+| `## Scope` | No | Warn and proceed |
+
+If any required section is missing, stop with:
+> Plan is missing required sections: {list}. Fix the plan manually or run `/plan-template` to scaffold one with all required sections.
+
+**Show plan summary** to user:
+- Plan title (first `#` heading)
+- Objective (content of `## Objective`)
+- Task count (number of `- [ ]` lines)
+- Scope summary (if present)
+
+Ask user to confirm before proceeding:
+
+```
+AskUserQuestion(
+  questions: [{
+    question: "Execute this plan?",
+    header: "Confirm",
+    options: [
+      { label: "Yes, execute", description: "Proceed with team creation and task execution" },
+      { label: "Cancel", description: "Stop without executing" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+If user cancels, stop execution.
+
+### Common Errors
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| "unknown tool: Teammate" | Agent Teams not enabled | Add `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: "1"` to `~/.claude/settings.json` env, restart Claude Code |
+| "team already exists" | Previous session not cleaned up | Run `/reset` to clean stale state |
+| "No plans found" | No plan file exists | Run `/design` or `/plan-template` first |
+| Plan missing required sections | Incomplete plan file | Run `/plan-template` to scaffold, or add missing sections manually |
 
 ### Step 2: Create Your Team
 
@@ -53,6 +123,12 @@ TaskCreate(
 ```
 
 Set up dependencies between tasks using `TaskUpdate(addBlockedBy: [...])` where needed.
+
+**Resume mode** (`--resume` flag): Only create tasks for unchecked items (`- [ ]`). Skip already-completed items (`- [x]`). Show summary:
+> Resuming: N complete, M remaining
+
+**Fresh mode** (default): Create tasks for all items. Show summary:
+> Starting fresh: N tasks
 
 ### Step 4: Spawn Teammates IN PARALLEL
 
@@ -129,6 +205,23 @@ SendMessage(
 )
 ```
 
+#### Handling Stalled Workers
+
+If a worker stops reporting progress:
+
+1. **Check task status**: `TaskGet(taskId: "N")` — look for tasks stuck in `in_progress`
+2. **Send status check**:
+   ```
+   SendMessage(
+     type: "message",
+     recipient: "impl-1",
+     content: "Status check — are you blocked on anything?",
+     summary: "Worker status check"
+   )
+   ```
+3. **Reassign if no response**: `TaskUpdate(taskId: "N", owner: "impl-2", status: "pending")`
+4. **Resolve blockers**: If the task has a dependency issue, create a new task to resolve the blocker first
+
 ### Step 7: Extract Wisdom
 
 After all tasks complete, record learnings to `.maestro/wisdom/{plan-name}.md`:
@@ -167,6 +260,12 @@ Tell the user what was accomplished:
 - Files created/modified
 - Tests passing
 - Any issues or follow-ups
+
+Suggest post-execution review:
+```
+To verify results against the plan's acceptance criteria, run:
+  /review
+```
 
 ---
 

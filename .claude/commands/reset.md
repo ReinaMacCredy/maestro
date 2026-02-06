@@ -28,7 +28,16 @@ ls -la ~/.claude/teams/ 2>/dev/null
 
 For each team directory, check if it has active members. Report orphaned teams.
 
-### 3. Stale Task Directories
+### 3. Stale Handoff Files
+
+List all handoff files in `.maestro/handoff/`:
+```
+Glob(".maestro/handoff/*.json")
+```
+
+For each handoff file, read the JSON and show the topic, status, and start time. Report handoff files that may be from interrupted design sessions (especially those with `status: "designing"`).
+
+### 4. Stale Task Directories
 
 Check for task directories:
 ```bash
@@ -46,7 +55,7 @@ Report any task directories that don't correspond to active teams.
 
 ## Process
 
-1. Scan all three areas (drafts, teams, tasks)
+1. Scan all four areas (drafts, handoffs, teams, tasks)
 2. Report findings to the user
 3. Wait for confirmation before removing anything
 4. Remove confirmed items
@@ -60,6 +69,7 @@ End with:
 
 ### Cleaned
 - [N] draft files removed
+- [N] handoff files removed
 - [N] orphaned team directories removed
 - [N] stale task directories removed
 

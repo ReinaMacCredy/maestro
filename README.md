@@ -29,7 +29,7 @@ graph LR
 
 1. **`/design`** — Start an interview-driven planning session (with team research)
 2. **Review plan** — Prometheus generates structured plan
-3. **`/work`** — Execute via Agent Teams
+3. **`/work`** — Confirm plan, then execute via Agent Teams
 4. **Verify** — Wisdom accumulated, learnings extracted
 
 ## Setup
@@ -48,13 +48,13 @@ Enable Agent Teams in `~/.claude/settings.json`:
 
 | Trigger | Action |
 |---------|--------|
-| `/design <request>` | Start Prometheus interview mode (team lead) |
-| `/work` | Execute plan with Agent Teams |
+| `/design <request>` | Start Prometheus interview mode (supports `--quick`) |
+| `/work` | Execute plan with Agent Teams (supports `--resume`) |
 | `@tdd` | TDD implementation (kraken) |
 | `@spark` | Quick fixes |
 | `@oracle` | Strategic advisor (opus) |
 | `@explore` | Codebase search |
-| `/setup-check` | Verify plugin prerequisites |
+| `/setup-check` | Verify and auto-fix plugin prerequisites |
 | `/status` | Show Maestro state |
 | `/review` | Post-execution review |
 | `/reset` | Clean stale state |
