@@ -11,8 +11,8 @@ description: AI agent workflow with interview-driven planning and team-based exe
 
 | Trigger | Action |
 |---------|--------|
-| `/design <request>` | Start Prometheus interview mode |
-| `/work` | Execute plan with Agent Teams |
+| `/design <request>` | Start Prometheus interview mode (supports `--quick`) |
+| `/work` | Execute plan with Agent Teams (supports `--resume`) |
 | `/setup-check` | Validate Maestro prerequisites |
 | `/status` | Show current Maestro state |
 | `/review` | Post-execution plan verification |
@@ -25,18 +25,21 @@ description: AI agent workflow with interview-driven planning and team-based exe
 ## Planning Flow
 
 ```
-/design → prometheus (team lead) → spawns explore/oracle → interview → plan file
+/design → prometheus (team lead) → spawns explore/oracle → interview → leviathan (review) → plan file
 ```
 
 1. User triggers `/design <description>`
 2. Prometheus creates team if research needed
+2.5. Loads prior wisdom from `.maestro/wisdom/` (if any)
 3. Spawns explore for codebase research
 4. Spawns oracle for architectural decisions
 5. Conducts interview with user
 6. Draft updates in `.maestro/drafts/{topic}.md`
 7. When clear, generate plan to `.maestro/plans/{name}.md`
-8. Spawn plan-reviewer to validate plan quality
+8. Spawn leviathan to validate plan quality
 9. Cleanup team
+
+Quick mode (`--quick`) streamlines to: team → 1 explore → 1-2 questions → plan
 
 ## Execution Flow
 
@@ -46,10 +49,14 @@ description: AI agent workflow with interview-driven planning and team-based exe
 
 1. User triggers `/work`
 2. Orchestrator loads plan from `.maestro/plans/`
+2.5. Validates plan structure and confirms with user before proceeding
 3. Creates tasks via TaskCreate with dependencies
 4. Spawns 2-4 workers in parallel (kraken, spark)
 5. Assigns first round, workers self-claim remaining via TaskList
 6. Orchestrator verifies results, extracts wisdom to `.maestro/wisdom/`
+7. Suggests `/review` for post-execution verification
+
+Use `--resume` to skip already-completed tasks.
 
 ## State Directory
 
@@ -70,7 +77,7 @@ description: AI agent workflow with interview-driven planning and team-based exe
 | `spark` | Quick fixes | sonnet | No | Yes (self-claim) |
 | `oracle` | Strategic advisor | opus | No | Yes (self-claim) |
 | `explore` | Codebase search | sonnet | No | Yes (self-claim) |
-| `plan-reviewer` | Plan quality gate | sonnet | No | Yes (self-claim) |
+| `leviathan` | Deep plan reviewer | opus | No | Yes (self-claim) |
 | `wisdom-synthesizer` | Knowledge consolidation | haiku | No | Yes (self-claim) |
 | `progress-reporter` | Status tracking | haiku | No | Yes (self-claim) |
 

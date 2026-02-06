@@ -5,7 +5,7 @@ Interview-driven planning with Agent Teams execution.
 ## Workflow
 
 ```
-/design → prometheus (interview) → plan file → /work → orchestrator → teammates
+/design → prometheus (interview) → leviathan (review) → plan file → /work → orchestrator → teammates
 ```
 
 ## Commands
@@ -33,7 +33,7 @@ Interview-driven planning with Agent Teams execution.
 | `spark` | Quick fixes | sonnet | No |
 | `oracle` | Strategic advisor | opus | No |
 | `explore` | Codebase search | sonnet | No |
-| `plan-reviewer` | Plan quality gate | sonnet | No |
+| `leviathan` | Deep plan reviewer | opus | No |
 | `wisdom-synthesizer` | Knowledge consolidation | haiku | No |
 | `progress-reporter` | Status tracking | haiku | No |
 

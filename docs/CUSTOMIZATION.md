@@ -17,6 +17,7 @@ Each agent has a default model set in its frontmatter. To change:
 | spark | sonnet | haiku (faster for simple fixes) |
 | oracle | opus | sonnet (cheaper, less thorough) |
 | explore | sonnet | haiku (faster searches) |
+| leviathan | opus | sonnet (cheaper, less thorough reviews) |
 | wisdom-synthesizer | haiku | sonnet (deeper analysis) |
 | progress-reporter | haiku | sonnet (more detailed reports) |
 
@@ -99,3 +100,47 @@ The `project-conventions` skill auto-discovers your project setup. To improve de
 - `package.json` / `pyproject.toml` / `Cargo.toml`
 - Linter configs (`.eslintrc`, `biome.json`, etc.)
 - `CLAUDE.md` with project-specific rules
+
+## Adaptive Mode
+
+Use `/design --quick "request"` to streamline the design flow for simple, well-defined changes.
+
+**How it works:**
+- Spawns 1 explore agent (instead of multiple)
+- Asks 1-2 clarifying questions (instead of a multi-round interview)
+- Generates the plan directly without a leviathan review loop
+
+**When to use:** Simple features, bug fixes with known solutions, config changes -- anything where the scope is already clear.
+
+**When to use full mode:** Omit the `--quick` flag (default is always full mode). Use full mode for complex features, multi-file refactors, or ambiguous requirements.
+
+## Wisdom Auto-Injection
+
+Wisdom from previous work cycles is automatically fed into `/design` interviews.
+
+**How it works:**
+1. During `/design`, Step 1.5 loads all `.maestro/wisdom/*.md` files
+2. Wisdom summaries are passed to explore agent prompts as additional context
+3. This complements the `wisdom-injector.sh` hook, which fires when plan files are read
+
+**Manual wisdom:** Any Markdown file placed in `.maestro/wisdom/` is included -- both auto-generated and manually written files are used.
+
+## Plan Confirmation
+
+`/work` always shows a plan summary before execution starts. This is a safety feature and cannot be disabled.
+
+**Behavior:**
+- Single plan: Summary is shown and user confirms before workers are spawned
+- Multiple plans: User selects which plan to execute from a list
+- Confirmation prevents accidental execution of the wrong plan
+
+## Resume Execution
+
+Use `/work --resume` to continue a partially completed execution.
+
+**How it works:**
+- Tasks marked `- [x]` in the plan file are treated as completed and skipped
+- Tasks marked `- [ ]` are created for execution
+- Default `/work` (no args) executes all tasks regardless of checkbox state
+
+**Marking tasks done manually:** Edit the plan file and change `- [ ]` to `- [x]` for any tasks you want to skip. The orchestrator also marks tasks automatically as workers complete them.

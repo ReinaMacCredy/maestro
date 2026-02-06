@@ -46,7 +46,7 @@ flowchart TB
 | `spark` | Quick fixes | sonnet | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
 | `oracle` | Strategic advisor | opus | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
 | `explore` | Codebase search | sonnet | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
-| `plan-reviewer` | Plan quality gate | sonnet | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
+| `leviathan` | Deep plan reviewer | opus | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
 | `wisdom-synthesizer` | Knowledge consolidation | haiku | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
 | `progress-reporter` | Status tracking | haiku | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
 
@@ -70,7 +70,7 @@ flowchart TB
 │   ├── spark.md
 │   ├── oracle.md
 │   ├── explore.md
-│   ├── plan-reviewer.md
+│   ├── leviathan.md
 │   ├── wisdom-synthesizer.md
 │   └── progress-reporter.md
 ├── commands/        # /design, /work, /setup-check, /status, /review, /reset

@@ -36,7 +36,7 @@
 | `spark` | Quick fixes | sonnet | No |
 | `oracle` | Strategic advisor | opus | No |
 | `explore` | Codebase search | sonnet | No |
-| `plan-reviewer` | Plan quality gate | sonnet | No |
+| `leviathan` | Deep plan reviewer | opus | No |
 | `wisdom-synthesizer` | Knowledge consolidation | haiku | No |
 | `progress-reporter` | Status tracking | haiku | No |
 
