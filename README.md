@@ -1,6 +1,6 @@
 # Maestro
 
-> Context-driven development for AI coding agents. Plan first, code once.
+> AI agent workflow plugin for Claude Code. Plan first, code once.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -16,84 +16,94 @@
 amp skill add https://github.com/ReinaMacCredy/maestro --global
 ```
 
-<details>
-<summary>Other agents (Codex, Cursor, Gemini CLI)</summary>
-
-**Codex CLI:**
-```bash
-# Add to .codex/AGENTS.md
-git clone https://github.com/ReinaMacCredy/maestro ~/.codex/plugins/maestro
-```
-
-**Cursor:**
-```bash
-# Copy skills to .cursor/skills/
-git clone https://github.com/ReinaMacCredy/maestro ~/.cursor/plugins/maestro
-```
-
-**Gemini CLI:**
-```bash
-# Add to GEMINI.md
-git clone https://github.com/ReinaMacCredy/maestro ~/.gemini/plugins/maestro
-```
-
-</details>
-
 ## Quick Start
 
 ```mermaid
 graph LR
-    A[ds] --> B[/conductor-newtrack]
-    B --> C[/conductor-implement]
-    C --> D[/conductor-finish]
+    A["/design"] --> B[Team Research]
+    B --> C[Interview]
+    C --> D[Plan Generated]
+    D --> E[/work]
+    E --> F[Team Execution]
 ```
 
-1. **`ds`** — Start a design session (Double Diamond methodology)
-2. **`/conductor-newtrack`** — Generate spec, plan, and beads from design
-3. **`/conductor-implement`** — Execute with TDD checkpoints
-4. **`/conductor-finish`** — Archive track and extract learnings
+1. **`/design`** — Start an interview-driven planning session (with team research)
+2. **Review plan** — Prometheus generates structured plan
+3. **`/work`** — Confirm plan, then execute via Agent Teams
+4. **Verify** — Wisdom accumulated, learnings extracted
 
-## Skills
+## Setup
 
-| Skill | Trigger | Purpose |
-|-------|---------|---------|
-| **conductor** | `/conductor-*` | Implementation execution, TDD |
-| **designing** | `ds` | Double Diamond design sessions |
-| **tracking** | `fb`, `rb`, `bd` | Persistent issue tracking |
-| **orchestrator** | `/conductor-orchestrate` | Multi-agent parallel execution |
-| **handoff** | `/conductor-handoff` | Session context preservation |
-| **maestro-core** | *(auto)* | Routing and fallback policies |
-| **creating-skills** | — | Skill authoring guide |
-| **sharing-skills** | — | Contribute skills upstream |
-| **using-git-worktrees** | `/worktree` | Isolated dev environments |
+Enable Agent Teams in `~/.claude/settings.json`:
+
+```json
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  }
+}
+```
+
+## Triggers
+
+| Trigger | Action |
+|---------|--------|
+| `/design <request>` | Start Prometheus interview mode (supports `--quick`) |
+| `/work` | Execute plan with Agent Teams (supports `--resume`) |
+| `@tdd` | TDD implementation (kraken) |
+| `@spark` | Quick fixes |
+| `@oracle` | Strategic advisor (opus) |
+| `@explore` | Codebase search |
+| `/setup-check` | Verify and auto-fix plugin prerequisites |
+| `/status` | Show Maestro state |
+| `/review` | Post-execution review |
+| `/reset` | Clean stale state |
+| `/plan-template <name>` | Scaffold blank plan |
+
+## Agents
+
+| Agent | Purpose | Model | Team Lead? |
+|-------|---------|-------|------------|
+| `prometheus` | Interview-driven planner | sonnet | Yes |
+| `orchestrator` | Execution coordinator | sonnet | Yes |
+| `kraken` | TDD implementation | sonnet | No |
+| `spark` | Quick fixes | sonnet | No |
+| `oracle` | Strategic advisor | opus | No |
+| `explore` | Codebase search | sonnet | No |
+| `wisdom-synthesizer` | Knowledge consolidator | haiku | No |
+| `progress-reporter` | Status tracker | haiku | No |
 
 ## Key Rules
 
-- **Design before code** — Run `ds` to explore before implementing
-- **TDD by default** — Never write production code without a failing test
-- **Beads track work** — Use `bd` CLI for persistent task management
-- **Handoffs preserve context** — Session state survives across restarts
-- **One question at a time** — Design sessions ask focused questions
+- **Interview before code** — Run `/design` to explore before implementing
+- **TDD by default** — Use kraken for new features
+- **Both phases use teams** — Planning and execution are team-based
+- **Verify subagent claims** — Always verify, agents can make mistakes
+
+## Recommended MCP Servers
+
+These MCP servers enhance the Maestro experience:
+
+| Server | Purpose |
+|--------|---------|
+| [Context7](https://github.com/upstash/context7) | Up-to-date library documentation |
+| [Sequential Thinking](https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking) | Dynamic reasoning for complex planning |
 
 ## Documentation
 
 | Topic | Path |
 |-------|------|
-| Tutorial | [TUTORIAL.md](TUTORIAL.md) |
-| Setup Guide | [SETUP_GUIDE.md](SETUP_GUIDE.md) |
-| Reference | [REFERENCE.md](REFERENCE.md) |
-| Changelog | [CHANGELOG.md](CHANGELOG.md) |
-| Workflow Chain | [skills/maestro-core/references/workflow-chain.md](.claude/skills/maestro-core/references/workflow-chain.md) |
-| Routing Table | [skills/maestro-core/references/routing-table.md](.claude/skills/maestro-core/references/routing-table.md) |
+| Workflow Skill | [.claude/skills/maestro/SKILL.md](.claude/skills/maestro/SKILL.md) |
+| Agent Definitions | [.claude/agents/](.claude/agents/) |
+| Agent Teams Guide | [docs/AGENT-TEAMS.md](docs/AGENT-TEAMS.md) |
+| Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| Troubleshooting | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) |
+| Customization | [docs/CUSTOMIZATION.md](docs/CUSTOMIZATION.md) |
 
 ## Credits
 
-Maestro builds on the shoulders of giants:
-
 - **[BMAD-METHOD](https://github.com/bmadcode/BMAD-METHOD)** — Multi-agent design methodology
 - **[conductor](https://github.com/cyanheads/conductor)** — Context-driven development patterns
-- **[beads](https://github.com/beads-org/beads)** — Issue tracking for AI agents
-- **[Agent Mail](https://github.com/agent-mail/agent-mail)** — Multi-agent coordination
 
 ## License
 

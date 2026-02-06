@@ -1,0 +1,430 @@
+{
+  "typescript": {
+    "command": "typescript-language-server",
+    "args": ["--stdio"],
+    "extensionToLanguage": {
+      ".ts": "typescript",
+      ".tsx": "typescriptreact",
+      ".js": "javascript",
+      ".jsx": "javascriptreact",
+      ".mjs": "javascript",
+      ".cjs": "javascript",
+      ".mts": "typescript",
+      ".cts": "typescript"
+    },
+    "startupTimeout": 15000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "deno": {
+    "command": "deno",
+    "args": ["lsp"],
+    "extensionToLanguage": {
+      ".ts": "typescript",
+      ".tsx": "typescriptreact",
+      ".js": "javascript",
+      ".jsx": "javascriptreact",
+      ".mjs": "javascript"
+    },
+    "startupTimeout": 10000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "vue": {
+    "command": "vue-language-server",
+    "args": ["--stdio"],
+    "extensionToLanguage": {
+      ".vue": "vue"
+    },
+    "startupTimeout": 10000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "eslint": {
+    "command": "vscode-eslint-language-server",
+    "args": ["--stdio"],
+    "extensionToLanguage": {
+      ".ts": "typescript",
+      ".tsx": "typescriptreact",
+      ".js": "javascript",
+      ".jsx": "javascriptreact",
+      ".mjs": "javascript",
+      ".cjs": "javascript",
+      ".mts": "typescript",
+      ".cts": "typescript",
+      ".vue": "vue"
+    },
+    "startupTimeout": 10000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "biome": {
+    "command": "biome",
+    "args": ["lsp-proxy", "--stdio"],
+    "extensionToLanguage": {
+      ".ts": "typescript",
+      ".tsx": "typescriptreact",
+      ".js": "javascript",
+      ".jsx": "javascriptreact",
+      ".json": "json",
+      ".jsonc": "jsonc",
+      ".css": "css",
+      ".html": "html"
+    },
+    "startupTimeout": 10000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "gopls": {
+    "command": "gopls",
+    "args": [],
+    "extensionToLanguage": {
+      ".go": "go"
+    },
+    "initializationOptions": {
+      "usePlaceholders": true,
+      "staticcheck": true
+    },
+    "startupTimeout": 10000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "pyright": {
+    "command": "pyright-langserver",
+    "args": ["--stdio"],
+    "extensionToLanguage": {
+      ".py": "python",
+      ".pyi": "python"
+    },
+    "initializationOptions": {
+      "python": {
+        "analysis": {
+          "autoSearchPaths": true,
+          "useLibraryCodeForTypes": true,
+          "diagnosticMode": "openFilesOnly"
+        }
+      }
+    },
+    "startupTimeout": 10000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "basedpyright": {
+    "command": "basedpyright-langserver",
+    "args": ["--stdio"],
+    "extensionToLanguage": {
+      ".py": "python",
+      ".pyi": "python"
+    },
+    "startupTimeout": 10000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "ruff": {
+    "command": "ruff",
+    "args": ["server"],
+    "extensionToLanguage": {
+      ".py": "python",
+      ".pyi": "python"
+    },
+    "startupTimeout": 10000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "rust": {
+    "command": "rust-analyzer",
+    "args": [],
+    "extensionToLanguage": {
+      ".rs": "rust"
+    },
+    "initializationOptions": {
+      "checkOnSave": { "command": "clippy" },
+      "cargo": { "loadOutDirsFromCheck": true },
+      "procMacro": { "enable": true }
+    },
+    "startupTimeout": 30000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "clangd": {
+    "command": "clangd",
+    "args": ["--background-index", "--clang-tidy"],
+    "extensionToLanguage": {
+      ".c": "c",
+      ".cpp": "cpp",
+      ".cc": "cpp",
+      ".cxx": "cpp",
+      ".c++": "cpp",
+      ".h": "c",
+      ".hpp": "cpp",
+      ".hh": "cpp",
+      ".hxx": "cpp",
+      ".h++": "cpp"
+    },
+    "startupTimeout": 15000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "sourcekit-lsp": {
+    "command": "sourcekit-lsp",
+    "args": [],
+    "extensionToLanguage": {
+      ".swift": "swift",
+      ".objc": "objective-c",
+      ".objcpp": "objective-cpp"
+    },
+    "startupTimeout": 15000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "ruby-lsp": {
+    "command": "ruby-lsp",
+    "args": [],
+    "extensionToLanguage": {
+      ".rb": "ruby",
+      ".rake": "ruby",
+      ".gemspec": "ruby",
+      ".ru": "ruby"
+    },
+    "startupTimeout": 10000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "elixir-ls": {
+    "command": "elixir-ls",
+    "args": [],
+    "extensionToLanguage": {
+      ".ex": "elixir",
+      ".exs": "elixir"
+    },
+    "startupTimeout": 15000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "zls": {
+    "command": "zls",
+    "args": [],
+    "extensionToLanguage": {
+      ".zig": "zig",
+      ".zon": "zig"
+    },
+    "startupTimeout": 10000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "csharp": {
+    "command": "csharp-ls",
+    "args": [],
+    "extensionToLanguage": {
+      ".cs": "csharp"
+    },
+    "startupTimeout": 15000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "fsharp": {
+    "command": "fsautocomplete",
+    "args": [],
+    "extensionToLanguage": {
+      ".fs": "fsharp",
+      ".fsi": "fsharp",
+      ".fsx": "fsharp",
+      ".fsscript": "fsharp"
+    },
+    "startupTimeout": 15000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "svelte": {
+    "command": "svelteserver",
+    "args": ["--stdio"],
+    "extensionToLanguage": {
+      ".svelte": "svelte"
+    },
+    "startupTimeout": 10000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "astro": {
+    "command": "astro-ls",
+    "args": ["--stdio"],
+    "extensionToLanguage": {
+      ".astro": "astro"
+    },
+    "startupTimeout": 10000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "bash": {
+    "command": "bash-language-server",
+    "args": ["start"],
+    "extensionToLanguage": {
+      ".sh": "shellscript",
+      ".bash": "shellscript",
+      ".zsh": "shellscript",
+      ".ksh": "shellscript"
+    },
+    "startupTimeout": 10000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "jdtls": {
+    "command": "jdtls",
+    "args": [],
+    "extensionToLanguage": {
+      ".java": "java"
+    },
+    "startupTimeout": 30000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "yaml-ls": {
+    "command": "yaml-language-server",
+    "args": ["--stdio"],
+    "extensionToLanguage": {
+      ".yaml": "yaml",
+      ".yml": "yaml"
+    },
+    "startupTimeout": 10000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "lua-ls": {
+    "command": "lua-language-server",
+    "args": [],
+    "extensionToLanguage": {
+      ".lua": "lua"
+    },
+    "startupTimeout": 10000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "php": {
+    "command": "intelephense",
+    "args": ["--stdio"],
+    "extensionToLanguage": {
+      ".php": "php"
+    },
+    "startupTimeout": 10000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "dart": {
+    "command": "dart",
+    "args": ["language-server", "--lsp"],
+    "extensionToLanguage": {
+      ".dart": "dart"
+    },
+    "startupTimeout": 15000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "terraform": {
+    "command": "terraform-ls",
+    "args": ["serve"],
+    "extensionToLanguage": {
+      ".tf": "terraform",
+      ".tfvars": "terraform"
+    },
+    "startupTimeout": 10000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "prisma": {
+    "command": "prisma",
+    "args": ["language-server"],
+    "extensionToLanguage": {
+      ".prisma": "prisma"
+    },
+    "startupTimeout": 10000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "ocaml-lsp": {
+    "command": "ocamllsp",
+    "args": [],
+    "extensionToLanguage": {
+      ".ml": "ocaml",
+      ".mli": "ocaml"
+    },
+    "startupTimeout": 10000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "texlab": {
+    "command": "texlab",
+    "args": [],
+    "extensionToLanguage": {
+      ".tex": "latex",
+      ".bib": "bibtex"
+    },
+    "startupTimeout": 10000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "dockerfile": {
+    "command": "docker-langserver",
+    "args": ["--stdio"],
+    "extensionToLanguage": {
+      ".dockerfile": "dockerfile"
+    },
+    "startupTimeout": 10000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "gleam": {
+    "command": "gleam",
+    "args": ["lsp"],
+    "extensionToLanguage": {
+      ".gleam": "gleam"
+    },
+    "startupTimeout": 10000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "clojure-lsp": {
+    "command": "clojure-lsp",
+    "args": ["listen"],
+    "extensionToLanguage": {
+      ".clj": "clojure",
+      ".cljs": "clojurescript",
+      ".cljc": "clojure",
+      ".edn": "edn"
+    },
+    "startupTimeout": 15000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "nixd": {
+    "command": "nixd",
+    "args": [],
+    "extensionToLanguage": {
+      ".nix": "nix"
+    },
+    "startupTimeout": 10000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "haskell": {
+    "command": "haskell-language-server-wrapper",
+    "args": ["--lsp"],
+    "extensionToLanguage": {
+      ".hs": "haskell",
+      ".lhs": "haskell"
+    },
+    "startupTimeout": 30000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  },
+  "kotlin-ls": {
+    "command": "kotlin-lsp",
+    "args": [],
+    "extensionToLanguage": {
+      ".kt": "kotlin",
+      ".kts": "kotlin"
+    },
+    "startupTimeout": 15000,
+    "restartOnCrash": true,
+    "maxRestarts": 3
+  }
+}

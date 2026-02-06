@@ -1,223 +1,61 @@
 # AGENTS.md - Maestro Plugin
 
-Workflow skills plugin: Conductor, Designing, Tracking, Orchestrator.
+Interview-driven planning with Agent Teams execution.
 
-## Project Detection
-
-| Condition | Result |
-|-----------|--------|
-| `conductor/` exists | Use Conductor workflow |
-| `.beads/` exists | Use Beads tracking |
-| Neither | Standalone mode |
-
-## Decision Trees
-
-### bd vs TodoWrite
+## Workflow
 
 ```
-bd available?
-├─ YES → Use bd CLI
-└─ NO  → HALT (do not use TodoWrite as fallback)
+/design → prometheus (interview) → leviathan (review) → plan file → /work → orchestrator → teammates
 ```
 
-### Execution Mode
+## Commands
 
-Always FULL mode via orchestrator. Even single tasks spawn 1 worker for consistency.
+| Trigger | Agent | Action |
+|---------|-------|--------|
+| `/design <request>` | prometheus | Interview-driven planning |
+| `/work` | orchestrator | Execute plan via teams |
+| `/setup-check` | - | Validate Maestro prerequisites |
+| `/status` | - | Show current Maestro state |
+| `/review` | - | Post-execution plan verification |
+| `/reset` | - | Clean stale Maestro state |
+| `@tdd` | kraken | TDD implementation |
+| `@spark` | spark | Quick fixes |
+| `@oracle` | oracle | Strategic advice (opus) |
+| `@explore` | explore | Codebase search |
 
-## Commands Quick Reference
+## Agents
 
-### Planning
+| Agent | Purpose | Model | Team Lead? |
+|-------|---------|-------|------------|
+| `prometheus` | Interview-driven planner | sonnet | Yes |
+| `orchestrator` | Execution coordinator | sonnet | Yes |
+| `kraken` | TDD implementation | sonnet | No |
+| `spark` | Quick fixes | sonnet | No |
+| `oracle` | Strategic advisor | opus | No |
+| `explore` | Codebase search | sonnet | No |
+| `leviathan` | Deep plan reviewer | opus | No |
+| `wisdom-synthesizer` | Knowledge consolidation | haiku | No |
+| `progress-reporter` | Status tracking | haiku | No |
 
-| Trigger | Action |
-|---------|--------|
-| `ds` | Design session (Double Diamond) |
-| `/conductor-setup` | Initialize project context |
-| `/conductor-newtrack` | Create spec + plan + beads from design |
+All agents have team coordination tools (TaskList, TaskGet, TaskUpdate, SendMessage). Only team leads have Task + Teammate for spawning.
 
-### Execution
-
-| Trigger | Action |
-|---------|--------|
-| `bd ready --json` | Find available work |
-| `/conductor-implement <track>` | Execute track with TDD |
-| `/conductor-implement --no-tdd` | Execute without TDD |
-| `ca`, `/conductor-autonomous` | Autonomous execution (Ralph loop) |
-| `tdd` | Enter TDD mode |
-| `finish branch` | Finalize and merge/PR |
-
-### Beads
-
-| Command | Action |
-|---------|--------|
-| `fb` | File beads from plan |
-| `rb` | Review beads |
-| `bd status` | Show ready + in_progress |
-| `bd show <id>` | Read task context |
-| `bd update <id> --status in_progress` | Claim task |
-| `bd close <id> --reason <completed\|skipped\|blocked>` | Close task |
-| `bd sync` | Sync to git |
-
-### Handoffs
-
-| Command | Action |
-|---------|--------|
-| `/conductor-handoff` | Save session context |
-| `/conductor-handoff resume` | Load session context |
-
-### Maintenance
-
-| Trigger | Action |
-|---------|--------|
-| `/conductor-revise` | Update spec/plan mid-work |
-| `/conductor-finish` | Complete track, extract learnings |
-| `/conductor-status` | Display progress overview |
-
-## Session Protocol
-
-### First Message
-
-1. Check `conductor/handoffs/` for recent handoffs (< 7 days)
-2. If found: `📋 Prior context: [track] (Xh ago)`
-3. Skip if: "fresh start", no `conductor/`, or handoffs > 7 days
-
-### Preflight Triggers
-
-| Command | Preflight |
-|---------|-----------|
-| `/conductor-implement` | ✅ Yes |
-| `/conductor-orchestrate` | ✅ Yes |
-| `ds` | ❌ Skip |
-| `bd ready/show/list` | ❌ Skip |
-
-### Session Start
-
-```bash
-bd ready --json                      # Find work
-bd show <id>                         # Read context
-bd update <id> --status in_progress  # Claim
-```
-
-### During Session
-
-- Heartbeat every 5 min (automatic)
-- TDD checkpoints tracked by default
-- Idle > 30min → prompt for handoff
-
-### Session End
-
-```bash
-bd update <id> --notes "COMPLETED: X. NEXT: Y"
-bd close <id> --reason completed
-bd sync
-```
-
-### Session Identity
-
-- Format: `{BaseAgent}-{timestamp}` (internal)
-- Registered on `/conductor-implement` or `/conductor-orchestrate`
-- Stale threshold: 10 min → takeover prompt
-
-### Ralph (Autonomous Mode)
-
-| Phase | Action |
-|-------|--------|
-| Start | `ca` sets `ralph.active = true`, invokes ralph.sh |
-| During | Ralph iterates through stories, updates passes status |
-| End | `ralph.active = false`, `workflow.state = DONE` |
-
-**Exclusive Lock:** `ci`/`co` commands blocked while `ralph.active` is true.
-
-**Gotchas:**
-- `ralph.active` lock prevents concurrent `ci`/`co` execution
-- `progress.txt` is in track directory, not project root
-- Ralph reads/writes `metadata.json.ralph.stories` directly
-
-## Fallback Policy
-
-| Condition | Action |
-|-----------|--------|
-| `bd` unavailable | HALT |
-| `conductor/` missing | DEGRADE (standalone) |
-| Agent Mail unavailable | HALT |
-
-## Skill Discipline
-
-**RULE:** Load [maestro-core](skills/maestro-core/SKILL.md) FIRST before any workflow skill for routing table and fallback policies.
-
-**RULE:** Check skills BEFORE ANY RESPONSE. 1% chance = invoke Skill tool.
-
-### Red Flags (Rationalizing)
-
-| Thought | Reality |
-|---------|---------|
-| "Just a simple question" | Questions are tasks. Check. |
-| "Need more context first" | Skill check BEFORE clarifying. |
-| "Let me explore first" | Skills tell HOW to explore. |
-| "Doesn't need formal skill" | If skill exists, use it. |
-| "I remember this skill" | Skills evolve. Re-read. |
-| "Skill is overkill" | Simple → complex. Use it. |
-
-### Skill Priority
-
-1. **Process skills** (`ds`, `/conductor-design`) → determine approach
-2. **Implementation skills** (`frontend-design`, `mcp-builder`) → guide execution
-
-### Skill Types
-
-| Type | Behavior |
-|------|----------|
-| Rigid (TDD) | Follow exactly |
-| Flexible (patterns) | Adapt to context |
-
-## Directory Structure
+## State
 
 ```
-conductor/
-├── product.md, tech-stack.md, workflow.md  # Context
-├── CODEMAPS/                               # Architecture
-├── handoffs/                               # Session context
-└── tracks/<id>/                            # Per-track
-    ├── design.md, spec.md, plan.md
-    └── metadata.json
+.maestro/
+├── plans/     # Work plans
+├── drafts/    # Interview drafts
+└── wisdom/    # Learnings
 ```
 
-## Build/Test
+## Rules
 
-```bash
-cat .claude-plugin/plugin.json | jq .   # Validate manifest
-```
+1. Orchestrator never edits directly — always delegates
+2. Verify subagent claims — agents can make mistakes
+3. TDD by default — use kraken for new features
+4. Workers self-claim tasks — parallel, not sequential
 
-## Code Style
+## Links
 
-- Skills: Markdown + YAML frontmatter (`name`, `description` required)
-- Directories: kebab-case
-- SKILL.md name must match directory
-
-## Versioning
-
-| Type | Method |
-|------|--------|
-| Plugin | CI auto-bump (`feat:` minor, `fix:` patch, `feat!:` major while 0.x) |
-| Skill | Manual frontmatter update |
-| Skip CI | `[skip ci]` in commit |
-
-**Pre-1.0 Semantics**: While version is 0.x.x, breaking changes (`feat!:` or `release:major`) bump MINOR not MAJOR. This prevents accidental 1.0.0 release. See [CHANGELOG-legacy.md](CHANGELOG-legacy.md) for pre-0.5.0 history.
-
-## Critical Rules
-
-- Use `--json` with `bd` for structured output
-- Use `--robot-*` with `bv` (bare `bv` hangs)
-- Never write production code without failing test first
-- Always commit `.beads/` with code changes
-
-## Detailed References
-
-| Topic | Path |
-|-------|------|
-| Beads workflow | [skills/tracking/references/workflow-integration.md](skills/tracking/references/workflow-integration.md) |
-| Handoff system | [skills/conductor/references/workflows/handoff.md](skills/conductor/references/workflows/handoff.md) |
-| Agent coordination | [skills/orchestrator/references/agent-coordination.md](skills/orchestrator/references/agent-coordination.md) |
-| Router | [skills/orchestrator/references/router.md](skills/orchestrator/references/router.md) |
-| Beads integration | [skills/conductor/references/beads-integration.md](skills/conductor/references/beads-integration.md) |
-| TDD checkpoints | [skills/conductor/references/tdd-checkpoints-beads.md](skills/conductor/references/tdd-checkpoints-beads.md) |
-| Idle detection | [skills/conductor/references/workflows/handoff.md](skills/conductor/references/workflows/handoff.md) |
+- [Skill](.claude/skills/maestro/SKILL.md)
+- [Agents](.claude/agents/)

@@ -4,100 +4,53 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Maestro** is a Claude Code plugin for structured AI-assisted development. It combines:
-- **Conductor**: Planning methodology producing design.md, spec.md, and plan.md
-- **Beads**: Persistent issue tracking with dependency graphs
-- **Orchestrator**: Multi-agent parallel execution
-- **Design**: Double Diamond brainstorming sessions
+**Maestro** is an AI agent workflow plugin for Claude Code. It provides interview-driven planning and team-based execution using Agent Teams.
 
-This is a skills-based plugin (no build required) - all functionality is delivered through markdown skill definitions in `skills/`.
+**Core philosophy:** "Spend tokens once on a good plan; reuse it many times."
 
-**Key insight**: Beads operations are abstracted behind Conductor (facade pattern). In the happy path, you use `/conductor-*` commands and beads are managed automatically.
+## Commands
 
-## Validation
+- `/design <request>` — Interview-driven planning (team-based)
+- `/work` — Execute plan with Agent Teams (parallel workers)
+- `/setup-check` — Verify plugin prerequisites
+- `/status` — Show Maestro state
+- `/review` — Post-execution review
+- `/reset` — Clean stale state
+- `/plan-template <name>` — Scaffold blank plan
 
-```bash
-cat .claude-plugin/plugin.json | jq .   # Validate plugin manifest
-```
-
-## Development Workflow
-
-**No build or tests required.** All functionality is in markdown skill files.
-
-When modifying skills:
-1. Edit SKILL.md in `skills/<skill-name>/`
-2. Ensure YAML frontmatter `name` matches directory name
-3. Keep skills self-contained with minimal cross-references
-4. Add supporting docs to `references/` subdirectory
-
-## Session Close Protocol
-
-Before completing any session, run this checklist:
+### Validation
 
 ```bash
-git status                  # Check what changed
-git add <files>             # Stage code changes
-bd sync                     # Commit beads changes
-git commit -m "..."         # Commit code
-bd sync                     # Commit any new beads changes
-git push                    # Push to remote
+cat .claude-plugin/plugin.json | jq .     # Validate plugin manifest
+./scripts/validate-links.sh               # Validate documentation links
+./scripts/validate-anchors.sh             # Validate markdown anchors
 ```
 
-## Commands & Triggers
+## Architecture
 
-| Command/Trigger | Description | Preflight |
-|-----------------|-------------|-----------|
-| `/conductor-setup` | Initialize project (once) | No |
-| `ds` | Design session (Double Diamond) | No |
-| `/conductor-newtrack` | Create spec + plan + beads from design | No |
-| `/conductor-implement` | Execute epic with TDD | Yes |
-| `/conductor-orchestrate` | Parallel execution with workers | Yes |
-| `/conductor-finish` | Complete track, archive | No |
-| `tdd` | Enter RED-GREEN-REFACTOR cycle | No |
-| `fb` | File beads from plan.md | No |
-| `rb` | Review beads status | No |
-| `finish branch` | Complete dev work, merge/PR | No |
+```
+.claude/
+├── agents/          # 9 agent definitions
+├── commands/        # 6 commands (full workflows — source of truth)
+└── skills/
+    ├── maestro/             # Skill manifest and reference
+    ├── project-conventions/ # Auto-discover project conventions
+    └── plan-template/       # Scaffold blank plans
 
-## Beads CLI
+.maestro/            # Runtime state
+├── plans/           # Work plans
+├── drafts/          # Interview drafts
+└── wisdom/          # Accumulated learnings
 
-**Always use `--json` flag with `bd` commands in AI agent context.**
-
-```bash
-bd ready --json                          # Find available work
-bd show <id>                             # View issue details
-bd update <id> --status in_progress      # Claim task
-bd close <id> --reason "Completed"       # Complete task
-bd sync                                  # Sync to git
+.claude-plugin/      # Plugin manifest
 ```
 
-## Skill Loading Rule
+**Key principle**: Commands contain the full workflow. Agent definitions are lean (identity + constraints). No duplication between them.
 
-**Always load `maestro-core` FIRST** before any workflow skill for routing table and fallback policies.
+## Critical Rules
 
-## Fallback Policy
-
-| Condition | Action |
-|-----------|--------|
-| `bd` unavailable | HALT |
-| `conductor/` missing | DEGRADE (standalone mode) |
-| Agent Mail unavailable | HALT |
-
-## Code Quality
-
-- No emojis in code or documentation
-- Conventional commits: `feat:`, `fix:`, `test:`, `refactor:`, `docs:`
-- TDD for implementation (watch tests fail before implementing)
-- Skills must be self-contained
-
-## Versioning
-
-- Plugin version in `.claude-plugin/plugin.json` is auto-bumped by CI
-- Skill versions are manually updated in SKILL.md frontmatter
-- Pre-1.0: breaking changes bump MINOR, not MAJOR
-
-## Related Documentation
-
-- [REFERENCE.md](REFERENCE.md) - Full command reference and troubleshooting
-- [AGENTS.md](AGENTS.md) - Decision trees, session protocol, skill discipline
-- [TUTORIAL.md](TUTORIAL.md) - Complete workflow walkthrough
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - System architecture
+1. **Both phases use Agent Teams** — `/design` and `/work` both create teams and spawn teammates
+2. **Orchestrator never edits directly** — Always delegates to kraken/spark
+3. **Workers self-coordinate** — All agents have TaskList/TaskUpdate/SendMessage for parallel work
+4. **Verify teammate claims** — Always read files and run tests after delegation
+5. **TDD by default** — Use kraken for new features
