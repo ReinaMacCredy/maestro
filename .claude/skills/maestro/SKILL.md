@@ -95,6 +95,18 @@ Requires experimental feature flag in `~/.claude/settings.json`:
 }
 ```
 
+## Skill Interoperability
+
+Maestro auto-detects installed skills and injects their guidance into worker prompts. This allows workers to follow project-specific conventions without manual configuration.
+
+**Discovery locations:**
+- Project: `.claude/skills/`
+- Global: `~/.claude/skills/`
+
+**Graceful degradation:** If no skills are found, workflows proceed normally without injection.
+
+See [docs/SKILL-INTEROP.md](../../../docs/SKILL-INTEROP.md) for full details.
+
 ## Quick Reference
 
 - **Design**: `/design add user authentication`

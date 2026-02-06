@@ -83,6 +83,40 @@ Glob(pattern: ".maestro/wisdom/*.md")
 
 **If no wisdom files**: Skip silently and proceed.
 
+### Step 3.5: Discover Available Skills
+
+Scan for skills to pass to Prometheus (see `.claude/lib/skill-registry.md` for full discovery logic).
+
+**Important**: Use Bash with `find` to discover all skills. Note: Remove `-type f` for plugin paths on macOS:
+
+```bash
+# Project skills (highest priority) - use -L to follow symlinks
+find .claude/skills -L -name "SKILL.md" -type f 2>/dev/null
+find .agents/skills -L -name "SKILL.md" -type f 2>/dev/null
+
+# Global skills
+find ~/.claude/skills -name "SKILL.md" 2>/dev/null
+
+# Plugin-installed skills (lowest priority) - no -L or -type f for macOS compatibility
+find ~/.claude/plugins/marketplaces -name "SKILL.md" 2>/dev/null
+```
+
+For each SKILL.md found:
+1. Read the file
+2. Parse YAML frontmatter (between `---` markers)
+3. Extract `name` and `description`
+4. Project skills (`.claude/skills/`) override global skills (`~/.claude/skills/`) with the same name
+
+Build a skill summary for Prometheus:
+```
+## Available Skills
+- {name}: {description}
+- {name}: {description}
+...
+```
+
+**If no skills found**: Omit the `## Available Skills` section entirely (graceful degradation).
+
 ### Step 4: Spawn Prometheus
 
 Spawn Prometheus as a teammate **in plan mode**. Prometheus handles all research, interviewing, and plan drafting.
@@ -96,7 +130,7 @@ Task(
   team_name: "design-{topic}",
   subagent_type: "prometheus",
   mode: "plan",
-  prompt: "## Design Request\n{original $ARGUMENTS}\n\n## Mode\nFull — thorough research, spawn explore + oracle, ask 3-6 questions.\n\n## Topic Slug\n{topic}\n\n## Plan Format\nWrite your plan with these sections:\n\n# {Plan Name}\n\n## Objective\n[One sentence summary]\n\n## Scope\n**In**: [What we're doing]\n**Out**: [What we're explicitly not doing]\n\n## Tasks\n- [ ] Task 1: [Description]\n- [ ] Task 2: [Description]\n...\n\n## Verification\n[How to verify completion]\n\n## Notes\n[Technical decisions, research findings, constraints]\n\n## Prior Wisdom\n{wisdom summary or 'None'}\n\nWhen your plan is ready, call ExitPlanMode."
+  prompt: "## Design Request\n{original $ARGUMENTS}\n\n## Mode\nFull — thorough research, spawn explore + oracle, ask 3-6 questions.\n\n## Topic Slug\n{topic}\n\n## Plan Format\nWrite your plan with these sections:\n\n# {Plan Name}\n\n## Objective\n[One sentence summary]\n\n## Scope\n**In**: [What we're doing]\n**Out**: [What we're explicitly not doing]\n\n## Tasks\n- [ ] Task 1: [Description]\n- [ ] Task 2: [Description]\n...\n\n## Verification\n[How to verify completion]\n\n## Notes\n[Technical decisions, research findings, constraints]\n\n## Prior Wisdom\n{wisdom summary or 'None'}\n\n{skill summary if skills found, otherwise omit}\n\nWhen your plan is ready, call ExitPlanMode."
 )
 ```
 
@@ -109,7 +143,7 @@ Task(
   team_name: "design-{topic}",
   subagent_type: "prometheus",
   mode: "plan",
-  prompt: "## Design Request\n{original $ARGUMENTS}\n\n## Mode\nQuick — spawn 1 explore agent, ask 1-2 targeted questions, keep it focused.\n\n## Topic Slug\n{topic}\n\n## Plan Format\n[same format as above]\n\n## Prior Wisdom\n{wisdom summary or 'None'}\n\nWhen your plan is ready, call ExitPlanMode."
+  prompt: "## Design Request\n{original $ARGUMENTS}\n\n## Mode\nQuick — spawn 1 explore agent, ask 1-2 targeted questions, keep it focused.\n\n## Topic Slug\n{topic}\n\n## Plan Format\n[same format as above]\n\n## Prior Wisdom\n{wisdom summary or 'None'}\n\n{skill summary if skills found, otherwise omit}\n\nWhen your plan is ready, call ExitPlanMode."
 )
 ```
 
