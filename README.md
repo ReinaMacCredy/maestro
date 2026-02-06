@@ -54,6 +54,11 @@ Enable Agent Teams in `~/.claude/settings.json`:
 | `@spark` | Quick fixes |
 | `@oracle` | Strategic advisor (opus) |
 | `@explore` | Codebase search |
+| `/setup-check` | Verify plugin prerequisites |
+| `/status` | Show Maestro state |
+| `/review` | Post-execution review |
+| `/reset` | Clean stale state |
+| `/plan-template <name>` | Scaffold blank plan |
 
 ## Agents
 
@@ -65,6 +70,8 @@ Enable Agent Teams in `~/.claude/settings.json`:
 | `spark` | Quick fixes | sonnet | No |
 | `oracle` | Strategic advisor | opus | No |
 | `explore` | Codebase search | sonnet | No |
+| `wisdom-synthesizer` | Knowledge consolidator | haiku | No |
+| `progress-reporter` | Status tracker | haiku | No |
 
 ## Key Rules
 
@@ -72,6 +79,15 @@ Enable Agent Teams in `~/.claude/settings.json`:
 - **TDD by default** — Use kraken for new features
 - **Both phases use teams** — Planning and execution are team-based
 - **Verify subagent claims** — Always verify, agents can make mistakes
+
+## Recommended MCP Servers
+
+These MCP servers enhance the Maestro experience:
+
+| Server | Purpose |
+|--------|---------|
+| [Context7](https://github.com/upstash/context7) | Up-to-date library documentation |
+| [Sequential Thinking](https://github.com/modelcontextprotocol/servers/tree/main/src/sequentialthinking) | Dynamic reasoning for complex planning |
 
 ## Documentation
 
@@ -81,6 +97,8 @@ Enable Agent Teams in `~/.claude/settings.json`:
 | Agent Definitions | [.claude/agents/](.claude/agents/) |
 | Agent Teams Guide | [docs/AGENT-TEAMS.md](docs/AGENT-TEAMS.md) |
 | Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| Troubleshooting | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) |
+| Customization | [docs/CUSTOMIZATION.md](docs/CUSTOMIZATION.md) |
 
 ## Credits
 
