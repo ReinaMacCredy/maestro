@@ -13,6 +13,10 @@ description: AI agent workflow with interview-driven planning and team-based exe
 |---------|--------|
 | `/design <request>` | Start Prometheus interview mode |
 | `/work` | Execute plan with Agent Teams |
+| `/setup-check` | Validate Maestro prerequisites |
+| `/status` | Show current Maestro state |
+| `/review` | Post-execution plan verification |
+| `/reset` | Clean stale Maestro state |
 | `@tdd` | TDD implementation (kraken) |
 | `@spark` | Quick fixes |
 | `@oracle` | Strategic advisor (opus) |
@@ -31,7 +35,8 @@ description: AI agent workflow with interview-driven planning and team-based exe
 5. Conducts interview with user
 6. Draft updates in `.maestro/drafts/{topic}.md`
 7. When clear, generate plan to `.maestro/plans/{name}.md`
-8. Cleanup team
+8. Spawn plan-reviewer to validate plan quality
+9. Cleanup team
 
 ## Execution Flow
 
@@ -65,6 +70,9 @@ description: AI agent workflow with interview-driven planning and team-based exe
 | `spark` | Quick fixes | sonnet | No | Yes (self-claim) |
 | `oracle` | Strategic advisor | opus | No | Yes (self-claim) |
 | `explore` | Codebase search | sonnet | No | Yes (self-claim) |
+| `plan-reviewer` | Plan quality gate | sonnet | No | Yes (self-claim) |
+| `wisdom-synthesizer` | Knowledge consolidation | haiku | No | Yes (self-claim) |
+| `progress-reporter` | Status tracking | haiku | No | Yes (self-claim) |
 
 All agents have `TaskList`, `TaskGet`, `TaskUpdate`, `SendMessage` for team self-coordination. Only team leads have `Task` and `Teammate` for spawning.
 

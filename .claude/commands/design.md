@@ -152,17 +152,37 @@ Write the final plan to `.maestro/plans/{name}.md`:
 [Technical decisions, research findings, constraints]
 ```
 
-### Step 8: Cleanup Team
+### Step 8: Review Plan
+
+Spawn the plan-reviewer to validate the plan before handoff:
+
+```
+Task(
+  description: "Review generated plan",
+  name: "reviewer",
+  team_name: "design-{topic}",
+  subagent_type: "plan-reviewer",
+  prompt: "Review the plan at .maestro/plans/{name}.md — run the full validation checklist and send your PASS/REVISE verdict."
+)
+```
+
+Wait for the reviewer's verdict (message arrives automatically):
+
+- **PASS** — Proceed to cleanup
+- **REVISE** — Update the plan file based on feedback, then proceed to cleanup
+
+### Step 9: Cleanup Team
 
 Shutdown all teammates and cleanup:
 
 ```
 SendMessage(type: "shutdown_request", recipient: "researcher")
 SendMessage(type: "shutdown_request", recipient: "advisor")  // if spawned
+SendMessage(type: "shutdown_request", recipient: "reviewer")
 Teammate(operation: "cleanup")
 ```
 
-### Step 9: Hand Off
+### Step 10: Hand Off
 
 Tell the user:
 ```
@@ -180,6 +200,7 @@ To begin execution, run:
 |----------|---------------|---------------|
 | `explore` | explore | Codebase search — find patterns, architecture, conventions |
 | `oracle` | oracle | Strategic decisions — evaluate tradeoffs (uses opus, spawn sparingly) |
+| `plan-reviewer` | plan-reviewer | After plan generation — validates quality |
 
 ## Anti-Patterns
 
@@ -190,3 +211,4 @@ To begin execution, run:
 | Researching codebase yourself | Spawn `explore` teammates |
 | Generating plan without research | Wait for teammate results |
 | Forgetting to cleanup team | Always shutdown + cleanup at end |
+| Skipping plan review | Always spawn plan-reviewer after generating plan |

@@ -12,6 +12,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - `/design <request>` — Interview-driven planning (team-based)
 - `/work` — Execute plan with Agent Teams (parallel workers)
+- `/setup-check` — Verify plugin prerequisites
+- `/status` — Show Maestro state
+- `/review` — Post-execution review
+- `/reset` — Clean stale state
+- `/plan-template <name>` — Scaffold blank plan
 
 ### Validation
 
@@ -25,10 +30,12 @@ cat .claude-plugin/plugin.json | jq .     # Validate plugin manifest
 
 ```
 .claude/
-├── agents/          # 6 agent definitions (prometheus, orchestrator, kraken, spark, oracle, explore)
-├── commands/        # /design, /work (full workflows — source of truth)
+├── agents/          # 9 agent definitions
+├── commands/        # 6 commands (full workflows — source of truth)
 └── skills/
-    └── maestro/     # Skill manifest and reference
+    ├── maestro/             # Skill manifest and reference
+    ├── project-conventions/ # Auto-discover project conventions
+    └── plan-template/       # Scaffold blank plans
 
 .maestro/            # Runtime state
 ├── plans/           # Work plans

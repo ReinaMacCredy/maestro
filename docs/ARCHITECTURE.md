@@ -46,6 +46,9 @@ flowchart TB
 | `spark` | Quick fixes | sonnet | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
 | `oracle` | Strategic advisor | opus | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
 | `explore` | Codebase search | sonnet | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
+| `plan-reviewer` | Plan quality gate | sonnet | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
+| `wisdom-synthesizer` | Knowledge consolidation | haiku | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
+| `progress-reporter` | Status tracking | haiku | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
 
 ## Source of Truth
 
@@ -60,20 +63,32 @@ flowchart TB
 
 ```
 .claude/
-├── agents/          # 6 agent definitions (identity + constraints)
+├── agents/          # 9 agent definitions (identity + constraints)
 │   ├── prometheus.md
 │   ├── orchestrator.md
 │   ├── kraken.md
 │   ├── spark.md
 │   ├── oracle.md
-│   └── explore.md
-├── commands/        # /design, /work (full workflows)
+│   ├── explore.md
+│   ├── plan-reviewer.md
+│   ├── wisdom-synthesizer.md
+│   └── progress-reporter.md
+├── commands/        # /design, /work, /setup-check, /status, /review, /reset
 │   ├── design.md
-│   └── work.md
+│   ├── work.md
+│   ├── setup-check.md
+│   ├── status.md
+│   ├── review.md
+│   └── reset.md
 ├── hooks/
 │   └── hooks.json
+├── scripts/         # Hook script symlinks
 └── skills/
-    └── maestro/
+    ├── maestro/
+    │   └── SKILL.md
+    ├── project-conventions/
+    │   └── SKILL.md
+    └── plan-template/
         └── SKILL.md
 
 .maestro/            # Runtime state
@@ -87,4 +102,7 @@ flowchart TB
 | Hook | Trigger | Purpose |
 |------|---------|---------|
 | `orchestrator-guard.sh` | PreToolUse(Write/Edit) | Prevents orchestrator from editing directly |
+| `plan-protection.sh` | PreToolUse(Write/Edit) | Blocks kraken/spark from editing plans |
 | `verification-injector.sh` | PostToolUse(Task) | Reminds to verify task results |
+| `plan-validator.sh` | PostToolUse(Write) | Warns if plan missing required sections |
+| `wisdom-injector.sh` | PostToolUse(Read) | Lists wisdom files when a plan is read |

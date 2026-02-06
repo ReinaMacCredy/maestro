@@ -6,6 +6,10 @@
 |---------|-------------|
 | `/design <request>` | Interview-driven planning (team-based) |
 | `/work` | Execute plan via Agent Teams |
+| `/setup-check` | Validate Maestro prerequisites |
+| `/status` | Show current Maestro state |
+| `/review` | Post-execution plan verification |
+| `/reset` | Clean stale Maestro state |
 
 ## Triggers
 
@@ -13,6 +17,10 @@
 |---------|-------|
 | `/design <request>` | prometheus (team lead) |
 | `/work` | orchestrator (team lead) |
+| `/setup-check` | - |
+| `/status` | - |
+| `/review` | - |
+| `/reset` | - |
 | `@tdd` | kraken |
 | `@spark` | spark |
 | `@oracle` | oracle (opus) |
@@ -28,6 +36,9 @@
 | `spark` | Quick fixes | sonnet | No |
 | `oracle` | Strategic advisor | opus | No |
 | `explore` | Codebase search | sonnet | No |
+| `plan-reviewer` | Plan quality gate | sonnet | No |
+| `wisdom-synthesizer` | Knowledge consolidation | haiku | No |
+| `progress-reporter` | Status tracking | haiku | No |
 
 ## State
 

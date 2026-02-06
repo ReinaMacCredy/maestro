@@ -14,6 +14,10 @@ Interview-driven planning with Agent Teams execution.
 |---------|-------|--------|
 | `/design <request>` | prometheus | Interview-driven planning |
 | `/work` | orchestrator | Execute plan via teams |
+| `/setup-check` | - | Validate Maestro prerequisites |
+| `/status` | - | Show current Maestro state |
+| `/review` | - | Post-execution plan verification |
+| `/reset` | - | Clean stale Maestro state |
 | `@tdd` | kraken | TDD implementation |
 | `@spark` | spark | Quick fixes |
 | `@oracle` | oracle | Strategic advice (opus) |
@@ -29,6 +33,9 @@ Interview-driven planning with Agent Teams execution.
 | `spark` | Quick fixes | sonnet | No |
 | `oracle` | Strategic advisor | opus | No |
 | `explore` | Codebase search | sonnet | No |
+| `plan-reviewer` | Plan quality gate | sonnet | No |
+| `wisdom-synthesizer` | Knowledge consolidation | haiku | No |
+| `progress-reporter` | Status tracking | haiku | No |
 
 All agents have team coordination tools (TaskList, TaskGet, TaskUpdate, SendMessage). Only team leads have Task + Teammate for spawning.
 
