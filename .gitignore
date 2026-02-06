@@ -17,9 +17,6 @@ node_modules/
 .env
 .env.local
 
-# Beads (tracked; runtime files ignored via `.beads/.gitignore`)
-.beads-village/
-
 # Memory (user-specific)
 .memory/
 .memory-index/
@@ -41,3 +38,6 @@ conductor/plans
 # Allow skill-level mcp.json for lazy-loading
 !skills/*/mcp.json
 tmp/ralph/
+
+# Maestro runtime state
+.maestro/

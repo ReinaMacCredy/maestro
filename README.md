@@ -20,10 +20,10 @@ amp skill add https://github.com/ReinaMacCredy/maestro --global
 
 ```mermaid
 graph LR
-    A["/design"] --> B[Team Research]
+    A[design] --> B[Team Research]
     B --> C[Interview]
     C --> D[Plan Generated]
-    D --> E["/work"]
+    D --> E[work]
     E --> F[Team Execution]
 ```
 
