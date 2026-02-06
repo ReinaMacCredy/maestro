@@ -1,0 +1,1 @@
+../../scripts/plan-protection.sh
