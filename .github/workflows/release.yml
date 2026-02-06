@@ -85,24 +85,37 @@ jobs:
 
       - name: Check if docs-only changes
         id: docs_only
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          CURRENT_SHA: ${{ github.sha }}
         run: |
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          set -euo pipefail
+          NULL_SHA="0000000000000000000000000000000000000000"
 
-          if [ -z "$LAST_TAG" ]; then
-            CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r HEAD)
+          if [ -z "${BEFORE_SHA}" ] || [ "${BEFORE_SHA}" = "${NULL_SHA}" ]; then
+            CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r "${CURRENT_SHA}")
           else
-            CHANGED_FILES=$(git diff --name-only ${LAST_TAG}..HEAD)
+            CHANGED_FILES=$(git diff --name-only "${BEFORE_SHA}" "${CURRENT_SHA}")
+          fi
+
+          echo "Changed files in this push:"
+          echo "$CHANGED_FILES"
+
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "is_docs_only=false" >> "$GITHUB_OUTPUT"
+            echo "Docs-only changes: false (no changed files detected)"
+            exit 0
           fi
 
           # Only skip bump for pure documentation files (not skill/agent .md files)
-          DOCS_ONLY="true"
+          DOCS_ONLY=true
           while IFS= read -r file; do
             case "$file" in
               README.md|CHANGELOG.md|LICENSE|.gitignore|docs/*)
                 # Pure documentation, continue
                 ;;
               *)
-                DOCS_ONLY="false"
+                DOCS_ONLY=false
                 break
                 ;;
             esac
