@@ -72,50 +72,86 @@ jobs:
         run: |
           LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
           echo "last_tag=$LAST_TAG" >> $GITHUB_OUTPUT
-          
+
           if [ "$LAST_TAG" = "v0.0.0" ]; then
             COMMITS=$(git log --pretty=format:"%s" --no-merges)
           else
             COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"%s" --no-merges)
           fi
-          
+
           echo "commits<<EOF" >> $GITHUB_OUTPUT
           echo "$COMMITS" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Check if docs-only changes
+        id: docs_only
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          if [ -z "$LAST_TAG" ]; then
+            CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r HEAD)
+          else
+            CHANGED_FILES=$(git diff --name-only ${LAST_TAG}..HEAD)
+          fi
+
+          # Only skip bump for pure documentation files (not skill/agent .md files)
+          DOCS_ONLY="true"
+          while IFS= read -r file; do
+            case "$file" in
+              README.md|CHANGELOG.md|LICENSE|.gitignore|docs/*)
+                # Pure documentation, continue
+                ;;
+              *)
+                DOCS_ONLY="false"
+                break
+                ;;
+            esac
+          done <<< "$CHANGED_FILES"
+
+          echo "is_docs_only=$DOCS_ONLY" >> $GITHUB_OUTPUT
+          echo "Docs-only changes: $DOCS_ONLY"
 
       - name: Determine version bump
         id: bump
         env:
           COMMITS: ${{ steps.commits.outputs.commits }}
           PR_LABELS: ${{ steps.pr_labels.outputs.labels }}
+          DOCS_ONLY: ${{ steps.docs_only.outputs.is_docs_only }}
         run: |
-          
+
           # Priority 1: Check PR labels
           if echo "$PR_LABELS" | grep -q 'release:major'; then
             echo "type=major" >> $GITHUB_OUTPUT
             echo "Version bump: major (from PR label)"
             exit 0
           fi
-          
+
           if echo "$PR_LABELS" | grep -q 'release:minor'; then
             echo "type=minor" >> $GITHUB_OUTPUT
             echo "Version bump: minor (from PR label)"
             exit 0
           fi
-          
+
           if echo "$PR_LABELS" | grep -q 'release:patch'; then
             echo "type=patch" >> $GITHUB_OUTPUT
             echo "Version bump: patch (from PR label)"
             exit 0
           fi
-          
+
           if echo "$PR_LABELS" | grep -q 'release:skip'; then
             echo "type=none" >> $GITHUB_OUTPUT
             echo "Version bump: none (from PR label release:skip)"
             exit 0
           fi
-          
-          # Priority 2: Fall back to commit analysis
+
+          # Priority 2: Skip bump for docs-only changes
+          if [ "$DOCS_ONLY" = "true" ]; then
+            echo "type=none" >> $GITHUB_OUTPUT
+            echo "Version bump: none (docs-only changes)"
+            exit 0
+          fi
+
+          # Priority 3: Fall back to commit analysis
           # Check for breaking changes -> major bump
           if echo "$COMMITS" | grep -qE '^[a-z]+!:|BREAKING CHANGE:'; then
             echo "type=major" >> $GITHUB_OUTPUT
