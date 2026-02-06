@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-02-06
+
+
+### Added
+
+
+- Add foundation files — .gitignore, wisdom-synthesizer, progress-reporter agents
+- Add setup-check, status, review, and reset commands
+- Add plan-protection, plan-validator, and wisdom-injector hooks
+- Add project-conventions and plan-template skills
+- Replace plan-reviewer with leviathan (opus deep plan reviewer)
+- Enhance commands with validation, auto-fix, and resume capabilities
+
+
+### Changed
+
+
+- Migrate from conductor/skills to Atlas workflow system
+- Consolidate to 6-agent architecture with Agent Teams
+
+
+### Documentation
+
+
+- Update CLAUDE.md for Atlas workflow system
+- Rewrite all documentation for Atlas workflow system
+- Add troubleshooting guide, customization guide, and update README
+
+
+### Fixed
+
+
+- Address Gemini and Copilot review comments
+
 ## [0.10.0] - 2026-01-08
 
 
