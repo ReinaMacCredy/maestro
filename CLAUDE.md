@@ -31,11 +31,18 @@ cat .claude-plugin/plugin.json | jq .     # Validate plugin manifest
 ```
 .claude/
 ├── agents/          # 9 agent definitions
-├── commands/        # 6 commands (full workflows — source of truth)
 └── skills/
     ├── maestro/             # Skill manifest and reference
+    ├── design/              # /design workflow
+    ├── work/                # /work workflow
+    ├── review/              # /review workflow
+    ├── reset/               # /reset workflow
+    ├── status/              # /status workflow
+    ├── setup-check/         # /setup-check workflow
+    ├── plan-template/       # Scaffold blank plans
     ├── project-conventions/ # Auto-discover project conventions
-    └── plan-template/       # Scaffold blank plans
+    ├── context7/            # Library docs via Context7 MCP
+    └── git-worktrees/       # Worktree isolation for parallel execution
 
 .maestro/            # Runtime state
 ├── plans/           # Work plans
@@ -45,7 +52,7 @@ cat .claude-plugin/plugin.json | jq .     # Validate plugin manifest
 .claude-plugin/      # Plugin manifest
 ```
 
-**Key principle**: Commands contain the full workflow. Agent definitions are lean (identity + constraints). No duplication between them.
+**Key principle**: Skills contain the full workflow. Agent definitions are lean (identity + constraints). No duplication between them.
 
 ## Critical Rules
 

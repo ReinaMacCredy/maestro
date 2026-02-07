@@ -2,6 +2,7 @@
 name: setup-check
 description: Verify Maestro plugin prerequisites — Agent Teams flag, jq, directories, symlinks.
 allowed-tools: Read, Bash, Glob, Write, AskUserQuestion
+disable-model-invocation: true
 ---
 
 # Setup Check

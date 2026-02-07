@@ -28,7 +28,7 @@ Look for project configuration:
 Read project-level Claude configuration:
 - `CLAUDE.md` — Project instructions and conventions
 - `.claude/settings.json` — Project settings
-- `.claude/commands/` — Available commands
+- `.claude/skills/` — Available skills and commands
 
 ### 3. Code Style
 

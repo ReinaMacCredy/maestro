@@ -2,6 +2,7 @@
 name: review
 description: Post-execution review — rigorous plan-vs-implementation comparison with per-criterion verdicts.
 allowed-tools: Read, Bash, Glob, Grep, AskUserQuestion
+disable-model-invocation: true
 ---
 
 # Post-Execution Review

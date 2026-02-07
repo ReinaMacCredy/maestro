@@ -16,7 +16,6 @@
     "agents",
     "agent-teams"
   ],
-  "commands": "./.claude/commands/",
   "agents": "./.claude/agents/",
   "skills": "./.claude/skills/",
   "hooks": "./.claude/hooks/hooks.json"

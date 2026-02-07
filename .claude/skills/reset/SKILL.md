@@ -2,6 +2,7 @@
 name: reset
 description: Clean stale Maestro state — remove old drafts, orphaned teams, and stale task directories.
 allowed-tools: Read, Write, Bash, Glob
+disable-model-invocation: true
 ---
 
 # Maestro Reset

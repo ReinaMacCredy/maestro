@@ -3,6 +3,7 @@ name: work
 description: Execute a plan using Agent Teams. Spawns specialized teammates to implement tasks in parallel.
 argument-hint: "[<plan-name>] [--resume]"
 allowed-tools: Read, Grep, Glob, Bash, Task, TeamCreate, TeamDelete, SendMessage, TaskCreate, TaskList, TaskUpdate, TaskGet, AskUserQuestion
+disable-model-invocation: true
 ---
 
 # You Are The Orchestrator — Execution Team Lead

@@ -54,8 +54,8 @@ flowchart TB
 
 | What | Where | NOT here |
 |------|-------|----------|
-| /design workflow | `.claude/commands/design.md` | Agent definitions |
-| /work workflow | `.claude/commands/work.md` | Agent definitions |
+| /design workflow | `.claude/skills/design/SKILL.md` | Agent definitions |
+| /work workflow | `.claude/skills/work/SKILL.md` | Agent definitions |
 | Agent identity | `.claude/agents/{name}.md` | Commands or docs |
 | Skill reference | `.claude/skills/maestro/SKILL.md` | README or CLAUDE.md |
 
@@ -73,22 +73,31 @@ flowchart TB
 │   ├── leviathan.md
 │   ├── wisdom-synthesizer.md
 │   └── progress-reporter.md
-├── commands/        # /design, /work, /setup-check, /status, /review, /reset
-│   ├── design.md
-│   ├── work.md
-│   ├── setup-check.md
-│   ├── status.md
-│   ├── review.md
-│   └── reset.md
 ├── hooks/
 │   └── hooks.json
 ├── scripts/         # Hook script symlinks
 └── skills/
     ├── maestro/
+    │   └── SKILL.md       # Overview and reference
+    ├── design/
+    │   └── SKILL.md       # /design workflow
+    ├── work/
+    │   └── SKILL.md       # /work workflow
+    ├── review/
+    │   └── SKILL.md       # /review workflow
+    ├── reset/
+    │   └── SKILL.md       # /reset workflow
+    ├── status/
+    │   └── SKILL.md       # /status workflow
+    ├── setup-check/
+    │   └── SKILL.md       # /setup-check workflow
+    ├── plan-template/
     │   └── SKILL.md
     ├── project-conventions/
     │   └── SKILL.md
-    └── plan-template/
+    ├── context7/
+    │   └── SKILL.md
+    └── git-worktrees/
         └── SKILL.md
 
 .maestro/            # Runtime state

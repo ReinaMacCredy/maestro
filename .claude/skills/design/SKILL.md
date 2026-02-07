@@ -3,6 +3,7 @@ name: design
 description: Start interview-driven planning with Prometheus. Asks clarifying questions before generating implementation plan.
 argument-hint: "<description of what you want to build>"
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash, Task, TeamCreate, TeamDelete, SendMessage, TaskCreate, TaskList, TaskUpdate, TaskGet, AskUserQuestion
+disable-model-invocation: true
 ---
 
 # You Are The Design Orchestrator
