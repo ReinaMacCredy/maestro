@@ -636,3 +636,92 @@ If matching skills are found, add a `## SKILL GUIDANCE` section after `## CONTEX
 | One-line task prompts | Use the delegation format above |
 | Not extracting wisdom | Always write `.maestro/wisdom/` file |
 | Forgetting to cleanup | Always shutdown teammates + cleanup at end |
+
+---
+
+## Planless Work Flow
+
+When `$ARGUMENTS` is detected as a work description (not a plan name), execute directly without a plan file.
+
+### Step P1: Analyze Description
+
+Parse the user's description to understand intent:
+
+1. Extract **key verbs** (add, fix, create, update, refactor, remove, etc.)
+2. Extract **target files/components** — look for file paths, module names, or component references
+3. Determine the **desired outcome** — what should be different when the work is done
+
+Store the parsed analysis for task generation.
+
+### Step P2: Generate Task Breakdown
+
+Create 1–5 atomic tasks from the description. Each task should:
+
+- Have a clear **subject** (imperative form)
+- Include **acceptance criteria** (what "done" looks like)
+- Specify the **agent type**:
+  - `kraken` — TDD, new features, multi-file changes
+  - `spark` — quick fixes, single-file changes, config updates
+- Be independently verifiable
+
+Keep the breakdown minimal. A single-sentence description should produce 1–2 tasks, not 5.
+
+### Step P3: Confirm with User
+
+Show the generated task breakdown via `AskUserQuestion`:
+
+```
+AskUserQuestion(
+  questions: [{
+    question: "Execute these tasks?",
+    header: "Planless Work — Task Breakdown",
+    options: [
+      { label: "Execute", description: "Proceed with team creation and task execution" },
+      { label: "Revise", description: "Let me re-describe what I want" },
+      { label: "Cancel", description: "Stop without executing" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+Before the prompt, display the task breakdown:
+
+```
+**Tasks:**
+1. [kraken] {subject} — {acceptance criteria}
+2. [spark] {subject} — {acceptance criteria}
+...
+```
+
+- If **Execute** → proceed to Step P4
+- If **Revise** → ask the user for a new description, return to Step P1
+- If **Cancel** → stop execution
+
+### Step P4: Join Main Workflow
+
+After user confirms, rejoin the main workflow:
+
+1. **Step 2** — Create team: `TeamCreate(team_name: "work-planless", description: "{first 50 chars of description}")`
+2. **Step 3** — Create tasks from the breakdown generated in Step P2
+3. **Step 3.5** — Discover available skills
+4. **Step 4 onward** — Spawn teammates, assign tasks, monitor, verify, extract wisdom, cleanup, report
+
+All remaining steps (Steps 2–9) are identical to the plan-based workflow.
+
+### Skipped Steps
+
+The following main workflow steps are skipped in planless mode:
+
+| Step | Reason |
+|------|--------|
+| Step 1.5 (Validate & Confirm) | No plan file to validate sections against |
+| Step 1.7 (Worktree Isolation) | Too heavyweight for ad-hoc work |
+| Step 8.5 (Archive Plan) | No plan file to archive |
+
+### Wisdom File Naming
+
+For planless mode, derive the wisdom filename from the first 5 words of the description, lowercased and hyphenated:
+
+- `/work add retry logic to api client` → `.maestro/wisdom/add-retry-logic-to-api.md`
+- `/work fix broken auth middleware` → `.maestro/wisdom/fix-broken-auth-middleware.md`
