@@ -193,9 +193,83 @@ Then wait for the next `plan_approval_request` from Prometheus and repeat from S
 When the plan is ready (leviathan PASS, or quick mode, or max loops reached):
 
 1. Read the plan content that Prometheus wrote (the plan file path is in the approval request)
-2. Show the user a summary of the plan (objective, scope, task count)
+2. Parse the plan content and display a structured summary:
+
+   **Parse these sections from the plan markdown:**
+   - **Title**: First line starting with `# ` (single `#`)
+   - **Objective**: Content after `## Objective` heading (take first sentence only)
+   - **Scope In**: Count bullet points under `**In**:` in `## Scope`
+   - **Scope Out**: Count bullet points under `**Out**:` in `## Scope`
+   - **Tasks**: Count lines matching `- [ ] Task N:` pattern. For each, extract `**Agent**:` value. Group by agent type.
+   - **Key Decisions**: From `## Notes` section, extract first 3 numbered or bulleted items (take the bold title only, e.g., "Two tasks, sequential dependency")
+
+   **Display this summary to the user:**
+
+   ```
+   ---
+   ## Plan Summary
+
+   **{Plan Title}**
+
+   **Objective**: {first sentence of Objective section}
+
+   **Scope**: {N} items in | {M} items out
+
+   **Tasks**: {total} total — {breakdown by agent, e.g., "2 spark, 1 kraken"}
+
+   **Key Decisions**:
+   - {decision 1}
+   - {decision 2}
+   - {decision 3}
+   ---
+   ```
+
 3. If leviathan had remaining concerns after max loops, note them for the user
-4. Ask the user to approve, reject, or request revisions:
+4. Generate and display an ASCII dependency flowchart below the summary:
+
+   **Parse dependencies from each task:**
+   - For each `- [ ] Task N:` line, extract the `**Dependencies**:` value (e.g., "Task 1", "Task 1, Task 2", or "None")
+   - Build a dependency graph: each task is a node, each dependency is a directed edge
+
+   **Render algorithm:**
+   - **Row 0 (entry points)**: Tasks with no dependencies (Dependencies: None)
+   - **Subsequent rows**: A task appears on the row after all its dependencies. Tasks whose dependencies are all satisfied at the same row appear side-by-side (parallel)
+   - Connect rows with vertical arrows (`│`, `▼`)
+   - Use box-drawing characters for task boxes
+
+   **Task box format** (fixed width 36 chars):
+   ```
+   ┌──────────────────────────────────┐
+   │ T{N}: {title≤30chars} [{agent}]  │
+   └──────────────────────────────────┘
+   ```
+
+   **Example flowchart** (4 tasks: T1 has no deps, T2 and T3 depend on T1, T4 depends on T2 and T3):
+   ```
+   ## Dependency Flow
+
+   ┌──────────────────────────────────┐
+   │ T1: Set up project scaffo… [kraken] │
+   └──────────────────────────────────┘
+               │
+       ┌───────┴───────┐
+       ▼               ▼
+   ┌──────────────────────────────────┐  ┌──────────────────────────────────┐
+   │ T2: Implement auth module [kraken] │  │ T3: Add config validation [spark]  │
+   └──────────────────────────────────┘  └──────────────────────────────────┘
+       │               │
+       └───────┬───────┘
+               ▼
+   ┌──────────────────────────────────┐
+   │ T4: Integration tests      [kraken] │
+   └──────────────────────────────────┘
+
+   Legend: → sequential dependency | side-by-side = parallel execution
+   ```
+
+   If all tasks are independent (no dependencies), display them in a single row with a note: `All tasks run in parallel — no dependencies.`
+
+5. Ask the user to approve, reject, or request revisions:
 
 ```
 AskUserQuestion(
