@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.6] - 2026-02-07
+
+
+### Added
+
+
+- Add 9 language guide templates from conductor
+- Add /styleguide command with language detection and CLAUDE.md injection
+- Add /styleguide suggestion to plan validation step
+- Derive commit scope from plan title instead of generic scope
+- Surface project context in session start
+- Inject project context into subagent context
+- Add /setup skill for project context scaffolding
+- Show project context files in /status output
+
+
+### Changed
+
+
+- Move guide templates to skill references/ directory
+
+
+### Documentation
+
+
+- Add /styleguide to commands, triggers, and skill-interop docs
+- Add /setup to session start commands list
+- Add /setup command and context directory to CLAUDE.md
+- Add /setup to maestro skill reference
+
+
+### Fixed
+
+
+- Use jq for JSON construction in wisdom-injector and plan-validator
+- Remove disable-model-invocation from reset skill
+
 ## [0.14.5] - 2026-02-07
 
 
