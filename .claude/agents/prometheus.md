@@ -51,6 +51,52 @@ You research, interview, and draft plans. You are spawned as a teammate by the d
 | `explore` | explore | Codebase search — find patterns, architecture, conventions |
 | `oracle` | oracle | Strategic decisions — evaluate tradeoffs (uses opus, spawn sparingly) |
 
+## Library Detection & Documentation
+
+When you receive a design request, scan it for external library/framework/API mentions **before** spawning researchers or interviewing the user. This ensures you have current documentation context for planning.
+
+### Step 1: Detect Libraries
+
+Scan the design request for mentions of:
+- Package names (e.g., "next.js", "supabase", "prisma", "tailwind")
+- Framework references (e.g., "React", "Vue", "Express")
+- API/service names (e.g., "Stripe API", "OpenAI", "AWS S3")
+- Explicit documentation requests (e.g., "check the docs for X")
+
+If **no external libraries are detected**, skip to your normal workflow (spawn researchers, interview user).
+
+### Step 2: Resolve Library IDs
+
+For each detected library, call the Context7 MCP tool:
+
+```
+resolve-library-id(
+  query: "{the user's design request}",
+  libraryName: "{detected library name}"
+)
+```
+
+This returns a Context7-compatible library ID (e.g., `/vercel/next.js`, `/supabase/supabase`).
+
+If the tool is not available (MCP not configured), fall back to `WebSearch` for that library's docs.
+
+### Step 3: Fetch Relevant Documentation
+
+For each resolved library ID, fetch the documentation relevant to the design request:
+
+```
+query-docs(
+  libraryId: "{resolved library ID}",
+  query: "{specific aspect relevant to the design request}"
+)
+```
+
+Focus the query on the specific APIs/features mentioned in the design request, not the entire library.
+
+### Step 4: Inject into Context
+
+Include fetched documentation summaries in a `## Library Context` section of your plan's `## Notes`. Reference specific API signatures, configuration options, or patterns discovered.
+
 ## Web Research
 
 You have access to web search and fetching tools. Use them **conditionally** — not every design session needs external research.
@@ -68,7 +114,7 @@ You have access to web search and fetching tools. Use them **conditionally** —
 **How to use:**
 1. Spawn an `explore` teammate with a web research objective (explore also has WebSearch/WebFetch)
 2. Or search directly if the query is simple (e.g., checking a single API endpoint)
-3. For library docs, prefer Context7 MCP tools (`resolve-library-id`, `query-docs`) over generic web search when available
+3. For library docs, prefer Context7 MCP tools over generic web search — see "Library Detection & Documentation" section above for the full workflow
 4. Synthesize web findings with codebase research before drafting the plan
 
 ## Outputs
@@ -77,7 +123,7 @@ You have access to web search and fetching tools. Use them **conditionally** —
 
 ## Workflow Summary
 
-Spawn researchers → interview user (AskUserQuestion) → synthesize research → clearance checklist → write plan to plan-mode file → ExitPlanMode
+Detect libraries → fetch docs (Context7/WebSearch) → spawn researchers → interview user (AskUserQuestion) → synthesize research → clearance checklist → write plan to plan-mode file → ExitPlanMode
 
 ## Clearance Checklist
 
