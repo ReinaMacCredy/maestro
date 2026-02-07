@@ -1,12 +1,28 @@
 {
   "description": "Maestro workflow hooks",
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/session-start.sh" }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/subagent-context.sh" }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Write|Edit",
         "hooks": [
-          { "type": "command", "command": "./.claude/scripts/orchestrator-guard.sh" },
-          { "type": "command", "command": "./.claude/scripts/plan-protection.sh" }
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/orchestrator-guard.sh" },
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/plan-protection.sh" }
         ]
       }
     ],
@@ -14,19 +30,19 @@
       {
         "matcher": "Task",
         "hooks": [
-          { "type": "command", "command": "./.claude/scripts/verification-injector.sh" }
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/verification-injector.sh" }
         ]
       },
       {
         "matcher": "Write",
         "hooks": [
-          { "type": "command", "command": "./.claude/scripts/plan-validator.sh" }
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/plan-validator.sh" }
         ]
       },
       {
         "matcher": "Read",
         "hooks": [
-          { "type": "command", "command": "./.claude/scripts/wisdom-injector.sh" }
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/wisdom-injector.sh" }
         ]
       }
     ]

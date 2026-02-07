@@ -41,3 +41,6 @@ tmp/ralph/
 
 # Maestro runtime state
 .maestro/
+
+# Git worktrees for isolated plan execution
+.worktrees/

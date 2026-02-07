@@ -2,7 +2,7 @@
 name: design
 description: Start interview-driven planning with Prometheus. Asks clarifying questions before generating implementation plan.
 argument-hint: "<description of what you want to build>"
-allowed-tools: Read, Write, Edit, Grep, Glob, Bash, Task, Teammate, SendMessage, TaskCreate, TaskList, TaskUpdate, TaskGet, AskUserQuestion
+allowed-tools: Read, Write, Edit, Grep, Glob, Bash, Task, TeamCreate, TeamDelete, SendMessage, TaskCreate, TaskList, TaskUpdate, TaskGet, AskUserQuestion
 ---
 
 # You Are The Design Orchestrator
@@ -35,7 +35,7 @@ Pass the detected mode to Prometheus in its prompt so it adjusts its depth accor
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| "unknown tool: Teammate" | Agent Teams not enabled | Add `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: "1"` to `~/.claude/settings.json` env, restart Claude Code |
+| "unknown tool: TeamCreate" | Agent Teams not enabled | Add `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: "1"` to `~/.claude/settings.json` env, restart Claude Code |
 | "team already exists" | Previous session not cleaned up | Run `/reset` to clean stale state |
 
 ---
@@ -45,8 +45,7 @@ Pass the detected mode to Prometheus in its prompt so it adjusts its depth accor
 **Do this FIRST. You are the team lead.**
 
 ```
-Teammate(
-  operation: "spawnTeam",
+TeamCreate(
   team_name: "design-{topic}",
   description: "Planning {topic}"
 )
@@ -130,7 +129,7 @@ Task(
   team_name: "design-{topic}",
   subagent_type: "prometheus",
   mode: "plan",
-  prompt: "## Design Request\n{original $ARGUMENTS}\n\n## Mode\nFull — thorough research, spawn explore + oracle, ask 3-6 questions.\n\n## Topic Slug\n{topic}\n\n## Plan Format\nWrite your plan with these sections:\n\n# {Plan Name}\n\n## Objective\n[One sentence summary]\n\n## Scope\n**In**: [What we're doing]\n**Out**: [What we're explicitly not doing]\n\n## Tasks\n- [ ] Task 1: [Description]\n- [ ] Task 2: [Description]\n...\n\n## Verification\n[How to verify completion]\n\n## Notes\n[Technical decisions, research findings, constraints]\n\n## Prior Wisdom\n{wisdom summary or 'None'}\n\n{skill summary if skills found, otherwise omit}\n\nWhen your plan is ready, call ExitPlanMode."
+  prompt: "## Design Request\n{original $ARGUMENTS}\n\n## Mode\nFull — thorough research, spawn explore + oracle, ask 3-6 questions.\n\n## Topic Slug\n{topic}\n\n## Plan Format\nWrite your plan with these sections:\n\n# {Plan Name}\n\n**Goal**: [One sentence — what are we building and why]\n**Architecture**: [2-3 sentences — how the pieces fit together]\n**Tech Stack**: [Relevant technologies, frameworks, tools]\n\n## Objective\n[One sentence summary]\n\n## Scope\n**In**: [What we're doing]\n**Out**: [What we're explicitly not doing]\n\n## Tasks\n\n- [ ] Task 1: [Short title]\n  - **Agent**: kraken | spark\n  - **Acceptance criteria**: [Objectively verifiable outcomes]\n  - **Dependencies**: none | Task N\n  - **Files**: [Exact paths to create/modify/test]\n  - **Steps**:\n    1. Write failing test (if applicable)\n    2. Run test — expect failure\n    3. Implement the change\n    4. Run tests — expect pass\n    5. Commit\n\n## Verification\n- [ ] `exact command` — expected output or behavior\n- [ ] `another command` — what it verifies\n\n## Notes\n[Technical decisions, research findings, constraints]\n\n## Prior Wisdom\n{wisdom summary or 'None'}\n\n{skill summary if skills found, otherwise omit}\n\n## Key Context\n- You have WebSearch and WebFetch tools for external research when the design request involves libraries, APIs, or technologies that benefit from current documentation.\n- Context7 MCP tools (resolve-library-id, query-docs) are available for fetching up-to-date library documentation. Use them when the request involves external libraries.\n- For library docs, prefer Context7 over generic web search -- it returns version-specific, structured documentation.\n- Use web research conditionally -- not every design session needs it.\n\nWhen your plan is ready, call ExitPlanMode."
 )
 ```
 
@@ -143,7 +142,7 @@ Task(
   team_name: "design-{topic}",
   subagent_type: "prometheus",
   mode: "plan",
-  prompt: "## Design Request\n{original $ARGUMENTS}\n\n## Mode\nQuick — spawn 1 explore agent, ask 1-2 targeted questions, keep it focused.\n\n## Topic Slug\n{topic}\n\n## Plan Format\n[same format as above]\n\n## Prior Wisdom\n{wisdom summary or 'None'}\n\n{skill summary if skills found, otherwise omit}\n\nWhen your plan is ready, call ExitPlanMode."
+  prompt: "## Design Request\n{original $ARGUMENTS}\n\n## Mode\nQuick — spawn 1 explore agent, ask 1-2 targeted questions, keep it focused.\n\n## Topic Slug\n{topic}\n\n## Plan Format\nWrite your plan with these sections:\n\n# {Plan Name}\n\n**Goal**: [One sentence — what are we building and why]\n**Architecture**: [2-3 sentences — how the pieces fit together]\n**Tech Stack**: [Relevant technologies, frameworks, tools]\n\n## Objective\n[One sentence summary]\n\n## Scope\n**In**: [What we're doing]\n**Out**: [What we're explicitly not doing]\n\n## Tasks\n\n- [ ] Task 1: [Short title]\n  - **Agent**: kraken | spark\n  - **Acceptance criteria**: [Objectively verifiable outcomes]\n  - **Dependencies**: none | Task N\n  - **Files**: [Exact paths to create/modify/test]\n  - **Steps**:\n    1. Write failing test (if applicable)\n    2. Run test — expect failure\n    3. Implement the change\n    4. Run tests — expect pass\n    5. Commit\n\n## Verification\n- [ ] `exact command` — expected output or behavior\n- [ ] `another command` — what it verifies\n\n## Notes\n[Technical decisions, research findings, constraints]\n\n## Prior Wisdom\n{wisdom summary or 'None'}\n\n{skill summary if skills found, otherwise omit}\n\n## Key Context\n- You have WebSearch and WebFetch tools for external research when the design request involves libraries, APIs, or technologies that benefit from current documentation.\n- Context7 MCP tools (resolve-library-id, query-docs) are available for fetching up-to-date library documentation. Use them when the request involves external libraries.\n- For library docs, prefer Context7 over generic web search -- it returns version-specific, structured documentation.\n- Use web research conditionally -- not every design session needs it.\n\nWhen your plan is ready, call ExitPlanMode."
 )
 ```
 
@@ -266,8 +265,10 @@ Shutdown Prometheus and leviathan, then clean up:
 ```
 SendMessage(type: "shutdown_request", recipient: "prometheus")
 SendMessage(type: "shutdown_request", recipient: "leviathan")
-Teammate(operation: "cleanup")
+TeamDelete()
 ```
+
+**IMPORTANT**: Do NOT pass any parameters to `TeamDelete()` — no `reason`, no arguments. The tool accepts no parameters and will error if any are provided.
 
 Note: leviathan may not exist (quick mode). Ignore errors if the shutdown fails for a non-existent teammate.
 
@@ -277,8 +278,11 @@ Tell the user:
 ```
 Plan saved to: .maestro/plans/{topic}.md
 
-To begin execution, run:
-  /work
+To begin execution:
+  Option A (this session): /work
+  Option B (fresh session): claude "/work"
+
+The /work command will auto-detect this plan and suggest it for execution.
 ```
 
 ---
@@ -304,7 +308,7 @@ Prometheus internally spawns its own research teammates:
 | Researching codebase yourself | Let Prometheus spawn `explore` teammates |
 | Interviewing the user yourself | Prometheus uses `AskUserQuestion` in plan mode |
 | Writing the plan yourself | Prometheus drafts, you just save the approved version |
-| Skipping team creation | Always `Teammate(spawnTeam)` first |
+| Skipping team creation | Always `TeamCreate(team_name, description)` first |
 | Forgetting handoff file | Always write `.maestro/handoff/` before spawning Prometheus |
 | Forgetting to cleanup team | Always shutdown + cleanup at end |
 | Auto-approving without user input | Always present plan to user via `AskUserQuestion` |

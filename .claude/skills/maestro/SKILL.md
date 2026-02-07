@@ -31,9 +31,9 @@ description: AI agent workflow with interview-driven planning and team-based exe
 1. User triggers `/design <description>`
 2. Prometheus creates team if research needed
 2.5. Loads prior wisdom from `.maestro/wisdom/` (if any)
-3. Spawns explore for codebase research
+3. Spawns explore for codebase research (and web research when relevant)
 4. Spawns oracle for architectural decisions
-5. Conducts interview with user
+5. Conducts structured interview (one question at a time, multiple-choice options, incremental validation)
 6. Draft updates in `.maestro/drafts/{topic}.md`
 7. When clear, generate plan to `.maestro/plans/{name}.md`
 8. Spawn leviathan to validate plan quality
@@ -50,6 +50,7 @@ Quick mode (`--quick`) streamlines to: team → 1 explore → 1-2 questions → 
 1. User triggers `/work`
 2. Orchestrator loads plan from `.maestro/plans/`
 2.5. Validates plan structure and confirms with user before proceeding
+2.7. Optionally creates a git worktree for isolated execution (prevents conflicts with concurrent sessions)
 3. Creates tasks via TaskCreate with dependencies
 4. Spawns 2-4 workers in parallel (kraken, spark)
 5. Assigns first round, workers self-claim remaining via TaskList
@@ -65,13 +66,15 @@ Use `--resume` to skip already-completed tasks.
 ├── plans/     # Committed work plans
 ├── drafts/    # Interview drafts
 └── wisdom/    # Accumulated learnings
+
+.worktrees/        # Git worktrees for isolated plan execution (project root)
 ```
 
 ## Agents
 
 | Agent | Purpose | Model | Team Lead? | Has Team Tools? |
 |-------|---------|-------|------------|-----------------|
-| `prometheus` | Interview-driven planner | sonnet | Yes | Yes (full) |
+| `prometheus` | Interview-driven planner. Has web research tools (WebSearch, WebFetch) | sonnet | Yes | Yes (full) |
 | `orchestrator` | Execution coordinator | sonnet | Yes | Yes (full) |
 | `kraken` | TDD implementation | sonnet | No | Yes (self-claim) |
 | `spark` | Quick fixes | sonnet | No | Yes (self-claim) |
@@ -81,7 +84,7 @@ Use `--resume` to skip already-completed tasks.
 | `wisdom-synthesizer` | Knowledge consolidation | haiku | No | Yes (self-claim) |
 | `progress-reporter` | Status tracking | haiku | No | Yes (self-claim) |
 
-All agents have `TaskList`, `TaskGet`, `TaskUpdate`, `SendMessage` for team self-coordination. Only team leads have `Task` and `Teammate` for spawning.
+All agents have `TaskList`, `TaskGet`, `TaskUpdate`, `SendMessage` for team self-coordination. Only team leads have `Task`, `TeamCreate`, and `TeamDelete` for spawning.
 
 ## Agent Teams Setup
 

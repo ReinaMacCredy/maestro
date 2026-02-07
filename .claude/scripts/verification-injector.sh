@@ -1,4 +1,12 @@
 #!/bin/bash
-# Verification injector - adds verification context after Task tool use
-# Stub implementation - exits successfully
-exit 0
+# verification-injector.sh
+# Reminds to verify task results after delegation
+# Hook: PostToolUse(Task)
+
+# Read stdin (hook input)
+input=$(cat)
+
+# Inject reminder message
+cat << 'EOF'
+{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"Task completed. Remember to VERIFY: Read files claimed modified, run tests claimed to pass, and check for errors."}}
+EOF

@@ -28,6 +28,10 @@ Write the following template to `.maestro/plans/{slug}.md`:
 ```markdown
 # {Plan Name}
 
+**Goal**: <!-- One sentence — what are we building and why -->
+**Architecture**: <!-- 2-3 sentences — how the pieces fit together -->
+**Tech Stack**: <!-- Relevant technologies, frameworks, tools -->
+
 ## Objective
 <!-- One sentence: what are we trying to achieve? -->
 
@@ -43,18 +47,25 @@ Write the following template to `.maestro/plans/{slug}.md`:
 
 ## Tasks
 
-<!-- Each task needs: description, acceptance criteria, agent assignment (kraken/spark), dependencies -->
+<!-- Each task = single atomic action. Include complete code/diffs — never vague instructions. -->
 
-- [ ] Task 1: [Description]
+- [ ] Task 1: [Short title]
   - **Agent**: kraken | spark
-  - **Acceptance criteria**: [What "done" looks like]
+  - **Acceptance criteria**: [Objectively verifiable outcomes]
   - **Dependencies**: none
-  - **Files**: [Expected files to create/modify]
+  - **Files**: [Exact paths to create/modify/test]
+  - **Steps**:
+    1. Write failing test (if applicable)
+    2. Run test — expect failure
+    3. Implement the change
+    4. Run tests — expect pass
+    5. Commit
 
 ## Verification
 
-<!-- Concrete commands to verify completion -->
-- [ ] `command here` — [What it verifies]
+<!-- Exact commands with expected output -->
+- [ ] `command here` — expected output or behavior
+- [ ] `another command` — what it verifies
 
 ## Notes
 

@@ -1,8 +1,8 @@
 ---
 name: work
 description: Execute a plan using Agent Teams. Spawns specialized teammates to implement tasks in parallel.
-argument-hint: "[--resume]"
-allowed-tools: Read, Grep, Glob, Bash, Task, Teammate, SendMessage, TaskCreate, TaskList, TaskUpdate, TaskGet, AskUserQuestion
+argument-hint: "[<plan-name>] [--resume]"
+allowed-tools: Read, Grep, Glob, Bash, Task, TeamCreate, TeamDelete, SendMessage, TaskCreate, TaskList, TaskUpdate, TaskGet, AskUserQuestion
 ---
 
 # You Are The Orchestrator — Execution Team Lead
@@ -18,8 +18,9 @@ You are now acting as **The Orchestrator**. You spawn teammates, assign tasks, v
 
 `$ARGUMENTS`
 
+- `<plan-name>`: Load a specific plan by name. Matches against filenames in `.maestro/plans/` (with or without `.md` extension). Skips the selection prompt.
 - `--resume`: Resume a previously interrupted execution. Already-completed tasks (`- [x]`) are skipped.
-- Default (no args): Execute all tasks from the plan.
+- Default (no args): Auto-load if one plan exists, or prompt for selection if multiple.
 
 ## MANDATORY: Agent Teams Workflow
 
@@ -44,12 +45,49 @@ Ask the user whether to proceed anyway or stop.
 Glob(pattern: ".maestro/plans/*.md")
 ```
 
+**If a `<plan-name>` argument was provided** (any argument that is not `--resume`):
+
+1. Look for `.maestro/plans/{plan-name}.md` (try exact match first, then with `.md` appended)
+2. If found, load it — skip the selection prompt entirely
+3. If not found, show available plans and stop with error:
+   > Plan "{plan-name}" not found. Available plans: {list of plan filenames}
+
+**If no plan name argument was provided:**
+
 **If 0 plans found**: Stop with error:
 > No plans found. Run `/design` or `/plan-template` to create one.
 
 **If 1 plan found**: Load it automatically.
 
-**If multiple plans found**: List all plans with title (first heading) and last modified date. Use `AskUserQuestion` to let the user select which plan to execute.
+**If multiple plans found**: Cross-reference handoff metadata to recommend the most relevant plan.
+
+1. Parse all `.maestro/handoff/*.json` files
+2. Find handoff files with `status: "complete"` — sort by `completed` timestamp (latest first)
+3. If the latest completed handoff's `plan_destination` matches an existing plan file, mark it as the recommended plan
+
+Present all plans via `AskUserQuestion`, with the recommended plan listed first:
+
+```
+AskUserQuestion(
+  questions: [{
+    question: "Which plan would you like to execute?",
+    header: "Select Plan",
+    options: [
+      { label: "{plan title} (Recommended)", description: "Most recently designed. {objective excerpt}. {N} tasks." },
+      { label: "{other plan title}", description: "{objective excerpt}. {N} tasks." },
+      ...
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+For each plan option:
+- **Title**: First `#` heading from the plan file
+- **Objective excerpt**: First 80 characters of the `## Objective` section content
+- **Task count**: Number of `- [ ]` lines in the plan
+
+**Graceful degradation**: If no handoff files exist or none have `status: "complete"`, fall back to listing all plans with title and last modified date (current behavior).
 
 ### Step 1.5: Validate & Confirm
 
@@ -93,18 +131,124 @@ If user cancels, stop execution.
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| "unknown tool: Teammate" | Agent Teams not enabled | Add `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: "1"` to `~/.claude/settings.json` env, restart Claude Code |
+| "unknown tool: TeamCreate" | Agent Teams not enabled | Add `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: "1"` to `~/.claude/settings.json` env, restart Claude Code |
 | "team already exists" | Previous session not cleaned up | Run `/reset` to clean stale state |
 | "No plans found" | No plan file exists | Run `/design` or `/plan-template` first |
 | Plan missing required sections | Incomplete plan file | Run `/plan-template` to scaffold, or add missing sections manually |
+
+### Step 1.7: Worktree Isolation (Optional)
+
+Ask the user whether to execute in an isolated worktree or in the current working tree:
+
+```
+AskUserQuestion(
+  questions: [{
+    question: "Where should this plan execute?",
+    header: "Execution Environment",
+    options: [
+      { label: "Execute in worktree (isolated)", description: "Creates a git worktree on a new branch. Safe for parallel execution." },
+      { label: "Execute in main tree (current behavior)", description: "Run directly in the current working directory." }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+**If main tree chosen**: Proceed to Step 2. No worktree fields are added to the handoff JSON.
+
+**If worktree chosen**, follow the git-worktrees skill workflow:
+
+#### 1. Resolve Worktree Directory
+
+Determine the worktree root using this priority chain:
+
+| Priority | Location | Notes |
+|----------|----------|-------|
+| 1 | `.worktrees/` | Default — at project root |
+| 2 | `worktrees/` | Alternate — same level |
+| 3 | CLAUDE.md preference | If project CLAUDE.md specifies a custom path |
+| 4 | Ask user | Prompt for directory if none of the above exist |
+
+#### 2. Safety Check — Gitignore
+
+```bash
+git check-ignore -q .worktrees
+```
+
+- If exit 0: `.worktrees/` is already ignored — proceed.
+- If exit 1: auto-add to `.gitignore`:
+
+```bash
+echo "" >> .gitignore
+echo "# Maestro worktrees (auto-added)" >> .gitignore
+echo ".worktrees/" >> .gitignore
+```
+
+#### 3. Create Worktree
+
+Derive `<plan-slug>` from the plan filename (without `.md`).
+
+```bash
+git worktree add "<worktree-dir>/<plan-slug>" -b "maestro/<plan-slug>"
+```
+
+#### 4. Copy Plan and Create Runtime Directories
+
+```bash
+mkdir -p "<worktree-dir>/<plan-slug>/.maestro/plans"
+cp ".maestro/plans/<plan-slug>.md" "<worktree-dir>/<plan-slug>/.maestro/plans/"
+
+mkdir -p "<worktree-dir>/<plan-slug>/.maestro/handoff"
+mkdir -p "<worktree-dir>/<plan-slug>/.maestro/drafts"
+mkdir -p "<worktree-dir>/<plan-slug>/.maestro/wisdom"
+mkdir -p "<worktree-dir>/<plan-slug>/.maestro/archive"
+```
+
+#### 5. Project Setup
+
+Detect and run the project's setup command inside the worktree directory:
+
+| File | Setup Command |
+|------|--------------|
+| `package.json` | `bun install` |
+| `Cargo.toml` | `cargo build` |
+| `pyproject.toml` | `uv sync` |
+| `go.mod` | `go mod download` |
+| `build.gradle` / `gradlew` | `./gradlew build` |
+| `pom.xml` / `mvnw` | `./mvnw install` |
+
+#### 6. Test Baseline Verification
+
+Run the project's test command inside the worktree to confirm a clean baseline. If tests fail, warn the user that failures are pre-existing and proceed.
+
+#### 7. Update Handoff
+
+Update the handoff JSON with worktree metadata:
+
+```json
+{
+  "worktree": true,
+  "worktree_path": "<absolute path to worktree>",
+  "worktree_branch": "maestro/<plan-slug>"
+}
+```
+
+**All subsequent steps operate inside the worktree directory.**
+
+#### Error Handling
+
+If worktree creation fails (e.g., branch name collision, dirty state, disk issues), fall back to main tree execution with a warning:
+
+> Worktree creation failed: {error}. Falling back to main tree execution.
+
+Proceed to Step 2 without worktree fields in the handoff.
 
 ### Step 2: Create Your Team
 
 **Do this FIRST. You are the team lead.**
 
 ```
-Teammate(
-  operation: "spawnTeam",
+TeamCreate(
   team_name: "work-{plan-slug}",
   description: "Executing {plan name}"
 )
@@ -247,6 +391,36 @@ SendMessage(
 )
 ```
 
+#### Auto-Commit on Verified Task Completion
+
+After a task passes verification (files confirmed, tests pass, lint clean), **immediately commit the changes**:
+
+1. Stage only the files related to the completed task:
+   ```bash
+   git add <file1> <file2> ...
+   ```
+
+2. Commit with a descriptive message referencing the task:
+   ```bash
+   git commit -m "$(cat <<'EOF'
+   feat(<scope>): <short description of what the task accomplished>
+
+   Plan: <plan-name>
+   Task: <task subject>
+
+   Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+   EOF
+   )"
+   ```
+
+   - Use conventional commit prefixes: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
+   - `<scope>` should reflect the area of change (e.g., module name, feature name)
+   - Keep the first line under 72 characters
+
+3. If there are no changes to commit (e.g., task was research-only), skip the commit silently.
+
+**This ensures each working increment is saved and the session never ends with 0 commits.**
+
 #### Handling Stalled Workers
 
 If a worker stops reporting progress:
@@ -284,6 +458,14 @@ After all tasks complete, record learnings to `.maestro/wisdom/{plan-name}.md`:
 - ...
 ```
 
+**If executing in a worktree** (handoff has `"worktree": true`): Copy the wisdom file back to the main tree so it persists after worktree removal:
+
+```bash
+cp "<worktree-path>/.maestro/wisdom/{plan-name}.md" ".maestro/wisdom/{plan-name}.md"
+```
+
+Where `<worktree-path>` is the `worktree_path` value from the handoff JSON.
+
 ### Step 8: Cleanup Team
 
 Shutdown all teammates and cleanup:
@@ -292,8 +474,77 @@ Shutdown all teammates and cleanup:
 SendMessage(type: "shutdown_request", recipient: "impl-1")
 SendMessage(type: "shutdown_request", recipient: "impl-2")
 // ... for each teammate
-Teammate(operation: "cleanup")
+TeamDelete()
 ```
+
+**IMPORTANT**: Do NOT pass any parameters to `TeamDelete()` — no `reason`, no arguments. The tool accepts no parameters and will error if any are provided.
+
+### Step 8.5: Archive Plan
+
+Move the executed plan to the archive so `.maestro/plans/` only contains unexecuted plans:
+
+```bash
+mkdir -p .maestro/archive/
+mv .maestro/plans/{name}.md .maestro/archive/{name}.md
+```
+
+Where `{name}` is the plan filename loaded in Step 1 (e.g., if the plan was `.maestro/plans/refactor-auth.md`, move it to `.maestro/archive/refactor-auth.md`).
+
+Log: "Archived plan to `.maestro/archive/{name}.md`"
+
+**Only the specific executed plan is moved** — other plans in `.maestro/plans/` are untouched.
+
+### Step 8.7: Worktree Cleanup
+
+**Skip this step if the handoff does not have `"worktree": true`.**
+
+If execution ran in a worktree, perform cleanup from the **main tree** (not from inside the worktree):
+
+#### 1. Report Branch
+
+Tell the user which branch contains the changes:
+
+> Plan complete. Changes are on branch: `maestro/<plan-slug>`
+> Worktree path: `<worktree-path>`
+> You can merge with: `git merge maestro/<plan-slug>`
+> Or create a PR from this branch.
+
+#### 2. Ask User About Worktree Removal
+
+```
+AskUserQuestion(
+  questions: [{
+    question: "Remove the worktree now?",
+    header: "Worktree Cleanup",
+    options: [
+      { label: "Remove worktree", description: "Delete the worktree directory. The branch is preserved for merge/PR." },
+      { label: "Keep worktree", description: "Leave it in place for manual inspection. Remove later with: git worktree remove <path>" }
+    ],
+    multiSelect: false
+  }]
+)
+```
+
+#### 3. If Remove
+
+```bash
+git worktree remove "<worktree-path>"
+```
+
+Then check if the branch is fully merged:
+
+```bash
+git branch -d "maestro/<plan-slug>"
+```
+
+- If `git branch -d` succeeds: branch was fully merged, cleanup complete.
+- If `git branch -d` fails (not merged): warn the user. Do NOT force-delete with `-D` unless the user explicitly confirms.
+
+#### 4. If Keep
+
+Leave the worktree in place. Log:
+
+> Worktree preserved at `<worktree-path>`. Remove later with: `git worktree remove "<worktree-path>"`
 
 ### Step 9: Report
 
@@ -301,7 +552,15 @@ Tell the user what was accomplished:
 - Tasks completed
 - Files created/modified
 - Tests passing
+- Plan archived to `.maestro/archive/{name}.md`
 - Any issues or follow-ups
+
+**If executed in a worktree** (handoff has `"worktree": true`), also include:
+- Branch name: `maestro/<plan-slug>`
+- Worktree path (if kept) or confirmation it was removed
+- Merge instructions: `git merge maestro/<plan-slug>`
+
+The plan has been archived. `/review` can still access it.
 
 Suggest post-execution review:
 ```
@@ -364,7 +623,7 @@ If matching skills are found, add a `## SKILL GUIDANCE` section after `## CONTEX
 | Anti-Pattern | Do This Instead |
 |--------------|-----------------|
 | Editing files yourself | Delegate to kraken/spark teammates |
-| Skipping team creation | Always `Teammate(spawnTeam)` first |
+| Skipping team creation | Always `TeamCreate(team_name, description)` first |
 | Skipping verification | Read files + run tests after every task |
 | One-line task prompts | Use the delegation format above |
 | Not extracting wisdom | Always write `.maestro/wisdom/` file |

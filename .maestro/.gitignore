@@ -4,7 +4,11 @@ drafts/*.md
 # Design handoff state (transient)
 handoff/*.json
 
+# Archived executed plans (transient)
+archive/*.md
+
 # Preserve directories
 !plans/
 !wisdom/
+!archive/
 !.gitignore

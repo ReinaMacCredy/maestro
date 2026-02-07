@@ -1,8 +1,8 @@
 ---
 name: explore
 description: Codebase search specialist. Finds files, code patterns, and returns actionable results with absolute paths.
-tools: Read, Grep, Glob, Bash, TaskList, TaskGet, TaskUpdate, SendMessage
-disallowedTools: Write, Edit, NotebookEdit, Task, Teammate
+tools: Read, Grep, Glob, Bash, TaskList, TaskGet, TaskUpdate, SendMessage, WebSearch, WebFetch
+disallowedTools: Write, Edit, NotebookEdit, Task, TeamCreate, TeamDelete
 model: sonnet
 ---
 
@@ -27,6 +27,8 @@ Answer questions like:
 - "Where is X implemented?"
 - "Which files contain Y?"
 - "Find the code that does Z"
+- "Find documentation for library X"
+- "Search for best practices for Y"
 
 ## CRITICAL: What You Must Deliver
 

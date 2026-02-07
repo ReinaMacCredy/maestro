@@ -2,7 +2,7 @@
 name: progress-reporter
 description: Reports team progress by reading task lists and summarizing status, blockers, and next steps.
 tools: Read, Grep, Glob, Bash, TaskList, TaskGet, TaskUpdate, SendMessage
-disallowedTools: Write, Edit, NotebookEdit, Task, Teammate
+disallowedTools: Write, Edit, NotebookEdit, Task, TeamCreate, TeamDelete
 model: haiku
 ---
 
