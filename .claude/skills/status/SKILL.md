@@ -29,6 +29,15 @@ List all files in `.maestro/archive/`:
 
 If empty, report "No archived plans."
 
+### 1.6. Context
+
+List all files in `.maestro/context/`:
+- File name
+- First line (title)
+- Last modified date
+
+If empty, report "No project context. Run `/setup` to create."
+
 ### 2. Drafts
 
 List all files in `.maestro/drafts/`:
@@ -103,6 +112,7 @@ Based on the state discovered above, suggest the most relevant next action:
 | Handoff with status "designing" | "Design in progress. Run `/design` to continue or `/reset` to clean up." |
 | Drafts exist + no plans | "Interview was interrupted. Run `/design` to continue or `/reset` to start fresh." |
 | Archive has items + no active plans | "Previous plans archived. Run `/design` for next iteration." |
+| No context files exist | "Run `/setup` to scaffold project context (product, tech stack, guidelines)." |
 | Empty state (no plans, drafts, tasks, wisdom) | "Get started: Run `/setup-check`, then `/design <your request>`." |
 
 Display all matching suggestions. Multiple states can apply simultaneously.
@@ -117,6 +127,7 @@ End with a summary table:
 |----------|-------|--------|
 | Plans | N | <name> |
 | Archive | N | <name> |
+| Context | N | <name> |
 | Drafts | N | <name> |
 | Tasks | N (X active) | - |
 | Handoffs | N | <name> |
