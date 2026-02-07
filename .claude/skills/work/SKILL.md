@@ -641,87 +641,79 @@ If matching skills are found, add a `## SKILL GUIDANCE` section after `## CONTEX
 
 ## Planless Work Flow
 
-When `$ARGUMENTS` is detected as a work description (not a plan name), execute directly without a plan file.
+When `/work` is invoked with a description instead of a plan name (detected in Step 1), follow this flow instead of the plan-based workflow.
 
 ### Step P1: Analyze Description
 
 Parse the user's description to understand intent:
 
-1. Extract **key verbs** (add, fix, create, update, refactor, remove, etc.)
-2. Extract **target files/components** — look for file paths, module names, or component references
-3. Determine the **desired outcome** — what should be different when the work is done
+1. Extract the core action (what to do)
+2. Identify target files, components, or modules (if mentioned)
+3. Determine scope and complexity
 
-Store the parsed analysis for task generation.
+Store the description for use in subsequent steps.
 
 ### Step P2: Generate Task Breakdown
 
-Create 1–5 atomic tasks from the description. Each task should:
+Generate 1-5 atomic tasks from the description. For each task, determine:
 
-- Have a clear **subject** (imperative form)
-- Include **acceptance criteria** (what "done" looks like)
-- Specify the **agent type**:
-  - `kraken` — TDD, new features, multi-file changes
-  - `spark` — quick fixes, single-file changes, config updates
-- Be independently verifiable
+- **Subject**: Short, imperative title
+- **Agent**: `kraken` (TDD, new features, multi-file changes) or `spark` (quick fixes, single-file changes)
+- **Acceptance criteria**: Objectively verifiable outcomes
+- **Files**: Target file paths (use Glob/Grep to find if not specified in the description)
 
-Keep the breakdown minimal. A single-sentence description should produce 1–2 tasks, not 5.
+Use the same task format as plan-based tasks. Keep the breakdown minimal — prefer fewer, well-scoped tasks over many granular ones.
 
 ### Step P3: Confirm with User
 
-Show the generated task breakdown via `AskUserQuestion`:
+Present the generated task breakdown for user approval:
 
-```
+````
 AskUserQuestion(
   questions: [{
-    question: "Execute these tasks?",
-    header: "Planless Work — Task Breakdown",
+    question: "Here's the task breakdown. How would you like to proceed?",
+    header: "Planless Work",
     options: [
-      { label: "Execute", description: "Proceed with team creation and task execution" },
+      { label: "Execute", description: "Proceed with these tasks" },
       { label: "Revise", description: "Let me re-describe what I want" },
       { label: "Cancel", description: "Stop without executing" }
     ],
     multiSelect: false
   }]
 )
-```
+````
 
-Before the prompt, display the task breakdown:
+Show each task with its agent assignment and acceptance criteria before asking.
 
-```
-**Tasks:**
-1. [kraken] {subject} — {acceptance criteria}
-2. [spark] {subject} — {acceptance criteria}
-...
-```
-
-- If **Execute** → proceed to Step P4
-- If **Revise** → ask the user for a new description, return to Step P1
-- If **Cancel** → stop execution
+**On Execute** → Proceed to Step P4.
+**On Revise** → Ask the user for a new description, then repeat from Step P1.
+**On Cancel** → Stop execution.
 
 ### Step P4: Join Main Workflow
 
-After user confirms, rejoin the main workflow:
+After user confirms, rejoin the plan-based workflow:
 
-1. **Step 2** — Create team: `TeamCreate(team_name: "work-planless", description: "{first 50 chars of description}")`
-2. **Step 3** — Create tasks from the breakdown generated in Step P2
-3. **Step 3.5** — Discover available skills
-4. **Step 4 onward** — Spawn teammates, assign tasks, monitor, verify, extract wisdom, cleanup, report
+1. **Create tasks** (same as Step 3) — convert the generated breakdown into shared tasks with dependencies
+2. **Discover skills** (same as Step 3.5) — scan for skills that can provide guidance
+3. **Proceed to Step 2** (Create Team) and continue through Steps 2 → 4 → 5 → 6 → 7 → 8 → 9
 
-All remaining steps (Steps 2–9) are identical to the plan-based workflow.
+### Skipped Steps in Planless Mode
 
-### Skipped Steps
-
-The following main workflow steps are skipped in planless mode:
+The following plan-based steps are skipped when running in planless mode:
 
 | Step | Reason |
 |------|--------|
-| Step 1.5 (Validate & Confirm) | No plan file to validate sections against |
+| Step 1.5 (Validate & Confirm) | No plan file to validate |
 | Step 1.7 (Worktree Isolation) | Too heavyweight for ad-hoc work |
 | Step 8.5 (Archive Plan) | No plan file to archive |
 
-### Wisdom File Naming
+All other steps (team creation, task execution, verification, wisdom extraction, cleanup, reporting) proceed normally.
 
-For planless mode, derive the wisdom filename from the first 5 words of the description, lowercased and hyphenated:
+### Wisdom File Naming in Planless Mode
+
+When extracting wisdom (Step 7), derive the file slug from the first 5 words of the user's description:
 
 - `/work add retry logic to api client` → `.maestro/wisdom/add-retry-logic-to-api.md`
-- `/work fix broken auth middleware` → `.maestro/wisdom/fix-broken-auth-middleware.md`
+- `/work fix login page redirect bug` → `.maestro/wisdom/fix-login-page-redirect-bug.md`
+
+Strip articles ("a", "an", "the") and limit to 5 significant words. Use hyphens as separators.
