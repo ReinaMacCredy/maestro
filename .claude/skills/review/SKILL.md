@@ -1,7 +1,7 @@
 ---
 name: review
-description: Code review — plan-vs-implementation comparison when a plan exists, or structured git-diff review when no plan is available.
-allowed-tools: Read, Bash, Glob, Grep, AskUserQuestion
+description: Code review with auto-fix — plan-vs-implementation comparison or structured git-diff review. Automatically fixes issues found during review.
+allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 disable-model-invocation: true
 ---
 
