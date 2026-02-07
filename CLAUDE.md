@@ -64,6 +64,7 @@ Shell scripts in `.claude/scripts/` enforce workflow invariants via `.claude/hoo
 | `verification-injector.sh` | PostToolUse(Task) | Reminds orchestrator to verify task results |
 | `plan-validator.sh` | PostToolUse(Write) | Warns if plan is missing required sections |
 | `wisdom-injector.sh` | PostToolUse(Read) | Surfaces wisdom files when a plan is read |
+| `plan-context-injector.sh` | PreCompact | Injects active plan context into compaction summary |
 | `session-start.sh` | SessionStart | Session initialization |
 | `subagent-context.sh` | SubagentStart | Injects context into subagents |
 

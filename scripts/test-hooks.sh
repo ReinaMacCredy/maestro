@@ -1,13 +1,13 @@
 #!/bin/bash
 # test-hooks.sh - Smoke tests for all Maestro hook scripts
-# Runs 12 tests with temp directory isolation and simulated stdin JSON input
+# Runs 15 tests with temp directory isolation and simulated stdin JSON input
 
 set -euo pipefail
 
 SCRIPTS_DIR="$(cd "$(dirname "$0")/../.claude/scripts" && pwd)"
 PASS=0
 FAIL=0
-TOTAL=12
+TOTAL=15
 
 red() { printf '\033[0;31m%s\033[0m\n' "$1"; }
 green() { printf '\033[0;32m%s\033[0m\n' "$1"; }
@@ -244,6 +244,62 @@ if echo "$output" | jq -e '.hookSpecificOutput.additionalContext' > /dev/null 2>
   fi
 else
   fail "verification-injector.sh JSON structure" "Output: $output"
+fi
+
+# -------------------------------------------------------
+# Test 13: plan-context-injector.sh outputs for executing status
+# -------------------------------------------------------
+bold "Test 13: plan-context-injector.sh outputs active plan context for executing"
+setup_project
+mkdir -p "$TMPDIR/.maestro/handoff"
+cat > "$TMPDIR/.maestro/handoff/test-handoff.json" <<'HANDOFF'
+{"status":"executing","topic":"Add auth system","plan_destination":".maestro/plans/add-auth-system.md"}
+HANDOFF
+
+output=$(CLAUDE_PROJECT_DIR="$TMPDIR" bash "$SCRIPTS_DIR/plan-context-injector.sh" 2>&1) || true
+if [[ "$output" == *"EXECUTING plan: Add auth system"* ]]; then
+  pass "plan-context-injector.sh outputs EXECUTING plan context"
+else
+  fail "plan-context-injector.sh executing output" "Expected EXECUTING plan reference, got: $output"
+fi
+
+# -------------------------------------------------------
+# Test 14: plan-context-injector.sh silent on no active plans
+# -------------------------------------------------------
+bold "Test 14: plan-context-injector.sh silent when no active plans"
+setup_project
+mkdir -p "$TMPDIR/.maestro/handoff"
+cat > "$TMPDIR/.maestro/handoff/done.json" <<'HANDOFF'
+{"status":"completed","topic":"Old plan","plan_destination":".maestro/plans/old.md"}
+HANDOFF
+
+output=$(CLAUDE_PROJECT_DIR="$TMPDIR" bash "$SCRIPTS_DIR/plan-context-injector.sh" 2>&1) || true
+if [[ -z "$output" ]]; then
+  pass "plan-context-injector.sh exits silently when no active plans"
+else
+  fail "plan-context-injector.sh silent exit" "Expected no output, got: $output"
+fi
+
+# -------------------------------------------------------
+# Test 15: session-start.sh includes ACTIVE PLAN for executing handoff
+# -------------------------------------------------------
+bold "Test 15: session-start.sh includes ACTIVE PLAN from handoff"
+setup_project
+mkdir -p "$TMPDIR/.maestro/handoff"
+cat > "$TMPDIR/.maestro/handoff/active.json" <<'HANDOFF'
+{"status":"executing","topic":"Build dashboard","plan_destination":".maestro/plans/build-dashboard.md"}
+HANDOFF
+
+output=$(CLAUDE_PROJECT_DIR="$TMPDIR" bash "$SCRIPTS_DIR/session-start.sh" < /dev/null 2>&1) || true
+if echo "$output" | jq -e '.hookSpecificOutput.additionalContext' > /dev/null 2>&1; then
+  context=$(echo "$output" | jq -r '.hookSpecificOutput.additionalContext')
+  if [[ "$context" == *"ACTIVE PLAN: Build dashboard"* ]]; then
+    pass "session-start.sh includes ACTIVE PLAN from handoff file"
+  else
+    fail "session-start.sh active plan content" "Missing ACTIVE PLAN in: $context"
+  fi
+else
+  fail "session-start.sh active plan JSON" "Output: $output"
 fi
 
 # -------------------------------------------------------
