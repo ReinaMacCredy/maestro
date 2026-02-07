@@ -50,13 +50,20 @@ Glob(pattern: ".maestro/plans/*.md")
 
 1. Look for `.maestro/plans/{plan-name}.md` (try exact match first, then with `.md` appended)
 2. If found, load it — skip the selection prompt entirely
-3. If not found, show available plans and stop with error:
+3. If not found, check if the argument looks like a work description using this heuristic:
+   - Contains spaces, OR
+   - Length > 40 characters, OR
+   - Contains common action verbs: "add", "fix", "create", "update", "implement", "refactor", "remove", "change", "move", "build"
+
+   **If it looks like a description** → store it as the planless work description and skip to the **Planless Work Flow** section below.
+
+   **If it does NOT look like a description** → show available plans and stop with error:
    > Plan "{plan-name}" not found. Available plans: {list of plan filenames}
 
 **If no plan name argument was provided:**
 
 **If 0 plans found**: Stop with error:
-> No plans found. Run `/design` or `/plan-template` to create one.
+> No plans found. Run `/design` to create a plan, or `/work <description>` to work directly.
 
 **If 1 plan found**: Load it automatically.
 
