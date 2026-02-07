@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.4] - 2026-02-07
+
+
+### Added
+
+
+- Migrate to TeamCreate/TeamDelete API, expand hook scripts, and add new skills
+- Add planless git-diff review mode to /review skill
+- Integrate Context7 library detection into design workflow
+
+
+### Changed
+
+
+- Migrate commands to skills for unified slash-command system
+
+
+### Documentation
+
+
+- Update all documentation to reflect Context7 library detection workflow
+
 ## [0.14.3] - 2026-02-06
 
 
