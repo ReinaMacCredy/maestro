@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 # Post-Execution Review
 
-Perform a rigorous, structured comparison of the plan against the actual implementation. Every acceptance criterion gets a verdict. Scope compliance is checked. Remediation is suggested for failures.
+Perform a rigorous, structured comparison of the plan against the actual implementation. Every acceptance criterion gets a verdict. Scope compliance is checked. Issues found during review are automatically fixed when possible; complex issues are logged as TODOs.
 
 ## Step 1: Find and Load the Plan
 

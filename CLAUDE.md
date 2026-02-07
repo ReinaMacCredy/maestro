@@ -19,7 +19,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `/work [<plan-name>] [--resume]` — Execute plan with Agent Teams (parallel workers)
 - `/setup-check` — Verify plugin prerequisites
 - `/status` — Show Maestro state
-- `/review` — Post-execution review (also supports planless git-diff mode)
+- `/review` — Post-execution review with auto-fix (also supports planless git-diff mode)
 - `/reset` — Clean stale state (teams, handoff files, drafts)
 - `/plan-template <name>` — Scaffold blank plan with required sections
 
