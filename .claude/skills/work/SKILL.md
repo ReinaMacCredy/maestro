@@ -1,7 +1,7 @@
 ---
 name: work
-description: Execute a plan using Agent Teams. Spawns specialized teammates to implement tasks in parallel.
-argument-hint: "[<plan-name>] [--resume]"
+description: Execute a plan using Agent Teams, or work directly from a description. Spawns specialized teammates to implement tasks in parallel.
+argument-hint: "[<plan-name>] [--resume] | <description of what to do>"
 allowed-tools: Read, Grep, Glob, Bash, Task, TeamCreate, TeamDelete, SendMessage, TaskCreate, TaskList, TaskUpdate, TaskGet, AskUserQuestion
 disable-model-invocation: true
 ---
