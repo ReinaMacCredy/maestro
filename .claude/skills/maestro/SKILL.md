@@ -16,6 +16,7 @@ description: AI agent workflow with interview-driven planning and team-based exe
 | `/setup-check` | Validate Maestro prerequisites |
 | `/status` | Show current Maestro state |
 | `/review` | Post-execution plan verification |
+| `/styleguide` | Inject code style guides into project CLAUDE.md |
 | `/reset` | Clean stale Maestro state |
 | `@tdd` | TDD implementation (kraken) |
 | `@spark` | Quick fixes |

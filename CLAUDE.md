@@ -20,6 +20,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `/setup-check` — Verify plugin prerequisites
 - `/status` — Show Maestro state
 - `/review` — Post-execution review with auto-fix (also supports planless git-diff mode)
+- `/styleguide` — Detect project languages and inject code style guides into CLAUDE.md
 - `/reset` — Clean stale state (teams, handoff files, drafts)
 - `/plan-template <name>` — Scaffold blank plan with required sections
 

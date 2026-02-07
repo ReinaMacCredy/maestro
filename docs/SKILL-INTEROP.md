@@ -42,6 +42,7 @@ npx @anthropic-ai/skills add frontend-design --project
 | `frontend-design` | Production-grade UI with high design quality |
 | `web-design-guidelines` | Modern web design principles and patterns |
 | `react-best-practices` | React conventions, hooks, and performance |
+| `code-styleguides` | Language-specific coding conventions injected into CLAUDE.md via `/styleguide` |
 
 ## Creating Skill-Aware Skills
 
