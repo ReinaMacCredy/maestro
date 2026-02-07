@@ -8,9 +8,10 @@ System architecture for Maestro.
 flowchart TB
     subgraph PLANNING["PLANNING (Agent Teams)"]
         PLAN["/design"] --> PROMETHEUS["prometheus (Team Lead)"]
-        PROMETHEUS --> EXPLORE_P["explore (Search)"]
+        PROMETHEUS --> CTX7["Library Detection (Context7/WebSearch)"]
+        CTX7 --> EXPLORE_P["explore (Search)"]
         PROMETHEUS --> ORACLE_P["oracle (Advice)"]
-        PROMETHEUS --> INTERVIEW["Interview"]
+        CTX7 --> INTERVIEW["Interview"]
         INTERVIEW --> PLANFILE["Plan File"]
     end
 
@@ -40,7 +41,7 @@ flowchart TB
 
 | Agent | Purpose | Model | Team Lead? | Team Tools? |
 |-------|---------|-------|------------|-------------|
-| `prometheus` | Interview-driven planner | sonnet | Yes | Full (Task, Teammate, SendMessage, TaskList, TaskUpdate) |
+| `prometheus` | Interview-driven planner. Detects libraries via Context7 MCP | sonnet | Yes | Full (Task, Teammate, SendMessage, TaskList, TaskUpdate) |
 | `orchestrator` | Execution coordinator | sonnet | Yes | Full (Task, Teammate, SendMessage, TaskList, TaskUpdate) |
 | `kraken` | TDD implementation | sonnet | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
 | `spark` | Quick fixes | sonnet | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |

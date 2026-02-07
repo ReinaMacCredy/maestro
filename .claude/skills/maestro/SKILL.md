@@ -25,12 +25,13 @@ description: AI agent workflow with interview-driven planning and team-based exe
 ## Planning Flow
 
 ```
-/design → prometheus (team lead) → spawns explore/oracle → interview → leviathan (review) → plan file
+/design → prometheus (team lead) → detect libraries → fetch docs (Context7/WebSearch) → spawns explore/oracle → interview → leviathan (review) → plan file
 ```
 
 1. User triggers `/design <description>`
 2. Prometheus creates team if research needed
 2.5. Loads prior wisdom from `.maestro/wisdom/` (if any)
+2.7. Detects external library/framework mentions and fetches docs via Context7 MCP (falls back to WebSearch/WebFetch)
 3. Spawns explore for codebase research (and web research when relevant)
 4. Spawns oracle for architectural decisions
 5. Conducts structured interview (one question at a time, multiple-choice options, incremental validation)
@@ -74,7 +75,7 @@ Use `--resume` to skip already-completed tasks.
 
 | Agent | Purpose | Model | Team Lead? | Has Team Tools? |
 |-------|---------|-------|------------|-----------------|
-| `prometheus` | Interview-driven planner. Has web research tools (WebSearch, WebFetch) | sonnet | Yes | Yes (full) |
+| `prometheus` | Interview-driven planner. Detects libraries and fetches docs via Context7 MCP. Has web research tools (WebSearch, WebFetch) | sonnet | Yes | Yes (full) |
 | `orchestrator` | Execution coordinator | sonnet | Yes | Yes (full) |
 | `kraken` | TDD implementation | sonnet | No | Yes (self-claim) |
 | `spark` | Quick fixes | sonnet | No | Yes (self-claim) |
