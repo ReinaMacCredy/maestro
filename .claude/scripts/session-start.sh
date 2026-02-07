@@ -9,6 +9,24 @@ PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
 # Collect context sections
 context_parts=()
 
+# 0. Active plan detection from handoff files
+handoff_dir="$PROJECT_DIR/.maestro/handoff"
+if [[ -d "$handoff_dir" ]]; then
+  for handoff in "$handoff_dir"/*.json; do
+    [[ -f "$handoff" ]] || continue
+    status=$(jq -r '.status // empty' "$handoff" 2>/dev/null) || continue
+    topic=$(jq -r '.topic // empty' "$handoff" 2>/dev/null) || continue
+    case "$status" in
+      executing)
+        context_parts+=("ACTIVE PLAN: $topic (status: executing) — Run /work --resume to continue")
+        ;;
+      designing)
+        context_parts+=("ACTIVE PLAN: $topic (status: designing) — Run /design to continue")
+        ;;
+    esac
+  done
+fi
+
 # 1. Available Maestro commands (always present)
 context_parts+=("Maestro commands: /design, /work, /status, /review, /reset, /plan-template")
 

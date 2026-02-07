@@ -55,7 +55,7 @@ Glob(pattern: ".maestro/plans/*.md")
    - Length > 40 characters, OR
    - Contains common action verbs: "add", "fix", "create", "update", "implement", "refactor", "remove", "change", "move", "build"
 
-   **If it looks like a description** → store it as the planless work description and skip to the **Planless Work Flow** section below.
+   **If it looks like a description** → store it as the planless work description and skip to the **[planless flow](#planless-work-flow)** below.
 
    **If it does NOT look like a description** → show available plans and stop with error:
    > Plan "{plan-name}" not found. Available plans: {list of plan filenames}
@@ -250,6 +250,27 @@ If worktree creation fails (e.g., branch name collision, dirty state, disk issue
 > Worktree creation failed: {error}. Falling back to main tree execution.
 
 Proceed to Step 2 without worktree fields in the handoff.
+
+### Step 1.8: Write Execution Handoff
+
+Write (or overwrite) `.maestro/handoff/{plan-slug}.json` to signal that this plan is actively executing:
+
+```bash
+mkdir -p .maestro/handoff/
+```
+
+```json
+{
+  "topic": "{plan-slug}",
+  "status": "executing",
+  "started": "{ISO timestamp}",
+  "plan_destination": ".maestro/plans/{plan-slug}.md"
+}
+```
+
+Where `{plan-slug}` is the plan filename without `.md` (e.g., `refactor-auth`), and `{ISO timestamp}` is the current time in ISO 8601 format.
+
+If a handoff file already exists (e.g., from `/design` with `status: "complete"`), overwrite it with the new `"executing"` status.
 
 ### Step 2: Create Your Team
 
@@ -499,6 +520,20 @@ mv .maestro/plans/{name}.md .maestro/archive/{name}.md
 Where `{name}` is the plan filename loaded in Step 1 (e.g., if the plan was `.maestro/plans/refactor-auth.md`, move it to `.maestro/archive/refactor-auth.md`).
 
 Log: "Archived plan to `.maestro/archive/{name}.md`"
+
+**Update the handoff file** to reflect the archived status:
+
+```json
+{
+  "topic": "{plan-slug}",
+  "status": "archived",
+  "started": "{original started timestamp}",
+  "completed": "{ISO timestamp}",
+  "plan_destination": ".maestro/archive/{plan-slug}.md"
+}
+```
+
+Where `{original started timestamp}` is preserved from the existing handoff file, and `{ISO timestamp}` is the current time.
 
 **Only the specific executed plan is moved** — other plans in `.maestro/plans/` are untouched.
 
