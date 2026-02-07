@@ -504,11 +504,11 @@ Generate the report in this exact format:
 
 Populate every section. If a file has no findings, omit it from "Findings by File" but keep it in the "Changed Files" table with "0 findings". Be precise with line numbers.
 
-## Step P7.5: Auto-Fix
+### Step P7.5: Auto-Fix
 
 After generating the report, automatically fix issues that can be resolved with mechanical edits.
 
-### Classify Findings
+#### Classify Findings
 
 Review every FAIL finding from the report (Code Quality, Security, Test Coverage, Commit Hygiene dimensions). Classify each as:
 
@@ -517,7 +517,7 @@ Review every FAIL finding from the report (Code Quality, Security, Test Coverage
 
 Also review WARN findings — apply the same classification. Fix WARNs that are mechanical (e.g., removing a `console.log`), skip WARNs that require judgment.
 
-### Apply Fixes
+#### Apply Fixes
 
 For each **fixable** finding:
 
@@ -530,7 +530,7 @@ For each **complex** finding:
 1. Do NOT attempt a fix
 2. Record as TODO: `TODO: {Dimension, file:line} — {what needs to be done}`
 
-### Re-Run Regression Check
+#### Re-Run Regression Check
 
 After all fixes are applied, re-run the regression checks from Step P5:
 
@@ -547,7 +547,7 @@ If a regression check that previously passed now fails after a fix:
 
 Record updated results.
 
-### Update Report
+#### Update Report
 
 Populate the **Auto-Fix Results** section in the report (the placeholder added in Step P7):
 
@@ -572,7 +572,7 @@ Populate the **Auto-Fix Results** section in the report (the placeholder added i
 
 If no FAILs or fixable WARNs were found in the report, populate the section with: `No issues to fix.`
 
-### Recalculate Verdict
+#### Recalculate Verdict
 
 After fixes, update the verdict based on **remaining unfixed issues only**:
 
