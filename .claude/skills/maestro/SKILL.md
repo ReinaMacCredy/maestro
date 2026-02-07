@@ -17,6 +17,7 @@ description: AI agent workflow with interview-driven planning and team-based exe
 | `/status` | Show current Maestro state |
 | `/review` | Post-execution plan verification |
 | `/styleguide` | Inject code style guides into project CLAUDE.md |
+| `/setup` | Scaffold project context (product, tech stack, guidelines) |
 | `/reset` | Clean stale Maestro state |
 | `@tdd` | TDD implementation (kraken) |
 | `@spark` | Quick fixes |
@@ -67,7 +68,8 @@ Use `--resume` to skip already-completed tasks.
 .maestro/
 ├── plans/     # Committed work plans
 ├── drafts/    # Interview drafts
-└── wisdom/    # Accumulated learnings
+├── wisdom/    # Accumulated learnings
+└── context/   # Project context (product, tech stack, guidelines)
 
 .worktrees/        # Git worktrees for isolated plan execution (project root)
 ```
@@ -118,3 +120,4 @@ See [docs/SKILL-INTEROP.md](../../../docs/SKILL-INTEROP.md) for full details.
 - **Execution**: `/work`
 - **Research**: `@explore`, `@oracle`
 - **Implementation**: `@tdd`, `@spark`
+- **Setup**: `/setup`
