@@ -30,6 +30,19 @@ fi
 # 1. Available Maestro commands (always present)
 context_parts+=("Maestro commands: /design, /work, /status, /review, /reset, /plan-template")
 
+# 1.5 Project context availability
+context_dir="$PROJECT_DIR/.maestro/context"
+if [[ -d "$context_dir" ]]; then
+  ctx_count=0
+  for cfile in "$context_dir"/*.md; do
+    [[ -f "$cfile" ]] || continue
+    ctx_count=$((ctx_count + 1))
+  done
+  if [[ $ctx_count -gt 0 ]]; then
+    context_parts+=("Project context: $ctx_count files (.maestro/context/) — run /setup to update")
+  fi
+fi
+
 # 2. Skills - parse name and description from YAML frontmatter
 skills_dir="$PROJECT_DIR/.claude/skills"
 if [[ -d "$skills_dir" ]]; then
