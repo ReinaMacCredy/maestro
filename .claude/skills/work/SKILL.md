@@ -111,6 +111,17 @@ For each plan option:
 If any required section is missing, stop with:
 > Plan is missing required sections: {list}. Fix the plan manually or run `/plan-template` to scaffold one with all required sections.
 
+**Check for code style guides** in the host project's `CLAUDE.md`:
+
+```bash
+grep -q "maestro:code-styleguides:start" CLAUDE.md 2>/dev/null
+```
+
+If the marker is NOT found (grep exits non-zero), log a non-blocking suggestion:
+> Tip: Run `/styleguide` to inject language-specific code style guides into your project's CLAUDE.md. This helps all agents produce consistent, idiomatic code.
+
+Do NOT block execution or prompt the user. This is informational only — proceed to the next step regardless.
+
 **Show plan summary** to user:
 - Plan title (first `#` heading)
 - Objective (content of `## Objective`)
