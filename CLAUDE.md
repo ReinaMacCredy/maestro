@@ -21,6 +21,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `/status` — Show Maestro state
 - `/review` — Post-execution review with auto-fix (also supports planless git-diff mode)
 - `/styleguide` — Detect project languages and inject code style guides into CLAUDE.md
+- `/setup` — Scaffold project context (product definition, tech stack, guidelines)
 - `/reset` — Clean stale state (teams, handoff files, drafts)
 - `/plan-template <name>` — Scaffold blank plan with required sections
 
@@ -76,6 +77,7 @@ Shell scripts in `.claude/scripts/` enforce workflow invariants via `.claude/hoo
 ├── plans/      # Unexecuted work plans (active)
 ├── archive/    # Executed plans (moved here after /work completes)
 ├── drafts/     # Interview drafts (created during /design)
+├── context/    # Project context files (product, tech stack, guidelines)
 ├── handoff/    # Session recovery JSON (design status, worktree metadata)
 └── wisdom/     # Accumulated learnings from past executions
 ```
