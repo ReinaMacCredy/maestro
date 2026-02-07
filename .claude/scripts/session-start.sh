@@ -28,7 +28,7 @@ if [[ -d "$handoff_dir" ]]; then
 fi
 
 # 1. Available Maestro commands (always present)
-context_parts+=("Maestro commands: /design, /work, /status, /review, /reset, /plan-template")
+context_parts+=("Maestro commands: /design, /work, /setup, /status, /review, /reset, /plan-template")
 
 # 1.5 Project context availability
 context_dir="$PROJECT_DIR/.maestro/context"
