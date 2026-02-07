@@ -186,6 +186,11 @@ For each failure, provide a specific fix suggestion:
 
 ---
 
+### Auto-Fix Results
+{Populated by Step 9.5 — see below}
+
+---
+
 ### Verdict: COMPLETE / NEEDS WORK / FAILED
 
 **Summary**: {1-2 sentence summary}
@@ -404,6 +409,11 @@ Generate the report in this exact format:
 | Test Coverage | {n} | {n} | {n} |
 | Commit Hygiene | {n} | {n} | {n} |
 | **Total** | **{n}** | **{n}** | **{n}** |
+
+---
+
+### Auto-Fix Results
+{Populated by Step P7.5 — see below}
 
 ---
 
