@@ -36,7 +36,6 @@ done
 if [[ ${#missing[@]} -gt 0 ]]; then
   missing_list=$(printf ', %s' "${missing[@]}")
   missing_list=${missing_list:2}
-  cat << EOF
-{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"Plan file is missing required sections: ${missing_list}. A complete plan should include ## Objective, ## Scope, ## Tasks, and ## Verification sections."}}
-EOF
+  printf '%s' "Plan file is missing required sections: ${missing_list}. A complete plan should include ## Objective, ## Scope, ## Tasks, and ## Verification sections." \
+    | jq -Rs '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: .}}'
 fi

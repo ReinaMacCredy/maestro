@@ -26,18 +26,21 @@ if [[ ! -d "$wisdom_dir" ]]; then
   exit 0
 fi
 
-wisdom_files=$(ls "$wisdom_dir"/*.md 2>/dev/null)
-if [[ -z "$wisdom_files" ]]; then
+# Build list of wisdom files with titles
+wisdom_list=""
+for f in "$wisdom_dir"/*.md; do
+  [[ -f "$f" ]] || continue
+  title=$(head -n 1 "$f" | sed 's/^#* *//')
+  if [[ -n "$wisdom_list" ]]; then
+    wisdom_list="$wisdom_list\n- ${f}: ${title}"
+  else
+    wisdom_list="\n- ${f}: ${title}"
+  fi
+done
+
+if [[ -z "$wisdom_list" ]]; then
   exit 0
 fi
 
-# Build list of wisdom files with titles
-wisdom_list=""
-for f in $wisdom_files; do
-  title=$(head -n 1 "$f" | sed 's/^#* *//')
-  wisdom_list="${wisdom_list}\n- ${f}: ${title}"
-done
-
-cat << EOF
-{"hookSpecificOutput":{"hookEventName":"PostToolUse","additionalContext":"Wisdom files available for this project:${wisdom_list}\nConsider reading relevant wisdom files before starting work."}}
-EOF
+printf '%s' "Wisdom files available for this project:${wisdom_list}\nConsider reading relevant wisdom files before starting work." \
+  | jq -Rs '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: .}}'
