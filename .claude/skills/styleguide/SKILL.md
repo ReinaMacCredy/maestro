@@ -120,14 +120,14 @@ Build the injection content:
 6. For each detected language, read and append the corresponding guide file
 7. End with the closing marker: `<!-- maestro:code-styleguides:end -->`
 
-**Locating the guide files**: The guide templates live in the Maestro plugin's `.claude/lib/styleguides/` directory. To find them:
+**Locating the guide files**: The guide templates live in this skill's `references/` directory (`.claude/skills/styleguide/references/`). To find them:
 
 ```bash
 # Try project path first (if Maestro is the current project)
-ls .claude/lib/styleguides/ 2>/dev/null
+ls .claude/skills/styleguide/references/ 2>/dev/null
 
 # Fall back to global plugin path
-find ~/.claude/plugins/marketplaces -path "*/maestro/.claude/lib/styleguides" -type d 2>/dev/null
+find ~/.claude/plugins/marketplaces -path "*/maestro/.claude/skills/styleguide/references" -type d 2>/dev/null
 ```
 
 Try the project path first, then fall back to the global plugin path.
