@@ -204,6 +204,80 @@ For each failure, provide a specific fix suggestion:
 
 Populate every section. Do not skip sections — use "N/A" if a section has no applicable items. Be precise with evidence: include file paths and line numbers, not vague descriptions.
 
+## Step 9.5: Auto-Fix
+
+After generating the report, automatically fix issues that can be resolved with mechanical edits.
+
+### Classify Findings
+
+Review every FAIL finding from the report (Task Completion criteria, Scope violations, Verification failures). Classify each as:
+
+- **Fixable**: Missing exports, wrong function/variable names, missing imports, incorrect config values, missing sections in markdown files, wrong file paths in references, minor logic errors with obvious corrections. The fix is unambiguous and localized to a few lines.
+- **Complex (TODO)**: Missing feature implementations, architectural changes, new test files needed, design decisions required, multi-file refactors with unclear scope. The fix requires judgment or significant new code.
+
+### Apply Fixes
+
+For each **fixable** finding:
+
+1. Read the target file using the path and line number from the report evidence
+2. Apply the fix using `Edit(file_path, old_string, new_string)` — use the smallest possible edit
+3. Record what was changed: `{file}:{line} — {description of fix}`
+
+For each **complex** finding:
+
+1. Do NOT attempt a fix
+2. Record as TODO: `TODO: {Task N, Criterion M} — {what needs to be done}`
+
+### Re-Run Verification
+
+After all fixes are applied, re-run the verification commands from Step 6 and the regression checks from Step 7:
+
+```
+# Re-run plan verification commands
+Bash("{each verification command from the plan}")
+
+# Re-run project validation
+Bash("{test/build/lint commands from Step 7}")
+```
+
+Record updated results.
+
+### Update Report
+
+Populate the **Auto-Fix Results** section in the report (the placeholder added in Step 9):
+
+```
+### Auto-Fix Results
+
+**Fixed ({N} of {total FAIL count}):**
+| # | Finding | File | Fix Applied |
+|---|---------|------|-------------|
+| 1 | {Task N, Criterion M or finding description} | `{file}:{line}` | {what was changed} |
+
+**Unfixed — TODO ({M} remaining):**
+| # | Finding | Reason |
+|---|---------|--------|
+| 1 | {Task N, Criterion M or finding description} | {why it couldn't be fixed inline} |
+
+**Re-Verification:**
+| # | Check | Before Fix | After Fix |
+|---|-------|------------|-----------|
+| 1 | {command or check name} | FAIL | PASS/FAIL |
+```
+
+If no FAILs were found in the report, populate the section with: `No issues to fix.`
+
+### Recalculate Verdict
+
+After fixes, update the verdict based on **remaining unfixed issues only**:
+
+- **COMPLETE**: All FAILs were fixed (or none existed), re-verification passes
+- **NEEDS WORK**: Some FAILs were fixed but TODOs remain
+- **FAILED**: Critical FAILs could not be fixed, or re-verification still fails
+
+Update the Verdict section at the bottom of the report to reflect post-fix state. Append a note:
+`Auto-fix applied: {N} issues fixed, {M} remaining as TODO.`
+
 ## Step 10: Post-Review Archival
 
 If the verdict is **COMPLETE** and the plan was loaded from `.maestro/plans/` (not already in `.maestro/archive/`):
@@ -429,3 +503,82 @@ Generate the report in this exact format:
 ````
 
 Populate every section. If a file has no findings, omit it from "Findings by File" but keep it in the "Changed Files" table with "0 findings". Be precise with line numbers.
+
+## Step P7.5: Auto-Fix
+
+After generating the report, automatically fix issues that can be resolved with mechanical edits.
+
+### Classify Findings
+
+Review every FAIL finding from the report (Code Quality, Security, Test Coverage, Commit Hygiene dimensions). Classify each as:
+
+- **Fixable**: Unused imports, missing exports, dead code flagged for removal, debug artifacts (`console.log`, `debugger`, `print()`), trivial naming fixes, missing type annotations with obvious types. The fix is unambiguous and localized to a few lines.
+- **Complex (TODO)**: Missing test files, architectural issues, security vulnerabilities requiring design changes, large refactors. The fix requires judgment or significant new code.
+
+Also review WARN findings — apply the same classification. Fix WARNs that are mechanical (e.g., removing a `console.log`), skip WARNs that require judgment.
+
+### Apply Fixes
+
+For each **fixable** finding:
+
+1. Read the target file using the path and line number from the report evidence
+2. Apply the fix using `Edit(file_path, old_string, new_string)` — use the smallest possible edit
+3. Record what was changed: `{file}:{line} — {description of fix}`
+
+For each **complex** finding:
+
+1. Do NOT attempt a fix
+2. Record as TODO: `TODO: {Dimension, file:line} — {what needs to be done}`
+
+### Re-Run Regression Check
+
+After all fixes are applied, re-run the regression checks from Step P5:
+
+```
+# Re-run project validation
+Bash("{test/build/lint commands from Step P5}")
+```
+
+If a regression check that previously passed now fails after a fix:
+
+1. **Revert the fix** that caused the regression using `Edit` to restore the original code
+2. Reclassify that finding as **Complex (TODO)** with note: `Reverted — caused regression in {check name}`
+3. Re-run the failing check to confirm the revert resolved it
+
+Record updated results.
+
+### Update Report
+
+Populate the **Auto-Fix Results** section in the report (the placeholder added in Step P7):
+
+```
+### Auto-Fix Results
+
+**Fixed ({N} of {total FAIL+WARN count}):**
+| # | Finding | File | Fix Applied |
+|---|---------|------|-------------|
+| 1 | {Dimension: description} | `{file}:{line}` | {what was changed} |
+
+**Unfixed — TODO ({M} remaining):**
+| # | Finding | Reason |
+|---|---------|--------|
+| 1 | {Dimension: description} | {why it couldn't be fixed inline} |
+
+**Re-Verification:**
+| # | Check | Before Fix | After Fix |
+|---|-------|------------|-----------|
+| 1 | {check name} | PASS/FAIL | PASS/FAIL |
+```
+
+If no FAILs or fixable WARNs were found in the report, populate the section with: `No issues to fix.`
+
+### Recalculate Verdict
+
+After fixes, update the verdict based on **remaining unfixed issues only**:
+
+- **CLEAN**: All FAILs were fixed (or none existed), no WARNs remain, regressions pass
+- **NEEDS WORK**: All FAILs were fixed but WARNs or TODOs remain
+- **FAILED**: FAILs could not be fixed, or re-verification still fails
+
+Update the Verdict section at the bottom of the report to reflect post-fix state. Append a note:
+`Auto-fix applied: {N} issues fixed, {M} remaining as TODO.`
