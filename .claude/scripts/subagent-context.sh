@@ -90,6 +90,32 @@ if [[ -d "$wisdom_dir" ]]; then
   fi
 fi
 
+# 3. Project context file titles
+context_dir="$PROJECT_DIR/.maestro/context"
+if [[ -d "$context_dir" ]]; then
+  pctx=""
+  for cfile in "$context_dir"/*.md; do
+    [[ -f "$cfile" ]] || continue
+    basename_c="$(basename "$cfile")"
+    c_name="${basename_c%.md}"
+    title=""
+    while IFS= read -r line; do
+      line="${line#"${line%%[! ]*}"}"
+      [[ -z "$line" ]] && continue
+      title="${line#\# }"
+      break
+    done < "$cfile"
+    if [[ -n "$pctx" ]]; then
+      pctx="$pctx; $c_name ($title)"
+    else
+      pctx="$c_name ($title)"
+    fi
+  done
+  if [[ -n "$pctx" ]]; then
+    context_parts+=("Project context: $pctx")
+  fi
+fi
+
 # If no context was gathered, exit silently
 if [[ ${#context_parts[@]} -eq 0 ]]; then
   exit 0
