@@ -440,10 +440,10 @@ After a task passes verification (files confirmed, tests pass, lint clean), **im
    git add <file1> <file2> ...
    ```
 
-2. Commit with a descriptive message referencing the task:
+2. Commit with a descriptive message using the **plan title** (first `#` heading from the plan file) as the scope:
    ```bash
    git commit -m "$(cat <<'EOF'
-   feat(<scope>): <short description of what the task accomplished>
+   feat(<plan-title-as-scope>): <short description of what the task accomplished>
 
    Plan: <plan-name>
    Task: <task subject>
@@ -454,7 +454,7 @@ After a task passes verification (files confirmed, tests pass, lint clean), **im
    ```
 
    - Use conventional commit prefixes: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
-   - `<scope>` should reflect the area of change (e.g., module name, feature name)
+   - `<plan-title-as-scope>` is derived from the plan's `#` heading, lowercased and shortened to a slug (e.g., plan titled "Code Styleguides — CLAUDE.md Injection" → scope `styleguides`, plan titled "Add User Auth Flow" → scope `auth`)
    - Keep the first line under 72 characters
 
 3. If there are no changes to commit (e.g., task was research-only), skip the commit silently.
