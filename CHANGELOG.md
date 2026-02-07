@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.5] - 2026-02-07
+
+
+### Added
+
+
+- Update frontmatter for planless work mode
+- Add planless detection logic to Step 1
+- Add Planless Work Flow section
+- Add executing handoff status and active plan detection in session-start
+- Add PreCompact hook for plan context injection and tests
+- Add plan summary and ASCII flowchart to Step 8
+- Add Write/Edit to allowed-tools and update description
+- Add Auto-Fix Results placeholders to report templates
+- Add auto-fix steps to plan-based and planless flows
+- Update intro and CLAUDE.md to mention auto-fix
+
+
+### Changed
+
+
+- Polish Planless Work Flow section
+
+
+### Fixed
+
+
+- Correct Step P7.5 heading levels to match planless convention
+
 ## [0.14.4] - 2026-02-07
 
 
