@@ -281,6 +281,21 @@ After fixes, update the verdict based on **remaining unfixed issues only**:
 Update the Verdict section at the bottom of the report to reflect post-fix state. Append a note:
 `Auto-fix applied: {N} issues fixed, {M} remaining as TODO.`
 
+#### Fix Escalation Loop
+
+If re-verification still shows FAIL results after auto-fix:
+
+1. **Cycle 1**: Re-read the failing files, apply a second round of targeted Edit fixes based on the error output
+2. **Cycle 2**: If still failing, use Bash to run the failing command, capture full error output, and apply fixes based on the complete error context
+3. **Cycle 3**: If still failing, stop and report remaining failures as TODOs
+
+**Exit conditions**:
+- All FAILs resolved → update verdict to COMPLETE/NEEDS WORK
+- Same failure 3 cycles → stop, mark as TODO
+- Max 3 cycles total (including the initial auto-fix attempt)
+
+Update the final verdict and append: `Auto-fix escalation: {N} additional issues fixed in {M} cycles, {R} remaining as TODO.`
+
 ## Step 10: Post-Review Archival
 
 If the verdict is **COMPLETE** and the plan was loaded from `.maestro/plans/` (not already in `.maestro/archive/`):
@@ -296,6 +311,19 @@ If the verdict is **COMPLETE** and the plan was loaded from `.maestro/plans/` (n
 3. Report: "Plan archived to `.maestro/archive/{name}.md`"
 
 If the plan is already in `.maestro/archive/`, or the verdict is not COMPLETE, do nothing.
+
+### Post-Review Knowledge Capture (Auto)
+
+**Trigger**: Review found >= 2 FAIL findings (skip for clean reviews).
+
+Auto-extract review insights as learned skills:
+1. Collect all FAIL findings from the review report
+2. Group by pattern (e.g., "missing exports", "untested edge case", "hardcoded secret")
+3. For each pattern that appeared 2+ times, apply learner quality gates (non-Googleable, context-specific, actionable, hard-won)
+4. Passing patterns → save to `.claude/skills/learned/{slug}.md` with triggers matching the pattern keywords
+5. Single-occurrence FAILs → skip (not yet a pattern)
+
+This ensures recurring review failures get codified as skills that future agents will see, breaking the cycle of repeated mistakes.
 
 ---
 
@@ -358,23 +386,25 @@ Record findings as a list of `{file, line, dimension, severity, description}` tu
 - **WARN** — Should fix: poor naming, unnecessary complexity, mild duplication
 - **INFO** — Consider: style suggestions, minor improvements
 
-### Step P3: Security Review
+### Step P3: Security Review (Auto-Delegated)
 
-For each changed file, check the diff for security concerns:
+Spawn the `security-reviewer` agent for deep security analysis on the diff:
 
-1. **Secrets/Credentials** — Hardcoded API keys, tokens, passwords, connection strings. Grep for common patterns:
-   ```
-   Grep("(api[_-]?key|secret|password|token|credential)\\s*[:=]", "{file_path}")
-   ```
-2. **Injection risks** — SQL concatenation, shell command construction, unescaped HTML output, eval usage
-3. **Input validation** — User input used without validation or sanitization, especially at system boundaries
-4. **Dependency concerns** — New dependencies added (check package.json, requirements.txt, go.mod diffs). Flag unfamiliar or unnecessary additions
-5. **Sensitive data exposure** — Logging sensitive information, error messages leaking internals
+```
+Task(
+  description: "Security review for code review",
+  subagent_type: "security-reviewer",
+  model: "opus",
+  prompt: "Analyze the following diff for security vulnerabilities:\n\n{diff from Step P1}\n\nCheck: auth/authz, input validation, secrets exposure, injection risks (SQL, XSS, command), dependency security, sensitive data logging, error message leaking.\n\nRun ecosystem audit if applicable (bun audit / pip-audit / govulncheck).\n\nReport each finding with: severity (Critical/High/Medium/Low), file:line, description, recommendation."
+)
+```
 
-Record security findings with severity:
-- **FAIL** — Confirmed vulnerability or secret exposure
-- **WARN** — Potential risk that needs manual verification
-- **INFO** — Security-adjacent observation (e.g., new dependency added)
+Map security-reviewer findings to review dimensions:
+- **Critical/High** → FAIL severity in review report
+- **Medium** → WARN severity
+- **Low** → INFO severity
+
+All findings go into the review's "Findings by File" table with Dimension = "Security".
 
 ### Step P4: Test Coverage Review
 
@@ -585,3 +615,31 @@ After fixes, update the verdict based on **remaining unfixed issues only**:
 
 Update the Verdict section at the bottom of the report to reflect post-fix state. Append a note:
 `Auto-fix applied: {N} issues fixed, {M} remaining as TODO.`
+
+#### Fix Escalation Loop
+
+If re-verification still shows FAIL results after auto-fix:
+
+1. **Cycle 1**: Re-read the failing files, apply a second round of targeted Edit fixes based on the error output
+2. **Cycle 2**: If still failing, use Bash to run the failing command, capture full error output, and apply fixes based on the complete error context
+3. **Cycle 3**: If still failing, stop and report remaining failures as TODOs
+
+**Exit conditions**:
+- All FAILs resolved → update verdict to CLEAN/NEEDS WORK
+- Same failure 3 cycles → stop, mark as TODO
+- Max 3 cycles total (including the initial auto-fix attempt)
+
+Update the final verdict and append: `Auto-fix escalation: {N} additional issues fixed in {M} cycles, {R} remaining as TODO.`
+
+### Post-Review Knowledge Capture (Auto)
+
+**Trigger**: Review found >= 2 FAIL findings (skip for clean reviews).
+
+Auto-extract review insights as learned skills:
+1. Collect all FAIL findings from the review report
+2. Group by pattern (e.g., "missing exports", "untested edge case", "hardcoded secret")
+3. For each pattern that appeared 2+ times, apply learner quality gates (non-Googleable, context-specific, actionable, hard-won)
+4. Passing patterns → save to `.claude/skills/learned/{slug}.md` with triggers matching the pattern keywords
+5. Single-occurrence FAILs → skip (not yet a pattern)
+
+This ensures recurring review failures get codified as skills that future agents will see, breaking the cycle of repeated mistakes.

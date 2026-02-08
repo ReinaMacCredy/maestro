@@ -297,6 +297,16 @@ TeamCreate(
 
 ### Step 3: Create Tasks
 
+#### Priority Context Injection
+
+Before creating tasks, read `.maestro/notepad.md`. If `## Priority Context` has content, append it to **every** task description as:
+```
+**Priority Context**: {items from Priority Context section}
+```
+Workers must treat these as hard constraints.
+
+**If no notepad or empty Priority Context section**: Skip silently.
+
 Convert every checkbox (`- [ ]`) from the plan into a shared task:
 
 ```
@@ -398,7 +408,7 @@ Task(
 | `build-fixer` | build-fixer | Build/compile errors, lint failures, type check errors |
 | `explore` | Explore | Codebase research, finding patterns |
 | `oracle` | oracle | Strategic decisions (uses opus -- spawn sparingly) |
-| `critic` | critic | Post-implementation review (opus -- see Step 6.5) |
+| `critic` | critic | Post-implementation review (opus -- see Step 6.7) |
 
 **Model selection**: Before spawning, analyze each task's keywords to choose the model tier. Tasks with architecture/refactor/redesign keywords should route to oracle (opus). Single-file simple tasks route to spark (haiku in eco mode). Multi-file TDD tasks use kraken (sonnet). Debug/investigate tasks use kraken with extended context. See the orchestrator's Model Selection Guide in `.claude/agents/orchestrator.md` for the full routing table.
 
@@ -452,6 +462,24 @@ SendMessage(
   summary: "Test failure feedback"
 )
 ```
+
+#### Verification Fix Loop
+
+When verification fails for a task, run an inlined fix-and-verify cycle (max 3 iterations):
+
+**Iteration 1**: Message the original worker with the failure details. Wait for their fix. Re-verify.
+**Iteration 2**: If still failing, spawn a `build-fixer` targeted at the specific error. Re-verify.
+**Iteration 3**: If still failing, spawn `oracle` to diagnose root cause. Apply oracle's recommendation via `build-fixer` or `kraken`. Re-verify.
+
+**Exit conditions** (stop the loop):
+- Verification passes → mark task complete, continue
+- Same failure 3 iterations in a row → mark task as blocked, log the failure, continue with other tasks
+- No actionable fix identified by oracle → mark task as blocked, notify user
+
+**Do NOT**:
+- Loop more than 3 times on the same failure
+- Retry the exact same fix that already failed
+- Skip to the next task without logging the failure
 
 #### Auto-Commit on Verified Task Completion
 
@@ -550,9 +578,31 @@ Before declaring all tasks complete and proceeding to Step 7, the orchestrator M
 - [ ] No build/lint errors
 - [ ] No test failures
 
-Only after all checks pass can the orchestrator proceed to Step 6.5 (optional) or Step 7 (Extract Wisdom).
+Only after all checks pass can the orchestrator proceed to Step 6.6 (security review, if applicable), Step 6.7 (critic review, if applicable), or Step 7 (Extract Wisdom).
 
-### Step 6.5: Critic Review (Optional)
+### Step 6.6: Security Review (Auto)
+
+**Trigger**: The plan has a `## Security` section (added by Prometheus during /design).
+**Skip**: Plans without a `## Security` section skip this step entirely.
+
+When triggered:
+1. Spawn `security-reviewer` on the team:
+   ```
+   Task(
+     description: "Security review of implementation",
+     name: "sec-reviewer",
+     team_name: "work-{plan-slug}",
+     subagent_type: "security-reviewer",
+     model: "opus",
+     prompt: "Review the git diff for this execution. Check for:\n{concerns from plan's ## Security section}\n\nReport findings with severity (Critical/High/Medium/Low) and file:line evidence.\n\nAlso run ecosystem audit if applicable:\n- JS/TS: `bun audit` or `npm audit`\n- Python: `pip-audit` (if available)\n- Go: `govulncheck` (if available)\n\nSend your report via SendMessage."
+   )
+   ```
+2. Wait for security-reviewer's report
+3. **Critical/High findings**: Message the responsible worker(s) to fix. Re-run security review after fixes.
+4. **Medium/Low findings**: Log in the wisdom file as security notes. Do not block completion.
+5. Proceed to Step 6.7 (Critic Review) or Step 7 (Extract Wisdom)
+
+### Step 6.7: Critic Review (Optional)
 
 Spawn a critic for final review when the plan has >5 tasks or touches >5 files:
 
@@ -609,6 +659,32 @@ After all tasks complete, record learnings to `.maestro/wisdom/{plan-name}.md`:
 
 Add any discovered patterns to the `## Patterns Captured` section.
 
+#### Auto-Extract Learned Skills
+
+**Trigger**: Plan had >= 3 tasks (skip for trivial plans).
+
+After writing the wisdom file, automatically extract reusable skill files:
+
+1. Scan the git diff for this execution
+2. Scan `<remember>` tags collected during execution (from worker output)
+3. For each candidate learning, apply quality gates:
+   - **Non-Googleable**: Would a developer NOT find this in official docs?
+   - **Context-specific**: Is it specific to this project/stack/pattern?
+   - **Actionable**: Can a future agent act on it immediately?
+   - **Hard-won**: Did it require debugging, experimentation, or failure to discover?
+4. Learnings that pass all 4 gates → save to `.claude/skills/learned/{slug}.md` with:
+   ```yaml
+   ---
+   name: {slug}
+   description: {one-line description}
+   triggers: [{keyword1}, {keyword2}]
+   source: {plan-name}
+   date: {ISO date}
+   ---
+   ```
+   Followed by the principle and when to apply it.
+5. Learnings that fail any gate → discard silently (they're already in the wisdom file)
+
 **If executing in a worktree** (handoff has `"worktree": true`): Copy the wisdom file back to the main tree so it persists after worktree removal:
 
 ```bash
@@ -618,6 +694,17 @@ cp "<worktree-path>/.maestro/wisdom/{plan-name}.md" ".maestro/wisdom/{plan-name}
 Where `<worktree-path>` is the `worktree_path` value from the handoff JSON.
 
 ### Step 8: Cleanup Team
+
+#### Auto-Capture Execution Summary
+
+Before shutting down the team, auto-append an execution summary to `.maestro/notepad.md` under `## Working Memory`:
+```
+- [{ISO date}] [work:{plan-slug}] Completed: {N}/{total} tasks. Files: {count modified}. Learned: {count skills extracted}. Security: {pass/fail/skipped}.
+```
+
+Create `.maestro/notepad.md` if it doesn't exist. Append under existing `## Working Memory` if present.
+
+#### Shutdown
 
 Shutdown all teammates and cleanup:
 
@@ -759,6 +846,13 @@ Give teammates rich context — one-line prompts lead to bad results:
 
 ## MUST NOT DO
 - [Explicit exclusions]
+
+## PERSISTENT CONTEXT
+- If you discover a non-obvious constraint, gotcha, or important decision during implementation, append it to `.maestro/notepad.md` under `## Working Memory` with format: `- [{ISO date}] {discovery}`.
+- If the task description includes **Priority Context** items, treat them as hard constraints.
+
+## KNOWLEDGE CAPTURE
+- If you solve a non-trivial debugging problem or discover a pattern that would save future effort, emit a `<remember category="learning">description of the principle</remember>` tag in your output. The orchestrator will persist these.
 ```
 
 ### Injecting Skill Guidance

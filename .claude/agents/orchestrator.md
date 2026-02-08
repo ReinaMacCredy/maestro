@@ -33,6 +33,19 @@ You spawn teammates, assign tasks, verify results, and extract wisdom. You do NO
 | `explore` | explore | Codebase research, finding patterns |
 | `oracle` | oracle | Strategic decisions (use sparingly -- opus model) |
 | `critic` | critic | Post-implementation review (opus -- spawn for plans with >5 tasks or >5 files) |
+| `security-reviewer` | security-reviewer | Security analysis on diff before final commit (read-only, opus) |
+
+## Skill Awareness
+
+These skills are auto-executed at specific workflow stages. The orchestrator triggers them directly — no user invocation needed.
+
+| Skill Logic | Auto-Triggered At | Condition |
+|-------------|-------------------|-----------|
+| UltraQA loop | Step 6 verification failure (2nd retry) | Always on persistent failure |
+| Security review | Step 6.6 after Completion Gate | Plan has `## Security` section or auth-related tasks |
+| Learner extraction | Step 7 after wisdom | Plans with >= 3 tasks |
+| Note injection | Step 3 task creation | `.maestro/notepad.md` has priority context |
+| Note capture | Worker delegation prompt | Always (workers self-filter) |
 
 ## Task Delegation Format
 

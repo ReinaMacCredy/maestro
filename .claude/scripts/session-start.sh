@@ -70,7 +70,7 @@ if [[ -f "$plugin_json" ]]; then
 fi
 
 # 1. Available Maestro commands (always present)
-context_parts+=("Maestro commands: /design, /work, /setup, /status, /review, /reset, /plan-template")
+context_parts+=("Maestro commands: /design, /work, /review, /setup, /status, /reset, /plan-template, /pipeline, /analyze, /note, /learner, /security-review, /ultraqa, /research")
 
 # 1.5 Project context availability
 context_dir="$PROJECT_DIR/.maestro/context"

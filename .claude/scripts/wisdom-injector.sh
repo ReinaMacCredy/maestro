@@ -21,7 +21,8 @@ if [[ "$file_path" != *".maestro/plans/"* ]]; then
 fi
 
 # Find wisdom files
-wisdom_dir="$CLAUDE_PROJECT_DIR"/.maestro/wisdom
+PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
+wisdom_dir="$PROJECT_DIR/.maestro/wisdom"
 if [[ ! -d "$wisdom_dir" ]]; then
   exit 0
 fi
