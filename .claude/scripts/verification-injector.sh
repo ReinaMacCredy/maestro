@@ -3,8 +3,8 @@
 # Reminds to verify task results after delegation
 # Hook: PostToolUse(Task)
 
-# Read stdin (hook input)
-input=$(cat)
+# Read and discard stdin (hook input not needed for static injection)
+cat > /dev/null
 
 # Inject reminder message
 cat << 'EOF'

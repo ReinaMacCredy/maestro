@@ -13,7 +13,6 @@ fi
 
 # Find the active plan
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
-plans_dir="$PROJECT_DIR/.maestro/plans"
 wisdom_dir="$PROJECT_DIR/.maestro/wisdom"
 mkdir -p "$wisdom_dir"
 

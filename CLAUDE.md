@@ -32,14 +32,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `/ultraqa [--tests|--build|--lint|--typecheck|--custom '<cmd>']` — Iterative fix-and-verify loop (max 5 cycles, never commits)
 - `/research <topic> [--auto|--stages <N>|--resume]` — Multi-stage research with parallel agents and synthesis
 
-### Validation
+Agent triggers (inline): `@tdd` (kraken), `@spark`, `@oracle`, `@explore`
+
+### Validation & Development
 
 ```bash
 cat .claude-plugin/plugin.json | jq .     # Validate plugin manifest
 ./scripts/validate-links.sh               # Validate documentation links
 ./scripts/validate-anchors.sh             # Validate markdown anchors
-./scripts/test-hooks.sh                   # Test hook scripts
+./scripts/test-hooks.sh                   # Test hook scripts (17 smoke tests, bash-only)
 ```
+
+Install: `/plugin install https://github.com/ReinaMacCredy/maestro` (Claude Code) or `amp skill add https://github.com/ReinaMacCredy/maestro --global` (Amp)
 
 ## Architecture
 
