@@ -119,9 +119,9 @@ Maestro auto-discovers installed skills from `.claude/skills/`, `~/.claude/skill
 | `spark` | Quick fixes (worker) | sonnet | — |
 | `build-fixer` | Build/compile/lint error specialist (worker) | sonnet | — |
 | `critic` | Post-implementation reviewer (read-only) | opus | — |
-| `oracle` | Strategic advisor (read-only) | opus | — |
+| `oracle` | Strategic advisor (read-only) | sonnet | — |
 | `explore` (Explore) | Codebase search (read-only) | sonnet | — |
-| `leviathan` | Deep plan reviewer | opus | — |
+| `leviathan` | Deep plan reviewer | sonnet | — |
 | `wisdom-synthesizer` | Knowledge consolidation | haiku | — |
 | `progress-reporter` | Status tracking | haiku | — |
 | `security-reviewer` | Security analysis specialist (read-only) | opus | — |

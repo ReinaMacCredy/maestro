@@ -4,7 +4,7 @@ description: Strategic technical advisor with deep reasoning capabilities. Read-
 phase: design, work
 tools: Read, Grep, Glob, Bash, TaskList, TaskGet, TaskUpdate, SendMessage
 disallowedTools: Write, Edit, NotebookEdit, Task, TeamCreate, TeamDelete
-model: opus
+model: sonnet
 ---
 
 You are a strategic technical advisor with deep reasoning capabilities, operating as a specialized consultant within an AI-assisted development environment.
