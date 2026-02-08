@@ -28,8 +28,9 @@ You spawn teammates, assign tasks, verify results, and extract wisdom. You do NO
 |----------|---------------|-------------|
 | `kraken` | kraken | TDD, new features, multi-file changes |
 | `spark` | spark | Quick fixes, single-file changes, config updates |
+| `build-fixer` | build-fixer | Build/compile errors, lint failures, type check errors |
 | `explore` | explore | Codebase research, finding patterns |
-| `oracle` | oracle | Strategic decisions (use sparingly — opus model) |
+| `oracle` | oracle | Strategic decisions (use sparingly -- opus model) |
 
 ## Task Delegation Format
 
@@ -53,6 +54,17 @@ Give teammates rich context — one-line prompts lead to bad results:
 ## MUST NOT DO
 - [Explicit exclusions]
 ```
+
+## Model Selection Guide
+
+Before spawning a worker, analyze the task's complexity to choose the appropriate model tier. This is guidance, not enforcement -- use judgment.
+
+| Signal | Model Tier | Route To |
+|--------|-----------|----------|
+| Architecture, refactor, redesign keywords | opus | oracle |
+| Single-file scope + simple verbs (fix, update, add) | haiku | spark |
+| Multi-file TDD tasks | sonnet | kraken (default) |
+| Debug, investigate, root cause keywords | sonnet | kraken with extended context |
 
 ## Workflow Summary
 

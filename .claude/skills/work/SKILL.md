@@ -21,6 +21,7 @@ You are now acting as **The Orchestrator**. You spawn teammates, assign tasks, v
 
 - `<plan-name>`: Load a specific plan by name. Matches against filenames in `.maestro/plans/` (with or without `.md` extension). Skips the selection prompt.
 - `--resume`: Resume a previously interrupted execution. Already-completed tasks (`- [x]`) are skipped.
+- `--eco`: Ecomode -- use cost-efficient model routing. Prefer haiku for spark tasks, sonnet for kraken tasks. Oracle and leviathan are not spawned.
 - Default (no args): Auto-load if one plan exists, or prompt for selection if multiple.
 
 ## MANDATORY: Agent Teams Workflow
@@ -392,10 +393,24 @@ Task(
 |----------|---------------|-------------|
 | `kraken` | kraken | TDD, new features, multi-file changes |
 | `spark` | spark | Quick fixes, single-file changes, config updates |
+| `build-fixer` | build-fixer | Build/compile errors, lint failures, type check errors |
 | `explore` | explore | Codebase research, finding patterns |
-| `oracle` | oracle | Strategic decisions (uses opus — spawn sparingly) |
+| `oracle` | oracle | Strategic decisions (uses opus -- spawn sparingly) |
+
+**Model selection**: Before spawning, analyze each task's keywords to choose the model tier. Tasks with architecture/refactor/redesign keywords should route to oracle (opus). Single-file simple tasks route to spark (haiku in eco mode). Multi-file TDD tasks use kraken (sonnet). Debug/investigate tasks use kraken with extended context. See the orchestrator's Model Selection Guide in `.claude/agents/orchestrator.md` for the full routing table.
 
 **Sizing**: Spawn 2-4 workers for most plans. Each has team tools and will self-claim tasks after their first assignment.
+
+#### Ecomode (`--eco`)
+
+When the `--eco` flag is present, use cost-efficient model routing:
+
+- **spark** tasks: spawn with `model: haiku` (simple fixes, config changes)
+- **kraken** tasks: spawn with `model: sonnet` (TDD, multi-file changes)
+- **oracle/leviathan**: do NOT spawn in eco mode (opus model too expensive)
+- **explore**: spawn with `model: haiku` (read-only research)
+
+Log at the start of Step 4: `"Ecomode: using cost-efficient model routing (haiku for simple, sonnet for complex)"`
 
 ### Step 5: Assign Initial Tasks, Then Let Workers Self-Claim
 
@@ -412,6 +427,8 @@ After the first round, workers **self-claim** from `TaskList()` when they finish
 ### Step 6: Monitor & Verify
 
 **TEAMMATES CAN MAKE MISTAKES. ALWAYS VERIFY.**
+
+Follow the standard verification protocol in `.claude/lib/verification-checklist.md`. Run each check (BUILD, TEST, LINT, FUNCTIONALITY, TODO, ERROR_FREE) independently. Evidence older than 5 minutes is stale -- re-run commands for fresh output.
 
 Messages from teammates arrive automatically. After each teammate reports completion:
 

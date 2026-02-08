@@ -12,7 +12,7 @@ agent_type="$(printf '%s' "$input" | jq -r '.agent_type // empty' 2>/dev/null)" 
 
 # Only inject context for known Maestro worker agents
 case "$agent_type" in
-  kraken|spark|explore|oracle|leviathan|wisdom-synthesizer|progress-reporter)
+  kraken|spark|build-fixer|explore|oracle|leviathan|wisdom-synthesizer|progress-reporter)
     ;;
   *)
     # Not a Maestro agent — exit silently
