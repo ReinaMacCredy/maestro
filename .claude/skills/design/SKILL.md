@@ -118,9 +118,54 @@ Build a skill summary for Prometheus:
 
 **If no skills found**: Omit the `## Available Skills` section entirely (graceful degradation).
 
+### Step 3.6: Spawn Explore and Oracle for Upfront Research
+
+Spawn `explore` and `oracle` to gather codebase context **before** Prometheus starts. Their findings are passed into the Prometheus prompt for better planning quality.
+
+**Explore** (always spawn — gathers codebase context):
+
+```
+Task(
+  description: "Codebase research for {topic}",
+  name: "explore",
+  team_name: "design-{topic}",
+  subagent_type: "explore",
+  run_in_background: true,
+  prompt: "Research the codebase for the following design request:\n\n{original $ARGUMENTS}\n\nFind and report:\n1. Existing patterns, conventions, and architecture relevant to this request\n2. Files and modules that will likely need changes\n3. Related test files and testing patterns\n4. Any existing implementations of similar functionality\n5. Dependencies and imports that are relevant\n\nSend your complete findings via SendMessage(type: 'message', recipient: 'design-orchestrator', summary: 'Codebase research complete', content: '...'). Be thorough but concise — focus on actionable context that helps plan the implementation."
+)
+```
+
+**Oracle** (full/consensus mode only — strategic pre-analysis):
+
+```
+Task(
+  description: "Strategic pre-analysis for {topic}",
+  name: "oracle",
+  team_name: "design-{topic}",
+  subagent_type: "oracle",
+  model: "opus",
+  run_in_background: true,
+  prompt: "Analyze the following design request from a strategic perspective:\n\n{original $ARGUMENTS}\n\nProvide:\n1. Key architectural considerations and tradeoffs\n2. Potential risks and pitfalls\n3. Recommended approach with justification\n4. Suggested task breakdown strategy\n5. Any edge cases or constraints to consider\n\nSend your analysis via SendMessage(type: 'message', recipient: 'design-orchestrator', summary: 'Strategic analysis complete', content: '...'). Be strategic and concise."
+)
+```
+
+### Step 3.7: Collect Research Results
+
+Wait for `explore` (and `oracle` in full/consensus mode) to send their findings via SendMessage. These messages arrive automatically.
+
+Once received, compile the research into a context block for Prometheus:
+
+```
+## Codebase Research (from explore)
+{explore's findings}
+
+## Strategic Analysis (from oracle)
+{oracle's analysis — omit this section in quick mode}
+```
+
 ### Step 4: Spawn Prometheus
 
-Spawn Prometheus as a teammate **in plan mode**. Prometheus handles all research, interviewing, and plan drafting.
+Spawn Prometheus as a teammate **in plan mode**. Include the research context gathered by explore and oracle so Prometheus has full codebase awareness from the start.
 
 **Full mode:**
 
@@ -131,7 +176,7 @@ Task(
   team_name: "design-{topic}",
   subagent_type: "prometheus",
   mode: "plan",
-  prompt: "## Design Request\n{original $ARGUMENTS}\n\n## Mode\nFull — thorough research, spawn explore + oracle, ask 3-6 questions.\n\n## Topic Slug\n{topic}\n\n## Plan Format\nWrite your plan with these sections:\n\n# {Plan Name}\n\n**Goal**: [One sentence — what are we building and why]\n**Architecture**: [2-3 sentences — how the pieces fit together]\n**Tech Stack**: [Relevant technologies, frameworks, tools]\n\n## Objective\n[One sentence summary]\n\n## Scope\n**In**: [What we're doing]\n**Out**: [What we're explicitly not doing]\n\n## Tasks\n\n- [ ] Task 1: [Short title]\n  - **Agent**: kraken | spark\n  - **Acceptance criteria**: [Objectively verifiable outcomes]\n  - **Dependencies**: none | Task N\n  - **Files**: [Exact paths to create/modify/test]\n  - **Steps**:\n    1. Write failing test (if applicable)\n    2. Run test — expect failure\n    3. Implement the change\n    4. Run tests — expect pass\n    5. Commit\n\n## Verification\n- [ ] `exact command` — expected output or behavior\n- [ ] `another command` — what it verifies\n\n## Notes\n[Technical decisions, research findings, constraints]\n\n## Prior Wisdom\n{wisdom summary or 'None'}\n\n{skill summary if skills found, otherwise omit}\n\n## Key Context\n- You have WebSearch, WebFetch, and Context7 MCP tools for external research.\n- IMPORTANT: When the design request mentions external libraries/frameworks/APIs, run your Library Detection & Documentation workflow BEFORE spawning researchers or interviewing the user.\n- Context7 tools: `resolve-library-id(query, libraryName)` resolves a library name to a Context7 ID. `query-docs(libraryId, query)` fetches version-specific docs for that library. If Context7 MCP is not configured, fall back to WebSearch/WebFetch.\n- Use web research conditionally -- not every design session needs it. Skip for pure internal codebase changes.\n\nWhen your plan is ready, call ExitPlanMode."
+  prompt: "## Design Request\n{original $ARGUMENTS}\n\n## Mode\nFull — thorough research, ask 3-6 questions.\n\n## Topic Slug\n{topic}\n\n## Upfront Research\n{compiled research from Step 3.7 — codebase findings from explore + strategic analysis from oracle}\n\n## Plan Format\nWrite your plan with these sections:\n\n# {Plan Name}\n\n**Goal**: [One sentence — what are we building and why]\n**Architecture**: [2-3 sentences — how the pieces fit together]\n**Tech Stack**: [Relevant technologies, frameworks, tools]\n\n## Objective\n[One sentence summary]\n\n## Scope\n**In**: [What we're doing]\n**Out**: [What we're explicitly not doing]\n\n## Tasks\n\n- [ ] Task 1: [Short title]\n  - **Agent**: kraken | spark\n  - **Acceptance criteria**: [Objectively verifiable outcomes]\n  - **Dependencies**: none | Task N\n  - **Files**: [Exact paths to create/modify/test]\n  - **Steps**:\n    1. Write failing test (if applicable)\n    2. Run test — expect failure\n    3. Implement the change\n    4. Run tests — expect pass\n    5. Commit\n\n## Dependency Chain\nList each task with its blocking dependencies:\n> T1: {title} [`agent`]\n> T2: {title} [`agent`]\n> T3: {title} [`agent`] — blocked by T1, T2\nTasks with no dependencies have no suffix. Tasks with dependencies show `— blocked by T{N}, T{M}`.\n\n## Execution Phases\nGroup tasks into sequential phases based on dependencies:\n- **Phase 1**: Tasks with no dependencies (run in parallel)\n- **Phase 2**: Tasks whose dependencies are all in Phase 1\n- **Phase N**: Tasks whose dependencies are satisfied by prior phases\n\nFormat each phase:\n> **Phase 1** — T1: {short title} [`agent`], T2: {short title} [`agent`]\n> **Phase 2** — T3: {short title} [`agent`]\nIf all tasks are independent: single Phase 1 with *(all parallel)* note.\n\n## Verification\n- [ ] `exact command` — expected output or behavior\n- [ ] `another command` — what it verifies\n\n## Notes\n[Technical decisions, research findings, constraints]\n\n## Prior Wisdom\n{wisdom summary or 'None'}\n\n{skill summary if skills found, otherwise omit}\n\n## Key Context\n- Upfront research from explore and oracle is included above. For follow-up research, use SendMessage(type: 'message', recipient: 'explore', ...) or SendMessage(type: 'message', recipient: 'oracle', ...). Do NOT spawn new research agents.\n- You have WebSearch, WebFetch, and Context7 MCP tools for external research.\n- IMPORTANT: When the design request mentions external libraries/frameworks/APIs, run your Library Detection & Documentation workflow BEFORE interviewing the user.\n- Context7 tools: `resolve-library-id(query, libraryName)` resolves a library name to a Context7 ID. `query-docs(libraryId, query)` fetches version-specific docs for that library. If Context7 MCP is not configured, fall back to WebSearch/WebFetch.\n- Use web research conditionally -- not every design session needs it. Skip for pure internal codebase changes.\n\nWhen your plan is ready, call ExitPlanMode."
 )
 ```
 
@@ -144,7 +189,7 @@ Task(
   team_name: "design-{topic}",
   subagent_type: "prometheus",
   mode: "plan",
-  prompt: "## Design Request\n{original $ARGUMENTS}\n\n## Mode\nQuick — spawn 1 explore agent, ask 1-2 targeted questions, keep it focused.\n\n## Topic Slug\n{topic}\n\n## Plan Format\nWrite your plan with these sections:\n\n# {Plan Name}\n\n**Goal**: [One sentence — what are we building and why]\n**Architecture**: [2-3 sentences — how the pieces fit together]\n**Tech Stack**: [Relevant technologies, frameworks, tools]\n\n## Objective\n[One sentence summary]\n\n## Scope\n**In**: [What we're doing]\n**Out**: [What we're explicitly not doing]\n\n## Tasks\n\n- [ ] Task 1: [Short title]\n  - **Agent**: kraken | spark\n  - **Acceptance criteria**: [Objectively verifiable outcomes]\n  - **Dependencies**: none | Task N\n  - **Files**: [Exact paths to create/modify/test]\n  - **Steps**:\n    1. Write failing test (if applicable)\n    2. Run test — expect failure\n    3. Implement the change\n    4. Run tests — expect pass\n    5. Commit\n\n## Verification\n- [ ] `exact command` — expected output or behavior\n- [ ] `another command` — what it verifies\n\n## Notes\n[Technical decisions, research findings, constraints]\n\n## Prior Wisdom\n{wisdom summary or 'None'}\n\n{skill summary if skills found, otherwise omit}\n\n## Key Context\n- You have WebSearch, WebFetch, and Context7 MCP tools for external research.\n- IMPORTANT: When the design request mentions external libraries/frameworks/APIs, run your Library Detection & Documentation workflow BEFORE spawning researchers or interviewing the user.\n- Context7 tools: `resolve-library-id(query, libraryName)` resolves a library name to a Context7 ID. `query-docs(libraryId, query)` fetches version-specific docs for that library. If Context7 MCP is not configured, fall back to WebSearch/WebFetch.\n- Use web research conditionally -- not every design session needs it. Skip for pure internal codebase changes.\n\nWhen your plan is ready, call ExitPlanMode."
+  prompt: "## Design Request\n{original $ARGUMENTS}\n\n## Mode\nQuick — focused research already done, ask 1-2 targeted questions, keep it focused.\n\n## Topic Slug\n{topic}\n\n## Upfront Research\n{compiled research from Step 3.7 — codebase findings from explore}\n\n## Plan Format\nWrite your plan with these sections:\n\n# {Plan Name}\n\n**Goal**: [One sentence — what are we building and why]\n**Architecture**: [2-3 sentences — how the pieces fit together]\n**Tech Stack**: [Relevant technologies, frameworks, tools]\n\n## Objective\n[One sentence summary]\n\n## Scope\n**In**: [What we're doing]\n**Out**: [What we're explicitly not doing]\n\n## Tasks\n\n- [ ] Task 1: [Short title]\n  - **Agent**: kraken | spark\n  - **Acceptance criteria**: [Objectively verifiable outcomes]\n  - **Dependencies**: none | Task N\n  - **Files**: [Exact paths to create/modify/test]\n  - **Steps**:\n    1. Write failing test (if applicable)\n    2. Run test — expect failure\n    3. Implement the change\n    4. Run tests — expect pass\n    5. Commit\n\n## Dependency Chain\nList each task with its blocking dependencies:\n> T1: {title} [`agent`]\n> T2: {title} [`agent`]\n> T3: {title} [`agent`] — blocked by T1, T2\nTasks with no dependencies have no suffix. Tasks with dependencies show `— blocked by T{N}, T{M}`.\n\n## Execution Phases\nGroup tasks into sequential phases based on dependencies:\n- **Phase 1**: Tasks with no dependencies (run in parallel)\n- **Phase 2**: Tasks whose dependencies are all in Phase 1\n- **Phase N**: Tasks whose dependencies are satisfied by prior phases\n\nFormat each phase:\n> **Phase 1** — T1: {short title} [`agent`], T2: {short title} [`agent`]\n> **Phase 2** — T3: {short title} [`agent`]\nIf all tasks are independent: single Phase 1 with *(all parallel)* note.\n\n## Verification\n- [ ] `exact command` — expected output or behavior\n- [ ] `another command` — what it verifies\n\n## Notes\n[Technical decisions, research findings, constraints]\n\n## Prior Wisdom\n{wisdom summary or 'None'}\n\n{skill summary if skills found, otherwise omit}\n\n## Key Context\n- Upfront research from explore is included above. For follow-up research, use SendMessage(type: 'message', recipient: 'explore', ...). Do NOT spawn new research agents.\n- Oracle is NOT available in quick mode.\n- You have WebSearch, WebFetch, and Context7 MCP tools for external research.\n- IMPORTANT: When the design request mentions external libraries/frameworks/APIs, run your Library Detection & Documentation workflow BEFORE interviewing the user.\n- Context7 tools: `resolve-library-id(query, libraryName)` resolves a library name to a Context7 ID. `query-docs(libraryId, query)` fetches version-specific docs for that library. If Context7 MCP is not configured, fall back to WebSearch/WebFetch.\n- Use web research conditionally -- not every design session needs it. Skip for pure internal codebase changes.\n\nWhen your plan is ready, call ExitPlanMode."
 )
 ```
 
@@ -252,6 +297,36 @@ When the plan is ready (leviathan PASS, or quick mode, or max loops reached):
    **Scope**: {N} items in | {M} items out
 
    **Tasks**: {total} total — {breakdown by agent, e.g., "2 spark, 1 kraken"}
+
+   **Dependency Chain**:
+
+   Parse the dependency graph from each task's `**Dependencies**:` field and display as a blockedBy list:
+
+   For each task, show what blocks it:
+   > T1: {short title} `[agent]`
+   > T2: {short title} `[agent]`
+   > T3: {short title} `[agent]` — blocked by T1, T2
+   > T4: {short title} `[agent]` — blocked by T1, T2
+   > T5: {short title} `[agent]` — blocked by T3, T4
+
+   Tasks with no dependencies have no suffix. Tasks with dependencies show `— blocked by T{N}, T{M}`.
+
+   **Execution Phases**:
+
+   Parse the dependency graph and group tasks into sequential phases:
+   - **Phase 1**: Tasks with no dependencies (can all run in parallel)
+   - **Phase 2**: Tasks whose dependencies are all in Phase 1
+   - **Phase N**: Tasks whose dependencies are all satisfied by prior phases
+   - Tasks in the same phase run in parallel
+
+   Display each phase on its own line with task number, short title, and agent:
+
+   > **Phase 1** — T1: {short title} `[spark]`, T2: {short title} `[kraken]`
+   > **Phase 2** — T3: {short title} `[spark]`
+   > **Phase 3** — T4: {short title} `[kraken]`, T5: {short title} `[spark]`
+
+   If all tasks are independent (single phase), show:
+   > **Phase 1** — T1: {title} `[agent]`, T2: {title} `[agent]`, ... *(all parallel)*
 
    **Key Decisions**:
    - {decision 1}
@@ -371,10 +446,12 @@ Update the handoff file status to "complete":
 
 ### Step 11: Cleanup Team
 
-Shutdown Prometheus and leviathan, then clean up:
+Shutdown all teammates, then clean up:
 
 ```
 SendMessage(type: "shutdown_request", recipient: "prometheus")
+SendMessage(type: "shutdown_request", recipient: "explore")
+SendMessage(type: "shutdown_request", recipient: "oracle")
 SendMessage(type: "shutdown_request", recipient: "leviathan")
 SendMessage(type: "shutdown_request", recipient: "critic-reviewer")
 TeamDelete()
@@ -382,7 +459,7 @@ TeamDelete()
 
 **IMPORTANT**: Do NOT pass any parameters to `TeamDelete()` — no `reason`, no arguments. The tool accepts no parameters and will error if any are provided.
 
-Note: leviathan and critic-reviewer may not exist (quick/full mode). Ignore errors if the shutdown fails for a non-existent teammate.
+Note: oracle (quick mode), leviathan, and critic-reviewer may not exist depending on mode. Ignore errors if the shutdown fails for a non-existent teammate.
 
 ### Step 12: Hand Off
 
@@ -405,23 +482,19 @@ The /work command will auto-detect this plan and suggest it for execution.
 |----------|---------------|-------|------|
 | `prometheus` | prometheus | sonnet | Interview-driven planner — spawned in plan mode. Handles research, user interviews, and plan drafting. |
 | `leviathan` | leviathan | opus | Deep plan reviewer — validates structural completeness and strategic coherence before user sees the plan. Full mode only. |
-
-Prometheus internally spawns its own research teammates:
-
-| Sub-Teammate | subagent_type | When Prometheus Spawns It |
-|--------------|---------------|---------------------------|
-| `explore` | explore | Codebase search — find patterns, architecture, conventions |
-| `oracle` | oracle | Strategic decisions — evaluate tradeoffs (uses opus, spawn sparingly) |
+| `explore` | explore | sonnet | Codebase search — find patterns, architecture, conventions. Spawned before prometheus so it's ready for research requests. |
+| `oracle` | oracle | opus | Strategic advisor — evaluate tradeoffs, architecture decisions. Spawned before prometheus so it's ready for research requests. |
 
 ## Anti-Patterns
 
 | Anti-Pattern | Do This Instead |
 |--------------|-----------------|
-| Researching codebase yourself | Let Prometheus spawn `explore` teammates |
+| Researching codebase yourself | Explore and oracle do upfront research; Prometheus messages them for follow-ups |
 | Interviewing the user yourself | Prometheus uses `AskUserQuestion` in plan mode |
 | Writing the plan yourself | Prometheus drafts, you just save the approved version |
 | Skipping team creation | Always `TeamCreate(team_name, description)` first |
-| Forgetting handoff file | Always write `.maestro/handoff/` before spawning Prometheus |
+| Forgetting handoff file | Always write `.maestro/handoff/` before spawning agents |
 | Forgetting to cleanup team | Always shutdown + cleanup at end |
 | Auto-approving without user input | Always present plan to user via `AskUserQuestion` |
 | Skipping leviathan review in full mode | Always spawn leviathan before presenting to user (unless quick mode) |
+| Skipping upfront research | Always spawn explore (and oracle in full mode) before prometheus |
