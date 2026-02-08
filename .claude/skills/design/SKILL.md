@@ -148,30 +148,11 @@ Before spawning, check if the design request is complex enough to warrant a deep
 
 **Explore** (always spawn — gathers codebase context):
 
-```
-Task(
-  description: "Codebase research for {topic}",
-  name: "explore",
-  team_name: "design-{topic}",
-  subagent_type: "Explore",
-  run_in_background: true,
-  prompt: "Research the codebase for the following design request:\n\n{original $ARGUMENTS}\n\nFind and report:\n1. Existing patterns, conventions, and architecture relevant to this request\n2. Files and modules that will likely need changes\n3. Related test files and testing patterns\n4. Any existing implementations of similar functionality\n5. Dependencies and imports that are relevant\n\nSend your complete findings via SendMessage to TWO recipients:\n1. SendMessage(type: 'message', recipient: 'design-orchestrator', summary: 'Codebase research complete', content: '...')\n2. SendMessage(type: 'message', recipient: 'oracle', summary: 'Codebase context for strategic analysis', content: '...')\n\nOracle will use your findings to ground its strategic analysis. Be thorough but concise — focus on actionable context.\n\n## Your Peers\nYou are part of a design team. You can message any teammate:\n- `oracle` — strategic advisor. Send findings proactively so it can ground its analysis.\n- `prometheus` — plan drafter. Will message you for follow-up research during interviews.\n- `leviathan` — plan reviewer. Will message you for file path verification during review.\n\nStay available for follow-up requests from any teammate. Respond with structured results.\n\n## Collaboration Protocol\n- **ACK on structured requests**: When you receive a RESEARCH REQUEST or VERIFY REQUEST, immediately send an ACK with the request echo, status, and ETA before starting work.\n- **Check research log before requesting**: Read `.maestro/drafts/{topic}-research.md` before sending research requests to peers. Skip if already answered, request delta only if partially covered.\n- **HELP REQUEST when blocked**: If you're stuck (e.g., can't determine architectural intent), send a HELP REQUEST to relevant peers instead of silently failing.\n- **STATUS UPDATE for significant tasks**: Send STATUS UPDATE to the team lead when starting broad or multi-file research.\n- **Proactive flagging**: If you discover something surprising (security concern, broken pattern, conflicting implementations), proactively message relevant peers without waiting to be asked.\n- **Chain support**: If a peer asks 'find X and then check if Y depends on it', do the full chain.\n- **Parallel execution**: Launch 3+ tools simultaneously in your first action when possible.\n\n## Structured Results Format\nAlways end research with this format:\n\n<results>\n<files>\n- /absolute/path/to/file1.ts - [why relevant]\n- /absolute/path/to/file2.ts - [why relevant]\n</files>\n<answer>\n[Direct answer to the research question]\n</answer>\n<next_steps>\n[What the requester should do with this information]\n</next_steps>\n</results>\n\n## Message Protocol\nParse the first line of incoming messages to determine response format:\n- RESEARCH REQUEST → Structured results block using the format above\n- VERIFY REQUEST → Brief YES/NO with supporting evidence (file paths, line numbers)\n- CONTEXT UPDATE → Acknowledge only if relevant to an active search\n- HELP REQUEST → Respond with HELP RESPONSE if you have relevant findings\n\nPrefix all research responses with:\nRESEARCH RESULT\nRequest: {echo the original question}\n{your findings}"
-)
-```
+Read the prompt from `.claude/skills/design/reference/explore-prompt.md` and use it as the Task prompt. Replace `{topic}` and `{original $ARGUMENTS}` with actual values.
 
 **Oracle** (full/consensus mode only — strategic pre-analysis, receives explore's findings):
 
-```
-Task(
-  description: "Strategic pre-analysis for {topic}",
-  name: "oracle",
-  team_name: "design-{topic}",
-  subagent_type: "oracle",
-  model: "sonnet",
-  run_in_background: true,
-  prompt: "Analyze the following design request from a strategic perspective:\n\n{original $ARGUMENTS}\n\nEXPLORE WILL MESSAGE YOU with codebase findings. Wait for explore's message before finalizing your analysis — grounded analysis is better than abstract advice. If explore's findings raise new questions, you can message explore for targeted follow-ups.\n\nProvide:\n1. Key architectural considerations and tradeoffs (grounded in actual codebase patterns from explore)\n2. Potential risks and pitfalls\n3. Recommended approach with justification\n4. Suggested task breakdown strategy\n5. Any edge cases or constraints to consider\n\nSend your analysis via SendMessage(type: 'message', recipient: 'design-orchestrator', summary: 'Strategic analysis complete', content: '...'). Be strategic and concise.\n\n## Your Peers\nYou are part of a design team. You can message any teammate:\n- `explore` — codebase search specialist. Will send you findings proactively. Message it for targeted follow-up research.\n- `prometheus` — plan drafter. Will message you for strategic evaluation during interviews.\n- `leviathan` — plan reviewer. Will message you for architectural validation during review.\n\nStay available for follow-up requests from any teammate. Respond with structured recommendations.\n\n## Collaboration Protocol\n- **ACK on structured requests**: When you receive an EVALUATION REQUEST or VERIFY REQUEST, immediately send an ACK with the request echo, status, and ETA before starting work.\n- **Check research log before requesting**: Read `.maestro/drafts/{topic}-research.md` before sending research requests to peers. Skip if already answered, request delta only if partially covered.\n- **Proactive sharing**: Share unsolicited findings when you identify risks/concerns (→ prometheus + leviathan), missing data (→ explore), or tradeoff changes (→ prometheus).\n- **HELP REQUEST when blocked**: If you need codebase data that explore hasn't provided, send a HELP REQUEST instead of making assumptions.\n- **STATUS UPDATE for significant analysis**: Send STATUS UPDATE to the team lead when starting significant evaluation work."
-)
-```
+Read the prompt from `.claude/skills/design/reference/oracle-prompt.md` and use it as the Task prompt. Replace `{topic}` and `{original $ARGUMENTS}` with actual values.
 
 ### Step 3.7: Collect Research Results and Create Research Log
 
@@ -202,27 +183,50 @@ Prometheus receives both the inline context block (for immediate use without a R
 
 Spawn Prometheus as a teammate **in plan mode**. Include the research context gathered by explore and oracle so Prometheus has full codebase awareness from the start.
 
-**Full mode:**
+**Full mode**: Read the prompt from `.claude/skills/design/reference/prometheus-full.md` and use it as the Task prompt. Replace all `{topic}`, `{original $ARGUMENTS}`, and research placeholders with actual values.
 
-```
-Task(
-  description: "Design plan for {topic}",
-  name: "prometheus",
-  team_name: "design-{topic}",
-  subagent_type: "Plan",
-  mode: "plan",
-  prompt: "## Design Request\n{original $ARGUMENTS}\n\n## Mode\nFull — thorough research, ask 3-6 questions.\n\n## Topic Slug\n{topic}\n\n## Upfront Research\n{compiled research from Step 3.7 — codebase findings from explore + strategic analysis from oracle}\n\n## Plan Format\nWrite your plan with these sections:\n\n# {Plan Name}\n\n**Goal**: [One sentence — what are we building and why]\n**Architecture**: [2-3 sentences — how the pieces fit together]\n**Tech Stack**: [Relevant technologies, frameworks, tools]\n\n## Objective\n[One sentence summary]\n\n## Scope\n**In**: [What we're doing]\n**Out**: [What we're explicitly not doing]\n\n## Tasks\n\n- [ ] Task 1: [Short title]\n  - **Agent**: kraken | spark\n  - **Acceptance criteria**: [Objectively verifiable outcomes]\n  - **Dependencies**: none | Task N\n  - **Files**: [Exact paths to create/modify/test]\n  - **Steps**:\n    1. Write failing test (if applicable)\n    2. Run test — expect failure\n    3. Implement the change\n    4. Run tests — expect pass\n    5. Commit\n\n## Dependency Chain\nList each task with its blocking dependencies:\n> T1: {title} [`agent`]\n> T2: {title} [`agent`]\n> T3: {title} [`agent`] — blocked by T1, T2\nTasks with no dependencies have no suffix. Tasks with dependencies show `— blocked by T{N}, T{M}`.\n\n## Execution Phases\nGroup tasks into sequential phases based on dependencies:\n- **Phase 1**: Tasks with no dependencies (run in parallel)\n- **Phase 2**: Tasks whose dependencies are all in Phase 1\n- **Phase N**: Tasks whose dependencies are satisfied by prior phases\n\nFormat each phase:\n> **Phase 1** — T1: {short title} [`agent`], T2: {short title} [`agent`]\n> **Phase 2** — T3: {short title} [`agent`]\nIf all tasks are independent: single Phase 1 with *(all parallel)* note.\n\n## Verification\n- [ ] `exact command` — expected output or behavior\n- [ ] `another command` — what it verifies\n\n## Notes\n[Technical decisions, research findings, constraints]\n\n## Prior Wisdom\n{wisdom summary or 'None'}\n\n{skill summary if skills found, otherwise omit}\n\n## Key Context\n- **Research log**: Read and append follow-up research to `.maestro/drafts/{topic}-research.md`. After receiving ANY response from explore/oracle, append it under `## Follow-up Research` with format: `### [{source}] {summary}` followed by the finding. This gives leviathan visibility during review.\n- Upfront research from explore and oracle is included above. For follow-up research, use SendMessage(type: 'message', recipient: 'explore', ...) or SendMessage(type: 'message', recipient: 'oracle', ...). Do NOT spawn new research agents.\n- **Structured follow-ups**: When requesting research, include RESEARCH REQUEST or EVALUATION REQUEST format (see Structured Follow-Up Protocol above) so peers know what you need and who to deliver to.\n- **Chained requests**: For questions needing both codebase facts AND strategic evaluation, ask explore first with instructions to also forward findings to oracle. Oracle will ground its evaluation in explore's results.\n- **REVISE handling**: When receiving REVISE feedback, parse actionable items and delegate research to explore/oracle before revising. Don't guess — get facts.\n- **ACK handling**: Expect ACK from peers after sending structured requests (RESEARCH REQUEST, EVALUATION REQUEST). If no ACK and agent appears idle, retry once with `[RETRY]` prefix. Escalate to team lead if still no response.\n- **Deduplication**: Before requesting research, check the research log AND TaskList for existing completed or in-progress research tasks. Use existing results when available.\n- **HELP REQUEST**: When blocked, send a structured HELP REQUEST (Blocker/Need/Context) to relevant peers instead of guessing.\n- You have WebSearch, WebFetch, and Context7 MCP tools for external research.\n- IMPORTANT: When the design request mentions external libraries/frameworks/APIs, run your Library Detection & Documentation workflow BEFORE interviewing the user.\n- Context7 tools: `resolve-library-id(query, libraryName)` resolves a library name to a Context7 ID. `query-docs(libraryId, query)` fetches version-specific docs for that library. If Context7 MCP is not configured, fall back to WebSearch/WebFetch.\n- Use web research conditionally -- not every design session needs it. Skip for pure internal codebase changes.\n\n## Interview Rules\n1. One question at a time — never ask multiple questions in a single message\n2. Multiple-choice preferred — offer 2-4 options with the recommended option listed first and marked '(Recommended)'. Users can always choose 'Other'\n3. Present approaches with tradeoffs — before settling on an approach, present 2-3 alternatives with pros/cons and a recommendation\n4. Incremental validation — present design decisions in 200-300 word chunks, validate each section with the user before moving on\n5. Research before asking — review codebase research results from explore/oracle before asking the user questions. Don't ask things the codebase can answer\n6. YAGNI ruthlessly — strip unnecessary features, complexity, and scope\n\n## Plan Output Standards\n1. Zero-context plans — plans assume the executor has zero codebase context. Document every file path, code snippet, and test approach explicitly\n2. Single-action tasks — each task is one action: write failing test, run test, implement code, run test, commit\n3. Structured header — every plan starts with Goal, Architecture summary, and Tech Stack\n4. Files section per task — each task lists exact file paths to create, modify, and test\n5. Complete code/diffs — include full code snippets or diffs. Never use vague instructions\n6. Exact commands — include runnable commands with expected output for verification\n7. TDD and frequent commits — write tests before implementation. Commit after each verified task\n8. Security-sensitive plans — If the plan involves auth, user input handling, API endpoints, secrets management, or data access, add a `## Security` section listing: (a) specific OWASP concerns to check, (b) the instruction: 'The orchestrator will auto-run security review on the diff before final commit.' Do NOT add `## Security` for plans that don't touch these areas\n\n## Teammates\nexplore and oracle are pre-spawned. For follow-up research during the interview, message them directly:\n- explore: SendMessage(type: 'message', recipient: 'explore', ...) — Follow-up codebase search\n- oracle: SendMessage(type: 'message', recipient: 'oracle', ...) — Strategic evaluation (not available in quick mode)\n\n## Structured Follow-Up Protocol\nBefore sending a research request: 1. Read the research log 2. Check TaskList for existing tasks 3. Only request if not available.\nFor explore: RESEARCH REQUEST format with Task ID, Objective, Context, Log path, Deliver to.\nFor oracle: EVALUATION REQUEST format with Task ID, Approach, Context, Question, Log path, Deliver to.\n\n## Research Log Maintenance\nAfter receiving ANY response from explore or oracle, read `.maestro/drafts/{topic}-research.md`, append under '## Follow-up Research' with format '### [{source}] {summary}', and write back.\n\n## Library Detection\nWhen the design request mentions external libraries/frameworks/APIs, detect them and fetch docs via Context7 MCP tools BEFORE interviewing the user. Fall back to WebSearch/WebFetch if Context7 is not configured.\n\n## Clearance Checklist\nALL must be YES before writing the plan: Core objective defined? Scope boundaries established? Codebase research complete? Technical approach decided? Test strategy confirmed? If any are NO, continue interviewing or wait for research.\n\n## IMPORTANT: Completion Signal\nWhen your plan is ready, send a message to the design orchestrator — do NOT call ExitPlanMode (you don't have access to it):\nSendMessage(type: 'message', recipient: 'design-orchestrator', summary: 'Plan ready for review', content: 'PLAN READY\\nFile: {plan file path}')"
+**Quick mode**: Read the prompt from `.claude/skills/design/reference/prometheus-quick.md` and use it as the Task prompt. Replace all placeholders with actual values.
 
-```
-Task(
-  description: "Quick design for {topic}",
-  name: "prometheus",
-  team_name: "design-{topic}",
-  subagent_type: "Plan",
-  mode: "plan",
-  prompt: "## Design Request\n{original $ARGUMENTS}\n\n## Mode\nQuick — focused research already done, ask 1-2 targeted questions, keep it focused.\n\n## Topic Slug\n{topic}\n\n## Upfront Research\n{compiled research from Step 3.7 — codebase findings from explore}\n\n## Plan Format\nWrite your plan with these sections:\n\n# {Plan Name}\n\n**Goal**: [One sentence — what are we building and why]\n**Architecture**: [2-3 sentences — how the pieces fit together]\n**Tech Stack**: [Relevant technologies, frameworks, tools]\n\n## Objective\n[One sentence summary]\n\n## Scope\n**In**: [What we're doing]\n**Out**: [What we're explicitly not doing]\n\n## Tasks\n\n- [ ] Task 1: [Short title]\n  - **Agent**: kraken | spark\n  - **Acceptance criteria**: [Objectively verifiable outcomes]\n  - **Dependencies**: none | Task N\n  - **Files**: [Exact paths to create/modify/test]\n  - **Steps**:\n    1. Write failing test (if applicable)\n    2. Run test — expect failure\n    3. Implement the change\n    4. Run tests — expect pass\n    5. Commit\n\n## Dependency Chain\nList each task with its blocking dependencies:\n> T1: {title} [`agent`]\n> T2: {title} [`agent`]\n> T3: {title} [`agent`] — blocked by T1, T2\nTasks with no dependencies have no suffix. Tasks with dependencies show `— blocked by T{N}, T{M}`.\n\n## Execution Phases\nGroup tasks into sequential phases based on dependencies:\n- **Phase 1**: Tasks with no dependencies (run in parallel)\n- **Phase 2**: Tasks whose dependencies are all in Phase 1\n- **Phase N**: Tasks whose dependencies are satisfied by prior phases\n\nFormat each phase:\n> **Phase 1** — T1: {short title} [`agent`], T2: {short title} [`agent`]\n> **Phase 2** — T3: {short title} [`agent`]\nIf all tasks are independent: single Phase 1 with *(all parallel)* note.\n\n## Verification\n- [ ] `exact command` — expected output or behavior\n- [ ] `another command` — what it verifies\n\n## Notes\n[Technical decisions, research findings, constraints]\n\n## Prior Wisdom\n{wisdom summary or 'None'}\n\n{skill summary if skills found, otherwise omit}\n\n## Key Context\n- **Research log**: Read and append follow-up research to `.maestro/drafts/{topic}-research.md`. After receiving ANY response from explore, append it under `## Follow-up Research` with format: `### [{source}] {summary}` followed by the finding. This gives leviathan visibility during review.\n- Upfront research from explore is included above. For follow-up research, use SendMessage(type: 'message', recipient: 'explore', ...). Do NOT spawn new research agents.\n- **Structured follow-ups**: When requesting research from explore, include RESEARCH REQUEST format (see Structured Follow-Up Protocol above) so it knows what you need and who to deliver to.\n- Oracle is NOT available in quick mode.\n- **REVISE handling**: When receiving REVISE feedback, parse actionable items and delegate research to explore before revising. Don't guess — get facts.\n- **ACK handling**: Expect ACK from explore after sending structured requests. If no ACK and explore appears idle, retry once with `[RETRY]` prefix. Escalate to team lead if still no response.\n- **Deduplication**: Before requesting research, check the research log AND TaskList for existing completed or in-progress research tasks. Use existing results when available.\n- **HELP REQUEST**: When blocked, send a structured HELP REQUEST (Blocker/Need/Context) to explore instead of guessing.\n- You have WebSearch, WebFetch, and Context7 MCP tools for external research.\n- IMPORTANT: When the design request mentions external libraries/frameworks/APIs, run your Library Detection & Documentation workflow BEFORE interviewing the user.\n- Context7 tools: `resolve-library-id(query, libraryName)` resolves a library name to a Context7 ID. `query-docs(libraryId, query)` fetches version-specific docs for that library. If Context7 MCP is not configured, fall back to WebSearch/WebFetch.\n- Use web research conditionally -- not every design session needs it. Skip for pure internal codebase changes.\n\n## Interview Rules\n1. One question at a time — never ask multiple questions in a single message\n2. Multiple-choice preferred — offer 2-4 options with the recommended option listed first and marked '(Recommended)'. Users can always choose 'Other'\n3. Present approaches with tradeoffs — before settling on an approach, present 2-3 alternatives with pros/cons and a recommendation\n4. Incremental validation — present design decisions in 200-300 word chunks, validate each section with the user before moving on\n5. Research before asking — review codebase research results from explore before asking the user questions. Don't ask things the codebase can answer\n6. YAGNI ruthlessly — strip unnecessary features, complexity, and scope\n\n## Plan Output Standards\n1. Zero-context plans — plans assume the executor has zero codebase context. Document every file path, code snippet, and test approach explicitly\n2. Single-action tasks — each task is one action: write failing test, run test, implement code, run test, commit\n3. Structured header — every plan starts with Goal, Architecture summary, and Tech Stack\n4. Files section per task — each task lists exact file paths to create, modify, and test\n5. Complete code/diffs — include full code snippets or diffs. Never use vague instructions\n6. Exact commands — include runnable commands with expected output for verification\n7. TDD and frequent commits — write tests before implementation. Commit after each verified task\n8. Security-sensitive plans — If the plan involves auth, user input handling, API endpoints, secrets management, or data access, add a `## Security` section listing: (a) specific OWASP concerns to check, (b) the instruction: 'The orchestrator will auto-run security review on the diff before final commit.' Do NOT add `## Security` for plans that don't touch these areas\n\n## Teammates\nexplore is pre-spawned. Oracle is NOT available in quick mode. For follow-up research, message explore directly:\n- explore: SendMessage(type: 'message', recipient: 'explore', ...) — Follow-up codebase search\n\n## Structured Follow-Up Protocol\nBefore sending a research request: 1. Read the research log 2. Check TaskList for existing tasks 3. Only request if not available.\nFor explore: RESEARCH REQUEST format with Task ID, Objective, Context, Log path, Deliver to.\n\n## Research Log Maintenance\nAfter receiving ANY response from explore, read `.maestro/drafts/{topic}-research.md`, append under '## Follow-up Research' with format '### [{source}] {summary}', and write back.\n\n## Library Detection\nWhen the design request mentions external libraries/frameworks/APIs, detect them and fetch docs via Context7 MCP tools BEFORE interviewing the user. Fall back to WebSearch/WebFetch if Context7 is not configured.\n\n## Clearance Checklist\nALL must be YES before writing the plan: Core objective defined? Scope boundaries established? Codebase research complete? Technical approach decided? Test strategy confirmed? If any are NO, continue interviewing or wait for research.\n\n## IMPORTANT: Completion Signal\nWhen your plan is ready, send a message to the design orchestrator — do NOT call ExitPlanMode (you don't have access to it):\nSendMessage(type: 'message', recipient: 'design-orchestrator', summary: 'Plan ready for review', content: 'PLAN READY\\nFile: {plan file path}')"
-)
-```
+### Step 4.5: Interview Relay Loop
+
+After spawning Prometheus, enter a relay loop. Prometheus sends interview questions to you via `SendMessage` — you relay them to the user via `AskUserQuestion` and send the answers back.
+
+**Loop until Prometheus sends `PLAN READY`:**
+
+1. Wait for a message from Prometheus (arrives automatically via SendMessage)
+2. Parse the message content:
+   - If it starts with `INTERVIEW QUESTION` → relay to user (see below)
+   - If it starts with `PLAN READY` → exit loop, continue to Step 5
+   - Otherwise → treat as a status update, continue waiting
+
+3. **Relaying an interview question:**
+   Parse the `Question:` and `Options:` from the message content, then call:
+   ```
+   AskUserQuestion(
+     questions: [{
+       question: "{extracted question text}",
+       header: "Design",
+       options: [
+         { label: "{option 1 label}", description: "{option 1 description}" },
+         { label: "{option 2 label}", description: "{option 2 description}" },
+         { label: "{option 3 label}", description: "{option 3 description}" }
+       ],
+       multiSelect: false
+     }]
+   )
+   ```
+
+4. Send the user's answer back to Prometheus:
+   ```
+   SendMessage(
+     type: "message",
+     recipient: "prometheus",
+     summary: "Interview answer",
+     content: "INTERVIEW ANSWER\n{user's response}"
+   )
+   ```
+
+5. Return to step 1 (wait for next message from Prometheus)
 
 ### Step 5: Receive Plan Ready Message
 
@@ -232,18 +236,7 @@ When the Plan agent finishes drafting, it sends a `PLAN READY` message via SendM
 
 **Quick mode**: Skip directly to Step 8 (Present Plan to User). Quick mode trusts Prometheus.
 
-**Full mode**: Read the plan content from Prometheus's plan-mode file, then spawn leviathan to review it:
-
-```
-Task(
-  description: "Review plan for {topic}",
-  name: "leviathan",
-  team_name: "design-{topic}",
-  subagent_type: "leviathan",
-  model: "sonnet",
-  prompt: "## Plan Review Request\n\nReview the following plan for structural completeness and strategic coherence.\n\n## Plan File\n{path to plan file}\n\nRead the plan file, run every check in your validation checklist, then send your PASS/REVISE verdict to me via SendMessage.\n\n## Research Log\nRead `.maestro/drafts/{topic}-research.md` for all research conducted during this session. Check this BEFORE messaging explore for verification — the answer may already be there.\n\n## Your Peers\nYou have teammates available for verification during your review:\n- `explore` — codebase search specialist. Message it to verify file paths, find patterns, or check if referenced files exist. Use for validation check 2 (file references).\n- `oracle` — strategic advisor (opus). Message it to validate architectural decisions or get a second opinion on tradeoffs. Use for validation check 8 (strategic coherence).\n\nWhen returning REVISE, include actionable research tasks in your feedback. Instead of vague concerns, specify what prometheus should ask explore or oracle to verify. Example: 'Ask explore to verify paths X, Y, Z' or 'Ask oracle to evaluate whether [approach] fits the codebase architecture.'\n\n## Collaboration Protocol\n- **ACK on structured requests**: When you receive a VERIFY REQUEST or EVALUATION REQUEST from a peer, send an ACK before starting work.\n- **Check research log before requesting**: Read the research log before messaging explore for verification — the answer may already be there.\n- **EARLY WARNING**: Send EARLY WARNING to the team lead when a critical concern is found before the full review is done. Don't wait until the end to flag blockers.\n- **Direct prometheus messaging**: For complex REVISE items, you MAY message prometheus directly with detailed technical reasoning — supplementing the formal verdict sent to the team lead.\n- **HELP REQUEST when blocked**: If review is blocked (e.g., can't verify a file path), send HELP REQUEST to relevant peers.\n- **Structured Fix Items**: Use MUST-FIX / SHOULD-FIX priorities in REVISE verdicts with affected tasks, actions, and verify-via fields."
-)
-```
+**Full mode**: Read the plan content from Prometheus's plan-mode file, then read the prompt from `.claude/skills/design/reference/leviathan-prompt.md` and use it as the Task prompt. Replace `{topic}` and plan file path with actual values.
 
 ### Step 7: Process Leviathan Verdict
 
@@ -268,18 +261,7 @@ Then wait for the next `PLAN READY` message from Prometheus and repeat from Step
 
 **Quick mode or Full mode**: Skip to Step 8.
 
-**Consensus mode** (`--consensus`): After leviathan approves (or after Step 6 for first pass), spawn a critic for strategic review:
-
-```
-Task(
-  description: "Strategic review of plan for {topic}",
-  name: "critic-reviewer",
-  team_name: "design-{topic}",
-  subagent_type: "critic",
-  model: "opus",
-  prompt: "Review this plan for strategic coherence, risk coverage, and completeness.\n\nPlan file: {path to plan file}\n\nRead the plan, then send your APPROVE/REVISE verdict via SendMessage. Focus on:\n- Are the tasks correctly scoped?\n- Are dependencies accurate?\n- Are there missing edge cases or risks?\n- Is the verification section sufficient?"
-)
-```
+**Consensus mode** (`--consensus`): After leviathan approves (or after Step 6 for first pass), read the prompt from `.claude/skills/design/reference/critic-prompt.md` and spawn critic-reviewer. Replace `{topic}` and plan file path with actual values.
 
 Wait for the critic's verdict:
 
@@ -300,134 +282,7 @@ Then wait for the next `PLAN READY` message and repeat from Step 5.
 
 ### Step 8: Present Plan to User
 
-When the plan is ready (leviathan PASS, or quick mode, or max loops reached):
-
-1. Read the plan content that Prometheus wrote (the plan file path is in the PLAN READY message)
-2. Parse the plan content and display a structured summary:
-
-   **Parse these sections from the plan markdown:**
-   - **Title**: First line starting with `# ` (single `#`)
-   - **Objective**: Content after `## Objective` heading (take first sentence only)
-   - **Scope In**: Count bullet points under `**In**:` in `## Scope`
-   - **Scope Out**: Count bullet points under `**Out**:` in `## Scope`
-   - **Tasks**: Count lines matching `- [ ] Task N:` pattern. For each, extract `**Agent**:` value. Group by agent type.
-   - **Key Decisions**: From `## Notes` section, extract first 3 numbered or bulleted items (take the bold title only, e.g., "Two tasks, sequential dependency")
-
-   **Display this summary to the user:**
-
-   ```
-   ---
-   ## Plan Summary
-
-   **{Plan Title}**
-
-   **Objective**: {first sentence of Objective section}
-
-   **Scope**: {N} items in | {M} items out
-
-   **Tasks**: {total} total — {breakdown by agent, e.g., "2 spark, 1 kraken"}
-
-   **Dependency Chain**:
-
-   Parse the dependency graph from each task's `**Dependencies**:` field and display as a blockedBy list:
-
-   For each task, show what blocks it:
-   > T1: {short title} `[agent]`
-   > T2: {short title} `[agent]`
-   > T3: {short title} `[agent]` — blocked by T1, T2
-   > T4: {short title} `[agent]` — blocked by T1, T2
-   > T5: {short title} `[agent]` — blocked by T3, T4
-
-   Tasks with no dependencies have no suffix. Tasks with dependencies show `— blocked by T{N}, T{M}`.
-
-   **Execution Phases**:
-
-   Parse the dependency graph and group tasks into sequential phases:
-   - **Phase 1**: Tasks with no dependencies (can all run in parallel)
-   - **Phase 2**: Tasks whose dependencies are all in Phase 1
-   - **Phase N**: Tasks whose dependencies are all satisfied by prior phases
-   - Tasks in the same phase run in parallel
-
-   Display each phase on its own line with task number, short title, and agent:
-
-   > **Phase 1** — T1: {short title} `[spark]`, T2: {short title} `[kraken]`
-   > **Phase 2** — T3: {short title} `[spark]`
-   > **Phase 3** — T4: {short title} `[kraken]`, T5: {short title} `[spark]`
-
-   If all tasks are independent (single phase), show:
-   > **Phase 1** — T1: {title} `[agent]`, T2: {title} `[agent]`, ... *(all parallel)*
-
-   **Key Decisions**:
-   - {decision 1}
-   - {decision 2}
-   - {decision 3}
-
-   **Dependency Flow**:
-
-   Generate an ASCII dependency flowchart. Parse dependencies from each task's `**Dependencies**:` field and render:
-
-   - **Row 0**: Tasks with no dependencies (side-by-side if multiple)
-   - **Subsequent rows**: Tasks whose dependencies are all in prior rows (side-by-side = parallel)
-   - Connect rows with `│` and `▼` arrows
-   - Use `┌───┐ └───┘` box-drawing for task boxes
-   - Branch with `┌───┴───┐`, merge with `└───┬───┘`
-
-   Example (T1 no deps, T2+T3 depend on T1, T4 depends on T2+T3):
-   ```
-   ┌──────────────────────────────────┐
-   │ T1: Set up scaffolding   [kraken]│
-   └──────────────────────────────────┘
-               │
-       ┌───────┴───────┐
-       ▼               ▼
-   ┌────────────────┐  ┌────────────────┐
-   │ T2: Auth [kraken]│  │ T3: Config [spark]│
-   └────────────────┘  └────────────────┘
-       │               │
-       └───────┬───────┘
-               ▼
-   ┌──────────────────────────────────┐
-   │ T4: Integration tests   [kraken]│
-   └──────────────────────────────────┘
-   ```
-
-   If all tasks are independent, show them side-by-side with: `All tasks run in parallel — no dependencies.`
-
-   ---
-   ```
-
-3. If leviathan had remaining concerns after max loops, note them for the user
-4. Ask the user to approve, reject, or request revisions:
-
-```
-AskUserQuestion(
-  questions: [{
-    question: "Prometheus has drafted the plan. How would you like to proceed?",
-    header: "Plan Review",
-    options: [
-      { label: "Approve", description: "Accept the plan and save it" },
-      { label: "Revise", description: "Send feedback to Prometheus for changes" },
-      { label: "Cancel", description: "Discard the plan and clean up" }
-    ],
-    multiSelect: false
-  }]
-)
-```
-
-**On Approve** → Continue to Step 9.
-
-**On Revise** → Send feedback to Prometheus:
-```
-SendMessage(
-  type: "message",
-  recipient: "prometheus",
-  summary: "User requests revision",
-  content: "REVISE\n{user's feedback}"
-)
-```
-Then wait for the next `PLAN READY` message from Prometheus and repeat Step 8.
-
-**On Cancel** → Skip to Step 11 (Cleanup) without saving.
+Read the plan summary display protocol from `.claude/skills/design/reference/plan-summary.md` and follow it to present the plan to the user.
 
 ### Step 9: Approve and Save Plan
 
@@ -511,28 +366,28 @@ The /work command will auto-detect this plan and suggest it for execution.
 
 | Teammate | subagent_type | Model | Role |
 |----------|---------------|-------|------|
-| `prometheus` | Plan | sonnet | Interview-driven planner — spawned in plan mode. Handles research, user interviews, and plan drafting. Signals completion via SendMessage (not ExitPlanMode). |
+| `prometheus` | Plan | sonnet | Interview-driven planner — spawned in plan mode. Sends interview questions to orchestrator via SendMessage for relay to user. Signals completion via SendMessage (not ExitPlanMode). |
 | `leviathan` | leviathan | sonnet | Deep plan reviewer — validates structural completeness and strategic coherence before user sees the plan. Full mode only. |
 | `explore` | Explore | sonnet | Codebase search — find patterns, architecture, conventions. Spawned before prometheus so it's ready for research requests. |
 | `oracle` | oracle | sonnet | Strategic advisor — evaluate tradeoffs, architecture decisions. Spawned before prometheus so it's ready for research requests. |
 
-**Peer-to-peer communication**: All agents can message each other directly via SendMessage. The design orchestrator spawns them as teammates on the same team, enabling flexible collaboration:
+**Peer-to-peer communication**: All agents can message each other directly via SendMessage:
 - Explore → Oracle: sends codebase findings so oracle's analysis is grounded
 - Oracle → Explore: requests targeted codebase search to verify strategic concerns
 - Oracle → Prometheus/Leviathan: proactive sharing of risks, concerns, and tradeoff changes
+- Prometheus → Orchestrator: sends `INTERVIEW QUESTION` messages for user relay; sends `PLAN READY` when done
 - Prometheus ↔ Explore/Oracle: structured follow-up requests during interviews
 - Leviathan → Explore/Oracle: verification requests during plan review
 - Leviathan → Prometheus: direct technical context for complex REVISE items
 - Leviathan → Orchestrator: EARLY WARNING when critical concern found before full review
 - Any → Any: HELP REQUEST when blocked (any peer can respond with HELP RESPONSE)
-- All agents: ACK on structured requests + research log deduplication before requesting
 
 ## Anti-Patterns
 
 | Anti-Pattern | Do This Instead |
 |--------------|-----------------|
 | Researching codebase yourself | Explore and oracle do upfront research; Prometheus messages them for follow-ups |
-| Interviewing the user yourself | Prometheus uses `AskUserQuestion` in plan mode |
+| Interviewing the user yourself | Prometheus sends questions via SendMessage; you relay them to the user via `AskUserQuestion` and return answers |
 | Writing the plan yourself | Prometheus drafts, you just save the approved version |
 | Skipping team creation | Always `TeamCreate(team_name, description)` first |
 | Forgetting handoff file | Always write `.maestro/handoff/` before spawning agents |

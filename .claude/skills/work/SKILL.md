@@ -56,7 +56,7 @@ Glob(pattern: ".maestro/plans/*.md")
    - Length > 40 characters, OR
    - Contains common action verbs: "add", "fix", "create", "update", "implement", "refactor", "remove", "change", "move", "build"
 
-   **If it looks like a description** → store it as the planless work description and skip to the **[planless flow](#planless-work-flow)** below.
+   **If it looks like a description** → store it as the planless work description and skip to the **planless flow** (see `.claude/skills/work/reference/planless-flow.md`).
 
    **If it does NOT look like a description** → show available plans and stop with error:
    > Plan "{plan-name}" not found. Available plans: {list of plan filenames}
@@ -96,7 +96,7 @@ For each plan option:
 - **Objective excerpt**: First 80 characters of the `## Objective` section content
 - **Task count**: Number of `- [ ]` lines in the plan
 
-**Graceful degradation**: If no handoff files exist or none have `status: "complete"`, fall back to listing all plans with title and last modified date (current behavior).
+**Graceful degradation**: If no handoff files exist or none have `status: "complete"`, fall back to listing all plans with title and last modified date.
 
 ### Step 1.5: Validate & Confirm
 
@@ -158,110 +158,7 @@ If user cancels, stop execution.
 
 ### Step 1.7: Worktree Isolation (Optional)
 
-Ask the user whether to execute in an isolated worktree or in the current working tree:
-
-```
-AskUserQuestion(
-  questions: [{
-    question: "Where should this plan execute?",
-    header: "Execution Environment",
-    options: [
-      { label: "Execute in worktree (isolated)", description: "Creates a git worktree on a new branch. Safe for parallel execution." },
-      { label: "Execute in main tree (current behavior)", description: "Run directly in the current working directory." }
-    ],
-    multiSelect: false
-  }]
-)
-```
-
-**If main tree chosen**: Proceed to Step 2. No worktree fields are added to the handoff JSON.
-
-**If worktree chosen**, follow the git-worktrees skill workflow:
-
-#### 1. Resolve Worktree Directory
-
-Determine the worktree root using this priority chain:
-
-| Priority | Location | Notes |
-|----------|----------|-------|
-| 1 | `.worktrees/` | Default — at project root |
-| 2 | `worktrees/` | Alternate — same level |
-| 3 | CLAUDE.md preference | If project CLAUDE.md specifies a custom path |
-| 4 | Ask user | Prompt for directory if none of the above exist |
-
-#### 2. Safety Check — Gitignore
-
-```bash
-git check-ignore -q .worktrees
-```
-
-- If exit 0: `.worktrees/` is already ignored — proceed.
-- If exit 1: auto-add to `.gitignore`:
-
-```bash
-echo "" >> .gitignore
-echo "# Maestro worktrees (auto-added)" >> .gitignore
-echo ".worktrees/" >> .gitignore
-```
-
-#### 3. Create Worktree
-
-Derive `<plan-slug>` from the plan filename (without `.md`).
-
-```bash
-git worktree add "<worktree-dir>/<plan-slug>" -b "maestro/<plan-slug>"
-```
-
-#### 4. Copy Plan and Create Runtime Directories
-
-```bash
-mkdir -p "<worktree-dir>/<plan-slug>/.maestro/plans"
-cp ".maestro/plans/<plan-slug>.md" "<worktree-dir>/<plan-slug>/.maestro/plans/"
-
-mkdir -p "<worktree-dir>/<plan-slug>/.maestro/handoff"
-mkdir -p "<worktree-dir>/<plan-slug>/.maestro/drafts"
-mkdir -p "<worktree-dir>/<plan-slug>/.maestro/wisdom"
-mkdir -p "<worktree-dir>/<plan-slug>/.maestro/archive"
-```
-
-#### 5. Project Setup
-
-Detect and run the project's setup command inside the worktree directory:
-
-| File | Setup Command |
-|------|--------------|
-| `package.json` | `bun install` |
-| `Cargo.toml` | `cargo build` |
-| `pyproject.toml` | `uv sync` |
-| `go.mod` | `go mod download` |
-| `build.gradle` / `gradlew` | `./gradlew build` |
-| `pom.xml` / `mvnw` | `./mvnw install` |
-
-#### 6. Test Baseline Verification
-
-Run the project's test command inside the worktree to confirm a clean baseline. If tests fail, warn the user that failures are pre-existing and proceed.
-
-#### 7. Update Handoff
-
-Update the handoff JSON with worktree metadata:
-
-```json
-{
-  "worktree": true,
-  "worktree_path": "<absolute path to worktree>",
-  "worktree_branch": "maestro/<plan-slug>"
-}
-```
-
-**All subsequent steps operate inside the worktree directory.**
-
-#### Error Handling
-
-If worktree creation fails (e.g., branch name collision, dirty state, disk issues), fall back to main tree execution with a warning:
-
-> Worktree creation failed: {error}. Falling back to main tree execution.
-
-Proceed to Step 2 without worktree fields in the handoff.
+See `.claude/skills/work/reference/worktree-isolation.md` for the full worktree setup and cleanup protocol.
 
 ### Step 1.8: Write Execution Handoff
 
@@ -279,8 +176,6 @@ mkdir -p .maestro/handoff/
   "plan_destination": ".maestro/plans/{plan-slug}.md"
 }
 ```
-
-Where `{plan-slug}` is the plan filename without `.md` (e.g., `refactor-auth`), and `{ISO timestamp}` is the current time in ISO 8601 format.
 
 If a handoff file already exists (e.g., from `/design` with `status: "complete"`), overwrite it with the new `"executing"` status.
 
@@ -329,45 +224,7 @@ Set up dependencies between tasks using `TaskUpdate(addBlockedBy: [...])` where 
 
 ### Step 3.5: Discover Available Skills
 
-Before spawning teammates, discover skills that can provide guidance for task delegation.
-
-**Important**: The Glob tool doesn't follow symlinks. Use Bash with `find` to discover all skills. Note: Remove `-type f` for plugin paths on macOS:
-
-```bash
-# Project skills (highest priority) - use -L to follow symlinks
-find .claude/skills -L -name "SKILL.md" -type f 2>/dev/null
-find .agents/skills -L -name "SKILL.md" -type f 2>/dev/null
-
-# Global skills
-find ~/.claude/skills -name "SKILL.md" 2>/dev/null
-
-# Plugin-installed skills (lowest priority) - no -L or -type f for macOS compatibility
-find ~/.claude/plugins/marketplaces -name "SKILL.md" 2>/dev/null
-```
-
-For each SKILL.md file found:
-1. Read the file
-2. Parse YAML frontmatter (between `---` markers)
-3. Extract: `name`, `description`, `triggers` (optional), `priority` (default: 100)
-4. Store the full content after frontmatter
-
-**Priority**: Project skills override global skills, which override plugin skills (same name = skip lower priority).
-
-See `.claude/lib/skill-registry.md` for the complete discovery process.
-
-**Build a skill registry** for use in Step 4:
-
-```yaml
-skills:
-  - name: "skill-name"
-    description: "What this skill does"
-    triggers: ["trigger1", "trigger2"]
-    priority: 100
-    content: "Full SKILL.md content after frontmatter"
-    source: "project"  # or "global"
-```
-
-**Graceful degradation**: If no skills are found, proceed without skill injection. Do not error or warn.
+See `.claude/skills/work/reference/skill-injection.md` for the full discovery and injection protocol.
 
 ### Step 4: Spawn Teammates IN PARALLEL
 
@@ -381,7 +238,16 @@ Task(
   name: "impl-1",
   team_name: "work-{plan-slug}",
   subagent_type: "kraken",
-  prompt: "## TASK\n[Goal]\n\n## EXPECTED OUTCOME\n- [ ] File: [path]\n- [ ] Tests pass\n\n## CONTEXT\n[Background]"
+  prompt: |
+    ## TASK
+    [Goal]
+
+    ## EXPECTED OUTCOME
+    - [ ] File: [path]
+    - [ ] Tests pass
+
+    ## CONTEXT
+    [Background]
 )
 Task(
   description: "TDD implementation of feature Y",
@@ -443,164 +309,11 @@ After the first round, workers **self-claim** from `TaskList()` when they finish
 
 **TEAMMATES CAN MAKE MISTAKES. ALWAYS VERIFY.**
 
-Follow the standard verification protocol in `.claude/lib/verification-checklist.md`. Run each check (BUILD, TEST, LINT, FUNCTIONALITY, TODO, ERROR_FREE) independently. Evidence older than 5 minutes is stale -- re-run commands for fresh output.
-
-Messages from teammates arrive automatically. After each teammate reports completion:
-
-1. Read files claimed to be created/modified
-2. Run tests claimed to pass: `Bash("bun test")` or project-specific command
-3. Check for lint/type errors
-4. Verify behavior matches the plan's acceptance criteria
-
-If verification fails, message the teammate with feedback:
-
-```
-SendMessage(
-  type: "message",
-  recipient: "impl-1",
-  content: "Tests fail: [error]. Fix and re-verify.",
-  summary: "Test failure feedback"
-)
-```
-
-#### Verification Fix Loop
-
-When verification fails for a task, run an inlined fix-and-verify cycle (max 3 iterations):
-
-**Iteration 1**: Message the original worker with the failure details. Wait for their fix. Re-verify.
-**Iteration 2**: If still failing, spawn a `build-fixer` targeted at the specific error. Re-verify.
-**Iteration 3**: If still failing, spawn `oracle` to diagnose root cause. Apply oracle's recommendation via `build-fixer` or `kraken`. Re-verify.
-
-**Exit conditions** (stop the loop):
-- Verification passes → mark task complete, continue
-- Same failure 3 iterations in a row → mark task as blocked, log the failure, continue with other tasks
-- No actionable fix identified by oracle → mark task as blocked, notify user
-
-**Do NOT**:
-- Loop more than 3 times on the same failure
-- Retry the exact same fix that already failed
-- Skip to the next task without logging the failure
-
-#### Auto-Commit on Verified Task Completion
-
-After a task passes verification (files confirmed, tests pass, lint clean), **immediately commit the changes**:
-
-1. Stage only the files related to the completed task:
-   ```bash
-   git add <file1> <file2> ...
-   ```
-
-2. Commit with a descriptive message using the **plan title** (first `#` heading from the plan file) as the scope:
-   ```bash
-   git commit -m "$(cat <<'EOF'
-   feat(<plan-title-as-scope>): <short description of what the task accomplished>
-
-   Plan: <plan-name>
-   Task: <task subject>
-
-   Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
-   EOF
-   )"
-   ```
-
-   - Use conventional commit prefixes: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
-   - `<plan-title-as-scope>` is derived from the plan's `#` heading, lowercased and shortened to a slug (e.g., plan titled "Code Styleguides — CLAUDE.md Injection" → scope `styleguides`, plan titled "Add User Auth Flow" → scope `auth`)
-   - Keep the first line under 72 characters
-
-3. If there are no changes to commit (e.g., task was research-only), skip the commit silently.
-
-4. **Annotate the plan with the commit SHA** — After a successful commit, capture the short SHA and update the plan file so `/review` can trace each task to its commit:
-
-   ```bash
-   SHA=$(git rev-parse --short HEAD)
-   ```
-
-   Then use `Edit` to update the task's checkbox line in the plan file from:
-   ```
-   - [ ] Task N: Title
-   ```
-   to:
-   ```
-   - [x] Task N: Title <!-- commit: {SHA} -->
-   ```
-
-   This annotation is an HTML comment — invisible when rendered but machine-parseable by `/review`. If the task checkbox has already been marked `[x]` (e.g., on resume), still append the commit annotation if not already present.
-
-   **Skip this step for planless work** (no plan file to annotate).
-
-**This ensures each working increment is saved and the session never ends with 0 commits.**
-
-#### Handling Stalled Workers
-
-If a worker stops reporting progress:
-
-1. **Check task status**: `TaskGet(taskId: "N")` — look for tasks stuck in `in_progress`
-2. **Check heartbeat**: Look for a `Heartbeat:` line in the task description. If the timestamp is older than 10 minutes, the worker is likely stalled.
-3. **Send status check**:
-   ```
-   SendMessage(
-     type: "message",
-     recipient: "impl-1",
-     content: "Status check — are you blocked on anything?",
-     summary: "Worker status check"
-   )
-   ```
-4. **Wait 2 minutes** for a response after sending the status check.
-5. **Reassign if no response**: `TaskUpdate(taskId: "N", owner: "impl-2", status: "pending")`
-6. **Resolve blockers**: If the task has a dependency issue, create a new task to resolve the blocker first
-
-#### Worker Heartbeat Protocol
-
-Workers are expected to update their task description with a heartbeat timestamp every 5 minutes while working on long-running tasks. The orchestrator uses these heartbeats to detect stalled workers.
-
-**Expected worker behavior**:
-```
-TaskUpdate(taskId: "N", description: "...existing description...\nHeartbeat: 2026-02-08T07:15:00Z")
-```
-
-**Stall detection rules**:
-- Task `in_progress` for >10 minutes with no heartbeat update → considered stalled
-- Task `in_progress` for >10 minutes with a recent heartbeat (<5 min old) → still working, do not interrupt
-- Task `in_progress` for >10 minutes with a stale heartbeat (>10 min old) → likely stalled, send status check
-
-#### Completion Gate
-
-Before declaring all tasks complete and proceeding to Step 7, the orchestrator MUST pass this gate:
-
-1. **Zero pending tasks**: Run `TaskList()` and confirm no tasks are `pending` or `in_progress`
-2. **Verification commands pass**: Run every verification command from the plan's `## Verification` section
-3. **Fix failures**: If ANY verification fails, message the responsible worker to fix it or spawn a `build-fixer`
-4. **Re-verify**: After fixes, re-run all verification commands from scratch
-
-**Completion Checklist** (all must be true before proceeding):
-- [ ] All tasks completed (`TaskList()` shows zero pending/in_progress)
-- [ ] All verification commands pass (from plan's `## Verification` section)
-- [ ] No build/lint errors
-- [ ] No test failures
-
-Only after all checks pass can the orchestrator proceed to Step 6.6 (security review, if applicable), Step 6.7 (critic review, if applicable), or Step 7 (Extract Wisdom).
+See `.claude/skills/work/reference/verification-protocol.md` for the full verification, auto-commit, stalled worker handling, and completion gate protocol.
 
 ### Step 6.6: Security Review (Auto)
 
-**Trigger**: The plan has a `## Security` section (added by Prometheus during /design).
-**Skip**: Plans without a `## Security` section skip this step entirely.
-
-When triggered:
-1. Spawn `security-reviewer` on the team:
-   ```
-   Task(
-     description: "Security review of implementation",
-     name: "sec-reviewer",
-     team_name: "work-{plan-slug}",
-     subagent_type: "security-reviewer",
-     model: "opus",
-     prompt: "Review the git diff for this execution. Check for:\n{concerns from plan's ## Security section}\n\nReport findings with severity (Critical/High/Medium/Low) and file:line evidence.\n\nAlso run ecosystem audit if applicable:\n- JS/TS: `bun audit` or `npm audit`\n- Python: `pip-audit` (if available)\n- Go: `govulncheck` (if available)\n\nSend your report via SendMessage."
-   )
-   ```
-2. Wait for security-reviewer's report
-3. **Critical/High findings**: Message the responsible worker(s) to fix. Re-run security review after fixes.
-4. **Medium/Low findings**: Log in the wisdom file as security notes. Do not block completion.
-5. Proceed to Step 6.7 (Critic Review) or Step 7 (Extract Wisdom)
+See `.claude/skills/work/reference/security-prompt.md` for the security review trigger and prompt.
 
 ### Step 6.7: Critic Review (Optional)
 
@@ -622,76 +335,7 @@ Skip this step for small plans (<= 5 tasks and <= 5 files) unless the plan invol
 
 ### Step 7: Extract Wisdom
 
-After all tasks complete, record learnings to `.maestro/wisdom/{plan-name}.md`:
-
-```markdown
-# Wisdom: {Plan Name}
-
-## Conventions Discovered
-- ...
-
-## Successful Approaches
-- ...
-
-## Failed Approaches to Avoid
-- ...
-
-## Technical Gotchas
-- ...
-
-## Agent Effectiveness
-- [agent-type]: [N/M tasks completed, avg time, notes on fit]
-- Example: "build-fixer resolved 3/3 lint tasks quickly"
-- Example: "kraken was overkill for single-file config changes"
-
-## Technology Notes
-- [library/framework]: [key findings, gotchas, patterns that worked]
-- Only include for technologies not previously seen in wisdom files
-
-## Patterns Captured
-- [New test patterns, error handling patterns, API usage patterns from git diff]
-```
-
-**Automated pattern capture**: After writing the base wisdom file, scan the git diff for this execution to identify:
-1. New test patterns (test file structures, assertion styles)
-2. New error handling patterns (try/catch, error boundaries)
-3. New API usage patterns (client setup, authentication, response handling)
-
-Add any discovered patterns to the `## Patterns Captured` section.
-
-#### Auto-Extract Learned Skills
-
-**Trigger**: Plan had >= 3 tasks (skip for trivial plans).
-
-After writing the wisdom file, automatically extract reusable skill files:
-
-1. Scan the git diff for this execution
-2. Scan `<remember>` tags collected during execution (from worker output)
-3. For each candidate learning, apply quality gates:
-   - **Non-Googleable**: Would a developer NOT find this in official docs?
-   - **Context-specific**: Is it specific to this project/stack/pattern?
-   - **Actionable**: Can a future agent act on it immediately?
-   - **Hard-won**: Did it require debugging, experimentation, or failure to discover?
-4. Learnings that pass all 4 gates → save to `.claude/skills/learned/{slug}.md` with:
-   ```yaml
-   ---
-   name: {slug}
-   description: {one-line description}
-   triggers: [{keyword1}, {keyword2}]
-   source: {plan-name}
-   date: {ISO date}
-   ---
-   ```
-   Followed by the principle and when to apply it.
-5. Learnings that fail any gate → discard silently (they're already in the wisdom file)
-
-**If executing in a worktree** (handoff has `"worktree": true`): Copy the wisdom file back to the main tree so it persists after worktree removal:
-
-```bash
-cp "<worktree-path>/.maestro/wisdom/{plan-name}.md" ".maestro/wisdom/{plan-name}.md"
-```
-
-Where `<worktree-path>` is the `worktree_path` value from the handoff JSON.
+See `.claude/skills/work/reference/wisdom-extraction.md` for the full wisdom extraction and learned skills protocol.
 
 ### Step 8: Cleanup Team
 
@@ -726,8 +370,6 @@ mkdir -p .maestro/archive/
 mv .maestro/plans/{name}.md .maestro/archive/{name}.md
 ```
 
-Where `{name}` is the plan filename loaded in Step 1 (e.g., if the plan was `.maestro/plans/refactor-auth.md`, move it to `.maestro/archive/refactor-auth.md`).
-
 Log: "Archived plan to `.maestro/archive/{name}.md`"
 
 **Update the handoff file** to reflect the archived status:
@@ -742,61 +384,11 @@ Log: "Archived plan to `.maestro/archive/{name}.md`"
 }
 ```
 
-Where `{original started timestamp}` is preserved from the existing handoff file, and `{ISO timestamp}` is the current time.
-
 **Only the specific executed plan is moved** — other plans in `.maestro/plans/` are untouched.
 
 ### Step 8.7: Worktree Cleanup
 
-**Skip this step if the handoff does not have `"worktree": true`.**
-
-If execution ran in a worktree, perform cleanup from the **main tree** (not from inside the worktree):
-
-#### 1. Report Branch
-
-Tell the user which branch contains the changes:
-
-> Plan complete. Changes are on branch: `maestro/<plan-slug>`
-> Worktree path: `<worktree-path>`
-> You can merge with: `git merge maestro/<plan-slug>`
-> Or create a PR from this branch.
-
-#### 2. Ask User About Worktree Removal
-
-```
-AskUserQuestion(
-  questions: [{
-    question: "Remove the worktree now?",
-    header: "Worktree Cleanup",
-    options: [
-      { label: "Remove worktree", description: "Delete the worktree directory. The branch is preserved for merge/PR." },
-      { label: "Keep worktree", description: "Leave it in place for manual inspection. Remove later with: git worktree remove <path>" }
-    ],
-    multiSelect: false
-  }]
-)
-```
-
-#### 3. If Remove
-
-```bash
-git worktree remove "<worktree-path>"
-```
-
-Then check if the branch is fully merged:
-
-```bash
-git branch -d "maestro/<plan-slug>"
-```
-
-- If `git branch -d` succeeds: branch was fully merged, cleanup complete.
-- If `git branch -d` fails (not merged): warn the user. Do NOT force-delete with `-D` unless the user explicitly confirms.
-
-#### 4. If Keep
-
-Leave the worktree in place. Log:
-
-> Worktree preserved at `<worktree-path>`. Remove later with: `git worktree remove "<worktree-path>"`
+See `.claude/skills/work/reference/worktree-isolation.md` for the worktree cleanup protocol.
 
 ### Step 9: Report
 
@@ -839,7 +431,7 @@ Give teammates rich context — one-line prompts lead to bad results:
 [Background, constraints, related files]
 
 ## SKILL GUIDANCE
-[Only include if matching skills found — see below]
+[Only include if matching skills found — see skill-injection.md]
 
 ## MUST DO
 - [Explicit requirements]
@@ -854,28 +446,6 @@ Give teammates rich context — one-line prompts lead to bad results:
 ## KNOWLEDGE CAPTURE
 - If you solve a non-trivial debugging problem or discover a pattern that would save future effort, emit a `<remember category="learning">description of the principle</remember>` tag in your output. The orchestrator will persist these.
 ```
-
-### Injecting Skill Guidance
-
-For each task, match the task description against the skill registry using the algorithm in `.claude/lib/skill-matcher.md`:
-
-1. **Normalize** task description to lowercase words
-2. **Match** skills by triggers (highest relevance) or keywords from name/description
-3. **Rank** by priority (lower = higher priority)
-
-If matching skills are found, add a `## SKILL GUIDANCE` section after `## CONTEXT`:
-
-```
-## SKILL GUIDANCE
-
-### {skill-name}
-{Full SKILL.md content after frontmatter}
-
-### {another-skill}
-{Content}
-```
-
-**If no skills match the task, omit the `## SKILL GUIDANCE` section entirely.** Do not include an empty section — graceful degradation means the prompt works without it.
 
 ## Anti-Patterns
 
@@ -892,79 +462,4 @@ If matching skills are found, add a `## SKILL GUIDANCE` section after `## CONTEX
 
 ## Planless Work Flow
 
-When `/work` is invoked with a description instead of a plan name (detected in Step 1), follow this flow instead of the plan-based workflow.
-
-### Step P1: Analyze Description
-
-Parse the user's description to understand intent:
-
-1. Extract the core action (what to do)
-2. Identify target files, components, or modules (if mentioned)
-3. Determine scope and complexity
-
-Store the description for use in subsequent steps.
-
-### Step P2: Generate Task Breakdown
-
-Generate 1-5 atomic tasks from the description. For each task, determine:
-
-- **Subject**: Short, imperative title
-- **Agent**: `kraken` (TDD, new features, multi-file changes) or `spark` (quick fixes, single-file changes)
-- **Acceptance criteria**: Objectively verifiable outcomes
-- **Files**: Target file paths (use Glob/Grep to find if not specified in the description)
-
-Use the same task format as plan-based tasks. Keep the breakdown minimal — prefer fewer, well-scoped tasks over many granular ones.
-
-### Step P3: Confirm with User
-
-Present the generated task breakdown for user approval:
-
-````
-AskUserQuestion(
-  questions: [{
-    question: "Here's the task breakdown. How would you like to proceed?",
-    header: "Planless Work",
-    options: [
-      { label: "Execute", description: "Proceed with these tasks" },
-      { label: "Revise", description: "Let me re-describe what I want" },
-      { label: "Cancel", description: "Stop without executing" }
-    ],
-    multiSelect: false
-  }]
-)
-````
-
-Show each task with its agent assignment and acceptance criteria before asking.
-
-**On Execute** → Proceed to Step P4.
-**On Revise** → Ask the user for a new description, then repeat from Step P1.
-**On Cancel** → Stop execution.
-
-### Step P4: Join Main Workflow
-
-After user confirms, rejoin the plan-based workflow:
-
-1. **Create tasks** (same as Step 3) — convert the generated breakdown into shared tasks with dependencies
-2. **Discover skills** (same as Step 3.5) — scan for skills that can provide guidance
-3. **Proceed to Step 2** (Create Team) and continue through Steps 2 → 4 → 5 → 6 → 7 → 8 → 9
-
-### Skipped Steps in Planless Mode
-
-The following plan-based steps are skipped when running in planless mode:
-
-| Step | Reason |
-|------|--------|
-| Step 1.5 (Validate & Confirm) | No plan file to validate |
-| Step 1.7 (Worktree Isolation) | Too heavyweight for ad-hoc work |
-| Step 8.5 (Archive Plan) | No plan file to archive |
-
-All other steps (team creation, task execution, verification, wisdom extraction, cleanup, reporting) proceed normally.
-
-### Wisdom File Naming in Planless Mode
-
-When extracting wisdom (Step 7), derive the file slug from the first 5 words of the user's description:
-
-- `/work add retry logic to api client` → `.maestro/wisdom/add-retry-logic-to-api.md`
-- `/work fix login page redirect bug` → `.maestro/wisdom/fix-login-page-redirect-bug.md`
-
-Strip articles ("a", "an", "the") and limit to 5 significant words. Use hyphens as separators.
+See `.claude/skills/work/reference/planless-flow.md` for the complete planless work protocol.

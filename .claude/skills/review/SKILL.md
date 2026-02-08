@@ -395,7 +395,16 @@ Task(
   description: "Security review for code review",
   subagent_type: "security-reviewer",
   model: "opus",
-  prompt: "Analyze the following diff for security vulnerabilities:\n\n{diff from Step P1}\n\nCheck: auth/authz, input validation, secrets exposure, injection risks (SQL, XSS, command), dependency security, sensitive data logging, error message leaking.\n\nRun ecosystem audit if applicable (bun audit / pip-audit / govulncheck).\n\nReport each finding with: severity (Critical/High/Medium/Low), file:line, description, recommendation."
+  prompt: |
+    Analyze the following diff for security vulnerabilities:
+
+    {diff from Step P1}
+
+    Check: auth/authz, input validation, secrets exposure, injection risks (SQL, XSS, command), dependency security, sensitive data logging, error message leaking.
+
+    Run ecosystem audit if applicable (bun audit / pip-audit / govulncheck).
+
+    Report each finding with: severity (Critical/High/Medium/Low), file:line, description, recommendation.
 )
 ```
 
