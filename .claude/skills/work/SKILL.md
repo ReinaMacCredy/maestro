@@ -481,6 +481,25 @@ After a task passes verification (files confirmed, tests pass, lint clean), **im
 
 3. If there are no changes to commit (e.g., task was research-only), skip the commit silently.
 
+4. **Annotate the plan with the commit SHA** — After a successful commit, capture the short SHA and update the plan file so `/review` can trace each task to its commit:
+
+   ```bash
+   SHA=$(git rev-parse --short HEAD)
+   ```
+
+   Then use `Edit` to update the task's checkbox line in the plan file from:
+   ```
+   - [ ] Task N: Title
+   ```
+   to:
+   ```
+   - [x] Task N: Title <!-- commit: {SHA} -->
+   ```
+
+   This annotation is an HTML comment — invisible when rendered but machine-parseable by `/review`. If the task checkbox has already been marked `[x]` (e.g., on resume), still append the commit annotation if not already present.
+
+   **Skip this step for planless work** (no plan file to annotate).
+
 **This ensures each working increment is saved and the session never ends with 0 commits.**
 
 #### Handling Stalled Workers

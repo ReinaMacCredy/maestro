@@ -31,7 +31,8 @@ Extract these sections from the plan:
 2. **Scope (In)** — Items explicitly in scope (bulleted list under `**In**:`)
 3. **Scope (Out)** — Items explicitly out of scope (bulleted list under `**Out**:`)
 4. **Tasks** — Each task with:
-   - Task number and title (from `- [ ] Task N: Title`)
+   - Task number and title (from `- [ ] Task N: Title` or `- [x] Task N: Title`)
+   - Commit SHA (from `<!-- commit: {SHA} -->` annotation on the checkbox line, if present)
    - File path (from `**File**: \`path\``)
    - Description (from `**Description**:`)
    - Acceptance criteria (bulleted list under `**Acceptance criteria**:`)
@@ -45,10 +46,11 @@ If any section is missing, note it as `[SECTION NOT FOUND]` and continue.
 
 For **each task** in the plan, check **every acceptance criterion individually**:
 
-1. **File existence**: Does the file referenced in `**File**:` exist? (Glob)
-2. **Per-criterion check**: For each acceptance criterion:
-   - Read the target file(s)
-   - Use Grep/Read to find evidence that the criterion is satisfied
+1. **Commit traceability**: If the task has a `<!-- commit: {SHA} -->` annotation, use `git show {SHA} --stat` to identify exactly which files were changed in that commit, and `git show {SHA}` to inspect the diff. This scopes your verification to the actual changes made for this task rather than searching the entire codebase.
+2. **File existence**: Does the file referenced in `**File**:` exist? (Glob)
+3. **Per-criterion check**: For each acceptance criterion:
+   - If a commit SHA is available, prefer checking the diff from `git show {SHA}` for evidence
+   - Otherwise, read the target file(s) and use Grep/Read to find evidence
    - Look for the specific patterns, functions, sections, or behaviors described
    - Mark as **PASS** (evidence found) or **FAIL** (no evidence or contradictory evidence)
    - Record the evidence (file path + line number or grep match) or the reason for failure
@@ -131,6 +133,7 @@ Generate the final report in this exact format:
 
 #### Task {N}: {Title}
 **File**: `{path}`
+**Commit**: `{SHA or "none"}`
 **Status**: COMPLETE / PARTIAL / MISSING
 
 | # | Criterion | Verdict | Evidence |
