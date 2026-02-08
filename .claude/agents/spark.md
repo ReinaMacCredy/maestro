@@ -70,6 +70,16 @@ Persist learnings discovered during work using `<remember>` tags in your output:
 
 Categories: `learning` (codebase insights), `decision` (implementation choices), `issue` (out-of-scope problems found).
 
+## Heartbeat
+
+While working on long tasks (>5 minutes), update your task description with a heartbeat timestamp every 5 minutes:
+
+```
+TaskUpdate(taskId: "N", description: "...existing description...\nHeartbeat: 2026-02-08T07:15:00Z")
+```
+
+This helps the orchestrator detect stalled workers and avoid premature reassignment.
+
 ## Output Format
 
 ```

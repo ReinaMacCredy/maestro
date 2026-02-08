@@ -488,7 +488,8 @@ After a task passes verification (files confirmed, tests pass, lint clean), **im
 If a worker stops reporting progress:
 
 1. **Check task status**: `TaskGet(taskId: "N")` — look for tasks stuck in `in_progress`
-2. **Send status check**:
+2. **Check heartbeat**: Look for a `Heartbeat:` line in the task description. If the timestamp is older than 10 minutes, the worker is likely stalled.
+3. **Send status check**:
    ```
    SendMessage(
      type: "message",
@@ -497,8 +498,23 @@ If a worker stops reporting progress:
      summary: "Worker status check"
    )
    ```
-3. **Reassign if no response**: `TaskUpdate(taskId: "N", owner: "impl-2", status: "pending")`
-4. **Resolve blockers**: If the task has a dependency issue, create a new task to resolve the blocker first
+4. **Wait 2 minutes** for a response after sending the status check.
+5. **Reassign if no response**: `TaskUpdate(taskId: "N", owner: "impl-2", status: "pending")`
+6. **Resolve blockers**: If the task has a dependency issue, create a new task to resolve the blocker first
+
+#### Worker Heartbeat Protocol
+
+Workers are expected to update their task description with a heartbeat timestamp every 5 minutes while working on long-running tasks. The orchestrator uses these heartbeats to detect stalled workers.
+
+**Expected worker behavior**:
+```
+TaskUpdate(taskId: "N", description: "...existing description...\nHeartbeat: 2026-02-08T07:15:00Z")
+```
+
+**Stall detection rules**:
+- Task `in_progress` for >10 minutes with no heartbeat update → considered stalled
+- Task `in_progress` for >10 minutes with a recent heartbeat (<5 min old) → still working, do not interrupt
+- Task `in_progress` for >10 minutes with a stale heartbeat (>10 min old) → likely stalled, send status check
 
 #### Completion Gate
 
@@ -553,7 +569,26 @@ After all tasks complete, record learnings to `.maestro/wisdom/{plan-name}.md`:
 
 ## Technical Gotchas
 - ...
+
+## Agent Effectiveness
+- [agent-type]: [N/M tasks completed, avg time, notes on fit]
+- Example: "build-fixer resolved 3/3 lint tasks quickly"
+- Example: "kraken was overkill for single-file config changes"
+
+## Technology Notes
+- [library/framework]: [key findings, gotchas, patterns that worked]
+- Only include for technologies not previously seen in wisdom files
+
+## Patterns Captured
+- [New test patterns, error handling patterns, API usage patterns from git diff]
 ```
+
+**Automated pattern capture**: After writing the base wisdom file, scan the git diff for this execution to identify:
+1. New test patterns (test file structures, assertion styles)
+2. New error handling patterns (try/catch, error boundaries)
+3. New API usage patterns (client setup, authentication, response handling)
+
+Add any discovered patterns to the `## Patterns Captured` section.
 
 **If executing in a worktree** (handoff has `"worktree": true`): Copy the wisdom file back to the main tree so it persists after worktree removal:
 

@@ -69,6 +69,10 @@ Before spawning a worker, analyze the task's complexity to choose the appropriat
 
 For detailed scoring criteria (lexical signals, structural signals, score thresholds), see `.claude/lib/complexity-scoring.md`.
 
+## Background Agent Management
+
+When spawning 3+ workers, use wave spawning and polling from `.claude/lib/background-agent-guide.md`. Key rules: spawn in batches of 3-4, poll `TaskList()` every 30 seconds, reserve 1 slot for ad-hoc agents (build-fixer, critic), and replace failed agents with additional error context.
+
 ## Workflow Summary
 
-Load plan → create team → create tasks (TaskCreate) → spawn workers in parallel → assign first round → workers self-claim remaining → verify results → extract wisdom → cleanup team → report
+Load plan → create team → create tasks (TaskCreate) → spawn workers in waves → assign first round → workers self-claim remaining → verify results → extract wisdom → cleanup team → report

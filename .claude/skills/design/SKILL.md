@@ -28,6 +28,7 @@ You MUST follow these steps in order. Do NOT skip team creation.
 Determine the design mode from `$ARGUMENTS`:
 
 - **Quick mode**: Triggered by `--quick` flag, OR when the request is short and specific enough for streamlined treatment
+- **Consensus mode**: Triggered by `--consensus` flag. Extends full mode with dual review (leviathan + critic) and feedback loop
 - **Full mode** (default): All other cases
 
 Pass the detected mode to Prometheus in its prompt so it adjusts its depth accordingly.
@@ -188,6 +189,41 @@ Then wait for the next `plan_approval_request` from Prometheus and repeat from S
 
 **Max 2 review loops.** After 2 REVISE cycles, proceed to Step 8 regardless — present the plan to the user with leviathan's remaining concerns noted.
 
+### Step 7.5: Consensus Review (Consensus Mode Only)
+
+**Quick mode or Full mode**: Skip to Step 8.
+
+**Consensus mode** (`--consensus`): After leviathan approves (or after Step 6 for first pass), spawn a critic for strategic review:
+
+```
+Task(
+  description: "Strategic review of plan for {topic}",
+  name: "critic-reviewer",
+  team_name: "design-{topic}",
+  subagent_type: "critic",
+  model: "opus",
+  prompt: "Review this plan for strategic coherence, risk coverage, and completeness.\n\nPlan file: {path to plan file}\n\nRead the plan, then send your APPROVE/REVISE verdict via SendMessage. Focus on:\n- Are the tasks correctly scoped?\n- Are dependencies accurate?\n- Are there missing edge cases or risks?\n- Is the verification section sufficient?"
+)
+```
+
+Wait for the critic's verdict:
+
+**Both leviathan and critic APPROVE** -> Proceed to Step 8.
+
+**Either returns REVISE** -> Send rejection to Prometheus with combined feedback from both reviewers:
+```
+SendMessage(
+  type: "plan_approval_response",
+  request_id: "{from the plan_approval_request}",
+  recipient: "prometheus",
+  approve: false,
+  content: "Consensus review found issues:\n{leviathan feedback}\n{critic feedback}"
+)
+```
+Then wait for the next `plan_approval_request` and repeat from Step 5.
+
+**Max 3 consensus loops.** After 3 rounds, proceed to Step 8 with the best version and note unresolved issues from both reviewers.
+
 ### Step 8: Present Plan to User
 
 When the plan is ready (leviathan PASS, or quick mode, or max loops reached):
@@ -340,12 +376,13 @@ Shutdown Prometheus and leviathan, then clean up:
 ```
 SendMessage(type: "shutdown_request", recipient: "prometheus")
 SendMessage(type: "shutdown_request", recipient: "leviathan")
+SendMessage(type: "shutdown_request", recipient: "critic-reviewer")
 TeamDelete()
 ```
 
 **IMPORTANT**: Do NOT pass any parameters to `TeamDelete()` — no `reason`, no arguments. The tool accepts no parameters and will error if any are provided.
 
-Note: leviathan may not exist (quick mode). Ignore errors if the shutdown fails for a non-existent teammate.
+Note: leviathan and critic-reviewer may not exist (quick/full mode). Ignore errors if the shutdown fails for a non-existent teammate.
 
 ### Step 12: Hand Off
 
