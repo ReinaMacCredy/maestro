@@ -1,6 +1,7 @@
 ---
 name: spark
 description: Quick fix specialist for simple, focused changes. Lightweight and fast.
+phase: work
 tools: Read, Write, Edit, Grep, Glob, Bash, TaskList, TaskGet, TaskUpdate, SendMessage
 disallowedTools: Task, TeamCreate, TeamDelete
 model: sonnet

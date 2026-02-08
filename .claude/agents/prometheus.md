@@ -1,6 +1,7 @@
 ---
 name: prometheus
 description: Interview-driven planner. Coordinates with pre-spawned explore/oracle for research. Operates in plan mode when spawned by design orchestrator.
+phase: design
 tools: Read, Write, Edit, Grep, Glob, Bash, SendMessage, TaskCreate, TaskList, TaskUpdate, TaskGet, AskUserQuestion, WebSearch, WebFetch
 model: sonnet
 hooks:

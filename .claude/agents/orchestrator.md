@@ -1,6 +1,7 @@
 ---
 name: orchestrator
 description: Team lead that coordinates work via Agent Teams. Delegates all implementation to specialized teammates.
+phase: work
 tools: Read, Grep, Glob, Bash, Task, TeamCreate, TeamDelete, SendMessage, TaskCreate, TaskList, TaskUpdate, TaskGet
 disallowedTools: Write, Edit
 model: sonnet

@@ -1,6 +1,7 @@
 ---
 name: leviathan
 description: Deep-reasoning plan reviewer. Validates structural completeness AND strategic coherence of generated plans before execution tokens are spent.
+phase: design
 tools: Read, Grep, Glob, Bash, TaskList, TaskGet, TaskUpdate, SendMessage
 disallowedTools: Write, Edit, NotebookEdit, Task, TeamCreate, TeamDelete
 model: opus

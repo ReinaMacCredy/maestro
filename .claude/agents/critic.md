@@ -1,6 +1,7 @@
 ---
 name: critic
 description: Post-implementation reviewer. Reads code, runs tests, checks for quality issues. Returns APPROVE or REVISE verdict.
+phase: design, work
 tools: Read, Grep, Glob, Bash, TaskList, TaskGet, TaskUpdate, SendMessage
 disallowedTools: Write, Edit, Task, TeamCreate, TeamDelete
 model: opus

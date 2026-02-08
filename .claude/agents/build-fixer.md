@@ -1,6 +1,7 @@
 ---
 name: build-fixer
 description: Specialist for resolving build, compile, and lint errors. Focused and fast -- fixes the error, nothing more.
+phase: work
 tools: Read, Write, Edit, Grep, Glob, Bash, TaskList, TaskGet, TaskUpdate, SendMessage
 disallowedTools: Task, TeamCreate, TeamDelete
 model: sonnet

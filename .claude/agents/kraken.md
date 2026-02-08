@@ -1,6 +1,7 @@
 ---
 name: kraken
 description: TDD implementation specialist. Writes failing tests first, then implements to make them pass. Red-Green-Refactor cycle.
+phase: work
 tools: Read, Write, Edit, Grep, Glob, Bash, TaskList, TaskGet, TaskUpdate, SendMessage
 disallowedTools: Task, TeamCreate, TeamDelete
 model: sonnet

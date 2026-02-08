@@ -1,6 +1,7 @@
 ---
 name: oracle
 description: Strategic technical advisor with deep reasoning capabilities. Read-only consultant for complex architecture, debugging hard problems, and multi-system tradeoffs.
+phase: design, work
 tools: Read, Grep, Glob, Bash, TaskList, TaskGet, TaskUpdate, SendMessage
 disallowedTools: Write, Edit, NotebookEdit, Task, TeamCreate, TeamDelete
 model: opus

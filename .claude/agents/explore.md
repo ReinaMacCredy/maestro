@@ -1,6 +1,7 @@
 ---
 name: explore
 description: Codebase search specialist. Finds files, code patterns, and returns actionable results with absolute paths.
+phase: design, work
 tools: Read, Grep, Glob, Bash, TaskList, TaskGet, TaskUpdate, SendMessage, WebSearch, WebFetch
 disallowedTools: Write, Edit, NotebookEdit, Task, TeamCreate, TeamDelete
 model: sonnet

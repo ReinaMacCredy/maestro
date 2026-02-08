@@ -1,6 +1,7 @@
 ---
 name: wisdom-synthesizer
 description: Consolidates and synthesizes accumulated wisdom from .maestro/wisdom/ files into actionable insights.
+phase: work
 tools: Read, Grep, Glob, Bash, TaskList, TaskGet, TaskUpdate, SendMessage
 disallowedTools: Write, Edit, NotebookEdit, Task, TeamCreate, TeamDelete
 model: haiku
