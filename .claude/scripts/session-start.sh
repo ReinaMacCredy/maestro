@@ -184,6 +184,40 @@ if [[ -d "$wisdom_dir" ]]; then
   fi
 fi
 
+# 5. Priority context from notepad
+notepad_file="$PROJECT_DIR/.maestro/notepad.md"
+if [[ -f "$notepad_file" ]]; then
+  priority_content=""
+  in_priority=false
+  while IFS= read -r line; do
+    if [[ "$line" == "## Priority Context" ]]; then
+      in_priority=true
+      continue
+    fi
+    if $in_priority; then
+      # Stop at next section header
+      if [[ "$line" =~ ^## ]]; then
+        break
+      fi
+      # Skip empty lines
+      trimmed="${line#"${line%%[! ]*}"}"
+      [[ -z "$trimmed" ]] && continue
+      if [[ -n "$priority_content" ]]; then
+        priority_content="$priority_content; $trimmed"
+      else
+        priority_content="$trimmed"
+      fi
+    fi
+  done < "$notepad_file"
+  if [[ -n "$priority_content" ]]; then
+    # Truncate to 500 chars
+    if [[ ${#priority_content} -gt 500 ]]; then
+      priority_content="${priority_content:0:500}..."
+    fi
+    context_parts+=("Priority context: $priority_content")
+  fi
+fi
+
 # If only the static commands line exists and nothing else was found, exit silently
 if [[ ${#context_parts[@]} -le 1 ]]; then
   # Check if skills/plans/wisdom dirs even exist with content

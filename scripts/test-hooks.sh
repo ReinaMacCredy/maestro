@@ -7,7 +7,7 @@ set -euo pipefail
 SCRIPTS_DIR="$(cd "$(dirname "$0")/../.claude/scripts" && pwd)"
 PASS=0
 FAIL=0
-TOTAL=15
+TOTAL=17
 
 red() { printf '\033[0;31m%s\033[0m\n' "$1"; }
 green() { printf '\033[0;32m%s\033[0m\n' "$1"; }
@@ -300,6 +300,50 @@ if echo "$output" | jq -e '.hookSpecificOutput.additionalContext' > /dev/null 2>
   fi
 else
   fail "session-start.sh active plan JSON" "Output: $output"
+fi
+
+# -------------------------------------------------------
+# Test 16: session-start.sh includes priority context from notepad
+# -------------------------------------------------------
+bold "Test 16: session-start.sh includes priority context from notepad"
+setup_project
+mkdir -p "$TMPDIR/.maestro"
+cat > "$TMPDIR/.maestro/notepad.md" <<'NOTEPAD'
+# Notepad
+## Priority Context
+Fix auth before deploy
+## Working Memory
+## Manual
+NOTEPAD
+
+output=$(CLAUDE_PROJECT_DIR="$TMPDIR" bash "$SCRIPTS_DIR/session-start.sh" < /dev/null 2>&1) || true
+if echo "$output" | jq -e '.hookSpecificOutput.additionalContext' > /dev/null 2>&1; then
+  context=$(echo "$output" | jq -r '.hookSpecificOutput.additionalContext')
+  if [[ "$context" == *"Priority context:"* ]]; then
+    pass "session-start.sh includes priority context from notepad"
+  else
+    fail "session-start.sh priority context" "Missing 'Priority context:' in: $context"
+  fi
+else
+  fail "session-start.sh priority context JSON" "Output: $output"
+fi
+
+# -------------------------------------------------------
+# Test 17: subagent-context.sh outputs context for security-reviewer
+# -------------------------------------------------------
+bold "Test 17: subagent-context.sh outputs context for security-reviewer"
+setup_project
+cat > "$TMPDIR/.maestro/plans/work.md" <<'PLAN'
+# Work Plan
+## Tasks
+- [ ] Review security
+PLAN
+
+output=$(echo '{"agent_type":"security-reviewer"}' | CLAUDE_PROJECT_DIR="$TMPDIR" bash "$SCRIPTS_DIR/subagent-context.sh" 2>&1) || true
+if echo "$output" | jq -e '.hookSpecificOutput.additionalContext' > /dev/null 2>&1; then
+  pass "subagent-context.sh outputs context for security-reviewer"
+else
+  fail "subagent-context.sh security-reviewer" "Expected context JSON, got: $output"
 fi
 
 # -------------------------------------------------------
