@@ -332,55 +332,43 @@ When the plan is ready (leviathan PASS, or quick mode, or max loops reached):
    - {decision 1}
    - {decision 2}
    - {decision 3}
-   ---
-   ```
 
-3. If leviathan had remaining concerns after max loops, note them for the user
-4. Generate and display an ASCII dependency flowchart below the summary:
+   **Dependency Flow**:
 
-   **Parse dependencies from each task:**
-   - For each `- [ ] Task N:` line, extract the `**Dependencies**:` value (e.g., "Task 1", "Task 1, Task 2", or "None")
-   - Build a dependency graph: each task is a node, each dependency is a directed edge
+   Generate an ASCII dependency flowchart. Parse dependencies from each task's `**Dependencies**:` field and render:
 
-   **Render algorithm:**
-   - **Row 0 (entry points)**: Tasks with no dependencies (Dependencies: None)
-   - **Subsequent rows**: A task appears on the row after all its dependencies. Tasks whose dependencies are all satisfied at the same row appear side-by-side (parallel)
-   - Connect rows with vertical arrows (`│`, `▼`)
-   - Use box-drawing characters for task boxes
+   - **Row 0**: Tasks with no dependencies (side-by-side if multiple)
+   - **Subsequent rows**: Tasks whose dependencies are all in prior rows (side-by-side = parallel)
+   - Connect rows with `│` and `▼` arrows
+   - Use `┌───┐ └───┘` box-drawing for task boxes
+   - Branch with `┌───┴───┐`, merge with `└───┬───┘`
 
-   **Task box format** (fixed width 36 chars):
+   Example (T1 no deps, T2+T3 depend on T1, T4 depends on T2+T3):
    ```
    ┌──────────────────────────────────┐
-   │ T{N}: {title≤30chars} [{agent}]  │
-   └──────────────────────────────────┘
-   ```
-
-   **Example flowchart** (4 tasks: T1 has no deps, T2 and T3 depend on T1, T4 depends on T2 and T3):
-   ```
-   ## Dependency Flow
-
-   ┌──────────────────────────────────┐
-   │ T1: Set up project scaffo… [kraken] │
+   │ T1: Set up scaffolding   [kraken]│
    └──────────────────────────────────┘
                │
        ┌───────┴───────┐
        ▼               ▼
-   ┌──────────────────────────────────┐  ┌──────────────────────────────────┐
-   │ T2: Implement auth module [kraken] │  │ T3: Add config validation [spark]  │
-   └──────────────────────────────────┘  └──────────────────────────────────┘
+   ┌────────────────┐  ┌────────────────┐
+   │ T2: Auth [kraken]│  │ T3: Config [spark]│
+   └────────────────┘  └────────────────┘
        │               │
        └───────┬───────┘
                ▼
    ┌──────────────────────────────────┐
-   │ T4: Integration tests      [kraken] │
+   │ T4: Integration tests   [kraken]│
    └──────────────────────────────────┘
-
-   Legend: → sequential dependency | side-by-side = parallel execution
    ```
 
-   If all tasks are independent (no dependencies), display them in a single row with a note: `All tasks run in parallel — no dependencies.`
+   If all tasks are independent, show them side-by-side with: `All tasks run in parallel — no dependencies.`
 
-5. Ask the user to approve, reject, or request revisions:
+   ---
+   ```
+
+3. If leviathan had remaining concerns after max loops, note them for the user
+4. Ask the user to approve, reject, or request revisions:
 
 ```
 AskUserQuestion(
