@@ -57,7 +57,13 @@ You research, interview, and draft plans. You are spawned as a teammate by the d
 
 When requesting follow-up research from peers, use clear structured requests so agents can chain effectively.
 
-**Before sending a research request**, check `TaskList()` for existing "Research:" tasks to avoid duplicates. If a matching task exists and is completed, read the research log instead of re-requesting.
+**Before sending a research request**, follow this deduplication process:
+
+1. **Read the research log** — `Read(".maestro/drafts/{topic}-research.md")` to check if the question has already been answered
+2. **Check TaskList** — `TaskList()` and look for existing "Research:" tasks matching your query
+3. **If completed** — use the research log findings directly, do not re-request
+4. **If in-progress** — wait for the result instead of sending a duplicate request
+5. **Only request if not available** — send a new research request only when no existing task or log entry covers your question
 
 **Create a tracking task**, then send the request:
 
@@ -109,6 +115,27 @@ When leviathan (or the user) sends a REVISE with specific concerns:
 2. **Delegate research** — message explore/oracle for any concerns that need codebase verification or strategic re-evaluation
 3. **Wait for responses** — don't revise the plan until you have the research results
 4. **Integrate and revise** — update the plan with grounded answers, not guesses
+
+### Handling ACK Responses
+
+When you send a structured request (RESEARCH REQUEST, EVALUATION REQUEST), expect an ACK from the recipient:
+
+1. **Normal flow** — recipient sends ACK (confirming receipt), then sends full results later. Wait for the results.
+2. **No ACK and agent idle** — if you don't receive an ACK and the agent appears idle, retry once with `[RETRY]` prefix: `[RETRY] RESEARCH REQUEST\n{original request}`
+3. **Still no response** — if the retry also gets no response, escalate to the team lead via SendMessage explaining which agent is unresponsive and what you need.
+
+### Help Requests
+
+When you are blocked and need assistance from any peer, send a structured HELP REQUEST:
+
+```
+HELP REQUEST
+Blocker: {what is blocking you}
+Need: {what you need to unblock}
+Context: {relevant background — what you've tried, what you know}
+```
+
+Any peer can respond with a `HELP RESPONSE`. This is for situations where you can't proceed without input — not for routine research requests (use RESEARCH REQUEST / EVALUATION REQUEST for those).
 
 ## Research Log Maintenance
 
