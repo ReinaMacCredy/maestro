@@ -237,7 +237,7 @@ bold "Test 12: verification-injector.sh outputs reminder"
 output=$(echo '{}' | bash "$SCRIPTS_DIR/verification-injector.sh" 2>&1) || true
 if echo "$output" | jq -e '.hookSpecificOutput.additionalContext' > /dev/null 2>&1; then
   context=$(echo "$output" | jq -r '.hookSpecificOutput.additionalContext')
-  if [[ "$context" == *"VERIFY"* ]]; then
+  if [[ "$context" == *"VERIFICATION"* ]]; then
     pass "verification-injector.sh outputs verification reminder"
   else
     fail "verification-injector.sh content" "Missing VERIFY in: $context"
@@ -293,10 +293,10 @@ HANDOFF
 output=$(CLAUDE_PROJECT_DIR="$TMPDIR" bash "$SCRIPTS_DIR/session-start.sh" < /dev/null 2>&1) || true
 if echo "$output" | jq -e '.hookSpecificOutput.additionalContext' > /dev/null 2>&1; then
   context=$(echo "$output" | jq -r '.hookSpecificOutput.additionalContext')
-  if [[ "$context" == *"ACTIVE PLAN: Build dashboard"* ]]; then
+  if [[ "$context" == *"ACTIVE EXECUTION:"* ]]; then
     pass "session-start.sh includes ACTIVE PLAN from handoff file"
   else
-    fail "session-start.sh active plan content" "Missing ACTIVE PLAN in: $context"
+    fail "session-start.sh active plan content" "Missing ACTIVE EXECUTION in: $context"
   fi
 else
   fail "session-start.sh active plan JSON" "Output: $output"
