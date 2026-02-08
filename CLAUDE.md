@@ -24,6 +24,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `/setup` — Scaffold project context (product definition, tech stack, guidelines)
 - `/reset` — Clean stale state (teams, handoff files, drafts)
 - `/plan-template <name>` — Scaffold blank plan with required sections
+- `/pipeline <preset> | <agent1 -> agent2 'task'>` — Sequential agent chains with context passing
 
 ### Validation
 

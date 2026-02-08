@@ -30,7 +30,8 @@
       {
         "matcher": "Task",
         "hooks": [
-          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/verification-injector.sh" }
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/verification-injector.sh" },
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/remember-extractor.sh" }
         ]
       },
       {

@@ -315,6 +315,8 @@ Set up dependencies between tasks using `TaskUpdate(addBlockedBy: [...])` where 
 **Fresh mode** (default): Create tasks for all items. Show summary:
 > Starting fresh: N tasks
 
+**File ownership**: When creating tasks from plan checkboxes, extract file paths mentioned in each task's Files section. Include an `**Owned files**: file1.ts, file2.ts` line in the task description. This helps avoid file contention when assigning parallel workers in Step 5.
+
 ### Step 3.5: Discover Available Skills
 
 Before spawning teammates, discover skills that can provide guidance for task delegation.
@@ -424,6 +426,8 @@ TaskUpdate(taskId: "3", owner: "fixer-1", status: "in_progress")
 
 After the first round, workers **self-claim** from `TaskList()` when they finish. You don't need to micro-manage every assignment.
 
+**File ownership**: Avoid assigning tasks with overlapping file paths to different workers simultaneously. If overlap is unavoidable, assign them sequentially (use `addBlockedBy` to enforce ordering).
+
 ### Step 6: Monitor & Verify
 
 **TEAMMATES CAN MAKE MISTAKES. ALWAYS VERIFY.**
@@ -494,6 +498,41 @@ If a worker stops reporting progress:
    ```
 3. **Reassign if no response**: `TaskUpdate(taskId: "N", owner: "impl-2", status: "pending")`
 4. **Resolve blockers**: If the task has a dependency issue, create a new task to resolve the blocker first
+
+#### Completion Gate
+
+Before declaring all tasks complete and proceeding to Step 7, the orchestrator MUST pass this gate:
+
+1. **Zero pending tasks**: Run `TaskList()` and confirm no tasks are `pending` or `in_progress`
+2. **Verification commands pass**: Run every verification command from the plan's `## Verification` section
+3. **Fix failures**: If ANY verification fails, message the responsible worker to fix it or spawn a `build-fixer`
+4. **Re-verify**: After fixes, re-run all verification commands from scratch
+
+**Completion Checklist** (all must be true before proceeding):
+- [ ] All tasks completed (`TaskList()` shows zero pending/in_progress)
+- [ ] All verification commands pass (from plan's `## Verification` section)
+- [ ] No build/lint errors
+- [ ] No test failures
+
+Only after all checks pass can the orchestrator proceed to Step 6.5 (optional) or Step 7 (Extract Wisdom).
+
+### Step 6.5: Critic Review (Optional)
+
+Spawn a critic for final review when the plan has >5 tasks or touches >5 files:
+
+```
+Task(
+  description: "Review implementation for quality issues",
+  name: "reviewer",
+  team_name: "work-{plan-slug}",
+  subagent_type: "critic",
+  prompt: "Review all files modified in this execution. Run tests, check for issues, report APPROVE/REVISE verdict."
+)
+```
+
+If the critic returns **REVISE**, message the responsible worker(s) with the specific issues and wait for fixes before proceeding. If **APPROVE**, proceed to Step 7.
+
+Skip this step for small plans (<= 5 tasks and <= 5 files) unless the plan involves security-sensitive changes.
 
 ### Step 7: Extract Wisdom
 

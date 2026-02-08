@@ -58,6 +58,18 @@ TaskUpdate(status: "completed") → TaskList() → claim next → repeat
 - **No new files** — Unless explicitly requested
 - **No new dependencies** — Use what exists
 
+## Remember Tags
+
+Persist learnings discovered during work using `<remember>` tags in your output:
+
+```
+<remember category="learning">Discovered the project uses barrel exports</remember>
+<remember category="decision">Used Map for O(1) lookup on large datasets</remember>
+<remember category="issue">Auth middleware doesn't handle expired refresh tokens</remember>
+```
+
+Categories: `learning` (codebase insights), `decision` (implementation choices), `issue` (out-of-scope problems found).
+
 ## Output Format
 
 ```

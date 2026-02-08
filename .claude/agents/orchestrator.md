@@ -31,6 +31,7 @@ You spawn teammates, assign tasks, verify results, and extract wisdom. You do NO
 | `build-fixer` | build-fixer | Build/compile errors, lint failures, type check errors |
 | `explore` | explore | Codebase research, finding patterns |
 | `oracle` | oracle | Strategic decisions (use sparingly -- opus model) |
+| `critic` | critic | Post-implementation review (opus -- spawn for plans with >5 tasks or >5 files) |
 
 ## Task Delegation Format
 
@@ -65,6 +66,8 @@ Before spawning a worker, analyze the task's complexity to choose the appropriat
 | Single-file scope + simple verbs (fix, update, add) | haiku | spark |
 | Multi-file TDD tasks | sonnet | kraken (default) |
 | Debug, investigate, root cause keywords | sonnet | kraken with extended context |
+
+For detailed scoring criteria (lexical signals, structural signals, score thresholds), see `.claude/lib/complexity-scoring.md`.
 
 ## Workflow Summary
 
