@@ -9,19 +9,44 @@ PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
 # Collect context sections
 context_parts=()
 
-# 0. Active plan detection from handoff files
+# 0. Active plan detection from handoff files (with staleness detection)
 handoff_dir="$PROJECT_DIR/.maestro/handoff"
 if [[ -d "$handoff_dir" ]]; then
+  now=$(date +%s)
   for handoff in "$handoff_dir"/*.json; do
     [[ -f "$handoff" ]] || continue
     status=$(jq -r '.status // empty' "$handoff" 2>/dev/null) || continue
     topic=$(jq -r '.topic // empty' "$handoff" 2>/dev/null) || continue
+    [[ -z "$status" || -z "$topic" ]] && continue
+    # Check for staleness via timestamp fields
+    is_stale=false
+    started_at=$(jq -r '.startedAt // .createdAt // .timestamp // empty' "$handoff" 2>/dev/null) || started_at=""
+    if [[ -n "$started_at" ]]; then
+      # Convert ISO timestamp to epoch (GNU and BSD date compatible)
+      started_epoch=$(date -j -f "%Y-%m-%dT%H:%M:%S" "${started_at%%.*}" +%s 2>/dev/null) || \
+        started_epoch=$(date -d "$started_at" +%s 2>/dev/null) || \
+        started_epoch=""
+      if [[ -n "$started_epoch" ]]; then
+        elapsed=$(( now - started_epoch ))
+        if [[ $elapsed -gt 86400 ]]; then
+          is_stale=true
+        fi
+      fi
+    fi
     case "$status" in
       executing)
-        context_parts+=("ACTIVE PLAN: $topic (status: executing) — Run /work --resume to continue")
+        if $is_stale; then
+          context_parts+=("STALE SESSION: Plan $topic started over 24 hours ago. Run /reset to clean up, or /work --resume to continue.")
+        else
+          context_parts+=("ACTIVE EXECUTION: Plan $topic was in progress. Run /work --resume to continue.")
+        fi
         ;;
       designing)
-        context_parts+=("ACTIVE PLAN: $topic (status: designing) — Run /design to continue")
+        if $is_stale; then
+          context_parts+=("STALE SESSION: Plan $topic (designing) started over 24 hours ago. Run /reset to clean up, or /design to continue.")
+        else
+          context_parts+=("ACTIVE DESIGN: Plan $topic was being designed. Run /design to continue.")
+        fi
         ;;
     esac
   done
