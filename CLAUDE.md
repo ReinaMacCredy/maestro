@@ -75,11 +75,17 @@ Shell scripts in `.claude/scripts/` enforce workflow invariants via `.claude/hoo
 | `orchestrator-guard.sh` | PreToolUse(Write/Edit) | Orchestrator cannot edit files directly — must delegate |
 | `plan-protection.sh` | PreToolUse(Write/Edit) | kraken/spark cannot edit `.maestro/plans/` files |
 | `verification-injector.sh` | PostToolUse(Task) | Reminds orchestrator to verify task results |
+| `remember-extractor.sh` | PostToolUse(Task) | Extracts remember tags from task output |
 | `plan-validator.sh` | PostToolUse(Write) | Warns if plan is missing required sections |
 | `wisdom-injector.sh` | PostToolUse(Read) | Surfaces wisdom files when a plan is read |
+| `error-detector.sh` | PostToolUse(Bash) | Detects build/test errors in command output |
+| `bash-history.sh` | PostToolUse(Bash) | Tracks command history for context |
 | `plan-context-injector.sh` | PreCompact | Injects active plan context into compaction summary |
-| `session-start.sh` | SessionStart | Session initialization |
-| `subagent-context.sh` | SubagentStart | Injects context into subagents |
+| `session-start.sh` | SessionStart | Session initialization (surfaces skills, plans, wisdom, notepad priority context) |
+| `subagent-context.sh` | SubagentStart | Injects plan context into worker subagents |
+| `worker-persistence.sh` | Stop | Persists worker state on session end |
+| `keyword-detector.sh` | UserPromptSubmit | Detects keywords in user prompts for skill activation |
+| `skill-injector.sh` | UserPromptSubmit | Injects matching skill context into prompts |
 
 ### Runtime State
 
@@ -98,6 +104,10 @@ Shell scripts in `.claude/scripts/` enforce workflow invariants via `.claude/hoo
 ### Skill Interoperability
 
 Maestro auto-discovers installed skills from `.claude/skills/`, `~/.claude/skills/`, and plugin marketplaces. Matching skills are injected into worker prompts as `## SKILL GUIDANCE` sections. Discovery logic is in `.claude/lib/skill-registry.md`, matching logic in `.claude/lib/skill-matcher.md`.
+
+### Toolboxes
+
+`toolboxes/` contains optional MCP server extensions. `mcp_template.json` provides a template for `mcp.json` configuration. The `agent-mail` toolbox provides inter-agent messaging capabilities (TypeScript source + compiled JS).
 
 ## Agents
 
@@ -127,3 +137,13 @@ Team leads have `Task`, `TeamCreate`, `TeamDelete`, `SendMessage`. Workers have 
 5. **Verify teammate claims** — Always read files and run tests after delegation
 6. **TDD by default** — Use kraken for new features
 7. **Plan required sections** — `## Objective`, `## Tasks` (with checkboxes), `## Verification` are mandatory
+
+## Development Notes
+
+- This is a **markdown-and-shell-only** project — no build step, no package manager, no compiled code (except the agent-mail toolbox TypeScript)
+- Hook scripts must output valid JSON to stdout (Claude Code hook protocol) or nothing at all — any non-JSON stdout breaks the hook chain
+- Hook scripts receive context via stdin as JSON and environment variables (`CLAUDE_PROJECT_DIR`, `CLAUDE_AGENT_NAME`, etc.)
+- Skills are defined by `SKILL.md` files with YAML frontmatter (`name`, `description`, `triggers`, `priority`)
+- Agent definitions in `.claude/agents/` are lean identity files — workflow logic lives in skill SKILL.md files, never in agent definitions
+- The `.claude/settings.json` is checked into the repo (project settings); `.claude/settings.local.json` is for local overrides
+- When adding new hooks: add the script to `.claude/scripts/`, register in `.claude/hooks/hooks.json`, and add a test to `scripts/test-hooks.sh`
