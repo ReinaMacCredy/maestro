@@ -398,6 +398,7 @@ Task(
 | `build-fixer` | build-fixer | Build/compile errors, lint failures, type check errors |
 | `explore` | explore | Codebase research, finding patterns |
 | `oracle` | oracle | Strategic decisions (uses opus -- spawn sparingly) |
+| `critic` | critic | Post-implementation review (opus -- see Step 6.5) |
 
 **Model selection**: Before spawning, analyze each task's keywords to choose the model tier. Tasks with architecture/refactor/redesign keywords should route to oracle (opus). Single-file simple tasks route to spark (haiku in eco mode). Multi-file TDD tasks use kraken (sonnet). Debug/investigate tasks use kraken with extended context. See the orchestrator's Model Selection Guide in `.claude/agents/orchestrator.md` for the full routing table.
 

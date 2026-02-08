@@ -92,10 +92,11 @@ Maestro auto-discovers installed skills from `.claude/skills/`, `~/.claude/skill
 | Agent | Role | Model | Spawns |
 |-------|------|-------|--------|
 | `prometheus` | Interview-driven planner (team lead) | sonnet | explore, oracle |
-| `orchestrator` | Execution coordinator (team lead) | sonnet | kraken, spark, build-fixer, explore |
+| `orchestrator` | Execution coordinator (team lead) | sonnet | kraken, spark, build-fixer, critic, explore |
 | `kraken` | TDD implementation (worker) | sonnet | — |
 | `spark` | Quick fixes (worker) | sonnet | — |
 | `build-fixer` | Build/compile/lint error specialist (worker) | sonnet | — |
+| `critic` | Post-implementation reviewer (read-only) | opus | — |
 | `oracle` | Strategic advisor (read-only) | opus | — |
 | `explore` | Codebase search (read-only) | sonnet | — |
 | `leviathan` | Deep plan reviewer | opus | — |
