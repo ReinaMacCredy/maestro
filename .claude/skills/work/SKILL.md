@@ -396,7 +396,7 @@ Task(
 | `kraken` | kraken | TDD, new features, multi-file changes |
 | `spark` | spark | Quick fixes, single-file changes, config updates |
 | `build-fixer` | build-fixer | Build/compile errors, lint failures, type check errors |
-| `explore` | explore | Codebase research, finding patterns |
+| `explore` | Explore | Codebase research, finding patterns |
 | `oracle` | oracle | Strategic decisions (uses opus -- spawn sparingly) |
 | `critic` | critic | Post-implementation review (opus -- see Step 6.5) |
 

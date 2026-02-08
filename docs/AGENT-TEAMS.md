@@ -64,7 +64,7 @@ TaskUpdate(nextId, owner: "my-name")      # Claim next
 Teammate(operation: "spawnTeam", team_name: "design-auth", description: "Planning auth")
 
 # 2. Spawn researchers in parallel
-Task(name: "researcher", team_name: "design-auth", subagent_type: "explore", prompt: "Find auth patterns...")
+Task(name: "researcher", team_name: "design-auth", subagent_type: "Explore", prompt: "Find auth patterns...")
 Task(name: "advisor", team_name: "design-auth", subagent_type: "oracle", prompt: "Evaluate JWT vs sessions...")
 
 # 3. Interview user while research happens

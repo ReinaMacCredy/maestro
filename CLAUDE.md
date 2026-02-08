@@ -41,7 +41,7 @@ cat .claude-plugin/plugin.json | jq .     # Validate plugin manifest
 
 Both phases create Agent Teams. The skill SKILL.md files are the source of truth for each workflow — not agent definitions, not docs.
 
-**Design phase** (`/design`): Design skill acts as thin team lead → spawns `prometheus` in plan mode → prometheus detects external libraries and fetches docs via Context7 MCP (with WebSearch/WebFetch fallback) → spawns `explore`/`oracle` for codebase research → conducts interview → `leviathan` reviews plan (full mode only) → user approves → plan saved to `.maestro/plans/`.
+**Design phase** (`/design`): Design skill acts as thin team lead → spawns `prometheus` (built-in Plan type) in plan mode → prometheus detects external libraries and fetches docs via Context7 MCP (with WebSearch/WebFetch fallback) → spawns `explore` (built-in Explore type)/`oracle` for codebase research → conducts interview → `leviathan` reviews plan (full mode only) → user approves → plan saved to `.maestro/plans/`.
 
 **Execution phase** (`/work`): Work skill acts as orchestrator → loads plan → creates tasks with dependencies → spawns 2-4 workers (`kraken`/`spark`) in parallel → workers self-claim tasks via TaskList → orchestrator verifies each result → commits after verified tasks → extracts wisdom → archives plan to `.maestro/archive/`.
 
@@ -91,14 +91,14 @@ Maestro auto-discovers installed skills from `.claude/skills/`, `~/.claude/skill
 
 | Agent | Role | Model | Spawns |
 |-------|------|-------|--------|
-| `prometheus` | Interview-driven planner (team lead) | sonnet | explore, oracle |
+| `prometheus` (Plan) | Interview-driven planner | sonnet | — |
 | `orchestrator` | Execution coordinator (team lead) | sonnet | kraken, spark, build-fixer, critic, explore |
 | `kraken` | TDD implementation (worker) | sonnet | — |
 | `spark` | Quick fixes (worker) | sonnet | — |
 | `build-fixer` | Build/compile/lint error specialist (worker) | sonnet | — |
 | `critic` | Post-implementation reviewer (read-only) | opus | — |
 | `oracle` | Strategic advisor (read-only) | opus | — |
-| `explore` | Codebase search (read-only) | sonnet | — |
+| `explore` (Explore) | Codebase search (read-only) | sonnet | — |
 | `leviathan` | Deep plan reviewer | opus | — |
 | `wisdom-synthesizer` | Knowledge consolidation | haiku | — |
 | `progress-reporter` | Status tracking | haiku | — |
