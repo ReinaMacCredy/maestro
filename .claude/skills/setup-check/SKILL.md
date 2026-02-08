@@ -55,6 +55,7 @@ Verify these directories exist:
 - `.maestro/plans/`
 - `.maestro/drafts/`
 - `.maestro/wisdom/`
+- `.maestro/research/`
 
 **On FAIL**:
 ```
@@ -63,7 +64,7 @@ AskUserQuestion(
     question: "Missing .maestro directories. Create them now?",
     header: "Fix dirs",
     options: [
-      { label: "Yes, create", description: "Run mkdir -p .maestro/plans .maestro/drafts .maestro/wisdom" },
+      { label: "Yes, create", description: "Run mkdir -p .maestro/plans .maestro/drafts .maestro/wisdom .maestro/research" },
       { label: "Skip", description: "Continue without creating directories" }
     ],
     multiSelect: false
@@ -71,7 +72,7 @@ AskUserQuestion(
 )
 ```
 
-If yes: `Bash("mkdir -p .maestro/plans .maestro/drafts .maestro/wisdom")`. Re-check to confirm.
+If yes: `Bash("mkdir -p .maestro/plans .maestro/drafts .maestro/wisdom .maestro/research")`. Re-check to confirm.
 
 ### 4. Hook Symlinks
 

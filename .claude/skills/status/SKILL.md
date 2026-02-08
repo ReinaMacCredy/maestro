@@ -64,6 +64,26 @@ List all files in `.maestro/wisdom/`:
 
 If empty, report "No wisdom accumulated yet. Complete a /work cycle to start learning."
 
+### 4.5. Research
+
+List all files in `.maestro/research/`:
+- File name
+- First line (title)
+- Last modified date
+
+If empty, report "No research sessions. Run `/research <topic>` to start one."
+
+### 4.6. Notepad
+
+Check if `.maestro/notepad.md` exists:
+- If it exists, show each section header and bullet count:
+  - `## Priority Context` — N items
+  - `## Working Memory` — N items
+  - `## Manual` — N items
+- If any priority items exist, display them (these are injected at session start)
+
+If file doesn't exist, report "No notepad. Run `/note <content>` to start."
+
 ### 5. Handoffs
 
 List all files in `.maestro/handoff/`:
@@ -132,6 +152,8 @@ End with a summary table:
 | Tasks | N (X active) | - |
 | Handoffs | N | <name> |
 | Wisdom | N | <name> |
+| Research | N | <name> |
+| Notepad | Present/Absent | N priority items |
 | Worktrees | N active | - |
 | Teams | N active | - |
 ```

@@ -19,6 +19,12 @@ description: AI agent workflow with interview-driven planning and team-based exe
 | `/styleguide` | Inject code style guides into project CLAUDE.md |
 | `/setup` | Scaffold project context (product, tech stack, guidelines) |
 | `/reset` | Clean stale Maestro state |
+| `/analyze <problem or topic>` | Deep read-only investigation with structured report |
+| `/note [--priority <P0-P3>] <text>` | Capture decisions, context, and constraints to persistent notepad |
+| `/learner [--from-session \| --from-diff \| <topic>]` | Extract hard-won principles as reusable learned skills |
+| `/security-review [<files> \| --diff [range]]` | Delegated security analysis with severity ratings |
+| `/ultraqa [--tests\|--build\|--lint\|--typecheck\|--custom '<cmd>']` | Iterative fix-and-verify loop (max 5 cycles) |
+| `/research <topic> [--depth shallow\|deep]` | Multi-agent research with session persistence |
 | `@tdd` | TDD implementation (kraken) |
 | `@spark` | Quick fixes |
 | `@oracle` | Strategic advisor (opus) |
@@ -87,6 +93,7 @@ Use `--resume` to skip already-completed tasks.
 | `leviathan` | Deep plan reviewer | opus | No | Yes (self-claim) |
 | `wisdom-synthesizer` | Knowledge consolidation | haiku | No | Yes (self-claim) |
 | `progress-reporter` | Status tracking | haiku | No | Yes (self-claim) |
+| `security-reviewer` | Security analysis (read-only) | opus | No | Yes (self-claim) |
 
 All agents have `TaskList`, `TaskGet`, `TaskUpdate`, `SendMessage` for team self-coordination. Only team leads have `Task`, `TeamCreate`, and `TeamDelete` for spawning.
 
@@ -118,6 +125,9 @@ See [docs/SKILL-INTEROP.md](../../../docs/SKILL-INTEROP.md) for full details.
 
 - **Design**: `/design add user authentication`
 - **Execution**: `/work`
-- **Research**: `@explore`, `@oracle`
+- **Research**: `@explore`, `@oracle`, `/research`
 - **Implementation**: `@tdd`, `@spark`
+- **Analysis**: `/analyze`, `/security-review`
+- **Quality**: `/ultraqa`, `/review`
+- **Knowledge**: `/note`, `/learner`
 - **Setup**: `/setup`

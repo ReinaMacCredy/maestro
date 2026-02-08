@@ -25,6 +25,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `/reset` — Clean stale state (teams, handoff files, drafts)
 - `/plan-template <name>` — Scaffold blank plan with required sections
 - `/pipeline <preset> | <agent1 -> agent2 'task'>` — Sequential agent chains with context passing
+- `/analyze <problem or topic>` — Deep read-only investigation with structured report
+- `/note [--priority <P0-P3>] <text>` — Capture decisions, context, and constraints to persistent notepad
+- `/learner [--from-session | --from-diff | <topic>]` — Extract hard-won principles as reusable learned skills
+- `/security-review [<files> | --diff [range]]` — Delegated security analysis with severity ratings
+- `/ultraqa [--tests|--build|--lint|--typecheck|--custom '<cmd>']` — Iterative fix-and-verify loop (max 5 cycles, never commits)
+- `/research <topic> [--auto|--stages <N>|--resume]` — Multi-stage research with parallel agents and synthesis
 
 ### Validation
 
@@ -80,7 +86,9 @@ Shell scripts in `.claude/scripts/` enforce workflow invariants via `.claude/hoo
 ├── drafts/     # Interview drafts (created during /design)
 ├── context/    # Project context files (product, tech stack, guidelines)
 ├── handoff/    # Session recovery JSON (design status, worktree metadata)
-└── wisdom/     # Accumulated learnings from past executions
+├── wisdom/     # Accumulated learnings from past executions
+├── research/   # Research session state and findings
+└── notepad.md  # Persistent notes (decisions, context, constraints)
 ```
 
 ### Skill Interoperability
@@ -102,6 +110,7 @@ Maestro auto-discovers installed skills from `.claude/skills/`, `~/.claude/skill
 | `leviathan` | Deep plan reviewer | opus | — |
 | `wisdom-synthesizer` | Knowledge consolidation | haiku | — |
 | `progress-reporter` | Status tracking | haiku | — |
+| `security-reviewer` | Security analysis specialist (read-only) | opus | — |
 
 Team leads have `Task`, `TeamCreate`, `TeamDelete`, `SendMessage`. Workers have `TaskList`, `TaskGet`, `TaskUpdate`, `SendMessage` for self-coordination.
 
