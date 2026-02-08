@@ -27,6 +27,23 @@ if [[ -d "$handoff_dir" ]]; then
   done
 fi
 
+# 0.5. Drift detection - check if CLAUDE.md has Maestro sections
+plugin_json="$PROJECT_DIR/.claude-plugin/plugin.json"
+claude_md="$PROJECT_DIR/CLAUDE.md"
+if [[ -f "$plugin_json" ]]; then
+  has_drift=false
+  if [[ -f "$claude_md" ]]; then
+    if ! grep -q '## Project Overview' "$claude_md" 2>/dev/null || ! grep -q '## Commands' "$claude_md" 2>/dev/null; then
+      has_drift=true
+    fi
+  else
+    has_drift=true
+  fi
+  if $has_drift; then
+    context_parts+=("Maestro plugin installed but CLAUDE.md may be outdated. Run /setup to refresh.")
+  fi
+fi
+
 # 1. Available Maestro commands (always present)
 context_parts+=("Maestro commands: /design, /work, /setup, /status, /review, /reset, /plan-template")
 
