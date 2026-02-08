@@ -44,21 +44,35 @@ Enable Agent Teams in `~/.claude/settings.json`:
 }
 ```
 
-## Triggers
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `/design <request>` | Interview-driven planning (supports `--quick`) |
+| `/work [<plan-name>] [--resume]` | Execute plan with Agent Teams |
+| `/review` | Post-execution review with auto-fix (supports planless git-diff mode) |
+| `/setup-check` | Verify plugin prerequisites |
+| `/status` | Show Maestro state |
+| `/reset` | Clean stale state |
+| `/plan-template <name>` | Scaffold blank plan |
+| `/styleguide` | Detect languages and inject code style guides into CLAUDE.md |
+| `/setup` | Scaffold project context (product, tech stack, guidelines) |
+| `/pipeline <preset>` | Sequential agent chains with context passing |
+| `/analyze <problem>` | Deep read-only investigation with structured report |
+| `/note [--priority <P0-P3>] <text>` | Capture decisions and context to persistent notepad |
+| `/learner [--from-session \| <topic>]` | Extract principles as reusable learned skills |
+| `/security-review [<files> \| --diff]` | Security analysis with severity ratings |
+| `/ultraqa [--tests\|--build\|--lint]` | Iterative fix-and-verify loop (max 5 cycles) |
+| `/research <topic> [--auto]` | Multi-stage research with parallel agents |
+
+## Agent Triggers
 
 | Trigger | Action |
 |---------|--------|
-| `/design <request>` | Start Prometheus interview mode (supports `--quick`) |
-| `/work` | Execute plan with Agent Teams (supports `--resume`) |
 | `@tdd` | TDD implementation (kraken) |
 | `@spark` | Quick fixes |
 | `@oracle` | Strategic advisor (opus) |
 | `@explore` | Codebase search |
-| `/setup-check` | Verify and auto-fix plugin prerequisites |
-| `/status` | Show Maestro state |
-| `/review` | Post-execution review |
-| `/reset` | Clean stale state |
-| `/plan-template <name>` | Scaffold blank plan |
 
 ## Agents
 
@@ -68,7 +82,10 @@ Enable Agent Teams in `~/.claude/settings.json`:
 | `orchestrator` | Execution coordinator | sonnet | Yes |
 | `kraken` | TDD implementation | sonnet | No |
 | `spark` | Quick fixes | sonnet | No |
+| `build-fixer` | Build/compile/lint error specialist | sonnet | No |
 | `oracle` | Strategic advisor | opus | No |
+| `critic` | Post-implementation reviewer | opus | No |
+| `security-reviewer` | Security analysis specialist | opus | No |
 | `explore` | Codebase search | sonnet | No |
 | `leviathan` | Deep plan reviewer | opus | No |
 | `wisdom-synthesizer` | Knowledge consolidator | haiku | No |
@@ -98,6 +115,7 @@ These MCP servers enhance the Maestro experience:
 | Agent Definitions | [.claude/agents/](.claude/agents/) |
 | Agent Teams Guide | [docs/AGENT-TEAMS.md](docs/AGENT-TEAMS.md) |
 | Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| Skill Interop | [docs/SKILL-INTEROP.md](docs/SKILL-INTEROP.md) |
 | Troubleshooting | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) |
 | Customization | [docs/CUSTOMIZATION.md](docs/CUSTOMIZATION.md) |
 

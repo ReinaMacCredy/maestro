@@ -4,7 +4,7 @@ Common issues and solutions for Maestro.
 
 ## Agent Teams Not Working
 
-**Symptom**: `/design` or `/work` fails with "unknown tool: Teammate" or similar.
+**Symptom**: `/design` or `/work` fails with "unknown tool: TeamCreate" or similar.
 
 **Cause**: Agent Teams experimental flag not enabled.
 

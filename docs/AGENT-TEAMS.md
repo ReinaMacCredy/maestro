@@ -8,8 +8,8 @@ How Maestro uses Claude Code's Agent Teams feature.
 
 | Tool | Purpose |
 |------|---------|
-| `Teammate(spawnTeam)` | Create a team |
-| `Teammate(cleanup)` | Remove team resources |
+| `TeamCreate` | Create a team and its task list |
+| `TeamDelete` | Remove team and task directories |
 
 ### Spawning Teammates
 
@@ -44,7 +44,7 @@ All agents (leads AND workers) share the task list:
 
 ## Worker Self-Coordination
 
-All workers (kraken, spark, explore, oracle) have team tools. After their first assigned task, they self-claim:
+All workers (kraken, spark, build-fixer, explore, oracle) have team tools. After their first assigned task, they self-claim:
 
 ```
 TaskGet(taskId)                          # Read task details
@@ -61,7 +61,7 @@ TaskUpdate(nextId, owner: "my-name")      # Claim next
 
 ```
 # 1. Create team
-Teammate(operation: "spawnTeam", team_name: "design-auth", description: "Planning auth")
+TeamCreate(team_name: "design-auth", description: "Planning auth")
 
 # 2. Spawn researchers in parallel
 Task(name: "researcher", team_name: "design-auth", subagent_type: "Explore", prompt: "Find auth patterns...")
@@ -73,14 +73,14 @@ Task(name: "advisor", team_name: "design-auth", subagent_type: "oracle", prompt:
 # 5. Cleanup
 SendMessage(type: "shutdown_request", recipient: "researcher")
 SendMessage(type: "shutdown_request", recipient: "advisor")
-Teammate(operation: "cleanup")
+TeamDelete(reason: "Planning complete")
 ```
 
 ### Execution Team
 
 ```
 # 1. Create team
-Teammate(operation: "spawnTeam", team_name: "work-auth", description: "Implementing auth")
+TeamCreate(team_name: "work-auth", description: "Implementing auth")
 
 # 2. Create tasks
 TaskCreate(subject: "Add login endpoint", description: "...", activeForm: "Adding login endpoint")
@@ -100,7 +100,7 @@ TaskUpdate(taskId: "2", owner: "impl-2", status: "in_progress")
 # 7. Cleanup
 SendMessage(type: "shutdown_request", recipient: "impl-1")
 SendMessage(type: "shutdown_request", recipient: "impl-2")
-Teammate(operation: "cleanup")
+TeamDelete(reason: "Execution complete")
 ```
 
 ## Best Practices
@@ -110,4 +110,4 @@ Teammate(operation: "cleanup")
 3. **Include context in prompts** — Teammates don't inherit your conversation
 4. **Verify all claims** — Read files and run tests after each task
 5. **Let workers self-claim** — Assign first round, workers take the rest
-6. **Clean up when done** — Always shutdown teammates then `Teammate(cleanup)`
+6. **Clean up when done** — Always shutdown teammates then `TeamDelete`

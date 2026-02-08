@@ -14,10 +14,20 @@ Interview-driven planning with Agent Teams execution.
 |---------|-------|--------|
 | `/design <request>` | prometheus | Interview-driven planning |
 | `/work` | orchestrator | Execute plan via teams |
+| `/review` | - | Post-execution review with auto-fix |
 | `/setup-check` | - | Validate Maestro prerequisites |
 | `/status` | - | Show current Maestro state |
-| `/review` | - | Post-execution plan verification |
 | `/reset` | - | Clean stale Maestro state |
+| `/plan-template <name>` | - | Scaffold blank plan |
+| `/styleguide` | - | Detect languages and inject code style guides |
+| `/setup` | - | Scaffold project context |
+| `/pipeline <preset>` | - | Sequential agent chains |
+| `/analyze <problem>` | - | Deep read-only investigation |
+| `/note <text>` | - | Capture decisions to notepad |
+| `/learner [<topic>]` | - | Extract reusable learned skills |
+| `/security-review` | security-reviewer | Security analysis |
+| `/ultraqa` | - | Iterative fix-and-verify loop |
+| `/research <topic>` | - | Multi-stage research |
 | `@tdd` | kraken | TDD implementation |
 | `@spark` | spark | Quick fixes |
 | `@oracle` | oracle | Strategic advice (opus) |
@@ -31,21 +41,29 @@ Interview-driven planning with Agent Teams execution.
 | `orchestrator` | Execution coordinator | sonnet | Yes |
 | `kraken` | TDD implementation | sonnet | No |
 | `spark` | Quick fixes | sonnet | No |
+| `build-fixer` | Build/compile/lint error specialist | sonnet | No |
 | `oracle` | Strategic advisor | opus | No |
+| `critic` | Post-implementation reviewer | opus | No |
+| `security-reviewer` | Security analysis specialist | opus | No |
 | `explore` | Codebase search | sonnet | No |
 | `leviathan` | Deep plan reviewer | opus | No |
 | `wisdom-synthesizer` | Knowledge consolidation | haiku | No |
 | `progress-reporter` | Status tracking | haiku | No |
 
-All agents have team coordination tools (TaskList, TaskGet, TaskUpdate, SendMessage). Only team leads have Task + Teammate for spawning.
+Team leads have Task, TeamCreate, TeamDelete, SendMessage. Workers have TaskList, TaskGet, TaskUpdate, SendMessage for self-coordination.
 
 ## State
 
 ```
 .maestro/
-├── plans/     # Work plans
-├── drafts/    # Interview drafts
-└── wisdom/    # Learnings
+├── plans/      # Work plans
+├── archive/    # Executed plans
+├── drafts/     # Interview drafts
+├── context/    # Project context files
+├── handoff/    # Session recovery JSON
+├── wisdom/     # Learnings
+├── research/   # Research session state
+└── notepad.md  # Persistent notes
 ```
 
 ## Rules
