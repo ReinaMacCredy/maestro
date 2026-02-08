@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.7] - 2026-02-08
+
+
+### Added
+
+
+- Add fresh evidence verification and session drift detection
+- Add stop hook, error detection, and bash history mirroring
+- Add session restore with staleness detection
+- Add verification checklist, ecomode, model selection, build-fixer
+- Phase 2 + pipeline skill + library docs
+- Add critic agent for post-implementation review
+- Phase 2 completion + Phase 3 features
+- Annotate plan with commit SHAs for review traceability
+- Promote explore/oracle to direct design team members with upfront research
+- Add dependency chain, execution phases, and flow chart to plan summary
+- Enable peer-to-peer agent communication in design workflow
+- Add shared research log, message protocols, and task-tracked follow-ups
+- Add phase annotations to agent frontmatter
+- Add collaboration protocols for design phase agents
+- Add 6 new skills, security-reviewer agent, and hook integration
+- Integrate OMC skills into core /design, /work, /review workflows
+
+
+### Changed
+
+
+- Replace custom explore/prometheus agents with built-in Explore/Plan types
+
+
+### Documentation
+
+
+- Update documentation for 6 new commands and security-reviewer agent
+- Complete CLAUDE.md with missing hooks, dev notes, and install info
+- Sync all documentation with current project state
+
+
+### Fixed
+
+
+- Align test assertions with actual hook output strings
+- Resolve shellcheck warnings and standardize PROJECT_DIR quoting
+
 ## [0.14.6] - 2026-02-07
 
 
