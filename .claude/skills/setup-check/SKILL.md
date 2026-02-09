@@ -1,6 +1,6 @@
 ---
 name: setup-check
-description: Verify Maestro plugin prerequisites — Agent Teams flag, jq, directories, symlinks.
+description: Verify Maestro plugin prerequisites — Agent Teams flag, jq, trace MCP, PSM tools, directories, and hooks.
 allowed-tools: Read, Bash, Glob, Write, AskUserQuestion
 disable-model-invocation: true
 ---
@@ -49,7 +49,38 @@ AskUserQuestion(
 
 If user wants to install, show: `brew install jq` (macOS) or `sudo apt-get install jq` (Linux). Re-check after install.
 
-### 3. .maestro Directory Structure
+### 3. Trace MCP Toolbox
+
+Verify trace toolbox prerequisites exist:
+- `toolboxes/trace/` directory
+- `toolboxes/trace/trace.js` entrypoint
+
+Use `Glob` checks. PASS only if both exist.
+
+**On FAIL**: Report missing paths and instruct user to run setup/build for the trace toolbox before enabling trace MCP.
+
+### 4. tmux Installed (PSM)
+
+Run `which tmux` — `/psm` requires tmux sessions.
+
+**On FAIL**: Detect OS and show install command:
+- macOS: `brew install tmux`
+- Linux (Debian/Ubuntu): `sudo apt-get install tmux`
+
+### 5. gh CLI Installed (PSM)
+
+Run `which gh` — `/psm` uses GitHub CLI for PR/issue operations.
+
+**On FAIL**: Detect OS and show install command:
+- macOS: `brew install gh`
+- Linux (Debian/Ubuntu): `sudo apt-get install gh`
+
+Also remind user to authenticate after install:
+```bash
+gh auth login
+```
+
+### 6. .maestro Directory Structure
 
 Verify these directories exist:
 - `.maestro/plans/`
@@ -74,7 +105,7 @@ AskUserQuestion(
 
 If yes: `Bash("mkdir -p .maestro/plans .maestro/drafts .maestro/wisdom .maestro/research")`. Re-check to confirm.
 
-### 4. Hook Symlinks
+### 7. Hook Symlinks
 
 Check that all symlinks in `.claude/scripts/` point to valid targets:
 ```bash
@@ -83,21 +114,21 @@ ls -la .claude/scripts/
 
 Report any broken symlinks. No auto-fix for symlinks — they require manual attention.
 
-### 5. Plugin Manifest
+### 8. Plugin Manifest
 
 Validate the plugin manifest parses correctly:
 ```bash
 cat .claude-plugin/plugin.json | jq .
 ```
 
-### 6. Hooks Configuration
+### 9. Hooks Configuration
 
 Validate hooks config parses correctly:
 ```bash
 cat .claude/hooks/hooks.json | jq .
 ```
 
-### 7. Script Permissions
+### 10. Script Permissions
 
 Verify all scripts in `scripts/` are executable:
 ```bash
@@ -128,10 +159,14 @@ End with a summary:
 ## Setup Status
 - Agent Teams: PASS/FAIL
 - jq: PASS/FAIL
+- Trace MCP toolbox: PASS/FAIL
+- tmux: PASS/FAIL
+- gh CLI: PASS/FAIL
 - Directories: PASS/FAIL
 - Symlinks: PASS/FAIL
 - Plugin manifest: PASS/FAIL
 - Hooks config: PASS/FAIL
+- Script permissions: PASS/FAIL
 
 Overall: READY / NOT READY (N issues to fix)
 ```
