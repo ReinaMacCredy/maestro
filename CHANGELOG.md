@@ -5,13 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.14.8] - 2026-02-09
+
+
+### Added
+
+
+- Add PostToolUse trace logging hook
+- Add Maestro health check skill
+- Add automated release workflow skill
+- Add trace MCP toolbox with timeline and summary tools
+- Add trace MCP server to template
+- Add Project Session Manager skill
+- Add /trace skill definition
+- Add trace and PSM state reporting
+- Verify trace MCP and PSM prerequisites
+- Add /trace skill
+- Discover and execute native Claude Code plans from ~/.claude/plans/
 
 
 ### Changed
 
 
 - Extract prompts to reference/ folders and slim SKILL.md files
+- Consolidate shared protocols into .claude/lib/
+
+
+### Documentation
+
+
+- Update changelog
+- Add /trace skill and command references
+- Index trace, doctor, psm, and release commands
+
+
+### Fixed
+
+
+- Pass plan content inline instead of file path
+- Pass reason parameter to TeamDelete across all 7 skills
+- Hardcode model: sonnet in worker spawn examples
 
 ## [0.14.7] - 2026-02-08
 
