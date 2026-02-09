@@ -25,6 +25,10 @@ description: AI agent workflow with interview-driven planning and team-based exe
 | `/security-review [<files> \| --diff [range]]` | Delegated security analysis with severity ratings |
 | `/ultraqa [--tests\|--build\|--lint\|--typecheck\|--custom '<cmd>']` | Iterative fix-and-verify loop (max 5 cycles) |
 | `/research <topic> [--depth shallow\|deep]` | Multi-agent research with session persistence |
+| `/trace` | Show agent execution timeline and performance summary |
+| `/doctor` | Diagnose and fix Maestro installation issues |
+| `/psm` | Project Session Manager — isolated dev environments with git worktrees and tmux |
+| `/release` | Automated release workflow with version bump, tag, publish, and GitHub release |
 | `@tdd` | TDD implementation (kraken) |
 | `@spark` | Quick fixes |
 | `@oracle` | Strategic advisor (sonnet) |
@@ -127,7 +131,7 @@ See [docs/SKILL-INTEROP.md](../../../docs/SKILL-INTEROP.md) for full details.
 - **Execution**: `/work`
 - **Research**: `@explore`, `@oracle`, `/research`
 - **Implementation**: `@tdd`, `@spark`
-- **Analysis**: `/analyze`, `/security-review`
-- **Quality**: `/ultraqa`, `/review`
+- **Analysis**: `/analyze`, `/security-review`, `/trace`
+- **Quality**: `/ultraqa`, `/review`, `/doctor`
 - **Knowledge**: `/note`, `/learner`
-- **Setup**: `/setup`
+- **Setup**: `/setup`, `/psm`, `/release`
