@@ -230,13 +230,13 @@ After spawning Prometheus, enter a relay loop. Prometheus sends interview questi
 
 ### Step 5: Receive Plan Ready Message
 
-When the Plan agent finishes drafting, it sends a `PLAN READY` message via SendMessage. The message content includes the plan file path. The message arrives automatically — wait for it.
+When the Plan agent finishes drafting, it sends a `PLAN READY` message via SendMessage. The message content includes the **full plan markdown** (not just a file path). The message arrives automatically — wait for it.
 
 ### Step 6: Spawn Leviathan to Review Plan (Full Mode Only)
 
 **Quick mode**: Skip directly to Step 8 (Present Plan to User). Quick mode trusts Prometheus.
 
-**Full mode**: Read the plan content from Prometheus's plan-mode file, then read the prompt from `.claude/skills/design/reference/leviathan-prompt.md` and use it as the Task prompt. Replace `{topic}` and plan file path with actual values.
+**Full mode**: Use the plan content from Prometheus's `PLAN READY` message (everything after the first line), then read the prompt from `.claude/skills/design/reference/leviathan-prompt.md` and use it as the Task prompt. Replace `{topic}` and include the plan content in the prompt.
 
 ### Step 7: Process Leviathan Verdict
 
@@ -261,7 +261,7 @@ Then wait for the next `PLAN READY` message from Prometheus and repeat from Step
 
 **Quick mode or Full mode**: Skip to Step 8.
 
-**Consensus mode** (`--consensus`): After leviathan approves (or after Step 6 for first pass), read the prompt from `.claude/skills/design/reference/critic-prompt.md` and spawn critic-reviewer. Replace `{topic}` and plan file path with actual values.
+**Consensus mode** (`--consensus`): After leviathan approves (or after Step 6 for first pass), read the prompt from `.claude/skills/design/reference/critic-prompt.md` and spawn critic-reviewer. Replace `{topic}` and include the plan content inline.
 
 Wait for the critic's verdict:
 
@@ -296,9 +296,9 @@ SendMessage(
 )
 ```
 
-Read the plan content from Prometheus's plan-mode file and write it to the final destination:
+Read the plan content from Prometheus's `PLAN READY` message (everything after the first line `PLAN READY`) and write it to the final destination:
 ```
-Write(file_path: ".maestro/plans/{topic}.md", content: "{plan content}")
+Write(file_path: ".maestro/plans/{topic}.md", content: "{plan content from PLAN READY message}")
 ```
 
 #### Auto-Capture Design Decisions
@@ -368,7 +368,7 @@ The /work command will auto-detect this plan and suggest it for execution.
 |----------|---------------|-------|------|
 | `prometheus` | Plan | sonnet | Interview-driven planner — spawned in plan mode. Sends interview questions to orchestrator via SendMessage for relay to user. Signals completion via SendMessage (not ExitPlanMode). |
 | `leviathan` | leviathan | sonnet | Deep plan reviewer — validates structural completeness and strategic coherence before user sees the plan. Full mode only. |
-| `explore` | Explore | sonnet | Codebase search — find patterns, architecture, conventions. Spawned before prometheus so it's ready for research requests. |
+| `explore` | Explore | haiku | Codebase search — find patterns, architecture, conventions. Spawned before prometheus so it's ready for research requests. |
 | `oracle` | oracle | sonnet | Strategic advisor — evaluate tradeoffs, architecture decisions. Spawned before prometheus so it's ready for research requests. |
 
 **Peer-to-peer communication**: All agents can message each other directly via SendMessage:

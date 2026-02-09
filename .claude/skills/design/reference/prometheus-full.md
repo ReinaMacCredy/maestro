@@ -142,7 +142,10 @@ Task(
     - Test strategy confirmed?
 
     ## Completion Signal
-    When your plan is ready, send to the design orchestrator (do NOT call ExitPlanMode):
-    SendMessage(type: 'message', recipient: 'design-orchestrator', summary: 'Plan ready for review', content: 'PLAN READY\nFile: {plan file path}')
+    When your plan is ready, send the FULL plan content to the design orchestrator (do NOT call ExitPlanMode).
+    IMPORTANT: Include the entire plan markdown in the message body — do NOT send just a file path.
+    The orchestrator cannot read your plan-mode file (it's in ~/.claude/plans/ which is ephemeral).
+
+    SendMessage(type: 'message', recipient: 'design-orchestrator', summary: 'Plan ready for review', content: 'PLAN READY\n{paste your complete plan markdown here}')
 )
 ```
