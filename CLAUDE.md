@@ -118,13 +118,13 @@ Maestro auto-discovers installed skills from `.claude/skills/`, `~/.claude/skill
 | `kraken` | TDD implementation (worker) | sonnet | — |
 | `spark` | Quick fixes (worker) | sonnet | — |
 | `build-fixer` | Build/compile/lint error specialist (worker) | sonnet | — |
-| `critic` | Post-implementation reviewer (read-only) | opus | — |
+| `critic` | Post-implementation reviewer (read-only) | sonnet | — |
 | `oracle` | Strategic advisor (read-only) | sonnet | — |
-| `explore` (Explore) | Codebase search (read-only) | sonnet | — |
+| `explore` (Explore) | Codebase search (read-only) | haiku | — |
 | `leviathan` | Deep plan reviewer | sonnet | — |
 | `wisdom-synthesizer` | Knowledge consolidation | haiku | — |
 | `progress-reporter` | Status tracking | haiku | — |
-| `security-reviewer` | Security analysis specialist (read-only) | opus | — |
+| `security-reviewer` | Security analysis specialist (read-only) | sonnet | — |
 
 Team leads have `Task`, `TeamCreate`, `TeamDelete`, `SendMessage`. Workers have `TaskList`, `TaskGet`, `TaskUpdate`, `SendMessage` for self-coordination.
 

@@ -4,7 +4,7 @@ description: Security analysis specialist. Reviews code for vulnerabilities, aut
 phase: work
 tools: Read, Grep, Glob, Bash, TaskList, TaskGet, TaskUpdate, SendMessage
 disallowedTools: Write, Edit, NotebookEdit, Task, TeamCreate, TeamDelete
-model: opus
+model: sonnet
 ---
 
 # Security Reviewer — Vulnerability Analysis Specialist

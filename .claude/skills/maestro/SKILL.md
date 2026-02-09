@@ -27,7 +27,7 @@ description: AI agent workflow with interview-driven planning and team-based exe
 | `/research <topic> [--depth shallow\|deep]` | Multi-agent research with session persistence |
 | `@tdd` | TDD implementation (kraken) |
 | `@spark` | Quick fixes |
-| `@oracle` | Strategic advisor (opus) |
+| `@oracle` | Strategic advisor (sonnet) |
 | `@explore` | Codebase search |
 
 ## Planning Flow
@@ -88,12 +88,12 @@ Use `--resume` to skip already-completed tasks.
 | `orchestrator` | Execution coordinator | sonnet | Yes | Yes (full) |
 | `kraken` | TDD implementation | sonnet | No | Yes (self-claim) |
 | `spark` | Quick fixes | sonnet | No | Yes (self-claim) |
-| `oracle` | Strategic advisor | opus | No | Yes (self-claim) |
-| `explore` | Codebase search | sonnet | No | Yes (self-claim) |
-| `leviathan` | Deep plan reviewer | opus | No | Yes (self-claim) |
+| `oracle` | Strategic advisor | sonnet | No | Yes (self-claim) |
+| `explore` | Codebase search | haiku | No | Yes (self-claim) |
+| `leviathan` | Deep plan reviewer | sonnet | No | Yes (self-claim) |
 | `wisdom-synthesizer` | Knowledge consolidation | haiku | No | Yes (self-claim) |
 | `progress-reporter` | Status tracking | haiku | No | Yes (self-claim) |
-| `security-reviewer` | Security analysis (read-only) | opus | No | Yes (self-claim) |
+| `security-reviewer` | Security analysis (read-only) | sonnet | No | Yes (self-claim) |
 
 All agents have `TaskList`, `TaskGet`, `TaskUpdate`, `SendMessage` for team self-coordination. Only team leads have `Task`, `TeamCreate`, and `TeamDelete` for spawning.
 

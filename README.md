@@ -71,7 +71,7 @@ Enable Agent Teams in `~/.claude/settings.json`:
 |---------|--------|
 | `@tdd` | TDD implementation (kraken) |
 | `@spark` | Quick fixes |
-| `@oracle` | Strategic advisor (opus) |
+| `@oracle` | Strategic advisor (sonnet) |
 | `@explore` | Codebase search |
 
 ## Agents
@@ -83,11 +83,11 @@ Enable Agent Teams in `~/.claude/settings.json`:
 | `kraken` | TDD implementation | sonnet | No |
 | `spark` | Quick fixes | sonnet | No |
 | `build-fixer` | Build/compile/lint error specialist | sonnet | No |
-| `oracle` | Strategic advisor | opus | No |
-| `critic` | Post-implementation reviewer | opus | No |
-| `security-reviewer` | Security analysis specialist | opus | No |
-| `explore` | Codebase search | sonnet | No |
-| `leviathan` | Deep plan reviewer | opus | No |
+| `oracle` | Strategic advisor | sonnet | No |
+| `critic` | Post-implementation reviewer | sonnet | No |
+| `security-reviewer` | Security analysis specialist | sonnet | No |
+| `explore` | Codebase search | haiku | No |
+| `leviathan` | Deep plan reviewer | sonnet | No |
 | `wisdom-synthesizer` | Knowledge consolidator | haiku | No |
 | `progress-reporter` | Status tracker | haiku | No |
 

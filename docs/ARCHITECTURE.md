@@ -54,11 +54,11 @@ flowchart TB
 | `kraken` | TDD implementation | sonnet | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
 | `spark` | Quick fixes | sonnet | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
 | `build-fixer` | Build/compile/lint error specialist | sonnet | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
-| `oracle` | Strategic advisor | opus | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
-| `critic` | Post-implementation reviewer | opus | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
-| `security-reviewer` | Security analysis specialist | opus | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
-| `explore` | Codebase search | sonnet | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
-| `leviathan` | Deep plan reviewer | opus | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
+| `oracle` | Strategic advisor | sonnet | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
+| `critic` | Post-implementation reviewer | sonnet | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
+| `security-reviewer` | Security analysis specialist | sonnet | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
+| `explore` | Codebase search | haiku | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
+| `leviathan` | Deep plan reviewer | sonnet | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
 | `wisdom-synthesizer` | Knowledge consolidation | haiku | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
 | `progress-reporter` | Status tracking | haiku | No | Self-claim (TaskList, TaskGet, TaskUpdate, SendMessage) |
 

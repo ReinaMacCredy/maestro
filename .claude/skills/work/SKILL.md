@@ -273,10 +273,10 @@ Task(
 | `spark` | spark | Quick fixes, single-file changes, config updates |
 | `build-fixer` | build-fixer | Build/compile errors, lint failures, type check errors |
 | `explore` | Explore | Codebase research, finding patterns |
-| `oracle` | oracle | Strategic decisions (uses opus -- spawn sparingly) |
-| `critic` | critic | Post-implementation review (opus -- see Step 6.7) |
+| `oracle` | oracle | Strategic decisions (sonnet) |
+| `critic` | critic | Post-implementation review (see Step 6.7) |
 
-**Model selection**: Before spawning, analyze each task's keywords to choose the model tier. Tasks with architecture/refactor/redesign keywords should route to oracle (opus). Single-file simple tasks route to spark (haiku in eco mode). Multi-file TDD tasks use kraken (sonnet). Debug/investigate tasks use kraken with extended context. See the orchestrator's Model Selection Guide in `.claude/agents/orchestrator.md` for the full routing table.
+**Model selection**: Before spawning, analyze each task's keywords to choose the model tier. Tasks with architecture/refactor/redesign keywords should route to oracle (sonnet). Single-file simple tasks route to spark (haiku in eco mode). Multi-file TDD tasks use kraken (sonnet). Debug/investigate tasks use kraken with extended context. See the orchestrator's Model Selection Guide in `.claude/agents/orchestrator.md` for the full routing table.
 
 **Sizing**: Spawn 2-4 workers for most plans. Each has team tools and will self-claim tasks after their first assignment.
 
@@ -286,7 +286,7 @@ When the `--eco` flag is present, use cost-efficient model routing:
 
 - **spark** tasks: spawn with `model: haiku` (simple fixes, config changes)
 - **kraken** tasks: spawn with `model: sonnet` (TDD, multi-file changes)
-- **oracle/leviathan**: do NOT spawn in eco mode (opus model too expensive)
+- **oracle/leviathan**: sonnet (same as default, no special handling needed)
 - **explore**: spawn with `model: haiku` (read-only research)
 
 Log at the start of Step 4: `"Ecomode: using cost-efficient model routing (haiku for simple, sonnet for complex)"`
@@ -356,10 +356,13 @@ Shutdown all teammates and cleanup:
 SendMessage(type: "shutdown_request", recipient: "impl-1")
 SendMessage(type: "shutdown_request", recipient: "impl-2")
 // ... for each teammate
-TeamDelete()
+TeamDelete(reason: "Execution session complete")
 ```
 
-**IMPORTANT**: Do NOT pass any parameters to `TeamDelete()` — no `reason`, no arguments. The tool accepts no parameters and will error if any are provided.
+**TeamDelete cleanup**: If TeamDelete fails, fall back to manual cleanup:
+```bash
+rm -rf ~/.claude/teams/{team-name} ~/.claude/tasks/{team-name}
+```
 
 ### Step 8.5: Archive Plan
 

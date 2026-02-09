@@ -45,13 +45,13 @@ Parse `$ARGUMENTS` to determine the pipeline stages.
 - The task description is the quoted string at the end, or all remaining text after the last agent
 
 **Default model per agent**:
-- explore: sonnet
-- oracle: opus
-- leviathan: opus
+- explore: haiku
+- oracle: sonnet
+- leviathan: sonnet
 - kraken: sonnet
 - spark: sonnet
 - build-fixer: sonnet
-- critic: opus
+- critic: sonnet
 
 ### Step 2: Create Team
 
@@ -118,7 +118,7 @@ For each stage in order:
 After all stages complete:
 
 1. **Summary**: Report what each stage produced
-2. **Cleanup**: Delete the team via `TeamDelete("pipeline-team")`
+2. **Cleanup**: Call `TeamDelete(reason: "Pipeline complete")`. If it fails, fall back to: `rm -rf ~/.claude/teams/pipeline-{id} ~/.claude/tasks/pipeline-{id}`
 3. **Archive state**: The pipeline state file remains in `.maestro/handoff/` for session recovery
 
 ## Error Handling
