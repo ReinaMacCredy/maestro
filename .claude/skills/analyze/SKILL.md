@@ -81,8 +81,10 @@ Output a structured report:
 ### Step 5: Cleanup
 
 ```
-TeamDelete()
+TeamDelete(reason: "Analysis complete")
 ```
+
+**TeamDelete cleanup**: If TeamDelete fails, fall back to: `rm -rf ~/.claude/teams/{team-name} ~/.claude/tasks/{team-name}`
 
 ## When to Use
 

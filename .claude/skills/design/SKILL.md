@@ -340,10 +340,13 @@ SendMessage(type: "shutdown_request", recipient: "explore")
 SendMessage(type: "shutdown_request", recipient: "oracle")
 SendMessage(type: "shutdown_request", recipient: "leviathan")
 SendMessage(type: "shutdown_request", recipient: "critic-reviewer")
-TeamDelete()
+TeamDelete(reason: "Design session complete")
 ```
 
-**IMPORTANT**: Do NOT pass any parameters to `TeamDelete()` — no `reason`, no arguments. The tool accepts no parameters and will error if any are provided.
+**TeamDelete cleanup**: If TeamDelete fails, fall back to manual cleanup:
+```bash
+rm -rf ~/.claude/teams/design-{topic} ~/.claude/tasks/design-{topic}
+```
 
 Note: oracle (quick mode), leviathan, and critic-reviewer may not exist depending on mode. Ignore errors if the shutdown fails for a non-existent teammate.
 
