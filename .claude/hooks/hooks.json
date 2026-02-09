@@ -52,6 +52,12 @@
           { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/error-detector.sh" },
           { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/bash-history.sh" }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/trace-logger.sh" }
+        ]
       }
     ],
     "PreCompact": [
