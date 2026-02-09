@@ -394,7 +394,7 @@ Spawn the `security-reviewer` agent for deep security analysis on the diff:
 Task(
   description: "Security review for code review",
   subagent_type: "security-reviewer",
-  model: "opus",
+  model: "sonnet",
   prompt: |
     Analyze the following diff for security vulnerabilities:
 

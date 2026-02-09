@@ -16,11 +16,11 @@ Each agent has a default model set in its frontmatter. To change:
 | kraken | sonnet | opus (complex implementations) |
 | spark | sonnet | haiku (faster for simple fixes) |
 | build-fixer | sonnet | haiku (faster for simple errors) |
-| oracle | opus | sonnet (cheaper, less thorough) |
-| critic | opus | sonnet (cheaper, less thorough reviews) |
-| security-reviewer | opus | sonnet (cheaper, less thorough) |
-| explore | sonnet | haiku (faster searches) |
-| leviathan | opus | sonnet (cheaper, less thorough reviews) |
+| oracle | sonnet | opus (deeper strategic analysis) |
+| critic | sonnet | opus (deeper reviews) |
+| security-reviewer | sonnet | opus (deeper security analysis) |
+| explore | haiku | sonnet (more thorough searches) |
+| leviathan | sonnet | opus (deeper plan reviews) |
 | wisdom-synthesizer | haiku | sonnet (deeper analysis) |
 | progress-reporter | haiku | sonnet (more detailed reports) |
 

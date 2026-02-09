@@ -2,7 +2,7 @@
 
 When the plan is ready (leviathan PASS, or quick mode, or max loops reached):
 
-1. Read the plan content that Prometheus wrote (the plan file path is in the PLAN READY message)
+1. Extract the plan content from Prometheus's PLAN READY message (everything after the first line `PLAN READY`). The full plan markdown is inline in the message body — do NOT try to read it from a file path.
 2. Parse the plan content and display a structured summary:
 
    **Parse these sections from the plan markdown:**

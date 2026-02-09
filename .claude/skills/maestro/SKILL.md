@@ -25,9 +25,13 @@ description: AI agent workflow with interview-driven planning and team-based exe
 | `/security-review [<files> \| --diff [range]]` | Delegated security analysis with severity ratings |
 | `/ultraqa [--tests\|--build\|--lint\|--typecheck\|--custom '<cmd>']` | Iterative fix-and-verify loop (max 5 cycles) |
 | `/research <topic> [--depth shallow\|deep]` | Multi-agent research with session persistence |
+| `/trace` | Show agent execution timeline and performance summary |
+| `/doctor` | Diagnose and fix Maestro installation issues |
+| `/psm` | Project Session Manager — isolated dev environments with git worktrees and tmux |
+| `/release` | Automated release workflow with version bump, tag, publish, and GitHub release |
 | `@tdd` | TDD implementation (kraken) |
 | `@spark` | Quick fixes |
-| `@oracle` | Strategic advisor (opus) |
+| `@oracle` | Strategic advisor (sonnet) |
 | `@explore` | Codebase search |
 
 ## Planning Flow
@@ -88,12 +92,12 @@ Use `--resume` to skip already-completed tasks.
 | `orchestrator` | Execution coordinator | sonnet | Yes | Yes (full) |
 | `kraken` | TDD implementation | sonnet | No | Yes (self-claim) |
 | `spark` | Quick fixes | sonnet | No | Yes (self-claim) |
-| `oracle` | Strategic advisor | opus | No | Yes (self-claim) |
-| `explore` | Codebase search | sonnet | No | Yes (self-claim) |
-| `leviathan` | Deep plan reviewer | opus | No | Yes (self-claim) |
+| `oracle` | Strategic advisor | sonnet | No | Yes (self-claim) |
+| `explore` | Codebase search | haiku | No | Yes (self-claim) |
+| `leviathan` | Deep plan reviewer | sonnet | No | Yes (self-claim) |
 | `wisdom-synthesizer` | Knowledge consolidation | haiku | No | Yes (self-claim) |
 | `progress-reporter` | Status tracking | haiku | No | Yes (self-claim) |
-| `security-reviewer` | Security analysis (read-only) | opus | No | Yes (self-claim) |
+| `security-reviewer` | Security analysis (read-only) | sonnet | No | Yes (self-claim) |
 
 All agents have `TaskList`, `TaskGet`, `TaskUpdate`, `SendMessage` for team self-coordination. Only team leads have `Task`, `TeamCreate`, and `TeamDelete` for spawning.
 
@@ -127,7 +131,7 @@ See [docs/SKILL-INTEROP.md](../../../docs/SKILL-INTEROP.md) for full details.
 - **Execution**: `/work`
 - **Research**: `@explore`, `@oracle`, `/research`
 - **Implementation**: `@tdd`, `@spark`
-- **Analysis**: `/analyze`, `/security-review`
-- **Quality**: `/ultraqa`, `/review`
+- **Analysis**: `/analyze`, `/security-review`, `/trace`
+- **Quality**: `/ultraqa`, `/review`, `/doctor`
 - **Knowledge**: `/note`, `/learner`
-- **Setup**: `/setup`
+- **Setup**: `/setup`, `/psm`, `/release`

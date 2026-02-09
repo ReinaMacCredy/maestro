@@ -4,29 +4,7 @@
 
 Before spawning teammates, discover skills that can provide guidance for task delegation.
 
-**Important**: The Glob tool doesn't follow symlinks. Use Bash with `find` to discover all skills. Note: Remove `-type f` for plugin paths on macOS:
-
-```bash
-# Project skills (highest priority) - use -L to follow symlinks
-find .claude/skills -L -name "SKILL.md" -type f 2>/dev/null
-find .agents/skills -L -name "SKILL.md" -type f 2>/dev/null
-
-# Global skills
-find ~/.claude/skills -name "SKILL.md" 2>/dev/null
-
-# Plugin-installed skills (lowest priority) - no -L or -type f for macOS compatibility
-find ~/.claude/plugins/marketplaces -name "SKILL.md" 2>/dev/null
-```
-
-For each SKILL.md file found:
-1. Read the file
-2. Parse YAML frontmatter (between `---` markers)
-3. Extract: `name`, `description`, `triggers` (optional), `priority` (default: 100)
-4. Store the full content after frontmatter
-
-**Priority**: Project skills override global skills, which override plugin skills (same name = skip lower priority).
-
-See `.claude/lib/skill-registry.md` for the complete discovery process.
+Discover skills using the protocol in `.claude/lib/skill-registry.md`. The registry handles scanning project, global, and plugin locations with proper priority ordering and symlink handling.
 
 **Build a skill registry** for use in Step 4:
 

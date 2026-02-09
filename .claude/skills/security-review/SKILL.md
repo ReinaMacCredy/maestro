@@ -126,8 +126,10 @@ Combine the agent's findings with dependency audit results into a unified report
 ### Step 5: Cleanup
 
 ```
-TeamDelete()
+TeamDelete(reason: "Security review complete")
 ```
+
+**TeamDelete cleanup**: If TeamDelete fails, fall back to: `rm -rf ~/.claude/teams/{team-name} ~/.claude/tasks/{team-name}`
 
 ## Severity Definitions
 

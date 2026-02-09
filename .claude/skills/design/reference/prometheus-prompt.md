@@ -1,4 +1,4 @@
-# Prometheus Full Mode Prompt
+# Prometheus Prompt Template
 
 ```
 Task(
@@ -12,13 +12,13 @@ Task(
     {original $ARGUMENTS}
 
     ## Mode
-    Full — thorough research, ask 3-6 questions.
+    {mode_line}
 
     ## Topic Slug
     {topic}
 
     ## Upfront Research
-    {compiled research from Step 3.7 — codebase findings from explore + strategic analysis from oracle}
+    {compiled research from Step 3.7 — codebase findings from explore + oracle analysis if available}
 
     ## Plan Format
 
@@ -77,18 +77,7 @@ Task(
     After receiving ANY response from explore/oracle, append under `## Follow-up Research` with format:
     `### [{source}] {summary}` followed by the finding.
 
-    **Follow-up research**: Message pre-spawned teammates directly:
-    - explore: SendMessage(type: 'message', recipient: 'explore', ...) — codebase search
-    - oracle: SendMessage(type: 'message', recipient: 'oracle', ...) — strategic evaluation
-    Do NOT spawn new research agents.
-
-    **Structured follow-ups**: Use RESEARCH REQUEST (for explore) or EVALUATION REQUEST (for oracle) format with: Task ID, Objective, Context, Log path, Deliver to.
-
-    **Before requesting research**: Check the research log AND TaskList for existing results. Use existing when available.
-
-    **Chained requests**: For questions needing codebase facts AND strategic evaluation, ask explore first with instructions to also forward to oracle.
-
-    **REVISE handling**: Parse actionable items and delegate research to explore/oracle before revising. Don't guess — get facts.
+    {mode_context}
 
     **External research**: You have WebSearch, WebFetch, and Context7 MCP tools.
     - Context7: `resolve-library-id(query, libraryName)` → `query-docs(libraryId, query)`. Fall back to WebSearch/WebFetch if not configured.
@@ -128,8 +117,7 @@ Task(
     8. Security-sensitive plans — add `## Security` section for auth, user input, API endpoints, secrets, data access. Omit for other plans.
 
     ## Teammates
-    - explore: SendMessage(type: 'message', recipient: 'explore', ...) — codebase search
-    - oracle: SendMessage(type: 'message', recipient: 'oracle', ...) — strategic evaluation
+    {mode_teammates}
 
     ## Research Log Maintenance
     After receiving ANY peer response, append to `.maestro/drafts/{topic}-research.md` under `## Follow-up Research`.
@@ -142,7 +130,67 @@ Task(
     - Test strategy confirmed?
 
     ## Completion Signal
-    When your plan is ready, send to the design orchestrator (do NOT call ExitPlanMode):
-    SendMessage(type: 'message', recipient: 'design-orchestrator', summary: 'Plan ready for review', content: 'PLAN READY\nFile: {plan file path}')
+    When your plan is ready, send the FULL plan content to the design orchestrator (do NOT call ExitPlanMode).
+    IMPORTANT: Include the entire plan markdown in the message body — do NOT send just a file path.
+    The orchestrator cannot read your plan-mode file (it's in ~/.claude/plans/ which is ephemeral).
+
+    SendMessage(type: 'message', recipient: 'design-orchestrator', summary: 'Plan ready for review', content: 'PLAN READY\n{paste your complete plan markdown here}')
 )
+```
+
+## Mode-Specific Blocks
+
+Substitution values for each placeholder by mode.
+
+### `{mode_line}`
+
+| Mode | Value |
+|------|-------|
+| **Full** | `Full — thorough research, ask 3-6 questions.` |
+| **Quick** | `Quick — focused research already done, ask 1-2 targeted questions, keep it focused.` |
+
+### `{mode_context}`
+
+**Full mode:**
+
+```
+**Follow-up research**: Message pre-spawned teammates directly:
+- explore: SendMessage(type: 'message', recipient: 'explore', ...) — codebase search
+- oracle: SendMessage(type: 'message', recipient: 'oracle', ...) — strategic evaluation
+Do NOT spawn new research agents.
+
+**Structured follow-ups**: Use RESEARCH REQUEST (for explore) or EVALUATION REQUEST (for oracle) format with: Task ID, Objective, Context, Log path, Deliver to.
+
+**Before requesting research**: Check the research log AND TaskList for existing results. Use existing when available.
+
+**Chained requests**: For questions needing codebase facts AND strategic evaluation, ask explore first with instructions to also forward to oracle.
+
+**REVISE handling**: Parse actionable items and delegate research to explore/oracle before revising. Don't guess — get facts.
+```
+
+**Quick mode:**
+
+```
+**Follow-up research**: Message explore directly:
+- explore: SendMessage(type: 'message', recipient: 'explore', ...) — codebase search
+- Oracle is NOT available in quick mode.
+
+**Before requesting research**: Check the research log AND TaskList for existing results.
+
+**REVISE handling**: Delegate research to explore before revising. Don't guess — get facts.
+```
+
+### `{mode_teammates}`
+
+**Full mode:**
+
+```
+- explore: SendMessage(type: 'message', recipient: 'explore', ...) — codebase search
+- oracle: SendMessage(type: 'message', recipient: 'oracle', ...) — strategic evaluation
+```
+
+**Quick mode:**
+
+```
+- explore: SendMessage(type: 'message', recipient: 'explore', ...) — codebase search
 ```

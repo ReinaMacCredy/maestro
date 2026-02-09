@@ -33,10 +33,9 @@ Task(
     Stay available for follow-up requests. Respond with structured results.
 
     ## Collaboration Protocol
-    - ACK structured requests (RESEARCH REQUEST, VERIFY REQUEST) before starting work
-    - Check `.maestro/drafts/{topic}-research.md` before requesting — skip if already answered
-    - HELP REQUEST to peers when blocked instead of silently failing
-    - STATUS UPDATE to team lead for broad research tasks
+    See `.claude/lib/collaboration-protocol.md` for shared rules (ACK, research log, HELP REQUEST, STATUS UPDATE, message protocol).
+
+    Role-specific additions:
     - Proactively flag surprising findings (security, broken patterns) to relevant peers
     - Chain support: complete full chains (find X then check if Y depends on it)
     - Parallel execution: launch 3+ tools simultaneously when possible

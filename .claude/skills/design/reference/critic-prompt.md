@@ -8,13 +8,17 @@ Task(
   name: "critic-reviewer",
   team_name: "design-{topic}",
   subagent_type: "critic",
-  model: "opus",
+  model: "sonnet",
   prompt: |
     Review this plan for strategic coherence, risk coverage, and completeness.
 
-    Plan file: {path to plan file}
+    The full plan is provided inline below. Do NOT try to read it from a file — the plan-mode file is ephemeral.
 
-    Read the plan, then send your APPROVE/REVISE verdict via SendMessage. Focus on:
+    ---
+    {full plan content from PLAN READY message}
+    ---
+
+    Send your APPROVE/REVISE verdict via SendMessage. Focus on:
     - Are the tasks correctly scoped?
     - Are dependencies accurate?
     - Are there missing edge cases or risks?

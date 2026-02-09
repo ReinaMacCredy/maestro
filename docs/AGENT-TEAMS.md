@@ -19,6 +19,7 @@ Task(
   name: "worker-1",
   team_name: "my-team",
   subagent_type: "kraken",
+  model: "sonnet",
   prompt: "## TASK\n..."
 )
 ```
@@ -87,8 +88,8 @@ TaskCreate(subject: "Add login endpoint", description: "...", activeForm: "Addin
 TaskCreate(subject: "Add auth middleware", description: "...", activeForm: "Adding auth middleware")
 
 # 3. Spawn workers in parallel
-Task(name: "impl-1", team_name: "work-auth", subagent_type: "kraken", prompt: "...")
-Task(name: "impl-2", team_name: "work-auth", subagent_type: "spark", prompt: "...")
+Task(name: "impl-1", team_name: "work-auth", subagent_type: "kraken", model: "sonnet", prompt: "...")
+Task(name: "impl-2", team_name: "work-auth", subagent_type: "spark", model: "sonnet", prompt: "...")
 
 # 4. Assign first round
 TaskUpdate(taskId: "1", owner: "impl-1", status: "in_progress")

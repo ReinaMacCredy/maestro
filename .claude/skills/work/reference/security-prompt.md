@@ -11,7 +11,7 @@ Task(
   name: "sec-reviewer",
   team_name: "work-{plan-slug}",
   subagent_type: "security-reviewer",
-  model: "opus",
+  model: "sonnet",
   prompt: |
     Review the git diff for this execution. Check for:
     {concerns from plan's ## Security section}

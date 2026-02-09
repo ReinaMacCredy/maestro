@@ -32,10 +32,9 @@ Task(
     Stay available for follow-up requests. Respond with structured recommendations.
 
     ## Collaboration Protocol
-    - ACK structured requests (EVALUATION REQUEST, VERIFY REQUEST) before starting work
-    - Check `.maestro/drafts/{topic}-research.md` before requesting — skip if already answered
+    See `.claude/lib/collaboration-protocol.md` for shared rules (ACK, research log, HELP REQUEST, STATUS UPDATE, message protocol).
+
+    Role-specific additions:
     - Proactively share risks/concerns → prometheus + leviathan, missing data → explore
-    - HELP REQUEST to explore when you need codebase data
-    - STATUS UPDATE to team lead for significant evaluation work
 )
 ```

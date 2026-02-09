@@ -7,7 +7,7 @@ set -euo pipefail
 SCRIPTS_DIR="$(cd "$(dirname "$0")/../.claude/scripts" && pwd)"
 PASS=0
 FAIL=0
-TOTAL=17
+TOTAL=18
 
 red() { printf '\033[0;31m%s\033[0m\n' "$1"; }
 green() { printf '\033[0;32m%s\033[0m\n' "$1"; }
@@ -344,6 +344,29 @@ if echo "$output" | jq -e '.hookSpecificOutput.additionalContext' > /dev/null 2>
   pass "subagent-context.sh outputs context for security-reviewer"
 else
   fail "subagent-context.sh security-reviewer" "Expected context JSON, got: $output"
+fi
+
+# -------------------------------------------------------
+# Test 18: trace-logger.sh appends valid JSONL and stays silent
+# -------------------------------------------------------
+bold "Test 18: trace-logger.sh logs trace entry with no stdout"
+setup_project
+
+input='{"tool_name":"Read","tool_input":{"file_path":"test.md"},"tool_result":{"exit_code":"0"}}'
+output=$(printf '%s' "$input" | CLAUDE_PROJECT_DIR="$TMPDIR" CLAUDE_AGENT_NAME="test-agent" bash "$SCRIPTS_DIR/trace-logger.sh" 2>&1) || true
+trace_file="$TMPDIR/.maestro/trace.jsonl"
+
+if [[ -n "$output" ]]; then
+  fail "trace-logger.sh silent output" "Expected no output, got: $output"
+elif [[ ! -f "$trace_file" ]]; then
+  fail "trace-logger.sh file creation" "Expected trace file at $trace_file"
+else
+  line=$(tail -n 1 "$trace_file")
+  if printf '%s' "$line" | jq -e '.timestamp and .tool_name == "Read" and .agent_name == "test-agent" and .success == true and .event_type == "tool_use"' > /dev/null 2>&1; then
+    pass "trace-logger.sh appends valid JSON trace line"
+  else
+    fail "trace-logger.sh json content" "Invalid trace line: $line"
+  fi
 fi
 
 # -------------------------------------------------------

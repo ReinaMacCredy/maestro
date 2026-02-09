@@ -31,7 +31,7 @@ Scoring system for the orchestrator to determine which model tier to assign to e
 
 | Score | Complexity | Model Tier | Route To |
 |-------|-----------|-----------|----------|
-| >= 8 | HIGH | opus | oracle for analysis, kraken for implementation |
+| >= 8 | HIGH | sonnet | oracle for analysis, kraken for implementation |
 | >= 4 | MEDIUM | sonnet | kraken (default) |
 | < 4 | LOW | haiku | spark |
 

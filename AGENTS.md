@@ -30,7 +30,7 @@ Interview-driven planning with Agent Teams execution.
 | `/research <topic>` | - | Multi-stage research |
 | `@tdd` | kraken | TDD implementation |
 | `@spark` | spark | Quick fixes |
-| `@oracle` | oracle | Strategic advice (opus) |
+| `@oracle` | oracle | Strategic advice (sonnet) |
 | `@explore` | explore | Codebase search |
 
 ## Agents
@@ -42,11 +42,11 @@ Interview-driven planning with Agent Teams execution.
 | `kraken` | TDD implementation | sonnet | No |
 | `spark` | Quick fixes | sonnet | No |
 | `build-fixer` | Build/compile/lint error specialist | sonnet | No |
-| `oracle` | Strategic advisor | opus | No |
-| `critic` | Post-implementation reviewer | opus | No |
-| `security-reviewer` | Security analysis specialist | opus | No |
-| `explore` | Codebase search | sonnet | No |
-| `leviathan` | Deep plan reviewer | opus | No |
+| `oracle` | Strategic advisor | sonnet | No |
+| `critic` | Post-implementation reviewer | sonnet | No |
+| `security-reviewer` | Security analysis specialist | sonnet | No |
+| `explore` | Codebase search | haiku | No |
+| `leviathan` | Deep plan reviewer | sonnet | No |
 | `wisdom-synthesizer` | Knowledge consolidation | haiku | No |
 | `progress-reporter` | Status tracking | haiku | No |
 

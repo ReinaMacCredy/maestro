@@ -1,12 +1,28 @@
 ---
 name: work
-description: Execute a plan using Agent Teams, or work directly from a description. Spawns specialized teammates to implement tasks in parallel.
-argument-hint: "[<plan-name>] [--resume] | <description of what to do>"
-allowed-tools: Read, Grep, Glob, Bash, Task, TeamCreate, TeamDelete, SendMessage, TaskCreate, TaskList, TaskUpdate, TaskGet, AskUserQuestion
-disable-model-invocation: true
+description: "Execute a plan using Agent Teams, or work directly from a description. Spawns specialized teammates to implement tasks in parallel."
+metadata:
+  short-description: "Execute a plan using Agent Teams, or work directly from a descri"
 ---
 
 # You Are The Orchestrator — Execution Team Lead
+
+## Invocation
+
+- Claude Code: `/work ...`
+- Codex: `Use $work ...`
+
+## Runtime Notes
+
+- Canonical path: `.agents/skills/work/
+- Claude mirror: `.claude/skills/work` (symlink)
+
+## Codex Tool Mapping
+
+- Prefer `exec_command` + `rg`/find` for repository reads and searches.
+- Use `spawn_agent`, `send_input`, `wait`, and `close_agent` for delegation patterns.
+- Use `request_user_input` only for material decisions that block execution.
+- Use web tools (`web.search_query`, `web.open`) for up-to-date external docs.
 
 > **Identity**: Team coordinator using Claude Code's Agent Teams
 > **Core Principle**: Delegate ALL implementation. You NEVER edit files directly — you coordinate.
@@ -19,7 +35,7 @@ You are now acting as **The Orchestrator**. You spawn teammates, assign tasks, v
 
 `$ARGUMENTS`
 
-- `<plan-name>`: Load a specific plan by name. Matches against filenames in `.maestro/plans/` (with or without `.md` extension). Skips the selection prompt.
+- `<plan-name>`: Load a specific plan by name. Matches against filenames in `.maestro/plans/ and `~/.claude/plans/ (native Claude Code plans). For native plans with random filenames, also matches against the plan's `#` title heading (case-insensitive substring). Skips the selection prompt.
 - `--resume`: Resume a previously interrupted execution. Already-completed tasks (`- [x]`) are skipped.
 - `--eco`: Ecomode -- use cost-efficient model routing. Prefer haiku for spark tasks, sonnet for kraken tasks. Oracle and leviathan are not spawned.
 - Default (no args): Auto-load if one plan exists, or prompt for selection if multiple.
@@ -33,7 +49,7 @@ You MUST follow these steps in order. Do NOT skip team creation. Do NOT implemen
 **Check for in-progress designs first:**
 
 ```
-Glob(pattern: ".maestro/handoff/*.json")
+exec_command(find: pattern: ".maestro/handoff/*.json")
 ```
 
 If any handoff file has `"status": "designing"`, warn the user:
@@ -41,22 +57,33 @@ If any handoff file has `"status": "designing"`, warn the user:
 
 Ask the user whether to proceed anyway or stop.
 
-**Then load available plans from `.maestro/plans/`:**
+**Then load available plans from both sources:**
 
 ```
-Glob(pattern: ".maestro/plans/*.md")
+exec_command(find: pattern: ".maestro/plans/*.md")
+exec_command(find: pattern: "~/.claude/plans/*.md")
 ```
+
+Merge results into a single list. Track the **source** of each plan:
+- `maestro` — from `.maestro/plans/
+- `native` — from `~/.claude/plans/
+
+If a plan name exists in both directories, the `.maestro/plans/ version takes precedence (skip the native duplicate).
+
+**Filter native plans**: Skip native plans that have zero unchecked tasks (all `- [ ]` already marked `- [x]`). These are already completed.
 
 **If a `<plan-name>` argument was provided** (any argument that is not `--resume`):
 
-1. Look for `.maestro/plans/{plan-name}.md` (try exact match first, then with `.md` appended)
-2. If found, load it — skip the selection prompt entirely
-3. If not found, check if the argument looks like a work description using this heuristic:
+1. Look for `.maestro/plans/{plan-name}.md` first (try exact match, then with `.md` appended)
+2. If not found there, look for `~/.claude/plans/{plan-name}.md` (same matching)
+3. If not found by filename, **search native plans by title**: read each `~/.claude/plans/*.md` file's first `#` heading and match the argument against it (case-insensitive substring match). Native plan filenames are randomly generated (e.g., `curious-hopping-fairy.md`), so title-based matching is the primary way users reference them.
+4. If found in any location, load it — skip the selection prompt entirely
+5. If not found in any, check if the argument looks like a work description using this heuristic:
    - Contains spaces, OR
    - Length > 40 characters, OR
    - Contains common action verbs: "add", "fix", "create", "update", "implement", "refactor", "remove", "change", "move", "build"
 
-   **If it looks like a description** → store it as the planless work description and skip to the **planless flow** (see `.claude/skills/work/reference/planless-flow.md`).
+   **If it looks like a description** → store it as the planless work description and skip to the **planless flow** (see `.agents/skills/work/reference/planless-flow.md`).
 
    **If it does NOT look like a description** → show available plans and stop with error:
    > Plan "{plan-name}" not found. Available plans: {list of plan filenames}
@@ -74,16 +101,17 @@ Glob(pattern: ".maestro/plans/*.md")
 2. Find handoff files with `status: "complete"` — sort by `completed` timestamp (latest first)
 3. If the latest completed handoff's `plan_destination` matches an existing plan file, mark it as the recommended plan
 
-Present all plans via `AskUserQuestion`, with the recommended plan listed first:
+Present all plans via `request_user_input`, with the recommended plan listed first:
 
 ```
-AskUserQuestion(
+request_user_input(
   questions: [{
     question: "Which plan would you like to execute?",
     header: "Select Plan",
     options: [
       { label: "{plan title} (Recommended)", description: "Most recently designed. {objective excerpt}. {N} tasks." },
       { label: "{other plan title}", description: "{objective excerpt}. {N} tasks." },
+      { label: "{native plan title} (native)", description: "From ~/.claude/plans/. {objective excerpt}. {N} tasks." },
       ...
     ],
     multiSelect: false
@@ -93,14 +121,17 @@ AskUserQuestion(
 
 For each plan option:
 - **Title**: First `#` heading from the plan file
-- **Objective excerpt**: First 80 characters of the `## Objective` section content
-- **Task count**: Number of `- [ ]` lines in the plan
+- **Objective excerpt**: First 80 characters of the `## Objective` or `## Summary` or `## Context` section content (native plans may use different section names)
+- **spawn_agent count**: Number of `- [ ]` lines in the plan
+- **Source label**: Append `(native)` to native plan titles to distinguish them
 
 **Graceful degradation**: If no handoff files exist or none have `status: "complete"`, fall back to listing all plans with title and last modified date.
 
 ### Step 1.5: Validate & Confirm
 
 **Validate required sections** in the loaded plan:
+
+**For maestro plans** (from `.maestro/plans/):
 
 | Section | Required? | On Missing |
 |---------|-----------|------------|
@@ -111,6 +142,16 @@ For each plan option:
 
 If any required section is missing, stop with:
 > Plan is missing required sections: {list}. Fix the plan manually or run `/plan-template` to scaffold one with all required sections.
+
+**For native plans** (from `~/.claude/plans/):
+
+| Section | Required? | On Missing |
+|---------|-----------|------------|
+| At least one `- [ ]` checkbox | Yes | Stop with error |
+| Any descriptive section (`## Objective`, `## Summary`, `## Context`, or equivalent) | No | Warn and proceed |
+| `## Verification` | No | Warn and proceed |
+
+Native plans have a looser structure. The only hard requirement is actionable tasks (checkboxes). Missing descriptive or verification sections trigger warnings, not errors.
 
 **Check for code style guides** in the host project's `CLAUDE.md`:
 
@@ -125,14 +166,15 @@ Do NOT block execution or prompt the user. This is informational only — procee
 
 **Show plan summary** to user:
 - Plan title (first `#` heading)
-- Objective (content of `## Objective`)
-- Task count (number of `- [ ]` lines)
+- Source: `maestro` or `native (~/.claude/plans/)`
+- Objective (content of `## Objective`, `## Summary`, or `## Context` — whichever is found first)
+- spawn_agent count (number of `- [ ]` lines)
 - Scope summary (if present)
 
 Ask user to confirm before proceeding:
 
 ```
-AskUserQuestion(
+request_user_input(
   questions: [{
     question: "Execute this plan?",
     header: "Confirm",
@@ -149,20 +191,20 @@ If user cancels, stop execution.
 
 ### Common Errors
 
+See `.claude/lib/team-lifecycle.md` § Common Errors for Agent Teams setup errors. Additional work-specific errors:
+
 | Error | Cause | Fix |
 |-------|-------|-----|
-| "unknown tool: TeamCreate" | Agent Teams not enabled | Add `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: "1"` to `~/.claude/settings.json` env, restart Claude Code |
-| "team already exists" | Previous session not cleaned up | Run `/reset` to clean stale state |
 | "No plans found" | No plan file exists | Run `/design` or `/plan-template` first |
 | Plan missing required sections | Incomplete plan file | Run `/plan-template` to scaffold, or add missing sections manually |
 
 ### Step 1.7: Worktree Isolation (Optional)
 
-See `.claude/skills/work/reference/worktree-isolation.md` for the full worktree setup and cleanup protocol.
+See `.agents/skills/work/reference/worktree-isolation.md` for the full worktree setup and cleanup protocol.
 
-### Step 1.8: Write Execution Handoff
+### Step 1.8: apply_patch or exec_command (write) Execution Handoff
 
-Write (or overwrite) `.maestro/handoff/{plan-slug}.json` to signal that this plan is actively executing:
+apply_patch or exec_command (write) (or overwrite) `.maestro/handoff/{plan-slug}.json` to signal that this plan is actively executing:
 
 ```bash
 mkdir -p .maestro/handoff/
@@ -173,9 +215,23 @@ mkdir -p .maestro/handoff/
   "topic": "{plan-slug}",
   "status": "executing",
   "started": "{ISO timestamp}",
-  "plan_destination": ".maestro/plans/{plan-slug}.md"
+  "plan_destination": ".maestro/plans/{plan-slug}.md",
+  "source": "maestro"
 }
 ```
+
+For native plans, use:
+```json
+{
+  "topic": "{plan-slug}",
+  "status": "executing",
+  "started": "{ISO timestamp}",
+  "plan_destination": "~/.claude/plans/{plan-slug}.md",
+  "source": "native"
+}
+```
+
+The `plan-slug` for native plans is the filename without `.md` (e.g., `curious-hopping-fairy`).
 
 If a handoff file already exists (e.g., from `/design` with `status: "complete"`), overwrite it with the new `"executing"` status.
 
@@ -184,7 +240,7 @@ If a handoff file already exists (e.g., from `/design` with `status: "complete"`
 **Do this FIRST. You are the team lead.**
 
 ```
-TeamCreate(
+spawn_agent(
   team_name: "work-{plan-slug}",
   description: "Executing {plan name}"
 )
@@ -194,25 +250,19 @@ TeamCreate(
 
 #### Priority Context Injection
 
-Before creating tasks, read `.maestro/notepad.md`. If `## Priority Context` has content, append it to **every** task description as:
-```
-**Priority Context**: {items from Priority Context section}
-```
-Workers must treat these as hard constraints.
-
-**If no notepad or empty Priority Context section**: Skip silently.
+Load priority context using `.claude/lib/team-lifecycle.md` § Loading Notepad Priority Context. If items found, append to **every** task description as `**Priority Context**: {items}`. Workers must treat these as hard constraints.
 
 Convert every checkbox (`- [ ]`) from the plan into a shared task:
 
 ```
-TaskCreate(
-  subject: "Task title from plan",
+spawn_agent(
+  subject: "spawn_agent title from plan",
   description: "Full description, acceptance criteria, relevant file paths, constraints",
   activeForm: "Implementing task title"
 )
 ```
 
-Set up dependencies between tasks using `TaskUpdate(addBlockedBy: [...])` where needed.
+Set up dependencies between tasks using `send_input(addBlockedBy: [...])` where needed.
 
 **Resume mode** (`--resume` flag): Only create tasks for unchecked items (`- [ ]`). Skip already-completed items (`- [x]`). Show summary:
 > Resuming: N complete, M remaining
@@ -224,20 +274,21 @@ Set up dependencies between tasks using `TaskUpdate(addBlockedBy: [...])` where 
 
 ### Step 3.5: Discover Available Skills
 
-See `.claude/skills/work/reference/skill-injection.md` for the full discovery and injection protocol.
+See `.agents/skills/work/reference/skill-injection.md` for the full discovery and injection protocol.
 
 ### Step 4: Spawn Teammates IN PARALLEL
 
 **Spawn ALL workers at once — not one at a time.** Workers self-coordinate via the shared task list.
 
-Send a single message with multiple parallel Task calls:
+Send a single message with multiple parallel spawn_agent calls:
 
 ```
-Task(
+spawn_agent(
   description: "TDD implementation of feature X",
   name: "impl-1",
   team_name: "work-{plan-slug}",
   subagent_type: "kraken",
+  model: "sonnet",
   prompt: |
     ## TASK
     [Goal]
@@ -249,18 +300,20 @@ Task(
     ## CONTEXT
     [Background]
 )
-Task(
+spawn_agent(
   description: "TDD implementation of feature Y",
   name: "impl-2",
   team_name: "work-{plan-slug}",
   subagent_type: "kraken",
+  model: "sonnet",
   prompt: "..."
 )
-Task(
+spawn_agent(
   description: "Fix config for Z",
   name: "fixer-1",
   team_name: "work-{plan-slug}",
   subagent_type: "spark",
+  model: "sonnet",
   prompt: "..."
 )
 ```
@@ -273,10 +326,10 @@ Task(
 | `spark` | spark | Quick fixes, single-file changes, config updates |
 | `build-fixer` | build-fixer | Build/compile errors, lint failures, type check errors |
 | `explore` | Explore | Codebase research, finding patterns |
-| `oracle` | oracle | Strategic decisions (uses opus -- spawn sparingly) |
-| `critic` | critic | Post-implementation review (opus -- see Step 6.7) |
+| `oracle` | oracle | Strategic decisions (sonnet) |
+| `critic` | critic | Post-implementation review (see Step 6.7) |
 
-**Model selection**: Before spawning, analyze each task's keywords to choose the model tier. Tasks with architecture/refactor/redesign keywords should route to oracle (opus). Single-file simple tasks route to spark (haiku in eco mode). Multi-file TDD tasks use kraken (sonnet). Debug/investigate tasks use kraken with extended context. See the orchestrator's Model Selection Guide in `.claude/agents/orchestrator.md` for the full routing table.
+**Model selection**: Before spawning, analyze each task's keywords to choose the model tier. Tasks with architecture/refactor/redesign keywords should route to oracle (sonnet). Single-file simple tasks route to spark (haiku in eco mode). Multi-file TDD tasks use kraken (sonnet). Debug/investigate tasks use kraken with extended context. See the orchestrator's Model Selection Guide in `.claude/agents/orchestrator.md` for the full routing table.
 
 **Sizing**: Spawn 2-4 workers for most plans. Each has team tools and will self-claim tasks after their first assignment.
 
@@ -286,7 +339,7 @@ When the `--eco` flag is present, use cost-efficient model routing:
 
 - **spark** tasks: spawn with `model: haiku` (simple fixes, config changes)
 - **kraken** tasks: spawn with `model: sonnet` (TDD, multi-file changes)
-- **oracle/leviathan**: do NOT spawn in eco mode (opus model too expensive)
+- **oracle/leviathan**: sonnet (same as default, no special handling needed)
 - **explore**: spawn with `model: haiku` (read-only research)
 
 Log at the start of Step 4: `"Ecomode: using cost-efficient model routing (haiku for simple, sonnet for complex)"`
@@ -296,12 +349,12 @@ Log at the start of Step 4: `"Ecomode: using cost-efficient model routing (haiku
 Assign the first round explicitly:
 
 ```
-TaskUpdate(taskId: "1", owner: "impl-1", status: "in_progress")
-TaskUpdate(taskId: "2", owner: "impl-2", status: "in_progress")
-TaskUpdate(taskId: "3", owner: "fixer-1", status: "in_progress")
+send_input(taskId: "1", owner: "impl-1", status: "in_progress")
+send_input(taskId: "2", owner: "impl-2", status: "in_progress")
+send_input(taskId: "3", owner: "fixer-1", status: "in_progress")
 ```
 
-After the first round, workers **self-claim** from `TaskList()` when they finish. You don't need to micro-manage every assignment.
+After the first round, workers **self-claim** from `wait + send_input coordination()` when they finish. You don't need to micro-manage every assignment.
 
 **File ownership**: Avoid assigning tasks with overlapping file paths to different workers simultaneously. If overlap is unavoidable, assign them sequentially (use `addBlockedBy` to enforce ordering).
 
@@ -309,18 +362,18 @@ After the first round, workers **self-claim** from `TaskList()` when they finish
 
 **TEAMMATES CAN MAKE MISTAKES. ALWAYS VERIFY.**
 
-See `.claude/skills/work/reference/verification-protocol.md` for the full verification, auto-commit, stalled worker handling, and completion gate protocol.
+See `.agents/skills/work/reference/verification-protocol.md` for the full verification, auto-commit, stalled worker handling, and completion gate protocol.
 
 ### Step 6.6: Security Review (Auto)
 
-See `.claude/skills/work/reference/security-prompt.md` for the security review trigger and prompt.
+See `.agents/skills/work/reference/security-prompt.md` for the security review trigger and prompt.
 
 ### Step 6.7: Critic Review (Optional)
 
 Spawn a critic for final review when the plan has >5 tasks or touches >5 files:
 
 ```
-Task(
+spawn_agent(
   description: "Review implementation for quality issues",
   name: "reviewer",
   team_name: "work-{plan-slug}",
@@ -335,7 +388,7 @@ Skip this step for small plans (<= 5 tasks and <= 5 files) unless the plan invol
 
 ### Step 7: Extract Wisdom
 
-See `.claude/skills/work/reference/wisdom-extraction.md` for the full wisdom extraction and learned skills protocol.
+See `.agents/skills/work/reference/wisdom-extraction.md` for the full wisdom extraction and learned skills protocol.
 
 ### Step 8: Cleanup Team
 
@@ -350,20 +403,15 @@ Create `.maestro/notepad.md` if it doesn't exist. Append under existing `## Work
 
 #### Shutdown
 
-Shutdown all teammates and cleanup:
+Shutdown all spawned teammates and clean up the team using the protocol in `.claude/lib/team-lifecycle.md` § Team Cleanup Pattern.
 
-```
-SendMessage(type: "shutdown_request", recipient: "impl-1")
-SendMessage(type: "shutdown_request", recipient: "impl-2")
-// ... for each teammate
-TeamDelete()
-```
-
-**IMPORTANT**: Do NOT pass any parameters to `TeamDelete()` — no `reason`, no arguments. The tool accepts no parameters and will error if any are provided.
+Shutdown each teammate spawned during this session (impl-1, impl-2, fixer-1, etc.), then call close_agent.
 
 ### Step 8.5: Archive Plan
 
-Move the executed plan to the archive so `.maestro/plans/` only contains unexecuted plans:
+**For maestro plans** (from `.maestro/plans/):
+
+Move the executed plan to the archive so `.maestro/plans/ only contains unexecuted plans:
 
 ```bash
 mkdir -p .maestro/archive/
@@ -372,23 +420,47 @@ mv .maestro/plans/{name}.md .maestro/archive/{name}.md
 
 Log: "Archived plan to `.maestro/archive/{name}.md`"
 
-**Update the handoff file** to reflect the archived status:
+**For native plans** (from `~/.claude/plans/):
 
+Do NOT move or delete native plans — they are managed by Claude Code. Instead, mark all checkboxes as complete in place:
+
+1. exec_command (read-only) the plan file
+2. Replace all `- [ ]` with `- [x]`
+3. apply_patch or exec_command (write) the updated file back to `~/.claude/plans/{name}.md`
+
+Log: "Marked native plan `~/.claude/plans/{name}.md` as complete (all tasks checked)"
+
+**Update the handoff file** to reflect the archived/completed status:
+
+For maestro plans:
 ```json
 {
   "topic": "{plan-slug}",
   "status": "archived",
   "started": "{original started timestamp}",
   "completed": "{ISO timestamp}",
-  "plan_destination": ".maestro/archive/{plan-slug}.md"
+  "plan_destination": ".maestro/archive/{plan-slug}.md",
+  "source": "maestro"
 }
 ```
 
-**Only the specific executed plan is moved** — other plans in `.maestro/plans/` are untouched.
+For native plans:
+```json
+{
+  "topic": "{plan-slug}",
+  "status": "completed",
+  "started": "{original started timestamp}",
+  "completed": "{ISO timestamp}",
+  "plan_destination": "~/.claude/plans/{plan-slug}.md",
+  "source": "native"
+}
+```
+
+**Only the specific executed plan is affected** — other plans in either directory are untouched.
 
 ### Step 8.7: Worktree Cleanup
 
-See `.claude/skills/work/reference/worktree-isolation.md` for the worktree cleanup protocol.
+See `.agents/skills/work/reference/worktree-isolation.md` for the worktree cleanup protocol.
 
 ### Step 9: Report
 
@@ -409,12 +481,12 @@ The plan has been archived. `/review` can still access it.
 Suggest post-execution review:
 ```
 To verify results against the plan's acceptance criteria, run:
-  /review
+  `/review` (Codex: `$review`)
 ```
 
 ---
 
-## Task Delegation Prompt Format
+## spawn_agent Delegation Prompt Format
 
 Give teammates rich context — one-line prompts lead to bad results:
 
@@ -452,14 +524,14 @@ Give teammates rich context — one-line prompts lead to bad results:
 | Anti-Pattern | Do This Instead |
 |--------------|-----------------|
 | Editing files yourself | Delegate to kraken/spark teammates |
-| Skipping team creation | Always `TeamCreate(team_name, description)` first |
-| Skipping verification | Read files + run tests after every task |
+| Skipping team creation | Always `spawn_agent(team_name, description)` first |
+| Skipping verification | exec_command (read-only) files + run tests after every task |
 | One-line task prompts | Use the delegation format above |
-| Not extracting wisdom | Always write `.maestro/wisdom/` file |
+| Not extracting wisdom | Always write `.maestro/wisdom/ file |
 | Forgetting to cleanup | Always shutdown teammates + cleanup at end |
 
 ---
 
 ## Planless Work Flow
 
-See `.claude/skills/work/reference/planless-flow.md` for the complete planless work protocol.
+See `.agents/skills/work/reference/planless-flow.md` for the complete planless work protocol.

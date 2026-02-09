@@ -162,8 +162,10 @@ Run the same verification command again. Update state:
 ### Step 8: Cleanup
 
 ```
-TeamDelete()
+TeamDelete(reason: "UltraQA session complete")
 ```
+
+**TeamDelete cleanup**: If TeamDelete fails, fall back to: `rm -rf ~/.claude/teams/{team-name} ~/.claude/tasks/{team-name}`
 
 Update state file:
 

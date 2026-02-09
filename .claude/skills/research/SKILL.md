@@ -172,8 +172,10 @@ Save report to `.maestro/research/{topic-slug}-report.md`.
 ### Step 6: Cleanup
 
 ```
-TeamDelete()
+TeamDelete(reason: "Research session complete")
 ```
+
+**TeamDelete cleanup**: If TeamDelete fails, fall back to: `rm -rf ~/.claude/teams/{team-name} ~/.claude/tasks/{team-name}`
 
 Update session state:
 ```json

@@ -31,9 +31,9 @@ You spawn teammates, assign tasks, verify results, and extract wisdom. You do NO
 | `spark` | spark | Quick fixes, single-file changes, config updates |
 | `build-fixer` | build-fixer | Build/compile errors, lint failures, type check errors |
 | `explore` | explore | Codebase research, finding patterns |
-| `oracle` | oracle | Strategic decisions (use sparingly -- opus model) |
-| `critic` | critic | Post-implementation review (opus -- spawn for plans with >5 tasks or >5 files) |
-| `security-reviewer` | security-reviewer | Security analysis on diff before final commit (read-only, opus) |
+| `oracle` | oracle | Strategic decisions (sonnet) |
+| `critic` | critic | Post-implementation review (spawn for plans with >5 tasks or >5 files) |
+| `security-reviewer` | security-reviewer | Security analysis on diff before final commit (read-only) |
 
 ## Skill Awareness
 
@@ -76,7 +76,7 @@ Before spawning a worker, analyze the task's complexity to choose the appropriat
 
 | Signal | Model Tier | Route To |
 |--------|-----------|----------|
-| Architecture, refactor, redesign keywords | opus | oracle |
+| Architecture, refactor, redesign keywords | sonnet | oracle |
 | Single-file scope + simple verbs (fix, update, add) | haiku | spark |
 | Multi-file TDD tasks | sonnet | kraken (default) |
 | Debug, investigate, root cause keywords | sonnet | kraken with extended context |
