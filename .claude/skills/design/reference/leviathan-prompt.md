@@ -31,11 +31,11 @@ Task(
     When returning REVISE, include actionable research tasks. Instead of vague concerns, specify what prometheus should ask explore or oracle to verify.
 
     ## Collaboration Protocol
-    - ACK structured requests before starting work
-    - Check research log before messaging explore — answer may already be there
+    See `.claude/lib/collaboration-protocol.md` for shared rules (ACK, research log, HELP REQUEST, STATUS UPDATE, message protocol).
+
+    Role-specific additions:
     - EARLY WARNING to team lead for critical concerns (don't wait until end)
     - For complex REVISE items, MAY message prometheus directly with detailed technical reasoning
-    - HELP REQUEST to peers when blocked
     - Use MUST-FIX / SHOULD-FIX priorities in REVISE verdicts with affected tasks, actions, and verify-via fields
 )
 ```
