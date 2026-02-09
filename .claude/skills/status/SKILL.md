@@ -119,6 +119,39 @@ ls ~/.claude/teams/ 2>/dev/null
 
 Report any active team directories.
 
+### 6.5. Trace
+
+Check trace log state:
+
+```bash
+ls -la .maestro/trace.jsonl 2>/dev/null
+```
+
+If `.maestro/trace.jsonl` exists, report:
+- File presence
+- Event count using:
+  ```bash
+  wc -l .maestro/trace.jsonl
+  ```
+
+If missing, report "No trace log found."
+
+### 6.6. PSM Sessions
+
+Check PSM session state:
+
+```bash
+ls -la ~/.maestro-psm/sessions.json 2>/dev/null
+```
+
+If `~/.maestro-psm/sessions.json` exists, report active session count from `.sessions` entries:
+
+```bash
+jq '.sessions | length' ~/.maestro-psm/sessions.json
+```
+
+If missing, report "No PSM sessions state found."
+
 ### 7. Next Steps
 
 Based on the state discovered above, suggest the most relevant next action:
@@ -156,4 +189,6 @@ End with a summary table:
 | Notepad | Present/Absent | N priority items |
 | Worktrees | N active | - |
 | Teams | N active | - |
+| Trace | Present/Absent | N events |
+| PSM Sessions | Present/Absent | N active |
 ```
