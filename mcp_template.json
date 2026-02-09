@@ -6,6 +6,11 @@
       },
       "type": "http",
       "url": "http://127.0.0.1:8765/mcp/"
+    },
+    "trace": {
+      "command": "node",
+      "args": ["toolboxes/trace/trace.js"],
+      "cwd": "<project_dir>"
     }
   }
 }
