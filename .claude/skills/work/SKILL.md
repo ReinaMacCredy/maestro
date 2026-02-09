@@ -19,7 +19,7 @@ You are now acting as **The Orchestrator**. You spawn teammates, assign tasks, v
 
 `$ARGUMENTS`
 
-- `<plan-name>`: Load a specific plan by name. Matches against filenames in `.maestro/plans/` (with or without `.md` extension). Skips the selection prompt.
+- `<plan-name>`: Load a specific plan by name. Matches against filenames in `.maestro/plans/` and `~/.claude/plans/` (native Claude Code plans). For native plans with random filenames, also matches against the plan's `#` title heading (case-insensitive substring). Skips the selection prompt.
 - `--resume`: Resume a previously interrupted execution. Already-completed tasks (`- [x]`) are skipped.
 - `--eco`: Ecomode -- use cost-efficient model routing. Prefer haiku for spark tasks, sonnet for kraken tasks. Oracle and leviathan are not spawned.
 - Default (no args): Auto-load if one plan exists, or prompt for selection if multiple.
@@ -41,17 +41,28 @@ If any handoff file has `"status": "designing"`, warn the user:
 
 Ask the user whether to proceed anyway or stop.
 
-**Then load available plans from `.maestro/plans/`:**
+**Then load available plans from both sources:**
 
 ```
 Glob(pattern: ".maestro/plans/*.md")
+Glob(pattern: "~/.claude/plans/*.md")
 ```
+
+Merge results into a single list. Track the **source** of each plan:
+- `maestro` — from `.maestro/plans/`
+- `native` — from `~/.claude/plans/`
+
+If a plan name exists in both directories, the `.maestro/plans/` version takes precedence (skip the native duplicate).
+
+**Filter native plans**: Skip native plans that have zero unchecked tasks (all `- [ ]` already marked `- [x]`). These are already completed.
 
 **If a `<plan-name>` argument was provided** (any argument that is not `--resume`):
 
-1. Look for `.maestro/plans/{plan-name}.md` (try exact match first, then with `.md` appended)
-2. If found, load it — skip the selection prompt entirely
-3. If not found, check if the argument looks like a work description using this heuristic:
+1. Look for `.maestro/plans/{plan-name}.md` first (try exact match, then with `.md` appended)
+2. If not found there, look for `~/.claude/plans/{plan-name}.md` (same matching)
+3. If not found by filename, **search native plans by title**: read each `~/.claude/plans/*.md` file's first `#` heading and match the argument against it (case-insensitive substring match). Native plan filenames are randomly generated (e.g., `curious-hopping-fairy.md`), so title-based matching is the primary way users reference them.
+4. If found in any location, load it — skip the selection prompt entirely
+5. If not found in any, check if the argument looks like a work description using this heuristic:
    - Contains spaces, OR
    - Length > 40 characters, OR
    - Contains common action verbs: "add", "fix", "create", "update", "implement", "refactor", "remove", "change", "move", "build"
@@ -84,6 +95,7 @@ AskUserQuestion(
     options: [
       { label: "{plan title} (Recommended)", description: "Most recently designed. {objective excerpt}. {N} tasks." },
       { label: "{other plan title}", description: "{objective excerpt}. {N} tasks." },
+      { label: "{native plan title} (native)", description: "From ~/.claude/plans/. {objective excerpt}. {N} tasks." },
       ...
     ],
     multiSelect: false
@@ -93,14 +105,17 @@ AskUserQuestion(
 
 For each plan option:
 - **Title**: First `#` heading from the plan file
-- **Objective excerpt**: First 80 characters of the `## Objective` section content
+- **Objective excerpt**: First 80 characters of the `## Objective` or `## Summary` or `## Context` section content (native plans may use different section names)
 - **Task count**: Number of `- [ ]` lines in the plan
+- **Source label**: Append `(native)` to native plan titles to distinguish them
 
 **Graceful degradation**: If no handoff files exist or none have `status: "complete"`, fall back to listing all plans with title and last modified date.
 
 ### Step 1.5: Validate & Confirm
 
 **Validate required sections** in the loaded plan:
+
+**For maestro plans** (from `.maestro/plans/`):
 
 | Section | Required? | On Missing |
 |---------|-----------|------------|
@@ -111,6 +126,16 @@ For each plan option:
 
 If any required section is missing, stop with:
 > Plan is missing required sections: {list}. Fix the plan manually or run `/plan-template` to scaffold one with all required sections.
+
+**For native plans** (from `~/.claude/plans/`):
+
+| Section | Required? | On Missing |
+|---------|-----------|------------|
+| At least one `- [ ]` checkbox | Yes | Stop with error |
+| Any descriptive section (`## Objective`, `## Summary`, `## Context`, or equivalent) | No | Warn and proceed |
+| `## Verification` | No | Warn and proceed |
+
+Native plans have a looser structure. The only hard requirement is actionable tasks (checkboxes). Missing descriptive or verification sections trigger warnings, not errors.
 
 **Check for code style guides** in the host project's `CLAUDE.md`:
 
@@ -125,7 +150,8 @@ Do NOT block execution or prompt the user. This is informational only — procee
 
 **Show plan summary** to user:
 - Plan title (first `#` heading)
-- Objective (content of `## Objective`)
+- Source: `maestro` or `native (~/.claude/plans/)`
+- Objective (content of `## Objective`, `## Summary`, or `## Context` — whichever is found first)
 - Task count (number of `- [ ]` lines)
 - Scope summary (if present)
 
@@ -173,9 +199,23 @@ mkdir -p .maestro/handoff/
   "topic": "{plan-slug}",
   "status": "executing",
   "started": "{ISO timestamp}",
-  "plan_destination": ".maestro/plans/{plan-slug}.md"
+  "plan_destination": ".maestro/plans/{plan-slug}.md",
+  "source": "maestro"
 }
 ```
+
+For native plans, use:
+```json
+{
+  "topic": "{plan-slug}",
+  "status": "executing",
+  "started": "{ISO timestamp}",
+  "plan_destination": "~/.claude/plans/{plan-slug}.md",
+  "source": "native"
+}
+```
+
+The `plan-slug` for native plans is the filename without `.md` (e.g., `curious-hopping-fairy`).
 
 If a handoff file already exists (e.g., from `/design` with `status: "complete"`), overwrite it with the new `"executing"` status.
 
@@ -369,6 +409,8 @@ rm -rf ~/.claude/teams/{team-name} ~/.claude/tasks/{team-name}
 
 ### Step 8.5: Archive Plan
 
+**For maestro plans** (from `.maestro/plans/`):
+
 Move the executed plan to the archive so `.maestro/plans/` only contains unexecuted plans:
 
 ```bash
@@ -378,19 +420,43 @@ mv .maestro/plans/{name}.md .maestro/archive/{name}.md
 
 Log: "Archived plan to `.maestro/archive/{name}.md`"
 
-**Update the handoff file** to reflect the archived status:
+**For native plans** (from `~/.claude/plans/`):
 
+Do NOT move or delete native plans — they are managed by Claude Code. Instead, mark all checkboxes as complete in place:
+
+1. Read the plan file
+2. Replace all `- [ ]` with `- [x]`
+3. Write the updated file back to `~/.claude/plans/{name}.md`
+
+Log: "Marked native plan `~/.claude/plans/{name}.md` as complete (all tasks checked)"
+
+**Update the handoff file** to reflect the archived/completed status:
+
+For maestro plans:
 ```json
 {
   "topic": "{plan-slug}",
   "status": "archived",
   "started": "{original started timestamp}",
   "completed": "{ISO timestamp}",
-  "plan_destination": ".maestro/archive/{plan-slug}.md"
+  "plan_destination": ".maestro/archive/{plan-slug}.md",
+  "source": "maestro"
 }
 ```
 
-**Only the specific executed plan is moved** — other plans in `.maestro/plans/` are untouched.
+For native plans:
+```json
+{
+  "topic": "{plan-slug}",
+  "status": "completed",
+  "started": "{original started timestamp}",
+  "completed": "{ISO timestamp}",
+  "plan_destination": "~/.claude/plans/{plan-slug}.md",
+  "source": "native"
+}
+```
+
+**Only the specific executed plan is affected** — other plans in either directory are untouched.
 
 ### Step 8.7: Worktree Cleanup
 
