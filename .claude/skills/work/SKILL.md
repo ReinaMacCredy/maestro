@@ -238,6 +238,7 @@ Task(
   name: "impl-1",
   team_name: "work-{plan-slug}",
   subagent_type: "kraken",
+  model: "sonnet",
   prompt: |
     ## TASK
     [Goal]
@@ -254,6 +255,7 @@ Task(
   name: "impl-2",
   team_name: "work-{plan-slug}",
   subagent_type: "kraken",
+  model: "sonnet",
   prompt: "..."
 )
 Task(
@@ -261,6 +263,7 @@ Task(
   name: "fixer-1",
   team_name: "work-{plan-slug}",
   subagent_type: "spark",
+  model: "sonnet",
   prompt: "..."
 )
 ```
