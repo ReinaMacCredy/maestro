@@ -30,6 +30,9 @@ Display the flow trace showing how hooks, keywords, skills, agents, tools, and m
    - **Mode transitions** (execution mode changes)
    - **Failure clusters** (repeated failures by tool/step)
    - **Flow patterns** (keyword → skill → agent/tool chains)
+5. Note runtime wiring when relevant:
+   - MCP server config lives in `mcp_template.json`
+   - Trace server runs via `node toolboxes/trace/trace.js`
 
 ## Output Format
 
