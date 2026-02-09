@@ -31,6 +31,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `/security-review [<files> | --diff [range]]` — Delegated security analysis with severity ratings
 - `/ultraqa [--tests|--build|--lint|--typecheck|--custom '<cmd>']` — Iterative fix-and-verify loop (max 5 cycles, never commits)
 - `/research <topic> [--auto|--stages <N>|--resume]` — Multi-stage research with parallel agents and synthesis
+- `/trace` — Show agent execution timeline and performance summary
+- `/doctor` — Diagnose and fix Maestro installation issues
+- `/psm` — Project Session Manager — isolated dev environments with git worktrees and tmux
+- `/release` — Automated release workflow with version bump, tag, publish, and GitHub release
 
 Agent triggers (inline): `@tdd` (kraken), `@spark`, `@oracle`, `@explore`
 
@@ -98,6 +102,7 @@ Shell scripts in `.claude/scripts/` enforce workflow invariants via `.claude/hoo
 ├── handoff/    # Session recovery JSON (design status, worktree metadata)
 ├── wisdom/     # Accumulated learnings from past executions
 ├── research/   # Research session state and findings
+├── trace.jsonl # Execution trace events (hook/tool timeline)
 └── notepad.md  # Persistent notes (decisions, context, constraints)
 ```
 
