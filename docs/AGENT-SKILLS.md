@@ -36,10 +36,4 @@ Each skill must follow Agent Skills core constraints:
 
 ## Validation
 
-Run the repo validator before publishing:
-
-```bash
-./scripts/validate-agent-skills.sh
-```
-
-This validates all skills under `skills/*/SKILL.md`.
+Validate skills using your preferred lint/CI flow (for example, the `skills.sh` tooling and CI checks in your host environment).

@@ -95,7 +95,7 @@ Look for and run the project's standard validation checks:
 1. Check `package.json` for `test`, `build`, `lint`, `typecheck` scripts — run them if they exist
 2. Check for `Makefile` — run relevant targets if present
 3. Check for CI config (`.github/workflows/`, `.gitlab-ci.yml`) — note what CI would run
-4. Check for validation scripts (e.g., `scripts/validate-*.sh`) — run them
+4. Check for project verification scripts and documented quality gates — run them when available
 
 Record each result as **PASS**, **FAIL**, or **SKIP** (with reason).
 
@@ -448,7 +448,7 @@ Run the project's standard validation checks (same as plan-based Step 7):
 1. Check `package.json` for `test`, `build`, `lint`, `typecheck` scripts — run them if they exist
 2. Check for `Makefile` — run relevant targets if present
 3. Check for CI config (`.github/workflows/`, `.gitlab-ci.yml`) — note what CI would run
-4. Check for validation scripts (e.g., `scripts/validate-*.sh`) — run them
+4. Check for project verification scripts and documented quality gates — run them when available
 
 Record each result as **PASS**, **FAIL**, or **SKIP** (with reason).
 
