@@ -12,6 +12,7 @@ description: AI agent workflow with interview-driven planning and team-based exe
 | Trigger | Action |
 |---------|--------|
 | `/design <request>` | Start Prometheus interview mode (supports `--quick`) |
+| `/plan:maestro [<request>] [--quick]` | Universal cross-platform interview-driven planning (subagents only, no Agent Teams) |
 | `/work` | Execute plan with Agent Teams (supports `--resume`) |
 | `/setup-check` | Validate Maestro prerequisites |
 | `/status` | Show current Maestro state |
