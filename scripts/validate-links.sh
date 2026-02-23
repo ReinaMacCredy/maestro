@@ -53,6 +53,7 @@ EXCLUDE_DIRS = {
     ".git",
     ".claude",  # hard-link mirror of skills/ - links designed for skills/ context
     "node_modules",
+    ".venv",
     ".bv",
     ".beads-village",
     ".reservations",

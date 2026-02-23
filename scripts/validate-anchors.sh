@@ -52,6 +52,7 @@ HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.*)$")
 EXCLUDE_DIRS = {
     ".git",
     "node_modules",
+    ".venv",
     ".bv",
     ".beads-village",
     ".reservations",
