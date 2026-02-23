@@ -1,6 +1,6 @@
 ---
 name: git-worktrees
-description: "Git worktree isolation for parallel plan execution. Creates isolated working directories so multiple plans can execute simultaneously without conflicts."
+description: "Creates isolated working directories using git worktrees for parallel plan execution. Enables multiple plans to run simultaneously without file conflicts. Use when running concurrent development tasks."
 triggers: [worktree, isolation, parallel]
 ---
 

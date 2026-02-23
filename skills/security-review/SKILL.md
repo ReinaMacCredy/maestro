@@ -1,6 +1,6 @@
 ---
 name: security-review
-description: Deep security analysis delegated to the security-reviewer agent. Checks auth, injection, secrets, dependencies, and reports with severity ratings.
+description: "Performs deep security analysis: checks auth flows, injection vectors, secrets, and dependencies. Reports findings with severity ratings and file:line evidence. Use when reviewing code for security vulnerabilities or performing security audits."
 argument-hint: "[<files or feature area> | --diff [range]]"
 allowed-tools: Read, Grep, Glob, Bash, Task, TeamCreate, TeamDelete, SendMessage, AskUserQuestion
 disable-model-invocation: true

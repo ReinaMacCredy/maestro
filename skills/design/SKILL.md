@@ -1,6 +1,6 @@
 ---
 name: design
-description: "Start interview-driven planning with Prometheus. Asks clarifying questions before generating implementation plan."
+description: "Conducts interview-driven planning via Prometheus agent asking clarifying questions before generating an implementation plan. Use when starting work on features or tasks."
 metadata:
   short-description: "Start interview-driven planning with Prometheus"
 ---

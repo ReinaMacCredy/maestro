@@ -2,7 +2,9 @@
 
 When `/work` is invoked with a description instead of a plan name (detected in Step 1), follow this flow instead of the plan-based workflow.
 
-### Step P1: Analyze Description
+---
+
+## Step P1: Analyze description
 
 Parse the user's description to understand intent:
 
@@ -10,65 +12,42 @@ Parse the user's description to understand intent:
 2. Identify target files, components, or modules (if mentioned)
 3. Determine scope and complexity
 
-Store the description for use in subsequent steps.
-
-### Step P2: Generate Task Breakdown
+## Step P2: Generate task breakdown
 
 Generate 1-5 atomic tasks from the description. For each task, determine:
 
 - **Subject**: Short, imperative title
-- **Agent**: `kraken` (TDD, new features, multi-file changes) or `spark` (quick fixes, single-file changes)
+- **Agent**: `kraken` (TDD, new features, multi-file changes) or `spark` (quick fixes, single-file)
 - **Acceptance criteria**: Objectively verifiable outcomes
-- **Files**: Target file paths (use Glob/Grep to find if not specified in the description)
+- **Files**: Target file paths (search the codebase if not specified)
 
-Use the same task format as plan-based tasks. Keep the breakdown minimal — prefer fewer, well-scoped tasks over many granular ones.
+Keep the breakdown minimal — fewer well-scoped tasks over many granular ones.
 
-### Step P3: Confirm with User
+## Step P3: Confirm with user
 
-Present the generated task breakdown for user approval. Show each task with its agent assignment and acceptance criteria before asking.
+Present the task breakdown with agent assignments and acceptance criteria.
 
-```
-DECIDE(
-  question: "Here's the task breakdown. How would you like to proceed?",
-  options: [
-    {label: "Execute", description: "Proceed with these tasks"},
-    {label: "Revise", description: "Let me re-describe what I want"},
-    {label: "Cancel", description: "Stop without executing"}
-  ],
-  blocking: true,
-  default: "Cancel"
-)
-```
+Ask: **"Execute these tasks?"** with options:
+- **Execute** → proceed to Step P4
+- **Revise** → ask for a new description, repeat from P1
+- **Cancel** → stop
 
-**On Execute** → Proceed to Step P4.
-**On Revise** → Use `prompt.chat` to ask the user for a new description, then repeat from Step P1.
-**On Cancel** → Stop execution.
+## Step P4: Join main workflow
 
-### Step P4: Join Main Workflow
+After confirmation, rejoin the plan-based workflow:
 
-After user confirms, rejoin the plan-based workflow:
+1. Discover skills (see `reference/skill-injection.md`)
+2. Write handoff file with `"status": "executing"`
+3. Execute tasks using Step 4 from the main workflow (delegate → verify → commit)
+4. Continue through Steps 5-7 (quality gates → wrap up → report)
 
-1. **Create tasks** (same as Step 3) — convert the generated breakdown into shared tasks with dependencies
-2. **Discover skills** (same as Step 3.5) — scan for skills that can provide guidance
-3. **Proceed to Step 2** (Create Team) and continue through Steps 2 → 4 → 5 → 6 → 7 → 8 → 9
-
-### Skipped Steps in Planless Mode
-
-The following plan-based steps are skipped when running in planless mode:
+## Skipped steps in planless mode
 
 | Step | Reason |
 |------|--------|
-| Step 1.5 (Validate & Confirm) | No plan file to validate |
-| Step 1.7 (Worktree Isolation) | Too heavyweight for ad-hoc work |
-| Step 8.5 (Archive Plan) | No plan file to archive |
+| Plan validation (Step 2) | No plan file to validate |
+| Worktree isolation (Step 3) | Too heavyweight for ad-hoc work |
+| Plan archival (Step 6) | No plan file to archive |
+| Plan checkbox annotation | No plan file to update |
 
-All other steps (team creation, task execution, verification, wisdom extraction, cleanup, reporting) proceed normally.
-
-### Wisdom File Naming in Planless Mode
-
-When extracting wisdom (Step 7), derive the file slug from the first 5 words of the user's description:
-
-- `/work add retry logic to api client` → `.maestro/wisdom/add-retry-logic-to-api.md`
-- `/work fix login page redirect bug` → `.maestro/wisdom/fix-login-page-redirect-bug.md`
-
-Strip articles ("a", "an", "the") and limit to 5 significant words. Use hyphens as separators.
+All other steps (execution, verification, wisdom extraction, reporting) proceed normally.

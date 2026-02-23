@@ -1,6 +1,6 @@
 ---
 name: setup-check
-description: Verify Maestro plugin prerequisites — Agent Teams flag, jq, trace MCP, PSM tools, directories, and hooks.
+description: "Verifies Maestro prerequisites such as flags, tools, directories, and hooks. Use when confirming that the environment is ready."
 allowed-tools: Read, Bash, Glob, Write, AskUserQuestion
 disable-model-invocation: true
 ---

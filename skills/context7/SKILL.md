@@ -1,6 +1,6 @@
 ---
 name: context7
-description: Fetch up-to-date library documentation via Context7 MCP. Use when working with external libraries, APIs, or frameworks.
+description: "Fetches up-to-date library documentation via Context7 MCP for external libraries, APIs, and frameworks. Use when working with external dependencies or unfamiliar APIs."
 triggers:
   - "documentation"
   - "library"

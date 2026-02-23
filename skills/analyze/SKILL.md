@@ -1,6 +1,6 @@
 ---
 name: analyze
-description: Deep investigation mode. Gather context, analyze, synthesize recommendations without making code changes.
+description: "Performs deep read-only investigation by gathering context and synthesizing recommendations. Use when you need thorough analysis before making code changes."
 argument-hint: "<problem or topic>"
 allowed-tools: Read, Grep, Glob, Bash, Task, TeamCreate, TeamDelete, SendMessage, AskUserQuestion
 disable-model-invocation: true

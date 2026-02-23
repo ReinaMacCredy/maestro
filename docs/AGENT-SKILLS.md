@@ -19,7 +19,7 @@ npx skills add ReinaMacCredy/maestro --list
 npx skills add ReinaMacCredy/maestro
 
 # Install a specific skill for specific agents
-npx skills add ReinaMacCredy/maestro --skill plan-maestro --agent claude-code --agent amp
+npx skills add ReinaMacCredy/maestro --skill planning --agent claude-code --agent amp
 ```
 
 ## SKILL.md Requirements

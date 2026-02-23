@@ -1,6 +1,6 @@
 ---
 name: project-conventions
-description: Discovers host project conventions from CLAUDE.md, package.json, linter configs, and other configuration files. Use when agents need to understand the target project's coding standards.
+description: "Discovers project conventions from configuration files and coding-standard sources. Use when agents need repository-specific style and workflow rules."
 user-invocable: false
 ---
 

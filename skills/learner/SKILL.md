@@ -1,6 +1,6 @@
 ---
 name: learner
-description: Extract hard-won principles from the current session and save as reusable learned skills.
+description: "Extracts reusable principles from the current session and stores them as learned skills. Use when you want to capture durable patterns after completing work."
 argument-hint: "[--from-session | --from-diff | <topic>]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 disable-model-invocation: true
@@ -88,7 +88,7 @@ For each approved principle, create a skill file:
 ```markdown
 ---
 name: {slug}
-description: {one-line summary}
+
 triggers:
   - {keyword1}
   - {keyword2}

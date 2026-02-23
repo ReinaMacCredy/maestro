@@ -1,6 +1,6 @@
 ---
 name: psm
-description: Project Session Manager — isolated dev environments with git worktrees and tmux
+description: "Manages isolated development sessions using git worktrees and tmux. Use when running parallel tasks that require separate environments."
 argument-hint: "review <ref> | fix <ref> | feature <name> | list | attach <session> | kill <session> | cleanup | status"
 aliases: [session, worktree-session]
 disable-model-invocation: true

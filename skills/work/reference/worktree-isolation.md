@@ -28,7 +28,7 @@ Determine the worktree root using this priority chain:
 |----------|----------|-------|
 | 1 | `.worktrees/` | Default — at project root |
 | 2 | `worktrees/` | Alternate — same level |
-| 3 | CLAUDE.md preference | If project CLAUDE.md specifies a custom path |
+| 3 | Project instructions preference | If project instruction files (for example `AGENTS.md` / `CLAUDE.md`) specify a custom path |
 | 4 | Ask user | Prompt for directory if none of the above exist |
 
 #### 2. Safety Check — Gitignore

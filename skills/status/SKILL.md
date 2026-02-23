@@ -1,6 +1,6 @@
 ---
 name: status
-description: Show current Maestro state — plans, drafts, active tasks, and wisdom files.
+description: "Shows current Maestro state including plans, drafts, active tasks, and wisdom files. Use when checking progress and session health."
 allowed-tools: Read, Bash, Glob, Grep, TaskList
 disable-model-invocation: true
 ---

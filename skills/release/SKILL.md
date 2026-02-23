@@ -1,6 +1,6 @@
 ---
 name: release
-description: Automated release workflow with version bump, tag, publish, and GitHub release
+description: "Automates version bumping, tagging, publishing, and GitHub release creation. Use when preparing and shipping a project release."
 argument-hint: "<version|patch|minor|major> [--dry-run]"
 disable-model-invocation: true
 ---

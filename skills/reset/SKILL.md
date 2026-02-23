@@ -1,6 +1,6 @@
 ---
 name: reset
-description: Clean stale Maestro state — remove old drafts, orphaned teams, and stale task directories.
+description: "Cleans stale Maestro state by removing old drafts, orphaned teams, and stale task directories. Use when the local Maestro state is inconsistent or cluttered."
 allowed-tools: Read, Write, Bash, Glob
 ---
 

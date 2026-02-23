@@ -4,7 +4,13 @@
 
 Before spawning teammates, discover skills that can provide guidance for task delegation.
 
-Discover skills using the protocol in `.claude/lib/skill-registry.md`. The registry handles scanning project, global, and plugin locations with proper priority ordering and symlink handling.
+Discover skills using runtime-visible inventories and local skill folders. Prefer this order:
+
+1. Runtime-provided skill list (if available)
+2. Project-local skills (for example `.agents/skills/**/SKILL.md`, `.claude/skills/**/SKILL.md`, or `skills/**/SKILL.md`)
+3. User-global skills (runtime dependent)
+
+Deduplicate by skill name, preferring project-local definitions over global ones.
 
 **Build a skill registry** for use in Step 4:
 
@@ -22,7 +28,7 @@ skills:
 
 ## Injecting Skill Guidance into Task Prompts
 
-For each task, match the task description against the skill registry using the algorithm in `.claude/lib/skill-matcher.md`:
+For each task, match the task description against the discovered skill registry using this algorithm:
 
 1. **Normalize** task description to lowercase words
 2. **Match** skills by triggers (highest relevance) or keywords from name/description

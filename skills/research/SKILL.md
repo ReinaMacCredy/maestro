@@ -1,6 +1,6 @@
 ---
 name: research
-description: Multi-stage research with parallel agents, verification, and synthesis. Supports AUTO mode for hands-free deep investigation.
+description: "Conducts multi-stage research with parallel agents, verification, and synthesis. Use when you need high-confidence findings for complex questions."
 argument-hint: "<topic> [--auto|--stages <N>|--resume]"
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Task, TeamCreate, TeamDelete, SendMessage, WebSearch, WebFetch, AskUserQuestion
 disable-model-invocation: true

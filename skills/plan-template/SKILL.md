@@ -1,6 +1,6 @@
 ---
 name: plan-template
-description: Scaffold a blank plan with required sections in .maestro/plans/. Use /plan-template <name> to create a new plan file.
+description: "Scaffolds a blank plan file with required sections in .maestro/plans/. Use when creating a new implementation plan. Do NOT use when a full planning pipeline is needed — use the planning skill instead."
 user-invocable: true
 disable-model-invocation: true
 ---

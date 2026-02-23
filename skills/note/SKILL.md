@@ -1,6 +1,6 @@
 ---
 name: note
-description: Manage persistent working memory. Add priority context, manual notes, or working memory that persists across sessions.
+description: "Manages persistent working-memory notes across sessions. Use when you need to store priority context, decisions, or reminders."
 argument-hint: "<content> [--priority|--manual|--show|--prune|--clear]"
 allowed-tools: Read, Write, Edit, Bash, Glob, AskUserQuestion
 disable-model-invocation: true

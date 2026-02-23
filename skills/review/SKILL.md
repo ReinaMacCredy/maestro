@@ -1,6 +1,6 @@
 ---
 name: review
-description: Code review with auto-fix — plan-vs-implementation comparison or structured git-diff review. Automatically fixes issues found during review.
+description: "Performs code review with plan-to-implementation comparison and structured diff analysis, including auto-fix support. Use when validating quality and addressing review findings."
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 disable-model-invocation: true
 ---

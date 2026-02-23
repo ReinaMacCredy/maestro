@@ -1,6 +1,6 @@
 ---
 name: ultraqa
-description: Iterative fix-and-verify loop for tests, build, lint, or typecheck. Diagnoses failures, applies fixes, re-verifies — up to 5 cycles.
+description: "Runs an iterative fix-and-verify loop for tests, build, lint, and typecheck failures. Use when you need automated diagnose-fix-reverify cycles."
 argument-hint: "[--tests|--build|--lint|--typecheck|--custom '<command>']"
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Task, TeamCreate, TeamDelete, SendMessage, AskUserQuestion
 disable-model-invocation: true

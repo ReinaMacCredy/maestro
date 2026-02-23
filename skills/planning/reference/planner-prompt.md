@@ -1,4 +1,4 @@
-# Planner Subagent Prompt — plan:maestro
+# Planner Subagent Prompt — planning
 
 This file is a prompt template. The orchestrator reads it, substitutes all `{placeholder}` values, and passes the result as the `prompt` argument to a Task subagent call.
 

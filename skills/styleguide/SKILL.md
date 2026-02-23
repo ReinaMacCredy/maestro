@@ -1,6 +1,6 @@
 ---
 name: styleguide
-description: Detect project languages and inject code style guides into CLAUDE.md. Provides consistent coding conventions for all Claude Code interactions.
+description: "Detects project languages and injects code style guides into CLAUDE.md. Use when establishing consistent coding conventions."
 argument-hint: "[--remove]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 disable-model-invocation: true

@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Scaffold persistent project context — product definition, tech stack, and guidelines. Interviews you about your project and generates context files that all Maestro agents reference.
+description: "Scaffolds persistent project context files through a guided interview. Use when onboarding a repository to Maestro context workflows."
 argument-hint: "[--reset]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 disable-model-invocation: true

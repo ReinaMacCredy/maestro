@@ -1,6 +1,6 @@
 ---
 name: doctor
-description: Diagnose and fix Maestro installation issues
+description: "Diagnoses and auto-fixes Maestro installation issues, detects configuration drift, and remedies common problems. Use when Maestro is broken or behaving unexpectedly."
 argument-hint: "[--fix] [--check <name>]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 disable-model-invocation: true

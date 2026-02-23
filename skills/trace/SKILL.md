@@ -1,6 +1,6 @@
 ---
 name: trace
-description: Show agent execution timeline and performance summary
+description: "Shows agent execution timelines and performance summaries. Use when debugging orchestration flow or measuring run behavior."
 argument-hint: "[--filter <tool|agent>] [--last N] [--summary]"
 disable-model-invocation: true
 ---

@@ -1,111 +1,244 @@
 ---
 name: work
-description: "Executes a plan using Agent Teams or a direct task description with parallel teammates. Use when implementing approved work efficiently."
-metadata:
-  short-description: "Execute a plan using Agent Teams, or work directly from a descri"
+description: Execute a plan or direct task with worker delegation and verification.
 ---
 
-# You Are The Orchestrator — Execution Team Lead
+# Work Skill
 
-> **Identity**: Team coordinator responsible for parallel execution.
-> **Core Principle**: Delegate ALL implementation. You NEVER edit files directly — you coordinate.
+## When to use
 
-You are now acting as **The Orchestrator**. You spawn teammates, assign tasks, verify results, and extract wisdom. You do NOT write code yourself.
+- Execute a plan from `.maestro/plans/`
+- Run direct work from a description: `/work fix the login bug`
+- Resume interrupted work: `/work --resume`
 
----
+## Your role
+
+You are the orchestrator.
+- **Delegate** all implementation to worker subagents.
+- **Never** edit product code directly.
+- Assign tasks, verify results, commit verified work, manage quality gates.
+- If no subagent tool is available, execute tasks inline (you become the worker).
 
 ## Arguments
 
-`$ARGUMENTS`
-
-- `<plan-name>`: Load a specific plan by name. Matches against filenames in `.maestro/plans/` and `~/.claude/plans/` (native plans). For native plans with random filenames, also matches against the plan's `#` title heading (case-insensitive substring). Skips the selection prompt.
-- `--resume`: Resume a previously interrupted execution. Already-completed tasks (`- [x]`) are skipped.
-- `--eco`: Eco mode — use cost-efficient model routing. Prefer haiku for spark tasks, sonnet for kraken tasks.
-- `--runtime=<name>`: Override runtime detection and load a specific adapter directly.
-- Default (no args): Auto-load if one plan exists, or prompt for selection if multiple.
-
----
-
-## Step 0: Detect Runtime
-
-Before executing any workflow step, identify the runtime environment and load the matching adapter.
-
-Follow the detection algorithm in `reference/runtimes/registry.md`:
-
-1. Probe the tool inventory for capability signatures
-2. Select the first adapter whose probes pass (priority order: claude-teams → codex → amp → generic-chat)
-3. If `--runtime=<name>` is provided, skip detection and load that adapter directly
-4. Log the selection: `[runtime] detected: <adapter-name> (tier <N>) — <reason>`
-
-The selected adapter defines the concrete tool calls used throughout the workflow. All subsequent steps use abstract capability names (`agent.spawn`, `task.create`, `DECIDE`, etc.) resolved through the adapter.
-
-**Reference**: `reference/runtimes/registry.md`
+| Argument | Meaning |
+|----------|---------|
+| `<plan-name>` | Load a plan by name or title substring |
+| `--resume` | Skip completed tasks (`- [x]`) |
+| _(none)_ | Auto-load if one plan; prompt if multiple |
+| _(description)_ | Planless mode — see `reference/planless-flow.md` |
 
 ---
 
-## Steps 1–9: Execute Workflow
+## Workflow
 
-Follow the canonical 9-step workflow defined in `reference/core/workflow.md`:
+### Step 1: Load plan
 
-| Step | Name | Purpose |
-|------|------|---------|
-| 1 | `load_plan` | Locate and load the plan file |
-| 2 | `confirm` | Validate plan structure and get user approval |
-| 3 | `init_coordination` | Create team, write handoff, optional worktree |
-| 4 | `create_tasks` | Convert plan checkboxes to tracked tasks |
-| 5 | `dispatch_workers` | Spawn parallel workers, assign initial tasks |
-| 6 | `monitor_verify` | Verify results, auto-commit, handle stalls |
-| 7 | `extract_wisdom` | Record learnings and reusable patterns |
-| 8 | `cleanup` | Shut down workers, archive plan |
-| 9 | `report` | Deliver execution summary to user |
+1. Check `.maestro/handoff/*.json` for `"status": "designing"`. If found, warn the user and wait for confirmation.
 
-**Reference**: `reference/core/workflow.md`
+2. Scan `.maestro/plans/*.md` for available plans.
+
+3. **If `<plan-name>` argument given:**
+   - Match by filename or title substring (case-insensitive)
+   - Not found? Check if it looks like a work description (contains spaces, >40 chars, or action verbs: `add`, `fix`, `create`, `update`, `implement`, `refactor`, `remove`, `change`, `move`, `build`). If so → `reference/planless-flow.md`
+   - Otherwise → error: `Plan not found. Available: {list}`
+
+4. **If no argument:**
+   - 0 plans → error: `No plans found. Run /design first, or /work <description>.`
+   - 1 plan → auto-load
+   - Multiple → ask user which plan to execute
+
+### Step 2: Confirm
+
+1. Validate the plan has:
+   - `## Objective` section (required)
+   - At least one `- [ ]` checkbox (required)
+   - `## Verification` section (required)
+   - `## Scope` section (warn if missing, proceed)
+
+2. Present summary: title, objective excerpt, task count, scope.
+
+3. Ask: **"Execute this plan?"** — wait for explicit confirmation. If cancelled, stop.
+
+### Step 3: Initialize
+
+1. **Write handoff file:**
+   ```json
+   // .maestro/handoff/{plan-slug}.json
+   {
+     "topic": "{slug}",
+     "status": "executing",
+     "started": "{ISO timestamp}",
+     "plan": ".maestro/plans/{slug}.md"
+   }
+   ```
+
+2. **Worktree isolation** (optional) — ask user, then follow `reference/worktree-isolation.md` if chosen.
+
+3. **Load priority context** from `.maestro/notepad.md` under `## Working Memory`. Items tagged P0-P2 become hard constraints appended to every task prompt.
+
+4. **Discover skills** → see `reference/skill-injection.md`. Build a registry for task prompt injection.
+
+### Step 4: Execute tasks
+
+Work through each `- [ ]` checkbox in the plan, in dependency order.
+
+For each task:
+
+#### 4a. Build task prompt
+
+Use this template for every worker assignment:
+
+```markdown
+## TASK
+[Task title from the checkbox]
+
+## EXPECTED OUTCOME
+- [ ] Files created/modified: [paths from plan]
+- [ ] Tests pass: [test command]
+- [ ] No new errors
+
+## CONTEXT
+[Background, constraints, related files from plan]
+
+## SKILL GUIDANCE
+[Only if matching skills found — see reference/skill-injection.md]
+
+## MUST DO
+- [Explicit requirements from plan]
+
+## MUST NOT DO
+- [Explicit exclusions]
+
+## PRIORITY CONTEXT
+- [P0-P2 items from notepad, if any]
+
+## KNOWLEDGE CAPTURE
+- If you discover a non-obvious constraint, append to .maestro/notepad.md under ## Working Memory.
+- Emit <remember category="learning">description</remember> for non-trivial patterns.
+```
+
+#### 4b. Delegate
+
+**Spawn a worker subagent** with the task prompt. Use whatever delegation tool your runtime provides (Task, handoff, subagent, etc.) — the point is isolated execution so you can verify independently.
+
+Worker role selection:
+| Role | Use for |
+|------|---------|
+| `kraken` | TDD, new features, multi-file changes |
+| `spark` | Quick fixes, single-file changes, config |
+| `build-fixer` | Build errors, lint failures, type errors |
+
+If no subagent tool is available, do the work yourself inline.
+
+#### 4c. Verify
+
+After the worker finishes → see `reference/verification.md` for the full protocol.
+
+Summary:
+1. Read the modified files — confirm they exist and look correct
+2. Run tests and build commands
+3. Check against acceptance criteria from the plan
+
+**If passes** → commit and mark done (4d).
+
+**If fails** → retry up to 3 times:
+1. Send failure details back to original worker (or fix inline)
+2. Spawn a `build-fixer` for persistent build/lint errors
+3. Spawn an `oracle` for diagnostic help on attempt 3
+4. After 3 failures → mark task failed, ask user: Retry / Skip / Stop
+
+#### 4d. Commit and mark done
+
+1. Stage only this task's files: `git add <file1> <file2>`
+2. Commit with conventional prefix:
+   ```
+   feat(<plan-scope>): <short task description>
+
+   Plan: <plan-name>
+   Task: <task subject>
+   ```
+3. Capture the commit SHA and annotate the plan checkbox:
+   ```
+   - [x] Task title <!-- commit: abc1234 -->
+   ```
+
+**Never end a session with 0 commits.** Each verified task gets its own commit.
+
+#### 4e. Next task
+
+Move to the next `- [ ]` checkbox. Repeat 4a-4d until all tasks are done.
+
+**`--resume` mode**: Skip all `- [x]` checkboxes.
+
+### Step 5: Quality gates
+
+After all tasks are done, pass these gates before wrapping up:
+
+1. **Run all verification commands** from the plan's `## Verification` section.
+2. **Fix failures** — spawn a worker to fix, then re-run all verification from scratch.
+3. **Security review** — if the plan has a `## Security` section → see `reference/security.md`
+4. **Critic review** — for plans with >5 tasks or >5 files changed, spawn a `critic` agent for final review. If verdict is REVISE, send issues to workers and wait for fixes.
+
+All gates must pass before proceeding.
+
+### Step 6: Wrap up
+
+1. **Extract wisdom** → see `reference/wisdom.md`
+   Write learnings to `.maestro/wisdom/{slug}.md`.
+
+2. **Archive plan:**
+   ```bash
+   mkdir -p .maestro/archive/
+   mv .maestro/plans/{slug}.md .maestro/archive/{slug}.md
+   ```
+
+3. **Update handoff:**
+   ```json
+   { "status": "archived", "completed": "{ISO timestamp}" }
+   ```
+
+4. **Worktree cleanup** (if used) → see `reference/worktree-isolation.md`
+
+5. **Append summary to notepad** (`.maestro/notepad.md` under `## Working Memory`):
+   ```
+   - [{date}] [work:{slug}] Completed: {N}/{total} tasks. Files: {count}. Security: {pass|skip}.
+   ```
+
+### Step 7: Report
+
+Tell the user:
+- Tasks completed: N/total
+- Files created/modified
+- Test results (command + pass/fail)
+- Plan archived to `.maestro/archive/{slug}.md`
+- Issues or follow-ups (if any)
+- Worktree info (if used): branch name, merge command
+
+Suggest: `Run /review to verify results against acceptance criteria.`
 
 ---
 
-## Key References
+## Anti-patterns
 
-| Topic | Document |
-|-------|----------|
-| Runtime detection and adapter selection | `reference/runtimes/registry.md` |
-| Abstract capability definitions | `reference/core/capabilities.md` |
-| Full 9-step workflow specification | `reference/core/workflow.md` |
-| Task state model and heartbeat protocol | `reference/core/task-model.md` |
-| DECIDE primitive (user interaction) | `reference/core/decisions.md` |
-| Claude Code Agent Teams adapter | `reference/runtimes/claude-teams.md` |
-| Codex adapter | `reference/runtimes/codex-spawn.md` |
-| Amp adapter | `reference/runtimes/amp-task-handoff.md` |
-| Generic chat adapter (serial fallback) | `reference/runtimes/generic-chat.md` |
-| Worktree isolation protocol | `reference/worktree-isolation.md` |
-| Verification and auto-commit protocol | `reference/verification-protocol.md` |
-| Security review trigger | `reference/security-prompt.md` |
-| Wisdom extraction and learned skills | `reference/wisdom-extraction.md` |
-| Skill injection protocol | `reference/skill-injection.md` |
-| Planless work flow | `reference/planless-flow.md` |
+| Don't | Do instead |
+|-------|-----------|
+| Edit files yourself | Delegate to workers |
+| Skip verification | Verify every task before committing |
+| Use one-line task prompts | Use the full delegation template |
+| Skip wisdom extraction | Always write `.maestro/wisdom/` file |
+| Forget to commit | Commit after each verified task |
+| Start without handoff file | Always write handoff in Step 3 |
 
 ---
 
-## Invariants
+## Reference
 
-These rules apply across all runtimes and modes:
-
-1. **Orchestrator never edits files directly** — all file changes are delegated to workers (Tiers 1-2) or executed inline by the orchestrator only in Tier 3 (serial execution).
-2. **Workers cannot edit plan files** — `.maestro/plans/` is read-only for all workers.
-3. **One task owner at a time** — concurrent ownership is invalid.
-4. **Destructive decisions block** — any irreversible action must wait for explicit user confirmation; auto-default is not permitted.
-5. **Commit after each verified task** — zero-commit sessions are a failure mode.
-6. **Resume skips completed tasks** — `--resume` never recreates tasks for `- [x]` checkboxes.
-
----
-
-## Anti-Patterns
-
-| Anti-Pattern | Do This Instead |
-|--------------|-----------------|
-| Editing files yourself | Delegate to kraken/spark workers |
-| Skipping runtime detection | Always run Step 0 before anything else |
-| Skipping team creation | Call `team.create` first (Tier 1 runtimes) |
-| Skipping verification | Read files + run tests after every task |
-| One-line task prompts | Use the delegation prompt format in `workflow.md` Step 5b |
-| Not extracting wisdom | Always write `.maestro/wisdom/` file after execution |
-| Forgetting cleanup | Always shut down workers and dissolve the team |
+| Topic | File |
+|-------|------|
+| Verification protocol | `reference/verification.md` |
+| Security review | `reference/security.md` |
+| Wisdom extraction | `reference/wisdom.md` |
+| Worktree isolation | `reference/worktree-isolation.md` |
+| Skill injection | `reference/skill-injection.md` |
+| Planless flow | `reference/planless-flow.md` |

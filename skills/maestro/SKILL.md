@@ -1,6 +1,6 @@
 ---
 name: maestro
-description: AI agent workflow with interview-driven planning and team-based execution. Use /design to start planning, /work to execute.
+description: "Provides the Maestro workflow for interview-driven planning and team-based execution. Use when orchestrating work with /design and /work."
 ---
 
 # Maestro Workflow
@@ -12,7 +12,8 @@ description: AI agent workflow with interview-driven planning and team-based exe
 | Trigger | Action |
 |---------|--------|
 | `/design <request>` | Start Prometheus interview mode (supports `--quick`) |
-| `/plan:maestro [<request>] [--quick]` | Universal cross-platform interview-driven planning (subagents only, no Agent Teams) |
+| `/planning [<request>]` | Feature planning pipeline (discovery → synthesis → verification → decomposition → validation → tracks) |
+| `/plan:maestro [<request>] [--quick]` | Legacy alias for planning workflow |
 | `/work` | Execute plan with Agent Teams (supports `--resume`) |
 | `/setup-check` | Validate Maestro prerequisites |
 | `/status` | Show current Maestro state |

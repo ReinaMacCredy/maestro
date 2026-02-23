@@ -1,6 +1,6 @@
 ---
 name: pipeline
-description: Sequential agent chains with context passing. Run agents in series where each stage receives output from prior stages.
+description: "Runs sequential agent chains with context passed between stages. Use when work should flow through ordered specialist steps."
 argument-hint: "<preset> | agent1 -> agent2 'task'"
 allowed-tools: Read, Write, Edit, Grep, Glob, Bash, Task, TeamCreate, TeamDelete, SendMessage, TaskCreate, TaskList, TaskUpdate, TaskGet
 ---

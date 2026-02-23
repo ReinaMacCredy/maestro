@@ -13,7 +13,7 @@ npx skills add ReinaMacCredy/maestro
 
 **Install specific skills and agents:**
 ```bash
-npx skills add ReinaMacCredy/maestro --skill plan-maestro --agent claude-code --agent amp
+npx skills add ReinaMacCredy/maestro --skill planning --agent claude-code --agent amp
 ```
 
 **Legacy direct installs (still supported):**

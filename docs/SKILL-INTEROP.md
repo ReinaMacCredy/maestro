@@ -35,7 +35,7 @@ Use the [skills.sh CLI](https://skills.sh/docs) to install from public repositor
 npx skills add ReinaMacCredy/maestro
 
 # Install specific skills to specific agents
-npx skills add ReinaMacCredy/maestro --skill plan-maestro --agent claude-code --agent amp
+npx skills add ReinaMacCredy/maestro --skill planning --agent claude-code --agent amp
 
 # List skills without installing
 npx skills add ReinaMacCredy/maestro --list
