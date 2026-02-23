@@ -25,27 +25,23 @@ Use the same task format as plan-based tasks. Keep the breakdown minimal — pre
 
 ### Step P3: Confirm with User
 
-Present the generated task breakdown for user approval:
+Present the generated task breakdown for user approval. Show each task with its agent assignment and acceptance criteria before asking.
 
-````
-AskUserQuestion(
-  questions: [{
-    question: "Here's the task breakdown. How would you like to proceed?",
-    header: "Planless Work",
-    options: [
-      { label: "Execute", description: "Proceed with these tasks" },
-      { label: "Revise", description: "Let me re-describe what I want" },
-      { label: "Cancel", description: "Stop without executing" }
-    ],
-    multiSelect: false
-  }]
+```
+DECIDE(
+  question: "Here's the task breakdown. How would you like to proceed?",
+  options: [
+    {label: "Execute", description: "Proceed with these tasks"},
+    {label: "Revise", description: "Let me re-describe what I want"},
+    {label: "Cancel", description: "Stop without executing"}
+  ],
+  blocking: true,
+  default: "Cancel"
 )
-````
-
-Show each task with its agent assignment and acceptance criteria before asking.
+```
 
 **On Execute** → Proceed to Step P4.
-**On Revise** → Ask the user for a new description, then repeat from Step P1.
+**On Revise** → Use `prompt.chat` to ask the user for a new description, then repeat from Step P1.
 **On Cancel** → Stop execution.
 
 ### Step P4: Join Main Workflow

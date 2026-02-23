@@ -5,16 +5,14 @@
 Ask the user whether to execute in an isolated worktree or in the current working tree:
 
 ```
-AskUserQuestion(
-  questions: [{
-    question: "Where should this plan execute?",
-    header: "Execution Environment",
-    options: [
-      { label: "Execute in worktree (isolated)", description: "Creates a git worktree on a new branch. Safe for parallel execution." },
-      { label: "Execute in main tree (current behavior)", description: "Run directly in the current working directory." }
-    ],
-    multiSelect: false
-  }]
+DECIDE(
+  question: "Where should this plan execute?",
+  options: [
+    { label: "Execute in worktree (isolated)", description: "Creates a git worktree on a new branch. Safe for parallel execution." },
+    { label: "Execute in main tree (current behavior)", description: "Run directly in the current working directory." }
+  ],
+  blocking: true,
+  default: "Execute in main tree (current behavior)"
 )
 ```
 
@@ -125,16 +123,14 @@ Tell the user which branch contains the changes:
 #### 2. Ask User About Worktree Removal
 
 ```
-AskUserQuestion(
-  questions: [{
-    question: "Remove the worktree now?",
-    header: "Worktree Cleanup",
-    options: [
-      { label: "Remove worktree", description: "Delete the worktree directory. The branch is preserved for merge/PR." },
-      { label: "Keep worktree", description: "Leave it in place for manual inspection. Remove later with: git worktree remove <path>" }
-    ],
-    multiSelect: false
-  }]
+DECIDE(
+  question: "Remove the worktree now?",
+  options: [
+    { label: "Remove worktree", description: "Delete the worktree directory. The branch is preserved for merge/PR." },
+    { label: "Keep worktree", description: "Leave it in place for manual inspection. Remove later with: git worktree remove <path>" }
+  ],
+  blocking: true,
+  default: "Keep worktree"
 )
 ```
 
