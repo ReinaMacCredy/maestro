@@ -68,14 +68,21 @@ Note: `prometheus` and `explore` use built-in Claude Code agent types (Plan and 
 
 | What | Where | NOT here |
 |------|-------|----------|
-| /design workflow | `.claude/skills/design/SKILL.md` | Agent definitions |
-| /work workflow | `.claude/skills/work/SKILL.md` | Agent definitions |
+| /design workflow | `skills/design/SKILL.md` | Agent definitions |
+| /work workflow | `skills/work/SKILL.md` | Agent definitions |
 | Agent identity | `.claude/agents/{name}.md` | Commands or docs |
-| Skill reference | `.claude/skills/maestro/SKILL.md` | README or CLAUDE.md |
+| Skill reference | `skills/maestro/SKILL.md` | README or CLAUDE.md |
 
 ## Directory Structure
 
 ```
+skills/             # Canonical Agent Skills location (portable)
+├── maestro/SKILL.md          # Overview and reference
+├── design/SKILL.md           # /design workflow
+├── work/SKILL.md             # /work workflow
+├── review/SKILL.md           # /review workflow
+└── ...
+
 .claude/
 ├── agents/          # 10 agent definitions (identity + constraints)
 │   ├── orchestrator.md
@@ -91,27 +98,10 @@ Note: `prometheus` and `explore` use built-in Claude Code agent types (Plan and 
 ├── hooks/
 │   └── hooks.json
 ├── scripts/         # Hook scripts
-└── skills/          # 20 skill definitions
-    ├── maestro/SKILL.md          # Overview and reference
-    ├── design/SKILL.md           # /design workflow
-    ├── work/SKILL.md             # /work workflow
-    ├── review/SKILL.md           # /review workflow
-    ├── reset/SKILL.md            # /reset workflow
-    ├── status/SKILL.md           # /status workflow
-    ├── setup-check/SKILL.md      # /setup-check workflow
-    ├── setup/SKILL.md            # /setup workflow
-    ├── plan-template/SKILL.md    # /plan-template workflow
-    ├── styleguide/SKILL.md       # /styleguide workflow
-    ├── pipeline/SKILL.md         # /pipeline workflow
-    ├── analyze/SKILL.md          # /analyze workflow
-    ├── note/SKILL.md             # /note workflow
-    ├── learner/SKILL.md          # /learner workflow
-    ├── security-review/SKILL.md  # /security-review workflow
-    ├── ultraqa/SKILL.md          # /ultraqa workflow
-    ├── research/SKILL.md         # /research workflow
-    ├── project-conventions/SKILL.md
-    ├── context7/SKILL.md
-    └── git-worktrees/SKILL.md
+└── skills/          # Compatibility mirror to ../skills
+
+.agents/
+└── skills/          # Compatibility path for Amp/OpenCode/Replit
 
 .maestro/            # Runtime state
 ├── plans/           # Unexecuted work plans (active)

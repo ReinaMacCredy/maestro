@@ -14,25 +14,31 @@ Workers receive contextual expertise without needing to know which skills exist.
 
 ## Skill Discovery Locations
 
-Skills are discovered from two locations, with project skills taking precedence:
+Skills are discovered from universal and agent-specific locations, with project skills taking precedence:
 
 | Priority | Location | Description |
 |----------|----------|-------------|
-| 1 (highest) | `.claude/skills/*/SKILL.md` | Project-specific skills |
-| 2 (lowest) | `~/.claude/skills/*/SKILL.md` | Global skills (shared across projects) |
+| 1 | `skills/*/SKILL.md` | Canonical project skill location (agent-agnostic) |
+| 2 | `.github/skills/*/SKILL.md` | GitHub Copilot and compatible tools |
+| 3 | `.agents/skills/*/SKILL.md` | Universal agent path (Amp/OpenCode/Replit/etc.) |
+| 4 | `.claude/skills/*/SKILL.md` | Claude-specific path (kept for compatibility) |
+| 5 (lowest) | `~/.claude/skills/*/SKILL.md` | Global user skills |
 
 **Override behavior:** If a project skill has the same name as a global skill, the project skill wins.
 
 ## Installing External Skills
 
-The [Vercel AI skills ecosystem](https://github.com/vercel/ai-skills) provides pre-built skills you can install:
+Use the [skills.sh CLI](https://skills.sh/docs) to install from public repositories:
 
 ```bash
-# Install a skill globally
-npx @anthropic-ai/skills add frontend-design
+# Install this repository's skills
+npx skills add ReinaMacCredy/maestro
 
-# Install into current project
-npx @anthropic-ai/skills add frontend-design --project
+# Install specific skills to specific agents
+npx skills add ReinaMacCredy/maestro --skill plan-maestro --agent claude-code --agent amp
+
+# List skills without installing
+npx skills add ReinaMacCredy/maestro --list
 ```
 
 ### Recommended Skills
@@ -51,7 +57,7 @@ Skills declare their metadata in YAML frontmatter at the top of `SKILL.md`:
 ```yaml
 ---
 name: my-skill              # Required: unique identifier
-description: What it does   # Required: one-line summary
+description: What it does and when to use it  # Required
 triggers:                   # Optional: activation keywords
   - "component"
   - "ui"
@@ -68,8 +74,8 @@ Your skill content here...
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `name` | Yes | Unique identifier for the skill |
-| `description` | Yes | One-line description shown in skill listings |
+| `name` | Yes | Unique identifier. Must be lowercase alphanumeric + hyphens, max 64 chars, and match the parent directory name |
+| `description` | Yes | Description of what the skill does and when to use it (max 1024 chars) |
 | `triggers` | No | Keywords that activate this skill for a task |
 | `priority` | No | Numeric weight for ranking (lower = higher priority, default: 100) |
 
@@ -84,7 +90,7 @@ Matching is case-insensitive and supports partial matches (e.g., "testing" match
 
 ## Example: Custom Skill
 
-Create `.claude/skills/api-design/SKILL.md`:
+Create `skills/api-design/SKILL.md`:
 
 ```yaml
 ---

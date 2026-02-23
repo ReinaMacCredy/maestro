@@ -1,18 +1,27 @@
 # Maestro
 
-> AI agent workflow plugin for Claude Code. Plan first, code once.
+> AI agent workflow skillpack. Plan first, code once.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ## Install
 
-**Claude Code:**
+**Universal install (`skills.sh` CLI):**
 ```bash
-/plugin install https://github.com/ReinaMacCredy/maestro
+npx skills add ReinaMacCredy/maestro
 ```
 
-**Amp:**
+**Install specific skills and agents:**
 ```bash
+npx skills add ReinaMacCredy/maestro --skill plan-maestro --agent claude-code --agent amp
+```
+
+**Legacy direct installs (still supported):**
+```bash
+# Claude Code plugin route
+/plugin install https://github.com/ReinaMacCredy/maestro
+
+# Amp route
 amp skill add https://github.com/ReinaMacCredy/maestro --global
 ```
 
@@ -111,9 +120,10 @@ These MCP servers enhance the Maestro experience:
 
 | Topic | Path |
 |-------|------|
-| Workflow Skill | [.claude/skills/maestro/SKILL.md](.claude/skills/maestro/SKILL.md) |
+| Workflow Skill | [skills/maestro/SKILL.md](skills/maestro/SKILL.md) |
 | Agent Definitions | [.claude/agents/](.claude/agents/) |
 | Agent Teams Guide | [docs/AGENT-TEAMS.md](docs/AGENT-TEAMS.md) |
+| Universal Skills Format | [docs/AGENT-SKILLS.md](docs/AGENT-SKILLS.md) |
 | Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | Skill Interop | [docs/SKILL-INTEROP.md](docs/SKILL-INTEROP.md) |
 | Troubleshooting | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) |
