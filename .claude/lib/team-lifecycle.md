@@ -2,9 +2,12 @@
 name: team-lifecycle
 description: Shared lifecycle protocols for creating, contextualizing, and cleaning up Agent Teams.
 type: internal
+runtime: claude-teams
 ---
 
 # Team Lifecycle
+
+> **Adapter note**: This file uses Claude Code Agent Teams tool names (`TeamCreate`, `SendMessage`, `TeamDelete`, etc.). These are Claude Code-specific. For the runtime-agnostic lifecycle pattern, see `skills/work/reference/core/workflow.md` Steps 3 and 8. Abstract capability definitions are in `skills/work/reference/core/capabilities.md`.
 
 Shared protocols used by both `/design` and `/work` for consistent Agent Team orchestration.
 
