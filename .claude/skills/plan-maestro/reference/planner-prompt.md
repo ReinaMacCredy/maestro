@@ -1,10 +1,10 @@
-# Planner Subagent Prompt -- plan:maestro
+# Planner Subagent Prompt — plan:maestro
 
 This file is a prompt template. The orchestrator reads it, substitutes all `{placeholder}` values, and passes the result as the `prompt` argument to a Task subagent call.
 
 ## Prompt Template
 
-```
+~~~
 ## Design Request
 {original $ARGUMENTS}
 
@@ -23,7 +23,7 @@ This file is a prompt template. The orchestrator reads it, substitutes all `{pla
 ## Prior Wisdom
 {wisdom file summaries matching topic slug, or "None"}
 
-{skill summary block -- omit entirely if no skills found}
+{skill summary block — omit entirely if no skills found}
 
 ---
 
@@ -56,11 +56,11 @@ After calling AskUserQuestion, the tool returns the user's selected answer. Use 
 
 ### Interview Rules
 
-1. One question at a time -- one AskUserQuestion call, then wait
-2. Multiple-choice preferred -- 2-4 options, recommended first with '(Recommended)'
+1. One question at a time — one AskUserQuestion call, then wait
+2. Multiple-choice preferred — 2-4 options, recommended first with '(Recommended)'
 3. Present tradeoffs for each option
-4. Research before asking -- use Glob, Grep, Read to check the codebase first
-5. YAGNI ruthlessly -- strip unnecessary scope
+4. Research before asking — use Glob, Grep, Read to check the codebase first
+5. YAGNI ruthlessly — strip unnecessary scope
 6. Full mode: ask 3-5 questions. Quick mode: ask 1-2 questions only.
 
 ### Inline Follow-up Research
@@ -82,8 +82,8 @@ Write the plan with these exact sections:
 
 # {Plan Name}
 
-**Goal**: [One sentence -- what we're building and why]
-**Architecture**: [2-3 sentences -- how the pieces fit together]
+**Goal**: [One sentence — what we're building and why]
+**Architecture**: [2-3 sentences — how the pieces fit together]
 **Tech Stack**: [Relevant technologies, frameworks, tools]
 
 ## Objective
@@ -102,34 +102,34 @@ Write the plan with these exact sections:
   - **Files**: [Exact paths to create/modify/test]
   - **Steps**:
     1. Write failing test (if applicable)
-    2. Run test -- expect failure
+    2. Run test — expect failure
     3. Implement the change
-    4. Run tests -- expect pass
+    4. Run tests — expect pass
     5. Commit
 
 ## Dependency Chain
 > T1: {title} [`agent`]
 > T2: {title} [`agent`]
-> T3: {title} [`agent`] -- blocked by T1, T2
+> T3: {title} [`agent`] — blocked by T1, T2
 
 ## Execution Phases
-> **Phase 1** -- T1: {short title} [`agent`], T2: {short title} [`agent`]
-> **Phase 2** -- T3: {short title} [`agent`]
+> **Phase 1** — T1: {short title} [`agent`], T2: {short title} [`agent`]
+> **Phase 2** — T3: {short title} [`agent`]
 
 ## Verification
-- [ ] `exact command` -- expected output or behavior
+- [ ] `exact command` — expected output or behavior
 
 ## Notes
 [Technical decisions, research findings, constraints discovered during interview]
 
 ## Plan Output Standards
-1. Zero-context plans -- document every file path, code snippet, and test approach
-2. Single-action tasks -- one action per task
-3. Files section per task -- exact paths to create, modify, and test
-4. Complete code/diffs -- full snippets, never vague instructions
+1. Zero-context plans — document every file path, code snippet, and test approach
+2. Single-action tasks — one action per task
+3. Files section per task — exact paths to create, modify, and test
+4. Complete code/diffs — full snippets, never vague instructions
 5. Exact commands with expected output for verification
 6. TDD and frequent commits
-7. Security-sensitive plans -- add `## Security` section for auth, user input, API endpoints, secrets, data access
+7. Security-sensitive plans — add `## Security` section for auth, user input, API endpoints, secrets, data access
 
 ## Revision Handling
 
@@ -145,4 +145,4 @@ When the plan passes all clearance checklist items:
 1. Write the complete plan markdown to: `.maestro/drafts/{topic}-plan-draft.md`
 2. Verify the file was written by reading the first 10 lines
 3. Output: "PLAN WRITTEN"
-```
+~~~
