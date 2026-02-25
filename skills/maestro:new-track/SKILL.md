@@ -2,15 +2,13 @@
 name: maestro:new-track
 description: "Create a new feature/bug track with spec and implementation plan. Interactive interview generates requirements spec, then phased TDD plan. Use when starting work on a new feature, bug fix, or chore."
 argument-hint: "<track description>"
-allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
-disable-model-invocation: true
 ---
 
 # New Track -- Specification & Planning
 
-CRITICAL: You must validate the success of every tool call. If any tool call fails, halt immediately, announce the failure, and await instructions.
+> This skill is CLI-agnostic. It works with Claude Code, Codex, Amp, or any AI coding assistant.
 
-When using AskUserQuestion, immediately call the tool -- do not repeat the question in plain text before the tool call.
+Validate the result of every operation. If any step fails, halt and report the failure before continuing.
 
 Create a new development track with a requirements specification and phased implementation plan. Every feature, bug fix, or chore gets its own track.
 
@@ -29,18 +27,15 @@ The track description. Examples:
 
 Check that `/maestro:setup` has been run:
 
-```
-Glob(pattern: ".maestro/context/product.md")
-```
+Search for files matching `.maestro/context/product.md`.
 
 If no context files exist:
 - Report: "Project context not found. Run `/maestro:setup` first."
 - Stop.
 
 Check that tracks registry exists:
-```
-Read(file_path: ".maestro/tracks.md")
-```
+
+Read `.maestro/tracks.md`.
 
 If missing, create it:
 ```markdown
@@ -57,20 +52,12 @@ If missing, create it:
 Extract the track description from `$ARGUMENTS`.
 
 If no arguments provided, ask:
-```
-AskUserQuestion(
-  questions: [{
-    question: "What feature, bug fix, or chore would you like to track?",
-    header: "Track",
-    options: [
-      { label: "Feature", description: "New functionality to build" },
-      { label: "Bug fix", description: "Something broken to fix" },
-      { label: "Chore", description: "Refactoring, cleanup, or maintenance" }
-    ],
-    multiSelect: false
-  }]
-)
-```
+
+Ask the user: "What feature, bug fix, or chore would you like to track?"
+Options:
+- **Feature** -- New functionality to build
+- **Bug fix** -- Something broken to fix
+- **Chore** -- Refactoring, cleanup, or maintenance
 
 Then ask for the description as a follow-up.
 
@@ -85,9 +72,7 @@ Rules:
 
 ## Step 4: Duplicate Check
 
-```
-Glob(pattern: ".maestro/tracks/*")
-```
+Search for files matching `.maestro/tracks/*`.
 
 Scan existing track directories. If any directory starts with the same short name prefix:
 - Warn: "A track with a similar name already exists: `{existing_track_id}`"
@@ -109,119 +94,62 @@ Inference rules:
 - **chore**: improves internals without changing external behavior (keywords: refactor, cleanup, migrate, upgrade, rename, reorganize, extract)
 
 If the description is ambiguous (matches multiple types or no clear keywords), confirm with:
-```
-AskUserQuestion(
-  questions: [{
-    question: "I inferred this as '{inferred_type}' -- does that look right?",
-    header: "Confirm Type",
-    options: [
-      { label: "Feature", description: "New functionality or capability" },
-      { label: "Bug", description: "Fix for broken behavior" },
-      { label: "Chore", description: "Refactoring, maintenance, or tech debt" }
-    ],
-    multiSelect: false
-  }]
-)
-```
+
+Ask the user: "I inferred this as '{inferred_type}' -- does that look right?"
+Options:
+- **Feature** -- New functionality or capability
+- **Bug** -- Fix for broken behavior
+- **Chore** -- Refactoring, maintenance, or tech debt
 
 ## Step 7: Specification Interview
 
-Generate a requirements specification through interactive questioning. Batch up to 4 questions in a single AskUserQuestion call where they are independent of each other.
+Generate a requirements specification through interactive questioning. Batch independent questions into a single interaction if your runtime supports it.
 
-### For Features (one batched call, 4 questions):
+### For Features (batch these into a single interaction if your runtime supports it):
 
-```
-AskUserQuestion(
-  questions: [
-    {
-      question: "What should this feature do? Describe the core behavior and expected outcomes.",
-      header: "Requirements"
-    },
-    {
-      question: "How will users interact with this feature?",
-      header: "Interaction",
-      options: [
-        { label: "UI component", description: "Visual element users see and interact with" },
-        { label: "API endpoint", description: "Programmatic interface" },
-        { label: "CLI command", description: "Terminal command or flag" },
-        { label: "Background process", description: "No direct user interaction" }
-      ],
-      multiSelect: false
-    },
-    {
-      question: "Any constraints or non-functional requirements? (performance, security, compatibility)",
-      header: "Constraints",
-      options: [
-        { label: "No special constraints", description: "Standard quality expectations" },
-        { label: "Performance-critical", description: "Must meet specific latency/throughput targets" },
-        { label: "Security-sensitive", description: "Handles auth, PII, or financial data" },
-        { label: "Let me specify", description: "Type your constraints" }
-      ],
-      multiSelect: true
-    },
-    {
-      question: "Any known edge cases or error scenarios to handle?",
-      header: "Edge Cases",
-      options: [
-        { label: "I'll list them", description: "Type known edge cases" },
-        { label: "Infer from requirements", description: "Generate edge cases from the spec" }
-      ],
-      multiSelect: false
-    }
-  ]
-)
-```
+1. Ask the user: "What should this feature do? Describe the core behavior and expected outcomes."
 
-### For Bugs (one batched call, 3 questions):
+2. Ask the user: "How will users interact with this feature?"
+   Options:
+   - **UI component** -- Visual element users see and interact with
+   - **API endpoint** -- Programmatic interface
+   - **CLI command** -- Terminal command or flag
+   - **Background process** -- No direct user interaction
 
-```
-AskUserQuestion(
-  questions: [
-    {
-      question: "What is happening? Provide steps to reproduce.",
-      header: "Observed Behavior"
-    },
-    {
-      question: "What should happen instead?",
-      header: "Expected Behavior"
-    },
-    {
-      question: "How critical is this? Which users or flows are affected?",
-      header: "Impact",
-      options: [
-        { label: "Blocker", description: "Core flow broken, no workaround" },
-        { label: "High", description: "Significant degradation, workaround exists" },
-        { label: "Medium", description: "Noticeable issue, limited impact" },
-        { label: "Low", description: "Minor or cosmetic" }
-      ],
-      multiSelect: false
-    }
-  ]
-)
-```
+3. Ask the user: "Any constraints or non-functional requirements? (performance, security, compatibility)" (select all that apply)
+   Options:
+   - **No special constraints** -- Standard quality expectations
+   - **Performance-critical** -- Must meet specific latency/throughput targets
+   - **Security-sensitive** -- Handles auth, PII, or financial data
+   - **Let me specify** -- Type your constraints
 
-### For Chores (one batched call, 2 questions):
+4. Ask the user: "Any known edge cases or error scenarios to handle?"
+   Options:
+   - **I'll list them** -- Type known edge cases
+   - **Infer from requirements** -- Generate edge cases from the spec
 
-```
-AskUserQuestion(
-  questions: [
-    {
-      question: "What needs to change and why?",
-      header: "Scope"
-    },
-    {
-      question: "Any backward compatibility requirements?",
-      header: "Constraints",
-      options: [
-        { label: "Must be backward compatible", description: "No breaking changes to public API" },
-        { label: "Breaking changes acceptable", description: "Semver major bump is fine" },
-        { label: "Internal only", description: "No public surface affected" }
-      ],
-      multiSelect: false
-    }
-  ]
-)
-```
+### For Bugs (batch these into a single interaction if your runtime supports it):
+
+1. Ask the user: "What is happening? Provide steps to reproduce."
+
+2. Ask the user: "What should happen instead?"
+
+3. Ask the user: "How critical is this? Which users or flows are affected?"
+   Options:
+   - **Blocker** -- Core flow broken, no workaround
+   - **High** -- Significant degradation, workaround exists
+   - **Medium** -- Noticeable issue, limited impact
+   - **Low** -- Minor or cosmetic
+
+### For Chores (batch these into a single interaction if your runtime supports it):
+
+1. Ask the user: "What needs to change and why?"
+
+2. Ask the user: "Any backward compatibility requirements?"
+   Options:
+   - **Must be backward compatible** -- No breaking changes to public API
+   - **Breaking changes acceptable** -- Semver major bump is fine
+   - **Internal only** -- No public surface affected
 
 ## Step 8: Draft Specification
 
@@ -261,19 +189,10 @@ Compose a spec document from the interview answers.
 
 Present the full draft to the user for approval by embedding the entire spec content directly in the question field:
 
-```
-AskUserQuestion(
-  questions: [{
-    question: "Here is the drafted specification -- does it look correct?\n\n---\n{full spec content}\n---",
-    header: "Approve Spec",
-    options: [
-      { label: "Approved", description: "Spec is ready, generate the plan" },
-      { label: "Needs revision", description: "I'll tell you what to change" }
-    ],
-    multiSelect: false
-  }]
-)
-```
+Ask the user: "Here is the drafted specification -- does it look correct?\n\n---\n{full spec content}\n---"
+Options:
+- **Approved** -- Spec is ready, generate the plan
+- **Needs revision** -- I'll tell you what to change
 
 If revision needed: ask what to change, update, and re-present with the full updated content embedded. Max 3 revision loops.
 
@@ -282,11 +201,9 @@ Write approved spec to `.maestro/tracks/{track_id}/spec.md`.
 ## Step 9: Generate Implementation Plan
 
 Read project context for informed planning:
-```
-Read(file_path: ".maestro/context/workflow.md")
-Read(file_path: ".maestro/context/tech-stack.md")
-Read(file_path: ".maestro/context/guidelines.md")
-```
+- `.maestro/context/workflow.md`
+- `.maestro/context/tech-stack.md`
+- `.maestro/context/guidelines.md`
 
 Use the plan template from `reference/plan-template.md`.
 
