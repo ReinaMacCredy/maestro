@@ -247,3 +247,20 @@ Options:
 - **Archive**: Move `.maestro/tracks/{track_id}/` to `.maestro/archive/{track_id}/`
 - **Delete**: Remove `.maestro/tracks/{track_id}/` entirely
 - **Keep** / **Skip**: No file changes
+
+---
+
+## Relationship to Other Commands
+
+Recommended workflow:
+
+- `/maestro:setup` -- Scaffold project context (run first)
+- `/maestro:new-track` -- Create a feature/bug track with spec and plan
+- `/maestro:implement` -- Execute the implementation
+- `/maestro:review` -- **You are here.** Verify implementation correctness
+- `/maestro:status` -- Check progress across all tracks
+- `/maestro:revert` -- Undo implementation if needed
+
+Review works best after commits are made, as it analyzes git history to understand what was implemented. It compares the implementation against the spec from `/maestro:new-track` and the plan from `/maestro:implement`. If issues are found, use `/maestro:revert` to undo and re-implement, or apply fixes directly.
+
+Remember: Good validation catches issues before they reach production. Be constructive but thorough in identifying gaps or improvements.

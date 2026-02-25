@@ -108,3 +108,18 @@ Based on the state:
 - Has pending tracks --> "Run `/maestro:implement {next_track}` to start."
 - Has in-progress tracks --> "Run `/maestro:implement {active_track} --resume` to continue."
 - Blocked --> "Resolve the blocker listed above before continuing."
+
+---
+
+## Relationship to Other Commands
+
+Recommended workflow:
+
+- `/maestro:setup` -- Scaffold project context (run first)
+- `/maestro:new-track` -- Create a feature/bug track with spec and plan
+- `/maestro:implement` -- Execute the implementation
+- `/maestro:review` -- Verify implementation correctness
+- `/maestro:status` -- **You are here.** Check progress across all tracks
+- `/maestro:revert` -- Undo implementation if needed
+
+Status is the observability layer across all maestro commands. It reads tracks created by `/maestro:new-track`, progress from `/maestro:implement`, and state changes from `/maestro:revert`. Use it anytime to orient yourself on what to do next.

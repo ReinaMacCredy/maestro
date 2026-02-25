@@ -110,3 +110,18 @@ Use the progressive disclosure guidance from `reference/AGENTS.md` to create wel
    - Review ./AGENTS.md and edit manually for accuracy
    - /maestro:AGENTS.md --reset  -- regenerate from scratch
    ```
+
+---
+
+## Relationship to Other Commands
+
+Recommended workflow:
+
+- `/maestro:setup` -- Scaffold project context (run first)
+- `/maestro:AGENTS.md` -- **You are here.** Generate AGENTS.md context file
+- `/maestro:new-track` -- Create a feature/bug track with spec and plan
+- `/maestro:implement` -- Execute the implementation
+- `/maestro:review` -- Verify implementation correctness
+- `/maestro:status` -- Check progress across all tracks
+
+AGENTS.md is an optional context enhancement that complements `/maestro:setup`. While setup creates project-level context files, this skill generates a codebase-oriented AGENTS.md with progressive disclosure. Run it after setup to give all agents richer context about the repository structure.

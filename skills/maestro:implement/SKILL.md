@@ -1,6 +1,6 @@
 ---
 name: maestro:implement
-description: "Execute track tasks following TDD workflow. Single-agent by default, --team for parallel Agent Teams. Use when ready to implement a planned track."
+description: "Execute track tasks following TDD workflow. Single-agent by default, --team for parallel Agent Teams, Sub Agent Parallels. Use when ready to implement a planned track."
 argument-hint: "[<track-name>] [--team]"
 ---
 
@@ -414,3 +414,18 @@ git commit -m "chore(maestro): complete track {track_id}"
 **Commits**: {list of task SHAs}
 **Next**: `/maestro:review {track_id}` to verify, or `/maestro:new-track` for next feature.
 ```
+
+---
+
+## Relationship to Other Commands
+
+Recommended workflow:
+
+- `/maestro:setup` -- Scaffold project context (run first)
+- `/maestro:new-track` -- Create a feature/bug track with spec and plan
+- `/maestro:implement` -- **You are here.** Execute the implementation
+- `/maestro:review` -- Verify implementation correctness
+- `/maestro:status` -- Check progress across all tracks
+- `/maestro:revert` -- Undo implementation if needed
+
+Implementation consumes the `plan.md` created by `/maestro:new-track`. Each task produces atomic commits, which `/maestro:review` can analyze to verify correctness against the spec. Run `/maestro:status` to check progress mid-implementation, or `/maestro:revert` to undo if something goes wrong.

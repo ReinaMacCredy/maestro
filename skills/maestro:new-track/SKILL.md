@@ -394,3 +394,18 @@ git commit -m "chore(maestro:new-track): add track {track_id}"
 
 **Next**: `/maestro:implement {track_id}`
 ```
+
+---
+
+## Relationship to Other Commands
+
+Recommended workflow:
+
+- `/maestro:setup` -- Scaffold project context (run first)
+- `/maestro:new-track` -- **You are here.** Create a feature/bug track with spec and plan
+- `/maestro:implement` -- Execute the implementation
+- `/maestro:review` -- Verify implementation correctness
+- `/maestro:status` -- Check progress across all tracks
+- `/maestro:revert` -- Undo implementation if needed
+
+A track created here produces `spec.md` and `plan.md` that `/maestro:implement` consumes. The spec also serves as the baseline for `/maestro:review` to validate against. Good specs lead to good implementations -- be thorough in the interview.

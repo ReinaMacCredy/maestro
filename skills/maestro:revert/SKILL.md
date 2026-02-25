@@ -318,3 +318,18 @@ CRITICAL: Validate this command completes. Report its exit code and output summa
 - `/maestro:implement {track_id}` -- Re-implement reverted tasks
 - `/maestro:status` -- Check overall progress
 ```
+
+---
+
+## Relationship to Other Commands
+
+Recommended workflow:
+
+- `/maestro:setup` -- Scaffold project context (run first)
+- `/maestro:new-track` -- Create a feature/bug track with spec and plan
+- `/maestro:implement` -- Execute the implementation
+- `/maestro:review` -- Verify implementation correctness
+- `/maestro:status` -- Check progress across all tracks
+- `/maestro:revert` -- **You are here.** Undo implementation if needed
+
+Revert is the safety valve for `/maestro:implement`. It undoes commits and resets plan state so you can re-implement with `/maestro:implement`. Use `/maestro:status` after reverting to confirm the track state is correct. Revert depends on atomic commits from implementation -- the cleaner the commit history, the more precise the revert.

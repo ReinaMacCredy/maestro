@@ -668,3 +668,18 @@ Remove the state file now that setup is complete (clean finish):
 ```bash
 rm -f .maestro/setup_state.json
 ```
+
+---
+
+## Relationship to Other Commands
+
+Recommended workflow:
+
+- `/maestro:setup` -- **You are here.** Scaffold project context (run first)
+- `/maestro:new-track` -- Create a feature/bug track with spec and plan
+- `/maestro:implement` -- Execute the implementation
+- `/maestro:review` -- Verify implementation correctness
+- `/maestro:status` -- Check progress across all tracks
+- `/maestro:revert` -- Undo implementation if needed
+
+Setup is the entry point for all maestro workflows. All other commands depend on the context files it creates. Run this once per project, then use `/maestro:new-track` to start building.
