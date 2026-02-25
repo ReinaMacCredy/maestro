@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.11] - 2026-02-25
+
+
+### Added
+
+
+- Add automatic skill detection and injection to tracks
+- Add maestro:AGENTS.md skill for context file generation
+- Add `AGENTS.md` to provide AI agent guidance and rename the `AGENTS.md` generation skill to `init`.
+
+
+### Changed
+
+
+- Remove `design` skill and its prompts, consolidating agent references into a new `AGENTS.md`.
+- Extract SKILL.md detail into reference/ files
+- Extract SKILL.md detail into reference/ files
+- Extract SKILL.md detail into reference/ files
+- Extract SKILL.md detail into reference/ files
+- Extract SKILL.md detail into reference/ files
+- Remove redundant agent skill redirects and outdated documentation, while updating skill name validation.
+
+
+### Documentation
+
+
+- Add workflow context and command relationships to skill documentation.
+- Remove project-conventions and pipeline skill documentation.
+
 ## [0.14.10] - 2026-02-25
 
 
