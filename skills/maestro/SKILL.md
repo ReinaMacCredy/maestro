@@ -1,20 +1,26 @@
 ---
 name: maestro
-description: "Provides the Maestro workflow for interview-driven planning and team-based execution. Use when orchestrating work with /design and /work."
+description: "Provides the Maestro workflow for interview-driven planning and team-based execution. Use when orchestrating work with /design, /planning, and /work."
 ---
 
 # Maestro Workflow
 
 > "Spend tokens once on a good plan; reuse it many times."
 
+## Runtime Paths
+
+- **Amp-first path (recommended in Amp):** `/planning` -> validated plan file -> `/work`
+- **Agent Teams path (non-Amp runtime):** `/design` -> Prometheus interview -> validated plan file -> `/work`
+- `/design` is kept for Claude Code/Agent Teams compatibility documentation. In Amp, use `/planning`.
+
 ## Triggers
 
 | Trigger | Action |
 |---------|--------|
-| `/design <request>` | Start Prometheus interview mode (supports `--quick`) |
-| `/planning [<request>]` | Feature planning pipeline (discovery → synthesis → verification → decomposition → validation → tracks) |
+| `/design <request>` | Start Prometheus interview mode (Claude Code Agent Teams runtime; non-Amp path) |
+| `/planning [<request>]` | Amp planning pipeline (discovery → synthesis → verification → decomposition → validation → tracks) |
 | `/plan:maestro [<request>] [--quick]` | Legacy alias for planning workflow |
-| `/work` | Execute plan with Agent Teams (supports `--resume`) |
+| `/work` | Execute a validated plan from `.maestro/plans/` (supports `--resume`) |
 | `/setup-check` | Validate Maestro prerequisites |
 | `/status` | Show current Maestro state |
 | `/review` | Post-execution plan verification |
@@ -34,9 +40,16 @@ description: "Provides the Maestro workflow for interview-driven planning and te
 | `@tdd` | TDD implementation (kraken) |
 | `@spark` | Quick fixes |
 | `@oracle` | Strategic advisor (sonnet) |
-| `@explore` | Codebase search |
 
-## Planning Flow
+## Amp Planning Flow (Recommended in Amp)
+
+```
+/planning → discovery/synthesis/verification/decomposition/validation → plan format gate → .maestro/plans/{topic}.md → /work
+```
+
+Use this path in Amp to avoid Claude-specific Agent Teams APIs.
+
+## Design Flow (Agent Teams Runtime Only)
 
 ```
 /design → prometheus (team lead) → detect libraries → fetch docs (Context7/WebSearch) → spawns explore/oracle → interview → leviathan (review) → plan file
@@ -50,11 +63,23 @@ description: "Provides the Maestro workflow for interview-driven planning and te
 4. Spawns oracle for architectural decisions
 5. Conducts structured interview (one question at a time, multiple-choice options, incremental validation)
 6. Draft updates in `.maestro/drafts/{topic}.md`
-7. When clear, generate plan to `.maestro/plans/{name}.md`
-8. Spawn leviathan to validate plan quality
-9. Cleanup team
+7. When clear, generate candidate plan content
+8. Enforce `/work` plan contract before writing `.maestro/plans/{name}.md`
+9. If contract fails, revise until compliant; only compliant plans are saved
+10. Cleanup team
 
-Quick mode (`--quick`) streamlines to: team → 1 explore → 1-2 questions → plan
+Quick mode (`--quick`) streamlines interview depth, but still must pass the plan contract before save.
+
+## Plan Contract Required by `/work`
+
+Before any workflow writes to `.maestro/plans/`, the plan must include:
+
+- `## Objective` section
+- At least one unchecked task checkbox (`- [ ] ...`)
+- `## Verification` section
+- `## Scope` section (recommended; `/work` warns if missing)
+
+If any required element is missing, keep the output in draft/revision state and do not hand off to `/work`.
 
 ## Execution Flow
 
@@ -129,9 +154,10 @@ See [docs/SKILL-INTEROP.md](../../../docs/SKILL-INTEROP.md) for full details.
 
 ## Quick Reference
 
-- **Design**: `/design add user authentication`
+- **Amp planning (use this in Amp)**: `/planning add user authentication`
+- **Design (non-Amp Agent Teams path)**: `/design add user authentication`
 - **Execution**: `/work`
-- **Research**: `@explore`, `@oracle`, `/research`
+- **Research**: `@oracle`, `/research` (the `explore` teammate is spawned by orchestrated workflows)
 - **Implementation**: `@tdd`, `@spark`
 - **Analysis**: `/analyze`, `/security-review`, `/trace`
 - **Quality**: `/ultraqa`, `/review`, `/doctor`

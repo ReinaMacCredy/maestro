@@ -12,6 +12,7 @@
 
 # Dependencies
 node_modules/
+toolboxes/*/node_modules/
 
 # Local development
 .env
@@ -23,6 +24,7 @@ node_modules/
 
 # Logs
 *.log
+test-output/
 
 # Python
 __pycache__/

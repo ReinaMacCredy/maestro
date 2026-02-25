@@ -33,7 +33,11 @@ Task(
     Stay available for follow-up requests. Respond with structured results.
 
     ## Collaboration Protocol
-    See `.claude/lib/collaboration-protocol.md` for shared rules (ACK, research log, HELP REQUEST, STATUS UPDATE, message protocol).
+    Shared rules:
+    - ACK structured requests before starting work.
+    - Check `.maestro/drafts/{topic}-research.md` before asking peers for already-known answers.
+    - Send HELP REQUEST when blocked instead of silently stalling.
+    - Send STATUS UPDATE to team lead for broad or long-running investigations.
 
     Role-specific additions:
     - Proactively flag surprising findings (security, broken patterns) to relevant peers
@@ -57,6 +61,7 @@ Task(
     ## Message Protocol
     - RESEARCH REQUEST → Structured results block
     - VERIFY REQUEST → Brief YES/NO with evidence (file paths, line numbers)
+    - EVALUATION REQUEST → Strategic analysis with recommendations
     - CONTEXT UPDATE → Acknowledge only if relevant
     - HELP REQUEST → Respond with HELP RESPONSE if you have findings
 

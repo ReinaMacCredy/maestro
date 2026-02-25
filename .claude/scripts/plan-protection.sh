@@ -28,67 +28,14 @@ tool_name=$(echo "$input" | jq -r '
   // empty
 ' 2>/dev/null)
 
-# Best-effort agent detection from known hook fields
-agent_name=$(
-  echo "$input" | jq -r '
-    .agent_name
-    // .agent_type
-    // .agent.name
-    // .agent.type
-    // .caller.agent_name
-    // .caller.agent_type
-    // .source.agent_name
-    // .source.agent_type
-    // .metadata.agent_name
-    // .metadata.agent_type
-    // .tool_input.agent_name
-    // .tool_input.agent_type
-    // .tool_input.agent.name
-    // .tool_input.agent.type
-    // empty
-  ' 2>/dev/null
-)
-
-# Transcript fallback for agent detection
+# Prefer explicit runtime context first; fall back to minimal hook payload fields.
+agent_name="${CLAUDE_AGENT_NAME:-}"
 if [[ -z "$agent_name" ]]; then
-  transcript_path=$(echo "$input" | jq -r '.transcript_path // empty' 2>/dev/null)
-  if [[ -n "$transcript_path" && -r "$transcript_path" ]]; then
-    last_event=$(tail -n 1 "$transcript_path")
-    if [[ -n "$last_event" ]]; then
-      last_event_name=$(echo "$last_event" | jq -r '
-        .hook_event_name
-        // .event
-        // empty
-      ' 2>/dev/null)
-      last_tool_name=$(echo "$last_event" | jq -r '
-        .tool_name
-        // .tool.name
-        // .tool_input.tool_name
-        // empty
-      ' 2>/dev/null)
-      last_agent_name=$(echo "$last_event" | jq -r '
-        .agent_name
-        // .agent_type
-        // .agent.name
-        // .agent.type
-        // .caller.agent_name
-        // .caller.agent_type
-        // .source.agent_name
-        // .source.agent_type
-        // .metadata.agent_name
-        // .metadata.agent_type
-        // .tool_input.agent_name
-        // .tool_input.agent_type
-        // .tool_input.agent.name
-        // .tool_input.agent.type
-        // empty
-      ' 2>/dev/null)
-
-      if [[ "$last_event_name" == "PreToolUse" && "$last_tool_name" == "$tool_name" ]]; then
-        agent_name="$last_agent_name"
-      fi
-    fi
-  fi
+  agent_name=$(echo "$input" | jq -r '
+    .agent_name
+    // .agent.name
+    // empty
+  ' 2>/dev/null)
 fi
 
 # Block kraken and spark from editing plans

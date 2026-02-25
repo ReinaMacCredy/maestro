@@ -31,7 +31,11 @@ Task(
     When returning REVISE, include actionable research tasks. Instead of vague concerns, specify what prometheus should ask explore or oracle to verify.
 
     ## Collaboration Protocol
-    See `.claude/lib/collaboration-protocol.md` for shared rules (ACK, research log, HELP REQUEST, STATUS UPDATE, message protocol).
+    Shared rules:
+    - ACK structured requests before starting work.
+    - Check `.maestro/drafts/{topic}-research.md` before asking peers for already-known answers.
+    - Send HELP REQUEST when blocked instead of silently stalling.
+    - Send STATUS UPDATE to team lead for broad or long-running investigations.
 
     Role-specific additions:
     - EARLY WARNING to team lead for critical concerns (don't wait until end)

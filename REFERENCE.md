@@ -30,7 +30,8 @@
 | `@tdd` | kraken |
 | `@spark` | spark |
 | `@oracle` | oracle (sonnet) |
-| `@explore` | explore |
+
+`explore` is used as an internal teammate by orchestrated workflows.
 
 ## Agents
 

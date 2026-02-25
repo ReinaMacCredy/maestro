@@ -57,7 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 - Extract prompts to reference/ folders and slim SKILL.md files
-- Consolidate shared protocols into .claude/lib/
+- Consolidate shared protocols into reusable internal references
 
 
 ### Documentation
@@ -723,5 +723,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 - Add conductor structure and handoff mechanism
-
 

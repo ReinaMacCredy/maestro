@@ -1,13 +1,21 @@
 ---
 name: setup-check
-description: "Verifies Maestro prerequisites such as flags, tools, directories, and hooks. Use when confirming that the environment is ready."
-allowed-tools: Read, Bash, Glob, Write, AskUserQuestion
+description: "Fast prerequisite gate for Maestro runtime readiness. Use before `/design` or `/work` to verify required local tooling and flags."
+allowed-tools: Read, Bash, Glob, AskUserQuestion
 disable-model-invocation: true
 ---
 
 # Setup Check
 
-Run through each check below. Report PASS or FAIL for each item with details.
+Run only the quick checks below. Report PASS or FAIL for each item with details.
+
+This command is a lightweight readiness gate only.
+- Do not run deep integrity diagnostics here.
+- Do not mutate repo files except optional `mkdir -p` for missing `.maestro/` directories when the user approves.
+- Do not perform destructive cleanup or deletion in this flow.
+- For deep diagnostics and broad remediation, direct the user to `doctor` (primary diagnostic flow).
+- Keep guidance runtime-accurate: use only local file/CLI checks available in Amp (`Read`, `Bash`, `Glob`, `AskUserQuestion`).
+- Do not assume unavailable Agent Teams APIs (`spawn_agent`, `send_input`, `request_user_input`, `TeamCreate`).
 
 ## Checks
 
@@ -30,7 +38,7 @@ Read `~/.claude/settings.json` and verify it contains:
 
 ### 2. jq Installed
 
-Run `which jq` — hooks require jq for JSON processing.
+Run `which jq` — Maestro hooks and diagnostics rely on jq for JSON processing.
 
 **On FAIL**: Detect OS and show install command:
 ```
@@ -105,52 +113,17 @@ AskUserQuestion(
 
 If yes: `Bash("mkdir -p .maestro/plans .maestro/drafts .maestro/wisdom .maestro/research")`. Re-check to confirm.
 
-### 7. Hook Symlinks
+## Out of Scope (Handled by `doctor`)
 
-Check that all symlinks in `.claude/scripts/` point to valid targets:
-```bash
-ls -la .claude/scripts/
-```
+Do not run these checks in `setup-check`:
+- Hook/script integrity and shell syntax validation
+- Plugin or hooks JSON manifest parsing
+- Broken symlink auditing in `.claude/scripts/`
+- Script execute-bit audits/fixes
+- Stale state cleanup and orphaned team checks
+- CLAUDE.md freshness checks
 
-Report any broken symlinks. No auto-fix for symlinks — they require manual attention.
-
-### 8. Plugin Manifest
-
-Validate the plugin manifest parses correctly:
-```bash
-cat .claude-plugin/plugin.json | jq .
-```
-
-### 9. Hooks Configuration
-
-Validate hooks config parses correctly:
-```bash
-cat .claude/hooks/hooks.json | jq .
-```
-
-### 10. Script Permissions
-
-Verify all scripts in `scripts/` are executable:
-```bash
-ls -la scripts/*.sh
-```
-
-**On FAIL**:
-```
-AskUserQuestion(
-  questions: [{
-    question: "Some scripts are missing execute permission. Fix now?",
-    header: "Fix perms",
-    options: [
-      { label: "Yes, fix", description: "Run chmod +x scripts/*.sh" },
-      { label: "Skip", description: "Continue without fixing permissions" }
-    ],
-    multiSelect: false
-  }]
-)
-```
-
-If yes: `Bash("chmod +x scripts/*.sh")`. Re-check to confirm.
+If the user asks for deeper diagnosis or auto-remediation, run `doctor` (optionally with `--fix`).
 
 ## Output
 
@@ -163,10 +136,8 @@ End with a summary:
 - tmux: PASS/FAIL
 - gh CLI: PASS/FAIL
 - Directories: PASS/FAIL
-- Symlinks: PASS/FAIL
-- Plugin manifest: PASS/FAIL
-- Hooks config: PASS/FAIL
-- Script permissions: PASS/FAIL
 
 Overall: READY / NOT READY (N issues to fix)
+
+Next step: run `doctor` for deep diagnostics/remediation.
 ```

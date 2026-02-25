@@ -36,7 +36,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `/psm` — Project Session Manager — isolated dev environments with git worktrees and tmux
 - `/release` — Automated release workflow with version bump, tag, publish, and GitHub release
 
-Agent triggers (inline): `@tdd` (kraken), `@spark`, `@oracle`, `@explore`
+Agent triggers (inline): `@tdd` (kraken), `@spark`, `@oracle`
+
+`explore` remains an internal teammate used by orchestrated workflows rather than an inline trigger.
 
 ### Validation & Development
 
@@ -108,7 +110,7 @@ Shell scripts in `.claude/scripts/` enforce workflow invariants via `.claude/hoo
 
 ### Skill Interoperability
 
-Maestro auto-discovers installed skills from `.claude/skills/`, `~/.claude/skills/`, and plugin marketplaces. Matching skills are injected into worker prompts as `## SKILL GUIDANCE` sections. Discovery logic is in `.claude/lib/skill-registry.md`, matching logic in `.claude/lib/skill-matcher.md`.
+Maestro auto-discovers installed skills from project, global, and plugin locations. Matching skills are injected into worker prompts as `## SKILL GUIDANCE` sections. Runtime behavior is documented in `.claude/skills/work/reference/skill-injection.md`, with hook-backed prompt injection in `.claude/scripts/skill-injector.sh`.
 
 ### Toolboxes
 

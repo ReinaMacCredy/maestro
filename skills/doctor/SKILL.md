@@ -1,6 +1,6 @@
 ---
 name: doctor
-description: "Diagnoses and auto-fixes Maestro installation issues, detects configuration drift, and remedies common problems. Use when Maestro is broken or behaving unexpectedly."
+description: "Primary Maestro diagnostic flow. Diagnoses installation issues, detects configuration drift, and auto-fixes common problems."
 argument-hint: "[--fix] [--check <name>]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 disable-model-invocation: true
@@ -8,7 +8,9 @@ disable-model-invocation: true
 
 # Doctor — Maestro Health Check
 
-> Diagnose installation issues, detect configuration drift, and auto-fix common problems.
+> Primary diagnostic command for Maestro. Diagnose installation issues, detect configuration drift, and auto-fix common problems.
+
+`doctor` is the primary deep diagnostic and remediation flow for Maestro. Keep `setup-check` as a lightweight prerequisite gate only.
 
 ## Arguments
 
@@ -32,7 +34,17 @@ If `--check` is provided with an unknown name, stop and show valid options.
 - Run all checks unless `--check <name>` is specified.
 - Classify each result as **OK**, **WARN**, or **CRITICAL**.
 - Keep checks Maestro-specific. Do not run oh-my-claudecode diagnostics.
+- Keep ownership boundaries explicit:
+  - `doctor` owns deep integrity, drift detection, and remediation guidance.
+  - `setup-check` is preflight-only (quick prerequisites) and must not replace this flow.
+- Do not require unavailable runtime-specific Agent Teams APIs (`spawn_agent`, `send_input`, `request_user_input`, `TeamCreate`) to execute checks or fixes.
 - In `--fix` mode, auto-apply only safe fixes. For destructive fixes, ask first.
+
+## Scope
+
+- Use this skill when Maestro is broken, inconsistent, or behaving unexpectedly.
+- Keep this flow comprehensive and authoritative for diagnostics.
+- Keep reports and remediation steps Maestro-specific.
 
 ## Health Checks
 

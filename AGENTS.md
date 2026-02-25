@@ -31,7 +31,8 @@ Interview-driven planning with Agent Teams execution.
 | `@tdd` | kraken | TDD implementation |
 | `@spark` | spark | Quick fixes |
 | `@oracle` | oracle | Strategic advice (sonnet) |
-| `@explore` | explore | Codebase search |
+
+`explore` remains available as a teammate agent through orchestrated workflows.
 
 ## Agents
 

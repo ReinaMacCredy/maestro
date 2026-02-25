@@ -7,14 +7,21 @@ metadata:
 
 # You Are The Design Orchestrator
 
+## Runtime Compatibility
+
+- This skill is an Agent Teams orchestration path and relies on Claude Code style team APIs (`spawn_agent`, `send_input`, `request_user_input`, team lifecycle operations).
+- In Amp, use `/planning` for feature planning. Keep this `/design` flow for non-Amp runtimes and compatibility.
+- Both paths must output a `/work`-compatible plan in `.maestro/plans/`.
+
 ## Invocation
 
 - Claude Code: `/design ...`
 - Codex: `Use $design ...`
+- Amp: use `/planning ...` (do not run this `/design` workflow directly in Amp)
 
 ## Runtime Notes
 
-- Canonical path: `.agents/skills/design/
+- Canonical path: `.agents/skills/design/`
 - Claude mirror: `.claude/skills/design` (symlink)
 
 ## Codex Tool Mapping
@@ -39,6 +46,8 @@ You coordinate the design workflow — you do NOT research, interview, or write 
 
 You MUST follow these steps in order. Do NOT skip team creation.
 
+If runtime does not provide the required Agent Teams APIs, stop this flow and switch to `/planning`.
+
 ### Mode Detection
 
 Determine the design mode from `$ARGUMENTS`:
@@ -51,7 +60,10 @@ Pass the detected mode to Prometheus in its prompt so it adjusts its depth accor
 
 ### Common Errors
 
-See `.claude/lib/team-lifecycle.md` § Common Errors.
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `unknown tool: TeamCreate` | Agent Teams not enabled | Enable Agent Teams in Claude settings (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: "1"`) and restart runtime |
+| `team already exists` | Previous session not cleaned up | Run `/reset` to clean stale teams and task state |
 
 ---
 
@@ -85,11 +97,21 @@ Create the `.maestro/handoff/ directory if it doesn't exist.
 
 ### Step 3: Load Priority Context
 
-Follow `.claude/lib/team-lifecycle.md` § Loading Priority Context to load wisdom files and notepad items. Inject any findings into the Prometheus prompt.
+Load priority context before spawning Prometheus:
+
+1. Gather wisdom context from `.maestro/wisdom/*.md` (if present) and summarize the most relevant titles/lessons.
+2. Read `.maestro/notepad.md` and extract `## Priority Context` items (if present).
+3. Inject both summaries into the Prometheus prompt as hard constraints.
 
 ### Step 3.5: Discover Available Skills
 
-Follow `.claude/lib/skill-registry.md` to discover skills from project, global, and plugin locations.
+Discover skills from project, global, and plugin locations in this order:
+
+1. Project skills: `.claude/skills/*/SKILL.md` and `.agents/skills/*/SKILL.md`.
+2. Global skills: `~/.claude/skills/*/SKILL.md`.
+3. Plugin skills: `~/.claude/plugins/marketplaces/**/skills/*/SKILL.md`.
+
+Use `find -L` when scanning to include symlinked skill directories. Deduplicate by skill name, preferring project-local definitions.
 
 Build a skill summary for Prometheus:
 ```
@@ -257,6 +279,17 @@ Then wait for the next `PLAN READY` message and repeat from Step 5.
 
 exec_command (read-only) the plan summary display protocol from `.agents/skills/design/reference/plan-summary.md` and follow it to present the plan to the user.
 
+### Step 8.5: Enforce `/work` Plan Contract (Required)
+
+Before approval/save, verify the candidate plan contains all required execution sections:
+
+- `## Objective` (required)
+- At least one unchecked task checkbox `- [ ] ...` (required)
+- `## Verification` (required)
+- `## Scope` (recommended; warn if missing)
+
+If any required section is missing, do not save to `.maestro/plans/`. Send `REVISE` to Prometheus with exact missing sections and return to Step 5.
+
 ### Step 9: Approve and Save Plan
 
 Send the approval to Prometheus:
@@ -273,6 +306,8 @@ exec_command (read-only) the plan content from Prometheus's `PLAN READY` message
 ```
 apply_patch or exec_command (write)(file_path: ".maestro/plans/{topic}.md", content: "{plan content from PLAN READY message}")
 ```
+
+Only execute this write after Step 8.5 passes.
 
 #### Auto-Capture Design Decisions
 
@@ -305,7 +340,9 @@ Update the handoff file status to "complete":
 
 ### Step 11: Cleanup Team
 
-Follow `.claude/lib/team-lifecycle.md` § Team Cleanup Pattern. Shutdown all teammates (prometheus, explore, oracle, leviathan, critic-reviewer), then close_agent. Oracle, leviathan, and critic-reviewer may not exist depending on mode — ignore shutdown errors for missing teammates.
+Shutdown all teammates (prometheus, explore, oracle, leviathan, critic-reviewer), then `close_agent` the team.
+
+Oracle, leviathan, and critic-reviewer may not exist depending on mode — ignore shutdown errors for missing teammates.
 
 ### Step 12: Hand Off
 
@@ -353,6 +390,7 @@ The `/work` (Codex: `$work`) command will auto-detect this plan and suggest it f
 | Forgetting handoff file | Always write `.maestro/handoff/ before spawning agents |
 | Forgetting to cleanup team | Always shutdown + cleanup at end |
 | Auto-approving without user input | Always present plan to user via `request_user_input` |
+| Saving plan without `/work` contract checks | Enforce Step 8.5 and return `REVISE` when required sections are missing |
 | Skipping leviathan review in full mode | Always spawn leviathan before presenting to user (unless quick mode) |
 | Skipping upfront research | Always spawn explore (and oracle in full mode) before prometheus |
 | Agents not knowing their peers | Always include `## Your Peers` section in spawn prompts so agents know who to message |

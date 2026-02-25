@@ -81,7 +81,8 @@ Enable Agent Teams in `~/.claude/settings.json`:
 | `@tdd` | TDD implementation (kraken) |
 | `@spark` | Quick fixes |
 | `@oracle` | Strategic advisor (sonnet) |
-| `@explore` | Codebase search |
+
+`explore` remains available as an internal teammate spawned by orchestrated workflows.
 
 ## Agents
 

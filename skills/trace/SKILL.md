@@ -12,6 +12,7 @@ disable-model-invocation: true
 ## Objective
 
 Display the flow trace showing how hooks, keywords, skills, agents, tools, and modes interacted during this session.
+This is the only Maestro command that should report execution timelines or performance telemetry.
 
 ## User Command
 

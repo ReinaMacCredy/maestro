@@ -1,44 +1,65 @@
 ---
 name: research
-description: "Conducts multi-stage research with parallel agents, verification, and synthesis. Use when you need high-confidence findings for complex questions."
-argument-hint: "<topic> [--auto|--stages <N>|--resume]"
-allowed-tools: Read, Write, Edit, Bash, Grep, Glob, Task, TeamCreate, TeamDelete, SendMessage, WebSearch, WebFetch, AskUserQuestion
+description: "Supporting follow-up mode for multi-source validation after analyze. Use to extend existing findings with docs/web cross-checks."
+argument-hint: "<topic> [--auto|--stages <N>]"
+allowed-tools: Read, Write, Bash, Grep, Glob, Task, TeamCreate, TeamDelete, SendMessage, WebSearch, WebFetch, AskUserQuestion
 disable-model-invocation: true
 ---
 
-# Research — Multi-Stage Deep Investigation
+# Research — Follow-Up Multi-Source Mode
 
-> Structured research across codebase, documentation, and web sources. Breaks complex topics into stages, runs parallel agents, verifies findings, and synthesizes a final report.
+> Extend an existing `analyze` investigation with focused multi-source validation (docs/web/external references). This is a supporting mode, not the primary investigation workflow.
 
 ## Arguments
 
 - `<topic>` — What to research (required)
 - `--auto` — Run all stages automatically without user confirmation between stages
-- `--stages <N>` — Override number of stages (default: auto-determined, range: 3-7)
-- `--resume` — Resume an interrupted research session from `.maestro/research/`
+- `--stages <N>` — Override number of stages (default: 2-4, range: 2-5)
 
 ## Guardrails
 
 ```
-max_stages: 7
-max_iterations: 10
+max_stages: 5
 max_concurrency: 5
 ```
 
 These limits are hard — no override. They prevent runaway research sessions.
 
+## Role Boundary
+
+- Start with `analyze` for core codebase investigation and root-cause analysis.
+- Use `research` only after `analyze` has produced baseline findings or open questions.
+- Avoid duplicating `analyze` steps (full call-chain tracing, broad codebase mapping) unless needed to verify a specific contradiction.
+
+## Tooling Compatibility
+
+- Prefer team orchestration APIs when available (`TeamCreate`, `SendMessage`, `Task`, `TeamDelete`).
+- If team APIs are unavailable, execute the same stages directly with available tools.
+- Do not assume APIs such as `spawn_agent`, `send_input`, or `request_user_input` unless explicitly provided by the host runtime.
+
 ## Workflow
 
-### Step 1: Decompose
+### Step 1: Ingest Baseline
 
-Break the research topic into 3-7 stages:
+Capture the relevant output from `analyze` before doing new work:
+
+1. Baseline findings (with `file:line` evidence)
+2. Open questions requiring external confirmation
+3. Assumptions that need verification
+
+If no prior `analyze` output exists, run `analyze` first.
+
+### Step 2: Plan Follow-Up Stages
+
+Break follow-up work into 2-5 narrowly scoped stages:
 
 ```markdown
 ## Research Plan: {topic}
 
 1. **{Stage Name}** — {What to investigate}
    - Sources: [codebase|docs|web|all]
-   - Key questions: [specific questions to answer]
+   - Linked analyze finding/open question: [reference]
+   - Key validation question: [specific question to answer]
 2. ...
 ```
 
@@ -46,9 +67,9 @@ Break the research topic into 3-7 stages:
 
 **If `--auto`**: Log the plan and proceed immediately.
 
-### Step 2: Initialize Session
+### Step 3: Initialize Session
 
-Create session state:
+Create a lightweight session note only:
 
 ```json
 // .maestro/research/{topic-slug}.json
@@ -56,24 +77,13 @@ Create session state:
   "topic": "{topic}",
   "status": "active",
   "mode": "auto|interactive",
-  "stages": [
-    {
-      "name": "{stage name}",
-      "status": "pending",
-      "sources": ["codebase"],
-      "questions": ["..."],
-      "findings": [],
-      "agents_used": 0
-    }
-  ],
-  "iteration": 1,
-  "max_iterations": 10,
-  "started": "{ISO timestamp}",
-  "report_path": null
+  "based_on": "analyze:{topic-or-thread-reference}",
+  "stages": ["{stage names}"],
+  "started": "{ISO timestamp}"
 }
 ```
 
-### Step 3: Execute Stages
+### Step 4: Execute Validation Stages
 
 Create a team:
 
@@ -85,21 +95,20 @@ For each stage, spawn up to `max_concurrency` agents in parallel:
 
 | Source | Agent | Task |
 |--------|-------|------|
-| Codebase | `explore` | Search files, patterns, dependencies |
-| Strategic | `oracle` | Analyze findings, identify implications |
+| Codebase | `explore` | Verify/contradict specific baseline findings |
+| Strategic | `oracle` | Evaluate implications of confirmations/contradictions |
 | Web | Use WebSearch/WebFetch directly | External documentation, articles, best practices |
 
 **Stage execution:**
 1. Spawn agents for current stage
 2. Collect findings
 3. Update session state
-4. Verify findings against sources (cross-reference)
+4. Cross-check against baseline `analyze` findings
 5. Move to next stage
 
 **In AUTO mode:**
 - No user prompts between stages
-- Log progress to session state
-- Track iteration count — stop at `max_iterations`
+- Continue through planned stages
 
 **In interactive mode:**
 - After each stage, present findings and ask:
@@ -110,7 +119,7 @@ For each stage, spawn up to `max_concurrency` agents in parallel:
       header: "Research",
       options: [
         { label: "Continue", description: "Proceed to next stage" },
-        { label: "Deep dive", description: "Add a sub-stage to explore a finding further" },
+        { label: "Deep dive", description: "Add one focused validation sub-stage" },
         { label: "Skip ahead", description: "Jump to synthesis" },
         { label: "Stop", description: "End research here" }
       ],
@@ -119,16 +128,16 @@ For each stage, spawn up to `max_concurrency` agents in parallel:
   )
   ```
 
-### Step 4: Verify
+### Step 5: Verify
 
 Cross-reference findings:
-- Do codebase findings match documentation?
-- Do multiple sources agree?
-- Are there contradictions to flag?
+- Do `analyze` findings match docs/web evidence?
+- Do multiple sources agree on disputed points?
+- Which baseline assumptions are now confirmed vs contradicted?
 
 Mark each finding as: `verified`, `unverified`, or `contradicted`.
 
-### Step 5: Synthesize
+### Step 6: Synthesize
 
 Produce a final report:
 
@@ -144,10 +153,15 @@ Produce a final report:
 - **Finding**: [description]
   - Source: [file:line | URL | agent analysis]
   - Confidence: [high|medium|low]
-  - Verified: [yes|no|contradicted]
+  - Verified: [verified|unverified|contradicted]
 
 ### Stage 2: {name}
 ...
+
+## Delta From Analyze
+- Confirmed findings:
+- Contradicted findings:
+- Newly discovered findings:
 
 ## Cross-References
 [Where multiple stages produced related findings]
@@ -162,14 +176,14 @@ Produce a final report:
 ## Methodology
 - Stages: {N}
 - Agents used: {N}
-- Iterations: {N}
 - Duration: {time}
 - Mode: {auto|interactive}
+- Based on: {analyze reference}
 ```
 
 Save report to `.maestro/research/{topic-slug}-report.md`.
 
-### Step 6: Cleanup
+### Step 7: Cleanup
 
 ```
 TeamDelete(reason: "Research session complete")
@@ -181,44 +195,7 @@ Update session state:
 ```json
 {
   "status": "completed",
-  "report_path": ".maestro/research/{topic-slug}-report.md",
   "completed": "{ISO timestamp}"
-}
-```
-
-## Resume Support
-
-When `--resume` is used:
-1. Find the most recent `.maestro/research/*.json` with `status: "active"`
-2. Load the session state
-3. Skip completed stages
-4. Resume from the first `pending` stage
-
-## Session State Schema
-
-```json
-{
-  "topic": "string",
-  "status": "active | completed | failed",
-  "mode": "auto | interactive",
-  "stages": [{
-    "name": "string",
-    "status": "pending | in_progress | completed | skipped",
-    "sources": ["codebase", "web", "docs"],
-    "questions": ["string"],
-    "findings": [{
-      "description": "string",
-      "source": "string",
-      "confidence": "high | medium | low",
-      "verified": "boolean | null"
-    }],
-    "agents_used": "number"
-  }],
-  "iteration": "number",
-  "max_iterations": 10,
-  "started": "ISO timestamp",
-  "completed": "ISO timestamp | null",
-  "report_path": "string | null"
 }
 ```
 
@@ -226,8 +203,9 @@ When `--resume` is used:
 
 | Don't | Do Instead |
 |-------|-----------|
-| Research without a plan | Always decompose into stages first |
+| Start in research without baseline analysis | Run `analyze` first and carry findings forward |
+| Re-run full codebase investigation | Only validate specific open questions from `analyze` |
+| Research without a plan | Decompose into 2-5 narrow validation stages |
 | Spawn more than 5 agents | Respect max_concurrency limit |
-| Run more than 10 iterations | Stop and synthesize what you have |
 | Skip verification | Always cross-reference findings |
 | Produce findings without sources | Every finding needs a source reference |

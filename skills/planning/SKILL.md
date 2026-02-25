@@ -72,6 +72,15 @@ Generate an execution-ready plan with parallel tracks, file scopes, and agent na
 
 Present a plan summary. Gate on user approval (Approve / Revise / Cancel). Save final plan to `.maestro/plans/{topic}.md`, capture key decisions to notepad, update handoff status, and report the `/work` command for execution. Read [reference/phases.md](reference/phases.md) for detailed phase instructions.
 
+Before writing `.maestro/plans/{topic}.md`, enforce the `/work` plan contract:
+
+- `## Objective` section is present (required)
+- At least one unchecked task checkbox `- [ ] ...` exists (required)
+- `## Verification` section is present (required)
+- `## Scope` section is present (recommended; warn if missing)
+
+If required sections are missing, keep output in draft state and revise before save.
+
 ## Amp Tool Mapping
 
 Use this mapping when older docs mention non-Amp tools:
