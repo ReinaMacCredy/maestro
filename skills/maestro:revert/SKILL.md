@@ -2,17 +2,15 @@
 name: maestro:revert
 description: "Git-aware revert of track, phase, or individual task. Safely undoes implementation with plan state rollback."
 argument-hint: "<track> [--phase <N>] [--task <name>]"
-allowed-tools: Read, Bash, Glob, Grep, AskUserQuestion
-disable-model-invocation: true
 ---
 
 # Revert -- Git-Aware Undo
 
+> This skill is CLI-agnostic. It works with Claude Code, Codex, Amp, or any AI coding assistant.
+
 Safely revert implementation work at track, phase, or task granularity. Updates plan state to reflect the rollback.
 
-CRITICAL: You must validate the success of every tool call. If any tool call fails, halt immediately and report the error.
-
-When using AskUserQuestion, immediately call the tool -- do not repeat the question in plain text.
+Validate the result of every operation. If any step fails, halt and report the failure before continuing.
 
 ## Arguments
 
@@ -40,9 +38,7 @@ If no `<track>` argument was provided, proceed to **Step 1a: Guided Selection** 
 
 Scan all tracks for context:
 
-```
-Read(file_path: ".maestro/tracks.md")
-```
+Read `.maestro/tracks.md`.
 
 Then for each track found (up to 4), check for in-progress or recently completed items:
 
@@ -57,41 +53,18 @@ Build a hierarchical menu grouped by track, showing:
 
 Present the menu:
 
-```
-AskUserQuestion(
-  questions: [{
-    question: "Which track do you want to revert?",
-    header: "Guided Selection",
-    options: [
-      { label: "{track_id}: {description}", description: "{N} completed tasks, status: {status}" },
-      // ... up to 4 tracks
-      { label: "Other", description: "Enter a track ID manually" }
-    ],
-    multiSelect: false
-  }]
-)
-```
+Ask the user: "Which track do you want to revert?"
+Options:
+- **{track_id}: {description}** -- {N} completed tasks, status: {status}
+- (repeat for up to 4 tracks)
 
-If user selects "Other", ask:
-
-```
-AskUserQuestion(
-  questions: [{
-    question: "Enter the track ID to revert:",
-    header: "Manual Track Entry"
-  }]
-)
-```
-
-Use the selected or entered value as the `<track>` argument and continue to Step 2.
+If user provides a custom response (manual track ID entry), use that value as the `<track>` argument and continue to Step 2.
 
 ---
 
 ## Step 2: Locate Track
 
-```
-Read(file_path: ".maestro/tracks.md")
-```
+Read `.maestro/tracks.md`.
 
 Match the track argument against track IDs and descriptions.
 
@@ -103,10 +76,7 @@ If not found:
 
 ## Step 3: Resolve Commit SHAs
 
-Read the track's plan:
-```
-Read(file_path: ".maestro/tracks/{track_id}/plan.md")
-```
+Read `.maestro/tracks/{track_id}/plan.md`.
 
 **3a: Extract implementation SHAs**
 
@@ -178,20 +148,11 @@ If any merge commits are found, warn for each one:
 
 Then ask:
 
-```
-AskUserQuestion(
-  questions: [{
-    question: "One or more commits to revert are merge commits ({sha_list}). How should we proceed?",
-    header: "Merge Commit Warning",
-    options: [
-      { label: "Proceed anyway", description: "Attempt git revert with -m 1 for merge commits" },
-      { label: "Skip merge commits", description: "Exclude merge commits from the revert list and continue" },
-      { label: "Cancel", description: "Abort the revert" }
-    ],
-    multiSelect: false
-  }]
-)
-```
+Ask the user: "One or more commits to revert are merge commits ({sha_list}). How should we proceed?"
+Options:
+- **Proceed anyway** -- Attempt git revert with -m 1 for merge commits
+- **Skip merge commits** -- Exclude merge commits from the revert list and continue
+- **Cancel** -- Abort the revert
 
 **4b: Cherry-pick duplicate detection**
 
@@ -244,47 +205,23 @@ Use `[plan-update]` and `[track creation]` labels to distinguish those commit ty
 ## Step 6: Multi-Step Confirmation
 
 **Confirmation 1** -- Target:
-```
-AskUserQuestion(
-  questions: [{
-    question: "Revert {scope} of track '{description}'? This will undo {N} commits.",
-    header: "Confirm Target",
-    options: [
-      { label: "Yes, continue", description: "Show me the execution plan" },
-      { label: "Cancel", description: "Abort revert" }
-    ],
-    multiSelect: false
-  }]
-)
-```
+
+Ask the user: "Revert {scope} of track '{description}'? This will undo {N} commits."
+Options:
+- **Yes, continue** -- Show me the execution plan
+- **Cancel** -- Abort revert
 
 **Confirmation 2** -- Final go/no-go (3 options):
-```
-AskUserQuestion(
-  questions: [{
-    question: "Ready to execute? This will create revert commits (original commits are preserved in history).",
-    header: "Execute",
-    options: [
-      { label: "Execute revert", description: "Create revert commits now" },
-      { label: "Revise plan", description: "Modify which commits to include or exclude before executing" },
-      { label: "Cancel", description: "Abort" }
-    ],
-    multiSelect: false
-  }]
-)
-```
+
+Ask the user: "Ready to execute? This will create revert commits (original commits are preserved in history)."
+Options:
+- **Execute revert** -- Create revert commits now
+- **Revise plan** -- Modify which commits to include or exclude before executing
+- **Cancel** -- Abort
 
 If user selects "Revise plan":
 - Display the numbered commit list again
-- Ask: "Enter the numbers of commits to EXCLUDE (comma-separated), or press Enter to keep all:"
-  ```
-  AskUserQuestion(
-    questions: [{
-      question: "Enter commit numbers to exclude (e.g. '2,3'), or leave blank to keep all:",
-      header: "Revise Commit List"
-    }]
-  )
-  ```
+- Ask the user: "Enter commit numbers to exclude (e.g. '2,3'), or leave blank to keep all:"
 - Remove the specified commits from the list
 - Re-display the updated plan and return to Confirmation 2
 
@@ -311,21 +248,11 @@ CRITICAL: Validate each `git revert` command succeeds before continuing to the n
 **On conflict**:
 1. Report: "Merge conflict during revert of {sha}."
 2. Show conflicting files
-3. Ask user:
-   ```
-   AskUserQuestion(
-     questions: [{
-       question: "Merge conflict in {file}. How should we proceed?",
-       header: "Conflict",
-       options: [
-         { label: "Help me resolve", description: "Show me the conflict and I'll guide resolution" },
-         { label: "Abort revert", description: "Cancel remaining reverts (already-reverted commits stay)" },
-         { label: "Accept theirs", description: "Keep the current version (discard the revert for this file)" }
-       ],
-       multiSelect: false
-     }]
-   )
-   ```
+3. Ask the user: "Merge conflict in {file}. How should we proceed?"
+   Options:
+   - **Help me resolve** -- Show me the conflict and I'll guide resolution
+   - **Abort revert** -- Cancel remaining reverts (already-reverted commits stay)
+   - **Accept theirs** -- Keep the current version (discard the revert for this file)
 
 ---
 
