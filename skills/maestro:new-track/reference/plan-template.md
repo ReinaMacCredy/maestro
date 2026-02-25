@@ -97,3 +97,7 @@ Every phase ends with a verification meta-task:
 - Shared infrastructure tasks come first (models, schemas, config)
 - UI tasks come after their backing API/logic tasks
 - Integration tests come after unit tests
+
+## Skill-Aware Planning
+
+If skills were detected in Step 9.5, the plan generator MAY reference skill capabilities in task descriptions (e.g., "Follow swift-testing-expert guidance for test structure"). Plans must remain self-contained and executable without skills.
