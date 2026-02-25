@@ -30,7 +30,7 @@ Each skill must follow Agent Skills core constraints:
 - YAML frontmatter includes:
   - `name` (required)
   - `description` (required)
-- `name` matches `^[a-z0-9-]{1,64}$`.
+- `name` matches `^[a-z0-9:-]{1,64}$` (colons allowed for namespace prefixes like `maestro:implement`).
 - `name` exactly matches the parent directory name.
 - `description` is non-empty and <= 1024 characters.
 

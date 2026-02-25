@@ -29,17 +29,16 @@ amp skill add https://github.com/ReinaMacCredy/maestro --global
 
 ```mermaid
 graph LR
-    A[design] --> B[Team Research]
-    B --> C[Interview]
-    C --> D[Plan Generated]
-    D --> E[work]
-    E --> F[Team Execution]
+    A["/maestro:setup"] --> B["/maestro:new-track"]
+    B --> C[Spec + Plan Generated]
+    C --> D["/maestro:implement"]
+    D --> E["/maestro:review"]
 ```
 
-1. **`/design`** — Start an interview-driven planning session (with team research)
-2. **Review plan** — Prometheus generates structured plan
-3. **`/work`** — Confirm plan, then execute via Agent Teams
-4. **Verify** — Wisdom accumulated, learnings extracted
+1. **`/maestro:setup`** — Scaffold project context (product, tech stack, guidelines)
+2. **`/maestro:new-track`** — Create a feature/bug track with spec and plan
+3. **`/maestro:implement`** — Execute tasks (single-agent or `--team` for parallel)
+4. **`/maestro:review`** — Verify implementation correctness
 
 ## Setup
 
@@ -55,34 +54,20 @@ Enable Agent Teams in `~/.claude/settings.json`:
 
 ## Commands
 
+### Core Workflow
+
 | Command | Description |
 |---------|-------------|
-| `/design <request>` | Interview-driven planning (supports `--quick`) |
-| `/work [<plan-name>] [--resume]` | Execute plan with Agent Teams |
-| `/review` | Post-execution review with auto-fix (supports planless git-diff mode) |
-| `/setup-check` | Verify plugin prerequisites |
-| `/status` | Show Maestro state |
-| `/reset` | Clean stale state |
-| `/plan-template <name>` | Scaffold blank plan |
-| `/styleguide` | Detect languages and inject code style guides into CLAUDE.md |
-| `/setup` | Scaffold project context (product, tech stack, guidelines) |
-| `/pipeline <preset>` | Sequential agent chains with context passing |
-| `/analyze <problem>` | Deep read-only investigation with structured report |
-| `/note [--priority <P0-P3>] <text>` | Capture decisions and context to persistent notepad |
-| `/learner [--from-session \| <topic>]` | Extract principles as reusable learned skills |
-| `/security-review [<files> \| --diff]` | Security analysis with severity ratings |
-| `/ultraqa [--tests\|--build\|--lint]` | Iterative fix-and-verify loop (max 5 cycles) |
-| `/research <topic> [--auto]` | Multi-stage research with parallel agents |
+| `/maestro:setup` | Scaffold project context (product, tech stack, guidelines) |
+| `/maestro:new-track <request>` | Create a feature/bug track with spec and plan |
+| `/maestro:implement [<track>] [--team]` | Execute track tasks (supports `--resume`) |
+| `/maestro:review` | Post-execution review with auto-fix |
+| `/maestro:status` | Show track progress across all tracks |
+| `/maestro:revert` | Undo implementation if needed |
+| `/maestro:note [--priority <P0-P3>] <text>` | Capture decisions and context to persistent notepad |
+| `/maestro:AGENTS.md` | Generate AGENTS.md context file |
 
-## Agent Triggers
 
-| Trigger | Action |
-|---------|--------|
-| `@tdd` | TDD implementation (kraken) |
-| `@spark` | Quick fixes |
-| `@oracle` | Strategic advisor (sonnet) |
-
-`explore` remains available as an internal teammate spawned by orchestrated workflows.
 
 ## Agents
 
@@ -103,9 +88,9 @@ Enable Agent Teams in `~/.claude/settings.json`:
 
 ## Key Rules
 
-- **Interview before code** — Run `/design` to explore before implementing
+- **Plan before code** — Run `/maestro:new-track` to create a spec and plan before implementing
 - **TDD by default** — Use kraken for new features
-- **Both phases use teams** — Planning and execution are team-based
+- **Track-based workflow** — All work is organized into tracks with specs and plans
 - **Verify subagent claims** — Always verify, agents can make mistakes
 
 ## Recommended MCP Servers
@@ -121,14 +106,10 @@ These MCP servers enhance the Maestro experience:
 
 | Topic | Path |
 |-------|------|
-| Workflow Skill | [skills/maestro/SKILL.md](skills/maestro/SKILL.md) |
+| Skills | [skills/](skills/) |
 | Agent Definitions | [.claude/agents/](.claude/agents/) |
 | Agent Teams Guide | [docs/AGENT-TEAMS.md](docs/AGENT-TEAMS.md) |
 | Universal Skills Format | [docs/AGENT-SKILLS.md](docs/AGENT-SKILLS.md) |
-| Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
-| Skill Interop | [docs/SKILL-INTEROP.md](docs/SKILL-INTEROP.md) |
-| Troubleshooting | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) |
-| Customization | [docs/CUSTOMIZATION.md](docs/CUSTOMIZATION.md) |
 
 ## Credits
 
