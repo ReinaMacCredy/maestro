@@ -37,15 +37,22 @@ Count by marker:
 
 For each track marked `[~]`:
 
-1. Read `.maestro/tracks/{track_id}/plan.md`.
+1. Read `.maestro/tracks/{track_id}/metadata.json` and `.maestro/tracks/{track_id}/plan.md`.
 
-2. Parse phases and tasks:
+2. **BR-enhanced path**: If `metadata.json` has `beads_epic_id`:
+   - Use `br epic status --json` for overall progress stats (open/closed/total)
+   - Use `br list --status open --label "phase:{N}-{kebab}" --json` for per-phase open counts
+   - Use `bv -robot-insights -format json` for graph health (cycles, bottlenecks, stale issues)
+   - Use `bv -robot-next -format json` for the top recommended next action
+   - Falls back to plan.md parsing if any BR/BV command fails
+
+3. **Legacy path** (no `beads_epic_id`): Parse phases and tasks from plan.md:
    - Count `[ ]` (pending), `[~]` (in-progress), `[x]` (complete) per phase
    - Calculate overall completion percentage
 
-3. Identify the next pending task (first `[ ]` in the plan)
+4. Identify the next pending task (first `[ ]` in the plan, or from `bv -robot-next`)
 
-4. Check for blockers:
+5. Check for blockers:
    - Any task marked `[~]` for more than one phase indicates a stall
    - Any phase with failed verification noted
 
@@ -57,6 +64,13 @@ Using the data collected, compute a qualitative status:
 - **Behind Schedule** -- completed tasks represent less than 25% of total tasks and at least one track is active
 - **On Track** -- active tracks exist and no blockers detected
 - **No Active Work** -- zero tracks marked `[~]`
+
+**BR health check**: If any track has `beads_epic_id`, also check `bv -robot-insights -format json` for:
+- Dependency cycles (critical blocker)
+- Stale issues (warning)
+- Bottleneck nodes (informational)
+
+Include health signals in the report under a "Health" subsection when available.
 
 ## Step 5: Display Report
 

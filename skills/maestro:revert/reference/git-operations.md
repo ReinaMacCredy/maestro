@@ -4,7 +4,13 @@
 
 ### 3a: Extract Implementation SHAs
 
-Read `.maestro/tracks/{track_id}/plan.md`.
+**BR-enhanced path**: If `metadata.json` has `beads_epic_id`:
+- Use `br list --status closed --parent {epic_id} --all --json` to get all closed issues
+- Parse the `close_reason` field for SHAs (format: `sha:{7char}`)
+- Scope by labels: `--label "phase:{N}"` for phase-level, match task title for task-level
+- Falls back to plan.md parsing if BR command fails or returns no results
+
+**Legacy path**: Read `.maestro/tracks/{track_id}/plan.md`.
 
 Extract `[x] {sha}` markers from the appropriate scope:
 - **Track**: All `[x] {sha}` markers
@@ -128,6 +134,14 @@ CRITICAL: Validate each `git revert` command succeeds before continuing.
 ## Step 8: Update Plan State
 
 Edit `plan.md`: For each reverted implementation task, change `[x] {sha}` back to `[ ]`.
+
+**BR mirror**: If `metadata.json` has `beads_epic_id`, also reopen the corresponding BR issues:
+
+```bash
+br update {issue_id} --status open --json
+```
+
+Look up `{issue_id}` from `metadata.json` `beads_issue_map` for each reverted task.
 
 ```bash
 git add .maestro/tracks/{track_id}/plan.md

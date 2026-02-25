@@ -40,7 +40,15 @@ Read all track files:
 
 ## Step 3: Collect Commits
 
-Parse `plan.md` for all `[x] {sha}` markers. If no SHAs found (and a track was selected): "Nothing to review." Stop.
+**BR-enhanced path**: If `metadata.json` has `beads_epic_id`:
+- Use `br list --status closed --label "type:{track_type}" --parent {epic_id} --all --json` to get closed issues
+- Parse the `close_reason` field for SHAs (format: `sha:{7char}`)
+- Extract each 7-character SHA from close reasons
+- Falls back to plan.md parsing if BR command fails or returns no results
+
+**Legacy path**: Parse `plan.md` for all `[x] {sha}` markers.
+
+If no SHAs found (and a track was selected): "Nothing to review." Stop.
 
 If operating in arbitrary scope (no track), skip -- diff collected in Step 4.
 
