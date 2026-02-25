@@ -38,6 +38,16 @@ Format: `{shortname}_{YYYYMMDD}` (2-4 words, snake_case + date). Example: `dark_
 
 Scan `.maestro/tracks/*` directories. Warn if any starts with the same short name prefix.
 
+## Step 4.5: BR Bootstrap Check
+
+Ensure the beads workspace exists for task tracking integration:
+
+```bash
+[ -d ".beads" ] || br init --prefix maestro --json
+```
+
+If `br` is not installed, skip silently -- beads integration is optional.
+
 ## Step 5: Create Track Directory
 
 ```bash
@@ -77,6 +87,20 @@ Present full plan for approval. Max 3 revision loops. Write to `.maestro/tracks/
 Match installed skills against track context for auto-loading during implementation.
 See `reference/skill-detection.md` for the full detection protocol (cache check, corpus build, matching, recording).
 
+## Step 9.7: Plan-to-BR Sync
+
+If `.beads/` exists and `br` is available, sync the plan to BR issues for structured task tracking.
+See `reference/plan-to-br-sync.md` (in the `maestro:implement` skill) for the full protocol.
+
+Summary:
+1. Create an epic issue for the track
+2. Create one BR issue per task with `--parent {epic_id}`, labels, and dependencies
+3. Validate with `br dep cycles --json`
+4. Store `beads_epic_id` and `beads_issue_map` in `metadata.json`
+5. Run `br sync --flush-only` and stage `.beads/`
+
+If `br` is not installed or sync fails, skip -- the track works without BR integration.
+
 ## Step 10-12: Write Metadata, Index, and Registry
 
 Write `metadata.json`, `index.md`, update `tracks.md`.
@@ -86,6 +110,8 @@ See `reference/metadata-and-registry.md` for all schemas, templates, commit mess
 
 ```bash
 git add .maestro/tracks/{track_id} .maestro/tracks.md
+# Include beads state if BR sync was performed
+[ -d ".beads" ] && git add .beads/
 git commit -m "chore(maestro:new-track): add track {track_id}"
 ```
 

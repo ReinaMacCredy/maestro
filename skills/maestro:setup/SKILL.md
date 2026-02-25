@@ -61,6 +61,22 @@ Classify as **Brownfield** (existing code) or **Greenfield** (new project).
 mkdir -p .maestro/context
 ```
 
+### 5a: Bootstrap Beads Workspace
+
+If `.beads/` does not exist, initialize it for task tracking integration:
+
+```bash
+[ -d ".beads" ] || br init --prefix maestro --json
+```
+
+Validate the workspace:
+
+```bash
+br doctor --json
+```
+
+If `br` is not installed, skip silently -- beads integration is optional.
+
 ## Steps 6-10: Interview & File Generation
 
 Each step generates one context file via an interactive or autogenerate flow.

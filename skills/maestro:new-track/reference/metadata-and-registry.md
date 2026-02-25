@@ -18,11 +18,18 @@
       "relevance": "matched",
       "matched_on": ["keyword1", "keyword2"]
     }
-  ]
+  ],
+  "beads_epic_id": "{br_epic_id | null}",
+  "beads_issue_map": {
+    "P1T1": "{br_issue_id}",
+    "P1T2": "{br_issue_id}"
+  }
 }
 ```
 
 Note: `"skills"` is `[]` if no skills were detected.
+
+Note: `"beads_epic_id"` and `"beads_issue_map"` are set by the plan-to-BR sync step (Step 9.5). If BR sync was skipped or failed, omit both fields. When present, `beads_epic_id` is the discriminator that tells downstream skills to use BR for state tracking.
 
 Write to `.maestro/tracks/{track_id}/metadata.json`.
 
