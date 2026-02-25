@@ -30,294 +30,52 @@ Determine what to revert:
 - **Phase-level**: `--phase N` specified. Revert commits from phase N only.
 - **Task-level**: `--task <name>` specified. Revert a single task's commit.
 
-If no `<track>` argument was provided, proceed to **Step 1a: Guided Selection** before continuing.
+If no `<track>` argument, proceed to Guided Selection.
 
----
+## Step 1a: Guided Selection (when no track argument)
 
-## Step 1a: Guided Selection (when no track argument provided)
+Read `.maestro/tracks.md` and recent maestro git history (`git log --oneline --since="7 days ago" --grep="maestro"`).
 
-Scan all tracks for context:
-
-Read `.maestro/tracks.md`.
-
-Then for each track found (up to 4), check for in-progress or recently completed items:
-
-```bash
-git log --oneline --since="7 days ago" --grep="maestro" -- .maestro/tracks/
-```
-
-Build a hierarchical menu grouped by track, showing:
-- Track ID and description
-- Status: `[ ]` pending, `[~]` in-progress, `[x]` completed
-- Number of completed tasks (potential revert candidates)
-
-Present the menu:
-
-Ask the user: "Which track do you want to revert?"
-Options:
-- **{track_id}: {description}** -- {N} completed tasks, status: {status}
-- (repeat for up to 4 tracks)
-
-If user provides a custom response (manual track ID entry), use that value as the `<track>` argument and continue to Step 2.
-
----
+Present a menu grouped by track showing ID, description, status, and completed task count. If user provides a custom track ID, use that.
 
 ## Step 2: Locate Track
 
-Read `.maestro/tracks.md`.
-
-Match the track argument against track IDs and descriptions.
-
-If not found:
-- Report: "Track not found. Available tracks: {list}"
-- Stop.
-
----
+Match track argument against IDs and descriptions in `.maestro/tracks.md`. If not found: report and stop.
 
 ## Step 3: Resolve Commit SHAs
 
-Read `.maestro/tracks/{track_id}/plan.md`.
-
-**3a: Extract implementation SHAs**
-
-Extract `[x] {sha}` markers from the appropriate scope:
-- **Track**: All `[x] {sha}` markers
-- **Phase N**: Only markers under `## Phase N`
-- **Task**: Only the marker for the matching task
-
-**3b: Identify plan-update commits**
-
-Search for commits that marked tasks as done in this track's plan.md (these have the message pattern `maestro(plan): mark task...`):
-
-```bash
-git log --oneline --all --grep="maestro(plan): mark task" -- .maestro/tracks/{track_id}/plan.md
-```
-
-Add any matching SHAs to the revert list alongside the implementation commits. These must also be reverted to restore plan state accurately.
-
-**3c: Identify track creation commit (track-level revert only)**
-
-If reverting the entire track, search for the commit that introduced the track entry in tracks.md:
-
-```bash
-git log --oneline --all --grep="chore(maestro:new-track): add track {track_id}"
-```
-
-If found, add this SHA to the revert list so the track entry itself is removed from tracks.md.
-
-If no SHAs found in scope (no implementation SHAs from 3a, and no plan-update commits from 3b):
-- Report: "No completed tasks found in the specified scope. Nothing to revert."
-- Stop.
-
----
+Extract implementation SHAs, plan-update commits, and track creation commit (for track-level).
+See `reference/git-operations.md` for full SHA resolution protocol (steps 3a-3c).
 
 ## Step 4: Git Reconciliation
 
-For each SHA in the combined revert list, verify it exists and hasn't been rewritten:
-
-```bash
-git cat-file -t {sha}
-```
-
-CRITICAL: Validate this command succeeds for each SHA before continuing.
-
-**If SHA exists**: Add to revert list.
-
-**If SHA is missing** (rebased, squashed, or force-pushed):
-- Warn: "Commit {sha} no longer exists (likely rewritten by rebase/squash)."
-- Try to find the replacement:
-  ```bash
-  git log --all --oneline --grep="{original commit message}"
-  ```
-- If found: offer to use the replacement SHA
-- If not found: skip this commit and warn user
-
-**4a: Merge commit detection**
-
-For each SHA that exists, check whether it is a merge commit:
-
-```bash
-git cat-file -p {sha}
-```
-
-Inspect the output for multiple `parent` lines. If two or more `parent` lines are present, the commit is a merge commit.
-
-If any merge commits are found, warn for each one:
-
-"Commit {sha} is a merge commit. Reverting merge commits may have unexpected results."
-
-Then ask:
-
-Ask the user: "One or more commits to revert are merge commits ({sha_list}). How should we proceed?"
-Options:
-- **Proceed anyway** -- Attempt git revert with -m 1 for merge commits
-- **Skip merge commits** -- Exclude merge commits from the revert list and continue
-- **Cancel** -- Abort the revert
-
-**4b: Cherry-pick duplicate detection**
-
-After building the full commit list, check for duplicates introduced by cherry-picks. Compare commit messages across all SHAs:
-
-```bash
-git log --format="%H %s" {sha1} {sha2} ...
-```
-
-For any two commits with identical subject lines, compare their patches:
-
-```bash
-git diff {sha_a}^ {sha_a}
-git diff {sha_b}^ {sha_b}
-```
-
-If patches are substantively identical (same file changes, same hunks), treat them as duplicates. Remove the older duplicate from the revert list and note:
-
-"Deduplicated: {sha_older} is a cherry-pick of {sha_newer} -- keeping only {sha_newer} in the revert list."
-
----
+Verify each SHA exists, detect merge commits and cherry-pick duplicates.
+See `reference/git-operations.md` for reconciliation protocol (steps 4a-4b).
 
 ## Step 5: Present Execution Plan
 
-Show the user exactly what will be reverted:
-
-```
-## Revert Plan
-
-**Scope**: {track | phase N | task name}
-**Track**: {track_description} ({track_id})
-
-**Commits to revert** (reverse chronological order):
-1. `{sha7}` -- {commit message}
-2. `{sha7}` -- {commit message} [plan-update]
-3. `{sha7}` -- {commit message} [track creation]
-
-**Affected files**:
-{list of files changed by these commits}
-
-**Plan updates**:
-- {task_name}: `[x] {sha}` --> `[ ]`
-- {task_name}: `[x] {sha}` --> `[ ]`
-```
-
-Use `[plan-update]` and `[track creation]` labels to distinguish those commit types from implementation commits.
-
----
+Show exactly what will be reverted with commit list, affected files, and plan updates.
+See `reference/confirmation-and-plan.md` for the plan format.
 
 ## Step 6: Multi-Step Confirmation
 
-**Confirmation 1** -- Target:
-
-Ask the user: "Revert {scope} of track '{description}'? This will undo {N} commits."
-Options:
-- **Yes, continue** -- Show me the execution plan
-- **Cancel** -- Abort revert
-
-**Confirmation 2** -- Final go/no-go (3 options):
-
-Ask the user: "Ready to execute? This will create revert commits (original commits are preserved in history)."
-Options:
-- **Execute revert** -- Create revert commits now
-- **Revise plan** -- Modify which commits to include or exclude before executing
-- **Cancel** -- Abort
-
-If user selects "Revise plan":
-- Display the numbered commit list again
-- Ask the user: "Enter commit numbers to exclude (e.g. '2,3'), or leave blank to keep all:"
-- Remove the specified commits from the list
-- Re-display the updated plan and return to Confirmation 2
-
----
+Two-phase confirmation with optional plan revision loop.
+See `reference/confirmation-and-plan.md` for the confirmation protocol.
 
 ## Step 7: Execute Reverts
 
-Revert commits in **reverse chronological order** (newest first).
+Revert in reverse chronological order. Handle merge commits and conflicts.
+See `reference/git-operations.md` for execution protocol (step 7).
 
-For standard commits:
-```bash
-git revert --no-edit {sha_newest}
-git revert --no-edit {sha_next}
-# ... continue for all SHAs
-```
+## Steps 8-10: Update Plan State, Registry, and Verify
 
-For merge commits (if user chose "Proceed anyway" in Step 4a):
-```bash
-git revert --no-edit -m 1 {merge_sha}
-```
-
-CRITICAL: Validate each `git revert` command succeeds before continuing to the next SHA.
-
-**On conflict**:
-1. Report: "Merge conflict during revert of {sha}."
-2. Show conflicting files
-3. Ask the user: "Merge conflict in {file}. How should we proceed?"
-   Options:
-   - **Help me resolve** -- Show me the conflict and I'll guide resolution
-   - **Abort revert** -- Cancel remaining reverts (already-reverted commits stay)
-   - **Accept theirs** -- Keep the current version (discard the revert for this file)
-
----
-
-## Step 8: Update Plan State
-
-Edit `plan.md`: For each reverted implementation task, change `[x] {sha}` back to `[ ]`.
-
-Note: plan-update commits and the track creation commit were already reverted in Step 7 via `git revert`, so their changes to tracked files are handled automatically. Only direct plan.md edits are needed here if any markers were not covered by the reverted plan-update commits.
-
-```bash
-git add .maestro/tracks/{track_id}/plan.md
-git commit -m "maestro(revert): update plan state for reverted {scope}"
-```
-
-CRITICAL: Validate the commit succeeds before continuing.
-
----
-
-## Step 9: Update Registry (if track-level revert)
-
-If the entire track was reverted and the track creation commit was NOT in the revert list (i.e., user chose to keep the track entry):
-- Edit `.maestro/tracks.md`: Change track status from `[x]` or `[~]` to `[ ]`
-- Update metadata.json: set `"status": "new"`
-
-```bash
-git add .maestro/tracks.md .maestro/tracks/{track_id}/metadata.json
-git commit -m "maestro(revert): reset track {track_id} status"
-```
-
-If the track creation commit WAS reverted in Step 7, the tracks.md entry was already removed -- skip this step.
-
----
-
-## Step 10: Verify
-
-Run the test suite to confirm the revert is clean:
-
-```bash
-CI=true {test_command}
-```
-
-CRITICAL: Validate this command completes. Report its exit code and output summary.
-
-**If tests pass**: Report success.
-**If tests fail**: Warn user that the revert introduced test failures and offer to debug.
-
----
+Reset plan markers, update registry status, run test suite.
+See `reference/git-operations.md` for details (steps 8-10).
 
 ## Step 11: Summary
 
-```
-## Revert Complete
-
-**Scope**: {track | phase N | task name}
-**Track**: {track_description}
-**Commits reverted**: {count} ({impl_count} implementation, {plan_count} plan-update, {track_count} track creation)
-**Duplicates removed**: {dedup_count} cherry-pick duplicates excluded
-**Tests**: {pass | fail}
-
-**Plan state updated**: {N} tasks reset to `[ ]`
-
-**Next**:
-- `/maestro:implement {track_id}` -- Re-implement reverted tasks
-- `/maestro:status` -- Check overall progress
-```
+Display revert summary with scope, commit counts, test results, and next steps.
+See `reference/confirmation-and-plan.md` for the summary format.
 
 ---
 
