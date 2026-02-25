@@ -10,6 +10,16 @@ Your runtime must support the Task tool for spawning sub-agents.
 - Claude Code: Task tool with `isolation: "worktree"` parameter
 - Other runtimes: use your native sub-agent/delegation mechanism with filesystem isolation
 
+### Agent Mail (Optional)
+
+If the `mcp-agent-mail` MCP server is available, parallel mode uses it for **advisory file reservations** to detect scope conflicts before spawning sub-agents. This replaces heuristic file-scope inference with explicit lock checks.
+
+Setup (once per session, before first wave):
+1. `ensure_project` with `human_key` set to the project's absolute path
+2. `register_agent` for the main session (auto-generated name is fine)
+
+If agent-mail is not available, parallel mode falls back to heuristic file-scope analysis (the default behavior described below).
+
 ---
 
 ## Step 6b: Analyze Plan for Parallelism
@@ -24,6 +34,8 @@ Parse `plan.md` to identify all tasks in the current phase. For each task, deter
    - Neither depends on the other's output
    - Their likely file scopes do not overlap
    - They are in the same phase (cross-phase tasks are always sequential)
+
+4. **File reservation check** (if agent-mail available): After heuristic analysis, call `file_reservation_paths` with `exclusive: true` for each task's inferred file scope. If `conflicts` are returned (another task already reserved overlapping paths), move the conflicting task to a later wave. This replaces guesswork with concrete overlap detection.
 
 ### 6b.2: Classify Tasks
 
@@ -60,9 +72,21 @@ Execute the phase using the single-agent protocol from `reference/single-agent-e
 
 For each wave in the current phase:
 
-### 6c.1: Spawn Sub-agents
+### 6c.1: Reserve Files and Spawn Sub-agents
 
-For each task in the wave, spawn a Task sub-agent with worktree isolation:
+**File reservations** (if agent-mail available): Before spawning, call `file_reservation_paths` for each task's inferred file scope with `exclusive: true` and a TTL of 7200 seconds. If any reservation returns `conflicts`, re-sequence the conflicting task into a later wave.
+
+```
+file_reservation_paths parameters:
+  project_key: {project_absolute_path}
+  agent_name: {registered_agent_name}
+  paths: ["src/api/*.py", "tests/test_api.py"]  (task's inferred file scope)
+  ttl_seconds: 7200
+  exclusive: true
+  reason: "Task {N.M}: {task_title}"
+```
+
+For each task in the wave (after reservations clear), spawn a Task sub-agent with worktree isolation:
 
 ```
 Task tool parameters:
@@ -105,6 +129,7 @@ Follow the {TDD/ship-fast} methodology:
 - You MUST NOT run git commit, git add, or any git write operations
 - You MUST NOT modify .maestro/ files (plan.md, metadata.json, notepad.md)
 - You MUST NOT run br/bv commands
+- You MUST NOT call agent-mail MCP tools (file reservations are managed by the main session)
 - You CAN read any file, write new files, edit existing files, and run tests
 - You CAN install dependencies if needed (but prefer existing stack)
 - After completing all sub-tasks, report what you changed and test results
@@ -192,7 +217,7 @@ git add .maestro/tracks/{track_id}/plan.md
 git commit -m "maestro(plan): mark wave tasks complete [parallel]"
 ```
 
-### 6d.5: Clean Up Worktrees
+### 6d.5: Clean Up Worktrees and Reservations
 
 After successful merge and commit, worktrees from completed sub-agents are automatically cleaned up by the Task tool. Verify cleanup:
 
@@ -203,6 +228,14 @@ git worktree list
 Remove any stale worktrees:
 ```bash
 git worktree prune
+```
+
+**Release file reservations** (if agent-mail was used): Call `release_file_reservations` for the main agent to free all reserved paths for the completed wave. This allows the next wave's tasks to reserve the same files if needed.
+
+```
+release_file_reservations parameters:
+  project_key: {project_absolute_path}
+  agent_name: {registered_agent_name}
 ```
 
 ---
@@ -263,3 +296,4 @@ The phase completion check runs against the main worktree, which now contains al
 | Ignore file scope overlap | Check for potential conflicts before spawning |
 | Force all tasks parallel | Fall back to sequential when parallelism adds no value |
 | Spawn too many sub-agents (>4) | Limit wave size to 3-4 concurrent sub-agents |
+| Skip file reservations when agent-mail is available | Reserve paths before spawning to catch conflicts early |
