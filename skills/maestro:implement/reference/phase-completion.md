@@ -43,20 +43,11 @@ CI=true {test_command}
 - Attempt 2: If still failing, try a different approach
 - After 2 failed attempts: HALT and ask user
 
-```
-AskUserQuestion(
-  questions: [{
-    question: "Tests are failing after 2 fix attempts. How should we proceed?",
-    header: "Test Failure",
-    options: [
-      { label: "Show me the errors", description: "I'll help debug" },
-      { label: "Skip this check", description: "Continue despite test failures (not recommended)" },
-      { label: "Revert phase", description: "Undo all changes in this phase" }
-    ],
-    multiSelect: false
-  }]
-)
-```
+Ask the user: "Tests are failing after 2 fix attempts. How should we proceed?"
+Options:
+- **Show me the errors** -- I'll help debug
+- **Skip this check** -- Continue despite test failures (not recommended)
+- **Revert phase** -- Undo all changes in this phase
 
 ### 3. Manual Verification Plan
 
@@ -97,19 +88,10 @@ Generate step-by-step verification instructions based on what the phase implemen
 
 Present the verification plan and wait for approval:
 
-```
-AskUserQuestion(
-  questions: [{
-    question: "Phase {N} is complete. Please verify the manual steps above. All good?",
-    header: "Phase {N}",
-    options: [
-      { label: "Verified, continue", description: "Phase looks good, move to next phase" },
-      { label: "Issue found", description: "Something isn't working as expected" }
-    ],
-    multiSelect: false
-  }]
-)
-```
+Ask the user: "Phase {N} is complete. Please verify the manual steps above. All good?"
+Options:
+- **Verified, continue** -- Phase looks good, move to next phase
+- **Issue found** -- Something isn't working as expected
 
 **If issue found**:
 1. Ask user to describe the issue
