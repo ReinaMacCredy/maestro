@@ -20,10 +20,10 @@
 - [x] Update the description frontmatter to reflect the three modes
 
 ### Phase 1 Completion Verification
-- [ ] Verify reference/parallel-mode.md is self-contained and covers all spec requirements
-- [ ] Verify SKILL.md correctly routes --parallel to the new reference doc
-- [ ] Verify no existing single-agent or team-mode references are broken
-- [ ] Run `bash -n scripts/*.sh` to ensure no shell scripts were broken
+- [x] Verify reference/parallel-mode.md is self-contained and covers all spec requirements
+- [x] Verify SKILL.md correctly routes --parallel to the new reference doc
+- [x] Verify no existing single-agent or team-mode references are broken
+- [x] Run `bash -n scripts/*.sh` to ensure no shell scripts were broken
 - [ ] Maestro - User Manual Verification 'Phase 1' (Protocol in workflow.md)
 
 ## Phase 2: Testing & Validation
@@ -34,12 +34,12 @@
 - [x] Add test case verifying SKILL.md frontmatter includes --parallel in argument-hint
 
 ### Task 2.2: Shell syntax and version sync validation
-- [ ] Run `bash -n scripts/*.sh` to verify no syntax errors
-- [ ] Run version sync check between plugin.json and marketplace.json
-- [ ] Verify all markdown files have valid structure (no broken links within the skill)
+- [x] Run `bash -n scripts/*.sh` to verify no syntax errors
+- [x] Run version sync check between plugin.json and marketplace.json
+- [x] Verify all markdown files have valid structure (no broken links within the skill)
 
 ### Phase 2 Completion Verification
-- [ ] All test cases pass
-- [ ] No shell syntax errors
-- [ ] Version metadata is consistent
+- [x] All test cases pass
+- [x] No shell syntax errors
+- [x] Version metadata is consistent
 - [ ] Maestro - User Manual Verification 'Phase 2' (Protocol in workflow.md)
