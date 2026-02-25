@@ -2,6 +2,14 @@
 
 When ALL phases are complete, execute this protocol.
 
+**BR-based completion detection**: If `metadata.json` has `beads_epic_id`:
+
+```bash
+br epic status --json
+```
+
+Check if all children of the track epic are closed. If so, the track is complete. Falls back to plan.md checkpoint detection if no `beads_epic_id`.
+
 ---
 
 ## 8.1: Mark Track Complete
@@ -107,8 +115,16 @@ Options:
 
 ## 8.4: Final Commit
 
+**BR sync**: If `beads_epic_id` exists, close the epic and sync:
+
+```bash
+br epic close-eligible --json
+br sync --flush-only
+```
+
 ```bash
 git add .maestro/
+[ -d ".beads" ] && git add .beads/
 git commit -m "chore(maestro): complete track {track_id}"
 ```
 

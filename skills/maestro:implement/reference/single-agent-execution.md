@@ -12,6 +12,14 @@ For each task in the queue, follow the workflow methodology from `workflow.md`.
 
 Edit `plan.md`: Change task checkbox from `[ ]` to `[~]`.
 
+**BR mirror**: If `metadata.json` has `beads_epic_id`, also claim the corresponding BR issue:
+
+```bash
+br update {issue_id} --claim --json
+```
+
+Look up `{issue_id}` from `metadata.json` `beads_issue_map` using the task key (e.g., `P1T1`).
+
 ### 6a.1.5: Load Skill Guidance for Task
 
 If the track has skills loaded (from Step 3.7 in SKILL.md):
@@ -118,6 +126,14 @@ If the task produced a non-obvious decision, constraint, or learning during impl
 ### 6a.9: Record Task SHA
 
 Edit `plan.md`: Change task marker from `[~]` to `[x] {sha}` (first 7 characters of commit hash).
+
+**BR mirror**: If `metadata.json` has `beads_epic_id`, also close the corresponding BR issue:
+
+```bash
+br close {issue_id} --reason "sha:{sha7} | tests pass | {evidence}" --suggest-next --json
+```
+
+Look up `{issue_id}` from `metadata.json` `beads_issue_map`. The `--suggest-next` flag returns newly unblocked issues.
 
 ```bash
 git add .maestro/tracks/{track_id}/plan.md

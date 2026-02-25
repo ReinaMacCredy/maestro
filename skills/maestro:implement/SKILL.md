@@ -51,10 +51,27 @@ Parse `$ARGUMENTS`:
 
 Edit `.maestro/tracks.md`: `[ ]` --> `[~]`. Update `metadata.json`: `"status": "in_progress"`.
 
+## Step 4.5: BR Bootstrap Check
+
+If `.beads/` does not exist and `br` is available:
+
+```bash
+[ -d ".beads" ] || br init --prefix maestro --json
+```
+
+If `br` is not installed, skip silently.
+
 ## Step 5: Build Task Queue
 
 Parse `plan.md`: identify phases (`## Phase N`), tasks (`### Task N.M`), sub-tasks (`- [ ] ...`).
 If `--resume`: skip tasks already marked `[x]`.
+
+**BR-enhanced path**: If `metadata.json` has `beads_epic_id`:
+- Use `bv -robot-plan -label "track:{epic_id}" -format json` to get dependency-respecting execution order
+- If `--resume`: use `br list --status open --label "phase:{N}" --json` to identify remaining work (skip closed issues)
+- Fall back to plan.md parsing if `bv` is unavailable or the command fails
+
+See `reference/br-integration.md` for full BR/BV usage patterns.
 
 ---
 

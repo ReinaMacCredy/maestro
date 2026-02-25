@@ -27,6 +27,8 @@ Create a task:
 
 Set dependencies between tasks so that task M is blocked by task M-1.
 
+**BR mirroring**: If `.beads/` exists and `metadata.json` has `beads_epic_id`, the orchestrator also mirrors task state to BR. Workers do NOT interact with `br` directly -- the orchestrator handles BR state changes after verifying worker output.
+
 ### 3. Spawn Workers
 
 Spawn 2-3 workers based on track size:
@@ -73,6 +75,8 @@ Spawn a quick-fix worker (spark) with the same workflow but without strict TDD r
 
 After spawning workers, periodically check the task list for available/completed work.
 
+**BR supplementary monitoring**: If `beads_epic_id` exists, use `br ready --parent {epic_id} --json` alongside `TaskList` to see which BR issues are unblocked. This supplements (does not replace) Agent Teams task monitoring.
+
 ### Verify Completed Tasks
 
 When a worker reports task completion:
@@ -80,6 +84,10 @@ When a worker reports task completion:
 2. Run the test suite
 3. If verification passes:
    - Update plan.md: mark `[x] {sha}`
+   - **BR mirror**: If `beads_epic_id` exists, also close the BR issue:
+     ```bash
+     br close {issue_id} --reason "sha:{sha7} | verified" --suggest-next --json
+     ```
    - Commit: `git add . && git commit`
 4. If verification fails:
    - Create a fix task

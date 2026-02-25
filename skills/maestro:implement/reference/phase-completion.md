@@ -4,6 +4,14 @@
 
 Execute this protocol when the last task in a phase is completed (marked `[x]`).
 
+**BR-based completion detection**: If `metadata.json` has `beads_epic_id`:
+
+```bash
+br list --status open --label "phase:{N}-{kebab}" --json
+```
+
+If the result is empty (no open issues for this phase), the phase is complete. Falls back to plan.md checkbox counting if no `beads_epic_id`.
+
 ## Steps
 
 ### 1. Test Coverage Check
