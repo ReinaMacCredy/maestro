@@ -89,5 +89,6 @@ Recommended workflow:
 - `/maestro:review` -- Verify implementation correctness
 - `/maestro:status` -- Check progress across all tracks
 - `/maestro:revert` -- **You are here.** Undo implementation if needed
+- `/maestro:note` -- Capture decisions and context to persistent notepad
 
 Revert is the safety valve for `/maestro:implement`. It undoes commits and resets plan state so you can re-implement with `/maestro:implement`. Use `/maestro:status` after reverting to confirm the track state is correct. Revert depends on atomic commits from implementation -- the cleaner the commit history, the more precise the revert.

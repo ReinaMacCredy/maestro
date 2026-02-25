@@ -52,6 +52,7 @@ Project context:
 - Tech stack: .maestro/context/tech-stack.md
 - Track spec: .maestro/tracks/{track_id}/spec.md
 - Style guides: .maestro/context/code_styleguides/ (if exists)
+- Priority context: .maestro/notepad.md (## Priority Context section, if exists)
 ```
 
 **For quick-fix tasks** (bugs, small changes):

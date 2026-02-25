@@ -112,5 +112,6 @@ Recommended workflow:
 - `/maestro:review` -- Verify implementation correctness
 - `/maestro:status` -- Check progress across all tracks
 - `/maestro:revert` -- Undo implementation if needed
+- `/maestro:note` -- Capture decisions and context to persistent notepad
 
 Setup is the entry point for all maestro workflows. All other commands depend on the context files it creates. Run this once per project, then use `/maestro:new-track` to start building.

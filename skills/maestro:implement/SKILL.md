@@ -45,6 +45,7 @@ Parse `$ARGUMENTS`:
 5. Read guidelines: `.maestro/context/guidelines.md` (if exists)
 6. Read code style guides: `.maestro/context/code_styleguides/` (if exists)
 7. Load skill guidance from `.maestro/tracks/{track_id}/metadata.json` `"skills"` array. For each skill, load its SKILL.md content. **Graceful degradation**: if missing/empty, proceed without.
+8. Read `.maestro/notepad.md` (if exists). Extract `## Priority Context` bullets. These are injected as constraints into task execution context. **Graceful degradation**: if missing or empty, skip.
 
 ## Step 4: Update Track Status
 
@@ -95,5 +96,6 @@ Recommended workflow:
 - `/maestro:review` -- Verify implementation correctness
 - `/maestro:status` -- Check progress across all tracks
 - `/maestro:revert` -- Undo implementation if needed
+- `/maestro:note` -- Capture decisions and context to persistent notepad
 
 Implementation consumes the `plan.md` created by `/maestro:new-track`. Each task produces atomic commits, which `/maestro:review` can analyze to verify correctness against the spec. Run `/maestro:status` to check progress mid-implementation, or `/maestro:revert` to undo if something goes wrong.

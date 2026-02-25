@@ -121,5 +121,6 @@ Recommended workflow:
 - `/maestro:review` -- Verify implementation correctness
 - `/maestro:status` -- **You are here.** Check progress across all tracks
 - `/maestro:revert` -- Undo implementation if needed
+- `/maestro:note` -- Capture decisions and context to persistent notepad
 
 Status is the observability layer across all maestro commands. It reads tracks created by `/maestro:new-track`, progress from `/maestro:implement`, and state changes from `/maestro:revert`. Use it anytime to orient yourself on what to do next.

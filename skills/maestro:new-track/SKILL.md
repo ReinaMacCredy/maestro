@@ -105,5 +105,6 @@ Recommended workflow:
 - `/maestro:review` -- Verify implementation correctness
 - `/maestro:status` -- Check progress across all tracks
 - `/maestro:revert` -- Undo implementation if needed
+- `/maestro:note` -- Capture decisions and context to persistent notepad
 
 A track created here produces `spec.md` and `plan.md` that `/maestro:implement` consumes. The spec also serves as the baseline for `/maestro:review` to validate against. Good specs lead to good implementations -- be thorough in the interview.

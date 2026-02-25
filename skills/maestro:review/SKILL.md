@@ -98,6 +98,7 @@ Recommended workflow:
 - `/maestro:review` -- **You are here.** Verify implementation correctness
 - `/maestro:status` -- Check progress across all tracks
 - `/maestro:revert` -- Undo implementation if needed
+- `/maestro:note` -- Capture decisions and context to persistent notepad
 
 Review works best after commits are made, as it analyzes git history to understand what was implemented. It compares the implementation against the spec from `/maestro:new-track` and the plan from `/maestro:implement`. If issues are found, use `/maestro:revert` to undo and re-implement, or apply fixes directly.
 

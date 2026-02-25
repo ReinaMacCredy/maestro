@@ -107,6 +107,14 @@ Summary: {what_and_why}" {commit_hash}
 
 If commit messages: include summary in the commit message body.
 
+### 6a.8.5: Capture Task Notes
+
+If the task produced a non-obvious decision, constraint, or learning during implementation:
+
+1. Append a bullet to `## Working Memory` in `.maestro/notepad.md`
+2. Format: `- [{date}] [{track_id}:{task_name}] {insight}`
+3. Only capture durable insights -- not routine status. Skip if nothing notable.
+
 ### 6a.9: Record Task SHA
 
 Edit `plan.md`: Change task marker from `[~]` to `[x] {sha}` (first 7 characters of commit hash).
