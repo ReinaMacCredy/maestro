@@ -6,20 +6,18 @@ argument-hint: "[<track-name>] [--team]"
 
 # Implement -- Task Execution Engine
 
-Execute tasks from a track's implementation plan, following the configured workflow methodology (TDD or ship-fast). Supports single-agent mode (default) and Agent Teams mode (`--team`).
+> This skill is CLI-agnostic. It works with Claude Code, Codex, Amp, or any AI coding assistant.
 
-**IMPORTANT: Every human-in-the-loop interaction mentioned in this workflow MUST be conducted using the AskUserQuestion tool. Do not ask questions via plain text output.**
+Execute tasks from a track's implementation plan, following the configured workflow methodology (TDD or ship-fast). Supports single-agent mode (default) and team mode (`--team`).
 
-**When using AskUserQuestion, immediately call the tool -- do not repeat the question in plain text before the tool call.**
-
-**CRITICAL: You must validate the success of every tool call. If any tool call fails, halt immediately, announce the failure, and await instructions.**
+Validate the result of every operation. If any step fails, halt and report the failure before continuing.
 
 ## Arguments
 
 `$ARGUMENTS`
 
 - `<track-name>`: Match track by name or ID substring. Optional -- auto-selects if only one track is pending.
-- `--team`: Enable Agent Teams mode with parallel workers (kraken/spark).
+- `--team`: Enable team mode with parallel workers (kraken/spark).
 - `--resume`: Skip already-completed tasks (marked `[x]`) and continue from next `[ ]` task.
 
 ---
@@ -46,35 +44,17 @@ Parse `$ARGUMENTS`:
    - Filter tracks with status `[ ]` (new) or `[~]` (in-progress)
    - 0 tracks --> error: "No pending tracks. Run `/maestro:new-track` to create one."
    - 1 track --> auto-select
-   - Multiple --> ask user:
-     ```
-     AskUserQuestion(
-       questions: [{
-         question: "Which track do you want to implement?",
-         header: "Track",
-         options: [
-           { label: "{track_1_description}", description: "ID: {track_1_id} | {task_count} tasks" },
-           { label: "{track_2_description}", description: "ID: {track_2_id} | {task_count} tasks" }
-         ],
-         multiSelect: false
-       }]
-     )
-     ```
+   - Multiple --> ask the user: "Which track do you want to implement?"
+     Options:
+     - **{track_1_description}** -- ID: {track_1_id} | {task_count} tasks
+     - **{track_2_description}** -- ID: {track_2_id} | {task_count} tasks
 
 4. **Confirm selection**:
-   ```
-   AskUserQuestion(
-     questions: [{
-       question: "Implement track '{description}'? ({task_count} tasks, {phase_count} phases)",
-       header: "Confirm",
-       options: [
-         { label: "Yes, start", description: "Begin implementation" },
-         { label: "Cancel", description: "Go back" }
-       ],
-       multiSelect: false
-     }]
-   )
-   ```
+
+   Ask the user: "Implement track '{description}'? ({task_count} tasks, {phase_count} phases)"
+   Options:
+   - **Yes, start** -- Begin implementation
+   - **Cancel** -- Go back
 
 ## Step 3: Load Context
 
@@ -221,19 +201,10 @@ See `reference/phase-completion.md` for details.
 3. **Manual verification**: Present step-by-step verification plan to user
 4. **User confirmation**: Wait for explicit approval
 
-```
-AskUserQuestion(
-  questions: [{
-    question: "Phase {N} complete. All tests pass. Have you verified the manual steps above?",
-    header: "Phase Done",
-    options: [
-      { label: "Verified, continue", description: "Proceed to next phase" },
-      { label: "Issue found", description: "I found a problem, let's fix it" }
-    ],
-    multiSelect: false
-  }]
-)
-```
+Ask the user: "Phase {N} complete. All tests pass. Have you verified the manual steps above?"
+Options:
+- **Verified, continue** -- Proceed to next phase
+- **Issue found** -- I found a problem, let's fix it
 
 If issue found: create a fix task, execute it, then re-verify.
 
@@ -245,45 +216,35 @@ See `reference/team-mode.md` for full protocol.
 
 ### Step 6b: Create Team
 
-```
-TeamCreate(
-  team_name: "implement-{track_id}",
-  description: "Implementing {track_description}"
-)
-```
+Create a worker team named "implement-{track_id}" (description: "Implementing {track_description}"). Use whatever team/delegation API your runtime provides.
 
 ### Step 7b: Create Tasks
 
 For each task in plan.md, create a task entry:
-```
-TaskCreate(
-  subject: "{task_name}",
-  description: "Phase {N}, Task {M}\n\n{task_description}\n\nSpec: {relevant_spec_section}\nWorkflow: {methodology}\nTrack: {track_id}",
-  activeForm: "Implementing {task_name}"
-)
-```
+- **Subject**: "{task_name}"
+- **Description**: Include phase number, task description, relevant spec section, workflow methodology, and track ID.
+- **Active form**: "Implementing {task_name}"
 
-Set up dependencies between tasks using `addBlockedBy`.
+Set up dependencies between tasks using blocked-by relationships.
 
 ### Step 8b: Spawn Workers
 
 Spawn 2-3 workers based on track size:
 
+Spawn a TDD worker (kraken) with the following prompt:
+
 ```
-Task(
-  subagent_type: "kraken",
-  name: "worker-1",
-  team_name: "implement-{track_id}",
-  prompt: "You are a TDD implementation worker. Check TaskList for available tasks. Claim one, implement following TDD (Red-Green-Refactor), then check for next task. Follow the project workflow in .maestro/context/workflow.md."
-)
+You are a TDD implementation worker. Check the task list for available tasks.
+Claim one, implement following TDD (Red-Green-Refactor), then check for next
+task. Follow the project workflow in .maestro/context/workflow.md.
 ```
 
-For quick fix tasks, use `spark` instead of `kraken`.
+For quick fix tasks, use a quick-fix worker (spark) instead of kraken.
 
 ### Step 9b: Monitor and Verify
 
 As an orchestrator in team mode:
-1. Monitor worker progress via TaskList
+1. Monitor worker progress via the task list
 2. After each task completion:
    - Read the changed files
    - Run tests to verify
@@ -296,11 +257,8 @@ As an orchestrator in team mode:
 Same Phase Completion Protocol as single-agent mode.
 
 After all tasks complete:
-```
-SendMessage(type: "shutdown_request", recipient: "worker-1")
-SendMessage(type: "shutdown_request", recipient: "worker-2")
-TeamDelete()
-```
+1. Request shutdown for each worker.
+2. Tear down the worker team.
 
 ---
 
@@ -330,20 +288,12 @@ Read the track spec and check if project docs need updating:
 
 **WARNING: Product guidelines should only be updated for strategic shifts. Most tracks should NOT trigger guidelines changes.**
 
-For each proposed change, show an embedded diff (before/after) in the question field:
-```
-AskUserQuestion(
-  questions: [{
-    question: "This track adds {capability}. Update product.md to include it?\n\nBEFORE:\n{existing_content_excerpt}\n\nAFTER:\n{proposed_content_excerpt}",
-    header: "Doc Sync",
-    options: [
-      { label: "Yes, update", description: "Add to project documentation" },
-      { label: "Skip", description: "Don't update documentation" }
-    ],
-    multiSelect: false
-  }]
-)
-```
+For each proposed change, show an embedded diff (before/after) in the question:
+
+Ask the user: "This track adds {capability}. Update product.md to include it?\n\nBEFORE:\n{existing_content_excerpt}\n\nAFTER:\n{proposed_content_excerpt}"
+Options:
+- **Yes, update** -- Add to project documentation
+- **Skip** -- Don't update documentation
 
 If approved, make the update and commit:
 ```bash
@@ -366,39 +316,23 @@ After all doc update decisions are made, output a final sync report:
 
 ### 8.3: Track Cleanup
 
-```
-AskUserQuestion(
-  questions: [{
-    question: "Track '{description}' is complete. What would you like to do with it?",
-    header: "Cleanup",
-    options: [
-      { label: "Review first", description: "Run /maestro:review before deciding" },
-      { label: "Archive", description: "Move to .maestro/archive/{track_id}/" },
-      { label: "Keep", description: "Leave in tracks/ for reference" },
-      { label: "Delete", description: "Permanently remove track files" }
-    ],
-    multiSelect: false
-  }]
-)
-```
+Ask the user: "Track '{description}' is complete. What would you like to do with it?"
+Options:
+- **Review first** -- Run /maestro:review before deciding
+- **Archive** -- Move to .maestro/archive/{track_id}/
+- **Keep** -- Leave in tracks/ for reference
+- **Delete** -- Permanently remove track files
 
 - **Review first**: Run `/maestro:review {track_id}` and return to this cleanup step afterward
 - **Archive**: `mkdir -p .maestro/archive && mv .maestro/tracks/{track_id} .maestro/archive/`
 - **Keep**: No action
-- **Delete**: First confirm with a second AskUserQuestion:
-  ```
-  AskUserQuestion(
-    questions: [{
-      question: "WARNING: This will permanently delete the track folder and all its contents. This action cannot be undone. Are you sure you want to delete track '{track_id}'?",
-      header: "Confirm Delete",
-      options: [
-        { label: "Yes, delete permanently", description: "Remove all track files" },
-        { label: "Cancel", description: "Go back to cleanup options" }
-      ],
-      multiSelect: false
-    }]
-  )
-  ```
+- **Delete**: First confirm with a second question:
+
+  Ask the user: "WARNING: This will permanently delete the track folder and all its contents. This action cannot be undone. Are you sure you want to delete track '{track_id}'?"
+  Options:
+  - **Yes, delete permanently** -- Remove all track files
+  - **Cancel** -- Go back to cleanup options
+
   If confirmed: `rm -rf .maestro/tracks/{track_id}`
   If cancelled: return to the cleanup options question.
 
