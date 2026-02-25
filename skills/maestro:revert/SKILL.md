@@ -1,5 +1,5 @@
 ---
-name: maestro:revert
+name: maestro-revert
 description: "Git-aware revert of track, phase, or individual task. Safely undoes implementation with plan state rollback."
 argument-hint: "<track> [--phase <N>] [--task <name>]"
 ---

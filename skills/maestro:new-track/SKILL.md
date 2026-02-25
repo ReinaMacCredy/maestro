@@ -1,5 +1,5 @@
 ---
-name: maestro:new-track
+name: maestro-new-track
 description: "Create a new feature/bug track with spec and implementation plan. Interactive interview generates requirements spec, then phased TDD plan. Use when starting work on a new feature, bug fix, or chore."
 argument-hint: "<track description>"
 ---

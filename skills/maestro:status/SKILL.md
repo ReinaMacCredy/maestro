@@ -1,5 +1,5 @@
 ---
-name: maestro:status
+name: maestro-status
 description: "Show track progress overview with phase/task completion stats, next actions, and blockers."
 ---
 

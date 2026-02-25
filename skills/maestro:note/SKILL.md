@@ -1,5 +1,5 @@
 ---
-name: maestro:note
+name: maestro-note
 description: "Capture decisions, constraints, and context to persistent notepad. Priority notes are injected into every session and implementation run."
 argument-hint: "<content> [--priority|--manual|--show|--prune|--clear <section>]"
 ---

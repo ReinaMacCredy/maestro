@@ -1,5 +1,5 @@
 ---
-name: maestro:implement
+name: maestro-implement
 description: "Execute track tasks following TDD workflow. Single-agent by default, --team for parallel Agent Teams, Sub Agent Parallels. Use when ready to implement a planned track."
 argument-hint: "[<track-name>] [--team]"
 ---
