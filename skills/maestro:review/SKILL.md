@@ -2,17 +2,15 @@
 name: maestro:review
 description: "Code review for a track against its spec and plan. Verifies implementation matches requirements, checks code quality and security."
 argument-hint: "[<track-name>] [--current]"
-allowed-tools: Read, Glob, Grep, Bash, AskUserQuestion
-disable-model-invocation: true
 ---
 
 # Review -- Track Code Review
 
+> This skill is CLI-agnostic. It works with Claude Code, Codex, Amp, or any AI coding assistant.
+
 Review the implementation of a track against its specification and plan. Verifies intent match, code quality, test coverage, and security.
 
-CRITICAL: You must validate the success of every tool call. If any tool call fails, halt immediately and report the failure before proceeding.
-
-When using AskUserQuestion, immediately call the tool -- do not repeat the question in plain text.
+Validate the result of every operation. If any step fails, halt and report the failure before continuing.
 
 ## Arguments
 
@@ -31,19 +29,10 @@ When using AskUserQuestion, immediately call the tool -- do not repeat the quest
 3. **If no args and tracks exist**: List completed and in-progress tracks, ask user
 4. **If no args and no tracks exist**: Fall back to arbitrary scope -- review uncommitted/staged changes via `git diff HEAD` (or `git diff --staged` for staged-only). Notify user: "No tracks found. Reviewing uncommitted changes."
 
-```
-AskUserQuestion(
-  questions: [{
-    question: "Which track would you like to review?",
-    header: "Review",
-    options: [
-      { label: "{track_1}", description: "{status} | {task_count} tasks" },
-      { label: "{track_2}", description: "{status} | {task_count} tasks" }
-    ],
-    multiSelect: false
-  }]
-)
-```
+Ask the user: "Which track would you like to review?"
+Options:
+- **{track_1}** -- {status} | {task_count} tasks
+- **{track_2}** -- {status} | {task_count} tasks
 
 ## Step 2: Load Track Context
 
@@ -78,19 +67,10 @@ git diff --staged
 
 If the diff is larger than 300 lines, ask the user before chunking:
 
-```
-AskUserQuestion(
-  questions: [{
-    question: "This diff is {N} lines. Use Iterative Review Mode (per-file review)?",
-    header: "Review Mode",
-    options: [
-      { label: "Yes", description: "Review each file separately for more focused feedback" },
-      { label: "No", description: "Review the full diff at once" }
-    ],
-    multiSelect: false
-  }]
-)
-```
+Ask the user: "This diff is {N} lines. Use Iterative Review Mode (per-file review)?"
+Options:
+- **Yes** -- Review each file separately for more focused feedback
+- **No** -- Review the full diff at once
 
 If Yes: chunk the diff by file and process each file in sequence, accumulating findings.
 
@@ -228,21 +208,12 @@ For each violation include a diff block:
 
 If the verdict is PASS WITH NOTES or NEEDS CHANGES:
 
-```
-AskUserQuestion(
-  questions: [{
-    question: "Apply auto-fixes for the suggested changes?",
-    header: "Auto-fix",
-    options: [
-      { label: "Yes, apply fixes", description: "Make the suggested changes automatically" },
-      { label: "No, manual only", description: "I'll handle fixes myself" },
-      { label: "Show me each fix", description: "Review and approve each fix individually" },
-      { label: "Complete Track (ignore warnings)", description: "Mark track complete without fixing warnings" }
-    ],
-    multiSelect: false
-  }]
-)
-```
+Ask the user: "Apply auto-fixes for the suggested changes?"
+Options:
+- **Yes, apply fixes** -- Make the suggested changes automatically
+- **No, manual only** -- I'll handle fixes myself
+- **Show me each fix** -- Review and approve each fix individually
+- **Complete Track (ignore warnings)** -- Mark track complete without fixing warnings
 
 If auto-fix: apply changes, run tests, commit:
 ```bash
@@ -266,21 +237,12 @@ Write this section to `.maestro/tracks/{track_id}/plan.md` appended after the ex
 
 After the review is complete (verdict delivered and any fixes applied), offer cleanup options:
 
-```
-AskUserQuestion(
-  questions: [{
-    question: "Review complete. What would you like to do with this track?",
-    header: "Track Cleanup",
-    options: [
-      { label: "Archive", description: "Move track to .maestro/archive/" },
-      { label: "Delete", description: "Remove track files entirely" },
-      { label: "Keep", description: "Leave track as-is for further work" },
-      { label: "Skip", description: "Do nothing" }
-    ],
-    multiSelect: false
-  }]
-)
-```
+Ask the user: "Review complete. What would you like to do with this track?"
+Options:
+- **Archive** -- Move track to .maestro/archive/
+- **Delete** -- Remove track files entirely
+- **Keep** -- Leave track as-is for further work
+- **Skip** -- Do nothing
 
 - **Archive**: Move `.maestro/tracks/{track_id}/` to `.maestro/archive/{track_id}/`
 - **Delete**: Remove `.maestro/tracks/{track_id}/` entirely
