@@ -1,6 +1,6 @@
 {
   "name": "maestro",
-  "version": "0.14.12",
+  "version": "0.14.13",
   "description": "AI agent workflow plugin for Claude Code. Interview-driven planning with Agent Teams execution.",
   "author": {
     "name": "Reina MacCredy"
