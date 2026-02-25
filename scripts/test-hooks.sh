@@ -7,7 +7,7 @@ set -euo pipefail
 SCRIPTS_DIR="$(cd "$(dirname "$0")/../.claude/scripts" && pwd)"
 PASS=0
 FAIL=0
-TOTAL=18
+TOTAL=21
 
 red() { printf '\033[0;31m%s\033[0m\n' "$1"; }
 green() { printf '\033[0;32m%s\033[0m\n' "$1"; }
@@ -367,6 +367,38 @@ else
   else
     fail "trace-logger.sh json content" "Invalid trace line: $line"
   fi
+fi
+
+# -------------------------------------------------------
+# Test 19: SKILL.md frontmatter includes --parallel in argument-hint
+# -------------------------------------------------------
+bold "Test 19: SKILL.md frontmatter includes --parallel in argument-hint"
+SKILL_FILE="$(cd "$(dirname "$0")/../skills/maestro:implement" && pwd)/SKILL.md"
+if grep -q '\-\-parallel' "$SKILL_FILE" 2>/dev/null; then
+  pass "SKILL.md contains --parallel in content"
+else
+  fail "SKILL.md --parallel" "Missing --parallel reference in $SKILL_FILE"
+fi
+
+# -------------------------------------------------------
+# Test 20: reference/parallel-mode.md exists and is non-empty
+# -------------------------------------------------------
+bold "Test 20: reference/parallel-mode.md exists and is non-empty"
+PARALLEL_REF="$(cd "$(dirname "$0")/../skills/maestro:implement/reference" && pwd)/parallel-mode.md"
+if [[ -s "$PARALLEL_REF" ]]; then
+  pass "reference/parallel-mode.md exists and is non-empty"
+else
+  fail "parallel-mode.md" "File missing or empty: $PARALLEL_REF"
+fi
+
+# -------------------------------------------------------
+# Test 21: SKILL.md argument-hint frontmatter includes --parallel
+# -------------------------------------------------------
+bold "Test 21: SKILL.md argument-hint frontmatter includes --parallel"
+if head -5 "$SKILL_FILE" | grep -q 'argument-hint:.*--parallel'; then
+  pass "SKILL.md argument-hint frontmatter includes --parallel"
+else
+  fail "SKILL.md argument-hint" "Missing --parallel in argument-hint frontmatter"
 fi
 
 # -------------------------------------------------------

@@ -29,9 +29,9 @@
 ## Phase 2: Testing & Validation
 
 ### Task 2.1: Update test-hooks.sh with parallel mode test cases
-- [ ] Add test case verifying --parallel flag is recognized in SKILL.md
-- [ ] Add test case verifying reference/parallel-mode.md exists and is non-empty
-- [ ] Add test case verifying SKILL.md frontmatter includes --parallel in argument-hint
+- [x] Add test case verifying --parallel flag is recognized in SKILL.md
+- [x] Add test case verifying reference/parallel-mode.md exists and is non-empty
+- [x] Add test case verifying SKILL.md frontmatter includes --parallel in argument-hint
 
 ### Task 2.2: Shell syntax and version sync validation
 - [ ] Run `bash -n scripts/*.sh` to verify no syntax errors
