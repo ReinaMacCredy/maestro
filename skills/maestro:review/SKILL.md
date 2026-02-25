@@ -8,8 +8,6 @@ disable-model-invocation: true
 
 # Review -- Track Code Review
 
-> Adapted from [Conductor](https://github.com/gemini-cli-extensions/conductor) for Claude Code.
-
 Review the implementation of a track against its specification and plan. Verifies intent match, code quality, test coverage, and security.
 
 CRITICAL: You must validate the success of every tool call. If any tool call fails, halt immediately and report the failure before proceeding.

@@ -1,14 +1,12 @@
 ---
 name: maestro:setup
-description: "Scaffolds project context (product, tech stack, coding guidelines, product guidelines, workflow) and initializes track registry. Use for first-time project onboarding to Conductor-style development."
+description: "Scaffolds project context (product, tech stack, coding guidelines, product guidelines, workflow) and initializes track registry. Use for first-time project onboarding."
 argument-hint: "[--reset]"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, AskUserQuestion
 disable-model-invocation: true
 ---
 
 # Maestro Setup -- Project Context Scaffolding
-
-> Adapted from [Conductor](https://github.com/gemini-cli-extensions/conductor) for Claude Code.
 
 Interview the user to create persistent project context documents. These files are referenced by all `maestro:*` skills for deeper project understanding.
 

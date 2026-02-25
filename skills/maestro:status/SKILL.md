@@ -7,8 +7,6 @@ disable-model-invocation: true
 
 # Status -- Track Progress Overview
 
-> Adapted from [Conductor](https://github.com/gemini-cli-extensions/conductor) for Claude Code.
-
 Display a high-level overview of all tracks and detailed progress for in-progress tracks.
 
 CRITICAL: You must validate the success of every tool call. If any tool call fails, halt immediately.

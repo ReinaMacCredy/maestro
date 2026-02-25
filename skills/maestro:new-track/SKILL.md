@@ -8,8 +8,6 @@ disable-model-invocation: true
 
 # New Track -- Specification & Planning
 
-> Adapted from [Conductor](https://github.com/gemini-cli-extensions/conductor) for Claude Code.
-
 CRITICAL: You must validate the success of every tool call. If any tool call fails, halt immediately, announce the failure, and await instructions.
 
 When using AskUserQuestion, immediately call the tool -- do not repeat the question in plain text before the tool call.

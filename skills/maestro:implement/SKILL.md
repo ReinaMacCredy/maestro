@@ -6,8 +6,6 @@ argument-hint: "[<track-name>] [--team]"
 
 # Implement -- Task Execution Engine
 
-> Adapted from [Conductor](https://github.com/gemini-cli-extensions/conductor) for Claude Code.
-
 Execute tasks from a track's implementation plan, following the configured workflow methodology (TDD or ship-fast). Supports single-agent mode (default) and Agent Teams mode (`--team`).
 
 **IMPORTANT: Every human-in-the-loop interaction mentioned in this workflow MUST be conducted using the AskUserQuestion tool. Do not ask questions via plain text output.**

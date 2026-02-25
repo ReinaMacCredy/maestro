@@ -8,8 +8,6 @@ disable-model-invocation: true
 
 # Revert -- Git-Aware Undo
 
-> Adapted from [Conductor](https://github.com/gemini-cli-extensions/conductor) for Claude Code.
-
 Safely revert implementation work at track, phase, or task granularity. Updates plan state to reflect the rollback.
 
 CRITICAL: You must validate the success of every tool call. If any tool call fails, halt immediately and report the error.
