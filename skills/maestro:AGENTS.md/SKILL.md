@@ -1,5 +1,5 @@
 ---
-name: maestro:AGENTS.md
+name: init
 description: "Generates AGENTS.md file using the WHAT/WHY/HOW framework. Explores the codebase and produces a minimal (<100 line) context file with progressive disclosure."
 argument-hint: "[--reset]"
 ---
