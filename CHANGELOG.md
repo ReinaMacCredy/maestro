@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.10] - 2026-02-25
+
+
+### Added
+
+
+- Add core abstraction layer and runtime adapters
+- Add canonical 9-step workflow specification
+- Add 6 Conductor-adapted skills for track-based development
+
+
+### Changed
+
+
+- Rewrite protocol docs to CLI-agnostic
+- Rewrite SKILL.md as thin dispatcher
+- Rewrite to CLI-agnostic prose
+- Rewrite phase-completion.md to CLI-agnostic prose
+- Rewrite team-mode.md to CLI-agnostic prose
+- Rewrite to CLI-agnostic prose
+- Rewrite to CLI-agnostic prose
+- Rewrite to CLI-agnostic prose
+- Rewrite to CLI-agnostic prose
+- Rewrite to CLI-agnostic prose
+
 ## [0.14.9] - 2026-02-23
 
 
@@ -57,7 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 - Extract prompts to reference/ folders and slim SKILL.md files
-- Consolidate shared protocols into reusable internal references
+- Consolidate shared protocols into .claude/lib/
 
 
 ### Documentation
@@ -723,4 +748,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 - Add conductor structure and handoff mechanism
+
 
