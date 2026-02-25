@@ -2,85 +2,61 @@
 
 ## Overview
 
-Team mode uses Agent Teams to parallelize task execution. You (the skill runner) become the orchestrator. Workers (kraken/spark) handle implementation.
+Team mode uses agent delegation to parallelize task execution. You (the skill runner) become the orchestrator. Workers (kraken/spark) handle implementation.
 
 ## Prerequisites
 
-Agent Teams must be enabled:
-```json
-// ~/.claude/settings.json
-{ "env": { "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1" } }
-```
+Your runtime must support agent delegation (teams, subagents, or equivalent).
+- Claude Code: enable Agent Teams via `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`
+- Other runtimes: use your native delegation mechanism
 
 ## Setup
 
 ### 1. Create Team
 
-```
-TeamCreate(
-  team_name: "implement-{track_id}",
-  description: "Implementing track: {track_description}"
-)
-```
+Create a worker team named "implement-{track_id}" (description: "Implementing track: {track_description}"). Use whatever team/delegation API your runtime provides.
 
 ### 2. Create Tasks from Plan
 
 Parse `plan.md` and create one task per implementation item:
 
-```
-TaskCreate(
-  subject: "Phase {N} Task {M}: {task_title}",
-  description: "## Context\n{task_description}\n\n## Spec Reference\n{relevant_spec_section}\n\n## Workflow\n{tdd_or_shipfast}\n\n## Files\n{expected_files_to_modify}\n\n## Acceptance\n- Tests pass\n- Coverage meets threshold\n- No lint errors",
-  activeForm: "Implementing {task_title}"
-)
-```
+Create a task:
+- **Subject**: "Phase {N} Task {M}: {task_title}"
+- **Description**: Include context, spec reference, workflow (TDD or ship-fast), expected files to modify, and acceptance criteria (tests pass, coverage meets threshold, no lint errors).
+- **Active form**: "Implementing {task_title}"
 
-Set dependencies:
-```
-TaskUpdate(taskId: "{task_M_id}", addBlockedBy: ["{task_M-1_id}"])
-```
+Set dependencies between tasks so that task M is blocked by task M-1.
 
 ### 3. Spawn Workers
 
 Spawn 2-3 workers based on track size:
 
 **For TDD tasks** (features, new code):
+
+Spawn a TDD worker (kraken) with the following prompt:
+
 ```
-Task(
-  subagent_type: "kraken",
-  name: "tdd-worker-{n}",
-  team_name: "implement-{track_id}",
-  model: "sonnet",
-  prompt: "You are a TDD implementation worker on team 'implement-{track_id}'.
+You are a TDD implementation worker on team 'implement-{track_id}'.
 
 Your workflow:
-1. Check TaskList for available tasks (unblocked, no owner)
-2. Claim one with TaskUpdate (set owner to your name, status to in_progress)
+1. Check the task list for available tasks (unblocked, no owner)
+2. Claim one by setting owner to your name and status to in_progress
 3. Read the task description for context
 4. Follow TDD: write failing tests, implement to pass, refactor
-5. Mark task completed with TaskUpdate
-6. Check TaskList for next available task
-7. If no tasks available, notify the orchestrator via SendMessage
+5. Mark task completed
+6. Check the task list for next available task
+7. If no tasks available, notify the orchestrator
 
 Project context:
 - Workflow: .maestro/context/workflow.md
 - Tech stack: .maestro/context/tech-stack.md
 - Track spec: .maestro/tracks/{track_id}/spec.md
-- Style guides: .maestro/context/code_styleguides/ (if exists)"
-)
+- Style guides: .maestro/context/code_styleguides/ (if exists)
 ```
 
 **For quick-fix tasks** (bugs, small changes):
-```
-Task(
-  subagent_type: "spark",
-  name: "fix-worker-{n}",
-  team_name: "implement-{track_id}",
-  model: "sonnet",
-  prompt: "You are a quick-fix worker on team 'implement-{track_id}'.
-{same workflow as above but without strict TDD requirement}"
-)
-```
+
+Spawn a quick-fix worker (spark) with the same workflow but without strict TDD requirement.
 
 ### 4. Worker Sizing
 
@@ -94,10 +70,7 @@ Task(
 
 ### Monitor Progress
 
-After spawning workers, periodically check:
-```
-TaskList()
-```
+After spawning workers, periodically check the task list for available/completed work.
 
 ### Verify Completed Tasks
 
@@ -117,7 +90,7 @@ If a worker reports being blocked:
 1. Read their message
 2. Assess the blocker
 3. Either:
-   - Provide guidance via SendMessage
+   - Provide guidance via a message to the worker
    - Reassign to a different worker
    - Handle the blocker yourself (but NEVER edit code directly as orchestrator)
 
@@ -125,12 +98,9 @@ If a worker reports being blocked:
 
 After all tasks complete:
 
-```
-SendMessage(type: "shutdown_request", recipient: "tdd-worker-1")
-SendMessage(type: "shutdown_request", recipient: "tdd-worker-2")
-// Wait for shutdown confirmations
-TeamDelete()
-```
+1. Request shutdown for each worker (e.g., "tdd-worker-1", "tdd-worker-2").
+2. Wait for shutdown confirmations.
+3. Tear down the worker team.
 
 ## Anti-patterns
 
