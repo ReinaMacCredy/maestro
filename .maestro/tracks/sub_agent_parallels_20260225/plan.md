@@ -13,11 +13,11 @@
 - [x] Document the wave execution loop: analyze --> spawn --> wait --> verify --> merge --> commit --> next wave
 
 ### Task 1.2: Update SKILL.md with --parallel mode
-- [ ] Add `--parallel` to the argument-hint in frontmatter
-- [ ] Add `--parallel` to the Arguments section with description
-- [ ] Add Step 1 mode detection for `--parallel` flag
-- [ ] Add new section between single-agent and team mode: `## Parallel Mode (--parallel)` referencing `reference/parallel-mode.md`
-- [ ] Update the description frontmatter to reflect the three modes
+- [x] Add `--parallel` to the argument-hint in frontmatter
+- [x] Add `--parallel` to the Arguments section with description
+- [x] Add Step 1 mode detection for `--parallel` flag
+- [x] Add new section between single-agent and team mode: `## Parallel Mode (--parallel)` referencing `reference/parallel-mode.md`
+- [x] Update the description frontmatter to reflect the three modes
 
 ### Phase 1 Completion Verification
 - [ ] Verify reference/parallel-mode.md is self-contained and covers all spec requirements

@@ -1,14 +1,14 @@
 ---
 name: maestro-implement
 description: "Execute track tasks following TDD workflow. Single-agent by default, --team for parallel Agent Teams, Sub Agent Parallels. Use when ready to implement a planned track."
-argument-hint: "[<track-name>] [--team]"
+argument-hint: "[<track-name>] [--team] [--parallel]"
 ---
 
 # Implement -- Task Execution Engine
 
 > This skill is CLI-agnostic. It works with Claude Code, Codex, Amp, or any AI coding assistant.
 
-Execute tasks from a track's implementation plan, following the configured workflow methodology (TDD or ship-fast). Supports single-agent mode (default) and team mode (`--team`).
+Execute tasks from a track's implementation plan, following the configured workflow methodology (TDD or ship-fast). Supports single-agent mode (default), team mode (`--team`), and parallel mode (`--parallel`).
 
 Validate the result of every operation. If any step fails, halt and report the failure before continuing.
 
@@ -18,6 +18,7 @@ Validate the result of every operation. If any step fails, halt and report the f
 
 - `<track-name>`: Match track by name or ID substring. Optional -- auto-selects if only one track is pending.
 - `--team`: Enable team mode with parallel workers (kraken/spark).
+- `--parallel`: Enable parallel mode with Task sub-agents in isolated worktrees.
 - `--resume`: Skip already-completed tasks (marked `[x]`) and continue from next `[ ]` task.
 
 ---
@@ -26,6 +27,7 @@ Validate the result of every operation. If any step fails, halt and report the f
 
 Parse `$ARGUMENTS`:
 - If contains `--team` --> team mode (see `reference/team-mode.md`)
+- If contains `--parallel` --> parallel mode (see `reference/parallel-mode.md`)
 - Otherwise --> single-agent mode (default)
 - If contains `--resume` --> set resume flag
 
@@ -87,6 +89,12 @@ See `reference/tdd-workflow.md` for TDD best practices and anti-patterns.
 
 When the last task in a phase completes, run the Phase Completion Protocol.
 See `reference/phase-completion.md` for details (coverage check, full test run, manual verification, user confirmation).
+
+---
+
+## Parallel Mode (--parallel)
+
+See `reference/parallel-mode.md` for full protocol: plan analysis for task independence, wave-based sub-agent spawning with worktree isolation, result verification and merge, conflict detection, and sequential fallback.
 
 ---
 
