@@ -218,6 +218,19 @@ if [[ -f "$notepad_file" ]]; then
   fi
 fi
 
+# 6. Beads workspace detection
+beads_dir="$PROJECT_DIR/.beads"
+if [[ -d "$beads_dir" ]] && command -v br &> /dev/null; then
+  br_stats=$(br stats --json 2>/dev/null) || br_stats=""
+  if [[ -n "$br_stats" ]]; then
+    open_count=$(echo "$br_stats" | jq -r '.open // .total_open // 0' 2>/dev/null) || open_count="?"
+    closed_count=$(echo "$br_stats" | jq -r '.closed // .total_closed // 0' 2>/dev/null) || closed_count="?"
+    context_parts+=("Beads: $open_count open, $closed_count closed (.beads/ active)")
+  else
+    context_parts+=("Beads: .beads/ exists (br stats unavailable)")
+  fi
+fi
+
 # If only the static commands line exists and nothing else was found, exit silently
 if [[ ${#context_parts[@]} -le 1 ]]; then
   # Check if skills/plans/wisdom dirs even exist with content

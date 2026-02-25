@@ -140,6 +140,10 @@ Treat worker completion as a claim, not a guarantee.
 - Require fresh evidence (commands run within the last 5 minutes)
 - Confirm no pending tasks remain for the current scope
 
+## BR State Tracking
+
+When `.beads/` exists and the track's `metadata.json` has `beads_epic_id`, the orchestrator also manages plan-level state via `br` commands (using the Bash tool). Workers do NOT interact with `br` directly -- the orchestrator handles all BR state changes after verifying worker output. See `skills/maestro:implement/reference/br-integration.md` for patterns.
+
 ## Remember Tags
 
 Workers can persist non-obvious findings during execution using:
