@@ -1,0 +1,128 @@
+# Single-Agent Execution Protocol
+
+## Task Execution Loop
+
+For each task in the queue, follow the workflow methodology from `workflow.md`.
+
+---
+
+## TDD Methodology
+
+### 6a.1: Mark Task In Progress
+
+Edit `plan.md`: Change task checkbox from `[ ]` to `[~]`.
+
+### 6a.1.5: Load Skill Guidance for Task
+
+If the track has skills loaded (from Step 3.7 in SKILL.md):
+
+1. Check if any loaded skill is relevant to the current task by comparing the task title and sub-task descriptions against each skill's description
+2. If relevant skills are found, prepend the following to the task's working context:
+
+```
+## SKILL GUIDANCE
+
+### {skill-name}
+{Full SKILL.md content after frontmatter}
+
+### {another-skill}
+{Content}
+```
+
+3. If no skills are relevant to this specific task, omit the section entirely
+4. This guidance should inform the Red-Green-Refactor cycle -- for example, a Swift testing skill would guide how tests are structured in the Red phase
+
+**Graceful degradation**: If no skills were loaded for this track, skip this step entirely.
+
+### 6a.2: Red Phase -- Write Failing Tests
+
+1. Identify what to test based on task description and spec
+2. Create test file if it doesn't exist
+3. Write tests defining expected behavior
+4. Run test suite:
+   ```bash
+   CI=true {test_command}
+   ```
+5. Confirm tests FAIL (this validates they're meaningful)
+6. If tests pass unexpectedly: the behavior already exists. Skip to refactor or mark complete.
+7. Do NOT proceed to implementation until tests fail.
+
+### 6a.3: Green Phase -- Implement to Pass
+
+1. Write minimum code to make tests pass
+2. Run test suite:
+   ```bash
+   CI=true {test_command}
+   ```
+3. Confirm tests PASS
+4. If tests fail: debug and fix. Max 3 attempts. If still failing, ask user for help.
+
+### 6a.4: Refactor (Optional)
+
+1. Review the implementation for code smells
+2. Improve readability and structure
+3. Run tests again to confirm still passing
+4. Skip if implementation is already clean
+
+### 6a.5: Verify Coverage
+
+If `workflow.md` specifies a coverage threshold:
+```bash
+CI=true {coverage_command}
+```
+
+Check that new code meets the threshold. If not, add more tests.
+
+### 6a.6: Check Tech Stack Compliance
+
+If the task introduced a new library or technology not in `tech-stack.md`:
+1. STOP implementation
+2. Inform user: "This task uses {new_tech} which isn't in the tech stack."
+3. Ask: Add to tech stack or find an alternative?
+4. If approved: update `.maestro/context/tech-stack.md`
+5. Resume
+
+### 6a.7: Commit Code Changes
+
+```bash
+git add {changed_files}
+git commit -m "{type}({scope}): {description}"
+```
+
+Commit message format:
+- `feat(scope):` for new features
+- `fix(scope):` for bug fixes
+- `refactor(scope):` for refactoring
+- `test(scope):` for test-only changes
+
+### 6a.8: Attach Summary (if configured)
+
+If `workflow.md` specifies git notes:
+```bash
+git notes add -m "Task: {task_name}
+Phase: {phase_number}
+Changes: {files_changed}
+Summary: {what_and_why}" {commit_hash}
+```
+
+If commit messages: include summary in the commit message body.
+
+### 6a.9: Record Task SHA
+
+Edit `plan.md`: Change task marker from `[~]` to `[x] {sha}` (first 7 characters of commit hash).
+
+```bash
+git add .maestro/tracks/{track_id}/plan.md
+git commit -m "maestro(plan): mark task '{task_name}' complete"
+```
+
+---
+
+## Ship-fast Methodology
+
+Same flow but reordered:
+1. Mark in progress
+2. Implement the feature/fix
+3. Write tests covering the implementation
+4. Run tests, verify passing
+5. Commit, attach summary, record SHA
