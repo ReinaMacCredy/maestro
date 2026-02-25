@@ -1,25 +1,21 @@
 ---
 name: maestro:status
 description: "Show track progress overview with phase/task completion stats, next actions, and blockers."
-allowed-tools: Read, Glob, Grep, Bash
-disable-model-invocation: true
 ---
 
 # Status -- Track Progress Overview
 
+> This skill is CLI-agnostic. It works with Claude Code, Codex, Amp, or any AI coding assistant.
+
 Display a high-level overview of all tracks and detailed progress for in-progress tracks.
 
-CRITICAL: You must validate the success of every tool call. If any tool call fails, halt immediately.
-
-When using AskUserQuestion, immediately call the tool -- do not repeat the question in plain text.
+Validate the result of every operation. If any step fails, halt and report the failure before continuing.
 
 ---
 
 ## Step 1: Read Tracks Registry
 
-```
-Read(file_path: ".maestro/tracks.md")
-```
+Read `.maestro/tracks.md`.
 
 If file doesn't exist:
 - Report: "No tracks found. Run `/maestro:setup` then `/maestro:new-track` to get started."
@@ -41,10 +37,7 @@ Count by marker:
 
 For each track marked `[~]`:
 
-1. Read its `plan.md`:
-   ```
-   Read(file_path: ".maestro/tracks/{track_id}/plan.md")
-   ```
+1. Read `.maestro/tracks/{track_id}/plan.md`.
 
 2. Parse phases and tasks:
    - Count `[ ]` (pending), `[~]` (in-progress), `[x]` (complete) per phase
