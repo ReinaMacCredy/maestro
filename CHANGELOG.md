@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Remove redundant test coverage check from phase completion
 - Make doc sync opt-in, mention in track completion summary
 - Remove duplicate question bank from spec-template.md
+- Reduce token waste across maestro skill family (~960 tokens)
 
 
 ### Documentation
@@ -24,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Update changelog
 - Remove the "Research Background" section from AGENTS.md.
+- Update changelog
 
 ## [0.14.13] - 2026-02-25
 
