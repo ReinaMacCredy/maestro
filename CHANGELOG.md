@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+
+### Changed
+
+
+- Remove `index.md` generation, refine plan state commitment, and introduce tiered context loading.
+- Inline skill detection, remove 52-line reference file and SKILL.md loading
+- Gate BR operations behind one-time br_enabled check
+- Remove redundant test coverage check from phase completion
+- Make doc sync opt-in, mention in track completion summary
+- Remove duplicate question bank from spec-template.md
+
 ## [0.14.13] - 2026-02-25
 
 
