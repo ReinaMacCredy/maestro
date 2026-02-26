@@ -55,43 +55,7 @@ If the completed track had skills in `metadata.json` (non-empty `"skills"` array
 
 No user confirmation required -- this is automatic on successful track completion.
 
-## 8.2: Documentation Sync
-
-Read the track spec and check if project docs need updating:
-
-1. **Product definition** (`product.md`): Does this track add a new capability?
-2. **Tech stack** (`tech-stack.md`): Were new technologies introduced?
-3. **Guidelines** (`guidelines.md`): Did this track establish new patterns?
-
-**WARNING: Product guidelines should only be updated for strategic shifts. Most tracks should NOT trigger guidelines changes.**
-
-For each proposed change, show an embedded diff (before/after) in the question:
-
-Ask the user: "This track adds {capability}. Update product.md to include it?\n\nBEFORE:\n{existing_content_excerpt}\n\nAFTER:\n{proposed_content_excerpt}"
-Options:
-- **Yes, update** -- Add to project documentation
-- **Skip** -- Don't update documentation
-
-If approved, make the update and commit:
-```bash
-git add .maestro/context/{file}
-git commit -m "docs(maestro): synchronize docs for track '{track_description}'"
-```
-
-After all doc update decisions are made, output a final sync report:
-```
-## Documentation Sync Report
-
-**Track**: {track_description}
-
-| File | Action | Reason |
-|------|--------|--------|
-| product.md | Updated | Added {capability} |
-| tech-stack.md | Skipped | No new technologies |
-| guidelines.md | Skipped | No strategic shift |
-```
-
-## 8.3: Track Cleanup
+## 8.2: Track Cleanup
 
 Ask the user: "Track '{description}' is complete. What would you like to do with it?"
 Options:
@@ -113,7 +77,7 @@ Options:
   If confirmed: `rm -rf .maestro/tracks/{track_id}`
   If cancelled: return to the cleanup options question.
 
-## 8.4: Final Commit
+## 8.3: Final Commit
 
 **BR sync**: If `beads_epic_id` exists, close the epic and sync:
 
@@ -128,7 +92,7 @@ git add .maestro/
 git commit -m "chore(maestro): complete track {track_id}"
 ```
 
-## 8.5: Summary
+## 8.4: Summary
 
 ```
 ## Track Complete
@@ -137,4 +101,5 @@ git commit -m "chore(maestro): complete track {track_id}"
 
 **Commits**: {list of task SHAs}
 **Next**: `/maestro:review {track_id}` to verify, or `/maestro:new-track` for next feature.
+To update project docs: `/maestro:review {track_id}`
 ```

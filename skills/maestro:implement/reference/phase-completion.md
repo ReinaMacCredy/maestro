@@ -108,13 +108,3 @@ CHECKPOINT_SHA=$(git rev-parse --short HEAD)
 
 Store in metadata or plan.md for future reference (used by `/maestro:revert` for phase-level reverts).
 
-## Documentation Sync (Track Completion Only)
-
-After the FINAL phase completes, check if project docs need updating:
-
-1. Read the track's `spec.md`
-2. Compare against current `product.md`, `tech-stack.md`, `guidelines.md`
-3. If the track introduces new capabilities, technologies, or patterns:
-   - Propose specific doc updates
-   - Get user approval for each
-   - Apply and commit

@@ -105,7 +105,7 @@ See `reference/team-mode.md` for full protocol: team creation, task delegation, 
 ## Step 8: Track Completion
 
 When ALL phases are complete, run the Track Completion Protocol.
-See `reference/track-completion.md` for details (mark complete, skill effectiveness recording, doc sync, cleanup, final commit, summary).
+See `reference/track-completion.md` for details (mark complete, skill effectiveness recording, cleanup, final commit, summary).
 
 ---
 
