@@ -47,17 +47,6 @@ Apply these filters to every line:
 6. **HOW gets priority**: Build/test/run commands are the most impactful content. Be thorough and precise.
 7. **Omit empty sections**: If a section has no content, remove it entirely.
 
-## Research Background
-
-These rules come from evaluations of agent context files (arXiv: 2602.11988, HumanLayer blog):
-
-- Auto-generated context files **reduce** success rates ~3% while increasing cost 20%+. Human-written files improve completion only ~4%. Quality matters more than quantity.
-- Codebase overviews and directory listings do not help agents navigate faster.
-- Tools mentioned in AGENTS.md get used **160x more often** than unmentioned ones. The HOW section is the highest-leverage category.
-- Instruction-following decays with rule count. Every line must earn its place.
-- LLMs bias toward instructions at the peripheries of the prompt (beginning and end).
-- Never send an LLM to do a linter's job -- use deterministic tools.
-- LLMs are in-context learners -- if code follows patterns, agents follow them without being told.
 
 ## Progressive Disclosure Files
 
