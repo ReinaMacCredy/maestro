@@ -116,10 +116,10 @@ Phase {N}, Task {M}: {task_title}
 {list of sub-tasks from plan.md}
 
 ## Context
-- Track spec: {spec.md content or path}
-- Workflow methodology: {TDD or ship-fast from workflow.md}
-- Tech stack: {tech-stack.md content or path}
-- Guidelines: {guidelines.md content or path}
+- Track spec: Read `.maestro/tracks/{track_id}/spec.md`
+- Workflow methodology: Read `.maestro/context/workflow.md`
+- Tech stack: Read `.maestro/context/tech-stack.md`
+- Guidelines: Read `.maestro/context/guidelines.md` (if exists)
 
 ## Instructions
 Follow the {TDD/ship-fast} methodology:

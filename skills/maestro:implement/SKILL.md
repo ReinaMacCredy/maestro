@@ -40,10 +40,17 @@ Parse `$ARGUMENTS`:
 
 ## Step 3: Load Context
 
+Load context in tiers to minimize upfront token cost:
+
+### Essential (load immediately)
 1. Read track plan: `.maestro/tracks/{track_id}/plan.md`
 2. Read track spec: `.maestro/tracks/{track_id}/spec.md`
+
+### Deferred (load at first task start)
 3. Read workflow config: `.maestro/context/workflow.md`
 4. Read tech stack: `.maestro/context/tech-stack.md`
+
+### On-demand (load only if relevant to current task)
 5. Read guidelines: `.maestro/context/guidelines.md` (if exists)
 6. Read code style guides: `.maestro/context/code_styleguides/` (if exists)
 7. Load skill guidance from `.maestro/tracks/{track_id}/metadata.json` `"skills"` array. For each skill, load its SKILL.md content. **Graceful degradation**: if missing/empty, proceed without.

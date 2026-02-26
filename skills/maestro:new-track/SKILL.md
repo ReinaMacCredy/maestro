@@ -77,8 +77,7 @@ Present full draft for approval. Max 3 revision loops. Write to `.maestro/tracks
 ## Step 9: Generate Implementation Plan
 
 Read context: `workflow.md`, `tech-stack.md`, `guidelines.md`.
-Use `reference/plan-template.md` for structure.
-See `reference/interview-questions.md` for plan rules and TDD injection.
+Use `reference/plan-template.md` for structure and rules.
 
 Present full plan for approval. Max 3 revision loops. Write to `.maestro/tracks/{track_id}/plan.md`.
 
@@ -101,9 +100,9 @@ Summary:
 
 If `br` is not installed or sync fails, skip -- the track works without BR integration.
 
-## Step 10-12: Write Metadata, Index, and Registry
+## Step 10-12: Write Metadata and Registry
 
-Write `metadata.json`, `index.md`, update `tracks.md`.
+Write `metadata.json`, update `tracks.md`.
 See `reference/metadata-and-registry.md` for all schemas, templates, commit message, and summary format.
 
 ## Step 13: Commit

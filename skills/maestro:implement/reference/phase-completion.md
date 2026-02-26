@@ -14,6 +14,20 @@ If the result is empty (no open issues for this phase), the phase is complete. F
 
 ## Steps
 
+### 0. Commit Plan State
+
+Stage and commit all accumulated plan.md state changes from this phase:
+
+```bash
+git add .maestro/tracks/{track_id}/plan.md
+git commit -m "maestro(plan): mark phase {N} tasks complete"
+```
+
+**BR mirror**: If `metadata.json` has `beads_epic_id`:
+```bash
+br sync --flush-only
+```
+
 ### 1. Test Coverage Check
 
 Determine the scope of changes since the phase started:

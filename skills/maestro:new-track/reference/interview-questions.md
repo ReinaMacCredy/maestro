@@ -62,39 +62,9 @@ Options:
 
 ---
 
-## Spec Draft Template
+## Spec Draft
 
-```markdown
-# Specification: {track description}
-
-## Overview
-{one-paragraph summary}
-
-## Type
-{feature | bug | chore}
-
-## Requirements
-
-### Functional Requirements
-{from Q1}
-
-### User Interaction
-{from Q2}
-
-### Non-Functional Requirements
-{from Q3}
-
-## Edge Cases & Error Handling
-{from Q4 or inferred}
-
-## Out of Scope
-{explicitly list what this track does NOT cover}
-
-## Acceptance Criteria
-- [ ] {criterion 1}
-- [ ] {criterion 2}
-- [ ] {criterion 3}
-```
+Compose the spec from interview answers using `reference/spec-template.md` for structure.
 
 ## Spec Approval Loop
 
@@ -118,24 +88,7 @@ Read project context for informed planning:
 - `.maestro/context/tech-stack.md`
 - `.maestro/context/guidelines.md`
 
-Use the plan template from `reference/plan-template.md`.
-
-### Plan Rules
-
-1. **Phases** group related tasks into logical milestones (1-4 phases typical)
-2. **Tasks** are atomic work items completable in one session
-3. **Sub-tasks** are granular steps within a task
-4. **TDD injection**: If workflow.md specifies TDD, every implementation task gets:
-   - `Write failing tests for {task}` (Red)
-   - `Implement {task} to pass tests` (Green)
-   - `Refactor {task}` (optional cleanup)
-5. **Phase Completion Verification**: Every phase ends with a verification block containing:
-   - Test coverage check
-   - Test suite execution
-   - Manual verification steps
-   - `- [ ] Maestro - User Manual Verification '{Phase Name}' (Protocol in workflow.md)`
-6. **All items** get `[ ]` checkboxes for progress tracking
-7. Tasks MUST be ordered by dependency (no forward references)
+Use `reference/plan-template.md` for structure and rules (TDD injection, phase verification, sizing, dependencies).
 
 Present the full plan for approval by embedding the entire plan content directly in the question field (same pattern as spec approval). Max 3 revision loops.
 

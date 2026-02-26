@@ -12,6 +12,8 @@ For each task in the queue, follow the workflow methodology from `workflow.md`.
 
 Edit `plan.md`: Change task checkbox from `[ ]` to `[~]`.
 
+**Deferred context**: If deferred context (workflow.md, tech-stack.md) has not been loaded yet, load it now before executing the first task.
+
 **BR mirror**: If `metadata.json` has `beads_epic_id`, also claim the corresponding BR issue:
 
 ```bash
@@ -19,28 +21,6 @@ br update {issue_id} --claim --json
 ```
 
 Look up `{issue_id}` from `metadata.json` `beads_issue_map` using the task key (e.g., `P1T1`).
-
-### 6a.1.5: Load Skill Guidance for Task
-
-If the track has skills loaded (from Step 3.7 in SKILL.md):
-
-1. Check if any loaded skill is relevant to the current task by comparing the task title and sub-task descriptions against each skill's description
-2. If relevant skills are found, prepend the following to the task's working context:
-
-```
-## SKILL GUIDANCE
-
-### {skill-name}
-{Full SKILL.md content after frontmatter}
-
-### {another-skill}
-{Content}
-```
-
-3. If no skills are relevant to this specific task, omit the section entirely
-4. This guidance should inform the Red-Green-Refactor cycle -- for example, a Swift testing skill would guide how tests are structured in the Red phase
-
-**Graceful degradation**: If no skills were loaded for this track, skip this step entirely.
 
 ### 6a.2: Red Phase -- Write Failing Tests
 
@@ -125,7 +105,7 @@ If the task produced a non-obvious decision, constraint, or learning during impl
 
 ### 6a.9: Record Task SHA
 
-Edit `plan.md`: Change task marker from `[~]` to `[x] {sha}` (first 7 characters of commit hash).
+Edit `plan.md`: Change task marker from `[~]` to `[x] {sha}` (first 7 characters of commit hash). Do NOT commit plan.md here -- plan state changes are batched and committed at phase completion.
 
 **BR mirror**: If `metadata.json` has `beads_epic_id`, also close the corresponding BR issue:
 
@@ -134,11 +114,6 @@ br close {issue_id} --reason "sha:{sha7} | tests pass | {evidence}" --suggest-ne
 ```
 
 Look up `{issue_id}` from `metadata.json` `beads_issue_map`. The `--suggest-next` flag returns newly unblocked issues.
-
-```bash
-git add .maestro/tracks/{track_id}/plan.md
-git commit -m "maestro(plan): mark task '{task_name}' complete"
-```
 
 ---
 
