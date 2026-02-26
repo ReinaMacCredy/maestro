@@ -14,13 +14,7 @@ Edit `plan.md`: Change task checkbox from `[ ]` to `[~]`.
 
 **Deferred context**: If deferred context (workflow.md, tech-stack.md) has not been loaded yet, load it now before executing the first task.
 
-**BR mirror**: If `metadata.json` has `beads_epic_id`, also claim the corresponding BR issue:
-
-```bash
-br update {issue_id} --claim --json
-```
-
-Look up `{issue_id}` from `metadata.json` `beads_issue_map` using the task key (e.g., `P1T1`).
+If `br_enabled`: see BR Mirror Protocol below.
 
 ### 6a.2: Red Phase -- Write Failing Tests
 
@@ -107,13 +101,7 @@ If the task produced a non-obvious decision, constraint, or learning during impl
 
 Edit `plan.md`: Change task marker from `[~]` to `[x] {sha}` (first 7 characters of commit hash). Do NOT commit plan.md here -- plan state changes are batched and committed at phase completion.
 
-**BR mirror**: If `metadata.json` has `beads_epic_id`, also close the corresponding BR issue:
-
-```bash
-br close {issue_id} --reason "sha:{sha7} | tests pass | {evidence}" --suggest-next --json
-```
-
-Look up `{issue_id}` from `metadata.json` `beads_issue_map`. The `--suggest-next` flag returns newly unblocked issues.
+If `br_enabled`: see BR Mirror Protocol below.
 
 ---
 
@@ -125,3 +113,29 @@ Same flow but reordered:
 3. Write tests covering the implementation
 4. Run tests, verify passing
 5. Commit, attach summary, record SHA
+
+---
+
+## BR Mirror Protocol
+
+Only applies when `br_enabled` (set in Step 4.5 of SKILL.md).
+
+### On task start (6a.1)
+
+Claim the corresponding BR issue:
+
+```bash
+br update {issue_id} --claim --json
+```
+
+Look up `{issue_id}` from `metadata.json` `beads_issue_map` using the task key (e.g., `P1T1`).
+
+### On task complete (6a.9)
+
+Close the corresponding BR issue:
+
+```bash
+br close {issue_id} --reason "sha:{sha7} | tests pass | {evidence}" --suggest-next --json
+```
+
+Look up `{issue_id}` from `metadata.json` `beads_issue_map`. The `--suggest-next` flag returns newly unblocked issues.

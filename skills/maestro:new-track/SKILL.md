@@ -87,17 +87,7 @@ Scan the runtime's installed skill list. Record skills whose description matches
 
 ## Step 9.7: Plan-to-BR Sync
 
-If `.beads/` exists and `br` is available, sync the plan to BR issues for structured task tracking.
-See `reference/plan-to-br-sync.md` (in the `maestro:implement` skill) for the full protocol.
-
-Summary:
-1. Create an epic issue for the track
-2. Create one BR issue per task with `--parent {epic_id}`, labels, and dependencies
-3. Validate with `br dep cycles --json`
-4. Store `beads_epic_id` and `beads_issue_map` in `metadata.json`
-5. Run `br sync --flush-only` and stage `.beads/`
-
-If `br` is not installed or sync fails, skip -- the track works without BR integration.
+If `.beads/` directory exists AND `command -v br` succeeds: run plan-to-BR sync per `reference/plan-to-br-sync.md` (in the `maestro:implement` skill). Otherwise skip entirely.
 
 ## Step 10-12: Write Metadata and Registry
 
