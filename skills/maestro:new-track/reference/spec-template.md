@@ -43,25 +43,3 @@
 - [ ] {Criterion 3}
 ```
 
-## Question Bank by Type
-
-### Feature Questions
-| # | Question | Purpose |
-|---|----------|---------|
-| 1 | What should this feature do? Core behavior and outcomes. | Functional requirements |
-| 2 | How will users interact with it? | Interaction design |
-| 3 | Any constraints? (performance, security, compatibility) | Non-functional requirements |
-| 4 | Known edge cases or error scenarios? | Robustness |
-
-### Bug Questions
-| # | Question | Purpose |
-|---|----------|---------|
-| 1 | What is happening? Steps to reproduce. | Observed behavior |
-| 2 | What should happen instead? | Expected behavior |
-| 3 | How critical? Affected users/flows? | Impact assessment |
-
-### Chore Questions
-| # | Question | Purpose |
-|---|----------|---------|
-| 1 | What needs to change and why? | Scope definition |
-| 2 | Backward compatibility requirements? | Constraints |
