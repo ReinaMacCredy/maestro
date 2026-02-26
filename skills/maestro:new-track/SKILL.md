@@ -83,8 +83,7 @@ Present full plan for approval. Max 3 revision loops. Write to `.maestro/tracks/
 
 ## Step 9.5: Detect Relevant Skills
 
-Match installed skills against track context for auto-loading during implementation.
-See `reference/skill-detection.md` for the full detection protocol (cache check, corpus build, matching, recording).
+Scan the runtime's installed skill list. Record skills whose description matches this track's domain/tech. Store names + relevance in metadata.json `skills` array. Skip if none match.
 
 ## Step 9.7: Plan-to-BR Sync
 

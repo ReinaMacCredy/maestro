@@ -53,7 +53,7 @@ Load context in tiers to minimize upfront token cost:
 ### On-demand (load only if relevant to current task)
 5. Read guidelines: `.maestro/context/guidelines.md` (if exists)
 6. Read code style guides: `.maestro/context/code_styleguides/` (if exists)
-7. Load skill guidance from `.maestro/tracks/{track_id}/metadata.json` `"skills"` array. For each skill, load its SKILL.md content. **Graceful degradation**: if missing/empty, proceed without.
+7. Note matched skills from `.maestro/tracks/{track_id}/metadata.json` `"skills"` array. Reference their guidance when relevant to current task (skill descriptions are already in runtime context). **Graceful degradation**: if missing/empty, proceed without.
 8. Read `.maestro/notepad.md` (if exists). Extract `## Priority Context` bullets. These are injected as constraints into task execution context. **Graceful degradation**: if missing or empty, skip.
 
 ## Step 4: Update Track Status
