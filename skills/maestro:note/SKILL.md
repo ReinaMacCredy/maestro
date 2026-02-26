@@ -6,11 +6,7 @@ argument-hint: "<content> [--priority|--manual|--show|--prune|--clear <section>]
 
 # Note -- Persistent Working Memory
 
-> This skill is CLI-agnostic. It works with Claude Code, Codex, Amp, or any AI coding assistant.
-
 Manage notes that persist across sessions. Priority context is injected at session start and during `/maestro:implement` execution.
-
-Validate the result of every operation. If any step fails, halt and report the failure before continuing.
 
 ## Arguments
 

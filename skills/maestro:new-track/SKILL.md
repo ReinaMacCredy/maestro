@@ -6,10 +6,6 @@ argument-hint: "<track description>"
 
 # New Track -- Specification & Planning
 
-> This skill is CLI-agnostic. It works with Claude Code, Codex, Amp, or any AI coding assistant.
-
-Validate the result of every operation. If any step fails, halt and report the failure before continuing.
-
 Create a new development track with a requirements specification and phased implementation plan. Every feature, bug fix, or chore gets its own track.
 
 ## Arguments
@@ -40,13 +36,7 @@ Scan `.maestro/tracks/*` directories. Warn if any starts with the same short nam
 
 ## Step 4.5: BR Bootstrap Check
 
-Ensure the beads workspace exists for task tracking integration:
-
-```bash
-[ -d ".beads" ] || br init --prefix maestro --json
-```
-
-If `br` is not installed, skip silently -- beads integration is optional.
+If `.beads/` does not exist and `br` is available: `br init --prefix maestro --json`. Skip silently if `br` is not installed.
 
 ## Step 5: Create Track Directory
 

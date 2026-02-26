@@ -6,11 +6,7 @@ argument-hint: "<track> [--phase <N>] [--task <name>]"
 
 # Revert -- Git-Aware Undo
 
-> This skill is CLI-agnostic. It works with Claude Code, Codex, Amp, or any AI coding assistant.
-
 Safely revert implementation work at track, phase, or task granularity. Updates plan state to reflect the rollback.
-
-Validate the result of every operation. If any step fails, halt and report the failure before continuing.
 
 ## Arguments
 
@@ -44,13 +40,7 @@ Match track argument against IDs and descriptions in `.maestro/tracks.md`. If no
 
 ## Step 3: Resolve Commit SHAs
 
-**BR-enhanced path**: If `metadata.json` has `beads_epic_id`:
-- Use `br list --status closed --parent {epic_id} --all --json` to get closed issues
-- Parse `close_reason` field for SHAs (format: `sha:{7char}`)
-- Scope to phase/task using labels if `--phase` or `--task` specified
-- Falls back to plan.md parsing if BR command fails
-
-**Legacy path**: Extract implementation SHAs, plan-update commits, and track creation commit (for track-level).
+If `metadata.json` has `beads_epic_id`: use `br list --status closed --parent {epic_id} --all --json` and parse `close_reason` for SHAs (`sha:{7char}`), scoped by labels for `--phase`/`--task`. Otherwise: extract SHAs from plan.md.
 See `reference/git-operations.md` for full SHA resolution protocol (steps 3a-3c).
 
 ## Step 4: Git Reconciliation
@@ -78,11 +68,7 @@ See `reference/git-operations.md` for execution protocol (step 7).
 Reset plan markers, update registry status, run test suite.
 See `reference/git-operations.md` for details (steps 8-10).
 
-**BR mirror**: If `metadata.json` has `beads_epic_id`, also reopen the BR issues for each reverted task:
-
-```bash
-br update {issue_id} --status open --json
-```
+If `metadata.json` has `beads_epic_id`, also reopen BR issues: `br update {issue_id} --status open --json`.
 
 ## Step 11: Summary
 

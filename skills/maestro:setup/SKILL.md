@@ -6,11 +6,7 @@ argument-hint: "[--reset]"
 
 # Maestro Setup -- Project Context Scaffolding
 
-> This skill is CLI-agnostic. It works with Claude Code, Codex, Amp, or any AI coding assistant.
-
 Interview the user to create persistent project context documents. These files are referenced by all `maestro:*` skills for deeper project understanding.
-
-Validate the result of every operation. If any step fails, halt and report the failure before continuing.
 
 ## Arguments
 
@@ -63,19 +59,7 @@ mkdir -p .maestro/context
 
 ### 5a: Bootstrap Beads Workspace
 
-If `.beads/` does not exist, initialize it for task tracking integration:
-
-```bash
-[ -d ".beads" ] || br init --prefix maestro --json
-```
-
-Validate the workspace:
-
-```bash
-br doctor --json
-```
-
-If `br` is not installed, skip silently -- beads integration is optional.
+If `.beads/` does not exist and `br` is available: `br init --prefix maestro --json && br doctor --json`. Skip silently if `br` is not installed.
 
 ## Steps 6-10: Interview & File Generation
 

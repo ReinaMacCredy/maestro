@@ -6,11 +6,7 @@ argument-hint: "[<track-name>] [--team] [--parallel]"
 
 # Implement -- Task Execution Engine
 
-> This skill is CLI-agnostic. It works with Claude Code, Codex, Amp, or any AI coding assistant.
-
 Execute tasks from a track's implementation plan, following the configured workflow methodology (TDD or ship-fast). Supports single-agent mode (default), team mode (`--team`), and parallel mode (`--parallel`).
-
-Validate the result of every operation. If any step fails, halt and report the failure before continuing.
 
 ## Arguments
 

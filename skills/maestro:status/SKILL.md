@@ -5,11 +5,7 @@ description: "Show track progress overview with phase/task completion stats, nex
 
 # Status -- Track Progress Overview
 
-> This skill is CLI-agnostic. It works with Claude Code, Codex, Amp, or any AI coding assistant.
-
 Display a high-level overview of all tracks and detailed progress for in-progress tracks.
-
-Validate the result of every operation. If any step fails, halt and report the failure before continuing.
 
 ---
 
@@ -39,14 +35,9 @@ For each track marked `[~]`:
 
 1. Read `.maestro/tracks/{track_id}/metadata.json` and `.maestro/tracks/{track_id}/plan.md`.
 
-2. **BR-enhanced path**: If `metadata.json` has `beads_epic_id`:
-   - Use `br epic status --json` for overall progress stats (open/closed/total)
-   - Use `br list --status open --label "phase:{N}-{kebab}" --json` for per-phase open counts
-   - Use `bv -robot-insights -format json` for graph health (cycles, bottlenecks, stale issues)
-   - Use `bv -robot-next -format json` for the top recommended next action
-   - Falls back to plan.md parsing if any BR/BV command fails
+2. If `metadata.json` has `beads_epic_id`: use `br` commands with `--json` for state tracking. Otherwise: parse plan.md checkboxes.
 
-3. **Legacy path** (no `beads_epic_id`): Parse phases and tasks from plan.md:
+3. Parse phases and tasks from plan.md:
    - Count `[ ]` (pending), `[~]` (in-progress), `[x]` (complete) per phase
    - Calculate overall completion percentage
 
@@ -65,12 +56,7 @@ Using the data collected, compute a qualitative status:
 - **On Track** -- active tracks exist and no blockers detected
 - **No Active Work** -- zero tracks marked `[~]`
 
-**BR health check**: If any track has `beads_epic_id`, also check `bv -robot-insights -format json` for:
-- Dependency cycles (critical blocker)
-- Stale issues (warning)
-- Bottleneck nodes (informational)
-
-Include health signals in the report under a "Health" subsection when available.
+If any track has `beads_epic_id`, include `bv -robot-insights -format json` health signals (cycles, stale issues, bottlenecks) in the report.
 
 ## Step 5: Display Report
 

@@ -6,11 +6,7 @@ argument-hint: "[--reset]"
 
 # AGENTS.md -- Context File Generator
 
-> This skill is CLI-agnostic. It works with Claude Code, Codex, Amp, or any AI coding assistant.
-
 Generate a minimal, high-impact `AGENTS.md` context file for this repository using the WHAT/WHY/HOW framework. See `reference/AGENTS.md` for the template, rules, and progressive disclosure specs.
-
-Validate the result of every operation. If any step fails, halt and report the failure before continuing.
 
 ## Arguments
 
@@ -60,6 +56,7 @@ Regardless of whether maestro context exists, explore the codebase to discover o
 5. **Tooling**: Detect non-obvious tool choices (bun vs npm, uv vs pip, pnpm vs yarn, custom wrappers).
 6. **Linter/formatter configs**: Check for `.eslintrc*`, `prettier*`, `biome.json`, `ruff.toml`, `.rubocop.yml`, `clippy.toml`, `.editorconfig`. Note what they enforce (used by template rules to avoid duplication).
 7. **Architecture signals**: Monorepo structure (`packages/`, `apps/`, `crates/`, `services/`), database configs, API patterns.
+8. **Issue tracking**: Check for `.beads/config.yaml`. If present, note `br` (beads_rust) as the project's issue tracking tool.
 
 The agent decides what to read based on what it finds. This is exploration, not a rigid checklist -- adapt to the project.
 
