@@ -61,24 +61,19 @@ For ship-fast methodology, implementation tasks get:
 
 Every phase ends with a verification meta-task:
 
-1. **Test coverage check**
-   - Determine phase scope via git diff from previous checkpoint
-   - For each new code file, verify a test file exists
-   - Run coverage tool if available
-
-2. **Automated test execution**
+1. **Automated test execution**
    - Announce exact command before running (e.g., `CI=true npm test`)
    - Run and report results
    - Max 2 fix attempts on failure; if still failing, halt and ask user
 
-3. **Manual verification plan**
+2. **Manual verification plan**
    - Generate step-by-step verification instructions
    - Include commands and expected outcomes
    - Frontend: start dev server, test UI interactions
    - Backend: verify API endpoints with curl/httpie
    - CLI: run commands with expected output
 
-4. **User confirmation**
+3. **User confirmation**
    - Wait for explicit user approval
    - Record checkpoint commit SHA
 

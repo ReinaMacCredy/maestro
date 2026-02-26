@@ -28,30 +28,7 @@ git commit -m "maestro(plan): mark phase {N} tasks complete"
 br sync --flush-only
 ```
 
-### 1. Test Coverage Check
-
-Determine the scope of changes since the phase started:
-
-```bash
-# Find the first commit of this phase (from plan.md SHA markers)
-git diff --name-only {phase_start_sha}..HEAD
-```
-
-For each changed source file:
-- Check if a corresponding test file exists
-- If not: create a test file with basic tests
-
-Run coverage:
-```bash
-CI=true {coverage_command}
-```
-
-Compare against threshold from `workflow.md`. If below threshold:
-- Identify uncovered lines/functions
-- Write additional tests to improve coverage
-- Re-run coverage to confirm improvement
-
-### 2. Automated Test Execution
+### 1. Automated Test Execution
 
 Run the full test suite:
 ```bash
@@ -71,7 +48,7 @@ Options:
 - **Skip this check** -- Continue despite test failures (not recommended)
 - **Revert phase** -- Undo all changes in this phase
 
-### 3. Manual Verification Plan
+### 2. Manual Verification Plan
 
 Generate step-by-step verification instructions based on what the phase implemented:
 
@@ -106,7 +83,7 @@ Generate step-by-step verification instructions based on what the phase implemen
 2. Verify no regressions in dependent code: {dependent_test_command}
 ```
 
-### 4. User Confirmation
+### 3. User Confirmation
 
 Present the verification plan and wait for approval:
 
@@ -121,7 +98,7 @@ Options:
 3. Execute the fix task
 4. Re-run this verification protocol
 
-### 5. Record Checkpoint
+### 4. Record Checkpoint
 
 After user approval:
 ```bash
