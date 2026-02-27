@@ -1,6 +1,6 @@
-# Step 13: Pre-Implementation Readiness Gate
+# Step 15: Pre-Implementation Readiness Gate
 
-**Progress: Step 13 of 14** -- Next: Metadata & Commit
+**Progress: Step 15 of 16** -- Next: Metadata & Commit
 
 ## Goal
 Validate that the spec and plan are aligned and complete before committing. Quick automated pass/fail check -- not a separate workflow.
@@ -77,4 +77,4 @@ Validate that the spec and plan are aligned and complete before committing. Quic
 - [x] Proceeding past gaps without user acknowledgment
 
 ## Next Step
-Read and follow `reference/steps/step-14-commit.md`.
+Read and follow `reference/steps/step-16-commit.md`.

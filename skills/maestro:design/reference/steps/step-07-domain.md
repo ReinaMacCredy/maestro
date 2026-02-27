@@ -1,6 +1,6 @@
 # Step 7: Domain & Scoping
 
-**Progress: Step 7 of 14** -- Next: Functional Requirements Synthesis
+**Progress: Step 7 of 16** -- Next: Functional Requirements Synthesis
 
 ## Goal
 Define domain-specific requirements (compliance, regulatory, industry-specific) and finalize MVP scope boundaries. Identify risks specific to the classified domain.

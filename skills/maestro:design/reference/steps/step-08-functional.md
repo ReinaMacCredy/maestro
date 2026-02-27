@@ -1,6 +1,6 @@
 # Step 8: Functional Requirements Synthesis
 
-**Progress: Step 8 of 14** -- Next: Non-Functional Requirements
+**Progress: Step 8 of 16** -- Next: Non-Functional Requirements
 
 ## Goal
 Synthesize functional requirements from ALL prior discovery (vision, journeys, domain). Group by capability area. Each FR must be implementation-agnostic and testable. Typical range: 10-40 FRs.

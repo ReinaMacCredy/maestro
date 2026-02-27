@@ -1,6 +1,6 @@
 # Step 12: Implementation Plan with Traceability
 
-**Progress: Step 12 of 14** -- Next: Readiness Gate
+**Progress: Step 12 of 16** -- Next: Skill Detection
 
 ## Goal
 Generate the implementation plan using enriched template with FR traceability. Each task references which FRs it addresses. Append Requirements Coverage Matrix. Present for approval.
@@ -100,4 +100,4 @@ Generate the implementation plan using enriched template with FR traceability. E
 - [x] Writing plan to disk before user approval
 
 ## Next Step
-Read and follow `reference/steps/step-13-readiness.md`.
+Read and follow `reference/steps/step-13-skills.md`.

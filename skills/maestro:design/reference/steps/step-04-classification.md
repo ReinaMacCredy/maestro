@@ -1,6 +1,6 @@
 # Step 4: Project Classification
 
-**Progress: Step 4 of 14** -- Next: Vision & Success Criteria
+**Progress: Step 4 of 16** -- Next: Vision & Success Criteria
 
 ## Goal
 Classify the project type, domain, and complexity level through collaborative discovery. This classification shapes which later steps are activated and how deep discovery goes.

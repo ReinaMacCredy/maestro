@@ -1,6 +1,6 @@
 # Step 9: Non-Functional Requirements
 
-**Progress: Step 9 of 14** -- Next: Spec Draft & Approval
+**Progress: Step 9 of 16** -- Next: Spec Draft & Approval
 
 ## Goal
 Define measurable non-functional requirements: performance, security, scalability, compatibility, and compliance. Format: "[System] shall [metric] [condition]".

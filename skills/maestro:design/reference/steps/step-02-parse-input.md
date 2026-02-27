@@ -1,6 +1,6 @@
 # Step 2: Parse Input & Generate Track ID
 
-**Progress: Step 2 of 14** -- Next: Create Directory
+**Progress: Step 2 of 16** -- Next: Create Directory
 
 ## Goal
 Extract track description and generate a unique track identifier.

@@ -70,7 +70,7 @@ Append to `.maestro/tracks.md`:
 
 ```bash
 git add .maestro/tracks/{track_id} .maestro/tracks.md
-git commit -m "chore(maestro:new-track): add track {track_id}"
+git commit -m "chore(maestro:design): add track {track_id}"
 ```
 
 ## Summary Output
@@ -87,6 +87,8 @@ git commit -m "chore(maestro:new-track): add track {track_id}"
 **Files**:
 - `.maestro/tracks/{track_id}/spec.md`
 - `.maestro/tracks/{track_id}/plan.md`
+- `.maestro/tracks/{track_id}/metadata.json`
+- `.maestro/tracks/{track_id}/index.md`
 
 **Next**: `/maestro:implement {track_id}`
 ```

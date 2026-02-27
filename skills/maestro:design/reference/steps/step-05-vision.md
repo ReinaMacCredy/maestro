@@ -1,6 +1,6 @@
 # Step 5: Vision & Success Criteria
 
-**Progress: Step 5 of 14** -- Next: User Journey Mapping
+**Progress: Step 5 of 16** -- Next: User Journey Mapping
 
 ## Goal
 Define the product vision, success criteria (user/business/technical), and negotiate MVP/Growth/Vision scope. Push for measurability in every criterion.

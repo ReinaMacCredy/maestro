@@ -1,6 +1,6 @@
-# Step 14: Metadata, Registry, Commit & Summary
+# Step 16: Metadata, Registry, Commit & Summary
 
-**Progress: Step 14 of 14** -- Complete
+**Progress: Step 16 of 16** -- Complete
 
 ## Goal
 Write metadata, update registry, commit all track files, and display summary.
@@ -20,7 +20,7 @@ Write metadata, update registry, commit all track files, and display summary.
    - track_id, type, status ("new"), description
    - created_at and updated_at (ISO 8601)
    - phases and tasks counts (from plan.md)
-   - skills: [] (or detected skills if applicable)
+   - skills: [] (or detected skills from step 13)
 
    Write to `.maestro/tracks/{track_id}/metadata.json`.
 
@@ -39,6 +39,8 @@ Write metadata, update registry, commit all track files, and display summary.
 5. **Commit**
    ```bash
    git add .maestro/tracks/{track_id} .maestro/tracks.md
+   # Include beads state if BR sync was performed
+   [ -d ".beads" ] && git add .beads/
    git commit -m "chore(maestro:design): add track {track_id}"
    ```
 

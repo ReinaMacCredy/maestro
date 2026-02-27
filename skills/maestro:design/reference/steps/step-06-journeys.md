@@ -1,6 +1,6 @@
 # Step 6: User Journey Mapping
 
-**Progress: Step 6 of 14** -- Next: Domain & Scoping
+**Progress: Step 6 of 16** -- Next: Domain & Scoping
 
 ## Goal
 Map ALL user types that interact with the system using narrative story-based journeys. Minimum 3 journeys. Extract capability hints that feed into functional requirements (step 8).

@@ -1,6 +1,6 @@
 # Step 1: Validate Prerequisites
 
-**Progress: Step 1 of 14** -- Next: Parse Input
+**Progress: Step 1 of 16** -- Next: Parse Input
 
 ## Goal
 Verify the project is set up for maestro tracks before proceeding.

@@ -80,17 +80,25 @@ Scan codebase for existing patterns relevant to this track. Feed into plan conte
 Generate plan with FR traceability and coverage matrix. Present for approval. Write plan.md.
 --> Read and follow `reference/steps/step-12-plan.md`
 
-### Step 13: Pre-Implementation Readiness Gate
-Validate FR coverage, AC coverage, dependency sanity, scope alignment. Pass/fail gate.
---> Read and follow `reference/steps/step-13-readiness.md`
+### Step 13: Detect Relevant Skills
+Scan runtime skill list for skills matching this track's domain/tech. Store matches in metadata.json.
+--> Read and follow `reference/steps/step-13-skills.md`
 
-### Step 14: Metadata, Registry, Commit & Summary
+### Step 14: Plan-to-BR Sync
+If Beads (BR) is available and initialized, sync plan into BR epics/issues. Skip if not available.
+--> Read and follow `reference/steps/step-14-br-sync.md`
+
+### Step 15: Pre-Implementation Readiness Gate
+Validate FR coverage, AC coverage, dependency sanity, scope alignment. Pass/fail gate.
+--> Read and follow `reference/steps/step-15-readiness.md`
+
+### Step 16: Metadata, Registry, Commit & Summary
 Write metadata.json, update tracks.md, commit, display summary.
---> Read and follow `reference/steps/step-14-commit.md`
+--> Read and follow `reference/steps/step-16-commit.md`
 
 ---
 
-## Relationship to Other Skills
+## Relationship to Other Commands
 
 - `/maestro:setup` -- Scaffold project context (run first)
 - `/maestro:new-track` -- Lightweight track creation (use for simple, well-understood features)
@@ -98,5 +106,7 @@ Write metadata.json, update tracks.md, commit, display summary.
 - `/maestro:implement` -- Execute the implementation plan
 - `/maestro:review` -- Verify implementation against spec
 - `/maestro:status` -- Check progress across all tracks
+- `/maestro:revert` -- Undo implementation if needed
+- `/maestro:note` -- Capture decisions and context to persistent notepad
 
 A track created here produces `spec.md` and `plan.md` that `/maestro:implement` consumes. The enriched spec serves as the baseline for `/maestro:review`. Deep specs lead to better implementations -- invest in the discovery.

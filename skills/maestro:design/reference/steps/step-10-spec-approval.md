@@ -1,6 +1,6 @@
 # Step 10: Spec Draft & Approval
 
-**Progress: Step 10 of 14** -- Next: Codebase Pattern Scan
+**Progress: Step 10 of 16** -- Next: Codebase Pattern Scan
 
 ## Goal
 Compose the complete specification from all discovery steps (4-9), present for approval, and write to disk.

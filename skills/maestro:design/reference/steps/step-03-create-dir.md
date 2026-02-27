@@ -1,6 +1,6 @@
 # Step 3: Create Track Directory
 
-**Progress: Step 3 of 14** -- Next: Project Classification
+**Progress: Step 3 of 16** -- Next: Project Classification
 
 ## Goal
 Create the track directory structure.
