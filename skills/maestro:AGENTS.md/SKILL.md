@@ -23,7 +23,7 @@ If `$ARGUMENTS` contains `--reset`:
 
 1. Check which `.maestro/context/` files were created by this skill (not by `maestro:setup`). The skill-created files use snake_case names like `building_the_project.md`, `running_tests.md`, `code_conventions.md`, `service_architecture.md`, `database_schema.md`, etc. The `maestro:setup` files use kebab-case: `product.md`, `tech-stack.md`, `guidelines.md`, `product-guidelines.md`, `workflow.md`, `index.md`.
 2. Delete the skill-created context files (preserve `maestro:setup` files).
-3. Delete `./AGENTS.md` if it exists.
+3. Delete `AGENTS.md` if it exists.
 4. Report what was deleted.
 5. Continue to Step 2 to regenerate everything from scratch.
 
@@ -52,11 +52,11 @@ Regardless of whether maestro context exists, explore the codebase to discover o
 1. **Project identity**: Read `README.md`, `package.json` / `pyproject.toml` / `Cargo.toml` / `go.mod` / `build.gradle` / `pom.xml` / `Gemfile` / `composer.json` (whichever exists).
 2. **Build and test commands**: Read the package manifest scripts section, `Makefile`, `justfile`, `Taskfile.yml`, CI config (`.github/workflows/*.yml`, `.gitlab-ci.yml`), `docker-compose.yml`.
 3. **Existing CLAUDE.md**: Read `CLAUDE.md` if it exists -- extract any rules worth preserving.
-4. **Existing AGENTS.md**: Read `./AGENTS.md` if it exists -- note what it covers before overwriting.
+4. **Existing AGENTS.md**: Read `AGENTS.md` if it exists -- note what it covers before overwriting.
 5. **Tooling**: Detect non-obvious tool choices (bun vs npm, uv vs pip, pnpm vs yarn, custom wrappers).
 6. **Linter/formatter configs**: Check for `.eslintrc*`, `prettier*`, `biome.json`, `ruff.toml`, `.rubocop.yml`, `clippy.toml`, `.editorconfig`. Note what they enforce (used by template rules to avoid duplication).
 7. **Architecture signals**: Monorepo structure (`packages/`, `apps/`, `crates/`, `services/`), database configs, API patterns.
-8. **Issue tracking**: Check for `.beads/config.yaml`. If present, note `br` (beads_rust) as the project's issue tracking tool.
+8. **Issue tracking**: Check for `.beads/` directory first. If it exists, the project uses Beads -- note `br` (beads_rust) as the issue tracking tool and skip checking for other issue trackers (GitHub Issues, Jira, Linear, etc.). Only probe for alternative issue trackers if `.beads/` is absent.
 
 The agent decides what to read based on what it finds. This is exploration, not a rigid checklist -- adapt to the project.
 
@@ -90,7 +90,7 @@ Use the progressive disclosure guidance from `reference/AGENTS.md` to create wel
    mkdir -p .maestro/context
    ```
 
-2. Write `./AGENTS.md` (overwrite if exists).
+2. Write `AGENTS.md` (overwrite if exists).
 
 3. Write each progressive disclosure file to `.maestro/context/`.
 
@@ -98,13 +98,13 @@ Use the progressive disclosure guidance from `reference/AGENTS.md` to create wel
    ```
    AGENTS.md generated.
 
-   - ./AGENTS.md ({line_count} lines)
+   - AGENTS.md ({line_count} lines)
    - .maestro/context/building_the_project.md
    - .maestro/context/running_tests.md
    {additional files as created}
 
    Next steps:
-   - Review ./AGENTS.md and edit manually for accuracy
+   - Review AGENTS.md and edit manually for accuracy
    - /maestro:AGENTS.md --reset  -- regenerate from scratch
    ```
 

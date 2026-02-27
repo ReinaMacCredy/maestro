@@ -100,6 +100,10 @@ Display summary of all generated files. See `reference/templates.md` for output 
 
 Remove `.maestro/setup_state.json` on successful completion.
 
+## Step 16: Auto-Generate AGENTS.md
+
+After the commit succeeds, check if `AGENTS.md` exists. If it does NOT exist, automatically invoke `/maestro:AGENTS.md` (no arguments, no user prompt). If `AGENTS.md` already exists, skip silently.
+
 ---
 
 ## Relationship to Other Commands
@@ -107,6 +111,7 @@ Remove `.maestro/setup_state.json` on successful completion.
 Recommended workflow:
 
 - `/maestro:setup` -- **You are here.** Scaffold project context (run first)
+- `/maestro:AGENTS.md` -- Generate AGENTS.md context file (offered at end of setup)
 - `/maestro:new-track` -- Create a feature/bug track with spec and plan
 - `/maestro:implement` -- Execute the implementation
 - `/maestro:review` -- Verify implementation correctness

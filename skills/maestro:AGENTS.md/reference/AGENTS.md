@@ -21,7 +21,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Tooling
 {non-obvious tool choices only: bun not npm, uv not pip, etc.}
-{if .beads/ detected: `br` (beads_rust) for issue tracking. Config in `.beads/config.yaml`.}
+{if .beads/ detected: `br` (beads_rust) for issue tracking, `bv` for task analysis. Config in `.beads/config.yaml`.}
 {omit this section entirely if all tooling is standard/obvious}
 
 ## Rules
