@@ -79,9 +79,9 @@ Scan the runtime's installed skill list. Record skills whose description matches
 
 If `.beads/` directory exists AND `command -v br` succeeds: run plan-to-BR sync per `reference/plan-to-br-sync.md` (in the `maestro:implement` skill). Otherwise skip entirely.
 
-## Step 10-12: Write Metadata and Registry
+## Step 10-12: Write Metadata, Index, and Registry
 
-Write `metadata.json`, update `tracks.md`.
+Write `metadata.json`, `index.md`, update `tracks.md`.
 See `reference/metadata-and-registry.md` for all schemas, templates, commit message, and summary format.
 
 ## Step 13: Commit
