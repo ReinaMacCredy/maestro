@@ -1,19 +1,19 @@
 ---
 name: init
-description: "Generates AGENTS.md file using the WHAT/WHY/HOW framework. Explores the codebase and produces a minimal (<100 line) context file with progressive disclosure."
+description: "Generates AGENTS.md and CLAUDE.md files using the WHAT/WHY/HOW framework. Explores the codebase and produces minimal (<100 line) context files with progressive disclosure."
 argument-hint: "[--reset]"
 ---
 
-# AGENTS.md -- Context File Generator
+# AGENTS.md + CLAUDE.md -- Context File Generator
 
-Generate a minimal, high-impact `AGENTS.md` context file for this repository using the WHAT/WHY/HOW framework. See `reference/AGENTS.md` for the template, rules, and progressive disclosure specs.
+Generate minimal, high-impact `AGENTS.md` and `CLAUDE.md` context files for this repository using the WHAT/WHY/HOW framework. Both files share identical content -- `CLAUDE.md` is the standard file Claude Code reads automatically, while `AGENTS.md` is the cross-agent convention. See `reference/AGENTS.md` for the template, rules, and progressive disclosure specs.
 
 ## Arguments
 
 `$ARGUMENTS`
 
-- `--reset`: Regenerate everything from scratch -- overwrite AGENTS.md and all context files created by this skill, then re-run the full exploration.
-- Default (no args): Generate AGENTS.md and context files. If AGENTS.md already exists, overwrite it directly.
+- `--reset`: Regenerate everything from scratch -- overwrite AGENTS.md, CLAUDE.md, and all context files created by this skill, then re-run the full exploration.
+- Default (no args): Generate AGENTS.md, CLAUDE.md, and context files. If either file already exists, overwrite it directly.
 
 ---
 
@@ -23,7 +23,7 @@ If `$ARGUMENTS` contains `--reset`:
 
 1. Check which `.maestro/context/` files were created by this skill (not by `maestro:setup`). The skill-created files use snake_case names like `building_the_project.md`, `running_tests.md`, `code_conventions.md`, `service_architecture.md`, `database_schema.md`, etc. The `maestro:setup` files use kebab-case: `product.md`, `tech-stack.md`, `guidelines.md`, `product-guidelines.md`, `workflow.md`, `index.md`.
 2. Delete the skill-created context files (preserve `maestro:setup` files).
-3. Delete `AGENTS.md` if it exists.
+3. Delete `AGENTS.md` and `CLAUDE.md` if they exist.
 4. Report what was deleted.
 5. Continue to Step 2 to regenerate everything from scratch.
 
@@ -92,19 +92,22 @@ Use the progressive disclosure guidance from `reference/AGENTS.md` to create wel
 
 2. Write `AGENTS.md` (overwrite if exists).
 
-3. Write each progressive disclosure file to `.maestro/context/`.
+3. Write `CLAUDE.md` with the same content as `AGENTS.md` (overwrite if exists).
 
-4. Display summary:
+4. Write each progressive disclosure file to `.maestro/context/`.
+
+5. Display summary:
    ```
-   AGENTS.md generated.
+   AGENTS.md + CLAUDE.md generated.
 
    - AGENTS.md ({line_count} lines)
+   - CLAUDE.md ({line_count} lines)
    - .maestro/context/building_the_project.md
    - .maestro/context/running_tests.md
    {additional files as created}
 
    Next steps:
-   - Review AGENTS.md and edit manually for accuracy
+   - Review AGENTS.md / CLAUDE.md and edit manually for accuracy
    - /maestro:AGENTS.md --reset  -- regenerate from scratch
    ```
 

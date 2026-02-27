@@ -1,8 +1,8 @@
-# AGENTS.md Template
+# AGENTS.md + CLAUDE.md Template
 
 ## Output Template
 
-The generated `AGENTS.md` file MUST be under 100 lines and follow this structure:
+The generated `AGENTS.md` and `CLAUDE.md` files share identical content. Both MUST be under 100 lines and follow this structure:
 
 ```markdown
 # CLAUDE.md
