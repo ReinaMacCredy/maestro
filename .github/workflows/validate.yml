@@ -83,4 +83,40 @@ jobs:
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
       - name: Check bash script syntax
-        run: bash -n scripts/*.sh
+        run: |
+          set -euo pipefail
+          bash -n scripts/*.sh
+          bash -n .claude/scripts/*.sh
+          if [ -d scripts/hooks/ecc ]; then
+            find scripts/hooks/ecc -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+          fi
+
+      - name: Validate hook command references
+        run: |
+          set -euo pipefail
+          if [ -f scripts/validate-hook-config.sh ]; then
+            bash scripts/validate-hook-config.sh
+          else
+            echo "scripts/validate-hook-config.sh not present; skipping"
+          fi
+
+      - name: Check Node syntax for ECC hook scripts
+        run: |
+          set -euo pipefail
+          if [ -d scripts/hooks/ecc ]; then
+            if ! command -v node >/dev/null 2>&1; then
+              echo "::error::node is required for ECC hook script syntax checks"
+              exit 1
+            fi
+            files_found=0
+            while IFS= read -r -d '' file; do
+              files_found=1
+              node --check "$file"
+            done < <(find scripts/hooks/ecc -type f -name '*.js' -print0)
+
+            if [ "$files_found" -eq 0 ]; then
+              echo "No ECC JavaScript hook scripts found; skipping"
+            fi
+          else
+            echo "scripts/hooks/ecc not present; skipping"
+          fi
