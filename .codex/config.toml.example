@@ -1,0 +1,14 @@
+# Example Codex config for Maestro compatibility.
+# Copy this file to ~/.codex/config.toml and adjust paths for your machine.
+
+[skills]
+extra_paths = ["~/.codex/skills/maestro/skills"]
+
+[profiles.default]
+instructions_file = "~/.codex/skills/maestro/.codex/AGENTS.md"
+
+# Optional ECC skillpack activation:
+# Run:
+#   bash ~/.codex/skills/maestro/scripts/enable-ecc-skillpack.sh all
+# This copies optional skills into canonical ~/.codex/skills/maestro/skills,
+# so no additional config.toml path is required.

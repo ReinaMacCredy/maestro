@@ -24,6 +24,24 @@
           { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/orchestrator-guard.sh" },
           { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/plan-protection.sh" }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/hooks/ecc/dev-server-blocker.sh" }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR\"/scripts/hooks/ecc/doc-file-warning.js" }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/hooks/ecc/learning-observe.sh PreToolUse" }
+        ]
       }
     ],
     "PostToolUse": [
@@ -50,13 +68,23 @@
         "matcher": "Bash",
         "hooks": [
           { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/error-detector.sh" },
-          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/bash-history.sh" }
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/bash-history.sh" },
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/hooks/ecc/tmux-reminder.sh" }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR\"/scripts/hooks/ecc/post-edit-format.js" },
+          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR\"/scripts/hooks/ecc/post-edit-typecheck.js" },
+          { "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR\"/scripts/hooks/ecc/post-edit-console-warn.js" }
         ]
       },
       {
         "matcher": "*",
         "hooks": [
-          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/trace-logger.sh" }
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/trace-logger.sh" },
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/hooks/ecc/learning-observe.sh PostToolUse" }
         ]
       }
     ],
@@ -72,7 +100,8 @@
       {
         "matcher": "*",
         "hooks": [
-          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/worker-persistence.sh" }
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/scripts/worker-persistence.sh" },
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/hooks/ecc/git-push-reminder.sh" }
         ]
       }
     ],

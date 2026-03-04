@@ -1,0 +1,655 @@
+{
+  "source_repo": "https://github.com/affaan-m/everything-claude-code",
+  "source_commit": "32e9c293f0d6f04e3b9bf804887747d5c8b5dc10",
+  "snapshot_commit_intended": "32e9c293f0d6f04e3b9bf804887747d5c8b5dc10",
+  "imported_at": "2026-03-04T08:26:52Z",
+  "skills": [
+    {
+      "source": "api-design",
+      "rebranded": "maestro:api-design",
+      "path": "skillpacks/ecc/skills/maestro:api-design",
+      "lifecycle": [
+        "design",
+        "implement"
+      ],
+      "domain": [
+        "practice:api-design"
+      ]
+    },
+    {
+      "source": "article-writing",
+      "rebranded": "maestro:article-writing",
+      "path": "skillpacks/ecc/skills/maestro:article-writing",
+      "lifecycle": [
+        "cross-cutting"
+      ],
+      "domain": [
+        "content:writing"
+      ]
+    },
+    {
+      "source": "autonomous-loops",
+      "rebranded": "maestro:autonomous-loops",
+      "path": "skillpacks/ecc/skills/maestro:autonomous-loops",
+      "lifecycle": [
+        "design"
+      ],
+      "domain": [
+        "practice:architecture"
+      ]
+    },
+    {
+      "source": "backend-patterns",
+      "rebranded": "maestro:backend-patterns",
+      "path": "skillpacks/ecc/skills/maestro:backend-patterns",
+      "lifecycle": [
+        "implement"
+      ],
+      "domain": [
+        "framework:nextjs"
+      ]
+    },
+    {
+      "source": "clickhouse-io",
+      "rebranded": "maestro:clickhouse-io",
+      "path": "skillpacks/ecc/skills/maestro:clickhouse-io",
+      "lifecycle": [
+        "implement"
+      ],
+      "domain": [
+        "practice:database"
+      ]
+    },
+    {
+      "source": "coding-standards",
+      "rebranded": "maestro:coding-standards",
+      "path": "skillpacks/ecc/skills/maestro:coding-standards",
+      "lifecycle": [
+        "implement",
+        "review"
+      ],
+      "domain": [
+        "language:typescript"
+      ]
+    },
+    {
+      "source": "configure-ecc",
+      "rebranded": "maestro:configure-ecc",
+      "path": "skillpacks/ecc/skills/maestro:configure-ecc",
+      "lifecycle": [
+        "cross-cutting"
+      ],
+      "domain": [
+        "practice:tooling"
+      ]
+    },
+    {
+      "source": "content-engine",
+      "rebranded": "maestro:content-engine",
+      "path": "skillpacks/ecc/skills/maestro:content-engine",
+      "lifecycle": [
+        "cross-cutting"
+      ],
+      "domain": [
+        "content:marketing"
+      ]
+    },
+    {
+      "source": "content-hash-cache-pattern",
+      "rebranded": "maestro:content-hash-cache-pattern",
+      "path": "skillpacks/ecc/skills/maestro:content-hash-cache-pattern",
+      "lifecycle": [
+        "implement"
+      ],
+      "domain": [
+        "practice:caching"
+      ]
+    },
+    {
+      "source": "continuous-learning",
+      "rebranded": "maestro:continuous-learning",
+      "path": "skillpacks/ecc/skills/maestro:continuous-learning",
+      "lifecycle": [
+        "cross-cutting"
+      ],
+      "domain": [
+        "practice:learning"
+      ]
+    },
+    {
+      "source": "continuous-learning-v2",
+      "rebranded": "maestro:continuous-learning-v2",
+      "path": "skillpacks/ecc/skills/maestro:continuous-learning-v2",
+      "lifecycle": [
+        "cross-cutting"
+      ],
+      "domain": [
+        "practice:learning"
+      ]
+    },
+    {
+      "source": "cost-aware-llm-pipeline",
+      "rebranded": "maestro:cost-aware-llm-pipeline",
+      "path": "skillpacks/ecc/skills/maestro:cost-aware-llm-pipeline",
+      "lifecycle": [
+        "implement"
+      ],
+      "domain": [
+        "ai:llm-pipeline"
+      ]
+    },
+    {
+      "source": "cpp-coding-standards",
+      "rebranded": "maestro:cpp-coding-standards",
+      "path": "skillpacks/ecc/skills/maestro:cpp-coding-standards",
+      "lifecycle": [
+        "implement",
+        "review"
+      ],
+      "domain": [
+        "language:cpp"
+      ]
+    },
+    {
+      "source": "cpp-testing",
+      "rebranded": "maestro:cpp-testing",
+      "path": "skillpacks/ecc/skills/maestro:cpp-testing",
+      "lifecycle": [
+        "implement",
+        "review"
+      ],
+      "domain": [
+        "language:cpp"
+      ]
+    },
+    {
+      "source": "database-migrations",
+      "rebranded": "maestro:database-migrations",
+      "path": "skillpacks/ecc/skills/maestro:database-migrations",
+      "lifecycle": [
+        "implement"
+      ],
+      "domain": [
+        "practice:database"
+      ]
+    },
+    {
+      "source": "deployment-patterns",
+      "rebranded": "maestro:deployment-patterns",
+      "path": "skillpacks/ecc/skills/maestro:deployment-patterns",
+      "lifecycle": [
+        "implement",
+        "review"
+      ],
+      "domain": [
+        "practice:deployment"
+      ]
+    },
+    {
+      "source": "django-patterns",
+      "rebranded": "maestro:django-patterns",
+      "path": "skillpacks/ecc/skills/maestro:django-patterns",
+      "lifecycle": [
+        "implement"
+      ],
+      "domain": [
+        "framework:django"
+      ]
+    },
+    {
+      "source": "django-security",
+      "rebranded": "maestro:django-security",
+      "path": "skillpacks/ecc/skills/maestro:django-security",
+      "lifecycle": [
+        "review"
+      ],
+      "domain": [
+        "framework:django"
+      ]
+    },
+    {
+      "source": "django-tdd",
+      "rebranded": "maestro:django-tdd",
+      "path": "skillpacks/ecc/skills/maestro:django-tdd",
+      "lifecycle": [
+        "implement"
+      ],
+      "domain": [
+        "framework:django"
+      ]
+    },
+    {
+      "source": "django-verification",
+      "rebranded": "maestro:django-verification",
+      "path": "skillpacks/ecc/skills/maestro:django-verification",
+      "lifecycle": [
+        "review"
+      ],
+      "domain": [
+        "framework:django"
+      ]
+    },
+    {
+      "source": "docker-patterns",
+      "rebranded": "maestro:docker-patterns",
+      "path": "skillpacks/ecc/skills/maestro:docker-patterns",
+      "lifecycle": [
+        "implement",
+        "review"
+      ],
+      "domain": [
+        "practice:docker"
+      ]
+    },
+    {
+      "source": "e2e-testing",
+      "rebranded": "maestro:e2e-testing",
+      "path": "skillpacks/ecc/skills/maestro:e2e-testing",
+      "lifecycle": [
+        "implement",
+        "review"
+      ],
+      "domain": [
+        "practice:tdd"
+      ]
+    },
+    {
+      "source": "eval-harness",
+      "rebranded": "maestro:eval-harness",
+      "path": "skillpacks/ecc/skills/maestro:eval-harness",
+      "lifecycle": [
+        "review"
+      ],
+      "domain": [
+        "practice:tdd"
+      ]
+    },
+    {
+      "source": "foundation-models-on-device",
+      "rebranded": "maestro:foundation-models-on-device",
+      "path": "skillpacks/ecc/skills/maestro:foundation-models-on-device",
+      "lifecycle": [
+        "implement"
+      ],
+      "domain": [
+        "ai:apple-ml"
+      ]
+    },
+    {
+      "source": "frontend-patterns",
+      "rebranded": "maestro:frontend-patterns",
+      "path": "skillpacks/ecc/skills/maestro:frontend-patterns",
+      "lifecycle": [
+        "implement"
+      ],
+      "domain": [
+        "framework:react"
+      ]
+    },
+    {
+      "source": "frontend-slides",
+      "rebranded": "maestro:frontend-slides",
+      "path": "skillpacks/ecc/skills/maestro:frontend-slides",
+      "lifecycle": [
+        "cross-cutting"
+      ],
+      "domain": [
+        "content:presentations"
+      ]
+    },
+    {
+      "source": "golang-patterns",
+      "rebranded": "maestro:golang-patterns",
+      "path": "skillpacks/ecc/skills/maestro:golang-patterns",
+      "lifecycle": [
+        "implement"
+      ],
+      "domain": [
+        "language:golang"
+      ]
+    },
+    {
+      "source": "golang-testing",
+      "rebranded": "maestro:golang-testing",
+      "path": "skillpacks/ecc/skills/maestro:golang-testing",
+      "lifecycle": [
+        "implement"
+      ],
+      "domain": [
+        "language:golang"
+      ]
+    },
+    {
+      "source": "investor-materials",
+      "rebranded": "maestro:investor-materials",
+      "path": "skillpacks/ecc/skills/maestro:investor-materials",
+      "lifecycle": [
+        "cross-cutting"
+      ],
+      "domain": [
+        "content:fundraising"
+      ]
+    },
+    {
+      "source": "investor-outreach",
+      "rebranded": "maestro:investor-outreach",
+      "path": "skillpacks/ecc/skills/maestro:investor-outreach",
+      "lifecycle": [
+        "cross-cutting"
+      ],
+      "domain": [
+        "content:fundraising"
+      ]
+    },
+    {
+      "source": "iterative-retrieval",
+      "rebranded": "maestro:iterative-retrieval",
+      "path": "skillpacks/ecc/skills/maestro:iterative-retrieval",
+      "lifecycle": [
+        "design"
+      ],
+      "domain": [
+        "practice:architecture"
+      ]
+    },
+    {
+      "source": "java-coding-standards",
+      "rebranded": "maestro:java-coding-standards",
+      "path": "skillpacks/ecc/skills/maestro:java-coding-standards",
+      "lifecycle": [
+        "implement",
+        "review"
+      ],
+      "domain": [
+        "language:java"
+      ]
+    },
+    {
+      "source": "jpa-patterns",
+      "rebranded": "maestro:jpa-patterns",
+      "path": "skillpacks/ecc/skills/maestro:jpa-patterns",
+      "lifecycle": [
+        "implement"
+      ],
+      "domain": [
+        "framework:springboot"
+      ]
+    },
+    {
+      "source": "liquid-glass-design",
+      "rebranded": "maestro:liquid-glass-design",
+      "path": "skillpacks/ecc/skills/maestro:liquid-glass-design",
+      "lifecycle": [
+        "implement"
+      ],
+      "domain": [
+        "framework:swiftui"
+      ]
+    },
+    {
+      "source": "market-research",
+      "rebranded": "maestro:market-research",
+      "path": "skillpacks/ecc/skills/maestro:market-research",
+      "lifecycle": [
+        "design"
+      ],
+      "domain": [
+        "content:research"
+      ]
+    },
+    {
+      "source": "nutrient-document-processing",
+      "rebranded": "maestro:nutrient-document-processing",
+      "path": "skillpacks/ecc/skills/maestro:nutrient-document-processing",
+      "lifecycle": [
+        "implement"
+      ],
+      "domain": [
+        "practice:document"
+      ]
+    },
+    {
+      "source": "plankton-code-quality",
+      "rebranded": "maestro:plankton-code-quality",
+      "path": "skillpacks/ecc/skills/maestro:plankton-code-quality",
+      "lifecycle": [
+        "cross-cutting"
+      ],
+      "domain": [
+        "practice:quality"
+      ]
+    },
+    {
+      "source": "postgres-patterns",
+      "rebranded": "maestro:postgres-patterns",
+      "path": "skillpacks/ecc/skills/maestro:postgres-patterns",
+      "lifecycle": [
+        "implement"
+      ],
+      "domain": [
+        "practice:database"
+      ]
+    },
+    {
+      "source": "project-guidelines-example",
+      "rebranded": "maestro:project-guidelines-example",
+      "path": "skillpacks/ecc/skills/maestro:project-guidelines-example",
+      "lifecycle": [
+        "cross-cutting"
+      ],
+      "domain": [
+        "practice:template"
+      ]
+    },
+    {
+      "source": "python-patterns",
+      "rebranded": "maestro:python-patterns",
+      "path": "skillpacks/ecc/skills/maestro:python-patterns",
+      "lifecycle": [
+        "implement"
+      ],
+      "domain": [
+        "language:python"
+      ]
+    },
+    {
+      "source": "python-testing",
+      "rebranded": "maestro:python-testing",
+      "path": "skillpacks/ecc/skills/maestro:python-testing",
+      "lifecycle": [
+        "implement"
+      ],
+      "domain": [
+        "language:python"
+      ]
+    },
+    {
+      "source": "regex-vs-llm-structured-text",
+      "rebranded": "maestro:regex-vs-llm-structured-text",
+      "path": "skillpacks/ecc/skills/maestro:regex-vs-llm-structured-text",
+      "lifecycle": [
+        "design",
+        "implement"
+      ],
+      "domain": [
+        "practice:decision"
+      ]
+    },
+    {
+      "source": "search-first",
+      "rebranded": "maestro:search-first",
+      "path": "skillpacks/ecc/skills/maestro:search-first",
+      "lifecycle": [
+        "design"
+      ],
+      "domain": [
+        "practice:research"
+      ]
+    },
+    {
+      "source": "security-review",
+      "rebranded": "maestro:security-review",
+      "path": "skillpacks/ecc/skills/maestro:security-review",
+      "lifecycle": [
+        "review"
+      ],
+      "domain": [
+        "practice:security"
+      ]
+    },
+    {
+      "source": "security-scan",
+      "rebranded": "maestro:security-scan",
+      "path": "skillpacks/ecc/skills/maestro:security-scan",
+      "lifecycle": [
+        "review"
+      ],
+      "domain": [
+        "practice:security"
+      ]
+    },
+    {
+      "source": "skill-stocktake",
+      "rebranded": "maestro:skill-stocktake",
+      "path": "skillpacks/ecc/skills/maestro:skill-stocktake",
+      "lifecycle": [
+        "review"
+      ],
+      "domain": [
+        "practice:quality"
+      ]
+    },
+    {
+      "source": "springboot-patterns",
+      "rebranded": "maestro:springboot-patterns",
+      "path": "skillpacks/ecc/skills/maestro:springboot-patterns",
+      "lifecycle": [
+        "implement"
+      ],
+      "domain": [
+        "framework:springboot"
+      ]
+    },
+    {
+      "source": "springboot-security",
+      "rebranded": "maestro:springboot-security",
+      "path": "skillpacks/ecc/skills/maestro:springboot-security",
+      "lifecycle": [
+        "review"
+      ],
+      "domain": [
+        "framework:springboot"
+      ]
+    },
+    {
+      "source": "springboot-tdd",
+      "rebranded": "maestro:springboot-tdd",
+      "path": "skillpacks/ecc/skills/maestro:springboot-tdd",
+      "lifecycle": [
+        "implement"
+      ],
+      "domain": [
+        "framework:springboot"
+      ]
+    },
+    {
+      "source": "springboot-verification",
+      "rebranded": "maestro:springboot-verification",
+      "path": "skillpacks/ecc/skills/maestro:springboot-verification",
+      "lifecycle": [
+        "review"
+      ],
+      "domain": [
+        "framework:springboot"
+      ]
+    },
+    {
+      "source": "strategic-compact",
+      "rebranded": "maestro:strategic-compact",
+      "path": "skillpacks/ecc/skills/maestro:strategic-compact",
+      "lifecycle": [
+        "design"
+      ],
+      "domain": [
+        "practice:context"
+      ]
+    },
+    {
+      "source": "swift-actor-persistence",
+      "rebranded": "maestro:swift-actor-persistence",
+      "path": "skillpacks/ecc/skills/maestro:swift-actor-persistence",
+      "lifecycle": [
+        "implement"
+      ],
+      "domain": [
+        "language:swift"
+      ]
+    },
+    {
+      "source": "swift-concurrency-6-2",
+      "rebranded": "maestro:swift-concurrency-6-2",
+      "path": "skillpacks/ecc/skills/maestro:swift-concurrency-6-2",
+      "lifecycle": [
+        "implement"
+      ],
+      "domain": [
+        "language:swift"
+      ]
+    },
+    {
+      "source": "swift-protocol-di-testing",
+      "rebranded": "maestro:swift-protocol-di-testing",
+      "path": "skillpacks/ecc/skills/maestro:swift-protocol-di-testing",
+      "lifecycle": [
+        "implement"
+      ],
+      "domain": [
+        "language:swift"
+      ]
+    },
+    {
+      "source": "swiftui-patterns",
+      "rebranded": "maestro:swiftui-patterns",
+      "path": "skillpacks/ecc/skills/maestro:swiftui-patterns",
+      "lifecycle": [
+        "implement"
+      ],
+      "domain": [
+        "framework:swiftui"
+      ]
+    },
+    {
+      "source": "tdd-workflow",
+      "rebranded": "maestro:tdd-workflow",
+      "path": "skillpacks/ecc/skills/maestro:tdd-workflow",
+      "lifecycle": [
+        "implement"
+      ],
+      "domain": [
+        "practice:tdd"
+      ]
+    },
+    {
+      "source": "verification-loop",
+      "rebranded": "maestro:verification-loop",
+      "path": "skillpacks/ecc/skills/maestro:verification-loop",
+      "lifecycle": [
+        "review"
+      ],
+      "domain": [
+        "practice:verification"
+      ]
+    },
+    {
+      "source": "visa-doc-translate",
+      "rebranded": "maestro:visa-doc-translate",
+      "path": "skillpacks/ecc/skills/maestro:visa-doc-translate",
+      "lifecycle": [
+        "cross-cutting"
+      ],
+      "domain": [
+        "content:translation"
+      ]
+    }
+  ]
+}

@@ -8,6 +8,19 @@ This repository is packaged for the open Agent Skills ecosystem (`agentskills.io
 - `.claude/skills` is kept as a compatibility path for Claude Code.
 - `.agents/skills` is kept as a compatibility path for Amp/OpenCode/Replit and other universal-agent conventions.
 - `.github/skills` points to `skills/` for GitHub Copilot compatibility.
+- `skillpacks/ecc/skills/` contains optional ECC-derived skills that are not active by default.
+
+## Optional ECC Skillpack
+
+The optional ECC skillpack is intentionally stored outside canonical `skills/` to avoid default activation and trigger noise.
+
+```bash
+# Enable all optional ECC skills into canonical skills/
+bash scripts/enable-ecc-skillpack.sh all
+
+# Disable all optional ECC skills from canonical skills/
+bash scripts/disable-ecc-skillpack.sh all
+```
 
 ## Install with `skills.sh`
 

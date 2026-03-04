@@ -1,0 +1,533 @@
+{
+  "maestro:api-design": {
+    "lifecycle": ["design", "implement"],
+    "domain": ["practice:api-design"],
+    "description": "REST API design patterns for resource naming, status codes, pagination, error responses, and versioning. Use during maestro:design when specifying API contracts, and maestro:implement when building endpoints.",
+    "maestro_phases": {
+      "design": "Reference during API specification in design phase. Define resource structure, URL patterns, and response formats before implementation.",
+      "implement": "Apply REST conventions during endpoint implementation. Use status code reference and pagination patterns when coding API routes."
+    },
+    "related": ["maestro:backend-patterns", "maestro:security-review", "maestro:coding-standards"]
+  },
+  "maestro:autonomous-loops": {
+    "lifecycle": ["design"],
+    "domain": ["practice:architecture"],
+    "description": "Patterns for autonomous Claude Code loops from simple pipelines to multi-agent DAG systems. Use during maestro:design when architecting automated workflows or multi-agent orchestration.",
+    "maestro_phases": {
+      "design": "Reference loop architecture patterns when designing autonomous workflows. Choose appropriate complexity level (sequential, parallel, DAG) during architecture decisions."
+    },
+    "related": ["maestro:iterative-retrieval", "maestro:strategic-compact", "maestro:cost-aware-llm-pipeline"]
+  },
+  "maestro:iterative-retrieval": {
+    "lifecycle": ["design"],
+    "domain": ["practice:architecture"],
+    "description": "Progressive context retrieval pattern for multi-agent workflows. Use during maestro:design when architecting subagent context strategies or RAG-like retrieval pipelines.",
+    "maestro_phases": {
+      "design": "Apply iterative retrieval when designing multi-agent context flow. Avoid upfront context loading -- design progressive refinement instead."
+    },
+    "related": ["maestro:autonomous-loops", "maestro:strategic-compact", "maestro:search-first"]
+  },
+  "maestro:market-research": {
+    "lifecycle": ["design"],
+    "domain": ["content:research"],
+    "description": "Market research, competitive analysis, and industry intelligence with source attribution. Use during maestro:design for research tasks, TAM/SAM/SOM estimates, or competitor analysis.",
+    "maestro_phases": {
+      "design": "Conduct market research during discovery phase. Produce decision-oriented summaries with source attribution for design specifications."
+    },
+    "related": ["maestro:investor-materials", "maestro:investor-outreach", "maestro:article-writing"]
+  },
+  "maestro:regex-vs-llm-structured-text": {
+    "lifecycle": ["design", "implement"],
+    "domain": ["practice:decision"],
+    "description": "Decision framework for choosing regex vs LLM for structured text parsing. Use during maestro:design when planning text extraction approach, and maestro:implement when building parsers.",
+    "maestro_phases": {
+      "design": "Use decision framework to choose parsing approach during architecture. Start with regex for structured patterns, reserve LLM for edge cases.",
+      "implement": "Apply the chosen strategy during parser implementation. Build hybrid pipeline if needed."
+    },
+    "related": ["maestro:cost-aware-llm-pipeline", "maestro:python-patterns", "maestro:coding-standards"]
+  },
+  "maestro:search-first": {
+    "lifecycle": ["design"],
+    "domain": ["practice:research"],
+    "description": "Research-before-coding workflow. Use during maestro:design to find existing tools, libraries, and patterns before writing custom code.",
+    "maestro_phases": {
+      "design": "Search for existing solutions before designing custom implementations. Check package registries, GitHub, and documentation first."
+    },
+    "related": ["maestro:iterative-retrieval", "maestro:market-research", "maestro:strategic-compact"]
+  },
+  "maestro:strategic-compact": {
+    "lifecycle": ["design"],
+    "domain": ["practice:context"],
+    "description": "Strategic context compaction for long sessions. Use during maestro:design for multi-phase sessions approaching context limits, suggesting /compact at logical breakpoints.",
+    "maestro_phases": {
+      "design": "Suggest compaction between major phases (research to plan, plan to implement). Preserve critical decisions across compaction boundaries."
+    },
+    "related": ["maestro:iterative-retrieval", "maestro:autonomous-loops", "maestro:continuous-learning"]
+  },
+  "maestro:backend-patterns": {
+    "lifecycle": ["implement"],
+    "domain": ["framework:nextjs"],
+    "description": "Backend architecture patterns for Node.js, Express, and Next.js API routes. Use during maestro:implement when building server-side code, API routes, or backend services.",
+    "maestro_phases": {
+      "implement": "Apply backend patterns during Green phase (Step 6a.3) when writing server code. Use for API route structure, middleware patterns, and database query optimization."
+    },
+    "related": ["maestro:api-design", "maestro:database-migrations", "maestro:frontend-patterns"]
+  },
+  "maestro:clickhouse-io": {
+    "lifecycle": ["implement"],
+    "domain": ["practice:database"],
+    "description": "ClickHouse query optimization, analytics patterns, and data engineering for high-performance analytical workloads. Use during maestro:implement when building analytics queries or data pipelines with ClickHouse.",
+    "maestro_phases": {
+      "implement": "Apply ClickHouse patterns when implementing analytics queries. Use materialized views and proper data types for performance."
+    },
+    "related": ["maestro:postgres-patterns", "maestro:database-migrations", "maestro:backend-patterns"]
+  },
+  "maestro:content-hash-cache-pattern": {
+    "lifecycle": ["implement"],
+    "domain": ["practice:caching"],
+    "description": "SHA-256 content hash caching for expensive file processing. Use during maestro:implement when adding caching layers with path-independent, auto-invalidating cache keys.",
+    "maestro_phases": {
+      "implement": "Apply content hash caching during implementation when processing expensive file operations. Use SHA-256 hashes for cache keys instead of file paths."
+    },
+    "related": ["maestro:backend-patterns", "maestro:deployment-patterns", "maestro:coding-standards"]
+  },
+  "maestro:cost-aware-llm-pipeline": {
+    "lifecycle": ["implement"],
+    "domain": ["ai:llm-pipeline"],
+    "description": "Cost optimization for LLM API usage with model routing, budget tracking, retry logic, and prompt caching. Use during maestro:implement when building LLM-powered features.",
+    "maestro_phases": {
+      "implement": "Apply cost-aware patterns when implementing LLM API calls. Route by task complexity, track token budgets, and use prompt caching where possible."
+    },
+    "related": ["maestro:regex-vs-llm-structured-text", "maestro:autonomous-loops", "maestro:backend-patterns"]
+  },
+  "maestro:database-migrations": {
+    "lifecycle": ["implement"],
+    "domain": ["practice:database"],
+    "description": "Database migration best practices for schema changes, rollbacks, and zero-downtime deployments across PostgreSQL, MySQL, and ORMs. Use during maestro:implement when modifying database schemas.",
+    "maestro_phases": {
+      "implement": "Apply migration patterns during schema change tasks. Write reversible migrations, test rollbacks, and ensure zero-downtime compatibility."
+    },
+    "related": ["maestro:postgres-patterns", "maestro:clickhouse-io", "maestro:deployment-patterns"]
+  },
+  "maestro:django-patterns": {
+    "lifecycle": ["implement"],
+    "domain": ["framework:django"],
+    "description": "Django architecture patterns, DRF APIs, ORM best practices, caching, and middleware. Use during maestro:implement when building Django features or REST APIs with Django REST Framework.",
+    "maestro_phases": {
+      "implement": "Apply Django patterns during Green phase. Use DRF serializers, viewsets, and ORM query optimization for implementation tasks."
+    },
+    "related": ["maestro:django-tdd", "maestro:django-security", "maestro:django-verification"]
+  },
+  "maestro:django-tdd": {
+    "lifecycle": ["implement"],
+    "domain": ["framework:django"],
+    "description": "Django TDD with pytest-django, factory_boy, and DRF testing. Use during maestro:implement when writing tests for Django models, views, and API endpoints.",
+    "maestro_phases": {
+      "implement": "Apply during Red phase (Step 6a.2) for Django test writing. Use factory_boy for fixtures, pytest-django for test runner, and DRF test client for API tests."
+    },
+    "related": ["maestro:django-patterns", "maestro:django-security", "maestro:tdd-workflow"]
+  },
+  "maestro:foundation-models-on-device": {
+    "lifecycle": ["implement"],
+    "domain": ["ai:apple-ml"],
+    "description": "Apple FoundationModels framework for on-device LLM with guided generation and tool calling in iOS 26+. Use during maestro:implement when building on-device ML features for Apple platforms.",
+    "maestro_phases": {
+      "implement": "Apply FoundationModels patterns when implementing on-device LLM features. Use @Generable for structured output and snapshot streaming for UI."
+    },
+    "related": ["maestro:swiftui-patterns", "maestro:swift-concurrency-6-2", "maestro:liquid-glass-design"]
+  },
+  "maestro:frontend-patterns": {
+    "lifecycle": ["implement"],
+    "domain": ["framework:react"],
+    "description": "React and Next.js frontend patterns for state management, performance optimization, and UI best practices. Use during maestro:implement when building UI components or client-side features.",
+    "maestro_phases": {
+      "implement": "Apply React patterns during component implementation. Use proper state management, memoization, and composition patterns."
+    },
+    "related": ["maestro:backend-patterns", "maestro:coding-standards", "maestro:e2e-testing"]
+  },
+  "maestro:golang-patterns": {
+    "lifecycle": ["implement"],
+    "domain": ["language:golang"],
+    "description": "Idiomatic Go patterns, best practices, and conventions for robust Go applications. Use during maestro:implement when writing Go code -- error handling, concurrency, interfaces, and project structure.",
+    "maestro_phases": {
+      "implement": "Apply Go idioms during Green phase. Use error wrapping, context propagation, and interface-based design for clean Go implementations."
+    },
+    "related": ["maestro:golang-testing", "maestro:api-design", "maestro:deployment-patterns"]
+  },
+  "maestro:golang-testing": {
+    "lifecycle": ["implement"],
+    "domain": ["language:golang"],
+    "description": "Go testing with table-driven tests, subtests, benchmarks, and fuzzing. Use during maestro:implement when writing Go tests following TDD methodology.",
+    "maestro_phases": {
+      "implement": "Apply during Red phase (Step 6a.2) for Go tests. Use table-driven tests, subtests for organization, and benchmarks for performance-critical code."
+    },
+    "related": ["maestro:golang-patterns", "maestro:tdd-workflow", "maestro:e2e-testing"]
+  },
+  "maestro:jpa-patterns": {
+    "lifecycle": ["implement"],
+    "domain": ["framework:springboot"],
+    "description": "JPA/Hibernate patterns for entity design, relationships, query optimization, and transactions in Spring Boot. Use during maestro:implement when building JPA entities or optimizing database access.",
+    "maestro_phases": {
+      "implement": "Apply JPA patterns when implementing entity relationships, custom queries, and transaction management. Avoid N+1 queries with proper fetch strategies."
+    },
+    "related": ["maestro:springboot-patterns", "maestro:springboot-tdd", "maestro:database-migrations"]
+  },
+  "maestro:liquid-glass-design": {
+    "lifecycle": ["implement"],
+    "domain": ["framework:swiftui"],
+    "description": "iOS 26 Liquid Glass design system with dynamic glass materials, blur, reflection, and interactive morphing. Use during maestro:implement when building iOS 26 UI with the glass material system.",
+    "maestro_phases": {
+      "implement": "Apply Liquid Glass patterns when implementing iOS 26 UI. Use GlassEffectContainer, dynamic tinting, and morphing animations per Apple HIG."
+    },
+    "related": ["maestro:swiftui-patterns", "maestro:foundation-models-on-device", "maestro:swift-concurrency-6-2"]
+  },
+  "maestro:nutrient-document-processing": {
+    "lifecycle": ["implement"],
+    "domain": ["practice:document"],
+    "description": "Nutrient DWS API for document processing, conversion, OCR, redaction, signing, and form filling. Use during maestro:implement when building document processing features with Nutrient.",
+    "maestro_phases": {
+      "implement": "Apply Nutrient API patterns when implementing document workflows. Use appropriate endpoints for conversion, OCR, redaction, or signing tasks."
+    },
+    "related": ["maestro:api-design", "maestro:backend-patterns", "maestro:security-review"]
+  },
+  "maestro:postgres-patterns": {
+    "lifecycle": ["implement"],
+    "domain": ["practice:database"],
+    "description": "PostgreSQL query optimization, schema design, indexing, and security patterns. Use during maestro:implement when writing SQL queries or designing database schemas with PostgreSQL.",
+    "maestro_phases": {
+      "implement": "Apply PostgreSQL patterns during database implementation tasks. Use proper indexing, query optimization, and RLS policies."
+    },
+    "related": ["maestro:database-migrations", "maestro:clickhouse-io", "maestro:backend-patterns"]
+  },
+  "maestro:python-patterns": {
+    "lifecycle": ["implement"],
+    "domain": ["language:python"],
+    "description": "Pythonic idioms, PEP 8 standards, type hints, and best practices for Python applications. Use during maestro:implement when writing Python code -- naming, structure, and idiomatic patterns.",
+    "maestro_phases": {
+      "implement": "Apply Pythonic patterns during Green phase. Use type hints, dataclasses, and PEP 8 conventions for clean Python implementations."
+    },
+    "related": ["maestro:python-testing", "maestro:django-patterns", "maestro:coding-standards"]
+  },
+  "maestro:python-testing": {
+    "lifecycle": ["implement"],
+    "domain": ["language:python"],
+    "description": "Python testing with pytest, TDD methodology, fixtures, mocking, and parametrization. Use during maestro:implement when writing Python tests following TDD.",
+    "maestro_phases": {
+      "implement": "Apply during Red phase (Step 6a.2) for Python tests. Use pytest fixtures, parametrize for edge cases, and mock external dependencies."
+    },
+    "related": ["maestro:python-patterns", "maestro:tdd-workflow", "maestro:django-tdd"]
+  },
+  "maestro:springboot-patterns": {
+    "lifecycle": ["implement"],
+    "domain": ["framework:springboot"],
+    "description": "Spring Boot architecture patterns, REST API design, layered services, and caching. Use during maestro:implement when building Java Spring Boot backend services.",
+    "maestro_phases": {
+      "implement": "Apply Spring Boot patterns during service implementation. Use layered architecture, proper exception handling, and Spring conventions."
+    },
+    "related": ["maestro:springboot-tdd", "maestro:jpa-patterns", "maestro:springboot-security"]
+  },
+  "maestro:springboot-tdd": {
+    "lifecycle": ["implement"],
+    "domain": ["framework:springboot"],
+    "description": "Spring Boot TDD with JUnit 5, Mockito, MockMvc, and Testcontainers. Use during maestro:implement when writing tests for Spring services, controllers, and repositories.",
+    "maestro_phases": {
+      "implement": "Apply during Red phase (Step 6a.2) for Spring tests. Use MockMvc for controller tests, Mockito for service mocking, Testcontainers for integration tests."
+    },
+    "related": ["maestro:springboot-patterns", "maestro:jpa-patterns", "maestro:tdd-workflow"]
+  },
+  "maestro:swift-actor-persistence": {
+    "lifecycle": ["implement"],
+    "domain": ["language:swift"],
+    "description": "Thread-safe data persistence using Swift actors with in-memory cache and file-backed storage. Use during maestro:implement when building persistence layers in Swift.",
+    "maestro_phases": {
+      "implement": "Apply actor-based persistence when implementing data storage. Use actors to eliminate data races by design with file-backed caching."
+    },
+    "related": ["maestro:swift-concurrency-6-2", "maestro:swift-protocol-di-testing", "maestro:swiftui-patterns"]
+  },
+  "maestro:swift-concurrency-6-2": {
+    "lifecycle": ["implement"],
+    "domain": ["language:swift"],
+    "description": "Swift 6.2 Approachable Concurrency with single-threaded default, @concurrent offloading, and isolated conformances. Use during maestro:implement when writing async Swift code.",
+    "maestro_phases": {
+      "implement": "Apply Swift 6.2 concurrency patterns during async implementation. Use default single-threaded execution, explicit @concurrent for background work."
+    },
+    "related": ["maestro:swift-actor-persistence", "maestro:swift-protocol-di-testing", "maestro:swiftui-patterns"]
+  },
+  "maestro:swift-protocol-di-testing": {
+    "lifecycle": ["implement"],
+    "domain": ["language:swift"],
+    "description": "Protocol-based dependency injection for testable Swift code with mock strategies and Swift Testing. Use during maestro:implement when writing testable Swift with DI.",
+    "maestro_phases": {
+      "implement": "Apply protocol-based DI during Red and Green phases. Define protocols for dependencies, inject via init, create mocks for testing."
+    },
+    "related": ["maestro:swift-actor-persistence", "maestro:swift-concurrency-6-2", "maestro:tdd-workflow"]
+  },
+  "maestro:swiftui-patterns": {
+    "lifecycle": ["implement"],
+    "domain": ["framework:swiftui"],
+    "description": "SwiftUI architecture with @Observable state management, view composition, navigation, and performance optimization. Use during maestro:implement when building SwiftUI views and features.",
+    "maestro_phases": {
+      "implement": "Apply SwiftUI patterns during UI implementation. Use @Observable for state, proper view composition, and navigation patterns."
+    },
+    "related": ["maestro:liquid-glass-design", "maestro:swift-concurrency-6-2", "maestro:foundation-models-on-device"]
+  },
+  "maestro:tdd-workflow": {
+    "lifecycle": ["implement"],
+    "domain": ["practice:tdd"],
+    "description": "Test-driven development workflow enforcing Red-Green-Refactor with 80%+ coverage. Use during maestro:implement as the core TDD methodology for all code changes.",
+    "maestro_phases": {
+      "implement": "Apply TDD cycle during Red-Green-Refactor (Steps 6a.2-6a.4). Write failing tests first, implement to pass, then refactor for quality."
+    },
+    "related": ["maestro:e2e-testing", "maestro:verification-loop", "maestro:coding-standards"]
+  },
+  "maestro:coding-standards": {
+    "lifecycle": ["implement", "review"],
+    "domain": ["language:typescript"],
+    "description": "TypeScript/JavaScript/React/Node.js coding standards and best practices. Use during maestro:implement for code quality and maestro:review for review criteria on TS/JS projects.",
+    "maestro_phases": {
+      "implement": "Apply coding standards during Green and Refactor phases. Enforce naming conventions, type safety, and React patterns.",
+      "review": "Use as review checklist for code quality dimensions -- naming, structure, type safety, and React best practices."
+    },
+    "related": ["maestro:frontend-patterns", "maestro:backend-patterns", "maestro:tdd-workflow"]
+  },
+  "maestro:cpp-coding-standards": {
+    "lifecycle": ["implement", "review"],
+    "domain": ["language:cpp"],
+    "description": "C++ coding standards based on C++ Core Guidelines for modern, safe, idiomatic C++. Use during maestro:implement for C++ code quality and maestro:review for C++ review criteria.",
+    "maestro_phases": {
+      "implement": "Apply C++ Core Guidelines during implementation. Enforce RAII, smart pointers, const correctness, and modern C++ idioms.",
+      "review": "Use as review checklist for C++ safety, resource management, and adherence to Core Guidelines."
+    },
+    "related": ["maestro:cpp-testing", "maestro:security-review", "maestro:tdd-workflow"]
+  },
+  "maestro:java-coding-standards": {
+    "lifecycle": ["implement", "review"],
+    "domain": ["language:java"],
+    "description": "Java coding standards for Spring Boot services covering naming, immutability, Optional, streams, and exceptions. Use during maestro:implement for Java code quality and maestro:review for Java review criteria.",
+    "maestro_phases": {
+      "implement": "Apply Java standards during Spring Boot implementation. Enforce immutability, proper Optional usage, and clean exception handling.",
+      "review": "Use as review checklist for Java naming, immutability, Optional patterns, and project layout."
+    },
+    "related": ["maestro:springboot-patterns", "maestro:springboot-tdd", "maestro:jpa-patterns"]
+  },
+  "maestro:cpp-testing": {
+    "lifecycle": ["implement", "review"],
+    "domain": ["language:cpp"],
+    "description": "C++ testing with GoogleTest and CTest, coverage analysis, and sanitizers. Use during maestro:implement when writing C++ tests and maestro:review when checking C++ test coverage.",
+    "maestro_phases": {
+      "implement": "Apply during Red phase for C++ tests. Use GoogleTest assertions, TYPED_TEST for generic code, and CTest for integration.",
+      "review": "Verify test coverage with gcov/lcov. Check sanitizer configurations and test organization during review."
+    },
+    "related": ["maestro:cpp-coding-standards", "maestro:tdd-workflow", "maestro:e2e-testing"]
+  },
+  "maestro:django-security": {
+    "lifecycle": ["review"],
+    "domain": ["framework:django"],
+    "description": "Django security best practices for authentication, CSRF, SQL injection, XSS prevention, and secure deployment. Use during maestro:review when reviewing Django security posture.",
+    "maestro_phases": {
+      "review": "Apply security checklist during review phase. Verify CSRF protection, SQL injection prevention, XSS defenses, and authentication configuration."
+    },
+    "related": ["maestro:django-patterns", "maestro:django-verification", "maestro:security-review"]
+  },
+  "maestro:django-verification": {
+    "lifecycle": ["review"],
+    "domain": ["framework:django"],
+    "description": "Verification loop for Django: migrations, linting, tests with coverage, security scans, and deployment readiness. Use during maestro:review before Django releases or PRs.",
+    "maestro_phases": {
+      "review": "Run full verification loop: check migrations, run linter, execute tests with coverage, scan for security issues, verify deployment readiness."
+    },
+    "related": ["maestro:django-patterns", "maestro:django-security", "maestro:verification-loop"]
+  },
+  "maestro:e2e-testing": {
+    "lifecycle": ["implement", "review"],
+    "domain": ["practice:tdd"],
+    "description": "Playwright E2E testing with Page Object Model, CI/CD integration, and flaky test strategies. Use during maestro:implement for E2E test writing and maestro:review for coverage verification.",
+    "maestro_phases": {
+      "implement": "Write E2E tests for critical user flows using Playwright POM pattern. Integrate with CI pipelines.",
+      "review": "Verify E2E coverage of critical flows. Check for flaky tests and proper artifact management."
+    },
+    "related": ["maestro:tdd-workflow", "maestro:frontend-patterns", "maestro:verification-loop"]
+  },
+  "maestro:eval-harness": {
+    "lifecycle": ["review"],
+    "domain": ["practice:tdd"],
+    "description": "Formal evaluation framework for Claude Code sessions implementing eval-driven development (EDD). Use during maestro:review to measure and validate session outcomes with eval metrics.",
+    "maestro_phases": {
+      "review": "Apply eval harness to measure session outcomes. Define eval criteria, run evaluations, and track metrics against baselines."
+    },
+    "related": ["maestro:verification-loop", "maestro:tdd-workflow", "maestro:skill-stocktake"]
+  },
+  "maestro:security-review": {
+    "lifecycle": ["review"],
+    "domain": ["practice:security"],
+    "description": "Comprehensive security checklist for authentication, input handling, secrets, API endpoints, and sensitive data. Use during maestro:review for security posture assessment.",
+    "maestro_phases": {
+      "review": "Apply security checklist during review dimensions (Step 6). Check secrets management, input validation, authentication, and data protection."
+    },
+    "related": ["maestro:security-scan", "maestro:django-security", "maestro:springboot-security"]
+  },
+  "maestro:security-scan": {
+    "lifecycle": ["review"],
+    "domain": ["practice:security"],
+    "description": "Scan Claude Code configuration (.claude/ directory) for security vulnerabilities, misconfigurations, and injection risks. Use during maestro:review to audit agent configuration security.",
+    "maestro_phases": {
+      "review": "Scan .claude/ directory for security issues. Check CLAUDE.md for injection risks, validate hooks, audit MCP server configs."
+    },
+    "related": ["maestro:security-review", "maestro:plankton-code-quality", "maestro:verification-loop"]
+  },
+  "maestro:skill-stocktake": {
+    "lifecycle": ["review"],
+    "domain": ["practice:quality"],
+    "description": "Audit Claude skills and commands for quality with Quick Scan or Full Stocktake modes. Use during maestro:review to assess skill quality and consistency.",
+    "maestro_phases": {
+      "review": "Run skill quality audit during review phase. Use Quick Scan for changed skills, Full Stocktake for comprehensive assessment."
+    },
+    "related": ["maestro:eval-harness", "maestro:plankton-code-quality", "maestro:verification-loop"]
+  },
+  "maestro:springboot-security": {
+    "lifecycle": ["review"],
+    "domain": ["framework:springboot"],
+    "description": "Spring Security best practices for authentication, authorization, CSRF, secrets, and rate limiting. Use during maestro:review when reviewing Spring Boot security configuration.",
+    "maestro_phases": {
+      "review": "Apply Spring Security checklist during review. Verify authentication config, authorization rules, CSRF protection, and dependency security."
+    },
+    "related": ["maestro:springboot-patterns", "maestro:springboot-verification", "maestro:security-review"]
+  },
+  "maestro:springboot-verification": {
+    "lifecycle": ["review"],
+    "domain": ["framework:springboot"],
+    "description": "Verification loop for Spring Boot: build, static analysis, tests with coverage, security scans, and diff review. Use during maestro:review before Spring Boot releases or PRs.",
+    "maestro_phases": {
+      "review": "Run full verification loop: build check, static analysis, test suite with coverage, security scan, and diff review."
+    },
+    "related": ["maestro:springboot-patterns", "maestro:springboot-security", "maestro:verification-loop"]
+  },
+  "maestro:verification-loop": {
+    "lifecycle": ["review"],
+    "domain": ["practice:verification"],
+    "description": "Comprehensive post-change verification system with build, test, lint, and quality gates. Use during maestro:review as the core verification workflow before PRs or releases.",
+    "maestro_phases": {
+      "review": "Run verification loop as final review gate. Execute build verification, test suite, linting, and quality checks in sequence."
+    },
+    "related": ["maestro:tdd-workflow", "maestro:e2e-testing", "maestro:security-review"]
+  },
+  "maestro:article-writing": {
+    "lifecycle": ["cross-cutting"],
+    "domain": ["content:writing"],
+    "description": "Long-form content writing for articles, guides, blog posts, and tutorials with distinctive voice. Use in any maestro phase when producing written content longer than a paragraph.",
+    "maestro_phases": {
+      "cross-cutting": "Apply writing patterns in any phase when producing documentation, articles, or content deliverables. Maintain voice consistency and structure."
+    },
+    "related": ["maestro:content-engine", "maestro:investor-materials", "maestro:frontend-slides"]
+  },
+  "maestro:configure-ecc": {
+    "lifecycle": ["cross-cutting"],
+    "domain": ["practice:tooling"],
+    "description": "Interactive installer for Everything Claude Code skills and rules. Use during maestro:setup or project initialization to install and configure ECC skills.",
+    "maestro_phases": {
+      "cross-cutting": "Use during project setup to install and configure relevant skills. Guides through skill selection and path configuration."
+    },
+    "related": ["maestro:project-guidelines-example", "maestro:plankton-code-quality", "maestro:continuous-learning"]
+  },
+  "maestro:content-engine": {
+    "lifecycle": ["cross-cutting"],
+    "domain": ["content:marketing"],
+    "description": "Multi-platform content creation for X, LinkedIn, TikTok, YouTube, and newsletters. Use in any maestro phase when producing social media content or marketing materials.",
+    "maestro_phases": {
+      "cross-cutting": "Apply content patterns when creating platform-native content. Adapt tone, format, and length per platform requirements."
+    },
+    "related": ["maestro:article-writing", "maestro:investor-materials", "maestro:frontend-slides"]
+  },
+  "maestro:continuous-learning": {
+    "lifecycle": ["cross-cutting"],
+    "domain": ["practice:learning"],
+    "description": "Auto-extract reusable patterns from Claude Code sessions as learned skills. Use across all maestro phases to capture and reuse session learnings.",
+    "maestro_phases": {
+      "cross-cutting": "Extract patterns after significant implementation or debugging sessions. Save as reusable skills for future reference."
+    },
+    "related": ["maestro:continuous-learning-v2", "maestro:strategic-compact", "maestro:eval-harness"]
+  },
+  "maestro:continuous-learning-v2": {
+    "lifecycle": ["cross-cutting"],
+    "domain": ["practice:learning"],
+    "description": "Instinct-based learning system with hooks, confidence scoring, and skill evolution. Use across all maestro phases for project-scoped pattern learning via session observation.",
+    "maestro_phases": {
+      "cross-cutting": "Observe sessions via hooks, create atomic instincts with confidence scoring. Evolve instincts into skills/commands/agents over time."
+    },
+    "related": ["maestro:continuous-learning", "maestro:plankton-code-quality", "maestro:eval-harness"]
+  },
+  "maestro:deployment-patterns": {
+    "lifecycle": ["implement", "review"],
+    "domain": ["practice:deployment"],
+    "description": "Deployment workflows, CI/CD pipelines, Docker containerization, and rollback strategies. Use during maestro:implement for deployment setup and maestro:review for production readiness.",
+    "maestro_phases": {
+      "implement": "Apply deployment patterns when setting up CI/CD, containerization, or infrastructure-as-code.",
+      "review": "Use production readiness checklist during review. Verify health checks, rollback strategy, and environment configuration."
+    },
+    "related": ["maestro:docker-patterns", "maestro:verification-loop", "maestro:security-review"]
+  },
+  "maestro:docker-patterns": {
+    "lifecycle": ["implement", "review"],
+    "domain": ["practice:docker"],
+    "description": "Docker and Docker Compose patterns for local development, container security, and multi-service orchestration. Use during maestro:implement for containerization and maestro:review for container security.",
+    "maestro_phases": {
+      "implement": "Apply Docker patterns when containerizing applications. Use multi-stage builds, proper layer caching, and security-hardened base images.",
+      "review": "Review container security, volume strategies, networking configuration, and resource limits."
+    },
+    "related": ["maestro:deployment-patterns", "maestro:security-review", "maestro:backend-patterns"]
+  },
+  "maestro:frontend-slides": {
+    "lifecycle": ["cross-cutting"],
+    "domain": ["content:presentations"],
+    "description": "Create animation-rich HTML presentations from scratch or convert PowerPoint files. Use in any maestro phase when building presentation slides or converting PPT/PPTX.",
+    "maestro_phases": {
+      "cross-cutting": "Apply slide creation patterns for presentations in any phase. Support both from-scratch and PPT conversion workflows."
+    },
+    "related": ["maestro:article-writing", "maestro:content-engine", "maestro:investor-materials"]
+  },
+  "maestro:investor-materials": {
+    "lifecycle": ["cross-cutting"],
+    "domain": ["content:fundraising"],
+    "description": "Pitch decks, one-pagers, investor memos, financial models, and fundraising materials. Use in any maestro phase when producing investor-facing documents.",
+    "maestro_phases": {
+      "cross-cutting": "Apply fundraising document patterns when creating investor materials. Ensure consistency across pitch deck, memo, and financial model."
+    },
+    "related": ["maestro:investor-outreach", "maestro:market-research", "maestro:frontend-slides"]
+  },
+  "maestro:investor-outreach": {
+    "lifecycle": ["cross-cutting"],
+    "domain": ["content:fundraising"],
+    "description": "Cold emails, warm intros, follow-ups, and investor communications for fundraising. Use in any maestro phase when drafting investor-facing outreach messages.",
+    "maestro_phases": {
+      "cross-cutting": "Apply investor communication patterns for outreach. Personalize per investor profile, maintain concise and credible tone."
+    },
+    "related": ["maestro:investor-materials", "maestro:market-research", "maestro:article-writing"]
+  },
+  "maestro:plankton-code-quality": {
+    "lifecycle": ["cross-cutting"],
+    "domain": ["practice:quality"],
+    "description": "Write-time code quality enforcement via Plankton hooks for auto-formatting, linting, and Claude-powered fixes. Use across all maestro phases as a quality gate on file edits.",
+    "maestro_phases": {
+      "cross-cutting": "Enforce code quality on every file edit via hooks. Auto-format, lint, and apply Claude-powered fixes at write time."
+    },
+    "related": ["maestro:coding-standards", "maestro:continuous-learning-v2", "maestro:verification-loop"]
+  },
+  "maestro:project-guidelines-example": {
+    "lifecycle": ["cross-cutting"],
+    "domain": ["practice:template"],
+    "description": "Example project-specific skill template based on a real production application. Use during maestro:setup as a reference for creating custom project skills.",
+    "maestro_phases": {
+      "cross-cutting": "Reference as a template when creating project-specific skills during setup. Shows structure and conventions for custom skills."
+    },
+    "related": ["maestro:configure-ecc", "maestro:coding-standards", "maestro:plankton-code-quality"]
+  },
+  "maestro:visa-doc-translate": {
+    "lifecycle": ["cross-cutting"],
+    "domain": ["content:translation"],
+    "description": "Translate visa application documents (images) to English and create bilingual PDFs. Use in any maestro phase when translating documents for visa applications.",
+    "maestro_phases": {
+      "cross-cutting": "Apply document translation patterns when processing visa documents. Create bilingual PDF output with original and translation."
+    },
+    "related": ["maestro:article-writing", "maestro:nutrient-document-processing", "maestro:content-engine"]
+  }
+}

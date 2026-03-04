@@ -11,6 +11,16 @@
 npx skills add ReinaMacCredy/maestro
 ```
 
+**Codex install (optional runtime):**
+```bash
+bash scripts/install-codex.sh
+```
+
+**Codex install with optional ECC skillpack:**
+```bash
+bash scripts/install-codex.sh --with-ecc-skillpack
+```
+
 **Install specific skills and agents:**
 ```bash
 npx skills add ReinaMacCredy/maestro --skill planning --agent claude-code --agent amp
@@ -53,6 +63,8 @@ Enable Agent Teams in `~/.claude/settings.json`:
 ```
 
 ## Commands
+
+Maestro command names are unchanged across Claude Code, Amp, and Codex compatibility paths.
 
 ### Core Workflow
 
@@ -110,6 +122,30 @@ These MCP servers enhance the Maestro experience:
 | Agent Definitions | [.claude/agents/](.claude/agents/) |
 | Agent Teams Guide | [docs/AGENT-TEAMS.md](docs/AGENT-TEAMS.md) |
 | Universal Skills Format | [docs/AGENT-SKILLS.md](docs/AGENT-SKILLS.md) |
+| Codex Compatibility | [.codex/](.codex/) |
+
+## Optional ECC Skillpack
+
+Maestro includes an optional ECC-derived skillpack under `skillpacks/ecc/skills/`.
+It is intentionally not active by default.
+
+```bash
+# Enable all optional ECC skills
+bash scripts/enable-ecc-skillpack.sh all
+
+# Disable all optional ECC skills
+bash scripts/disable-ecc-skillpack.sh all
+```
+
+ECC hook toggles:
+
+```bash
+# Disable ECC quality gates (default is enabled)
+export MAESTRO_ENABLE_ECC_QUALITY_GATES=0
+
+# Enable ECC learning observer hooks (default is disabled)
+export MAESTRO_ENABLE_LEARNING_HOOKS=1
+```
 
 ## Credits
 
