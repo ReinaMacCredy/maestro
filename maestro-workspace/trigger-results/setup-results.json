@@ -1,0 +1,1075 @@
+Evaluating: Scaffolds project context (product, tech stack, coding guidelines, product guidelines, workflow) and initializes track registry. Use for first-time project onboarding.
+Results: 109/118 passed
+  [FAIL] rate=0/1 expected=True: can you scaffold the project context? I need the tech stack doc and pr
+  [FAIL] rate=0/1 expected=True: I just cloned this repo and want to set up maestro so we can start tra
+  [FAIL] rate=0/1 expected=True: initialize maestro in this project -- product context, tech stack, gui
+  [FAIL] rate=0/1 expected=True: let's onboard this codebase to the maestro workflow, it's a Python Fas
+  [FAIL] rate=0/1 expected=True: run maestro setup with --reset, I want to redo the product definition 
+  [FAIL] rate=0/1 expected=True: scaffold the .maestro directory with all the context files -- product,
+  [FAIL] rate=0/1 expected=True: this is a brand new project, let's get maestro initialized before we s
+  [PASS] rate=0/1 expected=False: I want to regenerate the AGENTS.md and CLAUDE.md files for this projec
+  [FAIL] rate=0/1 expected=True: configure maestro for this monorepo -- it has a React frontend in apps
+  [PASS] rate=0/1 expected=False: we need a context file that explains the codebase to other agents. som
+  [PASS] rate=0/1 expected=False: generate the progressive disclosure context files -- building_the_proj
+  [PASS] rate=0/1 expected=False: create CLAUDE.md for this codebase -- I want Claude to know the build 
+  [PASS] rate=0/1 expected=False: I need an AGENTS.md that covers what this project is, how to build it,
+  [PASS] rate=0/1 expected=False: rebuild the AGENTS.md from scratch -- reset, the codebase has changed 
+  [PASS] rate=0/1 expected=False: create context files so any AI coding agent understands this repo -- p
+  [PASS] rate=0/1 expected=False: make an AGENTS.md with the WHAT/WHY/HOW framework for this Python data
+  [PASS] rate=0/1 expected=False: I need to add a dark mode toggle to the settings page. Pretty straight
+  [PASS] rate=0/1 expected=False: there's a login timeout bug where sessions expire after 5 minutes inst
+  [PASS] rate=0/1 expected=False: let's create a track for fixing that bug where the sidebar collapses o
+  [PASS] rate=0/1 expected=False: create a track to refactor the database connection pooling -- it's cau
+  [PASS] rate=0/1 expected=False: new feature: implement real-time notifications using websockets and a 
+  [PASS] rate=0/1 expected=False: plan out the work for adding Stripe payment integration with subscript
+  [PASS] rate=0/1 expected=False: start a new bug track for the broken file upload on mobile Safari -- f
+  [PASS] rate=0/1 expected=False: I want to add a simple 'export to CSV' button on the reports page. jus
+  [PASS] rate=0/1 expected=False: new chore: upgrade all major dependencies including React 19, Next.js 
+  [PASS] rate=0/1 expected=False: create a track for updating the footer copyright year from 2025 to 202
+  [PASS] rate=0/1 expected=False: we need to design the payment processing pipeline. it has to handle st
+  [PASS] rate=0/1 expected=False: I want to add a feature but I'm not totally sure what it should look l
+  [PASS] rate=0/1 expected=False: we're building a multi-tenant SaaS platform from scratch. need to desi
+  [PASS] rate=0/1 expected=False: ok I want to build a real-time collaborative editing system. multiple 
+  [PASS] rate=0/1 expected=False: I want to design a plugin architecture for our editor -- third party d
+  [PASS] rate=0/1 expected=False: let's do deep discovery on building a HIPAA-compliant patient records 
+  [PASS] rate=0/1 expected=False: design an event-driven microservices architecture for our e-commerce p
+  [PASS] rate=0/1 expected=False: help me design a complex RBAC system with dynamic permissions, SSO via
+  [PASS] rate=0/1 expected=False: deep dive into requirements for a financial transaction processing sys
+  [PASS] rate=0/1 expected=False: let's do thorough discovery for an AI-powered content moderation pipel
+  [PASS] rate=0/1 expected=False: ok the plan for the auth-refactor track looks good. let's start implem
+  [PASS] rate=0/1 expected=False: run the dark-mode track with --team, I want parallel agents on it sinc
+  [PASS] rate=0/1 expected=False: resume implementing the dashboard track -- I left off partway through 
+  [PASS] rate=0/1 expected=False: I'm ready to implement -- kick off the dark_mode_20260301 track in tea
+  [PASS] rate=0/1 expected=False: execute the payment_integration track -- we've got 3 phases, use --par
+  [PASS] rate=0/1 expected=False: the spec and plan are approved, go ahead and implement the notificatio
+  [PASS] rate=0/1 expected=False: pick up the bug fix track and start working through the tasks
+  [PASS] rate=0/1 expected=False: start implementing phase 2 of the db_migration track, phase 1 is alrea
+  [PASS] rate=0/1 expected=False: let's start coding the tasks from that plan we just finished, single a
+  [PASS] rate=0/1 expected=False: I finished implementing the search feature. can you review the code ag
+  [PASS] rate=0/1 expected=False: do a code review on the current track -- check for security issues and
+  [PASS] rate=0/1 expected=False: check if the api-v2 track passes review. I think there might be some s
+  [PASS] rate=0/1 expected=False: review the auth_flow track implementation -- does it match the spec we
+  [PASS] rate=0/1 expected=False: verify the payment_integration track -- check code quality, test cover
+  [PASS] rate=0/1 expected=False: I finished implementing the user_settings track, can you audit the cod
+  [PASS] rate=0/1 expected=False: review what we've built for the api_refactor track, especially the bre
+  [PASS] rate=0/1 expected=False: validate the db_migration track against the plan, did we miss any task
+  [PASS] rate=0/1 expected=False: review --current, let's see how the active track holds up against the 
+  [PASS] rate=0/1 expected=False: what's the status of all my tracks? which ones are done, which are in 
+  [PASS] rate=0/1 expected=False: how far along are we on the api-v2 track? I need to know how many task
+  [PASS] rate=0/1 expected=False: how are we doing on the tracks? give me an overview of everything
+  [PASS] rate=0/1 expected=False: show me where things stand with the current implementation -- phases, 
+  [PASS] rate=0/1 expected=False: what should I work on next? which track or task is up?
+  [PASS] rate=0/1 expected=False: are there any blockers on the current tracks I should know about?
+  [PASS] rate=0/1 expected=False: give me a status report on all maestro tracks -- completion stats and 
+  [PASS] rate=0/1 expected=False: where did we leave off last session? what's the next task I should pic
+  [PASS] rate=0/1 expected=False: we decided to use PostgreSQL instead of MongoDB for this project. save
+  [PASS] rate=0/1 expected=False: remember that the API rate limit is 100 req/min per user and we need t
+  [PASS] rate=0/1 expected=False: show me my notepad -- what priority notes do I have saved?
+  [PASS] rate=0/1 expected=False: make a note that we're using bun not npm for this project and it matte
+  [PASS] rate=0/1 expected=False: I need to document a constraint: the legacy API must stay backward-com
+  [PASS] rate=0/1 expected=False: make a priority note: all API responses must include X-Request-ID in h
+  [PASS] rate=0/1 expected=False: save this as a note -- staging DB credentials rotate every 30 days, la
+  [PASS] rate=0/1 expected=False: clear the working memory section, most of those items are from last we
+  [PASS] rate=0/1 expected=False: jot down: the legacy /v1/users endpoint is deprecated, redirect to /v2
+  [PASS] rate=0/1 expected=False: prune the notepad -- some of those working memory items are from compl
+  [PASS] rate=0/1 expected=False: add to manual notes: always run migrations with --fake-initial on firs
+  [PASS] rate=0/1 expected=False: the implementation of phase 3 on the search track broke everything. ro
+  [PASS] rate=0/1 expected=False: undo the last task I implemented on the auth-refactor track. the appro
+  [PASS] rate=0/1 expected=False: the implementation is done but I want to start fresh on the whole auth
+  [PASS] rate=0/1 expected=False: undo the implementation of the auth_flow_20260228 track -- it broke th
+  [PASS] rate=0/1 expected=False: roll back phase 2 of the current track, the database migration was wro
+  [PASS] rate=0/1 expected=False: revert task 'add-webhook-handler' from phase 1 of the integrations tra
+  [PASS] rate=0/1 expected=False: the payment integration track caused regressions in checkout, revert t
+  [PASS] rate=0/1 expected=False: take back all changes from track db_migration_20260301, we need to use
+  [PASS] rate=0/1 expected=False: can you look at this python script and tell me why it's throwing a Key
+  [PASS] rate=0/1 expected=False: write me a React component that shows a sortable data table with pagin
+  [PASS] rate=0/1 expected=False: I want to create a new git branch for the upcoming release and tag it 
+  [PASS] rate=0/1 expected=False: read the README and explain how this project works
+  [PASS] rate=0/1 expected=False: I need to set up my project for the first time. Can you install the de
+  [PASS] rate=0/1 expected=False: review this PR for me -- check the diff and leave comments on anything
+  [PASS] rate=0/1 expected=False: what's the status of the CI pipeline? are the latest builds passing?
+  [PASS] rate=0/1 expected=False: revert the last commit, I pushed it by accident
+  [PASS] rate=0/1 expected=False: I need to add a loading spinner to the submit button. that's it, nothi
+  [PASS] rate=0/1 expected=False: set up the development environment for this project -- install depende
+  [PASS] rate=0/1 expected=False: write a Jest unit test for the UserService.createUser method with mock
+  [PASS] rate=0/1 expected=False: git revert HEAD~3 -- I want to undo the last 3 commits on this branch
+  [PASS] rate=0/1 expected=False: can you review this pull request on GitHub? here's the link: github.co
+  [PASS] rate=0/1 expected=False: git status -- show me the working tree
+  [PASS] rate=0/1 expected=False: write a README.md for this project with installation instructions, usa
+  [PASS] rate=0/1 expected=False: add a JSDoc comment to this function explaining the retry logic and ba
+  [PASS] rate=0/1 expected=False: configure ESLint, Prettier, and Husky hooks for the codebase
+  [PASS] rate=0/1 expected=False: how many open GitHub issues do we have in the backlog?
+  [PASS] rate=0/1 expected=False: help me brainstorm feature ideas for the next quarter's roadmap
+  [PASS] rate=0/1 expected=False: write API documentation for the /users and /orders endpoints using Ope
+  [PASS] rate=0/1 expected=False: look at my submitOrder function and tell me if there are any edge case
+  [PASS] rate=0/1 expected=False: create a new Next.js project from scratch using create-next-app
+  [PASS] rate=0/1 expected=False: update the CLAUDE.md file with the new bun test command instead of npm
+  [PASS] rate=0/1 expected=False: save the output of this API call to a local JSON file for reference
+  [PASS] rate=0/1 expected=False: undo my last edit to server.ts, I preferred the previous version of th
+  [PASS] rate=0/1 expected=False: review the changelog entries before we cut the v2.4.0 release
+  [PASS] rate=0/1 expected=False: remove the feature flag for dark mode from the LaunchDarkly config
+  [PASS] rate=0/1 expected=False: let's plan out how to implement a user authentication system for my Dj
+  [PASS] rate=0/1 expected=False: plan a simple webhook receiver endpoint that validates signatures and 
+  [PASS] rate=0/1 expected=False: I need to design a complex multi-tenant SaaS platform with per-tenant 
+  [PASS] rate=0/1 expected=False: let's do deep discovery on the HIPAA compliance requirements -- this n
+  [PASS] rate=0/1 expected=False: note down that we decided to use PostgreSQL instead of MySQL for the u
+  [PASS] rate=0/1 expected=False: I want to capture this workflow as a reusable skill for future project
+  [PASS] rate=0/1 expected=False: what does the product.md context file say about our target users and k
+  [FAIL] rate=0/1 expected=True: I want to use the maestro workflow for this repo -- where do I start? 
+  [PASS] rate=0/1 expected=False: read the existing AGENTS.md and tell me what it says about the project
+  [PASS] rate=0/1 expected=False: explain what AGENTS.md is and why I'd want one in my repo
+{
+  "skill_name": "maestro-setup",
+  "description": "Scaffolds project context (product, tech stack, coding guidelines, product guidelines, workflow) and initializes track registry. Use for first-time project onboarding.",
+  "results": [
+    {
+      "query": "can you scaffold the project context? I need the tech stack doc and product guidelines before we start building anything",
+      "should_trigger": true,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": false
+    },
+    {
+      "query": "I just cloned this repo and want to set up maestro so we can start tracking features",
+      "should_trigger": true,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": false
+    },
+    {
+      "query": "initialize maestro in this project -- product context, tech stack, guidelines, the works",
+      "should_trigger": true,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": false
+    },
+    {
+      "query": "let's onboard this codebase to the maestro workflow, it's a Python FastAPI backend",
+      "should_trigger": true,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": false
+    },
+    {
+      "query": "run maestro setup with --reset, I want to redo the product definition and tech stack",
+      "should_trigger": true,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": false
+    },
+    {
+      "query": "scaffold the .maestro directory with all the context files -- product, tech stack, guidelines, workflow",
+      "should_trigger": true,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": false
+    },
+    {
+      "query": "this is a brand new project, let's get maestro initialized before we start any feature work",
+      "should_trigger": true,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": false
+    },
+    {
+      "query": "I want to regenerate the AGENTS.md and CLAUDE.md files for this project. The codebase has changed a lot since they were last generated.",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "configure maestro for this monorepo -- it has a React frontend in apps/web and a Go backend in services/api",
+      "should_trigger": true,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": false
+    },
+    {
+      "query": "we need a context file that explains the codebase to other agents. something with the WHAT/WHY/HOW framework you use",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "generate the progressive disclosure context files -- building_the_project.md, running_tests.md, that kind of thing",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "create CLAUDE.md for this codebase -- I want Claude to know the build commands, tech stack, and rules",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "I need an AGENTS.md that covers what this project is, how to build it, and the coding conventions",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "rebuild the AGENTS.md from scratch -- reset, the codebase has changed significantly since it was generated",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "create context files so any AI coding agent understands this repo -- progressive disclosure, under 100 lines",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "make an AGENTS.md with the WHAT/WHY/HOW framework for this Python data pipeline project",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "I need to add a dark mode toggle to the settings page. Pretty straightforward -- just a boolean preference that swaps the CSS theme.",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "there's a login timeout bug where sessions expire after 5 minutes instead of 30, let's plan the fix",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "let's create a track for fixing that bug where the sidebar collapses on mobile when you rotate the device. I can reproduce it on iPhone 14.",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "create a track to refactor the database connection pooling -- it's causing timeouts under load",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "new feature: implement real-time notifications using websockets and a Redis pub/sub backend",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "plan out the work for adding Stripe payment integration with subscriptions and invoicing",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "start a new bug track for the broken file upload on mobile Safari -- files over 5MB fail silently",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "I want to add a simple 'export to CSV' button on the reports page. just dump the table data as a csv download. maybe 20 lines of code.",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "new chore: upgrade all major dependencies including React 19, Next.js 15, and TypeScript 5.5",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "create a track for updating the footer copyright year from 2025 to 2026 across all pages",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "we need to design the payment processing pipeline. it has to handle stripe and paypal, support subscriptions and one-time payments, deal with webhooks, handle refunds, comply with PCI-DSS, and integrate with our existing user/org model. getting this wrong would be really expensive.",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "I want to add a feature but I'm not totally sure what it should look like yet. Something around notifications -- maybe email, maybe push, maybe both? And we'd need preferences per user, quiet hours, batching... honestly I need help figuring out the requirements first.",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "we're building a multi-tenant SaaS platform from scratch. need to design the tenant isolation model, billing integration, role-based access per tenant, data partitioning strategy, and onboarding flow. some tenants will be on shared infra, others need dedicated. oh and we need SOC2 compliance.",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "ok I want to build a real-time collaborative editing system. multiple users editing the same document simultaneously with conflict resolution, presence indicators, cursor tracking, and offline support with sync. this is going to touch the websocket layer, the document model, the auth system, and we might need a CRDT library.",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "I want to design a plugin architecture for our editor -- third party devs should be able to write plugins with a stable API, there needs to be a sandbox for security, a marketplace for discovery, and versioning so plugins don't break on updates. this is a core platform bet for us.",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "let's do deep discovery on building a HIPAA-compliant patient records system with audit logging and role-based access",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "design an event-driven microservices architecture for our e-commerce platform -- order processing, inventory, payments, shipping",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "help me design a complex RBAC system with dynamic permissions, SSO via SAML/OIDC, and comprehensive audit logging",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "deep dive into requirements for a financial transaction processing system with reconciliation, compliance reporting, and fraud detection",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "let's do thorough discovery for an AI-powered content moderation pipeline -- classification, appeals workflow, human review queue, policy engine",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "ok the plan for the auth-refactor track looks good. let's start implementing it. single agent is fine.",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "run the dark-mode track with --team, I want parallel agents on it since the phases are independent",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "resume implementing the dashboard track -- I left off partway through phase 2 yesterday",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "I'm ready to implement -- kick off the dark_mode_20260301 track in team mode with parallel workers",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "execute the payment_integration track -- we've got 3 phases, use --parallel to speed it up",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "the spec and plan are approved, go ahead and implement the notifications feature track",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "pick up the bug fix track and start working through the tasks",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "start implementing phase 2 of the db_migration track, phase 1 is already done",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "let's start coding the tasks from that plan we just finished, single agent is fine",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "I finished implementing the search feature. can you review the code against the spec? I want to make sure I didn't miss any requirements.",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "do a code review on the current track -- check for security issues and make sure the tests actually cover what the spec asks for",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "check if the api-v2 track passes review. I think there might be some spec requirements I missed in the error handling section.",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "review the auth_flow track implementation -- does it match the spec we wrote?",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "verify the payment_integration track -- check code quality, test coverage, and any security issues",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "I finished implementing the user_settings track, can you audit the code against the spec?",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "review what we've built for the api_refactor track, especially the breaking changes",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "validate the db_migration track against the plan, did we miss any tasks?",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "review --current, let's see how the active track holds up against the spec",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "what's the status of all my tracks? which ones are done, which are in progress, and what should I work on next?",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "how far along are we on the api-v2 track? I need to know how many tasks are left in phase 2",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "how are we doing on the tracks? give me an overview of everything",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "show me where things stand with the current implementation -- phases, tasks, blockers",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "what should I work on next? which track or task is up?",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "are there any blockers on the current tracks I should know about?",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "give me a status report on all maestro tracks -- completion stats and next actions",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "where did we leave off last session? what's the next task I should pick up?",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "we decided to use PostgreSQL instead of MongoDB for this project. save that as a priority note so it gets injected into every session going forward.",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "remember that the API rate limit is 100 req/min per user and we need to respect that in all integration tests. put it in the notepad.",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "show me my notepad -- what priority notes do I have saved?",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "make a note that we're using bun not npm for this project and it matters for CI too",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "I need to document a constraint: the legacy API must stay backward-compatible through v3 launch. pin this as a priority note.",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "make a priority note: all API responses must include X-Request-ID in headers per the compliance audit",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "save this as a note -- staging DB credentials rotate every 30 days, last rotated Feb 15",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "clear the working memory section, most of those items are from last week and resolved",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "jot down: the legacy /v1/users endpoint is deprecated, redirect to /v2/users by March 15",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "prune the notepad -- some of those working memory items are from completed tracks",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "add to manual notes: always run migrations with --fake-initial on first deploy to staging",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "the implementation of phase 3 on the search track broke everything. roll it back -- revert just that phase, keep phases 1 and 2.",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "undo the last task I implemented on the auth-refactor track. the approach was wrong and I want to try a different one.",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "the implementation is done but I want to start fresh on the whole auth track. revert everything.",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "undo the implementation of the auth_flow_20260228 track -- it broke the login page for SSO users",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "roll back phase 2 of the current track, the database migration was wrong and corrupted the index",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "revert task 'add-webhook-handler' from phase 1 of the integrations track",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "the payment integration track caused regressions in checkout, revert the whole thing",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "take back all changes from track db_migration_20260301, we need to use a different migration strategy",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "can you look at this python script and tell me why it's throwing a KeyError on line 47? here's the traceback...",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "write me a React component that shows a sortable data table with pagination. use shadcn/ui.",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "I want to create a new git branch for the upcoming release and tag it as v2.1.0",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "read the README and explain how this project works",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "I need to set up my project for the first time. Can you install the dependencies with npm and configure eslint?",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "review this PR for me -- check the diff and leave comments on anything that looks off",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "what's the status of the CI pipeline? are the latest builds passing?",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "revert the last commit, I pushed it by accident",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "I need to add a loading spinner to the submit button. that's it, nothing else.",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "set up the development environment for this project -- install dependencies, configure Docker, etc.",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "write a Jest unit test for the UserService.createUser method with mocked database calls",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "git revert HEAD~3 -- I want to undo the last 3 commits on this branch",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "can you review this pull request on GitHub? here's the link: github.com/myorg/myrepo/pull/247",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "git status -- show me the working tree",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "write a README.md for this project with installation instructions, usage examples, and contributing guide",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "add a JSDoc comment to this function explaining the retry logic and backoff strategy",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "configure ESLint, Prettier, and Husky hooks for the codebase",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "how many open GitHub issues do we have in the backlog?",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "help me brainstorm feature ideas for the next quarter's roadmap",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "write API documentation for the /users and /orders endpoints using OpenAPI spec",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "look at my submitOrder function and tell me if there are any edge cases I'm missing",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "create a new Next.js project from scratch using create-next-app",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "update the CLAUDE.md file with the new bun test command instead of npm test",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "save the output of this API call to a local JSON file for reference",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "undo my last edit to server.ts, I preferred the previous version of that function",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "review the changelog entries before we cut the v2.4.0 release",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "remove the feature flag for dark mode from the LaunchDarkly config",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "let's plan out how to implement a user authentication system for my Django app -- I need a spec and phased breakdown",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "plan a simple webhook receiver endpoint that validates signatures and forwards to a queue",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "I need to design a complex multi-tenant SaaS platform with per-tenant database isolation and custom domains",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "let's do deep discovery on the HIPAA compliance requirements -- this needs thorough domain analysis",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "note down that we decided to use PostgreSQL instead of MySQL for the user store",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "I want to capture this workflow as a reusable skill for future projects",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "what does the product.md context file say about our target users and key features?",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "I want to use the maestro workflow for this repo -- where do I start? what do I need to set up?",
+      "should_trigger": true,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": false
+    },
+    {
+      "query": "read the existing AGENTS.md and tell me what it says about the project",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    },
+    {
+      "query": "explain what AGENTS.md is and why I'd want one in my repo",
+      "should_trigger": false,
+      "trigger_rate": 0.0,
+      "triggers": 0,
+      "runs": 1,
+      "pass": true
+    }
+  ],
+  "summary": {
+    "total": 118,
+    "passed": 109,
+    "failed": 9
+  }
+}

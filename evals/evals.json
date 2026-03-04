@@ -1,0 +1,324 @@
+{
+  "skill_name": "maestro",
+  "description": "Functional test cases for all 9 maestro skills. Each eval exercises a skill end-to-end and checks for expected outputs.",
+  "evals": [
+    {
+      "id": 1,
+      "skill": "maestro:setup",
+      "prompt": "I just started a new TypeScript web app using Next.js 14, Tailwind, and Supabase. It's a project management tool for small teams. Run maestro setup so I can start using tracks.",
+      "expected_output": "Should create .maestro/context/ with product.md, tech-stack.md, guidelines.md, product-guidelines.md, workflow.md, and index.md. Should also create .maestro/tracks.md. The tech-stack.md should mention TypeScript, Next.js, Tailwind, and Supabase.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "setup-context-dir",
+          "text": ".maestro/context/ directory exists with at least product.md, tech-stack.md, and guidelines.md",
+          "type": "file_exists"
+        },
+        {
+          "id": "setup-tracks-registry",
+          "text": ".maestro/tracks.md registry file is created",
+          "type": "file_exists"
+        },
+        {
+          "id": "setup-tech-stack-content",
+          "text": "tech-stack.md mentions the user's stated stack (TypeScript, Next.js, Tailwind, Supabase)",
+          "type": "content_check"
+        },
+        {
+          "id": "setup-product-context",
+          "text": "product.md captures that this is a project management tool for small teams",
+          "type": "content_check"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "skill": "maestro:setup",
+      "prompt": "run /maestro:setup --reset to regenerate the project context. the tech stack changed -- we dropped Supabase and switched to Prisma with a self-hosted Postgres.",
+      "expected_output": "Should regenerate all .maestro/context/ files. tech-stack.md should now mention Prisma and PostgreSQL instead of Supabase. Existing track data should not be destroyed.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "setup-reset-preserves-tracks",
+          "text": "Existing .maestro/tracks.md and track directories are preserved after --reset",
+          "type": "state_check"
+        },
+        {
+          "id": "setup-reset-updates-stack",
+          "text": "tech-stack.md reflects the new stack (Prisma, PostgreSQL) not the old one (Supabase)",
+          "type": "content_check"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "skill": "maestro:AGENTS.md",
+      "prompt": "generate the AGENTS.md and CLAUDE.md for this project. the codebase is a monorepo with a Go backend in services/ and a React frontend in web/. There's also a shared proto/ directory for gRPC definitions.",
+      "expected_output": "Should produce AGENTS.md and CLAUDE.md under 100 lines each. Should generate progressive disclosure files in .maestro/context/. The AGENTS.md should reference the Go backend, React frontend, and gRPC protos.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "agents-md-created",
+          "text": "AGENTS.md file is created at the project root",
+          "type": "file_exists"
+        },
+        {
+          "id": "agents-md-length",
+          "text": "AGENTS.md is under 100 lines",
+          "type": "line_count"
+        },
+        {
+          "id": "agents-md-structure",
+          "text": "AGENTS.md uses the WHAT/WHY/HOW framework",
+          "type": "content_check"
+        },
+        {
+          "id": "agents-progressive-disclosure",
+          "text": "Progressive disclosure files (building_the_project.md, running_tests.md, etc.) are created in .maestro/context/",
+          "type": "file_exists"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "skill": "maestro:new-track",
+      "prompt": "create a new track for adding email verification to the signup flow. When a user registers, they should get a verification email with a 6-digit code. The code expires after 15 minutes. Users can't access protected routes until verified.",
+      "expected_output": "Should create a track directory under .maestro/tracks/ with spec.md, plan.md, metadata.json, and index.md. The spec should capture all requirements (6-digit code, 15-min expiry, route protection). The plan should have phased TDD tasks.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "new-track-dir",
+          "text": "Track directory created under .maestro/tracks/ with a meaningful slug (e.g., email-verification)",
+          "type": "file_exists"
+        },
+        {
+          "id": "new-track-spec",
+          "text": "spec.md exists and captures 6-digit code, 15-minute expiry, and route protection requirements",
+          "type": "content_check"
+        },
+        {
+          "id": "new-track-plan",
+          "text": "plan.md exists with phased tasks and TDD markers",
+          "type": "content_check"
+        },
+        {
+          "id": "new-track-metadata",
+          "text": "metadata.json exists with track type, status, and creation date",
+          "type": "file_exists"
+        },
+        {
+          "id": "new-track-registry",
+          "text": "Track is registered in .maestro/tracks.md",
+          "type": "content_check"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "skill": "maestro:new-track",
+      "prompt": "I have a bug: the user avatar doesn't show up in the navbar after login. It works after a page refresh. Pretty sure it's a state sync issue between the auth context and the navbar component. Create a bug track for it.",
+      "expected_output": "Should create a bug-type track. The spec should capture the reproduction steps (login -> avatar missing -> refresh fixes it) and the suspected root cause (state sync). Plan should include a reproduce-first approach.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "bug-track-type",
+          "text": "metadata.json has type 'bug' (not 'feature')",
+          "type": "content_check"
+        },
+        {
+          "id": "bug-track-repro",
+          "text": "spec.md includes reproduction steps",
+          "type": "content_check"
+        },
+        {
+          "id": "bug-track-plan-repro-first",
+          "text": "plan.md starts with a reproduce/isolate phase before the fix",
+          "type": "content_check"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "skill": "maestro:design",
+      "prompt": "I want to build a real-time analytics dashboard. It needs to ingest events from our API (hundreds of thousands per minute), aggregate them in near-real-time, and render interactive charts. Users should be able to create custom dashboard layouts, set up alerts on metric thresholds, and share dashboards with their team. We also need role-based access -- some dashboards contain sensitive financial data. I'm not sure whether to use Kafka or a simpler queue, and I'm torn between ClickHouse and TimescaleDB for the analytics store.",
+      "expected_output": "Should run the full design interview: classification (multi-component), vision statement, user journeys, domain analysis. Should explore the Kafka vs simpler queue tradeoff and the ClickHouse vs TimescaleDB decision. Output should be a rich spec.md with FR traceability and a phased plan.md.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "design-spec-vision",
+          "text": "spec.md includes a vision or product overview section",
+          "type": "content_check"
+        },
+        {
+          "id": "design-spec-journeys",
+          "text": "spec.md includes user journeys or user stories",
+          "type": "content_check"
+        },
+        {
+          "id": "design-spec-frs",
+          "text": "spec.md has numbered functional requirements with traceability",
+          "type": "content_check"
+        },
+        {
+          "id": "design-spec-nfrs",
+          "text": "spec.md addresses non-functional requirements (performance, security, scalability)",
+          "type": "content_check"
+        },
+        {
+          "id": "design-tech-decisions",
+          "text": "spec.md discusses the Kafka vs queue and ClickHouse vs TimescaleDB tradeoffs",
+          "type": "content_check"
+        },
+        {
+          "id": "design-plan-phases",
+          "text": "plan.md has multiple phases with clear dependencies",
+          "type": "content_check"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "skill": "maestro:implement",
+      "prompt": "implement the email-verification track. single agent, standard TDD workflow.",
+      "expected_output": "Should pick up the track's plan.md, work through tasks in order with TDD (test first, then implement, then verify). Should produce atomic commits per task. Plan should be updated with completion markers as tasks finish.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "implement-commits",
+          "text": "At least one atomic commit is created during implementation",
+          "type": "git_check"
+        },
+        {
+          "id": "implement-plan-markers",
+          "text": "plan.md tasks are marked with [x] as they complete",
+          "type": "content_check"
+        },
+        {
+          "id": "implement-tests-exist",
+          "text": "Test files are created before or alongside implementation (TDD)",
+          "type": "file_exists"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "skill": "maestro:review",
+      "prompt": "review the email-verification track. I want to know if the implementation matches the spec and if there are any security concerns with how we handle the verification codes.",
+      "expected_output": "Should produce a review report covering intent match, code quality, test coverage, security, and product guidelines. Should flag if verification codes are stored in plaintext or if brute-force protection is missing. Verdict should be PASS/PASS WITH NOTES/NEEDS CHANGES.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "review-5-dimensions",
+          "text": "Review covers all 5 dimensions: intent match, code quality, test coverage, security, product guidelines",
+          "type": "content_check"
+        },
+        {
+          "id": "review-verdict",
+          "text": "Review includes an explicit verdict (PASS, PASS WITH NOTES, or NEEDS CHANGES)",
+          "type": "content_check"
+        },
+        {
+          "id": "review-security-analysis",
+          "text": "Review specifically addresses verification code security (storage, brute-force, expiry enforcement)",
+          "type": "content_check"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "skill": "maestro:status",
+      "prompt": "show me the status of all my tracks. I've been away for a week and need to get oriented.",
+      "expected_output": "Should display track counts by status (active, completed, blocked). For active tracks, show phase/task completion percentages. Identify blockers and suggest what to work on next.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "status-track-counts",
+          "text": "Output includes counts of tracks by status",
+          "type": "content_check"
+        },
+        {
+          "id": "status-phase-progress",
+          "text": "Active tracks show phase/task completion stats",
+          "type": "content_check"
+        },
+        {
+          "id": "status-next-action",
+          "text": "Output includes a suggested next action",
+          "type": "content_check"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "skill": "maestro:note",
+      "prompt": "save this as a priority note: 'All API responses must include request-id headers for distributed tracing. This is a hard requirement from the platform team.'",
+      "expected_output": "Should create or update .maestro/notepad.md with the note in the Priority Context section. The note should be injected into future sessions.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "note-file-exists",
+          "text": ".maestro/notepad.md exists after the command",
+          "type": "file_exists"
+        },
+        {
+          "id": "note-priority-section",
+          "text": "The note appears in the Priority Context section",
+          "type": "content_check"
+        },
+        {
+          "id": "note-content-preserved",
+          "text": "The note text about request-id headers and distributed tracing is preserved accurately",
+          "type": "content_check"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "skill": "maestro:note",
+      "prompt": "show me what's in my notepad right now",
+      "expected_output": "Should display the contents of .maestro/notepad.md, organized by section (Priority Context, Working Memory, Manual).",
+      "files": [],
+      "assertions": [
+        {
+          "id": "note-show-reads-file",
+          "text": "Output displays the contents of .maestro/notepad.md",
+          "type": "content_check"
+        },
+        {
+          "id": "note-show-sections",
+          "text": "Output shows section organization (Priority, Working Memory, Manual)",
+          "type": "content_check"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "skill": "maestro:revert",
+      "prompt": "revert phase 2 of the email-verification track. phase 1 was fine but phase 2 introduced a regression in the login flow.",
+      "expected_output": "Should identify the commits associated with phase 2 of the email-verification track, revert them in reverse chronological order, reset plan.md phase 2 markers to [ ], and run tests to confirm the revert didn't break phase 1.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "revert-commits",
+          "text": "Phase 2 commits are reverted (git revert, not destructive reset)",
+          "type": "git_check"
+        },
+        {
+          "id": "revert-plan-reset",
+          "text": "Phase 2 tasks in plan.md are reset to [ ] (unchecked)",
+          "type": "content_check"
+        },
+        {
+          "id": "revert-phase1-intact",
+          "text": "Phase 1 completion markers remain [x] (untouched)",
+          "type": "content_check"
+        },
+        {
+          "id": "revert-tests-pass",
+          "text": "Tests pass after the revert (phase 1 functionality preserved)",
+          "type": "test_check"
+        }
+      ]
+    }
+  ]
+}

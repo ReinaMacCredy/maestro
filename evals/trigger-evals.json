@@ -1,0 +1,724 @@
+{
+  "description": "Unified trigger evaluation queries for all 9 maestro skills. Tests whether the correct skill fires for each prompt. Merged from cross-skill discrimination set and per-skill description-optimization sets.",
+  "skills_tested": [
+    "maestro:setup",
+    "maestro:AGENTS.md",
+    "maestro:new-track",
+    "maestro:design",
+    "maestro:implement",
+    "maestro:review",
+    "maestro:status",
+    "maestro:note",
+    "maestro:revert"
+  ],
+  "evals": [
+    {
+      "id": 1,
+      "query": "I just cloned this repo and want to set up maestro so we can start tracking features",
+      "should_trigger": "maestro:setup",
+      "notes": "First-time onboarding -- clear setup signal"
+    },
+    {
+      "id": 2,
+      "query": "can you scaffold the project context? I need the tech stack doc and product guidelines before we start building anything",
+      "should_trigger": "maestro:setup",
+      "notes": "Explicit scaffolding request with setup-specific outputs"
+    },
+    {
+      "id": 3,
+      "query": "initialize maestro in this project -- product context, tech stack, guidelines, the works",
+      "should_trigger": "maestro:setup",
+      "notes": "Full maestro initialization"
+    },
+    {
+      "id": 4,
+      "query": "let's onboard this codebase to the maestro workflow, it's a Python FastAPI backend",
+      "should_trigger": "maestro:setup",
+      "notes": "Onboarding with tech context"
+    },
+    {
+      "id": 5,
+      "query": "run maestro setup with --reset, I want to redo the product definition and tech stack",
+      "should_trigger": "maestro:setup",
+      "notes": "Reset flag usage"
+    },
+    {
+      "id": 6,
+      "query": "scaffold the .maestro directory with all the context files -- product, tech stack, guidelines, workflow",
+      "should_trigger": "maestro:setup",
+      "notes": "Explicit directory + file references"
+    },
+    {
+      "id": 7,
+      "query": "this is a brand new project, let's get maestro initialized before we start any feature work",
+      "should_trigger": "maestro:setup",
+      "notes": "New project initialization"
+    },
+    {
+      "id": 8,
+      "query": "configure maestro for this monorepo -- it has a React frontend in apps/web and a Go backend in services/api",
+      "should_trigger": "maestro:setup",
+      "notes": "Monorepo setup with specifics"
+    },
+    {
+      "id": 9,
+      "query": "I want to regenerate the AGENTS.md and CLAUDE.md files for this project. The codebase has changed a lot since they were last generated.",
+      "should_trigger": "maestro:AGENTS.md",
+      "notes": "Direct AGENTS.md regeneration -- not setup"
+    },
+    {
+      "id": 10,
+      "query": "we need a context file that explains the codebase to other agents. something with the WHAT/WHY/HOW framework you use",
+      "should_trigger": "maestro:AGENTS.md",
+      "notes": "WHAT/WHY/HOW is the AGENTS.md framework marker"
+    },
+    {
+      "id": 11,
+      "query": "generate the progressive disclosure context files -- building_the_project.md, running_tests.md, that kind of thing",
+      "should_trigger": "maestro:AGENTS.md",
+      "notes": "Progressive disclosure files are AGENTS.md outputs, not setup"
+    },
+    {
+      "id": 12,
+      "query": "create CLAUDE.md for this codebase -- I want Claude to know the build commands, tech stack, and rules",
+      "should_trigger": "maestro:AGENTS.md",
+      "notes": "CLAUDE.md generation"
+    },
+    {
+      "id": 13,
+      "query": "I need an AGENTS.md that covers what this project is, how to build it, and the coding conventions",
+      "should_trigger": "maestro:AGENTS.md",
+      "notes": "Content-focused AGENTS.md request"
+    },
+    {
+      "id": 14,
+      "query": "rebuild the AGENTS.md from scratch -- reset, the codebase has changed significantly since it was generated",
+      "should_trigger": "maestro:AGENTS.md",
+      "notes": "AGENTS.md reset"
+    },
+    {
+      "id": 15,
+      "query": "create context files so any AI coding agent understands this repo -- progressive disclosure, under 100 lines",
+      "should_trigger": "maestro:AGENTS.md",
+      "notes": "Agent context files with line limit"
+    },
+    {
+      "id": 16,
+      "query": "make an AGENTS.md with the WHAT/WHY/HOW framework for this Python data pipeline project",
+      "should_trigger": "maestro:AGENTS.md",
+      "notes": "Framework-specific request"
+    },
+    {
+      "id": 17,
+      "query": "I need to add a dark mode toggle to the settings page. Pretty straightforward -- just a boolean preference that swaps the CSS theme.",
+      "should_trigger": "maestro:new-track",
+      "notes": "Simple, well-scoped feature -- new-track, not design"
+    },
+    {
+      "id": 18,
+      "query": "let's create a track for fixing that bug where the sidebar collapses on mobile when you rotate the device. I can reproduce it on iPhone 14.",
+      "should_trigger": "maestro:new-track",
+      "notes": "Bug fix track -- new-track handles bugs and simple features"
+    },
+    {
+      "id": 19,
+      "query": "there's a login timeout bug where sessions expire after 5 minutes instead of 30, let's plan the fix",
+      "should_trigger": "maestro:new-track",
+      "notes": "Bug with clear reproduction"
+    },
+    {
+      "id": 20,
+      "query": "new feature: implement real-time notifications using websockets and a Redis pub/sub backend",
+      "should_trigger": "maestro:new-track",
+      "notes": "Feature with clear tech choices -- scoped enough for new-track"
+    },
+    {
+      "id": 21,
+      "query": "create a track to refactor the database connection pooling -- it's causing timeouts under load",
+      "should_trigger": "maestro:new-track",
+      "notes": "Refactor with clear problem statement"
+    },
+    {
+      "id": 22,
+      "query": "start a new bug track for the broken file upload on mobile Safari -- files over 5MB fail silently",
+      "should_trigger": "maestro:new-track",
+      "notes": "Bug track with platform-specific repro"
+    },
+    {
+      "id": 23,
+      "query": "plan out the work for adding Stripe payment integration with subscriptions and invoicing",
+      "should_trigger": "maestro:new-track",
+      "notes": "Feature planning -- scoped to single integration"
+    },
+    {
+      "id": 24,
+      "query": "new chore: upgrade all major dependencies including React 19, Next.js 15, and TypeScript 5.5",
+      "should_trigger": "maestro:new-track",
+      "notes": "Chore-type track"
+    },
+    {
+      "id": 25,
+      "query": "I want to add a simple 'export to CSV' button on the reports page. just dump the table data as a csv download. maybe 20 lines of code.",
+      "should_trigger": "maestro:new-track",
+      "notes": "Small feature -- new-track, not design"
+    },
+    {
+      "id": 26,
+      "query": "create a track for updating the footer copyright year from 2025 to 2026 across all pages",
+      "should_trigger": "maestro:new-track",
+      "notes": "Chore-type track -- clearly new-track"
+    },
+    {
+      "id": 27,
+      "query": "ok I want to build a real-time collaborative editing system. multiple users editing the same document simultaneously with conflict resolution, presence indicators, cursor tracking, and offline support with sync. this is going to touch the websocket layer, the document model, the auth system, and we might need a CRDT library.",
+      "should_trigger": "maestro:design",
+      "notes": "Multi-component system, many subsystems -- design territory"
+    },
+    {
+      "id": 28,
+      "query": "we need to design the payment processing pipeline. it has to handle stripe and paypal, support subscriptions and one-time payments, deal with webhooks, handle refunds, comply with PCI-DSS, and integrate with our existing user/org model. getting this wrong would be really expensive.",
+      "should_trigger": "maestro:design",
+      "notes": "Regulated domain, high cost of error, multi-integration"
+    },
+    {
+      "id": 29,
+      "query": "I want to add a feature but I'm not totally sure what it should look like yet. Something around notifications -- maybe email, maybe push, maybe both? And we'd need preferences per user, quiet hours, batching... honestly I need help figuring out the requirements first.",
+      "should_trigger": "maestro:design",
+      "notes": "Unclear requirements + multi-component -- design's sweet spot"
+    },
+    {
+      "id": 30,
+      "query": "we're building a multi-tenant SaaS platform from scratch. need to design the tenant isolation model, billing integration, role-based access per tenant, data partitioning strategy, and onboarding flow. some tenants will be on shared infra, others need dedicated. oh and we need SOC2 compliance.",
+      "should_trigger": "maestro:design",
+      "notes": "Maximum complexity -- clearly design, not new-track"
+    },
+    {
+      "id": 31,
+      "query": "I want to design a plugin architecture for our editor -- third party devs should be able to write plugins with a stable API, there needs to be a sandbox for security, a marketplace for discovery, and versioning so plugins don't break on updates. this is a core platform bet for us.",
+      "should_trigger": "maestro:design",
+      "notes": "Architecture-level design with security/versioning/extensibility concerns"
+    },
+    {
+      "id": 32,
+      "query": "let's do deep discovery on building a HIPAA-compliant patient records system with audit logging and role-based access",
+      "should_trigger": "maestro:design",
+      "notes": "Regulated domain -- HIPAA compliance"
+    },
+    {
+      "id": 33,
+      "query": "design an event-driven microservices architecture for our e-commerce platform -- order processing, inventory, payments, shipping",
+      "should_trigger": "maestro:design",
+      "notes": "Multi-service architecture"
+    },
+    {
+      "id": 34,
+      "query": "help me design a complex RBAC system with dynamic permissions, SSO via SAML/OIDC, and comprehensive audit logging",
+      "should_trigger": "maestro:design",
+      "notes": "Security system with multiple concerns"
+    },
+    {
+      "id": 35,
+      "query": "deep dive into requirements for a financial transaction processing system with reconciliation, compliance reporting, and fraud detection",
+      "should_trigger": "maestro:design",
+      "notes": "Financial domain with compliance"
+    },
+    {
+      "id": 36,
+      "query": "let's do thorough discovery for an AI-powered content moderation pipeline -- classification, appeals workflow, human review queue, policy engine",
+      "should_trigger": "maestro:design",
+      "notes": "Multi-pipeline system with workflow"
+    },
+    {
+      "id": 37,
+      "query": "ok the plan for the auth-refactor track looks good. let's start implementing it. single agent is fine.",
+      "should_trigger": "maestro:implement",
+      "notes": "Explicit implementation of existing track"
+    },
+    {
+      "id": 38,
+      "query": "run the dark-mode track with --team, I want parallel agents on it since the phases are independent",
+      "should_trigger": "maestro:implement",
+      "notes": "Implementation with team flag"
+    },
+    {
+      "id": 39,
+      "query": "resume implementing the dashboard track -- I left off partway through phase 2 yesterday",
+      "should_trigger": "maestro:implement",
+      "notes": "Resume implementation (--resume flag)"
+    },
+    {
+      "id": 40,
+      "query": "I'm ready to implement -- kick off the dark_mode_20260301 track in team mode with parallel workers",
+      "should_trigger": "maestro:implement",
+      "notes": "Team mode with track name"
+    },
+    {
+      "id": 41,
+      "query": "execute the payment_integration track -- we've got 3 phases, use --parallel to speed it up",
+      "should_trigger": "maestro:implement",
+      "notes": "Parallel flag with phase awareness"
+    },
+    {
+      "id": 42,
+      "query": "the spec and plan are approved, go ahead and implement the notifications feature track",
+      "should_trigger": "maestro:implement",
+      "notes": "Post-approval implementation"
+    },
+    {
+      "id": 43,
+      "query": "pick up the bug fix track and start working through the tasks",
+      "should_trigger": "maestro:implement",
+      "notes": "Casual implementation start"
+    },
+    {
+      "id": 44,
+      "query": "start implementing phase 2 of the db_migration track, phase 1 is already done",
+      "should_trigger": "maestro:implement",
+      "notes": "Phase-specific implementation start"
+    },
+    {
+      "id": 45,
+      "query": "let's start coding the tasks from that plan we just finished, single agent is fine",
+      "should_trigger": "maestro:implement",
+      "notes": "Indirect reference to plan -> implement"
+    },
+    {
+      "id": 46,
+      "query": "I finished implementing the search feature. can you review the code against the spec? I want to make sure I didn't miss any requirements.",
+      "should_trigger": "maestro:review",
+      "notes": "Post-implementation review request"
+    },
+    {
+      "id": 47,
+      "query": "do a code review on the current track -- check for security issues and make sure the tests actually cover what the spec asks for",
+      "should_trigger": "maestro:review",
+      "notes": "Review with specific quality dimensions"
+    },
+    {
+      "id": 48,
+      "query": "check if the api-v2 track passes review. I think there might be some spec requirements I missed in the error handling section.",
+      "should_trigger": "maestro:review",
+      "notes": "Review with concern about spec coverage"
+    },
+    {
+      "id": 49,
+      "query": "review the auth_flow track implementation -- does it match the spec we wrote?",
+      "should_trigger": "maestro:review",
+      "notes": "Spec-match review"
+    },
+    {
+      "id": 50,
+      "query": "verify the payment_integration track -- check code quality, test coverage, and any security issues",
+      "should_trigger": "maestro:review",
+      "notes": "Multi-dimension review"
+    },
+    {
+      "id": 51,
+      "query": "I finished implementing the user_settings track, can you audit the code against the spec?",
+      "should_trigger": "maestro:review",
+      "notes": "Audit phrasing for review"
+    },
+    {
+      "id": 52,
+      "query": "review what we've built for the api_refactor track, especially the breaking changes",
+      "should_trigger": "maestro:review",
+      "notes": "Review with focus area"
+    },
+    {
+      "id": 53,
+      "query": "validate the db_migration track against the plan, did we miss any tasks?",
+      "should_trigger": "maestro:review",
+      "notes": "Plan-match validation"
+    },
+    {
+      "id": 54,
+      "query": "review --current, let's see how the active track holds up against the spec",
+      "should_trigger": "maestro:review",
+      "notes": "Flag-based invocation"
+    },
+    {
+      "id": 55,
+      "query": "what's the status of all my tracks? which ones are done, which are in progress, and what should I work on next?",
+      "should_trigger": "maestro:status",
+      "notes": "Progress overview request"
+    },
+    {
+      "id": 56,
+      "query": "how far along are we on the api-v2 track? I need to know how many tasks are left in phase 2",
+      "should_trigger": "maestro:status",
+      "notes": "Track-specific progress query"
+    },
+    {
+      "id": 57,
+      "query": "how are we doing on the tracks? give me an overview of everything",
+      "should_trigger": "maestro:status",
+      "notes": "Casual status check"
+    },
+    {
+      "id": 58,
+      "query": "show me where things stand with the current implementation -- phases, tasks, blockers",
+      "should_trigger": "maestro:status",
+      "notes": "Detailed status request"
+    },
+    {
+      "id": 59,
+      "query": "what should I work on next? which track or task is up?",
+      "should_trigger": "maestro:status",
+      "notes": "Next-action orientation"
+    },
+    {
+      "id": 60,
+      "query": "are there any blockers on the current tracks I should know about?",
+      "should_trigger": "maestro:status",
+      "notes": "Blocker-focused status"
+    },
+    {
+      "id": 61,
+      "query": "give me a status report on all maestro tracks -- completion stats and next actions",
+      "should_trigger": "maestro:status",
+      "notes": "Formal status report"
+    },
+    {
+      "id": 62,
+      "query": "where did we leave off last session? what's the next task I should pick up?",
+      "should_trigger": "maestro:status",
+      "notes": "Session resumption orientation"
+    },
+    {
+      "id": 63,
+      "query": "we decided to use PostgreSQL instead of MongoDB for this project. save that as a priority note so it gets injected into every session going forward.",
+      "should_trigger": "maestro:note",
+      "notes": "Priority decision capture"
+    },
+    {
+      "id": 64,
+      "query": "remember that the API rate limit is 100 req/min per user and we need to respect that in all integration tests. put it in the notepad.",
+      "should_trigger": "maestro:note",
+      "notes": "Constraint capture for future sessions"
+    },
+    {
+      "id": 65,
+      "query": "show me my notepad -- what priority notes do I have saved?",
+      "should_trigger": "maestro:note",
+      "notes": "Note retrieval (--show flag)"
+    },
+    {
+      "id": 66,
+      "query": "make a note that we're using bun not npm for this project and it matters for CI too",
+      "should_trigger": "maestro:note",
+      "notes": "Decision capture, casual phrasing"
+    },
+    {
+      "id": 67,
+      "query": "I need to document a constraint: the legacy API must stay backward-compatible through v3 launch. pin this as a priority note.",
+      "should_trigger": "maestro:note",
+      "notes": "Constraint documentation with priority flag"
+    },
+    {
+      "id": 68,
+      "query": "make a priority note: all API responses must include X-Request-ID in headers per the compliance audit",
+      "should_trigger": "maestro:note",
+      "notes": "Compliance constraint as priority note"
+    },
+    {
+      "id": 69,
+      "query": "save this as a note -- staging DB credentials rotate every 30 days, last rotated Feb 15",
+      "should_trigger": "maestro:note",
+      "notes": "Operational context capture"
+    },
+    {
+      "id": 70,
+      "query": "clear the working memory section, most of those items are from last week and resolved",
+      "should_trigger": "maestro:note",
+      "notes": "Notepad management (--clear)"
+    },
+    {
+      "id": 71,
+      "query": "jot down: the legacy /v1/users endpoint is deprecated, redirect to /v2/users by March 15",
+      "should_trigger": "maestro:note",
+      "notes": "Deadline-aware constraint"
+    },
+    {
+      "id": 72,
+      "query": "prune the notepad -- some of those working memory items are from completed tracks",
+      "should_trigger": "maestro:note",
+      "notes": "Notepad cleanup (--prune)"
+    },
+    {
+      "id": 73,
+      "query": "add to manual notes: always run migrations with --fake-initial on first deploy to staging",
+      "should_trigger": "maestro:note",
+      "notes": "Manual section note"
+    },
+    {
+      "id": 74,
+      "query": "the implementation of phase 3 on the search track broke everything. roll it back -- revert just that phase, keep phases 1 and 2.",
+      "should_trigger": "maestro:revert",
+      "notes": "Phase-level revert with clear scope"
+    },
+    {
+      "id": 75,
+      "query": "undo the last task I implemented on the auth-refactor track. the approach was wrong and I want to try a different one.",
+      "should_trigger": "maestro:revert",
+      "notes": "Task-level revert"
+    },
+    {
+      "id": 76,
+      "query": "the implementation is done but I want to start fresh on the whole auth track. revert everything.",
+      "should_trigger": "maestro:revert",
+      "notes": "Full track revert"
+    },
+    {
+      "id": 77,
+      "query": "undo the implementation of the auth_flow_20260228 track -- it broke the login page for SSO users",
+      "should_trigger": "maestro:revert",
+      "notes": "Track revert with specific track name"
+    },
+    {
+      "id": 78,
+      "query": "roll back phase 2 of the current track, the database migration was wrong and corrupted the index",
+      "should_trigger": "maestro:revert",
+      "notes": "Phase revert with impact description"
+    },
+    {
+      "id": 79,
+      "query": "revert task 'add-webhook-handler' from phase 1 of the integrations track",
+      "should_trigger": "maestro:revert",
+      "notes": "Task-level revert by name"
+    },
+    {
+      "id": 80,
+      "query": "the payment integration track caused regressions in checkout, revert the whole thing",
+      "should_trigger": "maestro:revert",
+      "notes": "Regression-driven full revert"
+    },
+    {
+      "id": 81,
+      "query": "take back all changes from track db_migration_20260301, we need to use a different migration strategy",
+      "should_trigger": "maestro:revert",
+      "notes": "Strategy-change revert"
+    },
+    {
+      "id": 82,
+      "query": "can you look at this python script and tell me why it's throwing a KeyError on line 47? here's the traceback...",
+      "should_trigger": false,
+      "notes": "Generic debugging -- no maestro skill should trigger"
+    },
+    {
+      "id": 83,
+      "query": "write me a React component that shows a sortable data table with pagination. use shadcn/ui.",
+      "should_trigger": false,
+      "notes": "Direct coding task -- no maestro skill needed"
+    },
+    {
+      "id": 84,
+      "query": "I want to create a new git branch for the upcoming release and tag it as v2.1.0",
+      "should_trigger": false,
+      "notes": "Git operation, not a maestro track"
+    },
+    {
+      "id": 85,
+      "query": "read the README and explain how this project works",
+      "should_trigger": false,
+      "notes": "Exploration/explanation -- no maestro workflow"
+    },
+    {
+      "id": 86,
+      "query": "I need to set up my project for the first time. Can you install the dependencies with npm and configure eslint?",
+      "should_trigger": false,
+      "notes": "Near-miss for maestro:setup -- generic project setup, not maestro"
+    },
+    {
+      "id": 87,
+      "query": "review this PR for me -- check the diff and leave comments on anything that looks off",
+      "should_trigger": false,
+      "notes": "Near-miss for maestro:review -- PR review, not track review"
+    },
+    {
+      "id": 88,
+      "query": "what's the status of the CI pipeline? are the latest builds passing?",
+      "should_trigger": false,
+      "notes": "Near-miss for maestro:status -- CI status, not track status"
+    },
+    {
+      "id": 89,
+      "query": "revert the last commit, I pushed it by accident",
+      "should_trigger": false,
+      "notes": "Near-miss for maestro:revert -- git revert, not track revert"
+    },
+    {
+      "id": 90,
+      "query": "I need to add a loading spinner to the submit button. that's it, nothing else.",
+      "should_trigger": false,
+      "notes": "Trivial change -- too small for a track"
+    },
+    {
+      "id": 91,
+      "query": "set up the development environment for this project -- install dependencies, configure Docker, etc.",
+      "should_trigger": false,
+      "notes": "Near-miss for maestro:setup -- dev env setup, not maestro scaffolding"
+    },
+    {
+      "id": 92,
+      "query": "write a Jest unit test for the UserService.createUser method with mocked database calls",
+      "should_trigger": false,
+      "notes": "Direct coding task"
+    },
+    {
+      "id": 93,
+      "query": "git revert HEAD~3 -- I want to undo the last 3 commits on this branch",
+      "should_trigger": false,
+      "notes": "Near-miss for maestro:revert -- raw git, not track revert"
+    },
+    {
+      "id": 94,
+      "query": "can you review this pull request on GitHub? here's the link: github.com/myorg/myrepo/pull/247",
+      "should_trigger": false,
+      "notes": "Near-miss for maestro:review -- GitHub PR review, not track review"
+    },
+    {
+      "id": 95,
+      "query": "git status -- show me the working tree",
+      "should_trigger": false,
+      "notes": "Near-miss for maestro:status -- git status, not track status"
+    },
+    {
+      "id": 96,
+      "query": "write a README.md for this project with installation instructions, usage examples, and contributing guide",
+      "should_trigger": false,
+      "notes": "Near-miss for maestro:AGENTS.md -- README, not AGENTS.md"
+    },
+    {
+      "id": 97,
+      "query": "add a JSDoc comment to this function explaining the retry logic and backoff strategy",
+      "should_trigger": false,
+      "notes": "Near-miss for maestro:note -- code comment, not notepad"
+    },
+    {
+      "id": 98,
+      "query": "configure ESLint, Prettier, and Husky hooks for the codebase",
+      "should_trigger": false,
+      "notes": "Near-miss for maestro:setup -- tooling config, not maestro"
+    },
+    {
+      "id": 99,
+      "query": "how many open GitHub issues do we have in the backlog?",
+      "should_trigger": false,
+      "notes": "Near-miss for maestro:status -- GitHub issues, not track status"
+    },
+    {
+      "id": 100,
+      "query": "help me brainstorm feature ideas for the next quarter's roadmap",
+      "should_trigger": false,
+      "notes": "Near-miss for maestro:design -- brainstorming, not spec work"
+    },
+    {
+      "id": 101,
+      "query": "write API documentation for the /users and /orders endpoints using OpenAPI spec",
+      "should_trigger": false,
+      "notes": "Near-miss for maestro:AGENTS.md -- API docs, not agent context"
+    },
+    {
+      "id": 102,
+      "query": "look at my submitOrder function and tell me if there are any edge cases I'm missing",
+      "should_trigger": false,
+      "notes": "Near-miss for maestro:review -- ad-hoc code review, not track review"
+    },
+    {
+      "id": 103,
+      "query": "create a new Next.js project from scratch using create-next-app",
+      "should_trigger": false,
+      "notes": "Near-miss for maestro:setup -- project creation, not maestro scaffolding"
+    },
+    {
+      "id": 104,
+      "query": "update the CLAUDE.md file with the new bun test command instead of npm test",
+      "should_trigger": false,
+      "notes": "Near-miss for maestro:AGENTS.md -- manual edit, not generation"
+    },
+    {
+      "id": 105,
+      "query": "save the output of this API call to a local JSON file for reference",
+      "should_trigger": false,
+      "notes": "Near-miss for maestro:note -- file save, not notepad"
+    },
+    {
+      "id": 106,
+      "query": "undo my last edit to server.ts, I preferred the previous version of that function",
+      "should_trigger": false,
+      "notes": "Near-miss for maestro:revert -- file edit undo, not track revert"
+    },
+    {
+      "id": 107,
+      "query": "review the changelog entries before we cut the v2.4.0 release",
+      "should_trigger": false,
+      "notes": "Near-miss for maestro:review -- changelog review, not track review"
+    },
+    {
+      "id": 108,
+      "query": "remove the feature flag for dark mode from the LaunchDarkly config",
+      "should_trigger": false,
+      "notes": "Near-miss for maestro:revert -- config change, not track revert"
+    },
+    {
+      "id": 109,
+      "query": "let's plan out how to implement a user authentication system for my Django app -- I need a spec and phased breakdown",
+      "should_trigger": "maestro:new-track",
+      "notes": "Cross-skill: mentions 'plan' and 'implement' but wants spec+plan creation"
+    },
+    {
+      "id": 110,
+      "query": "plan a simple webhook receiver endpoint that validates signatures and forwards to a queue",
+      "should_trigger": "maestro:new-track",
+      "notes": "Cross-skill: simple enough for new-track, not design"
+    },
+    {
+      "id": 111,
+      "query": "I need to design a complex multi-tenant SaaS platform with per-tenant database isolation and custom domains",
+      "should_trigger": "maestro:design",
+      "notes": "Cross-skill: mentions 'design' + complexity signals -> design not new-track"
+    },
+    {
+      "id": 112,
+      "query": "let's do deep discovery on the HIPAA compliance requirements -- this needs thorough domain analysis",
+      "should_trigger": "maestro:design",
+      "notes": "Cross-skill: 'deep discovery' + 'domain analysis' -> design"
+    },
+    {
+      "id": 113,
+      "query": "note down that we decided to use PostgreSQL instead of MySQL for the user store",
+      "should_trigger": "maestro:note",
+      "notes": "Cross-skill: 'note down' decision -- note not setup"
+    },
+    {
+      "id": 114,
+      "query": "I want to capture this workflow as a reusable skill for future projects",
+      "should_trigger": false,
+      "notes": "Near-miss for maestro:note -- skill creation, not notepad"
+    },
+    {
+      "id": 115,
+      "query": "what does the product.md context file say about our target users and key features?",
+      "should_trigger": false,
+      "notes": "Near-miss for maestro:setup/status -- reading context, not creating/checking"
+    },
+    {
+      "id": 116,
+      "query": "I want to use the maestro workflow for this repo -- where do I start? what do I need to set up?",
+      "should_trigger": "maestro:setup",
+      "notes": "Question that leads to setup"
+    },
+    {
+      "id": 117,
+      "query": "read the existing AGENTS.md and tell me what it says about the project",
+      "should_trigger": false,
+      "notes": "Near-miss for maestro:AGENTS.md -- reading, not generating"
+    },
+    {
+      "id": 118,
+      "query": "explain what AGENTS.md is and why I'd want one in my repo",
+      "should_trigger": false,
+      "notes": "Near-miss for maestro:AGENTS.md -- explanation, not generation"
+    }
+  ]
+}
