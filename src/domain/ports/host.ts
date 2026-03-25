@@ -6,7 +6,7 @@
  * backend is an acceleration layer for state transitions and native UI.
  */
 
-import type { HostType } from '../../core/host-detect.ts';
+import type { HostType } from '../../infra/utils/host-detect.ts';
 import type { TaskStatusType } from '../types.ts';
 
 /** Mapping from maestro task id to host-native task id. */

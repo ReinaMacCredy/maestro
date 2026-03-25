@@ -5,7 +5,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { getSessionsDir, EVENTS_FILE } from '../hooks/_helpers.ts';
+import { getSessionsDir, EVENTS_FILE } from '../core/paths.ts';
 import type { SearchPort, SessionSearchResult } from './port.ts';
 import { extractKeywords } from '../dcp/relevance.ts';
 
