@@ -6,7 +6,7 @@
   "metadata": {
     "description": "Agent-optimized development orchestrator with parallel task execution and workflow enforcement",
     "version": "0.2.0",
-    "repository": "https://github.com/user/maestro"
+    "repository": "https://github.com/ReinaMacCredy/maestro"
   },
   "plugins": [
     {

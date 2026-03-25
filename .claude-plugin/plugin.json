@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "description": "Agent-optimized development orchestrator with parallel task execution and workflow enforcement",
   "author": { "name": "maestro" },
-  "homepage": "https://github.com/user/maestro",
+  "homepage": "https://github.com/ReinaMacCredy/maestro",
   "license": "MIT",
   "keywords": ["mcp", "orchestration", "tdd", "agent"],
   "mcpServers": {

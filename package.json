@@ -6,10 +6,10 @@
   "keywords": ["mcp", "orchestration", "tdd", "agent", "claude-code", "workflow", "codex"],
   "repository": {
     "type": "git",
-    "url": "https://github.com/user/maestro"
+    "url": "https://github.com/ReinaMacCredy/maestro"
   },
-  "homepage": "https://github.com/user/maestro#readme",
-  "bugs": "https://github.com/user/maestro/issues",
+  "homepage": "https://github.com/ReinaMacCredy/maestro#readme",
+  "bugs": "https://github.com/ReinaMacCredy/maestro/issues",
   "license": "MIT",
   "bin": {
     "maestro": "./dist/cli.js"
