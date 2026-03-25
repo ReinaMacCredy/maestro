@@ -37,17 +37,24 @@ All durable state lives under `.maestro/`.
 
 ## Architecture
 
-```text
-commands/  -->  usecases/  -->  ports/  <--  adapters/
-(CLI I/O)       (rules)        (interfaces)  (implementations)
+4-layer hexagonal architecture with immutable DI container:
 
-server/    -->  usecases/  -->  ports/  <--  adapters/
-(MCP tools)     (rules)        (interfaces)  (implementations)
+```text
+surfaces/  -->  app/     -->  domain/ports/  <--  infra/adapters/
+(CLI, MCP,      (rules,       (interfaces)       (implementations)
+ hooks)          DCP, skills)
 ```
 
-Hexagonal architecture: commands/server handle I/O, usecases own workflow rules, ports define boundaries, adapters implement storage.
+```text
+src/
+  domain/       # Pure domain: ports, types, errors (zero infra deps)
+  app/          # Use cases, DCP, doctrine, skills, workflow engine
+  infra/        # Adapters, toolbox, settings, utilities, visual renderer
+  surfaces/     # CLI (71 commands), MCP (26 tools), hooks (5 scripts)
+  container.ts  # Immutable DI container (Object.freeze)
+```
 
-### Ports
+### Ports (11 interfaces)
 
 | Port | Purpose |
 |------|---------|
@@ -60,6 +67,8 @@ Hexagonal architecture: commands/server handle I/O, usecases own workflow rules,
 | GraphPort | Dependency graph insights (optional, requires bv) |
 | HandoffPort | Cross-agent handoff (optional, requires agent-mail) |
 | SearchPort | Session search (optional, requires cass) |
+| SettingsPort | Project configuration with merge semantics |
+| HostPort | Host agent detection and backend resolution |
 
 ## Task Lifecycle
 
@@ -101,6 +110,7 @@ Doctrine items are JSON files at `.maestro/doctrine/` with structured fields: ru
 | Hook | Trigger | Purpose |
 |------|---------|---------|
 | SessionStart | Session begins | Inject pipeline state and recommended skills |
+| PreToolUse:Bash | Before Bash tool | Remind agent to finish maestro tasks on git commit |
 | PreToolUse:Agent | Before agent spawn | Inject task spec + DCP-scored memories + doctrine into worker prompt |
 | PostToolUse | After tool execution | Track tool usage and state changes |
 | PreCompact | Before context compaction | Preserve critical maestro state |
