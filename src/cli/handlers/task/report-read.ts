@@ -1,2 +1,2 @@
-import { makeDocReadCommand } from '../_task-factory.ts';
-export default makeDocReadCommand('report');
+export * from '../../../surfaces/cli/handlers/task/report-read.ts';
+export { default } from '../../../surfaces/cli/handlers/task/report-read.ts';

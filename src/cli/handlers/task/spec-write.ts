@@ -1,2 +1,2 @@
-import { makeDocWriteCommand } from '../_task-factory.ts';
-export default makeDocWriteCommand('spec');
+export * from '../../../surfaces/cli/handlers/task/spec-write.ts';
+export { default } from '../../../surfaces/cli/handlers/task/spec-write.ts';

@@ -1,2 +1,2 @@
-import { makeInfoCommand } from '../_task-factory.ts';
-export default makeInfoCommand();
+export * from '../../../surfaces/cli/handlers/task/info.ts';
+export { default } from '../../../surfaces/cli/handlers/task/info.ts';

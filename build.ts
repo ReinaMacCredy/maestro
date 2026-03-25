@@ -26,12 +26,12 @@ async function build() {
   await $`bun src/skills/generate.ts`;
 
   console.log('[build] Generating command registry...');
-  await $`bun src/cli/_generate.ts`;
+  await $`bun src/surfaces/cli/_generate.ts`;
 
   // Step 1: Server bundle (Node target, ESM)
   console.log('[build] Bundling MCP server...');
   checkBuild(await Bun.build({
-    entrypoints: ['./src/mcp/index.ts'],
+    entrypoints: ['./src/surfaces/mcp/index.ts'],
     outdir: './dist',
     target: 'node',
     format: 'esm',
@@ -44,7 +44,7 @@ async function build() {
   console.log('[build] Bundling hooks...');
   const hooks = ['sessionstart', 'pretooluse', 'posttooluse', 'precompact', 'pre-agent'];
   const hookResults = await Promise.all(hooks.map(hook => Bun.build({
-    entrypoints: [`./src/hooks/${hook}.ts`],
+    entrypoints: [`./src/surfaces/hooks/${hook}.ts`],
     outdir: './hooks',
     target: 'node',
     format: 'esm',
@@ -57,7 +57,7 @@ async function build() {
   // Step 3: CLI bundle for npm bin entry (Node target)
   console.log('[build] Bundling CLI for npm...');
   checkBuild(await Bun.build({
-    entrypoints: ['./src/cli/index.ts'],
+    entrypoints: ['./src/surfaces/cli/index.ts'],
     outdir: './dist',
     target: 'node',
     format: 'esm',
@@ -79,7 +79,7 @@ async function build() {
 
   // Step 5: Compile standalone binary (existing behavior)
   console.log('[build] Compiling to standalone binary...');
-  await $`bun build --compile --minify ./src/cli/index.ts --outfile ./dist/maestro`;
+  await $`bun build --compile --minify ./src/surfaces/cli/index.ts --outfile ./dist/maestro`;
 
   console.log('[build] Done.');
   console.log('  dist/server.bundle.mjs  -- MCP server');
