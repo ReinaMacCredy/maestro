@@ -1,8 +1,8 @@
 # maestro
 
-Agent-optimized development orchestrator -- an MCP plugin that gives AI coding agents structured memory, workflow guardrails, and a plan-first pipeline.
+Harness for long-running AI coding agents -- structured memory, cross-feature learning, and plan-approve-execute workflow.
 
-Features are discovered, researched, planned, approved, then executed by agents with all state persisted under `.maestro/`.
+An MCP plugin that gives AI coding agents persistent state, workflow guardrails, and a plan-first pipeline. All durable state lives under `.maestro/`.
 
 ## Quick Start
 
@@ -27,7 +27,7 @@ maestro task-done --feature my-feature \
 
 ### Optional integrations
 
-The following tools from [Dicklesworthstone](https://github.com/Dicklesworthstone) power optional adapters. maestro degrades gracefully when any are absent.
+The following tools power optional adapters. maestro degrades gracefully when any are absent.
 
 | Tool | Adapter | Purpose |
 |------|---------|---------|
@@ -43,36 +43,55 @@ bun install
 bun run build
 ```
 
-Produces `./dist/cli.js` (CLI) and `./dist/server.bundle.mjs` (MCP server). Development mode: `bun src/cli.ts <command>`.
+Produces:
+
+| Output | Purpose |
+|--------|---------|
+| `dist/server.bundle.mjs` | MCP server |
+| `dist/cli.js` | npm CLI entry |
+| `dist/maestro` | Standalone binary |
+| `hooks/*.mjs` | 5 Claude Code hook scripts |
+
+Development mode: `bun src/surfaces/cli/index.ts <command>`.
 
 ## Architecture
 
-maestro is a **pure MCP plugin** -- Claude Code is the orchestrator (spawning agents natively), maestro is the filing cabinet with opinions.
+maestro is a **pure MCP plugin** -- the AI agent is the orchestrator, maestro is the filing cabinet with opinions.
 
 ```text
-commands/  -->  usecases/  -->  ports/  <--  adapters/
-(CLI I/O)       (rules)        (interfaces)  (implementations)
-
-server/    -->  usecases/  -->  ports/  <--  adapters/
-(MCP tools)     (rules)        (interfaces)  (implementations)
+surfaces/  -->  app/     -->  domain/ports/  <--  infra/adapters/
+(CLI, MCP,      (rules,       (interfaces)       (implementations)
+ hooks)          DCP, skills)
 ```
 
 ```text
 src/
-  adapters/     # Filesystem, br, graph, search, verification
-  commands/     # CLI commands organized by domain
-  hooks/        # Claude Code hooks (session-start, pre-agent, pre-compact)
-  lib/          # Output, errors, signals, truncation
-  plugins/      # Plugin registry and loader (built-in: br, git, rg, tilth)
-  ports/        # Interfaces (tasks, plans, features, memory, doctrine, search, graph, handoff)
-  server/       # MCP tool registration (one file per domain)
-  skills/       # Skill loader and registry generator
-  templates/    # Plan scaffolding
-  usecases/     # Business rules
-  utils/        # Paths, git, plan parser, spec builder
-skills/         # Bundled SKILL.md workflow guides
-hooks/          # Installable Claude Code hooks
+  domain/           # Pure domain: ports (interfaces), types, errors
+    ports/          # 11 port interfaces (task, feature, plan, memory, doctrine,
+                    #   verification, graph, handoff, search, settings, host)
+  app/              # Application layer: use cases, DCP, skills, workflow engine
+    dcp/            # Dynamic Context Pruning (budget-based memory scoring)
+    doctrine/       # Cross-feature learning compiler
+    skills/         # Skill loader and registry generator
+    tasks/          # Task state machine, graph, verification, spec builder
+    workflow/       # Pipeline stages, playbook, execution insights
+    ...             # Plus domain orchestration (features, plans, memory, etc.)
+  infra/            # Infrastructure: adapters, settings, utilities
+    adapters/       # Port implementations (fs-based + toolbox-provided)
+    toolbox/        # Plugin registry and loader (br, bv, cass, agent-mail)
+    utils/          # Filesystem, git, paths, validation, output
+    visual/         # HTML/CSS renderer for visualization
+  surfaces/         # External interfaces
+    cli/            # 71 CLI commands (citty framework)
+    mcp/            # 26 MCP tool handlers
+    hooks/          # 5 Claude Code hooks
+  container.ts      # Immutable DI container -- wires ports to adapters
+  services.ts       # Service locator (thin shim over container)
+skills/             # Bundled SKILL.md workflow guides
+hooks/              # Installable Claude Code hooks (build output)
 ```
+
+The container (`createContainer()`) returns an `Object.freeze()`-d service object. Domain ports have zero dependencies on infrastructure. Optional ports (graph, search, handoff) resolve via toolbox at startup.
 
 ### Pipeline
 
@@ -88,23 +107,27 @@ Stages are skippable. Hooks inject pipeline context automatically.
 
 Stale claims expire after a configurable timeout (default 120 min) and auto-reset to `pending` on `task-next`.
 
-## MCP Tools (39)
+## MCP Tools (26)
 
-All tools are prefixed `maestro_` in MCP (e.g., `maestro_task_claim`).
+All tools are prefixed `maestro_` in MCP. Tools use merged action/what params: mutating tools use `action`, read-only tools use `what`.
 
 | Group | Tools | Count |
 |-------|-------|-------|
-| Feature | `feature_create`, `feature_list`, `feature_complete` | 3 |
-| Plan | `plan_write`, `plan_read`, `plan_approve`, `plan_comment` | 4 |
-| Task | `tasks_sync`, `task_next`, `task_claim`, `task_done`, `task_accept`, `task_reject`, `task_block`, `task_unblock`, `task_list` | 9 |
-| Memory | `memory_write`, `memory_read`, `memory_list`, `memory_promote` | 4 |
-| Doctrine | `doctrine_list`, `doctrine_read`, `doctrine_write`, `doctrine_deprecate`, `doctrine_approve` | 5 |
-| Meta | `status`, `skill`, `ping`, `init`, `dcp_preview`, `execution_insights` | 6 |
-| Graph | `graph_insights`, `graph_next`, `graph_plan` | 3 |
-| Handoff | `handoff_send`, `handoff_receive`, `handoff_ack` | 3 |
-| Search | `search_sessions`, `search_related` | 2 |
+| Feature | `feature` (create, complete), `feature_read` (list, info, active) | 2 |
+| Plan | `plan` (write, approve, revoke, comment, comments_clear), `plan_read` | 2 |
+| Task | `task` (sync, claim, done, accept, reject, block, unblock, spec_write, report_write), `task_read` (list, info, spec, report, next, brief) | 2 |
+| Memory | `memory` (write, delete, promote, compress, consolidate, connect, archive), `memory_read` (read, list, stats, insights, compile) | 2 |
+| Doctrine | `doctrine` (write, approve, suggest, deprecate), `doctrine_read` (list, read) | 2 |
+| Handoff | `handoff` (send, ack), `handoff_read` (read, list, status, receive) | 2 |
+| Graph | `graph` (insights, next, plan, discovery, reserve) | 1 |
+| Search | `search` (sessions, related, similar) | 1 |
+| Config | `config_get`, `config_set` | 2 |
+| Visual | `visual` | 1 |
+| DCP | `dcp` (preview, stats, config) | 1 |
+| Workflow | `stage` (jump, skip, back) | 1 |
+| Standalone | `status`, `ping`, `init`, `doctor`, `history`, `execution_insights`, `skill` | 7 |
 
-## CLI Commands (58)
+## CLI Commands (71)
 
 All commands accept `--json` for machine-readable output. Use `maestro <command> --help` for full usage.
 
@@ -113,30 +136,33 @@ All commands accept `--json` for machine-readable output. Use `maestro <command>
 | Feature | create, list, info, active, complete | 5 |
 | Plan | write, read, approve, revoke, comment, comments-clear | 6 |
 | Task | sync, list, next, info, claim, done, block, unblock, spec-read, spec-write, report-read, report-write | 12 |
-| Memory | write, read, list, delete, compile, archive, stats, promote | 8 |
+| Memory | write, read, list, delete, compile, consolidate, archive, stats, promote | 9 |
 | Doctrine | list, read, write, deprecate, suggest, approve | 6 |
 | Graph | insights, next, plan | 3 |
 | Handoff | send, receive, ack | 3 |
 | Search | sessions, related | 2 |
 | Config | get, set, agent | 3 |
-| Other | init, install, ping, status, agents-md, skill, skill-list, dcp-preview, self-update, update | 10 |
+| Toolbox | add, create, install, list, remove, test | 6 |
+| Visual | visual, debug-visual | 2 |
+| Other | init, install, ping, status, agents-md, skill, skill-list, dcp-preview, doctor, history, execution-insights, self-update, update | 13 |
 
 ## Hooks
 
 Installable Claude Code hooks that integrate maestro into the agent lifecycle:
 
-| Hook | Trigger | Purpose |
-|------|---------|---------|
-| SessionStart | Session begins | Inject pipeline state and recommended skills |
-| PreToolUse:Agent | Before agent spawn | Inject task spec into worker prompt |
-| PostToolUse | After tool execution | Track tool usage and state changes |
-| PreCompact | Before context compaction | Preserve critical maestro state |
+| Hook | File | Trigger | Purpose |
+|------|------|---------|---------|
+| SessionStart | sessionstart.mjs | Session begins | Inject pipeline state and recommended skills |
+| PreToolUse:Bash | pretooluse.mjs | Before Bash tool | Remind agent to finish maestro tasks on git commit |
+| PreToolUse:Agent | pre-agent.mjs | Before agent spawn | Inject task spec + DCP-scored memories + doctrine |
+| PostToolUse | posttooluse.mjs | After tool execution | Track tool usage and state changes |
+| PreCompact | precompact.mjs | Before context compaction | Preserve critical maestro state |
 
 Install with `maestro install`.
 
 ## Skills
 
-18 bundled workflow skills, all using `maestro:` colon-prefixed naming:
+21 bundled workflow skills, all using `maestro:` colon-prefixed naming:
 
 - `maestro:design` -- deep discovery and specification (16-step process with reference files)
 - `maestro:implement` -- task execution with TDD, parallel, and team modes
@@ -154,8 +180,9 @@ Install with `maestro install`.
 - `maestro:note` -- capture decisions and context to persistent notepad
 - `maestro:plan-review-loop` -- iterative adversarial plan review
 - `maestro:revert` -- git-aware undo of track implementation
-- `maestro:setup` -- scaffold project context
-- `maestro:status` -- track progress overview
+- `maestro:next-move` -- strategic analysis for highest-leverage next step
+- `maestro:simplify` -- review changed code for reuse, quality, and efficiency
+- `maestro:visual` -- generate visual explanations of systems and data
 
 Load with `maestro skill <name>`, list with `maestro skill-list`.
 
@@ -185,7 +212,7 @@ Old skill names (e.g., `writing-plans`) are aliased with deprecation warnings.
           task.json                     # Task state, claims, summaries
           spec.md                       # Compiled task specification
           report.md                     # Task completion report
-          doctrine-trace.json           # Doctrine injection trace (Phase 4)
+          doctrine-trace.json           # Doctrine injection trace
 ```
 
 ## License
