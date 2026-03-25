@@ -82,7 +82,7 @@ export function registerSkillTools(server: McpServer, _thunk: ServicesThunk, dir
         case 'sync': {
           const projectRoot = directory ?? process.cwd();
           const result = syncSkills(projectRoot);
-          return respond(result);
+          return respond(result as unknown as Record<string, unknown>);
         }
         default:
           return respond({ error: `Unknown action: ${(input as { action: string }).action}` });

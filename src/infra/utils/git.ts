@@ -37,7 +37,7 @@ export async function getChangedFilesSince(
       try {
         const logResult = await git.log({ '--since': sinceISO, '--name-only': null, '--format': '' });
         for (const commit of logResult.all) {
-          const diff = (commit as Record<string, unknown>).diff;
+          const diff = (commit as unknown as Record<string, unknown>).diff;
           if (diff && typeof diff === 'object' && 'files' in (diff as object)) {
             for (const f of (diff as { files: Array<{ file: string }> }).files) {
               if (f.file) files.add(f.file);

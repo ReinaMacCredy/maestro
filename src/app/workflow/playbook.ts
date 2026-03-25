@@ -9,7 +9,7 @@
  * Skill names are hardcoded strings; validation is test-only.
  */
 
-import type { PipelineStage } from './workflow.ts';
+import type { PipelineStage } from './stages.ts';
 import type { WorkflowRegistry } from './registry.ts';
 import type { ToolboxRegistry } from '../../infra/toolbox/registry.ts';
 import { discoverExternalSkillsByStage } from '../skills/external-discovery.ts';

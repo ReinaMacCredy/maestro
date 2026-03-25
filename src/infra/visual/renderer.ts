@@ -21,7 +21,7 @@ export function buildFilename(type: VisualType, feature?: string): string {
   const now = new Date();
   const ts = now.toISOString().replace(/[:.]/g, '-').slice(0, 23);
   const suffix = Math.random().toString(36).slice(2, 10);
-  const parts = [type];
+  const parts: string[] = [type];
   if (feature) parts.push(sanitizeForFilename(feature));
   parts.push(ts);
   parts.push(suffix);

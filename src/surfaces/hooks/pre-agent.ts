@@ -122,11 +122,10 @@ function trackSessionDcp(projectDir: string, result: TaskBriefResult): void {
     const state = loadSessionState(sessionsDir);
     recordInjection(state, {
       totalTokens: result.dcp.totalTokens,
-      totalBytes: result.dcp.totalBytes,
       memoriesIncluded: result.dcp.memoriesIncluded,
       memoriesDropped: result.dcp.memoriesDropped,
       components: {},
-    });
+    } as Parameters<typeof recordInjection>[1]);
     saveSessionState(sessionsDir, state);
   } catch { /* best-effort */ }
 }

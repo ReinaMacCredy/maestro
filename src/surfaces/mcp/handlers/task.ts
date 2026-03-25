@@ -37,7 +37,7 @@ export function registerTaskTools(server: McpServer, thunk: ServicesThunk): void
         action: z.enum(['sync', 'claim', 'done', 'accept', 'reject', 'block', 'unblock', 'spec_write', 'report_write'])
           .describe('Action to perform'),
         feature: featureParam(),
-        task: taskParam().optional() as ReturnType<typeof z.string>,
+        task: taskParam().optional(),
         agent_id: z.string().optional().describe('Agent identifier (required for claim)'),
         summary: z.string().optional().describe('Summary of work completed (required for done; optional for accept)'),
         feedback: z.string().optional().describe('Revision feedback (required for reject)'),
@@ -187,7 +187,7 @@ export function registerTaskTools(server: McpServer, thunk: ServicesThunk): void
       inputSchema: {
         what: z.enum(['list', 'info', 'spec', 'report', 'next', 'brief']).describe('What to read'),
         feature: featureParam(),
-        task: taskParam().optional() as ReturnType<typeof z.string>,
+        task: taskParam().optional(),
         status: z.enum(['pending', 'claimed', 'done', 'blocked', 'review', 'revision']).optional().describe('Filter by status (list only)'),
         includeAll: z.boolean().optional().describe('Include all tasks regardless of status (list only)'),
         brief: z.boolean().optional().default(false).describe('Return compact task info (list only)'),

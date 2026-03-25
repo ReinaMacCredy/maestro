@@ -46,6 +46,7 @@ export interface DoctrineSettings {
   maxSuggestionsPerFeature: number;
   crossFeatureScanLimit: number;
   minSampleSize: number;
+  staleThresholdDays: number;
 }
 
 export interface TasksSettings {
@@ -112,6 +113,7 @@ export const DEFAULT_SETTINGS: MaestroSettings = {
     maxSuggestionsPerFeature: 5,
     crossFeatureScanLimit: 20,
     minSampleSize: 5,
+    staleThresholdDays: 30,
   },
   tasks: {
     claimExpiresMinutes: 120,

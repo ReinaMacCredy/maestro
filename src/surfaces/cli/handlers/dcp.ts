@@ -46,7 +46,7 @@ export default defineCommand({
       // Load all tasks for dependency-proximity scoring
       const allTasks = await services.taskPort.list(feature, { includeAll: true });
       const taskDeps = allTasks.map(t => ({
-        folder: t.folder, status: t.status, dependsOn: t.dependsOn,
+        id: t.id, folder: t.folder, status: t.status, dependsOn: t.dependsOn,
       }));
 
       const { metrics } = pruneContext({

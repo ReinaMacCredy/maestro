@@ -138,7 +138,7 @@ export async function taskBrief(
   const settings = settingsPort.get();
   const dcpConfig = resolveDcpConfig(settings.dcp);
   const allTasks: TaskWithDeps[] = allTasksResult.status === 'fulfilled'
-    ? allTasksResult.value.map(t => ({ folder: t.folder, status: t.status, dependsOn: t.dependsOn }))
+    ? allTasksResult.value.map(t => ({ id: t.id, folder: t.folder, status: t.status, dependsOn: t.dependsOn }))
     : [];
 
   const rawMemories = memoryAdapter.listWithMeta(feature);

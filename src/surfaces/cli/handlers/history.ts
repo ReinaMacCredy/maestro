@@ -4,7 +4,7 @@
 
 import { defineCommand } from 'citty';
 import { getServices } from '../../../services.ts';
-import { history } from '../../../app/workflow/history.ts';
+import { history, type HistoryResult } from '../../../app/workflow/history.ts';
 import { output, renderTable } from '../../../infra/utils/output.ts';
 import { handleCommandError } from '../../../domain/errors.ts';
 import type { FeatureStatusType } from '../../../domain/types.ts';
@@ -23,7 +23,7 @@ function formatHistory(result: HistoryResult): string {
   }
 
   const headers = ['Name', 'Status', 'Tasks', 'Created', 'Duration'];
-  const rows = result.features.map((f) => [
+  const rows = result.features.map((f: HistoryResult['features'][number]) => [
     f.name,
     f.status,
     `${f.taskStats.done}/${f.taskStats.total}`,

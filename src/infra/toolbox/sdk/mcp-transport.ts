@@ -40,7 +40,7 @@ export class McpTransport {
     const transport = new StdioClientTransport({
       command: config.command,
       args: config.args,
-      env: config.env ? { ...process.env, ...config.env } : undefined,
+      env: config.env ? { ...Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined)), ...config.env } : undefined,
       cwd: config.cwd,
     });
     const client = new Client({ name: 'maestro', version: '1.0.0' });

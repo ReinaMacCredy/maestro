@@ -12,7 +12,7 @@ import { ANNOTATIONS_READONLY } from '../annotations.ts';
 import { requireFeature } from '../../../infra/utils/resolve.ts';
 import { featureParam, taskParam } from '../params.ts';
 import { pruneContext } from '../../../app/dcp/prune-context.ts';
-import { resolveDcpConfig, type ResolvedDcpConfig } from '../../../app/dcp/config.ts';
+import { resolveDcpConfig } from '../../../app/dcp/config.ts';
 import { WORKER_RULES } from '../../../app/tasks/worker-rules.ts';
 import { collectMetrics, formatMetricsSummary } from '../../../app/dcp/metrics.ts';
 import { COMPONENT_REGISTRY } from '../../../app/dcp/components.ts';
@@ -24,7 +24,7 @@ interface DcpContext {
   task: TaskInfo;
   spec: string;
   memories: MemoryFileWithMeta[];
-  resolvedDcp: ResolvedDcpConfig;
+  resolvedDcp: ReturnType<typeof resolveDcpConfig>;
   featureCreatedAt: string | undefined;
   allTasks: Awaited<ReturnType<MaestroServices['taskPort']['list']>>;
 }
@@ -53,7 +53,7 @@ export function registerDcpTools(server: McpServer, thunk: ServicesThunk): void 
       inputSchema: {
         action: z.enum(['preview', 'stats', 'config']).describe('Action to perform'),
         feature: featureParam(),
-        task: taskParam().optional() as ReturnType<typeof z.string>,
+        task: taskParam().optional(),
       },
       annotations: ANNOTATIONS_READONLY,
     },
@@ -66,7 +66,7 @@ export function registerDcpTools(server: McpServer, thunk: ServicesThunk): void 
           const ctx = await prepareDcpContext(services, input.feature, input.task);
           if (!ctx) return respond({ error: `Task '${input.task}' not found in feature '${requireFeature(services, input.feature)}'` });
           const { feature, task, memories, resolvedDcp, featureCreatedAt, allTasks } = ctx;
-          const taskDeps = allTasks.map(t => ({ folder: t.folder, status: t.status, dependsOn: t.dependsOn }));
+          const taskDeps = allTasks.map(t => ({ id: t.id, folder: t.folder, status: t.status, dependsOn: t.dependsOn }));
           const { metrics } = pruneContext({
             featureName: feature,
             taskFolder: input.task,

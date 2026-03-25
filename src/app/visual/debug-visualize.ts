@@ -89,12 +89,12 @@ const SCHEMAS: Record<DebugVisualType, z.ZodType> = {
 // ============================================================================
 
 const RENDERERS: Record<DebugVisualType, TemplateRenderer<unknown>> = {
-  'component-tree': renderComponentTree,
-  'state-flow': renderStateFlow,
-  'error-cascade': renderErrorCascade,
-  'network-waterfall': renderNetworkWaterfall,
-  'dom-diff': renderDomDiff,
-  'console-timeline': renderConsoleTimeline,
+  'component-tree': renderComponentTree as TemplateRenderer<unknown>,
+  'state-flow': renderStateFlow as TemplateRenderer<unknown>,
+  'error-cascade': renderErrorCascade as TemplateRenderer<unknown>,
+  'network-waterfall': renderNetworkWaterfall as TemplateRenderer<unknown>,
+  'dom-diff': renderDomDiff as TemplateRenderer<unknown>,
+  'console-timeline': renderConsoleTimeline as TemplateRenderer<unknown>,
 };
 
 // ============================================================================

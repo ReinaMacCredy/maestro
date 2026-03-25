@@ -3,7 +3,7 @@
  * Shared utility -- used by execution-insights, query-historical-context, suggest-doctrine.
  */
 
-import type { FeaturePort } from '../features/port.ts';
+import type { FeaturePort } from '../../../domain/ports/feature.ts';
 import { parseFrontmatterRich, stripFrontmatter } from '../../../infra/utils/frontmatter.ts';
 
 export interface ParsedExecMemory {

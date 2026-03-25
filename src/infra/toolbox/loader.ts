@@ -82,13 +82,13 @@ export function detectTool(
 
   // No detection needed -- always available
   if (manifest.detect === null && manifest.binary === null) {
-    return { manifest, installed: true, settingsState };
+    return { manifest, installed: true, settingsState, transport: inferTransport(manifest) };
   }
 
   const cacheKey = manifest.detect ?? manifest.binary ?? manifest.name;
   const cached = detectCache.get(cacheKey);
   if (cached) {
-    return { manifest, installed: cached.installed, version: cached.version, settingsState, detectError: cached.error };
+    return { manifest, installed: cached.installed, version: cached.version, settingsState, detectError: cached.error, transport: inferTransport(manifest) };
   }
 
   const detectCmd = manifest.detect ?? `command -v ${manifest.binary}`;
@@ -99,11 +99,11 @@ export function detectTool(
     });
     const version = output.toString().trim().split('\n')[0] || undefined;
     detectCache.set(cacheKey, { installed: true, version });
-    return { manifest, installed: true, version, settingsState };
+    return { manifest, installed: true, version, settingsState, transport: inferTransport(manifest) };
   } catch (e) {
     const error = e instanceof Error ? e.message : 'detection failed';
     detectCache.set(cacheKey, { installed: false, error });
-    return { manifest, installed: false, settingsState, detectError: error };
+    return { manifest, installed: false, settingsState, detectError: error, transport: inferTransport(manifest) };
   }
 }
 

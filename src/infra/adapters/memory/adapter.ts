@@ -105,7 +105,7 @@ export class FsMemoryAdapter implements MemoryPort {
     const content = this.read(featureName, fileName);
     if (!content) return false;
     const parsed = parseFrontmatterRich(content);
-    return parsed !== null && parsed.compressed === true;
+    return parsed !== null && String(parsed.compressed) === 'true';
   }
 
   readFull(featureName: string, fileName: string): MemoryFileWithMeta | null {

@@ -381,6 +381,7 @@ export class BrTaskAdapter implements TaskPort {
 
   private toTaskInfo(issue: BrIssue, folder: string, mapping?: BrMapping): TaskInfo {
     return {
+      id: folder,
       folder,
       name: folder.replace(/^\d+-/, ''),
       status: this.toMaestroStatus(issue),

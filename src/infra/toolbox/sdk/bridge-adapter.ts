@@ -25,7 +25,7 @@ export interface BridgeMapping {
  * Returns a Proxy object that routes method calls to the appropriate
  * MCP tool through the bridge's reverse mapping.
  */
-export function createMcpPortAdapter<T>(
+export function createMcpPortAdapter<T extends object>(
   ctx: AdapterContext,
   mappings: BridgeMapping[],
 ): T {

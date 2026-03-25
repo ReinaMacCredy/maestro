@@ -3,9 +3,9 @@
  * Pure function -- deterministic, no I/O, no LLM calls.
  */
 
-import type { VerificationReport } from '../tasks/verification/port.ts';
+import type { VerificationReport } from '../../../domain/ports/verification.ts';
 import type { MemoryPort } from '../../../domain/ports/memory.ts';
-import type { DoctrinePort } from '../doctrine/port.ts';
+import type { DoctrinePort } from '../../../domain/ports/doctrine.ts';
 import type { TaskInfo } from '../../../domain/types.ts';
 import { extractKeywords } from '../../dcp/relevance.ts';
 import { formatDurationMinutes } from '../../../infra/utils/time-utils.ts';

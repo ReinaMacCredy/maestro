@@ -37,14 +37,14 @@ export function discoverExternalSkills(projectRoot: string): SkillEntry[] {
 
   for (const { dir, source } of EXTERNAL_SOURCES) {
     const base = join(projectRoot, dir);
-    let entries: ReturnType<typeof readdirSync>;
+    let entries: import('fs').Dirent[];
     try {
-      entries = readdirSync(base, { withFileTypes: true });
+      entries = readdirSync(base, { withFileTypes: true }) as import('fs').Dirent[];
     } catch {
       continue;
     }
 
-    const dirs = entries.filter(e => e.isDirectory()).map(e => e.name).sort();
+    const dirs = (entries as import('fs').Dirent[]).filter(e => e.isDirectory()).map(e => e.name as string).sort();
 
     for (const slug of dirs) {
       const mdPath = join(base, slug, 'SKILL.md');

@@ -76,7 +76,7 @@ export function registerDoctrineTools(server: McpServer, thunk: ServicesThunk): 
           const existing = port.list({ status: 'active' });
           const config = services.settingsPort.get().doctrine;
           const result = suggestDoctrine(services.featureAdapter, services.memoryAdapter, existing, config);
-          return respond(result);
+          return respond(result as unknown as Record<string, unknown>);
         }
         case 'deprecate': {
           if (!input.name) return respond({ error: 'name is required for action: deprecate' });
@@ -124,7 +124,7 @@ export function registerDoctrineTools(server: McpServer, thunk: ServicesThunk): 
           if (!item) {
             throw new MaestroError(`Doctrine item '${input.name}' not found`, ['Use maestro_doctrine_read with what: list to see available items']);
           }
-          return respond(item);
+          return respond(item as unknown as Record<string, unknown>);
         }
         default:
           return respond({ error: `Unknown what: ${(input as { what: string }).what}` });

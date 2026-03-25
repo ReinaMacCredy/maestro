@@ -141,12 +141,24 @@ export class InMemoryMemoryPort implements MemoryPort {
     const mem = this.getFeatureMap(featureName).get(name);
     if (!mem) return false;
     const parsed = parseFrontmatterRich(mem.content);
-    return parsed !== null && parsed.compressed === true;
+    return parsed !== null && String(parsed.compressed) === 'true';
   }
 
   readFull(featureName: string, fileName: string): import('../../domain/types.ts').MemoryFileWithMeta | null {
     const name = fileName.replace(/\.md$/, '');
     return this.listWithMeta(featureName).find(f => f.name === name) ?? null;
+  }
+
+  recordSelection(_featureName: string, _fileName: string): void {
+    // no-op for mock
+  }
+
+  connect(_featureName: string, _sourceName: string, _targetName: string, _relation: import('../../domain/types.ts').MemoryRelation): void {
+    // no-op for mock
+  }
+
+  getConnections(_featureName: string, _name: string): import('../../domain/types.ts').MemoryConnection[] {
+    return [];
   }
 
   // Test helpers
