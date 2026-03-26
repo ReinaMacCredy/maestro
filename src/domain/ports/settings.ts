@@ -135,6 +135,11 @@ export const DEFAULT_SETTINGS: MaestroSettings = {
 export interface SettingsPort {
   get(): MaestroSettings;
   getToolConfig(name: string): Record<string, unknown>;
+  invalidate(): void;
+  getAgentConfig(agentName: string): {
+    model?: string; temperature?: number; skills?: string[];
+    autoLoadSkills?: string[]; variant?: string;
+  };
 }
 
 // ============================================================================

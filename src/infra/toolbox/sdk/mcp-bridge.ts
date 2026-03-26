@@ -101,6 +101,11 @@ export class McpBridge {
     return this.call<T>(mcpTool, args);
   }
 
+  /** Look up the MCP tool name for a given port method. */
+  getToolForMethod(portMethod: string): string | undefined {
+    return this.reverseMap.get(portMethod);
+  }
+
   /** List all registered tool mappings. */
   getMappings(): string[] {
     return [...this.mappings.keys()];

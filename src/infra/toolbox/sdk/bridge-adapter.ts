@@ -62,7 +62,7 @@ export function createMcpPortAdapter<T extends object>(
       if (prop === 'close' || prop === 'dispose') {
         return () => bridge.close();
       }
-      const mcpTool = (bridge as any).reverseMap?.get(prop);
+      const mcpTool = bridge.getToolForMethod(prop);
       if (!mcpTool) return undefined;
 
       return async (...args: unknown[]) => {

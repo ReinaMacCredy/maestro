@@ -54,7 +54,7 @@ export default defineCommand({
       writeJsonAtomic(settingsPath, existing);
 
       // Invalidate settings cache
-      (services.settingsPort as any).invalidate?.();
+      services.settingsPort.invalidate();
 
       output(
         { key: args.key, value: parsed, path: settingsPath },

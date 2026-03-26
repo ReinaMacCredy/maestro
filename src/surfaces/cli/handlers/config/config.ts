@@ -25,7 +25,7 @@ export default defineCommand({
       }
 
       const { settingsPort } = getServices();
-      const agentConfig = (settingsPort as any).getAgentConfig(args.agent);
+      const agentConfig = settingsPort.getAgentConfig(args.agent);
       output(agentConfig, (c) => JSON.stringify(c, null, 2));
     } catch (err) {
       handleCommandError('config-agent', err);
