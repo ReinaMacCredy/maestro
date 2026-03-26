@@ -12,7 +12,6 @@ import type { VerificationPort, VerifyParams, VerificationReport, VerificationCr
 import type { ResolvedVerificationConfig } from './verification-config.ts';
 import { spawn } from 'child_process';
 import simpleGit from 'simple-git';
-import * as fs from 'fs';
 import * as path from 'path';
 import { readJson } from '../../utils/fs-io.ts';
 import { extractKeywords } from '../../../app/dcp/relevance.ts';
@@ -240,8 +239,7 @@ export class FsVerificationAdapter implements VerificationPort {
       if (!pkg) return undefined;
       const scripts = pkg.scripts ?? {};
 
-      // Priority: check > typecheck > build
-      if (scripts.check) return 'bun run check';
+      // Priority: typecheck > build (not 'check' -- often includes full test suite)
       if (scripts.typecheck) return 'bun run typecheck';
       if (scripts.build) return 'bun run build';
     } catch {
