@@ -8,6 +8,27 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { McpStdioTransportConfig, McpHttpTransportConfig } from './types.ts';
 
+/**
+ * Env vars safe to forward to MCP tool subprocesses.
+ * Explicit list prevents leaking secrets (API keys, tokens, credentials).
+ */
+const ENV_ALLOWLIST = new Set([
+  'PATH', 'HOME', 'USER', 'SHELL', 'LANG', 'LC_ALL',
+  'TERM', 'NODE_ENV', 'BUN_INSTALL',
+]);
+
+/** Filter process.env to only allowed variables. XDG_* vars are included dynamically. */
+function filterEnv(): Record<string, string> {
+  const filtered: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value === undefined) continue;
+    if (ENV_ALLOWLIST.has(key) || key.startsWith('XDG_')) {
+      filtered[key] = value;
+    }
+  }
+  return filtered;
+}
+
 export interface McpToolResult {
   content: Array<{ type: string; text?: string }>;
   isError?: boolean;
@@ -40,7 +61,7 @@ export class McpTransport {
     const transport = new StdioClientTransport({
       command: config.command,
       args: config.args,
-      env: config.env ? { ...Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined)), ...config.env } : undefined,
+      env: config.env ? { ...filterEnv(), ...config.env } : undefined,
       cwd: config.cwd,
     });
     const client = new Client({ name: 'maestro', version: '1.0.0' });

@@ -8,6 +8,7 @@ import { defineCommand } from 'citty';
 import { output } from '../../../../infra/utils/output.ts';
 import { handleCommandError } from '../../../../domain/errors.ts';
 import { loadManifest, inferTransport } from '../../../../infra/toolbox/loader.ts';
+import { sanitizeDetectCommand } from '../../../../infra/utils/cli-detect.ts';
 import { execFileSync } from 'node:child_process';
 
 interface CheckResult {
@@ -60,13 +61,15 @@ export default defineCommand({
       // 3. Binary detection
       if (manifest.detect) {
         try {
-          const version = execFileSync('sh', ['-c', manifest.detect], {
+          const safeCmd = sanitizeDetectCommand(manifest.detect);
+          const version = execFileSync('sh', ['-c', safeCmd], {
             stdio: ['pipe', 'pipe', 'pipe'],
             timeout: 5000,
           }).toString().trim().split('\n')[0];
           checks.push({ check: 'detect', status: 'pass', message: version || 'detected' });
-        } catch {
-          checks.push({ check: 'detect', status: 'fail', message: `Detection failed: ${manifest.detect}` });
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          checks.push({ check: 'detect', status: 'fail', message: `Detection failed: ${msg}` });
         }
       } else {
         checks.push({ check: 'detect', status: 'skip', message: 'No detect command (built-in or HTTP tool)' });

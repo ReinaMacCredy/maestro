@@ -22,6 +22,36 @@ import * as path from 'node:path';
 import type { AdapterContext, AdapterFactory } from '../../../types.ts';
 
 const DEFAULT_AGENT_MAIL_URL = 'http://localhost:8765';
+const ALLOWED_SCHEMES = new Set(['http:', 'https:']);
+const LOCALHOST_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/**
+ * Validate an Agent Mail base URL: must be http/https, and warn if a bearer
+ * token will be sent to a non-localhost endpoint.
+ */
+function validateAgentMailUrl(baseUrl: string, hasBearerToken: boolean): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(baseUrl);
+  } catch {
+    throw new Error(`Invalid AGENT_MAIL_URL: "${baseUrl}" is not a valid URL`);
+  }
+
+  if (!ALLOWED_SCHEMES.has(parsed.protocol)) {
+    throw new Error(
+      `Unsupported AGENT_MAIL_URL scheme "${parsed.protocol}" -- only http: and https: are allowed`,
+    );
+  }
+
+  if (hasBearerToken && !LOCALHOST_HOSTS.has(parsed.hostname)) {
+    console.warn(
+      `[!] Agent Mail: bearer token will be sent to non-localhost URL "${parsed.origin}". ` +
+      'Verify this endpoint is trusted.',
+    );
+  }
+
+  return baseUrl;
+}
 
 interface AgentMailIdentity {
   agentName: string;
@@ -52,7 +82,11 @@ export class AgentMailHandoffAdapter implements HandoffPort {
     this.memoryAdapter = memoryAdapter;
     this.settingsPort = settingsPort;
     this.taskBackend = taskBackend;
-    this.baseUrl = agentMailUrl ?? process.env.AGENT_MAIL_URL ?? DEFAULT_AGENT_MAIL_URL;
+    const hasBearerToken = !!process.env.HTTP_BEARER_TOKEN;
+    this.baseUrl = validateAgentMailUrl(
+      agentMailUrl ?? process.env.AGENT_MAIL_URL ?? DEFAULT_AGENT_MAIL_URL,
+      hasBearerToken,
+    );
     this.transport = transport ?? new HttpTransport({
       baseUrl: this.baseUrl,
       timeout: 5000,
@@ -345,7 +379,11 @@ export const createAdapter: AdapterFactory<HandoffPort> = (ctx: AdapterContext) 
   const memoryPort = ctx.ports.memoryPort as MemoryPort;
   const settingsPort = ctx.ports.settingsPort as SettingsPort;
   const taskBackend = (ctx.ports.taskBackend as 'fs' | 'br') ?? 'fs';
-  const baseUrl = ctx.manifest.baseUrl ?? process.env.AGENT_MAIL_URL ?? DEFAULT_AGENT_MAIL_URL;
+  const hasBearerToken = !!process.env.HTTP_BEARER_TOKEN;
+  const baseUrl = validateAgentMailUrl(
+    ctx.manifest.baseUrl ?? process.env.AGENT_MAIL_URL ?? DEFAULT_AGENT_MAIL_URL,
+    hasBearerToken,
+  );
   const transport = new HttpTransport({
     baseUrl,
     timeout: 5000,

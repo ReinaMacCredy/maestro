@@ -9,6 +9,7 @@ import { isToolAllowed } from '../../domain/ports/settings.ts';
 import type { ToolManifest, ToolStatus } from './types.ts';
 import type { TransportType } from './sdk/types.ts';
 import { BUILT_IN_MANIFESTS } from './manifests.generated.ts';
+import { sanitizeDetectCommand } from '../utils/cli-detect.ts';
 
 // ============================================================================
 // Manifest Loading
@@ -92,12 +93,19 @@ export function detectTool(
     return { manifest, installed: cached.installed, version: cached.version, settingsState, detectError: cached.error, transport: inferTransport(manifest) };
   }
 
-  const detectCmd = manifest.detect ?? `command -v ${manifest.binary}`;
+  const detectCmd = manifest.detect
+    ? sanitizeDetectCommand(manifest.detect)
+    : null;
   try {
-    const output = execFileSync('sh', ['-c', detectCmd], {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: 5000,
-    });
+    const output = detectCmd
+      ? execFileSync('sh', ['-c', detectCmd], {
+          stdio: ['pipe', 'pipe', 'pipe'],
+          timeout: 5000,
+        })
+      : execFileSync('/bin/sh', ['-c', 'command -v -- "$1"', '--', manifest.binary!], {
+          stdio: ['pipe', 'pipe', 'pipe'],
+          timeout: 5000,
+        });
     const version = output.toString().trim().split('\n')[0] || undefined;
     detectCache.set(cacheKey, { installed: true, version });
     return { manifest, installed: true, version, settingsState, transport: inferTransport(manifest) };

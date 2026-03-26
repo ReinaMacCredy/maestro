@@ -99,7 +99,6 @@ export class FsVerificationAdapter implements VerificationPort {
           cwd,
           signal: controller.signal,
           stdio: ['ignore', 'ignore', 'pipe'],
-          shell: true,
         });
 
         proc.stderr.on('data', (chunk: Buffer) => {
