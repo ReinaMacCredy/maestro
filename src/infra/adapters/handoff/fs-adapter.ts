@@ -9,7 +9,7 @@ import type { TaskPort } from '../../../domain/ports/task.ts';
 import type { MemoryPort } from '../../../domain/ports/memory.ts';
 import { getHandoffPath, getHandoffsPath } from '../../utils/paths.ts';
 import { ensureDir, writeText, readText, fileExists } from '../../utils/fs-io.ts';
-import { execFileSync } from 'node:child_process';
+import { getModifiedFiles, extractTitle, formatHandoffMessage } from './shared.ts';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -29,7 +29,7 @@ export class FsHandoffAdapter implements HandoffPort {
       value: mf.content.slice(0, 500),
     }));
 
-    const modifiedFiles = this.getModifiedFiles();
+    const modifiedFiles = getModifiedFiles(this.projectRoot);
 
     return {
       beadId: taskId,
@@ -52,7 +52,7 @@ export class FsHandoffAdapter implements HandoffPort {
     handoff: HandoffDocument,
     _targetAgent?: string,
   ): Promise<HandoffResult> {
-    const body = this.formatHandoff(handoff, feature);
+    const body = formatHandoffMessage(handoff, feature);
     const filePath = getHandoffPath(this.projectRoot, feature, handoff.beadId);
     ensureDir(path.dirname(filePath));
     writeText(filePath, body);
@@ -73,7 +73,7 @@ export class FsHandoffAdapter implements HandoffPort {
         const beadId = file.replace(/\.md$/, '');
         handoffs.push({
           beadId,
-          beadState: { title: this.extractTitle(content), status: 'unknown' },
+          beadState: { title: extractTitle(content), status: 'unknown' },
           decisions: [],
           modifiedFiles: [],
           blockers: [],
@@ -113,61 +113,4 @@ export class FsHandoffAdapter implements HandoffPort {
     }
   }
 
-  private getModifiedFiles(): string[] {
-    try {
-      const stdout = execFileSync('git', ['diff', '--name-only'], {
-        cwd: this.projectRoot,
-        encoding: 'utf-8',
-        timeout: 5000,
-      });
-      return stdout.trim().split('\n').filter(Boolean);
-    } catch {
-      return [];
-    }
-  }
-
-  private formatHandoff(handoff: HandoffDocument, feature: string): string {
-    const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 19);
-    const sections: string[] = [];
-
-    sections.push(`## Handoff: ${timestamp}`, '');
-    sections.push('### Current Task State');
-    sections.push(`Task: \`${handoff.beadId}\` | Status: ${handoff.beadState.status}`);
-    sections.push(`Title: ${handoff.beadState.title}`, '');
-
-    if (handoff.decisions.length > 0) {
-      sections.push('### Key Decisions');
-      for (const d of handoff.decisions) sections.push(`- **${d.key}**: ${d.value}`);
-      sections.push('');
-    }
-
-    if (handoff.modifiedFiles.length > 0) {
-      sections.push('### Modified Files');
-      for (const f of handoff.modifiedFiles) sections.push(`- \`${f}\``);
-      sections.push('');
-    }
-
-    if (handoff.blockers.length > 0) {
-      sections.push('### Blockers');
-      for (const b of handoff.blockers) sections.push(`- ${b}`);
-      sections.push('');
-    }
-
-    if (handoff.criticalContext) {
-      sections.push('### Critical Context', handoff.criticalContext, '');
-    }
-
-    sections.push('### Handoff Context (for next session)');
-    sections.push(`1. Read this handoff file for full context on task \`${handoff.beadId}\`.`);
-    sections.push(`2. Run: \`maestro task-info --feature ${feature} --task ${handoff.beadId}\` for current task state.`);
-    if (handoff.cassPointer) sections.push(`3. ${handoff.cassPointer}`);
-    sections.push('');
-
-    return sections.join('\n');
-  }
-
-  private extractTitle(content: string): string {
-    const match = content.match(/^##\s+Handoff:\s+(.+)$/m);
-    return match ? match[1].trim() : 'Unknown';
-  }
 }

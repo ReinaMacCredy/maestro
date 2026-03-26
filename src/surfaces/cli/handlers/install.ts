@@ -18,17 +18,7 @@ import { ensureDir, writeAtomic } from '../../../infra/utils/fs-io.ts';
 import { BUILTIN_SKILLS } from '../../../app/skills/registry.ts';
 import * as path from 'path';
 
-type Platform = 'claude-code' | 'codex' | 'other';
-
-function detectPlatform(): Platform {
-  if (process.env.CLAUDE_PROJECT_DIR || process.env.CLAUDE_SESSION_ID) {
-    return 'claude-code';
-  }
-  if (process.env.CODEX_CI || process.env.CODEX_THREAD_ID) {
-    return 'codex';
-  }
-  return 'other';
-}
+import { detectHost, type HostType } from '../../../infra/utils/host-detect.ts';
 
 interface InstalledSkill {
   slug: string;
@@ -77,7 +67,7 @@ function installCodexSkills(projectRoot: string): InstalledSkill[] {
 }
 
 interface InstallResult {
-  platform: Platform;
+  platform: HostType;
   projectRoot?: string;
   skills?: InstalledSkill[];
   message: string;
@@ -88,7 +78,7 @@ export default defineCommand({
   args: {},
   async run() {
     try {
-      const platform = detectPlatform();
+      const platform = detectHost();
       const projectRoot = process.cwd();
 
       let result: InstallResult;
