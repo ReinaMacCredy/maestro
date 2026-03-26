@@ -98,12 +98,12 @@ export const BUILT_IN_MANIFESTS: ToolManifest[] = [
   {
     "name": "agent-memory",
     "transport": "builtin",
-    "description": "Workflow-aware memory layer with hybrid retrieval (semantic + keyword + pipeline stage + dependency graph + execution feedback)",
+    "description": "Workflow-aware retrieval engine for memory files. Indexes .maestro/ memories with keyword + semantic + workflow signals.",
     "binary": null,
     "detect": null,
     "install": "bun add file:../agentMemory",
     "homepage": "https://github.com/ReinaMacCredy/agentMemory",
-    "provides": "memory",
+    "provides": null,
     "priority": 200,
     "adapter": "tools/external/agent-memory/adapter.ts"
   },

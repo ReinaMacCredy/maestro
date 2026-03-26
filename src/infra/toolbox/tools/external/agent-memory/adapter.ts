@@ -1,234 +1,170 @@
 /**
- * AgentMemoryAdapter -- MemoryPort implementation backed by agentMemory library.
+ * AgentMemory adapter -- retrieval engine for maestro memory files.
  *
- * Wraps agentMemory's SQLite + vec0 store, hybrid retrieval engine, and
- * workflow signals into maestro's MemoryPort interface. When this adapter
- * is active (priority 200 > fs-memory at 0), maestro uses agentMemory
- * for all memory operations instead of the filesystem backend.
+ * Unlike other adapters that provide a domain port, agentMemory is a
+ * read-only retrieval engine. It indexes .maestro/ memory files and
+ * provides hybrid search (keyword + semantic + workflow signals).
  *
- * The agentMemory library is imported directly (not via MCP/CLI) so
- * there is zero IPC overhead -- it runs in-process.
+ * Maestro uses this for enhanced DCP memory selection when available.
+ * Falls back to the standard FsMemoryAdapter scoring when not available.
  */
 
-import type { MemoryPort } from '../../../../../domain/ports/memory.ts';
-import type {
-  MemoryFile,
-  MemoryFileWithMeta,
-  MemoryMetadata,
-  MemoryConnection,
-  MemoryRelation,
-} from '../../../../../domain/types.ts';
 import type { AdapterContext, AdapterFactory } from '../../../types.ts';
 import {
   createStore,
-  writeMemory,
-  deleteMemory,
-  getMemory,
-  searchByKeyword,
+  syncIndex,
+  rebuildIndex,
   type Store,
-  type Memory,
 } from 'agent-memory';
+import { keywordSearch } from 'agent-memory';
+import { mergeSignals, type RetrievalSignal } from 'agent-memory';
+import { scoreStageProximity } from 'agent-memory';
+import { scoreMemoryEffectiveness } from 'agent-memory';
+import { readMemoryFile } from 'agent-memory';
+import { selectWithMmr } from 'agent-memory';
 
-function memoryToFile(m: Memory): MemoryFile {
-  return {
-    name: m.name,
-    content: m.content,
-    updatedAt: m.updatedAt,
-    sizeBytes: Buffer.byteLength(m.content, 'utf8'),
-  };
+export interface AgentMemoryRetriever {
+  /** Hybrid search across indexed memories. */
+  query(queryText: string, opts?: {
+    stage?: string;
+    feature?: string;
+    limit?: number;
+  }): Promise<Array<{ path: string; score: number; snippet: string }>>;
+
+  /** Budget-aware context assembly for agent briefs. */
+  compile(taskId: string, opts?: {
+    stage?: string;
+    feature?: string;
+    budgetTokens?: number;
+  }): Promise<{ compiled: string; memoriesUsed: number; tokensUsed: number }>;
+
+  /** Force reindex. */
+  reindex(): Promise<number>;
+
+  /** Sync index (incremental). */
+  sync(): Promise<number>;
 }
 
-function memoryToFileWithMeta(m: Memory): MemoryFileWithMeta {
-  const metadata: MemoryMetadata = {
-    tags: m.tags,
-    priority: m.priority,
-    category: m.category as MemoryMetadata['category'],
-    selectionCount: m.selectionCount,
-    lastSelectedAt: m.lastSelectedAt,
-  };
-  return {
-    ...memoryToFile(m),
-    metadata,
-    bodyContent: m.content,
-  };
-}
-
-export class AgentMemoryAdapter implements MemoryPort {
+class AgentMemoryAdapter implements AgentMemoryRetriever {
   private store: Store;
 
-  constructor() {
-    this.store = createStore();
+  constructor(maestroDir: string) {
+    this.store = createStore(maestroDir);
   }
 
-  write(featureName: string, fileName: string, content: string): string {
-    const m = writeMemory(this.store, {
-      name: fileName,
-      content,
-      feature: featureName,
-    });
-    return m.id;
-  }
+  async query(queryText: string, opts?: {
+    stage?: string;
+    feature?: string;
+    limit?: number;
+  }): Promise<Array<{ path: string; score: number; snippet: string }>> {
+    await syncIndex(this.store);
 
-  read(featureName: string, fileName: string): string | null {
-    const rows = this.store.db.query<{ content: string }, [string, string]>(
-      'SELECT content FROM memories WHERE name = ? AND feature = ? LIMIT 1',
-    ).get(fileName, featureName);
-    return rows?.content ?? null;
-  }
+    const limit = opts?.limit ?? 20;
+    const allSignals: RetrievalSignal[][] = [];
 
-  list(featureName: string): MemoryFile[] {
-    const rows = this.store.db.query<Record<string, unknown>, [string]>(
-      'SELECT * FROM memories WHERE feature = ? ORDER BY updated_at DESC',
-    ).all(featureName);
-    return rows.map(r => memoryToFile(this._rowToMemory(r)));
-  }
+    // Keyword search
+    const kwSignals = keywordSearch(queryText, this.store.index);
+    allSignals.push(kwSignals);
 
-  listWithMeta(featureName: string): MemoryFileWithMeta[] {
-    const rows = this.store.db.query<Record<string, unknown>, [string]>(
-      'SELECT * FROM memories WHERE feature = ? ORDER BY updated_at DESC',
-    ).all(featureName);
-    return rows.map(r => memoryToFileWithMeta(this._rowToMemory(r)));
-  }
+    const candidateIds = new Set(kwSignals.map(s => s.memoryId));
 
-  delete(featureName: string, fileName: string): boolean {
-    const result = this.store.db.run(
-      'DELETE FROM memories WHERE name = ? AND feature = ?',
-      [fileName, featureName],
-    );
-    return result.changes > 0;
-  }
+    // Stage scoring
+    if (opts?.stage) {
+      const stageSignals: RetrievalSignal[] = [];
+      for (const relPath of candidateIds) {
+        const entry = this.store.index.entries[relPath];
+        if (!entry) continue;
+        stageSignals.push({
+          memoryId: relPath,
+          score: scoreStageProximity(entry.metadata.stage, opts.stage),
+          source: 'pipelineStage',
+        });
+      }
+      allSignals.push(stageSignals);
+    }
 
-  compile(featureName: string): string {
-    const files = this.list(featureName);
-    return files.map(f => `## ${f.name}\n\n${f.content}`).join('\n\n---\n\n');
-  }
+    // Feedback
+    const fbSignals: RetrievalSignal[] = [];
+    for (const relPath of candidateIds) {
+      const eff = scoreMemoryEffectiveness(this.store, relPath);
+      if (eff !== 0) {
+        fbSignals.push({ memoryId: relPath, score: (eff + 1) / 2, source: 'execFeedback' });
+      }
+    }
+    if (fbSignals.length > 0) allSignals.push(fbSignals);
 
-  archive(featureName: string): { archived: string[]; archivePath: string } {
-    const files = this.list(featureName);
-    const names = files.map(f => f.name);
-    // Mark as archived by setting stage to null
-    this.store.db.run(
-      'UPDATE memories SET category = \'execution\' WHERE feature = ?',
-      [featureName],
-    );
-    return { archived: names, archivePath: `agent-memory:${featureName}` };
-  }
-
-  stats(featureName: string): { count: number; totalBytes: number; oldest?: string; newest?: string } {
-    const row = this.store.db.query<{ cnt: number; total: number; oldest: string | null; newest: string | null }, [string]>(
-      `SELECT COUNT(*) as cnt, COALESCE(SUM(LENGTH(content)), 0) as total,
-              MIN(name) as oldest, MAX(name) as newest
-       FROM memories WHERE feature = ?`,
-    ).get(featureName);
-    return {
-      count: row?.cnt ?? 0,
-      totalBytes: row?.total ?? 0,
-      oldest: row?.oldest ?? undefined,
-      newest: row?.newest ?? undefined,
-    };
-  }
-
-  compress(featureName: string, fileName: string): boolean {
-    const content = this.read(featureName, fileName);
-    if (!content) return false;
-    const truncated = content.slice(0, 200) + (content.length > 200 ? '\n\n[compressed]' : '');
-    this.store.db.run(
-      'UPDATE memories SET content = ?, updated_at = datetime(\'now\') WHERE name = ? AND feature = ?',
-      [truncated, fileName, featureName],
-    );
-    return true;
-  }
-
-  isCompressed(featureName: string, fileName: string): boolean {
-    const content = this.read(featureName, fileName);
-    return content?.includes('[compressed]') ?? false;
-  }
-
-  readFull(featureName: string, fileName: string): MemoryFileWithMeta | null {
-    const row = this.store.db.query<Record<string, unknown>, [string, string]>(
-      'SELECT * FROM memories WHERE name = ? AND feature = ? LIMIT 1',
-    ).get(fileName, featureName);
-    if (!row) return null;
-    return memoryToFileWithMeta(this._rowToMemory(row));
-  }
-
-  recordSelection(featureName: string, fileName: string): void {
-    this.store.db.run(
-      `UPDATE memories SET selection_count = selection_count + 1,
-              last_selected_at = datetime('now'), updated_at = datetime('now')
-       WHERE name = ? AND feature = ?`,
-      [fileName, featureName],
-    );
-  }
-
-  connect(featureName: string, sourceName: string, targetName: string, relation: MemoryRelation): void {
-    const src = this._findId(featureName, sourceName);
-    const tgt = this._findId(featureName, targetName);
-    if (!src || !tgt) return;
-    const id = crypto.randomUUID();
-    this.store.db.run(
-      'INSERT OR IGNORE INTO connections (id, source_id, target_id, relation) VALUES (?, ?, ?, ?)',
-      [id, src, tgt, relation],
-    );
-  }
-
-  getConnections(featureName: string, name: string): MemoryConnection[] {
-    const memId = this._findId(featureName, name);
-    if (!memId) return [];
-    const rows = this.store.db.query<{ target_id: string; relation: string }, [string]>(
-      'SELECT target_id, relation FROM connections WHERE source_id = ?',
-    ).all(memId);
-    return rows.map(r => {
-      const target = this.store.db.query<{ name: string }, [string]>(
-        'SELECT name FROM memories WHERE id = ?',
-      ).get(r.target_id);
-      return { target: target?.name ?? r.target_id, relation: r.relation as MemoryRelation };
+    const merged = mergeSignals(allSignals);
+    return merged.slice(0, limit).map(r => {
+      const mem = readMemoryFile(this.store.maestroDir, r.memoryId);
+      return {
+        path: r.memoryId,
+        score: r.totalScore,
+        snippet: mem ? mem.body.slice(0, 200) : '',
+      };
     });
   }
 
-  writeGlobal(fileName: string, content: string): string {
-    return this.write('__global__', fileName, content);
-  }
+  async compile(taskId: string, opts?: {
+    stage?: string;
+    feature?: string;
+    budgetTokens?: number;
+  }): Promise<{ compiled: string; memoriesUsed: number; tokensUsed: number }> {
+    await syncIndex(this.store);
 
-  readGlobal(fileName: string): string | null {
-    return this.read('__global__', fileName);
-  }
+    const budget = opts?.budgetTokens ?? 1024;
+    const queryText = taskId.replace(/[-_]/g, ' ');
+    const allSignals: RetrievalSignal[][] = [];
 
-  listGlobal(): MemoryFile[] {
-    return this.list('__global__');
-  }
+    const kwSignals = keywordSearch(queryText, this.store.index);
+    allSignals.push(kwSignals);
 
-  deleteGlobal(fileName: string): boolean {
-    return this.delete('__global__', fileName);
-  }
+    if (opts?.stage) {
+      const stageSignals: RetrievalSignal[] = [];
+      for (const [relPath, entry] of Object.entries(this.store.index.entries)) {
+        if (opts.feature && !relPath.includes(`features/${opts.feature}/`)) continue;
+        stageSignals.push({
+          memoryId: relPath,
+          score: scoreStageProximity(entry.metadata.stage, opts.stage),
+          source: 'pipelineStage',
+        });
+      }
+      allSignals.push(stageSignals);
+    }
 
-  private _findId(featureName: string, name: string): string | null {
-    const row = this.store.db.query<{ id: string }, [string, string]>(
-      'SELECT id FROM memories WHERE name = ? AND feature = ? LIMIT 1',
-    ).get(name, featureName);
-    return row?.id ?? null;
-  }
+    const merged = mergeSignals(allSignals);
+    const mmrCandidates = merged.map(r => ({
+      ...r,
+      tokenCount: this.store.index.entries[r.memoryId]?.tokenCount ?? 100,
+    }));
+    const selected = selectWithMmr(mmrCandidates, budget);
 
-  private _rowToMemory(row: Record<string, unknown>): Memory {
+    let tokensUsed = 0;
+    const sections: string[] = [];
+
+    for (const sel of selected) {
+      const mem = readMemoryFile(this.store.maestroDir, sel.memoryId);
+      if (!mem) continue;
+      const name = sel.memoryId.split('/').pop()?.replace('.md', '') ?? sel.memoryId;
+      sections.push(`## ${name}\n\n${mem.body}`);
+      tokensUsed += sel.tokenCount;
+    }
+
     return {
-      id: row.id as string,
-      name: row.name as string,
-      content: row.content as string,
-      category: row.category as string | undefined,
-      stage: row.stage as string | undefined,
-      taskId: row.task_id as string | undefined,
-      feature: row.feature as string | undefined,
-      project: row.project as string | undefined,
-      tags: JSON.parse((row.tags as string) ?? '[]'),
-      priority: row.priority as number,
-      selectionCount: row.selection_count as number,
-      lastSelectedAt: row.last_selected_at as string | undefined,
-      createdAt: row.created_at as string,
-      updatedAt: row.updated_at as string,
+      compiled: sections.join('\n\n---\n\n'),
+      memoriesUsed: selected.length,
+      tokensUsed,
     };
+  }
+
+  async reindex(): Promise<number> {
+    return rebuildIndex(this.store);
+  }
+
+  async sync(): Promise<number> {
+    return syncIndex(this.store);
   }
 }
 
-export const createAdapter: AdapterFactory<MemoryPort> = (_ctx: AdapterContext) => {
-  return new AgentMemoryAdapter();
+export const createAdapter: AdapterFactory<AgentMemoryRetriever> = (ctx: AdapterContext) => {
+  return new AgentMemoryAdapter(ctx.projectRoot + '/.maestro');
 };
