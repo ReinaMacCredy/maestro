@@ -1,0 +1,12 @@
+{
+  "name": "agent-memory",
+  "transport": "builtin",
+  "description": "Workflow-aware memory layer with hybrid retrieval (semantic + keyword + pipeline stage + dependency graph + execution feedback)",
+  "binary": null,
+  "detect": null,
+  "install": "bun add file:../agentMemory",
+  "homepage": "https://github.com/ReinaMacCredy/agentMemory",
+  "provides": "memory",
+  "priority": 200,
+  "adapter": "tools/external/agent-memory/adapter.ts"
+}

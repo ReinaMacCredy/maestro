@@ -38,6 +38,7 @@
     "prepublishOnly": "bun run check && bun run build"
   },
   "dependencies": {
+    "agent-memory": "file:../agentMemory",
     "simple-git": "^3.27.0"
   },
   "devDependencies": {

@@ -96,6 +96,18 @@ export const BUILT_IN_MANIFESTS: ToolManifest[] = [
     "adapter": "tools/external/mcp-search/adapter.ts"
   },
   {
+    "name": "agent-memory",
+    "transport": "builtin",
+    "description": "Workflow-aware memory layer with hybrid retrieval (semantic + keyword + pipeline stage + dependency graph + execution feedback)",
+    "binary": null,
+    "detect": null,
+    "install": "bun add file:../agentMemory",
+    "homepage": "https://github.com/ReinaMacCredy/agentMemory",
+    "provides": "memory",
+    "priority": 200,
+    "adapter": "tools/external/agent-memory/adapter.ts"
+  },
+  {
     "name": "br",
     "transport": "cli",
     "description": "Beads Rust task backend with sync, graph queries, and batch ops",
