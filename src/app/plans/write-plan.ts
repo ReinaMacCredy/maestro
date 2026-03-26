@@ -6,7 +6,8 @@ import { MaestroError } from '../../domain/errors.ts';
 import scaffoldTemplate from '../../templates/plan-scaffold.md';
 import { queryHistoricalContext, type HistoricalPitfall } from '../dcp/historical.ts';
 
-const TASK_HEADING_RE = /^###\s+\d+\.\s+.+$/gm;
+/** Matches task headings at any sub-heading level: ### N. or #### N. etc. */
+const TASK_HEADING_RE = /^#{3,6}\s+\d+\.\s+.+$/gm;
 
 export interface WritePlanServices {
   planAdapter: PlanPort;

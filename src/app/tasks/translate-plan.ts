@@ -48,7 +48,7 @@ export async function translatePlan(
   const warnings: string[] = [];
   if (parsedTasks.length === 0) {
     warnings.push(
-      'Plan produced 0 tasks. Expected "### N. Task Name" headings (e.g. "### 1. Setup database").'
+      'Plan produced 0 tasks. Expected numbered headings like "### 1. Setup database" or "#### 1. Setup database".'
     );
   }
 

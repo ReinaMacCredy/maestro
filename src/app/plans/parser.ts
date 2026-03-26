@@ -22,7 +22,9 @@ export interface ParsedTask {
 
 /**
  * Parse tasks from a plan.md file.
- * Expects headings in the format: ### N. Task Name
+ * Accepts task headings at any level (###, ####, #####) in the format:
+ *   ### N. Task Name   OR   #### N. Task Name
+ * This handles plans where tasks are nested under phase headings.
  */
 export function parseTasksFromPlan(content: string): ParsedTask[] {
   const tasks: ParsedTask[] = [];
@@ -34,7 +36,8 @@ export function parseTasksFromPlan(content: string): ParsedTask[] {
   const dependsOnRegex = /^\s*(?:[-*]\s+)?\*{0,2}Depends\s+on\*{0,2}\s*:\s*(.+)$/i;
 
   for (const line of lines) {
-    const taskMatch = line.match(/^###\s+(\d+)\.\s+(.+)$/);
+    // Accept task headings at any heading level (###, ####, #####, etc.)
+    const taskMatch = line.match(/^#{3,6}\s+(\d+)\.\s+(.+)$/);
 
     if (taskMatch) {
       if (currentTask) {
