@@ -88,22 +88,27 @@ export async function translatePlan(
     }
   }
 
-  // Create rich beads from plan sections
+  // Create rich beads from plan sections.
+  // Track plan-ID -> br-folder so deps resolve to created br folders, not raw plan IDs.
+  const planIdToFolder = new Map<string, string>();
   for (const parsedTask of parsedTasks) {
     if (existingByFolder.has(parsedTask.folder) || existingById.has(parsedTask.id)) continue;
 
-    const dependsOn = resolveDependencies(parsedTask, parsedTasks);
+    const rawDeps = resolveDependencies(parsedTask, parsedTasks);
+    const resolvedDeps = rawDeps.map(dep => planIdToFolder.get(dep) ?? dep);
 
     const beadOpts = buildBeadOpts({
       featureName,
       task: parsedTask,
       planContent: plan.content,
       allTasks: parsedTasks,
-      dependsOn,
+      dependsOn: resolvedDeps,
     });
 
     const created = await taskPort.create(featureName, parsedTask.name, beadOpts);
 
+    // Map plan ID to actual br folder so later tasks can resolve deps
+    planIdToFolder.set(parsedTask.id, created.folder);
     // Update folder to match actual assignment (br prefixes issue ID)
     parsedTask.folder = created.folder;
 
