@@ -21,11 +21,17 @@ export interface TranslatePlanServices {
   planAdapter: PlanPort;
 }
 
+export interface TranslatePlanOpts {
+  dryRun?: boolean;
+}
+
 export async function translatePlan(
   services: TranslatePlanServices,
   featureName: string,
+  opts?: TranslatePlanOpts,
 ): Promise<TasksSyncResult> {
   const { taskPort, planAdapter } = services;
+  const dryRun = opts?.dryRun ?? false;
 
   const plan = planAdapter.read(featureName);
   if (!plan) throw new MaestroError(`No plan found for feature '${featureName}'`);
@@ -81,7 +87,7 @@ export async function translatePlan(
 
     const stillInPlan = parsedFolderSet.has(existing.folder) || parsedIdSet.has(existing.id);
     if (!stillInPlan) {
-      await taskPort.remove(featureName, existing.folder);
+      if (!dryRun) await taskPort.remove(featureName, existing.folder);
       result.removed.push(existing.folder);
     } else {
       result.kept.push(existing.folder);
@@ -105,14 +111,18 @@ export async function translatePlan(
       dependsOn: resolvedDeps,
     });
 
-    const created = await taskPort.create(featureName, parsedTask.name, beadOpts);
+    if (!dryRun) {
+      const created = await taskPort.create(featureName, parsedTask.name, beadOpts);
 
-    // Map plan ID to actual br folder so later tasks can resolve deps
-    planIdToFolder.set(parsedTask.id, created.folder);
-    // Update folder to match actual assignment (br prefixes issue ID)
-    parsedTask.folder = created.folder;
+      // Map plan ID to actual br folder so later tasks can resolve deps
+      planIdToFolder.set(parsedTask.id, created.folder);
+      // Update folder to match actual assignment (br prefixes issue ID)
+      parsedTask.folder = created.folder;
 
-    result.created.push(created.folder);
+      result.created.push(created.folder);
+    } else {
+      result.created.push(parsedTask.folder);
+    }
   }
 
   if (warnings.length > 0) result.warnings = warnings;

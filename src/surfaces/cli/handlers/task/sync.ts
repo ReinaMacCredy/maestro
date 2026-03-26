@@ -28,7 +28,7 @@ export default defineCommand({
       const services = getServices();
       const dryRun = args['dry-run'];
       const result = services.taskBackend === 'br'
-        ? await translatePlan(services, args.feature)
+        ? await translatePlan(services, args.feature, { dryRun })
         : await syncPlan(services, args.feature, { dryRun });
 
       output(result, (r) => {

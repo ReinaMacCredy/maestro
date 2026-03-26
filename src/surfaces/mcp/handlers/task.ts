@@ -56,7 +56,7 @@ export function registerTaskTools(server: McpServer, thunk: ServicesThunk): void
       switch (input.action) {
         case 'sync': {
           const result = services.taskBackend === 'br'
-            ? await translatePlan(services, feature)
+            ? await translatePlan(services, feature, { dryRun: input.dry_run })
             : await syncPlan(services, feature, { dryRun: input.dry_run });
           const hint = buildTransitionHint('tasks_sync', { created: result.created.length });
           return respond({ ...result, ...(hint && { transition: hint }) });
