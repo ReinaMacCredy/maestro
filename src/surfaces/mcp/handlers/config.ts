@@ -67,7 +67,11 @@ export function registerConfigTools(server: McpServer, thunk: ServicesThunk): vo
 
       ensureDir(path.dirname(settingsPath));
       writeJsonAtomic(settingsPath, existing);
+
+      // Invalidate both the settings adapter cache AND the container so
+      // subsequent MCP calls see the new config (e.g. tasks.backend change).
       (services.settingsPort as any).invalidate?.();
+      thunk.invalidate();
 
       return respond({ key: input.key, value: parsed });
     }),

@@ -20,6 +20,8 @@ export interface ServicesThunk {
   isInitialized(): boolean;
   /** Force initialization (used by maestro_init after creating .maestro/). */
   forceInit(): MaestroContainer;
+  /** Invalidate cached container so next get() rebuilds it from current settings. */
+  invalidate(): void;
 }
 
 export function createServicesThunk(
@@ -61,6 +63,10 @@ export function createServicesThunk(
     forceInit(): MaestroContainer {
       cached = init();
       return cached;
+    },
+
+    invalidate(): void {
+      cached = null;
     },
   };
 }
