@@ -1,0 +1,27 @@
+{
+  "name": "embed-at-build-time",
+  "rule": "When code uses Bun-only APIs (import.meta.dir, import.meta.file) that will run under Node.js in the MCP bundle, embed the data at build time via a generator script instead of runtime filesystem scanning.",
+  "rationale": "MCP server runs under Node.js via start.mjs. import.meta.dir is undefined in Node, causing crashes. Build-time embedding eliminates all runtime path dependencies.",
+  "conditions": {},
+  "tags": [
+    "mcp",
+    "node",
+    "bundler",
+    "build"
+  ],
+  "source": {
+    "features": [
+      "mcp-node-compat"
+    ],
+    "memories": []
+  },
+  "effectiveness": {
+    "injectionCount": 0,
+    "associatedSuccessRate": 0,
+    "overrideCount": 0
+  },
+  "status": "active",
+  "createdAt": "2026-03-26T01:48:06.734Z",
+  "updatedAt": "2026-03-26T01:48:25.171Z",
+  "schemaVersion": 1
+}

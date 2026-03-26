@@ -1,0 +1,12 @@
+{
+  "folderToId": {
+    "maestro-w0u-embed-tool-manifests": "maestro-w0u",
+    "maestro-3xl-embed-agent-data": "maestro-3xl",
+    "maestro-mca-verify-mcp-server": "maestro-mca"
+  },
+  "idToFolder": {
+    "maestro-w0u": "maestro-w0u-embed-tool-manifests",
+    "maestro-3xl": "maestro-3xl-embed-agent-data",
+    "maestro-mca": "maestro-mca-verify-mcp-server"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "folderToId": {
+    "maestro-yin-validate-core-tools": "maestro-yin",
+    "maestro-1zw-validate-core-tools": "maestro-1zw",
+    "maestro-22k-validate-advanced-tools": "maestro-22k"
+  },
+  "idToFolder": {
+    "maestro-yin": "maestro-yin-validate-core-tools",
+    "maestro-1zw": "maestro-1zw-validate-core-tools",
+    "maestro-22k": "maestro-22k-validate-advanced-tools"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 2,
+  "status": "done",
+  "origin": "plan",
+  "planTitle": "Add embeddings and semantic search",
+  "dependsOn": [
+    "implement-keyword-search-and-query-tool"
+  ],
+  "summary": "Added ONNX embeddings, cosine similarity, full hybrid retrieval engine.",
+  "completedAt": "2026-03-26T10:23:43.461Z"
+}

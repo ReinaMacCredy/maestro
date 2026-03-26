@@ -1,0 +1,1 @@
+Build the filesystem scanner and sidecar index manager. Scanner crawls .maestro/features/*/memory/*.md and .maestro/memory/*.md. Index stored at .maestro/retrieval-index.json with checksums, keywords, and optional embeddings.
