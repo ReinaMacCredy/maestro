@@ -11,7 +11,7 @@ import type { TaskInfo } from '../../../domain/types.ts';
 
 export function makeInfoCommand() {
   return defineCommand({
-    meta: { name: 'task-info', description: 'Show task details' },
+    meta: { name: 'task-info', description: 'Show task details\n\nExamples:\n  maestro task-info --feature my-feat --task 01-setup\n  maestro task-info --feature my-feat --task 01-setup --json' },
     args: {
       feature: { type: 'string' as const, description: 'Feature name', required: true },
       task: { type: 'string' as const, description: 'Task ID', required: true },
@@ -44,7 +44,7 @@ export function makeInfoCommand() {
 export function makeDocReadCommand(docType: 'spec' | 'report') {
   const portMethod = docType === 'spec' ? 'readSpec' as const : 'readReport' as const;
   return defineCommand({
-    meta: { name: `task-${docType}-read`, description: `Read task ${docType}` },
+    meta: { name: `task-${docType}-read`, description: `Read task ${docType}\n\nExamples:\n  maestro task-${docType}-read --feature my-feat --task 01-setup\n  maestro task-${docType}-read --feature my-feat --task 01-setup --json` },
     args: {
       feature: { type: 'string' as const, description: 'Feature name', required: true },
       task: { type: 'string' as const, description: 'Task ID', required: true },
@@ -67,7 +67,7 @@ export function makeDocReadCommand(docType: 'spec' | 'report') {
 export function makeDocWriteCommand(docType: 'spec' | 'report') {
   const portMethod = docType === 'spec' ? 'writeSpec' as const : 'writeReport' as const;
   return defineCommand({
-    meta: { name: `task-${docType}-write`, description: `Write task ${docType}` },
+    meta: { name: `task-${docType}-write`, description: `Write task ${docType}\n\nExamples:\n  maestro task-${docType}-write --feature my-feat --task 01-setup --content "..."\n  echo "content" | maestro task-${docType}-write --feature my-feat --task 01-setup --stdin` },
     args: {
       feature: { type: 'string' as const, description: 'Feature name', required: true },
       task: { type: 'string' as const, description: 'Task ID', required: true },

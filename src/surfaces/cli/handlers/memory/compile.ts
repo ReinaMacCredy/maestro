@@ -34,7 +34,7 @@ function requireMemories(memories: MemoryFileWithMeta[], feature: string): asser
 }
 
 export default defineCommand({
-  meta: { name: 'memory-compile', description: 'Compile all memory into single string' },
+  meta: { name: 'memory-compile', description: 'Compile all memory into single string\n\nExamples:\n  maestro memory-compile --feature my-feat\n  maestro memory-compile --feature my-feat --task 01-setup --json' },
   args: {
     feature: {
       type: 'string',

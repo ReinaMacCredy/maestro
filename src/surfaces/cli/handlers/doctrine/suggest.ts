@@ -10,7 +10,7 @@ import { requireDoctrinePort } from '../../../../infra/utils/resolve.ts';
 import { suggestDoctrine } from '../../../../app/doctrine/suggest.ts';
 
 export default defineCommand({
-  meta: { name: 'doctrine-suggest', description: 'Suggest doctrine from cross-feature execution patterns' },
+  meta: { name: 'doctrine-suggest', description: 'Suggest doctrine from cross-feature execution patterns\n\nExamples:\n  maestro doctrine-suggest\n  maestro doctrine-suggest --json' },
   args: {},
   async run() {
     try {

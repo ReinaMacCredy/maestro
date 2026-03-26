@@ -17,7 +17,7 @@ function formatResult(result: VisualResult): string {
 }
 
 export default defineCommand({
-  meta: { name: 'visual', description: 'Render maestro state as interactive HTML' },
+  meta: { name: 'visual', description: 'Render maestro state as interactive HTML\n\nExamples:\n  maestro visual --type status-dashboard --feature my-feat\n  maestro visual --type dependency-graph --feature my-feat --no-open' },
   args: {
     type: {
       type: 'string',

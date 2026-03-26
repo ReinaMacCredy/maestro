@@ -9,7 +9,7 @@ import { output } from '../../../../infra/utils/output.ts';
 import { handleCommandError } from '../../../../domain/errors.ts';
 
 export default defineCommand({
-  meta: { name: 'toolbox-list', description: 'List all registered tools with status and transport' },
+  meta: { name: 'toolbox-list', description: 'List all registered tools with status and transport\n\nExamples:\n  maestro toolbox-list\n  maestro toolbox-list --json' },
   args: {},
   async run() {
     try {

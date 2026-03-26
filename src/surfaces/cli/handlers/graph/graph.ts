@@ -9,7 +9,7 @@ import { handleCommandError } from '../../../../domain/errors.ts';
 import { requireGraphPort } from '../../../../infra/utils/resolve.ts';
 
 export default defineCommand({
-  meta: { name: 'graph-insights', description: 'Show dependency graph metrics' },
+  meta: { name: 'graph-insights', description: 'Show dependency graph metrics\n\nExamples:\n  maestro graph-insights\n  maestro graph-insights --json' },
   args: {},
   async run() {
     try {

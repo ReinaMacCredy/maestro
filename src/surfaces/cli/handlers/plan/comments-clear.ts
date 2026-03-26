@@ -8,7 +8,7 @@ import { output } from '../../../../infra/utils/output.ts';
 import { handleCommandError } from '../../../../domain/errors.ts';
 
 export default defineCommand({
-  meta: { name: 'plan-comments-clear', description: 'Clear all plan comments' },
+  meta: { name: 'plan-comments-clear', description: 'Clear all plan comments\n\nExamples:\n  maestro plan-comments-clear --feature my-feat\n  maestro plan-comments-clear --feature my-feat --json' },
   args: {
     feature: {
       type: 'string',

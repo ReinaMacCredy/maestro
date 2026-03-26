@@ -9,7 +9,7 @@ import { handleCommandError } from '../../../../domain/errors.ts';
 import { requireGraphPort } from '../../../../infra/utils/resolve.ts';
 
 export default defineCommand({
-  meta: { name: 'graph-next', description: 'Show recommended next bead' },
+  meta: { name: 'graph-next', description: 'Show recommended next bead\n\nExamples:\n  maestro graph-next\n  maestro graph-next --json' },
   args: {},
   async run() {
     try {

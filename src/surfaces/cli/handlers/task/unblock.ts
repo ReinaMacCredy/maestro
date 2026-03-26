@@ -9,7 +9,7 @@ import { handleCommandError } from '../../../../domain/errors.ts';
 import { requireFeature, FEATURE_HINT } from '../../../../infra/utils/resolve.ts';
 
 export default defineCommand({
-  meta: { name: 'task-unblock', description: 'Unblock a blocked task' },
+  meta: { name: 'task-unblock', description: 'Unblock a blocked task\n\nExamples:\n  maestro task-unblock --feature my-feat --task 01-setup --decision "Key obtained"\n  maestro task-unblock --task 01-setup --decision "Resolved" --json' },
   args: {
     feature: {
       type: 'string',

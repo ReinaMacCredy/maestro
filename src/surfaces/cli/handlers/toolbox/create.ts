@@ -116,7 +116,7 @@ export const createAdapter: AdapterFactory = (ctx: AdapterContext) => {
 }
 
 export default defineCommand({
-  meta: { name: 'toolbox-create', description: 'Scaffold a new tool with manifest and adapter' },
+  meta: { name: 'toolbox-create', description: 'Scaffold a new tool with manifest and adapter\n\nExamples:\n  maestro toolbox-create --name my-adapter --transport cli\n  maestro toolbox-create --name my-bridge --transport mcp-stdio --provides search' },
   args: {
     name: {
       type: 'string',

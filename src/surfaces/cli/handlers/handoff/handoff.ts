@@ -9,7 +9,7 @@ import { handleCommandError } from '../../../../domain/errors.ts';
 import { requireHandoffPort } from '../../../../infra/utils/resolve.ts';
 
 export default defineCommand({
-  meta: { name: 'handoff-ack', description: 'Acknowledge a handoff' },
+  meta: { name: 'handoff-ack', description: 'Acknowledge a handoff\n\nExamples:\n  maestro handoff-ack --thread-id abc123\n  maestro handoff-ack --thread-id abc123 --json' },
   args: {
     threadId: {
       type: 'string',

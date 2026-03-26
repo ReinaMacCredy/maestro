@@ -10,7 +10,7 @@ import { MaestroError, handleCommandError } from '../../../../domain/errors.ts';
 import { getNestedValue } from '../../../../infra/utils/object-utils.ts';
 
 export default defineCommand({
-  meta: { name: 'config-get', description: 'Get a config value' },
+  meta: { name: 'config-get', description: 'Get a config value\n\nExamples:\n  maestro config-get --key tasks.backend\n  maestro config-get --key dcp.enabled --json' },
   args: {
     key: {
       type: 'string',

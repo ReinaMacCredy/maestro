@@ -84,7 +84,7 @@ interface InstallResult {
 }
 
 export default defineCommand({
-  meta: { name: 'install', description: 'Install maestro integration for the current host platform' },
+  meta: { name: 'install', description: 'Install maestro integration for the current host platform\n\nExamples:\n  maestro install\n  maestro install --json' },
   args: {},
   async run() {
     try {

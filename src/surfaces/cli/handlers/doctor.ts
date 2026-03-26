@@ -36,7 +36,7 @@ function formatDoctor(report: DoctorReport): string {
 }
 
 export default defineCommand({
-  meta: { name: 'doctor', description: 'Health check for config, integrations, and project state' },
+  meta: { name: 'doctor', description: 'Health check for config, integrations, and project state\n\nExamples:\n  maestro doctor\n  maestro doctor --json' },
   args: {},
   async run() {
     try {

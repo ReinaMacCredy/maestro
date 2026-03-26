@@ -9,7 +9,7 @@ import { handleCommandError } from '../../../../domain/errors.ts';
 import { requireFeature, FEATURE_HINT } from '../../../../infra/utils/resolve.ts';
 
 export default defineCommand({
-  meta: { name: 'task-block', description: 'Mark a task as blocked' },
+  meta: { name: 'task-block', description: 'Mark a task as blocked\n\nExamples:\n  maestro task-block --feature my-feat --task 01-setup --reason "Needs API key"\n  maestro task-block --task 01-setup --reason "Blocked by upstream" --json' },
   args: {
     feature: {
       type: 'string',

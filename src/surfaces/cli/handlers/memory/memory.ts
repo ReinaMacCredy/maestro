@@ -8,7 +8,7 @@ import { output } from '../../../../infra/utils/output.ts';
 import { handleCommandError } from '../../../../domain/errors.ts';
 
 export default defineCommand({
-  meta: { name: 'memory-archive', description: 'Archive memory files' },
+  meta: { name: 'memory-archive', description: 'Archive memory files\n\nExamples:\n  maestro memory-archive --feature my-feat\n  maestro memory-archive --feature my-feat --json' },
   args: {
     feature: {
       type: 'string',

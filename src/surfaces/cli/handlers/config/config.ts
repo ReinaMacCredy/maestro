@@ -10,7 +10,7 @@ import { AGENT_NAMES } from '../../../../domain/types.ts';
 import type { AgentName } from '../../../../domain/types.ts';
 
 export default defineCommand({
-  meta: { name: 'config-agent', description: 'Get agent-specific config' },
+  meta: { name: 'config-agent', description: 'Get agent-specific config\n\nExamples:\n  maestro config-agent --agent forager-worker\n  maestro config-agent --agent hive-master --json' },
   args: {
     agent: {
       type: 'string',

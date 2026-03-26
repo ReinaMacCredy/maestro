@@ -10,7 +10,7 @@ import { MaestroError, handleCommandError } from '../../../../domain/errors.ts';
 import { loadManifest } from '../../../../infra/toolbox/loader.ts';
 
 export default defineCommand({
-  meta: { name: 'toolbox-install', description: 'Install a tool from a local path' },
+  meta: { name: 'toolbox-install', description: 'Install a tool from a local path\n\nExamples:\n  maestro toolbox-install --source ./my-tool\n  maestro toolbox-install --source /path/to/tool-dir --json' },
   args: {
     source: {
       type: 'string',

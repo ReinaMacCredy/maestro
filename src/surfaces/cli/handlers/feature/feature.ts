@@ -9,7 +9,7 @@ import { renderStatusLine } from '../../../../infra/utils/output.ts';
 import { handleCommandError } from '../../../../domain/errors.ts';
 
 export default defineCommand({
-  meta: { name: 'feature-active', description: 'Show or set active feature' },
+  meta: { name: 'feature-active', description: 'Show or set active feature\n\nExamples:\n  maestro feature-active\n  maestro feature-active --json' },
   args: {
     name: {
       type: 'positional',

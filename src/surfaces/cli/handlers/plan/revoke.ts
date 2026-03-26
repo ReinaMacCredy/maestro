@@ -9,7 +9,7 @@ import { handleCommandError } from '../../../../domain/errors.ts';
 import { revokePlan } from '../../../../app/plans/revoke-plan.ts';
 
 export default defineCommand({
-  meta: { name: 'plan-revoke', description: 'Revoke plan approval' },
+  meta: { name: 'plan-revoke', description: 'Revoke plan approval\n\nExamples:\n  maestro plan-revoke --feature my-feat\n  maestro plan-revoke --feature my-feat --json' },
   args: {
     feature: {
       type: 'string',

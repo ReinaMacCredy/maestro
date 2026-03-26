@@ -9,7 +9,7 @@ import { handleCommandError } from '../../../../domain/errors.ts';
 import { requireGraphPort } from '../../../../infra/utils/resolve.ts';
 
 export default defineCommand({
-  meta: { name: 'graph-plan', description: 'Show parallel execution tracks' },
+  meta: { name: 'graph-plan', description: 'Show parallel execution tracks\n\nExamples:\n  maestro graph-plan\n  maestro graph-plan --agents 3 --json' },
   args: {
     agents: {
       type: 'string',

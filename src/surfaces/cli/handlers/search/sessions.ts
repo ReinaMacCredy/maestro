@@ -9,7 +9,7 @@ import { handleCommandError } from '../../../../domain/errors.ts';
 import { requireSearchPort } from '../../../../infra/utils/resolve.ts';
 
 export default defineCommand({
-  meta: { name: 'search-sessions', description: 'Search past agent sessions' },
+  meta: { name: 'search-sessions', description: 'Search past agent sessions\n\nExamples:\n  maestro search-sessions --query "auth refactor"\n  maestro search-sessions --query "bug fix" --agent forager-worker --days 7 --json' },
   args: {
     query: {
       type: 'string',

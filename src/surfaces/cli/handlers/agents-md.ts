@@ -29,7 +29,7 @@ function formatApplyResult(result: { path: string; chars: number; isNew: boolean
 }
 
 export default defineCommand({
-  meta: { name: 'agents-md', description: 'Manage AGENTS.md file (init, sync, apply)' },
+  meta: { name: 'agents-md', description: 'Manage AGENTS.md file (init, sync, apply)\n\nExamples:\n  maestro agents-md --action init\n  maestro agents-md --action sync --feature my-feat' },
   args: {
     action: {
       type: 'string',

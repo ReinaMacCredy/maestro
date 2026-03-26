@@ -9,7 +9,7 @@ import { handleCommandError } from '../../../../domain/errors.ts';
 import { requireDoctrinePort } from '../../../../infra/utils/resolve.ts';
 
 export default defineCommand({
-  meta: { name: 'doctrine-deprecate', description: 'Deprecate a doctrine item' },
+  meta: { name: 'doctrine-deprecate', description: 'Deprecate a doctrine item\n\nExamples:\n  maestro doctrine-deprecate --name old-rule\n  maestro doctrine-deprecate --name old-rule --json' },
   args: {
     name: {
       type: 'string',

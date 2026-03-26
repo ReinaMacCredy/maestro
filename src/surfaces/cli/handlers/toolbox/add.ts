@@ -13,7 +13,7 @@ import type { TransportType } from '../../../../infra/toolbox/sdk/types.ts';
 const VALID_TRANSPORTS: TransportType[] = ['cli', 'http', 'mcp-stdio', 'mcp-http'];
 
 export default defineCommand({
-  meta: { name: 'toolbox-add', description: 'Quick-add a tool (manifest only, no adapter)' },
+  meta: { name: 'toolbox-add', description: 'Quick-add a tool (manifest only, no adapter)\n\nExamples:\n  maestro toolbox-add --name my-tool --transport cli --binary my-tool\n  maestro toolbox-add --name my-mcp --transport mcp-stdio --command "npx my-mcp"' },
   args: {
     name: {
       type: 'string',

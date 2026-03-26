@@ -9,7 +9,7 @@ import { handleCommandError } from '../../../../domain/errors.ts';
 import { consolidateMemories } from '../../../../app/memory/consolidate.ts';
 
 export default defineCommand({
-  meta: { name: 'memory-consolidate', description: 'Consolidate memories: merge duplicates, compress stale, identify promotions' },
+  meta: { name: 'memory-consolidate', description: 'Consolidate memories: merge duplicates, compress stale, identify promotions\n\nExamples:\n  maestro memory-consolidate --feature my-feat\n  maestro memory-consolidate --feature my-feat --auto-promote --dry-run' },
   args: {
     feature: {
       type: 'string',

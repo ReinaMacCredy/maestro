@@ -8,7 +8,7 @@ import { output } from '../../../../infra/utils/output.ts';
 import { handleCommandError } from '../../../../domain/errors.ts';
 
 export default defineCommand({
-  meta: { name: 'memory-stats', description: 'Show memory stats' },
+  meta: { name: 'memory-stats', description: 'Show memory stats\n\nExamples:\n  maestro memory-stats --feature my-feat\n  maestro memory-stats --feature my-feat --json' },
   args: {
     feature: {
       type: 'string',

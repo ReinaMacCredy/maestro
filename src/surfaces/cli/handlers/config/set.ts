@@ -13,7 +13,7 @@ import { setNestedValue } from '../../../../infra/utils/object-utils.ts';
 import { homedir } from 'os';
 
 export default defineCommand({
-  meta: { name: 'config-set', description: 'Set a settings value' },
+  meta: { name: 'config-set', description: 'Set a settings value\n\nExamples:\n  maestro config-set --key tasks.backend --value br\n  maestro config-set --key dcp.enabled --value true --global' },
   args: {
     key: {
       type: 'string',

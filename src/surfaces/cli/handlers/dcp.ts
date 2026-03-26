@@ -12,7 +12,7 @@ import { resolveDcpConfig } from '../../../app/dcp/config.ts';
 import { WORKER_RULES } from '../../../app/tasks/worker-rules.ts';
 
 export default defineCommand({
-  meta: { name: 'dcp-preview', description: 'Preview DCP memory selection for a task' },
+  meta: { name: 'dcp-preview', description: 'Preview DCP memory selection for a task\n\nExamples:\n  maestro dcp-preview --feature my-feat --task 01-setup\n  maestro dcp-preview --feature my-feat --task 01-setup --json' },
   args: {
     feature: {
       type: 'string',

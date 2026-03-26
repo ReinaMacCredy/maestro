@@ -55,7 +55,7 @@ function formatInsights(result: ExecutionInsightsResult): string {
 }
 
 export default defineCommand({
-  meta: { name: 'execution-insights', description: 'Query execution knowledge graph' },
+  meta: { name: 'execution-insights', description: 'Query execution knowledge graph\n\nExamples:\n  maestro execution-insights --feature my-feat\n  maestro execution-insights --feature my-feat --json' },
   args: {
     feature: {
       type: 'string',

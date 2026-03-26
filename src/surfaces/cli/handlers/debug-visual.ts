@@ -59,7 +59,7 @@ function parseData(raw: string): unknown {
 }
 
 export default defineCommand({
-  meta: { name: 'debug-visual', description: 'Render debug data as interactive HTML' },
+  meta: { name: 'debug-visual', description: 'Render debug data as interactive HTML\n\nExamples:\n  maestro debug-visual --type component-tree --data \'{"root": "App"}\'\n  maestro debug-visual --type flame-chart --data ./profile.json --no-open' },
   args: {
     type: {
       type: 'string',

@@ -8,7 +8,7 @@ import { output } from '../../../../infra/utils/output.ts';
 import { handleCommandError } from '../../../../domain/errors.ts';
 
 export default defineCommand({
-  meta: { name: 'plan-comment', description: 'Add comment to feature plan' },
+  meta: { name: 'plan-comment', description: 'Add comment to feature plan\n\nExamples:\n  maestro plan-comment --feature my-feat --body "Consider edge case X"\n  maestro plan-comment --feature my-feat --body "Needs auth" --line 42' },
   args: {
     feature: {
       type: 'string',

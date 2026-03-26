@@ -41,7 +41,7 @@ function formatHistory(result: HistoryResult): string {
 }
 
 export default defineCommand({
-  meta: { name: 'history', description: 'Show feature completion history with stats' },
+  meta: { name: 'history', description: 'Show feature completion history with stats\n\nExamples:\n  maestro history\n  maestro history --status completed --limit 20 --json' },
   args: {
     limit: {
       type: 'string',

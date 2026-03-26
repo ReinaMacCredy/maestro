@@ -10,7 +10,7 @@ import { requireDoctrinePort, parseTags } from '../../../../infra/utils/resolve.
 import { buildDoctrineItem } from '../../../../app/doctrine/factory.ts';
 
 export default defineCommand({
-  meta: { name: 'doctrine-approve', description: 'Approve a doctrine suggestion' },
+  meta: { name: 'doctrine-approve', description: 'Approve a doctrine suggestion\n\nExamples:\n  maestro doctrine-approve --name no-mocks --rule "Never mock internal modules" --rationale "Mocks hide bugs"\n  maestro doctrine-approve --name no-mocks --rule "..." --rationale "..." --tags "testing,quality"' },
   args: {
     name: { type: 'string', description: 'Doctrine item name (kebab-case)', required: true },
     rule: { type: 'string', description: 'The operating rule', required: true },

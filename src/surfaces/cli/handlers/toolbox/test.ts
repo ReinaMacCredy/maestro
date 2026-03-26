@@ -25,7 +25,7 @@ function findToolDir(name: string): string | null {
 }
 
 export default defineCommand({
-  meta: { name: 'toolbox-test', description: 'Validate a tool manifest and adapter' },
+  meta: { name: 'toolbox-test', description: 'Validate a tool manifest and adapter\n\nExamples:\n  maestro toolbox-test --name rg\n  maestro toolbox-test --name my-tool --json' },
   args: {
     name: {
       type: 'string',

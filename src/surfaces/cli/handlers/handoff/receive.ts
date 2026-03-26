@@ -9,7 +9,7 @@ import { handleCommandError } from '../../../../domain/errors.ts';
 import { resolveFeature, requireHandoffPort } from '../../../../infra/utils/resolve.ts';
 
 export default defineCommand({
-  meta: { name: 'handoff-receive', description: 'Check for pending handoffs' },
+  meta: { name: 'handoff-receive', description: 'Check for pending handoffs\n\nExamples:\n  maestro handoff-receive --agent-id worker-1\n  maestro handoff-receive --feature my-feat --agent-id worker-1 --json' },
   args: {
     feature: {
       type: 'string',

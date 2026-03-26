@@ -25,7 +25,7 @@ function formatPing(result: PingResult): string {
 }
 
 export default defineCommand({
-  meta: { name: 'ping', description: 'Version and integration health check' },
+  meta: { name: 'ping', description: 'Version and integration health check\n\nExamples:\n  maestro ping\n  maestro ping --json' },
   args: {},
   async run() {
     try {

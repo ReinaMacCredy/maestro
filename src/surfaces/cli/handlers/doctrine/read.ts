@@ -9,7 +9,7 @@ import { MaestroError, handleCommandError } from '../../../../domain/errors.ts';
 import { requireDoctrinePort } from '../../../../infra/utils/resolve.ts';
 
 export default defineCommand({
-  meta: { name: 'doctrine-read', description: 'Read a doctrine item' },
+  meta: { name: 'doctrine-read', description: 'Read a doctrine item\n\nExamples:\n  maestro doctrine-read --name no-mocks\n  maestro doctrine-read --name no-mocks --json' },
   args: {
     name: {
       type: 'string',

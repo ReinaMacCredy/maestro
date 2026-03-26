@@ -9,7 +9,7 @@ import { MaestroError, handleCommandError } from '../../../../domain/errors.ts';
 import { requireFeature, FEATURE_HINT } from '../../../../infra/utils/resolve.ts';
 
 export default defineCommand({
-  meta: { name: 'memory-promote', description: 'Promote feature memory to global' },
+  meta: { name: 'memory-promote', description: 'Promote feature memory to global\n\nExamples:\n  maestro memory-promote --feature my-feat --name important-finding\n  maestro memory-promote --feature my-feat --name arch-decisions --json' },
   args: {
     feature: {
       type: 'string',

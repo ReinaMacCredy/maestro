@@ -11,7 +11,7 @@ import { MaestroError, handleCommandError } from '../../../../domain/errors.ts';
 const BUILT_IN_TOOLS = new Set(['fs-tasks']);
 
 export default defineCommand({
-  meta: { name: 'toolbox-remove', description: 'Remove an external tool' },
+  meta: { name: 'toolbox-remove', description: 'Remove an external tool\n\nExamples:\n  maestro toolbox-remove --name my-tool\n  maestro toolbox-remove --name my-tool --json' },
   args: {
     name: {
       type: 'string',

@@ -57,7 +57,7 @@ export async function runSelfUpdate() {
 }
 
 export default defineCommand({
-  meta: { name: 'self-update', description: 'Update maestro to latest version' },
+  meta: { name: 'self-update', description: 'Update maestro to latest version\n\nExamples:\n  maestro self-update\n  maestro self-update --json' },
   args: {},
   run: runSelfUpdate,
 });

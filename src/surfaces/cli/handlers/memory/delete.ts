@@ -8,7 +8,7 @@ import { output } from '../../../../infra/utils/output.ts';
 import { MaestroError, handleCommandError } from '../../../../domain/errors.ts';
 
 export default defineCommand({
-  meta: { name: 'memory-delete', description: 'Delete a memory file' },
+  meta: { name: 'memory-delete', description: 'Delete a memory file\n\nExamples:\n  maestro memory-delete --feature my-feat --name old-finding\n  maestro memory-delete --feature my-feat --name stale-notes --dry-run' },
   args: {
     feature: {
       type: 'string',

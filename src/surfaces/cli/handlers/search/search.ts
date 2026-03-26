@@ -9,7 +9,7 @@ import { handleCommandError } from '../../../../domain/errors.ts';
 import { requireSearchPort } from '../../../../infra/utils/resolve.ts';
 
 export default defineCommand({
-  meta: { name: 'search-related', description: 'Find sessions related to a file' },
+  meta: { name: 'search-related', description: 'Find sessions related to a file\n\nExamples:\n  maestro search-related --file src/app.ts\n  maestro search-related --file src/app.ts --limit 10 --json' },
   args: {
     file: {
       type: 'string',

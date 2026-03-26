@@ -8,7 +8,7 @@ import { output, renderStatusLine } from '../../../../infra/utils/output.ts';
 import { MaestroError, handleCommandError } from '../../../../domain/errors.ts';
 
 export default defineCommand({
-  meta: { name: 'feature-info', description: 'Show feature details' },
+  meta: { name: 'feature-info', description: 'Show feature details\n\nExamples:\n  maestro feature-info --feature my-feat\n  maestro feature-info --feature my-feat --json' },
   args: {
     feature: {
       type: 'string',
