@@ -52,10 +52,19 @@ export class CassSearchAdapter implements SearchPort {
   }
 
   async searchSimilar(content: string, opts?: { limit?: number }): Promise<SessionSearchResult[]> {
-    // Extract first 100 chars as query -- CASS handles keyword matching natively
-    const query = content.slice(0, 100).replace(/\n/g, ' ').trim();
+    // Extract keywords from content for similarity search.
+    // cass switches to FTS mode at 8+ words which requires a sqlite FTS5 extension
+    // that may not be loaded. Cap at 6 words to stay safely in lexical mode.
+    const words = content.replace(/\n/g, ' ').trim().split(/\s+/).slice(0, 6);
+    const query = words.join(' ');
     if (!query) return [];
-    return this.searchSessions(query, { limit: opts?.limit ?? 10 });
+    try {
+      return await this.searchSessions(query, { limit: opts?.limit ?? 10 });
+    } catch {
+      // cass search can fail for various reasons (FTS5 not loaded, corrupt index).
+      // Degrade gracefully rather than propagating the error.
+      return [];
+    }
   }
 }
 
