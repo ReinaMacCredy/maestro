@@ -5,7 +5,8 @@
 import { defineCommand } from 'citty';
 import { getServices } from '../../../../services.ts';
 import { output } from '../../../../infra/utils/output.ts';
-import { handleCommandError } from '../../../../domain/errors.ts';
+import { handleCommandError, MaestroError } from '../../../../domain/errors.ts';
+import { readStdinText } from '../../../../infra/utils/stdin.ts';
 import { parseTags } from '../../../../infra/utils/resolve.ts';
 import { prependMetadataFrontmatter } from '../../../../infra/utils/frontmatter.ts';
 import { MEMORY_CATEGORIES } from '../../../../domain/types.ts';
@@ -25,8 +26,12 @@ export default defineCommand({
     },
     content: {
       type: 'string',
-      description: 'Content to write',
-      required: true,
+      description: 'Content to write (or use --stdin)',
+    },
+    stdin: {
+      type: 'boolean',
+      description: 'Read content from stdin',
+      default: false,
     },
     global: {
       type: 'boolean',
@@ -50,7 +55,17 @@ export default defineCommand({
     try {
       const { memoryAdapter } = getServices();
 
-      const finalContent = prependMetadataFrontmatter(args.content, {
+      let content = args.content;
+      if (!content && args.stdin) {
+        content = await readStdinText();
+      }
+      if (!content) {
+        throw new MaestroError('No content provided', [
+          'Pass --content "..." or --stdin',
+        ]);
+      }
+
+      const finalContent = prependMetadataFrontmatter(content, {
         tags: args.tags ? parseTags(args.tags) : undefined,
         priority: args.priority !== undefined ? Number(args.priority) : undefined,
         category: args.category,

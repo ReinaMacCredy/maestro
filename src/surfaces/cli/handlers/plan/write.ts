@@ -7,6 +7,7 @@ import { getServices } from '../../../../services.ts';
 import { writePlan } from '../../../../app/plans/write-plan.ts';
 import { output } from '../../../../infra/utils/output.ts';
 import { handleCommandError, MaestroError } from '../../../../domain/errors.ts';
+import { readStdinText } from '../../../../infra/utils/stdin.ts';
 import * as fs from 'fs';
 
 export default defineCommand({
@@ -28,6 +29,11 @@ export default defineCommand({
     scaffold: {
       type: 'boolean',
       description: 'Write a plan template scaffold instead of real content',
+      default: false,
+    },
+    stdin: {
+      type: 'boolean',
+      description: 'Read plan content from stdin',
       default: false,
     },
     'dry-run': {
@@ -52,9 +58,12 @@ export default defineCommand({
       if (!content && args.file) {
         content = fs.readFileSync(args.file, 'utf-8');
       }
+      if (!content && args.stdin) {
+        content = await readStdinText();
+      }
       if (!content) {
         throw new MaestroError('No content provided', [
-          'Pass --content "..." or --file path/to/plan.md or --scaffold',
+          'Pass --content "..." or --file path/to/plan.md or --stdin or --scaffold',
         ]);
       }
 

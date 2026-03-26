@@ -6,6 +6,7 @@ import { defineCommand } from 'citty';
 import { getServices } from '../../../services.ts';
 import { output, renderStatusLine } from '../../../infra/utils/output.ts';
 import { MaestroError, handleCommandError } from '../../../domain/errors.ts';
+import { readStdinText } from '../../../infra/utils/stdin.ts';
 import type { TaskInfo } from '../../../domain/types.ts';
 
 export function makeInfoCommand() {
@@ -70,13 +71,23 @@ export function makeDocWriteCommand(docType: 'spec' | 'report') {
     args: {
       feature: { type: 'string' as const, description: 'Feature name', required: true },
       task: { type: 'string' as const, description: 'Task ID', required: true },
-      content: { type: 'string' as const, description: `Task ${docType} content`, required: true },
+      content: { type: 'string' as const, description: `Task ${docType} content (or use --stdin)` },
+      stdin: { type: 'boolean' as const, description: 'Read content from stdin', default: false },
     },
     async run({ args }) {
       try {
         const { taskPort } = getServices();
+        let rawContent = args.content;
+        if (!rawContent && args.stdin) {
+          rawContent = await readStdinText();
+        }
+        if (!rawContent) {
+          throw new MaestroError(`No ${docType} content provided`, [
+            `Pass --content "..." or --stdin`,
+          ]);
+        }
         // Unescape literal \n from CLI args to actual newlines
-        const content = args.content.replace(/\\n/g, '\n');
+        const content = rawContent.replace(/\\n/g, '\n');
         await taskPort[portMethod](args.feature, args.task, content);
         output({ task: args.task }, () =>
           `[ok] ${docType} written for task '${args.task}'`,
