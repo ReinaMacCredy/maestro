@@ -8,7 +8,7 @@ import { output, renderTable } from '../../../../infra/utils/output.ts';
 import { handleCommandError } from '../../../../domain/errors.ts';
 
 export default defineCommand({
-  meta: { name: 'memory-list', description: 'List memory files' },
+  meta: { name: 'memory-list', description: 'List memory files\n\nExamples:\n  maestro memory-list --feature my-feat\n  maestro memory-list --feature my-feat --json' },
   args: {
     feature: {
       type: 'string',

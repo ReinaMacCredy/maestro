@@ -10,7 +10,7 @@ import { requireDoctrinePort } from '../../../../infra/utils/resolve.ts';
 import type { DoctrineStatus } from '../../../../domain/ports/doctrine.ts';
 
 export default defineCommand({
-  meta: { name: 'doctrine-list', description: 'List doctrine items' },
+  meta: { name: 'doctrine-list', description: 'List doctrine items\n\nExamples:\n  maestro doctrine-list\n  maestro doctrine-list --status active --json' },
   args: {
     status: {
       type: 'string',

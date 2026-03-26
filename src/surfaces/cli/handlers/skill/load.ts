@@ -12,7 +12,7 @@ function formatSkillContent(result: { content: string }): string {
 }
 
 export default defineCommand({
-  meta: { name: 'skill', description: 'Load and print a skill template' },
+  meta: { name: 'skill', description: 'Load and print a skill template\n\nExamples:\n  maestro skill maestro:design\n  maestro skill maestro:parallel-exploration --json' },
   args: {
     name: {
       type: 'positional',

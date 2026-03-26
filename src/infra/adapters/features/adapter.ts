@@ -138,7 +138,7 @@ export class FsFeatureAdapter implements FeaturePort {
     if (!feature) throw new Error(`Feature '${name}' not found`);
 
     if (feature.status === 'completed') {
-      throw new Error(`Feature '${name}' is already completed`);
+      return feature; // idempotent -- already completed
     }
 
     return this.updateStatus(name, 'completed');

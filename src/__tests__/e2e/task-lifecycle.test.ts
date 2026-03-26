@@ -243,13 +243,16 @@ describe('task block and unblock', () => {
     expect(task.status).toBe('blocked');
   });
 
-  test('rejects unblock on non-blocked task', async () => {
+  test('unblock on non-blocked task returns idempotent success', async () => {
     harness = await createTestHarness();
     const sync = await setupWithTasks(harness, SEQUENTIAL_PLAN);
     const firstTask = sync.created[0];
 
-    const result = await harness.run('task-unblock', '--feature', 'test-feature', '--task', firstTask, '--decision', 'Not blocked');
-    expect(result.exitCode).toBe(1);
+    // Pending is the target state of unblock -- idempotent return with already: true
+    const result = await harness.run('task-unblock', '--feature', 'test-feature', '--task', firstTask, '--decision', 'Not blocked', '--json');
+    expect(result.exitCode).toBe(0);
+    const parsed = JSON.parse(result.stdout);
+    expect(parsed.already).toBe(true);
   });
 });
 

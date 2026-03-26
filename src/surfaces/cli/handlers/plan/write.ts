@@ -11,7 +11,7 @@ import { readStdinText } from '../../../../infra/utils/stdin.ts';
 import * as fs from 'fs';
 
 export default defineCommand({
-  meta: { name: 'plan-write', description: 'Write or update feature plan' },
+  meta: { name: 'plan-write', description: 'Write or update feature plan\n\nExamples:\n  maestro plan-write --feature my-feat --file plan.md\n  maestro plan-write --feature my-feat --content "## Tasks\\n- Setup auth"' },
   args: {
     feature: {
       type: 'string',

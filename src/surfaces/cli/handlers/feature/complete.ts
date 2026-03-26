@@ -9,7 +9,7 @@ import { output } from '../../../../infra/utils/output.ts';
 import { handleCommandError } from '../../../../domain/errors.ts';
 
 export default defineCommand({
-  meta: { name: 'feature-complete', description: 'Mark feature as completed' },
+  meta: { name: 'feature-complete', description: 'Mark feature as completed\n\nExamples:\n  maestro feature-complete --feature my-feature\n  maestro feature-complete --feature my-feature --dry-run' },
   args: {
     feature: {
       type: 'string',

@@ -9,7 +9,7 @@ import { handleCommandError } from '../../../../domain/errors.ts';
 import { requireFeature, FEATURE_HINT } from '../../../../infra/utils/resolve.ts';
 
 export default defineCommand({
-  meta: { name: 'task-claim', description: 'Claim a task for an agent' },
+  meta: { name: 'task-claim', description: 'Claim a task for an agent\n\nExamples:\n  maestro task-claim --task 01-setup --agent-id worker-1\n  maestro task-claim --task 01-setup --agent-id worker-1 --json' },
   args: {
     feature: {
       type: 'string',

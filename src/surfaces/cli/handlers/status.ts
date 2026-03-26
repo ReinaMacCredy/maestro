@@ -56,7 +56,7 @@ function formatStatus(result: StatusResult): string {
 }
 
 export default defineCommand({
-  meta: { name: 'status', description: 'Show feature status overview' },
+  meta: { name: 'status', description: 'Show feature status overview\n\nExamples:\n  maestro status\n  maestro status --feature my-feature --json' },
   args: {
     feature: {
       type: 'string',

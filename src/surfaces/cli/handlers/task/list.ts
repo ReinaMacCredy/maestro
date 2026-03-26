@@ -11,7 +11,7 @@ import type { TaskStatusType } from '../../../../domain/types.ts';
 const VALID_STATUSES: TaskStatusType[] = ['pending', 'claimed', 'done', 'blocked', 'review', 'revision'];
 
 export default defineCommand({
-  meta: { name: 'task-list', description: 'List tasks for a feature' },
+  meta: { name: 'task-list', description: 'List tasks for a feature\n\nExamples:\n  maestro task-list --feature my-feat\n  maestro task-list --feature my-feat --status pending --json' },
   args: {
     feature: {
       type: 'string',

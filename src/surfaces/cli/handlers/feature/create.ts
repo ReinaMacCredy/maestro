@@ -8,7 +8,7 @@ import { output } from '../../../../infra/utils/output.ts';
 import { handleCommandError } from '../../../../domain/errors.ts';
 
 export default defineCommand({
-  meta: { name: 'feature-create', description: 'Create a new feature' },
+  meta: { name: 'feature-create', description: 'Create a new feature\n\nExamples:\n  maestro feature-create my-feature\n  maestro feature-create my-feature --ticket PROJ-123' },
   args: {
     name: {
       type: 'positional',

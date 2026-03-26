@@ -14,7 +14,7 @@ import type { DoctrineStatus } from '../../../../domain/ports/doctrine.ts';
 const VALID_STATUSES = new Set<DoctrineStatus>(['active', 'deprecated', 'proposed']);
 
 export default defineCommand({
-  meta: { name: 'doctrine-write', description: 'Create or update a doctrine item' },
+  meta: { name: 'doctrine-write', description: 'Create or update a doctrine item\n\nExamples:\n  maestro doctrine-write --name no-mocks --rule "Never mock internal modules" --rationale "Mocks hide integration bugs"\n  maestro doctrine-write --name no-mocks --stdin --rationale "Mocks hide integration bugs"' },
   args: {
     name: { type: 'string', description: 'Doctrine item name (kebab-case)', required: true },
     rule: { type: 'string', description: 'The operating rule (or use --stdin)' },

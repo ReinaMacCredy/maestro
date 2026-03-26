@@ -12,7 +12,7 @@ import { prependMetadataFrontmatter } from '../../../../infra/utils/frontmatter.
 import { MEMORY_CATEGORIES } from '../../../../domain/types.ts';
 
 export default defineCommand({
-  meta: { name: 'memory-write', description: 'Write a memory file' },
+  meta: { name: 'memory-write', description: 'Write a memory file\n\nExamples:\n  maestro memory-write --feature my-feat --name finding --content "Auth requires OAuth2"\n  maestro memory-write --feature my-feat --name api-notes --stdin' },
   args: {
     feature: {
       type: 'string',

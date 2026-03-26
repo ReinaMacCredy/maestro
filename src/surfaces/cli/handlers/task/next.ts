@@ -9,7 +9,7 @@ import { handleCommandError } from '../../../../domain/errors.ts';
 import { requireFeature, FEATURE_HINT } from '../../../../infra/utils/resolve.ts';
 
 export default defineCommand({
-  meta: { name: 'task-next', description: 'Show runnable tasks and recommended next' },
+  meta: { name: 'task-next', description: 'Show runnable tasks and recommended next\n\nExamples:\n  maestro task-next --feature my-feat\n  maestro task-next --json' },
   args: {
     feature: {
       type: 'string',

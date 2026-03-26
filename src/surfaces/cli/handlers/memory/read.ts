@@ -8,7 +8,7 @@ import { output } from '../../../../infra/utils/output.ts';
 import { MaestroError, handleCommandError } from '../../../../domain/errors.ts';
 
 export default defineCommand({
-  meta: { name: 'memory-read', description: 'Read a memory file' },
+  meta: { name: 'memory-read', description: 'Read a memory file\n\nExamples:\n  maestro memory-read --feature my-feat --name finding\n  maestro memory-read --feature my-feat --name finding --json' },
   args: {
     feature: {
       type: 'string',

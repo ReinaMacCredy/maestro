@@ -15,12 +15,13 @@ export function registerSearchTools(server: McpServer, thunk: ServicesThunk): vo
     'maestro_search',
     {
       description:
-        'Session history search. Actions: sessions (requires: query -- full-text search of past agent sessions), ' +
+        'Session history search. What: sessions (requires: query -- full-text search of past agent sessions), ' +
         'related (requires: file_path -- find sessions that worked on a specific file), ' +
         'similar (requires: content -- find sessions with similar content). ' +
-        'Example: maestro_search({ action: "sessions", query: "auth refactor" })',
+        'Example: maestro_search({ what: "sessions", query: "auth refactor" })',
       inputSchema: {
-        action: z.enum(['sessions', 'related', 'similar']).describe('Action to perform'),
+        what: z.enum(['sessions', 'related', 'similar']).optional().describe('Query to perform'),
+        action: z.enum(['sessions', 'related', 'similar']).optional().describe('(deprecated, use what)'),
         query: z.string().optional().describe('Search query (required for sessions)'),
         agent: z.string().optional().describe('Filter to specific agent -- claude, codex, cursor, etc. (sessions only)'),
         limit: limitParam(10),
@@ -32,7 +33,9 @@ export function registerSearchTools(server: McpServer, thunk: ServicesThunk): vo
     },
     withErrorHandling(async (input) => {
       const port = requireSearchPort(thunk.get());
-      switch (input.action) {
+      const what = input.what ?? input.action;
+      if (!what) return errorResponse({ terminal: false, reason: 'validation', error: 'what is required' });
+      switch (what) {
         case 'sessions': {
           if (!input.query) return errorResponse({ terminal: false, reason: 'validation', error: 'query is required for action: sessions', suggestions: ['Provide the query parameter.'] });
           const results = await port.searchSessions(input.query, {
@@ -53,7 +56,7 @@ export function registerSearchTools(server: McpServer, thunk: ServicesThunk): vo
           return respond({ results });
         }
         default:
-          return errorResponse({ terminal: true, reason: 'unknown_action', error: `Unknown action: ${(input as { action: string }).action}` });
+          return errorResponse({ terminal: true, reason: 'unknown_action', error: `Unknown action: ${what}` });
       }
     }),
   );

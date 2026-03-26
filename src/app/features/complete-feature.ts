@@ -22,6 +22,7 @@ export interface CompleteFeatureResult {
   promoted: string[];
   consolidation?: ConsolidationResult;
   doctrineSuggestions?: DoctrineSuggestion[];
+  already?: boolean;
 }
 
 export interface CompleteFeatureOpts {
@@ -36,7 +37,18 @@ export async function completeFeature(
   const { taskPort, featureAdapter, memoryAdapter } = services;
   const feature = featureAdapter.get(featureName);
   if (!feature) throw new MaestroError(`Feature '${featureName}' not found`);
-  if (feature.status === 'completed') throw new MaestroError(`Feature '${featureName}' is already completed`);
+
+  // Idempotent: if already completed, skip consolidation/promotion/doctrine
+  if (feature.status === 'completed') {
+    const tasks = await taskPort.list(featureName, { includeAll: true });
+    const done = tasks.filter(t => t.status === 'done').length;
+    return {
+      feature,
+      tasksSummary: { total: tasks.length, done },
+      promoted: [],
+      already: true,
+    };
+  }
 
   const tasks = await taskPort.list(featureName, { includeAll: true });
   const done = tasks.filter(t => t.status === 'done').length;

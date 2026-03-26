@@ -14,7 +14,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 export default defineCommand({
-  meta: { name: 'init', description: 'Initialize maestro for current project' },
+  meta: { name: 'init', description: 'Initialize maestro for current project\n\nExamples:\n  maestro init\n  maestro init --json' },
   args: {},
   async run() {
     try {

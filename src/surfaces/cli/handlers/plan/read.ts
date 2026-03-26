@@ -8,7 +8,7 @@ import { output } from '../../../../infra/utils/output.ts';
 import { handleCommandError, MaestroError } from '../../../../domain/errors.ts';
 
 export default defineCommand({
-  meta: { name: 'plan-read', description: 'Read feature plan' },
+  meta: { name: 'plan-read', description: 'Read feature plan\n\nExamples:\n  maestro plan-read --feature my-feat\n  maestro plan-read --feature my-feat --json' },
   args: {
     feature: {
       type: 'string',

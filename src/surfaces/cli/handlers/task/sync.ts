@@ -10,7 +10,7 @@ import { output } from '../../../../infra/utils/output.ts';
 import { handleCommandError } from '../../../../domain/errors.ts';
 
 export default defineCommand({
-  meta: { name: 'task-sync', description: 'Sync tasks from approved plan' },
+  meta: { name: 'task-sync', description: 'Sync tasks from approved plan\n\nExamples:\n  maestro task-sync --feature my-feat\n  maestro task-sync --feature my-feat --dry-run' },
   args: {
     feature: {
       type: 'string',

@@ -108,6 +108,9 @@ export class FsTaskAdapter implements TaskPort {
   async claim(feature: string, id: string, agentId: string): Promise<TaskInfo> {
     const status = this.readStatus(feature, id);
     if (!status) throw new MaestroError(`Task '${id}' not found`);
+    if (status.status === 'claimed' && status.claimedBy === agentId) {
+      return { ...this.statusToInfo(id, status), already: true };
+    }
     if (status.status !== 'pending' && status.status !== 'revision') {
       throw new MaestroError(`Cannot claim task '${id}': status is '${status.status}', expected 'pending' or 'revision'`);
     }
@@ -122,6 +125,9 @@ export class FsTaskAdapter implements TaskPort {
   async done(feature: string, id: string, summary: string): Promise<TaskInfo> {
     const status = this.readStatus(feature, id);
     if (!status) throw new MaestroError(`Task '${id}' not found`);
+    if (status.status === 'done') {
+      return { ...this.statusToInfo(id, status), already: true };
+    }
     if (status.status !== 'claimed' && status.status !== 'review') {
       throw new MaestroError(`Cannot complete task '${id}': status is '${status.status}', expected 'claimed' or 'review'`);
     }
@@ -137,6 +143,9 @@ export class FsTaskAdapter implements TaskPort {
   async block(feature: string, id: string, reason: string): Promise<TaskInfo> {
     const status = this.readStatus(feature, id);
     if (!status) throw new MaestroError(`Task '${id}' not found`);
+    if (status.status === 'blocked') {
+      return { ...this.statusToInfo(id, status), already: true };
+    }
     if (status.status !== 'pending' && status.status !== 'claimed') {
       throw new MaestroError(`Cannot block task '${id}': status is '${status.status}'`);
     }
@@ -151,6 +160,9 @@ export class FsTaskAdapter implements TaskPort {
   async unblock(feature: string, id: string, decision: string): Promise<TaskInfo> {
     const status = this.readStatus(feature, id);
     if (!status) throw new MaestroError(`Task '${id}' not found`);
+    if (status.status === 'pending') {
+      return { ...this.statusToInfo(id, status), already: true };
+    }
     if (status.status !== 'blocked') {
       throw new MaestroError(`Cannot unblock task '${id}': status is '${status.status}', expected 'blocked'`);
     }

@@ -10,7 +10,7 @@ import { requireFeature, FEATURE_HINT } from '../../../../infra/utils/resolve.ts
 import { writeExecutionMemory } from '../../../../app/memory/execution/writer.ts';
 
 export default defineCommand({
-  meta: { name: 'task-done', description: 'Mark a task as done' },
+  meta: { name: 'task-done', description: 'Mark a task as done\n\nExamples:\n  maestro task-done --task 01-setup --summary "Implemented auth module"\n  maestro task-done --task 01-setup --summary "Added tests" --json' },
   args: {
     feature: {
       type: 'string',

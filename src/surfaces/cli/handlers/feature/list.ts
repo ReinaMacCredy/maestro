@@ -9,7 +9,7 @@ import { renderTable } from '../../../../infra/utils/output.ts';
 import { handleCommandError } from '../../../../domain/errors.ts';
 
 export default defineCommand({
-  meta: { name: 'feature-list', description: 'List all features' },
+  meta: { name: 'feature-list', description: 'List all features\n\nExamples:\n  maestro feature-list\n  maestro feature-list --json' },
   args: {},
   async run() {
     try {

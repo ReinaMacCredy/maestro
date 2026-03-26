@@ -19,7 +19,7 @@ function formatSkillList(skills: Array<SkillEntry>): string {
 }
 
 export default defineCommand({
-  meta: { name: 'skill-list', description: 'List available skills' },
+  meta: { name: 'skill-list', description: 'List available skills\n\nExamples:\n  maestro skill-list\n  maestro skill-list --json' },
   args: {},
   async run() {
     try {

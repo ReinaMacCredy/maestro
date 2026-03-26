@@ -49,6 +49,8 @@ export interface TaskInfo extends Omit<TaskStatus, 'schemaVersion'> {
   /** @deprecated Internal storage path segment. Use `id` for public identity. */
   folder: string;
   name: string;
+  /** Set when an idempotent transition finds the entity already in the target state. */
+  already?: boolean;
 }
 
 // ============================================================================

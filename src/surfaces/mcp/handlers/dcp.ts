@@ -48,12 +48,13 @@ export function registerDcpTools(server: McpServer, thunk: ServicesThunk): void 
     'maestro_dcp',
     {
       description:
-        'DCP (Dynamic Context Pruning) operations. Actions: preview (requires: task -- memory selection scores for a task), ' +
+        'DCP (Dynamic Context Pruning) operations. What: preview (requires: task -- memory selection scores for a task), ' +
         'stats (requires: task -- token budgets and component breakdown), ' +
         'config (current DCP settings and component registry). ' +
-        'Example: maestro_dcp({ action: "preview", task: "implement-auth" })',
+        'Example: maestro_dcp({ what: "preview", task: "implement-auth" })',
       inputSchema: {
-        action: z.enum(['preview', 'stats', 'config']).describe('Action to perform'),
+        what: z.enum(['preview', 'stats', 'config']).optional().describe('Query to perform'),
+        action: z.enum(['preview', 'stats', 'config']).optional().describe('(deprecated, use what)'),
         feature: featureParam(),
         task: taskParam().optional(),
       },
@@ -61,8 +62,10 @@ export function registerDcpTools(server: McpServer, thunk: ServicesThunk): void 
     },
     withErrorHandling(async (input) => {
       const services = thunk.get();
+      const what = input.what ?? input.action;
+      if (!what) return errorResponse({ terminal: false, reason: 'validation', error: 'what is required' });
 
-      switch (input.action) {
+      switch (what) {
         case 'preview': {
           if (!input.task) return errorResponse({ terminal: false, reason: 'validation', error: 'task is required for action: preview', suggestions: ['Provide the task parameter.'] });
           const ctx = await prepareDcpContext(services, input.feature, input.task);
@@ -130,7 +133,7 @@ export function registerDcpTools(server: McpServer, thunk: ServicesThunk): void 
           });
         }
         default:
-          return errorResponse({ terminal: true, reason: 'unknown_action', error: `Unknown action: ${(input as { action: string }).action}` });
+          return errorResponse({ terminal: true, reason: 'unknown_action', error: `Unknown action: ${what}` });
       }
     }),
   );

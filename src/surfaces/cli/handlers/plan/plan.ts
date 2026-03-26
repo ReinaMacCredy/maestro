@@ -9,7 +9,7 @@ import { output } from '../../../../infra/utils/output.ts';
 import { handleCommandError } from '../../../../domain/errors.ts';
 
 export default defineCommand({
-  meta: { name: 'plan-approve', description: 'Approve feature plan' },
+  meta: { name: 'plan-approve', description: 'Approve feature plan\n\nExamples:\n  maestro plan-approve --feature my-feat\n  maestro plan-approve --feature my-feat --json' },
   args: {
     feature: {
       type: 'string',
