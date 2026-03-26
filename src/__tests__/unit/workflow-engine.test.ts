@@ -35,7 +35,7 @@ describe('WorkflowEngine', () => {
       tasks: { total: 5, done: 2, pending: 1, inProgress: 1, review: 1 },
     }));
 
-    expect(rec.urgent).toContain('maestro_task_accept');
+    expect(rec.urgent).toContain('maestro_task(action: accept)');
   });
 
   test('emit dispatches to event bus', () => {

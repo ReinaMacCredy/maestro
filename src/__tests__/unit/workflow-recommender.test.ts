@@ -34,14 +34,14 @@ describe('recommend', () => {
   test('returns urgent tools when tasks in review', () => {
     const registry = makeRegistry();
     const rec = recommend(registry, 'execution', makeContext({ taskReview: 2 }));
-    expect(rec.urgent).toContain('maestro_task_accept');
-    expect(rec.urgent).toContain('maestro_task_reject');
+    expect(rec.urgent).toContain('maestro_task(action: accept)');
+    expect(rec.urgent).toContain('maestro_task(action: reject)');
   });
 
   test('returns urgent tools when tasks in revision', () => {
     const registry = makeRegistry();
     const rec = recommend(registry, 'execution', makeContext({ taskRevision: 1 }));
-    expect(rec.urgent).toContain('maestro_task_claim');
+    expect(rec.urgent).toContain('maestro_task(action: claim)');
   });
 
   test('no urgent tools when no review/revision tasks', () => {
@@ -57,7 +57,7 @@ describe('recommend', () => {
       planApproved: true,
       taskPending: 0,
     }));
-    expect(rec.urgent).toContain('maestro_tasks_sync');
+    expect(rec.urgent).toContain('maestro_task(action: sync)');
   });
 
   test('collects contextHints from tool metadata', () => {
