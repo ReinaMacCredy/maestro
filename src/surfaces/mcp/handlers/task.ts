@@ -45,6 +45,7 @@ export function registerTaskTools(server: McpServer, thunk: ServicesThunk): void
         reason: z.string().optional().describe('Blocker reason (required for block)'),
         decision: z.string().optional().describe('Blocker resolution (required for unblock)'),
         content: z.string().optional().describe('Content (required for spec_write and report_write)'),
+        dry_run: z.boolean().optional().default(false).describe('Preview sync without modifying tasks (sync only)'),
       },
       annotations: ANNOTATIONS_MUTATING,
     },
@@ -56,7 +57,7 @@ export function registerTaskTools(server: McpServer, thunk: ServicesThunk): void
         case 'sync': {
           const result = services.taskBackend === 'br'
             ? await translatePlan(services, feature)
-            : await syncPlan(services, feature);
+            : await syncPlan(services, feature, { dryRun: input.dry_run });
           const hint = buildTransitionHint('tasks_sync', { created: result.created.length });
           return respond({ ...result, ...(hint && { transition: hint }) });
         }

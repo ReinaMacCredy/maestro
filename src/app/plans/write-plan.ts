@@ -25,6 +25,7 @@ export interface WritePlanResult {
 
 export interface WritePlanOpts {
   scaffold?: boolean;
+  dryRun?: boolean;
 }
 
 function generateScaffold(featureName: string): string {
@@ -40,9 +41,11 @@ export async function writePlan(
   const { planAdapter, featureAdapter } = services;
   featureAdapter.requireActive(featureName);
 
+  const dryRun = opts?.dryRun ?? false;
+
   if (opts?.scaffold) {
     const template = generateScaffold(featureName);
-    const planPath = planAdapter.write(featureName, template);
+    const planPath = !dryRun ? planAdapter.write(featureName, template) : '(dry run)';
     const taskHeadings = template.match(TASK_HEADING_RE) || [];
     return { path: planPath, feature: featureName, taskCount: taskHeadings.length, scaffold: true };
   }
@@ -77,9 +80,14 @@ export async function writePlan(
     }
   }
 
-  const planPath = planAdapter.write(featureName, content);
-  if (wasApproved) {
-    featureAdapter.updateStatus(featureName, 'planning');
+  let planPath: string;
+  if (!dryRun) {
+    planPath = planAdapter.write(featureName, content);
+    if (wasApproved) {
+      featureAdapter.updateStatus(featureName, 'planning');
+    }
+  } else {
+    planPath = '(dry run)';
   }
 
   // Query cross-feature historical context (advisory, never blocking)

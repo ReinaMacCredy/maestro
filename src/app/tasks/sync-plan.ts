@@ -17,11 +17,17 @@ export interface SyncPlanServices {
   planAdapter: PlanPort;
 }
 
+export interface SyncPlanOpts {
+  dryRun?: boolean;
+}
+
 export async function syncPlan(
   services: SyncPlanServices,
   featureName: string,
+  opts?: SyncPlanOpts,
 ): Promise<TasksSyncResult> {
   const { taskPort, planAdapter } = services;
+  const dryRun = opts?.dryRun ?? false;
   const plan = planAdapter.read(featureName);
   if (!plan) throw new MaestroError(`No plan found for feature '${featureName}'`);
   if (plan.status !== 'approved') {
@@ -67,7 +73,7 @@ export async function syncPlan(
 
     const stillInPlan = parsedFolderSet.has(existing.folder) || parsedIdSet.has(existing.id);
     if (!stillInPlan) {
-      await taskPort.remove(featureName, existing.folder);
+      if (!dryRun) await taskPort.remove(featureName, existing.folder);
       result.removed.push(existing.folder);
     } else {
       result.kept.push(existing.folder);
@@ -87,17 +93,21 @@ export async function syncPlan(
       planContent: plan.content,
     });
 
-    const created = await taskPort.create(featureName, parsedTask.name, {
-      description: specContent,
-      deps: dependsOn,
-    });
+    if (!dryRun) {
+      const created = await taskPort.create(featureName, parsedTask.name, {
+        description: specContent,
+        deps: dependsOn,
+      });
 
-    // Update the parsed task's folder to match the actual folder assigned by
-    // the adapter (e.g. br prefixes the issue ID). This ensures subsequent
-    // tasks resolving dependencies find the correct name in the mapping.
-    parsedTask.folder = created.folder;
+      // Update the parsed task's folder to match the actual folder assigned by
+      // the adapter (e.g. br prefixes the issue ID). This ensures subsequent
+      // tasks resolving dependencies find the correct name in the mapping.
+      parsedTask.folder = created.folder;
 
-    result.created.push(created.folder);
+      result.created.push(created.folder);
+    } else {
+      result.created.push(parsedTask.folder);
+    }
   }
 
   if (warnings.length > 0) result.warnings = warnings;

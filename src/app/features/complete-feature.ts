@@ -24,9 +24,14 @@ export interface CompleteFeatureResult {
   doctrineSuggestions?: DoctrineSuggestion[];
 }
 
+export interface CompleteFeatureOpts {
+  dryRun?: boolean;
+}
+
 export async function completeFeature(
   services: CompleteFeatureServices,
   featureName: string,
+  opts?: CompleteFeatureOpts,
 ): Promise<CompleteFeatureResult> {
   const { taskPort, featureAdapter, memoryAdapter } = services;
   const feature = featureAdapter.get(featureName);
@@ -59,19 +64,23 @@ export async function completeFeature(
     );
   }
 
+  const dryRun = opts?.dryRun ?? false;
+
   // Consolidate memories: merge duplicates, compress stale, auto-promote qualifying
   let consolidation: ConsolidationResult | undefined;
-  try {
-    consolidation = consolidateMemories(memoryAdapter, featureName, { autoPromote: true });
-  } catch {
-    // Best-effort -- never block feature completion
+  if (!dryRun) {
+    try {
+      consolidation = consolidateMemories(memoryAdapter, featureName, { autoPromote: true });
+    } catch {
+      // Best-effort -- never block feature completion
+    }
   }
 
-  const updated = featureAdapter.complete(featureName);
+  const updated = dryRun ? feature : featureAdapter.complete(featureName);
 
   // Suggest doctrine candidates from cross-feature patterns (advisory, never blocking)
   let doctrineSuggestions: DoctrineSuggestion[] | undefined;
-  if (services.doctrinePort) {
+  if (!dryRun && services.doctrinePort) {
     try {
       const existing = services.doctrinePort.list({ status: 'active' });
       const result = suggestDoctrine(featureAdapter, memoryAdapter, existing, services.doctrineConfig);

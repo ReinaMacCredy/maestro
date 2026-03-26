@@ -16,15 +16,21 @@ export default defineCommand({
       description: 'Feature name',
       required: true,
     },
+    'dry-run': {
+      type: 'boolean',
+      description: 'Preview completion without modifying feature',
+      default: false,
+    },
   },
   async run({ args }) {
     try {
       const services = getServices();
-      const result = await completeFeature(services, args.feature);
+      const result = await completeFeature(services, args.feature, { dryRun: args['dry-run'] });
 
       output(result, (r) => {
         const { total, done } = r.tasksSummary;
-        return `[ok] feature '${args.feature}' completed (${done}/${total} done)`;
+        const suffix = args['dry-run'] ? ' (dry run)' : '';
+        return `[ok] feature '${args.feature}' completed (${done}/${total} done)${suffix}`;
       });
     } catch (err) {
       handleCommandError('feature-complete', err);

@@ -29,6 +29,7 @@ export function registerPlanTools(server: McpServer, thunk: ServicesThunk): void
         feature: featureParam(),
         content: z.string().optional().describe('Full plan content in markdown (write only; not required when scaffold is true)'),
         scaffold: z.boolean().optional().default(false).describe('Write a plan template scaffold instead of real content (write only)'),
+        dry_run: z.boolean().optional().default(false).describe('Preview plan write without modifying files (write only)'),
         body: z.string().optional().describe('Comment text (comment only)'),
         line: z.number().optional().describe('Line number this comment refers to (comment only)'),
         author: z.string().optional().describe('Comment author name (comment only)'),
@@ -47,7 +48,7 @@ export function registerPlanTools(server: McpServer, thunk: ServicesThunk): void
           }
           const result = await writePlan(
             { ...services, memoryAdapter: services.memoryAdapter },
-            feature, input.content ?? '', { scaffold: input.scaffold },
+            feature, input.content ?? '', { scaffold: input.scaffold, dryRun: input.dry_run },
           );
           return respond({ ...result });
         }

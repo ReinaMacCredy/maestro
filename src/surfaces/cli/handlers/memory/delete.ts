@@ -24,10 +24,35 @@ export default defineCommand({
       description: 'Delete from global project memory',
       default: false,
     },
+    'dry-run': {
+      type: 'boolean',
+      description: 'Preview deletion without removing file',
+      default: false,
+    },
   },
   async run({ args }) {
     try {
       const { memoryAdapter } = getServices();
+
+      if (args['dry-run']) {
+        // Check existence without deleting
+        let exists: boolean;
+        if (args.global) {
+          exists = memoryAdapter.readGlobal(args.name) != null;
+        } else {
+          if (!args.feature) {
+            throw new MaestroError('Missing --feature (required unless --global)');
+          }
+          exists = memoryAdapter.read(args.feature, args.name) != null;
+        }
+        if (!exists) {
+          const scope = args.global ? 'global memory' : `feature '${args.feature}'`;
+          throw new MaestroError(`memory '${args.name}' not found in ${scope}`);
+        }
+        output({ name: args.name, feature: args.feature, wouldDelete: true }, () =>
+          `[ok] memory '${args.name}' would be deleted (dry run)`);
+        return;
+      }
 
       let deleted: boolean;
       if (args.global) {

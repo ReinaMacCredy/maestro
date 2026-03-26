@@ -17,16 +17,22 @@ export default defineCommand({
       description: 'Feature name',
       required: true,
     },
+    'dry-run': {
+      type: 'boolean',
+      description: 'Preview sync without creating or removing tasks',
+      default: false,
+    },
   },
   async run({ args }) {
     try {
       const services = getServices();
+      const dryRun = args['dry-run'];
       const result = services.taskBackend === 'br'
         ? await translatePlan(services, args.feature)
-        : await syncPlan(services, args.feature);
+        : await syncPlan(services, args.feature, { dryRun });
 
       output(result, (r) => {
-        const lines = [`[ok] tasks synced for '${args.feature}'`];
+        const lines = [`[ok] tasks synced for '${args.feature}'${dryRun ? ' (dry run)' : ''}`];
         if (r.created.length > 0) lines.push(`  created: ${r.created.join(', ')}`);
         if (r.removed.length > 0) lines.push(`  removed: ${r.removed.join(', ')}`);
         if (r.kept.length > 0) lines.push(`  kept: ${r.kept.join(', ')}`);

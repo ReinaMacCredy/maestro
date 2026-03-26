@@ -30,14 +30,21 @@ export default defineCommand({
       description: 'Write a plan template scaffold instead of real content',
       default: false,
     },
+    'dry-run': {
+      type: 'boolean',
+      description: 'Preview plan write without modifying files',
+      default: false,
+    },
   },
   async run({ args }) {
     try {
       const services = getServices();
 
+      const dryRun = args['dry-run'];
+
       if (args.scaffold) {
-        const result = await writePlan(services, args.feature, '', { scaffold: true });
-        output(result, (r) => `[ok] plan scaffold written for '${r.feature}' -- edit ${r.path} then run plan-write with content`);
+        const result = await writePlan(services, args.feature, '', { scaffold: true, dryRun });
+        output(result, (r) => `[ok] plan scaffold written for '${r.feature}'${dryRun ? ' (dry run)' : ''} -- edit ${r.path} then run plan-write with content`);
         return;
       }
 
@@ -51,8 +58,8 @@ export default defineCommand({
         ]);
       }
 
-      const result = await writePlan(services, args.feature, content);
-      output(result, (r) => `[ok] plan written for '${r.feature}' (${r.taskCount} task headings)`);
+      const result = await writePlan(services, args.feature, content, { dryRun });
+      output(result, (r) => `[ok] plan written for '${r.feature}' (${r.taskCount} task headings)${dryRun ? ' (dry run)' : ''}`);
     } catch (err) {
       handleCommandError('plan-write', err);
     }
