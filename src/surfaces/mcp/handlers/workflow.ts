@@ -17,10 +17,10 @@ export function registerWorkflowTools(server: McpServer, _thunk: ServicesThunk):
     'maestro_stage',
     {
       description:
-        'Navigate pipeline stages. Actions: jump (requires: target, currentStage -- go to a specific stage), ' +
-        'skip (requires: currentStage -- advance one stage forward), ' +
-        'back (requires: currentStage -- retreat one stage). ' +
-        'Stages: discovery, research, planning, approval, execution, done. ' +
+        'Move a feature forward or backward through pipeline stages. Use when skipping a stage ' +
+        '(e.g. jumping past research to planning) or retreating to revisit an earlier stage. ' +
+        'Stages: discovery -> research -> planning -> approval -> execution -> done. ' +
+        'Actions: jump (requires: target, currentStage), skip (advance one), back (retreat one). ' +
         'Example: maestro_stage({ action: "jump", target: "execution", currentStage: "planning" })',
       annotations: ANNOTATIONS_MUTATING,
       inputSchema: {

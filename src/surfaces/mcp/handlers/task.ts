@@ -29,10 +29,11 @@ export function registerTaskTools(server: McpServer, thunk: ServicesThunk): void
     'maestro_task',
     {
       description:
-        'Task mutations.\n' +
-        'Actions: sync (requires: feature), claim (requires: task, agent_id), done (requires: task, summary), ' +
-        'accept (requires: task), reject (requires: task, feedback), block (requires: task, reason), ' +
-        'unblock (requires: task, decision), spec_write (requires: task, content), report_write (requires: task, content)\n' +
+        'Manage task lifecycle for a maestro feature. Use after plan approval to sync tasks from the plan, ' +
+        'during execution to claim/complete tasks, or to handle blockers and code review. ' +
+        'Actions: sync, claim (requires: task, agent_id), done (requires: task, summary), ' +
+        'accept, reject (requires: feedback), block (requires: reason), unblock (requires: decision), ' +
+        'spec_write (requires: content), report_write (requires: content). ' +
         'Example: {action: "claim", task: "01-setup", agent_id: "worker-1"}',
       inputSchema: {
         action: z.enum(['sync', 'claim', 'done', 'accept', 'reject', 'block', 'unblock', 'spec_write', 'report_write'])
@@ -183,10 +184,11 @@ export function registerTaskTools(server: McpServer, thunk: ServicesThunk): void
     'maestro_task_read',
     {
       description:
-        'Task read operations.\n' +
-        'What: list (no required params), info (requires: task), spec (requires: task), ' +
-        'report (requires: task), next (no required params), brief (requires: task)\n' +
-        'Example: {what: "info", task: "01-setup"}',
+        'Check task progress, find what to work on next, or read task specs and reports. ' +
+        'Use during execution to pick the next available task or inspect a specific task. ' +
+        'What: list, info (requires: task), spec (requires: task), report (requires: task), ' +
+        'next (recommends the next claimable task), brief (requires: task -- compiled worker context). ' +
+        'Example: {what: "next"}',
       inputSchema: {
         what: z.enum(['list', 'info', 'spec', 'report', 'next', 'brief']).describe('What to read'),
         feature: featureParam(),

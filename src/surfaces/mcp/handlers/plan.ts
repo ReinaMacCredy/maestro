@@ -18,10 +18,9 @@ export function registerPlanTools(server: McpServer, thunk: ServicesThunk): void
     'maestro_plan',
     {
       description:
-        'Plan mutations. Actions: write (requires: content OR scaffold flag -- create/update plan), ' +
-        'approve (approve for execution), revoke (un-approve plan), ' +
-        'comment (requires: body -- add review comment), comments_clear (remove all comments). ' +
-        'Plan must include ## Discovery (min 100 chars), ## Non-Goals, and ## Ghost Diffs sections. ' +
+        'Write, approve, or review an implementation plan for a feature. Use after research to draft a plan, ' +
+        'or when ready to begin execution by approving it. Plans must include ## Discovery, ## Non-Goals, and ## Ghost Diffs. ' +
+        'Actions: write (requires: content OR scaffold flag), approve, revoke, comment (requires: body), comments_clear. ' +
         'Example: maestro_plan({ action: "write", scaffold: true })',
       inputSchema: {
         action: z.enum(['write', 'approve', 'revoke', 'comment', 'comments_clear'])
@@ -93,8 +92,8 @@ export function registerPlanTools(server: McpServer, thunk: ServicesThunk): void
     'maestro_plan_read',
     {
       description:
-        'Read the plan and any review comments for a feature. No required params beyond feature. ' +
-        'Set summary: true for outline only. ' +
+        'Read the implementation plan and any review comments for a feature. Use to review a plan before approving, ' +
+        'or to reference the plan during execution. Set summary: true for headings-only outline. ' +
         'Example: maestro_plan_read({ summary: true })',
       inputSchema: {
         feature: featureParam(),

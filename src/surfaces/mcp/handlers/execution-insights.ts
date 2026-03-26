@@ -15,9 +15,9 @@ export function registerExecutionInsightsTools(server: McpServer, thunk: Service
     'maestro_execution_insights',
     {
       description:
-        'Query execution knowledge graph: which tasks generated knowledge, how it flows ' +
-        'through dependencies, downstream coverage. Shows exec-* memory details, coverage ' +
-        'stats, and knowledge flow edges with proximity scores.',
+        'Trace how execution knowledge flows through task dependencies. Use to understand which tasks ' +
+        'generated knowledge, what downstream tasks benefit, and where coverage gaps exist. ' +
+        'Shows exec-* memory details, coverage stats, and knowledge flow edges.',
       inputSchema: {
         feature: featureParam(),
       },

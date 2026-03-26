@@ -15,8 +15,9 @@ export function registerFeatureTools(server: McpServer, thunk: ServicesThunk): v
     'maestro_feature',
     {
       description:
-        'Feature mutations.\n' +
-        'Actions: create (requires: name), complete (no required params)\n' +
+        'Start a new feature track or mark one as complete. Use when beginning work on a new feature, bug fix, or chore, ' +
+        'or when all tasks are done and the feature is ready to close. ' +
+        'Actions: create (requires: name), complete. ' +
         'Example: {action: "create", name: "auth-refactor"}',
       inputSchema: {
         action: z.enum(['create', 'complete']).describe('Action to perform'),
@@ -52,9 +53,10 @@ export function registerFeatureTools(server: McpServer, thunk: ServicesThunk): v
     'maestro_feature_read',
     {
       description:
-        'Feature read operations.\n' +
-        'What: list (no required params), info (requires: name), active (no required params)\n' +
-        'Example: {what: "info", name: "auth-refactor"}',
+        'List features, check which feature is active, or get details on a specific feature. ' +
+        'Use to see all tracked features or check the current active feature context. ' +
+        'What: list, info (requires: feature name), active (returns the current feature). ' +
+        'Example: {what: "active"}',
       inputSchema: {
         what: z.enum(['list', 'info', 'active']).describe('What to read'),
         feature: featureParam(),

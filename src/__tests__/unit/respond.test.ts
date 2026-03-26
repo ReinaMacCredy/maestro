@@ -37,13 +37,14 @@ describe('textResponse', () => {
 });
 
 describe('errorResponse', () => {
-  test('produces error with success: false', () => {
+  test('produces error with success: false and isError: true', () => {
     const result = errorResponse({
       terminal: true,
       reason: 'not_found',
       error: 'Feature not found',
       hint: 'Create a feature first',
     });
+    expect(result.isError).toBe(true);
     const parsed = JSON.parse(result.content[0].text);
     expect(parsed.success).toBe(false);
     expect(parsed.terminal).toBe(true);

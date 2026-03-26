@@ -5,7 +5,7 @@
 
 import { MaestroError } from '../../domain/errors.ts';
 
-type McpResponse = { content: Array<{ type: 'text'; text: string }> };
+type McpResponse = { content: Array<{ type: 'text'; text: string }>; isError?: boolean };
 
 /** Wrap an MCP tool handler with standard MaestroError / unexpected error handling. */
 export function withErrorHandling<T>(
@@ -84,9 +84,9 @@ export interface ErrorResponseOptions {
 
 const ERROR_RESPONSE_KNOWN_KEYS = ['terminal', 'reason', 'error', 'hint', 'suggestions'];
 
-/** Produce a standard MCP error response with success: false. */
+/** Produce a standard MCP error response with success: false and isError: true per MCP spec. */
 export function errorResponse(opts: ErrorResponseOptions) {
-  return respond({
+  const response = respond({
     success: false,
     terminal: opts.terminal,
     reason: opts.reason,
@@ -97,4 +97,5 @@ export function errorResponse(opts: ErrorResponseOptions) {
       Object.entries(opts).filter(([k]) => !ERROR_RESPONSE_KNOWN_KEYS.includes(k))
     ),
   });
+  return { ...response, isError: true as const };
 }

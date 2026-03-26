@@ -48,9 +48,9 @@ export function registerDcpTools(server: McpServer, thunk: ServicesThunk): void 
     'maestro_dcp',
     {
       description:
-        'DCP (Dynamic Context Pruning) operations. What: preview (requires: task -- memory selection scores for a task), ' +
-        'stats (requires: task -- token budgets and component breakdown), ' +
-        'config (current DCP settings and component registry). ' +
+        'Inspect how Dynamic Context Pruning selects and budgets memory for tasks. ' +
+        'Use to debug why certain memories are included/excluded, check token budgets, or review DCP settings. ' +
+        'What: preview (requires: task -- memory scores), stats (requires: task -- budget breakdown), config (current settings). ' +
         'Example: maestro_dcp({ what: "preview", task: "implement-auth" })',
       inputSchema: {
         what: z.enum(['preview', 'stats', 'config']).optional().describe('Query to perform'),

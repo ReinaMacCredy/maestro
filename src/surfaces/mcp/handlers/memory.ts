@@ -18,10 +18,10 @@ export function registerMemoryTools(server: McpServer, thunk: ServicesThunk): vo
     'maestro_memory',
     {
       description:
-        'Memory mutations.\n' +
+        'Save, organize, or remove research findings and decisions for a feature. ' +
+        'Use during research to capture findings, after execution to promote key learnings, or to clean up stale memory. ' +
         'Actions: write (requires: name, content), delete (requires: name), promote (requires: name), ' +
-        'compress (requires: name), consolidate (no required params), ' +
-        'connect (requires: name, target, relation), archive (no required params)\n' +
+        'compress (requires: name), consolidate, connect (requires: name, target, relation), archive. ' +
         'Example: {action: "write", name: "api-findings", content: "REST endpoints use /v2 prefix"}',
       inputSchema: {
         action: z.enum(['write', 'delete', 'promote', 'compress', 'consolidate', 'connect', 'archive'])
@@ -132,9 +132,9 @@ export function registerMemoryTools(server: McpServer, thunk: ServicesThunk): vo
     'maestro_memory_read',
     {
       description:
-        'Memory read operations.\n' +
-        'What: read (requires: name), list (no required params), stats (no required params), ' +
-        'insights (no required params), compile (no required params)\n' +
+        'Read saved research findings, list available memory files, or view memory usage stats. ' +
+        'Use to recall earlier research, check what has been captured, or compile context for a task. ' +
+        'What: read (requires: name), list, stats, insights, compile (DCP-scored context assembly). ' +
         'Example: {what: "read", name: "api-findings"}',
       inputSchema: {
         what: z.enum(['read', 'list', 'stats', 'insights', 'compile']).describe('What to read'),

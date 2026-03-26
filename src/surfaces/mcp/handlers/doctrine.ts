@@ -14,10 +14,10 @@ export function registerDoctrineTools(server: McpServer, thunk: ServicesThunk): 
     'maestro_doctrine',
     {
       description:
-        'Doctrine mutations. Actions: write (requires: name, rule, rationale -- create/update doctrine item), ' +
-        'approve (requires: name, rule, rationale -- approve suggestion -> active), ' +
-        'suggest (analyze execution patterns to find candidates), ' +
-        'deprecate (requires: name -- mark item inactive). ' +
+        'Create or manage cross-feature operating rules learned from execution. Use after completing a feature ' +
+        'to codify patterns worth repeating, or to approve/deprecate suggested rules. ' +
+        'Actions: write (requires: name, rule, rationale), approve (requires: name, rule, rationale), ' +
+        'suggest (auto-detect candidates from execution patterns), deprecate (requires: name). ' +
         'Example: maestro_doctrine({ action: "write", name: "no-any", rule: "Avoid any type", rationale: "Type safety" })',
       inputSchema: {
         action: z.enum(['write', 'approve', 'suggest', 'deprecate']).describe('Action to perform'),
@@ -98,9 +98,10 @@ export function registerDoctrineTools(server: McpServer, thunk: ServicesThunk): 
     'maestro_doctrine_read',
     {
       description:
-        'Doctrine read operations. What: list (all items, optionally filtered by status), ' +
-        'read (requires: name -- single item by name). ' +
-        'Example: maestro_doctrine_read({ what: "read", name: "no-any" })',
+        'Read active operating rules or browse all doctrine items. Use to check existing rules ' +
+        'before writing new ones, or to review what has been learned from past features. ' +
+        'What: list (optionally filtered by status), read (requires: name). ' +
+        'Example: maestro_doctrine_read({ what: "list" })',
       inputSchema: {
         what: z.enum(['list', 'read']).describe('What to read'),
         name: z.string().optional().describe('Doctrine item name (required for what: read)'),

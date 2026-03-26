@@ -15,9 +15,9 @@ export function registerSearchTools(server: McpServer, thunk: ServicesThunk): vo
     'maestro_search',
     {
       description:
-        'Session history search. What: sessions (requires: query -- full-text search of past agent sessions), ' +
-        'related (requires: file_path -- find sessions that worked on a specific file), ' +
-        'similar (requires: content -- find sessions with similar content). ' +
+        'Search past agent sessions to find relevant prior work. Use when you need context from earlier sessions, ' +
+        'want to know what was previously done on a file, or need to find similar past work. Requires CASS integration. ' +
+        'What: sessions (requires: query), related (requires: file_path), similar (requires: content). ' +
         'Example: maestro_search({ what: "sessions", query: "auth refactor" })',
       inputSchema: {
         what: z.enum(['sessions', 'related', 'similar']).optional().describe('Query to perform'),

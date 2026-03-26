@@ -13,7 +13,7 @@ export function registerHistoryTools(server: McpServer, thunk: ServicesThunk): v
   server.registerTool(
     'maestro_history',
     {
-      description: 'Show feature completion history with task stats and duration.',
+      description: 'Browse completed features with task counts and durations. Use to review past work, check how long features took, or find patterns across completed tracks.',
       inputSchema: {
         limit: limitParam(10),
         status: z.enum(FEATURE_STATUSES).optional().describe('Filter by feature status'),

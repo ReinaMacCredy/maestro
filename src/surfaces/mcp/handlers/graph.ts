@@ -17,11 +17,10 @@ export function registerGraphTools(server: McpServer, thunk: ServicesThunk): voi
     'maestro_graph',
     {
       description:
-        'Graph and parallel execution operations. Actions: insights (bottlenecks, critical path, velocity -- requires bv), ' +
-        'next (top recommended next bead with rationale -- requires bv), ' +
-        'plan (parallel execution tracks for N agents -- requires bv), ' +
-        'discovery (all runnable tasks with specs for parallel dispatch), ' +
-        'reserve (requires: tasks array -- batch claim multiple tasks for parallel agents). ' +
+        'Analyze task dependencies, find bottlenecks, or plan parallel execution across multiple agents. ' +
+        'Use when coordinating multi-agent work, identifying the critical path, or dispatching tasks in parallel. ' +
+        'Requires bv integration for insights/next/plan. ' +
+        'Actions: insights, next, plan (requires: agents count), discovery (all runnable tasks), reserve (requires: tasks array). ' +
         'Example: maestro_graph({ action: "discovery" })',
       inputSchema: {
         action: z.enum(['insights', 'next', 'plan', 'discovery', 'reserve'])

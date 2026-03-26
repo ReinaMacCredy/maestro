@@ -27,7 +27,7 @@ export function registerConfigTools(server: McpServer, thunk: ServicesThunk): vo
   server.registerTool(
     'maestro_config_get',
     {
-      description: 'Read maestro configuration. Supports dot notation (e.g. "dcp.enabled", "tasks.backend"). Returns settings (v2).',
+      description: 'Read maestro project settings. Use to check current configuration values like DCP thresholds, task backend, or toolbox settings. Supports dot notation (e.g. "dcp.enabled"). Omit key for full settings.',
       inputSchema: {
         key: z.string().optional().describe('Specific config key (supports dot notation, e.g. "dcp.enabled", "toolbox.deny"). Omit for full settings.'),
       },
@@ -49,7 +49,7 @@ export function registerConfigTools(server: McpServer, thunk: ServicesThunk): vo
   server.registerTool(
     'maestro_config_set',
     {
-      description: 'Set a settings value using dot notation (e.g. "tasks.backend", "dcp.enabled"). Writes to project settings.json.',
+      description: 'Update a maestro project setting. Use to change DCP thresholds, switch task backends, or adjust toolbox configuration. Dot notation keys (e.g. "tasks.backend", "dcp.enabled"). Writes to project settings.json.',
       inputSchema: {
         key: z.string().describe('Settings key with dot notation (e.g. "tasks.backend", "toolbox.deny")'),
         value: z.string().describe('Value to set (JSON for objects/arrays, plain string otherwise)'),

@@ -15,7 +15,7 @@ export function registerStatusTools(server: McpServer, thunk: ServicesThunk, eng
   server.registerTool(
     'maestro_status',
     {
-      description: 'Get current feature status: pipeline stage, plan, tasks, next action. Call at session start.',
+      description: 'Get current feature status including pipeline stage, task progress, and recommended next action. Call at session start to orient, or anytime you need to know where a feature stands.',
       inputSchema: {
         feature: featureParam(),
         verbose: z.boolean().optional().default(false).describe('Include researchTools in response'),
