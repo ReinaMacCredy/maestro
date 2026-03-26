@@ -30,6 +30,7 @@ export interface TaskBriefParams {
   graphPort?: GraphPort;
   doctrinePort?: DoctrinePort;
   agentMemoryRetriever?: import('../../infra/toolbox/tools/external/agent-memory/adapter.ts').AgentMemoryRetriever;
+  // AgentMemoryRetriever is typed inline to avoid circular imports via container.ts
 }
 
 export interface TaskBriefResult {
@@ -57,6 +58,30 @@ export interface TaskBriefResult {
   };
   agentToolsGuidance?: string;
   hint?: string;
+}
+
+function selectStandardDcp(
+  memoryAdapter: { listWithMeta(feature: string): MemoryFileWithMeta[] },
+  task: Parameters<typeof selectMemories>[1] & { planTitle?: string },
+  feature: string,
+  dcpConfig: { memoryBudgetTokens: number; relevanceThreshold: number },
+  featureCreatedAt?: string,
+  allTasks?: TaskWithDeps[],
+) {
+  const rawMemories = memoryAdapter.listWithMeta(feature);
+  const selected = selectMemories(rawMemories, task, task.planTitle ?? null, dcpConfig.memoryBudgetTokens, dcpConfig.relevanceThreshold, featureCreatedAt, allTasks);
+  const scoreMap = new Map(selected.scores.map(s => [s.name, s.score]));
+  const memories = selected.memories.map(m => ({
+    name: m.name,
+    content: m.bodyContent ?? m.content,
+    score: Math.round((scoreMap.get(m.name) ?? 0) * 1000) / 1000,
+    tags: m.metadata?.tags ?? [],
+    category: m.metadata?.category ?? 'unknown',
+  }));
+  return {
+    memories,
+    dcpMetrics: { totalTokens: selected.totalTokens, includedCount: selected.includedCount, droppedCount: selected.droppedCount, scores: selected.scores },
+  };
 }
 
 export async function taskBrief(
@@ -142,46 +167,37 @@ export async function taskBrief(
     ? allTasksResult.value.map(t => ({ id: t.id, folder: t.folder, status: t.status, dependsOn: t.dependsOn }))
     : [];
 
-  // Memory selection: use agentMemory hybrid retrieval when available, else standard DCP
+  // Memory selection: agentMemory hybrid retrieval when available, else standard DCP
   let memories: Array<{ name: string; content: string; score: number; tags: string[]; category: string }>;
   let dcpMetrics: { totalTokens: number; includedCount: number; droppedCount: number; scores: Array<{ name: string; score: number; included: boolean }> };
 
   if (params.agentMemoryRetriever) {
     try {
-      const compiled = await params.agentMemoryRetriever.compile(taskFolder, {
+      const result = await params.agentMemoryRetriever.compile(taskFolder, {
         stage: task.status === 'claimed' ? 'execution' : undefined,
         feature,
         budgetTokens: dcpConfig.memoryBudgetTokens,
       });
-      // Parse compiled sections back into structured memory entries
-      const sections = compiled.compiled.split('\n\n---\n\n').filter(Boolean);
-      memories = sections.map(section => {
-        const nameMatch = section.match(/^## (.+)\n/);
-        const name = nameMatch?.[1] ?? 'unknown';
-        const content = section.replace(/^## .+\n\n/, '');
-        return { name, content, score: 0, tags: [], category: 'unknown' };
-      });
+      memories = result.sections.map(s => ({
+        name: s.name, content: s.content, score: s.score,
+        tags: s.tags, category: s.category,
+      }));
       dcpMetrics = {
-        totalTokens: compiled.tokensUsed,
-        includedCount: compiled.memoriesUsed,
+        totalTokens: result.tokensUsed,
+        includedCount: result.sections.length,
         droppedCount: 0,
-        scores: memories.map(m => ({ name: m.name, score: 0, included: true })),
+        scores: result.sections.map(s => ({ name: s.name, score: s.score, included: true })),
       };
-    } catch {
-      // Fallback to standard DCP on any error
-      const rawMemories = memoryAdapter.listWithMeta(feature);
-      const selected = selectMemories(rawMemories, task, task.planTitle ?? null, dcpConfig.memoryBudgetTokens, dcpConfig.relevanceThreshold, featureCreatedAt, allTasks);
-      const scoreMap = new Map(selected.scores.map(s => [s.name, s.score]));
-      memories = selected.memories.map(m => ({ name: m.name, content: m.bodyContent ?? m.content, score: Math.round((scoreMap.get(m.name) ?? 0) * 1000) / 1000, tags: m.metadata?.tags ?? [], category: m.metadata?.category ?? 'unknown' }));
-      dcpMetrics = { totalTokens: selected.totalTokens, includedCount: selected.includedCount, droppedCount: selected.droppedCount, scores: selected.scores };
+    } catch (e) {
+      console.error('[maestro] agentMemory compile failed, falling back to standard DCP:', e);
+      const std = selectStandardDcp(memoryAdapter, task, feature, dcpConfig, featureCreatedAt, allTasks);
+      memories = std.memories;
+      dcpMetrics = std.dcpMetrics;
     }
   } else {
-    const rawMemories = memoryAdapter.listWithMeta(feature);
-    const planSection = task.planTitle ?? null;
-    const selected: SelectedContext = selectMemories(rawMemories, task, planSection, dcpConfig.memoryBudgetTokens, dcpConfig.relevanceThreshold, featureCreatedAt, allTasks);
-    const scoreMap = new Map(selected.scores.map(s => [s.name, s.score]));
-    memories = selected.memories.map(m => ({ name: m.name, content: m.bodyContent ?? m.content, score: Math.round((scoreMap.get(m.name) ?? 0) * 1000) / 1000, tags: m.metadata?.tags ?? [], category: m.metadata?.category ?? 'unknown' }));
-    dcpMetrics = { totalTokens: selected.totalTokens, includedCount: selected.includedCount, droppedCount: selected.droppedCount, scores: selected.scores };
+    const std = selectStandardDcp(memoryAdapter, task, feature, dcpConfig, featureCreatedAt, allTasks);
+    memories = std.memories;
+    dcpMetrics = std.dcpMetrics;
   }
 
   // 9. Completed tasks (newest-first, budget-capped)
