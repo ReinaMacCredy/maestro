@@ -36,6 +36,13 @@ function settingsWith(overrides: Partial<MaestroSettings>): MaestroSettings {
   return mergeSettings(DEFAULT_SETTINGS, overrides);
 }
 
+function writeProjectSettings(tmpDir: string, settings: MaestroSettings): void {
+  fs.writeFileSync(
+    path.join(tmpDir, '.maestro', 'settings.json'),
+    JSON.stringify(settings, null, 2),
+  );
+}
+
 // ============================================================================
 // Tests
 // ============================================================================
@@ -59,6 +66,7 @@ describe('toolbox integration with initServices', () => {
 
   it('uses FsTaskAdapter when settings.tasks.backend is fs', () => {
     const settings = settingsWith({ tasks: { backend: 'fs', claimExpiresMinutes: 60 } });
+    writeProjectSettings(tmpDir, settings);
     // Build toolbox with br "available" but settings say fs
     const manifests = [
       makeManifest({ name: 'fs-tasks', provides: 'tasks', priority: 0 }),
@@ -73,6 +81,7 @@ describe('toolbox integration with initServices', () => {
 
   it('uses fs-tasks fallback when br not installed and backend is auto', () => {
     const settings = settingsWith({ tasks: { backend: 'auto', claimExpiresMinutes: 120 } });
+    writeProjectSettings(tmpDir, settings);
     const manifests = [
       makeManifest({ name: 'fs-tasks', provides: 'tasks', priority: 0 }),
       makeManifest({
