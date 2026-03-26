@@ -51,8 +51,30 @@ const main = defineCommand({
       console.log(VERSION);
       return;
     }
-    console.log(`maestro ${VERSION} -- agent-optimized development orchestrator`);
-    console.log('Run `maestro --help` for usage.');
+
+    // Grouped command summary -- more useful than flat --help for 70+ commands
+    console.log(`maestro ${VERSION} -- agent-optimized development orchestrator\n`);
+    console.log('Command groups:');
+    const groups: [string, string][] = [
+      ['feature-*', 'Feature lifecycle (create, complete, list, info, active)'],
+      ['plan-*', 'Plan management (write, approve, revoke, read, comment)'],
+      ['task-*', 'Task operations (sync, claim, done, block, list, next, info, spec, report)'],
+      ['memory-*', 'Memory read/write (write, read, list, delete, compile, consolidate, promote)'],
+      ['doctrine-*', 'Doctrine rules (write, read, list, approve, deprecate, suggest)'],
+      ['handoff-*', 'Agent handoffs (send, receive, ack)'],
+      ['config-*', 'Settings (get, set, agent)'],
+      ['graph-*', 'Dependency graph (insights, next, plan)'],
+      ['search-*', 'Session search (sessions, related)'],
+      ['toolbox-*', 'Tool management (add, create, install, list, remove, test)'],
+      ['skill*', 'Built-in skills (skill, skill-list)'],
+      ['visual*', 'HTML visualizations (visual, debug-visual)'],
+    ];
+    for (const [prefix, desc] of groups) {
+      console.log(`  ${prefix.padEnd(14)} ${desc}`);
+    }
+    console.log(`\nOther: init, status, ping, doctor, history, execution-insights, dcp-preview, agents-md`);
+    console.log(`\nRun \`maestro <command> --help\` for details on any command.`);
+    console.log('All commands accept --json for structured output.');
   },
 });
 
