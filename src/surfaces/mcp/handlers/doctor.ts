@@ -8,7 +8,9 @@ export function registerDoctorTools(server: McpServer, thunk: ServicesThunk): vo
   server.registerTool(
     'maestro_doctor',
     {
-      description: 'Diagnose maestro configuration issues. Use when something seems misconfigured or broken -- validates config, checks active feature, task backend health, and integration availability.',
+      description: 'Diagnose maestro configuration issues. Use when something seems misconfigured or broken -- validates config, checks active feature, task backend health, and integration availability. ' +
+        'Example: maestro_doctor() ' +
+        'Returns: { checks[], healthy, summary }',
       annotations: ANNOTATIONS_READONLY,
     },
     withErrorHandling(async () => {

@@ -21,7 +21,6 @@ export function registerSearchTools(server: McpServer, thunk: ServicesThunk): vo
         'Example: maestro_search({ what: "sessions", query: "auth refactor" })',
       inputSchema: {
         what: z.enum(['sessions', 'related', 'similar']).optional().describe('Query to perform'),
-        action: z.enum(['sessions', 'related', 'similar']).optional().describe('(deprecated, use what)'),
         query: z.string().optional().describe('Search query (required for sessions)'),
         agent: z.string().optional().describe('Filter to specific agent -- claude, codex, cursor, etc. (sessions only)'),
         limit: limitParam(10),
@@ -33,7 +32,7 @@ export function registerSearchTools(server: McpServer, thunk: ServicesThunk): vo
     },
     withErrorHandling(async (input) => {
       const port = requireSearchPort(thunk.get());
-      const what = input.what ?? input.action;
+      const what = input.what;
       if (!what) return errorResponse({ terminal: false, reason: 'validation', error: 'what is required' });
       switch (what) {
         case 'sessions': {

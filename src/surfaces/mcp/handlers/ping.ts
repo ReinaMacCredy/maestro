@@ -8,7 +8,9 @@ export function registerPingTools(server: McpServer, thunk: ServicesThunk): void
   server.registerTool(
     'maestro_ping',
     {
-      description: 'Quick health check returning maestro version, active backend, and available integrations. Use to verify maestro is running and connected.',
+      description: 'Quick health check returning maestro version, active backend, and available integrations. Use to verify maestro is running and connected. ' +
+        'Example: maestro_ping() ' +
+        'Returns: { version, backend, integrations, directory }',
       annotations: ANNOTATIONS_READONLY,
     },
     withErrorHandling(async () => {

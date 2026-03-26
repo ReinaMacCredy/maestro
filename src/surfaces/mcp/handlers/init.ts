@@ -15,7 +15,9 @@ export function registerInitTools(server: McpServer, thunk: ServicesThunk, direc
   server.registerTool(
     'maestro_init',
     {
-      description: 'Initialize maestro for a new project. Use when setting up maestro in a repo for the first time. Creates .maestro/ directory structure and default configuration.',
+      description: 'Initialize maestro for a new project. Use when setting up maestro in a repo for the first time. Creates .maestro/ directory structure and default configuration. ' +
+        'Example: maestro_init() ' +
+        'Returns: { initialized, directory, directories[] }',
       inputSchema: {
         // z.object({}) not needed -- empty schema means no inputs
       },

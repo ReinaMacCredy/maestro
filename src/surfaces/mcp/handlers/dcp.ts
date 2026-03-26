@@ -54,7 +54,6 @@ export function registerDcpTools(server: McpServer, thunk: ServicesThunk): void 
         'Example: maestro_dcp({ what: "preview", task: "implement-auth" })',
       inputSchema: {
         what: z.enum(['preview', 'stats', 'config']).optional().describe('Query to perform'),
-        action: z.enum(['preview', 'stats', 'config']).optional().describe('(deprecated, use what)'),
         feature: featureParam(),
         task: taskParam().optional(),
       },
@@ -62,7 +61,7 @@ export function registerDcpTools(server: McpServer, thunk: ServicesThunk): void 
     },
     withErrorHandling(async (input) => {
       const services = thunk.get();
-      const what = input.what ?? input.action;
+      const what = input.what;
       if (!what) return errorResponse({ terminal: false, reason: 'validation', error: 'what is required' });
 
       switch (what) {
