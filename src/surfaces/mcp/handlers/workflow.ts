@@ -6,6 +6,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ServicesThunk } from '../services-thunk.ts';
 import { respond, withErrorHandling } from '../respond.ts';
+import { ANNOTATIONS_MUTATING } from '../annotations.ts';
 import { buildPlaybook } from '../../../app/workflow/playbook.ts';
 import type { PipelineStage } from '../../../app/workflow/stages.ts';
 
@@ -16,6 +17,7 @@ export function registerWorkflowTools(server: McpServer, _thunk: ServicesThunk):
     'maestro_stage',
     {
       description: 'Navigate pipeline stages: jump to a specific stage, skip forward, or go back.',
+      annotations: ANNOTATIONS_MUTATING,
       inputSchema: {
         action: z.enum(['jump', 'skip', 'back']).describe('Navigation action'),
         target: z.string().optional().describe('Target stage (required for jump)'),

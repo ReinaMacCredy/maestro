@@ -35,7 +35,7 @@ export function registerMemoryTools(server: McpServer, thunk: ServicesThunk): vo
         target: z.string().optional().describe('Target memory name (required for connect)'),
         relation: z.enum(['related', 'supersedes', 'contradicts', 'extends']).optional().describe('Relation type (required for connect)'),
       },
-      annotations: ANNOTATIONS_MUTATING,
+      annotations: ANNOTATIONS_DESTRUCTIVE,
     },
     withErrorHandling(async (input) => {
       const services = thunk.get();
