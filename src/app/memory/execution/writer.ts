@@ -12,6 +12,8 @@ import { formatDurationMinutes } from '../../../infra/utils/time-utils.ts';
 import { prependMetadataFrontmatter } from '../../../infra/utils/frontmatter.ts';
 import { getChangedFilesSince } from '../../../infra/utils/git.ts';
 import { readDoctrineTrace, collectDoctrineNames } from '../../doctrine/trace.ts';
+import { readDcpTrace, collectMemoryNames } from '../../dcp/trace.ts';
+import { recordTelemetry, type TelemetryOutcome } from '../../dcp/telemetry.ts';
 
 export const EXEC_MEMORY_PREFIX = 'exec-';
 
@@ -229,5 +231,28 @@ export async function writeExecutionMemory(params: WriteExecutionMemoryParams): 
     } catch {
       // Best-effort -- never block task completion
     }
+  }
+
+  // Record DCP telemetry from injection trace
+  try {
+    const dcpTrace = readDcpTrace(projectRoot, featureName, taskFolder);
+    if (dcpTrace && dcpTrace.entries.length > 0) {
+      const memoryNames = collectMemoryNames(dcpTrace);
+      const outcome: TelemetryOutcome =
+        (task.revisionCount ?? 0) === 0 ? 'success'
+          : task.status === 'blocked' ? 'blocked'
+          : 'revision';
+      recordTelemetry(projectRoot, {
+        taskId: task.id,
+        featureName,
+        timestamp: new Date().toISOString(),
+        injectedMemories: memoryNames,
+        outcome,
+        revisionCount: task.revisionCount ?? 0,
+        verificationPassed: verificationReport?.passed ?? null,
+      });
+    }
+  } catch {
+    // Best-effort -- never block task completion
   }
 }
