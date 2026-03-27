@@ -2,23 +2,28 @@
 
 Harness for long-running AI coding agents -- structured memory, cross-feature learning, and plan-approve-execute workflow.
 
-An MCP plugin that gives AI coding agents persistent state, workflow guardrails, and a plan-first pipeline. All durable state lives under `.maestro/`.
+A CLI-first tool that gives AI coding agents persistent state, workflow guardrails, and a plan-first pipeline. Agents interact via `maestro <command> --json` through Bash. All durable state lives under `.maestro/`.
 
 ## Quick Start
 
 ```bash
 maestro init                                    # initialize project
 maestro feature-create my-feature               # create feature
-maestro plan-write --feature my-feature \
-  --content "## Discovery\n..."                 # write plan
-maestro plan-approve --feature my-feature       # approve plan
-maestro task-sync --feature my-feature          # generate tasks from plan
-maestro task-next --feature my-feature          # find next runnable task
-maestro task-claim --feature my-feature \
-  --task 01-example                             # claim task for an agent
-maestro task-done --feature my-feature \
-  --task 01-example --summary "What changed"    # mark task complete
+maestro memory-write --name findings \
+  --file research.md                            # save research
+maestro plan-write --file plan.md               # write plan (auto-detects active feature)
+maestro plan-approve                            # approve plan
+maestro task-sync                               # generate tasks from plan
+maestro task-next --json                        # find next runnable task
+maestro task-claim --task 01-example \
+  --agent-id worker-1                           # claim task for an agent
+maestro task-brief --task 01-example --json     # get compiled worker context
+maestro task-done --task 01-example \
+  --file summary.md                             # mark task complete
+maestro feature-complete                        # close the feature
 ```
+
+All commands auto-detect the active feature -- no need to pass `--feature` after `feature-create`.
 
 ## Prerequisites
 
@@ -47,20 +52,20 @@ Produces:
 
 | Output | Purpose |
 |--------|---------|
-| `dist/server.bundle.mjs` | MCP server |
-| `dist/cli.js` | npm CLI entry |
 | `dist/maestro` | Standalone binary |
+| `dist/cli.js` | npm CLI entry |
 | `hooks/*.mjs` | 5 Claude Code hook scripts |
+| `dist/server.bundle.mjs` | Plugin server (empty, for hook registration) |
 
 Development mode: `bun src/surfaces/cli/index.ts <command>`.
 
 ## Architecture
 
-maestro is a **pure MCP plugin** -- the AI agent is the orchestrator, maestro is the filing cabinet with opinions.
+maestro is a **CLI-first harness** -- the AI agent is the orchestrator, maestro is the filing cabinet with opinions. Agents call `maestro <command> --json` via Bash. Hooks inject context automatically.
 
 ```text
 surfaces/  -->  app/     -->  domain/ports/  <--  infra/adapters/
-(CLI, MCP,      (rules,       (interfaces)       (implementations)
+(CLI,           (rules,       (interfaces)       (implementations)
  hooks)          DCP, skills)
 ```
 
@@ -82,8 +87,8 @@ src/
     utils/          # Filesystem, git, paths, validation, output
     visual/         # HTML/CSS renderer for visualization
   surfaces/         # External interfaces
-    cli/            # 71 CLI commands (citty framework)
-    mcp/            # 26 MCP tool handlers
+    cli/            # 89 CLI commands (citty framework)
+    mcp/            # Empty server shell (hooks require plugin recognition)
     hooks/          # 5 Claude Code hooks
   container.ts      # Immutable DI container -- wires ports to adapters
   services.ts       # Service locator (thin shim over container)
@@ -107,44 +112,28 @@ Stages are skippable. Hooks inject pipeline context automatically.
 
 Stale claims expire after a configurable timeout (default 120 min) and auto-reset to `pending` on `task-next`.
 
-## MCP Tools (26)
+## CLI Commands (89)
 
-All commands use the `maestro <command>` format. Use `--json` for structured output.
+All commands accept `--json` for structured output. All feature-scoped commands auto-detect the active feature. Use `maestro <command> --help` for full usage.
 
-| Group | Tools | Count |
-|-------|-------|-------|
-| Feature | `feature` (create, complete), `feature_read` (list, info, active) | 2 |
-| Plan | `plan` (write, approve, revoke, comment, comments_clear), `plan_read` | 2 |
-| Task | `task` (sync, claim, done, accept, reject, block, unblock, spec_write, report_write), `task_read` (list, info, spec, report, next, brief) | 2 |
-| Memory | `memory` (write, delete, promote, compress, consolidate, connect, archive), `memory_read` (read, list, stats, insights, compile) | 2 |
-| Doctrine | `doctrine` (write, approve, suggest, deprecate), `doctrine_read` (list, read) | 2 |
-| Handoff | `handoff` (send, ack), `handoff_read` (read, list, status, receive) | 2 |
-| Graph | `graph` (insights, next, plan, discovery, reserve) | 1 |
-| Search | `search` (sessions, related, similar) | 1 |
-| Config | `config_get`, `config_set` | 2 |
-| Visual | `visual` | 1 |
-| DCP | `dcp` (preview, stats, config) | 1 |
-| Workflow | `stage` (jump, skip, back) | 1 |
-| Standalone | `status`, `ping`, `init`, `doctor`, `history`, `execution_insights`, `skill` | 7 |
-
-## CLI Commands (71)
-
-All commands accept `--json` for machine-readable output. Use `maestro <command> --help` for full usage.
+Content-accepting commands support three input modes: `--content "..."` (inline), `--file path` (from file), or `--stdin` (piped).
 
 | Domain | Commands | Count |
 |--------|----------|-------|
 | Feature | create, list, info, active, complete | 5 |
 | Plan | write, read, approve, revoke, comment, comments-clear | 6 |
-| Task | sync, list, next, info, claim, done, block, unblock, spec-read, spec-write, report-read, report-write | 12 |
-| Memory | write, read, list, delete, compile, consolidate, archive, stats, promote | 9 |
+| Task | sync, list, next, info, claim, done, block, unblock, accept, reject, brief, spec-read, spec-write, report-read, report-write | 15 |
+| Memory | write, read, list, delete, compile, consolidate, archive, stats, promote, compress, connect, insights | 12 |
 | Doctrine | list, read, write, deprecate, suggest, approve | 6 |
-| Graph | insights, next, plan | 3 |
-| Handoff | send, receive, ack | 3 |
-| Search | sessions, related | 2 |
+| Graph | insights, next, plan, discovery, reserve | 5 |
+| Handoff | send, receive, ack, read, list, status | 6 |
+| Search | sessions, related, similar | 3 |
+| Skill | load, list, install, create, remove, sync | 6 |
+| Stage | jump, skip, back | 3 |
 | Config | get, set, agent | 3 |
 | Toolbox | add, create, install, list, remove, test | 6 |
 | Visual | visual, debug-visual | 2 |
-| Other | init, install, ping, status, agents-md, skill, skill-list, dcp-preview, doctor, history, execution-insights, self-update, update | 13 |
+| Other | init, install, ping, status, agents-md, dcp-preview, doctor, history, execution-insights, self-update, update | 11 |
 
 ## Hooks
 

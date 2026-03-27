@@ -42,7 +42,7 @@
 - Test error paths in addition to happy paths
 
 
-# maestro -- MCP Plugin for Agent-Optimized Development
+# maestro -- CLI Harness for Agent-Optimized Development
 
 ## Getting Started
 
@@ -53,11 +53,12 @@ Load recommended skills from `playbook.skills` with `maestro skill <name>`.
 
 ## Architecture
 
-maestro is a **pure MCP plugin** -- structured memory + workflow guardrails.
+maestro is a **CLI-first harness** -- structured memory + workflow guardrails.
 Claude Code is the orchestrator (spawning agents natively), maestro is the filing cabinet with opinions.
+Agents interact via `maestro <command> --json` through Bash. Hooks inject context automatically.
 
 - **6 task states**: pending, claimed, done, blocked, review, revision
-- **26 MCP tools** (17 merged action-based + 9 standalone) across 13 groups
+- **89 CLI commands** across 14 domains, all with `--json` support
 - **Plain file backend** (default), optional br sync
 - **Hooks**: SessionStart (pipeline injection), PreToolUse:Agent (task spec injection)
 - **Doctrine Compiler**: cross-feature learning from execution history, injected into workers via separate budget
@@ -160,7 +161,7 @@ maestro status --json                    # [read] orient: stage, playbook, next 
 maestro skill <name>                     # [read] load skill into context
 
 ### Discovery
-maestro feature-create --name <name> --json          # [write]
+maestro feature-create <name> --json                 # [write]
 maestro feature-active --json                        # [read]
 
 ### Research
