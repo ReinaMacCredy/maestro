@@ -14,6 +14,7 @@ import { selectMemories, type SelectedContext } from '../dcp/selector.ts';
 import { deriveFolderTags } from '../memory/execution/writer.ts';
 import { extractKeywords } from '../dcp/relevance.ts';
 import { appendDoctrineTrace } from '../doctrine/trace.ts';
+import { appendDcpTrace } from '../dcp/trace.ts';
 import { WORKER_RULES } from '../tasks/worker-rules.ts';
 import { resolveDcpConfig } from '../dcp/config.ts';
 import { resolveDoctrineConfig } from '../doctrine/config.ts';
@@ -198,6 +199,15 @@ export async function taskBrief(
     const std = selectStandardDcp(memoryAdapter, task, feature, dcpConfig, featureCreatedAt, allTasks);
     memories = std.memories;
     dcpMetrics = std.dcpMetrics;
+  }
+
+  // 8b. Record DCP injection trace (only for claimed tasks, mirrors doctrine trace)
+  if (task.status === 'claimed' && dcpMetrics.scores.length > 0) {
+    appendDcpTrace(
+      directory, feature, taskFolder,
+      task.revisionCount ?? 0,
+      dcpMetrics.scores.filter(s => s.included).map(s => ({ name: s.name, score: s.score })),
+    );
   }
 
   // 9. Completed tasks (newest-first, budget-capped)
