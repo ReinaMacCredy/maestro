@@ -64,6 +64,7 @@ async function main(): Promise<void> {
     taskTotal: status.tasks.total,
     taskDone: status.tasks.done,
     contextCount: status.context.count,
+    featureStatus: status.feature.status,
   });
   const researchTools = detectResearchTools(projectDir);
 

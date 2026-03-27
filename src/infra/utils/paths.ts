@@ -18,6 +18,7 @@ const REPORT_FILE = 'report.md';
 const APPROVED_FILE = 'APPROVED';
 const SPEC_FILE = 'spec.md';
 const HANDOFFS_DIR = 'handoffs';
+const CROSSAGENT_DIR = 'crossagent';
 const VERIFICATION_FILE = 'verification.json';
 
 export function normalizePath(filePath: string): string {
@@ -91,6 +92,15 @@ export function getHandoffPath(projectRoot: string, featureName: string, beadId:
 
 export function getTaskVerificationPath(projectRoot: string, featureName: string, taskFolder: string): string {
   return path.join(getTaskPath(projectRoot, featureName, taskFolder), VERIFICATION_FILE);
+}
+
+// ============================================================================
+// Cross-Agent Handoff Paths
+// ============================================================================
+
+export function getCrossAgentHandoffDir(projectRoot: string, featureName: string): string {
+  const safeName = featureName.replace(/[^a-z0-9-]/gi, '-');
+  return path.join(getMaestroPath(projectRoot), 'handoff', CROSSAGENT_DIR, safeName);
 }
 
 // ============================================================================

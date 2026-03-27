@@ -3,9 +3,9 @@
  * Updated for 6-state model (pending/claimed/done/blocked/review/revision).
  */
 
-import type { TaskStatusType } from '../../domain/types.ts';
+import type { FeatureStatusType, TaskStatusType } from '../../domain/types.ts';
 
-export type PipelineStage = 'discovery' | 'research' | 'planning' | 'approval' | 'execution' | 'done';
+export type PipelineStage = 'discovery' | 'research' | 'planning' | 'approval' | 'execution' | 'handoff' | 'done';
 
 export function derivePipelineStage(opts: {
   planExists: boolean;
@@ -13,7 +13,11 @@ export function derivePipelineStage(opts: {
   taskTotal: number;
   taskDone: number;
   contextCount: number;
+  featureStatus?: FeatureStatusType;
 }): PipelineStage {
+  if (opts.featureStatus === 'handed-off' || opts.featureStatus === 'review-pending') {
+    return 'handoff';
+  }
   if (!opts.planExists && opts.taskTotal === 0) {
     return opts.contextCount > 0 ? 'research' : 'discovery';
   }
@@ -47,7 +51,14 @@ export function getNextAction(
   planStatus: 'approved' | 'draft' | null,
   tasks: Array<{ status: TaskStatusType; folder: string }>,
   runnableTasks: string[],
+  featureStatus?: FeatureStatusType,
 ): string {
+  if (featureStatus === 'handed-off') {
+    return 'Feature handed off to another agent. Run maestro handoff-pickup --json to check status, or wait for handoff-report.';
+  }
+  if (featureStatus === 'review-pending') {
+    return 'Handoff report received. Review completed work and run maestro feature-complete --json when satisfied.';
+  }
   if (!planStatus || planStatus === 'draft') {
     return 'Write or revise plan with maestro plan-write, then get approval';
   }

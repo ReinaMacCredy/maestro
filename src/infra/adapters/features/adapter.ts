@@ -102,6 +102,12 @@ export class FsFeatureAdapter implements FeaturePort {
       if (status === 'approved' && !feature.approvedAt) {
         feature.approvedAt = new Date().toISOString();
       }
+      if (status === 'handed-off' && !feature.handedOffAt) {
+        feature.handedOffAt = new Date().toISOString();
+      }
+      if (status === 'review-pending' && !feature.reviewPendingAt) {
+        feature.reviewPendingAt = new Date().toISOString();
+      }
       if (status === 'completed' && !feature.completedAt) {
         feature.completedAt = new Date().toISOString();
       }

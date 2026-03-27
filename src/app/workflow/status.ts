@@ -108,6 +108,7 @@ export async function checkStatus(
     planStatus,
     tasks.map((task) => ({ status: task.status, folder: task.id })),
     runnableIds,
+    feature.status,
   );
 
   const dcpCfg = resolveDcpConfig(settings.dcp);

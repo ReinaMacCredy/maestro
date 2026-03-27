@@ -25,8 +25,11 @@ import cmdGraphPlan from './handlers/graph/plan.ts';
 import cmdGraphReserve from './handlers/graph/reserve.ts';
 import cmdHandoffAck from './handlers/handoff/handoff.ts';
 import cmdHandoffList from './handlers/handoff/list.ts';
+import cmdHandoffPickup from './handlers/handoff/pickup.ts';
+import cmdHandoffPlan from './handlers/handoff/plan.ts';
 import cmdHandoffRead from './handlers/handoff/read.ts';
 import cmdHandoffReceive from './handlers/handoff/receive.ts';
+import cmdHandoffReport from './handlers/handoff/report.ts';
 import cmdHandoffSend from './handlers/handoff/send.ts';
 import cmdHandoffStatus from './handlers/handoff/status.ts';
 import cmdHistory from './handlers/history.ts';
@@ -116,8 +119,11 @@ export const subCommands = {
   'graph-reserve': cmdGraphReserve,
   'handoff-ack': cmdHandoffAck,
   'handoff-list': cmdHandoffList,
+  'handoff-pickup': cmdHandoffPickup,
+  'handoff-plan': cmdHandoffPlan,
   'handoff-read': cmdHandoffRead,
   'handoff-receive': cmdHandoffReceive,
+  'handoff-report': cmdHandoffReport,
   'handoff-send': cmdHandoffSend,
   'handoff-status': cmdHandoffStatus,
   'history': cmdHistory,

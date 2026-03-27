@@ -7,7 +7,7 @@
 // Feature Types
 // ============================================================================
 
-export type FeatureStatusType = 'planning' | 'approved' | 'executing' | 'completed';
+export type FeatureStatusType = 'planning' | 'approved' | 'executing' | 'handed-off' | 'review-pending' | 'completed';
 
 export interface FeatureJson {
   name: string;
@@ -16,6 +16,8 @@ export interface FeatureJson {
   sessionId?: string;
   createdAt: string;
   approvedAt?: string;
+  handedOffAt?: string;
+  reviewPendingAt?: string;
   completedAt?: string;
 }
 

@@ -65,6 +65,13 @@ const STAGE_CONTENT: Record<PipelineStage, Omit<Playbook, 'tools'>> = {
     nextMilestone: 'All tasks done',
     antiPatterns: ["Don't skip maestro task-claim before working", "Don't mark done without verification"],
   },
+  handoff: {
+    stage: 'handoff',
+    objective: 'Cross-agent handoff in progress -- monitor or review results',
+    skills: [],
+    nextMilestone: 'Run maestro handoff-pickup --json to check status, or review with maestro handoff-report',
+    antiPatterns: ["Don't start new work on a handed-off feature", "Don't forget to review the handoff report before completing"],
+  },
   done: {
     stage: 'done',
     objective: 'Complete feature, promote memories, review doctrine',
