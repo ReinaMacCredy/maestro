@@ -15,6 +15,7 @@ export function getModifiedFiles(projectRoot: string): string[] {
       cwd: projectRoot,
       encoding: 'utf-8',
       timeout: DETECT_TIMEOUT_MS,
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
     return stdout.trim().split('\n').filter(Boolean);
   } catch {

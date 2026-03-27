@@ -3,7 +3,7 @@ import type { FeaturePort } from '../../domain/ports/feature.ts';
 import type { TaskPort } from '../../domain/ports/task.ts';
 import type { MemoryPort } from '../../domain/ports/memory.ts';
 import { MaestroError } from '../../domain/errors.ts';
-import scaffoldTemplate from '../../templates/plan-scaffold.md';
+import { PLAN_SCAFFOLD_TEMPLATE } from '../../templates/plan-scaffold.ts';
 import { queryHistoricalContext, type HistoricalPitfall } from '../dcp/historical.ts';
 
 /** Matches task headings at any sub-heading level: ### N. or #### N. etc. */
@@ -30,7 +30,7 @@ export interface WritePlanOpts {
 }
 
 function generateScaffold(featureName: string): string {
-  return scaffoldTemplate.replace('{{featureName}}', featureName);
+  return PLAN_SCAFFOLD_TEMPLATE.replace('{{featureName}}', featureName);
 }
 
 export async function writePlan(
@@ -56,7 +56,10 @@ export async function writePlan(
   if (!discoveryMatch) {
     throw new MaestroError(
       'Plan must include a "## Discovery" section',
-      ['Add a ## Discovery section documenting research findings']
+      [
+        'Add a ## Discovery section documenting research findings',
+        'Run `maestro plan-write --scaffold` to generate a valid template',
+      ],
     );
   }
   const discoveryContent = discoveryMatch[1].trim();
