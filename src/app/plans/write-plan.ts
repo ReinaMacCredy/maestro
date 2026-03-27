@@ -22,6 +22,7 @@ export interface WritePlanResult {
   taskCount: number;
   scaffold?: boolean;
   historicalPitfalls?: HistoricalPitfall[];
+  warnings?: string[];
 }
 
 export interface WritePlanOpts {
@@ -73,6 +74,24 @@ export async function writePlan(
   // Count task headings (### N. Task Name)
   const taskHeadings = content.match(TASK_HEADING_RE) || [];
 
+  // Warn if no tasks found but h2 numbered headings exist (common agent mistake)
+  const warnings: string[] = [];
+  if (taskHeadings.length === 0) {
+    const h2Numbered = content.match(/^##\s+\d+\.\s+.+$/gm);
+    if (h2Numbered && h2Numbered.length > 0) {
+      warnings.push(
+        `Found ${h2Numbered.length} task heading(s) at ## level (h2), but tasks must use ### or #### (h3/h4). ` +
+        `## is reserved for section headers (Discovery, Non-Goals, etc.). ` +
+        `Change "## 1." to "### 1." and rewrite.`
+      );
+    } else {
+      warnings.push(
+        'No task headings found. Use numbered headings like "### 1. Setup database" or "#### 1. Add tests". ' +
+        'Run `maestro plan-write --scaffold` to see the expected format.'
+      );
+    }
+  }
+
   const wasApproved = planAdapter.isApproved(featureName);
   if (wasApproved && services.taskPort) {
     const tasks = await services.taskPort.list(featureName, { includeAll: true });
@@ -107,5 +126,5 @@ export async function writePlan(
     }
   }
 
-  return { path: planPath, feature: featureName, taskCount: taskHeadings.length, historicalPitfalls };
+  return { path: planPath, feature: featureName, taskCount: taskHeadings.length, historicalPitfalls, ...(warnings.length > 0 && { warnings }) };
 }

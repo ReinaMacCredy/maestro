@@ -69,7 +69,13 @@ export default defineCommand({
       }
 
       const result = await writePlan(services, featureName, content, { dryRun });
-      output(result, (r) => `[ok] plan written for '${r.feature}' (${r.taskCount} task headings)${dryRun ? ' (dry run)' : ''}`);
+      output(result, (r) => {
+        let msg = `[ok] plan written for '${r.feature}' (${r.taskCount} task headings detected)${dryRun ? ' (dry run)' : ''}`;
+        if (r.warnings?.length) {
+          msg += '\n' + r.warnings.map((w: string) => `[warn] ${w}`).join('\n');
+        }
+        return msg;
+      });
     } catch (err) {
       handleCommandError('plan-write', err);
     }
