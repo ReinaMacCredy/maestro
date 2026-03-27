@@ -105,6 +105,28 @@ If a worker hits a blocker:
 
 Claims expire after `claimExpiresMinutes` (default 120). Expired claims are auto-reset to pending when `maestro task-next` is called.
 
+## Cross-Agent Handoff
+
+Hand off a planned feature to another agent (Codex, Gemini, etc.) for implementation, or pick up work from another agent.
+
+### Sending (from Claude)
+```bash
+maestro handoff-plan --to codex --json              # export plan + tasks for another agent
+```
+Requires: approved plan with synced tasks. Sets feature status to `handed-off`.
+
+### Receiving (from Codex or other agent)
+The receiving agent runs one prompt:
+```
+Run maestro handoff-pickup --json to check for pending handoffs. If one exists, implement the tasks following the quickstart instructions in the response. When all tasks are done, run maestro handoff-report with a summary. Always pass --json to all maestro commands.
+```
+
+### Reviewing (back in Claude)
+```bash
+maestro status --json                               # shows review-pending + next action
+```
+Review the work, then `maestro feature-complete --json` when satisfied.
+
 ## CLI Interface
 
 All commands accept `--json` for structured output. Use `maestro <command> --help` for full usage.
