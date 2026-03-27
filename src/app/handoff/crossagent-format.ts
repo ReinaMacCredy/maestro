@@ -98,12 +98,12 @@ export function buildQuickstart(feature: string, tasks: CrossAgentTask[]): strin
   lines.push('');
   lines.push('### 1. Claim a task');
   lines.push('```');
-  lines.push(`maestro task-claim --task ${taskExample} --agent-id <your-id> --json`);
+  lines.push(`maestro task-claim --feature ${feature} --task ${taskExample} --agent-id <your-id> --json`);
   lines.push('```');
   lines.push('');
   lines.push('### 2. Implement, then mark done');
   lines.push('```');
-  lines.push(`maestro task-done --task ${taskExample} --content "summary of work" --json`);
+  lines.push(`maestro task-done --feature ${feature} --task ${taskExample} --content "summary of work" --json`);
   lines.push('```');
   lines.push('');
   lines.push('### 3. Check remaining work');

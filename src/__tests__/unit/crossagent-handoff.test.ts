@@ -113,7 +113,7 @@ describe('buildQuickstart', () => {
       { id: '02-next', name: 'next', status: 'pending' },
     ];
     const qs = buildQuickstart('my-feat', tasks);
-    expect(qs).toContain('maestro task-claim --task 02-next');
+    expect(qs).toContain('maestro task-claim --feature my-feat --task 02-next');
   });
 
   it('uses placeholder when no pending tasks', () => {
@@ -121,7 +121,7 @@ describe('buildQuickstart', () => {
       { id: '01-done', name: 'done', status: 'done' },
     ];
     const qs = buildQuickstart('my-feat', tasks);
-    expect(qs).toContain('maestro task-claim --task <task-id>');
+    expect(qs).toContain('maestro task-claim --feature my-feat --task <task-id>');
   });
 
   it('includes --json on all commands', () => {
