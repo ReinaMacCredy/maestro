@@ -291,7 +291,7 @@ export class FsTaskAdapter implements TaskPort {
   private statusToInfo(folder: string, status: TaskStatus): TaskInfo {
     const { schemaVersion: _, ...rest } = status;
     const name = folder.replace(/^\d+-/, '');
-    return { id: name, folder, name, ...rest };
+    return { id: folder, folder, name, ...rest };
   }
 
   // Optional rich methods -- fs backend extracts from spec file

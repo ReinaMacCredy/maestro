@@ -50,7 +50,7 @@ export async function history(
   const taskStatsResults = await Promise.all(
     infos.map(async (info) => {
       try {
-        const tasks = await services.taskPort.list(info.name);
+        const tasks = await services.taskPort.list(info.name, { includeAll: true });
         return {
           total: tasks.length,
           done: tasks.filter((t) => t.status === 'done').length,

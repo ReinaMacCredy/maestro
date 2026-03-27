@@ -28,10 +28,11 @@ export default defineCommand({
       const featureName = requireFeature(services, args.feature, [FEATURE_HINT]);
       const result = await completeFeature(services, featureName, { dryRun: args['dry-run'] });
 
-      output(result, (r) => {
+      const enriched = { ...result, completedFeature: featureName, hint: `Feature '${featureName}' completed. Use --feature ${featureName} with subsequent commands.` };
+      output(enriched, (r) => {
         const { total, done } = r.tasksSummary;
         const suffix = args['dry-run'] ? ' (dry run)' : '';
-        return `[ok] feature '${featureName}' completed (${done}/${total} done)${suffix}`;
+        return `[ok] feature '${featureName}' completed (${done}/${total} done)${suffix}\n[hint] Use --feature ${featureName} with subsequent commands (no active feature set).`;
       });
     } catch (err) {
       handleCommandError('feature-complete', err);

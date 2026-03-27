@@ -268,19 +268,19 @@ describe('dependency ordering', () => {
     const t1 = JSON.parse(info1.stdout);
     expect(t1.dependsOn ?? []).toHaveLength(0);
 
-    // Task 2 depends on task 1 -- dependsOn stores task ids (not folder names)
+    // Task 2 depends on task 1 -- dependsOn stores task names (stripped, not folder names)
     const info2 = await harness.run('task-info', '--feature', 'test-feature', '--task', task2);
     expect(info2.exitCode).toBe(0);
     const t2 = JSON.parse(info2.stdout);
     expect(t2.dependsOn).toHaveLength(1);
-    expect(t2.dependsOn).toContain(t1.id);
+    expect(t2.dependsOn).toContain(t1.name);
 
     // Task 3 depends on task 2
     const info3 = await harness.run('task-info', '--feature', 'test-feature', '--task', task3);
     expect(info3.exitCode).toBe(0);
     const t3 = JSON.parse(info3.stdout);
     expect(t3.dependsOn).toHaveLength(1);
-    expect(t3.dependsOn).toContain(t2.id);
+    expect(t3.dependsOn).toContain(t2.name);
   });
 
   test('parallel deps: task 3 depends on both 1 and 2', async () => {
@@ -288,7 +288,7 @@ describe('dependency ordering', () => {
     const sync = await setupWithTasks(harness, PARALLEL_PLAN);
     const [task1, task2, task3] = sync.created;
 
-    // Fetch ids for task1 and task2 to check against dependsOn (which stores ids)
+    // Fetch names for task1 and task2 to check against dependsOn (which stores stripped names)
     const info1 = await harness.run('task-info', '--feature', 'test-feature', '--task', task1);
     const t1 = JSON.parse(info1.stdout);
     const info2 = await harness.run('task-info', '--feature', 'test-feature', '--task', task2);
@@ -297,8 +297,8 @@ describe('dependency ordering', () => {
     const info3 = await harness.run('task-info', '--feature', 'test-feature', '--task', task3);
     expect(info3.exitCode).toBe(0);
     const t3 = JSON.parse(info3.stdout);
-    expect(t3.dependsOn).toContain(t1.id);
-    expect(t3.dependsOn).toContain(t2.id);
+    expect(t3.dependsOn).toContain(t1.name);
+    expect(t3.dependsOn).toContain(t2.name);
   });
 
   test('completing a task allows dependent to be claimed', async () => {
