@@ -30,7 +30,7 @@ export default defineCommand({
       if (content === null) {
         throw new MaestroError(`memory '${args.name}' not found for feature '${featureName}'`);
       }
-      output(content, (c) => c);
+      output({ name: args.name, content }, (c) => c.content);
     } catch (err) {
       handleCommandError('memory-read', err);
     }

@@ -25,7 +25,8 @@ export default defineCommand({
     },
     summary: {
       type: 'string',
-      description: 'Summary of work completed (or use --file / --stdin)',
+      alias: 'content',
+      description: 'Summary of work completed (or use --content, --file, --stdin)',
     },
     file: {
       type: 'string',

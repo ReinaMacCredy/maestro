@@ -79,10 +79,10 @@ export default defineCommand({
         category: args.category,
       });
 
-      const result = args.global
+      const path = args.global
         ? memoryAdapter.writeGlobal(args.name, finalContent)
         : memoryAdapter.write(requireFeature(services, args.feature, [FEATURE_HINT]), args.name, finalContent);
-      output(result, (r) => `[ok] memory written --> ${r}`);
+      output({ name: args.name, path }, (r) => `[ok] memory written --> ${r.path}`);
     } catch (err) {
       handleCommandError('memory-write', err);
     }

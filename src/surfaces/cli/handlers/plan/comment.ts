@@ -19,7 +19,8 @@ export default defineCommand({
     },
     body: {
       type: 'string',
-      description: 'Comment body (or use --file / --stdin)',
+      alias: 'content',
+      description: 'Comment body (or use --content, --file, --stdin)',
     },
     file: {
       type: 'string',
