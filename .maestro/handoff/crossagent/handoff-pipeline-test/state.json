@@ -1,0 +1,10 @@
+{
+  "feature": "handoff-pipeline-test",
+  "status": "picked-up",
+  "fromHost": "codex",
+  "toAgent": "claude",
+  "createdAt": "2026-03-27T14:12:13.493Z",
+  "handoffPath": "/Users/reinamaccredy/Code/maestro/.maestro/handoff/crossagent/handoff-pipeline-test/handoff.md",
+  "pickedUpAt": "2026-03-27T14:12:24.599Z",
+  "pickedUpBy": "codex"
+}

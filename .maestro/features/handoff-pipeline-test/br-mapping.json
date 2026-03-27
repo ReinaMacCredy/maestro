@@ -1,0 +1,16 @@
+{
+  "folderToId": {
+    "maestro-2t5-write-plan-into-maestro-state": "maestro-2t5",
+    "maestro-3uk-approve-the-plan": "maestro-3uk",
+    "maestro-1s9-sync-tasks-from-the-plan": "maestro-1s9",
+    "maestro-2n8-generate-the-claude-handoff": "maestro-2n8",
+    "maestro-1tf-verify-claude-pickup": "maestro-1tf"
+  },
+  "idToFolder": {
+    "maestro-2t5": "maestro-2t5-write-plan-into-maestro-state",
+    "maestro-3uk": "maestro-3uk-approve-the-plan",
+    "maestro-1s9": "maestro-1s9-sync-tasks-from-the-plan",
+    "maestro-2n8": "maestro-2n8-generate-the-claude-handoff",
+    "maestro-1tf": "maestro-1tf-verify-claude-pickup"
+  }
+}
