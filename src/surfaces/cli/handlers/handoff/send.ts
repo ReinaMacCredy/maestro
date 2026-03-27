@@ -27,7 +27,8 @@ export default defineCommand({
     },
     context: {
       type: 'string',
-      description: 'Critical context to include',
+      alias: 'content',
+      description: 'Critical context to include (also accepts --content)',
     },
   },
   async run({ args }) {
