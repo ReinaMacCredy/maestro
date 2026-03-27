@@ -14,10 +14,8 @@ import { spawn } from 'child_process';
 import simpleGit from 'simple-git';
 import * as path from 'path';
 import { readJson } from '../../utils/fs-io.ts';
-import { extractKeywords } from '../../../app/dcp/relevance.ts';
-
-const MAX_BUILD_OUTPUT = 2048;
-const MIN_SUMMARY_LENGTH = 20;
+import { extractKeywords } from '../../../domain/text-utils.ts';
+import { MAX_BUILD_OUTPUT_BYTES, MIN_SUMMARY_LENGTH } from '../../../domain/constants.ts';
 
 export class FsVerificationAdapter implements VerificationPort {
   private config: ResolvedVerificationConfig;
@@ -102,7 +100,7 @@ export class FsVerificationAdapter implements VerificationPort {
         });
 
         proc.stderr.on('data', (chunk: Buffer) => {
-          if (stderr.length < MAX_BUILD_OUTPUT) {
+          if (stderr.length < MAX_BUILD_OUTPUT_BYTES) {
             stderr += chunk.toString();
           }
         });
@@ -116,7 +114,7 @@ export class FsVerificationAdapter implements VerificationPort {
               passed,
               detail: passed ? `Build passed (${command})` : `Build failed with exit code ${code}`,
             },
-            output: passed ? undefined : stderr.slice(0, MAX_BUILD_OUTPUT),
+            output: passed ? undefined : stderr.slice(0, MAX_BUILD_OUTPUT_BYTES),
           });
         });
 
@@ -131,7 +129,7 @@ export class FsVerificationAdapter implements VerificationPort {
                 ? `Build timed out after ${this.config.buildTimeoutMs}ms`
                 : `Build error: ${err.message}`,
             },
-            output: aborted ? undefined : stderr.slice(0, MAX_BUILD_OUTPUT),
+            output: aborted ? undefined : stderr.slice(0, MAX_BUILD_OUTPUT_BYTES),
           });
         });
       } catch (err) {

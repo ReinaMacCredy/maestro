@@ -10,7 +10,7 @@ import type { DoctrineItem, DoctrinePort, DoctrineStatus } from '../../../domain
 import { getDoctrinePath, getDoctrineItemPath } from '../../utils/paths.ts';
 import { readJson, writeJsonAtomic } from '../../utils/fs-io.ts';
 import { acquireLockSync } from '../../utils/locking.ts';
-import { extractKeywords, TAG_WEIGHT, KEYWORD_WEIGHT } from '../../../app/dcp/relevance.ts';
+import { extractKeywords, TAG_WEIGHT, KEYWORD_WEIGHT } from '../../../domain/text-utils.ts';
 
 export const CURRENT_SCHEMA_VERSION = 1;
 const RELEVANCE_THRESHOLD = 0.2;
