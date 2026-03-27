@@ -95,25 +95,36 @@ describe('formatCrossAgentHandoff', () => {
 // ============================================================================
 
 describe('buildQuickstart', () => {
-  it('produces 4 numbered sections', () => {
+  it('produces 5 numbered sections', () => {
     const tasks: CrossAgentTask[] = [
       { id: '01-setup', name: 'setup', status: 'pending' },
     ];
     const qs = buildQuickstart('my-feat', tasks);
 
-    expect(qs).toContain('### 1. Claim a task');
-    expect(qs).toContain('### 2. Implement, then mark done');
-    expect(qs).toContain('### 3. Check remaining work');
-    expect(qs).toContain('### 4. Report completion');
+    expect(qs).toContain('### 1. Find the next runnable task');
+    expect(qs).toContain('### 2. Claim and implement');
+    expect(qs).toContain('### 3. Mark done');
+    expect(qs).toContain('### 4. Repeat until all tasks done');
+    expect(qs).toContain('### 5. Report completion');
   });
 
-  it('uses first pending task ID as example', () => {
+  it('uses first runnable task ID as example', () => {
     const tasks: CrossAgentTask[] = [
       { id: '01-done', name: 'done', status: 'done' },
       { id: '02-next', name: 'next', status: 'pending' },
     ];
     const qs = buildQuickstart('my-feat', tasks);
     expect(qs).toContain('maestro task-claim --feature my-feat --task 02-next');
+  });
+
+  it('picks first task with no unmet deps', () => {
+    const tasks: CrossAgentTask[] = [
+      { id: 'aaa-blocked', name: 'blocked', status: 'pending', deps: ['zzz-first'] },
+      { id: 'zzz-first', name: 'first', status: 'pending' },
+    ];
+    const qs = buildQuickstart('my-feat', tasks);
+    expect(qs).toContain('--task zzz-first');
+    expect(qs).not.toContain('--task aaa-blocked');
   });
 
   it('uses placeholder when no pending tasks', () => {
@@ -132,9 +143,15 @@ describe('buildQuickstart', () => {
     }
   });
 
-  it('includes feature name in task-list and handoff-report', () => {
+  it('includes feature name in task-next and handoff-report', () => {
     const qs = buildQuickstart('my-feat', []);
     expect(qs).toContain('--feature my-feat');
+  });
+
+  it('recommends task-next for dependency ordering', () => {
+    const qs = buildQuickstart('my-feat', []);
+    expect(qs).toContain('task-next');
+    expect(qs).toContain('dependency order');
   });
 });
 

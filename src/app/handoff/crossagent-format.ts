@@ -89,37 +89,49 @@ export function formatCrossAgentHandoff(doc: CrossAgentDocument, quickstart: str
  * Build quickstart instructions for the receiving agent.
  */
 export function buildQuickstart(feature: string, tasks: CrossAgentTask[]): string {
-  const pendingTasks = tasks.filter((t) => t.status === 'pending');
-  const firstTask = pendingTasks[0];
-  const taskExample = firstTask ? firstTask.id : '<task-id>';
+  // Find first runnable task: pending with no unmet dependencies
+  const pendingIds = new Set(tasks.filter((t) => t.status !== 'done').map((t) => t.id));
+  const firstRunnable = tasks.find((t) => {
+    if (t.status !== 'pending') return false;
+    if (!t.deps || t.deps.length === 0) return true;
+    return t.deps.every((d) => !pendingIds.has(d));
+  });
+  const taskExample = firstRunnable ? firstRunnable.id : (tasks.find((t) => t.status === 'pending')?.id ?? '<task-id>');
 
   const lines: string[] = [];
   lines.push('This project uses `maestro` for agent coordination. Always pass `--json` to all commands.');
   lines.push('');
-  lines.push('### 1. Claim a task');
+  lines.push('### 1. Find the next runnable task');
+  lines.push('```');
+  lines.push(`maestro task-next --feature ${feature} --json`);
+  lines.push('```');
+  lines.push('This returns the next task whose dependencies are satisfied.');
+  lines.push('');
+  lines.push('### 2. Claim and implement');
   lines.push('```');
   lines.push(`maestro task-claim --feature ${feature} --task ${taskExample} --agent-id <your-id> --json`);
   lines.push('```');
   lines.push('');
-  lines.push('### 2. Implement, then mark done');
+  lines.push('### 3. Mark done');
   lines.push('```');
   lines.push(`maestro task-done --feature ${feature} --task ${taskExample} --content "summary of work" --json`);
   lines.push('```');
   lines.push('');
-  lines.push('### 3. Check remaining work');
+  lines.push('### 4. Repeat until all tasks done');
   lines.push('```');
-  lines.push(`maestro task-list --feature ${feature} --json`);
+  lines.push(`maestro task-next --feature ${feature} --json`);
   lines.push('```');
+  lines.push('When task-next returns no runnable tasks, all work is done.');
   lines.push('');
-  lines.push('### 4. Report completion');
+  lines.push('### 5. Report completion');
   lines.push('```');
   lines.push(`maestro handoff-report --feature ${feature} --content "Summary of all work done" --json`);
   lines.push('```');
   lines.push('');
   lines.push('### Tips');
-  lines.push('- Run `maestro status --json` anytime to orient');
-  lines.push('- If a task is blocked: `maestro task-block --task <id> --reason "..." --json`');
-  lines.push('- Tasks have dependencies -- claim only tasks with no pending deps');
+  lines.push(`- Run \`maestro status --feature ${feature} --json\` anytime to orient`);
+  lines.push(`- If a task is blocked: \`maestro task-block --feature ${feature} --task <id> --reason "..." --json\``);
+  lines.push('- Always use task-next to find runnable tasks -- it respects dependency order');
 
   return lines.join('\n');
 }
