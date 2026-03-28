@@ -8,6 +8,13 @@ export function registerHandoffPickupCommand(program: Command): void {
   program
     .command("handoff-pickup")
     .description("Read the latest (or specified) handoff payload")
+    .addHelpText("after", `
+Examples:
+  maestro handoff-pickup --json
+  maestro handoff-pickup --markdown
+  maestro handoff-pickup --list
+  maestro handoff-pickup --id 2026-03-28-001
+`)
     .option("--id <handoff-id>", "Pick up a specific handoff by ID")
     .option("--list", "List available handoffs without picking one up")
     .option("--markdown", "Output as readable markdown")

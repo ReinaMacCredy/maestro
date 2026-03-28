@@ -7,6 +7,11 @@ export function registerHandoffDigCommand(program: Command): void {
   program
     .command("handoff-dig")
     .description("Search previous session via CASS, scoped to a handoff")
+    .addHelpText("after", `
+Examples:
+  maestro handoff-dig "token refresh" --json
+  maestro handoff-dig "auth adapter" --id 2026-03-28-001 --limit 5
+`)
     .argument("<query>", "Search query")
     .option("--id <handoff-id>", "Scope search to a specific handoff")
     .option("--limit <n>", "Max results", "10")

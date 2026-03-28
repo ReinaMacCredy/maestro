@@ -7,6 +7,13 @@ export function registerHandoffCommand(program: Command): void {
   program
     .command("handoff")
     .description("Create a handoff payload for another agent")
+    .addHelpText("after", `
+Examples:
+  maestro handoff --sitrep "Auth done. Refresh blocked." --quickstart "Run: bun test"
+  maestro handoff --plan --sitrep "Phase 1 complete" --quickstart "Start phase 2"
+  maestro handoff --sitrep "Done" --quickstart "Continue" --message "Short summary"
+  maestro handoff --dry-run --sitrep "test" --quickstart "test"
+`)
     .requiredOption("--sitrep <text>", "Situation report (decisions, status, blockers)")
     .requiredOption("--quickstart <text>", "First steps for the receiving agent")
     .option("--plan", "Include plan state from .maestro/plan.json")
