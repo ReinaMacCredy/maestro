@@ -19,7 +19,10 @@ export const DEFAULT_PROMPT_TEMPLATE = `You are picking up a handoff from anothe
 Follow the quickstart in the handoff output.
 Read AGENTS.md for code style.
 {{#task}}Your task: {{task}}
-{{/task}}Use maestro handoff-report --content "summary of work done" --json when done.`;
+{{/task}}If you need more context about a decision or implementation detail, search the previous agent's conversation history:
+  maestro handoff-dig "<your question>" --json
+
+Use maestro handoff-report --content "summary of work done" --json when done.`;
 
 export const AGENT_INSTRUCTION_BLOCK = `## Cross-Agent Handoff (maestro)
 
