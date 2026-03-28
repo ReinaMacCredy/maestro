@@ -53,8 +53,9 @@ export async function removeIfExists(
 export async function dirExists(dir: string): Promise<boolean> {
   try {
     return (await stat(dir)).isDirectory();
-  } catch {
-    return false;
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw err;
   }
 }
 

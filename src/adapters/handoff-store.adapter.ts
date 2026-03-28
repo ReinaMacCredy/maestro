@@ -54,15 +54,13 @@ export class FsHandoffStoreAdapter implements HandoffStorePort {
     filter?: { status?: HandoffStatus },
   ): Promise<readonly HandoffEnvelope[]> {
     const dirs = await listDirs(this.handoffsRoot());
+    const ids = dirs.map((d) => basename(d));
 
-    const envelopes: HandoffEnvelope[] = [];
-    for (const dir of dirs) {
-      const id = basename(dir);
-      const envelope = await readJson<HandoffEnvelope>(this.envelopePath(id));
-      if (!envelope) continue;
-      if (filter?.status && envelope.status !== filter.status) continue;
-      envelopes.push(envelope);
-    }
+    const results = await Promise.all(ids.map((id) => this.get(id)));
+    const envelopes = results.filter(
+      (e): e is HandoffEnvelope =>
+        e !== undefined && (!filter?.status || e.status === filter.status),
+    );
 
     envelopes.sort((a, b) =>
       b.handoff.timestamp.localeCompare(a.handoff.timestamp),

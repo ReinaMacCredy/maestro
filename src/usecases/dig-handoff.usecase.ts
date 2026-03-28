@@ -41,7 +41,6 @@ export async function digHandoff(
 
   const { session } = envelope.handoff;
 
-  // Lazy indexing with sentinel to avoid re-indexing on repeated digs
   if (session.sourcePath) {
     const sentinel = join(opts.dir, MAESTRO_DIR, "handoffs", envelope.handoff.id, ".cass-indexed");
     if (!(await Bun.file(sentinel).exists())) {
