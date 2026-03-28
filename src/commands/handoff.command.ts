@@ -118,26 +118,41 @@ function printPrompt(prompt: string, agent?: string): void {
 function formatListTable(list: readonly HandoffEnvelope[]): string[] {
   if (list.length === 0) return ["No handoffs found"];
 
-  // Compute column widths
-  const idWidth = 16;
-  const statusWidth = Math.max(
-    6,
-    ...list.map((e) => formatStatus(e).length),
-  );
+  // Group by session
+  const groups = new Map<string, HandoffEnvelope[]>();
+  for (const e of list) {
+    const key = e.handoff.session.sessionId;
+    const group = groups.get(key) ?? [];
+    group.push(e);
+    groups.set(key, group);
+  }
 
-  const header = `  ${"ID".padEnd(idWidth)}  ${"Status".padEnd(statusWidth)}  Message`;
-  const sep = `  ${"----".padEnd(idWidth)}  ${"------".padEnd(statusWidth)}  -------`;
+  const lines: string[] = [`${list.length} handoff(s) across ${groups.size} session(s)`, ""];
 
-  const rows = list.map((e) => {
-    const id = e.handoff.id.padEnd(idWidth);
-    const status = formatStatus(e).padEnd(statusWidth);
-    const msg = e.handoff.message.length > 50
-      ? e.handoff.message.slice(0, 47) + "..."
-      : e.handoff.message;
-    return `  ${id}  ${status}  ${msg}`;
-  });
+  for (const [sessionId, envelopes] of groups) {
+    const first = envelopes[0]!;
+    const agent = first.handoff.session.agent;
+    const started = first.handoff.session.startedAt
+      ? new Date(first.handoff.session.startedAt).toLocaleString()
+      : "";
+    const label = sessionId === "none"
+      ? "No session"
+      : `${sessionId.slice(0, 8)} (${agent}${started ? ", " + started : ""})`;
 
-  return [`${list.length} handoff(s)`, "", header, sep, ...rows];
+    lines.push(`Session: ${label}`);
+
+    for (const e of envelopes) {
+      const status = formatStatus(e).padEnd(15);
+      const msg = e.handoff.message.length > 45
+        ? e.handoff.message.slice(0, 42) + "..."
+        : e.handoff.message;
+      lines.push(`  ${e.handoff.id}  ${status}  ${msg}`);
+    }
+
+    lines.push("");
+  }
+
+  return lines;
 }
 
 function formatStatus(e: HandoffEnvelope): string {
