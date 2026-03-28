@@ -45,15 +45,19 @@ export async function createHandoff(
     }),
   ]);
 
+  if (!sessionResult && !opts.noSession) {
+    throw new MaestroError("No session detected", [
+      "Get your session ID first: maestro session -q",
+      "Then: maestro handoff --session <id> ...",
+      "Or skip with --skip-session",
+    ]);
+  }
+
   const session: HandoffSession = sessionResult?.session ?? {
     agent: UNKNOWN_AGENT,
     sessionId: NO_SESSION_ID,
     sourcePath: "",
   };
-
-  if (!sessionResult && !opts.noSession) {
-    warn("Could not auto-detect session. Handoff will proceed without session reference.");
-  }
 
   let plan: HandoffPlan | undefined;
   if (opts.plan) {

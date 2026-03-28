@@ -42,7 +42,25 @@ describe("createHandoff", () => {
     }
   });
 
-  it("continues when session detection fails", async () => {
+  it("throws when session detection fails", async () => {
+    const sessionDetect = { detect: async () => undefined, resolve: async () => undefined };
+    const store = mockHandoffStore();
+
+    try {
+      await createHandoff(mockGit(), sessionDetect, { sessionDetection: { enabled: true, agents: ["claude-code"] } }, store, {
+        plan: false,
+        sitrep: "test",
+        quickstart: "test",
+        dir: process.cwd(),
+      });
+      expect(true).toBe(false);
+    } catch (err) {
+      expect(err).toBeInstanceOf(MaestroError);
+      expect((err as MaestroError).message).toContain("No session detected");
+    }
+  });
+
+  it("creates handoff with --skip-session when detection fails", async () => {
     const sessionDetect = { detect: async () => undefined, resolve: async () => undefined };
     const store = mockHandoffStore();
 
@@ -50,10 +68,12 @@ describe("createHandoff", () => {
       plan: false,
       sitrep: "test",
       quickstart: "test",
+      noSession: true,
       dir: process.cwd(),
     });
 
     expect(handoff.session.agent).toBe("unknown");
+    expect(handoff.session.sessionId).toBe("none");
   });
 
   it("uses message when provided", async () => {

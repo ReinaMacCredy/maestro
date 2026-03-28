@@ -24,10 +24,10 @@ Follow the quickstart in the handoff output.
 Read AGENTS.md for code style.
 {{#instructions}}Your instructions: {{instructions}}
 {{/instructions}}{{#task}}Your task: {{task}}
-{{/task}}If you need more context about a decision or implementation detail, search the previous agent's conversation history:
-  maestro handoff-dig "<your question>" --json
+{{/task}}{{#sessionId}}If you need more context about a decision or implementation detail, search the previous agent's conversation history:
+  maestro handoff-dig "<your question>" --id {{handoffId}} --json
 
-Use maestro handoff-report --content "summary of work done" --json when done.`;
+{{/sessionId}}Use maestro handoff-report --content "summary of work done" --json when done.`;
 
 export const AGENT_INSTRUCTION_BLOCK = `## Cross-Agent Handoff (maestro)
 

@@ -6,6 +6,7 @@ export interface GeneratePromptOpts {
   readonly agent?: string;
   readonly task?: string;
   readonly instructions?: string;
+  readonly sessionId?: string;
   readonly handoffId: string;
 }
 
@@ -20,6 +21,7 @@ export function generatePrompt(
     agent,
     task: opts.task ?? "",
     instructions: opts.instructions ?? "",
+    sessionId: opts.sessionId ?? "",
     handoffId: opts.handoffId,
   });
 }

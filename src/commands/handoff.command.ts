@@ -54,6 +54,7 @@ Examples:
           agent,
           handoffId,
           instructions: latest?.handoff.instructions,
+          sessionId: latest?.handoff.session.sessionId,
         });
         if (isJson) {
           output(true, { prompt, handoffId }, () => []);
@@ -101,6 +102,7 @@ Examples:
         agent,
         task: opts.task,
         instructions: opts.instructions,
+        sessionId: handoff.session.sessionId,
         handoffId: handoff.id,
       });
 
