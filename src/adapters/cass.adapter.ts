@@ -15,6 +15,11 @@ export class ShellCassAdapter implements CassPort {
     return result.exitCode === 0;
   }
 
+  async hasBinary(): Promise<boolean> {
+    const result = await execArgv(["which", this.cassPath]);
+    return result.exitCode === 0;
+  }
+
   async indexOnce(sessionPaths: readonly string[]): Promise<void> {
     if (sessionPaths.length === 0) return;
     const result = await execArgv(

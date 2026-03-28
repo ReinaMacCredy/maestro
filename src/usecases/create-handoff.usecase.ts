@@ -1,26 +1,25 @@
 import type { GitPort } from "../ports/git.port.js";
-import type { CassPort } from "../ports/cass.port.js";
 import type { SessionDetectPort } from "../ports/session-detect.port.js";
 import type { HandoffStorePort } from "../ports/handoff-store.port.js";
-import type { Handoff, HandoffPlan, HandoffSession } from "../domain/types.js";
+import type { GitState, Handoff, HandoffPlan, HandoffSession } from "../domain/types.js";
 import { generateHandoffId } from "../domain/id.js";
 import { MaestroError } from "../domain/errors.js";
-import { CASS_INSTALL_HINT, MAESTRO_DIR } from "../domain/defaults.js";
+import { MAESTRO_DIR } from "../domain/defaults.js";
 import { readJson } from "../lib/fs.js";
 import { warn } from "../lib/output.js";
 import { join } from "node:path";
 
 export interface CreateHandoffOpts {
   readonly plan: boolean;
-  readonly sitrep: string;
-  readonly quickstart: string;
+  readonly sitrep?: string;
+  readonly quickstart?: string;
+  readonly task?: string;
   readonly message?: string;
   readonly dir: string;
 }
 
 export async function createHandoff(
   git: GitPort,
-  cass: CassPort,
   sessionDetect: SessionDetectPort,
   store: HandoffStorePort,
   opts: CreateHandoffOpts,
@@ -36,27 +35,14 @@ export async function createHandoff(
     sessionDetect.detect(opts.dir),
   ]);
 
-  let session: HandoffSession = {
+  const session: HandoffSession = detected ?? {
     agent: "unknown",
     sessionId: "none",
     sourcePath: "",
     cassIndexed: false,
   };
 
-  if (detected) {
-    session = { ...detected };
-
-    if (await cass.isAvailable()) {
-      try {
-        await cass.indexOnce([detected.sourcePath]);
-        session = { ...session, cassIndexed: true };
-      } catch {
-        warn("CASS indexing failed, continuing without session index");
-      }
-    } else {
-      warn(`CASS not available. ${CASS_INSTALL_HINT}`);
-    }
-  } else {
+  if (!detected) {
     warn("Could not auto-detect session. Handoff will proceed without session reference.");
   }
 
@@ -69,17 +55,42 @@ export async function createHandoff(
   const existingIds = existing.map((e) => e.handoff.id);
   const id = generateHandoffId(existingIds);
 
+  const sitrep = opts.sitrep ?? formatAutoSitrep(gitState);
+  const quickstart = opts.quickstart ?? "See handoff briefing for orientation.";
+  const message = opts.message
+    ?? opts.task
+    ?? sitrep.slice(0, 80);
+
   const handoff: Handoff = {
     id,
     timestamp: new Date().toISOString(),
-    message: opts.message ?? opts.sitrep.slice(0, 80),
+    message,
     session,
     plan,
-    sitrep: opts.sitrep,
-    quickstart: opts.quickstart,
+    sitrep,
+    quickstart,
     git: gitState,
   };
 
   await store.create(handoff);
   return handoff;
+}
+
+function formatAutoSitrep(git: GitState): string {
+  const lines = [`Branch: ${git.branch}`];
+
+  if (git.recentCommits.length > 0) {
+    lines.push("Recent commits:");
+    for (const c of git.recentCommits.slice(0, 5)) {
+      lines.push(`- ${c}`);
+    }
+  }
+
+  lines.push(`Working tree: ${git.workingTreeClean ? "clean" : "dirty"}`);
+
+  if (git.diffStat !== "+0 -0") {
+    lines.push(`Diff: ${git.diffStat}`);
+  }
+
+  return lines.join("\n");
 }

@@ -68,6 +68,7 @@ export interface NoteEntry {
 
 export interface MaestroConfig {
   readonly defaultAgent?: AgentSlug;
+  readonly cassAvailable?: boolean;
   readonly cassPath?: string;
   readonly handoffDir?: string;
   readonly promptTemplate?: string;

@@ -12,12 +12,10 @@ export function registerHandoffCommand(program: Command): void {
     .description("Create a handoff payload for another agent")
     .addHelpText("after", `
 Examples:
-  maestro handoff --list
+  maestro handoff --prompt codex --task "implement note"    # fast mode (auto-sitrep)
   maestro handoff --sitrep "Auth done." --quickstart "Run: bun test"
-  maestro handoff --sitrep "Done" --quickstart "Continue" --prompt codex
-  maestro handoff --sitrep "Done" --quickstart "Continue" --prompt codex --task "create PR"
-  maestro handoff --prompt codex                    # prompt for latest pending handoff
-  maestro handoff --prompt codex --task "fix tests" # prompt with task for latest pending
+  maestro handoff --prompt codex                            # prompt for latest pending
+  maestro handoff --list
   maestro handoff --dry-run --sitrep "test" --quickstart "test"
 `)
     .option("--list", "List all handoffs with status")
@@ -39,8 +37,9 @@ Examples:
         return;
       }
 
-      // Prompt-only mode: --prompt without --sitrep/--quickstart
-      const isPromptOnly = opts.prompt !== undefined && !opts.sitrep && !opts.quickstart;
+      // Prompt-only mode: --prompt without any creation intent
+      const hasCreateIntent = opts.sitrep || opts.quickstart || opts.task || opts.plan;
+      const isPromptOnly = opts.prompt !== undefined && !hasCreateIntent;
 
       if (isPromptOnly) {
         const config = await services.config.load(process.cwd());
@@ -56,13 +55,6 @@ Examples:
         return;
       }
 
-      if (!opts.sitrep || !opts.quickstart) {
-        console.error("[!] --sitrep and --quickstart are required when creating a handoff");
-        console.error("    maestro handoff --sitrep '...' --quickstart '...'");
-        console.error("    maestro handoff --list   (to list existing handoffs)");
-        process.exit(1);
-      }
-
       if (opts.dryRun) {
         output(true, {
           dryRun: true,
@@ -70,19 +62,20 @@ Examples:
           quickstart: opts.quickstart,
           plan: opts.plan ?? false,
           message: opts.message,
+          task: opts.task,
         }, () => []);
         return;
       }
 
       const handoff = await createHandoff(
         services.git,
-        services.cass,
         services.sessionDetect,
         services.handoffStore,
         {
           plan: opts.plan ?? false,
           sitrep: opts.sitrep,
           quickstart: opts.quickstart,
+          task: opts.task,
           message: opts.message,
           dir: process.cwd(),
         },

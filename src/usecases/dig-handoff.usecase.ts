@@ -3,6 +3,7 @@ import type { CassPort } from "../ports/cass.port.js";
 import type { CassSearchResponse } from "../domain/types.js";
 import { MaestroError } from "../domain/errors.js";
 import { CASS_INSTALL_HINT } from "../domain/defaults.js";
+import { warn } from "../lib/output.js";
 
 export interface DigOpts {
   readonly id?: string;
@@ -36,12 +37,21 @@ export async function digHandoff(
     envelope = all[0];
     if (!envelope) {
       throw new MaestroError("No handoffs found to search", [
-        "Create one first: maestro handoff --sitrep '...' --quickstart '...'",
+        "Create one first: maestro handoff",
       ]);
     }
   }
 
   const { session } = envelope.handoff;
+
+  // Lazy indexing: ensure session is indexed before searching
+  if (session.sourcePath) {
+    try {
+      await cass.indexOnce([session.sourcePath]);
+    } catch {
+      warn("CASS indexing failed, searching with existing index");
+    }
+  }
 
   return cass.search(query, {
     agent: session.agent === "unknown" ? undefined : session.agent.replace("-", "_"),

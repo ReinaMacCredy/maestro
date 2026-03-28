@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { FsHandoffStoreAdapter } from "../../src/adapters/handoff-store.adapter.js";
 import { createHandoff } from "../../src/usecases/create-handoff.usecase.js";
 import { pickupHandoff } from "../../src/usecases/pickup-handoff.usecase.js";
-import { mockGit, mockCass, mockSessionDetect } from "../helpers/mocks.js";
+import { mockGit, mockSessionDetect } from "../helpers/mocks.js";
 
 let tmpDir: string;
 let store: FsHandoffStoreAdapter;
@@ -25,7 +25,6 @@ describe("Handoff roundtrip", () => {
     // Create
     const handoff = await createHandoff(
       mockGit(),
-      mockCass(),
       mockSessionDetect(),
       store,
       {
@@ -60,17 +59,16 @@ describe("Handoff roundtrip", () => {
 
   it("creates multiple handoffs with sequential IDs", async () => {
     const git = mockGit();
-    const cass = mockCass();
     const session = mockSessionDetect();
 
-    const h1 = await createHandoff(git, cass, session, store, {
+    const h1 = await createHandoff(git, session, store, {
       plan: false,
       sitrep: "First",
       quickstart: "Step 1",
       dir: tmpDir,
     });
 
-    const h2 = await createHandoff(git, cass, session, store, {
+    const h2 = await createHandoff(git, session, store, {
       plan: false,
       sitrep: "Second",
       quickstart: "Step 2",

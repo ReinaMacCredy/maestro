@@ -96,6 +96,7 @@ export function mockCass(
 ): CassPort {
   return {
     isAvailable: async () => true,
+    hasBinary: async () => true,
     indexOnce: async () => {},
     search: async (query): Promise<CassSearchResponse> => ({
       query,

@@ -82,9 +82,11 @@ describe("CLI integration", () => {
     expect(status).toHaveProperty("gitAvailable");
   });
 
-  it("handoff fails without required options", async () => {
-    const { exitCode } = await run(["handoff"]);
-    expect(exitCode).not.toBe(0);
+  it("handoff with no flags creates auto-generated handoff", async () => {
+    const { exitCode, stdout } = await run(["handoff", "--json"]);
+    expect(exitCode).toBe(0);
+    // Should contain auto-generated sitrep with branch info
+    expect(stdout).toContain("Branch:");
   });
 
   it("handoff --dry-run outputs plan without writing", async () => {
