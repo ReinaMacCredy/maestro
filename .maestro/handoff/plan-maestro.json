@@ -1,8 +1,0 @@
-{
-  "topic": "plan-maestro",
-  "status": "archived",
-  "started": "2026-02-23T12:00:00Z",
-  "completed": "2026-02-23T12:10:00Z",
-  "plan_destination": ".maestro/archive/plan-maestro.md",
-  "source": "maestro"
-}

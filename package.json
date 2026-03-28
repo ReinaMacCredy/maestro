@@ -1,13 +1,14 @@
 {
   "name": "maestro-handoff",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "bin": {
     "maestro": "./dist/maestro"
   },
   "scripts": {
     "build": "bun build src/index.ts --compile --outfile dist/maestro --target bun",
-    "deploy": "bun test && bun run build && cp ./dist/maestro ~/.local/bin/maestro",
+    "bump": "bun scripts/bump.ts",
+    "deploy": "bun run bump && bun test && bun run build && cp ./dist/maestro ~/.local/bin/maestro",
     "dev": "bun run src/index.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit"

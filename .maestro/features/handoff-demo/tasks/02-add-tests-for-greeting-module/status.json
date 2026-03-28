@@ -1,9 +1,0 @@
-{
-  "schemaVersion": 2,
-  "status": "pending",
-  "origin": "plan",
-  "planTitle": "Add tests for greeting module",
-  "dependsOn": [
-    "01-create-greeting-module"
-  ]
-}

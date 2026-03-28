@@ -1,7 +1,0 @@
-{
-  "schemaVersion": 2,
-  "status": "pending",
-  "origin": "plan",
-  "planTitle": "Create greeting module",
-  "dependsOn": []
-}
