@@ -3,6 +3,7 @@ import type { ConfigPort } from "../../src/ports/config.port.js";
 import type { HandoffStorePort } from "../../src/ports/handoff-store.port.js";
 import type { CassPort } from "../../src/ports/cass.port.js";
 import type { SessionDetectPort } from "../../src/ports/session-detect.port.js";
+import type { NotesStorePort } from "../../src/ports/notes-store.port.js";
 import type {
   GitState,
   MaestroConfig,
@@ -11,6 +12,7 @@ import type {
   HandoffStatus,
   CassSearchResponse,
   HandoffSession,
+  NoteEntry,
 } from "../../src/domain/types.js";
 
 export function mockGit(overrides: Partial<GitPort> = {}): GitPort {
@@ -102,6 +104,17 @@ export function mockCass(
       hits: [],
     }),
     ...overrides,
+  };
+}
+
+export function mockNotesStore(initial: NoteEntry[] = []): NotesStorePort {
+  const notes = [...initial];
+
+  return {
+    append: async (note) => {
+      notes.push(note);
+    },
+    list: async () => notes,
   };
 }
 

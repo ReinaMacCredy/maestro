@@ -10,6 +10,7 @@ import { registerHandoffDigCommand } from "./commands/handoff-dig.command.js";
 import { registerStatusCommand } from "./commands/status.command.js";
 import { registerHandoffReportCommand } from "./commands/handoff-report.command.js";
 import { registerDoctorCommand } from "./commands/doctor.command.js";
+import { registerNoteCommand } from "./commands/note.command.js";
 
 export const program = new Command()
   .name("maestro")
@@ -28,6 +29,7 @@ registerHandoffDigCommand(program);
 registerHandoffReportCommand(program);
 registerStatusCommand(program);
 registerDoctorCommand(program);
+registerNoteCommand(program);
 
 async function main(): Promise<void> {
   try {
