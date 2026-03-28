@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -60,6 +60,8 @@ describe("CLI integration", () => {
     expect(stdout).toContain("handoff ");
     expect(stdout).toContain("handoff-pickup");
     expect(stdout).toContain("handoff-dig");
+    expect(stdout).toContain("handoff-drop");
+    expect(stdout).toContain("handoff-cleanup");
     expect(stdout).toContain("note");
     expect(stdout).toContain("status");
     expect(stdout).toContain("doctor");
@@ -114,7 +116,7 @@ describe("CLI integration", () => {
       expect(exitCode).toBe(0);
     });
 
-    it("handoff --prompt includes stored instructions from latest pending handoff", async () => {
+  it("handoff --prompt includes stored instructions from latest pending handoff", async () => {
       await initGitRepo(tmpDir);
 
       const create = await run([
@@ -130,6 +132,43 @@ describe("CLI integration", () => {
       const prompt = await run(["handoff", "--prompt", "codex"], tmpDir);
       expect(prompt.exitCode).toBe(0);
       expect(prompt.stdout).toContain("Your instructions: Deploy to staging first");
+    });
+
+    it("handoff-drop deletes schema-invalid handoff directories", async () => {
+      const handoffDir = join(tmpDir, ".maestro", "handoffs", "2026-03-28-001");
+      await mkdir(handoffDir, { recursive: true });
+      await writeFile(join(handoffDir, "envelope.json"), JSON.stringify({ wrong: "schema" }));
+
+      const drop = await run([
+        "handoff-drop",
+        "--id", "2026-03-28-001",
+        "--json",
+      ], tmpDir);
+      expect(drop.exitCode).toBe(0);
+
+      const cleanup = await run(["handoff-cleanup", "--json"], tmpDir);
+      expect(cleanup.exitCode).toBe(0);
+      const result = JSON.parse(cleanup.stdout);
+      expect(result.count).toBe(0);
+      expect(result.deleted).toBe(false);
+    });
+
+    it("handoff-cleanup counts and deletes corrupted handoff directories", async () => {
+      const handoffDir = join(tmpDir, ".maestro", "handoffs", "2026-03-28-001");
+      await mkdir(handoffDir, { recursive: true });
+      await writeFile(join(handoffDir, "envelope.json"), "NOT VALID JSON{{{");
+
+      const preview = await run(["handoff-cleanup", "--json"], tmpDir);
+      expect(preview.exitCode).toBe(1);
+      const previewData = JSON.parse(preview.stdout);
+      expect(previewData.error).toContain("1 handoff(s) would be deleted");
+
+      const cleanup = await run(["handoff-cleanup", "--force", "--json"], tmpDir);
+      expect(cleanup.exitCode).toBe(0);
+      const result = JSON.parse(cleanup.stdout);
+      expect(result.count).toBe(1);
+      expect(result.deleted).toBe(true);
+      expect(result.ids).toEqual(["2026-03-28-001"]);
     });
 
     it("note writes a note and note --list returns it", async () => {

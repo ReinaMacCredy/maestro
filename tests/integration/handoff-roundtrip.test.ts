@@ -99,6 +99,67 @@ describe("Handoff roundtrip", () => {
     expect(envelope.handoff.instructions).toBe("Deploy to staging before PR review");
   });
 
+  it("drop removes a single handoff", async () => {
+    await createHandoff(mockGit(), mockSessionDetect(), { sessionDetection: { enabled: true, agents: ["claude-code"] } }, store, {
+      plan: false,
+      sitrep: "To be dropped",
+      quickstart: "N/A",
+      session: "test-session-123",
+      dir: tmpDir,
+    });
+
+    const before = await store.list();
+    expect(before).toHaveLength(1);
+    const id = before[0]!.handoff.id;
+
+    await store.delete(id);
+    const after = await store.list();
+    expect(after).toHaveLength(0);
+  });
+
+  it("cleanup deletes all handoffs", async () => {
+    const git = mockGit();
+    const session = mockSessionDetect();
+
+    await createHandoff(git, session, { sessionDetection: { enabled: true, agents: ["claude-code"] } }, store, {
+      plan: false, sitrep: "First", quickstart: "Step 1", session: "test-session-123", dir: tmpDir,
+    });
+    await createHandoff(git, session, { sessionDetection: { enabled: true, agents: ["claude-code"] } }, store, {
+      plan: false, sitrep: "Second", quickstart: "Step 2", session: "test-session-123", dir: tmpDir,
+    });
+
+    const all = await store.list();
+    expect(all).toHaveLength(2);
+
+    await Promise.all(all.map((e) => store.delete(e.handoff.id)));
+    const remaining = await store.list();
+    expect(remaining).toHaveLength(0);
+  });
+
+  it("list filters active-only (pending + picked-up)", async () => {
+    const git = mockGit();
+    const session = mockSessionDetect();
+
+    const h1 = await createHandoff(git, session, { sessionDetection: { enabled: true, agents: ["claude-code"] } }, store, {
+      plan: false, sitrep: "A", quickstart: "S", session: "test-session-123", dir: tmpDir,
+    });
+    await createHandoff(git, session, { sessionDetection: { enabled: true, agents: ["claude-code"] } }, store, {
+      plan: false, sitrep: "B", quickstart: "S", session: "test-session-123", dir: tmpDir,
+    });
+
+    // Pick up and complete the first one
+    await pickupHandoff(store, { agent: "codex", id: h1.id });
+    await store.updateStatus(h1.id, "completed", { completedAt: new Date().toISOString(), report: "done" });
+
+    // All should return both
+    const all = await store.list();
+    expect(all).toHaveLength(2);
+
+    // Active filter: only pending + picked-up
+    const active = all.filter((e) => e.status === "pending" || e.status === "picked-up");
+    expect(active).toHaveLength(1);
+  });
+
   it("handoff without instructions has undefined field", async () => {
     const handoff = await createHandoff(mockGit(), mockSessionDetect(), { sessionDetection: { enabled: true, agents: ["claude-code"] } }, store, {
       plan: false,

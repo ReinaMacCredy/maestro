@@ -71,6 +71,9 @@ export function mockHandoffStore(
         b.handoff.timestamp.localeCompare(a.handoff.timestamp),
       );
     },
+    delete: async (id: string) => {
+      envelopes.delete(id);
+    },
     updateStatus: async (
       id: string,
       status: HandoffStatus,

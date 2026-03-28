@@ -19,7 +19,8 @@ Examples:
   maestro handoff --prompt codex                            # prompt for latest pending
   maestro handoff --list
 `)
-    .option("--list", "List all handoffs with status")
+    .option("--list", "List handoffs (active only by default)")
+    .option("--all", "Include completed handoffs in --list")
     .option("--sitrep <text>", "Situation report (decisions, status, blockers)")
     .option("--quickstart <text>", "First steps for the receiving agent")
     .option("--plan", "Include plan state from .maestro/plan.json")
@@ -37,7 +38,10 @@ Examples:
 
       if (opts.list) {
         const all = await listHandoffs(services.handoffStore);
-        output(isJson, all, formatListTable);
+        const filtered = opts.all
+          ? all
+          : all.filter((e) => e.status === "pending" || e.status === "picked-up");
+        output(isJson, filtered, formatListTable);
         return;
       }
 

@@ -3,7 +3,7 @@ import type { Handoff, HandoffEnvelope, HandoffStatus } from "../domain/types.js
 import type { HandoffStorePort } from "../ports/handoff-store.port.js";
 import { MAESTRO_DIR } from "../domain/defaults.js";
 import { validateEnvelope, validateHandoff } from "../domain/validators.js";
-import { ensureDir, readJson, writeJson, listDirs } from "../lib/fs.js";
+import { ensureDir, readJson, writeJson, listDirs, removeIfExists } from "../lib/fs.js";
 
 export class FsHandoffStoreAdapter implements HandoffStorePort {
   constructor(private readonly baseDir: string) {}
@@ -98,5 +98,9 @@ export class FsHandoffStoreAdapter implements HandoffStorePort {
     const validatedEnvelope = validateEnvelope(updated);
     await writeJson(this.envelopePath(id), validatedEnvelope);
     return validatedEnvelope;
+  }
+
+  async delete(id: string): Promise<void> {
+    await removeIfExists(this.handoffDir(id), { recursive: true });
   }
 }

@@ -168,6 +168,30 @@ describe("FsHandoffStoreAdapter", () => {
     });
   });
 
+  describe("delete", () => {
+    it("removes handoff directory", async () => {
+      await store.create(makeHandoff());
+      expect(await store.get("2026-03-28-001")).toBeDefined();
+
+      await store.delete("2026-03-28-001");
+      expect(await store.get("2026-03-28-001")).toBeUndefined();
+    });
+
+    it("does not throw for non-existent handoff", async () => {
+      await expect(store.delete("does-not-exist")).resolves.toBeUndefined();
+    });
+
+    it("removes handoff from list results", async () => {
+      await store.create(makeHandoff({ id: "2026-03-28-001" }));
+      await store.create(makeHandoff({ id: "2026-03-28-002", timestamp: "2026-03-28T14:00:00Z" }));
+
+      await store.delete("2026-03-28-001");
+      const remaining = await store.list();
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0]!.handoff.id).toBe("2026-03-28-002");
+    });
+  });
+
   describe("updateStatus", () => {
     it("updates status to picked-up with metadata", async () => {
       await store.create(makeHandoff());
