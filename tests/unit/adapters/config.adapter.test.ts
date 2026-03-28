@@ -1,0 +1,66 @@
+import { describe, expect, it, beforeEach, afterEach } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { YamlConfigAdapter } from "../../../src/adapters/config.adapter.js";
+import { ensureDir } from "../../../src/lib/fs.js";
+
+let tmpDir: string;
+const config = new YamlConfigAdapter();
+
+beforeEach(async () => {
+  tmpDir = await mkdtemp(join(tmpdir(), "maestro-test-"));
+});
+
+afterEach(async () => {
+  await rm(tmpDir, { recursive: true, force: true });
+});
+
+describe("YamlConfigAdapter", () => {
+  describe("exists", () => {
+    it("returns false when no config file exists", async () => {
+      const result = await config.exists("project", tmpDir);
+      expect(result).toBe(false);
+    });
+
+    it("returns true after writing config", async () => {
+      await config.write("project", tmpDir, { defaultAgent: "codex" });
+      const result = await config.exists("project", tmpDir);
+      expect(result).toBe(true);
+    });
+  });
+
+  describe("write and load", () => {
+    it("round-trips config through yaml", async () => {
+      const input = { defaultAgent: "codex" as const, cassPath: "/usr/local/bin/cass" };
+      await config.write("project", tmpDir, input);
+      const loaded = await config.load(tmpDir);
+      expect(loaded.defaultAgent).toBe("codex");
+      expect(loaded.cassPath).toBe("/usr/local/bin/cass");
+    });
+
+    it("creates .maestro directory for project scope", async () => {
+      await config.write("project", tmpDir, {});
+      const file = Bun.file(join(tmpDir, ".maestro", "config.yaml"));
+      expect(await file.exists()).toBe(true);
+    });
+  });
+
+  describe("load with defaults", () => {
+    it("returns default config when no files exist", async () => {
+      const loaded = await config.load(tmpDir);
+      expect(loaded.sessionDetection?.enabled).toBe(true);
+      expect(loaded.sessionDetection?.agents).toContain("claude-code");
+    });
+
+    it("merges project config over defaults", async () => {
+      await config.write("project", tmpDir, {
+        defaultAgent: "gemini",
+        sessionDetection: { enabled: false, agents: [] },
+      });
+      const loaded = await config.load(tmpDir);
+      expect(loaded.defaultAgent).toBe("gemini");
+      expect(loaded.sessionDetection?.enabled).toBe(false);
+    });
+  });
+});
