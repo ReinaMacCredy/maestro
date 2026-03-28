@@ -1,5 +1,6 @@
 import type { GitPort } from "../ports/git.port.js";
 import type { SessionDetectPort } from "../ports/session-detect.port.js";
+import type { ConfigPort } from "../ports/config.port.js";
 import type { HandoffStorePort } from "../ports/handoff-store.port.js";
 import type { GitState, Handoff, HandoffPlan, HandoffSession } from "../domain/types.js";
 import { generateHandoffId } from "../domain/id.js";
@@ -7,6 +8,7 @@ import { MaestroError } from "../domain/errors.js";
 import { MAESTRO_DIR } from "../domain/defaults.js";
 import { readJson } from "../lib/fs.js";
 import { warn } from "../lib/output.js";
+import { detectSession } from "./detect-session.usecase.js";
 import { join } from "node:path";
 
 export interface CreateHandoffOpts {
@@ -15,12 +17,15 @@ export interface CreateHandoffOpts {
   readonly quickstart?: string;
   readonly task?: string;
   readonly message?: string;
+  readonly session?: string;
+  readonly noSession?: boolean;
   readonly dir: string;
 }
 
 export async function createHandoff(
   git: GitPort,
   sessionDetect: SessionDetectPort,
+  config: ConfigPort,
   store: HandoffStorePort,
   opts: CreateHandoffOpts,
 ): Promise<Handoff> {
@@ -30,19 +35,25 @@ export async function createHandoff(
     ]);
   }
 
-  const [gitState, detected] = await Promise.all([
+  const loadedConfig = await config.load(opts.dir);
+
+  const [gitState, sessionResult] = await Promise.all([
     git.getState(opts.dir),
-    sessionDetect.detect(opts.dir),
+    detectSession(sessionDetect, loadedConfig, {
+      cwd: opts.dir,
+      sessionId: opts.session,
+      noSession: opts.noSession,
+    }),
   ]);
 
-  const session: HandoffSession = detected ?? {
+  const session: HandoffSession = sessionResult?.session ?? {
     agent: "unknown",
     sessionId: "none",
     sourcePath: "",
     cassIndexed: false,
   };
 
-  if (!detected) {
+  if (!sessionResult && !opts.noSession) {
     warn("Could not auto-detect session. Handoff will proceed without session reference.");
   }
 

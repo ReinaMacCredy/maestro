@@ -3,6 +3,7 @@ import { createHandoff } from "../../../src/usecases/create-handoff.usecase.js";
 import { MaestroError } from "../../../src/domain/errors.js";
 import {
   mockGit,
+  mockConfig,
   mockSessionDetect,
   mockHandoffStore,
 } from "../../helpers/mocks.js";
@@ -10,17 +11,12 @@ import {
 describe("createHandoff", () => {
   it("creates a handoff with git state and session", async () => {
     const store = mockHandoffStore();
-    const handoff = await createHandoff(
-      mockGit(),
-      mockSessionDetect(),
-      store,
-      {
-        plan: false,
-        sitrep: "Auth done",
-        quickstart: "Run tests",
-        dir: process.cwd(),
-      },
-    );
+    const handoff = await createHandoff(mockGit(), mockSessionDetect(), mockConfig(), store, {
+      plan: false,
+      sitrep: "Auth done",
+      quickstart: "Run tests",
+      dir: process.cwd(),
+    });
 
     expect(handoff.id).toMatch(/^\d{4}-\d{2}-\d{2}-\d{3}$/);
     expect(handoff.sitrep).toBe("Auth done");
@@ -34,7 +30,7 @@ describe("createHandoff", () => {
     const store = mockHandoffStore();
 
     try {
-      await createHandoff(git, mockSessionDetect(), store, {
+      await createHandoff(git, mockSessionDetect(), mockConfig(), store, {
         plan: false,
         sitrep: "test",
         quickstart: "test",
@@ -47,69 +43,49 @@ describe("createHandoff", () => {
   });
 
   it("continues when session detection fails", async () => {
-    const sessionDetect = { detect: async () => undefined };
+    const sessionDetect = { detect: async () => undefined, resolve: async () => undefined };
     const store = mockHandoffStore();
 
-    const handoff = await createHandoff(
-      mockGit(),
-      sessionDetect,
-      store,
-      {
-        plan: false,
-        sitrep: "test",
-        quickstart: "test",
-        dir: process.cwd(),
-      },
-    );
+    const handoff = await createHandoff(mockGit(), sessionDetect, mockConfig(), store, {
+      plan: false,
+      sitrep: "test",
+      quickstart: "test",
+      dir: process.cwd(),
+    });
 
     expect(handoff.session.agent).toBe("unknown");
   });
 
   it("uses message when provided", async () => {
     const store = mockHandoffStore();
-    const handoff = await createHandoff(
-      mockGit(),
-      mockSessionDetect(),
-      store,
-      {
-        plan: false,
-        sitrep: "Full sitrep",
-        quickstart: "Steps",
-        message: "Short msg",
-        dir: process.cwd(),
-      },
-    );
+    const handoff = await createHandoff(mockGit(), mockSessionDetect(), mockConfig(), store, {
+      plan: false,
+      sitrep: "Full sitrep",
+      quickstart: "Steps",
+      message: "Short msg",
+      dir: process.cwd(),
+    });
 
     expect(handoff.message).toBe("Short msg");
   });
 
   it("uses task for message when no message provided", async () => {
     const store = mockHandoffStore();
-    const handoff = await createHandoff(
-      mockGit(),
-      mockSessionDetect(),
-      store,
-      {
-        plan: false,
-        task: "implement note command",
-        dir: process.cwd(),
-      },
-    );
+    const handoff = await createHandoff(mockGit(), mockSessionDetect(), mockConfig(), store, {
+      plan: false,
+      task: "implement note command",
+      dir: process.cwd(),
+    });
 
     expect(handoff.message).toBe("implement note command");
   });
 
   it("auto-generates sitrep from git state when not provided", async () => {
     const store = mockHandoffStore();
-    const handoff = await createHandoff(
-      mockGit(),
-      mockSessionDetect(),
-      store,
-      {
-        plan: false,
-        dir: process.cwd(),
-      },
-    );
+    const handoff = await createHandoff(mockGit(), mockSessionDetect(), mockConfig(), store, {
+      plan: false,
+      dir: process.cwd(),
+    });
 
     expect(handoff.sitrep).toContain("Branch: main");
     expect(handoff.sitrep).toContain("abc1234 feat: test");
@@ -118,15 +94,10 @@ describe("createHandoff", () => {
 
   it("auto-generates message from branch when nothing provided", async () => {
     const store = mockHandoffStore();
-    const handoff = await createHandoff(
-      mockGit(),
-      mockSessionDetect(),
-      store,
-      {
-        plan: false,
-        dir: process.cwd(),
-      },
-    );
+    const handoff = await createHandoff(mockGit(), mockSessionDetect(), mockConfig(), store, {
+      plan: false,
+      dir: process.cwd(),
+    });
 
     expect(handoff.message).toContain("main");
   });
@@ -134,17 +105,12 @@ describe("createHandoff", () => {
   it("truncates sitrep for auto-message", async () => {
     const store = mockHandoffStore();
     const longSitrep = "A".repeat(200);
-    const handoff = await createHandoff(
-      mockGit(),
-      mockSessionDetect(),
-      store,
-      {
-        plan: false,
-        sitrep: longSitrep,
-        quickstart: "Steps",
-        dir: process.cwd(),
-      },
-    );
+    const handoff = await createHandoff(mockGit(), mockSessionDetect(), mockConfig(), store, {
+      plan: false,
+      sitrep: longSitrep,
+      quickstart: "Steps",
+      dir: process.cwd(),
+    });
 
     expect(handoff.message.length).toBeLessThanOrEqual(80);
   });

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { FsHandoffStoreAdapter } from "../../src/adapters/handoff-store.adapter.js";
 import { createHandoff } from "../../src/usecases/create-handoff.usecase.js";
 import { pickupHandoff } from "../../src/usecases/pickup-handoff.usecase.js";
-import { mockGit, mockSessionDetect } from "../helpers/mocks.js";
+import { mockGit, mockConfig, mockSessionDetect } from "../helpers/mocks.js";
 
 let tmpDir: string;
 let store: FsHandoffStoreAdapter;
@@ -23,18 +23,13 @@ afterEach(async () => {
 describe("Handoff roundtrip", () => {
   it("create -> list -> pickup -> verify state transition", async () => {
     // Create
-    const handoff = await createHandoff(
-      mockGit(),
-      mockSessionDetect(),
-      store,
-      {
-        plan: false,
-        sitrep: "Auth module complete. JWT chosen over sessions.",
-        quickstart: "Run: bun test test/auth",
-        message: "Auth handoff",
-        dir: tmpDir,
-      },
-    );
+    const handoff = await createHandoff(mockGit(), mockSessionDetect(), mockConfig(), store, {
+      plan: false,
+      sitrep: "Auth module complete. JWT chosen over sessions.",
+      quickstart: "Run: bun test test/auth",
+      message: "Auth handoff",
+      dir: tmpDir,
+    });
 
     expect(handoff.id).toMatch(/^\d{4}-\d{2}-\d{2}-\d{3}$/);
     expect(handoff.sitrep).toContain("Auth module");
@@ -61,14 +56,14 @@ describe("Handoff roundtrip", () => {
     const git = mockGit();
     const session = mockSessionDetect();
 
-    const h1 = await createHandoff(git, session, store, {
+    const h1 = await createHandoff(git, session, mockConfig(), store, {
       plan: false,
       sitrep: "First",
       quickstart: "Step 1",
       dir: tmpDir,
     });
 
-    const h2 = await createHandoff(git, session, store, {
+    const h2 = await createHandoff(git, session, mockConfig(), store, {
       plan: false,
       sitrep: "Second",
       quickstart: "Step 2",

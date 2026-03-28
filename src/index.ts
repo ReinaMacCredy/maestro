@@ -14,6 +14,7 @@ import { registerNoteCommand } from "./commands/note.command.js";
 import { registerInstallCommand } from "./commands/install.command.js";
 import { registerUpdateCommand } from "./commands/update.command.js";
 import { registerUninstallCommand } from "./commands/uninstall.command.js";
+import { registerSessionCommand } from "./commands/session.command.js";
 
 export const program = new Command()
   .name("maestro")
@@ -33,6 +34,7 @@ registerHandoffReportCommand(program);
 registerStatusCommand(program);
 registerDoctorCommand(program);
 registerNoteCommand(program);
+registerSessionCommand(program);
 registerInstallCommand(program);
 registerUpdateCommand(program);
 registerUninstallCommand(program);

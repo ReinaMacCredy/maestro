@@ -17,6 +17,7 @@ export interface HandoffSession {
   readonly sessionId: string;
   readonly sourcePath: string;
   readonly cassIndexed: boolean;
+  readonly startedAt?: number;
 }
 
 export interface PlanTask {
@@ -75,6 +76,7 @@ export interface MaestroConfig {
   readonly sessionDetection?: {
     readonly enabled: boolean;
     readonly agents: readonly AgentSlug[];
+    readonly staleMinutes?: number;
   };
 }
 

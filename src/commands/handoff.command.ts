@@ -13,10 +13,10 @@ export function registerHandoffCommand(program: Command): void {
     .addHelpText("after", `
 Examples:
   maestro handoff --prompt codex --task "implement note"    # fast mode (auto-sitrep)
-  maestro handoff --sitrep "Auth done." --quickstart "Run: bun test"
+  maestro handoff --session $(maestro session -q) --prompt codex --task "fix auth"
+  maestro handoff --skip-session --prompt codex              # skip session detection
   maestro handoff --prompt codex                            # prompt for latest pending
   maestro handoff --list
-  maestro handoff --dry-run --sitrep "test" --quickstart "test"
 `)
     .option("--list", "List all handoffs with status")
     .option("--sitrep <text>", "Situation report (decisions, status, blockers)")
@@ -25,6 +25,8 @@ Examples:
     .option("--message <text>", "Short summary message")
     .option("--prompt [agent]", "Generate agent prompt (optionally specify agent name)")
     .option("--task <text>", "Task description to include in the prompt")
+    .option("--session <id>", "Use a specific session ID (prefix match supported)")
+    .option("--skip-session", "Skip session detection entirely")
     .option("--dry-run", "Show what would be written without writing")
     .option("--json", "Output as JSON")
     .action(async (opts) => {
@@ -70,6 +72,7 @@ Examples:
       const handoff = await createHandoff(
         services.git,
         services.sessionDetect,
+        services.config,
         services.handoffStore,
         {
           plan: opts.plan ?? false,
@@ -77,6 +80,8 @@ Examples:
           quickstart: opts.quickstart,
           task: opts.task,
           message: opts.message,
+          session: opts.session,
+          noSession: opts.skipSession,
           dir: process.cwd(),
         },
       );

@@ -123,13 +123,17 @@ export function mockNotesStore(initial: NoteEntry[] = []): NotesStorePort {
 export function mockSessionDetect(
   session?: HandoffSession,
 ): SessionDetectPort {
+  const defaultSession: HandoffSession = {
+    agent: "claude-code",
+    sessionId: "test-session-123",
+    sourcePath: "/tmp/sessions/test",
+    cassIndexed: false,
+  };
   return {
-    detect: async () =>
-      session ?? {
-        agent: "claude-code",
-        sessionId: "test-session-123",
-        sourcePath: "/tmp/sessions/test",
-        cassIndexed: false,
-      },
+    detect: async () => session ?? defaultSession,
+    resolve: async (_cwd, id) => {
+      const s = session ?? defaultSession;
+      return s.sessionId.startsWith(id) ? s : undefined;
+    },
   };
 }
