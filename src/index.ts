@@ -8,6 +8,7 @@ import { registerHandoffCommand } from "./commands/handoff.command.js";
 import { registerHandoffPickupCommand } from "./commands/handoff-pickup.command.js";
 import { registerHandoffDigCommand } from "./commands/handoff-dig.command.js";
 import { registerStatusCommand } from "./commands/status.command.js";
+import { registerHandoffReportCommand } from "./commands/handoff-report.command.js";
 import { registerDoctorCommand } from "./commands/doctor.command.js";
 
 export const program = new Command()
@@ -24,6 +25,7 @@ registerInitCommand(program);
 registerHandoffCommand(program);
 registerHandoffPickupCommand(program);
 registerHandoffDigCommand(program);
+registerHandoffReportCommand(program);
 registerStatusCommand(program);
 registerDoctorCommand(program);
 

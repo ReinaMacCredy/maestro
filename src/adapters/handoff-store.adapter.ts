@@ -66,7 +66,7 @@ export class FsHandoffStoreAdapter implements HandoffStorePort {
   async updateStatus(
     id: string,
     status: HandoffStatus,
-    meta?: { pickedUpBy?: string; completedAt?: string },
+    meta?: { pickedUpBy?: string; completedAt?: string; report?: string },
   ): Promise<void> {
     const envelope = await this.get(id);
     if (!envelope) {
@@ -83,6 +83,7 @@ export class FsHandoffStoreAdapter implements HandoffStorePort {
         pickedUpAt: new Date().toISOString(),
       }),
       ...(meta?.completedAt && { completedAt: meta.completedAt }),
+      ...(meta?.report && { report: meta.report }),
     };
 
     await writeJson(this.envelopePath(id), updated);

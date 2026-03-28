@@ -82,6 +82,8 @@ export function mockHandoffStore(
           pickedUpBy: meta.pickedUpBy,
           pickedUpAt: new Date().toISOString(),
         }),
+        ...(meta?.completedAt && { completedAt: meta.completedAt }),
+        ...(meta?.report && { report: meta.report }),
       });
     },
   };

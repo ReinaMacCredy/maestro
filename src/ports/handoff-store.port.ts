@@ -8,6 +8,6 @@ export interface HandoffStorePort {
   updateStatus(
     id: string,
     status: HandoffStatus,
-    meta?: { pickedUpBy?: string; completedAt?: string },
+    meta?: { pickedUpBy?: string; completedAt?: string; report?: string },
   ): Promise<void>;
 }

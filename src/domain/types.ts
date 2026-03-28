@@ -57,6 +57,7 @@ export interface HandoffEnvelope {
   readonly pickedUpAt?: string;
   readonly pickedUpBy?: AgentSlug;
   readonly completedAt?: string;
+  readonly report?: string;
 }
 
 export interface MaestroConfig {
