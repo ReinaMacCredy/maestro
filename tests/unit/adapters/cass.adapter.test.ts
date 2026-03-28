@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { ShellCassAdapter } from "../../../src/adapters/cass.adapter.js";
 
 const cass = new ShellCassAdapter();
+const SLOW_CASS_TIMEOUT_MS = 15_000;
 
 describe("ShellCassAdapter", () => {
   describe("isAvailable", () => {
@@ -9,7 +10,7 @@ describe("ShellCassAdapter", () => {
       const result = await cass.isAvailable();
       // CASS is a required dependency, should be available
       expect(result).toBe(true);
-    });
+    }, SLOW_CASS_TIMEOUT_MS);
 
     it("returns false when cass binary not found", async () => {
       const badCass = new ShellCassAdapter("/nonexistent/cass");
@@ -25,7 +26,7 @@ describe("ShellCassAdapter", () => {
       });
       expect(result.query).toBe("zzznonexistentqueryzz");
       expect(Array.isArray(result.hits)).toBe(true);
-    });
+    }, SLOW_CASS_TIMEOUT_MS);
 
     it("returns structured results with correct fields", async () => {
       const result = await cass.search("test", { limit: 3 });

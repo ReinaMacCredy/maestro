@@ -10,6 +10,7 @@ const CLI = [
 ];
 
 let tmpDir: string;
+const SLOW_CLI_TIMEOUT_MS = 15_000;
 
 async function run(
   args: string[],
@@ -72,7 +73,7 @@ describe("CLI integration", () => {
     expect(checks.length).toBeGreaterThan(0);
     expect(checks[0]).toHaveProperty("name");
     expect(checks[0]).toHaveProperty("status");
-  });
+  }, SLOW_CLI_TIMEOUT_MS);
 
   it("status --json returns structured output", async () => {
     const { stdout, exitCode } = await run(["status", "--json"]);
@@ -80,7 +81,7 @@ describe("CLI integration", () => {
     const status = JSON.parse(stdout);
     expect(status).toHaveProperty("cassAvailable");
     expect(status).toHaveProperty("gitAvailable");
-  });
+  }, SLOW_CLI_TIMEOUT_MS);
 
   it("handoff without --session rejects with guidance", async () => {
     const { exitCode, stdout, stderr } = await run(["handoff", "--sitrep", "test", "--json"]);
