@@ -122,7 +122,8 @@ async function resolveCodexSession(
     const glob = new Bun.Glob(`**/*-${threadId}*.jsonl`);
     for await (const path of glob.scan({ cwd: CODEX_SESSIONS_DIR, absolute: true })) {
       const filename = basename(path);
-      const idMatch = filename.match(/rollout-[^-]+-(.+)\.jsonl$/);
+      // Extract thread ID: rollout-YYYY-MM-DDTHH-MM-SS-<threadId>.jsonl
+      const idMatch = filename.match(/rollout-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-(.+)\.jsonl$/);
       const fullId = idMatch?.[1] ?? threadId;
 
       if (fullId === threadId || fullId.startsWith(threadId)) {
