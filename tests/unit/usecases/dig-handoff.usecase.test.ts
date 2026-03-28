@@ -41,7 +41,7 @@ describe("digHandoff", () => {
     });
     const store = mockHandoffStore([makeEnvelope()]);
 
-    await digHandoff(store, cass, "token refresh", { id: "2026-03-28-001" });
+    await digHandoff(store, cass, "token refresh", { id: "2026-03-28-001", dir: "/tmp" });
     expect(searchQuery).toBe("token refresh");
     expect(searchOpts.agent).toBe("claude_code");
   });
@@ -51,7 +51,7 @@ describe("digHandoff", () => {
     const store = mockHandoffStore([makeEnvelope()]);
 
     try {
-      await digHandoff(store, cass, "test", {});
+      await digHandoff(store, cass, "test", { dir: "/tmp" });
       expect(true).toBe(false);
     } catch (err) {
       expect(err).toBeInstanceOf(MaestroError);
@@ -64,7 +64,7 @@ describe("digHandoff", () => {
     const store = mockHandoffStore();
 
     try {
-      await digHandoff(store, cass, "test", {});
+      await digHandoff(store, cass, "test", { dir: "/tmp" });
       expect(true).toBe(false);
     } catch (err) {
       expect(err).toBeInstanceOf(MaestroError);

@@ -1,5 +1,5 @@
 import type { ConfigPort } from "../ports/config.port.js";
-import type { MaestroConfig } from "../domain/types.js";
+import { DEFAULT_CONFIG, MAESTRO_DIR } from "../domain/defaults.js";
 import { ensureDir } from "../lib/fs.js";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -9,13 +9,6 @@ export interface InitResult {
   readonly scope: "global" | "project";
 }
 
-const DEFAULT_CONFIG: MaestroConfig = {
-  sessionDetection: {
-    enabled: true,
-    agents: ["claude-code"],
-  },
-};
-
 export async function initMaestro(
   config: ConfigPort,
   opts: { global: boolean; dir: string },
@@ -24,7 +17,7 @@ export async function initMaestro(
   const created: string[] = [];
 
   if (opts.global) {
-    const globalDir = join(homedir(), ".maestro");
+    const globalDir = join(homedir(), MAESTRO_DIR);
     await ensureDir(globalDir);
     created.push(globalDir);
 
@@ -33,7 +26,7 @@ export async function initMaestro(
       created.push(join(globalDir, "config.yaml"));
     }
   } else {
-    const maestroDir = join(opts.dir, ".maestro");
+    const maestroDir = join(opts.dir, MAESTRO_DIR);
     const handoffsDir = join(maestroDir, "handoffs");
     await ensureDir(maestroDir);
     await ensureDir(handoffsDir);

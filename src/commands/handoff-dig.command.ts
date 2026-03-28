@@ -25,6 +25,7 @@ Examples:
         {
           id: opts.id,
           limit: parseInt(opts.limit, 10),
+          dir: process.cwd(),
         },
       );
 

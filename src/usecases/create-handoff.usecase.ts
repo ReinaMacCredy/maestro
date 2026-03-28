@@ -5,6 +5,7 @@ import type { HandoffStorePort } from "../ports/handoff-store.port.js";
 import type { Handoff, HandoffPlan, HandoffSession } from "../domain/types.js";
 import { generateHandoffId } from "../domain/id.js";
 import { MaestroError } from "../domain/errors.js";
+import { CASS_INSTALL_HINT, MAESTRO_DIR } from "../domain/defaults.js";
 import { readJson } from "../lib/fs.js";
 import { warn } from "../lib/output.js";
 import { join } from "node:path";
@@ -24,15 +25,17 @@ export async function createHandoff(
   store: HandoffStorePort,
   opts: CreateHandoffOpts,
 ): Promise<Handoff> {
-  // Collect git state
   if (!(await git.isRepo(opts.dir))) {
     throw new MaestroError("Not a git repository", [
-      `Run this command from inside a git repo`,
+      "Run this command from inside a git repo",
     ]);
   }
-  const gitState = await git.getState(opts.dir);
 
-  // Detect session
+  const [gitState, detected] = await Promise.all([
+    git.getState(opts.dir),
+    sessionDetect.detect(opts.dir),
+  ]);
+
   let session: HandoffSession = {
     agent: "unknown",
     sessionId: "none",
@@ -40,11 +43,9 @@ export async function createHandoff(
     cassIndexed: false,
   };
 
-  const detected = await sessionDetect.detect(opts.dir);
   if (detected) {
     session = { ...detected };
 
-    // Try to index via CASS
     if (await cass.isAvailable()) {
       try {
         await cass.indexOnce([detected.sourcePath]);
@@ -53,19 +54,17 @@ export async function createHandoff(
         warn("CASS indexing failed, continuing without session index");
       }
     } else {
-      warn("CASS not available. Install: brew install dicklesworthstone/tap/cass");
+      warn(`CASS not available. ${CASS_INSTALL_HINT}`);
     }
   } else {
     warn("Could not auto-detect session. Handoff will proceed without session reference.");
   }
 
-  // Read plan if requested
   let plan: HandoffPlan | undefined;
   if (opts.plan) {
-    plan = await readJson<HandoffPlan>(join(opts.dir, ".maestro", "plan.json"));
+    plan = await readJson<HandoffPlan>(join(opts.dir, MAESTRO_DIR, "plan.json"));
   }
 
-  // Generate ID from existing handoffs
   const existing = await store.list();
   const existingIds = existing.map((e) => e.handoff.id);
   const id = generateHandoffId(existingIds);

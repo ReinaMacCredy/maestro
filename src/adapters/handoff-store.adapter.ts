@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import type { Handoff, HandoffEnvelope, HandoffStatus } from "../domain/types.js";
 import type { HandoffStorePort } from "../ports/handoff-store.port.js";
+import { MaestroError } from "../domain/errors.js";
 import { ensureDir, readJson, writeJson, listDirs } from "../lib/fs.js";
 
 export class FsHandoffStoreAdapter implements HandoffStorePort {
@@ -69,7 +70,9 @@ export class FsHandoffStoreAdapter implements HandoffStorePort {
   ): Promise<void> {
     const envelope = await this.get(id);
     if (!envelope) {
-      throw new Error(`Handoff ${id} not found`);
+      throw new MaestroError(`Handoff ${id} not found`, [
+        "List handoffs: maestro handoff --list",
+      ]);
     }
 
     const updated: HandoffEnvelope = {

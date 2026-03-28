@@ -2,10 +2,12 @@ import type { HandoffStorePort } from "../ports/handoff-store.port.js";
 import type { CassPort } from "../ports/cass.port.js";
 import type { CassSearchResponse } from "../domain/types.js";
 import { MaestroError } from "../domain/errors.js";
+import { CASS_INSTALL_HINT } from "../domain/defaults.js";
 
 export interface DigOpts {
   readonly id?: string;
   readonly limit?: number;
+  readonly dir: string;
 }
 
 export async function digHandoff(
@@ -16,18 +18,17 @@ export async function digHandoff(
 ): Promise<CassSearchResponse> {
   if (!(await cass.isAvailable())) {
     throw new MaestroError("CASS is not available", [
-      "Install: brew install dicklesworthstone/tap/cass",
+      CASS_INSTALL_HINT,
       "Then: cass index",
     ]);
   }
 
-  // Find the handoff to scope the search
   let envelope;
   if (opts.id) {
     envelope = await store.get(opts.id);
     if (!envelope) {
       throw new MaestroError(`Handoff ${opts.id} not found`, [
-        "List available handoffs: maestro handoff-pickup --list",
+        "List handoffs: maestro handoff --list",
       ]);
     }
   } else {
@@ -44,7 +45,7 @@ export async function digHandoff(
 
   return cass.search(query, {
     agent: session.agent === "unknown" ? undefined : session.agent.replace("-", "_"),
-    workspace: process.cwd(),
+    workspace: opts.dir,
     limit: opts.limit,
   });
 }

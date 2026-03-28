@@ -1,6 +1,6 @@
 import type { CassSearchResponse, CassSearchResult } from "../domain/types.js";
 import type { CassPort } from "../ports/cass.port.js";
-import { exec } from "../lib/shell.js";
+import { execArgv } from "../lib/shell.js";
 import { warn } from "../lib/output.js";
 
 export class ShellCassAdapter implements CassPort {
@@ -11,15 +11,14 @@ export class ShellCassAdapter implements CassPort {
   }
 
   async isAvailable(): Promise<boolean> {
-    const result = await exec(`${this.cassPath} health --json`);
+    const result = await execArgv([this.cassPath, "health", "--json"]);
     return result.exitCode === 0;
   }
 
   async indexOnce(sessionPaths: readonly string[]): Promise<void> {
     if (sessionPaths.length === 0) return;
-    const paths = sessionPaths.join(",");
-    const result = await exec(
-      `${this.cassPath} index --watch-once ${paths} --json`,
+    const result = await execArgv(
+      [this.cassPath, "index", "--watch-once", sessionPaths.join(","), "--json"],
       { timeout: 60_000 },
     );
     if (result.exitCode !== 0) {
@@ -35,17 +34,17 @@ export class ShellCassAdapter implements CassPort {
       limit?: number;
     },
   ): Promise<CassSearchResponse> {
-    const args = [`search`, `"${escapeShell(query)}"`, "--json"];
+    const argv = [this.cassPath, "search", query, "--json"];
 
     if (options.agent) {
-      args.push("--agent", options.agent);
+      argv.push("--agent", options.agent);
     }
     if (options.workspace) {
-      args.push("--workspace", options.workspace);
+      argv.push("--workspace", options.workspace);
     }
-    args.push("--limit", String(options.limit ?? 10));
+    argv.push("--limit", String(options.limit ?? 10));
 
-    const result = await exec(`${this.cassPath} ${args.join(" ")}`);
+    const result = await execArgv(argv);
 
     if (result.exitCode !== 0) {
       return { query, count: 0, totalMatches: 0, hits: [] };
@@ -53,10 +52,6 @@ export class ShellCassAdapter implements CassPort {
 
     return parseCassSearchOutput(query, result.stdout);
   }
-}
-
-function escapeShell(s: string): string {
-  return s.replace(/'/g, "'\\''");
 }
 
 function parseCassSearchOutput(

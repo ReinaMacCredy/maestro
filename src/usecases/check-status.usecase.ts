@@ -25,7 +25,7 @@ export async function checkStatus(
     git.isRepo(dir),
   ]);
 
-  const configSource = projectConfigExists
+  const configSource: StatusReport["configSource"] = projectConfigExists
     ? "project"
     : globalConfigExists
       ? "global"
@@ -33,7 +33,7 @@ export async function checkStatus(
 
   return {
     initialized: projectConfigExists || globalConfigExists,
-    configSource: configSource as "project" | "global" | "none",
+    configSource,
     pendingHandoffs,
     cassAvailable,
     gitAvailable,
