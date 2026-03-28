@@ -10,12 +10,14 @@ export function registerHandoffPickupCommand(program: Command): void {
     .description("Read the latest (or specified) handoff payload")
     .addHelpText("after", `
 Examples:
-  maestro handoff-pickup --json
-  maestro handoff-pickup --markdown
-  maestro handoff-pickup --list
+  maestro handoff-pickup --json            # pick up and mark as picked-up
+  maestro handoff-pickup --peek --json     # view without consuming
+  maestro handoff-pickup --markdown        # pick up as readable briefing
+  maestro handoff-pickup --list            # list all handoffs with status
   maestro handoff-pickup --id 2026-03-28-001
 `)
     .option("--id <handoff-id>", "Pick up a specific handoff by ID")
+    .option("--peek", "View the handoff without marking it as picked up")
     .option("--list", "List available handoffs without picking one up")
     .option("--markdown", "Output as readable markdown")
     .option("--json", "Output as JSON (default)")
@@ -42,6 +44,7 @@ Examples:
       const envelope = await pickupHandoff(services.handoffStore, {
         id: opts.id,
         agent: "unknown",
+        peek: opts.peek,
       });
 
       if (opts.markdown) {

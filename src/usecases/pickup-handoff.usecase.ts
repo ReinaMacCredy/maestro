@@ -5,6 +5,7 @@ import { MaestroError } from "../domain/errors.js";
 export interface PickupOpts {
   readonly id?: string;
   readonly agent: string;
+  readonly peek?: boolean;
 }
 
 export async function pickupHandoff(
@@ -29,7 +30,7 @@ export async function pickupHandoff(
     }
   }
 
-  if (envelope.status === "pending") {
+  if (envelope.status === "pending" && !opts.peek) {
     await store.updateStatus(envelope.handoff.id, "picked-up", {
       pickedUpBy: opts.agent,
     });
