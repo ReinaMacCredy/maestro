@@ -126,6 +126,22 @@ describe('cross-agent handoff lifecycle', () => {
     expect(parsed.feature).toBe('auto-test');
   });
 
+  test('handoff-pickup rejects completed handoff', async () => {
+    harness = await createTestHarness();
+    await harness.run('init');
+    await harness.run('feature-create', 'completed-test');
+    await harness.run('plan-write', '--content', VALID_PLAN);
+    await harness.run('plan-approve');
+    await harness.run('task-sync');
+    await harness.run('handoff-plan', '--to', 'codex');
+    await harness.run('handoff-pickup', '--feature', 'completed-test');
+    await harness.run('handoff-report', '--feature', 'completed-test', '--content', 'Done');
+
+    const result = await harness.run('handoff-pickup', '--feature', 'completed-test');
+    expect(result.exitCode).not.toBe(0);
+    expect(getErrorText(result)).toContain('already completed');
+  });
+
   test('handoff-report requires content', async () => {
     harness = await createTestHarness();
     await harness.run('init');

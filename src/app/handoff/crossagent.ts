@@ -265,13 +265,29 @@ export function pickupCrossAgentHandoff(
     ]);
   }
 
-  // Update state to picked-up (idempotent)
+  // Reject completed handoffs
+  if (state.status === 'completed') {
+    throw new MaestroError(`Handoff for '${featureName}' is already completed`, [
+      'Check the report: maestro status --json',
+      'Create a new handoff: maestro handoff-plan --to <agent> --json',
+    ]);
+  }
+
+  const currentHost = detectHost();
+
+  // Update state to picked-up, or re-claim from wrong agent
   if (state.status === 'pending') {
     state.status = 'picked-up';
     state.pickedUpAt = new Date().toISOString();
-    state.pickedUpBy = detectHost();
+    state.pickedUpBy = currentHost;
+    writeJsonAtomic(statePath, state);
+  } else if (state.status === 'picked-up' && state.pickedUpBy !== currentHost) {
+    // Re-claim: intended agent taking over from wrong agent
+    state.pickedUpAt = new Date().toISOString();
+    state.pickedUpBy = currentHost;
     writeJsonAtomic(statePath, state);
   }
+  // else: picked-up by same host -- idempotent, no state change
 
   // Parse plan and tasks from the markdown (or use state for feature name)
   // Extract plan section between ## Plan and next ##

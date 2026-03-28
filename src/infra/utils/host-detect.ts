@@ -12,7 +12,7 @@ let _cached: HostType | undefined;
 export function detectHost(): HostType {
   if (_cached !== undefined) return _cached;
 
-  if (process.env.CLAUDE_PROJECT_DIR || process.env.CLAUDE_SESSION_ID) {
+  if (process.env.CLAUDE_PROJECT_DIR || process.env.CLAUDE_SESSION_ID || process.env.CLAUDECODE) {
     _cached = 'claude-code';
   } else if (process.env.CODEX_CI || process.env.CODEX_THREAD_ID) {
     _cached = 'codex';

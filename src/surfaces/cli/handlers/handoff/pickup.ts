@@ -26,6 +26,7 @@ export default defineCommand({
         let text = `[ok] handoff picked up for '${r.feature}' (${r.tasks.length} tasks)`;
         text += `\n  status: ${r.state.status}`;
         text += `\n  from: ${r.state.fromHost}`;
+        if (r.state.toAgent) text += `\n  to: ${r.state.toAgent}`;
         return text;
       });
     } catch (err) {

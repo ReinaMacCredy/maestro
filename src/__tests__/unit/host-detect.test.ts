@@ -1,13 +1,17 @@
-import { describe, test, expect, afterEach } from 'bun:test';
+import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { detectHost, isHosted, _resetHostDetection } from '../../infra/utils/host-detect.ts';
 
-afterEach(() => {
+function clearHostEnv() {
   _resetHostDetection();
   delete process.env.CLAUDE_PROJECT_DIR;
   delete process.env.CLAUDE_SESSION_ID;
+  delete process.env.CLAUDECODE;
   delete process.env.CODEX_CI;
   delete process.env.CODEX_THREAD_ID;
-});
+}
+
+beforeEach(clearHostEnv);
+afterEach(clearHostEnv);
 
 describe('detectHost', () => {
   test('returns standalone when no host env vars', () => {
@@ -21,6 +25,11 @@ describe('detectHost', () => {
 
   test('detects claude-code from CLAUDE_SESSION_ID', () => {
     process.env.CLAUDE_SESSION_ID = 'abc123';
+    expect(detectHost()).toBe('claude-code');
+  });
+
+  test('detects claude-code from CLAUDECODE', () => {
+    process.env.CLAUDECODE = '1';
     expect(detectHost()).toBe('claude-code');
   });
 

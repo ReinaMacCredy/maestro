@@ -1,0 +1,10 @@
+{
+  "folderToId": {
+    "maestro-1ts-verify-handoff-pickup-output": "maestro-1ts",
+    "maestro-2tu-verify-task-next-works": "maestro-2tu"
+  },
+  "idToFolder": {
+    "maestro-1ts": "maestro-1ts-verify-handoff-pickup-output",
+    "maestro-2tu": "maestro-2tu-verify-task-next-works"
+  }
+}

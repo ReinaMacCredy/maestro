@@ -1,0 +1,8 @@
+{
+  "feature": "edge-test-2",
+  "status": "pending",
+  "fromHost": "standalone",
+  "toAgent": "claude",
+  "createdAt": "2026-03-27T08:12:50.350Z",
+  "handoffPath": "/Users/reinamaccredy/Code/maestro/.maestro/handoff/crossagent/edge-test-2/handoff.md"
+}

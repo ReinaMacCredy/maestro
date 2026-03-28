@@ -1,0 +1,10 @@
+{
+  "folderToId": {
+    "maestro-8wm-update-claudemd-command-counts": "maestro-8wm",
+    "maestro-1i8-update-total-in-cli-reference-section": "maestro-1i8"
+  },
+  "idToFolder": {
+    "maestro-8wm": "maestro-8wm-update-claudemd-command-counts",
+    "maestro-1i8": "maestro-1i8-update-total-in-cli-reference-section"
+  }
+}

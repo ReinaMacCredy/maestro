@@ -1,0 +1,12 @@
+{
+  "folderToId": {
+    "maestro-3ny-create-greeting-file": "maestro-3ny",
+    "maestro-2l1-append-timestamp": "maestro-2l1",
+    "maestro-1ys-delete-greeting-file": "maestro-1ys"
+  },
+  "idToFolder": {
+    "maestro-3ny": "maestro-3ny-create-greeting-file",
+    "maestro-2l1": "maestro-2l1-append-timestamp",
+    "maestro-1ys": "maestro-1ys-delete-greeting-file"
+  }
+}
