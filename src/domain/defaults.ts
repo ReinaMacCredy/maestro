@@ -35,7 +35,12 @@ maestro handoff-pickup --claim --agent {{agent}} --markdown
 
 **Create a handoff for another agent:**
 \`\`\`bash
-maestro handoff --prompt <agent> --task "description"
+maestro handoff --session $(maestro session -q) --prompt <agent> --task "description"
+\`\`\`
+
+**Search previous agent's conversation for context:**
+\`\`\`bash
+maestro handoff-dig "<your question>" --json
 \`\`\`
 
 **Report completion:**
