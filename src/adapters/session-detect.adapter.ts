@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-import { readdir } from "node:fs/promises";
+import { readdir, realpath } from "node:fs/promises";
 import type { DetectionMethod, HandoffSession } from "../domain/types.js";
 import type { SessionDetectPort } from "../ports/session-detect.port.js";
 import { readJson } from "../lib/fs.js";
@@ -57,16 +57,23 @@ export class ClaudeSessionDetectAdapter implements SessionDetectPort {
   }
 }
 
-function buildClaudeSession(
+async function buildClaudeSession(
   cwd: string,
   session: ClaudeSessionFile,
   method: DetectionMethod,
-): HandoffSession {
+): Promise<HandoffSession> {
+  let resolvedCwd: string;
+  try {
+    resolvedCwd = await realpath(cwd);
+  } catch {
+    resolvedCwd = cwd;
+  }
+
   const sourcePath = join(
     homedir(),
     ".claude",
     "projects",
-    encodeProjectPath(cwd),
+    encodeProjectPath(normalizePath(resolvedCwd)),
     session.sessionId + ".jsonl",
   );
 
@@ -82,14 +89,17 @@ function buildClaudeSession(
 async function readClaudeSessionFiles(): Promise<ClaudeSessionFile[]> {
   try {
     const entries = await readdir(CLAUDE_SESSIONS_DIR);
-    const results = await Promise.all(
+    const settled = await Promise.allSettled(
       entries
         .filter((e) => e.endsWith(".json"))
         .map((e) => readJson<ClaudeSessionFile>(join(CLAUDE_SESSIONS_DIR, e))),
     );
-    return results.filter(
-      (d): d is ClaudeSessionFile => d !== undefined && !!d.sessionId && !!d.cwd && !!d.startedAt,
-    );
+    return settled
+      .filter((r): r is PromiseFulfilledResult<ClaudeSessionFile | undefined> => r.status === "fulfilled")
+      .map((r) => r.value)
+      .filter(
+        (d): d is ClaudeSessionFile => d !== undefined && !!d.sessionId && !!d.cwd && !!d.startedAt,
+      );
   } catch {
     return [];
   }

@@ -27,7 +27,7 @@ export class ShellCassAdapter implements CassPort {
       { timeout: 60_000 },
     );
     if (result.exitCode !== 0) {
-      warn(`CASS indexing failed: ${result.stderr}`);
+      throw new Error(`CASS indexing failed (exit ${result.exitCode}): ${result.stderr}`);
     }
   }
 

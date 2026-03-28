@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from "bun:test";
-import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, mkdir, writeFile, symlink, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir, homedir } from "node:os";
 import { FsHandoffStoreAdapter } from "../../src/adapters/handoff-store.adapter.js";
@@ -268,5 +268,146 @@ describe("dig handoff sentinel behavior", () => {
 
     await digHandoff(store, cass, "test", { id: handoff.id, dir: tmpDir });
     expect(searchCalled).toBe(true);
+  });
+
+  it("does not write sentinel when indexOnce throws (failed indexing)", async () => {
+    const sessionFile = join(tmpDir, "session.jsonl");
+    await writeFile(sessionFile, '{"test": true}\n');
+
+    const session: HandoffSession = {
+      agent: "claude-code",
+      sessionId: "test-session-fail",
+      sourcePath: sessionFile,
+    };
+
+    const handoff = await createHandoff(
+      mockGit(),
+      { detect: async () => session, resolve: async () => session },
+      { sessionDetection: { enabled: true, agents: ["claude-code"] } },
+      store,
+      { plan: false, sitrep: "test", quickstart: "test", dir: tmpDir },
+    );
+
+    const cass = mockCass({
+      indexOnce: async () => { throw new Error("CASS indexing failed (exit 1)"); },
+    });
+
+    await digHandoff(store, cass, "test", { id: handoff.id, dir: tmpDir });
+
+    const sentinelPath = join(tmpDir, ".maestro", "handoffs", handoff.id, ".cass-indexed");
+    const sentinelExists = await Bun.file(sentinelPath).exists();
+    expect(sentinelExists).toBe(false);
+  });
+
+  it("allows re-indexing after failed attempt (no stale sentinel)", async () => {
+    const sessionFile = join(tmpDir, "session.jsonl");
+    await writeFile(sessionFile, '{"test": true}\n');
+
+    const session: HandoffSession = {
+      agent: "claude-code",
+      sessionId: "test-session-retry",
+      sourcePath: sessionFile,
+    };
+
+    const handoff = await createHandoff(
+      mockGit(),
+      { detect: async () => session, resolve: async () => session },
+      { sessionDetection: { enabled: true, agents: ["claude-code"] } },
+      store,
+      { plan: false, sitrep: "test", quickstart: "test", dir: tmpDir },
+    );
+
+    let indexCount = 0;
+
+    // First attempt: indexOnce fails
+    const failCass = mockCass({
+      indexOnce: async () => { indexCount++; throw new Error("fail"); },
+    });
+    await digHandoff(store, failCass, "test", { id: handoff.id, dir: tmpDir });
+    expect(indexCount).toBe(1);
+
+    // Second attempt: indexOnce succeeds -- should re-index since no sentinel
+    const okCass = mockCass({
+      indexOnce: async () => { indexCount++; },
+    });
+    await digHandoff(store, okCass, "test", { id: handoff.id, dir: tmpDir });
+    expect(indexCount).toBe(2);
+
+    // Third attempt: sentinel now exists, should skip
+    await digHandoff(store, okCass, "test", { id: handoff.id, dir: tmpDir });
+    expect(indexCount).toBe(2);
+  });
+});
+
+describe("sourcePath symlink resolution", () => {
+  it("resolves symlinked CWD to real path for sourcePath encoding", async () => {
+    // /tmp on macOS is a symlink to /private/tmp
+    const realTmp = await realpath(tmpdir());
+    const adapter = new ClaudeSessionDetectAdapter();
+
+    // Detect from the symlinked path
+    const session = await adapter.detect(process.cwd());
+
+    if (session) {
+      // sourcePath should use the resolved (real) path, not the symlink
+      const resolvedCwd = await realpath(process.cwd());
+      const encodedResolved = resolvedCwd.replace(/\//g, "-");
+      expect(session.sourcePath).toContain(encodedResolved);
+    }
+  });
+});
+
+describe("corrupted file resilience", () => {
+  it("handoff list survives a corrupted envelope.json", async () => {
+    // Create a valid handoff first
+    const session: HandoffSession = {
+      agent: "claude-code",
+      sessionId: "test-session",
+      sourcePath: "/tmp/test",
+    };
+
+    const handoff = await createHandoff(
+      mockGit(),
+      { detect: async () => session, resolve: async () => session },
+      { sessionDetection: { enabled: true, agents: ["claude-code"] } },
+      store,
+      { plan: false, sitrep: "valid handoff", quickstart: "test", dir: tmpDir },
+    );
+
+    // Create a corrupted handoff directory
+    const corruptDir = join(tmpDir, ".maestro", "handoffs", "2099-01-01-001");
+    await mkdir(corruptDir, { recursive: true });
+    await writeFile(join(corruptDir, "envelope.json"), "NOT VALID JSON{{{");
+    await writeFile(join(corruptDir, "handoff.json"), "NOT VALID JSON{{{");
+
+    // list() should return the valid handoff and skip the corrupted one
+    const all = await store.list();
+    expect(all.length).toBe(1);
+    expect(all[0]!.handoff.id).toBe(handoff.id);
+  });
+
+  it("handoff list survives a schema-invalid envelope", async () => {
+    const session: HandoffSession = {
+      agent: "claude-code",
+      sessionId: "test-session",
+      sourcePath: "/tmp/test",
+    };
+
+    const handoff = await createHandoff(
+      mockGit(),
+      { detect: async () => session, resolve: async () => session },
+      { sessionDetection: { enabled: true, agents: ["claude-code"] } },
+      store,
+      { plan: false, sitrep: "valid handoff", quickstart: "test", dir: tmpDir },
+    );
+
+    // Create a valid-JSON but schema-invalid envelope
+    const badDir = join(tmpDir, ".maestro", "handoffs", "2099-01-01-002");
+    await mkdir(badDir, { recursive: true });
+    await writeFile(join(badDir, "envelope.json"), JSON.stringify({ wrong: "schema" }));
+
+    const all = await store.list();
+    expect(all.length).toBe(1);
+    expect(all[0]!.handoff.id).toBe(handoff.id);
   });
 });
