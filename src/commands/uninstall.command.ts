@@ -1,19 +1,9 @@
 import type { Command } from "commander";
 import { removeAgentBlocks } from "../usecases/manage-agents.usecase.js";
 import { formatAgentResults, output } from "../lib/output.js";
-import { rm } from "node:fs/promises";
+import { removeIfExists } from "../lib/fs.js";
 import { homedir } from "node:os";
 import { join } from "node:path";
-
-async function tryRemove(path: string, opts?: { recursive?: boolean }): Promise<boolean> {
-  try {
-    await rm(path, opts);
-    return true;
-  } catch (err: unknown) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
-    throw err;
-  }
-}
 
 export function registerUninstallCommand(program: Command): void {
   program
@@ -30,9 +20,9 @@ export function registerUninstallCommand(program: Command): void {
       let configRemoved = false;
 
       if (!opts.agentsOnly) {
-        const installDir = process.env.MAESTRO_INSTALL_DIR ?? `${process.env.HOME}/.local/bin`;
-        binaryRemoved = await tryRemove(join(installDir, "maestro"));
-        configRemoved = await tryRemove(join(homedir(), ".maestro"), { recursive: true });
+        const installDir = process.env.MAESTRO_INSTALL_DIR ?? join(homedir(), ".local", "bin");
+        binaryRemoved = await removeIfExists(join(installDir, "maestro"));
+        configRemoved = await removeIfExists(join(homedir(), ".maestro"), { recursive: true });
       }
 
       output(isJson, { agents: agentResults, binaryRemoved, configRemoved }, (r) => [

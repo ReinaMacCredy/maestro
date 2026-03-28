@@ -1,8 +1,7 @@
 import type { GitPort } from "../ports/git.port.js";
 import type { SessionDetectPort } from "../ports/session-detect.port.js";
-import type { ConfigPort } from "../ports/config.port.js";
 import type { HandoffStorePort } from "../ports/handoff-store.port.js";
-import type { GitState, Handoff, HandoffPlan, HandoffSession } from "../domain/types.js";
+import type { GitState, Handoff, HandoffPlan, HandoffSession, MaestroConfig } from "../domain/types.js";
 import { generateHandoffId } from "../domain/id.js";
 import { MaestroError } from "../domain/errors.js";
 import { MAESTRO_DIR } from "../domain/defaults.js";
@@ -25,7 +24,7 @@ export interface CreateHandoffOpts {
 export async function createHandoff(
   git: GitPort,
   sessionDetect: SessionDetectPort,
-  config: ConfigPort,
+  config: MaestroConfig,
   store: HandoffStorePort,
   opts: CreateHandoffOpts,
 ): Promise<Handoff> {
@@ -35,11 +34,9 @@ export async function createHandoff(
     ]);
   }
 
-  const loadedConfig = await config.load(opts.dir);
-
   const [gitState, sessionResult] = await Promise.all([
     git.getState(opts.dir),
-    detectSession(sessionDetect, loadedConfig, {
+    detectSession(sessionDetect, config, {
       cwd: opts.dir,
       sessionId: opts.session,
       noSession: opts.noSession,

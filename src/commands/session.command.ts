@@ -1,7 +1,8 @@
 import type { Command } from "commander";
 import { getServices } from "../services.js";
 import { detectSession } from "../usecases/detect-session.usecase.js";
-import { output } from "../lib/output.js";
+import { output, warn } from "../lib/output.js";
+import { MaestroError } from "../domain/errors.js";
 import type { HandoffSession } from "../domain/types.js";
 
 export function registerSessionCommand(program: Command): void {
@@ -26,16 +27,16 @@ Examples:
       });
 
       if (!result) {
-        if (opts.quiet) {
-          process.exit(1);
-        }
-        if (isJson) {
-          console.log(JSON.stringify({ error: "No session detected" }, null, 2));
-        } else {
-          console.error("[!] No session detected");
-          console.error("    Run inside Claude Code, Codex, or another supported agent");
-        }
-        process.exit(1);
+        if (opts.quiet) process.exit(1);
+        throw new MaestroError("No session detected", [
+          "Run inside Claude Code, Codex, or another supported agent",
+        ]);
+      }
+
+      if (result.stale) {
+        warn(
+          `Session ${result.session.sessionId.slice(0, 8)} is stale (cwd fallback). Use --session <id> or --skip-session.`,
+        );
       }
 
       if (opts.quiet) {

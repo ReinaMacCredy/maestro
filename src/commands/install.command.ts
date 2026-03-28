@@ -13,12 +13,10 @@ export function registerInstallCommand(program: Command): void {
       const services = getServices();
       const isJson = opts.json ?? program.opts().json;
 
-      const initResult = await initMaestro(services.config, {
-        global: true,
-        dir: process.cwd(),
-      });
-
-      const agentResults = await injectAgentBlocks();
+      const [initResult, agentResults] = await Promise.all([
+        initMaestro(services.config, { global: true, dir: process.cwd() }),
+        injectAgentBlocks(),
+      ]);
 
       output(isJson, { init: initResult, agents: agentResults }, (r) => [
         `[ok] Global config initialized`,

@@ -1,18 +1,11 @@
 import type { Command } from "commander";
 import { injectAgentBlocks } from "../usecases/manage-agents.usecase.js";
 import { formatAgentResults, output } from "../lib/output.js";
-import { execArgv } from "../lib/shell.js";
+import { execOrThrow } from "../lib/shell.js";
 import { getServices } from "../services.js";
 import { MaestroError } from "../domain/errors.js";
-
-async function execOrThrow(argv: string[], name: string, opts?: { cwd?: string }): Promise<void> {
-  const result = await execArgv(argv, opts);
-  if (result.exitCode !== 0) {
-    throw new MaestroError(`${name} failed: ${result.stderr}`, [
-      `Command: ${argv.join(" ")}`,
-    ]);
-  }
-}
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 export function registerUpdateCommand(program: Command): void {
   program
@@ -40,7 +33,7 @@ export function registerUpdateCommand(program: Command): void {
         await execOrThrow(["bun", "install", "--frozen-lockfile"], "bun install", { cwd: sourceRepo });
         await execOrThrow(["bun", "run", "build"], "bun run build", { cwd: sourceRepo });
 
-        const installDir = process.env.MAESTRO_INSTALL_DIR ?? `${process.env.HOME}/.local/bin`;
+        const installDir = process.env.MAESTRO_INSTALL_DIR ?? join(homedir(), ".local", "bin");
         await execOrThrow(["cp", `${sourceRepo}/dist/maestro`, `${installDir}/maestro`], "copy binary");
 
         binaryUpdated = true;

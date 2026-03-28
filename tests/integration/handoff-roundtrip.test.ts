@@ -23,7 +23,7 @@ afterEach(async () => {
 describe("Handoff roundtrip", () => {
   it("create -> list -> pickup -> verify state transition", async () => {
     // Create
-    const handoff = await createHandoff(mockGit(), mockSessionDetect(), mockConfig(), store, {
+    const handoff = await createHandoff(mockGit(), mockSessionDetect(), { sessionDetection: { enabled: true, agents: ["claude-code"] } }, store, {
       plan: false,
       sitrep: "Auth module complete. JWT chosen over sessions.",
       quickstart: "Run: bun test test/auth",
@@ -56,14 +56,14 @@ describe("Handoff roundtrip", () => {
     const git = mockGit();
     const session = mockSessionDetect();
 
-    const h1 = await createHandoff(git, session, mockConfig(), store, {
+    const h1 = await createHandoff(git, session, { sessionDetection: { enabled: true, agents: ["claude-code"] } }, store, {
       plan: false,
       sitrep: "First",
       quickstart: "Step 1",
       dir: tmpDir,
     });
 
-    const h2 = await createHandoff(git, session, mockConfig(), store, {
+    const h2 = await createHandoff(git, session, { sessionDetection: { enabled: true, agents: ["claude-code"] } }, store, {
       plan: false,
       sitrep: "Second",
       quickstart: "Step 2",

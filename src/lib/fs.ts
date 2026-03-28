@@ -1,4 +1,4 @@
-import { mkdir, readdir, rename } from "node:fs/promises";
+import { mkdir, readdir, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 
 export async function ensureDir(dir: string): Promise<void> {
@@ -29,6 +29,19 @@ async function writeAtomic(path: string, content: string): Promise<void> {
   const tmp = `${path}.tmp.${Date.now()}`;
   await Bun.write(tmp, content);
   await rename(tmp, path);
+}
+
+export async function removeIfExists(
+  path: string,
+  opts?: { recursive?: boolean },
+): Promise<boolean> {
+  try {
+    await rm(path, opts);
+    return true;
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw err;
+  }
 }
 
 export async function listDirs(dir: string): Promise<string[]> {

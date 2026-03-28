@@ -11,7 +11,7 @@ import {
 describe("createHandoff", () => {
   it("creates a handoff with git state and session", async () => {
     const store = mockHandoffStore();
-    const handoff = await createHandoff(mockGit(), mockSessionDetect(), mockConfig(), store, {
+    const handoff = await createHandoff(mockGit(), mockSessionDetect(), { sessionDetection: { enabled: true, agents: ["claude-code"] } }, store, {
       plan: false,
       sitrep: "Auth done",
       quickstart: "Run tests",
@@ -30,7 +30,7 @@ describe("createHandoff", () => {
     const store = mockHandoffStore();
 
     try {
-      await createHandoff(git, mockSessionDetect(), mockConfig(), store, {
+      await createHandoff(git, mockSessionDetect(), { sessionDetection: { enabled: true, agents: ["claude-code"] } }, store, {
         plan: false,
         sitrep: "test",
         quickstart: "test",
@@ -46,7 +46,7 @@ describe("createHandoff", () => {
     const sessionDetect = { detect: async () => undefined, resolve: async () => undefined };
     const store = mockHandoffStore();
 
-    const handoff = await createHandoff(mockGit(), sessionDetect, mockConfig(), store, {
+    const handoff = await createHandoff(mockGit(), sessionDetect, { sessionDetection: { enabled: true, agents: ["claude-code"] } }, store, {
       plan: false,
       sitrep: "test",
       quickstart: "test",
@@ -58,7 +58,7 @@ describe("createHandoff", () => {
 
   it("uses message when provided", async () => {
     const store = mockHandoffStore();
-    const handoff = await createHandoff(mockGit(), mockSessionDetect(), mockConfig(), store, {
+    const handoff = await createHandoff(mockGit(), mockSessionDetect(), { sessionDetection: { enabled: true, agents: ["claude-code"] } }, store, {
       plan: false,
       sitrep: "Full sitrep",
       quickstart: "Steps",
@@ -71,7 +71,7 @@ describe("createHandoff", () => {
 
   it("uses task for message when no message provided", async () => {
     const store = mockHandoffStore();
-    const handoff = await createHandoff(mockGit(), mockSessionDetect(), mockConfig(), store, {
+    const handoff = await createHandoff(mockGit(), mockSessionDetect(), { sessionDetection: { enabled: true, agents: ["claude-code"] } }, store, {
       plan: false,
       task: "implement note command",
       dir: process.cwd(),
@@ -82,7 +82,7 @@ describe("createHandoff", () => {
 
   it("auto-generates sitrep from git state when not provided", async () => {
     const store = mockHandoffStore();
-    const handoff = await createHandoff(mockGit(), mockSessionDetect(), mockConfig(), store, {
+    const handoff = await createHandoff(mockGit(), mockSessionDetect(), { sessionDetection: { enabled: true, agents: ["claude-code"] } }, store, {
       plan: false,
       dir: process.cwd(),
     });
@@ -94,7 +94,7 @@ describe("createHandoff", () => {
 
   it("auto-generates message from branch when nothing provided", async () => {
     const store = mockHandoffStore();
-    const handoff = await createHandoff(mockGit(), mockSessionDetect(), mockConfig(), store, {
+    const handoff = await createHandoff(mockGit(), mockSessionDetect(), { sessionDetection: { enabled: true, agents: ["claude-code"] } }, store, {
       plan: false,
       dir: process.cwd(),
     });
@@ -105,7 +105,7 @@ describe("createHandoff", () => {
   it("truncates sitrep for auto-message", async () => {
     const store = mockHandoffStore();
     const longSitrep = "A".repeat(200);
-    const handoff = await createHandoff(mockGit(), mockSessionDetect(), mockConfig(), store, {
+    const handoff = await createHandoff(mockGit(), mockSessionDetect(), { sessionDetection: { enabled: true, agents: ["claude-code"] } }, store, {
       plan: false,
       sitrep: longSitrep,
       quickstart: "Steps",

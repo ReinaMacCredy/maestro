@@ -69,10 +69,13 @@ Examples:
         return;
       }
 
+      // Load config once for both createHandoff and generatePrompt
+      const config = await services.config.load(process.cwd());
+
       const handoff = await createHandoff(
         services.git,
         services.sessionDetect,
-        services.config,
+        config,
         services.handoffStore,
         {
           plan: opts.plan ?? false,
@@ -86,8 +89,6 @@ Examples:
         },
       );
 
-      // Always generate a prompt after creation
-      const config = await services.config.load(process.cwd());
       const agent = typeof opts.prompt === "string" ? opts.prompt : undefined;
       const prompt = generatePrompt(config, {
         agent,

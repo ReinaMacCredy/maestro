@@ -12,12 +12,15 @@ export type AgentSlug =
 
 export type HandoffStatus = "pending" | "picked-up" | "completed";
 
+export type DetectionMethod = "pid" | "env" | "cwd-fallback" | "explicit";
+
 export interface HandoffSession {
   readonly agent: AgentSlug;
   readonly sessionId: string;
   readonly sourcePath: string;
   readonly cassIndexed: boolean;
   readonly startedAt?: number;
+  readonly detectionMethod?: DetectionMethod;
 }
 
 export interface PlanTask {

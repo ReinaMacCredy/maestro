@@ -15,6 +15,21 @@ export async function execArgv(
   return execSpawn(argv, opts);
 }
 
+export async function execOrThrow(
+  argv: string[],
+  name: string,
+  opts?: { cwd?: string },
+): Promise<ShellResult> {
+  const { MaestroError } = await import("../domain/errors.js");
+  const result = await execArgv(argv, opts);
+  if (result.exitCode !== 0) {
+    throw new MaestroError(`${name} failed: ${result.stderr}`, [
+      `Command: ${argv.join(" ")}`,
+    ]);
+  }
+  return result;
+}
+
 export async function exec(
   cmd: string,
   opts: { cwd?: string; timeout?: number } = {},
