@@ -5,6 +5,12 @@ export async function ensureDir(dir: string): Promise<void> {
   await mkdir(dir, { recursive: true });
 }
 
+export async function readText(path: string): Promise<string | undefined> {
+  const file = Bun.file(path);
+  if (!(await file.exists())) return undefined;
+  return file.text();
+}
+
 export async function readJson<T>(path: string): Promise<T | undefined> {
   const file = Bun.file(path);
   if (!(await file.exists())) return undefined;
