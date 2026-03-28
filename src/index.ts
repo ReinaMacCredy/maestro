@@ -11,6 +11,9 @@ import { registerStatusCommand } from "./commands/status.command.js";
 import { registerHandoffReportCommand } from "./commands/handoff-report.command.js";
 import { registerDoctorCommand } from "./commands/doctor.command.js";
 import { registerNoteCommand } from "./commands/note.command.js";
+import { registerInstallCommand } from "./commands/install.command.js";
+import { registerUpdateCommand } from "./commands/update.command.js";
+import { registerUninstallCommand } from "./commands/uninstall.command.js";
 
 export const program = new Command()
   .name("maestro")
@@ -30,6 +33,9 @@ registerHandoffReportCommand(program);
 registerStatusCommand(program);
 registerDoctorCommand(program);
 registerNoteCommand(program);
+registerInstallCommand(program);
+registerUpdateCommand(program);
+registerUninstallCommand(program);
 
 async function main(): Promise<void> {
   try {

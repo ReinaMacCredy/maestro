@@ -67,8 +67,8 @@ main() {
     fail "Installation verification failed"
   fi
 
-  # 6. Initialize global config
-  "$INSTALL_DIR/maestro" init --global 2>/dev/null && info "Global config initialized" || true
+  # 6. Initialize global config + inject agent instructions
+  "$INSTALL_DIR/maestro" install --json 2>/dev/null && info "Initialized config and agent instructions" || true
 
   # 7. PATH hint
   if ! echo "$PATH" | grep -q "$INSTALL_DIR"; then
