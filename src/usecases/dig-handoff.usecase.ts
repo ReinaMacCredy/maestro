@@ -44,11 +44,16 @@ export async function digHandoff(
   if (session.sourcePath) {
     const sentinel = join(opts.dir, MAESTRO_DIR, "handoffs", envelope.handoff.id, ".cass-indexed");
     if (!(await Bun.file(sentinel).exists())) {
-      try {
-        await cass.indexOnce([session.sourcePath]);
-        await writeText(sentinel, new Date().toISOString());
-      } catch {
-        warn("CASS indexing failed, searching with existing index");
+      const sourceExists = await Bun.file(session.sourcePath).exists();
+      if (!sourceExists) {
+        warn(`Session file not found: ${session.sourcePath}`);
+      } else {
+        try {
+          await cass.indexOnce([session.sourcePath]);
+          await writeText(sentinel, new Date().toISOString());
+        } catch {
+          warn("CASS indexing failed, searching with existing index");
+        }
       }
     }
   }
