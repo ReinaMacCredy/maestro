@@ -28,6 +28,7 @@ describe("Handoff roundtrip", () => {
       sitrep: "Auth module complete. JWT chosen over sessions.",
       quickstart: "Run: bun test test/auth",
       message: "Auth handoff",
+      session: "test-session-123",
       dir: tmpDir,
     });
 
@@ -60,6 +61,7 @@ describe("Handoff roundtrip", () => {
       plan: false,
       sitrep: "First",
       quickstart: "Step 1",
+      session: "test-session-123",
       dir: tmpDir,
     });
 
@@ -67,6 +69,7 @@ describe("Handoff roundtrip", () => {
       plan: false,
       sitrep: "Second",
       quickstart: "Step 2",
+      session: "test-session-123",
       dir: tmpDir,
     });
 
@@ -86,6 +89,7 @@ describe("Handoff roundtrip", () => {
       sitrep: "Auth done",
       quickstart: "Run tests",
       instructions: "Deploy to staging before PR review",
+      session: "test-session-123",
       dir: tmpDir,
     });
 
@@ -100,6 +104,7 @@ describe("Handoff roundtrip", () => {
       plan: false,
       sitrep: "Auth done",
       quickstart: "Run tests",
+      session: "test-session-123",
       dir: tmpDir,
     });
 

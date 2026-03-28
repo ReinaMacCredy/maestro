@@ -36,6 +36,14 @@ export async function createHandoff(
     ]);
   }
 
+  if (!opts.session && !opts.noSession) {
+    throw new MaestroError("Session ID required", [
+      "Get your session ID: maestro session -q",
+      "Then: maestro handoff --session <id> ...",
+      "Or skip with --skip-session",
+    ]);
+  }
+
   const [gitState, sessionResult] = await Promise.all([
     git.getState(opts.dir),
     detectSession(sessionDetect, config, {
@@ -44,14 +52,6 @@ export async function createHandoff(
       noSession: opts.noSession,
     }),
   ]);
-
-  if (!sessionResult && !opts.noSession) {
-    throw new MaestroError("No session detected", [
-      "Get your session ID first: maestro session -q",
-      "Then: maestro handoff --session <id> ...",
-      "Or skip with --skip-session",
-    ]);
-  }
 
   const session: HandoffSession = sessionResult?.session ?? {
     agent: UNKNOWN_AGENT,

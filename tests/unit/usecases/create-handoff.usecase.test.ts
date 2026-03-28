@@ -15,6 +15,7 @@ describe("createHandoff", () => {
       plan: false,
       sitrep: "Auth done",
       quickstart: "Run tests",
+      session: "test-session-123",
       dir: process.cwd(),
     });
 
@@ -42,12 +43,11 @@ describe("createHandoff", () => {
     }
   });
 
-  it("throws when session detection fails", async () => {
-    const sessionDetect = { detect: async () => undefined, resolve: async () => undefined };
+  it("throws when --session is not provided", async () => {
     const store = mockHandoffStore();
 
     try {
-      await createHandoff(mockGit(), sessionDetect, { sessionDetection: { enabled: true, agents: ["claude-code"] } }, store, {
+      await createHandoff(mockGit(), mockSessionDetect(), { sessionDetection: { enabled: true, agents: ["claude-code"] } }, store, {
         plan: false,
         sitrep: "test",
         quickstart: "test",
@@ -56,7 +56,7 @@ describe("createHandoff", () => {
       expect(true).toBe(false);
     } catch (err) {
       expect(err).toBeInstanceOf(MaestroError);
-      expect((err as MaestroError).message).toContain("No session detected");
+      expect((err as MaestroError).message).toContain("Session ID required");
     }
   });
 
@@ -83,6 +83,7 @@ describe("createHandoff", () => {
       sitrep: "Full sitrep",
       quickstart: "Steps",
       message: "Short msg",
+      session: "test-session-123",
       dir: process.cwd(),
     });
 
@@ -94,6 +95,7 @@ describe("createHandoff", () => {
     const handoff = await createHandoff(mockGit(), mockSessionDetect(), { sessionDetection: { enabled: true, agents: ["claude-code"] } }, store, {
       plan: false,
       task: "implement note command",
+      session: "test-session-123",
       dir: process.cwd(),
     });
 
@@ -104,6 +106,7 @@ describe("createHandoff", () => {
     const store = mockHandoffStore();
     const handoff = await createHandoff(mockGit(), mockSessionDetect(), { sessionDetection: { enabled: true, agents: ["claude-code"] } }, store, {
       plan: false,
+      session: "test-session-123",
       dir: process.cwd(),
     });
 
@@ -116,6 +119,7 @@ describe("createHandoff", () => {
     const store = mockHandoffStore();
     const handoff = await createHandoff(mockGit(), mockSessionDetect(), { sessionDetection: { enabled: true, agents: ["claude-code"] } }, store, {
       plan: false,
+      session: "test-session-123",
       dir: process.cwd(),
     });
 
@@ -129,6 +133,7 @@ describe("createHandoff", () => {
       sitrep: "Auth done",
       quickstart: "Run tests",
       instructions: "Deploy to staging first",
+      session: "test-session-123",
       dir: process.cwd(),
     });
 
@@ -141,6 +146,7 @@ describe("createHandoff", () => {
       plan: false,
       sitrep: "Auth done",
       quickstart: "Run tests",
+      session: "test-session-123",
       dir: process.cwd(),
     });
 
@@ -160,6 +166,7 @@ describe("createHandoff", () => {
           sitrep: "Auth done",
           quickstart: "Run tests",
           instructions: "",
+          session: "test-session-123",
           dir: process.cwd(),
         },
       );
@@ -182,6 +189,7 @@ describe("createHandoff", () => {
           sitrep: "Auth done",
           quickstart: "Run tests",
           instructions: "A".repeat(2001),
+          session: "test-session-123",
           dir: process.cwd(),
         },
       );
@@ -198,6 +206,7 @@ describe("createHandoff", () => {
       plan: false,
       sitrep: longSitrep,
       quickstart: "Steps",
+      session: "test-session-123",
       dir: process.cwd(),
     });
 

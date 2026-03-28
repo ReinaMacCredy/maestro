@@ -105,7 +105,7 @@ describe("sourcePath in handoff lifecycle", () => {
       mockSession,
       { sessionDetection: { enabled: true, agents: ["claude-code"] } },
       store,
-      { plan: false, sitrep: "test", quickstart: "test", dir: tmpDir },
+      { plan: false, sitrep: "test", quickstart: "test", session: "test-session-abc", dir: tmpDir },
     );
 
     const exists = await Bun.file(handoff.session.sourcePath).exists();
@@ -128,7 +128,7 @@ describe("sourcePath in handoff lifecycle", () => {
       mockSession,
       { sessionDetection: { enabled: true, agents: ["claude-code"] } },
       store,
-      { plan: false, sitrep: "test", quickstart: "test", dir: tmpDir },
+      { plan: false, sitrep: "test", quickstart: "test", session: "test-session-abc", dir: tmpDir },
     );
 
     const envelope = await store.get(handoff.id);
@@ -153,7 +153,7 @@ describe("dig handoff sentinel behavior", () => {
       { detect: async () => session, resolve: async () => session },
       { sessionDetection: { enabled: true, agents: ["claude-code"] } },
       store,
-      { plan: false, sitrep: "test", quickstart: "test", dir: tmpDir },
+      { plan: false, sitrep: "test", quickstart: "test", session: "test-session-abc", dir: tmpDir },
     );
 
     const cass = mockCass();
@@ -183,7 +183,7 @@ describe("dig handoff sentinel behavior", () => {
       { detect: async () => session, resolve: async () => session },
       { sessionDetection: { enabled: true, agents: ["claude-code"] } },
       store,
-      { plan: false, sitrep: "test", quickstart: "test", dir: tmpDir },
+      { plan: false, sitrep: "test", quickstart: "test", session: "test-session-abc", dir: tmpDir },
     );
 
     const cass = mockCass();
@@ -212,7 +212,7 @@ describe("dig handoff sentinel behavior", () => {
       { detect: async () => session, resolve: async () => session },
       { sessionDetection: { enabled: true, agents: ["claude-code"] } },
       store,
-      { plan: false, sitrep: "test", quickstart: "test", dir: tmpDir },
+      { plan: false, sitrep: "test", quickstart: "test", session: "test-session-abc", dir: tmpDir },
     );
 
     let indexCount = 0;
@@ -236,7 +236,7 @@ describe("dig handoff sentinel behavior", () => {
       { detect: async () => session, resolve: async () => session },
       { sessionDetection: { enabled: true, agents: ["claude-code"] } },
       store,
-      { plan: false, sitrep: "test", quickstart: "test", dir: tmpDir },
+      { plan: false, sitrep: "test", quickstart: "test", session: "test-session-abc", dir: tmpDir },
     );
 
     let indexCalled = false;
@@ -255,7 +255,7 @@ describe("dig handoff sentinel behavior", () => {
       { detect: async () => session, resolve: async () => session },
       { sessionDetection: { enabled: true, agents: ["claude-code"] } },
       store,
-      { plan: false, sitrep: "test", quickstart: "test", dir: tmpDir },
+      { plan: false, sitrep: "test", quickstart: "test", session: "test-session-abc", dir: tmpDir },
     );
 
     let searchCalled = false;
@@ -285,7 +285,7 @@ describe("dig handoff sentinel behavior", () => {
       { detect: async () => session, resolve: async () => session },
       { sessionDetection: { enabled: true, agents: ["claude-code"] } },
       store,
-      { plan: false, sitrep: "test", quickstart: "test", dir: tmpDir },
+      { plan: false, sitrep: "test", quickstart: "test", session: "test-session-abc", dir: tmpDir },
     );
 
     const cass = mockCass({
@@ -314,7 +314,7 @@ describe("dig handoff sentinel behavior", () => {
       { detect: async () => session, resolve: async () => session },
       { sessionDetection: { enabled: true, agents: ["claude-code"] } },
       store,
-      { plan: false, sitrep: "test", quickstart: "test", dir: tmpDir },
+      { plan: false, sitrep: "test", quickstart: "test", session: "test-session-abc", dir: tmpDir },
     );
 
     let indexCount = 0;
@@ -371,7 +371,7 @@ describe("corrupted file resilience", () => {
       { detect: async () => session, resolve: async () => session },
       { sessionDetection: { enabled: true, agents: ["claude-code"] } },
       store,
-      { plan: false, sitrep: "valid handoff", quickstart: "test", dir: tmpDir },
+      { plan: false, sitrep: "valid handoff", quickstart: "test", session: "test-session", dir: tmpDir },
     );
 
     // Create a corrupted handoff directory
@@ -398,7 +398,7 @@ describe("corrupted file resilience", () => {
       { detect: async () => session, resolve: async () => session },
       { sessionDetection: { enabled: true, agents: ["claude-code"] } },
       store,
-      { plan: false, sitrep: "valid handoff", quickstart: "test", dir: tmpDir },
+      { plan: false, sitrep: "valid handoff", quickstart: "test", session: "test-session", dir: tmpDir },
     );
 
     // Create a valid-JSON but schema-invalid envelope

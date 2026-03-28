@@ -82,10 +82,16 @@ describe("CLI integration", () => {
     expect(status).toHaveProperty("gitAvailable");
   });
 
-  it("handoff with no flags creates auto-generated handoff", async () => {
-    const { exitCode, stdout } = await run(["handoff", "--json"]);
+  it("handoff without --session rejects with guidance", async () => {
+    const { exitCode, stdout, stderr } = await run(["handoff", "--sitrep", "test", "--json"]);
+    expect(exitCode).toBe(1);
+    const output = stdout + stderr;
+    expect(output).toContain("Session ID required");
+  });
+
+  it("handoff with --skip-session creates auto-generated handoff", async () => {
+    const { exitCode, stdout } = await run(["handoff", "--skip-session", "--json"]);
     expect(exitCode).toBe(0);
-    // Should contain auto-generated sitrep with branch info
     expect(stdout).toContain("Branch:");
   });
 
