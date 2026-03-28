@@ -20,3 +20,24 @@ Follow the quickstart in the handoff output.
 Read AGENTS.md for code style.
 {{#task}}Your task: {{task}}
 {{/task}}Use maestro handoff-report --content "summary of work done" --json when done.`;
+
+export const AGENT_INSTRUCTION_BLOCK = `## Cross-Agent Handoff (maestro)
+
+Projects with \`.maestro/\` support handoffs between agents.
+
+**Pick up a handoff assigned to you:**
+\`\`\`bash
+maestro handoff-pickup --claim --agent {{agent}} --markdown
+\`\`\`
+
+**Create a handoff for another agent:**
+\`\`\`bash
+maestro handoff --prompt <agent> --task "description"
+\`\`\`
+
+**Report completion:**
+\`\`\`bash
+maestro handoff-report --content "summary" --json
+\`\`\`
+
+**When to use**: User mentions another agent, wants to delegate, or explicitly asks for a handoff.`;
