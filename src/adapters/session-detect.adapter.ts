@@ -41,7 +41,7 @@ export class ClaudeSessionDetectAdapter implements SessionDetectPort {
       agent: "claude-code",
       sessionId: best.sessionId,
       sourcePath,
-      cassIndexed: false, // Will be set by create-handoff use case
+      cassIndexed: false,
     };
   }
 }

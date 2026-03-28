@@ -46,7 +46,7 @@ Examples:
         const latest = await services.handoffStore.getLatestPending();
         const handoffId = latest?.handoff.id ?? "HANDOFF_ID";
         const agent = typeof opts.prompt === "string" ? opts.prompt : undefined;
-        const prompt = generatePrompt(config, { agent, task: opts.task, handoffId });
+        const prompt = generatePrompt(config, { agent, handoffId });
         if (isJson) {
           console.log(JSON.stringify({ prompt, handoffId }, null, 2));
         } else {
@@ -81,14 +81,7 @@ Examples:
         },
       );
 
-      output(isJson, handoff, (h) => [
-        `[ok] Handoff created: ${h.id}`,
-        `  Branch: ${h.git.branch}`,
-        `  Session: ${h.session.sessionId}`,
-        `  CASS indexed: ${h.session.cassIndexed}`,
-      ]);
-
-      // Always suggest a prompt after creation
+      // Always generate a prompt after creation
       const config = await services.config.load(process.cwd());
       const agent = typeof opts.prompt === "string" ? opts.prompt : undefined;
       const prompt = generatePrompt(config, {
@@ -96,9 +89,14 @@ Examples:
         task: opts.task,
         handoffId: handoff.id,
       });
-      if (isJson) {
-        console.log(JSON.stringify({ prompt }, null, 2));
-      } else {
+
+      output(isJson, { ...handoff, prompt }, (h) => [
+        `[ok] Handoff created: ${h.id}`,
+        `  Branch: ${h.git.branch}`,
+        `  Session: ${h.session.sessionId}`,
+      ]);
+
+      if (!isJson) {
         console.log("");
         printPrompt(prompt, agent ?? config.defaultAgent);
       }

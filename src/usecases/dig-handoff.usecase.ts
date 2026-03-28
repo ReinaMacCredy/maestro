@@ -1,9 +1,12 @@
+import { existsSync } from "node:fs";
 import type { HandoffStorePort } from "../ports/handoff-store.port.js";
 import type { CassPort } from "../ports/cass.port.js";
 import type { CassSearchResponse } from "../domain/types.js";
 import { MaestroError } from "../domain/errors.js";
-import { CASS_INSTALL_HINT } from "../domain/defaults.js";
+import { CASS_INSTALL_HINT, MAESTRO_DIR } from "../domain/defaults.js";
 import { warn } from "../lib/output.js";
+import { writeText } from "../lib/fs.js";
+import { join } from "node:path";
 
 export interface DigOpts {
   readonly id?: string;
@@ -17,10 +20,9 @@ export async function digHandoff(
   query: string,
   opts: DigOpts,
 ): Promise<CassSearchResponse> {
-  if (!(await cass.isAvailable())) {
-    throw new MaestroError("CASS is not available", [
+  if (!(await cass.hasBinary())) {
+    throw new MaestroError("CASS binary not found", [
       CASS_INSTALL_HINT,
-      "Then: cass index",
     ]);
   }
 
@@ -44,12 +46,16 @@ export async function digHandoff(
 
   const { session } = envelope.handoff;
 
-  // Lazy indexing: ensure session is indexed before searching
+  // Lazy indexing with sentinel to avoid re-indexing on repeated digs
   if (session.sourcePath) {
-    try {
-      await cass.indexOnce([session.sourcePath]);
-    } catch {
-      warn("CASS indexing failed, searching with existing index");
+    const sentinel = join(opts.dir, MAESTRO_DIR, "handoffs", envelope.handoff.id, ".cass-indexed");
+    if (!existsSync(sentinel)) {
+      try {
+        await cass.indexOnce([session.sourcePath]);
+        await writeText(sentinel, new Date().toISOString());
+      } catch {
+        warn("CASS indexing failed, searching with existing index");
+      }
     }
   }
 

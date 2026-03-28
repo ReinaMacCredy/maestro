@@ -44,20 +44,6 @@ main() {
     fi
   fi
 
-  # 2b. Write cassAvailable to global config
-  GLOBAL_CONFIG_DIR="$HOME/.maestro"
-  GLOBAL_CONFIG="$GLOBAL_CONFIG_DIR/config.yaml"
-  mkdir -p "$GLOBAL_CONFIG_DIR"
-  if [ -f "$GLOBAL_CONFIG" ]; then
-    # Append if not already present
-    if ! grep -q "cassAvailable" "$GLOBAL_CONFIG" 2>/dev/null; then
-      echo "cassAvailable: true" >> "$GLOBAL_CONFIG"
-    fi
-  else
-    echo "cassAvailable: true" > "$GLOBAL_CONFIG"
-  fi
-  info "Global config: cassAvailable: true"
-
   # 3. Build maestro
   echo ""
   echo "Building maestro..."
@@ -81,7 +67,10 @@ main() {
     fail "Installation verification failed"
   fi
 
-  # 6. PATH hint
+  # 6. Initialize global config
+  "$INSTALL_DIR/maestro" init --global 2>/dev/null && info "Global config initialized" || true
+
+  # 7. PATH hint
   if ! echo "$PATH" | grep -q "$INSTALL_DIR"; then
     echo ""
     warn "$INSTALL_DIR is not in your PATH"

@@ -63,7 +63,7 @@ function formatMarkdown(envelope: HandoffEnvelope): string {
     `**ID:** ${h.id}`,
     `**From:** ${h.session.agent}`,
     `**Branch:** ${h.git.branch}`,
-    `**CASS indexed:** ${h.session.cassIndexed}`,
+    `**CASS session:** ${h.session.sourcePath ? "available" : "none"}`,
     "",
     "## Sitrep",
     "",
@@ -107,12 +107,12 @@ function formatMarkdown(envelope: HandoffEnvelope): string {
     }
   }
 
-  if (h.session.cassIndexed) {
+  if (h.session.sourcePath) {
     lines.push(
       "",
       "## Session History",
       "",
-      `Full conversation available via CASS:`,
+      `Full conversation available via CASS (indexes on first search):`,
       `  maestro handoff-dig "<your query>" --id ${h.id}`,
     );
   }

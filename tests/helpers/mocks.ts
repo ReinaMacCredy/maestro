@@ -61,6 +61,7 @@ export function mockHandoffStore(
         .sort((a, b) => b.handoff.timestamp.localeCompare(a.handoff.timestamp));
       return pending[0];
     },
+    listIds: async () => [...envelopes.keys()].sort().reverse(),
     list: async (filter) => {
       let all = [...envelopes.values()];
       if (filter?.status) {

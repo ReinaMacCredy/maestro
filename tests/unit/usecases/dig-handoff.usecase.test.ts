@@ -46,8 +46,8 @@ describe("digHandoff", () => {
     expect(searchOpts.agent).toBe("claude_code");
   });
 
-  it("throws when CASS unavailable", async () => {
-    const cass = mockCass({ isAvailable: async () => false });
+  it("throws when CASS binary not found", async () => {
+    const cass = mockCass({ hasBinary: async () => false });
     const store = mockHandoffStore([makeEnvelope()]);
 
     try {
@@ -55,7 +55,7 @@ describe("digHandoff", () => {
       expect(true).toBe(false);
     } catch (err) {
       expect(err).toBeInstanceOf(MaestroError);
-      expect((err as MaestroError).message).toContain("not available");
+      expect((err as MaestroError).message).toContain("not found");
     }
   });
 

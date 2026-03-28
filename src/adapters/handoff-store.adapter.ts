@@ -41,6 +41,12 @@ export class FsHandoffStoreAdapter implements HandoffStorePort {
     return all[0];
   }
 
+  async listIds(): Promise<readonly string[]> {
+    const handoffsRoot = join(this.baseDir, ".maestro", "handoffs");
+    const dirs = await listDirs(handoffsRoot);
+    return dirs.map((d) => d.split("/").pop()!).sort().reverse();
+  }
+
   async list(
     filter?: { status?: HandoffStatus },
   ): Promise<readonly HandoffEnvelope[]> {

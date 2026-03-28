@@ -51,8 +51,7 @@ export async function createHandoff(
     plan = await readJson<HandoffPlan>(join(opts.dir, MAESTRO_DIR, "plan.json"));
   }
 
-  const existing = await store.list();
-  const existingIds = existing.map((e) => e.handoff.id);
+  const existingIds = await store.listIds();
   const id = generateHandoffId(existingIds);
 
   const sitrep = opts.sitrep ?? formatAutoSitrep(gitState);
