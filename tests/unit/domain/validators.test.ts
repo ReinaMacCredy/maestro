@@ -94,10 +94,9 @@ describe("validateHandoff", () => {
     ).toThrow(ZodError);
   });
 
-  it("rejects instructions exceeding 2000 chars", () => {
-    expect(() =>
-      validateHandoff({ ...validHandoff, instructions: "A".repeat(2001) }),
-    ).toThrow(ZodError);
+  it("accepts long instructions (no max limit)", () => {
+    const result = validateHandoff({ ...validHandoff, instructions: "A".repeat(5000) });
+    expect(result.instructions).toHaveLength(5000);
   });
 
   it("rejects invalid plan task status", () => {

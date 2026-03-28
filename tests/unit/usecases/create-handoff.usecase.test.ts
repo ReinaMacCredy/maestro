@@ -176,27 +176,18 @@ describe("createHandoff", () => {
     }
   });
 
-  it("rejects instructions exceeding 2000 chars", async () => {
+  it("accepts long instructions (no max limit)", async () => {
     const store = mockHandoffStore();
-    try {
-      await createHandoff(
-        mockGit(),
-        mockSessionDetect(),
-        { sessionDetection: { enabled: true, agents: ["claude-code"] } },
-        store,
-        {
-          plan: false,
-          sitrep: "Auth done",
-          quickstart: "Run tests",
-          instructions: "A".repeat(2001),
-          session: "test-session-123",
-          dir: process.cwd(),
-        },
-      );
-      expect.unreachable();
-    } catch (err) {
-      expect(err).toBeInstanceOf(ZodError);
-    }
+    const handoff = await createHandoff(mockGit(), mockSessionDetect(), { sessionDetection: { enabled: true, agents: ["claude-code"] } }, store, {
+      plan: false,
+      sitrep: "Auth done",
+      quickstart: "Run tests",
+      instructions: "A".repeat(5000),
+      session: "test-session-123",
+      dir: process.cwd(),
+    });
+
+    expect(handoff.instructions).toHaveLength(5000);
   });
 
   it("truncates sitrep for auto-message", async () => {

@@ -60,10 +60,10 @@ describe("FsHandoffStoreAdapter", () => {
       expect(envelope?.status).toBe("pending");
     });
 
-    it("rejects invalid instructions before persisting", async () => {
-      await expect(
-        store.create(makeHandoff({ instructions: "A".repeat(2001) })),
-      ).rejects.toBeInstanceOf(ZodError);
+    it("persists long instructions without limit", async () => {
+      const id = await store.create(makeHandoff({ instructions: "A".repeat(5000) }));
+      const envelope = await store.get(id);
+      expect(envelope?.handoff.instructions).toHaveLength(5000);
     });
   });
 
