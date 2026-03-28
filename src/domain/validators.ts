@@ -36,6 +36,7 @@ export const HandoffSchema = z.object({
   plan: HandoffPlanSchema.optional(),
   sitrep: z.string().min(1),
   quickstart: z.string().min(1),
+  instructions: z.string().min(1).max(2000).optional(),
   git: GitStateSchema,
 });
 

@@ -26,6 +26,7 @@ Examples:
     .option("--message <text>", "Short summary message")
     .option("--prompt [agent]", "Generate agent prompt (optionally specify agent name)")
     .option("--task <text>", "Task description to include in the prompt")
+    .option("--instructions <text>", "Custom directives for receiving agent")
     .option("--session <id>", "Use a specific session ID (prefix match supported)")
     .option("--skip-session", "Skip session detection entirely")
     .option("--dry-run", "Show what would be written without writing")
@@ -41,7 +42,7 @@ Examples:
       }
 
       // Prompt-only mode: --prompt without any creation intent
-      const hasCreateIntent = opts.sitrep || opts.quickstart || opts.task || opts.plan;
+      const hasCreateIntent = opts.sitrep || opts.quickstart || opts.task || opts.plan || opts.instructions;
       const isPromptOnly = opts.prompt !== undefined && !hasCreateIntent;
 
       if (isPromptOnly) {
@@ -63,6 +64,7 @@ Examples:
           dryRun: true,
           sitrep: opts.sitrep,
           quickstart: opts.quickstart,
+          instructions: opts.instructions,
           plan: opts.plan ?? false,
           message: opts.message,
           task: opts.task,
@@ -82,6 +84,7 @@ Examples:
           sitrep: opts.sitrep,
           quickstart: opts.quickstart,
           task: opts.task,
+          instructions: opts.instructions,
           message: opts.message,
           session: opts.session,
           noSession: opts.skipSession,
@@ -93,6 +96,7 @@ Examples:
       const prompt = generatePrompt(config, {
         agent,
         task: opts.task,
+        instructions: opts.instructions,
         handoffId: handoff.id,
       });
 

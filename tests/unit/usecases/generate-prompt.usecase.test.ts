@@ -73,6 +73,23 @@ describe("generatePrompt", () => {
     expect(result).toBe("claude picks up 2026-03-28-002");
   });
 
+  it("includes instructions when provided", () => {
+    const result = generatePrompt(baseConfig, {
+      agent: "codex",
+      instructions: "Deploy to staging first",
+      handoffId: "2026-03-28-001",
+    });
+    expect(result).toContain("Your instructions: Deploy to staging first");
+  });
+
+  it("omits instructions block when not provided", () => {
+    const result = generatePrompt(baseConfig, {
+      agent: "codex",
+      handoffId: "2026-03-28-001",
+    });
+    expect(result).not.toContain("Your instructions:");
+  });
+
   it("agent priority: opts.agent > config.defaultAgent > TARGET_AGENT", () => {
     const config: MaestroConfig = { ...baseConfig, defaultAgent: "gemini" };
 

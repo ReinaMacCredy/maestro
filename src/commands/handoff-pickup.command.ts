@@ -43,17 +43,17 @@ Examples:
 
 function formatText(envelope: HandoffEnvelope): string[] {
   const h = envelope.handoff;
-  return [
+  const lines = [
     `${h.id}  [${envelope.status}]`,
     `  ${h.message}`,
     `  From: ${h.session.agent}  Branch: ${h.git.branch}`,
     "",
-    "Sitrep:",
-    h.sitrep,
-    "",
-    "Quickstart:",
-    h.quickstart,
   ];
+  if (h.instructions) {
+    lines.push("Instructions:", h.instructions, "");
+  }
+  lines.push("Sitrep:", h.sitrep, "", "Quickstart:", h.quickstart);
+  return lines;
 }
 
 function formatMarkdown(envelope: HandoffEnvelope): string {
@@ -66,6 +66,9 @@ function formatMarkdown(envelope: HandoffEnvelope): string {
     `**Branch:** ${h.git.branch}`,
     `**CASS session:** ${h.session.sourcePath ? "available" : "none"}`,
     "",
+    ...(h.instructions
+      ? ["## Instructions", "", h.instructions, ""]
+      : []),
     "## Sitrep",
     "",
     h.sitrep,

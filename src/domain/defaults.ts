@@ -22,7 +22,8 @@ export const DEFAULT_PROMPT_TEMPLATE = `You are picking up a handoff from anothe
 
 Follow the quickstart in the handoff output.
 Read AGENTS.md for code style.
-{{#task}}Your task: {{task}}
+{{#instructions}}Your instructions: {{instructions}}
+{{/instructions}}{{#task}}Your task: {{task}}
 {{/task}}If you need more context about a decision or implementation detail, search the previous agent's conversation history:
   maestro handoff-dig "<your question>" --json
 
@@ -51,5 +52,7 @@ maestro handoff-dig "<your question>" --json
 \`\`\`bash
 maestro handoff-report --content "summary" --json
 \`\`\`
+
+**When picking up a handoff**: If the briefing includes an \`## Instructions\` section, treat those directives as your primary task objectives. Execute them before exploring broader context. If instructions reference plan phases or tasks, resolve them via \`maestro\` commands.
 
 **When to use**: User mentions another agent, wants to delegate, or explicitly asks for a handoff.`;

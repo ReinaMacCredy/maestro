@@ -69,6 +69,29 @@ describe("validateHandoff", () => {
     ).toThrow(ZodError);
   });
 
+  it("accepts handoff with optional instructions", () => {
+    const withInstructions = { ...validHandoff, instructions: "Complete phase 1" };
+    const result = validateHandoff(withInstructions);
+    expect(result.instructions).toBe("Complete phase 1");
+  });
+
+  it("accepts handoff without instructions (backward compat)", () => {
+    const result = validateHandoff(validHandoff);
+    expect(result.instructions).toBeUndefined();
+  });
+
+  it("rejects empty instructions", () => {
+    expect(() =>
+      validateHandoff({ ...validHandoff, instructions: "" }),
+    ).toThrow(ZodError);
+  });
+
+  it("rejects instructions exceeding 2000 chars", () => {
+    expect(() =>
+      validateHandoff({ ...validHandoff, instructions: "A".repeat(2001) }),
+    ).toThrow(ZodError);
+  });
+
   it("rejects invalid plan task status", () => {
     const badPlan = {
       ...validHandoff,

@@ -51,6 +51,7 @@ export interface Handoff {
   readonly plan?: HandoffPlan;
   readonly sitrep: string;
   readonly quickstart: string;
+  readonly instructions?: string;
   readonly git: GitState;
 }
 

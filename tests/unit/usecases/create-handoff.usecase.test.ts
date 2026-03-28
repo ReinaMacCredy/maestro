@@ -101,6 +101,31 @@ describe("createHandoff", () => {
     expect(handoff.message).toContain("main");
   });
 
+  it("passes instructions to handoff when provided", async () => {
+    const store = mockHandoffStore();
+    const handoff = await createHandoff(mockGit(), mockSessionDetect(), { sessionDetection: { enabled: true, agents: ["claude-code"] } }, store, {
+      plan: false,
+      sitrep: "Auth done",
+      quickstart: "Run tests",
+      instructions: "Deploy to staging first",
+      dir: process.cwd(),
+    });
+
+    expect(handoff.instructions).toBe("Deploy to staging first");
+  });
+
+  it("omits instructions when not provided", async () => {
+    const store = mockHandoffStore();
+    const handoff = await createHandoff(mockGit(), mockSessionDetect(), { sessionDetection: { enabled: true, agents: ["claude-code"] } }, store, {
+      plan: false,
+      sitrep: "Auth done",
+      quickstart: "Run tests",
+      dir: process.cwd(),
+    });
+
+    expect(handoff.instructions).toBeUndefined();
+  });
+
   it("truncates sitrep for auto-message", async () => {
     const store = mockHandoffStore();
     const longSitrep = "A".repeat(200);

@@ -15,6 +15,7 @@ export interface CreateHandoffOpts {
   readonly sitrep?: string;
   readonly quickstart?: string;
   readonly task?: string;
+  readonly instructions?: string;
   readonly message?: string;
   readonly session?: string;
   readonly noSession?: boolean;
@@ -75,6 +76,7 @@ export async function createHandoff(
     plan,
     sitrep,
     quickstart,
+    ...(opts.instructions && { instructions: opts.instructions }),
     git: gitState,
   };
 

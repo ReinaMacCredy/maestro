@@ -5,6 +5,7 @@ import { renderTemplate } from "../lib/template.js";
 export interface GeneratePromptOpts {
   readonly agent?: string;
   readonly task?: string;
+  readonly instructions?: string;
   readonly handoffId: string;
 }
 
@@ -18,6 +19,7 @@ export function generatePrompt(
   return renderTemplate(template, {
     agent,
     task: opts.task ?? "",
+    instructions: opts.instructions ?? "",
     handoffId: opts.handoffId,
   });
 }

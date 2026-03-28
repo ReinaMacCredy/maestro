@@ -79,4 +79,33 @@ describe("Handoff roundtrip", () => {
     const seq2 = parseInt(h2.id.slice(11), 10);
     expect(seq2).toBe(seq1 + 1);
   });
+
+  it("instructions survive create -> pickup roundtrip", async () => {
+    const handoff = await createHandoff(mockGit(), mockSessionDetect(), { sessionDetection: { enabled: true, agents: ["claude-code"] } }, store, {
+      plan: false,
+      sitrep: "Auth done",
+      quickstart: "Run tests",
+      instructions: "Deploy to staging before PR review",
+      dir: tmpDir,
+    });
+
+    expect(handoff.instructions).toBe("Deploy to staging before PR review");
+
+    const envelope = await pickupHandoff(store, { agent: "codex" });
+    expect(envelope.handoff.instructions).toBe("Deploy to staging before PR review");
+  });
+
+  it("handoff without instructions has undefined field", async () => {
+    const handoff = await createHandoff(mockGit(), mockSessionDetect(), { sessionDetection: { enabled: true, agents: ["claude-code"] } }, store, {
+      plan: false,
+      sitrep: "Auth done",
+      quickstart: "Run tests",
+      dir: tmpDir,
+    });
+
+    expect(handoff.instructions).toBeUndefined();
+
+    const envelope = await pickupHandoff(store, { agent: "codex" });
+    expect(envelope.handoff.instructions).toBeUndefined();
+  });
 });
