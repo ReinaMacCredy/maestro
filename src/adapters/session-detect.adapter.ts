@@ -67,7 +67,7 @@ function buildClaudeSession(
     ".claude",
     "projects",
     encodeProjectPath(cwd),
-    session.sessionId,
+    session.sessionId + ".jsonl",
   );
 
   return {
@@ -136,5 +136,5 @@ function normalizePath(p: string): string {
 }
 
 function encodeProjectPath(cwd: string): string {
-  return cwd.replace(/\//g, "-").replace(/^-/, "");
+  return cwd.replace(/\//g, "-");
 }
