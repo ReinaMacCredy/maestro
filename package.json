@@ -7,6 +7,7 @@
   },
   "scripts": {
     "build": "bun build src/index.ts --compile --outfile dist/maestro --target bun",
+    "deploy": "bun test && bun run build && cp ./dist/maestro ~/.local/bin/maestro",
     "dev": "bun run src/index.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
