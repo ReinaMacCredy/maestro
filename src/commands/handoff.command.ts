@@ -2,8 +2,9 @@ import type { Command } from "commander";
 import { getServices } from "../services.js";
 import { createHandoff } from "../usecases/create-handoff.usecase.js";
 import { listHandoffs } from "../usecases/pickup-handoff.usecase.js";
+import { generatePrompt } from "../usecases/generate-prompt.usecase.js";
 import { output } from "../lib/output.js";
-import type { HandoffEnvelope } from "../domain/types.js";
+import type { HandoffEnvelope, MaestroConfig } from "../domain/types.js";
 
 export function registerHandoffCommand(program: Command): void {
   program
@@ -12,9 +13,11 @@ export function registerHandoffCommand(program: Command): void {
     .addHelpText("after", `
 Examples:
   maestro handoff --list
-  maestro handoff --sitrep "Auth done. Refresh blocked." --quickstart "Run: bun test"
-  maestro handoff --plan --sitrep "Phase 1 complete" --quickstart "Start phase 2"
-  maestro handoff --sitrep "Done" --quickstart "Continue" --message "Short summary"
+  maestro handoff --sitrep "Auth done." --quickstart "Run: bun test"
+  maestro handoff --sitrep "Done" --quickstart "Continue" --prompt codex
+  maestro handoff --sitrep "Done" --quickstart "Continue" --prompt codex --task "create PR"
+  maestro handoff --prompt codex                    # prompt for latest pending handoff
+  maestro handoff --prompt codex --task "fix tests" # prompt with task for latest pending
   maestro handoff --dry-run --sitrep "test" --quickstart "test"
 `)
     .option("--list", "List all handoffs with status")
@@ -22,6 +25,8 @@ Examples:
     .option("--quickstart <text>", "First steps for the receiving agent")
     .option("--plan", "Include plan state from .maestro/plan.json")
     .option("--message <text>", "Short summary message")
+    .option("--prompt [agent]", "Generate agent prompt (optionally specify agent name)")
+    .option("--task <text>", "Task description to include in the prompt")
     .option("--dry-run", "Show what would be written without writing")
     .option("--json", "Output as JSON")
     .action(async (opts) => {
@@ -31,6 +36,23 @@ Examples:
       if (opts.list) {
         const all = await listHandoffs(services.handoffStore);
         output(isJson, all, formatListTable);
+        return;
+      }
+
+      // Prompt-only mode: --prompt without --sitrep/--quickstart
+      const isPromptOnly = opts.prompt !== undefined && !opts.sitrep && !opts.quickstart;
+
+      if (isPromptOnly) {
+        const config = await services.config.load(process.cwd());
+        const latest = await services.handoffStore.getLatestPending();
+        const handoffId = latest?.handoff.id ?? "HANDOFF_ID";
+        const agent = typeof opts.prompt === "string" ? opts.prompt : undefined;
+        const prompt = generatePrompt(config, { agent, task: opts.task, handoffId });
+        if (isJson) {
+          console.log(JSON.stringify({ prompt, handoffId }, null, 2));
+        } else {
+          printPrompt(prompt, agent ?? config.defaultAgent);
+        }
         return;
       }
 
@@ -71,9 +93,30 @@ Examples:
         `  Branch: ${h.git.branch}`,
         `  Session: ${h.session.sessionId}`,
         `  CASS indexed: ${h.session.cassIndexed}`,
-        `  Pickup: maestro handoff-pickup --json`,
       ]);
+
+      // Always suggest a prompt after creation
+      const config = await services.config.load(process.cwd());
+      const agent = typeof opts.prompt === "string" ? opts.prompt : undefined;
+      const prompt = generatePrompt(config, {
+        agent,
+        task: opts.task,
+        handoffId: handoff.id,
+      });
+      if (isJson) {
+        console.log(JSON.stringify({ prompt }, null, 2));
+      } else {
+        console.log("");
+        printPrompt(prompt, agent ?? config.defaultAgent);
+      }
     });
+}
+
+function printPrompt(prompt: string, agent?: string): void {
+  const label = agent ? `Prompt for ${agent}` : "Prompt (replace TARGET_AGENT)";
+  console.log(`--- ${label} ---`);
+  console.log(prompt);
+  console.log("--- End prompt ---");
 }
 
 function formatListTable(list: readonly HandoffEnvelope[]): string[] {

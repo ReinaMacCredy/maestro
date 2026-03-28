@@ -63,6 +63,7 @@ export interface MaestroConfig {
   readonly defaultAgent?: AgentSlug;
   readonly cassPath?: string;
   readonly handoffDir?: string;
+  readonly promptTemplate?: string;
   readonly sessionDetection?: {
     readonly enabled: boolean;
     readonly agents: readonly AgentSlug[];
