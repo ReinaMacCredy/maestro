@@ -20,3 +20,10 @@ export function output<T>(
 export function warn(message: string): void {
   console.error(`[!] ${message}`);
 }
+
+/** Format agent inject/remove results for text output. */
+export function formatAgentResults(
+  agents: ReadonlyArray<{ agent: string; action: string; configPath: string }>,
+): string[] {
+  return agents.map((a) => `  ${a.agent}: ${a.action} (${a.configPath})`);
+}

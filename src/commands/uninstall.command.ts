@@ -1,10 +1,19 @@
 import type { Command } from "commander";
 import { removeAgentBlocks } from "../usecases/manage-agents.usecase.js";
-import { output } from "../lib/output.js";
+import { formatAgentResults, output } from "../lib/output.js";
 import { rm } from "node:fs/promises";
-import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+
+async function tryRemove(path: string, opts?: { recursive?: boolean }): Promise<boolean> {
+  try {
+    await rm(path, opts);
+    return true;
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw err;
+  }
+}
 
 export function registerUninstallCommand(program: Command): void {
   program
@@ -22,30 +31,12 @@ export function registerUninstallCommand(program: Command): void {
 
       if (!opts.agentsOnly) {
         const installDir = process.env.MAESTRO_INSTALL_DIR ?? `${process.env.HOME}/.local/bin`;
-        const binaryPath = join(installDir, "maestro");
-        const globalConfigDir = join(homedir(), ".maestro");
-
-        if (existsSync(binaryPath)) {
-          await rm(binaryPath);
-          binaryRemoved = true;
-        }
-
-        if (existsSync(globalConfigDir)) {
-          await rm(globalConfigDir, { recursive: true });
-          configRemoved = true;
-        }
+        binaryRemoved = await tryRemove(join(installDir, "maestro"));
+        configRemoved = await tryRemove(join(homedir(), ".maestro"), { recursive: true });
       }
 
-      const result = {
-        agents: agentResults,
-        binaryRemoved,
-        configRemoved,
-      };
-
-      output(isJson, result, (r) => [
-        ...r.agents.map((a: { agent: string; action: string; configPath: string }) =>
-          `  ${a.agent}: ${a.action} (${a.configPath})`
-        ),
+      output(isJson, { agents: agentResults, binaryRemoved, configRemoved }, (r) => [
+        ...formatAgentResults(r.agents),
         "",
         r.binaryRemoved ? "[ok] Binary removed" : "[--] Binary kept",
         r.configRemoved ? "[ok] ~/.maestro/ removed" : "[--] ~/.maestro/ kept",

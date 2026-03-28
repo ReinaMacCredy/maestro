@@ -1,8 +1,18 @@
 import type { Command } from "commander";
 import { injectAgentBlocks } from "../usecases/manage-agents.usecase.js";
-import { output } from "../lib/output.js";
+import { formatAgentResults, output } from "../lib/output.js";
 import { execArgv } from "../lib/shell.js";
 import { getServices } from "../services.js";
+import { MaestroError } from "../domain/errors.js";
+
+async function execOrThrow(argv: string[], name: string, opts?: { cwd?: string }): Promise<void> {
+  const result = await execArgv(argv, opts);
+  if (result.exitCode !== 0) {
+    throw new MaestroError(`${name} failed: ${result.stderr}`, [
+      `Command: ${argv.join(" ")}`,
+    ]);
+  }
+}
 
 export function registerUpdateCommand(program: Command): void {
   program
@@ -21,51 +31,27 @@ export function registerUpdateCommand(program: Command): void {
         const sourceRepo = config.sourceRepo;
 
         if (!sourceRepo) {
-          console.error("[!] No sourceRepo in config. Run maestro install from the repo first.");
-          process.exit(1);
+          throw new MaestroError("No sourceRepo in config", [
+            "Run maestro install from the repo first",
+          ]);
         }
 
-        const pull = await execArgv(["git", "-C", sourceRepo, "pull"]);
-        if (pull.exitCode !== 0) {
-          console.error(`[!] git pull failed: ${pull.stderr}`);
-          process.exit(1);
-        }
-
-        const install = await execArgv(["bun", "install", "--frozen-lockfile"], { cwd: sourceRepo });
-        if (install.exitCode !== 0) {
-          console.error(`[!] bun install failed: ${install.stderr}`);
-          process.exit(1);
-        }
-
-        const build = await execArgv(["bun", "run", "build"], { cwd: sourceRepo });
-        if (build.exitCode !== 0) {
-          console.error(`[!] bun run build failed: ${build.stderr}`);
-          process.exit(1);
-        }
+        await execOrThrow(["git", "-C", sourceRepo, "pull"], "git pull");
+        await execOrThrow(["bun", "install", "--frozen-lockfile"], "bun install", { cwd: sourceRepo });
+        await execOrThrow(["bun", "run", "build"], "bun run build", { cwd: sourceRepo });
 
         const installDir = process.env.MAESTRO_INSTALL_DIR ?? `${process.env.HOME}/.local/bin`;
-        const cp = await execArgv(["cp", `${sourceRepo}/dist/maestro`, `${installDir}/maestro`]);
-        if (cp.exitCode !== 0) {
-          console.error(`[!] Failed to copy binary: ${cp.stderr}`);
-          process.exit(1);
-        }
+        await execOrThrow(["cp", `${sourceRepo}/dist/maestro`, `${installDir}/maestro`], "copy binary");
 
         binaryUpdated = true;
       }
 
       const agentResults = await injectAgentBlocks();
 
-      const result = {
-        binaryUpdated,
-        agents: agentResults,
-      };
-
-      output(isJson, result, (r) => [
+      output(isJson, { binaryUpdated, agents: agentResults }, (r) => [
         r.binaryUpdated ? "[ok] Binary updated" : "[--] Binary skipped (--agents-only)",
         "",
-        ...r.agents.map((a: { agent: string; action: string; configPath: string }) =>
-          `  ${a.agent}: ${a.action} (${a.configPath})`
-        ),
+        ...formatAgentResults(r.agents),
       ]);
     });
 }
