@@ -74,7 +74,6 @@ function buildClaudeSession(
     agent: "claude-code",
     sessionId: session.sessionId,
     sourcePath,
-    cassIndexed: false,
     startedAt: session.startedAt,
     detectionMethod: method,
   };
@@ -121,7 +120,6 @@ async function resolveCodexSession(
           agent: "codex",
           sessionId: fullId,
           sourcePath: path,
-          cassIndexed: false,
           startedAt: parseCodexTimestamp(filename),
           detectionMethod: method,
         };

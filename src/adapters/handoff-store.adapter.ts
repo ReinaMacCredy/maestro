@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { Handoff, HandoffEnvelope, HandoffStatus } from "../domain/types.js";
 import type { HandoffStorePort } from "../ports/handoff-store.port.js";
 import { MaestroError } from "../domain/errors.js";
@@ -44,7 +44,7 @@ export class FsHandoffStoreAdapter implements HandoffStorePort {
   async listIds(): Promise<readonly string[]> {
     const handoffsRoot = join(this.baseDir, ".maestro", "handoffs");
     const dirs = await listDirs(handoffsRoot);
-    return dirs.map((d) => d.split("/").pop()!).sort().reverse();
+    return dirs.map((d) => basename(d)).sort().reverse();
   }
 
   async list(
@@ -55,7 +55,7 @@ export class FsHandoffStoreAdapter implements HandoffStorePort {
 
     const envelopes: HandoffEnvelope[] = [];
     for (const dir of dirs) {
-      const id = dir.split("/").pop()!;
+      const id = basename(dir);
       const envelope = await readJson<HandoffEnvelope>(this.envelopePath(id));
       if (!envelope) continue;
       if (filter?.status && envelope.status !== filter.status) continue;

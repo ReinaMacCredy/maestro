@@ -127,7 +127,6 @@ export function mockSessionDetect(
     agent: "claude-code",
     sessionId: "test-session-123",
     sourcePath: "/tmp/sessions/test",
-    cassIndexed: false,
   };
   return {
     detect: async () => session ?? defaultSession,

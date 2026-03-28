@@ -1,3 +1,5 @@
+import { MaestroError } from "../domain/errors.js";
+
 export interface ShellResult {
   readonly stdout: string;
   readonly stderr: string;
@@ -20,7 +22,6 @@ export async function execOrThrow(
   name: string,
   opts?: { cwd?: string },
 ): Promise<ShellResult> {
-  const { MaestroError } = await import("../domain/errors.js");
   const result = await execArgv(argv, opts);
   if (result.exitCode !== 0) {
     throw new MaestroError(`${name} failed: ${result.stderr}`, [

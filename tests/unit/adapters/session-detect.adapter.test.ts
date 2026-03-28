@@ -34,7 +34,6 @@ describe("ClaudeSessionDetectAdapter", () => {
         expect(session.agent).toBe("claude-code");
         expect(typeof session.sessionId).toBe("string");
         expect(typeof session.sourcePath).toBe("string");
-        expect(session.cassIndexed).toBe(false);
       }
     });
   });

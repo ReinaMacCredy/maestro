@@ -1,6 +1,8 @@
 import { BLOCK_START_MARKER, BLOCK_END_MARKER } from "../domain/agents.js";
 
-const BLOCK_REGEX = /<!-- maestro:start -->[\s\S]*?<!-- maestro:end -->/;
+const BLOCK_REGEX = new RegExp(
+  `${BLOCK_START_MARKER.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[\\s\\S]*?${BLOCK_END_MARKER.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
+);
 const LEGACY_HEADING_REGEX = /\n## Cross-Agent Handoff \(maestro\)[\s\S]*?(?=\n## |\n$|$)/;
 
 export function wrapBlock(content: string): string {

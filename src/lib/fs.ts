@@ -6,15 +6,21 @@ export async function ensureDir(dir: string): Promise<void> {
 }
 
 export async function readText(path: string): Promise<string | undefined> {
-  const file = Bun.file(path);
-  if (!(await file.exists())) return undefined;
-  return file.text();
+  try {
+    return await Bun.file(path).text();
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw err;
+  }
 }
 
 export async function readJson<T>(path: string): Promise<T | undefined> {
-  const file = Bun.file(path);
-  if (!(await file.exists())) return undefined;
-  return file.json() as Promise<T>;
+  try {
+    return await Bun.file(path).json() as T;
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw err;
+  }
 }
 
 export async function writeJson(path: string, data: unknown): Promise<void> {

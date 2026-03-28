@@ -14,7 +14,6 @@ const validSession = {
   agent: "claude-code",
   sessionId: "abc-123",
   sourcePath: "/home/user/.claude/sessions/abc-123",
-  cassIndexed: true,
 };
 
 const validHandoff = {

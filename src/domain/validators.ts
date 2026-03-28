@@ -4,8 +4,7 @@ import type { Handoff, HandoffEnvelope } from "./types.js";
 export const HandoffSessionSchema = z.object({
   agent: z.string().min(1),
   sessionId: z.string().min(1),
-  sourcePath: z.string().min(1),
-  cassIndexed: z.boolean(),
+  sourcePath: z.string(),
 });
 
 export const PlanTaskSchema = z.object({

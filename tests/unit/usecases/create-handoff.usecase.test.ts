@@ -3,7 +3,6 @@ import { createHandoff } from "../../../src/usecases/create-handoff.usecase.js";
 import { MaestroError } from "../../../src/domain/errors.js";
 import {
   mockGit,
-  mockConfig,
   mockSessionDetect,
   mockHandoffStore,
 } from "../../helpers/mocks.js";

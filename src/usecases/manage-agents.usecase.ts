@@ -7,7 +7,7 @@ import {
 } from "../domain/agents.js";
 import { AGENT_INSTRUCTION_BLOCK } from "../domain/defaults.js";
 import { renderTemplate } from "../lib/template.js";
-import { readText, writeText, ensureDir } from "../lib/fs.js";
+import { readText, writeText } from "../lib/fs.js";
 import {
   extractBlock,
   injectBlock,
@@ -15,7 +15,6 @@ import {
   removeBlock,
   removeLegacyBlock,
 } from "../lib/agent-block.js";
-import { dirname } from "node:path";
 
 export interface InjectResult {
   readonly agent: string;
@@ -48,12 +47,10 @@ async function processInject(agent: AgentConfigSpec): Promise<InjectResult> {
   if (currentBlock === null) {
     const cleaned = removeLegacyBlock(existing);
     if (cleaned !== null) {
-      await ensureDir(dirname(configPath));
       await writeText(configPath, injectBlock(cleaned, rendered));
       return { agent: agent.displayName, action: "migrated", configPath };
     }
 
-    await ensureDir(dirname(configPath));
     await writeText(configPath, injectBlock(existing, rendered));
     return { agent: agent.displayName, action: "injected", configPath };
   }

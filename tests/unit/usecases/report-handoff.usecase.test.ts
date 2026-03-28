@@ -16,7 +16,6 @@ const makeEnvelope = (
       agent: "claude-code",
       sessionId: "sess-1",
       sourcePath: "/tmp/sessions/sess-1",
-      cassIndexed: true,
     },
     sitrep: "Done",
     quickstart: "Run tests",

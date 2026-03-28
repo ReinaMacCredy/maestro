@@ -1,5 +1,5 @@
 import type { SessionDetectPort } from "../ports/session-detect.port.js";
-import type { MaestroConfig, HandoffSession } from "../domain/types.js";
+import type { DetectionMethod, MaestroConfig, HandoffSession } from "../domain/types.js";
 import { MaestroError } from "../domain/errors.js";
 
 const DEFAULT_STALE_MINUTES = 60;
@@ -12,7 +12,7 @@ export interface DetectSessionOpts {
 
 export interface DetectSessionResult {
   readonly session: HandoffSession;
-  readonly method: string;
+  readonly method: DetectionMethod;
   readonly stale: boolean;
 }
 

@@ -4,6 +4,7 @@ import { createHandoff } from "../usecases/create-handoff.usecase.js";
 import { listHandoffs } from "../usecases/pickup-handoff.usecase.js";
 import { generatePrompt } from "../usecases/generate-prompt.usecase.js";
 import { output } from "../lib/output.js";
+import { NO_SESSION_ID } from "../domain/defaults.js";
 import type { HandoffEnvelope, MaestroConfig } from "../domain/types.js";
 
 export function registerHandoffCommand(program: Command): void {
@@ -69,7 +70,6 @@ Examples:
         return;
       }
 
-      // Load config once for both createHandoff and generatePrompt
       const config = await services.config.load(process.cwd());
 
       const handoff = await createHandoff(
@@ -136,7 +136,7 @@ function formatListTable(list: readonly HandoffEnvelope[]): string[] {
     const started = first.handoff.session.startedAt
       ? new Date(first.handoff.session.startedAt).toLocaleString()
       : "";
-    const label = sessionId === "none"
+    const label = sessionId === NO_SESSION_ID
       ? "No session"
       : `${sessionId.slice(0, 8)} (${agent}${started ? ", " + started : ""})`;
 

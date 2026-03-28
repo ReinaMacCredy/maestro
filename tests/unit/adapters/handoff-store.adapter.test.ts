@@ -16,7 +16,6 @@ const makeHandoff = (overrides: Partial<Handoff> = {}): Handoff => ({
     agent: "claude-code",
     sessionId: "test-session-id",
     sourcePath: "/tmp/sessions/test",
-    cassIndexed: true,
   },
   sitrep: "Everything is fine",
   quickstart: "Run: bun test",

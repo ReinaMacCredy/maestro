@@ -9,6 +9,8 @@ export const DEFAULT_CONFIG: MaestroConfig = {
   },
 };
 
+export const NO_SESSION_ID = "none";
+
 export const CASS_INSTALL_HINT = "Install: brew install dicklesworthstone/tap/cass";
 
 export const DEFAULT_PROMPT_TEMPLATE = `You are picking up a handoff from another agent. Run these commands to get oriented:
