@@ -24,7 +24,8 @@ Follow the quickstart in the handoff output.
 Read AGENTS.md for code style.
 {{#instructions}}Your instructions: {{instructions}}
 {{/instructions}}{{#task}}Your task: {{task}}
-{{/task}}{{#sessionId}}If you need more context about a decision or implementation detail, search the previous agent's conversation history:
+{{/task}}{{#sessionId}}Session: {{sessionId}}
+If you need more context about a decision or implementation detail, search the previous agent's conversation history:
   maestro handoff-dig "<your question>" --id {{handoffId}} --json
 
 {{/sessionId}}Use maestro handoff-report --content "summary of work done" --json when done.`;
