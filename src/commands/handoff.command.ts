@@ -50,7 +50,11 @@ Examples:
         const latest = await services.handoffStore.getLatestPending();
         const handoffId = latest?.handoff.id ?? "HANDOFF_ID";
         const agent = typeof opts.prompt === "string" ? opts.prompt : undefined;
-        const prompt = generatePrompt(config, { agent, handoffId });
+        const prompt = generatePrompt(config, {
+          agent,
+          handoffId,
+          instructions: latest?.handoff.instructions,
+        });
         if (isJson) {
           output(true, { prompt, handoffId }, () => []);
         } else {

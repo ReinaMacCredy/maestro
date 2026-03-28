@@ -4,6 +4,7 @@ import type { HandoffStorePort } from "../ports/handoff-store.port.js";
 import type { GitState, Handoff, HandoffPlan, HandoffSession, MaestroConfig } from "../domain/types.js";
 import { generateHandoffId } from "../domain/id.js";
 import { MaestroError } from "../domain/errors.js";
+import { validateHandoff } from "../domain/validators.js";
 import { MAESTRO_DIR, NO_SESSION_ID, UNKNOWN_AGENT } from "../domain/defaults.js";
 import { readJson } from "../lib/fs.js";
 import { warn } from "../lib/output.js";
@@ -76,10 +77,13 @@ export async function createHandoff(
     plan,
     sitrep,
     quickstart,
-    ...(opts.instructions && { instructions: opts.instructions }),
+    ...(opts.instructions !== undefined
+      ? { instructions: opts.instructions }
+      : {}),
     git: gitState,
   };
 
+  validateHandoff(handoff);
   await store.create(handoff);
   return handoff;
 }

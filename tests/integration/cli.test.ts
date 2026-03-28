@@ -102,13 +102,31 @@ describe("CLI integration", () => {
     expect(data.sitrep).toBe("test sitrep");
   });
 
-  it("handoff --list returns table when handoffs exist", async () => {
-    const { exitCode } = await run(["handoff", "--list"]);
-    expect(exitCode).toBe(0);
-  });
+    it("handoff --list returns table when handoffs exist", async () => {
+      const { exitCode } = await run(["handoff", "--list"]);
+      expect(exitCode).toBe(0);
+    });
 
-  it("note writes a note and note --list returns it", async () => {
-    await initGitRepo(tmpDir);
+    it("handoff --prompt includes stored instructions from latest pending handoff", async () => {
+      await initGitRepo(tmpDir);
+
+      const create = await run([
+        "handoff",
+        "--skip-session",
+        "--sitrep", "test sitrep",
+        "--quickstart", "run tests",
+        "--instructions", "Deploy to staging first",
+        "--json",
+      ], tmpDir);
+      expect(create.exitCode).toBe(0);
+
+      const prompt = await run(["handoff", "--prompt", "codex"], tmpDir);
+      expect(prompt.exitCode).toBe(0);
+      expect(prompt.stdout).toContain("Your instructions: Deploy to staging first");
+    });
+
+    it("note writes a note and note --list returns it", async () => {
+      await initGitRepo(tmpDir);
 
     const create = await run(
       ["note", "--content", "Remember the branch state", "--json"],

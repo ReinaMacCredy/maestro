@@ -2,6 +2,7 @@ import { basename, join } from "node:path";
 import type { Handoff, HandoffEnvelope, HandoffStatus } from "../domain/types.js";
 import type { HandoffStorePort } from "../ports/handoff-store.port.js";
 import { MAESTRO_DIR } from "../domain/defaults.js";
+import { validateEnvelope, validateHandoff } from "../domain/validators.js";
 import { ensureDir, readJson, writeJson, listDirs } from "../lib/fs.js";
 
 export class FsHandoffStoreAdapter implements HandoffStorePort {
@@ -24,20 +25,24 @@ export class FsHandoffStoreAdapter implements HandoffStorePort {
   }
 
   async create(handoff: Handoff): Promise<string> {
-    const dir = this.handoffDir(handoff.id);
+    const validatedHandoff = validateHandoff(handoff);
+    const dir = this.handoffDir(validatedHandoff.id);
     await ensureDir(dir);
-    await writeJson(this.handoffPath(handoff.id), handoff);
+    await writeJson(this.handoffPath(validatedHandoff.id), validatedHandoff);
 
     const envelope: HandoffEnvelope = {
-      handoff,
+      handoff: validatedHandoff,
       status: "pending",
     };
-    await writeJson(this.envelopePath(handoff.id), envelope);
-    return handoff.id;
+    const validatedEnvelope = validateEnvelope(envelope);
+    await writeJson(this.envelopePath(validatedHandoff.id), validatedEnvelope);
+    return validatedHandoff.id;
   }
 
   async get(id: string): Promise<HandoffEnvelope | undefined> {
-    return readJson<HandoffEnvelope>(this.envelopePath(id));
+    const envelope = await readJson<unknown>(this.envelopePath(id));
+    if (!envelope) return undefined;
+    return validateEnvelope(envelope);
   }
 
   async getLatestPending(): Promise<HandoffEnvelope | undefined> {
@@ -87,7 +92,8 @@ export class FsHandoffStoreAdapter implements HandoffStorePort {
       ...(meta?.report && { report: meta.report }),
     };
 
-    await writeJson(this.envelopePath(id), updated);
-    return updated;
+    const validatedEnvelope = validateEnvelope(updated);
+    await writeJson(this.envelopePath(id), validatedEnvelope);
+    return validatedEnvelope;
   }
 }

@@ -14,6 +14,8 @@ const validSession = {
   agent: "claude-code",
   sessionId: "abc-123",
   sourcePath: "/home/user/.claude/sessions/abc-123",
+  startedAt: 1_774_624_000_000,
+  detectionMethod: "cwd-fallback",
 };
 
 const validHandoff = {
@@ -78,6 +80,12 @@ describe("validateHandoff", () => {
   it("accepts handoff without instructions (backward compat)", () => {
     const result = validateHandoff(validHandoff);
     expect(result.instructions).toBeUndefined();
+  });
+
+  it("preserves session metadata stored on disk", () => {
+    const result = validateHandoff(validHandoff);
+    expect(result.session.startedAt).toBe(1_774_624_000_000);
+    expect(result.session.detectionMethod).toBe("cwd-fallback");
   });
 
   it("rejects empty instructions", () => {

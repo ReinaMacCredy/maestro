@@ -5,7 +5,9 @@ export const HandoffSessionSchema = z.object({
   agent: z.string().min(1),
   sessionId: z.string().min(1),
   sourcePath: z.string(),
-});
+  startedAt: z.number().int().nonnegative().optional(),
+  detectionMethod: z.enum(["pid", "env", "cwd-fallback", "explicit"]).optional(),
+}).passthrough();
 
 export const PlanTaskSchema = z.object({
   id: z.string().min(1),
@@ -38,7 +40,7 @@ export const HandoffSchema = z.object({
   quickstart: z.string().min(1),
   instructions: z.string().min(1).max(2000).optional(),
   git: GitStateSchema,
-});
+}).passthrough();
 
 export const HandoffEnvelopeSchema = z.object({
   handoff: HandoffSchema,
@@ -47,7 +49,7 @@ export const HandoffEnvelopeSchema = z.object({
   pickedUpBy: z.string().optional(),
   completedAt: z.string().datetime().optional(),
   report: z.string().optional(),
-});
+}).passthrough();
 
 export function validateHandoff(data: unknown): Handoff {
   return HandoffSchema.parse(data);

@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { ZodError } from "zod";
 import { FsHandoffStoreAdapter } from "../../../src/adapters/handoff-store.adapter.js";
 import type { Handoff } from "../../../src/domain/types.js";
 
@@ -16,6 +17,8 @@ const makeHandoff = (overrides: Partial<Handoff> = {}): Handoff => ({
     agent: "claude-code",
     sessionId: "test-session-id",
     sourcePath: "/tmp/sessions/test",
+    startedAt: 1_774_624_000_000,
+    detectionMethod: "cwd-fallback",
   },
   sitrep: "Everything is fine",
   quickstart: "Run: bun test",
@@ -56,6 +59,12 @@ describe("FsHandoffStoreAdapter", () => {
       const envelope = await store.get("2026-03-28-001");
       expect(envelope?.status).toBe("pending");
     });
+
+    it("rejects invalid instructions before persisting", async () => {
+      await expect(
+        store.create(makeHandoff({ instructions: "A".repeat(2001) })),
+      ).rejects.toBeInstanceOf(ZodError);
+    });
   });
 
   describe("get", () => {
@@ -68,6 +77,45 @@ describe("FsHandoffStoreAdapter", () => {
       await store.create(makeHandoff());
       const envelope = await store.get("2026-03-28-001");
       expect(envelope?.handoff.message).toBe("Test handoff");
+    });
+
+    it("preserves stored session metadata when reading", async () => {
+      await store.create(makeHandoff());
+      const envelope = await store.get("2026-03-28-001");
+      expect(envelope?.handoff.session.startedAt).toBe(1_774_624_000_000);
+      expect(envelope?.handoff.session.detectionMethod).toBe("cwd-fallback");
+    });
+
+    it("reads legacy envelopes without instructions", async () => {
+      await store.create(makeHandoff());
+      await Bun.write(
+        join(tmpDir, ".maestro", "handoffs", "2026-03-28-001", "envelope.json"),
+        JSON.stringify({
+          handoff: {
+            id: "2026-03-28-001",
+            timestamp: "2026-03-28T12:00:00Z",
+            message: "Legacy handoff",
+            session: {
+              agent: "claude-code",
+              sessionId: "test-session-id",
+              sourcePath: "/tmp/sessions/test",
+            },
+            sitrep: "Everything is fine",
+            quickstart: "Run: bun test",
+            git: {
+              branch: "main",
+              recentCommits: [],
+              changedFiles: [],
+              workingTreeClean: true,
+              diffStat: "+0 -0",
+            },
+          },
+          status: "pending",
+        }, null, 2),
+      );
+
+      const envelope = await store.get("2026-03-28-001");
+      expect(envelope?.handoff.instructions).toBeUndefined();
     });
   });
 

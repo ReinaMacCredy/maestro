@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { ZodError } from "zod";
 import { createHandoff } from "../../../src/usecases/create-handoff.usecase.js";
 import { MaestroError } from "../../../src/domain/errors.js";
 import {
@@ -124,6 +125,50 @@ describe("createHandoff", () => {
     });
 
     expect(handoff.instructions).toBeUndefined();
+  });
+
+  it("rejects empty instructions", async () => {
+    const store = mockHandoffStore();
+    try {
+      await createHandoff(
+        mockGit(),
+        mockSessionDetect(),
+        { sessionDetection: { enabled: true, agents: ["claude-code"] } },
+        store,
+        {
+          plan: false,
+          sitrep: "Auth done",
+          quickstart: "Run tests",
+          instructions: "",
+          dir: process.cwd(),
+        },
+      );
+      expect.unreachable();
+    } catch (err) {
+      expect(err).toBeInstanceOf(ZodError);
+    }
+  });
+
+  it("rejects instructions exceeding 2000 chars", async () => {
+    const store = mockHandoffStore();
+    try {
+      await createHandoff(
+        mockGit(),
+        mockSessionDetect(),
+        { sessionDetection: { enabled: true, agents: ["claude-code"] } },
+        store,
+        {
+          plan: false,
+          sitrep: "Auth done",
+          quickstart: "Run tests",
+          instructions: "A".repeat(2001),
+          dir: process.cwd(),
+        },
+      );
+      expect.unreachable();
+    } catch (err) {
+      expect(err).toBeInstanceOf(ZodError);
+    }
   });
 
   it("truncates sitrep for auto-message", async () => {
