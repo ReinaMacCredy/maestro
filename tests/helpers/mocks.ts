@@ -77,8 +77,8 @@ export function mockHandoffStore(
       meta,
     ) => {
       const existing = envelopes.get(id);
-      if (!existing) throw new Error(`Handoff ${id} not found`);
-      envelopes.set(id, {
+      if (!existing) return undefined;
+      const updated: HandoffEnvelope = {
         ...existing,
         status,
         ...(meta?.pickedUpBy && {
@@ -87,7 +87,9 @@ export function mockHandoffStore(
         }),
         ...(meta?.completedAt && { completedAt: meta.completedAt }),
         ...(meta?.report && { report: meta.report }),
-      });
+      };
+      envelopes.set(id, updated);
+      return updated;
     },
   };
 }

@@ -45,6 +45,7 @@ export const HandoffEnvelopeSchema = z.object({
   pickedUpAt: z.string().datetime().optional(),
   pickedUpBy: z.string().optional(),
   completedAt: z.string().datetime().optional(),
+  report: z.string().optional(),
 });
 
 export function validateHandoff(data: unknown): Handoff {

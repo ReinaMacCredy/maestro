@@ -1,5 +1,6 @@
 import type { Command } from "commander";
 import type { NoteEntry } from "../domain/types.js";
+import { MaestroError } from "../domain/errors.js";
 import { output } from "../lib/output.js";
 import { getServices } from "../services.js";
 import { createNote, listNotes } from "../usecases/note.usecase.js";
@@ -22,10 +23,10 @@ Examples:
       const isJson = opts.json ?? program.opts().json;
 
       if (opts.list && opts.content) {
-        console.error("[!] --content and --list cannot be used together");
-        console.error("    maestro note --content '...'");
-        console.error("    maestro note --list");
-        process.exit(1);
+        throw new MaestroError("--content and --list cannot be used together", [
+          "maestro note --content '...'",
+          "maestro note --list",
+        ]);
       }
 
       if (opts.list) {
@@ -35,10 +36,10 @@ Examples:
       }
 
       if (!opts.content) {
-        console.error("[!] --content is required unless --list is used");
-        console.error("    maestro note --content '...'");
-        console.error("    maestro note --list");
-        process.exit(1);
+        throw new MaestroError("--content is required unless --list is used", [
+          "maestro note --content '...'",
+          "maestro note --list",
+        ]);
       }
 
       const note = await createNote(services.git, services.notesStore, {

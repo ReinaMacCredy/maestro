@@ -1,6 +1,6 @@
 import type { HandoffStorePort } from "../ports/handoff-store.port.js";
 import type { HandoffEnvelope } from "../domain/types.js";
-import { MaestroError } from "../domain/errors.js";
+import { MaestroError, handoffNotFound } from "../domain/errors.js";
 
 export interface ReportOpts {
   readonly id?: string;
@@ -15,11 +15,7 @@ export async function reportHandoff(
 
   if (opts.id) {
     envelope = await store.get(opts.id);
-    if (!envelope) {
-      throw new MaestroError(`Handoff ${opts.id} not found`, [
-        "List handoffs: maestro handoff --list",
-      ]);
-    }
+    if (!envelope) throw handoffNotFound(opts.id);
   } else {
     const all = await store.list({ status: "picked-up" });
     envelope = all[0];
@@ -30,10 +26,8 @@ export async function reportHandoff(
     }
   }
 
-  await store.updateStatus(envelope.handoff.id, "completed", {
+  return (await store.updateStatus(envelope.handoff.id, "completed", {
     completedAt: new Date().toISOString(),
     report: opts.content,
-  });
-
-  return (await store.get(envelope.handoff.id))!;
+  }))!;
 }

@@ -1,6 +1,6 @@
 import type { HandoffStorePort } from "../ports/handoff-store.port.js";
 import type { HandoffEnvelope } from "../domain/types.js";
-import { MaestroError } from "../domain/errors.js";
+import { MaestroError, handoffNotFound } from "../domain/errors.js";
 
 export interface PickupOpts {
   readonly id?: string;
@@ -16,11 +16,7 @@ export async function pickupHandoff(
 
   if (opts.id) {
     envelope = await store.get(opts.id);
-    if (!envelope) {
-      throw new MaestroError(`Handoff ${opts.id} not found`, [
-        "List available handoffs: maestro handoff-pickup --list",
-      ]);
-    }
+    if (!envelope) throw handoffNotFound(opts.id);
   } else {
     envelope = await store.getLatestPending();
     if (!envelope) {
@@ -31,10 +27,9 @@ export async function pickupHandoff(
   }
 
   if (envelope.status === "pending" && !opts.peek) {
-    await store.updateStatus(envelope.handoff.id, "picked-up", {
+    envelope = (await store.updateStatus(envelope.handoff.id, "picked-up", {
       pickedUpBy: opts.agent,
-    });
-    envelope = (await store.get(envelope.handoff.id))!;
+    }))!;
   }
 
   return envelope;

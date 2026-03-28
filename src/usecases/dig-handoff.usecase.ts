@@ -1,9 +1,8 @@
-import { existsSync } from "node:fs";
 import type { HandoffStorePort } from "../ports/handoff-store.port.js";
 import type { CassPort } from "../ports/cass.port.js";
 import type { CassSearchResponse } from "../domain/types.js";
-import { MaestroError } from "../domain/errors.js";
-import { CASS_INSTALL_HINT, MAESTRO_DIR } from "../domain/defaults.js";
+import { MaestroError, handoffNotFound } from "../domain/errors.js";
+import { CASS_INSTALL_HINT, MAESTRO_DIR, UNKNOWN_AGENT } from "../domain/defaults.js";
 import { warn } from "../lib/output.js";
 import { writeText } from "../lib/fs.js";
 import { join } from "node:path";
@@ -29,11 +28,7 @@ export async function digHandoff(
   let envelope;
   if (opts.id) {
     envelope = await store.get(opts.id);
-    if (!envelope) {
-      throw new MaestroError(`Handoff ${opts.id} not found`, [
-        "List handoffs: maestro handoff --list",
-      ]);
-    }
+    if (!envelope) throw handoffNotFound(opts.id);
   } else {
     const all = await store.list();
     envelope = all[0];
@@ -49,7 +44,7 @@ export async function digHandoff(
   // Lazy indexing with sentinel to avoid re-indexing on repeated digs
   if (session.sourcePath) {
     const sentinel = join(opts.dir, MAESTRO_DIR, "handoffs", envelope.handoff.id, ".cass-indexed");
-    if (!existsSync(sentinel)) {
+    if (!(await Bun.file(sentinel).exists())) {
       try {
         await cass.indexOnce([session.sourcePath]);
         await writeText(sentinel, new Date().toISOString());
@@ -60,7 +55,7 @@ export async function digHandoff(
   }
 
   return cass.search(query, {
-    agent: session.agent === "unknown" ? undefined : session.agent.replace("-", "_"),
+    agent: session.agent === UNKNOWN_AGENT ? undefined : session.agent,
     workspace: opts.dir,
     limit: opts.limit,
   });

@@ -42,7 +42,7 @@ export class ShellCassAdapter implements CassPort {
     const argv = [this.cassPath, "search", query, "--json"];
 
     if (options.agent) {
-      argv.push("--agent", options.agent);
+      argv.push("--agent", options.agent.replace(/-/g, "_"));
     }
     if (options.workspace) {
       argv.push("--workspace", options.workspace);

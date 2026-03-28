@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import {
   SUPPORTED_AGENTS,
   agentConfigPath,
@@ -7,7 +6,7 @@ import {
 } from "../domain/agents.js";
 import { AGENT_INSTRUCTION_BLOCK } from "../domain/defaults.js";
 import { renderTemplate } from "../lib/template.js";
-import { readText, writeText } from "../lib/fs.js";
+import { dirExists, readText, writeText } from "../lib/fs.js";
 import {
   extractBlock,
   injectBlock,
@@ -36,7 +35,7 @@ async function processInject(agent: AgentConfigSpec): Promise<InjectResult> {
   const configPath = agentConfigPath(agent);
   const dirPath = agentConfigDirPath(agent);
 
-  if (!existsSync(dirPath)) {
+  if (!(await dirExists(dirPath))) {
     return { agent: agent.displayName, action: "not-detected", configPath };
   }
 
@@ -67,7 +66,7 @@ async function processRemove(agent: AgentConfigSpec): Promise<RemoveResult> {
   const configPath = agentConfigPath(agent);
   const dirPath = agentConfigDirPath(agent);
 
-  if (!existsSync(dirPath)) {
+  if (!(await dirExists(dirPath))) {
     return { agent: agent.displayName, action: "not-detected", configPath };
   }
 

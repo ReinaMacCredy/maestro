@@ -4,7 +4,7 @@ import type { HandoffStorePort } from "../ports/handoff-store.port.js";
 import type { GitState, Handoff, HandoffPlan, HandoffSession, MaestroConfig } from "../domain/types.js";
 import { generateHandoffId } from "../domain/id.js";
 import { MaestroError } from "../domain/errors.js";
-import { MAESTRO_DIR, NO_SESSION_ID } from "../domain/defaults.js";
+import { MAESTRO_DIR, NO_SESSION_ID, UNKNOWN_AGENT } from "../domain/defaults.js";
 import { readJson } from "../lib/fs.js";
 import { warn } from "../lib/output.js";
 import { detectSession } from "./detect-session.usecase.js";
@@ -44,7 +44,7 @@ export async function createHandoff(
   ]);
 
   const session: HandoffSession = sessionResult?.session ?? {
-    agent: "unknown",
+    agent: UNKNOWN_AGENT,
     sessionId: NO_SESSION_ID,
     sourcePath: "",
   };

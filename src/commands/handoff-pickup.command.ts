@@ -2,6 +2,7 @@ import type { Command } from "commander";
 import { getServices } from "../services.js";
 import { pickupHandoff } from "../usecases/pickup-handoff.usecase.js";
 import { output } from "../lib/output.js";
+import { UNKNOWN_AGENT } from "../domain/defaults.js";
 import type { HandoffEnvelope } from "../domain/types.js";
 
 export function registerHandoffPickupCommand(program: Command): void {
@@ -27,7 +28,7 @@ Examples:
       const peek = !opts.claim;
       const envelope = await pickupHandoff(services.handoffStore, {
         id: opts.id,
-        agent: opts.agent ?? "unknown",
+        agent: opts.agent ?? UNKNOWN_AGENT,
         peek,
       });
 

@@ -2,6 +2,7 @@ import type { Command } from "commander";
 import { removeAgentBlocks } from "../usecases/manage-agents.usecase.js";
 import { formatAgentResults, output } from "../lib/output.js";
 import { removeIfExists } from "../lib/fs.js";
+import { MAESTRO_DIR } from "../domain/defaults.js";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -22,7 +23,7 @@ export function registerUninstallCommand(program: Command): void {
       if (!opts.agentsOnly) {
         const installDir = process.env.MAESTRO_INSTALL_DIR ?? join(homedir(), ".local", "bin");
         binaryRemoved = await removeIfExists(join(installDir, "maestro"));
-        configRemoved = await removeIfExists(join(homedir(), ".maestro"), { recursive: true });
+        configRemoved = await removeIfExists(join(homedir(), MAESTRO_DIR), { recursive: true });
       }
 
       output(isJson, { agents: agentResults, binaryRemoved, configRemoved }, (r) => [

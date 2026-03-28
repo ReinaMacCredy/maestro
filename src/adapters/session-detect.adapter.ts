@@ -135,6 +135,6 @@ function normalizePath(p: string): string {
   return p.replace(/\/+$/, "");
 }
 
-export function encodeProjectPath(cwd: string): string {
+function encodeProjectPath(cwd: string): string {
   return cwd.replace(/\//g, "-").replace(/^-/, "");
 }

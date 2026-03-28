@@ -1,14 +1,18 @@
 import { basename, join } from "node:path";
 import type { Handoff, HandoffEnvelope, HandoffStatus } from "../domain/types.js";
 import type { HandoffStorePort } from "../ports/handoff-store.port.js";
-import { MaestroError } from "../domain/errors.js";
+import { MAESTRO_DIR } from "../domain/defaults.js";
 import { ensureDir, readJson, writeJson, listDirs } from "../lib/fs.js";
 
 export class FsHandoffStoreAdapter implements HandoffStorePort {
   constructor(private readonly baseDir: string) {}
 
+  private handoffsRoot(): string {
+    return join(this.baseDir, MAESTRO_DIR, "handoffs");
+  }
+
   private handoffDir(id: string): string {
-    return join(this.baseDir, ".maestro", "handoffs", id);
+    return join(this.handoffsRoot(), id);
   }
 
   private handoffPath(id: string): string {
@@ -42,16 +46,14 @@ export class FsHandoffStoreAdapter implements HandoffStorePort {
   }
 
   async listIds(): Promise<readonly string[]> {
-    const handoffsRoot = join(this.baseDir, ".maestro", "handoffs");
-    const dirs = await listDirs(handoffsRoot);
+    const dirs = await listDirs(this.handoffsRoot());
     return dirs.map((d) => basename(d)).sort().reverse();
   }
 
   async list(
     filter?: { status?: HandoffStatus },
   ): Promise<readonly HandoffEnvelope[]> {
-    const handoffsRoot = join(this.baseDir, ".maestro", "handoffs");
-    const dirs = await listDirs(handoffsRoot);
+    const dirs = await listDirs(this.handoffsRoot());
 
     const envelopes: HandoffEnvelope[] = [];
     for (const dir of dirs) {
@@ -62,7 +64,6 @@ export class FsHandoffStoreAdapter implements HandoffStorePort {
       envelopes.push(envelope);
     }
 
-    // Sort by timestamp descending (most recent first)
     envelopes.sort((a, b) =>
       b.handoff.timestamp.localeCompare(a.handoff.timestamp),
     );
@@ -73,13 +74,9 @@ export class FsHandoffStoreAdapter implements HandoffStorePort {
     id: string,
     status: HandoffStatus,
     meta?: { pickedUpBy?: string; completedAt?: string; report?: string },
-  ): Promise<void> {
+  ): Promise<HandoffEnvelope | undefined> {
     const envelope = await this.get(id);
-    if (!envelope) {
-      throw new MaestroError(`Handoff ${id} not found`, [
-        "List handoffs: maestro handoff --list",
-      ]);
-    }
+    if (!envelope) return undefined;
 
     const updated: HandoffEnvelope = {
       ...envelope,
@@ -93,5 +90,6 @@ export class FsHandoffStoreAdapter implements HandoffStorePort {
     };
 
     await writeJson(this.envelopePath(id), updated);
+    return updated;
   }
 }

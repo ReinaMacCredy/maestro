@@ -42,7 +42,7 @@ describe("digHandoff", () => {
 
     await digHandoff(store, cass, "token refresh", { id: "2026-03-28-001", dir: "/tmp" });
     expect(searchQuery).toBe("token refresh");
-    expect(searchOpts.agent).toBe("claude_code");
+    expect(searchOpts.agent).toBe("claude-code");
   });
 
   it("throws when CASS binary not found", async () => {

@@ -4,7 +4,7 @@ import { createHandoff } from "../usecases/create-handoff.usecase.js";
 import { listHandoffs } from "../usecases/pickup-handoff.usecase.js";
 import { generatePrompt } from "../usecases/generate-prompt.usecase.js";
 import { output } from "../lib/output.js";
-import { NO_SESSION_ID } from "../domain/defaults.js";
+import { NO_SESSION_ID, UNKNOWN_AGENT } from "../domain/defaults.js";
 import type { HandoffEnvelope, MaestroConfig } from "../domain/types.js";
 
 export function registerHandoffCommand(program: Command): void {
@@ -51,7 +51,7 @@ Examples:
         const agent = typeof opts.prompt === "string" ? opts.prompt : undefined;
         const prompt = generatePrompt(config, { agent, handoffId });
         if (isJson) {
-          console.log(JSON.stringify({ prompt, handoffId }, null, 2));
+          output(true, { prompt, handoffId }, () => []);
         } else {
           printPrompt(prompt, agent ?? config.defaultAgent);
         }
@@ -157,7 +157,7 @@ function formatListTable(list: readonly HandoffEnvelope[]): string[] {
 }
 
 function formatStatus(e: HandoffEnvelope): string {
-  if (e.status === "picked-up" && e.pickedUpBy && e.pickedUpBy !== "unknown") {
+  if (e.status === "picked-up" && e.pickedUpBy && e.pickedUpBy !== UNKNOWN_AGENT) {
     return `picked-up ${e.pickedUpBy}`;
   }
   return e.status;

@@ -1,4 +1,4 @@
-import { mkdir, readdir, rename, rm } from "node:fs/promises";
+import { mkdir, readdir, rename, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 
 export async function ensureDir(dir: string): Promise<void> {
@@ -47,6 +47,14 @@ export async function removeIfExists(
   } catch (err: unknown) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
     throw err;
+  }
+}
+
+export async function dirExists(dir: string): Promise<boolean> {
+  try {
+    return (await stat(dir)).isDirectory();
+  } catch {
+    return false;
   }
 }
 

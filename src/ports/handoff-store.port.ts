@@ -10,5 +10,5 @@ export interface HandoffStorePort {
     id: string,
     status: HandoffStatus,
     meta?: { pickedUpBy?: string; completedAt?: string; report?: string },
-  ): Promise<void>;
+  ): Promise<HandoffEnvelope | undefined>;
 }

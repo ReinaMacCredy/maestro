@@ -132,10 +132,9 @@ describe("FsHandoffStoreAdapter", () => {
       expect(envelope?.pickedUpAt).toBeTruthy();
     });
 
-    it("throws for non-existent handoff", async () => {
-      await expect(
-        store.updateStatus("nope", "picked-up"),
-      ).rejects.toThrow("not found");
+    it("returns undefined for non-existent handoff", async () => {
+      const result = await store.updateStatus("nope", "picked-up");
+      expect(result).toBeUndefined();
     });
   });
 });
