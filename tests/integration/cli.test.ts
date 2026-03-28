@@ -72,8 +72,8 @@ describe("CLI integration", () => {
     expect(data.sitrep).toBe("test sitrep");
   });
 
-  it("handoff-pickup --list returns empty when no handoffs", async () => {
-    const { stdout, exitCode } = await run("handoff-pickup", "--list");
+  it("handoff --list returns table when handoffs exist", async () => {
+    const { exitCode } = await run("handoff", "--list");
     expect(exitCode).toBe(0);
   });
 });

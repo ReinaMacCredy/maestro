@@ -3,6 +3,7 @@ import { getServices } from "../services.js";
 import { createHandoff } from "../usecases/create-handoff.usecase.js";
 import { listHandoffs } from "../usecases/pickup-handoff.usecase.js";
 import { output } from "../lib/output.js";
+import type { HandoffEnvelope } from "../domain/types.js";
 
 export function registerHandoffCommand(program: Command): void {
   program
@@ -29,17 +30,7 @@ Examples:
 
       if (opts.list) {
         const all = await listHandoffs(services.handoffStore);
-        output(isJson ?? true, all, (list) =>
-          list.length === 0
-            ? ["No handoffs found"]
-            : [
-                `${list.length} handoff(s):`,
-                ...list.map(
-                  (e) =>
-                    `  ${e.handoff.id}  [${e.status}]  ${e.handoff.message}`,
-                ),
-              ],
-        );
+        output(isJson, all, formatListTable);
         return;
       }
 
@@ -83,4 +74,36 @@ Examples:
         `  Pickup: maestro handoff-pickup --json`,
       ]);
     });
+}
+
+function formatListTable(list: readonly HandoffEnvelope[]): string[] {
+  if (list.length === 0) return ["No handoffs found"];
+
+  // Compute column widths
+  const idWidth = 16;
+  const statusWidth = Math.max(
+    6,
+    ...list.map((e) => formatStatus(e).length),
+  );
+
+  const header = `  ${"ID".padEnd(idWidth)}  ${"Status".padEnd(statusWidth)}  Message`;
+  const sep = `  ${"----".padEnd(idWidth)}  ${"------".padEnd(statusWidth)}  -------`;
+
+  const rows = list.map((e) => {
+    const id = e.handoff.id.padEnd(idWidth);
+    const status = formatStatus(e).padEnd(statusWidth);
+    const msg = e.handoff.message.length > 50
+      ? e.handoff.message.slice(0, 47) + "..."
+      : e.handoff.message;
+    return `  ${id}  ${status}  ${msg}`;
+  });
+
+  return [`${list.length} handoff(s)`, "", header, sep, ...rows];
+}
+
+function formatStatus(e: HandoffEnvelope): string {
+  if (e.status === "picked-up" && e.pickedUpBy && e.pickedUpBy !== "unknown") {
+    return `picked-up ${e.pickedUpBy}`;
+  }
+  return e.status;
 }

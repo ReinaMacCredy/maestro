@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { getServices } from "../services.js";
-import { pickupHandoff, listHandoffs } from "../usecases/pickup-handoff.usecase.js";
+import { pickupHandoff } from "../usecases/pickup-handoff.usecase.js";
 import { output } from "../lib/output.js";
 import type { HandoffEnvelope } from "../domain/types.js";
 
@@ -10,49 +10,49 @@ export function registerHandoffPickupCommand(program: Command): void {
     .description("Read the latest (or specified) handoff payload")
     .addHelpText("after", `
 Examples:
-  maestro handoff-pickup --json            # pick up and mark as picked-up
-  maestro handoff-pickup --peek --json     # view without consuming
-  maestro handoff-pickup --markdown        # pick up as readable briefing
-  maestro handoff-pickup --list            # list all handoffs with status
-  maestro handoff-pickup --id 2026-03-28-001
+  maestro handoff-pickup --json                    # view latest pending (safe, repeatable)
+  maestro handoff-pickup --claim --agent codex     # consume and mark as picked-up
+  maestro handoff-pickup --claim --json            # consume (anonymous)
+  maestro handoff-pickup --markdown                # view as readable briefing
+  maestro handoff-pickup --id 2026-03-28-001       # view a specific handoff
 `)
-    .option("--id <handoff-id>", "Pick up a specific handoff by ID")
-    .option("--peek", "View the handoff without marking it as picked up")
-    .option("--list", "List available handoffs without picking one up")
+    .option("--id <handoff-id>", "View a specific handoff by ID")
+    .option("--claim", "Mark the handoff as picked-up (default: peek only)")
+    .option("--agent <name>", "Agent name for attribution when claiming")
     .option("--markdown", "Output as readable markdown")
     .option("--json", "Output as JSON (default)")
     .action(async (opts) => {
       const services = getServices();
-      const isJson = opts.json ?? (!opts.markdown && program.opts().json !== false);
 
-      if (opts.list) {
-        const all = await listHandoffs(services.handoffStore);
-        output(isJson ?? true, all, (list) =>
-          list.length === 0
-            ? ["No handoffs found"]
-            : [
-                `${list.length} handoff(s):`,
-                ...list.map(
-                  (e) =>
-                    `  ${e.handoff.id}  [${e.status}]  ${e.handoff.message}`,
-                ),
-              ],
-        );
-        return;
-      }
-
+      const peek = !opts.claim;
       const envelope = await pickupHandoff(services.handoffStore, {
         id: opts.id,
-        agent: "unknown",
-        peek: opts.peek,
+        agent: opts.agent ?? "unknown",
+        peek,
       });
 
       if (opts.markdown) {
         console.log(formatMarkdown(envelope));
       } else {
-        output(true, envelope, () => []);
+        const isJson = opts.json ?? program.opts().json;
+        output(isJson ?? true, envelope, (e) => formatText(e));
       }
     });
+}
+
+function formatText(envelope: HandoffEnvelope): string[] {
+  const h = envelope.handoff;
+  return [
+    `${h.id}  [${envelope.status}]`,
+    `  ${h.message}`,
+    `  From: ${h.session.agent}  Branch: ${h.git.branch}`,
+    "",
+    "Sitrep:",
+    h.sitrep,
+    "",
+    "Quickstart:",
+    h.quickstart,
+  ];
 }
 
 function formatMarkdown(envelope: HandoffEnvelope): string {
