@@ -1,9 +1,0 @@
-{
-  "name": "fs-tasks",
-  "description": "Plain-file task backend (default, always available)",
-  "binary": null,
-  "detect": null,
-  "provides": "tasks",
-  "priority": 0,
-  "adapter": "tools/built-in/fs-tasks/adapter.ts"
-}

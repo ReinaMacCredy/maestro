@@ -1,7 +1,0 @@
-{
-  "name": "rg",
-  "binary": "rg",
-  "detect": "rg --version",
-  "category": "text-search",
-  "description": "Exhaustive regex text search (ripgrep)"
-}

@@ -1,7 +1,0 @@
-{
-  "name": "tilth",
-  "binary": "tilth",
-  "detect": "tilth --version",
-  "category": "code-navigation",
-  "description": "Structure-aware code navigation and reading"
-}
