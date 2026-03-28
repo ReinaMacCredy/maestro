@@ -96,6 +96,9 @@ describe("CLI integration", () => {
     const { exitCode, stdout } = await run(["handoff", "--skip-session", "--json"]);
     expect(exitCode).toBe(0);
     expect(stdout).toContain("Branch:");
+    const result = JSON.parse(stdout);
+    expect(result.prompt).not.toContain("--session none");
+    expect(result.prompt).not.toContain("Session: none");
   });
 
   it("handoff --dry-run outputs plan without writing", async () => {
@@ -116,7 +119,7 @@ describe("CLI integration", () => {
       expect(exitCode).toBe(0);
     });
 
-  it("handoff --prompt includes stored instructions from latest pending handoff", async () => {
+    it("handoff --prompt includes stored instructions from latest pending handoff", async () => {
       await initGitRepo(tmpDir);
 
       const create = await run([
@@ -132,6 +135,8 @@ describe("CLI integration", () => {
       const prompt = await run(["handoff", "--prompt", "codex"], tmpDir);
       expect(prompt.exitCode).toBe(0);
       expect(prompt.stdout).toContain("Your instructions: Deploy to staging first");
+      expect(prompt.stdout).not.toContain("--session none");
+      expect(prompt.stdout).not.toContain("Session: none");
     });
 
     it("handoff-drop deletes schema-invalid handoff directories", async () => {
@@ -174,10 +179,10 @@ describe("CLI integration", () => {
     it("note writes a note and note --list returns it", async () => {
       await initGitRepo(tmpDir);
 
-    const create = await run(
-      ["note", "--content", "Remember the branch state", "--json"],
-      tmpDir,
-    );
+      const create = await run(
+        ["note", "--content", "Remember the branch state", "--json"],
+        tmpDir,
+      );
     expect(create.exitCode).toBe(0);
     const createdNote = JSON.parse(create.stdout);
     expect(createdNote.content).toBe("Remember the branch state");

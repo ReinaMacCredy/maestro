@@ -9,6 +9,7 @@ import { join } from "node:path";
 
 export interface DigOpts {
   readonly id?: string;
+  readonly session?: string;
   readonly limit?: number;
   readonly dir: string;
 }
@@ -26,7 +27,18 @@ export async function digHandoff(
   }
 
   let envelope;
-  if (opts.id) {
+  if (opts.session) {
+    const all = await store.list();
+    envelope = all.find(
+      (e) => e.handoff.session.sessionId === opts.session
+        || e.handoff.session.sessionId.startsWith(opts.session!),
+    );
+    if (!envelope) {
+      throw new MaestroError(`No handoff found for session: ${opts.session}`, [
+        "Run: maestro handoff --list --all",
+      ]);
+    }
+  } else if (opts.id) {
     envelope = await store.get(opts.id);
     if (!envelope) throw handoffNotFound(opts.id);
   } else {

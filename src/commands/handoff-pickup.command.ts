@@ -117,7 +117,7 @@ function formatMarkdown(envelope: HandoffEnvelope): string {
       "## Session History",
       "",
       `Full conversation available via CASS (indexes on first search):`,
-      `  maestro handoff-dig "<your query>" --id ${h.id}`,
+      `  maestro handoff-dig "<your query>" --session ${h.session.sessionId}`,
     );
   }
 

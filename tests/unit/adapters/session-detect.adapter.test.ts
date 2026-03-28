@@ -7,6 +7,21 @@ import { ClaudeSessionDetectAdapter } from "../../../src/adapters/session-detect
 const adapter = new ClaudeSessionDetectAdapter();
 
 describe("ClaudeSessionDetectAdapter", () => {
+  let originalCodexThreadId: string | undefined;
+
+  beforeEach(() => {
+    originalCodexThreadId = process.env.CODEX_THREAD_ID;
+    delete process.env.CODEX_THREAD_ID;
+  });
+
+  afterEach(() => {
+    if (originalCodexThreadId === undefined) {
+      delete process.env.CODEX_THREAD_ID;
+      return;
+    }
+    process.env.CODEX_THREAD_ID = originalCodexThreadId;
+  });
+
   describe("detect", () => {
     it("returns a session for the current working directory", async () => {
       // This test uses the real ~/.claude/sessions/ directory

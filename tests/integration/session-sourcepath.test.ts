@@ -11,8 +11,11 @@ import type { HandoffSession } from "../../src/domain/types.js";
 
 let tmpDir: string;
 let store: FsHandoffStoreAdapter;
+let originalCodexThreadId: string | undefined;
 
 beforeEach(async () => {
+  originalCodexThreadId = process.env.CODEX_THREAD_ID;
+  delete process.env.CODEX_THREAD_ID;
   tmpDir = await mkdtemp(join(tmpdir(), "maestro-sourcepath-"));
   await mkdir(join(tmpDir, ".maestro", "handoffs"), { recursive: true });
   store = new FsHandoffStoreAdapter(tmpDir);
@@ -20,6 +23,11 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await rm(tmpDir, { recursive: true, force: true });
+  if (originalCodexThreadId === undefined) {
+    delete process.env.CODEX_THREAD_ID;
+    return;
+  }
+  process.env.CODEX_THREAD_ID = originalCodexThreadId;
 });
 
 describe("sourcePath encoding", () => {

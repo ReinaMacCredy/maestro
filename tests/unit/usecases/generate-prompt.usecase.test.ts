@@ -90,14 +90,15 @@ describe("generatePrompt", () => {
     expect(result).not.toContain("Your instructions:");
   });
 
-  it("includes handoff-dig with --id when sessionId provided", () => {
+  it("includes handoff-dig with --session when sessionId provided", () => {
     const result = generatePrompt(baseConfig, {
       agent: "codex",
       sessionId: "abc-session-123",
       handoffId: "2026-03-28-001",
     });
     expect(result).toContain("handoff-dig");
-    expect(result).toContain("--id 2026-03-28-001");
+    expect(result).toContain("--session abc-session-123");
+    expect(result).not.toContain("--id 2026-03-28-001");
   });
 
   it("omits dig hint when sessionId not provided", () => {

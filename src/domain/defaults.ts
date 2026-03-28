@@ -27,7 +27,7 @@ Read AGENTS.md for code style.
 {{/instructions}}{{#task}}Your task: {{task}}
 {{/task}}{{#sessionId}}Session: {{sessionId}}
 If you need more context about a decision or implementation detail, search the previous agent's conversation history:
-  maestro handoff-dig "<your question>" --id {{handoffId}} --json
+  maestro handoff-dig "<your question>" --session {{sessionId}} --json
 
 {{/sessionId}}Use maestro handoff-report --content "summary of work done" --json when done.`;
 

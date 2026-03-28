@@ -45,6 +45,43 @@ describe("digHandoff", () => {
     expect(searchOpts.agent).toBe("claude-code");
   });
 
+  it("resolves handoff by session ID", async () => {
+    let searchAgent = "";
+    const cass = mockCass({
+      search: async (_q, opts) => {
+        searchAgent = opts.agent ?? "";
+        return { query: _q, count: 0, totalMatches: 0, hits: [] };
+      },
+    });
+    const store = mockHandoffStore([makeEnvelope()]);
+
+    await digHandoff(store, cass, "test query", { session: "sess-1", dir: "/tmp" });
+    expect(searchAgent).toBe("claude-code");
+  });
+
+  it("resolves handoff by session ID prefix", async () => {
+    const cass = mockCass();
+    const store = mockHandoffStore([makeEnvelope()]);
+
+    // "sess" is a prefix of "sess-1"
+    await expect(
+      digHandoff(store, cass, "test", { session: "sess", dir: "/tmp" }),
+    ).resolves.toBeDefined();
+  });
+
+  it("throws when no handoff matches session ID", async () => {
+    const cass = mockCass();
+    const store = mockHandoffStore([makeEnvelope()]);
+
+    try {
+      await digHandoff(store, cass, "test", { session: "no-match", dir: "/tmp" });
+      expect(true).toBe(false);
+    } catch (err) {
+      expect(err).toBeInstanceOf(MaestroError);
+      expect((err as MaestroError).message).toContain("no-match");
+    }
+  });
+
   it("throws when CASS binary not found", async () => {
     const cass = mockCass({ hasBinary: async () => false });
     const store = mockHandoffStore([makeEnvelope()]);

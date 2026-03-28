@@ -54,11 +54,12 @@ Examples:
         const latest = await services.handoffStore.getLatestPending();
         const handoffId = latest?.handoff.id ?? "HANDOFF_ID";
         const agent = typeof opts.prompt === "string" ? opts.prompt : undefined;
+        const sessionId = getPromptSessionId(latest?.handoff.session);
         const prompt = generatePrompt(config, {
           agent,
           handoffId,
           instructions: latest?.handoff.instructions,
-          sessionId: latest?.handoff.session.sessionId,
+          sessionId,
         });
         if (isJson) {
           output(true, { prompt, handoffId }, () => []);
@@ -102,11 +103,12 @@ Examples:
       );
 
       const agent = typeof opts.prompt === "string" ? opts.prompt : undefined;
+      const sessionId = getPromptSessionId(handoff.session);
       const prompt = generatePrompt(config, {
         agent,
         task: opts.task,
         instructions: opts.instructions,
-        sessionId: handoff.session.sessionId,
+        sessionId,
         handoffId: handoff.id,
       });
 
@@ -128,6 +130,15 @@ function printPrompt(prompt: string, agent?: string): void {
   console.log(`--- ${label} ---`);
   console.log(prompt);
   console.log("--- End prompt ---");
+}
+
+function getPromptSessionId(
+  session?: HandoffEnvelope["handoff"]["session"],
+): string | undefined {
+  if (!session?.sourcePath || session.sessionId === NO_SESSION_ID) {
+    return undefined;
+  }
+  return session.sessionId;
 }
 
 function formatListTable(list: readonly HandoffEnvelope[]): string[] {
