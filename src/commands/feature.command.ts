@@ -12,6 +12,10 @@ import {
   type ListFeaturesResult,
   type UpdateFeatureResult,
 } from "../usecases/feature-lifecycle.usecase.js";
+import {
+  generateWorkerPrompt,
+  type GenerateWorkerPromptResult,
+} from "../usecases/generate-worker-prompt.usecase.js";
 import { MaestroError } from "../domain/errors.js";
 import type { Feature } from "../domain/mission-types.js";
 
@@ -109,6 +113,36 @@ export function registerFeatureCommand(program: Command): void {
 
       output(isJson, result, formatFeatureUpdate);
     });
+
+  featureCmd
+    .command("prompt <featureId>")
+    .description("Generate a worker prompt for a feature")
+    .requiredOption("--mission <id>", "Mission ID (required)")
+    .option("--out <path>", "Write prompt to specified path (also writes to workers/{featureId}/prompt.md)")
+    .option("--json", "Output as JSON")
+    .action(async (featureId: string, opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+
+      if (!opts.mission) {
+        throw new MaestroError("--mission is required", [
+          "Usage: maestro feature prompt <featureId> --mission <id>",
+          "Optional: --out /path/to/prompt.md",
+        ]);
+      }
+
+      const result = await generateWorkerPrompt(
+        services.missionStore,
+        services.featureStore,
+        services.assertionStore,
+        process.cwd(),
+        opts.mission,
+        featureId,
+        opts.out,
+      );
+
+      output(isJson, result, formatPromptResult);
+    });
 }
 
 /** Format feature list for text output */
@@ -149,6 +183,29 @@ function formatFeatureUpdate(result: UpdateFeatureResult): string[] {
       lines.push(`  Report agent: ${result.feature.report.agent}`);
     }
   }
+
+  return lines;
+}
+
+/** Format prompt generation result for text output */
+function formatPromptResult(result: GenerateWorkerPromptResult): string[] {
+  const lines: string[] = [
+    `[ok] Worker prompt generated for: ${result.featureId}`,
+    `  Worker type: ${result.workerType}`,
+  ];
+
+  if (result.writtenTo) {
+    for (const path of result.writtenTo) {
+      lines.push(`  Written to: ${path}`);
+    }
+  }
+
+  lines.push("");
+  lines.push("--- PROMPT BEGIN ---");
+  lines.push("");
+  lines.push(result.prompt);
+  lines.push("");
+  lines.push("--- PROMPT END ---");
 
   return lines;
 }

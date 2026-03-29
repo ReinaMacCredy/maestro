@@ -482,4 +482,177 @@ describe("feature CLI commands", () => {
       expect(() => JSON.parse(stdout)).not.toThrow();
     }, SLOW_CLI_TIMEOUT_MS);
   });
+
+  describe("feature prompt", () => {
+    async function createSkill(baseDir: string, skillName: string): Promise<void> {
+      const skillDir = join(baseDir, ".maestro", "skills", skillName);
+      await mkdir(skillDir, { recursive: true });
+      await writeFile(
+        join(skillDir, "SKILL.md"),
+        `# ${skillName}\n\nThis is a test skill for ${skillName}.\n`,
+      );
+    }
+
+    it("feature prompt generates a worker prompt to stdout", async () => {
+      const missionId = await createMission(tmpDir);
+      await createSkill(tmpDir, "test-skill");
+
+      const { stdout, exitCode } = await run(
+        ["feature", "prompt", "f1", "--mission", missionId],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Worker prompt generated for: f1");
+      expect(stdout).toContain("Worker type: test-skill");
+      expect(stdout).toContain("--- PROMPT BEGIN ---");
+      expect(stdout).toContain("--- PROMPT END ---");
+      expect(stdout).toContain("Worker Assignment: Feature 1");
+      expect(stdout).toContain("# test-skill");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("feature prompt --json outputs parseable JSON", async () => {
+      const missionId = await createMission(tmpDir);
+      await createSkill(tmpDir, "test-skill");
+
+      const { stdout, exitCode } = await run(
+        ["feature", "prompt", "f1", "--mission", missionId, "--json"],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(0);
+      const result = JSON.parse(stdout);
+      expect(result.prompt).toBeDefined();
+      expect(result.featureId).toBe("f1");
+      expect(result.workerType).toBe("test-skill");
+      expect(result.writtenTo).toBeDefined();
+      expect(result.writtenTo.length).toBe(1);
+      expect(result.writtenTo[0]).toContain("workers/f1/prompt.md");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("feature prompt --out writes to custom path", async () => {
+      const missionId = await createMission(tmpDir);
+      await createSkill(tmpDir, "test-skill");
+      const outPath = join(tmpDir, "custom-prompt.md");
+
+      const { stdout, exitCode } = await run(
+        ["feature", "prompt", "f1", "--mission", missionId, "--out", outPath],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Written to:");
+      expect(stdout).toContain(outPath);
+
+      // Verify file was written
+      const fs = await import("node:fs/promises");
+      const fileContent = await fs.readFile(outPath, "utf-8");
+      expect(fileContent).toContain("Worker Assignment: Feature 1");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("feature prompt writes to workers/{featureId}/prompt.md", async () => {
+      const missionId = await createMission(tmpDir);
+      await createSkill(tmpDir, "test-skill");
+
+      const { stdout, exitCode } = await run(
+        ["feature", "prompt", "f1", "--mission", missionId],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(0);
+
+      // Verify file was written
+      const promptPath = join(tmpDir, ".maestro", "missions", missionId, "workers", "f1", "prompt.md");
+      const fs = await import("node:fs/promises");
+      const fileContent = await fs.readFile(promptPath, "utf-8");
+      expect(fileContent).toContain("Worker Assignment: Feature 1");
+      expect(fileContent).toContain("## Mission Context");
+      expect(fileContent).toContain("## Feature Assignment");
+      expect(fileContent).toContain("## Skill Instructions");
+      expect(fileContent).toContain("<!-- BEGIN SKILL -->");
+      expect(fileContent).toContain("<!-- END SKILL -->");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("feature prompt errors for missing skill file", async () => {
+      const missionId = await createMission(tmpDir);
+      // Don't create the skill file
+
+      const { stdout, stderr, exitCode } = await run(
+        ["feature", "prompt", "f1", "--mission", missionId],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(1);
+      const output = stdout + stderr;
+      expect(output).toContain("Worker skill 'test-skill' not found");
+      expect(output).toContain(".maestro/skills/test-skill/SKILL.md");
+      expect(output).toContain("Create skill file:");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("feature prompt errors for non-existent mission", async () => {
+      await createSkill(tmpDir, "test-skill");
+
+      const { stdout, stderr, exitCode } = await run(
+        ["feature", "prompt", "f1", "--mission", "2026-03-28-001"],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(1);
+      const output = stdout + stderr;
+      expect(output).toContain("Mission 2026-03-28-001 not found");
+      expect(output).toContain("maestro mission list");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("feature prompt errors for non-existent feature", async () => {
+      const missionId = await createMission(tmpDir);
+      await createSkill(tmpDir, "test-skill");
+
+      const { stdout, stderr, exitCode } = await run(
+        ["feature", "prompt", "nonexistent", "--mission", missionId],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(1);
+      const output = stdout + stderr;
+      expect(output).toContain("Feature nonexistent not found");
+      expect(output).toContain("maestro feature list");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("feature prompt includes assertions in generated prompt", async () => {
+      const missionId = await createMission(tmpDir);
+      await createSkill(tmpDir, "test-skill");
+
+      // Create assertion for f1 (which has fulfills: ["assertion-1"] in sample plan)
+      // The assertion should be loaded if the feature fulfills it
+      // For now, verify the prompt structure includes assertion-related sections
+      const { stdout, exitCode } = await run(
+        ["feature", "prompt", "f1", "--mission", missionId],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Verification Steps");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("JSON output works from different --json flag positions for prompt", async () => {
+      const missionId = await createMission(tmpDir);
+      await createSkill(tmpDir, "test-skill");
+
+      // Root position: maestro --json feature prompt f1 --mission <id>
+      const rootResult = await run(
+        ["--json", "feature", "prompt", "f1", "--mission", missionId],
+        tmpDir,
+      );
+      expect(rootResult.exitCode).toBe(0);
+      expect(() => JSON.parse(rootResult.stdout)).not.toThrow();
+
+      // Group position: maestro feature --json prompt f1 --mission <id>
+      const groupResult = await run(
+        ["feature", "--json", "prompt", "f1", "--mission", missionId],
+        tmpDir,
+      );
+      expect(groupResult.exitCode).toBe(0);
+      expect(() => JSON.parse(groupResult.stdout)).not.toThrow();
+    }, SLOW_CLI_TIMEOUT_MS);
+  });
 });
