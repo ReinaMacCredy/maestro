@@ -1,0 +1,334 @@
+/**
+ * Mission Control domain validators
+ * Zod schemas and validation functions for mission entities
+ */
+
+import { z } from "zod";
+import { MaestroError } from "./errors.js";
+import type {
+  Mission,
+  Milestone,
+  Feature,
+  Assertion,
+  Checkpoint,
+  CreateMissionInput,
+  CreateFeatureInput,
+  CreateAssertionInput,
+  UpdateAssertionInput,
+} from "./mission-types.js";
+
+// ============================
+// Schema Constants
+// ============================
+
+const MISSION_ID_PATTERN = /^\d{4}-\d{2}-\d{2}-\d{3}$/;
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/;
+
+// ============================
+// Zod Schemas
+// ============================
+
+export const MilestoneSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string(),
+  order: z.number().int().nonnegative(),
+}).strict();
+
+export const WorkerReportSchema = z.object({
+  content: z.string().min(1),
+  timestamp: z.string().regex(ISO_DATE_PATTERN),
+  agent: z.string().optional(),
+}).strict();
+
+export const FeatureSchema = z.object({
+  id: z.string().min(1),
+  missionId: z.string().regex(MISSION_ID_PATTERN),
+  milestoneId: z.string().min(1),
+  status: z.enum(["pending", "in_progress", "in_review", "completed", "blocked"]),
+  title: z.string().min(1),
+  description: z.string(),
+  skillName: z.string().min(1),
+  verificationSteps: z.array(z.string().min(1)).min(1),
+  dependsOn: z.array(z.string()).default([]),
+  report: WorkerReportSchema.optional(),
+  createdAt: z.string().regex(ISO_DATE_PATTERN),
+  updatedAt: z.string().regex(ISO_DATE_PATTERN),
+}).strict();
+
+export const AssertionSchema = z.object({
+  id: z.string().min(1),
+  missionId: z.string().regex(MISSION_ID_PATTERN),
+  milestoneId: z.string().min(1),
+  featureId: z.string().min(1),
+  status: z.enum(["pending", "passed", "failed", "blocked", "waived"]),
+  description: z.string().min(1),
+  evidence: z.string().optional(),
+  waivedReason: z.string().min(1).optional(),
+  createdAt: z.string().regex(ISO_DATE_PATTERN),
+  updatedAt: z.string().regex(ISO_DATE_PATTERN),
+}).strict().refine(
+  (data) => {
+    // If status is waived, waivedReason must be provided and non-empty
+    if (data.status === "waived") {
+      return data.waivedReason !== undefined && data.waivedReason.length > 0;
+    }
+    return true;
+  },
+  {
+    message: "waivedReason is required when status is 'waived'",
+    path: ["waivedReason"],
+  },
+);
+
+export const MissionSchema = z.object({
+  id: z.string().regex(MISSION_ID_PATTERN),
+  status: z.enum(["draft", "approved", "rejected", "executing", "validating", "completed", "failed"]),
+  title: z.string().min(1),
+  description: z.string(),
+  milestones: z.array(MilestoneSchema),
+  features: z.array(z.string().min(1)),
+  createdAt: z.string().regex(ISO_DATE_PATTERN),
+  updatedAt: z.string().regex(ISO_DATE_PATTERN),
+  approvedAt: z.string().regex(ISO_DATE_PATTERN).optional(),
+  rejectedAt: z.string().regex(ISO_DATE_PATTERN).optional(),
+  completedAt: z.string().regex(ISO_DATE_PATTERN).optional(),
+}).strict().refine(
+  (data) => {
+    // Validate that milestone IDs are unique
+    const milestoneIds = data.milestones.map((m) => m.id);
+    return new Set(milestoneIds).size === milestoneIds.length;
+  },
+  {
+    message: "Milestone IDs must be unique",
+    path: ["milestones"],
+  },
+);
+
+export const CheckpointSchema = z.object({
+  id: z.string().min(1),
+  missionId: z.string().regex(MISSION_ID_PATTERN),
+  milestoneId: z.string().min(1),
+  timestamp: z.string().regex(ISO_DATE_PATTERN),
+  featureStates: z.record(z.enum(["pending", "in_progress", "in_review", "completed", "blocked"])),
+  assertionStates: z.record(z.enum(["pending", "passed", "failed", "blocked", "waived"])),
+}).strict();
+
+// Input validation schemas
+export const CreateMissionInputSchema = z.object({
+  title: z.string().min(1),
+  description: z.string(),
+  milestones: z.array(MilestoneSchema).min(1),
+}).strict().refine(
+  (data) => {
+    const milestoneIds = data.milestones.map((m) => m.id);
+    return new Set(milestoneIds).size === milestoneIds.length;
+  },
+  {
+    message: "Milestone IDs must be unique",
+    path: ["milestones"],
+  },
+);
+
+export const CreateFeatureInputSchema = z.object({
+  missionId: z.string().regex(MISSION_ID_PATTERN),
+  milestoneId: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string(),
+  skillName: z.string().min(1),
+  verificationSteps: z.array(z.string().min(1)).min(1),
+  dependsOn: z.array(z.string()).optional(),
+}).strict();
+
+export const CreateAssertionInputSchema = z.object({
+  missionId: z.string().regex(MISSION_ID_PATTERN),
+  milestoneId: z.string().min(1),
+  featureId: z.string().min(1),
+  description: z.string().min(1),
+}).strict();
+
+export const UpdateAssertionInputSchema = z.object({
+  status: z.enum(["pending", "passed", "failed", "blocked", "waived"]),
+  evidence: z.string().optional(),
+  waivedReason: z.string().min(1).optional(),
+}).strict().refine(
+  (data) => {
+    if (data.status === "waived") {
+      return data.waivedReason !== undefined && data.waivedReason.length > 0;
+    }
+    return true;
+  },
+  {
+    message: "waivedReason is required when status is 'waived'",
+    path: ["waivedReason"],
+  },
+);
+
+// ============================
+// Validation Functions
+// ============================
+
+export function validateMission(data: unknown): Mission {
+  return MissionSchema.parse(data);
+}
+
+export function validateMilestone(data: unknown): Milestone {
+  return MilestoneSchema.parse(data);
+}
+
+export function validateFeature(data: unknown): Feature {
+  return FeatureSchema.parse(data);
+}
+
+export function validateAssertion(data: unknown): Assertion {
+  return AssertionSchema.parse(data);
+}
+
+export function validateCheckpoint(data: unknown): Checkpoint {
+  return CheckpointSchema.parse(data);
+}
+
+export function validateCreateMissionInput(data: unknown): CreateMissionInput {
+  return CreateMissionInputSchema.parse(data);
+}
+
+export function validateCreateFeatureInput(data: unknown): CreateFeatureInput {
+  return CreateFeatureInputSchema.parse(data);
+}
+
+export function validateCreateAssertionInput(data: unknown): CreateAssertionInput {
+  return CreateAssertionInputSchema.parse(data);
+}
+
+export function validateUpdateAssertionInput(data: unknown): UpdateAssertionInput {
+  return UpdateAssertionInputSchema.parse(data);
+}
+
+// ============================
+// Referential Integrity Validation
+// ============================
+
+/**
+ * Assert that no dangling references exist in mission data.
+ * Checks:
+ * - All feature milestoneIds reference existing milestones
+ * - All mission feature IDs exist in features array
+ * - All assertion featureIds and milestoneIds reference existing entities
+ */
+export function assertNoDanglingReferences(
+  mission: Mission,
+  features: readonly Feature[],
+  assertions: readonly Assertion[],
+): void {
+  const milestoneIds = new Set(mission.milestones.map((m) => m.id));
+  const featureIds = new Set(features.map((f) => f.id));
+  const missionFeatureIds = new Set(mission.features);
+
+  // Check all features reference valid milestones
+  for (const feature of features) {
+    if (!milestoneIds.has(feature.milestoneId)) {
+      throw new MaestroError(
+        `Dangling reference: Feature '${feature.id}' references non-existent milestone '${feature.milestoneId}'`,
+        [
+          `Available milestones: ${Array.from(milestoneIds).join(", ")}`,
+          `Check the milestoneId in feature '${feature.id}'`,
+        ],
+      );
+    }
+  }
+
+  // Check all mission feature IDs exist
+  for (const featureId of mission.features) {
+    if (!featureIds.has(featureId)) {
+      throw new MaestroError(
+        `Dangling reference: Mission features list contains non-existent feature '${featureId}'`,
+        [
+          `Available features: ${Array.from(featureIds).join(", ")}`,
+          `Remove '${featureId}' from mission.features or create the feature`,
+        ],
+      );
+    }
+  }
+
+  // Check all assertions reference valid features and milestones
+  for (const assertion of assertions) {
+    if (!featureIds.has(assertion.featureId)) {
+      throw new MaestroError(
+        `Dangling reference: Assertion '${assertion.id}' references non-existent feature '${assertion.featureId}'`,
+        [
+          `Available features: ${Array.from(featureIds).join(", ")}`,
+          `Check the featureId in assertion '${assertion.id}'`,
+        ],
+      );
+    }
+    if (!milestoneIds.has(assertion.milestoneId)) {
+      throw new MaestroError(
+        `Dangling reference: Assertion '${assertion.id}' references non-existent milestone '${assertion.milestoneId}'`,
+        [
+          `Available milestones: ${Array.from(milestoneIds).join(", ")}`,
+          `Check the milestoneId in assertion '${assertion.id}'`,
+        ],
+      );
+    }
+  }
+}
+
+// ============================
+// Cyclic Dependency Validation
+// ============================
+
+/**
+ * Assert that no cyclic dependencies exist in feature dependency graph.
+ * Uses DFS to detect cycles in the directed graph formed by feature dependsOn arrays.
+ */
+export function assertNoCyclicDependencies(features: readonly Feature[]): void {
+  const featureMap = new Map(features.map((f) => [f.id, f]));
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+
+  function visit(featureId: string, path: string[]): void {
+    if (visiting.has(featureId)) {
+      // Found a cycle
+      const cycleStart = path.indexOf(featureId);
+      const cycle = path.slice(cycleStart).concat(featureId);
+      throw new MaestroError(
+        `Cyclic dependency detected: ${cycle.join(" -> ")}`,
+        [
+          `Review the 'dependsOn' arrays for features in this cycle`,
+          `Remove circular references to fix the dependency graph`,
+        ],
+      );
+    }
+
+    if (visited.has(featureId)) {
+      return;
+    }
+
+    const feature = featureMap.get(featureId);
+    if (!feature) {
+      throw new MaestroError(
+        `Dangling dependency: Feature '${path[path.length - 1]}' depends on non-existent feature '${featureId}'`,
+        [
+          `Available features: ${Array.from(featureMap.keys()).join(", ")}`,
+          `Update the 'dependsOn' array to reference only existing features`,
+        ],
+      );
+    }
+
+    visiting.add(featureId);
+    path.push(featureId);
+
+    for (const depId of feature.dependsOn) {
+      visit(depId, [...path]);
+    }
+
+    visiting.delete(featureId);
+    visited.add(featureId);
+  }
+
+  for (const feature of features) {
+    if (!visited.has(feature.id)) {
+      visit(feature.id, []);
+    }
+  }
+}
