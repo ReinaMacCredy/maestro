@@ -134,6 +134,15 @@ describe("checkpoint save semantics", () => {
     expect(f1Result.exitCode).toBe(0);
     expect(JSON.parse(f1Result.stdout).feature.status).toBe("in_progress");
 
+    // Transition f2 through proper states: pending -> in_progress -> in_review -> completed
+    await run(
+      ["feature", "update", "f2", "--mission", missionId, "--status", "in_progress"],
+      tmpDir,
+    );
+    await run(
+      ["feature", "update", "f2", "--mission", missionId, "--status", "in_review"],
+      tmpDir,
+    );
     const f2Result = await run(
       ["feature", "update", "f2", "--mission", missionId, "--status", "completed", "--json"],
       tmpDir,
@@ -450,6 +459,15 @@ describe("checkpoint resume workflow", () => {
     await run(["mission", "approve", missionId], tmpDir);
 
     // Set up some state with verification
+    // Transition f1 through proper states: pending -> in_progress -> in_review -> completed
+    await run(
+      ["feature", "update", "f1", "--mission", missionId, "--status", "in_progress"],
+      tmpDir,
+    );
+    await run(
+      ["feature", "update", "f1", "--mission", missionId, "--status", "in_review"],
+      tmpDir,
+    );
     const f1Result = await run(
       ["feature", "update", "f1", "--mission", missionId, "--status", "completed", "--json"],
       tmpDir,
@@ -528,7 +546,19 @@ describe("checkpoint resume workflow", () => {
       tmpDir,
     );
     
-    // Then update to completed
+    // Then update to completed (via in_review)
+    await run(
+      [
+        "feature",
+        "update",
+        "f1",
+        "--mission",
+        missionId,
+        "--status",
+        "in_review",
+      ],
+      tmpDir,
+    );
     await run(
       [
         "feature",

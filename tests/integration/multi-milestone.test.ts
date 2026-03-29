@@ -169,7 +169,15 @@ describe("multi-milestone progression", () => {
       tmpDir,
     );
 
-    // Complete m1 features with verification
+    // Complete m1 features with verification - need to go through in_progress and in_review
+    await run(
+      ["feature", "update", "f1-m1", "--mission", missionId, "--status", "in_progress"],
+      tmpDir,
+    );
+    await run(
+      ["feature", "update", "f1-m1", "--mission", missionId, "--status", "in_review"],
+      tmpDir,
+    );
     const f1Result = await run(
       ["feature", "update", "f1-m1", "--mission", missionId, "--status", "completed", "--json"],
       tmpDir,
@@ -177,6 +185,14 @@ describe("multi-milestone progression", () => {
     expect(f1Result.exitCode).toBe(0);
     expect(JSON.parse(f1Result.stdout).feature.status).toBe("completed");
 
+    await run(
+      ["feature", "update", "f2-m1", "--mission", missionId, "--status", "in_progress"],
+      tmpDir,
+    );
+    await run(
+      ["feature", "update", "f2-m1", "--mission", missionId, "--status", "in_review"],
+      tmpDir,
+    );
     const f2Result = await run(
       ["feature", "update", "f2-m1", "--mission", missionId, "--status", "completed", "--json"],
       tmpDir,
@@ -217,7 +233,23 @@ describe("multi-milestone progression", () => {
 
     // Complete m2 features
     await run(
+      ["feature", "update", "f3-m2", "--mission", missionId, "--status", "in_progress"],
+      tmpDir,
+    );
+    await run(
+      ["feature", "update", "f3-m2", "--mission", missionId, "--status", "in_review"],
+      tmpDir,
+    );
+    await run(
       ["feature", "update", "f3-m2", "--mission", missionId, "--status", "completed"],
+      tmpDir,
+    );
+    await run(
+      ["feature", "update", "f4-m2", "--mission", missionId, "--status", "in_progress"],
+      tmpDir,
+    );
+    await run(
+      ["feature", "update", "f4-m2", "--mission", missionId, "--status", "in_review"],
       tmpDir,
     );
     await run(
@@ -246,6 +278,14 @@ describe("multi-milestone progression", () => {
 
     // Complete m3 features
     await run(
+      ["feature", "update", "f5-m3", "--mission", missionId, "--status", "in_progress"],
+      tmpDir,
+    );
+    await run(
+      ["feature", "update", "f5-m3", "--mission", missionId, "--status", "in_review"],
+      tmpDir,
+    );
+    await run(
       ["feature", "update", "f5-m3", "--mission", missionId, "--status", "completed"],
       tmpDir,
     );
@@ -257,13 +297,13 @@ describe("multi-milestone progression", () => {
     );
     const finalData = JSON.parse(finalList.stdout);
 
-    const m1Final = finalData.milestones.find((m: { id: string }) => m.id === "m1");
-    const m2Final = finalData.milestones.find((m: { id: string }) => m.id === "m2");
-    const m3Final = finalData.milestones.find((m: { id: string }) => m.id === "m3");
+    const m1Final = finalData.milestones.find((m: { milestoneId: string }) => m.milestoneId === "m1");
+    const m2Final = finalData.milestones.find((m: { milestoneId: string }) => m.milestoneId === "m2");
+    const m3Final = finalData.milestones.find((m: { milestoneId: string }) => m.milestoneId === "m3");
 
-    expect(m1Final.status).toBe("sealed");
-    expect(m2Final.status).toBe("sealed");
-    expect(m3Final.progress.completedFeatures).toBe(1);
+    expect(m1Final.status).toBe("executing"); // mission is still executing, m1 is current milestone
+    expect(m2Final.status).toBe("pending"); // m2 comes after current
+    expect(m3Final.completedFeatures).toBe(1);
   }, SLOW_CLI_TIMEOUT_MS);
 
   it("shows correct feature counts per milestone", async () => {
@@ -374,6 +414,14 @@ describe("multi-milestone progression", () => {
 
     // Complete 1 of 2 features in m1
     await run(
+      ["feature", "update", "f1-m1", "--mission", missionId, "--status", "in_progress"],
+      tmpDir,
+    );
+    await run(
+      ["feature", "update", "f1-m1", "--mission", missionId, "--status", "in_review"],
+      tmpDir,
+    );
+    await run(
       ["feature", "update", "f1-m1", "--mission", missionId, "--status", "completed"],
       tmpDir,
     );
@@ -383,11 +431,19 @@ describe("multi-milestone progression", () => {
       tmpDir,
     );
     const halfData = JSON.parse(halfDone.stdout);
-    const m1Half = halfData.milestones.find((m: { id: string }) => m.id === "m1");
+    const m1Half = halfData.milestones.find((m: { milestoneId: string }) => m.milestoneId === "m1");
     expect(m1Half.completedFeatures).toBe(1);
     expect(m1Half.featureCount).toBe(2);
 
     // Complete all m1 features
+    await run(
+      ["feature", "update", "f2-m1", "--mission", missionId, "--status", "in_progress"],
+      tmpDir,
+    );
+    await run(
+      ["feature", "update", "f2-m1", "--mission", missionId, "--status", "in_review"],
+      tmpDir,
+    );
     await run(
       ["feature", "update", "f2-m1", "--mission", missionId, "--status", "completed"],
       tmpDir,
@@ -398,7 +454,7 @@ describe("multi-milestone progression", () => {
       tmpDir,
     );
     const allData = JSON.parse(allDone.stdout);
-    const m1All = allData.milestones.find((m: { id: string }) => m.id === "m1");
+    const m1All = allData.milestones.find((m: { milestoneId: string }) => m.milestoneId === "m1");
     expect(m1All.completedFeatures).toBe(2);
     expect(m1All.featureCompletionPct).toBe(100);
   }, SLOW_CLI_TIMEOUT_MS);
@@ -413,7 +469,23 @@ describe("multi-milestone progression", () => {
 
     // Complete m1
     await run(
+      ["feature", "update", "f1-m1", "--mission", missionId, "--status", "in_progress"],
+      tmpDir,
+    );
+    await run(
+      ["feature", "update", "f1-m1", "--mission", missionId, "--status", "in_review"],
+      tmpDir,
+    );
+    await run(
       ["feature", "update", "f1-m1", "--mission", missionId, "--status", "completed"],
+      tmpDir,
+    );
+    await run(
+      ["feature", "update", "f2-m1", "--mission", missionId, "--status", "in_progress"],
+      tmpDir,
+    );
+    await run(
+      ["feature", "update", "f2-m1", "--mission", missionId, "--status", "in_review"],
       tmpDir,
     );
     await run(
@@ -449,11 +521,11 @@ describe("multi-milestone progression", () => {
     );
     const listData = JSON.parse(listResult.stdout);
 
-    const m1 = listData.milestones.find((m: { id: string }) => m.id === "m1");
-    const m2 = listData.milestones.find((m: { id: string }) => m.id === "m2");
-    const m3 = listData.milestones.find((m: { id: string }) => m.id === "m3");
+    const m1 = listData.milestones.find((m: { milestoneId: string }) => m.milestoneId === "m1");
+    const m2 = listData.milestones.find((m: { milestoneId: string }) => m.milestoneId === "m2");
+    const m3 = listData.milestones.find((m: { milestoneId: string }) => m.milestoneId === "m3");
 
-    expect(m1.status).toBe("sealed");
+    expect(m1.status).toBe("executing"); // m1 is current milestone while mission is executing
     expect(m1.featureCompletionPct).toBe(100);
 
     expect(m2.status).toBe("executing"); // or default status

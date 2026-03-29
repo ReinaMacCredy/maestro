@@ -209,6 +209,10 @@ describe("full mission lifecycle", () => {
       tmpDir,
     );
     await run(
+      ["feature", "update", "f2", "--mission", missionId, "--status", "in_review"],
+      tmpDir,
+    );
+    await run(
       ["feature", "update", "f2", "--mission", missionId, "--status", "completed"],
       tmpDir,
     );
@@ -259,18 +263,22 @@ describe("full mission lifecycle", () => {
     expect(sealData.milestone.id).toBe("m1");
     expect(sealData.sealed).toBe(true);
 
-    // Verify milestone m1 shows sealed
+    // Verify milestone m1 shows validating (mission is in validating status)
     const m1Status = await run(
       ["milestone", "status", "m1", "--mission", missionId, "--json"],
       tmpDir,
     );
     expect(m1Status.exitCode).toBe(0);
     const m1Data = JSON.parse(m1Status.stdout);
-    expect(m1Data.milestone.status).toBe("sealed");
+    expect(m1Data.progress.status).toBe("validating");
 
     // Step 8: Continue with m2
     await run(
       ["feature", "update", "f3", "--mission", missionId, "--status", "in_progress"],
+      tmpDir,
+    );
+    await run(
+      ["feature", "update", "f3", "--mission", missionId, "--status", "in_review"],
       tmpDir,
     );
     await run(
