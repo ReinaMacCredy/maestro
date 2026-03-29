@@ -103,6 +103,7 @@ export interface Mission {
   readonly approvedAt?: string;
   readonly rejectedAt?: string;
   readonly completedAt?: string;
+  readonly completedMilestoneIds?: readonly string[];
 }
 
 /** Checkpoint - saved state snapshot */
@@ -163,4 +164,5 @@ export interface UpdateMissionInput {
   readonly status?: MissionStatus;
   readonly title?: string;
   readonly description?: string;
+  readonly completedMilestoneIds?: readonly string[];
 }

@@ -302,7 +302,7 @@ describe("multi-milestone progression", () => {
     const m3Final = finalData.milestones.find((m: { milestoneId: string }) => m.milestoneId === "m3");
 
     expect(m1Final.status).toBe("completed"); // m1 is sealed/completed
-    expect(m2Final.status).toBe("executing"); // m2 is the current milestone (sealed but mission still executing)
+    expect(m2Final.status).toBe("completed"); // m2 is sealed/completed
     expect(m3Final.completedFeatures).toBe(1);
   }, SLOW_CLI_TIMEOUT_MS);
 

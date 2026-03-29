@@ -270,7 +270,7 @@ describe("full mission lifecycle", () => {
     );
     expect(m1Status.exitCode).toBe(0);
     const m1Data = JSON.parse(m1Status.stdout);
-    expect(m1Data.progress.status).toBe("validating");
+    expect(m1Data.progress.status).toBe("completed");
 
     // Step 8: Continue with m2
     await run(

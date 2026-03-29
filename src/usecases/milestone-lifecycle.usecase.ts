@@ -63,27 +63,31 @@ export interface SealMilestoneResult {
 /**
  * Compute the effective milestone status based on mission status and milestone order
  * This is a derivation - actual transitions happen via the state machine
- * If a milestone is already sealed/completed, it stays completed.
+ * If a milestone is already completed (derived from previous computation), it stays completed.
  */
 function deriveMilestoneStatus(
   mission: Mission,
   milestone: Milestone,
   allMilestones: readonly Milestone[],
+  sortedMilestoneStatuses: Map<string, MilestoneStatus>,
 ): MilestoneStatus {
-  // If milestone is already sealed/completed, it stays that way
-  if (milestone.status === "completed") {
-    return "completed";
-  }
-
   // Sort milestones by order
   const sorted = [...allMilestones].sort((a, b) => a.order - b.order);
   const currentIndex = sorted.findIndex((m) => m.id === milestone.id);
+
+  // Check if this milestone is already completed in the status map
+  const currentStatus = sortedMilestoneStatuses.get(milestone.id);
+  if (currentStatus === "completed") {
+    return "completed";
+  }
 
   // Find the first non-completed milestone (the active one)
   let firstNonCompletedIndex = -1;
   for (let i = 0; i < sorted.length; i++) {
     const m = sorted[i]!;
-    if (m.status !== "completed") {
+    const status = sortedMilestoneStatuses.get(m.id);
+    // A milestone is "completed" if it's marked completed
+    if (status !== "completed") {
       firstNonCompletedIndex = i;
       break;
     }
@@ -125,6 +129,7 @@ async function calculateMilestoneProgress(
   milestone: Milestone,
   featureStore: FeatureStorePort,
   assertionStore: AssertionStorePort,
+  sortedMilestoneStatuses: Map<string, MilestoneStatus>,
 ): Promise<MilestoneProgress> {
   // Get all features and assertions for this milestone
   const features = await featureStore.list(mission.id, { milestoneId: milestone.id });
@@ -144,7 +149,7 @@ async function calculateMilestoneProgress(
     .filter((a) => a.status === "waived")
     .map((a) => a.id);
 
-  const status = deriveMilestoneStatus(mission, milestone, mission.milestones);
+  const status = deriveMilestoneStatus(mission, milestone, mission.milestones, sortedMilestoneStatuses);
 
   return {
     milestoneId: milestone.id,
@@ -179,14 +184,29 @@ export async function listMilestones(
     ]);
   }
 
-  // Calculate progress for each milestone
-  const milestones: MilestoneProgress[] = [];
-  for (const milestone of mission.milestones) {
-    const progress = await calculateMilestoneProgress(mission, milestone, featureStore, assertionStore);
-    milestones.push(progress);
+  // Sort milestones by order for sequential processing
+  const sortedMilestones = [...mission.milestones].sort((a, b) => a.order - b.order);
+  
+  // Build a map of milestone statuses - start with completedMilestoneIds from mission
+  // then compute remaining statuses in order
+  const sortedMilestoneStatuses = new Map<string, MilestoneStatus>();
+  const completedMilestoneIds = mission.completedMilestoneIds ?? [];
+  
+  // Initialize with completed milestones
+  for (const m of sortedMilestones) {
+    const status = completedMilestoneIds.includes(m.id) ? "completed" : "pending";
+    sortedMilestoneStatuses.set(m.id, status);
   }
 
-  // Sort by milestone order
+  // Calculate progress for each milestone in order
+  const milestones: MilestoneProgress[] = [];
+  for (const milestone of sortedMilestones) {
+    const progress = await calculateMilestoneProgress(mission, milestone, featureStore, assertionStore, sortedMilestoneStatuses);
+    milestones.push(progress);
+    sortedMilestoneStatuses.set(milestone.id, progress.status);
+  }
+
+  // Sort by milestone order (already sorted, but ensure)
   milestones.sort((a, b) => a.milestone.order - b.milestone.order);
 
   return { mission, milestones };
@@ -218,7 +238,15 @@ export async function getMilestoneStatus(
     ]);
   }
 
-  const progress = await calculateMilestoneProgress(mission, milestone, featureStore, assertionStore);
+  // Build status map for deriving correct milestone status
+  const completedMilestoneIds = mission.completedMilestoneIds ?? [];
+  const sortedMilestoneStatuses = new Map<string, MilestoneStatus>();
+  for (const m of mission.milestones) {
+    const status = completedMilestoneIds.includes(m.id) ? "completed" : "pending";
+    sortedMilestoneStatuses.set(m.id, status);
+  }
+
+  const progress = await calculateMilestoneProgress(mission, milestone, featureStore, assertionStore, sortedMilestoneStatuses);
 
   return { mission, milestone, progress };
 }
@@ -250,8 +278,16 @@ export async function sealMilestone(
     ]);
   }
 
+  // Build status map for deriving correct milestone status
+  const completedMilestoneIds = mission.completedMilestoneIds ?? [];
+  const sortedMilestoneStatuses = new Map<string, MilestoneStatus>();
+  for (const m of mission.milestones) {
+    const status = completedMilestoneIds.includes(m.id) ? "completed" : "pending";
+    sortedMilestoneStatuses.set(m.id, status);
+  }
+
   // Get current progress to determine status
-  const progress = await calculateMilestoneProgress(mission, milestone, featureStore, assertionStore);
+  const progress = await calculateMilestoneProgress(mission, milestone, featureStore, assertionStore, sortedMilestoneStatuses);
 
   // Auto-transition from executing to validating if needed
   let autoTransitioned = false;
@@ -275,18 +311,12 @@ export async function sealMilestone(
   // Can only seal if all assertions are terminal (passed or waived)
   const canSeal = blockingAssertionIds.length === 0;
 
-  // If sealing succeeds, persist the milestone status transition to completed
-  if (canSeal && milestone.status !== "completed") {
+  // If sealing succeeds, persist the milestone as completed
+  if (canSeal && !completedMilestoneIds.includes(milestoneId)) {
+    const updatedCompletedIds = [...completedMilestoneIds, milestoneId];
     await missionStore.update(missionId, {
-      milestones: mission.milestones.map((m) =>
-        m.id === milestoneId ? { ...m, status: "completed" as const } : m
-      ),
+      completedMilestoneIds: updatedCompletedIds,
     });
-    // Refresh mission to get updated state
-    const updatedMission = await missionStore.get(missionId);
-    if (updatedMission) {
-      mission.milestones = updatedMission.milestones;
-    }
     progress.status = "completed";
   }
 

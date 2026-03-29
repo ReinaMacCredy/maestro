@@ -99,6 +99,7 @@ export class FsMissionStoreAdapter implements MissionStorePort {
       ...(input.title !== undefined && { title: input.title }),
       ...(input.description !== undefined && { description: input.description }),
       ...(input.status !== undefined && { status: input.status }),
+      ...(input.completedMilestoneIds !== undefined && { completedMilestoneIds: input.completedMilestoneIds }),
       updatedAt: now,
       ...(input.status === "approved" && { approvedAt: now }),
       ...(input.status === "rejected" && { rejectedAt: now }),

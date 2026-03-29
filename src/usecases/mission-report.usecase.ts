@@ -170,9 +170,16 @@ export async function generateMissionReport(
   // Sort milestones by order for sequential processing
   const sortedMilestones = [...mission.milestones].sort((a, b) => a.order - b.order);
   
-  // Build a map of milestone statuses - we compute in order so that later milestones
-  // know which earlier ones are completed/sealed
+  // Build a map of milestone statuses - start with completedMilestoneIds from mission
+  // then compute remaining statuses in order
   const sortedMilestoneStatuses = new Map<string, MilestoneStatus>();
+  const completedMilestoneIds = mission.completedMilestoneIds ?? [];
+  
+  // Initialize with completed milestones
+  for (const m of sortedMilestones) {
+    const status = completedMilestoneIds.includes(m.id) ? "completed" : "pending";
+    sortedMilestoneStatuses.set(m.id, status);
+  }
 
   // Calculate progress for each milestone in order
   const milestones: MilestoneReportProgress[] = [];

@@ -93,6 +93,7 @@ export const MissionSchema = z.object({
   approvedAt: z.string().regex(ISO_DATE_PATTERN).optional(),
   rejectedAt: z.string().regex(ISO_DATE_PATTERN).optional(),
   completedAt: z.string().regex(ISO_DATE_PATTERN).optional(),
+  completedMilestoneIds: z.array(z.string().min(1)).optional(),
 }).strict().refine(
   (data) => {
     // Validate that milestone IDs are unique
