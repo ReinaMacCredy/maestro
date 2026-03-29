@@ -20,6 +20,7 @@ import { registerSessionCommand } from "./commands/session.command.js";
 import { registerMissionCommand } from "./commands/mission.command.js";
 import { registerFeatureCommand } from "./commands/feature.command.js";
 import { registerValidationCommand } from "./commands/validation.command.js";
+import { registerMilestoneCommand } from "./commands/milestone.command.js";
 
 export const program = new Command()
   .name("maestro")
@@ -48,6 +49,7 @@ registerUninstallCommand(program);
 registerMissionCommand(program);
 registerFeatureCommand(program);
 registerValidationCommand(program);
+registerMilestoneCommand(program);
 
 async function main(): Promise<void> {
   try {
