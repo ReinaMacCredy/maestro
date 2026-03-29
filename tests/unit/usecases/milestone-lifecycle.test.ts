@@ -74,7 +74,7 @@ function createMockFeatureStore(features: Feature[] = []): FeatureStorePort {
     exists: async (missionId, featureId) => features.some(f => f.missionId === missionId && f.id === featureId),
     create: async (missionId, input, id) => ({ ...input, id, missionId, dependsOn: input.dependsOn ?? [], status: "pending", createdAt: "2024-01-01T00:00:00Z", updatedAt: "2024-01-01T00:00:00Z" } as Feature),
     update: async () => undefined,
-    list: async (missionId, filter?) => {
+    list: async (missionId, filter?: { milestoneId?: string; status?: string }) => {
       let result = features.filter(f => f.missionId === missionId);
       if (filter?.milestoneId) {
         result = result.filter(f => f.milestoneId === filter.milestoneId);

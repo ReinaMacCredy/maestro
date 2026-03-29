@@ -21,6 +21,7 @@ import { registerMissionCommand } from "./commands/mission.command.js";
 import { registerFeatureCommand } from "./commands/feature.command.js";
 import { registerValidationCommand } from "./commands/validation.command.js";
 import { registerMilestoneCommand } from "./commands/milestone.command.js";
+import { registerCheckpointCommand } from "./commands/checkpoint.command.js";
 
 export const program = new Command()
   .name("maestro")
@@ -50,6 +51,7 @@ registerMissionCommand(program);
 registerFeatureCommand(program);
 registerValidationCommand(program);
 registerMilestoneCommand(program);
+registerCheckpointCommand(program);
 
 async function main(): Promise<void> {
   try {

@@ -96,8 +96,8 @@ export function registerMilestoneCommand(program: Command): void {
           `Use 'maestro validate update <assertionId> --mission ${opts.mission} --status passed' to pass assertions`,
         ];
 
-        if (result.waivedAssertionIds.length > 0) {
-          hints.push(`Note: ${result.waivedAssertionIds.length} assertion(s) are currently waived: ${result.waivedAssertionIds.join(", ")}`);
+        if (result.progress.waivedAssertionIds.length > 0) {
+          hints.push(`Note: ${result.progress.waivedAssertionIds.length} assertion(s) are currently waived: ${result.progress.waivedAssertionIds.join(", ")}`);
         }
 
         throw new MaestroError(
