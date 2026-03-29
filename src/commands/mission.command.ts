@@ -14,6 +14,7 @@ import {
   updateMission,
   type CreateMissionResult,
 } from "../usecases/mission-lifecycle.usecase.js";
+import { generateMissionReport, type MissionReport } from "../usecases/mission-report.usecase.js";
 import { MaestroError } from "../domain/errors.js";
 import { readJson } from "../lib/fs.js";
 import type { Mission, UpdateMissionInput, MissionStatus } from "../domain/mission-types.js";
@@ -101,21 +102,20 @@ export function registerMissionCommand(program: Command): void {
 
   missionCmd
     .command("show <id>")
-    .description("Show mission details")
+    .description("Show mission details with milestone progress")
     .option("--json", "Output as JSON")
     .action(async (id: string, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
 
-      const mission = await showMission(services.missionStore, id);
-      if (!mission) {
-        throw new MaestroError(`Mission ${id} not found`, [
-          "List missions: maestro mission list",
-          `Check that mission ID '${id}' is correct`,
-        ]);
-      }
+      const report = await generateMissionReport(
+        services.missionStore,
+        services.featureStore,
+        services.assertionStore,
+        id,
+      );
 
-      output(isJson, mission, formatMissionDetails);
+      output(isJson, report, formatMissionReport);
     });
 
   missionCmd
@@ -204,8 +204,10 @@ function formatMissionList(missions: readonly Mission[]): string[] {
   return lines;
 }
 
-/** Format mission details for text output */
-function formatMissionDetails(mission: Mission): string[] {
+/** Format mission report with milestone progress for text output */
+function formatMissionReport(report: MissionReport): string[] {
+  const { mission, milestones, summary } = report;
+  
   const lines: string[] = [
     `Mission: ${mission.id}`,
     `  Title: ${mission.title}`,
@@ -227,14 +229,29 @@ function formatMissionDetails(mission: Mission): string[] {
   lines.push("");
   lines.push(`Description: ${mission.description || "(none)"}`);
   lines.push("");
-  lines.push(`Milestones (${mission.milestones.length}):`);
-
-  const sortedMilestones = [...mission.milestones].sort((a, b) => a.order - b.order);
-  for (const ms of sortedMilestones) {
-    lines.push(`  ${ms.id}: ${ms.title} (order: ${ms.order})`);
+  lines.push("Progress Summary:");
+  lines.push(`  Features: ${summary.totalCompletedFeatures}/${summary.totalFeatures} (${summary.overallFeaturePct}%)`);
+  lines.push(`  Assertions: ${summary.totalTerminalAssertions}/${summary.totalAssertions} (${summary.overallAssertionPct}%)`);
+  if (summary.totalWaivedAssertions > 0) {
+    lines.push(`  Waived Assertions: ${summary.totalWaivedAssertions}`);
   }
 
   lines.push("");
+  lines.push(`Milestones (${milestones.length}):`);
+  lines.push("");
+
+  for (const m of milestones) {
+    const status = m.status.padEnd(12);
+    lines.push(`${m.order + 1}. ${m.milestone.id}  ${status}  ${m.milestone.title}`);
+    lines.push(`   Features: ${m.completedFeatures}/${m.featureCount} (${m.featureCompletionPct}%)`);
+    lines.push(`   Assertions: ${m.terminalAssertions}/${m.assertionCount} (${m.assertionCompletionPct}%)`);
+    
+    if (m.waivedAssertions > 0) {
+      lines.push(`   Waived: ${m.waivedAssertions} assertion(s)`);
+    }
+    lines.push("");
+  }
+
   lines.push(`Features (${mission.features.length}):`);
   for (const fid of mission.features) {
     lines.push(`  - ${fid}`);

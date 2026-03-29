@@ -246,10 +246,12 @@ describe("mission CLI commands", () => {
     );
 
     expect(exitCode).toBe(0);
-    const mission = JSON.parse(stdout);
-    expect(mission.id).toBe(missionId);
-    expect(mission.title).toBe("Test Mission");
-    expect(mission.milestones).toHaveLength(2);
+    const report = JSON.parse(stdout);
+    expect(report.mission).toBeDefined();
+    expect(report.mission.id).toBe(missionId);
+    expect(report.mission.title).toBe("Test Mission");
+    expect(report.milestones).toHaveLength(2);
+    expect(report.summary).toBeDefined();
   }, SLOW_CLI_TIMEOUT_MS);
 
   it("mission approve transitions draft to approved", async () => {
@@ -274,9 +276,9 @@ describe("mission CLI commands", () => {
 
     // Verify by showing
     const showResult = await run(["mission", "show", missionId, "--json"], tmpDir);
-    const mission = JSON.parse(showResult.stdout);
-    expect(mission.status).toBe("approved");
-    expect(mission.approvedAt).toBeDefined();
+    const report = JSON.parse(showResult.stdout);
+    expect(report.mission.status).toBe("approved");
+    expect(report.mission.approvedAt).toBeDefined();
   }, SLOW_CLI_TIMEOUT_MS);
 
   it("mission reject transitions draft to rejected", async () => {
@@ -301,9 +303,9 @@ describe("mission CLI commands", () => {
 
     // Verify by showing
     const showResult = await run(["mission", "show", missionId, "--json"], tmpDir);
-    const mission = JSON.parse(showResult.stdout);
-    expect(mission.status).toBe("rejected");
-    expect(mission.rejectedAt).toBeDefined();
+    const report = JSON.parse(showResult.stdout);
+    expect(report.mission.status).toBe("rejected");
+    expect(report.mission.rejectedAt).toBeDefined();
   }, SLOW_CLI_TIMEOUT_MS);
 
   it("mission update --status updates status with legal transitions", async () => {
@@ -375,8 +377,8 @@ describe("mission CLI commands", () => {
 
     // Verify
     const showResult = await run(["mission", "show", missionId, "--json"], tmpDir);
-    const mission = JSON.parse(showResult.stdout);
-    expect(mission.title).toBe("Updated Title");
+    const report = JSON.parse(showResult.stdout);
+    expect(report.mission.title).toBe("Updated Title");
   }, SLOW_CLI_TIMEOUT_MS);
 
   it("JSON output works from different flag positions", async () => {
