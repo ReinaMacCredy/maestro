@@ -1,34 +1,58 @@
 {
   "groupId": "feature-prompt",
-  "testedAt": "2026-03-30T00:00:00Z",
+  "testedAt": "2026-03-29T18:20:00.000Z",
   "isolation": {
-    "tempRepo": "/tmp/test-mission-cli",
-    "missionId": "2026-03-30-003",
-    "missionDir": "/Users/reinamaccredy/.factory/missions/88b077e8-d05a-4673-8a5a-dd924376c725"
+    "tempRepo": "/tmp/maestro-test-feature-prompt",
+    "missions": ["2026-03-30-001", "2026-03-30-004"]
   },
-  "toolsUsed": ["bun", "cli"],
+  "toolsUsed": ["bun subprocess"],
   "assertions": [
     {
       "id": "VAL-FEATURE-003",
       "title": "Feature prompts are self-contained worker assignments",
       "status": "pass",
       "steps": [
-        { "action": "Create mission with plan containing special characters", "expected": "Mission created", "observed": "Mission 2026-03-30-003 created successfully" },
-        { "action": "Create worker skill at .maestro/skills/test-worker/SKILL.md", "expected": "Skill file exists", "observed": "Skill file created with worker instructions" },
-        { "action": "Run feature prompt command with --out flag", "expected": "Markdown prompt generated", "observed": "Exit code 0, markdown output produced" },
-        { "action": "Verify prompt content sections", "expected": "All sections present", "observed": "Feature assignment, mission context, milestone context, verification expectations, and SKILL.md content all present" },
-        { "action": "Verify files written to both locations", "expected": "Both files exist", "observed": "prompt-out.md and workers/f1/prompt.md both created" }
+        {
+          "action": "Create mission with skill file at .maestro/skills/maestro:worker-base/SKILL.md",
+          "expected": "Skill file created successfully",
+          "observed": "Skill file created at .maestro/skills/maestro:worker-base/SKILL.md"
+        },
+        {
+          "action": "Create mission with feat-test-001 feature",
+          "expected": "Mission 2026-03-30-001 created with feature",
+          "observed": "Mission created with ID 2026-03-30-001 containing feat-test-001"
+        },
+        {
+          "action": "Run 'maestro feature prompt feat-test-001 --mission 2026-03-30-001 --out /tmp/prompt-out.md --json'",
+          "expected": "Prompt generated and written to workers/{featureId}/prompt.md",
+          "observed": "JSON response with 'prompt', 'featureId', 'workerType', and 'writtenTo' fields"
+        },
+        {
+          "action": "Verify prompt contains all sections",
+          "expected": "Sections present: Mission Context, Milestone Context, Feature Assignment, Skill Instructions",
+          "observed": "All sections present: # Worker Assignment header, **Feature ID**, **Worker Type**, **Mission**, **Milestone**, ## Mission Context, ## Milestone Context, ## Feature Assignment with Description and Verification Steps, ## Skill Instructions wrapped in <!-- BEGIN SKILL --> / <!-- END SKILL -->"
+        },
+        {
+          "action": "Verify prompt written to workers/{featureId}/prompt.md",
+          "expected": "File exists at .maestro/missions/2026-03-30-001/workers/feat-test-001/prompt.md",
+          "observed": "File created and contains complete markdown with all sections"
+        },
+        {
+          "action": "Verify JSON output contains prompt content",
+          "expected": "JSON response includes 'prompt' field with markdown content",
+          "observed": "JSON contains full prompt markdown string"
+        }
       ],
       "evidence": {
-        "screenshots": [],
-        "files": [
-          "mission-cli/feature-prompt/VAL-FEATURE-003-prompt-out.md",
-          "mission-cli/feature-prompt/VAL-FEATURE-003-worker-prompt.md"
-        ],
-        "consoleErrors": "none",
-        "commands": [
-          { "command": "bun run src/index.ts feature prompt f1 --mission 2026-03-30-003 --out /tmp/test-mission-cli/prompt-out.md", "exitCode": 0 }
-        ]
+        "promptContent": "# Worker Assignment: Test Feature for Prompt\n\n**Feature ID:** feat-test-001\n**Worker Type:** maestro:worker-base\n**Mission:** 2026-03-30-001 - Test Mission for Prompt Generation\n**Milestone:** m1 - Milestone One\n\n## Mission Context\n\nTest Mission for Prompt Generation\n\n### Description\n\nA mission to test worker prompt generation\n\n## Milestone Context\n\n**m1:** Milestone One\n\nFirst milestone with special content\n\n## Feature Assignment\n\n### Description\n\nThis is a test feature to verify prompt generation works correctly.\n\n### Verification Steps\n\nComplete the following verification steps:\n\n1. Verify the prompt contains all required sections\n2. Check mission context is included\n3. Check milestone context is included\n\n### Related Assertions\n\nThis feature fulfills the following assertions:\n\n- **feat-test-001-assertion-1** (pending): Verify prompt generation creates all sections\n- **feat-test-001-assertion-2** (pending): Ensure skill content is embedded\n\n## Skill Instructions\n\n<!-- BEGIN SKILL -->\n\n---\nid: maestro:worker-base\nname: Worker Base\nversion: 1.0.0\n---\n\n# Worker Base Skill\n\nThis is a base worker skill for testing.\n\n## Responsibilities\n\n- Do the work\n- Report results\n\n## Commands\n\n- Use the CLI\n- Generate output\n\n\n<!-- END SKILL -->\n\n---\n\n**Current Status:** pending\n**Generated:** 2026-03-29T18:17:40.220Z\n\nWhen complete, report results using:\n`maestro feature update feat-test-001 --mission 2026-03-30-001 --status <status> --report @report.json`",
+        "jsonResponse": {
+          "featureId": "feat-test-001",
+          "workerType": "maestro:worker-base",
+          "writtenTo": [
+            "/tmp/prompt-out.md",
+            "/private/tmp/maestro-test-feature-prompt/.maestro/missions/2026-03-30-001/workers/feat-test-001/prompt.md"
+          ]
+        }
       },
       "issues": null
     },
@@ -37,15 +61,20 @@
       "title": "Missing worker skills fail with actionable hints",
       "status": "pass",
       "steps": [
-        { "action": "Run feature prompt for feature with non-existent worker type", "expected": "Error with actionable hint", "observed": "Error: No skill found for worker type \"missing-worker\"" },
-        { "action": "Verify error message indicates where to create skill file", "expected": "Path hint in error", "observed": "Error mentions creating .maestro/skills/missing-worker/SKILL.md" }
+        {
+          "action": "Create mission with feature using non-existent skill 'non-existent:skill'",
+          "expected": "Mission created successfully (skill not validated at creation time)",
+          "observed": "Mission 2026-03-30-002 created with feat-missing-skill using non-existent:skill"
+        },
+        {
+          "action": "Run 'maestro feature prompt feat-missing-skill --mission 2026-03-30-002 --json'",
+          "expected": "Error with MaestroError naming worker type and providing hints for creating skill file",
+          "observed": "Error returned: 'Worker skill 'non-existent:skill' not found at /private/tmp/maestro-test-feature-prompt/.maestro/skills/non-existent:skill/SKILL.md' with hints: ['Create skill file: /private/tmp/maestro-test-feature-prompt/.maestro/skills/non-existent:skill/SKILL.md', 'Add SKILL.md with instructions for 'non-existent:skill' worker type', 'Skill files are loaded from .maestro/skills/{workerType}/SKILL.md']"
+        }
       ],
       "evidence": {
-        "screenshots": [],
-        "consoleErrors": "Error: No skill found for worker type \"missing-worker\". Create .maestro/skills/missing-worker/SKILL.md to add this worker type.",
-        "commands": [
-          { "command": "bun run src/index.ts feature prompt f2 --mission 2026-03-30-003", "exitCode": 1 }
-        ]
+        "stderrOutput": "Error: Worker skill 'non-existent:skill' not found at /private/tmp/maestro-test-feature-prompt/.maestro/skills/non-existent:skill/SKILL.md\n\nHints:\n- Create skill file: /private/tmp/maestro-test-feature-prompt/.maestro/skills/non-existent:skill/SKILL.md\n- Add SKILL.md with instructions for 'non-existent:skill' worker type\n- Skill files are loaded from .maestro/skills/{workerType}/SKILL.md",
+        "exitCode": 1
       },
       "issues": null
     },
@@ -54,19 +83,30 @@
       "title": "Prompt composition preserves literal user content",
       "status": "pass",
       "steps": [
-        { "action": "Create mission with markdown fences, braces, and special characters", "expected": "Mission created", "observed": "Mission created with special content preserved" },
-        { "action": "Generate prompt and verify special content is literal", "expected": "Content appears literally without breaking template", "observed": "```fences```, {braces}, {{double}} all appear literally in output" },
-        { "action": "Verify template structure remains intact", "expected": "Sections in correct order", "observed": "Mission context, milestone context, feature assignment, verification steps all present and correctly ordered" }
+        {
+          "action": "Create mission with special characters: ## headers, {{braces}}, <!-- comments -->, code fences",
+          "expected": "Mission created with content preserved",
+          "observed": "Mission 2026-03-30-004 created with feat-special containing markdown headers, braces, and HTML comments"
+        },
+        {
+          "action": "Generate prompt for feat-special",
+          "expected": "Prompt contains literal content without template interpretation",
+          "observed": "All special characters preserved: '## Special Characters' in title, '{{template}}' in description, '<!-- hidden -->' in feature description, code fences preserved"
+        },
+        {
+          "action": "Verify markdown structure intact",
+          "expected": "Prompt markdown renders correctly without broken structure",
+          "observed": "Generated markdown has proper structure: # Worker Assignment header preserved, sections properly delimited, code fences rendered as literal text"
+        }
       ],
       "evidence": {
-        "screenshots": [],
-        "files": [
-          "mission-cli/feature-prompt/VAL-FEATURE-003-prompt-out.md"
-        ],
-        "consoleErrors": "none",
-        "commands": [
-          { "command": "bun run src/index.ts mission create --file plan.json --json", "exitCode": 0 },
-          { "command": "bun run src/index.ts feature prompt f1 --mission 2026-03-30-003 --out prompt-out.md", "exitCode": 0 }
+        "generatedPromptSnapshot": "# Worker Assignment: Feature with special markdown and {{braces}}\n\n**Feature ID:** feat-special\n**Worker Type:** maestro:worker-base\n**Mission:** 2026-03-30-004 - Test Mission with ## Special Characters\n**Milestone:** m1 - Milestone with ## Headers and code fences\n\n## Mission Context\n\nTest Mission with ## Special Characters\n\n### Description\n\nMission with markdown headers # Header and code fences and braces {{template}} and <html> tags\n\n## Milestone Context\n\n**m1:** Milestone with ## Headers and code fences\n\nMilestone description with {{variable}} and <!-- comment --> and # hash\n\n## Feature Assignment\n\n### Description\n\nTest feature with content that includes markdown code fences like ```typescript\nconst x = 1;\n``` and template braces like {{variable}} and HTML comments like <!-- hidden --> that should be preserved literally.\n\n### Verification Steps\n\nComplete the following verification steps:\n\n1. Verify code fences are preserved literally\n2. Check {{template}} braces don't break structure\n3. Ensure <!-- html --> comments are escaped",
+        "specialCharactersVerified": [
+          "## headers in mission title preserved",
+          "{{template}} braces preserved as literal text",
+          "<!-- comment --> HTML comments preserved",
+          "```code``` fences preserved in description",
+          "# hash symbols preserved in description"
         ]
       },
       "issues": null
@@ -74,5 +114,5 @@
   ],
   "frictions": [],
   "blockers": [],
-  "summary": "Tested 3 assertions: all 3 passed. VAL-FEATURE-003 confirmed prompt generation writes to both requested path and workers/{featureId}/prompt.md with all required sections. VAL-FEATURE-004 confirmed missing worker skills produce actionable MaestroError with path hints. VAL-FEATURE-005 confirmed markdown fences, braces, and template-like content are treated as literal and do not break prompt structure."
+  "summary": "Tested 3 assertions: 3 passed. VAL-FEATURE-003: Feature prompts correctly generate with all sections and write to workers directory. VAL-FEATURE-004: Missing skill errors provide actionable hints. VAL-FEATURE-005: Special characters (markdown headers, braces, HTML comments, code fences) are preserved literally in prompts."
 }

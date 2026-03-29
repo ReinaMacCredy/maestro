@@ -19,6 +19,7 @@ import { registerUninstallCommand } from "./commands/uninstall.command.js";
 import { registerSessionCommand } from "./commands/session.command.js";
 import { registerMissionCommand } from "./commands/mission.command.js";
 import { registerFeatureCommand } from "./commands/feature.command.js";
+import { registerValidationCommand } from "./commands/validation.command.js";
 
 export const program = new Command()
   .name("maestro")
@@ -46,6 +47,7 @@ registerUpdateCommand(program);
 registerUninstallCommand(program);
 registerMissionCommand(program);
 registerFeatureCommand(program);
+registerValidationCommand(program);
 
 async function main(): Promise<void> {
   try {
