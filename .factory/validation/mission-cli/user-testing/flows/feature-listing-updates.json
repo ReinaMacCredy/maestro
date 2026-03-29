@@ -1,0 +1,143 @@
+{
+  "flowName": "feature-listing-updates",
+  "flowId": "VAL-FEATURE-001, VAL-FEATURE-002",
+  "testedAt": "2026-03-30T18:40:00.000Z",
+  "testedAssertions": [
+    {
+      "assertionId": "VAL-FEATURE-001",
+      "assertionName": "Feature listing stays mission-scoped and filterable",
+      "status": "pass",
+      "criteria": "maestro feature list --mission <id> requires mission scoping and can filter by --milestone and --status",
+      "tests": [
+        {
+          "name": "List all features for mission",
+          "command": "maestro feature list --mission 2026-03-30-001 --json",
+          "expectedResult": "Returns 5 features with total: 5, filtered: 5",
+          "actualResult": "Success - returns all 5 features with correct total/filtered counts",
+          "status": "pass"
+        },
+        {
+          "name": "Filter by milestone m1",
+          "command": "maestro feature list --mission 2026-03-30-001 --milestone m1 --json",
+          "expectedResult": "Returns 3 features (f1-m1, f2-m1, f3-m1) with filtered: 3",
+          "actualResult": "Success - returns 3 features from milestone m1, total still 5, filtered: 3",
+          "status": "pass"
+        },
+        {
+          "name": "Filter by milestone m2",
+          "command": "maestro feature list --mission 2026-03-30-001 --milestone m2 --json",
+          "expectedResult": "Returns 2 features (f1-m2, f2-m2) with filtered: 2",
+          "actualResult": "Success - returns 2 features from milestone m2, total still 5, filtered: 2",
+          "status": "pass"
+        },
+        {
+          "name": "Filter by status pending",
+          "command": "maestro feature list --mission 2026-03-30-001 --status pending --json",
+          "expectedResult": "Returns features with pending status",
+          "actualResult": "Success - returns 5 features initially, then 4 after one was moved to in_progress",
+          "status": "pass"
+        },
+        {
+          "name": "Filter by status in_progress",
+          "command": "maestro feature list --mission 2026-03-30-001 --status in_progress --json",
+          "expectedResult": "Returns 1 feature (f1-m1) after it was moved to in_progress",
+          "actualResult": "Success - returns 0 when no in_progress features, 1 when f1-m1 was in_progress",
+          "status": "pass"
+        },
+        {
+          "name": "Combined milestone + status filter",
+          "command": "maestro feature list --mission 2026-03-30-001 --milestone m1 --status pending --json",
+          "expectedResult": "Returns features in m1 with pending status",
+          "actualResult": "Success - correctly filters by both milestone and status",
+          "status": "pass"
+        }
+      ],
+      "evidence": {
+        "missionId": "2026-03-30-001",
+        "featuresCreated": 5,
+        "milestones": ["m1", "m2"],
+        "featureDistribution": { "m1": 3, "m2": 2 },
+        "filterResults": [
+          { "filter": "none", "total": 5, "filtered": 5 },
+          { "filter": "milestone=m1", "total": 5, "filtered": 3 },
+          { "filter": "milestone=m2", "total": 5, "filtered": 2 },
+          { "filter": "status=pending (after update)", "total": 5, "filtered": 4 },
+          { "filter": "status=in_progress", "total": 5, "filtered": 1 }
+        ]
+      }
+    },
+    {
+      "assertionId": "VAL-FEATURE-002",
+      "assertionName": "Feature updates persist status and worker reports safely",
+      "status": "pass",
+      "criteria": "maestro feature update enforces legal transitions, stores worker reports, preserves reports on retry",
+      "tests": [
+        {
+          "name": "Legal transition: pending -> in_progress",
+          "command": "maestro feature update f1-m1 --mission 2026-03-30-001 --status in_progress --json",
+          "expectedResult": "Status updated to in_progress",
+          "actualResult": "Success - feature status updated to in_progress, updatedAt timestamp refreshed",
+          "status": "pass"
+        },
+        {
+          "name": "Legal transition: in_progress -> in_review",
+          "command": "maestro feature update f1-m1 --mission 2026-03-30-001 --status in_review --json",
+          "expectedResult": "Status updated to in_review",
+          "actualResult": "Success - feature status updated to in_review",
+          "status": "pass"
+        },
+        {
+          "name": "Retry transition: in_review -> pending",
+          "command": "maestro feature update f1-m1 --mission 2026-03-30-001 --status pending --json",
+          "expectedResult": "Status reset to pending for retry",
+          "actualResult": "Success - status reset to pending, report preserved",
+          "status": "pass"
+        },
+        {
+          "name": "Invalid transition rejected",
+          "command": "maestro feature update f2-m1 --mission 2026-03-30-001 --status in_review --json",
+          "expectedResult": "Error: pending cannot transition directly to in_review",
+          "actualResult": "Error correctly raised: 'Invalid feature transition: pending -> in_review' with hint showing valid transitions",
+          "status": "pass"
+        },
+        {
+          "name": "Attach worker report via @file",
+          "command": "maestro feature update f1-m1 --mission 2026-03-30-001 --report @report.json --json",
+          "expectedResult": "Report attached and persisted to workers/f1-m1/report.json",
+          "actualResult": "Success - report persisted, reportPersisted path returned, report embedded in feature",
+          "status": "pass"
+        },
+        {
+          "name": "Report persists after retry to pending",
+          "command": "maestro feature list --mission 2026-03-30-001 --json",
+          "expectedResult": "Feature f1-m1 still has report after status reset to pending",
+          "actualResult": "Success - report with content, timestamp, and agent fields preserved after retry",
+          "status": "pass"
+        }
+      ],
+      "evidence": {
+        "validTransitionsTested": [
+          { "from": "pending", "to": "in_progress", "result": "success" },
+          { "from": "in_progress", "to": "in_review", "result": "success" },
+          { "from": "in_review", "to": "pending", "result": "success" }
+        ],
+        "invalidTransitionsBlocked": [
+          { "from": "pending", "to": "in_review", "error": "Invalid feature transition: pending -> in_review" }
+        ],
+        "reportPersistence": {
+          "persistedPath": ".maestro/missions/2026-03-30-001/workers/f1-m1/report.json",
+          "reportContent": {
+            "content": "Implemented the feature with unit tests and documentation",
+            "timestamp": "2026-03-30T18:45:00.000Z",
+            "agent": "test-droid"
+          },
+          "preservedAfterRetry": true
+        }
+      }
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "toolsUsed": ["bun run", "maestro CLI", "git", "echo/cat for file creation", "JSON parsing"],
+  "summary": "All assertions passed. Feature listing commands correctly filter by mission, milestone, and status. Feature updates enforce the state machine (no invalid transitions allowed), worker reports are persisted to disk and embedded in feature state, and reports are preserved when retrying to pending status."
+}
