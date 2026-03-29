@@ -267,7 +267,7 @@ export function mockFeatureStore(
       features.set(featureId, updated);
       return updated;
     },
-    list: async (_missionId: string, filter?) => {
+    list: async (_missionId: string, filter?: { milestoneId?: string; status?: string }) => {
       let all = [...features.values()];
       if (filter?.milestoneId) {
         all = all.filter((f) => f.milestoneId === filter.milestoneId);

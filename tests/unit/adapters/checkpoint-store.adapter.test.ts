@@ -123,8 +123,8 @@ describe("FsCheckpointStoreAdapter", () => {
       const checkpoints = await store.list(missionId);
       expect(checkpoints).toHaveLength(2);
       // Newest first
-      expect(new Date(checkpoints[0].timestamp).getTime()).toBeGreaterThanOrEqual(
-        new Date(checkpoints[1].timestamp).getTime(),
+      expect(new Date(checkpoints[0]!.timestamp).getTime()).toBeGreaterThanOrEqual(
+        new Date(checkpoints[1]!.timestamp).getTime(),
       );
     });
   });
@@ -192,8 +192,8 @@ describe("FsCheckpointStoreAdapter", () => {
       // Verify list returns both, newest first
       const list = await store.list(missionId);
       expect(list).toHaveLength(2);
-      expect(list[0].id).toBe(cp2.id);
-      expect(list[1].id).toBe(cp1.id);
+      expect(list[0]!.id).toBe(cp2.id);
+      expect(list[1]!.id).toBe(cp1.id);
 
       // Verify get returns correct checkpoint
       const retrieved = await store.get(missionId, cp1.id);

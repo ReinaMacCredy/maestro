@@ -169,7 +169,7 @@ describe("FsFeatureStoreAdapter", () => {
 
       const features = await store.list(missionId, { status: "pending" });
       expect(features).toHaveLength(1);
-      expect(features[0].id).toBe("f2");
+      expect(features[0]!.id).toBe("f2");
     });
 
     it("combines filters", async () => {
@@ -180,7 +180,7 @@ describe("FsFeatureStoreAdapter", () => {
 
       const features = await store.list(missionId, { milestoneId: "m1", status: "in_progress" });
       expect(features).toHaveLength(1);
-      expect(features[0].id).toBe("f1");
+      expect(features[0]!.id).toBe("f1");
     });
   });
 

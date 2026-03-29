@@ -133,8 +133,8 @@ describe("FsMissionStoreAdapter", () => {
 
       const missions = await store.list();
       expect(missions).toHaveLength(2);
-      expect(missions[0].id).toBe(id2);
-      expect(missions[1].id).toBe(id1);
+      expect(missions[0]!.id).toBe(id2);
+      expect(missions[1]!.id).toBe(id1);
     });
   });
 

@@ -49,7 +49,7 @@ describe("FsAssertionStoreAdapter", () => {
 
       const data = await file.json() as { assertions: Assertion[] };
       expect(data.assertions).toHaveLength(1);
-      expect(data.assertions[0].id).toBe("a1");
+      expect(data.assertions[0]!.id).toBe("a1");
     });
 
     it("creates directory if it doesn't exist", async () => {
@@ -157,7 +157,7 @@ describe("FsAssertionStoreAdapter", () => {
       await store.update(missionId, "a1", { status: "failed" });
 
       const updated = await store.update(missionId, "a1", { status: "pending" });
-      expect(updated?.status).toBe("pending");
+      expect(updated!.status).toBe("pending");
     });
 
     it("allows retry from blocked to pending", async () => {
@@ -166,7 +166,7 @@ describe("FsAssertionStoreAdapter", () => {
       await store.update(missionId, "a1", { status: "blocked" });
 
       const updated = await store.update(missionId, "a1", { status: "pending" });
-      expect(updated?.status).toBe("pending");
+      expect(updated!.status).toBe("pending");
     });
   });
 
@@ -183,8 +183,8 @@ describe("FsAssertionStoreAdapter", () => {
 
       const assertions = await store.list(missionId);
       expect(assertions).toHaveLength(2);
-      expect(assertions[0].id).toBe("a1");
-      expect(assertions[1].id).toBe("a2");
+      expect(assertions[0]!.id).toBe("a1");
+      expect(assertions[1]!.id).toBe("a2");
     });
   });
 
@@ -228,7 +228,7 @@ describe("FsAssertionStoreAdapter", () => {
 
       const assertions = await store.getMany(missionId, ["a1", "non-existent"]);
       expect(assertions).toHaveLength(1);
-      expect(assertions[0].id).toBe("a1");
+      expect(assertions[0]!.id).toBe("a1");
     });
   });
 });
