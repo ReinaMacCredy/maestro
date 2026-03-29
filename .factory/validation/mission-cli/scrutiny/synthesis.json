@@ -1,0 +1,42 @@
+{
+  "milestone": "mission-cli",
+  "round": 1,
+  "status": "pass",
+  "validatorsRun": {
+    "test": { "passed": true, "command": "bun run test", "exitCode": 0 },
+    "typecheck": { "passed": true, "command": "bun run typecheck", "exitCode": 0 },
+    "lint": { "passed": true, "command": "not configured", "exitCode": 0, "note": "No lint command in package.json" }
+  },
+  "reviewsSummary": {
+    "total": 3,
+    "passed": 3,
+    "failed": 0,
+    "failedFeatures": []
+  },
+  "blockingIssues": [],
+  "appliedUpdates": [
+    {
+      "target": "src/commands/mission.command.ts",
+      "description": "Fixed UpdateMissionInput type error by using spread operator instead of direct property assignment",
+      "sourceFeature": "mission-cli-lifecycle"
+    },
+    {
+      "target": "tests/integration/mission-commands.test.ts",
+      "description": "Fixed Bun.spawn stdin handling to use new Response().body instead of getWriter()",
+      "sourceFeature": "mission-cli-lifecycle"
+    },
+    {
+      "target": "tests/unit/adapters/mission-store.adapter.test.ts",
+      "description": "Updated store.stage() calls to include third argument (features array) matching new signature",
+      "sourceFeature": "mission-cli-lifecycle"
+    },
+    {
+      "target": "tests/unit/usecases/mission-lifecycle.usecase.test.ts",
+      "description": "Fixed type errors with readonly arrays and expect.fail() calls not available in bun:test",
+      "sourceFeature": "mission-cli-lifecycle"
+    }
+  ],
+  "suggestedGuidanceUpdates": [],
+  "rejectedObservations": [],
+  "previousRound": null
+}

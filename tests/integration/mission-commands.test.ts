@@ -102,18 +102,13 @@ describe("mission CLI commands", () => {
     const plan = createSamplePlan();
     const planJson = JSON.stringify(plan);
 
-    // Write to a temp file and read via stdin using Bun.spawn directly
+    // Write plan JSON to stdin using Bun.spawn with string input
     const proc = Bun.spawn([...CLI, "mission", "create", "--file", "-"], {
       stdout: "pipe",
       stderr: "pipe",
-      stdin: "pipe",
+      stdin: new Response(planJson).body,
       cwd: tmpDir,
     });
-
-    // Write plan JSON to stdin
-    const writer = proc.stdin.getWriter();
-    await writer.write(new TextEncoder().encode(planJson));
-    await writer.close();
 
     const [stdout, stderr] = await Promise.all([
       new Response(proc.stdout).text(),

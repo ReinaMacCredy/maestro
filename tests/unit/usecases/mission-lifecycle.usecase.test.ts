@@ -41,7 +41,7 @@ describe("mission lifecycle usecases", () => {
         title: "Feature 1",
         description: "First feature",
         skillName: "test-skill",
-        verificationSteps: ["step1", "step2"],
+        verificationSteps: ["step1", "step2"] as const,
         dependsOn: [],
         fulfills: ["assertion1", "assertion2"],
       },
@@ -51,7 +51,7 @@ describe("mission lifecycle usecases", () => {
         title: "Feature 2",
         description: "Second feature",
         skillName: "test-skill",
-        verificationSteps: ["step3"],
+        verificationSteps: ["step3"] as const,
         dependsOn: ["f1"],
       },
     ],
@@ -172,12 +172,10 @@ describe("mission lifecycle usecases", () => {
     });
 
     it("rejects duplicate feature IDs", async () => {
+      const f1 = samplePlan.features[0]!;
       const plan = {
         ...samplePlan,
-        features: [
-          samplePlan.features[0],
-          samplePlan.features[0], // duplicate
-        ],
+        features: [f1, f1], // duplicate
       };
 
       expect(
@@ -195,8 +193,8 @@ describe("mission lifecycle usecases", () => {
             title: "A",
             description: "Depends on B",
             skillName: "test-skill",
-            verificationSteps: ["step"],
-            dependsOn: ["b"],
+            verificationSteps: ["step"] as const,
+            dependsOn: ["b"] as const,
           },
           {
             id: "b",
@@ -204,8 +202,8 @@ describe("mission lifecycle usecases", () => {
             title: "B",
             description: "Depends on A",
             skillName: "test-skill",
-            verificationSteps: ["step"],
-            dependsOn: ["a"],
+            verificationSteps: ["step"] as const,
+            dependsOn: ["a"] as const,
           },
         ],
       };
@@ -305,16 +303,18 @@ describe("mission lifecycle usecases", () => {
       await approveMission(missionStore, created.mission.id);
 
       // Try to approve again - should fail
+      let threw = false;
       try {
         await approveMission(missionStore, created.mission.id);
-        expect.fail("Should have thrown");
       } catch (err) {
+        threw = true;
         expect(err).toBeInstanceOf(MaestroError);
         const me = err as MaestroError;
         expect(me.message).toContain("Invalid mission transition");
         expect(me.hints.length).toBeGreaterThan(0);
         expect(me.hints.some((h) => h.includes("approved"))).toBe(true);
       }
+      expect(threw).toBe(true);
     });
   });
 
@@ -338,15 +338,17 @@ describe("mission lifecycle usecases", () => {
       await approveMission(missionStore, created.mission.id);
 
       // Try to reject an approved mission - should fail
+      let threw = false;
       try {
         await rejectMission(missionStore, created.mission.id);
-        expect.fail("Should have thrown");
       } catch (err) {
+        threw = true;
         expect(err).toBeInstanceOf(MaestroError);
         const me = err as MaestroError;
         expect(me.message).toContain("Invalid mission transition");
         expect(me.hints.length).toBeGreaterThan(0);
       }
+      expect(threw).toBe(true);
     });
   });
 

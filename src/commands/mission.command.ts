@@ -163,10 +163,11 @@ export function registerMissionCommand(program: Command): void {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
 
-      const input: UpdateMissionInput = {};
-      if (opts.status) input.status = opts.status as MissionStatus;
-      if (opts.title) input.title = opts.title;
-      if (opts.description) input.description = opts.description;
+      const input: UpdateMissionInput = {
+        ...(opts.status && { status: opts.status as MissionStatus }),
+        ...(opts.title && { title: opts.title }),
+        ...(opts.description && { description: opts.description }),
+      };
 
       if (Object.keys(input).length === 0) {
         throw new MaestroError("No update specified", [

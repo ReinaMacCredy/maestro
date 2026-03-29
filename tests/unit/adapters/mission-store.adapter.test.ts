@@ -30,13 +30,13 @@ describe("FsMissionStoreAdapter", () => {
   describe("stage and finalize", () => {
     it("stages a mission and returns ID", async () => {
       const input = makeCreateInput();
-      const id = await store.stage(input, "2026-03-28-001");
+      const id = await store.stage(input, "2026-03-28-001", []);
       expect(id).toBe("2026-03-28-001");
     });
 
     it("finalizes a staged mission into the active directory", async () => {
       const input = makeCreateInput();
-      const id = await store.stage(input, "2026-03-28-001");
+      const id = await store.stage(input, "2026-03-28-001", []);
       await store.finalize(id);
 
       const mission = await store.get(id);
@@ -47,7 +47,7 @@ describe("FsMissionStoreAdapter", () => {
 
     it("creates subdirectories on finalize", async () => {
       const input = makeCreateInput();
-      const id = await store.stage(input, "2026-03-28-001");
+      const id = await store.stage(input, "2026-03-28-001", []);
       await store.finalize(id);
 
       // Check that feature, workers, and checkpoints dirs exist
@@ -70,7 +70,7 @@ describe("FsMissionStoreAdapter", () => {
 
     it("returns mission after staging and finalizing", async () => {
       const input = makeCreateInput();
-      const id = await store.stage(input, "2026-03-28-001");
+      const id = await store.stage(input, "2026-03-28-001", []);
       await store.finalize(id);
 
       const mission = await store.get(id);
@@ -88,7 +88,7 @@ describe("FsMissionStoreAdapter", () => {
 
     it("returns true for existing mission", async () => {
       const input = makeCreateInput();
-      const id = await store.stage(input, "2026-03-28-001");
+      const id = await store.stage(input, "2026-03-28-001", []);
       await store.finalize(id);
 
       const result = await store.exists(id);
@@ -103,8 +103,8 @@ describe("FsMissionStoreAdapter", () => {
     });
 
     it("returns all mission IDs sorted newest first", async () => {
-      await store.stage(makeCreateInput(), "2026-03-28-001");
-      await store.stage(makeCreateInput(), "2026-03-28-002");
+      await store.stage(makeCreateInput(), "2026-03-28-001", []);
+      await store.stage(makeCreateInput(), "2026-03-28-002", []);
       await store.finalize("2026-03-28-001");
       await store.finalize("2026-03-28-002");
 
@@ -121,14 +121,14 @@ describe("FsMissionStoreAdapter", () => {
 
     it("returns all missions sorted by createdAt descending", async () => {
       const input1 = makeCreateInput();
-      const id1 = await store.stage(input1, "2026-03-28-001");
+      const id1 = await store.stage(input1, "2026-03-28-001", []);
       await store.finalize(id1);
 
       // Small delay to ensure different timestamps
       await new Promise((r) => setTimeout(r, 10));
 
       const input2 = makeCreateInput({ title: "Second Mission" });
-      const id2 = await store.stage(input2, "2026-03-28-002");
+      const id2 = await store.stage(input2, "2026-03-28-002", []);
       await store.finalize(id2);
 
       const missions = await store.list();
@@ -146,7 +146,7 @@ describe("FsMissionStoreAdapter", () => {
 
     it("updates mission status and records timestamp", async () => {
       const input = makeCreateInput();
-      const id = await store.stage(input, "2026-03-28-001");
+      const id = await store.stage(input, "2026-03-28-001", []);
       await store.finalize(id);
 
       const updated = await store.update(id, { status: "approved" });
@@ -157,7 +157,7 @@ describe("FsMissionStoreAdapter", () => {
 
     it("updates mission title without changing status", async () => {
       const input = makeCreateInput();
-      const id = await store.stage(input, "2026-03-28-001");
+      const id = await store.stage(input, "2026-03-28-001", []);
       await store.finalize(id);
 
       const updated = await store.update(id, { title: "Updated Title" });
@@ -167,7 +167,7 @@ describe("FsMissionStoreAdapter", () => {
 
     it("updates mission description", async () => {
       const input = makeCreateInput();
-      const id = await store.stage(input, "2026-03-28-001");
+      const id = await store.stage(input, "2026-03-28-001", []);
       await store.finalize(id);
 
       const updated = await store.update(id, { description: "Updated description" });
@@ -176,7 +176,7 @@ describe("FsMissionStoreAdapter", () => {
 
     it("records rejectedAt when transitioning to rejected", async () => {
       const input = makeCreateInput();
-      const id = await store.stage(input, "2026-03-28-001");
+      const id = await store.stage(input, "2026-03-28-001", []);
       await store.finalize(id);
 
       const updated = await store.update(id, { status: "rejected" });
@@ -186,7 +186,7 @@ describe("FsMissionStoreAdapter", () => {
 
     it("records completedAt when transitioning to completed", async () => {
       const input = makeCreateInput();
-      const id = await store.stage(input, "2026-03-28-001");
+      const id = await store.stage(input, "2026-03-28-001", []);
       await store.finalize(id);
       await store.update(id, { status: "approved" });
       await store.update(id, { status: "executing" });
