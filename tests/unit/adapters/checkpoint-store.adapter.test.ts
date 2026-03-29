@@ -99,8 +99,8 @@ describe("FsCheckpointStoreAdapter", () => {
 
       const checkpoint = await store.get(missionId, saved.id);
       expect(checkpoint).toBeDefined();
-      expect(checkpoint.id).toBe(saved.id);
-      expect(checkpoint.milestoneId).toBe("m1");
+      expect(checkpoint!.id).toBe(saved.id);
+      expect(checkpoint!.milestoneId).toBe("m1");
     });
   });
 

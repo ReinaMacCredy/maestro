@@ -159,7 +159,7 @@ describe("FsFeatureStoreAdapter", () => {
 
       const features = await store.list(missionId, { milestoneId: "m1" });
       expect(features).toHaveLength(1);
-      expect(features[0].id).toBe("f1");
+      expect(features[0]!.id).toBe("f1");
     });
 
     it("filters by status", async () => {
