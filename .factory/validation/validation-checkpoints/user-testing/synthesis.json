@@ -1,0 +1,31 @@
+{
+  "milestone": "validation-checkpoints",
+  "round": 1,
+  "status": "pass",
+  "assertionsSummary": {
+    "total": 6,
+    "passed": 6,
+    "failed": 0,
+    "blocked": 0
+  },
+  "passedAssertions": [
+    "VAL-VALIDATION-001",
+    "VAL-VALIDATION-002",
+    "VAL-MILESTONE-002",
+    "VAL-MILESTONE-003",
+    "VAL-CHECKPOINT-001",
+    "VAL-CHECKPOINT-002"
+  ],
+  "failedAssertions": [],
+  "blockedAssertions": [],
+  "appliedUpdates": [],
+  "previousRound": null,
+  "notes": {
+    "VAL-VALIDATION-001": "Assertion show/update correctly persists results and evidence to assertions.json",
+    "VAL-VALIDATION-002": "Waive requires reason; retry transitions work; illegal transitions fail with helpful hints",
+    "VAL-MILESTONE-002": "Milestone seal succeeds when all assertions are passed or waived",
+    "VAL-MILESTONE-003": "Failed seal attempts correctly identify blocking assertion IDs in both JSON and text output",
+    "VAL-CHECKPOINT-001": "Checkpoint save captures missionId, milestoneId, featureStates, and assertionStates",
+    "VAL-CHECKPOINT-002": "Checkpoint list returns newest-first; load returns latest with metadata-only warning"
+  }
+}
