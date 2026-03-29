@@ -1,0 +1,45 @@
+{
+  "milestone": "mission-cli",
+  "round": 1,
+  "status": "partial",
+  "assertionsSummary": {
+    "total": 21,
+    "passed": 4,
+    "failed": 0,
+    "blocked": 0,
+    "pending": 17
+  },
+  "passedAssertions": [
+    "VAL-MISSION-001",
+    "VAL-MISSION-003",
+    "VAL-MISSION-004",
+    "VAL-CROSS-002"
+  ],
+  "failedAssertions": [],
+  "blockedAssertions": [],
+  "pendingAssertions": [
+    "VAL-MISSION-002",
+    "VAL-FEATURE-001",
+    "VAL-FEATURE-002",
+    "VAL-FEATURE-003",
+    "VAL-FEATURE-004",
+    "VAL-FEATURE-005",
+    "VAL-VALIDATION-001",
+    "VAL-VALIDATION-002",
+    "VAL-MILESTONE-001",
+    "VAL-MILESTONE-002",
+    "VAL-MILESTONE-003",
+    "VAL-CHECKPOINT-001",
+    "VAL-CHECKPOINT-002",
+    "VAL-SKILLS-001",
+    "VAL-CROSS-001",
+    "VAL-CROSS-003"
+  ],
+  "appliedUpdates": [],
+  "flowReports": [
+    ".factory/validation/mission-cli/user-testing/flows/mission-lifecycle.json",
+    ".factory/validation/mission-cli/user-testing/flows/cross-cutting.json"
+  ],
+  "previousRound": null,
+  "notes": "Round 1 of user testing validation. 4 assertions passed from existing flow reports. The mission-lifecycle flow tested VAL-MISSION-001, VAL-MISSION-003, VAL-MISSION-004. The cross-cutting flow tested VAL-CROSS-002. Remaining 17 assertions require additional testing."
+}

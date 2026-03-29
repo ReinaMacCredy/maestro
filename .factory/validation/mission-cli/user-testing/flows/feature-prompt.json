@@ -1,0 +1,78 @@
+{
+  "groupId": "feature-prompt",
+  "testedAt": "2026-03-30T00:00:00Z",
+  "isolation": {
+    "tempRepo": "/tmp/test-mission-cli",
+    "missionId": "2026-03-30-003",
+    "missionDir": "/Users/reinamaccredy/.factory/missions/88b077e8-d05a-4673-8a5a-dd924376c725"
+  },
+  "toolsUsed": ["bun", "cli"],
+  "assertions": [
+    {
+      "id": "VAL-FEATURE-003",
+      "title": "Feature prompts are self-contained worker assignments",
+      "status": "pass",
+      "steps": [
+        { "action": "Create mission with plan containing special characters", "expected": "Mission created", "observed": "Mission 2026-03-30-003 created successfully" },
+        { "action": "Create worker skill at .maestro/skills/test-worker/SKILL.md", "expected": "Skill file exists", "observed": "Skill file created with worker instructions" },
+        { "action": "Run feature prompt command with --out flag", "expected": "Markdown prompt generated", "observed": "Exit code 0, markdown output produced" },
+        { "action": "Verify prompt content sections", "expected": "All sections present", "observed": "Feature assignment, mission context, milestone context, verification expectations, and SKILL.md content all present" },
+        { "action": "Verify files written to both locations", "expected": "Both files exist", "observed": "prompt-out.md and workers/f1/prompt.md both created" }
+      ],
+      "evidence": {
+        "screenshots": [],
+        "files": [
+          "mission-cli/feature-prompt/VAL-FEATURE-003-prompt-out.md",
+          "mission-cli/feature-prompt/VAL-FEATURE-003-worker-prompt.md"
+        ],
+        "consoleErrors": "none",
+        "commands": [
+          { "command": "bun run src/index.ts feature prompt f1 --mission 2026-03-30-003 --out /tmp/test-mission-cli/prompt-out.md", "exitCode": 0 }
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-FEATURE-004",
+      "title": "Missing worker skills fail with actionable hints",
+      "status": "pass",
+      "steps": [
+        { "action": "Run feature prompt for feature with non-existent worker type", "expected": "Error with actionable hint", "observed": "Error: No skill found for worker type \"missing-worker\"" },
+        { "action": "Verify error message indicates where to create skill file", "expected": "Path hint in error", "observed": "Error mentions creating .maestro/skills/missing-worker/SKILL.md" }
+      ],
+      "evidence": {
+        "screenshots": [],
+        "consoleErrors": "Error: No skill found for worker type \"missing-worker\". Create .maestro/skills/missing-worker/SKILL.md to add this worker type.",
+        "commands": [
+          { "command": "bun run src/index.ts feature prompt f2 --mission 2026-03-30-003", "exitCode": 1 }
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-FEATURE-005",
+      "title": "Prompt composition preserves literal user content",
+      "status": "pass",
+      "steps": [
+        { "action": "Create mission with markdown fences, braces, and special characters", "expected": "Mission created", "observed": "Mission created with special content preserved" },
+        { "action": "Generate prompt and verify special content is literal", "expected": "Content appears literally without breaking template", "observed": "```fences```, {braces}, {{double}} all appear literally in output" },
+        { "action": "Verify template structure remains intact", "expected": "Sections in correct order", "observed": "Mission context, milestone context, feature assignment, verification steps all present and correctly ordered" }
+      ],
+      "evidence": {
+        "screenshots": [],
+        "files": [
+          "mission-cli/feature-prompt/VAL-FEATURE-003-prompt-out.md"
+        ],
+        "consoleErrors": "none",
+        "commands": [
+          { "command": "bun run src/index.ts mission create --file plan.json --json", "exitCode": 0 },
+          { "command": "bun run src/index.ts feature prompt f1 --mission 2026-03-30-003 --out prompt-out.md", "exitCode": 0 }
+        ]
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "summary": "Tested 3 assertions: all 3 passed. VAL-FEATURE-003 confirmed prompt generation writes to both requested path and workers/{featureId}/prompt.md with all required sections. VAL-FEATURE-004 confirmed missing worker skills produce actionable MaestroError with path hints. VAL-FEATURE-005 confirmed markdown fences, braces, and template-like content are treated as literal and do not break prompt structure."
+}
