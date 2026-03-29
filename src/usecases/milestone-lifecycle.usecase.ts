@@ -63,61 +63,58 @@ export interface SealMilestoneResult {
 /**
  * Compute the effective milestone status based on mission status and milestone order
  * This is a derivation - actual transitions happen via the state machine
+ * If a milestone is already sealed/completed, it stays completed.
  */
 function deriveMilestoneStatus(
   mission: Mission,
   milestone: Milestone,
   allMilestones: readonly Milestone[],
 ): MilestoneStatus {
+  // If milestone is already sealed/completed, it stays that way
+  if (milestone.status === "completed") {
+    return "completed";
+  }
+
   // Sort milestones by order
   const sorted = [...allMilestones].sort((a, b) => a.order - b.order);
   const currentIndex = sorted.findIndex((m) => m.id === milestone.id);
 
-  // Derive based on mission status and position
-  switch (mission.status) {
-    case "draft":
-    case "approved":
-      return "pending";
-    case "executing":
-      // Find the first non-completed milestone
-      for (let i = 0; i < sorted.length; i++) {
-        if (i < currentIndex) {
-          // Previous milestones should be completed
-          continue;
-        } else if (i === currentIndex) {
-          return "executing";
-        } else {
-          return "pending";
-        }
-      }
-      return "completed";
-    case "validating":
-      // During validation, current milestone is validating
-      for (let i = 0; i < sorted.length; i++) {
-        if (i < currentIndex) {
-          continue;
-        } else if (i === currentIndex) {
-          return "validating";
-        } else {
-          return "pending";
-        }
-      }
-      return "completed";
-    case "completed":
-      return "completed";
-    case "failed":
-      // If mission failed, the current milestone failed
-      for (let i = 0; i < sorted.length; i++) {
-        if (i === currentIndex) {
-          return currentIndex < sorted.length - 1 ? "failed" : "completed";
-        }
-      }
-      return "completed";
-    case "rejected":
-      return "pending";
-    default:
-      return "pending";
+  // Find the first non-completed milestone (the active one)
+  let firstNonCompletedIndex = -1;
+  for (let i = 0; i < sorted.length; i++) {
+    const m = sorted[i]!;
+    if (m.status !== "completed") {
+      firstNonCompletedIndex = i;
+      break;
+    }
   }
+
+  // If all milestones are completed
+  if (firstNonCompletedIndex === -1) {
+    return "completed";
+  }
+
+  // If this milestone is before the first non-completed one, it's completed
+  if (currentIndex < firstNonCompletedIndex) {
+    return "completed";
+  }
+
+  // If this IS the first non-completed milestone, it gets the active status
+  if (currentIndex === firstNonCompletedIndex) {
+    switch (mission.status) {
+      case "executing":
+        return "executing";
+      case "validating":
+        return "validating";
+      case "failed":
+        return "failed";
+      default:
+        return "pending";
+    }
+  }
+
+  // This milestone is after the active one - it should be pending
+  return "pending";
 }
 
 /**
@@ -277,6 +274,21 @@ export async function sealMilestone(
 
   // Can only seal if all assertions are terminal (passed or waived)
   const canSeal = blockingAssertionIds.length === 0;
+
+  // If sealing succeeds, persist the milestone status transition to completed
+  if (canSeal && milestone.status !== "completed") {
+    await missionStore.update(missionId, {
+      milestones: mission.milestones.map((m) =>
+        m.id === milestoneId ? { ...m, status: "completed" as const } : m
+      ),
+    });
+    // Refresh mission to get updated state
+    const updatedMission = await missionStore.get(missionId);
+    if (updatedMission) {
+      mission.milestones = updatedMission.milestones;
+    }
+    progress.status = "completed";
+  }
 
   return {
     mission,

@@ -301,8 +301,8 @@ describe("multi-milestone progression", () => {
     const m2Final = finalData.milestones.find((m: { milestoneId: string }) => m.milestoneId === "m2");
     const m3Final = finalData.milestones.find((m: { milestoneId: string }) => m.milestoneId === "m3");
 
-    expect(m1Final.status).toBe("executing"); // mission is still executing, m1 is current milestone
-    expect(m2Final.status).toBe("pending"); // m2 comes after current
+    expect(m1Final.status).toBe("completed"); // m1 is sealed/completed
+    expect(m2Final.status).toBe("executing"); // m2 is the current milestone (sealed but mission still executing)
     expect(m3Final.completedFeatures).toBe(1);
   }, SLOW_CLI_TIMEOUT_MS);
 
@@ -525,13 +525,13 @@ describe("multi-milestone progression", () => {
     const m2 = listData.milestones.find((m: { milestoneId: string }) => m.milestoneId === "m2");
     const m3 = listData.milestones.find((m: { milestoneId: string }) => m.milestoneId === "m3");
 
-    expect(m1.status).toBe("executing"); // m1 is current milestone while mission is executing
+    expect(m1.status).toBe("completed"); // m1 is completed (sealed)
     expect(m1.featureCompletionPct).toBe(100);
 
-    expect(m2.status).toBe("executing"); // or default status
+    expect(m2.status).toBe("executing"); // m2 is the current active milestone
     expect(m2.completedFeatures).toBe(0);
 
-    expect(m3.status).toBe("pending");
+    expect(m3.status).toBe("pending"); // m3 comes after the current milestone
     expect(m3.completedFeatures).toBe(0);
   }, SLOW_CLI_TIMEOUT_MS);
 });
