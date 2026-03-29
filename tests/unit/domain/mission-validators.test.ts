@@ -58,6 +58,7 @@ const makeFeature = (overrides: Partial<Feature> = {}): Feature => ({
   description: "A test feature",
   skillName: "test-skill",
   verificationSteps: ["step 1"],
+  dependsOn: [],
   createdAt: "2026-03-28T12:00:00Z",
   updatedAt: "2026-03-28T12:00:00Z",
   ...overrides,

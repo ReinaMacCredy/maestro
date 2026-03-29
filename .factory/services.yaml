@@ -1,0 +1,10 @@
+commands:
+  install: bun install
+  build: bun run build
+  test: bun test
+  typecheck: bun run typecheck
+  lint: echo "No linter configured"
+  dev: bun run src/index.ts
+  smoke: bun run src/index.ts --help
+
+services: {}

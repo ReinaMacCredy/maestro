@@ -35,5 +35,5 @@ retrieval-index.json
 feedback.jsonl
 
 # Runtime data
-.factory/
 .maestro/handoffs/
+.maestro/missions/

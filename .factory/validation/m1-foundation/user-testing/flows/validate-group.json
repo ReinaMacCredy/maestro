@@ -1,0 +1,24 @@
+{
+  "groupId": "validate",
+  "assertions": {
+    "VAL-M1-VALIDATE-001": {
+      "status": "passed",
+      "evidence": "Mission schema validation tests passed - rejects mission missing id with descriptive error, rejects mission missing name with path and message. All 118 tests passed including mission validation for required fields (id, name, objective, status, createdAt, updatedAt) and rejection of invalid values."
+    },
+    "VAL-M1-VALIDATE-002": {
+      "status": "passed",
+      "evidence": "Feature schema validation tests passed - validates all required fields present (id, missionId, description, skillName, status), validates fulfills contains valid assertion IDs, rejects invalid assertion ID format in fulfills. Tests cover optional fields and timestamp validation."
+    },
+    "VAL-M1-VALIDATE-003": {
+      "status": "passed",
+      "evidence": "Task dependency validation tests passed - detects circular dependencies in task chains (simple A->B->A, three-way A->B->C->A, self-dependency A->A), allows valid dependency chains without cycles. Returns typed objects on successful validation."
+    },
+    "VAL-M1-VALIDATE-004": {
+      "status": "passed",
+      "evidence": "Worker capability validation tests passed - validates capabilities against known skills when validateCapabilities=true, allows any capabilities by default (validateCapabilities=false), rejects empty capabilities array. Tests cover all worker statuses and custom agent slugs."
+    }
+  },
+  "frictions": [],
+  "blockers": [],
+  "toolsUsed": ["bun test"]
+}
