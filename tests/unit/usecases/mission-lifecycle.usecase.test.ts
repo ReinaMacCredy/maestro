@@ -1,0 +1,408 @@
+/**
+ * Unit tests for mission lifecycle usecases
+ */
+import { describe, expect, it, beforeEach } from "bun:test";
+import {
+  createMission,
+  listMissions,
+  showMission,
+  approveMission,
+  rejectMission,
+  updateMission,
+} from "../../../src/usecases/mission-lifecycle.usecase.js";
+import { FsMissionStoreAdapter } from "../../../src/adapters/mission-store.adapter.js";
+import { FsFeatureStoreAdapter } from "../../../src/adapters/feature-store.adapter.js";
+import { FsAssertionStoreAdapter } from "../../../src/adapters/assertion-store.adapter.js";
+import { MaestroError } from "../../../src/domain/errors.js";
+import type { Milestone } from "../../../src/domain/mission-types.js";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { mkdtemp } from "node:fs/promises";
+
+describe("mission lifecycle usecases", () => {
+  let tmpDir: string;
+  let missionStore: FsMissionStoreAdapter;
+  let featureStore: FsFeatureStoreAdapter;
+  let assertionStore: FsAssertionStoreAdapter;
+
+  const sampleMilestones: Milestone[] = [
+    { id: "m1", title: "Milestone 1", description: "First milestone", order: 0 },
+    { id: "m2", title: "Milestone 2", description: "Second milestone", order: 1 },
+  ];
+
+  const samplePlan = {
+    title: "Test Mission",
+    description: "A test mission",
+    milestones: sampleMilestones,
+    features: [
+      {
+        id: "f1",
+        milestoneId: "m1",
+        title: "Feature 1",
+        description: "First feature",
+        skillName: "test-skill",
+        verificationSteps: ["step1", "step2"],
+        dependsOn: [],
+        fulfills: ["assertion1", "assertion2"],
+      },
+      {
+        id: "f2",
+        milestoneId: "m2",
+        title: "Feature 2",
+        description: "Second feature",
+        skillName: "test-skill",
+        verificationSteps: ["step3"],
+        dependsOn: ["f1"],
+      },
+    ],
+  };
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), "mission-test-"));
+    missionStore = new FsMissionStoreAdapter(tmpDir);
+    featureStore = new FsFeatureStoreAdapter(tmpDir);
+    assertionStore = new FsAssertionStoreAdapter(tmpDir);
+  });
+
+  describe("createMission", () => {
+    it("creates a mission with generated ID from plan file", async () => {
+      const result = await createMission(
+        missionStore,
+        featureStore,
+        assertionStore,
+        samplePlan,
+      );
+
+      expect(result.mission).toBeDefined();
+      expect(result.mission.id).toMatch(/^\d{4}-\d{2}-\d{2}-\d{3}$/);
+      expect(result.mission.title).toBe("Test Mission");
+      expect(result.mission.status).toBe("draft");
+      expect(result.mission.milestones).toHaveLength(2);
+      expect(result.features).toHaveLength(2);
+    });
+
+    it("creates features with correct data", async () => {
+      const result = await createMission(
+        missionStore,
+        featureStore,
+        assertionStore,
+        samplePlan,
+      );
+
+      const f1 = result.features.find((f) => f.id === "f1");
+      expect(f1).toBeDefined();
+      expect(f1?.missionId).toBe(result.mission.id);
+      expect(f1?.milestoneId).toBe("m1");
+      expect(f1?.skillName).toBe("test-skill");
+      expect(f1?.verificationSteps).toEqual(["step1", "step2"]);
+    });
+
+    it("creates assertions for features with fulfills", async () => {
+      const result = await createMission(
+        missionStore,
+        featureStore,
+        assertionStore,
+        samplePlan,
+      );
+
+      const assertions = await assertionStore.list(result.mission.id);
+      expect(assertions).toHaveLength(2);
+      expect(assertions[0]?.featureId).toBe("f1");
+      expect(assertions[0]?.status).toBe("pending");
+    });
+
+    it("handles features without fulfills", async () => {
+      const plan = {
+        ...samplePlan,
+        features: [
+          {
+            id: "f3",
+            milestoneId: "m1",
+            title: "Feature 3",
+            description: "No assertions",
+            skillName: "test-skill",
+            verificationSteps: ["step"],
+          },
+        ],
+      };
+
+      const result = await createMission(
+        missionStore,
+        featureStore,
+        assertionStore,
+        plan,
+      );
+
+      const assertions = await assertionStore.list(result.mission.id);
+      expect(assertions).toHaveLength(0);
+    });
+
+    it("rejects duplicate milestone IDs", async () => {
+      const plan = {
+        ...samplePlan,
+        milestones: [
+          { id: "dup", title: "One", description: "First", order: 0 },
+          { id: "dup", title: "Two", description: "Second", order: 1 },
+        ],
+      };
+
+      expect(
+        createMission(missionStore, featureStore, assertionStore, plan),
+      ).rejects.toThrow("Milestone IDs must be unique");
+    });
+
+    it("rejects dangling milestone references in features", async () => {
+      const plan = {
+        ...samplePlan,
+        features: [
+          {
+            id: "bad",
+            milestoneId: "nonexistent",
+            title: "Bad Feature",
+            description: "References invalid milestone",
+            skillName: "test-skill",
+            verificationSteps: ["step"],
+          },
+        ],
+      };
+
+      expect(
+        createMission(missionStore, featureStore, assertionStore, plan),
+      ).rejects.toThrow("references non-existent milestone");
+    });
+
+    it("rejects duplicate feature IDs", async () => {
+      const plan = {
+        ...samplePlan,
+        features: [
+          samplePlan.features[0],
+          samplePlan.features[0], // duplicate
+        ],
+      };
+
+      expect(
+        createMission(missionStore, featureStore, assertionStore, plan),
+      ).rejects.toThrow("Duplicate feature ID");
+    });
+
+    it("rejects cyclic dependencies", async () => {
+      const plan = {
+        ...samplePlan,
+        features: [
+          {
+            id: "a",
+            milestoneId: "m1",
+            title: "A",
+            description: "Depends on B",
+            skillName: "test-skill",
+            verificationSteps: ["step"],
+            dependsOn: ["b"],
+          },
+          {
+            id: "b",
+            milestoneId: "m1",
+            title: "B",
+            description: "Depends on A",
+            skillName: "test-skill",
+            verificationSteps: ["step"],
+            dependsOn: ["a"],
+          },
+        ],
+      };
+
+      expect(
+        createMission(missionStore, featureStore, assertionStore, plan),
+      ).rejects.toThrow("Cyclic dependency");
+    });
+
+    it("stores mission in .maestro/missions/{id}", async () => {
+      const result = await createMission(
+        missionStore,
+        featureStore,
+        assertionStore,
+        samplePlan,
+      );
+
+      const retrieved = await missionStore.get(result.mission.id);
+      expect(retrieved).toBeDefined();
+      expect(retrieved?.id).toBe(result.mission.id);
+    });
+  });
+
+  describe("listMissions", () => {
+    it("returns empty array when no missions", async () => {
+      const missions = await listMissions(missionStore);
+      expect(missions).toHaveLength(0);
+    });
+
+    it("lists all missions sorted by date", async () => {
+      await createMission(missionStore, featureStore, assertionStore, samplePlan);
+      await createMission(missionStore, featureStore, assertionStore, {
+        ...samplePlan,
+        title: "Second Mission",
+      });
+
+      const missions = await listMissions(missionStore);
+      expect(missions).toHaveLength(2);
+      // Newest first
+      expect(missions[0]?.title).toBe("Second Mission");
+      expect(missions[1]?.title).toBe("Test Mission");
+    });
+
+    it("filters by status", async () => {
+      const result1 = await createMission(missionStore, featureStore, assertionStore, samplePlan);
+      const result2 = await createMission(missionStore, featureStore, assertionStore, {
+        ...samplePlan,
+        title: "Second Mission",
+      });
+
+      // Approve the second mission
+      await approveMission(missionStore, result2.mission.id);
+
+      const drafts = await listMissions(missionStore, { status: "draft" });
+      expect(drafts).toHaveLength(1);
+      expect(drafts[0]?.id).toBe(result1.mission.id);
+
+      const approved = await listMissions(missionStore, { status: "approved" });
+      expect(approved).toHaveLength(1);
+      expect(approved[0]?.id).toBe(result2.mission.id);
+    });
+  });
+
+  describe("showMission", () => {
+    it("returns mission by ID", async () => {
+      const created = await createMission(missionStore, featureStore, assertionStore, samplePlan);
+
+      const mission = await showMission(missionStore, created.mission.id);
+      expect(mission).toBeDefined();
+      expect(mission?.title).toBe("Test Mission");
+    });
+
+    it("returns undefined for non-existent mission", async () => {
+      const mission = await showMission(missionStore, "2026-03-28-001");
+      expect(mission).toBeUndefined();
+    });
+  });
+
+  describe("approveMission", () => {
+    it("transitions draft mission to approved", async () => {
+      const created = await createMission(missionStore, featureStore, assertionStore, samplePlan);
+      expect(created.mission.status).toBe("draft");
+
+      const approved = await approveMission(missionStore, created.mission.id);
+      expect(approved.status).toBe("approved");
+      expect(approved.approvedAt).toBeDefined();
+    });
+
+    it("throws for non-existent mission", async () => {
+      expect(
+        approveMission(missionStore, "2026-03-28-001"),
+      ).rejects.toThrow("Mission 2026-03-28-001 not found");
+    });
+
+    it("throws with helpful hints for invalid transitions", async () => {
+      const created = await createMission(missionStore, featureStore, assertionStore, samplePlan);
+      await approveMission(missionStore, created.mission.id);
+
+      // Try to approve again - should fail
+      try {
+        await approveMission(missionStore, created.mission.id);
+        expect.fail("Should have thrown");
+      } catch (err) {
+        expect(err).toBeInstanceOf(MaestroError);
+        const me = err as MaestroError;
+        expect(me.message).toContain("Invalid mission transition");
+        expect(me.hints.length).toBeGreaterThan(0);
+        expect(me.hints.some((h) => h.includes("approved"))).toBe(true);
+      }
+    });
+  });
+
+  describe("rejectMission", () => {
+    it("transitions draft mission to rejected", async () => {
+      const created = await createMission(missionStore, featureStore, assertionStore, samplePlan);
+
+      const rejected = await rejectMission(missionStore, created.mission.id);
+      expect(rejected.status).toBe("rejected");
+      expect(rejected.rejectedAt).toBeDefined();
+    });
+
+    it("throws for non-existent mission", async () => {
+      expect(
+        rejectMission(missionStore, "2026-03-28-001"),
+      ).rejects.toThrow("Mission 2026-03-28-001 not found");
+    });
+
+    it("throws with helpful hints for invalid transitions", async () => {
+      const created = await createMission(missionStore, featureStore, assertionStore, samplePlan);
+      await approveMission(missionStore, created.mission.id);
+
+      // Try to reject an approved mission - should fail
+      try {
+        await rejectMission(missionStore, created.mission.id);
+        expect.fail("Should have thrown");
+      } catch (err) {
+        expect(err).toBeInstanceOf(MaestroError);
+        const me = err as MaestroError;
+        expect(me.message).toContain("Invalid mission transition");
+        expect(me.hints.length).toBeGreaterThan(0);
+      }
+    });
+  });
+
+  describe("updateMission", () => {
+    it("updates mission status", async () => {
+      const created = await createMission(missionStore, featureStore, assertionStore, samplePlan);
+      await approveMission(missionStore, created.mission.id);
+
+      const updated = await updateMission(missionStore, created.mission.id, {
+        status: "executing",
+      });
+      expect(updated.status).toBe("executing");
+    });
+
+    it("updates mission title", async () => {
+      const created = await createMission(missionStore, featureStore, assertionStore, samplePlan);
+
+      const updated = await updateMission(missionStore, created.mission.id, {
+        title: "Updated Title",
+      });
+      expect(updated.title).toBe("Updated Title");
+      expect(updated.status).toBe("draft"); // unchanged
+    });
+
+    it("updates mission description", async () => {
+      const created = await createMission(missionStore, featureStore, assertionStore, samplePlan);
+
+      const updated = await updateMission(missionStore, created.mission.id, {
+        description: "Updated description",
+      });
+      expect(updated.description).toBe("Updated description");
+    });
+
+    it("validates legal transitions on status update", async () => {
+      const created = await createMission(missionStore, featureStore, assertionStore, samplePlan);
+
+      // Cannot go directly from draft to executing (must go through approved)
+      expect(
+        updateMission(missionStore, created.mission.id, { status: "executing" }),
+      ).rejects.toThrow("Invalid mission transition");
+    });
+
+    it("throws for non-existent mission", async () => {
+      expect(
+        updateMission(missionStore, "2026-03-28-001", { title: "New Title" }),
+      ).rejects.toThrow("Mission 2026-03-28-001 not found");
+    });
+
+    it("allows same status update (no-op)", async () => {
+      const created = await createMission(missionStore, featureStore, assertionStore, samplePlan);
+
+      const updated = await updateMission(missionStore, created.mission.id, {
+        status: "draft",
+      });
+      expect(updated.status).toBe("draft");
+      expect(updated.updatedAt).not.toBe(created.mission.updatedAt);
+    });
+  });
+});

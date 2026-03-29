@@ -19,7 +19,7 @@ export interface MissionStorePort {
    * Writes to a staging area before finalizing.
    * Returns the mission ID.
    */
-  stage(input: CreateMissionInput, id: string): Promise<string>;
+  stage(input: CreateMissionInput, id: string, features: readonly string[]): Promise<string>;
 
   /**
    * Finalize a staged mission.

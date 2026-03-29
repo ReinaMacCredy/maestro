@@ -17,6 +17,8 @@ import { registerInstallCommand } from "./commands/install.command.js";
 import { registerUpdateCommand } from "./commands/update.command.js";
 import { registerUninstallCommand } from "./commands/uninstall.command.js";
 import { registerSessionCommand } from "./commands/session.command.js";
+import { registerMissionCommand } from "./commands/mission.command.js";
+import { registerFeatureCommand } from "./commands/feature.command.js";
 
 export const program = new Command()
   .name("maestro")
@@ -42,6 +44,8 @@ registerSessionCommand(program);
 registerInstallCommand(program);
 registerUpdateCommand(program);
 registerUninstallCommand(program);
+registerMissionCommand(program);
+registerFeatureCommand(program);
 
 async function main(): Promise<void> {
   try {

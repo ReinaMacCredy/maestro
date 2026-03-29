@@ -56,7 +56,7 @@ export class FsMissionStoreAdapter implements MissionStorePort {
     return await dirExists(this.missionDir(id));
   }
 
-  async stage(input: CreateMissionInput, id: string): Promise<string> {
+  async stage(input: CreateMissionInput, id: string, features: readonly string[]): Promise<string> {
     const now = new Date().toISOString();
     const mission: Mission = {
       id,
@@ -64,7 +64,7 @@ export class FsMissionStoreAdapter implements MissionStorePort {
       title: input.title,
       description: input.description,
       milestones: input.milestones,
-      features: [],
+      features,
       createdAt: now,
       updatedAt: now,
     };

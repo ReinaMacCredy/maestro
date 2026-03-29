@@ -1,0 +1,154 @@
+/**
+ * Feature command handler
+ * Implements CLI commands: feature list|update
+ */
+import type { Command } from "commander";
+import { getServices } from "../services.js";
+import { output } from "../lib/output.js";
+import {
+  listFeatures,
+  updateFeature,
+  parseWorkerReport,
+  type ListFeaturesResult,
+  type UpdateFeatureResult,
+} from "../usecases/feature-lifecycle.usecase.js";
+import { MaestroError } from "../domain/errors.js";
+import type { Feature } from "../domain/mission-types.js";
+
+/** Resolve --json flag from leaf, group, or root options */
+function resolveJsonFlag(opts: Record<string, unknown>, program: Command): boolean {
+  // Leaf option takes precedence
+  if (opts.json !== undefined) return opts.json as boolean;
+  // Then group option
+  if (opts.jsonGroup !== undefined) return opts.jsonGroup as boolean;
+  // Then root option
+  return program.opts().json as boolean ?? false;
+}
+
+export function registerFeatureCommand(program: Command): void {
+  const featureCmd = program
+    .command("feature")
+    .description("Feature lifecycle management")
+    .option("--json", "Output as JSON");
+
+  featureCmd
+    .command("list")
+    .description("List features for a mission")
+    .requiredOption("--mission <id>", "Mission ID (required)")
+    .option("--milestone <id>", "Filter by milestone ID")
+    .option("--status <status>", "Filter by status (pending, in_progress, in_review, completed, blocked)")
+    .option("--json", "Output as JSON")
+    .action(async (opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+
+      if (!opts.mission) {
+        // This should never happen due to requiredOption, but handle defensively
+        throw new MaestroError("--mission is required", [
+          "Usage: maestro feature list --mission <id>",
+          "Optional filters: --milestone <id> --status <status>",
+        ]);
+      }
+
+      const result = await listFeatures(
+        services.missionStore,
+        services.featureStore,
+        opts.mission,
+        {
+          milestoneId: opts.milestone,
+          status: opts.status,
+        },
+      );
+
+      output(isJson, result, formatFeatureList);
+    });
+
+  featureCmd
+    .command("update <featureId>")
+    .description("Update feature status and/or attach a worker report")
+    .requiredOption("--mission <id>", "Mission ID (required)")
+    .option("--status <status>", "New status (pending, in_progress, in_review, completed, blocked)")
+    .option("--report <value>", "Worker report as inline JSON or @file.json")
+    .option("--json", "Output as JSON")
+    .action(async (featureId: string, opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+
+      if (!opts.mission) {
+        throw new MaestroError("--mission is required", [
+          "Usage: maestro feature update <featureId> --mission <id> --status <status>",
+          "Optional: --report '{\"content\": \"...\"}' or --report @report.json",
+        ]);
+      }
+
+      if (!opts.status && !opts.report) {
+        throw new MaestroError("No update specified", [
+          "Usage: maestro feature update <featureId> --mission <id> --status <status>",
+          "Or: maestro feature update <featureId> --mission <id> --report @report.json",
+          "Or both: --status <status> --report <report>",
+        ]);
+      }
+
+      // Parse report if provided
+      let report: Awaited<ReturnType<typeof parseWorkerReport>> | undefined;
+      if (opts.report) {
+        report = await parseWorkerReport(opts.report);
+      }
+
+      const result = await updateFeature(
+        services.missionStore,
+        services.featureStore,
+        process.cwd(),
+        opts.mission,
+        featureId,
+        {
+          status: opts.status,
+          report,
+        },
+      );
+
+      output(isJson, result, formatFeatureUpdate);
+    });
+}
+
+/** Format feature list for text output */
+function formatFeatureList(result: ListFeaturesResult): string[] {
+  if (result.features.length === 0) {
+    return ["No features found"];
+  }
+
+  const lines: string[] = [
+    `${result.filtered} feature(s) (total: ${result.total})`,
+    "",
+  ];
+
+  for (const f of result.features) {
+    const status = f.status.padEnd(12);
+    const title = f.title.slice(0, 40).padEnd(40);
+    lines.push(`${f.id}  ${status}  ${title}  [${f.milestoneId}]`);
+  }
+
+  return lines;
+}
+
+/** Format feature update result for text output */
+function formatFeatureUpdate(result: UpdateFeatureResult): string[] {
+  const lines: string[] = [
+    `[ok] Feature updated: ${result.feature.id}`,
+    `  Status: ${result.feature.status}`,
+    `  Title: ${result.feature.title}`,
+  ];
+
+  if (result.reportPersisted) {
+    lines.push(`  Report: ${result.reportPersisted}`);
+  }
+
+  if (result.feature.report) {
+    lines.push(`  Report timestamp: ${result.feature.report.timestamp}`);
+    if (result.feature.report.agent) {
+      lines.push(`  Report agent: ${result.feature.report.agent}`);
+    }
+  }
+
+  return lines;
+}
