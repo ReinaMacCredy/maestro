@@ -205,7 +205,7 @@ describe("FsFeatureStoreAdapter", () => {
 
       const features = await store.getMany(missionId, ["f1", "non-existent"]);
       expect(features).toHaveLength(1);
-      expect(features[0].id).toBe("f1");
+      expect(features[0]!.id).toBe("f1");
     });
   });
 });
