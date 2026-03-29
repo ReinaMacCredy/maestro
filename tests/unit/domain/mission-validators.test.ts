@@ -167,9 +167,15 @@ describe("mission validators", () => {
     });
 
     it("accepts all valid statuses including waived", () => {
-      const validStatuses: Assertion["status"][] = ["pending", "passed", "failed", "blocked", "waived"];
-      for (const status of validStatuses) {
-        const result = validateAssertion(makeAssertion({ status }));
+      const validStatuses: { status: Assertion["status"]; waivedReason?: string }[] = [
+        { status: "pending" },
+        { status: "passed" },
+        { status: "failed" },
+        { status: "blocked" },
+        { status: "waived", waivedReason: "Test reason" },
+      ];
+      for (const { status, waivedReason } of validStatuses) {
+        const result = validateAssertion(makeAssertion({ status, waivedReason }));
         expect(result.status).toBe(status);
       }
     });
