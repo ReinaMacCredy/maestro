@@ -407,8 +407,7 @@ describe("mission-report usecase", () => {
 
     // First non-completed milestone should be "executing"
     expect(report.milestones[0]?.status).toBe("executing");
-    // Note: Current deriveMilestoneStatus implementation sets all milestones to "executing"
-    // when mission status is "executing" and currentIndex >= 0 (loop logic issue)
-    expect(report.milestones[1]?.status).toBe("executing");
+    // Later milestones should remain "pending" until reached
+    expect(report.milestones[1]?.status).toBe("pending");
   });
 });
