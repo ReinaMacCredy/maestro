@@ -22,7 +22,7 @@ export function renderProgressLog(
   row += 2;
 
   if (events.length === 0) {
-    buf.writeText(row, rect.x + 1, "No events yet", { fg: PALETTE.dimGray });
+    buf.writeText(row, rect.x + 1, "No events yet", { fg: PALETTE.gray });
     return;
   }
 
@@ -35,12 +35,12 @@ export function renderProgressLog(
     const titleCol = rect.x + 10;
 
     // Age label (right-aligned in 8-char column)
-    buf.writeText(row, ageCol + (8 - age.length), age, { fg: PALETTE.dimGray });
+    buf.writeText(row, ageCol + (8 - age.length), age, { fg: PALETTE.gray });
 
     // Event title with colored feature/checkpoint IDs
     const titleWidth = w - 10;
     buf.writeText(row, titleCol, truncate(evt.title, titleWidth), {
-      fg: evt.kind === "feature" || evt.kind === "worker" ? PALETTE.green : PALETTE.gray,
+      fg: evt.kind === "feature" || evt.kind === "worker" ? PALETTE.green : PALETTE.brightWhite,
     });
     row++;
   }

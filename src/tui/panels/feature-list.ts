@@ -21,7 +21,7 @@ export function renderFeatureList(
   // Section header: "Features  {done}/{total}"
   buf.writeText(row, rect.x + 1, "Features", { fg: PALETTE.brightWhite, bold: true });
   const countStr = `${snap.featureProgress.done}/${snap.featureProgress.total}`;
-  buf.writeText(row, rect.x + w - countStr.length, countStr, { fg: PALETTE.gray });
+  buf.writeText(row, rect.x + w - countStr.length, countStr, { fg: PALETTE.brightWhite, bold: true });
   row += 2;
 
   for (let i = 0; i < snap.features.length && row < maxRow; i++) {
@@ -40,7 +40,7 @@ export function renderFeatureList(
     // Dot + title
     buf.writeText(row, rect.x + 2, dot, { fg: dotColor, ...rowStyle });
     buf.writeText(row, rect.x + 4, truncate(f.title, w - 4), {
-      fg: isSelected ? PALETTE.brightWhite : PALETTE.gray,
+      fg: PALETTE.brightWhite,
       ...rowStyle,
     });
     row++;
