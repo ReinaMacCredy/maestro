@@ -42,7 +42,8 @@ function withTerminalSize<T>(width: number, height: number, run: () => T): T {
 
 function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionControlSnapshot {
   return {
-    missionId: "2026-03-30-001",
+      mode: "mission",
+      missionId: "2026-03-30-001",
     missionTitle: "Full Pipeline Test",
     missionStatus: "executing",
     effectiveStatus: "executing",
@@ -84,14 +85,15 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
       { timestamp: "2026-03-30T10:05:00.000Z", relativeMs: 300_000, kind: "assertion", title: "a-f1-1: passed" },
       { timestamp: "2026-03-30T10:00:00.000Z", relativeMs: 0, kind: "mission", title: "Mission approved" },
     ],
-    milestones: [
-      { id: "m1", title: "Core Setup", status: "executing", order: 0 },
-      { id: "m2", title: "API Layer", status: "pending", order: 1 },
-    ],
-    canPause: true,
-    canResume: false,
-    ...overrides,
-  };
+      milestones: [
+        { id: "m1", title: "Core Setup", status: "executing", order: 0 },
+        { id: "m2", title: "API Layer", status: "pending", order: 1 },
+      ],
+      canPause: true,
+      canResume: false,
+      home: null,
+      ...overrides,
+    };
 }
 
 describe("frame rendering", () => {
@@ -127,7 +129,8 @@ describe("frame rendering", () => {
     it("contains worker info", () => {
       const frame = renderOnceFrame({ snapshot: makeSnapshot() });
       expect(frame).toContain("backend-worker");
-      expect(frame).toContain("Worker active");
+      expect(frame).toContain("Activity");
+      expect(frame).toContain("Database config");
     });
 
     it("contains progress log events", () => {
@@ -139,6 +142,7 @@ describe("frame rendering", () => {
     it("contains footer hints", () => {
       const frame = renderOnceFrame({ snapshot: makeSnapshot() });
       expect(frame).toContain("Features");
+      expect(frame).toContain("Timeline");
       expect(frame).toContain("Back To Orchestrator");
     });
   });
@@ -155,12 +159,12 @@ describe("frame rendering", () => {
             { timestamp: "2026-03-30T10:00:00.000Z", relativeMs: 0, kind: "mission", title: "Mission created" },
           ],
         }),
+        });
+        expect(frame).toContain("Mission Control");
+        expect(frame).toContain("No active feature");
+        expect(frame).toContain("No features in this mission yet");
       });
-      expect(frame).toContain("Mission Control");
-      expect(frame).toContain("No active feature");
-      expect(frame).toContain("No active workers");
     });
-  });
 
   describe("completed mission", () => {
     it("shows completed state", () => {
@@ -254,21 +258,54 @@ describe("frame rendering", () => {
           }),
         }));
 
-      expect(frame).toContain("┌");
-      expect(frame).toContain("└");
-      expect(frame).toContain("│");
-      expect(frame).toContain("No active feature");
-      expect(frame).toContain("No active workers");
-    });
+        expect(frame).toContain("┌");
+        expect(frame).toContain("└");
+        expect(frame).toContain("│");
+        expect(frame).toContain("No active feature");
+        expect(frame).toContain("No features in this mission yet");
+      });
 
-    it("renders bordered chrome for narrow-but-valid terminals", () => {
-      const frame = withTerminalSize(60, 18, () => renderOnceFrame({ snapshot: makeSnapshot() }));
-      const lines = frame.split("\n");
+      it("renders bordered chrome for narrow-but-valid terminals", () => {
+        const frame = withTerminalSize(60, 18, () => renderOnceFrame({ snapshot: makeSnapshot() }));
+        const lines = frame.split("\n");
 
       expect(lines[0]?.startsWith("┌")).toBe(true);
       expect(lines[0]?.endsWith("┐")).toBe(true);
-      expect(frame).not.toContain("undefined");
-      expect(lines.every((line) => line.length <= 60)).toBe(true);
+        expect(frame).not.toContain("undefined");
+        expect(lines.every((line) => line.length <= 60)).toBe(true);
+      });
+
+      it("renders a guided home layout without mission context", () => {
+        const frame = withTerminalSize(80, 24, () => renderOnceFrame({
+          snapshot: makeSnapshot({
+            mode: "home",
+            missionTitle: "No project detected",
+            features: [],
+            activeFeature: null,
+            activeWorker: null,
+            progressLog: [],
+            home: {
+              headline: "No project detected",
+              summary: "Open a git repository to track missions here.",
+              locationLabel: "Outside a git repository",
+              checks: [
+                { name: "git", status: "fail", message: "Not inside a git repository", fix: "Run: git init" },
+                { name: "global-config", status: "warn", message: "No global config found", fix: "Run: maestro init --global" },
+              ],
+              actions: [
+                { label: "Create a project repo", command: "git init", detail: "Initialize this folder first." },
+                { label: "Run environment checks", command: "maestro doctor", detail: "Verify your environment." },
+              ],
+              pendingHandoffs: [],
+            },
+          }),
+        }));
+
+        expect(frame).toContain("HOME");
+        expect(frame).toContain("Overview");
+        expect(frame).toContain("Environment");
+        expect(frame).toContain("Pending Handoffs");
+        expect(frame).toContain("git init");
+      });
     });
   });
-});

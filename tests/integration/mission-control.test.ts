@@ -336,15 +336,46 @@ describe("mission-control CLI", () => {
     expect(output).toContain("not found");
   }, SLOW_CLI_TIMEOUT_MS);
 
-  it("errors when no missions exist", async () => {
-    const { stdout, stderr, exitCode } = await run(
+  it("returns home mode when no missions exist in a git repo", async () => {
+    const { stdout, exitCode } = await run(
       ["mission-control", "--json"],
       tmpDir,
     );
 
-    expect(exitCode).toBe(1);
-    const output = stdout + stderr;
-    expect(output).toContain("No missions found");
+    expect(exitCode).toBe(0);
+    const snapshot = JSON.parse(stdout);
+    expect(snapshot.mode).toBe("home");
+    expect(snapshot.home.headline).toBe("No missions yet");
+    expect(snapshot.home.actions.length).toBeGreaterThan(0);
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("renders a guided home frame when no missions exist in a git repo", async () => {
+    const { stdout, exitCode } = await run(
+      ["mission-control", "--once"],
+      tmpDir,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("HOME");
+    expect(stdout).toContain("Environment");
+    expect(stdout).toContain("Pending Handoffs");
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("returns home mode outside a git repo", async () => {
+    const outsideDir = await mkdtemp(join(tmpdir(), "maestro-mc-home-"));
+    try {
+      const { stdout, exitCode } = await run(
+        ["mission-control", "--json"],
+        outsideDir,
+      );
+
+      expect(exitCode).toBe(0);
+      const snapshot = JSON.parse(stdout);
+      expect(snapshot.mode).toBe("home");
+      expect(snapshot.home.headline).toBe("No project detected");
+    } finally {
+      await rm(outsideDir, { recursive: true, force: true });
+    }
   }, SLOW_CLI_TIMEOUT_MS);
 
   it("rejects interactive mode without both tty streams", async () => {
@@ -427,7 +458,21 @@ describe("mission-control CLI", () => {
         ["mission-control", "--mission", missionId],
         { input: "q" },
       );
-      expectCleanPtyExit(result);
-    }
+        expectCleanPtyExit(result);
+      }
+    }, PTY_TIMEOUT_MS);
+
+  it("compiled binary interactive home mode exits cleanly on q", async () => {
+    if (!pythonAvailable) return;
+
+    const result = await runCompiledInteractivePty(
+      tmpDir,
+      ["mission-control"],
+      { input: "q" },
+    );
+
+    expectCleanPtyExit(result);
+    expect(result.plainOutput).toContain("HOME");
+    expect(result.plainOutput).toContain("No missions yet");
   }, PTY_TIMEOUT_MS);
 });

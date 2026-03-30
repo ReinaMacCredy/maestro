@@ -7,8 +7,8 @@ import { startKeyListener, type Key } from "./terminal/input.js";
 import { Buffer } from "./terminal/buffer.js";
 import { inset, type Rect } from "./terminal/layout.js";
 import type { MissionControlSnapshot } from "./types.js";
-import type { SnapshotDeps } from "./snapshot.js";
-import { buildSnapshot } from "./snapshot.js";
+import type { HomeSnapshotDeps, SnapshotDeps } from "./snapshot.js";
+import { buildHomeSnapshot, buildSnapshot } from "./snapshot.js";
 import { createInitialState, reduce, type AppState, type Action } from "./state.js";
 import { renderHeader } from "./panels/header.js";
 import { renderStatusBar } from "./panels/status-bar.js";
@@ -29,7 +29,8 @@ export interface OnceFrameOptions {
 export interface InteractiveOptions {
   snapshot: MissionControlSnapshot;
   snapshotDeps: SnapshotDeps;
-  missionId: string;
+  homeSnapshotDeps: HomeSnapshotDeps;
+  missionId?: string;
 }
 
 /**
@@ -105,13 +106,15 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
 
       // Poll snapshot every 2s
       const now = Date.now();
-      if (now - lastPollMs >= 2000) {
-        lastPollMs = now;
-        try {
-          const snap = await buildSnapshot(opts.snapshotDeps, opts.missionId);
-          state = reduce(state, { type: "update-snapshot", snapshot: snap });
-          dirty = true;
-        } catch {
+        if (now - lastPollMs >= 2000) {
+          lastPollMs = now;
+          try {
+            const snap = opts.missionId
+              ? await buildSnapshot(opts.snapshotDeps, opts.missionId)
+              : await buildHomeSnapshot(opts.homeSnapshotDeps, process.cwd());
+            state = reduce(state, { type: "update-snapshot", snapshot: snap });
+            dirty = true;
+          } catch {
           // non-fatal
         }
       }
@@ -134,7 +137,7 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
 
 // ── Key Mapping ─────────────────────────────────────
 
-function keyToAction(key: Key, state: AppState): Action | undefined {
+  function keyToAction(key: Key, state: AppState): Action | undefined {
   if (key.type === "char" && key.char === "q" && state.modal.kind === "none") {
     return { type: "quit" };
   }
@@ -152,13 +155,18 @@ function keyToAction(key: Key, state: AppState): Action | undefined {
   }
   if (key.type === "char" && state.modal.kind === "none") {
     switch (key.char) {
-      case "f": case "F": return { type: "focus", panel: "features" };
-      case "w": case "W": return { type: "focus", panel: "log" };
-      case "p": case "P": return { type: "toggle-pause" };
-      case "d": case "D": return { type: "open-dir" };
-      case "m": case "M": return { type: "open-models" };
+        case "f": case "F": return { type: "focus", panel: "features" };
+        case "l": case "L":
+        case "w": case "W":
+          return { type: "focus", panel: "log" };
+        case "p": case "P":
+          return state.snapshot.mode === "mission" ? { type: "toggle-pause" } : undefined;
+        case "d": case "D":
+          return state.snapshot.mode === "mission" ? { type: "open-dir" } : undefined;
+        case "m": case "M":
+          return state.snapshot.mode === "mission" ? { type: "open-models" } : undefined;
+      }
     }
-  }
   return undefined;
 }
 
@@ -250,7 +258,7 @@ function renderFrame(buf: Buffer, state: AppState): void {
   renderStatusBar(buf, statusRect, snap);
   renderFeatureDetail(buf, leftRect, snap);
   renderFeatureList(buf, featureListRect, snap, state.selectedFeatureIndex);
-  renderProgressLog(buf, progressRect, snap.progressLog);
+    renderProgressLog(buf, progressRect, snap.progressLog, snap);
   renderWorkerPanel(buf, workerRect, snap);
   renderFooter(buf, footerRect, snap);
 

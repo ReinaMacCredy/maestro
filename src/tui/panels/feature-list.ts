@@ -18,6 +18,24 @@ export function renderFeatureList(
   let row = rect.y;
   const maxRow = rect.y + rect.height;
 
+  if (snap.mode === "home" && snap.home) {
+    const okCount = snap.home.checks.filter((check) => check.status === "ok").length;
+    buf.writeText(row, rect.x + 1, "Environment", { fg: PALETTE.brightWhite, bold: true });
+    const countStr = `${okCount}/${snap.home.checks.length} ok`;
+    buf.writeText(row, rect.x + w - countStr.length, countStr, { fg: PALETTE.brightWhite, bold: true });
+    row += 2;
+
+    for (const check of snap.home.checks) {
+      if (row >= maxRow) break;
+      const marker = check.status === "ok" ? "●" : check.status === "warn" ? "!" : "x";
+      const color = check.status === "ok" ? PALETTE.green : check.status === "warn" ? PALETTE.yellow : PALETTE.red;
+      buf.writeText(row, rect.x + 2, marker, { fg: color });
+      buf.writeText(row, rect.x + 4, truncate(check.message, w - 4), { fg: PALETTE.brightWhite });
+      row++;
+    }
+    return;
+  }
+
   // Section header: "Features  {done}/{total}"
   buf.writeText(row, rect.x + 1, "Features", { fg: PALETTE.brightWhite, bold: true });
   const countStr = `${snap.featureProgress.done}/${snap.featureProgress.total}`;

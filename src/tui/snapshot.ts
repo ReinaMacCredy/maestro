@@ -6,8 +6,14 @@ import type { MissionStorePort } from "../ports/mission-store.port.js";
 import type { FeatureStorePort } from "../ports/feature-store.port.js";
 import type { AssertionStorePort } from "../ports/assertion-store.port.js";
 import type { CheckpointStorePort } from "../ports/checkpoint-store.port.js";
+import type { HandoffStorePort } from "../ports/handoff-store.port.js";
+import type { ConfigPort } from "../ports/config.port.js";
+import type { CassPort } from "../ports/cass.port.js";
+import type { GitPort } from "../ports/git.port.js";
 import type { Mission, Feature } from "../domain/mission-types.js";
 import { generateMissionReport, type MissionReport } from "../usecases/mission-report.usecase.js";
+import { checkStatus } from "../usecases/check-status.usecase.js";
+import { runDoctor } from "../usecases/run-doctor.usecase.js";
 import { getValidFeatureTransitions } from "../domain/mission-state.js";
 import { deriveEvents } from "./events.js";
 import type {
@@ -16,6 +22,7 @@ import type {
   MissionControlFeatureDetail,
   MissionControlWorkerPane,
   MissionControlMilestoneRow,
+  MissionControlHomeAction,
 } from "./types.js";
 
 export interface SnapshotDeps {
@@ -23,6 +30,13 @@ export interface SnapshotDeps {
   featureStore: FeatureStorePort;
   assertionStore: AssertionStorePort;
   checkpointStore: CheckpointStorePort;
+}
+
+export interface HomeSnapshotDeps {
+  handoffStore: HandoffStorePort;
+  config: ConfigPort;
+  cass: CassPort;
+  git: GitPort;
 }
 
 /**
@@ -88,6 +102,7 @@ export async function buildSnapshot(
   ).length;
 
   return {
+    mode: "mission",
     missionId: mission.id,
     missionTitle: mission.title,
     missionStatus: mission.status,
@@ -102,6 +117,60 @@ export async function buildSnapshot(
     milestones,
     canPause: mission.status === "executing",
     canResume: mission.status === "paused",
+    home: null,
+  };
+}
+
+export async function buildHomeSnapshot(
+  deps: HomeSnapshotDeps,
+  cwd: string,
+): Promise<MissionControlSnapshot> {
+  const [status, checks] = await Promise.all([
+    checkStatus(deps.handoffStore, deps.config, deps.cass, deps.git, cwd),
+    runDoctor(deps.cass, deps.git, deps.config, cwd),
+  ]);
+
+  const headline = status.gitAvailable
+    ? "No missions yet"
+    : "No project detected";
+
+  const summary = status.gitAvailable
+    ? "Initialize this repository, then create your first mission."
+    : status.initialized
+      ? "Global setup is ready. Open a project repository to start tracking missions here."
+      : "Open a git repository to track missions, checkpoints, and handoffs here.";
+
+  const actions = buildHomeActions(status, checks);
+  const pendingHandoffs = status.pendingHandoffs.map((entry) => ({
+    id: entry.handoff.id,
+    message: entry.handoff.message,
+    agent: entry.handoff.session.agent,
+  }));
+
+  return {
+    mode: "home",
+    missionId: "home",
+    missionTitle: headline,
+    missionStatus: "approved",
+    effectiveStatus: "approved",
+    elapsedMs: 0,
+    featureProgress: { done: 0, total: 0, active: 0 },
+    tokenCounters: null,
+    activeFeature: null,
+    features: [],
+    activeWorker: null,
+    progressLog: [],
+    milestones: [],
+    canPause: false,
+    canResume: false,
+    home: {
+      headline,
+      summary,
+      locationLabel: status.gitAvailable ? cwd : "Outside a git repository",
+      checks,
+      actions,
+      pendingHandoffs,
+    },
   };
 }
 
@@ -155,4 +224,45 @@ function buildActiveWorker(
     elapsedMs: nowMs - featureStartMs,
     report: active.report ?? null,
   };
+}
+
+function buildHomeActions(
+  status: Awaited<ReturnType<typeof checkStatus>>,
+  checks: Awaited<ReturnType<typeof runDoctor>>,
+): readonly MissionControlHomeAction[] {
+  const actions: MissionControlHomeAction[] = [];
+  const projectConfig = checks.find((check) => check.name === "project-config");
+  const globalConfig = checks.find((check) => check.name === "global-config");
+
+  if (!status.gitAvailable) {
+    actions.push({
+      label: "Create a project repo",
+      command: "git init",
+      detail: "Initialize this folder as a git repository before project setup.",
+    });
+  }
+
+  if (projectConfig?.status !== "ok") {
+    actions.push({
+      label: "Initialize this project",
+      command: "maestro init",
+      detail: "Create .maestro/config.yaml and enable project-local mission tracking.",
+    });
+  }
+
+  if (globalConfig?.status !== "ok") {
+    actions.push({
+      label: "Initialize global config",
+      command: "maestro init --global",
+      detail: "Set shared defaults and global agent instructions.",
+    });
+  }
+
+  actions.push({
+    label: "Run environment checks",
+    command: "maestro doctor",
+    detail: "Verify git, CASS, and config health before starting work.",
+  });
+
+  return actions;
 }

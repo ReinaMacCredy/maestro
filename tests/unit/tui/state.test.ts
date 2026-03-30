@@ -4,7 +4,8 @@ import type { MissionControlSnapshot } from "../../../src/tui/types.js";
 
 function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionControlSnapshot {
   return {
-    missionId: "2026-03-30-001",
+      mode: "mission",
+      missionId: "2026-03-30-001",
     missionTitle: "Test",
     missionStatus: "executing",
     effectiveStatus: "executing",
@@ -33,11 +34,12 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
     ],
     activeWorker: null,
     progressLog: [],
-    milestones: [],
-    canPause: true,
-    canResume: false,
-    ...overrides,
-  };
+      milestones: [],
+      canPause: true,
+      canResume: false,
+      home: null,
+      ...overrides,
+    };
 }
 
 function makeState(overrides?: Partial<AppState>): AppState {
@@ -108,14 +110,32 @@ describe("reduce", () => {
     });
   });
 
-  describe("enter", () => {
-    it("opens feature action modal when features focused", () => {
-      const state = reduce(makeState(), { type: "enter" });
-      expect(state.modal.kind).toBe("feature-action");
-    });
+    describe("enter", () => {
+      it("opens feature action modal when features focused", () => {
+        const state = reduce(makeState(), { type: "enter" });
+        expect(state.modal.kind).toBe("feature-action");
+      });
 
-    it("does nothing when no features", () => {
-      const state = makeState({
+      it("does nothing in home mode", () => {
+        const state = makeState({
+          snapshot: makeSnapshot({
+            mode: "home",
+            home: {
+              headline: "No project detected",
+              summary: "Open a repo",
+              locationLabel: "Outside a git repository",
+              checks: [],
+              actions: [],
+              pendingHandoffs: [],
+            },
+          }),
+        });
+        const next = reduce(state, { type: "enter" });
+        expect(next.modal.kind).toBe("none");
+      });
+
+      it("does nothing when no features", () => {
+        const state = makeState({
         snapshot: makeSnapshot({ features: [] }),
       });
       const next = reduce(state, { type: "enter" });

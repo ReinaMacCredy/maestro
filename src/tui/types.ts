@@ -7,8 +7,33 @@ import type {
   FeatureStatus,
   WorkerReport,
 } from "../domain/mission-types.js";
+import type { DoctorCheck } from "../domain/types.js";
+
+export type MissionControlMode = "mission" | "home";
+
+export interface MissionControlHomeAction {
+  label: string;
+  command: string;
+  detail: string;
+}
+
+export interface MissionControlHomeHandoff {
+  id: string;
+  message: string;
+  agent: string;
+}
+
+export interface MissionControlHomeState {
+  headline: string;
+  summary: string;
+  locationLabel: string;
+  checks: readonly DoctorCheck[];
+  actions: readonly MissionControlHomeAction[];
+  pendingHandoffs: readonly MissionControlHomeHandoff[];
+}
 
 export interface MissionControlSnapshot {
+  mode: MissionControlMode;
   // Header
   missionId: string;
   missionTitle: string;
@@ -34,6 +59,9 @@ export interface MissionControlSnapshot {
   // Footer state
   canPause: boolean;
   canResume: boolean;
+
+  // Home mode
+  home: MissionControlHomeState | null;
 }
 
 export interface MissionControlMilestoneRow {

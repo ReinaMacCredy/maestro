@@ -1,6 +1,7 @@
 /**
  * Footer panel -- key binding hints with bold key letters.
- * "F Features  W Workers  M Models  P Pause  D Mission Dir  Ctrl+T Back To Orchestrator"
+ * Mission mode: "F Features  L Timeline  M Models  P Pause  D Mission Dir  Ctrl+T Back To Orchestrator"
+ * Home mode: "F Overview  L Handoffs  Ctrl+T Back To Orchestrator"
  */
 import type { Buffer } from "../terminal/buffer.js";
 import type { Rect } from "../terminal/layout.js";
@@ -17,27 +18,36 @@ export function renderFooter(buf: Buffer, rect: Rect, snap: MissionControlSnapsh
   const y = rect.y;
   buf.fillRect(rect, " ", { bg: PALETTE.headerBg });
 
-  const hints: FooterHint[] = [
-    { key: "F", label: "Features" },
-    { key: "W", label: "Workers" },
-    { key: "M", label: "Models" },
-  ];
+  const leftHints = snap.mode === "home"
+    ? [
+      { key: "F", label: "Overview" },
+      { key: "L", label: "Handoffs" },
+    ]
+    : [
+      { key: "F", label: "Features" },
+      { key: "L", label: "Timeline" },
+      { key: "M", label: "Models" },
+      ...(snap.canPause ? [{ key: "P", label: "Pause" }] : []),
+      ...(snap.canResume ? [{ key: "P", label: "Resume" }] : []),
+      { key: "D", label: "Mission Dir" },
+    ];
 
-  if (snap.canPause) hints.push({ key: "P", label: "Pause" });
-  if (snap.canResume) hints.push({ key: "P", label: "Resume" });
+  const exitHint = { key: "Ctrl+T", label: "Back To Orchestrator" };
+  const exitWidth = exitHint.key.length + exitHint.label.length + 2;
+  const exitCol = rect.x + w - exitWidth - 1;
 
-  hints.push({ key: "D", label: "Mission Dir" });
-  hints.push({ key: "Ctrl+T", label: "Back To Orchestrator" });
+  renderHint(buf, y, exitCol, exitHint);
 
   let col = rect.x + 1;
-  for (const hint of hints) {
-    if (col + hint.key.length + hint.label.length + 4 > rect.x + w) break;
-
-    // Bold key
-    buf.writeText(y, col, hint.key, { fg: PALETTE.brightWhite, bg: PALETTE.headerBg, bold: true });
-    col += hint.key.length + 1;
-    // Label
-    buf.writeText(y, col, hint.label, { fg: PALETTE.gray, bg: PALETTE.headerBg });
-    col += hint.label.length + 4;
+  for (const hint of leftHints) {
+    const hintWidth = hint.key.length + hint.label.length + 4;
+    if (col + hintWidth >= exitCol - 1) break;
+    renderHint(buf, y, col, hint);
+    col += hintWidth;
   }
+}
+
+function renderHint(buf: Buffer, y: number, col: number, hint: FooterHint): void {
+  buf.writeText(y, col, hint.key, { fg: PALETTE.brightWhite, bg: PALETTE.headerBg, bold: true });
+  buf.writeText(y, col + hint.key.length + 1, hint.label, { fg: PALETTE.gray, bg: PALETTE.headerBg });
 }

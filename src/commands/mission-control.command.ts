@@ -6,7 +6,7 @@ import type { Command } from "commander";
 import { getServices } from "../services.js";
 import { output, resolveJsonFlag } from "../lib/output.js";
 import { MaestroError } from "../domain/errors.js";
-import { buildSnapshot } from "../tui/snapshot.js";
+import { buildHomeSnapshot, buildSnapshot } from "../tui/snapshot.js";
 import { renderDashboard, renderOnceFrame } from "../tui/index.js";
 
 export function registerMissionControlCommand(program: Command): void {
@@ -20,32 +20,32 @@ export function registerMissionControlCommand(program: Command): void {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
 
-      const missionId = await resolveMissionId(opts.mission);
-      const mission = await services.missionStore.get(missionId);
-
-      if (!mission) {
-        throw new MaestroError(`Mission ${missionId} not found`, [
-          "List available missions: maestro mission list",
-        ]);
-      }
-
       const snapshotDeps = {
         missionStore: services.missionStore,
         featureStore: services.featureStore,
         assertionStore: services.assertionStore,
         checkpointStore: services.checkpointStore,
       };
+      const homeSnapshotDeps = {
+        handoffStore: services.handoffStore,
+        config: services.config,
+        cass: services.cass,
+        git: services.git,
+      };
+
+      const missionId = await resolveMissionId(opts.mission);
+      const snapshot = missionId
+        ? await buildMissionSnapshot(missionId, snapshotDeps)
+        : await buildHomeSnapshot(homeSnapshotDeps, process.cwd());
 
       // --json mode: emit full snapshot
       if (isJson) {
-        const snapshot = await buildSnapshot(snapshotDeps, missionId);
         output(true, snapshot, () => []);
         return;
       }
 
       // --once mode: render one frame from snapshot
       if (opts.once) {
-        const snapshot = await buildSnapshot(snapshotDeps, missionId);
         const frame = renderOnceFrame({ snapshot });
         console.log(frame);
         return;
@@ -60,8 +60,9 @@ export function registerMissionControlCommand(program: Command): void {
       }
 
       await renderDashboard({
-        snapshot: await buildSnapshot(snapshotDeps, missionId),
+        snapshot,
         snapshotDeps,
+        homeSnapshotDeps,
         missionId,
       });
     });
@@ -70,16 +71,14 @@ export function registerMissionControlCommand(program: Command): void {
 /**
  * Resolve mission ID: explicit > executing/paused > newest.
  */
-async function resolveMissionId(explicit?: string): Promise<string> {
+async function resolveMissionId(explicit?: string): Promise<string | undefined> {
   if (explicit) return explicit;
 
   const services = getServices();
   const ids = await services.missionStore.listIds();
 
   if (ids.length === 0) {
-    throw new MaestroError("No missions found", [
-      "Create a mission first: maestro mission create --file plan.json",
-    ]);
+    return undefined;
   }
 
   // Try to find an active mission
@@ -92,4 +91,20 @@ async function resolveMissionId(explicit?: string): Promise<string> {
 
   // Fall back to newest (first in list, which is sorted newest-first)
   return ids[0]!;
+}
+
+async function buildMissionSnapshot(
+  missionId: string,
+  snapshotDeps: Parameters<typeof buildSnapshot>[0],
+) {
+  const services = getServices();
+  const mission = await services.missionStore.get(missionId);
+
+  if (!mission) {
+    throw new MaestroError(`Mission ${missionId} not found`, [
+      "List available missions: maestro mission list",
+    ]);
+  }
+
+  return buildSnapshot(snapshotDeps, missionId);
 }

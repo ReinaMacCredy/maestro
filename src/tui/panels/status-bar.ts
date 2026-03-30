@@ -12,6 +12,27 @@ export function renderStatusBar(buf: Buffer, rect: Rect, snap: MissionControlSna
   const y = rect.y;
   buf.fillRect(rect, " ");
 
+  if (snap.mode === "home" && snap.home) {
+    const hasFail = snap.home.checks.some((check) => check.status === "fail");
+    const hasWarn = snap.home.checks.some((check) => check.status === "warn");
+    const statusColor = hasFail ? PALETTE.red : hasWarn ? PALETTE.yellow : PALETTE.blue;
+    const summary = [
+      `${snap.home.checks.length} checks`,
+      `${snap.home.actions.length} next`,
+      snap.home.pendingHandoffs.length > 0 ? `${snap.home.pendingHandoffs.length} handoffs` : undefined,
+    ].filter(Boolean).join("  ·  ");
+
+    buf.writeText(y, rect.x + 1, DOT_FILLED, { fg: statusColor, bold: true });
+    buf.writeText(y, rect.x + 3, "HOME", { fg: statusColor, bold: true });
+    buf.writeText(y, rect.x + 8, snap.home.headline, { fg: PALETTE.brightWhite, bold: true });
+
+    const summaryX = rect.x + w - summary.length - 1;
+    if (summaryX > rect.x + 18) {
+      buf.writeText(y, summaryX, summary, { fg: PALETTE.gray });
+    }
+    return;
+  }
+
   const statusColor = MISSION_STATUS_COLOR[snap.effectiveStatus] ?? PALETTE.gray;
   const label = MISSION_STATUS_LABEL[snap.effectiveStatus] ?? snap.effectiveStatus.toUpperCase();
 

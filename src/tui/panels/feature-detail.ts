@@ -11,6 +11,11 @@ import { truncate } from "../format.js";
 const BULLET = "\u00b7"; // ·
 
 export function renderFeatureDetail(buf: Buffer, rect: Rect, snap: MissionControlSnapshot): void {
+  if (snap.mode === "home" && snap.home) {
+    renderHomeOverview(buf, rect, snap);
+    return;
+  }
+
   if (!snap.activeFeature) {
     buf.writeText(rect.y + 1, rect.x + 1, "No active feature", { fg: PALETTE.dimGray });
     return;
@@ -95,4 +100,34 @@ export function renderFeatureDetail(buf: Buffer, rect: Rect, snap: MissionContro
       writeLine(`  ${line}`, { fg: PALETTE.gray });
     }
   }
+}
+
+function renderHomeOverview(buf: Buffer, rect: Rect, snap: MissionControlSnapshot): void {
+  const home = snap.home!;
+  const w = rect.width - 2;
+  let row = rect.y;
+  const maxRow = rect.y + rect.height;
+
+  const writeLine = (text: string, style?: Partial<Cell>): void => {
+    if (row >= maxRow) return;
+    buf.writeText(row, rect.x + 1, truncate(text, w), style);
+    row++;
+  };
+
+  const writeBullet = (text: string, style?: Partial<Cell>): void => {
+    if (row >= maxRow) return;
+    buf.writeText(row, rect.x + 1, `${BULLET} `, { fg: PALETTE.dimGray });
+    buf.writeText(row, rect.x + 3, truncate(text, w - 2), style ?? { fg: PALETTE.gray });
+    row++;
+  };
+
+  writeLine("Overview", { fg: PALETTE.brightWhite, bold: true });
+  writeLine(home.headline, { fg: PALETTE.brightWhite });
+  writeLine(home.summary, { fg: PALETTE.gray });
+  row++;
+
+  writeLine("Workspace", { fg: PALETTE.brightWhite, bold: true });
+  writeBullet(home.locationLabel);
+  writeBullet(`${home.pendingHandoffs.length} pending handoff${home.pendingHandoffs.length === 1 ? "" : "s"}`);
+  writeBullet(`${home.actions.length} suggested next step${home.actions.length === 1 ? "" : "s"}`);
 }

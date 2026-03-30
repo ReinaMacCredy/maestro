@@ -4,7 +4,7 @@
  */
 import type { Buffer } from "../terminal/buffer.js";
 import type { Rect } from "../terminal/layout.js";
-import type { MissionControlEvent } from "../types.js";
+import type { MissionControlEvent, MissionControlSnapshot } from "../types.js";
 import { PALETTE } from "../theme.js";
 import { formatAge, truncate } from "../format.js";
 
@@ -12,10 +12,32 @@ export function renderProgressLog(
   buf: Buffer,
   rect: Rect,
   events: readonly MissionControlEvent[],
+  snap?: MissionControlSnapshot,
 ): void {
   const w = rect.width - 2;
   let row = rect.y;
   const maxRow = rect.y + rect.height;
+
+  if (snap?.mode === "home" && snap.home) {
+    buf.writeText(row, rect.x + 1, "Pending Handoffs", { fg: PALETTE.brightWhite, bold: true });
+    row += 2;
+
+    if (snap.home.pendingHandoffs.length === 0) {
+      buf.writeText(row, rect.x + 1, "No pending handoffs", { fg: PALETTE.gray });
+      return;
+    }
+
+    for (const handoff of snap.home.pendingHandoffs) {
+      if (row >= maxRow) break;
+      const prefix = `${handoff.id} · ${handoff.agent}`;
+      buf.writeText(row, rect.x + 1, truncate(prefix, w), { fg: PALETTE.gray });
+      row++;
+      if (row >= maxRow) break;
+      buf.writeText(row, rect.x + 1, truncate(handoff.message, w), { fg: PALETTE.brightWhite });
+      row++;
+    }
+    return;
+  }
 
   // Section header
   buf.writeText(row, rect.x + 1, "Progress Log", { fg: PALETTE.brightWhite, bold: true });

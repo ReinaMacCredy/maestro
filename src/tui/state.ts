@@ -71,6 +71,9 @@ export function reduce(state: AppState, action: Action): AppState {
       return { ...state, focusedPanel: action.panel };
 
     case "enter": {
+      if (state.snapshot.mode === "home") {
+        return state;
+      }
       if (state.modal.kind === "feature-action") {
         return { ...state, modal: { ...state.modal, status: "confirm" } };
       }
@@ -97,10 +100,12 @@ export function reduce(state: AppState, action: Action): AppState {
       return state; // Handled externally (needs store call)
 
     case "open-dir":
+      if (state.snapshot.mode === "home") return state;
       if (state.modal.kind !== "none") return state;
       return { ...state, modal: { kind: "directory" } };
 
     case "open-models":
+      if (state.snapshot.mode === "home") return state;
       if (state.modal.kind !== "none") return state;
       return { ...state, modal: { kind: "models" } };
 

@@ -6,6 +6,7 @@ import type { MissionControlSnapshot } from "../../../../src/tui/types.js";
 
 function makeSnapshot(): MissionControlSnapshot {
   return {
+    mode: "mission",
     missionId: "2026-03-30-001",
     missionTitle: "Test Mission",
     missionStatus: "executing",
@@ -24,6 +25,7 @@ function makeSnapshot(): MissionControlSnapshot {
     milestones: [],
     canPause: true,
     canResume: false,
+    home: null,
   };
 }
 
