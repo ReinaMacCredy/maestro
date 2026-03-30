@@ -11,7 +11,7 @@ import type {
   UpdateMissionInput,
   CreateFeatureInput,
   CreateAssertionInput,
-  Milestone,
+  MilestoneInput,
   Feature,
 } from "../domain/mission-types.js";
 import { generateMissionId } from "../domain/mission-id.js";
@@ -34,7 +34,7 @@ interface MissionPlanFile {
   title: string;
   description?: string;
   proposal?: string;
-  milestones: readonly Milestone[];
+  milestones: readonly MilestoneInput[];
   features: ReadonlyArray<{
     id: string;
     milestoneId: string;

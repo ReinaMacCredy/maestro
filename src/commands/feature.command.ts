@@ -174,10 +174,7 @@ function formatFeatureUpdate(result: UpdateFeatureResult): string[] {
   }
 
   if (result.feature.report) {
-    lines.push(`  Report timestamp: ${result.feature.report.timestamp}`);
-    if (result.feature.report.agent) {
-      lines.push(`  Report agent: ${result.feature.report.agent}`);
-    }
+    lines.push(`  Summary: ${result.feature.report.salientSummary}`);
   }
 
   return lines;

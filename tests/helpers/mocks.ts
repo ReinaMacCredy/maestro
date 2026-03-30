@@ -174,18 +174,21 @@ export function mockMissionStore(initial: Mission[] = []): MissionStorePort {
     listIds: async () => [...missions.keys()].sort().reverse(),
     get: async (id: string) => missions.get(id) ?? staging.get(id),
     exists: async (id: string) => missions.has(id),
-    stage: async (input: CreateMissionInput, id: string) => {
-      const now = new Date().toISOString();
-      const mission: Mission = {
-        id,
-        status: "draft",
-        title: input.title,
-        description: input.description,
-        milestones: input.milestones,
-        features: [],
-        createdAt: now,
-        updatedAt: now,
-      };
+      stage: async (input: CreateMissionInput, id: string) => {
+        const now = new Date().toISOString();
+        const mission: Mission = {
+          id,
+          status: "draft",
+          title: input.title,
+          description: input.description,
+          milestones: input.milestones.map((milestone) => ({
+            ...milestone,
+            featureIds: [],
+          })),
+          features: [],
+          createdAt: now,
+          updatedAt: now,
+        };
       staging.set(id, mission);
       return id;
     },
@@ -235,21 +238,24 @@ export function mockFeatureStore(
   return {
     get: async (_missionId: string, featureId: string) => features.get(featureId),
     exists: async (_missionId: string, featureId: string) => features.has(featureId),
-    create: async (_missionId: string, input: CreateFeatureInput, id: string) => {
-      const now = new Date().toISOString();
-      const feature: Feature = {
-        id,
-        missionId,
+      create: async (_missionId: string, input: CreateFeatureInput, id: string) => {
+        const now = new Date().toISOString();
+        const feature: Feature = {
+          id,
+          missionId,
         milestoneId: input.milestoneId,
         status: "pending",
-        title: input.title,
-        description: input.description,
-        workerType: input.workerType,
-        verificationSteps: input.verificationSteps,
-        dependsOn: input.dependsOn ?? [],
-        createdAt: now,
-        updatedAt: now,
-      };
+          title: input.title,
+          description: input.description,
+          workerType: input.workerType,
+          verificationSteps: input.verificationSteps,
+          dependsOn: input.dependsOn ?? [],
+          fulfills: input.fulfills ?? [],
+          preconditions: input.preconditions,
+          expectedBehavior: input.expectedBehavior,
+          createdAt: now,
+          updatedAt: now,
+        };
       features.set(id, feature);
       return feature;
     },
@@ -299,18 +305,19 @@ export function mockAssertionStore(
   return {
     get: async (_missionId: string, assertionId: string) => assertions.get(assertionId),
     exists: async (_missionId: string, assertionId: string) => assertions.has(assertionId),
-    create: async (_missionId: string, input: CreateAssertionInput, id: string) => {
-      const now = new Date().toISOString();
-      const assertion: Assertion = {
-        id,
-        missionId,
+      create: async (_missionId: string, input: CreateAssertionInput, id: string) => {
+        const now = new Date().toISOString();
+        const assertion: Assertion = {
+          id,
+          missionId,
         milestoneId: input.milestoneId,
-        featureId: input.featureId,
-        result: "pending",
-        description: input.description,
-        createdAt: now,
-        updatedAt: now,
-      };
+          featureId: input.featureId,
+          result: "pending",
+          description: input.description,
+          surface: input.surface ?? "cli",
+          createdAt: now,
+          updatedAt: now,
+        };
       assertions.set(id, assertion);
       return assertion;
     },
@@ -322,12 +329,13 @@ export function mockAssertionStore(
       const updated: Assertion = {
         id: existing.id,
         missionId: existing.missionId,
-        milestoneId: existing.milestoneId,
-        featureId: existing.featureId,
-        description: existing.description,
-        createdAt: existing.createdAt,
-        result: input.result,
-        updatedAt: now,
+          milestoneId: existing.milestoneId,
+          featureId: existing.featureId,
+          description: existing.description,
+          surface: existing.surface,
+          createdAt: existing.createdAt,
+          result: input.result,
+          updatedAt: now,
         evidence: input.evidence,
         waivedReason: input.waivedReason,
       };

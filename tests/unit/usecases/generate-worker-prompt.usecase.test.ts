@@ -44,10 +44,10 @@ async function createTestMission(
   featureStore: FsFeatureStoreAdapter,
   assertionStore: FsAssertionStoreAdapter,
   baseDir: string,
-): Promise<{ missionId: string; features: string[] }> {
-  const sampleMilestones: Milestone[] = [
-    { id: "m1", title: "Milestone 1", description: "First milestone", order: 0 },
-  ];
+  ): Promise<{ missionId: string; features: string[] }> {
+    const sampleMilestones: Milestone[] = [
+      { id: "m1", title: "Milestone 1", description: "First milestone", order: 0, featureIds: [] },
+    ];
 
   const samplePlan = {
     title: "Test Mission",
@@ -322,11 +322,11 @@ describe("generateWorkerPrompt", () => {
   it("sanitizes content containing markdown headers", async () => {
     const missionStore = new FsMissionStoreAdapter(tmpDir);
     const featureStore = new FsFeatureStoreAdapter(tmpDir);
-    const assertionStore = new FsAssertionStoreAdapter(tmpDir);
-
-    const sampleMilestones: Milestone[] = [
-      { id: "m1", title: "Milestone 1", description: "First milestone", order: 0 },
-    ];
+      const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+  
+      const sampleMilestones: Milestone[] = [
+        { id: "m1", title: "Milestone 1", description: "First milestone", order: 0, featureIds: [] },
+      ];
 
     // Create mission with markdown headers in description
     const samplePlan = {
@@ -372,11 +372,11 @@ describe("generateWorkerPrompt", () => {
   it("includes dependencies section when feature has dependencies", async () => {
     const missionStore = new FsMissionStoreAdapter(tmpDir);
     const featureStore = new FsFeatureStoreAdapter(tmpDir);
-    const assertionStore = new FsAssertionStoreAdapter(tmpDir);
-
-    const sampleMilestones: Milestone[] = [
-      { id: "m1", title: "Milestone 1", description: "First milestone", order: 0 },
-    ];
+      const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+  
+      const sampleMilestones: Milestone[] = [
+        { id: "m1", title: "Milestone 1", description: "First milestone", order: 0, featureIds: [] },
+      ];
 
     const samplePlan = {
       title: "Test Mission",

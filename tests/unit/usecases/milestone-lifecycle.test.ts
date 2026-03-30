@@ -16,10 +16,10 @@ function createTestMission(status: MissionStatus = "draft", milestones: Mileston
     status,
     title: "Test Mission",
     description: "A test mission",
-    milestones: milestones.length > 0 ? milestones : [
-      { id: "m1", title: "Milestone 1", description: "First", order: 0 },
-      { id: "m2", title: "Milestone 2", description: "Second", order: 1 },
-    ],
+      milestones: milestones.length > 0 ? milestones : [
+        { id: "m1", title: "Milestone 1", description: "First", order: 0, featureIds: [] },
+        { id: "m2", title: "Milestone 2", description: "Second", order: 1, featureIds: [] },
+      ],
     features: ["f1", "f2"],
     createdAt: "2024-01-01T00:00:00Z",
     updatedAt: "2024-01-01T00:00:00Z",
@@ -34,12 +34,13 @@ function createTestFeature(missionId: string, milestoneId: string, status: Featu
     status,
     title: `Feature ${id}`,
     description: "Test feature",
-    workerType: "test-skill",
-    verificationSteps: ["step1"],
-    dependsOn: [],
-    createdAt: "2024-01-01T00:00:00Z",
-    updatedAt: "2024-01-01T00:00:00Z",
-  };
+      workerType: "test-skill",
+      verificationSteps: ["step1"],
+      dependsOn: [],
+      fulfills: [],
+      createdAt: "2024-01-01T00:00:00Z",
+      updatedAt: "2024-01-01T00:00:00Z",
+    };
 }
 
 function createTestAssertion(missionId: string, milestoneId: string, featureId: string, result: AssertionResult = "pending", id = "a1"): Assertion {
@@ -47,12 +48,13 @@ function createTestAssertion(missionId: string, milestoneId: string, featureId: 
     id,
     missionId,
     milestoneId,
-    featureId,
-    result,
-    description: `Assertion ${id}`,
-    createdAt: "2024-01-01T00:00:00Z",
-    updatedAt: "2024-01-01T00:00:00Z",
-  };
+      featureId,
+      result,
+      description: `Assertion ${id}`,
+      surface: "cli",
+      createdAt: "2024-01-01T00:00:00Z",
+      updatedAt: "2024-01-01T00:00:00Z",
+    };
 }
 
 // Mock stores

@@ -25,10 +25,10 @@ describe("mission lifecycle usecases", () => {
   let featureStore: FsFeatureStoreAdapter;
   let assertionStore: FsAssertionStoreAdapter;
 
-  const sampleMilestones: Milestone[] = [
-    { id: "m1", title: "Milestone 1", description: "First milestone", order: 0 },
-    { id: "m2", title: "Milestone 2", description: "Second milestone", order: 1 },
-  ];
+    const sampleMilestones: Milestone[] = [
+      { id: "m1", title: "Milestone 1", description: "First milestone", order: 0, featureIds: [] },
+      { id: "m2", title: "Milestone 2", description: "Second milestone", order: 1, featureIds: [] },
+    ];
 
   const samplePlan = {
     title: "Test Mission",

@@ -33,7 +33,7 @@ const makeMission = (overrides: Partial<Mission> = {}): Mission => ({
   title: "Test Mission",
   description: "A test mission",
   milestones: [
-    { id: "m1", title: "Milestone 1", description: "First milestone", order: 0 },
+    { id: "m1", title: "Milestone 1", description: "First milestone", order: 0, featureIds: [] },
   ],
   features: ["f1"],
   createdAt: "2026-03-28T12:00:00Z",
@@ -46,6 +46,7 @@ const makeMilestone = (overrides: Partial<Milestone> = {}): Milestone => ({
   title: "Milestone 1",
   description: "First milestone",
   order: 0,
+  featureIds: [],
   ...overrides,
 });
 
@@ -59,6 +60,7 @@ const makeFeature = (overrides: Partial<Feature> = {}): Feature => ({
   workerType: "test-skill",
   verificationSteps: ["step 1"],
   dependsOn: [],
+  fulfills: [],
   createdAt: "2026-03-28T12:00:00Z",
   updatedAt: "2026-03-28T12:00:00Z",
   ...overrides,
@@ -71,6 +73,7 @@ const makeAssertion = (overrides: Partial<Assertion> = {}): Assertion => ({
   featureId: "f1",
   result: "pending",
   description: "An assertion",
+  surface: "cli",
   createdAt: "2026-03-28T12:00:00Z",
   updatedAt: "2026-03-28T12:00:00Z",
   ...overrides,

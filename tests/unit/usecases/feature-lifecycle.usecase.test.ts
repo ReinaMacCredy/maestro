@@ -20,12 +20,12 @@ async function createSampleMission(
   missionStore: FsMissionStoreAdapter,
   featureStore: FsFeatureStoreAdapter,
   assertionStore: FsAssertionStoreAdapter,
-  tmpDir: string,
-): Promise<{ missionId: string; features: string[] }> {
-  const sampleMilestones: Milestone[] = [
-    { id: "m1", title: "Milestone 1", description: "First milestone", order: 0 },
-    { id: "m2", title: "Milestone 2", description: "Second milestone", order: 1 },
-  ];
+    tmpDir: string,
+  ): Promise<{ missionId: string; features: string[] }> {
+    const sampleMilestones: Milestone[] = [
+      { id: "m1", title: "Milestone 1", description: "First milestone", order: 0, featureIds: [] },
+      { id: "m2", title: "Milestone 2", description: "Second milestone", order: 1, featureIds: [] },
+    ];
 
   const samplePlan = {
     title: "Test Mission",
@@ -244,11 +244,11 @@ describe("feature lifecycle usecases", () => {
     it("attaches and persists worker report", async () => {
       const { missionId } = await createSampleMission(missionStore, featureStore, assertionStore, tmpDir);
 
-      const report = {
+      const report = await parseWorkerReport(JSON.stringify({
         content: "Feature implementation complete",
         timestamp: new Date().toISOString(),
         agent: "test-agent",
-      };
+      }));
 
       const result = await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
         status: "in-progress",
@@ -272,11 +272,11 @@ describe("feature lifecycle usecases", () => {
       const { missionId } = await createSampleMission(missionStore, featureStore, assertionStore, tmpDir);
 
       // First attach a report (legacy format -- converted on parse)
-      const report = {
+      const report = await parseWorkerReport(JSON.stringify({
         content: "Initial implementation",
         timestamp: new Date().toISOString(),
         agent: "agent-1",
-      };
+      }));
 
       await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
         status: "in-progress",

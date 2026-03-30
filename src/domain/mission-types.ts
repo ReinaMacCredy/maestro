@@ -95,6 +95,14 @@ export interface Milestone {
   readonly featureIds: readonly string[];
 }
 
+/** Milestone input used before mission state is materialized */
+export interface MilestoneInput {
+  readonly id: string;
+  readonly title: string;
+  readonly description: string;
+  readonly order: number;
+}
+
 /** Structured worker report attached to a feature */
 export interface WorkerReport {
   readonly salientSummary: string;
@@ -180,7 +188,7 @@ export interface CreateMissionInput {
   readonly title: string;
   readonly description: string;
   readonly proposal?: string;
-  readonly milestones: readonly Milestone[];
+  readonly milestones: readonly MilestoneInput[];
 }
 
 /** Input for creating a new feature */

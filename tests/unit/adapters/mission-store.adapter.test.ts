@@ -9,13 +9,13 @@ let tmpDir: string;
 let store: FsMissionStoreAdapter;
 
 const makeCreateInput = (overrides: Partial<CreateMissionInput> = {}): CreateMissionInput => ({
-  title: "Test Mission",
-  description: "A test mission",
-  milestones: [
-    { id: "m1", title: "Milestone 1", description: "First milestone", order: 0 },
-  ],
-  ...overrides,
-});
+    title: "Test Mission",
+    description: "A test mission",
+    milestones: [
+      { id: "m1", title: "Milestone 1", description: "First milestone", order: 0 },
+    ],
+    ...overrides,
+  });
 
 beforeEach(async () => {
   tmpDir = await mkdtemp(join(tmpdir(), "maestro-mission-store-"));

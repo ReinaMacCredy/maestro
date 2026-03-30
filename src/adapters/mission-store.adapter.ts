@@ -84,7 +84,10 @@ export class FsMissionStoreAdapter implements MissionStorePort {
       title: input.title,
       description: input.description,
       ...(input.proposal !== undefined && { proposal: input.proposal }),
-      milestones: input.milestones,
+      milestones: input.milestones.map((milestone) => ({
+        ...milestone,
+        featureIds: [],
+      })),
       features,
       createdAt: now,
       updatedAt: now,
