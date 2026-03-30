@@ -118,7 +118,7 @@ export const AssertionSchema = z.object({
   missionId: z.string().regex(MISSION_ID_PATTERN),
   milestoneId: z.string().min(1),
   featureId: z.string().min(1),
-  status: z.enum(["pending", "passed", "failed", "blocked", "waived"]),
+  result: z.enum(["pending", "passed", "failed", "blocked", "waived"]),
   description: z.string().min(1),
   surface: z.string().default("cli"),
   evidence: z.string().optional(),
@@ -127,14 +127,14 @@ export const AssertionSchema = z.object({
   updatedAt: z.string().regex(ISO_DATE_PATTERN),
 }).strict().refine(
   (data) => {
-    // If status is waived, waivedReason must be provided and non-empty
-    if (data.status === "waived") {
+    // If result is waived, waivedReason must be provided and non-empty
+    if (data.result === "waived") {
       return data.waivedReason !== undefined && data.waivedReason.length > 0;
     }
     return true;
   },
   {
-    message: "waivedReason is required when status is 'waived'",
+    message: "waivedReason is required when result is 'waived'",
     path: ["waivedReason"],
   },
 );
@@ -168,10 +168,10 @@ export const MissionSchema = z.object({
 export const CheckpointSchema = z.object({
   id: z.string().min(1),
   missionId: z.string().regex(MISSION_ID_PATTERN),
-  milestoneId: z.string().min(1),
+  currentMilestoneId: z.string().min(1),
   timestamp: z.string().regex(ISO_DATE_PATTERN),
-  featureStates: z.record(z.enum(["pending", "assigned", "in_progress", "in_review", "completed", "blocked"])),
-  assertionStates: z.record(z.enum(["pending", "passed", "failed", "blocked", "waived"])),
+  featureStatuses: z.record(z.enum(["pending", "assigned", "in_progress", "in_review", "completed", "blocked"])),
+  assertionResults: z.record(z.enum(["pending", "passed", "failed", "blocked", "waived"])),
 }).strict();
 
 // Input validation schemas
@@ -213,18 +213,18 @@ export const CreateAssertionInputSchema = z.object({
 }).strict();
 
 export const UpdateAssertionInputSchema = z.object({
-  status: z.enum(["pending", "passed", "failed", "blocked", "waived"]),
+  result: z.enum(["pending", "passed", "failed", "blocked", "waived"]),
   evidence: z.string().optional(),
   waivedReason: z.string().min(1).optional(),
 }).strict().refine(
   (data) => {
-    if (data.status === "waived") {
+    if (data.result === "waived") {
       return data.waivedReason !== undefined && data.waivedReason.length > 0;
     }
     return true;
   },
   {
-    message: "waivedReason is required when status is 'waived'",
+    message: "waivedReason is required when result is 'waived'",
     path: ["waivedReason"],
   },
 );

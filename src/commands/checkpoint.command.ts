@@ -82,13 +82,13 @@ export function registerCheckpointCommand(program: Command): void {
 /** Format save result for text output */
 function formatSaveResult(result: SaveCheckpointResult): string[] {
   const cp = result.checkpoint;
-  const featureCount = Object.keys(cp.featureStates).length;
-  const assertionCount = Object.keys(cp.assertionStates).length;
+  const featureCount = Object.keys(cp.featureStatuses).length;
+  const assertionCount = Object.keys(cp.assertionResults).length;
 
   return [
     `[ok] Checkpoint saved: ${cp.id}`,
     `  Mission: ${cp.missionId}`,
-    `  Milestone: ${cp.milestoneId}`,
+    `  Milestone: ${cp.currentMilestoneId}`,
     `  Timestamp: ${cp.timestamp}`,
     `  Features captured: ${featureCount}`,
     `  Assertions captured: ${assertionCount}`,
@@ -109,12 +109,12 @@ function formatListResult(result: ListCheckpointsResult): string[] {
   ];
 
   for (const cp of result.checkpoints) {
-    const featureCount = Object.keys(cp.featureStates).length;
-    const assertionCount = Object.keys(cp.assertionStates).length;
+    const featureCount = Object.keys(cp.featureStatuses).length;
+    const assertionCount = Object.keys(cp.assertionResults).length;
     const date = new Date(cp.timestamp).toLocaleString();
 
     lines.push(`${cp.id}`);
-    lines.push(`  Milestone: ${cp.milestoneId}`);
+    lines.push(`  Milestone: ${cp.currentMilestoneId}`);
     lines.push(`  Time: ${date}`);
     lines.push(`  Features: ${featureCount}, Assertions: ${assertionCount}`);
     lines.push("");
@@ -126,14 +126,14 @@ function formatListResult(result: ListCheckpointsResult): string[] {
 /** Format load result for text output */
 function formatLoadResult(result: LoadCheckpointResult): string[] {
   const cp = result.checkpoint;
-  const featureCount = Object.keys(cp.featureStates).length;
-  const assertionCount = Object.keys(cp.assertionStates).length;
+  const featureCount = Object.keys(cp.featureStatuses).length;
+  const assertionCount = Object.keys(cp.assertionResults).length;
   const totalRestored = result.restored.featureCount + result.restored.assertionCount;
 
   const lines = [
     `[ok] Checkpoint restored: ${cp.id}`,
     `  Mission: ${cp.missionId}`,
-    `  Milestone: ${cp.milestoneId}`,
+    `  Milestone: ${cp.currentMilestoneId}`,
     `  Timestamp: ${cp.timestamp}`,
     `  Features captured: ${featureCount}`,
     `  Assertions captured: ${assertionCount}`,

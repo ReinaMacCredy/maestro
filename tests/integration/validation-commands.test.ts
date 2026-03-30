@@ -222,7 +222,7 @@ describe("validation CLI commands", () => {
       expect(exitCode).toBe(0);
       const result = JSON.parse(stdout);
       expect(result.assertion).toBeDefined();
-      expect(result.assertion.status).toBe("passed");
+      expect(result.assertion.result).toBe("passed");
       expect(result.assertion.id).toBe(assertionId);
     }, SLOW_CLI_TIMEOUT_MS);
 

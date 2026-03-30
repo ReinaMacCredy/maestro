@@ -8,7 +8,7 @@ import type {
   MissionStatus,
   MilestoneStatus,
   FeatureStatus,
-  AssertionStatus,
+  AssertionResult,
 } from "./mission-types.js";
 
 // ============================
@@ -145,7 +145,7 @@ export function assertFeatureTransition(
 // Assertion State Machine
 // ============================
 
-const ASSERTION_TRANSITIONS: Readonly<Record<AssertionStatus, readonly AssertionStatus[]>> = {
+const ASSERTION_TRANSITIONS: Readonly<Record<AssertionResult, readonly AssertionResult[]>> = {
   pending: ["passed", "failed", "blocked", "waived"],
   passed: [], // terminal
   failed: ["pending"], // retry
@@ -155,21 +155,21 @@ const ASSERTION_TRANSITIONS: Readonly<Record<AssertionStatus, readonly Assertion
 
 /** Check if an assertion transition is valid */
 export function canTransitionAssertion(
-  from: AssertionStatus,
-  to: AssertionStatus,
+  from: AssertionResult,
+  to: AssertionResult,
 ): boolean {
   return ASSERTION_TRANSITIONS[from].includes(to);
 }
 
 /** Get list of valid next states for an assertion */
-export function getValidAssertionTransitions(from: AssertionStatus): readonly AssertionStatus[] {
+export function getValidAssertionTransitions(from: AssertionResult): readonly AssertionResult[] {
   return ASSERTION_TRANSITIONS[from];
 }
 
 /** Assert that an assertion transition is valid, throw MaestroError if not */
 export function assertAssertionTransition(
-  from: AssertionStatus,
-  to: AssertionStatus,
+  from: AssertionResult,
+  to: AssertionResult,
 ): void {
   if (!canTransitionAssertion(from, to)) {
     const validNext = getValidAssertionTransitions(from);
@@ -203,6 +203,6 @@ export function isTerminalFeatureStatus(status: FeatureStatus): boolean {
 }
 
 /** Check if an assertion status is terminal (includes waived) */
-export function isTerminalAssertionStatus(status: AssertionStatus): boolean {
+export function isTerminalAssertionStatus(status: AssertionResult): boolean {
   return ASSERTION_TRANSITIONS[status].length === 0;
 }

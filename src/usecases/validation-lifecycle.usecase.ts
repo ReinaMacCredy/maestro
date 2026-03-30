@@ -93,13 +93,13 @@ export async function updateAssertion(
     ]);
   }
 
-  // Validate status transition if provided and different
-  if (input.status !== undefined && input.status !== existing.status) {
-    assertAssertionTransition(existing.status, input.status);
+  // Validate result transition if provided and different
+  if (input.result !== undefined && input.result !== existing.result) {
+    assertAssertionTransition(existing.result, input.result);
   }
 
   // Enforce waived reason at usecase level (not just CLI)
-  if (input.status === "waived" && !input.waivedReason) {
+  if (input.result === "waived" && !input.waivedReason) {
     throw new MaestroError("waivedReason is required when waiving an assertion", [
       "Use --waived-reason to provide the reason for waiving",
       "Example: maestro validate update <id> --mission <id> --status waived --waived-reason \"reason\"",
@@ -108,13 +108,13 @@ export async function updateAssertion(
 
   // Build final update input, preserving existing evidence if not provided
   let finalEvidence = input.evidence;
-  if (input.evidence === undefined && input.status !== undefined) {
+  if (input.evidence === undefined && input.result !== undefined) {
     // When transitioning (especially retrying), preserve existing evidence
     finalEvidence = existing.evidence;
   }
 
   const updateInput: UpdateAssertionInput = {
-    status: input.status,
+    result: input.result,
     evidence: finalEvidence,
     waivedReason: input.waivedReason,
   };

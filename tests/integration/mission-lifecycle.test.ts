@@ -321,9 +321,9 @@ describe("full mission lifecycle", () => {
     expect(checkpointResult.exitCode).toBe(0);
     const checkpoint = JSON.parse(checkpointResult.stdout).checkpoint;
     expect(checkpoint.missionId).toBe(missionId);
-    expect(checkpoint.featureStates.f1).toBe("completed");
-    expect(checkpoint.featureStates.f2).toBe("completed");
-    expect(checkpoint.featureStates.f3).toBe("completed");
+    expect(checkpoint.featureStatuses.f1).toBe("completed");
+    expect(checkpoint.featureStatuses.f2).toBe("completed");
+    expect(checkpoint.featureStatuses.f3).toBe("completed");
 
     // Step 10: List checkpoints
     const listResult = await run(

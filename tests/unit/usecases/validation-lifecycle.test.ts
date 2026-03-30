@@ -176,14 +176,14 @@ describe("validation lifecycle usecases", () => {
 
       const assertionId = assertions[0]!;
       const result = await updateAssertion(missionStore, assertionStore, missionId, assertionId, {
-        status: "passed",
+        result: "passed",
       });
 
-      expect(result.assertion.status).toBe("passed");
+      expect(result.assertion.result).toBe("passed");
       expect(result.assertion.id).toBe(assertionId);
     });
 
-    it("persists evidence with status update", async () => {
+    it("persists evidence with result update", async () => {
       const { missionId, assertions } = await createSampleMissionWithAssertions(
         missionStore,
         featureStore,
@@ -194,11 +194,11 @@ describe("validation lifecycle usecases", () => {
       const evidence = "Test output showing success";
 
       const result = await updateAssertion(missionStore, assertionStore, missionId, assertionId, {
-        status: "passed",
+        result: "passed",
         evidence,
       });
 
-      expect(result.assertion.status).toBe("passed");
+      expect(result.assertion.result).toBe("passed");
       expect(result.assertion.evidence).toBe(evidence);
     });
 
@@ -213,11 +213,11 @@ describe("validation lifecycle usecases", () => {
       const reason = "Not applicable to this implementation";
 
       const result = await updateAssertion(missionStore, assertionStore, missionId, assertionId, {
-        status: "waived",
+        result: "waived",
         waivedReason: reason,
       });
 
-      expect(result.assertion.status).toBe("waived");
+      expect(result.assertion.result).toBe("waived");
       expect(result.assertion.waivedReason).toBe(reason);
     });
 
@@ -232,7 +232,7 @@ describe("validation lifecycle usecases", () => {
 
       await expect(
         updateAssertion(missionStore, assertionStore, missionId, assertionId, {
-          status: "waived",
+          result: "waived",
         }),
       ).rejects.toThrow("waivedReason is required when waiving an assertion");
     });
@@ -248,7 +248,7 @@ describe("validation lifecycle usecases", () => {
 
       await expect(
         updateAssertion(missionStore, assertionStore, missionId, assertionId, {
-          status: "waived",
+          result: "waived",
           waivedReason: "",
         }),
       ).rejects.toThrow("waivedReason is required when waiving an assertion");
@@ -265,16 +265,16 @@ describe("validation lifecycle usecases", () => {
 
       // First fail the assertion
       await updateAssertion(missionStore, assertionStore, missionId, assertionId, {
-        status: "failed",
+        result: "failed",
         evidence: "Initial failure",
       });
 
       // Retry: failed -> pending
       const result = await updateAssertion(missionStore, assertionStore, missionId, assertionId, {
-        status: "pending",
+        result: "pending",
       });
 
-      expect(result.assertion.status).toBe("pending");
+      expect(result.assertion.result).toBe("pending");
     });
 
     it("allows retry from blocked to pending", async () => {
@@ -288,16 +288,16 @@ describe("validation lifecycle usecases", () => {
 
       // First block the assertion
       await updateAssertion(missionStore, assertionStore, missionId, assertionId, {
-        status: "blocked",
+        result: "blocked",
         evidence: "Blocked by external dependency",
       });
 
       // Retry: blocked -> pending
       const result = await updateAssertion(missionStore, assertionStore, missionId, assertionId, {
-        status: "pending",
+        result: "pending",
       });
 
-      expect(result.assertion.status).toBe("pending");
+      expect(result.assertion.result).toBe("pending");
     });
 
     it("rejects illegal transitions with helpful hints", async () => {
@@ -311,14 +311,14 @@ describe("validation lifecycle usecases", () => {
 
       // First pass the assertion
       await updateAssertion(missionStore, assertionStore, missionId, assertionId, {
-        status: "passed",
+        result: "passed",
       });
 
       // Try to go back to pending - should fail
       let threw = false;
       try {
         await updateAssertion(missionStore, assertionStore, missionId, assertionId, {
-          status: "pending",
+          result: "pending",
         });
       } catch (err) {
         threw = true;
@@ -342,13 +342,13 @@ describe("validation lifecycle usecases", () => {
 
       // First pass the assertion
       await updateAssertion(missionStore, assertionStore, missionId, assertionId, {
-        status: "passed",
+        result: "passed",
       });
 
       // Try to fail - should fail
       await expect(
         updateAssertion(missionStore, assertionStore, missionId, assertionId, {
-          status: "failed",
+          result: "failed",
         }),
       ).rejects.toThrow("Invalid assertion transition");
     });
@@ -364,14 +364,14 @@ describe("validation lifecycle usecases", () => {
 
       // First waive the assertion
       await updateAssertion(missionStore, assertionStore, missionId, assertionId, {
-        status: "waived",
+        result: "waived",
         waivedReason: "Not applicable",
       });
 
       // Try to pass - should fail (waived is terminal)
       await expect(
         updateAssertion(missionStore, assertionStore, missionId, assertionId, {
-          status: "passed",
+          result: "passed",
         }),
       ).rejects.toThrow("Invalid assertion transition");
     });
@@ -387,17 +387,17 @@ describe("validation lifecycle usecases", () => {
 
       // First update with evidence
       await updateAssertion(missionStore, assertionStore, missionId, assertionId, {
-        status: "failed",
+        result: "failed",
         evidence: "Error log here",
       });
 
       // Retry without new evidence
       const result = await updateAssertion(missionStore, assertionStore, missionId, assertionId, {
-        status: "pending",
+        result: "pending",
       });
 
       // Evidence should be preserved
-      expect(result.assertion.status).toBe("pending");
+      expect(result.assertion.result).toBe("pending");
       expect(result.assertion.evidence).toBe("Error log here");
     });
 
@@ -412,14 +412,14 @@ describe("validation lifecycle usecases", () => {
 
       // First update with evidence
       await updateAssertion(missionStore, assertionStore, missionId, assertionId, {
-        status: "failed",
+        result: "failed",
         evidence: "Initial error",
       });
 
       // Retry with new evidence
       const newEvidence = "Additional debugging info";
       const result = await updateAssertion(missionStore, assertionStore, missionId, assertionId, {
-        status: "pending",
+        result: "pending",
         evidence: newEvidence,
       });
 
@@ -429,7 +429,7 @@ describe("validation lifecycle usecases", () => {
     it("throws for non-existent mission", async () => {
       await expect(
         updateAssertion(missionStore, assertionStore, "2026-03-28-001", "a1", {
-          status: "passed",
+          result: "passed",
         }),
       ).rejects.toThrow("Mission 2026-03-28-001 not found");
     });
@@ -443,7 +443,7 @@ describe("validation lifecycle usecases", () => {
 
       await expect(
         updateAssertion(missionStore, assertionStore, missionId, "nonexistent", {
-          status: "passed",
+          result: "passed",
         }),
       ).rejects.toThrow("Assertion nonexistent not found");
     });
@@ -459,10 +459,10 @@ describe("validation lifecycle usecases", () => {
       const before = await assertionStore.get(missionId, assertionId);
 
       const result = await updateAssertion(missionStore, assertionStore, missionId, assertionId, {
-        status: "pending",
+        result: "pending",
       });
 
-      expect(result.assertion.status).toBe("pending");
+      expect(result.assertion.result).toBe("pending");
       expect(result.assertion.updatedAt).not.toBe(before?.updatedAt);
     });
 
@@ -484,7 +484,7 @@ describe("validation lifecycle usecases", () => {
 
       // Update status
       const result = await updateAssertion(missionStore, assertionStore, missionId, assertionId, {
-        status: "passed",
+        result: "passed",
       });
 
       expect(result.assertion.updatedAt).not.toBe(initialUpdatedAt);
@@ -501,7 +501,7 @@ describe("validation lifecycle usecases", () => {
       const before = await assertionStore.get(missionId, assertionId);
 
       const result = await updateAssertion(missionStore, assertionStore, missionId, assertionId, {
-        status: "passed",
+        result: "passed",
       });
 
       expect(result.assertion.id).toBe(before!.id);

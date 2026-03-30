@@ -3,7 +3,7 @@ import { mkdtemp, rm, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { FsCheckpointStoreAdapter } from "../../../src/adapters/checkpoint-store.adapter.js";
-import type { Checkpoint, FeatureStatus, AssertionStatus } from "../../../src/domain/mission-types.js";
+import type { Checkpoint, FeatureStatus, AssertionResult } from "../../../src/domain/mission-types.js";
 
 let tmpDir: string;
 let store: FsCheckpointStoreAdapter;
@@ -11,10 +11,10 @@ const missionId = "2026-03-28-001";
 
 const makeCheckpointData = (overrides: Partial<Omit<Checkpoint, "id">> = {}): Omit<Checkpoint, "id"> => ({
   missionId,
-  milestoneId: "m1",
+  currentMilestoneId: "m1",
   timestamp: new Date().toISOString(),
-  featureStates: { f1: "pending" as FeatureStatus },
-  assertionStates: { a1: "pending" as AssertionStatus },
+  featureStatuses: { f1: "pending" as FeatureStatus },
+  assertionResults: { a1: "pending" as AssertionResult },
   ...overrides,
 });
 
@@ -38,7 +38,7 @@ describe("FsCheckpointStoreAdapter", () => {
 
       expect(checkpoint.id).toBeTruthy();
       expect(checkpoint.missionId).toBe(missionId);
-      expect(checkpoint.milestoneId).toBe("m1");
+      expect(checkpoint.currentMilestoneId).toBe("m1");
       expect(checkpoint.timestamp).toBe(data.timestamp);
     });
 
@@ -56,14 +56,14 @@ describe("FsCheckpointStoreAdapter", () => {
 
     it("captures feature states", async () => {
       const data = makeCheckpointData({
-        featureStates: {
+        featureStatuses: {
           f1: "in_progress",
           f2: "completed",
         },
       });
       const checkpoint = await store.save(missionId, data);
 
-      expect(checkpoint.featureStates).toEqual({
+      expect(checkpoint.featureStatuses).toEqual({
         f1: "in_progress",
         f2: "completed",
       });
@@ -71,7 +71,7 @@ describe("FsCheckpointStoreAdapter", () => {
 
     it("captures assertion states", async () => {
       const data = makeCheckpointData({
-        assertionStates: {
+        assertionResults: {
           a1: "passed",
           a2: "failed",
           a3: "waived",
@@ -79,7 +79,7 @@ describe("FsCheckpointStoreAdapter", () => {
       });
       const checkpoint = await store.save(missionId, data);
 
-      expect(checkpoint.assertionStates).toEqual({
+      expect(checkpoint.assertionResults).toEqual({
         a1: "passed",
         a2: "failed",
         a3: "waived",
@@ -100,7 +100,7 @@ describe("FsCheckpointStoreAdapter", () => {
       const checkpoint = await store.get(missionId, saved.id);
       expect(checkpoint).toBeDefined();
       expect(checkpoint!.id).toBe(saved.id);
-      expect(checkpoint!.milestoneId).toBe("m1");
+      expect(checkpoint!.currentMilestoneId).toBe("m1");
     });
   });
 
@@ -174,18 +174,18 @@ describe("FsCheckpointStoreAdapter", () => {
     it("can save, list, and retrieve checkpoints", async () => {
       // Save initial checkpoint
       const initialData = makeCheckpointData({
-        milestoneId: "m1",
-        featureStates: { f1: "pending" },
-        assertionStates: { a1: "pending" },
+        currentMilestoneId: "m1",
+        featureStatuses: { f1: "pending" },
+        assertionResults: { a1: "pending" },
       });
       const cp1 = await store.save(missionId, initialData);
 
       // Progress some features and assertions
       await new Promise((r) => setTimeout(r, 10));
       const progressData = makeCheckpointData({
-        milestoneId: "m1",
-        featureStates: { f1: "in_progress" },
-        assertionStates: { a1: "passed" },
+        currentMilestoneId: "m1",
+        featureStatuses: { f1: "in_progress" },
+        assertionResults: { a1: "passed" },
       });
       const cp2 = await store.save(missionId, progressData);
 
@@ -197,11 +197,11 @@ describe("FsCheckpointStoreAdapter", () => {
 
       // Verify get returns correct checkpoint
       const retrieved = await store.get(missionId, cp1.id);
-      expect(retrieved!.featureStates).toEqual({ f1: "pending" });
+      expect(retrieved!.featureStatuses).toEqual({ f1: "pending" });
 
       // Verify getLatest returns most recent
       const latest = await store.getLatest(missionId);
-      expect(latest!.featureStates).toEqual({ f1: "in_progress" });
+      expect(latest!.featureStatuses).toEqual({ f1: "in_progress" });
     });
   });
 });

@@ -125,10 +125,10 @@ describe("checkpoint CLI commands", () => {
       expect(result.checkpoint).toBeDefined();
       expect(result.checkpoint.id).toBeTruthy();
       expect(result.checkpoint.missionId).toBe(missionId);
-      expect(result.checkpoint.milestoneId).toBeDefined();
+      expect(result.checkpoint.currentMilestoneId).toBeDefined();
       expect(result.checkpoint.timestamp).toBeDefined();
-      expect(result.checkpoint.featureStates).toBeDefined();
-      expect(result.checkpoint.assertionStates).toBeDefined();
+      expect(result.checkpoint.featureStatuses).toBeDefined();
+      expect(result.checkpoint.assertionResults).toBeDefined();
     }, SLOW_CLI_TIMEOUT_MS);
 
     it("checkpoint save captures feature and assertion states", async () => {
@@ -158,10 +158,10 @@ describe("checkpoint CLI commands", () => {
 
       expect(exitCode).toBe(0);
       const result = JSON.parse(stdout);
-      expect(result.checkpoint.featureStates).toEqual(
+      expect(result.checkpoint.featureStatuses).toEqual(
         expect.objectContaining({ f1: "in_progress" }),
       );
-      expect(result.checkpoint.assertionStates).toEqual(
+      expect(result.checkpoint.assertionResults).toEqual(
         expect.objectContaining({ [assertions[0]!.id]: "passed" }),
       );
     }, SLOW_CLI_TIMEOUT_MS);
@@ -274,8 +274,8 @@ describe("checkpoint CLI commands", () => {
         // Verify checkpoint structure
         expect(result.checkpoint.missionId).toBe(missionId);
         expect(result.checkpoint.timestamp).toBeDefined();
-        expect(result.checkpoint.featureStates).toBeDefined();
-        expect(result.checkpoint.assertionStates).toBeDefined();
+        expect(result.checkpoint.featureStatuses).toBeDefined();
+        expect(result.checkpoint.assertionResults).toBeDefined();
         expect(result.restored).toEqual({
           featureCount: 0,
           assertionCount: 0,
@@ -412,7 +412,7 @@ describe("checkpoint CLI commands", () => {
       expect(load.exitCode).toBe(0);
       const loadResult = JSON.parse(load.stdout);
       expect(loadResult.checkpoint.id).toBe(checkpoint2.id);
-      expect(loadResult.checkpoint.featureStates).toBeDefined();
+      expect(loadResult.checkpoint.featureStatuses).toBeDefined();
       expect(loadResult.restored).toBeDefined();
     }, SLOW_CLI_TIMEOUT_MS);
   });

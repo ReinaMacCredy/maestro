@@ -12,7 +12,7 @@ import type {
   Feature,
   Assertion,
   FeatureStatus,
-  AssertionStatus,
+  AssertionResult,
 } from "../domain/mission-types.js";
 import { MaestroError } from "../domain/errors.js";
 import {
@@ -82,13 +82,13 @@ async function collectMilestoneProgress(
   const featureCompletionPct = featureCount > 0 ? Math.round((completedFeatures / featureCount) * 100) : 0;
 
   const assertionCount = assertions.length;
-  const passedAssertions = assertions.filter((a) => a.status === "passed").length;
-  const waivedAssertions = assertions.filter((a) => a.status === "waived").length;
-  const terminalAssertions = assertions.filter((a) => isTerminalAssertionStatus(a.status)).length;
+  const passedAssertions = assertions.filter((a) => a.result === "passed").length;
+  const waivedAssertions = assertions.filter((a) => a.result === "waived").length;
+  const terminalAssertions = assertions.filter((a) => isTerminalAssertionStatus(a.result)).length;
   const assertionCompletionPct = assertionCount > 0 ? Math.round((terminalAssertions / assertionCount) * 100) : 0;
 
   const waivedAssertionIds = assertions
-    .filter((a) => a.status === "waived")
+    .filter((a) => a.result === "waived")
     .map((a) => a.id);
 
   return {
@@ -258,7 +258,7 @@ export async function sealMilestone(
 
   // Find non-terminal assertions (those that block sealing)
   const nonTerminalAssertions = assertions.filter(
-    (a) => !isTerminalAssertionStatus(a.status),
+    (a) => !isTerminalAssertionStatus(a.result),
   );
 
   const blockingAssertionIds = nonTerminalAssertions.map((a) => a.id);

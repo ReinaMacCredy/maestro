@@ -34,7 +34,7 @@ describe("FsAssertionStoreAdapter", () => {
 
       expect(assertion.id).toBe("a1");
       expect(assertion.missionId).toBe(missionId);
-      expect(assertion.status).toBe("pending");
+      expect(assertion.result).toBe("pending");
       expect(assertion.description).toBe("Test assertion description");
     });
 
@@ -75,7 +75,7 @@ describe("FsAssertionStoreAdapter", () => {
       const assertion = await store.get(missionId, "a1");
       expect(assertion).toBeDefined();
       expect(assertion!.id).toBe("a1");
-      expect(assertion!.status).toBe("pending");
+      expect(assertion!.result).toBe("pending");
     });
 
     it("returns correct assertion from multiple", async () => {
@@ -104,7 +104,7 @@ describe("FsAssertionStoreAdapter", () => {
 
   describe("update", () => {
     it("returns undefined for non-existent assertion", async () => {
-      const result = await store.update(missionId, "non-existent", { status: "passed" });
+      const result = await store.update(missionId, "non-existent", { result: "passed" });
       expect(result).toBeUndefined();
     });
 
@@ -112,8 +112,8 @@ describe("FsAssertionStoreAdapter", () => {
       const input = makeCreateInput();
       await store.create(missionId, input, "a1");
 
-      const updated = await store.update(missionId, "a1", { status: "passed" });
-      expect(updated!.status).toBe("passed");
+      const updated = await store.update(missionId, "a1", { result: "passed" });
+      expect(updated!.result).toBe("passed");
       expect(updated!.updatedAt).toBeTruthy();
     });
 
@@ -122,10 +122,10 @@ describe("FsAssertionStoreAdapter", () => {
       await store.create(missionId, input, "a1");
 
       const updated = await store.update(missionId, "a1", {
-        status: "failed",
+        result: "failed",
         evidence: "Error message here",
       });
-      expect(updated!.status).toBe("failed");
+      expect(updated!.result).toBe("failed");
       expect(updated!.evidence).toBe("Error message here");
     });
 
@@ -134,10 +134,10 @@ describe("FsAssertionStoreAdapter", () => {
       await store.create(missionId, input, "a1");
 
       const updated = await store.update(missionId, "a1", {
-        status: "waived",
+        result: "waived",
         waivedReason: "Not applicable for this feature",
       });
-      expect(updated!.status).toBe("waived");
+      expect(updated!.result).toBe("waived");
       expect(updated!.waivedReason).toBe("Not applicable for this feature");
     });
 
@@ -145,7 +145,7 @@ describe("FsAssertionStoreAdapter", () => {
       const input = makeCreateInput();
       await store.create(missionId, input, "a1");
 
-      const updated = await store.update(missionId, "a1", { status: "passed" });
+      const updated = await store.update(missionId, "a1", { result: "passed" });
       expect(updated!.description).toBe("Test assertion description");
       expect(updated!.milestoneId).toBe("m1");
       expect(updated!.featureId).toBe("f1");
@@ -154,19 +154,19 @@ describe("FsAssertionStoreAdapter", () => {
     it("allows retry from failed to pending", async () => {
       const input = makeCreateInput();
       await store.create(missionId, input, "a1");
-      await store.update(missionId, "a1", { status: "failed" });
+      await store.update(missionId, "a1", { result: "failed" });
 
-      const updated = await store.update(missionId, "a1", { status: "pending" });
-      expect(updated!.status).toBe("pending");
+      const updated = await store.update(missionId, "a1", { result: "pending" });
+      expect(updated!.result).toBe("pending");
     });
 
     it("allows retry from blocked to pending", async () => {
       const input = makeCreateInput();
       await store.create(missionId, input, "a1");
-      await store.update(missionId, "a1", { status: "blocked" });
+      await store.update(missionId, "a1", { result: "blocked" });
 
-      const updated = await store.update(missionId, "a1", { status: "pending" });
-      expect(updated!.status).toBe("pending");
+      const updated = await store.update(missionId, "a1", { result: "pending" });
+      expect(updated!.result).toBe("pending");
     });
   });
 

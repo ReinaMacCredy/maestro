@@ -80,7 +80,7 @@ export function registerValidationCommand(program: Command): void {
         opts.mission,
         assertionId,
         {
-          status: opts.status,
+          result: opts.status,
           evidence: opts.evidence,
           waivedReason: opts.waivedReason,
         },
@@ -109,7 +109,7 @@ function formatAssertionList(result: ShowAssertionsResult): string[] {
   lines.push("");
 
   for (const a of result.assertions) {
-    const status = a.status.padEnd(10);
+    const status = a.result.padEnd(10);
     const desc = a.description.slice(0, 40).padEnd(40);
     lines.push(`${a.id}  ${status}  ${desc}  [${a.featureId}]`);
 
@@ -129,7 +129,7 @@ function formatAssertionList(result: ShowAssertionsResult): string[] {
 function formatAssertionUpdate(result: UpdateAssertionResult): string[] {
   const lines: string[] = [
     `[ok] Assertion updated: ${result.assertion.id}`,
-    `  Status: ${result.assertion.status}`,
+    `  Status: ${result.assertion.result}`,
     `  Description: ${result.assertion.description}`,
     `  Feature: ${result.assertion.featureId}`,
     `  Milestone: ${result.assertion.milestoneId}`,

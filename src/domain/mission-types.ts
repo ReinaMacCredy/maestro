@@ -36,7 +36,7 @@ export type FeatureStatus =
   | "blocked";
 
 /** Assertion validation result status - includes 'waived' as terminal state */
-export type AssertionStatus =
+export type AssertionResult =
   | "pending"
   | "passed"
   | "failed"
@@ -135,7 +135,7 @@ export interface Assertion {
   readonly missionId: string;
   readonly milestoneId: string;
   readonly featureId: string;
-  readonly status: AssertionStatus;
+  readonly result: AssertionResult;
   readonly description: string;
   readonly surface: AssertionSurface;
   readonly evidence?: string;
@@ -165,10 +165,10 @@ export interface Mission {
 export interface Checkpoint {
   readonly id: string;
   readonly missionId: string;
-  readonly milestoneId: string;
+  readonly currentMilestoneId: string;
   readonly timestamp: string;
-  readonly featureStates: Readonly<Record<string, FeatureStatus>>;
-  readonly assertionStates: Readonly<Record<string, AssertionStatus>>;
+  readonly featureStatuses: Readonly<Record<string, FeatureStatus>>;
+  readonly assertionResults: Readonly<Record<string, AssertionResult>>;
 }
 
 // ============================
@@ -208,7 +208,7 @@ export interface CreateAssertionInput {
 
 /** Input for updating an assertion */
 export interface UpdateAssertionInput {
-  readonly status: AssertionStatus;
+  readonly result: AssertionResult;
   readonly evidence?: string;
   readonly waivedReason?: string;
 }

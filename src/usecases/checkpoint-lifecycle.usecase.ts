@@ -10,7 +10,7 @@ import type { AssertionStorePort } from "../ports/assertion-store.port.js";
 import type {
   Checkpoint,
   FeatureStatus,
-  AssertionStatus,
+  AssertionResult,
   Mission,
 } from "../domain/mission-types.js";
 import { MaestroError } from "../domain/errors.js";
@@ -62,16 +62,16 @@ export async function saveCheckpoint(
 
   // Get all features and their statuses
   const features = await featureStore.list(missionId);
-  const featureStates: Record<string, FeatureStatus> = {};
+  const featureStatuses: Record<string, FeatureStatus> = {};
   for (const feature of features) {
-    featureStates[feature.id] = feature.status;
+    featureStatuses[feature.id] = feature.status;
   }
 
-  // Get all assertions and their statuses
+  // Get all assertions and their results
   const assertions = await assertionStore.list(missionId);
-  const assertionStates: Record<string, AssertionStatus> = {};
+  const assertionResults: Record<string, AssertionResult> = {};
   for (const assertion of assertions) {
-    assertionStates[assertion.id] = assertion.status;
+    assertionResults[assertion.id] = assertion.result;
   }
 
   const milestoneActivities: MilestoneActivitySnapshot[] = mission.milestones.map((milestone) => {
@@ -91,10 +91,10 @@ export async function saveCheckpoint(
   // Create and save the checkpoint
   const checkpoint = await checkpointStore.save(missionId, {
     missionId,
-    milestoneId: currentMilestoneId,
+    currentMilestoneId,
     timestamp: new Date().toISOString(),
-    featureStates,
-    assertionStates,
+    featureStatuses,
+    assertionResults,
   });
 
   return { checkpoint };
@@ -156,7 +156,7 @@ export async function loadCheckpoint(
   const features = await featureStore.list(missionId);
   let restoredFeatureCount = 0;
   for (const feature of features) {
-    const checkpointStatus = checkpoint.featureStates[feature.id];
+    const checkpointStatus = checkpoint.featureStatuses[feature.id];
     if (checkpointStatus !== undefined && checkpointStatus !== feature.status) {
       const updated = await featureStore.update(missionId, feature.id, { status: checkpointStatus });
       if (!updated) {
@@ -169,9 +169,9 @@ export async function loadCheckpoint(
   const assertions = await assertionStore.list(missionId);
   let restoredAssertionCount = 0;
   for (const assertion of assertions) {
-    const checkpointStatus = checkpoint.assertionStates[assertion.id];
-    if (checkpointStatus !== undefined && checkpointStatus !== assertion.status) {
-      const updated = await assertionStore.update(missionId, assertion.id, { status: checkpointStatus });
+    const checkpointResult = checkpoint.assertionResults[assertion.id];
+    if (checkpointResult !== undefined && checkpointResult !== assertion.result) {
+      const updated = await assertionStore.update(missionId, assertion.id, { result: checkpointResult });
       if (!updated) {
         throw new MaestroError(`Failed to restore assertion ${assertion.id} from checkpoint ${checkpoint.id}`);
       }

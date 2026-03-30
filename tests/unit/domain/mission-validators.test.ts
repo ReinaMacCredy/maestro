@@ -69,7 +69,7 @@ const makeAssertion = (overrides: Partial<Assertion> = {}): Assertion => ({
   missionId: "2026-03-28-001",
   milestoneId: "m1",
   featureId: "f1",
-  status: "pending",
+  result: "pending",
   description: "An assertion",
   createdAt: "2026-03-28T12:00:00Z",
   updatedAt: "2026-03-28T12:00:00Z",
@@ -79,10 +79,10 @@ const makeAssertion = (overrides: Partial<Assertion> = {}): Assertion => ({
 const makeCheckpoint = (overrides: Partial<Checkpoint> = {}): Checkpoint => ({
   id: "cp1",
   missionId: "2026-03-28-001",
-  milestoneId: "m1",
+  currentMilestoneId: "m1",
   timestamp: "2026-03-28T12:00:00Z",
-  featureStates: { f1: "pending" },
-  assertionStates: { a1: "pending" },
+  featureStatuses: { f1: "pending" },
+  assertionResults: { a1: "pending" },
   ...overrides,
 });
 
@@ -163,31 +163,31 @@ describe("mission validators", () => {
     });
 
     it("rejects invalid status", () => {
-      expect(() => validateAssertion(makeAssertion({ status: "invalid" as any }))).toThrow(ZodError);
+      expect(() => validateAssertion(makeAssertion({ result: "invalid" as any }))).toThrow(ZodError);
     });
 
-    it("accepts all valid statuses including waived", () => {
-      const validStatuses: { status: Assertion["status"]; waivedReason?: string }[] = [
-        { status: "pending" },
-        { status: "passed" },
-        { status: "failed" },
-        { status: "blocked" },
-        { status: "waived", waivedReason: "Test reason" },
+    it("accepts all valid results including waived", () => {
+      const validResults: { result: Assertion["result"]; waivedReason?: string }[] = [
+        { result: "pending" },
+        { result: "passed" },
+        { result: "failed" },
+        { result: "blocked" },
+        { result: "waived", waivedReason: "Test reason" },
       ];
-      for (const { status, waivedReason } of validStatuses) {
-        const result = validateAssertion(makeAssertion({ status, waivedReason }));
-        expect(result.status).toBe(status);
+      for (const { result: r, waivedReason } of validResults) {
+        const validated = validateAssertion(makeAssertion({ result: r, waivedReason }));
+        expect(validated.result).toBe(r);
       }
     });
 
     it("accepts assertion with waivedReason when waived", () => {
-      const assertion = makeAssertion({ status: "waived", waivedReason: "Not applicable" });
+      const assertion = makeAssertion({ result: "waived", waivedReason: "Not applicable" });
       const result = validateAssertion(assertion);
       expect(result.waivedReason).toBe("Not applicable");
     });
 
     it("rejects empty waivedReason when waived", () => {
-      expect(() => validateAssertion(makeAssertion({ status: "waived", waivedReason: "" }))).toThrow(ZodError);
+      expect(() => validateAssertion(makeAssertion({ result: "waived", waivedReason: "" }))).toThrow(ZodError);
     });
   });
 
@@ -286,25 +286,25 @@ describe("mission validators", () => {
   describe("validateUpdateAssertionInput", () => {
     it("accepts valid update input with result", () => {
       const input: UpdateAssertionInput = {
-        status: "passed",
+        result: "passed",
         evidence: "Test passed",
       };
-      const result = validateUpdateAssertionInput(input);
-      expect(result.status).toBe("passed");
+      const validated = validateUpdateAssertionInput(input);
+      expect(validated.result).toBe("passed");
     });
 
     it("accepts valid update input with waive reason", () => {
       const input: UpdateAssertionInput = {
-        status: "waived",
+        result: "waived",
         waivedReason: "Not applicable",
       };
-      const result = validateUpdateAssertionInput(input);
-      expect(result.waivedReason).toBe("Not applicable");
+      const validated = validateUpdateAssertionInput(input);
+      expect(validated.waivedReason).toBe("Not applicable");
     });
 
     it("rejects waived without waivedReason", () => {
       const input: UpdateAssertionInput = {
-        status: "waived",
+        result: "waived",
       };
       expect(() => validateUpdateAssertionInput(input)).toThrow(ZodError);
     });

@@ -170,10 +170,10 @@ describe("checkpoint save semantics", () => {
     const checkpoint = JSON.parse(saveResult.stdout).checkpoint;
 
     // Verify all features captured
-    expect(checkpoint.featureStates).toBeDefined();
-    expect(checkpoint.featureStates.f1).toBe("in_progress");
-    expect(checkpoint.featureStates.f2).toBe("completed");
-    expect(checkpoint.featureStates.f3).toBe("pending");
+    expect(checkpoint.featureStatuses).toBeDefined();
+    expect(checkpoint.featureStatuses.f1).toBe("in_progress");
+    expect(checkpoint.featureStatuses.f2).toBe("completed");
+    expect(checkpoint.featureStatuses.f3).toBe("pending");
   }, SLOW_CLI_TIMEOUT_MS);
 
   it("checkpoint captures all assertion states at save time", async () => {
@@ -209,9 +209,9 @@ describe("checkpoint save semantics", () => {
     const checkpoint = JSON.parse(saveResult.stdout).checkpoint;
 
     // Verify assertion states captured
-    expect(checkpoint.assertionStates[assertionList[0].id]).toBe("passed");
+    expect(checkpoint.assertionResults[assertionList[0].id]).toBe("passed");
     if (assertionList.length >= 2) {
-      expect(checkpoint.assertionStates[assertionList[1].id]).toBe("failed");
+      expect(checkpoint.assertionResults[assertionList[1].id]).toBe("failed");
     }
   }, SLOW_CLI_TIMEOUT_MS);
 
@@ -225,7 +225,7 @@ describe("checkpoint save semantics", () => {
       tmpDir,
     );
     const checkpoint1 = JSON.parse(save1.stdout).checkpoint;
-    expect(checkpoint1.milestoneId).toBe("m1");
+    expect(checkpoint1.currentMilestoneId).toBe("m1");
 
     // Complete m1
     await run(
@@ -265,7 +265,7 @@ describe("checkpoint save semantics", () => {
     // Checkpoint captures the mission state at this point
     // The milestoneId reflects the active milestone based on mission status
     expect(checkpoint2.missionId).toBe(missionId);
-    expect(checkpoint2.featureStates).toBeDefined();
+    expect(checkpoint2.featureStatuses).toBeDefined();
   }, SLOW_CLI_TIMEOUT_MS);
 
   it("multiple checkpoints are stored independently", async () => {
@@ -328,7 +328,7 @@ describe("checkpoint load semantics", () => {
     );
     const loaded = JSON.parse(load.stdout).checkpoint;
     expect(loaded.id).toBe(checkpoint2.id);
-    expect(loaded.featureStates.f1).toBe("in_progress");
+    expect(loaded.featureStatuses.f1).toBe("in_progress");
   }, SLOW_CLI_TIMEOUT_MS);
 
   it("load restores checkpoint state", async () => {
@@ -383,7 +383,7 @@ describe("checkpoint load semantics", () => {
 
     // Verify checkpoint captured the in_progress state at save time
     // (not the completed state set after saving)
-    expect(loaded.featureStates.f1).toBe("in_progress");
+    expect(loaded.featureStatuses.f1).toBe("in_progress");
     expect(loaded.id).toBe(checkpoint.id);
   }, SLOW_CLI_TIMEOUT_MS);
 });
@@ -518,9 +518,9 @@ describe("checkpoint resume workflow", () => {
     const loaded = JSON.parse(load.stdout);
 
     // Verify we can understand the state at that point
-    expect(loaded.checkpoint.featureStates.f1).toBe("completed");
-    expect(loaded.checkpoint.featureStates.f2).toBe("in_progress");
-    expect(Object.values(loaded.checkpoint.assertionStates).filter(s => s === "passed").length).toBeGreaterThanOrEqual(2);
+    expect(loaded.checkpoint.featureStatuses.f1).toBe("completed");
+    expect(loaded.checkpoint.featureStatuses.f2).toBe("in_progress");
+    expect(Object.values(loaded.checkpoint.assertionResults).filter(s => s === "passed").length).toBeGreaterThanOrEqual(2);
   }, SLOW_CLI_TIMEOUT_MS);
 
   it("checkpoint captures feature reports for resume context", async () => {
@@ -585,7 +585,7 @@ describe("checkpoint resume workflow", () => {
     const checkpoint = JSON.parse(save.stdout).checkpoint;
 
     // Verify feature state was captured in checkpoint
-    expect(checkpoint.featureStates.f1).toBe("completed");
+    expect(checkpoint.featureStatuses.f1).toBe("completed");
   }, SLOW_CLI_TIMEOUT_MS);
 });
 
@@ -624,7 +624,7 @@ describe("checkpoint with mission lifecycle", () => {
       tmpDir,
     );
     const checkpointBefore = JSON.parse(beforeSeal.stdout).checkpoint;
-    expect(checkpointBefore.milestoneId).toBe("m1");
+    expect(checkpointBefore.currentMilestoneId).toBe("m1");
 
     // Seal m1
     await run(["milestone", "seal", "m1", "--mission", missionId], tmpDir);

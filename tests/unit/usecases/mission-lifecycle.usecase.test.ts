@@ -108,7 +108,7 @@ describe("mission lifecycle usecases", () => {
       const assertions = await assertionStore.list(result.mission.id);
       expect(assertions).toHaveLength(2);
       expect(assertions[0]?.featureId).toBe("f1");
-      expect(assertions[0]?.status).toBe("pending");
+      expect(assertions[0]?.result).toBe("pending");
     });
 
     it("handles features without fulfills", async () => {

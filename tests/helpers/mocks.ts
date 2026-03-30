@@ -306,7 +306,7 @@ export function mockAssertionStore(
         missionId,
         milestoneId: input.milestoneId,
         featureId: input.featureId,
-        status: "pending",
+        result: "pending",
         description: input.description,
         createdAt: now,
         updatedAt: now,
@@ -326,7 +326,7 @@ export function mockAssertionStore(
         featureId: existing.featureId,
         description: existing.description,
         createdAt: existing.createdAt,
-        status: input.status,
+        result: input.result,
         updatedAt: now,
         evidence: input.evidence,
         waivedReason: input.waivedReason,
@@ -369,10 +369,10 @@ export function mockCheckpointStore(
       const checkpoint: Checkpoint = {
         id,
         missionId: data.missionId,
-        milestoneId: data.milestoneId,
+        currentMilestoneId: data.currentMilestoneId,
         timestamp: data.timestamp,
-        featureStates: data.featureStates,
-        assertionStates: data.assertionStates,
+        featureStatuses: data.featureStatuses,
+        assertionResults: data.assertionResults,
       };
       checkpoints.set(id, checkpoint);
       return checkpoint;

@@ -4,7 +4,7 @@
 import { describe, expect, it, beforeEach } from "bun:test";
 import { listMilestones, getMilestoneStatus, sealMilestone } from "../../../src/usecases/milestone-lifecycle.usecase.js";
 import { MaestroError } from "../../../src/domain/errors.js";
-import type { Mission, Milestone, Feature, Assertion, MissionStatus, MilestoneStatus, FeatureStatus, AssertionStatus } from "../../../src/domain/mission-types.js";
+import type { Mission, Milestone, Feature, Assertion, MissionStatus, MilestoneStatus, FeatureStatus, AssertionResult } from "../../../src/domain/mission-types.js";
 import type { MissionStorePort } from "../../../src/ports/mission-store.port.js";
 import type { FeatureStorePort } from "../../../src/ports/feature-store.port.js";
 import type { AssertionStorePort } from "../../../src/ports/assertion-store.port.js";
@@ -42,13 +42,13 @@ function createTestFeature(missionId: string, milestoneId: string, status: Featu
   };
 }
 
-function createTestAssertion(missionId: string, milestoneId: string, featureId: string, status: AssertionStatus = "pending", id = "a1"): Assertion {
+function createTestAssertion(missionId: string, milestoneId: string, featureId: string, result: AssertionResult = "pending", id = "a1"): Assertion {
   return {
     id,
     missionId,
     milestoneId,
     featureId,
-    status,
+    result,
     description: `Assertion ${id}`,
     createdAt: "2024-01-01T00:00:00Z",
     updatedAt: "2024-01-01T00:00:00Z",
@@ -92,7 +92,7 @@ function createMockAssertionStore(assertions: Assertion[] = []): AssertionStoreP
   return {
     get: async (missionId, assertionId) => assertions.find(a => a.missionId === missionId && a.id === assertionId),
     exists: async (missionId, assertionId) => assertions.some(a => a.missionId === missionId && a.id === assertionId),
-    create: async (missionId, input, id) => ({ ...input, id, status: "pending", createdAt: "2024-01-01T00:00:00Z", updatedAt: "2024-01-01T00:00:00Z" } as Assertion),
+    create: async (missionId, input, id) => ({ ...input, id, result: "pending", createdAt: "2024-01-01T00:00:00Z", updatedAt: "2024-01-01T00:00:00Z" } as Assertion),
     update: async () => undefined,
     list: async (missionId) => assertions.filter(a => a.missionId === missionId),
     listByMilestone: async (missionId, milestoneId) => assertions.filter(a => a.missionId === missionId && a.milestoneId === milestoneId),
