@@ -34,6 +34,17 @@ export function formatRelativeTime(timestampMs: number, baseMs: number): string 
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
+/** Format a timestamp as human-readable relative age (e.g., "<1m ago", "5m ago", "2h ago"). */
+export function formatAge(timestampMs: number, nowMs: number): string {
+  const delta = Math.max(0, nowMs - timestampMs);
+  const totalSeconds = Math.floor(delta / 1000);
+  if (totalSeconds < 60) return "<1m ago";
+  const minutes = Math.floor(totalSeconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ago`;
+}
+
 /** Truncate text to maxLen, appending ellipsis if truncated. */
 export function truncate(text: string, maxLen: number): string {
   if (maxLen <= 0) return "";

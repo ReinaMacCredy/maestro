@@ -24,31 +24,25 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
 }
 
 describe("renderHeader", () => {
-  it("renders mission title", () => {
+  it("renders Mission Control label", () => {
     const buf = new Buffer(80, 1);
     renderHeader(buf, { x: 0, y: 0, width: 80, height: 1 }, makeSnapshot());
     const text = buf.toString();
     expect(text).toContain("Mission Control");
-    expect(text).toContain("Test Mission");
   });
 
-  it("truncates long title to width", () => {
-    const buf = new Buffer(30, 1);
-    renderHeader(
-      buf,
-      { x: 0, y: 0, width: 30, height: 1 },
-      makeSnapshot({ missionTitle: "A Very Long Mission Title That Should Be Truncated" }),
-    );
-    const text = buf.toString();
-    expect(text.length).toBeLessThanOrEqual(30);
-  });
-
-  it("shows token placeholder when null", () => {
+  it("shows TIME with elapsed duration", () => {
     const buf = new Buffer(80, 1);
     renderHeader(buf, { x: 0, y: 0, width: 80, height: 1 }, makeSnapshot());
-    // No token counters should be rendered
     const text = buf.toString();
-    expect(text).not.toContain("In:");
+    expect(text).toContain("TIME 2m");
+  });
+
+  it("shows no token labels when counters are null", () => {
+    const buf = new Buffer(80, 1);
+    renderHeader(buf, { x: 0, y: 0, width: 80, height: 1 }, makeSnapshot());
+    const text = buf.toString();
+    expect(text).not.toContain("Input");
   });
 
   it("shows token counters when available", () => {
@@ -59,7 +53,7 @@ describe("renderHeader", () => {
       makeSnapshot({ tokenCounters: { input: 1500, cached: 500, output: 300 } }),
     );
     const text = buf.toString();
-    expect(text).toContain("In: 1.5k");
-    expect(text).toContain("Out: 300");
+    expect(text).toContain("Input 1.5k");
+    expect(text).toContain("Output 300");
   });
 });

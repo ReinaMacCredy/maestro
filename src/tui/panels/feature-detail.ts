@@ -1,11 +1,14 @@
 /**
- * Feature detail panel (left pane) -- metadata, preconditions, verification steps.
+ * Feature detail panel (left pane).
+ * "Active Feature {name}" header, then skill/milestone, sections with bullet lists.
  */
 import type { Buffer, Cell } from "../terminal/buffer.js";
 import type { Rect } from "../terminal/layout.js";
 import type { MissionControlSnapshot } from "../types.js";
-import { FEATURE_STATUS_COLOR, PALETTE } from "../theme.js";
+import { PALETTE } from "../theme.js";
 import { truncate } from "../format.js";
+
+const BULLET = "\u00b7"; // ·
 
 export function renderFeatureDetail(buf: Buffer, rect: Rect, snap: MissionControlSnapshot): void {
   if (!snap.activeFeature) {
@@ -24,36 +27,72 @@ export function renderFeatureDetail(buf: Buffer, rect: Rect, snap: MissionContro
     row++;
   };
 
-  writeLine(`Skill: ${f.workerType}`, { fg: PALETTE.cyan });
-  writeLine(`Milestone: ${f.milestoneId} - ${f.milestoneTitle}`, { fg: PALETTE.gray });
-  writeLine(`Status: ${f.status}`, { fg: FEATURE_STATUS_COLOR[f.status] });
-  row++;
+  const writeBullet = (text: string): void => {
+    if (row >= maxRow) return;
+    buf.writeText(row, rect.x + 1, `${BULLET} `, { fg: PALETTE.dimGray });
+    buf.writeText(row, rect.x + 3, truncate(text, w - 2), { fg: PALETTE.gray });
+    row++;
+  };
 
-  if (f.description && row < maxRow - 4) {
-    writeLine("Description", { fg: PALETTE.brightWhite, bold: true });
-    const descLines = f.description.split("\n").slice(0, 3);
+  const writeSection = (title: string): void => {
+    if (row >= maxRow) return;
+    row++; // blank line before section
+    if (row >= maxRow) return;
+    writeLine(title, { fg: PALETTE.brightWhite, bold: true });
+  };
+
+  // Header: "Active Feature  {name}"
+  buf.writeText(row, rect.x + 1, "Active Feature", { fg: PALETTE.brightWhite, bold: true });
+  buf.writeText(row, rect.x + 16, truncate(f.title, w - 16), { fg: PALETTE.gray });
+  row += 2;
+
+  // Skill + milestone
+  writeLine(`skill ${f.workerType}`, { fg: PALETTE.gray });
+  writeLine(`milestone ${f.milestoneId}`, { fg: PALETTE.gray });
+
+  // Preconditions
+  if (f.preconditions && row < maxRow - 4) {
+    writeSection("Preconditions");
+    const lines = f.preconditions.split("\n").filter((l) => l.trim());
+    for (const line of lines.slice(0, 4)) {
+      writeBullet(line.trim());
+    }
+    if (lines.length > 4) {
+      writeBullet(`+${lines.length - 4} more`);
+    }
+  }
+
+  // Expected Behavior
+  if (f.expectedBehavior && row < maxRow - 4) {
+    writeSection("Expected Behavior");
+    const lines = f.expectedBehavior.split("\n").filter((l) => l.trim());
+    const maxShow = Math.min(lines.length, Math.max(2, maxRow - row - 6));
+    for (const line of lines.slice(0, maxShow)) {
+      writeBullet(line.trim());
+    }
+    if (lines.length > maxShow) {
+      writeBullet(`+${lines.length - maxShow} more`);
+    }
+  }
+
+  // Verification Steps
+  if (f.verificationSteps.length > 0 && row < maxRow - 3) {
+    writeSection("Verification Steps");
+    const maxShow = Math.min(f.verificationSteps.length, Math.max(2, maxRow - row - 3));
+    for (let i = 0; i < maxShow; i++) {
+      writeBullet(f.verificationSteps[i]!);
+    }
+    if (f.verificationSteps.length > maxShow) {
+      writeBullet(`+${f.verificationSteps.length - maxShow} more`);
+    }
+  }
+
+  // Description (at bottom, if space remains)
+  if (f.description && row < maxRow - 2) {
+    writeSection("Description");
+    const descLines = f.description.split("\n").slice(0, maxRow - row - 1);
     for (const line of descLines) {
       writeLine(`  ${line}`, { fg: PALETTE.gray });
-    }
-    row++;
-  }
-
-  if (f.preconditions && row < maxRow - 3) {
-    writeLine("Preconditions", { fg: PALETTE.brightWhite, bold: true });
-    writeLine(`  ${truncate(f.preconditions, w - 2)}`, { fg: PALETTE.gray });
-    row++;
-  }
-
-  if (f.expectedBehavior && row < maxRow - 3) {
-    writeLine("Expected Behavior", { fg: PALETTE.brightWhite, bold: true });
-    writeLine(`  ${truncate(f.expectedBehavior, w - 2)}`, { fg: PALETTE.gray });
-    row++;
-  }
-
-  if (f.verificationSteps.length > 0 && row < maxRow - 2) {
-    writeLine("Verification Steps", { fg: PALETTE.brightWhite, bold: true });
-    for (let i = 0; i < Math.min(f.verificationSteps.length, maxRow - row - 1); i++) {
-      writeLine(`  ${i + 1}. ${truncate(f.verificationSteps[i]!, w - 6)}`, { fg: PALETTE.gray });
     }
   }
 }

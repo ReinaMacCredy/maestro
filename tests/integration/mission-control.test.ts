@@ -125,7 +125,7 @@ describe("mission-control CLI", () => {
     expect(exitCode).toBe(0);
     expect(stdout.length).toBeGreaterThan(0);
     expect(stdout).toContain("Mission Control");
-    expect(stdout).toContain("MC Test Mission");
+    expect(stdout).toContain("Features");
   }, SLOW_CLI_TIMEOUT_MS);
 
   it("--json auto-selects mission when --mission omitted", async () => {

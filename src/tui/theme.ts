@@ -25,6 +25,10 @@ export const PALETTE = {
   // Accents
   magenta: 200,
   orange: 208,
+  // Background
+  panelBg: 235,
+  selectedBg: 237,
+  headerBg: 234,
   // Default (terminal default)
   default: -1,
 } as const;
@@ -35,7 +39,7 @@ export const MISSION_STATUS_COLOR: Record<MissionStatus, number> = {
   draft: PALETTE.gray,
   approved: PALETTE.blue,
   rejected: PALETTE.red,
-  executing: PALETTE.green,
+  executing: PALETTE.orange,
   paused: PALETTE.amber,
   validating: PALETTE.yellow,
   completed: PALETTE.brightGreen,
@@ -45,7 +49,7 @@ export const MISSION_STATUS_COLOR: Record<MissionStatus, number> = {
 export const FEATURE_STATUS_COLOR: Record<FeatureStatus, number> = {
   pending: PALETTE.dimGray,
   assigned: PALETTE.yellow,
-  "in-progress": PALETTE.yellow,
+  "in-progress": PALETTE.green,
   review: PALETTE.cyan,
   done: PALETTE.green,
   blocked: PALETTE.red,
@@ -69,8 +73,8 @@ export const ASSERTION_RESULT_COLOR: Record<AssertionResult, number> = {
 
 // ── Status Dots ─────────────────────────────────────
 
-export const DOT_FILLED = "*";
-export const DOT_EMPTY = "o";
+export const DOT_FILLED = "\u25cf";  // ●
+export const DOT_EMPTY = "\u25cb";   // ○
 
 /** Get the dot character for a feature status. */
 export function featureDot(status: FeatureStatus): string {
@@ -87,7 +91,18 @@ export function featureDot(status: FeatureStatus): string {
   }
 }
 
-// ── Labels ──────────────────────────────────────────
+// ── Status Labels ───────────────────────────────────
+
+export const MISSION_STATUS_LABEL: Record<MissionStatus, string> = {
+  draft: "DRAFT",
+  approved: "APPROVED",
+  rejected: "REJECTED",
+  executing: "RUNNING",
+  paused: "PAUSED",
+  validating: "VALIDATING",
+  completed: "COMPLETED",
+  failed: "FAILED",
+};
 
 export const FEATURE_STATUS_LABEL: Record<FeatureStatus, string> = {
   pending: "pending",

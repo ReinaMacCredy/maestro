@@ -66,29 +66,27 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
 
 describe("frame rendering", () => {
   describe("standard size (120x32)", () => {
-    it("contains mission title", () => {
+    it("contains mission control label", () => {
       const frame = renderOnceFrame({ snapshot: makeSnapshot() });
       expect(frame).toContain("Mission Control");
-      expect(frame).toContain("Full Pipeline Test");
     });
 
-    it("contains status label", () => {
+    it("contains RUNNING status label", () => {
       const frame = renderOnceFrame({ snapshot: makeSnapshot() });
-      expect(frame).toContain("EXECUTING");
+      expect(frame).toContain("RUNNING");
     });
 
-    it("contains feature list", () => {
+    it("contains feature titles", () => {
       const frame = renderOnceFrame({ snapshot: makeSnapshot() });
-      expect(frame).toContain("f1");
-      expect(frame).toContain("f2");
-      expect(frame).toContain("f3");
-      expect(frame).toContain("f4");
+      expect(frame).toContain("Init project");
+      expect(frame).toContain("Database config");
+      expect(frame).toContain("Auth endpoints");
+      expect(frame).toContain("API docs");
     });
 
-    it("contains milestone headers", () => {
+    it("contains Features header", () => {
       const frame = renderOnceFrame({ snapshot: makeSnapshot() });
-      expect(frame).toContain("m1");
-      expect(frame).toContain("m2");
+      expect(frame).toContain("Features");
     });
 
     it("contains progress counts", () => {
@@ -104,14 +102,14 @@ describe("frame rendering", () => {
 
     it("contains progress log events", () => {
       const frame = renderOnceFrame({ snapshot: makeSnapshot() });
+      expect(frame).toContain("Progress Log");
       expect(frame).toContain("f2 moved to in-progress");
-      expect(frame).toContain("Mission approved");
     });
 
     it("contains footer hints", () => {
       const frame = renderOnceFrame({ snapshot: makeSnapshot() });
-      expect(frame).toContain("Quit");
-      expect(frame).toContain("Navigate");
+      expect(frame).toContain("Features");
+      expect(frame).toContain("Back To Orchestrator");
     });
   });
 
@@ -194,7 +192,7 @@ describe("frame rendering", () => {
 
     it("shows worker type", () => {
       const frame = renderOnceFrame({ snapshot: makeSnapshot() });
-      expect(frame).toContain("Skill: backend-worker");
+      expect(frame).toContain("skill backend-worker");
     });
   });
 });

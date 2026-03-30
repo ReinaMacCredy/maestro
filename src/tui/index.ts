@@ -163,13 +163,16 @@ function renderFrame(buf: Buffer, state: AppState): void {
   const w = buf.width;
   const h = buf.height;
 
+  // Worker panel height: ~30% of screen, minimum 5 rows
+  const workerHeight = Math.max(5, Math.floor(h * 0.3));
+
   // Layout zones
   const zones = splitV({ x: 0, y: 0, width: w, height: h }, [
-    1,  // header
-    1,  // status bar
-    -1, // body (flex)
-    3,  // worker panel
-    1,  // footer
+    1,            // header
+    1,            // status bar
+    -1,           // body (flex)
+    workerHeight, // worker panel
+    1,            // footer
   ]);
 
   const headerRect = zones[0]!;
@@ -178,8 +181,8 @@ function renderFrame(buf: Buffer, state: AppState): void {
   const workerRect = zones[3]!;
   const footerRect = zones[4]!;
 
-  // Body: left detail (40%) + right pane (60%)
-  const [leftRect, rightRect] = splitH(bodyRect, [2, 3]);
+  // Body: left detail (55%) + right pane (45%)
+  const [leftRect, rightRect] = splitH(bodyRect, [11, 9]);
 
   // Right pane: feature list (top half) + progress log (bottom half)
   const [featureListRect, progressRect] = splitV(rightRect!, [

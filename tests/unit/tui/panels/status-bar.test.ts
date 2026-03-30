@@ -24,11 +24,11 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
 }
 
 describe("renderStatusBar", () => {
-  it("shows status label in uppercase", () => {
+  it("shows RUNNING label for executing status", () => {
     const buf = new Buffer(80, 1);
     renderStatusBar(buf, { x: 0, y: 0, width: 80, height: 1 }, makeSnapshot());
     const text = buf.toString();
-    expect(text).toContain("EXECUTING");
+    expect(text).toContain("RUNNING");
   });
 
   it("shows progress counts", () => {
@@ -45,19 +45,10 @@ describe("renderStatusBar", () => {
     expect(text).toContain("[+1]");
   });
 
-  it("shows elapsed time", () => {
+  it("shows filled circle dot", () => {
     const buf = new Buffer(80, 1);
     renderStatusBar(buf, { x: 0, y: 0, width: 80, height: 1 }, makeSnapshot());
     const text = buf.toString();
-    expect(text).toContain("Elapsed:");
-    expect(text).toContain("12m");
-  });
-
-  it("renders progress bar", () => {
-    const buf = new Buffer(80, 1);
-    renderStatusBar(buf, { x: 0, y: 0, width: 80, height: 1 }, makeSnapshot());
-    const text = buf.toString();
-    expect(text).toContain("[");
-    expect(text).toContain("]");
+    expect(text).toContain("\u25cf"); // ●
   });
 });

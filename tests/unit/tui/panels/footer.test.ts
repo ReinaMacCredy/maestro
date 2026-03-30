@@ -24,42 +24,44 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
 }
 
 describe("renderFooter", () => {
-  it("shows quit hint", () => {
-    const buf = new Buffer(80, 1);
-    renderFooter(buf, { x: 0, y: 0, width: 80, height: 1 }, makeSnapshot());
+  it("shows Features hint", () => {
+    const buf = new Buffer(120, 1);
+    renderFooter(buf, { x: 0, y: 0, width: 120, height: 1 }, makeSnapshot());
     const text = buf.toString();
-    expect(text).toContain("Quit");
+    expect(text).toContain("F");
+    expect(text).toContain("Features");
   });
 
-  it("shows navigate hint", () => {
-    const buf = new Buffer(80, 1);
-    renderFooter(buf, { x: 0, y: 0, width: 80, height: 1 }, makeSnapshot());
+  it("shows Back To Orchestrator hint", () => {
+    const buf = new Buffer(120, 1);
+    renderFooter(buf, { x: 0, y: 0, width: 120, height: 1 }, makeSnapshot());
     const text = buf.toString();
-    expect(text).toContain("Navigate");
+    expect(text).toContain("Ctrl+T");
+    expect(text).toContain("Back To Orchestrator");
   });
 
   it("shows Pause when canPause is true", () => {
-    const buf = new Buffer(80, 1);
-    renderFooter(buf, { x: 0, y: 0, width: 80, height: 1 }, makeSnapshot({ canPause: true }));
+    const buf = new Buffer(120, 1);
+    renderFooter(buf, { x: 0, y: 0, width: 120, height: 1 }, makeSnapshot({ canPause: true }));
     const text = buf.toString();
     expect(text).toContain("Pause");
   });
 
   it("shows Resume when canResume is true", () => {
-    const buf = new Buffer(80, 1);
+    const buf = new Buffer(120, 1);
     renderFooter(
       buf,
-      { x: 0, y: 0, width: 80, height: 1 },
+      { x: 0, y: 0, width: 120, height: 1 },
       makeSnapshot({ canPause: false, canResume: true }),
     );
     const text = buf.toString();
     expect(text).toContain("Resume");
   });
 
-  it("shows Dir hint", () => {
-    const buf = new Buffer(80, 1);
-    renderFooter(buf, { x: 0, y: 0, width: 80, height: 1 }, makeSnapshot());
+  it("shows Mission Dir hint", () => {
+    const buf = new Buffer(120, 1);
+    renderFooter(buf, { x: 0, y: 0, width: 120, height: 1 }, makeSnapshot());
     const text = buf.toString();
-    expect(text).toContain("Dir");
+    expect(text).toContain("Mission Dir");
   });
 });

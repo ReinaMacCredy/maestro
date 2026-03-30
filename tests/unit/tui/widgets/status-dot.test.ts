@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { Buffer } from "../../../../src/tui/terminal/buffer.js";
 import { renderFeatureDot, renderMissionDot } from "../../../../src/tui/widgets/status-dot.js";
-import { FEATURE_STATUS_COLOR, MISSION_STATUS_COLOR } from "../../../../src/tui/theme.js";
+import { FEATURE_STATUS_COLOR, MISSION_STATUS_COLOR, DOT_FILLED, DOT_EMPTY } from "../../../../src/tui/theme.js";
 import type { FeatureStatus, MissionStatus } from "../../../../src/domain/mission-types.js";
 
 describe("renderFeatureDot", () => {
@@ -24,16 +24,16 @@ describe("renderFeatureDot", () => {
     expect(buf.getCell(0, 0)!.char).toBe("x");
   });
 
-  it("uses 'o' dot for pending status", () => {
+  it("uses empty dot for pending status", () => {
     const buf = new Buffer(3, 1);
     renderFeatureDot(buf, 0, 0, "pending");
-    expect(buf.getCell(0, 0)!.char).toBe("o");
+    expect(buf.getCell(0, 0)!.char).toBe(DOT_EMPTY);
   });
 
-  it("uses '*' dot for done status", () => {
+  it("uses filled dot for done status", () => {
     const buf = new Buffer(3, 1);
     renderFeatureDot(buf, 0, 0, "done");
-    expect(buf.getCell(0, 0)!.char).toBe("*");
+    expect(buf.getCell(0, 0)!.char).toBe(DOT_FILLED);
   });
 });
 
@@ -47,7 +47,7 @@ describe("renderMissionDot", () => {
       const cell = buf.getCell(0, 0);
       expect(cell).toBeDefined();
       expect(cell!.fg).toBe(MISSION_STATUS_COLOR[status]);
-      expect(cell!.char).toBe("*");
+      expect(cell!.char).toBe(DOT_FILLED);
     });
   }
 });
