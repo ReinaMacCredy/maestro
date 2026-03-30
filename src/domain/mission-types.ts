@@ -217,6 +217,7 @@ export interface UpdateAssertionInput {
 export interface UpdateFeatureInput {
   readonly status?: FeatureStatus;
   readonly report?: WorkerReport;
+  readonly retryReason?: string;
 }
 
 /** Input for updating a mission */

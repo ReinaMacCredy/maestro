@@ -12,7 +12,7 @@ import type {
 } from "../domain/mission-types.js";
 import { MaestroError } from "../domain/errors.js";
 import { assertFeatureTransition } from "../domain/mission-state.js";
-import { writeJson, ensureDir } from "../lib/fs.js";
+import { writeJson, readJson, ensureDir } from "../lib/fs.js";
 import { join } from "node:path";
 import { MAESTRO_DIR } from "../domain/defaults.js";
 
@@ -119,6 +119,21 @@ export async function updateFeature(
   // If a new report is provided, persist it to workers/{featureId}/report.json
   if (input.report !== undefined) {
     reportPersisted = await persistWorkerReport(baseDir, missionId, featureId, input.report);
+  }
+
+  // Persist retry reason if provided on retry (status -> pending)
+  if (input.retryReason && input.status === "pending") {
+    const retryEntry = {
+      reason: input.retryReason,
+      timestamp: new Date().toISOString(),
+      previousStatus: existing.status,
+    };
+    const workersDir = join(baseDir, MAESTRO_DIR, "missions", missionId, "workers", featureId);
+    await ensureDir(workersDir);
+    const retryLogPath = join(workersDir, "retry-log.json");
+    const existingLog = await readJson<readonly unknown[]>(retryLogPath);
+    const log = Array.isArray(existingLog) ? [...existingLog, retryEntry] : [retryEntry];
+    await writeJson(retryLogPath, log);
   }
 
   // Update the feature
