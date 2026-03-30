@@ -38,11 +38,11 @@ export function renderStatusBar(buf: Buffer, rect: Rect, snap: MissionControlSna
       : 0;
     const filled = Math.round(Math.min(1, pct) * barWidth);
 
-    // Green filled portion (full blocks)
+    // Filled portion: colored background with spaces (no gaps)
     for (let i = 0; i < filled; i++) {
-      buf.set(y, barStart + i, BLOCK.full, { fg: PALETTE.green });
+      buf.set(y, barStart + i, " ", { bg: statusColor });
     }
-    // Dark unfilled portion (dark bg with spaces)
+    // Unfilled portion: dark background
     for (let i = filled; i < barWidth; i++) {
       buf.set(y, barStart + i, " ", { bg: 238 });
     }
