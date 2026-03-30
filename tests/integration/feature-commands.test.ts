@@ -212,6 +212,24 @@ describe("feature CLI commands", () => {
     }, SLOW_CLI_TIMEOUT_MS);
   });
 
+  describe("help text", () => {
+    it("feature update --help lists the actual supported statuses", async () => {
+      const { stdout, exitCode } = await run(["feature", "update", "--help"], tmpDir);
+
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("New status");
+      expect(stdout).toContain("pending");
+      expect(stdout).toContain("assigned");
+      expect(stdout).toContain("in-progress");
+      expect(stdout).toContain("review");
+      expect(stdout).toContain("done");
+      expect(stdout).toContain("blocked");
+      expect(stdout).not.toContain("in_progress");
+      expect(stdout).not.toContain("in_review");
+      expect(stdout).not.toContain("completed");
+    }, SLOW_CLI_TIMEOUT_MS);
+  });
+
   describe("feature update", () => {
     it("feature update --status transitions feature status", async () => {
       const missionId = await createMission(tmpDir);

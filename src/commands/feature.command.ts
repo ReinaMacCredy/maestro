@@ -30,7 +30,7 @@ export function registerFeatureCommand(program: Command): void {
     .description("List features for a mission")
     .requiredOption("--mission <id>", "Mission ID (required)")
     .option("--milestone <id>", "Filter by milestone ID")
-    .option("--status <status>", "Filter by status (pending, in_progress, in_review, completed, blocked)")
+    .option("--status <status>", "Filter by status (pending, assigned, in-progress, review, done, blocked)")
     .option("--json", "Output as JSON")
     .action(async (opts) => {
       const services = getServices();
@@ -61,7 +61,7 @@ export function registerFeatureCommand(program: Command): void {
     .command("update <featureId>")
     .description("Update feature status and/or attach a worker report")
     .requiredOption("--mission <id>", "Mission ID (required)")
-    .option("--status <status>", "New status (pending, in_progress, in_review, completed, blocked)")
+    .option("--status <status>", "New status (pending, assigned, in-progress, review, done, blocked)")
     .option("--report <value>", "Worker report as inline JSON or @file.json")
     .option("--retry-reason <reason>", "Reason for retrying (when status is pending)")
     .option("--json", "Output as JSON")

@@ -220,6 +220,75 @@ describe("mission CLI commands", () => {
     expect(stdout).toContain("2 mission(s)");
   }, SLOW_CLI_TIMEOUT_MS);
 
+  it("mission list defaults to the newest 10 missions in text mode when there are more", async () => {
+    const plan = createSamplePlan();
+    const planPath = join(tmpDir, "plan.json");
+    await writeFile(planPath, JSON.stringify(plan, null, 2));
+
+    const missionIds: string[] = [];
+    for (let i = 0; i < 12; i++) {
+      const createResult = await run(
+        ["mission", "create", "--file", planPath, "--json"],
+        tmpDir,
+      );
+      missionIds.push(JSON.parse(createResult.stdout).mission.id);
+    }
+
+    const { stdout, exitCode } = await run(["mission", "list"], tmpDir);
+
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("10 newest mission(s) shown (total: 12)");
+    expect(stdout).toContain("Output truncated to the newest 10 missions.");
+    expect(stdout).toContain("maestro mission list --limit 12");
+
+    for (const id of missionIds.slice(-10)) {
+      expect(stdout).toContain(id);
+    }
+    expect(stdout).not.toContain(missionIds[0]!);
+    expect(stdout).not.toContain(missionIds[1]!);
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("mission list preserves an explicit text limit above the default truncation threshold", async () => {
+    const plan = createSamplePlan();
+    const planPath = join(tmpDir, "plan.json");
+    await writeFile(planPath, JSON.stringify(plan, null, 2));
+
+    const missionIds: string[] = [];
+    for (let i = 0; i < 12; i++) {
+      const createResult = await run(
+        ["mission", "create", "--file", planPath, "--json"],
+        tmpDir,
+      );
+      missionIds.push(JSON.parse(createResult.stdout).mission.id);
+    }
+
+    const { stdout, exitCode } = await run(["mission", "list", "--limit", "12"], tmpDir);
+
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("12 mission(s)");
+    expect(stdout).not.toContain("Output truncated");
+
+    for (const id of missionIds) {
+      expect(stdout).toContain(id);
+    }
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("mission list --json preserves the full mission list when no limit is provided", async () => {
+    const plan = createSamplePlan();
+    const planPath = join(tmpDir, "plan.json");
+    await writeFile(planPath, JSON.stringify(plan, null, 2));
+
+    for (let i = 0; i < 12; i++) {
+      await run(["mission", "create", "--file", planPath], tmpDir);
+    }
+
+    const { stdout, exitCode } = await run(["mission", "list", "--json"], tmpDir);
+
+    expect(exitCode).toBe(0);
+    const missions = JSON.parse(stdout);
+    expect(missions).toHaveLength(12);
+  }, SLOW_CLI_TIMEOUT_MS);
+
   it("mission show <id> displays mission details", async () => {
     const plan = createSamplePlan();
     const planPath = join(tmpDir, "plan.json");
@@ -443,6 +512,21 @@ describe("mission CLI commands", () => {
     const showResult = await run(["mission", "show", missionId, "--json"], tmpDir);
     const report = JSON.parse(showResult.stdout);
     expect(report.mission.title).toBe("Updated Title");
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("mission update --help lists the actual supported statuses", async () => {
+    const { stdout, exitCode } = await run(["mission", "update", "--help"], tmpDir);
+
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("New status");
+    expect(stdout).toContain("draft");
+    expect(stdout).toContain("approved");
+    expect(stdout).toContain("rejected");
+    expect(stdout).toContain("executing");
+    expect(stdout).toContain("paused");
+    expect(stdout).toContain("validating");
+    expect(stdout).toContain("completed");
+    expect(stdout).toContain("failed");
   }, SLOW_CLI_TIMEOUT_MS);
 
   it("JSON output works from different flag positions", async () => {

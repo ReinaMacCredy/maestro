@@ -19,6 +19,14 @@ import { MaestroError } from "../domain/errors.js";
 import { readJson } from "../lib/fs.js";
 import type { Mission, UpdateMissionInput, MissionStatus } from "../domain/mission-types.js";
 
+const DEFAULT_TEXT_MISSION_LIST_LIMIT = 10;
+
+interface MissionListTextView {
+  readonly visibleMissions: readonly Mission[];
+  readonly totalMissions: number;
+  readonly truncated: boolean;
+}
+
 export function registerMissionCommand(program: Command): void {
   const missionCmd = program
     .command("mission")
@@ -83,13 +91,19 @@ export function registerMissionCommand(program: Command): void {
     .action(async (opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
+      const hasExplicitLimit = opts.limit !== undefined;
 
       const missions = await listMissions(services.missionStore, {
         status: opts.status,
-        limit: opts.limit !== undefined ? Number.parseInt(String(opts.limit), 10) : undefined,
+        limit: hasExplicitLimit ? Number.parseInt(String(opts.limit), 10) : undefined,
       });
 
-      output(isJson, missions, formatMissionList);
+      if (isJson) {
+        output(true, missions, () => []);
+        return;
+      }
+
+      output(false, createMissionListTextView(missions, hasExplicitLimit), formatMissionList);
     });
 
   missionCmd
@@ -147,7 +161,7 @@ export function registerMissionCommand(program: Command): void {
   missionCmd
     .command("update <id>")
     .description("Update mission status or metadata")
-    .option("--status <status>", "New status (draft, approved, executing, validating, completed, failed)")
+    .option("--status <status>", "New status (draft, approved, rejected, executing, paused, validating, completed, failed)")
     .option("--title <title>", "New title")
     .option("--description <desc>", "New description")
     .option("--json", "Output as JSON")
@@ -180,20 +194,50 @@ export function registerMissionCommand(program: Command): void {
 }
 
 /** Format mission list for text output */
-function formatMissionList(missions: readonly Mission[]): string[] {
-  if (missions.length === 0) {
+function formatMissionList(view: MissionListTextView): string[] {
+  if (view.totalMissions === 0) {
     return ["No missions found"];
   }
 
-  const lines: string[] = [`${missions.length} mission(s)`, ""];
+  const lines: string[] = [
+    view.truncated
+      ? `${view.visibleMissions.length} newest mission(s) shown (total: ${view.totalMissions})`
+      : `${view.visibleMissions.length} mission(s)`,
+    "",
+  ];
 
-  for (const m of missions) {
+  for (const m of view.visibleMissions) {
     const status = m.status.padEnd(12);
     const title = m.title.slice(0, 40).padEnd(40);
     lines.push(`${m.id}  ${status}  ${title}`);
   }
 
+  if (view.truncated) {
+    lines.push("");
+    lines.push(`Output truncated to the newest ${DEFAULT_TEXT_MISSION_LIST_LIMIT} missions.`);
+    lines.push(`Use 'maestro mission list --limit ${view.totalMissions}' to see more.`);
+  }
+
   return lines;
+}
+
+function createMissionListTextView(
+  missions: readonly Mission[],
+  hasExplicitLimit: boolean,
+): MissionListTextView {
+  if (hasExplicitLimit || missions.length <= DEFAULT_TEXT_MISSION_LIST_LIMIT) {
+    return {
+      visibleMissions: missions,
+      totalMissions: missions.length,
+      truncated: false,
+    };
+  }
+
+  return {
+    visibleMissions: missions.slice(0, DEFAULT_TEXT_MISSION_LIST_LIMIT),
+    totalMissions: missions.length,
+    truncated: true,
+  };
 }
 
 /** Format mission report with milestone progress for text output */
