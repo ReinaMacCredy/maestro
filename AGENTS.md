@@ -42,4 +42,9 @@
 - Mock external dependencies, not internal modules
 - Test error paths in addition to happy paths
 
-<!-- Add agent context for this project here -->
+## Release and Commit Conventions
+- Bump the **minor** version for backward-compatible feature additions or meaningful capability expansions
+- Bump the **major** version for breaking CLI, API, storage, or workflow changes
+- Use the **patch** version for fixes, small internal improvements, and documentation-only changes
+- Keep commit messages in Conventional Commits format, e.g. `feat(mission): add retry reason support`
+- Prefer `feat` for user-visible functionality, `fix` for bug fixes, `refactor` for internal restructuring, and `test` for test-only changes
