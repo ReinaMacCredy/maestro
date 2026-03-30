@@ -22,11 +22,11 @@ export function sanitizePromptContent(content: string, label?: string): string {
     .replace(/^(<!--)/gm, "\\$1")
     .replace(/^(-->)/gm, "\\$1");
 
-  // Prevent user content from closing or nesting the wrapper tag.
-  const escapedTag = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // Encode markup characters so user content remains literal within the wrapper.
   sanitized = sanitized
-    .replace(new RegExp(`<${escapedTag}>`, "gi"), `&lt;${tag}&gt;`)
-    .replace(new RegExp(`</${escapedTag}>`, "gi"), `&lt;/${tag}&gt;`);
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 
   // Wrap in XML delimiters
   return `<${tag}>\n${sanitized}\n</${tag}>`;

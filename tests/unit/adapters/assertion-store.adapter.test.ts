@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from "bun:test";
-import { mkdtemp, rm, mkdir } from "node:fs/promises";
+import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { FsAssertionStoreAdapter } from "../../../src/adapters/assertion-store.adapter.js";
@@ -17,6 +17,9 @@ const makeCreateInput = (overrides: Partial<CreateAssertionInput> = {}): CreateA
   ...overrides,
 });
 
+const assertionsPathFor = (baseDir: string, currentMissionId: string): string =>
+  join(baseDir, ".maestro", "missions", currentMissionId, "assertions.json");
+
 beforeEach(async () => {
   tmpDir = await mkdtemp(join(tmpdir(), "maestro-assertion-store-"));
   store = new FsAssertionStoreAdapter(tmpDir);
@@ -27,7 +30,7 @@ afterEach(async () => {
 });
 
 describe("FsAssertionStoreAdapter", () => {
-  describe("create", () => {
+    describe("create", () => {
     it("creates an assertion and returns it", async () => {
       const input = makeCreateInput();
       const assertion = await store.create(missionId, input, "a1");
@@ -52,15 +55,43 @@ describe("FsAssertionStoreAdapter", () => {
       expect(data.assertions[0]!.id).toBe("a1");
     });
 
-    it("creates directory if it doesn't exist", async () => {
-      const input = makeCreateInput();
-      await store.create(missionId, input, "a1");
+      it("creates directory if it doesn't exist", async () => {
+        const input = makeCreateInput();
+        await store.create(missionId, input, "a1");
 
-      const dirPath = join(tmpDir, ".maestro", "missions", missionId);
-      const { stat } = await import("node:fs/promises");
-      expect((await stat(dirPath)).isDirectory()).toBe(true);
+        const dirPath = join(tmpDir, ".maestro", "missions", missionId);
+        const { stat } = await import("node:fs/promises");
+        expect((await stat(dirPath)).isDirectory()).toBe(true);
+      });
+
+      it("fails loudly and preserves invalid records already on disk", async () => {
+        const filePath = assertionsPathFor(tmpDir, missionId);
+        await mkdir(join(tmpDir, ".maestro", "missions", missionId), { recursive: true });
+        await writeFile(
+          filePath,
+          `${JSON.stringify({
+            assertions: [
+              {
+                id: "legacy-a1",
+                missionId,
+                milestoneId: "m1",
+                featureId: "f1",
+                result: "pending",
+                description: "Legacy assertion missing timestamps",
+                surface: "cli",
+              },
+            ],
+          }, null, 2)}\n`,
+        );
+        const before = await Bun.file(filePath).text();
+
+        await expect(store.create(missionId, makeCreateInput(), "a1")).rejects.toThrow(
+          "Assertion store contains an invalid record",
+        );
+
+        expect(await Bun.file(filePath).text()).toBe(before);
+      });
     });
-  });
 
   describe("get", () => {
     it("returns undefined for non-existent assertion", async () => {
@@ -160,15 +191,55 @@ describe("FsAssertionStoreAdapter", () => {
       expect(updated!.result).toBe("pending");
     });
 
-    it("allows retry from blocked to pending", async () => {
-      const input = makeCreateInput();
-      await store.create(missionId, input, "a1");
-      await store.update(missionId, "a1", { result: "blocked" });
+      it("allows retry from blocked to pending", async () => {
+        const input = makeCreateInput();
+        await store.create(missionId, input, "a1");
+        await store.update(missionId, "a1", { result: "blocked" });
 
-      const updated = await store.update(missionId, "a1", { result: "pending" });
-      expect(updated!.result).toBe("pending");
+        const updated = await store.update(missionId, "a1", { result: "pending" });
+        expect(updated!.result).toBe("pending");
+      });
+
+      it("refuses to rewrite the file when another record is invalid", async () => {
+        await store.create(missionId, makeCreateInput(), "a1");
+
+        const filePath = assertionsPathFor(tmpDir, missionId);
+        await writeFile(
+          filePath,
+          `${JSON.stringify({
+            assertions: [
+              {
+                id: "a1",
+                missionId,
+                milestoneId: "m1",
+                featureId: "f1",
+                result: "pending",
+                description: "Test assertion description",
+                surface: "cli",
+                createdAt: "2026-03-28T00:00:00.000Z",
+                updatedAt: "2026-03-28T00:00:00.000Z",
+              },
+              {
+                id: "legacy-a2",
+                missionId,
+                milestoneId: "m1",
+                featureId: "f1",
+                result: "pending",
+                description: "Legacy assertion missing timestamps",
+                surface: "cli",
+              },
+            ],
+          }, null, 2)}\n`,
+        );
+        const before = await Bun.file(filePath).text();
+
+        await expect(store.update(missionId, "a1", { result: "passed" })).rejects.toThrow(
+          "Assertion store contains an invalid record",
+        );
+
+        expect(await Bun.file(filePath).text()).toBe(before);
+      });
     });
-  });
 
   describe("list", () => {
     it("returns empty array when no assertions exist", async () => {

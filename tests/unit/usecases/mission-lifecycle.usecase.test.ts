@@ -14,7 +14,7 @@ import { FsMissionStoreAdapter } from "../../../src/adapters/mission-store.adapt
 import { FsFeatureStoreAdapter } from "../../../src/adapters/feature-store.adapter.js";
 import { FsAssertionStoreAdapter } from "../../../src/adapters/assertion-store.adapter.js";
 import { MaestroError } from "../../../src/domain/errors.js";
-import type { Milestone } from "../../../src/domain/mission-types.js";
+import type { MilestoneInput } from "../../../src/domain/mission-types.js";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mkdtemp } from "node:fs/promises";
@@ -25,10 +25,10 @@ describe("mission lifecycle usecases", () => {
   let featureStore: FsFeatureStoreAdapter;
   let assertionStore: FsAssertionStoreAdapter;
 
-    const sampleMilestones: Milestone[] = [
-      { id: "m1", title: "Milestone 1", description: "First milestone", order: 0, featureIds: [] },
-      { id: "m2", title: "Milestone 2", description: "Second milestone", order: 1, featureIds: [] },
-    ];
+      const sampleMilestones: MilestoneInput[] = [
+        { id: "m1", title: "Milestone 1", description: "First milestone", order: 0 },
+        { id: "m2", title: "Milestone 2", description: "Second milestone", order: 1 },
+      ];
 
   const samplePlan = {
     title: "Test Mission",

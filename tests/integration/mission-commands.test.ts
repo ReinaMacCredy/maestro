@@ -138,7 +138,7 @@ describe("mission CLI commands", () => {
     expect(result.features).toHaveLength(2);
   }, SLOW_CLI_TIMEOUT_MS);
 
-  it("mission create validates cross-references", async () => {
+    it("mission create validates cross-references", async () => {
     const plan = {
       title: "Bad Mission",
       milestones: [{ id: "m1", title: "M1", description: "", order: 0 }],
@@ -163,8 +163,45 @@ describe("mission CLI commands", () => {
 
     expect(exitCode).toBe(1);
     const output = stdout + stderr;
-    expect(output).toContain("references non-existent milestone");
-  }, SLOW_CLI_TIMEOUT_MS);
+      expect(output).toContain("references non-existent milestone");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("mission create surfaces invalid JSON file errors as CLI errors", async () => {
+      const planPath = join(tmpDir, "bad.json");
+      await writeFile(planPath, "{bad json");
+
+      const { stdout, stderr, exitCode } = await run(
+        ["mission", "create", "--file", planPath],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(1);
+      const output = stdout + stderr;
+      expect(output).toContain("Invalid JSON in plan file");
+      expect(output).not.toContain("SyntaxError:");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("mission create rejects plans missing features with a structured error", async () => {
+      const planPath = join(tmpDir, "missing-features.json");
+      await writeFile(
+        planPath,
+        JSON.stringify({
+          title: "Bad Mission",
+          description: "Missing features",
+          milestones: [{ id: "m1", title: "Milestone 1", description: "First", order: 0 }],
+        }),
+      );
+
+      const { stdout, stderr, exitCode } = await run(
+        ["mission", "create", "--file", planPath],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(1);
+      const output = stdout + stderr;
+      expect(output).toContain("features");
+      expect(output).not.toContain("TypeError:");
+    }, SLOW_CLI_TIMEOUT_MS);
 
   it("mission list shows created missions", async () => {
     const plan = createSamplePlan();

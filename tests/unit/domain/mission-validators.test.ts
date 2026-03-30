@@ -16,6 +16,7 @@ import {
 import type {
   Mission,
   Milestone,
+  MilestoneInput,
   Feature,
   Assertion,
   Checkpoint,
@@ -47,6 +48,14 @@ const makeMilestone = (overrides: Partial<Milestone> = {}): Milestone => ({
   description: "First milestone",
   order: 0,
   featureIds: [],
+  ...overrides,
+});
+
+const makeMilestoneInput = (overrides: Partial<MilestoneInput> = {}): MilestoneInput => ({
+  id: "m1",
+  title: "Milestone 1",
+  description: "First milestone",
+  order: 0,
   ...overrides,
 });
 
@@ -207,33 +216,33 @@ describe("mission validators", () => {
   });
 
   describe("validateCreateMissionInput", () => {
-    it("accepts valid create input", () => {
-      const input: CreateMissionInput = {
-        title: "New Mission",
-        description: "A new mission",
-        milestones: [makeMilestone()],
-      };
-      const result = validateCreateMissionInput(input);
-      expect(result.title).toBe("New Mission");
-    });
+      it("accepts valid create input", () => {
+        const input: CreateMissionInput = {
+          title: "New Mission",
+          description: "A new mission",
+          milestones: [makeMilestoneInput()],
+        };
+        const result = validateCreateMissionInput(input);
+        expect(result.title).toBe("New Mission");
+      });
 
-    it("rejects empty title", () => {
-      const input: CreateMissionInput = {
-        title: "",
-        description: "A new mission",
-        milestones: [makeMilestone()],
-      };
-      expect(() => validateCreateMissionInput(input)).toThrow(ZodError);
-    });
+      it("rejects empty title", () => {
+        const input: CreateMissionInput = {
+          title: "",
+          description: "A new mission",
+          milestones: [makeMilestoneInput()],
+        };
+        expect(() => validateCreateMissionInput(input)).toThrow(ZodError);
+      });
 
-    it("rejects milestones with duplicate IDs", () => {
-      const input: CreateMissionInput = {
-        title: "New Mission",
-        description: "A new mission",
-        milestones: [makeMilestone({ id: "m1" }), makeMilestone({ id: "m1" })],
-      };
-      expect(() => validateCreateMissionInput(input)).toThrow(ZodError);
-    });
+      it("rejects milestones with duplicate IDs", () => {
+        const input: CreateMissionInput = {
+          title: "New Mission",
+          description: "A new mission",
+          milestones: [makeMilestoneInput({ id: "m1" }), makeMilestoneInput({ id: "m1" })],
+        };
+        expect(() => validateCreateMissionInput(input)).toThrow(ZodError);
+      });
   });
 
   describe("validateCreateFeatureInput", () => {

@@ -11,13 +11,14 @@ import type {
   UpdateMissionInput,
   CreateFeatureInput,
   CreateAssertionInput,
-  MilestoneInput,
+  MissionPlanFile,
   Feature,
 } from "../domain/mission-types.js";
 import { generateMissionId } from "../domain/mission-id.js";
 import { MaestroError } from "../domain/errors.js";
 import {
   validateCreateMissionInput,
+  validateMissionPlanFile,
   assertNoDanglingReferences,
   assertNoCyclicDependencies,
 } from "../domain/mission-validators.js";
@@ -27,26 +28,6 @@ import { assertMissionTransition, canTransitionMission } from "../domain/mission
 export interface CreateMissionResult {
   mission: Mission;
   features: readonly Feature[];
-}
-
-/** Mission plan file structure for parsing */
-interface MissionPlanFile {
-  title: string;
-  description?: string;
-  proposal?: string;
-  milestones: readonly MilestoneInput[];
-  features: ReadonlyArray<{
-    id: string;
-    milestoneId: string;
-    title: string;
-    description: string;
-    workerType: string;
-    verificationSteps: readonly string[];
-    dependsOn?: readonly string[];
-    fulfills?: readonly string[];
-    preconditions?: string;
-    expectedBehavior?: string;
-  }>;
 }
 
 /**
@@ -59,12 +40,14 @@ export async function createMission(
   assertionStore: AssertionStorePort,
   planFile: MissionPlanFile,
 ): Promise<CreateMissionResult> {
+  const validatedPlan = validateMissionPlanFile(planFile);
+
   // Validate input structure
   const input: CreateMissionInput = validateCreateMissionInput({
-    title: planFile.title,
-    description: planFile.description ?? "",
-    proposal: planFile.proposal,
-    milestones: planFile.milestones,
+    title: validatedPlan.title,
+    description: validatedPlan.description ?? "",
+    proposal: validatedPlan.proposal,
+    milestones: validatedPlan.milestones,
   });
 
   // Validate that all milestone IDs are unique
@@ -76,7 +59,7 @@ export async function createMission(
   }
 
   // Validate that feature milestoneIds reference existing milestones
-  for (const feature of planFile.features) {
+  for (const feature of validatedPlan.features) {
     if (!milestoneIds.has(feature.milestoneId)) {
       throw new MaestroError(
         `Feature '${feature.id}' references non-existent milestone '${feature.milestoneId}'`,
@@ -90,7 +73,7 @@ export async function createMission(
 
   // Check for duplicate feature IDs
   const featureIds = new Set<string>();
-  for (const feature of planFile.features) {
+  for (const feature of validatedPlan.features) {
     if (featureIds.has(feature.id)) {
       throw new MaestroError(`Duplicate feature ID: '${feature.id}'`, [
         "Feature IDs must be unique within a mission",
@@ -113,7 +96,7 @@ export async function createMission(
   // Wrap in try/catch for cleanup on failure (B8 fix)
   const features: Feature[] = [];
   try {
-    for (const featureDef of planFile.features) {
+    for (const featureDef of validatedPlan.features) {
       const featureInput: CreateFeatureInput = {
         missionId,
         milestoneId: featureDef.milestoneId,

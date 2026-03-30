@@ -65,6 +65,12 @@ describe("FsFeatureStoreAdapter", () => {
       expect(data.id).toBe("f1");
       expect(data.title).toBe("Test Feature");
     });
+
+    it("rejects feature IDs with path traversal", async () => {
+      await expect(
+        store.create(missionId, makeCreateInput(), "../escape"),
+      ).rejects.toThrow("Invalid feature ID");
+    });
   });
 
   describe("get", () => {
@@ -81,6 +87,10 @@ describe("FsFeatureStoreAdapter", () => {
       expect(feature).toBeDefined();
       expect(feature!.id).toBe("f1");
       expect(feature!.status).toBe("pending");
+    });
+
+    it("rejects feature IDs with path traversal on read", async () => {
+      await expect(store.get(missionId, "../escape")).rejects.toThrow("Invalid feature ID");
     });
   });
 

@@ -5,6 +5,7 @@
  */
 import { join } from "node:path";
 import type { Assertion, CreateAssertionInput, UpdateAssertionInput } from "../domain/mission-types.js";
+import { MaestroError } from "../domain/errors.js";
 import type { AssertionStorePort } from "../ports/assertion-store.port.js";
 import { validateAssertion } from "../domain/mission-validators.js";
 import { ensureDir, readJson, writeJson } from "../lib/fs.js";
@@ -26,16 +27,28 @@ export class FsAssertionStoreAdapter implements AssertionStorePort {
   }
 
   private async readAssertions(missionId: string): Promise<readonly Assertion[]> {
-    const data = await readJson<{ assertions: unknown[] }>(this.assertionsPath(missionId));
-    if (!data?.assertions) return [];
+    const path = this.assertionsPath(missionId);
+    const data = await readJson<{ assertions?: unknown }>(path);
+    if (data === undefined) return [];
+    if (!Array.isArray(data.assertions)) {
+      throw new MaestroError(`Assertion store is corrupted for mission ${missionId}`, [
+        `Expected ${path} to contain an 'assertions' array`,
+        "Repair or quarantine the invalid records before retrying",
+      ]);
+    }
 
-    // Validate each assertion, filtering out invalid ones
     const assertions: Assertion[] = [];
-    for (const a of data.assertions) {
+    for (const [index, record] of data.assertions.entries()) {
       try {
-        assertions.push(validateAssertion(a));
-      } catch {
-        // Skip invalid assertions
+        assertions.push(validateAssertion(record));
+      } catch (error) {
+        const recordId = getAssertionRecordId(record);
+        throw new MaestroError(`Assertion store contains an invalid record for mission ${missionId}`, [
+          `File: ${path}`,
+          `Record index: ${index}${recordId === undefined ? "" : ` (id: ${recordId})`}`,
+          error instanceof Error ? `Validation error: ${error.message}` : "Validation error: unknown",
+          "Repair or quarantine the invalid record before retrying",
+        ]);
       }
     }
     return assertions;
@@ -124,4 +137,13 @@ export class FsAssertionStoreAdapter implements AssertionStorePort {
     const idSet = new Set(assertionIds);
     return assertions.filter((a) => idSet.has(a.id));
   }
+}
+
+function getAssertionRecordId(record: unknown): string | undefined {
+  if (typeof record !== "object" || record === null || !("id" in record)) {
+    return undefined;
+  }
+
+  const { id } = record as { id?: unknown };
+  return typeof id === "string" ? id : undefined;
 }

@@ -13,7 +13,7 @@ import { FsMissionStoreAdapter } from "../../../src/adapters/mission-store.adapt
 import { FsFeatureStoreAdapter } from "../../../src/adapters/feature-store.adapter.js";
 import { FsAssertionStoreAdapter } from "../../../src/adapters/assertion-store.adapter.js";
 import { MaestroError } from "../../../src/domain/errors.js";
-import type { Milestone } from "../../../src/domain/mission-types.js";
+import type { MilestoneInput } from "../../../src/domain/mission-types.js";
 
 let tmpDir: string;
 
@@ -45,8 +45,8 @@ async function createTestMission(
   assertionStore: FsAssertionStoreAdapter,
   baseDir: string,
   ): Promise<{ missionId: string; features: string[] }> {
-    const sampleMilestones: Milestone[] = [
-      { id: "m1", title: "Milestone 1", description: "First milestone", order: 0, featureIds: [] },
+    const sampleMilestones: MilestoneInput[] = [
+      { id: "m1", title: "Milestone 1", description: "First milestone", order: 0 },
     ];
 
   const samplePlan = {
@@ -316,16 +316,43 @@ describe("generateWorkerPrompt", () => {
       expect((err as MaestroError).hints.join("\n")).toContain("skills/built-in/test-skill/SKILL.md");
     }
 
-    expect(errorThrown).toBe(true);
-  });
+      expect(errorThrown).toBe(true);
+    });
 
-  it("sanitizes content containing markdown headers", async () => {
+    it("rejects worker types with path traversal", async () => {
+      const missionStore = new FsMissionStoreAdapter(tmpDir);
+      const featureStore = new FsFeatureStoreAdapter(tmpDir);
+      const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+
+      const samplePlan = {
+        title: "Unsafe Mission",
+        description: "Should fail",
+        milestones: [{ id: "m1", title: "Milestone 1", description: "First", order: 0 }],
+        features: [
+          {
+            id: "f1",
+            milestoneId: "m1",
+            title: "Unsafe Feature",
+            description: "Bad worker type",
+            workerType: "../../../../etc",
+            verificationSteps: ["Step 1"],
+          },
+        ],
+      };
+
+      const { createMission } = await import("../../../src/usecases/mission-lifecycle.usecase.js");
+      await expect(
+        createMission(missionStore, featureStore, assertionStore, samplePlan),
+      ).rejects.toThrow("Invalid mission plan file");
+    });
+
+    it("sanitizes content containing markdown headers", async () => {
     const missionStore = new FsMissionStoreAdapter(tmpDir);
     const featureStore = new FsFeatureStoreAdapter(tmpDir);
       const assertionStore = new FsAssertionStoreAdapter(tmpDir);
   
-      const sampleMilestones: Milestone[] = [
-        { id: "m1", title: "Milestone 1", description: "First milestone", order: 0, featureIds: [] },
+      const sampleMilestones: MilestoneInput[] = [
+        { id: "m1", title: "Milestone 1", description: "First milestone", order: 0 },
       ];
 
     // Create mission with markdown headers in description
@@ -374,8 +401,8 @@ describe("generateWorkerPrompt", () => {
     const featureStore = new FsFeatureStoreAdapter(tmpDir);
       const assertionStore = new FsAssertionStoreAdapter(tmpDir);
   
-      const sampleMilestones: Milestone[] = [
-        { id: "m1", title: "Milestone 1", description: "First milestone", order: 0, featureIds: [] },
+      const sampleMilestones: MilestoneInput[] = [
+        { id: "m1", title: "Milestone 1", description: "First milestone", order: 0 },
       ];
 
     const samplePlan = {

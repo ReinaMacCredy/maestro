@@ -3,13 +3,14 @@
  * Implements the FeatureStorePort using one JSON file per feature
  * Storage layout: .maestro/missions/{missionId}/features/{featureId}.json
  */
-import { join } from "node:path";
 import type { Feature, CreateFeatureInput, UpdateFeatureInput } from "../domain/mission-types.js";
 import type { FeatureStorePort } from "../ports/feature-store.port.js";
-import { validateFeature } from "../domain/mission-validators.js";
+import { FEATURE_ID_PATTERN, validateFeature } from "../domain/mission-validators.js";
 import { ensureDir, readJson, writeJson, listDirs, readText } from "../lib/fs.js";
 import { MAESTRO_DIR } from "../domain/defaults.js";
 import { readdir } from "node:fs/promises";
+import { join } from "node:path";
+import { assertSafeSegment, resolveWithin } from "../lib/path-safety.js";
 
 export class FsFeatureStoreAdapter implements FeatureStorePort {
   constructor(private readonly baseDir: string) {}
@@ -27,7 +28,8 @@ export class FsFeatureStoreAdapter implements FeatureStorePort {
   }
 
   private featurePath(missionId: string, featureId: string): string {
-    return join(this.featuresDir(missionId), `${featureId}.json`);
+    assertSafeSegment(featureId, "feature ID", FEATURE_ID_PATTERN, "letters, numbers, dashes, and underscores");
+    return resolveWithin(this.featuresDir(missionId), `${featureId}.json`, "Feature path");
   }
 
   async get(missionId: string, featureId: string): Promise<Feature | undefined> {
@@ -51,6 +53,7 @@ export class FsFeatureStoreAdapter implements FeatureStorePort {
   }
 
   async create(missionId: string, input: CreateFeatureInput, id: string): Promise<Feature> {
+    assertSafeSegment(id, "feature ID", FEATURE_ID_PATTERN, "letters, numbers, dashes, and underscores");
     const now = new Date().toISOString();
     const feature: Feature = {
       id,

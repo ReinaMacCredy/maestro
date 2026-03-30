@@ -8,10 +8,12 @@ import type { MissionStorePort } from "../ports/mission-store.port.js";
 import type { AssertionStorePort } from "../ports/assertion-store.port.js";
 import type { Feature, Mission, Milestone, Assertion } from "../domain/mission-types.js";
 import { MaestroError } from "../domain/errors.js";
+import { WORKER_TYPE_PATTERN } from "../domain/mission-validators.js";
 import { readText, writeText, ensureDir } from "../lib/fs.js";
 import { sanitizePromptContent } from "../lib/sanitize.js";
 import { dirname, join, resolve } from "node:path";
 import { MAESTRO_DIR } from "../domain/defaults.js";
+import { assertSafeSegment, resolveWithin } from "../lib/path-safety.js";
 
 /** Result of generating a worker prompt */
 export interface GenerateWorkerPromptResult {
@@ -123,17 +125,26 @@ export async function generateWorkerPrompt(
  * 2. skills/built-in/{workerType}/SKILL.md in the current workspace or any ancestor
  */
 async function readWorkerSkill(baseDir: string, workerType: string): Promise<string> {
+  assertSafeSegment(workerType, "worker type", WORKER_TYPE_PATTERN, "letters, numbers, colons, dashes, and underscores");
   const searchedPaths: string[] = [];
 
   for (const dir of enumerateSearchRoots(baseDir)) {
-    const workspaceSkillPath = join(dir, MAESTRO_DIR, "skills", workerType, "SKILL.md");
+    const workspaceSkillPath = resolveWithin(
+      join(dir, MAESTRO_DIR, "skills"),
+      join(workerType, "SKILL.md"),
+      "Workspace skill path",
+    );
     searchedPaths.push(workspaceSkillPath);
     const workspaceContent = await readText(workspaceSkillPath);
     if (workspaceContent !== undefined) {
       return workspaceContent;
     }
 
-    const builtInSkillPath = join(dir, "skills", "built-in", workerType, "SKILL.md");
+    const builtInSkillPath = resolveWithin(
+      join(dir, "skills", "built-in"),
+      join(workerType, "SKILL.md"),
+      "Built-in skill path",
+    );
     searchedPaths.push(builtInSkillPath);
     const builtInContent = await readText(builtInSkillPath);
     if (builtInContent !== undefined) {
@@ -141,7 +152,11 @@ async function readWorkerSkill(baseDir: string, workerType: string): Promise<str
     }
   }
 
-  const primaryPath = searchedPaths[0] ?? join(baseDir, MAESTRO_DIR, "skills", workerType, "SKILL.md");
+  const primaryPath = searchedPaths[0] ?? resolveWithin(
+    join(baseDir, MAESTRO_DIR, "skills"),
+    join(workerType, "SKILL.md"),
+    "Workspace skill path",
+  );
   throw new MaestroError(
     `Worker skill '${workerType}' not found at ${primaryPath}`,
     [

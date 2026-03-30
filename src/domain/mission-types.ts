@@ -205,6 +205,29 @@ export interface CreateFeatureInput {
   readonly expectedBehavior?: string;
 }
 
+/** Feature definition from a mission plan file */
+export interface MissionPlanFeature {
+  readonly id: string;
+  readonly milestoneId: string;
+  readonly title: string;
+  readonly description: string;
+  readonly workerType: string;
+  readonly verificationSteps: readonly string[];
+  readonly dependsOn?: readonly string[];
+  readonly fulfills?: readonly string[];
+  readonly preconditions?: string;
+  readonly expectedBehavior?: string;
+}
+
+/** Mission plan file as accepted by `mission create` */
+export interface MissionPlanFile {
+  readonly title: string;
+  readonly description?: string;
+  readonly proposal?: string;
+  readonly milestones: readonly MilestoneInput[];
+  readonly features: readonly MissionPlanFeature[];
+}
+
 /** Input for creating a new assertion */
 export interface CreateAssertionInput {
   readonly missionId: string;

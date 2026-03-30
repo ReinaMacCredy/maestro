@@ -8,6 +8,7 @@ import { MaestroError } from "./errors.js";
 import type {
   Mission,
   Milestone,
+  MilestoneInput,
   Feature,
   Assertion,
   Checkpoint,
@@ -15,6 +16,7 @@ import type {
   CreateFeatureInput,
   CreateAssertionInput,
   UpdateAssertionInput,
+  MissionPlanFile,
 } from "./mission-types.js";
 
 // ============================
@@ -23,16 +25,21 @@ import type {
 
 const MISSION_ID_PATTERN = /^\d{4}-\d{2}-\d{2}-\d{3}$/;
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/;
+export const FEATURE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+export const WORKER_TYPE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:_-]*$/;
 
 // ============================
 // Zod Schemas
 // ============================
 
-export const MilestoneSchema = z.object({
+export const MilestoneInputSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
   description: z.string(),
   order: z.number().int().nonnegative(),
+}).strict();
+
+export const MilestoneSchema = MilestoneInputSchema.extend({
   featureIds: z.array(z.string().min(1)).default([]),
 }).strict();
 
@@ -96,13 +103,13 @@ const LegacyWorkerReportSchema = z.object({
 export const WorkerReportSchema = z.union([RichWorkerReportSchema, LegacyWorkerReportSchema]);
 
 export const FeatureSchema = z.object({
-  id: z.string().min(1),
+  id: z.string().regex(FEATURE_ID_PATTERN),
   missionId: z.string().regex(MISSION_ID_PATTERN),
   milestoneId: z.string().min(1),
   status: z.enum(["pending", "assigned", "in-progress", "review", "done", "blocked"]),
   title: z.string().min(1),
   description: z.string(),
-  workerType: z.string().min(1),
+  workerType: z.string().regex(WORKER_TYPE_PATTERN),
   verificationSteps: z.array(z.string().min(1)).min(1),
   dependsOn: z.array(z.string()).default([]),
   fulfills: z.array(z.string()).default([]),
@@ -179,7 +186,7 @@ export const CreateMissionInputSchema = z.object({
   title: z.string().min(1),
   description: z.string(),
   proposal: z.string().optional(),
-  milestones: z.array(MilestoneSchema).min(1),
+  milestones: z.array(MilestoneInputSchema).min(1),
 }).strict().refine(
   (data) => {
     const milestoneIds = data.milestones.map((m) => m.id);
@@ -196,7 +203,7 @@ export const CreateFeatureInputSchema = z.object({
   milestoneId: z.string().min(1),
   title: z.string().min(1),
   description: z.string(),
-  workerType: z.string().min(1),
+  workerType: z.string().regex(WORKER_TYPE_PATTERN),
   verificationSteps: z.array(z.string().min(1)).min(1),
   dependsOn: z.array(z.string()).optional(),
   fulfills: z.array(z.string()).optional(),
@@ -207,9 +214,30 @@ export const CreateFeatureInputSchema = z.object({
 export const CreateAssertionInputSchema = z.object({
   missionId: z.string().regex(MISSION_ID_PATTERN),
   milestoneId: z.string().min(1),
-  featureId: z.string().min(1),
+  featureId: z.string().regex(FEATURE_ID_PATTERN),
   description: z.string().min(1),
   surface: z.string().default("cli"),
+}).strict();
+
+const MissionPlanFeatureSchema = z.object({
+  id: z.string().regex(FEATURE_ID_PATTERN),
+  milestoneId: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string(),
+  workerType: z.string().regex(WORKER_TYPE_PATTERN),
+  verificationSteps: z.array(z.string().min(1)).min(1),
+  dependsOn: z.array(z.string()).optional(),
+  fulfills: z.array(z.string()).optional(),
+  preconditions: z.string().optional(),
+  expectedBehavior: z.string().optional(),
+}).strict();
+
+export const MissionPlanFileSchema = z.object({
+  title: z.string().min(1),
+  description: z.string().optional(),
+  proposal: z.string().optional(),
+  milestones: z.array(MilestoneInputSchema).min(1),
+  features: z.array(MissionPlanFeatureSchema),
 }).strict();
 
 export const UpdateAssertionInputSchema = z.object({
@@ -255,6 +283,22 @@ export function validateCheckpoint(data: unknown): Checkpoint {
 
 export function validateCreateMissionInput(data: unknown): CreateMissionInput {
   return CreateMissionInputSchema.parse(data);
+}
+
+export function validateMissionPlanFile(data: unknown): MissionPlanFile {
+  try {
+    return MissionPlanFileSchema.parse(data);
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      const issue = err.issues[0];
+      const path = issue?.path.length ? issue.path.join(".") : "root";
+      throw new MaestroError(`Invalid mission plan file: ${issue?.message ?? "validation failed"}`, [
+        `Problem field: ${path}`,
+        "Mission plans must include title, milestones, and a features array",
+      ]);
+    }
+    throw err;
+  }
 }
 
 export function validateCreateFeatureInput(data: unknown): CreateFeatureInput {

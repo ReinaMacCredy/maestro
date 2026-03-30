@@ -16,7 +16,7 @@ import {
 } from "../usecases/mission-lifecycle.usecase.js";
 import { generateMissionReport, type MissionReport } from "../usecases/mission-report.usecase.js";
 import { MaestroError } from "../domain/errors.js";
-import { readJson } from "../lib/fs.js";
+import { readText } from "../lib/fs.js";
 import type { Mission, UpdateMissionInput, MissionStatus } from "../domain/mission-types.js";
 
 const DEFAULT_TEXT_MISSION_LIST_LIMIT = 10;
@@ -51,20 +51,29 @@ export function registerMissionCommand(program: Command): void {
 
       // Read plan file
       let planData: unknown;
-      if (opts.file === "-") {
-        // Read from stdin
-        const stdin = await new Response(Bun.stdin).text();
-        try {
-          planData = JSON.parse(stdin);
-        } catch {
-          throw new MaestroError("Invalid JSON from stdin");
+        if (opts.file === "-") {
+          // Read from stdin
+          const stdin = await new Response(Bun.stdin).text();
+          try {
+            planData = JSON.parse(stdin);
+          } catch {
+            throw new MaestroError("Invalid JSON from stdin", [
+              "Provide a valid mission plan JSON document on stdin",
+            ]);
+          }
+        } else {
+          const content = await readText(opts.file);
+          if (content === undefined) {
+            throw new MaestroError(`Plan file not found: ${opts.file}`);
+          }
+          try {
+            planData = JSON.parse(content);
+          } catch {
+            throw new MaestroError(`Invalid JSON in plan file: ${opts.file}`, [
+              "Fix the JSON syntax and retry mission creation",
+            ]);
+          }
         }
-      } else {
-        planData = await readJson<unknown>(opts.file);
-        if (!planData) {
-          throw new MaestroError(`Plan file not found: ${opts.file}`);
-        }
-      }
 
       const result = await createMission(
         services.missionStore,
