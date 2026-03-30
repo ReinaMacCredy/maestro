@@ -45,8 +45,10 @@
 ## Compiled Binary Verification
 - After `bun run build`, verify CLI changes against the fresh repo build first: `./dist/maestro --version` and then `./dist/maestro <command-under-test>`
 - Do not assume `maestro` on `PATH` is the fresh build; treat `./dist/maestro` and `/Users/reinamaccredy/.local/bin/maestro` as separate artifacts
+- For user-facing CLI or TUI work, finish by running `bun run release:local` so the local `maestro` command on `PATH` is refreshed to the newest compiled build before sign-off
 - If you need to verify the installed `maestro` command, run `command -v maestro` first and record the resolved path in your notes
 - Before testing the installed `maestro` command, refresh it from `./dist/maestro` using atomic replacement with a temp file plus `mv`; do not rely on a plain in-place overwrite
+- After `bun run release:local`, verify both `maestro --version` and `./dist/maestro --version`, and record the installed path from `command -v maestro`
 - For Mission Control or other TTY smoke tests, prefer `./dist/maestro mission-control ...` unless the goal is specifically to validate the installed command on `PATH`
 - Every verification summary must state which binary was exercised: `./dist/maestro` or installed `maestro` on `PATH`
 

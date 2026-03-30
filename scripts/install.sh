@@ -56,9 +56,7 @@ main() {
   info "Built dist/maestro"
 
   # 4. Install binary
-  mkdir -p "$INSTALL_DIR"
-  cp ./dist/maestro "$INSTALL_DIR/maestro"
-  chmod +x "$INSTALL_DIR/maestro"
+  ./scripts/install-local.sh ./dist/maestro
 
   # 5. Verify
   if "$INSTALL_DIR/maestro" --version >/dev/null 2>&1; then
