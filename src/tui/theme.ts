@@ -28,6 +28,7 @@ export const PALETTE = {
   orange: 208,
   // Background
   panelBg: 235,
+  infoBg: 237,
   selectedBg: 236,
   headerBg: 234,
   // Default (terminal default)

@@ -5,33 +5,55 @@ import type { Buffer } from "../terminal/buffer.js";
 import type { Rect } from "../terminal/layout.js";
 import { PALETTE } from "../theme.js";
 import { truncate } from "../format.js";
-import { BOX } from "../terminal/ansi.js";
 
-export interface ModalOptions {
+export interface ModalInfoItem {
+  text: string;
+  tone?: "default" | "muted" | "accent";
+  style?: "plain" | "block";
+}
+
+export interface MenuModalOptions {
+  mode: "menu";
   title: string;
+  eyebrow?: string;
   items: readonly string[];
   selectedIndex: number;
-  /** Optional status line below items. */
-  statusLine?: string;
+  footer?: string;
 }
+
+export interface InfoModalOptions {
+  mode: "info";
+  title: string;
+  eyebrow?: string;
+  items: readonly ModalInfoItem[];
+  footer?: string;
+}
+
+export type ModalOptions = MenuModalOptions | InfoModalOptions;
 
 /**
  * Render a centered modal overlay within the parent rect.
  * Returns the rect consumed by the modal.
  */
 export function renderModal(buf: Buffer, parent: Rect, opts: ModalOptions): Rect {
-  const { title, items, selectedIndex, statusLine } = opts;
-  const modalBg = PALETTE.selectedBg;
-  const selectedBg = 238;
-
-  // Calculate modal dimensions
+  const modalBg = PALETTE.panelBg;
+  const footer = opts.footer;
+  const lines = opts.mode === "menu"
+    ? opts.items.map((item) => item.length + 2)
+    : opts.items.map((item) => item.text.length);
   const maxItemLen = Math.max(
-    title.length,
-    ...items.map((i) => i.length + 4), // "  > item"
-    (statusLine?.length ?? 0),
+    opts.title.length,
+    opts.eyebrow?.length ?? 0,
+    ...lines,
+    footer?.length ?? 0,
   );
-  const modalWidth = Math.min(Math.max(maxItemLen + 4, 20), parent.width - 4);
-  const modalHeight = Math.min(items.length + 3 + (statusLine ? 1 : 0), parent.height - 2);
+  const modalWidth = Math.min(Math.max(maxItemLen + 8, 32), parent.width - 4);
+  const contentHeight = opts.mode === "menu"
+    ? opts.items.length
+    : opts.items.reduce((height, item) => height + (item.style === "block" ? 2 : 1), 0);
+  const headerHeight = opts.eyebrow ? 3 : 2;
+  const footerHeight = footer ? 2 : 1;
+  const modalHeight = Math.min(headerHeight + contentHeight + footerHeight + 2, parent.height - 2);
 
   // Center within parent
   const mx = parent.x + Math.floor((parent.width - modalWidth) / 2);
@@ -40,49 +62,89 @@ export function renderModal(buf: Buffer, parent: Rect, opts: ModalOptions): Rect
 
   // Clear area and draw border
   buf.fillRect(modalRect, " ", { bg: modalBg });
-  buf.drawBorder(modalRect, { fg: PALETTE.cyan, bg: modalBg });
+  buf.drawBorder(modalRect, { fg: PALETTE.border, bg: modalBg });
 
   // Title
-  const titleText = truncate(title, modalWidth - 4);
-  const titleX = mx + Math.max(1, Math.floor((modalWidth - titleText.length) / 2));
-  buf.writeText(my, titleX, titleText, {
+  const titleText = truncate(opts.title, modalWidth - 4);
+  const titleX = mx + 2;
+  buf.writeText(my + 1, titleX, titleText, {
     fg: PALETTE.brightWhite,
     bg: modalBg,
     bold: true,
   });
 
-  // Items
-  const innerWidth = modalWidth - 4;
-  for (let i = 0; i < items.length; i++) {
-    const row = my + 2 + i;
-    if (row >= my + modalHeight - 1) break;
-
-    const isSelected = i === selectedIndex;
-    const prefix = isSelected ? "> " : "  ";
-    const text = truncate(items[i]!, innerWidth - 2);
-    const itemBg = isSelected ? selectedBg : modalBg;
-
-    if (isSelected) {
-      buf.fillRect({ x: mx + 1, y: row, width: modalWidth - 2, height: 1 }, " ", { bg: itemBg });
-    }
-
-    buf.writeText(row, mx + 2, prefix + text, {
-      fg: isSelected ? PALETTE.brightWhite : PALETTE.gray,
-      bg: itemBg,
-      bold: isSelected,
+  if (opts.eyebrow) {
+    buf.writeText(my + 2, titleX, truncate(opts.eyebrow, modalWidth - 4), {
+      fg: PALETTE.dimGray,
+      bg: modalBg,
     });
   }
 
-  // Status line
-  if (statusLine) {
-      const statusRow = my + modalHeight - 2;
-    if (statusRow > my + 1) {
-      buf.writeText(statusRow, mx + 2, truncate(statusLine, innerWidth), {
-        fg: PALETTE.gray,
-        bg: modalBg,
+  const innerWidth = modalWidth - 4;
+  let row = my + headerHeight + 1;
+
+  if (opts.mode === "menu") {
+    for (let i = 0; i < opts.items.length; i++) {
+      if (row >= my + modalHeight - 2) break;
+      const isSelected = i === opts.selectedIndex;
+      const text = truncate(opts.items[i]!, innerWidth - 4);
+      const itemBg = isSelected ? PALETTE.selectedBg : modalBg;
+
+      if (isSelected) {
+        buf.fillRect({ x: mx + 1, y: row, width: modalWidth - 2, height: 1 }, " ", { bg: itemBg });
+      }
+
+      buf.writeText(row, mx + 2, isSelected ? "> " : "  ", {
+        fg: isSelected ? PALETTE.brightWhite : PALETTE.dimGray,
+        bg: itemBg,
+        bold: isSelected,
       });
+      buf.writeText(row, mx + 4, text, {
+        fg: isSelected ? PALETTE.brightWhite : PALETTE.gray,
+        bg: itemBg,
+        bold: isSelected,
+      });
+      row++;
+    }
+  } else {
+    for (const item of opts.items) {
+      if (row >= my + modalHeight - 2) break;
+      const text = item.style === "block"
+        ? truncatePathTail(item.text, innerWidth - 4)
+        : truncate(item.text, innerWidth);
+      const fg = item.tone === "accent"
+        ? PALETTE.brightWhite
+        : item.tone === "muted"
+          ? PALETTE.gray
+          : PALETTE.brightWhite;
+
+      if (item.style === "block") {
+        buf.fillRect({ x: mx + 2, y: row, width: modalWidth - 4, height: 1 }, " ", { bg: PALETTE.infoBg });
+        buf.writeText(row, mx + 3, text, { fg, bg: PALETTE.infoBg, bold: true });
+        row += 2;
+        continue;
+      }
+
+      buf.writeText(row, mx + 2, text, { fg, bg: modalBg });
+      row++;
     }
   }
 
+  if (footer) {
+    const footerRow = my + modalHeight - 2;
+    buf.writeText(footerRow, mx + 2, truncate(footer, innerWidth), {
+      fg: PALETTE.gray,
+      bg: modalBg,
+    });
+  }
+
   return modalRect;
+}
+
+function truncatePathTail(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text;
+  if (maxLen <= 6) return truncate(text, maxLen);
+
+  const tail = text.slice(-(maxLen - 3));
+  return `...${tail}`;
 }

@@ -8,7 +8,7 @@ import { createInitialState } from "../../../src/tui/state.js";
 import type { MissionControlSnapshot } from "../../../src/tui/types.js";
 
 // Re-export renderFrame for testing by importing the once-frame path
-import { renderOnceFrame } from "../../../src/tui/index.js";
+import { renderFrame, renderOnceFrame } from "../../../src/tui/index.js";
 
 function withTerminalSize<T>(width: number, height: number, run: () => T): T {
   const columnsDescriptor = Object.getOwnPropertyDescriptor(process.stdout, "columns");
@@ -306,6 +306,22 @@ describe("frame rendering", () => {
         expect(frame).toContain("Environment");
         expect(frame).toContain("Pending Handoffs");
         expect(frame).toContain("git init");
+      });
+
+      it("renders the mission directory modal with command-palette styling", () => {
+        const frame = withTerminalSize(90, 28, () => {
+          const buf = new Buffer(90, 28);
+          const state = createInitialState(makeSnapshot());
+          state.modal = { kind: "directory" };
+          renderFrame(buf, state);
+          return buf.toString();
+        });
+
+        expect(frame).toContain("Mission Directory");
+        expect(frame).toContain("Project-local runtime path");
+        expect(frame).toContain(".maestro/missions/2026-03-30-001");
+        expect(frame).toContain("Esc close");
+        expect(frame).not.toContain("Press Escape to close");
       });
     });
   });

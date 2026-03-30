@@ -172,7 +172,7 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
 
 // ── Frame Composition ───────────────────────────────
 
-function renderFrame(buf: Buffer, state: AppState): void {
+export function renderFrame(buf: Buffer, state: AppState): void {
   const snap = state.snapshot;
   const w = buf.width;
   const h = buf.height;
@@ -314,40 +314,48 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function renderModalOverlay(buf: Buffer, parentRect: Rect, state: AppState): void {
-  if (state.modal.kind === "feature-action") {
-    const feature = state.snapshot.features[state.modal.featureIndex];
-    if (!feature) return;
-    const transitions = getValidFeatureTransitions(feature.status);
-    renderModal(buf, parentRect, {
-      title: `${feature.id}: ${feature.title}`,
-      items: transitions.length > 0
-        ? transitions.map((t) => `Move to: ${t}`)
-        : ["No valid transitions"],
-      selectedIndex: state.modal.selectedOption,
-      statusLine: state.modal.status,
-    });
+    if (state.modal.kind === "feature-action") {
+      const feature = state.snapshot.features[state.modal.featureIndex];
+      if (!feature) return;
+      const transitions = getValidFeatureTransitions(feature.status);
+      renderModal(buf, parentRect, {
+        mode: "menu",
+        title: "Change Feature Status",
+        eyebrow: `${feature.id} · ${feature.title}`,
+        items: transitions.length > 0
+          ? transitions.map((t) => `Set status to ${t}`)
+          : ["No valid transitions"],
+        selectedIndex: state.modal.selectedOption,
+        footer: state.modal.status
+          ? "Enter confirm · Esc cancel"
+          : "Use arrows · Enter choose · Esc cancel",
+      });
+    }
+    if (state.modal.kind === "directory") {
+      renderModal(buf, parentRect, {
+        mode: "info",
+        title: "Mission Directory",
+        eyebrow: "Project-local runtime path",
+        items: [
+          { text: `.maestro/missions/${state.snapshot.missionId}`, style: "block", tone: "accent" },
+        ],
+        footer: "Esc close",
+      });
+    }
+    if (state.modal.kind === "models") {
+      const snap = state.snapshot;
+      const workerTypes = [...new Set(snap.features.map((f) => f.workerType))];
+      renderModal(buf, parentRect, {
+        mode: "info",
+        title: "Models & Workers",
+        eyebrow: "Snapshot metadata",
+        items: [
+          { text: `Mission ${snap.missionId}`, style: "block", tone: "accent" },
+          { text: `Status ${snap.effectiveStatus}`, tone: "default" },
+          { text: "Data source: store polling every 2s", tone: "muted" },
+          ...workerTypes.map((w) => ({ text: `Worker model: ${w}`, tone: "muted" as const })),
+        ],
+        footer: "Esc close",
+      });
+    }
   }
-  if (state.modal.kind === "directory") {
-    renderModal(buf, parentRect, {
-      title: "Mission Directory",
-      items: [`.maestro/missions/${state.snapshot.missionId}`],
-      selectedIndex: 0,
-      statusLine: "Press Escape to close",
-    });
-  }
-  if (state.modal.kind === "models") {
-    const snap = state.snapshot;
-    const workerTypes = [...new Set(snap.features.map((f) => f.workerType))];
-    renderModal(buf, parentRect, {
-      title: "Models & Workers",
-      items: [
-        `Mission: ${snap.missionId}`,
-        `Status: ${snap.effectiveStatus}`,
-        `Data source: store polling (2s)`,
-        ...workerTypes.map((w) => `Worker: ${w}`),
-      ],
-      selectedIndex: 0,
-      statusLine: "Press Escape to close",
-    });
-  }
-}
