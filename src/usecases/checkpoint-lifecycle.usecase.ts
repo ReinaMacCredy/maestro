@@ -14,6 +14,11 @@ import type {
   Mission,
 } from "../domain/mission-types.js";
 import { MaestroError } from "../domain/errors.js";
+import {
+  deriveSequentialMilestoneStatuses,
+  getCurrentMilestoneId,
+  type MilestoneActivitySnapshot,
+} from "./progress-derivation.usecase.js";
 
 /** Result of saving a checkpoint */
 export interface SaveCheckpointResult {
@@ -29,6 +34,7 @@ export interface ListCheckpointsResult {
 /** Result of loading the latest checkpoint */
 export interface LoadCheckpointResult {
   checkpoint: Checkpoint;
+  restoreMode: "metadata_only";
   warning: string;
 }
 
@@ -66,19 +72,19 @@ export async function saveCheckpoint(
     assertionStates[assertion.id] = assertion.status;
   }
 
-  // Determine current milestone (first non-completed milestone, or first milestone)
-  let currentMilestoneId = mission.milestones[0]?.id ?? "";
-  for (const milestone of mission.milestones) {
-    const milestoneFeatures = features.filter((f) => f.milestoneId === milestone.id);
-    const hasInProgress = milestoneFeatures.some((f) => f.status === "in_progress");
-    const isValidating = mission.status === "validating";
-    const isExecuting = mission.status === "executing";
-    
-    if (hasInProgress || (isExecuting || isValidating) && milestoneFeatures.some((f) => f.status !== "completed")) {
-      currentMilestoneId = milestone.id;
-      break;
-    }
-  }
+  const milestoneActivities: MilestoneActivitySnapshot[] = mission.milestones.map((milestone) => {
+    const milestoneFeatures = features.filter((feature) => feature.milestoneId === milestone.id);
+    return {
+      milestoneId: milestone.id,
+      order: milestone.order,
+      hasStartedFeatures: milestoneFeatures.some((feature) => feature.status !== "pending"),
+      allFeaturesCompleted:
+        milestoneFeatures.length > 0 &&
+        milestoneFeatures.every((feature) => feature.status === "completed"),
+    };
+  });
+  const milestoneStatuses = deriveSequentialMilestoneStatuses(mission, milestoneActivities);
+  const currentMilestoneId = getCurrentMilestoneId(mission, milestoneStatuses);
 
   // Create and save the checkpoint
   const checkpoint = await checkpointStore.save(missionId, {
@@ -149,5 +155,5 @@ export async function loadCheckpoint(
     "Filesystem changes and git state are NOT restored by checkpoint load. " +
     "To restore code state, checkout the corresponding git commit if available.";
 
-  return { checkpoint, warning };
+  return { checkpoint, restoreMode: "metadata_only", warning };
 }

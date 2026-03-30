@@ -271,11 +271,12 @@ describe("checkpoint CLI commands", () => {
       // Should return the latest checkpoint (different ID from first)
       expect(result.checkpoint.id).toBe(latestId);
       expect(result.checkpoint.id).not.toBe(checkpoint1.id);
-      // Verify checkpoint structure
-      expect(result.checkpoint.missionId).toBe(missionId);
-      expect(result.checkpoint.timestamp).toBeDefined();
-      expect(result.checkpoint.featureStates).toBeDefined();
-      expect(result.checkpoint.assertionStates).toBeDefined();
+        // Verify checkpoint structure
+        expect(result.checkpoint.missionId).toBe(missionId);
+        expect(result.restoreMode).toBe("metadata_only");
+        expect(result.checkpoint.timestamp).toBeDefined();
+        expect(result.checkpoint.featureStates).toBeDefined();
+        expect(result.checkpoint.assertionStates).toBeDefined();
     }, SLOW_CLI_TIMEOUT_MS);
 
     it("checkpoint load includes metadata-only restore warning", async () => {
@@ -289,6 +290,7 @@ describe("checkpoint CLI commands", () => {
       );
 
       expect(exitCode).toBe(0);
+      expect(stdout).toContain("Checkpoint snapshot loaded (metadata only)");
       expect(stdout).toContain("WARNING");
       expect(stdout).toContain("metadata only");
       expect(stdout).toContain("Filesystem changes");
@@ -308,6 +310,7 @@ describe("checkpoint CLI commands", () => {
       expect(exitCode).toBe(0);
       const result = JSON.parse(stdout);
       expect(result.checkpoint).toBeDefined();
+      expect(result.restoreMode).toBe("metadata_only");
       expect(result.warning).toBeDefined();
       expect(result.warning).toContain("WARNING");
       expect(result.warning).toContain("metadata only");

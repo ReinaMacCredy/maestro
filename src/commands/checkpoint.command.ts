@@ -70,7 +70,7 @@ export function registerCheckpointCommand(program: Command): void {
 
   checkpointCmd
     .command("load")
-    .description("Load the latest checkpoint for a mission (metadata only)")
+    .description("Read the latest checkpoint snapshot for a mission (metadata only)")
     .requiredOption("--mission <id>", "Mission ID (required)")
     .option("--json", "Output as JSON")
     .action(async (opts) => {
@@ -138,7 +138,7 @@ function formatLoadResult(result: LoadCheckpointResult): string[] {
   const assertionCount = Object.keys(cp.assertionStates).length;
 
   const lines: string[] = [
-    `[ok] Latest checkpoint loaded: ${cp.id}`,
+    `[ok] Checkpoint snapshot loaded (metadata only): ${cp.id}`,
     `  Mission: ${cp.missionId}`,
     `  Milestone: ${cp.milestoneId}`,
     `  Timestamp: ${cp.timestamp}`,

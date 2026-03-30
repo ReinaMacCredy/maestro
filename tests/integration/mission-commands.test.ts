@@ -250,8 +250,33 @@ describe("mission CLI commands", () => {
     expect(report.mission).toBeDefined();
     expect(report.mission.id).toBe(missionId);
     expect(report.mission.title).toBe("Test Mission");
+    expect(report.effectiveMissionStatus).toBeDefined();
     expect(report.milestones).toHaveLength(2);
     expect(report.summary).toBeDefined();
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("mission show reflects active execution even before mission status is manually advanced", async () => {
+    const plan = createSamplePlan();
+    const planPath = join(tmpDir, "plan.json");
+    await writeFile(planPath, JSON.stringify(plan, null, 2));
+
+    const createResult = await run(
+      ["mission", "create", "--file", planPath, "--json"],
+      tmpDir,
+    );
+    const missionId = JSON.parse(createResult.stdout).mission.id;
+
+    await run(["mission", "approve", missionId], tmpDir);
+    await run(
+      ["feature", "update", "f1", "--mission", missionId, "--status", "in_progress"],
+      tmpDir,
+    );
+
+    const showResult = await run(["mission", "show", missionId], tmpDir);
+
+    expect(showResult.exitCode).toBe(0);
+    expect(showResult.stdout).toContain("Status: executing");
+    expect(showResult.stdout).toContain("Stored status: approved");
   }, SLOW_CLI_TIMEOUT_MS);
 
   it("mission approve transitions draft to approved", async () => {

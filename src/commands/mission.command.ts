@@ -206,15 +206,19 @@ function formatMissionList(missions: readonly Mission[]): string[] {
 
 /** Format mission report with milestone progress for text output */
 function formatMissionReport(report: MissionReport): string[] {
-  const { mission, milestones, summary } = report;
+  const { mission, effectiveMissionStatus, milestones, summary } = report;
   
   const lines: string[] = [
     `Mission: ${mission.id}`,
     `  Title: ${mission.title}`,
-    `  Status: ${mission.status}`,
+    `  Status: ${effectiveMissionStatus}`,
     `  Created: ${mission.createdAt}`,
     `  Updated: ${mission.updatedAt}`,
   ];
+
+  if (effectiveMissionStatus !== mission.status) {
+    lines.push(`  Stored status: ${mission.status}`);
+  }
 
   if (mission.approvedAt) {
     lines.push(`  Approved: ${mission.approvedAt}`);

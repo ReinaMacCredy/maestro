@@ -84,7 +84,7 @@ Mission Control adds plan-based orchestration with milestones, features, asserti
 |---------|-------------|
 | `maestro checkpoint save --mission <id>` | Save timestamped mission state snapshot |
 | `maestro checkpoint list --mission <id>` | List checkpoints (newest first) |
-| `maestro checkpoint load --mission <id>` | Load latest checkpoint |
+| `maestro checkpoint load --mission <id>` | Read latest checkpoint snapshot (metadata only) |
 
 ### Global Options
 

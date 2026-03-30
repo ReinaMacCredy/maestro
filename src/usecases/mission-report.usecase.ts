@@ -7,15 +7,17 @@ import type { FeatureStorePort } from "../ports/feature-store.port.js";
 import type { AssertionStorePort } from "../ports/assertion-store.port.js";
 import type {
   Mission,
+  MissionStatus,
   Milestone,
-  Feature,
-  Assertion,
   MilestoneStatus,
-  FeatureStatus,
-  AssertionStatus,
 } from "../domain/mission-types.js";
 import { MaestroError } from "../domain/errors.js";
 import { isTerminalAssertionStatus } from "../domain/mission-state.js";
+import {
+  deriveEffectiveMissionStatus,
+  deriveSequentialMilestoneStatuses,
+  type MilestoneActivitySnapshot,
+} from "./progress-derivation.usecase.js";
 
 /** Progress information for a milestone in the report */
 export interface MilestoneReportProgress {
@@ -37,6 +39,7 @@ export interface MilestoneReportProgress {
 /** Enhanced mission report with progress indicators */
 export interface MissionReport {
   mission: Mission;
+  effectiveMissionStatus: MissionStatus;
   milestones: readonly MilestoneReportProgress[];
   summary: {
     totalFeatures: number;
@@ -49,70 +52,15 @@ export interface MissionReport {
   };
 }
 
-/**
- * Derive milestone status based on mission status and milestone order
- * Only the first non-completed milestone is active (executing/validating),
- * later milestones remain pending until reached.
- */
-function deriveMilestoneStatus(
-  mission: Mission,
-  milestone: Milestone,
-  allMilestones: readonly Milestone[],
-  sortedMilestoneStatuses: Map<string, MilestoneStatus>,
-): MilestoneStatus {
-  const sorted = [...allMilestones].sort((a, b) => a.order - b.order);
-  const currentIndex = sorted.findIndex((m) => m.id === milestone.id);
-
-  // Find the first non-completed milestone (the active one)
-  let firstNonCompletedIndex = -1;
-  for (let i = 0; i < sorted.length; i++) {
-    const m = sorted[i]!;
-    const status = sortedMilestoneStatuses.get(m.id);
-    // A milestone is "completed" if it's marked completed
-    if (status !== "completed") {
-      firstNonCompletedIndex = i;
-      break;
-    }
-  }
-
-  // If all milestones are completed
-  if (firstNonCompletedIndex === -1) {
-    return "completed";
-  }
-
-  // If this milestone is before the first non-completed one, it's completed
-  if (currentIndex < firstNonCompletedIndex) {
-    return "completed";
-  }
-
-  // If this IS the first non-completed milestone, it gets the active status
-  if (currentIndex === firstNonCompletedIndex) {
-    switch (mission.status) {
-      case "executing":
-        return "executing";
-      case "validating":
-        return "validating";
-      case "failed":
-        return "failed";
-      default:
-        return "pending";
-    }
-  }
-
-  // This milestone is after the active one - it should be pending
-  return "pending";
-}
-
-/**
- * Calculate progress for a single milestone
- */
-async function calculateMilestoneProgress(
+async function collectMilestoneData(
   mission: Mission,
   milestone: Milestone,
   featureStore: FeatureStorePort,
   assertionStore: AssertionStorePort,
-  sortedMilestoneStatuses: Map<string, MilestoneStatus>,
-): Promise<MilestoneReportProgress> {
+): Promise<{
+  activity: MilestoneActivitySnapshot;
+  progress: Omit<MilestoneReportProgress, "status">;
+}> {
   const features = await featureStore.list(mission.id, { milestoneId: milestone.id });
   const assertions = await assertionStore.listByMilestone(mission.id, milestone.id);
 
@@ -130,22 +78,27 @@ async function calculateMilestoneProgress(
     .filter((a) => a.status === "waived")
     .map((a) => a.id);
 
-  const status = deriveMilestoneStatus(mission, milestone, mission.milestones, sortedMilestoneStatuses);
-
   return {
-    milestoneId: milestone.id,
-    milestone,
-    status,
-    order: milestone.order,
-    featureCount,
-    completedFeatures,
-    featureCompletionPct,
-    assertionCount,
-    passedAssertions,
-    waivedAssertions,
-    terminalAssertions,
-    assertionCompletionPct,
-    waivedAssertionIds,
+    activity: {
+      milestoneId: milestone.id,
+      order: milestone.order,
+      hasStartedFeatures: features.some((feature) => feature.status !== "pending"),
+      allFeaturesCompleted: featureCount > 0 && completedFeatures === featureCount,
+    },
+    progress: {
+      milestoneId: milestone.id,
+      milestone,
+      order: milestone.order,
+      featureCount,
+      completedFeatures,
+      featureCompletionPct,
+      assertionCount,
+      passedAssertions,
+      waivedAssertions,
+      terminalAssertions,
+      assertionCompletionPct,
+      waivedAssertionIds,
+    },
   };
 }
 
@@ -167,30 +120,22 @@ export async function generateMissionReport(
     ]);
   }
 
-  // Sort milestones by order for sequential processing
   const sortedMilestones = [...mission.milestones].sort((a, b) => a.order - b.order);
-  
-  // Build a map of milestone statuses - start with completedMilestoneIds from mission
-  // then compute remaining statuses in order
-  const sortedMilestoneStatuses = new Map<string, MilestoneStatus>();
-  const completedMilestoneIds = mission.completedMilestoneIds ?? [];
-  
-  // Initialize with completed milestones
-  for (const m of sortedMilestones) {
-    const status = completedMilestoneIds.includes(m.id) ? "completed" : "pending";
-    sortedMilestoneStatuses.set(m.id, status);
-  }
-
-  // Calculate progress for each milestone in order
-  const milestones: MilestoneReportProgress[] = [];
-  for (const milestone of sortedMilestones) {
-    const progress = await calculateMilestoneProgress(mission, milestone, featureStore, assertionStore, sortedMilestoneStatuses);
-    milestones.push(progress);
-    sortedMilestoneStatuses.set(milestone.id, progress.status);
-  }
-
-  // Sort by milestone order (already sorted, but ensure)
-  milestones.sort((a, b) => a.order - b.order);
+  const milestoneData = await Promise.all(
+    sortedMilestones.map((milestone) =>
+      collectMilestoneData(mission, milestone, featureStore, assertionStore),
+    ),
+  );
+  const milestoneStatuses = deriveSequentialMilestoneStatuses(
+    mission,
+    milestoneData.map((item) => item.activity),
+  );
+  const milestones: MilestoneReportProgress[] = milestoneData
+    .map((item) => ({
+      ...item.progress,
+      status: milestoneStatuses.get(item.progress.milestoneId) ?? "pending",
+    }))
+    .sort((a, b) => a.order - b.order);
 
   // Calculate overall summary
   const totalFeatures = milestones.reduce((sum, m) => sum + m.featureCount, 0);
@@ -201,9 +146,11 @@ export async function generateMissionReport(
   const totalTerminalAssertions = milestones.reduce((sum, m) => sum + m.terminalAssertions, 0);
   const overallAssertionPct = totalAssertions > 0 ? Math.round((totalTerminalAssertions / totalAssertions) * 100) : 0;
   const totalWaivedAssertions = milestones.reduce((sum, m) => sum + m.waivedAssertions, 0);
+  const effectiveMissionStatus = deriveEffectiveMissionStatus(mission, milestoneStatuses);
 
   return {
     mission,
+    effectiveMissionStatus,
     milestones,
     summary: {
       totalFeatures,

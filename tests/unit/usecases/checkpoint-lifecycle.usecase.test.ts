@@ -451,6 +451,7 @@ describe("checkpoint lifecycle usecases", () => {
 
       expect(result.checkpoint.id).toBe("cp2");
       expect(result.checkpoint.milestoneId).toBe("m1");
+      expect(result.restoreMode).toBe("metadata_only");
       expect(result.warning).toContain("WARNING");
       expect(result.warning).toContain("metadata only");
       expect(result.warning).toContain("Filesystem changes");

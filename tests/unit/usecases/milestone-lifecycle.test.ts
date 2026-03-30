@@ -182,6 +182,24 @@ describe("milestone lifecycle usecases", () => {
       expect(result.milestones[0]!.featureCompletionPct).toBe(0);
       expect(result.milestones[0]!.assertionCompletionPct).toBe(0);
     });
+
+    it("infers executing status from started features even when mission is still approved", async () => {
+      const mission = createTestMission("approved");
+      const features: Feature[] = [
+        createTestFeature(mission.id, "m1", "in_progress", "f1"),
+        createTestFeature(mission.id, "m2", "pending", "f2"),
+      ];
+
+      const result = await listMilestones(
+        createMockMissionStore(mission),
+        createMockFeatureStore(features),
+        createMockAssertionStore(),
+        mission.id,
+      );
+
+      expect(result.milestones[0]!.status).toBe("executing");
+      expect(result.milestones[1]!.status).toBe("pending");
+    });
   });
 
   describe("getMilestoneStatus", () => {

@@ -287,12 +287,13 @@ describe("mission-report usecase", () => {
     featureStore.setFeatures(mission.id, createTestFeatures(mission.id));
     assertionStore.setAssertions(mission.id, createTestAssertions(mission.id));
 
-    const report = await generateMissionReport(missionStore, featureStore, assertionStore, mission.id);
+      const report = await generateMissionReport(missionStore, featureStore, assertionStore, mission.id);
 
-    expect(report.mission.id).toBe(mission.id);
-    expect(report.milestones).toHaveLength(2);
-    expect(report.summary.totalFeatures).toBe(3);
-    expect(report.summary.totalCompletedFeatures).toBe(1);
+      expect(report.mission.id).toBe(mission.id);
+      expect(report.effectiveMissionStatus).toBe("draft");
+      expect(report.milestones).toHaveLength(2);
+      expect(report.summary.totalFeatures).toBe(3);
+      expect(report.summary.totalCompletedFeatures).toBe(1);
   });
 
   it("calculates correct milestone progress", async () => {
@@ -405,9 +406,22 @@ describe("mission-report usecase", () => {
 
     const report = await generateMissionReport(missionStore, featureStore, assertionStore, mission.id);
 
-    // First non-completed milestone should be "executing"
-    expect(report.milestones[0]?.status).toBe("executing");
-    // Later milestones should remain "pending" until reached
-    expect(report.milestones[1]?.status).toBe("pending");
+      // First non-completed milestone should be "executing"
+      expect(report.milestones[0]?.status).toBe("executing");
+      // Later milestones should remain "pending" until reached
+      expect(report.milestones[1]?.status).toBe("pending");
+    });
+
+    it("elevates effective mission status when approved work has started", async () => {
+      const mission = createTestMission("2024-01-01-008", "approved");
+      missionStore.setMission(mission);
+      featureStore.setFeatures(mission.id, createTestFeatures(mission.id));
+      assertionStore.setAssertions(mission.id, createTestAssertions(mission.id));
+
+      const report = await generateMissionReport(missionStore, featureStore, assertionStore, mission.id);
+
+      expect(report.mission.status).toBe("approved");
+      expect(report.effectiveMissionStatus).toBe("executing");
+      expect(report.milestones[0]?.status).toBe("executing");
+    });
   });
-});
