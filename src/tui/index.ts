@@ -1,6 +1,6 @@
 /**
  * TUI entry point -- renderDashboard() event loop.
- * Composes panels into a full-screen frame with state-driven rendering.
+ * Simple while-loop design: no setInterval, no double-buffer.
  */
 import { Screen } from "./terminal/screen.js";
 import { startKeyListener, type Key } from "./terminal/input.js";
@@ -20,7 +20,6 @@ import { renderFooter } from "./panels/footer.js";
 import { renderModal } from "./widgets/modal.js";
 import { getValidFeatureTransitions } from "../domain/mission-state.js";
 import { PALETTE } from "./theme.js";
-import { truncate } from "./format.js";
 
 export interface OnceFrameOptions {
   snapshot: MissionControlSnapshot;
@@ -45,140 +44,93 @@ export function renderOnceFrame(opts: OnceFrameOptions): string {
 }
 
 /**
- * Start the interactive dashboard event loop.
- * Resolves when the user exits (q or Ctrl+T).
+ * Start the interactive dashboard.
+ * Simple while-loop: sleep, check input, poll snapshot, render.
  */
 export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
   const screen = new Screen();
   let state = createInitialState(opts.snapshot);
+  let dirty = true;
+  let lastPollMs = Date.now();
+  const POLL_INTERVAL_MS = 2000;
+  const FRAME_MS = 50;
 
-  const dispatch = (action: Action): void => {
-    state = reduce(state, action);
-    render();
-  };
-
+  // Key handler sets dirty flag instead of rendering directly
   const handleKey = (key: Key): void => {
     const action = keyToAction(key, state);
-    if (action) dispatch(action);
+    if (action) {
+      state = reduce(state, action);
+      dirty = true;
+    }
   };
-
-  // Ensure terminal is restored on any crash
-  const emergencyExit = (): void => {
-    try { screen.exit(); } catch {}
-  };
-  process.on("uncaughtException", (err) => {
-    emergencyExit();
-    console.error("[!] TUI crashed:", err.message);
-    process.exit(1);
-  });
-  process.on("unhandledRejection", (err) => {
-    emergencyExit();
-    console.error("[!] TUI unhandled rejection:", err);
-    process.exit(1);
-  });
 
   screen.enter();
   const stopKeys = startKeyListener(handleKey);
 
-  const render = (): void => {
-    const buf = screen.buffer();
-    renderFrame(buf, state);
-    screen.flush();
-  };
-
-  screen.onResize(() => {
-    screen.invalidate();
-    render();
-  });
-
-  let pollTimer: ReturnType<typeof setInterval> | undefined;
-  let checkTimer: ReturnType<typeof setInterval> | undefined;
-  let polling = false;
-
-  const cleanup = (): void => {
-    if (pollTimer) { clearInterval(pollTimer); pollTimer = undefined; }
-    if (checkTimer) { clearInterval(checkTimer); checkTimer = undefined; }
-    stopKeys();
-    screen.exit();
-  };
-
   try {
-    render();
+    while (state.running) {
+      // Check for terminal resize
+      if (screen.refreshSize()) {
+        dirty = true;
+      }
 
-    await new Promise<void>((resolve) => {
-      pollTimer = setInterval(async () => {
-        if (polling || !state.running) return;
-        polling = true;
+      // Poll snapshot every 2s
+      const now = Date.now();
+      if (now - lastPollMs >= POLL_INTERVAL_MS) {
+        lastPollMs = now;
         try {
           const snapshot = await buildSnapshot(opts.snapshotDeps, opts.missionId);
-          if (state.running) {
-            dispatch({ type: "update-snapshot", snapshot });
-          }
+          state = reduce(state, { type: "update-snapshot", snapshot });
+          dirty = true;
         } catch {
           // Poll failure is non-fatal
-        } finally {
-          polling = false;
         }
-      }, 2000);
+      }
 
-      checkTimer = setInterval(() => {
-        if (!state.running) {
-          resolve();
-        }
-      }, 50);
-    });
+      // Render only when dirty
+      if (dirty) {
+        const buf = screen.createBuffer();
+        renderFrame(buf, state);
+        screen.render(buf);
+        dirty = false;
+      }
+
+      // Yield to event loop (process key events) and sleep
+      await Bun.sleep(FRAME_MS);
+    }
   } finally {
-    cleanup();
+    stopKeys();
+    screen.exit();
   }
 }
 
 // ── Key Mapping ─────────────────────────────────────
 
 function keyToAction(key: Key, state: AppState): Action | undefined {
-  // Exit shortcuts
   if (key.type === "char" && key.char === "q" && state.modal.kind === "none") {
     return { type: "quit" };
   }
   if (key.type === "ctrl" && (key.char === "t" || key.char === "c")) {
     return { type: "quit" };
   }
-
-  // Modal escape
   if (key.type === "escape") {
     return { type: "escape" };
   }
-
-  // Navigation
   if (key.type === "arrow" && (key.direction === "up" || key.direction === "down")) {
     return { type: "navigate", direction: key.direction };
   }
-
-  // Enter
   if (key.type === "enter") {
     return { type: "enter" };
   }
-
-  // Focus shortcuts (only when no modal)
   if (key.type === "char" && state.modal.kind === "none") {
     switch (key.char) {
-      case "f":
-      case "F":
-        return { type: "focus", panel: "features" };
-      case "w":
-      case "W":
-        return { type: "focus", panel: "log" };
-      case "p":
-      case "P":
-        return { type: "toggle-pause" };
-      case "d":
-      case "D":
-        return { type: "open-dir" };
-      case "m":
-      case "M":
-        return { type: "open-models" };
+      case "f": case "F": return { type: "focus", panel: "features" };
+      case "w": case "W": return { type: "focus", panel: "log" };
+      case "p": case "P": return { type: "toggle-pause" };
+      case "d": case "D": return { type: "open-dir" };
+      case "m": case "M": return { type: "open-models" };
     }
   }
-
   return undefined;
 }
 
@@ -189,51 +141,39 @@ function renderFrame(buf: Buffer, state: AppState): void {
   const w = buf.width;
   const h = buf.height;
 
-  // Worker panel height: ~30% of screen, minimum 5 rows
   const workerHeight = Math.max(5, Math.floor(h * 0.3));
 
-  // Layout zones
   const zones = splitV({ x: 0, y: 0, width: w, height: h }, [
-    1,            // header
-    1,            // status bar
-    -1,           // body (flex)
-    workerHeight, // worker panel
-    1,            // footer
+    1, 1, -1, workerHeight, 1,
   ]);
 
-  const headerRect = zones[0]!;
-  const statusRect = zones[1]!;
-  const bodyRect = zones[2]!;
-  const workerRect = zones[3]!;
-  const footerRect = zones[4]!;
+  const [headerRect, statusRect, bodyRect, workerRect, footerRect] = zones;
 
-  // Body: left detail (55%) + right pane (45%)
-  const [leftRect, rightRect] = splitH(bodyRect, [11, 9]);
+  const [leftRect, rightRect] = splitH(bodyRect!, [11, 9]);
 
-  // Right pane: feature list (top half) + progress log (bottom half)
   const [featureListRect, progressRect] = splitV(rightRect!, [
     Math.max(3, Math.ceil(rightRect!.height * 0.5)),
     -1,
   ]);
 
-  renderHeader(buf, headerRect, snap);
-  renderStatusBar(buf, statusRect, snap);
+  renderHeader(buf, headerRect!, snap);
+  renderStatusBar(buf, statusRect!, snap);
   renderFeatureDetail(buf, leftRect!, snap);
   renderFeatureList(buf, featureListRect!, snap, state.selectedFeatureIndex);
   renderProgressLog(buf, progressRect!, snap.progressLog);
-  renderWorkerPanel(buf, workerRect, snap);
-  renderFooter(buf, footerRect, snap);
+  renderWorkerPanel(buf, workerRect!, snap);
+  renderFooter(buf, footerRect!, snap);
 
-  // Vertical separator between left and right panels
+  // Vertical separator
   if (rightRect) {
-    for (let r = bodyRect.y; r < bodyRect.y + bodyRect.height; r++) {
+    for (let r = bodyRect!.y; r < bodyRect!.y + bodyRect!.height; r++) {
       buf.set(r, rightRect.x - 1, "\u2502", { fg: PALETTE.dimGray });
     }
   }
 
-  // Modal overlay (last, so it draws on top)
+  // Modal overlay
   if (state.modal.kind !== "none") {
-    renderModalOverlay(buf, bodyRect, state);
+    renderModalOverlay(buf, bodyRect!, state);
   }
 }
 
@@ -241,7 +181,6 @@ function renderModalOverlay(buf: Buffer, parentRect: Rect, state: AppState): voi
   if (state.modal.kind === "feature-action") {
     const feature = state.snapshot.features[state.modal.featureIndex];
     if (!feature) return;
-
     const transitions = getValidFeatureTransitions(feature.status);
     renderModal(buf, parentRect, {
       title: `${feature.id}: ${feature.title}`,
@@ -252,17 +191,14 @@ function renderModalOverlay(buf: Buffer, parentRect: Rect, state: AppState): voi
       statusLine: state.modal.status,
     });
   }
-
   if (state.modal.kind === "directory") {
-    const dir = `.maestro/missions/${state.snapshot.missionId}`;
     renderModal(buf, parentRect, {
       title: "Mission Directory",
-      items: [dir],
+      items: [`.maestro/missions/${state.snapshot.missionId}`],
       selectedIndex: 0,
       statusLine: "Press Escape to close",
     });
   }
-
   if (state.modal.kind === "models") {
     const snap = state.snapshot;
     const workerTypes = [...new Set(snap.features.map((f) => f.workerType))];

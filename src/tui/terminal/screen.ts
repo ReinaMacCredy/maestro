@@ -1,24 +1,20 @@
 /**
- * Screen -- alternate screen, raw mode, double-buffer flush.
- * Wraps Buffer with lifecycle management for interactive TUI.
+ * Screen -- alternate screen, raw mode, direct ANSI write.
+ * No double-buffer. Clears and redraws the full frame each time.
+ * Simple and memory-efficient for compiled binaries.
  */
 import { Buffer } from "./buffer.js";
 import { moveTo, style, reset, hideCursor, showCursor, enterAltScreen, exitAltScreen, clearScreen } from "./ansi.js";
 
 export class Screen {
-  private front: Buffer;
-  private back: Buffer;
   private _width: number;
   private _height: number;
-  private resizeCallbacks: Array<() => void> = [];
   private active = false;
   private signalHandlers: Array<() => void> = [];
 
   constructor() {
     this._width = process.stdout.columns || 80;
     this._height = process.stdout.rows || 24;
-    this.front = new Buffer(this._width, this._height);
-    this.back = new Buffer(this._width, this._height);
   }
 
   get width(): number { return this._width; }
@@ -28,17 +24,15 @@ export class Screen {
   enter(): void {
     if (this.active) return;
     this.active = true;
-    process.stdout.write(enterAltScreen + hideCursor + clearScreen);
+    process.stdout.write(enterAltScreen + hideCursor);
     if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
       process.stdin.setRawMode(true);
       process.stdin.resume();
     }
-    process.stdout.on("resize", this.handleResize);
 
     // Register signal handlers to restore terminal on unexpected exit
-    const cleanup = () => this.exit();
-    const onSigint = () => { cleanup(); process.exit(130); };
-    const onSigterm = () => { cleanup(); process.exit(143); };
+    const onSigint = () => { this.exit(); process.exit(130); };
+    const onSigterm = () => { this.exit(); process.exit(143); };
     process.on("SIGINT", onSigint);
     process.on("SIGTERM", onSigterm);
     this.signalHandlers.push(
@@ -51,12 +45,8 @@ export class Screen {
   exit(): void {
     if (!this.active) return;
     this.active = false;
-    process.stdout.off("resize", this.handleResize);
-
-    // Remove signal handlers
     for (const remove of this.signalHandlers) remove();
     this.signalHandlers.length = 0;
-
     process.stdout.write(reset + showCursor + exitAltScreen);
     if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
       process.stdin.setRawMode(false);
@@ -64,67 +54,46 @@ export class Screen {
     }
   }
 
-  /** Get the back buffer for drawing. */
-  buffer(): Buffer {
-    return this.back;
+  /** Create a buffer for drawing. Caller fills it, then calls render(). */
+  createBuffer(): Buffer {
+    return new Buffer(this._width, this._height);
   }
 
-  /** Diff back vs front, emit ANSI for changed cells, swap buffers. */
-  flush(): void {
-    const changes = this.back.diff(this.front);
-    if (changes.length === 0) return;
-
-    // Build ANSI output, batching consecutive cells on the same row
-    const parts: string[] = [];
+  /** Render a filled buffer to the terminal in one write. */
+  render(buf: Buffer): void {
+    // Build output: move to home, write each cell row by row
+    const parts: string[] = [moveTo(0, 0)];
     let lastFg = -2;
     let lastBg = -2;
     let lastBold = false;
     let lastDim = false;
-    let lastRow = -1;
-    let lastCol = -1;
 
-    for (const ch of changes) {
-      // Only emit moveTo if not consecutive on same row
-      if (ch.row !== lastRow || ch.col !== lastCol + 1) {
-        parts.push(moveTo(ch.row, ch.col));
+    for (let r = 0; r < buf.height && r < this._height; r++) {
+      if (r > 0) parts.push(moveTo(r, 0));
+      for (let c = 0; c < buf.width && c < this._width; c++) {
+        const cell = buf.getCell(r, c);
+        if (!cell) { parts.push(" "); continue; }
+        if (cell.fg !== lastFg || cell.bg !== lastBg || cell.bold !== lastBold || cell.dim !== lastDim) {
+          parts.push(style(cell.fg, cell.bg, cell.bold, cell.dim));
+          lastFg = cell.fg;
+          lastBg = cell.bg;
+          lastBold = cell.bold;
+          lastDim = cell.dim;
+        }
+        parts.push(cell.char);
       }
-      if (ch.cell.fg !== lastFg || ch.cell.bg !== lastBg || ch.cell.bold !== lastBold || ch.cell.dim !== lastDim) {
-        parts.push(style(ch.cell.fg, ch.cell.bg, ch.cell.bold, ch.cell.dim));
-        lastFg = ch.cell.fg;
-        lastBg = ch.cell.bg;
-        lastBold = ch.cell.bold;
-        lastDim = ch.cell.dim;
-      }
-      parts.push(ch.cell.char);
-      lastRow = ch.row;
-      lastCol = ch.col;
     }
     parts.push(reset);
     process.stdout.write(parts.join(""));
-
-    // Swap: front becomes back's state
-    this.front = this.back.clone();
-    this.back = new Buffer(this._width, this._height);
   }
 
-  /** Register a resize callback. */
-  onResize(cb: () => void): void {
-    this.resizeCallbacks.push(cb);
-  }
-
-  /** Handle terminal resize. */
-  private handleResize = (): void => {
-    this._width = process.stdout.columns || 80;
-    this._height = process.stdout.rows || 24;
-    this.front = new Buffer(this._width, this._height);
-    this.back = new Buffer(this._width, this._height);
-    for (const cb of this.resizeCallbacks) {
-      cb();
-    }
-  };
-
-  /** Force a full redraw on next flush. */
-  invalidate(): void {
-    this.front = new Buffer(this._width, this._height);
+  /** Update cached terminal dimensions. Returns true if size changed. */
+  refreshSize(): boolean {
+    const newW = process.stdout.columns || 80;
+    const newH = process.stdout.rows || 24;
+    if (newW === this._width && newH === this._height) return false;
+    this._width = newW;
+    this._height = newH;
+    return true;
   }
 }
