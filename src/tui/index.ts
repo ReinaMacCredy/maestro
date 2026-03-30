@@ -50,12 +50,13 @@ export function renderOnceFrame(opts: OnceFrameOptions): string {
 export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
   const screen = new Screen();
   let state = createInitialState(opts.snapshot);
-  let dirty = true;
-  let lastPollMs = Date.now();
-  const POLL_INTERVAL_MS = 2000;
-  const FRAME_MS = 50;
 
-  // Key handler sets dirty flag instead of rendering directly
+  function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  // Key handler sets dirty flag
+  let dirty = true;
   const handleKey = (key: Key): void => {
     const action = keyToAction(key, state);
     if (action) {
@@ -64,43 +65,55 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
     }
   };
 
+  // SIGINT/SIGTERM cleanup
+  const exitClean = (): void => { screen.exit(); process.exit(0); };
+  process.on("SIGINT", exitClean);
+  process.on("SIGTERM", exitClean);
+
   screen.enter();
   const stopKeys = startKeyListener(handleKey);
 
   try {
+    // Initial render
+    const buf = screen.createBuffer();
+    renderFrame(buf, state);
+    screen.render(buf);
+    dirty = false;
+
+    let lastPollMs = Date.now();
+
     while (state.running) {
+      await sleep(100);
+
       // Check for terminal resize
-      if (screen.refreshSize()) {
-        dirty = true;
-      }
+      if (screen.refreshSize()) dirty = true;
 
       // Poll snapshot every 2s
       const now = Date.now();
-      if (now - lastPollMs >= POLL_INTERVAL_MS) {
+      if (now - lastPollMs >= 2000) {
         lastPollMs = now;
         try {
-          const snapshot = await buildSnapshot(opts.snapshotDeps, opts.missionId);
-          state = reduce(state, { type: "update-snapshot", snapshot });
+          const snap = await buildSnapshot(opts.snapshotDeps, opts.missionId);
+          state = reduce(state, { type: "update-snapshot", snapshot: snap });
           dirty = true;
         } catch {
-          // Poll failure is non-fatal
+          // non-fatal
         }
       }
 
-      // Render only when dirty
+      // Render only when something changed
       if (dirty) {
         const buf = screen.createBuffer();
         renderFrame(buf, state);
         screen.render(buf);
         dirty = false;
       }
-
-      // Yield to event loop (process key events) and sleep
-      await Bun.sleep(FRAME_MS);
     }
   } finally {
     stopKeys();
     screen.exit();
+    process.off("SIGINT", exitClean);
+    process.off("SIGTERM", exitClean);
   }
 }
 
