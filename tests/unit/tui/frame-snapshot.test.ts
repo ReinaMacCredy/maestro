@@ -10,6 +10,36 @@ import type { MissionControlSnapshot } from "../../../src/tui/types.js";
 // Re-export renderFrame for testing by importing the once-frame path
 import { renderOnceFrame } from "../../../src/tui/index.js";
 
+function withTerminalSize<T>(width: number, height: number, run: () => T): T {
+  const columnsDescriptor = Object.getOwnPropertyDescriptor(process.stdout, "columns");
+  const rowsDescriptor = Object.getOwnPropertyDescriptor(process.stdout, "rows");
+
+  Object.defineProperty(process.stdout, "columns", {
+    configurable: true,
+    value: width,
+  });
+  Object.defineProperty(process.stdout, "rows", {
+    configurable: true,
+    value: height,
+  });
+
+  try {
+    return run();
+  } finally {
+    if (columnsDescriptor) {
+      Object.defineProperty(process.stdout, "columns", columnsDescriptor);
+    } else {
+      delete (process.stdout as { columns?: number }).columns;
+    }
+
+    if (rowsDescriptor) {
+      Object.defineProperty(process.stdout, "rows", rowsDescriptor);
+    } else {
+      delete (process.stdout as { rows?: number }).rows;
+    }
+  }
+}
+
 function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionControlSnapshot {
   return {
     missionId: "2026-03-30-001",
@@ -193,6 +223,52 @@ describe("frame rendering", () => {
     it("shows worker type", () => {
       const frame = renderOnceFrame({ snapshot: makeSnapshot() });
       expect(frame).toContain("skill backend-worker");
+    });
+  });
+
+  describe("chrome layout", () => {
+    it("renders a full outer frame with connected dividers", () => {
+      const frame = withTerminalSize(80, 24, () => renderOnceFrame({ snapshot: makeSnapshot() }));
+      const lines = frame.split("\n");
+
+      expect(lines[0]?.startsWith("┌")).toBe(true);
+      expect(lines[0]?.endsWith("┐")).toBe(true);
+      expect(lines.at(-1)?.startsWith("└")).toBe(true);
+      expect(lines.at(-1)?.endsWith("┘")).toBe(true);
+      expect(frame).toContain("├");
+      expect(frame).toContain("┤");
+      expect(frame).toContain("┬");
+      expect(frame).toContain("┴");
+      expect(frame).toContain("┼");
+    });
+
+    it("keeps the full chrome in empty-state frames", () => {
+      const frame = withTerminalSize(80, 24, () =>
+        renderOnceFrame({
+          snapshot: makeSnapshot({
+            features: [],
+            activeFeature: null,
+            activeWorker: null,
+            featureProgress: { done: 0, total: 0, active: 0 },
+            progressLog: [],
+          }),
+        }));
+
+      expect(frame).toContain("┌");
+      expect(frame).toContain("└");
+      expect(frame).toContain("│");
+      expect(frame).toContain("No active feature");
+      expect(frame).toContain("No active workers");
+    });
+
+    it("renders bordered chrome for narrow-but-valid terminals", () => {
+      const frame = withTerminalSize(60, 18, () => renderOnceFrame({ snapshot: makeSnapshot() }));
+      const lines = frame.split("\n");
+
+      expect(lines[0]?.startsWith("┌")).toBe(true);
+      expect(lines[0]?.endsWith("┐")).toBe(true);
+      expect(frame).not.toContain("undefined");
+      expect(lines.every((line) => line.length <= 60)).toBe(true);
     });
   });
 });

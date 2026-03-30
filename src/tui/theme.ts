@@ -22,6 +22,7 @@ export const PALETTE = {
   gray: 245,
   dimGray: 240,
   brightWhite: 255,
+  border: 240,
   // Accents
   magenta: 200,
   orange: 208,

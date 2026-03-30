@@ -11,14 +11,10 @@ import { formatElapsed, truncate } from "../format.js";
 export function renderWorkerPanel(buf: Buffer, rect: Rect, snap: MissionControlSnapshot): void {
   const y = rect.y;
   const w = rect.width;
-
-  // Border top
-  for (let c = rect.x; c < rect.x + w; c++) {
-    buf.set(y, c, "\u2500", { fg: PALETTE.dimGray });
-  }
+  if (rect.height <= 0 || w <= 0) return;
 
   if (!snap.activeWorker) {
-    buf.writeText(y + 1, rect.x + 1, "No active workers", { fg: PALETTE.dimGray });
+    buf.writeText(y, rect.x + 1, "No active workers", { fg: PALETTE.dimGray });
     return;
   }
 
@@ -26,16 +22,16 @@ export function renderWorkerPanel(buf: Buffer, rect: Rect, snap: MissionControlS
 
   // Header: "Active Worker  #1  {workerType}"
   let col = rect.x + 1;
-  col += buf.writeText(y + 1, col, "Active Worker", { fg: PALETTE.brightWhite, bold: true });
-  col += buf.writeText(y + 1, col + 1, " #1", { fg: PALETTE.dimGray });
-  col += buf.writeText(y + 1, col + 2, ` ${aw.workerType}`, { fg: PALETTE.gray });
+  col += buf.writeText(y, col, "Active Worker", { fg: PALETTE.brightWhite, bold: true });
+  col += buf.writeText(y, col + 1, " #1", { fg: PALETTE.dimGray });
+  col += buf.writeText(y, col + 2, ` ${aw.workerType}`, { fg: PALETTE.gray });
 
   // Duration on right
   const duration = `Duration ${formatElapsed(aw.elapsedMs)}`;
-  buf.writeText(y + 1, rect.x + w - duration.length - 1, duration, { fg: PALETTE.gray });
+  buf.writeText(y, rect.x + w - duration.length - 1, duration, { fg: PALETTE.gray });
 
-  // Worker output area (rows y+2 to y+height-1)
-  const outputStart = y + 3;
+  // Worker output area (rows below the header)
+  const outputStart = y + 1;
   const outputEnd = y + rect.height;
 
   if (aw.report) {

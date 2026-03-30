@@ -5,7 +5,7 @@
 import { Screen } from "./terminal/screen.js";
 import { startKeyListener, type Key } from "./terminal/input.js";
 import { Buffer } from "./terminal/buffer.js";
-import { splitV, splitH, type Rect } from "./terminal/layout.js";
+import { inset, type Rect } from "./terminal/layout.js";
 import type { MissionControlSnapshot } from "./types.js";
 import type { SnapshotDeps } from "./snapshot.js";
 import { buildSnapshot } from "./snapshot.js";
@@ -20,6 +20,7 @@ import { renderFooter } from "./panels/footer.js";
 import { renderModal } from "./widgets/modal.js";
 import { getValidFeatureTransitions } from "../domain/mission-state.js";
 import { PALETTE } from "./theme.js";
+import { BOX } from "./terminal/ansi.js";
 
 export interface OnceFrameOptions {
   snapshot: MissionControlSnapshot;
@@ -36,7 +37,8 @@ export interface InteractiveOptions {
  */
 export function renderOnceFrame(opts: OnceFrameOptions): string {
   const width = Math.min(process.stdout.columns || 120, 200);
-  const height = Math.max(opts.snapshot.features.length * 2 + 12, 16);
+  const minHeight = Math.max(opts.snapshot.features.length * 2 + 18, 22);
+  const height = Math.max(process.stdout.rows || 0, minHeight);
   const buf = new Buffer(width, height);
   const state = createInitialState(opts.snapshot);
   renderFrame(buf, state);
@@ -50,25 +52,37 @@ export function renderOnceFrame(opts: OnceFrameOptions): string {
 export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
   const screen = new Screen();
   let state = createInitialState(opts.snapshot);
+  let shuttingDown = false;
 
   function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  const requestQuit = (): void => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    state = reduce(state, { type: "quit" });
+  };
+
   // Key handler sets dirty flag
   let dirty = true;
   const handleKey = (key: Key): void => {
+    if (shuttingDown) return;
     const action = keyToAction(key, state);
     if (action) {
       state = reduce(state, action);
+      if (action.type === "quit") shuttingDown = true;
       dirty = true;
     }
   };
 
   // SIGINT/SIGTERM cleanup
-  const exitClean = (): void => { screen.exit(); process.exit(0); };
-  process.on("SIGINT", exitClean);
-  process.on("SIGTERM", exitClean);
+  const handleSignal = (): void => {
+    requestQuit();
+    dirty = true;
+  };
+  process.on("SIGINT", handleSignal);
+  process.on("SIGTERM", handleSignal);
 
   screen.enter();
   const stopKeys = startKeyListener(handleKey);
@@ -84,6 +98,7 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
 
     while (state.running) {
       await sleep(100);
+      if (!state.running) break;
 
       // Check for terminal resize
       if (screen.refreshSize()) dirty = true;
@@ -112,8 +127,8 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
   } finally {
     stopKeys();
     screen.exit();
-    process.off("SIGINT", exitClean);
-    process.off("SIGTERM", exitClean);
+    process.off("SIGINT", handleSignal);
+    process.off("SIGTERM", handleSignal);
   }
 }
 
@@ -153,41 +168,141 @@ function renderFrame(buf: Buffer, state: AppState): void {
   const snap = state.snapshot;
   const w = buf.width;
   const h = buf.height;
+  if (w < 4 || h < 8) return;
 
-  const workerHeight = Math.max(5, Math.floor(h * 0.3));
+  const borderStyle = { fg: PALETTE.border };
+  const outerRect = { x: 0, y: 0, width: w, height: h };
+  const innerRect = inset(outerRect, 1);
+  buf.drawBorder(outerRect, borderStyle);
 
-  const zones = splitV({ x: 0, y: 0, width: w, height: h }, [
-    1, 1, -1, workerHeight, 1,
-  ]);
+  const headerRect: Rect = { x: innerRect.x, y: innerRect.y, width: innerRect.width, height: 1 };
+  const headerDividerY = headerRect.y + headerRect.height;
+  const statusRect: Rect = { x: innerRect.x, y: headerDividerY + 1, width: innerRect.width, height: 1 };
+  const statusDividerY = statusRect.y + statusRect.height;
+  const bottomDividerY = h - 5;
+  const spacerY = h - 4;
+  const footerDividerY = h - 3;
+  const footerRect: Rect = { x: innerRect.x, y: h - 2, width: innerRect.width, height: 1 };
 
-  const [headerRect, statusRect, bodyRect, workerRect, footerRect] = zones;
+  drawFullWidthDivider(buf, headerDividerY, borderStyle);
+  drawFullWidthDivider(buf, statusDividerY, borderStyle);
+  drawFullWidthDivider(buf, bottomDividerY, borderStyle);
+  drawFullWidthDivider(buf, footerDividerY, borderStyle);
+  buf.fillRect({ x: 1, y: spacerY, width: w - 2, height: 1 }, " ");
 
-  const [leftRect, rightRect] = splitH(bodyRect!, [11, 9]);
+  const bodyY = statusDividerY + 1;
+  const bodyBottomY = bottomDividerY - 1;
+  const bodyHeight = Math.max(0, bodyBottomY - bodyY + 1);
+  const workerHeight = Math.min(Math.max(2, Math.floor(bodyHeight * 0.2)), Math.max(2, bodyHeight - 6));
+  const topBodyHeight = Math.max(4, bodyHeight - workerHeight - 1);
+  const topBodyRect: Rect = { x: innerRect.x, y: bodyY, width: innerRect.width, height: topBodyHeight };
+  const workerDividerY = topBodyRect.y + topBodyRect.height;
+  const workerRect: Rect = {
+    x: innerRect.x,
+    y: workerDividerY + 1,
+    width: innerRect.width,
+    height: Math.max(0, bodyBottomY - workerDividerY),
+  };
 
-  const [featureListRect, progressRect] = splitV(rightRect!, [
-    Math.max(3, Math.ceil(rightRect!.height * 0.5)),
-    -1,
-  ]);
+  drawFullWidthDivider(buf, workerDividerY, borderStyle);
 
-  renderHeader(buf, headerRect!, snap);
-  renderStatusBar(buf, statusRect!, snap);
-  renderFeatureDetail(buf, leftRect!, snap);
-  renderFeatureList(buf, featureListRect!, snap, state.selectedFeatureIndex);
-  renderProgressLog(buf, progressRect!, snap.progressLog);
-  renderWorkerPanel(buf, workerRect!, snap);
-  renderFooter(buf, footerRect!, snap);
+  const splitOffset = clamp(Math.round(innerRect.width * (11 / 20)), 20, Math.max(20, innerRect.width - 18));
+  const bodySplitX = clamp(innerRect.x + splitOffset, innerRect.x + 12, innerRect.x + innerRect.width - 13);
+  drawVerticalDivider(buf, bodySplitX, statusDividerY, bottomDividerY, borderStyle);
+  buf.set(statusDividerY, bodySplitX, BOX.teeDown, borderStyle);
+  buf.set(workerDividerY, bodySplitX, BOX.cross, borderStyle);
+  buf.set(bottomDividerY, bodySplitX, BOX.teeUp, borderStyle);
 
-  // Vertical separator
-  if (rightRect) {
-    for (let r = bodyRect!.y; r < bodyRect!.y + bodyRect!.height; r++) {
-      buf.set(r, rightRect.x - 1, "\u2502", { fg: PALETTE.dimGray });
-    }
-  }
+  const leftRect: Rect = {
+    x: innerRect.x,
+    y: topBodyRect.y,
+    width: Math.max(0, bodySplitX - innerRect.x),
+    height: topBodyRect.height,
+  };
+  const rightRect: Rect = {
+    x: bodySplitX + 1,
+    y: topBodyRect.y,
+    width: Math.max(0, innerRect.x + innerRect.width - bodySplitX - 1),
+    height: topBodyRect.height,
+  };
+  const minFeatureHeight = Math.min(topBodyRect.height - 3, Math.max(4, snap.features.length + 2));
+  const featureHeight = Math.min(
+    Math.max(minFeatureHeight, Math.ceil(topBodyRect.height * 0.45)),
+    Math.max(4, topBodyRect.height - 3),
+  );
+  const rightSplitY = topBodyRect.y + featureHeight;
+  drawHorizontalRange(buf, rightSplitY, bodySplitX, w - 1, borderStyle, BOX.cross, BOX.teeLeft);
+
+  const featureListRect: Rect = {
+    x: rightRect.x,
+    y: rightRect.y,
+    width: rightRect.width,
+    height: Math.max(0, rightSplitY - rightRect.y),
+  };
+  const progressRect: Rect = {
+    x: rightRect.x,
+    y: rightSplitY + 1,
+    width: rightRect.width,
+    height: Math.max(0, topBodyRect.y + topBodyRect.height - rightSplitY - 1),
+  };
+
+  renderHeader(buf, headerRect, snap);
+  renderStatusBar(buf, statusRect, snap);
+  renderFeatureDetail(buf, leftRect, snap);
+  renderFeatureList(buf, featureListRect, snap, state.selectedFeatureIndex);
+  renderProgressLog(buf, progressRect, snap.progressLog);
+  renderWorkerPanel(buf, workerRect, snap);
+  renderFooter(buf, footerRect, snap);
 
   // Modal overlay
-  if (state.modal.kind !== "none") {
-    renderModalOverlay(buf, bodyRect!, state);
+  const modalRect: Rect = {
+    x: innerRect.x,
+    y: bodyY,
+    width: innerRect.width,
+    height: Math.max(0, footerDividerY - bodyY),
+  };
+  if (state.modal.kind !== "none" && modalRect.width > 0 && modalRect.height > 0) {
+    renderModalOverlay(buf, modalRect, state);
   }
+}
+
+function drawFullWidthDivider(buf: Buffer, y: number, s: { fg: number }): void {
+  drawHorizontalRange(buf, y, 0, buf.width - 1, s, BOX.teeRight, BOX.teeLeft);
+}
+
+function drawHorizontalRange(
+  buf: Buffer,
+  y: number,
+  startX: number,
+  endX: number,
+  s: { fg: number },
+  leftCap: string,
+  rightCap: string,
+): void {
+  if (startX > endX || y < 0 || y >= buf.height) return;
+  buf.set(y, startX, leftCap, s);
+  for (let x = startX + 1; x < endX; x++) {
+    buf.set(y, x, BOX.horizontal, s);
+  }
+  if (endX > startX) {
+    buf.set(y, endX, rightCap, s);
+  }
+}
+
+function drawVerticalDivider(
+  buf: Buffer,
+  x: number,
+  startY: number,
+  endY: number,
+  s: { fg: number },
+): void {
+  for (let y = startY + 1; y < endY; y++) {
+    buf.set(y, x, BOX.vertical, s);
+  }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
 }
 
 function renderModalOverlay(buf: Buffer, parentRect: Rect, state: AppState): void {
