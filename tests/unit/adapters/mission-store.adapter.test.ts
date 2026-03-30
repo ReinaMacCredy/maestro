@@ -233,4 +233,49 @@ describe("FsMissionStoreAdapter", () => {
       expect(mission!.proposal).toBeUndefined();
     });
   });
+
+  describe("cleanOrphanedStaging", () => {
+    it("removes orphaned .staging-* directories", async () => {
+      const { mkdir, readdir } = await import("node:fs/promises");
+      const missionsRoot = join(tmpDir, ".maestro", "missions");
+      await mkdir(missionsRoot, { recursive: true });
+      await mkdir(join(missionsRoot, ".staging-orphan-001"));
+      await mkdir(join(missionsRoot, ".staging-orphan-002"));
+
+      const cleaned = await store.cleanOrphanedStaging();
+      expect(cleaned).toBe(2);
+
+      const entries = await readdir(missionsRoot);
+      expect(entries.filter((e) => e.startsWith(".staging-"))).toHaveLength(0);
+    });
+
+    it("returns 0 with no staging dirs", async () => {
+      const { mkdir } = await import("node:fs/promises");
+      await mkdir(join(tmpDir, ".maestro", "missions"), { recursive: true });
+
+      const cleaned = await store.cleanOrphanedStaging();
+      expect(cleaned).toBe(0);
+    });
+
+    it("does not remove real mission dirs", async () => {
+      const { mkdir, readdir } = await import("node:fs/promises");
+      const missionsRoot = join(tmpDir, ".maestro", "missions");
+      await mkdir(missionsRoot, { recursive: true });
+      await mkdir(join(missionsRoot, "2026-01-01-001"));
+      await mkdir(join(missionsRoot, ".staging-orphan"));
+
+      const cleaned = await store.cleanOrphanedStaging();
+      expect(cleaned).toBe(1);
+
+      const entries = await readdir(missionsRoot);
+      expect(entries).toContain("2026-01-01-001");
+      expect(entries.filter((e) => e.startsWith(".staging-"))).toHaveLength(0);
+    });
+
+    it("handles missing missions root gracefully", async () => {
+      // tmpDir exists but .maestro/missions/ does not
+      const cleaned = await store.cleanOrphanedStaging();
+      expect(cleaned).toBe(0);
+    });
+  });
 });

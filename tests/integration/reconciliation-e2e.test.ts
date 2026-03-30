@@ -548,4 +548,84 @@ describe("reconciliation E2E: milestone validating -> executing retry", () => {
     expect(sealOk.exitCode).toBe(0);
     expect(JSON.parse(sealOk.stdout).sealed).toBe(true);
   }, SLOW_CLI_TIMEOUT_MS);
+
+  it("compact progress notation in mission show text output", async () => {
+    // Create mission with 2 milestones
+    const plan = {
+      title: "Compact Test",
+      milestones: [
+        { id: "m1", title: "M1", description: "First", order: 0 },
+        { id: "m2", title: "M2", description: "Second", order: 1 },
+      ],
+      features: [
+        { id: "f1", milestoneId: "m1", title: "F1", description: "D", workerType: "w", verificationSteps: ["S"], fulfills: ["A1"] },
+        { id: "f2", milestoneId: "m2", title: "F2", description: "D", workerType: "w", verificationSteps: ["S"], fulfills: ["A2"] },
+      ],
+    };
+    const planPath = join(tmpDir, "compact-plan.json");
+    await writeFile(planPath, JSON.stringify(plan));
+
+    const createRes = await run(["mission", "create", "--file", planPath, "--json"], tmpDir);
+    expect(createRes.exitCode).toBe(0);
+    const missionId = JSON.parse(createRes.stdout).mission.id;
+
+    await run(["mission", "approve", missionId, "--json"], tmpDir);
+    await run(["mission", "update", missionId, "--status", "executing", "--json"], tmpDir);
+
+    // Complete m1
+    await run(["feature", "update", "f1", "--mission", missionId, "--status", "in-progress"], tmpDir);
+    await run(["feature", "update", "f1", "--mission", missionId, "--status", "review"], tmpDir);
+    await run(["feature", "update", "f1", "--mission", missionId, "--status", "done"], tmpDir);
+
+    // Pass m1 assertion and seal
+    const showRes = await run(["validate", "show", "--mission", missionId, "--milestone", "m1", "--json"], tmpDir);
+    const m1Assertions = JSON.parse(showRes.stdout).assertions;
+    for (const a of m1Assertions) {
+      await run(["validate", "update", a.id, "--mission", missionId, "--result", "passed"], tmpDir);
+    }
+    await run(["milestone", "seal", "m1", "--mission", missionId, "--json"], tmpDir);
+
+    // Start m2
+    await run(["feature", "update", "f2", "--mission", missionId, "--status", "in-progress"], tmpDir);
+
+    // Text output should have compact progress
+    const textRes = await run(["mission", "show", missionId], tmpDir);
+    expect(textRes.exitCode).toBe(0);
+    const output = textRes.stdout;
+    expect(output).toContain("Progress:");
+    expect(output).toContain("[m1: sealed]");
+    expect(output).toMatch(/\[m2: executing \d+\/\d+\]/);
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("--retry-reason persists to retry log", async () => {
+    const plan = createBasicPlan();
+    const planPath = join(tmpDir, "retry-plan.json");
+    await writeFile(planPath, JSON.stringify(plan));
+
+    const createRes = await run(["mission", "create", "--file", planPath, "--json"], tmpDir);
+    expect(createRes.exitCode).toBe(0);
+    const missionId = JSON.parse(createRes.stdout).mission.id;
+
+    await run(["mission", "approve", missionId, "--json"], tmpDir);
+    await run(["mission", "update", missionId, "--status", "executing", "--json"], tmpDir);
+
+    // Progress feature to review then retry with reason
+    await run(["feature", "update", "f1", "--mission", missionId, "--status", "in-progress"], tmpDir);
+    await run(["feature", "update", "f1", "--mission", missionId, "--status", "review"], tmpDir);
+    const retryRes = await run(
+      ["feature", "update", "f1", "--mission", missionId, "--status", "pending", "--retry-reason", "Tests failed on CI"],
+      tmpDir,
+    );
+    expect(retryRes.exitCode).toBe(0);
+
+    // Verify retry log file exists
+    const { readFile } = await import("node:fs/promises");
+    const retryLogPath = join(tmpDir, ".maestro", "missions", missionId, "workers", "f1", "retry-log.json");
+    const logContent = JSON.parse(await readFile(retryLogPath, "utf-8"));
+    expect(Array.isArray(logContent)).toBe(true);
+    expect(logContent).toHaveLength(1);
+    expect(logContent[0].reason).toBe("Tests failed on CI");
+    expect(logContent[0].previousStatus).toBe("review");
+    expect(logContent[0].timestamp).toBeDefined();
+  }, SLOW_CLI_TIMEOUT_MS);
 });

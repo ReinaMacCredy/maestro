@@ -457,4 +457,144 @@ describe("generateWorkerPrompt", () => {
 
     expect(result.prompt).not.toContain("### Dependencies");
   });
+
+  it("renders preconditions section when feature has preconditions", async () => {
+    const missionStore = new FsMissionStoreAdapter(tmpDir);
+    const featureStore = new FsFeatureStoreAdapter(tmpDir);
+    const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+
+    const samplePlan = {
+      title: "Test", description: "Test",
+      milestones: [{ id: "m1", title: "M1", description: "M1 desc", order: 0 }],
+      features: [{
+        id: "f1", milestoneId: "m1", title: "Feature",
+        description: "Desc", workerType: "test-skill",
+        verificationSteps: ["Step 1"], dependsOn: [],
+        preconditions: "Docker running on port 2375",
+      }],
+    };
+
+    const { createMission } = await import("../../../src/usecases/mission-lifecycle.usecase.js");
+    const { mission } = await createMission(missionStore, featureStore, assertionStore, samplePlan);
+    await createSampleSkill(tmpDir, "test-skill", "# Skill");
+
+    const result = await generateWorkerPrompt(missionStore, featureStore, assertionStore, tmpDir, mission.id, "f1");
+    expect(result.prompt).toContain("### Preconditions");
+    expect(result.prompt).toContain("Docker running on port 2375");
+  });
+
+  it("renders expected behavior section when feature has expectedBehavior", async () => {
+    const missionStore = new FsMissionStoreAdapter(tmpDir);
+    const featureStore = new FsFeatureStoreAdapter(tmpDir);
+    const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+
+    const samplePlan = {
+      title: "Test", description: "Test",
+      milestones: [{ id: "m1", title: "M1", description: "M1 desc", order: 0 }],
+      features: [{
+        id: "f1", milestoneId: "m1", title: "Feature",
+        description: "Desc", workerType: "test-skill",
+        verificationSteps: ["Step 1"], dependsOn: [],
+        expectedBehavior: "Returns 200 OK with JWT token",
+      }],
+    };
+
+    const { createMission } = await import("../../../src/usecases/mission-lifecycle.usecase.js");
+    const { mission } = await createMission(missionStore, featureStore, assertionStore, samplePlan);
+    await createSampleSkill(tmpDir, "test-skill", "# Skill");
+
+    const result = await generateWorkerPrompt(missionStore, featureStore, assertionStore, tmpDir, mission.id, "f1");
+    expect(result.prompt).toContain("### Expected Behavior");
+    expect(result.prompt).toContain("Returns 200 OK with JWT token");
+  });
+
+  it("omits preconditions/expectedBehavior when not set", async () => {
+    const missionStore = new FsMissionStoreAdapter(tmpDir);
+    const featureStore = new FsFeatureStoreAdapter(tmpDir);
+    const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+
+    const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
+    await createSampleSkill(tmpDir, "test-skill", "# Skill");
+
+    const result = await generateWorkerPrompt(missionStore, featureStore, assertionStore, tmpDir, missionId, "f1");
+    expect(result.prompt).not.toContain("### Preconditions");
+    expect(result.prompt).not.toContain("### Expected Behavior");
+  });
+
+  it("lists completed and in-progress sibling features", async () => {
+    const missionStore = new FsMissionStoreAdapter(tmpDir);
+    const featureStore = new FsFeatureStoreAdapter(tmpDir);
+    const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+
+    const samplePlan = {
+      title: "Test", description: "Test",
+      milestones: [{ id: "m1", title: "M1", description: "M1", order: 0 }],
+      features: [
+        { id: "f1", milestoneId: "m1", title: "Done Feature", description: "D", workerType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
+        { id: "f2", milestoneId: "m1", title: "Active Feature", description: "D", workerType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
+        { id: "f3", milestoneId: "m1", title: "Target Feature", description: "D", workerType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
+      ],
+    };
+
+    const { createMission } = await import("../../../src/usecases/mission-lifecycle.usecase.js");
+    const { mission } = await createMission(missionStore, featureStore, assertionStore, samplePlan);
+
+    // Progress f1 to done, f2 to in-progress
+    await featureStore.update(mission.id, "f1", { status: "in-progress" });
+    await featureStore.update(mission.id, "f1", { status: "review" });
+    await featureStore.update(mission.id, "f1", { status: "done" });
+    await featureStore.update(mission.id, "f2", { status: "in-progress" });
+
+    await createSampleSkill(tmpDir, "test-skill", "# Skill");
+
+    // Generate prompt for f3 -- should see f1 in completed, f2 in in-progress
+    const result = await generateWorkerPrompt(missionStore, featureStore, assertionStore, tmpDir, mission.id, "f3");
+    expect(result.prompt).toContain("### Completed Features");
+    expect(result.prompt).toContain("f1: Done Feature");
+    expect(result.prompt).toContain("### In Progress Features");
+    expect(result.prompt).toContain("f2: Active Feature");
+  });
+
+  it("omits feature listing when all siblings are pending", async () => {
+    const missionStore = new FsMissionStoreAdapter(tmpDir);
+    const featureStore = new FsFeatureStoreAdapter(tmpDir);
+    const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+
+    const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
+    await createSampleSkill(tmpDir, "test-skill", "# Skill");
+
+    // All features are pending by default
+    const result = await generateWorkerPrompt(missionStore, featureStore, assertionStore, tmpDir, missionId, "f1");
+    expect(result.prompt).not.toContain("### Completed Features");
+    expect(result.prompt).not.toContain("### In Progress Features");
+  });
+
+  it("includes handoff protocol when worker-base skill exists", async () => {
+    const missionStore = new FsMissionStoreAdapter(tmpDir);
+    const featureStore = new FsFeatureStoreAdapter(tmpDir);
+    const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+
+    const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
+    await createSampleSkill(tmpDir, "test-skill", "# Skill");
+    await createBuiltInSkill(tmpDir, "maestro:worker-base", "# Worker Base\nFollow the handoff protocol.");
+
+    const result = await generateWorkerPrompt(missionStore, featureStore, assertionStore, tmpDir, missionId, "f1");
+    expect(result.prompt).toContain("## Handoff Protocol");
+    expect(result.prompt).toContain("<!-- BEGIN HANDOFF PROTOCOL -->");
+    expect(result.prompt).toContain("# Worker Base");
+    expect(result.prompt).toContain("<!-- END HANDOFF PROTOCOL -->");
+  });
+
+  it("omits handoff protocol when worker-base skill is missing", async () => {
+    const missionStore = new FsMissionStoreAdapter(tmpDir);
+    const featureStore = new FsFeatureStoreAdapter(tmpDir);
+    const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+
+    const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
+    await createSampleSkill(tmpDir, "test-skill", "# Skill");
+    // Do NOT create maestro:worker-base skill
+
+    const result = await generateWorkerPrompt(missionStore, featureStore, assertionStore, tmpDir, missionId, "f1");
+    expect(result.prompt).not.toContain("## Handoff Protocol");
+  });
 });
