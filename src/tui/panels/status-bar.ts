@@ -1,5 +1,5 @@
 /**
- * Status bar panel -- ● RUNNING [====] 0/4 [+2]
+ * Status bar panel -- ● RUNNING [green][dark] N/M [+K]
  */
 import type { Buffer } from "../terminal/buffer.js";
 import type { Rect } from "../terminal/layout.js";
@@ -20,29 +20,33 @@ export function renderStatusBar(buf: Buffer, rect: Rect, snap: MissionControlSna
   const labelEnd = rect.x + 3 + label.length;
   buf.writeText(y, rect.x + 3, label, { fg: statusColor, bold: true });
 
-  // Progress bar: wide green filled blocks
+  // Counts on right
   const countsStr = `${snap.featureProgress.done}/${snap.featureProgress.total}`;
   const activeStr = snap.featureProgress.active > 0 ? ` [+${snap.featureProgress.active}]` : "";
   const rightText = countsStr + activeStr;
   const rightStart = rect.x + w - rightText.length - 1;
 
+  // Progress bar: green for (done + active), dark bg for unfilled
   const barStart = labelEnd + 2;
   const barEnd = rightStart - 2;
   const barWidth = barEnd - barStart;
 
   if (barWidth > 4) {
-    const pct = snap.featureProgress.total > 0
-      ? snap.featureProgress.done / snap.featureProgress.total
+    const total = snap.featureProgress.total;
+    const pct = total > 0
+      ? (snap.featureProgress.done + snap.featureProgress.active) / total
       : 0;
-    const filled = Math.round(pct * barWidth);
+    const filled = Math.round(Math.min(1, pct) * barWidth);
 
-    for (let i = 0; i < barWidth; i++) {
-      buf.set(y, barStart + i, i < filled ? BLOCK.full : BLOCK.dark, {
-        fg: i < filled ? PALETTE.green : PALETTE.dimGray,
-      });
+    // Green filled portion (full blocks)
+    for (let i = 0; i < filled; i++) {
+      buf.set(y, barStart + i, BLOCK.full, { fg: PALETTE.green });
+    }
+    // Dark unfilled portion (dark bg with spaces)
+    for (let i = filled; i < barWidth; i++) {
+      buf.set(y, barStart + i, " ", { bg: 238 });
     }
   }
 
-  // Counts on right
   buf.writeText(y, rightStart, rightText, { fg: PALETTE.brightWhite, bold: true });
 }

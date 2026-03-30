@@ -198,6 +198,13 @@ function renderFrame(buf: Buffer, state: AppState): void {
   renderWorkerPanel(buf, workerRect, snap);
   renderFooter(buf, footerRect, snap);
 
+  // Vertical separator between left and right panels
+  if (rightRect) {
+    for (let r = bodyRect.y; r < bodyRect.y + bodyRect.height; r++) {
+      buf.set(r, rightRect.x - 1, "\u2502", { fg: PALETTE.dimGray });
+    }
+  }
+
   // Modal overlay (last, so it draws on top)
   if (state.modal.kind !== "none") {
     renderModalOverlay(buf, bodyRect, state);
