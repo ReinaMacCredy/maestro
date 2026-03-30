@@ -35,9 +35,6 @@ export class FsMissionStoreAdapter implements MissionStorePort {
   }
 
   async listIds(): Promise<readonly string[]> {
-    // Fire-and-forget cleanup of orphaned staging directories
-    this.cleanOrphanedStaging().catch(() => {});
-
     const dirs = await listDirs(this.missionsRoot());
     return dirs
       .map((d) => d.split("/").pop() || "")

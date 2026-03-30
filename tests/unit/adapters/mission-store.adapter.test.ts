@@ -27,11 +27,11 @@ afterEach(async () => {
 });
 
 describe("FsMissionStoreAdapter", () => {
-  describe("stage and finalize", () => {
-    it("stages a mission and returns ID", async () => {
-      const input = makeCreateInput();
-      const id = await store.stage(input, "2026-03-28-001", []);
-      expect(id).toBe("2026-03-28-001");
+    describe("stage and finalize", () => {
+      it("stages a mission and returns ID", async () => {
+        const input = makeCreateInput();
+        const id = await store.stage(input, "2026-03-28-001", []);
+        expect(id).toBe("2026-03-28-001");
     });
 
     it("finalizes a staged mission into the active directory", async () => {
@@ -45,10 +45,10 @@ describe("FsMissionStoreAdapter", () => {
       expect(mission!.title).toBe("Test Mission");
     });
 
-    it("creates subdirectories on finalize", async () => {
-      const input = makeCreateInput();
-      const id = await store.stage(input, "2026-03-28-001", []);
-      await store.finalize(id);
+      it("creates subdirectories on finalize", async () => {
+        const input = makeCreateInput();
+        const id = await store.stage(input, "2026-03-28-001", []);
+        await store.finalize(id);
 
       // Check that feature, workers, and checkpoints dirs exist
       const featuresDir = join(tmpDir, ".maestro", "missions", id, "features");
@@ -56,11 +56,24 @@ describe("FsMissionStoreAdapter", () => {
       const checkpointsDir = join(tmpDir, ".maestro", "missions", id, "checkpoints");
 
       const { stat } = await import("node:fs/promises");
-      expect((await stat(featuresDir)).isDirectory()).toBe(true);
-      expect((await stat(workersDir)).isDirectory()).toBe(true);
-      expect((await stat(checkpointsDir)).isDirectory()).toBe(true);
+        expect((await stat(featuresDir)).isDirectory()).toBe(true);
+        expect((await stat(workersDir)).isDirectory()).toBe(true);
+        expect((await stat(checkpointsDir)).isDirectory()).toBe(true);
+      });
+
+      it("keeps staged missions intact when listIds runs before finalize", async () => {
+        const input = makeCreateInput();
+        const id = await store.stage(input, "2026-03-28-001", []);
+
+        expect(await store.listIds()).toEqual([]);
+
+        await store.finalize(id);
+
+        const mission = await store.get(id);
+        expect(mission).toBeDefined();
+        expect(mission!.id).toBe(id);
+      });
     });
-  });
 
   describe("get", () => {
     it("returns undefined for non-existent mission", async () => {
