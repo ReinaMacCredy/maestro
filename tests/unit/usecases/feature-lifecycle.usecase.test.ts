@@ -185,6 +185,21 @@ describe("feature lifecycle usecases", () => {
       ).rejects.toThrow("Invalid feature transition");
     });
 
+    it("does not auto-start an approved mission when the feature transition is invalid", async () => {
+      const { missionId } = await createSampleMission(missionStore, featureStore, assertionStore, tmpDir);
+
+      await missionStore.update(missionId, { status: "approved" });
+
+      expect(
+        updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
+          status: "review",
+        }),
+      ).rejects.toThrow("Invalid feature transition");
+
+      const mission = await missionStore.get(missionId);
+      expect(mission?.status).toBe("approved");
+    });
+
     it("allows retry from in_review to pending", async () => {
       const { missionId } = await createSampleMission(missionStore, featureStore, assertionStore, tmpDir);
 
@@ -283,6 +298,34 @@ describe("feature lifecycle usecases", () => {
       expect(result.feature.report).toBeDefined();
       expect(result.feature.report?.salientSummary).toBe("Initial implementation");
       expect(result.feature.report?.whatWasImplemented).toBe("Initial implementation");
+    });
+
+    it("records retry reasons only for real transitions back to pending", async () => {
+      const { missionId } = await createSampleMission(missionStore, featureStore, assertionStore, tmpDir);
+
+      await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
+        status: "in-progress",
+      });
+      await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
+        status: "review",
+      });
+
+      await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
+        status: "pending",
+        retryReason: "First retry",
+      });
+      await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
+        status: "pending",
+        retryReason: "No-op retry",
+      });
+
+      const { readFile } = await import("node:fs/promises");
+      const retryLogPath = join(tmpDir, ".maestro", "missions", missionId, "workers", "f1", "retry-log.json");
+      const retryLog = JSON.parse(await readFile(retryLogPath, "utf8"));
+
+      expect(retryLog).toHaveLength(1);
+      expect(retryLog[0].reason).toBe("First retry");
+      expect(retryLog[0].previousStatus).toBe("review");
     });
 
     it("throws for non-existent mission", async () => {

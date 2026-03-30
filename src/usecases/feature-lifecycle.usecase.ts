@@ -92,6 +92,11 @@ export async function updateFeature(
     ]);
   }
 
+  // Validate status transition if provided
+  if (input.status !== undefined && input.status !== existing.status) {
+    assertFeatureTransition(existing.status, input.status);
+  }
+
   let missionAutoStarted = false;
   if (mission.status === "approved" && input.status !== undefined && input.status !== existing.status) {
     const autoStartedMission = await missionStore.update(missionId, { status: "executing" });
@@ -99,11 +104,6 @@ export async function updateFeature(
       throw new MaestroError(`Failed to auto-start mission ${missionId}`);
     }
     missionAutoStarted = true;
-  }
-
-  // Validate status transition if provided
-  if (input.status !== undefined && input.status !== existing.status) {
-    assertFeatureTransition(existing.status, input.status);
   }
 
   // Handle report persistence
@@ -122,7 +122,7 @@ export async function updateFeature(
   }
 
   // Persist retry reason if provided on retry (status -> pending)
-  if (input.retryReason && input.status === "pending") {
+  if (input.retryReason && input.status === "pending" && existing.status !== "pending") {
     const retryEntry = {
       reason: input.retryReason,
       timestamp: new Date().toISOString(),
