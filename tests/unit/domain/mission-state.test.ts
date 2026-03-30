@@ -201,4 +201,167 @@ describe("mission state transitions", () => {
       expect(() => assertAssertionTransition("blocked", "pending")).not.toThrow();
     });
   });
+
+  // ============================
+  // Phase 7 additions
+  // ============================
+
+  describe("paused mission state", () => {
+    it("allows executing -> paused", () => {
+      expect(canTransitionMission("executing", "paused")).toBe(true);
+    });
+
+    it("allows paused -> executing (resume)", () => {
+      expect(canTransitionMission("paused", "executing")).toBe(true);
+    });
+
+    it("rejects paused -> completed (must resume first)", () => {
+      expect(canTransitionMission("paused", "completed")).toBe(false);
+    });
+
+    it("paused has exactly one outbound transition (executing)", () => {
+      const valid = getValidMissionTransitions("paused");
+      expect(valid).toEqual(["executing"]);
+    });
+
+    it("assertMissionTransition throws for paused -> completed", () => {
+      expect(() => assertMissionTransition("paused", "completed")).toThrow(MaestroError);
+    });
+
+    it("assertMissionTransition allows executing -> paused", () => {
+      expect(() => assertMissionTransition("executing", "paused")).not.toThrow();
+    });
+  });
+
+  describe("assigned feature state", () => {
+    it("allows pending -> assigned", () => {
+      expect(canTransitionFeature("pending", "assigned")).toBe(true);
+    });
+
+    it("allows assigned -> in-progress", () => {
+      expect(canTransitionFeature("assigned", "in-progress")).toBe(true);
+    });
+
+    it("rejects assigned -> review (must go through in-progress first)", () => {
+      expect(canTransitionFeature("assigned", "review")).toBe(false);
+    });
+
+    it("assigned has exactly one outbound transition (in-progress)", () => {
+      const valid = getValidFeatureTransitions("assigned");
+      expect(valid).toEqual(["in-progress"]);
+    });
+
+    it("assertFeatureTransition throws for assigned -> review", () => {
+      expect(() => assertFeatureTransition("assigned", "review")).toThrow(MaestroError);
+    });
+
+    it("assertFeatureTransition allows pending -> assigned", () => {
+      expect(() => assertFeatureTransition("pending", "assigned")).not.toThrow();
+    });
+  });
+
+  describe("blocked -> waived assertion transition (B1 fix)", () => {
+    it("allows blocked -> waived", () => {
+      expect(canTransitionAssertion("blocked", "waived")).toBe(true);
+    });
+
+    it("assertAssertionTransition allows blocked -> waived", () => {
+      expect(() => assertAssertionTransition("blocked", "waived")).not.toThrow();
+    });
+
+    it("blocked has two outbound transitions: pending and waived", () => {
+      const valid = getValidAssertionTransitions("blocked");
+      expect(valid).toContain("pending");
+      expect(valid).toContain("waived");
+      expect(valid).toHaveLength(2);
+    });
+  });
+
+  describe("validating -> executing milestone retry", () => {
+    it("allows validating -> executing (retry after failed validation)", () => {
+      expect(canTransitionMilestone("validating", "executing")).toBe(true);
+    });
+
+    it("assertMilestoneTransition allows validating -> executing", () => {
+      expect(() => assertMilestoneTransition("validating", "executing")).not.toThrow();
+    });
+
+    it("validating has three outbound transitions", () => {
+      const valid = getValidMilestoneTransitions("validating");
+      expect(valid).toContain("sealed");
+      expect(valid).toContain("failed");
+      expect(valid).toContain("executing");
+      expect(valid).toHaveLength(3);
+    });
+  });
+
+  describe("sealed as terminal milestone state", () => {
+    it("sealed has no outbound transitions", () => {
+      const valid = getValidMilestoneTransitions("sealed");
+      expect(valid).toHaveLength(0);
+    });
+
+    it("rejects sealed -> pending", () => {
+      expect(canTransitionMilestone("sealed", "pending")).toBe(false);
+    });
+
+    it("rejects sealed -> executing", () => {
+      expect(canTransitionMilestone("sealed", "executing")).toBe(false);
+    });
+
+    it("rejects sealed -> validating", () => {
+      expect(canTransitionMilestone("sealed", "validating")).toBe(false);
+    });
+
+    it("rejects sealed -> failed", () => {
+      expect(canTransitionMilestone("sealed", "failed")).toBe(false);
+    });
+
+    it("assertMilestoneTransition throws with terminal hint for sealed", () => {
+      try {
+        assertMilestoneTransition("sealed", "executing");
+      } catch (err) {
+        expect(err).toBeInstanceOf(MaestroError);
+        const error = err as MaestroError;
+        expect(error.hints.some((h: string) => h.includes("terminal"))).toBe(true);
+      }
+    });
+  });
+
+  describe("done as terminal feature state", () => {
+    it("done has no outbound transitions", () => {
+      const valid = getValidFeatureTransitions("done");
+      expect(valid).toHaveLength(0);
+    });
+
+    it("rejects done -> pending", () => {
+      expect(canTransitionFeature("done", "pending")).toBe(false);
+    });
+
+    it("rejects done -> assigned", () => {
+      expect(canTransitionFeature("done", "assigned")).toBe(false);
+    });
+
+    it("rejects done -> in-progress", () => {
+      expect(canTransitionFeature("done", "in-progress")).toBe(false);
+    });
+
+    it("rejects done -> review", () => {
+      expect(canTransitionFeature("done", "review")).toBe(false);
+    });
+
+    it("rejects done -> blocked", () => {
+      expect(canTransitionFeature("done", "blocked")).toBe(false);
+    });
+
+    it("assertFeatureTransition throws with terminal hint for done", () => {
+      try {
+        assertFeatureTransition("done", "pending");
+      } catch (err) {
+        expect(err).toBeInstanceOf(MaestroError);
+        const error = err as MaestroError;
+        expect(error.hints.some((h: string) => h.includes("terminal"))).toBe(true);
+      }
+    });
+  });
 });

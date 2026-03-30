@@ -93,6 +93,7 @@ export class FsAssertionStoreAdapter implements AssertionStorePort {
       milestoneId: existing.milestoneId,
       featureId: existing.featureId,
       description: existing.description,
+      surface: existing.surface,
       createdAt: existing.createdAt,
       result: input.result,
       updatedAt: now,

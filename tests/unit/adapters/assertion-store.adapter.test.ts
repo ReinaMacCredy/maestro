@@ -231,4 +231,52 @@ describe("FsAssertionStoreAdapter", () => {
       expect(assertions[0]!.id).toBe("a1");
     });
   });
+
+  // ============================
+  // Phase 7: Surface field roundtrip tests
+  // ============================
+
+  describe("surface field roundtrip", () => {
+    it("roundtrips assertion with explicit surface", async () => {
+      const input = makeCreateInput({ surface: "browser" });
+      const created = await store.create(missionId, input, "a1");
+
+      expect(created.surface).toBe("browser");
+
+      // Read back from disk
+      const loaded = await store.get(missionId, "a1");
+      expect(loaded).toBeDefined();
+      expect(loaded!.surface).toBe("browser");
+    });
+
+    it("defaults surface to cli when omitted", async () => {
+      const input = makeCreateInput();
+      const created = await store.create(missionId, input, "a1");
+
+      expect(created.surface).toBe("cli");
+
+      // Read back from disk
+      const loaded = await store.get(missionId, "a1");
+      expect(loaded).toBeDefined();
+      expect(loaded!.surface).toBe("cli");
+    });
+
+    it("preserves surface through update", async () => {
+      const input = makeCreateInput({ surface: "api" });
+      await store.create(missionId, input, "a1");
+
+      const updated = await store.update(missionId, "a1", { result: "passed" });
+      expect(updated!.surface).toBe("api");
+    });
+
+    it("accepts custom surface values", async () => {
+      const input = makeCreateInput({ surface: "e2e-cypress" });
+      const created = await store.create(missionId, input, "a1");
+
+      expect(created.surface).toBe("e2e-cypress");
+
+      const loaded = await store.get(missionId, "a1");
+      expect(loaded!.surface).toBe("e2e-cypress");
+    });
+  });
 });

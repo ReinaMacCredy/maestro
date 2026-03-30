@@ -221,4 +221,55 @@ describe("FsFeatureStoreAdapter", () => {
       expect(features[0]!.id).toBe("f1");
     });
   });
+
+  // ============================
+  // Phase 7: Field roundtrip tests
+  // ============================
+
+  describe("new field roundtrips", () => {
+    it("roundtrips fulfills, preconditions, and expectedBehavior", async () => {
+      const input = makeCreateInput({
+        fulfills: ["assertion-1"],
+        preconditions: "DB running",
+        expectedBehavior: "Returns 200",
+      });
+      const created = await store.create(missionId, input, "f1");
+
+      expect(created.fulfills).toEqual(["assertion-1"]);
+      expect(created.preconditions).toBe("DB running");
+      expect(created.expectedBehavior).toBe("Returns 200");
+
+      // Read back from disk
+      const loaded = await store.get(missionId, "f1");
+      expect(loaded).toBeDefined();
+      expect(loaded!.fulfills).toEqual(["assertion-1"]);
+      expect(loaded!.preconditions).toBe("DB running");
+      expect(loaded!.expectedBehavior).toBe("Returns 200");
+    });
+
+    it("defaults fulfills to empty array when omitted", async () => {
+      const input = makeCreateInput();
+      const created = await store.create(missionId, input, "f1");
+
+      expect(created.fulfills).toEqual([]);
+
+      const loaded = await store.get(missionId, "f1");
+      expect(loaded!.fulfills).toEqual([]);
+    });
+
+    it("preserves new fields through update", async () => {
+      const input = makeCreateInput({
+        fulfills: ["assertion-1", "assertion-2"],
+        preconditions: "Redis available",
+        expectedBehavior: "Cache hit rate > 90%",
+      });
+      await store.create(missionId, input, "f1");
+
+      // Update status -- new fields should survive
+      const updated = await store.update(missionId, "f1", { status: "in-progress" });
+      expect(updated!.fulfills).toEqual(["assertion-1", "assertion-2"]);
+      expect(updated!.preconditions).toBe("Redis available");
+      expect(updated!.expectedBehavior).toBe("Cache hit rate > 90%");
+    });
+  });
 });

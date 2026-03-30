@@ -197,4 +197,40 @@ describe("FsMissionStoreAdapter", () => {
       expect(updated!.completedAt).toBeTruthy();
     });
   });
+
+  // ============================
+  // Phase 7: Proposal field roundtrip test
+  // ============================
+
+  describe("proposal field roundtrip", () => {
+    it("roundtrips mission with proposal through stage and finalize", async () => {
+      const input = makeCreateInput({ proposal: "# Full proposal\n\nDetailed plan here." });
+      const id = await store.stage(input, "2026-03-28-001", []);
+      await store.finalize(id);
+
+      const mission = await store.get(id);
+      expect(mission).toBeDefined();
+      expect(mission!.proposal).toBe("# Full proposal\n\nDetailed plan here.");
+    });
+
+    it("preserves proposal through update", async () => {
+      const input = makeCreateInput({ proposal: "# Proposal v1" });
+      const id = await store.stage(input, "2026-03-28-001", []);
+      await store.finalize(id);
+
+      // Update status -- proposal should survive
+      const updated = await store.update(id, { status: "approved" });
+      expect(updated!.proposal).toBe("# Proposal v1");
+    });
+
+    it("mission without proposal has undefined proposal field", async () => {
+      const input = makeCreateInput();
+      const id = await store.stage(input, "2026-03-28-001", []);
+      await store.finalize(id);
+
+      const mission = await store.get(id);
+      expect(mission).toBeDefined();
+      expect(mission!.proposal).toBeUndefined();
+    });
+  });
 });
