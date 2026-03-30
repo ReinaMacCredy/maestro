@@ -240,7 +240,15 @@ describe("feature lifecycle usecases", () => {
         report,
       });
 
-      expect(result.feature.report).toEqual(report);
+      // parseWorkerReport converts legacy {content} to rich format
+      expect(result.feature.report).toEqual({
+        salientSummary: "Feature implementation complete",
+        whatWasImplemented: "Feature implementation complete",
+        whatWasLeftUndone: "",
+        verification: { commandsRun: [], interactiveChecks: [] },
+        tests: { added: [] },
+        discoveredIssues: [],
+      });
       expect(result.reportPersisted).toBeDefined();
       expect(result.reportPersisted).toContain("workers/f1/report.json");
     });
@@ -248,7 +256,7 @@ describe("feature lifecycle usecases", () => {
     it("preserves existing report when retrying without new report", async () => {
       const { missionId } = await createSampleMission(missionStore, featureStore, assertionStore, tmpDir);
 
-      // First attach a report
+      // First attach a report (legacy format -- converted on parse)
       const report = {
         content: "Initial implementation",
         timestamp: new Date().toISOString(),
@@ -270,11 +278,11 @@ describe("feature lifecycle usecases", () => {
         status: "pending",
       });
 
-      // Report should be preserved
+      // Report should be preserved in rich format (legacy content -> salientSummary)
       expect(result.feature.status).toBe("pending");
       expect(result.feature.report).toBeDefined();
-      expect(result.feature.report?.content).toBe("Initial implementation");
-      expect(result.feature.report?.agent).toBe("agent-1");
+      expect(result.feature.report?.salientSummary).toBe("Initial implementation");
+      expect(result.feature.report?.whatWasImplemented).toBe("Initial implementation");
     });
 
     it("throws for non-existent mission", async () => {
@@ -319,9 +327,13 @@ describe("feature lifecycle usecases", () => {
 
       const result = await parseWorkerReport(JSON.stringify(reportData));
 
-      expect(result.content).toBe("Test report content");
-      expect(result.timestamp).toBe("2026-03-28T10:00:00.000Z");
-      expect(result.agent).toBe("test-agent");
+      // Legacy content is promoted to salientSummary and whatWasImplemented
+      expect(result.salientSummary).toBe("Test report content");
+      expect(result.whatWasImplemented).toBe("Test report content");
+      expect(result.whatWasLeftUndone).toBe("");
+      expect(result.verification).toEqual({ commandsRun: [], interactiveChecks: [] });
+      expect(result.tests).toEqual({ added: [] });
+      expect(result.discoveredIssues).toEqual([]);
     });
 
     it("generates timestamp if not provided", async () => {
@@ -331,9 +343,10 @@ describe("feature lifecycle usecases", () => {
 
       const result = await parseWorkerReport(JSON.stringify(reportData));
 
-      expect(result.content).toBe("Test report content");
-      expect(result.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-      expect(result.agent).toBeUndefined();
+      // Legacy content-only report is promoted to rich format
+      expect(result.salientSummary).toBe("Test report content");
+      expect(result.whatWasImplemented).toBe("Test report content");
+      expect(result.whatWasLeftUndone).toBe("");
     });
 
     it("reads report from file using @ syntax", async () => {
@@ -346,8 +359,9 @@ describe("feature lifecycle usecases", () => {
 
       const result = await parseWorkerReport(`@${reportPath}`);
 
-      expect(result.content).toBe("File-based report");
-      expect(result.timestamp).toBe("2026-03-28T12:00:00.000Z");
+      // Legacy format from file is promoted to rich format
+      expect(result.salientSummary).toBe("File-based report");
+      expect(result.whatWasImplemented).toBe("File-based report");
     });
 
     it("throws for missing file with @ syntax", async () => {
@@ -369,7 +383,7 @@ describe("feature lifecycle usecases", () => {
 
       expect(
         parseWorkerReport(JSON.stringify(reportData)),
-      ).rejects.toThrow("non-empty 'content' field");
+      ).rejects.toThrow("Worker report must have 'salientSummary' (preferred) or 'content' (legacy) field");
     });
 
     it("throws for empty content field", async () => {
@@ -379,7 +393,7 @@ describe("feature lifecycle usecases", () => {
 
       expect(
         parseWorkerReport(JSON.stringify(reportData)),
-      ).rejects.toThrow("non-empty 'content' field");
+      ).rejects.toThrow("Worker report must have 'salientSummary' (preferred) or 'content' (legacy) field");
     });
 
     it("throws for non-object JSON", async () => {

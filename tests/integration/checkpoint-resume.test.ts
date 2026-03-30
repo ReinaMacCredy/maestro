@@ -331,10 +331,14 @@ describe("checkpoint load semantics", () => {
     expect(loaded.featureStates.f1).toBe("in_progress");
   }, SLOW_CLI_TIMEOUT_MS);
 
-  it("load includes metadata-only restore warning", async () => {
+  it("load restores checkpoint state", async () => {
     const missionId = await createMission(tmpDir);
 
     await run(["checkpoint", "save", "--mission", missionId], tmpDir);
+    await run(
+      ["feature", "update", "f1", "--mission", missionId, "--status", "in_progress"],
+      tmpDir,
+    );
 
     const load = await run(
       ["checkpoint", "load", "--mission", missionId, "--json"],
@@ -342,10 +346,10 @@ describe("checkpoint load semantics", () => {
     );
     const result = JSON.parse(load.stdout);
 
-    expect(result.warning).toBeDefined();
-    expect(result.warning).toContain("WARNING");
-    expect(result.warning).toContain("metadata only");
-    expect(result.warning).toContain("NOT restored");
+    expect(result.restored).toEqual({
+      featureCount: 1,
+      assertionCount: 0,
+    });
   }, SLOW_CLI_TIMEOUT_MS);
 
   it("checkpoint data is immutable once saved", async () => {

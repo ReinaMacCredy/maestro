@@ -33,24 +33,81 @@ export const MilestoneSchema = z.object({
   title: z.string().min(1),
   description: z.string(),
   order: z.number().int().nonnegative(),
+  featureIds: z.array(z.string().min(1)).default([]),
 }).strict();
 
-export const WorkerReportSchema = z.object({
-  content: z.string().min(1),
-  timestamp: z.string().regex(ISO_DATE_PATTERN),
-  agent: z.string().optional(),
+const CommandRunSchema = z.object({
+  command: z.string().min(1),
+  exitCode: z.number().int(),
+  observation: z.string(),
 }).strict();
+
+const InteractiveCheckSchema = z.object({
+  action: z.string().min(1),
+  observed: z.string(),
+}).strict();
+
+const TestCaseSchema = z.object({
+  name: z.string().min(1),
+  verifies: z.string(),
+}).strict();
+
+const TestFileSchema = z.object({
+  file: z.string().min(1),
+  cases: z.array(TestCaseSchema),
+}).strict();
+
+const DiscoveredIssueSchema = z.object({
+  severity: z.string().min(1),
+  description: z.string().min(1),
+  suggestedFix: z.string().optional(),
+}).strict();
+
+/** Rich worker report (plan spec) */
+const RichWorkerReportSchema = z.object({
+  salientSummary: z.string().min(1),
+  whatWasImplemented: z.string(),
+  whatWasLeftUndone: z.string(),
+  verification: z.object({
+    commandsRun: z.array(CommandRunSchema),
+    interactiveChecks: z.array(InteractiveCheckSchema),
+  }).strict(),
+  tests: z.object({
+    added: z.array(TestFileSchema),
+  }).strict(),
+  discoveredIssues: z.array(DiscoveredIssueSchema),
+}).strict();
+
+/** Legacy worker report (backward compat -- transforms to rich format) */
+const LegacyWorkerReportSchema = z.object({
+  content: z.string().min(1),
+  timestamp: z.string().optional(),
+  agent: z.string().optional(),
+}).strict().transform((legacy) => ({
+  salientSummary: legacy.content,
+  whatWasImplemented: legacy.content,
+  whatWasLeftUndone: "",
+  verification: { commandsRun: [] as readonly z.infer<typeof CommandRunSchema>[], interactiveChecks: [] as readonly z.infer<typeof InteractiveCheckSchema>[] },
+  tests: { added: [] as readonly z.infer<typeof TestFileSchema>[] },
+  discoveredIssues: [] as readonly z.infer<typeof DiscoveredIssueSchema>[],
+}));
+
+/** Accepts rich or legacy worker report, normalizes to rich format */
+export const WorkerReportSchema = z.union([RichWorkerReportSchema, LegacyWorkerReportSchema]);
 
 export const FeatureSchema = z.object({
   id: z.string().min(1),
   missionId: z.string().regex(MISSION_ID_PATTERN),
   milestoneId: z.string().min(1),
-  status: z.enum(["pending", "in_progress", "in_review", "completed", "blocked"]),
+  status: z.enum(["pending", "assigned", "in_progress", "in_review", "completed", "blocked"]),
   title: z.string().min(1),
   description: z.string(),
   skillName: z.string().min(1),
   verificationSteps: z.array(z.string().min(1)).min(1),
   dependsOn: z.array(z.string()).default([]),
+  fulfills: z.array(z.string()).default([]),
+  preconditions: z.string().optional(),
+  expectedBehavior: z.string().optional(),
   report: WorkerReportSchema.optional(),
   createdAt: z.string().regex(ISO_DATE_PATTERN),
   updatedAt: z.string().regex(ISO_DATE_PATTERN),
@@ -63,6 +120,7 @@ export const AssertionSchema = z.object({
   featureId: z.string().min(1),
   status: z.enum(["pending", "passed", "failed", "blocked", "waived"]),
   description: z.string().min(1),
+  surface: z.string().default("cli"),
   evidence: z.string().optional(),
   waivedReason: z.string().min(1).optional(),
   createdAt: z.string().regex(ISO_DATE_PATTERN),
@@ -83,9 +141,10 @@ export const AssertionSchema = z.object({
 
 export const MissionSchema = z.object({
   id: z.string().regex(MISSION_ID_PATTERN),
-  status: z.enum(["draft", "approved", "rejected", "executing", "validating", "completed", "failed"]),
+  status: z.enum(["draft", "approved", "rejected", "executing", "paused", "validating", "completed", "failed"]),
   title: z.string().min(1),
   description: z.string(),
+  proposal: z.string().optional(),
   milestones: z.array(MilestoneSchema),
   features: z.array(z.string().min(1)),
   createdAt: z.string().regex(ISO_DATE_PATTERN),
@@ -111,7 +170,7 @@ export const CheckpointSchema = z.object({
   missionId: z.string().regex(MISSION_ID_PATTERN),
   milestoneId: z.string().min(1),
   timestamp: z.string().regex(ISO_DATE_PATTERN),
-  featureStates: z.record(z.enum(["pending", "in_progress", "in_review", "completed", "blocked"])),
+  featureStates: z.record(z.enum(["pending", "assigned", "in_progress", "in_review", "completed", "blocked"])),
   assertionStates: z.record(z.enum(["pending", "passed", "failed", "blocked", "waived"])),
 }).strict();
 
@@ -119,6 +178,7 @@ export const CheckpointSchema = z.object({
 export const CreateMissionInputSchema = z.object({
   title: z.string().min(1),
   description: z.string(),
+  proposal: z.string().optional(),
   milestones: z.array(MilestoneSchema).min(1),
 }).strict().refine(
   (data) => {
@@ -139,6 +199,9 @@ export const CreateFeatureInputSchema = z.object({
   skillName: z.string().min(1),
   verificationSteps: z.array(z.string().min(1)).min(1),
   dependsOn: z.array(z.string()).optional(),
+  fulfills: z.array(z.string()).optional(),
+  preconditions: z.string().optional(),
+  expectedBehavior: z.string().optional(),
 }).strict();
 
 export const CreateAssertionInputSchema = z.object({
@@ -146,6 +209,7 @@ export const CreateAssertionInputSchema = z.object({
   milestoneId: z.string().min(1),
   featureId: z.string().min(1),
   description: z.string().min(1),
+  surface: z.string().default("cli"),
 }).strict();
 
 export const UpdateAssertionInputSchema = z.object({

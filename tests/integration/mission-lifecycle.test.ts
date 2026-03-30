@@ -342,7 +342,7 @@ describe("full mission lifecycle", () => {
     expect(loadResult.exitCode).toBe(0);
     const loadData = JSON.parse(loadResult.stdout);
     expect(loadData.checkpoint.id).toBe(checkpoint.id);
-    expect(loadData.warning).toContain("metadata only");
+    expect(loadData.restored).toBeDefined();
 
     // Step 12: Complete mission
     const completeResult = await run(

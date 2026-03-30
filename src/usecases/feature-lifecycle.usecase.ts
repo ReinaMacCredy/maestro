@@ -27,6 +27,7 @@ export interface ListFeaturesResult {
 export interface UpdateFeatureResult {
   feature: Feature;
   reportPersisted?: string; // path to persisted report
+  missionAutoStarted?: boolean;
 }
 
 /**
@@ -91,6 +92,15 @@ export async function updateFeature(
     ]);
   }
 
+  let missionAutoStarted = false;
+  if (mission.status === "approved" && input.status !== undefined && input.status !== existing.status) {
+    const autoStartedMission = await missionStore.update(missionId, { status: "executing" });
+    if (!autoStartedMission) {
+      throw new MaestroError(`Failed to auto-start mission ${missionId}`);
+    }
+    missionAutoStarted = true;
+  }
+
   // Validate status transition if provided
   if (input.status !== undefined && input.status !== existing.status) {
     assertFeatureTransition(existing.status, input.status);
@@ -122,12 +132,20 @@ export async function updateFeature(
     throw new MaestroError(`Failed to update feature ${featureId}`);
   }
 
-  return { feature: updated, reportPersisted };
+  return { feature: updated, reportPersisted, missionAutoStarted };
 }
 
 /**
  * Parse a worker report from inline JSON or @file syntax
  */
+function isVerificationObj(v: unknown): v is WorkerReport["verification"] {
+  return typeof v === "object" && v !== null && "commandsRun" in v && "interactiveChecks" in v;
+}
+
+function isTestsObj(t: unknown): t is WorkerReport["tests"] {
+  return typeof t === "object" && t !== null && "added" in t;
+}
+
 export async function parseWorkerReport(
   reportValue: string,
 ): Promise<WorkerReport> {
@@ -168,21 +186,42 @@ export async function parseWorkerReport(
 
   const reportObj = parsed as Record<string, unknown>;
 
-  if (typeof reportObj.content !== "string" || reportObj.content.length === 0) {
-    throw new MaestroError("Worker report must have a non-empty 'content' field", [
-      "Report format: { content: string, timestamp?: string, agent?: string }",
-    ]);
+  // Accept rich format (plan spec) with salientSummary
+  if (typeof reportObj.salientSummary === "string") {
+    const report: WorkerReport = {
+      salientSummary: reportObj.salientSummary as string,
+      whatWasImplemented: typeof reportObj.whatWasImplemented === "string" ? reportObj.whatWasImplemented : "",
+      whatWasLeftUndone: typeof reportObj.whatWasLeftUndone === "string" ? reportObj.whatWasLeftUndone : "",
+      verification: isVerificationObj(reportObj.verification)
+        ? reportObj.verification as WorkerReport["verification"]
+        : { commandsRun: [], interactiveChecks: [] },
+      tests: isTestsObj(reportObj.tests)
+        ? reportObj.tests as WorkerReport["tests"]
+        : { added: [] },
+      discoveredIssues: Array.isArray(reportObj.discoveredIssues)
+        ? reportObj.discoveredIssues as WorkerReport["discoveredIssues"]
+        : [],
+    };
+    return report;
   }
 
-  const report: WorkerReport = {
-    content: reportObj.content,
-    timestamp: typeof reportObj.timestamp === "string"
-      ? reportObj.timestamp
-      : new Date().toISOString(),
-    agent: typeof reportObj.agent === "string" ? reportObj.agent : undefined,
-  };
+  // Accept legacy format with content field (backward compat)
+  if (typeof reportObj.content === "string" && reportObj.content.length > 0) {
+    const report: WorkerReport = {
+      salientSummary: reportObj.content as string,
+      whatWasImplemented: reportObj.content as string,
+      whatWasLeftUndone: "",
+      verification: { commandsRun: [], interactiveChecks: [] },
+      tests: { added: [] },
+      discoveredIssues: [],
+    };
+    return report;
+  }
 
-  return report;
+  throw new MaestroError("Worker report must have 'salientSummary' (preferred) or 'content' (legacy) field", [
+    "Rich format: { salientSummary, whatWasImplemented, whatWasLeftUndone, verification, tests, discoveredIssues }",
+    "Legacy format: { content: string }",
+  ]);
 }
 
 /**

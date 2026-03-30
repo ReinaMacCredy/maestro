@@ -19,7 +19,8 @@ const MISSION_TRANSITIONS: Readonly<Record<MissionStatus, readonly MissionStatus
   draft: ["approved", "rejected"],
   approved: ["executing"],
   rejected: [], // terminal
-  executing: ["validating"],
+  executing: ["validating", "paused"],
+  paused: ["executing"],
   validating: ["completed", "failed"],
   completed: [], // terminal
   failed: [], // terminal
@@ -62,7 +63,7 @@ export function assertMissionTransition(
 const MILESTONE_TRANSITIONS: Readonly<Record<MilestoneStatus, readonly MilestoneStatus[]>> = {
   pending: ["executing"],
   executing: ["validating"],
-  validating: ["completed", "failed"],
+  validating: ["completed", "failed", "executing"], // executing = retry after failed validation
   completed: [], // terminal
   failed: [], // terminal
 };
@@ -102,7 +103,8 @@ export function assertMilestoneTransition(
 // ============================
 
 const FEATURE_TRANSITIONS: Readonly<Record<FeatureStatus, readonly FeatureStatus[]>> = {
-  pending: ["in_progress"],
+  pending: ["assigned", "in_progress"],
+  assigned: ["in_progress"],
   in_progress: ["in_review"],
   in_review: ["completed", "blocked", "pending"], // pending = retry
   completed: [], // terminal
@@ -147,7 +149,7 @@ const ASSERTION_TRANSITIONS: Readonly<Record<AssertionStatus, readonly Assertion
   pending: ["passed", "failed", "blocked", "waived"],
   passed: [], // terminal
   failed: ["pending"], // retry
-  blocked: ["pending"], // retry
+  blocked: ["pending", "waived"], // retry or waive if unprovable
   waived: [], // terminal - preserved as terminal per requirements
 };
 

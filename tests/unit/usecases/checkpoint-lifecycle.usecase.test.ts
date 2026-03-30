@@ -102,13 +102,14 @@ function createMockMissionStore(
 }
 
 function createMockFeatureStore(features: Feature[] = []): FeatureStorePort {
+  const storedFeatures = [...features];
   return {
     get: async (missionId, featureId) =>
-      features.find(
+      storedFeatures.find(
         (f) => f.missionId === missionId && f.id === featureId,
       ),
     exists: async (missionId, featureId) =>
-      features.some(
+      storedFeatures.some(
         (f) => f.missionId === missionId && f.id === featureId,
       ),
     create: async (missionId, input, id) =>
@@ -121,9 +122,22 @@ function createMockFeatureStore(features: Feature[] = []): FeatureStorePort {
         createdAt: "2024-01-01T00:00:00Z",
         updatedAt: "2024-01-01T00:00:00Z",
       }) as Feature,
-    update: async () => undefined,
+    update: async (missionId, featureId, input) => {
+      const index = storedFeatures.findIndex(
+        (f) => f.missionId === missionId && f.id === featureId,
+      );
+      if (index === -1) return undefined;
+      const existing = storedFeatures[index]!;
+      const updated = {
+        ...existing,
+        ...(input.status !== undefined && { status: input.status }),
+        ...(input.report !== undefined && { report: input.report }),
+      };
+      storedFeatures[index] = updated;
+      return updated;
+    },
     list: async (missionId, filter?: { milestoneId?: string; status?: string }) => {
-      let result = features.filter((f) => f.missionId === missionId);
+      let result = storedFeatures.filter((f) => f.missionId === missionId);
       if (filter?.milestoneId) {
         result = result.filter((f) => f.milestoneId === filter.milestoneId);
       }
@@ -139,13 +153,14 @@ function createMockFeatureStore(features: Feature[] = []): FeatureStorePort {
 function createMockAssertionStore(
   assertions: Assertion[] = [],
 ): AssertionStorePort {
+  const storedAssertions = [...assertions];
   return {
     get: async (missionId, assertionId) =>
-      assertions.find(
+      storedAssertions.find(
         (a) => a.missionId === missionId && a.id === assertionId,
       ),
     exists: async (missionId, assertionId) =>
-      assertions.some(
+      storedAssertions.some(
         (a) => a.missionId === missionId && a.id === assertionId,
       ),
     create: async (missionId, input, id) =>
@@ -156,11 +171,25 @@ function createMockAssertionStore(
         createdAt: "2024-01-01T00:00:00Z",
         updatedAt: "2024-01-01T00:00:00Z",
       }) as Assertion,
-    update: async () => undefined,
+    update: async (missionId, assertionId, input) => {
+      const index = storedAssertions.findIndex(
+        (a) => a.missionId === missionId && a.id === assertionId,
+      );
+      if (index === -1) return undefined;
+      const existing = storedAssertions[index]!;
+      const updated = {
+        ...existing,
+        status: input.status,
+        evidence: input.evidence,
+        waivedReason: input.waivedReason,
+      };
+      storedAssertions[index] = updated;
+      return updated;
+    },
     list: async (missionId) =>
-      assertions.filter((a) => a.missionId === missionId),
+      storedAssertions.filter((a) => a.missionId === missionId),
     listByMilestone: async (missionId, milestoneId) =>
-      assertions.filter(
+      storedAssertions.filter(
         (a) => a.missionId === missionId && a.milestoneId === milestoneId,
       ),
     getMany: async () => [],
@@ -422,8 +451,14 @@ describe("checkpoint lifecycle usecases", () => {
   });
 
   describe("loadCheckpoint", () => {
-    it("returns the latest checkpoint with metadata-only warning", async () => {
+    it("returns the latest checkpoint and restores feature/assertion states", async () => {
       const mission = createTestMission("executing");
+      const features: Feature[] = [
+        createTestFeature(mission.id, "m1", "in_progress", "f1"),
+      ];
+      const assertions: Assertion[] = [
+        createTestAssertion(mission.id, "m1", "f1", "failed", "a1"),
+      ];
       const checkpoints: Checkpoint[] = [
         {
           id: "cp1",
@@ -445,17 +480,16 @@ describe("checkpoint lifecycle usecases", () => {
 
       const result = await loadCheckpoint(
         createMockMissionStore(mission),
+        createMockFeatureStore(features),
+        createMockAssertionStore(assertions),
         createMockCheckpointStore(checkpoints),
         mission.id,
       );
 
       expect(result.checkpoint.id).toBe("cp2");
       expect(result.checkpoint.milestoneId).toBe("m1");
-      expect(result.restoreMode).toBe("metadata_only");
-      expect(result.warning).toContain("WARNING");
-      expect(result.warning).toContain("metadata only");
-      expect(result.warning).toContain("Filesystem changes");
-      expect(result.warning).toContain("git state");
+      expect(result.restored.featureCount).toBe(1);
+      expect(result.restored.assertionCount).toBe(1);
     });
 
     it("throws when no checkpoints exist", async () => {
@@ -464,6 +498,8 @@ describe("checkpoint lifecycle usecases", () => {
       try {
         await loadCheckpoint(
           createMockMissionStore(mission),
+          createMockFeatureStore(),
+          createMockAssertionStore(),
           createMockCheckpointStore(),
           mission.id,
         );
@@ -477,6 +513,8 @@ describe("checkpoint lifecycle usecases", () => {
       try {
         await loadCheckpoint(
           createMockMissionStore(null),
+          createMockFeatureStore(),
+          createMockAssertionStore(),
           createMockCheckpointStore(),
           "nonexistent",
         );
@@ -507,6 +545,8 @@ describe("checkpoint lifecycle usecases", () => {
 
       const result = await loadCheckpoint(
         createMockMissionStore(mission),
+        createMockFeatureStore(),
+        createMockAssertionStore(),
         createMockCheckpointStore(checkpoints),
         mission.id,
       );

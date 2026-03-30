@@ -150,15 +150,25 @@ export async function createMission(
 /** List all missions with optional status filter */
 export async function listMissions(
   missionStore: MissionStorePort,
-  filter?: { status?: string },
+  filter?: { status?: string; limit?: number },
 ): Promise<readonly Mission[]> {
   const missions = await missionStore.list();
+  let filtered = missions;
 
   if (filter?.status) {
-    return missions.filter((m) => m.status === filter.status);
+    filtered = filtered.filter((m) => m.status === filter.status);
   }
 
-  return missions;
+  if (filter?.limit !== undefined) {
+    if (!Number.isInteger(filter.limit) || filter.limit <= 0) {
+      throw new MaestroError("Mission list limit must be a positive integer", [
+        "Usage: maestro mission list --limit 10",
+      ]);
+    }
+    filtered = filtered.slice(0, filter.limit);
+  }
+
+  return filtered;
 }
 
 /** Get a mission by ID */

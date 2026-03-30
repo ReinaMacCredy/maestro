@@ -205,6 +205,21 @@ describe("mission CLI commands", () => {
     expect(approvedList.stdout).toContain("1 mission(s)");
   }, SLOW_CLI_TIMEOUT_MS);
 
+  it("mission list --limit restricts the number of returned missions", async () => {
+    const plan = createSamplePlan();
+    const planPath = join(tmpDir, "plan.json");
+    await writeFile(planPath, JSON.stringify(plan, null, 2));
+
+    await run(["mission", "create", "--file", planPath], tmpDir);
+    await run(["mission", "create", "--file", planPath], tmpDir);
+    await run(["mission", "create", "--file", planPath], tmpDir);
+
+    const { stdout, exitCode } = await run(["mission", "list", "--limit", "2"], tmpDir);
+
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("2 mission(s)");
+  }, SLOW_CLI_TIMEOUT_MS);
+
   it("mission show <id> displays mission details", async () => {
     const plan = createSamplePlan();
     const planPath = join(tmpDir, "plan.json");
@@ -276,7 +291,31 @@ describe("mission CLI commands", () => {
 
     expect(showResult.exitCode).toBe(0);
     expect(showResult.stdout).toContain("Status: executing");
-    expect(showResult.stdout).toContain("Stored status: approved");
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("feature work auto-starts an approved mission", async () => {
+    const plan = createSamplePlan();
+    const planPath = join(tmpDir, "plan.json");
+    await writeFile(planPath, JSON.stringify(plan, null, 2));
+
+    const createResult = await run(
+      ["mission", "create", "--file", planPath, "--json"],
+      tmpDir,
+    );
+    const missionId = JSON.parse(createResult.stdout).mission.id;
+
+    await run(["mission", "approve", missionId], tmpDir);
+    const featureUpdate = await run(
+      ["feature", "update", "f1", "--mission", missionId, "--status", "in_progress", "--json"],
+      tmpDir,
+    );
+    expect(featureUpdate.exitCode).toBe(0);
+
+    const showResult = await run(["mission", "show", missionId, "--json"], tmpDir);
+    expect(showResult.exitCode).toBe(0);
+    const report = JSON.parse(showResult.stdout);
+    expect(report.mission.status).toBe("executing");
+    expect(report.effectiveMissionStatus).toBe("executing");
   }, SLOW_CLI_TIMEOUT_MS);
 
   it("mission approve transitions draft to approved", async () => {

@@ -118,14 +118,26 @@ describe("FsFeatureStoreAdapter", () => {
       const input = makeCreateInput();
       await store.create(missionId, input, "f1");
 
-      const report: WorkerReport = {
+      // Write with legacy format -- Zod transforms to rich format on read
+      const legacyReport = {
         content: "Work completed successfully",
         timestamp: new Date().toISOString(),
         agent: "claude-code",
       };
 
-      const updated = await store.update(missionId, "f1", { report });
-      expect(updated!.report).toEqual(report);
+      const report: WorkerReport = {
+        salientSummary: "Work completed successfully",
+        whatWasImplemented: "Work completed successfully",
+        whatWasLeftUndone: "",
+        verification: { commandsRun: [], interactiveChecks: [] },
+        tests: { added: [] },
+        discoveredIssues: [],
+      };
+
+      const updated = await store.update(missionId, "f1", { report: legacyReport as unknown as WorkerReport });
+      // After round-trip through disk + Zod validation, expect rich format
+      const reloaded = await store.get(missionId, "f1");
+      expect(reloaded!.report).toEqual(report);
     });
 
     it("preserves existing fields when updating", async () => {

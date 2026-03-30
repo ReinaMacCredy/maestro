@@ -13,6 +13,7 @@ export type MissionStatus =
   | "approved"
   | "rejected"
   | "executing"
+  | "paused"
   | "validating"
   | "completed"
   | "failed";
@@ -28,6 +29,7 @@ export type MilestoneStatus =
 /** Feature lifecycle status */
 export type FeatureStatus =
   | "pending"
+  | "assigned"
   | "in_progress"
   | "in_review"
   | "completed"
@@ -41,6 +43,45 @@ export type AssertionStatus =
   | "blocked"
   | "waived";
 
+/** Test surface classification for assertions */
+export type AssertionSurface = "browser" | "cli" | "api" | (string & {});
+
+// ============================
+// Worker Report Sub-types
+// ============================
+
+/** Record of a command executed during worker verification */
+export interface CommandRun {
+  readonly command: string;
+  readonly exitCode: number;
+  readonly observation: string;
+}
+
+/** Record of an interactive check performed by a worker */
+export interface InteractiveCheck {
+  readonly action: string;
+  readonly observed: string;
+}
+
+/** A single test case within a test file */
+export interface TestCase {
+  readonly name: string;
+  readonly verifies: string;
+}
+
+/** A test file added by a worker */
+export interface TestFile {
+  readonly file: string;
+  readonly cases: readonly TestCase[];
+}
+
+/** An issue discovered during worker execution */
+export interface DiscoveredIssue {
+  readonly severity: string;
+  readonly description: string;
+  readonly suggestedFix?: string;
+}
+
 // ============================
 // Core Entity Types
 // ============================
@@ -51,13 +92,22 @@ export interface Milestone {
   readonly title: string;
   readonly description: string;
   readonly order: number;
+  readonly featureIds: readonly string[];
 }
 
-/** Worker report attached to a feature */
+/** Structured worker report attached to a feature */
 export interface WorkerReport {
-  readonly content: string;
-  readonly timestamp: string;
-  readonly agent?: string;
+  readonly salientSummary: string;
+  readonly whatWasImplemented: string;
+  readonly whatWasLeftUndone: string;
+  readonly verification: {
+    readonly commandsRun: readonly CommandRun[];
+    readonly interactiveChecks: readonly InteractiveCheck[];
+  };
+  readonly tests: {
+    readonly added: readonly TestFile[];
+  };
+  readonly discoveredIssues: readonly DiscoveredIssue[];
 }
 
 /** Feature within a mission */
@@ -71,6 +121,9 @@ export interface Feature {
   readonly skillName: string;
   readonly verificationSteps: readonly string[];
   readonly dependsOn: readonly string[];
+  readonly fulfills: readonly string[];
+  readonly preconditions?: string;
+  readonly expectedBehavior?: string;
   readonly report?: WorkerReport;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -84,6 +137,7 @@ export interface Assertion {
   readonly featureId: string;
   readonly status: AssertionStatus;
   readonly description: string;
+  readonly surface: AssertionSurface;
   readonly evidence?: string;
   readonly waivedReason?: string;
   readonly createdAt: string;
@@ -96,6 +150,7 @@ export interface Mission {
   readonly status: MissionStatus;
   readonly title: string;
   readonly description: string;
+  readonly proposal?: string;
   readonly milestones: readonly Milestone[];
   readonly features: readonly string[]; // Feature IDs
   readonly createdAt: string;
@@ -124,6 +179,7 @@ export interface Checkpoint {
 export interface CreateMissionInput {
   readonly title: string;
   readonly description: string;
+  readonly proposal?: string;
   readonly milestones: readonly Milestone[];
 }
 
@@ -136,6 +192,9 @@ export interface CreateFeatureInput {
   readonly skillName: string;
   readonly verificationSteps: readonly string[];
   readonly dependsOn?: readonly string[];
+  readonly fulfills?: readonly string[];
+  readonly preconditions?: string;
+  readonly expectedBehavior?: string;
 }
 
 /** Input for creating a new assertion */
@@ -144,6 +203,7 @@ export interface CreateAssertionInput {
   readonly milestoneId: string;
   readonly featureId: string;
   readonly description: string;
+  readonly surface?: AssertionSurface;
 }
 
 /** Input for updating an assertion */

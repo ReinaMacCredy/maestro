@@ -273,13 +273,36 @@ describe("checkpoint CLI commands", () => {
       expect(result.checkpoint.id).not.toBe(checkpoint1.id);
         // Verify checkpoint structure
         expect(result.checkpoint.missionId).toBe(missionId);
-        expect(result.restoreMode).toBe("metadata_only");
         expect(result.checkpoint.timestamp).toBeDefined();
         expect(result.checkpoint.featureStates).toBeDefined();
         expect(result.checkpoint.assertionStates).toBeDefined();
+        expect(result.restored).toEqual({
+          featureCount: 0,
+          assertionCount: 0,
+        });
     }, SLOW_CLI_TIMEOUT_MS);
 
-    it("checkpoint load includes metadata-only restore warning", async () => {
+    it("checkpoint load restores saved state and reports restore counts", async () => {
+      const missionId = await createMission(tmpDir);
+
+      await run(["checkpoint", "save", "--mission", missionId], tmpDir);
+      await run(
+        ["feature", "update", "f1", "--mission", missionId, "--status", "in_progress"],
+        tmpDir,
+      );
+
+      const { stdout, exitCode } = await run(
+        ["checkpoint", "load", "--mission", missionId],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Checkpoint restored");
+      expect(stdout).toContain("Features restored: 1");
+      expect(stdout).toContain("Assertions restored: 0");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("checkpoint load explains when current state already matches the checkpoint", async () => {
       const missionId = await createMission(tmpDir);
 
       await run(["checkpoint", "save", "--mission", missionId], tmpDir);
@@ -290,14 +313,12 @@ describe("checkpoint CLI commands", () => {
       );
 
       expect(exitCode).toBe(0);
-      expect(stdout).toContain("Checkpoint snapshot loaded (metadata only)");
-      expect(stdout).toContain("WARNING");
-      expect(stdout).toContain("metadata only");
-      expect(stdout).toContain("Filesystem changes");
-      expect(stdout).toContain("git state");
+      expect(stdout).toContain("Features restored: 0");
+      expect(stdout).toContain("Assertions restored: 0");
+      expect(stdout).toContain("current state already matches the checkpoint");
     }, SLOW_CLI_TIMEOUT_MS);
 
-    it("checkpoint load --json includes warning in output", async () => {
+    it("checkpoint load --json includes restore counts", async () => {
       const missionId = await createMission(tmpDir);
 
       await run(["checkpoint", "save", "--mission", missionId], tmpDir);
@@ -310,10 +331,10 @@ describe("checkpoint CLI commands", () => {
       expect(exitCode).toBe(0);
       const result = JSON.parse(stdout);
       expect(result.checkpoint).toBeDefined();
-      expect(result.restoreMode).toBe("metadata_only");
-      expect(result.warning).toBeDefined();
-      expect(result.warning).toContain("WARNING");
-      expect(result.warning).toContain("metadata only");
+      expect(result.restored).toEqual({
+        featureCount: 0,
+        assertionCount: 0,
+      });
     }, SLOW_CLI_TIMEOUT_MS);
 
     it("checkpoint load errors when no checkpoints exist", async () => {
@@ -392,7 +413,7 @@ describe("checkpoint CLI commands", () => {
       const loadResult = JSON.parse(load.stdout);
       expect(loadResult.checkpoint.id).toBe(checkpoint2.id);
       expect(loadResult.checkpoint.featureStates).toBeDefined();
-      expect(loadResult.warning).toContain("metadata only");
+      expect(loadResult.restored).toBeDefined();
     }, SLOW_CLI_TIMEOUT_MS);
   });
 

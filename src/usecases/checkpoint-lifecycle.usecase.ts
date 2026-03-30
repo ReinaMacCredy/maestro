@@ -34,8 +34,10 @@ export interface ListCheckpointsResult {
 /** Result of loading the latest checkpoint */
 export interface LoadCheckpointResult {
   checkpoint: Checkpoint;
-  restoreMode: "metadata_only";
-  warning: string;
+  restored: {
+    featureCount: number;
+    assertionCount: number;
+  };
 }
 
 /**
@@ -124,10 +126,12 @@ export async function listCheckpoints(
 
 /**
  * Load the latest checkpoint for a mission
- * Returns the most recent checkpoint with a metadata-only restore warning
+ * Returns the most recent checkpoint metadata and clearly reports restore scope
  */
 export async function loadCheckpoint(
   missionStore: MissionStorePort,
+  featureStore: FeatureStorePort,
+  assertionStore: AssertionStorePort,
   checkpointStore: CheckpointStorePort,
   missionId: string,
 ): Promise<LoadCheckpointResult> {
@@ -149,11 +153,37 @@ export async function loadCheckpoint(
     ]);
   }
 
-  // Include warning about metadata-only restore
-  const warning =
-    "WARNING: Checkpoints restore metadata only (mission state, feature statuses, assertion results). " +
-    "Filesystem changes and git state are NOT restored by checkpoint load. " +
-    "To restore code state, checkout the corresponding git commit if available.";
+  const features = await featureStore.list(missionId);
+  let restoredFeatureCount = 0;
+  for (const feature of features) {
+    const checkpointStatus = checkpoint.featureStates[feature.id];
+    if (checkpointStatus !== undefined && checkpointStatus !== feature.status) {
+      const updated = await featureStore.update(missionId, feature.id, { status: checkpointStatus });
+      if (!updated) {
+        throw new MaestroError(`Failed to restore feature ${feature.id} from checkpoint ${checkpoint.id}`);
+      }
+      restoredFeatureCount += 1;
+    }
+  }
 
-  return { checkpoint, restoreMode: "metadata_only", warning };
+  const assertions = await assertionStore.list(missionId);
+  let restoredAssertionCount = 0;
+  for (const assertion of assertions) {
+    const checkpointStatus = checkpoint.assertionStates[assertion.id];
+    if (checkpointStatus !== undefined && checkpointStatus !== assertion.status) {
+      const updated = await assertionStore.update(missionId, assertion.id, { status: checkpointStatus });
+      if (!updated) {
+        throw new MaestroError(`Failed to restore assertion ${assertion.id} from checkpoint ${checkpoint.id}`);
+      }
+      restoredAssertionCount += 1;
+    }
+  }
+
+  return {
+    checkpoint,
+    restored: {
+      featureCount: restoredFeatureCount,
+      assertionCount: restoredAssertionCount,
+    },
+  };
 }

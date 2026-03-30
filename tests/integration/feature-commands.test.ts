@@ -235,6 +235,34 @@ describe("feature CLI commands", () => {
       expect(f1.status).toBe("in_progress");
     }, SLOW_CLI_TIMEOUT_MS);
 
+    it("feature update makes approved mission auto-start explicit in text output", async () => {
+      const missionId = await createMission(tmpDir);
+      await run(["mission", "approve", missionId], tmpDir);
+
+      const { stdout, exitCode } = await run(
+        ["feature", "update", "f1", "--mission", missionId, "--status", "in_progress"],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Mission: auto-started to executing");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("feature update reports mission auto-start in json output", async () => {
+      const missionId = await createMission(tmpDir);
+      await run(["mission", "approve", missionId], tmpDir);
+
+      const { stdout, exitCode } = await run(
+        ["feature", "update", "f1", "--mission", missionId, "--status", "in_progress", "--json"],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(0);
+      const result = JSON.parse(stdout);
+      expect(result.missionAutoStarted).toBe(true);
+      expect(result.feature.status).toBe("in_progress");
+    }, SLOW_CLI_TIMEOUT_MS);
+
     it("feature update --status rejects illegal transitions", async () => {
       const missionId = await createMission(tmpDir);
 
@@ -303,6 +331,7 @@ describe("feature CLI commands", () => {
     it("feature update with --report attaches worker report", async () => {
       const missionId = await createMission(tmpDir);
 
+      // Legacy format input -- parseWorkerReport converts to rich format
       const report = {
         content: "Feature implementation complete",
         timestamp: "2026-03-28T10:00:00.000Z",
@@ -328,7 +357,6 @@ describe("feature CLI commands", () => {
       expect(stdout).toContain("Feature updated: f1");
       expect(stdout).toContain("Report:");
       expect(stdout).toContain("report.json");
-      expect(stdout).toContain("2026-03-28T10:00:00.000Z");
     }, SLOW_CLI_TIMEOUT_MS);
 
     it("feature update with --report @file reads report from file", async () => {
@@ -452,8 +480,9 @@ describe("feature CLI commands", () => {
 
       expect(f1.status).toBe("pending");
       expect(f1.report).toBeDefined();
-      expect(f1.report.content).toBe("First implementation attempt");
-      expect(f1.report.agent).toBe("agent-1");
+      // Legacy content is promoted to salientSummary on parse
+      expect(f1.report.salientSummary).toBe("First implementation attempt");
+      expect(f1.report.whatWasImplemented).toBe("First implementation attempt");
     }, SLOW_CLI_TIMEOUT_MS);
   });
 
@@ -537,6 +566,8 @@ describe("feature CLI commands", () => {
       expect(result.writtenTo).toBeDefined();
       expect(result.writtenTo.length).toBe(1);
       expect(result.writtenTo[0]).toContain("workers/f1/prompt.md");
+      expect(result.prompt).toContain("# Worker Assignment: Feature 1");
+      expect(result.prompt).toContain("## Skill Instructions");
     }, SLOW_CLI_TIMEOUT_MS);
 
     it("feature prompt --out writes to custom path", async () => {
