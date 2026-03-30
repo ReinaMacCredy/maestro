@@ -232,6 +232,16 @@ function formatMissionReport(report: MissionReport): string[] {
     lines.push(`  Waived Assertions: ${summary.totalWaivedAssertions}`);
   }
 
+  // Compact progress line
+  const compactParts = milestones.map((mp) => {
+    const id = mp.milestoneId;
+    const st = mp.status;
+    if (st === "pending" || st === "sealed") return `[${id}: ${st}]`;
+    return `[${id}: ${st} ${mp.completedFeatures}/${mp.featureCount}]`;
+  });
+  lines.push("");
+  lines.push(`Progress: ${compactParts.join(" ")}`);
+
   lines.push("");
   lines.push(`Milestones (${milestones.length}):`);
   lines.push("");

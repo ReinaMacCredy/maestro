@@ -9,6 +9,7 @@ import type { AssertionStorePort } from "../ports/assertion-store.port.js";
 import type { Feature, Mission, Milestone, Assertion } from "../domain/mission-types.js";
 import { MaestroError } from "../domain/errors.js";
 import { readText, writeText, ensureDir } from "../lib/fs.js";
+import { sanitizePromptContent } from "../lib/sanitize.js";
 import { dirname, join, resolve } from "node:path";
 import { MAESTRO_DIR } from "../domain/defaults.js";
 
@@ -201,7 +202,7 @@ function composePrompt(
   if (mission.description) {
     parts.push("### Description");
     parts.push("");
-    parts.push(delimitContent(mission.description));
+    parts.push(sanitizePromptContent(mission.description, "mission-description"));
     parts.push("");
   }
 
@@ -245,14 +246,14 @@ function composePrompt(
   parts.push("");
   parts.push("### Description");
   parts.push("");
-  parts.push(delimitContent(feature.description));
+  parts.push(sanitizePromptContent(feature.description, "feature-description"));
   parts.push("");
 
   // Preconditions (A1)
   if (feature.preconditions) {
     parts.push("### Preconditions");
     parts.push("");
-    parts.push(delimitContent(feature.preconditions));
+    parts.push(sanitizePromptContent(feature.preconditions, "preconditions"));
     parts.push("");
   }
 
@@ -260,7 +261,7 @@ function composePrompt(
   if (feature.expectedBehavior) {
     parts.push("### Expected Behavior");
     parts.push("");
-    parts.push(delimitContent(feature.expectedBehavior));
+    parts.push(sanitizePromptContent(feature.expectedBehavior, "expected-behavior"));
     parts.push("");
   }
 

@@ -35,12 +35,34 @@ export class FsMissionStoreAdapter implements MissionStorePort {
   }
 
   async listIds(): Promise<readonly string[]> {
+    // Fire-and-forget cleanup of orphaned staging directories
+    this.cleanOrphanedStaging().catch(() => {});
+
     const dirs = await listDirs(this.missionsRoot());
     return dirs
       .map((d) => d.split("/").pop() || "")
       .filter((id) => !id.startsWith(".") && id.length > 0)
       .sort()
       .reverse();
+  }
+
+  /** Remove orphaned .staging-* directories left by crashed creates */
+  async cleanOrphanedStaging(): Promise<number> {
+    const root = this.missionsRoot();
+    const { readdir, rm } = await import("node:fs/promises");
+    let cleaned = 0;
+    try {
+      const entries = await readdir(root);
+      for (const entry of entries) {
+        if (entry.startsWith(".staging-")) {
+          await rm(join(root, entry), { recursive: true, force: true });
+          cleaned++;
+        }
+      }
+    } catch {
+      // missions root may not exist yet
+    }
+    return cleaned;
   }
 
   async get(id: string): Promise<Mission | undefined> {
