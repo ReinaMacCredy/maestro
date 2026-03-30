@@ -56,7 +56,7 @@ function createSamplePlan(): object {
         milestoneId: "m1",
         title: "Feature 1",
         description: "First feature",
-        skillName: "test-skill",
+        workerType: "test-skill",
         verificationSteps: ["step1", "step2"],
         fulfills: ["assertion-f1-1"],
       },
@@ -65,7 +65,7 @@ function createSamplePlan(): object {
         milestoneId: "m1",
         title: "Feature 2",
         description: "Second feature",
-        skillName: "test-skill",
+        workerType: "test-skill",
         verificationSteps: ["step3"],
         fulfills: ["assertion-f2-1"],
       },
@@ -136,7 +136,7 @@ describe("checkpoint CLI commands", () => {
 
       // Update a feature status
       await run(
-        ["feature", "update", "f1", "--mission", missionId, "--status", "in_progress"],
+        ["feature", "update", "f1", "--mission", missionId, "--status", "in-progress"],
         tmpDir,
       );
 
@@ -159,7 +159,7 @@ describe("checkpoint CLI commands", () => {
       expect(exitCode).toBe(0);
       const result = JSON.parse(stdout);
       expect(result.checkpoint.featureStatuses).toEqual(
-        expect.objectContaining({ f1: "in_progress" }),
+        expect.objectContaining({ f1: "in-progress" }),
       );
       expect(result.checkpoint.assertionResults).toEqual(
         expect.objectContaining({ [assertions[0]!.id]: "passed" }),
@@ -287,7 +287,7 @@ describe("checkpoint CLI commands", () => {
 
       await run(["checkpoint", "save", "--mission", missionId], tmpDir);
       await run(
-        ["feature", "update", "f1", "--mission", missionId, "--status", "in_progress"],
+        ["feature", "update", "f1", "--mission", missionId, "--status", "in-progress"],
         tmpDir,
       );
 

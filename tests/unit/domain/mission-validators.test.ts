@@ -56,7 +56,7 @@ const makeFeature = (overrides: Partial<Feature> = {}): Feature => ({
   status: "pending",
   title: "Test Feature",
   description: "A test feature",
-  skillName: "test-skill",
+  workerType: "test-skill",
   verificationSteps: ["step 1"],
   dependsOn: [],
   createdAt: "2026-03-28T12:00:00Z",
@@ -143,7 +143,7 @@ describe("mission validators", () => {
     });
 
     it("accepts all valid statuses", () => {
-      const validStatuses: Feature["status"][] = ["pending", "in_progress", "in_review", "completed", "blocked"];
+      const validStatuses: Feature["status"][] = ["pending", "in-progress", "review", "done", "blocked"];
       for (const status of validStatuses) {
         const result = validateFeature(makeFeature({ status }));
         expect(result.status).toBe(status);
@@ -240,7 +240,7 @@ describe("mission validators", () => {
         milestoneId: "m1",
         title: "New Feature",
         description: "A new feature",
-        skillName: "test-skill",
+        workerType: "test-skill",
         verificationSteps: ["step 1"],
       };
       const result = validateCreateFeatureInput(input);
@@ -253,7 +253,7 @@ describe("mission validators", () => {
         milestoneId: "m1",
         title: "New Feature",
         description: "A new feature",
-        skillName: "test-skill",
+        workerType: "test-skill",
         verificationSteps: [],
       };
       expect(() => validateCreateFeatureInput(input)).toThrow(ZodError);

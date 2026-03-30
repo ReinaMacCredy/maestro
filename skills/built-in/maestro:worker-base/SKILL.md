@@ -13,7 +13,7 @@ You are a worker in a multi-agent mission. This skill defines the procedures tha
 Your feature has been pre-assigned by the system and is shown in your bootstrap message. The feature includes:
 - `id` - Feature identifier
 - `description` - What to build
-- `skillName` - The skill you must invoke for the work procedure
+- `workerType` - The skill you must invoke for the work procedure
 - `expectedBehavior` - What success looks like
 - `verificationSteps` - How to verify your work
 - `fulfills` - Validation contract assertion IDs (if present)
@@ -84,7 +84,7 @@ Start any services you'll need from `.factory/services.yaml`:
 
 ## Phase 2: Work (Defined by Your Specific Skill)
 
-After completing startup, invoke the skill specified in your feature's `skillName` field.
+After completing startup, invoke the skill specified in your feature's `workerType` field.
 
 **If the skill does not exist** (Skill tool returns error), do NOT proceed. Return to orchestrator via `EndFeatureRun` with `returnToOrchestrator: true`.
 

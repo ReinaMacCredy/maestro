@@ -40,7 +40,7 @@ interface MissionPlanFile {
     milestoneId: string;
     title: string;
     description: string;
-    skillName: string;
+    workerType: string;
     verificationSteps: readonly string[];
     dependsOn?: readonly string[];
     fulfills?: readonly string[];
@@ -119,7 +119,7 @@ export async function createMission(
         milestoneId: featureDef.milestoneId,
         title: featureDef.title,
         description: featureDef.description,
-        skillName: featureDef.skillName,
+        workerType: featureDef.workerType,
         verificationSteps: featureDef.verificationSteps,
         dependsOn: featureDef.dependsOn ?? [],
         fulfills: featureDef.fulfills ?? [],

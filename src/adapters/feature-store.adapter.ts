@@ -59,7 +59,7 @@ export class FsFeatureStoreAdapter implements FeatureStorePort {
       status: "pending",
       title: input.title,
       description: input.description,
-      skillName: input.skillName,
+      workerType: input.workerType,
       verificationSteps: input.verificationSteps,
       dependsOn: input.dependsOn ?? [],
       fulfills: input.fulfills ?? [],

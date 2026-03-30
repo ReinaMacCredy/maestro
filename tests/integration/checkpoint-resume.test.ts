@@ -58,7 +58,7 @@ function createCheckpointPlan(): object {
         milestoneId: "m1",
         title: "Feature 1",
         description: "First feature",
-        skillName: "test-skill",
+        workerType: "test-skill",
         verificationSteps: ["Step 1"],
         fulfills: ["assert-f1"],
       },
@@ -67,7 +67,7 @@ function createCheckpointPlan(): object {
         milestoneId: "m1",
         title: "Feature 2",
         description: "Second feature",
-        skillName: "test-skill",
+        workerType: "test-skill",
         verificationSteps: ["Step 2"],
         fulfills: ["assert-f2"],
       },
@@ -76,7 +76,7 @@ function createCheckpointPlan(): object {
         milestoneId: "m2",
         title: "Feature 3",
         description: "Third feature",
-        skillName: "test-skill",
+        workerType: "test-skill",
         verificationSteps: ["Step 3"],
         fulfills: ["assert-f3"],
       },
@@ -128,27 +128,27 @@ describe("checkpoint save semantics", () => {
 
     // Set different feature states with verification
     const f1Result = await run(
-      ["feature", "update", "f1", "--mission", missionId, "--status", "in_progress", "--json"],
+      ["feature", "update", "f1", "--mission", missionId, "--status", "in-progress", "--json"],
       tmpDir,
     );
     expect(f1Result.exitCode).toBe(0);
-    expect(JSON.parse(f1Result.stdout).feature.status).toBe("in_progress");
+    expect(JSON.parse(f1Result.stdout).feature.status).toBe("in-progress");
 
     // Transition f2 through proper states: pending -> in_progress -> in_review -> completed
     await run(
-      ["feature", "update", "f2", "--mission", missionId, "--status", "in_progress"],
+      ["feature", "update", "f2", "--mission", missionId, "--status", "in-progress"],
       tmpDir,
     );
     await run(
-      ["feature", "update", "f2", "--mission", missionId, "--status", "in_review"],
+      ["feature", "update", "f2", "--mission", missionId, "--status", "review"],
       tmpDir,
     );
     const f2Result = await run(
-      ["feature", "update", "f2", "--mission", missionId, "--status", "completed", "--json"],
+      ["feature", "update", "f2", "--mission", missionId, "--status", "done", "--json"],
       tmpDir,
     );
     expect(f2Result.exitCode).toBe(0);
-    expect(JSON.parse(f2Result.stdout).feature.status).toBe("completed");
+    expect(JSON.parse(f2Result.stdout).feature.status).toBe("done");
 
     // Verify features were updated by listing
     const listResult = await run(
@@ -158,8 +158,8 @@ describe("checkpoint save semantics", () => {
     const features = JSON.parse(listResult.stdout).features;
     const f1 = features.find((f: { id: string }) => f.id === "f1");
     const f2 = features.find((f: { id: string }) => f.id === "f2");
-    expect(f1.status).toBe("in_progress");
-    expect(f2.status).toBe("completed");
+    expect(f1.status).toBe("in-progress");
+    expect(f2.status).toBe("done");
 
     // Save checkpoint
     const saveResult = await run(
@@ -171,8 +171,8 @@ describe("checkpoint save semantics", () => {
 
     // Verify all features captured
     expect(checkpoint.featureStatuses).toBeDefined();
-    expect(checkpoint.featureStatuses.f1).toBe("in_progress");
-    expect(checkpoint.featureStatuses.f2).toBe("completed");
+    expect(checkpoint.featureStatuses.f1).toBe("in-progress");
+    expect(checkpoint.featureStatuses.f2).toBe("done");
     expect(checkpoint.featureStatuses.f3).toBe("pending");
   }, SLOW_CLI_TIMEOUT_MS);
 
@@ -229,11 +229,11 @@ describe("checkpoint save semantics", () => {
 
     // Complete m1
     await run(
-      ["feature", "update", "f1", "--mission", missionId, "--status", "completed"],
+      ["feature", "update", "f1", "--mission", missionId, "--status", "done"],
       tmpDir,
     );
     await run(
-      ["feature", "update", "f2", "--mission", missionId, "--status", "completed"],
+      ["feature", "update", "f2", "--mission", missionId, "--status", "done"],
       tmpDir,
     );
 
@@ -277,7 +277,7 @@ describe("checkpoint save semantics", () => {
 
     // Make changes
     await run(
-      ["feature", "update", "f1", "--mission", missionId, "--status", "in_progress"],
+      ["feature", "update", "f1", "--mission", missionId, "--status", "in-progress"],
       tmpDir,
     );
 
@@ -311,7 +311,7 @@ describe("checkpoint load semantics", () => {
     await new Promise((r) => setTimeout(r, 50));
 
     await run(
-      ["feature", "update", "f1", "--mission", missionId, "--status", "in_progress"],
+      ["feature", "update", "f1", "--mission", missionId, "--status", "in-progress"],
       tmpDir,
     );
 
@@ -328,7 +328,7 @@ describe("checkpoint load semantics", () => {
     );
     const loaded = JSON.parse(load.stdout).checkpoint;
     expect(loaded.id).toBe(checkpoint2.id);
-    expect(loaded.featureStatuses.f1).toBe("in_progress");
+    expect(loaded.featureStatuses.f1).toBe("in-progress");
   }, SLOW_CLI_TIMEOUT_MS);
 
   it("load restores checkpoint state", async () => {
@@ -336,7 +336,7 @@ describe("checkpoint load semantics", () => {
 
     await run(["checkpoint", "save", "--mission", missionId], tmpDir);
     await run(
-      ["feature", "update", "f1", "--mission", missionId, "--status", "in_progress"],
+      ["feature", "update", "f1", "--mission", missionId, "--status", "in-progress"],
       tmpDir,
     );
 
@@ -358,7 +358,7 @@ describe("checkpoint load semantics", () => {
     // Set initial state and save
     // Note: The checkpoint captures the state at SAVE time
     await run(
-      ["feature", "update", "f1", "--mission", missionId, "--status", "in_progress"],
+      ["feature", "update", "f1", "--mission", missionId, "--status", "in-progress"],
       tmpDir,
     );
 
@@ -370,7 +370,7 @@ describe("checkpoint load semantics", () => {
 
     // Change feature state AFTER saving
     await run(
-      ["feature", "update", "f1", "--mission", missionId, "--status", "completed"],
+      ["feature", "update", "f1", "--mission", missionId, "--status", "done"],
       tmpDir,
     );
 
@@ -383,7 +383,7 @@ describe("checkpoint load semantics", () => {
 
     // Verify checkpoint captured the in_progress state at save time
     // (not the completed state set after saving)
-    expect(loaded.featureStatuses.f1).toBe("in_progress");
+    expect(loaded.featureStatuses.f1).toBe("in-progress");
     expect(loaded.id).toBe(checkpoint.id);
   }, SLOW_CLI_TIMEOUT_MS);
 });
@@ -399,7 +399,7 @@ describe("checkpoint resume workflow", () => {
 
     // Work on f1
     await run(
-      ["feature", "update", "f1", "--mission", missionId, "--status", "in_progress"],
+      ["feature", "update", "f1", "--mission", missionId, "--status", "in-progress"],
       tmpDir,
     );
 
@@ -412,13 +412,13 @@ describe("checkpoint resume workflow", () => {
 
     // Continue working - complete f1
     await run(
-      ["feature", "update", "f1", "--mission", missionId, "--status", "completed"],
+      ["feature", "update", "f1", "--mission", missionId, "--status", "done"],
       tmpDir,
     );
 
     // Work on f2
     await run(
-      ["feature", "update", "f2", "--mission", missionId, "--status", "in_progress"],
+      ["feature", "update", "f2", "--mission", missionId, "--status", "in-progress"],
       tmpDir,
     );
 
@@ -431,11 +431,11 @@ describe("checkpoint resume workflow", () => {
 
     // Continue - complete f2, start f3
     await run(
-      ["feature", "update", "f2", "--mission", missionId, "--status", "completed"],
+      ["feature", "update", "f2", "--mission", missionId, "--status", "done"],
       tmpDir,
     );
     await run(
-      ["feature", "update", "f3", "--mission", missionId, "--status", "in_progress"],
+      ["feature", "update", "f3", "--mission", missionId, "--status", "in-progress"],
       tmpDir,
     );
 
@@ -465,26 +465,26 @@ describe("checkpoint resume workflow", () => {
     // Set up some state with verification
     // Transition f1 through proper states: pending -> in_progress -> in_review -> completed
     await run(
-      ["feature", "update", "f1", "--mission", missionId, "--status", "in_progress"],
+      ["feature", "update", "f1", "--mission", missionId, "--status", "in-progress"],
       tmpDir,
     );
     await run(
-      ["feature", "update", "f1", "--mission", missionId, "--status", "in_review"],
+      ["feature", "update", "f1", "--mission", missionId, "--status", "review"],
       tmpDir,
     );
     const f1Result = await run(
-      ["feature", "update", "f1", "--mission", missionId, "--status", "completed", "--json"],
+      ["feature", "update", "f1", "--mission", missionId, "--status", "done", "--json"],
       tmpDir,
     );
     expect(f1Result.exitCode).toBe(0);
-    expect(JSON.parse(f1Result.stdout).feature.status).toBe("completed");
+    expect(JSON.parse(f1Result.stdout).feature.status).toBe("done");
 
     const f2Result = await run(
-      ["feature", "update", "f2", "--mission", missionId, "--status", "in_progress", "--json"],
+      ["feature", "update", "f2", "--mission", missionId, "--status", "in-progress", "--json"],
       tmpDir,
     );
     expect(f2Result.exitCode).toBe(0);
-    expect(JSON.parse(f2Result.stdout).feature.status).toBe("in_progress");
+    expect(JSON.parse(f2Result.stdout).feature.status).toBe("in-progress");
 
     // Pass some assertions
     const assertions = await run(
@@ -518,8 +518,8 @@ describe("checkpoint resume workflow", () => {
     const loaded = JSON.parse(load.stdout);
 
     // Verify we can understand the state at that point
-    expect(loaded.checkpoint.featureStatuses.f1).toBe("completed");
-    expect(loaded.checkpoint.featureStatuses.f2).toBe("in_progress");
+    expect(loaded.checkpoint.featureStatuses.f1).toBe("done");
+    expect(loaded.checkpoint.featureStatuses.f2).toBe("in-progress");
     expect(Object.values(loaded.checkpoint.assertionResults).filter(s => s === "passed").length).toBeGreaterThanOrEqual(2);
   }, SLOW_CLI_TIMEOUT_MS);
 
@@ -543,7 +543,7 @@ describe("checkpoint resume workflow", () => {
         "--mission",
         missionId,
         "--status",
-        "in_progress",
+        "in-progress",
         "--report",
         JSON.stringify(report),
       ],
@@ -559,7 +559,7 @@ describe("checkpoint resume workflow", () => {
         "--mission",
         missionId,
         "--status",
-        "in_review",
+        "review",
       ],
       tmpDir,
     );
@@ -571,7 +571,7 @@ describe("checkpoint resume workflow", () => {
         "--mission",
         missionId,
         "--status",
-        "completed",
+        "done",
       ],
       tmpDir,
     );
@@ -585,7 +585,7 @@ describe("checkpoint resume workflow", () => {
     const checkpoint = JSON.parse(save.stdout).checkpoint;
 
     // Verify feature state was captured in checkpoint
-    expect(checkpoint.featureStatuses.f1).toBe("completed");
+    expect(checkpoint.featureStatuses.f1).toBe("done");
   }, SLOW_CLI_TIMEOUT_MS);
 });
 
@@ -599,11 +599,11 @@ describe("checkpoint with mission lifecycle", () => {
 
     // Complete m1 work
     await run(
-      ["feature", "update", "f1", "--mission", missionId, "--status", "completed"],
+      ["feature", "update", "f1", "--mission", missionId, "--status", "done"],
       tmpDir,
     );
     await run(
-      ["feature", "update", "f2", "--mission", missionId, "--status", "completed"],
+      ["feature", "update", "f2", "--mission", missionId, "--status", "done"],
       tmpDir,
     );
 

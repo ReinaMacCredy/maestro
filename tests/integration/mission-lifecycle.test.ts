@@ -58,7 +58,7 @@ function createFullPlan(): object {
         milestoneId: "m1",
         title: "Setup Feature",
         description: "Initial setup and configuration",
-        skillName: "test-skill",
+        workerType: "test-skill",
         verificationSteps: ["Verify setup completes"],
         fulfills: ["assertion-setup-1"],
       },
@@ -67,7 +67,7 @@ function createFullPlan(): object {
         milestoneId: "m1",
         title: "Core Feature",
         description: "Main implementation work",
-        skillName: "test-skill",
+        workerType: "test-skill",
         verificationSteps: ["Verify core logic", "Check edge cases"],
         fulfills: ["assertion-core-1", "assertion-core-2"],
       },
@@ -76,7 +76,7 @@ function createFullPlan(): object {
         milestoneId: "m2",
         title: "Validation Feature",
         description: "Final validation steps",
-        skillName: "test-skill",
+        workerType: "test-skill",
         verificationSteps: ["Run integration tests"],
         fulfills: ["assertion-val-1"],
       },
@@ -150,14 +150,14 @@ describe("full mission lifecycle", () => {
     // Step 4: Feature transitions
     // Move f1 through its lifecycle
     const f1Progress = await run(
-      ["feature", "update", "f1", "--mission", missionId, "--status", "in_progress", "--json"],
+      ["feature", "update", "f1", "--mission", missionId, "--status", "in-progress", "--json"],
       tmpDir,
     );
     expect(f1Progress.exitCode).toBe(0);
-    expect(JSON.parse(f1Progress.stdout).feature.status).toBe("in_progress");
+    expect(JSON.parse(f1Progress.stdout).feature.status).toBe("in-progress");
 
     const f1Review = await run(
-      ["feature", "update", "f1", "--mission", missionId, "--status", "in_review", "--json"],
+      ["feature", "update", "f1", "--mission", missionId, "--status", "review", "--json"],
       tmpDir,
     );
     expect(f1Review.exitCode).toBe(0);
@@ -176,7 +176,7 @@ describe("full mission lifecycle", () => {
         "--mission",
         missionId,
         "--status",
-        "completed",
+        "done",
         "--report",
         JSON.stringify(report),
         "--json",
@@ -184,15 +184,15 @@ describe("full mission lifecycle", () => {
       tmpDir,
     );
     expect(f1Done.exitCode).toBe(0);
-    expect(JSON.parse(f1Done.stdout).feature.status).toBe("completed");
+    expect(JSON.parse(f1Done.stdout).feature.status).toBe("done");
 
     // Move f2 with a retry scenario
     await run(
-      ["feature", "update", "f2", "--mission", missionId, "--status", "in_progress"],
+      ["feature", "update", "f2", "--mission", missionId, "--status", "in-progress"],
       tmpDir,
     );
     await run(
-      ["feature", "update", "f2", "--mission", missionId, "--status", "in_review"],
+      ["feature", "update", "f2", "--mission", missionId, "--status", "review"],
       tmpDir,
     );
     // Rejected in review, back to pending for retry
@@ -205,15 +205,15 @@ describe("full mission lifecycle", () => {
 
     // Complete f2
     await run(
-      ["feature", "update", "f2", "--mission", missionId, "--status", "in_progress"],
+      ["feature", "update", "f2", "--mission", missionId, "--status", "in-progress"],
       tmpDir,
     );
     await run(
-      ["feature", "update", "f2", "--mission", missionId, "--status", "in_review"],
+      ["feature", "update", "f2", "--mission", missionId, "--status", "review"],
       tmpDir,
     );
     await run(
-      ["feature", "update", "f2", "--mission", missionId, "--status", "completed"],
+      ["feature", "update", "f2", "--mission", missionId, "--status", "done"],
       tmpDir,
     );
 
@@ -270,19 +270,19 @@ describe("full mission lifecycle", () => {
     );
     expect(m1Status.exitCode).toBe(0);
     const m1Data = JSON.parse(m1Status.stdout);
-    expect(m1Data.progress.status).toBe("completed");
+    expect(m1Data.progress.status).toBe("sealed");
 
     // Step 8: Continue with m2
     await run(
-      ["feature", "update", "f3", "--mission", missionId, "--status", "in_progress"],
+      ["feature", "update", "f3", "--mission", missionId, "--status", "in-progress"],
       tmpDir,
     );
     await run(
-      ["feature", "update", "f3", "--mission", missionId, "--status", "in_review"],
+      ["feature", "update", "f3", "--mission", missionId, "--status", "review"],
       tmpDir,
     );
     await run(
-      ["feature", "update", "f3", "--mission", missionId, "--status", "completed"],
+      ["feature", "update", "f3", "--mission", missionId, "--status", "done"],
       tmpDir,
     );
 
@@ -321,9 +321,9 @@ describe("full mission lifecycle", () => {
     expect(checkpointResult.exitCode).toBe(0);
     const checkpoint = JSON.parse(checkpointResult.stdout).checkpoint;
     expect(checkpoint.missionId).toBe(missionId);
-    expect(checkpoint.featureStatuses.f1).toBe("completed");
-    expect(checkpoint.featureStatuses.f2).toBe("completed");
-    expect(checkpoint.featureStatuses.f3).toBe("completed");
+    expect(checkpoint.featureStatuses.f1).toBe("done");
+    expect(checkpoint.featureStatuses.f2).toBe("done");
+    expect(checkpoint.featureStatuses.f3).toBe("done");
 
     // Step 10: List checkpoints
     const listResult = await run(
@@ -374,7 +374,7 @@ describe("full mission lifecycle", () => {
         "--mission",
         missionId,
         "--status",
-        "in_progress",
+        "in-progress",
         "--report",
         JSON.stringify(report),
       ],
@@ -382,7 +382,7 @@ describe("full mission lifecycle", () => {
     );
 
     await run(
-      ["feature", "update", "f1", "--mission", missionId, "--status", "completed"],
+      ["feature", "update", "f1", "--mission", missionId, "--status", "done"],
       tmpDir,
     );
 
@@ -439,7 +439,7 @@ describe("lifecycle error handling", () => {
 
     // Complete features but don't pass assertions
     await run(
-      ["feature", "update", "f1", "--mission", missionId, "--status", "completed"],
+      ["feature", "update", "f1", "--mission", missionId, "--status", "done"],
       tmpDir,
     );
 

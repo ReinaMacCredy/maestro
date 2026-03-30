@@ -23,16 +23,16 @@ export type MilestoneStatus =
   | "pending"
   | "executing"
   | "validating"
-  | "completed"
+  | "sealed"
   | "failed";
 
 /** Feature lifecycle status */
 export type FeatureStatus =
   | "pending"
   | "assigned"
-  | "in_progress"
-  | "in_review"
-  | "completed"
+  | "in-progress"
+  | "review"
+  | "done"
   | "blocked";
 
 /** Assertion validation result status - includes 'waived' as terminal state */
@@ -118,7 +118,7 @@ export interface Feature {
   readonly status: FeatureStatus;
   readonly title: string;
   readonly description: string;
-  readonly skillName: string;
+  readonly workerType: string;
   readonly verificationSteps: readonly string[];
   readonly dependsOn: readonly string[];
   readonly fulfills: readonly string[];
@@ -189,7 +189,7 @@ export interface CreateFeatureInput {
   readonly milestoneId: string;
   readonly title: string;
   readonly description: string;
-  readonly skillName: string;
+  readonly workerType: string;
   readonly verificationSteps: readonly string[];
   readonly dependsOn?: readonly string[];
   readonly fulfills?: readonly string[];

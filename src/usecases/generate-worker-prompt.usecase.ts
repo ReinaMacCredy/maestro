@@ -69,7 +69,7 @@ export async function generateWorkerPrompt(
   const featureAssertions = assertions.filter((a) => a.featureId === featureId);
 
   // Read skill file
-  const skillContent = await readWorkerSkill(baseDir, feature.skillName);
+  const skillContent = await readWorkerSkill(baseDir, feature.workerType);
 
   // Generate the prompt
   const prompt = composePrompt(mission, milestone, feature, featureAssertions, skillContent);
@@ -100,7 +100,7 @@ export async function generateWorkerPrompt(
   return {
     prompt,
     featureId,
-    workerType: feature.skillName,
+    workerType: feature.workerType,
     writtenTo: writtenPaths.length > 0 ? writtenPaths : undefined,
   };
 }
@@ -175,7 +175,7 @@ function composePrompt(
 
   // Feature identification
   parts.push(`**Feature ID:** ${feature.id}`);
-  parts.push(`**Worker Type:** ${feature.skillName}`);
+  parts.push(`**Worker Type:** ${feature.workerType}`);
   parts.push(`**Mission:** ${mission.id} - ${mission.title}`);
   parts.push(`**Milestone:** ${milestone.id} - ${milestone.title}`);
   parts.push("");

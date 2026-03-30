@@ -59,7 +59,7 @@ function createTestFeature(
     status,
     title: `Feature ${id}`,
     description: "Test feature",
-    skillName: "test-skill",
+    workerType: "test-skill",
     verificationSteps: ["step1"],
     dependsOn: [],
     createdAt: "2024-01-01T00:00:00Z",
@@ -250,8 +250,8 @@ describe("checkpoint lifecycle usecases", () => {
     it("saves a checkpoint with current feature and assertion states", async () => {
       const mission = createTestMission("executing");
       const features: Feature[] = [
-        createTestFeature(mission.id, "m1", "completed", "f1"),
-        createTestFeature(mission.id, "m1", "in_progress", "f2"),
+        createTestFeature(mission.id, "m1", "done", "f1"),
+        createTestFeature(mission.id, "m1", "in-progress", "f2"),
       ];
       const assertions: Assertion[] = [
         createTestAssertion(mission.id, "m1", "f1", "passed", "a1"),
@@ -270,8 +270,8 @@ describe("checkpoint lifecycle usecases", () => {
       expect(result.checkpoint.currentMilestoneId).toBe("m1");
       expect(result.checkpoint.timestamp).toBeTruthy();
       expect(result.checkpoint.featureStatuses).toEqual({
-        f1: "completed",
-        f2: "in_progress",
+        f1: "done",
+        f2: "in-progress",
       });
       expect(result.checkpoint.assertionResults).toEqual({
         a1: "passed",
@@ -298,9 +298,9 @@ describe("checkpoint lifecycle usecases", () => {
       const mission = createTestMission("executing");
       const features: Feature[] = [
         createTestFeature(mission.id, "m1", "pending", "f1"),
-        createTestFeature(mission.id, "m1", "in_progress", "f2"),
-        createTestFeature(mission.id, "m1", "in_review", "f3"),
-        createTestFeature(mission.id, "m1", "completed", "f4"),
+        createTestFeature(mission.id, "m1", "in-progress", "f2"),
+        createTestFeature(mission.id, "m1", "review", "f3"),
+        createTestFeature(mission.id, "m1", "done", "f4"),
         createTestFeature(mission.id, "m1", "blocked", "f5"),
       ];
 
@@ -314,9 +314,9 @@ describe("checkpoint lifecycle usecases", () => {
 
       expect(result.checkpoint.featureStatuses).toEqual({
         f1: "pending",
-        f2: "in_progress",
-        f3: "in_review",
-        f4: "completed",
+        f2: "in-progress",
+        f3: "review",
+        f4: "done",
         f5: "blocked",
       });
     });
@@ -398,7 +398,7 @@ describe("checkpoint lifecycle usecases", () => {
           missionId: mission.id,
           currentMilestoneId: "m1",
           timestamp: "2024-01-02T00:00:00Z",
-          featureStatuses: { f1: "completed" },
+          featureStatuses: { f1: "done" },
           assertionResults: { a1: "passed" },
         },
         {
@@ -406,7 +406,7 @@ describe("checkpoint lifecycle usecases", () => {
           missionId: mission.id,
           currentMilestoneId: "m1",
           timestamp: "2024-01-03T00:00:00Z",
-          featureStatuses: { f1: "completed" },
+          featureStatuses: { f1: "done" },
           assertionResults: { a1: "passed" },
         },
       ];
@@ -454,7 +454,7 @@ describe("checkpoint lifecycle usecases", () => {
     it("returns the latest checkpoint and restores feature/assertion states", async () => {
       const mission = createTestMission("executing");
       const features: Feature[] = [
-        createTestFeature(mission.id, "m1", "in_progress", "f1"),
+        createTestFeature(mission.id, "m1", "in-progress", "f1"),
       ];
       const assertions: Assertion[] = [
         createTestAssertion(mission.id, "m1", "f1", "failed", "a1"),
@@ -473,7 +473,7 @@ describe("checkpoint lifecycle usecases", () => {
           missionId: mission.id,
           currentMilestoneId: "m1",
           timestamp: "2024-01-02T00:00:00Z",
-          featureStatuses: { f1: "completed" },
+          featureStatuses: { f1: "done" },
           assertionResults: { a1: "passed" },
         },
       ];
@@ -533,8 +533,8 @@ describe("checkpoint lifecycle usecases", () => {
           currentMilestoneId: "m1",
           timestamp: "2024-01-01T00:00:00Z",
           featureStatuses: {
-            f1: "completed",
-            f2: "in_progress",
+            f1: "done",
+            f2: "in-progress",
           },
           assertionResults: {
             a1: "passed",
@@ -552,8 +552,8 @@ describe("checkpoint lifecycle usecases", () => {
       );
 
       expect(result.checkpoint.featureStatuses).toEqual({
-        f1: "completed",
-        f2: "in_progress",
+        f1: "done",
+        f2: "in-progress",
       });
       expect(result.checkpoint.assertionResults).toEqual({
         a1: "passed",

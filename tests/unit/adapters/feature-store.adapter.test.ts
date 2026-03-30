@@ -14,7 +14,7 @@ const makeCreateInput = (overrides: Partial<CreateFeatureInput> = {}): CreateFea
   milestoneId: "m1",
   title: "Test Feature",
   description: "A test feature",
-  skillName: "test-skill",
+  workerType: "test-skill",
   verificationSteps: ["step 1", "step 2"],
   ...overrides,
 });
@@ -101,7 +101,7 @@ describe("FsFeatureStoreAdapter", () => {
 
   describe("update", () => {
     it("returns undefined for non-existent feature", async () => {
-      const result = await store.update(missionId, "non-existent", { status: "in_progress" });
+      const result = await store.update(missionId, "non-existent", { status: "in-progress" });
       expect(result).toBeUndefined();
     });
 
@@ -109,8 +109,8 @@ describe("FsFeatureStoreAdapter", () => {
       const input = makeCreateInput();
       await store.create(missionId, input, "f1");
 
-      const updated = await store.update(missionId, "f1", { status: "in_progress" });
-      expect(updated!.status).toBe("in_progress");
+      const updated = await store.update(missionId, "f1", { status: "in-progress" });
+      expect(updated!.status).toBe("in-progress");
       expect(updated!.updatedAt).toBeTruthy();
     });
 
@@ -144,7 +144,7 @@ describe("FsFeatureStoreAdapter", () => {
       const input = makeCreateInput();
       await store.create(missionId, input, "f1");
 
-      const updated = await store.update(missionId, "f1", { status: "in_progress" });
+      const updated = await store.update(missionId, "f1", { status: "in-progress" });
       expect(updated!.title).toBe("Test Feature");
       expect(updated!.description).toBe("A test feature");
       expect(updated!.verificationSteps).toEqual(["step 1", "step 2"]);
@@ -177,7 +177,7 @@ describe("FsFeatureStoreAdapter", () => {
 
     it("filters by status", async () => {
       await store.create(missionId, makeCreateInput(), "f1");
-      await store.update(missionId, "f1", { status: "in_progress" });
+      await store.update(missionId, "f1", { status: "in-progress" });
       await store.create(missionId, makeCreateInput(), "f2");
 
       const features = await store.list(missionId, { status: "pending" });
@@ -187,11 +187,11 @@ describe("FsFeatureStoreAdapter", () => {
 
     it("combines filters", async () => {
       await store.create(missionId, makeCreateInput({ milestoneId: "m1" }), "f1");
-      await store.update(missionId, "f1", { status: "in_progress" });
+      await store.update(missionId, "f1", { status: "in-progress" });
       await store.create(missionId, makeCreateInput({ milestoneId: "m2" }), "f2");
       await store.create(missionId, makeCreateInput({ milestoneId: "m1" }), "f3");
 
-      const features = await store.list(missionId, { milestoneId: "m1", status: "in_progress" });
+      const features = await store.list(missionId, { milestoneId: "m1", status: "in-progress" });
       expect(features).toHaveLength(1);
       expect(features[0]!.id).toBe("f1");
     });

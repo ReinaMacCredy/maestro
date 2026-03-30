@@ -34,7 +34,7 @@ function createTestFeature(missionId: string, milestoneId: string, status: Featu
     status,
     title: `Feature ${id}`,
     description: "Test feature",
-    skillName: "test-skill",
+    workerType: "test-skill",
     verificationSteps: ["step1"],
     dependsOn: [],
     createdAt: "2024-01-01T00:00:00Z",
@@ -105,8 +105,8 @@ describe("milestone lifecycle usecases", () => {
     it("returns all milestones with progress for a mission", async () => {
       const mission = createTestMission("executing");
       const features: Feature[] = [
-        createTestFeature(mission.id, "m1", "completed", "f1"),
-        createTestFeature(mission.id, "m1", "in_progress", "f2"),
+        createTestFeature(mission.id, "m1", "done", "f1"),
+        createTestFeature(mission.id, "m1", "in-progress", "f2"),
         createTestFeature(mission.id, "m2", "pending", "f3"),
       ];
       const assertions: Assertion[] = [
@@ -186,7 +186,7 @@ describe("milestone lifecycle usecases", () => {
     it("infers executing status from started features even when mission is still approved", async () => {
       const mission = createTestMission("approved");
       const features: Feature[] = [
-        createTestFeature(mission.id, "m1", "in_progress", "f1"),
+        createTestFeature(mission.id, "m1", "in-progress", "f1"),
         createTestFeature(mission.id, "m2", "pending", "f2"),
       ];
 
@@ -206,7 +206,7 @@ describe("milestone lifecycle usecases", () => {
     it("returns detailed status for a specific milestone", async () => {
       const mission = createTestMission("executing");
       const features: Feature[] = [
-        createTestFeature(mission.id, "m1", "completed", "f1"),
+        createTestFeature(mission.id, "m1", "done", "f1"),
       ];
       const assertions: Assertion[] = [
         createTestAssertion(mission.id, "m1", "f1", "passed", "a1"),

@@ -56,7 +56,7 @@ function createSamplePlan(): object {
         milestoneId: "m1",
         title: "Feature 1",
         description: "First feature",
-        skillName: "test-skill",
+        workerType: "test-skill",
         verificationSteps: ["step1", "step2"],
         fulfills: ["assertion-1"],
       },
@@ -65,7 +65,7 @@ function createSamplePlan(): object {
         milestoneId: "m2",
         title: "Feature 2",
         description: "Second feature",
-        skillName: "test-skill",
+        workerType: "test-skill",
         verificationSteps: ["step3"],
       },
     ],
@@ -148,7 +148,7 @@ describe("mission CLI commands", () => {
           milestoneId: "nonexistent", // dangling reference
           title: "Bad Feature",
           description: "",
-          skillName: "test",
+          workerType: "test",
           verificationSteps: ["step"],
         },
       ],
@@ -283,7 +283,7 @@ describe("mission CLI commands", () => {
 
     await run(["mission", "approve", missionId], tmpDir);
     await run(
-      ["feature", "update", "f1", "--mission", missionId, "--status", "in_progress"],
+      ["feature", "update", "f1", "--mission", missionId, "--status", "in-progress"],
       tmpDir,
     );
 
@@ -306,7 +306,7 @@ describe("mission CLI commands", () => {
 
     await run(["mission", "approve", missionId], tmpDir);
     const featureUpdate = await run(
-      ["feature", "update", "f1", "--mission", missionId, "--status", "in_progress", "--json"],
+      ["feature", "update", "f1", "--mission", missionId, "--status", "in-progress", "--json"],
       tmpDir,
     );
     expect(featureUpdate.exitCode).toBe(0);

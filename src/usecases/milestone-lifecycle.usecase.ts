@@ -78,7 +78,7 @@ async function collectMilestoneProgress(
   const assertions = await assertionStore.listByMilestone(mission.id, milestone.id);
 
   const featureCount = features.length;
-  const completedFeatures = features.filter((f) => f.status === "completed").length;
+  const completedFeatures = features.filter((f) => f.status === "done").length;
   const featureCompletionPct = featureCount > 0 ? Math.round((completedFeatures / featureCount) * 100) : 0;
 
   const assertionCount = assertions.length;
@@ -272,7 +272,7 @@ export async function sealMilestone(
     await missionStore.update(missionId, {
       completedMilestoneIds: updatedCompletedIds,
     });
-    progress.status = "completed";
+    progress.status = "sealed";
   }
 
   return {

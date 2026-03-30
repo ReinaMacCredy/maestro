@@ -56,7 +56,7 @@ function createSamplePlan(): object {
         milestoneId: "m1",
         title: "Feature 1",
         description: "First feature",
-        skillName: "test-skill",
+        workerType: "test-skill",
         verificationSteps: ["step1", "step2"],
         fulfills: ["assertion-1"],
       },
@@ -65,7 +65,7 @@ function createSamplePlan(): object {
         milestoneId: "m1",
         title: "Feature 2",
         description: "Second feature",
-        skillName: "test-skill",
+        workerType: "test-skill",
         verificationSteps: ["step3"],
         dependsOn: ["f1"],
       },
@@ -74,7 +74,7 @@ function createSamplePlan(): object {
         milestoneId: "m2",
         title: "Feature 3",
         description: "Third feature",
-        skillName: "test-skill",
+        workerType: "test-skill",
         verificationSteps: ["step4"],
       },
     ],
@@ -156,12 +156,12 @@ describe("feature CLI commands", () => {
 
       // First transition f1 to in_progress
       await run(
-        ["feature", "update", "f1", "--mission", missionId, "--status", "in_progress"],
+        ["feature", "update", "f1", "--mission", missionId, "--status", "in-progress"],
         tmpDir,
       );
 
       const { stdout, exitCode } = await run(
-        ["feature", "list", "--mission", missionId, "--status", "in_progress"],
+        ["feature", "list", "--mission", missionId, "--status", "in-progress"],
         tmpDir,
       );
 
@@ -176,7 +176,7 @@ describe("feature CLI commands", () => {
 
       // Transition f1 (in m1) to in_progress
       await run(
-        ["feature", "update", "f1", "--mission", missionId, "--status", "in_progress"],
+        ["feature", "update", "f1", "--mission", missionId, "--status", "in-progress"],
         tmpDir,
       );
 
@@ -189,7 +189,7 @@ describe("feature CLI commands", () => {
           "--milestone",
           "m1",
           "--status",
-          "in_progress",
+          "in-progress",
         ],
         tmpDir,
       );
@@ -217,13 +217,13 @@ describe("feature CLI commands", () => {
       const missionId = await createMission(tmpDir);
 
       const { stdout, exitCode } = await run(
-        ["feature", "update", "f1", "--mission", missionId, "--status", "in_progress"],
+        ["feature", "update", "f1", "--mission", missionId, "--status", "in-progress"],
         tmpDir,
       );
 
       expect(exitCode).toBe(0);
       expect(stdout).toContain("Feature updated: f1");
-      expect(stdout).toContain("Status: in_progress");
+      expect(stdout).toContain("Status: in-progress");
 
       // Verify by listing
       const listResult = await run(
@@ -232,7 +232,7 @@ describe("feature CLI commands", () => {
       );
       const features = JSON.parse(listResult.stdout).features;
       const f1 = features.find((f: { id: string }) => f.id === "f1");
-      expect(f1.status).toBe("in_progress");
+      expect(f1.status).toBe("in-progress");
     }, SLOW_CLI_TIMEOUT_MS);
 
     it("feature update makes approved mission auto-start explicit in text output", async () => {
@@ -240,7 +240,7 @@ describe("feature CLI commands", () => {
       await run(["mission", "approve", missionId], tmpDir);
 
       const { stdout, exitCode } = await run(
-        ["feature", "update", "f1", "--mission", missionId, "--status", "in_progress"],
+        ["feature", "update", "f1", "--mission", missionId, "--status", "in-progress"],
         tmpDir,
       );
 
@@ -253,14 +253,14 @@ describe("feature CLI commands", () => {
       await run(["mission", "approve", missionId], tmpDir);
 
       const { stdout, exitCode } = await run(
-        ["feature", "update", "f1", "--mission", missionId, "--status", "in_progress", "--json"],
+        ["feature", "update", "f1", "--mission", missionId, "--status", "in-progress", "--json"],
         tmpDir,
       );
 
       expect(exitCode).toBe(0);
       const result = JSON.parse(stdout);
       expect(result.missionAutoStarted).toBe(true);
-      expect(result.feature.status).toBe("in_progress");
+      expect(result.feature.status).toBe("in-progress");
     }, SLOW_CLI_TIMEOUT_MS);
 
     it("feature update --status rejects illegal transitions", async () => {
@@ -268,7 +268,7 @@ describe("feature CLI commands", () => {
 
       // Try to go directly from pending to completed (illegal)
       const { stdout, stderr, exitCode } = await run(
-        ["feature", "update", "f1", "--mission", missionId, "--status", "completed"],
+        ["feature", "update", "f1", "--mission", missionId, "--status", "done"],
         tmpDir,
       );
 
@@ -283,11 +283,11 @@ describe("feature CLI commands", () => {
 
       // Move through states: pending -> in_progress -> in_review
       await run(
-        ["feature", "update", "f1", "--mission", missionId, "--status", "in_progress"],
+        ["feature", "update", "f1", "--mission", missionId, "--status", "in-progress"],
         tmpDir,
       );
       await run(
-        ["feature", "update", "f1", "--mission", missionId, "--status", "in_review"],
+        ["feature", "update", "f1", "--mission", missionId, "--status", "review"],
         tmpDir,
       );
 
@@ -306,11 +306,11 @@ describe("feature CLI commands", () => {
 
       // Move through states: pending -> in_progress -> in_review -> blocked
       await run(
-        ["feature", "update", "f1", "--mission", missionId, "--status", "in_progress"],
+        ["feature", "update", "f1", "--mission", missionId, "--status", "in-progress"],
         tmpDir,
       );
       await run(
-        ["feature", "update", "f1", "--mission", missionId, "--status", "in_review"],
+        ["feature", "update", "f1", "--mission", missionId, "--status", "review"],
         tmpDir,
       );
       await run(
@@ -346,7 +346,7 @@ describe("feature CLI commands", () => {
           "--mission",
           missionId,
           "--status",
-          "in_progress",
+          "in-progress",
           "--report",
           JSON.stringify(report),
         ],
@@ -378,7 +378,7 @@ describe("feature CLI commands", () => {
           "--mission",
           missionId,
           "--status",
-          "in_progress",
+          "in-progress",
           "--report",
           `@${reportPath}`,
         ],
@@ -394,21 +394,21 @@ describe("feature CLI commands", () => {
       const missionId = await createMission(tmpDir);
 
       const { stdout, exitCode } = await run(
-        ["feature", "update", "f1", "--mission", missionId, "--status", "in_progress", "--json"],
+        ["feature", "update", "f1", "--mission", missionId, "--status", "in-progress", "--json"],
         tmpDir,
       );
 
       expect(exitCode).toBe(0);
       const result = JSON.parse(stdout);
       expect(result.feature.id).toBe("f1");
-      expect(result.feature.status).toBe("in_progress");
+      expect(result.feature.status).toBe("in-progress");
     }, SLOW_CLI_TIMEOUT_MS);
 
     it("feature update errors for non-existent feature", async () => {
       const missionId = await createMission(tmpDir);
 
       const { stdout, stderr, exitCode } = await run(
-        ["feature", "update", "nonexistent", "--mission", missionId, "--status", "in_progress"],
+        ["feature", "update", "nonexistent", "--mission", missionId, "--status", "in-progress"],
         tmpDir,
       );
 
@@ -449,7 +449,7 @@ describe("feature CLI commands", () => {
           "--mission",
           missionId,
           "--status",
-          "in_progress",
+          "in-progress",
           "--report",
           JSON.stringify(report1),
         ],
@@ -458,7 +458,7 @@ describe("feature CLI commands", () => {
 
       // Move to in_review
       await run(
-        ["feature", "update", "f1", "--mission", missionId, "--status", "in_review"],
+        ["feature", "update", "f1", "--mission", missionId, "--status", "review"],
         tmpDir,
       );
 

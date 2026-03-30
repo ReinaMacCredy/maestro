@@ -63,8 +63,8 @@ export function assertMissionTransition(
 const MILESTONE_TRANSITIONS: Readonly<Record<MilestoneStatus, readonly MilestoneStatus[]>> = {
   pending: ["executing"],
   executing: ["validating"],
-  validating: ["completed", "failed", "executing"], // executing = retry after failed validation
-  completed: [], // terminal
+  validating: ["sealed", "failed", "executing"], // executing = retry after failed validation
+  sealed: [], // terminal
   failed: [], // terminal
 };
 
@@ -103,11 +103,11 @@ export function assertMilestoneTransition(
 // ============================
 
 const FEATURE_TRANSITIONS: Readonly<Record<FeatureStatus, readonly FeatureStatus[]>> = {
-  pending: ["assigned", "in_progress"],
-  assigned: ["in_progress"],
-  in_progress: ["in_review"],
-  in_review: ["completed", "blocked", "pending"], // pending = retry
-  completed: [], // terminal
+  pending: ["assigned", "in-progress"],
+  assigned: ["in-progress"],
+  "in-progress": ["review"],
+  review: ["done", "blocked", "pending"], // pending = retry
+  done: [], // terminal
   blocked: ["pending"], // pending = retry
 };
 

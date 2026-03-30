@@ -95,8 +95,8 @@ describe("mission state transitions", () => {
       expect(canTransitionMilestone("executing", "validating")).toBe(true);
     });
 
-    it("allows validating -> completed", () => {
-      expect(canTransitionMilestone("validating", "completed")).toBe(true);
+    it("allows validating -> sealed", () => {
+      expect(canTransitionMilestone("validating", "sealed")).toBe(true);
     });
 
     it("allows validating -> failed", () => {
@@ -107,9 +107,9 @@ describe("mission state transitions", () => {
       expect(canTransitionMilestone("pending", "validating")).toBe(false);
     });
 
-    it("rejects completed -> any state", () => {
-      expect(canTransitionMilestone("completed", "pending")).toBe(false);
-      expect(canTransitionMilestone("completed", "executing")).toBe(false);
+    it("rejects sealed -> any state", () => {
+      expect(canTransitionMilestone("sealed", "pending")).toBe(false);
+      expect(canTransitionMilestone("sealed", "executing")).toBe(false);
     });
 
     it("assertMilestoneTransition throws MaestroError with hints on invalid transition", () => {
@@ -118,41 +118,41 @@ describe("mission state transitions", () => {
   });
 
   describe("feature transitions", () => {
-    it("allows pending -> in_progress", () => {
-      expect(canTransitionFeature("pending", "in_progress")).toBe(true);
+    it("allows pending -> in-progress", () => {
+      expect(canTransitionFeature("pending", "in-progress")).toBe(true);
     });
 
-    it("allows in_progress -> in_review", () => {
-      expect(canTransitionFeature("in_progress", "in_review")).toBe(true);
+    it("allows in-progress -> review", () => {
+      expect(canTransitionFeature("in-progress", "review")).toBe(true);
     });
 
-    it("allows in_review -> completed", () => {
-      expect(canTransitionFeature("in_review", "completed")).toBe(true);
+    it("allows review -> done", () => {
+      expect(canTransitionFeature("review", "done")).toBe(true);
     });
 
-    it("allows in_review -> blocked", () => {
-      expect(canTransitionFeature("in_review", "blocked")).toBe(true);
+    it("allows review -> blocked", () => {
+      expect(canTransitionFeature("review", "blocked")).toBe(true);
     });
 
     it("allows blocked -> pending (retry)", () => {
       expect(canTransitionFeature("blocked", "pending")).toBe(true);
     });
 
-    it("allows in_review -> pending (retry)", () => {
-      expect(canTransitionFeature("in_review", "pending")).toBe(true);
+    it("allows review -> pending (retry)", () => {
+      expect(canTransitionFeature("review", "pending")).toBe(true);
     });
 
-    it("rejects pending -> completed directly", () => {
-      expect(canTransitionFeature("pending", "completed")).toBe(false);
+    it("rejects pending -> done directly", () => {
+      expect(canTransitionFeature("pending", "done")).toBe(false);
     });
 
-    it("rejects completed -> any state", () => {
-      expect(canTransitionFeature("completed", "pending")).toBe(false);
-      expect(canTransitionFeature("completed", "in_progress")).toBe(false);
+    it("rejects done -> any state", () => {
+      expect(canTransitionFeature("done", "pending")).toBe(false);
+      expect(canTransitionFeature("done", "in-progress")).toBe(false);
     });
 
     it("assertFeatureTransition throws MaestroError with hints on invalid transition", () => {
-      expect(() => assertFeatureTransition("pending", "completed")).toThrow(MaestroError);
+      expect(() => assertFeatureTransition("pending", "done")).toThrow(MaestroError);
     });
   });
 

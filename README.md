@@ -137,7 +137,7 @@ Missions are created from JSON plan files:
       "title": "User migration",
       "milestoneId": "m1",
       "description": "Create users table",
-      "skillName": "backend-worker",
+      "workerType": "backend-worker",
       "verificationSteps": ["Table exists", "Indexes created"],
       "fulfills": ["ASSERT-001"]
     }

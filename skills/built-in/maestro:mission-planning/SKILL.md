@@ -91,7 +91,7 @@ maestro feature approve <feature-id> --mission <mission-id>
 Each feature has:
 - `id`: Unique identifier
 - `description`: What to implement
-- `skillName`: The skill to use for implementation
+- `workerType`: The skill to use for implementation
 - `milestone`: Which milestone it belongs to
 - `verificationSteps`: How to verify completion
 

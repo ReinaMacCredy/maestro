@@ -57,15 +57,15 @@ describe("FsCheckpointStoreAdapter", () => {
     it("captures feature states", async () => {
       const data = makeCheckpointData({
         featureStatuses: {
-          f1: "in_progress",
-          f2: "completed",
+          f1: "in-progress",
+          f2: "done",
         },
       });
       const checkpoint = await store.save(missionId, data);
 
       expect(checkpoint.featureStatuses).toEqual({
-        f1: "in_progress",
-        f2: "completed",
+        f1: "in-progress",
+        f2: "done",
       });
     });
 
@@ -184,7 +184,7 @@ describe("FsCheckpointStoreAdapter", () => {
       await new Promise((r) => setTimeout(r, 10));
       const progressData = makeCheckpointData({
         currentMilestoneId: "m1",
-        featureStatuses: { f1: "in_progress" },
+        featureStatuses: { f1: "in-progress" },
         assertionResults: { a1: "passed" },
       });
       const cp2 = await store.save(missionId, progressData);
@@ -201,7 +201,7 @@ describe("FsCheckpointStoreAdapter", () => {
 
       // Verify getLatest returns most recent
       const latest = await store.getLatest(missionId);
-      expect(latest!.featureStatuses).toEqual({ f1: "in_progress" });
+      expect(latest!.featureStatuses).toEqual({ f1: "in-progress" });
     });
   });
 });

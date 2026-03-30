@@ -22,7 +22,7 @@ export function deriveSequentialMilestoneStatuses(
 
   for (const activity of sortedActivities) {
     if (completedMilestoneIds.has(activity.milestoneId)) {
-      statuses.set(activity.milestoneId, "completed");
+      statuses.set(activity.milestoneId, "sealed");
       continue;
     }
 
@@ -56,14 +56,14 @@ export function deriveEffectiveMissionStatus(
   const sortedMilestones = [...mission.milestones].sort((a, b) => a.order - b.order);
   if (
     sortedMilestones.length > 0 &&
-    sortedMilestones.every((milestone) => milestoneStatuses.get(milestone.id) === "completed")
+    sortedMilestones.every((milestone) => milestoneStatuses.get(milestone.id) === "sealed")
   ) {
     return "completed";
   }
 
   for (const milestone of sortedMilestones) {
     const status = milestoneStatuses.get(milestone.id);
-    if (!status || status === "completed") {
+    if (!status || status === "sealed") {
       continue;
     }
     if (status !== "pending") {
@@ -82,7 +82,7 @@ export function getCurrentMilestoneId(
   const sortedMilestones = [...mission.milestones].sort((a, b) => a.order - b.order);
 
   for (const milestone of sortedMilestones) {
-    if (milestoneStatuses.get(milestone.id) !== "completed") {
+    if (milestoneStatuses.get(milestone.id) !== "sealed") {
       return milestone.id;
     }
   }

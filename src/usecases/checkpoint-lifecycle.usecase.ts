@@ -82,7 +82,7 @@ export async function saveCheckpoint(
       hasStartedFeatures: milestoneFeatures.some((feature) => feature.status !== "pending"),
       allFeaturesCompleted:
         milestoneFeatures.length > 0 &&
-        milestoneFeatures.every((feature) => feature.status === "completed"),
+        milestoneFeatures.every((feature) => feature.status === "done"),
     };
   });
   const milestoneStatuses = deriveSequentialMilestoneStatuses(mission, milestoneActivities);

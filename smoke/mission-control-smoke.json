@@ -15,11 +15,11 @@
       "milestoneId": "smoke-setup",
       "title": "Run smoke feature",
       "description": "Exercise prompt generation, state transition, and checkpoint handling.",
-      "skillName": "maestro:worker-base",
+      "workerType": "maestro:worker-base",
       "verificationSteps": [
         "Create the mission from this plan file",
         "Approve the mission and list features",
-        "Advance the feature to in_progress and verify the update"
+        "Advance the feature to in-progress and verify the update"
       ],
       "fulfills": [
         "Smoke workflow can create and advance a feature"

@@ -37,7 +37,7 @@ async function createSampleMission(
         milestoneId: "m1",
         title: "Feature 1",
         description: "First feature",
-        skillName: "test-skill",
+        workerType: "test-skill",
         verificationSteps: ["step1", "step2"],
         dependsOn: [],
         fulfills: ["assertion1"],
@@ -47,7 +47,7 @@ async function createSampleMission(
         milestoneId: "m1",
         title: "Feature 2",
         description: "Second feature",
-        skillName: "test-skill",
+        workerType: "test-skill",
         verificationSteps: ["step3"],
         dependsOn: ["f1"],
       },
@@ -56,7 +56,7 @@ async function createSampleMission(
         milestoneId: "m2",
         title: "Feature 3",
         description: "Third feature",
-        skillName: "test-skill",
+        workerType: "test-skill",
         verificationSteps: ["step4"],
         dependsOn: [],
       },
@@ -114,17 +114,17 @@ describe("feature lifecycle usecases", () => {
 
       // First transition a feature to in_progress
       await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
-        status: "in_progress",
+        status: "in-progress",
       });
 
       const result = await listFeatures(missionStore, featureStore, missionId, {
-        status: "in_progress",
+        status: "in-progress",
       });
 
       expect(result.total).toBe(3);
       expect(result.filtered).toBe(1);
       expect(result.features[0]?.id).toBe("f1");
-      expect(result.features[0]?.status).toBe("in_progress");
+      expect(result.features[0]?.status).toBe("in-progress");
     });
 
     it("combines milestone and status filters", async () => {
@@ -132,12 +132,12 @@ describe("feature lifecycle usecases", () => {
 
       // Transition f1 (m1) to in_progress, f2 (m1) stays pending
       await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
-        status: "in_progress",
+        status: "in-progress",
       });
 
       const result = await listFeatures(missionStore, featureStore, missionId, {
         milestoneId: "m1",
-        status: "in_progress",
+        status: "in-progress",
       });
 
       expect(result.filtered).toBe(1);
@@ -154,7 +154,7 @@ describe("feature lifecycle usecases", () => {
       const { missionId } = await createSampleMission(missionStore, featureStore, assertionStore, tmpDir);
 
       const result = await listFeatures(missionStore, featureStore, missionId, {
-        status: "completed",
+        status: "done",
       });
 
       expect(result.filtered).toBe(0);
@@ -167,10 +167,10 @@ describe("feature lifecycle usecases", () => {
       const { missionId } = await createSampleMission(missionStore, featureStore, assertionStore, tmpDir);
 
       const result = await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
-        status: "in_progress",
+        status: "in-progress",
       });
 
-      expect(result.feature.status).toBe("in_progress");
+      expect(result.feature.status).toBe("in-progress");
       expect(result.feature.id).toBe("f1");
     });
 
@@ -180,7 +180,7 @@ describe("feature lifecycle usecases", () => {
       // Cannot go from pending to in_review (must go through in_progress)
       expect(
         updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
-          status: "in_review",
+          status: "review",
         }),
       ).rejects.toThrow("Invalid feature transition");
     });
@@ -190,10 +190,10 @@ describe("feature lifecycle usecases", () => {
 
       // First move to in_progress, then in_review
       await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
-        status: "in_progress",
+        status: "in-progress",
       });
       await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
-        status: "in_review",
+        status: "review",
       });
 
       // Retry: in_review -> pending
@@ -209,10 +209,10 @@ describe("feature lifecycle usecases", () => {
 
       // First move through the states: pending -> in_progress -> in_review -> blocked
       await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
-        status: "in_progress",
+        status: "in-progress",
       });
       await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
-        status: "in_review",
+        status: "review",
       });
       await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
         status: "blocked",
@@ -236,7 +236,7 @@ describe("feature lifecycle usecases", () => {
       };
 
       const result = await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
-        status: "in_progress",
+        status: "in-progress",
         report,
       });
 
@@ -264,13 +264,13 @@ describe("feature lifecycle usecases", () => {
       };
 
       await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
-        status: "in_progress",
+        status: "in-progress",
         report,
       });
 
       // Move to in_review
       await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
-        status: "in_review",
+        status: "review",
       });
 
       // Retry to pending WITHOUT providing a new report
@@ -288,7 +288,7 @@ describe("feature lifecycle usecases", () => {
     it("throws for non-existent mission", async () => {
       expect(
         updateFeature(missionStore, featureStore, tmpDir, "2026-03-28-001", "f1", {
-          status: "in_progress",
+          status: "in-progress",
         }),
       ).rejects.toThrow("Mission 2026-03-28-001 not found");
     });
@@ -298,7 +298,7 @@ describe("feature lifecycle usecases", () => {
 
       expect(
         updateFeature(missionStore, featureStore, tmpDir, missionId, "nonexistent", {
-          status: "in_progress",
+          status: "in-progress",
         }),
       ).rejects.toThrow("Feature nonexistent not found");
     });
