@@ -311,7 +311,7 @@ describe("validation CLI commands", () => {
 
       expect(exitCode).toBe(1);
       const output = stdout + stderr;
-      expect(output).toContain("waivedReason is required when status is 'waived'");
+      expect(output).toContain("waivedReason is required when waiving an assertion");
     }, SLOW_CLI_TIMEOUT_MS);
 
     it("validate update allows retry from failed to pending", async () => {

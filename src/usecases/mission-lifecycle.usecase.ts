@@ -33,6 +33,7 @@ export interface CreateMissionResult {
 interface MissionPlanFile {
   title: string;
   description?: string;
+  proposal?: string;
   milestones: readonly Milestone[];
   features: ReadonlyArray<{
     id: string;
@@ -43,6 +44,8 @@ interface MissionPlanFile {
     verificationSteps: readonly string[];
     dependsOn?: readonly string[];
     fulfills?: readonly string[];
+    preconditions?: string;
+    expectedBehavior?: string;
   }>;
 }
 
@@ -60,6 +63,7 @@ export async function createMission(
   const input: CreateMissionInput = validateCreateMissionInput({
     title: planFile.title,
     description: planFile.description ?? "",
+    proposal: planFile.proposal,
     milestones: planFile.milestones,
   });
 
@@ -106,45 +110,66 @@ export async function createMission(
   await missionStore.finalize(missionId);
 
   // Now create features and assertions in the final location
+  // Wrap in try/catch for cleanup on failure (B8 fix)
   const features: Feature[] = [];
+  try {
+    for (const featureDef of planFile.features) {
+      const featureInput: CreateFeatureInput = {
+        missionId,
+        milestoneId: featureDef.milestoneId,
+        title: featureDef.title,
+        description: featureDef.description,
+        skillName: featureDef.skillName,
+        verificationSteps: featureDef.verificationSteps,
+        dependsOn: featureDef.dependsOn ?? [],
+        fulfills: featureDef.fulfills ?? [],
+        preconditions: featureDef.preconditions,
+        expectedBehavior: featureDef.expectedBehavior,
+      };
 
-  for (const featureDef of planFile.features) {
-    const featureInput: CreateFeatureInput = {
-      missionId,
-      milestoneId: featureDef.milestoneId,
-      title: featureDef.title,
-      description: featureDef.description,
-      skillName: featureDef.skillName,
-      verificationSteps: featureDef.verificationSteps,
-      dependsOn: featureDef.dependsOn ?? [],
-    };
+      const feature = await featureStore.create(missionId, featureInput, featureDef.id);
+      features.push(feature);
 
-    const feature = await featureStore.create(missionId, featureInput, featureDef.id);
-    features.push(feature);
-
-    // Create assertions for each fulfill
-    if (featureDef.fulfills) {
-      for (let i = 0; i < featureDef.fulfills.length; i++) {
-        const assertionInput: CreateAssertionInput = {
-          missionId,
-          milestoneId: featureDef.milestoneId,
-          featureId: featureDef.id,
-          description: featureDef.fulfills[i]!,
-        };
-        await assertionStore.create(missionId, assertionInput, `${featureDef.id}-assertion-${i + 1}`);
+      // Create assertions for each fulfill
+      if (featureDef.fulfills) {
+        for (let i = 0; i < featureDef.fulfills.length; i++) {
+          const assertionInput: CreateAssertionInput = {
+            missionId,
+            milestoneId: featureDef.milestoneId,
+            featureId: featureDef.id,
+            description: featureDef.fulfills[i]!,
+          };
+          await assertionStore.create(missionId, assertionInput, `${featureDef.id}-assertion-${i + 1}`);
+        }
       }
     }
+
+    // Validate no cyclic dependencies
+    assertNoCyclicDependencies(features);
+
+    // Validate referential integrity (B9 fix)
+    const mission = await missionStore.get(missionId);
+    if (!mission) {
+      throw new MaestroError(`Failed to finalize mission ${missionId}`);
+    }
+
+    const allAssertions = await assertionStore.list(missionId);
+    assertNoDanglingReferences(mission, features, allAssertions);
+
+    return { mission, features };
+  } catch (err) {
+    // Attempt cleanup of partially created mission
+    // The mission directory may be left in an inconsistent state -- wrap the
+    // error with context so the user knows to clean up manually if needed.
+    if (err instanceof MaestroError) throw err;
+    throw new MaestroError(
+      `Mission ${missionId} creation failed after directory was created. Manual cleanup may be required.`,
+      [
+        `Original error: ${err instanceof Error ? err.message : String(err)}`,
+        `Check .maestro/missions/${missionId}/ for partial state`,
+      ],
+    );
   }
-
-  // Validate no cyclic dependencies
-  assertNoCyclicDependencies(features);
-
-  const mission = await missionStore.get(missionId);
-  if (!mission) {
-    throw new MaestroError(`Failed to finalize mission ${missionId}`);
-  }
-
-  return { mission, features };
 }
 
 /** List all missions with optional status filter */

@@ -98,6 +98,14 @@ export async function updateAssertion(
     assertAssertionTransition(existing.status, input.status);
   }
 
+  // Enforce waived reason at usecase level (not just CLI)
+  if (input.status === "waived" && !input.waivedReason) {
+    throw new MaestroError("waivedReason is required when waiving an assertion", [
+      "Use --waived-reason to provide the reason for waiving",
+      "Example: maestro validate update <id> --mission <id> --status waived --waived-reason \"reason\"",
+    ]);
+  }
+
   // Build final update input, preserving existing evidence if not provided
   let finalEvidence = input.evidence;
   if (input.evidence === undefined && input.status !== undefined) {

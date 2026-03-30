@@ -234,7 +234,7 @@ describe("validation lifecycle usecases", () => {
         updateAssertion(missionStore, assertionStore, missionId, assertionId, {
           status: "waived",
         }),
-      ).rejects.toThrow("waivedReason is required when status is 'waived'");
+      ).rejects.toThrow("waivedReason is required when waiving an assertion");
     });
 
     it("rejects waive with empty reason", async () => {
@@ -251,7 +251,7 @@ describe("validation lifecycle usecases", () => {
           status: "waived",
           waivedReason: "",
         }),
-      ).rejects.toThrow("waivedReason is required when status is 'waived'");
+      ).rejects.toThrow("waivedReason is required when waiving an assertion");
     });
 
     it("allows retry from failed to pending", async () => {

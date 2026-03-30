@@ -65,6 +65,7 @@ export class FsAssertionStoreAdapter implements AssertionStorePort {
       featureId: input.featureId,
       status: "pending",
       description: input.description,
+      surface: input.surface ?? "cli",
       createdAt: now,
       updatedAt: now,
     };

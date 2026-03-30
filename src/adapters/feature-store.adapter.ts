@@ -62,6 +62,9 @@ export class FsFeatureStoreAdapter implements FeatureStorePort {
       skillName: input.skillName,
       verificationSteps: input.verificationSteps,
       dependsOn: input.dependsOn ?? [],
+      fulfills: input.fulfills ?? [],
+      preconditions: input.preconditions,
+      expectedBehavior: input.expectedBehavior,
       createdAt: now,
       updatedAt: now,
     };

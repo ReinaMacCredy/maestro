@@ -7,6 +7,7 @@ import { join } from "node:path";
 import type { Mission, CreateMissionInput, UpdateMissionInput } from "../domain/mission-types.js";
 import type { MissionStorePort } from "../ports/mission-store.port.js";
 import { validateMission } from "../domain/mission-validators.js";
+import { MaestroError } from "../domain/errors.js";
 import { ensureDir, readJson, writeJson, dirExists, listDirs } from "../lib/fs.js";
 import { MAESTRO_DIR } from "../domain/defaults.js";
 
@@ -63,6 +64,7 @@ export class FsMissionStoreAdapter implements MissionStorePort {
       status: "draft",
       title: input.title,
       description: input.description,
+      ...(input.proposal !== undefined && { proposal: input.proposal }),
       milestones: input.milestones,
       features,
       createdAt: now,
@@ -79,9 +81,21 @@ export class FsMissionStoreAdapter implements MissionStorePort {
     const stagingPath = this.stagingDir(id);
     const finalPath = this.missionDir(id);
 
-    // Move from staging to final location
-    const { rename } = await import("node:fs/promises");
-    await rename(stagingPath, finalPath);
+    // Move from staging to final location with error handling
+    const { rename, rm } = await import("node:fs/promises");
+    try {
+      await rename(stagingPath, finalPath);
+    } catch (err: unknown) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === "ENOTEMPTY" || code === "EEXIST") {
+        await rm(stagingPath, { recursive: true, force: true });
+        throw new MaestroError(`Mission ${id} already exists`, [
+          "Use a different mission ID or delete the existing mission",
+          `Mission directory: ${finalPath}`,
+        ]);
+      }
+      throw err;
+    }
 
     // Create subdirectories for features, workers, reports, checkpoints
     await ensureDir(join(finalPath, "features"));
