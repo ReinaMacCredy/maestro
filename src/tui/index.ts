@@ -62,6 +62,21 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
     if (action) dispatch(action);
   };
 
+  // Ensure terminal is restored on any crash
+  const emergencyExit = (): void => {
+    try { screen.exit(); } catch {}
+  };
+  process.on("uncaughtException", (err) => {
+    emergencyExit();
+    console.error("[!] TUI crashed:", err.message);
+    process.exit(1);
+  });
+  process.on("unhandledRejection", (err) => {
+    emergencyExit();
+    console.error("[!] TUI unhandled rejection:", err);
+    process.exit(1);
+  });
+
   screen.enter();
   const stopKeys = startKeyListener(handleKey);
 
@@ -76,33 +91,44 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
     render();
   });
 
+  let pollTimer: ReturnType<typeof setInterval> | undefined;
+  let checkTimer: ReturnType<typeof setInterval> | undefined;
+  let polling = false;
+
+  const cleanup = (): void => {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = undefined; }
+    if (checkTimer) { clearInterval(checkTimer); checkTimer = undefined; }
+    stopKeys();
+    screen.exit();
+  };
+
   try {
     render();
 
-    let pollTimer: ReturnType<typeof setInterval> | undefined;
-
     await new Promise<void>((resolve) => {
       pollTimer = setInterval(async () => {
+        if (polling || !state.running) return;
+        polling = true;
         try {
           const snapshot = await buildSnapshot(opts.snapshotDeps, opts.missionId);
-          dispatch({ type: "update-snapshot", snapshot });
+          if (state.running) {
+            dispatch({ type: "update-snapshot", snapshot });
+          }
         } catch {
           // Poll failure is non-fatal
+        } finally {
+          polling = false;
         }
       }, 2000);
 
-      const check = setInterval(() => {
+      checkTimer = setInterval(() => {
         if (!state.running) {
-          clearInterval(check);
           resolve();
         }
       }, 50);
     });
-
-    if (pollTimer) clearInterval(pollTimer);
   } finally {
-    stopKeys();
-    screen.exit();
+    cleanup();
   }
 }
 

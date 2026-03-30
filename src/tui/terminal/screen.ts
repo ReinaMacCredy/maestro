@@ -2,7 +2,7 @@
  * Screen -- alternate screen, raw mode, double-buffer flush.
  * Wraps Buffer with lifecycle management for interactive TUI.
  */
-import { Buffer, type CellChange } from "./buffer.js";
+import { Buffer } from "./buffer.js";
 import { moveTo, style, reset, hideCursor, showCursor, enterAltScreen, exitAltScreen, clearScreen } from "./ansi.js";
 
 export class Screen {
@@ -12,6 +12,7 @@ export class Screen {
   private _height: number;
   private resizeCallbacks: Array<() => void> = [];
   private active = false;
+  private signalHandlers: Array<() => void> = [];
 
   constructor() {
     this._width = process.stdout.columns || 80;
@@ -33,6 +34,17 @@ export class Screen {
       process.stdin.resume();
     }
     process.stdout.on("resize", this.handleResize);
+
+    // Register signal handlers to restore terminal on unexpected exit
+    const cleanup = () => this.exit();
+    const onSigint = () => { cleanup(); process.exit(130); };
+    const onSigterm = () => { cleanup(); process.exit(143); };
+    process.on("SIGINT", onSigint);
+    process.on("SIGTERM", onSigterm);
+    this.signalHandlers.push(
+      () => process.off("SIGINT", onSigint),
+      () => process.off("SIGTERM", onSigterm),
+    );
   }
 
   /** Exit alternate screen, show cursor, restore cooked mode. */
@@ -40,6 +52,11 @@ export class Screen {
     if (!this.active) return;
     this.active = false;
     process.stdout.off("resize", this.handleResize);
+
+    // Remove signal handlers
+    for (const remove of this.signalHandlers) remove();
+    this.signalHandlers.length = 0;
+
     process.stdout.write(reset + showCursor + exitAltScreen);
     if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
       process.stdin.setRawMode(false);
@@ -57,26 +74,33 @@ export class Screen {
     const changes = this.back.diff(this.front);
     if (changes.length === 0) return;
 
-    let out = "";
+    // Build ANSI output, batching consecutive cells on the same row
+    const parts: string[] = [];
     let lastFg = -2;
     let lastBg = -2;
     let lastBold = false;
     let lastDim = false;
+    let lastRow = -1;
+    let lastCol = -1;
 
     for (const ch of changes) {
-      out += moveTo(ch.row, ch.col);
-      // Only emit style if it changed
+      // Only emit moveTo if not consecutive on same row
+      if (ch.row !== lastRow || ch.col !== lastCol + 1) {
+        parts.push(moveTo(ch.row, ch.col));
+      }
       if (ch.cell.fg !== lastFg || ch.cell.bg !== lastBg || ch.cell.bold !== lastBold || ch.cell.dim !== lastDim) {
-        out += style(ch.cell.fg, ch.cell.bg, ch.cell.bold, ch.cell.dim);
+        parts.push(style(ch.cell.fg, ch.cell.bg, ch.cell.bold, ch.cell.dim));
         lastFg = ch.cell.fg;
         lastBg = ch.cell.bg;
         lastBold = ch.cell.bold;
         lastDim = ch.cell.dim;
       }
-      out += ch.cell.char;
+      parts.push(ch.cell.char);
+      lastRow = ch.row;
+      lastCol = ch.col;
     }
-    out += reset;
-    process.stdout.write(out);
+    parts.push(reset);
+    process.stdout.write(parts.join(""));
 
     // Swap: front becomes back's state
     this.front = this.back.clone();
