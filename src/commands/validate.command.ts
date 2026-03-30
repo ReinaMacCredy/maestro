@@ -129,7 +129,7 @@ function formatAssertionList(result: ShowAssertionsResult): string[] {
 function formatAssertionUpdate(result: UpdateAssertionResult): string[] {
   const lines: string[] = [
     `[ok] Assertion updated: ${result.assertion.id}`,
-    `  Status: ${result.assertion.result}`,
+    `  Result: ${result.assertion.result}`,
     `  Description: ${result.assertion.description}`,
     `  Feature: ${result.assertion.featureId}`,
     `  Milestone: ${result.assertion.milestoneId}`,

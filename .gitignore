@@ -37,3 +37,6 @@ feedback.jsonl
 # Runtime data
 .maestro/handoffs/
 .maestro/missions/
+
+# Claude plans
+.claude/plans/

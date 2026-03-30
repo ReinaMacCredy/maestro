@@ -200,7 +200,7 @@ describe("validation CLI commands", () => {
 
       expect(exitCode).toBe(0);
       expect(stdout).toContain("Assertion updated");
-      expect(stdout).toContain("Status: passed");
+      expect(stdout).toContain("Result: passed");
       expect(stdout).toContain(assertionId);
     }, SLOW_CLI_TIMEOUT_MS);
 
@@ -285,7 +285,7 @@ describe("validation CLI commands", () => {
       );
 
       expect(exitCode).toBe(0);
-      expect(stdout).toContain("Status: waived");
+      expect(stdout).toContain("Result: waived");
       expect(stdout).toContain("Waived Reason:");
       expect(stdout).toContain(reason);
     }, SLOW_CLI_TIMEOUT_MS);
@@ -346,7 +346,7 @@ describe("validation CLI commands", () => {
       );
 
       expect(exitCode).toBe(0);
-      expect(stdout).toContain("Status: pending");
+      expect(stdout).toContain("Result: pending");
     }, SLOW_CLI_TIMEOUT_MS);
 
     it("validate update allows retry from blocked to pending", async () => {
@@ -381,7 +381,7 @@ describe("validation CLI commands", () => {
       );
 
       expect(exitCode).toBe(0);
-      expect(stdout).toContain("Status: pending");
+      expect(stdout).toContain("Result: pending");
     }, SLOW_CLI_TIMEOUT_MS);
 
     it("validate update rejects illegal transitions with helpful hints", async () => {
