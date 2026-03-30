@@ -125,10 +125,14 @@ export class FsFeatureStoreAdapter implements FeatureStorePort {
       features = features.filter((f) => f.status === filter.status);
     }
 
-    // Sort by creation date, newest first
-    features.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    return features;
-  }
+      // Preserve plan order by listing oldest-created features first.
+      // Fall back to feature ID when timestamps are identical.
+      features.sort((a, b) => {
+        const byCreatedAt = a.createdAt.localeCompare(b.createdAt);
+        return byCreatedAt !== 0 ? byCreatedAt : a.id.localeCompare(b.id);
+      });
+      return features;
+    }
 
   async getMany(missionId: string, featureIds: readonly string[]): Promise<readonly Feature[]> {
     const settled = await Promise.allSettled(

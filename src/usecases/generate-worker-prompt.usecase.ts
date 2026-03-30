@@ -9,7 +9,7 @@ import type { AssertionStorePort } from "../ports/assertion-store.port.js";
 import type { Feature, Mission, Milestone, Assertion } from "../domain/mission-types.js";
 import { MaestroError } from "../domain/errors.js";
 import { readText, writeText, ensureDir } from "../lib/fs.js";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { MAESTRO_DIR } from "../domain/defaults.js";
 
 /** Result of generating a worker prompt */
@@ -106,25 +106,54 @@ export async function generateWorkerPrompt(
 }
 
 /**
- * Read worker skill markdown from .maestro/skills/{workerType}/SKILL.md
- * Returns a safe error message if skill file is missing.
+ * Read worker skill markdown from either:
+ * 1. .maestro/skills/{workerType}/SKILL.md in the current workspace or any ancestor
+ * 2. skills/built-in/{workerType}/SKILL.md in the current workspace or any ancestor
  */
 async function readWorkerSkill(baseDir: string, workerType: string): Promise<string> {
-  const skillPath = join(baseDir, MAESTRO_DIR, "skills", workerType, "SKILL.md");
-  const content = await readText(skillPath);
+  const searchedPaths: string[] = [];
 
-  if (content === undefined) {
-    throw new MaestroError(
-      `Worker skill '${workerType}' not found at ${skillPath}`,
-      [
-        `Create skill file: ${skillPath}`,
-        `Add SKILL.md with instructions for '${workerType}' worker type`,
-        "Skill files are loaded from .maestro/skills/{workerType}/SKILL.md",
-      ],
-    );
+  for (const dir of enumerateSearchRoots(baseDir)) {
+    const workspaceSkillPath = join(dir, MAESTRO_DIR, "skills", workerType, "SKILL.md");
+    searchedPaths.push(workspaceSkillPath);
+    const workspaceContent = await readText(workspaceSkillPath);
+    if (workspaceContent !== undefined) {
+      return workspaceContent;
+    }
+
+    const builtInSkillPath = join(dir, "skills", "built-in", workerType, "SKILL.md");
+    searchedPaths.push(builtInSkillPath);
+    const builtInContent = await readText(builtInSkillPath);
+    if (builtInContent !== undefined) {
+      return builtInContent;
+    }
   }
 
-  return content;
+  const primaryPath = searchedPaths[0] ?? join(baseDir, MAESTRO_DIR, "skills", workerType, "SKILL.md");
+  throw new MaestroError(
+    `Worker skill '${workerType}' not found at ${primaryPath}`,
+    [
+      `Create workspace skill file: ${primaryPath}`,
+      `Or add built-in skill file: skills/built-in/${workerType}/SKILL.md`,
+      `Searched paths: ${searchedPaths.join(", ")}`,
+    ],
+  );
+}
+
+function enumerateSearchRoots(baseDir: string): string[] {
+  const roots: string[] = [];
+  let current = resolve(baseDir);
+
+  while (true) {
+    roots.push(current);
+    const parent = dirname(current);
+    if (parent === current) {
+      break;
+    }
+    current = parent;
+  }
+
+  return roots;
 }
 
 /**

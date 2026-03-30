@@ -12,6 +12,7 @@ import {
 import { FsMissionStoreAdapter } from "../../../src/adapters/mission-store.adapter.js";
 import { FsFeatureStoreAdapter } from "../../../src/adapters/feature-store.adapter.js";
 import { FsAssertionStoreAdapter } from "../../../src/adapters/assertion-store.adapter.js";
+import { MaestroError } from "../../../src/domain/errors.js";
 import type { Milestone } from "../../../src/domain/mission-types.js";
 
 let tmpDir: string;
@@ -28,6 +29,12 @@ async function cleanup(): Promise<void> {
 
 async function createSampleSkill(baseDir: string, skillName: string, content: string): Promise<void> {
   const skillDir = join(baseDir, ".maestro", "skills", skillName);
+  await mkdir(skillDir, { recursive: true });
+  await writeFile(join(skillDir, "SKILL.md"), content);
+}
+
+async function createBuiltInSkill(baseDir: string, skillName: string, content: string): Promise<void> {
+  const skillDir = join(baseDir, "skills", "built-in", skillName);
   await mkdir(skillDir, { recursive: true });
   await writeFile(join(skillDir, "SKILL.md"), content);
 }
@@ -212,6 +219,27 @@ describe("generateWorkerPrompt", () => {
     expect(result.writtenTo?.[1]).toContain("workers/f1/prompt.md");
   });
 
+  it("falls back to built-in skills when workspace skill is missing", async () => {
+    const missionStore = new FsMissionStoreAdapter(tmpDir);
+    const featureStore = new FsFeatureStoreAdapter(tmpDir);
+    const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+
+    const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
+    await createBuiltInSkill(tmpDir, "test-skill", "# Built In Skill\n\nUse the packaged worker flow.");
+
+    const result = await generateWorkerPrompt(
+      missionStore,
+      featureStore,
+      assertionStore,
+      tmpDir,
+      missionId,
+      "f1",
+    );
+
+    expect(result.prompt).toContain("# Built In Skill");
+    expect(result.prompt).toContain("Use the packaged worker flow.");
+  });
+
   it("throws error for non-existent mission", async () => {
     const missionStore = new FsMissionStoreAdapter(tmpDir);
     const featureStore = new FsFeatureStoreAdapter(tmpDir);
@@ -282,8 +310,10 @@ describe("generateWorkerPrompt", () => {
       );
     } catch (err) {
       errorThrown = true;
+      expect(err).toBeInstanceOf(MaestroError);
       expect((err as Error).message).toContain("Worker skill 'test-skill' not found");
       expect((err as Error).message).toContain(".maestro/skills/test-skill/SKILL.md");
+      expect((err as MaestroError).hints.join("\n")).toContain("skills/built-in/test-skill/SKILL.md");
     }
 
     expect(errorThrown).toBe(true);

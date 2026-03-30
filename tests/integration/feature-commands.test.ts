@@ -493,6 +493,15 @@ describe("feature CLI commands", () => {
       );
     }
 
+    async function createBuiltInSkill(baseDir: string, skillName: string): Promise<void> {
+      const skillDir = join(baseDir, "skills", "built-in", skillName);
+      await mkdir(skillDir, { recursive: true });
+      await writeFile(
+        join(skillDir, "SKILL.md"),
+        `# ${skillName}\n\nThis is a built-in test skill for ${skillName}.\n`,
+      );
+    }
+
     it("feature prompt generates a worker prompt to stdout", async () => {
       const missionId = await createMission(tmpDir);
       await createSkill(tmpDir, "test-skill");
@@ -571,6 +580,20 @@ describe("feature CLI commands", () => {
       expect(fileContent).toContain("## Skill Instructions");
       expect(fileContent).toContain("<!-- BEGIN SKILL -->");
       expect(fileContent).toContain("<!-- END SKILL -->");
+      }, SLOW_CLI_TIMEOUT_MS);
+
+    it("feature prompt falls back to built-in skills when workspace skill is missing", async () => {
+      const missionId = await createMission(tmpDir);
+      await createBuiltInSkill(tmpDir, "test-skill");
+
+      const { stdout, exitCode } = await run(
+        ["feature", "prompt", "f1", "--mission", missionId],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Worker prompt generated for: f1");
+      expect(stdout).toContain("built-in test skill");
     }, SLOW_CLI_TIMEOUT_MS);
 
     it("feature prompt errors for missing skill file", async () => {
@@ -586,7 +609,7 @@ describe("feature CLI commands", () => {
       const output = stdout + stderr;
       expect(output).toContain("Worker skill 'test-skill' not found");
       expect(output).toContain(".maestro/skills/test-skill/SKILL.md");
-      expect(output).toContain("Create skill file:");
+      expect(output).toContain("skills/built-in/test-skill/SKILL.md");
     }, SLOW_CLI_TIMEOUT_MS);
 
     it("feature prompt errors for non-existent mission", async () => {
