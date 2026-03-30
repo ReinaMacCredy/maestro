@@ -182,7 +182,7 @@ describe("validation CLI commands", () => {
   });
 
   describe("validate update", () => {
-    it("validate update --status passed transitions assertion to passed", async () => {
+    it("validate update --result passed transitions assertion to passed", async () => {
       const missionId = await createMission(tmpDir);
 
       // Get the assertions list
@@ -194,7 +194,7 @@ describe("validation CLI commands", () => {
       const assertionId = assertions[0]!.id;
 
       const { stdout, exitCode } = await run(
-        ["validate", "update", assertionId, "--mission", missionId, "--status", "passed"],
+        ["validate", "update", assertionId, "--mission", missionId, "--result", "passed"],
         tmpDir,
       );
 
@@ -215,7 +215,7 @@ describe("validation CLI commands", () => {
       const assertionId = assertions[0]!.id;
 
       const { stdout, exitCode } = await run(
-        ["validate", "update", assertionId, "--mission", missionId, "--status", "passed", "--json"],
+        ["validate", "update", assertionId, "--mission", missionId, "--result", "passed", "--json"],
         tmpDir,
       );
 
@@ -242,7 +242,7 @@ describe("validation CLI commands", () => {
         [
           "validate", "update", assertionId,
           "--mission", missionId,
-          "--status", "passed",
+          "--result", "passed",
           "--evidence", evidence,
         ],
         tmpDir,
@@ -262,7 +262,7 @@ describe("validation CLI commands", () => {
       expect(updated.evidence).toBe(evidence);
     }, SLOW_CLI_TIMEOUT_MS);
 
-    it("validate update with --waived-reason for waived status", async () => {
+    it("validate update with --reason for waived status", async () => {
       const missionId = await createMission(tmpDir);
 
       const showResult = await run(
@@ -278,8 +278,8 @@ describe("validation CLI commands", () => {
         [
           "validate", "update", assertionId,
           "--mission", missionId,
-          "--status", "waived",
-          "--waived-reason", reason,
+          "--result", "waived",
+          "--reason", reason,
         ],
         tmpDir,
       );
@@ -304,7 +304,7 @@ describe("validation CLI commands", () => {
         [
           "validate", "update", assertionId,
           "--mission", missionId,
-          "--status", "waived",
+          "--result", "waived",
         ],
         tmpDir,
       );
@@ -329,7 +329,7 @@ describe("validation CLI commands", () => {
         [
           "validate", "update", assertionId,
           "--mission", missionId,
-          "--status", "failed",
+          "--result", "failed",
           "--evidence", "Initial failure",
         ],
         tmpDir,
@@ -340,7 +340,7 @@ describe("validation CLI commands", () => {
         [
           "validate", "update", assertionId,
           "--mission", missionId,
-          "--status", "pending",
+          "--result", "pending",
         ],
         tmpDir,
       );
@@ -364,7 +364,7 @@ describe("validation CLI commands", () => {
         [
           "validate", "update", assertionId,
           "--mission", missionId,
-          "--status", "blocked",
+          "--result", "blocked",
           "--evidence", "Blocked by external dependency",
         ],
         tmpDir,
@@ -375,7 +375,7 @@ describe("validation CLI commands", () => {
         [
           "validate", "update", assertionId,
           "--mission", missionId,
-          "--status", "pending",
+          "--result", "pending",
         ],
         tmpDir,
       );
@@ -399,7 +399,7 @@ describe("validation CLI commands", () => {
         [
           "validate", "update", assertionId,
           "--mission", missionId,
-          "--status", "passed",
+          "--result", "passed",
         ],
         tmpDir,
       );
@@ -409,7 +409,7 @@ describe("validation CLI commands", () => {
         [
           "validate", "update", assertionId,
           "--mission", missionId,
-          "--status", "pending",
+          "--result", "pending",
         ],
         tmpDir,
       );
@@ -427,7 +427,7 @@ describe("validation CLI commands", () => {
         [
           "validate", "update", "nonexistent-assertion",
           "--mission", missionId,
-          "--status", "passed",
+          "--result", "passed",
         ],
         tmpDir,
       );
@@ -438,7 +438,7 @@ describe("validation CLI commands", () => {
       expect(output).toContain("maestro validate show");
     }, SLOW_CLI_TIMEOUT_MS);
 
-    it("validate update requires --status", async () => {
+    it("validate update requires --result", async () => {
       const missionId = await createMission(tmpDir);
 
       const showResult = await run(
@@ -455,7 +455,7 @@ describe("validation CLI commands", () => {
 
       expect(exitCode).toBe(1);
       const output = stdout + stderr;
-      expect(output).toContain("--status is required");
+      expect(output).toContain("--result is required");
     }, SLOW_CLI_TIMEOUT_MS);
 
     it("JSON flag works from different positions for validate show", async () => {
@@ -490,7 +490,7 @@ describe("validation CLI commands", () => {
 
       // Root position
       const rootResult = await run(
-        ["--json", "validate", "update", assertionId, "--mission", missionId, "--status", "passed"],
+        ["--json", "validate", "update", assertionId, "--mission", missionId, "--result", "passed"],
         tmpDir,
       );
       expect(rootResult.exitCode).toBe(0);
@@ -498,7 +498,7 @@ describe("validation CLI commands", () => {
 
       // Group position
       const groupResult = await run(
-        ["validate", "--json", "update", assertionId, "--mission", missionId, "--status", "passed"],
+        ["validate", "--json", "update", assertionId, "--mission", missionId, "--result", "passed"],
         tmpDir,
       );
       expect(groupResult.exitCode).toBe(0);

@@ -235,7 +235,7 @@ describe("full mission lifecycle", () => {
           assertion.id,
           "--mission",
           missionId,
-          "--status",
+          "--result",
           "passed",
           "--evidence",
           `Test passed for ${assertion.description}`,
@@ -298,7 +298,7 @@ describe("full mission lifecycle", () => {
           assertion.id,
           "--mission",
           missionId,
-          "--status",
+          "--result",
           "passed",
           "--json",
         ],
@@ -479,7 +479,7 @@ describe("lifecycle error handling", () => {
     );
     for (const assertion of JSON.parse(assertions.stdout).assertions) {
       await run(
-        ["validate", "update", assertion.id, "--mission", missionId, "--status", "passed"],
+        ["validate", "update", assertion.id, "--mission", missionId, "--result", "passed"],
         tmpDir,
       );
     }

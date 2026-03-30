@@ -19,7 +19,7 @@ import { registerUninstallCommand } from "./commands/uninstall.command.js";
 import { registerSessionCommand } from "./commands/session.command.js";
 import { registerMissionCommand } from "./commands/mission.command.js";
 import { registerFeatureCommand } from "./commands/feature.command.js";
-import { registerValidationCommand } from "./commands/validation.command.js";
+import { registerValidateCommand } from "./commands/validate.command.js";
 import { registerMilestoneCommand } from "./commands/milestone.command.js";
 import { registerCheckpointCommand } from "./commands/checkpoint.command.js";
 
@@ -49,7 +49,7 @@ registerUpdateCommand(program);
 registerUninstallCommand(program);
 registerMissionCommand(program);
 registerFeatureCommand(program);
-registerValidationCommand(program);
+registerValidateCommand(program);
 registerMilestoneCommand(program);
 registerCheckpointCommand(program);
 

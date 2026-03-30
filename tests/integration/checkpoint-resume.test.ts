@@ -189,14 +189,14 @@ describe("checkpoint save semantics", () => {
 
     // Pass first assertion
     await run(
-      ["validate", "update", assertionList[0].id, "--mission", missionId, "--status", "passed"],
+      ["validate", "update", assertionList[0].id, "--mission", missionId, "--result", "passed"],
       tmpDir,
     );
 
     // Fail second assertion
     if (assertionList.length >= 2) {
       await run(
-        ["validate", "update", assertionList[1].id, "--mission", missionId, "--status", "failed", "--evidence", "Test failure"],
+        ["validate", "update", assertionList[1].id, "--mission", missionId, "--result", "failed", "--evidence", "Test failure"],
         tmpDir,
       );
     }
@@ -243,7 +243,7 @@ describe("checkpoint save semantics", () => {
     );
     for (const a of JSON.parse(m1Asserts.stdout).assertions) {
       await run(
-        ["validate", "update", a.id, "--mission", missionId, "--status", "passed"],
+        ["validate", "update", a.id, "--mission", missionId, "--result", "passed"],
         tmpDir,
       );
     }
@@ -495,7 +495,7 @@ describe("checkpoint resume workflow", () => {
 
     for (const a of assertionList.slice(0, 2)) {
       const result = await run(
-        ["validate", "update", a.id, "--mission", missionId, "--status", "passed", "--json"],
+        ["validate", "update", a.id, "--mission", missionId, "--result", "passed", "--json"],
         tmpDir,
       );
       expect(result.exitCode).toBe(0);
@@ -613,7 +613,7 @@ describe("checkpoint with mission lifecycle", () => {
     );
     for (const a of JSON.parse(m1Asserts.stdout).assertions) {
       await run(
-        ["validate", "update", a.id, "--mission", missionId, "--status", "passed"],
+        ["validate", "update", a.id, "--mission", missionId, "--result", "passed"],
         tmpDir,
       );
     }

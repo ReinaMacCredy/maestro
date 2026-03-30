@@ -207,7 +207,7 @@ describe("multi-milestone progression", () => {
     );
     for (const assertion of JSON.parse(m1Asserts.stdout).assertions) {
       await run(
-        ["validate", "update", assertion.id, "--mission", missionId, "--status", "passed"],
+        ["validate", "update", assertion.id, "--mission", missionId, "--result", "passed"],
         tmpDir,
       );
     }
@@ -264,7 +264,7 @@ describe("multi-milestone progression", () => {
     );
     for (const assertion of JSON.parse(m2Asserts.stdout).assertions) {
       await run(
-        ["validate", "update", assertion.id, "--mission", missionId, "--status", "passed"],
+        ["validate", "update", assertion.id, "--mission", missionId, "--result", "passed"],
         tmpDir,
       );
     }
@@ -499,7 +499,7 @@ describe("multi-milestone progression", () => {
     );
     for (const assertion of JSON.parse(m1Asserts.stdout).assertions) {
       await run(
-        ["validate", "update", assertion.id, "--mission", missionId, "--status", "passed"],
+        ["validate", "update", assertion.id, "--mission", missionId, "--result", "passed"],
         tmpDir,
       );
     }
@@ -559,7 +559,7 @@ describe("milestone completion tracking", () => {
     // Pass half
     if (assertionIds.length >= 1) {
       await run(
-        ["validate", "update", assertionIds[0], "--mission", missionId, "--status", "passed"],
+        ["validate", "update", assertionIds[0], "--mission", missionId, "--result", "passed"],
         tmpDir,
       );
 
@@ -574,7 +574,7 @@ describe("milestone completion tracking", () => {
     // Pass all
     for (const id of assertionIds) {
       await run(
-        ["validate", "update", id, "--mission", missionId, "--status", "passed"],
+        ["validate", "update", id, "--mission", missionId, "--result", "passed"],
         tmpDir,
       );
     }
@@ -613,7 +613,7 @@ describe("milestone completion tracking", () => {
     // Pass all but one, waive the last one
     for (let i = 0; i < assertionList.length - 1; i++) {
       await run(
-        ["validate", "update", assertionList[i].id, "--mission", missionId, "--status", "passed"],
+        ["validate", "update", assertionList[i].id, "--mission", missionId, "--result", "passed"],
         tmpDir,
       );
     }
@@ -627,9 +627,9 @@ describe("milestone completion tracking", () => {
         lastId,
         "--mission",
         missionId,
-        "--status",
+        "--result",
         "waived",
-        "--waived-reason",
+        "--reason",
         "Not applicable for this release",
       ],
       tmpDir,

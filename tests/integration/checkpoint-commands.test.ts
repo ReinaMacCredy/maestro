@@ -147,7 +147,7 @@ describe("checkpoint CLI commands", () => {
       );
       const assertions = JSON.parse(showResult.stdout).assertions;
       await run(
-        ["validate", "update", assertions[0]!.id, "--mission", missionId, "--status", "passed"],
+        ["validate", "update", assertions[0]!.id, "--mission", missionId, "--result", "passed"],
         tmpDir,
       );
 

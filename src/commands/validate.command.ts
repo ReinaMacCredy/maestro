@@ -14,7 +14,7 @@ import {
 import { MaestroError } from "../domain/errors.js";
 import type { Assertion } from "../domain/mission-types.js";
 
-export function registerValidationCommand(program: Command): void {
+export function registerValidateCommand(program: Command): void {
   const validationCmd = program
     .command("validate")
     .description("Validation lifecycle management")
@@ -49,11 +49,11 @@ export function registerValidationCommand(program: Command): void {
 
   validationCmd
     .command("update <assertionId>")
-    .description("Update assertion status with evidence or waived reason")
+    .description("Update assertion result with evidence or waived reason")
     .requiredOption("--mission <id>", "Mission ID (required)")
-    .option("--status <status>", "New status (pending, passed, failed, blocked, waived)")
-    .option("--evidence <text>", "Evidence or notes for this status")
-    .option("--waived-reason <reason>", "Required when status is 'waived'")
+    .option("--result <result>", "New result (pending, passed, failed, blocked, waived)")
+    .option("--evidence <text>", "Evidence or notes for this result")
+    .option("--reason <reason>", "Required when result is 'waived'")
     .option("--json", "Output as JSON")
     .action(async (assertionId: string, opts) => {
       const services = getServices();
@@ -61,16 +61,16 @@ export function registerValidationCommand(program: Command): void {
 
       if (!opts.mission) {
         throw new MaestroError("--mission is required", [
-          "Usage: maestro validate update <assertionId> --mission <id> --status <status>",
-          "Optional: --evidence <text> --waived-reason <reason>",
+          "Usage: maestro validate update <assertionId> --mission <id> --result <result>",
+          "Optional: --evidence <text> --reason <reason>",
         ]);
       }
 
-      if (!opts.status) {
-        throw new MaestroError("--status is required", [
-          "Usage: maestro validate update <assertionId> --mission <id> --status <status>",
-          "Valid statuses: pending, passed, failed, blocked, waived",
-          "Use --waived-reason when status is 'waived'",
+      if (!opts.result) {
+        throw new MaestroError("--result is required", [
+          "Usage: maestro validate update <assertionId> --mission <id> --result <result>",
+          "Valid results: pending, passed, failed, blocked, waived",
+          "Use --reason when result is 'waived'",
         ]);
       }
 
@@ -80,9 +80,9 @@ export function registerValidationCommand(program: Command): void {
         opts.mission,
         assertionId,
         {
-          result: opts.status,
+          result: opts.result,
           evidence: opts.evidence,
-          waivedReason: opts.waivedReason,
+          waivedReason: opts.reason,
         },
       );
 

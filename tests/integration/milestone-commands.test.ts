@@ -230,7 +230,7 @@ describe("milestone CLI commands", () => {
       // Pass all assertions for m1
       for (const assertion of assertions) {
         await run(
-          ["validate", "update", assertion.id, "--mission", missionId, "--status", "passed"],
+          ["validate", "update", assertion.id, "--mission", missionId, "--result", "passed"],
           tmpDir,
         );
       }
@@ -259,7 +259,7 @@ describe("milestone CLI commands", () => {
       for (let i = 0; i < assertions.length; i++) {
         if (i === 0) {
           await run(
-            ["validate", "update", assertions[i]!.id, "--mission", missionId, "--status", "passed"],
+            ["validate", "update", assertions[i]!.id, "--mission", missionId, "--result", "passed"],
             tmpDir,
           );
         } else {
@@ -267,8 +267,8 @@ describe("milestone CLI commands", () => {
             [
               "validate", "update", assertions[i]!.id,
               "--mission", missionId,
-              "--status", "waived",
-              "--waived-reason", "Not applicable",
+              "--result", "waived",
+              "--reason", "Not applicable",
             ],
             tmpDir,
           );
@@ -299,7 +299,7 @@ describe("milestone CLI commands", () => {
 
       // Pass only the first assertion, leave others pending
       await run(
-        ["validate", "update", assertions[0]!.id, "--mission", missionId, "--status", "passed"],
+        ["validate", "update", assertions[0]!.id, "--mission", missionId, "--result", "passed"],
         tmpDir,
       );
 
@@ -332,7 +332,7 @@ describe("milestone CLI commands", () => {
       // Pass all assertions
       for (const assertion of assertions) {
         await run(
-          ["validate", "update", assertion.id, "--mission", missionId, "--status", "passed"],
+          ["validate", "update", assertion.id, "--mission", missionId, "--result", "passed"],
           tmpDir,
         );
       }
@@ -382,7 +382,7 @@ describe("milestone CLI commands", () => {
 
       for (const assertion of assertions) {
         await run(
-          ["validate", "update", assertion.id, "--mission", missionId, "--status", "passed"],
+          ["validate", "update", assertion.id, "--mission", missionId, "--result", "passed"],
           tmpDir,
         );
       }
@@ -448,7 +448,7 @@ describe("milestone CLI commands", () => {
       const assertions = JSON.parse(showResult.stdout).assertions;
       for (const assertion of assertions) {
         await run(
-          ["validate", "update", assertion.id, "--mission", missionId, "--status", "passed"],
+          ["validate", "update", assertion.id, "--mission", missionId, "--result", "passed"],
           tmpDir,
         );
       }
@@ -470,7 +470,7 @@ describe("milestone CLI commands", () => {
       const assertions2 = JSON.parse(showResult2.stdout).assertions;
       for (const assertion of assertions2) {
         await run(
-          ["validate", "update", assertion.id, "--mission", missionId2, "--status", "passed"],
+          ["validate", "update", assertion.id, "--mission", missionId2, "--result", "passed"],
           tmpDir,
         );
       }
