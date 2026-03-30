@@ -37,7 +37,13 @@ export class Screen {
     if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
       process.stdin.setRawMode(false);
     }
-    // stdin.pause() can hang in compiled binaries -- skip it, process.exit handles cleanup
+    if (typeof process.stdin.pause === "function") {
+      try {
+        process.stdin.pause();
+      } catch {
+        // Ignore cleanup errors during shutdown.
+      }
+    }
   }
 
   /** Create a buffer for drawing. Caller fills it, then calls render(). */

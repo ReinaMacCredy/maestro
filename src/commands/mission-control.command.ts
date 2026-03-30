@@ -52,8 +52,8 @@ export function registerMissionControlCommand(program: Command): void {
       }
 
       // Interactive mode: requires TTY
-      if (!process.stdout.isTTY) {
-        throw new MaestroError("Interactive mode requires a TTY", [
+      if (!process.stdout.isTTY || !process.stdin.isTTY) {
+        throw new MaestroError("Interactive mode requires TTY input and output", [
           "Use --once for non-interactive output",
           "Use --json for machine-readable output",
         ]);
