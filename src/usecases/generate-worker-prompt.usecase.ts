@@ -71,8 +71,19 @@ export async function generateWorkerPrompt(
   // Read skill file
   const skillContent = await readWorkerSkill(baseDir, feature.workerType);
 
+  // Load all features for sibling context in prompt
+  const allFeatures = await featureStore.list(missionId);
+
+  // Read handoff protocol (worker-base skill) -- optional, don't error if missing
+  let handoffProtocol: string | undefined;
+  try {
+    handoffProtocol = await readWorkerSkill(baseDir, "maestro:worker-base");
+  } catch {
+    // worker-base skill not found -- skip handoff protocol section
+  }
+
   // Generate the prompt
-  const prompt = composePrompt(mission, milestone, feature, featureAssertions, skillContent);
+  const prompt = composePrompt(mission, milestone, feature, featureAssertions, skillContent, allFeatures, handoffProtocol);
 
   // Track written paths
   const writtenPaths: string[] = [];
@@ -166,6 +177,8 @@ function composePrompt(
   feature: Feature,
   assertions: readonly Assertion[],
   skillContent: string,
+  allFeatures: readonly Feature[],
+  handoffProtocol?: string,
 ): string {
   const parts: string[] = [];
 
@@ -202,6 +215,31 @@ function composePrompt(
   }
   parts.push("");
 
+  // Sibling feature context (A3)
+  const otherFeatures = allFeatures.filter((f) => f.id !== feature.id);
+  const doneFeatures = otherFeatures.filter((f) => f.status === "done");
+  const activeFeatures = otherFeatures.filter((f) =>
+    f.status === "assigned" || f.status === "in-progress" || f.status === "review",
+  );
+
+  if (doneFeatures.length > 0) {
+    parts.push("### Completed Features");
+    parts.push("");
+    for (const f of doneFeatures) {
+      parts.push(`- ${f.id}: ${f.title}`);
+    }
+    parts.push("");
+  }
+
+  if (activeFeatures.length > 0) {
+    parts.push("### In Progress Features");
+    parts.push("");
+    for (const f of activeFeatures) {
+      parts.push(`- ${f.id}: ${f.title} (${f.status})`);
+    }
+    parts.push("");
+  }
+
   // Feature description
   parts.push("## Feature Assignment");
   parts.push("");
@@ -209,6 +247,22 @@ function composePrompt(
   parts.push("");
   parts.push(delimitContent(feature.description));
   parts.push("");
+
+  // Preconditions (A1)
+  if (feature.preconditions) {
+    parts.push("### Preconditions");
+    parts.push("");
+    parts.push(delimitContent(feature.preconditions));
+    parts.push("");
+  }
+
+  // Expected Behavior (A2)
+  if (feature.expectedBehavior) {
+    parts.push("### Expected Behavior");
+    parts.push("");
+    parts.push(delimitContent(feature.expectedBehavior));
+    parts.push("");
+  }
 
   // Dependencies
   if (feature.dependsOn.length > 0) {
@@ -239,7 +293,7 @@ function composePrompt(
     parts.push("This feature fulfills the following assertions:");
     parts.push("");
     for (const assertion of assertions) {
-      parts.push(`- **${assertion.id}** (${assertion.status}): ${delimitContent(assertion.description)}`);
+      parts.push(`- **${assertion.id}** (${assertion.result}): ${delimitContent(assertion.description)}`);
     }
     parts.push("");
   }
@@ -253,6 +307,18 @@ function composePrompt(
   parts.push("");
   parts.push("<!-- END SKILL -->");
   parts.push("");
+
+  // Handoff Protocol (A4) -- worker-base skill content
+  if (handoffProtocol) {
+    parts.push("## Handoff Protocol");
+    parts.push("");
+    parts.push("<!-- BEGIN HANDOFF PROTOCOL -->");
+    parts.push("");
+    parts.push(handoffProtocol);
+    parts.push("");
+    parts.push("<!-- END HANDOFF PROTOCOL -->");
+    parts.push("");
+  }
 
   // Footer with status reminder
   parts.push("---");
