@@ -16,6 +16,13 @@ export function output<T>(
   }
 }
 
+/** Resolve --json flag from leaf option, group option, or root program option. */
+export function resolveJsonFlag(opts: Record<string, unknown>, program: { opts(): Record<string, unknown> }): boolean {
+  if (opts.json !== undefined) return opts.json as boolean;
+  if (opts.jsonGroup !== undefined) return opts.jsonGroup as boolean;
+  return program.opts().json as boolean ?? false;
+}
+
 /** Write to stderr without affecting stdout (for warnings in --json mode). */
 export function warn(message: string): void {
   console.error(`[!] ${message}`);

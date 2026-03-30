@@ -4,7 +4,7 @@
  */
 import type { Command } from "commander";
 import { getServices } from "../services.js";
-import { output } from "../lib/output.js";
+import { output, resolveJsonFlag } from "../lib/output.js";
 import {
   listMilestones,
   getMilestoneStatus,
@@ -14,16 +14,6 @@ import {
   type SealMilestoneResult,
 } from "../usecases/milestone-lifecycle.usecase.js";
 import { MaestroError } from "../domain/errors.js";
-
-/** Resolve --json flag from leaf, group, or root options */
-function resolveJsonFlag(opts: Record<string, unknown>, program: Command): boolean {
-  // Leaf option takes precedence
-  if (opts.json !== undefined) return opts.json as boolean;
-  // Then group option
-  if (opts.jsonGroup !== undefined) return opts.jsonGroup as boolean;
-  // Then root option
-  return program.opts().json as boolean ?? false;
-}
 
 export function registerMilestoneCommand(program: Command): void {
   const milestoneCmd = program

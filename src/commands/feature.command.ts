@@ -4,7 +4,7 @@
  */
 import type { Command } from "commander";
 import { getServices } from "../services.js";
-import { output } from "../lib/output.js";
+import { output, resolveJsonFlag } from "../lib/output.js";
 import {
   listFeatures,
   updateFeature,
@@ -18,16 +18,6 @@ import {
 } from "../usecases/generate-worker-prompt.usecase.js";
 import { MaestroError } from "../domain/errors.js";
 import type { Feature } from "../domain/mission-types.js";
-
-/** Resolve --json flag from leaf, group, or root options */
-function resolveJsonFlag(opts: Record<string, unknown>, program: Command): boolean {
-  // Leaf option takes precedence
-  if (opts.json !== undefined) return opts.json as boolean;
-  // Then group option
-  if (opts.jsonGroup !== undefined) return opts.jsonGroup as boolean;
-  // Then root option
-  return program.opts().json as boolean ?? false;
-}
 
 export function registerFeatureCommand(program: Command): void {
   const featureCmd = program
@@ -172,6 +162,10 @@ function formatFeatureUpdate(result: UpdateFeatureResult): string[] {
     `  Status: ${result.feature.status}`,
     `  Title: ${result.feature.title}`,
   ];
+
+  if (result.missionAutoStarted) {
+    lines.push("  Mission: auto-started to executing");
+  }
 
   if (result.reportPersisted) {
     lines.push(`  Report: ${result.reportPersisted}`);

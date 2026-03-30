@@ -4,7 +4,7 @@
  */
 import type { Command } from "commander";
 import { getServices } from "../services.js";
-import { output } from "../lib/output.js";
+import { output, resolveJsonFlag } from "../lib/output.js";
 import {
   saveCheckpoint,
   listCheckpoints,
@@ -13,16 +13,6 @@ import {
   type ListCheckpointsResult,
   type LoadCheckpointResult,
 } from "../usecases/checkpoint-lifecycle.usecase.js";
-
-/** Resolve --json flag from leaf, group, or root options */
-function resolveJsonFlag(opts: Record<string, unknown>, program: Command): boolean {
-  // Leaf option takes precedence
-  if (opts.json !== undefined) return opts.json as boolean;
-  // Then group option
-  if (opts.jsonGroup !== undefined) return opts.jsonGroup as boolean;
-  // Then root option
-  return program.opts().json as boolean ?? false;
-}
 
 export function registerCheckpointCommand(program: Command): void {
   const checkpointCmd = program
@@ -70,7 +60,7 @@ export function registerCheckpointCommand(program: Command): void {
 
   checkpointCmd
     .command("load")
-    .description("Read the latest checkpoint snapshot for a mission (metadata only)")
+    .description("Load the latest checkpoint snapshot for a mission and restore changed state")
     .requiredOption("--mission <id>", "Mission ID (required)")
     .option("--json", "Output as JSON")
     .action(async (opts) => {
@@ -79,6 +69,8 @@ export function registerCheckpointCommand(program: Command): void {
 
       const result = await loadCheckpoint(
         services.missionStore,
+        services.featureStore,
+        services.assertionStore,
         services.checkpointStore,
         opts.mission,
       );
@@ -136,17 +128,22 @@ function formatLoadResult(result: LoadCheckpointResult): string[] {
   const cp = result.checkpoint;
   const featureCount = Object.keys(cp.featureStates).length;
   const assertionCount = Object.keys(cp.assertionStates).length;
+  const totalRestored = result.restored.featureCount + result.restored.assertionCount;
 
-  const lines: string[] = [
-    `[ok] Checkpoint snapshot loaded (metadata only): ${cp.id}`,
+  const lines = [
+    `[ok] Checkpoint restored: ${cp.id}`,
     `  Mission: ${cp.missionId}`,
     `  Milestone: ${cp.milestoneId}`,
     `  Timestamp: ${cp.timestamp}`,
     `  Features captured: ${featureCount}`,
     `  Assertions captured: ${assertionCount}`,
-    "",
-    `[!] ${result.warning}`,
+    `  Features restored: ${result.restored.featureCount}`,
+    `  Assertions restored: ${result.restored.assertionCount}`,
   ];
+
+  if (totalRestored === 0) {
+    lines.push("  No state changes were needed; current state already matches the checkpoint.");
+  }
 
   return lines;
 }

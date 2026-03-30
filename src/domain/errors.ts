@@ -157,6 +157,13 @@ export function milestoneNotSealable(
   );
 }
 
+export function workerSkillNotFound(workerType: string): MaestroError {
+  return new MaestroError(`Worker skill '${workerType}' not found`, [
+    `Create skill at .maestro/skills/${workerType}/SKILL.md`,
+    "Skills define the worker's behavior, report format, and handoff protocol",
+  ]);
+}
+
 export function checkpointNotFound(id: string, missionId?: string): MaestroError {
   const hints = missionId
     ? [`List checkpoints: maestro checkpoint list --mission ${missionId}`]

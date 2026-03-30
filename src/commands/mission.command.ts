@@ -4,7 +4,7 @@
  */
 import type { Command } from "commander";
 import { getServices } from "../services.js";
-import { output } from "../lib/output.js";
+import { output, resolveJsonFlag } from "../lib/output.js";
 import {
   createMission,
   listMissions,
@@ -18,16 +18,6 @@ import { generateMissionReport, type MissionReport } from "../usecases/mission-r
 import { MaestroError } from "../domain/errors.js";
 import { readJson } from "../lib/fs.js";
 import type { Mission, UpdateMissionInput, MissionStatus } from "../domain/mission-types.js";
-
-/** Resolve --json flag from leaf, group, or root options */
-function resolveJsonFlag(opts: Record<string, unknown>, program: Command): boolean {
-  // Leaf option takes precedence
-  if (opts.json !== undefined) return opts.json as boolean;
-  // Then group option
-  if (opts.jsonGroup !== undefined) return opts.jsonGroup as boolean;
-  // Then root option
-  return program.opts().json as boolean ?? false;
-}
 
 export function registerMissionCommand(program: Command): void {
   const missionCmd = program
@@ -88,6 +78,7 @@ export function registerMissionCommand(program: Command): void {
     .command("list")
     .description("List all missions")
     .option("--status <status>", "Filter by status (draft, approved, executing, etc.)")
+    .option("--limit <number>", "Limit the number of missions shown")
     .option("--json", "Output as JSON")
     .action(async (opts) => {
       const services = getServices();
@@ -95,6 +86,7 @@ export function registerMissionCommand(program: Command): void {
 
       const missions = await listMissions(services.missionStore, {
         status: opts.status,
+        limit: opts.limit !== undefined ? Number.parseInt(String(opts.limit), 10) : undefined,
       });
 
       output(isJson, missions, formatMissionList);
