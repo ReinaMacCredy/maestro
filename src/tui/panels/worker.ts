@@ -14,7 +14,13 @@ export function renderWorkerPanel(buf: Buffer, rect: Rect, snap: MissionControlS
   if (rect.height <= 0 || w <= 0) return;
 
   if (!snap.activeWorker) {
-    buf.writeText(y, rect.x + 1, "No active workers", { fg: PALETTE.dimGray });
+    buf.writeText(y, rect.x + 1, "Workers", { fg: PALETTE.brightWhite, bold: true });
+    if (rect.height > 1) {
+      buf.writeText(y + 1, rect.x + 1, "No active workers", { fg: PALETTE.gray });
+    }
+    if (rect.height > 2) {
+      buf.writeText(y + 2, rect.x + 1, "Start a feature to see live activity.", { fg: PALETTE.dimGray });
+    }
     return;
   }
 
@@ -45,7 +51,12 @@ export function renderWorkerPanel(buf: Buffer, rect: Rect, snap: MissionControlS
   } else {
     // Placeholder when worker is active but no IPC
     if (outputStart < outputEnd) {
-      buf.writeText(outputStart, rect.x + 1, "Worker active...", { fg: PALETTE.yellow });
+      buf.writeText(outputStart, rect.x + 1, `Worker active on ${truncate(aw.featureTitle, Math.max(0, w - 18))}`, {
+        fg: PALETTE.yellow,
+      });
+    }
+    if (outputStart + 1 < outputEnd) {
+      buf.writeText(outputStart + 1, rect.x + 1, "Waiting for the first worker update...", { fg: PALETTE.gray });
     }
   }
 }

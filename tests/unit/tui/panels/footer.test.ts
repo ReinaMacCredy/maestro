@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { Buffer } from "../../../../src/tui/terminal/buffer.js";
 import { renderFooter } from "../../../../src/tui/panels/footer.js";
+import { PALETTE } from "../../../../src/tui/theme.js";
 import type { MissionControlSnapshot } from "../../../../src/tui/types.js";
 
 function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionControlSnapshot {
@@ -63,5 +64,14 @@ describe("renderFooter", () => {
     renderFooter(buf, { x: 0, y: 0, width: 120, height: 1 }, makeSnapshot());
     const text = buf.toString();
     expect(text).toContain("Mission Dir");
+  });
+
+  it("uses brighter label text for footer hints", () => {
+    const buf = new Buffer(120, 1);
+    renderFooter(buf, { x: 0, y: 0, width: 120, height: 1 }, makeSnapshot());
+
+    const featuresLabelCell = buf.getCell(0, 3);
+    expect(featuresLabelCell?.char).toBe("F");
+    expect(featuresLabelCell?.fg).toBe(PALETTE.gray);
   });
 });

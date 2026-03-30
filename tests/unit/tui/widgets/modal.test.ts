@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { Buffer } from "../../../../src/tui/terminal/buffer.js";
 import { renderModal } from "../../../../src/tui/widgets/modal.js";
+import { PALETTE } from "../../../../src/tui/theme.js";
 
 describe("renderModal", () => {
   it("renders centered within parent rect", () => {
@@ -45,6 +46,21 @@ describe("renderModal", () => {
 
     const text = buf.toString();
     expect(text).toContain("Press Escape");
+  });
+
+  it("centers the title and highlights the selected row", () => {
+    const buf = new Buffer(80, 24);
+    const modalRect = renderModal(buf, { x: 0, y: 0, width: 80, height: 24 }, {
+      title: "Configure database",
+      items: ["Move to: assigned", "Move to: in-progress"],
+      selectedIndex: 0,
+    });
+
+    const titleStart = modalRect.x + Math.floor((modalRect.width - "Configure database".length) / 2);
+    expect(buf.getCell(modalRect.y, titleStart)?.char).toBe("C");
+
+    const selectedRowCell = buf.getCell(modalRect.y + 2, modalRect.x + 2);
+    expect(selectedRowCell?.bg).toBe(238);
   });
 
   it("handles empty items gracefully", () => {

@@ -36,8 +36,8 @@ export function renderFooter(buf: Buffer, rect: Rect, snap: MissionControlSnapsh
     // Bold key
     buf.writeText(y, col, hint.key, { fg: PALETTE.brightWhite, bg: PALETTE.headerBg, bold: true });
     col += hint.key.length + 1;
-    // Dim label
-    buf.writeText(y, col, hint.label, { fg: PALETTE.dimGray, bg: PALETTE.headerBg });
+    // Label
+    buf.writeText(y, col, hint.label, { fg: PALETTE.gray, bg: PALETTE.headerBg });
     col += hint.label.length + 4;
   }
 }

@@ -21,6 +21,8 @@ export interface ModalOptions {
  */
 export function renderModal(buf: Buffer, parent: Rect, opts: ModalOptions): Rect {
   const { title, items, selectedIndex, statusLine } = opts;
+  const modalBg = PALETTE.selectedBg;
+  const selectedBg = 238;
 
   // Calculate modal dimensions
   const maxItemLen = Math.max(
@@ -37,13 +39,15 @@ export function renderModal(buf: Buffer, parent: Rect, opts: ModalOptions): Rect
   const modalRect: Rect = { x: mx, y: my, width: modalWidth, height: modalHeight };
 
   // Clear area and draw border
-  buf.fillRect(modalRect, " ", { bg: 235 });
-  buf.drawBorder(modalRect, { fg: PALETTE.cyan, bg: 235 });
+  buf.fillRect(modalRect, " ", { bg: modalBg });
+  buf.drawBorder(modalRect, { fg: PALETTE.cyan, bg: modalBg });
 
   // Title
-  buf.writeText(my, mx + 2, ` ${truncate(title, modalWidth - 4)} `, {
+  const titleText = truncate(title, modalWidth - 4);
+  const titleX = mx + Math.max(1, Math.floor((modalWidth - titleText.length) / 2));
+  buf.writeText(my, titleX, titleText, {
     fg: PALETTE.brightWhite,
-    bg: 235,
+    bg: modalBg,
     bold: true,
   });
 
@@ -56,21 +60,26 @@ export function renderModal(buf: Buffer, parent: Rect, opts: ModalOptions): Rect
     const isSelected = i === selectedIndex;
     const prefix = isSelected ? "> " : "  ";
     const text = truncate(items[i]!, innerWidth - 2);
+    const itemBg = isSelected ? selectedBg : modalBg;
+
+    if (isSelected) {
+      buf.fillRect({ x: mx + 1, y: row, width: modalWidth - 2, height: 1 }, " ", { bg: itemBg });
+    }
 
     buf.writeText(row, mx + 2, prefix + text, {
       fg: isSelected ? PALETTE.brightWhite : PALETTE.gray,
-      bg: isSelected ? 237 : 235,
+      bg: itemBg,
       bold: isSelected,
     });
   }
 
   // Status line
   if (statusLine) {
-    const statusRow = my + modalHeight - 2;
+      const statusRow = my + modalHeight - 2;
     if (statusRow > my + 1) {
       buf.writeText(statusRow, mx + 2, truncate(statusLine, innerWidth), {
-        fg: PALETTE.yellow,
-        bg: 235,
+        fg: PALETTE.gray,
+        bg: modalBg,
       });
     }
   }
