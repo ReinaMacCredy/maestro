@@ -15,7 +15,7 @@
       "milestoneId": "smoke-setup",
       "title": "Run smoke feature",
       "description": "Exercise prompt generation, state transition, and checkpoint handling.",
-      "skillName": "maestro:verification",
+      "skillName": "maestro:worker-base",
       "verificationSteps": [
         "Create the mission from this plan file",
         "Approve the mission and list features",
