@@ -7,6 +7,8 @@ export function sanitizePromptContent(content: string, label?: string): string {
     return "_(no content)_";
   }
 
+  const tag = label ?? "user-content";
+
   // Strip known injection patterns
   let sanitized = content
     .replace(/<\/?system[^>]*>/gi, "")
@@ -20,7 +22,12 @@ export function sanitizePromptContent(content: string, label?: string): string {
     .replace(/^(<!--)/gm, "\\$1")
     .replace(/^(-->)/gm, "\\$1");
 
+  // Prevent user content from closing or nesting the wrapper tag.
+  const escapedTag = tag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  sanitized = sanitized
+    .replace(new RegExp(`<${escapedTag}>`, "gi"), `&lt;${tag}&gt;`)
+    .replace(new RegExp(`</${escapedTag}>`, "gi"), `&lt;/${tag}&gt;`);
+
   // Wrap in XML delimiters
-  const tag = label ?? "user-content";
   return `<${tag}>\n${sanitized}\n</${tag}>`;
 }
