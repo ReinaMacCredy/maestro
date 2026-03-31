@@ -298,7 +298,7 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
 
 // ── Key Mapping ─────────────────────────────────────
 
-function keyToAction(key: Key, state: AppState): Action | undefined {
+export function keyToAction(key: Key, state: AppState): Action | undefined {
   if (key.type === "char" && key.char === "q" && state.modal.kind === "none") {
     return { type: "quit" };
   }
@@ -309,6 +309,9 @@ function keyToAction(key: Key, state: AppState): Action | undefined {
     return { type: "open-command-palette" };
   }
   if (key.type === "escape") {
+    return { type: "escape" };
+  }
+  if (key.type === "arrow" && key.direction === "left" && state.modal.kind === "command-palette") {
     return { type: "escape" };
   }
   if (key.type === "arrow" && (key.direction === "up" || key.direction === "down")) {
