@@ -203,17 +203,13 @@ describe("reduce", () => {
           expect(next.modal.kind).toBe("none");
       });
 
-      it("returns palette-launched detail modals to the command palette home view", () => {
+      it("closes palette-launched detail modals instead of returning to the command palette", () => {
         const state = makeState({
           modal: { kind: "config", returnTarget: "command-palette" },
         });
         const next = reduce(state, { type: "escape" });
 
-        expect(next.modal.kind).toBe("command-palette");
-        if (next.modal.kind === "command-palette") {
-          expect(next.modal.query).toBe("");
-          expect(next.modal.selectedCommandIndex).toBe(0);
-        }
+        expect(next.modal.kind).toBe("none");
       });
 
       it("closes the command palette itself instead of reopening it", () => {

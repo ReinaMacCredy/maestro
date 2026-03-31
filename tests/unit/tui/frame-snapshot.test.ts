@@ -410,7 +410,7 @@ describe("frame rendering", () => {
           expect(frame).toContain("backend-work");
         });
 
-        it("shows back copy for palette-launched detail overlays", () => {
+        it("shows left-back plus escape-close copy for palette-launched detail overlays", () => {
           const frame = withTerminalSize(90, 28, () => {
             const buf = new Buffer(90, 28);
             const state = createInitialState(makeSnapshot());
@@ -419,7 +419,7 @@ describe("frame rendering", () => {
             return buf.toString();
           });
 
-          expect(frame).toContain("Esc back");
+          expect(frame).toContain("Left back · Esc close");
         });
 
         it("renders the command palette and dims the dashboard behind it", () => {

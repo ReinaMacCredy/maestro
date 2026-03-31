@@ -596,7 +596,7 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
         Math.max(0, state.snapshot.features.length - 1),
       ),
         footer: state.modal.returnTarget === "command-palette"
-          ? "Enter focus · Esc back"
+          ? "Enter focus · Left back · Esc close"
           : "Enter focus · Esc close",
     };
   }
@@ -617,7 +617,7 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
           tone: "muted" as const,
         })),
       ],
-      footer: state.modal.returnTarget === "command-palette" ? "Esc back" : "Esc close",
+      footer: state.modal.returnTarget === "command-palette" ? "Left back · Esc close" : "Esc close",
     };
   }
 
@@ -639,7 +639,7 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
             },
           ]))
           : [{ text: "No pending handoffs in this workspace.", section: "Pending", tone: "muted" }],
-        footer: state.modal.returnTarget === "command-palette" ? "Esc back" : "Esc close",
+        footer: state.modal.returnTarget === "command-palette" ? "Left back · Esc close" : "Esc close",
       };
     }
 
@@ -669,7 +669,7 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
             tone: "muted" as const,
           })),
         ],
-        footer: state.modal.returnTarget === "command-palette" ? "Esc back" : "Esc close",
+        footer: state.modal.returnTarget === "command-palette" ? "Left back · Esc close" : "Esc close",
       };
     }
 
@@ -691,7 +691,7 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
             },
           ]))
           : [{ text: "No assigned, in-progress, or review features right now.", section: "Runtime", tone: "muted" }],
-        footer: state.modal.returnTarget === "command-palette" ? "Esc back" : "Esc close",
+        footer: state.modal.returnTarget === "command-palette" ? "Left back · Esc close" : "Esc close",
       };
     }
 

@@ -141,7 +141,10 @@ export function reduce(state: AppState, action: Action): AppState {
     }
 
     case "escape":
-      return closeOrReturnModal(state);
+      if (state.modal.kind !== "none") {
+        return { ...state, modal: { kind: "none" } };
+      }
+      return { ...state, focusedPanel: "none" };
 
     case "open-command-palette":
       if (!canOpenOverlayFromModal(state.modal)) return state;
