@@ -70,6 +70,33 @@ describe("buildSnapshot", () => {
     expect(snapshot.featureProgress.active).toBe(0);
   }, 15_000);
 
+  it("derives a dedicated statusProgress summary for the top strip", async () => {
+    const plan = createSamplePlan();
+    await writeFile(join(tmpDir, "plan.json"), JSON.stringify(plan));
+    const { stdout } = await run(["mission", "create", "--file", join(tmpDir, "plan.json"), "--json"], tmpDir);
+    const missionId = JSON.parse(stdout).mission.id;
+
+    await run(["mission", "approve", missionId, "--json"], tmpDir);
+    await run(["feature", "update", "f1", "--mission", missionId, "--status", "in-progress", "--json"], tmpDir);
+    await run(["feature", "update", "f1", "--mission", missionId, "--status", "review", "--json"], tmpDir);
+    await run(["feature", "update", "f1", "--mission", missionId, "--status", "done", "--json"], tmpDir);
+    await run(["feature", "update", "f2", "--mission", missionId, "--status", "assigned", "--json"], tmpDir);
+    await run(["feature", "update", "f3", "--mission", missionId, "--status", "in-progress", "--json"], tmpDir);
+    await run(["feature", "update", "f3", "--mission", missionId, "--status", "review", "--json"], tmpDir);
+    await run(["feature", "update", "f3", "--mission", missionId, "--status", "blocked", "--json"], tmpDir);
+
+    const snapshot = await buildSnapshot(deps, missionId);
+
+    expect(snapshot.statusProgress).toEqual({
+      completed: 1,
+      total: 3,
+      inFlight: 1,
+      blocked: 1,
+      queued: 0,
+      completionPct: 33,
+    });
+  }, 15_000);
+
   it("activeFeature matches first non-done feature", async () => {
     const plan = createSamplePlan();
     await writeFile(join(tmpDir, "plan.json"), JSON.stringify(plan));

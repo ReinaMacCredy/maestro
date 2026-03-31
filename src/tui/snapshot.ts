@@ -100,6 +100,8 @@ export async function buildSnapshot(
   const activeCount = features.filter(
     (f) => f.status === "assigned" || f.status === "in-progress" || f.status === "review",
   ).length;
+  const blockedCount = features.filter((f) => f.status === "blocked").length;
+  const queuedCount = features.filter((f) => f.status === "pending").length;
 
   return {
     mode: "mission",
@@ -109,6 +111,14 @@ export async function buildSnapshot(
     effectiveStatus: report.effectiveMissionStatus,
     elapsedMs: now - startMs,
     featureProgress: { done: doneCount, total: features.length, active: activeCount },
+    statusProgress: {
+      completed: report.summary.totalCompletedFeatures,
+      total: report.summary.totalFeatures,
+      inFlight: activeCount,
+      blocked: blockedCount,
+      queued: queuedCount,
+      completionPct: report.summary.overallFeaturePct,
+    },
     tokenCounters: null, // No telemetry infrastructure yet
     activeFeature,
     features: featureRows,
@@ -155,6 +165,14 @@ export async function buildHomeSnapshot(
     effectiveStatus: "approved",
     elapsedMs: 0,
     featureProgress: { done: 0, total: 0, active: 0 },
+    statusProgress: {
+      completed: 0,
+      total: 0,
+      inFlight: 0,
+      blocked: 0,
+      queued: 0,
+      completionPct: 0,
+    },
     tokenCounters: null,
     activeFeature: null,
     features: [],

@@ -11,6 +11,14 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
     effectiveStatus: "executing",
     elapsedMs: 0,
     featureProgress: { done: 0, total: 3, active: 0 },
+    statusProgress: {
+      completed: 0,
+      total: 3,
+      inFlight: 0,
+      blocked: 0,
+      queued: 3,
+      completionPct: 0,
+    },
     tokenCounters: null,
     activeFeature: {
       id: "f1",

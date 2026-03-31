@@ -1,21 +1,56 @@
 /**
- * Header panel -- .:. Mission Control ~ with TIME and token counters.
+ * Header panel -- animated 3-dot mark, title, and runtime counters.
  */
+import cliSpinners from "cli-spinners";
 import type { Buffer } from "../terminal/buffer.js";
 import type { Rect } from "../terminal/layout.js";
 import type { MissionControlSnapshot } from "../types.js";
 import { PALETTE } from "../theme.js";
 import { formatElapsed, formatTokens } from "../format.js";
 
-export function renderHeader(buf: Buffer, rect: Rect, snap: MissionControlSnapshot): void {
+const HEADER_DOT_FRAMES = ["●••", "•●•", "••●", "•●•"] as const;
+
+export const HEADER_DOT_INTERVAL_MS = cliSpinners.orangePulse.interval;
+
+export function isHeaderAnimationActive(snap: MissionControlSnapshot): boolean {
+  return snap.mode === "mission"
+    && (snap.effectiveStatus === "executing" || snap.effectiveStatus === "validating");
+}
+
+export function getHeaderDotsFrame(
+  snap: MissionControlSnapshot,
+  frameIndex: number,
+): string {
+  if (!isHeaderAnimationActive(snap)) {
+    return HEADER_DOT_FRAMES[0];
+  }
+
+  return HEADER_DOT_FRAMES[Math.abs(frameIndex) % HEADER_DOT_FRAMES.length] ?? HEADER_DOT_FRAMES[0];
+}
+
+export function renderHeader(
+  buf: Buffer,
+  rect: Rect,
+  snap: MissionControlSnapshot,
+  animationFrame = 0,
+): void {
   const w = rect.width;
   const y = rect.y;
   buf.fillRect(rect, " ", { bg: PALETTE.headerBg });
 
   // Animated dots + title
-  buf.writeText(y, rect.x + 1, ".:.", { fg: PALETTE.orange, bg: PALETTE.headerBg });
+  const dots = getHeaderDotsFrame(snap, animationFrame);
+  for (let i = 0; i < dots.length; i++) {
+    const char = dots[i] ?? "•";
+    const isActive = char === "●";
+    buf.set(y, rect.x + 1 + i, char, {
+      fg: isActive ? PALETTE.orange : PALETTE.dimGray,
+      bg: PALETTE.headerBg,
+      bold: isActive,
+      dim: !isActive,
+    });
+  }
   buf.writeText(y, rect.x + 5, "Mission Control", { fg: PALETTE.orange, bg: PALETTE.headerBg, bold: true });
-  buf.writeText(y, rect.x + 21, "~", { fg: PALETTE.dimGray, bg: PALETTE.headerBg });
 
   // Right side: TIME + token counters
   const parts: string[] = [];

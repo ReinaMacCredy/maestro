@@ -181,6 +181,18 @@ async function createMission(cwd: string): Promise<string> {
   return JSON.parse(stdout).mission.id;
 }
 
+async function setMissionStatus(
+  cwd: string,
+  missionId: string,
+  status: "approved" | "executing" | "paused",
+): Promise<void> {
+  const args = status === "approved"
+    ? ["mission", "approve", missionId, "--json"]
+    : ["mission", "update", missionId, "--status", status, "--json"];
+  const { exitCode } = await run(args, cwd);
+  expect(exitCode).toBe(0);
+}
+
 async function listFeatureStatuses(
   cwd: string,
   missionId: string,
@@ -211,6 +223,10 @@ function stripAnsi(text: string): string {
     .replace(/\u0008/g, "")
     .replace(/[^\S\n]+\n/g, "\n")
     .trim();
+}
+
+function hasAnimatedHeaderFrame(plainOutput: string): boolean {
+  return plainOutput.includes("•●•") || plainOutput.includes("••●");
 }
 
 interface PtyRunOptions {
@@ -355,6 +371,10 @@ describe("mission-control CLI", () => {
     expect(snapshot.missionTitle).toBe("MC Test Mission");
     expect(snapshot.featureProgress).toBeDefined();
     expect(snapshot.featureProgress.total).toBe(2);
+    expect(snapshot.statusProgress).toBeDefined();
+    expect(snapshot.statusProgress.total).toBe(2);
+    expect(snapshot.statusProgress.completed).toBe(0);
+    expect(snapshot.statusProgress.queued).toBe(2);
     expect(snapshot.features).toBeDefined();
     expect(Array.isArray(snapshot.features)).toBe(true);
     expect(snapshot.features.length).toBe(2);
@@ -514,7 +534,44 @@ describe("mission-control CLI", () => {
     expect(result.plainOutput).toContain("Progress Log");
   }, PTY_TIMEOUT_MS);
 
-    it("compiled binary interactive mode remains stable across repeated launch and quit cycles", async () => {
+  it("compiled binary interactive mode animates header dots while an executing mission idles", async () => {
+    if (!pythonAvailable) return;
+    const missionId = await createMission(tmpDir);
+
+    await setMissionStatus(tmpDir, missionId, "approved");
+    await setMissionStatus(tmpDir, missionId, "executing");
+
+    const result = await runCompiledInteractivePty(
+      tmpDir,
+      ["mission-control", "--mission", missionId],
+      { input: "q", delayMs: 450 },
+    );
+
+    expectCleanPtyExit(result);
+    expect(result.plainOutput).toContain("●••");
+    expect(hasAnimatedHeaderFrame(result.plainOutput)).toBe(true);
+  }, PTY_TIMEOUT_MS);
+
+  it("compiled binary interactive mode keeps header dots static while paused", async () => {
+    if (!pythonAvailable) return;
+    const missionId = await createMission(tmpDir);
+
+    await setMissionStatus(tmpDir, missionId, "approved");
+    await setMissionStatus(tmpDir, missionId, "executing");
+    await setMissionStatus(tmpDir, missionId, "paused");
+
+    const result = await runCompiledInteractivePty(
+      tmpDir,
+      ["mission-control", "--mission", missionId],
+      { input: "q", delayMs: 450 },
+    );
+
+    expectCleanPtyExit(result);
+    expect(result.plainOutput).toContain("●••");
+    expect(hasAnimatedHeaderFrame(result.plainOutput)).toBe(false);
+  }, PTY_TIMEOUT_MS);
+
+  it("compiled binary interactive mode remains stable across repeated launch and quit cycles", async () => {
     if (!pythonAvailable) return;
     const missionId = await createMission(tmpDir);
 
@@ -524,69 +581,71 @@ describe("mission-control CLI", () => {
         ["mission-control", "--mission", missionId],
         { input: "q" },
       );
-        expectCleanPtyExit(result);
-        }
-      }, PTY_TIMEOUT_MS);
-
-    it("compiled binary interactive mode persists a selected feature transition on keyboard confirm", async () => {
-      if (!pythonAvailable) return;
-      const missionId = await createMission(tmpDir);
-
-      const result = await runCompiledInteractivePty(
-        tmpDir,
-        ["mission-control", "--mission", missionId],
-        { input: "\r\r\r\u001bq" },
-      );
-
       expectCleanPtyExit(result);
+    }
+  }, PTY_TIMEOUT_MS);
 
-      const statuses = await listFeatureStatuses(tmpDir, missionId);
-      expect(statuses.f1).toBe("assigned");
-    }, PTY_TIMEOUT_MS);
+  it("compiled binary interactive mode persists a selected feature transition on keyboard confirm", async () => {
+    if (!pythonAvailable) return;
+    const missionId = await createMission(tmpDir);
 
-    it("compiled binary interactive mode persists a selected feature transition on mouse click confirm", async () => {
-      if (!pythonAvailable) return;
-      const missionId = await createMission(tmpDir);
+    const result = await runCompiledInteractivePty(
+      tmpDir,
+      ["mission-control", "--mission", missionId],
+      { input: "\r\r\r\u001bq" },
+    );
 
-      const result = await runCompiledInteractivePty(
-        tmpDir,
-        ["mission-control", "--mission", missionId],
-        { input: `\r${buildFeatureActionMouseSequence(0)}q` },
-      );
+    expectCleanPtyExit(result);
 
-      expectCleanPtyExit(result);
+    const statuses = await listFeatureStatuses(tmpDir, missionId);
+    expect(statuses.f1).toBe("assigned");
+  }, PTY_TIMEOUT_MS);
 
-      const statuses = await listFeatureStatuses(tmpDir, missionId);
-      expect(statuses.f1).toBe("assigned");
-    }, PTY_TIMEOUT_MS);
+  it("compiled binary interactive mode persists a selected feature transition on mouse click confirm", async () => {
+    if (!pythonAvailable) return;
+    const missionId = await createMission(tmpDir);
 
-    it("compiled binary interactive mode closes the modal on outside click without applying a transition", async () => {
-      if (!pythonAvailable) return;
-      const missionId = await createMission(tmpDir);
+    const result = await runCompiledInteractivePty(
+      tmpDir,
+      ["mission-control", "--mission", missionId],
+      { input: `\r${buildFeatureActionMouseSequence(0)}q` },
+    );
 
-      const result = await runCompiledInteractivePty(
-        tmpDir,
-        ["mission-control", "--mission", missionId],
-        { input: `\r${encodeLeftClick(0, 0)}q` },
-      );
+    expectCleanPtyExit(result);
 
-      expectCleanPtyExit(result);
+    const statuses = await listFeatureStatuses(tmpDir, missionId);
+    expect(statuses.f1).toBe("assigned");
+  }, PTY_TIMEOUT_MS);
 
-      const statuses = await listFeatureStatuses(tmpDir, missionId);
-      expect(statuses.f1).toBe("pending");
-    }, PTY_TIMEOUT_MS);
+  it("compiled binary interactive mode closes the modal on outside click without applying a transition", async () => {
+    if (!pythonAvailable) return;
+    const missionId = await createMission(tmpDir);
 
-    it("compiled binary interactive home mode exits cleanly on q", async () => {
-      if (!pythonAvailable) return;
+    const result = await runCompiledInteractivePty(
+      tmpDir,
+      ["mission-control", "--mission", missionId],
+      { input: `\r${encodeLeftClick(0, 0)}q` },
+    );
+
+    expectCleanPtyExit(result);
+
+    const statuses = await listFeatureStatuses(tmpDir, missionId);
+    expect(statuses.f1).toBe("pending");
+  }, PTY_TIMEOUT_MS);
+
+  it("compiled binary interactive home mode exits cleanly on q", async () => {
+    if (!pythonAvailable) return;
 
     const result = await runCompiledInteractivePty(
       tmpDir,
       ["mission-control"],
-      { input: "q" },
+      { input: "q", delayMs: 450 },
     );
 
     expectCleanPtyExit(result);
     expect(result.plainOutput).toContain("HOME");
     expect(result.plainOutput).toContain("No missions yet");
+    expect(result.plainOutput).toContain("●••");
+    expect(hasAnimatedHeaderFrame(result.plainOutput)).toBe(false);
   }, PTY_TIMEOUT_MS);
 });

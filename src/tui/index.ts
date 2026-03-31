@@ -10,7 +10,7 @@ import type { MissionControlSnapshot } from "./types.js";
 import type { HomeSnapshotDeps, SnapshotDeps } from "./snapshot.js";
 import { buildHomeSnapshot, buildSnapshot } from "./snapshot.js";
 import { createInitialState, reduce, type AppState, type Action } from "./state.js";
-import { renderHeader } from "./panels/header.js";
+import { HEADER_DOT_INTERVAL_MS, isHeaderAnimationActive, renderHeader } from "./panels/header.js";
 import { renderStatusBar } from "./panels/status-bar.js";
 import { renderFeatureDetail } from "./panels/feature-detail.js";
 import { renderFeatureList } from "./panels/feature-list.js";
@@ -48,7 +48,7 @@ export function renderOnceFrame(opts: OnceFrameOptions): string {
   const height = Math.max(process.stdout.rows || 0, minHeight);
   const buf = new Buffer(width, height);
   const state = createInitialState(opts.snapshot);
-  renderFrame(buf, state);
+  renderFrame(buf, state, 0);
   return buf.toString();
 }
 
@@ -60,6 +60,8 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
   const screen = new Screen();
   let state = createInitialState(opts.snapshot);
   let shuttingDown = false;
+  let animationFrame = 0;
+  let nextAnimationTickMs = Date.now() + HEADER_DOT_INTERVAL_MS;
 
   function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -117,7 +119,7 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
   try {
     // Initial render
     const buf = screen.createBuffer();
-    renderFrame(buf, state);
+    renderFrame(buf, state, animationFrame);
     screen.render(buf);
     dirty = false;
 
@@ -132,15 +134,30 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
 
       // Poll snapshot every 2s
       const now = Date.now();
-        if (now - lastPollMs >= 2000) {
-          lastPollMs = now;
-          try {
-            const snap = opts.missionId
-              ? await buildSnapshot(opts.snapshotDeps, opts.missionId)
-              : await buildHomeSnapshot(opts.homeSnapshotDeps, process.cwd());
-            state = reduce(state, { type: "update-snapshot", snapshot: snap });
-            dirty = true;
-          } catch {
+      if (isHeaderAnimationActive(state.snapshot)) {
+        if (now >= nextAnimationTickMs) {
+          const elapsedTicks = Math.max(1, Math.floor((now - nextAnimationTickMs) / HEADER_DOT_INTERVAL_MS) + 1);
+          animationFrame = (animationFrame + elapsedTicks) % 4;
+          nextAnimationTickMs += elapsedTicks * HEADER_DOT_INTERVAL_MS;
+          dirty = true;
+        }
+      } else if (animationFrame !== 0) {
+        animationFrame = 0;
+        nextAnimationTickMs = now + HEADER_DOT_INTERVAL_MS;
+        dirty = true;
+      } else {
+        nextAnimationTickMs = now + HEADER_DOT_INTERVAL_MS;
+      }
+
+      if (now - lastPollMs >= 2000) {
+        lastPollMs = now;
+        try {
+          const snap = opts.missionId
+            ? await buildSnapshot(opts.snapshotDeps, opts.missionId)
+            : await buildHomeSnapshot(opts.homeSnapshotDeps, process.cwd());
+          state = reduce(state, { type: "update-snapshot", snapshot: snap });
+          dirty = true;
+        } catch {
           // non-fatal
         }
       }
@@ -148,7 +165,7 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
       // Render only when something changed
       if (dirty) {
         const buf = screen.createBuffer();
-        renderFrame(buf, state);
+        renderFrame(buf, state, animationFrame);
         screen.render(buf);
         dirty = false;
       }
@@ -275,7 +292,7 @@ function shouldSubmitFeatureAction(state: AppState): boolean {
 
 // ── Frame Composition ───────────────────────────────
 
-export function renderFrame(buf: Buffer, state: AppState): void {
+export function renderFrame(buf: Buffer, state: AppState, animationFrame = 0): void {
   const snap = state.snapshot;
   const w = buf.width;
   const h = buf.height;
@@ -357,7 +374,7 @@ export function renderFrame(buf: Buffer, state: AppState): void {
     height: Math.max(0, topBodyRect.y + topBodyRect.height - rightSplitY - 1),
   };
 
-  renderHeader(buf, headerRect, snap);
+  renderHeader(buf, headerRect, snap, animationFrame);
   renderStatusBar(buf, statusRect, snap);
   renderFeatureDetail(buf, leftRect, snap);
   renderFeatureList(buf, featureListRect, snap, state.selectedFeatureIndex);

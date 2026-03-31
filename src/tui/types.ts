@@ -41,6 +41,7 @@ export interface MissionControlSnapshot {
   effectiveStatus: MissionStatus;
   elapsedMs: number;
   featureProgress: { done: number; total: number; active: number };
+  statusProgress: MissionControlStatusProgress;
   tokenCounters: { input: number; cached: number; output: number } | null;
 
   // Left pane (active feature)
@@ -111,4 +112,13 @@ export interface MissionControlEvent {
   kind: "mission" | "feature" | "milestone" | "assertion" | "checkpoint" | "worker";
   title: string;
   detail?: string;
+}
+
+export interface MissionControlStatusProgress {
+  completed: number;
+  total: number;
+  inFlight: number;
+  blocked: number;
+  queued: number;
+  completionPct: number;
 }

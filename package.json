@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "cli-spinners": "^2.9.2",
     "commander": "^13.0.0",
     "yaml": "^2.7.0",
     "zod": "^3.24.0"

@@ -13,6 +13,14 @@ function makeSnapshot(): MissionControlSnapshot {
     effectiveStatus: "executing",
     elapsedMs: 754_000,
     featureProgress: { done: 1, total: 3, active: 1 },
+    statusProgress: {
+      completed: 1,
+      total: 3,
+      inFlight: 1,
+      blocked: 0,
+      queued: 2,
+      completionPct: 33,
+    },
     tokenCounters: null,
     activeFeature: null,
     features: [

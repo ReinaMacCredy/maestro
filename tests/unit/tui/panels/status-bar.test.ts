@@ -12,6 +12,14 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
     effectiveStatus: "executing",
     elapsedMs: 754_000,
     featureProgress: { done: 2, total: 4, active: 1 },
+    statusProgress: {
+      completed: 2,
+      total: 4,
+      inFlight: 1,
+      blocked: 1,
+      queued: 0,
+      completionPct: 50,
+    },
     tokenCounters: null,
     activeFeature: null,
     features: [],
@@ -37,14 +45,57 @@ describe("renderStatusBar", () => {
     const buf = new Buffer(80, 1);
     renderStatusBar(buf, { x: 0, y: 0, width: 80, height: 1 }, makeSnapshot());
     const text = buf.toString();
-    expect(text).toContain("2/4");
+    expect(text).toContain("2/4 done");
   });
 
   it("shows active count when > 0", () => {
     const buf = new Buffer(80, 1);
     renderStatusBar(buf, { x: 0, y: 0, width: 80, height: 1 }, makeSnapshot());
     const text = buf.toString();
-    expect(text).toContain("[+1]");
+    expect(text).toContain("1 active");
+  });
+
+  it("shows blocked count when present", () => {
+    const buf = new Buffer(90, 1);
+    renderStatusBar(buf, { x: 0, y: 0, width: 90, height: 1 }, makeSnapshot());
+    const text = buf.toString();
+    expect(text).toContain("1 blocked");
+  });
+
+  it("keeps done counts visible first at narrow widths", () => {
+    const buf = new Buffer(46, 1);
+    renderStatusBar(buf, { x: 0, y: 0, width: 46, height: 1 }, makeSnapshot({
+      statusProgress: {
+        completed: 2,
+        total: 4,
+        inFlight: 1,
+        blocked: 1,
+        queued: 3,
+        completionPct: 50,
+      },
+    }));
+    const text = buf.toString();
+    expect(text).toContain("2/4 done");
+  });
+
+  it("fills the rail from completion only, not active work", () => {
+    const buf = new Buffer(80, 1);
+    renderStatusBar(buf, { x: 0, y: 0, width: 80, height: 1 }, makeSnapshot({
+      statusProgress: {
+        completed: 1,
+        total: 4,
+        inFlight: 2,
+        blocked: 0,
+        queued: 1,
+        completionPct: 25,
+      },
+      featureProgress: { done: 1, total: 4, active: 2 },
+    }));
+
+    const filledCells = Array.from({ length: buf.width }, (_, x) => buf.getCell(0, x))
+      .filter((cell) => cell?.bg === 208).length;
+
+    expect(filledCells).toBeLessThan(20);
   });
 
   it("shows filled circle dot", () => {
