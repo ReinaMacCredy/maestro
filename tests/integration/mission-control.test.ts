@@ -14,6 +14,7 @@ const CLI = [
   join(import.meta.dir, "..", "..", "src", "index.ts"),
 ];
 const DIST_CLI = join(import.meta.dir, "..", "..", "dist", "maestro");
+const CTRL_P = "\u0010";
 
 let tmpDir: string;
 const SLOW_CLI_TIMEOUT_MS = 15_000;
@@ -661,7 +662,7 @@ describe("mission-control CLI", () => {
     }
   }, PTY_TIMEOUT_MS);
 
-  it("compiled binary interactive mode updates the Session duration every second while idle", async () => {
+    it("compiled binary interactive mode updates the Session duration every second while idle", async () => {
     if (!pythonAvailable) return;
     const missionId = await createMission(tmpDir);
     await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
@@ -674,11 +675,137 @@ describe("mission-control CLI", () => {
 
     expectCleanPtyExit(result);
     expect(result.plainOutput).toContain("Session");
-    const durationSamples = getDurationSamples(result.plainOutput);
-    expect(durationSamples.length).toBeGreaterThan(1);
-  }, PTY_TIMEOUT_MS);
+      const durationSamples = getDurationSamples(result.plainOutput);
+      expect(durationSamples.length).toBeGreaterThan(1);
+    }, PTY_TIMEOUT_MS);
 
-  it("compiled binary interactive mode opens the Features overlay", async () => {
+    it("compiled binary interactive mode opens and closes the command palette with Ctrl+P", async () => {
+      if (!pythonAvailable) return;
+      const missionId = await createMission(tmpDir);
+
+      const result = await runCompiledInteractivePty(
+        tmpDir,
+        ["mission-control", "--mission", missionId],
+        {
+          input: "",
+          inputSteps: [
+            { chars: CTRL_P, delayMs: 450 },
+            { chars: "\u001b", delayMs: 250 },
+            { chars: "q", delayMs: 250 },
+          ],
+          waitForText: "Mission Control",
+        },
+      );
+
+      expectCleanPtyExit(result);
+      expect(result.plainOutput).toContain("Commands");
+      expect(result.plainOutput).toContain("Navigate");
+      expect(result.plainOutput).toContain("Enter open · Esc close");
+    }, PTY_TIMEOUT_MS);
+
+    it("compiled binary interactive mode filters the command palette and activates Features", async () => {
+      if (!pythonAvailable) return;
+      const missionId = await createMission(tmpDir);
+      await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+
+      const result = await runCompiledInteractivePty(
+        tmpDir,
+        ["mission-control", "--mission", missionId],
+        {
+          input: "",
+          inputSteps: [
+            { chars: CTRL_P, delayMs: 450 },
+            { chars: "fea", delayMs: 180 },
+            { chars: "\r", delayMs: 180 },
+            { chars: "\u001b", delayMs: 250 },
+            { chars: "q", delayMs: 250 },
+          ],
+          waitForText: "Mission Control",
+        },
+      );
+
+      expectCleanPtyExit(result);
+      expect(result.plainOutput).toContain("Commands");
+      expect(result.plainOutput).toContain("Select a feature to focus");
+    }, PTY_TIMEOUT_MS);
+
+    it("compiled binary interactive mode filters the command palette and activates Handoff", async () => {
+      if (!pythonAvailable) return;
+      const missionId = await createMission(tmpDir);
+
+      const result = await runCompiledInteractivePty(
+        tmpDir,
+        ["mission-control", "--mission", missionId],
+        {
+          input: "",
+          inputSteps: [
+            { chars: CTRL_P, delayMs: 450 },
+            { chars: "hand", delayMs: 180 },
+            { chars: "\r", delayMs: 180 },
+            { chars: "\u001b", delayMs: 250 },
+            { chars: "q", delayMs: 250 },
+          ],
+          waitForText: "Mission Control",
+        },
+      );
+
+      expectCleanPtyExit(result);
+      expect(result.plainOutput).toContain("Handoffs");
+      expect(result.plainOutput).toContain("No pending handoffs");
+    }, PTY_TIMEOUT_MS);
+
+    it("compiled binary interactive mode filters the command palette and activates Config", async () => {
+      if (!pythonAvailable) return;
+      const missionId = await createMission(tmpDir);
+
+      const result = await runCompiledInteractivePty(
+        tmpDir,
+        ["mission-control", "--mission", missionId],
+        {
+          input: "",
+          inputSteps: [
+            { chars: CTRL_P, delayMs: 450 },
+            { chars: "conf", delayMs: 180 },
+            { chars: "\r", delayMs: 180 },
+            { chars: "\u001b", delayMs: 250 },
+            { chars: "q", delayMs: 250 },
+          ],
+          waitForText: "Mission Control",
+        },
+      );
+
+      expectCleanPtyExit(result);
+      expect(result.plainOutput).toContain("Config");
+      expect(result.plainOutput).toContain(`.maestro/missions/${missionId}`);
+    }, PTY_TIMEOUT_MS);
+
+    it("compiled binary interactive mode filters the command palette and activates Processes", async () => {
+      if (!pythonAvailable) return;
+      const missionId = await createMission(tmpDir);
+      await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+
+      const result = await runCompiledInteractivePty(
+        tmpDir,
+        ["mission-control", "--mission", missionId],
+        {
+          input: "",
+          inputSteps: [
+            { chars: CTRL_P, delayMs: 450 },
+            { chars: "proc", delayMs: 180 },
+            { chars: "\r", delayMs: 180 },
+            { chars: "\u001b", delayMs: 250 },
+            { chars: "q", delayMs: 250 },
+          ],
+          waitForText: "Mission Control",
+        },
+      );
+
+      expectCleanPtyExit(result);
+      expect(result.plainOutput).toContain("Processes");
+      expect(result.plainOutput).toContain("test-skill");
+    }, PTY_TIMEOUT_MS);
+
+    it("compiled binary interactive mode opens the Features overlay", async () => {
     if (!pythonAvailable) return;
     const missionId = await createMission(tmpDir);
     await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
@@ -741,12 +868,12 @@ describe("mission-control CLI", () => {
         ],
         waitForText: "Mission Control",
       },
-    );
+      );
 
-    expectCleanPtyExit(result);
-    expect(result.plainOutput).toContain("Configuration");
-    expect(result.plainOutput).toContain(`.maestro/missions/${missionId}`);
-  }, PTY_TIMEOUT_MS);
+      expectCleanPtyExit(result);
+      expect(result.plainOutput).toContain("Config");
+      expect(result.plainOutput).toContain(`.maestro/missions/${missionId}`);
+    }, PTY_TIMEOUT_MS);
 
   it("compiled binary interactive mode opens the Processes overlay", async () => {
     if (!pythonAvailable) return;

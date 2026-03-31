@@ -63,6 +63,11 @@ describe("parseKeypress", () => {
       const keys = parseKeypress(bytes(0x01));
       expect(keys).toEqual([{ type: "ctrl", char: "a" }]);
     });
+
+    it("parses ctrl+p (0x10)", () => {
+      const keys = parseKeypress(bytes(0x10));
+      expect(keys).toEqual([{ type: "ctrl", char: "p" }]);
+    });
   });
 
   describe("special keys", () => {
@@ -80,6 +85,11 @@ describe("parseKeypress", () => {
       const keys = parseKeypress(bytes(0x1b));
       expect(keys).toEqual([{ type: "escape" }]);
     });
+
+    it("parses backspace", () => {
+      const keys = parseKeypress(bytes(0x7f));
+      expect(keys).toEqual([{ type: "backspace" }]);
+    });
   });
 
   describe("function keys", () => {
@@ -96,6 +106,11 @@ describe("parseKeypress", () => {
     it("parses F12 (ESC [ 24 ~)", () => {
       const keys = parseKeypress(bytes(0x1b, 0x5b, 0x32, 0x34, 0x7e));
       expect(keys).toEqual([{ type: "function", n: 12 }]);
+    });
+
+    it("parses delete (ESC [ 3 ~)", () => {
+      const keys = parseKeypress(bytes(0x1b, 0x5b, 0x33, 0x7e));
+      expect(keys).toEqual([{ type: "delete" }]);
     });
   });
 

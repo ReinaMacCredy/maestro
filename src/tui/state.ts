@@ -9,6 +9,7 @@ export type FocusedPanel = "features" | "log" | "none";
 
 export type ModalState =
   | { kind: "none" }
+  | { kind: "command-palette"; query: string; selectedCommandIndex: number }
   | {
     kind: "feature-action";
     featureIndex: number;
@@ -48,12 +49,15 @@ export type Action =
   | { type: "focus"; panel: FocusedPanel }
   | { type: "enter" }
   | { type: "escape" }
+  | { type: "open-command-palette" }
   | { type: "open-features" }
   | { type: "open-handoffs" }
   | { type: "open-config" }
   | { type: "open-processes" }
   | { type: "update-snapshot"; snapshot: MissionControlSnapshot }
   | { type: "modal-select"; option: number }
+  | { type: "modal-query-append"; char: string }
+  | { type: "modal-query-backspace" }
   | { type: "modal-submit-start" }
   | { type: "modal-submit-error"; message: string };
 
@@ -67,6 +71,9 @@ export function reduce(state: AppState, action: Action): AppState {
 
     case "navigate": {
       if (state.modal.kind === "feature-action") {
+        return handleModalNavigate(state, action.direction);
+      }
+      if (state.modal.kind === "command-palette") {
         return handleModalNavigate(state, action.direction);
       }
       if (state.focusedPanel === "features") {
@@ -83,6 +90,9 @@ export function reduce(state: AppState, action: Action): AppState {
       return { ...state, focusedPanel: action.panel };
 
     case "enter": {
+      if (state.modal.kind === "command-palette") {
+        return state;
+      }
       if (state.snapshot.mode === "home") {
         return state;
       }
@@ -127,8 +137,18 @@ export function reduce(state: AppState, action: Action): AppState {
       }
       return { ...state, focusedPanel: "none" };
 
+    case "open-command-palette":
+      return {
+        ...state,
+        modal: {
+          kind: "command-palette",
+          query: "",
+          selectedCommandIndex: 0,
+        },
+      };
+
     case "open-features":
-      if (state.modal.kind !== "none") return state;
+      if (state.modal.kind !== "none" && state.modal.kind !== "command-palette") return state;
       if (state.snapshot.mode === "home") {
         return { ...state, modal: { kind: "overview" } };
       }
@@ -141,15 +161,15 @@ export function reduce(state: AppState, action: Action): AppState {
       };
 
     case "open-handoffs":
-      if (state.modal.kind !== "none") return state;
+      if (state.modal.kind !== "none" && state.modal.kind !== "command-palette") return state;
       return { ...state, modal: { kind: "handoffs" } };
 
     case "open-config":
-      if (state.modal.kind !== "none") return state;
+      if (state.modal.kind !== "none" && state.modal.kind !== "command-palette") return state;
       return { ...state, modal: { kind: "config" } };
 
     case "open-processes":
-      if (state.modal.kind !== "none") return state;
+      if (state.modal.kind !== "none" && state.modal.kind !== "command-palette") return state;
       return { ...state, modal: { kind: "processes" } };
 
     case "update-snapshot":
@@ -184,6 +204,15 @@ export function reduce(state: AppState, action: Action): AppState {
       };
 
     case "modal-select":
+      if (state.modal.kind === "command-palette") {
+        return {
+          ...state,
+          modal: {
+            ...state.modal,
+            selectedCommandIndex: Math.max(0, action.option),
+          },
+        };
+      }
       if (state.modal.kind === "feature-action") {
         return {
           ...state,
@@ -201,6 +230,32 @@ export function reduce(state: AppState, action: Action): AppState {
           modal: {
             kind: "feature-browser",
             selectedFeatureIndex: action.option,
+          },
+        };
+      }
+      return state;
+
+    case "modal-query-append":
+      if (state.modal.kind === "command-palette") {
+        return {
+          ...state,
+          modal: {
+            ...state.modal,
+            query: state.modal.query + action.char,
+            selectedCommandIndex: 0,
+          },
+        };
+      }
+      return state;
+
+    case "modal-query-backspace":
+      if (state.modal.kind === "command-palette") {
+        return {
+          ...state,
+          modal: {
+            ...state.modal,
+            query: state.modal.query.slice(0, -1),
+            selectedCommandIndex: 0,
           },
         };
       }
@@ -261,6 +316,22 @@ function handleLogNavigate(state: AppState, direction: "up" | "down"): AppState 
 }
 
 function handleModalNavigate(state: AppState, direction: "up" | "down"): AppState {
+  if (state.modal.kind === "command-palette") {
+    const optionsCount = getPaletteCommandCount(state.snapshot.mode);
+    if (optionsCount === 0) return state;
+
+    const selectedCommandIndex = direction === "down"
+      ? Math.min(state.modal.selectedCommandIndex + 1, optionsCount - 1)
+      : Math.max(state.modal.selectedCommandIndex - 1, 0);
+    return {
+      ...state,
+      modal: {
+        ...state.modal,
+        selectedCommandIndex,
+      },
+    };
+  }
+
   if (state.modal.kind === "feature-action") {
     const feature = state.snapshot.features[state.modal.featureIndex];
     if (!feature) return state;
@@ -300,4 +371,8 @@ function handleModalNavigate(state: AppState, direction: "up" | "down"): AppStat
   }
 
   return state;
+}
+
+function getPaletteCommandCount(mode: MissionControlSnapshot["mode"]): number {
+  return mode === "home" ? 5 : 5;
 }

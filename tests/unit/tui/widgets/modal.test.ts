@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { Buffer } from "../../../../src/tui/terminal/buffer.js";
-import { renderModal } from "../../../../src/tui/widgets/modal.js";
+import { applyModalBackdrop, renderModal } from "../../../../src/tui/widgets/modal.js";
 import { PALETTE } from "../../../../src/tui/theme.js";
 
 describe("renderModal", () => {
@@ -26,17 +26,18 @@ describe("renderModal", () => {
     expect(text).toContain("Option 3");
   });
 
-  it("shows selection indicator", () => {
+  it("renders a full-width cyan selection row for menu items", () => {
     const buf = new Buffer(80, 24);
-    renderModal(buf, { x: 0, y: 0, width: 80, height: 24 }, {
+    const layout = renderModal(buf, { x: 0, y: 0, width: 80, height: 24 }, {
       mode: "menu",
       title: "Select",
       items: ["A", "B", "C"],
       selectedIndex: 1,
     });
 
-    const text = buf.toString();
-    expect(text).toContain("> B");
+    const selectedRow = layout.itemRects[1]!;
+    expect(buf.getCell(selectedRow.y, selectedRow.x + 2)?.bg).toBe(PALETTE.overlaySelectedBg);
+    expect(buf.getCell(selectedRow.y, selectedRow.x + 2)?.fg).toBe(PALETTE.overlaySelectedFg);
   });
 
   it("renders status line when provided", () => {
@@ -52,7 +53,7 @@ describe("renderModal", () => {
     expect(text).toContain("Esc close");
   });
 
-  it("uses theme tokens for the border and selected row", () => {
+  it("uses overlay surface and selection theme tokens", () => {
     const buf = new Buffer(80, 24);
     const modalRect = renderModal(buf, { x: 0, y: 0, width: 80, height: 24 }, {
       mode: "menu",
@@ -62,10 +63,10 @@ describe("renderModal", () => {
       selectedIndex: 0,
     });
 
-    expect(buf.getCell(modalRect.y, modalRect.x)?.fg).toBe(PALETTE.border);
+    expect(buf.getCell(modalRect.y, modalRect.x)?.bg).toBe(PALETTE.overlaySurfaceBg);
 
     const selectedRowCell = buf.getCell(modalRect.y + 4, modalRect.x + 2);
-    expect(selectedRowCell?.bg).toBe(PALETTE.selectedBg);
+    expect(selectedRowCell?.bg).toBe(PALETTE.overlaySelectedBg);
   });
 
   it("renders info cards without a selection chevron", () => {
@@ -144,5 +145,55 @@ describe("renderModal", () => {
     };
 
     expect(layout.itemRects).toEqual([]);
+  });
+
+  it("applies a dimmed backdrop behind overlays", () => {
+    const buf = new Buffer(20, 6);
+    buf.writeText(1, 1, "Mission", {
+      fg: PALETTE.brightWhite,
+      bg: PALETTE.panelBg,
+      bold: true,
+    });
+
+    applyModalBackdrop(buf);
+
+    const cell = buf.getCell(1, 1);
+    expect(cell?.bg).toBe(PALETTE.overlayBackdropBg);
+    expect(cell?.fg).toBe(PALETTE.gray);
+    expect(cell?.bold).toBe(false);
+    expect(cell?.dim).toBe(true);
+  });
+
+  it("renders palette rows with a query line, sections, and shortcut hints", () => {
+    const buf = new Buffer(90, 28);
+    renderModal(buf, { x: 0, y: 0, width: 90, height: 28 }, {
+      mode: "palette",
+      title: "Commands",
+      query: "pro",
+      items: [
+        {
+          label: "Processes",
+          detail: "List live Maestro runtime work for this mission",
+          hint: "P",
+          section: "Navigate",
+        },
+        {
+          label: "Exit",
+          detail: "Close Mission Control cleanly",
+          hint: "Ctrl+T",
+          section: "Session",
+        },
+      ],
+      selectedIndex: 0,
+      footer: "Enter open · Esc close",
+    });
+
+    const text = buf.toString();
+    expect(text).toContain("Commands");
+    expect(text).toContain("pro");
+    expect(text).toContain("Navigate");
+    expect(text).toContain("Processes");
+    expect(text).toContain("Ctrl+T");
+    expect(text).toContain("esc");
   });
 });

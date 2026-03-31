@@ -18,10 +18,12 @@ import { renderProgressLog } from "./panels/progress-log.js";
 import { renderWorkerPanel } from "./panels/worker.js";
 import { renderFooter } from "./panels/footer.js";
 import {
+  applyModalBackdrop,
   layoutModal,
   pointInRect,
   renderModal,
   type ModalOptions,
+  type ModalRow,
 } from "./widgets/modal.js";
 import { getValidFeatureTransitions } from "../domain/mission-state.js";
 import { FEATURE_STATUS_LABEL, PALETTE } from "./theme.js";
@@ -86,6 +88,15 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
 
     const action = keyToAction(key, state);
     if (!action) return;
+
+    if (action.type === "enter" && state.modal.kind === "command-palette") {
+      const paletteAction = getCommandPaletteSelectionAction(state);
+      if (!paletteAction) return;
+      state = reduce(state, paletteAction);
+      if (paletteAction.type === "quit") shuttingDown = true;
+      dirty = true;
+      return;
+    }
 
     if (action.type === "enter" && shouldSubmitFeatureAction(state)) {
       await submitFeatureAction();
@@ -199,6 +210,20 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
       return;
     }
 
+    if (state.modal.kind === "command-palette") {
+      const optionIndex = layout.itemRects.findIndex((rect) => pointInRect(rect, key.x, key.y));
+      if (optionIndex < 0) return;
+
+      const commands = getFilteredCommandPaletteItems(state);
+      const command = commands[optionIndex];
+      if (!command) return;
+
+      state = reduce(state, command.action);
+      if (command.action.type === "quit") shuttingDown = true;
+      dirty = true;
+      return;
+    }
+
     if (state.modal.kind !== "feature-action" || state.modal.phase === "submitting") {
       if (state.modal.kind === "feature-browser") {
         const optionIndex = layout.itemRects.findIndex((rect) => pointInRect(rect, key.x, key.y));
@@ -276,14 +301,23 @@ function keyToAction(key: Key, state: AppState): Action | undefined {
   if (key.type === "ctrl" && (key.char === "t" || key.char === "c")) {
     return { type: "quit" };
   }
+  if (key.type === "ctrl" && key.char === "p") {
+    return { type: "open-command-palette" };
+  }
   if (key.type === "escape") {
     return { type: "escape" };
   }
   if (key.type === "arrow" && (key.direction === "up" || key.direction === "down")) {
     return { type: "navigate", direction: key.direction };
   }
+  if ((key.type === "backspace" || key.type === "delete") && state.modal.kind === "command-palette") {
+    return { type: "modal-query-backspace" };
+  }
   if (key.type === "enter") {
     return { type: "enter" };
+  }
+  if (key.type === "char" && state.modal.kind === "command-palette") {
+    return { type: "modal-query-append", char: key.char };
   }
   if (key.type === "char" && state.modal.kind === "none") {
     switch (key.char) {
@@ -451,6 +485,7 @@ function clamp(value: number, min: number, max: number): number {
 function renderModalOverlay(buf: Buffer, parentRect: Rect, state: AppState): void {
   const opts = buildModalOptions(state);
   if (!opts) return;
+  applyModalBackdrop(buf);
   renderModal(buf, parentRect, opts);
 }
 
@@ -478,6 +513,27 @@ function getModalParentRect(width: number, height: number): Rect {
 }
 
 function buildModalOptions(state: AppState): ModalOptions | undefined {
+  if (state.modal.kind === "command-palette") {
+    const commands = getFilteredCommandPaletteItems(state);
+    return {
+      mode: "palette",
+      title: "Commands",
+      query: state.modal.query,
+      items: commands.map((command) => ({
+        label: command.label,
+        detail: command.detail,
+        hint: command.hint,
+        section: command.section,
+      })),
+      selectedIndex: Math.min(
+        state.modal.selectedCommandIndex,
+        Math.max(0, commands.length - 1),
+      ),
+      footer: "Enter open · Esc close",
+      emptyLabel: "No commands match your filter",
+    };
+  }
+
   if (state.modal.kind === "feature-action") {
     const feature = state.snapshot.features[state.modal.featureIndex];
     if (!feature) return undefined;
@@ -488,8 +544,12 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
       title: "Change Feature Status",
       eyebrow: `${feature.id} · ${feature.title}`,
       items: transitions.length > 0
-        ? transitions.map((transition) => `Set status to ${transition}`)
-        : ["No valid transitions"],
+        ? transitions.map((transition) => ({
+          label: `Set status to ${transition}`,
+          detail: `Move ${feature.id} from ${FEATURE_STATUS_LABEL[feature.status]} to ${transition}`,
+          section: "Transitions",
+        }))
+        : [{ label: "No valid transitions", detail: "This feature cannot move to another state right now.", section: "Transitions", tone: "muted" }],
       selectedIndex: state.modal.selectedOption,
       footer: getFeatureActionFooter(state.modal),
     };
@@ -499,11 +559,15 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
     return {
       mode: "menu",
       title: "Features",
-      eyebrow: "Select a feature to focus",
+      eyebrow: state.snapshot.mode === "home" ? "Project overview" : "Select a feature to focus",
       items: state.snapshot.features.length > 0
-        ? state.snapshot.features.map((feature) =>
-          `${feature.id} · ${FEATURE_STATUS_LABEL[feature.status]} · ${feature.title}`)
-        : ["No features available"],
+        ? state.snapshot.features.map((feature) => ({
+          label: feature.title,
+          detail: `${feature.id} · ${FEATURE_STATUS_LABEL[feature.status]} · ${feature.workerType}`,
+          hint: feature.hasReport ? "report" : undefined,
+          section: "Mission",
+        }))
+        : [{ label: "No features available", detail: "This mission does not have any features yet.", section: "Mission", tone: "muted" }],
       selectedIndex: Math.min(
         state.modal.selectedFeatureIndex,
         Math.max(0, state.snapshot.features.length - 1),
@@ -518,9 +582,15 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
       title: "Overview",
       eyebrow: state.snapshot.home.headline,
       items: [
-        { text: state.snapshot.home.summary, tone: "default" },
-        { text: state.snapshot.home.locationLabel, style: "block", tone: "accent" },
-        ...state.snapshot.home.actions.map((action) => ({ text: `${action.command} · ${action.detail}`, tone: "muted" as const })),
+        { text: state.snapshot.home.summary, section: "Environment" },
+        { text: state.snapshot.home.locationLabel, style: "block", tone: "accent", section: "Location" },
+        ...state.snapshot.home.actions.map((action) => ({
+          text: action.command,
+          detail: action.detail,
+          hint: action.label,
+          section: "Next Steps",
+          tone: "muted" as const,
+        })),
       ],
       footer: "Esc close",
     };
@@ -530,62 +600,75 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
     return {
       mode: "info",
       title: "Handoffs",
-      eyebrow: state.snapshot.pendingHandoffs.length > 0
-        ? `${state.snapshot.pendingHandoffs.length} pending`
-        : "No pending handoffs",
-      items: state.snapshot.pendingHandoffs.length > 0
-        ? state.snapshot.pendingHandoffs.flatMap((handoff) => ([
-          { text: `${handoff.id} · ${handoff.agent}`, style: "block", tone: "accent" as const },
-          { text: handoff.message, tone: "muted" as const },
-        ]))
-        : [{ text: "No pending handoffs in this workspace.", tone: "muted" }],
-      footer: "Esc close",
-    };
-  }
+        eyebrow: state.snapshot.pendingHandoffs.length > 0
+          ? `${state.snapshot.pendingHandoffs.length} pending`
+          : "No pending handoffs",
+        items: state.snapshot.pendingHandoffs.length > 0
+          ? state.snapshot.pendingHandoffs.flatMap((handoff) => ([
+            {
+              text: `${handoff.id} · ${handoff.agent}`,
+              detail: handoff.message,
+              style: "block",
+              tone: "accent" as const,
+              section: "Pending",
+            },
+          ]))
+          : [{ text: "No pending handoffs in this workspace.", section: "Pending", tone: "muted" }],
+        footer: "Esc close",
+      };
+    }
 
   if (state.modal.kind === "config") {
     const summary = state.snapshot.configSummary;
     if (!summary) return undefined;
-    return {
-      mode: "info",
-      title: "Configuration",
-      eyebrow: `Config source: ${summary.configSource}`,
-      items: [
-        ...(summary.missionDirectory
-          ? [{ text: summary.missionDirectory, style: "block", tone: "accent" as const }]
-          : []),
-        { text: `Git ${summary.gitAvailable ? "available" : "unavailable"}`, tone: "default" },
-        { text: `CASS ${summary.cassAvailable ? "available" : "unavailable"}`, tone: "default" },
-        ...summary.checks.map((check) => ({ text: `${check.name}: ${check.status} · ${check.message}`, tone: "muted" as const })),
-        ...summary.workerTypes.map((workerType) => ({ text: `Worker model: ${workerType}`, tone: "muted" as const })),
-      ],
-      footer: "Esc close",
-    };
-  }
+      return {
+        mode: "info",
+        title: "Config",
+        eyebrow: `Config source: ${summary.configSource}`,
+        items: [
+          ...(summary.missionDirectory
+            ? [{ text: summary.missionDirectory, style: "block", tone: "accent" as const, section: "Mission Directory" }]
+            : []),
+          { text: `Git ${summary.gitAvailable ? "available" : "unavailable"}`, section: "Environment" },
+          { text: `CASS ${summary.cassAvailable ? "available" : "unavailable"}`, section: "Environment" },
+          ...summary.checks.map((check) => ({
+            text: check.name,
+            detail: `${check.status} · ${check.message}`,
+            section: "Doctor",
+            tone: "muted" as const,
+          })),
+          ...summary.workerTypes.map((workerType) => ({
+            text: workerType,
+            detail: "Worker model available for this mission",
+            section: "Workers",
+            tone: "muted" as const,
+          })),
+        ],
+        footer: "Esc close",
+      };
+    }
 
   if (state.modal.kind === "processes") {
     return {
       mode: "info",
-      title: "Processes",
-      eyebrow: state.snapshot.runtimeProcesses.length > 0
-        ? `${state.snapshot.runtimeProcesses.length} runtime item${state.snapshot.runtimeProcesses.length === 1 ? "" : "s"}`
-        : "No active runtime processes",
-      items: state.snapshot.runtimeProcesses.length > 0
-        ? state.snapshot.runtimeProcesses.flatMap((process) => ([
-          {
-            text: `${process.featureId} · ${FEATURE_STATUS_LABEL[process.status]} · ${process.workerType}${process.isLive ? " · live" : ""}`,
-            style: "block",
-            tone: "accent" as const,
-          },
-          {
-            text: `${process.title}${process.hasReport ? " · report available" : " · waiting for report"}`,
-            tone: "muted" as const,
-          },
-        ]))
-        : [{ text: "No assigned, in-progress, or review features right now.", tone: "muted" }],
-      footer: "Esc close",
-    };
-  }
+        title: "Processes",
+        eyebrow: state.snapshot.runtimeProcesses.length > 0
+          ? `${state.snapshot.runtimeProcesses.length} runtime item${state.snapshot.runtimeProcesses.length === 1 ? "" : "s"}`
+          : "No active runtime processes",
+        items: state.snapshot.runtimeProcesses.length > 0
+          ? state.snapshot.runtimeProcesses.flatMap((process) => ([
+            {
+              text: process.title,
+              detail: `${process.featureId} · ${FEATURE_STATUS_LABEL[process.status]} · ${process.workerType}${process.isLive ? " · live" : ""}${process.hasReport ? " · report available" : " · waiting for report"}`,
+              style: "block",
+              tone: "accent" as const,
+              section: "Runtime",
+            },
+          ]))
+          : [{ text: "No assigned, in-progress, or review features right now.", section: "Runtime", tone: "muted" }],
+        footer: "Esc close",
+      };
+    }
 
   return undefined;
 }
@@ -601,4 +684,94 @@ function getFeatureActionFooter(modal: Extract<AppState["modal"], { kind: "featu
     return "Enter confirm · Esc cancel";
   }
   return "Use arrows or click · Enter choose · Esc cancel";
+}
+
+interface CommandPaletteItem {
+  readonly label: string;
+  readonly detail: string;
+  readonly hint: string;
+  readonly section: string;
+  readonly keywords: readonly string[];
+  readonly action: Action;
+}
+
+function getCommandPaletteItems(state: AppState): readonly CommandPaletteItem[] {
+  const featureCommand: CommandPaletteItem = state.snapshot.mode === "home"
+    ? {
+      label: "Overview",
+      detail: "Show the guided Mission Control home screen",
+      hint: "F",
+      section: "Navigate",
+      keywords: ["overview", "home", "project", "empty state"],
+      action: { type: "open-features" },
+    }
+    : {
+      label: "Features",
+      detail: "Browse mission features and focus a specific item",
+      hint: "F",
+      section: "Navigate",
+      keywords: ["features", "feature browser", "focus"],
+      action: { type: "open-features" },
+    };
+
+  return [
+    featureCommand,
+    {
+      label: "Handoff",
+      detail: "Review pending cross-agent handoffs",
+      hint: "H",
+      section: "Navigate",
+      keywords: ["handoff", "handoffs", "agent"],
+      action: { type: "open-handoffs" },
+    },
+    {
+      label: "Config",
+      detail: "Inspect workspace configuration, checks, and mission directory",
+      hint: "C",
+      section: "Navigate",
+      keywords: ["config", "configuration", "doctor", "directory"],
+      action: { type: "open-config" },
+    },
+    {
+      label: "Processes",
+      detail: "List live Maestro runtime work for this mission",
+      hint: "P",
+      section: "Navigate",
+      keywords: ["processes", "runtime", "workers"],
+      action: { type: "open-processes" },
+    },
+    {
+      label: "Exit",
+      detail: "Close Mission Control cleanly",
+      hint: "Ctrl+T",
+      section: "Session",
+      keywords: ["quit", "exit", "close"],
+      action: { type: "quit" },
+    },
+  ];
+}
+
+function getFilteredCommandPaletteItems(state: AppState): readonly CommandPaletteItem[] {
+  if (state.modal.kind !== "command-palette") return [];
+
+  const query = state.modal.query.trim().toLowerCase();
+  const items = getCommandPaletteItems(state);
+  if (query.length === 0) return items;
+
+  return items.filter((item) =>
+    [item.label, item.detail, item.section, ...item.keywords]
+      .join(" ")
+      .toLowerCase()
+      .includes(query)
+  );
+}
+
+function getCommandPaletteSelectionAction(state: AppState): Action | undefined {
+  if (state.modal.kind !== "command-palette") return undefined;
+
+  const commands = getFilteredCommandPaletteItems(state);
+  if (commands.length === 0) return undefined;
+
+  const index = Math.min(state.modal.selectedCommandIndex, commands.length - 1);
+  return commands[index]?.action;
 }

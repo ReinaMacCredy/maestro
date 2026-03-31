@@ -8,6 +8,8 @@ export type Key =
   | { type: "arrow"; direction: "up" | "down" | "left" | "right" }
   | { type: "enter" }
   | { type: "escape" }
+  | { type: "backspace" }
+  | { type: "delete" }
   | { type: "ctrl"; char: string }
   | { type: "function"; n: number }
   | { type: "mouse"; event: "down" | "up"; button: "left"; x: number; y: number };
@@ -55,6 +57,12 @@ export function parseKeypress(data: Uint8Array): Key[] {
     // Ctrl combos (0x01-0x1a except 0x0d=enter, 0x1b=escape)
     if (byte === 0x0d || byte === 0x0a) {
       keys.push({ type: "enter" });
+      i++;
+      continue;
+    }
+
+    if (byte === 0x08 || byte === 0x7f) {
+      keys.push({ type: "backspace" });
       i++;
       continue;
     }
@@ -109,6 +117,9 @@ function parseCSI(
   // Function keys: ESC [ N ~ (where N is the function key code)
   if (final === 0x7e) {
     const n = parseInt(param, 10);
+    if (n === 3) {
+      return { key: { type: "delete" }, nextIndex: i };
+    }
     const fnMap: Record<number, number> = {
       11: 1, 12: 2, 13: 3, 14: 4, 15: 5,
       17: 6, 18: 7, 19: 8, 20: 9, 21: 10,

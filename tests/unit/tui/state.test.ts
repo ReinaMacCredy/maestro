@@ -200,6 +200,14 @@ describe("reduce", () => {
       const state = reduce(makeState(), { type: "open-features" });
       expect(state.modal.kind).toBe("feature-browser");
     });
+
+    it("opens the feature browser from the command palette", () => {
+      const state = reduce(
+        makeState({ modal: { kind: "command-palette", query: "fea", selectedCommandIndex: 1 } }),
+        { type: "open-features" },
+      );
+      expect(state.modal.kind).toBe("feature-browser");
+    });
   });
 
   describe("open-handoffs", () => {
@@ -220,6 +228,52 @@ describe("reduce", () => {
     it("opens processes modal", () => {
       const state = reduce(makeState(), { type: "open-processes" });
       expect(state.modal.kind).toBe("processes");
+    });
+  });
+
+  describe("command palette", () => {
+    it("opens the command palette with a fresh query", () => {
+      const state = reduce(makeState(), { type: "open-command-palette" });
+      expect(state.modal.kind).toBe("command-palette");
+      if (state.modal.kind === "command-palette") {
+        expect(state.modal.query).toBe("");
+        expect(state.modal.selectedCommandIndex).toBe(0);
+      }
+    });
+
+    it("appends query characters and resets selection", () => {
+      const state = reduce(
+        makeState({ modal: { kind: "command-palette", query: "", selectedCommandIndex: 3 } }),
+        { type: "modal-query-append", char: "p" },
+      );
+      expect(state.modal.kind).toBe("command-palette");
+      if (state.modal.kind === "command-palette") {
+        expect(state.modal.query).toBe("p");
+        expect(state.modal.selectedCommandIndex).toBe(0);
+      }
+    });
+
+    it("backspaces the query and resets selection", () => {
+      const state = reduce(
+        makeState({ modal: { kind: "command-palette", query: "proc", selectedCommandIndex: 2 } }),
+        { type: "modal-query-backspace" },
+      );
+      expect(state.modal.kind).toBe("command-palette");
+      if (state.modal.kind === "command-palette") {
+        expect(state.modal.query).toBe("pro");
+        expect(state.modal.selectedCommandIndex).toBe(0);
+      }
+    });
+
+    it("updates the selected command index", () => {
+      const state = reduce(
+        makeState({ modal: { kind: "command-palette", query: "", selectedCommandIndex: 0 } }),
+        { type: "modal-select", option: 2 },
+      );
+      expect(state.modal.kind).toBe("command-palette");
+      if (state.modal.kind === "command-palette") {
+        expect(state.modal.selectedCommandIndex).toBe(2);
+      }
     });
   });
 

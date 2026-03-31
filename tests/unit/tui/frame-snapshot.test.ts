@@ -5,6 +5,7 @@
 import { describe, expect, it } from "bun:test";
 import { Buffer } from "../../../src/tui/terminal/buffer.js";
 import { createInitialState } from "../../../src/tui/state.js";
+import { PALETTE } from "../../../src/tui/theme.js";
 import type { MissionControlSnapshot } from "../../../src/tui/types.js";
 
 // Re-export renderFrame for testing by importing the once-frame path
@@ -180,6 +181,7 @@ describe("frame rendering", () => {
       expect(frame).toContain("Handoff");
       expect(frame).toContain("Config");
       expect(frame).toContain("Processes");
+      expect(frame).toContain("Commands");
       expect(frame).toContain("Exit");
     });
   });
@@ -387,23 +389,41 @@ describe("frame rendering", () => {
           expect(frame).toContain("Overview");
           expect(frame).toContain("Environment");
           expect(frame).toContain("Pending Handoffs");
-          expect(frame).toContain("Processes");
+          expect(frame).toContain("Ctrl+P Commands");
         });
 
-        it("renders the configuration modal with command-palette styling", () => {
-          const frame = withTerminalSize(90, 28, () => {
-            const buf = new Buffer(90, 28);
+      it("renders the configuration modal with command-palette styling", () => {
+        const frame = withTerminalSize(90, 28, () => {
+          const buf = new Buffer(90, 28);
             const state = createInitialState(makeSnapshot());
             state.modal = { kind: "config" };
             renderFrame(buf, state);
-            return buf.toString();
-          });
-
-          expect(frame).toContain("Configuration");
-          expect(frame).toContain("Config source: project");
-          expect(frame).toContain(".maestro/missions/2026-03-30-001");
-          expect(frame).toContain("Esc close");
-          expect(frame).toContain("Worker model: backend-worker");
+          return buf.toString();
         });
+
+        expect(frame).toContain("Config");
+        expect(frame).toContain("Config source: project");
+        expect(frame).toContain("Mission Directory");
+        expect(frame).toContain(".maestro/missions/2026-03-30-001");
+        expect(frame).toContain("Esc close");
+        expect(frame).toContain("Workers");
+        expect(frame).toContain("backend-work");
+      });
+
+      it("renders the command palette and dims the dashboard behind it", () => {
+        const buf = new Buffer(90, 28);
+        const state = createInitialState(makeSnapshot());
+        state.modal = { kind: "command-palette", query: "pro", selectedCommandIndex: 0 };
+
+        renderFrame(buf, state);
+
+        const frame = buf.toString();
+        expect(frame).toContain("Commands");
+        expect(frame).toContain("Navigate");
+        expect(frame).toContain("Processes");
+        expect(frame).toContain("Enter open · Esc close");
+        expect(buf.getCell(1, 1)?.bg).toBe(PALETTE.overlayBackdropBg);
+        expect(buf.getCell(1, 1)?.dim).toBe(true);
+      });
+      });
     });
-  });

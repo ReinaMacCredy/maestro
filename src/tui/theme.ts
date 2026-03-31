@@ -31,6 +31,13 @@ export const PALETTE = {
   infoBg: 237,
   selectedBg: 236,
   headerBg: 234,
+  overlayBackdropBg: 233,
+  overlaySurfaceBg: 236,
+  overlayQueryBg: 237,
+  overlaySection: 215,
+  overlayHint: 242,
+  overlaySelectedBg: 39,
+  overlaySelectedFg: 234,
   // Default (terminal default)
   default: -1,
 } as const;
