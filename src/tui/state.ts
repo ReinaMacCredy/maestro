@@ -2,7 +2,7 @@
  * TUI application state -- focus, selection, modal management.
  */
 import type { MissionControlSnapshot } from "./types.js";
-import { getMissionControlPaletteCommandCount } from "./mission-control-commands.js";
+import { getFilteredMissionControlPaletteCommandCount } from "./mission-control-commands.js";
 import type { FeatureStatus } from "../domain/mission-types.js";
 import { getValidFeatureTransitions } from "../domain/mission-state.js";
 
@@ -77,6 +77,9 @@ export function reduce(state: AppState, action: Action): AppState {
       if (state.modal.kind === "command-palette") {
         return handleModalNavigate(state, action.direction);
       }
+      if (state.modal.kind === "feature-browser") {
+        return handleModalNavigate(state, action.direction);
+      }
       if (state.focusedPanel === "features") {
         return handleFeatureNavigate(state, action.direction);
       }
@@ -139,6 +142,7 @@ export function reduce(state: AppState, action: Action): AppState {
       return { ...state, focusedPanel: "none" };
 
     case "open-command-palette":
+      if (!canOpenOverlayFromModal(state.modal)) return state;
       return {
         ...state,
         modal: {
@@ -189,14 +193,20 @@ export function reduce(state: AppState, action: Action): AppState {
           ),
       };
       if (state.modal.kind === "feature-browser") {
+        const selectedModalFeatureId = state.snapshot.features[state.modal.selectedFeatureIndex]?.id;
+        const nextModalSelectedIndex = selectedModalFeatureId
+          ? action.snapshot.features.findIndex((feature) => feature.id === selectedModalFeatureId)
+          : -1;
         return {
           ...baseState,
           modal: {
             kind: "feature-browser",
-            selectedFeatureIndex: Math.min(
-              state.modal.selectedFeatureIndex,
-              Math.max(0, action.snapshot.features.length - 1),
-            ),
+            selectedFeatureIndex: nextModalSelectedIndex >= 0
+              ? nextModalSelectedIndex
+              : Math.min(
+                state.modal.selectedFeatureIndex,
+                Math.max(0, action.snapshot.features.length - 1),
+              ),
           },
         };
       }
@@ -318,7 +328,10 @@ function handleLogNavigate(state: AppState, direction: "up" | "down"): AppState 
 
 function handleModalNavigate(state: AppState, direction: "up" | "down"): AppState {
   if (state.modal.kind === "command-palette") {
-    const optionsCount = getMissionControlPaletteCommandCount(state.snapshot.mode);
+    const optionsCount = getFilteredMissionControlPaletteCommandCount(
+      state.snapshot.mode,
+      state.modal.query,
+    );
     if (optionsCount === 0) return state;
 
     const selectedCommandIndex = direction === "down"

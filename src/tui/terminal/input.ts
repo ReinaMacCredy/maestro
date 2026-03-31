@@ -14,12 +14,35 @@ export type Key =
   | { type: "function"; n: number }
   | { type: "mouse"; event: "down" | "up"; button: "left"; x: number; y: number };
 
+const ESCAPE_FLUSH_DELAY_MS = 25;
+
+interface ParseResult {
+  readonly keys: Key[];
+  readonly remainder: Uint8Array;
+}
+
+interface CsiParseResult {
+  readonly key?: Key;
+  readonly nextIndex: number;
+  readonly incomplete?: boolean;
+}
+
+export interface BufferedKeyParser {
+  push(data: Uint8Array): Key[];
+  flushPending(): Key[];
+  hasPending(): boolean;
+}
+
 /**
  * Parse raw bytes from stdin into Key events.
  * Handles: printable ASCII, arrow keys (CSI A/B/C/D), ctrl combos,
  * function keys (CSI 11~..CSI 24~), enter, escape.
  */
 export function parseKeypress(data: Uint8Array): Key[] {
+  return parseKeypressInternal(data, true).keys;
+}
+
+function parseKeypressInternal(data: Uint8Array, flushIncomplete: boolean): ParseResult {
   const keys: Key[] = [];
   let i = 0;
 
@@ -30,9 +53,12 @@ export function parseKeypress(data: Uint8Array): Key[] {
     if (byte === 0x1b) {
       // Bare escape (no more bytes or next byte isn't '[')
       if (i + 1 >= data.length) {
-        keys.push({ type: "escape" });
-        i++;
-        continue;
+        if (flushIncomplete) {
+          keys.push({ type: "escape" });
+          i++;
+          continue;
+        }
+        return { keys, remainder: data.slice(i) };
       }
 
       if (data[i + 1] === 0x5b) {
@@ -40,10 +66,18 @@ export function parseKeypress(data: Uint8Array): Key[] {
         i += 2;
         const result = parseCSI(data, i);
         if (result) {
+          if (result.incomplete) {
+            return { keys, remainder: data.slice(i - 2) };
+          }
           if (result.key) {
             keys.push(result.key);
           }
           i = result.nextIndex;
+        } else if (flushIncomplete) {
+          keys.push({ type: "escape" });
+          continue;
+        } else {
+          return { keys, remainder: data.slice(i - 2) };
         }
         continue;
       }
@@ -84,14 +118,14 @@ export function parseKeypress(data: Uint8Array): Key[] {
     i++;
   }
 
-  return keys;
+  return { keys, remainder: new Uint8Array() };
 }
 
 /** Parse CSI parameters starting at index i (after ESC [). */
 function parseCSI(
   data: Uint8Array,
   i: number,
-): { key?: Key; nextIndex: number } | undefined {
+) : CsiParseResult | undefined {
   if (data[i] === 0x3c) {
     return parseSgrMouse(data, i + 1);
   }
@@ -103,7 +137,9 @@ function parseCSI(
     i++;
   }
 
-  if (i >= data.length) return undefined;
+  if (i >= data.length) {
+    return { nextIndex: i, incomplete: true };
+  }
 
   const final = data[i]!;
   i++;
@@ -136,14 +172,16 @@ function parseCSI(
 function parseSgrMouse(
   data: Uint8Array,
   i: number,
-): { key?: Key; nextIndex: number } | undefined {
+): CsiParseResult | undefined {
   let param = "";
   while (i < data.length && ((data[i]! >= 0x30 && data[i]! <= 0x39) || data[i] === 0x3b)) {
     param += String.fromCharCode(data[i]!);
     i++;
   }
 
-  if (i >= data.length) return undefined;
+  if (i >= data.length) {
+    return { nextIndex: i, incomplete: true };
+  }
 
   const final = data[i]!;
   i++;
@@ -169,21 +207,74 @@ function parseSgrMouse(
   };
 }
 
+export function createBufferedKeyParser(): BufferedKeyParser {
+  let pending = new Uint8Array();
+
+  return {
+    push(data: Uint8Array): Key[] {
+      const merged = pending.length > 0 ? concatBytes(pending, data) : data;
+      const result = parseKeypressInternal(merged, false);
+      pending = result.remainder;
+      return result.keys;
+    },
+    flushPending(): Key[] {
+      if (pending.length === 0) return [];
+      const result = parseKeypressInternal(pending, true);
+      pending = result.remainder;
+      return result.keys;
+    },
+    hasPending(): boolean {
+      return pending.length > 0;
+    },
+  };
+}
+
 /**
  * Start listening for keypress events on stdin.
  * Returns a cleanup function to stop listening.
  * Requires raw mode to be enabled on stdin.
  */
 export function startKeyListener(handler: (key: Key) => void): () => void {
-  const onData = (chunk: Buffer) => {
-    const keys = parseKeypress(new Uint8Array(chunk));
+  const parser = createBufferedKeyParser();
+  let escapeTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const emit = (keys: readonly Key[]): void => {
     for (const key of keys) {
       handler(key);
     }
   };
 
+  const clearEscapeTimer = (): void => {
+    if (!escapeTimer) return;
+    clearTimeout(escapeTimer);
+    escapeTimer = undefined;
+  };
+
+  const schedulePendingFlush = (): void => {
+    clearEscapeTimer();
+    if (!parser.hasPending()) return;
+    escapeTimer = setTimeout(() => {
+      escapeTimer = undefined;
+      emit(parser.flushPending());
+    }, ESCAPE_FLUSH_DELAY_MS);
+  };
+
+  const onData = (chunk: Buffer) => {
+    clearEscapeTimer();
+    emit(parser.push(new Uint8Array(chunk)));
+    schedulePendingFlush();
+  };
+
   process.stdin.on("data", onData);
   return () => {
+    clearEscapeTimer();
     process.stdin.off("data", onData);
   };
+}
+
+function concatBytes(left: Uint8Array, right: Uint8Array): Uint8Array {
+  const merged = new Uint8Array(left.length + right.length);
+  merged.set(left);
+  merged.set(right, left.length);
+  return merged;
 }

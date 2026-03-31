@@ -13,6 +13,7 @@ export function renderProgressLog(
   rect: Rect,
   events: readonly MissionControlEvent[],
   snap?: MissionControlSnapshot,
+  scrollOffset = 0,
 ): void {
   const w = rect.width - 2;
   let row = rect.y;
@@ -50,8 +51,10 @@ export function renderProgressLog(
 
   const nowMs = Date.now();
 
-  for (let i = 0; i < events.length && row < maxRow; i++) {
-    const evt = events[i]!;
+  const visibleEvents = scrollOffset > 0 ? events.slice(scrollOffset) : events;
+
+  for (let i = 0; i < visibleEvents.length && row < maxRow; i++) {
+    const evt = visibleEvents[i]!;
     const age = formatAge(new Date(evt.timestamp).getTime(), nowMs);
     const ageCol = rect.x + 1;
     const titleCol = rect.x + 10;

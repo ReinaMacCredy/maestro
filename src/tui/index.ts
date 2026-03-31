@@ -18,6 +18,7 @@ import { renderProgressLog } from "./panels/progress-log.js";
 import { renderWorkerPanel } from "./panels/worker.js";
 import { renderFooter } from "./panels/footer.js";
 import {
+  getFilteredMissionControlCommandSpecs,
   getMissionControlCommandSpecs,
   type MissionControlCommandId,
 } from "./mission-control-commands.js";
@@ -437,7 +438,7 @@ export function renderFrame(
   renderStatusBar(buf, statusRect, snap);
   renderFeatureDetail(buf, leftRect, snap);
   renderFeatureList(buf, featureListRect, snap, state.selectedFeatureIndex);
-    renderProgressLog(buf, progressRect, snap.progressLog, snap);
+      renderProgressLog(buf, progressRect, snap.progressLog, snap, state.logScrollOffset);
   renderWorkerPanel(buf, workerRect, snap, elapsedOffsetMs);
   renderFooter(buf, footerRect, snap);
 
@@ -716,16 +717,14 @@ function getCommandPaletteItems(state: AppState): readonly CommandPaletteItem[] 
 function getFilteredCommandPaletteItems(state: AppState): readonly CommandPaletteItem[] {
   if (state.modal.kind !== "command-palette") return [];
 
-  const query = state.modal.query.trim().toLowerCase();
-  const items = getCommandPaletteItems(state);
-  if (query.length === 0) return items;
-
-  return items.filter((item) =>
-    [item.label, item.detail, item.section, ...item.keywords]
-      .join(" ")
-      .toLowerCase()
-      .includes(query)
+  const filteredCommands = getFilteredMissionControlCommandSpecs(
+    state.snapshot.mode,
+    state.modal.query,
   );
+  const itemsById = new Map(getCommandPaletteItems(state).map((item) => [item.id, item]));
+  return filteredCommands
+    .map((command) => itemsById.get(command.id))
+    .filter((item): item is CommandPaletteItem => item !== undefined);
 }
 
 function getCommandPaletteSelectionAction(state: AppState): Action | undefined {

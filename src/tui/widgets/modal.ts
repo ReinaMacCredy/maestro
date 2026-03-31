@@ -100,11 +100,12 @@ export function layoutModal(parent: Rect, opts: ModalOptions): ModalLayout {
   const rows = normalizeRows(opts);
   const headerHeight = getHeaderHeight(opts);
   const footerHeight = opts.footer ? 2 : 1;
+  const compactRows = shouldUseCompactRows(parent.height, headerHeight, footerHeight, rows);
   const emptyContentHeight = opts.mode === "palette" && rows.length === 0 ? 1 : 0;
   const contentHeight = Math.max(
     rows.reduce((height, row, index) => {
-      const sectionHeight = row.section && row.section !== rows[index - 1]?.section ? 1 : 0;
-      return height + sectionHeight + getRowHeight(row);
+      const sectionHeight = !compactRows && row.section && row.section !== rows[index - 1]?.section ? 1 : 0;
+      return height + sectionHeight + getRowHeight(row, compactRows);
     }, 0),
     emptyContentHeight,
   );
@@ -126,7 +127,12 @@ export function layoutModal(parent: Rect, opts: ModalOptions): ModalLayout {
   const preferredWidth = opts.mode === "palette" ? 64 : 50;
   const maxWidth = Math.max(28, parent.width - 4);
   const modalWidth = Math.min(Math.max(maxLineLength + 6, preferredWidth), maxWidth);
-  const modalHeight = Math.min(headerHeight + contentHeight + footerHeight, Math.max(6, parent.height - 2));
+  const minContentHeight = rows.length > 0 || opts.mode === "palette" ? 1 : 0;
+  const minModalHeight = headerHeight + footerHeight + minContentHeight;
+  const modalHeight = Math.min(
+    Math.max(headerHeight + contentHeight + footerHeight, minModalHeight),
+    Math.max(minModalHeight, parent.height),
+  );
 
   const x = parent.x + Math.floor((parent.width - modalWidth) / 2);
   const y = parent.y + Math.floor((parent.height - modalHeight) / 2);
@@ -148,11 +154,12 @@ export function layoutModal(parent: Rect, opts: ModalOptions): ModalLayout {
     for (let index = 0; index < selectableRows.length; index++) {
       const row = selectableRows[index]!;
       const previous = selectableRows[index - 1];
-      if (row.section && row.section !== previous?.section) {
+      if (!compactRows && row.section && row.section !== previous?.section) {
         currentY += 1;
       }
-      const height = getRowHeight(row);
-      if (currentY + height > contentRect.y + contentRect.height) break;
+      const remainingHeight = contentRect.y + contentRect.height - currentY;
+      if (remainingHeight <= 0) break;
+      const height = Math.min(getRowHeight(row, compactRows), remainingHeight);
       itemRects.push({ x: x + 1, y: currentY, width: modalWidth - 2, height });
       currentY += height;
     }
@@ -175,6 +182,7 @@ export function layoutModal(parent: Rect, opts: ModalOptions): ModalLayout {
 export function renderModal(buf: Buffer, parent: Rect, opts: ModalOptions): ModalLayout {
   const layout = layoutModal(parent, opts);
   const rows = normalizeRows(opts);
+  const compactRows = shouldUseCompactRows(parent.height, getHeaderHeight(opts), opts.footer ? 2 : 1, rows);
   const surfaceBg = PALETTE.overlaySurfaceBg;
   const contentWidth = layout.contentRect.width;
 
@@ -216,7 +224,7 @@ export function renderModal(buf: Buffer, parent: Rect, opts: ModalOptions): Moda
     for (let index = 0; index < rows.length; index++) {
       const row = rows[index]!;
       const previous = rows[index - 1];
-      if (row.section && row.section !== previous?.section) {
+      if (!compactRows && row.section && row.section !== previous?.section) {
         if (rowY >= layout.contentRect.y + layout.contentRect.height) break;
         buf.writeText(rowY, layout.x + 2, truncate(row.section, contentWidth), {
           fg: PALETTE.overlaySection,
@@ -227,8 +235,13 @@ export function renderModal(buf: Buffer, parent: Rect, opts: ModalOptions): Moda
       }
 
       const rowRect = opts.mode === "info"
-        ? { x: layout.x + 1, y: rowY, width: layout.width - 2, height: getRowHeight(row) }
-        : layout.itemRects[index] ?? { x: layout.x + 1, y: rowY, width: layout.width - 2, height: getRowHeight(row) };
+        ? { x: layout.x + 1, y: rowY, width: layout.width - 2, height: getRowHeight(row, compactRows) }
+        : layout.itemRects[index] ?? {
+          x: layout.x + 1,
+          y: rowY,
+          width: layout.width - 2,
+          height: getRowHeight(row, compactRows),
+        };
       if (rowRect.y + rowRect.height > layout.contentRect.y + layout.contentRect.height) break;
 
       const isSelected = opts.mode !== "info" && index === opts.selectedIndex;
@@ -366,7 +379,8 @@ function getHeaderHeight(opts: ModalOptions): number {
   return opts.eyebrow ? 4 : 3;
 }
 
-function getRowHeight(row: NormalizedModalRow): number {
+function getRowHeight(row: NormalizedModalRow, compact = false): number {
+  if (compact) return 1;
   if (row.detail) return 2;
   if (row.style === "block") return 2;
   return 1;
@@ -407,4 +421,13 @@ function truncatePathTail(text: string, maxLen: number): string {
 
   const tail = text.slice(-(maxLen - 3));
   return `...${tail}`;
+}
+
+function shouldUseCompactRows(
+  parentHeight: number,
+  headerHeight: number,
+  footerHeight: number,
+  rows: readonly NormalizedModalRow[],
+): boolean {
+  return headerHeight + footerHeight + rows.length > parentHeight;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { parseKeypress } from "../../../../src/tui/terminal/input.js";
+import { createBufferedKeyParser, parseKeypress } from "../../../../src/tui/terminal/input.js";
 
 function bytes(...values: number[]): Uint8Array {
   return new Uint8Array(values);
@@ -149,5 +149,34 @@ describe("parseKeypress", () => {
       const keys = parseKeypress(bytes());
       expect(keys).toEqual([]);
     });
+  });
+});
+
+describe("createBufferedKeyParser", () => {
+  it("parses split arrow sequences across chunks", () => {
+    const parser = createBufferedKeyParser();
+
+    expect(parser.push(bytes(0x1b))).toEqual([]);
+    expect(parser.push(bytes(0x5b, 0x41))).toEqual([{ type: "arrow", direction: "up" }]);
+  });
+
+  it("flushes a pending bare escape when no continuation arrives", () => {
+    const parser = createBufferedKeyParser();
+
+    expect(parser.push(bytes(0x1b))).toEqual([]);
+    expect(parser.flushPending()).toEqual([{ type: "escape" }]);
+  });
+
+  it("parses split mouse sequences across chunks", () => {
+    const parser = createBufferedKeyParser();
+
+    expect(parser.push(bytes(0x1b, 0x5b, 0x3c, 0x30, 0x3b))).toEqual([]);
+    expect(parser.push(bytes(0x31, 0x32, 0x3b, 0x38, 0x4d))).toEqual([{
+      type: "mouse",
+      event: "down",
+      button: "left",
+      x: 11,
+      y: 7,
+    }]);
   });
 });

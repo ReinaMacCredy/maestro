@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { Buffer } from "../../../../src/tui/terminal/buffer.js";
-import { applyModalBackdrop, renderModal } from "../../../../src/tui/widgets/modal.js";
+import { applyModalBackdrop, layoutModal, renderModal } from "../../../../src/tui/widgets/modal.js";
 import { PALETTE } from "../../../../src/tui/theme.js";
 
 describe("renderModal", () => {
@@ -196,5 +196,32 @@ describe("renderModal", () => {
     expect(text).toContain("Ctrl+T");
     expect(text).toContain("esc");
     expect(buf.getCell(layout.y, layout.x)?.bg).toBe(PALETTE.overlaySurfaceBg);
+  });
+
+  it("keeps at least one selectable row in short but valid palette heights", () => {
+    const layout = layoutModal({ x: 1, y: 5, width: 78, height: 8 }, {
+      mode: "palette",
+      title: "Commands",
+      query: "",
+      items: [
+        {
+          label: "Features",
+          detail: "Browse mission features and focus a specific item",
+          hint: "F",
+          section: "Navigate",
+        },
+        {
+          label: "Exit",
+          detail: "Close Mission Control cleanly",
+          hint: "Ctrl+T",
+          section: "Session",
+        },
+      ],
+      selectedIndex: 0,
+      footer: "Enter open · Esc close",
+    });
+
+    expect(layout.contentRect.height).toBeGreaterThan(0);
+    expect(layout.itemRects.length).toBeGreaterThan(0);
   });
 });

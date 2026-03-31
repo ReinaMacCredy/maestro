@@ -118,6 +118,20 @@ describe("reduce", () => {
         expect(next.modal.phase).toBe("selecting");
       }
     });
+
+    it("navigates the feature browser instead of the background feature list", () => {
+      const state = makeState({
+        selectedFeatureIndex: 0,
+        modal: { kind: "feature-browser", selectedFeatureIndex: 0 },
+      });
+      const next = reduce(state, { type: "navigate", direction: "down" });
+
+      expect(next.selectedFeatureIndex).toBe(0);
+      expect(next.modal.kind).toBe("feature-browser");
+      if (next.modal.kind === "feature-browser") {
+        expect(next.modal.selectedFeatureIndex).toBe(1);
+      }
+    });
   });
 
   describe("focus", () => {
@@ -275,6 +289,31 @@ describe("reduce", () => {
         expect(state.modal.selectedCommandIndex).toBe(2);
       }
     });
+
+    it("does not open over another active modal", () => {
+      const state = reduce(
+        makeState({
+          modal: { kind: "feature-action", featureIndex: 0, selectedOption: 0, phase: "confirming" },
+        }),
+        { type: "open-command-palette" },
+      );
+
+      expect(state.modal.kind).toBe("feature-action");
+    });
+
+    it("keeps keyboard navigation within the filtered results", () => {
+      let state = makeState({
+        modal: { kind: "command-palette", query: "proc", selectedCommandIndex: 0 },
+      });
+
+      state = reduce(state, { type: "navigate", direction: "down" });
+      state = reduce(state, { type: "navigate", direction: "down" });
+
+      expect(state.modal.kind).toBe("command-palette");
+      if (state.modal.kind === "command-palette") {
+        expect(state.modal.selectedCommandIndex).toBe(0);
+      }
+    });
   });
 
   describe("update-snapshot", () => {
@@ -302,6 +341,28 @@ describe("reduce", () => {
       const next = reduce(state, { type: "update-snapshot", snapshot: reordered });
       expect(next.selectedFeatureIndex).toBe(1);
       expect(next.snapshot.features[next.selectedFeatureIndex]?.id).toBe("f2");
+    });
+
+    it("preserves the feature browser selection by id when the snapshot order changes", () => {
+      const state = makeState({
+        selectedFeatureIndex: 1,
+        modal: { kind: "feature-browser", selectedFeatureIndex: 1 },
+      });
+      const reordered = makeSnapshot({
+        features: [
+          { id: "f2", title: "F2", status: "assigned", milestoneId: "m1", workerType: "t", hasReport: false },
+          { id: "f3", title: "F3", status: "pending", milestoneId: "m2", workerType: "t", hasReport: false },
+          { id: "f1", title: "F1", status: "pending", milestoneId: "m1", workerType: "t", hasReport: false },
+        ],
+      });
+
+      const next = reduce(state, { type: "update-snapshot", snapshot: reordered });
+
+      expect(next.modal.kind).toBe("feature-browser");
+      if (next.modal.kind === "feature-browser") {
+        expect(next.modal.selectedFeatureIndex).toBe(0);
+        expect(next.snapshot.features[next.modal.selectedFeatureIndex]?.id).toBe("f2");
+      }
     });
   });
 });

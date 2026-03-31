@@ -74,6 +74,29 @@ export function getMissionControlCommandSpecs(
   ];
 }
 
+export function getFilteredMissionControlCommandSpecs(
+  mode: MissionControlMode,
+  query: string,
+): readonly MissionControlCommandSpec[] {
+  const normalizedQuery = query.trim().toLowerCase();
+  const commands = getMissionControlCommandSpecs(mode);
+  if (normalizedQuery.length === 0) return commands;
+
+  return commands.filter((command) =>
+    [command.label, command.detail, command.section, ...command.keywords]
+      .join(" ")
+      .toLowerCase()
+      .includes(normalizedQuery)
+  );
+}
+
 export function getMissionControlPaletteCommandCount(mode: MissionControlMode): number {
   return getMissionControlCommandSpecs(mode).length;
+}
+
+export function getFilteredMissionControlPaletteCommandCount(
+  mode: MissionControlMode,
+  query: string,
+): number {
+  return getFilteredMissionControlCommandSpecs(mode, query).length;
 }

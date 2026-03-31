@@ -806,9 +806,9 @@ describe("mission-control CLI", () => {
     }, PTY_TIMEOUT_MS);
 
     it("compiled binary interactive mode opens the Features overlay", async () => {
-    if (!pythonAvailable) return;
-    const missionId = await createMission(tmpDir);
-    await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+      if (!pythonAvailable) return;
+      const missionId = await createMission(tmpDir);
+      await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
 
     const result = await runCompiledInteractivePty(
       tmpDir,
@@ -825,13 +825,13 @@ describe("mission-control CLI", () => {
     );
 
     expectCleanPtyExit(result);
-    expect(result.plainOutput).toContain("Features");
-    expect(result.plainOutput).toContain("Select a feature to focus");
-  }, PTY_TIMEOUT_MS);
+      expect(result.plainOutput).toContain("Features");
+      expect(result.plainOutput).toContain("Select a feature to focus");
+    }, PTY_TIMEOUT_MS);
 
-  it("compiled binary interactive mode opens the Handoff overlay", async () => {
-    if (!pythonAvailable) return;
-    const missionId = await createMission(tmpDir);
+    it("compiled binary interactive mode opens the Handoff overlay", async () => {
+      if (!pythonAvailable) return;
+      const missionId = await createMission(tmpDir);
 
     const result = await runCompiledInteractivePty(
       tmpDir,
