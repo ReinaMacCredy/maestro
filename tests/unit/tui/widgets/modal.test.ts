@@ -158,7 +158,7 @@ describe("renderModal", () => {
     applyModalBackdrop(buf);
 
     const cell = buf.getCell(1, 1);
-    expect(cell?.bg).toBe(PALETTE.overlayBackdropBg);
+    expect(cell?.bg).toBe(PALETTE.panelBg);
     expect(cell?.fg).toBe(PALETTE.gray);
     expect(cell?.bold).toBe(false);
     expect(cell?.dim).toBe(true);

@@ -83,16 +83,16 @@ export function applyModalBackdrop(buf: Buffer, rect: Rect = {
 }): void {
   for (let row = rect.y; row < rect.y + rect.height; row++) {
     for (let col = rect.x; col < rect.x + rect.width; col++) {
-      const cell = buf.getCell(row, col);
-      if (!cell) continue;
+        const cell = buf.getCell(row, col);
+        if (!cell) continue;
 
-      buf.set(row, col, cell.char, {
-        fg: dimColor(cell.fg),
-        bg: PALETTE.overlayBackdropBg,
-        bold: false,
-        dim: true,
-      });
-    }
+        buf.set(row, col, cell.char, {
+          fg: dimColor(cell.fg),
+          bg: cell.bg,
+          bold: false,
+          dim: true,
+        });
+      }
   }
 }
 
