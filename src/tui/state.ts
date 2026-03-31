@@ -2,6 +2,7 @@
  * TUI application state -- focus, selection, modal management.
  */
 import type { MissionControlSnapshot } from "./types.js";
+import { getMissionControlPaletteCommandCount } from "./mission-control-commands.js";
 import type { FeatureStatus } from "../domain/mission-types.js";
 import { getValidFeatureTransitions } from "../domain/mission-state.js";
 
@@ -148,7 +149,7 @@ export function reduce(state: AppState, action: Action): AppState {
       };
 
     case "open-features":
-      if (state.modal.kind !== "none" && state.modal.kind !== "command-palette") return state;
+      if (!canOpenOverlayFromModal(state.modal)) return state;
       if (state.snapshot.mode === "home") {
         return { ...state, modal: { kind: "overview" } };
       }
@@ -161,15 +162,15 @@ export function reduce(state: AppState, action: Action): AppState {
       };
 
     case "open-handoffs":
-      if (state.modal.kind !== "none" && state.modal.kind !== "command-palette") return state;
+      if (!canOpenOverlayFromModal(state.modal)) return state;
       return { ...state, modal: { kind: "handoffs" } };
 
     case "open-config":
-      if (state.modal.kind !== "none" && state.modal.kind !== "command-palette") return state;
+      if (!canOpenOverlayFromModal(state.modal)) return state;
       return { ...state, modal: { kind: "config" } };
 
     case "open-processes":
-      if (state.modal.kind !== "none" && state.modal.kind !== "command-palette") return state;
+      if (!canOpenOverlayFromModal(state.modal)) return state;
       return { ...state, modal: { kind: "processes" } };
 
     case "update-snapshot":
@@ -317,7 +318,7 @@ function handleLogNavigate(state: AppState, direction: "up" | "down"): AppState 
 
 function handleModalNavigate(state: AppState, direction: "up" | "down"): AppState {
   if (state.modal.kind === "command-palette") {
-    const optionsCount = getPaletteCommandCount(state.snapshot.mode);
+    const optionsCount = getMissionControlPaletteCommandCount(state.snapshot.mode);
     if (optionsCount === 0) return state;
 
     const selectedCommandIndex = direction === "down"
@@ -373,6 +374,6 @@ function handleModalNavigate(state: AppState, direction: "up" | "down"): AppStat
   return state;
 }
 
-function getPaletteCommandCount(mode: MissionControlSnapshot["mode"]): number {
-  return mode === "home" ? 5 : 5;
+function canOpenOverlayFromModal(modal: ModalState): boolean {
+  return modal.kind === "none" || modal.kind === "command-palette";
 }

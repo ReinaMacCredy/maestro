@@ -6,6 +6,7 @@
 import type { Buffer } from "../terminal/buffer.js";
 import type { Rect } from "../terminal/layout.js";
 import type { MissionControlSnapshot } from "../types.js";
+import { getMissionControlCommandSpecs } from "../mission-control-commands.js";
 import { PALETTE } from "../theme.js";
 
 interface FooterHint {
@@ -18,22 +19,16 @@ export function renderFooter(buf: Buffer, rect: Rect, snap: MissionControlSnapsh
   const y = rect.y;
   buf.fillRect(rect, " ", { bg: PALETTE.headerBg });
 
-  const leftHints = snap.mode === "home"
-    ? [
-      { key: "F", label: "Overview" },
-      { key: "H", label: "Handoff" },
-      { key: "C", label: "Config" },
-      { key: "P", label: "Processes" },
-    ]
-    : [
-      { key: "F", label: "Features" },
-      { key: "H", label: "Handoff" },
-      { key: "C", label: "Config" },
-      { key: "P", label: "Processes" },
-    ];
-
+  const commands = getMissionControlCommandSpecs(snap.mode);
+  const leftHints = commands
+    .filter((command) => command.key.length === 1)
+    .map((command) => ({ key: command.key, label: command.label }));
   const commandsHint = { key: "Ctrl+P", label: "Commands" };
-  const exitHint = { key: "Ctrl+T", label: "Exit" };
+  const exitCommand = commands.find((command) => command.id === "exit");
+  const exitHint = {
+    key: exitCommand?.key ?? "Ctrl+T",
+    label: exitCommand?.label ?? "Exit",
+  };
   const exitWidth = measureHint(exitHint);
   const commandsWidth = measureHint(commandsHint);
   const exitCol = rect.x + w - exitWidth - 1;

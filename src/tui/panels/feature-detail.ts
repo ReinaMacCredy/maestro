@@ -25,18 +25,12 @@ export function renderFeatureDetail(buf: Buffer, rect: Rect, snap: MissionContro
   const w = rect.width - 2;
   let row = rect.y;
   const maxRow = rect.y + rect.height;
-
-  const writeLine = (text: string, style?: Partial<Cell>): void => {
-    if (row >= maxRow) return;
-    buf.writeText(row, rect.x + 1, truncate(text, w), style);
-    row++;
-  };
-
+  const writers = createPanelWriters(buf, rect, w, maxRow, () => row, (nextRow) => {
+    row = nextRow;
+  });
+  const { writeLine } = writers;
   const writeBullet = (text: string): void => {
-    if (row >= maxRow) return;
-    buf.writeText(row, rect.x + 1, `${BULLET} `, { fg: PALETTE.dimGray });
-    buf.writeText(row, rect.x + 3, truncate(text, w - 2), { fg: PALETTE.gray });
-    row++;
+    writers.writeBullet(text, { fg: PALETTE.gray });
   };
 
   const writeSection = (title: string): void => {
@@ -107,19 +101,9 @@ function renderHomeOverview(buf: Buffer, rect: Rect, snap: MissionControlSnapsho
   const w = rect.width - 2;
   let row = rect.y;
   const maxRow = rect.y + rect.height;
-
-  const writeLine = (text: string, style?: Partial<Cell>): void => {
-    if (row >= maxRow) return;
-    buf.writeText(row, rect.x + 1, truncate(text, w), style);
-    row++;
-  };
-
-  const writeBullet = (text: string, style?: Partial<Cell>): void => {
-    if (row >= maxRow) return;
-    buf.writeText(row, rect.x + 1, `${BULLET} `, { fg: PALETTE.dimGray });
-    buf.writeText(row, rect.x + 3, truncate(text, w - 2), style ?? { fg: PALETTE.gray });
-    row++;
-  };
+  const { writeLine, writeBullet } = createPanelWriters(buf, rect, w, maxRow, () => row, (nextRow) => {
+    row = nextRow;
+  });
 
   writeLine("Overview", { fg: PALETTE.brightWhite, bold: true });
   writeLine(home.headline, { fg: PALETTE.brightWhite });
@@ -130,4 +114,33 @@ function renderHomeOverview(buf: Buffer, rect: Rect, snap: MissionControlSnapsho
   writeBullet(home.locationLabel);
   writeBullet(`${home.pendingHandoffs.length} pending handoff${home.pendingHandoffs.length === 1 ? "" : "s"}`);
   writeBullet(`${home.actions.length} suggested next step${home.actions.length === 1 ? "" : "s"}`);
+}
+
+function createPanelWriters(
+  buf: Buffer,
+  rect: Rect,
+  width: number,
+  maxRow: number,
+  getRow: () => number,
+  setRow: (row: number) => void,
+): {
+  writeLine: (text: string, style?: Partial<Cell>) => void;
+  writeBullet: (text: string, style?: Partial<Cell>) => void;
+} {
+  const writeLine = (text: string, style?: Partial<Cell>): void => {
+    const row = getRow();
+    if (row >= maxRow) return;
+    buf.writeText(row, rect.x + 1, truncate(text, width), style);
+    setRow(row + 1);
+  };
+
+  const writeBullet = (text: string, style?: Partial<Cell>): void => {
+    const row = getRow();
+    if (row >= maxRow) return;
+    buf.writeText(row, rect.x + 1, `${BULLET} `, { fg: PALETTE.dimGray });
+    buf.writeText(row, rect.x + 3, truncate(text, width - 2), style ?? { fg: PALETTE.gray });
+    setRow(row + 1);
+  };
+
+  return { writeLine, writeBullet };
 }

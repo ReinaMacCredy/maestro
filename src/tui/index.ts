@@ -18,12 +18,15 @@ import { renderProgressLog } from "./panels/progress-log.js";
 import { renderWorkerPanel } from "./panels/worker.js";
 import { renderFooter } from "./panels/footer.js";
 import {
+  getMissionControlCommandSpecs,
+  type MissionControlCommandId,
+} from "./mission-control-commands.js";
+import {
   applyModalBackdrop,
   layoutModal,
   pointInRect,
   renderModal,
   type ModalOptions,
-  type ModalRow,
 } from "./widgets/modal.js";
 import { getValidFeatureTransitions } from "../domain/mission-state.js";
 import { FEATURE_STATUS_LABEL, PALETTE } from "./theme.js";
@@ -320,13 +323,15 @@ function keyToAction(key: Key, state: AppState): Action | undefined {
     return { type: "modal-query-append", char: key.char };
   }
   if (key.type === "char" && state.modal.kind === "none") {
-    switch (key.char) {
-      case "f": case "F": return { type: "open-features" };
-      case "h": case "H": return { type: "open-handoffs" };
-      case "c": case "C": return { type: "open-config" };
-      case "p": case "P": return { type: "open-processes" };
-      case "l": case "L":
-      case "w": case "W":
+    const hotkey = key.char.toUpperCase();
+    const command = getMissionControlCommandSpecs(state.snapshot.mode)
+      .find((spec) => spec.key === hotkey);
+    if (command) {
+      return actionForMissionControlCommand(command.id);
+    }
+    switch (hotkey) {
+      case "L":
+      case "W":
         return { type: "focus", panel: "log" };
     }
   }
@@ -687,6 +692,7 @@ function getFeatureActionFooter(modal: Extract<AppState["modal"], { kind: "featu
 }
 
 interface CommandPaletteItem {
+  readonly id: MissionControlCommandId;
   readonly label: string;
   readonly detail: string;
   readonly hint: string;
@@ -696,59 +702,15 @@ interface CommandPaletteItem {
 }
 
 function getCommandPaletteItems(state: AppState): readonly CommandPaletteItem[] {
-  const featureCommand: CommandPaletteItem = state.snapshot.mode === "home"
-    ? {
-      label: "Overview",
-      detail: "Show the guided Mission Control home screen",
-      hint: "F",
-      section: "Navigate",
-      keywords: ["overview", "home", "project", "empty state"],
-      action: { type: "open-features" },
-    }
-    : {
-      label: "Features",
-      detail: "Browse mission features and focus a specific item",
-      hint: "F",
-      section: "Navigate",
-      keywords: ["features", "feature browser", "focus"],
-      action: { type: "open-features" },
-    };
-
-  return [
-    featureCommand,
-    {
-      label: "Handoff",
-      detail: "Review pending cross-agent handoffs",
-      hint: "H",
-      section: "Navigate",
-      keywords: ["handoff", "handoffs", "agent"],
-      action: { type: "open-handoffs" },
-    },
-    {
-      label: "Config",
-      detail: "Inspect workspace configuration, checks, and mission directory",
-      hint: "C",
-      section: "Navigate",
-      keywords: ["config", "configuration", "doctor", "directory"],
-      action: { type: "open-config" },
-    },
-    {
-      label: "Processes",
-      detail: "List live Maestro runtime work for this mission",
-      hint: "P",
-      section: "Navigate",
-      keywords: ["processes", "runtime", "workers"],
-      action: { type: "open-processes" },
-    },
-    {
-      label: "Exit",
-      detail: "Close Mission Control cleanly",
-      hint: "Ctrl+T",
-      section: "Session",
-      keywords: ["quit", "exit", "close"],
-      action: { type: "quit" },
-    },
-  ];
+  return getMissionControlCommandSpecs(state.snapshot.mode).map((command) => ({
+    id: command.id,
+    label: command.label,
+    detail: command.detail,
+    hint: command.key,
+    section: command.section,
+    keywords: command.keywords,
+    action: actionForMissionControlCommand(command.id),
+  }));
 }
 
 function getFilteredCommandPaletteItems(state: AppState): readonly CommandPaletteItem[] {
@@ -774,4 +736,19 @@ function getCommandPaletteSelectionAction(state: AppState): Action | undefined {
 
   const index = Math.min(state.modal.selectedCommandIndex, commands.length - 1);
   return commands[index]?.action;
+}
+
+function actionForMissionControlCommand(id: MissionControlCommandId): Action {
+  switch (id) {
+    case "features":
+      return { type: "open-features" };
+    case "handoffs":
+      return { type: "open-handoffs" };
+    case "config":
+      return { type: "open-config" };
+    case "processes":
+      return { type: "open-processes" };
+    case "exit":
+      return { type: "quit" };
+  }
 }

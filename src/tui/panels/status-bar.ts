@@ -59,7 +59,7 @@ export function renderStatusBar(buf: Buffer, rect: Rect, snap: MissionControlSna
     }
     // Unfilled portion: dark background
     for (let i = filled; i < barWidth; i++) {
-      buf.set(y, barStart + i, " ", { bg: 238 });
+      buf.set(y, barStart + i, " ", { bg: PALETTE.progressUnfilledBg });
     }
   }
 

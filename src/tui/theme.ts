@@ -38,8 +38,9 @@ export const PALETTE = {
     overlayHint: 252,
     overlaySelectedBg: 39,
     overlaySelectedFg: 255,
-  // Default (terminal default)
-  default: -1,
+    progressUnfilledBg: 238,
+    // Default (terminal default)
+    default: -1,
 } as const;
 
 // ── Status Colors ───────────────────────────────────
