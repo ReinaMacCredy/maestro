@@ -9,7 +9,8 @@ export type Key =
   | { type: "enter" }
   | { type: "escape" }
   | { type: "ctrl"; char: string }
-  | { type: "function"; n: number };
+  | { type: "function"; n: number }
+  | { type: "mouse"; event: "down" | "up"; button: "left"; x: number; y: number };
 
 /**
  * Parse raw bytes from stdin into Key events.
@@ -37,7 +38,9 @@ export function parseKeypress(data: Uint8Array): Key[] {
         i += 2;
         const result = parseCSI(data, i);
         if (result) {
-          keys.push(result.key);
+          if (result.key) {
+            keys.push(result.key);
+          }
           i = result.nextIndex;
         }
         continue;
@@ -80,7 +83,11 @@ export function parseKeypress(data: Uint8Array): Key[] {
 function parseCSI(
   data: Uint8Array,
   i: number,
-): { key: Key; nextIndex: number } | undefined {
+): { key?: Key; nextIndex: number } | undefined {
+  if (data[i] === 0x3c) {
+    return parseSgrMouse(data, i + 1);
+  }
+
   // Collect numeric parameter bytes (0x30-0x39 and 0x3b)
   let param = "";
   while (i < data.length && ((data[i]! >= 0x30 && data[i]! <= 0x39) || data[i] === 0x3b)) {
@@ -113,6 +120,42 @@ function parseCSI(
   }
 
   return undefined;
+}
+
+function parseSgrMouse(
+  data: Uint8Array,
+  i: number,
+): { key?: Key; nextIndex: number } | undefined {
+  let param = "";
+  while (i < data.length && ((data[i]! >= 0x30 && data[i]! <= 0x39) || data[i] === 0x3b)) {
+    param += String.fromCharCode(data[i]!);
+    i++;
+  }
+
+  if (i >= data.length) return undefined;
+
+  const final = data[i]!;
+  i++;
+  if (final !== 0x4d && final !== 0x6d) return undefined;
+
+  const [buttonRaw, xRaw, yRaw] = param.split(";").map((value) => Number.parseInt(value, 10));
+  if (!Number.isFinite(buttonRaw) || !Number.isFinite(xRaw) || !Number.isFinite(yRaw)) {
+    return undefined;
+  }
+
+  const isLeftButton = (buttonRaw & 0b11) === 0 && buttonRaw < 64;
+  if (!isLeftButton) return { nextIndex: i };
+
+  return {
+    key: {
+      type: "mouse",
+      event: final === 0x4d ? "down" : "up",
+      button: "left",
+      x: Math.max(0, xRaw - 1),
+      y: Math.max(0, yRaw - 1),
+    },
+    nextIndex: i,
+  };
 }
 
 /**

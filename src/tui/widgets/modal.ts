@@ -31,12 +31,20 @@ export interface InfoModalOptions {
 
 export type ModalOptions = MenuModalOptions | InfoModalOptions;
 
-/**
- * Render a centered modal overlay within the parent rect.
- * Returns the rect consumed by the modal.
- */
-export function renderModal(buf: Buffer, parent: Rect, opts: ModalOptions): Rect {
-  const modalBg = PALETTE.panelBg;
+export interface ModalLayout extends Rect {
+  readonly contentRect: Rect;
+  readonly footerRect: Rect | undefined;
+  readonly itemRects: readonly Rect[];
+}
+
+export function pointInRect(rect: Rect, x: number, y: number): boolean {
+  return x >= rect.x
+    && x < rect.x + rect.width
+    && y >= rect.y
+    && y < rect.y + rect.height;
+}
+
+export function layoutModal(parent: Rect, opts: ModalOptions): ModalLayout {
   const footer = opts.footer;
   const lines = opts.mode === "menu"
     ? opts.items.map((item) => item.length + 2)
@@ -55,14 +63,56 @@ export function renderModal(buf: Buffer, parent: Rect, opts: ModalOptions): Rect
   const footerHeight = footer ? 2 : 1;
   const modalHeight = Math.min(headerHeight + contentHeight + footerHeight + 2, parent.height - 2);
 
-  // Center within parent
-  const mx = parent.x + Math.floor((parent.width - modalWidth) / 2);
-  const my = parent.y + Math.floor((parent.height - modalHeight) / 2);
-  const modalRect: Rect = { x: mx, y: my, width: modalWidth, height: modalHeight };
+  const x = parent.x + Math.floor((parent.width - modalWidth) / 2);
+  const y = parent.y + Math.floor((parent.height - modalHeight) / 2);
+  const layout: ModalLayout = {
+    x,
+    y,
+    width: modalWidth,
+    height: modalHeight,
+    contentRect: {
+      x: x + 2,
+      y: y + headerHeight + 1,
+      width: modalWidth - 4,
+      height: Math.max(0, contentHeight),
+    },
+    footerRect: footer
+      ? { x: x + 2, y: y + modalHeight - 2, width: modalWidth - 4, height: 1 }
+      : undefined,
+    itemRects: [],
+  };
+
+  if (opts.mode === "menu") {
+    const itemRects: Rect[] = [];
+    let row = layout.contentRect.y;
+    for (let i = 0; i < opts.items.length; i++) {
+      if (row >= y + modalHeight - 2) break;
+      itemRects.push({ x: x + 1, y: row, width: modalWidth - 2, height: 1 });
+      row++;
+    }
+    layout.itemRects = itemRects;
+  }
+
+  return layout;
+}
+
+/**
+ * Render a centered modal overlay within the parent rect.
+ * Returns the rect consumed by the modal.
+ */
+export function renderModal(buf: Buffer, parent: Rect, opts: ModalOptions): ModalLayout {
+  const modalBg = PALETTE.panelBg;
+  const layout = layoutModal(parent, opts);
+  const footer = opts.footer;
+  const mx = layout.x;
+  const my = layout.y;
+  const modalWidth = layout.width;
+  const modalHeight = layout.height;
+  const headerHeight = opts.eyebrow ? 3 : 2;
 
   // Clear area and draw border
-  buf.fillRect(modalRect, " ", { bg: modalBg });
-  buf.drawBorder(modalRect, { fg: PALETTE.border, bg: modalBg });
+  buf.fillRect(layout, " ", { bg: modalBg });
+  buf.drawBorder(layout, { fg: PALETTE.border, bg: modalBg });
 
   // Title
   const titleText = truncate(opts.title, modalWidth - 4);
@@ -81,7 +131,7 @@ export function renderModal(buf: Buffer, parent: Rect, opts: ModalOptions): Rect
   }
 
   const innerWidth = modalWidth - 4;
-  let row = my + headerHeight + 1;
+  let row = layout.contentRect.y;
 
   if (opts.mode === "menu") {
     for (let i = 0; i < opts.items.length; i++) {
@@ -131,14 +181,14 @@ export function renderModal(buf: Buffer, parent: Rect, opts: ModalOptions): Rect
   }
 
   if (footer) {
-    const footerRow = my + modalHeight - 2;
+    const footerRow = layout.footerRect?.y ?? (my + modalHeight - 2);
     buf.writeText(footerRow, mx + 2, truncate(footer, innerWidth), {
       fg: PALETTE.gray,
       bg: modalBg,
     });
   }
 
-  return modalRect;
+  return layout;
 }
 
 function truncatePathTail(text: string, maxLen: number): string {

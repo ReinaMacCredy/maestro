@@ -6,6 +6,7 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { enterAltScreen, exitAltScreen } from "../../src/tui/terminal/ansi.js";
+import { layoutModal } from "../../src/tui/widgets/modal.js";
 
 const CLI = [
   "bun",
@@ -20,10 +21,14 @@ const PTY_TIMEOUT_MS = 30_000;
 let pythonAvailable = false;
 
 const PYTHON_PTY_RUNNER = `
-import base64, json, os, select, signal, subprocess, sys, time, pty
+import base64, json, os, select, signal, subprocess, sys, time, pty, fcntl, termios, struct
 
 payload = json.loads(sys.argv[1])
 master, slave = pty.openpty()
+rows = payload.get("rows", 24)
+cols = payload.get("cols", 80)
+winsize = struct.pack("HHHH", rows, cols, 0, 0)
+fcntl.ioctl(slave, termios.TIOCSWINSZ, winsize)
 proc = subprocess.Popen(
     payload["cmd"],
     cwd=payload["cwd"],
@@ -176,6 +181,21 @@ async function createMission(cwd: string): Promise<string> {
   return JSON.parse(stdout).mission.id;
 }
 
+async function listFeatureStatuses(
+  cwd: string,
+  missionId: string,
+): Promise<Record<string, string>> {
+  const { stdout, exitCode } = await run(
+    ["feature", "list", "--mission", missionId, "--json"],
+    cwd,
+  );
+  expect(exitCode).toBe(0);
+  const payload = JSON.parse(stdout) as {
+    features: Array<{ id: string; status: string }>;
+  };
+  return Object.fromEntries(payload.features.map((feature) => [feature.id, feature.status]));
+}
+
 async function commandExists(command: string): Promise<boolean> {
   const proc = Bun.spawn(["/bin/zsh", "-lc", `command -v ${command}`], {
     stdout: "pipe",
@@ -197,6 +217,8 @@ interface PtyRunOptions {
   readonly input: string;
   readonly delayMs?: number;
   readonly timeoutMs?: number;
+  readonly rows?: number;
+  readonly cols?: number;
 }
 
 interface PtyRunResult {
@@ -218,6 +240,8 @@ async function runCompiledInteractivePty(
     input: Buffer.from(opts.input, "utf8").toString("base64"),
     delayMs: opts.delayMs ?? 250,
     timeoutMs: opts.timeoutMs ?? PTY_TIMEOUT_MS,
+    rows: opts.rows ?? 24,
+    cols: opts.cols ?? 80,
   });
 
   const proc = Bun.spawn(["python3", "-c", PYTHON_PTY_RUNNER, payload], {
@@ -253,6 +277,48 @@ function expectCleanPtyExit(result: PtyRunResult): void {
   expect(result.signal).toBeNull();
   expect(result.rawOutput).toContain(enterAltScreen);
   expect(result.rawOutput).toContain(exitAltScreen);
+}
+
+function encodeLeftClick(x: number, y: number): string {
+  return `\u001b[<0;${x + 1};${y + 1}M`;
+}
+
+function getMissionControlModalParentRect(width: number, height: number) {
+  const innerRect = { x: 1, y: 1, width: width - 2, height: height - 2 };
+  const headerDividerY = innerRect.y + 1;
+  const statusRectY = headerDividerY + 1;
+  const statusDividerY = statusRectY + 1;
+  const bodyY = statusDividerY + 1;
+  const footerDividerY = height - 3;
+  return {
+    x: innerRect.x,
+    y: bodyY,
+    width: innerRect.width,
+    height: Math.max(0, footerDividerY - bodyY),
+  };
+}
+
+function buildFeatureActionMouseSequence(optionIndex: number, width = 80, height = 24): string {
+  const parentRect = getMissionControlModalParentRect(width, height);
+  const selectingLayout = layoutModal(parentRect, {
+    mode: "menu",
+    title: "Change Feature Status",
+    eyebrow: "f1 · Feature 1",
+    items: ["Set status to assigned", "Set status to in-progress"],
+    selectedIndex: 0,
+    footer: "Use arrows or click · Enter choose · Esc cancel",
+  });
+  const confirmingLayout = layoutModal(parentRect, {
+    mode: "menu",
+    title: "Change Feature Status",
+    eyebrow: "f1 · Feature 1",
+    items: ["Set status to assigned", "Set status to in-progress"],
+    selectedIndex: optionIndex,
+    footer: "Enter confirm · Esc cancel",
+  });
+  const selectRect = selectingLayout.itemRects[optionIndex]!;
+  const confirmRect = confirmingLayout.itemRects[optionIndex]!;
+  return `${encodeLeftClick(selectRect.x + 1, selectRect.y)}${encodeLeftClick(confirmRect.x + 1, confirmRect.y)}`;
 }
 
 beforeAll(async () => {
@@ -448,7 +514,7 @@ describe("mission-control CLI", () => {
     expect(result.plainOutput).toContain("Progress Log");
   }, PTY_TIMEOUT_MS);
 
-  it("compiled binary interactive mode remains stable across repeated launch and quit cycles", async () => {
+    it("compiled binary interactive mode remains stable across repeated launch and quit cycles", async () => {
     if (!pythonAvailable) return;
     const missionId = await createMission(tmpDir);
 
@@ -459,11 +525,59 @@ describe("mission-control CLI", () => {
         { input: "q" },
       );
         expectCleanPtyExit(result);
-      }
+        }
+      }, PTY_TIMEOUT_MS);
+
+    it("compiled binary interactive mode persists a selected feature transition on keyboard confirm", async () => {
+      if (!pythonAvailable) return;
+      const missionId = await createMission(tmpDir);
+
+      const result = await runCompiledInteractivePty(
+        tmpDir,
+        ["mission-control", "--mission", missionId],
+        { input: "\r\r\r\u001bq" },
+      );
+
+      expectCleanPtyExit(result);
+
+      const statuses = await listFeatureStatuses(tmpDir, missionId);
+      expect(statuses.f1).toBe("assigned");
     }, PTY_TIMEOUT_MS);
 
-  it("compiled binary interactive home mode exits cleanly on q", async () => {
-    if (!pythonAvailable) return;
+    it("compiled binary interactive mode persists a selected feature transition on mouse click confirm", async () => {
+      if (!pythonAvailable) return;
+      const missionId = await createMission(tmpDir);
+
+      const result = await runCompiledInteractivePty(
+        tmpDir,
+        ["mission-control", "--mission", missionId],
+        { input: `\r${buildFeatureActionMouseSequence(0)}q` },
+      );
+
+      expectCleanPtyExit(result);
+
+      const statuses = await listFeatureStatuses(tmpDir, missionId);
+      expect(statuses.f1).toBe("assigned");
+    }, PTY_TIMEOUT_MS);
+
+    it("compiled binary interactive mode closes the modal on outside click without applying a transition", async () => {
+      if (!pythonAvailable) return;
+      const missionId = await createMission(tmpDir);
+
+      const result = await runCompiledInteractivePty(
+        tmpDir,
+        ["mission-control", "--mission", missionId],
+        { input: `\r${encodeLeftClick(0, 0)}q` },
+      );
+
+      expectCleanPtyExit(result);
+
+      const statuses = await listFeatureStatuses(tmpDir, missionId);
+      expect(statuses.f1).toBe("pending");
+    }, PTY_TIMEOUT_MS);
+
+    it("compiled binary interactive home mode exits cleanly on q", async () => {
+      if (!pythonAvailable) return;
 
     const result = await runCompiledInteractivePty(
       tmpDir,

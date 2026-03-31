@@ -3,7 +3,17 @@
  * Writes each row separately to avoid large string construction.
  */
 import { Buffer } from "./buffer.js";
-import { moveTo, style, reset, hideCursor, showCursor, enterAltScreen, exitAltScreen } from "./ansi.js";
+import {
+  moveTo,
+  style,
+  reset,
+  hideCursor,
+  showCursor,
+  enterAltScreen,
+  exitAltScreen,
+  enableMouse,
+  disableMouse,
+} from "./ansi.js";
 
 export class Screen {
   private _width: number;
@@ -22,7 +32,7 @@ export class Screen {
   enter(): void {
     if (this.active) return;
     this.active = true;
-    process.stdout.write(enterAltScreen + hideCursor);
+    process.stdout.write(enterAltScreen + hideCursor + enableMouse);
     if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
       process.stdin.setRawMode(true);
       process.stdin.resume();
@@ -33,7 +43,7 @@ export class Screen {
   exit(): void {
     if (!this.active) return;
     this.active = false;
-    process.stdout.write(reset + showCursor + exitAltScreen);
+    process.stdout.write(reset + showCursor + disableMouse + exitAltScreen);
     if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
       process.stdin.setRawMode(false);
     }

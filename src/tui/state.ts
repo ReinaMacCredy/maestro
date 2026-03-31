@@ -3,12 +3,19 @@
  */
 import type { MissionControlSnapshot } from "./types.js";
 import type { FeatureStatus } from "../domain/mission-types.js";
+import { getValidFeatureTransitions } from "../domain/mission-state.js";
 
 export type FocusedPanel = "features" | "log" | "none";
 
 export type ModalState =
   | { kind: "none" }
-  | { kind: "feature-action"; featureIndex: number; selectedOption: number; status?: string }
+  | {
+    kind: "feature-action";
+    featureIndex: number;
+    selectedOption: number;
+    phase: "selecting" | "confirming" | "submitting" | "error";
+    errorMessage?: string;
+  }
   | { kind: "directory" }
   | { kind: "models" };
 
@@ -43,7 +50,8 @@ export type Action =
   | { type: "open-models" }
   | { type: "update-snapshot"; snapshot: MissionControlSnapshot }
   | { type: "modal-select"; option: number }
-  | { type: "modal-status"; status: string };
+  | { type: "modal-submit-start" }
+  | { type: "modal-submit-error"; message: string };
 
 /**
  * Pure state reducer -- returns a new state given an action.
@@ -75,7 +83,17 @@ export function reduce(state: AppState, action: Action): AppState {
         return state;
       }
       if (state.modal.kind === "feature-action") {
-        return { ...state, modal: { ...state.modal, status: "confirm" } };
+        if (state.modal.phase === "selecting") {
+          return {
+            ...state,
+            modal: {
+              ...state.modal,
+              phase: "confirming",
+              errorMessage: undefined,
+            },
+          };
+        }
+        return state;
       }
       if (state.focusedPanel === "features" && state.snapshot.features.length > 0) {
         return {
@@ -84,6 +102,7 @@ export function reduce(state: AppState, action: Action): AppState {
             kind: "feature-action",
             featureIndex: state.selectedFeatureIndex,
             selectedOption: 0,
+            phase: "selecting",
           },
         };
       }
@@ -110,24 +129,58 @@ export function reduce(state: AppState, action: Action): AppState {
       return { ...state, modal: { kind: "models" } };
 
     case "update-snapshot":
+      const selectedFeatureId = state.snapshot.features[state.selectedFeatureIndex]?.id;
+      const nextSelectedIndex = selectedFeatureId
+        ? action.snapshot.features.findIndex((feature) => feature.id === selectedFeatureId)
+        : -1;
       return {
         ...state,
         snapshot: action.snapshot,
-        selectedFeatureIndex: Math.min(
-          state.selectedFeatureIndex,
-          Math.max(0, action.snapshot.features.length - 1),
-        ),
+        selectedFeatureIndex: nextSelectedIndex >= 0
+          ? nextSelectedIndex
+          : Math.min(
+            state.selectedFeatureIndex,
+            Math.max(0, action.snapshot.features.length - 1),
+          ),
       };
 
     case "modal-select":
       if (state.modal.kind === "feature-action") {
-        return { ...state, modal: { ...state.modal, selectedOption: action.option } };
+        return {
+          ...state,
+          modal: {
+            ...state.modal,
+            selectedOption: action.option,
+            phase: "confirming",
+            errorMessage: undefined,
+          },
+        };
       }
       return state;
 
-    case "modal-status":
+    case "modal-submit-start":
       if (state.modal.kind === "feature-action") {
-        return { ...state, modal: { ...state.modal, status: action.status } };
+        return {
+          ...state,
+          modal: {
+            ...state.modal,
+            phase: "submitting",
+            errorMessage: undefined,
+          },
+        };
+      }
+      return state;
+
+    case "modal-submit-error":
+      if (state.modal.kind === "feature-action") {
+        return {
+          ...state,
+          modal: {
+            ...state.modal,
+            phase: "error",
+            errorMessage: action.message,
+          },
+        };
       }
       return state;
 
@@ -166,13 +219,20 @@ function handleModalNavigate(state: AppState, direction: "up" | "down"): AppStat
   if (!feature) return state;
 
   // Options count comes from valid transitions for the feature
-  const detail = state.snapshot.activeFeature;
-  const optionsCount = detail?.validTransitions.length ?? 0;
+  const optionsCount = getValidFeatureTransitions(feature.status).length;
   if (optionsCount === 0) return state;
 
   const newOption = direction === "down"
     ? Math.min(state.modal.selectedOption + 1, optionsCount - 1)
     : Math.max(state.modal.selectedOption - 1, 0);
 
-  return { ...state, modal: { ...state.modal, selectedOption: newOption } };
+  return {
+    ...state,
+    modal: {
+      ...state.modal,
+      selectedOption: newOption,
+      phase: "selecting",
+      errorMessage: undefined,
+    },
+  };
 }

@@ -86,11 +86,12 @@ describe("reduce", () => {
 
     it("navigates modal options when modal is open", () => {
       const state = makeState({
-        modal: { kind: "feature-action", featureIndex: 0, selectedOption: 0 },
+        modal: { kind: "feature-action", featureIndex: 0, selectedOption: 0, phase: "selecting" },
       });
       const next = reduce(state, { type: "navigate", direction: "down" });
       if (next.modal.kind === "feature-action") {
         expect(next.modal.selectedOption).toBe(1);
+        expect(next.modal.phase).toBe("selecting");
       }
     });
   });
@@ -114,6 +115,18 @@ describe("reduce", () => {
       it("opens feature action modal when features focused", () => {
         const state = reduce(makeState(), { type: "enter" });
         expect(state.modal.kind).toBe("feature-action");
+        if (state.modal.kind === "feature-action") {
+          expect(state.modal.phase).toBe("selecting");
+        }
+      });
+
+      it("moves feature action modal into confirming state on enter", () => {
+        const opened = reduce(makeState(), { type: "enter" });
+        const confirmed = reduce(opened, { type: "enter" });
+        expect(confirmed.modal.kind).toBe("feature-action");
+        if (confirmed.modal.kind === "feature-action") {
+          expect(confirmed.modal.phase).toBe("confirming");
+        }
       });
 
       it("does nothing in home mode", () => {
@@ -183,6 +196,20 @@ describe("reduce", () => {
       const next = reduce(state, { type: "update-snapshot", snapshot: newSnap });
       expect(next.snapshot.features.length).toBe(1);
       expect(next.selectedFeatureIndex).toBe(0);
+    });
+
+    it("preserves the selected feature by id when the snapshot order changes", () => {
+      const state = makeState({ selectedFeatureIndex: 1 });
+      const reordered = makeSnapshot({
+        features: [
+          { id: "f3", title: "F3", status: "pending", milestoneId: "m2", workerType: "t", hasReport: false },
+          { id: "f2", title: "F2", status: "assigned", milestoneId: "m1", workerType: "t", hasReport: false },
+          { id: "f1", title: "F1", status: "pending", milestoneId: "m1", workerType: "t", hasReport: false },
+        ],
+      });
+      const next = reduce(state, { type: "update-snapshot", snapshot: reordered });
+      expect(next.selectedFeatureIndex).toBe(1);
+      expect(next.snapshot.features[next.selectedFeatureIndex]?.id).toBe("f2");
     });
   });
 });

@@ -21,6 +21,8 @@ export const enterAltScreen = `${CSI}?1049h`;
 export const exitAltScreen = `${CSI}?1049l`;
 export const clearScreen = `${CSI}2J`;
 export const clearLine = `${CSI}2K`;
+export const enableMouse = `${CSI}?1000h${CSI}?1006h`;
+export const disableMouse = `${CSI}?1000l${CSI}?1006l`;
 
 // ── Style ───────────────────────────────────────────
 

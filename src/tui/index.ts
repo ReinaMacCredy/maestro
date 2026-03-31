@@ -17,10 +17,16 @@ import { renderFeatureList } from "./panels/feature-list.js";
 import { renderProgressLog } from "./panels/progress-log.js";
 import { renderWorkerPanel } from "./panels/worker.js";
 import { renderFooter } from "./panels/footer.js";
-import { renderModal } from "./widgets/modal.js";
+import {
+  layoutModal,
+  pointInRect,
+  renderModal,
+  type ModalOptions,
+} from "./widgets/modal.js";
 import { getValidFeatureTransitions } from "../domain/mission-state.js";
 import { PALETTE } from "./theme.js";
 import { BOX } from "./terminal/ansi.js";
+import { updateFeature } from "../usecases/feature-lifecycle.usecase.js";
 
 export interface OnceFrameOptions {
   snapshot: MissionControlSnapshot;
@@ -67,14 +73,34 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
 
   // Key handler sets dirty flag
   let dirty = true;
-  const handleKey = (key: Key): void => {
+  async function processKey(key: Key): Promise<void> {
     if (shuttingDown) return;
-    const action = keyToAction(key, state);
-    if (action) {
-      state = reduce(state, action);
-      if (action.type === "quit") shuttingDown = true;
-      dirty = true;
+    if (key.type === "mouse") {
+      await handleMouse(key);
+      return;
     }
+
+    const action = keyToAction(key, state);
+    if (!action) return;
+
+    if (action.type === "enter" && shouldSubmitFeatureAction(state)) {
+      await submitFeatureAction();
+      return;
+    }
+
+    state = reduce(state, action);
+    if (action.type === "quit") shuttingDown = true;
+    dirty = true;
+  }
+
+  let inputQueue = Promise.resolve();
+  const handleKey = (key: Key): void => {
+    inputQueue = inputQueue
+      .then(() => processKey(key))
+      .catch(() => {
+        requestQuit();
+        dirty = true;
+      });
   };
 
   // SIGINT/SIGTERM cleanup
@@ -133,14 +159,86 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
     process.off("SIGINT", handleSignal);
     process.off("SIGTERM", handleSignal);
   }
+
+  async function handleMouse(key: Extract<Key, { type: "mouse" }>): Promise<void> {
+    if (key.button !== "left" || key.event !== "down" || state.modal.kind === "none") return;
+
+    const layout = getActiveModalLayout(screen.width, screen.height, state);
+    if (!layout) return;
+
+    if (!pointInRect(layout, key.x, key.y)) {
+      state = reduce(state, { type: "escape" });
+      dirty = true;
+      return;
+    }
+
+    if (state.modal.kind !== "feature-action" || state.modal.phase === "submitting") {
+      return;
+    }
+
+    const optionIndex = layout.itemRects.findIndex((rect) => pointInRect(rect, key.x, key.y));
+    if (optionIndex < 0) return;
+
+    if (
+      optionIndex === state.modal.selectedOption
+      && (state.modal.phase === "confirming" || state.modal.phase === "error")
+    ) {
+      await submitFeatureAction();
+      return;
+    }
+
+    state = reduce(state, { type: "modal-select", option: optionIndex });
+    dirty = true;
+  }
+
+  async function submitFeatureAction(): Promise<void> {
+    if (state.modal.kind !== "feature-action") return;
+
+    const feature = state.snapshot.features[state.modal.featureIndex];
+    if (!feature) return;
+
+    const transitions = getValidFeatureTransitions(feature.status);
+    const nextStatus = transitions[state.modal.selectedOption];
+    if (!nextStatus) return;
+
+    state = reduce(state, { type: "modal-submit-start" });
+    dirty = true;
+
+    try {
+      await updateFeature(
+        opts.snapshotDeps.missionStore,
+        opts.snapshotDeps.featureStore,
+        process.cwd(),
+        state.snapshot.missionId,
+        feature.id,
+        { status: nextStatus },
+      );
+
+      try {
+        const nextSnapshot = await buildSnapshot(opts.snapshotDeps, state.snapshot.missionId);
+        state = reduce(state, { type: "update-snapshot", snapshot: nextSnapshot });
+      } catch {
+        // Fall back to the next poll refresh if the immediate snapshot reload fails.
+      }
+
+      state = { ...state, modal: { kind: "none" } };
+      dirty = true;
+    } catch (error) {
+      state = reduce(state, {
+        type: "modal-submit-error",
+        message: error instanceof Error ? error.message : "Failed to update feature",
+      });
+      dirty = true;
+    }
+  }
 }
 
 // ── Key Mapping ─────────────────────────────────────
 
-  function keyToAction(key: Key, state: AppState): Action | undefined {
-  if (key.type === "char" && key.char === "q" && state.modal.kind === "none") {
-    return { type: "quit" };
-  }
+function keyToAction(key: Key, state: AppState): Action | undefined {
+    if (key.type === "char" && key.char === "q" && state.modal.kind === "none") {
+      return { type: "quit" };
+    }
   if (key.type === "ctrl" && (key.char === "t" || key.char === "c")) {
     return { type: "quit" };
   }
@@ -167,7 +265,12 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
           return state.snapshot.mode === "mission" ? { type: "open-models" } : undefined;
       }
     }
-  return undefined;
+    return undefined;
+  }
+
+function shouldSubmitFeatureAction(state: AppState): boolean {
+  return state.modal.kind === "feature-action"
+    && (state.modal.phase === "confirming" || state.modal.phase === "error");
 }
 
 // ── Frame Composition ───────────────────────────────
@@ -262,17 +365,12 @@ export function renderFrame(buf: Buffer, state: AppState): void {
   renderWorkerPanel(buf, workerRect, snap);
   renderFooter(buf, footerRect, snap);
 
-  // Modal overlay
-  const modalRect: Rect = {
-    x: innerRect.x,
-    y: bodyY,
-    width: innerRect.width,
-    height: Math.max(0, footerDividerY - bodyY),
-  };
-  if (state.modal.kind !== "none" && modalRect.width > 0 && modalRect.height > 0) {
-    renderModalOverlay(buf, modalRect, state);
+    // Modal overlay
+    const modalRect = getModalParentRect(w, h);
+    if (state.modal.kind !== "none" && modalRect.width > 0 && modalRect.height > 0) {
+      renderModalOverlay(buf, modalRect, state);
+    }
   }
-}
 
 function drawFullWidthDivider(buf: Buffer, y: number, s: { fg: number }): void {
   drawHorizontalRange(buf, y, 0, buf.width - 1, s, BOX.teeRight, BOX.teeLeft);
@@ -314,48 +412,93 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function renderModalOverlay(buf: Buffer, parentRect: Rect, state: AppState): void {
-    if (state.modal.kind === "feature-action") {
-      const feature = state.snapshot.features[state.modal.featureIndex];
-      if (!feature) return;
-      const transitions = getValidFeatureTransitions(feature.status);
-      renderModal(buf, parentRect, {
-        mode: "menu",
-        title: "Change Feature Status",
-        eyebrow: `${feature.id} · ${feature.title}`,
-        items: transitions.length > 0
-          ? transitions.map((t) => `Set status to ${t}`)
-          : ["No valid transitions"],
-        selectedIndex: state.modal.selectedOption,
-        footer: state.modal.status
-          ? "Enter confirm · Esc cancel"
-          : "Use arrows · Enter choose · Esc cancel",
-      });
-    }
-    if (state.modal.kind === "directory") {
-      renderModal(buf, parentRect, {
-        mode: "info",
-        title: "Mission Directory",
-        eyebrow: "Project-local runtime path",
-        items: [
-          { text: `.maestro/missions/${state.snapshot.missionId}`, style: "block", tone: "accent" },
-        ],
-        footer: "Esc close",
-      });
-    }
-    if (state.modal.kind === "models") {
-      const snap = state.snapshot;
-      const workerTypes = [...new Set(snap.features.map((f) => f.workerType))];
-      renderModal(buf, parentRect, {
-        mode: "info",
-        title: "Models & Workers",
-        eyebrow: "Snapshot metadata",
-        items: [
-          { text: `Mission ${snap.missionId}`, style: "block", tone: "accent" },
-          { text: `Status ${snap.effectiveStatus}`, tone: "default" },
-          { text: "Data source: store polling every 2s", tone: "muted" },
-          ...workerTypes.map((w) => ({ text: `Worker model: ${w}`, tone: "muted" as const })),
-        ],
-        footer: "Esc close",
-      });
-    }
+  const opts = buildModalOptions(state);
+  if (!opts) return;
+  renderModal(buf, parentRect, opts);
+}
+
+function getActiveModalLayout(width: number, height: number, state: AppState) {
+  const opts = buildModalOptions(state);
+  if (!opts || state.modal.kind === "none") return undefined;
+  const parentRect = getModalParentRect(width, height);
+  if (parentRect.width <= 0 || parentRect.height <= 0) return undefined;
+  return layoutModal(parentRect, opts);
+}
+
+function getModalParentRect(width: number, height: number): Rect {
+  const innerRect = inset({ x: 0, y: 0, width, height }, 1);
+  const headerDividerY = innerRect.y + 1;
+  const statusRectY = headerDividerY + 1;
+  const statusDividerY = statusRectY + 1;
+  const bodyY = statusDividerY + 1;
+  const footerDividerY = height - 3;
+  return {
+    x: innerRect.x,
+    y: bodyY,
+    width: innerRect.width,
+    height: Math.max(0, footerDividerY - bodyY),
+  };
+}
+
+function buildModalOptions(state: AppState): ModalOptions | undefined {
+  if (state.modal.kind === "feature-action") {
+    const feature = state.snapshot.features[state.modal.featureIndex];
+    if (!feature) return undefined;
+
+    const transitions = getValidFeatureTransitions(feature.status);
+    return {
+      mode: "menu",
+      title: "Change Feature Status",
+      eyebrow: `${feature.id} · ${feature.title}`,
+      items: transitions.length > 0
+        ? transitions.map((transition) => `Set status to ${transition}`)
+        : ["No valid transitions"],
+      selectedIndex: state.modal.selectedOption,
+      footer: getFeatureActionFooter(state.modal),
+    };
   }
+
+  if (state.modal.kind === "directory") {
+    return {
+      mode: "info",
+      title: "Mission Directory",
+      eyebrow: "Project-local runtime path",
+      items: [
+        { text: `.maestro/missions/${state.snapshot.missionId}`, style: "block", tone: "accent" },
+      ],
+      footer: "Esc close",
+    };
+  }
+
+  if (state.modal.kind === "models") {
+    const snap = state.snapshot;
+    const workerTypes = [...new Set(snap.features.map((f) => f.workerType))];
+    return {
+      mode: "info",
+      title: "Models & Workers",
+      eyebrow: "Snapshot metadata",
+      items: [
+        { text: `Mission ${snap.missionId}`, style: "block", tone: "accent" },
+        { text: `Status ${snap.effectiveStatus}`, tone: "default" },
+        { text: "Data source: store polling every 2s", tone: "muted" },
+        ...workerTypes.map((workerType) => ({ text: `Worker model: ${workerType}`, tone: "muted" as const })),
+      ],
+      footer: "Esc close",
+    };
+  }
+
+  return undefined;
+}
+
+function getFeatureActionFooter(modal: Extract<AppState["modal"], { kind: "feature-action" }>): string {
+  if (modal.phase === "submitting") {
+    return "Applying status...";
+  }
+  if (modal.phase === "error") {
+    return `${modal.errorMessage ?? "Failed to update feature"} · Enter retry · Esc cancel`;
+  }
+  if (modal.phase === "confirming") {
+    return "Enter confirm · Esc cancel";
+  }
+  return "Use arrows or click · Enter choose · Esc cancel";
+}

@@ -99,6 +99,28 @@ describe("parseKeypress", () => {
     });
   });
 
+  describe("mouse input", () => {
+    it("parses SGR left click press events", () => {
+      const keys = parseKeypress(bytes(
+        0x1b, 0x5b, 0x3c, 0x30, 0x3b, 0x31, 0x32, 0x3b, 0x38, 0x4d,
+      )); // ESC [ < 0 ; 12 ; 8 M
+      expect(keys).toEqual([{
+        type: "mouse",
+        event: "down",
+        button: "left",
+        x: 11,
+        y: 7,
+      }]);
+    });
+
+    it("ignores unsupported mouse buttons safely", () => {
+      const keys = parseKeypress(bytes(
+        0x1b, 0x5b, 0x3c, 0x36, 0x34, 0x3b, 0x31, 0x32, 0x3b, 0x38, 0x4d,
+      )); // ESC [ < 64 ; 12 ; 8 M
+      expect(keys).toEqual([]);
+    });
+  });
+
   describe("mixed input", () => {
     it("parses arrow followed by char", () => {
       const keys = parseKeypress(bytes(0x1b, 0x5b, 0x41, 0x71)); // Up, 'q'

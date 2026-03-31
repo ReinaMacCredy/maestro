@@ -114,4 +114,35 @@ describe("renderModal", () => {
     expect(modalRect.width).toBeGreaterThan(0);
     expect(modalRect.height).toBeGreaterThan(0);
   });
+
+  it("returns stable row hit boxes for selectable menu items", () => {
+    const buf = new Buffer(80, 24);
+    const layout = renderModal(buf, { x: 0, y: 0, width: 80, height: 24 }, {
+      mode: "menu",
+      title: "Select",
+      items: ["A", "B", "C"],
+      selectedIndex: 1,
+      footer: "Esc close",
+    }) as unknown as {
+      itemRects: Array<{ x: number; y: number; width: number; height: number }>;
+    };
+
+    expect(layout.itemRects.length).toBe(3);
+    expect(layout.itemRects[1]?.height).toBe(1);
+    expect(layout.itemRects[1]?.width).toBeGreaterThan(8);
+  });
+
+  it("returns no selectable hit boxes for info cards", () => {
+    const buf = new Buffer(80, 24);
+    const layout = renderModal(buf, { x: 0, y: 0, width: 80, height: 24 }, {
+      mode: "info",
+      title: "Mission Directory",
+      items: [{ text: ".maestro/missions/2026-03-31-001", style: "block", tone: "accent" }],
+      footer: "Esc close",
+    }) as unknown as {
+      itemRects: Array<{ x: number; y: number; width: number; height: number }>;
+    };
+
+    expect(layout.itemRects).toEqual([]);
+  });
 });
