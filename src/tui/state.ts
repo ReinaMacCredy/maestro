@@ -8,6 +8,8 @@ import { getValidFeatureTransitions } from "../domain/mission-state.js";
 
 export type FocusedPanel = "features" | "log" | "none";
 
+type ModalReturnTarget = "command-palette";
+
 export type ModalState =
   | { kind: "none" }
   | { kind: "command-palette"; query: string; selectedCommandIndex: number }
@@ -18,11 +20,11 @@ export type ModalState =
     phase: "selecting" | "confirming" | "submitting" | "error";
     errorMessage?: string;
   }
-  | { kind: "feature-browser"; selectedFeatureIndex: number }
-  | { kind: "overview" }
-  | { kind: "handoffs" }
-  | { kind: "config" }
-  | { kind: "processes" };
+  | { kind: "feature-browser"; selectedFeatureIndex: number; returnTarget?: ModalReturnTarget }
+  | { kind: "overview"; returnTarget?: ModalReturnTarget }
+  | { kind: "handoffs"; returnTarget?: ModalReturnTarget }
+  | { kind: "config"; returnTarget?: ModalReturnTarget }
+  | { kind: "processes"; returnTarget?: ModalReturnTarget };
 
 export interface AppState {
   snapshot: MissionControlSnapshot;
@@ -46,7 +48,7 @@ export function createInitialState(snapshot: MissionControlSnapshot): AppState {
 
 export type Action =
   | { type: "quit" }
-  | { type: "navigate"; direction: "up" | "down" }
+  | { type: "navigate"; direction: "up" | "down" | "left" }
   | { type: "focus"; panel: FocusedPanel }
   | { type: "enter" }
   | { type: "escape" }
@@ -71,6 +73,9 @@ export function reduce(state: AppState, action: Action): AppState {
       return { ...state, running: false };
 
     case "navigate": {
+      if (action.direction === "left") {
+        return closeOrReturnModal(state);
+      }
       if (state.modal.kind === "feature-action") {
         return handleModalNavigate(state, action.direction);
       }
@@ -136,10 +141,7 @@ export function reduce(state: AppState, action: Action): AppState {
     }
 
     case "escape":
-      if (state.modal.kind !== "none") {
-        return { ...state, modal: { kind: "none" } };
-      }
-      return { ...state, focusedPanel: "none" };
+      return closeOrReturnModal(state);
 
     case "open-command-palette":
       if (!canOpenOverlayFromModal(state.modal)) return state;
@@ -155,27 +157,37 @@ export function reduce(state: AppState, action: Action): AppState {
     case "open-features":
       if (!canOpenOverlayFromModal(state.modal)) return state;
       if (state.snapshot.mode === "home") {
-        return { ...state, modal: { kind: "overview" } };
+        return { ...state, modal: { kind: "overview", returnTarget: getModalReturnTarget(state.modal) } };
       }
       return {
         ...state,
         modal: {
           kind: "feature-browser",
           selectedFeatureIndex: state.selectedFeatureIndex,
+          returnTarget: getModalReturnTarget(state.modal),
         },
       };
 
     case "open-handoffs":
       if (!canOpenOverlayFromModal(state.modal)) return state;
-      return { ...state, modal: { kind: "handoffs" } };
+      return {
+        ...state,
+        modal: { kind: "handoffs", returnTarget: getModalReturnTarget(state.modal) },
+      };
 
     case "open-config":
       if (!canOpenOverlayFromModal(state.modal)) return state;
-      return { ...state, modal: { kind: "config" } };
+      return {
+        ...state,
+        modal: { kind: "config", returnTarget: getModalReturnTarget(state.modal) },
+      };
 
     case "open-processes":
       if (!canOpenOverlayFromModal(state.modal)) return state;
-      return { ...state, modal: { kind: "processes" } };
+      return {
+        ...state,
+        modal: { kind: "processes", returnTarget: getModalReturnTarget(state.modal) },
+      };
 
     case "update-snapshot":
       const selectedFeatureId = state.snapshot.features[state.selectedFeatureIndex]?.id;
@@ -207,6 +219,7 @@ export function reduce(state: AppState, action: Action): AppState {
                 state.modal.selectedFeatureIndex,
                 Math.max(0, action.snapshot.features.length - 1),
               ),
+            returnTarget: state.modal.returnTarget,
           },
         };
       }
@@ -241,6 +254,7 @@ export function reduce(state: AppState, action: Action): AppState {
           modal: {
             kind: "feature-browser",
             selectedFeatureIndex: action.option,
+            returnTarget: state.modal.returnTarget,
           },
         };
       }
@@ -389,4 +403,41 @@ function handleModalNavigate(state: AppState, direction: "up" | "down"): AppStat
 
 function canOpenOverlayFromModal(modal: ModalState): boolean {
   return modal.kind === "none" || modal.kind === "command-palette";
+}
+
+function closeOrReturnModal(state: AppState): AppState {
+  if (state.modal.kind !== "none") {
+    if (state.modal.kind === "command-palette") {
+      return { ...state, modal: { kind: "none" } };
+    }
+    const returnTarget = getModalReturnTarget(state.modal);
+    if (returnTarget === "command-palette") {
+      return {
+        ...state,
+        modal: {
+          kind: "command-palette",
+          query: "",
+          selectedCommandIndex: 0,
+        },
+      };
+    }
+    return { ...state, modal: { kind: "none" } };
+  }
+  return { ...state, focusedPanel: "none" };
+}
+
+function getModalReturnTarget(modal: ModalState): ModalReturnTarget | undefined {
+  if (
+    modal.kind === "feature-browser"
+    || modal.kind === "overview"
+    || modal.kind === "handoffs"
+    || modal.kind === "config"
+    || modal.kind === "processes"
+  ) {
+    return modal.returnTarget;
+  }
+  if (modal.kind === "command-palette") {
+    return "command-palette";
+  }
+  return undefined;
 }

@@ -311,7 +311,21 @@ export function keyToAction(key: Key, state: AppState): Action | undefined {
   if (key.type === "escape") {
     return { type: "escape" };
   }
-  if (key.type === "arrow" && key.direction === "left" && state.modal.kind === "command-palette") {
+  if (
+    key.type === "arrow"
+    && key.direction === "left"
+    && (
+      state.modal.kind === "command-palette"
+      || (
+        (state.modal.kind === "feature-browser"
+          || state.modal.kind === "overview"
+          || state.modal.kind === "handoffs"
+          || state.modal.kind === "config"
+          || state.modal.kind === "processes")
+        && state.modal.returnTarget === "command-palette"
+      )
+    )
+  ) {
     return { type: "escape" };
   }
   if (key.type === "arrow" && (key.direction === "up" || key.direction === "down")) {
@@ -581,7 +595,9 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
         state.modal.selectedFeatureIndex,
         Math.max(0, state.snapshot.features.length - 1),
       ),
-      footer: "Enter focus · Esc close",
+        footer: state.modal.returnTarget === "command-palette"
+          ? "Enter focus · Esc back"
+          : "Enter focus · Esc close",
     };
   }
 
@@ -601,7 +617,7 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
           tone: "muted" as const,
         })),
       ],
-      footer: "Esc close",
+      footer: state.modal.returnTarget === "command-palette" ? "Esc back" : "Esc close",
     };
   }
 
@@ -623,7 +639,7 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
             },
           ]))
           : [{ text: "No pending handoffs in this workspace.", section: "Pending", tone: "muted" }],
-        footer: "Esc close",
+        footer: state.modal.returnTarget === "command-palette" ? "Esc back" : "Esc close",
       };
     }
 
@@ -653,7 +669,7 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
             tone: "muted" as const,
           })),
         ],
-        footer: "Esc close",
+        footer: state.modal.returnTarget === "command-palette" ? "Esc back" : "Esc close",
       };
     }
 
@@ -675,7 +691,7 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
             },
           ]))
           : [{ text: "No assigned, in-progress, or review features right now.", section: "Runtime", tone: "muted" }],
-        footer: "Esc close",
+        footer: state.modal.returnTarget === "command-palette" ? "Esc back" : "Esc close",
       };
     }
 

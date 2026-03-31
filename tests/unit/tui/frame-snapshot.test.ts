@@ -392,11 +392,11 @@ describe("frame rendering", () => {
           expect(frame).toContain("Ctrl+P Commands");
         });
 
-      it("renders the configuration modal with command-palette styling", () => {
-        const frame = withTerminalSize(90, 28, () => {
-          const buf = new Buffer(90, 28);
-            const state = createInitialState(makeSnapshot());
-            state.modal = { kind: "config" };
+        it("renders the configuration modal with command-palette styling", () => {
+          const frame = withTerminalSize(90, 28, () => {
+            const buf = new Buffer(90, 28);
+              const state = createInitialState(makeSnapshot());
+              state.modal = { kind: "config" };
             renderFrame(buf, state);
           return buf.toString();
         });
@@ -406,11 +406,23 @@ describe("frame rendering", () => {
         expect(frame).toContain("Mission Directory");
         expect(frame).toContain(".maestro/missions/2026-03-30-001");
         expect(frame).toContain("Esc close");
-        expect(frame).toContain("Workers");
-        expect(frame).toContain("backend-work");
-      });
+          expect(frame).toContain("Workers");
+          expect(frame).toContain("backend-work");
+        });
 
-      it("renders the command palette and dims the dashboard behind it", () => {
+        it("shows back copy for palette-launched detail overlays", () => {
+          const frame = withTerminalSize(90, 28, () => {
+            const buf = new Buffer(90, 28);
+            const state = createInitialState(makeSnapshot());
+            state.modal = { kind: "config", returnTarget: "command-palette" };
+            renderFrame(buf, state);
+            return buf.toString();
+          });
+
+          expect(frame).toContain("Esc back");
+        });
+
+        it("renders the command palette and dims the dashboard behind it", () => {
         const buf = new Buffer(90, 28);
         const state = createInitialState(makeSnapshot());
         state.modal = { kind: "command-palette", query: "pro", selectedCommandIndex: 0 };

@@ -76,6 +76,15 @@ describe("keyToAction", () => {
     expect(action).toEqual({ type: "escape" });
   });
 
+  it("maps Left Arrow to back when a palette-launched detail overlay is open", () => {
+    const state = createInitialState(SNAPSHOT);
+    state.modal = { kind: "handoffs", returnTarget: "command-palette" };
+
+    const action = keyToAction({ type: "arrow", direction: "left" }, state);
+
+    expect(action).toEqual({ type: "escape" });
+  });
+
   it("does not map Left Arrow when the command palette is closed", () => {
     const action = keyToAction(
       { type: "arrow", direction: "left" },

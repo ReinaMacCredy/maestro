@@ -195,13 +195,35 @@ describe("reduce", () => {
   });
 
   describe("escape", () => {
-      it("closes modal", () => {
+        it("closes modal", () => {
+          const state = makeState({
+            modal: { kind: "config" },
+          });
+          const next = reduce(state, { type: "escape" });
+          expect(next.modal.kind).toBe("none");
+      });
+
+      it("returns palette-launched detail modals to the command palette home view", () => {
         const state = makeState({
-          modal: { kind: "config" },
+          modal: { kind: "config", returnTarget: "command-palette" },
         });
         const next = reduce(state, { type: "escape" });
+
+        expect(next.modal.kind).toBe("command-palette");
+        if (next.modal.kind === "command-palette") {
+          expect(next.modal.query).toBe("");
+          expect(next.modal.selectedCommandIndex).toBe(0);
+        }
+      });
+
+      it("closes the command palette itself instead of reopening it", () => {
+        const state = makeState({
+          modal: { kind: "command-palette", query: "han", selectedCommandIndex: 2 },
+        });
+        const next = reduce(state, { type: "escape" });
+
         expect(next.modal.kind).toBe("none");
-    });
+      });
 
     it("unfocuses panel when no modal", () => {
       const state = reduce(makeState(), { type: "escape" });
@@ -209,27 +231,42 @@ describe("reduce", () => {
     });
   });
 
-  describe("open-features", () => {
+    describe("open-features", () => {
     it("opens feature browser", () => {
       const state = reduce(makeState(), { type: "open-features" });
       expect(state.modal.kind).toBe("feature-browser");
     });
 
-    it("opens the feature browser from the command palette", () => {
-      const state = reduce(
-        makeState({ modal: { kind: "command-palette", query: "fea", selectedCommandIndex: 1 } }),
-        { type: "open-features" },
-      );
-      expect(state.modal.kind).toBe("feature-browser");
+      it("opens the feature browser from the command palette", () => {
+        const state = reduce(
+          makeState({ modal: { kind: "command-palette", query: "fea", selectedCommandIndex: 1 } }),
+          { type: "open-features" },
+        );
+        expect(state.modal.kind).toBe("feature-browser");
+        if (state.modal.kind === "feature-browser") {
+          expect(state.modal.returnTarget).toBe("command-palette");
+        }
+      });
     });
-  });
 
-  describe("open-handoffs", () => {
-    it("opens handoffs modal", () => {
-      const state = reduce(makeState(), { type: "open-handoffs" });
-      expect(state.modal.kind).toBe("handoffs");
+    describe("open-handoffs", () => {
+      it("opens handoffs modal", () => {
+        const state = reduce(makeState(), { type: "open-handoffs" });
+        expect(state.modal.kind).toBe("handoffs");
+      });
+
+      it("keeps palette return context when opened from the command palette", () => {
+        const state = reduce(
+          makeState({ modal: { kind: "command-palette", query: "han", selectedCommandIndex: 0 } }),
+          { type: "open-handoffs" },
+        );
+
+        expect(state.modal.kind).toBe("handoffs");
+        if (state.modal.kind === "handoffs") {
+          expect(state.modal.returnTarget).toBe("command-palette");
+        }
+      });
     });
-  });
 
   describe("open-config", () => {
     it("opens config modal", () => {
@@ -245,7 +282,7 @@ describe("reduce", () => {
     });
   });
 
-  describe("command palette", () => {
+    describe("command palette", () => {
     it("opens the command palette with a fresh query", () => {
       const state = reduce(makeState(), { type: "open-command-palette" });
       expect(state.modal.kind).toBe("command-palette");
@@ -301,20 +338,40 @@ describe("reduce", () => {
       expect(state.modal.kind).toBe("feature-action");
     });
 
-    it("keeps keyboard navigation within the filtered results", () => {
-      let state = makeState({
-        modal: { kind: "command-palette", query: "proc", selectedCommandIndex: 0 },
-      });
+      it("keeps keyboard navigation within the filtered results", () => {
+        let state = makeState({
+          modal: { kind: "command-palette", query: "proc", selectedCommandIndex: 0 },
+        });
 
       state = reduce(state, { type: "navigate", direction: "down" });
       state = reduce(state, { type: "navigate", direction: "down" });
 
       expect(state.modal.kind).toBe("command-palette");
-      if (state.modal.kind === "command-palette") {
-        expect(state.modal.selectedCommandIndex).toBe(0);
-      }
+        if (state.modal.kind === "command-palette") {
+          expect(state.modal.selectedCommandIndex).toBe(0);
+        }
+      });
+
+      it("returns palette-launched feature browser overlays to the palette after snapshot refresh", () => {
+        const state = makeState({
+          modal: { kind: "feature-browser", selectedFeatureIndex: 1, returnTarget: "command-palette" },
+        });
+        const reordered = makeSnapshot({
+          features: [
+            { id: "f2", title: "F2", status: "pending", milestoneId: "m1", workerType: "test", hasReport: false },
+            { id: "f1", title: "F1", status: "pending", milestoneId: "m1", workerType: "test", hasReport: false },
+            { id: "f3", title: "F3", status: "pending", milestoneId: "m2", workerType: "test", hasReport: false },
+          ],
+        });
+
+        const next = reduce(state, { type: "update-snapshot", snapshot: reordered });
+
+        expect(next.modal.kind).toBe("feature-browser");
+        if (next.modal.kind === "feature-browser") {
+          expect(next.modal.returnTarget).toBe("command-palette");
+        }
+      });
     });
-  });
 
   describe("update-snapshot", () => {
     it("updates snapshot and clamps selection", () => {
