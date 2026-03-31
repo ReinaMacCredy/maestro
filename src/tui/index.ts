@@ -315,18 +315,15 @@ export function keyToAction(key: Key, state: AppState): Action | undefined {
     key.type === "arrow"
     && key.direction === "left"
     && (
-      state.modal.kind === "command-palette"
-      || (
-        (state.modal.kind === "feature-browser"
-          || state.modal.kind === "overview"
-          || state.modal.kind === "handoffs"
-          || state.modal.kind === "config"
-          || state.modal.kind === "processes")
-        && state.modal.returnTarget === "command-palette"
-      )
+      (state.modal.kind === "feature-browser"
+        || state.modal.kind === "overview"
+        || state.modal.kind === "handoffs"
+        || state.modal.kind === "config"
+        || state.modal.kind === "processes")
+      && state.modal.returnTarget === "command-palette"
     )
   ) {
-    return { type: "escape" };
+    return { type: "navigate", direction: "left" };
   }
   if (key.type === "arrow" && (key.direction === "up" || key.direction === "down")) {
     return { type: "navigate", direction: key.direction };

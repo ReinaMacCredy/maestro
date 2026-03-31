@@ -132,6 +132,28 @@ describe("reduce", () => {
         expect(next.modal.selectedFeatureIndex).toBe(1);
       }
     });
+
+    it("returns palette-backed overlays to the command palette on left-arrow back", () => {
+      const state = makeState({
+        modal: { kind: "config", returnTarget: "command-palette" },
+      });
+      const next = reduce(state, { type: "navigate", direction: "left" });
+
+      expect(next.modal.kind).toBe("command-palette");
+      if (next.modal.kind === "command-palette") {
+        expect(next.modal.query).toBe("");
+        expect(next.modal.selectedCommandIndex).toBe(0);
+      }
+    });
+
+    it("ignores left-arrow on the command palette home view", () => {
+      const state = makeState({
+        modal: { kind: "command-palette", query: "han", selectedCommandIndex: 1 },
+      });
+      const next = reduce(state, { type: "navigate", direction: "left" });
+
+      expect(next).toEqual(state);
+    });
   });
 
   describe("focus", () => {

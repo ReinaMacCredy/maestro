@@ -67,13 +67,13 @@ const SNAPSHOT: MissionControlSnapshot = {
 };
 
 describe("keyToAction", () => {
-  it("maps Left Arrow to back when the command palette is open", () => {
+  it("does not map Left Arrow on the command palette home view", () => {
     const state = createInitialState(SNAPSHOT);
     state.modal = { kind: "command-palette", query: "", selectedCommandIndex: 0 };
 
     const action = keyToAction({ type: "arrow", direction: "left" }, state);
 
-    expect(action).toEqual({ type: "escape" });
+    expect(action).toBeUndefined();
   });
 
   it("maps Left Arrow to back when a palette-launched detail overlay is open", () => {
@@ -82,7 +82,7 @@ describe("keyToAction", () => {
 
     const action = keyToAction({ type: "arrow", direction: "left" }, state);
 
-    expect(action).toEqual({ type: "escape" });
+    expect(action).toEqual({ type: "navigate", direction: "left" });
   });
 
   it("does not map Left Arrow when the command palette is closed", () => {
