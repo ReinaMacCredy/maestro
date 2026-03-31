@@ -88,7 +88,7 @@ export function applyModalBackdrop(buf: Buffer, rect: Rect = {
 
         buf.set(row, col, cell.char, {
           fg: dimColor(cell.fg),
-          bg: cell.bg,
+          bg: PALETTE.overlayBackdropBg,
           bold: false,
           dim: true,
         });

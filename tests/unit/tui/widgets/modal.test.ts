@@ -158,7 +158,7 @@ describe("renderModal", () => {
     applyModalBackdrop(buf);
 
     const cell = buf.getCell(1, 1);
-    expect(cell?.bg).toBe(PALETTE.panelBg);
+    expect(cell?.bg).toBe(PALETTE.overlayBackdropBg);
     expect(cell?.fg).toBe(PALETTE.gray);
     expect(cell?.bold).toBe(false);
     expect(cell?.dim).toBe(true);
@@ -166,7 +166,7 @@ describe("renderModal", () => {
 
   it("renders palette rows with a query line, sections, and shortcut hints", () => {
     const buf = new Buffer(90, 28);
-    renderModal(buf, { x: 0, y: 0, width: 90, height: 28 }, {
+    const layout = renderModal(buf, { x: 0, y: 0, width: 90, height: 28 }, {
       mode: "palette",
       title: "Commands",
       query: "pro",
@@ -195,5 +195,6 @@ describe("renderModal", () => {
     expect(text).toContain("Processes");
     expect(text).toContain("Ctrl+T");
     expect(text).toContain("esc");
+    expect(buf.getCell(layout.y, layout.x)?.bg).toBe(PALETTE.overlaySurfaceBg);
   });
 });

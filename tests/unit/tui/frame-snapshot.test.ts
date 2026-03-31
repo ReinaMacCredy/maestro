@@ -422,7 +422,7 @@ describe("frame rendering", () => {
         expect(frame).toContain("Navigate");
         expect(frame).toContain("Processes");
         expect(frame).toContain("Enter open · Esc close");
-        expect(buf.getCell(1, 1)?.bg).toBe(PALETTE.headerBg);
+        expect(buf.getCell(1, 1)?.bg).toBe(PALETTE.overlayBackdropBg);
         expect(buf.getCell(1, 1)?.dim).toBe(true);
       });
       });
