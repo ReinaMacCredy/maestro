@@ -374,7 +374,7 @@ function getRowHeight(row: NormalizedModalRow): number {
 
 function getToneColor(tone: ModalTone): number {
   if (tone === "accent") return PALETTE.brightWhite;
-  if (tone === "muted") return PALETTE.gray;
+  if (tone === "muted") return PALETTE.overlayHint;
   return PALETTE.brightWhite;
 }
 

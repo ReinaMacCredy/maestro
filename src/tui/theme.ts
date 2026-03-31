@@ -31,11 +31,11 @@ export const PALETTE = {
   infoBg: 237,
   selectedBg: 236,
   headerBg: 234,
-    overlayBackdropBg: -1,
+    overlayBackdropBg: 232,
     overlaySurfaceBg: -1,
     overlayQueryBg: -1,
     overlaySection: 223,
-    overlayHint: 250,
+    overlayHint: 252,
     overlaySelectedBg: 39,
     overlaySelectedFg: 255,
   // Default (terminal default)
