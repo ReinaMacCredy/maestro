@@ -11,9 +11,9 @@ import type { ConfigPort } from "../ports/config.port.js";
 import type { CassPort } from "../ports/cass.port.js";
 import type { GitPort } from "../ports/git.port.js";
 import type { Mission, Feature } from "../domain/mission-types.js";
+import type { DoctorCheck, StatusReport } from "../domain/types.js";
+import { CASS_INSTALL_HINT } from "../domain/defaults.js";
 import { generateMissionReport, type MissionReport } from "../usecases/mission-report.usecase.js";
-import { checkStatus } from "../usecases/check-status.usecase.js";
-import { runDoctor } from "../usecases/run-doctor.usecase.js";
 import { getValidFeatureTransitions } from "../domain/mission-state.js";
 import { deriveEvents } from "./events.js";
 import type {
@@ -59,8 +59,7 @@ export async function buildSnapshot(
     features,
     assertions,
     checkpoints,
-    status,
-    checks,
+    env,
     gitState,
   ] = await Promise.all([
     generateMissionReport(
@@ -72,8 +71,7 @@ export async function buildSnapshot(
     deps.featureStore.list(missionId),
     deps.assertionStore.list(missionId),
     deps.checkpointStore.list(missionId),
-    checkStatus(deps.handoffStore, deps.config, deps.cass, deps.git, deps.cwd),
-    runDoctor(deps.cass, deps.git, deps.config, deps.cwd),
+    buildMissionControlEnvironmentSummary(deps.handoffStore, deps.config, deps.cass, deps.git, deps.cwd),
     deps.git.getState(deps.cwd),
   ]);
 
@@ -121,8 +119,8 @@ export async function buildSnapshot(
   ).length;
   const blockedCount = features.filter((f) => f.status === "blocked").length;
   const queuedCount = features.filter((f) => f.status === "pending").length;
-  const pendingHandoffs = status.pendingHandoffs.map(mapPendingHandoff);
-  const workerTypes = [...new Set(features.map((feature) => feature.workerType))];
+    const pendingHandoffs = env.status.pendingHandoffs.map(mapPendingHandoff);
+    const workerTypes = [...new Set(features.map((feature) => feature.workerType))];
 
   return {
     mode: "mission",
@@ -150,15 +148,15 @@ export async function buildSnapshot(
       diffStat: gitState.diffStat,
       changedFiles: gitState.changedFiles,
     },
-    pendingHandoffs,
-    configSummary: {
-      configSource: status.configSource,
-      cassAvailable: status.cassAvailable,
-      gitAvailable: status.gitAvailable,
-      checks,
-      missionDirectory: `.maestro/missions/${mission.id}`,
-      workerTypes,
-    },
+      pendingHandoffs,
+      configSummary: {
+        configSource: env.status.configSource,
+        cassAvailable: env.status.cassAvailable,
+        gitAvailable: env.status.gitAvailable,
+        checks: env.checks,
+        missionDirectory: `.maestro/missions/${mission.id}`,
+        workerTypes,
+      },
     runtimeProcesses: buildRuntimeProcesses(features, activeWorker),
     progressLog,
     milestones,
@@ -172,11 +170,11 @@ export async function buildHomeSnapshot(
   deps: HomeSnapshotDeps,
   cwd: string,
 ): Promise<MissionControlSnapshot> {
-  const [status, checks, gitState] = await Promise.all([
-    checkStatus(deps.handoffStore, deps.config, deps.cass, deps.git, cwd),
-    runDoctor(deps.cass, deps.git, deps.config, cwd),
+  const [env, gitState] = await Promise.all([
+    buildMissionControlEnvironmentSummary(deps.handoffStore, deps.config, deps.cass, deps.git, cwd),
     deps.git.isRepo(cwd) ? deps.git.getState(cwd) : Promise.resolve(undefined),
   ]);
+  const { status, checks } = env;
 
   const headline = status.gitAvailable
     ? "No missions yet"
@@ -363,5 +361,69 @@ function mapPendingHandoff(
     id: entry.handoff.id,
     message: entry.handoff.message,
     agent: entry.handoff.session.agent,
+  };
+}
+
+async function buildMissionControlEnvironmentSummary(
+  handoffStore: HandoffStorePort,
+  config: ConfigPort,
+  cass: CassPort,
+  git: GitPort,
+  cwd: string,
+): Promise<{ status: StatusReport; checks: readonly DoctorCheck[] }> {
+  const [
+    pendingHandoffs,
+    projectConfigExists,
+    globalConfigExists,
+    cassBinaryAvailable,
+    gitAvailable,
+  ] = await Promise.all([
+    handoffStore.list({ status: "pending" }),
+    config.exists("project", cwd),
+    config.exists("global", cwd),
+    cass.hasBinary(),
+    git.isRepo(cwd),
+  ]);
+
+  const configSource: StatusReport["configSource"] = projectConfigExists
+    ? "project"
+    : globalConfigExists
+      ? "global"
+      : "none";
+
+  return {
+    status: {
+      initialized: projectConfigExists || globalConfigExists,
+      configSource,
+      pendingHandoffs,
+      cassAvailable: cassBinaryAvailable,
+      gitAvailable,
+    },
+    checks: [
+      {
+        name: "git",
+        status: gitAvailable ? "ok" : "fail",
+        message: gitAvailable ? "Git repository detected" : "Not inside a git repository",
+        fix: gitAvailable ? undefined : "Run: git init",
+      },
+      {
+        name: "cass",
+        status: cassBinaryAvailable ? "ok" : "fail",
+        message: cassBinaryAvailable ? "CASS binary detected" : "CASS binary not found",
+        fix: cassBinaryAvailable ? undefined : CASS_INSTALL_HINT,
+      },
+      {
+        name: "project-config",
+        status: projectConfigExists ? "ok" : "warn",
+        message: projectConfigExists ? "Project config found at .maestro/config.yaml" : "No project config found",
+        fix: projectConfigExists ? undefined : "Run: maestro init",
+      },
+      {
+        name: "global-config",
+        status: globalConfigExists ? "ok" : "warn",
+        message: globalConfigExists ? "Global config found at ~/.maestro/config.yaml" : "No global config found",
+        fix: globalConfigExists ? undefined : "Run: maestro init --global",
+      },
+    ],
   };
 }

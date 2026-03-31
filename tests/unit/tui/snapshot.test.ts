@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildSnapshot, type SnapshotDeps } from "../../../src/tui/snapshot.js";
+import { buildHomeSnapshot, buildSnapshot, type SnapshotDeps } from "../../../src/tui/snapshot.js";
 import { FsMissionStoreAdapter } from "../../../src/adapters/mission-store.adapter.js";
 import { FsFeatureStoreAdapter } from "../../../src/adapters/feature-store.adapter.js";
 import { FsAssertionStoreAdapter } from "../../../src/adapters/assertion-store.adapter.js";
@@ -209,4 +209,64 @@ describe("buildSnapshot", () => {
     expect(snapshot.features.length).toBe(3);
     expect(snapshot.features.map((f) => f.id)).toEqual(["f1", "f2", "f3"]);
   }, 15_000);
-});
+
+  it("uses the fast CASS binary check for mission-control snapshots", async () => {
+    const plan = createSamplePlan();
+    await writeFile(join(tmpDir, "plan.json"), JSON.stringify(plan));
+    const { stdout } = await run(["mission", "create", "--file", join(tmpDir, "plan.json"), "--json"], tmpDir);
+    const missionId = JSON.parse(stdout).mission.id;
+
+    let isAvailableCalls = 0;
+    let hasBinaryCalls = 0;
+    deps = {
+      ...deps,
+      cass: {
+        isAvailable: async () => {
+          isAvailableCalls += 1;
+          return true;
+        },
+        hasBinary: async () => {
+          hasBinaryCalls += 1;
+          return true;
+        },
+        indexOnce: async () => undefined,
+        search: async () => ({ query: "", hits: [] }),
+      } satisfies CassPort,
+    };
+
+    const snapshot = await buildSnapshot(deps, missionId);
+
+    expect(snapshot.configSummary?.cassAvailable).toBe(true);
+    expect(isAvailableCalls).toBe(0);
+    expect(hasBinaryCalls).toBe(1);
+  }, 15_000);
+
+  it("uses the fast CASS binary check for home snapshots", async () => {
+    let isAvailableCalls = 0;
+    let hasBinaryCalls = 0;
+    const homeDeps = {
+      handoffStore: deps.handoffStore,
+      config: deps.config,
+      cass: {
+        isAvailable: async () => {
+          isAvailableCalls += 1;
+          return true;
+        },
+        hasBinary: async () => {
+          hasBinaryCalls += 1;
+          return true;
+        },
+        indexOnce: async () => undefined,
+        search: async () => ({ query: "", hits: [] }),
+      } satisfies CassPort,
+      git: deps.git,
+    };
+
+    const snapshot = await buildHomeSnapshot(homeDeps, tmpDir);
+
+    expect(snapshot.mode).toBe("home");
+    expect(snapshot.configSummary?.cassAvailable).toBe(true);
+    expect(isAvailableCalls).toBe(0);
+    expect(hasBinaryCalls).toBe(1);
+  }, 15_000);
+  });
