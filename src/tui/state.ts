@@ -74,7 +74,7 @@ export function reduce(state: AppState, action: Action): AppState {
 
     case "navigate": {
       if (action.direction === "left") {
-        return closeOrReturnModal(state);
+        return canNavigateBackToPalette(state.modal) ? closeOrReturnModal(state) : state;
       }
       if (state.modal.kind === "feature-action") {
         return handleModalNavigate(state, action.direction);
@@ -443,4 +443,8 @@ function getModalReturnTarget(modal: ModalState): ModalReturnTarget | undefined 
     return "command-palette";
   }
   return undefined;
+}
+
+function canNavigateBackToPalette(modal: ModalState): boolean {
+  return modal.kind !== "command-palette" && getModalReturnTarget(modal) === "command-palette";
 }
