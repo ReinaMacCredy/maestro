@@ -198,20 +198,20 @@ export function renderModal(buf: Buffer, parent: Rect, opts: ModalOptions): Moda
 
   if (opts.mode === "palette") {
     renderQueryRow(buf, layout, opts.query, rows.length);
-  } else if (opts.eyebrow) {
-    buf.writeText(layout.y + 2, layout.x + 2, truncate(opts.eyebrow, contentWidth), {
-      fg: PALETTE.gray,
-      bg: surfaceBg,
-    });
-  }
+    } else if (opts.eyebrow) {
+      buf.writeText(layout.y + 2, layout.x + 2, truncate(opts.eyebrow, contentWidth), {
+        fg: PALETTE.overlayHint,
+        bg: surfaceBg,
+      });
+    }
 
   let rowY = layout.contentRect.y;
   if (opts.mode === "palette" && rows.length === 0) {
-    const emptyLabel = truncate(opts.emptyLabel ?? "No commands match", contentWidth);
-    buf.writeText(rowY, layout.x + 3, emptyLabel, {
-      fg: PALETTE.gray,
-      bg: surfaceBg,
-    });
+      const emptyLabel = truncate(opts.emptyLabel ?? "No commands match", contentWidth);
+      buf.writeText(rowY, layout.x + 3, emptyLabel, {
+        fg: PALETTE.overlayHint,
+        bg: surfaceBg,
+      });
   } else {
     for (let index = 0; index < rows.length; index++) {
       const row = rows[index]!;
@@ -261,9 +261,9 @@ function renderQueryRow(
   };
   buf.fillRect(queryRect, " ", { bg: PALETTE.overlayQueryBg });
 
-  const prompt = "> ";
-  const queryText = query.length > 0 ? query : "Type a command";
-  const queryColor = query.length > 0 ? PALETTE.brightWhite : PALETTE.gray;
+    const prompt = "> ";
+    const queryText = query.length > 0 ? query : "Type a command";
+    const queryColor = query.length > 0 ? PALETTE.brightWhite : PALETTE.overlayHint;
   buf.writeText(queryRect.y, queryRect.x + 1, prompt, {
     fg: PALETTE.overlayHint,
     bg: PALETTE.overlayQueryBg,
@@ -293,7 +293,7 @@ function renderRow(
   const baseBg = row.style === "block" && !isSelected ? PALETTE.overlayQueryBg : PALETTE.overlaySurfaceBg;
   const bg = isSelected ? PALETTE.overlaySelectedBg : baseBg;
   const labelFg = isSelected ? PALETTE.overlaySelectedFg : getToneColor(row.tone);
-  const detailFg = isSelected ? PALETTE.overlaySelectedFg : PALETTE.gray;
+    const detailFg = isSelected ? PALETTE.overlaySelectedFg : PALETTE.overlayHint;
   const hintFg = isSelected ? PALETTE.overlaySelectedFg : PALETTE.overlayHint;
 
   buf.fillRect(rect, " ", { bg });
