@@ -23,6 +23,31 @@ export interface MissionControlHomeHandoff {
   agent: string;
 }
 
+export interface MissionControlSessionSidebar {
+  branch: string;
+  workingTreeClean: boolean;
+  diffStat: string;
+  changedFiles: readonly string[];
+}
+
+export interface MissionControlConfigSummary {
+  configSource: "project" | "global" | "none";
+  cassAvailable: boolean;
+  gitAvailable: boolean;
+  checks: readonly DoctorCheck[];
+  missionDirectory: string | null;
+  workerTypes: readonly string[];
+}
+
+export interface MissionControlRuntimeProcessRow {
+  featureId: string;
+  title: string;
+  status: FeatureStatus;
+  workerType: string;
+  hasReport: boolean;
+  isLive: boolean;
+}
+
 export interface MissionControlHomeState {
   headline: string;
   summary: string;
@@ -52,6 +77,10 @@ export interface MissionControlSnapshot {
 
   // Lower pane
   activeWorker: MissionControlWorkerPane | null;
+  session: MissionControlSessionSidebar | null;
+  pendingHandoffs: readonly MissionControlHomeHandoff[];
+  configSummary: MissionControlConfigSummary | null;
+  runtimeProcesses: readonly MissionControlRuntimeProcessRow[];
   progressLog: readonly MissionControlEvent[];
 
   // Milestones (for grouping)

@@ -34,14 +34,30 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
       dependsOn: [],
       fulfills: [],
       validTransitions: ["assigned", "in-progress"],
-    },
-    features: [
-      { id: "f1", title: "F1", status: "pending", milestoneId: "m1", workerType: "test", hasReport: false },
-      { id: "f2", title: "F2", status: "pending", milestoneId: "m1", workerType: "test", hasReport: false },
-      { id: "f3", title: "F3", status: "pending", milestoneId: "m2", workerType: "test", hasReport: false },
-    ],
-    activeWorker: null,
-    progressLog: [],
+      },
+      features: [
+        { id: "f1", title: "F1", status: "pending", milestoneId: "m1", workerType: "test", hasReport: false },
+        { id: "f2", title: "F2", status: "pending", milestoneId: "m1", workerType: "test", hasReport: false },
+        { id: "f3", title: "F3", status: "pending", milestoneId: "m2", workerType: "test", hasReport: false },
+      ],
+      activeWorker: null,
+      session: {
+        branch: "main",
+        workingTreeClean: false,
+        diffStat: "+4 -1",
+        changedFiles: ["src/tui/index.ts"],
+      },
+      pendingHandoffs: [],
+      configSummary: {
+        configSource: "project",
+        cassAvailable: true,
+        gitAvailable: true,
+        checks: [],
+        missionDirectory: ".maestro/missions/2026-03-30-001",
+        workerTypes: ["test"],
+      },
+      runtimeProcesses: [],
+      progressLog: [],
       milestones: [],
       canPause: true,
       canResume: false,
@@ -110,12 +126,12 @@ describe("reduce", () => {
       expect(state.focusedPanel).toBe("log");
     });
 
-    it("does not change focus when modal is open", () => {
-      const state = makeState({
-        modal: { kind: "directory" },
-      });
-      const next = reduce(state, { type: "focus", panel: "log" });
-      expect(next.focusedPanel).toBe("features");
+      it("does not change focus when modal is open", () => {
+        const state = makeState({
+          modal: { kind: "config" },
+        });
+        const next = reduce(state, { type: "focus", panel: "log" });
+        expect(next.focusedPanel).toBe("features");
     });
   });
 
@@ -165,12 +181,12 @@ describe("reduce", () => {
   });
 
   describe("escape", () => {
-    it("closes modal", () => {
-      const state = makeState({
-        modal: { kind: "directory" },
-      });
-      const next = reduce(state, { type: "escape" });
-      expect(next.modal.kind).toBe("none");
+      it("closes modal", () => {
+        const state = makeState({
+          modal: { kind: "config" },
+        });
+        const next = reduce(state, { type: "escape" });
+        expect(next.modal.kind).toBe("none");
     });
 
     it("unfocuses panel when no modal", () => {
@@ -179,17 +195,31 @@ describe("reduce", () => {
     });
   });
 
-  describe("open-dir", () => {
-    it("opens directory modal", () => {
-      const state = reduce(makeState(), { type: "open-dir" });
-      expect(state.modal.kind).toBe("directory");
+  describe("open-features", () => {
+    it("opens feature browser", () => {
+      const state = reduce(makeState(), { type: "open-features" });
+      expect(state.modal.kind).toBe("feature-browser");
     });
   });
 
-  describe("open-models", () => {
-    it("opens models modal", () => {
-      const state = reduce(makeState(), { type: "open-models" });
-      expect(state.modal.kind).toBe("models");
+  describe("open-handoffs", () => {
+    it("opens handoffs modal", () => {
+      const state = reduce(makeState(), { type: "open-handoffs" });
+      expect(state.modal.kind).toBe("handoffs");
+    });
+  });
+
+  describe("open-config", () => {
+    it("opens config modal", () => {
+      const state = reduce(makeState(), { type: "open-config" });
+      expect(state.modal.kind).toBe("config");
+    });
+  });
+
+  describe("open-processes", () => {
+    it("opens processes modal", () => {
+      const state = reduce(makeState(), { type: "open-processes" });
+      expect(state.modal.kind).toBe("processes");
     });
   });
 

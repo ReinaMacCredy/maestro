@@ -25,6 +25,11 @@ export function registerMissionControlCommand(program: Command): void {
         featureStore: services.featureStore,
         assertionStore: services.assertionStore,
         checkpointStore: services.checkpointStore,
+        handoffStore: services.handoffStore,
+        config: services.config,
+        cass: services.cass,
+        git: services.git,
+        cwd: process.cwd(),
       };
       const homeSnapshotDeps = {
         handoffStore: services.handoffStore,

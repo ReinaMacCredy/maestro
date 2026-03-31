@@ -7,6 +7,10 @@ import { FsMissionStoreAdapter } from "../../../src/adapters/mission-store.adapt
 import { FsFeatureStoreAdapter } from "../../../src/adapters/feature-store.adapter.js";
 import { FsAssertionStoreAdapter } from "../../../src/adapters/assertion-store.adapter.js";
 import { FsCheckpointStoreAdapter } from "../../../src/adapters/checkpoint-store.adapter.js";
+import type { CassPort } from "../../../src/ports/cass.port.js";
+import type { ConfigPort } from "../../../src/ports/config.port.js";
+import type { GitPort } from "../../../src/ports/git.port.js";
+import type { HandoffStorePort } from "../../../src/ports/handoff-store.port.js";
 
 let tmpDir: string;
 let deps: SnapshotDeps;
@@ -49,6 +53,37 @@ beforeEach(async () => {
     featureStore: new FsFeatureStoreAdapter(tmpDir),
     assertionStore: new FsAssertionStoreAdapter(tmpDir),
     checkpointStore: new FsCheckpointStoreAdapter(tmpDir),
+    handoffStore: {
+      create: async () => "handoff-id",
+      get: async () => undefined,
+      getLatestPending: async () => undefined,
+      listIds: async () => [],
+      list: async () => [],
+      updateStatus: async () => undefined,
+      delete: async () => undefined,
+    } satisfies HandoffStorePort,
+    config: {
+      load: async () => ({ defaultAgent: "codex" }),
+      write: async () => undefined,
+      exists: async () => true,
+    } satisfies ConfigPort,
+    cass: {
+      isAvailable: async () => true,
+      hasBinary: async () => true,
+      indexOnce: async () => undefined,
+      search: async () => ({ query: "", hits: [] }),
+    } satisfies CassPort,
+    git: {
+      getState: async () => ({
+        branch: "main",
+        recentCommits: [],
+        changedFiles: ["src/db.ts", "src/config.ts", "tests/db.test.ts"],
+        workingTreeClean: false,
+        diffStat: "+42 -11",
+      }),
+      isRepo: async () => true,
+    } satisfies GitPort,
+    cwd: tmpDir,
   };
 });
 
@@ -68,6 +103,9 @@ describe("buildSnapshot", () => {
     expect(snapshot.featureProgress.total).toBe(3);
     expect(snapshot.featureProgress.done).toBe(0);
     expect(snapshot.featureProgress.active).toBe(0);
+    expect(snapshot.session?.branch).toBe("main");
+    expect(snapshot.configSummary?.missionDirectory).toBe(`.maestro/missions/${missionId}`);
+    expect(snapshot.pendingHandoffs).toEqual([]);
   }, 15_000);
 
   it("derives a dedicated statusProgress summary for the top strip", async () => {
@@ -95,6 +133,8 @@ describe("buildSnapshot", () => {
       queued: 0,
       completionPct: 33,
     });
+    expect(snapshot.runtimeProcesses.map((process) => process.featureId)).toEqual(["f2"]);
+    expect(snapshot.runtimeProcesses.find((process) => process.featureId === "f2")?.isLive).toBe(true);
   }, 15_000);
 
   it("activeFeature matches first non-done feature", async () => {

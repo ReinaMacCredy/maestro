@@ -22,6 +22,22 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
       completionPct: 33,
     },
     tokenCounters: null,
+    session: {
+      branch: "main",
+      workingTreeClean: false,
+      diffStat: "+4 -1",
+      changedFiles: ["src/tui/worker.ts", "tests/unit/tui/panels/worker.test.ts", "src/tui/index.ts"],
+    },
+    pendingHandoffs: [],
+    configSummary: {
+      configSource: "project",
+      cassAvailable: true,
+      gitAvailable: true,
+      checks: [],
+      missionDirectory: ".maestro/missions/2026-03-30-001",
+      workerTypes: ["backend-worker"],
+    },
+    runtimeProcesses: [],
     activeFeature: null,
     features: [],
     activeWorker: null,
@@ -35,20 +51,19 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
 }
 
 describe("renderWorkerPanel", () => {
-  it("renders an explicit activity heading for the empty state", () => {
-    const buf = new Buffer(80, 4);
-    renderWorkerPanel(buf, { x: 0, y: 0, width: 80, height: 4 }, makeSnapshot());
+  it("renders the new activity/session two-pane structure", () => {
+    const buf = new Buffer(80, 8);
+    renderWorkerPanel(buf, { x: 0, y: 0, width: 80, height: 8 }, makeSnapshot());
 
-    const headingCell = buf.getCell(0, 1);
-    expect(headingCell?.char).toBe("A");
-    expect(headingCell?.fg).toBe(PALETTE.brightWhite);
-
-    const emptyStateCell = buf.getCell(1, 1);
-    expect(emptyStateCell?.char).toBe("N");
-    expect(emptyStateCell?.fg).toBe(PALETTE.gray);
+    const text = buf.toString();
+    expect(text).toContain("Activity");
+    expect(text).toContain("Session");
+    expect(text).toContain("Task");
+    expect(text).toContain("Branch");
+    expect(text).toContain("Changes");
   });
 
-  it("shows ready-state guidance for the next feature", () => {
+  it("shows structured task rows for the next feature", () => {
     const buf = new Buffer(80, 6);
     renderWorkerPanel(buf, { x: 0, y: 0, width: 80, height: 6 }, makeSnapshot({
       activeFeature: {
@@ -69,8 +84,9 @@ describe("renderWorkerPanel", () => {
     }));
 
     const text = buf.toString();
-    expect(text).toContain("Ready for the next feature");
-    expect(text).toContain("f2");
+    expect(text).toContain("Task");
     expect(text).toContain("Database config");
+    expect(text).toContain("State");
+    expect(text).toContain("Waiting to start next feature");
   });
 });

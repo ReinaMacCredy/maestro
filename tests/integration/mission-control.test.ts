@@ -42,10 +42,19 @@ os.close(slave)
 input_data = base64.b64decode(payload["input"])
 delay_s = payload.get("delayMs", 250) / 1000.0
 deadline = time.time() + (payload.get("timeoutMs", 30000) / 1000.0)
-send_at = time.time() + delay_s
+wait_for_text = payload.get("waitForText")
+input_steps = [
+    {
+        "data": base64.b64decode(step["input"]),
+        "delay_s": step.get("delayMs", 0) / 1000.0,
+    }
+    for step in payload.get("inputSteps", [])
+]
 first_output_seen = False
 send_attempts = 0
-next_send_at = send_at
+send_at = None
+next_send_at = None
+next_step_index = 0
 chunks = []
 timed_out = False
 
@@ -59,13 +68,32 @@ while True:
             if data:
                 chunks.append(data)
                 first_output_seen = True
+                if send_at is None:
+                    if wait_for_text:
+                        current_output = b"".join(chunks).decode("utf8", "replace")
+                        if wait_for_text in current_output:
+                            send_at = time.time()
+                            next_send_at = send_at + (input_steps[0]["delay_s"] if input_steps else delay_s)
+                    else:
+                        send_at = time.time()
+                        next_send_at = send_at + (input_steps[0]["delay_s"] if input_steps else delay_s)
         except OSError:
             pass
 
-    if first_output_seen and send_attempts < 3 and now >= next_send_at:
-        os.write(master, input_data)
-        send_attempts += 1
-        next_send_at = now + 0.5
+    if first_output_seen and send_at is not None and next_send_at is not None and now >= next_send_at:
+        if input_steps:
+            os.write(master, input_steps[next_step_index]["data"])
+            next_step_index += 1
+            if next_step_index < len(input_steps):
+                next_send_at = now + input_steps[next_step_index]["delay_s"]
+            else:
+                next_send_at = None
+        elif send_attempts < 3:
+            os.write(master, input_data)
+            send_attempts += 1
+            next_send_at = now + 0.5
+        else:
+            next_send_at = None
 
     if proc.poll() is not None:
         end = time.time() + 0.2
@@ -208,6 +236,19 @@ async function listFeatureStatuses(
   return Object.fromEntries(payload.features.map((feature) => [feature.id, feature.status]));
 }
 
+async function setFeatureStatus(
+  cwd: string,
+  missionId: string,
+  featureId: string,
+  status: "assigned" | "in-progress" | "review" | "blocked" | "done" | "pending",
+): Promise<void> {
+  const { exitCode } = await run(
+    ["feature", "update", featureId, "--mission", missionId, "--status", status, "--json"],
+    cwd,
+  );
+  expect(exitCode).toBe(0);
+}
+
 async function commandExists(command: string): Promise<boolean> {
   const proc = Bun.spawn(["/bin/zsh", "-lc", `command -v ${command}`], {
     stdout: "pipe",
@@ -229,10 +270,20 @@ function hasAnimatedHeaderFrame(plainOutput: string): boolean {
   return plainOutput.includes("•●•") || plainOutput.includes("••●");
 }
 
+function getDurationSamples(plainOutput: string): string[] {
+  const matches = plainOutput.matchAll(/Duration\s+((?:\d+[hms]\s*)+)/g);
+  return [...new Set(
+    Array.from(matches, (match) => match[1]?.replace(/\s+/g, " ").trim() ?? "")
+      .filter((sample) => sample.length > 0),
+  )];
+}
+
 interface PtyRunOptions {
   readonly input: string;
+  readonly inputSteps?: readonly Array<{ chars: string; delayMs?: number }>;
   readonly delayMs?: number;
   readonly timeoutMs?: number;
+  readonly waitForText?: string;
   readonly rows?: number;
   readonly cols?: number;
 }
@@ -254,8 +305,13 @@ async function runCompiledInteractivePty(
     cmd: [DIST_CLI, ...args],
     cwd,
     input: Buffer.from(opts.input, "utf8").toString("base64"),
+    inputSteps: opts.inputSteps?.map((step) => ({
+      input: Buffer.from(step.chars, "utf8").toString("base64"),
+      delayMs: step.delayMs ?? 0,
+    })),
     delayMs: opts.delayMs ?? 250,
     timeoutMs: opts.timeoutMs ?? PTY_TIMEOUT_MS,
+    waitForText: opts.waitForText,
     rows: opts.rows ?? 24,
     cols: opts.cols ?? 80,
   });
@@ -359,6 +415,7 @@ afterEach(async () => {
 describe("mission-control CLI", () => {
   it("--json returns valid snapshot with expected fields", async () => {
     const missionId = await createMission(tmpDir);
+    await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
 
     const { stdout, exitCode } = await run(
       ["mission-control", "--mission", missionId, "--json"],
@@ -374,10 +431,29 @@ describe("mission-control CLI", () => {
     expect(snapshot.statusProgress).toBeDefined();
     expect(snapshot.statusProgress.total).toBe(2);
     expect(snapshot.statusProgress.completed).toBe(0);
-    expect(snapshot.statusProgress.queued).toBe(2);
+    expect(snapshot.statusProgress.queued).toBe(1);
+    expect(snapshot.statusProgress.inFlight).toBe(1);
     expect(snapshot.features).toBeDefined();
     expect(Array.isArray(snapshot.features)).toBe(true);
     expect(snapshot.features.length).toBe(2);
+    expect(snapshot.session).toBeDefined();
+    expect(snapshot.session.branch).toBe("main");
+    expect(snapshot.session.workingTreeClean).toBe(false);
+    expect(Array.isArray(snapshot.session.changedFiles)).toBe(true);
+    expect(snapshot.session.changedFiles.length).toBeGreaterThan(0);
+    expect(typeof snapshot.session.diffStat).toBe("string");
+    expect(snapshot.session.diffStat.length).toBeGreaterThan(0);
+    expect(Array.isArray(snapshot.pendingHandoffs)).toBe(true);
+    expect(snapshot.configSummary).toBeDefined();
+    expect(snapshot.configSummary.missionDirectory).toBe(`.maestro/missions/${missionId}`);
+    expect(snapshot.configSummary.workerTypes).toContain("test-skill");
+    expect(Array.isArray(snapshot.configSummary.checks)).toBe(true);
+    expect(Array.isArray(snapshot.runtimeProcesses)).toBe(true);
+    expect(snapshot.runtimeProcesses.length).toBe(1);
+    expect(snapshot.runtimeProcesses[0].featureId).toBe("f1");
+    expect(snapshot.runtimeProcesses[0].status).toBe("assigned");
+    expect(snapshot.runtimeProcesses[0].workerType).toBe("test-skill");
+    expect(snapshot.runtimeProcesses[0].isLive).toBe(true);
     expect(snapshot.progressLog).toBeDefined();
     expect(snapshot.milestones).toBeDefined();
   }, SLOW_CLI_TIMEOUT_MS);
@@ -544,7 +620,7 @@ describe("mission-control CLI", () => {
     const result = await runCompiledInteractivePty(
       tmpDir,
       ["mission-control", "--mission", missionId],
-      { input: "q", delayMs: 450 },
+      { input: "q", delayMs: 1_250, waitForText: "Mission Control" },
     );
 
     expectCleanPtyExit(result);
@@ -583,6 +659,118 @@ describe("mission-control CLI", () => {
       );
       expectCleanPtyExit(result);
     }
+  }, PTY_TIMEOUT_MS);
+
+  it("compiled binary interactive mode updates the Session duration every second while idle", async () => {
+    if (!pythonAvailable) return;
+    const missionId = await createMission(tmpDir);
+    await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+
+    const result = await runCompiledInteractivePty(
+      tmpDir,
+      ["mission-control", "--mission", missionId],
+      { input: "q", delayMs: 2_300, waitForText: "Mission Control" },
+    );
+
+    expectCleanPtyExit(result);
+    expect(result.plainOutput).toContain("Session");
+    const durationSamples = getDurationSamples(result.plainOutput);
+    expect(durationSamples.length).toBeGreaterThan(1);
+  }, PTY_TIMEOUT_MS);
+
+  it("compiled binary interactive mode opens the Features overlay", async () => {
+    if (!pythonAvailable) return;
+    const missionId = await createMission(tmpDir);
+    await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+
+    const result = await runCompiledInteractivePty(
+      tmpDir,
+      ["mission-control", "--mission", missionId],
+      {
+        input: "",
+        inputSteps: [
+          { chars: "F", delayMs: 450 },
+          { chars: "\u001b", delayMs: 300 },
+          { chars: "q", delayMs: 300 },
+        ],
+        waitForText: "Mission Control",
+      },
+    );
+
+    expectCleanPtyExit(result);
+    expect(result.plainOutput).toContain("Features");
+    expect(result.plainOutput).toContain("Select a feature to focus");
+  }, PTY_TIMEOUT_MS);
+
+  it("compiled binary interactive mode opens the Handoff overlay", async () => {
+    if (!pythonAvailable) return;
+    const missionId = await createMission(tmpDir);
+
+    const result = await runCompiledInteractivePty(
+      tmpDir,
+      ["mission-control", "--mission", missionId],
+      {
+        input: "",
+        inputSteps: [
+          { chars: "H", delayMs: 450 },
+          { chars: "\u001b", delayMs: 300 },
+          { chars: "q", delayMs: 300 },
+        ],
+        waitForText: "Mission Control",
+      },
+    );
+
+    expectCleanPtyExit(result);
+    expect(result.plainOutput).toContain("Handoffs");
+    expect(result.plainOutput).toContain("No pending handoffs");
+  }, PTY_TIMEOUT_MS);
+
+  it("compiled binary interactive mode opens the Config overlay", async () => {
+    if (!pythonAvailable) return;
+    const missionId = await createMission(tmpDir);
+
+    const result = await runCompiledInteractivePty(
+      tmpDir,
+      ["mission-control", "--mission", missionId],
+      {
+        input: "",
+        inputSteps: [
+          { chars: "C", delayMs: 450 },
+          { chars: "\u001b", delayMs: 300 },
+          { chars: "q", delayMs: 300 },
+        ],
+        waitForText: "Mission Control",
+      },
+    );
+
+    expectCleanPtyExit(result);
+    expect(result.plainOutput).toContain("Configuration");
+    expect(result.plainOutput).toContain(`.maestro/missions/${missionId}`);
+  }, PTY_TIMEOUT_MS);
+
+  it("compiled binary interactive mode opens the Processes overlay", async () => {
+    if (!pythonAvailable) return;
+    const missionId = await createMission(tmpDir);
+    await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+
+    const result = await runCompiledInteractivePty(
+      tmpDir,
+      ["mission-control", "--mission", missionId],
+      {
+        input: "",
+        inputSteps: [
+          { chars: "P", delayMs: 450 },
+          { chars: "\u001b", delayMs: 300 },
+          { chars: "q", delayMs: 300 },
+        ],
+        waitForText: "Mission Control",
+      },
+    );
+
+    expectCleanPtyExit(result);
+    expect(result.plainOutput).toContain("Processes");
+    expect(result.plainOutput).toContain("f1");
+    expect(result.plainOutput).toContain("test-skill");
   }, PTY_TIMEOUT_MS);
 
   it("compiled binary interactive mode persists a selected feature transition on keyboard confirm", async () => {

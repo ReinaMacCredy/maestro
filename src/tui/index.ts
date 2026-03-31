@@ -24,7 +24,7 @@ import {
   type ModalOptions,
 } from "./widgets/modal.js";
 import { getValidFeatureTransitions } from "../domain/mission-state.js";
-import { PALETTE } from "./theme.js";
+import { FEATURE_STATUS_LABEL, PALETTE } from "./theme.js";
 import { BOX } from "./terminal/ansi.js";
 import { updateFeature } from "../usecases/feature-lifecycle.usecase.js";
 
@@ -48,7 +48,7 @@ export function renderOnceFrame(opts: OnceFrameOptions): string {
   const height = Math.max(process.stdout.rows || 0, minHeight);
   const buf = new Buffer(width, height);
   const state = createInitialState(opts.snapshot);
-  renderFrame(buf, state, 0);
+  renderFrame(buf, state, 0, 0);
   return buf.toString();
 }
 
@@ -62,6 +62,8 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
   let shuttingDown = false;
   let animationFrame = 0;
   let nextAnimationTickMs = Date.now() + HEADER_DOT_INTERVAL_MS;
+  let nextDurationTickMs = Date.now() + 1000;
+  let lastSnapshotMs = Date.now();
 
   function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -119,7 +121,7 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
   try {
     // Initial render
     const buf = screen.createBuffer();
-    renderFrame(buf, state, animationFrame);
+    renderFrame(buf, state, animationFrame, 0);
     screen.render(buf);
     dirty = false;
 
@@ -149,6 +151,12 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
         nextAnimationTickMs = now + HEADER_DOT_INTERVAL_MS;
       }
 
+      if (now >= nextDurationTickMs) {
+        const elapsedTicks = Math.max(1, Math.floor((now - nextDurationTickMs) / 1000) + 1);
+        nextDurationTickMs += elapsedTicks * 1000;
+        dirty = true;
+      }
+
       if (now - lastPollMs >= 2000) {
         lastPollMs = now;
         try {
@@ -156,6 +164,8 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
             ? await buildSnapshot(opts.snapshotDeps, opts.missionId)
             : await buildHomeSnapshot(opts.homeSnapshotDeps, process.cwd());
           state = reduce(state, { type: "update-snapshot", snapshot: snap });
+          lastSnapshotMs = now;
+          nextDurationTickMs = now + 1000;
           dirty = true;
         } catch {
           // non-fatal
@@ -165,7 +175,7 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
       // Render only when something changed
       if (dirty) {
         const buf = screen.createBuffer();
-        renderFrame(buf, state, animationFrame);
+        renderFrame(buf, state, animationFrame, now - lastSnapshotMs);
         screen.render(buf);
         dirty = false;
       }
@@ -190,6 +200,13 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
     }
 
     if (state.modal.kind !== "feature-action" || state.modal.phase === "submitting") {
+      if (state.modal.kind === "feature-browser") {
+        const optionIndex = layout.itemRects.findIndex((rect) => pointInRect(rect, key.x, key.y));
+        if (optionIndex < 0) return;
+        state = reduce(state, { type: "modal-select", option: optionIndex });
+        state = reduce(state, { type: "enter" });
+        dirty = true;
+      }
       return;
     }
 
@@ -253,9 +270,9 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
 // ── Key Mapping ─────────────────────────────────────
 
 function keyToAction(key: Key, state: AppState): Action | undefined {
-    if (key.type === "char" && key.char === "q" && state.modal.kind === "none") {
-      return { type: "quit" };
-    }
+  if (key.type === "char" && key.char === "q" && state.modal.kind === "none") {
+    return { type: "quit" };
+  }
   if (key.type === "ctrl" && (key.char === "t" || key.char === "c")) {
     return { type: "quit" };
   }
@@ -270,20 +287,17 @@ function keyToAction(key: Key, state: AppState): Action | undefined {
   }
   if (key.type === "char" && state.modal.kind === "none") {
     switch (key.char) {
-        case "f": case "F": return { type: "focus", panel: "features" };
-        case "l": case "L":
-        case "w": case "W":
-          return { type: "focus", panel: "log" };
-        case "p": case "P":
-          return state.snapshot.mode === "mission" ? { type: "toggle-pause" } : undefined;
-        case "d": case "D":
-          return state.snapshot.mode === "mission" ? { type: "open-dir" } : undefined;
-        case "m": case "M":
-          return state.snapshot.mode === "mission" ? { type: "open-models" } : undefined;
-      }
+      case "f": case "F": return { type: "open-features" };
+      case "h": case "H": return { type: "open-handoffs" };
+      case "c": case "C": return { type: "open-config" };
+      case "p": case "P": return { type: "open-processes" };
+      case "l": case "L":
+      case "w": case "W":
+        return { type: "focus", panel: "log" };
     }
-    return undefined;
   }
+  return undefined;
+}
 
 function shouldSubmitFeatureAction(state: AppState): boolean {
   return state.modal.kind === "feature-action"
@@ -292,7 +306,12 @@ function shouldSubmitFeatureAction(state: AppState): boolean {
 
 // ── Frame Composition ───────────────────────────────
 
-export function renderFrame(buf: Buffer, state: AppState, animationFrame = 0): void {
+export function renderFrame(
+  buf: Buffer,
+  state: AppState,
+  animationFrame = 0,
+  elapsedOffsetMs = 0,
+): void {
   const snap = state.snapshot;
   const w = buf.width;
   const h = buf.height;
@@ -321,7 +340,8 @@ export function renderFrame(buf: Buffer, state: AppState, animationFrame = 0): v
   const bodyY = statusDividerY + 1;
   const bodyBottomY = bottomDividerY - 1;
   const bodyHeight = Math.max(0, bodyBottomY - bodyY + 1);
-  const workerHeight = Math.min(Math.max(2, Math.floor(bodyHeight * 0.2)), Math.max(2, bodyHeight - 6));
+  const maxWorkerHeight = Math.max(6, bodyHeight - 5);
+  const workerHeight = Math.min(Math.max(7, Math.floor(bodyHeight * 0.3)), maxWorkerHeight);
   const topBodyHeight = Math.max(4, bodyHeight - workerHeight - 1);
   const topBodyRect: Rect = { x: innerRect.x, y: bodyY, width: innerRect.width, height: topBodyHeight };
   const workerDividerY = topBodyRect.y + topBodyRect.height;
@@ -379,7 +399,7 @@ export function renderFrame(buf: Buffer, state: AppState, animationFrame = 0): v
   renderFeatureDetail(buf, leftRect, snap);
   renderFeatureList(buf, featureListRect, snap, state.selectedFeatureIndex);
     renderProgressLog(buf, progressRect, snap.progressLog, snap);
-  renderWorkerPanel(buf, workerRect, snap);
+  renderWorkerPanel(buf, workerRect, snap, elapsedOffsetMs);
   renderFooter(buf, footerRect, snap);
 
     // Modal overlay
@@ -475,31 +495,94 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
     };
   }
 
-  if (state.modal.kind === "directory") {
+  if (state.modal.kind === "feature-browser") {
+    return {
+      mode: "menu",
+      title: "Features",
+      eyebrow: "Select a feature to focus",
+      items: state.snapshot.features.length > 0
+        ? state.snapshot.features.map((feature) =>
+          `${feature.id} · ${FEATURE_STATUS_LABEL[feature.status]} · ${feature.title}`)
+        : ["No features available"],
+      selectedIndex: Math.min(
+        state.modal.selectedFeatureIndex,
+        Math.max(0, state.snapshot.features.length - 1),
+      ),
+      footer: "Enter focus · Esc close",
+    };
+  }
+
+  if (state.modal.kind === "overview" && state.snapshot.home) {
     return {
       mode: "info",
-      title: "Mission Directory",
-      eyebrow: "Project-local runtime path",
+      title: "Overview",
+      eyebrow: state.snapshot.home.headline,
       items: [
-        { text: `.maestro/missions/${state.snapshot.missionId}`, style: "block", tone: "accent" },
+        { text: state.snapshot.home.summary, tone: "default" },
+        { text: state.snapshot.home.locationLabel, style: "block", tone: "accent" },
+        ...state.snapshot.home.actions.map((action) => ({ text: `${action.command} · ${action.detail}`, tone: "muted" as const })),
       ],
       footer: "Esc close",
     };
   }
 
-  if (state.modal.kind === "models") {
-    const snap = state.snapshot;
-    const workerTypes = [...new Set(snap.features.map((f) => f.workerType))];
+  if (state.modal.kind === "handoffs") {
     return {
       mode: "info",
-      title: "Models & Workers",
-      eyebrow: "Snapshot metadata",
+      title: "Handoffs",
+      eyebrow: state.snapshot.pendingHandoffs.length > 0
+        ? `${state.snapshot.pendingHandoffs.length} pending`
+        : "No pending handoffs",
+      items: state.snapshot.pendingHandoffs.length > 0
+        ? state.snapshot.pendingHandoffs.flatMap((handoff) => ([
+          { text: `${handoff.id} · ${handoff.agent}`, style: "block", tone: "accent" as const },
+          { text: handoff.message, tone: "muted" as const },
+        ]))
+        : [{ text: "No pending handoffs in this workspace.", tone: "muted" }],
+      footer: "Esc close",
+    };
+  }
+
+  if (state.modal.kind === "config") {
+    const summary = state.snapshot.configSummary;
+    if (!summary) return undefined;
+    return {
+      mode: "info",
+      title: "Configuration",
+      eyebrow: `Config source: ${summary.configSource}`,
       items: [
-        { text: `Mission ${snap.missionId}`, style: "block", tone: "accent" },
-        { text: `Status ${snap.effectiveStatus}`, tone: "default" },
-        { text: "Data source: store polling every 2s", tone: "muted" },
-        ...workerTypes.map((workerType) => ({ text: `Worker model: ${workerType}`, tone: "muted" as const })),
+        ...(summary.missionDirectory
+          ? [{ text: summary.missionDirectory, style: "block", tone: "accent" as const }]
+          : []),
+        { text: `Git ${summary.gitAvailable ? "available" : "unavailable"}`, tone: "default" },
+        { text: `CASS ${summary.cassAvailable ? "available" : "unavailable"}`, tone: "default" },
+        ...summary.checks.map((check) => ({ text: `${check.name}: ${check.status} · ${check.message}`, tone: "muted" as const })),
+        ...summary.workerTypes.map((workerType) => ({ text: `Worker model: ${workerType}`, tone: "muted" as const })),
       ],
+      footer: "Esc close",
+    };
+  }
+
+  if (state.modal.kind === "processes") {
+    return {
+      mode: "info",
+      title: "Processes",
+      eyebrow: state.snapshot.runtimeProcesses.length > 0
+        ? `${state.snapshot.runtimeProcesses.length} runtime item${state.snapshot.runtimeProcesses.length === 1 ? "" : "s"}`
+        : "No active runtime processes",
+      items: state.snapshot.runtimeProcesses.length > 0
+        ? state.snapshot.runtimeProcesses.flatMap((process) => ([
+          {
+            text: `${process.featureId} · ${FEATURE_STATUS_LABEL[process.status]} · ${process.workerType}${process.isLive ? " · live" : ""}`,
+            style: "block",
+            tone: "accent" as const,
+          },
+          {
+            text: `${process.title}${process.hasReport ? " · report available" : " · waiting for report"}`,
+            tone: "muted" as const,
+          },
+        ]))
+        : [{ text: "No assigned, in-progress, or review features right now.", tone: "muted" }],
       footer: "Esc close",
     };
   }

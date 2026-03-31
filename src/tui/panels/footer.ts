@@ -1,7 +1,7 @@
 /**
  * Footer panel -- key binding hints with bold key letters.
- * Mission mode: "F Features  L Timeline  M Models  P Pause  D Mission Dir  Ctrl+T Back To Orchestrator"
- * Home mode: "F Overview  L Handoffs  Ctrl+T Back To Orchestrator"
+ * Mission mode: "F Features  H Handoff  C Config  P Processes  Ctrl+T Exit"
+ * Home mode: "F Overview  H Handoff  C Config  P Processes  Ctrl+T Exit"
  */
 import type { Buffer } from "../terminal/buffer.js";
 import type { Rect } from "../terminal/layout.js";
@@ -21,18 +21,18 @@ export function renderFooter(buf: Buffer, rect: Rect, snap: MissionControlSnapsh
   const leftHints = snap.mode === "home"
     ? [
       { key: "F", label: "Overview" },
-      { key: "L", label: "Handoffs" },
+      { key: "H", label: "Handoff" },
+      { key: "C", label: "Config" },
+      { key: "P", label: "Processes" },
     ]
     : [
       { key: "F", label: "Features" },
-      { key: "L", label: "Timeline" },
-      { key: "M", label: "Models" },
-      ...(snap.canPause ? [{ key: "P", label: "Pause" }] : []),
-      ...(snap.canResume ? [{ key: "P", label: "Resume" }] : []),
-      { key: "D", label: "Mission Dir" },
+      { key: "H", label: "Handoff" },
+      { key: "C", label: "Config" },
+      { key: "P", label: "Processes" },
     ];
 
-  const exitHint = { key: "Ctrl+T", label: "Back To Orchestrator" };
+  const exitHint = { key: "Ctrl+T", label: "Exit" };
   const exitWidth = exitHint.key.length + exitHint.label.length + 2;
   const exitCol = rect.x + w - exitWidth - 1;
 

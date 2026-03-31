@@ -23,6 +23,8 @@ import type {
   MissionControlWorkerPane,
   MissionControlMilestoneRow,
   MissionControlHomeAction,
+  MissionControlHomeHandoff,
+  MissionControlRuntimeProcessRow,
 } from "./types.js";
 
 export interface SnapshotDeps {
@@ -30,6 +32,11 @@ export interface SnapshotDeps {
   featureStore: FeatureStorePort;
   assertionStore: AssertionStorePort;
   checkpointStore: CheckpointStorePort;
+  handoffStore: HandoffStorePort;
+  config: ConfigPort;
+  cass: CassPort;
+  git: GitPort;
+  cwd: string;
 }
 
 export interface HomeSnapshotDeps {
@@ -47,16 +54,28 @@ export async function buildSnapshot(
   deps: SnapshotDeps,
   missionId: string,
 ): Promise<MissionControlSnapshot> {
-  const report = await generateMissionReport(
-    deps.missionStore,
-    deps.featureStore,
-    deps.assertionStore,
-    missionId,
-  );
-
-  const features = await deps.featureStore.list(missionId);
-  const assertions = await deps.assertionStore.list(missionId);
-  const checkpoints = await deps.checkpointStore.list(missionId);
+  const [
+    report,
+    features,
+    assertions,
+    checkpoints,
+    status,
+    checks,
+    gitState,
+  ] = await Promise.all([
+    generateMissionReport(
+      deps.missionStore,
+      deps.featureStore,
+      deps.assertionStore,
+      missionId,
+    ),
+    deps.featureStore.list(missionId),
+    deps.assertionStore.list(missionId),
+    deps.checkpointStore.list(missionId),
+    checkStatus(deps.handoffStore, deps.config, deps.cass, deps.git, deps.cwd),
+    runDoctor(deps.cass, deps.git, deps.config, deps.cwd),
+    deps.git.getState(deps.cwd),
+  ]);
 
   const mission = report.mission;
   const now = Date.now();
@@ -102,6 +121,8 @@ export async function buildSnapshot(
   ).length;
   const blockedCount = features.filter((f) => f.status === "blocked").length;
   const queuedCount = features.filter((f) => f.status === "pending").length;
+  const pendingHandoffs = status.pendingHandoffs.map(mapPendingHandoff);
+  const workerTypes = [...new Set(features.map((feature) => feature.workerType))];
 
   return {
     mode: "mission",
@@ -123,6 +144,22 @@ export async function buildSnapshot(
     activeFeature,
     features: featureRows,
     activeWorker,
+    session: {
+      branch: gitState.branch,
+      workingTreeClean: gitState.workingTreeClean,
+      diffStat: gitState.diffStat,
+      changedFiles: gitState.changedFiles,
+    },
+    pendingHandoffs,
+    configSummary: {
+      configSource: status.configSource,
+      cassAvailable: status.cassAvailable,
+      gitAvailable: status.gitAvailable,
+      checks,
+      missionDirectory: `.maestro/missions/${mission.id}`,
+      workerTypes,
+    },
+    runtimeProcesses: buildRuntimeProcesses(features, activeWorker),
     progressLog,
     milestones,
     canPause: mission.status === "executing",
@@ -135,9 +172,10 @@ export async function buildHomeSnapshot(
   deps: HomeSnapshotDeps,
   cwd: string,
 ): Promise<MissionControlSnapshot> {
-  const [status, checks] = await Promise.all([
+  const [status, checks, gitState] = await Promise.all([
     checkStatus(deps.handoffStore, deps.config, deps.cass, deps.git, cwd),
     runDoctor(deps.cass, deps.git, deps.config, cwd),
+    deps.git.isRepo(cwd) ? deps.git.getState(cwd) : Promise.resolve(undefined),
   ]);
 
   const headline = status.gitAvailable
@@ -151,11 +189,7 @@ export async function buildHomeSnapshot(
       : "Open a git repository to track missions, checkpoints, and handoffs here.";
 
   const actions = buildHomeActions(status, checks);
-  const pendingHandoffs = status.pendingHandoffs.map((entry) => ({
-    id: entry.handoff.id,
-    message: entry.handoff.message,
-    agent: entry.handoff.session.agent,
-  }));
+  const pendingHandoffs = status.pendingHandoffs.map(mapPendingHandoff);
 
   return {
     mode: "home",
@@ -177,6 +211,24 @@ export async function buildHomeSnapshot(
     activeFeature: null,
     features: [],
     activeWorker: null,
+    session: gitState
+      ? {
+        branch: gitState.branch,
+        workingTreeClean: gitState.workingTreeClean,
+        diffStat: gitState.diffStat,
+        changedFiles: gitState.changedFiles,
+      }
+      : null,
+    pendingHandoffs,
+    configSummary: {
+      configSource: status.configSource,
+      cassAvailable: status.cassAvailable,
+      gitAvailable: status.gitAvailable,
+      checks,
+      missionDirectory: null,
+      workerTypes: [],
+    },
+    runtimeProcesses: [],
     progressLog: [],
     milestones: [],
     canPause: false,
@@ -283,4 +335,33 @@ function buildHomeActions(
   });
 
   return actions;
+}
+
+function buildRuntimeProcesses(
+  features: readonly Feature[],
+  activeWorker: MissionControlWorkerPane | null,
+): readonly MissionControlRuntimeProcessRow[] {
+  return features
+    .filter((feature) =>
+      feature.status === "assigned"
+      || feature.status === "in-progress"
+      || feature.status === "review")
+    .map((feature) => ({
+      featureId: feature.id,
+      title: feature.title,
+      status: feature.status,
+      workerType: feature.workerType,
+      hasReport: feature.report !== undefined && feature.report !== null,
+      isLive: activeWorker?.featureId === feature.id,
+    }));
+}
+
+function mapPendingHandoff(
+  entry: Awaited<ReturnType<typeof checkStatus>>["pendingHandoffs"][number],
+): MissionControlHomeHandoff {
+  return {
+    id: entry.handoff.id,
+    message: entry.handoff.message,
+    agent: entry.handoff.session.agent,
+  };
 }

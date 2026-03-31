@@ -16,8 +16,11 @@ export type ModalState =
     phase: "selecting" | "confirming" | "submitting" | "error";
     errorMessage?: string;
   }
-  | { kind: "directory" }
-  | { kind: "models" };
+  | { kind: "feature-browser"; selectedFeatureIndex: number }
+  | { kind: "overview" }
+  | { kind: "handoffs" }
+  | { kind: "config" }
+  | { kind: "processes" };
 
 export interface AppState {
   snapshot: MissionControlSnapshot;
@@ -45,9 +48,10 @@ export type Action =
   | { type: "focus"; panel: FocusedPanel }
   | { type: "enter" }
   | { type: "escape" }
-  | { type: "toggle-pause" }
-  | { type: "open-dir" }
-  | { type: "open-models" }
+  | { type: "open-features" }
+  | { type: "open-handoffs" }
+  | { type: "open-config" }
+  | { type: "open-processes" }
   | { type: "update-snapshot"; snapshot: MissionControlSnapshot }
   | { type: "modal-select"; option: number }
   | { type: "modal-submit-start" }
@@ -95,6 +99,14 @@ export function reduce(state: AppState, action: Action): AppState {
         }
         return state;
       }
+      if (state.modal.kind === "feature-browser") {
+        return {
+          ...state,
+          focusedPanel: "features",
+          selectedFeatureIndex: state.modal.selectedFeatureIndex,
+          modal: { kind: "none" },
+        };
+      }
       if (state.focusedPanel === "features" && state.snapshot.features.length > 0) {
         return {
           ...state,
@@ -115,25 +127,37 @@ export function reduce(state: AppState, action: Action): AppState {
       }
       return { ...state, focusedPanel: "none" };
 
-    case "toggle-pause":
-      return state; // Handled externally (needs store call)
-
-    case "open-dir":
-      if (state.snapshot.mode === "home") return state;
+    case "open-features":
       if (state.modal.kind !== "none") return state;
-      return { ...state, modal: { kind: "directory" } };
+      if (state.snapshot.mode === "home") {
+        return { ...state, modal: { kind: "overview" } };
+      }
+      return {
+        ...state,
+        modal: {
+          kind: "feature-browser",
+          selectedFeatureIndex: state.selectedFeatureIndex,
+        },
+      };
 
-    case "open-models":
-      if (state.snapshot.mode === "home") return state;
+    case "open-handoffs":
       if (state.modal.kind !== "none") return state;
-      return { ...state, modal: { kind: "models" } };
+      return { ...state, modal: { kind: "handoffs" } };
+
+    case "open-config":
+      if (state.modal.kind !== "none") return state;
+      return { ...state, modal: { kind: "config" } };
+
+    case "open-processes":
+      if (state.modal.kind !== "none") return state;
+      return { ...state, modal: { kind: "processes" } };
 
     case "update-snapshot":
       const selectedFeatureId = state.snapshot.features[state.selectedFeatureIndex]?.id;
       const nextSelectedIndex = selectedFeatureId
         ? action.snapshot.features.findIndex((feature) => feature.id === selectedFeatureId)
         : -1;
-      return {
+      const baseState = {
         ...state,
         snapshot: action.snapshot,
         selectedFeatureIndex: nextSelectedIndex >= 0
@@ -142,6 +166,21 @@ export function reduce(state: AppState, action: Action): AppState {
             state.selectedFeatureIndex,
             Math.max(0, action.snapshot.features.length - 1),
           ),
+      };
+      if (state.modal.kind === "feature-browser") {
+        return {
+          ...baseState,
+          modal: {
+            kind: "feature-browser",
+            selectedFeatureIndex: Math.min(
+              state.modal.selectedFeatureIndex,
+              Math.max(0, action.snapshot.features.length - 1),
+            ),
+          },
+        };
+      }
+      return {
+        ...baseState,
       };
 
     case "modal-select":
@@ -153,6 +192,15 @@ export function reduce(state: AppState, action: Action): AppState {
             selectedOption: action.option,
             phase: "confirming",
             errorMessage: undefined,
+          },
+        };
+      }
+      if (state.modal.kind === "feature-browser") {
+        return {
+          ...state,
+          modal: {
+            kind: "feature-browser",
+            selectedFeatureIndex: action.option,
           },
         };
       }
@@ -213,26 +261,43 @@ function handleLogNavigate(state: AppState, direction: "up" | "down"): AppState 
 }
 
 function handleModalNavigate(state: AppState, direction: "up" | "down"): AppState {
-  if (state.modal.kind !== "feature-action") return state;
+  if (state.modal.kind === "feature-action") {
+    const feature = state.snapshot.features[state.modal.featureIndex];
+    if (!feature) return state;
 
-  const feature = state.snapshot.features[state.modal.featureIndex];
-  if (!feature) return state;
+    // Options count comes from valid transitions for the feature
+    const optionsCount = getValidFeatureTransitions(feature.status).length;
+    if (optionsCount === 0) return state;
 
-  // Options count comes from valid transitions for the feature
-  const optionsCount = getValidFeatureTransitions(feature.status).length;
-  if (optionsCount === 0) return state;
+    const newOption = direction === "down"
+      ? Math.min(state.modal.selectedOption + 1, optionsCount - 1)
+      : Math.max(state.modal.selectedOption - 1, 0);
 
-  const newOption = direction === "down"
-    ? Math.min(state.modal.selectedOption + 1, optionsCount - 1)
-    : Math.max(state.modal.selectedOption - 1, 0);
+    return {
+      ...state,
+      modal: {
+        ...state.modal,
+        selectedOption: newOption,
+        phase: "selecting",
+        errorMessage: undefined,
+      },
+    };
+  }
 
-  return {
-    ...state,
-    modal: {
-      ...state.modal,
-      selectedOption: newOption,
-      phase: "selecting",
-      errorMessage: undefined,
-    },
-  };
+  if (state.modal.kind === "feature-browser") {
+    const total = state.snapshot.features.length;
+    if (total === 0) return state;
+    const selectedFeatureIndex = direction === "down"
+      ? Math.min(state.modal.selectedFeatureIndex + 1, total - 1)
+      : Math.max(state.modal.selectedFeatureIndex - 1, 0);
+    return {
+      ...state,
+      modal: {
+        kind: "feature-browser",
+        selectedFeatureIndex,
+      },
+    };
+  }
+
+  return state;
 }

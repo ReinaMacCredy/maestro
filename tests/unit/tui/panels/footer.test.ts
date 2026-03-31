@@ -22,6 +22,22 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
       completionPct: 33,
     },
     tokenCounters: null,
+    session: {
+      branch: "main",
+      workingTreeClean: false,
+      diffStat: "+4 -1",
+      changedFiles: ["src/tui/footer.ts"],
+    },
+    pendingHandoffs: [],
+    configSummary: {
+      configSource: "project",
+      cassAvailable: true,
+      gitAvailable: true,
+      checks: [],
+      missionDirectory: ".maestro/missions/2026-03-30-001",
+      workerTypes: ["test"],
+    },
+    runtimeProcesses: [],
     activeFeature: null,
     features: [],
     activeWorker: null,
@@ -43,45 +59,21 @@ describe("renderFooter", () => {
     expect(text).toContain("Features");
   });
 
-  it("shows Timeline hint instead of Workers", () => {
+  it("shows Handoff, Config, and Processes hints", () => {
     const buf = new Buffer(120, 1);
     renderFooter(buf, { x: 0, y: 0, width: 120, height: 1 }, makeSnapshot());
     const text = buf.toString();
-    expect(text).toContain("Timeline");
-    expect(text).not.toContain("Workers");
+    expect(text).toContain("Handoff");
+    expect(text).toContain("Config");
+    expect(text).toContain("Processes");
   });
 
-  it("shows Back To Orchestrator hint", () => {
+  it("shows Exit hint", () => {
     const buf = new Buffer(120, 1);
     renderFooter(buf, { x: 0, y: 0, width: 120, height: 1 }, makeSnapshot());
     const text = buf.toString();
     expect(text).toContain("Ctrl+T");
-    expect(text).toContain("Back To Orchestrator");
-  });
-
-  it("shows Pause when canPause is true", () => {
-    const buf = new Buffer(120, 1);
-    renderFooter(buf, { x: 0, y: 0, width: 120, height: 1 }, makeSnapshot({ canPause: true }));
-    const text = buf.toString();
-    expect(text).toContain("Pause");
-  });
-
-  it("shows Resume when canResume is true", () => {
-    const buf = new Buffer(120, 1);
-    renderFooter(
-      buf,
-      { x: 0, y: 0, width: 120, height: 1 },
-      makeSnapshot({ canPause: false, canResume: true }),
-    );
-    const text = buf.toString();
-    expect(text).toContain("Resume");
-  });
-
-  it("shows Mission Dir hint", () => {
-    const buf = new Buffer(120, 1);
-    renderFooter(buf, { x: 0, y: 0, width: 120, height: 1 }, makeSnapshot());
-    const text = buf.toString();
-    expect(text).toContain("Mission Dir");
+    expect(text).toContain("Exit");
   });
 
   it("uses dimmer label text for footer labels than the key", () => {
@@ -118,7 +110,8 @@ describe("renderFooter", () => {
     }));
     const text = buf.toString();
     expect(text).toContain("Overview");
-    expect(text).toContain("Handoffs");
-    expect(text).not.toContain("Mission Dir");
+    expect(text).toContain("Handoff");
+    expect(text).toContain("Config");
+    expect(text).toContain("Processes");
   });
 });

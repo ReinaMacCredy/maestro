@@ -56,9 +56,37 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
       blocked: 0,
       queued: 2,
       completionPct: 50,
-    },
-    tokenCounters: null,
-    activeFeature: {
+      },
+      tokenCounters: null,
+      session: {
+        branch: "main",
+        workingTreeClean: false,
+        diffStat: "+42 -11",
+        changedFiles: ["src/db.ts", "src/config.ts", "tests/db.test.ts"],
+      },
+      pendingHandoffs: [],
+      configSummary: {
+        configSource: "project",
+        cassAvailable: true,
+        gitAvailable: true,
+        checks: [
+          { name: "git", status: "ok", message: "Git repository detected" },
+          { name: "project-config", status: "ok", message: "Project config present" },
+        ],
+        missionDirectory: ".maestro/missions/2026-03-30-001",
+        workerTypes: ["backend-worker"],
+      },
+      runtimeProcesses: [
+        {
+          featureId: "f2",
+          title: "Database config",
+          status: "in-progress",
+          workerType: "backend-worker",
+          hasReport: false,
+          isLive: true,
+        },
+      ],
+      activeFeature: {
       id: "f2",
       title: "Database config",
       status: "in-progress",
@@ -121,7 +149,6 @@ describe("frame rendering", () => {
       expect(frame).toContain("Init project");
       expect(frame).toContain("Database config");
       expect(frame).toContain("Auth endpoints");
-      expect(frame).toContain("API docs");
     });
 
     it("contains Features header", () => {
@@ -144,26 +171,34 @@ describe("frame rendering", () => {
     it("contains progress log events", () => {
       const frame = renderOnceFrame({ snapshot: makeSnapshot() });
       expect(frame).toContain("Progress Log");
-      expect(frame).toContain("f2 moved to in-progress");
+      expect(frame).toContain("Activity");
     });
 
     it("contains footer hints", () => {
       const frame = renderOnceFrame({ snapshot: makeSnapshot() });
       expect(frame).toContain("Features");
-      expect(frame).toContain("Timeline");
-      expect(frame).toContain("Back To Orchestrator");
+      expect(frame).toContain("Handoff");
+      expect(frame).toContain("Config");
+      expect(frame).toContain("Processes");
+      expect(frame).toContain("Exit");
     });
   });
 
   describe("empty mission", () => {
     it("shows meaningful placeholder when no features", () => {
-      const frame = renderOnceFrame({
-        snapshot: makeSnapshot({
-          features: [],
-          activeFeature: null,
-          activeWorker: null,
-          featureProgress: { done: 0, total: 0, active: 0 },
-          statusProgress: {
+        const frame = renderOnceFrame({
+          snapshot: makeSnapshot({
+            features: [],
+            activeFeature: null,
+            activeWorker: null,
+            session: {
+              branch: "main",
+              workingTreeClean: true,
+              diffStat: "+0 -0",
+              changedFiles: [],
+            },
+            featureProgress: { done: 0, total: 0, active: 0 },
+            statusProgress: {
             completed: 0,
             total: 0,
             inFlight: 0,
@@ -174,13 +209,13 @@ describe("frame rendering", () => {
           progressLog: [
             { timestamp: "2026-03-30T10:00:00.000Z", relativeMs: 0, kind: "mission", title: "Mission created" },
           ],
-        }),
+          }),
+          });
+          expect(frame).toContain("Mission Control");
+          expect(frame).toContain("No active work");
+          expect(frame).toContain("Create or import work to populate Mission Control");
         });
-        expect(frame).toContain("Mission Control");
-        expect(frame).toContain("No active feature");
-        expect(frame).toContain("No features in this mission yet");
       });
-    });
 
   describe("completed mission", () => {
     it("shows completed state", () => {
@@ -222,18 +257,18 @@ describe("frame rendering", () => {
           canPause: false,
           canResume: true,
         }),
+        });
+        expect(frame).toContain("PAUSED");
+        expect(frame).toContain("Processes");
       });
-      expect(frame).toContain("PAUSED");
-      expect(frame).toContain("Resume");
-    });
   });
 
-  describe("feature detail fields", () => {
-    it("shows preconditions when available", () => {
-      const frame = renderOnceFrame({ snapshot: makeSnapshot() });
-      expect(frame).toContain("Preconditions");
-      expect(frame).toContain("Clean working directory");
-    });
+    describe("feature detail fields", () => {
+      it("shows preconditions when available", () => {
+        const frame = withTerminalSize(120, 40, () => renderOnceFrame({ snapshot: makeSnapshot() }));
+        expect(frame).toContain("Preconditions");
+        expect(frame).toContain("Clean working directory");
+      });
 
     it("shows verification steps when panel has enough height", () => {
       // Use a snapshot without preconditions/expectedBehavior to leave room
@@ -273,12 +308,18 @@ describe("frame rendering", () => {
     it("keeps the full chrome in empty-state frames", () => {
       const frame = withTerminalSize(80, 24, () =>
         renderOnceFrame({
-          snapshot: makeSnapshot({
-            features: [],
-            activeFeature: null,
-            activeWorker: null,
-            featureProgress: { done: 0, total: 0, active: 0 },
-            statusProgress: {
+            snapshot: makeSnapshot({
+              features: [],
+              activeFeature: null,
+              activeWorker: null,
+              session: {
+                branch: "main",
+                workingTreeClean: true,
+                diffStat: "+0 -0",
+                changedFiles: [],
+              },
+              featureProgress: { done: 0, total: 0, active: 0 },
+              statusProgress: {
               completed: 0,
               total: 0,
               inFlight: 0,
@@ -290,12 +331,12 @@ describe("frame rendering", () => {
           }),
         }));
 
-        expect(frame).toContain("┌");
-        expect(frame).toContain("└");
-        expect(frame).toContain("│");
-        expect(frame).toContain("No active feature");
-        expect(frame).toContain("No features in this mission yet");
-      });
+          expect(frame).toContain("┌");
+          expect(frame).toContain("└");
+          expect(frame).toContain("│");
+          expect(frame).toContain("No active work");
+          expect(frame).toContain("Read-only until work exists");
+        });
 
       it("renders bordered chrome for narrow-but-valid terminals", () => {
         const frame = withTerminalSize(60, 18, () => renderOnceFrame({ snapshot: makeSnapshot() }));
@@ -308,25 +349,26 @@ describe("frame rendering", () => {
       });
 
       it("renders a guided home layout without mission context", () => {
-        const frame = withTerminalSize(80, 24, () => renderOnceFrame({
-          snapshot: makeSnapshot({
-            mode: "home",
-            missionTitle: "No project detected",
-            features: [],
-            activeFeature: null,
-            activeWorker: null,
-            progressLog: [],
-            statusProgress: {
-              completed: 0,
+          const frame = withTerminalSize(80, 24, () => renderOnceFrame({
+            snapshot: makeSnapshot({
+              mode: "home",
+              missionTitle: "No project detected",
+              features: [],
+              activeFeature: null,
+              activeWorker: null,
+              session: null,
+              progressLog: [],
+              statusProgress: {
+                completed: 0,
               total: 0,
               inFlight: 0,
               blocked: 0,
               queued: 0,
               completionPct: 0,
             },
-            home: {
-              headline: "No project detected",
-              summary: "Open a git repository to track missions here.",
+              home: {
+                headline: "No project detected",
+                summary: "Open a git repository to track missions here.",
               locationLabel: "Outside a git repository",
               checks: [
                 { name: "git", status: "fail", message: "Not inside a git repository", fix: "Run: git init" },
@@ -341,27 +383,27 @@ describe("frame rendering", () => {
           }),
         }));
 
-        expect(frame).toContain("HOME");
-        expect(frame).toContain("Overview");
-        expect(frame).toContain("Environment");
-        expect(frame).toContain("Pending Handoffs");
-        expect(frame).toContain("git init");
-      });
-
-      it("renders the mission directory modal with command-palette styling", () => {
-        const frame = withTerminalSize(90, 28, () => {
-          const buf = new Buffer(90, 28);
-          const state = createInitialState(makeSnapshot());
-          state.modal = { kind: "directory" };
-          renderFrame(buf, state);
-          return buf.toString();
+          expect(frame).toContain("HOME");
+          expect(frame).toContain("Overview");
+          expect(frame).toContain("Environment");
+          expect(frame).toContain("Pending Handoffs");
+          expect(frame).toContain("Processes");
         });
 
-        expect(frame).toContain("Mission Directory");
-        expect(frame).toContain("Project-local runtime path");
-        expect(frame).toContain(".maestro/missions/2026-03-30-001");
-        expect(frame).toContain("Esc close");
-        expect(frame).not.toContain("Press Escape to close");
-      });
+        it("renders the configuration modal with command-palette styling", () => {
+          const frame = withTerminalSize(90, 28, () => {
+            const buf = new Buffer(90, 28);
+            const state = createInitialState(makeSnapshot());
+            state.modal = { kind: "config" };
+            renderFrame(buf, state);
+            return buf.toString();
+          });
+
+          expect(frame).toContain("Configuration");
+          expect(frame).toContain("Config source: project");
+          expect(frame).toContain(".maestro/missions/2026-03-30-001");
+          expect(frame).toContain("Esc close");
+          expect(frame).toContain("Worker model: backend-worker");
+        });
     });
   });
