@@ -25,6 +25,13 @@ interface PreviousMilestoneReport {
 }
 
 const PREVIOUS_REPORT_SUMMARY_LIMIT = 600;
+const REVIEW_PROFILES = new Set<MilestoneProfile>([
+  "plan-review",
+  "code-review",
+  "bug-hunt",
+  "simplify",
+  "validation",
+]);
 
 /** Result of generating a worker prompt */
 export interface GenerateWorkerPromptResult {
@@ -123,7 +130,7 @@ export async function generateWorkerPrompt(
   await ensureDir(workersDir);
   const promptPath = join(workersDir, "prompt.md");
   await writeText(promptPath, prompt);
-  await initializeWorkerRuntime(runtimeStore, missionId, featureId, promptPath);
+    await initializeWorkerRuntime(runtimeStore, missionId, featureId);
   writtenPaths.push(promptPath);
 
   // If --out is provided, also write to that path
@@ -144,7 +151,6 @@ async function initializeWorkerRuntime(
   runtimeStore: RuntimeStorePort,
   missionId: string,
   featureId: string,
-  promptPath: string,
 ): Promise<void> {
   const now = Date.now();
   const nowIso = new Date(now).toISOString();
@@ -165,7 +171,6 @@ async function initializeWorkerRuntime(
       history: priorRuntime?.recoveryMetadata.history ?? [],
     },
   };
-  void promptPath;
   await runtimeStore.save(missionId, featureId, runtime);
 }
 
@@ -240,21 +245,11 @@ async function loadPreviousMilestoneReports(
   missionId: string,
   milestone: Milestone,
 ): Promise<readonly PreviousMilestoneReport[] | undefined> {
-  const reviewProfiles = new Set<MilestoneProfile>([
-    "plan-review",
-    "code-review",
-    "bug-hunt",
-    "simplify",
-    "validation",
-  ]);
-
-  if (!milestone.profile || !reviewProfiles.has(milestone.profile)) {
+  if (!milestone.profile || !REVIEW_PROFILES.has(milestone.profile)) {
     return undefined;
   }
 
-  const prevMilestone = mission.milestones
-    .filter((item) => item.order < milestone.order)
-    .sort((a, b) => b.order - a.order)[0];
+  const prevMilestone = findPreviousMilestone(mission.milestones, milestone.order);
 
   if (!prevMilestone) {
     return undefined;
@@ -303,6 +298,25 @@ async function loadPreviousMilestoneReports(
   }))).filter((report): report is PreviousMilestoneReport => report !== undefined);
 
   return reports.length > 0 ? reports : undefined;
+}
+
+function findPreviousMilestone(
+  milestones: readonly Milestone[],
+  currentOrder: number,
+): Milestone | undefined {
+  let previous: Milestone | undefined;
+
+  for (const candidate of milestones) {
+    if (candidate.order >= currentOrder) {
+      continue;
+    }
+
+    if (!previous || candidate.order > previous.order) {
+      previous = candidate;
+    }
+  }
+
+  return previous;
 }
 
 function truncatePreviousReportSummary(summary: string): string {

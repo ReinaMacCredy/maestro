@@ -6,7 +6,7 @@ import type { MissionStatus, FeatureStatus, MilestoneStatus, AssertionResult, Mi
 
 // ── Palette (256-color) ─────────────────────────────
 
-  export const PALETTE = {
+export const PALETTE = {
   // Greens
   green: 34,
   brightGreen: 46,
@@ -26,15 +26,14 @@ import type { MissionStatus, FeatureStatus, MilestoneStatus, AssertionResult, Mi
   // Accents
   magenta: 200,
   orange: 208,
-    // Background
-    black: 16,
-    panelBg: 235,
-    infoBg: 237,
-    selectedBg: 236,
-    headerBg: 234,
-      overlayBackdropBg: -1,
-      overlaySurfaceBg: 16,
-      overlayQueryBg: 16,
+  // Background
+  panelBg: 235,
+  infoBg: 237,
+  selectedBg: 236,
+  headerBg: 234,
+    overlayBackdropBg: -1,
+    overlaySurfaceBg: -1,
+    overlayQueryBg: -1,
     overlaySection: 250,
     overlayHint: 254,
     overlaySelectedBg: 39,
