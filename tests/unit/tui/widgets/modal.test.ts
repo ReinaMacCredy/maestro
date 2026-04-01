@@ -40,6 +40,35 @@ describe("renderModal", () => {
     expect(buf.getCell(selectedRow.y, selectedRow.x + 2)?.fg).toBe(PALETTE.overlaySelectedFg);
   });
 
+  it("renders the palette with an amber selection row and centered title", () => {
+    const buf = new Buffer(90, 28);
+    const layout = renderModal(buf, { x: 0, y: 0, width: 90, height: 28 }, {
+      mode: "palette",
+      title: "Command Palette",
+      query: "han",
+      items: [
+        {
+          label: "Handoffs",
+          detail: "Review pending cross-agent handoffs",
+          hint: "H",
+          section: "Navigate",
+        },
+        {
+          label: "Runtime",
+          detail: "List live Maestro runtime work for this mission",
+          hint: "P",
+          section: "Navigate",
+        },
+      ],
+      selectedIndex: 0,
+      footer: "Enter open · Esc close",
+    });
+
+    const titleRow = buf.toString().split("\n")[layout.y + 1] ?? "";
+    expect(titleRow).toContain("Command Palette");
+    expect(buf.getCell(layout.itemRects[0]!.y, layout.itemRects[0]!.x + 2)?.bg).toBe(PALETTE.amber);
+  });
+
   it("renders status line when provided", () => {
     const buf = new Buffer(80, 24);
     renderModal(buf, { x: 0, y: 0, width: 80, height: 24 }, {

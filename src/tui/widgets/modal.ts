@@ -187,10 +187,15 @@ export function renderModal(buf: Buffer, parent: Rect, opts: ModalOptions): Moda
   const contentWidth = layout.contentRect.width;
 
   buf.fillRect(layout, " ", { bg: surfaceBg });
+  buf.drawBorder(layout, { fg: PALETTE.brightWhite, bg: surfaceBg });
 
   const titleY = layout.y + 1;
-  buf.writeText(titleY, layout.x + 2, truncate(opts.title, Math.max(0, layout.width - 10)), {
-    fg: PALETTE.brightWhite,
+  const titleText = truncate(opts.title, Math.max(0, layout.width - 10));
+  const titleX = opts.mode === "palette"
+    ? layout.x + Math.max(2, Math.floor((layout.width - titleText.length) / 2))
+    : layout.x + 2;
+  buf.writeText(titleY, titleX, titleText, {
+    fg: opts.mode === "palette" ? PALETTE.amber : PALETTE.brightWhite,
     bg: surfaceBg,
     bold: true,
   });
@@ -206,12 +211,12 @@ export function renderModal(buf: Buffer, parent: Rect, opts: ModalOptions): Moda
 
   if (opts.mode === "palette") {
     renderQueryRow(buf, layout, opts.query, rows.length);
-    } else if (opts.eyebrow) {
-      buf.writeText(layout.y + 2, layout.x + 2, truncate(opts.eyebrow, contentWidth), {
-        fg: PALETTE.overlayHint,
-        bg: surfaceBg,
-      });
-    }
+  } else if (opts.eyebrow) {
+    buf.writeText(layout.y + 2, layout.x + 2, truncate(opts.eyebrow, contentWidth), {
+      fg: PALETTE.overlayHint,
+      bg: surfaceBg,
+    });
+  }
 
   let rowY = layout.contentRect.y;
   if (opts.mode === "palette" && rows.length === 0) {
@@ -245,7 +250,7 @@ export function renderModal(buf: Buffer, parent: Rect, opts: ModalOptions): Moda
       if (rowRect.y + rowRect.height > layout.contentRect.y + layout.contentRect.height) break;
 
       const isSelected = opts.mode !== "info" && index === opts.selectedIndex;
-      renderRow(buf, rowRect, row, isSelected, layout.width - 4);
+        renderRow(buf, rowRect, row, isSelected, layout.width - 4, opts.mode);
       rowY = rowRect.y + rowRect.height;
     }
   }
@@ -272,14 +277,13 @@ function renderQueryRow(
     width: layout.width - 4,
     height: 1,
   };
-  buf.fillRect(queryRect, " ", { bg: PALETTE.overlayQueryBg });
-
-    const prompt = "> ";
-    const queryText = query.length > 0 ? query : "Type a command";
-    const queryColor = query.length > 0 ? PALETTE.brightWhite : PALETTE.overlayHint;
+  const prompt = "> ";
+  const queryText = query.length > 0 ? query : "Type a command";
+  const queryColor = query.length > 0 ? PALETTE.brightWhite : PALETTE.overlayHint;
   buf.writeText(queryRect.y, queryRect.x + 1, prompt, {
-    fg: PALETTE.overlayHint,
+    fg: PALETTE.brightWhite,
     bg: PALETTE.overlayQueryBg,
+    bold: true,
   });
   buf.writeText(queryRect.y, queryRect.x + 1 + prompt.length, truncate(queryText, queryRect.width - 6), {
     fg: queryColor,
@@ -302,12 +306,15 @@ function renderRow(
   row: NormalizedModalRow,
   isSelected: boolean,
   width: number,
+  mode: ModalOptions["mode"],
 ): void {
-  const baseBg = row.style === "block" && !isSelected ? PALETTE.overlayQueryBg : PALETTE.overlaySurfaceBg;
-  const bg = isSelected ? PALETTE.overlaySelectedBg : baseBg;
-  const labelFg = isSelected ? PALETTE.overlaySelectedFg : getToneColor(row.tone);
-    const detailFg = isSelected ? PALETTE.overlaySelectedFg : PALETTE.overlayHint;
-  const hintFg = isSelected ? PALETTE.overlaySelectedFg : PALETTE.overlayHint;
+  const baseBg = PALETTE.overlaySurfaceBg;
+  const selectedBg = mode === "palette" ? PALETTE.amber : PALETTE.overlaySelectedBg;
+  const selectedFg = mode === "palette" ? PALETTE.blue : PALETTE.overlaySelectedFg;
+  const bg = isSelected ? selectedBg : baseBg;
+  const labelFg = isSelected ? selectedFg : getToneColor(row.tone, mode);
+  const detailFg = isSelected ? selectedFg : PALETTE.overlayHint;
+  const hintFg = isSelected ? selectedFg : (mode === "palette" ? PALETTE.blue : PALETTE.overlayHint);
 
   buf.fillRect(rect, " ", { bg });
 
@@ -324,7 +331,7 @@ function renderRow(
   buf.writeText(rect.y, labelX, labelText, {
     fg: labelFg,
     bg,
-    bold: isSelected || row.tone === "accent" || row.style === "block",
+    bold: isSelected || row.tone === "accent" || row.style === "block" || mode === "palette",
   });
 
   if (row.hint && hintX && hintX > labelX + 4) {
@@ -386,10 +393,10 @@ function getRowHeight(row: NormalizedModalRow, compact = false): number {
   return 1;
 }
 
-function getToneColor(tone: ModalTone): number {
+function getToneColor(tone: ModalTone, mode: ModalOptions["mode"]): number {
   if (tone === "accent") return PALETTE.brightWhite;
   if (tone === "muted") return PALETTE.overlayHint;
-  return PALETTE.brightWhite;
+  return mode === "palette" ? PALETTE.gray : PALETTE.brightWhite;
 }
 
 function dimColor(color: number): number {
