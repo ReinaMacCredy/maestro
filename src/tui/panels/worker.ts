@@ -51,7 +51,7 @@ export function renderSessionSidebar(
       { label: "Agent", value: session.agent ?? "--", style: "value" as const },
       { label: "Session", value: session.sessionId ? shortenSessionId(session.sessionId) : "--", style: "value" as const },
       { label: "Branch", value: session.branch, style: "value" as const },
-      { label: "Changes", value: getChangesText(session), style: "value" as const },
+      { label: "Changes", value: getChangesText(session), style: "changes" as const },
     ]
     : [
       { label: "Agent", value: "--", style: "muted" as const },
@@ -62,7 +62,11 @@ export function renderSessionSidebar(
 
   for (const entry of rows) {
     if (row >= rect.y + rect.height) return;
-    writeLabeledRow(buf, row, rect, entry.label, entry.value, entry.style);
+    if (entry.style === "changes") {
+      writeChangesRow(buf, row, rect, entry.label, session);
+    } else {
+      writeLabeledRow(buf, row, rect, entry.label, entry.value, entry.style);
+    }
     row++;
   }
 
@@ -120,11 +124,11 @@ function renderSessionPane(
   let row = rect.y + 2;
   const rows = session
     ? [
-      { label: "Duration", value: formatElapsed(durationMs), style: "value" as const },
-      { label: "Branch", value: session.branch, style: "value" as const },
-      { label: "Changes", value: getChangesText(session), style: "value" as const },
-      ...getFileRows(session),
-    ]
+        { label: "Duration", value: formatElapsed(durationMs), style: "value" as const },
+        { label: "Branch", value: session.branch, style: "value" as const },
+        { label: "Changes", value: getChangesText(session), style: "changes" as const },
+        ...getFileRows(session),
+      ]
     : [
       { label: "Duration", value: "--", style: "muted" as const },
       { label: "Branch", value: "--", style: "muted" as const },
@@ -134,7 +138,11 @@ function renderSessionPane(
 
   for (const entry of rows) {
     if (row >= rect.y + rect.height) break;
-    writeLabeledRow(buf, row, rect, entry.label, entry.value, entry.style);
+    if (entry.style === "changes") {
+      writeChangesRow(buf, row, rect, entry.label, session);
+    } else {
+      writeLabeledRow(buf, row, rect, entry.label, entry.value, entry.style);
+    }
     row++;
   }
 }
@@ -286,6 +294,43 @@ function writeLabeledRow(
   buf.writeText(row, valueX, truncate(sanitizeTerminalText(value), valueWidth), cellStyle);
 }
 
+function writeChangesRow(
+  buf: Buffer,
+  row: number,
+  rect: Rect,
+  label: string,
+  session: MissionControlSnapshot["session"],
+): void {
+  const labelWidth = 9;
+  const availableWidth = Math.max(0, rect.width - 3);
+  if (label) {
+    buf.writeText(row, rect.x + 1, truncate(label, labelWidth), { fg: PALETTE.dimGray });
+  }
+
+  const valueOffset = label ? labelWidth + 1 : 0;
+  const valueX = rect.x + 1 + valueOffset;
+  const valueWidth = Math.max(0, availableWidth - valueOffset);
+
+  if (!session || session.workingTreeClean) {
+    buf.writeText(row, valueX, truncate("clean", valueWidth), { fg: PALETTE.gray });
+    return;
+  }
+
+  const fileLabel = session.changedFiles.length === 1 ? "file" : "files";
+  let col = valueX;
+  col += buf.writeText(row, col, `${session.changedFiles.length} ${fileLabel}`, { fg: PALETTE.gray });
+  if (col >= valueX + valueWidth) return;
+
+  col += buf.writeText(row, col, " · ", { fg: PALETTE.dimGray });
+  if (col >= valueX + valueWidth) return;
+
+  const diff = parseDiffStatParts(session.diffStat);
+  col += buf.writeText(row, col, diff.added, { fg: PALETTE.green });
+  if (col >= valueX + valueWidth) return;
+
+  buf.writeText(row, col, ` ${diff.deleted}`, { fg: PALETTE.red });
+}
+
 function getRowStyle(style: "title" | "meta" | "value" | "muted") {
   switch (style) {
     case "title":
@@ -314,6 +359,14 @@ function getFileChangePresentation(
     default:
       return { symbol: "~", color: PALETTE.yellow } as const;
   }
+}
+
+function parseDiffStatParts(diffStat: string): { added: string; deleted: string } {
+  const match = diffStat.match(/(\+\d+)\s+(-\d+)/);
+  if (!match) {
+    return { added: "+0", deleted: "-0" };
+  }
+  return { added: match[1]!, deleted: match[2]! };
 }
 
 function clamp(value: number, min: number, max: number): number {

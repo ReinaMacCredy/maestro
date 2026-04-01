@@ -160,7 +160,7 @@ describe("renderWorkerPanel", () => {
       expect(text).not.toContain("[2J");
     });
 
-    it("uses change-kind colors in the Session / Changes file list", () => {
+  it("uses change-kind colors in the Session / Changes file list", () => {
       const buf = new Buffer(80, 10);
       renderSessionSidebar(buf, { x: 0, y: 0, width: 80, height: 10 }, makeSnapshot({
         session: {
@@ -189,5 +189,29 @@ describe("renderWorkerPanel", () => {
       expect(buf.getCell(8, 1)?.char).toBe("-");
       expect(buf.getCell(8, 1)?.fg).toBe(PALETTE.red);
       expect(buf.getCell(8, 3)?.fg).toBe(PALETTE.red);
+    });
+
+    it("colors the Changes summary diff counts", () => {
+      const buf = new Buffer(80, 8);
+      renderSessionSidebar(buf, { x: 0, y: 0, width: 80, height: 8 }, makeSnapshot({
+        session: {
+          agent: "codex",
+          sessionId: "5634c102-9871-4001-86f8-89399077624e",
+          branch: "main",
+          workingTreeClean: false,
+          diffStat: "+118 -17",
+          changedFiles: ["package.json", "src/tui/index.ts"],
+          fileChanges: [
+            { path: "package.json", kind: "modified" },
+            { path: "src/tui/index.ts", kind: "added" },
+          ],
+        },
+      }));
+
+      expect(buf.toString()).toContain("Changes");
+      expect(buf.getCell(5, 21)?.char).toBe("+");
+      expect(buf.getCell(5, 21)?.fg).toBe(PALETTE.green);
+      expect(buf.getCell(5, 26)?.char).toBe("-");
+      expect(buf.getCell(5, 26)?.fg).toBe(PALETTE.red);
     });
   });
