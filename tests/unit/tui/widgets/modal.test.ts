@@ -93,10 +93,10 @@ describe("renderModal", () => {
     expect(text).toContain("Esc close");
   });
 
-  it("uses overlay surface and selection theme tokens", () => {
-    const buf = new Buffer(80, 24);
-      const modalRect = renderModal(buf, { x: 0, y: 0, width: 80, height: 24 }, {
-        mode: "menu",
+    it("uses overlay surface and selection theme tokens", () => {
+      const buf = new Buffer(80, 24);
+        const modalRect = renderModal(buf, { x: 0, y: 0, width: 80, height: 24 }, {
+          mode: "menu",
         title: "Configure database",
         eyebrow: "f2 · Database config",
         items: ["Set status to assigned", "Set status to in-progress"],
@@ -106,9 +106,36 @@ describe("renderModal", () => {
 
     expect(buf.getCell(modalRect.y, modalRect.x)?.bg).toBe(PALETTE.overlaySurfaceBg);
 
-    const selectedRowCell = buf.getCell(modalRect.y + 4, modalRect.x + 2);
-    expect(selectedRowCell?.bg).toBe(PALETTE.overlaySelectedBg);
-  });
+      const selectedRowCell = buf.getCell(modalRect.y + 4, modalRect.x + 2);
+      expect(selectedRowCell?.bg).toBe(PALETTE.overlaySelectedBg);
+    });
+
+    it("uses the standard warm selection for the task browser", () => {
+      const buf = new Buffer(90, 28);
+      const layout = renderModal(buf, { x: 0, y: 0, width: 90, height: 28 }, {
+        mode: "menu",
+        title: "Tasks",
+        eyebrow: "Select a task to focus",
+        items: [
+          {
+            label: "Setup project structure",
+            detail: "f1 · done · backend-worker",
+            section: "Mission",
+          },
+          {
+            label: "Configure database",
+            detail: "f2 · assigned · backend-worker",
+            section: "Mission",
+          },
+        ],
+        selectedIndex: 0,
+        footer: "Enter focus · Esc close",
+        renderSpec: buildOverlayRenderSpec("feature-browser"),
+      });
+
+      expect(buf.getCell(layout.itemRects[0]!.y, layout.itemRects[0]!.x + 2)?.bg).toBe(PALETTE.yellow);
+      expect(buf.getCell(layout.itemRects[0]!.y, layout.itemRects[0]!.x + 2)?.fg).toBe(PALETTE.headerBg);
+    });
 
   it("renders info cards without a selection chevron", () => {
     const buf = new Buffer(80, 24);

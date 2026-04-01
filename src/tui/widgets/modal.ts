@@ -258,7 +258,7 @@ export function buildOverlayRenderSpec(kind: OverlayModalKind): OverlayRenderSpe
         family: "menu",
         sizePreset: "standard",
         chrome: STANDARD_CHROME,
-        selection: LEGACY_SELECTION,
+        selection: STANDARD_SELECTION,
         text: STANDARD_TEXT,
         layout: STANDARD_LAYOUT,
       };
