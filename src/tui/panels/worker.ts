@@ -123,11 +123,17 @@ function buildActivityRows(
 
   if (snap.activeFeature) {
     const meta = `${snap.activeFeature.id} · ${FEATURE_STATUS_LABEL[snap.activeFeature.status]} · ${snap.activeFeature.workerType}`;
+    const stateValue = snap.activeFeature.runtimeState === "recoverable"
+      ? `Recovery ready · retry count ${snap.activeFeature.retryCount ?? 0}`
+      : "Waiting to start next feature";
+    const nextValue = snap.activeFeature.runtimeState === "recoverable"
+      ? "Prompt generation can resume this feature"
+      : "Open Features and choose a task to focus";
     return [
       { label: "Task", value: snap.activeFeature.title, style: "title" },
       { label: "Meta", value: meta, style: "meta" },
-      { label: "State", value: "Waiting to start next feature", style: "muted" },
-      { label: "Next", value: "Open Features and choose a task to focus", style: "value" },
+      { label: "State", value: stateValue, style: snap.activeFeature.runtimeState === "recoverable" ? "value" : "muted" },
+      { label: "Next", value: nextValue, style: "value" },
       { label: "Scope", value: "Ready on current mission", style: "value" },
     ];
   }

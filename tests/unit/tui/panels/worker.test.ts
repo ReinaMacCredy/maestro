@@ -109,4 +109,32 @@ describe("renderWorkerPanel", () => {
     expect(text).toContain("Worker heartbeat stale");
     expect(text).toContain("Recovery review or manual retry");
   });
+
+  it("shows recoverable guidance for the next feature", () => {
+    const buf = new Buffer(90, 6);
+    renderWorkerPanel(buf, { x: 0, y: 0, width: 90, height: 6 }, makeSnapshot({
+      activeWorker: null,
+      activeFeature: {
+        id: "f2",
+        title: "Database config",
+        status: "pending",
+        milestoneId: "m1",
+        milestoneTitle: "Core Setup",
+        workerType: "backend-worker",
+        description: "Configure the database",
+        preconditions: undefined,
+        expectedBehavior: undefined,
+        verificationSteps: [],
+        dependsOn: [],
+        fulfills: [],
+        validTransitions: ["assigned"],
+        runtimeState: "recoverable",
+        retryCount: 1,
+      },
+    }));
+
+    const text = buf.toString();
+    expect(text).toContain("Recovery ready");
+    expect(text).toContain("Prompt generation can resume");
+  });
 });

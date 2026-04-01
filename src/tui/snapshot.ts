@@ -14,15 +14,12 @@ import type { RuntimeStorePort } from "../ports/runtime-store.port.js";
 import type { Mission, Feature } from "../domain/mission-types.js";
 import type { RuntimeState, WorkerRuntime } from "../domain/runtime-types.js";
 import type { DoctorCheck, StatusReport } from "../domain/types.js";
-import {
-  CASS_INSTALL_HINT,
-  DEFAULT_RUNTIME_FAILURE_MS,
-  DEFAULT_RUNTIME_STALE_MS,
-} from "../domain/defaults.js";
+import { CASS_INSTALL_HINT } from "../domain/defaults.js";
 import { generateMissionReport, type MissionReport } from "../usecases/mission-report.usecase.js";
 import { checkStatus } from "../usecases/check-status.usecase.js";
 import { runDoctor } from "../usecases/run-doctor.usecase.js";
 import { getValidFeatureTransitions } from "../domain/mission-state.js";
+import { classifyRuntime } from "../usecases/runtime-supervision.usecase.js";
 import { deriveEvents } from "./events.js";
 import type {
   MissionControlSnapshot,
@@ -114,7 +111,7 @@ export async function buildSnapshot(
   }));
 
   // Active feature: first assigned or in-progress
-  const activeFeature = findActiveFeature(features, report);
+  const activeFeature = findActiveFeature(features, report, runtimeByFeature);
 
   // Active worker
   const activeWorker = buildActiveWorker(features, runtimeByFeature, startMs, now);
@@ -269,6 +266,7 @@ export async function buildHomeSnapshot(
 function findActiveFeature(
   features: readonly Feature[],
   report: MissionReport,
+  runtimeByFeature?: ReadonlyMap<string, RuntimeView>,
 ): MissionControlFeatureDetail | null {
   const active = features.find(
     (f) => f.status === "assigned" || f.status === "in-progress" || f.status === "review",
@@ -277,6 +275,7 @@ function findActiveFeature(
   if (!active) return null;
 
   const milestone = report.mission.milestones.find((m) => m.id === active.milestoneId);
+  const runtime = runtimeByFeature?.get(active.id);
 
   return {
     id: active.id,
@@ -292,6 +291,12 @@ function findActiveFeature(
     dependsOn: active.dependsOn,
     fulfills: active.fulfills,
     validTransitions: [...getValidFeatureTransitions(active.status)],
+    runtimeState: runtime?.runtimeState,
+    lastSeenAgeMs: runtime?.lastSeenAgeMs,
+    failureReason: runtime?.failureReason,
+    retryCount: runtime?.retryCount,
+    agent: runtime?.agent,
+    sessionId: runtime?.sessionId,
   };
 }
 
@@ -402,30 +407,15 @@ function buildRuntimeProcesses(
 }
 
 function buildRuntimeView(runtime: WorkerRuntime, nowMs: number): RuntimeView {
-  const lastSeenMs = new Date(runtime.lastSeenAt).getTime();
-  const startedAtMs = new Date(runtime.startedAt).getTime();
-  const leaseExpiresMs = new Date(runtime.leaseExpiresAt).getTime();
-  const lastSeenAgeMs = Math.max(0, nowMs - lastSeenMs);
-
-  let runtimeState = runtime.runtimeState;
-  if (runtimeState !== "completed" && runtimeState !== "recoverable") {
-    if (lastSeenAgeMs >= DEFAULT_RUNTIME_FAILURE_MS) {
-      runtimeState = "failed";
-    } else if (lastSeenAgeMs >= DEFAULT_RUNTIME_STALE_MS) {
-      runtimeState = "stale";
-    } else if (runtimeState === "starting" || runtimeState === "live" || leaseExpiresMs >= nowMs) {
-      runtimeState = "live";
-    }
-  }
-
+  const classification = classifyRuntime(runtime, nowMs);
   return {
-    runtimeState,
-    lastSeenAgeMs,
+    runtimeState: classification.runtimeState,
+    lastSeenAgeMs: classification.lastSeenAgeMs,
     failureReason: runtime.failureReason,
     retryCount: runtime.recoveryMetadata.retryCount,
     agent: runtime.agent,
     sessionId: runtime.sessionId,
-    startedAtMs,
+    startedAtMs: classification.startedAtMs,
   };
 }
 

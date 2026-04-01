@@ -131,6 +131,12 @@ export interface MissionControlFeatureDetail {
   dependsOn: readonly string[];
   fulfills: readonly string[];
   validTransitions: readonly FeatureStatus[];
+  runtimeState?: RuntimeState;
+  lastSeenAgeMs?: number;
+  failureReason?: string;
+  retryCount?: number;
+  agent?: string;
+  sessionId?: string;
 }
 
 export interface MissionControlWorkerPane {
