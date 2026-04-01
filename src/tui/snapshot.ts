@@ -216,7 +216,7 @@ export async function buildSnapshot(
         missionDirectory: `.maestro/missions/${mission.id}`,
         workerTypes,
       },
-      runtimeProcesses: buildRuntimeProcesses(features, runtimeByFeature, activeWorker),
+        runtimeProcesses: buildRuntimeProcesses(mission, features, runtimeByFeature, activeWorker),
       progressLog,
       milestones,
       gateBlocked,
@@ -323,7 +323,7 @@ function buildActiveWorker(
   nowMs: number,
 ): MissionControlWorkerPane | null {
   const active = features.find(
-    (f) => f.status === "assigned" || f.status === "in-progress",
+    (f) => f.status === "assigned" || f.status === "in-progress" || f.status === "review",
   );
 
   if (!active) return null;
@@ -389,10 +389,12 @@ function buildHomeActions(
 }
 
 function buildRuntimeProcesses(
+  mission: Mission,
   features: readonly Feature[],
   runtimeByFeature: ReadonlyMap<string, RuntimeView>,
   activeWorker: MissionControlWorkerPane | null,
 ): readonly MissionControlRuntimeProcessRow[] {
+  const milestoneById = new Map(mission.milestones.map((milestone) => [milestone.id, milestone]));
   return features
       .filter((feature) => {
         const runtime = runtimeByFeature.get(feature.id);
@@ -404,13 +406,16 @@ function buildRuntimeProcesses(
           || feature.status === "in-progress"
         || feature.status === "review";
     })
-      .map((feature) => {
-        const runtime = runtimeByFeature.get(feature.id);
-        return {
-          featureId: feature.id,
-          title: feature.title,
-          status: feature.status,
-          workerType: feature.workerType,
+        .map((feature) => {
+          const runtime = runtimeByFeature.get(feature.id);
+          const milestone = milestoneById.get(feature.milestoneId);
+          return {
+            featureId: feature.id,
+            title: feature.title,
+            milestoneTitle: milestone?.title,
+            profile: milestone?.profile,
+            status: feature.status,
+            workerType: feature.workerType,
         hasReport: feature.report !== undefined && feature.report !== null,
         isLive: runtime
           ? presentRuntimeState(runtime, feature.status) === "live"

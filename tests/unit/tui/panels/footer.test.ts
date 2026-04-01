@@ -112,10 +112,10 @@ describe("renderFooter", () => {
     }));
     const text = buf.toString();
     expect(text).toContain("Overview");
-    expect(text).toContain("Dependencies");
     expect(text).toContain("Handoffs");
     expect(text).toContain("Config");
-    expect(text).toContain("Runtime");
+    expect(text).not.toContain("Dependencies");
+    expect(text).not.toContain("Runtime");
   });
 
   it("shows a copy mode banner when copy mode is active", () => {

@@ -795,10 +795,20 @@ function buildEmptyDependencyListItems() {
 }
 
 function buildDependencyDetailItems(preview: TaskPreviewPane) {
+  const blockedBy = preview.blockedBy ?? [];
+  const unblocks = preview.unblocks ?? [];
+  const blockedByLines = blockedBy.map((feature, index) => {
+    const isLast = index === blockedBy.length - 1 && unblocks.length === 0;
+    return `${isLast ? "└" : "├"}─ blocked by ${feature.id} [${FEATURE_TASK_STATUS_LABEL[feature.status]}]`;
+  });
+  const unblocksLines = unblocks.map((feature, index) => {
+    const isLast = index === unblocks.length - 1;
+    return `${isLast ? "└" : "├"}─ unblocks ${feature.id} [${FEATURE_TASK_STATUS_LABEL[feature.status]}]`;
+  });
   const graphLines = [
     `${preview.id} ${preview.title} [${FEATURE_TASK_STATUS_LABEL[preview.status]}]`,
-    ...((preview.blockedBy ?? []).length > 0
-      ? (preview.blockedBy ?? []).map((feature, index, features) => `${index === features.length - 1 ? "└" : "├"}─ blocked by ${feature.id} [${FEATURE_TASK_STATUS_LABEL[feature.status]}]`)
+    ...(blockedByLines.length > 0 || unblocksLines.length > 0
+      ? [...blockedByLines, ...unblocksLines]
       : ["└─ ready to start [CLEAR]"]),
   ];
   return [

@@ -178,9 +178,9 @@ export function reduce(state: AppState, action: Action): AppState {
       return state;
     }
 
-      case "escape":
-        if (state.modal.kind !== "none") {
-          return { ...state, modal: { kind: "none" } };
+    case "escape":
+      if (state.modal.kind !== "none") {
+          return { ...state, modal: { kind: "none" }, copyMode: false };
         }
       if (state.copyMode) {
         return { ...state, copyMode: false };
@@ -220,6 +220,7 @@ export function reduce(state: AppState, action: Action): AppState {
 
     case "open-dependencies":
       if (!canOpenOverlayFromModal(state.modal)) return state;
+      if (state.snapshot.mode !== "mission") return state;
       return {
         ...state,
         modal: {
@@ -249,6 +250,7 @@ export function reduce(state: AppState, action: Action): AppState {
 
     case "open-processes":
       if (!canOpenOverlayFromModal(state.modal)) return state;
+      if (state.snapshot.mode !== "mission") return state;
       return {
         ...state,
         modal: {

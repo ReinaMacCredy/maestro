@@ -536,14 +536,16 @@ describe("frame rendering", () => {
               expectedBehavior: undefined,
               verificationSteps: [],
               dependsOn: ["f3", "f5"],
-              blockedBy: [
-                { id: "f3", title: "Implement API endpoints", status: "in-progress" },
-                { id: "f5", title: "Verify migrations", status: "review" },
-              ],
-              unblocks: [],
-              fulfills: [],
-              validTransitions: ["assigned"],
-            },
+                blockedBy: [
+                  { id: "f3", title: "Implement API endpoints", status: "in-progress" },
+                  { id: "f5", title: "Verify migrations", status: "review" },
+                ],
+                unblocks: [
+                  { id: "f7", title: "Ship auth polish", status: "pending" },
+                ],
+                fulfills: [],
+                validTransitions: ["assigned"],
+              },
             taskPreviews: [{
               id: "f6",
               title: "Bug hunt auth flow",
@@ -556,14 +558,16 @@ describe("frame rendering", () => {
               expectedBehavior: undefined,
               verificationSteps: [],
               dependsOn: ["f3", "f5"],
-              blockedBy: [
-                { id: "f3", title: "Implement API endpoints", status: "in-progress" },
-                { id: "f5", title: "Verify migrations", status: "review" },
-              ],
-              unblocks: [],
-              fulfills: [],
-              validTransitions: ["assigned"],
-            }],
+                blockedBy: [
+                  { id: "f3", title: "Implement API endpoints", status: "in-progress" },
+                  { id: "f5", title: "Verify migrations", status: "review" },
+                ],
+                unblocks: [
+                  { id: "f7", title: "Ship auth polish", status: "pending" },
+                ],
+                fulfills: [],
+                validTransitions: ["assigned"],
+              }],
           });
           const frame = withTerminalSize(100, 32, () => {
             const buf = new Buffer(100, 32);
@@ -576,10 +580,11 @@ describe("frame rendering", () => {
           expect(frame).toContain("Dependencies");
           expect(frame).toContain("Upstream");
           expect(frame).toContain("Downstream");
-          expect(frame).toContain("Summary");
-          expect(frame).toContain("Graph");
-          expect(frame).toContain("ready to start: no");
-        });
+            expect(frame).toContain("Summary");
+            expect(frame).toContain("Graph");
+            expect(frame).toContain("ready to start: no");
+            expect(frame).toContain("unblocks f7");
+          });
 
         it("renders the handoffs overlay as a split pane", () => {
           const frame = withTerminalSize(100, 32, () => {

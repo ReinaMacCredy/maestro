@@ -248,14 +248,25 @@ describe("reduce", () => {
         expect(state.focusedPanel).toBe("none");
       });
 
-      it("turns off copy mode before changing focus", () => {
-        const state = makeState({ copyMode: true, focusedPanel: "features", leftPaneMode: "preview" });
-        const next = reduce(state, { type: "escape" });
+        it("turns off copy mode before changing focus", () => {
+          const state = makeState({ copyMode: true, focusedPanel: "features", leftPaneMode: "preview" });
+          const next = reduce(state, { type: "escape" });
 
-        expect(next.copyMode).toBe(false);
-        expect(next.leftPaneMode).toBe("preview");
+          expect(next.copyMode).toBe(false);
+          expect(next.leftPaneMode).toBe("preview");
+        });
+
+        it("turns off copy mode while closing an open modal", () => {
+          const state = makeState({
+            copyMode: true,
+            modal: { kind: "command-palette", query: "dep", selectedCommandIndex: 0 },
+          });
+          const next = reduce(state, { type: "escape" });
+
+          expect(next.modal.kind).toBe("none");
+          expect(next.copyMode).toBe(false);
+        });
       });
-    });
 
     describe("open-features", () => {
     it("opens feature browser", () => {
@@ -317,11 +328,29 @@ describe("reduce", () => {
     });
   });
 
-    describe("open-processes", () => {
-      it("opens processes modal", () => {
-        const state = reduce(makeState(), { type: "open-processes" });
-        expect(state.modal.kind).toBe("processes");
-      });
+      describe("open-processes", () => {
+        it("opens processes modal", () => {
+          const state = reduce(makeState(), { type: "open-processes" });
+          expect(state.modal.kind).toBe("processes");
+        });
+
+        it("does not open processes from home mode", () => {
+          const state = reduce(makeState({
+            snapshot: makeSnapshot({
+              mode: "home",
+              home: {
+                headline: "Home",
+                summary: "No mission",
+                locationLabel: "repo",
+                checks: [],
+                actions: [],
+                pendingHandoffs: [],
+              },
+            }),
+          }), { type: "open-processes" });
+
+          expect(state.modal.kind).toBe("none");
+        });
 
         it("keeps the split runtime overlay open on enter and closes on escape", () => {
           const opened = reduce(makeState({
@@ -345,13 +374,31 @@ describe("reduce", () => {
         });
       });
 
-    describe("open-dependencies", () => {
-      it("opens dependencies modal", () => {
-        const state = reduce(makeState(), { type: "open-dependencies" });
-        expect(state.modal.kind).toBe("dependencies");
-      });
+      describe("open-dependencies", () => {
+        it("opens dependencies modal", () => {
+          const state = reduce(makeState(), { type: "open-dependencies" });
+          expect(state.modal.kind).toBe("dependencies");
+        });
 
-      it("jumps to a selected dependency on enter", () => {
+        it("does not open dependencies from home mode", () => {
+          const state = reduce(makeState({
+            snapshot: makeSnapshot({
+              mode: "home",
+              home: {
+                headline: "Home",
+                summary: "No mission",
+                locationLabel: "repo",
+                checks: [],
+                actions: [],
+                pendingHandoffs: [],
+              },
+            }),
+          }), { type: "open-dependencies" });
+
+          expect(state.modal.kind).toBe("none");
+        });
+
+        it("jumps to a selected dependency on enter", () => {
         const snapshot = makeSnapshot({
           features: [
             { id: "f1", title: "F1", status: "done", milestoneId: "m1", workerType: "test", hasReport: true },

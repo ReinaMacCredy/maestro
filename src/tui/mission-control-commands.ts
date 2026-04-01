@@ -38,7 +38,37 @@ export function getMissionControlCommandSpecs(
         keywords: ["tasks", "features", "feature browser", "focus"],
       };
 
+  if (mode === "home") {
     return [
+      featureCommand,
+      {
+        id: "handoffs",
+        key: "H",
+        label: "Handoffs",
+        detail: "Review pending cross-agent handoffs",
+        section: "Navigate",
+        keywords: ["handoff", "handoffs", "agent"],
+      },
+      {
+        id: "config",
+        key: "C",
+        label: "Config",
+        detail: "Inspect workspace configuration, checks, and mission directory",
+        section: "Navigate",
+        keywords: ["config", "configuration", "doctor", "directory"],
+      },
+      {
+        id: "exit",
+        key: "Ctrl+T",
+        label: "Exit",
+        detail: "Close Mission Control cleanly",
+        section: "Session",
+        keywords: ["quit", "exit", "close"],
+      },
+    ];
+  }
+
+  return [
       featureCommand,
       {
         id: "dependencies",

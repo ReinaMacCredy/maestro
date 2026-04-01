@@ -511,11 +511,11 @@ describe("buildSnapshot", () => {
       expect(snapshot.runtimeProcesses.find((process) => process.featureId === "f1")).toBeUndefined();
     }, 15_000);
 
-    it("keeps overview dependency chains visible when downstream work is linked but not blocked", async () => {
-      const plan = createSamplePlan();
-      await writeFile(join(tmpDir, "plan.json"), JSON.stringify(plan));
-      const { stdout } = await run(["mission", "create", "--file", join(tmpDir, "plan.json"), "--json"], tmpDir);
-      const missionId = JSON.parse(stdout).mission.id;
+      it("keeps overview dependency chains visible when downstream work is linked but not blocked", async () => {
+        const plan = createSamplePlan();
+        await writeFile(join(tmpDir, "plan.json"), JSON.stringify(plan));
+        const { stdout } = await run(["mission", "create", "--file", join(tmpDir, "plan.json"), "--json"], tmpDir);
+        const missionId = JSON.parse(stdout).mission.id;
 
       await run(["mission", "approve", missionId, "--json"], tmpDir);
       await run(["feature", "update", "f1", "--mission", missionId, "--status", "done", "--json"], tmpDir);
@@ -523,14 +523,69 @@ describe("buildSnapshot", () => {
 
       const snapshot = await buildSnapshot(deps, missionId);
 
-      expect(snapshot.missionOverview?.dependencyMap).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            root: expect.objectContaining({ id: "f1" }),
-            primaryDependent: expect.objectContaining({ id: "f2", status: "assigned" }),
-            hiddenDependentCount: 0,
-          }),
-        ]),
-      );
-    }, 15_000);
-  });
+        expect(snapshot.missionOverview?.dependencyMap).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              root: expect.objectContaining({ id: "f1" }),
+              primaryDependent: expect.objectContaining({ id: "f2", status: "assigned" }),
+              hiddenDependentCount: 0,
+            }),
+          ]),
+        );
+      }, 15_000);
+
+      it("keeps review-only runtime ownership in the session sidebar and runtime detail rows", async () => {
+        const plan = {
+          title: "Review Ownership Mission",
+          description: "Review runtime coverage",
+          milestones: [
+            { id: "m1", title: "Implementation", description: "Build", order: 0, kind: "work", profile: "implementation" },
+            { id: "m2", title: "Code Review", description: "Review", order: 1, kind: "gate", profile: "code-review" },
+          ],
+          features: [
+            { id: "f1", milestoneId: "m1", title: "Build auth", description: "Build auth", workerType: "backend", verificationSteps: ["check"] },
+            { id: "f2", milestoneId: "m2", title: "Review auth", description: "Review auth", workerType: "reviewer", verificationSteps: ["inspect"] },
+          ],
+        };
+        await writeFile(join(tmpDir, "plan.json"), JSON.stringify(plan));
+        const { stdout } = await run(["mission", "create", "--file", join(tmpDir, "plan.json"), "--json"], tmpDir);
+        const missionId = JSON.parse(stdout).mission.id;
+
+        await run(["mission", "approve", missionId, "--json"], tmpDir);
+        await run(["feature", "update", "f1", "--mission", missionId, "--status", "in-progress", "--json"], tmpDir);
+        await run(["feature", "update", "f1", "--mission", missionId, "--status", "review", "--json"], tmpDir);
+        await run(["feature", "update", "f1", "--mission", missionId, "--status", "done", "--json"], tmpDir);
+        await run(["feature", "update", "f2", "--mission", missionId, "--status", "assigned", "--json"], tmpDir);
+        await run(["feature", "update", "f2", "--mission", missionId, "--status", "in-progress", "--json"], tmpDir);
+        await run(["feature", "update", "f2", "--mission", missionId, "--status", "review", "--json"], tmpDir);
+
+        await runtimeStore.save(missionId, "f2", {
+          featureId: "f2",
+          attemptId: "attempt-review-owner",
+          attempt: 1,
+          agent: "codex",
+          sessionId: "session-review-1234567890",
+          runtimeState: "live",
+          startedAt: new Date(Date.now() - 20_000).toISOString(),
+          lastSeenAt: new Date(Date.now() - 5_000).toISOString(),
+          leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+          recoveryMetadata: {
+            retryCount: 0,
+            history: [],
+          },
+        });
+
+        const snapshot = await buildSnapshot(deps, missionId);
+        const reviewRuntime = snapshot.runtimeProcesses.find((process) => process.featureId === "f2");
+
+        expect(snapshot.session?.agent).toBe("codex");
+        expect(snapshot.session?.sessionId).toBe("session-review-1234567890");
+        expect(reviewRuntime).toMatchObject({
+          featureId: "f2",
+          milestoneTitle: "Code Review",
+          profile: "code-review",
+          agent: "codex",
+          sessionId: "session-review-1234567890",
+        });
+      }, 15_000);
+    });
