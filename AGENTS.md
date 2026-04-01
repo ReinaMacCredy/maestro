@@ -52,6 +52,17 @@
 - For Mission Control or other TTY smoke tests, prefer `./dist/maestro mission-control ...` unless the goal is specifically to validate the installed command on `PATH`
 - Every verification summary must state which binary was exercised: `./dist/maestro` or installed `maestro` on `PATH`
 
+## Mission Control Contracts
+- Keep `buildSnapshot()` and `buildHomeSnapshot()` read-only; do not perform runtime recovery, feature updates, or other state mutation inside snapshot projection
+- `mission-control --json` and `mission-control --once` must remain read-only inspection paths; recovery or supervision belongs only in explicit orchestration/supervised runtime paths
+- When adding Mission Control tests, cover both source-run and compiled `./dist/maestro` behavior if the change affects interactive flow, polling, or TTY handling
+
+## Shell Gotchas
+- When running `git commit -m ...` through `zsh -lc`, do not put Markdown backticks inside double-quoted commit messages; use single-quoted heredocs, a temp file, or escaped backticks to avoid accidental command substitution
+
+## Environment-Sensitive Tests
+- Treat `tests/integration/session-sourcepath.test.ts` as environment-dependent: if `sourcePath` existence assertions fail, verify the expected local Claude session artifact exists before blaming unrelated code changes
+
 ## Release and Commit Conventions
 - Bump the **minor** version for backward-compatible feature additions or meaningful capability expansions
 - Bump the **major** version for breaking CLI, API, storage, or workflow changes
