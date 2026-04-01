@@ -131,6 +131,8 @@ export async function buildSnapshot(
     title: mp.milestone.title,
     status: mp.status,
     order: mp.order,
+    kind: mp.milestone.kind ?? "work",
+    profile: mp.milestone.profile ?? "custom",
   }));
 
   // Feature progress

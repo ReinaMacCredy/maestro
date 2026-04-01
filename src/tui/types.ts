@@ -106,6 +106,8 @@ export interface MissionControlMilestoneRow {
   title: string;
   status: MilestoneStatus;
   order: number;
+  kind: string;
+  profile: string;
 }
 
 export interface MissionControlFeatureRow {
