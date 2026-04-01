@@ -420,12 +420,45 @@ describe("mission lifecycle usecases", () => {
       it("rejects malformed custom workflow templates with a structured error", () => {
         expect(() => expandWorkflowTemplate("broken", {
           workflowTemplates: {
-            broken: {
-              description: "Broken",
-              phases: [{ label: "Planning" }],
+              broken: {
+                description: "Broken",
+                phases: [{ kind: "work" }],
+              } as unknown as WorkflowTemplate,
+            },
+          })).toThrow("Invalid workflow template 'broken'");
+        });
+
+      it("normalizes legacy custom workflow templates with omitted kind and extra metadata", () => {
+        const milestones = expandWorkflowTemplate("legacy", {
+          workflowTemplates: {
+            legacy: {
+              phases: [
+                { label: "Planning", profile: "planning" },
+                { label: "Implementation", profile: "implementation", notes: "ignored" },
+              ],
+              notes: "ignored",
             } as unknown as WorkflowTemplate,
           },
-        })).toThrow("Invalid workflow template 'broken'");
+        });
+
+        expect(milestones).toEqual([
+          {
+            id: "planning",
+            title: "Planning",
+            description: "Planning",
+            order: 0,
+            kind: "work",
+            profile: "planning",
+          },
+          {
+            id: "implementation",
+            title: "Implementation",
+            description: "Implementation",
+            order: 1,
+            kind: "work",
+            profile: "implementation",
+          },
+        ]);
       });
     });
   });

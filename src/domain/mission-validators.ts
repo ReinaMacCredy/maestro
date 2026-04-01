@@ -47,16 +47,16 @@ export const MilestoneProfileSchema = z.enum([
 ]);
 
 export const WorkflowPhaseSchema = z.object({
-  kind: MilestoneKindSchema,
+  kind: MilestoneKindSchema.default("work"),
   label: z.string().min(1),
   profile: MilestoneProfileSchema.optional(),
   description: z.string().optional(),
-}).strict();
+});
 
 export const WorkflowTemplateSchema = z.object({
-  description: z.string().min(1),
+  description: z.string().min(1).optional(),
   phases: z.array(WorkflowPhaseSchema).min(1),
-}).strict();
+});
 
 export const MilestoneInputSchema = z.object({
   id: z.string().min(1),
@@ -331,7 +331,11 @@ export function validateMissionPlanFile(data: unknown): MissionPlanFile {
 
 export function validateWorkflowTemplate(data: unknown, templateName: string): WorkflowTemplate {
   try {
-    return WorkflowTemplateSchema.parse(data);
+    const parsed = WorkflowTemplateSchema.parse(data);
+    return {
+      description: parsed.description ?? templateName,
+      phases: parsed.phases,
+    };
   } catch (err) {
     if (err instanceof z.ZodError) {
       const issue = err.issues[0];
@@ -340,7 +344,7 @@ export function validateWorkflowTemplate(data: unknown, templateName: string): W
         `Invalid workflow template '${templateName}': ${issue?.message ?? "validation failed"}`,
         [
           `Problem field: ${path}`,
-          "Workflow templates must include a description and at least one phase with kind and label",
+          "Workflow templates must include at least one phase with a label",
         ],
       );
     }
