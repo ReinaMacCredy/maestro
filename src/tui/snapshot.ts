@@ -20,7 +20,6 @@ import { checkStatus } from "../usecases/check-status.usecase.js";
 import { runDoctor } from "../usecases/run-doctor.usecase.js";
 import { getValidFeatureTransitions } from "../domain/mission-state.js";
 import { classifyRuntime } from "../usecases/runtime-supervision.usecase.js";
-import { recoverMissionRuntimeFailures } from "../usecases/runtime-recovery.usecase.js";
 import { deriveEvents } from "./events.js";
 import type {
   MissionControlSnapshot,
@@ -71,13 +70,6 @@ export async function buildSnapshot(
   deps: SnapshotDeps,
   missionId: string,
 ): Promise<MissionControlSnapshot> {
-  await recoverMissionRuntimeFailures(
-    deps.missionStore,
-    deps.featureStore,
-    deps.runtimeStore,
-    missionId,
-  );
-
   const [
     report,
     features,

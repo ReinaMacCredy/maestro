@@ -31,3 +31,21 @@ export function sanitizePromptContent(content: string, label?: string): string {
   // Wrap in XML delimiters
   return `<${tag}>\n${sanitized}\n</${tag}>`;
 }
+
+export function sanitizeTerminalText(content: string | undefined): string {
+  if (!content) {
+    return "";
+  }
+
+  return content
+    // OSC sequences
+    .replace(/\u001b\][^\u0007]*(?:\u0007|\u001b\\)/g, "")
+    // CSI sequences
+    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
+    // Other escape-led control sequences
+    .replace(/\u001b[@-_]/g, "")
+    // Remaining control characters
+    .replace(/[\u0000-\u001F\u007F]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}

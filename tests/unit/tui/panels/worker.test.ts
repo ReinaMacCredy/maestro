@@ -110,9 +110,9 @@ describe("renderWorkerPanel", () => {
     expect(text).toContain("Recovery review or manual retry");
   });
 
-  it("shows recoverable guidance for the next feature", () => {
-    const buf = new Buffer(90, 6);
-    renderWorkerPanel(buf, { x: 0, y: 0, width: 90, height: 6 }, makeSnapshot({
+    it("shows recoverable guidance for the next feature", () => {
+      const buf = new Buffer(90, 6);
+      renderWorkerPanel(buf, { x: 0, y: 0, width: 90, height: 6 }, makeSnapshot({
       activeWorker: null,
       activeFeature: {
         id: "f2",
@@ -133,8 +133,30 @@ describe("renderWorkerPanel", () => {
       },
     }));
 
-    const text = buf.toString();
-    expect(text).toContain("Recovery ready");
-    expect(text).toContain("Prompt generation can resume");
+      const text = buf.toString();
+      expect(text).toContain("Recovery ready");
+      expect(text).toContain("Prompt generation can resume");
+    });
+
+    it("sanitizes failure reasons before writing them into the terminal buffer", () => {
+      const buf = new Buffer(90, 6);
+      renderWorkerPanel(buf, { x: 0, y: 0, width: 90, height: 6 }, makeSnapshot({
+        activeWorker: {
+          featureId: "f2",
+          featureTitle: "Database config",
+          workerType: "backend-worker",
+          status: "in-progress",
+          elapsedMs: 30_000,
+          report: null,
+          runtimeState: "failed",
+          failureReason: "\u001b[2Jworker vanished\u0007",
+        },
+      }));
+
+      const text = buf.toString();
+      expect(text).toContain("worker vanished");
+      expect(text).not.toContain("\u001b");
+      expect(text).not.toContain("\u0007");
+      expect(text).not.toContain("[2J");
+    });
   });
-});

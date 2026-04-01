@@ -8,6 +8,7 @@ import { output, resolveJsonFlag } from "../lib/output.js";
 import { MaestroError } from "../domain/errors.js";
 import { buildHomeSnapshot, buildSnapshot } from "../tui/snapshot.js";
 import { renderDashboard, renderOnceFrame } from "../tui/index.js";
+import { recoverMissionRuntimeFailures } from "../usecases/runtime-recovery.usecase.js";
 
 export function registerMissionControlCommand(program: Command): void {
   program
@@ -65,13 +66,12 @@ export function registerMissionControlCommand(program: Command): void {
         ]);
       }
 
-      await renderDashboard({
-        snapshot,
-        snapshotDeps,
-        homeSnapshotDeps,
-        missionId,
+        await renderDashboard({
+          snapshot,
+          snapshotDeps,
+          reloadSnapshot: () => loadSnapshot(snapshotDeps, homeSnapshotDeps, missionId),
+        });
       });
-    });
 }
 
 /**
@@ -112,5 +112,22 @@ async function buildMissionSnapshot(
     ]);
   }
 
+  await recoverMissionRuntimeFailures(
+    snapshotDeps.missionStore,
+    snapshotDeps.featureStore,
+    snapshotDeps.runtimeStore,
+    missionId,
+  );
+
   return buildSnapshot(snapshotDeps, missionId);
+}
+
+async function loadSnapshot(
+  snapshotDeps: Parameters<typeof buildSnapshot>[0],
+  homeSnapshotDeps: Parameters<typeof buildHomeSnapshot>[0],
+  missionId?: string,
+) {
+  return missionId
+    ? buildMissionSnapshot(missionId, snapshotDeps)
+    : buildHomeSnapshot(homeSnapshotDeps, process.cwd());
 }

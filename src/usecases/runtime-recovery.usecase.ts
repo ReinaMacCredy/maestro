@@ -29,6 +29,11 @@ export async function recoverMissionRuntimeFailures(
   const recovered: RecoverRuntimeFailureResult[] = [];
 
   for (const runtime of runtimes) {
+    const feature = await featureStore.get(missionId, runtime.featureId);
+    if (!feature) {
+      continue;
+    }
+
     const result = await recoverRuntimeFailure(
       missionStore,
       featureStore,
@@ -79,6 +84,10 @@ export async function recoverRuntimeFailure(
   const exhausted = runtime.recoveryMetadata.retryCount >= DEFAULT_RUNTIME_RETRY_BUDGET;
 
   if (exhausted) {
+    if (hasRecordedExhaustedFailure(runtime)) {
+      return { recovered: false, exhausted: true, feature, runtime };
+    }
+
     const exhaustedRuntime: WorkerRuntime = {
       ...runtime,
       runtimeState: "failed",
@@ -124,6 +133,13 @@ export async function recoverRuntimeFailure(
     feature: updatedFeature,
     runtime: recoveredRuntime,
   };
+}
+
+function hasRecordedExhaustedFailure(runtime: WorkerRuntime): boolean {
+  const lastHistoryEntry = runtime.recoveryMetadata.history.at(-1);
+  return runtime.recoveryMetadata.lastRecoveryReason?.endsWith("(retry budget exhausted)") === true
+    && lastHistoryEntry?.fromState === "failed"
+    && lastHistoryEntry?.toState === "failed";
 }
 
 function makeRecoveryHistory(

@@ -275,9 +275,9 @@ describe("buildSnapshot", () => {
       expect(hasBinaryCalls).toBe(1);
     }, 15_000);
 
-  it("prefers explicit runtime state when runtime.json exists", async () => {
-    const plan = createSamplePlan();
-    await writeFile(join(tmpDir, "plan.json"), JSON.stringify(plan));
+    it("prefers explicit runtime state when runtime.json exists", async () => {
+      const plan = createSamplePlan();
+      await writeFile(join(tmpDir, "plan.json"), JSON.stringify(plan));
     const { stdout } = await run(["mission", "create", "--file", join(tmpDir, "plan.json"), "--json"], tmpDir);
     const missionId = JSON.parse(stdout).mission.id;
 
@@ -307,12 +307,55 @@ describe("buildSnapshot", () => {
       runtimeState: "live",
       retryCount: 1,
     });
-    expect(snapshot.runtimeProcesses[0]).toMatchObject({
-      featureId: "f1",
-      runtimeState: "live",
-      retryCount: 1,
-    });
-  }, 15_000);
+      expect(snapshot.runtimeProcesses[0]).toMatchObject({
+        featureId: "f1",
+        runtimeState: "live",
+        retryCount: 1,
+      });
+    }, 15_000);
+
+    it("projects failed runtime state without mutating feature or runtime storage", async () => {
+      const plan = createSamplePlan();
+      await writeFile(join(tmpDir, "plan.json"), JSON.stringify(plan));
+      const { stdout } = await run(["mission", "create", "--file", join(tmpDir, "plan.json"), "--json"], tmpDir);
+      const missionId = JSON.parse(stdout).mission.id;
+
+      await run(["mission", "approve", missionId, "--json"], tmpDir);
+      await run(["feature", "update", "f1", "--mission", missionId, "--status", "assigned", "--json"], tmpDir);
+
+      await runtimeStore.save(missionId, "f1", {
+        featureId: "f1",
+        attemptId: "attempt-failed-view",
+        attempt: 1,
+        agent: "unknown",
+        runtimeState: "live",
+        startedAt: new Date(Date.now() - 360_000).toISOString(),
+        lastSeenAt: new Date(Date.now() - 360_000).toISOString(),
+        leaseExpiresAt: new Date(Date.now() - 300_000).toISOString(),
+        failureReason: "worker vanished",
+        recoveryMetadata: {
+          retryCount: 0,
+          history: [],
+        },
+      });
+
+      const snapshot = await buildSnapshot(deps, missionId);
+      const feature = await deps.featureStore.get(missionId, "f1");
+      const runtime = await runtimeStore.get(missionId, "f1");
+
+      expect(snapshot.activeWorker).toMatchObject({
+        featureId: "f1",
+        runtimeState: "failed",
+        failureReason: "worker vanished",
+      });
+      expect(feature?.status).toBe("assigned");
+      expect(runtime).toMatchObject({
+        runtimeState: "live",
+        failureReason: "worker vanished",
+      });
+      expect(runtime?.recoveryMetadata.retryCount).toBe(0);
+      expect(runtime?.recoveryMetadata.history).toHaveLength(0);
+    }, 15_000);
 
     it("classifies stale and failed runtimes from heartbeat age", async () => {
     const plan = createSamplePlan();

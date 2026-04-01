@@ -47,7 +47,7 @@ describe("Buffer", () => {
     });
   });
 
-  describe("writeText", () => {
+    describe("writeText", () => {
     it("writes text starting at position", () => {
       const buf = new Buffer(10, 1);
       const written = buf.writeText(0, 2, "hello");
@@ -62,15 +62,22 @@ describe("Buffer", () => {
       expect(buf.toString()).toBe("   he");
     });
 
-    it("applies style to all characters", () => {
-      const buf = new Buffer(10, 1);
-      buf.writeText(0, 0, "abc", { fg: 196, bold: true });
-      for (let i = 0; i < 3; i++) {
-        expect(buf.getCell(0, i)?.fg).toBe(196);
-        expect(buf.getCell(0, i)?.bold).toBe(true);
-      }
+      it("applies style to all characters", () => {
+        const buf = new Buffer(10, 1);
+        buf.writeText(0, 0, "abc", { fg: 196, bold: true });
+        for (let i = 0; i < 3; i++) {
+          expect(buf.getCell(0, i)?.fg).toBe(196);
+          expect(buf.getCell(0, i)?.bold).toBe(true);
+        }
+      });
+
+      it("strips ANSI escapes and control characters before writing", () => {
+        const buf = new Buffer(20, 1);
+        const written = buf.writeText(0, 0, "\u001b[2Jhi\u0007");
+        expect(written).toBe(2);
+        expect(buf.toString()).toBe("hi");
+      });
     });
-  });
 
   describe("fillRow", () => {
     it("fills entire row with character", () => {

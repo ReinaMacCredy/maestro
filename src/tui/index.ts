@@ -7,8 +7,7 @@ import { startKeyListener, type Key } from "./terminal/input.js";
 import { Buffer } from "./terminal/buffer.js";
 import { inset, type Rect } from "./terminal/layout.js";
 import type { MissionControlSnapshot } from "./types.js";
-import type { HomeSnapshotDeps, SnapshotDeps } from "./snapshot.js";
-import { buildHomeSnapshot, buildSnapshot } from "./snapshot.js";
+import type { SnapshotDeps } from "./snapshot.js";
 import { createInitialState, reduce, type AppState, type Action } from "./state.js";
 import { HEADER_DOT_INTERVAL_MS, isHeaderAnimationActive, renderHeader } from "./panels/header.js";
 import { renderStatusBar } from "./panels/status-bar.js";
@@ -41,8 +40,7 @@ export interface OnceFrameOptions {
 export interface InteractiveOptions {
   snapshot: MissionControlSnapshot;
   snapshotDeps: SnapshotDeps;
-  homeSnapshotDeps: HomeSnapshotDeps;
-  missionId?: string;
+  reloadSnapshot: () => Promise<MissionControlSnapshot>;
 }
 
 /**
@@ -174,13 +172,11 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
 
       if (now - lastPollMs >= 2000) {
         lastPollMs = now;
-        try {
-          const snap = opts.missionId
-            ? await buildSnapshot(opts.snapshotDeps, opts.missionId)
-            : await buildHomeSnapshot(opts.homeSnapshotDeps, process.cwd());
-          state = reduce(state, { type: "update-snapshot", snapshot: snap });
-          lastSnapshotMs = now;
-          nextDurationTickMs = now + 1000;
+          try {
+            const snap = await opts.reloadSnapshot();
+            state = reduce(state, { type: "update-snapshot", snapshot: snap });
+            lastSnapshotMs = now;
+            nextDurationTickMs = now + 1000;
           dirty = true;
         } catch {
           // non-fatal
@@ -278,11 +274,11 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
           { status: nextStatus },
         );
 
-      try {
-        const nextSnapshot = await buildSnapshot(opts.snapshotDeps, state.snapshot.missionId);
-        state = reduce(state, { type: "update-snapshot", snapshot: nextSnapshot });
-      } catch {
-        // Fall back to the next poll refresh if the immediate snapshot reload fails.
+        try {
+          const nextSnapshot = await opts.reloadSnapshot();
+          state = reduce(state, { type: "update-snapshot", snapshot: nextSnapshot });
+        } catch {
+          // Fall back to the next poll refresh if the immediate snapshot reload fails.
       }
 
       state = { ...state, modal: { kind: "none" } };

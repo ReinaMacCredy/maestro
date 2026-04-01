@@ -195,12 +195,37 @@ describe("renderModal", () => {
     expect(text).toContain("Processes");
     expect(text).toContain("Ctrl+T");
     expect(text).toContain("esc");
-    expect(buf.getCell(layout.y, layout.x)?.bg).toBe(PALETTE.overlaySurfaceBg);
-  });
+      expect(buf.getCell(layout.y, layout.x)?.bg).toBe(PALETTE.overlaySurfaceBg);
+    });
 
-  it("keeps at least one selectable row in short but valid palette heights", () => {
-    const layout = layoutModal({ x: 1, y: 5, width: 78, height: 8 }, {
-      mode: "palette",
+    it("sanitizes modal detail text before it reaches the terminal buffer", () => {
+      const buf = new Buffer(90, 28);
+      renderModal(buf, { x: 0, y: 0, width: 90, height: 28 }, {
+        mode: "palette",
+        title: "Commands",
+        query: "",
+        items: [
+          {
+            label: "Processes",
+            detail: "\u001b[2Jruntime failed\u0007",
+            hint: "P",
+            section: "Navigate",
+          },
+        ],
+        selectedIndex: 0,
+        footer: "Enter open · Esc close",
+      });
+
+      const text = buf.toString();
+      expect(text).toContain("runtime failed");
+      expect(text).not.toContain("\u001b");
+      expect(text).not.toContain("\u0007");
+      expect(text).not.toContain("[2J");
+    });
+
+    it("keeps at least one selectable row in short but valid palette heights", () => {
+      const layout = layoutModal({ x: 1, y: 5, width: 78, height: 8 }, {
+        mode: "palette",
       title: "Commands",
       query: "",
       items: [

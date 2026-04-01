@@ -4,6 +4,7 @@
  */
 import type { Rect } from "./layout.js";
 import { BOX } from "./ansi.js";
+import { sanitizeTerminalText } from "../../lib/sanitize.js";
 
 export interface Cell {
   char: string;
@@ -63,11 +64,12 @@ export class Buffer {
 
   /** Write a text string starting at (row, col). Returns number of columns written. */
   writeText(row: number, col: number, text: string, s?: Partial<Cell>): number {
+    const sanitized = sanitizeTerminalText(text);
     let written = 0;
-    for (let i = 0; i < text.length; i++) {
+    for (let i = 0; i < sanitized.length; i++) {
       const c = col + i;
       if (c >= this.width) break;
-      this.set(row, c, text[i]!, s);
+      this.set(row, c, sanitized[i]!, s);
       written++;
     }
     return written;

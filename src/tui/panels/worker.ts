@@ -4,6 +4,7 @@
 import type { Buffer } from "../terminal/buffer.js";
 import type { Rect } from "../terminal/layout.js";
 import type { MissionControlSnapshot } from "../types.js";
+import { sanitizeTerminalText } from "../../lib/sanitize.js";
 import { FEATURE_STATUS_COLOR, FEATURE_STATUS_LABEL, PALETTE } from "../theme.js";
 import { formatElapsed, truncate } from "../format.js";
 
@@ -223,7 +224,7 @@ function writeLabeledRow(
   const valueX = rect.x + 1 + valueOffset;
   const valueWidth = Math.max(0, availableWidth - valueOffset);
   const cellStyle = getRowStyle(style);
-  buf.writeText(row, valueX, truncate(value, valueWidth), cellStyle);
+  buf.writeText(row, valueX, truncate(sanitizeTerminalText(value), valueWidth), cellStyle);
 }
 
 function getRowStyle(style: "title" | "meta" | "value" | "muted") {
