@@ -22,6 +22,7 @@ import { BUILT_IN_WORKFLOWS } from "../domain/defaults.js";
 import {
   validateCreateMissionInput,
   validateMissionPlanFile,
+  validateWorkflowTemplate,
   assertNoDanglingReferences,
   assertNoCyclicDependencies,
 } from "../domain/mission-validators.js";
@@ -43,10 +44,11 @@ export function expandWorkflowTemplate(
   config?: MaestroConfig,
 ): readonly MilestoneInput[] {
   const userTemplates = config?.workflowTemplates ?? {};
-  const template: WorkflowTemplate | undefined =
-    userTemplates[templateName] ?? BUILT_IN_WORKFLOWS[templateName];
+  const rawTemplate =
+    getOwnWorkflowTemplate(userTemplates, templateName)
+    ?? getOwnWorkflowTemplate(BUILT_IN_WORKFLOWS, templateName);
 
-  if (!template) {
+  if (!rawTemplate) {
     const available = [
       ...Object.keys(BUILT_IN_WORKFLOWS),
       ...Object.keys(userTemplates),
@@ -55,6 +57,8 @@ export function expandWorkflowTemplate(
       `Available templates: ${available.join(", ")}`,
     ]);
   }
+
+  const template: WorkflowTemplate = validateWorkflowTemplate(rawTemplate, templateName);
 
   return template.phases.map((phase, index) => {
     const id = phase.label.toLowerCase().replace(/\s+/g, "-");
@@ -67,6 +71,17 @@ export function expandWorkflowTemplate(
       profile: phase.profile,
     };
   });
+}
+
+function getOwnWorkflowTemplate(
+  templates: Readonly<Record<string, WorkflowTemplate>>,
+  templateName: string,
+): WorkflowTemplate | undefined {
+  if (!Object.hasOwn(templates, templateName)) {
+    return undefined;
+  }
+
+  return templates[templateName];
 }
 
 /**

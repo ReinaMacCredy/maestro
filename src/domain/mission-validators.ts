@@ -18,6 +18,7 @@ import type {
   UpdateAssertionInput,
   MissionPlanFile,
 } from "./mission-types.js";
+import type { WorkflowTemplate } from "./types.js";
 
 // ============================
 // Schema Constants
@@ -44,6 +45,18 @@ export const MilestoneProfileSchema = z.enum([
   "validation",
   "custom",
 ]);
+
+export const WorkflowPhaseSchema = z.object({
+  kind: MilestoneKindSchema,
+  label: z.string().min(1),
+  profile: MilestoneProfileSchema.optional(),
+  description: z.string().optional(),
+}).strict();
+
+export const WorkflowTemplateSchema = z.object({
+  description: z.string().min(1),
+  phases: z.array(WorkflowPhaseSchema).min(1),
+}).strict();
 
 export const MilestoneInputSchema = z.object({
   id: z.string().min(1),
@@ -311,6 +324,25 @@ export function validateMissionPlanFile(data: unknown): MissionPlanFile {
         `Problem field: ${path}`,
         "Mission plans must include title, milestones, and a features array",
       ]);
+    }
+    throw err;
+  }
+}
+
+export function validateWorkflowTemplate(data: unknown, templateName: string): WorkflowTemplate {
+  try {
+    return WorkflowTemplateSchema.parse(data);
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      const issue = err.issues[0];
+      const path = issue?.path.length ? issue.path.join(".") : "root";
+      throw new MaestroError(
+        `Invalid workflow template '${templateName}': ${issue?.message ?? "validation failed"}`,
+        [
+          `Problem field: ${path}`,
+          "Workflow templates must include a description and at least one phase with kind and label",
+        ],
+      );
     }
     throw err;
   }

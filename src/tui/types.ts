@@ -6,6 +6,8 @@ import type {
   MilestoneStatus,
   FeatureStatus,
   WorkerReport,
+  MilestoneKind,
+  MilestoneProfile,
 } from "../domain/mission-types.js";
 import type { DoctorCheck } from "../domain/types.js";
 import type { RuntimeState } from "../domain/runtime-types.js";
@@ -94,8 +96,8 @@ export interface MissionControlSnapshot {
   milestones: readonly MissionControlMilestoneRow[];
 
   // Gate state
-  gateBlocked: boolean;
-  gateLabel: string | null;
+  gateBlocked?: boolean;
+  gateLabel?: string | null;
 
   // Footer state
   canPause: boolean;
@@ -110,8 +112,8 @@ export interface MissionControlMilestoneRow {
   title: string;
   status: MilestoneStatus;
   order: number;
-  kind: string;
-  profile: string;
+  kind?: MilestoneKind;
+  profile?: MilestoneProfile;
 }
 
 export interface MissionControlFeatureRow {

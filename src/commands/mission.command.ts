@@ -79,7 +79,7 @@ export function registerMissionCommand(program: Command): void {
 
       // Inject milestones from workflow template if specified
       if (opts.workflow) {
-        const plan = planData as Record<string, unknown>;
+        const plan = asMutablePlanRoot(planData);
         if (plan.milestones && Array.isArray(plan.milestones) && plan.milestones.length > 0) {
           throw new MaestroError(
             "Cannot use --workflow with a plan that already defines milestones",
@@ -215,6 +215,17 @@ export function registerMissionCommand(program: Command): void {
         `  Title: ${m.title}`,
       ]);
     });
+}
+
+function asMutablePlanRoot(planData: unknown): Record<string, unknown> {
+  if (typeof planData !== "object" || planData === null || Array.isArray(planData)) {
+    throw new MaestroError("Mission plan root must be a JSON object", [
+      "Mission plans must be JSON objects with title, milestones, and features fields",
+      "If you use --workflow, provide an object-shaped plan document instead of a primitive JSON value",
+    ]);
+  }
+
+  return planData as Record<string, unknown>;
 }
 
 /** Format mission list for text output */

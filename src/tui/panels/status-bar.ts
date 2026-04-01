@@ -3,8 +3,21 @@
  */
 import type { Buffer } from "../terminal/buffer.js";
 import type { Rect } from "../terminal/layout.js";
-import type { MissionControlSnapshot, MissionControlStatusProgress } from "../types.js";
-import { MISSION_STATUS_COLOR, MISSION_STATUS_LABEL, PALETTE, DOT_FILLED } from "../theme.js";
+import type {
+  MissionControlSnapshot,
+  MissionControlStatusProgress,
+  MissionControlMilestoneRow,
+} from "../types.js";
+import {
+  MILESTONE_KIND_COLOR,
+  MILESTONE_KIND_INDICATOR,
+  MILESTONE_PROFILE_COLOR,
+  MILESTONE_PROFILE_LABEL,
+  MISSION_STATUS_COLOR,
+  MISSION_STATUS_LABEL,
+  PALETTE,
+  DOT_FILLED,
+} from "../theme.js";
 
 export function renderStatusBar(buf: Buffer, rect: Rect, snap: MissionControlSnapshot): void {
   const w = rect.width;
@@ -38,12 +51,17 @@ export function renderStatusBar(buf: Buffer, rect: Rect, snap: MissionControlSna
 
   // ● STATUS
   buf.writeText(y, rect.x + 1, DOT_FILLED, { fg: statusColor, bold: true });
-  const labelEnd = rect.x + 3 + label.length;
   buf.writeText(y, rect.x + 3, label, { fg: statusColor, bold: true });
 
   // Counts on right
   const rightText = summary;
   const rightStart = rect.x + w - rightText.length - 1;
+  let labelEnd = rect.x + 3 + label.length;
+
+  const activeMilestone = getActiveMilestone(snap);
+  if (activeMilestone) {
+    labelEnd = renderActiveMilestone(buf, y, labelEnd + 2, rightStart - 2, snap, activeMilestone);
+  }
 
   // Progress bar: completion only, active work stays in the text summary.
   const barStart = labelEnd + 2;
@@ -79,4 +97,64 @@ function buildMissionSummary(progress: MissionControlStatusProgress, maxLen: num
     summary = next;
   }
   return summary;
+}
+
+function getActiveMilestone(snap: MissionControlSnapshot): MissionControlMilestoneRow | undefined {
+  return snap.milestones.find((milestone) =>
+    milestone.status === "executing" || milestone.status === "validating");
+}
+
+function renderActiveMilestone(
+  buf: Buffer,
+  y: number,
+  startX: number,
+  maxX: number,
+  snap: MissionControlSnapshot,
+  milestone: MissionControlMilestoneRow,
+): number {
+  if (startX > maxX) {
+    return startX - 2;
+  }
+
+  let cursor = startX;
+  const kind = milestone.kind ?? "work";
+  const profile = milestone.profile ?? "custom";
+  const indicator = MILESTONE_KIND_INDICATOR[kind];
+  const profileLabel = MILESTONE_PROFILE_LABEL[profile];
+  const detail = snap.gateBlocked
+    ? `${snap.gateLabel ?? milestone.title} BLOCKED`
+    : milestone.title;
+
+  cursor = writeSegment(buf, y, cursor, maxX, `${indicator} `, {
+    fg: MILESTONE_KIND_COLOR[kind],
+    bold: true,
+  });
+  cursor = writeSegment(buf, y, cursor, maxX, profileLabel, {
+    fg: MILESTONE_PROFILE_COLOR[profile],
+    bold: true,
+  });
+  cursor = writeSegment(buf, y, cursor, maxX, ` ${detail}`, {
+    fg: snap.gateBlocked ? PALETTE.red : PALETTE.gray,
+    bold: snap.gateBlocked,
+  });
+
+  return cursor - 1;
+}
+
+function writeSegment(
+  buf: Buffer,
+  y: number,
+  startX: number,
+  maxX: number,
+  text: string,
+  style: { fg: number; bold?: boolean },
+): number {
+  if (startX > maxX) {
+    return startX;
+  }
+
+  const width = maxX - startX + 1;
+  const clipped = text.length > width ? text.slice(0, width) : text;
+  buf.writeText(y, startX, clipped, style);
+  return startX + clipped.length;
 }

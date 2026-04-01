@@ -188,6 +188,40 @@ describe("buildSnapshot", () => {
     expect(snapshot.milestones.length).toBe(2);
     expect(snapshot.milestones[0]!.id).toBe("m1");
     expect(snapshot.milestones[1]!.id).toBe("m2");
+    expect(snapshot.milestones[0]!.kind).toBe("work");
+    expect(snapshot.milestones[0]!.profile).toBe("custom");
+  }, 15_000);
+
+  it("projects active gate metadata when a gate milestone is blocked", async () => {
+    const plan = {
+      title: "Gate Mission",
+      description: "Gate test",
+      milestones: [
+        { id: "m1", title: "Plan Review", description: "Review", order: 0, kind: "gate", profile: "plan-review" },
+      ],
+      features: [
+        { id: "f1", milestoneId: "m1", title: "Review", description: "Review work", workerType: "test", verificationSteps: ["check"] },
+      ],
+    };
+    await writeFile(join(tmpDir, "plan.json"), JSON.stringify(plan));
+    const { stdout } = await run(["mission", "create", "--file", join(tmpDir, "plan.json"), "--json"], tmpDir);
+    const missionId = JSON.parse(stdout).mission.id;
+
+    await run(["mission", "approve", missionId, "--json"], tmpDir);
+    await run(["feature", "update", "f1", "--mission", missionId, "--status", "in-progress", "--json"], tmpDir);
+    await run(["feature", "update", "f1", "--mission", missionId, "--status", "review", "--json"], tmpDir);
+    await run(["feature", "update", "f1", "--mission", missionId, "--status", "blocked", "--json"], tmpDir);
+
+    const snapshot = await buildSnapshot(deps, missionId);
+
+    expect(snapshot.gateBlocked).toBe(true);
+    expect(snapshot.gateLabel).toBe("Plan Review");
+    expect(snapshot.milestones[0]).toMatchObject({
+      id: "m1",
+      kind: "gate",
+      profile: "plan-review",
+      status: "executing",
+    });
   }, 15_000);
 
   it("progressLog contains at least mission created event", async () => {

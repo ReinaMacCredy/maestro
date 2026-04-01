@@ -175,16 +175,32 @@ describe("frame rendering", () => {
       expect(frame).toContain("Activity");
     });
 
-    it("contains footer hints", () => {
-      const frame = renderOnceFrame({ snapshot: makeSnapshot() });
-      expect(frame).toContain("Features");
+      it("contains footer hints", () => {
+        const frame = renderOnceFrame({ snapshot: makeSnapshot() });
+        expect(frame).toContain("Features");
       expect(frame).toContain("Handoff");
       expect(frame).toContain("Config");
       expect(frame).toContain("Processes");
-      expect(frame).toContain("Commands");
-      expect(frame).toContain("Exit");
+        expect(frame).toContain("Commands");
+        expect(frame).toContain("Exit");
+      });
+
+      it("contains blocked gate context when the active milestone is a gate", () => {
+        const frame = renderOnceFrame({
+          snapshot: makeSnapshot({
+            milestones: [
+              { id: "m1", title: "Plan Review", status: "executing", order: 0, kind: "gate", profile: "plan-review" },
+              { id: "m2", title: "Implementation", status: "pending", order: 1, kind: "work", profile: "implementation" },
+            ],
+            gateBlocked: true,
+            gateLabel: "Plan Review",
+          }),
+        });
+
+        expect(frame).toContain("PLAN-REVIEW");
+        expect(frame).toContain("BLOCKED");
+      });
     });
-  });
 
   describe("empty mission", () => {
     it("shows meaningful placeholder when no features", () => {

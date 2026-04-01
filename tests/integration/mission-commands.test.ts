@@ -166,9 +166,9 @@ describe("mission CLI commands", () => {
       expect(output).toContain("references non-existent milestone");
     }, SLOW_CLI_TIMEOUT_MS);
 
-    it("mission create surfaces invalid JSON file errors as CLI errors", async () => {
-      const planPath = join(tmpDir, "bad.json");
-      await writeFile(planPath, "{bad json");
+  it("mission create surfaces invalid JSON file errors as CLI errors", async () => {
+    const planPath = join(tmpDir, "bad.json");
+    await writeFile(planPath, "{bad json");
 
       const { stdout, stderr, exitCode } = await run(
         ["mission", "create", "--file", planPath],
@@ -177,11 +177,26 @@ describe("mission CLI commands", () => {
 
       expect(exitCode).toBe(1);
       const output = stdout + stderr;
-      expect(output).toContain("Invalid JSON in plan file");
-      expect(output).not.toContain("SyntaxError:");
-    }, SLOW_CLI_TIMEOUT_MS);
+    expect(output).toContain("Invalid JSON in plan file");
+    expect(output).not.toContain("SyntaxError:");
+  }, SLOW_CLI_TIMEOUT_MS);
 
-    it("mission create rejects plans missing features with a structured error", async () => {
+  it("mission create --workflow rejects primitive JSON roots with a structured error", async () => {
+    const planPath = join(tmpDir, "primitive-plan.json");
+    await writeFile(planPath, "null");
+
+    const { stdout, stderr, exitCode } = await run(
+      ["mission", "create", "--file", planPath, "--workflow", "plan-implement"],
+      tmpDir,
+    );
+
+    expect(exitCode).toBe(1);
+    const output = stdout + stderr;
+    expect(output).toContain("Mission plan root must be a JSON object");
+    expect(output).not.toContain("TypeError:");
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("mission create rejects plans missing features with a structured error", async () => {
       const planPath = join(tmpDir, "missing-features.json");
       await writeFile(
         planPath,

@@ -126,4 +126,19 @@ describe("renderStatusBar", () => {
     expect(text).toContain("HOME");
     expect(text).toContain("No missions yet");
   });
+
+  it("shows active milestone profile and gate blocked detail", () => {
+    const buf = new Buffer(120, 1);
+    renderStatusBar(buf, { x: 0, y: 0, width: 120, height: 1 }, makeSnapshot({
+      milestones: [
+        { id: "m1", title: "Plan Review", status: "executing", order: 0, kind: "gate", profile: "plan-review" },
+      ],
+      gateBlocked: true,
+      gateLabel: "Plan Review",
+    }));
+
+    const text = buf.toString();
+    expect(text).toContain("PLAN-REVIEW");
+    expect(text).toContain("Plan Review BLOCKED");
+  });
 });

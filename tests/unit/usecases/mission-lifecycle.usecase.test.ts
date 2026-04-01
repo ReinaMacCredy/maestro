@@ -4,6 +4,7 @@
 import { describe, expect, it, beforeEach } from "bun:test";
 import {
   createMission,
+  expandWorkflowTemplate,
   listMissions,
   showMission,
   approveMission,
@@ -15,6 +16,7 @@ import { FsFeatureStoreAdapter } from "../../../src/adapters/feature-store.adapt
 import { FsAssertionStoreAdapter } from "../../../src/adapters/assertion-store.adapter.js";
 import { MaestroError } from "../../../src/domain/errors.js";
 import type { MilestoneInput } from "../../../src/domain/mission-types.js";
+import type { WorkflowTemplate } from "../../../src/domain/types.js";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mkdtemp } from "node:fs/promises";
@@ -352,7 +354,7 @@ describe("mission lifecycle usecases", () => {
     });
   });
 
-  describe("updateMission", () => {
+    describe("updateMission", () => {
     it("updates mission status", async () => {
       const created = await createMission(missionStore, featureStore, assertionStore, samplePlan);
       await approveMission(missionStore, created.mission.id);
@@ -397,14 +399,33 @@ describe("mission lifecycle usecases", () => {
       ).rejects.toThrow("Mission 2026-03-28-001 not found");
     });
 
-    it("allows same status update (no-op)", async () => {
-      const created = await createMission(missionStore, featureStore, assertionStore, samplePlan);
+      it("allows same status update (no-op)", async () => {
+        const created = await createMission(missionStore, featureStore, assertionStore, samplePlan);
 
       const updated = await updateMission(missionStore, created.mission.id, {
         status: "draft",
       });
       expect(updated.status).toBe("draft");
-      expect(updated.updatedAt).not.toBe(created.mission.updatedAt);
+        expect(updated.updatedAt).not.toBe(created.mission.updatedAt);
+      });
+    });
+
+    describe("expandWorkflowTemplate", () => {
+      it("rejects magic prototype keys as unknown templates", () => {
+        expect(() => expandWorkflowTemplate("__proto__", { workflowTemplates: {} })).toThrow(
+          "Unknown workflow template: __proto__",
+        );
+      });
+
+      it("rejects malformed custom workflow templates with a structured error", () => {
+        expect(() => expandWorkflowTemplate("broken", {
+          workflowTemplates: {
+            broken: {
+              description: "Broken",
+              phases: [{ label: "Planning" }],
+            } as unknown as WorkflowTemplate,
+          },
+        })).toThrow("Invalid workflow template 'broken'");
+      });
     });
   });
-});

@@ -9,13 +9,21 @@ import type { AssertionStorePort } from "../ports/assertion-store.port.js";
 import type { RuntimeStorePort } from "../ports/runtime-store.port.js";
 import type { Feature, Mission, Milestone, Assertion, MilestoneProfile } from "../domain/mission-types.js";
 import { MaestroError } from "../domain/errors.js";
-import { WORKER_TYPE_PATTERN } from "../domain/mission-validators.js";
+import { WORKER_TYPE_PATTERN, WorkerReportSchema } from "../domain/mission-validators.js";
 import { readText, writeText, ensureDir } from "../lib/fs.js";
 import { sanitizePromptContent } from "../lib/sanitize.js";
 import { dirname, join, resolve } from "node:path";
 import { DEFAULT_RUNTIME_LEASE_MS, MAESTRO_DIR, UNKNOWN_AGENT } from "../domain/defaults.js";
 import { assertSafeSegment, resolveWithin } from "../lib/path-safety.js";
 import type { WorkerRuntime } from "../domain/runtime-types.js";
+
+interface PreviousMilestoneReport {
+  readonly featureId: string;
+  readonly featureTitle: string;
+  readonly summary: string;
+}
+
+const PREVIOUS_REPORT_SUMMARY_LIMIT = 600;
 
 /** Result of generating a worker prompt */
 export interface GenerateWorkerPromptResult {
@@ -88,43 +96,13 @@ export async function generateWorkerPrompt(
     // worker-base skill not found -- skip handoff protocol section
   }
 
-  // Load previous milestone's worker reports for review/validation profiles
-  const reviewProfiles = new Set(["plan-review", "code-review", "bug-hunt", "simplify", "validation"]);
-  let previousMilestoneReports: { featureId: string; featureTitle: string; summary: string }[] | undefined;
-
-  if (milestone.profile && reviewProfiles.has(milestone.profile)) {
-    const prevMilestone = mission.milestones
-      .filter((m) => m.order < milestone.order)
-      .sort((a, b) => b.order - a.order)[0];
-
-    if (prevMilestone) {
-      const prevFeatures = allFeatures.filter(
-        (f) => f.milestoneId === prevMilestone.id && f.status === "done",
-      );
-      const reports: typeof previousMilestoneReports = [];
-      for (const pf of prevFeatures) {
-        const reportPath = join(
-          baseDir, MAESTRO_DIR, "missions", missionId, "workers", pf.id, "report.json",
-        );
-        const reportContent = await readText(reportPath);
-        if (reportContent) {
-          try {
-            const parsed = JSON.parse(reportContent);
-            reports.push({
-              featureId: pf.id,
-              featureTitle: pf.title,
-              summary: parsed.salientSummary ?? parsed.whatWasImplemented ?? "(no summary)",
-            });
-          } catch {
-            // Malformed report -- skip
-          }
-        }
-      }
-      if (reports.length > 0) {
-        previousMilestoneReports = reports;
-      }
-    }
-  }
+  const previousMilestoneReports = await loadPreviousMilestoneReports(
+    baseDir,
+    mission,
+    allFeatures,
+    missionId,
+    milestone,
+  );
 
   // Generate the prompt
   const prompt = composePrompt(mission, milestone, feature, featureAssertions, skillContent, allFeatures, handoffProtocol, previousMilestoneReports);
@@ -254,6 +232,86 @@ function enumerateSearchRoots(baseDir: string): string[] {
   return roots;
 }
 
+async function loadPreviousMilestoneReports(
+  baseDir: string,
+  mission: Mission,
+  allFeatures: readonly Feature[],
+  missionId: string,
+  milestone: Milestone,
+): Promise<readonly PreviousMilestoneReport[] | undefined> {
+  const reviewProfiles = new Set<MilestoneProfile>([
+    "plan-review",
+    "code-review",
+    "bug-hunt",
+    "simplify",
+    "validation",
+  ]);
+
+  if (!milestone.profile || !reviewProfiles.has(milestone.profile)) {
+    return undefined;
+  }
+
+  const prevMilestone = mission.milestones
+    .filter((item) => item.order < milestone.order)
+    .sort((a, b) => b.order - a.order)[0];
+
+  if (!prevMilestone) {
+    return undefined;
+  }
+
+  const prevFeatures = allFeatures.filter(
+    (feature) => feature.milestoneId === prevMilestone.id && feature.status === "done",
+  );
+
+  const reports = (await Promise.all(prevFeatures.map(async (feature) => {
+    const reportPath = join(
+      baseDir,
+      MAESTRO_DIR,
+      "missions",
+      missionId,
+      "workers",
+      feature.id,
+      "report.json",
+    );
+
+    let reportContent: string | undefined;
+    try {
+      reportContent = await readText(reportPath);
+    } catch {
+      return undefined;
+    }
+
+    if (!reportContent) {
+      return undefined;
+    }
+
+    try {
+      const parsed = WorkerReportSchema.parse(JSON.parse(reportContent));
+      const rawSummary = parsed.salientSummary || parsed.whatWasImplemented || "(no summary)";
+      return {
+        featureId: feature.id,
+        featureTitle: feature.title,
+        summary: sanitizePromptContent(
+          truncatePreviousReportSummary(rawSummary),
+          "previous-milestone-summary",
+        ),
+      } satisfies PreviousMilestoneReport;
+    } catch {
+      return undefined;
+    }
+  }))).filter((report): report is PreviousMilestoneReport => report !== undefined);
+
+  return reports.length > 0 ? reports : undefined;
+}
+
+function truncatePreviousReportSummary(summary: string): string {
+  if (summary.length <= PREVIOUS_REPORT_SUMMARY_LIMIT) {
+    return summary;
+  }
+
+  return `${summary.slice(0, PREVIOUS_REPORT_SUMMARY_LIMIT)}... [truncated]`;
+}
+
 /** Profile-specific preambles injected into the milestone context section */
 const PROFILE_PREAMBLE: Partial<Record<MilestoneProfile, string>> = {
   planning: "You are producing a design or specification. Focus on architecture decisions, interface contracts, and identifying risks before implementation begins.",
@@ -277,7 +335,7 @@ function composePrompt(
   skillContent: string,
   allFeatures: readonly Feature[],
   handoffProtocol?: string,
-  previousMilestoneReports?: readonly { featureId: string; featureTitle: string; summary: string }[],
+  previousMilestoneReports?: readonly PreviousMilestoneReport[],
 ): string {
   const parts: string[] = [];
 
@@ -337,7 +395,7 @@ function composePrompt(
     parts.push("The following features were completed in the preceding milestone:");
     parts.push("");
     for (const report of previousMilestoneReports) {
-      parts.push(`#### ${report.featureId}: ${report.featureTitle}`);
+      parts.push(`#### ${report.featureId}: ${delimitContent(report.featureTitle)}`);
       parts.push("");
       parts.push(report.summary);
       parts.push("");
