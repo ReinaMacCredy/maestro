@@ -93,6 +93,10 @@ export interface MissionControlSnapshot {
   // Milestones (for grouping)
   milestones: readonly MissionControlMilestoneRow[];
 
+  // Gate state
+  gateBlocked: boolean;
+  gateLabel: string | null;
+
   // Footer state
   canPause: boolean;
   canResume: boolean;
