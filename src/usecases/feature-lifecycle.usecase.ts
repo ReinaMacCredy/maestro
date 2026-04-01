@@ -4,17 +4,22 @@
  */
 import type { FeatureStorePort } from "../ports/feature-store.port.js";
 import type { MissionStorePort } from "../ports/mission-store.port.js";
+import type { RuntimeStorePort } from "../ports/runtime-store.port.js";
 import type {
   Feature,
   FeatureStatus,
   UpdateFeatureInput,
   WorkerReport,
 } from "../domain/mission-types.js";
+import type { WorkerRuntime } from "../domain/runtime-types.js";
 import { MaestroError } from "../domain/errors.js";
 import { assertFeatureTransition } from "../domain/mission-state.js";
 import { writeJson, readJson, ensureDir } from "../lib/fs.js";
 import { join } from "node:path";
-import { MAESTRO_DIR } from "../domain/defaults.js";
+import {
+  DEFAULT_RUNTIME_LEASE_MS,
+  MAESTRO_DIR,
+} from "../domain/defaults.js";
 
 /** Result of listing features */
 export interface ListFeaturesResult {
@@ -69,6 +74,7 @@ export async function listFeatures(
 export async function updateFeature(
   missionStore: MissionStorePort,
   featureStore: FeatureStorePort,
+  runtimeStore: RuntimeStorePort,
   baseDir: string,
   missionId: string,
   featureId: string,
@@ -147,7 +153,76 @@ export async function updateFeature(
     throw new MaestroError(`Failed to update feature ${featureId}`);
   }
 
+  await syncWorkerRuntime(
+    runtimeStore,
+    missionId,
+    featureId,
+    existing,
+    updated,
+    reportPersisted,
+    input.retryReason,
+  );
+
   return { feature: updated, reportPersisted, missionAutoStarted };
+}
+
+async function syncWorkerRuntime(
+  runtimeStore: RuntimeStorePort,
+  missionId: string,
+  featureId: string,
+  existing: Feature,
+  updated: Feature,
+  reportPersisted?: string,
+  retryReason?: string,
+): Promise<void> {
+  const current = await runtimeStore.get(missionId, featureId);
+  if (!current) return;
+
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+  const nextRuntime = deriveNextRuntime(current, existing, updated, reportPersisted, retryReason, now, nowIso);
+  await runtimeStore.save(missionId, featureId, nextRuntime);
+}
+
+function deriveNextRuntime(
+  runtime: WorkerRuntime,
+  existing: Feature,
+  updated: Feature,
+  reportPersisted: string | undefined,
+  retryReason: string | undefined,
+  now: number,
+  nowIso: string,
+): WorkerRuntime {
+  const recoveryMetadata = {
+    ...runtime.recoveryMetadata,
+    history: [...runtime.recoveryMetadata.history],
+  };
+
+  let runtimeState = runtime.runtimeState;
+  let failureReason = runtime.failureReason;
+
+  if (updated.status === "done") {
+    runtimeState = "completed";
+    failureReason = undefined;
+  } else if (updated.status === "pending" && existing.status !== "pending") {
+    runtimeState = "recoverable";
+    failureReason = retryReason;
+  }
+
+  return {
+    ...runtime,
+    runtimeState,
+    lastSeenAt: nowIso,
+    leaseExpiresAt: new Date(now + DEFAULT_RUNTIME_LEASE_MS).toISOString(),
+    failureReason,
+    ...(reportPersisted !== undefined
+      ? {
+        recoveryMetadata,
+      }
+      : {
+        recoveryMetadata,
+      }),
+  };
 }
 
 /**

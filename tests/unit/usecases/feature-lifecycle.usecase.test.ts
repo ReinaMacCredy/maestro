@@ -10,6 +10,7 @@ import {
 import { FsMissionStoreAdapter } from "../../../src/adapters/mission-store.adapter.js";
 import { FsFeatureStoreAdapter } from "../../../src/adapters/feature-store.adapter.js";
 import { FsAssertionStoreAdapter } from "../../../src/adapters/assertion-store.adapter.js";
+import { FsRuntimeStoreAdapter } from "../../../src/adapters/runtime-store.adapter.js";
 import { MaestroError } from "../../../src/domain/errors.js";
 import type { MilestoneInput } from "../../../src/domain/mission-types.js";
 import { tmpdir } from "node:os";
@@ -78,12 +79,14 @@ describe("feature lifecycle usecases", () => {
   let missionStore: FsMissionStoreAdapter;
   let featureStore: FsFeatureStoreAdapter;
   let assertionStore: FsAssertionStoreAdapter;
+  let runtimeStore: FsRuntimeStoreAdapter;
 
   beforeEach(async () => {
     tmpDir = await mkdtemp(join(tmpdir(), "feature-test-"));
     missionStore = new FsMissionStoreAdapter(tmpDir);
     featureStore = new FsFeatureStoreAdapter(tmpDir);
     assertionStore = new FsAssertionStoreAdapter(tmpDir);
+    runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
   });
 
   describe("listFeatures", () => {
@@ -113,7 +116,7 @@ describe("feature lifecycle usecases", () => {
       const { missionId } = await createSampleMission(missionStore, featureStore, assertionStore, tmpDir);
 
       // First transition a feature to in_progress
-      await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
+      await updateFeature(missionStore, featureStore, runtimeStore, tmpDir, missionId, "f1", {
         status: "in-progress",
       });
 
@@ -131,7 +134,7 @@ describe("feature lifecycle usecases", () => {
       const { missionId } = await createSampleMission(missionStore, featureStore, assertionStore, tmpDir);
 
       // Transition f1 (m1) to in_progress, f2 (m1) stays pending
-      await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
+      await updateFeature(missionStore, featureStore, runtimeStore, tmpDir, missionId, "f1", {
         status: "in-progress",
       });
 
@@ -166,7 +169,7 @@ describe("feature lifecycle usecases", () => {
     it("updates feature status with legal transition", async () => {
       const { missionId } = await createSampleMission(missionStore, featureStore, assertionStore, tmpDir);
 
-      const result = await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
+      const result = await updateFeature(missionStore, featureStore, runtimeStore, tmpDir, missionId, "f1", {
         status: "in-progress",
       });
 
@@ -179,7 +182,7 @@ describe("feature lifecycle usecases", () => {
 
       // Cannot go from pending to in_review (must go through in_progress)
       expect(
-        updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
+        updateFeature(missionStore, featureStore, runtimeStore, tmpDir, missionId, "f1", {
           status: "review",
         }),
       ).rejects.toThrow("Invalid feature transition");
@@ -191,7 +194,7 @@ describe("feature lifecycle usecases", () => {
       await missionStore.update(missionId, { status: "approved" });
 
       expect(
-        updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
+        updateFeature(missionStore, featureStore, runtimeStore, tmpDir, missionId, "f1", {
           status: "review",
         }),
       ).rejects.toThrow("Invalid feature transition");
@@ -204,15 +207,15 @@ describe("feature lifecycle usecases", () => {
       const { missionId } = await createSampleMission(missionStore, featureStore, assertionStore, tmpDir);
 
       // First move to in_progress, then in_review
-      await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
+      await updateFeature(missionStore, featureStore, runtimeStore, tmpDir, missionId, "f1", {
         status: "in-progress",
       });
-      await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
+      await updateFeature(missionStore, featureStore, runtimeStore, tmpDir, missionId, "f1", {
         status: "review",
       });
 
       // Retry: in_review -> pending
-      const result = await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
+      const result = await updateFeature(missionStore, featureStore, runtimeStore, tmpDir, missionId, "f1", {
         status: "pending",
       });
 
@@ -223,18 +226,18 @@ describe("feature lifecycle usecases", () => {
       const { missionId } = await createSampleMission(missionStore, featureStore, assertionStore, tmpDir);
 
       // First move through the states: pending -> in_progress -> in_review -> blocked
-      await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
+      await updateFeature(missionStore, featureStore, runtimeStore, tmpDir, missionId, "f1", {
         status: "in-progress",
       });
-      await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
+      await updateFeature(missionStore, featureStore, runtimeStore, tmpDir, missionId, "f1", {
         status: "review",
       });
-      await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
+      await updateFeature(missionStore, featureStore, runtimeStore, tmpDir, missionId, "f1", {
         status: "blocked",
       });
 
       // Retry: blocked -> pending
-      const result = await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
+      const result = await updateFeature(missionStore, featureStore, runtimeStore, tmpDir, missionId, "f1", {
         status: "pending",
       });
 
@@ -250,7 +253,7 @@ describe("feature lifecycle usecases", () => {
         agent: "test-agent",
       }));
 
-      const result = await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
+      const result = await updateFeature(missionStore, featureStore, runtimeStore, tmpDir, missionId, "f1", {
         status: "in-progress",
         report,
       });
@@ -278,18 +281,18 @@ describe("feature lifecycle usecases", () => {
         agent: "agent-1",
       }));
 
-      await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
+      await updateFeature(missionStore, featureStore, runtimeStore, tmpDir, missionId, "f1", {
         status: "in-progress",
         report,
       });
 
       // Move to in_review
-      await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
+      await updateFeature(missionStore, featureStore, runtimeStore, tmpDir, missionId, "f1", {
         status: "review",
       });
 
       // Retry to pending WITHOUT providing a new report
-      const result = await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
+      const result = await updateFeature(missionStore, featureStore, runtimeStore, tmpDir, missionId, "f1", {
         status: "pending",
       });
 
@@ -303,18 +306,18 @@ describe("feature lifecycle usecases", () => {
     it("records retry reasons only for real transitions back to pending", async () => {
       const { missionId } = await createSampleMission(missionStore, featureStore, assertionStore, tmpDir);
 
-      await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
+      await updateFeature(missionStore, featureStore, runtimeStore, tmpDir, missionId, "f1", {
         status: "in-progress",
       });
-      await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
+      await updateFeature(missionStore, featureStore, runtimeStore, tmpDir, missionId, "f1", {
         status: "review",
       });
 
-      await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
+      await updateFeature(missionStore, featureStore, runtimeStore, tmpDir, missionId, "f1", {
         status: "pending",
         retryReason: "First retry",
       });
-      await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
+      await updateFeature(missionStore, featureStore, runtimeStore, tmpDir, missionId, "f1", {
         status: "pending",
         retryReason: "No-op retry",
       });
@@ -330,7 +333,7 @@ describe("feature lifecycle usecases", () => {
 
     it("throws for non-existent mission", async () => {
       expect(
-        updateFeature(missionStore, featureStore, tmpDir, "2026-03-28-001", "f1", {
+        updateFeature(missionStore, featureStore, runtimeStore, tmpDir, "2026-03-28-001", "f1", {
           status: "in-progress",
         }),
       ).rejects.toThrow("Mission 2026-03-28-001 not found");
@@ -340,7 +343,7 @@ describe("feature lifecycle usecases", () => {
       const { missionId } = await createSampleMission(missionStore, featureStore, assertionStore, tmpDir);
 
       expect(
-        updateFeature(missionStore, featureStore, tmpDir, missionId, "nonexistent", {
+        updateFeature(missionStore, featureStore, runtimeStore, tmpDir, missionId, "nonexistent", {
           status: "in-progress",
         }),
       ).rejects.toThrow("Feature nonexistent not found");
@@ -351,12 +354,47 @@ describe("feature lifecycle usecases", () => {
 
       const before = await featureStore.get(missionId, "f1");
 
-      const result = await updateFeature(missionStore, featureStore, tmpDir, missionId, "f1", {
+      const result = await updateFeature(missionStore, featureStore, runtimeStore, tmpDir, missionId, "f1", {
         status: "pending",
       });
 
       expect(result.feature.status).toBe("pending");
       expect(result.feature.updatedAt).not.toBe(before?.updatedAt);
+    });
+
+    it("syncs runtime state when a prompt already initialized execution", async () => {
+      const { missionId } = await createSampleMission(missionStore, featureStore, assertionStore, tmpDir);
+
+      await runtimeStore.save(missionId, "f1", {
+        featureId: "f1",
+        attemptId: "attempt-1",
+        attempt: 1,
+        agent: "unknown",
+        runtimeState: "starting",
+        startedAt: "2026-04-01T00:00:00.000Z",
+        lastSeenAt: "2026-04-01T00:00:00.000Z",
+        leaseExpiresAt: "2026-04-01T00:02:00.000Z",
+        recoveryMetadata: {
+          retryCount: 0,
+          history: [],
+        },
+      });
+
+      await updateFeature(missionStore, featureStore, runtimeStore, tmpDir, missionId, "f1", {
+        status: "in-progress",
+      });
+
+      await updateFeature(missionStore, featureStore, runtimeStore, tmpDir, missionId, "f1", {
+        status: "review",
+      });
+
+      await updateFeature(missionStore, featureStore, runtimeStore, tmpDir, missionId, "f1", {
+        status: "done",
+      });
+
+      await expect(runtimeStore.get(missionId, "f1")).resolves.toMatchObject({
+        runtimeState: "completed",
+      });
     });
   });
 

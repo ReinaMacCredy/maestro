@@ -7,6 +7,7 @@ import { FsMissionStoreAdapter } from "../../../src/adapters/mission-store.adapt
 import { FsFeatureStoreAdapter } from "../../../src/adapters/feature-store.adapter.js";
 import { FsAssertionStoreAdapter } from "../../../src/adapters/assertion-store.adapter.js";
 import { FsCheckpointStoreAdapter } from "../../../src/adapters/checkpoint-store.adapter.js";
+import { FsRuntimeStoreAdapter } from "../../../src/adapters/runtime-store.adapter.js";
 import type { CassPort } from "../../../src/ports/cass.port.js";
 import type { ConfigPort } from "../../../src/ports/config.port.js";
 import type { GitPort } from "../../../src/ports/git.port.js";
@@ -14,6 +15,7 @@ import type { HandoffStorePort } from "../../../src/ports/handoff-store.port.js"
 
 let tmpDir: string;
 let deps: SnapshotDeps;
+let runtimeStore: FsRuntimeStoreAdapter;
 
 async function initGitRepo(cwd: string): Promise<void> {
   const proc = Bun.spawn(["git", "init", "-b", "main"], { cwd, stdout: "pipe", stderr: "pipe" });
@@ -48,6 +50,7 @@ function createSamplePlan(): object {
 beforeEach(async () => {
   tmpDir = await mkdtemp(join(tmpdir(), "maestro-snapshot-"));
   await initGitRepo(tmpDir);
+  runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
   deps = {
     missionStore: new FsMissionStoreAdapter(tmpDir),
     featureStore: new FsFeatureStoreAdapter(tmpDir),
@@ -83,6 +86,7 @@ beforeEach(async () => {
       }),
       isRepo: async () => true,
     } satisfies GitPort,
+    runtimeStore,
     cwd: tmpDir,
   };
 });

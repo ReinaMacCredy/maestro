@@ -29,6 +29,7 @@ export function registerMissionControlCommand(program: Command): void {
         config: services.config,
         cass: services.cass,
         git: services.git,
+        runtimeStore: services.runtimeStore,
         cwd: process.cwd(),
       };
       const homeSnapshotDeps = {

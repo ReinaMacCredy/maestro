@@ -268,14 +268,15 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
     dirty = true;
 
     try {
-      await updateFeature(
-        opts.snapshotDeps.missionStore,
-        opts.snapshotDeps.featureStore,
-        process.cwd(),
-        state.snapshot.missionId,
-        feature.id,
-        { status: nextStatus },
-      );
+        await updateFeature(
+          opts.snapshotDeps.missionStore,
+          opts.snapshotDeps.featureStore,
+          opts.snapshotDeps.runtimeStore,
+          process.cwd(),
+          state.snapshot.missionId,
+          feature.id,
+          { status: nextStatus },
+        );
 
       try {
         const nextSnapshot = await buildSnapshot(opts.snapshotDeps, state.snapshot.missionId);

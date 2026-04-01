@@ -13,6 +13,11 @@ export const NO_SESSION_ID = "none";
 
 export const UNKNOWN_AGENT = "unknown";
 
+export const DEFAULT_RUNTIME_LEASE_MS = 2 * 60_000;
+export const DEFAULT_RUNTIME_STALE_MS = 90_000;
+export const DEFAULT_RUNTIME_FAILURE_MS = 5 * 60_000;
+export const DEFAULT_RUNTIME_RETRY_BUDGET = 2;
+
 export const CASS_INSTALL_HINT = "Install: brew install dicklesworthstone/tap/cass";
 
 export const DEFAULT_PROMPT_TEMPLATE = `You are picking up a handoff from another agent. Run these commands to get oriented:

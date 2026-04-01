@@ -93,6 +93,7 @@ export function registerFeatureCommand(program: Command): void {
       const result = await updateFeature(
         services.missionStore,
         services.featureStore,
+        services.runtimeStore,
         process.cwd(),
         opts.mission,
         featureId,
@@ -127,6 +128,7 @@ export function registerFeatureCommand(program: Command): void {
         services.missionStore,
         services.featureStore,
         services.assertionStore,
+        services.runtimeStore,
         process.cwd(),
         opts.mission,
         featureId,

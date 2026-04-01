@@ -12,6 +12,7 @@ import {
 import { FsMissionStoreAdapter } from "../../../src/adapters/mission-store.adapter.js";
 import { FsFeatureStoreAdapter } from "../../../src/adapters/feature-store.adapter.js";
 import { FsAssertionStoreAdapter } from "../../../src/adapters/assertion-store.adapter.js";
+import { FsRuntimeStoreAdapter } from "../../../src/adapters/runtime-store.adapter.js";
 import { MaestroError } from "../../../src/domain/errors.js";
 import type { MilestoneInput } from "../../../src/domain/mission-types.js";
 
@@ -97,6 +98,7 @@ describe("generateWorkerPrompt", () => {
     const missionStore = new FsMissionStoreAdapter(tmpDir);
     const featureStore = new FsFeatureStoreAdapter(tmpDir);
     const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+    const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
 
     // Create test mission and features
     const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
@@ -109,6 +111,7 @@ describe("generateWorkerPrompt", () => {
       missionStore,
       featureStore,
       assertionStore,
+      runtimeStore,
       tmpDir,
       missionId,
       "f1",
@@ -137,6 +140,7 @@ describe("generateWorkerPrompt", () => {
     const missionStore = new FsMissionStoreAdapter(tmpDir);
     const featureStore = new FsFeatureStoreAdapter(tmpDir);
     const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+    const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
 
     const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
 
@@ -156,6 +160,7 @@ describe("generateWorkerPrompt", () => {
       missionStore,
       featureStore,
       assertionStore,
+      runtimeStore,
       tmpDir,
       missionId,
       "f1",
@@ -170,6 +175,7 @@ describe("generateWorkerPrompt", () => {
     const missionStore = new FsMissionStoreAdapter(tmpDir);
     const featureStore = new FsFeatureStoreAdapter(tmpDir);
     const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+    const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
 
     const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
 
@@ -181,6 +187,7 @@ describe("generateWorkerPrompt", () => {
       missionStore,
       featureStore,
       assertionStore,
+      runtimeStore,
       tmpDir,
       missionId,
       "f1",
@@ -195,6 +202,7 @@ describe("generateWorkerPrompt", () => {
     const missionStore = new FsMissionStoreAdapter(tmpDir);
     const featureStore = new FsFeatureStoreAdapter(tmpDir);
     const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+    const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
 
     const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
 
@@ -207,6 +215,7 @@ describe("generateWorkerPrompt", () => {
       missionStore,
       featureStore,
       assertionStore,
+      runtimeStore,
       tmpDir,
       missionId,
       "f1",
@@ -223,6 +232,7 @@ describe("generateWorkerPrompt", () => {
     const missionStore = new FsMissionStoreAdapter(tmpDir);
     const featureStore = new FsFeatureStoreAdapter(tmpDir);
     const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+    const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
 
     const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
     await createBuiltInSkill(tmpDir, "test-skill", "# Built In Skill\n\nUse the packaged worker flow.");
@@ -231,6 +241,7 @@ describe("generateWorkerPrompt", () => {
       missionStore,
       featureStore,
       assertionStore,
+      runtimeStore,
       tmpDir,
       missionId,
       "f1",
@@ -244,6 +255,7 @@ describe("generateWorkerPrompt", () => {
     const missionStore = new FsMissionStoreAdapter(tmpDir);
     const featureStore = new FsFeatureStoreAdapter(tmpDir);
     const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+    const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
 
     let errorThrown = false;
     try {
@@ -251,6 +263,7 @@ describe("generateWorkerPrompt", () => {
         missionStore,
         featureStore,
         assertionStore,
+        runtimeStore,
         tmpDir,
         "non-existent",
         "f1",
@@ -267,6 +280,7 @@ describe("generateWorkerPrompt", () => {
     const missionStore = new FsMissionStoreAdapter(tmpDir);
     const featureStore = new FsFeatureStoreAdapter(tmpDir);
     const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+    const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
 
     // Create mission without the feature
     const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
@@ -277,6 +291,7 @@ describe("generateWorkerPrompt", () => {
         missionStore,
         featureStore,
         assertionStore,
+        runtimeStore,
         tmpDir,
         missionId,
         "non-existent",
@@ -293,6 +308,7 @@ describe("generateWorkerPrompt", () => {
     const missionStore = new FsMissionStoreAdapter(tmpDir);
     const featureStore = new FsFeatureStoreAdapter(tmpDir);
     const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+    const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
 
     const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
 
@@ -304,6 +320,7 @@ describe("generateWorkerPrompt", () => {
         missionStore,
         featureStore,
         assertionStore,
+        runtimeStore,
         tmpDir,
         missionId,
         "f1",
@@ -323,6 +340,7 @@ describe("generateWorkerPrompt", () => {
       const missionStore = new FsMissionStoreAdapter(tmpDir);
       const featureStore = new FsFeatureStoreAdapter(tmpDir);
       const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+      const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
 
       const samplePlan = {
         title: "Unsafe Mission",
@@ -346,10 +364,11 @@ describe("generateWorkerPrompt", () => {
       ).rejects.toThrow("Invalid mission plan file");
     });
 
-    it("sanitizes content containing markdown headers", async () => {
+  it("sanitizes content containing markdown headers", async () => {
     const missionStore = new FsMissionStoreAdapter(tmpDir);
     const featureStore = new FsFeatureStoreAdapter(tmpDir);
-      const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+    const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+    const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
   
       const sampleMilestones: MilestoneInput[] = [
         { id: "m1", title: "Milestone 1", description: "First milestone", order: 0 },
@@ -383,11 +402,12 @@ describe("generateWorkerPrompt", () => {
     // Generate prompt
     const promptResult = await generateWorkerPrompt(
       missionStore,
-      featureStore,
-      assertionStore,
-      tmpDir,
-      missionId,
-      "f1",
+        featureStore,
+        assertionStore,
+        runtimeStore,
+        tmpDir,
+        missionId,
+        "f1",
     );
 
     // Headers should be escaped to not break structure
@@ -399,11 +419,12 @@ describe("generateWorkerPrompt", () => {
   it("includes dependencies section when feature has dependencies", async () => {
     const missionStore = new FsMissionStoreAdapter(tmpDir);
     const featureStore = new FsFeatureStoreAdapter(tmpDir);
-      const assertionStore = new FsAssertionStoreAdapter(tmpDir);
-  
-      const sampleMilestones: MilestoneInput[] = [
-        { id: "m1", title: "Milestone 1", description: "First milestone", order: 0 },
-      ];
+    const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+    const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
+
+    const sampleMilestones: MilestoneInput[] = [
+      { id: "m1", title: "Milestone 1", description: "First milestone", order: 0 },
+    ];
 
     const samplePlan = {
       title: "Test Mission",
@@ -448,13 +469,14 @@ describe("generateWorkerPrompt", () => {
     await createSampleSkill(tmpDir, "test-skill", "# Test Skill");
 
     // Generate prompt for f1 which has dependencies
-    const promptResult = await generateWorkerPrompt(
-      missionStore,
-      featureStore,
-      assertionStore,
-      tmpDir,
-      missionId,
-      "f1",
+      const promptResult = await generateWorkerPrompt(
+        missionStore,
+        featureStore,
+        assertionStore,
+        runtimeStore,
+        tmpDir,
+        missionId,
+        "f1",
     );
 
     expect(promptResult.prompt).toContain("### Dependencies");
@@ -466,6 +488,7 @@ describe("generateWorkerPrompt", () => {
     const missionStore = new FsMissionStoreAdapter(tmpDir);
     const featureStore = new FsFeatureStoreAdapter(tmpDir);
     const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+    const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
 
     const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
 
@@ -473,22 +496,24 @@ describe("generateWorkerPrompt", () => {
     await createSampleSkill(tmpDir, "test-skill", "# Test Skill");
 
     // f1 has empty dependsOn
-    const result = await generateWorkerPrompt(
-      missionStore,
-      featureStore,
-      assertionStore,
-      tmpDir,
-      missionId,
-      "f1",
+      const result = await generateWorkerPrompt(
+        missionStore,
+        featureStore,
+        assertionStore,
+        runtimeStore,
+        tmpDir,
+        missionId,
+        "f1",
     );
 
     expect(result.prompt).not.toContain("### Dependencies");
   });
 
   it("renders preconditions section when feature has preconditions", async () => {
-    const missionStore = new FsMissionStoreAdapter(tmpDir);
-    const featureStore = new FsFeatureStoreAdapter(tmpDir);
-    const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+      const missionStore = new FsMissionStoreAdapter(tmpDir);
+      const featureStore = new FsFeatureStoreAdapter(tmpDir);
+      const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+      const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
 
     const samplePlan = {
       title: "Test", description: "Test",
@@ -505,15 +530,21 @@ describe("generateWorkerPrompt", () => {
     const { mission } = await createMission(missionStore, featureStore, assertionStore, samplePlan);
     await createSampleSkill(tmpDir, "test-skill", "# Skill");
 
-    const result = await generateWorkerPrompt(missionStore, featureStore, assertionStore, tmpDir, mission.id, "f1");
-    expect(result.prompt).toContain("### Preconditions");
+      const result = await generateWorkerPrompt(missionStore, featureStore, assertionStore, runtimeStore, tmpDir, mission.id, "f1");
+      expect(await runtimeStore.get(mission.id, "f1")).toMatchObject({
+        featureId: "f1",
+        attempt: 1,
+        runtimeState: "starting",
+      });
+      expect(result.prompt).toContain("### Preconditions");
     expect(result.prompt).toContain("Docker running on port 2375");
   });
 
   it("renders expected behavior section when feature has expectedBehavior", async () => {
     const missionStore = new FsMissionStoreAdapter(tmpDir);
     const featureStore = new FsFeatureStoreAdapter(tmpDir);
-    const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+      const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+      const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
 
     const samplePlan = {
       title: "Test", description: "Test",
@@ -530,7 +561,7 @@ describe("generateWorkerPrompt", () => {
     const { mission } = await createMission(missionStore, featureStore, assertionStore, samplePlan);
     await createSampleSkill(tmpDir, "test-skill", "# Skill");
 
-    const result = await generateWorkerPrompt(missionStore, featureStore, assertionStore, tmpDir, mission.id, "f1");
+      const result = await generateWorkerPrompt(missionStore, featureStore, assertionStore, runtimeStore, tmpDir, mission.id, "f1");
     expect(result.prompt).toContain("### Expected Behavior");
     expect(result.prompt).toContain("Returns 200 OK with JWT token");
   });
@@ -538,12 +569,13 @@ describe("generateWorkerPrompt", () => {
   it("omits preconditions/expectedBehavior when not set", async () => {
     const missionStore = new FsMissionStoreAdapter(tmpDir);
     const featureStore = new FsFeatureStoreAdapter(tmpDir);
-    const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+      const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+      const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
 
     const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
     await createSampleSkill(tmpDir, "test-skill", "# Skill");
 
-    const result = await generateWorkerPrompt(missionStore, featureStore, assertionStore, tmpDir, missionId, "f1");
+      const result = await generateWorkerPrompt(missionStore, featureStore, assertionStore, runtimeStore, tmpDir, missionId, "f1");
     expect(result.prompt).not.toContain("### Preconditions");
     expect(result.prompt).not.toContain("### Expected Behavior");
   });
@@ -551,7 +583,8 @@ describe("generateWorkerPrompt", () => {
   it("lists completed and in-progress sibling features", async () => {
     const missionStore = new FsMissionStoreAdapter(tmpDir);
     const featureStore = new FsFeatureStoreAdapter(tmpDir);
-    const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+      const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+      const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
 
     const samplePlan = {
       title: "Test", description: "Test",
@@ -575,7 +608,7 @@ describe("generateWorkerPrompt", () => {
     await createSampleSkill(tmpDir, "test-skill", "# Skill");
 
     // Generate prompt for f3 -- should see f1 in completed, f2 in in-progress
-    const result = await generateWorkerPrompt(missionStore, featureStore, assertionStore, tmpDir, mission.id, "f3");
+      const result = await generateWorkerPrompt(missionStore, featureStore, assertionStore, runtimeStore, tmpDir, mission.id, "f3");
     expect(result.prompt).toContain("### Completed Features");
     expect(result.prompt).toContain("f1: Done Feature");
     expect(result.prompt).toContain("### In Progress Features");
@@ -585,13 +618,14 @@ describe("generateWorkerPrompt", () => {
   it("omits feature listing when all siblings are pending", async () => {
     const missionStore = new FsMissionStoreAdapter(tmpDir);
     const featureStore = new FsFeatureStoreAdapter(tmpDir);
-    const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+      const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+      const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
 
     const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
     await createSampleSkill(tmpDir, "test-skill", "# Skill");
 
     // All features are pending by default
-    const result = await generateWorkerPrompt(missionStore, featureStore, assertionStore, tmpDir, missionId, "f1");
+      const result = await generateWorkerPrompt(missionStore, featureStore, assertionStore, runtimeStore, tmpDir, missionId, "f1");
     expect(result.prompt).not.toContain("### Completed Features");
     expect(result.prompt).not.toContain("### In Progress Features");
   });
@@ -599,13 +633,14 @@ describe("generateWorkerPrompt", () => {
   it("includes handoff protocol when worker-base skill exists", async () => {
     const missionStore = new FsMissionStoreAdapter(tmpDir);
     const featureStore = new FsFeatureStoreAdapter(tmpDir);
-    const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+      const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+      const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
 
     const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
     await createSampleSkill(tmpDir, "test-skill", "# Skill");
     await createBuiltInSkill(tmpDir, "maestro:worker-base", "# Worker Base\nFollow the handoff protocol.");
 
-    const result = await generateWorkerPrompt(missionStore, featureStore, assertionStore, tmpDir, missionId, "f1");
+      const result = await generateWorkerPrompt(missionStore, featureStore, assertionStore, runtimeStore, tmpDir, missionId, "f1");
     expect(result.prompt).toContain("## Handoff Protocol");
     expect(result.prompt).toContain("<!-- BEGIN HANDOFF PROTOCOL -->");
     expect(result.prompt).toContain("# Worker Base");
@@ -616,12 +651,13 @@ describe("generateWorkerPrompt", () => {
     const missionStore = new FsMissionStoreAdapter(tmpDir);
     const featureStore = new FsFeatureStoreAdapter(tmpDir);
     const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+    const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
 
     const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
     await createSampleSkill(tmpDir, "test-skill", "# Skill");
     // Do NOT create maestro:worker-base skill
 
-    const result = await generateWorkerPrompt(missionStore, featureStore, assertionStore, tmpDir, missionId, "f1");
+    const result = await generateWorkerPrompt(missionStore, featureStore, assertionStore, runtimeStore, tmpDir, missionId, "f1");
     expect(result.prompt).not.toContain("## Handoff Protocol");
   });
 });

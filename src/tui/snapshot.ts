@@ -10,6 +10,7 @@ import type { HandoffStorePort } from "../ports/handoff-store.port.js";
 import type { ConfigPort } from "../ports/config.port.js";
 import type { CassPort } from "../ports/cass.port.js";
 import type { GitPort } from "../ports/git.port.js";
+import type { RuntimeStorePort } from "../ports/runtime-store.port.js";
 import type { Mission, Feature } from "../domain/mission-types.js";
 import type { DoctorCheck, StatusReport } from "../domain/types.js";
 import { CASS_INSTALL_HINT } from "../domain/defaults.js";
@@ -38,6 +39,7 @@ export interface SnapshotDeps {
   config: ConfigPort;
   cass: CassPort;
   git: GitPort;
+  runtimeStore: RuntimeStorePort;
   cwd: string;
 }
 

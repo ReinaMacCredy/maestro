@@ -6,14 +6,16 @@
 import type { FeatureStorePort } from "../ports/feature-store.port.js";
 import type { MissionStorePort } from "../ports/mission-store.port.js";
 import type { AssertionStorePort } from "../ports/assertion-store.port.js";
+import type { RuntimeStorePort } from "../ports/runtime-store.port.js";
 import type { Feature, Mission, Milestone, Assertion } from "../domain/mission-types.js";
 import { MaestroError } from "../domain/errors.js";
 import { WORKER_TYPE_PATTERN } from "../domain/mission-validators.js";
 import { readText, writeText, ensureDir } from "../lib/fs.js";
 import { sanitizePromptContent } from "../lib/sanitize.js";
 import { dirname, join, resolve } from "node:path";
-import { MAESTRO_DIR } from "../domain/defaults.js";
+import { DEFAULT_RUNTIME_LEASE_MS, MAESTRO_DIR, UNKNOWN_AGENT } from "../domain/defaults.js";
 import { assertSafeSegment, resolveWithin } from "../lib/path-safety.js";
+import type { WorkerRuntime } from "../domain/runtime-types.js";
 
 /** Result of generating a worker prompt */
 export interface GenerateWorkerPromptResult {
@@ -36,6 +38,7 @@ export async function generateWorkerPrompt(
   missionStore: MissionStorePort,
   featureStore: FeatureStorePort,
   assertionStore: AssertionStorePort,
+  runtimeStore: RuntimeStorePort,
   baseDir: string,
   missionId: string,
   featureId: string,
@@ -103,6 +106,7 @@ export async function generateWorkerPrompt(
   await ensureDir(workersDir);
   const promptPath = join(workersDir, "prompt.md");
   await writeText(promptPath, prompt);
+  await initializeWorkerRuntime(runtimeStore, missionId, featureId, promptPath);
   writtenPaths.push(promptPath);
 
   // If --out is provided, also write to that path
@@ -117,6 +121,35 @@ export async function generateWorkerPrompt(
     workerType: feature.workerType,
     writtenTo: writtenPaths.length > 0 ? writtenPaths : undefined,
   };
+}
+
+async function initializeWorkerRuntime(
+  runtimeStore: RuntimeStorePort,
+  missionId: string,
+  featureId: string,
+  promptPath: string,
+): Promise<void> {
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+  const priorRuntime = await runtimeStore.get(missionId, featureId);
+  const runtime: WorkerRuntime = {
+    featureId,
+    attemptId: crypto.randomUUID(),
+    attempt: (priorRuntime?.attempt ?? 0) + 1,
+    agent: UNKNOWN_AGENT,
+    runtimeState: "starting",
+    startedAt: nowIso,
+    lastSeenAt: nowIso,
+    leaseExpiresAt: new Date(now + DEFAULT_RUNTIME_LEASE_MS).toISOString(),
+    recoveryMetadata: {
+      retryCount: priorRuntime?.recoveryMetadata.retryCount ?? 0,
+      lastRecoveryAt: priorRuntime?.recoveryMetadata.lastRecoveryAt,
+      lastRecoveryReason: priorRuntime?.recoveryMetadata.lastRecoveryReason,
+      history: priorRuntime?.recoveryMetadata.history ?? [],
+    },
+  };
+  void promptPath;
+  await runtimeStore.save(missionId, featureId, runtime);
 }
 
 /**
