@@ -253,6 +253,20 @@ async function setFeatureStatus(
   expect(exitCode).toBe(0);
 }
 
+async function createPendingHandoff(cwd: string): Promise<string> {
+  const { stdout, exitCode } = await run([
+    "handoff",
+    "--skip-session",
+    "--sitrep",
+    "preview sitrep",
+    "--quickstart",
+    "preview command",
+    "--json",
+  ], cwd);
+  expect(exitCode).toBe(0);
+  return JSON.parse(stdout).id;
+}
+
 async function commandExists(command: string): Promise<boolean> {
   const proc = Bun.spawn(["/bin/zsh", "-lc", `command -v ${command}`], {
     stdout: "pipe",
@@ -464,21 +478,90 @@ describe("mission-control CLI", () => {
     expect(snapshot.milestones).toBeDefined();
   }, SLOW_CLI_TIMEOUT_MS);
 
-  it("--once returns non-empty text containing mission title", async () => {
-    const missionId = await createMission(tmpDir);
+    it("--preview returns non-empty dashboard text containing mission title", async () => {
+      const missionId = await createMission(tmpDir);
 
-    const { stdout, exitCode } = await run(
-      ["mission-control", "--mission", missionId, "--once"],
-      tmpDir,
-    );
+      const { stdout, exitCode } = await run(
+        ["mission-control", "--mission", missionId, "--preview"],
+        tmpDir,
+      );
 
     expect(exitCode).toBe(0);
     expect(stdout.length).toBeGreaterThan(0);
     expect(stdout).toContain("Mission Control");
     expect(stdout).toContain("Tasks");
     expect(stdout).toContain("┌");
-    expect(stdout).toContain("┘");
-  }, SLOW_CLI_TIMEOUT_MS);
+      expect(stdout).toContain("┘");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("--preview features renders the task browser", async () => {
+      const missionId = await createMission(tmpDir);
+
+      const { stdout, exitCode } = await run(
+        ["mission-control", "--mission", missionId, "--preview", "features"],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Tasks");
+      expect(stdout).toContain("Select a task to focus");
+      expect(stdout).toContain("Feature 1");
+      expect(stdout).toContain("Feature 2");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("--preview dependencies targets the requested feature", async () => {
+      const missionId = await createMission(tmpDir);
+
+      const { stdout, exitCode } = await run(
+        ["mission-control", "--mission", missionId, "--preview", "dependencies", "--feature", "f2"],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Dependencies");
+      expect(stdout).toContain("Feature 2");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("--preview handoffs renders the handoffs modal", async () => {
+      const handoffId = await createPendingHandoff(tmpDir);
+
+      const { stdout, exitCode } = await run(
+        ["mission-control", "--preview", "handoffs", "--handoff", handoffId],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Handoffs");
+      expect(stdout).toContain(handoffId);
+      expect(stdout).toContain("Details hidden in read-only output");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("--preview config renders the config modal", async () => {
+      const missionId = await createMission(tmpDir);
+
+      const { stdout, exitCode } = await run(
+        ["mission-control", "--mission", missionId, "--preview", "config"],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Config");
+      expect(stdout).toContain("Config source:");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("--preview runtime renders the runtime modal", async () => {
+      const missionId = await createMission(tmpDir);
+      await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+
+      const { stdout, exitCode } = await run(
+        ["mission-control", "--mission", missionId, "--preview", "runtime"],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Runtime");
+      expect(stdout).toContain("Feature 1");
+    }, SLOW_CLI_TIMEOUT_MS);
 
     it("--json projects failed runtime state without auto-requeue", async () => {
       const missionId = await createMission(tmpDir);
@@ -522,7 +605,7 @@ describe("mission-control CLI", () => {
       });
     }, SLOW_CLI_TIMEOUT_MS);
 
-    it("--once keeps runtime storage read-only", async () => {
+    it("--preview keeps runtime storage read-only", async () => {
       const missionId = await createMission(tmpDir);
       await setMissionStatus(tmpDir, missionId, "approved");
       await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
@@ -544,7 +627,7 @@ describe("mission-control CLI", () => {
       });
 
       const { stdout, exitCode } = await run(
-        ["mission-control", "--mission", missionId, "--once"],
+        ["mission-control", "--mission", missionId, "--preview"],
         tmpDir,
       );
 
@@ -571,16 +654,38 @@ describe("mission-control CLI", () => {
     expect(snapshot.missionId).toBe(missionId);
   }, SLOW_CLI_TIMEOUT_MS);
 
-  it("errors for non-existent mission", async () => {
-    const { stdout, stderr, exitCode } = await run(
-      ["mission-control", "--mission", "2026-03-30-nonexistent", "--json"],
+    it("errors for non-existent mission", async () => {
+      const { stdout, stderr, exitCode } = await run(
+        ["mission-control", "--mission", "2026-03-30-nonexistent", "--json"],
       tmpDir,
     );
 
     expect(exitCode).toBe(1);
-    const output = stdout + stderr;
-    expect(output).toContain("not found");
-  }, SLOW_CLI_TIMEOUT_MS);
+      const output = stdout + stderr;
+      expect(output).toContain("not found");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("errors for an unknown preview feature selector", async () => {
+      const missionId = await createMission(tmpDir);
+
+      const { stdout, stderr, exitCode } = await run(
+        ["mission-control", "--mission", missionId, "--preview", "dependencies", "--feature", "f9"],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(1);
+      expect(stdout + stderr).toContain("Feature f9 not found");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("errors for an unknown preview handoff selector", async () => {
+      const { stdout, stderr, exitCode } = await run(
+        ["mission-control", "--preview", "handoffs", "--handoff", "handoff-missing"],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(1);
+      expect(stdout + stderr).toContain("Handoff handoff-missing not found");
+    }, SLOW_CLI_TIMEOUT_MS);
 
     it("returns home mode when no missions exist in a git repo", async () => {
       const { stdout, exitCode } = await run(
@@ -596,17 +701,7 @@ describe("mission-control CLI", () => {
     }, SLOW_CLI_TIMEOUT_MS);
 
     it("redacts pending handoff details in read-only json output", async () => {
-      const create = await run([
-        "handoff",
-        "--skip-session",
-        "--sitrep",
-        "sensitive sitrep",
-        "--quickstart",
-        "run secret command",
-        "--json",
-      ], tmpDir);
-      expect(create.exitCode).toBe(0);
-      const created = JSON.parse(create.stdout);
+      const handoffId = await createPendingHandoff(tmpDir);
 
       const { stdout, exitCode } = await run(
         ["mission-control", "--json"],
@@ -617,7 +712,7 @@ describe("mission-control CLI", () => {
         const snapshot = JSON.parse(stdout);
         expect(snapshot.pendingHandoffs).toEqual([
           expect.objectContaining({
-            id: created.id,
+            id: handoffId,
             agent: expect.any(String),
             message: "Details hidden in read-only output",
           }),
@@ -625,17 +720,39 @@ describe("mission-control CLI", () => {
         expect(snapshot.home.pendingHandoffs).toEqual(snapshot.pendingHandoffs);
       }, SLOW_CLI_TIMEOUT_MS);
 
-  it("renders a guided home frame when no missions exist in a git repo", async () => {
-    const { stdout, exitCode } = await run(
-      ["mission-control", "--once"],
-      tmpDir,
-    );
+    it("renders a guided home frame when no missions exist in a git repo", async () => {
+      const { stdout, exitCode } = await run(
+        ["mission-control", "--preview"],
+        tmpDir,
+      );
 
     expect(exitCode).toBe(0);
     expect(stdout).toContain("HOME");
-    expect(stdout).toContain("Environment");
-    expect(stdout).toContain("Pending Handoffs");
-  }, SLOW_CLI_TIMEOUT_MS);
+      expect(stdout).toContain("Environment");
+      expect(stdout).toContain("Pending Handoffs");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("renders the overview modal for home features previews", async () => {
+      const { stdout, exitCode } = await run(
+        ["mission-control", "--preview", "features"],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Overview");
+      expect(stdout).toContain("Environment");
+      expect(stdout).toContain("Next Steps");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("errors for dependencies previews in home mode", async () => {
+      const { stdout, stderr, exitCode } = await run(
+        ["mission-control", "--preview", "dependencies"],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(1);
+      expect(stdout + stderr).toContain("Dependencies preview requires a mission");
+    }, SLOW_CLI_TIMEOUT_MS);
 
   it("returns home mode outside a git repo", async () => {
     const outsideDir = await mkdtemp(join(tmpdir(), "maestro-mc-home-"));
@@ -654,17 +771,31 @@ describe("mission-control CLI", () => {
     }
   }, SLOW_CLI_TIMEOUT_MS);
 
-  it("rejects interactive mode without both tty streams", async () => {
-    const missionId = await createMission(tmpDir);
+    it("rejects interactive mode without both tty streams", async () => {
+      const missionId = await createMission(tmpDir);
 
     const { stdout, stderr, exitCode } = await run(
       ["mission-control", "--mission", missionId],
       tmpDir,
     );
 
-    expect(exitCode).toBe(1);
-    expect(stdout + stderr).toContain("Interactive mode requires TTY input and output");
-  }, SLOW_CLI_TIMEOUT_MS);
+      expect(exitCode).toBe(1);
+      expect(stdout + stderr).toContain("Interactive mode requires TTY input and output");
+      expect(stdout + stderr).toContain("Use --preview");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("rejects --once with migration guidance", async () => {
+      const missionId = await createMission(tmpDir);
+
+      const { stdout, stderr, exitCode } = await run(
+        ["mission-control", "--mission", missionId, "--once"],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(1);
+      expect(stdout + stderr).toContain("--once");
+      expect(stdout + stderr).toContain("--preview");
+    }, SLOW_CLI_TIMEOUT_MS);
 
   it("compiled binary interactive mode exits cleanly on q", async () => {
     if (!pythonAvailable) return;

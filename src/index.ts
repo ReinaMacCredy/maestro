@@ -57,6 +57,7 @@ registerMissionControlCommand(program);
 
 async function main(): Promise<void> {
   try {
+    assertNoDeprecatedMissionControlFlags(process.argv);
     await program.parseAsync(process.argv);
   } catch (err) {
     if (err instanceof CommanderError) {
@@ -82,6 +83,16 @@ async function main(): Promise<void> {
     }
     throw err;
   }
+}
+
+function assertNoDeprecatedMissionControlFlags(argv: readonly string[]): void {
+  if (!argv.includes("mission-control") || !argv.includes("--once")) return;
+
+  throw new MaestroError("`maestro mission-control --once` has been removed", [
+    "Use `maestro mission-control --preview` for the dashboard preview",
+    "Use `maestro mission-control --preview handoffs` to inspect pending handoffs",
+    "Use `maestro mission-control --json` for machine-readable output",
+  ]);
 }
 
 main();

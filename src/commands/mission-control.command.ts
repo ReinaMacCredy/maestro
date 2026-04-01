@@ -1,6 +1,6 @@
 /**
  * Mission Control command handler
- * Registers: maestro mission-control [--mission <id>] [--json] [--once]
+ * Registers: maestro mission-control [--mission <id>] [--json] [--preview [screen]]
  */
 import type { Command } from "commander";
 import { getServices } from "../services.js";
@@ -8,6 +8,7 @@ import { output, resolveJsonFlag } from "../lib/output.js";
 import { MaestroError } from "../domain/errors.js";
 import { buildHomeSnapshot, buildSnapshot } from "../tui/state/snapshot.js";
 import type { MissionControlSnapshot } from "../tui/state/types.js";
+import { PREVIEW_SCREENS, type PreviewScreen } from "../tui/app/preview-state.js";
 import { renderDashboard, renderPreviewFrame } from "../tui/index.js";
 import { recoverMissionRuntimeFailures } from "../usecases/runtime-recovery.usecase.js";
 
@@ -19,10 +20,21 @@ export function registerMissionControlCommand(program: Command): void {
     .description("Interactive mission control dashboard")
     .option("--mission <id>", "Mission ID (auto-selects if omitted)")
     .option("--json", "Output snapshot as JSON")
-    .option("--once", "Render one plain-text frame and exit")
+    .option("--preview [screen]", `Render a read-only preview frame (${PREVIEW_SCREENS.join(", ")})`)
+    .option("--feature <id>", "Select a feature for dashboard, features, or dependencies previews")
+    .option("--handoff <id>", "Select a handoff for handoffs previews")
+    .addHelpText("after", `
+Examples:
+  maestro mission-control --preview
+  maestro mission-control --mission <id> --preview features
+  maestro mission-control --mission <id> --preview dependencies --feature <id>
+  maestro mission-control --preview handoffs --handoff <id>
+  maestro mission-control --json
+`)
     .action(async (opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
+      const previewScreen = resolvePreviewScreen(opts.preview);
 
       const snapshotDeps = {
         missionStore: services.missionStore,
@@ -54,14 +66,31 @@ export function registerMissionControlCommand(program: Command): void {
       const loadReadSnapshot = async (): Promise<MissionControlSnapshot> =>
         redactSnapshotForReadOutput(await loadSnapshot("read"));
 
+      if (isJson && previewScreen) {
+        throw new MaestroError("Choose either --json or --preview", [
+          "Use `maestro mission-control --json` for machine-readable output",
+          "Use `maestro mission-control --preview` for a read-only terminal preview",
+        ]);
+      }
+
+      if ((opts.feature || opts.handoff) && !previewScreen) {
+        throw new MaestroError("Preview selectors require --preview", [
+          "Use `maestro mission-control --preview dashboard --feature <id>`",
+          "Use `maestro mission-control --preview handoffs --handoff <id>`",
+        ]);
+      }
+
       if (isJson) {
         output(true, await loadReadSnapshot(), () => []);
         return;
       }
 
-      if (opts.once) {
+      if (previewScreen) {
         const frame = renderPreviewFrame({
           snapshot: await loadReadSnapshot(),
+          screen: previewScreen,
+          featureId: opts.feature,
+          handoffId: opts.handoff,
         });
         console.log(frame);
         return;
@@ -69,7 +98,7 @@ export function registerMissionControlCommand(program: Command): void {
 
       if (!process.stdout.isTTY || !process.stdin.isTTY) {
         throw new MaestroError("Interactive mode requires TTY input and output", [
-          "Use --once for non-interactive output",
+          "Use --preview for non-interactive output",
           "Use --json for machine-readable output",
         ]);
       }
@@ -82,6 +111,27 @@ export function registerMissionControlCommand(program: Command): void {
         reloadSnapshot: () => loadSnapshot("supervise"),
       });
     });
+}
+
+function resolvePreviewScreen(value: unknown): PreviewScreen | undefined {
+  if (value === undefined || value === false) return undefined;
+  if (value === true) return "dashboard";
+
+  if (typeof value !== "string") {
+    throw new MaestroError("Invalid value for --preview", [
+      `Use one of: ${PREVIEW_SCREENS.join(", ")}`,
+    ]);
+  }
+
+  const screen = value.toLowerCase() as PreviewScreen;
+  if (PREVIEW_SCREENS.includes(screen)) {
+    return screen;
+  }
+
+  throw new MaestroError(`Unknown preview screen '${value}'`, [
+    `Use one of: ${PREVIEW_SCREENS.join(", ")}`,
+    "Try `maestro mission-control --preview` for the default dashboard preview",
+  ]);
 }
 
 /**

@@ -46,7 +46,7 @@
 - After `bun run build`, verify CLI changes against the fresh repo build first: `./dist/maestro --version` and then `./dist/maestro <command-under-test>`
 - Do not assume `maestro` on `PATH` is the fresh build; treat `./dist/maestro` and `/Users/reinamaccredy/.local/bin/maestro` as separate artifacts
 - For user-facing CLI or TUI work, finish by running `bun run release:local` so the local `maestro` command on `PATH` is refreshed to the newest compiled build before sign-off
-- When reviewing the Maestro TUI, start with `./dist/maestro mission-control --once` to smoke-test a single read-only frame before doing interactive TTY validation
+- When reviewing the Maestro TUI, start with `./dist/maestro mission-control --preview` to smoke-test a single read-only frame before doing interactive TTY validation
 - If you need to verify the installed `maestro` command, run `command -v maestro` first and record the resolved path in your notes
 - Before testing the installed `maestro` command, refresh it from `./dist/maestro` using atomic replacement with a temp file plus `mv`; do not rely on a plain in-place overwrite
 - After `bun run release:local`, verify both `maestro --version` and `./dist/maestro --version`, and record the installed path from `command -v maestro`
@@ -55,7 +55,7 @@
 
 ## Mission Control Contracts
 - Keep `buildSnapshot()` and `buildHomeSnapshot()` read-only; do not perform runtime recovery, feature updates, or other state mutation inside snapshot projection
-- `mission-control --json` and `mission-control --once` must remain read-only inspection paths; recovery or supervision belongs only in explicit orchestration/supervised runtime paths
+- `mission-control --json` and `mission-control --preview` must remain read-only inspection paths; recovery or supervision belongs only in explicit orchestration/supervised runtime paths
 - When adding Mission Control tests, cover both source-run and compiled `./dist/maestro` behavior if the change affects interactive flow, polling, or TTY handling
 
 ## Shell Gotchas

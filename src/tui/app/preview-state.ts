@@ -2,13 +2,16 @@ import { MaestroError } from "../../domain/errors.js";
 import { createInitialState, reduce, type AppState } from "../state/reducer.js";
 import type { MissionControlSnapshot } from "../state/types.js";
 
-export type PreviewScreen =
-  | "dashboard"
-  | "features"
-  | "dependencies"
-  | "handoffs"
-  | "config"
-  | "runtime";
+export const PREVIEW_SCREENS = [
+  "dashboard",
+  "features",
+  "dependencies",
+  "handoffs",
+  "config",
+  "runtime",
+] as const;
+
+export type PreviewScreen = typeof PREVIEW_SCREENS[number];
 
 export interface PreviewStateOptions {
   snapshot: MissionControlSnapshot;

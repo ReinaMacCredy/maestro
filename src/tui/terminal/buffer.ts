@@ -162,7 +162,7 @@ export class Buffer {
     return copy;
   }
 
-  /** Render buffer as plain text (no ANSI). For testing / --once output. */
+  /** Render buffer as plain text (no ANSI). For testing and preview output. */
   toString(): string {
     const lines: string[] = [];
     for (let r = 0; r < this.height; r++) {
