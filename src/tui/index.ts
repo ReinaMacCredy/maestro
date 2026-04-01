@@ -48,7 +48,7 @@ export interface InteractiveOptions {
  */
 export function renderOnceFrame(opts: OnceFrameOptions): string {
   const width = Math.min(process.stdout.columns || 120, 200);
-  const minHeight = Math.max(opts.snapshot.features.length * 2 + 18, 22);
+  const minHeight = Math.max(opts.snapshot.features.length * 2 + 24, 36);
   const height = Math.max(process.stdout.rows || 0, minHeight);
   const buf = new Buffer(width, height);
   const state = createInitialState(opts.snapshot);
@@ -385,7 +385,7 @@ export function renderFrame(
 
   const headerRect: Rect = { x: innerRect.x, y: innerRect.y, width: innerRect.width, height: 1 };
   const headerDividerY = headerRect.y + headerRect.height;
-  const statusRect: Rect = { x: innerRect.x, y: headerDividerY + 1, width: innerRect.width, height: 1 };
+  const statusRect: Rect = { x: innerRect.x, y: headerDividerY + 1, width: innerRect.width, height: 2 };
   const statusDividerY = statusRect.y + statusRect.height;
   const bottomDividerY = h - 5;
   const spacerY = h - 4;
@@ -450,7 +450,7 @@ export function renderFrame(
     renderHeader(buf, headerRect, snap, animationFrame);
     renderStatusBar(buf, statusRect, snap);
     renderFeatureDetail(buf, leftRect, snap, state.leftPaneMode, state.selectedFeatureIndex);
-    renderFeatureList(buf, featureListRect, snap, state.selectedFeatureIndex);
+    renderFeatureList(buf, featureListRect, snap, state.selectedFeatureIndex, state.leftPaneMode === "preview");
     renderProgressLog(buf, timelineRect, snap.progressLog, snap, state.logScrollOffset);
     renderSessionSidebar(buf, sessionRect, snap);
     renderFooter(buf, footerRect, snap, state.copyMode);

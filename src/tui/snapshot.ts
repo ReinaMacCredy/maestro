@@ -542,13 +542,16 @@ function buildMinimalDependencyMap(
     })
     .filter((entry) => entry.blockedChildren.length > 0)
     .sort((a, b) => b.score - a.score || a.feature.id.localeCompare(b.feature.id))
-    .slice(0, 2)
-    .map((entry) => ({
-      root: toFeatureRef(entry.feature),
-      primaryBlocked: entry.blockedChildren[0] ? toFeatureRef(entry.blockedChildren[0]) : undefined,
-      hiddenBlockedCount: Math.max(0, entry.blockedChildren.length - 1),
-    }));
-}
+      .slice(0, 2)
+      .map((entry) => ({
+        root: toFeatureRef(entry.feature),
+        primaryBlocked: entry.blockedChildren[0] ? toFeatureRef(entry.blockedChildren[0]) : undefined,
+        primaryBlockedDependencyCount: entry.blockedChildren[0]
+          ? featureGraph.get(entry.blockedChildren[0].id)?.blockedBy.length ?? 0
+          : undefined,
+        hiddenBlockedCount: Math.max(0, entry.blockedChildren.length - 1),
+      }));
+  }
 
 function buildSessionSidebar(
   gitState: Awaited<ReturnType<GitPort["getState"]>>,

@@ -44,6 +44,15 @@ function makeSnapshot(): MissionControlSnapshot {
 }
 
 describe("renderFeatureList", () => {
+  it("shows sketch-style task status labels", () => {
+    const buf = new Buffer(48, 8);
+    renderFeatureList(buf, { x: 0, y: 0, width: 48, height: 8 }, makeSnapshot(), 1);
+
+    const text = buf.toString();
+    expect(text).toContain("DONE");
+    expect(text).toContain("OPEN");
+  });
+
   it("uses bright text for non-selected feature titles", () => {
     const buf = new Buffer(48, 8);
     renderFeatureList(buf, { x: 0, y: 0, width: 48, height: 8 }, makeSnapshot(), 2);
@@ -60,5 +69,14 @@ describe("renderFeatureList", () => {
     const countCell = buf.getCell(0, 43);
     expect(countCell?.char).toBe("1");
     expect(countCell?.fg).toBe(PALETTE.brightWhite);
+  });
+
+  it("renders a selection chevron in preview mode", () => {
+    const buf = new Buffer(48, 8);
+    renderFeatureList(buf, { x: 0, y: 0, width: 48, height: 8 }, makeSnapshot(), 1, true);
+
+    const chevronCell = buf.getCell(3, 2);
+    expect(chevronCell?.char).toBe(">");
+    expect(chevronCell?.fg).toBe(PALETTE.brightWhite);
   });
 });

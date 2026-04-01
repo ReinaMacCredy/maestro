@@ -94,6 +94,7 @@ export interface AgentSummaryRow {
 export interface DependencyMapRow {
   root: BlockedByRef;
   primaryBlocked?: BlockedByRef;
+  primaryBlockedDependencyCount?: number;
   hiddenBlockedCount: number;
 }
 

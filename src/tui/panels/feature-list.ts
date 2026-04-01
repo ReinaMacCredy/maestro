@@ -4,7 +4,7 @@
 import type { Buffer } from "../terminal/buffer.js";
 import type { Rect } from "../terminal/layout.js";
 import type { MissionControlSnapshot } from "../types.js";
-import { FEATURE_STATUS_COLOR, FEATURE_STATUS_LABEL, PALETTE } from "../theme.js";
+import { FEATURE_TASK_STATUS_COLOR, FEATURE_TASK_STATUS_LABEL, PALETTE } from "../theme.js";
 import { truncate } from "../format.js";
 
 export function renderFeatureList(
@@ -12,6 +12,7 @@ export function renderFeatureList(
   rect: Rect,
   snap: MissionControlSnapshot,
   selectedIndex: number,
+  showSelectionIndicator = false,
 ): void {
   const w = rect.width - 2;
   let row = rect.y;
@@ -44,8 +45,8 @@ export function renderFeatureList(
   for (let i = 0; i < snap.features.length && row < maxRow; i++) {
     const f = snap.features[i]!;
     const isSelected = i === selectedIndex;
-    const statusLabel = FEATURE_STATUS_LABEL[f.status];
-    const statusColor = FEATURE_STATUS_COLOR[f.status];
+    const statusLabel = FEATURE_TASK_STATUS_LABEL[f.status];
+    const statusColor = FEATURE_TASK_STATUS_COLOR[f.status];
     const blockedByText = f.status === "blocked" && f.blockedByLabel ? `by ${f.blockedByLabel}` : "";
 
     // Selected row gets highlight bg
@@ -56,6 +57,10 @@ export function renderFeatureList(
     const rowStyle = isSelected ? { bg: PALETTE.selectedBg } : {};
 
     let col = rect.x + 2;
+    if (showSelectionIndicator && isSelected) {
+      buf.writeText(row, col, ">", { fg: PALETTE.brightWhite, ...rowStyle, bold: true });
+      col += 2;
+    }
     buf.writeText(row, col, truncate(statusLabel, 10), { fg: statusColor, ...rowStyle, bold: true });
     col += 11;
     if (blockedByText) {

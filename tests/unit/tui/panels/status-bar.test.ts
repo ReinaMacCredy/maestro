@@ -163,4 +163,19 @@ describe("renderStatusBar", () => {
     expect(text).toContain("CUSTOM Foundation");
     expect(text).toContain("1/3 done");
   });
+
+  it("renders milestone and gate details on a second row when space is available", () => {
+    const buf = new Buffer(120, 2);
+    renderStatusBar(buf, { x: 0, y: 0, width: 120, height: 2 }, makeSnapshot({
+      milestones: [
+        { id: "m1", title: "Implementation", status: "executing", order: 0, kind: "work", profile: "implementation" },
+      ],
+      gateLabel: null,
+      gateBlocked: false,
+    }));
+
+    const text = buf.toString();
+    expect(text).toContain("Milestone: Implementation");
+    expect(text).toContain("Gate: clear");
+  });
 });

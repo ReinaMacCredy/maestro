@@ -123,6 +123,24 @@ export const FEATURE_STATUS_LABEL: Record<FeatureStatus, string> = {
   blocked: "blocked",
 };
 
+export const FEATURE_TASK_STATUS_LABEL: Record<FeatureStatus, string> = {
+  pending: "OPEN",
+  assigned: "OPEN",
+  "in-progress": "OPEN",
+  review: "REVIEW",
+  done: "DONE",
+  blocked: "BLOCKED",
+};
+
+export const FEATURE_TASK_STATUS_COLOR: Record<FeatureStatus, number> = {
+  pending: PALETTE.cyan,
+  assigned: PALETTE.cyan,
+  "in-progress": PALETTE.cyan,
+  review: PALETTE.yellow,
+  done: PALETTE.green,
+  blocked: PALETTE.red,
+};
+
 // ── Milestone Kind / Profile ───────────────────────
 
 export const MILESTONE_KIND_INDICATOR: Record<MilestoneKind, string> = {

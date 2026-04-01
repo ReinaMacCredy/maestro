@@ -5,10 +5,10 @@ import type { Buffer, Cell } from "../terminal/buffer.js";
 import type { Rect } from "../terminal/layout.js";
 import type { MissionControlSnapshot, TaskPreviewPane } from "../types.js";
 import type { LeftPaneMode } from "../state.js";
-import { PALETTE } from "../theme.js";
+import { FEATURE_TASK_STATUS_LABEL, MISSION_STATUS_LABEL, PALETTE } from "../theme.js";
 import { truncate } from "../format.js";
-
-const BULLET = "\u00b7"; // ·
+const TREE_BULLET = "●";
+const TREE_CHILD = "└─";
 
 export function renderFeatureDetail(
   buf: Buffer,
@@ -60,7 +60,7 @@ function renderTaskPreview(buf: Buffer, rect: Rect, preview: TaskPreviewPane): v
   writeLine(preview.title, { fg: PALETTE.brightWhite, bold: true });
 
   writeKeyValue(writers, "id", preview.id);
-  writeKeyValue(writers, "status", preview.status);
+  writeKeyValue(writers, "status", FEATURE_TASK_STATUS_LABEL[preview.status].toLowerCase());
   writeKeyValue(writers, "milestone", preview.milestoneTitle);
   writeKeyValue(writers, "worker", preview.workerType);
   writeKeyValue(writers, "agent", preview.agent ?? "--");
@@ -114,7 +114,7 @@ function renderMissionOverview(buf: Buffer, rect: Rect, snap: MissionControlSnap
     writeLine("Create or import work to populate Mission Control", { fg: PALETTE.gray });
     return;
   }
-  writeKeyValue(writers, "status", overview.statusLabel);
+  writeKeyValue(writers, "status", formatMissionOverviewStatus(overview.statusLabel));
   writeKeyValue(writers, "active", String(overview.activeCount));
   writeKeyValue(writers, "done", `${overview.doneCount} / ${overview.totalCount}`);
   writeKeyValue(writers, "blocked", String(overview.blockedCount));
@@ -133,13 +133,15 @@ function renderMissionOverview(buf: Buffer, rect: Rect, snap: MissionControlSnap
     writeLine("Dependency Map", { fg: PALETTE.brightWhite, bold: true });
     for (const entry of overview.dependencyMap) {
       writers.writeBullet(
-        `${entry.root.id} ${entry.root.title} [${entry.root.status.toUpperCase()}]`,
+        `${TREE_BULLET} ${entry.root.id} ${entry.root.title} [${FEATURE_TASK_STATUS_LABEL[entry.root.status]}]`,
         { fg: PALETTE.gray },
       );
       if (entry.primaryBlocked) {
         writeLine(
-          `${BULLET === "\u00b7" ? "└─" : "-"} ${truncate(
-            `${entry.primaryBlocked.id} ${entry.primaryBlocked.title} [BLOCKED${entry.hiddenBlockedCount > 0 ? ` +${entry.hiddenBlockedCount}` : ""}]`,
+          `${TREE_CHILD} ${truncate(
+            `${entry.primaryBlocked.id} ${entry.primaryBlocked.title} [${formatDependencyBlockedLabel(
+              entry.primaryBlockedDependencyCount,
+            )}]${entry.hiddenBlockedCount > 0 ? ` +${entry.hiddenBlockedCount} more` : ""}`,
             Math.max(0, w - 3),
           )}`,
           { fg: PALETTE.gray },
@@ -190,7 +192,7 @@ function createPanelWriters(
   const writeBullet = (text: string, style?: Partial<Cell>): void => {
     const row = getRow();
     if (row >= maxRow) return;
-    buf.writeText(row, rect.x + 1, `${BULLET} `, { fg: PALETTE.dimGray });
+    buf.writeText(row, rect.x + 1, "  ", { fg: PALETTE.dimGray });
     buf.writeText(row, rect.x + 3, truncate(text, width - 2), style ?? { fg: PALETTE.gray });
     setRow(row + 1);
   };
@@ -208,4 +210,16 @@ function writeKeyValue(
 
 function shortenSessionId(sessionId: string): string {
   return sessionId.length > 10 ? `${sessionId.slice(0, 8)}…` : sessionId;
+}
+
+function formatMissionOverviewStatus(statusLabel: string): string {
+  const missionStatus = statusLabel as keyof typeof MISSION_STATUS_LABEL;
+  return MISSION_STATUS_LABEL[missionStatus]?.toLowerCase() ?? statusLabel;
+}
+
+function formatDependencyBlockedLabel(blockedByCount?: number): string {
+  if (!blockedByCount || blockedByCount <= 1) {
+    return "BLOCKED";
+  }
+  return `BLOCKED by ${blockedByCount}`;
 }

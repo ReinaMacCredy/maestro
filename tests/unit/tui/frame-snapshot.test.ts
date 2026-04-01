@@ -155,11 +155,12 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
     gateLabel: snapshot.gateLabel ?? null,
     agentSummary: [{ agent: "codex", count: 1 }],
     dependencyMap: [
-      {
-        root: { id: "f2", title: "Database config", status: "in-progress" },
-        primaryBlocked: { id: "f3", title: "Auth endpoints", status: "pending" },
-        hiddenBlockedCount: 0,
-      },
+        {
+          root: { id: "f2", title: "Database config", status: "in-progress" },
+          primaryBlocked: { id: "f3", title: "Auth endpoints", status: "pending" },
+          primaryBlockedDependencyCount: 1,
+          hiddenBlockedCount: 0,
+        },
     ],
   };
 
@@ -209,7 +210,9 @@ describe("frame rendering", () => {
         const frame = renderOnceFrame({ snapshot: makeSnapshot() });
         expect(frame).toContain("Mission Overview");
         expect(frame).toContain("Mission: Full Pipeline Test");
+        expect(frame).toContain("status     running");
         expect(frame).toContain("agents");
+        expect(frame).toContain("Dependency Map");
       });
 
       it("contains timeline and session labels", () => {
@@ -242,6 +245,8 @@ describe("frame rendering", () => {
 
         expect(frame).toContain("PLAN-REVIEW");
         expect(frame).toContain("BLOCKED");
+        expect(frame).toContain("Milestone:");
+        expect(frame).toContain("Gate:");
       });
     });
 

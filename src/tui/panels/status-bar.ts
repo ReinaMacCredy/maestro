@@ -82,6 +82,10 @@ export function renderStatusBar(buf: Buffer, rect: Rect, snap: MissionControlSna
   }
 
   buf.writeText(y, rightStart, rightText, { fg: PALETTE.brightWhite, bold: true });
+
+  if (rect.height > 1) {
+    renderMilestoneMetaRow(buf, { x: rect.x, y: y + 1, width: w, height: rect.height - 1 }, snap, activeMilestone);
+  }
 }
 
 function buildMissionSummary(progress: MissionControlStatusProgress, maxLen: number): string {
@@ -157,4 +161,26 @@ function writeSegment(
   const clipped = text.length > width ? text.slice(0, width) : text;
   buf.writeText(y, startX, clipped, style);
   return startX + clipped.length;
+}
+
+function renderMilestoneMetaRow(
+  buf: Buffer,
+  rect: Rect,
+  snap: MissionControlSnapshot,
+  activeMilestone?: MissionControlMilestoneRow,
+): void {
+  const milestoneText = `Milestone: ${activeMilestone?.title ?? "--"}`;
+  const gateValue = snap.gateBlocked
+    ? snap.gateLabel ?? activeMilestone?.title ?? "blocked"
+    : "clear";
+  const gateText = `Gate: ${gateValue}`;
+
+  buf.writeText(rect.y, rect.x + 1, milestoneText, { fg: PALETTE.gray });
+  const gateX = rect.x + rect.width - gateText.length - 1;
+  if (gateX > rect.x + milestoneText.length + 4) {
+    buf.writeText(rect.y, gateX, gateText, {
+      fg: snap.gateBlocked ? PALETTE.red : PALETTE.gray,
+      bold: snap.gateBlocked,
+    });
+  }
 }
