@@ -9,7 +9,7 @@ import { FsFeatureStoreAdapter } from "../../src/adapters/feature-store.adapter.
 import { FsMissionStoreAdapter } from "../../src/adapters/mission-store.adapter.js";
 import { FsRuntimeStoreAdapter } from "../../src/adapters/runtime-store.adapter.js";
 import { enterAltScreen, exitAltScreen } from "../../src/tui/terminal/ansi.js";
-import { layoutModal } from "../../src/tui/widgets/modal.js";
+import { buildOverlayRenderSpec, layoutModal } from "../../src/tui/widgets/modal.js";
 
 const CLI = [
   "bun",
@@ -376,22 +376,24 @@ function getMissionControlModalParentRect(width: number, height: number) {
 
 function buildFeatureActionMouseSequence(optionIndex: number, width = 80, height = 24): string {
   const parentRect = getMissionControlModalParentRect(width, height);
-  const selectingLayout = layoutModal(parentRect, {
-    mode: "menu",
-    title: "Change Feature Status",
-    eyebrow: "f1 · Feature 1",
-    items: ["Set status to assigned", "Set status to in-progress"],
-    selectedIndex: 0,
-    footer: "Use arrows or click · Enter choose · Esc cancel",
-  });
-  const confirmingLayout = layoutModal(parentRect, {
-    mode: "menu",
-    title: "Change Feature Status",
-    eyebrow: "f1 · Feature 1",
-    items: ["Set status to assigned", "Set status to in-progress"],
-    selectedIndex: optionIndex,
-    footer: "Enter confirm · Esc cancel",
-  });
+    const selectingLayout = layoutModal(parentRect, {
+      mode: "menu",
+      title: "Change Feature Status",
+      eyebrow: "f1 · Feature 1",
+      items: ["Set status to assigned", "Set status to in-progress"],
+      selectedIndex: 0,
+      footer: "Use arrows or click · Enter choose · Esc cancel",
+      renderSpec: buildOverlayRenderSpec("feature-action"),
+    });
+    const confirmingLayout = layoutModal(parentRect, {
+      mode: "menu",
+      title: "Change Feature Status",
+      eyebrow: "f1 · Feature 1",
+      items: ["Set status to assigned", "Set status to in-progress"],
+      selectedIndex: optionIndex,
+      footer: "Enter confirm · Esc cancel",
+      renderSpec: buildOverlayRenderSpec("feature-action"),
+    });
   const selectRect = selectingLayout.itemRects[optionIndex]!;
   const confirmRect = confirmingLayout.itemRects[optionIndex]!;
   return `${encodeLeftClick(selectRect.x + 1, selectRect.y)}${encodeLeftClick(confirmRect.x + 1, confirmRect.y)}`;

@@ -23,6 +23,7 @@ import {
 } from "./mission-control-commands.js";
 import {
   applyModalBackdrop,
+  buildOverlayRenderSpec,
   layoutModal,
   pointInRect,
   renderModal,
@@ -549,6 +550,7 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
         Math.max(0, commands.length - 1),
       ),
       emptyLabel: "No commands match your filter",
+      renderSpec: buildOverlayRenderSpec("command-palette"),
     };
   }
 
@@ -557,27 +559,28 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
     if (!feature) return undefined;
 
     const transitions = getValidFeatureTransitions(feature.status);
-    return {
-      mode: "menu",
-      title: "Change Feature Status",
-      eyebrow: `${feature.id} · ${feature.title}`,
+      return {
+        mode: "menu",
+        title: "Change Feature Status",
+        eyebrow: `${feature.id} · ${feature.title}`,
       items: transitions.length > 0
         ? transitions.map((transition) => ({
           label: `Set status to ${transition}`,
           detail: `Move ${feature.id} from ${FEATURE_STATUS_LABEL[feature.status]} to ${transition}`,
           section: "Transitions",
         }))
-        : [{ label: "No valid transitions", detail: "This feature cannot move to another state right now.", section: "Transitions", tone: "muted" }],
-      selectedIndex: state.modal.selectedOption,
-      footer: getFeatureActionFooter(state.modal),
-    };
-  }
+          : [{ label: "No valid transitions", detail: "This feature cannot move to another state right now.", section: "Transitions", tone: "muted" }],
+        selectedIndex: state.modal.selectedOption,
+        footer: getFeatureActionFooter(state.modal),
+        renderSpec: buildOverlayRenderSpec("feature-action"),
+      };
+    }
 
   if (state.modal.kind === "feature-browser") {
-    return {
-      mode: "menu",
-      title: "Tasks",
-      eyebrow: state.snapshot.mode === "home" ? "Project overview" : "Select a task to focus",
+      return {
+        mode: "menu",
+        title: "Tasks",
+        eyebrow: state.snapshot.mode === "home" ? "Project overview" : "Select a task to focus",
       items: state.snapshot.features.length > 0
         ? state.snapshot.features.map((feature) => ({
           label: feature.title,
@@ -586,15 +589,16 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
           section: "Mission",
         }))
         : [{ label: "No features available", detail: "This mission does not have any features yet.", section: "Mission", tone: "muted" }],
-      selectedIndex: Math.min(
-        state.modal.selectedFeatureIndex,
-        Math.max(0, state.snapshot.features.length - 1),
-      ),
+        selectedIndex: Math.min(
+          state.modal.selectedFeatureIndex,
+          Math.max(0, state.snapshot.features.length - 1),
+        ),
         footer: state.modal.returnTarget === "command-palette"
           ? "Enter focus · Left back · Esc close"
           : "Enter focus · Esc close",
-    };
-  }
+        renderSpec: buildOverlayRenderSpec("feature-browser"),
+      };
+    }
 
     if (state.modal.kind === "dependencies") {
       const preview = getSelectedTaskPreview(state);
@@ -613,14 +617,15 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
           ? buildDependencyDetailItems(preview)
           : [{ text: "No dependency graph available", tone: "muted" as const }],
         footer: buildOverlayFooter(state.modal.returnTarget, "Enter jump"),
+        renderSpec: buildOverlayRenderSpec("dependencies"),
       };
     }
 
   if (state.modal.kind === "overview" && state.snapshot.home) {
-    return {
-      mode: "info",
-      title: "Overview",
-      eyebrow: state.snapshot.home.headline,
+      return {
+        mode: "info",
+        title: "Overview",
+        eyebrow: state.snapshot.home.headline,
       items: [
         { text: state.snapshot.home.summary, section: "Environment" },
         { text: state.snapshot.home.locationLabel, style: "block", tone: "accent", section: "Location" },
@@ -630,11 +635,12 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
           hint: action.label,
           section: "Next Steps",
           tone: "muted" as const,
-        })),
-      ],
-      footer: state.modal.returnTarget === "command-palette" ? "Left back · Esc close" : "Esc close",
-    };
-  }
+          })),
+        ],
+        footer: state.modal.returnTarget === "command-palette" ? "Left back · Esc close" : "Esc close",
+        renderSpec: buildOverlayRenderSpec("overview"),
+      };
+    }
 
     if (state.modal.kind === "handoffs") {
       const items = state.snapshot.pendingHandoffs.map((handoff) => ({
@@ -653,12 +659,13 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
         selectedIndex: Math.min(state.modal.selectedHandoffIndex, Math.max(0, items.length - 1)),
         detailItems: buildHandoffDetailItems(selectedHandoff),
         footer: buildOverlayFooter(state.modal.returnTarget, "Enter inspect"),
+        renderSpec: buildOverlayRenderSpec("handoffs"),
       };
     }
 
-  if (state.modal.kind === "config") {
-    const summary = state.snapshot.configSummary;
-    if (!summary) return undefined;
+    if (state.modal.kind === "config") {
+      const summary = state.snapshot.configSummary;
+      if (!summary) return undefined;
       return {
         mode: "info",
         title: "Config",
@@ -683,6 +690,7 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
           })),
         ],
         footer: state.modal.returnTarget === "command-palette" ? "Left back · Esc close" : "Esc close",
+        renderSpec: buildOverlayRenderSpec("config"),
       };
     }
 
@@ -703,6 +711,7 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
         selectedIndex: Math.min(state.modal.selectedProcessIndex, Math.max(0, items.length - 1)),
         detailItems: buildRuntimeDetailItems(selectedProcess),
         footer: buildOverlayFooter(state.modal.returnTarget, "Enter inspect"),
+        renderSpec: buildOverlayRenderSpec("processes"),
       };
     }
 
