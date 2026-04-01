@@ -10,6 +10,8 @@ import { buildHomeSnapshot, buildSnapshot } from "../tui/snapshot.js";
 import { renderDashboard, renderOnceFrame } from "../tui/index.js";
 import { recoverMissionRuntimeFailures } from "../usecases/runtime-recovery.usecase.js";
 
+export type MissionControlSnapshotLoadMode = "read" | "supervise";
+
 export function registerMissionControlCommand(program: Command): void {
   program
     .command("mission-control")
@@ -38,24 +40,20 @@ export function registerMissionControlCommand(program: Command): void {
         config: services.config,
         cass: services.cass,
         git: services.git,
-      };
+        };
 
-      const missionId = await resolveMissionId(opts.mission);
-      const snapshot = missionId
-        ? await buildMissionSnapshot(missionId, snapshotDeps)
-        : await buildHomeSnapshot(homeSnapshotDeps, process.cwd());
+        const missionId = await resolveMissionId(opts.mission);
+        if (isJson) {
+          const snapshot = await loadMissionControlSnapshot(snapshotDeps, homeSnapshotDeps, "read", missionId);
+          output(true, snapshot, () => []);
+          return;
+        }
 
-      // --json mode: emit full snapshot
-      if (isJson) {
-        output(true, snapshot, () => []);
-        return;
-      }
-
-      // --once mode: render one frame from snapshot
-      if (opts.once) {
-        const frame = renderOnceFrame({ snapshot });
-        console.log(frame);
-        return;
+        if (opts.once) {
+          const snapshot = await loadMissionControlSnapshot(snapshotDeps, homeSnapshotDeps, "read", missionId);
+          const frame = renderOnceFrame({ snapshot });
+          console.log(frame);
+          return;
       }
 
       // Interactive mode: requires TTY
@@ -63,16 +61,18 @@ export function registerMissionControlCommand(program: Command): void {
         throw new MaestroError("Interactive mode requires TTY input and output", [
           "Use --once for non-interactive output",
           "Use --json for machine-readable output",
-        ]);
-      }
+          ]);
+        }
+
+        const snapshot = await loadMissionControlSnapshot(snapshotDeps, homeSnapshotDeps, "supervise", missionId);
 
         await renderDashboard({
           snapshot,
           snapshotDeps,
-          reloadSnapshot: () => loadSnapshot(snapshotDeps, homeSnapshotDeps, missionId),
+          reloadSnapshot: () => loadMissionControlSnapshot(snapshotDeps, homeSnapshotDeps, "supervise", missionId),
         });
       });
-}
+  }
 
 /**
  * Resolve mission ID: explicit > executing/paused > newest.
@@ -102,32 +102,35 @@ async function resolveMissionId(explicit?: string): Promise<string | undefined> 
 async function buildMissionSnapshot(
   missionId: string,
   snapshotDeps: Parameters<typeof buildSnapshot>[0],
+  mode: MissionControlSnapshotLoadMode,
 ) {
-  const services = getServices();
-  const mission = await services.missionStore.get(missionId);
+  const mission = await snapshotDeps.missionStore.get(missionId);
 
   if (!mission) {
     throw new MaestroError(`Mission ${missionId} not found`, [
       "List available missions: maestro mission list",
-    ]);
+      ]);
   }
 
-  await recoverMissionRuntimeFailures(
-    snapshotDeps.missionStore,
-    snapshotDeps.featureStore,
-    snapshotDeps.runtimeStore,
-    missionId,
-  );
+  if (mode === "supervise") {
+    await recoverMissionRuntimeFailures(
+      snapshotDeps.missionStore,
+      snapshotDeps.featureStore,
+      snapshotDeps.runtimeStore,
+      missionId,
+    );
+  }
 
   return buildSnapshot(snapshotDeps, missionId);
 }
 
-async function loadSnapshot(
+export async function loadMissionControlSnapshot(
   snapshotDeps: Parameters<typeof buildSnapshot>[0],
   homeSnapshotDeps: Parameters<typeof buildHomeSnapshot>[0],
+  mode: MissionControlSnapshotLoadMode,
   missionId?: string,
 ) {
   return missionId
-    ? buildMissionSnapshot(missionId, snapshotDeps)
+    ? buildMissionSnapshot(missionId, snapshotDeps, mode)
     : buildHomeSnapshot(homeSnapshotDeps, process.cwd());
 }

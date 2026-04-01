@@ -478,7 +478,7 @@ describe("mission-control CLI", () => {
     expect(stdout).toContain("┘");
   }, SLOW_CLI_TIMEOUT_MS);
 
-    it("--json reflects recoverable runtime state after auto-requeue", async () => {
+    it("--json projects failed runtime state without auto-requeue", async () => {
       const missionId = await createMission(tmpDir);
       await setMissionStatus(tmpDir, missionId, "approved");
       await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
@@ -504,21 +504,59 @@ describe("mission-control CLI", () => {
         tmpDir,
       );
 
-    expect(exitCode).toBe(0);
-    const snapshot = JSON.parse(stdout);
-    expect(snapshot.runtimeProcesses.find((process: { featureId: string }) => process.featureId === "f1")).toMatchObject({
-      runtimeState: "recoverable",
-      retryCount: 1,
-    });
-    expect(snapshot.activeFeature).toMatchObject({
-      id: "f1",
-      status: "pending",
-      runtimeState: "recoverable",
-      retryCount: 1,
-    });
-  }, SLOW_CLI_TIMEOUT_MS);
+      expect(exitCode).toBe(0);
+      const snapshot = JSON.parse(stdout);
+      expect(snapshot.runtimeProcesses.find((process: { featureId: string }) => process.featureId === "f1")).toMatchObject({
+        runtimeState: "failed",
+      });
+      expect(snapshot.activeWorker).toMatchObject({
+        featureId: "f1",
+        runtimeState: "failed",
+      });
+      expect(await listFeatureStatuses(tmpDir, missionId)).toMatchObject({ f1: "assigned" });
+      expect(await runtimeStore.get(missionId, "f1")).toMatchObject({
+        runtimeState: "live",
+        recoveryMetadata: { retryCount: 0, history: [] },
+      });
+    }, SLOW_CLI_TIMEOUT_MS);
 
-  it("--json auto-selects mission when --mission omitted", async () => {
+    it("--once keeps runtime storage read-only", async () => {
+      const missionId = await createMission(tmpDir);
+      await setMissionStatus(tmpDir, missionId, "approved");
+      await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+      const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
+
+      await runtimeStore.save(missionId, "f1", {
+        featureId: "f1",
+        attemptId: "attempt-1",
+        attempt: 1,
+        agent: "unknown",
+        runtimeState: "live",
+        startedAt: "2026-04-01T00:00:00.000Z",
+        lastSeenAt: "2026-04-01T00:00:00.000Z",
+        leaseExpiresAt: "2026-04-01T00:01:00.000Z",
+        recoveryMetadata: {
+          retryCount: 0,
+          history: [],
+        },
+      });
+
+      const { stdout, exitCode } = await run(
+        ["mission-control", "--mission", missionId, "--once"],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Mission Control");
+      expect(stdout).toContain("Feature 1");
+      expect(await listFeatureStatuses(tmpDir, missionId)).toMatchObject({ f1: "assigned" });
+      expect(await runtimeStore.get(missionId, "f1")).toMatchObject({
+        runtimeState: "live",
+        recoveryMetadata: { retryCount: 0, history: [] },
+      });
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("--json auto-selects mission when --mission omitted", async () => {
     const missionId = await createMission(tmpDir);
 
     const { stdout, exitCode } = await run(
