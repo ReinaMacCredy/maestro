@@ -68,6 +68,10 @@
 - Bump the Maestro CLI version for every repo-tracked code change that affects runtime behavior, CLI output, TUI behavior, storage behavior, or user-visible workflows so the running binary can be identified exactly after each change
 - Treat documentation-only or comment-only changes as exempt from version bumps unless they ship alongside behavior changes
 - Make the version bump part of the same working increment and commit as the behavior change; do not leave version updates for a later cleanup commit
+- `bun scripts/auto-bump.ts` computes the next version from conventional commits and updates tracked version files, but does not build, tag, install, or publish by itself
+- `bun scripts/ci.ts` is the full local release flow: auto-bump, test, build, commit the release, tag it, and install the local binary
+- `bun run release:local` only rebuilds and reinstalls the local `maestro` binary; it does not bump the version or create a release commit
+- `bun run deploy` currently uses the manual bump flow (`bun run bump`) rather than `auto-bump`; do not assume `deploy` applies conventional-commit versioning unless it is updated explicitly
 - Bump the **minor** version for backward-compatible feature additions or meaningful capability expansions
 - Bump the **major** version for breaking CLI, API, storage, or workflow changes
 - Use the **patch** version for fixes, small internal improvements, and documentation-only changes
