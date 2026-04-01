@@ -5,7 +5,7 @@
 import { Buffer } from "../terminal/buffer.js";
 import { inset, type Rect } from "../terminal/layout.js";
 import type { MissionControlSnapshot } from "../state/types.js";
-import { createInitialState, type AppState } from "../state/reducer.js";
+import { type AppState } from "../state/reducer.js";
 import { renderHeader } from "../panels/header.js";
 import { renderStatusBar } from "../panels/status-bar.js";
 import { renderFeatureDetail } from "../panels/feature-detail.js";
@@ -21,20 +21,24 @@ import {
 import { PALETTE } from "../theme.js";
 import { BOX } from "../terminal/ansi.js";
 import { buildModalOptions } from "./modal-builders.js";
+import { buildPreviewState, type PreviewScreen } from "./preview-state.js";
 
-export interface OnceFrameOptions {
+export interface PreviewFrameOptions {
   snapshot: MissionControlSnapshot;
+  screen?: PreviewScreen;
+  featureId?: string;
+  handoffId?: string;
 }
 
 /**
- * Render a single plain-text frame (for --once mode).
+ * Render a single preview frame without entering interactive mode.
  */
-export function renderOnceFrame(opts: OnceFrameOptions): string {
+export function renderPreviewFrame(opts: PreviewFrameOptions): string {
   const width = Math.min(process.stdout.columns || 120, 200);
   const minHeight = Math.max(opts.snapshot.features.length * 2 + 24, 36);
   const height = Math.max(process.stdout.rows || 0, minHeight);
   const buf = new Buffer(width, height);
-  const state = createInitialState(opts.snapshot);
+  const state = buildPreviewState(opts);
   renderFrame(buf, state, 0, 0);
   return process.stdout.isTTY ? buf.toAnsiString() : buf.toString();
 }

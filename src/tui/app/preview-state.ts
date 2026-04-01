@@ -1,0 +1,123 @@
+import { MaestroError } from "../../domain/errors.js";
+import { createInitialState, reduce, type AppState } from "../state/reducer.js";
+import type { MissionControlSnapshot } from "../state/types.js";
+
+export type PreviewScreen =
+  | "dashboard"
+  | "features"
+  | "dependencies"
+  | "handoffs"
+  | "config"
+  | "runtime";
+
+export interface PreviewStateOptions {
+  snapshot: MissionControlSnapshot;
+  screen?: PreviewScreen;
+  featureId?: string;
+  handoffId?: string;
+}
+
+const FEATURE_SELECTOR_SCREENS: readonly PreviewScreen[] = [
+  "dashboard",
+  "features",
+  "dependencies",
+];
+
+export function buildPreviewState(opts: PreviewStateOptions): AppState {
+  const screen = opts.screen ?? "dashboard";
+  validateSelectorUsage(screen, opts);
+
+  const state = createInitialState(opts.snapshot);
+  const selectedFeatureIndex = resolveSelectedFeatureIndex(opts);
+  const selectedHandoffIndex = resolveSelectedHandoffIndex(opts);
+
+  const baseState = selectedFeatureIndex === undefined
+    ? state
+    : { ...state, selectedFeatureIndex };
+
+  switch (screen) {
+    case "dashboard":
+      return opts.featureId
+        ? { ...baseState, leftPaneMode: "preview" }
+        : baseState;
+    case "features":
+      return reduce(baseState, { type: "open-features" });
+    case "dependencies":
+      if (opts.snapshot.mode !== "mission") {
+        throw new MaestroError("Dependencies preview requires a mission", [
+          "Run `maestro mission-control --preview` to view the home dashboard",
+          "Run `maestro mission-control --preview features` to inspect home overview details",
+        ]);
+      }
+      return reduce(baseState, { type: "open-dependencies" });
+    case "handoffs": {
+      const handoffState = reduce(baseState, { type: "open-handoffs" });
+      if (handoffState.modal.kind !== "handoffs" || selectedHandoffIndex === undefined) {
+        return handoffState;
+      }
+      return {
+        ...handoffState,
+        modal: { ...handoffState.modal, selectedHandoffIndex },
+      };
+    }
+    case "config":
+      return reduce(baseState, { type: "open-config" });
+    case "runtime":
+      if (opts.snapshot.mode === "mission") {
+        return reduce(baseState, { type: "open-processes" });
+      }
+      return {
+        ...baseState,
+        modal: {
+          kind: "processes",
+          selectedProcessIndex: 0,
+        },
+      };
+  }
+}
+
+function validateSelectorUsage(screen: PreviewScreen, opts: PreviewStateOptions): void {
+  if (opts.featureId && !FEATURE_SELECTOR_SCREENS.includes(screen)) {
+    throw new MaestroError("--feature is only supported for dashboard, features, and dependencies previews", [
+      "Try `maestro mission-control --preview dashboard --feature <id>`",
+      "Try `maestro mission-control --preview dependencies --feature <id>`",
+    ]);
+  }
+
+  if (opts.handoffId && screen !== "handoffs") {
+    throw new MaestroError("--handoff is only supported for handoffs previews", [
+      "Try `maestro mission-control --preview handoffs --handoff <id>`",
+    ]);
+  }
+}
+
+function resolveSelectedFeatureIndex(opts: PreviewStateOptions): number | undefined {
+  if (!opts.featureId) return undefined;
+
+  if (opts.snapshot.mode !== "mission") {
+    throw new MaestroError("Feature previews require an active mission", [
+      "Run `maestro mission-control --preview` for the home dashboard",
+      "Omit `--feature` when previewing home mode",
+    ]);
+  }
+
+  const featureIndex = opts.snapshot.features.findIndex((feature) => feature.id === opts.featureId);
+  if (featureIndex >= 0) return featureIndex;
+
+  throw new MaestroError(`Feature ${opts.featureId} not found in mission ${opts.snapshot.missionId}`, [
+    `List tasks with \`maestro mission-control --mission ${opts.snapshot.missionId} --preview features\``,
+  ]);
+}
+
+function resolveSelectedHandoffIndex(opts: PreviewStateOptions): number | undefined {
+  if (!opts.handoffId) {
+    return opts.snapshot.pendingHandoffs.length > 0 ? 0 : undefined;
+  }
+
+  const handoffIndex = opts.snapshot.pendingHandoffs.findIndex((handoff) => handoff.id === opts.handoffId);
+  if (handoffIndex >= 0) return handoffIndex;
+
+  throw new MaestroError(`Handoff ${opts.handoffId} not found in pending handoffs`, [
+    "Run `maestro mission-control --preview handoffs` to list pending handoffs",
+  ]);
+}

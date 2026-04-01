@@ -8,7 +8,7 @@ import { output, resolveJsonFlag } from "../lib/output.js";
 import { MaestroError } from "../domain/errors.js";
 import { buildHomeSnapshot, buildSnapshot } from "../tui/state/snapshot.js";
 import type { MissionControlSnapshot } from "../tui/state/types.js";
-import { renderDashboard, renderOnceFrame } from "../tui/index.js";
+import { renderDashboard, renderPreviewFrame } from "../tui/index.js";
 import { recoverMissionRuntimeFailures } from "../usecases/runtime-recovery.usecase.js";
 
 export type MissionControlSnapshotLoadMode = "read" | "supervise";
@@ -60,7 +60,7 @@ export function registerMissionControlCommand(program: Command): void {
       }
 
       if (opts.once) {
-        const frame = renderOnceFrame({
+        const frame = renderPreviewFrame({
           snapshot: await loadReadSnapshot(),
         });
         console.log(frame);

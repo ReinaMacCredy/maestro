@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "bun:test";
 import { Buffer } from "../../../src/tui/terminal/buffer.js";
-import { renderFrame, renderOnceFrame } from "../../../src/tui/app/render.js";
+import { renderFrame, renderPreviewFrame } from "../../../src/tui/app/render.js";
 import { createInitialState } from "../../../src/tui/state/reducer.js";
 import type { MissionControlSnapshot } from "../../../src/tui/state/types.js";
 import { PALETTE } from "../../../src/tui/theme.js";
@@ -184,7 +184,7 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
   return snapshot;
 }
 
-function renderPreviewFrame(snapshot: MissionControlSnapshot): string {
+function renderFocusedPreviewFrame(snapshot: MissionControlSnapshot): string {
   return withTerminalSize(120, 40, () => {
     const buf = new Buffer(120, 40);
     const state = createInitialState(snapshot);
@@ -197,34 +197,34 @@ function renderPreviewFrame(snapshot: MissionControlSnapshot): string {
 describe("frame rendering", () => {
   describe("standard size (120x32)", () => {
     it("contains mission control label", () => {
-      const frame = renderOnceFrame({ snapshot: makeSnapshot() });
+      const frame = renderPreviewFrame({ snapshot: makeSnapshot() });
       expect(frame).toContain("Mission Control");
     });
 
     it("contains RUNNING status label", () => {
-      const frame = renderOnceFrame({ snapshot: makeSnapshot() });
+      const frame = renderPreviewFrame({ snapshot: makeSnapshot() });
       expect(frame).toContain("RUNNING");
     });
 
     it("contains feature titles", () => {
-      const frame = renderOnceFrame({ snapshot: makeSnapshot() });
+      const frame = renderPreviewFrame({ snapshot: makeSnapshot() });
       expect(frame).toContain("Init project");
       expect(frame).toContain("Database config");
       expect(frame).toContain("Auth endpoints");
     });
 
       it("contains Tasks header", () => {
-        const frame = renderOnceFrame({ snapshot: makeSnapshot() });
+        const frame = renderPreviewFrame({ snapshot: makeSnapshot() });
         expect(frame).toContain("Tasks");
       });
 
     it("contains progress counts", () => {
-      const frame = renderOnceFrame({ snapshot: makeSnapshot() });
+      const frame = renderPreviewFrame({ snapshot: makeSnapshot() });
       expect(frame).toContain("2/4");
     });
 
       it("contains mission overview info", () => {
-        const frame = renderOnceFrame({ snapshot: makeSnapshot() });
+        const frame = renderPreviewFrame({ snapshot: makeSnapshot() });
         expect(frame).toContain("Mission Overview");
         expect(frame).toContain("Mission: Full Pipeline Test");
         expect(frame).toContain("status     running");
@@ -232,19 +232,19 @@ describe("frame rendering", () => {
         expect(frame).toContain("Dependency Map");
       });
 
-      it("emits ANSI styles for --once when stdout is a TTY", () => {
-        const frame = withStdoutTty(true, () => renderOnceFrame({ snapshot: makeSnapshot() }));
+      it("emits ANSI styles for preview output when stdout is a TTY", () => {
+        const frame = withStdoutTty(true, () => renderPreviewFrame({ snapshot: makeSnapshot() }));
         expect(frame).toContain("\u001b[");
       });
 
       it("contains timeline and session labels", () => {
-        const frame = renderOnceFrame({ snapshot: makeSnapshot() });
+        const frame = renderPreviewFrame({ snapshot: makeSnapshot() });
         expect(frame).toContain("Timeline");
         expect(frame).toContain("Session / Changes");
       });
 
       it("contains footer hints", () => {
-        const frame = renderOnceFrame({ snapshot: makeSnapshot() });
+        const frame = renderPreviewFrame({ snapshot: makeSnapshot() });
           expect(frame).toContain("Tasks");
       expect(frame).toContain("Handoffs");
       expect(frame).toContain("Config");
@@ -254,7 +254,7 @@ describe("frame rendering", () => {
         });
 
       it("contains blocked gate context when the active milestone is a gate", () => {
-        const frame = renderOnceFrame({
+        const frame = renderPreviewFrame({
           snapshot: makeSnapshot({
             milestones: [
               { id: "m1", title: "Plan Review", status: "executing", order: 0, kind: "gate", profile: "plan-review" },
@@ -274,7 +274,7 @@ describe("frame rendering", () => {
 
   describe("empty mission", () => {
     it("shows meaningful placeholder when no features", () => {
-        const frame = renderOnceFrame({
+        const frame = renderPreviewFrame({
           snapshot: makeSnapshot({
             features: [],
             activeFeature: null,
@@ -307,7 +307,7 @@ describe("frame rendering", () => {
 
   describe("completed mission", () => {
     it("shows completed state", () => {
-      const frame = renderOnceFrame({
+      const frame = renderPreviewFrame({
         snapshot: makeSnapshot({
           effectiveStatus: "completed",
           missionStatus: "completed",
@@ -338,7 +338,7 @@ describe("frame rendering", () => {
 
   describe("paused mission", () => {
     it("shows resume hint", () => {
-      const frame = renderOnceFrame({
+      const frame = renderPreviewFrame({
         snapshot: makeSnapshot({
           effectiveStatus: "paused",
           missionStatus: "paused",
@@ -353,20 +353,20 @@ describe("frame rendering", () => {
 
     describe("feature detail fields", () => {
         it("shows preconditions when available", () => {
-          const frame = renderPreviewFrame(makeSnapshot());
+          const frame = renderFocusedPreviewFrame(makeSnapshot());
           expect(frame).toContain("Focus / Preview");
           expect(frame).toContain("worker");
           expect(frame).toContain("backend-worker");
         });
 
       it("shows verification steps when panel has enough height", () => {
-        const frame = renderPreviewFrame(makeSnapshot());
+        const frame = renderFocusedPreviewFrame(makeSnapshot());
         expect(frame).toContain("blocked by");
         expect(frame).toContain("unblocks");
       });
 
       it("shows worker type", () => {
-        const frame = renderPreviewFrame(makeSnapshot());
+        const frame = renderFocusedPreviewFrame(makeSnapshot());
         expect(frame).toContain("agent");
         expect(frame).toContain("codex");
       });
@@ -374,7 +374,7 @@ describe("frame rendering", () => {
 
   describe("chrome layout", () => {
     it("renders a full outer frame with connected dividers", () => {
-      const frame = withTerminalSize(80, 24, () => renderOnceFrame({ snapshot: makeSnapshot() }));
+      const frame = withTerminalSize(80, 24, () => renderPreviewFrame({ snapshot: makeSnapshot() }));
       const lines = frame.split("\n");
 
       expect(lines[0]?.startsWith("┌")).toBe(true);
@@ -390,7 +390,7 @@ describe("frame rendering", () => {
 
     it("keeps the full chrome in empty-state frames", () => {
       const frame = withTerminalSize(80, 24, () =>
-        renderOnceFrame({
+        renderPreviewFrame({
             snapshot: makeSnapshot({
               features: [],
               activeFeature: null,
@@ -422,7 +422,7 @@ describe("frame rendering", () => {
           });
 
       it("renders bordered chrome for narrow-but-valid terminals", () => {
-        const frame = withTerminalSize(60, 18, () => renderOnceFrame({ snapshot: makeSnapshot() }));
+        const frame = withTerminalSize(60, 18, () => renderPreviewFrame({ snapshot: makeSnapshot() }));
         const lines = frame.split("\n");
 
       expect(lines[0]?.startsWith("┌")).toBe(true);
@@ -432,7 +432,7 @@ describe("frame rendering", () => {
       });
 
       it("renders a guided home layout without mission context", () => {
-          const frame = withTerminalSize(80, 24, () => renderOnceFrame({
+          const frame = withTerminalSize(80, 24, () => renderPreviewFrame({
             snapshot: makeSnapshot({
               mode: "home",
               missionTitle: "No project detected",
