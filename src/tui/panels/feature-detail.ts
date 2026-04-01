@@ -128,20 +128,25 @@ function renderMissionOverview(buf: Buffer, rect: Rect, snap: MissionControlSnap
       : "none",
   );
 
-  if (overview.dependencyMap.length > 0 && row < maxRow - 3) {
+  if (row < maxRow - 3) {
     row++;
     writeLine("Dependency Map", { fg: PALETTE.brightWhite, bold: true });
+    if (overview.dependencyMap.length === 0) {
+      writeLine("No linked tasks yet", { fg: PALETTE.dimGray });
+      return;
+    }
     for (const entry of overview.dependencyMap) {
       writers.writeBullet(
         `${TREE_BULLET} ${entry.root.id} ${entry.root.title} [${FEATURE_TASK_STATUS_LABEL[entry.root.status]}]`,
         { fg: PALETTE.gray },
       );
-      if (entry.primaryBlocked) {
+      if (entry.primaryDependent) {
         writeLine(
           `${TREE_CHILD} ${truncate(
-            `${entry.primaryBlocked.id} ${entry.primaryBlocked.title} [${formatDependencyBlockedLabel(
-              entry.primaryBlockedDependencyCount,
-            )}]${entry.hiddenBlockedCount > 0 ? ` +${entry.hiddenBlockedCount} more` : ""}`,
+            `${entry.primaryDependent.id} ${entry.primaryDependent.title} [${formatDependencyLinkLabel(
+              entry.primaryDependent.status,
+              entry.primaryDependentBlockedByCount,
+            )}]${entry.hiddenDependentCount > 0 ? ` +${entry.hiddenDependentCount} more` : ""}`,
             Math.max(0, w - 3),
           )}`,
           { fg: PALETTE.gray },
@@ -217,9 +222,15 @@ function formatMissionOverviewStatus(statusLabel: string): string {
   return MISSION_STATUS_LABEL[missionStatus]?.toLowerCase() ?? statusLabel;
 }
 
-function formatDependencyBlockedLabel(blockedByCount?: number): string {
-  if (!blockedByCount || blockedByCount <= 1) {
-    return "BLOCKED";
+function formatDependencyLinkLabel(
+  status: TaskPreviewPane["status"],
+  blockedByCount?: number,
+): string {
+  if (status !== "blocked") {
+    return FEATURE_TASK_STATUS_LABEL[status];
   }
-  return `BLOCKED by ${blockedByCount}`;
+  if (!blockedByCount || blockedByCount <= 1) {
+    return FEATURE_TASK_STATUS_LABEL.blocked;
+  }
+  return `${FEATURE_TASK_STATUS_LABEL.blocked} by ${blockedByCount}`;
 }

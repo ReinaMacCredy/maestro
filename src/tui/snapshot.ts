@@ -533,25 +533,27 @@ function buildMinimalDependencyMap(
   return features
     .map((feature) => {
       const graphEntry = featureGraph.get(feature.id);
-      const blockedChildren = (graphEntry?.unblocks ?? []).filter((child) => child.status === "blocked");
+      const dependents = graphEntry?.unblocks ?? [];
+      const blockedChildren = dependents.filter((child) => child.status === "blocked");
+      const prioritizedDependents = blockedChildren.length > 0 ? blockedChildren : dependents;
       const score = (feature.milestoneId === currentMilestone ? 100 : 0)
         + ((feature.status === "assigned" || feature.status === "in-progress") ? 50 : 0)
-        + blockedChildren.length * 10
-        + (graphEntry?.unblocks.length ?? 0);
-      return { feature, blockedChildren, score };
+        + blockedChildren.length * 20
+        + dependents.length * 10;
+      return { feature, dependents, prioritizedDependents, score };
     })
-    .filter((entry) => entry.blockedChildren.length > 0)
+    .filter((entry) => entry.dependents.length > 0)
     .sort((a, b) => b.score - a.score || a.feature.id.localeCompare(b.feature.id))
-      .slice(0, 2)
-      .map((entry) => ({
-        root: toFeatureRef(entry.feature),
-        primaryBlocked: entry.blockedChildren[0] ? toFeatureRef(entry.blockedChildren[0]) : undefined,
-        primaryBlockedDependencyCount: entry.blockedChildren[0]
-          ? featureGraph.get(entry.blockedChildren[0].id)?.blockedBy.length ?? 0
-          : undefined,
-        hiddenBlockedCount: Math.max(0, entry.blockedChildren.length - 1),
-      }));
-  }
+    .slice(0, 2)
+    .map((entry) => ({
+      root: toFeatureRef(entry.feature),
+      primaryDependent: entry.prioritizedDependents[0] ? toFeatureRef(entry.prioritizedDependents[0]) : undefined,
+      primaryDependentBlockedByCount: entry.prioritizedDependents[0]
+        ? featureGraph.get(entry.prioritizedDependents[0].id)?.blockedBy.length ?? 0
+        : undefined,
+      hiddenDependentCount: Math.max(0, entry.dependents.length - 1),
+    }));
+}
 
 function buildSessionSidebar(
   gitState: Awaited<ReturnType<GitPort["getState"]>>,

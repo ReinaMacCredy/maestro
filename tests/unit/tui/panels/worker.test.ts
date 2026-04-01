@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { Buffer } from "../../../../src/tui/terminal/buffer.js";
-import { renderWorkerPanel } from "../../../../src/tui/panels/worker.js";
+import { renderSessionSidebar, renderWorkerPanel } from "../../../../src/tui/panels/worker.js";
 import { PALETTE } from "../../../../src/tui/theme.js";
 import type { MissionControlSnapshot } from "../../../../src/tui/types.js";
 
@@ -138,7 +138,7 @@ describe("renderWorkerPanel", () => {
       expect(text).toContain("Prompt generation can resume");
     });
 
-    it("sanitizes failure reasons before writing them into the terminal buffer", () => {
+  it("sanitizes failure reasons before writing them into the terminal buffer", () => {
       const buf = new Buffer(90, 6);
       renderWorkerPanel(buf, { x: 0, y: 0, width: 90, height: 6 }, makeSnapshot({
         activeWorker: {
@@ -158,5 +158,36 @@ describe("renderWorkerPanel", () => {
       expect(text).not.toContain("\u001b");
       expect(text).not.toContain("\u0007");
       expect(text).not.toContain("[2J");
+    });
+
+    it("uses change-kind colors in the Session / Changes file list", () => {
+      const buf = new Buffer(80, 10);
+      renderSessionSidebar(buf, { x: 0, y: 0, width: 80, height: 10 }, makeSnapshot({
+        session: {
+          agent: "codex",
+          sessionId: "5634c102-9871-4001-86f8-89399077624e",
+          branch: "main",
+          workingTreeClean: false,
+          diffStat: "+4 -1",
+          changedFiles: ["src/tui/worker.ts", "src/tui/index.ts", "tests/unit/tui/panels/worker.test.ts"],
+          fileChanges: [
+            { path: "src/tui/worker.ts", kind: "modified" },
+            { path: "src/tui/index.ts", kind: "added" },
+            { path: "tests/unit/tui/panels/worker.test.ts", kind: "deleted" },
+          ],
+        },
+      }));
+
+      expect(buf.getCell(6, 11)?.char).toBe("~");
+      expect(buf.getCell(6, 11)?.fg).toBe(PALETTE.yellow);
+      expect(buf.getCell(6, 13)?.fg).toBe(PALETTE.yellow);
+
+      expect(buf.getCell(7, 1)?.char).toBe("+");
+      expect(buf.getCell(7, 1)?.fg).toBe(PALETTE.green);
+      expect(buf.getCell(7, 3)?.fg).toBe(PALETTE.green);
+
+      expect(buf.getCell(8, 1)?.char).toBe("-");
+      expect(buf.getCell(8, 1)?.fg).toBe(PALETTE.red);
+      expect(buf.getCell(8, 3)?.fg).toBe(PALETTE.red);
     });
   });

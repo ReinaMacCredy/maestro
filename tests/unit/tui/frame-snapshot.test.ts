@@ -154,14 +154,14 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
     currentMilestone: snapshot.milestones[0]?.title ?? null,
     gateLabel: snapshot.gateLabel ?? null,
     agentSummary: [{ agent: "codex", count: 1 }],
-    dependencyMap: [
+      dependencyMap: [
         {
           root: { id: "f2", title: "Database config", status: "in-progress" },
-          primaryBlocked: { id: "f3", title: "Auth endpoints", status: "pending" },
-          primaryBlockedDependencyCount: 1,
-          hiddenBlockedCount: 0,
+          primaryDependent: { id: "f3", title: "Auth endpoints", status: "pending" },
+          primaryDependentBlockedByCount: 1,
+          hiddenDependentCount: 0,
         },
-    ],
+      ],
   };
 
   return snapshot;

@@ -77,16 +77,15 @@ export function renderSessionSidebar(
   for (const [index, fileChange] of fileChanges.slice(0, Math.max(0, rect.height - (row - rect.y) - 1)).entries()) {
     if (row >= rect.y + rect.height) break;
     const label = index === 0 ? "Files" : "";
-    const symbol = fileChange.kind === "deleted" ? "-" : "+";
-    const symbolColor = fileChange.kind === "deleted" ? PALETTE.red : PALETTE.green;
+    const presentation = getFileChangePresentation(fileChange.kind);
     const labelWidth = 9;
     if (label) {
       buf.writeText(row, rect.x + 1, truncate(label, labelWidth), { fg: PALETTE.dimGray });
     }
     const valueX = rect.x + 1 + (label ? labelWidth + 1 : 0);
-    buf.writeText(row, valueX, symbol, { fg: symbolColor });
+    buf.writeText(row, valueX, presentation.symbol, { fg: presentation.color });
     buf.writeText(row, valueX + 2, truncate(sanitizeTerminalText(fileChange.path), Math.max(0, rect.x + rect.width - valueX - 3)), {
-      fg: PALETTE.brightWhite,
+      fg: presentation.color,
     });
     row++;
   }
@@ -297,6 +296,23 @@ function getRowStyle(style: "title" | "meta" | "value" | "muted") {
       return { fg: PALETTE.gray };
     default:
       return { fg: PALETTE.dimGray };
+  }
+}
+
+function getFileChangePresentation(
+  kind: NonNullable<NonNullable<MissionControlSnapshot["session"]>["fileChanges"]>[number]["kind"],
+) {
+  switch (kind) {
+    case "deleted":
+      return { symbol: "-", color: PALETTE.red } as const;
+    case "added":
+    case "copied":
+    case "untracked":
+      return { symbol: "+", color: PALETTE.green } as const;
+    case "conflicted":
+      return { symbol: "!", color: PALETTE.red } as const;
+    default:
+      return { symbol: "~", color: PALETTE.yellow } as const;
   }
 }
 

@@ -510,4 +510,27 @@ describe("buildSnapshot", () => {
       expect(snapshot.activeFeature?.runtimeState).toBe("starting");
       expect(snapshot.runtimeProcesses.find((process) => process.featureId === "f1")).toBeUndefined();
     }, 15_000);
+
+    it("keeps overview dependency chains visible when downstream work is linked but not blocked", async () => {
+      const plan = createSamplePlan();
+      await writeFile(join(tmpDir, "plan.json"), JSON.stringify(plan));
+      const { stdout } = await run(["mission", "create", "--file", join(tmpDir, "plan.json"), "--json"], tmpDir);
+      const missionId = JSON.parse(stdout).mission.id;
+
+      await run(["mission", "approve", missionId, "--json"], tmpDir);
+      await run(["feature", "update", "f1", "--mission", missionId, "--status", "done", "--json"], tmpDir);
+      await run(["feature", "update", "f2", "--mission", missionId, "--status", "assigned", "--json"], tmpDir);
+
+      const snapshot = await buildSnapshot(deps, missionId);
+
+      expect(snapshot.missionOverview?.dependencyMap).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            root: expect.objectContaining({ id: "f1" }),
+            primaryDependent: expect.objectContaining({ id: "f2", status: "assigned" }),
+            hiddenDependentCount: 0,
+          }),
+        ]),
+      );
+    }, 15_000);
   });
