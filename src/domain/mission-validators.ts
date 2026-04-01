@@ -32,11 +32,26 @@ export const WORKER_TYPE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:_-]*$/;
 // Zod Schemas
 // ============================
 
+export const MilestoneKindSchema = z.enum(["work", "gate"]);
+
+export const MilestoneProfileSchema = z.enum([
+  "planning",
+  "plan-review",
+  "implementation",
+  "code-review",
+  "bug-hunt",
+  "simplify",
+  "validation",
+  "custom",
+]);
+
 export const MilestoneInputSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
   description: z.string(),
   order: z.number().int().nonnegative(),
+  kind: MilestoneKindSchema.default("work").optional(),
+  profile: MilestoneProfileSchema.default("custom").optional(),
 }).strict();
 
 export const MilestoneSchema = MilestoneInputSchema.extend({

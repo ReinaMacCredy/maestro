@@ -12,10 +12,13 @@ import type {
   CreateFeatureInput,
   CreateAssertionInput,
   MissionPlanFile,
+  MilestoneInput,
   Feature,
 } from "../domain/mission-types.js";
 import { generateMissionId } from "../domain/mission-id.js";
 import { MaestroError } from "../domain/errors.js";
+import type { MaestroConfig, WorkflowTemplate } from "../domain/types.js";
+import { BUILT_IN_WORKFLOWS } from "../domain/defaults.js";
 import {
   validateCreateMissionInput,
   validateMissionPlanFile,
@@ -28,6 +31,42 @@ import { assertMissionTransition, canTransitionMission } from "../domain/mission
 export interface CreateMissionResult {
   mission: Mission;
   features: readonly Feature[];
+}
+
+/**
+ * Expand a workflow template into a milestone array.
+ * Resolves the template from config (user-defined) or built-in templates.
+ * Generates milestone IDs from phase labels (kebab-cased) with order from array position.
+ */
+export function expandWorkflowTemplate(
+  templateName: string,
+  config?: MaestroConfig,
+): readonly MilestoneInput[] {
+  const userTemplates = config?.workflowTemplates ?? {};
+  const template: WorkflowTemplate | undefined =
+    userTemplates[templateName] ?? BUILT_IN_WORKFLOWS[templateName];
+
+  if (!template) {
+    const available = [
+      ...Object.keys(BUILT_IN_WORKFLOWS),
+      ...Object.keys(userTemplates),
+    ];
+    throw new MaestroError(`Unknown workflow template: ${templateName}`, [
+      `Available templates: ${available.join(", ")}`,
+    ]);
+  }
+
+  return template.phases.map((phase, index) => {
+    const id = phase.label.toLowerCase().replace(/\s+/g, "-");
+    return {
+      id,
+      title: phase.label,
+      description: phase.description ?? phase.label,
+      order: index,
+      kind: phase.kind,
+      profile: phase.profile,
+    };
+  });
 }
 
 /**

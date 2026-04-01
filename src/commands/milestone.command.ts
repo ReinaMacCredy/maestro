@@ -116,7 +116,10 @@ function formatMilestoneList(result: ListMilestonesResult): string[] {
 
   for (const m of result.milestones) {
     const status = m.status.padEnd(12);
-    lines.push(`${m.milestone.order + 1}. ${m.milestone.id}  ${status}  ${m.milestone.title}`);
+    const kind = m.milestone.kind ?? "work";
+    const profile = m.milestone.profile ?? "custom";
+    const kindTag = kind === "gate" ? "[GATE]" : "[WORK]";
+    lines.push(`${m.milestone.order + 1}. ${kindTag} ${m.milestone.id}  ${status}  ${m.milestone.title}  (${profile})`);
     lines.push(`   Features: ${m.completedFeatures}/${m.featureCount} (${m.featureCompletionPct}%)`);
     lines.push(`   Assertions: ${m.terminalAssertions}/${m.assertionCount} (${m.assertionCompletionPct}%)`);
     
@@ -134,9 +137,13 @@ function formatMilestoneList(result: ListMilestonesResult): string[] {
 function formatMilestoneStatus(result: GetMilestoneStatusResult): string[] {
   const p = result.progress;
   
+  const kind = result.milestone.kind ?? "work";
+  const profile = result.milestone.profile ?? "custom";
   const lines: string[] = [
     `Milestone: ${result.milestone.id}`,
     `  Title: ${result.milestone.title}`,
+    `  Kind: ${kind}`,
+    `  Profile: ${profile}`,
     `  Order: ${result.milestone.order + 1}`,
     `  Status: ${p.status}`,
     "",
@@ -159,8 +166,10 @@ function formatMilestoneStatus(result: GetMilestoneStatusResult): string[] {
 
 /** Format seal result for text output */
 function formatSealResult(result: SealMilestoneResult): string[] {
+  const kind = result.milestone.kind ?? "work";
+  const kindLabel = kind === "gate" ? "Gate sealed" : "Milestone sealed";
   const lines: string[] = [
-    `[ok] Milestone sealed: ${result.milestone.id}`,
+    `[ok] ${kindLabel}: ${result.milestone.id}`,
     `  Title: ${result.milestone.title}`,
   ];
 

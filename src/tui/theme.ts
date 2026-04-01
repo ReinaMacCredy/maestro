@@ -2,7 +2,7 @@
  * TUI theme -- status-to-color maps and palette constants.
  * Uses 256-color indices for broad terminal compatibility.
  */
-import type { MissionStatus, FeatureStatus, MilestoneStatus, AssertionResult } from "../domain/mission-types.js";
+import type { MissionStatus, FeatureStatus, MilestoneStatus, AssertionResult, MilestoneKind, MilestoneProfile } from "../domain/mission-types.js";
 
 // ── Palette (256-color) ─────────────────────────────
 
@@ -121,4 +121,38 @@ export const FEATURE_STATUS_LABEL: Record<FeatureStatus, string> = {
   review: "review",
   done: "done",
   blocked: "blocked",
+};
+
+// ── Milestone Kind / Profile ───────────────────────
+
+export const MILESTONE_KIND_INDICATOR: Record<MilestoneKind, string> = {
+  work: ">>",
+  gate: "||",
+};
+
+export const MILESTONE_KIND_COLOR: Record<MilestoneKind, number> = {
+  work: PALETTE.green,
+  gate: PALETTE.amber,
+};
+
+export const MILESTONE_PROFILE_LABEL: Record<MilestoneProfile, string> = {
+  planning: "PLAN",
+  "plan-review": "PLAN-REVIEW",
+  implementation: "IMPL",
+  "code-review": "CODE-REVIEW",
+  "bug-hunt": "BUG-HUNT",
+  simplify: "SIMPLIFY",
+  validation: "VALIDATE",
+  custom: "CUSTOM",
+};
+
+export const MILESTONE_PROFILE_COLOR: Record<MilestoneProfile, number> = {
+  planning: PALETTE.cyan,
+  "plan-review": PALETTE.amber,
+  implementation: PALETTE.green,
+  "code-review": PALETTE.amber,
+  "bug-hunt": PALETTE.red,
+  simplify: PALETTE.cyan,
+  validation: PALETTE.yellow,
+  custom: PALETTE.gray,
 };

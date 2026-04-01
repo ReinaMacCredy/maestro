@@ -131,6 +131,8 @@ export async function buildSnapshot(
     title: mp.milestone.title,
     status: mp.status,
     order: mp.order,
+    kind: mp.milestone.kind ?? "work",
+    profile: mp.milestone.profile ?? "custom",
   }));
 
   // Feature progress
@@ -181,6 +183,16 @@ export async function buildSnapshot(
     runtimeProcesses: buildRuntimeProcesses(features, runtimeByFeature, activeWorker),
     progressLog,
     milestones,
+    gateBlocked: (() => {
+      const activeMilestone = milestones.find((m) => m.status === "executing" || m.status === "validating");
+      if (!activeMilestone || activeMilestone.kind !== "gate") return false;
+      return features.some((f) => f.milestoneId === activeMilestone.id && f.status === "blocked");
+    })(),
+    gateLabel: (() => {
+      const activeMilestone = milestones.find((m) => m.status === "executing" || m.status === "validating");
+      if (!activeMilestone || activeMilestone.kind !== "gate") return null;
+      return activeMilestone.title;
+    })(),
     canPause: mission.status === "executing",
     canResume: mission.status === "paused",
     home: null,
@@ -250,6 +262,8 @@ export async function buildHomeSnapshot(
     runtimeProcesses: [],
     progressLog: [],
     milestones: [],
+    gateBlocked: false,
+    gateLabel: null,
     canPause: false,
     canResume: false,
     home: {

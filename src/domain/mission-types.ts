@@ -26,6 +26,20 @@ export type MilestoneStatus =
   | "sealed"
   | "failed";
 
+/** Milestone kind — controls engine behavior */
+export type MilestoneKind = "work" | "gate";
+
+/** Milestone profile — controls UX, prompts, and default skill selection */
+export type MilestoneProfile =
+  | "planning"
+  | "plan-review"
+  | "implementation"
+  | "code-review"
+  | "bug-hunt"
+  | "simplify"
+  | "validation"
+  | "custom";
+
 /** Feature lifecycle status */
 export type FeatureStatus =
   | "pending"
@@ -93,6 +107,8 @@ export interface Milestone {
   readonly description: string;
   readonly order: number;
   readonly featureIds: readonly string[];
+  readonly kind?: MilestoneKind;
+  readonly profile?: MilestoneProfile;
 }
 
 /** Milestone input used before mission state is materialized */
@@ -101,6 +117,8 @@ export interface MilestoneInput {
   readonly title: string;
   readonly description: string;
   readonly order: number;
+  readonly kind?: MilestoneKind;
+  readonly profile?: MilestoneProfile;
 }
 
 /** Structured worker report attached to a feature */

@@ -7,6 +7,7 @@ import { getServices } from "../services.js";
 import { output, resolveJsonFlag } from "../lib/output.js";
 import {
   createMission,
+  expandWorkflowTemplate,
   listMissions,
   showMission,
   approveMission,
@@ -37,6 +38,7 @@ export function registerMissionCommand(program: Command): void {
     .command("create")
     .description("Create a new mission from a plan file")
     .option("--file <path>", "Path to plan JSON file (use - for stdin)")
+    .option("--workflow <template>", "Use a workflow template for milestone structure")
     .option("--json", "Output as JSON")
     .action(async (opts) => {
       const services = getServices();
@@ -45,7 +47,7 @@ export function registerMissionCommand(program: Command): void {
       if (!opts.file) {
         throw new MaestroError("--file is required", [
           "Usage: maestro mission create --file plan.json",
-          "Or: maestro mission create --file - < plan.json",
+          "Or: maestro mission create --file plan.json --workflow plan-review-implement-review",
         ]);
       }
 
@@ -74,6 +76,19 @@ export function registerMissionCommand(program: Command): void {
             ]);
           }
         }
+
+      // Inject milestones from workflow template if specified
+      if (opts.workflow) {
+        const plan = planData as Record<string, unknown>;
+        if (plan.milestones && Array.isArray(plan.milestones) && plan.milestones.length > 0) {
+          throw new MaestroError(
+            "Cannot use --workflow with a plan that already defines milestones",
+            ["Remove the milestones array from the plan file, or remove --workflow"],
+          );
+        }
+        const config = await services.config.load(process.cwd());
+        plan.milestones = expandWorkflowTemplate(opts.workflow, config);
+      }
 
       const result = await createMission(
         services.missionStore,
