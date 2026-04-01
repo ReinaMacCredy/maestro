@@ -261,13 +261,13 @@ export function renderModal(buf: Buffer, parent: Rect, opts: ModalOptions): Moda
     for (let index = 0; index < rows.length; index++) {
       const row = rows[index]!;
       const previous = rows[index - 1];
-      if (!compactRows && row.section && row.section !== previous?.section) {
-        if (rowY >= layout.contentRect.y + layout.contentRect.height) break;
-        buf.writeText(rowY, layout.x + 2, truncate(row.section, contentWidth), {
-          fg: PALETTE.overlaySection,
-          bg: surfaceBg,
-          bold: true,
-        });
+        if (!compactRows && row.section && row.section !== previous?.section) {
+          if (rowY >= layout.contentRect.y + layout.contentRect.height) break;
+          buf.writeText(rowY, layout.x + 2, truncate(row.section, contentWidth), {
+            fg: opts.mode === "palette" ? PALETTE.brightWhite : PALETTE.overlaySection,
+            bg: surfaceBg,
+            bold: true,
+          });
         rowY += 1;
       }
 
@@ -310,8 +310,8 @@ function renderQueryRow(
     height: 1,
   };
   const prompt = "> ";
-  const queryText = query.length > 0 ? query : "Type a command";
-  const queryColor = query.length > 0 ? PALETTE.brightWhite : PALETTE.overlayHint;
+    const queryText = query.length > 0 ? query : "Type a command";
+    const queryColor = PALETTE.brightWhite;
   buf.writeText(queryRect.y, queryRect.x + 1, prompt, {
     fg: PALETTE.brightWhite,
     bg: PALETTE.overlayQueryBg,
@@ -324,13 +324,14 @@ function renderQueryRow(
 
   const resultsLabel = `${resultCount} result${resultCount === 1 ? "" : "s"}`;
   const resultsX = queryRect.x + queryRect.width - resultsLabel.length - 1;
-  if (resultsX > queryRect.x + 8) {
-    buf.writeText(queryRect.y, resultsX, resultsLabel, {
-      fg: PALETTE.overlayHint,
-      bg: PALETTE.overlayQueryBg,
-    });
+    if (resultsX > queryRect.x + 8) {
+      buf.writeText(queryRect.y, resultsX, resultsLabel, {
+        fg: PALETTE.brightWhite,
+        bg: PALETTE.overlayQueryBg,
+        bold: true,
+      });
+    }
   }
-}
 
 function renderRow(
   buf: Buffer,
@@ -345,12 +346,12 @@ function renderRow(
   const selectedFg = mode === "palette" ? PALETTE.blue : PALETTE.overlaySelectedFg;
   const bg = isSelected ? selectedBg : baseBg;
   const labelFg = isSelected ? selectedFg : getToneColor(row.tone, mode);
-  const detailFg = isSelected
-    ? selectedFg
-    : (mode === "palette" ? PALETTE.brightWhite : PALETTE.overlayHint);
-  const hintFg = isSelected
-    ? selectedFg
-    : (mode === "palette" ? PALETTE.cyan : PALETTE.overlayHint);
+    const detailFg = isSelected
+      ? selectedFg
+      : (mode === "palette" ? PALETTE.brightWhite : PALETTE.overlayHint);
+    const hintFg = isSelected
+      ? selectedFg
+      : (mode === "palette" ? PALETTE.brightWhite : PALETTE.overlayHint);
 
   buf.fillRect(rect, " ", { bg });
 
