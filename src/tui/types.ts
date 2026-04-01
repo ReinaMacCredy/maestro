@@ -9,7 +9,7 @@ import type {
   MilestoneKind,
   MilestoneProfile,
 } from "../domain/mission-types.js";
-import type { DoctorCheck } from "../domain/types.js";
+import type { DoctorCheck, GitFileChange } from "../domain/types.js";
 import type { RuntimeState } from "../domain/runtime-types.js";
 
 export type MissionControlMode = "mission" | "home";
@@ -27,10 +27,13 @@ export interface MissionControlHomeHandoff {
 }
 
 export interface MissionControlSessionSidebar {
+  agent?: string;
+  sessionId?: string;
   branch: string;
   workingTreeClean: boolean;
   diffStat: string;
   changedFiles: readonly string[];
+  fileChanges?: readonly GitFileChange[];
 }
 
 export interface MissionControlConfigSummary {
@@ -66,6 +69,42 @@ export interface MissionControlHomeState {
   pendingHandoffs: readonly MissionControlHomeHandoff[];
 }
 
+export interface BlockedByRef {
+  id: string;
+  title: string;
+  status: FeatureStatus;
+}
+
+export interface UnblocksRef {
+  id: string;
+  title: string;
+  status: FeatureStatus;
+}
+
+export interface AgentSummaryRow {
+  agent: string;
+  count: number;
+}
+
+export interface DependencyMapRow {
+  root: BlockedByRef;
+  primaryBlocked?: BlockedByRef;
+  hiddenBlockedCount: number;
+}
+
+export interface MissionOverviewPane {
+  missionLabel: string;
+  statusLabel: string;
+  activeCount: number;
+  doneCount: number;
+  totalCount: number;
+  blockedCount: number;
+  currentMilestone: string | null;
+  gateLabel: string | null;
+  agentSummary: readonly AgentSummaryRow[];
+  dependencyMap: readonly DependencyMapRow[];
+}
+
 export interface MissionControlSnapshot {
   mode: MissionControlMode;
   // Header
@@ -78,11 +117,13 @@ export interface MissionControlSnapshot {
   statusProgress: MissionControlStatusProgress;
   tokenCounters: { input: number; cached: number; output: number } | null;
 
-  // Left pane (active feature)
-  activeFeature: MissionControlFeatureDetail | null;
+  // Left pane
+  missionOverview?: MissionOverviewPane | null;
+  activeFeature: TaskPreviewPane | null;
 
   // Right pane (feature list)
   features: readonly MissionControlFeatureRow[];
+  taskPreviews?: readonly TaskPreviewPane[];
 
   // Lower pane
   activeWorker: MissionControlWorkerPane | null;
@@ -123,9 +164,11 @@ export interface MissionControlFeatureRow {
   milestoneId: string;
   workerType: string;
   hasReport: boolean;
+  blockedByIds?: readonly string[];
+  blockedByLabel?: string;
 }
 
-export interface MissionControlFeatureDetail {
+export interface TaskPreviewPane {
   id: string;
   title: string;
   status: FeatureStatus;
@@ -137,6 +180,8 @@ export interface MissionControlFeatureDetail {
   expectedBehavior: string | undefined;
   verificationSteps: readonly string[];
   dependsOn: readonly string[];
+  blockedBy?: readonly BlockedByRef[];
+  unblocks?: readonly UnblocksRef[];
   fulfills: readonly string[];
   validTransitions: readonly FeatureStatus[];
   runtimeState?: RuntimeState;
@@ -146,6 +191,8 @@ export interface MissionControlFeatureDetail {
   agent?: string;
   sessionId?: string;
 }
+
+export type MissionControlFeatureDetail = TaskPreviewPane;
 
 export interface MissionControlWorkerPane {
   featureId: string;

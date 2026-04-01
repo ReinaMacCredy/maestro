@@ -1,4 +1,4 @@
-import type { GitState } from "../domain/types.js";
+import type { GitFileChange, GitState } from "../domain/types.js";
 import type { GitPort } from "../ports/git.port.js";
 import { exec } from "../lib/shell.js";
 
@@ -30,6 +30,7 @@ export class ShellGitAdapter implements GitPort {
       branch,
       recentCommits,
       changedFiles,
+      fileChanges: statusResult.stdout ? parseGitFileChanges(statusResult.stdout) : [],
       workingTreeClean,
       diffStat,
     };
@@ -39,6 +40,35 @@ export class ShellGitAdapter implements GitPort {
     const result = await exec("git rev-parse --is-inside-work-tree", { cwd });
     return result.exitCode === 0 && result.stdout === "true";
   }
+}
+
+function parseGitFileChanges(output: string): GitFileChange[] {
+  return output
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter(Boolean)
+    .map((line) => {
+      const status = line.slice(0, 2);
+      const rawPath = line.slice(3).trim();
+      const path = status.includes("R") || status.includes("C")
+        ? rawPath.split(" -> ").at(-1) ?? rawPath
+        : rawPath;
+      return {
+        path,
+        kind: classifyGitFileChange(status),
+      } satisfies GitFileChange;
+    });
+}
+
+function classifyGitFileChange(status: string): GitFileChange["kind"] {
+  if (status === "??") return "untracked";
+  if (status.includes("U")) return "conflicted";
+  if (status.includes("R")) return "renamed";
+  if (status.includes("C")) return "copied";
+  if (status.includes("T")) return "typechange";
+  if (status.includes("A")) return "added";
+  if (status.includes("D")) return "deleted";
+  return "modified";
 }
 
 function parseDiffStat(output: string): string {
