@@ -506,9 +506,9 @@ describe("frame rendering", () => {
         });
 
         it("renders the command palette and dims the dashboard behind it", () => {
-        const buf = new Buffer(90, 28);
-        const state = createInitialState(makeSnapshot());
-        state.modal = { kind: "command-palette", query: "pro", selectedCommandIndex: 0 };
+          const buf = new Buffer(90, 28);
+          const state = createInitialState(makeSnapshot());
+          state.modal = { kind: "command-palette", query: "pro", selectedCommandIndex: 0 };
 
         renderFrame(buf, state);
 
@@ -517,8 +517,122 @@ describe("frame rendering", () => {
         expect(frame).toContain("Navigate");
         expect(frame).toContain("Runtime");
         expect(frame).toContain("Enter open · Esc close");
-        expect(buf.getCell(1, 1)?.bg).toBe(PALETTE.overlayBackdropBg);
-        expect(buf.getCell(1, 1)?.dim).toBe(true);
-      });
+          expect(buf.getCell(1, 1)?.bg).toBe(PALETTE.overlayBackdropBg);
+          expect(buf.getCell(1, 1)?.dim).toBe(true);
+        });
+
+        it("renders the dependencies overlay as a split pane", () => {
+          const snapshot = makeSnapshot({
+            activeFeature: {
+              id: "f6",
+              title: "Bug hunt auth flow",
+              status: "blocked",
+              milestoneId: "m3",
+              milestoneTitle: "Validation",
+              workerType: "bug-hunter",
+              description: "Find regressions in the auth flow",
+              preconditions: undefined,
+              expectedBehavior: undefined,
+              verificationSteps: [],
+              dependsOn: ["f3", "f5"],
+              blockedBy: [
+                { id: "f3", title: "Implement API endpoints", status: "in-progress" },
+                { id: "f5", title: "Verify migrations", status: "review" },
+              ],
+              unblocks: [],
+              fulfills: [],
+              validTransitions: ["assigned"],
+            },
+            taskPreviews: [{
+              id: "f6",
+              title: "Bug hunt auth flow",
+              status: "blocked",
+              milestoneId: "m3",
+              milestoneTitle: "Validation",
+              workerType: "bug-hunter",
+              description: "Find regressions in the auth flow",
+              preconditions: undefined,
+              expectedBehavior: undefined,
+              verificationSteps: [],
+              dependsOn: ["f3", "f5"],
+              blockedBy: [
+                { id: "f3", title: "Implement API endpoints", status: "in-progress" },
+                { id: "f5", title: "Verify migrations", status: "review" },
+              ],
+              unblocks: [],
+              fulfills: [],
+              validTransitions: ["assigned"],
+            }],
+          });
+          const frame = withTerminalSize(100, 32, () => {
+            const buf = new Buffer(100, 32);
+            const state = createInitialState(snapshot);
+            state.modal = { kind: "dependencies", selectedOption: 0 };
+            renderFrame(buf, state);
+            return buf.toString();
+          });
+
+          expect(frame).toContain("Dependencies");
+          expect(frame).toContain("Upstream");
+          expect(frame).toContain("Downstream");
+          expect(frame).toContain("Summary");
+          expect(frame).toContain("Graph");
+          expect(frame).toContain("ready to start: no");
+        });
+
+        it("renders the handoffs overlay as a split pane", () => {
+          const frame = withTerminalSize(100, 32, () => {
+            const buf = new Buffer(100, 32);
+            const state = createInitialState(makeSnapshot({
+              pendingHandoffs: [{
+                id: "h-12",
+                agent: "claude-code",
+                message: "Need review on runtime recovery flow",
+                sessionId: "abc123456789",
+                quickstart: "Run maestro handoff-pickup --claim ...",
+              }],
+            }));
+            state.modal = { kind: "handoffs", selectedHandoffIndex: 0 };
+            renderFrame(buf, state);
+            return buf.toString();
+          });
+
+          expect(frame).toContain("Handoffs");
+          expect(frame).toContain("h-12 · claude-code");
+          expect(frame).toContain("message");
+          expect(frame).toContain("session");
+          expect(frame).toContain("quickstart");
+        });
+
+        it("renders the runtime overlay as a split pane", () => {
+          const frame = withTerminalSize(100, 32, () => {
+            const buf = new Buffer(100, 32);
+            const state = createInitialState(makeSnapshot({
+              runtimeProcesses: [{
+                featureId: "f2",
+                title: "Configure database",
+                status: "in-progress",
+                workerType: "backend-worker",
+                hasReport: false,
+                isLive: true,
+                runtimeState: "live",
+                lastSeenAgeMs: 12_000,
+                retryCount: 0,
+                agent: "codex",
+                sessionId: "5634c102-9871-4001-86f8-89399077624e",
+                milestoneTitle: "Implementation",
+              }],
+            }));
+            state.modal = { kind: "processes", selectedProcessIndex: 0 };
+            renderFrame(buf, state);
+            return buf.toString();
+          });
+
+          expect(frame).toContain("Runtime");
+          expect(frame).toContain("f2 · Configure database");
+          expect(frame).toContain("agent");
+          expect(frame).toContain("session");
+          expect(frame).toContain("milestone");
+        });
       });
     });

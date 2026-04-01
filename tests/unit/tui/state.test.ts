@@ -293,7 +293,7 @@ describe("reduce", () => {
         }
         });
 
-        it("opens handoff details on enter and returns to the list on escape", () => {
+        it("keeps the split handoff overlay open on enter and closes on escape", () => {
           const opened = reduce(makeState({
             snapshot: makeSnapshot({
               pendingHandoffs: [
@@ -303,13 +303,10 @@ describe("reduce", () => {
           }), { type: "open-handoffs" });
           const detail = reduce(opened, { type: "enter" });
 
-          expect(detail.modal.kind).toBe("handoff-detail");
+          expect(detail.modal.kind).toBe("handoffs");
 
-          const backToList = reduce(detail, { type: "escape" });
-          expect(backToList.modal.kind).toBe("handoffs");
-          if (backToList.modal.kind === "handoffs") {
-            expect(backToList.modal.selectedHandoffIndex).toBe(0);
-          }
+          const closed = reduce(detail, { type: "escape" });
+          expect(closed.modal.kind).toBe("none");
         });
       });
 
@@ -326,10 +323,10 @@ describe("reduce", () => {
         expect(state.modal.kind).toBe("processes");
       });
 
-      it("opens runtime details on enter and returns to the list on escape", () => {
-        const opened = reduce(makeState({
-          snapshot: makeSnapshot({
-            runtimeProcesses: [{
+        it("keeps the split runtime overlay open on enter and closes on escape", () => {
+          const opened = reduce(makeState({
+            snapshot: makeSnapshot({
+              runtimeProcesses: [{
               featureId: "f1",
               title: "F1",
               status: "assigned",
@@ -338,18 +335,15 @@ describe("reduce", () => {
               isLive: true,
             }],
           }),
-        }), { type: "open-processes" });
-        const detail = reduce(opened, { type: "enter" });
+          }), { type: "open-processes" });
+          const detail = reduce(opened, { type: "enter" });
 
-        expect(detail.modal.kind).toBe("process-detail");
+          expect(detail.modal.kind).toBe("processes");
 
-        const backToList = reduce(detail, { type: "escape" });
-        expect(backToList.modal.kind).toBe("processes");
-        if (backToList.modal.kind === "processes") {
-          expect(backToList.modal.selectedProcessIndex).toBe(0);
-        }
+          const closed = reduce(detail, { type: "escape" });
+          expect(closed.modal.kind).toBe("none");
+        });
       });
-    });
 
     describe("open-dependencies", () => {
       it("opens dependencies modal", () => {

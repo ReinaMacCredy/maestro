@@ -833,6 +833,7 @@ describe("mission-control CLI", () => {
       expectCleanPtyExit(result);
       expect(result.plainOutput).toContain("Handoffs");
       expect(result.plainOutput).toContain("No pending handoffs");
+      expect(result.plainOutput).toContain("No pending handoff selected");
     }, PTY_TIMEOUT_MS);
 
     it("compiled binary interactive mode filters the command palette and activates Config", async () => {
@@ -975,11 +976,12 @@ describe("mission-control CLI", () => {
       },
     );
 
-    expectCleanPtyExit(result);
-    expect(result.plainOutput).toContain("Runtime");
-    expect(result.plainOutput).toContain("f1");
-    expect(result.plainOutput).toContain("test-skill");
-  }, PTY_TIMEOUT_MS);
+      expectCleanPtyExit(result);
+      expect(result.plainOutput).toContain("Runtime");
+      expect(result.plainOutput).toContain("f1");
+      expect(result.plainOutput).toContain("test-skill");
+      expect(result.plainOutput).toContain("worker");
+    }, PTY_TIMEOUT_MS);
 
   it("compiled binary interactive mode persists a selected feature transition on keyboard confirm", async () => {
     if (!pythonAvailable) return;

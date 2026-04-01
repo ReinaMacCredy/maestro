@@ -24,10 +24,8 @@ export type ModalState =
   | { kind: "dependencies"; selectedOption: number; returnTarget?: ModalReturnTarget }
   | { kind: "overview"; returnTarget?: ModalReturnTarget }
   | { kind: "handoffs"; selectedHandoffIndex: number; returnTarget?: ModalReturnTarget }
-  | { kind: "handoff-detail"; handoffIndex: number; returnTarget?: ModalReturnTarget }
   | { kind: "config"; returnTarget?: ModalReturnTarget }
-  | { kind: "processes"; selectedProcessIndex: number; returnTarget?: ModalReturnTarget }
-  | { kind: "process-detail"; processIndex: number; returnTarget?: ModalReturnTarget };
+  | { kind: "processes"; selectedProcessIndex: number; returnTarget?: ModalReturnTarget };
 
 export interface AppState {
   snapshot: MissionControlSnapshot;
@@ -81,30 +79,10 @@ export function reduce(state: AppState, action: Action): AppState {
     case "quit":
       return { ...state, running: false };
 
-    case "navigate": {
-      if (action.direction === "left") {
-        if (state.modal.kind === "handoff-detail") {
-          return {
-            ...state,
-            modal: {
-              kind: "handoffs",
-              selectedHandoffIndex: state.modal.handoffIndex,
-              returnTarget: state.modal.returnTarget,
-            },
-          };
+      case "navigate": {
+        if (action.direction === "left") {
+          return canNavigateBackToPalette(state.modal) ? closeOrReturnModal(state) : state;
         }
-        if (state.modal.kind === "process-detail") {
-          return {
-            ...state,
-            modal: {
-              kind: "processes",
-              selectedProcessIndex: state.modal.processIndex,
-              returnTarget: state.modal.returnTarget,
-            },
-          };
-        }
-        return canNavigateBackToPalette(state.modal) ? closeOrReturnModal(state) : state;
-      }
 
       if (
         state.modal.kind === "feature-action"
@@ -163,26 +141,12 @@ export function reduce(state: AppState, action: Action): AppState {
           modal: { kind: "none" },
         };
       }
-      if (state.modal.kind === "handoffs") {
-        return {
-          ...state,
-          modal: {
-            kind: "handoff-detail",
-            handoffIndex: state.modal.selectedHandoffIndex,
-            returnTarget: state.modal.returnTarget,
-          },
-        };
-      }
-      if (state.modal.kind === "processes") {
-        return {
-          ...state,
-          modal: {
-            kind: "process-detail",
-            processIndex: state.modal.selectedProcessIndex,
-            returnTarget: state.modal.returnTarget,
-          },
-        };
-      }
+        if (state.modal.kind === "handoffs") {
+          return state;
+        }
+        if (state.modal.kind === "processes") {
+          return state;
+        }
       if (state.modal.kind === "dependencies") {
         const targetId = getSelectedDependencyTargetId(state);
         if (!targetId) return state;
@@ -214,30 +178,10 @@ export function reduce(state: AppState, action: Action): AppState {
       return state;
     }
 
-    case "escape":
-      if (state.modal.kind === "handoff-detail") {
-        return {
-          ...state,
-          modal: {
-            kind: "handoffs",
-            selectedHandoffIndex: state.modal.handoffIndex,
-            returnTarget: state.modal.returnTarget,
-          },
-        };
-      }
-      if (state.modal.kind === "process-detail") {
-        return {
-          ...state,
-          modal: {
-            kind: "processes",
-            selectedProcessIndex: state.modal.processIndex,
-            returnTarget: state.modal.returnTarget,
-          },
-        };
-      }
-      if (state.modal.kind !== "none") {
-        return { ...state, modal: { kind: "none" } };
-      }
+      case "escape":
+        if (state.modal.kind !== "none") {
+          return { ...state, modal: { kind: "none" } };
+        }
       if (state.copyMode) {
         return { ...state, copyMode: false };
       }
@@ -361,23 +305,9 @@ export function reduce(state: AppState, action: Action): AppState {
         };
       }
 
-      if (state.modal.kind === "handoff-detail") {
-        return {
-          ...baseState,
-          modal: {
-            kind: "handoff-detail",
-            handoffIndex: Math.min(
-              state.modal.handoffIndex,
-              Math.max(0, action.snapshot.pendingHandoffs.length - 1),
-            ),
-            returnTarget: state.modal.returnTarget,
-          },
-        };
-      }
-
-      if (state.modal.kind === "processes") {
-        return {
-          ...baseState,
+        if (state.modal.kind === "processes") {
+          return {
+            ...baseState,
           modal: {
             kind: "processes",
             selectedProcessIndex: Math.min(
@@ -389,23 +319,9 @@ export function reduce(state: AppState, action: Action): AppState {
         };
       }
 
-      if (state.modal.kind === "process-detail") {
-        return {
-          ...baseState,
-          modal: {
-            kind: "process-detail",
-            processIndex: Math.min(
-              state.modal.processIndex,
-              Math.max(0, action.snapshot.runtimeProcesses.length - 1),
-            ),
-            returnTarget: state.modal.returnTarget,
-          },
-        };
-      }
-
-      if (state.modal.kind === "dependencies") {
-        return {
-          ...baseState,
+        if (state.modal.kind === "dependencies") {
+          return {
+            ...baseState,
           modal: {
             kind: "dependencies",
             selectedOption: Math.min(
@@ -708,18 +624,16 @@ function closeOrReturnModal(state: AppState): AppState {
 }
 
 function getModalReturnTarget(modal: ModalState): ModalReturnTarget | undefined {
-  if (
-    modal.kind === "feature-browser"
-    || modal.kind === "dependencies"
-    || modal.kind === "overview"
-    || modal.kind === "handoffs"
-    || modal.kind === "handoff-detail"
-    || modal.kind === "config"
-    || modal.kind === "processes"
-    || modal.kind === "process-detail"
-  ) {
-    return modal.returnTarget;
-  }
+    if (
+      modal.kind === "feature-browser"
+      || modal.kind === "dependencies"
+      || modal.kind === "overview"
+      || modal.kind === "handoffs"
+      || modal.kind === "config"
+      || modal.kind === "processes"
+    ) {
+      return modal.returnTarget;
+    }
   if (modal.kind === "command-palette") {
     return "command-palette";
   }
