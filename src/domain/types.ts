@@ -70,6 +70,20 @@ export interface NoteEntry {
   readonly git_branch: string;
 }
 
+/** A single phase in a workflow template */
+export interface WorkflowPhase {
+  readonly kind: import("./mission-types.js").MilestoneKind;
+  readonly label: string;
+  readonly profile?: import("./mission-types.js").MilestoneProfile;
+  readonly description?: string;
+}
+
+/** Named workflow template — a reusable milestone sequence */
+export interface WorkflowTemplate {
+  readonly description: string;
+  readonly phases: readonly WorkflowPhase[];
+}
+
 export interface MaestroConfig {
   readonly defaultAgent?: AgentSlug;
   readonly sourceRepo?: string;
@@ -81,6 +95,8 @@ export interface MaestroConfig {
     readonly agents: readonly AgentSlug[];
     readonly staleMinutes?: number;
   };
+  readonly defaultWorkflow?: string;
+  readonly workflowTemplates?: Readonly<Record<string, WorkflowTemplate>>;
 }
 
 export interface CassSearchResult {
