@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { Buffer } from "../../../../src/tui/terminal/buffer.js";
+import { reset } from "../../../../src/tui/terminal/ansi.js";
 
 describe("Buffer", () => {
   describe("construction", () => {
@@ -183,6 +184,26 @@ describe("Buffer", () => {
       const buf = new Buffer(10, 5);
       buf.writeText(0, 0, "only first");
       expect(buf.toString()).toBe("only first");
+    });
+  });
+
+  describe("toAnsiString", () => {
+    it("renders ANSI style sequences for styled cells", () => {
+      const buf = new Buffer(10, 1);
+      buf.writeText(0, 0, "+ src/tui/index.ts", { fg: 46, bold: true });
+
+      const text = buf.toAnsiString();
+      expect(text).toContain("\u001b[");
+      expect(text).toContain("+ src/tui/");
+      expect(text.endsWith(reset)).toBe(true);
+    });
+
+    it("trims trailing empty lines like plain output", () => {
+      const buf = new Buffer(10, 3);
+      buf.writeText(0, 0, "hi", { fg: 220 });
+
+      const text = buf.toAnsiString();
+      expect(text.includes("\n\n")).toBe(false);
     });
   });
 });

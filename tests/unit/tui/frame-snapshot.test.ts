@@ -41,6 +41,25 @@ function withTerminalSize<T>(width: number, height: number, run: () => T): T {
   }
 }
 
+function withStdoutTty<T>(isTTY: boolean, run: () => T): T {
+  const ttyDescriptor = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
+
+  Object.defineProperty(process.stdout, "isTTY", {
+    configurable: true,
+    value: isTTY,
+  });
+
+  try {
+    return run();
+  } finally {
+    if (ttyDescriptor) {
+      Object.defineProperty(process.stdout, "isTTY", ttyDescriptor);
+    } else {
+      delete (process.stdout as { isTTY?: boolean }).isTTY;
+    }
+  }
+}
+
 function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionControlSnapshot {
   const base: MissionControlSnapshot = {
       mode: "mission",
@@ -213,6 +232,11 @@ describe("frame rendering", () => {
         expect(frame).toContain("status     running");
         expect(frame).toContain("agents");
         expect(frame).toContain("Dependency Map");
+      });
+
+      it("emits ANSI styles for --once when stdout is a TTY", () => {
+        const frame = withStdoutTty(true, () => renderOnceFrame({ snapshot: makeSnapshot() }));
+        expect(frame).toContain("\u001b[");
       });
 
       it("contains timeline and session labels", () => {

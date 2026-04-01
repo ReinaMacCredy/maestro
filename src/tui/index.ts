@@ -53,7 +53,7 @@ export function renderOnceFrame(opts: OnceFrameOptions): string {
   const buf = new Buffer(width, height);
   const state = createInitialState(opts.snapshot);
   renderFrame(buf, state, 0, 0);
-  return buf.toString();
+  return process.stdout.isTTY ? buf.toAnsiString() : buf.toString();
 }
 
 /**

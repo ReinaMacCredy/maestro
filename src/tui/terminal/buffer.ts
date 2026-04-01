@@ -3,7 +3,7 @@
  * Only changed cells are emitted as ANSI -- eliminates flicker.
  */
 import type { Rect } from "./layout.js";
-import { BOX } from "./ansi.js";
+import { BOX, reset, style } from "./ansi.js";
 import { sanitizeTerminalText } from "../../lib/sanitize.js";
 
 export interface Cell {
@@ -176,6 +176,45 @@ export class Buffer {
     while (lines.length > 0 && lines[lines.length - 1] === "") {
       lines.pop();
     }
+    return lines.join("\n");
+  }
+
+  /** Render buffer as ANSI-styled text for one-shot TTY output. */
+  toAnsiString(): string {
+    const lines: string[] = [];
+    for (let r = 0; r < this.height; r++) {
+      let line = "";
+      let lastFg = -2;
+      let lastBg = -2;
+      let lastBold = false;
+      let lastDim = false;
+      let hasVisibleContent = false;
+      let lineEnd = this.width;
+
+      while (lineEnd > 0 && this.cells[r]![lineEnd - 1]!.char === " ") {
+        lineEnd--;
+      }
+
+      for (let c = 0; c < lineEnd; c++) {
+        const cell = this.cells[r]![c]!;
+        if (cell.fg !== lastFg || cell.bg !== lastBg || cell.bold !== lastBold || cell.dim !== lastDim) {
+          line += style(cell.fg, cell.bg, cell.bold, cell.dim);
+          lastFg = cell.fg;
+          lastBg = cell.bg;
+          lastBold = cell.bold;
+          lastDim = cell.dim;
+        }
+        line += cell.char;
+        hasVisibleContent = true;
+      }
+
+      lines.push(hasVisibleContent ? `${line}${reset}` : "");
+    }
+
+    while (lines.length > 0 && lines[lines.length - 1] === "") {
+      lines.pop();
+    }
+
     return lines.join("\n");
   }
 }
