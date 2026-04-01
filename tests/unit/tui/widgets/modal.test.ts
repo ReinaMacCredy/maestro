@@ -145,36 +145,33 @@ describe("renderModal", () => {
     expect(modalRect.height).toBeGreaterThan(0);
   });
 
-  it("returns stable row hit boxes for selectable menu items", () => {
-    const buf = new Buffer(80, 24);
-    const layout = renderModal(buf, { x: 0, y: 0, width: 80, height: 24 }, {
-      mode: "menu",
-      title: "Select",
-      items: ["A", "B", "C"],
-      selectedIndex: 1,
-      footer: "Esc close",
-    }) as unknown as {
-      itemRects: Array<{ x: number; y: number; width: number; height: number }>;
-    };
+    it("returns stable row hit boxes for selectable menu items", () => {
+      const buf = new Buffer(80, 24);
+      const layout = renderModal(buf, { x: 0, y: 0, width: 80, height: 24 }, {
+        mode: "menu",
+        title: "Select",
+        items: ["A", "B", "C"],
+        selectedIndex: 1,
+        footer: "Esc close",
+      });
 
     expect(layout.itemRects.length).toBe(3);
     expect(layout.itemRects[1]?.height).toBe(1);
     expect(layout.itemRects[1]?.width).toBeGreaterThan(8);
   });
 
-  it("returns no selectable hit boxes for info cards", () => {
-    const buf = new Buffer(80, 24);
-    const layout = renderModal(buf, { x: 0, y: 0, width: 80, height: 24 }, {
-      mode: "info",
-      title: "Mission Directory",
-      items: [{ text: ".maestro/missions/2026-03-31-001", style: "block", tone: "accent" }],
-      footer: "Esc close",
-    }) as unknown as {
-      itemRects: Array<{ x: number; y: number; width: number; height: number }>;
-    };
+    it("returns no selectable hit boxes for info cards", () => {
+      const buf = new Buffer(80, 24);
+      const layout = renderModal(buf, { x: 0, y: 0, width: 80, height: 24 }, {
+        mode: "info",
+        title: "Mission Directory",
+        items: [{ text: ".maestro/missions/2026-03-31-001", style: "block", tone: "accent" }],
+        footer: "Esc close",
+      });
 
-    expect(layout.itemRects).toEqual([]);
-  });
+      expect(layout.itemRects).toEqual([]);
+      expect(layout.itemRowIndexes).toEqual([]);
+    });
 
   it("applies a dimmed backdrop behind overlays", () => {
     const buf = new Buffer(20, 6);
@@ -252,7 +249,7 @@ describe("renderModal", () => {
       expect(text).not.toContain("[2J");
     });
 
-    it("keeps at least one selectable row in short but valid palette heights", () => {
+  it("keeps at least one selectable row in short but valid palette heights", () => {
       const layout = layoutModal({ x: 1, y: 5, width: 78, height: 8 }, {
         mode: "palette",
       title: "Commands",
@@ -275,7 +272,61 @@ describe("renderModal", () => {
       footer: "Enter open · Esc close",
     });
 
-    expect(layout.contentRect.height).toBeGreaterThan(0);
-    expect(layout.itemRects.length).toBeGreaterThan(0);
+      expect(layout.contentRect.height).toBeGreaterThan(0);
+      expect(layout.itemRects.length).toBeGreaterThan(0);
+    });
+
+    it("renders split overlays with selectable left rows and live detail content", () => {
+      const buf = new Buffer(100, 30);
+      const layout = renderModal(buf, { x: 0, y: 0, width: 100, height: 30 }, {
+        mode: "split",
+        title: "Dependencies",
+        eyebrow: "Bug hunt auth flow",
+        items: [
+          { label: "1. f3 Implement API endpoints", section: "Upstream" },
+          { label: "status: open", selectable: false, tone: "muted" },
+          { label: "2. f5 Verify migrations", section: "Downstream" },
+          { label: "status: review", selectable: false, tone: "muted" },
+          { label: "blocked by: 2 open dependencies", section: "Summary", selectable: false, tone: "muted" },
+        ],
+        selectedIndex: 1,
+        detailItems: [
+          { text: "Graph", section: "Graph", tone: "accent" },
+          { text: "f6 Bug hunt auth flow [BLOCKED]" },
+          { text: "├─ blocked by f3 [OPEN]" },
+          { text: "└─ blocked by f5 [REVIEW]" },
+        ],
+        footer: "Enter jump · Left back · Esc close",
+      });
+
+      expect(layout.itemRects.length).toBe(2);
+      expect(layout.itemRowIndexes).toEqual([0, 2]);
+      expect(layout.detailRect).toBeDefined();
+      expect(buf.toString()).toContain("Upstream");
+      expect(buf.toString()).toContain("Graph");
+      expect(buf.toString()).toContain("blocked by f5");
+      expect(buf.getCell(layout.itemRects[1]!.y, layout.itemRects[1]!.x + 2)?.bg).toBe(PALETTE.amber);
+    });
+
+    it("omits hit boxes for non-selectable split rows", () => {
+      const layout = layoutModal({ x: 0, y: 0, width: 100, height: 30 }, {
+        mode: "split",
+        title: "Runtime",
+        items: [
+          { label: "Pending", selectable: false, section: "Summary" },
+          { label: "f2 · Configure database" },
+          { label: "status: live", selectable: false, tone: "muted" },
+        ],
+        selectedIndex: 0,
+        detailItems: [
+          { text: "Configure database", tone: "accent" },
+          { text: "agent", detail: "codex" },
+        ],
+        footer: "Enter inspect · Esc close",
+      });
+
+      expect(layout.itemRects.length).toBe(1);
+      expect(layout.itemRowIndexes).toEqual([1]);
+      expect(layout.detailRect?.width ?? 0).toBeGreaterThan(10);
+    });
   });
-});
