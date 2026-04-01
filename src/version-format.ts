@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { BUILD_UNIX, GIT_SHA, RELEASED_AT, VERSION } from "./version.js";
 
 export interface VersionMetadata {
@@ -7,11 +8,67 @@ export interface VersionMetadata {
   readonly releasedAt: string;
 }
 
-export function getVersionMetadata(): VersionMetadata {
+interface VersionEnv {
+  readonly MAESTRO_BUILD_GIT_SHA?: string;
+  readonly [key: string]: string | undefined;
+}
+
+interface GitShaResolutionOptions {
+  readonly buildGitSha?: string;
+  readonly liveGitSha?: string;
+  readonly trackedGitSha?: string;
+}
+
+const REPO_ROOT = join(import.meta.dir, "..");
+const BUILD_GIT_SHA_OVERRIDE = normalizeGitSha(process.env.MAESTRO_BUILD_GIT_SHA);
+
+function normalizeGitSha(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function resolveRuntimeGitSha(repoRoot: string = REPO_ROOT): string | undefined {
+  try {
+    const result = Bun.spawnSync(["git", "rev-parse", "--short=7", "HEAD"], {
+      cwd: repoRoot,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (result.exitCode !== 0) {
+      return undefined;
+    }
+
+    return normalizeGitSha(new TextDecoder().decode(result.stdout).trim());
+  } catch {
+    return undefined;
+  }
+}
+
+export function resolveDisplayedGitSha(
+  options: GitShaResolutionOptions,
+): string {
+  return (
+    normalizeGitSha(options.buildGitSha) ??
+    normalizeGitSha(options.liveGitSha) ??
+    normalizeGitSha(options.trackedGitSha) ??
+    "unknown"
+  );
+}
+
+export function getVersionMetadata(
+  env: VersionEnv = {},
+  liveGitSha?: string,
+): VersionMetadata {
+  const buildGitSha =
+    normalizeGitSha(env.MAESTRO_BUILD_GIT_SHA) ?? BUILD_GIT_SHA_OVERRIDE;
   return {
     version: VERSION,
     buildUnix: BUILD_UNIX,
-    gitSha: GIT_SHA,
+    gitSha: resolveDisplayedGitSha({
+      buildGitSha,
+      liveGitSha: buildGitSha ? undefined : liveGitSha ?? resolveRuntimeGitSha(),
+      trackedGitSha: GIT_SHA,
+    }),
     releasedAt: RELEASED_AT,
   };
 }

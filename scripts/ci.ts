@@ -11,7 +11,7 @@
  *   3. Run tests
  *   4. Build compiled binary
  *   5. Commit version files + tag
- *   6. Install binary locally
+ *   6. Rebuild from the release commit and install locally
  *
  * On test failure the version bump is rolled back automatically.
  */
@@ -110,7 +110,17 @@ await $`git commit -m ${commitMsg}`.cwd(root);
 await $`git tag ${"v" + nextVersion}`.cwd(root);
 console.log(`[ok] Committed and tagged v${nextVersion}.`);
 
-// ---- step 6: install locally ----
+// ---- step 6: rebuild + install locally ----
+
+console.log("\n[-->] Rebuilding release artifact...");
+const rebuildResult = await Bun.spawn(["bun", "run", "build"], {
+  cwd: root,
+  stdout: "inherit",
+  stderr: "inherit",
+}).exited;
+
+if (rebuildResult !== 0) fail("Release artifact rebuild failed after commit.");
+console.log("[ok] Rebuilt dist/maestro from the release commit.");
 
 console.log("\n[-->] Installing locally...");
 const installResult = await Bun.spawn(["bash", "scripts/install-local.sh", "./dist/maestro"], {

@@ -55,6 +55,20 @@ describe("CLI integration", () => {
     );
   });
 
+  it("prints the current repo HEAD in source-run version output", async () => {
+    const shaProc = Bun.spawn(["git", "rev-parse", "--short=7", "HEAD"], {
+      cwd: join(import.meta.dir, "..", ".."),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const sha = (await new Response(shaProc.stdout).text()).trim();
+    expect(await shaProc.exited).toBe(0);
+
+    const { stdout, exitCode } = await run(["--version"]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain(`-g${sha} `);
+  });
+
   it("prints help with all commands", async () => {
     const { stdout, exitCode } = await run(["--help"]);
     expect(exitCode).toBe(0);

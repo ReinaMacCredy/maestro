@@ -1,12 +1,12 @@
 {
   "name": "maestro-handoff",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "type": "module",
   "bin": {
     "maestro": "./dist/maestro"
   },
   "scripts": {
-    "build": "bun build src/index.ts --compile --outfile dist/maestro --target bun",
+    "build": "bun scripts/build.ts",
     "bump": "bun scripts/bump.ts",
     "auto-bump": "bun scripts/auto-bump.ts",
     "ci": "bun scripts/ci.ts",

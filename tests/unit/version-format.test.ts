@@ -1,5 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { formatRelativeAge, formatVersionOutput } from "../../src/version-format.js";
+import {
+  formatRelativeAge,
+  formatVersionOutput,
+  getVersionMetadata,
+  resolveDisplayedGitSha,
+} from "../../src/version-format.js";
 
 describe("version formatting", () => {
   it("formats short relative ages in seconds", () => {
@@ -26,5 +31,21 @@ describe("version formatting", () => {
     expect(output).toBe(
       "0.5.0.1775123456-ge9d9b3 (released 2026-04-01T16:20:52.362Z, 49m ago)",
     );
+  });
+
+  it("prefers build-time git sha over live and tracked metadata", () => {
+    expect(
+      resolveDisplayedGitSha({
+        buildGitSha: "build123",
+        liveGitSha: "live456",
+        trackedGitSha: "track789",
+      }),
+    ).toBe("build123");
+  });
+
+  it("falls back to the live repo sha when no build override is present", () => {
+    expect(
+      getVersionMetadata({}, "live4567").gitSha,
+    ).toBe("live4567");
   });
 });
