@@ -529,9 +529,10 @@ function renderSingleBody(
     return;
   }
 
-  for (let index = 0; index < rows.length; index++) {
-    const row = rows[index]!;
-    const previous = rows[index - 1];
+    let selectableRectIndex = 0;
+    for (let index = 0; index < rows.length; index++) {
+      const row = rows[index]!;
+      const previous = rows[index - 1];
     if (!isPalette && !compactRows && row.section && row.section !== previous?.section) {
       if (rowY >= layout.contentRect.y + layout.contentRect.height) break;
       buf.writeText(rowY, layout.x + 2, formatOverlayText(row.section, opts.renderSpec.text.sectionCase, contentWidth), {
@@ -542,14 +543,16 @@ function renderSingleBody(
       rowY += 1;
     }
 
-    const rowRect = opts.mode === "info"
-      ? { x: layout.x + 1, y: rowY, width: layout.width - 2, height: getRowHeight(row, compactRows, opts.renderSpec.family) }
-      : layout.itemRects[layout.itemRowIndexes.indexOf(index)] ?? {
-        x: layout.x + 1,
-        y: rowY,
-        width: layout.width - 2,
-        height: getRowHeight(row, compactRows, opts.renderSpec.family),
-      };
+      const rowRect = opts.mode === "info"
+        ? { x: layout.x + 1, y: rowY, width: layout.width - 2, height: getRowHeight(row, compactRows, opts.renderSpec.family) }
+        : (layout.itemRowIndexes[selectableRectIndex] === index
+          ? layout.itemRects[selectableRectIndex++]
+          : undefined) ?? {
+          x: layout.x + 1,
+          y: rowY,
+          width: layout.width - 2,
+          height: getRowHeight(row, compactRows, opts.renderSpec.family),
+        };
 
     if (rowRect.y + rowRect.height > layout.contentRect.y + layout.contentRect.height) break;
     const isSelected = opts.mode !== "info" && index === opts.selectedIndex;

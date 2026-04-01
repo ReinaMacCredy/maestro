@@ -7,6 +7,7 @@ import { getServices } from "../services.js";
 import { output, resolveJsonFlag } from "../lib/output.js";
 import { MaestroError } from "../domain/errors.js";
 import { buildHomeSnapshot, buildSnapshot } from "../tui/snapshot.js";
+import type { MissionControlSnapshot } from "../tui/types.js";
 import { renderDashboard, renderOnceFrame } from "../tui/index.js";
 import { recoverMissionRuntimeFailures } from "../usecases/runtime-recovery.usecase.js";
 
@@ -42,19 +43,21 @@ export function registerMissionControlCommand(program: Command): void {
         git: services.git,
         };
 
-        const missionId = await resolveMissionId(opts.mission);
-        if (isJson) {
-          const snapshot = await loadMissionControlSnapshot(snapshotDeps, homeSnapshotDeps, "read", missionId);
-          output(true, snapshot, () => []);
-          return;
-        }
+          const missionId = await resolveMissionId(opts.mission);
+          if (isJson) {
+            const snapshot = await loadMissionControlSnapshot(snapshotDeps, homeSnapshotDeps, "read", missionId);
+            output(true, redactSnapshotForReadOutput(snapshot), () => []);
+            return;
+          }
 
-        if (opts.once) {
-          const snapshot = await loadMissionControlSnapshot(snapshotDeps, homeSnapshotDeps, "read", missionId);
-          const frame = renderOnceFrame({ snapshot });
-          console.log(frame);
-          return;
-      }
+          if (opts.once) {
+            const snapshot = await loadMissionControlSnapshot(snapshotDeps, homeSnapshotDeps, "read", missionId);
+            const frame = renderOnceFrame({
+              snapshot: redactSnapshotForReadOutput(snapshot),
+            });
+            console.log(frame);
+            return;
+        }
 
       // Interactive mode: requires TTY
       if (!process.stdout.isTTY || !process.stdin.isTTY) {
@@ -131,6 +134,29 @@ export async function loadMissionControlSnapshot(
   missionId?: string,
 ) {
   return missionId
-    ? buildMissionSnapshot(missionId, snapshotDeps, mode)
-    : buildHomeSnapshot(homeSnapshotDeps, process.cwd());
+      ? buildMissionSnapshot(missionId, snapshotDeps, mode)
+      : buildHomeSnapshot(homeSnapshotDeps, process.cwd());
+}
+
+function redactSnapshotForReadOutput(
+  snapshot: MissionControlSnapshot,
+): MissionControlSnapshot {
+  const redactPendingHandoff = (
+    handoff: MissionControlSnapshot["pendingHandoffs"][number],
+  ) => ({
+    id: handoff.id,
+    agent: handoff.agent,
+    message: "Details hidden in read-only output",
+  });
+
+  return {
+    ...snapshot,
+    pendingHandoffs: snapshot.pendingHandoffs.map(redactPendingHandoff),
+    home: snapshot.home
+      ? {
+        ...snapshot.home,
+        pendingHandoffs: snapshot.home.pendingHandoffs.map(redactPendingHandoff),
+      }
+      : null,
+  };
 }

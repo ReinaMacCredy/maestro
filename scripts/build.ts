@@ -3,11 +3,11 @@ import { $ } from "bun";
 
 const root = join(import.meta.dir, "..");
 
-async function getGitShortSha(cwd: string): Promise<string> {
+async function getGitShortSha(cwd: string): Promise<string | undefined> {
   try {
-    return (await $`git rev-parse --short=7 HEAD`.cwd(cwd).quiet()).text().trim() || "unknown";
+    return (await $`git rev-parse --short=7 HEAD`.cwd(cwd).quiet()).text().trim() || undefined;
   } catch {
-    return "unknown";
+    return undefined;
   }
 }
 
@@ -21,17 +21,19 @@ const args = [
   "dist/maestro",
   "--target",
   "bun",
-  "--env=inline",
+  "--env=MAESTRO_BUILD_*",
 ];
 
 const build = Bun.spawn(args, {
   cwd: root,
   stdout: "inherit",
   stderr: "inherit",
-  env: {
-    ...process.env,
-    MAESTRO_BUILD_GIT_SHA: gitSha,
-  },
+  env: gitSha
+    ? {
+      ...process.env,
+      MAESTRO_BUILD_GIT_SHA: gitSha,
+    }
+    : process.env,
 });
 
 process.exit(await build.exited);

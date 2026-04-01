@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import {
   formatRelativeAge,
   formatVersionOutput,
+  formatVersionOutputForArgv,
   getVersionMetadata,
   resolveDisplayedGitSha,
 } from "../../src/version-format.js";
@@ -47,5 +48,20 @@ describe("version formatting", () => {
     expect(
       getVersionMetadata({}, "live4567").gitSha,
     ).toBe("live4567");
+  });
+
+  it("ignores unknown build-time sha overrides", () => {
+    expect(
+      getVersionMetadata({ MAESTRO_BUILD_GIT_SHA: "unknown" }, "live4567").gitSha,
+    ).toBe("live4567");
+  });
+
+  it("avoids live git lookup when version output is not requested", () => {
+    const output = formatVersionOutputForArgv(
+      ["bun", "src/index.ts", "status"],
+      { MAESTRO_BUILD_GIT_SHA: "build123" },
+      new Date("2026-04-01T17:09:52.362Z"),
+    );
+    expect(output).toContain("-gbuild123 ");
   });
 });

@@ -24,10 +24,12 @@ const BUILD_GIT_SHA_OVERRIDE = normalizeGitSha(process.env.MAESTRO_BUILD_GIT_SHA
 
 function normalizeGitSha(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
-  return trimmed ? trimmed : undefined;
+  return trimmed && trimmed !== "unknown" ? trimmed : undefined;
 }
 
-function resolveRuntimeGitSha(repoRoot: string = REPO_ROOT): string | undefined {
+export function resolveRuntimeGitSha(
+  repoRoot: string = REPO_ROOT,
+): string | undefined {
   try {
     const result = Bun.spawnSync(["git", "rev-parse", "--short=7", "HEAD"], {
       cwd: repoRoot,
@@ -120,4 +122,22 @@ export function formatVersionOutput(
   now: Date = new Date(),
 ): string {
   return `${metadata.version}.${metadata.buildUnix}-g${metadata.gitSha} (released ${metadata.releasedAt}, ${formatRelativeAge(metadata.releasedAt, now)})`;
+}
+
+function isVersionFlag(arg: string): boolean {
+  return arg === "--version" || arg === "-V";
+}
+
+export function formatVersionOutputForArgv(
+  argv: readonly string[] = process.argv,
+  env: VersionEnv = process.env,
+  now: Date = new Date(),
+): string {
+  const wantsVersion = argv.slice(2).some(isVersionFlag);
+  const hasBuildOverride =
+    normalizeGitSha(env.MAESTRO_BUILD_GIT_SHA) ?? BUILD_GIT_SHA_OVERRIDE;
+  const liveGitSha = wantsVersion && !hasBuildOverride
+    ? resolveRuntimeGitSha()
+    : undefined;
+  return formatVersionOutput(getVersionMetadata(env, liveGitSha), now);
 }

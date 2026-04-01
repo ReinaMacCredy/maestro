@@ -582,18 +582,48 @@ describe("mission-control CLI", () => {
     expect(output).toContain("not found");
   }, SLOW_CLI_TIMEOUT_MS);
 
-  it("returns home mode when no missions exist in a git repo", async () => {
-    const { stdout, exitCode } = await run(
-      ["mission-control", "--json"],
+    it("returns home mode when no missions exist in a git repo", async () => {
+      const { stdout, exitCode } = await run(
+        ["mission-control", "--json"],
       tmpDir,
     );
 
     expect(exitCode).toBe(0);
     const snapshot = JSON.parse(stdout);
-    expect(snapshot.mode).toBe("home");
-    expect(snapshot.home.headline).toBe("No missions yet");
-    expect(snapshot.home.actions.length).toBeGreaterThan(0);
-  }, SLOW_CLI_TIMEOUT_MS);
+      expect(snapshot.mode).toBe("home");
+      expect(snapshot.home.headline).toBe("No missions yet");
+      expect(snapshot.home.actions.length).toBeGreaterThan(0);
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("redacts pending handoff details in read-only json output", async () => {
+      const create = await run([
+        "handoff",
+        "--skip-session",
+        "--sitrep",
+        "sensitive sitrep",
+        "--quickstart",
+        "run secret command",
+        "--json",
+      ], tmpDir);
+      expect(create.exitCode).toBe(0);
+      const created = JSON.parse(create.stdout);
+
+      const { stdout, exitCode } = await run(
+        ["mission-control", "--json"],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(0);
+      const snapshot = JSON.parse(stdout);
+      expect(snapshot.pendingHandoffs).toEqual([
+        {
+          id: created.id,
+          agent: "unknown",
+          message: "Details hidden in read-only output",
+        },
+      ]);
+      expect(snapshot.home.pendingHandoffs).toEqual(snapshot.pendingHandoffs);
+    }, SLOW_CLI_TIMEOUT_MS);
 
   it("renders a guided home frame when no missions exist in a git repo", async () => {
     const { stdout, exitCode } = await run(

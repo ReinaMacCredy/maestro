@@ -9,15 +9,13 @@
  *   1. Guard: reject dirty working tree (unstaged/staged changes)
  *   2. Auto-bump version from conventional commits
  *   3. Run tests
- *   4. Build compiled binary
- *   5. Commit version files + tag
- *   6. Rebuild from the release commit and install locally
+ *   4. Commit version files + tag
+ *   5. Build the release artifact and install locally
  *
  * On test failure the version bump is rolled back automatically.
  */
 import { join } from "node:path";
 import { $ } from "bun";
-import { writeVersionArtifacts } from "./version-file";
 
 const root = join(import.meta.dir, "..");
 const pkgPath = join(root, "package.json");
@@ -34,6 +32,15 @@ function fail(msg: string): never {
 async function restoreVersion(pkgText: string, versionText: string): Promise<void> {
   await Bun.write(pkgPath, pkgText);
   await Bun.write(versionPath, versionText);
+}
+
+async function rollbackRelease(previousHead: string, tagName: string): Promise<void> {
+  try {
+    await $`git tag -d ${tagName}`.cwd(root).quiet();
+  } catch {
+    // Tag may not exist yet.
+  }
+  await $`git reset --hard ${previousHead}`.cwd(root).quiet();
 }
 
 // ---- step 1: dirty guard ----
@@ -59,6 +66,8 @@ if (dryRun) process.exit(0);
 // Re-read the bumped version
 const pkg = await Bun.file(pkgPath).json();
 const nextVersion: string = pkg.version;
+const previousHead = (await $`git rev-parse HEAD`.quiet()).text().trim();
+const tagName = `v${nextVersion}`;
 
 // Read the pre-bump version from git
 const origPkgText = (await $`git show HEAD:package.json`.quiet()).text();
@@ -85,9 +94,19 @@ if (testResult !== 0) {
 }
 console.log("[ok] Tests passed.");
 
-// ---- step 4: build ----
+// ---- step 4: commit + tag ----
 
-console.log("\n[-->] Building...");
+console.log("\n[-->] Committing release...");
+await $`git add package.json src/version.ts`.cwd(root);
+
+const commitMsg = `chore(release): v${nextVersion}`;
+await $`git commit -m ${commitMsg}`.cwd(root);
+await $`git tag ${tagName}`.cwd(root);
+console.log(`[ok] Committed and tagged v${nextVersion}.`);
+
+// ---- step 5: build + install locally ----
+
+console.log("\n[-->] Building release artifact...");
 const buildResult = await Bun.spawn(["bun", "run", "build"], {
   cwd: root,
   stdout: "inherit",
@@ -95,32 +114,10 @@ const buildResult = await Bun.spawn(["bun", "run", "build"], {
 }).exited;
 
 if (buildResult !== 0) {
-  await restoreVersion(origPkgText, origVersionText);
-  fail(`Build failed. Version reverted to ${origVersion}.`);
+  await rollbackRelease(previousHead, tagName);
+  fail(`Release build failed. Rolled back v${nextVersion}.`);
 }
-console.log("[ok] Built dist/maestro.");
-
-// ---- step 5: commit + tag ----
-
-console.log("\n[-->] Committing release...");
-await $`git add package.json src/version.ts`.cwd(root);
-
-const commitMsg = `chore(release): v${nextVersion}`;
-await $`git commit -m ${commitMsg}`.cwd(root);
-await $`git tag ${"v" + nextVersion}`.cwd(root);
-console.log(`[ok] Committed and tagged v${nextVersion}.`);
-
-// ---- step 6: rebuild + install locally ----
-
-console.log("\n[-->] Rebuilding release artifact...");
-const rebuildResult = await Bun.spawn(["bun", "run", "build"], {
-  cwd: root,
-  stdout: "inherit",
-  stderr: "inherit",
-}).exited;
-
-if (rebuildResult !== 0) fail("Release artifact rebuild failed after commit.");
-console.log("[ok] Rebuilt dist/maestro from the release commit.");
+console.log("[ok] Built dist/maestro from the release commit.");
 
 console.log("\n[-->] Installing locally...");
 const installResult = await Bun.spawn(["bash", "scripts/install-local.sh", "./dist/maestro"], {
@@ -129,7 +126,10 @@ const installResult = await Bun.spawn(["bash", "scripts/install-local.sh", "./di
   stderr: "inherit",
 }).exited;
 
-if (installResult !== 0) fail("Local install failed.");
+if (installResult !== 0) {
+  await rollbackRelease(previousHead, tagName);
+  fail(`Local install failed. Rolled back v${nextVersion}.`);
+}
 
 // ---- done ----
 

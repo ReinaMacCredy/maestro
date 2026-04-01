@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { Command, CommanderError } from "commander";
-import { formatVersionOutput } from "./version-format.js";
+import { formatVersionOutputForArgv } from "./version-format.js";
 import { MaestroError } from "./domain/errors.js";
 import { initServices } from "./services.js";
 import { registerInitCommand } from "./commands/init.command.js";
@@ -27,7 +27,7 @@ import { registerMissionControlCommand } from "./commands/mission-control.comman
 export const program = new Command()
   .name("maestro")
   .description("Cross-agent handoff CLI")
-  .version(formatVersionOutput())
+  .version(formatVersionOutputForArgv())
   .option("--json", "Output as JSON")
   .exitOverride()
   .hook("preAction", () => {

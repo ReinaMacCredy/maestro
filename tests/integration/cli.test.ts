@@ -8,6 +8,7 @@ const CLI = [
   "run",
   join(import.meta.dir, "..", "..", "src", "index.ts"),
 ];
+const DIST_CLI = join(import.meta.dir, "..", "..", "dist", "maestro");
 
 let tmpDir: string;
 const SLOW_CLI_TIMEOUT_MS = 15_000;
@@ -20,6 +21,25 @@ async function run(
     stdout: "pipe",
     stderr: "pipe",
     cwd,
+  });
+  const [stdout, stderr] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+  ]);
+  const exitCode = await proc.exited;
+  return { stdout: stdout.trim(), stderr: stderr.trim(), exitCode };
+}
+
+async function runCompiled(
+  args: string[],
+  cwd = process.cwd(),
+  env: Record<string, string | undefined> = process.env,
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  const proc = Bun.spawn([DIST_CLI, ...args], {
+    stdout: "pipe",
+    stderr: "pipe",
+    cwd,
+    env,
   });
   const [stdout, stderr] = await Promise.all([
     new Response(proc.stdout).text(),
@@ -67,6 +87,29 @@ describe("CLI integration", () => {
     const { stdout, exitCode } = await run(["--version"]);
     expect(exitCode).toBe(0);
     expect(stdout).toContain(`-g${sha} `);
+  });
+
+  it("compiled binary still honors runtime install dir overrides", async () => {
+    const homeDir = join(tmpDir, "home");
+    const installDir = join(tmpDir, "custom-bin");
+    await mkdir(join(homeDir, ".maestro"), { recursive: true });
+    await mkdir(installDir, { recursive: true });
+    await writeFile(join(installDir, "maestro"), "test-binary");
+
+    const { stdout, exitCode } = await runCompiled(
+      ["uninstall", "--json"],
+      tmpDir,
+      {
+        ...process.env,
+        HOME: homeDir,
+        MAESTRO_INSTALL_DIR: installDir,
+      },
+    );
+
+    expect(exitCode).toBe(0);
+    const result = JSON.parse(stdout);
+    expect(result.binaryRemoved).toBe(true);
+    expect(await Bun.file(join(installDir, "maestro")).exists()).toBe(false);
   });
 
   it("prints help with all commands", async () => {
