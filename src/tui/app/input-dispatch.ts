@@ -3,8 +3,8 @@
  * Extracted from index.ts -- pure functions, no side effects.
  */
 import type { Key } from "../terminal/input.js";
-import type { AppState, Action } from "../state.js";
-import { getMissionControlCommandSpecs } from "../mission-control-commands.js";
+import type { AppState, Action } from "../state/reducer.js";
+import { getMissionControlCommandSpecs } from "../state/mission-control-commands.js";
 import { actionForMissionControlCommand } from "./modal-builders.js";
 
 export function keyToAction(key: Key, state: AppState): Action | undefined {

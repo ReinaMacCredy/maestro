@@ -2,13 +2,13 @@
  * Modal option builders and command palette glue.
  * Extracted from index.ts -- builds ModalOptions from AppState.
  */
-import type { AppState, Action } from "../state.js";
-import type { MissionControlSnapshot, TaskPreviewPane } from "../types.js";
+import type { AppState, Action } from "../state/reducer.js";
+import type { MissionControlSnapshot, TaskPreviewPane } from "../state/types.js";
 import {
   getFilteredMissionControlCommandSpecs,
   getMissionControlCommandSpecs,
   type MissionControlCommandId,
-} from "../mission-control-commands.js";
+} from "../state/mission-control-commands.js";
 import {
   buildOverlayRenderSpec,
   type ModalOptions,

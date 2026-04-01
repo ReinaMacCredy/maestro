@@ -7,7 +7,7 @@ import type {
   MissionControlSnapshot,
   MissionControlStatusProgress,
   MissionControlMilestoneRow,
-} from "../types.js";
+} from "../state/types.js";
 import {
   MILESTONE_KIND_COLOR,
   MILESTONE_KIND_INDICATOR,

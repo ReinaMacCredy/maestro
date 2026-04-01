@@ -4,7 +4,7 @@
 import cliSpinners from "cli-spinners";
 import type { Buffer } from "../terminal/buffer.js";
 import type { Rect } from "../terminal/layout.js";
-import type { MissionControlSnapshot } from "../types.js";
+import type { MissionControlSnapshot } from "../state/types.js";
 import { PALETTE } from "../theme.js";
 import { formatElapsed, formatTokens } from "../format.js";
 

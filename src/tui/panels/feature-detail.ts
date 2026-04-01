@@ -3,8 +3,8 @@
  */
 import type { Buffer, Cell } from "../terminal/buffer.js";
 import type { Rect } from "../terminal/layout.js";
-import type { MissionControlSnapshot, TaskPreviewPane } from "../types.js";
-import type { LeftPaneMode } from "../types.js";
+import type { MissionControlSnapshot, TaskPreviewPane } from "../state/types.js";
+import type { LeftPaneMode } from "../state/types.js";
 import { FEATURE_TASK_STATUS_LABEL, MISSION_STATUS_LABEL, PALETTE } from "../theme.js";
 import { truncate } from "../format.js";
 import { shortenSessionId } from "../session-id.js";

@@ -4,7 +4,7 @@
  */
 import type { Buffer } from "../terminal/buffer.js";
 import type { Rect } from "../terminal/layout.js";
-import type { MissionControlEvent, MissionControlSnapshot } from "../types.js";
+import type { MissionControlEvent, MissionControlSnapshot } from "../state/types.js";
 import { PALETTE } from "../theme.js";
 import { formatAge, truncate } from "../format.js";
 

@@ -4,9 +4,9 @@
  */
 import { Screen } from "../terminal/screen.js";
 import { startKeyListener, type Key } from "../terminal/input.js";
-import type { MissionControlSnapshot } from "../types.js";
-import type { SnapshotDeps } from "../snapshot.js";
-import { createInitialState, reduce } from "../state.js";
+import type { MissionControlSnapshot } from "../state/types.js";
+import type { SnapshotDeps } from "../state/snapshot.js";
+import { createInitialState, reduce } from "../state/reducer.js";
 import { HEADER_DOT_INTERVAL_MS, isHeaderAnimationActive } from "../panels/header.js";
 import { pointInRect } from "../widgets/modal.js";
 import { getValidFeatureTransitions } from "../../domain/mission-state.js";

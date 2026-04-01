@@ -3,7 +3,7 @@
  */
 import type { Buffer } from "../terminal/buffer.js";
 import type { Rect } from "../terminal/layout.js";
-import type { MissionControlSnapshot } from "../types.js";
+import type { MissionControlSnapshot } from "../state/types.js";
 import { FEATURE_TASK_STATUS_COLOR, FEATURE_TASK_STATUS_LABEL, PALETTE } from "../theme.js";
 import { truncate } from "../format.js";
 

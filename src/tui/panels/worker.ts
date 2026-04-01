@@ -3,10 +3,11 @@
  */
 import type { Buffer } from "../terminal/buffer.js";
 import type { Rect } from "../terminal/layout.js";
-import type { MissionControlSnapshot } from "../types.js";
+import type { MissionControlSnapshot } from "../state/types.js";
 import { sanitizeTerminalText } from "../../lib/sanitize.js";
 import { FEATURE_STATUS_COLOR, FEATURE_STATUS_LABEL, PALETTE } from "../theme.js";
 import { formatElapsed, truncate } from "../format.js";
+import { shortenSessionId } from "../session-id.js";
 
 export function renderWorkerPanel(
   buf: Buffer,
@@ -268,10 +269,6 @@ function getFileRows(
     rows.push({ label: "", value: `+${remaining} more`, style: "muted" as const });
   }
   return rows;
-}
-
-function shortenSessionId(sessionId: string): string {
-  return sessionId.length > 10 ? `${sessionId.slice(0, 8)}…` : sessionId;
 }
 
 function writeLabeledRow(

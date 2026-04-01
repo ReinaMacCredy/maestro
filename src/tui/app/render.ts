@@ -4,8 +4,8 @@
  */
 import { Buffer } from "../terminal/buffer.js";
 import { inset, type Rect } from "../terminal/layout.js";
-import type { MissionControlSnapshot } from "../types.js";
-import { createInitialState, type AppState } from "../state.js";
+import type { MissionControlSnapshot } from "../state/types.js";
+import { createInitialState, type AppState } from "../state/reducer.js";
 import { renderHeader } from "../panels/header.js";
 import { renderStatusBar } from "../panels/status-bar.js";
 import { renderFeatureDetail } from "../panels/feature-detail.js";

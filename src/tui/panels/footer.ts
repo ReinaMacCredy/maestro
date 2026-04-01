@@ -5,8 +5,8 @@
  */
 import type { Buffer } from "../terminal/buffer.js";
 import type { Rect } from "../terminal/layout.js";
-import type { MissionControlSnapshot } from "../types.js";
-import { getMissionControlCommandSpecs } from "../mission-control-commands.js";
+import type { MissionControlSnapshot } from "../state/types.js";
+import { getMissionControlCommandSpecs } from "../state/mission-control-commands.js";
 import { PALETTE } from "../theme.js";
 
 interface FooterHint {
