@@ -36,6 +36,62 @@ export function renderWorkerPanel(
   renderSessionPane(buf, rightRect, snap, elapsedOffsetMs);
 }
 
+export function renderSessionSidebar(
+  buf: Buffer,
+  rect: Rect,
+  snap: MissionControlSnapshot,
+): void {
+  if (rect.width <= 0 || rect.height <= 0) return;
+  buf.writeText(rect.y, rect.x + 1, "Session / Changes", { fg: PALETTE.brightWhite, bold: true });
+
+  const session = snap.session;
+  let row = rect.y + 2;
+  const rows = session
+    ? [
+      { label: "Agent", value: session.agent ?? "--", style: "value" as const },
+      { label: "Session", value: session.sessionId ? shortenSessionId(session.sessionId) : "--", style: "value" as const },
+      { label: "Branch", value: session.branch, style: "value" as const },
+      { label: "Changes", value: getChangesText(session), style: "value" as const },
+    ]
+    : [
+      { label: "Agent", value: "--", style: "muted" as const },
+      { label: "Session", value: "--", style: "muted" as const },
+      { label: "Branch", value: "--", style: "muted" as const },
+      { label: "Changes", value: "no repo", style: "muted" as const },
+    ];
+
+  for (const entry of rows) {
+    if (row >= rect.y + rect.height) return;
+    writeLabeledRow(buf, row, rect, entry.label, entry.value, entry.style);
+    row++;
+  }
+
+  if (!session || session.workingTreeClean) {
+    if (row < rect.y + rect.height) {
+      writeLabeledRow(buf, row, rect, "Files", "no local edits", "muted");
+    }
+    return;
+  }
+
+  const fileChanges = session.fileChanges ?? session.changedFiles.map((path) => ({ path, kind: "modified" as const }));
+  for (const [index, fileChange] of fileChanges.slice(0, Math.max(0, rect.height - (row - rect.y) - 1)).entries()) {
+    if (row >= rect.y + rect.height) break;
+    const label = index === 0 ? "Files" : "";
+    const symbol = fileChange.kind === "deleted" ? "-" : "+";
+    const symbolColor = fileChange.kind === "deleted" ? PALETTE.red : PALETTE.green;
+    const labelWidth = 9;
+    if (label) {
+      buf.writeText(row, rect.x + 1, truncate(label, labelWidth), { fg: PALETTE.dimGray });
+    }
+    const valueX = rect.x + 1 + (label ? labelWidth + 1 : 0);
+    buf.writeText(row, valueX, symbol, { fg: symbolColor });
+    buf.writeText(row, valueX + 2, truncate(sanitizeTerminalText(fileChange.path), Math.max(0, rect.x + rect.width - valueX - 3)), {
+      fg: PALETTE.brightWhite,
+    });
+    row++;
+  }
+}
+
 function renderActivityPane(buf: Buffer, rect: Rect, snap: MissionControlSnapshot): void {
   if (rect.width <= 0 || rect.height <= 0) return;
   buf.writeText(rect.y, rect.x + 1, "Activity", { fg: PALETTE.brightWhite, bold: true });
@@ -205,6 +261,10 @@ function getFileRows(
     rows.push({ label: "", value: `+${remaining} more`, style: "muted" as const });
   }
   return rows;
+}
+
+function shortenSessionId(sessionId: string): string {
+  return sessionId.length > 10 ? `${sessionId.slice(0, 8)}…` : sessionId;
 }
 
 function writeLabeledRow(

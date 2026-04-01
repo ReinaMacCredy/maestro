@@ -1,5 +1,5 @@
 /**
- * Progress log panel -- "Progress Log" header, reverse-chronological events
+ * Timeline panel -- reverse-chronological events
  * with relative age timestamps like "<1m ago", "5m ago".
  */
 import type { Buffer } from "../terminal/buffer.js";
@@ -40,8 +40,8 @@ export function renderProgressLog(
     return;
   }
 
-  // Section header
-  buf.writeText(row, rect.x + 1, "Progress Log", { fg: PALETTE.brightWhite, bold: true });
+    // Section header
+    buf.writeText(row, rect.x + 1, "Timeline", { fg: PALETTE.brightWhite, bold: true });
   row += 2;
 
   if (events.length === 0) {
@@ -62,11 +62,19 @@ export function renderProgressLog(
     // Age label (right-aligned in 8-char column)
     buf.writeText(row, ageCol + (8 - age.length), age, { fg: PALETTE.gray });
 
-    // Event title with colored feature/checkpoint IDs
-    const titleWidth = w - 10;
-    buf.writeText(row, titleCol, truncate(evt.title, titleWidth), {
-      fg: evt.kind === "feature" || evt.kind === "worker" ? PALETTE.green : PALETTE.brightWhite,
-    });
-    row++;
-  }
+      // Event title with higher-signal event coloring.
+      const titleWidth = w - 10;
+      buf.writeText(row, titleCol, truncate(evt.title, titleWidth), {
+        fg: eventColor(evt),
+      });
+      row++;
+    }
+}
+
+function eventColor(evt: MissionControlEvent): number {
+  if (evt.kind === "worker") return PALETTE.blue;
+  if (evt.kind === "checkpoint") return PALETTE.yellow;
+  if (evt.kind === "feature" && evt.title.toLowerCase().includes("blocked")) return PALETTE.red;
+  if (evt.kind === "feature") return PALETTE.green;
+  return PALETTE.brightWhite;
 }

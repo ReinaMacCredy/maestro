@@ -42,13 +42,13 @@ function withTerminalSize<T>(width: number, height: number, run: () => T): T {
 }
 
 function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionControlSnapshot {
-  return {
+  const base: MissionControlSnapshot = {
       mode: "mission",
       missionId: "2026-03-30-001",
-    missionTitle: "Full Pipeline Test",
-    missionStatus: "executing",
-    effectiveStatus: "executing",
-    elapsedMs: 754_000,
+      missionTitle: "Full Pipeline Test",
+      missionStatus: "executing",
+      effectiveStatus: "executing",
+      elapsedMs: 754_000,
     featureProgress: { done: 2, total: 4, active: 1 },
     statusProgress: {
       completed: 2,
@@ -59,11 +59,19 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
       completionPct: 50,
       },
       tokenCounters: null,
+      missionOverview: null,
       session: {
+        agent: "codex",
+        sessionId: "5634c102-9871-4001-86f8-89399077624e",
         branch: "main",
         workingTreeClean: false,
         diffStat: "+42 -11",
         changedFiles: ["src/db.ts", "src/config.ts", "tests/db.test.ts"],
+        fileChanges: [
+          { path: "src/db.ts", kind: "added" },
+          { path: "src/config.ts", kind: "added" },
+          { path: "tests/db.test.ts", kind: "deleted" },
+        ],
       },
       pendingHandoffs: [],
       configSummary: {
@@ -88,29 +96,32 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
         },
       ],
       activeFeature: {
-      id: "f2",
-      title: "Database config",
+        id: "f2",
+        title: "Database config",
       status: "in-progress",
       milestoneId: "m1",
       milestoneTitle: "Core Setup",
       workerType: "backend-worker",
       description: "Configure the database connection and migrations",
       preconditions: "Clean working directory",
-      expectedBehavior: "Database connects and migrations run",
-      verificationSteps: ["Run build", "Run lint", "Run tests"],
-      dependsOn: ["f1"],
-      fulfills: ["a-f2-1"],
-      validTransitions: ["review"],
-    },
-    features: [
-      { id: "f1", title: "Init project", status: "done", milestoneId: "m1", workerType: "backend-worker", hasReport: true },
-      { id: "f2", title: "Database config", status: "in-progress", milestoneId: "m1", workerType: "backend-worker", hasReport: false },
-      { id: "f3", title: "Auth endpoints", status: "pending", milestoneId: "m2", workerType: "backend-worker", hasReport: false },
-      { id: "f4", title: "API docs", status: "pending", milestoneId: "m2", workerType: "backend-worker", hasReport: false },
-    ],
-    activeWorker: {
-      featureId: "f2",
-      featureTitle: "Database config",
+        expectedBehavior: "Database connects and migrations run",
+        verificationSteps: ["Run build", "Run lint", "Run tests"],
+        dependsOn: ["f1"],
+        blockedBy: [],
+        unblocks: [{ id: "f3", title: "Auth endpoints", status: "pending" }],
+        fulfills: ["a-f2-1"],
+        validTransitions: ["review"],
+      },
+      features: [
+        { id: "f1", title: "Init project", status: "done", milestoneId: "m1", workerType: "backend-worker", hasReport: true, blockedByIds: [] },
+        { id: "f2", title: "Database config", status: "in-progress", milestoneId: "m1", workerType: "backend-worker", hasReport: false, blockedByIds: [] },
+        { id: "f3", title: "Auth endpoints", status: "pending", milestoneId: "m2", workerType: "backend-worker", hasReport: false, blockedByIds: ["f2"], blockedByLabel: "f2" },
+        { id: "f4", title: "API docs", status: "pending", milestoneId: "m2", workerType: "backend-worker", hasReport: false, blockedByIds: [] },
+      ],
+      taskPreviews: [],
+      activeWorker: {
+        featureId: "f2",
+        featureTitle: "Database config",
       workerType: "backend-worker",
       status: "in-progress",
       elapsedMs: 252_000,
@@ -129,8 +140,40 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
       canPause: true,
       canResume: false,
       home: null,
-      ...overrides,
     };
+
+  const snapshot = { ...base, ...overrides };
+  snapshot.taskPreviews = snapshot.taskPreviews ?? (snapshot.activeFeature ? [snapshot.activeFeature] : []);
+  snapshot.missionOverview = snapshot.missionOverview ?? {
+    missionLabel: `Mission: ${snapshot.missionTitle}`,
+    statusLabel: snapshot.effectiveStatus,
+    activeCount: snapshot.featureProgress.active,
+    doneCount: snapshot.featureProgress.done,
+    totalCount: snapshot.featureProgress.total,
+    blockedCount: snapshot.statusProgress.blocked,
+    currentMilestone: snapshot.milestones[0]?.title ?? null,
+    gateLabel: snapshot.gateLabel ?? null,
+    agentSummary: [{ agent: "codex", count: 1 }],
+    dependencyMap: [
+      {
+        root: { id: "f2", title: "Database config", status: "in-progress" },
+        primaryBlocked: { id: "f3", title: "Auth endpoints", status: "pending" },
+        hiddenBlockedCount: 0,
+      },
+    ],
+  };
+
+  return snapshot;
+}
+
+function renderPreviewFrame(snapshot: MissionControlSnapshot): string {
+  return withTerminalSize(120, 40, () => {
+    const buf = new Buffer(120, 40);
+    const state = createInitialState(snapshot);
+    state.leftPaneMode = "preview";
+    renderFrame(buf, state);
+    return buf.toString();
+  });
 }
 
 describe("frame rendering", () => {
@@ -152,38 +195,38 @@ describe("frame rendering", () => {
       expect(frame).toContain("Auth endpoints");
     });
 
-    it("contains Features header", () => {
-      const frame = renderOnceFrame({ snapshot: makeSnapshot() });
-      expect(frame).toContain("Features");
-    });
+      it("contains Tasks header", () => {
+        const frame = renderOnceFrame({ snapshot: makeSnapshot() });
+        expect(frame).toContain("Tasks");
+      });
 
     it("contains progress counts", () => {
       const frame = renderOnceFrame({ snapshot: makeSnapshot() });
       expect(frame).toContain("2/4");
     });
 
-    it("contains worker info", () => {
-      const frame = renderOnceFrame({ snapshot: makeSnapshot() });
-      expect(frame).toContain("backend-worker");
-      expect(frame).toContain("Activity");
-      expect(frame).toContain("Database config");
-    });
+      it("contains mission overview info", () => {
+        const frame = renderOnceFrame({ snapshot: makeSnapshot() });
+        expect(frame).toContain("Mission Overview");
+        expect(frame).toContain("Mission: Full Pipeline Test");
+        expect(frame).toContain("agents");
+      });
 
-    it("contains progress log events", () => {
-      const frame = renderOnceFrame({ snapshot: makeSnapshot() });
-      expect(frame).toContain("Progress Log");
-      expect(frame).toContain("Activity");
-    });
+      it("contains timeline and session labels", () => {
+        const frame = renderOnceFrame({ snapshot: makeSnapshot() });
+        expect(frame).toContain("Timeline");
+        expect(frame).toContain("Session / Changes");
+      });
 
       it("contains footer hints", () => {
         const frame = renderOnceFrame({ snapshot: makeSnapshot() });
-        expect(frame).toContain("Features");
-      expect(frame).toContain("Handoff");
+          expect(frame).toContain("Tasks");
+      expect(frame).toContain("Handoffs");
       expect(frame).toContain("Config");
-      expect(frame).toContain("Processes");
-        expect(frame).toContain("Commands");
-        expect(frame).toContain("Exit");
-      });
+      expect(frame).toContain("Runtime");
+          expect(frame).toContain("Commands");
+          expect(frame).toContain("Exit");
+        });
 
       it("contains blocked gate context when the active milestone is a gate", () => {
         const frame = renderOnceFrame({
@@ -230,10 +273,10 @@ describe("frame rendering", () => {
           }),
           });
           expect(frame).toContain("Mission Control");
-          expect(frame).toContain("No active work");
-          expect(frame).toContain("Create or import work to populate Mission Control");
+            expect(frame).toContain("Mission Overview");
+            expect(frame).toContain("0/0");
+          });
         });
-      });
 
   describe("completed mission", () => {
     it("shows completed state", () => {
@@ -275,36 +318,31 @@ describe("frame rendering", () => {
           canPause: false,
           canResume: true,
         }),
+          });
+          expect(frame).toContain("PAUSED");
+          expect(frame).toContain("Runtime");
         });
-        expect(frame).toContain("PAUSED");
-        expect(frame).toContain("Processes");
-      });
-  });
+    });
 
     describe("feature detail fields", () => {
-      it("shows preconditions when available", () => {
-        const frame = withTerminalSize(120, 40, () => renderOnceFrame({ snapshot: makeSnapshot() }));
-        expect(frame).toContain("Preconditions");
-        expect(frame).toContain("Clean working directory");
+        it("shows preconditions when available", () => {
+          const frame = renderPreviewFrame(makeSnapshot());
+          expect(frame).toContain("Focus / Preview");
+          expect(frame).toContain("worker");
+          expect(frame).toContain("backend-worker");
+        });
+
+      it("shows verification steps when panel has enough height", () => {
+        const frame = renderPreviewFrame(makeSnapshot());
+        expect(frame).toContain("blocked by");
+        expect(frame).toContain("unblocks");
       });
 
-    it("shows verification steps when panel has enough height", () => {
-      // Use a snapshot without preconditions/expectedBehavior to leave room
-      const snap = makeSnapshot();
-      snap.activeFeature = {
-        ...snap.activeFeature!,
-        preconditions: undefined,
-        expectedBehavior: undefined,
-      };
-      const frame = renderOnceFrame({ snapshot: snap });
-      expect(frame).toContain("Verification Steps");
-      expect(frame).toContain("Run build");
-    });
-
-    it("shows worker type", () => {
-      const frame = renderOnceFrame({ snapshot: makeSnapshot() });
-      expect(frame).toContain("skill backend-worker");
-    });
+      it("shows worker type", () => {
+        const frame = renderPreviewFrame(makeSnapshot());
+        expect(frame).toContain("agent");
+        expect(frame).toContain("codex");
+      });
   });
 
   describe("chrome layout", () => {
@@ -352,9 +390,9 @@ describe("frame rendering", () => {
           expect(frame).toContain("┌");
           expect(frame).toContain("└");
           expect(frame).toContain("│");
-          expect(frame).toContain("No active work");
-          expect(frame).toContain("Read-only until work exists");
-        });
+            expect(frame).toContain("No active work");
+            expect(frame).toContain("Timeline");
+          });
 
       it("renders bordered chrome for narrow-but-valid terminals", () => {
         const frame = withTerminalSize(60, 18, () => renderOnceFrame({ snapshot: makeSnapshot() }));
@@ -448,7 +486,7 @@ describe("frame rendering", () => {
         const frame = buf.toString();
         expect(frame).toContain("Commands");
         expect(frame).toContain("Navigate");
-        expect(frame).toContain("Processes");
+        expect(frame).toContain("Runtime");
         expect(frame).toContain("Enter open · Esc close");
         expect(buf.getCell(1, 1)?.bg).toBe(PALETTE.overlayBackdropBg);
         expect(buf.getCell(1, 1)?.dim).toBe(true);

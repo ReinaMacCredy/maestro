@@ -1,11 +1,10 @@
 /**
- * Feature list panel (right pane top).
- * "Features {done}/{total}" header, ●/○ dots, selected row highlight.
+ * Task list panel (right pane).
  */
 import type { Buffer } from "../terminal/buffer.js";
 import type { Rect } from "../terminal/layout.js";
 import type { MissionControlSnapshot } from "../types.js";
-import { FEATURE_STATUS_COLOR, PALETTE, featureDot } from "../theme.js";
+import { FEATURE_STATUS_COLOR, FEATURE_STATUS_LABEL, PALETTE } from "../theme.js";
 import { truncate } from "../format.js";
 
 export function renderFeatureList(
@@ -36,8 +35,8 @@ export function renderFeatureList(
     return;
   }
 
-  // Section header: "Features  {done}/{total}"
-  buf.writeText(row, rect.x + 1, "Features", { fg: PALETTE.brightWhite, bold: true });
+  // Section header: "Tasks  {done}/{total}"
+  buf.writeText(row, rect.x + 1, "Tasks", { fg: PALETTE.brightWhite, bold: true });
   const countStr = `${snap.featureProgress.done}/${snap.featureProgress.total}`;
   buf.writeText(row, rect.x + w - countStr.length, countStr, { fg: PALETTE.brightWhite, bold: true });
   row += 2;
@@ -45,8 +44,9 @@ export function renderFeatureList(
   for (let i = 0; i < snap.features.length && row < maxRow; i++) {
     const f = snap.features[i]!;
     const isSelected = i === selectedIndex;
-    const dot = featureDot(f.status);
-    const dotColor = FEATURE_STATUS_COLOR[f.status];
+    const statusLabel = FEATURE_STATUS_LABEL[f.status];
+    const statusColor = FEATURE_STATUS_COLOR[f.status];
+    const blockedByText = f.blockedByLabel ? `by ${f.blockedByLabel}` : "";
 
     // Selected row gets highlight bg
     if (isSelected) {
@@ -55,9 +55,16 @@ export function renderFeatureList(
 
     const rowStyle = isSelected ? { bg: PALETTE.selectedBg } : {};
 
-    // Dot + title
-    buf.writeText(row, rect.x + 2, dot, { fg: dotColor, ...rowStyle });
-    buf.writeText(row, rect.x + 4, truncate(f.title, w - 4), {
+    let col = rect.x + 2;
+    buf.writeText(row, col, truncate(statusLabel, 10), { fg: statusColor, ...rowStyle, bold: true });
+    col += 11;
+    if (blockedByText) {
+      buf.writeText(row, col, truncate(blockedByText, Math.max(0, w - 18)), { fg: PALETTE.red, dim: true, ...rowStyle });
+      col += blockedByText.length + 1;
+    }
+    buf.writeText(row, col, f.id, { fg: PALETTE.brightWhite, ...rowStyle, bold: true });
+    col += f.id.length + 2;
+    buf.writeText(row, col, truncate(f.title, Math.max(0, rect.x + rect.width - col - 1)), {
       fg: PALETTE.brightWhite,
       ...rowStyle,
     });

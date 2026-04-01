@@ -14,7 +14,7 @@ import { renderStatusBar } from "./panels/status-bar.js";
 import { renderFeatureDetail } from "./panels/feature-detail.js";
 import { renderFeatureList } from "./panels/feature-list.js";
 import { renderProgressLog } from "./panels/progress-log.js";
-import { renderWorkerPanel } from "./panels/worker.js";
+import { renderSessionSidebar } from "./panels/worker.js";
 import { renderFooter } from "./panels/footer.js";
 import {
   getFilteredMissionControlCommandSpecs,
@@ -391,17 +391,16 @@ export function renderFrame(
   const bodyY = statusDividerY + 1;
   const bodyBottomY = bottomDividerY - 1;
   const bodyHeight = Math.max(0, bodyBottomY - bodyY + 1);
-  const maxWorkerHeight = Math.max(6, bodyHeight - 5);
-  const workerHeight = Math.min(Math.max(7, Math.floor(bodyHeight * 0.3)), maxWorkerHeight);
-  const topBodyHeight = Math.max(4, bodyHeight - workerHeight - 1);
-  const topBodyRect: Rect = { x: innerRect.x, y: bodyY, width: innerRect.width, height: topBodyHeight };
-  const workerDividerY = topBodyRect.y + topBodyRect.height;
-  const workerRect: Rect = {
-    x: innerRect.x,
-    y: workerDividerY + 1,
-    width: innerRect.width,
-    height: Math.max(0, bodyBottomY - workerDividerY),
-  };
+    const bottomPaneHeight = Math.min(Math.max(6, Math.floor(bodyHeight * 0.26)), Math.max(6, bodyHeight - 5));
+    const topBodyHeight = Math.max(4, bodyHeight - bottomPaneHeight - 1);
+    const topBodyRect: Rect = { x: innerRect.x, y: bodyY, width: innerRect.width, height: topBodyHeight };
+    const workerDividerY = topBodyRect.y + topBodyRect.height;
+    const bottomBodyRect: Rect = {
+      x: innerRect.x,
+      y: workerDividerY + 1,
+      width: innerRect.width,
+      height: Math.max(0, bodyBottomY - workerDividerY),
+    };
 
   drawFullWidthDivider(buf, workerDividerY, borderStyle);
 
@@ -418,40 +417,33 @@ export function renderFrame(
     width: Math.max(0, bodySplitX - innerRect.x),
     height: topBodyRect.height,
   };
-  const rightRect: Rect = {
-    x: bodySplitX + 1,
-    y: topBodyRect.y,
-    width: Math.max(0, innerRect.x + innerRect.width - bodySplitX - 1),
-    height: topBodyRect.height,
-  };
-  const minFeatureHeight = Math.min(topBodyRect.height - 3, Math.max(4, snap.features.length + 2));
-  const featureHeight = Math.min(
-    Math.max(minFeatureHeight, Math.ceil(topBodyRect.height * 0.45)),
-    Math.max(4, topBodyRect.height - 3),
-  );
-  const rightSplitY = topBodyRect.y + featureHeight;
-  drawHorizontalRange(buf, rightSplitY, bodySplitX, w - 1, borderStyle, BOX.cross, BOX.teeLeft);
+    const rightRect: Rect = {
+      x: bodySplitX + 1,
+      y: topBodyRect.y,
+      width: Math.max(0, innerRect.x + innerRect.width - bodySplitX - 1),
+      height: topBodyRect.height,
+    };
+    const featureListRect: Rect = rightRect;
+    const timelineRect: Rect = {
+      x: innerRect.x,
+      y: bottomBodyRect.y,
+      width: Math.max(0, bodySplitX - innerRect.x),
+      height: bottomBodyRect.height,
+    };
+    const sessionRect: Rect = {
+      x: bodySplitX + 1,
+      y: bottomBodyRect.y,
+      width: Math.max(0, innerRect.x + innerRect.width - bodySplitX - 1),
+      height: bottomBodyRect.height,
+    };
 
-  const featureListRect: Rect = {
-    x: rightRect.x,
-    y: rightRect.y,
-    width: rightRect.width,
-    height: Math.max(0, rightSplitY - rightRect.y),
-  };
-  const progressRect: Rect = {
-    x: rightRect.x,
-    y: rightSplitY + 1,
-    width: rightRect.width,
-    height: Math.max(0, topBodyRect.y + topBodyRect.height - rightSplitY - 1),
-  };
-
-  renderHeader(buf, headerRect, snap, animationFrame);
-  renderStatusBar(buf, statusRect, snap);
-  renderFeatureDetail(buf, leftRect, snap);
-  renderFeatureList(buf, featureListRect, snap, state.selectedFeatureIndex);
-      renderProgressLog(buf, progressRect, snap.progressLog, snap, state.logScrollOffset);
-  renderWorkerPanel(buf, workerRect, snap, elapsedOffsetMs);
-  renderFooter(buf, footerRect, snap);
+    renderHeader(buf, headerRect, snap, animationFrame);
+    renderStatusBar(buf, statusRect, snap);
+    renderFeatureDetail(buf, leftRect, snap, state.leftPaneMode, state.selectedFeatureIndex);
+    renderFeatureList(buf, featureListRect, snap, state.selectedFeatureIndex);
+    renderProgressLog(buf, timelineRect, snap.progressLog, snap, state.logScrollOffset);
+    renderSessionSidebar(buf, sessionRect, snap);
+    renderFooter(buf, footerRect, snap);
 
     // Modal overlay
     const modalRect = getModalParentRect(w, h);

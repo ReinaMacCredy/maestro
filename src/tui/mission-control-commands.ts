@@ -21,31 +21,31 @@ export function getMissionControlCommandSpecs(
 ): readonly MissionControlCommandSpec[] {
   const featureCommand: MissionControlCommandSpec = mode === "home"
     ? {
-      id: "features",
-      key: "F",
-      label: "Overview",
-      detail: "Show the guided Mission Control home screen",
-      section: "Navigate",
-      keywords: ["overview", "home", "project", "empty state"],
+        id: "features",
+        key: "F",
+        label: "Overview",
+        detail: "Show the guided Mission Control home screen",
+        section: "Navigate",
+        keywords: ["overview", "home", "project", "empty state"],
     }
     : {
-      id: "features",
-      key: "F",
-      label: "Features",
-      detail: "Browse mission features and focus a specific item",
-      section: "Navigate",
-      keywords: ["features", "feature browser", "focus"],
-    };
+        id: "features",
+        key: "F",
+        label: "Tasks",
+        detail: "Browse mission tasks and focus a specific item",
+        section: "Navigate",
+        keywords: ["tasks", "features", "feature browser", "focus"],
+      };
 
   return [
     featureCommand,
     {
-      id: "handoffs",
-      key: "H",
-      label: "Handoff",
-      detail: "Review pending cross-agent handoffs",
-      section: "Navigate",
-      keywords: ["handoff", "handoffs", "agent"],
+        id: "handoffs",
+        key: "H",
+        label: "Handoffs",
+        detail: "Review pending cross-agent handoffs",
+        section: "Navigate",
+        keywords: ["handoff", "handoffs", "agent"],
     },
     {
       id: "config",
@@ -56,13 +56,13 @@ export function getMissionControlCommandSpecs(
       keywords: ["config", "configuration", "doctor", "directory"],
     },
     {
-      id: "processes",
-      key: "P",
-      label: "Processes",
-      detail: "List live Maestro runtime work for this mission",
-      section: "Navigate",
-      keywords: ["processes", "runtime", "workers"],
-    },
+        id: "processes",
+        key: "P",
+        label: "Runtime",
+        detail: "List live Maestro runtime work for this mission",
+        section: "Navigate",
+        keywords: ["processes", "runtime", "workers"],
+      },
     {
       id: "exit",
       key: "Ctrl+T",

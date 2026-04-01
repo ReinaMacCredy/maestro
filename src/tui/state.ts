@@ -7,6 +7,7 @@ import type { FeatureStatus } from "../domain/mission-types.js";
 import { getValidFeatureTransitions } from "../domain/mission-state.js";
 
 export type FocusedPanel = "features" | "log" | "none";
+export type LeftPaneMode = "overview" | "preview";
 
 type ModalReturnTarget = "command-palette";
 
@@ -29,6 +30,7 @@ export type ModalState =
 export interface AppState {
   snapshot: MissionControlSnapshot;
   focusedPanel: FocusedPanel;
+  leftPaneMode: LeftPaneMode;
   selectedFeatureIndex: number;
   logScrollOffset: number;
   modal: ModalState;
@@ -36,12 +38,13 @@ export interface AppState {
 }
 
 export function createInitialState(snapshot: MissionControlSnapshot): AppState {
-  return {
-    snapshot,
-    focusedPanel: "features",
-    selectedFeatureIndex: 0,
-    logScrollOffset: 0,
-    modal: { kind: "none" },
+    return {
+      snapshot,
+      focusedPanel: "features",
+      leftPaneMode: "overview",
+      selectedFeatureIndex: 0,
+      logScrollOffset: 0,
+      modal: { kind: "none" },
     running: true,
   };
 }
@@ -96,7 +99,11 @@ export function reduce(state: AppState, action: Action): AppState {
 
     case "focus":
       if (state.modal.kind !== "none") return state;
-      return { ...state, focusedPanel: action.panel };
+        return {
+          ...state,
+          focusedPanel: action.panel,
+          leftPaneMode: action.panel === "features" ? state.leftPaneMode : "overview",
+        };
 
     case "enter": {
       if (state.modal.kind === "command-palette") {
@@ -141,10 +148,13 @@ export function reduce(state: AppState, action: Action): AppState {
     }
 
     case "escape":
-      if (state.modal.kind !== "none") {
-        return { ...state, modal: { kind: "none" } };
-      }
-      return { ...state, focusedPanel: "none" };
+        if (state.modal.kind !== "none") {
+          return { ...state, modal: { kind: "none" } };
+        }
+        if (state.leftPaneMode === "preview") {
+          return { ...state, focusedPanel: "none", leftPaneMode: "overview" };
+        }
+        return { ...state, focusedPanel: "none" };
 
     case "open-command-palette":
       if (!canOpenOverlayFromModal(state.modal)) return state;
@@ -328,8 +338,8 @@ function handleFeatureNavigate(state: AppState, direction: "up" | "down"): AppSt
     ? Math.min(state.selectedFeatureIndex + 1, total - 1)
     : Math.max(state.selectedFeatureIndex - 1, 0);
 
-  if (newIndex === state.selectedFeatureIndex) return state;
-  return { ...state, selectedFeatureIndex: newIndex };
+    if (newIndex === state.selectedFeatureIndex) return state;
+    return { ...state, selectedFeatureIndex: newIndex, leftPaneMode: "preview" };
 }
 
 function handleLogNavigate(state: AppState, direction: "up" | "down"): AppState {

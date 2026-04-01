@@ -22,12 +22,14 @@ function makeSnapshot(): MissionControlSnapshot {
       completionPct: 33,
     },
     tokenCounters: null,
+    missionOverview: null,
     activeFeature: null,
     features: [
-      { id: "f1", title: "Setup project structure", status: "done", milestoneId: "m1", workerType: "worker", hasReport: true },
-      { id: "f2", title: "Configure database", status: "pending", milestoneId: "m1", workerType: "worker", hasReport: false },
-      { id: "f3", title: "Implement API endpoints", status: "pending", milestoneId: "m1", workerType: "worker", hasReport: false },
+      { id: "f1", title: "Setup project structure", status: "done", milestoneId: "m1", workerType: "worker", hasReport: true, blockedByIds: [] },
+      { id: "f2", title: "Configure database", status: "pending", milestoneId: "m1", workerType: "worker", hasReport: false, blockedByIds: [] },
+      { id: "f3", title: "Implement API endpoints", status: "pending", milestoneId: "m1", workerType: "worker", hasReport: false, blockedByIds: [] },
     ],
+    taskPreviews: [],
     activeWorker: null,
     progressLog: [],
     milestones: [],
@@ -46,7 +48,7 @@ describe("renderFeatureList", () => {
     const buf = new Buffer(48, 8);
     renderFeatureList(buf, { x: 0, y: 0, width: 48, height: 8 }, makeSnapshot(), 2);
 
-    const firstTitleCell = buf.getCell(2, 4);
+    const firstTitleCell = buf.getCell(2, 17);
     expect(firstTitleCell?.char).toBe("S");
     expect(firstTitleCell?.fg).toBe(PALETTE.brightWhite);
   });
