@@ -4,7 +4,6 @@
  */
 import { Buffer } from "../terminal/buffer.js";
 import { inset, type Rect } from "../terminal/layout.js";
-import type { MissionControlSnapshot } from "../state/types.js";
 import { type AppState } from "../state/reducer.js";
 import { renderHeader } from "../panels/header.js";
 import { renderStatusBar } from "../panels/status-bar.js";
@@ -21,14 +20,9 @@ import {
 import { PALETTE } from "../theme.js";
 import { BOX } from "../terminal/ansi.js";
 import { buildModalOptions } from "./modal-builders.js";
-import { buildPreviewState, type PreviewScreen } from "./preview-state.js";
+import { buildPreviewState, type PreviewStateOptions } from "./preview-state.js";
 
-export interface PreviewFrameOptions {
-  snapshot: MissionControlSnapshot;
-  screen?: PreviewScreen;
-  featureId?: string;
-  handoffId?: string;
-}
+export type PreviewFrameOptions = PreviewStateOptions;
 
 /**
  * Render a single preview frame without entering interactive mode.

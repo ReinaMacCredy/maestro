@@ -13,11 +13,18 @@ export const PREVIEW_SCREENS = [
 
 export type PreviewScreen = typeof PREVIEW_SCREENS[number];
 
-export interface PreviewStateOptions {
-  snapshot: MissionControlSnapshot;
+export function isPreviewScreen(value: string): value is PreviewScreen {
+  return PREVIEW_SCREENS.includes(value as PreviewScreen);
+}
+
+export interface PreviewSelectionOptions {
   screen?: PreviewScreen;
   featureId?: string;
   handoffId?: string;
+}
+
+export interface PreviewStateOptions extends PreviewSelectionOptions {
+  snapshot: MissionControlSnapshot;
 }
 
 const FEATURE_SELECTOR_SCREENS: readonly PreviewScreen[] = [

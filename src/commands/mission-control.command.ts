@@ -8,7 +8,7 @@ import { output, resolveJsonFlag } from "../lib/output.js";
 import { MaestroError } from "../domain/errors.js";
 import { buildHomeSnapshot, buildSnapshot } from "../tui/state/snapshot.js";
 import type { MissionControlSnapshot } from "../tui/state/types.js";
-import { PREVIEW_SCREENS, type PreviewScreen } from "../tui/app/preview-state.js";
+import { PREVIEW_SCREENS, isPreviewScreen, type PreviewScreen } from "../tui/app/preview-state.js";
 import { renderDashboard, renderPreviewFrame } from "../tui/index.js";
 import { recoverMissionRuntimeFailures } from "../usecases/runtime-recovery.usecase.js";
 
@@ -32,10 +32,24 @@ Examples:
   maestro mission-control --json
 `)
     .action(async (opts) => {
-      const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const previewScreen = resolvePreviewScreen(opts.preview);
 
+      if (isJson && previewScreen) {
+        throw new MaestroError("Choose either --json or --preview", [
+          "Use `maestro mission-control --json` for machine-readable output",
+          "Use `maestro mission-control --preview` for a read-only terminal preview",
+        ]);
+      }
+
+      if ((opts.feature || opts.handoff) && !previewScreen) {
+        throw new MaestroError("Preview selectors require --preview", [
+          "Use `maestro mission-control --preview dashboard --feature <id>`",
+          "Use `maestro mission-control --preview handoffs --handoff <id>`",
+        ]);
+      }
+
+      const services = getServices();
       const snapshotDeps = {
         missionStore: services.missionStore,
         featureStore: services.featureStore,
@@ -65,20 +79,6 @@ Examples:
         );
       const loadReadSnapshot = async (): Promise<MissionControlSnapshot> =>
         redactSnapshotForReadOutput(await loadSnapshot("read"));
-
-      if (isJson && previewScreen) {
-        throw new MaestroError("Choose either --json or --preview", [
-          "Use `maestro mission-control --json` for machine-readable output",
-          "Use `maestro mission-control --preview` for a read-only terminal preview",
-        ]);
-      }
-
-      if ((opts.feature || opts.handoff) && !previewScreen) {
-        throw new MaestroError("Preview selectors require --preview", [
-          "Use `maestro mission-control --preview dashboard --feature <id>`",
-          "Use `maestro mission-control --preview handoffs --handoff <id>`",
-        ]);
-      }
 
       if (isJson) {
         output(true, await loadReadSnapshot(), () => []);
@@ -123,9 +123,9 @@ function resolvePreviewScreen(value: unknown): PreviewScreen | undefined {
     ]);
   }
 
-  const screen = value.toLowerCase() as PreviewScreen;
-  if (PREVIEW_SCREENS.includes(screen)) {
-    return screen;
+  const normalizedValue = value.toLowerCase();
+  if (isPreviewScreen(normalizedValue)) {
+    return normalizedValue;
   }
 
   throw new MaestroError(`Unknown preview screen '${value}'`, [
