@@ -141,4 +141,26 @@ describe("renderStatusBar", () => {
     expect(text).toContain("PLAN-REVIEW");
     expect(text).toContain("Plan Review BLOCKED");
   });
+
+  it("preserves spacing between milestone profile and title at narrow widths", () => {
+    const buf = new Buffer(60, 1);
+    renderStatusBar(buf, { x: 0, y: 0, width: 60, height: 1 }, makeSnapshot({
+      milestones: [
+        { id: "m1", title: "Foundation", status: "executing", order: 0, kind: "work", profile: "custom" },
+      ],
+      statusProgress: {
+        completed: 1,
+        total: 3,
+        inFlight: 2,
+        blocked: 0,
+        queued: 0,
+        completionPct: 33,
+      },
+      featureProgress: { done: 1, total: 3, active: 2 },
+    }));
+
+    const text = buf.toString();
+    expect(text).toContain("CUSTOM Foundation");
+    expect(text).toContain("1/3 done");
+  });
 });

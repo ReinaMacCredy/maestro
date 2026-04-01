@@ -41,11 +41,9 @@ export function sanitizeTerminalText(content: string | undefined): string {
     // OSC sequences
     .replace(/\u001b\][^\u0007]*(?:\u0007|\u001b\\)/g, "")
     // CSI sequences
-    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
-    // Other escape-led control sequences
-    .replace(/\u001b[@-_]/g, "")
-    // Remaining control characters
-    .replace(/[\u0000-\u001F\u007F]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+      .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
+      // Other escape-led control sequences
+      .replace(/\u001b[@-_]/g, "")
+      // Remaining control characters
+      .replace(/[\u0000-\u001F\u007F]/g, " ");
 }

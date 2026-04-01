@@ -2,7 +2,7 @@
  * Unit tests for sanitizePromptContent utility
  */
 import { describe, it, expect } from "bun:test";
-import { sanitizePromptContent } from "../../../src/lib/sanitize.js";
+import { sanitizePromptContent, sanitizeTerminalText } from "../../../src/lib/sanitize.js";
 
 describe("sanitizePromptContent", () => {
   it("returns placeholder for empty string", () => {
@@ -99,4 +99,14 @@ describe("sanitizePromptContent", () => {
     expect(result).toContain("\\&lt;!--");
   });
 
+  });
+
+describe("sanitizeTerminalText", () => {
+  it("preserves layout spaces while stripping terminal control sequences", () => {
+    expect(sanitizeTerminalText("  hello\u001b[31m world\u001b[0m  ")).toBe("  hello world  ");
+  });
+
+  it("replaces control characters with spaces without trimming the result", () => {
+    expect(sanitizeTerminalText("\nA\tB\u0007")).toBe(" A B ");
+  });
 });
