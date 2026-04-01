@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 /**
  * Minimal TTY test -- enter alt screen, show message, wait for q, exit.
- * Run: bun run src/tui/test-tty.ts
- * Or compiled: bun build src/tui/test-tty.ts --compile --outfile /tmp/test-tty && /tmp/test-tty
+ * Run: bun run scripts/test-tty.ts
+ * Or compiled: bun build scripts/test-tty.ts --compile --outfile /tmp/test-tty && /tmp/test-tty
  */
 const ESC = "\x1b";
 
