@@ -40,7 +40,7 @@ describe("renderModal", () => {
     expect(buf.getCell(selectedRow.y, selectedRow.x + 2)?.fg).toBe(PALETTE.overlaySelectedFg);
   });
 
-  it("renders the palette with an amber selection row and centered title", () => {
+    it("renders the palette with an amber selection row and centered title", () => {
     const buf = new Buffer(90, 28);
     const layout = renderModal(buf, { x: 0, y: 0, width: 90, height: 28 }, {
       mode: "palette",
@@ -64,10 +64,11 @@ describe("renderModal", () => {
       footer: "Enter open · Esc close",
     });
 
-    const titleRow = buf.toString().split("\n")[layout.y + 1] ?? "";
-    expect(titleRow).toContain("Command Palette");
-    expect(buf.getCell(layout.itemRects[0]!.y, layout.itemRects[0]!.x + 2)?.bg).toBe(PALETTE.amber);
-  });
+      const titleRow = buf.toString().split("\n")[layout.y + 1] ?? "";
+      expect(titleRow).toContain("Command Palette");
+      expect(buf.getCell(layout.itemRects[0]!.y, layout.itemRects[0]!.x + 2)?.bg).toBe(PALETTE.amber);
+      expect(buf.getCell(layout.itemRects[1]!.y, layout.itemRects[1]!.x + 2)?.dim).toBe(false);
+    });
 
   it("renders status line when provided", () => {
     const buf = new Buffer(80, 24);

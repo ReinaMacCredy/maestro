@@ -218,45 +218,49 @@ export function renderModal(buf: Buffer, parent: Rect, opts: ModalOptions): Moda
   const surfaceBg = PALETTE.overlaySurfaceBg;
   const contentWidth = layout.contentRect.width;
 
-  buf.fillRect(layout, " ", { bg: surfaceBg });
-  buf.drawBorder(layout, { fg: PALETTE.brightWhite, bg: surfaceBg });
+    buf.fillRect(layout, " ", { bg: surfaceBg, fg: PALETTE.default, bold: false, dim: false });
+    buf.drawBorder(layout, { fg: PALETTE.brightWhite, bg: surfaceBg, bold: false, dim: false });
 
   const titleY = layout.y + 1;
   const titleText = truncate(opts.title, Math.max(0, layout.width - 10));
   const titleX = opts.mode === "palette"
     ? layout.x + Math.max(2, Math.floor((layout.width - titleText.length) / 2))
     : layout.x + 2;
-  buf.writeText(titleY, titleX, titleText, {
-    fg: opts.mode === "palette" ? PALETTE.amber : PALETTE.brightWhite,
-    bg: surfaceBg,
-    bold: true,
-  });
+      buf.writeText(titleY, titleX, titleText, {
+        fg: opts.mode === "palette" ? PALETTE.amber : PALETTE.brightWhite,
+        bg: surfaceBg,
+        bold: true,
+        dim: false,
+      });
 
   const escapeText = "esc";
   const escapeX = layout.x + layout.width - escapeText.length - 2;
   if (escapeX > layout.x + 2) {
-    buf.writeText(titleY, escapeX, escapeText, {
-      fg: PALETTE.overlayHint,
-      bg: surfaceBg,
-    });
+      buf.writeText(titleY, escapeX, escapeText, {
+        fg: PALETTE.overlayHint,
+        bg: surfaceBg,
+        dim: false,
+      });
   }
 
   if (opts.mode === "palette") {
     renderQueryRow(buf, layout, opts.query, rows.length);
   } else if (opts.eyebrow) {
-    buf.writeText(layout.y + 2, layout.x + 2, truncate(opts.eyebrow, contentWidth), {
-      fg: PALETTE.overlayHint,
-      bg: surfaceBg,
-    });
+      buf.writeText(layout.y + 2, layout.x + 2, truncate(opts.eyebrow, contentWidth), {
+        fg: PALETTE.overlayHint,
+        bg: surfaceBg,
+        dim: false,
+      });
   }
 
   let rowY = layout.contentRect.y;
   if (opts.mode === "palette" && rows.length === 0) {
       const emptyLabel = truncate(opts.emptyLabel ?? "No commands match", contentWidth);
-      buf.writeText(rowY, layout.x + 3, emptyLabel, {
-        fg: PALETTE.overlayHint,
-        bg: surfaceBg,
-      });
+        buf.writeText(rowY, layout.x + 3, emptyLabel, {
+          fg: PALETTE.overlayHint,
+          bg: surfaceBg,
+          dim: false,
+        });
   } else {
     for (let index = 0; index < rows.length; index++) {
       const row = rows[index]!;
@@ -312,15 +316,17 @@ function renderQueryRow(
   const prompt = "> ";
     const queryText = query.length > 0 ? query : "Type a command";
     const queryColor = PALETTE.brightWhite;
-  buf.writeText(queryRect.y, queryRect.x + 1, prompt, {
-    fg: PALETTE.brightWhite,
-    bg: PALETTE.overlayQueryBg,
-    bold: true,
-  });
-  buf.writeText(queryRect.y, queryRect.x + 1 + prompt.length, truncate(queryText, queryRect.width - 6), {
-    fg: queryColor,
-    bg: PALETTE.overlayQueryBg,
-  });
+    buf.writeText(queryRect.y, queryRect.x + 1, prompt, {
+      fg: PALETTE.brightWhite,
+      bg: PALETTE.overlayQueryBg,
+      bold: true,
+      dim: false,
+    });
+    buf.writeText(queryRect.y, queryRect.x + 1 + prompt.length, truncate(queryText, queryRect.width - 6), {
+      fg: queryColor,
+      bg: PALETTE.overlayQueryBg,
+      dim: false,
+    });
 
   const resultsLabel = `${resultCount} result${resultCount === 1 ? "" : "s"}`;
   const resultsX = queryRect.x + queryRect.width - resultsLabel.length - 1;
@@ -329,6 +335,7 @@ function renderQueryRow(
         fg: PALETTE.brightWhite,
         bg: PALETTE.overlayQueryBg,
         bold: true,
+        dim: false,
       });
     }
   }
@@ -353,7 +360,7 @@ function renderRow(
       ? selectedFg
       : (mode === "palette" ? PALETTE.brightWhite : PALETTE.overlayHint);
 
-  buf.fillRect(rect, " ", { bg });
+    buf.fillRect(rect, " ", { bg, fg: PALETTE.default, bold: false, dim: false });
 
   const labelX = rect.x + 2;
   const lineWidth = Math.max(0, width - 2);
@@ -365,25 +372,27 @@ function renderRow(
     ? truncatePathTail(row.label, labelMax)
     : truncate(row.label, labelMax);
 
-  buf.writeText(rect.y, labelX, labelText, {
-    fg: labelFg,
-    bg,
-    bold: isSelected || row.tone === "accent" || row.style === "block" || mode === "palette",
-  });
+    buf.writeText(rect.y, labelX, labelText, {
+      fg: labelFg,
+      bg,
+      bold: isSelected || row.tone === "accent" || row.style === "block" || mode === "palette",
+      dim: false,
+    });
 
   if (row.hint && hintX && hintX > labelX + 4) {
-    buf.writeText(rect.y, hintX, row.hint, {
-      fg: hintFg,
-      bg,
-      dim: !isSelected,
-    });
+      buf.writeText(rect.y, hintX, row.hint, {
+        fg: hintFg,
+        bg,
+        dim: !isSelected,
+      });
   }
 
   if (row.detail && rect.height > 1) {
-    buf.writeText(rect.y + 1, labelX, truncate(row.detail, lineWidth), {
-      fg: detailFg,
-      bg,
-    });
+      buf.writeText(rect.y + 1, labelX, truncate(row.detail, lineWidth), {
+        fg: detailFg,
+        bg,
+        dim: false,
+      });
   }
 }
 
