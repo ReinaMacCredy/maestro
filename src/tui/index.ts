@@ -649,7 +649,7 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
         eyebrow: `Config source: ${summary.configSource}`,
         items: [
           ...(summary.missionDirectory
-            ? [{ text: summary.missionDirectory, style: "block", tone: "accent" as const, section: "Mission Directory" }]
+            ? [{ text: summary.missionDirectory, style: "block" as const, tone: "accent" as const, section: "Mission Directory" }]
             : []),
           { text: `Git ${summary.gitAvailable ? "available" : "unavailable"}`, section: "Environment" },
           { text: `CASS ${summary.cassAvailable ? "available" : "unavailable"}`, section: "Environment" },
@@ -682,7 +682,7 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
             {
               text: process.title,
               detail: `${process.featureId} · ${FEATURE_STATUS_LABEL[process.status]} · ${process.workerType}${process.isLive ? " · live" : ""}${process.hasReport ? " · report available" : " · waiting for report"}`,
-              style: "block",
+              style: "block" as const,
               tone: "accent" as const,
               section: "Runtime",
             },

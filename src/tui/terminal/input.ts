@@ -188,6 +188,9 @@ function parseSgrMouse(
   if (final !== 0x4d && final !== 0x6d) return undefined;
 
   const [buttonRaw, xRaw, yRaw] = param.split(";").map((value) => Number.parseInt(value, 10));
+  if (buttonRaw == null || xRaw == null || yRaw == null) {
+    return undefined;
+  }
   if (!Number.isFinite(buttonRaw) || !Number.isFinite(xRaw) || !Number.isFinite(yRaw)) {
     return undefined;
   }
@@ -208,7 +211,7 @@ function parseSgrMouse(
 }
 
 export function createBufferedKeyParser(): BufferedKeyParser {
-  let pending = new Uint8Array();
+  let pending: Uint8Array = new Uint8Array();
 
   return {
     push(data: Uint8Array): Key[] {

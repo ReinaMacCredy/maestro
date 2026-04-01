@@ -1,269 +1,133 @@
 # Architecture
 
-High-level architecture for Mission Control in Maestro.
+High-level architecture for the Mission Control reliability and cross-CLI orchestration mission.
 
-**What belongs here:** Component relationships, data flow, storage boundaries, and invariants workers need before editing code.
+**What belongs here:** Component relationships, runtime-state boundaries, recovery data flow, and invariants workers need before editing code.
 
 ---
 
 ## System Overview
 
-Mission Control extends the existing handoff-oriented CLI with mission planning and execution state. The CLI remains the only executable surface. It persists and validates state; the human/AI orchestrator remains responsible for planning, spawning workers, and making decisions.
+Mission Control currently behaves mostly as a lifecycle/state persistence layer. This mission extends it into a more reliable orchestration substrate by adding explicit runtime supervision, cross-CLI session/hook parity, automatic recovery, operator controls, and checkpoint-aware recovery semantics.
 
-## Core Architectural Rule
+The product remains a CLI/TUI application. It still does not become a full autonomous agent runner, but it gains enough runtime modeling to represent active, stale, failed, recoverable, and resumed work coherently.
 
-**Maestro is a state machine and persistence layer, not an agent runtime.**
+## Architectural Direction
 
-That means:
-- Maestro stores mission plans, feature state, assertion state, checkpoints, prompts, and reports
-- Maestro validates transitions and referential integrity
-- Maestro can generate worker prompts from stored mission data and skill files
-- Maestro does **not** spawn workers, pick strategies, manage git branches, or make autonomous decisions
+### 1. Runtime state becomes first-class
+
+Feature status is not enough to represent real execution. The mission should introduce a dedicated runtime-state record for feature execution concerns such as:
+- ownership / worker identity
+- host or session attribution
+- last-seen / lease / freshness timestamps
+- runtime condition (`live`, `stale`, `failed`, `recoverable`, etc.)
+- recovery/audit metadata references
+
+This runtime state must be persisted separately from feature status and consumed by Mission Control views, recovery logic, and checkpointing.
+
+### 2. Cross-CLI support is adapter-driven
+
+Supported host CLIs (Claude, Codex, Droid, and any others explicitly in scope) should be represented through adapters and normalized metadata rather than host-specific assumptions leaking into usecases.
+
+Key rule:
+- host-specific detection/hook capture happens at the boundary
+- normalized session/event/runtime metadata flows through usecases and snapshots
+
+### 3. Recovery is explicit and auditable
+
+Automatic recovery must not silently mutate state. Every recovery action should leave a paper trail across:
+- runtime-state metadata
+- retry history
+- preserved worker report state
+- event/audit records
+
+Recovery should requeue work safely without producing duplicate active ownership records.
+
+### 4. Operator surfaces read the same truth
+
+`mission-control --json`, one-frame Mission Control, and the interactive TUI must all derive runtime/recovery state from the same persisted runtime model.
+
+If the JSON view says a feature is stale/recoverable, the interactive Mission Control surface and compiled binary must communicate the same state.
+
+### 5. Checkpoints snapshot recovery context, not just lifecycle status
+
+Checkpoint save/load currently centers on feature/assertion states. This mission extends checkpoint semantics so the system can resume or recover interrupted work coherently. Runtime recovery metadata must be captured/restored with safe rules, especially around expired ownership.
 
 ## Main Components
 
-### CLI command groups
+### Domain layer
 
-- `mission`: create/show/list/approve/reject/update mission lifecycle
-- `feature`: list/update/prompt feature lifecycle and worker prompt generation
-- `milestone`: list/status/seal milestone progress
-- `validate`: show/update assertion state
-- `checkpoint`: save/load/list execution snapshots
+Expected areas of change:
+- runtime-state types and validators
+- recovery-related lifecycle helpers and invariants
+- cross-CLI normalized session/event metadata types
+- checkpoint data structures extended for runtime recovery context
 
 ### Usecase layer
 
-Pure async functions coordinate domain validation and persistence through ports. Commands should stay thin and convert domain results into CLI output.
+Expected responsibilities:
+- session detection and host-context normalization
+- runtime-state persistence and freshness evaluation
+- automatic recovery orchestration
+- snapshot derivation for Mission Control JSON/TUI
+- checkpoint save/load semantics for runtime recovery data
 
-### Domain layer
+### Adapter layer
 
-Mission-specific domain files define:
-- status unions and input types
-- Zod validators
-- ID generation
-- state-machine transition guards
-- helpful mission-specific errors
+Expected responsibilities:
+- filesystem persistence for runtime-state and checkpoint extensions
+- host/session detection adapters
+- hook/event ingestion adapters or normalization helpers
+- service wiring in `src/services.ts`
 
-### Ports and adapters
+### CLI/TUI layer
 
-Filesystem-backed ports persist the mission graph:
-- mission metadata in `mission.json`
-- one file per feature in `features/{featureId}.json`
-- assertion array in `assertions.json`
-- timestamped snapshots in `checkpoints/`
-- worker prompt/report artifacts in `workers/{featureId}/`
-
-## Data Flow
-
-1. A complete mission plan enters through `maestro mission create`
-2. The create usecase validates cross-references and dependency cycles
-3. Filesystem adapters persist mission metadata plus per-feature and assertion files
-4. Feature and assertion commands move entities through validated state transitions
-5. Prompt generation reads stored mission state plus `.maestro/skills/{workerType}/SKILL.md`
-6. Checkpoints snapshot metadata so execution can resume later
+Expected responsibilities:
+- operator-visible recovery and runtime context
+- explicit recovery/retry/resume command paths where applicable
+- compiled-binary parity with source-run behavior
 
 ## Storage Boundaries
 
 ### Product runtime state
 
-Mission Control runtime state must live under:
+Mission Control product runtime continues to live under:
 
 ```text
 .maestro/missions/{missionId}/
 ```
 
-Expected structure:
+This mission may extend that layout with additional runtime-oriented files/directories, but must keep runtime state inside the same mission-scoped namespace.
 
-```text
-.maestro/missions/{missionId}/
-  mission.json
-  features/
-    {featureId}.json
-  assertions.json
-  checkpoints/
-    {timestamp}.json
-  workers/
-    {featureId}/
-      prompt.md
-      report.json
-```
+### Repo mission infrastructure
 
-### Skill locations
+`.factory/` in this repository is worker/validator infrastructure and mission knowledge. It is not product runtime state.
 
-- Built-in shipped skills live under `skills/built-in/`
-- Per-project worker skills used by prompt generation live under `.maestro/skills/{workerType}/SKILL.md`
+## Proposed Data Shape Boundaries
 
-### Non-goal boundary
+At a high level, workers should expect these concerns to remain separate:
 
-Do not put product runtime mission state under `.factory/`. In this repo, `.factory/` exists only to guide mission workers and validators.
+- **feature state**: lifecycle of planned work (`pending`, `assigned`, `in-progress`, etc.)
+- **runtime state**: who owns active work, freshness, failure, recovery, audit links
+- **assertion state**: validation outcomes
+- **checkpoint state**: a snapshot of feature/assertion/runtime context for resume/recovery
+- **event history**: append-oriented host/tool/runtime signals that can support audit and recovery
 
-## Invariants
+## Critical Invariants
 
-1. Mission IDs follow the existing `YYYY-MM-DD-NNN` date-sequential format
-2. Feature, milestone, and assertion IDs are user-supplied and must remain unique within a mission
-3. All cross-references are validated before persistence
-4. Each feature file is updated independently to avoid concurrent shared-file corruption
-5. Milestones can seal only when their assertions are terminal (`passed` or `waived`)
-6. `waived` assertions require a stored reason and are terminal
-7. Generated worker prompts must remain structurally stable even when stored user content contains prompt-like text
+1. A feature may have at most one live runtime ownership record at a time.
+2. Recovery must preserve previous evidence (`report.json`, retry history, event history) instead of overwriting it.
+3. Missing host hook/session context must degrade gracefully and never crash normal CLI flows.
+4. Cross-CLI support must not regress existing Claude/Codex behavior.
+5. Mission Control surfaces must derive runtime truth from explicit runtime state, not only feature timestamps.
+6. Checkpoint restore must never revive expired ownership as currently live work.
+7. Operator recovery workflows must be available through supported surfaces rather than requiring manual file edits.
 
-## Data Flow
+## Verification Focus
 
-### Mission Creation Flow
-1. User runs `maestro mission create --name X --objective Y`
-2. CLI parses arguments and calls `createMission()` use case
-3. Use case generates ID, validates input
-4. MissionStoreAdapter writes to `.maestro/missions/{id}/mission.yaml`
-5. CLI outputs mission ID
-
-### Feature Addition Flow
-1. User runs `maestro feature add --description "Do X" --skill worker`
-2. CLI validates description and skill exist
-3. FeatureStoreAdapter appends to `features.json`
-4. Feature gets sequential ID within mission
-
-### Execution Flow
-1. User runs `maestro run`
-2. System loads mission and features
-3. Scheduler builds dependency graph
-4. For each ready feature:
-   - Select agent based on capabilities
-   - Create handoff with context
-   - Spawn agent process
-   - Wait for completion report
-5. At milestone end: inject scrutiny validator
-6. After scrutiny: inject user testing validator
-7. Milestone sealed when all assertions pass
-
-## Key Abstractions
-
-### State Machines
-
-**Task State:**
-```
-pending → assigned → in-progress → review → done
-   ↑                                      |
-   └────────── retry (on failure) ────────┘
-```
-
-**Feature State:**
-```
-pending → in-progress → completed
-   ↑            |
-   └──── retry ─┘
-```
-
-**Mission State:**
-```
-planning → running → validating → completed
-              ↓         ↓
-           paused   failed
-```
-
-### Validation Flow
-
-```
-Milestone Complete
-       ↓
-┌──────────────────┐
-│ Scrutiny Inject  │ (auto)
-│ Review Features  │
-│ Synthesize       │
-└────────┬─────────┘
-       ↓ (pass)
-┌──────────────────┐
-│ User Test Inject │ (auto)
-│ Validate Asserts │
-│ Update State     │
-└────────┬─────────┘
-       ↓ (pass)
-   Milestone Sealed
-```
-
-## Storage Schema
-
-### Mission Directory Structure
-```
-.maestro/missions/{mission-id}/
-├── mission.yaml              # Mission metadata
-├── features.json             # Feature list
-├── validation-contract.md    # Behavioral assertions
-├── validation-state.json     # Assertion statuses
-├── events.yaml               # Timeline events
-├── notes.yaml                # Mission notes
-├── checkpoints/              # Execution checkpoints
-│   ├── checkpoint-{timestamp}.yaml
-│   └── ...
-└── workers/                  # Worker assignments
-    └── {worker-id}/
-        ├── worker.yaml
-        └── handoffs/
-```
-
-### File Formats
-
-**mission.yaml:**
-```yaml
-id: "2026-03-29-abc123"
-name: "Refactor Auth System"
-objective: "Modernize authentication"
-status: "running"
-createdAt: "2026-03-29T10:00:00Z"
-updatedAt: "2026-03-29T14:30:00Z"
-description: "Full auth refactor..."
-priority: "high"
-```
-
-**features.json:**
-```json
-{
-  "features": [
-    {
-      "id": "2026-03-29-abc123-F001",
-      "description": "Implement JWT validation",
-      "skillName": "backend-worker",
-      "status": "completed",
-      "fulfills": ["VAL-M2-FEATURE-001"]
-    }
-  ]
-}
-```
-
-**agents.yaml:** (global)
-```yaml
-agents:
-  - slug: "claude-code"
-    displayName: "Claude Code"
-    configDir: ".claude"
-    configFile: "CLAUDE.md"
-    capabilities: ["typescript", "design"]
-    fallback: ["codex"]
-```
-
-## Invariants
-
-1. **ID Uniqueness** - All IDs are globally unique within their scope
-2. **State Validity** - All state transitions are validated before application
-3. **Storage Atomicity** - Critical writes are atomic (write temp + rename)
-4. **Validation Completeness** - Milestones only seal when all assertions pass
-5. **Agent Attribution** - All work attributed to executing agent
-6. **Context Preservation** - Handoffs preserve full execution context
-
-## Extension Points
-
-### Adding New Agent Types
-1. Add agent spec to `SUPPORTED_AGENTS` in domain
-2. Add agent to `agents.yaml` if custom
-3. Create agent-specific prompt template
-4. Test handoff pickup flow
-
-### Adding New Commands
-1. Create command file in `src/commands/`
-2. Register in `src/index.ts`
-3. Add integration tests
-4. Add to validation contract
-
-### Adding New Storage Backends
-1. Implement port interface (e.g., `MissionStorePort`)
-2. Create adapter (e.g., `DatabaseMissionStoreAdapter`)
-3. Update services.ts to inject new adapter
-4. Add adapter-specific tests
+Workers should verify changes through:
+- temp git repo CLI flows
+- persisted runtime/checkpoint file inspection
+- `mission-control --json`
+- one-frame / PTY Mission Control checks
+- compiled `./dist/maestro` parity for user-facing behavior

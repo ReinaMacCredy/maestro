@@ -71,7 +71,7 @@ beforeEach(async () => {
       isAvailable: async () => true,
       hasBinary: async () => true,
       indexOnce: async () => undefined,
-      search: async () => ({ query: "", hits: [] }),
+      search: async () => ({ query: "", hits: [], count: 0, totalMatches: 0 }),
     } satisfies CassPort,
     git: {
       getState: async () => ({
@@ -230,7 +230,7 @@ describe("buildSnapshot", () => {
           return true;
         },
         indexOnce: async () => undefined,
-        search: async () => ({ query: "", hits: [] }),
+        search: async () => ({ query: "", hits: [], count: 0, totalMatches: 0 }),
       } satisfies CassPort,
     };
 
@@ -257,7 +257,7 @@ describe("buildSnapshot", () => {
           return true;
         },
         indexOnce: async () => undefined,
-        search: async () => ({ query: "", hits: [] }),
+        search: async () => ({ query: "", hits: [], count: 0, totalMatches: 0 }),
       } satisfies CassPort,
       git: deps.git,
     };

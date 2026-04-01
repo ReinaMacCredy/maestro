@@ -33,6 +33,10 @@ function makeSnapshot(): MissionControlSnapshot {
     milestones: [],
     canPause: true,
     canResume: false,
+    session: null,
+    pendingHandoffs: [],
+    configSummary: null,
+    runtimeProcesses: [],
     home: null,
   };
 }

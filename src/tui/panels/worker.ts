@@ -154,14 +154,14 @@ function getFileRows(
     return [{ label: "Files", value: "no local edits", style: "muted" }];
   }
 
-  const rows = session.changedFiles.slice(0, 2).map((filePath, index) => ({
+  const rows: Array<{ label: string; value: string; style: "value" | "muted" }> = session.changedFiles.slice(0, 2).map((filePath, index) => ({
     label: index === 0 ? "Files" : "",
     value: filePath,
     style: "value" as const,
   }));
   const remaining = session.changedFiles.length - rows.length;
   if (remaining > 0) {
-    rows.push({ label: "", value: `+${remaining} more`, style: "muted" });
+    rows.push({ label: "", value: `+${remaining} more`, style: "muted" as const });
   }
   return rows;
 }

@@ -14,6 +14,8 @@ import type { Mission, Feature } from "../domain/mission-types.js";
 import type { DoctorCheck, StatusReport } from "../domain/types.js";
 import { CASS_INSTALL_HINT } from "../domain/defaults.js";
 import { generateMissionReport, type MissionReport } from "../usecases/mission-report.usecase.js";
+import { checkStatus } from "../usecases/check-status.usecase.js";
+import { runDoctor } from "../usecases/run-doctor.usecase.js";
 import { getValidFeatureTransitions } from "../domain/mission-state.js";
 import { deriveEvents } from "./events.js";
 import type {
@@ -172,7 +174,7 @@ export async function buildHomeSnapshot(
 ): Promise<MissionControlSnapshot> {
   const [env, gitState] = await Promise.all([
     buildMissionControlEnvironmentSummary(deps.handoffStore, deps.config, deps.cass, deps.git, cwd),
-    deps.git.isRepo(cwd) ? deps.git.getState(cwd) : Promise.resolve(undefined),
+    deps.git.isRepo(cwd).then((isRepo) => isRepo ? deps.git.getState(cwd) : Promise.resolve(undefined)),
   ]);
   const { status, checks } = env;
 
@@ -296,11 +298,11 @@ function buildActiveWorker(
 
 function buildHomeActions(
   status: Awaited<ReturnType<typeof checkStatus>>,
-  checks: Awaited<ReturnType<typeof runDoctor>>,
+  checks: readonly DoctorCheck[],
 ): readonly MissionControlHomeAction[] {
   const actions: MissionControlHomeAction[] = [];
-  const projectConfig = checks.find((check) => check.name === "project-config");
-  const globalConfig = checks.find((check) => check.name === "global-config");
+  const projectConfig = checks.find((check: DoctorCheck) => check.name === "project-config");
+  const globalConfig = checks.find((check: DoctorCheck) => check.name === "global-config");
 
   if (!status.gitAvailable) {
     actions.push({

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "== Maestro Mission Control init =="
+echo "== Maestro Mission Control reliability init =="
 
 if ! command -v bun >/dev/null 2>&1; then
   echo "[!] Bun is required: https://bun.sh"
@@ -23,7 +23,7 @@ else
   echo "[ok] node_modules already present"
 fi
 
-echo "[...] Verifying local toolchain"
+echo "[...] Verifying baseline toolchain"
 bun run typecheck >/dev/null
 echo "[ok] TypeScript typecheck passes at init time"
 

@@ -8,7 +8,7 @@ function makeMission(overrides: Partial<Mission> = {}): Mission {
     status: "executing",
     title: "Test Mission",
     description: "A test mission",
-    milestones: [{ id: "m1", title: "Milestone 1", description: "First", order: 0 }],
+    milestones: [{ id: "m1", title: "Milestone 1", description: "First", order: 0, featureIds: [] }],
     features: ["f1"],
     createdAt: "2026-03-30T10:00:00.000Z",
     updatedAt: "2026-03-30T10:05:00.000Z",

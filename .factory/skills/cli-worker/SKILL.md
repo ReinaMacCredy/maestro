@@ -1,22 +1,21 @@
 ---
 name: cli-worker
-description: Implement Mission Control CLI commands, prompt generation, shipped skills, and user-visible command behavior in Maestro
+description: Implement Mission Control CLI commands, Mission Control snapshot/TUI behavior, and user-visible recovery/operator workflows in Maestro
 ---
 
 # CLI Worker
 
-NOTE: startup and cleanup are handled by `worker-base`. This skill defines the work procedure for CLI-facing Mission Control features.
+NOTE: startup and cleanup are handled by `worker-base`. This skill defines the work procedure for CLI-facing Mission Control reliability features.
 
 ## When to Use This Skill
 
 Use for features involving:
 - command registration in `src/index.ts`
 - Commander subcommand groups and option handling
-- human-readable and JSON output formatting
-- worker prompt generation
-- progress/reporting views
-- shipped skill markdown content under `skills/built-in/`
-- CLI integration tests and temp-repo smoke checks
+- `mission-control` JSON/text/TUI behavior
+- operator-facing pause/resume/recover/retry/history flows
+- compiled binary parity and user-visible output formatting
+- PTY or one-frame Mission Control verification
 
 ## Required Skills
 
@@ -24,62 +23,62 @@ None.
 
 ## Work Procedure
 
-1. Read the feature description, affected assertions, and `.factory/library/implementation-patterns.md`.
-2. Sketch the CLI contract before editing code: command path, arguments/options, JSON behavior, and failure cases.
-3. Add failing integration tests first for the user-visible behavior. Use temp git repos and Bun subprocesses rather than testing through private helpers alone.
-4. Implement command handlers as thin shells over usecases:
-   - register under the correct command group
+1. Read the feature description, `fulfills` assertions, and the relevant `.factory/library/*.md` files, especially `architecture.md`, `user-testing.md`, and any mission-specific topic file for your area.
+2. Sketch the user-visible CLI/TUI contract before editing code: commands, options, JSON fields, one-frame/TUI output changes, and failure hints.
+3. Add failing integration or PTY-facing tests first for the intended user-visible behavior. Prefer temp git repos and Bun subprocesses over private helper-only coverage.
+4. Implement command or snapshot/TUI changes as thin shells over usecases:
+   - keep command handlers thin
    - use `getServices()`
-   - route output through `output(...)`
-   - keep error behavior consistent with existing commands
-5. If the feature involves prompt generation or shipped skill files, verify the actual written markdown content, not just return values.
-6. Run targeted integration/unit tests while iterating, then finish with the feature's verification steps. When CLI wiring changes substantially, include `bun run build`.
-7. In the handoff, include the exact CLI commands you ran and what their output proved.
+   - route structured output through existing output helpers
+   - keep source-run and compiled-binary behavior aligned
+5. If Mission Control rendering changes, verify both JSON and operator-visible text/interactive output. Do not rely on JSON-only coverage for UI-facing recovery states.
+6. Run narrow test files while iterating, then finish with `bun run typecheck`. If the feature changes user-facing CLI/TUI behavior, also run `bun run build`, `./dist/maestro --version`, and a compiled `./dist/maestro mission-control ...` check.
+7. In the handoff, include the exact commands/PTY checks you ran and what operator-visible behavior they proved.
 
 ## Example Handoff
 
 ```json
 {
-  "salientSummary": "Implemented the Mission Control command group for mission lifecycle plus prompt JSON inheritance. Added CLI integration coverage for create/show/approve/update flows and verified generated prompts write to worker artifact paths.",
-  "whatWasImplemented": "Added `mission`, `feature`, and `milestone` command registration in `src/index.ts`, implemented command handlers that call Mission Control usecases, introduced a `resolveJsonFlag()` helper for root/group/leaf `--json` behavior, and added integration tests using temp git repositories. Also updated built-in Mission Control skill files to match the shipped command syntax.",
+  "salientSummary": "Updated Mission Control JSON and TUI views to show explicit runtime recovery state and added operator-facing retry history output. Verified both source-run and compiled `./dist/maestro` Mission Control surfaces against the same fixture mission.",
+  "whatWasImplemented": "Extended the Mission Control snapshot and rendering layers to consume explicit runtime-state records, surfaced recoverable/stale/failed status in both JSON and one-frame/interactive views, added CLI coverage for operator recovery/history inspection, and kept compiled-binary output aligned with source-run behavior.",
   "whatWasLeftUndone": "",
   "verification": {
     "commandsRun": [
       {
-        "command": "bun test tests/integration/mission-commands.test.ts tests/integration/feature-commands.test.ts",
+        "command": "bun test tests/integration/mission-control.test.ts tests/unit/tui",
         "exitCode": 0,
-        "observation": "Mission and feature CLI roundtrips passed in temp git repositories, including JSON output and invalid-transition failures."
-      },
-      {
-        "command": "bun run src/index.ts mission create --file tmp/plan.json --json",
-        "exitCode": 0,
-        "observation": "CLI emitted parseable JSON with a generated mission ID and created `.maestro/missions/{id}` runtime state."
+        "observation": "Mission Control JSON/TUI regressions passed, including runtime/recovery rendering expectations."
       },
       {
         "command": "bun run typecheck",
         "exitCode": 0,
-        "observation": "Command registrations and output helpers compile cleanly."
+        "observation": "Command, snapshot, and TUI changes compile cleanly."
+      },
+      {
+        "command": "bun run build && ./dist/maestro --version && ./dist/maestro mission-control --once",
+        "exitCode": 0,
+        "observation": "Compiled binary was rebuilt successfully and rendered the expected Mission Control recovery state."
       }
     ],
     "interactiveChecks": [
       {
-        "action": "Create a temp git repo, run `bun run src/index.ts feature prompt f1 --mission <id> --out /tmp/prompt.md`, and inspect the written prompt",
-        "observed": "Prompt contained mission context, feature verification steps, and the worker skill body, and it was written both to `/tmp/prompt.md` and `.maestro/missions/{id}/workers/f1/prompt.md`."
+        "action": "Run Mission Control in a PTY fixture mission with stale and recoverable runtime states present",
+        "observed": "Interactive output distinguished active work from stale/recoverable work and matched the JSON snapshot for the same mission."
       }
     ]
   },
   "tests": {
     "added": [
       {
-        "file": "tests/integration/mission-commands.test.ts",
+        "file": "tests/integration/mission-control.test.ts",
         "cases": [
           {
-            "name": "mission create initializes runtime state under .maestro/missions with generated ID",
-            "verifies": "VAL-MISSION-001"
+            "name": "mission-control --json exposes runtime recovery context from explicit runtime records",
+            "verifies": "VAL-OPS-001"
           },
           {
-            "name": "maestro --json mission create emits parseable JSON",
-            "verifies": "VAL-CROSS-002"
+            "name": "compiled Mission Control reports the same runtime recovery state as source-run JSON snapshot",
+            "verifies": "VAL-CROSS-003"
           }
         ]
       }
@@ -91,6 +90,6 @@ None.
 
 ## When to Return to Orchestrator
 
-- The feature needs a new lifecycle behavior that is not covered by the approved plan
-- Existing deleted skill trees or legacy output contracts appear to require a broader migration decision
-- A CLI-facing regression exists in pre-existing handoff/session flows that is unrelated to Mission Control scope
+- The feature needs a new operator workflow or command contract that is not specified in the approved mission
+- Existing interactive/PTy helpers are insufficient and a broader testing-strategy change is required
+- A cross-CLI or runtime-state decision would alter backend invariants beyond the feature budget

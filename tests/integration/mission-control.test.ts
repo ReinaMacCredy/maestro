@@ -281,7 +281,7 @@ function getDurationSamples(plainOutput: string): string[] {
 
 interface PtyRunOptions {
   readonly input: string;
-  readonly inputSteps?: readonly Array<{ chars: string; delayMs?: number }>;
+  readonly inputSteps?: ReadonlyArray<{ chars: string; delayMs?: number }>;
   readonly delayMs?: number;
   readonly timeoutMs?: number;
   readonly waitForText?: string;

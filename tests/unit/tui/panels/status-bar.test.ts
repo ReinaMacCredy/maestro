@@ -29,6 +29,10 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
     canPause: true,
     canResume: false,
     home: null,
+    session: null,
+    pendingHandoffs: [],
+    configSummary: null,
+    runtimeProcesses: [],
     ...overrides,
   };
 }
