@@ -8,25 +8,22 @@ import type { SnapshotDeps } from "./snapshot.js";
 import { createInitialState, reduce, type AppState, type Action } from "./state.js";
 import { HEADER_DOT_INTERVAL_MS, isHeaderAnimationActive } from "./panels/header.js";
 import {
-  getMissionControlCommandSpecs,
-} from "./mission-control-commands.js";
-import {
   pointInRect,
 } from "./widgets/modal.js";
 import { getValidFeatureTransitions } from "../domain/mission-state.js";
 import { updateFeature } from "../usecases/feature-lifecycle.usecase.js";
 import { renderFrame, type OnceFrameOptions, renderOnceFrame, getActiveModalLayout } from "./app/render.js";
 import {
-  buildModalOptions,
   isSelectableListModal,
   getFilteredCommandPaletteItems,
   getCommandPaletteSelectionAction,
-  actionForMissionControlCommand,
 } from "./app/modal-builders.js";
+import { keyToAction, shouldSubmitFeatureAction } from "./app/input-dispatch.js";
 import type { MissionControlSnapshot } from "./types.js";
 
 // Re-exports for backward compatibility
 export { renderFrame, renderOnceFrame, type OnceFrameOptions };
+export { keyToAction };
 export type { Action };
 
 export interface InteractiveOptions {
@@ -277,69 +274,3 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
   }
 }
 
-// ── Key Mapping ─────────────────────────────────────
-
-export function keyToAction(key: Key, state: AppState): Action | undefined {
-  if (key.type === "char" && key.char === "q" && state.modal.kind === "none") {
-    return { type: "quit" };
-  }
-  if (key.type === "ctrl" && (key.char === "t" || key.char === "c")) {
-    return { type: "quit" };
-  }
-  if (key.type === "ctrl" && key.char === "p") {
-    return { type: "open-command-palette" };
-  }
-  if (key.type === "ctrl" && key.char === "y") {
-    return { type: "toggle-copy-mode" };
-  }
-  if (key.type === "escape") {
-    return { type: "escape" };
-  }
-    if (
-      key.type === "arrow"
-      && key.direction === "left"
-      && (
-        ((
-          state.modal.kind === "feature-browser"
-          || state.modal.kind === "dependencies"
-          || state.modal.kind === "overview"
-        || state.modal.kind === "handoffs"
-        || state.modal.kind === "config"
-        || state.modal.kind === "processes"
-      ) && state.modal.returnTarget === "command-palette")
-    )
-  ) {
-    return { type: "navigate", direction: "left" };
-  }
-  if (key.type === "arrow" && (key.direction === "up" || key.direction === "down")) {
-    return { type: "navigate", direction: key.direction };
-  }
-  if ((key.type === "backspace" || key.type === "delete") && state.modal.kind === "command-palette") {
-    return { type: "modal-query-backspace" };
-  }
-  if (key.type === "enter") {
-    return { type: "enter" };
-  }
-  if (key.type === "char" && state.modal.kind === "command-palette") {
-    return { type: "modal-query-append", char: key.char };
-  }
-  if (key.type === "char" && state.modal.kind === "none") {
-    const hotkey = key.char.toUpperCase();
-    const command = getMissionControlCommandSpecs(state.snapshot.mode)
-      .find((spec) => spec.key === hotkey);
-    if (command) {
-      return actionForMissionControlCommand(command.id);
-    }
-    switch (hotkey) {
-      case "L":
-      case "W":
-        return { type: "focus", panel: "log" };
-    }
-  }
-  return undefined;
-}
-
-function shouldSubmitFeatureAction(state: AppState): boolean {
-  return state.modal.kind === "feature-action"
-    && (state.modal.phase === "confirming" || state.modal.phase === "error");
-}
