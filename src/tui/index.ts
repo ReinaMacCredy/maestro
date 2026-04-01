@@ -536,7 +536,7 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
     const commands = getFilteredCommandPaletteItems(state);
     return {
       mode: "palette",
-      title: "Commands",
+      title: "Command Palette",
       query: state.modal.query,
       items: commands.map((command) => ({
         label: command.label,
@@ -548,7 +548,6 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
         state.modal.selectedCommandIndex,
         Math.max(0, commands.length - 1),
       ),
-      footer: "Enter open · Esc close",
       emptyLabel: "No commands match your filter",
     };
   }

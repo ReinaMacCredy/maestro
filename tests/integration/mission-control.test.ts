@@ -779,9 +779,10 @@ describe("mission-control CLI", () => {
       );
 
       expectCleanPtyExit(result);
-      expect(result.plainOutput).toContain("Commands");
-      expect(result.plainOutput).toContain("Navigate");
-      expect(result.plainOutput).toContain("Enter open · Esc close");
+      expect(result.plainOutput).toContain("Command Palette");
+      expect(result.plainOutput).toContain("navigate");
+      expect(result.plainOutput).toContain("tasks");
+      expect(result.plainOutput).not.toContain("Enter open · Esc close");
     }, PTY_TIMEOUT_MS);
 
     it("compiled binary interactive mode filters the command palette and activates Features", async () => {
@@ -806,7 +807,8 @@ describe("mission-control CLI", () => {
       );
 
       expectCleanPtyExit(result);
-      expect(result.plainOutput).toContain("Commands");
+      expect(result.plainOutput).toContain("Command Palette");
+      expect(result.plainOutput).toContain("> fea");
       expect(result.plainOutput).toContain("Select a task to focus");
     }, PTY_TIMEOUT_MS);
 

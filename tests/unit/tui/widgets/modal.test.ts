@@ -196,11 +196,11 @@ describe("renderModal", () => {
     const buf = new Buffer(90, 28);
     const layout = renderModal(buf, { x: 0, y: 0, width: 90, height: 28 }, {
       mode: "palette",
-      title: "Commands",
+      title: "Command Palette",
       query: "pro",
       items: [
         {
-          label: "Processes",
+          label: "Runtime",
           detail: "List live Maestro runtime work for this mission",
           hint: "P",
           section: "Navigate",
@@ -213,52 +213,51 @@ describe("renderModal", () => {
         },
       ],
       selectedIndex: 0,
-      footer: "Enter open · Esc close",
     });
 
     const text = buf.toString();
-    expect(text).toContain("Commands");
-    expect(text).toContain("pro");
-    expect(text).toContain("Navigate");
-    expect(text).toContain("Processes");
+    expect(text).toContain("Command Palette");
+    expect(text).toContain("> pro");
+    expect(text).toContain("navigate");
+    expect(text).toContain("runtime");
     expect(text).toContain("Ctrl+T");
     expect(text).toContain("esc");
-      expect(buf.getCell(layout.y, layout.x)?.bg).toBe(PALETTE.overlaySurfaceBg);
+    expect(text).not.toContain("Enter open · Esc close");
+    expect(buf.getCell(layout.y, layout.x)?.bg).toBe(PALETTE.overlaySurfaceBg);
+  });
+
+  it("sanitizes menu detail text before it reaches the terminal buffer", () => {
+    const buf = new Buffer(90, 28);
+    renderModal(buf, { x: 0, y: 0, width: 90, height: 28 }, {
+      mode: "menu",
+      title: "Runtime",
+      items: [
+        {
+          label: "Inspect runtime",
+          detail: "\u001b[2Jruntime failed\u0007",
+          hint: "P",
+          section: "Navigate",
+        },
+      ],
+      selectedIndex: 0,
+      footer: "Esc close",
     });
 
-    it("sanitizes modal detail text before it reaches the terminal buffer", () => {
-      const buf = new Buffer(90, 28);
-      renderModal(buf, { x: 0, y: 0, width: 90, height: 28 }, {
-        mode: "palette",
-        title: "Commands",
-        query: "",
-        items: [
-          {
-            label: "Processes",
-            detail: "\u001b[2Jruntime failed\u0007",
-            hint: "P",
-            section: "Navigate",
-          },
-        ],
-        selectedIndex: 0,
-        footer: "Enter open · Esc close",
-      });
-
-      const text = buf.toString();
-      expect(text).toContain("runtime failed");
-      expect(text).not.toContain("\u001b");
-      expect(text).not.toContain("\u0007");
-      expect(text).not.toContain("[2J");
-    });
+    const text = buf.toString();
+    expect(text).toContain("runtime failed");
+    expect(text).not.toContain("\u001b");
+    expect(text).not.toContain("\u0007");
+    expect(text).not.toContain("[2J");
+  });
 
   it("keeps at least one selectable row in short but valid palette heights", () => {
-      const layout = layoutModal({ x: 1, y: 5, width: 78, height: 8 }, {
-        mode: "palette",
-      title: "Commands",
+    const layout = layoutModal({ x: 1, y: 5, width: 78, height: 8 }, {
+      mode: "palette",
+      title: "Command Palette",
       query: "",
       items: [
         {
-          label: "Features",
+          label: "Tasks",
           detail: "Browse mission features and focus a specific item",
           hint: "F",
           section: "Navigate",
@@ -271,12 +270,11 @@ describe("renderModal", () => {
         },
       ],
       selectedIndex: 0,
-      footer: "Enter open · Esc close",
     });
 
-      expect(layout.contentRect.height).toBeGreaterThan(0);
-      expect(layout.itemRects.length).toBeGreaterThan(0);
-    });
+    expect(layout.contentRect.height).toBeGreaterThan(0);
+    expect(layout.itemRects.length).toBeGreaterThan(0);
+  });
 
     it("renders split overlays with selectable left rows and live detail content", () => {
       const buf = new Buffer(100, 30);

@@ -513,13 +513,14 @@ describe("frame rendering", () => {
         renderFrame(buf, state);
 
         const frame = buf.toString();
-        expect(frame).toContain("Commands");
-        expect(frame).toContain("Navigate");
-        expect(frame).toContain("Runtime");
-        expect(frame).toContain("Enter open · Esc close");
-          expect(buf.getCell(1, 1)?.bg).toBe(PALETTE.overlayBackdropBg);
-          expect(buf.getCell(1, 1)?.dim).toBe(true);
-        });
+        expect(frame).toContain("Command Palette");
+        expect(frame).toContain("> pro");
+        expect(frame).toContain("navigate");
+        expect(frame).toContain("runtime");
+        expect(frame).not.toContain("Enter open · Esc close");
+        expect(buf.getCell(1, 1)?.bg).toBe(PALETTE.overlayBackdropBg);
+        expect(buf.getCell(1, 1)?.dim).toBe(true);
+      });
 
         it("renders the dependencies overlay as a split pane", () => {
           const snapshot = makeSnapshot({
