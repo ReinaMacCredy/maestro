@@ -16,7 +16,7 @@ describe("renderProgressLog", () => {
     renderProgressLog(buf, { x: 0, y: 0, width: 48, height: 8 }, EVENTS);
 
     const ageCell = buf.getCell(2, 3);
-    expect(ageCell?.fg).toBe(PALETTE.gray);
+    expect(ageCell?.fg).toBe(PALETTE.overlayHint);
   });
 
   it("uses bright text for non-feature events", () => {

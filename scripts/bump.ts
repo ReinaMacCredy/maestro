@@ -4,6 +4,7 @@
  * Default: patch
  */
 import { join } from "node:path";
+import { writeVersionArtifacts } from "./version-file";
 
 const root = join(import.meta.dir, "..");
 const pkgPath = join(root, "package.json");
@@ -25,8 +26,12 @@ switch (part) {
   case "patch": next = `${major}.${minor}.${patch + 1}`; break;
 }
 
-pkg.version = next;
-await Bun.write(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
-await Bun.write(versionPath, `export const VERSION = "${next}";\n`);
+await writeVersionArtifacts({
+  cwd: root,
+  pkgPath,
+  versionPath,
+  pkg,
+  version: next,
+});
 
 console.log(`[ok] ${pkg.version.replace(next, `${major}.${minor}.${patch}`)} --> ${next}`);

@@ -50,7 +50,9 @@ describe("CLI integration", () => {
   it("prints version", async () => {
     const { stdout, exitCode } = await run(["--version"]);
     expect(exitCode).toBe(0);
-    expect(stdout).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(stdout).toMatch(
+      /^\d+\.\d+\.\d+\.\d+-g[a-z0-9]+ \(released \d{4}-\d{2}-\d{2}T.+, \S+ ago\)$/,
+    );
   });
 
   it("prints help with all commands", async () => {
