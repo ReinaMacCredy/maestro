@@ -84,7 +84,7 @@ export function renderSessionSidebar(
     const presentation = getFileChangePresentation(fileChange.kind);
     const labelWidth = 9;
     if (label) {
-      buf.writeText(row, rect.x + 1, truncate(label, labelWidth), { fg: PALETTE.dimGray });
+      buf.writeText(row, rect.x + 1, truncate(label, labelWidth), { fg: PALETTE.gray });
     }
     const valueX = rect.x + 1 + (label ? labelWidth + 1 : 0);
     buf.writeText(row, valueX, presentation.symbol, { fg: presentation.color });
@@ -284,9 +284,9 @@ function writeLabeledRow(
 ): void {
   const labelWidth = 9;
   const availableWidth = Math.max(0, rect.width - 3);
-  if (label) {
-    buf.writeText(row, rect.x + 1, truncate(label, labelWidth), { fg: PALETTE.dimGray });
-  }
+    if (label) {
+      buf.writeText(row, rect.x + 1, truncate(label, labelWidth), { fg: PALETTE.gray });
+    }
   const valueOffset = label ? labelWidth + 1 : 0;
   const valueX = rect.x + 1 + valueOffset;
   const valueWidth = Math.max(0, availableWidth - valueOffset);
@@ -311,14 +311,14 @@ function writeChangesRow(
   const valueX = rect.x + 1 + valueOffset;
   const valueWidth = Math.max(0, availableWidth - valueOffset);
 
-  if (!session || session.workingTreeClean) {
-    buf.writeText(row, valueX, truncate("clean", valueWidth), { fg: PALETTE.gray });
-    return;
-  }
+    if (!session || session.workingTreeClean) {
+      buf.writeText(row, valueX, truncate("clean", valueWidth), { fg: PALETTE.overlayHint });
+      return;
+    }
 
   const fileLabel = session.changedFiles.length === 1 ? "file" : "files";
   let col = valueX;
-  col += buf.writeText(row, col, `${session.changedFiles.length} ${fileLabel}`, { fg: PALETTE.gray });
+    col += buf.writeText(row, col, `${session.changedFiles.length} ${fileLabel}`, { fg: PALETTE.overlayHint });
   if (col >= valueX + valueWidth) return;
 
   col += buf.writeText(row, col, " · ", { fg: PALETTE.dimGray });
@@ -335,14 +335,14 @@ function getRowStyle(style: "title" | "meta" | "value" | "muted") {
   switch (style) {
     case "title":
       return { fg: PALETTE.brightWhite, bold: true };
-    case "meta":
-      return { fg: PALETTE.yellow, bold: true };
-    case "value":
-      return { fg: PALETTE.gray };
-    default:
-      return { fg: PALETTE.dimGray };
+      case "meta":
+        return { fg: PALETTE.yellow, bold: true };
+      case "value":
+        return { fg: PALETTE.overlayHint };
+      default:
+        return { fg: PALETTE.gray };
+    }
   }
-}
 
 function getFileChangePresentation(
   kind: NonNullable<NonNullable<MissionControlSnapshot["session"]>["fileChanges"]>[number]["kind"],

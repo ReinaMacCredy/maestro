@@ -23,16 +23,16 @@ export function renderProgressLog(
     buf.writeText(row, rect.x + 1, "Pending Handoffs", { fg: PALETTE.brightWhite, bold: true });
     row += 2;
 
-    if (snap.home.pendingHandoffs.length === 0) {
-      buf.writeText(row, rect.x + 1, "No pending handoffs", { fg: PALETTE.gray });
-      return;
-    }
+      if (snap.home.pendingHandoffs.length === 0) {
+        buf.writeText(row, rect.x + 1, "No pending handoffs", { fg: PALETTE.overlayHint });
+        return;
+      }
 
     for (const handoff of snap.home.pendingHandoffs) {
-      if (row >= maxRow) break;
-      const prefix = `${handoff.id} · ${handoff.agent}`;
-      buf.writeText(row, rect.x + 1, truncate(prefix, w), { fg: PALETTE.gray });
-      row++;
+        if (row >= maxRow) break;
+        const prefix = `${handoff.id} · ${handoff.agent}`;
+        buf.writeText(row, rect.x + 1, truncate(prefix, w), { fg: PALETTE.overlayHint });
+        row++;
       if (row >= maxRow) break;
       buf.writeText(row, rect.x + 1, truncate(handoff.message, w), { fg: PALETTE.brightWhite });
       row++;
@@ -44,10 +44,10 @@ export function renderProgressLog(
     buf.writeText(row, rect.x + 1, "Timeline", { fg: PALETTE.brightWhite, bold: true });
   row += 2;
 
-  if (events.length === 0) {
-    buf.writeText(row, rect.x + 1, "No events yet", { fg: PALETTE.gray });
-    return;
-  }
+    if (events.length === 0) {
+      buf.writeText(row, rect.x + 1, "No events yet", { fg: PALETTE.overlayHint });
+      return;
+    }
 
   const nowMs = Date.now();
 
@@ -60,7 +60,7 @@ export function renderProgressLog(
     const titleCol = rect.x + 10;
 
     // Age label (right-aligned in 8-char column)
-    buf.writeText(row, ageCol + (8 - age.length), age, { fg: PALETTE.gray });
+      buf.writeText(row, ageCol + (8 - age.length), age, { fg: PALETTE.overlayHint });
 
       // Event title with higher-signal event coloring.
       const titleWidth = w - 10;

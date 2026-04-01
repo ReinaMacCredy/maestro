@@ -43,10 +43,10 @@ function renderTaskPreview(buf: Buffer, rect: Rect, preview: TaskPreviewPane): v
   const writers = createPanelWriters(buf, rect, w, maxRow, () => row, (nextRow) => {
     row = nextRow;
   });
-  const { writeLine } = writers;
-  const writeBullet = (text: string): void => {
-    writers.writeBullet(text, { fg: PALETTE.gray });
-  };
+    const { writeLine } = writers;
+    const writeBullet = (text: string): void => {
+      writers.writeBullet(text, { fg: PALETTE.overlayHint });
+    };
 
   const writeSection = (title: string): void => {
     if (row >= maxRow) return;
@@ -85,12 +85,12 @@ function renderTaskPreview(buf: Buffer, rect: Rect, preview: TaskPreviewPane): v
 
   if (preview.description && row < maxRow - 2) {
     writeSection("Description");
-    const descLines = preview.description.split("\n").slice(0, maxRow - row - 1);
-    for (const line of descLines) {
-      writeLine(line, { fg: PALETTE.gray });
+      const descLines = preview.description.split("\n").slice(0, maxRow - row - 1);
+      for (const line of descLines) {
+        writeLine(line, { fg: PALETTE.overlayHint });
+      }
     }
   }
-}
 
 function renderMissionOverview(buf: Buffer, rect: Rect, snap: MissionControlSnapshot): void {
   const overview = snap.missionOverview;
@@ -108,12 +108,12 @@ function renderMissionOverview(buf: Buffer, rect: Rect, snap: MissionControlSnap
   const { writeLine } = writers;
 
   writeLine("Mission Overview", { fg: PALETTE.brightWhite, bold: true });
-  writeLine(overview.missionLabel, { fg: PALETTE.brightWhite, bold: true });
-  if (overview.totalCount === 0) {
-    writeLine("No active work", { fg: PALETTE.brightWhite, bold: true });
-    writeLine("Create or import work to populate Mission Control", { fg: PALETTE.gray });
-    return;
-  }
+    writeLine(overview.missionLabel, { fg: PALETTE.brightWhite, bold: true });
+    if (overview.totalCount === 0) {
+      writeLine("No active work", { fg: PALETTE.brightWhite, bold: true });
+      writeLine("Create or import work to populate Mission Control", { fg: PALETTE.overlayHint });
+      return;
+    }
   writeKeyValue(writers, "status", formatMissionOverviewStatus(overview.statusLabel));
   writeKeyValue(writers, "active", String(overview.activeCount));
   writeKeyValue(writers, "done", `${overview.doneCount} / ${overview.totalCount}`);
@@ -136,23 +136,23 @@ function renderMissionOverview(buf: Buffer, rect: Rect, snap: MissionControlSnap
       return;
     }
     for (const entry of overview.dependencyMap) {
-      writers.writeBullet(
-        `${TREE_BULLET} ${entry.root.id} ${entry.root.title} [${FEATURE_TASK_STATUS_LABEL[entry.root.status]}]`,
-        { fg: PALETTE.gray },
-      );
-      if (entry.primaryDependent) {
-        writeLine(
+        writers.writeBullet(
+          `${TREE_BULLET} ${entry.root.id} ${entry.root.title} [${FEATURE_TASK_STATUS_LABEL[entry.root.status]}]`,
+          { fg: PALETTE.overlayHint },
+        );
+        if (entry.primaryDependent) {
+          writeLine(
           `${TREE_CHILD} ${truncate(
             `${entry.primaryDependent.id} ${entry.primaryDependent.title} [${formatDependencyLinkLabel(
               entry.primaryDependent.status,
               entry.primaryDependentBlockedByCount,
-            )}]${entry.hiddenDependentCount > 0 ? ` +${entry.hiddenDependentCount} more` : ""}`,
-            Math.max(0, w - 3),
-          )}`,
-          { fg: PALETTE.gray },
-        );
+              )}]${entry.hiddenDependentCount > 0 ? ` +${entry.hiddenDependentCount} more` : ""}`,
+              Math.max(0, w - 3),
+            )}`,
+            { fg: PALETTE.overlayHint },
+          );
+        }
       }
-    }
   }
 }
 
@@ -165,9 +165,9 @@ function renderHomeOverview(buf: Buffer, rect: Rect, snap: MissionControlSnapsho
     row = nextRow;
   });
 
-  writeLine("Overview", { fg: PALETTE.brightWhite, bold: true });
-  writeLine(home.headline, { fg: PALETTE.brightWhite });
-  writeLine(home.summary, { fg: PALETTE.gray });
+    writeLine("Overview", { fg: PALETTE.brightWhite, bold: true });
+    writeLine(home.headline, { fg: PALETTE.brightWhite });
+    writeLine(home.summary, { fg: PALETTE.overlayHint });
   row++;
 
   writeLine("Workspace", { fg: PALETTE.brightWhite, bold: true });
@@ -197,10 +197,10 @@ function createPanelWriters(
   const writeBullet = (text: string, style?: Partial<Cell>): void => {
     const row = getRow();
     if (row >= maxRow) return;
-    buf.writeText(row, rect.x + 1, "  ", { fg: PALETTE.dimGray });
-    buf.writeText(row, rect.x + 3, truncate(text, width - 2), style ?? { fg: PALETTE.gray });
-    setRow(row + 1);
-  };
+      buf.writeText(row, rect.x + 1, "  ", { fg: PALETTE.dimGray });
+      buf.writeText(row, rect.x + 3, truncate(text, width - 2), style ?? { fg: PALETTE.overlayHint });
+      setRow(row + 1);
+    };
 
   return { writeLine, writeBullet };
 }
@@ -210,7 +210,7 @@ function writeKeyValue(
   label: string,
   value: string,
 ): void {
-  writers.writeLine(`${label.padEnd(11, " ")}${value}`, { fg: PALETTE.gray });
+  writers.writeLine(`${label.padEnd(11, " ")}${value}`, { fg: PALETTE.overlayHint });
 }
 
 function shortenSessionId(sessionId: string): string {

@@ -38,10 +38,10 @@ export function renderStatusBar(buf: Buffer, rect: Rect, snap: MissionControlSna
     buf.writeText(y, rect.x + 3, "HOME", { fg: statusColor, bold: true });
     buf.writeText(y, rect.x + 8, snap.home.headline, { fg: PALETTE.brightWhite, bold: true });
 
-    const summaryX = rect.x + w - summary.length - 1;
-    if (summaryX > rect.x + 18) {
-      buf.writeText(y, summaryX, summary, { fg: PALETTE.gray });
-    }
+      const summaryX = rect.x + w - summary.length - 1;
+      if (summaryX > rect.x + 18) {
+        buf.writeText(y, summaryX, summary, { fg: PALETTE.overlayHint });
+      }
     return;
   }
 
@@ -137,10 +137,10 @@ function renderActiveMilestone(
     fg: MILESTONE_PROFILE_COLOR[profile],
     bold: true,
   });
-  cursor = writeSegment(buf, y, cursor, maxX, ` ${detail}`, {
-    fg: snap.gateBlocked ? PALETTE.red : PALETTE.gray,
-    bold: snap.gateBlocked,
-  });
+    cursor = writeSegment(buf, y, cursor, maxX, ` ${detail}`, {
+      fg: snap.gateBlocked ? PALETTE.red : PALETTE.overlayHint,
+      bold: snap.gateBlocked,
+    });
 
   return cursor - 1;
 }
@@ -175,12 +175,12 @@ function renderMilestoneMetaRow(
     : "clear";
   const gateText = `Gate: ${gateValue}`;
 
-  buf.writeText(rect.y, rect.x + 1, milestoneText, { fg: PALETTE.gray });
+    buf.writeText(rect.y, rect.x + 1, milestoneText, { fg: PALETTE.overlayHint });
   const gateX = rect.x + rect.width - gateText.length - 1;
   if (gateX > rect.x + milestoneText.length + 4) {
-    buf.writeText(rect.y, gateX, gateText, {
-      fg: snap.gateBlocked ? PALETTE.red : PALETTE.gray,
-      bold: snap.gateBlocked,
-    });
+      buf.writeText(rect.y, gateX, gateText, {
+        fg: snap.gateBlocked ? PALETTE.red : PALETTE.overlayHint,
+        bold: snap.gateBlocked,
+      });
   }
 }
