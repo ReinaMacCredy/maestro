@@ -9,13 +9,14 @@ import type { AssertionStorePort } from "../ports/assertion-store.port.js";
 import type { RuntimeStorePort } from "../ports/runtime-store.port.js";
 import type { Feature, Mission, Milestone, Assertion, MilestoneProfile } from "../domain/mission-types.js";
 import { MaestroError } from "../domain/errors.js";
-import { WORKER_TYPE_PATTERN, WorkerReportSchema } from "../domain/mission-validators.js";
+import { WORKER_TYPE_PATTERN } from "../domain/mission-validators.js";
 import { readText, writeText, ensureDir } from "../lib/fs.js";
 import { sanitizePromptContent } from "../lib/sanitize.js";
 import { dirname, join, resolve } from "node:path";
 import { DEFAULT_RUNTIME_LEASE_MS, MAESTRO_DIR, UNKNOWN_AGENT } from "../domain/defaults.js";
 import { assertSafeSegment, resolveWithin } from "../lib/path-safety.js";
 import type { WorkerRuntime } from "../domain/runtime-types.js";
+import { parseWorkerReport } from "./feature-lifecycle.usecase.js";
 
 interface PreviousMilestoneReport {
   readonly featureId: string;
@@ -285,11 +286,11 @@ async function loadPreviousMilestoneReports(
       return undefined;
     }
 
-    try {
-      const parsed = WorkerReportSchema.parse(JSON.parse(reportContent));
-      const rawSummary = parsed.salientSummary || parsed.whatWasImplemented || "(no summary)";
-      return {
-        featureId: feature.id,
+      try {
+        const parsed = await parseWorkerReport(reportContent);
+        const rawSummary = parsed.salientSummary || parsed.whatWasImplemented || "(no summary)";
+        return {
+          featureId: feature.id,
         featureTitle: feature.title,
         summary: sanitizePromptContent(
           truncatePreviousReportSummary(rawSummary),

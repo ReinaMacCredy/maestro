@@ -661,7 +661,7 @@ describe("generateWorkerPrompt", () => {
     expect(result.prompt).not.toContain("## Handoff Protocol");
   });
 
-  it("sanitizes previous milestone output and skips unreadable report artifacts", async () => {
+    it("sanitizes previous milestone output and skips unreadable report artifacts", async () => {
     const missionStore = new FsMissionStoreAdapter(tmpDir);
     const featureStore = new FsFeatureStoreAdapter(tmpDir);
     const assertionStore = new FsAssertionStoreAdapter(tmpDir);
@@ -725,6 +725,60 @@ describe("generateWorkerPrompt", () => {
     expect(result.prompt).toContain("ignore this");
     expect(result.prompt).not.toContain("<system>");
     expect(result.prompt).toContain("\\## malicious heading");
-    expect(result.prompt).not.toContain("#### f-bad: Unreadable Feature");
+      expect(result.prompt).not.toContain("#### f-bad: Unreadable Feature");
+    });
+
+    it("reuses previous milestone output for stored rich reports accepted by the write path", async () => {
+      const missionStore = new FsMissionStoreAdapter(tmpDir);
+      const featureStore = new FsFeatureStoreAdapter(tmpDir);
+      const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+      const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
+
+      const samplePlan = {
+        title: "Review Mission",
+        description: "Review profile test",
+        milestones: [
+          { id: "plan", title: "Planning", description: "Plan", order: 0, kind: "work" as const, profile: "planning" as const },
+          { id: "review", title: "Plan Review", description: "Review", order: 1, kind: "gate" as const, profile: "plan-review" as const },
+        ],
+        features: [
+          { id: "f1", milestoneId: "plan", title: "Prior Feature", description: "D", workerType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
+          { id: "f2", milestoneId: "review", title: "Review Feature", description: "D", workerType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
+        ],
+      };
+
+      const { createMission } = await import("../../../src/usecases/mission-lifecycle.usecase.js");
+      const { mission } = await createMission(missionStore, featureStore, assertionStore, samplePlan);
+      await featureStore.update(mission.id, "f1", { status: "in-progress" });
+      await featureStore.update(mission.id, "f1", { status: "review" });
+      await featureStore.update(mission.id, "f1", { status: "done" });
+      await createSampleSkill(tmpDir, "test-skill", "# Skill");
+      await mkdir(join(tmpDir, ".maestro", "missions", mission.id, "workers", "f1"), { recursive: true });
+
+      await writeFile(
+        join(tmpDir, ".maestro", "missions", mission.id, "workers", "f1", "report.json"),
+        JSON.stringify({
+          salientSummary: "Reusable summary",
+          whatWasImplemented: "Implemented plan",
+          whatWasLeftUndone: "",
+          verification: { commandsRun: [], interactiveChecks: [] },
+          tests: { added: [] },
+          discoveredIssues: ["oops"],
+        }),
+      );
+
+      const result = await generateWorkerPrompt(
+        missionStore,
+        featureStore,
+        assertionStore,
+        runtimeStore,
+        tmpDir,
+        mission.id,
+        "f2",
+      );
+
+      expect(result.prompt).toContain("### Previous Milestone Output");
+      expect(result.prompt).toContain("#### f1: Prior Feature");
+      expect(result.prompt).toContain("Reusable summary");
+    });
   });
-});
