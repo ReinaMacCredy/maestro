@@ -19,6 +19,7 @@ export class Screen {
   private _width: number;
   private _height: number;
   private active = false;
+  private mouseEnabled = false;
 
   constructor() {
     this._width = process.stdout.columns || 80;
@@ -32,6 +33,7 @@ export class Screen {
   enter(): void {
     if (this.active) return;
     this.active = true;
+    this.mouseEnabled = true;
     process.stdout.write(enterAltScreen + hideCursor + enableMouse);
     if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
       process.stdin.setRawMode(true);
@@ -43,6 +45,7 @@ export class Screen {
   exit(): void {
     if (!this.active) return;
     this.active = false;
+    this.mouseEnabled = false;
     process.stdout.write(reset + showCursor + disableMouse + exitAltScreen);
     if (process.stdin.isTTY && typeof process.stdin.setRawMode === "function") {
       process.stdin.setRawMode(false);
@@ -97,5 +100,11 @@ export class Screen {
     this._width = newW;
     this._height = newH;
     return true;
+  }
+
+  setMouseEnabled(enabled: boolean): void {
+    if (!this.active || this.mouseEnabled === enabled) return;
+    this.mouseEnabled = enabled;
+    process.stdout.write(enabled ? enableMouse : disableMouse);
   }
 }

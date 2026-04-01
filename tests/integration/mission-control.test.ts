@@ -275,7 +275,7 @@ function hasAnimatedHeaderFrame(plainOutput: string): boolean {
 }
 
 function getDurationSamples(plainOutput: string): string[] {
-  const matches = plainOutput.matchAll(/Duration\s+((?:\d+[hms]\s*)+)/g);
+  const matches = plainOutput.matchAll(/TIME\s+((?:\d+[hms]\s*)+)/g);
   return [...new Set(
     Array.from(matches, (match) => match[1]?.replace(/\s+/g, " ").trim() ?? "")
       .filter((sample) => sample.length > 0),
@@ -473,7 +473,7 @@ describe("mission-control CLI", () => {
     expect(exitCode).toBe(0);
     expect(stdout.length).toBeGreaterThan(0);
     expect(stdout).toContain("Mission Control");
-    expect(stdout).toContain("Features");
+    expect(stdout).toContain("Tasks");
     expect(stdout).toContain("┌");
     expect(stdout).toContain("┘");
   }, SLOW_CLI_TIMEOUT_MS);
@@ -646,7 +646,7 @@ describe("mission-control CLI", () => {
 
     expectCleanPtyExit(result);
     expect(result.plainOutput).toContain("Mission Control");
-    expect(result.plainOutput).toContain("Features");
+    expect(result.plainOutput).toContain("Tasks");
     expect(result.plainOutput).toContain("┌");
   }, PTY_TIMEOUT_MS);
 
@@ -689,7 +689,7 @@ describe("mission-control CLI", () => {
     );
 
     expectCleanPtyExit(result);
-    expect(result.plainOutput).toContain("Progress Log");
+    expect(result.plainOutput).toContain("Timeline");
   }, PTY_TIMEOUT_MS);
 
   it("compiled binary interactive mode animates header dots while an executing mission idles", async () => {
@@ -743,7 +743,7 @@ describe("mission-control CLI", () => {
     }
   }, PTY_TIMEOUT_MS);
 
-    it("compiled binary interactive mode updates the Session duration every second while idle", async () => {
+    it("compiled binary interactive mode updates the header time every second while idle", async () => {
     if (!pythonAvailable) return;
     const missionId = await createMission(tmpDir);
     await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
@@ -755,7 +755,7 @@ describe("mission-control CLI", () => {
     );
 
     expectCleanPtyExit(result);
-    expect(result.plainOutput).toContain("Session");
+      expect(result.plainOutput).toContain("TIME");
       const durationSamples = getDurationSamples(result.plainOutput);
       expect(durationSamples.length).toBeGreaterThan(1);
     }, PTY_TIMEOUT_MS);
@@ -807,7 +807,7 @@ describe("mission-control CLI", () => {
 
       expectCleanPtyExit(result);
       expect(result.plainOutput).toContain("Commands");
-      expect(result.plainOutput).toContain("Select a feature to focus");
+      expect(result.plainOutput).toContain("Select a task to focus");
     }, PTY_TIMEOUT_MS);
 
     it("compiled binary interactive mode filters the command palette and activates Handoff", async () => {
@@ -882,7 +882,7 @@ describe("mission-control CLI", () => {
       );
 
       expectCleanPtyExit(result);
-      expect(result.plainOutput).toContain("Processes");
+      expect(result.plainOutput).toContain("Runtime");
       expect(result.plainOutput).toContain("test-skill");
     }, PTY_TIMEOUT_MS);
 
@@ -906,8 +906,8 @@ describe("mission-control CLI", () => {
     );
 
     expectCleanPtyExit(result);
-      expect(result.plainOutput).toContain("Features");
-      expect(result.plainOutput).toContain("Select a feature to focus");
+      expect(result.plainOutput).toContain("Tasks");
+      expect(result.plainOutput).toContain("Select a task to focus");
     }, PTY_TIMEOUT_MS);
 
     it("compiled binary interactive mode opens the Handoff overlay", async () => {
@@ -976,7 +976,7 @@ describe("mission-control CLI", () => {
     );
 
     expectCleanPtyExit(result);
-    expect(result.plainOutput).toContain("Processes");
+    expect(result.plainOutput).toContain("Runtime");
     expect(result.plainOutput).toContain("f1");
     expect(result.plainOutput).toContain("test-skill");
   }, PTY_TIMEOUT_MS);

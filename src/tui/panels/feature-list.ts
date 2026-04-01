@@ -46,7 +46,7 @@ export function renderFeatureList(
     const isSelected = i === selectedIndex;
     const statusLabel = FEATURE_STATUS_LABEL[f.status];
     const statusColor = FEATURE_STATUS_COLOR[f.status];
-    const blockedByText = f.blockedByLabel ? `by ${f.blockedByLabel}` : "";
+    const blockedByText = f.status === "blocked" && f.blockedByLabel ? `by ${f.blockedByLabel}` : "";
 
     // Selected row gets highlight bg
     if (isSelected) {

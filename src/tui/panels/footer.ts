@@ -14,7 +14,12 @@ interface FooterHint {
   label: string;
 }
 
-export function renderFooter(buf: Buffer, rect: Rect, snap: MissionControlSnapshot): void {
+export function renderFooter(
+  buf: Buffer,
+  rect: Rect,
+  snap: MissionControlSnapshot,
+  copyMode = false,
+): void {
   const w = rect.width;
   const y = rect.y;
   buf.fillRect(rect, " ", { bg: PALETTE.headerBg });
@@ -23,6 +28,9 @@ export function renderFooter(buf: Buffer, rect: Rect, snap: MissionControlSnapsh
   const leftHints = commands
     .filter((command) => command.key.length === 1)
     .map((command) => ({ key: command.key, label: command.label }));
+  leftHints.push(copyMode
+    ? { key: "Esc", label: "Copy Off" }
+    : { key: "Ctrl+Y", label: "Copy" });
   const commandsHint = { key: "Ctrl+P", label: "Commands" };
   const exitCommand = commands.find((command) => command.id === "exit");
   const exitHint = {
@@ -38,6 +46,17 @@ export function renderFooter(buf: Buffer, rect: Rect, snap: MissionControlSnapsh
     renderHint(buf, y, commandsCol, commandsHint);
   }
   renderHint(buf, y, exitCol, exitHint);
+
+  if (copyMode) {
+    const banner = "COPY MODE ACTIVE · drag-select enabled";
+    const bannerWidth = Math.max(0, commandsCol - rect.x - 3);
+    buf.writeText(y, rect.x + 1, banner.slice(0, bannerWidth), {
+      fg: PALETTE.yellow,
+      bg: PALETTE.headerBg,
+      bold: true,
+    });
+    return;
+  }
 
   let col = rect.x + 1;
   for (const hint of leftHints) {

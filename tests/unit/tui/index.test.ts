@@ -56,11 +56,17 @@ describe("keyToAction", () => {
 
   it("maps Left Arrow to back when a palette-launched detail overlay is open", () => {
     const state = createInitialState(SNAPSHOT);
-    state.modal = { kind: "handoffs", returnTarget: "command-palette" };
+    state.modal = { kind: "handoffs", selectedHandoffIndex: 0, returnTarget: "command-palette" };
 
     const action = keyToAction({ type: "arrow", direction: "left" }, state);
 
     expect(action).toEqual({ type: "navigate", direction: "left" });
+  });
+
+  it("maps Ctrl+Y to copy mode toggle", () => {
+    const action = keyToAction({ type: "ctrl", char: "y" }, createInitialState(SNAPSHOT));
+
+    expect(action).toEqual({ type: "toggle-copy-mode" });
   });
 
   it("does not map Left Arrow when the command palette is closed", () => {

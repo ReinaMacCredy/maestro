@@ -216,7 +216,7 @@ describe("reduce", () => {
     });
   });
 
-  describe("escape", () => {
+    describe("escape", () => {
         it("closes modal", () => {
           const state = makeState({
             modal: { kind: "config" },
@@ -243,11 +243,19 @@ describe("reduce", () => {
         expect(next.modal.kind).toBe("none");
       });
 
-    it("unfocuses panel when no modal", () => {
-      const state = reduce(makeState(), { type: "escape" });
-      expect(state.focusedPanel).toBe("none");
+      it("unfocuses panel when no modal", () => {
+        const state = reduce(makeState(), { type: "escape" });
+        expect(state.focusedPanel).toBe("none");
+      });
+
+      it("turns off copy mode before changing focus", () => {
+        const state = makeState({ copyMode: true, focusedPanel: "features", leftPaneMode: "preview" });
+        const next = reduce(state, { type: "escape" });
+
+        expect(next.copyMode).toBe(false);
+        expect(next.leftPaneMode).toBe("preview");
+      });
     });
-  });
 
     describe("open-features", () => {
     it("opens feature browser", () => {
@@ -283,8 +291,27 @@ describe("reduce", () => {
         if (state.modal.kind === "handoffs") {
           expect(state.modal.returnTarget).toBe("command-palette");
         }
+        });
+
+        it("opens handoff details on enter and returns to the list on escape", () => {
+          const opened = reduce(makeState({
+            snapshot: makeSnapshot({
+              pendingHandoffs: [
+                { id: "h1", message: "Review this", agent: "codex" },
+              ],
+            }),
+          }), { type: "open-handoffs" });
+          const detail = reduce(opened, { type: "enter" });
+
+          expect(detail.modal.kind).toBe("handoff-detail");
+
+          const backToList = reduce(detail, { type: "escape" });
+          expect(backToList.modal.kind).toBe("handoffs");
+          if (backToList.modal.kind === "handoffs") {
+            expect(backToList.modal.selectedHandoffIndex).toBe(0);
+          }
+        });
       });
-    });
 
   describe("open-config", () => {
     it("opens config modal", () => {
@@ -293,12 +320,113 @@ describe("reduce", () => {
     });
   });
 
-  describe("open-processes", () => {
-    it("opens processes modal", () => {
-      const state = reduce(makeState(), { type: "open-processes" });
-      expect(state.modal.kind).toBe("processes");
+    describe("open-processes", () => {
+      it("opens processes modal", () => {
+        const state = reduce(makeState(), { type: "open-processes" });
+        expect(state.modal.kind).toBe("processes");
+      });
+
+      it("opens runtime details on enter and returns to the list on escape", () => {
+        const opened = reduce(makeState({
+          snapshot: makeSnapshot({
+            runtimeProcesses: [{
+              featureId: "f1",
+              title: "F1",
+              status: "assigned",
+              workerType: "test",
+              hasReport: false,
+              isLive: true,
+            }],
+          }),
+        }), { type: "open-processes" });
+        const detail = reduce(opened, { type: "enter" });
+
+        expect(detail.modal.kind).toBe("process-detail");
+
+        const backToList = reduce(detail, { type: "escape" });
+        expect(backToList.modal.kind).toBe("processes");
+        if (backToList.modal.kind === "processes") {
+          expect(backToList.modal.selectedProcessIndex).toBe(0);
+        }
+      });
     });
-  });
+
+    describe("open-dependencies", () => {
+      it("opens dependencies modal", () => {
+        const state = reduce(makeState(), { type: "open-dependencies" });
+        expect(state.modal.kind).toBe("dependencies");
+      });
+
+      it("jumps to a selected dependency on enter", () => {
+        const snapshot = makeSnapshot({
+          features: [
+            { id: "f1", title: "F1", status: "done", milestoneId: "m1", workerType: "test", hasReport: true },
+            { id: "f2", title: "F2", status: "pending", milestoneId: "m1", workerType: "test", hasReport: false },
+            { id: "f3", title: "F3", status: "pending", milestoneId: "m2", workerType: "test", hasReport: false },
+          ],
+          taskPreviews: [
+            {
+              id: "f1",
+              title: "F1",
+              status: "done",
+              milestoneId: "m1",
+              milestoneTitle: "Milestone 1",
+              workerType: "test",
+              description: "Done",
+              preconditions: undefined,
+              expectedBehavior: undefined,
+              verificationSteps: [],
+              dependsOn: [],
+              fulfills: [],
+              validTransitions: [],
+            },
+            {
+              id: "f2",
+              title: "F2",
+              status: "pending",
+              milestoneId: "m1",
+              milestoneTitle: "Milestone 1",
+              workerType: "test",
+              description: "Blocked work",
+              preconditions: undefined,
+              expectedBehavior: undefined,
+              verificationSteps: [],
+              dependsOn: ["f1"],
+              blockedBy: [{ id: "f1", title: "F1", status: "done" }],
+              unblocks: [{ id: "f3", title: "F3", status: "pending" }],
+              fulfills: [],
+              validTransitions: ["assigned"],
+            },
+            {
+              id: "f3",
+              title: "F3",
+              status: "pending",
+              milestoneId: "m2",
+              milestoneTitle: "Milestone 2",
+              workerType: "test",
+              description: "Downstream work",
+              preconditions: undefined,
+              expectedBehavior: undefined,
+              verificationSteps: [],
+              dependsOn: ["f2"],
+              fulfills: [],
+              validTransitions: ["assigned"],
+            },
+          ],
+        });
+        const opened = reduce(makeState({
+          snapshot,
+          selectedFeatureIndex: 1,
+        }), { type: "open-dependencies" });
+
+        expect(opened.modal.kind).toBe("dependencies");
+
+        const jumped = reduce(opened, { type: "enter" });
+        expect(jumped.modal.kind).toBe("none");
+        expect(jumped.selectedFeatureIndex).toBe(0);
+        expect(jumped.leftPaneMode).toBe("preview");
+      });
+    });
 
     describe("command palette", () => {
     it("opens the command palette with a fresh query", () => {

@@ -51,21 +51,23 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
 }
 
 describe("renderFooter", () => {
-  it("shows Features hint", () => {
+  it("shows Tasks hint", () => {
     const buf = new Buffer(120, 1);
     renderFooter(buf, { x: 0, y: 0, width: 120, height: 1 }, makeSnapshot());
     const text = buf.toString();
     expect(text).toContain("F");
-    expect(text).toContain("Features");
+    expect(text).toContain("Tasks");
   });
 
-  it("shows Handoff, Config, and Processes hints", () => {
+  it("shows Dependencies, Handoffs, Config, Runtime, and Copy hints", () => {
     const buf = new Buffer(120, 1);
     renderFooter(buf, { x: 0, y: 0, width: 120, height: 1 }, makeSnapshot());
     const text = buf.toString();
-    expect(text).toContain("Handoff");
+    expect(text).toContain("Dependencies");
+    expect(text).toContain("Handoffs");
     expect(text).toContain("Config");
-    expect(text).toContain("Processes");
+    expect(text).toContain("Runtime");
+    expect(text).toContain("Copy");
   });
 
   it("shows Exit hint", () => {
@@ -84,7 +86,7 @@ describe("renderFooter", () => {
     const featuresLabelCell = buf.getCell(0, 3);
     expect(keyCell?.char).toBe("F");
     expect(keyCell?.fg).toBe(PALETTE.brightWhite);
-    expect(featuresLabelCell?.char).toBe("F");
+    expect(featuresLabelCell?.char).toBe("T");
     expect(featuresLabelCell?.fg).toBe(PALETTE.gray);
   });
 
@@ -110,8 +112,18 @@ describe("renderFooter", () => {
     }));
     const text = buf.toString();
     expect(text).toContain("Overview");
-    expect(text).toContain("Handoff");
+    expect(text).toContain("Dependencies");
+    expect(text).toContain("Handoffs");
     expect(text).toContain("Config");
-    expect(text).toContain("Processes");
+    expect(text).toContain("Runtime");
+  });
+
+  it("shows a copy mode banner when copy mode is active", () => {
+    const buf = new Buffer(120, 1);
+    renderFooter(buf, { x: 0, y: 0, width: 120, height: 1 }, makeSnapshot(), true);
+
+    const text = buf.toString();
+    expect(text).toContain("COPY MODE ACTIVE");
+    expect(text).toContain("drag-select enabled");
   });
 });

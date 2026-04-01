@@ -2,6 +2,7 @@ import type { MissionControlMode } from "./types.js";
 
 export type MissionControlCommandId =
   | "features"
+  | "dependencies"
   | "handoffs"
   | "config"
   | "processes"
@@ -37,9 +38,17 @@ export function getMissionControlCommandSpecs(
         keywords: ["tasks", "features", "feature browser", "focus"],
       };
 
-  return [
-    featureCommand,
-    {
+    return [
+      featureCommand,
+      {
+        id: "dependencies",
+        key: "D",
+        label: "Dependencies",
+        detail: "Inspect blockers and downstream tasks for the selected item",
+        section: "Navigate",
+        keywords: ["dependencies", "blocked by", "graph", "unblocks"],
+      },
+      {
         id: "handoffs",
         key: "H",
         label: "Handoffs",

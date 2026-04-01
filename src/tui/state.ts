@@ -3,7 +3,6 @@
  */
 import type { MissionControlSnapshot } from "./types.js";
 import { getFilteredMissionControlPaletteCommandCount } from "./mission-control-commands.js";
-import type { FeatureStatus } from "../domain/mission-types.js";
 import { getValidFeatureTransitions } from "../domain/mission-state.js";
 
 export type FocusedPanel = "features" | "log" | "none";
@@ -22,15 +21,19 @@ export type ModalState =
     errorMessage?: string;
   }
   | { kind: "feature-browser"; selectedFeatureIndex: number; returnTarget?: ModalReturnTarget }
+  | { kind: "dependencies"; selectedOption: number; returnTarget?: ModalReturnTarget }
   | { kind: "overview"; returnTarget?: ModalReturnTarget }
-  | { kind: "handoffs"; returnTarget?: ModalReturnTarget }
+  | { kind: "handoffs"; selectedHandoffIndex: number; returnTarget?: ModalReturnTarget }
+  | { kind: "handoff-detail"; handoffIndex: number; returnTarget?: ModalReturnTarget }
   | { kind: "config"; returnTarget?: ModalReturnTarget }
-  | { kind: "processes"; returnTarget?: ModalReturnTarget };
+  | { kind: "processes"; selectedProcessIndex: number; returnTarget?: ModalReturnTarget }
+  | { kind: "process-detail"; processIndex: number; returnTarget?: ModalReturnTarget };
 
 export interface AppState {
   snapshot: MissionControlSnapshot;
   focusedPanel: FocusedPanel;
   leftPaneMode: LeftPaneMode;
+  copyMode: boolean;
   selectedFeatureIndex: number;
   logScrollOffset: number;
   modal: ModalState;
@@ -38,13 +41,14 @@ export interface AppState {
 }
 
 export function createInitialState(snapshot: MissionControlSnapshot): AppState {
-    return {
-      snapshot,
-      focusedPanel: "features",
-      leftPaneMode: "overview",
-      selectedFeatureIndex: 0,
-      logScrollOffset: 0,
-      modal: { kind: "none" },
+  return {
+    snapshot,
+    focusedPanel: "features",
+    leftPaneMode: "overview",
+    copyMode: false,
+    selectedFeatureIndex: 0,
+    logScrollOffset: 0,
+    modal: { kind: "none" },
     running: true,
   };
 }
@@ -57,9 +61,11 @@ export type Action =
   | { type: "escape" }
   | { type: "open-command-palette" }
   | { type: "open-features" }
+  | { type: "open-dependencies" }
   | { type: "open-handoffs" }
   | { type: "open-config" }
   | { type: "open-processes" }
+  | { type: "toggle-copy-mode" }
   | { type: "update-snapshot"; snapshot: MissionControlSnapshot }
   | { type: "modal-select"; option: number }
   | { type: "modal-query-append"; char: string }
@@ -77,17 +83,40 @@ export function reduce(state: AppState, action: Action): AppState {
 
     case "navigate": {
       if (action.direction === "left") {
+        if (state.modal.kind === "handoff-detail") {
+          return {
+            ...state,
+            modal: {
+              kind: "handoffs",
+              selectedHandoffIndex: state.modal.handoffIndex,
+              returnTarget: state.modal.returnTarget,
+            },
+          };
+        }
+        if (state.modal.kind === "process-detail") {
+          return {
+            ...state,
+            modal: {
+              kind: "processes",
+              selectedProcessIndex: state.modal.processIndex,
+              returnTarget: state.modal.returnTarget,
+            },
+          };
+        }
         return canNavigateBackToPalette(state.modal) ? closeOrReturnModal(state) : state;
       }
-      if (state.modal.kind === "feature-action") {
+
+      if (
+        state.modal.kind === "feature-action"
+        || state.modal.kind === "command-palette"
+        || state.modal.kind === "feature-browser"
+        || state.modal.kind === "handoffs"
+        || state.modal.kind === "processes"
+        || state.modal.kind === "dependencies"
+      ) {
         return handleModalNavigate(state, action.direction);
       }
-      if (state.modal.kind === "command-palette") {
-        return handleModalNavigate(state, action.direction);
-      }
-      if (state.modal.kind === "feature-browser") {
-        return handleModalNavigate(state, action.direction);
-      }
+
       if (state.focusedPanel === "features") {
         return handleFeatureNavigate(state, action.direction);
       }
@@ -99,11 +128,11 @@ export function reduce(state: AppState, action: Action): AppState {
 
     case "focus":
       if (state.modal.kind !== "none") return state;
-        return {
-          ...state,
-          focusedPanel: action.panel,
-          leftPaneMode: action.panel === "features" ? state.leftPaneMode : "overview",
-        };
+      return {
+        ...state,
+        focusedPanel: action.panel,
+        leftPaneMode: action.panel === "features" ? state.leftPaneMode : "overview",
+      };
 
     case "enter": {
       if (state.modal.kind === "command-palette") {
@@ -129,7 +158,45 @@ export function reduce(state: AppState, action: Action): AppState {
         return {
           ...state,
           focusedPanel: "features",
+          leftPaneMode: "preview",
           selectedFeatureIndex: state.modal.selectedFeatureIndex,
+          modal: { kind: "none" },
+        };
+      }
+      if (state.modal.kind === "handoffs") {
+        return {
+          ...state,
+          modal: {
+            kind: "handoff-detail",
+            handoffIndex: state.modal.selectedHandoffIndex,
+            returnTarget: state.modal.returnTarget,
+          },
+        };
+      }
+      if (state.modal.kind === "processes") {
+        return {
+          ...state,
+          modal: {
+            kind: "process-detail",
+            processIndex: state.modal.selectedProcessIndex,
+            returnTarget: state.modal.returnTarget,
+          },
+        };
+      }
+      if (state.modal.kind === "dependencies") {
+        const targetId = getSelectedDependencyTargetId(state);
+        if (!targetId) return state;
+
+        const nextIndex = state.snapshot.features.findIndex((feature) => feature.id === targetId);
+        if (nextIndex < 0) {
+          return { ...state, modal: { kind: "none" }, leftPaneMode: "preview" };
+        }
+
+        return {
+          ...state,
+          focusedPanel: "features",
+          leftPaneMode: "preview",
+          selectedFeatureIndex: nextIndex,
           modal: { kind: "none" },
         };
       }
@@ -148,13 +215,36 @@ export function reduce(state: AppState, action: Action): AppState {
     }
 
     case "escape":
-        if (state.modal.kind !== "none") {
-          return { ...state, modal: { kind: "none" } };
-        }
-        if (state.leftPaneMode === "preview") {
-          return { ...state, focusedPanel: "none", leftPaneMode: "overview" };
-        }
-        return { ...state, focusedPanel: "none" };
+      if (state.modal.kind === "handoff-detail") {
+        return {
+          ...state,
+          modal: {
+            kind: "handoffs",
+            selectedHandoffIndex: state.modal.handoffIndex,
+            returnTarget: state.modal.returnTarget,
+          },
+        };
+      }
+      if (state.modal.kind === "process-detail") {
+        return {
+          ...state,
+          modal: {
+            kind: "processes",
+            selectedProcessIndex: state.modal.processIndex,
+            returnTarget: state.modal.returnTarget,
+          },
+        };
+      }
+      if (state.modal.kind !== "none") {
+        return { ...state, modal: { kind: "none" } };
+      }
+      if (state.copyMode) {
+        return { ...state, copyMode: false };
+      }
+      if (state.leftPaneMode === "preview") {
+        return { ...state, focusedPanel: "none", leftPaneMode: "overview" };
+      }
+      return { ...state, focusedPanel: "none" };
 
     case "open-command-palette":
       if (!canOpenOverlayFromModal(state.modal)) return state;
@@ -170,7 +260,10 @@ export function reduce(state: AppState, action: Action): AppState {
     case "open-features":
       if (!canOpenOverlayFromModal(state.modal)) return state;
       if (state.snapshot.mode === "home") {
-        return { ...state, modal: { kind: "overview", returnTarget: getModalReturnTarget(state.modal) } };
+        return {
+          ...state,
+          modal: { kind: "overview", returnTarget: getModalReturnTarget(state.modal) },
+        };
       }
       return {
         ...state,
@@ -181,11 +274,26 @@ export function reduce(state: AppState, action: Action): AppState {
         },
       };
 
+    case "open-dependencies":
+      if (!canOpenOverlayFromModal(state.modal)) return state;
+      return {
+        ...state,
+        modal: {
+          kind: "dependencies",
+          selectedOption: 0,
+          returnTarget: getModalReturnTarget(state.modal),
+        },
+      };
+
     case "open-handoffs":
       if (!canOpenOverlayFromModal(state.modal)) return state;
       return {
         ...state,
-        modal: { kind: "handoffs", returnTarget: getModalReturnTarget(state.modal) },
+        modal: {
+          kind: "handoffs",
+          selectedHandoffIndex: 0,
+          returnTarget: getModalReturnTarget(state.modal),
+        },
       };
 
     case "open-config":
@@ -199,24 +307,29 @@ export function reduce(state: AppState, action: Action): AppState {
       if (!canOpenOverlayFromModal(state.modal)) return state;
       return {
         ...state,
-        modal: { kind: "processes", returnTarget: getModalReturnTarget(state.modal) },
+        modal: {
+          kind: "processes",
+          selectedProcessIndex: 0,
+          returnTarget: getModalReturnTarget(state.modal),
+        },
       };
 
-    case "update-snapshot":
+    case "toggle-copy-mode":
+      return { ...state, copyMode: !state.copyMode };
+
+    case "update-snapshot": {
       const selectedFeatureId = state.snapshot.features[state.selectedFeatureIndex]?.id;
       const nextSelectedIndex = selectedFeatureId
         ? action.snapshot.features.findIndex((feature) => feature.id === selectedFeatureId)
         : -1;
-      const baseState = {
+      const baseState: AppState = {
         ...state,
         snapshot: action.snapshot,
         selectedFeatureIndex: nextSelectedIndex >= 0
           ? nextSelectedIndex
-          : Math.min(
-            state.selectedFeatureIndex,
-            Math.max(0, action.snapshot.features.length - 1),
-          ),
+          : Math.min(state.selectedFeatureIndex, Math.max(0, action.snapshot.features.length - 1)),
       };
+
       if (state.modal.kind === "feature-browser") {
         const selectedModalFeatureId = state.snapshot.features[state.modal.selectedFeatureIndex]?.id;
         const nextModalSelectedIndex = selectedModalFeatureId
@@ -228,17 +341,84 @@ export function reduce(state: AppState, action: Action): AppState {
             kind: "feature-browser",
             selectedFeatureIndex: nextModalSelectedIndex >= 0
               ? nextModalSelectedIndex
-              : Math.min(
-                state.modal.selectedFeatureIndex,
-                Math.max(0, action.snapshot.features.length - 1),
-              ),
+              : Math.min(state.modal.selectedFeatureIndex, Math.max(0, action.snapshot.features.length - 1)),
             returnTarget: state.modal.returnTarget,
           },
         };
       }
-      return {
-        ...baseState,
-      };
+
+      if (state.modal.kind === "handoffs") {
+        return {
+          ...baseState,
+          modal: {
+            kind: "handoffs",
+            selectedHandoffIndex: Math.min(
+              state.modal.selectedHandoffIndex,
+              Math.max(0, action.snapshot.pendingHandoffs.length - 1),
+            ),
+            returnTarget: state.modal.returnTarget,
+          },
+        };
+      }
+
+      if (state.modal.kind === "handoff-detail") {
+        return {
+          ...baseState,
+          modal: {
+            kind: "handoff-detail",
+            handoffIndex: Math.min(
+              state.modal.handoffIndex,
+              Math.max(0, action.snapshot.pendingHandoffs.length - 1),
+            ),
+            returnTarget: state.modal.returnTarget,
+          },
+        };
+      }
+
+      if (state.modal.kind === "processes") {
+        return {
+          ...baseState,
+          modal: {
+            kind: "processes",
+            selectedProcessIndex: Math.min(
+              state.modal.selectedProcessIndex,
+              Math.max(0, action.snapshot.runtimeProcesses.length - 1),
+            ),
+            returnTarget: state.modal.returnTarget,
+          },
+        };
+      }
+
+      if (state.modal.kind === "process-detail") {
+        return {
+          ...baseState,
+          modal: {
+            kind: "process-detail",
+            processIndex: Math.min(
+              state.modal.processIndex,
+              Math.max(0, action.snapshot.runtimeProcesses.length - 1),
+            ),
+            returnTarget: state.modal.returnTarget,
+          },
+        };
+      }
+
+      if (state.modal.kind === "dependencies") {
+        return {
+          ...baseState,
+          modal: {
+            kind: "dependencies",
+            selectedOption: Math.min(
+              state.modal.selectedOption,
+              Math.max(0, getDependencyTargets(baseState).length - 1),
+            ),
+            returnTarget: state.modal.returnTarget,
+          },
+        };
+      }
+
+      return baseState;
+    }
 
     case "modal-select":
       if (state.modal.kind === "command-palette") {
@@ -267,6 +447,36 @@ export function reduce(state: AppState, action: Action): AppState {
           modal: {
             kind: "feature-browser",
             selectedFeatureIndex: action.option,
+            returnTarget: state.modal.returnTarget,
+          },
+        };
+      }
+      if (state.modal.kind === "handoffs") {
+        return {
+          ...state,
+          modal: {
+            kind: "handoffs",
+            selectedHandoffIndex: action.option,
+            returnTarget: state.modal.returnTarget,
+          },
+        };
+      }
+      if (state.modal.kind === "processes") {
+        return {
+          ...state,
+          modal: {
+            kind: "processes",
+            selectedProcessIndex: action.option,
+            returnTarget: state.modal.returnTarget,
+          },
+        };
+      }
+      if (state.modal.kind === "dependencies") {
+        return {
+          ...state,
+          modal: {
+            kind: "dependencies",
+            selectedOption: action.option,
             returnTarget: state.modal.returnTarget,
           },
         };
@@ -338,8 +548,8 @@ function handleFeatureNavigate(state: AppState, direction: "up" | "down"): AppSt
     ? Math.min(state.selectedFeatureIndex + 1, total - 1)
     : Math.max(state.selectedFeatureIndex - 1, 0);
 
-    if (newIndex === state.selectedFeatureIndex) return state;
-    return { ...state, selectedFeatureIndex: newIndex, leftPaneMode: "preview" };
+  if (newIndex === state.selectedFeatureIndex) return state;
+  return { ...state, selectedFeatureIndex: newIndex, leftPaneMode: "preview" };
 }
 
 function handleLogNavigate(state: AppState, direction: "up" | "down"): AppState {
@@ -377,11 +587,10 @@ function handleModalNavigate(state: AppState, direction: "up" | "down"): AppStat
     const feature = state.snapshot.features[state.modal.featureIndex];
     if (!feature) return state;
 
-    // Options count comes from valid transitions for the feature
     const optionsCount = getValidFeatureTransitions(feature.status).length;
     if (optionsCount === 0) return state;
 
-    const newOption = direction === "down"
+    const selectedOption = direction === "down"
       ? Math.min(state.modal.selectedOption + 1, optionsCount - 1)
       : Math.max(state.modal.selectedOption - 1, 0);
 
@@ -389,7 +598,7 @@ function handleModalNavigate(state: AppState, direction: "up" | "down"): AppStat
       ...state,
       modal: {
         ...state.modal,
-        selectedOption: newOption,
+        selectedOption,
         phase: "selecting",
         errorMessage: undefined,
       },
@@ -399,14 +608,71 @@ function handleModalNavigate(state: AppState, direction: "up" | "down"): AppStat
   if (state.modal.kind === "feature-browser") {
     const total = state.snapshot.features.length;
     if (total === 0) return state;
+
     const selectedFeatureIndex = direction === "down"
       ? Math.min(state.modal.selectedFeatureIndex + 1, total - 1)
       : Math.max(state.modal.selectedFeatureIndex - 1, 0);
+
     return {
       ...state,
       modal: {
         kind: "feature-browser",
         selectedFeatureIndex,
+        returnTarget: state.modal.returnTarget,
+      },
+    };
+  }
+
+  if (state.modal.kind === "handoffs") {
+    const total = state.snapshot.pendingHandoffs.length;
+    if (total === 0) return state;
+
+    const selectedHandoffIndex = direction === "down"
+      ? Math.min(state.modal.selectedHandoffIndex + 1, total - 1)
+      : Math.max(state.modal.selectedHandoffIndex - 1, 0);
+
+    return {
+      ...state,
+      modal: {
+        kind: "handoffs",
+        selectedHandoffIndex,
+        returnTarget: state.modal.returnTarget,
+      },
+    };
+  }
+
+  if (state.modal.kind === "processes") {
+    const total = state.snapshot.runtimeProcesses.length;
+    if (total === 0) return state;
+
+    const selectedProcessIndex = direction === "down"
+      ? Math.min(state.modal.selectedProcessIndex + 1, total - 1)
+      : Math.max(state.modal.selectedProcessIndex - 1, 0);
+
+    return {
+      ...state,
+      modal: {
+        kind: "processes",
+        selectedProcessIndex,
+        returnTarget: state.modal.returnTarget,
+      },
+    };
+  }
+
+  if (state.modal.kind === "dependencies") {
+    const total = getDependencyTargets(state).length;
+    if (total === 0) return state;
+
+    const selectedOption = direction === "down"
+      ? Math.min(state.modal.selectedOption + 1, total - 1)
+      : Math.max(state.modal.selectedOption - 1, 0);
+
+    return {
+      ...state,
+      modal: {
+        kind: "dependencies",
+        selectedOption,
+        returnTarget: state.modal.returnTarget,
       },
     };
   }
@@ -419,33 +685,38 @@ function canOpenOverlayFromModal(modal: ModalState): boolean {
 }
 
 function closeOrReturnModal(state: AppState): AppState {
-  if (state.modal.kind !== "none") {
-    if (state.modal.kind === "command-palette") {
-      return { ...state, modal: { kind: "none" } };
-    }
-    const returnTarget = getModalReturnTarget(state.modal);
-    if (returnTarget === "command-palette") {
-      return {
-        ...state,
-        modal: {
-          kind: "command-palette",
-          query: "",
-          selectedCommandIndex: 0,
-        },
-      };
-    }
+  if (state.modal.kind === "none") {
+    return { ...state, focusedPanel: "none" };
+  }
+  if (state.modal.kind === "command-palette") {
     return { ...state, modal: { kind: "none" } };
   }
-  return { ...state, focusedPanel: "none" };
+
+  const returnTarget = getModalReturnTarget(state.modal);
+  if (returnTarget === "command-palette") {
+    return {
+      ...state,
+      modal: {
+        kind: "command-palette",
+        query: "",
+        selectedCommandIndex: 0,
+      },
+    };
+  }
+
+  return { ...state, modal: { kind: "none" } };
 }
 
 function getModalReturnTarget(modal: ModalState): ModalReturnTarget | undefined {
   if (
     modal.kind === "feature-browser"
+    || modal.kind === "dependencies"
     || modal.kind === "overview"
     || modal.kind === "handoffs"
+    || modal.kind === "handoff-detail"
     || modal.kind === "config"
     || modal.kind === "processes"
+    || modal.kind === "process-detail"
   ) {
     return modal.returnTarget;
   }
@@ -457,4 +728,19 @@ function getModalReturnTarget(modal: ModalState): ModalReturnTarget | undefined 
 
 function canNavigateBackToPalette(modal: ModalState): boolean {
   return modal.kind !== "command-palette" && getModalReturnTarget(modal) === "command-palette";
+}
+
+function getSelectedDependencyTargetId(state: AppState): string | undefined {
+  if (state.modal.kind !== "dependencies") return undefined;
+  return getDependencyTargets(state)[state.modal.selectedOption]?.id;
+}
+
+function getDependencyTargets(state: AppState): ReadonlyArray<{ id: string }> {
+  const preview = state.snapshot.taskPreviews?.[state.selectedFeatureIndex] ?? state.snapshot.activeFeature;
+  if (!preview) return [];
+
+  return [
+    ...(preview.blockedBy ?? []),
+    ...(preview.unblocks ?? []),
+  ].map((feature) => ({ id: feature.id }));
 }

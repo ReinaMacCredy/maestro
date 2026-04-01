@@ -24,6 +24,9 @@ export interface MissionControlHomeHandoff {
   id: string;
   message: string;
   agent: string;
+  sessionId?: string;
+  sitrep?: string;
+  quickstart?: string;
 }
 
 export interface MissionControlSessionSidebar {
@@ -48,6 +51,8 @@ export interface MissionControlConfigSummary {
 export interface MissionControlRuntimeProcessRow {
   featureId: string;
   title: string;
+  milestoneTitle?: string;
+  profile?: MilestoneProfile;
   status: FeatureStatus;
   workerType: string;
   hasReport: boolean;

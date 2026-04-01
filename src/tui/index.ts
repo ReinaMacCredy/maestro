@@ -6,7 +6,7 @@ import { Screen } from "./terminal/screen.js";
 import { startKeyListener, type Key } from "./terminal/input.js";
 import { Buffer } from "./terminal/buffer.js";
 import { inset, type Rect } from "./terminal/layout.js";
-import type { MissionControlSnapshot } from "./types.js";
+import type { MissionControlSnapshot, TaskPreviewPane } from "./types.js";
 import type { SnapshotDeps } from "./snapshot.js";
 import { createInitialState, reduce, type AppState, type Action } from "./state.js";
 import { HEADER_DOT_INTERVAL_MS, isHeaderAnimationActive, renderHeader } from "./panels/header.js";
@@ -129,12 +129,14 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
   process.on("SIGTERM", handleSignal);
 
   screen.enter();
+  screen.setMouseEnabled(!state.copyMode);
   const stopKeys = startKeyListener(handleKey);
 
   try {
     // Initial render
     const buf = screen.createBuffer();
     renderFrame(buf, state, animationFrame, 0);
+    screen.setMouseEnabled(!state.copyMode);
     screen.render(buf);
     dirty = false;
 
@@ -184,12 +186,13 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
       }
 
       // Render only when something changed
-      if (dirty) {
-        const buf = screen.createBuffer();
-        renderFrame(buf, state, animationFrame, now - lastSnapshotMs);
-        screen.render(buf);
-        dirty = false;
-      }
+        if (dirty) {
+          const buf = screen.createBuffer();
+          renderFrame(buf, state, animationFrame, now - lastSnapshotMs);
+          screen.setMouseEnabled(!state.copyMode);
+          screen.render(buf);
+          dirty = false;
+        }
     }
   } finally {
     stopKeys();
@@ -199,7 +202,7 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
   }
 
   async function handleMouse(key: Extract<Key, { type: "mouse" }>): Promise<void> {
-    if (key.button !== "left" || key.event !== "down" || state.modal.kind === "none") return;
+    if (state.copyMode || key.button !== "left" || key.event !== "down" || state.modal.kind === "none") return;
 
     const layout = getActiveModalLayout(screen.width, screen.height, state);
     if (!layout) return;
@@ -225,7 +228,7 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
     }
 
     if (state.modal.kind !== "feature-action" || state.modal.phase === "submitting") {
-      if (state.modal.kind === "feature-browser") {
+      if (isSelectableListModal(state.modal.kind)) {
         const optionIndex = layout.itemRects.findIndex((rect) => pointInRect(rect, key.x, key.y));
         if (optionIndex < 0) return;
         state = reduce(state, { type: "modal-select", option: optionIndex });
@@ -305,6 +308,9 @@ export function keyToAction(key: Key, state: AppState): Action | undefined {
   if (key.type === "ctrl" && key.char === "p") {
     return { type: "open-command-palette" };
   }
+  if (key.type === "ctrl" && key.char === "y") {
+    return { type: "toggle-copy-mode" };
+  }
   if (key.type === "escape") {
     return { type: "escape" };
   }
@@ -312,12 +318,16 @@ export function keyToAction(key: Key, state: AppState): Action | undefined {
     key.type === "arrow"
     && key.direction === "left"
     && (
-      (state.modal.kind === "feature-browser"
+      state.modal.kind === "handoff-detail"
+      || state.modal.kind === "process-detail"
+      || ((
+        state.modal.kind === "feature-browser"
+        || state.modal.kind === "dependencies"
         || state.modal.kind === "overview"
         || state.modal.kind === "handoffs"
         || state.modal.kind === "config"
-        || state.modal.kind === "processes")
-      && state.modal.returnTarget === "command-palette"
+        || state.modal.kind === "processes"
+      ) && state.modal.returnTarget === "command-palette")
     )
   ) {
     return { type: "navigate", direction: "left" };
@@ -443,7 +453,7 @@ export function renderFrame(
     renderFeatureList(buf, featureListRect, snap, state.selectedFeatureIndex);
     renderProgressLog(buf, timelineRect, snap.progressLog, snap, state.logScrollOffset);
     renderSessionSidebar(buf, sessionRect, snap);
-    renderFooter(buf, footerRect, snap);
+    renderFooter(buf, footerRect, snap, state.copyMode);
 
     // Modal overlay
     const modalRect = getModalParentRect(w, h);
@@ -567,8 +577,8 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
   if (state.modal.kind === "feature-browser") {
     return {
       mode: "menu",
-      title: "Features",
-      eyebrow: state.snapshot.mode === "home" ? "Project overview" : "Select a feature to focus",
+      title: "Tasks",
+      eyebrow: state.snapshot.mode === "home" ? "Project overview" : "Select a task to focus",
       items: state.snapshot.features.length > 0
         ? state.snapshot.features.map((feature) => ({
           label: feature.title,
@@ -584,6 +594,28 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
         footer: state.modal.returnTarget === "command-palette"
           ? "Enter focus · Left back · Esc close"
           : "Enter focus · Esc close",
+    };
+  }
+
+  if (state.modal.kind === "dependencies") {
+    const preview = getSelectedTaskPreview(state);
+    const items = preview
+      ? buildDependencyItems(preview)
+      : [];
+    return {
+      mode: "menu",
+      title: "Dependencies",
+      eyebrow: preview ? `${preview.id} · ${preview.title}` : "No task selected",
+      items: items.length > 0
+        ? items
+        : [{
+          label: "No related tasks",
+          detail: "This task has no direct blockers or dependents.",
+          section: "Selected Task",
+          tone: "muted",
+        }],
+      selectedIndex: Math.min(state.modal.selectedOption, Math.max(0, items.length - 1)),
+      footer: buildOverlayFooter(state.modal.returnTarget, "Enter jump"),
     };
   }
 
@@ -608,26 +640,44 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
   }
 
   if (state.modal.kind === "handoffs") {
+    const items = state.snapshot.pendingHandoffs.map((handoff) => ({
+      label: `${handoff.id} · ${handoff.agent}`,
+      detail: handoff.message,
+      hint: handoff.sessionId ? shortenSessionId(handoff.sessionId) : undefined,
+      section: "Pending",
+      style: "block" as const,
+    }));
+    return {
+      mode: "menu",
+      title: "Handoffs",
+      eyebrow: state.snapshot.pendingHandoffs.length > 0
+        ? `${state.snapshot.pendingHandoffs.length} pending`
+        : "No pending handoffs",
+      items: items.length > 0
+        ? items
+        : [{ label: "No pending handoffs in this workspace.", section: "Pending", tone: "muted" }],
+      selectedIndex: Math.min(state.modal.selectedHandoffIndex, Math.max(0, items.length - 1)),
+      footer: buildOverlayFooter(state.modal.returnTarget, "Enter details"),
+    };
+  }
+
+  if (state.modal.kind === "handoff-detail") {
+    const handoff = state.snapshot.pendingHandoffs[state.modal.handoffIndex];
+    if (!handoff) return undefined;
+
     return {
       mode: "info",
-      title: "Handoffs",
-        eyebrow: state.snapshot.pendingHandoffs.length > 0
-          ? `${state.snapshot.pendingHandoffs.length} pending`
-          : "No pending handoffs",
-        items: state.snapshot.pendingHandoffs.length > 0
-          ? state.snapshot.pendingHandoffs.flatMap((handoff) => ([
-            {
-              text: `${handoff.id} · ${handoff.agent}`,
-              detail: handoff.message,
-              style: "block",
-              tone: "accent" as const,
-              section: "Pending",
-            },
-          ]))
-          : [{ text: "No pending handoffs in this workspace.", section: "Pending", tone: "muted" }],
-        footer: state.modal.returnTarget === "command-palette" ? "Left back · Esc close" : "Esc close",
-      };
-    }
+      title: "Handoff Details",
+      eyebrow: `${handoff.id} · ${handoff.agent}`,
+      items: [
+        { text: handoff.message, section: "Task", style: "block", tone: "accent" },
+        { text: handoff.agent, detail: handoff.sessionId ? `Session ${shortenSessionId(handoff.sessionId)}` : undefined, section: "Agent" },
+        ...(handoff.sitrep ? [{ text: handoff.sitrep, section: "Sitrep" as const }] : []),
+        ...(handoff.quickstart ? [{ text: handoff.quickstart, section: "Quickstart" as const, style: "block" as const }] : []),
+      ],
+      footer: "Left back · Esc list",
+    };
+  }
 
   if (state.modal.kind === "config") {
     const summary = state.snapshot.configSummary;
@@ -660,26 +710,46 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
     }
 
   if (state.modal.kind === "processes") {
+    const items = state.snapshot.runtimeProcesses.map((process) => ({
+      label: `${process.featureId} · ${process.title}`,
+      detail: formatRuntimeProcessLine(process),
+      hint: process.agent ?? undefined,
+      section: "Runtime",
+      style: "block" as const,
+    }));
+    return {
+      mode: "menu",
+      title: "Runtime",
+      eyebrow: state.snapshot.runtimeProcesses.length > 0
+        ? `${state.snapshot.runtimeProcesses.length} runtime item${state.snapshot.runtimeProcesses.length === 1 ? "" : "s"}`
+        : "No active runtime processes",
+      items: items.length > 0
+        ? items
+        : [{ label: "No assigned, in-progress, or review features right now.", section: "Runtime", tone: "muted" }],
+      selectedIndex: Math.min(state.modal.selectedProcessIndex, Math.max(0, items.length - 1)),
+      footer: buildOverlayFooter(state.modal.returnTarget, "Enter details"),
+    };
+  }
+
+  if (state.modal.kind === "process-detail") {
+    const process = state.snapshot.runtimeProcesses[state.modal.processIndex];
+    if (!process) return undefined;
+
     return {
       mode: "info",
-        title: "Processes",
-        eyebrow: state.snapshot.runtimeProcesses.length > 0
-          ? `${state.snapshot.runtimeProcesses.length} runtime item${state.snapshot.runtimeProcesses.length === 1 ? "" : "s"}`
-          : "No active runtime processes",
-        items: state.snapshot.runtimeProcesses.length > 0
-          ? state.snapshot.runtimeProcesses.flatMap((process) => ([
-              {
-                text: process.title,
-                detail: `${process.featureId} · ${FEATURE_STATUS_LABEL[process.status]} · ${process.workerType}${process.runtimeState ? ` · ${process.runtimeState}` : ""}${process.isLive ? " · live" : ""}${process.retryCount ? ` · retry ${process.retryCount}` : ""}${process.failureReason ? ` · ${process.failureReason}` : process.hasReport ? " · report available" : " · waiting for report"}`,
-                style: "block" as const,
-                tone: "accent" as const,
-                section: "Runtime",
-            },
-          ]))
-          : [{ text: "No assigned, in-progress, or review features right now.", section: "Runtime", tone: "muted" }],
-        footer: state.modal.returnTarget === "command-palette" ? "Left back · Esc close" : "Esc close",
-      };
-    }
+      title: "Runtime Details",
+      eyebrow: `${process.featureId} · ${process.title}`,
+      items: [
+        { text: process.workerType, detail: process.milestoneTitle ?? undefined, section: "Worker", style: "block", tone: "accent" },
+        { text: process.agent ?? "unknown", detail: process.sessionId ? `Session ${shortenSessionId(process.sessionId)}` : undefined, section: "Ownership" },
+        { text: FEATURE_STATUS_LABEL[process.status], detail: process.runtimeState ?? (process.isLive ? "live" : "inactive"), section: "Status" },
+        ...(typeof process.lastSeenAgeMs === "number" ? [{ text: `${Math.round(process.lastSeenAgeMs / 1000)}s ago`, section: "Last Seen" as const }] : []),
+        ...(typeof process.retryCount === "number" ? [{ text: String(process.retryCount), section: "Retries" as const }] : []),
+        ...(process.failureReason ? [{ text: process.failureReason, section: "Failure" as const }] : []),
+      ],
+      footer: "Left back · Esc list",
+    };
+  }
 
   return undefined;
 }
@@ -695,6 +765,48 @@ function getFeatureActionFooter(modal: Extract<AppState["modal"], { kind: "featu
     return "Enter confirm · Esc cancel";
   }
   return "Use arrows or click · Enter choose · Esc cancel";
+}
+
+function buildOverlayFooter(returnTarget: "command-palette" | undefined, enterLabel: string): string {
+  return returnTarget === "command-palette"
+    ? `${enterLabel} · Left back · Esc close`
+    : `${enterLabel} · Esc close`;
+}
+
+function getSelectedTaskPreview(state: AppState): TaskPreviewPane | null {
+  return state.snapshot.taskPreviews?.[state.selectedFeatureIndex] ?? state.snapshot.activeFeature ?? null;
+}
+
+function buildDependencyItems(preview: TaskPreviewPane) {
+  return [
+    ...(preview.blockedBy ?? []).map((feature) => ({
+      label: `${feature.id} · ${feature.title}`,
+      detail: `${FEATURE_STATUS_LABEL[feature.status]} · upstream blocker`,
+      section: "Blocked By",
+      style: "block" as const,
+    })),
+    ...(preview.unblocks ?? []).map((feature) => ({
+      label: `${feature.id} · ${feature.title}`,
+      detail: `${FEATURE_STATUS_LABEL[feature.status]} · downstream dependent`,
+      section: "Unblocks",
+      style: "block" as const,
+    })),
+  ];
+}
+
+function formatRuntimeProcessLine(process: MissionControlSnapshot["runtimeProcesses"][number]): string {
+  return `${process.workerType}${process.runtimeState ? ` · ${process.runtimeState}` : ""}${process.isLive ? " · live" : ""}${typeof process.retryCount === "number" ? ` · retry ${process.retryCount}` : ""}${process.failureReason ? ` · ${process.failureReason}` : process.hasReport ? " · report available" : " · waiting for report"}`;
+}
+
+function shortenSessionId(sessionId: string): string {
+  return sessionId.length > 10 ? `${sessionId.slice(0, 8)}…` : sessionId;
+}
+
+function isSelectableListModal(kind: AppState["modal"]["kind"]): kind is "feature-browser" | "handoffs" | "processes" | "dependencies" {
+  return kind === "feature-browser"
+    || kind === "handoffs"
+    || kind === "processes"
+    || kind === "dependencies";
 }
 
 interface CommandPaletteItem {
@@ -746,6 +858,8 @@ function actionForMissionControlCommand(id: MissionControlCommandId): Action {
   switch (id) {
     case "features":
       return { type: "open-features" };
+    case "dependencies":
+      return { type: "open-dependencies" };
     case "handoffs":
       return { type: "open-handoffs" };
     case "config":

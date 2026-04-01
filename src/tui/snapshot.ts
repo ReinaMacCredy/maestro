@@ -404,13 +404,13 @@ function buildRuntimeProcesses(
           || feature.status === "in-progress"
         || feature.status === "review";
     })
-    .map((feature) => {
-      const runtime = runtimeByFeature.get(feature.id);
-      return {
-        featureId: feature.id,
-        title: feature.title,
-        status: feature.status,
-        workerType: feature.workerType,
+      .map((feature) => {
+        const runtime = runtimeByFeature.get(feature.id);
+        return {
+          featureId: feature.id,
+          title: feature.title,
+          status: feature.status,
+          workerType: feature.workerType,
         hasReport: feature.report !== undefined && feature.report !== null,
         isLive: runtime
           ? presentRuntimeState(runtime, feature.status) === "live"
@@ -606,6 +606,9 @@ function mapPendingHandoff(
     id: entry.handoff.id,
     message: entry.handoff.message,
     agent: entry.handoff.session.agent,
+    sessionId: entry.handoff.session.sessionId,
+    sitrep: entry.handoff.sitrep,
+    quickstart: entry.handoff.quickstart,
   };
 }
 
