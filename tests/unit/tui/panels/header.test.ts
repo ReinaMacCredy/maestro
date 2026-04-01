@@ -5,7 +5,7 @@ import {
   isHeaderAnimationActive,
   renderHeader,
 } from "../../../../src/tui/panels/header.js";
-import type { MissionControlSnapshot } from "../../../../src/tui/types.js";
+import type { MissionControlSnapshot } from "../../../../src/tui/state/types.js";
 
 function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionControlSnapshot {
   return {

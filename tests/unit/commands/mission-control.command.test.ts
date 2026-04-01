@@ -12,7 +12,7 @@ import type { CassPort } from "../../../src/ports/cass.port.js";
 import type { ConfigPort } from "../../../src/ports/config.port.js";
 import type { GitPort } from "../../../src/ports/git.port.js";
 import type { HandoffStorePort } from "../../../src/ports/handoff-store.port.js";
-import type { SnapshotDeps, HomeSnapshotDeps } from "../../../src/tui/snapshot.js";
+import type { SnapshotDeps, HomeSnapshotDeps } from "../../../src/tui/state/snapshot.js";
 
 let tmpDir: string;
 let snapshotDeps: SnapshotDeps;

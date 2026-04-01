@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { Buffer } from "../../../../src/tui/terminal/buffer.js";
 import { renderProgressLog } from "../../../../src/tui/panels/progress-log.js";
 import { PALETTE } from "../../../../src/tui/theme.js";
-import type { MissionControlEvent } from "../../../../src/tui/types.js";
+import type { MissionControlEvent } from "../../../../src/tui/state/types.js";
 
 const EVENTS: readonly MissionControlEvent[] = [
   { timestamp: "2026-03-30T10:12:00.000Z", relativeMs: 720_000, kind: "feature", title: "f1 moved to done" },

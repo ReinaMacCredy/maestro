@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { Buffer } from "../../../../src/tui/terminal/buffer.js";
 import { renderSessionSidebar, renderWorkerPanel } from "../../../../src/tui/panels/worker.js";
 import { PALETTE } from "../../../../src/tui/theme.js";
-import type { MissionControlSnapshot } from "../../../../src/tui/types.js";
+import type { MissionControlSnapshot } from "../../../../src/tui/state/types.js";
 
 function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionControlSnapshot {
   return {

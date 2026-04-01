@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { getMissionControlCommandSpecs } from "../../../src/tui/mission-control-commands.js";
+import { getMissionControlCommandSpecs } from "../../../src/tui/state/mission-control-commands.js";
 
 describe("getMissionControlCommandSpecs", () => {
   it("omits mission-scoped commands in home mode", () => {

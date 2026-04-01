@@ -4,4 +4,4 @@
 export { renderDashboard, type InteractiveOptions } from "./app/app.js";
 export { renderOnceFrame, renderFrame, type OnceFrameOptions } from "./app/render.js";
 export { keyToAction } from "./app/input-dispatch.js";
-export type { Action } from "./state.js";
+export type { Action } from "./state/reducer.js";

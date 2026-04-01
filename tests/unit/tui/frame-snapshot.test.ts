@@ -4,12 +4,10 @@
  */
 import { describe, expect, it } from "bun:test";
 import { Buffer } from "../../../src/tui/terminal/buffer.js";
-import { createInitialState } from "../../../src/tui/state.js";
+import { renderFrame, renderOnceFrame } from "../../../src/tui/app/render.js";
+import { createInitialState } from "../../../src/tui/state/reducer.js";
+import type { MissionControlSnapshot } from "../../../src/tui/state/types.js";
 import { PALETTE } from "../../../src/tui/theme.js";
-import type { MissionControlSnapshot } from "../../../src/tui/types.js";
-
-// Re-export renderFrame for testing by importing the once-frame path
-import { renderFrame, renderOnceFrame } from "../../../src/tui/index.js";
 
 function withTerminalSize<T>(width: number, height: number, run: () => T): T {
   const columnsDescriptor = Object.getOwnPropertyDescriptor(process.stdout, "columns");

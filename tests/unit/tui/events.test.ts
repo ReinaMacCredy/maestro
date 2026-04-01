@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { deriveEvents } from "../../../src/tui/events.js";
+import { deriveEvents } from "../../../src/tui/state/events.js";
 import type { Mission, Feature, Checkpoint, Assertion } from "../../../src/domain/mission-types.js";
 
 function makeMission(overrides: Partial<Mission> = {}): Mission {

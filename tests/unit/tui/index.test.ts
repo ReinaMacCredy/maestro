@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 
-import { keyToAction } from "../../../src/tui/index.js";
-import { createInitialState } from "../../../src/tui/state.js";
-import type { MissionControlSnapshot } from "../../../src/tui/types.js";
+import { keyToAction } from "../../../src/tui/app/input-dispatch.js";
+import { createInitialState } from "../../../src/tui/state/reducer.js";
+import type { MissionControlSnapshot } from "../../../src/tui/state/types.js";
 
 const SNAPSHOT: MissionControlSnapshot = {
   mode: "mission",
