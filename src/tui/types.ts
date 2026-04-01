@@ -8,6 +8,7 @@ import type {
   WorkerReport,
 } from "../domain/mission-types.js";
 import type { DoctorCheck } from "../domain/types.js";
+import type { RuntimeState } from "../domain/runtime-types.js";
 
 export type MissionControlMode = "mission" | "home";
 
@@ -46,6 +47,12 @@ export interface MissionControlRuntimeProcessRow {
   workerType: string;
   hasReport: boolean;
   isLive: boolean;
+  runtimeState?: RuntimeState;
+  lastSeenAgeMs?: number;
+  failureReason?: string;
+  retryCount?: number;
+  agent?: string;
+  sessionId?: string;
 }
 
 export interface MissionControlHomeState {
@@ -133,6 +140,12 @@ export interface MissionControlWorkerPane {
   status: FeatureStatus;
   elapsedMs: number;
   report: WorkerReport | null;
+  runtimeState?: RuntimeState;
+  lastSeenAgeMs?: number;
+  failureReason?: string;
+  retryCount?: number;
+  agent?: string;
+  sessionId?: string;
 }
 
 export interface MissionControlEvent {

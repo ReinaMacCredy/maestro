@@ -8,6 +8,7 @@ import { FsFeatureStoreAdapter } from "../../../src/adapters/feature-store.adapt
 import { FsAssertionStoreAdapter } from "../../../src/adapters/assertion-store.adapter.js";
 import { FsCheckpointStoreAdapter } from "../../../src/adapters/checkpoint-store.adapter.js";
 import { FsRuntimeStoreAdapter } from "../../../src/adapters/runtime-store.adapter.js";
+import type { WorkerRuntime } from "../../../src/domain/runtime-types.js";
 import type { CassPort } from "../../../src/ports/cass.port.js";
 import type { ConfigPort } from "../../../src/ports/config.port.js";
 import type { GitPort } from "../../../src/ports/git.port.js";
@@ -269,8 +270,93 @@ describe("buildSnapshot", () => {
     const snapshot = await buildHomeSnapshot(homeDeps, tmpDir);
 
     expect(snapshot.mode).toBe("home");
-    expect(snapshot.configSummary?.cassAvailable).toBe(true);
-    expect(isAvailableCalls).toBe(0);
-    expect(hasBinaryCalls).toBe(1);
+      expect(snapshot.configSummary?.cassAvailable).toBe(true);
+      expect(isAvailableCalls).toBe(0);
+      expect(hasBinaryCalls).toBe(1);
+    }, 15_000);
+
+  it("prefers explicit runtime state when runtime.json exists", async () => {
+    const plan = createSamplePlan();
+    await writeFile(join(tmpDir, "plan.json"), JSON.stringify(plan));
+    const { stdout } = await run(["mission", "create", "--file", join(tmpDir, "plan.json"), "--json"], tmpDir);
+    const missionId = JSON.parse(stdout).mission.id;
+
+    await run(["mission", "approve", missionId, "--json"], tmpDir);
+    await run(["feature", "update", "f1", "--mission", missionId, "--status", "assigned", "--json"], tmpDir);
+
+    const runtime: WorkerRuntime = {
+      featureId: "f1",
+      attemptId: "attempt-1",
+      attempt: 1,
+      agent: "unknown",
+      runtimeState: "starting",
+      startedAt: new Date(Date.now() - 20_000).toISOString(),
+      lastSeenAt: new Date(Date.now() - 5_000).toISOString(),
+      leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+      recoveryMetadata: {
+        retryCount: 1,
+        history: [],
+      },
+    };
+    await runtimeStore.save(missionId, "f1", runtime);
+
+    const snapshot = await buildSnapshot(deps, missionId);
+
+    expect(snapshot.activeWorker).toMatchObject({
+      featureId: "f1",
+      runtimeState: "live",
+      retryCount: 1,
+    });
+    expect(snapshot.runtimeProcesses[0]).toMatchObject({
+      featureId: "f1",
+      runtimeState: "live",
+      retryCount: 1,
+    });
   }, 15_000);
-  });
+
+  it("classifies stale and failed runtimes from heartbeat age", async () => {
+    const plan = createSamplePlan();
+    await writeFile(join(tmpDir, "plan.json"), JSON.stringify(plan));
+    const { stdout } = await run(["mission", "create", "--file", join(tmpDir, "plan.json"), "--json"], tmpDir);
+    const missionId = JSON.parse(stdout).mission.id;
+
+    await run(["mission", "approve", missionId, "--json"], tmpDir);
+    await run(["feature", "update", "f1", "--mission", missionId, "--status", "assigned", "--json"], tmpDir);
+    await run(["feature", "update", "f2", "--mission", missionId, "--status", "assigned", "--json"], tmpDir);
+
+    await runtimeStore.save(missionId, "f1", {
+      featureId: "f1",
+      attemptId: "attempt-stale",
+      attempt: 1,
+      agent: "unknown",
+      runtimeState: "live",
+      startedAt: new Date(Date.now() - 120_000).toISOString(),
+      lastSeenAt: new Date(Date.now() - 120_000).toISOString(),
+      leaseExpiresAt: new Date(Date.now() - 30_000).toISOString(),
+      recoveryMetadata: {
+        retryCount: 0,
+        history: [],
+      },
+    });
+    await runtimeStore.save(missionId, "f2", {
+      featureId: "f2",
+      attemptId: "attempt-failed",
+      attempt: 1,
+      agent: "unknown",
+      runtimeState: "live",
+      startedAt: new Date(Date.now() - 360_000).toISOString(),
+      lastSeenAt: new Date(Date.now() - 360_000).toISOString(),
+      leaseExpiresAt: new Date(Date.now() - 300_000).toISOString(),
+      failureReason: "worker vanished",
+      recoveryMetadata: {
+        retryCount: 0,
+        history: [],
+      },
+    });
+
+    const snapshot = await buildSnapshot(deps, missionId);
+
+    expect(snapshot.runtimeProcesses.find((process) => process.featureId === "f1")?.runtimeState).toBe("stale");
+    expect(snapshot.runtimeProcesses.find((process) => process.featureId === "f2")?.runtimeState).toBe("failed");
+  }, 15_000);
+});

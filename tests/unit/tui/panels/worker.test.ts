@@ -89,4 +89,24 @@ describe("renderWorkerPanel", () => {
     expect(text).toContain("State");
     expect(text).toContain("Waiting to start next feature");
   });
+
+  it("shows stale runtime messaging for the active worker", () => {
+    const buf = new Buffer(90, 6);
+    renderWorkerPanel(buf, { x: 0, y: 0, width: 90, height: 6 }, makeSnapshot({
+      activeWorker: {
+        featureId: "f2",
+        featureTitle: "Database config",
+        workerType: "backend-worker",
+        status: "in-progress",
+        elapsedMs: 30_000,
+        report: null,
+        runtimeState: "stale",
+        lastSeenAgeMs: 120_000,
+      },
+    }));
+
+    const text = buf.toString();
+    expect(text).toContain("Worker heartbeat stale");
+    expect(text).toContain("Recovery review or manual retry");
+  });
 });

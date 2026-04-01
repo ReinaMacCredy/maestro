@@ -12,8 +12,13 @@ import type { CassPort } from "../ports/cass.port.js";
 import type { GitPort } from "../ports/git.port.js";
 import type { RuntimeStorePort } from "../ports/runtime-store.port.js";
 import type { Mission, Feature } from "../domain/mission-types.js";
+import type { RuntimeState, WorkerRuntime } from "../domain/runtime-types.js";
 import type { DoctorCheck, StatusReport } from "../domain/types.js";
-import { CASS_INSTALL_HINT } from "../domain/defaults.js";
+import {
+  CASS_INSTALL_HINT,
+  DEFAULT_RUNTIME_FAILURE_MS,
+  DEFAULT_RUNTIME_STALE_MS,
+} from "../domain/defaults.js";
 import { generateMissionReport, type MissionReport } from "../usecases/mission-report.usecase.js";
 import { checkStatus } from "../usecases/check-status.usecase.js";
 import { runDoctor } from "../usecases/run-doctor.usecase.js";
@@ -50,6 +55,16 @@ export interface HomeSnapshotDeps {
   git: GitPort;
 }
 
+interface RuntimeView {
+  readonly runtimeState: RuntimeState;
+  readonly lastSeenAgeMs: number;
+  readonly failureReason?: string;
+  readonly retryCount: number;
+  readonly agent: string;
+  readonly sessionId?: string;
+  readonly startedAtMs: number;
+}
+
 /**
  * Build a complete snapshot for the mission control dashboard.
  * Throws if mission not found.
@@ -65,6 +80,7 @@ export async function buildSnapshot(
     checkpoints,
     env,
     gitState,
+    runtimes,
   ] = await Promise.all([
     generateMissionReport(
       deps.missionStore,
@@ -77,11 +93,15 @@ export async function buildSnapshot(
     deps.checkpointStore.list(missionId),
     buildMissionControlEnvironmentSummary(deps.handoffStore, deps.config, deps.cass, deps.git, deps.cwd),
     deps.git.getState(deps.cwd),
+    deps.runtimeStore.list(missionId),
   ]);
 
   const mission = report.mission;
   const now = Date.now();
   const startMs = new Date(mission.approvedAt ?? mission.createdAt).getTime();
+  const runtimeByFeature = new Map(
+    runtimes.map((runtime) => [runtime.featureId, buildRuntimeView(runtime, now)]),
+  );
 
   // Feature rows
   const featureRows: MissionControlFeatureRow[] = features.map((f) => ({
@@ -97,7 +117,7 @@ export async function buildSnapshot(
   const activeFeature = findActiveFeature(features, report);
 
   // Active worker
-  const activeWorker = buildActiveWorker(features, startMs, now);
+  const activeWorker = buildActiveWorker(features, runtimeByFeature, startMs, now);
 
   // Progress log
   const progressLog = deriveEvents({
@@ -161,7 +181,7 @@ export async function buildSnapshot(
         missionDirectory: `.maestro/missions/${mission.id}`,
         workerTypes,
       },
-    runtimeProcesses: buildRuntimeProcesses(features, activeWorker),
+    runtimeProcesses: buildRuntimeProcesses(features, runtimeByFeature, activeWorker),
     progressLog,
     milestones,
     canPause: mission.status === "executing",
@@ -277,6 +297,7 @@ function findActiveFeature(
 
 function buildActiveWorker(
   features: readonly Feature[],
+  runtimeByFeature: ReadonlyMap<string, RuntimeView>,
   startMs: number,
   nowMs: number,
 ): MissionControlWorkerPane | null {
@@ -286,7 +307,8 @@ function buildActiveWorker(
 
   if (!active) return null;
 
-  const featureStartMs = new Date(active.updatedAt).getTime();
+  const runtime = runtimeByFeature.get(active.id);
+  const featureStartMs = runtime?.startedAtMs ?? new Date(active.updatedAt).getTime();
 
   return {
     featureId: active.id,
@@ -295,6 +317,12 @@ function buildActiveWorker(
     status: active.status,
     elapsedMs: nowMs - featureStartMs,
     report: active.report ?? null,
+    runtimeState: runtime?.runtimeState,
+    lastSeenAgeMs: runtime?.lastSeenAgeMs,
+    failureReason: runtime?.failureReason,
+    retryCount: runtime?.retryCount,
+    agent: runtime?.agent,
+    sessionId: runtime?.sessionId,
   };
 }
 
@@ -341,21 +369,64 @@ function buildHomeActions(
 
 function buildRuntimeProcesses(
   features: readonly Feature[],
+  runtimeByFeature: ReadonlyMap<string, RuntimeView>,
   activeWorker: MissionControlWorkerPane | null,
 ): readonly MissionControlRuntimeProcessRow[] {
   return features
-    .filter((feature) =>
-      feature.status === "assigned"
-      || feature.status === "in-progress"
-      || feature.status === "review")
-    .map((feature) => ({
-      featureId: feature.id,
-      title: feature.title,
-      status: feature.status,
-      workerType: feature.workerType,
-      hasReport: feature.report !== undefined && feature.report !== null,
-      isLive: activeWorker?.featureId === feature.id,
-    }));
+    .filter((feature) => {
+      const runtime = runtimeByFeature.get(feature.id);
+      if (runtime) {
+        return runtime.runtimeState !== "completed";
+      }
+      return feature.status === "assigned"
+        || feature.status === "in-progress"
+        || feature.status === "review";
+    })
+    .map((feature) => {
+      const runtime = runtimeByFeature.get(feature.id);
+      return {
+        featureId: feature.id,
+        title: feature.title,
+        status: feature.status,
+        workerType: feature.workerType,
+        hasReport: feature.report !== undefined && feature.report !== null,
+        isLive: runtime ? runtime.runtimeState === "live" : activeWorker?.featureId === feature.id,
+        runtimeState: runtime?.runtimeState,
+        lastSeenAgeMs: runtime?.lastSeenAgeMs,
+        failureReason: runtime?.failureReason,
+        retryCount: runtime?.retryCount,
+        agent: runtime?.agent,
+        sessionId: runtime?.sessionId,
+      };
+    });
+}
+
+function buildRuntimeView(runtime: WorkerRuntime, nowMs: number): RuntimeView {
+  const lastSeenMs = new Date(runtime.lastSeenAt).getTime();
+  const startedAtMs = new Date(runtime.startedAt).getTime();
+  const leaseExpiresMs = new Date(runtime.leaseExpiresAt).getTime();
+  const lastSeenAgeMs = Math.max(0, nowMs - lastSeenMs);
+
+  let runtimeState = runtime.runtimeState;
+  if (runtimeState !== "completed" && runtimeState !== "recoverable") {
+    if (lastSeenAgeMs >= DEFAULT_RUNTIME_FAILURE_MS) {
+      runtimeState = "failed";
+    } else if (lastSeenAgeMs >= DEFAULT_RUNTIME_STALE_MS) {
+      runtimeState = "stale";
+    } else if (runtimeState === "starting" || runtimeState === "live" || leaseExpiresMs >= nowMs) {
+      runtimeState = "live";
+    }
+  }
+
+  return {
+    runtimeState,
+    lastSeenAgeMs,
+    failureReason: runtime.failureReason,
+    retryCount: runtime.recoveryMetadata.retryCount,
+    agent: runtime.agent,
+    sessionId: runtime.sessionId,
+    startedAtMs,
+  };
 }
 
 function mapPendingHandoff(

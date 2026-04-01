@@ -680,12 +680,12 @@ function buildModalOptions(state: AppState): ModalOptions | undefined {
           : "No active runtime processes",
         items: state.snapshot.runtimeProcesses.length > 0
           ? state.snapshot.runtimeProcesses.flatMap((process) => ([
-            {
-              text: process.title,
-              detail: `${process.featureId} · ${FEATURE_STATUS_LABEL[process.status]} · ${process.workerType}${process.isLive ? " · live" : ""}${process.hasReport ? " · report available" : " · waiting for report"}`,
-              style: "block" as const,
-              tone: "accent" as const,
-              section: "Runtime",
+              {
+                text: process.title,
+                detail: `${process.featureId} · ${FEATURE_STATUS_LABEL[process.status]} · ${process.workerType}${process.runtimeState ? ` · ${process.runtimeState}` : ""}${process.isLive ? " · live" : ""}${process.retryCount ? ` · retry ${process.retryCount}` : ""}${process.failureReason ? ` · ${process.failureReason}` : process.hasReport ? " · report available" : " · waiting for report"}`,
+                style: "block" as const,
+                tone: "accent" as const,
+                section: "Runtime",
             },
           ]))
           : [{ text: "No assigned, in-progress, or review features right now.", section: "Runtime", tone: "muted" }],

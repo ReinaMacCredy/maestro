@@ -102,18 +102,20 @@ function buildActivityRows(
 
   if (snap.activeWorker) {
     const meta = `${snap.activeWorker.featureId} · ${FEATURE_STATUS_LABEL[snap.activeWorker.status]} · ${snap.activeWorker.workerType}`;
+    const stateValue = getWorkerStateText(snap.activeWorker);
+    const nextValue = getWorkerNextText(snap.activeWorker);
     return [
       { label: "Task", value: snap.activeWorker.featureTitle, style: "title" },
       { label: "Meta", value: meta, style: "meta" },
       {
         label: "State",
-        value: snap.activeWorker.report?.salientSummary ?? "Waiting for first worker report",
-        style: snap.activeWorker.report?.salientSummary ? "value" : "muted",
+        value: stateValue,
+        style: stateValue === "Waiting for first worker report" ? "muted" : "value",
       },
       {
         label: "Next",
-        value: snap.activeWorker.report?.whatWasImplemented ?? "Report update or status transition",
-        style: snap.activeWorker.report?.whatWasImplemented ? "value" : "muted",
+        value: nextValue,
+        style: nextValue === "Report update or status transition" ? "muted" : "value",
       },
       { label: "Scope", value: "Live on current feature", style: "value" },
     ];
@@ -145,6 +147,38 @@ function getChangesText(session: MissionControlSnapshot["session"]): string {
   }
   const fileLabel = session.changedFiles.length === 1 ? "file" : "files";
   return `${session.changedFiles.length} ${fileLabel} · ${session.diffStat}`;
+}
+
+function getWorkerStateText(activeWorker: NonNullable<MissionControlSnapshot["activeWorker"]>): string {
+  if (activeWorker.runtimeState === "failed") {
+    return activeWorker.failureReason ?? "Worker runtime failed";
+  }
+  if (activeWorker.runtimeState === "stale") {
+    return `Worker heartbeat stale · last seen ${formatElapsed(activeWorker.lastSeenAgeMs ?? 0)} ago`;
+  }
+  if (activeWorker.runtimeState === "recoverable") {
+    return `Recovery ready · retry count ${activeWorker.retryCount ?? 0}`;
+  }
+  if (activeWorker.report?.salientSummary) {
+    return activeWorker.report.salientSummary;
+  }
+  if (activeWorker.runtimeState === "live") {
+    return "Worker runtime live";
+  }
+  return "Waiting for first worker report";
+}
+
+function getWorkerNextText(activeWorker: NonNullable<MissionControlSnapshot["activeWorker"]>): string {
+  if (activeWorker.runtimeState === "failed") {
+    return "Recovery review or manual retry";
+  }
+  if (activeWorker.runtimeState === "stale") {
+    return "Recovery review or manual retry";
+  }
+  if (activeWorker.runtimeState === "recoverable") {
+    return "Retry attempt can be scheduled";
+  }
+  return activeWorker.report?.whatWasImplemented ?? "Report update or status transition";
 }
 
 function getFileRows(
