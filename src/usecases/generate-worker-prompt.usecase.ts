@@ -7,7 +7,7 @@ import type { FeatureStorePort } from "../ports/feature-store.port.js";
 import type { MissionStorePort } from "../ports/mission-store.port.js";
 import type { AssertionStorePort } from "../ports/assertion-store.port.js";
 import type { RuntimeStorePort } from "../ports/runtime-store.port.js";
-import type { Feature, Mission, Milestone, Assertion } from "../domain/mission-types.js";
+import type { Feature, Mission, Milestone, Assertion, MilestoneProfile } from "../domain/mission-types.js";
 import { MaestroError } from "../domain/errors.js";
 import { WORKER_TYPE_PATTERN } from "../domain/mission-validators.js";
 import { readText, writeText, ensureDir } from "../lib/fs.js";
@@ -88,8 +88,46 @@ export async function generateWorkerPrompt(
     // worker-base skill not found -- skip handoff protocol section
   }
 
+  // Load previous milestone's worker reports for review/validation profiles
+  const reviewProfiles = new Set(["plan-review", "code-review", "bug-hunt", "simplify", "validation"]);
+  let previousMilestoneReports: { featureId: string; featureTitle: string; summary: string }[] | undefined;
+
+  if (milestone.profile && reviewProfiles.has(milestone.profile)) {
+    const prevMilestone = mission.milestones
+      .filter((m) => m.order < milestone.order)
+      .sort((a, b) => b.order - a.order)[0];
+
+    if (prevMilestone) {
+      const prevFeatures = allFeatures.filter(
+        (f) => f.milestoneId === prevMilestone.id && f.status === "done",
+      );
+      const reports: typeof previousMilestoneReports = [];
+      for (const pf of prevFeatures) {
+        const reportPath = join(
+          baseDir, MAESTRO_DIR, "missions", missionId, "workers", pf.id, "report.json",
+        );
+        const reportContent = await readText(reportPath);
+        if (reportContent) {
+          try {
+            const parsed = JSON.parse(reportContent);
+            reports.push({
+              featureId: pf.id,
+              featureTitle: pf.title,
+              summary: parsed.salientSummary ?? parsed.whatWasImplemented ?? "(no summary)",
+            });
+          } catch {
+            // Malformed report -- skip
+          }
+        }
+      }
+      if (reports.length > 0) {
+        previousMilestoneReports = reports;
+      }
+    }
+  }
+
   // Generate the prompt
-  const prompt = composePrompt(mission, milestone, feature, featureAssertions, skillContent, allFeatures, handoffProtocol);
+  const prompt = composePrompt(mission, milestone, feature, featureAssertions, skillContent, allFeatures, handoffProtocol, previousMilestoneReports);
 
   // Track written paths
   const writtenPaths: string[] = [];
@@ -216,6 +254,17 @@ function enumerateSearchRoots(baseDir: string): string[] {
   return roots;
 }
 
+/** Profile-specific preambles injected into the milestone context section */
+const PROFILE_PREAMBLE: Partial<Record<MilestoneProfile, string>> = {
+  planning: "You are producing a design or specification. Focus on architecture decisions, interface contracts, and identifying risks before implementation begins.",
+  "plan-review": "You are reviewing a plan. Evaluate completeness, feasibility, missed edge cases, and alignment with the mission objectives. Approve or request changes.",
+  implementation: "You are implementing features according to the plan. Focus on correctness, test coverage, and clean code.",
+  "code-review": "You are reviewing implementation quality. Check for correctness, security vulnerabilities, performance issues, and adherence to the plan. Approve or request changes.",
+  "bug-hunt": "You are hunting for bugs. Try to break the implementation through edge cases, unexpected inputs, race conditions, and integration failures.",
+  simplify: "You are simplifying. Reduce complexity, improve clarity, remove dead code, and consolidate abstractions without changing behavior.",
+  validation: "You are validating. Run checks, verify contracts, confirm assertions pass, and ensure the implementation meets acceptance criteria.",
+};
+
 /**
  * Compose the complete worker prompt.
  * Sanitizes mission text to ensure prompt structure remains stable.
@@ -228,6 +277,7 @@ function composePrompt(
   skillContent: string,
   allFeatures: readonly Feature[],
   handoffProtocol?: string,
+  previousMilestoneReports?: readonly { featureId: string; featureTitle: string; summary: string }[],
 ): string {
   const parts: string[] = [];
 
@@ -258,11 +308,41 @@ function composePrompt(
   parts.push("## Milestone Context");
   parts.push("");
   parts.push(`**${milestone.id}:** ${delimitContent(milestone.title)}`);
+  if (milestone.kind) {
+    parts.push(`**Kind:** ${milestone.kind}`);
+  }
+  if (milestone.profile) {
+    parts.push(`**Profile:** ${milestone.profile}`);
+  }
   if (milestone.description) {
     parts.push("");
     parts.push(delimitContent(milestone.description));
   }
   parts.push("");
+
+  // Profile-specific preamble
+  const profile = milestone.profile ?? "custom";
+  const preamble = PROFILE_PREAMBLE[profile];
+  if (preamble) {
+    parts.push("### Phase Intent");
+    parts.push("");
+    parts.push(preamble);
+    parts.push("");
+  }
+
+  // Previous milestone output (for review/validation profiles)
+  if (previousMilestoneReports && previousMilestoneReports.length > 0) {
+    parts.push("### Previous Milestone Output");
+    parts.push("");
+    parts.push("The following features were completed in the preceding milestone:");
+    parts.push("");
+    for (const report of previousMilestoneReports) {
+      parts.push(`#### ${report.featureId}: ${report.featureTitle}`);
+      parts.push("");
+      parts.push(report.summary);
+      parts.push("");
+    }
+  }
 
   // Sibling feature context (A3)
   const otherFeatures = allFeatures.filter((f) => f.id !== feature.id);
