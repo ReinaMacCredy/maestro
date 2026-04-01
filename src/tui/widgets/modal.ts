@@ -349,8 +349,8 @@ function renderRow(
   mode: ModalOptions["mode"],
 ): void {
   const baseBg = PALETTE.overlaySurfaceBg;
-  const selectedBg = mode === "palette" ? PALETTE.amber : PALETTE.overlaySelectedBg;
-  const selectedFg = mode === "palette" ? PALETTE.blue : PALETTE.overlaySelectedFg;
+    const selectedBg = mode === "palette" ? PALETTE.yellow : PALETTE.overlaySelectedBg;
+    const selectedFg = mode === "palette" ? PALETTE.headerBg : PALETTE.overlaySelectedFg;
   const bg = isSelected ? selectedBg : baseBg;
   const labelFg = isSelected ? selectedFg : getToneColor(row.tone, mode);
     const detailFg = isSelected

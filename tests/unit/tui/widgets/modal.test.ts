@@ -66,7 +66,8 @@ describe("renderModal", () => {
 
       const titleRow = buf.toString().split("\n")[layout.y + 1] ?? "";
       expect(titleRow).toContain("Command Palette");
-      expect(buf.getCell(layout.itemRects[0]!.y, layout.itemRects[0]!.x + 2)?.bg).toBe(PALETTE.amber);
+      expect(buf.getCell(layout.itemRects[0]!.y, layout.itemRects[0]!.x + 2)?.bg).toBe(PALETTE.yellow);
+      expect(buf.getCell(layout.itemRects[0]!.y, layout.itemRects[0]!.x + 2)?.fg).toBe(PALETTE.headerBg);
       expect(buf.getCell(layout.itemRects[1]!.y, layout.itemRects[1]!.x + 2)?.dim).toBe(false);
     });
 
