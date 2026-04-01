@@ -345,8 +345,12 @@ function renderRow(
   const selectedFg = mode === "palette" ? PALETTE.blue : PALETTE.overlaySelectedFg;
   const bg = isSelected ? selectedBg : baseBg;
   const labelFg = isSelected ? selectedFg : getToneColor(row.tone, mode);
-  const detailFg = isSelected ? selectedFg : PALETTE.overlayHint;
-  const hintFg = isSelected ? selectedFg : (mode === "palette" ? PALETTE.blue : PALETTE.overlayHint);
+  const detailFg = isSelected
+    ? selectedFg
+    : (mode === "palette" ? PALETTE.brightWhite : PALETTE.overlayHint);
+  const hintFg = isSelected
+    ? selectedFg
+    : (mode === "palette" ? PALETTE.cyan : PALETTE.overlayHint);
 
   buf.fillRect(rect, " ", { bg });
 
@@ -442,8 +446,8 @@ function getRowHeight(row: NormalizedModalRow, compact = false): number {
 
 function getToneColor(tone: ModalTone, mode: ModalOptions["mode"]): number {
   if (tone === "accent") return PALETTE.brightWhite;
-  if (tone === "muted") return PALETTE.overlayHint;
-  return mode === "palette" ? PALETTE.gray : PALETTE.brightWhite;
+  if (tone === "muted") return mode === "palette" ? PALETTE.gray : PALETTE.overlayHint;
+  return PALETTE.brightWhite;
 }
 
 function dimColor(color: number): number {
