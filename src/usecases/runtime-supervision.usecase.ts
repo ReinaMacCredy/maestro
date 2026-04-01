@@ -16,18 +16,27 @@ export function classifyRuntime(
 ): RuntimeClassification {
   const lastSeenMs = new Date(runtime.lastSeenAt).getTime();
   const startedAtMs = new Date(runtime.startedAt).getTime();
-  const leaseExpiresMs = new Date(runtime.leaseExpiresAt).getTime();
   const lastSeenAgeMs = Math.max(0, nowMs - lastSeenMs);
 
   let runtimeState = runtime.runtimeState;
-  if (runtimeState !== "completed" && runtimeState !== "recoverable") {
-    if (lastSeenAgeMs >= DEFAULT_RUNTIME_FAILURE_MS) {
-      runtimeState = "failed";
-    } else if (lastSeenAgeMs >= DEFAULT_RUNTIME_STALE_MS) {
-      runtimeState = "stale";
-    } else if (runtimeState === "starting" || runtimeState === "live" || leaseExpiresMs >= nowMs) {
-      runtimeState = "live";
-    }
+  if (runtimeState === "completed" || runtimeState === "recoverable" || runtimeState === "failed") {
+    return {
+      runtimeState,
+      lastSeenAgeMs,
+      startedAtMs,
+    };
+  }
+
+  if (lastSeenAgeMs >= DEFAULT_RUNTIME_FAILURE_MS) {
+    runtimeState = "failed";
+  } else if (lastSeenAgeMs >= DEFAULT_RUNTIME_STALE_MS) {
+    runtimeState = "stale";
+  } else if (runtimeState === "stale") {
+    runtimeState = "stale";
+  } else if (runtimeState === "starting") {
+    runtimeState = "starting";
+  } else {
+    runtimeState = "live";
   }
 
   return {

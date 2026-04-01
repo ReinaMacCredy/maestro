@@ -396,6 +396,35 @@ describe("feature lifecycle usecases", () => {
         runtimeState: "completed",
       });
     });
+
+    it("clears recoverable runtime state when a feature is reassigned to active work", async () => {
+      const { missionId } = await createSampleMission(missionStore, featureStore, assertionStore, tmpDir);
+
+      await runtimeStore.save(missionId, "f1", {
+        featureId: "f1",
+        attemptId: "attempt-1",
+        attempt: 1,
+        agent: "unknown",
+        runtimeState: "recoverable",
+        startedAt: "2026-04-01T00:00:00.000Z",
+        lastSeenAt: "2026-04-01T00:00:00.000Z",
+        leaseExpiresAt: "2026-04-01T00:02:00.000Z",
+        failureReason: "worker heartbeat expired",
+        recoveryMetadata: {
+          retryCount: 1,
+          history: [],
+        },
+      });
+
+      await updateFeature(missionStore, featureStore, runtimeStore, tmpDir, missionId, "f1", {
+        status: "assigned",
+      });
+
+      const runtime = await runtimeStore.get(missionId, "f1");
+      expect(runtime).toBeDefined();
+      expect(runtime?.runtimeState).toBe("live");
+      expect(runtime?.failureReason).toBeUndefined();
+    });
   });
 
   describe("parseWorkerReport", () => {

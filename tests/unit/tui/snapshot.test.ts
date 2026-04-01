@@ -314,15 +314,17 @@ describe("buildSnapshot", () => {
     });
   }, 15_000);
 
-  it("classifies stale and failed runtimes from heartbeat age", async () => {
+    it("classifies stale and failed runtimes from heartbeat age", async () => {
     const plan = createSamplePlan();
     await writeFile(join(tmpDir, "plan.json"), JSON.stringify(plan));
     const { stdout } = await run(["mission", "create", "--file", join(tmpDir, "plan.json"), "--json"], tmpDir);
     const missionId = JSON.parse(stdout).mission.id;
 
-    await run(["mission", "approve", missionId, "--json"], tmpDir);
-    await run(["feature", "update", "f1", "--mission", missionId, "--status", "assigned", "--json"], tmpDir);
-    await run(["feature", "update", "f2", "--mission", missionId, "--status", "assigned", "--json"], tmpDir);
+      await run(["mission", "approve", missionId, "--json"], tmpDir);
+      await run(["feature", "update", "f1", "--mission", missionId, "--status", "assigned", "--json"], tmpDir);
+      await run(["feature", "update", "f2", "--mission", missionId, "--status", "assigned", "--json"], tmpDir);
+      await run(["feature", "update", "f2", "--mission", missionId, "--status", "in-progress", "--json"], tmpDir);
+      await run(["feature", "update", "f2", "--mission", missionId, "--status", "review", "--json"], tmpDir);
 
     await runtimeStore.save(missionId, "f1", {
       featureId: "f1",
@@ -357,6 +359,78 @@ describe("buildSnapshot", () => {
     const snapshot = await buildSnapshot(deps, missionId);
 
     expect(snapshot.runtimeProcesses.find((process) => process.featureId === "f1")?.runtimeState).toBe("stale");
-    expect(snapshot.runtimeProcesses.find((process) => process.featureId === "f2")?.runtimeState).toBe("failed");
-  }, 15_000);
-});
+      expect(snapshot.runtimeProcesses.find((process) => process.featureId === "f2")?.runtimeState).toBe("failed");
+    }, 15_000);
+
+    it("preserves explicit failed runtime state even when the lease is still active", async () => {
+      const plan = createSamplePlan();
+      await writeFile(join(tmpDir, "plan.json"), JSON.stringify(plan));
+      const { stdout } = await run(["mission", "create", "--file", join(tmpDir, "plan.json"), "--json"], tmpDir);
+      const missionId = JSON.parse(stdout).mission.id;
+
+      await run(["mission", "approve", missionId, "--json"], tmpDir);
+      await run(["feature", "update", "f1", "--mission", missionId, "--status", "assigned", "--json"], tmpDir);
+      await run(["feature", "update", "f1", "--mission", missionId, "--status", "in-progress", "--json"], tmpDir);
+      await run(["feature", "update", "f1", "--mission", missionId, "--status", "review", "--json"], tmpDir);
+
+      await runtimeStore.save(missionId, "f1", {
+        featureId: "f1",
+        attemptId: "attempt-explicit-failed",
+        attempt: 1,
+        agent: "unknown",
+        runtimeState: "failed",
+        startedAt: new Date(Date.now() - 20_000).toISOString(),
+        lastSeenAt: new Date(Date.now() - 5_000).toISOString(),
+        leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+        failureReason: "worker exited",
+        recoveryMetadata: {
+          retryCount: 0,
+          history: [],
+        },
+      });
+
+      const snapshot = await buildSnapshot(deps, missionId);
+
+      expect(snapshot.activeFeature).toMatchObject({
+        id: "f1",
+        runtimeState: "failed",
+        failureReason: "worker exited",
+      });
+      expect(snapshot.runtimeProcesses.find((process) => process.featureId === "f1")).toMatchObject({
+        featureId: "f1",
+        runtimeState: "failed",
+        failureReason: "worker exited",
+      });
+    }, 15_000);
+
+    it("does not surface pending features with starting runtimes as live processes", async () => {
+      const plan = createSamplePlan();
+      await writeFile(join(tmpDir, "plan.json"), JSON.stringify(plan));
+      const { stdout } = await run(["mission", "create", "--file", join(tmpDir, "plan.json"), "--json"], tmpDir);
+      const missionId = JSON.parse(stdout).mission.id;
+
+      await runtimeStore.save(missionId, "f1", {
+        featureId: "f1",
+        attemptId: "attempt-starting",
+        attempt: 1,
+        agent: "unknown",
+        runtimeState: "starting",
+        startedAt: new Date(Date.now() - 5_000).toISOString(),
+        lastSeenAt: new Date(Date.now() - 5_000).toISOString(),
+        leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+        recoveryMetadata: {
+          retryCount: 0,
+          history: [],
+        },
+      });
+
+      const snapshot = await buildSnapshot(deps, missionId);
+
+      expect(snapshot.activeFeature).toMatchObject({
+        id: "f1",
+        status: "pending",
+      });
+      expect(snapshot.activeFeature?.runtimeState).toBe("starting");
+      expect(snapshot.runtimeProcesses.find((process) => process.featureId === "f1")).toBeUndefined();
+    }, 15_000);
+  });

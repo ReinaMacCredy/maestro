@@ -14,6 +14,37 @@ export interface RecoverRuntimeFailureResult {
   readonly runtime?: WorkerRuntime;
 }
 
+export interface RecoverMissionRuntimeFailuresResult {
+  readonly recovered: readonly RecoverRuntimeFailureResult[];
+}
+
+export async function recoverMissionRuntimeFailures(
+  missionStore: MissionStorePort,
+  featureStore: FeatureStorePort,
+  runtimeStore: RuntimeStorePort,
+  missionId: string,
+  nowMs = Date.now(),
+): Promise<RecoverMissionRuntimeFailuresResult> {
+  const runtimes = await runtimeStore.list(missionId);
+  const recovered: RecoverRuntimeFailureResult[] = [];
+
+  for (const runtime of runtimes) {
+    const result = await recoverRuntimeFailure(
+      missionStore,
+      featureStore,
+      runtimeStore,
+      missionId,
+      runtime.featureId,
+      nowMs,
+    );
+    if (result.recovered || result.exhausted) {
+      recovered.push(result);
+    }
+  }
+
+  return { recovered };
+}
+
 export async function recoverRuntimeFailure(
   missionStore: MissionStorePort,
   featureStore: FeatureStorePort,

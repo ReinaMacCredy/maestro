@@ -20,6 +20,7 @@ import { checkStatus } from "../usecases/check-status.usecase.js";
 import { runDoctor } from "../usecases/run-doctor.usecase.js";
 import { getValidFeatureTransitions } from "../domain/mission-state.js";
 import { classifyRuntime } from "../usecases/runtime-supervision.usecase.js";
+import { recoverMissionRuntimeFailures } from "../usecases/runtime-recovery.usecase.js";
 import { deriveEvents } from "./events.js";
 import type {
   MissionControlSnapshot,
@@ -70,6 +71,13 @@ export async function buildSnapshot(
   deps: SnapshotDeps,
   missionId: string,
 ): Promise<MissionControlSnapshot> {
+  await recoverMissionRuntimeFailures(
+    deps.missionStore,
+    deps.featureStore,
+    deps.runtimeStore,
+    missionId,
+  );
+
   const [
     report,
     features,
@@ -288,12 +296,12 @@ function findActiveFeature(
     preconditions: active.preconditions,
     expectedBehavior: active.expectedBehavior,
     verificationSteps: active.verificationSteps,
-    dependsOn: active.dependsOn,
-    fulfills: active.fulfills,
-    validTransitions: [...getValidFeatureTransitions(active.status)],
-    runtimeState: runtime?.runtimeState,
-    lastSeenAgeMs: runtime?.lastSeenAgeMs,
-    failureReason: runtime?.failureReason,
+      dependsOn: active.dependsOn,
+      fulfills: active.fulfills,
+      validTransitions: [...getValidFeatureTransitions(active.status)],
+      runtimeState: presentRuntimeState(runtime, active.status),
+      lastSeenAgeMs: runtime?.lastSeenAgeMs,
+      failureReason: runtime?.failureReason,
     retryCount: runtime?.retryCount,
     agent: runtime?.agent,
     sessionId: runtime?.sessionId,
@@ -322,7 +330,7 @@ function buildActiveWorker(
     status: active.status,
     elapsedMs: nowMs - featureStartMs,
     report: active.report ?? null,
-    runtimeState: runtime?.runtimeState,
+    runtimeState: presentRuntimeState(runtime, active.status),
     lastSeenAgeMs: runtime?.lastSeenAgeMs,
     failureReason: runtime?.failureReason,
     retryCount: runtime?.retryCount,
@@ -378,13 +386,14 @@ function buildRuntimeProcesses(
   activeWorker: MissionControlWorkerPane | null,
 ): readonly MissionControlRuntimeProcessRow[] {
   return features
-    .filter((feature) => {
-      const runtime = runtimeByFeature.get(feature.id);
-      if (runtime) {
-        return runtime.runtimeState !== "completed";
-      }
-      return feature.status === "assigned"
-        || feature.status === "in-progress"
+      .filter((feature) => {
+        const runtime = runtimeByFeature.get(feature.id);
+        if (runtime) {
+          return runtime.runtimeState !== "completed"
+            && !(feature.status === "pending" && runtime.runtimeState === "starting");
+        }
+        return feature.status === "assigned"
+          || feature.status === "in-progress"
         || feature.status === "review";
     })
     .map((feature) => {
@@ -395,8 +404,10 @@ function buildRuntimeProcesses(
         status: feature.status,
         workerType: feature.workerType,
         hasReport: feature.report !== undefined && feature.report !== null,
-        isLive: runtime ? runtime.runtimeState === "live" : activeWorker?.featureId === feature.id,
-        runtimeState: runtime?.runtimeState,
+        isLive: runtime
+          ? presentRuntimeState(runtime, feature.status) === "live"
+          : activeWorker?.featureId === feature.id,
+        runtimeState: presentRuntimeState(runtime, feature.status),
         lastSeenAgeMs: runtime?.lastSeenAgeMs,
         failureReason: runtime?.failureReason,
         retryCount: runtime?.retryCount,
@@ -417,6 +428,19 @@ function buildRuntimeView(runtime: WorkerRuntime, nowMs: number): RuntimeView {
     sessionId: runtime.sessionId,
     startedAtMs: classification.startedAtMs,
   };
+}
+
+function presentRuntimeState(
+  runtime: RuntimeView | undefined,
+  featureStatus: Feature["status"],
+): RuntimeState | undefined {
+  if (!runtime) return undefined;
+  const isActiveStatus =
+    featureStatus === "assigned" || featureStatus === "in-progress" || featureStatus === "review";
+  if (runtime.runtimeState === "starting" && isActiveStatus) {
+    return "live";
+  }
+  return runtime.runtimeState;
 }
 
 function mapPendingHandoff(

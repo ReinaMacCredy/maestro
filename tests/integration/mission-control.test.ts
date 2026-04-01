@@ -10,7 +10,6 @@ import { FsMissionStoreAdapter } from "../../src/adapters/mission-store.adapter.
 import { FsRuntimeStoreAdapter } from "../../src/adapters/runtime-store.adapter.js";
 import { enterAltScreen, exitAltScreen } from "../../src/tui/terminal/ansi.js";
 import { layoutModal } from "../../src/tui/widgets/modal.js";
-import { recoverRuntimeFailure } from "../../src/usecases/runtime-recovery.usecase.js";
 
 const CLI = [
   "bun",
@@ -479,44 +478,31 @@ describe("mission-control CLI", () => {
     expect(stdout).toContain("┘");
   }, SLOW_CLI_TIMEOUT_MS);
 
-  it("--json reflects recoverable runtime state after auto-requeue", async () => {
-    const missionId = await createMission(tmpDir);
-    await setMissionStatus(tmpDir, missionId, "approved");
-    await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+    it("--json reflects recoverable runtime state after auto-requeue", async () => {
+      const missionId = await createMission(tmpDir);
+      await setMissionStatus(tmpDir, missionId, "approved");
+      await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+      const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
 
-    const missionStore = new FsMissionStoreAdapter(tmpDir);
-    const featureStore = new FsFeatureStoreAdapter(tmpDir);
-    const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
-
-    await runtimeStore.save(missionId, "f1", {
-      featureId: "f1",
-      attemptId: "attempt-1",
+      await runtimeStore.save(missionId, "f1", {
+        featureId: "f1",
+        attemptId: "attempt-1",
       attempt: 1,
       agent: "unknown",
       runtimeState: "live",
       startedAt: "2026-04-01T00:00:00.000Z",
       lastSeenAt: "2026-04-01T00:00:00.000Z",
       leaseExpiresAt: "2026-04-01T00:01:00.000Z",
-      recoveryMetadata: {
-        retryCount: 0,
-        history: [],
-      },
-    });
+        recoveryMetadata: {
+          retryCount: 0,
+          history: [],
+        },
+      });
 
-    const recovery = await recoverRuntimeFailure(
-      missionStore,
-      featureStore,
-      runtimeStore,
-      missionId,
-      "f1",
-      Date.parse("2026-04-01T00:10:00.000Z"),
-    );
-    expect(recovery.recovered).toBe(true);
-
-    const { stdout, exitCode } = await run(
-      ["mission-control", "--mission", missionId, "--json"],
-      tmpDir,
-    );
+      const { stdout, exitCode } = await run(
+        ["mission-control", "--mission", missionId, "--json"],
+        tmpDir,
+      );
 
     expect(exitCode).toBe(0);
     const snapshot = JSON.parse(stdout);

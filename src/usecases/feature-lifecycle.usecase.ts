@@ -19,6 +19,7 @@ import { join } from "node:path";
 import {
   DEFAULT_RUNTIME_LEASE_MS,
   MAESTRO_DIR,
+  UNKNOWN_AGENT,
 } from "../domain/defaults.js";
 
 /** Result of listing features */
@@ -197,23 +198,39 @@ function deriveNextRuntime(
     ...runtime.recoveryMetadata,
     history: [...runtime.recoveryMetadata.history],
   };
+  const isPendingRetry = updated.status === "pending" && existing.status !== "pending";
+  const isActiveStatus =
+    updated.status === "assigned" || updated.status === "in-progress" || updated.status === "review";
+  const hasWorkerEvidence = reportPersisted !== undefined || isActiveStatus || updated.status === "done";
 
   let runtimeState = runtime.runtimeState;
   let failureReason = runtime.failureReason;
+  let agent = runtime.agent;
+  let sessionId = runtime.sessionId;
 
   if (updated.status === "done") {
     runtimeState = "completed";
     failureReason = undefined;
-  } else if (updated.status === "pending" && existing.status !== "pending") {
-    runtimeState = "recoverable";
-    failureReason = retryReason;
+  } else if (isPendingRetry) {
+    const wasRuntimeRecovery = existing.status === "assigned" || existing.status === "in-progress";
+    runtimeState = wasRuntimeRecovery ? "recoverable" : "starting";
+    failureReason = wasRuntimeRecovery ? retryReason : undefined;
+    agent = UNKNOWN_AGENT;
+    sessionId = undefined;
+  } else if (reportPersisted !== undefined || isActiveStatus) {
+    runtimeState = "live";
+    failureReason = undefined;
   }
 
   return {
     ...runtime,
+    agent,
+    sessionId,
     runtimeState,
-    lastSeenAt: nowIso,
-    leaseExpiresAt: new Date(now + DEFAULT_RUNTIME_LEASE_MS).toISOString(),
+    lastSeenAt: hasWorkerEvidence ? nowIso : runtime.lastSeenAt,
+    leaseExpiresAt: hasWorkerEvidence
+      ? new Date(now + DEFAULT_RUNTIME_LEASE_MS).toISOString()
+      : runtime.leaseExpiresAt,
     failureReason,
     ...(reportPersisted !== undefined
       ? {
