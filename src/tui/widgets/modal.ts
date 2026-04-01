@@ -543,16 +543,19 @@ function renderSingleBody(
       rowY += 1;
     }
 
-      const rowRect = opts.mode === "info"
-        ? { x: layout.x + 1, y: rowY, width: layout.width - 2, height: getRowHeight(row, compactRows, opts.renderSpec.family) }
-        : (layout.itemRowIndexes[selectableRectIndex] === index
-          ? layout.itemRects[selectableRectIndex++]
-          : undefined) ?? {
-          x: layout.x + 1,
-          y: rowY,
-          width: layout.width - 2,
-          height: getRowHeight(row, compactRows, opts.renderSpec.family),
-        };
+      const rowHeight = getRowHeight(row, compactRows, opts.renderSpec.family);
+      const defaultRowRect: Rect = {
+        x: layout.x + 1,
+        y: rowY,
+        width: layout.width - 2,
+        height: rowHeight,
+      };
+      let rowRect = defaultRowRect;
+
+      if (opts.mode !== "info" && layout.itemRowIndexes[selectableRectIndex] === index) {
+        rowRect = layout.itemRects[selectableRectIndex] ?? defaultRowRect;
+        selectableRectIndex += 1;
+      }
 
     if (rowRect.y + rowRect.height > layout.contentRect.y + layout.contentRect.height) break;
     const isSelected = opts.mode !== "info" && index === opts.selectedIndex;

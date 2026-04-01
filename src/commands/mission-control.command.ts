@@ -41,41 +41,48 @@ export function registerMissionControlCommand(program: Command): void {
         config: services.config,
         cass: services.cass,
         git: services.git,
-        };
+      };
 
-          const missionId = await resolveMissionId(opts.mission);
-          if (isJson) {
-            const snapshot = await loadMissionControlSnapshot(snapshotDeps, homeSnapshotDeps, "read", missionId);
-            output(true, redactSnapshotForReadOutput(snapshot), () => []);
-            return;
-          }
+      const missionId = await resolveMissionId(opts.mission);
+      const loadSnapshot = (mode: MissionControlSnapshotLoadMode) =>
+        loadMissionControlSnapshot(
+          snapshotDeps,
+          homeSnapshotDeps,
+          mode,
+          missionId,
+        );
+      const loadReadSnapshot = async (): Promise<MissionControlSnapshot> =>
+        redactSnapshotForReadOutput(await loadSnapshot("read"));
 
-          if (opts.once) {
-            const snapshot = await loadMissionControlSnapshot(snapshotDeps, homeSnapshotDeps, "read", missionId);
-            const frame = renderOnceFrame({
-              snapshot: redactSnapshotForReadOutput(snapshot),
-            });
-            console.log(frame);
-            return;
-        }
+      if (isJson) {
+        output(true, await loadReadSnapshot(), () => []);
+        return;
+      }
 
-      // Interactive mode: requires TTY
+      if (opts.once) {
+        const frame = renderOnceFrame({
+          snapshot: await loadReadSnapshot(),
+        });
+        console.log(frame);
+        return;
+      }
+
       if (!process.stdout.isTTY || !process.stdin.isTTY) {
         throw new MaestroError("Interactive mode requires TTY input and output", [
           "Use --once for non-interactive output",
           "Use --json for machine-readable output",
-          ]);
-        }
+        ]);
+      }
 
-        const snapshot = await loadMissionControlSnapshot(snapshotDeps, homeSnapshotDeps, "supervise", missionId);
+      const snapshot = await loadSnapshot("supervise");
 
-        await renderDashboard({
-          snapshot,
-          snapshotDeps,
-          reloadSnapshot: () => loadMissionControlSnapshot(snapshotDeps, homeSnapshotDeps, "supervise", missionId),
-        });
+      await renderDashboard({
+        snapshot,
+        snapshotDeps,
+        reloadSnapshot: () => loadSnapshot("supervise"),
       });
-  }
+    });
+}
 
 /**
  * Resolve mission ID: explicit > executing/paused > newest.
@@ -112,7 +119,7 @@ async function buildMissionSnapshot(
   if (!mission) {
     throw new MaestroError(`Mission ${missionId} not found`, [
       "List available missions: maestro mission list",
-      ]);
+    ]);
   }
 
   if (mode === "supervise") {
@@ -134,8 +141,8 @@ export async function loadMissionControlSnapshot(
   missionId?: string,
 ) {
   return missionId
-      ? buildMissionSnapshot(missionId, snapshotDeps, mode)
-      : buildHomeSnapshot(homeSnapshotDeps, process.cwd());
+    ? buildMissionSnapshot(missionId, snapshotDeps, mode)
+    : buildHomeSnapshot(homeSnapshotDeps, process.cwd());
 }
 
 function redactSnapshotForReadOutput(

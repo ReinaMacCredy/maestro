@@ -27,6 +27,10 @@ function normalizeGitSha(value: string | undefined): string | undefined {
   return trimmed && trimmed !== "unknown" ? trimmed : undefined;
 }
 
+function resolveBuildOverrideSha(env: VersionEnv): string | undefined {
+  return normalizeGitSha(env.MAESTRO_BUILD_GIT_SHA) ?? BUILD_GIT_SHA_OVERRIDE;
+}
+
 export function resolveRuntimeGitSha(
   repoRoot: string = REPO_ROOT,
 ): string | undefined {
@@ -61,14 +65,13 @@ export function getVersionMetadata(
   env: VersionEnv = {},
   liveGitSha?: string,
 ): VersionMetadata {
-  const buildGitSha =
-    normalizeGitSha(env.MAESTRO_BUILD_GIT_SHA) ?? BUILD_GIT_SHA_OVERRIDE;
+  const buildGitSha = resolveBuildOverrideSha(env);
   return {
     version: VERSION,
     buildUnix: BUILD_UNIX,
     gitSha: resolveDisplayedGitSha({
       buildGitSha,
-      liveGitSha: buildGitSha ? undefined : liveGitSha ?? resolveRuntimeGitSha(),
+      liveGitSha: buildGitSha ? undefined : liveGitSha,
       trackedGitSha: GIT_SHA,
     }),
     releasedAt: RELEASED_AT,
@@ -134,9 +137,8 @@ export function formatVersionOutputForArgv(
   now: Date = new Date(),
 ): string {
   const wantsVersion = argv.slice(2).some(isVersionFlag);
-  const hasBuildOverride =
-    normalizeGitSha(env.MAESTRO_BUILD_GIT_SHA) ?? BUILD_GIT_SHA_OVERRIDE;
-  const liveGitSha = wantsVersion && !hasBuildOverride
+  const buildOverrideSha = resolveBuildOverrideSha(env);
+  const liveGitSha = wantsVersion && !buildOverrideSha
     ? resolveRuntimeGitSha()
     : undefined;
   return formatVersionOutput(getVersionMetadata(env, liveGitSha), now);

@@ -1,15 +1,7 @@
 import { join } from "node:path";
-import { $ } from "bun";
+import { getGitShortSha } from "./git-short-sha";
 
 const root = join(import.meta.dir, "..");
-
-async function getGitShortSha(cwd: string): Promise<string | undefined> {
-  try {
-    return (await $`git rev-parse --short=7 HEAD`.cwd(cwd).quiet()).text().trim() || undefined;
-  } catch {
-    return undefined;
-  }
-}
 
 const gitSha = await getGitShortSha(root);
 const args = [

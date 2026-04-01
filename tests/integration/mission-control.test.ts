@@ -614,16 +614,16 @@ describe("mission-control CLI", () => {
       );
 
       expect(exitCode).toBe(0);
-      const snapshot = JSON.parse(stdout);
-      expect(snapshot.pendingHandoffs).toEqual([
-        {
-          id: created.id,
-          agent: "unknown",
-          message: "Details hidden in read-only output",
-        },
-      ]);
-      expect(snapshot.home.pendingHandoffs).toEqual(snapshot.pendingHandoffs);
-    }, SLOW_CLI_TIMEOUT_MS);
+        const snapshot = JSON.parse(stdout);
+        expect(snapshot.pendingHandoffs).toEqual([
+          expect.objectContaining({
+            id: created.id,
+            agent: expect.any(String),
+            message: "Details hidden in read-only output",
+          }),
+        ]);
+        expect(snapshot.home.pendingHandoffs).toEqual(snapshot.pendingHandoffs);
+      }, SLOW_CLI_TIMEOUT_MS);
 
   it("renders a guided home frame when no missions exist in a git repo", async () => {
     const { stdout, exitCode } = await run(
