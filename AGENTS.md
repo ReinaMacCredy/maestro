@@ -65,6 +65,9 @@
 - Treat `tests/integration/session-sourcepath.test.ts` as environment-dependent: if `sourcePath` existence assertions fail, verify the expected local Claude session artifact exists before blaming unrelated code changes
 
 ## Release and Commit Conventions
+- Bump the Maestro CLI version for every repo-tracked code change that affects runtime behavior, CLI output, TUI behavior, storage behavior, or user-visible workflows so the running binary can be identified exactly after each change
+- Treat documentation-only or comment-only changes as exempt from version bumps unless they ship alongside behavior changes
+- Make the version bump part of the same working increment and commit as the behavior change; do not leave version updates for a later cleanup commit
 - Bump the **minor** version for backward-compatible feature additions or meaningful capability expansions
 - Bump the **major** version for breaking CLI, API, storage, or workflow changes
 - Use the **patch** version for fixes, small internal improvements, and documentation-only changes
