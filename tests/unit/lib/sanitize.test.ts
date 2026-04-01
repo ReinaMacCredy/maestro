@@ -106,7 +106,7 @@ describe("sanitizeTerminalText", () => {
     expect(sanitizeTerminalText("  hello\u001b[31m world\u001b[0m  ")).toBe("  hello world  ");
   });
 
-  it("replaces control characters with spaces without trimming the result", () => {
-    expect(sanitizeTerminalText("\nA\tB\u0007")).toBe(" A B ");
+  it("keeps whitespace controls as layout spaces while stripping other controls", () => {
+    expect(sanitizeTerminalText("\nA\tB\u0007")).toBe(" A B");
   });
 });

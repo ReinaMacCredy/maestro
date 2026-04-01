@@ -44,6 +44,8 @@ export function sanitizeTerminalText(content: string | undefined): string {
       .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
       // Other escape-led control sequences
       .replace(/\u001b[@-_]/g, "")
-      // Remaining control characters
-      .replace(/[\u0000-\u001F\u007F]/g, " ");
+      // Preserve layout spacing for whitespace controls only
+      .replace(/[\u0009-\u000D]/g, " ")
+      // Strip remaining control characters
+      .replace(/[\u0000-\u0008\u000E-\u001F\u007F]/g, "");
 }
