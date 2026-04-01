@@ -13,6 +13,7 @@ import type { DoctorCheck, GitFileChange } from "../domain/types.js";
 import type { RuntimeState } from "../domain/runtime-types.js";
 
 export type MissionControlMode = "mission" | "home";
+export type LeftPaneMode = "overview" | "preview";
 
 export interface MissionControlHomeAction {
   label: string;

@@ -1,12 +1,12 @@
 /**
  * TUI application state -- focus, selection, modal management.
  */
-import type { MissionControlSnapshot } from "./types.js";
+import type { MissionControlSnapshot, LeftPaneMode } from "./types.js";
 import { getFilteredMissionControlPaletteCommandCount } from "./mission-control-commands.js";
 import { getValidFeatureTransitions } from "../domain/mission-state.js";
 
 export type FocusedPanel = "features" | "log" | "none";
-export type LeftPaneMode = "overview" | "preview";
+export type { LeftPaneMode };
 
 type ModalReturnTarget = "command-palette";
 

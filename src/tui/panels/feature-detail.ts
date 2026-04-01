@@ -4,9 +4,10 @@
 import type { Buffer, Cell } from "../terminal/buffer.js";
 import type { Rect } from "../terminal/layout.js";
 import type { MissionControlSnapshot, TaskPreviewPane } from "../types.js";
-import type { LeftPaneMode } from "../state.js";
+import type { LeftPaneMode } from "../types.js";
 import { FEATURE_TASK_STATUS_LABEL, MISSION_STATUS_LABEL, PALETTE } from "../theme.js";
 import { truncate } from "../format.js";
+import { shortenSessionId } from "../session-id.js";
 const TREE_BULLET = "●";
 const TREE_CHILD = "└─";
 
@@ -211,10 +212,6 @@ function writeKeyValue(
   value: string,
 ): void {
   writers.writeLine(`${label.padEnd(11, " ")}${value}`, { fg: PALETTE.overlayHint });
-}
-
-function shortenSessionId(sessionId: string): string {
-  return sessionId.length > 10 ? `${sessionId.slice(0, 8)}…` : sessionId;
 }
 
 function formatMissionOverviewStatus(statusLabel: string): string {
