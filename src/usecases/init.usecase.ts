@@ -169,7 +169,8 @@ async function overlayLegacyTree(
 }
 
 async function listFilesRecursive(dir: string): Promise<string[]> {
-  const entries = await readdir(dir, { withFileTypes: true });
+  const entries = (await readdir(dir, { withFileTypes: true }))
+    .sort((left, right) => left.name.localeCompare(right.name));
   const files: string[] = [];
 
   for (const entry of entries) {
@@ -232,6 +233,7 @@ async function assertProjectLocalPathSafe(
   rootDir: string,
   target: string,
 ): Promise<void> {
+  await assertNonSymlinkRoot(rootDir);
   const projectRoot = resolve(rootDir);
   const resolvedTarget = resolve(target);
   const rel = relative(projectRoot, resolvedTarget);
@@ -256,5 +258,19 @@ async function assertProjectLocalPathSafe(
       }
       throw err;
     }
+  }
+}
+
+async function assertNonSymlinkRoot(rootDir: string): Promise<void> {
+  try {
+    const rootEntry = await lstat(rootDir);
+    if (rootEntry.isSymbolicLink()) {
+      throw new Error(`Refusing to initialize through symlinked project root: ${rootDir}`);
+    }
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      return;
+    }
+    throw err;
   }
 }

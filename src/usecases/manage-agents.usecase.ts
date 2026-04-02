@@ -32,19 +32,25 @@ function renderBlock(agent: AgentConfigSpec): string {
   return renderTemplate(AGENT_INSTRUCTION_BLOCK, { agent: agent.agentFlag });
 }
 
+interface ExistingConfig {
+  readonly path: string;
+  readonly content: string;
+}
+
 async function processInject(agent: AgentConfigSpec, projectDir: string): Promise<InjectResult> {
   const configPath = agentConfigPath(agent, projectDir);
   const dirPath = agentConfigDirPath(agent, projectDir);
-  const dirPresent = await dirExists(dirPath);
-  const legacySource = await firstExistingPath(agentLegacyConfigPaths(agent, projectDir));
   const targetContent = await readText(configPath);
+  const legacySource = targetContent === undefined
+    ? await firstExistingConfig(agentLegacyConfigPaths(agent, projectDir))
+    : undefined;
 
-  if (!dirPresent && !legacySource) {
+  if (!(await dirExists(dirPath)) && !legacySource) {
     return { agent: agent.displayName, action: "not-detected", configPath };
   }
 
   const rendered = renderBlock(agent);
-  const existing = targetContent ?? (legacySource ? (await readText(legacySource)) ?? "" : "");
+  const existing = targetContent ?? legacySource?.content ?? "";
   const currentBlock = extractBlock(existing);
   const migrating = targetContent === undefined && legacySource !== undefined;
 
@@ -77,32 +83,29 @@ async function processInject(agent: AgentConfigSpec, projectDir: string): Promis
 
 async function processRemove(agent: AgentConfigSpec, projectDir: string): Promise<RemoveResult> {
   const configPath = agentConfigPath(agent, projectDir);
-  const dirPath = agentConfigDirPath(agent, projectDir);
-  const legacyPath = await firstExistingPath(agentLegacyConfigPaths(agent, projectDir));
-  const actualPath = await dirExists(dirPath) ? configPath : legacyPath;
+  const current = await firstExistingConfig([
+    configPath,
+    ...agentLegacyConfigPaths(agent, projectDir),
+  ]);
 
-  if (!actualPath) {
+  if (!current) {
     return { agent: agent.displayName, action: "not-detected", configPath };
   }
 
-  const existing = await readText(actualPath);
-  if (!existing) {
-    return { agent: agent.displayName, action: "not-found", configPath: actualPath };
-  }
-
-  const cleaned = removeBlock(existing) ?? removeLegacyBlock(existing);
+  const cleaned = removeBlock(current.content) ?? removeLegacyBlock(current.content);
   if (!cleaned) {
-    return { agent: agent.displayName, action: "not-found", configPath: actualPath };
+    return { agent: agent.displayName, action: "not-found", configPath: current.path };
   }
 
-  await writeText(actualPath, cleaned);
-  return { agent: agent.displayName, action: "removed", configPath: actualPath };
+  await writeText(current.path, cleaned);
+  return { agent: agent.displayName, action: "removed", configPath: current.path };
 }
 
-async function firstExistingPath(paths: readonly string[]): Promise<string | undefined> {
+async function firstExistingConfig(paths: readonly string[]): Promise<ExistingConfig | undefined> {
   for (const path of paths) {
-    if ((await readText(path)) !== undefined) {
-      return path;
+    const content = await readText(path);
+    if (content !== undefined) {
+      return { path, content };
     }
   }
 

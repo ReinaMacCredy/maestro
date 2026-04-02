@@ -153,4 +153,17 @@ describe("initMaestro", () => {
       "Refusing to initialize through symlinked path",
     );
   });
+
+  it("rejects symlinked project roots", async () => {
+    const config = mockConfig();
+    const realRoot = join(tmpDir, "real-project");
+    const linkRoot = join(tmpDir, "project-link");
+
+    await mkdir(realRoot, { recursive: true });
+    await symlink(realRoot, linkRoot);
+
+    await expect(initMaestro(config, { global: false, dir: linkRoot })).rejects.toThrow(
+      "Refusing to initialize through symlinked project root",
+    );
+  });
 });

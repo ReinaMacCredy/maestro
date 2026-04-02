@@ -197,5 +197,20 @@ describe("manage-agents use case logic", () => {
       expect(droid?.configPath).toBe(path);
       expect(await readFile(path, "utf8")).not.toContain("maestro handoff-pickup --claim --agent droid");
     });
+
+    it("removes the droid block from legacy .factory/AGENTS.md when .maestro exists without AGENTS.md", async () => {
+      const legacyPath = join(tmpDir, ".factory", "AGENTS.md");
+      await mkdir(join(tmpDir, ".maestro"), { recursive: true });
+      await mkdir(join(tmpDir, ".factory"), { recursive: true });
+      await writeFile(legacyPath, wrapBlock(renderTemplate(AGENT_INSTRUCTION_BLOCK, { agent: "droid" })));
+
+      const results = await removeAgentBlocks(tmpDir);
+      const droid = results.find((result) => result.agent === "Droid CLI");
+
+      expect(droid).toBeDefined();
+      expect(droid?.action).toBe("removed");
+      expect(droid?.configPath).toBe(legacyPath);
+      expect(await readFile(legacyPath, "utf8")).not.toContain("maestro handoff-pickup --claim --agent droid");
+    });
   });
 });
