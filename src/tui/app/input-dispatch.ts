@@ -74,6 +74,12 @@ export function keyToAction(key: Key, state: AppState): Action | undefined {
           return { type: "config-prev-tab" };
         case "]":
           return { type: "config-next-tab" };
+        case "p":
+        case "P":
+          return { type: "config-preview" };
+        case "r":
+        case "R":
+          return { type: "config-reload" };
         case "s":
         case "S":
           return { type: "config-toggle-scope" };

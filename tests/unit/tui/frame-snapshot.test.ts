@@ -571,9 +571,9 @@ describe("frame rendering", () => {
               return buf.toString();
             });
 
-            expect(frame).toContain("[ and ] tabs");
-            expect(frame).toContain("/ find");
-            });
+              expect(frame).toContain("[overview] effective project global defaults workers next problems");
+              expect(frame).toContain("/ find    Enter change    S save to    P preview    R reload");
+              });
 
         it("renders the command palette and dims the dashboard behind it", () => {
           const buf = new Buffer(90, 28);
@@ -761,10 +761,12 @@ describe("frame rendering", () => {
         renderFrame(buf, state);
         const frame = buf.toString();
 
-        expect(frame).toContain("Change setting");
-        expect(frame).toContain("Best for");
-        expect(frame).toContain("Good fit in this mission");
-      });
+          expect(frame).toContain("Change Default Worker");
+          expect(frame).toContain("Pick which worker Maestro should use by default.");
+          expect(frame).toContain("Best for");
+          expect(frame).toContain("Good fit in this mission");
+          expect(frame).toContain("Other saved values");
+        });
 
       it("renders the review screen with preview details", () => {
         const state = createInitialState(makeSnapshot({
@@ -816,11 +818,12 @@ describe("frame rendering", () => {
         renderFrame(buf, state);
         const frame = buf.toString();
 
-        expect(frame).toContain("Review change");
-        expect(frame).toContain("Old value");
-        expect(frame).toContain("Preview file");
-        expect(frame).toContain("stopOnFailure");
-      });
+          expect(frame).toContain("Review Change");
+          expect(frame).toContain("Change summary");
+          expect(frame).toContain("Old value");
+          expect(frame).toContain("File preview");
+          expect(frame).toContain("stopOnFailure");
+        });
     });
   });
 

@@ -157,7 +157,7 @@ function buildOverviewRows(
   const problemCount = checks.filter((check) => check.status !== "ok").length + layers.errors.length;
   const problemsRow = buildReadonlyRow({
     keyPath: "overview.problems",
-    label: "Problems found",
+    label: "Problems",
     section: "Problems",
     rawValue: problemCount > 0 ? `${problemCount}` : "none",
     displayValue: problemCount > 0 ? `${problemCount} ${problemCount === 1 ? "warning" : "issues"}` : "No problems",
@@ -214,16 +214,6 @@ function buildOverviewRows(
       Object.keys(layers.effective.workers ?? {}),
       "overview",
     ),
-    buildReadonlyRow({
-      keyPath: "overview.configSource",
-      label: "Config source",
-      section: "Quick settings",
-      rawValue: configSource,
-      displayValue: configSource === "none" ? "defaults only" : configSource,
-      summary: "Shows which config layer is currently supplying most active values.",
-      impactText: "This helps explain where your current settings are coming from.",
-      source: "none",
-    }),
   ];
 
   return [...quickRows, ...workerRows, ...planRows, problemsRow];
@@ -742,22 +732,22 @@ function workerGuidanceForSlug(slug: string): {
   switch (slug) {
     case "claude-code":
       return {
-        summary: "Best when the task is messy, high-risk, or needs careful judgment.",
-        bestFor: "Complex orchestration, review-heavy changes, and tricky state transitions.",
-        tradeoffs: "Usually slower and more expensive than the faster workers.",
+        summary: "Highest quality, slower and pricier.",
+        bestFor: "hard bugs; risky refactors; architecture-heavy work; tasks where correctness matters",
+        tradeoffs: "slower; highest cost",
       };
     case "gemini":
       return {
-        summary: "Fast and lightweight for simpler or lower-stakes passes.",
-        bestFor: "Docs, quick follow-ups, and broad first passes.",
-        tradeoffs: "Less reliable on complex implementation details.",
+        summary: "Fast and low cost, lighter reasoning.",
+        bestFor: "low-risk tasks; drafting and support work; simple follow-up tasks; cheap retries",
+        tradeoffs: "weaker on complex tasks; may need more retries",
       };
     case "codex":
     default:
       return {
-        summary: "Fast, balanced implementation worker for day-to-day execution.",
-        bestFor: "CLI work, adapters, tests, refactors, and direct code changes.",
-        tradeoffs: "Less ideal than Claude Code for ambiguous, review-heavy work.",
+        summary: "Fast, strong general-purpose coding.",
+        bestFor: "everyday implementation; debugging and iteration; medium to high complexity tasks",
+        tradeoffs: "less exhaustive than Claude Code; higher cost than Gemini",
       };
   }
 }

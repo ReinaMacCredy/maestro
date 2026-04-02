@@ -93,6 +93,8 @@ export type Action =
   | { type: "modal-submit-error"; message: string }
   | { type: "config-next-tab" }
   | { type: "config-prev-tab" }
+    | { type: "config-preview" }
+    | { type: "config-reload" }
     | { type: "config-cycle-value"; direction: "previous" | "next" }
     | { type: "config-toggle-scope" }
     | { type: "config-find-start" }
@@ -606,11 +608,11 @@ export function reduce(state: AppState, action: Action): AppState {
             },
           };
 
-      case "config-next-tab":
-      case "config-prev-tab":
-        if (state.modal.kind !== "config") return state;
-        return {
-          ...state,
+        case "config-next-tab":
+        case "config-prev-tab":
+          if (state.modal.kind !== "config") return state;
+          return {
+            ...state,
               modal: {
                 ...state.modal,
                 tab: nextConfigTab(state.modal.tab, action.type === "config-next-tab" ? 1 : -1),
@@ -620,12 +622,16 @@ export function reduce(state: AppState, action: Action): AppState {
                 draftValue: undefined,
                 message: undefined,
                 preview: undefined,
-              },
-          };
+                },
+            };
 
-      case "config-cycle-value":
-        if (state.modal.kind !== "config" || state.modal.phase !== "edit-inline") return state;
-        return cycleConfigDraft(state, action.direction);
+        case "config-preview":
+        case "config-reload":
+          return state;
+
+        case "config-cycle-value":
+          if (state.modal.kind !== "config" || state.modal.phase !== "edit-inline") return state;
+          return cycleConfigDraft(state, action.direction);
 
         case "config-toggle-scope":
           if (state.modal.kind !== "config") return state;

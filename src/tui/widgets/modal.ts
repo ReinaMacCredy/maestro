@@ -345,7 +345,7 @@ function layoutSingleModal(
     opts.renderSpec.chrome.escapeText.length + 6,
     isPalette
       ? Math.max(18, (opts.mode === "palette" ? opts.query.length : 0) + 4)
-      : ("eyebrow" in opts ? (opts.eyebrow?.length ?? 0) : 0),
+        : Math.max(0, ...getEyebrowLines("eyebrow" in opts ? opts.eyebrow : undefined).map((line) => line.length)),
     opts.footer?.length ?? 0,
     ...rows.flatMap((row) => [
       isPalette ? getPaletteRowLength(row) : (row.section?.length ?? 0) + 2,
@@ -400,9 +400,12 @@ function layoutSplitModal(parent: Rect, opts: SplitModalOptions): ModalLayout {
   const maxLineLength = Math.max(
     opts.title.length + 6,
     opts.renderSpec.chrome.escapeText.length + 6,
-    opts.eyebrow?.length ?? 0,
+    Math.max(0, ...getEyebrowLines(opts.eyebrow).map((line) => line.length)),
     opts.footer?.length ?? 0,
-    ...leftRows.flatMap((row) => [(row.section?.length ?? 0) + 4, row.label.length + 4]),
+    ...leftRows.flatMap((row) => [
+      (row.section?.length ?? 0) + 4,
+      row.label.length + (row.detail?.length ?? 0) + (row.hint?.length ?? 0) + 8,
+    ]),
     ...rightRows.flatMap((row) => [(row.section?.length ?? 0) + 4, row.label.length + (row.detail?.length ?? 0) + 6]),
   );
 
@@ -484,11 +487,14 @@ function renderOverlayShell(buf: Buffer, layout: ModalLayout, opts: ModalOptions
   }
 
   if (opts.mode !== "palette" && opts.eyebrow) {
-    buf.writeText(layout.y + 2, layout.x + 2, truncate(opts.eyebrow, layout.width - 4), {
-      fg: PALETTE.overlayHint,
-      bg: surfaceBg,
-      dim: false,
-    });
+    const eyebrowLines = getEyebrowLines(opts.eyebrow);
+    for (let index = 0; index < eyebrowLines.length; index++) {
+      buf.writeText(layout.y + 2 + index, layout.x + 2, truncate(eyebrowLines[index] ?? "", layout.width - 4), {
+        fg: PALETTE.overlayHint,
+        bg: surfaceBg,
+        dim: false,
+      });
+    }
   }
 
   if (opts.footer && layout.footerRect) {
@@ -731,24 +737,56 @@ function renderSplitLeftRows(
     const rect = row.selectable
       ? layout.itemRects[selectableIndex] ?? { x: layout.contentRect.x, y: rowY, width: maxWidth, height: 1 }
       : { x: layout.contentRect.x, y: rowY, width: maxWidth, height: 1 };
-    const bg = isSelected ? spec.selection.bg : PALETTE.overlaySurfaceBg;
-    const fg = isSelected ? spec.selection.fg : getRowColor(row.tone, spec, "label");
-    const label = formatOverlayText(row.label, spec.text.rowCase, Math.max(0, rect.width - 2));
+      const bg = isSelected ? spec.selection.bg : PALETTE.overlaySurfaceBg;
+      const fg = isSelected ? spec.selection.fg : getRowColor(row.tone, spec, "label");
+      const detailFg = isSelected ? spec.selection.fg : getRowColor(row.tone, spec, "detail");
+      const hintFg = isSelected ? spec.selection.fg : spec.text.hintColor;
+      const labelX = rect.x + (row.selectable ? 2 : 0);
+      const innerRight = rect.x + rect.width - 1;
+      const hintText = row.hint ? truncate(row.hint, Math.max(0, rect.width - 4)) : undefined;
+      const hintX = hintText ? Math.max(labelX + 2, innerRight - hintText.length) : undefined;
+      const detailText = row.detail
+        ? truncate(row.detail, Math.max(0, Math.floor(rect.width * 0.34)))
+        : undefined;
+      const detailX = detailText
+        ? Math.max(labelX + 2, (hintX ?? innerRight) - detailText.length - 2)
+        : undefined;
+      const label = formatOverlayText(
+        row.label,
+        spec.text.rowCase,
+        Math.max(0, (detailX ?? hintX ?? innerRight) - labelX - 1),
+      );
 
-    if (row.selectable) {
-      buf.fillRect(rect, " ", { bg, fg: PALETTE.default, bold: false, dim: false });
-    }
+      if (row.selectable) {
+        buf.fillRect(rect, " ", { bg, fg: PALETTE.default, bold: false, dim: false });
+      }
 
-    buf.writeText(rect.y, rect.x + (row.selectable ? 2 : 0), label, {
-      fg,
-      bg,
-      bold: isSelected || row.tone === "accent",
-    });
+      buf.writeText(rect.y, labelX, label, {
+        fg,
+        bg,
+        bold: isSelected || row.tone === "accent",
+      });
 
-    if (row.selectable) {
-      selectableIndex += 1;
-    }
-    rowY = rect.y + 1;
+      if (detailText && detailX) {
+        buf.writeText(rect.y, detailX, detailText, {
+          fg: detailFg,
+          bg,
+          bold: isSelected,
+        });
+      }
+
+      if (hintText && hintX) {
+        buf.writeText(rect.y, hintX, hintText, {
+          fg: hintFg,
+          bg,
+          bold: isSelected,
+        });
+      }
+
+      if (row.selectable) {
+        selectableIndex += 1;
+      }
+      rowY = rect.y + 1;
   }
 }
 
@@ -846,7 +884,9 @@ function normalizeInfoRows(items: readonly ModalInfoItem[]): NormalizedModalRow[
 }
 
 function getHeaderHeight(opts: ModalOptions): number {
-  return opts.mode === "palette" || opts.eyebrow ? 4 : 3;
+  if (opts.mode === "palette") return 4;
+  const eyebrowLines = getEyebrowLines("eyebrow" in opts ? opts.eyebrow : undefined);
+  return eyebrowLines.length > 0 ? 3 + eyebrowLines.length : 3;
 }
 
 function getRowHeight(row: NormalizedModalRow, compact = false, family?: OverlayFamily): number {
@@ -968,6 +1008,11 @@ function getPaneContentHeight(rows: readonly NormalizedModalRow[]): number {
 
 function formatOverlayText(text: string, textCase: OverlayTextCase, maxLen: number): string {
   return truncate(applyOverlayCase(text, textCase), maxLen);
+}
+
+function getEyebrowLines(eyebrow?: string): readonly string[] {
+  if (!eyebrow) return [];
+  return eyebrow.split("\n");
 }
 
 function applyOverlayCase(text: string, textCase: OverlayTextCase): string {

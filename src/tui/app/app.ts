@@ -81,10 +81,35 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
         return;
       }
 
-      if (action.type === "enter" && state.modal.kind === "config" && state.modal.phase === "confirm-write") {
+    if (action.type === "enter" && state.modal.kind === "config" && state.modal.phase === "confirm-write") {
         await submitConfigEdit();
         return;
       }
+
+    if (action.type === "config-preview" && state.modal.kind === "config") {
+      if (state.modal.phase === "browse") {
+        const nextState = reduce(state, { type: "enter" });
+        if (nextState !== state) {
+          state = nextState;
+          dirty = true;
+        }
+      }
+      if (state.modal.phase === "edit-inline") {
+        await prepareConfigReview();
+      }
+      return;
+    }
+
+    if (action.type === "config-reload" && state.modal.kind === "config") {
+      try {
+        const nextSnapshot = await opts.reloadSnapshot();
+        state = reduce(state, { type: "update-snapshot", snapshot: nextSnapshot });
+      } catch {
+        // Non-fatal: keep the existing snapshot on screen.
+      }
+      dirty = true;
+      return;
+    }
 
     state = reduce(state, action);
     if (action.type === "quit") shuttingDown = true;

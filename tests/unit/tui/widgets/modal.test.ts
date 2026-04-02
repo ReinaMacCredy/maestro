@@ -321,7 +321,7 @@ describe("renderModal", () => {
     expect(layout.itemRects.length).toBeGreaterThan(0);
   });
 
-    it("renders split overlays with selectable left rows and live detail content", () => {
+  it("renders split overlays with selectable left rows and live detail content", () => {
       const buf = new Buffer(100, 30);
         const layout = renderModal(buf, { x: 0, y: 0, width: 100, height: 30 }, {
           mode: "split",
@@ -352,6 +352,44 @@ describe("renderModal", () => {
       expect(buf.toString()).toContain("Graph");
       expect(buf.toString()).toContain("blocked by f5");
       expect(buf.getCell(layout.itemRects[1]!.y, layout.itemRects[1]!.x + 2)?.bg).toBe(PALETTE.yellow);
+    });
+
+    it("renders split overlays with multiline headers and left-row value columns", () => {
+      const buf = new Buffer(110, 30);
+      renderModal(buf, { x: 0, y: 0, width: 110, height: 30 }, {
+        mode: "split",
+        title: "Config",
+        eyebrow: "[overview] effective project\nactions row",
+        items: [
+          {
+            label: "Default worker",
+            detail: "codex",
+            hint: "[P]",
+            section: "Quick settings",
+          },
+          {
+            label: "Stop on failure",
+            detail: "on",
+            hint: "[D]",
+            section: "Quick settings",
+          },
+        ],
+        selectedIndex: 0,
+        detailItems: [
+          { text: "Default worker", tone: "accent" },
+          { text: "Using now", section: "Using now" },
+        ],
+        renderSpec: buildOverlayRenderSpec("config"),
+      });
+
+      const text = buf.toString();
+      expect(text).toContain("[overview] effective project");
+      expect(text).toContain("actions row");
+      expect(text).toContain("Default worker");
+      expect(text).toContain("codex");
+      expect(text).toContain("[P]");
+      expect(text).toContain("Stop on failure");
+      expect(text).toContain("[D]");
     });
 
       it("omits hit boxes for non-selectable split rows", () => {

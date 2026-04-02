@@ -522,8 +522,8 @@ describe("mission-control CLI", () => {
       expect(stdout).toContain("Feature 2");
     }, SLOW_CLI_TIMEOUT_MS);
 
-    it("--preview handoffs renders the handoffs modal", async () => {
-      const handoffId = await createPendingHandoff(tmpDir);
+      it("--preview handoffs renders the handoffs modal", async () => {
+        const handoffId = await createPendingHandoff(tmpDir);
 
       const { stdout, exitCode } = await run(
         ["mission-control", "--preview", "handoffs", "--handoff", handoffId],
@@ -533,11 +533,24 @@ describe("mission-control CLI", () => {
       expect(exitCode).toBe(0);
       expect(stdout).toContain("Handoffs");
       expect(stdout).toContain(handoffId);
-      expect(stdout).toContain("Details hidden in read-only output");
-    }, SLOW_CLI_TIMEOUT_MS);
+        expect(stdout).toContain("Details hidden in read-only output");
+      }, SLOW_CLI_TIMEOUT_MS);
 
-      it("--preview config renders the config modal", async () => {
-        const missionId = await createMission(tmpDir);
+      it("--preview handoff accepts the singular alias", async () => {
+        const handoffId = await createPendingHandoff(tmpDir);
+
+        const { stdout, exitCode } = await run(
+          ["mission-control", "--preview", "handoff", "--handoff", handoffId],
+          tmpDir,
+        );
+
+        expect(exitCode).toBe(0);
+        expect(stdout).toContain("Handoffs");
+        expect(stdout).toContain(handoffId);
+      }, SLOW_CLI_TIMEOUT_MS);
+
+        it("--preview config renders the config modal", async () => {
+          const missionId = await createMission(tmpDir);
 
         const { stdout, exitCode } = await run(
         ["mission-control", "--mission", missionId, "--preview", "config"],
@@ -547,9 +560,35 @@ describe("mission-control CLI", () => {
           expect(exitCode).toBe(0);
           expect(stdout).toContain("Config");
           expect(stdout).toContain("[overview] effective project global defaults workers next problems");
-          expect(stdout).toContain("Using now");
-          expect(stdout).toContain("Why it matters");
-        }, SLOW_CLI_TIMEOUT_MS);
+            expect(stdout).toContain("Using now");
+            expect(stdout).toContain("Why it matters");
+          }, SLOW_CLI_TIMEOUT_MS);
+
+      it("--preview feat accepts the feature browser shorthand", async () => {
+        const missionId = await createMission(tmpDir);
+
+        const { stdout, exitCode } = await run(
+          ["mission-control", "--mission", missionId, "--preview", "feat"],
+          tmpDir,
+        );
+
+        expect(exitCode).toBe(0);
+        expect(stdout).toContain("Tasks");
+        expect(stdout).toContain("Feature 1");
+      }, SLOW_CLI_TIMEOUT_MS);
+
+      it("--preview cfg accepts the config shorthand", async () => {
+        const missionId = await createMission(tmpDir);
+
+        const { stdout, exitCode } = await run(
+          ["mission-control", "--mission", missionId, "--preview", "cfg"],
+          tmpDir,
+        );
+
+        expect(exitCode).toBe(0);
+        expect(stdout).toContain("Config");
+        expect(stdout).toContain("Why it matters");
+      }, SLOW_CLI_TIMEOUT_MS);
 
     it("--preview runtime renders the runtime modal", async () => {
       const missionId = await createMission(tmpDir);
