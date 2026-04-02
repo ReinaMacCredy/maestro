@@ -531,14 +531,10 @@ describe("generateWorkerPrompt", () => {
     await createSampleSkill(tmpDir, "test-skill", "# Skill");
 
       const result = await generateWorkerPrompt(missionStore, featureStore, assertionStore, runtimeStore, tmpDir, mission.id, "f1");
-      expect(await runtimeStore.get(mission.id, "f1")).toMatchObject({
-        featureId: "f1",
-        attempt: 1,
-        runtimeState: "starting",
-      });
+      expect(await runtimeStore.get(mission.id, "f1")).toBeUndefined();
       expect(result.prompt).toContain("### Preconditions");
-    expect(result.prompt).toContain("Docker running on port 2375");
-  });
+      expect(result.prompt).toContain("Docker running on port 2375");
+    });
 
   it("renders expected behavior section when feature has expectedBehavior", async () => {
     const missionStore = new FsMissionStoreAdapter(tmpDir);

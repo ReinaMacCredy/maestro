@@ -21,6 +21,7 @@ interface A2aProbeResult {
 
 export interface WorkerHealthOptions {
   readonly activeWorkers?: readonly string[];
+  readonly probe?: boolean;
   readonly nowIso?: string;
   readonly probeCli?: (slug: string, worker: Extract<WorkerConfig, { transport: "cli" }>) => Promise<CliProbeResult>;
   readonly probeA2a?: (slug: string, worker: Extract<WorkerConfig, { transport: "a2a" }>) => Promise<A2aProbeResult>;
@@ -31,6 +32,7 @@ export async function getWorkerHealthRows(
   opts: WorkerHealthOptions = {},
 ): Promise<readonly MissionControlWorkerHealthRow[]> {
   const activeWorkers = new Set(opts.activeWorkers ?? []);
+  const shouldProbe = opts.probe !== false;
   const nowIso = opts.nowIso ?? new Date().toISOString();
   const probeCli = opts.probeCli ?? defaultProbeCli;
   const probeA2a = opts.probeA2a ?? defaultProbeA2a;
@@ -52,9 +54,15 @@ export async function getWorkerHealthRows(
       } satisfies MissionControlWorkerHealthRow;
     }
 
-    const probe = worker.transport === "a2a"
-      ? await probeA2a(slug, worker)
-      : await probeCli(slug, worker);
+    const probe = shouldProbe
+      ? worker.transport === "a2a"
+        ? await probeA2a(slug, worker)
+        : await probeCli(slug, worker)
+      : {
+        status: "ready",
+        detail: "configured; not checked in read-only mode",
+        checks: [{ label: "probe skipped", ok: true, detail: "read-only mode" }],
+      } satisfies CliProbeResult | A2aProbeResult;
     const status: MissionControlWorkerHealthStatus = probe.status === "ready" && activeWorkers.has(slug)
       ? "busy"
       : probe.status;

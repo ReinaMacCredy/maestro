@@ -62,6 +62,10 @@ export interface HomeSnapshotDeps {
   git: GitPort;
 }
 
+export interface SnapshotBuildOptions {
+  readonly probeWorkers?: boolean;
+}
+
 interface RuntimeView {
   readonly runtimeState: RuntimeState;
   readonly lastSeenAgeMs: number;
@@ -96,7 +100,8 @@ interface FeatureGraphEntry {
 export async function buildSnapshot(
   deps: SnapshotDeps,
   missionId: string,
-  ): Promise<MissionControlSnapshot> {
+  options: SnapshotBuildOptions = {},
+): Promise<MissionControlSnapshot> {
   const [
     report,
     features,
@@ -141,6 +146,7 @@ export async function buildSnapshot(
   );
   const featureGraph = buildFeatureGraph(features);
   const workerHealth = await getWorkerHealthRows(configLayers.effective.workers ?? {}, {
+    probe: options.probeWorkers !== false,
     activeWorkers: features
       .filter((feature) => feature.status === "assigned" || feature.status === "in-progress" || feature.status === "review")
       .map((feature) => runtimeByFeature.get(feature.id)?.agent ?? "unknown")
@@ -278,6 +284,7 @@ export async function buildSnapshot(
 export async function buildHomeSnapshot(
   deps: HomeSnapshotDeps,
   cwd: string,
+  options: SnapshotBuildOptions = {},
 ): Promise<MissionControlSnapshot> {
   const [env, configLayers, gitState] = await Promise.all([
     buildMissionControlEnvironmentSummary(deps.handoffStore, deps.config, deps.cass, deps.git, cwd),
@@ -299,7 +306,9 @@ export async function buildHomeSnapshot(
   const actions = buildHomeActions(status, checks);
   const pendingHandoffs = status.pendingHandoffs.map(mapPendingHandoff);
 
-    const workerHealth = await getWorkerHealthRows(configLayers.effective.workers ?? {});
+    const workerHealth = await getWorkerHealthRows(configLayers.effective.workers ?? {}, {
+      probe: options.probeWorkers !== false,
+    });
 
     return {
     mode: "home",

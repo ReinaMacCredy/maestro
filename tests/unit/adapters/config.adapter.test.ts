@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { YamlConfigAdapter } from "../../../src/adapters/config.adapter.js";
@@ -61,6 +61,13 @@ describe("YamlConfigAdapter", () => {
       const loaded = await config.load(tmpDir);
       expect(loaded.defaultAgent).toBe("gemini");
       expect(loaded.sessionDetection?.enabled).toBe(false);
+    });
+
+    it("throws when yaml is malformed", async () => {
+      await ensureDir(join(tmpDir, ".maestro"));
+      await writeFile(join(tmpDir, ".maestro", "config.yaml"), "execution: [broken");
+
+      await expect(config.load(tmpDir)).rejects.toThrow("Cannot load Maestro config due to YAML errors");
     });
   });
 });

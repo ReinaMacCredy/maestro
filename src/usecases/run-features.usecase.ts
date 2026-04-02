@@ -11,7 +11,7 @@ import type { ExecutionRecord, FailureClass, WorkerConfig, WorkerResult } from "
 import { MaestroError } from "../domain/errors.js";
 import { UNKNOWN_AGENT } from "../domain/defaults.js";
 import { classifyRuntime } from "./runtime-supervision.usecase.js";
-import { generateWorkerPrompt } from "./generate-worker-prompt.usecase.js";
+import { generateWorkerPrompt, initializeWorkerRuntime } from "./generate-worker-prompt.usecase.js";
 import { parseWorkerReport, updateFeature } from "./feature-lifecycle.usecase.js";
 import { selectWorker } from "./worker-selection.usecase.js";
 import { recordWorkerProgressEvent } from "./live-runtime-tracking.usecase.js";
@@ -84,13 +84,15 @@ export async function runFeatures(
   const outcomes: RunFeatureOutcome[] = [];
 
   for (const feature of selectedFeatures) {
-    if (feature.status === "done" || feature.status === "blocked") {
+    if (feature.status === "done" || feature.status === "blocked" || !isRunnableStatus(feature.status)) {
       outcomes.push({
         featureId: feature.id,
         title: feature.title,
         worker: opts.workerOverride ?? deps.config.execution?.defaultWorker ?? UNKNOWN_AGENT,
         status: "skipped",
-        summary: `Feature is already ${feature.status}`,
+        summary: isRunnableStatus(feature.status)
+          ? `Feature is already ${feature.status}`
+          : `Feature is not runnable from status ${feature.status}`,
       });
       continue;
     }
@@ -161,8 +163,6 @@ export async function runFeatureAttempt(
     feature.id,
   );
 
-  await stampRuntimeAgent(deps.runtimeStore, feature.missionId, feature.id, workerSelection.slug);
-
   if (opts.dryRun) {
     return {
       featureId: feature.id,
@@ -172,6 +172,9 @@ export async function runFeatureAttempt(
       summary: `Prompt generated (${promptResult.prompt.length} chars)`,
     };
   }
+
+  await initializeWorkerRuntime(deps.runtimeStore, feature.missionId, feature.id);
+  await stampRuntimeAgent(deps.runtimeStore, feature.missionId, feature.id, workerSelection.slug);
 
   if (feature.status === "pending") {
     await updateFeature(
@@ -277,6 +280,10 @@ function areDependenciesSatisfied(
   featureById: ReadonlyMap<string, Feature>,
 ): boolean {
   return feature.dependsOn.every((dependencyId) => featureById.get(dependencyId)?.status === "done");
+}
+
+function isRunnableStatus(status: Feature["status"]): boolean {
+  return status === "pending" || status === "assigned" || status === "in-progress";
 }
 
 function resolveWorkerOverride(config: MaestroConfig, workerSlug: string): { slug: string; config: WorkerConfig } {

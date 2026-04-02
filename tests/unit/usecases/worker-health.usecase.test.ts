@@ -90,6 +90,34 @@ describe("getWorkerHealthRows", () => {
     });
   });
 
+  it("skips active probes in passive mode", async () => {
+    const rows = await getWorkerHealthRows(
+      {
+        codex: {
+          enabled: true,
+          transport: "cli",
+          command: "codex",
+          outputMode: "raw",
+        },
+      },
+      {
+        probe: false,
+        probeCli: async () => {
+          throw new Error("should not be called");
+        },
+      },
+    );
+
+    expect(rows[0]).toMatchObject({
+      slug: "codex",
+      status: "ready",
+      detail: "configured; not checked in read-only mode",
+    });
+    expect(rows[0]?.checks).toEqual([
+      { label: "probe skipped", ok: true, detail: "read-only mode" },
+    ]);
+  });
+
   it("confirms the A2A agent card and JSON-RPC endpoint when the worker is reachable", async () => {
     server = await startA2aTestServer("a2a worker ok");
 

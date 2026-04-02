@@ -1,6 +1,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { MaestroConfig } from "../domain/types.js";
+import { MaestroError } from "../domain/errors.js";
 import type { ConfigLayers, ConfigLoadError, ConfigPort, ConfigScope } from "../ports/config.port.js";
 import { DEFAULT_CONFIG, MAESTRO_DIR } from "../domain/defaults.js";
 import { ensureDir, readText, writeText } from "../lib/fs.js";
@@ -11,7 +12,13 @@ const CONFIG_FILE = "config.yaml";
 
 export class YamlConfigAdapter implements ConfigPort {
   async load(projectDir: string): Promise<MaestroConfig> {
-    return (await this.loadLayers(projectDir)).effective;
+    const layers = await this.loadLayers(projectDir);
+    if (layers.errors.length > 0) {
+      throw new MaestroError("Cannot load Maestro config due to YAML errors", layers.errors.map((error) =>
+        `${error.scope}: ${error.message}`
+      ));
+    }
+    return layers.effective;
   }
 
   async loadLayers(projectDir: string): Promise<ConfigLayers> {

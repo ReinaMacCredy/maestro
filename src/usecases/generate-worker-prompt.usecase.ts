@@ -130,7 +130,6 @@ export async function generateWorkerPrompt(
   await ensureDir(workersDir);
   const promptPath = join(workersDir, "prompt.md");
   await writeText(promptPath, prompt);
-    await initializeWorkerRuntime(runtimeStore, missionId, featureId);
   writtenPaths.push(promptPath);
 
   // If --out is provided, also write to that path
@@ -147,7 +146,7 @@ export async function generateWorkerPrompt(
   };
 }
 
-async function initializeWorkerRuntime(
+export async function initializeWorkerRuntime(
   runtimeStore: RuntimeStorePort,
   missionId: string,
   featureId: string,

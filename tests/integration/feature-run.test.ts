@@ -159,6 +159,25 @@ describe("feature run integration", () => {
     expect(result.outcomes[0].status).toBe("dry-run");
   });
 
+  it("allows a real run immediately after dry-run", async () => {
+    const missionId = await createMission(tmpDir);
+    await writeSkillAndConfig(tmpDir);
+
+    const dryRunResult = await run(
+      ["feature", "run", "--mission", missionId, "--dry-run", "--json"],
+      tmpDir,
+    );
+    expect(dryRunResult.exitCode).toBe(0);
+
+    const realRunResult = await run(
+      ["feature", "run", "--mission", missionId, "--worker", "test-worker"],
+      tmpDir,
+    );
+
+    expect(realRunResult.exitCode).toBe(0);
+    expect(realRunResult.stdout).toContain("Feature run finished");
+  });
+
   it("runs features through the configured worker", async () => {
     const missionId = await createMission(tmpDir);
     await writeSkillAndConfig(tmpDir);
@@ -200,5 +219,19 @@ describe("feature run integration", () => {
     );
     const features = JSON.parse(listResult.stdout).features;
     expect(features.every((feature: { status: string }) => feature.status === "done")).toBe(true);
+  });
+
+  it("fails fast when config yaml is malformed", async () => {
+    const missionId = await createMission(tmpDir);
+    await mkdir(join(tmpDir, ".maestro"), { recursive: true });
+    await writeFile(join(tmpDir, ".maestro", "config.yaml"), "execution: [broken");
+
+    const { stdout, stderr, exitCode } = await run(
+      ["feature", "run", "--mission", missionId],
+      tmpDir,
+    );
+
+    expect(exitCode).toBe(1);
+    expect(`${stdout}\n${stderr}`).toContain("Cannot load Maestro config due to YAML errors");
   });
 });

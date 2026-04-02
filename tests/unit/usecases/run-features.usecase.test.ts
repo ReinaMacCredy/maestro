@@ -93,12 +93,14 @@ describe("runFeatures", () => {
 
   it("supports dry-run prompt generation without spawning", async () => {
     let spawnCount = 0;
+    const runtimeStore = mockRuntimeStore();
     const result = await runFeatures(
       {
         missionStore: mockMissionStore([mission]),
         featureStore: mockFeatureStore(mission.id, features),
         assertionStore: mockAssertionStore(mission.id, []),
-        runtimeStore: mockRuntimeStore(),
+        runtimeStore,
+        runtimeEventStore: mockRuntimeEventStore(),
         executionStore: mockExecutionStore(),
         transport: mockTransport([], () => {
           spawnCount += 1;
@@ -115,6 +117,7 @@ describe("runFeatures", () => {
     expect(result.success).toBe(true);
     expect(spawnCount).toBe(0);
     expect(result.outcomes.every((outcome) => outcome.status === "dry-run" || outcome.status === "skipped")).toBe(true);
+    expect(await runtimeStore.get(mission.id, "f1")).toBeUndefined();
   });
 
   it("runs ready features in order and skips blocked dependencies", async () => {
@@ -124,6 +127,7 @@ describe("runFeatures", () => {
         featureStore: mockFeatureStore(mission.id, features),
         assertionStore: mockAssertionStore(mission.id, []),
         runtimeStore: mockRuntimeStore(),
+        runtimeEventStore: mockRuntimeEventStore(),
         executionStore: mockExecutionStore(),
         transport: mockTransport([{
           success: true,
@@ -185,6 +189,7 @@ describe("runFeatures", () => {
         featureStore: mockFeatureStore(mission.id, features),
         assertionStore: mockAssertionStore(mission.id, []),
         runtimeStore: mockRuntimeStore(),
+        runtimeEventStore: mockRuntimeEventStore(),
         executionStore: mockExecutionStore(),
         transport: mockTransport([{
           success: false,
@@ -229,6 +234,7 @@ describe("runFeatures", () => {
             history: [],
           },
         }]),
+        runtimeEventStore: mockRuntimeEventStore(),
         executionStore: mockExecutionStore(),
         transport: mockTransport(),
         baseDir,
@@ -283,5 +289,38 @@ describe("runFeatures", () => {
     expect(events.some((event) => event.text?.includes("Reading runtime-supervision"))).toBe(true);
     expect(runtime?.sessionId).toBe("session-123");
     expect(runtime?.agent).toBe("codex");
+  });
+
+  it("skips features that are already in review", async () => {
+    const reviewFeature: Feature = {
+      ...features[0]!,
+      status: "review",
+    };
+
+    const result = await runFeatures(
+      {
+        missionStore: mockMissionStore([mission]),
+        featureStore: mockFeatureStore(mission.id, [reviewFeature]),
+        assertionStore: mockAssertionStore(mission.id, []),
+        runtimeStore: mockRuntimeStore(),
+        runtimeEventStore: mockRuntimeEventStore(),
+        executionStore: mockExecutionStore(),
+        transport: mockTransport(),
+        baseDir,
+        config: DEFAULT_CONFIG,
+      },
+      {
+        missionId: mission.id,
+      },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.outcomes).toEqual([
+      expect.objectContaining({
+        featureId: "f1",
+        status: "skipped",
+        summary: "Feature is not runnable from status review",
+      }),
+    ]);
   });
 });

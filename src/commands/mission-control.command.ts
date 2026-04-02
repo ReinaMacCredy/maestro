@@ -216,7 +216,9 @@ async function buildMissionSnapshot(
     );
   }
 
-  return buildSnapshot(snapshotDeps, missionId);
+  return buildSnapshot(snapshotDeps, missionId, {
+    probeWorkers: mode === "supervise",
+  });
 }
 
 export async function loadMissionControlSnapshot(
@@ -227,7 +229,9 @@ export async function loadMissionControlSnapshot(
 ) {
   return missionId
     ? buildMissionSnapshot(missionId, snapshotDeps, mode)
-    : buildHomeSnapshot(homeSnapshotDeps, process.cwd());
+    : buildHomeSnapshot(homeSnapshotDeps, process.cwd(), {
+      probeWorkers: mode === "supervise",
+    });
 }
 
 function redactSnapshotForReadOutput(
