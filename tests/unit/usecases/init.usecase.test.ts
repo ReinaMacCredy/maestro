@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { initMaestro } from "../../../src/usecases/init.usecase.js";
@@ -96,5 +96,27 @@ describe("initMaestro", () => {
     expect(result.bootstrapGenerated).toBe(false);
     expect(writeCount).toBe(1);
     expect(result.created.some((path) => path.includes("bootstrap"))).toBe(false);
+  });
+
+  it("does not re-report existing directories on rerun", async () => {
+    const config = mockConfig();
+
+    await initMaestro(config, { global: false, dir: tmpDir });
+    const second = await initMaestro(config, { global: false, dir: tmpDir });
+
+    expect(second.created).toEqual([]);
+    expect(second.skipped).toContain(join(tmpDir, ".maestro", "config.yaml"));
+  });
+
+  it("rejects symlinked .maestro paths that escape the project root", async () => {
+    const config = mockConfig();
+    const outsideDir = join(tmpDir, "outside");
+
+    await mkdir(outsideDir, { recursive: true });
+    await symlink(outsideDir, join(tmpDir, ".maestro"));
+
+    await expect(initMaestro(config, { global: false, dir: tmpDir })).rejects.toThrow(
+      "Refusing to initialize through symlinked path",
+    );
   });
 });

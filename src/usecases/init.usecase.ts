@@ -1,10 +1,10 @@
 import type { ConfigPort } from "../ports/config.port.js";
 import { DEFAULT_CONFIG, MAESTRO_DIR } from "../domain/defaults.js";
 import { PROJECT_BOOTSTRAP_TEMPLATES } from "../domain/bootstrap-templates.js";
-import { ensureDir, writeText } from "../lib/fs.js";
+import { dirExists, ensureDir, writeText } from "../lib/fs.js";
 import { homedir } from "node:os";
-import { join } from "node:path";
-import { chmod } from "node:fs/promises";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { chmod, lstat } from "node:fs/promises";
 
 export interface InitResult {
   readonly created: string[];
@@ -40,6 +40,10 @@ export async function initMaestro(
     const handoffsDir = join(maestroDir, "handoffs");
     const skillsDir = join(maestroDir, "skills");
     const bootstrapDir = join(maestroDir, "bootstrap");
+    const configPath = join(maestroDir, "config.yaml");
+
+    await assertProjectLocalPathSafe(opts.dir, maestroDir);
+    await assertProjectLocalPathSafe(opts.dir, configPath);
 
     await ensureDirIfMissing(maestroDir, created);
     await ensureDirIfMissing(handoffsDir, created);
@@ -48,17 +52,18 @@ export async function initMaestro(
 
     if (!(await config.exists("project", opts.dir))) {
       await config.write("project", opts.dir, DEFAULT_CONFIG);
-      created.push(join(maestroDir, "config.yaml"));
-    } else if (opts.confirmReplace && await opts.confirmReplace(join(maestroDir, "config.yaml"))) {
+      created.push(configPath);
+    } else if (opts.confirmReplace && await opts.confirmReplace(configPath)) {
       await config.write("project", opts.dir, DEFAULT_CONFIG);
-      created.push(join(maestroDir, "config.yaml"));
+      created.push(configPath);
     } else {
-      skipped.push(join(maestroDir, "config.yaml"));
+      skipped.push(configPath);
     }
 
     for (const template of PROJECT_BOOTSTRAP_TEMPLATES) {
       const target = join(opts.dir, template.path);
-      await ensureDir(join(target, ".."));
+      await assertProjectLocalPathSafe(opts.dir, target);
+      await ensureDir(dirname(target));
 
       if (await Bun.file(target).exists()) {
         if (!opts.confirmReplace || !(await opts.confirmReplace(target))) {
@@ -84,11 +89,42 @@ export async function initMaestro(
 }
 
 async function ensureDirIfMissing(dir: string, created: string[]): Promise<void> {
-  if (!(await Bun.file(dir).exists())) {
+  if (!(await dirExists(dir))) {
     await ensureDir(dir);
     created.push(dir);
     return;
   }
 
   await ensureDir(dir);
+}
+
+async function assertProjectLocalPathSafe(
+  rootDir: string,
+  target: string,
+): Promise<void> {
+  const projectRoot = resolve(rootDir);
+  const resolvedTarget = resolve(target);
+  const rel = relative(projectRoot, resolvedTarget);
+
+  if (rel === ".." || rel.startsWith(`..${sep}`) || rel === "") {
+    throw new Error(`Refusing to initialize outside project root: ${target}`);
+  }
+
+  const segments = rel.split(sep).filter(Boolean);
+  let current = projectRoot;
+
+  for (const segment of segments) {
+    current = join(current, segment);
+    try {
+      const entry = await lstat(current);
+      if (entry.isSymbolicLink()) {
+        throw new Error(`Refusing to initialize through symlinked path: ${current}`);
+      }
+    } catch (err: unknown) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+        continue;
+      }
+      throw err;
+    }
+  }
 }

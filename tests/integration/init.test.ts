@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -152,6 +152,15 @@ async function commandExists(command: string): Promise<boolean> {
   return (await proc.exited) === 0;
 }
 
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 describe("init CLI", () => {
   beforeAll(async () => {
     pythonAvailable = await commandExists("python3");
@@ -182,7 +191,10 @@ describe("init CLI", () => {
     expect(await readFile(join(tmpDir, ".maestro", "bootstrap", "services.yaml"), "utf8")).toContain(
       "maestro mission-control --preview",
     );
-    expect(await Bun.file(join(tmpDir, ".factory")).exists()).toBe(false);
+    expect(await readFile(join(tmpDir, ".maestro", "bootstrap", "services.yaml"), "utf8")).not.toContain(
+      "src/index.ts",
+    );
+    expect(await pathExists(join(tmpDir, ".factory"))).toBe(false);
   });
 
   it("skips existing files in non-interactive mode", async () => {
@@ -196,6 +208,17 @@ describe("init CLI", () => {
     const result = JSON.parse(stdout);
     expect(result.skipped.some((path: string) => path.endsWith("/.maestro/AGENTS.md"))).toBe(true);
     expect(await readFile(agentsPath, "utf8")).toBe("custom bootstrap\n");
+  });
+
+  it("reports no new directories on an idempotent second run", async () => {
+    await run(["init", "--json"], tmpDir);
+
+    const { stdout, exitCode } = await run(["init", "--json"], tmpDir);
+
+    expect(exitCode).toBe(0);
+    const result = JSON.parse(stdout);
+    expect(result.created).toEqual([]);
+    expect(result.skipped.some((path: string) => path.endsWith("/.maestro/config.yaml"))).toBe(true);
   });
 
   it("exits cleanly in tty mode when no replacement prompt is needed", async () => {
