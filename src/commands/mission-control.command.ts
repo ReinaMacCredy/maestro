@@ -14,13 +14,35 @@ import { recoverMissionRuntimeFailures } from "../usecases/runtime-recovery.usec
 
 export type MissionControlSnapshotLoadMode = "read" | "supervise";
 
+const PREVIEW_SCREEN_ALIASES: Readonly<Record<string, PreviewScreen>> = {
+  dash: "dashboard",
+  dashboard: "dashboard",
+  home: "dashboard",
+  feat: "features",
+  feature: "features",
+  features: "features",
+  dep: "dependencies",
+  deps: "dependencies",
+  dependency: "dependencies",
+  dependencies: "dependencies",
+  handoff: "handoffs",
+  handoffs: "handoffs",
+  cfg: "config",
+  config: "config",
+  settings: "config",
+  proc: "runtime",
+  process: "runtime",
+  processes: "runtime",
+  runtime: "runtime",
+};
+
 export function registerMissionControlCommand(program: Command): void {
   program
     .command("mission-control")
     .description("Interactive mission control dashboard")
     .option("--mission <id>", "Mission ID (auto-selects if omitted)")
     .option("--json", "Output snapshot as JSON")
-    .option("--preview [screen]", `Render a read-only preview frame (${PREVIEW_SCREENS.join(", ")})`)
+    .option("--preview [screen]", `Render a read-only preview frame (${PREVIEW_SCREENS.join(", ")}; aliases: feat, handoff, cfg, deps, proc)`)
     .option("--feature <id>", "Select a feature for dashboard, features, or dependencies previews")
     .option("--handoff <id>", "Select a handoff for handoffs previews")
     .addHelpText("after", `
@@ -128,8 +150,13 @@ function resolvePreviewScreen(value: unknown): PreviewScreen | undefined {
     return normalizedValue;
   }
 
+  const aliasedValue = PREVIEW_SCREEN_ALIASES[normalizedValue];
+  if (aliasedValue) {
+    return aliasedValue;
+  }
+
   throw new MaestroError(`Unknown preview screen '${value}'`, [
-    `Use one of: ${PREVIEW_SCREENS.join(", ")}`,
+    `Use one of: ${PREVIEW_SCREENS.join(", ")} (aliases: feat, handoff, cfg, deps, proc)`,
     "Try `maestro mission-control --preview` for the default dashboard preview",
   ]);
 }
