@@ -862,7 +862,7 @@ describe("frame rendering", () => {
           expect(frame).toContain("Change Default Worker");
           expect(frame).toContain("Pick which worker Maestro should use by default.");
           expect(frame).toContain("Best for");
-            expect(frame).toContain("Status");
+            expect(frame).toContain("Availability");
           expect(frame).toContain("ready");
           expect(frame).toContain("Good fit in this mission");
           expect(frame).toContain("Other saved values");

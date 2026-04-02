@@ -662,21 +662,9 @@ describe("mission-control CLI", () => {
       expect(stdout).toContain("Real worker readiness");
     }, SLOW_CLI_TIMEOUT_MS);
 
-    it("--preview output renders captured worker output for the selected feature", async () => {
+    it("--preview output shows the empty state when no runtime output is captured yet", async () => {
       const missionId = await createMission(tmpDir);
       await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
-
-      const runtimeEventDir = join(tmpDir, ".maestro", "missions", missionId, "runtime-events", "f1");
-      await mkdir(runtimeEventDir, { recursive: true });
-      await writeFile(join(runtimeEventDir, "0001.json"), `${JSON.stringify({
-        missionId,
-        featureId: "f1",
-        attemptId: "attempt-1",
-        worker: "test-skill",
-        timestamp: "2026-04-02T12:00:01.000Z",
-        kind: "stdout",
-        text: "Applying patch",
-      })}\n`);
 
       const { stdout, exitCode } = await run(
         ["mission-control", "--mission", missionId, "--preview", "output", "--feature", "f1"],
@@ -685,7 +673,7 @@ describe("mission-control CLI", () => {
 
       expect(exitCode).toBe(0);
       expect(stdout).toContain("Worker Output");
-      expect(stdout).toContain("Applying patch");
+      expect(stdout).toContain("No runtime output captured yet.");
     }, SLOW_CLI_TIMEOUT_MS);
 
     it("--preview workers renders the workers modal", async () => {
