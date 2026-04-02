@@ -1,5 +1,6 @@
 import type { Feature } from "../../domain/mission-types.js";
 import type { DoctorCheck, MaestroConfig } from "../../domain/types.js";
+import type { WorkerConfig } from "../../domain/worker-types.js";
 import type { ConfigLayers } from "../../ports/config.port.js";
 import type {
   MissionControlConfigEditKind,
@@ -331,8 +332,8 @@ function buildWorkerRows(
 ): readonly MissionControlConfigRow[] {
   const nextFeature = features.find((feature) => feature.status === "pending");
   return Object.entries(config.workers ?? {}).map(([slug, worker]) => {
-    const available = Boolean(Bun.which(worker.command));
-    const stateLabel = !worker.enabled ? "disabled" : available ? "ready" : "missing";
+      const available = workerIsAvailable(worker);
+      const stateLabel = !worker.enabled ? "disabled" : available ? "ready" : "missing";
     const copy: RowCopy = {
       label: humanizeWorkerSlug(slug),
       summary: `${humanizeWorkerSlug(slug)} is a worker Maestro can choose for task execution.`,
@@ -705,12 +706,12 @@ function buildWorkerChoices(
   features: readonly Feature[],
 ): readonly MissionControlConfigWorkerChoice[] {
   return workerSlugs.map((slug) => {
-    const worker = workers?.[slug];
-    const availability: MissionControlConfigWorkerChoice["availability"] = !worker?.enabled
-      ? "disabled"
-      : Bun.which(worker.command)
-        ? "ready"
-        : "missing";
+      const worker = workers?.[slug];
+      const availability: MissionControlConfigWorkerChoice["availability"] = !worker?.enabled
+        ? "disabled"
+        : workerIsAvailable(worker)
+          ? "ready"
+          : "missing";
     const guidance = workerGuidanceForSlug(slug);
     return {
       slug,
@@ -722,6 +723,23 @@ function buildWorkerChoices(
       recommendation: recommendWorkerFit(slug, features),
     };
   });
+}
+
+function workerIsAvailable(worker: WorkerConfig | undefined): boolean {
+  if (!worker || !worker.enabled) {
+    return false;
+  }
+
+  if (worker.transport === "a2a") {
+    try {
+      new URL(worker.url);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  return Boolean(Bun.which(worker.command));
 }
 
 function workerGuidanceForSlug(slug: string): {

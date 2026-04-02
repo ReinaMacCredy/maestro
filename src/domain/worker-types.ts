@@ -1,6 +1,6 @@
 import type { WorkerReport } from "./mission-types.js";
 
-export type TransportType = "cli";
+export type TransportType = "cli" | "a2a";
 
 export type WorkerOutputMode = "raw" | "stream-json";
 
@@ -19,14 +19,27 @@ export interface ExecutionConfig {
   readonly rotateWorkerOnRetry?: boolean;
 }
 
-export interface WorkerConfig {
+export interface WorkerBaseConfig {
   readonly enabled: boolean;
   readonly transport: TransportType;
+}
+
+export interface CliWorkerConfig extends WorkerBaseConfig {
+  readonly transport: "cli";
   readonly command: string;
   readonly args?: readonly string[];
   readonly outputMode?: WorkerOutputMode;
   readonly env?: Readonly<Record<string, string>>;
 }
+
+export interface A2aWorkerConfig extends WorkerBaseConfig {
+  readonly transport: "a2a";
+  readonly url: string;
+  readonly agentCardPath?: string;
+  readonly headers?: Readonly<Record<string, string>>;
+}
+
+export type WorkerConfig = CliWorkerConfig | A2aWorkerConfig;
 
 export interface SupervisionConfig {
   readonly level?: SupervisionLevel;

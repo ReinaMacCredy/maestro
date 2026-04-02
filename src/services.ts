@@ -23,7 +23,7 @@ import { FsAssertionStoreAdapter } from "./adapters/assertion-store.adapter.js";
 import { FsCheckpointStoreAdapter } from "./adapters/checkpoint-store.adapter.js";
 import { FsRuntimeStoreAdapter } from "./adapters/runtime-store.adapter.js";
 import { FsExecutionStoreAdapter } from "./adapters/execution-store.adapter.js";
-import { CliTransportAdapter } from "./adapters/cli-transport.adapter.js";
+import { MultiTransportAdapter } from "./adapters/multi-transport.adapter.js";
 
 export interface Services {
   readonly git: GitPort;
@@ -57,7 +57,7 @@ export function initServices(projectDir: string): Services {
     checkpointStore: new FsCheckpointStoreAdapter(projectDir),
     runtimeStore: new FsRuntimeStoreAdapter(projectDir),
     executionStore: new FsExecutionStoreAdapter(projectDir),
-    transport: new CliTransportAdapter(),
+    transport: new MultiTransportAdapter(),
   };
   return instance;
 }

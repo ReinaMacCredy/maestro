@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { startA2aTestServer, type TestA2aServer } from "../helpers/a2a-test-server.js";
 
 const CLI = [
   "bun",
@@ -10,6 +11,7 @@ const CLI = [
 ];
 
 let tmpDir: string;
+let a2aServer: TestA2aServer | undefined;
 
 async function run(
   args: string[],
@@ -112,12 +114,32 @@ async function writeSkillAndConfig(cwd: string): Promise<void> {
   );
 }
 
+async function writeA2aConfig(cwd: string, baseUrl: string): Promise<void> {
+  await mkdir(join(cwd, ".maestro", "skills", "test-skill"), { recursive: true });
+  await writeFile(join(cwd, ".maestro", "skills", "test-skill", "SKILL.md"), "# test skill\n");
+
+  await writeFile(
+    join(cwd, ".maestro", "config.yaml"),
+    [
+      "execution:",
+      "  defaultWorker: test-worker",
+      "workers:",
+      "  test-worker:",
+      "    enabled: true",
+      "    transport: a2a",
+      `    url: ${baseUrl}`,
+    ].join("\n"),
+  );
+}
+
 beforeEach(async () => {
   tmpDir = await mkdtemp(join(tmpdir(), "maestro-feature-run-"));
   await initGitRepo(tmpDir);
 });
 
 afterEach(async () => {
+  await a2aServer?.close();
+  a2aServer = undefined;
   await rm(tmpDir, { recursive: true, force: true });
 });
 
@@ -149,6 +171,28 @@ describe("feature run integration", () => {
     expect(exitCode).toBe(0);
     expect(stdout).toContain("Feature run finished");
     expect(stdout).toContain("test-worker");
+
+    const listResult = await run(
+      ["feature", "list", "--mission", missionId, "--json"],
+      tmpDir,
+    );
+    const features = JSON.parse(listResult.stdout).features;
+    expect(features.every((feature: { status: string }) => feature.status === "done")).toBe(true);
+  });
+
+  it("runs features through a live A2A worker", async () => {
+    const missionId = await createMission(tmpDir);
+    a2aServer = await startA2aTestServer("a2a integration ok");
+    await writeA2aConfig(tmpDir, a2aServer.baseUrl);
+
+    const { stdout, exitCode } = await run(
+      ["feature", "run", "--mission", missionId, "--worker", "test-worker"],
+      tmpDir,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Feature run finished");
+    expect(stdout).toContain("a2a integration ok");
 
     const listResult = await run(
       ["feature", "list", "--mission", missionId, "--json"],

@@ -1,6 +1,6 @@
 {
   "name": "maestro-handoff",
-  "version": "0.7.4",
+  "version": "0.8.0",
   "type": "module",
   "bin": {
     "maestro": "./dist/maestro"
@@ -26,6 +26,9 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "@a2a-js/sdk": "0.3.13",
+    "@types/express": "^5.0.3",
+    "express": "^5.1.0",
     "typescript": "^5.7.0"
   }
 }

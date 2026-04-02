@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { MaestroError } from "./errors.js";
 import type {
+  A2aWorkerConfig,
+  CliWorkerConfig,
   ExecutionRecord,
   ParallelConfig,
   SupervisionConfig,
@@ -9,14 +11,27 @@ import type {
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/;
 
-export const WorkerConfigSchema = z.object({
+const CliWorkerConfigSchema = z.object({
   enabled: z.boolean(),
-  transport: z.enum(["cli"]),
+  transport: z.literal("cli"),
   command: z.string().min(1),
   args: z.array(z.string()).optional(),
   outputMode: z.enum(["raw", "stream-json"]).optional(),
   env: z.record(z.string()).optional(),
 }).strict();
+
+const A2aWorkerConfigSchema = z.object({
+  enabled: z.boolean(),
+  transport: z.literal("a2a"),
+  url: z.string().url(),
+  agentCardPath: z.string().min(1).optional(),
+  headers: z.record(z.string()).optional(),
+}).strict();
+
+export const WorkerConfigSchema = z.discriminatedUnion("transport", [
+  CliWorkerConfigSchema,
+  A2aWorkerConfigSchema,
+]);
 
 export const SupervisionConfigSchema = z.object({
   level: z.enum(["low", "mid", "high"]).optional(),
@@ -35,7 +50,7 @@ export const ExecutionRecordSchema = z.object({
   missionId: z.string().min(1),
   featureId: z.string().min(1),
   worker: z.string().min(1),
-  transport: z.enum(["cli"]),
+  transport: z.enum(["cli", "a2a"]),
   attemptId: z.string().min(1),
   startedAt: z.string().regex(ISO_DATE_PATTERN),
   completedAt: z.string().regex(ISO_DATE_PATTERN),
@@ -60,10 +75,18 @@ function formatIssues(issues: readonly z.ZodIssue[]): string[] {
 export function validateWorkerConfig(value: unknown): WorkerConfig {
   const parsed = WorkerConfigSchema.safeParse(value);
   if (parsed.success) {
-    return parsed.data;
+    return parsed.data as WorkerConfig;
   }
 
   throw new MaestroError("Invalid worker config", formatIssues(parsed.error.issues));
+}
+
+export function isCliWorkerConfig(value: WorkerConfig): value is CliWorkerConfig {
+  return value.transport === "cli";
+}
+
+export function isA2aWorkerConfig(value: WorkerConfig): value is A2aWorkerConfig {
+  return value.transport === "a2a";
 }
 
 export function validateSupervisionConfig(value: unknown): SupervisionConfig {
