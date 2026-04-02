@@ -10,6 +10,14 @@ export class A2aTransportAdapter implements TransportPort {
       featureId: string;
       missionId: string;
       workerSlug: string;
+      onEvent?: (event: {
+        timestamp: string;
+        kind: "status" | "stdout" | "stderr" | "heartbeat";
+        worker: string;
+        text?: string;
+        sessionId?: string;
+        runtimeState?: "starting" | "live" | "stale" | "failed" | "recoverable" | "completed";
+      }) => void | Promise<void>;
     },
   ): Promise<WorkerResult> {
     const startedAt = Date.now();
@@ -18,8 +26,24 @@ export class A2aTransportAdapter implements TransportPort {
     let finalState: string | undefined;
 
     try {
+      await opts.onEvent?.({
+        timestamp: new Date().toISOString(),
+        kind: "status",
+        worker: opts.workerSlug,
+        runtimeState: "starting",
+        text: `Connecting to ${opts.workerSlug}`,
+      });
+
       const agentCard = await fetchAgentCard(workerConfig.url, workerConfig.agentCardPath, workerConfig.headers);
       const endpoint = resolveJsonRpcEndpoint(workerConfig.url, agentCard);
+      const heartbeat = setInterval(() => {
+        void opts.onEvent?.({
+          timestamp: new Date().toISOString(),
+          kind: "heartbeat",
+          worker: opts.workerSlug,
+          runtimeState: "live",
+        });
+      }, 15_000);
       const streamResponse = await fetch(endpoint, {
         method: "POST",
         headers: {
@@ -45,19 +69,51 @@ export class A2aTransportAdapter implements TransportPort {
 
       for await (const event of parseJsonRpcSseStream(streamResponse)) {
         rawEvents.push(JSON.stringify(event));
-        outputChunks.push(...extractEventText(event));
+        const eventTexts = extractEventText(event);
+        outputChunks.push(...eventTexts);
         if (event.kind === "task") {
           finalState = event.status.state;
         }
         if (event.kind === "status-update") {
           finalState = event.status.state;
         }
+        if (finalState) {
+          await opts.onEvent?.({
+            timestamp: new Date().toISOString(),
+            kind: "status",
+            worker: opts.workerSlug,
+            runtimeState: mapA2aRuntimeState(finalState),
+            text: `${opts.workerSlug} task state ${finalState}`,
+          });
+        }
+        for (const text of eventTexts) {
+          const trimmed = text.trim();
+          if (trimmed.length === 0) continue;
+          await opts.onEvent?.({
+            timestamp: new Date().toISOString(),
+            kind: "stdout",
+            worker: opts.workerSlug,
+            runtimeState: "live",
+            text: trimmed,
+          });
+        }
       }
+      clearInterval(heartbeat);
 
       const parsedOutput = outputChunks.join("\n").trim();
       const success = finalState === undefined
         ? parsedOutput.length > 0
         : finalState === "completed";
+
+      await opts.onEvent?.({
+        timestamp: new Date().toISOString(),
+        kind: "status",
+        worker: opts.workerSlug,
+        runtimeState: success ? "completed" : mapA2aRuntimeState(finalState),
+        text: success
+          ? `${opts.workerSlug} completed`
+          : `${opts.workerSlug} finished with task state ${finalState ?? "unknown"}`,
+      });
 
       return {
         success,
@@ -82,6 +138,21 @@ export class A2aTransportAdapter implements TransportPort {
         failureClass: "infrastructure",
       };
     }
+  }
+}
+
+function mapA2aRuntimeState(
+  finalState: string | undefined,
+): "starting" | "live" | "stale" | "failed" | "recoverable" | "completed" {
+  switch (finalState) {
+    case "completed":
+      return "completed";
+    case "failed":
+    case "rejected":
+    case "canceled":
+      return "failed";
+    default:
+      return "live";
   }
 }
 

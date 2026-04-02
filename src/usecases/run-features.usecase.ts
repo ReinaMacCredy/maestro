@@ -3,6 +3,7 @@ import type { ExecutionStorePort } from "../ports/execution-store.port.js";
 import type { FeatureStorePort } from "../ports/feature-store.port.js";
 import type { MissionStorePort } from "../ports/mission-store.port.js";
 import type { RuntimeStorePort } from "../ports/runtime-store.port.js";
+import type { RuntimeEventStorePort } from "../ports/runtime-event-store.port.js";
 import type { TransportPort } from "../ports/transport.port.js";
 import type { Feature, WorkerReport } from "../domain/mission-types.js";
 import type { MaestroConfig } from "../domain/types.js";
@@ -13,6 +14,7 @@ import { classifyRuntime } from "./runtime-supervision.usecase.js";
 import { generateWorkerPrompt } from "./generate-worker-prompt.usecase.js";
 import { parseWorkerReport, updateFeature } from "./feature-lifecycle.usecase.js";
 import { selectWorker } from "./worker-selection.usecase.js";
+import { recordWorkerProgressEvent } from "./live-runtime-tracking.usecase.js";
 
 export interface RunFeaturesOptions {
   readonly missionId: string;
@@ -45,6 +47,7 @@ export interface RunFeaturesDeps {
   readonly featureStore: FeatureStorePort;
   readonly assertionStore: AssertionStorePort;
   readonly runtimeStore: RuntimeStorePort;
+  readonly runtimeEventStore: RuntimeEventStorePort;
   readonly executionStore: ExecutionStorePort;
   readonly transport: TransportPort;
   readonly baseDir: string;
@@ -197,6 +200,14 @@ export async function runFeatureAttempt(
     featureId: feature.id,
     missionId: feature.missionId,
     workerSlug: workerSelection.slug,
+    onEvent: (event) =>
+      recordWorkerProgressEvent(
+        deps.runtimeStore,
+        deps.runtimeEventStore,
+        feature.missionId,
+        feature.id,
+        event,
+      ),
   });
   const report = await resolveWorkerReport(workerResult);
 

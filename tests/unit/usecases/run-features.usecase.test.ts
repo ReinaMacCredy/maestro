@@ -6,6 +6,7 @@ import { runFeatures } from "../../../src/usecases/run-features.usecase.js";
 import { DEFAULT_CONFIG } from "../../../src/domain/defaults.js";
 import {
   mockAssertionStore,
+  mockRuntimeEventStore,
   mockExecutionStore,
   mockFeatureStore,
   mockMissionStore,
@@ -237,5 +238,50 @@ describe("runFeatures", () => {
         missionId: mission.id,
       },
     )).rejects.toThrow("live runtime ownership");
+  });
+
+  it("persists live runtime events emitted during transport execution", async () => {
+    const runtimeStore = mockRuntimeStore();
+    const runtimeEventStore = mockRuntimeEventStore();
+
+    await runFeatures(
+      {
+        missionStore: mockMissionStore([mission]),
+        featureStore: mockFeatureStore(mission.id, [features[0]!]),
+        assertionStore: mockAssertionStore(mission.id, []),
+        runtimeStore,
+        runtimeEventStore,
+        executionStore: mockExecutionStore(),
+        transport: mockTransport([{
+          success: true,
+          exitCode: 0,
+          summary: "ok",
+          stdoutRaw: "done",
+          stderrRaw: "",
+          filesChanged: [],
+          durationMs: 5,
+        }], async (_workerConfig, _prompt, opts) => {
+          await opts.onEvent?.({
+            timestamp: "2026-04-02T12:00:10.000Z",
+            kind: "stdout",
+            worker: "codex",
+            text: "Reading runtime-supervision.usecase.ts",
+            sessionId: "session-123",
+          });
+        }),
+        baseDir,
+        config: DEFAULT_CONFIG,
+      },
+      {
+        missionId: mission.id,
+      },
+    );
+
+    const events = await runtimeEventStore.listByFeature(mission.id, "f1");
+    const runtime = await runtimeStore.get(mission.id, "f1");
+
+    expect(events.some((event) => event.text?.includes("Reading runtime-supervision"))).toBe(true);
+    expect(runtime?.sessionId).toBe("session-123");
+    expect(runtime?.agent).toBe("codex");
   });
 });

@@ -1,4 +1,4 @@
-import { mkdir, readdir, rename, rm, stat } from "node:fs/promises";
+import { appendFile, mkdir, readdir, rename, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 
 export async function ensureDir(dir: string): Promise<void> {
@@ -29,6 +29,10 @@ export async function writeJson(path: string, data: unknown): Promise<void> {
 
 export async function writeText(path: string, content: string): Promise<void> {
   await writeAtomic(path, content);
+}
+
+export async function appendText(path: string, content: string): Promise<void> {
+  await appendFile(path, content, "utf8");
 }
 
 async function writeAtomic(path: string, content: string): Promise<void> {

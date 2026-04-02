@@ -1,4 +1,4 @@
-import type { WorkerConfig, WorkerResult } from "../domain/worker-types.js";
+import type { WorkerConfig, WorkerProgressEvent, WorkerResult } from "../domain/worker-types.js";
 import { execArgv } from "../lib/shell.js";
 import { parseRawOutput, parseStreamJsonOutput } from "../lib/stream-json-parser.js";
 import type { TransportPort } from "../ports/transport.port.js";
@@ -12,6 +12,7 @@ export class CliTransportAdapter implements TransportPort {
       featureId: string;
       missionId: string;
       workerSlug: string;
+      onEvent?: (event: WorkerProgressEvent) => void | Promise<void>;
     },
   ): Promise<WorkerResult> {
     const startedAt = Date.now();
@@ -37,19 +38,45 @@ export class CliTransportAdapter implements TransportPort {
       };
     }
 
+    await emitEvent(opts, {
+      timestamp: new Date().toISOString(),
+      kind: "status",
+      worker: opts.workerSlug,
+      runtimeState: "starting",
+      text: `Started ${opts.workerSlug}`,
+    });
+
     proc.stdin.write(`${prompt}\n`);
     proc.stdin.end();
 
+    const heartbeat = setInterval(() => {
+      void emitEvent(opts, {
+        timestamp: new Date().toISOString(),
+        kind: "heartbeat",
+        worker: opts.workerSlug,
+        runtimeState: "live",
+      });
+    }, 15_000);
+
     const [stdoutRaw, stderrRaw] = await Promise.all([
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
+      collectStream(proc.stdout, "stdout", opts),
+      collectStream(proc.stderr, "stderr", opts),
     ]);
     const exitCode = await proc.exited;
+    clearInterval(heartbeat);
     const durationMs = Date.now() - startedAt;
     const parsedOutput = workerConfig.outputMode === "stream-json"
       ? parseStreamJsonOutput(stdoutRaw, opts.workerSlug)
       : parseRawOutput(stdoutRaw);
     const summary = summarizeWorkerOutput(parsedOutput, stderrRaw, exitCode, opts.workerSlug);
+
+    await emitEvent(opts, {
+      timestamp: new Date().toISOString(),
+      kind: "status",
+      worker: opts.workerSlug,
+      runtimeState: exitCode === 0 ? "completed" : "failed",
+      text: exitCode === 0 ? `${opts.workerSlug} completed` : `${opts.workerSlug} exited with code ${exitCode}`,
+    });
 
     return {
       success: exitCode === 0,
@@ -67,6 +94,76 @@ export class CliTransportAdapter implements TransportPort {
           : "worker-crash",
     };
   }
+}
+
+async function collectStream(
+  stream: ReadableStream<Uint8Array>,
+  kind: "stdout" | "stderr",
+  opts: {
+    cwd: string;
+    featureId: string;
+    missionId: string;
+    workerSlug: string;
+    onEvent?: (event: WorkerProgressEvent) => void | Promise<void>;
+  },
+): Promise<string> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let pendingLine = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      const chunk = decoder.decode(value, { stream: true });
+      buffer += chunk;
+      pendingLine += chunk;
+      const lines = pendingLine.split(/\r?\n/);
+      pendingLine = lines.pop() ?? "";
+      for (const line of lines) {
+        const text = line.trim();
+        if (text.length === 0) continue;
+        await emitEvent(opts, {
+          timestamp: new Date().toISOString(),
+          kind,
+          worker: opts.workerSlug,
+          runtimeState: "live",
+          text,
+        });
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const tail = decoder.decode();
+  if (tail.length > 0) {
+    buffer += tail;
+    pendingLine += tail;
+  }
+  const finalLine = pendingLine.trim();
+  if (finalLine.length > 0) {
+    await emitEvent(opts, {
+      timestamp: new Date().toISOString(),
+      kind,
+      worker: opts.workerSlug,
+      runtimeState: "live",
+      text: finalLine,
+    });
+  }
+
+  return buffer;
+}
+
+async function emitEvent(
+  opts: {
+    onEvent?: (event: WorkerProgressEvent) => void | Promise<void>;
+  },
+  event: WorkerProgressEvent,
+): Promise<void> {
+  await opts.onEvent?.(event);
 }
 
 function summarizeWorkerOutput(

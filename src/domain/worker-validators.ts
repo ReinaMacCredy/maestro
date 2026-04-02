@@ -5,6 +5,7 @@ import type {
   CliWorkerConfig,
   ExecutionRecord,
   ParallelConfig,
+  RuntimeEventRecord,
   SupervisionConfig,
   WorkerConfig,
 } from "./worker-types.js";
@@ -65,6 +66,19 @@ export const ExecutionRecordSchema = z.object({
   failureClass: z.enum(["infrastructure", "worker-crash", "validation", "unknown"]).optional(),
 }).strict();
 
+export const RuntimeEventRecordSchema = z.object({
+  id: z.string().min(1),
+  missionId: z.string().min(1),
+  featureId: z.string().min(1),
+  attemptId: z.string().min(1),
+  worker: z.string().min(1),
+  timestamp: z.string().regex(ISO_DATE_PATTERN),
+  kind: z.enum(["status", "stdout", "stderr", "heartbeat"]),
+  text: z.string().optional(),
+  sessionId: z.string().min(1).optional(),
+  runtimeState: z.enum(["starting", "live", "stale", "failed", "recoverable", "completed"]).optional(),
+}).strict();
+
 function formatIssues(issues: readonly z.ZodIssue[]): string[] {
   return issues.map((issue) => {
     const path = issue.path.length > 0 ? issue.path.join(".") : "<root>";
@@ -114,4 +128,13 @@ export function validateExecutionRecord(value: unknown): ExecutionRecord {
   }
 
   throw new MaestroError("Invalid execution record", formatIssues(parsed.error.issues));
+}
+
+export function validateRuntimeEventRecord(value: unknown): RuntimeEventRecord {
+  const parsed = RuntimeEventRecordSchema.safeParse(value);
+  if (parsed.success) {
+    return parsed.data as RuntimeEventRecord;
+  }
+
+  throw new MaestroError("Invalid runtime event record", formatIssues(parsed.error.issues));
 }

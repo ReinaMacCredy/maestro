@@ -9,6 +9,7 @@ import type { FeatureStorePort } from "../../src/ports/feature-store.port.js";
 import type { AssertionStorePort } from "../../src/ports/assertion-store.port.js";
 import type { CheckpointStorePort } from "../../src/ports/checkpoint-store.port.js";
 import type { RuntimeStorePort } from "../../src/ports/runtime-store.port.js";
+import type { RuntimeEventStorePort } from "../../src/ports/runtime-event-store.port.js";
 import type { ExecutionStorePort } from "../../src/ports/execution-store.port.js";
 import type { TransportPort } from "../../src/ports/transport.port.js";
 import type {
@@ -35,7 +36,13 @@ import type {
   UpdateAssertionInput,
 } from "../../src/domain/mission-types.js";
 import type { WorkerRuntime } from "../../src/domain/runtime-types.js";
-import type { ExecutionRecord, WorkerConfig, WorkerResult } from "../../src/domain/worker-types.js";
+import type {
+  ExecutionRecord,
+  RuntimeEventRecord,
+  WorkerConfig,
+  WorkerProgressEvent,
+  WorkerResult,
+} from "../../src/domain/worker-types.js";
 
 export function mockGit(overrides: Partial<GitPort> = {}): GitPort {
   return {
@@ -455,15 +462,42 @@ export function mockExecutionStore(
   };
 }
 
+export function mockRuntimeEventStore(
+  initial: RuntimeEventRecord[] = [],
+): RuntimeEventStorePort {
+  const events = [...initial];
+
+  return {
+    append: async (_missionId, event) => {
+      events.push(event);
+      return event;
+    },
+    listByFeature: async (_missionId, featureId) =>
+      events
+        .filter((event) => event.featureId === featureId)
+        .sort((left, right) => left.timestamp.localeCompare(right.timestamp)),
+  };
+}
+
 export function mockTransport(
   results: readonly WorkerResult[] = [],
-  onSpawn?: (workerConfig: WorkerConfig, prompt: string) => void | Promise<void>,
+  onSpawn?: (
+    workerConfig: WorkerConfig,
+    prompt: string,
+    opts: {
+      cwd: string;
+      featureId: string;
+      missionId: string;
+      workerSlug: string;
+      onEvent?: (event: WorkerProgressEvent) => void | Promise<void>;
+    },
+  ) => void | Promise<void>,
 ): TransportPort {
   const queue = [...results];
 
   return {
-    spawn: async (workerConfig, prompt) => {
-      await onSpawn?.(workerConfig, prompt);
+    spawn: async (workerConfig, prompt, opts) => {
+      await onSpawn?.(workerConfig, prompt, opts);
       const next = queue.shift();
       if (next) return next;
 

@@ -12,6 +12,12 @@ export type FailureClass =
   | "validation"
   | "unknown";
 
+export type WorkerProgressEventKind =
+  | "status"
+  | "stdout"
+  | "stderr"
+  | "heartbeat";
+
 export interface ExecutionConfig {
   readonly defaultWorker?: string;
   readonly stopOnFailure?: boolean;
@@ -66,6 +72,15 @@ export interface WorkerResult {
   readonly parsedOutput?: string;
 }
 
+export interface WorkerProgressEvent {
+  readonly timestamp: string;
+  readonly kind: WorkerProgressEventKind;
+  readonly worker: string;
+  readonly text?: string;
+  readonly sessionId?: string;
+  readonly runtimeState?: "starting" | "live" | "stale" | "failed" | "recoverable" | "completed";
+}
+
 export interface ExecutionRecord {
   readonly id: string;
   readonly missionId: string;
@@ -84,4 +99,17 @@ export interface ExecutionRecord {
   readonly filesChanged: readonly string[];
   readonly report?: WorkerReport;
   readonly failureClass?: FailureClass;
+}
+
+export interface RuntimeEventRecord {
+  readonly id: string;
+  readonly missionId: string;
+  readonly featureId: string;
+  readonly attemptId: string;
+  readonly worker: string;
+  readonly timestamp: string;
+  readonly kind: WorkerProgressEventKind;
+  readonly text?: string;
+  readonly sessionId?: string;
+  readonly runtimeState?: "starting" | "live" | "stale" | "failed" | "recoverable" | "completed";
 }

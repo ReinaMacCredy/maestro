@@ -1,4 +1,4 @@
-import type { WorkerConfig, WorkerResult } from "../domain/worker-types.js";
+import type { WorkerConfig, WorkerProgressEvent, WorkerResult } from "../domain/worker-types.js";
 
 export interface TransportPort {
   spawn(
@@ -9,6 +9,7 @@ export interface TransportPort {
       featureId: string;
       missionId: string;
       workerSlug: string;
+      onEvent?: (event: WorkerProgressEvent) => void | Promise<void>;
     },
   ): Promise<WorkerResult>;
 }

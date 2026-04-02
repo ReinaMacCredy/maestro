@@ -136,6 +136,7 @@ export function registerFeatureCommand(program: Command): void {
             featureStore: services.featureStore,
             assertionStore: services.assertionStore,
             runtimeStore: services.runtimeStore,
+            runtimeEventStore: services.runtimeEventStore,
             executionStore: services.executionStore,
             transport: services.transport,
             baseDir: process.cwd(),
