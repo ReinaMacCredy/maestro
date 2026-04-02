@@ -65,8 +65,8 @@ echo "[ok] Bootstrap init completed"
   typecheck: echo "Customize commands.typecheck in .maestro/bootstrap/services.yaml"
   build: echo "Customize commands.build in .maestro/bootstrap/services.yaml"
   lint: echo "Customize commands.lint in .maestro/bootstrap/services.yaml"
-  missionControlJson: maestro mission-control --json
-  missionControlPreview: maestro mission-control --preview
+  missionControlJson: echo "Customize commands.missionControlJson in .maestro/bootstrap/services.yaml"
+  missionControlPreview: echo "Customize commands.missionControlPreview in .maestro/bootstrap/services.yaml"
 
 services: {}
 `,

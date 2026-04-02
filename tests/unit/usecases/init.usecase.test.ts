@@ -108,6 +108,40 @@ describe("initMaestro", () => {
     expect(second.skipped).toContain(join(tmpDir, ".maestro", "config.yaml"));
   });
 
+  it("migrates legacy .factory bootstrap files into .maestro", async () => {
+    const config = mockConfig();
+    await mkdir(join(tmpDir, ".factory", "library"), { recursive: true });
+    await writeFile(
+      join(tmpDir, ".factory", "services.yaml"),
+      "commands:\n  test: echo legacy-test\nservices: {}\n",
+    );
+    await writeFile(
+      join(tmpDir, ".factory", "library", "architecture.md"),
+      "# Legacy Architecture\n",
+    );
+
+    const result = await initMaestro(config, { global: false, dir: tmpDir });
+
+    expect(result.created).toContain(join(tmpDir, ".maestro", "bootstrap", "services.yaml"));
+    expect(await readFile(join(tmpDir, ".maestro", "bootstrap", "services.yaml"), "utf8")).toContain(
+      "legacy-test",
+    );
+    expect(await readFile(join(tmpDir, ".maestro", "bootstrap", "library", "architecture.md"), "utf8")).toContain(
+      "# Legacy Architecture",
+    );
+  });
+
+  it("scaffolds gitignore entries for runtime state", async () => {
+    const config = mockConfig();
+
+    await initMaestro(config, { global: false, dir: tmpDir });
+
+    const gitignore = await readFile(join(tmpDir, ".gitignore"), "utf8");
+    expect(gitignore).toContain(".maestro/handoffs/");
+    expect(gitignore).toContain(".maestro/missions/");
+    expect(gitignore).toContain(".maestro/sessions/");
+  });
+
   it("rejects symlinked .maestro paths that escape the project root", async () => {
     const config = mockConfig();
     const outsideDir = join(tmpDir, "outside");

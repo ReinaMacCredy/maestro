@@ -1,10 +1,20 @@
 import type { ConfigPort } from "../ports/config.port.js";
 import { DEFAULT_CONFIG, MAESTRO_DIR } from "../domain/defaults.js";
-import { PROJECT_BOOTSTRAP_TEMPLATES } from "../domain/bootstrap-templates.js";
-import { dirExists, ensureDir, writeText } from "../lib/fs.js";
+import {
+  PROJECT_BOOTSTRAP_TEMPLATES,
+  type BootstrapTemplateFile,
+} from "../domain/bootstrap-templates.js";
+import { dirExists, ensureDir, readText, writeText } from "../lib/fs.js";
 import { homedir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
-import { chmod, lstat } from "node:fs/promises";
+import { chmod, lstat, readdir } from "node:fs/promises";
+
+const RUNTIME_GITIGNORE_COMMENT = "# Maestro runtime state";
+const RUNTIME_GITIGNORE_LINES = [
+  ".maestro/handoffs/",
+  ".maestro/missions/",
+  ".maestro/sessions/",
+] as const;
 
 export interface InitResult {
   readonly created: string[];
@@ -60,15 +70,20 @@ export async function initMaestro(
       skipped.push(configPath);
     }
 
-    for (const template of PROJECT_BOOTSTRAP_TEMPLATES) {
+    const bootstrapFiles = await collectProjectBootstrapFiles(opts.dir);
+
+    for (const template of bootstrapFiles) {
       const target = join(opts.dir, template.path);
       await assertProjectLocalPathSafe(opts.dir, target);
       await ensureDir(dirname(target));
 
-      if (await Bun.file(target).exists()) {
-        if (!opts.confirmReplace || !(await opts.confirmReplace(target))) {
-          skipped.push(target);
-          continue;
+      const existing = await readText(target);
+      if (existing !== undefined) {
+        if (!shouldAutoMigrateLegacyTemplate(template.path, existing, template.content)) {
+          if (!opts.confirmReplace || !(await opts.confirmReplace(target))) {
+            skipped.push(target);
+            continue;
+          }
         }
       }
 
@@ -78,6 +93,13 @@ export async function initMaestro(
       }
       created.push(target);
     }
+
+    const gitignoreUpdated = await ensureRuntimeGitignore(opts.dir);
+    if (gitignoreUpdated) {
+      created.push(join(opts.dir, ".gitignore"));
+    } else if (await readText(join(opts.dir, ".gitignore")) !== undefined) {
+      skipped.push(join(opts.dir, ".gitignore"));
+    }
   }
 
   return {
@@ -86,6 +108,114 @@ export async function initMaestro(
     scope,
     bootstrapGenerated: scope === "project",
   };
+}
+
+async function collectProjectBootstrapFiles(rootDir: string): Promise<BootstrapTemplateFile[]> {
+  const files = new Map<string, BootstrapTemplateFile>(
+    PROJECT_BOOTSTRAP_TEMPLATES.map((template) => [template.path, template]),
+  );
+
+  await overlayLegacyFile(files, rootDir, ".factory/AGENTS.md", ".maestro/AGENTS.md");
+  await overlayLegacyFile(files, rootDir, ".factory/init.sh", ".maestro/bootstrap/init.sh", true);
+  await overlayLegacyFile(files, rootDir, ".factory/services.yaml", ".maestro/bootstrap/services.yaml");
+  await overlayLegacyTree(files, rootDir, ".factory/library", ".maestro/bootstrap/library");
+  await overlayLegacyTree(files, rootDir, ".factory/validation", ".maestro/bootstrap/validation");
+  await overlayLegacyTree(files, rootDir, ".factory/skills", ".maestro/skills");
+
+  return [...files.values()];
+}
+
+async function overlayLegacyFile(
+  files: Map<string, BootstrapTemplateFile>,
+  rootDir: string,
+  sourcePath: string,
+  targetPath: string,
+  executable = false,
+): Promise<void> {
+  const absoluteSource = join(rootDir, sourcePath);
+  const content = await readText(absoluteSource);
+  if (content === undefined) {
+    return;
+  }
+
+  files.set(targetPath, { path: targetPath, content, executable });
+}
+
+async function overlayLegacyTree(
+  files: Map<string, BootstrapTemplateFile>,
+  rootDir: string,
+  sourceDir: string,
+  targetDir: string,
+): Promise<void> {
+  const absoluteSourceDir = join(rootDir, sourceDir);
+  if (!(await dirExists(absoluteSourceDir))) {
+    return;
+  }
+
+  for (const sourcePath of await listFilesRecursive(absoluteSourceDir)) {
+    const relativePath = relative(absoluteSourceDir, sourcePath);
+    const content = await readText(sourcePath);
+    if (content === undefined) {
+      continue;
+    }
+
+    const stat = await lstat(sourcePath);
+    files.set(join(targetDir, relativePath), {
+      path: join(targetDir, relativePath),
+      content,
+      executable: Boolean(stat.mode & 0o111),
+    });
+  }
+}
+
+async function listFilesRecursive(dir: string): Promise<string[]> {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const files: string[] = [];
+
+  for (const entry of entries) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...await listFilesRecursive(path));
+      continue;
+    }
+
+    if (entry.isFile()) {
+      files.push(path);
+    }
+  }
+
+  return files;
+}
+
+function shouldAutoMigrateLegacyTemplate(
+  relativePath: string,
+  existingContent: string,
+  nextContent: string,
+): boolean {
+  const defaultTemplate = PROJECT_BOOTSTRAP_TEMPLATES.find((template) => template.path === relativePath);
+  if (!defaultTemplate) {
+    return false;
+  }
+
+  return existingContent === defaultTemplate.content && nextContent !== defaultTemplate.content;
+}
+
+async function ensureRuntimeGitignore(rootDir: string): Promise<boolean> {
+  const gitignorePath = join(rootDir, ".gitignore");
+  await assertProjectLocalPathSafe(rootDir, gitignorePath);
+
+  const existing = await readText(gitignorePath) ?? "";
+  const lines = new Set(existing.split(/\r?\n/));
+  const missingLines = RUNTIME_GITIGNORE_LINES.filter((line) => !lines.has(line));
+
+  if (missingLines.length === 0) {
+    return false;
+  }
+
+  const prefix = existing.length === 0 ? "" : existing.endsWith("\n") ? "\n" : "\n\n";
+  const comment = lines.has(RUNTIME_GITIGNORE_COMMENT) ? "" : `${RUNTIME_GITIGNORE_COMMENT}\n`;
+  await writeText(gitignorePath, `${existing}${prefix}${comment}${missingLines.join("\n")}\n`);
+  return true;
 }
 
 async function ensureDirIfMissing(dir: string, created: string[]): Promise<void> {

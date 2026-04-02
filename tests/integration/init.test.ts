@@ -189,11 +189,12 @@ describe("init CLI", () => {
     expect(await Bun.file(join(tmpDir, ".maestro", "bootstrap", "library", "architecture.md")).exists()).toBe(true);
     expect(await Bun.file(join(tmpDir, ".maestro", "bootstrap", "validation", "README.md")).exists()).toBe(true);
     expect(await readFile(join(tmpDir, ".maestro", "bootstrap", "services.yaml"), "utf8")).toContain(
-      "maestro mission-control --preview",
+      "Customize commands.missionControlPreview",
     );
     expect(await readFile(join(tmpDir, ".maestro", "bootstrap", "services.yaml"), "utf8")).not.toContain(
-      "src/index.ts",
+      "maestro mission-control",
     );
+    expect(await readFile(join(tmpDir, ".gitignore"), "utf8")).toContain(".maestro/sessions/");
     expect(await pathExists(join(tmpDir, ".factory"))).toBe(false);
   });
 
@@ -219,6 +220,46 @@ describe("init CLI", () => {
     const result = JSON.parse(stdout);
     expect(result.created).toEqual([]);
     expect(result.skipped.some((path: string) => path.endsWith("/.maestro/config.yaml"))).toBe(true);
+  });
+
+  it("migrates legacy .factory bootstrap files into .maestro", async () => {
+    await mkdir(join(tmpDir, ".factory", "library"), { recursive: true });
+    await writeFile(
+      join(tmpDir, ".factory", "services.yaml"),
+      "commands:\n  test: echo legacy-test\nservices: {}\n",
+    );
+    await writeFile(
+      join(tmpDir, ".factory", "library", "architecture.md"),
+      "# Legacy Architecture\n",
+    );
+
+    const { exitCode } = await run(["init", "--json"], tmpDir);
+
+    expect(exitCode).toBe(0);
+    expect(await readFile(join(tmpDir, ".maestro", "bootstrap", "services.yaml"), "utf8")).toContain(
+      "legacy-test",
+    );
+    expect(await readFile(join(tmpDir, ".maestro", "bootstrap", "library", "architecture.md"), "utf8")).toContain(
+      "# Legacy Architecture",
+    );
+  });
+
+  it("keeps runtime session logs ignored after init", async () => {
+    await run(["init", "--json"], tmpDir);
+    await mkdir(join(tmpDir, ".maestro", "sessions"), { recursive: true });
+    const sessionPath = join(tmpDir, ".maestro", "sessions", "events.jsonl");
+    await writeFile(sessionPath, "{}\n");
+
+    const proc = Bun.spawn(["git", "check-ignore", sessionPath], {
+      cwd: tmpDir,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const stdout = await new Response(proc.stdout).text();
+    const exitCode = await proc.exited;
+
+    expect(exitCode).toBe(0);
+    expect(stdout.trim()).toBe(sessionPath);
   });
 
   it("exits cleanly in tty mode when no replacement prompt is needed", async () => {
