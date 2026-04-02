@@ -534,26 +534,59 @@ describe("frame rendering", () => {
         it("renders the configuration modal with command-palette styling", () => {
           const frame = withTerminalSize(90, 28, () => {
             const buf = new Buffer(90, 28);
-              const state = createInitialState(makeSnapshot());
-              state.modal = {
-                kind: "config",
-                tab: "overview",
-                selectedRowIndex: 0,
+              const state = createInitialState(makeSnapshot({
+                configInspector: {
+                  ...makeSnapshot().configInspector!,
+                  rowsByTab: {
+                    ...makeSnapshot().configInspector!.rowsByTab,
+                    overview: [
+                      {
+                        keyPath: "execution.defaultWorker",
+                        label: "Default worker",
+                        section: "Quick settings",
+                        valueText: "codex",
+                        displayValueText: "codex",
+                        source: "project",
+                        sourceBadge: "P",
+                        editKind: "enum",
+                        editKindLabel: "choice",
+                        options: ["codex", "claude-code", "gemini"],
+                        description: "Choose the default worker profile for feature run.",
+                        summary: "Maestro uses this worker unless you choose a different one for a run.",
+                        impactText: "This changes which worker runs the next task by default.",
+                        effectiveValueText: "codex",
+                        effectiveDisplayValueText: "codex",
+                        projectValueText: "codex",
+                        projectDisplayValueText: "codex",
+                        globalValueText: "claude-code",
+                        globalDisplayValueText: "claude-code",
+                        defaultValueText: "codex",
+                        defaultDisplayValueText: "codex",
+                      },
+                    ],
+                  },
+                },
+              }));
+                state.modal = {
+                  kind: "config",
+                  tab: "overview",
+                  selectedRowIndex: 0,
                 phase: "browse",
                 selectedScope: "project",
               };
             renderFrame(buf, state);
             return buf.toString();
-            });
+              });
 
-            expect(frame).toContain("Config");
-            expect(frame).toContain("[overview] effective project global defaults workers next problems");
-            expect(frame).toContain("Config source");
-            expect(frame).toContain("Using now");
-            expect(frame).toContain("Also set in");
-            expect(frame).toContain("Why it matters");
-            expect(frame).toContain("/ find");
-            });
+              expect(frame).toContain("Config");
+              expect(frame).toContain("[overview] effective project global defaults workers next problems");
+              expect(frame).toContain("> Default worker");
+              expect(frame).toContain("Using now");
+              expect(frame).toContain("Also set in");
+              expect(frame).toContain("Why it matters");
+              expect(frame).toContain("/ find");
+              expect(frame).not.toContain("Details");
+              });
 
           it("shows config browse controls for palette-launched config overlays", () => {
             const frame = withTerminalSize(90, 28, () => {

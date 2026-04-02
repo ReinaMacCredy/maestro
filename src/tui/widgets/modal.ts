@@ -734,15 +734,16 @@ function renderSplitLeftRows(
     if (rowY >= layout.contentRect.y + layout.contentRect.height) break;
 
     const isSelected = row.selectable && selectableIndex === selectedIndex;
-    const rect = row.selectable
-      ? layout.itemRects[selectableIndex] ?? { x: layout.contentRect.x, y: rowY, width: maxWidth, height: 1 }
-      : { x: layout.contentRect.x, y: rowY, width: maxWidth, height: 1 };
-      const bg = isSelected ? spec.selection.bg : PALETTE.overlaySurfaceBg;
-      const fg = isSelected ? spec.selection.fg : getRowColor(row.tone, spec, "label");
-      const detailFg = isSelected ? spec.selection.fg : getRowColor(row.tone, spec, "detail");
-      const hintFg = isSelected ? spec.selection.fg : spec.text.hintColor;
-      const labelX = rect.x + (row.selectable ? 2 : 0);
-      const innerRight = rect.x + rect.width - 1;
+      const rect = row.selectable
+        ? layout.itemRects[selectableIndex] ?? { x: layout.contentRect.x, y: rowY, width: maxWidth, height: 1 }
+        : { x: layout.contentRect.x, y: rowY, width: maxWidth, height: 1 };
+        const bg = isSelected ? spec.selection.bg : PALETTE.overlaySurfaceBg;
+        const fg = isSelected ? spec.selection.fg : getRowColor(row.tone, spec, "label");
+        const detailFg = isSelected ? spec.selection.fg : getRowColor(row.tone, spec, "detail");
+        const hintFg = isSelected ? spec.selection.fg : spec.text.hintColor;
+        const markerX = rect.x;
+        const labelX = rect.x + (row.selectable ? 2 : 0);
+        const innerRight = rect.x + rect.width - 1;
       const hintText = row.hint ? truncate(row.hint, Math.max(0, rect.width - 4)) : undefined;
       const hintX = hintText ? Math.max(labelX + 2, innerRight - hintText.length) : undefined;
       const detailText = row.detail
@@ -757,9 +758,14 @@ function renderSplitLeftRows(
         Math.max(0, (detailX ?? hintX ?? innerRight) - labelX - 1),
       );
 
-      if (row.selectable) {
-        buf.fillRect(rect, " ", { bg, fg: PALETTE.default, bold: false, dim: false });
-      }
+        if (row.selectable) {
+          buf.fillRect(rect, " ", { bg, fg: PALETTE.default, bold: false, dim: false });
+          buf.writeText(rect.y, markerX, isSelected ? ">" : " ", {
+            fg,
+            bg,
+            bold: isSelected,
+          });
+        }
 
       buf.writeText(rect.y, labelX, label, {
         fg,

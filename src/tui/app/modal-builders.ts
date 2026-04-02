@@ -348,12 +348,31 @@ function buildConfigItems(
       items: [
         {
           label: "Project config",
-          detail: "Only this project changes",
           section: "Choose where to save this",
         },
         {
+          label: "Only this project changes",
+          selectable: false,
+          tone: "muted",
+        },
+        {
           label: "Global config",
-          detail: "All projects use this value",
+        },
+        {
+          label: "All projects use this value",
+          selectable: false,
+          tone: "muted",
+        },
+        {
+          label: state.modal.selectedScope === "project" ? "Project config" : "Global config",
+          section: "Current target",
+          selectable: false,
+          tone: "accent",
+        },
+        {
+          label: "Project config",
+          section: "Recommended now",
+          selectable: false,
         },
       ],
       selectedIndex: state.modal.selectedScope === "project" ? 0 : 1,
@@ -406,8 +425,8 @@ function buildConfigBrowseDetailItems(
   return [
     { text: row.label, tone: "accent" as const, style: "block" as const },
     { text: row.summary },
-    { text: `Can edit: ${row.editKind === "readonly" ? "no" : "yes"}   Type: ${row.editKindLabel}`, section: "Details" },
-    { text: `Saving to: ${state.modal.selectedScope === "project" ? "project config" : "global config"}`, section: "Details" },
+    { text: `Can edit: ${row.editKind === "readonly" ? "no" : "yes"}   Type: ${row.editKindLabel}` },
+    { text: `Saving to: ${state.modal.selectedScope === "project" ? "project config" : "global config"}` },
     { text: row.effectiveDisplayValueText, section: "Using now", tone: "accent" as const, style: "block" as const },
     ...buildSavedValueItems(row),
     { text: row.impactText, section: "Why it matters" },
@@ -527,8 +546,7 @@ function buildSavedValueItems(row: MissionControlConfigRow) {
 function buildWorkerChoiceItems(row: MissionControlConfigRow) {
   return [
     ...(row.workerChoices ?? []).map((choice, index) => ({
-      label: humanizeWorkerLabel(choice.slug),
-      detail: availabilityText(choice.availability),
+      label: choice.slug,
       section: index === 0 ? "Choose a worker" : undefined,
     })),
     {

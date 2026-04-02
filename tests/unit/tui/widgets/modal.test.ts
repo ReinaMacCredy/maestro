@@ -356,7 +356,7 @@ describe("renderModal", () => {
 
     it("renders split overlays with multiline headers and left-row value columns", () => {
       const buf = new Buffer(110, 30);
-      renderModal(buf, { x: 0, y: 0, width: 110, height: 30 }, {
+      const layout = renderModal(buf, { x: 0, y: 0, width: 110, height: 30 }, {
         mode: "split",
         title: "Config",
         eyebrow: "[overview] effective project\nactions row",
@@ -390,6 +390,7 @@ describe("renderModal", () => {
       expect(text).toContain("[P]");
       expect(text).toContain("Stop on failure");
       expect(text).toContain("[D]");
+      expect(buf.getCell(layout.itemRects[0]!.y, layout.itemRects[0]!.x)?.char).toBe(">");
     });
 
       it("omits hit boxes for non-selectable split rows", () => {
