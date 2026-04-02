@@ -55,9 +55,9 @@ None.
         "observation": "Command, snapshot, and TUI changes compile cleanly."
       },
       {
-        "command": "bun run build && ./dist/maestro --version && ./dist/maestro mission-control --once",
+        "command": "bun run build && ./dist/maestro --version && ./dist/maestro mission-control --preview",
         "exitCode": 0,
-        "observation": "Compiled binary was rebuilt successfully and rendered the expected Mission Control recovery state."
+        "observation": "Compiled binary was rebuilt successfully and rendered the expected read-only Mission Control preview."
       }
     ],
     "interactiveChecks": [

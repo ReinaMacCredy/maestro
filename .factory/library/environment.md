@@ -28,6 +28,8 @@ Environment variables, dependencies, and repository-scoped setup notes for the M
 
 - `.factory/` in this repository is mission infrastructure for workers and validators, not product runtime storage
 - `.factory/` should stay committed; `.maestro/missions/` should stay ignored
+- `.factory/skills/` is authoring/reference material for repo-local worker guidance
+- Runtime worker prompt lookup should resolve `.maestro/skills/{workerType}/SKILL.md` first, then `skills/built-in/{workerType}/SKILL.md`
 
 ## Environment Variables
 

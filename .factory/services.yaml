@@ -5,7 +5,7 @@ commands:
   build: bun run build
   lint: echo "No linter configured"
   missionControlJson: bun run src/index.ts mission-control --json
-  missionControlOnce: bun run src/index.ts mission-control --once
+  missionControlPreview: bun run src/index.ts mission-control --preview
   sessionJson: bun run src/index.ts session --json
   releaseLocal: bun run release:local
 

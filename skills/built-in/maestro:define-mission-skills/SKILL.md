@@ -15,8 +15,8 @@ Define and register custom skills for use in Mission Control missions. Create sk
 The skill name and optional scope flag.
 
 - `<skill-name>`: The skill identifier (e.g., `my-feature-worker`)
-- `--project`: Store skill in project `.factory/droids/` (default)
-- `--global`: Store skill in personal `~/.factory/droids/`
+- `--project`: Store skill in project `.maestro/skills/` (default runtime lookup path)
+- `--global`: Store skill in personal `~/.maestro/skills/`
 
 ---
 
@@ -26,7 +26,7 @@ The skill name and optional scope flag.
 
 **Actions:**
 1. Verify Maestro CLI is available: `maestro --version`
-2. Check if skill directory exists: `.factory/droids/` or `~/.factory/droids/`
+2. Check if skill directory exists: `.maestro/skills/` or `~/.maestro/skills/`
 3. Confirm the skill name is valid (alphanumeric, hyphens, colons allowed)
 
 **Outputs:** Ready to create skill.
@@ -79,15 +79,15 @@ The main body describing:
 **For project-scoped skills:**
 
 ```bash
-mkdir -p .factory/droids/<skill-name>
-# Create .factory/droids/<skill-name>/SKILL.md
+mkdir -p .maestro/skills/<skill-name>
+# Create .maestro/skills/<skill-name>/SKILL.md
 ```
 
 **For global skills:**
 
 ```bash
-mkdir -p ~/.factory/droids/<skill-name>
-# Create ~/.factory/droids/<skill-name>/SKILL.md
+mkdir -p ~/.maestro/skills/<skill-name>
+# Create ~/.maestro/skills/<skill-name>/SKILL.md
 ```
 
 ---
@@ -178,3 +178,4 @@ After creating a skill, validate it:
 3. **Document return conditions**: Clearly state when to return to orchestrator
 4. **Include verification**: Every skill should specify how to verify its work
 5. **Keep skills focused**: One skill = one responsibility
+6. **Document lookup order**: Runtime workers load `.maestro/skills/{workerType}/SKILL.md` first, then fall back to `skills/built-in/{workerType}/SKILL.md`
