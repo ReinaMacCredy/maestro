@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { initMaestro } from "../../../src/usecases/init.usecase.js";
@@ -21,6 +21,7 @@ describe("initMaestro", () => {
     const result = await initMaestro(config, { global: false, dir: tmpDir });
     expect(result.scope).toBe("project");
     expect(result.created.length).toBeGreaterThan(0);
+    expect(result.bootstrapGenerated).toBe(true);
 
     const maestroDir = Bun.file(join(tmpDir, ".maestro"));
     // Directory created (ensureDir was called)
@@ -31,6 +32,8 @@ describe("initMaestro", () => {
     const config = mockConfig();
     const result = await initMaestro(config, { global: false, dir: tmpDir });
     expect(result.created.some((p) => p.includes("handoffs"))).toBe(true);
+    expect(result.created).toContain(join(tmpDir, ".maestro", "bootstrap", "services.yaml"));
+    expect(result.created).toContain(join(tmpDir, ".maestro", "AGENTS.md"));
   });
 
   it("does not overwrite existing config", async () => {
@@ -39,8 +42,9 @@ describe("initMaestro", () => {
       exists: async () => true,
       write: async () => { writeCount++; },
     });
-    await initMaestro(config, { global: false, dir: tmpDir });
+    const result = await initMaestro(config, { global: false, dir: tmpDir });
     expect(writeCount).toBe(0);
+    expect(result.skipped).toContain(join(tmpDir, ".maestro", "config.yaml"));
   });
 
   it("writes config when none exists", async () => {
@@ -51,5 +55,46 @@ describe("initMaestro", () => {
     });
     await initMaestro(config, { global: false, dir: tmpDir });
     expect(written).toBe(true);
+  });
+
+  it("skips existing bootstrap files by default", async () => {
+    const config = mockConfig();
+    const agentsPath = join(tmpDir, ".maestro", "AGENTS.md");
+    await Bun.write(agentsPath, "keep me\n");
+
+    const result = await initMaestro(config, { global: false, dir: tmpDir });
+
+    expect(result.skipped).toContain(agentsPath);
+    expect(await readFile(agentsPath, "utf8")).toBe("keep me\n");
+  });
+
+  it("replaces existing bootstrap files when confirmed", async () => {
+    const config = mockConfig();
+    const agentsPath = join(tmpDir, ".maestro", "AGENTS.md");
+    await Bun.write(agentsPath, "old content\n");
+
+    const result = await initMaestro(config, {
+      global: false,
+      dir: tmpDir,
+      confirmReplace: async (path) => path === agentsPath,
+    });
+
+    expect(result.created).toContain(agentsPath);
+    expect(await readFile(agentsPath, "utf8")).toContain("Maestro Project Bootstrap");
+  });
+
+  it("keeps global init minimal", async () => {
+    let writeCount = 0;
+    const config = mockConfig({
+      exists: async () => false,
+      write: async () => { writeCount++; },
+    });
+
+    const result = await initMaestro(config, { global: true, dir: tmpDir });
+
+    expect(result.scope).toBe("global");
+    expect(result.bootstrapGenerated).toBe(false);
+    expect(writeCount).toBe(1);
+    expect(result.created.some((path) => path.includes("bootstrap"))).toBe(false);
   });
 });
