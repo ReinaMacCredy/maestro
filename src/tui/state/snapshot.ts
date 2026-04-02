@@ -178,7 +178,7 @@ export async function buildSnapshot(
 
   // Active worker
     const effectiveWorkers = configLayers.effective.workers ?? {};
-    const activeWorker = buildActiveWorker(features, runtimeByFeature, runtimeTelemetryByFeature, startMs, now, effectiveWorkers);
+  const activeWorker = buildActiveWorker(features, runtimeByFeature, runtimeTelemetryByFeature, now, effectiveWorkers);
 
   // Progress log
   const progressLog = deriveEvents({
@@ -261,7 +261,7 @@ export async function buildSnapshot(
         missionDirectory: `.maestro/missions/${mission.id}`,
         workerTypes,
         },
-          configInspector: buildConfigInspector(configLayers, env.checks, features, env.status.configSource, workerHealth),
+            configInspector: buildConfigInspector(configLayers, env.checks, features, workerHealth),
             workerHealth,
             runtimeProcesses: buildRuntimeProcesses(
               mission,
@@ -352,7 +352,7 @@ export async function buildHomeSnapshot(
       missionDirectory: null,
       workerTypes: [],
     },
-        configInspector: buildConfigInspector(configLayers, checks, [], status.configSource, workerHealth),
+          configInspector: buildConfigInspector(configLayers, checks, [], workerHealth),
         workerHealth,
         runtimeProcesses: [],
     progressLog: [],
@@ -382,7 +382,6 @@ function buildActiveWorker(
   features: readonly Feature[],
   runtimeByFeature: ReadonlyMap<string, RuntimeView>,
   telemetryByFeature: ReadonlyMap<string, RuntimeTelemetry>,
-  startMs: number,
   nowMs: number,
   workers: Readonly<Record<string, WorkerConfig>>,
   ): MissionControlWorkerPane | null {

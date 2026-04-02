@@ -84,15 +84,13 @@ export async function runFeatures(
   const outcomes: RunFeatureOutcome[] = [];
 
   for (const feature of selectedFeatures) {
-    if (feature.status === "done" || feature.status === "blocked" || !isRunnableStatus(feature.status)) {
+    if (!isRunnableStatus(feature.status)) {
       outcomes.push({
         featureId: feature.id,
         title: feature.title,
         worker: opts.workerOverride ?? deps.config.execution?.defaultWorker ?? UNKNOWN_AGENT,
         status: "skipped",
-        summary: isRunnableStatus(feature.status)
-          ? `Feature is already ${feature.status}`
-          : `Feature is not runnable from status ${feature.status}`,
+        summary: `Feature is not runnable from status ${feature.status}`,
       });
       continue;
     }
@@ -175,28 +173,22 @@ export async function runFeatureAttempt(
 
   await initializeWorkerRuntime(deps.runtimeStore, feature.missionId, feature.id);
   await stampRuntimeAgent(deps.runtimeStore, feature.missionId, feature.id, workerSelection.slug);
-
-  if (feature.status === "pending") {
-    await updateFeature(
+  const updateCurrentFeature = (patch: Parameters<typeof updateFeature>[6]) =>
+    updateFeature(
       deps.missionStore,
       deps.featureStore,
       deps.runtimeStore,
       deps.baseDir,
       feature.missionId,
       feature.id,
-      { status: "assigned" },
+      patch,
     );
+
+  if (feature.status === "pending") {
+    await updateCurrentFeature({ status: "assigned" });
   }
 
-  await updateFeature(
-    deps.missionStore,
-    deps.featureStore,
-    deps.runtimeStore,
-    deps.baseDir,
-    feature.missionId,
-    feature.id,
-    { status: "in-progress" },
-  );
+  await updateCurrentFeature({ status: "in-progress" });
 
   const workerResult = await deps.transport.spawn(workerSelection.config, promptResult.prompt, {
     cwd: deps.baseDir,
@@ -214,28 +206,12 @@ export async function runFeatureAttempt(
   });
   const report = await resolveWorkerReport(workerResult);
 
-  await updateFeature(
-    deps.missionStore,
-    deps.featureStore,
-    deps.runtimeStore,
-    deps.baseDir,
-    feature.missionId,
-    feature.id,
-    { status: "review", report },
-  );
+  await updateCurrentFeature({ status: "review", report });
 
-  await updateFeature(
-    deps.missionStore,
-    deps.featureStore,
-    deps.runtimeStore,
-    deps.baseDir,
-    feature.missionId,
-    feature.id,
-    {
-      status: workerResult.success ? "done" : "blocked",
-      report,
-    },
-  );
+  await updateCurrentFeature({
+    status: workerResult.success ? "done" : "blocked",
+    report,
+  });
 
   const runtime = await deps.runtimeStore.get(feature.missionId, feature.id);
   const startedAt = runtime?.startedAt ?? new Date(Date.now() - workerResult.durationMs).toISOString();

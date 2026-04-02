@@ -59,7 +59,6 @@ export function buildConfigInspector(
   layers: ConfigLayers,
   checks: readonly DoctorCheck[],
   features: readonly Feature[],
-  configSource: "project" | "global" | "none",
   workerHealth: readonly MissionControlWorkerHealthRow[] = [],
 ): MissionControlConfigInspector {
   const workerHealthBySlug = new Map(workerHealth.map((row) => [row.slug, row]));
@@ -79,7 +78,7 @@ export function buildConfigInspector(
     ...workerHealth.map((row) => row.slug),
   ])].sort();
   const rowsByTab = {
-    overview: buildOverviewRows(layers, checks, features, configSource, workerHealthBySlug),
+    overview: buildOverviewRows(layers, checks, features, workerHealthBySlug),
     effective: allPaths.map((path) =>
       buildConfigValueRow(
         path,
@@ -152,7 +151,6 @@ function buildOverviewRows(
   layers: ConfigLayers,
   checks: readonly DoctorCheck[],
   features: readonly Feature[],
-  configSource: "project" | "global" | "none",
   workerHealthBySlug: ReadonlyMap<string, MissionControlWorkerHealthRow>,
 ): readonly MissionControlConfigRow[] {
   const workerRows = buildWorkerRows(layers.effective, features, workerHealthBySlug).map((row) => ({

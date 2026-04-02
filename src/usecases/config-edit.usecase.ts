@@ -35,15 +35,11 @@ export async function applyConfigEdit(
   keyPath: string,
   draftValue: string,
 ): Promise<void> {
-  const preview = await previewConfigEdit(configPort, projectDir, scope, keyPath, draftValue);
-  const nextConfig = preview.content.length > 0
-    ? JSON.parse(JSON.stringify(await configPort.load(projectDir))) as MaestroConfig
-    : {};
   const layers = await configPort.loadLayers(projectDir);
+  assertScopeHealthy(layers.errors, scope);
   const baseConfig = structuredClone((scope === "project" ? layers.project : layers.global) ?? {}) as MaestroConfig;
   setNestedValue(baseConfig as Record<string, unknown>, keyPath, parseDraftValue(draftValue));
   await configPort.write(scope, projectDir, baseConfig);
-  void nextConfig;
 }
 
 function assertScopeHealthy(

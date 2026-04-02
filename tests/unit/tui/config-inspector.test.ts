@@ -87,7 +87,7 @@ const workerHealth: readonly MissionControlWorkerHealthRow[] = [
 
 describe("buildConfigInspector", () => {
     it("builds effective rows with provenance", () => {
-        const inspector = buildConfigInspector(layers, [], [], "project", workerHealth);
+        const inspector = buildConfigInspector(layers, [], [], workerHealth);
         const row = inspector.rowsByTab.effective.find((item) => item.keyPath === "execution.defaultWorker");
 
       expect(row?.label).toBe("Default worker");
@@ -134,16 +134,15 @@ describe("buildConfigInspector", () => {
         },
       ];
 
-      const inspector = buildConfigInspector(
-        {
-        ...layers,
-        errors: [{ scope: "project", path: ".maestro/config.yaml", message: "bad yaml" }],
-        },
-        [{ name: "git", status: "ok", message: "Git repository detected" }],
-        features,
-        "project",
-        workerHealth,
-      );
+        const inspector = buildConfigInspector(
+          {
+          ...layers,
+          errors: [{ scope: "project", path: ".maestro/config.yaml", message: "bad yaml" }],
+          },
+          [{ name: "git", status: "ok", message: "Git repository detected" }],
+          features,
+          workerHealth,
+        );
 
       expect(inspector.rowsByTab.plan.length).toBeGreaterThan(0);
       expect(inspector.rowsByTab.plan.find((row) => row.keyPath === "plan.nextTask")?.displayValueText).toBe("f2 Ready after setup");
@@ -151,7 +150,7 @@ describe("buildConfigInspector", () => {
     });
 
     it("uses worker health as the shared source of truth for worker rows", () => {
-      const inspector = buildConfigInspector(layers, [], [], "project", workerHealth);
+        const inspector = buildConfigInspector(layers, [], [], workerHealth);
       const workerRow = inspector.rowsByTab.workers.find((row) => row.keyPath === "workers.codex");
 
       expect(workerRow).toMatchObject({
@@ -162,7 +161,7 @@ describe("buildConfigInspector", () => {
     });
 
     it("masks sensitive worker config values", () => {
-      const inspector = buildConfigInspector(layers, [], [], "project", workerHealth);
+        const inspector = buildConfigInspector(layers, [], [], workerHealth);
       const row = inspector.rowsByTab.effective.find((item) => item.keyPath === "workers.codex.env.API_TOKEN");
 
       expect(row).toMatchObject({
