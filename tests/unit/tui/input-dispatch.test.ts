@@ -41,17 +41,23 @@ const SNAPSHOT: MissionControlSnapshot = {
     tabs: ["overview", "effective", "project", "global", "defaults", "workers", "plan", "doctor"],
     rowsByTab: {
       overview: [],
-      effective: [{
-        keyPath: "execution.stopOnFailure",
-        label: "execution.stopOnFailure",
-        section: "Execution",
-        valueText: "on",
-        source: "default",
-        editKind: "toggle",
-        options: ["off", "on"],
-        description: "desc",
-        effectiveValueText: "on",
-      }],
+        effective: [{
+          keyPath: "execution.stopOnFailure",
+          label: "Stop on failure",
+          section: "Execution",
+          valueText: "on",
+          displayValueText: "on",
+          source: "default",
+          sourceBadge: "D",
+          editKind: "toggle",
+          editKindLabel: "on/off",
+          options: ["off", "on"],
+          description: "desc",
+          summary: "Choose whether Maestro stops after the first failed task.",
+          impactText: "If this is on, the run stops on the first failure.",
+          effectiveValueText: "on",
+          effectiveDisplayValueText: "on",
+        }],
       project: [],
       global: [],
       defaults: [],
@@ -122,17 +128,45 @@ describe("keyToAction", () => {
     expect(action).toEqual({ type: "config-cycle-value", direction: "next" });
   });
 
-  it("switches config tabs with bracket hotkeys", () => {
-    const state = createInitialState(SNAPSHOT);
-    state.modal = {
-      kind: "config",
+    it("switches config tabs with bracket hotkeys", () => {
+      const state = createInitialState(SNAPSHOT);
+      state.modal = {
+        kind: "config",
       tab: "overview",
       selectedRowIndex: 0,
       phase: "browse",
       selectedScope: "project",
     };
 
-    expect(keyToAction({ type: "char", char: "]" }, state)).toEqual({ type: "config-next-tab" });
-    expect(keyToAction({ type: "char", char: "[" }, state)).toEqual({ type: "config-prev-tab" });
+      expect(keyToAction({ type: "char", char: "]" }, state)).toEqual({ type: "config-next-tab" });
+      expect(keyToAction({ type: "char", char: "[" }, state)).toEqual({ type: "config-prev-tab" });
+    });
+
+    it("opens config row finder with slash", () => {
+      const state = createInitialState(SNAPSHOT);
+      state.modal = {
+        kind: "config",
+        tab: "overview",
+        selectedRowIndex: 0,
+        phase: "browse",
+        selectedScope: "project",
+      };
+
+      expect(keyToAction({ type: "char", char: "/" }, state)).toEqual({ type: "config-find-start" });
+    });
+
+    it("routes characters into the config row finder when search is open", () => {
+      const state = createInitialState(SNAPSHOT);
+      state.modal = {
+        kind: "config",
+        tab: "overview",
+        selectedRowIndex: 0,
+        phase: "browse",
+        selectedScope: "project",
+        findQuery: "def",
+      };
+
+      expect(keyToAction({ type: "char", char: "a" }, state)).toEqual({ type: "config-find-append", char: "a" });
+      expect(keyToAction({ type: "backspace" }, state)).toEqual({ type: "config-find-backspace" });
+    });
   });
-});

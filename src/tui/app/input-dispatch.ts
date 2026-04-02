@@ -20,13 +20,26 @@ export function keyToAction(key: Key, state: AppState): Action | undefined {
   if (key.type === "ctrl" && key.char === "y") {
     return { type: "toggle-copy-mode" };
   }
-  if (key.type === "escape") {
-    return { type: "escape" };
-  }
-  if (state.modal.kind === "config" && state.modal.phase === "edit-inline" && key.type === "arrow") {
-    if (key.direction === "left") {
-      return { type: "config-cycle-value", direction: "previous" };
+    if (key.type === "escape") {
+      return { type: "escape" };
     }
+    if (state.modal.kind === "config" && state.modal.phase === "browse") {
+      if (key.type === "char" && key.char === "/") {
+        return { type: "config-find-start" };
+      }
+      if (state.modal.findQuery !== undefined) {
+        if (key.type === "char") {
+          return { type: "config-find-append", char: key.char };
+        }
+        if (key.type === "backspace" || key.type === "delete") {
+          return { type: "config-find-backspace" };
+        }
+      }
+    }
+    if (state.modal.kind === "config" && state.modal.phase === "edit-inline" && key.type === "arrow") {
+      if (key.direction === "left") {
+        return { type: "config-cycle-value", direction: "previous" };
+      }
     if (key.direction === "right") {
       return { type: "config-cycle-value", direction: "next" };
     }
@@ -55,17 +68,17 @@ export function keyToAction(key: Key, state: AppState): Action | undefined {
   if (key.type === "enter") {
     return { type: "enter" };
   }
-  if (key.type === "char" && state.modal.kind === "config") {
-    switch (key.char) {
-      case "[":
-        return { type: "config-prev-tab" };
-      case "]":
-        return { type: "config-next-tab" };
-      case "s":
-      case "S":
-        return { type: "config-toggle-scope" };
+    if (key.type === "char" && state.modal.kind === "config") {
+      switch (key.char) {
+        case "[":
+          return { type: "config-prev-tab" };
+        case "]":
+          return { type: "config-next-tab" };
+        case "s":
+        case "S":
+          return { type: "config-toggle-scope" };
+      }
     }
-  }
   if (key.type === "char" && state.modal.kind === "command-palette") {
     return { type: "modal-query-append", char: key.char };
   }

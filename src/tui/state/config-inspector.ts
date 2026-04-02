@@ -5,9 +5,12 @@ import type {
   MissionControlConfigEditKind,
   MissionControlConfigInspector,
   MissionControlConfigRow,
+  MissionControlConfigWorkerChoice,
+  MissionControlConfigSourceBadge,
   MissionControlConfigTab,
   MissionControlConfigValueSource,
 } from "./types.js";
+import { recommendWorkerFit } from "../../usecases/worker-fit-recommendation.usecase.js";
 
 const KNOWN_TABS: readonly MissionControlConfigTab[] = [
   "overview",
@@ -20,6 +23,17 @@ const KNOWN_TABS: readonly MissionControlConfigTab[] = [
   "doctor",
 ];
 
+const TAB_LABELS: Readonly<Record<MissionControlConfigTab, string>> = {
+  overview: "overview",
+  effective: "effective",
+  project: "project",
+  global: "global",
+  defaults: "defaults",
+  workers: "workers",
+  plan: "next",
+  doctor: "problems",
+};
+
 const KNOWN_AGENT_OPTIONS = [
   "claude-code",
   "codex",
@@ -30,6 +44,13 @@ const KNOWN_AGENT_OPTIONS = [
   "aider",
   "cursor",
 ] as const;
+
+interface RowCopy {
+  readonly label: string;
+  readonly summary: string;
+  readonly impactText: string;
+  readonly section?: string;
+}
 
 export function buildConfigInspector(
   layers: ConfigLayers,
@@ -48,16 +69,28 @@ export function buildConfigInspector(
     ...Object.keys(global),
   ])].sort();
 
-  const workerSlugs = Object.keys(layers.effective.workers ?? {});
-  const rowsByTab = {
-    overview: buildOverviewRows(layers, features, configSource),
-    effective: allPaths.map((path) => buildEffectiveRow(path, layers, effective[path], defaults[path], global[path], project[path], workerSlugs)),
-    project: buildScopeRows("project", project, effective, workerSlugs),
-    global: buildScopeRows("global", global, effective, workerSlugs),
-    defaults: buildScopeRows("default", defaults, effective, workerSlugs),
-    workers: buildWorkerRows(layers.effective),
-    plan: buildPlanRows(layers.effective, features),
-    doctor: buildDoctorRows(checks, layers.errors),
+    const workerSlugs = Object.keys(layers.effective.workers ?? {});
+    const rowsByTab = {
+      overview: buildOverviewRows(layers, checks, features, configSource),
+      effective: allPaths.map((path) =>
+        buildConfigValueRow(
+          path,
+          effective[path],
+          defaults[path],
+          global[path],
+          project[path],
+          workerSlugs,
+          "effective",
+          layers.effective.workers,
+          features,
+        )
+      ),
+      project: buildScopeRows("project", project, effective, workerSlugs, layers.effective.workers, features),
+      global: buildScopeRows("global", global, effective, workerSlugs, layers.effective.workers, features),
+      defaults: buildScopeRows("default", defaults, effective, workerSlugs, layers.effective.workers, features),
+      workers: buildWorkerRows(layers.effective, features),
+      plan: buildPlanRows(layers.effective, features),
+      doctor: buildDoctorRows(checks, layers.errors),
   } satisfies Record<MissionControlConfigTab, readonly MissionControlConfigRow[]>;
 
   return {
@@ -74,175 +107,272 @@ export function buildConfigInspector(
 export function getConfigRowsForTab(
   inspector: MissionControlConfigInspector | null,
   tab: MissionControlConfigTab,
+  query?: string,
 ): readonly MissionControlConfigRow[] {
   if (!inspector) return [];
-  return inspector.rowsByTab[tab] ?? [];
+  const rows = inspector.rowsByTab[tab] ?? [];
+  return filterConfigRows(rows, query);
+}
+
+export function getConfigTabDisplayLabel(tab: MissionControlConfigTab): string {
+  return TAB_LABELS[tab] ?? tab;
+}
+
+function filterConfigRows(
+  rows: readonly MissionControlConfigRow[],
+  query?: string,
+): readonly MissionControlConfigRow[] {
+  const normalizedQuery = (query ?? "").trim().toLowerCase();
+  if (normalizedQuery.length === 0) return rows;
+
+  return rows.filter((row) =>
+    [
+      row.label,
+      row.keyPath,
+      row.summary,
+      row.valueText,
+      row.displayValueText,
+      row.section,
+    ]
+      .filter(Boolean)
+      .some((value) => value.toLowerCase().includes(normalizedQuery))
+  );
 }
 
 function buildOverviewRows(
   layers: ConfigLayers,
+  checks: readonly DoctorCheck[],
   features: readonly Feature[],
   configSource: "project" | "global" | "none",
 ): readonly MissionControlConfigRow[] {
-  const workerEntries = Object.entries(layers.effective.workers ?? {});
-  return [
-    {
-      keyPath: "overview.configSource",
-      label: "Config source",
-      section: "Status",
-      valueText: configSource,
-      source: "none",
-      editKind: "readonly",
-      description: "Which config layer is currently active.",
-      effectiveValueText: configSource,
-    },
-    {
-      keyPath: "overview.projectPath",
-      label: "Project config",
-      section: "Paths",
-      valueText: layers.project ? layers.paths.project : "missing",
-      source: layers.project ? "project" : "none",
-      editKind: "readonly",
-      description: "Project-level config file path.",
-      effectiveValueText: layers.project ? layers.paths.project : "missing",
-    },
-    {
-      keyPath: "overview.globalPath",
-      label: "Global config",
-      section: "Paths",
-      valueText: layers.global ? layers.paths.global : "missing",
-      source: layers.global ? "global" : "none",
-      editKind: "readonly",
-      description: "Global config file path.",
-      effectiveValueText: layers.global ? layers.paths.global : "missing",
-    },
-    {
-      keyPath: "execution.defaultWorker",
-      label: "Default worker",
-      section: "Execution",
-      valueText: stringifyValue(layers.effective.execution?.defaultWorker),
-      source: provenanceForValue(
+  const workerRows = buildWorkerRows(layers.effective, features).map((row) => ({
+    ...row,
+    section: "Workers",
+  }));
+  const planRows = buildPlanRows(layers.effective, features).map((row) => ({
+    ...row,
+    section: "What happens next",
+  }));
+
+  const problemCount = checks.filter((check) => check.status !== "ok").length + layers.errors.length;
+  const problemsRow = buildReadonlyRow({
+    keyPath: "overview.problems",
+    label: "Problems found",
+    section: "Problems",
+    rawValue: problemCount > 0 ? `${problemCount}` : "none",
+    displayValue: problemCount > 0 ? `${problemCount} ${problemCount === 1 ? "warning" : "issues"}` : "No problems",
+    summary: "Warnings and errors that could affect config editing or worker choice.",
+    impactText: "Fix these before trusting the next run.",
+    source: "none",
+  });
+
+  const quickRows = [
+      buildConfigValueRow(
+        "execution.defaultWorker",
         layers.effective.execution?.defaultWorker,
         layers.defaults.execution?.defaultWorker,
         layers.global?.execution?.defaultWorker,
         layers.project?.execution?.defaultWorker,
+        Object.keys(layers.effective.workers ?? {}),
+        "overview",
+        layers.effective.workers,
+        features,
       ),
-      editKind: "enum",
-      options: workerEntries.map(([slug]) => slug),
-      description: "Worker used by feature run when no override is passed.",
-      effectiveValueText: stringifyValue(layers.effective.execution?.defaultWorker),
-      defaultValueText: stringifyValue(layers.defaults.execution?.defaultWorker),
-      globalValueText: stringifyValue(layers.global?.execution?.defaultWorker),
-      projectValueText: stringifyValue(layers.project?.execution?.defaultWorker),
-    },
-    {
-      keyPath: "execution.stopOnFailure",
-      label: "Stop on failure",
-      section: "Execution",
-      valueText: stringifyBoolean(layers.effective.execution?.stopOnFailure),
-      source: provenanceForValue(
-        layers.effective.execution?.stopOnFailure,
-        layers.defaults.execution?.stopOnFailure,
-        layers.global?.execution?.stopOnFailure,
-        layers.project?.execution?.stopOnFailure,
-      ),
-      editKind: "toggle",
-      options: ["off", "on"],
-      description: "Whether the sequential run loop stops after the first failed feature.",
-      effectiveValueText: stringifyBoolean(layers.effective.execution?.stopOnFailure),
-      defaultValueText: stringifyBoolean(layers.defaults.execution?.stopOnFailure),
-      globalValueText: stringifyBoolean(layers.global?.execution?.stopOnFailure),
-      projectValueText: stringifyBoolean(layers.project?.execution?.stopOnFailure),
-    },
-    {
-      keyPath: "overview.pendingFeatures",
-      label: "Runnable features",
-      section: "Plan",
-      valueText: String(features.filter((feature) => feature.status === "pending").length),
+    buildConfigValueRow(
+      "execution.stopOnFailure",
+      layers.effective.execution?.stopOnFailure,
+      layers.defaults.execution?.stopOnFailure,
+      layers.global?.execution?.stopOnFailure,
+      layers.project?.execution?.stopOnFailure,
+      Object.keys(layers.effective.workers ?? {}),
+      "overview",
+    ),
+    buildConfigValueRow(
+      "execution.retryBudget",
+      layers.effective.execution?.retryBudget,
+      layers.defaults.execution?.retryBudget,
+      layers.global?.execution?.retryBudget,
+      layers.project?.execution?.retryBudget,
+      Object.keys(layers.effective.workers ?? {}),
+      "overview",
+    ),
+    buildConfigValueRow(
+      "supervision.level",
+      layers.effective.supervision?.level,
+      layers.defaults.supervision?.level,
+      layers.global?.supervision?.level,
+      layers.project?.supervision?.level,
+      Object.keys(layers.effective.workers ?? {}),
+      "overview",
+    ),
+    buildConfigValueRow(
+      "parallel.enabled",
+      layers.effective.parallel?.enabled,
+      layers.defaults.parallel?.enabled,
+      layers.global?.parallel?.enabled,
+      layers.project?.parallel?.enabled,
+      Object.keys(layers.effective.workers ?? {}),
+      "overview",
+    ),
+    buildReadonlyRow({
+      keyPath: "overview.configSource",
+      label: "Config source",
+      section: "Quick settings",
+      rawValue: configSource,
+      displayValue: configSource === "none" ? "defaults only" : configSource,
+      summary: "Shows which config layer is currently supplying most active values.",
+      impactText: "This helps explain where your current settings are coming from.",
       source: "none",
-      editKind: "readonly",
-      description: "Pending features that may participate in the next run.",
-      effectiveValueText: String(features.filter((feature) => feature.status === "pending").length),
-    },
+    }),
   ];
+
+  return [...quickRows, ...workerRows, ...planRows, problemsRow];
 }
 
-function buildEffectiveRow(
+function buildConfigValueRow(
   keyPath: string,
-  layers: ConfigLayers,
   effectiveValue: unknown,
   defaultValue: unknown,
   globalValue: unknown,
   projectValue: unknown,
   workerSlugs: readonly string[],
+  tab: MissionControlConfigTab,
+  workers?: MaestroConfig["workers"],
+  features: readonly Feature[] = [],
 ): MissionControlConfigRow {
-  const meta = getEditMeta(keyPath, effectiveValue, workerSlugs);
+  const editMeta = getEditMeta(keyPath, effectiveValue, workerSlugs);
+  const source = provenanceForValue(effectiveValue, defaultValue, globalValue, projectValue);
+  const copy = getRowCopy(keyPath, tab);
+  const section = copy.section ?? sectionForKey(keyPath);
+  const effectiveDisplayValue = displayValueForKey(keyPath, editMeta.editKind, effectiveValue);
+  const projectDisplayValue = displayValueForKey(keyPath, editMeta.editKind, projectValue);
+  const globalDisplayValue = displayValueForKey(keyPath, editMeta.editKind, globalValue);
+  const defaultDisplayValue = displayValueForKey(keyPath, editMeta.editKind, defaultValue);
+
   return {
     keyPath,
-    label: keyPath,
-    section: sectionForKey(keyPath),
-    valueText: displayValue(meta.editKind, effectiveValue),
-    source: provenanceForValue(effectiveValue, defaultValue, globalValue, projectValue),
-    editKind: meta.editKind,
-    options: meta.options,
-    description: meta.description,
-    effectiveValueText: displayValue(meta.editKind, effectiveValue),
-    defaultValueText: displayValue(meta.editKind, defaultValue),
-    globalValueText: displayValue(meta.editKind, globalValue),
-    projectValueText: displayValue(meta.editKind, projectValue),
-  };
-}
+    label: copy.label,
+    section,
+    valueText: stringifyConfigValue(editMeta.editKind, effectiveValue),
+    displayValueText: effectiveDisplayValue,
+    source,
+    sourceBadge: sourceBadgeForValueSource(source),
+    editKind: editMeta.editKind,
+    editKindLabel: editLabelForKind(editMeta.editKind),
+    options: editMeta.options,
+    description: editMeta.description,
+    summary: copy.summary,
+    impactText: copy.impactText,
+    effectiveValueText: stringifyConfigValue(editMeta.editKind, effectiveValue),
+    effectiveDisplayValueText: effectiveDisplayValue,
+    projectValueText: stringifyConfigValue(editMeta.editKind, projectValue),
+    projectDisplayValueText: projectDisplayValue,
+      globalValueText: stringifyConfigValue(editMeta.editKind, globalValue),
+      globalDisplayValueText: globalDisplayValue,
+      defaultValueText: stringifyConfigValue(editMeta.editKind, defaultValue),
+      defaultDisplayValueText: defaultDisplayValue,
+      workerChoices: keyPath === "execution.defaultWorker"
+        ? buildWorkerChoices(workerSlugs, workers, features)
+        : undefined,
+    };
+  }
 
 function buildScopeRows(
   scope: "project" | "global" | "default",
   scopeValues: Readonly<Record<string, unknown>>,
   effectiveValues: Readonly<Record<string, unknown>>,
   workerSlugs: readonly string[],
+  workers?: MaestroConfig["workers"],
+  features: readonly Feature[] = [],
 ): readonly MissionControlConfigRow[] {
   const paths = Object.keys(scopeValues).sort();
   if (paths.length === 0) {
-    return [{
+    return [buildReadonlyRow({
       keyPath: `${scope}.empty`,
-      label: scope === "default" ? "Defaults" : `No ${scope} config`,
-      section: "Status",
-      valueText: scope === "default" ? "Built-in defaults available" : "Not configured",
+      label: scope === "default" ? "Built-in defaults" : `No ${scope} settings`,
+      section: scope === "default" ? "Defaults" : "Settings",
+      rawValue: scope === "default" ? "available" : "empty",
+      displayValue: scope === "default" ? "Built-in defaults are available" : "No settings saved here",
+      summary: scope === "default"
+        ? "These values are used when nothing overrides them."
+        : `Settings saved in ${scope} config appear here.`,
+      impactText: scope === "default"
+        ? "These values are read-only in Mission Control."
+        : `Save a change to ${scope} config to populate this tab.`,
       source: scope === "default" ? "default" : "none",
-      editKind: "readonly",
-      description: `Values defined in the ${scope} scope.`,
-      effectiveValueText: scope === "default" ? "Built-in defaults available" : "Not configured",
-    }];
+    })];
   }
 
   return paths.map((path) => {
-    const meta = getEditMeta(path, scopeValues[path], workerSlugs);
+    const editMeta = getEditMeta(path, scopeValues[path], workerSlugs);
+    const copy = getRowCopy(path, scope);
     return {
       keyPath: path,
-      label: path,
-      section: sectionForKey(path),
-      valueText: displayValue(meta.editKind, scopeValues[path]),
+      label: copy.label,
+      section: copy.section ?? sectionForKey(path),
+      valueText: stringifyConfigValue(editMeta.editKind, scopeValues[path]),
+      displayValueText: displayValueForKey(path, editMeta.editKind, scopeValues[path]),
       source: scope,
-      editKind: scope === "default" ? "readonly" : meta.editKind,
-      options: scope === "default" ? undefined : meta.options,
-      description: meta.description,
-      effectiveValueText: displayValue(meta.editKind, effectiveValues[path]),
-      defaultValueText: scope === "default" ? displayValue(meta.editKind, scopeValues[path]) : undefined,
-      globalValueText: scope === "global" ? displayValue(meta.editKind, scopeValues[path]) : undefined,
-      projectValueText: scope === "project" ? displayValue(meta.editKind, scopeValues[path]) : undefined,
+      sourceBadge: sourceBadgeForValueSource(scope),
+      editKind: scope === "default" ? "readonly" : editMeta.editKind,
+      editKindLabel: scope === "default" ? editLabelForKind("readonly") : editLabelForKind(editMeta.editKind),
+      options: scope === "default" ? undefined : editMeta.options,
+      description: editMeta.description,
+      summary: copy.summary,
+      impactText: copy.impactText,
+      effectiveValueText: stringifyConfigValue(editMeta.editKind, effectiveValues[path]),
+      effectiveDisplayValueText: displayValueForKey(path, editMeta.editKind, effectiveValues[path]),
+      defaultValueText: scope === "default" ? stringifyConfigValue(editMeta.editKind, scopeValues[path]) : undefined,
+      defaultDisplayValueText: scope === "default" ? displayValueForKey(path, editMeta.editKind, scopeValues[path]) : undefined,
+        globalValueText: scope === "global" ? stringifyConfigValue(editMeta.editKind, scopeValues[path]) : undefined,
+        globalDisplayValueText: scope === "global" ? displayValueForKey(path, editMeta.editKind, scopeValues[path]) : undefined,
+        projectValueText: scope === "project" ? stringifyConfigValue(editMeta.editKind, scopeValues[path]) : undefined,
+        projectDisplayValueText: scope === "project" ? displayValueForKey(path, editMeta.editKind, scopeValues[path]) : undefined,
+        workerChoices: path === "execution.defaultWorker"
+          ? buildWorkerChoices(workerSlugs, workers, features)
+          : undefined,
+      };
+    });
+  }
+
+function buildWorkerRows(
+  config: MaestroConfig,
+  features: readonly Feature[],
+): readonly MissionControlConfigRow[] {
+  const nextFeature = features.find((feature) => feature.status === "pending");
+  return Object.entries(config.workers ?? {}).map(([slug, worker]) => {
+    const available = Boolean(Bun.which(worker.command));
+    const stateLabel = !worker.enabled ? "disabled" : available ? "ready" : "missing";
+    const copy: RowCopy = {
+      label: humanizeWorkerSlug(slug),
+      summary: `${humanizeWorkerSlug(slug)} is a worker Maestro can choose for task execution.`,
+      impactText: !worker.enabled
+        ? "Disabled workers will not be selected."
+        : available
+          ? `Available for future runs${nextFeature ? `, including ${nextFeature.id}` : ""}.`
+          : "Install this worker command before expecting Maestro to use it.",
+      section: "Workers",
+    };
+    return {
+      keyPath: `workers.${slug}`,
+      label: copy.label,
+      section: copy.section ?? "Workers",
+      valueText: stateLabel,
+      displayValueText: stateLabel,
+      source: "mixed",
+      sourceBadge: sourceBadgeForValueSource("mixed"),
+      editKind: "readonly",
+      editKindLabel: editLabelForKind("readonly"),
+      description: "Inspect the worker profile and availability.",
+      summary: copy.summary,
+      impactText: copy.impactText,
+      effectiveValueText: stateLabel,
+      effectiveDisplayValueText: stateLabel,
+      projectValueText: undefined,
+      globalValueText: undefined,
+      defaultValueText: undefined,
     };
   });
-}
-
-function buildWorkerRows(config: MaestroConfig): readonly MissionControlConfigRow[] {
-  return Object.entries(config.workers ?? {}).map(([slug, worker]) => ({
-    keyPath: `workers.${slug}`,
-    label: slug,
-    section: "Workers",
-    valueText: `${worker.enabled ? "enabled" : "disabled"} · ${worker.transport} · ${worker.command} · ${worker.outputMode ?? "raw"} · ${Bun.which(worker.command) ? "ready" : "missing"}`,
-    source: "mixed",
-    editKind: "readonly",
-    description: "Resolved worker profile and binary availability.",
-    effectiveValueText: `${worker.enabled ? "enabled" : "disabled"} · ${worker.transport} · ${worker.command} · ${worker.outputMode ?? "raw"}`,
-  }));
 }
 
 function buildPlanRows(
@@ -251,54 +381,107 @@ function buildPlanRows(
 ): readonly MissionControlConfigRow[] {
   const pending = features.filter((feature) => feature.status === "pending");
   const ready = pending.find((feature) => feature.dependsOn.length === 0);
-  const lines = [
-    `Mode: ${config.parallel?.enabled ? "parallel" : "sequential"}`,
-    `Default worker: ${config.execution?.defaultWorker ?? "unset"}`,
-    `Stop on failure: ${stringifyBoolean(config.execution?.stopOnFailure)}`,
-    `Retry budget: ${config.execution?.retryBudget ?? 0}`,
-    ready
-      ? `Next ready feature: ${ready.id} · ${ready.title}`
-      : "Next ready feature: none",
-  ];
 
-  return lines.map((line, index) => ({
-    keyPath: `plan.${index + 1}`,
-    label: line,
-    section: "Execution Plan",
-    valueText: line,
-    source: "none",
-    editKind: "readonly",
-    description: "How feature run will behave with the current config.",
-    effectiveValueText: line,
-  }));
+  return [
+    buildReadonlyRow({
+      keyPath: "plan.runMode",
+      label: "Run mode",
+      section: "What happens next",
+      rawValue: config.parallel?.enabled ? "parallel" : "sequential",
+      displayValue: config.parallel?.enabled ? "parallel" : "sequential",
+      summary: "Shows whether Maestro would run tasks one at a time or in parallel.",
+      impactText: "This changes how the next feature run will be scheduled.",
+      source: "none",
+    }),
+    buildReadonlyRow({
+      keyPath: "plan.nextTask",
+      label: "Next task",
+      section: "What happens next",
+      rawValue: ready ? `${ready.id} ${ready.title}` : "none",
+      displayValue: ready ? `${ready.id} ${ready.title}` : "No ready task",
+      summary: "The next task Maestro would try to run with the current mission state.",
+      impactText: ready
+        ? `If you start a run now, Maestro will try ${ready.id} first.`
+        : "No task is ready to run right now.",
+      source: "none",
+    }),
+  ];
 }
 
 function buildDoctorRows(
   checks: readonly DoctorCheck[],
   errors: readonly { scope: string; message: string }[],
 ): readonly MissionControlConfigRow[] {
-  const checkRows = checks.map((check) => ({
-    keyPath: `doctor.${check.name}`,
-    label: check.name,
-    section: "Checks",
-    valueText: `${check.status} · ${check.message}`,
-    source: "none" as const,
-    editKind: "readonly" as const,
-    description: check.fix ?? "No fix available",
-    effectiveValueText: `${check.status} · ${check.message}`,
-  }));
-  const errorRows = errors.map((error, index) => ({
+  const checkRows = checks
+    .filter((check) => check.status !== "ok")
+    .map((check) => buildReadonlyRow({
+      keyPath: `doctor.${check.name}`,
+      label: humanizeCheckName(check.name),
+      section: "Problems",
+      rawValue: check.message,
+      displayValue: check.message,
+      summary: check.fix ?? "Review this warning before trusting the next run.",
+      impactText: check.message,
+      source: "none",
+    }));
+
+  const errorRows = errors.map((error, index) => buildReadonlyRow({
     keyPath: `doctor.error.${index + 1}`,
-    label: `${error.scope} config`,
-    section: "YAML",
-    valueText: error.message,
-    source: "none" as const,
-    editKind: "readonly" as const,
-    description: "Fix the YAML before editing this scope from Mission Control.",
-    effectiveValueText: error.message,
+    label: `${capitalize(error.scope)} config error`,
+    section: "Problems",
+    rawValue: error.message,
+    displayValue: error.message,
+    summary: "Mission Control cannot safely edit this config file until the YAML is fixed.",
+    impactText: "Fix the config file first, then try editing again.",
+    source: "none",
   }));
 
-  return [...checkRows, ...errorRows];
+  return checkRows.length > 0 || errorRows.length > 0
+    ? [...checkRows, ...errorRows]
+    : [buildReadonlyRow({
+      keyPath: "doctor.clear",
+      label: "No problems",
+      section: "Problems",
+      rawValue: "clear",
+      displayValue: "Everything looks good",
+      summary: "Maestro did not detect config or worker problems.",
+      impactText: "You can change settings with confidence.",
+      source: "none",
+    })];
+}
+
+function buildReadonlyRow(options: {
+  keyPath: string;
+  label: string;
+  section: string;
+  rawValue: string;
+  displayValue: string;
+  summary: string;
+  impactText: string;
+  source: MissionControlConfigValueSource;
+}): MissionControlConfigRow {
+  return {
+    keyPath: options.keyPath,
+    label: options.label,
+    section: options.section,
+    valueText: options.rawValue,
+    displayValueText: options.displayValue,
+    source: options.source,
+    sourceBadge: sourceBadgeForValueSource(options.source),
+    editKind: "readonly",
+    editKindLabel: editLabelForKind("readonly"),
+    description: options.summary,
+    summary: options.summary,
+    impactText: options.impactText,
+    effectiveValueText: options.rawValue,
+    effectiveDisplayValueText: options.displayValue,
+    projectValueText: undefined,
+    projectDisplayValueText: undefined,
+    globalValueText: undefined,
+    globalDisplayValueText: undefined,
+    defaultValueText: undefined,
+    defaultDisplayValueText: undefined,
+  };
 }
 
 function flattenConfig(
@@ -329,7 +512,7 @@ function sectionForKey(keyPath: string): string {
   if (keyPath.startsWith("workers.")) return "Workers";
   if (keyPath.startsWith("supervision.")) return "Supervision";
   if (keyPath.startsWith("parallel.")) return "Parallel";
-  if (keyPath.startsWith("sessionDetection.")) return "Session Detection";
+  if (keyPath.startsWith("sessionDetection.")) return "Session detection";
   return "General";
 }
 
@@ -416,6 +599,52 @@ function getEditMeta(
   };
 }
 
+function getRowCopy(keyPath: string, tab: MissionControlConfigTab | "project" | "global" | "default"): RowCopy {
+  switch (keyPath) {
+    case "execution.defaultWorker":
+      return {
+        label: "Default worker",
+        summary: "Maestro uses this worker unless you choose a different one for a run.",
+        impactText: "This changes which worker runs the next task by default.",
+        section: tab === "overview" ? "Quick settings" : undefined,
+      };
+    case "execution.stopOnFailure":
+      return {
+        label: "Stop on failure",
+        summary: "Choose whether Maestro stops after the first failed task.",
+        impactText: "If this is on, the run stops on the first failure.",
+        section: tab === "overview" ? "Quick settings" : undefined,
+      };
+    case "execution.retryBudget":
+      return {
+        label: "Retry attempts",
+        summary: "How many retry attempts Maestro is allowed to make.",
+        impactText: "Higher numbers allow more retries before a task is marked blocked.",
+        section: tab === "overview" ? "Quick settings" : undefined,
+      };
+    case "supervision.level":
+      return {
+        label: "Watch level",
+        summary: "How closely Maestro watches running workers.",
+        impactText: "Higher levels check more aggressively for stale or failed workers.",
+        section: tab === "overview" ? "Quick settings" : undefined,
+      };
+    case "parallel.enabled":
+      return {
+        label: "Run in parallel",
+        summary: "Choose whether independent tasks can run at the same time.",
+        impactText: "Turning this on can speed up runs when tasks do not conflict.",
+        section: tab === "overview" ? "Quick settings" : undefined,
+      };
+    default:
+      return {
+        label: humanizeConfigKey(keyPath),
+        summary: `Controls ${humanizeConfigKey(keyPath).toLowerCase()}.`,
+        impactText: "Changing this will affect future Maestro behavior.",
+      };
+  }
+}
+
 function provenanceForValue(
   effectiveValue: unknown,
   defaultValue: unknown,
@@ -433,11 +662,124 @@ function areEqual(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function displayValue(editKind: MissionControlConfigEditKind, value: unknown): string {
+function stringifyConfigValue(editKind: MissionControlConfigEditKind, value: unknown): string {
   if (editKind === "toggle") {
     return stringifyBoolean(value as boolean | undefined);
   }
   return stringifyValue(value);
+}
+
+function displayValueForKey(
+  keyPath: string,
+  editKind: MissionControlConfigEditKind,
+  value: unknown,
+): string {
+  const raw = stringifyConfigValue(editKind, value);
+  if (keyPath === "supervision.level" && raw === "mid") return "medium";
+  return raw;
+}
+
+function editLabelForKind(editKind: MissionControlConfigEditKind): string {
+  switch (editKind) {
+    case "toggle":
+      return "on/off";
+    case "enum":
+      return "choice";
+    case "number-preset":
+      return "number";
+    case "readonly":
+    default:
+      return "read only";
+  }
+}
+
+function sourceBadgeForValueSource(source: MissionControlConfigValueSource): MissionControlConfigSourceBadge {
+  switch (source) {
+    case "project":
+      return "P";
+    case "global":
+      return "G";
+    case "default":
+      return "D";
+    case "mixed":
+      return "M";
+    case "none":
+    default:
+      return "";
+  }
+}
+
+function buildWorkerChoices(
+  workerSlugs: readonly string[],
+  workers: MaestroConfig["workers"] | undefined,
+  features: readonly Feature[],
+): readonly MissionControlConfigWorkerChoice[] {
+  return workerSlugs.map((slug) => {
+    const worker = workers?.[slug];
+    const availability: MissionControlConfigWorkerChoice["availability"] = !worker?.enabled
+      ? "disabled"
+      : Bun.which(worker.command)
+        ? "ready"
+        : "missing";
+    const guidance = workerGuidanceForSlug(slug);
+    return {
+      slug,
+      label: slug,
+      availability,
+      summary: guidance.summary,
+      bestFor: guidance.bestFor,
+      tradeoffs: guidance.tradeoffs,
+      recommendation: recommendWorkerFit(slug, features),
+    };
+  });
+}
+
+function workerGuidanceForSlug(slug: string): {
+  summary: string;
+  bestFor: string;
+  tradeoffs: string;
+} {
+  switch (slug) {
+    case "claude-code":
+      return {
+        summary: "Best when the task is messy, high-risk, or needs careful judgment.",
+        bestFor: "Complex orchestration, review-heavy changes, and tricky state transitions.",
+        tradeoffs: "Usually slower and more expensive than the faster workers.",
+      };
+    case "gemini":
+      return {
+        summary: "Fast and lightweight for simpler or lower-stakes passes.",
+        bestFor: "Docs, quick follow-ups, and broad first passes.",
+        tradeoffs: "Less reliable on complex implementation details.",
+      };
+    case "codex":
+    default:
+      return {
+        summary: "Fast, balanced implementation worker for day-to-day execution.",
+        bestFor: "CLI work, adapters, tests, refactors, and direct code changes.",
+        tradeoffs: "Less ideal than Claude Code for ambiguous, review-heavy work.",
+      };
+  }
+}
+
+function humanizeConfigKey(keyPath: string): string {
+  const leaf = keyPath.split(".").at(-1) ?? keyPath;
+  return capitalize(leaf.replace(/([A-Z])/g, " $1").replace(/[-_]/g, " ").trim());
+}
+
+function humanizeWorkerSlug(slug: string): string {
+  return slug
+    .split("-")
+    .map((part) => capitalize(part))
+    .join(" ");
+}
+
+function humanizeCheckName(name: string): string {
+  return capitalize(name.replace(/[-_]/g, " "));
+}
+
+function capitalize(value: string): string {
+  return value.length === 0 ? value : value[0]!.toUpperCase() + value.slice(1);
 }
 
 function stringifyBoolean(value: boolean | undefined): string {

@@ -30,16 +30,22 @@ export type ModalState =
   | { kind: "dependencies"; selectedOption: number; returnTarget?: ModalReturnTarget }
   | { kind: "overview"; returnTarget?: ModalReturnTarget }
   | { kind: "handoffs"; selectedHandoffIndex: number; returnTarget?: ModalReturnTarget }
-  | {
-    kind: "config";
-    tab: MissionControlConfigTab;
-    selectedRowIndex: number;
-    phase: "browse" | "choose-scope" | "edit-inline" | "confirm-write" | "write-result";
-    selectedScope: ConfigScope;
-    draftValue?: string;
-    message?: string;
-    returnTarget?: ModalReturnTarget;
-  }
+    | {
+      kind: "config";
+      tab: MissionControlConfigTab;
+      selectedRowIndex: number;
+      phase: "browse" | "choose-scope" | "edit-inline" | "confirm-write" | "write-result";
+      selectedScope: ConfigScope;
+      findQuery?: string;
+      draftValue?: string;
+      message?: string;
+      preview?: {
+        scope: ConfigScope;
+        path: string;
+        content: string;
+      };
+      returnTarget?: ModalReturnTarget;
+    }
   | { kind: "processes"; selectedProcessIndex: number; returnTarget?: ModalReturnTarget };
 
 export interface AppState {
@@ -87,11 +93,17 @@ export type Action =
   | { type: "modal-submit-error"; message: string }
   | { type: "config-next-tab" }
   | { type: "config-prev-tab" }
-  | { type: "config-cycle-value"; direction: "previous" | "next" }
-  | { type: "config-toggle-scope" }
-  | { type: "config-submit-start" }
-  | { type: "config-submit-success"; message: string }
-  | { type: "config-submit-error"; message: string };
+    | { type: "config-cycle-value"; direction: "previous" | "next" }
+    | { type: "config-toggle-scope" }
+    | { type: "config-find-start" }
+      | { type: "config-find-append"; char: string }
+      | { type: "config-find-backspace" }
+      | { type: "config-find-clear" }
+      | { type: "config-preview-ready"; preview: { scope: ConfigScope; path: string; content: string } }
+      | { type: "config-preview-error"; message: string }
+      | { type: "config-submit-start" }
+      | { type: "config-submit-success"; message: string }
+      | { type: "config-submit-error"; message: string };
 
 /**
  * Pure state reducer -- returns a new state given an action.
@@ -205,33 +217,46 @@ export function reduce(state: AppState, action: Action): AppState {
     }
 
     case "escape":
-      if (state.modal.kind !== "none") {
-        if (state.modal.kind === "config") {
-          if (state.modal.phase === "confirm-write") {
-            return {
-              ...state,
-              modal: {
-                ...state.modal,
-                phase: "edit-inline",
-              },
-            };
-          }
-          if (
-            state.modal.phase === "choose-scope"
+        if (state.modal.kind !== "none") {
+          if (state.modal.kind === "config") {
+            if (state.modal.phase === "browse" && state.modal.findQuery !== undefined) {
+              return {
+                ...state,
+                modal: {
+                  ...state.modal,
+                  findQuery: undefined,
+                  selectedRowIndex: 0,
+                },
+              };
+            }
+            if (state.modal.phase === "confirm-write") {
+              return {
+                ...state,
+                modal: {
+                  ...state.modal,
+                  phase: "edit-inline",
+                  preview: undefined,
+                },
+              };
+            }
+            if (
+              state.modal.phase === "choose-scope"
             || state.modal.phase === "edit-inline"
             || state.modal.phase === "write-result"
           ) {
             return {
-              ...state,
-              modal: {
-                ...state.modal,
-                phase: "browse",
-                draftValue: undefined,
-                message: undefined,
-              },
-              copyMode: false,
-            };
-          }
+                ...state,
+                modal: {
+                  ...state.modal,
+                  phase: state.modal.phase === "choose-scope" && state.modal.draftValue ? "edit-inline" : "browse",
+                  findQuery: undefined,
+                  draftValue: state.modal.phase === "choose-scope" ? state.modal.draftValue : undefined,
+                  message: undefined,
+                  preview: undefined,
+                },
+                copyMode: false,
+              };
+            }
         }
         return { ...state, modal: { kind: "none" }, copyMode: false };
       }
@@ -296,17 +321,19 @@ export function reduce(state: AppState, action: Action): AppState {
 
     case "open-config":
       if (!canOpenOverlayFromModal(state.modal)) return state;
-      return {
-        ...state,
-        modal: {
-          kind: "config",
-          tab: "overview",
-          selectedRowIndex: 0,
-          phase: "browse",
-          selectedScope: "project",
-          returnTarget: getModalReturnTarget(state.modal),
-        },
-      };
+        return {
+          ...state,
+            modal: {
+              kind: "config",
+              tab: "overview",
+              selectedRowIndex: 0,
+              phase: "browse",
+              selectedScope: "project",
+              findQuery: undefined,
+              preview: undefined,
+              returnTarget: getModalReturnTarget(state.modal),
+            },
+          };
 
     case "open-processes":
       if (!canOpenOverlayFromModal(state.modal)) return state;
@@ -395,18 +422,18 @@ export function reduce(state: AppState, action: Action): AppState {
           };
         }
 
-        if (state.modal.kind === "config") {
-          return {
-            ...baseState,
-            modal: {
-              ...state.modal,
-              selectedRowIndex: Math.min(
-                state.modal.selectedRowIndex,
-                Math.max(0, getConfigRowsForTab(action.snapshot.configInspector ?? null, state.modal.tab).length - 1),
-              ),
-            },
-          };
-        }
+          if (state.modal.kind === "config") {
+            return {
+              ...baseState,
+              modal: {
+                ...state.modal,
+                selectedRowIndex: Math.min(
+                  state.modal.selectedRowIndex,
+                  Math.max(0, getConfigRowsForTab(action.snapshot.configInspector ?? null, state.modal.tab, state.modal.findQuery).length - 1),
+                ),
+              },
+            };
+          }
 
         return baseState;
       }
@@ -496,10 +523,10 @@ export function reduce(state: AppState, action: Action): AppState {
       }
       return state;
 
-    case "modal-query-backspace":
-      if (state.modal.kind === "command-palette") {
-        return {
-          ...state,
+      case "modal-query-backspace":
+        if (state.modal.kind === "command-palette") {
+          return {
+            ...state,
           modal: {
             ...state.modal,
             query: state.modal.query.slice(0, -1),
@@ -535,40 +562,124 @@ export function reduce(state: AppState, action: Action): AppState {
         }
         return state;
 
+        case "config-find-start":
+          if (state.modal.kind !== "config" || state.modal.phase !== "browse") return state;
+          return {
+            ...state,
+            modal: {
+              ...state.modal,
+              findQuery: "",
+              selectedRowIndex: 0,
+            },
+          };
+
+        case "config-find-append":
+          if (state.modal.kind !== "config" || state.modal.phase !== "browse") return state;
+          return {
+            ...state,
+            modal: {
+              ...state.modal,
+              findQuery: `${state.modal.findQuery ?? ""}${action.char}`,
+              selectedRowIndex: 0,
+            },
+          };
+
+        case "config-find-backspace":
+          if (state.modal.kind !== "config" || state.modal.phase !== "browse") return state;
+          return {
+            ...state,
+            modal: {
+              ...state.modal,
+              findQuery: (state.modal.findQuery ?? "").slice(0, -1),
+              selectedRowIndex: 0,
+            },
+          };
+
+        case "config-find-clear":
+          if (state.modal.kind !== "config") return state;
+          return {
+            ...state,
+            modal: {
+              ...state.modal,
+              findQuery: undefined,
+              selectedRowIndex: 0,
+            },
+          };
+
       case "config-next-tab":
       case "config-prev-tab":
         if (state.modal.kind !== "config") return state;
         return {
           ...state,
-          modal: {
-            ...state.modal,
-            tab: nextConfigTab(state.modal.tab, action.type === "config-next-tab" ? 1 : -1),
-            selectedRowIndex: 0,
-            phase: "browse",
-            draftValue: undefined,
-            message: undefined,
-          },
-        };
+              modal: {
+                ...state.modal,
+                tab: nextConfigTab(state.modal.tab, action.type === "config-next-tab" ? 1 : -1),
+                selectedRowIndex: 0,
+                phase: "browse",
+                findQuery: undefined,
+                draftValue: undefined,
+                message: undefined,
+                preview: undefined,
+              },
+          };
 
       case "config-cycle-value":
         if (state.modal.kind !== "config" || state.modal.phase !== "edit-inline") return state;
         return cycleConfigDraft(state, action.direction);
 
-      case "config-toggle-scope":
-        if (state.modal.kind !== "config") return state;
-        return {
-          ...state,
-          modal: {
-            ...state.modal,
-            selectedScope: state.modal.selectedScope === "project" ? "global" : "project",
-          },
-        };
+        case "config-toggle-scope":
+          if (state.modal.kind !== "config") return state;
+          if (state.modal.phase === "choose-scope") {
+            return {
+              ...state,
+              modal: {
+                ...state.modal,
+                selectedScope: state.modal.selectedScope === "project" ? "global" : "project",
+                preview: undefined,
+              },
+            };
+          }
+          return {
+            ...state,
+            modal: {
+              ...state.modal,
+              phase: "choose-scope",
+              findQuery: undefined,
+              message: undefined,
+              preview: undefined,
+            },
+          };
 
-      case "config-submit-start":
-        if (state.modal.kind !== "config") return state;
-        return {
-          ...state,
-          modal: {
+        case "config-preview-ready":
+          if (state.modal.kind !== "config") return state;
+          return {
+            ...state,
+            modal: {
+              ...state.modal,
+              phase: "confirm-write",
+              message: undefined,
+              preview: action.preview,
+            },
+          };
+
+        case "config-preview-error":
+          if (state.modal.kind !== "config") return state;
+          return {
+            ...state,
+            modal: {
+              ...state.modal,
+              phase: "write-result",
+              findQuery: undefined,
+              message: action.message,
+              preview: undefined,
+            },
+          };
+
+        case "config-submit-start":
+          if (state.modal.kind !== "config") return state;
+          return {
+            ...state,
+            modal: {
             ...state.modal,
             message: undefined,
           },
@@ -579,13 +690,15 @@ export function reduce(state: AppState, action: Action): AppState {
         if (state.modal.kind !== "config") return state;
         return {
           ...state,
-          modal: {
-            ...state.modal,
-            phase: "write-result",
-            message: action.message,
-            draftValue: undefined,
-          },
-        };
+              modal: {
+                ...state.modal,
+                phase: "write-result",
+                findQuery: undefined,
+                message: action.message,
+                draftValue: undefined,
+                preview: undefined,
+              },
+          };
 
       default:
         return state;
@@ -729,18 +842,26 @@ function handleModalNavigate(state: AppState, direction: "up" | "down"): AppStat
       };
     }
 
-  if (state.modal.kind === "config") {
-    const total = getConfigRowsForTab(state.snapshot.configInspector ?? null, state.modal.tab).length;
-    if (state.modal.phase === "choose-scope") {
-      return {
-        ...state,
-        modal: {
-          ...state.modal,
-          selectedScope: direction === "down" ? "global" : "project",
-        },
-      };
-    }
-    if (state.modal.phase !== "browse" || total === 0) return state;
+    if (state.modal.kind === "config") {
+      const total = getConfigRowsForTab(
+        state.snapshot.configInspector ?? null,
+        state.modal.tab,
+        state.modal.findQuery,
+      ).length;
+      if (state.modal.phase === "choose-scope") {
+        return {
+          ...state,
+          modal: {
+            ...state.modal,
+            selectedScope: direction === "down" ? "global" : "project",
+            preview: undefined,
+          },
+        };
+      }
+      if (state.modal.phase === "edit-inline") {
+        return cycleConfigDraft(state, direction === "down" ? "next" : "previous");
+      }
+      if (state.modal.phase !== "browse" || total === 0) return state;
 
     const selectedRowIndex = direction === "down"
       ? Math.min(state.modal.selectedRowIndex + 1, total - 1)
@@ -824,8 +945,12 @@ function getDependencyTargets(state: AppState): ReadonlyArray<{ id: string }> {
 function handleConfigEnter(state: AppState): AppState {
   if (state.modal.kind !== "config") return state;
 
-  const row = getConfigRowsForTab(state.snapshot.configInspector ?? null, state.modal.tab)[state.modal.selectedRowIndex];
-  if (!row) return state;
+    const row = getConfigRowsForTab(
+      state.snapshot.configInspector ?? null,
+      state.modal.tab,
+      state.modal.findQuery,
+    )[state.modal.selectedRowIndex];
+    if (!row) return state;
 
   if (state.modal.phase === "browse") {
     if (row.editKind === "readonly") {
@@ -836,8 +961,11 @@ function handleConfigEnter(state: AppState): AppState {
       ...state,
       modal: {
         ...state.modal,
-        phase: state.modal.tab === "effective" ? "choose-scope" : "edit-inline",
+        phase: "edit-inline",
+        findQuery: undefined,
         draftValue: row.effectiveValueText,
+        message: undefined,
+        preview: undefined,
       },
     };
   }
@@ -847,18 +975,10 @@ function handleConfigEnter(state: AppState): AppState {
       ...state,
       modal: {
         ...state.modal,
-        phase: "edit-inline",
+        phase: state.modal.draftValue ? "edit-inline" : "browse",
+        findQuery: undefined,
         draftValue: state.modal.draftValue ?? row.effectiveValueText,
-      },
-    };
-  }
-
-  if (state.modal.phase === "edit-inline") {
-    return {
-      ...state,
-      modal: {
-        ...state.modal,
-        phase: "confirm-write",
+        preview: undefined,
       },
     };
   }
@@ -869,7 +989,9 @@ function handleConfigEnter(state: AppState): AppState {
       modal: {
         ...state.modal,
         phase: "browse",
+        findQuery: undefined,
         message: undefined,
+        preview: undefined,
       },
     };
   }
@@ -895,8 +1017,12 @@ function nextConfigTab(current: MissionControlConfigTab, delta: 1 | -1): Mission
 
 function cycleConfigDraft(state: AppState, direction: "previous" | "next"): AppState {
   if (state.modal.kind !== "config") return state;
-  const row = getConfigRowsForTab(state.snapshot.configInspector ?? null, state.modal.tab)[state.modal.selectedRowIndex];
-  if (!row?.options || row.options.length === 0) return state;
+    const row = getConfigRowsForTab(
+      state.snapshot.configInspector ?? null,
+      state.modal.tab,
+      state.modal.findQuery,
+    )[state.modal.selectedRowIndex];
+    if (!row?.options || row.options.length === 0) return state;
 
   const currentValue = state.modal.draftValue ?? row.effectiveValueText;
   const currentIndex = Math.max(0, row.options.indexOf(currentValue));
@@ -904,11 +1030,13 @@ function cycleConfigDraft(state: AppState, direction: "previous" | "next"): AppS
     ? (currentIndex + 1) % row.options.length
     : (currentIndex - 1 + row.options.length) % row.options.length;
 
-  return {
-    ...state,
-    modal: {
-      ...state.modal,
-      draftValue: row.options[nextIndex],
-    },
-  };
-}
+    return {
+      ...state,
+      modal: {
+        ...state.modal,
+        draftValue: row.options[nextIndex],
+        message: undefined,
+        preview: undefined,
+      },
+    };
+  }

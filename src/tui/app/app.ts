@@ -7,6 +7,7 @@ import { startKeyListener, type Key } from "../terminal/input.js";
 import type { MissionControlSnapshot } from "../state/types.js";
 import type { SnapshotDeps } from "../state/snapshot.js";
 import { createInitialState, reduce } from "../state/reducer.js";
+import { getConfigRowsForTab } from "../state/config-inspector.js";
 import { HEADER_DOT_INTERVAL_MS, isHeaderAnimationActive } from "../panels/header.js";
 import { pointInRect } from "../widgets/modal.js";
 import { getValidFeatureTransitions } from "../../domain/mission-state.js";
@@ -70,15 +71,20 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
       return;
     }
 
-    if (action.type === "enter" && shouldSubmitFeatureAction(state)) {
-      await submitFeatureAction();
-      return;
-    }
+      if (action.type === "enter" && shouldSubmitFeatureAction(state)) {
+        await submitFeatureAction();
+        return;
+      }
 
-    if (action.type === "enter" && state.modal.kind === "config" && state.modal.phase === "confirm-write") {
-      await submitConfigEdit();
-      return;
-    }
+      if (action.type === "enter" && state.modal.kind === "config" && state.modal.phase === "edit-inline") {
+        await prepareConfigReview();
+        return;
+      }
+
+      if (action.type === "enter" && state.modal.kind === "config" && state.modal.phase === "confirm-write") {
+        await submitConfigEdit();
+        return;
+      }
 
     state = reduce(state, action);
     if (action.type === "quit") shuttingDown = true;
@@ -272,10 +278,14 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
     }
   }
 
-  async function submitConfigEdit(): Promise<void> {
-    if (state.modal.kind !== "config" || state.modal.phase !== "confirm-write") return;
+    async function submitConfigEdit(): Promise<void> {
+      if (state.modal.kind !== "config" || state.modal.phase !== "confirm-write") return;
 
-    const row = state.snapshot.configInspector?.rowsByTab[state.modal.tab]?.[state.modal.selectedRowIndex];
+      const row = getConfigRowsForTab(
+        state.snapshot.configInspector ?? null,
+        state.modal.tab,
+        state.modal.findQuery,
+      )[state.modal.selectedRowIndex];
     if (!row) return;
 
     state = reduce(state, { type: "config-submit-start" });
@@ -314,7 +324,36 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
         type: "config-submit-error",
         message: error instanceof Error ? error.message : "Failed to update config",
       });
+        dirty = true;
+      }
+    }
+
+    async function prepareConfigReview(): Promise<void> {
+      if (state.modal.kind !== "config" || state.modal.phase !== "edit-inline") return;
+
+      const row = getConfigRowsForTab(
+        state.snapshot.configInspector ?? null,
+        state.modal.tab,
+        state.modal.findQuery,
+      )[state.modal.selectedRowIndex];
+      if (!row) return;
+
+      try {
+        const preview = await previewConfigEdit(
+          opts.snapshotDeps.config,
+          process.cwd(),
+          state.modal.selectedScope,
+          row.keyPath,
+          state.modal.draftValue ?? row.effectiveValueText,
+        );
+        state = reduce(state, { type: "config-preview-ready", preview });
+      } catch (error) {
+        state = reduce(state, {
+          type: "config-preview-error",
+          message: error instanceof Error ? error.message : "Failed to build the config preview",
+        });
+      }
+
       dirty = true;
     }
   }
-}

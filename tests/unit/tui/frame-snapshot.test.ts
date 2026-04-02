@@ -6,7 +6,7 @@ import { describe, expect, it } from "bun:test";
 import { Buffer } from "../../../src/tui/terminal/buffer.js";
 import { renderFrame, renderPreviewFrame } from "../../../src/tui/app/render.js";
 import { createInitialState } from "../../../src/tui/state/reducer.js";
-import type { MissionControlSnapshot } from "../../../src/tui/state/types.js";
+import type { MissionControlSnapshot, MissionControlConfigWorkerChoice } from "../../../src/tui/state/types.js";
 import { PALETTE } from "../../../src/tui/theme.js";
 
 function withTerminalSize<T>(width: number, height: number, run: () => T): T {
@@ -105,32 +105,47 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
         configInspector: {
           tabs: ["overview", "effective", "project", "global", "defaults", "workers", "plan", "doctor"],
           rowsByTab: {
-            overview: [
-              {
-                keyPath: "overview.configSource",
-                label: "Config source",
-                section: "Status",
-                valueText: "project",
-                source: "none",
-                editKind: "readonly",
-                description: "Which config layer is currently active.",
-                effectiveValueText: "project",
-              },
-              {
-                keyPath: "execution.stopOnFailure",
-                label: "Stop on failure",
-                section: "Execution",
-                valueText: "on",
-                source: "default",
-                editKind: "toggle",
-                options: ["off", "on"],
-                description: "Whether feature run stops after the first failed feature.",
-                effectiveValueText: "on",
-                defaultValueText: "on",
-                globalValueText: "unset",
-                projectValueText: "unset",
-              },
-            ],
+              overview: [
+                {
+                  keyPath: "overview.configSource",
+                  label: "Config source",
+                  section: "Quick settings",
+                  valueText: "project",
+                  displayValueText: "project",
+                  source: "none",
+                  sourceBadge: "",
+                  editKind: "readonly",
+                  editKindLabel: "read only",
+                  description: "Which config layer is currently active.",
+                  summary: "Shows which config layer is currently supplying most active values.",
+                  impactText: "This helps explain where your current settings are coming from.",
+                  effectiveValueText: "project",
+                  effectiveDisplayValueText: "project",
+                },
+                {
+                  keyPath: "execution.stopOnFailure",
+                  label: "Stop on failure",
+                  section: "Quick settings",
+                  valueText: "on",
+                  displayValueText: "on",
+                  source: "default",
+                  sourceBadge: "D",
+                  editKind: "toggle",
+                  editKindLabel: "on/off",
+                  options: ["off", "on"],
+                  description: "Whether feature run stops after the first failed feature.",
+                  summary: "Choose whether Maestro stops after the first failed task.",
+                  impactText: "If this is on, the run stops on the first failure.",
+                  effectiveValueText: "on",
+                  effectiveDisplayValueText: "on",
+                  defaultValueText: "on",
+                  defaultDisplayValueText: "on",
+                  globalValueText: "unset",
+                  globalDisplayValueText: "unset",
+                  projectValueText: "unset",
+                  projectDisplayValueText: "unset",
+                },
+              ],
             effective: [],
             project: [],
             global: [],
@@ -529,17 +544,16 @@ describe("frame rendering", () => {
               };
             renderFrame(buf, state);
             return buf.toString();
-          });
+            });
 
-          expect(frame).toContain("Config");
-          expect(frame).toContain("[overview] effective project global defaults workers plan doctor");
-          expect(frame).toContain("Config source");
-          expect(frame).toContain("Write Scope");
-          expect(frame).toContain("target scope: project");
-          expect(frame).toContain("Esc close");
-            expect(frame).toContain("Meaning");
-            expect(frame).toContain("Values");
-          });
+            expect(frame).toContain("Config");
+            expect(frame).toContain("[overview] effective project global defaults workers next problems");
+            expect(frame).toContain("Config source");
+            expect(frame).toContain("Using now");
+            expect(frame).toContain("Also set in");
+            expect(frame).toContain("Why it matters");
+            expect(frame).toContain("/ find");
+            });
 
           it("shows config browse controls for palette-launched config overlays", () => {
             const frame = withTerminalSize(90, 28, () => {
@@ -557,8 +571,9 @@ describe("frame rendering", () => {
               return buf.toString();
             });
 
-          expect(frame).toContain("[ / ] tabs · Up/Down rows · Enter edit · Esc close");
-          });
+            expect(frame).toContain("[ and ] tabs");
+            expect(frame).toContain("/ find");
+            });
 
         it("renders the command palette and dims the dashboard behind it", () => {
           const buf = new Buffer(90, 28);
@@ -694,6 +709,140 @@ describe("frame rendering", () => {
           expect(frame).toContain("agent");
           expect(frame).toContain("session");
           expect(frame).toContain("milestone");
-        });
+      });
+
+      it("renders the specialized worker chooser copy", () => {
+        const state = createInitialState(makeSnapshot({
+          configInspector: {
+            ...makeSnapshot().configInspector!,
+            rowsByTab: {
+              ...makeSnapshot().configInspector!.rowsByTab,
+              overview: [{
+                keyPath: "execution.defaultWorker",
+                label: "Default worker",
+                section: "Quick settings",
+                valueText: "codex",
+                displayValueText: "codex",
+                source: "project",
+                sourceBadge: "P",
+                editKind: "enum",
+                editKindLabel: "choice",
+                options: ["codex", "claude-code", "gemini"],
+                description: "Choose the default worker profile for feature run.",
+                summary: "Maestro uses this worker unless you choose a different one for a run.",
+                impactText: "This changes which worker runs the next task by default.",
+                effectiveValueText: "codex",
+                effectiveDisplayValueText: "codex",
+                projectValueText: "codex",
+                projectDisplayValueText: "codex",
+                globalValueText: "claude-code",
+                globalDisplayValueText: "claude-code",
+                defaultValueText: "codex",
+                defaultDisplayValueText: "codex",
+                workerChoices: [
+                  makeWorkerChoice("codex", "ready", "f2", "Great fit for CLI transport work that is ready now."),
+                  makeWorkerChoice("claude-code", "ready", "f1", "Best for orchestration design and careful review."),
+                  makeWorkerChoice("gemini", "missing", undefined, "No clear match in this mission right now."),
+                ],
+              }],
+            },
+          },
+        }));
+        state.modal = {
+          kind: "config",
+          tab: "overview",
+          selectedRowIndex: 0,
+          phase: "edit-inline",
+          selectedScope: "project",
+          draftValue: "claude-code",
+        };
+
+        const buf = new Buffer(120, 32);
+        renderFrame(buf, state);
+        const frame = buf.toString();
+
+        expect(frame).toContain("Change setting");
+        expect(frame).toContain("Best for");
+        expect(frame).toContain("Good fit in this mission");
+      });
+
+      it("renders the review screen with preview details", () => {
+        const state = createInitialState(makeSnapshot({
+          configInspector: {
+            ...makeSnapshot().configInspector!,
+            rowsByTab: {
+              ...makeSnapshot().configInspector!.rowsByTab,
+              overview: [{
+                keyPath: "execution.stopOnFailure",
+                label: "Stop on failure",
+                section: "Quick settings",
+                valueText: "on",
+                displayValueText: "on",
+                source: "default",
+                sourceBadge: "D",
+                editKind: "toggle",
+                editKindLabel: "on/off",
+                options: ["off", "on"],
+                description: "Toggle stop on failure.",
+                summary: "Choose whether Maestro stops after the first failed task.",
+                impactText: "If this is on, the run stops on the first failure.",
+                effectiveValueText: "on",
+                effectiveDisplayValueText: "on",
+                projectValueText: "unset",
+                projectDisplayValueText: "unset",
+                globalValueText: "unset",
+                globalDisplayValueText: "unset",
+                defaultValueText: "on",
+                defaultDisplayValueText: "on",
+              }],
+            },
+          },
+        }));
+        state.modal = {
+          kind: "config",
+          tab: "overview",
+          selectedRowIndex: 0,
+          phase: "confirm-write",
+          selectedScope: "project",
+          draftValue: "off",
+          preview: {
+            scope: "project",
+            path: "/tmp/project/.maestro/config.yaml",
+            content: "execution:\n  stopOnFailure: false\n",
+          },
+        };
+
+        const buf = new Buffer(120, 32);
+        renderFrame(buf, state);
+        const frame = buf.toString();
+
+        expect(frame).toContain("Review change");
+        expect(frame).toContain("Old value");
+        expect(frame).toContain("Preview file");
+        expect(frame).toContain("stopOnFailure");
       });
     });
+  });
+
+function makeWorkerChoice(
+  slug: string,
+  availability: MissionControlConfigWorkerChoice["availability"],
+  featureId: string | undefined,
+  reason: string,
+): MissionControlConfigWorkerChoice {
+  return {
+    slug,
+    label: slug,
+    availability,
+    summary: `${slug} summary`,
+    bestFor: `${slug} best for`,
+    tradeoffs: `${slug} tradeoffs`,
+    recommendation: {
+      workerSlug: slug,
+      featureId,
+      featureTitle: featureId ? `Feature ${featureId}` : undefined,
+      reason,
+      fallbackReason: featureId ? undefined : reason,
+    },
+  };
+}

@@ -66,26 +66,56 @@ export type MissionControlConfigValueSource =
   | "mixed"
   | "none";
 
+export type MissionControlConfigSourceBadge = "P" | "G" | "D" | "M" | "";
+
 export type MissionControlConfigEditKind =
   | "readonly"
   | "toggle"
   | "enum"
   | "number-preset";
 
-export interface MissionControlConfigRow {
-  keyPath: string;
-  label: string;
-  section: string;
-  valueText: string;
-  source: MissionControlConfigValueSource;
-  editKind: MissionControlConfigEditKind;
-  options?: readonly string[];
-  description: string;
-  effectiveValueText: string;
-  projectValueText?: string;
-  globalValueText?: string;
-  defaultValueText?: string;
+export interface MissionControlWorkerFitRecommendation {
+  workerSlug: string;
+  featureId?: string;
+  featureTitle?: string;
+  reason: string;
+  fallbackReason?: string;
 }
+
+export interface MissionControlConfigWorkerChoice {
+  slug: string;
+  label: string;
+  availability: "ready" | "missing" | "disabled";
+  summary: string;
+  bestFor: string;
+  tradeoffs: string;
+  recommendation: MissionControlWorkerFitRecommendation;
+}
+
+export interface MissionControlConfigRow {
+    keyPath: string;
+    label: string;
+    section: string;
+    valueText: string;
+    displayValueText: string;
+    source: MissionControlConfigValueSource;
+    sourceBadge: MissionControlConfigSourceBadge;
+    editKind: MissionControlConfigEditKind;
+    editKindLabel: string;
+    options?: readonly string[];
+    description: string;
+    summary: string;
+    impactText: string;
+    effectiveValueText: string;
+    effectiveDisplayValueText: string;
+    projectValueText?: string;
+    projectDisplayValueText?: string;
+    globalValueText?: string;
+      globalDisplayValueText?: string;
+      defaultValueText?: string;
+      defaultDisplayValueText?: string;
+      workerChoices?: readonly MissionControlConfigWorkerChoice[];
+    }
 
 export interface MissionControlConfigInspector {
   tabs: readonly MissionControlConfigTab[];

@@ -133,10 +133,17 @@ describe("reduce", () => {
       }
     });
 
-    it("returns palette-backed overlays to the command palette on left-arrow back", () => {
-      const state = makeState({
-        modal: { kind: "config", returnTarget: "command-palette" },
-      });
+      it("returns palette-backed overlays to the command palette on left-arrow back", () => {
+        const state = makeState({
+          modal: {
+            kind: "config",
+            tab: "overview",
+            selectedRowIndex: 0,
+            phase: "browse",
+            selectedScope: "project",
+            returnTarget: "command-palette",
+          },
+        });
       const next = reduce(state, { type: "navigate", direction: "left" });
 
       expect(next.modal.kind).toBe("command-palette");
@@ -162,10 +169,16 @@ describe("reduce", () => {
       expect(state.focusedPanel).toBe("log");
     });
 
-      it("does not change focus when modal is open", () => {
-        const state = makeState({
-          modal: { kind: "config" },
-        });
+        it("does not change focus when modal is open", () => {
+          const state = makeState({
+            modal: {
+              kind: "config",
+              tab: "overview",
+              selectedRowIndex: 0,
+              phase: "browse",
+              selectedScope: "project",
+            },
+          });
         const next = reduce(state, { type: "focus", panel: "log" });
         expect(next.focusedPanel).toBe("features");
     });
@@ -208,27 +221,115 @@ describe("reduce", () => {
       });
 
       it("does nothing when no features", () => {
-        const state = makeState({
-        snapshot: makeSnapshot({ features: [] }),
+          const state = makeState({
+          snapshot: makeSnapshot({ features: [] }),
+        });
+        const next = reduce(state, { type: "enter" });
+        expect(next.modal.kind).toBe("none");
       });
-      const next = reduce(state, { type: "enter" });
-      expect(next.modal.kind).toBe("none");
+
+      it("opens config editing directly from the effective tab", () => {
+        const state = makeState({
+          snapshot: makeSnapshot({
+            configInspector: {
+              tabs: ["overview", "effective", "project", "global", "defaults", "workers", "plan", "doctor"],
+              rowsByTab: {
+                overview: [],
+                effective: [{
+                  keyPath: "execution.stopOnFailure",
+                  label: "Stop on failure",
+                  section: "Execution",
+                  valueText: "on",
+                  displayValueText: "on",
+                  source: "default",
+                  sourceBadge: "D",
+                  editKind: "toggle",
+                  editKindLabel: "on/off",
+                  options: ["off", "on"],
+                  description: "desc",
+                  summary: "Choose whether Maestro stops after the first failed task.",
+                  impactText: "If this is on, the run stops on the first failure.",
+                  effectiveValueText: "on",
+                  effectiveDisplayValueText: "on",
+                }],
+                project: [],
+                global: [],
+                defaults: [],
+                workers: [],
+                plan: [],
+                doctor: [],
+              },
+              hasProjectConfig: true,
+              hasGlobalConfig: true,
+              projectPath: ".maestro/config.yaml",
+              globalPath: "~/.maestro/config.yaml",
+              errors: [],
+            },
+          }),
+          modal: {
+            kind: "config",
+            tab: "effective",
+            selectedRowIndex: 0,
+            phase: "browse",
+            selectedScope: "project",
+          },
+        });
+
+        const next = reduce(state, { type: "enter" });
+
+        expect(next.modal.kind).toBe("config");
+        if (next.modal.kind === "config") {
+          expect(next.modal.phase).toBe("edit-inline");
+        }
+      });
     });
-  });
 
     describe("escape", () => {
-        it("closes modal", () => {
+        it("closes config row finder before closing the config modal", () => {
           const state = makeState({
-            modal: { kind: "config" },
+            modal: {
+              kind: "config",
+              tab: "overview",
+              selectedRowIndex: 1,
+              phase: "browse",
+              selectedScope: "project",
+              findQuery: "worker",
+            },
           });
+          const next = reduce(state, { type: "escape" });
+
+          expect(next.modal.kind).toBe("config");
+          if (next.modal.kind === "config") {
+            expect(next.modal.findQuery).toBeUndefined();
+            expect(next.modal.selectedRowIndex).toBe(0);
+          }
+        });
+
+          it("closes modal", () => {
+            const state = makeState({
+              modal: {
+                kind: "config",
+                tab: "overview",
+                selectedRowIndex: 0,
+                phase: "browse",
+                selectedScope: "project",
+              },
+            });
           const next = reduce(state, { type: "escape" });
           expect(next.modal.kind).toBe("none");
       });
 
-      it("closes palette-launched detail modals instead of returning to the command palette", () => {
-        const state = makeState({
-          modal: { kind: "config", returnTarget: "command-palette" },
-        });
+        it("closes palette-launched detail modals instead of returning to the command palette", () => {
+          const state = makeState({
+            modal: {
+              kind: "config",
+              tab: "overview",
+              selectedRowIndex: 0,
+              phase: "browse",
+              selectedScope: "project",
+              returnTarget: "command-palette",
+            },
+          });
         const next = reduce(state, { type: "escape" });
 
         expect(next.modal.kind).toBe("none");
@@ -321,12 +422,15 @@ describe("reduce", () => {
         });
       });
 
-  describe("open-config", () => {
-    it("opens config modal", () => {
-      const state = reduce(makeState(), { type: "open-config" });
-      expect(state.modal.kind).toBe("config");
-    });
-  });
+      describe("open-config", () => {
+        it("opens config modal", () => {
+          const state = reduce(makeState(), { type: "open-config" });
+          expect(state.modal.kind).toBe("config");
+          if (state.modal.kind === "config") {
+            expect(state.modal.findQuery).toBeUndefined();
+          }
+        });
+      });
 
       describe("open-processes", () => {
         it("opens processes modal", () => {
@@ -469,7 +573,7 @@ describe("reduce", () => {
       });
     });
 
-    describe("command palette", () => {
+      describe("command palette", () => {
     it("opens the command palette with a fresh query", () => {
       const state = reduce(makeState(), { type: "open-command-palette" });
       expect(state.modal.kind).toBe("command-palette");
@@ -537,6 +641,27 @@ describe("reduce", () => {
         if (state.modal.kind === "command-palette") {
           expect(state.modal.selectedCommandIndex).toBe(0);
         }
+      });
+
+      describe("config row finder", () => {
+        it("starts a row finder query in browse mode", () => {
+          const state = makeState({
+            modal: {
+              kind: "config",
+              tab: "overview",
+              selectedRowIndex: 1,
+              phase: "browse",
+              selectedScope: "project",
+            },
+          });
+          const next = reduce(state, { type: "config-find-start" });
+
+          expect(next.modal.kind).toBe("config");
+          if (next.modal.kind === "config") {
+            expect(next.modal.findQuery).toBe("");
+            expect(next.modal.selectedRowIndex).toBe(0);
+          }
+        });
       });
 
       it("returns palette-launched feature browser overlays to the palette after snapshot refresh", () => {
@@ -607,6 +732,85 @@ describe("reduce", () => {
         expect(next.modal.selectedFeatureIndex).toBe(0);
         expect(next.snapshot.features[next.modal.selectedFeatureIndex]?.id).toBe("f2");
       }
+    });
+
+    describe("config scope flow", () => {
+      it("opens the explicit scope picker when S is pressed", () => {
+        const state = makeState({
+          modal: {
+            kind: "config",
+            tab: "overview",
+            selectedRowIndex: 0,
+            phase: "browse",
+            selectedScope: "project",
+          },
+        });
+
+        const next = reduce(state, { type: "config-toggle-scope" });
+
+        expect(next.modal.kind).toBe("config");
+        if (next.modal.kind === "config") {
+          expect(next.modal.phase).toBe("choose-scope");
+          expect(next.modal.selectedScope).toBe("project");
+        }
+      });
+
+      it("returns to inline editing after confirming the scope choice", () => {
+        const state = makeState({
+          snapshot: makeSnapshot({
+            configInspector: {
+              tabs: ["overview", "effective", "project", "global", "defaults", "workers", "plan", "doctor"],
+              rowsByTab: {
+                overview: [{
+                  keyPath: "execution.stopOnFailure",
+                  label: "Stop on failure",
+                  section: "Quick settings",
+                  valueText: "on",
+                  displayValueText: "on",
+                  source: "default",
+                  sourceBadge: "D",
+                  editKind: "toggle",
+                  editKindLabel: "on/off",
+                  options: ["off", "on"],
+                  description: "desc",
+                  summary: "Choose whether Maestro stops after the first failed task.",
+                  impactText: "If this is on, the run stops on the first failure.",
+                  effectiveValueText: "on",
+                  effectiveDisplayValueText: "on",
+                }],
+                effective: [],
+                project: [],
+                global: [],
+                defaults: [],
+                workers: [],
+                plan: [],
+                doctor: [],
+              },
+              hasProjectConfig: true,
+              hasGlobalConfig: true,
+              projectPath: ".maestro/config.yaml",
+              globalPath: "~/.maestro/config.yaml",
+              errors: [],
+            },
+          }),
+          modal: {
+            kind: "config",
+            tab: "overview",
+            selectedRowIndex: 0,
+            phase: "choose-scope",
+            selectedScope: "global",
+            draftValue: "off",
+          },
+        });
+
+        const next = reduce(state, { type: "enter" });
+
+        expect(next.modal.kind).toBe("config");
+        if (next.modal.kind === "config") {
+          expect(next.modal.phase).toBe("edit-inline");
+          expect(next.modal.selectedScope).toBe("global");
+        }
+      });
     });
   });
 });

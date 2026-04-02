@@ -544,12 +544,12 @@ describe("mission-control CLI", () => {
         tmpDir,
       );
 
-        expect(exitCode).toBe(0);
-        expect(stdout).toContain("Config");
-        expect(stdout).toContain("[overview] effective project global defaults workers plan doctor");
-        expect(stdout).toContain("Write Scope");
-        expect(stdout).toContain("target scope: project");
-      }, SLOW_CLI_TIMEOUT_MS);
+          expect(exitCode).toBe(0);
+          expect(stdout).toContain("Config");
+          expect(stdout).toContain("[overview] effective project global defaults workers next problems");
+          expect(stdout).toContain("Using now");
+          expect(stdout).toContain("Why it matters");
+        }, SLOW_CLI_TIMEOUT_MS);
 
     it("--preview runtime renders the runtime modal", async () => {
       const missionId = await createMission(tmpDir);
@@ -1025,8 +1025,8 @@ describe("mission-control CLI", () => {
 
         expectCleanPtyExit(result);
         expect(result.plainOutput).toContain("Config");
-        expect(result.plainOutput).toContain("[overview] effective project global defaults workers plan doctor");
-        expect(result.plainOutput).toContain("target scope: project");
+        expect(result.plainOutput).toContain("[overview] effective project global defaults workers next problems");
+        expect(result.plainOutput).toContain("Using now");
       }, PTY_TIMEOUT_MS);
 
     it("compiled binary interactive mode filters the command palette and activates Processes", async () => {
@@ -1122,8 +1122,8 @@ describe("mission-control CLI", () => {
 
         expectCleanPtyExit(result);
         expect(result.plainOutput).toContain("Config");
-        expect(result.plainOutput).toContain("[overview] effective project global defaults workers plan doctor");
-        expect(result.plainOutput).toContain("target scope: project");
+        expect(result.plainOutput).toContain("[overview] effective project global defaults workers next problems");
+        expect(result.plainOutput).toContain("Why it matters");
       }, PTY_TIMEOUT_MS);
 
   it("compiled binary interactive mode opens the Processes overlay", async () => {

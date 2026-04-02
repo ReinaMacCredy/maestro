@@ -58,13 +58,16 @@ const layers: ConfigLayers = {
 
 describe("buildConfigInspector", () => {
   it("builds effective rows with provenance", () => {
-    const inspector = buildConfigInspector(layers, [], [], "project");
-    const row = inspector.rowsByTab.effective.find((item) => item.keyPath === "execution.defaultWorker");
+      const inspector = buildConfigInspector(layers, [], [], "project");
+      const row = inspector.rowsByTab.effective.find((item) => item.keyPath === "execution.defaultWorker");
 
-    expect(row?.valueText).toBe("claude-code");
-    expect(row?.source).toBe("project");
-    expect(row?.editKind).toBe("enum");
-  });
+      expect(row?.label).toBe("Default worker");
+      expect(row?.displayValueText).toBe("claude-code");
+      expect(row?.source).toBe("project");
+      expect(row?.sourceBadge).toBe("P");
+      expect(row?.editKind).toBe("enum");
+      expect(row?.editKindLabel).toBe("choice");
+    });
 
   it("builds plan and doctor tabs", () => {
     const inspector = buildConfigInspector(
