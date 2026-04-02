@@ -377,9 +377,12 @@ function buildActiveWorker(
   nowMs: number,
   workers: Readonly<Record<string, WorkerConfig>>,
   ): MissionControlWorkerPane | null {
-    const active = features.find(
-      (f) => f.status === "assigned" || f.status === "in-progress" || f.status === "review",
-    );
+    const active = features.find((feature) => {
+      if (!(feature.status === "assigned" || feature.status === "in-progress" || feature.status === "review")) {
+        return false;
+      }
+      return runtimeByFeature.has(feature.id);
+    });
 
     if (!active) return null;
 

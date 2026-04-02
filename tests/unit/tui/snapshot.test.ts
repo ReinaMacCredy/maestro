@@ -401,14 +401,61 @@ describe("buildSnapshot", () => {
       retryCount: 1,
     });
       expect(snapshot.runtimeProcesses[0]).toMatchObject({
-        featureId: "f1",
-        runtimeState: "live",
-        retryCount: 1,
-      });
-    }, 15_000);
+          featureId: "f1",
+          runtimeState: "live",
+          retryCount: 1,
+        });
+      }, 15_000);
 
-    it("projects failed runtime state without mutating feature or runtime storage", async () => {
-      const plan = createSamplePlan();
+      it("selects the active worker from the first active feature that has runtime state", async () => {
+        const plan = createSamplePlan();
+        await writeFile(join(tmpDir, "plan.json"), JSON.stringify(plan));
+        const { stdout } = await run(["mission", "create", "--file", join(tmpDir, "plan.json"), "--json"], tmpDir);
+        const missionId = JSON.parse(stdout).mission.id;
+
+        await run(["mission", "approve", missionId, "--json"], tmpDir);
+        await run(["feature", "update", "f1", "--mission", missionId, "--status", "assigned", "--json"], tmpDir);
+        await run(["feature", "update", "f2", "--mission", missionId, "--status", "assigned", "--json"], tmpDir);
+        await run(["feature", "update", "f2", "--mission", missionId, "--status", "in-progress", "--json"], tmpDir);
+
+        await runtimeStore.save(missionId, "f2", {
+          featureId: "f2",
+          attemptId: "attempt-live-second-feature",
+          attempt: 1,
+          agent: "codex",
+          sessionId: "5634c102-9871-4001-86f8-89399077624e",
+          runtimeState: "live",
+          startedAt: new Date(Date.now() - 20_000).toISOString(),
+          lastSeenAt: new Date(Date.now() - 2_000).toISOString(),
+          leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+          recoveryMetadata: {
+            retryCount: 0,
+            history: [],
+          },
+        });
+
+        const snapshot = await buildSnapshot(deps, missionId);
+
+        expect(snapshot.activeWorker).toMatchObject({
+          featureId: "f2",
+          featureTitle: "Feature 2",
+          runtimeState: "live",
+          agent: "codex",
+          sessionId: "5634c102-9871-4001-86f8-89399077624e",
+        });
+        expect(snapshot.session).toMatchObject({
+          agent: "codex",
+          sessionId: "5634c102-9871-4001-86f8-89399077624e",
+        });
+        expect(snapshot.runtimeProcesses).toHaveLength(1);
+        expect(snapshot.runtimeProcesses[0]).toMatchObject({
+          featureId: "f2",
+          runtimeState: "live",
+        });
+      }, 15_000);
+
+      it("projects failed runtime state without mutating feature or runtime storage", async () => {
+        const plan = createSamplePlan();
       await writeFile(join(tmpDir, "plan.json"), JSON.stringify(plan));
       const { stdout } = await run(["mission", "create", "--file", join(tmpDir, "plan.json"), "--json"], tmpDir);
       const missionId = JSON.parse(stdout).mission.id;

@@ -261,6 +261,11 @@ async function seedLiveRuntimeOutput(
 ): Promise<void> {
   const runtimeStore = new FsRuntimeStoreAdapter(cwd);
   const runtimeEventStore = new FsRuntimeEventStoreAdapter(cwd);
+  const startedAt = new Date(Date.now() - 15_000).toISOString();
+  const lastSeenAt = new Date(Date.now() - 2_000).toISOString();
+  const leaseExpiresAt = new Date(Date.now() + 60_000).toISOString();
+  const stdoutAt = new Date(Date.now() - 3_000).toISOString();
+  const stderrAt = new Date(Date.now() - 1_000).toISOString();
   await runtimeStore.save(missionId, featureId, {
     featureId,
     attemptId: "attempt-live-output",
@@ -268,9 +273,9 @@ async function seedLiveRuntimeOutput(
     agent: "codex",
     sessionId: "5634c102-9871-4001-86f8-89399077624e",
     runtimeState: "live",
-    startedAt: "2026-04-02T12:00:00.000Z",
-    lastSeenAt: "2026-04-02T12:00:12.000Z",
-    leaseExpiresAt: "2026-04-02T12:02:00.000Z",
+    startedAt,
+    lastSeenAt,
+    leaseExpiresAt,
     recoveryMetadata: {
       retryCount: 0,
       history: [],
@@ -278,24 +283,24 @@ async function seedLiveRuntimeOutput(
   });
   await runtimeEventStore.append(missionId, {
     id: "event-1",
-    missionId,
-    featureId,
-    attemptId: "attempt-live-output",
-    worker: "codex",
-    timestamp: "2026-04-02T12:00:10.000Z",
-    kind: "stdout",
-    text: "Reading runtime-supervision.usecase.ts",
-  });
+      missionId,
+      featureId,
+      attemptId: "attempt-live-output",
+      worker: "codex",
+      timestamp: stdoutAt,
+      kind: "stdout",
+      text: "Reading runtime-supervision.usecase.ts",
+    });
   await runtimeEventStore.append(missionId, {
     id: "event-2",
-    missionId,
-    featureId,
-    attemptId: "attempt-live-output",
-    worker: "codex",
-    timestamp: "2026-04-02T12:00:12.000Z",
-    kind: "stderr",
-    text: "Retry budget still available",
-    });
+      missionId,
+      featureId,
+      attemptId: "attempt-live-output",
+      worker: "codex",
+      timestamp: stderrAt,
+      kind: "stderr",
+      text: "Retry budget still available",
+      });
 }
 
 async function seedLiveRuntime(
@@ -304,6 +309,9 @@ async function seedLiveRuntime(
   featureId: string,
 ): Promise<void> {
   const runtimeStore = new FsRuntimeStoreAdapter(cwd);
+  const startedAt = new Date(Date.now() - 15_000).toISOString();
+  const lastSeenAt = new Date(Date.now() - 2_000).toISOString();
+  const leaseExpiresAt = new Date(Date.now() + 60_000).toISOString();
   await runtimeStore.save(missionId, featureId, {
     featureId,
     attemptId: "attempt-live-only",
@@ -311,14 +319,24 @@ async function seedLiveRuntime(
     agent: "codex",
     sessionId: "5634c102-9871-4001-86f8-89399077624e",
     runtimeState: "live",
-    startedAt: "2026-04-02T12:00:00.000Z",
-    lastSeenAt: "2026-04-02T12:00:12.000Z",
-    leaseExpiresAt: "2026-04-02T12:02:00.000Z",
+    startedAt,
+    lastSeenAt,
+    leaseExpiresAt,
     recoveryMetadata: {
       retryCount: 0,
       history: [],
     },
-  });
+    });
+}
+
+async function setFeatureToReview(
+  cwd: string,
+  missionId: string,
+  featureId: string,
+): Promise<void> {
+  await setFeatureStatus(cwd, missionId, featureId, "assigned");
+  await setFeatureStatus(cwd, missionId, featureId, "in-progress");
+  await setFeatureStatus(cwd, missionId, featureId, "review");
 }
 
 async function createPendingHandoff(cwd: string): Promise<string> {
@@ -737,12 +755,88 @@ describe("mission-control CLI", () => {
       expect(stdout).toContain("Worker Output");
       expect(stdout).toContain("Reading runtime-supervision.usecase.ts");
       expect(stdout).toContain("Retry budget still available");
-    }, SLOW_CLI_TIMEOUT_MS);
+      }, SLOW_CLI_TIMEOUT_MS);
 
-    it("--preview out accepts the runtime output alias", async () => {
-      const missionId = await createMission(tmpDir);
-      await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
-      await seedLiveRuntimeOutput(tmpDir, missionId, "f1");
+      it("--json keeps assigned, in-progress, and review features invisible to runtime views until a real lease exists", async () => {
+        const statuses = ["assigned", "in-progress", "review"] as const;
+
+        for (const status of statuses) {
+          const missionId = await createMission(tmpDir);
+
+          if (status === "assigned") {
+            await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+          } else if (status === "in-progress") {
+            await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+            await setFeatureStatus(tmpDir, missionId, "f1", "in-progress");
+          } else {
+            await setFeatureToReview(tmpDir, missionId, "f1");
+          }
+
+          const { stdout, exitCode } = await run(
+            ["mission-control", "--mission", missionId, "--json"],
+            tmpDir,
+          );
+
+          expect(exitCode).toBe(0);
+          const snapshot = JSON.parse(stdout);
+          expect(snapshot.activeWorker).toBeNull();
+          expect(snapshot.runtimeProcesses).toEqual([]);
+
+          const preview = await run(
+            ["mission-control", "--mission", missionId, "--preview", "runtime"],
+            tmpDir,
+          );
+          expect(preview.exitCode).toBe(0);
+          expect(preview.stdout).toContain("No active runtime processes");
+          expect(preview.stdout).toContain("No runtime item selected");
+        }
+      }, SLOW_CLI_TIMEOUT_MS);
+
+      it("--json and default preview follow the real runtime when an earlier active feature has none", async () => {
+        const missionId = await createMission(tmpDir);
+        await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+        await setFeatureStatus(tmpDir, missionId, "f2", "assigned");
+        await setFeatureStatus(tmpDir, missionId, "f2", "in-progress");
+        await seedLiveRuntime(tmpDir, missionId, "f2");
+
+        const { stdout, exitCode } = await run(
+          ["mission-control", "--mission", missionId, "--json"],
+          tmpDir,
+        );
+
+        expect(exitCode).toBe(0);
+        const snapshot = JSON.parse(stdout);
+        expect(snapshot.activeWorker).toMatchObject({
+          featureId: "f2",
+          featureTitle: "Feature 2",
+          runtimeState: "live",
+          agent: "codex",
+          sessionId: "5634c102-9871-4001-86f8-89399077624e",
+        });
+        expect(snapshot.session).toMatchObject({
+          agent: "codex",
+          sessionId: "5634c102-9871-4001-86f8-89399077624e",
+        });
+        expect(snapshot.runtimeProcesses).toHaveLength(1);
+        expect(snapshot.runtimeProcesses[0]).toMatchObject({
+          featureId: "f2",
+          runtimeState: "live",
+          agent: "codex",
+        });
+
+        const preview = await run(
+          ["mission-control", "--mission", missionId, "--preview"],
+          tmpDir,
+        );
+        expect(preview.exitCode).toBe(0);
+        expect(preview.stdout).toContain("Agent     codex");
+        expect(preview.stdout).toContain("Session   5634c102");
+      }, SLOW_CLI_TIMEOUT_MS);
+
+      it("--preview out accepts the runtime output alias", async () => {
+        const missionId = await createMission(tmpDir);
+        await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+        await seedLiveRuntimeOutput(tmpDir, missionId, "f1");
 
       const { stdout, exitCode } = await run(
         ["mission-control", "--mission", missionId, "--preview", "out", "--feature", "f1"],
@@ -1314,10 +1408,10 @@ describe("mission-control CLI", () => {
         expect(result.plainOutput).toContain("Why it matters");
       }, PTY_TIMEOUT_MS);
 
-  it("compiled binary interactive mode opens the Processes overlay", async () => {
-    if (!pythonAvailable) return;
-    const missionId = await createMission(tmpDir);
-    await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+    it("compiled binary interactive mode opens the Processes overlay", async () => {
+      if (!pythonAvailable) return;
+      const missionId = await createMission(tmpDir);
+      await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
 
     const result = await runCompiledInteractivePty(
       tmpDir,
@@ -1338,6 +1432,29 @@ describe("mission-control CLI", () => {
       expect(result.plainOutput).toContain("No active runtime processes");
       expect(result.plainOutput).toContain("No runtime item selected");
       }, PTY_TIMEOUT_MS);
+
+    it("compiled binary interactive mode follows a real later runtime on startup", async () => {
+      if (!pythonAvailable) return;
+      const missionId = await createMission(tmpDir);
+      await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+      await setFeatureStatus(tmpDir, missionId, "f2", "assigned");
+      await setFeatureStatus(tmpDir, missionId, "f2", "in-progress");
+      await seedLiveRuntime(tmpDir, missionId, "f2");
+
+      const result = await runCompiledInteractivePty(
+        tmpDir,
+        ["mission-control", "--mission", missionId],
+        {
+          input: "",
+          inputSteps: [{ chars: "q", delayMs: 600 }],
+          waitForText: "Mission Control",
+        },
+      );
+
+      expectCleanPtyExit(result);
+      expect(result.plainOutput).toContain("Agent     codex");
+      expect(result.plainOutput).toContain("Session   5634c102");
+    }, PTY_TIMEOUT_MS);
 
   it("compiled binary interactive mode persists a selected feature transition on keyboard confirm", async () => {
     if (!pythonAvailable) return;
