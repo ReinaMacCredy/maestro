@@ -24,9 +24,27 @@ export class A2aTransportAdapter implements TransportPort {
     const rawEvents: string[] = [];
     const outputChunks: string[] = [];
     let finalState: string | undefined;
+    let sessionId: string | undefined;
+    let heartbeat: ReturnType<typeof setInterval> | undefined;
+
+    const emitEvent = async (
+      event: {
+        timestamp: string;
+        kind: "status" | "stdout" | "stderr" | "heartbeat";
+        worker: string;
+        text?: string;
+        sessionId?: string;
+        runtimeState?: "starting" | "live" | "stale" | "failed" | "recoverable" | "completed";
+      },
+    ): Promise<void> => {
+      await opts.onEvent?.({
+        ...event,
+        sessionId: event.sessionId ?? sessionId,
+      });
+    };
 
     try {
-      await opts.onEvent?.({
+      await emitEvent({
         timestamp: new Date().toISOString(),
         kind: "status",
         worker: opts.workerSlug,
@@ -36,8 +54,8 @@ export class A2aTransportAdapter implements TransportPort {
 
       const agentCard = await fetchAgentCard(workerConfig.url, workerConfig.agentCardPath, workerConfig.headers);
       const endpoint = resolveJsonRpcEndpoint(workerConfig.url, agentCard);
-      const heartbeat = setInterval(() => {
-        void opts.onEvent?.({
+      heartbeat = setInterval(() => {
+        void emitEvent({
           timestamp: new Date().toISOString(),
           kind: "heartbeat",
           worker: opts.workerSlug,
@@ -69,6 +87,7 @@ export class A2aTransportAdapter implements TransportPort {
 
       for await (const event of parseJsonRpcSseStream(streamResponse)) {
         rawEvents.push(JSON.stringify(event));
+        sessionId = extractRemoteHandle(event) ?? sessionId;
         const eventTexts = extractEventText(event);
         outputChunks.push(...eventTexts);
         if (event.kind === "task") {
@@ -78,7 +97,7 @@ export class A2aTransportAdapter implements TransportPort {
           finalState = event.status.state;
         }
         if (finalState) {
-          await opts.onEvent?.({
+          await emitEvent({
             timestamp: new Date().toISOString(),
             kind: "status",
             worker: opts.workerSlug,
@@ -89,7 +108,7 @@ export class A2aTransportAdapter implements TransportPort {
         for (const text of eventTexts) {
           const trimmed = text.trim();
           if (trimmed.length === 0) continue;
-          await opts.onEvent?.({
+          await emitEvent({
             timestamp: new Date().toISOString(),
             kind: "stdout",
             worker: opts.workerSlug,
@@ -98,14 +117,13 @@ export class A2aTransportAdapter implements TransportPort {
           });
         }
       }
-      clearInterval(heartbeat);
 
       const parsedOutput = outputChunks.join("\n").trim();
       const success = finalState === undefined
         ? parsedOutput.length > 0
         : finalState === "completed";
 
-      await opts.onEvent?.({
+      await emitEvent({
         timestamp: new Date().toISOString(),
         kind: "status",
         worker: opts.workerSlug,
@@ -127,16 +145,29 @@ export class A2aTransportAdapter implements TransportPort {
         failureClass: success ? undefined : classifyFailure(finalState),
       };
     } catch (error) {
+      finalState = finalState ?? "failed";
+      const detail = error instanceof Error ? error.message : String(error);
+      await emitEvent({
+        timestamp: new Date().toISOString(),
+        kind: "status",
+        worker: opts.workerSlug,
+        runtimeState: "failed",
+        text: detail,
+      });
       return {
         success: false,
         exitCode: 1,
-        summary: `Failed to communicate with A2A worker '${opts.workerSlug}'`,
+        summary: `Failed to communicate with A2A worker '${opts.workerSlug}': ${detail}`,
         stdoutRaw: rawEvents.join("\n"),
-        stderrRaw: error instanceof Error ? error.message : String(error),
+        stderrRaw: detail,
         filesChanged: [],
         durationMs: Date.now() - startedAt,
         failureClass: "infrastructure",
       };
+    } finally {
+      if (heartbeat) {
+        clearInterval(heartbeat);
+      }
     }
   }
 }
@@ -145,6 +176,8 @@ function mapA2aRuntimeState(
   finalState: string | undefined,
 ): "starting" | "live" | "stale" | "failed" | "recoverable" | "completed" {
   switch (finalState) {
+    case "submitted":
+      return "starting";
     case "completed":
       return "completed";
     case "failed":
@@ -170,6 +203,18 @@ function extractEventText(event: A2aEvent): readonly string[] {
   }
 
   return [];
+}
+
+function extractRemoteHandle(event: A2aEvent): string | undefined {
+  if (event.kind === "task") {
+    return event.id ?? event.contextId;
+  }
+
+  if (event.kind === "status-update" || event.kind === "artifact-update") {
+    return event.taskId ?? event.contextId;
+  }
+
+  return undefined;
 }
 
 function extractPartTexts(parts: readonly unknown[]): readonly string[] {
@@ -232,6 +277,8 @@ interface A2aMessage {
 
 interface A2aTask {
   readonly kind: "task";
+  readonly id?: string;
+  readonly contextId?: string;
   readonly status: {
     readonly state: string;
   };
@@ -242,6 +289,8 @@ interface A2aTask {
 
 interface A2aStatusUpdate {
   readonly kind: "status-update";
+  readonly taskId?: string;
+  readonly contextId?: string;
   readonly status: {
     readonly state: string;
   };
@@ -249,6 +298,8 @@ interface A2aStatusUpdate {
 
 interface A2aArtifactUpdate {
   readonly kind: "artifact-update";
+  readonly taskId?: string;
+  readonly contextId?: string;
   readonly artifact: {
     readonly parts: readonly unknown[];
   };
