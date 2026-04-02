@@ -4,6 +4,8 @@ import { getGitShortSha } from "./git-short-sha";
 const root = join(import.meta.dir, "..");
 
 const gitSha = await getGitShortSha(root);
+const buildUnix = Math.floor(Date.now() / 1_000).toString();
+const releasedAt = new Date().toISOString();
 const args = [
   "bun",
   "build",
@@ -20,12 +22,12 @@ const build = Bun.spawn(args, {
   cwd: root,
   stdout: "inherit",
   stderr: "inherit",
-  env: gitSha
-    ? {
-      ...process.env,
-      MAESTRO_BUILD_GIT_SHA: gitSha,
-    }
-    : process.env,
+  env: {
+    ...process.env,
+    MAESTRO_BUILD_UNIX: buildUnix,
+    MAESTRO_BUILD_RELEASED_AT: releasedAt,
+    ...(gitSha ? { MAESTRO_BUILD_GIT_SHA: gitSha } : {}),
+  },
 });
 
 process.exit(await build.exited);

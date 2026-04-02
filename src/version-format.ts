@@ -10,6 +10,8 @@ export interface VersionMetadata {
 
 interface VersionEnv {
   readonly MAESTRO_BUILD_GIT_SHA?: string;
+  readonly MAESTRO_BUILD_UNIX?: string;
+  readonly MAESTRO_BUILD_RELEASED_AT?: string;
   readonly [key: string]: string | undefined;
 }
 
@@ -21,14 +23,37 @@ interface GitShaResolutionOptions {
 
 const REPO_ROOT = join(import.meta.dir, "..");
 const BUILD_GIT_SHA_OVERRIDE = normalizeGitSha(process.env.MAESTRO_BUILD_GIT_SHA);
+const BUILD_UNIX_OVERRIDE = normalizeBuildUnix(process.env.MAESTRO_BUILD_UNIX);
+const BUILD_RELEASED_AT_OVERRIDE = normalizeReleasedAt(process.env.MAESTRO_BUILD_RELEASED_AT);
 
 function normalizeGitSha(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed && trimmed !== "unknown" ? trimmed : undefined;
 }
 
+function normalizeBuildUnix(value: string | undefined): number | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  const parsed = Number.parseInt(trimmed, 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function normalizeReleasedAt(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  return Number.isFinite(Date.parse(trimmed)) ? trimmed : undefined;
+}
+
 function resolveBuildOverrideSha(env: VersionEnv): string | undefined {
   return normalizeGitSha(env.MAESTRO_BUILD_GIT_SHA) ?? BUILD_GIT_SHA_OVERRIDE;
+}
+
+function resolveBuildOverrideUnix(env: VersionEnv): number | undefined {
+  return normalizeBuildUnix(env.MAESTRO_BUILD_UNIX) ?? BUILD_UNIX_OVERRIDE;
+}
+
+function resolveBuildOverrideReleasedAt(env: VersionEnv): string | undefined {
+  return normalizeReleasedAt(env.MAESTRO_BUILD_RELEASED_AT) ?? BUILD_RELEASED_AT_OVERRIDE;
 }
 
 export function resolveRuntimeGitSha(
@@ -66,15 +91,17 @@ export function getVersionMetadata(
   liveGitSha?: string,
 ): VersionMetadata {
   const buildGitSha = resolveBuildOverrideSha(env);
+  const buildUnix = resolveBuildOverrideUnix(env);
+  const releasedAt = resolveBuildOverrideReleasedAt(env);
   return {
     version: VERSION,
-    buildUnix: BUILD_UNIX,
+    buildUnix: buildUnix ?? BUILD_UNIX,
     gitSha: resolveDisplayedGitSha({
       buildGitSha,
       liveGitSha: buildGitSha ? undefined : liveGitSha,
       trackedGitSha: GIT_SHA,
     }),
-    releasedAt: RELEASED_AT,
+    releasedAt: releasedAt ?? RELEASED_AT,
   };
 }
 

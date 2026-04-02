@@ -56,12 +56,30 @@ describe("version formatting", () => {
     ).toBe("live4567");
   });
 
+  it("prefers build-time timestamp overrides over tracked version metadata", () => {
+    expect(
+      getVersionMetadata({
+        MAESTRO_BUILD_UNIX: "1776000000",
+        MAESTRO_BUILD_RELEASED_AT: "2026-04-02T11:11:12.000Z",
+      }),
+    ).toMatchObject({
+      buildUnix: 1_776_000_000,
+      releasedAt: "2026-04-02T11:11:12.000Z",
+    });
+  });
+
   it("avoids live git lookup when version output is not requested", () => {
     const output = formatVersionOutputForArgv(
       ["bun", "src/index.ts", "status"],
-      { MAESTRO_BUILD_GIT_SHA: "build123" },
+      {
+        MAESTRO_BUILD_GIT_SHA: "build123",
+        MAESTRO_BUILD_UNIX: "1776000000",
+        MAESTRO_BUILD_RELEASED_AT: "2026-04-02T11:11:12.000Z",
+      },
       new Date("2026-04-01T17:09:52.362Z"),
     );
     expect(output).toContain("-gbuild123 ");
+    expect(output).toContain("1776000000");
+    expect(output).toContain("released 2026-04-02T11:11:12.000Z");
   });
 });
