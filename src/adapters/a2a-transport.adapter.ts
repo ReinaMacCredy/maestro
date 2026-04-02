@@ -1,25 +1,12 @@
-import type { A2aWorkerConfig, WorkerResult } from "../domain/worker-types.js";
+import type { A2aWorkerConfig, WorkerProgressEvent, WorkerResult } from "../domain/worker-types.js";
 import { fetchA2aAgentCard, resolveA2aJsonRpcEndpoint } from "../lib/a2a.js";
-import type { TransportPort } from "../ports/transport.port.js";
+import type { TransportPort, TransportSpawnOptions } from "../ports/transport.port.js";
 
 export class A2aTransportAdapter implements TransportPort {
   async spawn(
     workerConfig: A2aWorkerConfig,
     prompt: string,
-    opts: {
-      cwd: string;
-      featureId: string;
-      missionId: string;
-      workerSlug: string;
-      onEvent?: (event: {
-        timestamp: string;
-        kind: "status" | "stdout" | "stderr" | "heartbeat";
-        worker: string;
-        text?: string;
-        sessionId?: string;
-        runtimeState?: "starting" | "live" | "stale" | "failed" | "recoverable" | "completed";
-      }) => void | Promise<void>;
-    },
+    opts: TransportSpawnOptions,
   ): Promise<WorkerResult> {
     const startedAt = Date.now();
     const rawEvents: string[] = [];
@@ -29,16 +16,7 @@ export class A2aTransportAdapter implements TransportPort {
     let sessionId: string | undefined;
     let heartbeat: ReturnType<typeof setInterval> | undefined;
 
-    const emitEvent = async (
-      event: {
-        timestamp: string;
-        kind: "status" | "stdout" | "stderr" | "heartbeat";
-        worker: string;
-        text?: string;
-        sessionId?: string;
-        runtimeState?: "starting" | "live" | "stale" | "failed" | "recoverable" | "completed";
-      },
-    ): Promise<void> => {
+    const emitEvent = async (event: WorkerProgressEvent): Promise<void> => {
       try {
         await opts.onEvent?.({
           ...event,

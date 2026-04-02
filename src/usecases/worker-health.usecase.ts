@@ -1,6 +1,7 @@
 import { execArgv } from "../lib/shell.js";
 import { fetchA2aAgentCard, resolveA2aJsonRpcEndpoint } from "../lib/a2a.js";
 import type { WorkerConfig } from "../domain/worker-types.js";
+import { formatWorkerLabel, getWorkerGuidance } from "../domain/worker-presentation.js";
 import type {
   MissionControlWorkerHealthCheck,
   MissionControlWorkerHealthRow,
@@ -51,11 +52,11 @@ export async function getWorkerHealthRows(
   const entries = Object.entries(workers ?? {});
 
   return Promise.all(entries.map(async ([slug, worker]) => {
-    const guidance = workerGuidanceForSlug(slug);
+    const guidance = getWorkerGuidance(slug);
     if (!worker.enabled) {
       return {
         slug,
-        label: humanizeWorkerSlug(slug),
+        label: formatWorkerLabel(slug),
         status: "disabled",
         detail: "disabled",
         lastCheckedAt: nowIso,
@@ -79,7 +80,7 @@ export async function getWorkerHealthRows(
 
     return {
       slug,
-      label: humanizeWorkerSlug(slug),
+      label: formatWorkerLabel(slug),
       status,
       detail: status === "busy" ? "active on current mission" : probe.detail ?? status,
       lastCheckedAt: nowIso,
@@ -185,39 +186,4 @@ export async function probeA2aWorkerReadiness(
       checks: [{ label: checkLabel, ok: false, detail }],
     };
   }
-}
-
-function workerGuidanceForSlug(slug: string): {
-  readonly summary: string;
-  readonly bestFor: string;
-  readonly tradeoffs: string;
-} {
-  switch (slug) {
-    case "claude-code":
-      return {
-        summary: "Highest quality, slower and pricier.",
-        bestFor: "hard bugs; risky refactors; architecture-heavy work; tasks where correctness matters",
-        tradeoffs: "slower; highest cost",
-      };
-    case "gemini":
-      return {
-        summary: "Fast and low cost, lighter reasoning.",
-        bestFor: "low-risk tasks; drafting and support work; simple follow-up tasks; cheap retries",
-        tradeoffs: "weaker on complex tasks; may need more retries",
-      };
-    case "codex":
-    default:
-      return {
-        summary: "Fast, strong general-purpose coding.",
-        bestFor: "everyday implementation; debugging and iteration; medium to high complexity tasks",
-        tradeoffs: "less exhaustive than Claude Code; higher cost than Gemini",
-      };
-  }
-}
-
-function humanizeWorkerSlug(slug: string): string {
-  return slug
-    .split("-")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
 }

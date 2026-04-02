@@ -1,6 +1,7 @@
 import type { Feature } from "../../domain/mission-types.js";
 import type { DoctorCheck, MaestroConfig } from "../../domain/types.js";
 import type { WorkerConfig } from "../../domain/worker-types.js";
+import { formatWorkerLabel, getWorkerGuidance } from "../../domain/worker-presentation.js";
 import type { ConfigLayers } from "../../ports/config.port.js";
 import type {
   MissionControlConfigEditKind,
@@ -749,11 +750,11 @@ function fallbackWorkerHealth(
   slug: string,
   worker: WorkerConfig | undefined,
 ): MissionControlWorkerHealthRow {
-  const guidance = workerGuidanceForSlug(slug);
+  const guidance = getWorkerGuidance(slug);
   if (!worker) {
     return {
       slug,
-      label: humanizeWorkerSlug(slug),
+      label: formatWorkerLabel(slug),
       status: "missing",
       detail: "Worker profile is missing from config.",
       lastCheckedAt: "",
@@ -767,7 +768,7 @@ function fallbackWorkerHealth(
   if (!worker.enabled) {
     return {
       slug,
-      label: humanizeWorkerSlug(slug),
+      label: formatWorkerLabel(slug),
       status: "disabled",
       detail: "Worker is disabled in config.",
       lastCheckedAt: "",
@@ -781,7 +782,7 @@ function fallbackWorkerHealth(
   if (worker.transport === "cli") {
     return {
       slug,
-      label: humanizeWorkerSlug(slug),
+      label: formatWorkerLabel(slug),
       status: Bun.which(worker.command) ? "ready" : "missing",
       detail: Bun.which(worker.command) ? "ready to run" : `Command not found: ${worker.command}`,
       lastCheckedAt: "",
@@ -794,7 +795,7 @@ function fallbackWorkerHealth(
 
   return {
     slug,
-    label: humanizeWorkerSlug(slug),
+    label: formatWorkerLabel(slug),
     status: worker.url ? "degraded" : "missing",
     detail: worker.url ? "Health has not been checked yet." : "Missing agent endpoint.",
     lastCheckedAt: "",
@@ -825,44 +826,9 @@ function workerImpactText(
   }
 }
 
-function workerGuidanceForSlug(slug: string): {
-  summary: string;
-  bestFor: string;
-  tradeoffs: string;
-} {
-  switch (slug) {
-    case "claude-code":
-      return {
-        summary: "Highest quality, slower and pricier.",
-        bestFor: "hard bugs; risky refactors; architecture-heavy work; tasks where correctness matters",
-        tradeoffs: "slower; highest cost",
-      };
-    case "gemini":
-      return {
-        summary: "Fast and low cost, lighter reasoning.",
-        bestFor: "low-risk tasks; drafting and support work; simple follow-up tasks; cheap retries",
-        tradeoffs: "weaker on complex tasks; may need more retries",
-      };
-    case "codex":
-    default:
-      return {
-        summary: "Fast, strong general-purpose coding.",
-        bestFor: "everyday implementation; debugging and iteration; medium to high complexity tasks",
-        tradeoffs: "less exhaustive than Claude Code; higher cost than Gemini",
-      };
-  }
-}
-
 function humanizeConfigKey(keyPath: string): string {
   const leaf = keyPath.split(".").at(-1) ?? keyPath;
   return capitalize(leaf.replace(/([A-Z])/g, " $1").replace(/[-_]/g, " ").trim());
-}
-
-function humanizeWorkerSlug(slug: string): string {
-  return slug
-    .split("-")
-    .map((part) => capitalize(part))
-    .join(" ");
 }
 
 function humanizeCheckName(name: string): string {

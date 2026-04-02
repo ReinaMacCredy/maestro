@@ -20,6 +20,7 @@ import {
   getConfigRowsForTab,
   getConfigTabDisplayLabel,
 } from "../state/config-inspector.js";
+import { formatWorkerLabel } from "../../domain/worker-presentation.js";
 
 export function buildModalOptions(state: AppState): ModalOptions | undefined {
   if (state.modal.kind === "command-palette") {
@@ -494,7 +495,7 @@ function buildDefaultWorkerDetailItems(
   }
   const recommendationLines = buildWorkerRecommendationLines(choice);
   return [
-    { text: humanizeWorkerLabel(choice.slug), tone: "accent" as const, style: "block" as const },
+    { text: formatWorkerLabel(choice.slug), tone: "accent" as const, style: "block" as const },
     { text: choice.summary },
     { text: `${availabilityText(choice.availability)}${choice.availabilityDetail ? ` · ${choice.availabilityDetail}` : ""}`, section: "Availability" },
     ...splitParagraph(choice.bestFor, "Best for"),
@@ -711,13 +712,6 @@ function normalizeRecommendationReason(reason: string, workerSlug: string): stri
     return "Best for lower-risk support work.";
   }
   return reason;
-}
-
-function humanizeWorkerLabel(slug: string): string {
-  return slug
-    .split("-")
-    .map((part) => part.length === 0 ? part : part[0]!.toUpperCase() + part.slice(1))
-    .join(" ");
 }
 
 function getSelectedTaskPreview(state: AppState): TaskPreviewPane | null {

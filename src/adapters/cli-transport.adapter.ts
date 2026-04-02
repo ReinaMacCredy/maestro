@@ -1,19 +1,13 @@
 import type { WorkerConfig, WorkerProgressEvent, WorkerResult } from "../domain/worker-types.js";
 import { execArgv } from "../lib/shell.js";
 import { parseRawOutput, parseStreamJsonOutput } from "../lib/stream-json-parser.js";
-import type { TransportPort } from "../ports/transport.port.js";
+import type { TransportPort, TransportSpawnOptions } from "../ports/transport.port.js";
 
 export class CliTransportAdapter implements TransportPort {
   async spawn(
     workerConfig: WorkerConfig,
     prompt: string,
-    opts: {
-      cwd: string;
-      featureId: string;
-      missionId: string;
-      workerSlug: string;
-      onEvent?: (event: WorkerProgressEvent) => void | Promise<void>;
-    },
+    opts: TransportSpawnOptions,
   ): Promise<WorkerResult> {
     const startedAt = Date.now();
     const changedFilesBefore = await captureChangedFileSet(opts.cwd);
@@ -106,13 +100,7 @@ export class CliTransportAdapter implements TransportPort {
 async function collectStream(
   stream: ReadableStream<Uint8Array>,
   kind: "stdout" | "stderr",
-  opts: {
-    cwd: string;
-    featureId: string;
-    missionId: string;
-    workerSlug: string;
-    onEvent?: (event: WorkerProgressEvent) => void | Promise<void>;
-  },
+  opts: TransportSpawnOptions,
 ): Promise<string> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();

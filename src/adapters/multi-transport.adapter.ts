@@ -1,5 +1,5 @@
 import type { WorkerConfig, WorkerResult } from "../domain/worker-types.js";
-import type { TransportPort } from "../ports/transport.port.js";
+import type { TransportPort, TransportSpawnOptions } from "../ports/transport.port.js";
 import { isA2aWorkerConfig, isCliWorkerConfig } from "../domain/worker-validators.js";
 import { A2aTransportAdapter } from "./a2a-transport.adapter.js";
 import { CliTransportAdapter } from "./cli-transport.adapter.js";
@@ -13,12 +13,7 @@ export class MultiTransportAdapter implements TransportPort {
   spawn(
     workerConfig: WorkerConfig,
     prompt: string,
-    opts: {
-      cwd: string;
-      featureId: string;
-      missionId: string;
-      workerSlug: string;
-    },
+    opts: TransportSpawnOptions,
   ): Promise<WorkerResult> {
     if (isCliWorkerConfig(workerConfig)) {
       return this.cliTransport.spawn(workerConfig, prompt, opts);
