@@ -117,13 +117,14 @@ export function buildPreviewState(opts: PreviewStateOptions): AppState {
   }
 }
 
-function validateSelectorUsage(screen: PreviewScreen, opts: PreviewStateOptions): void {
-  if (opts.featureId && !FEATURE_SELECTOR_SCREENS.includes(screen)) {
-    throw new MaestroError("--feature is only supported for dashboard, features, and dependencies previews", [
-      "Try `maestro mission-control --preview dashboard --feature <id>`",
-      "Try `maestro mission-control --preview dependencies --feature <id>`",
-    ]);
-  }
+  function validateSelectorUsage(screen: PreviewScreen, opts: PreviewStateOptions): void {
+    if (opts.featureId && !FEATURE_SELECTOR_SCREENS.includes(screen)) {
+      throw new MaestroError("--feature is only supported for dashboard, features, dependencies, and output previews", [
+        "Try `maestro mission-control --preview dashboard --feature <id>`",
+        "Try `maestro mission-control --preview dependencies --feature <id>`",
+        "Try `maestro mission-control --preview output --feature <id>`",
+      ]);
+    }
 
   if (opts.handoffId && screen !== "handoffs") {
     throw new MaestroError("--handoff is only supported for handoffs previews", [

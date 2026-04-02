@@ -110,7 +110,8 @@ export interface MissionControlWorkerFitRecommendation {
 export interface MissionControlConfigWorkerChoice {
   slug: string;
   label: string;
-  availability: "ready" | "missing" | "disabled";
+  availability: MissionControlWorkerHealthStatus;
+  availabilityDetail: string;
   summary: string;
   bestFor: string;
   tradeoffs: string;

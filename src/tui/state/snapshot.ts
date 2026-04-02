@@ -135,10 +135,16 @@ export async function buildSnapshot(
     const runtimeByFeature = new Map(
       runtimes.map((runtime) => [runtime.featureId, buildRuntimeView(runtime, now)]),
     );
-    const runtimeTelemetryByFeature = new Map(
-      features.map((feature) => [feature.id, buildRuntimeTelemetry(runtimeEventsByFeature.get(feature.id) ?? [], now)]),
-    );
-    const featureGraph = buildFeatureGraph(features);
+  const runtimeTelemetryByFeature = new Map(
+    features.map((feature) => [feature.id, buildRuntimeTelemetry(runtimeEventsByFeature.get(feature.id) ?? [], now)]),
+  );
+  const featureGraph = buildFeatureGraph(features);
+  const workerHealth = await getWorkerHealthRows(configLayers.effective.workers ?? {}, {
+    activeWorkers: features
+      .filter((feature) => feature.status === "assigned" || feature.status === "in-progress" || feature.status === "review")
+      .map((feature) => runtimeByFeature.get(feature.id)?.agent ?? "unknown")
+      .filter((agent) => agent !== "unknown"),
+  });
   const taskPreviews = features.map((feature) =>
     buildTaskPreview(feature, report, runtimeByFeature, featureGraph.get(feature.id))
   );
@@ -147,6 +153,7 @@ export async function buildSnapshot(
   // Feature rows
   const featureRows: MissionControlFeatureRow[] = features.map((f) => {
     const preview = taskPreviewById.get(f.id);
+
     return {
       id: f.id,
       title: f.title,
@@ -246,14 +253,9 @@ export async function buildSnapshot(
         missionDirectory: `.maestro/missions/${mission.id}`,
         workerTypes,
         },
-        configInspector: buildConfigInspector(configLayers, env.checks, features, env.status.configSource),
-        workerHealth: await getWorkerHealthRows(configLayers.effective.workers ?? {}, {
-          activeWorkers: features
-            .filter((feature) => feature.status === "assigned" || feature.status === "in-progress" || feature.status === "review")
-            .map((feature) => runtimeByFeature.get(feature.id)?.agent ?? "unknown")
-            .filter((agent) => agent !== "unknown"),
-        }),
-        runtimeProcesses: buildRuntimeProcesses(mission, features, runtimeByFeature, runtimeTelemetryByFeature, activeWorker),
+          configInspector: buildConfigInspector(configLayers, env.checks, features, env.status.configSource, workerHealth),
+          workerHealth,
+          runtimeProcesses: buildRuntimeProcesses(mission, features, runtimeByFeature, runtimeTelemetryByFeature, activeWorker),
         progressLog,
       milestones,
       gateBlocked,
@@ -288,7 +290,9 @@ export async function buildHomeSnapshot(
   const actions = buildHomeActions(status, checks);
   const pendingHandoffs = status.pendingHandoffs.map(mapPendingHandoff);
 
-  return {
+    const workerHealth = await getWorkerHealthRows(configLayers.effective.workers ?? {});
+
+    return {
     mode: "home",
     missionId: "home",
     missionTitle: headline,
@@ -330,9 +334,9 @@ export async function buildHomeSnapshot(
       missionDirectory: null,
       workerTypes: [],
     },
-      configInspector: buildConfigInspector(configLayers, checks, [], status.configSource),
-      workerHealth: await getWorkerHealthRows(configLayers.effective.workers ?? {}),
-      runtimeProcesses: [],
+        configInspector: buildConfigInspector(configLayers, checks, [], status.configSource, workerHealth),
+        workerHealth,
+        runtimeProcesses: [],
     progressLog: [],
     milestones: [],
     gateBlocked: false,

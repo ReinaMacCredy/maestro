@@ -90,7 +90,7 @@ describe("renderWorkerPanel", () => {
     expect(text).toContain("Waiting to start next feature");
   });
 
-  it("shows stale runtime messaging for the active worker", () => {
+    it("shows stale runtime messaging for the active worker", () => {
     const buf = new Buffer(90, 6);
     renderWorkerPanel(buf, { x: 0, y: 0, width: 90, height: 6 }, makeSnapshot({
       activeWorker: {
@@ -107,8 +107,29 @@ describe("renderWorkerPanel", () => {
 
     const text = buf.toString();
     expect(text).toContain("Worker heartbeat stale");
-    expect(text).toContain("Recovery review or manual retry");
-  });
+      expect(text).toContain("Recovery review or manual retry");
+    });
+
+    it("prefers live activity and output freshness for the active worker", () => {
+      const buf = new Buffer(100, 6);
+      renderWorkerPanel(buf, { x: 0, y: 0, width: 100, height: 6 }, makeSnapshot({
+        activeWorker: {
+          featureId: "f2",
+          featureTitle: "Database config",
+          workerType: "backend-worker",
+          status: "in-progress",
+          elapsedMs: 30_000,
+          report: null,
+          runtimeState: "live",
+          currentActivity: "Applying auth schema patch",
+          lastOutputAgeMs: 3_000,
+        },
+      }));
+
+      const text = buf.toString();
+      expect(text).toContain("Applying auth schema patch");
+      expect(text).toContain("Live output streaming now");
+    });
 
     it("shows recoverable guidance for the next feature", () => {
       const buf = new Buffer(90, 6);

@@ -2,11 +2,12 @@
  * Integration tests for mission-control command
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FsFeatureStoreAdapter } from "../../src/adapters/feature-store.adapter.js";
 import { FsMissionStoreAdapter } from "../../src/adapters/mission-store.adapter.js";
+import { FsRuntimeEventStoreAdapter } from "../../src/adapters/runtime-event-store.adapter.js";
 import { FsRuntimeStoreAdapter } from "../../src/adapters/runtime-store.adapter.js";
 import { enterAltScreen, exitAltScreen } from "../../src/tui/terminal/ansi.js";
 import { buildOverlayRenderSpec, layoutModal } from "../../src/tui/widgets/modal.js";
@@ -251,6 +252,50 @@ async function setFeatureStatus(
     cwd,
   );
   expect(exitCode).toBe(0);
+}
+
+async function seedLiveRuntimeOutput(
+  cwd: string,
+  missionId: string,
+  featureId: string,
+): Promise<void> {
+  const runtimeStore = new FsRuntimeStoreAdapter(cwd);
+  const runtimeEventStore = new FsRuntimeEventStoreAdapter(cwd);
+  await runtimeStore.save(missionId, featureId, {
+    featureId,
+    attemptId: "attempt-live-output",
+    attempt: 1,
+    agent: "codex",
+    sessionId: "5634c102-9871-4001-86f8-89399077624e",
+    runtimeState: "live",
+    startedAt: "2026-04-02T12:00:00.000Z",
+    lastSeenAt: "2026-04-02T12:00:12.000Z",
+    leaseExpiresAt: "2026-04-02T12:02:00.000Z",
+    recoveryMetadata: {
+      retryCount: 0,
+      history: [],
+    },
+  });
+  await runtimeEventStore.append(missionId, {
+    id: "event-1",
+    missionId,
+    featureId,
+    attemptId: "attempt-live-output",
+    worker: "codex",
+    timestamp: "2026-04-02T12:00:10.000Z",
+    kind: "stdout",
+    text: "Reading runtime-supervision.usecase.ts",
+  });
+  await runtimeEventStore.append(missionId, {
+    id: "event-2",
+    missionId,
+    featureId,
+    attemptId: "attempt-live-output",
+    worker: "codex",
+    timestamp: "2026-04-02T12:00:12.000Z",
+    kind: "stderr",
+    text: "Retry budget still available",
+  });
 }
 
 async function createPendingHandoff(cwd: string): Promise<string> {
@@ -602,6 +647,100 @@ describe("mission-control CLI", () => {
       expect(exitCode).toBe(0);
       expect(stdout).toContain("Runtime");
       expect(stdout).toContain("Feature 1");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("--preview workers renders the worker health modal", async () => {
+      const missionId = await createMission(tmpDir);
+
+      const { stdout, exitCode } = await run(
+        ["mission-control", "--mission", missionId, "--preview", "workers"],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Workers");
+      expect(stdout).toContain("Real worker readiness");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("--preview output renders captured worker output for the selected feature", async () => {
+      const missionId = await createMission(tmpDir);
+      await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+
+      const runtimeEventDir = join(tmpDir, ".maestro", "missions", missionId, "runtime-events", "f1");
+      await mkdir(runtimeEventDir, { recursive: true });
+      await writeFile(join(runtimeEventDir, "0001.json"), `${JSON.stringify({
+        missionId,
+        featureId: "f1",
+        attemptId: "attempt-1",
+        worker: "test-skill",
+        timestamp: "2026-04-02T12:00:01.000Z",
+        kind: "stdout",
+        text: "Applying patch",
+      })}\n`);
+
+      const { stdout, exitCode } = await run(
+        ["mission-control", "--mission", missionId, "--preview", "output", "--feature", "f1"],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Worker Output");
+      expect(stdout).toContain("Applying patch");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("--preview workers renders the workers modal", async () => {
+      const missionId = await createMission(tmpDir);
+
+      const { stdout, exitCode } = await run(
+        ["mission-control", "--mission", missionId, "--preview", "workers"],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Workers");
+      expect(stdout).toContain("Real worker readiness, not just config presence.");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("--preview worker accepts the singular alias", async () => {
+      const missionId = await createMission(tmpDir);
+
+      const { stdout, exitCode } = await run(
+        ["mission-control", "--mission", missionId, "--preview", "worker"],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Workers");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("--preview output renders streamed runtime lines for the selected feature", async () => {
+      const missionId = await createMission(tmpDir);
+      await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+      await seedLiveRuntimeOutput(tmpDir, missionId, "f1");
+
+      const { stdout, exitCode } = await run(
+        ["mission-control", "--mission", missionId, "--preview", "output", "--feature", "f1"],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Worker Output");
+      expect(stdout).toContain("Reading runtime-supervision.usecase.ts");
+      expect(stdout).toContain("Retry budget still available");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("--preview out accepts the runtime output alias", async () => {
+      const missionId = await createMission(tmpDir);
+      await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+      await seedLiveRuntimeOutput(tmpDir, missionId, "f1");
+
+      const { stdout, exitCode } = await run(
+        ["mission-control", "--mission", missionId, "--preview", "out", "--feature", "f1"],
+        tmpDir,
+      );
+
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Worker Output");
     }, SLOW_CLI_TIMEOUT_MS);
 
     it("--json projects failed runtime state without auto-requeue", async () => {

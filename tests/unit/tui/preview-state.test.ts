@@ -321,15 +321,29 @@ describe("buildPreviewState", () => {
     ).toThrow("Dependencies preview requires a mission");
   });
 
-  it("rejects feature selectors on unsupported screens", () => {
+    it("rejects feature selectors on unsupported screens", () => {
     expect(() =>
       buildPreviewState({
         snapshot: makeSnapshot(),
         screen: "handoffs",
         featureId: "f1",
       })
-    ).toThrow("--feature is only supported");
-  });
+      ).toThrow("--feature is only supported");
+    });
+
+    it("accepts feature selectors on output previews", () => {
+      const state = buildPreviewState({
+        snapshot: makeSnapshot(),
+        screen: "output",
+        featureId: "f1",
+      });
+
+      expect(state.modal).toEqual({
+        kind: "runtime-output",
+        selectedProcessIndex: 0,
+        returnTarget: undefined,
+      });
+    });
 
   it("rejects unknown handoff selectors", () => {
     expect(() =>

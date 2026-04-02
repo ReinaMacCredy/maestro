@@ -46,17 +46,19 @@ export function registerMissionControlCommand(program: Command): void {
     .description("Interactive mission control dashboard")
     .option("--mission <id>", "Mission ID (auto-selects if omitted)")
     .option("--json", "Output snapshot as JSON")
-    .option("--preview [screen]", `Render a read-only preview frame (${PREVIEW_SCREENS.join(", ")}; aliases: feat, handoff, cfg, deps, proc)`)
-    .option("--feature <id>", "Select a feature for dashboard, features, or dependencies previews")
+      .option("--preview [screen]", `Render a read-only preview frame (${PREVIEW_SCREENS.join(", ")}; aliases: feat, handoff, cfg, deps, proc, worker, out)`)
+      .option("--feature <id>", "Select a feature for dashboard, features, dependencies, or output previews")
     .option("--handoff <id>", "Select a handoff for handoffs previews")
     .addHelpText("after", `
-Examples:
-  maestro mission-control --preview
-  maestro mission-control --mission <id> --preview features
-  maestro mission-control --mission <id> --preview dependencies --feature <id>
-  maestro mission-control --preview handoffs --handoff <id>
-  maestro mission-control --json
-`)
+  Examples:
+    maestro mission-control --preview
+    maestro mission-control --mission <id> --preview features
+    maestro mission-control --mission <id> --preview dependencies --feature <id>
+    maestro mission-control --mission <id> --preview workers
+    maestro mission-control --mission <id> --preview output --feature <id>
+    maestro mission-control --preview handoffs --handoff <id>
+    maestro mission-control --json
+  `)
     .action(async (opts) => {
       const isJson = resolveJsonFlag(opts, program);
       const previewScreen = resolvePreviewScreen(opts.preview);
@@ -68,12 +70,13 @@ Examples:
         ]);
       }
 
-      if ((opts.feature || opts.handoff) && !previewScreen) {
-        throw new MaestroError("Preview selectors require --preview", [
-          "Use `maestro mission-control --preview dashboard --feature <id>`",
-          "Use `maestro mission-control --preview handoffs --handoff <id>`",
-        ]);
-      }
+        if ((opts.feature || opts.handoff) && !previewScreen) {
+          throw new MaestroError("Preview selectors require --preview", [
+            "Use `maestro mission-control --preview dashboard --feature <id>`",
+            "Use `maestro mission-control --preview handoffs --handoff <id>`",
+            "Use `maestro mission-control --preview output --feature <id>`",
+          ]);
+        }
 
       const services = getServices();
       const snapshotDeps = {
@@ -161,9 +164,9 @@ function resolvePreviewScreen(value: unknown): PreviewScreen | undefined {
   }
 
   throw new MaestroError(`Unknown preview screen '${value}'`, [
-    `Use one of: ${PREVIEW_SCREENS.join(", ")} (aliases: feat, handoff, cfg, deps, proc)`,
-    "Try `maestro mission-control --preview` for the default dashboard preview",
-  ]);
+      `Use one of: ${PREVIEW_SCREENS.join(", ")} (aliases: feat, handoff, cfg, deps, proc, worker, out)`,
+      "Try `maestro mission-control --preview` for the default dashboard preview",
+    ]);
 }
 
 /**

@@ -10,6 +10,8 @@ import type {
   MissionControlConfigSourceBadge,
   MissionControlConfigTab,
   MissionControlConfigValueSource,
+  MissionControlWorkerHealthRow,
+  MissionControlWorkerHealthStatus,
 } from "./types.js";
 import { recommendWorkerFit } from "../../usecases/worker-fit-recommendation.usecase.js";
 
@@ -58,7 +60,9 @@ export function buildConfigInspector(
   checks: readonly DoctorCheck[],
   features: readonly Feature[],
   configSource: "project" | "global" | "none",
+  workerHealth: readonly MissionControlWorkerHealthRow[] = [],
 ): MissionControlConfigInspector {
+  const workerHealthBySlug = new Map(workerHealth.map((row) => [row.slug, row]));
   const effective = flattenConfig(layers.effective);
   const defaults = flattenConfig(layers.defaults);
   const project = flattenConfig(layers.project ?? {});
@@ -70,28 +74,32 @@ export function buildConfigInspector(
     ...Object.keys(global),
   ])].sort();
 
-    const workerSlugs = Object.keys(layers.effective.workers ?? {});
-    const rowsByTab = {
-      overview: buildOverviewRows(layers, checks, features, configSource),
-      effective: allPaths.map((path) =>
-        buildConfigValueRow(
-          path,
-          effective[path],
-          defaults[path],
-          global[path],
-          project[path],
-          workerSlugs,
-          "effective",
-          layers.effective.workers,
-          features,
-        )
-      ),
-      project: buildScopeRows("project", project, effective, workerSlugs, layers.effective.workers, features),
-      global: buildScopeRows("global", global, effective, workerSlugs, layers.effective.workers, features),
-      defaults: buildScopeRows("default", defaults, effective, workerSlugs, layers.effective.workers, features),
-      workers: buildWorkerRows(layers.effective, features),
-      plan: buildPlanRows(layers.effective, features),
-      doctor: buildDoctorRows(checks, layers.errors),
+  const workerSlugs = [...new Set([
+    ...Object.keys(layers.effective.workers ?? {}),
+    ...workerHealth.map((row) => row.slug),
+  ])].sort();
+  const rowsByTab = {
+    overview: buildOverviewRows(layers, checks, features, configSource, workerHealthBySlug),
+    effective: allPaths.map((path) =>
+      buildConfigValueRow(
+        path,
+        effective[path],
+        defaults[path],
+        global[path],
+        project[path],
+        workerSlugs,
+        "effective",
+        layers.effective.workers,
+        features,
+        workerHealthBySlug,
+      )
+    ),
+    project: buildScopeRows("project", project, effective, workerSlugs, layers.effective.workers, features, workerHealthBySlug),
+    global: buildScopeRows("global", global, effective, workerSlugs, layers.effective.workers, features, workerHealthBySlug),
+    defaults: buildScopeRows("default", defaults, effective, workerSlugs, layers.effective.workers, features, workerHealthBySlug),
+    workers: buildWorkerRows(layers.effective, features, workerHealthBySlug),
+    plan: buildPlanRows(layers.effective, features),
+    doctor: buildDoctorRows(checks, layers.errors),
   } satisfies Record<MissionControlConfigTab, readonly MissionControlConfigRow[]>;
 
   return {
@@ -145,8 +153,9 @@ function buildOverviewRows(
   checks: readonly DoctorCheck[],
   features: readonly Feature[],
   configSource: "project" | "global" | "none",
+  workerHealthBySlug: ReadonlyMap<string, MissionControlWorkerHealthRow>,
 ): readonly MissionControlConfigRow[] {
-  const workerRows = buildWorkerRows(layers.effective, features).map((row) => ({
+  const workerRows = buildWorkerRows(layers.effective, features, workerHealthBySlug).map((row) => ({
     ...row,
     section: "Workers",
   }));
@@ -168,17 +177,18 @@ function buildOverviewRows(
   });
 
   const quickRows = [
-      buildConfigValueRow(
-        "execution.defaultWorker",
-        layers.effective.execution?.defaultWorker,
-        layers.defaults.execution?.defaultWorker,
-        layers.global?.execution?.defaultWorker,
-        layers.project?.execution?.defaultWorker,
-        Object.keys(layers.effective.workers ?? {}),
-        "overview",
-        layers.effective.workers,
-        features,
-      ),
+    buildConfigValueRow(
+      "execution.defaultWorker",
+      layers.effective.execution?.defaultWorker,
+      layers.defaults.execution?.defaultWorker,
+      layers.global?.execution?.defaultWorker,
+      layers.project?.execution?.defaultWorker,
+      Object.keys(layers.effective.workers ?? {}),
+      "overview",
+      layers.effective.workers,
+      features,
+      workerHealthBySlug,
+    ),
     buildConfigValueRow(
       "execution.stopOnFailure",
       layers.effective.execution?.stopOnFailure,
@@ -230,6 +240,7 @@ function buildConfigValueRow(
   tab: MissionControlConfigTab,
   workers?: MaestroConfig["workers"],
   features: readonly Feature[] = [],
+  workerHealthBySlug: ReadonlyMap<string, MissionControlWorkerHealthRow> = new Map(),
 ): MissionControlConfigRow {
   const editMeta = getEditMeta(keyPath, effectiveValue, workerSlugs);
   const source = provenanceForValue(effectiveValue, defaultValue, globalValue, projectValue);
@@ -258,15 +269,15 @@ function buildConfigValueRow(
     effectiveDisplayValueText: effectiveDisplayValue,
     projectValueText: stringifyConfigValue(editMeta.editKind, projectValue),
     projectDisplayValueText: projectDisplayValue,
-      globalValueText: stringifyConfigValue(editMeta.editKind, globalValue),
-      globalDisplayValueText: globalDisplayValue,
-      defaultValueText: stringifyConfigValue(editMeta.editKind, defaultValue),
-      defaultDisplayValueText: defaultDisplayValue,
-      workerChoices: keyPath === "execution.defaultWorker"
-        ? buildWorkerChoices(workerSlugs, workers, features)
-        : undefined,
-    };
-  }
+    globalValueText: stringifyConfigValue(editMeta.editKind, globalValue),
+    globalDisplayValueText: globalDisplayValue,
+    defaultValueText: stringifyConfigValue(editMeta.editKind, defaultValue),
+    defaultDisplayValueText: defaultDisplayValue,
+    workerChoices: keyPath === "execution.defaultWorker"
+      ? buildWorkerChoices(workerSlugs, workers, features, workerHealthBySlug)
+      : undefined,
+  };
+}
 
 function buildScopeRows(
   scope: "project" | "global" | "default",
@@ -275,6 +286,7 @@ function buildScopeRows(
   workerSlugs: readonly string[],
   workers?: MaestroConfig["workers"],
   features: readonly Feature[] = [],
+  workerHealthBySlug: ReadonlyMap<string, MissionControlWorkerHealthRow> = new Map(),
 ): readonly MissionControlConfigRow[] {
   const paths = Object.keys(scopeValues).sort();
   if (paths.length === 0) {
@@ -315,54 +327,51 @@ function buildScopeRows(
       effectiveDisplayValueText: displayValueForKey(path, editMeta.editKind, effectiveValues[path]),
       defaultValueText: scope === "default" ? stringifyConfigValue(editMeta.editKind, scopeValues[path]) : undefined,
       defaultDisplayValueText: scope === "default" ? displayValueForKey(path, editMeta.editKind, scopeValues[path]) : undefined,
-        globalValueText: scope === "global" ? stringifyConfigValue(editMeta.editKind, scopeValues[path]) : undefined,
-        globalDisplayValueText: scope === "global" ? displayValueForKey(path, editMeta.editKind, scopeValues[path]) : undefined,
-        projectValueText: scope === "project" ? stringifyConfigValue(editMeta.editKind, scopeValues[path]) : undefined,
-        projectDisplayValueText: scope === "project" ? displayValueForKey(path, editMeta.editKind, scopeValues[path]) : undefined,
-        workerChoices: path === "execution.defaultWorker"
-          ? buildWorkerChoices(workerSlugs, workers, features)
-          : undefined,
-      };
-    });
-  }
+      globalValueText: scope === "global" ? stringifyConfigValue(editMeta.editKind, scopeValues[path]) : undefined,
+      globalDisplayValueText: scope === "global" ? displayValueForKey(path, editMeta.editKind, scopeValues[path]) : undefined,
+      projectValueText: scope === "project" ? stringifyConfigValue(editMeta.editKind, scopeValues[path]) : undefined,
+      projectDisplayValueText: scope === "project" ? displayValueForKey(path, editMeta.editKind, scopeValues[path]) : undefined,
+      workerChoices: path === "execution.defaultWorker"
+        ? buildWorkerChoices(workerSlugs, workers, features, workerHealthBySlug)
+        : undefined,
+    };
+  });
+}
 
 function buildWorkerRows(
   config: MaestroConfig,
   features: readonly Feature[],
+  workerHealthBySlug: ReadonlyMap<string, MissionControlWorkerHealthRow>,
 ): readonly MissionControlConfigRow[] {
   const nextFeature = features.find((feature) => feature.status === "pending");
   return Object.entries(config.workers ?? {}).map(([slug, worker]) => {
-      const available = workerIsAvailable(worker);
-      const stateLabel = !worker.enabled ? "disabled" : available ? "ready" : "missing";
+    const health = workerHealthBySlug.get(slug) ?? fallbackWorkerHealth(slug, worker);
+    const stateLabel = health.status;
     const copy: RowCopy = {
-      label: humanizeWorkerSlug(slug),
-      summary: `${humanizeWorkerSlug(slug)} is a worker Maestro can choose for task execution.`,
-      impactText: !worker.enabled
-        ? "Disabled workers will not be selected."
-        : available
-          ? `Available for future runs${nextFeature ? `, including ${nextFeature.id}` : ""}.`
-          : "Install this worker command before expecting Maestro to use it.",
+      label: health.label,
+      summary: `${health.label} is a worker Maestro can choose for task execution.`,
+      impactText: workerImpactText(health.status, nextFeature?.id),
       section: "Workers",
     };
-    return {
-      keyPath: `workers.${slug}`,
-      label: copy.label,
-      section: copy.section ?? "Workers",
-      valueText: stateLabel,
-      displayValueText: stateLabel,
-      source: "mixed",
+      return {
+        keyPath: `workers.${slug}`,
+        label: copy.label,
+        section: copy.section ?? "Workers",
+        valueText: stateLabel,
+        displayValueText: stateLabel,
+        source: "mixed",
       sourceBadge: sourceBadgeForValueSource("mixed"),
       editKind: "readonly",
       editKindLabel: editLabelForKind("readonly"),
-      description: "Inspect the worker profile and availability.",
-      summary: copy.summary,
-      impactText: copy.impactText,
-      effectiveValueText: stateLabel,
-      effectiveDisplayValueText: stateLabel,
-      projectValueText: undefined,
-      globalValueText: undefined,
-      defaultValueText: undefined,
-    };
+      description: health.detail,
+      summary: health.summary || copy.summary,
+      impactText: health.detail === health.status ? copy.impactText : `${copy.impactText} ${health.detail}`.trim(),
+        effectiveValueText: stateLabel,
+        effectiveDisplayValueText: stateLabel,
+        projectValueText: undefined,
+        globalValueText: undefined,
+        defaultValueText: undefined,
+      };
   });
 }
 
@@ -704,42 +713,102 @@ function buildWorkerChoices(
   workerSlugs: readonly string[],
   workers: MaestroConfig["workers"] | undefined,
   features: readonly Feature[],
+  workerHealthBySlug: ReadonlyMap<string, MissionControlWorkerHealthRow>,
 ): readonly MissionControlConfigWorkerChoice[] {
   return workerSlugs.map((slug) => {
-      const worker = workers?.[slug];
-      const availability: MissionControlConfigWorkerChoice["availability"] = !worker?.enabled
-        ? "disabled"
-        : workerIsAvailable(worker)
-          ? "ready"
-          : "missing";
-    const guidance = workerGuidanceForSlug(slug);
+    const worker = workers?.[slug];
+    const health = workerHealthBySlug.get(slug) ?? fallbackWorkerHealth(slug, worker);
     return {
       slug,
-      label: slug,
-      availability,
-      summary: guidance.summary,
-      bestFor: guidance.bestFor,
-      tradeoffs: guidance.tradeoffs,
+      label: health.label,
+      availability: health.status,
+      availabilityDetail: health.detail,
+      summary: health.summary,
+      bestFor: health.bestFor,
+      tradeoffs: health.tradeoffs,
       recommendation: recommendWorkerFit(slug, features),
     };
   });
 }
 
-function workerIsAvailable(worker: WorkerConfig | undefined): boolean {
-  if (!worker || !worker.enabled) {
-    return false;
+function fallbackWorkerHealth(
+  slug: string,
+  worker: WorkerConfig | undefined,
+): MissionControlWorkerHealthRow {
+  const guidance = workerGuidanceForSlug(slug);
+  if (!worker) {
+    return {
+      slug,
+      label: humanizeWorkerSlug(slug),
+      status: "missing",
+      detail: "Worker profile is missing from config.",
+      lastCheckedAt: "",
+      checks: [],
+      summary: guidance.summary,
+      bestFor: guidance.bestFor,
+      tradeoffs: guidance.tradeoffs,
+    };
   }
 
-  if (worker.transport === "a2a") {
-    try {
-      new URL(worker.url);
-      return true;
-    } catch {
-      return false;
-    }
+  if (!worker.enabled) {
+    return {
+      slug,
+      label: humanizeWorkerSlug(slug),
+      status: "disabled",
+      detail: "Worker is disabled in config.",
+      lastCheckedAt: "",
+      checks: [],
+      summary: guidance.summary,
+      bestFor: guidance.bestFor,
+      tradeoffs: guidance.tradeoffs,
+    };
   }
 
-  return Boolean(Bun.which(worker.command));
+  if (worker.transport === "cli") {
+    return {
+      slug,
+      label: humanizeWorkerSlug(slug),
+      status: Bun.which(worker.command) ? "ready" : "missing",
+      detail: Bun.which(worker.command) ? "ready to run" : `Command not found: ${worker.command}`,
+      lastCheckedAt: "",
+      checks: [],
+      summary: guidance.summary,
+      bestFor: guidance.bestFor,
+      tradeoffs: guidance.tradeoffs,
+    };
+  }
+
+  return {
+    slug,
+    label: humanizeWorkerSlug(slug),
+    status: worker.url ? "degraded" : "missing",
+    detail: worker.url ? "Health has not been checked yet." : "Missing agent endpoint.",
+    lastCheckedAt: "",
+    checks: [],
+    summary: guidance.summary,
+    bestFor: guidance.bestFor,
+    tradeoffs: guidance.tradeoffs,
+  };
+}
+
+function workerImpactText(
+  status: MissionControlWorkerHealthStatus,
+  nextFeatureId?: string,
+): string {
+  switch (status) {
+    case "ready":
+      return `Available for future runs${nextFeatureId ? `, including ${nextFeatureId}` : ""}.`;
+    case "busy":
+      return "Already active on this mission. Maestro can still use it later.";
+    case "degraded":
+      return "This worker responds, but something looks unhealthy. Check it before relying on it.";
+    case "missing":
+      return "Install or repair this worker command before expecting Maestro to use it.";
+    case "disabled":
+      return "Disabled workers will not be selected.";
+    default:
+      return "Review this worker before using it.";
+  }
 }
 
 function workerGuidanceForSlug(slug: string): {

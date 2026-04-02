@@ -737,11 +737,76 @@ describe("frame rendering", () => {
             return buf.toString();
           });
 
-          expect(frame).toContain("Runtime");
-          expect(frame).toContain("f2 · Configure database");
-          expect(frame).toContain("agent");
-          expect(frame).toContain("session");
-          expect(frame).toContain("milestone");
+        expect(frame).toContain("Runtime");
+        expect(frame).toContain("f2 · Configure database");
+        expect(frame).toContain("agent");
+        expect(frame).toContain("session");
+        expect(frame).toContain("milestone");
+      });
+
+      it("renders the workers modal with live readiness details", () => {
+        const frame = withTerminalSize(100, 32, () => {
+          const buf = new Buffer(100, 32);
+          const state = createInitialState(makeSnapshot({
+            workerHealth: [
+              {
+                slug: "codex",
+                label: "Codex",
+                status: "busy",
+                detail: "active on current mission",
+                lastCheckedAt: "2026-04-02T12:00:00.000Z",
+                checks: [{ label: "command found", ok: true }],
+                summary: "Fast, strong general-purpose coding.",
+                bestFor: "everyday implementation",
+                tradeoffs: "less exhaustive than Claude Code",
+              },
+            ],
+          }));
+          state.modal = { kind: "workers", selectedWorkerIndex: 0 };
+          renderFrame(buf, state);
+          return buf.toString();
+        });
+
+        expect(frame).toContain("Workers");
+        expect(frame).toContain("Real worker readiness, not just config presence.");
+        expect(frame).toContain("active on current mission");
+        expect(frame).toContain("Checks");
+      });
+
+      it("renders the runtime output modal with streamed lines", () => {
+        const frame = withTerminalSize(100, 32, () => {
+          const buf = new Buffer(100, 32);
+          const state = createInitialState(makeSnapshot({
+            runtimeProcesses: [{
+              featureId: "f2",
+              title: "Configure database",
+              status: "in-progress",
+              workerType: "backend-worker",
+              hasReport: false,
+              isLive: true,
+              runtimeState: "live",
+              outputLines: [
+                {
+                  timestamp: "2026-04-02T12:00:10.000Z",
+                  kind: "stdout",
+                  text: "Reading runtime-supervision.usecase.ts",
+                },
+                {
+                  timestamp: "2026-04-02T12:00:12.000Z",
+                  kind: "stderr",
+                  text: "Retry budget still available",
+                },
+              ],
+            }],
+          }));
+          state.modal = { kind: "runtime-output", selectedProcessIndex: 0 };
+          renderFrame(buf, state);
+          return buf.toString();
+        });
+
+        expect(frame).toContain("Worker Output");
+        expect(frame).toContain("Reading runtime-supervision.usecase.ts");
+        expect(frame).toContain("Retry budget still available");
       });
 
       it("renders the specialized worker chooser copy", () => {
@@ -797,6 +862,8 @@ describe("frame rendering", () => {
           expect(frame).toContain("Change Default Worker");
           expect(frame).toContain("Pick which worker Maestro should use by default.");
           expect(frame).toContain("Best for");
+            expect(frame).toContain("Status");
+          expect(frame).toContain("ready");
           expect(frame).toContain("Good fit in this mission");
           expect(frame).toContain("Other saved values");
           expect(frame).toContain("Better if you want maximum reliability over");
@@ -872,6 +939,7 @@ function makeWorkerChoice(
     slug,
     label: slug,
     availability,
+    availabilityDetail: availability === "missing" ? "command not found" : "ready",
     summary: `${slug} summary`,
     bestFor: `${slug} best for`,
     tradeoffs: `${slug} tradeoffs`,

@@ -496,6 +496,7 @@ function buildDefaultWorkerDetailItems(
   return [
     { text: humanizeWorkerLabel(choice.slug), tone: "accent" as const, style: "block" as const },
     { text: choice.summary },
+    { text: `${availabilityText(choice.availability)}${choice.availabilityDetail ? ` · ${choice.availabilityDetail}` : ""}`, section: "Availability" },
     ...splitParagraph(choice.bestFor, "Best for"),
     ...splitParagraph(choice.tradeoffs, "Tradeoffs"),
     ...recommendationLines,
@@ -579,26 +580,31 @@ function buildSavedValueItems(row: MissionControlConfigRow) {
   }));
 }
 
-function buildWorkerChoiceItems(row: MissionControlConfigRow) {
-  return [
-    ...(row.workerChoices ?? []).map((choice, index) => ({
-      label: choice.slug,
-      section: index === 0 ? "Choose a worker" : undefined,
-    })),
-    {
-      label: row.effectiveDisplayValueText,
-      section: "Current value",
-      selectable: false,
-      tone: "accent" as const,
-    },
+  function buildWorkerChoiceItems(row: MissionControlConfigRow) {
+    return [
+      ...(row.workerChoices ?? []).map((choice, index) => ({
+        label: choice.slug,
+        detail: availabilityText(choice.availability),
+        section: index === 0 ? "Choose a worker" : undefined,
+      })),
+      {
+        label: row.effectiveDisplayValueText,
+        section: "Current value",
+        selectable: false,
+        tone: "accent" as const,
+      },
     ...buildSavedValueRows(row, "Other saved values"),
   ];
 }
 
-function availabilityText(availability: "ready" | "missing" | "disabled"): string {
+function availabilityText(availability: NonNullable<MissionControlConfigRow["workerChoices"]>[number]["availability"]): string {
   switch (availability) {
     case "ready":
       return "ready";
+    case "busy":
+      return "busy";
+    case "degraded":
+      return "degraded";
     case "missing":
       return "missing";
     case "disabled":

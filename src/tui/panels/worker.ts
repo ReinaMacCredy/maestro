@@ -230,11 +230,16 @@ function getWorkerStateText(activeWorker: NonNullable<MissionControlSnapshot["ac
   if (activeWorker.runtimeState === "recoverable") {
     return `Recovery ready · retry count ${activeWorker.retryCount ?? 0}`;
   }
+  if (activeWorker.runtimeState === "live" && activeWorker.currentActivity) {
+    return activeWorker.currentActivity;
+  }
   if (activeWorker.report?.salientSummary) {
     return activeWorker.report.salientSummary;
   }
   if (activeWorker.runtimeState === "live") {
-    return "Worker runtime live";
+    return typeof activeWorker.lastOutputAgeMs === "number"
+      ? `Worker runtime live · last output ${formatElapsed(activeWorker.lastOutputAgeMs)} ago`
+      : "Worker runtime live";
   }
   return "Waiting for first worker report";
 }
@@ -248,6 +253,14 @@ function getWorkerNextText(activeWorker: NonNullable<MissionControlSnapshot["act
   }
   if (activeWorker.runtimeState === "recoverable") {
     return "Retry attempt can be scheduled";
+  }
+  if (typeof activeWorker.lastOutputAgeMs === "number") {
+    return activeWorker.lastOutputAgeMs <= 5_000
+      ? "Live output streaming now"
+      : `Waiting for next worker output · last line ${formatElapsed(activeWorker.lastOutputAgeMs)} ago`;
+  }
+  if (activeWorker.currentActivity) {
+    return "Live output stream active";
   }
   return activeWorker.report?.whatWasImplemented ?? "Report update or status transition";
 }
