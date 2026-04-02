@@ -295,6 +295,29 @@ async function seedLiveRuntimeOutput(
     timestamp: "2026-04-02T12:00:12.000Z",
     kind: "stderr",
     text: "Retry budget still available",
+    });
+}
+
+async function seedLiveRuntime(
+  cwd: string,
+  missionId: string,
+  featureId: string,
+): Promise<void> {
+  const runtimeStore = new FsRuntimeStoreAdapter(cwd);
+  await runtimeStore.save(missionId, featureId, {
+    featureId,
+    attemptId: "attempt-live-only",
+    attempt: 1,
+    agent: "codex",
+    sessionId: "5634c102-9871-4001-86f8-89399077624e",
+    runtimeState: "live",
+    startedAt: "2026-04-02T12:00:00.000Z",
+    lastSeenAt: "2026-04-02T12:00:12.000Z",
+    leaseExpiresAt: "2026-04-02T12:02:00.000Z",
+    recoveryMetadata: {
+      retryCount: 0,
+      history: [],
+    },
   });
 }
 
@@ -512,16 +535,13 @@ describe("mission-control CLI", () => {
     expect(snapshot.configSummary).toBeDefined();
     expect(snapshot.configSummary.missionDirectory).toBe(`.maestro/missions/${missionId}`);
     expect(snapshot.configSummary.workerTypes).toContain("test-skill");
-    expect(Array.isArray(snapshot.configSummary.checks)).toBe(true);
-    expect(Array.isArray(snapshot.runtimeProcesses)).toBe(true);
-    expect(snapshot.runtimeProcesses.length).toBe(1);
-    expect(snapshot.runtimeProcesses[0].featureId).toBe("f1");
-    expect(snapshot.runtimeProcesses[0].status).toBe("assigned");
-    expect(snapshot.runtimeProcesses[0].workerType).toBe("test-skill");
-    expect(snapshot.runtimeProcesses[0].isLive).toBe(true);
-    expect(snapshot.progressLog).toBeDefined();
-    expect(snapshot.milestones).toBeDefined();
-  }, SLOW_CLI_TIMEOUT_MS);
+      expect(Array.isArray(snapshot.configSummary.checks)).toBe(true);
+      expect(Array.isArray(snapshot.runtimeProcesses)).toBe(true);
+      expect(snapshot.runtimeProcesses.length).toBe(0);
+      expect(snapshot.activeWorker).toBeNull();
+      expect(snapshot.progressLog).toBeDefined();
+      expect(snapshot.milestones).toBeDefined();
+    }, SLOW_CLI_TIMEOUT_MS);
 
     it("--preview returns non-empty dashboard text containing mission title", async () => {
       const missionId = await createMission(tmpDir);
@@ -638,6 +658,7 @@ describe("mission-control CLI", () => {
     it("--preview runtime renders the runtime modal", async () => {
       const missionId = await createMission(tmpDir);
       await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+      await seedLiveRuntime(tmpDir, missionId, "f1");
 
       const { stdout, exitCode } = await run(
         ["mission-control", "--mission", missionId, "--preview", "runtime"],
@@ -665,6 +686,7 @@ describe("mission-control CLI", () => {
     it("--preview output shows the empty state when no runtime output is captured yet", async () => {
       const missionId = await createMission(tmpDir);
       await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+      await seedLiveRuntime(tmpDir, missionId, "f1");
 
       const { stdout, exitCode } = await run(
         ["mission-control", "--mission", missionId, "--preview", "output", "--feature", "f1"],
@@ -1216,10 +1238,10 @@ describe("mission-control CLI", () => {
         },
       );
 
-      expectCleanPtyExit(result);
-      expect(result.plainOutput).toContain("Runtime");
-      expect(result.plainOutput).toContain("test-skill");
-    }, PTY_TIMEOUT_MS);
+        expectCleanPtyExit(result);
+        expect(result.plainOutput).toContain("Runtime");
+        expect(result.plainOutput).toContain("No active runtime processes");
+      }, PTY_TIMEOUT_MS);
 
     it("compiled binary interactive mode opens the Features overlay", async () => {
       if (!pythonAvailable) return;
@@ -1313,10 +1335,9 @@ describe("mission-control CLI", () => {
 
       expectCleanPtyExit(result);
       expect(result.plainOutput).toContain("Runtime");
-      expect(result.plainOutput).toContain("f1");
-      expect(result.plainOutput).toContain("test-skill");
-      expect(result.plainOutput).toContain("worker");
-    }, PTY_TIMEOUT_MS);
+      expect(result.plainOutput).toContain("No active runtime processes");
+      expect(result.plainOutput).toContain("No runtime item selected");
+      }, PTY_TIMEOUT_MS);
 
   it("compiled binary interactive mode persists a selected feature transition on keyboard confirm", async () => {
     if (!pythonAvailable) return;

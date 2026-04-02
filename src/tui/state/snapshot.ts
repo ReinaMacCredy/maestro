@@ -376,16 +376,17 @@ function buildActiveWorker(
   startMs: number,
   nowMs: number,
   workers: Readonly<Record<string, WorkerConfig>>,
-): MissionControlWorkerPane | null {
-  const active = features.find(
-    (f) => f.status === "assigned" || f.status === "in-progress" || f.status === "review",
-  );
+  ): MissionControlWorkerPane | null {
+    const active = features.find(
+      (f) => f.status === "assigned" || f.status === "in-progress" || f.status === "review",
+    );
 
-  if (!active) return null;
+    if (!active) return null;
 
-  const runtime = runtimeByFeature.get(active.id);
-  const telemetry = telemetryByFeature.get(active.id);
-  const featureStartMs = runtime?.startedAtMs ?? new Date(active.updatedAt).getTime();
+    const runtime = runtimeByFeature.get(active.id);
+    if (!runtime) return null;
+    const telemetry = telemetryByFeature.get(active.id);
+    const featureStartMs = runtime?.startedAtMs ?? new Date(active.updatedAt).getTime();
 
   return {
     featureId: active.id,
@@ -454,23 +455,19 @@ function buildRuntimeProcesses(
   runtimeTelemetryByFeature: ReadonlyMap<string, RuntimeTelemetry>,
   activeWorker: MissionControlWorkerPane | null,
   workers: Readonly<Record<string, WorkerConfig>>,
-): readonly MissionControlRuntimeProcessRow[] {
-  const milestoneById = new Map(mission.milestones.map((milestone) => [milestone.id, milestone]));
-  return features
-      .filter((feature) => {
-        const runtime = runtimeByFeature.get(feature.id);
-        if (runtime) {
-          return runtime.runtimeState !== "completed"
+  ): readonly MissionControlRuntimeProcessRow[] {
+    const milestoneById = new Map(mission.milestones.map((milestone) => [milestone.id, milestone]));
+    return features
+        .filter((feature) => {
+          const runtime = runtimeByFeature.get(feature.id);
+          return runtime !== undefined
+            && runtime.runtimeState !== "completed"
             && !(feature.status === "pending" && runtime.runtimeState === "starting");
-        }
-        return feature.status === "assigned"
-          || feature.status === "in-progress"
-        || feature.status === "review";
-        })
-          .map((feature) => {
-            const runtime = runtimeByFeature.get(feature.id);
-            const telemetry = runtimeTelemetryByFeature.get(feature.id);
-            const milestone = milestoneById.get(feature.milestoneId);
+          })
+            .map((feature) => {
+              const runtime = runtimeByFeature.get(feature.id);
+              const telemetry = runtimeTelemetryByFeature.get(feature.id);
+              const milestone = milestoneById.get(feature.milestoneId);
             return {
             featureId: feature.id,
             title: feature.title,
@@ -478,11 +475,9 @@ function buildRuntimeProcesses(
             profile: milestone?.profile,
             status: feature.status,
             workerType: feature.workerType,
-        hasReport: feature.report !== undefined && feature.report !== null,
-        isLive: runtime
-          ? presentRuntimeState(runtime, feature.status) === "live"
-          : activeWorker?.featureId === feature.id,
-        runtimeState: presentRuntimeState(runtime, feature.status),
+          hasReport: feature.report !== undefined && feature.report !== null,
+          isLive: presentRuntimeState(runtime, feature.status) === "live",
+          runtimeState: presentRuntimeState(runtime, feature.status),
         lastSeenAgeMs: runtime?.lastSeenAgeMs,
           failureReason: runtime?.failureReason,
             retryCount: runtime?.retryCount,

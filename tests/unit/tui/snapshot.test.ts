@@ -143,17 +143,17 @@ describe("buildSnapshot", () => {
 
     const snapshot = await buildSnapshot(deps, missionId);
 
-    expect(snapshot.statusProgress).toEqual({
-      completed: 1,
-      total: 3,
-      inFlight: 1,
-      blocked: 1,
-      queued: 0,
-      completionPct: 33,
-    });
-    expect(snapshot.runtimeProcesses.map((process) => process.featureId)).toEqual(["f2"]);
-    expect(snapshot.runtimeProcesses.find((process) => process.featureId === "f2")?.isLive).toBe(true);
-  }, 15_000);
+      expect(snapshot.statusProgress).toEqual({
+        completed: 1,
+        total: 3,
+        inFlight: 1,
+        blocked: 1,
+        queued: 0,
+        completionPct: 33,
+      });
+      expect(snapshot.runtimeProcesses).toEqual([]);
+      expect(snapshot.activeWorker).toBeNull();
+    }, 15_000);
 
   it("projects live runtime output metadata from persisted runtime events", async () => {
     const plan = createSamplePlan();
