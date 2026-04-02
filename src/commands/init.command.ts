@@ -13,19 +13,25 @@ export function registerInitCommand(program: Command): void {
     .action(async (opts) => {
       const services = getServices();
       const isJson = opts.json ?? program.opts().json ?? false;
-      const result = await initMaestro(services.config, {
-        global: opts.global ?? false,
-        dir: process.cwd(),
-        confirmReplace: shouldPromptForReplacement(isJson)
-          ? createReplacementPrompter()
-          : undefined,
-      });
+      const replacementPrompter = shouldPromptForReplacement(isJson)
+        ? createReplacementPrompter()
+        : undefined;
 
-      output(isJson, result, (r) => [
-        `[ok] Initialized ${r.scope} ${r.bootstrapGenerated ? "bootstrap" : "config"}`,
-        ...r.created.map((p) => `  --> ${p}`),
-        ...r.skipped.map((p) => `  [skip] ${p}`),
-      ]);
+      try {
+        const result = await initMaestro(services.config, {
+          global: opts.global ?? false,
+          dir: process.cwd(),
+          confirmReplace: replacementPrompter?.confirmReplace,
+        });
+
+        output(isJson, result, (r) => [
+          `[ok] Initialized ${r.scope} ${r.bootstrapGenerated ? "bootstrap" : "config"}`,
+          ...r.created.map((p) => `  --> ${p}`),
+          ...r.skipped.map((p) => `  [skip] ${p}`),
+        ]);
+      } finally {
+        replacementPrompter?.close();
+      }
     });
 }
 
@@ -33,33 +39,43 @@ function shouldPromptForReplacement(isJson: boolean): boolean {
   return !isJson && Boolean(process.stdin.isTTY && process.stdout.isTTY);
 }
 
-function createReplacementPrompter(): (path: string) => Promise<boolean> {
-  const rl = createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
+function createReplacementPrompter(): {
+  readonly confirmReplace: (path: string) => Promise<boolean>;
+  readonly close: () => void;
+} {
+  let rl: ReturnType<typeof createInterface> | undefined;
   let defaultDecision: boolean | undefined;
 
-  return async (path: string) => {
-    if (defaultDecision !== undefined) {
-      return defaultDecision;
-    }
+  return {
+    confirmReplace: async (path: string) => {
+      if (defaultDecision !== undefined) {
+        return defaultDecision;
+      }
 
-    const answer = (await rl.question(
-      `Replace existing file ${path}? [y]es/[n]o/[a]ll yes/[s]kip all: `,
-    )).trim().toLowerCase();
+      rl ??= createInterface({
+        input: process.stdin,
+        output: process.stdout,
+      });
 
-    if (answer === "a") {
-      defaultDecision = true;
-      return true;
-    }
+      const answer = (await rl.question(
+        `Replace existing file ${path}? [y]es/[n]o/[a]ll yes/[s]kip all: `,
+      )).trim().toLowerCase();
 
-    if (answer === "s") {
-      defaultDecision = false;
-      return false;
-    }
+      if (answer === "a") {
+        defaultDecision = true;
+        return true;
+      }
 
-    return answer === "y" || answer === "yes";
+      if (answer === "s") {
+        defaultDecision = false;
+        return false;
+      }
+
+      return answer === "y" || answer === "yes";
+    },
+    close: () => {
+      rl?.close();
+      rl = undefined;
+    },
   };
 }

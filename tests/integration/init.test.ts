@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,6 +8,68 @@ const CLI = [
   "run",
   join(import.meta.dir, "..", "..", "src", "index.ts"),
 ];
+const PTY_TIMEOUT_MS = 15_000;
+let pythonAvailable = false;
+
+const PYTHON_PTY_RUNNER = `
+import base64, json, os, select, subprocess, sys, time, pty, fcntl, termios, struct
+
+payload = json.loads(sys.argv[1])
+master, slave = pty.openpty()
+rows = payload.get("rows", 24)
+cols = payload.get("cols", 80)
+winsize = struct.pack("HHHH", rows, cols, 0, 0)
+fcntl.ioctl(slave, termios.TIOCSWINSZ, winsize)
+proc = subprocess.Popen(
+    payload["cmd"],
+    cwd=payload["cwd"],
+    stdin=slave,
+    stdout=slave,
+    stderr=slave,
+    close_fds=True,
+)
+os.close(slave)
+
+deadline = time.time() + (payload.get("timeoutMs", 15000) / 1000.0)
+chunks = []
+timed_out = False
+
+while True:
+    timeout = max(0.0, min(0.1, deadline - time.time()))
+    readable, _, _ = select.select([master], [], [], timeout)
+    if readable:
+        try:
+            data = os.read(master, 4096)
+            if data:
+                chunks.append(data)
+        except OSError:
+            pass
+
+    if proc.poll() is not None:
+        end = time.time() + 0.2
+        while time.time() < end:
+            try:
+                data = os.read(master, 4096)
+                if not data:
+                    break
+                chunks.append(data)
+            except OSError:
+                break
+        break
+
+    if time.time() >= deadline:
+        timed_out = True
+        proc.kill()
+        proc.wait()
+        break
+
+os.close(master)
+print(json.dumps({
+    "exitCode": proc.returncode,
+    "timedOut": timed_out,
+    "rawOutput": base64.b64encode(b"".join(chunks)).decode("ascii"),
+}))
+`;
 
 let tmpDir: string;
 
@@ -33,6 +95,45 @@ async function run(
   };
 }
 
+async function runInteractivePty(
+  args: string[],
+  cwd = process.cwd(),
+): Promise<{ exitCode: number | null; timedOut: boolean; rawOutput: string }> {
+  const payload = JSON.stringify({
+    cmd: [...CLI, ...args],
+    cwd,
+    timeoutMs: PTY_TIMEOUT_MS,
+    rows: 24,
+    cols: 80,
+  });
+
+  const proc = Bun.spawn(["python3", "-c", PYTHON_PTY_RUNNER, payload], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+
+  expect(exitCode).toBe(0);
+  expect(stderr.trim()).toBe("");
+
+  const result = JSON.parse(stdout) as {
+    exitCode: number | null;
+    timedOut: boolean;
+    rawOutput: string;
+  };
+
+  return {
+    exitCode: result.exitCode,
+    timedOut: result.timedOut,
+    rawOutput: Buffer.from(result.rawOutput, "base64").toString("utf8"),
+  };
+}
+
 async function initGitRepo(cwd: string): Promise<void> {
   const proc = Bun.spawn(["git", "init", "-b", "main"], {
     cwd,
@@ -43,7 +144,19 @@ async function initGitRepo(cwd: string): Promise<void> {
   await proc.exited;
 }
 
+async function commandExists(command: string): Promise<boolean> {
+  const proc = Bun.spawn(["bash", "-lc", `command -v ${command}`], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  return (await proc.exited) === 0;
+}
+
 describe("init CLI", () => {
+  beforeAll(async () => {
+    pythonAvailable = await commandExists("python3");
+  });
+
   beforeEach(async () => {
     tmpDir = await mkdtemp(join(tmpdir(), "maestro-init-cli-"));
     await initGitRepo(tmpDir);
@@ -66,6 +179,9 @@ describe("init CLI", () => {
     expect(await Bun.file(join(tmpDir, ".maestro", "bootstrap", "services.yaml")).exists()).toBe(true);
     expect(await Bun.file(join(tmpDir, ".maestro", "bootstrap", "library", "architecture.md")).exists()).toBe(true);
     expect(await Bun.file(join(tmpDir, ".maestro", "bootstrap", "validation", "README.md")).exists()).toBe(true);
+    expect(await readFile(join(tmpDir, ".maestro", "bootstrap", "services.yaml"), "utf8")).toContain(
+      "maestro mission-control --preview",
+    );
     expect(await Bun.file(join(tmpDir, ".factory")).exists()).toBe(false);
   });
 
@@ -81,4 +197,14 @@ describe("init CLI", () => {
     expect(result.skipped.some((path: string) => path.endsWith("/.maestro/AGENTS.md"))).toBe(true);
     expect(await readFile(agentsPath, "utf8")).toBe("custom bootstrap\n");
   });
+
+  it("exits cleanly in tty mode when no replacement prompt is needed", async () => {
+    if (!pythonAvailable) return;
+
+    const result = await runInteractivePty(["init"], tmpDir);
+
+    expect(result.timedOut).toBe(false);
+    expect(result.exitCode).toBe(0);
+    expect(result.rawOutput).toContain("[ok] Initialized project bootstrap");
+  }, PTY_TIMEOUT_MS);
 });
