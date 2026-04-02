@@ -8,6 +8,7 @@ import { sanitizeTerminalText } from "../../lib/sanitize.js";
 import { FEATURE_STATUS_COLOR, FEATURE_STATUS_LABEL, PALETTE } from "../theme.js";
 import { formatElapsed, truncate } from "../format.js";
 import { shortenSessionId } from "../session-id.js";
+import type { TransportType } from "../../domain/worker-types.js";
 
 export function renderWorkerPanel(
   buf: Buffer,
@@ -125,12 +126,18 @@ function renderSessionPane(
   let row = rect.y + 2;
   const rows = session
     ? [
+      { label: "Agent", value: session.agent ?? "--", style: "value" as const },
+      { label: "Transport", value: session.transport ?? "--", style: "value" as const },
+      { label: getHandleLabel(session.transport), value: session.sessionId ? shortenSessionId(session.sessionId) : "--", style: "value" as const },
         { label: "Duration", value: formatElapsed(durationMs), style: "value" as const },
         { label: "Branch", value: session.branch, style: "value" as const },
         { label: "Changes", value: getChangesText(session), style: "changes" as const },
         ...getFileRows(session),
       ]
     : [
+      { label: "Agent", value: "--", style: "muted" as const },
+      { label: "Transport", value: "--", style: "muted" as const },
+      { label: "Handle", value: "--", style: "muted" as const },
       { label: "Duration", value: "--", style: "muted" as const },
       { label: "Branch", value: "--", style: "muted" as const },
       { label: "Changes", value: "no repo", style: "muted" as const },
@@ -146,6 +153,10 @@ function renderSessionPane(
     }
     row++;
   }
+}
+
+function getHandleLabel(transport: TransportType | undefined): string {
+  return transport === "a2a" ? "Handle" : "Session";
 }
 
 function buildActivityRows(

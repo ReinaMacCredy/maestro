@@ -717,32 +717,34 @@ describe("frame rendering", () => {
           const frame = withTerminalSize(100, 32, () => {
             const buf = new Buffer(100, 32);
             const state = createInitialState(makeSnapshot({
-              runtimeProcesses: [{
-                featureId: "f2",
-                title: "Configure database",
-                status: "in-progress",
-                workerType: "backend-worker",
+                runtimeProcesses: [{
+                  featureId: "f2",
+                  title: "Configure database",
+                  status: "in-progress",
+                  workerType: "backend-worker",
                 hasReport: false,
                 isLive: true,
                 runtimeState: "live",
                 lastSeenAgeMs: 12_000,
-                retryCount: 0,
-                agent: "codex",
-                sessionId: "5634c102-9871-4001-86f8-89399077624e",
-                milestoneTitle: "Implementation",
-              }],
-            }));
+                  retryCount: 0,
+                  agent: "codex",
+                  sessionId: "5634c102-9871-4001-86f8-89399077624e",
+                  transport: "a2a",
+                  milestoneTitle: "Implementation",
+                }],
+              }));
             state.modal = { kind: "processes", selectedProcessIndex: 0 };
             renderFrame(buf, state);
             return buf.toString();
           });
 
         expect(frame).toContain("Runtime");
-        expect(frame).toContain("f2 · Configure database");
-        expect(frame).toContain("agent");
-        expect(frame).toContain("session");
-        expect(frame).toContain("milestone");
-      });
+          expect(frame).toContain("f2 · Configure database");
+          expect(frame).toContain("agent");
+          expect(frame).toContain("transport");
+          expect(frame).toContain("handle");
+          expect(frame).toContain("milestone");
+        });
 
       it("renders the workers modal with live readiness details", () => {
         const frame = withTerminalSize(100, 32, () => {

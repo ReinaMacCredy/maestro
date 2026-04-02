@@ -1,4 +1,5 @@
 import type { A2aWorkerConfig, WorkerResult } from "../domain/worker-types.js";
+import { fetchA2aAgentCard, resolveA2aJsonRpcEndpoint } from "../lib/a2a.js";
 import type { TransportPort } from "../ports/transport.port.js";
 
 export class A2aTransportAdapter implements TransportPort {
@@ -52,8 +53,11 @@ export class A2aTransportAdapter implements TransportPort {
         text: `Connecting to ${opts.workerSlug}`,
       });
 
-      const agentCard = await fetchAgentCard(workerConfig.url, workerConfig.agentCardPath, workerConfig.headers);
-      const endpoint = resolveJsonRpcEndpoint(workerConfig.url, agentCard);
+      const agentCard = await fetchA2aAgentCard(workerConfig.url, {
+        agentCardPath: workerConfig.agentCardPath,
+        headers: workerConfig.headers,
+      });
+      const endpoint = resolveA2aJsonRpcEndpoint(workerConfig.url, agentCard);
       heartbeat = setInterval(() => {
         void emitEvent({
           timestamp: new Date().toISOString(),
@@ -262,14 +266,6 @@ function classifyFailure(finalState: string | undefined): WorkerResult["failureC
   }
 }
 
-interface AgentCardDocument {
-  readonly url?: string;
-  readonly additionalInterfaces?: readonly {
-    readonly transport?: string;
-    readonly url: string;
-  }[];
-}
-
 interface A2aMessage {
   readonly kind: "message";
   readonly parts: readonly unknown[];
@@ -306,34 +302,6 @@ interface A2aArtifactUpdate {
 }
 
 type A2aEvent = A2aMessage | A2aTask | A2aStatusUpdate | A2aArtifactUpdate;
-
-async function fetchAgentCard(
-  baseUrl: string,
-  agentCardPath: string | undefined,
-  headers: Readonly<Record<string, string>> | undefined,
-): Promise<AgentCardDocument> {
-  const cardUrl = new URL(agentCardPath ?? "/.well-known/agent-card.json", ensureTrailingSlash(baseUrl)).toString();
-  const response = await fetch(cardUrl, { headers });
-  if (!response.ok) {
-    throw new Error(`Failed to fetch agent card from ${cardUrl}: ${response.status}`);
-  }
-
-  return await response.json() as AgentCardDocument;
-}
-
-function resolveJsonRpcEndpoint(baseUrl: string, agentCard: AgentCardDocument): string {
-  const jsonRpcInterface = agentCard.additionalInterfaces?.find((entry) => entry.transport === "JSONRPC");
-  const endpoint = jsonRpcInterface?.url ?? agentCard.url;
-  if (!endpoint) {
-    throw new Error("Agent card does not expose a JSON-RPC endpoint");
-  }
-
-  return new URL(endpoint, ensureTrailingSlash(baseUrl)).toString();
-}
-
-function ensureTrailingSlash(value: string): string {
-  return value.endsWith("/") ? value : `${value}/`;
-}
 
 function assertSseResponse(response: Response, endpoint: string): void {
   if (!response.ok) {

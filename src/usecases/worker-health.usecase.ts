@@ -1,4 +1,5 @@
 import { execArgv } from "../lib/shell.js";
+import { fetchA2aAgentCard, resolveA2aJsonRpcEndpoint } from "../lib/a2a.js";
 import type { WorkerConfig } from "../domain/worker-types.js";
 import type {
   MissionControlWorkerHealthCheck,
@@ -110,29 +111,36 @@ async function defaultProbeA2a(
   _slug: string,
   worker: Extract<WorkerConfig, { transport: "a2a" }>,
 ): Promise<A2aProbeResult> {
+  return probeA2aWorkerReadiness(worker);
+}
+
+export async function probeA2aWorkerReadiness(
+  worker: Extract<WorkerConfig, { transport: "a2a" }>,
+): Promise<A2aProbeResult> {
   try {
-    const cardUrl = new URL(worker.agentCardPath ?? "/.well-known/agent-card.json", worker.url).toString();
-    const response = await fetch(cardUrl, {
+    const agentCard = await fetchA2aAgentCard(worker.url, {
+      agentCardPath: worker.agentCardPath,
       headers: worker.headers,
       signal: AbortSignal.timeout(2_000),
     });
-    if (!response.ok) {
-      return {
-        status: "degraded",
-        detail: `Agent card probe failed: ${response.status}`,
-        checks: [{ label: "agent card", ok: false, detail: `HTTP ${response.status}` }],
-      };
-    }
+    const endpoint = resolveA2aJsonRpcEndpoint(worker.url, agentCard);
     return {
       status: "ready",
-      checks: [{ label: "agent card", ok: true, detail: "reachable" }],
+      detail: "agent card and JSON-RPC endpoint ready",
+      checks: [
+        { label: "agent card", ok: true, detail: "reachable" },
+        { label: "json-rpc endpoint", ok: true, detail: endpoint },
+      ],
     };
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
+    const checkLabel = detail.includes("JSON-RPC endpoint")
+      ? "json-rpc endpoint"
+      : "agent card";
     return {
       status: "degraded",
       detail,
-      checks: [{ label: "agent card", ok: false, detail }],
+      checks: [{ label: checkLabel, ok: false, detail }],
     };
   }
 }

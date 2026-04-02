@@ -27,6 +27,16 @@ export interface InteractiveOptions {
   reloadSnapshot: () => Promise<MissionControlSnapshot>;
 }
 
+export function getSnapshotPollIntervalMs(snapshot: MissionControlSnapshot): number {
+  const hasActiveRuntime = snapshot.runtimeProcesses.some((process) =>
+    process.isLive
+    || process.runtimeState === "starting"
+    || process.runtimeState === "stale"
+    || process.runtimeState === "recoverable"
+  );
+  return hasActiveRuntime ? 1_000 : 2_000;
+}
+
 /**
  * Start the interactive dashboard.
  * Simple while-loop: sleep, check input, poll snapshot, render.
@@ -155,7 +165,6 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
       // Check for terminal resize
       if (screen.refreshSize()) dirty = true;
 
-      // Poll snapshot every 2s
       const now = Date.now();
       if (isHeaderAnimationActive(state.snapshot)) {
         if (now >= nextAnimationTickMs) {
@@ -178,7 +187,7 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
         dirty = true;
       }
 
-      if (now - lastPollMs >= 2000) {
+      if (now - lastPollMs >= getSnapshotPollIntervalMs(state.snapshot)) {
         lastPollMs = now;
           try {
             const snap = await opts.reloadSnapshot();

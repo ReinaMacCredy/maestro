@@ -819,11 +819,12 @@ function buildRuntimeDetailItems(process: MissionControlSnapshot["runtimeProcess
     return [{ text: "No runtime item selected", tone: "muted" as const }];
   }
 
-  return [
-    { text: process.title, tone: "accent" as const, style: "block" as const },
-    { text: "agent", detail: process.agent ?? "unknown" },
-    { text: "session", detail: process.sessionId ? shortenSessionId(process.sessionId) : "none" },
-    { text: "worker", detail: process.workerType },
+    return [
+      { text: process.title, tone: "accent" as const, style: "block" as const },
+      { text: "agent", detail: process.agent ?? "unknown" },
+      { text: "transport", detail: process.transport ?? "unknown" },
+      { text: process.transport === "a2a" ? "handle" : "session", detail: process.sessionId ? shortenSessionId(process.sessionId) : "none" },
+      { text: "worker", detail: process.workerType },
     { text: "runtime", detail: process.runtimeState ?? (process.isLive ? "live" : FEATURE_STATUS_LABEL[process.status]) },
     ...(typeof process.lastSeenAgeMs === "number" ? [{ text: "last seen", detail: `${Math.round(process.lastSeenAgeMs / 1000)}s ago` }] : []),
     ...(typeof process.lastOutputAgeMs === "number" ? [{ text: "last output", detail: `${Math.round(process.lastOutputAgeMs / 1000)}s ago` }] : []),

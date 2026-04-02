@@ -11,6 +11,7 @@ import type {
 } from "../../domain/mission-types.js";
 import type { DoctorCheck, GitFileChange } from "../../domain/types.js";
 import type { RuntimeState } from "../../domain/runtime-types.js";
+import type { TransportType } from "../../domain/worker-types.js";
 
 export type MissionControlMode = "mission" | "home";
 export type LeftPaneMode = "overview" | "preview";
@@ -33,6 +34,7 @@ export interface MissionControlHomeHandoff {
 export interface MissionControlSessionSidebar {
   agent?: string;
   sessionId?: string;
+  transport?: TransportType;
   branch: string;
   workingTreeClean: boolean;
   diffStat: string;
@@ -168,6 +170,7 @@ export interface MissionControlRuntimeProcessRow {
   retryCount?: number;
   agent?: string;
   sessionId?: string;
+  transport?: TransportType;
   currentActivity?: string;
   lastOutputAgeMs?: number;
   leaseRemainingMs?: number;
@@ -328,6 +331,7 @@ export interface MissionControlWorkerPane {
   retryCount?: number;
   agent?: string;
   sessionId?: string;
+  transport?: TransportType;
   currentActivity?: string;
   lastOutputAgeMs?: number;
 }

@@ -22,11 +22,11 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
       completionPct: 33,
     },
     tokenCounters: null,
-    session: {
-      branch: "main",
-      workingTreeClean: false,
-      diffStat: "+4 -1",
-      changedFiles: ["src/tui/worker.ts", "tests/unit/tui/panels/worker.test.ts", "src/tui/index.ts"],
+      session: {
+        branch: "main",
+        workingTreeClean: false,
+        diffStat: "+4 -1",
+        changedFiles: ["src/tui/worker.ts", "tests/unit/tui/panels/worker.test.ts", "src/tui/index.ts"],
     },
     pendingHandoffs: [],
     configSummary: {
@@ -113,23 +113,36 @@ describe("renderWorkerPanel", () => {
     it("prefers live activity and output freshness for the active worker", () => {
       const buf = new Buffer(100, 6);
       renderWorkerPanel(buf, { x: 0, y: 0, width: 100, height: 6 }, makeSnapshot({
-        activeWorker: {
-          featureId: "f2",
-          featureTitle: "Database config",
-          workerType: "backend-worker",
-          status: "in-progress",
-          elapsedMs: 30_000,
-          report: null,
-          runtimeState: "live",
-          currentActivity: "Applying auth schema patch",
-          lastOutputAgeMs: 3_000,
-        },
-      }));
+          activeWorker: {
+            featureId: "f2",
+            featureTitle: "Database config",
+            workerType: "backend-worker",
+            status: "in-progress",
+            elapsedMs: 30_000,
+            report: null,
+            runtimeState: "live",
+            transport: "a2a",
+            currentActivity: "Applying auth schema patch",
+            lastOutputAgeMs: 3_000,
+          },
+          session: {
+            agent: "demo-a2a",
+            sessionId: "5634c102-9871-4001-86f8-89399077624e",
+            transport: "a2a",
+            branch: "main",
+            workingTreeClean: true,
+            diffStat: "",
+            changedFiles: [],
+          },
+        }));
 
-      const text = buf.toString();
-      expect(text).toContain("Applying auth schema patch");
-      expect(text).toContain("Live output streaming now");
-    });
+        const text = buf.toString();
+        expect(text).toContain("Applying auth schema patch");
+        expect(text).toContain("Live output streaming now");
+        expect(text).toContain("Transport");
+        expect(text).toContain("a2a");
+        expect(text).toContain("Handle");
+      });
 
     it("shows recoverable guidance for the next feature", () => {
       const buf = new Buffer(90, 6);

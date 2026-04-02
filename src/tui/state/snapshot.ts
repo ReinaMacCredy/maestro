@@ -39,6 +39,7 @@ import type {
   MissionOverviewPane,
   DependencyMapRow,
 } from "./types.js";
+import type { TransportType, WorkerConfig } from "../../domain/worker-types.js";
 
 export interface SnapshotDeps {
   missionStore: MissionStorePort;
@@ -170,7 +171,8 @@ export async function buildSnapshot(
   const activeFeature = findActiveFeature(taskPreviews);
 
   // Active worker
-    const activeWorker = buildActiveWorker(features, runtimeByFeature, runtimeTelemetryByFeature, startMs, now);
+    const effectiveWorkers = configLayers.effective.workers ?? {};
+    const activeWorker = buildActiveWorker(features, runtimeByFeature, runtimeTelemetryByFeature, startMs, now, effectiveWorkers);
 
   // Progress log
   const progressLog = deriveEvents({
@@ -254,8 +256,15 @@ export async function buildSnapshot(
         workerTypes,
         },
           configInspector: buildConfigInspector(configLayers, env.checks, features, env.status.configSource, workerHealth),
-          workerHealth,
-          runtimeProcesses: buildRuntimeProcesses(mission, features, runtimeByFeature, runtimeTelemetryByFeature, activeWorker),
+            workerHealth,
+            runtimeProcesses: buildRuntimeProcesses(
+              mission,
+              features,
+              runtimeByFeature,
+              runtimeTelemetryByFeature,
+              activeWorker,
+              effectiveWorkers,
+            ),
         progressLog,
       milestones,
       gateBlocked,
@@ -366,6 +375,7 @@ function buildActiveWorker(
   telemetryByFeature: ReadonlyMap<string, RuntimeTelemetry>,
   startMs: number,
   nowMs: number,
+  workers: Readonly<Record<string, WorkerConfig>>,
 ): MissionControlWorkerPane | null {
   const active = features.find(
     (f) => f.status === "assigned" || f.status === "in-progress" || f.status === "review",
@@ -390,9 +400,10 @@ function buildActiveWorker(
       retryCount: runtime?.retryCount,
       agent: runtime?.agent,
       sessionId: runtime?.sessionId,
+      transport: resolveWorkerTransport(runtime?.agent, workers),
       currentActivity: telemetry?.currentActivity,
       lastOutputAgeMs: telemetry?.lastOutputAgeMs,
-    };
+      };
   }
 
 function buildHomeActions(
@@ -442,6 +453,7 @@ function buildRuntimeProcesses(
   runtimeByFeature: ReadonlyMap<string, RuntimeView>,
   runtimeTelemetryByFeature: ReadonlyMap<string, RuntimeTelemetry>,
   activeWorker: MissionControlWorkerPane | null,
+  workers: Readonly<Record<string, WorkerConfig>>,
 ): readonly MissionControlRuntimeProcessRow[] {
   const milestoneById = new Map(mission.milestones.map((milestone) => [milestone.id, milestone]));
   return features
@@ -473,12 +485,13 @@ function buildRuntimeProcesses(
         runtimeState: presentRuntimeState(runtime, feature.status),
         lastSeenAgeMs: runtime?.lastSeenAgeMs,
           failureReason: runtime?.failureReason,
-          retryCount: runtime?.retryCount,
-          agent: runtime?.agent,
-          sessionId: runtime?.sessionId,
-          currentActivity: telemetry?.currentActivity,
-          lastOutputAgeMs: telemetry?.lastOutputAgeMs,
-          leaseRemainingMs: runtime?.leaseRemainingMs,
+            retryCount: runtime?.retryCount,
+            agent: runtime?.agent,
+            sessionId: runtime?.sessionId,
+            transport: resolveWorkerTransport(runtime?.agent, workers),
+            currentActivity: telemetry?.currentActivity,
+            lastOutputAgeMs: telemetry?.lastOutputAgeMs,
+            leaseRemainingMs: runtime?.leaseRemainingMs,
           outputLines: telemetry?.outputLines,
         };
       });
@@ -621,12 +634,24 @@ function buildSessionSidebar(
   return {
     agent: activeWorker?.agent,
     sessionId: activeWorker?.sessionId,
+    transport: activeWorker?.transport,
     branch: gitState.branch,
     workingTreeClean: gitState.workingTreeClean,
     diffStat: gitState.diffStat,
     changedFiles: gitState.changedFiles,
     fileChanges: gitState.fileChanges ?? [],
   };
+}
+
+function resolveWorkerTransport(
+  agent: string | undefined,
+  workers: Readonly<Record<string, WorkerConfig>>,
+): TransportType | undefined {
+  if (!agent) {
+    return undefined;
+  }
+
+  return workers[agent]?.transport;
 }
 
 function toFeatureRef(feature: Feature): BlockedByRef {
@@ -661,7 +686,7 @@ function buildRuntimeTelemetry(
       && typeof event.text === "string"
       && event.text.trim().length > 0,
     )
-    .slice(-8)
+    .slice(-12)
     .map((event) => ({
       timestamp: event.timestamp,
       kind: event.kind as "status" | "stdout" | "stderr",

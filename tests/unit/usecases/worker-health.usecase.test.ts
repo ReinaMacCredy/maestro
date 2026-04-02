@@ -1,5 +1,13 @@
-import { describe, expect, it } from "bun:test";
-import { getWorkerHealthRows } from "../../../src/usecases/worker-health.usecase.js";
+import { afterEach, describe, expect, it } from "bun:test";
+import { getWorkerHealthRows, probeA2aWorkerReadiness } from "../../../src/usecases/worker-health.usecase.js";
+import { startA2aTestServer, type TestA2aServer } from "../../helpers/a2a-test-server.js";
+
+let server: TestA2aServer | undefined;
+
+afterEach(async () => {
+  await server?.close();
+  server = undefined;
+});
 
 describe("getWorkerHealthRows", () => {
   it("marks enabled workers ready when probes succeed", async () => {
@@ -80,5 +88,64 @@ describe("getWorkerHealthRows", () => {
       slug: "gemini",
       status: "disabled",
     });
+  });
+
+  it("confirms the A2A agent card and JSON-RPC endpoint when the worker is reachable", async () => {
+    server = await startA2aTestServer("a2a worker ok");
+
+    const result = await probeA2aWorkerReadiness({
+      enabled: true,
+      transport: "a2a",
+      url: server.baseUrl,
+    });
+
+    expect(result.status).toBe("ready");
+    expect(result.detail).toContain("JSON-RPC endpoint");
+    expect(result.checks).toEqual([
+      { label: "agent card", ok: true, detail: "reachable" },
+      expect.objectContaining({ label: "json-rpc endpoint", ok: true }),
+    ]);
+  });
+
+  it("degrades A2A readiness when the agent card omits a JSON-RPC endpoint", async () => {
+    const badCardServer = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      routes: {
+        "/.well-known/agent-card.json": () => Response.json({
+          name: "Broken Worker",
+          description: "Missing endpoint",
+          protocolVersion: "0.3.0",
+          version: "0.1.0",
+          capabilities: {
+            streaming: true,
+            pushNotifications: false,
+          },
+          defaultInputModes: ["text"],
+          defaultOutputModes: ["text"],
+          skills: [],
+        }),
+      },
+    });
+
+    try {
+      const result = await probeA2aWorkerReadiness({
+        enabled: true,
+        transport: "a2a",
+        url: `http://127.0.0.1:${badCardServer.port}`,
+      });
+
+      expect(result.status).toBe("degraded");
+      expect(result.detail).toContain("JSON-RPC endpoint");
+      expect(result.checks).toEqual([
+        {
+          label: "json-rpc endpoint",
+          ok: false,
+          detail: "Agent card does not expose a JSON-RPC endpoint",
+        },
+      ]);
+    } finally {
+      await badCardServer.stop(true);
+    }
   });
 });
