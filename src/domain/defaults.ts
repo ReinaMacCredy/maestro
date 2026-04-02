@@ -44,6 +44,45 @@ export const DEFAULT_CONFIG: MaestroConfig = {
     agents: ["claude-code"],
   },
   defaultWorkflow: "plan-implement",
+  execution: {
+    defaultWorker: "codex",
+    stopOnFailure: true,
+    retryBudget: 1,
+    rotateWorkerOnRetry: false,
+  },
+  workers: {
+    "claude-code": {
+      enabled: true,
+      transport: "cli",
+      command: "claude",
+      args: ["--print"],
+      outputMode: "stream-json",
+    },
+    codex: {
+      enabled: true,
+      transport: "cli",
+      command: "codex",
+      args: [],
+      outputMode: "raw",
+    },
+    gemini: {
+      enabled: false,
+      transport: "cli",
+      command: "gemini",
+      args: [],
+      outputMode: "stream-json",
+    },
+  },
+  supervision: {
+    level: "mid",
+    staleAfterMs: 300_000,
+    killGraceMs: 5_000,
+    progressIntervalMs: 30_000,
+  },
+  parallel: {
+    enabled: false,
+    maxConcurrent: 1,
+  },
 };
 
 export const NO_SESSION_ID = "none";

@@ -9,6 +9,8 @@ import type { FeatureStorePort } from "./ports/feature-store.port.js";
 import type { AssertionStorePort } from "./ports/assertion-store.port.js";
 import type { CheckpointStorePort } from "./ports/checkpoint-store.port.js";
 import type { RuntimeStorePort } from "./ports/runtime-store.port.js";
+import type { ExecutionStorePort } from "./ports/execution-store.port.js";
+import type { TransportPort } from "./ports/transport.port.js";
 import { ShellGitAdapter } from "./adapters/git.adapter.js";
 import { YamlConfigAdapter } from "./adapters/config.adapter.js";
 import { FsHandoffStoreAdapter } from "./adapters/handoff-store.adapter.js";
@@ -20,6 +22,8 @@ import { FsFeatureStoreAdapter } from "./adapters/feature-store.adapter.js";
 import { FsAssertionStoreAdapter } from "./adapters/assertion-store.adapter.js";
 import { FsCheckpointStoreAdapter } from "./adapters/checkpoint-store.adapter.js";
 import { FsRuntimeStoreAdapter } from "./adapters/runtime-store.adapter.js";
+import { FsExecutionStoreAdapter } from "./adapters/execution-store.adapter.js";
+import { CliTransportAdapter } from "./adapters/cli-transport.adapter.js";
 
 export interface Services {
   readonly git: GitPort;
@@ -33,6 +37,8 @@ export interface Services {
   readonly assertionStore: AssertionStorePort;
   readonly checkpointStore: CheckpointStorePort;
   readonly runtimeStore: RuntimeStorePort;
+  readonly executionStore: ExecutionStorePort;
+  readonly transport: TransportPort;
 }
 
 let instance: Services | undefined;
@@ -50,6 +56,8 @@ export function initServices(projectDir: string): Services {
     assertionStore: new FsAssertionStoreAdapter(projectDir),
     checkpointStore: new FsCheckpointStoreAdapter(projectDir),
     runtimeStore: new FsRuntimeStoreAdapter(projectDir),
+    executionStore: new FsExecutionStoreAdapter(projectDir),
+    transport: new CliTransportAdapter(),
   };
   return instance;
 }

@@ -111,6 +111,10 @@ export interface MaestroConfig {
   };
   readonly defaultWorkflow?: string;
   readonly workflowTemplates?: Readonly<Record<string, WorkflowTemplate>>;
+  readonly execution?: import("./worker-types.js").ExecutionConfig;
+  readonly workers?: Readonly<Record<string, import("./worker-types.js").WorkerConfig>>;
+  readonly supervision?: import("./worker-types.js").SupervisionConfig;
+  readonly parallel?: import("./worker-types.js").ParallelConfig;
 }
 
 export interface CassSearchResult {

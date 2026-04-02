@@ -8,6 +8,9 @@ import type { MissionStorePort } from "../../src/ports/mission-store.port.js";
 import type { FeatureStorePort } from "../../src/ports/feature-store.port.js";
 import type { AssertionStorePort } from "../../src/ports/assertion-store.port.js";
 import type { CheckpointStorePort } from "../../src/ports/checkpoint-store.port.js";
+import type { RuntimeStorePort } from "../../src/ports/runtime-store.port.js";
+import type { ExecutionStorePort } from "../../src/ports/execution-store.port.js";
+import type { TransportPort } from "../../src/ports/transport.port.js";
 import type {
   GitState,
   MaestroConfig,
@@ -30,6 +33,8 @@ import type {
   UpdateFeatureInput,
   UpdateAssertionInput,
 } from "../../src/domain/mission-types.js";
+import type { WorkerRuntime } from "../../src/domain/runtime-types.js";
+import type { ExecutionRecord, WorkerConfig, WorkerResult } from "../../src/domain/worker-types.js";
 
 export function mockGit(overrides: Partial<GitPort> = {}): GitPort {
   return {
@@ -399,6 +404,66 @@ export function mockCheckpointStore(
       const all = [...checkpoints.values()];
       all.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
       return all[0];
+    },
+    };
+  }
+
+export function mockRuntimeStore(
+  initial: WorkerRuntime[] = [],
+): RuntimeStorePort {
+  const runtimes = new Map(initial.map((runtime) => [runtime.featureId, runtime]));
+
+  return {
+    get: async (_missionId, featureId) => runtimes.get(featureId),
+    save: async (_missionId, featureId, runtime) => {
+      runtimes.set(featureId, runtime);
+      return runtime;
+    },
+    delete: async (_missionId, featureId) => runtimes.delete(featureId),
+    list: async () => [...runtimes.values()].sort((left, right) => left.featureId.localeCompare(right.featureId)),
+  };
+}
+
+export function mockExecutionStore(
+  initial: ExecutionRecord[] = [],
+): ExecutionStorePort {
+  const records = new Map(initial.map((record) => [record.id, record]));
+
+  return {
+    get: async (_missionId, executionId) => records.get(executionId),
+    save: async (_missionId, record) => {
+      records.set(record.id, record);
+      return record;
+    },
+    list: async () => [...records.values()].sort((left, right) => left.startedAt.localeCompare(right.startedAt)),
+    getByFeature: async (_missionId, featureId) =>
+      [...records.values()]
+        .filter((record) => record.featureId === featureId)
+        .sort((left, right) => left.startedAt.localeCompare(right.startedAt)),
+  };
+}
+
+export function mockTransport(
+  results: readonly WorkerResult[] = [],
+  onSpawn?: (workerConfig: WorkerConfig, prompt: string) => void | Promise<void>,
+): TransportPort {
+  const queue = [...results];
+
+  return {
+    spawn: async (workerConfig, prompt) => {
+      await onSpawn?.(workerConfig, prompt);
+      const next = queue.shift();
+      if (next) return next;
+
+      return {
+        success: true,
+        exitCode: 0,
+        summary: "mock worker completed",
+        stdoutRaw: "",
+        stderrRaw: "",
+        filesChanged: [],
+        durationMs: 1,
+      };
     },
   };
 }
