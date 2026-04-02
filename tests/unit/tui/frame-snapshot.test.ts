@@ -799,7 +799,9 @@ describe("frame rendering", () => {
           expect(frame).toContain("Best for");
           expect(frame).toContain("Good fit in this mission");
           expect(frame).toContain("Other saved values");
-        });
+          expect(frame).toContain("Better if you want maximum reliability over");
+          expect(frame).toContain("speed.");
+          });
 
       it("renders the review screen with preview details", () => {
         const state = createInitialState(makeSnapshot({

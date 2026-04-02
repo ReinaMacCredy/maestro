@@ -5,6 +5,7 @@
 import type { Buffer } from "../terminal/buffer.js";
 import type { Rect } from "../terminal/layout.js";
 import { truncate } from "../format.js";
+import { wrapText } from "./text-wrap.js";
 import { BOX } from "../terminal/ansi.js";
 import { PALETTE } from "../theme.js";
 
@@ -803,7 +804,7 @@ function renderSplitDetailRows(
   spec: OverlayRenderSpec,
 ): void {
   let rowY = rect.y;
-  const maxWidth = rect.width;
+  const maxWidth = Math.max(0, rect.width - 2);
 
   for (let index = 0; index < rows.length; index++) {
     const row = rows[index]!;
@@ -816,19 +817,34 @@ function renderSplitDetailRows(
         bold: true,
       });
       rowY += 1;
-    }
-    if (rowY >= rect.y + rect.height) break;
+      }
+      if (rowY >= rect.y + rect.height) break;
 
-    const text = row.detail
-      ? `${truncate(formatOverlayText(row.label, spec.text.rowCase, Math.max(0, Math.floor(maxWidth * 0.34) - 2)), Math.max(0, Math.floor(maxWidth * 0.34) - 2))} ${truncate(row.detail, Math.max(0, maxWidth - Math.floor(maxWidth * 0.34) - 5))}`
-      : formatOverlayText(row.label, spec.text.rowCase, maxWidth - 2);
-    buf.writeText(rowY, rect.x + 2, text, {
-      fg: getRowColor(row.tone, spec, row.detail ? "detail" : "label"),
-      bg: PALETTE.overlaySurfaceBg,
-      bold: row.tone === "accent" || row.style === "block",
-    });
-    rowY += 1;
+      const text = row.detail
+        ? `${truncate(formatOverlayText(row.label, spec.text.rowCase, Math.max(0, Math.floor(maxWidth * 0.34) - 2)), Math.max(0, Math.floor(maxWidth * 0.34) - 2))} ${truncate(row.detail, Math.max(0, maxWidth - Math.floor(maxWidth * 0.34) - 5))}`
+        : applyOverlayCase(row.label, spec.text.rowCase);
+      const lines = getSplitDetailLines(text, maxWidth);
+      const fg = getRowColor(row.tone, spec, row.detail ? "detail" : "label");
+      const bold = row.tone === "accent" || row.style === "block";
+      for (const line of lines) {
+        if (rowY >= rect.y + rect.height) break;
+        buf.writeText(rowY, rect.x + 2, line, {
+          fg,
+          bg: PALETTE.overlaySurfaceBg,
+          bold,
+        });
+        rowY += 1;
+      }
+    }
   }
+
+function getSplitDetailLines(text: string, maxWidth: number): readonly string[] {
+  if (maxWidth <= 0) return [];
+  if (text.length <= maxWidth) return [text];
+  if (/^\s/.test(text)) {
+    return [truncate(text, maxWidth)];
+  }
+  return wrapText(text, maxWidth);
 }
 
 function normalizeRows(opts: ModalOptions): NormalizedModalRow[] {
