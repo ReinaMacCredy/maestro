@@ -62,12 +62,17 @@ export interface AppState {
 }
 
 export function createInitialState(snapshot: MissionControlSnapshot): AppState {
+  const initialLiveFeatureId = getLiveRuntimeFeatureId(snapshot);
+  const initialLiveFeatureIndex = initialLiveFeatureId
+    ? snapshot.features.findIndex((feature) => feature.id === initialLiveFeatureId)
+    : -1;
+
   return {
     snapshot,
     focusedPanel: "features",
-    leftPaneMode: "overview",
+    leftPaneMode: initialLiveFeatureIndex >= 0 ? "preview" : "overview",
     copyMode: false,
-    selectedFeatureIndex: 0,
+    selectedFeatureIndex: initialLiveFeatureIndex >= 0 ? initialLiveFeatureIndex : 0,
     logScrollOffset: 0,
     modal: { kind: "none" },
     running: true,

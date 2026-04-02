@@ -74,15 +74,73 @@ function makeState(overrides?: Partial<AppState>): AppState {
   };
 }
 
-describe("createInitialState", () => {
-  it("sets default focus to features", () => {
-    const state = createInitialState(makeSnapshot());
-    expect(state.focusedPanel).toBe("features");
-    expect(state.selectedFeatureIndex).toBe(0);
-    expect(state.modal.kind).toBe("none");
-    expect(state.running).toBe(true);
+  describe("createInitialState", () => {
+    it("sets default focus to features", () => {
+      const state = createInitialState(makeSnapshot());
+      expect(state.focusedPanel).toBe("features");
+      expect(state.selectedFeatureIndex).toBe(0);
+      expect(state.modal.kind).toBe("none");
+      expect(state.running).toBe(true);
+    });
+
+    it("follows the live feature immediately when a run is already active", () => {
+      const state = createInitialState(makeSnapshot({
+        features: [
+          { id: "f1", title: "F1", status: "pending", milestoneId: "m1", workerType: "test", hasReport: false },
+          { id: "f2", title: "F2", status: "in-progress", milestoneId: "m1", workerType: "test", hasReport: false },
+          { id: "f3", title: "F3", status: "pending", milestoneId: "m2", workerType: "test", hasReport: false },
+        ],
+        activeFeature: {
+          id: "f2",
+          title: "Feature 2",
+          status: "in-progress",
+          milestoneId: "m1",
+          milestoneTitle: "Milestone 1",
+          workerType: "test",
+          description: "Running now",
+          preconditions: undefined,
+          expectedBehavior: undefined,
+          verificationSteps: [],
+          dependsOn: [],
+          fulfills: [],
+          validTransitions: ["review"],
+          runtimeState: "live",
+          agent: "demo-a2a",
+          sessionId: "sess-2",
+        },
+        activeWorker: {
+          featureId: "f2",
+          featureTitle: "Feature 2",
+          workerType: "test",
+          status: "in-progress",
+          elapsedMs: 10_000,
+          report: null,
+          runtimeState: "live",
+          agent: "demo-a2a",
+          sessionId: "sess-2",
+          transport: "a2a",
+          currentActivity: "Applying patch draft",
+          lastOutputAgeMs: 500,
+        },
+        runtimeProcesses: [{
+          featureId: "f2",
+          title: "Feature 2",
+          status: "in-progress",
+          workerType: "test",
+          hasReport: false,
+          isLive: true,
+          runtimeState: "live",
+          agent: "demo-a2a",
+          sessionId: "sess-2",
+          transport: "a2a",
+        }],
+      }));
+
+      expect(state.focusedPanel).toBe("features");
+      expect(state.leftPaneMode).toBe("preview");
+      expect(state.selectedFeatureIndex).toBe(1);
+    });
   });
-});
 
 describe("reduce", () => {
   describe("quit", () => {
