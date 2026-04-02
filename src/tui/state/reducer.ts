@@ -350,16 +350,17 @@ export function reduce(state: AppState, action: Action): AppState {
           };
 
     case "open-processes":
-      if (!canOpenOverlayFromModal(state.modal)) return state;
-      if (state.snapshot.mode !== "mission") return state;
-      return {
-        ...state,
-        modal: {
-          kind: "processes",
-          selectedProcessIndex: 0,
-          returnTarget: getModalReturnTarget(state.modal),
-        },
-      };
+        if (!canOpenOverlayFromModal(state.modal)) return state;
+        if (state.snapshot.mode !== "mission") return state;
+        const selectedFeatureId = state.snapshot.features[state.selectedFeatureIndex]?.id;
+        return {
+          ...state,
+          modal: {
+            kind: "processes",
+            selectedProcessIndex: getPreferredRuntimeProcessIndex(state.snapshot, selectedFeatureId),
+            returnTarget: getModalReturnTarget(state.modal),
+          },
+        };
 
     case "open-workers":
       if (!canOpenOverlayFromModal(state.modal)) return state;
@@ -373,14 +374,14 @@ export function reduce(state: AppState, action: Action): AppState {
       };
 
     case "open-runtime-output": {
-      if (state.snapshot.mode !== "mission") return state;
-      if (state.snapshot.runtimeProcesses.length === 0) return state;
-      const selectedProcessIndex = state.modal.kind === "processes"
-        ? state.modal.selectedProcessIndex
-        : 0;
-      return {
-        ...state,
-        modal: {
+        if (state.snapshot.mode !== "mission") return state;
+        if (state.snapshot.runtimeProcesses.length === 0) return state;
+        const selectedProcessIndex = state.modal.kind === "processes"
+          ? state.modal.selectedProcessIndex
+          : getPreferredRuntimeProcessIndex(state.snapshot, state.snapshot.features[state.selectedFeatureIndex]?.id);
+        return {
+          ...state,
+          modal: {
           kind: "runtime-output",
           selectedProcessIndex: Math.min(selectedProcessIndex, state.snapshot.runtimeProcesses.length - 1),
           returnTarget: getModalReturnTarget(state.modal),
@@ -392,17 +393,29 @@ export function reduce(state: AppState, action: Action): AppState {
       return { ...state, copyMode: !state.copyMode };
 
     case "update-snapshot": {
-      const selectedFeatureId = state.snapshot.features[state.selectedFeatureIndex]?.id;
-      const nextSelectedIndex = selectedFeatureId
-        ? action.snapshot.features.findIndex((feature) => feature.id === selectedFeatureId)
-        : -1;
-      const baseState: AppState = {
-        ...state,
-        snapshot: action.snapshot,
-        selectedFeatureIndex: nextSelectedIndex >= 0
-          ? nextSelectedIndex
-          : Math.min(state.selectedFeatureIndex, Math.max(0, action.snapshot.features.length - 1)),
-      };
+        const selectedFeatureId = state.snapshot.features[state.selectedFeatureIndex]?.id;
+        const preservedSelectedIndex = selectedFeatureId
+          ? action.snapshot.features.findIndex((feature) => feature.id === selectedFeatureId)
+          : -1;
+        const nextLiveFeatureId = getLiveRuntimeFeatureId(action.snapshot);
+        const previousLiveFeatureId = getLiveRuntimeFeatureId(state.snapshot);
+        const shouldAutoFollowLiveFeature = nextLiveFeatureId !== undefined
+          && nextLiveFeatureId !== previousLiveFeatureId
+          && !blocksLiveFeatureAutoFollow(state.modal);
+        const liveSelectedIndex = nextLiveFeatureId
+          ? action.snapshot.features.findIndex((feature) => feature.id === nextLiveFeatureId)
+          : -1;
+        const baseState: AppState = {
+          ...state,
+          snapshot: action.snapshot,
+          focusedPanel: shouldAutoFollowLiveFeature ? "features" : state.focusedPanel,
+          leftPaneMode: shouldAutoFollowLiveFeature ? "preview" : state.leftPaneMode,
+          selectedFeatureIndex: shouldAutoFollowLiveFeature && liveSelectedIndex >= 0
+            ? liveSelectedIndex
+            : preservedSelectedIndex >= 0
+              ? preservedSelectedIndex
+              : Math.min(state.selectedFeatureIndex, Math.max(0, action.snapshot.features.length - 1)),
+        };
 
       if (state.modal.kind === "feature-browser") {
         const selectedModalFeatureId = state.snapshot.features[state.modal.selectedFeatureIndex]?.id;
@@ -449,18 +462,20 @@ export function reduce(state: AppState, action: Action): AppState {
         };
       }
 
-        if (state.modal.kind === "processes") {
-          return {
-            ...baseState,
-          modal: {
-            kind: "processes",
-            selectedProcessIndex: Math.min(
-              state.modal.selectedProcessIndex,
-              Math.max(0, action.snapshot.runtimeProcesses.length - 1),
-            ),
-            returnTarget: state.modal.returnTarget,
-          },
-        };
+          if (state.modal.kind === "processes") {
+            return {
+              ...baseState,
+            modal: {
+              kind: "processes",
+              selectedProcessIndex: getUpdatedRuntimeProcessIndex(
+                state.snapshot,
+                action.snapshot,
+                state.modal.selectedProcessIndex,
+                action.snapshot.features[baseState.selectedFeatureIndex]?.id,
+              ),
+              returnTarget: state.modal.returnTarget,
+            },
+          };
       }
 
         if (state.modal.kind === "dependencies") {
@@ -477,18 +492,20 @@ export function reduce(state: AppState, action: Action): AppState {
           };
         }
 
-        if (state.modal.kind === "runtime-output") {
-          return {
-            ...baseState,
-            modal: {
-              kind: "runtime-output",
-              selectedProcessIndex: Math.min(
-                state.modal.selectedProcessIndex,
-                Math.max(0, action.snapshot.runtimeProcesses.length - 1),
-              ),
-              returnTarget: state.modal.returnTarget,
-            },
-          };
+          if (state.modal.kind === "runtime-output") {
+            return {
+              ...baseState,
+              modal: {
+                kind: "runtime-output",
+                selectedProcessIndex: getUpdatedRuntimeProcessIndex(
+                  state.snapshot,
+                  action.snapshot,
+                  state.modal.selectedProcessIndex,
+                  action.snapshot.features[baseState.selectedFeatureIndex]?.id,
+                ),
+                returnTarget: state.modal.returnTarget,
+              },
+            };
         }
 
           if (state.modal.kind === "config") {
@@ -982,6 +999,75 @@ function handleModalNavigate(state: AppState, direction: "up" | "down"): AppStat
 
 function canOpenOverlayFromModal(modal: ModalState): boolean {
   return modal.kind === "none" || modal.kind === "command-palette";
+}
+
+function blocksLiveFeatureAutoFollow(modal: ModalState): boolean {
+  return modal.kind === "command-palette"
+    || modal.kind === "feature-action"
+    || modal.kind === "feature-browser"
+    || modal.kind === "dependencies"
+    || modal.kind === "handoffs"
+    || modal.kind === "workers"
+    || modal.kind === "config";
+}
+
+function getLiveRuntimeFeatureId(snapshot: MissionControlSnapshot): string | undefined {
+  if (snapshot.mode !== "mission") {
+    return undefined;
+  }
+
+  if (snapshot.activeWorker?.featureId) {
+    return snapshot.activeWorker.featureId;
+  }
+
+  return snapshot.runtimeProcesses.find((process) =>
+    process.isLive
+    || process.runtimeState === "starting"
+    || process.runtimeState === "live"
+    || process.runtimeState === "stale"
+    || process.runtimeState === "recoverable"
+  )?.featureId;
+}
+
+function getPreferredRuntimeProcessIndex(
+  snapshot: MissionControlSnapshot,
+  selectedFeatureId: string | undefined,
+): number {
+  if (snapshot.mode !== "mission" || snapshot.runtimeProcesses.length === 0) {
+    return 0;
+  }
+
+  const candidateFeatureIds = [
+    snapshot.activeWorker?.featureId,
+    selectedFeatureId,
+    getLiveRuntimeFeatureId(snapshot),
+  ].filter((featureId): featureId is string => typeof featureId === "string" && featureId.length > 0);
+
+  for (const featureId of candidateFeatureIds) {
+    const index = snapshot.runtimeProcesses.findIndex((process) => process.featureId === featureId);
+    if (index >= 0) {
+      return index;
+    }
+  }
+
+  return 0;
+}
+
+function getUpdatedRuntimeProcessIndex(
+  previousSnapshot: MissionControlSnapshot,
+  nextSnapshot: MissionControlSnapshot,
+  previousSelectedIndex: number,
+  selectedFeatureId: string | undefined,
+): number {
+  const previousFeatureId = previousSnapshot.runtimeProcesses[previousSelectedIndex]?.featureId;
+  if (previousFeatureId) {
+    const preservedIndex = nextSnapshot.runtimeProcesses.findIndex((process) => process.featureId === previousFeatureId);
+    if (preservedIndex >= 0) {
+      return preservedIndex;
+    }
+  }
+
+  return getPreferredRuntimeProcessIndex(nextSnapshot, selectedFeatureId);
 }
 
 function closeOrReturnModal(state: AppState): AppState {

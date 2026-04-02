@@ -110,9 +110,9 @@ describe("renderWorkerPanel", () => {
       expect(text).toContain("Recovery review or manual retry");
     });
 
-    it("prefers live activity and output freshness for the active worker", () => {
-      const buf = new Buffer(100, 6);
-      renderWorkerPanel(buf, { x: 0, y: 0, width: 100, height: 6 }, makeSnapshot({
+      it("prefers live activity and output freshness for the active worker", () => {
+        const buf = new Buffer(100, 7);
+        renderWorkerPanel(buf, { x: 0, y: 0, width: 100, height: 7 }, makeSnapshot({
           activeWorker: {
             featureId: "f2",
             featureTitle: "Database config",
@@ -139,6 +139,7 @@ describe("renderWorkerPanel", () => {
         const text = buf.toString();
         expect(text).toContain("Applying auth schema patch");
         expect(text).toContain("Live output streaming now");
+        expect(text).toContain("Following live feature on current mission");
         expect(text).toContain("Transport");
         expect(text).toContain("a2a");
         expect(text).toContain("Handle");

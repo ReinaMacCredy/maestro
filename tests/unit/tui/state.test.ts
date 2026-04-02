@@ -439,6 +439,40 @@ describe("reduce", () => {
           expect(state.modal.kind).toBe("processes");
         });
 
+        it("defaults to the active live process instead of index zero", () => {
+          const state = reduce(makeState({
+            selectedFeatureIndex: 0,
+            snapshot: makeSnapshot({
+              features: [
+                { id: "f1", title: "F1", status: "pending", milestoneId: "m1", workerType: "test", hasReport: false },
+                { id: "f2", title: "F2", status: "in-progress", milestoneId: "m1", workerType: "test", hasReport: false },
+                { id: "f3", title: "F3", status: "pending", milestoneId: "m2", workerType: "test", hasReport: false },
+              ],
+              activeWorker: {
+                featureId: "f2",
+                featureTitle: "F2",
+                workerType: "test",
+                status: "in-progress",
+                elapsedMs: 10_000,
+                report: null,
+                runtimeState: "live",
+                agent: "demo-a2a",
+                sessionId: "sess-2",
+                transport: "a2a",
+              },
+              runtimeProcesses: [
+                { featureId: "f1", title: "F1", status: "assigned", workerType: "test", hasReport: false, isLive: true },
+                { featureId: "f2", title: "F2", status: "in-progress", workerType: "test", hasReport: false, isLive: true },
+              ],
+            }),
+          }), { type: "open-processes" });
+
+          expect(state.modal.kind).toBe("processes");
+          if (state.modal.kind === "processes") {
+            expect(state.modal.selectedProcessIndex).toBe(1);
+          }
+        });
+
         it("does not open processes from home mode", () => {
           const state = reduce(makeState({
             snapshot: makeSnapshot({
@@ -526,6 +560,57 @@ describe("reduce", () => {
           expect(state.modal).toEqual({
             kind: "runtime-output",
             selectedProcessIndex: 0,
+            returnTarget: undefined,
+          });
+        });
+
+        it("defaults runtime output to the followed live process when opened directly", () => {
+          const state = reduce(makeState({
+            selectedFeatureIndex: 0,
+            snapshot: makeSnapshot({
+              features: [
+                { id: "f1", title: "F1", status: "pending", milestoneId: "m1", workerType: "test", hasReport: false },
+                { id: "f2", title: "F2", status: "in-progress", milestoneId: "m1", workerType: "test", hasReport: false },
+                { id: "f3", title: "F3", status: "pending", milestoneId: "m2", workerType: "test", hasReport: false },
+              ],
+              activeWorker: {
+                featureId: "f2",
+                featureTitle: "F2",
+                workerType: "test",
+                status: "in-progress",
+                elapsedMs: 10_000,
+                report: null,
+                runtimeState: "live",
+                agent: "demo-a2a",
+                sessionId: "sess-2",
+                transport: "a2a",
+              },
+              runtimeProcesses: [
+                {
+                  featureId: "f1",
+                  title: "F1",
+                  status: "assigned",
+                  workerType: "test",
+                  hasReport: false,
+                  isLive: true,
+                  outputLines: [{ timestamp: "2026-04-02T12:00:10.000Z", kind: "stdout", text: "Waiting" }],
+                },
+                {
+                  featureId: "f2",
+                  title: "F2",
+                  status: "in-progress",
+                  workerType: "test",
+                  hasReport: false,
+                  isLive: true,
+                  outputLines: [{ timestamp: "2026-04-02T12:00:10.000Z", kind: "stdout", text: "Running tests" }],
+                },
+              ],
+            }),
+          }), { type: "open-runtime-output" });
+
+          expect(state.modal).toEqual({
+            kind: "runtime-output",
+            selectedProcessIndex: 1,
             returnTarget: undefined,
           });
         });
@@ -738,7 +823,7 @@ describe("reduce", () => {
       });
     });
 
-  describe("update-snapshot", () => {
+    describe("update-snapshot", () => {
     it("updates snapshot and clamps selection", () => {
       const state = makeState({ selectedFeatureIndex: 5 });
       const newSnap = makeSnapshot({
@@ -765,7 +850,7 @@ describe("reduce", () => {
       expect(next.snapshot.features[next.selectedFeatureIndex]?.id).toBe("f2");
     });
 
-    it("preserves the feature browser selection by id when the snapshot order changes", () => {
+      it("preserves the feature browser selection by id when the snapshot order changes", () => {
       const state = makeState({
         selectedFeatureIndex: 1,
         modal: { kind: "feature-browser", selectedFeatureIndex: 1 },
@@ -781,13 +866,152 @@ describe("reduce", () => {
       const next = reduce(state, { type: "update-snapshot", snapshot: reordered });
 
       expect(next.modal.kind).toBe("feature-browser");
-      if (next.modal.kind === "feature-browser") {
-        expect(next.modal.selectedFeatureIndex).toBe(0);
-        expect(next.snapshot.features[next.modal.selectedFeatureIndex]?.id).toBe("f2");
-      }
-    });
+        if (next.modal.kind === "feature-browser") {
+          expect(next.modal.selectedFeatureIndex).toBe(0);
+          expect(next.snapshot.features[next.modal.selectedFeatureIndex]?.id).toBe("f2");
+        }
+      });
 
-    describe("config scope flow", () => {
+      it("auto-follows a newly live feature on the main dashboard", () => {
+        const state = makeState({
+          focusedPanel: "log",
+          leftPaneMode: "overview",
+          selectedFeatureIndex: 0,
+        });
+        const nextSnapshot = makeSnapshot({
+          activeFeature: {
+            id: "f2",
+            title: "Feature 2",
+            status: "in-progress",
+            milestoneId: "m1",
+            milestoneTitle: "Milestone 1",
+            workerType: "test",
+            description: "Running now",
+            preconditions: undefined,
+            expectedBehavior: undefined,
+            verificationSteps: [],
+            dependsOn: [],
+            fulfills: [],
+            validTransitions: ["review"],
+            runtimeState: "live",
+            agent: "demo-a2a",
+            sessionId: "sess-2",
+          },
+          features: [
+            { id: "f1", title: "F1", status: "pending", milestoneId: "m1", workerType: "t", hasReport: false },
+            { id: "f2", title: "F2", status: "in-progress", milestoneId: "m1", workerType: "t", hasReport: false },
+            { id: "f3", title: "F3", status: "pending", milestoneId: "m2", workerType: "t", hasReport: false },
+          ],
+          activeWorker: {
+            featureId: "f2",
+            featureTitle: "Feature 2",
+            workerType: "test",
+            status: "in-progress",
+            elapsedMs: 10_000,
+            report: null,
+            runtimeState: "live",
+            agent: "demo-a2a",
+            sessionId: "sess-2",
+            transport: "a2a",
+            currentActivity: "Applying patch draft",
+            lastOutputAgeMs: 500,
+          },
+          runtimeProcesses: [{
+            featureId: "f2",
+            title: "Feature 2",
+            status: "in-progress",
+            workerType: "test",
+            hasReport: false,
+            isLive: true,
+            runtimeState: "live",
+            agent: "demo-a2a",
+            sessionId: "sess-2",
+            transport: "a2a",
+          }],
+        });
+
+        const next = reduce(state, { type: "update-snapshot", snapshot: nextSnapshot });
+
+        expect(next.selectedFeatureIndex).toBe(1);
+        expect(next.focusedPanel).toBe("features");
+        expect(next.leftPaneMode).toBe("preview");
+      });
+
+      it("does not auto-follow a newly live feature while a config modal is open", () => {
+        const state = makeState({
+          leftPaneMode: "overview",
+          selectedFeatureIndex: 0,
+          modal: {
+            kind: "config",
+            tab: "overview",
+            selectedRowIndex: 0,
+            phase: "browse",
+            selectedScope: "project",
+          },
+        });
+        const nextSnapshot = makeSnapshot({
+          activeWorker: {
+            featureId: "f2",
+            featureTitle: "Feature 2",
+            workerType: "test",
+            status: "in-progress",
+            elapsedMs: 10_000,
+            report: null,
+            runtimeState: "live",
+            agent: "demo-a2a",
+            sessionId: "sess-2",
+            transport: "a2a",
+          },
+          runtimeProcesses: [{
+            featureId: "f2",
+            title: "Feature 2",
+            status: "in-progress",
+            workerType: "test",
+            hasReport: false,
+            isLive: true,
+            runtimeState: "live",
+          }],
+          features: [
+            { id: "f1", title: "F1", status: "pending", milestoneId: "m1", workerType: "t", hasReport: false },
+            { id: "f2", title: "F2", status: "in-progress", milestoneId: "m1", workerType: "t", hasReport: false },
+            { id: "f3", title: "F3", status: "pending", milestoneId: "m2", workerType: "t", hasReport: false },
+          ],
+        });
+
+        const next = reduce(state, { type: "update-snapshot", snapshot: nextSnapshot });
+
+        expect(next.selectedFeatureIndex).toBe(0);
+        expect(next.leftPaneMode).toBe("overview");
+        expect(next.modal.kind).toBe("config");
+      });
+
+      it("preserves process selection by feature id when runtime items reorder", () => {
+        const state = makeState({
+          snapshot: makeSnapshot({
+            runtimeProcesses: [
+              { featureId: "f1", title: "F1", status: "in-progress", workerType: "t", hasReport: false, isLive: true },
+              { featureId: "f2", title: "F2", status: "assigned", workerType: "t", hasReport: false, isLive: true },
+            ],
+          }),
+          modal: { kind: "processes", selectedProcessIndex: 1 },
+        });
+        const nextSnapshot = makeSnapshot({
+          runtimeProcesses: [
+            { featureId: "f2", title: "F2", status: "assigned", workerType: "t", hasReport: false, isLive: true },
+            { featureId: "f1", title: "F1", status: "in-progress", workerType: "t", hasReport: false, isLive: true },
+          ],
+        });
+
+        const next = reduce(state, { type: "update-snapshot", snapshot: nextSnapshot });
+
+        expect(next.modal.kind).toBe("processes");
+        if (next.modal.kind === "processes") {
+          expect(next.modal.selectedProcessIndex).toBe(0);
+          expect(next.snapshot.runtimeProcesses[next.modal.selectedProcessIndex]?.featureId).toBe("f2");
+        }
+      });
+
+      describe("config scope flow", () => {
       it("opens the explicit scope picker when S is pressed", () => {
         const state = makeState({
           modal: {

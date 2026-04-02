@@ -180,22 +180,22 @@ function buildActivityRows(
     const meta = `${snap.activeWorker.featureId} · ${FEATURE_STATUS_LABEL[snap.activeWorker.status]} · ${snap.activeWorker.workerType}`;
     const stateValue = getWorkerStateText(snap.activeWorker);
     const nextValue = getWorkerNextText(snap.activeWorker);
-    return [
-      { label: "Task", value: snap.activeWorker.featureTitle, style: "title" },
-      { label: "Meta", value: meta, style: "meta" },
+      return [
+        { label: "Task", value: snap.activeWorker.featureTitle, style: "title" },
+        { label: "Meta", value: meta, style: "meta" },
       {
         label: "State",
         value: stateValue,
         style: stateValue === "Waiting for first worker report" ? "muted" : "value",
       },
-      {
-        label: "Next",
-        value: nextValue,
-        style: nextValue === "Report update or status transition" ? "muted" : "value",
-      },
-      { label: "Scope", value: "Live on current feature", style: "value" },
-    ];
-  }
+        {
+          label: "Next",
+          value: nextValue,
+          style: nextValue === "Report update or status transition" ? "muted" : "value",
+        },
+        { label: "Scope", value: "Following live feature on current mission", style: "value" },
+      ];
+    }
 
   if (snap.activeFeature) {
     const meta = `${snap.activeFeature.id} · ${FEATURE_STATUS_LABEL[snap.activeFeature.status]} · ${snap.activeFeature.workerType}`;
