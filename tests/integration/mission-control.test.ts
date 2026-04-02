@@ -1519,4 +1519,32 @@ describe("mission-control CLI", () => {
     expect(result.plainOutput).toContain("●••");
     expect(hasAnimatedHeaderFrame(result.plainOutput)).toBe(false);
   }, PTY_TIMEOUT_MS);
+
+  it("compiled binary interactive home mode auto-binds to a mission that appears later", async () => {
+    if (!pythonAvailable) return;
+
+    const ptyRun = runCompiledInteractivePty(
+      tmpDir,
+      ["mission-control"],
+      {
+        input: "",
+        inputSteps: [{ chars: "q", delayMs: 2_600 }],
+      },
+    );
+
+    await Bun.sleep(400);
+    const missionId = await createMission(tmpDir);
+    await setMissionStatus(tmpDir, missionId, "approved");
+    await setMissionStatus(tmpDir, missionId, "executing");
+    await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+    await setFeatureStatus(tmpDir, missionId, "f1", "in-progress");
+    await seedLiveRuntime(tmpDir, missionId, "f1");
+
+    const result = await ptyRun;
+
+    expectCleanPtyExit(result);
+    expect(result.plainOutput).toContain("Mission Control");
+    expect(result.plainOutput).toContain("Feature 1");
+    expect(result.plainOutput).toContain("Agent     codex");
+  }, PTY_TIMEOUT_MS);
 });
