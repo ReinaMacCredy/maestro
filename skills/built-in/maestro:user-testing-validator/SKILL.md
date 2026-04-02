@@ -69,7 +69,7 @@ Example assertions:
 **For CLI testing:**
 1. Create temporary git repository
 2. Initialize Mission Control: `maestro mission create`
-3. Set up required services (check `.factory/services.yaml`)
+3. Set up required services (check `.maestro/bootstrap/services.yaml`)
 4. Start services and verify healthchecks
 
 **For UI testing:**

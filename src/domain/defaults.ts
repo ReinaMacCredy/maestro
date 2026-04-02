@@ -64,7 +64,7 @@ export const DEFAULT_PROMPT_TEMPLATE = `You are picking up a handoff from anothe
 3. maestro doctor --json
 
 Follow the quickstart in the handoff output.
-Read AGENTS.md for code style.
+Read .maestro/AGENTS.md for project-local code style and bootstrap guidance.
 {{#instructions}}Your instructions: {{instructions}}
 {{/instructions}}{{#task}}Your task: {{task}}
 {{/task}}{{#sessionId}}Session: {{sessionId}}

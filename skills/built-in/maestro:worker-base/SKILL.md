@@ -22,15 +22,15 @@ Your feature has been pre-assigned by the system and is shown in your bootstrap 
 
 ---
 
-## CRITICAL: .factory/ must remain intact and be committed
+## CRITICAL: `.maestro/bootstrap/` is the project bootstrap layer
 
-NEVER rename, delete, or modify the `.factory/` folder. This folder contains mission infrastructure files that the system depends on. Corrupting it will break the mission.
+Do not remove or corrupt `.maestro/bootstrap/` while a project relies on Maestro bootstrap assets. This subtree contains the committed project-local setup files workers depend on.
 
-**The `.factory/` folder MUST be committed to the repository** (NOT added to `.gitignore`).
+**The `.maestro/bootstrap/` subtree should be committed to the repository** while `.maestro/missions/`, `.maestro/sessions/`, and other runtime state remain ignored.
 
-You MAY read and update these files in `.factory/`:
-- `.factory/services.yaml` - Add new services/commands if discovered during work
-- `.factory/library/` - Add knowledge for future workers
+You MAY read and update these files:
+- `.maestro/bootstrap/services.yaml` - Add new services/commands if discovered during work
+- `.maestro/bootstrap/library/` - Add knowledge for future workers
 
 ---
 
@@ -41,18 +41,18 @@ You MAY read and update these files in `.factory/`:
 **PERFORMANCE TIP:** Parallelize your startup by reading all context files in a single tool call batch:
 
 - `mission.md` - The accepted mission proposal
-- `AGENTS.md` - Guidance from orchestrator (includes Mission Boundaries)
+- `.maestro/AGENTS.md` - Guidance from orchestrator/bootstrap (includes Mission Boundaries)
 - `validation-contract.md` - If your feature has `fulfills`, read those assertions
-- `.factory/services.yaml` - Commands and services (single source of truth)
+- `.maestro/bootstrap/services.yaml` - Commands and services (single source of truth)
 - `features.json` - Feature list and status
 
 ### 1.2 Initialize Environment
 
-1. Run `.factory/init.sh` if it exists (one-time setup, idempotent)
+1. Run `.maestro/bootstrap/init.sh` if it exists (one-time setup, idempotent)
 
 ### 1.3 Baseline Validation
 
-Run `commands.test` from `.factory/services.yaml`. This verifies the mission is in a healthy state before you start.
+Run `commands.test` from `.maestro/bootstrap/services.yaml`. This verifies the mission is in a healthy state before you start.
 
 **CRITICAL: Do NOT pipe validator output through `| tail`, `| head`, or similar.** Pipes can mask failing exit codes.
 
@@ -69,11 +69,11 @@ jq --arg m "YOUR_MILESTONE" '.features | map(select(.milestone == $m)) | map({id
 
 ### 1.5 Check Library
 
-Refer to `.factory/library/` for knowledge from previous workers (organized by topic).
+Refer to `.maestro/bootstrap/library/` for knowledge from previous workers (organized by topic).
 
 ### 1.6 Start Services
 
-Start any services you'll need from `.factory/services.yaml`:
+Start any services you'll need from `.maestro/bootstrap/services.yaml`:
 
 1. Check `depends_on` and start dependencies first
 2. Run each service's `start` command
@@ -96,7 +96,7 @@ That skill will guide you through the actual work procedure.
 
 ### 3.1 Final Validation
 
-All validators from `.factory/services.yaml` must pass before handoff.
+All validators from `.maestro/bootstrap/services.yaml` must pass before handoff.
 
 ### 3.2 Environment Cleanup
 
@@ -106,7 +106,7 @@ All validators from `.factory/services.yaml` must pass before handoff.
 
 ### 3.3 Update Manifest (if needed)
 
-If you discovered reusable services/commands, ADD them to `.factory/services.yaml`.
+If you discovered reusable services/commands, ADD them to `.maestro/bootstrap/services.yaml`.
 
 ---
 
@@ -185,7 +185,7 @@ Set `returnToOrchestrator: true` when:
 
 ## Service Management via Manifest
 
-`.factory/services.yaml` is the **single source of truth** for all commands.
+`.maestro/bootstrap/services.yaml` is the **single source of truth** for all commands.
 
 **Using the manifest:**
 - Read it to find commands/services
@@ -202,7 +202,7 @@ Set `returnToOrchestrator: true` when:
 
 **FORBIDDEN:**
 - `pkill node`, `killall`, `kill` by process name
-- Port-based kills on ports NOT declared in `.factory/services.yaml`
+- Port-based kills on ports NOT declared in `.maestro/bootstrap/services.yaml`
 
 **ALLOWED:**
 - Port-based kills using manifest's declared `stop` command
