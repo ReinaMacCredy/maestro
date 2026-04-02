@@ -282,9 +282,9 @@ describe("runFeatures", () => {
     }));
   });
 
-  it("fails fast when a feature already has live runtime ownership", async () => {
-    await expect(runFeatures(
-      {
+    it("fails fast when a feature already has live runtime ownership", async () => {
+      await expect(runFeatures(
+        {
         missionStore: mockMissionStore([mission]),
         featureStore: mockFeatureStore(mission.id, [features[0]!]),
         assertionStore: mockAssertionStore(mission.id, []),
@@ -310,13 +310,13 @@ describe("runFeatures", () => {
       },
       {
         missionId: mission.id,
-      },
-    )).rejects.toThrow("live runtime ownership");
-  });
+        },
+      )).rejects.toThrow("live runtime ownership");
+    });
 
-  it("persists live runtime events emitted during transport execution", async () => {
-    const runtimeStore = mockRuntimeStore();
-    const runtimeEventStore = mockRuntimeEventStore();
+    it("persists live runtime events emitted during transport execution", async () => {
+      const runtimeStore = mockRuntimeStore();
+      const runtimeEventStore = mockRuntimeEventStore();
 
     await runFeatures(
       {

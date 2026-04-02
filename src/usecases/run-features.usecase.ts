@@ -81,67 +81,63 @@ export async function runFeatures(
     ]);
   }
 
-  const outcomes: RunFeatureOutcome[] = [];
-  let remaining = [...selectedFeatures];
+    const outcomes: RunFeatureOutcome[] = [];
+    const remainingFeatureIds = selectedFeatures.map((feature) => feature.id);
 
-  while (remaining.length > 0) {
-    let executedInPass = false;
-    const deferred: Feature[] = [];
+    while (remainingFeatureIds.length > 0) {
+      let executedFeatureId: string | undefined;
 
-    for (const originalFeature of remaining) {
-      const feature = featureById.get(originalFeature.id) ?? originalFeature;
-      if (!isRunnableStatus(feature.status)) {
+      for (const featureId of remainingFeatureIds) {
+        const feature = featureById.get(featureId);
+        if (!feature || !isRunnableStatus(feature.status) || !areDependenciesSatisfied(feature, featureById)) {
+          continue;
+        }
+
+        const outcome = await runFeatureAttempt(deps, feature, opts);
+        outcomes.push(outcome);
+        executedFeatureId = feature.id;
+
+        const updatedFeature = await deps.featureStore.get(opts.missionId, feature.id);
+        if (updatedFeature) {
+          featureById.set(feature.id, updatedFeature);
+        }
+
+        if (outcome.status === "blocked" && deps.config.execution?.stopOnFailure !== false) {
+          return {
+            missionId: opts.missionId,
+            dryRun: opts.dryRun === true,
+            success: false,
+            outcomes,
+            stoppedOnFeatureId: feature.id,
+          };
+        }
+
+        break;
+      }
+
+      if (executedFeatureId) {
+        const executedIndex = remainingFeatureIds.indexOf(executedFeatureId);
+        if (executedIndex >= 0) {
+          remainingFeatureIds.splice(executedIndex, 1);
+        }
+        continue;
+      }
+
+      for (const featureId of remainingFeatureIds) {
+        const feature = featureById.get(featureId);
+        if (!feature) continue;
         outcomes.push({
           featureId: feature.id,
           title: feature.title,
           worker: opts.workerOverride ?? deps.config.execution?.defaultWorker ?? UNKNOWN_AGENT,
           status: "skipped",
-          summary: `Feature is not runnable from status ${feature.status}`,
-        });
-        continue;
-      }
-
-      if (!areDependenciesSatisfied(feature, featureById)) {
-        deferred.push(feature);
-        continue;
-      }
-
-      const outcome = await runFeatureAttempt(deps, feature, opts);
-      outcomes.push({
-        ...outcome,
-      });
-      executedInPass = true;
-      const updatedFeature = await deps.featureStore.get(opts.missionId, feature.id);
-      if (updatedFeature) {
-        featureById.set(feature.id, updatedFeature);
-      }
-
-      if (outcome.status === "blocked" && deps.config.execution?.stopOnFailure !== false) {
-        return {
-          missionId: opts.missionId,
-          dryRun: opts.dryRun === true,
-          success: false,
-          outcomes,
-          stoppedOnFeatureId: feature.id,
-        };
-      }
-    }
-
-    if (!executedInPass) {
-      for (const feature of deferred) {
-        outcomes.push({
-          featureId: feature.id,
-          title: feature.title,
-          worker: opts.workerOverride ?? deps.config.execution?.defaultWorker ?? UNKNOWN_AGENT,
-          status: "skipped",
-          summary: "Dependencies are not satisfied",
+          summary: isRunnableStatus(feature.status)
+            ? "Dependencies are not satisfied"
+            : `Feature is not runnable from status ${feature.status}`,
         });
       }
       break;
     }
-
-    remaining = deferred;
-  }
 
   return {
     missionId: opts.missionId,

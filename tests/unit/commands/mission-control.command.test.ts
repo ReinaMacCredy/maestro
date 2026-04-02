@@ -8,7 +8,11 @@ import { FsFeatureStoreAdapter } from "../../../src/adapters/feature-store.adapt
 import { FsMissionStoreAdapter } from "../../../src/adapters/mission-store.adapter.js";
 import { FsRuntimeStoreAdapter } from "../../../src/adapters/runtime-store.adapter.js";
 import { FsRuntimeEventStoreAdapter } from "../../../src/adapters/runtime-event-store.adapter.js";
-import { loadMissionControlSnapshot, type MissionControlSnapshotLoadMode } from "../../../src/commands/mission-control.command.js";
+import {
+  createMissionControlSnapshotLoader,
+  loadMissionControlSnapshot,
+  type MissionControlSnapshotLoadMode,
+} from "../../../src/commands/mission-control.command.js";
 import type { CassPort } from "../../../src/ports/cass.port.js";
 import type { ConfigPort } from "../../../src/ports/config.port.js";
 import type { GitPort } from "../../../src/ports/git.port.js";
@@ -175,5 +179,22 @@ describe("loadMissionControlSnapshot", () => {
       runtimeState: "recoverable",
       recoveryMetadata: { retryCount: 1 },
     });
+  });
+
+  it("re-resolves the mission after starting in home mode without an explicit mission", async () => {
+    const loader = createMissionControlSnapshotLoader(
+      snapshotDeps,
+      homeSnapshotDeps,
+      "read",
+    );
+
+    const homeSnapshot = await loader.load();
+    expect(homeSnapshot.mode).toBe("home");
+
+    const missionId = await createMissionAndRuntime("read");
+    const missionSnapshot = await loader.load();
+
+    expect(missionSnapshot.mode).toBe("mission");
+    expect(missionSnapshot.missionId).toBe(missionId);
   });
 });

@@ -6,6 +6,7 @@ import type { Command } from "commander";
 import { getServices } from "../services.js";
 import { output, resolveJsonFlag } from "../lib/output.js";
 import { MaestroError } from "../domain/errors.js";
+import type { MissionStorePort } from "../ports/mission-store.port.js";
 import { buildHomeSnapshot, buildSnapshot } from "../tui/state/snapshot.js";
 import type { MissionControlSnapshot } from "../tui/state/types.js";
 import { PREVIEW_SCREENS, isPreviewScreen, type PreviewScreen } from "../tui/app/preview-state.js";
@@ -13,6 +14,10 @@ import { renderDashboard, renderPreviewFrame } from "../tui/index.js";
 import { recoverMissionRuntimeFailures } from "../usecases/runtime-recovery.usecase.js";
 
 export type MissionControlSnapshotLoadMode = "read" | "supervise";
+
+export interface MissionControlSnapshotLoader {
+  load: () => Promise<MissionControlSnapshot>;
+}
 
 const PREVIEW_SCREEN_ALIASES: Readonly<Record<string, PreviewScreen>> = {
   dash: "dashboard",
@@ -99,16 +104,20 @@ export function registerMissionControlCommand(program: Command): void {
         git: services.git,
       };
 
-      const missionId = await resolveMissionId(opts.mission);
-      const loadSnapshot = (mode: MissionControlSnapshotLoadMode) =>
-        loadMissionControlSnapshot(
+        const readSnapshotLoader = createMissionControlSnapshotLoader(
           snapshotDeps,
           homeSnapshotDeps,
-          mode,
-          missionId,
+          "read",
+          opts.mission,
         );
-      const loadReadSnapshot = async (): Promise<MissionControlSnapshot> =>
-        redactSnapshotForReadOutput(await loadSnapshot("read"));
+        const supervisedSnapshotLoader = createMissionControlSnapshotLoader(
+          snapshotDeps,
+          homeSnapshotDeps,
+          "supervise",
+          opts.mission,
+        );
+        const loadReadSnapshot = async (): Promise<MissionControlSnapshot> =>
+          redactSnapshotForReadOutput(await readSnapshotLoader.load());
 
       if (isJson) {
         output(true, await loadReadSnapshot(), () => []);
@@ -133,14 +142,14 @@ export function registerMissionControlCommand(program: Command): void {
         ]);
       }
 
-      const snapshot = await loadSnapshot("supervise");
+        const snapshot = await supervisedSnapshotLoader.load();
 
-      await renderDashboard({
-        snapshot,
-        snapshotDeps,
-        reloadSnapshot: () => loadSnapshot("supervise"),
+        await renderDashboard({
+          snapshot,
+          snapshotDeps,
+          reloadSnapshot: () => supervisedSnapshotLoader.load(),
+        });
       });
-    });
 }
 
 function resolvePreviewScreen(value: unknown): PreviewScreen | undefined {
@@ -173,10 +182,17 @@ function resolvePreviewScreen(value: unknown): PreviewScreen | undefined {
  * Resolve mission ID: explicit > executing/paused > newest.
  */
 async function resolveMissionId(explicit?: string): Promise<string | undefined> {
+  const services = getServices();
+  return resolveMissionIdFromStore(services.missionStore, explicit);
+}
+
+async function resolveMissionIdFromStore(
+  missionStore: MissionStorePort,
+  explicit?: string,
+): Promise<string | undefined> {
   if (explicit) return explicit;
 
-  const services = getServices();
-  const ids = await services.missionStore.listIds();
+  const ids = await missionStore.listIds();
 
   if (ids.length === 0) {
     return undefined;
@@ -184,7 +200,7 @@ async function resolveMissionId(explicit?: string): Promise<string | undefined> 
 
   // Try to find an active mission
   for (const id of ids) {
-    const m = await services.missionStore.get(id);
+    const m = await missionStore.get(id);
     if (m && (m.status === "executing" || m.status === "paused")) {
       return m.id;
     }
@@ -217,8 +233,32 @@ async function buildMissionSnapshot(
   }
 
   return buildSnapshot(snapshotDeps, missionId, {
-    probeWorkers: mode === "supervise",
-  });
+      probeWorkers: mode === "supervise",
+    });
+}
+
+export function createMissionControlSnapshotLoader(
+  snapshotDeps: Parameters<typeof buildSnapshot>[0],
+  homeSnapshotDeps: Parameters<typeof buildHomeSnapshot>[0],
+  mode: MissionControlSnapshotLoadMode,
+  explicitMissionId?: string,
+): MissionControlSnapshotLoader {
+  let resolvedMissionId = explicitMissionId;
+
+  return {
+    load: async () => {
+      if (!explicitMissionId && !resolvedMissionId) {
+        resolvedMissionId = await resolveMissionIdFromStore(snapshotDeps.missionStore);
+      }
+
+      return loadMissionControlSnapshot(
+        snapshotDeps,
+        homeSnapshotDeps,
+        mode,
+        resolvedMissionId,
+      );
+    },
+  };
 }
 
 export async function loadMissionControlSnapshot(

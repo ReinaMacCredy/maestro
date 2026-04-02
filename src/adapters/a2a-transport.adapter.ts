@@ -2,7 +2,19 @@ import type { A2aWorkerConfig, WorkerProgressEvent, WorkerResult } from "../doma
 import { fetchA2aAgentCard, resolveA2aJsonRpcEndpoint } from "../lib/a2a.js";
 import type { TransportPort, TransportSpawnOptions } from "../ports/transport.port.js";
 
+const DEFAULT_A2A_CONNECT_TIMEOUT_MS = 5_000;
+const DEFAULT_A2A_IDLE_TIMEOUT_MS = 5_000;
+
+export interface A2aTransportAdapterOptions {
+  readonly connectTimeoutMs?: number;
+  readonly idleTimeoutMs?: number;
+}
+
 export class A2aTransportAdapter implements TransportPort {
+  constructor(
+    private readonly options: A2aTransportAdapterOptions = {},
+  ) {}
+
   async spawn(
     workerConfig: A2aWorkerConfig,
     prompt: string,
@@ -15,6 +27,11 @@ export class A2aTransportAdapter implements TransportPort {
     let emittedState: string | undefined;
     let sessionId: string | undefined;
     let heartbeat: ReturnType<typeof setInterval> | undefined;
+    let idleTimer: ReturnType<typeof setTimeout> | undefined;
+    let connectTimer: ReturnType<typeof setTimeout> | undefined;
+    const connectTimeoutMs = this.options.connectTimeoutMs ?? DEFAULT_A2A_CONNECT_TIMEOUT_MS;
+    const idleTimeoutMs = this.options.idleTimeoutMs ?? DEFAULT_A2A_IDLE_TIMEOUT_MS;
+    const streamAbortController = new AbortController();
 
     const emitEvent = async (event: WorkerProgressEvent): Promise<void> => {
       try {
@@ -27,39 +44,44 @@ export class A2aTransportAdapter implements TransportPort {
       }
     };
 
-    try {
-      await emitEvent({
-        timestamp: new Date().toISOString(),
-        kind: "status",
-        worker: opts.workerSlug,
+      try {
+        await emitEvent({
+          timestamp: new Date().toISOString(),
+          kind: "status",
+          worker: opts.workerSlug,
         runtimeState: "starting",
         text: `Connecting to ${opts.workerSlug}`,
       });
 
-      const agentCard = await fetchA2aAgentCard(workerConfig.url, {
-        agentCardPath: workerConfig.agentCardPath,
-        headers: workerConfig.headers,
-      });
-      const endpoint = resolveA2aJsonRpcEndpoint(workerConfig.url, agentCard);
-      heartbeat = setInterval(() => {
-        void emitEvent({
-          timestamp: new Date().toISOString(),
+        const agentCard = await fetchA2aAgentCard(workerConfig.url, {
+          agentCardPath: workerConfig.agentCardPath,
+          headers: workerConfig.headers,
+          signal: AbortSignal.timeout(connectTimeoutMs),
+        });
+        const endpoint = resolveA2aJsonRpcEndpoint(workerConfig.url, agentCard);
+        heartbeat = setInterval(() => {
+          void emitEvent({
+            timestamp: new Date().toISOString(),
           kind: "heartbeat",
           worker: opts.workerSlug,
-          runtimeState: "live",
-        });
-      }, 15_000);
-      const streamResponse = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          Accept: "text/event-stream",
-          "Content-Type": "application/json",
-          ...workerConfig.headers,
-        },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: crypto.randomUUID(),
-          method: "message/stream",
+            runtimeState: "live",
+          });
+        }, 15_000);
+        connectTimer = setTimeout(() => {
+          streamAbortController.abort(new Error(`Timed out connecting to ${opts.workerSlug}`));
+        }, connectTimeoutMs);
+        const streamResponse = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            Accept: "text/event-stream",
+            "Content-Type": "application/json",
+            ...workerConfig.headers,
+          },
+          signal: streamAbortController.signal,
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: crypto.randomUUID(),
+            method: "message/stream",
           params: {
             message: {
               kind: "message",
@@ -68,14 +90,27 @@ export class A2aTransportAdapter implements TransportPort {
               parts: [{ kind: "text", text: prompt }],
             },
           },
-        }),
-      });
-      assertSseResponse(streamResponse, endpoint);
+          }),
+        });
+        assertSseResponse(streamResponse, endpoint);
+        clearTimer(connectTimer);
+        idleTimer = armAbortTimer(
+          streamAbortController,
+          idleTimeoutMs,
+          `Timed out waiting for A2A worker '${opts.workerSlug}' output`,
+        );
 
-      for await (const event of parseJsonRpcSseStream(streamResponse)) {
-        rawEvents.push(JSON.stringify(event));
-        sessionId = extractRemoteHandle(event) ?? sessionId;
-        const eventTexts = extractEventText(event);
+        for await (const event of parseJsonRpcSseStream(streamResponse, () => {
+          clearTimer(idleTimer);
+          idleTimer = armAbortTimer(
+            streamAbortController,
+            idleTimeoutMs,
+            `Timed out waiting for A2A worker '${opts.workerSlug}' output`,
+          );
+        })) {
+          rawEvents.push(JSON.stringify(event));
+          sessionId = extractRemoteHandle(event) ?? sessionId;
+          const eventTexts = extractEventText(event);
         outputChunks.push(...eventTexts);
         if (event.kind === "task") {
           finalState = event.status.state;
@@ -107,12 +142,13 @@ export class A2aTransportAdapter implements TransportPort {
       }
 
       const parsedOutput = outputChunks.join("\n").trim();
-      const success = finalState === undefined
-        ? parsedOutput.length > 0
-        : finalState === "completed";
+        const success = finalState === undefined
+          ? parsedOutput.length > 0
+          : finalState === "completed";
+        clearTimer(idleTimer);
 
-      await emitEvent({
-        timestamp: new Date().toISOString(),
+        await emitEvent({
+          timestamp: new Date().toISOString(),
         kind: "status",
         worker: opts.workerSlug,
         runtimeState: success ? "completed" : mapA2aRuntimeState(finalState),
@@ -132,32 +168,34 @@ export class A2aTransportAdapter implements TransportPort {
         parsedOutput,
         failureClass: success ? undefined : classifyFailure(finalState),
       };
-    } catch (error) {
-      finalState = finalState ?? "failed";
-      const detail = error instanceof Error ? error.message : String(error);
-      await emitEvent({
-        timestamp: new Date().toISOString(),
-        kind: "status",
+      } catch (error) {
+        finalState = finalState ?? "failed";
+        const detail = describeA2aFailure(error, streamAbortController.signal);
+        await emitEvent({
+          timestamp: new Date().toISOString(),
+          kind: "status",
         worker: opts.workerSlug,
         runtimeState: "failed",
         text: detail,
       });
-      return {
-        success: false,
-        exitCode: 1,
-        summary: `Failed to communicate with A2A worker '${opts.workerSlug}': ${detail}`,
+        return {
+          success: false,
+          exitCode: 1,
+          summary: `Failed to communicate with A2A worker '${opts.workerSlug}': ${detail}`,
         stdoutRaw: rawEvents.join("\n"),
         stderrRaw: detail,
         filesChanged: [],
         durationMs: Date.now() - startedAt,
         failureClass: "infrastructure",
-      };
-    } finally {
-      if (heartbeat) {
-        clearInterval(heartbeat);
+        };
+      } finally {
+        clearTimer(connectTimer);
+        clearTimer(idleTimer);
+        if (heartbeat) {
+          clearInterval(heartbeat);
+        }
       }
     }
-  }
 }
 
 function mapA2aRuntimeState(
@@ -298,7 +336,10 @@ function assertSseResponse(response: Response, endpoint: string): void {
   }
 }
 
-async function* parseJsonRpcSseStream(response: Response): AsyncGenerator<A2aEvent, void, undefined> {
+async function* parseJsonRpcSseStream(
+  response: Response,
+  onChunk?: () => void,
+): AsyncGenerator<A2aEvent, void, undefined> {
   if (!response.body) {
     throw new Error("A2A stream response did not include a body");
   }
@@ -308,8 +349,8 @@ async function* parseJsonRpcSseStream(response: Response): AsyncGenerator<A2aEve
   let eventData = "";
   const stream = response.body.pipeThrough(new TextDecoderStream());
 
-  for await (const chunk of readFrom(stream)) {
-    buffer += chunk;
+    for await (const chunk of readFrom(stream, onChunk)) {
+      buffer += chunk;
 
     while (true) {
       const lineBreakIndex = buffer.indexOf("\n");
@@ -346,21 +387,55 @@ async function* parseJsonRpcSseStream(response: Response): AsyncGenerator<A2aEve
   }
 }
 
-async function* readFrom(stream: ReadableStream<string>): AsyncGenerator<string, void, undefined> {
+async function* readFrom(
+  stream: ReadableStream<string>,
+  onChunk?: () => void,
+): AsyncGenerator<string, void, undefined> {
   const reader = stream.getReader();
 
   try {
     while (true) {
       const { done, value } = await reader.read();
-      if (done) {
-        return;
-      }
+        if (done) {
+          return;
+        }
 
-      yield value;
+        onChunk?.();
+        yield value;
+      }
+    } finally {
+      reader.releaseLock();
     }
-  } finally {
-    reader.releaseLock();
   }
+
+function armAbortTimer(
+  controller: AbortController,
+  timeoutMs: number,
+  message: string,
+): ReturnType<typeof setTimeout> {
+  return setTimeout(() => {
+    controller.abort(new Error(message));
+  }, timeoutMs);
+}
+
+function clearTimer(timer: ReturnType<typeof setTimeout> | undefined): void {
+  if (timer) {
+    clearTimeout(timer);
+  }
+}
+
+function describeA2aFailure(error: unknown, signal: AbortSignal): string {
+  if (signal.aborted) {
+    const reason = signal.reason;
+    if (reason instanceof Error) {
+      return reason.message;
+    }
+    if (typeof reason === "string" && reason.length > 0) {
+      return reason;
+    }
+  }
+
+  return error instanceof Error ? error.message : String(error);
 }
 
 function parseEventPayload(eventType: string, eventData: string): A2aEvent {
