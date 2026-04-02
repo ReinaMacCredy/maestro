@@ -15,7 +15,7 @@ export function registerUninstallCommand(program: Command): void {
     .action(async (opts) => {
       const isJson = opts.json ?? program.opts().json;
 
-      const agentResults = await removeAgentBlocks();
+      const agentResults = await removeAgentBlocks(process.cwd());
 
       let binaryRemoved = false;
       let configRemoved = false;

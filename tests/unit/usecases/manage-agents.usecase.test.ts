@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach, afterEach } from "bun:test";
 import { mkdtemp, rm, mkdir, writeFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { tmpdir, homedir } from "node:os";
+import { tmpdir } from "node:os";
 
 // We can't easily mock homedir() in the use case since it uses os.homedir() directly.
 // Instead, test the underlying block functions + do a focused integration test
@@ -17,16 +17,27 @@ import {
   removeLegacyBlock,
   wrapBlock,
 } from "../../../src/lib/agent-block.js";
+import {
+  injectAgentBlocks,
+  removeAgentBlocks,
+} from "../../../src/usecases/manage-agents.usecase.js";
 
 describe("manage-agents use case logic", () => {
   let tmpDir: string;
+  let homeDir: string;
+  let originalHome: string | undefined;
 
   beforeEach(async () => {
     tmpDir = await mkdtemp(join(tmpdir(), "maestro-agents-"));
+    homeDir = await mkdtemp(join(tmpdir(), "maestro-agents-home-"));
+    originalHome = process.env.HOME;
+    process.env.HOME = homeDir;
   });
 
   afterEach(async () => {
+    process.env.HOME = originalHome;
     await rm(tmpDir, { recursive: true, force: true });
+    await rm(homeDir, { recursive: true, force: true });
   });
 
   const rendered = renderTemplate(AGENT_INSTRUCTION_BLOCK, { agent: "codex" });
@@ -136,6 +147,55 @@ describe("manage-agents use case logic", () => {
 
       const gemini = renderTemplate(AGENT_INSTRUCTION_BLOCK, { agent: "gemini" });
       expect(gemini).toContain("--agent gemini");
+    });
+  });
+
+  describe("droid project-local anchoring", () => {
+    it("injects the droid block into project-local .maestro/AGENTS.md", async () => {
+      const path = join(tmpDir, ".maestro", "AGENTS.md");
+      await mkdir(join(tmpDir, ".maestro"), { recursive: true });
+      await writeFile(path, "# Project config\n");
+
+      const results = await injectAgentBlocks(tmpDir);
+      const droid = results.find((result) => result.agent === "Droid CLI");
+
+      expect(droid).toBeDefined();
+      expect(droid?.action).toBe("injected");
+      expect(droid?.configPath).toBe(path);
+      expect(await readFile(path, "utf8")).toContain("maestro handoff-pickup --claim --agent droid");
+    });
+
+    it("migrates legacy project .factory/AGENTS.md into project-local .maestro/AGENTS.md", async () => {
+      const legacyPath = join(tmpDir, ".factory", "AGENTS.md");
+      const targetPath = join(tmpDir, ".maestro", "AGENTS.md");
+      await mkdir(join(tmpDir, ".factory"), { recursive: true });
+      await writeFile(
+        legacyPath,
+        "# Legacy config\n\n## Cross-Agent Handoff (maestro)\n\nOld stale commands here.\nmaestro handoff-plan --to droid\n",
+      );
+
+      const results = await injectAgentBlocks(tmpDir);
+      const droid = results.find((result) => result.agent === "Droid CLI");
+
+      expect(droid).toBeDefined();
+      expect(droid?.action).toBe("migrated");
+      expect(droid?.configPath).toBe(targetPath);
+      expect(await readFile(targetPath, "utf8")).toContain("maestro handoff-pickup --claim --agent droid");
+      expect(await readFile(targetPath, "utf8")).not.toContain("handoff-plan");
+    });
+
+    it("removes the droid block from project-local .maestro/AGENTS.md", async () => {
+      const path = join(tmpDir, ".maestro", "AGENTS.md");
+      await mkdir(join(tmpDir, ".maestro"), { recursive: true });
+      await writeFile(path, wrapBlock(renderTemplate(AGENT_INSTRUCTION_BLOCK, { agent: "droid" })));
+
+      const results = await removeAgentBlocks(tmpDir);
+      const droid = results.find((result) => result.agent === "Droid CLI");
+
+      expect(droid).toBeDefined();
+      expect(droid?.action).toBe("removed");
+      expect(droid?.configPath).toBe(path);
+      expect(await readFile(path, "utf8")).not.toContain("maestro handoff-pickup --claim --agent droid");
     });
   });
 });

@@ -39,7 +39,7 @@ export function registerUpdateCommand(program: Command): void {
         binaryUpdated = true;
       }
 
-      const agentResults = await injectAgentBlocks();
+      const agentResults = await injectAgentBlocks(process.cwd());
 
       output(isJson, { binaryUpdated, agents: agentResults }, (r) => [
         r.binaryUpdated ? "[ok] Binary updated" : "[--] Binary skipped (--agents-only)",
