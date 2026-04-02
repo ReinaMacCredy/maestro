@@ -211,6 +211,9 @@ function deriveNextRuntime(
   if (updated.status === "done") {
     runtimeState = "completed";
     failureReason = undefined;
+  } else if (updated.status === "blocked") {
+    runtimeState = "failed";
+    failureReason = updated.report?.salientSummary ?? runtime.failureReason;
   } else if (isPendingRetry) {
     const wasRuntimeRecovery = existing.status === "assigned" || existing.status === "in-progress";
     runtimeState = wasRuntimeRecovery ? "recoverable" : "starting";

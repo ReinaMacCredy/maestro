@@ -82,46 +82,65 @@ export async function runFeatures(
   }
 
   const outcomes: RunFeatureOutcome[] = [];
+  let remaining = [...selectedFeatures];
 
-  for (const feature of selectedFeatures) {
-    if (!isRunnableStatus(feature.status)) {
+  while (remaining.length > 0) {
+    let executedInPass = false;
+    const deferred: Feature[] = [];
+
+    for (const originalFeature of remaining) {
+      const feature = featureById.get(originalFeature.id) ?? originalFeature;
+      if (!isRunnableStatus(feature.status)) {
+        outcomes.push({
+          featureId: feature.id,
+          title: feature.title,
+          worker: opts.workerOverride ?? deps.config.execution?.defaultWorker ?? UNKNOWN_AGENT,
+          status: "skipped",
+          summary: `Feature is not runnable from status ${feature.status}`,
+        });
+        continue;
+      }
+
+      if (!areDependenciesSatisfied(feature, featureById)) {
+        deferred.push(feature);
+        continue;
+      }
+
+      const outcome = await runFeatureAttempt(deps, feature, opts);
       outcomes.push({
-        featureId: feature.id,
-        title: feature.title,
-        worker: opts.workerOverride ?? deps.config.execution?.defaultWorker ?? UNKNOWN_AGENT,
-        status: "skipped",
-        summary: `Feature is not runnable from status ${feature.status}`,
+        ...outcome,
       });
-      continue;
+      executedInPass = true;
+      const updatedFeature = await deps.featureStore.get(opts.missionId, feature.id);
+      if (updatedFeature) {
+        featureById.set(feature.id, updatedFeature);
+      }
+
+      if (outcome.status === "blocked" && deps.config.execution?.stopOnFailure !== false) {
+        return {
+          missionId: opts.missionId,
+          dryRun: opts.dryRun === true,
+          success: false,
+          outcomes,
+          stoppedOnFeatureId: feature.id,
+        };
+      }
     }
 
-    if (!areDependenciesSatisfied(feature, featureById)) {
-      outcomes.push({
-        featureId: feature.id,
-        title: feature.title,
-        worker: opts.workerOverride ?? deps.config.execution?.defaultWorker ?? UNKNOWN_AGENT,
-        status: "skipped",
-        summary: "Dependencies are not satisfied",
-      });
-      continue;
+    if (!executedInPass) {
+      for (const feature of deferred) {
+        outcomes.push({
+          featureId: feature.id,
+          title: feature.title,
+          worker: opts.workerOverride ?? deps.config.execution?.defaultWorker ?? UNKNOWN_AGENT,
+          status: "skipped",
+          summary: "Dependencies are not satisfied",
+        });
+      }
+      break;
     }
 
-    const outcome = await runFeatureAttempt(deps, feature, opts);
-    outcomes.push(outcome);
-    const updatedFeature = await deps.featureStore.get(opts.missionId, feature.id);
-    if (updatedFeature) {
-      featureById.set(feature.id, updatedFeature);
-    }
-
-    if (outcome.status === "blocked" && deps.config.execution?.stopOnFailure !== false) {
-      return {
-        missionId: opts.missionId,
-        dryRun: opts.dryRun === true,
-        success: false,
-        outcomes,
-        stoppedOnFeatureId: feature.id,
-      };
-    }
+    remaining = deferred;
   }
 
   return {
@@ -190,20 +209,7 @@ export async function runFeatureAttempt(
 
   await updateCurrentFeature({ status: "in-progress" });
 
-  const workerResult = await deps.transport.spawn(workerSelection.config, promptResult.prompt, {
-    cwd: deps.baseDir,
-    featureId: feature.id,
-    missionId: feature.missionId,
-    workerSlug: workerSelection.slug,
-    onEvent: (event) =>
-      recordWorkerProgressEvent(
-        deps.runtimeStore,
-        deps.runtimeEventStore,
-        feature.missionId,
-        feature.id,
-        event,
-      ),
-  });
+  const workerResult = await spawnWorkerResult(deps, feature, promptResult.prompt, workerSelection);
   const report = await resolveWorkerReport(workerResult);
 
   await updateCurrentFeature({ status: "review", report });
@@ -286,6 +292,49 @@ async function stampRuntimeAgent(
     ...runtime,
     agent: workerSlug,
   });
+}
+
+async function spawnWorkerResult(
+  deps: RunFeaturesDeps,
+  feature: Feature,
+  prompt: string,
+  workerSelection: { slug: string; config: WorkerConfig },
+): Promise<WorkerResult> {
+  try {
+    return await deps.transport.spawn(workerSelection.config, prompt, {
+      cwd: deps.baseDir,
+      featureId: feature.id,
+      missionId: feature.missionId,
+      workerSlug: workerSelection.slug,
+      onEvent: (event) =>
+        recordWorkerProgressEvent(
+          deps.runtimeStore,
+          deps.runtimeEventStore,
+          feature.missionId,
+          feature.id,
+          event,
+        ),
+    });
+  } catch (error) {
+    return buildInfrastructureFailureResult(error, workerSelection.slug);
+  }
+}
+
+function buildInfrastructureFailureResult(
+  error: unknown,
+  workerSlug: string,
+): WorkerResult {
+  const detail = error instanceof Error ? error.message : String(error);
+  return {
+    success: false,
+    exitCode: 1,
+    summary: `Failed to run worker '${workerSlug}': ${detail}`,
+    stdoutRaw: "",
+    stderrRaw: detail,
+    filesChanged: [],
+    durationMs: 0,
+    failureClass: "infrastructure",
+  };
 }
 
 async function resolveWorkerReport(result: WorkerResult): Promise<WorkerReport> {

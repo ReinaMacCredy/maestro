@@ -182,13 +182,77 @@ describe("runFeatures", () => {
     expect(result.outcomes[0]?.featureId).toBe("f1");
   });
 
+  it("retries deferred features after their dependencies complete later in mission order", async () => {
+    const reorderedMission = {
+      ...mission,
+      features: ["f2", "f1"],
+      milestones: [{
+        ...mission.milestones[0]!,
+        featureIds: ["f2", "f1"],
+      }],
+    };
+    const reorderedFeatures = [
+      {
+        ...features[1]!,
+        dependsOn: ["f1"],
+      },
+      {
+        ...features[0]!,
+        dependsOn: [],
+      },
+    ];
+
+    const result = await runFeatures(
+      {
+        missionStore: mockMissionStore([reorderedMission]),
+        featureStore: mockFeatureStore(mission.id, reorderedFeatures),
+        assertionStore: mockAssertionStore(mission.id, []),
+        runtimeStore: mockRuntimeStore(),
+        runtimeEventStore: mockRuntimeEventStore(),
+        executionStore: mockExecutionStore(),
+        transport: mockTransport([
+          {
+            success: true,
+            exitCode: 0,
+            summary: "first ok",
+            stdoutRaw: "",
+            stderrRaw: "",
+            filesChanged: [],
+            durationMs: 5,
+          },
+          {
+            success: true,
+            exitCode: 0,
+            summary: "second ok",
+            stdoutRaw: "",
+            stderrRaw: "",
+            filesChanged: [],
+            durationMs: 5,
+          },
+        ]),
+        baseDir,
+        config: DEFAULT_CONFIG,
+      },
+      {
+        missionId: mission.id,
+      },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.outcomes.map((outcome) => [outcome.featureId, outcome.status])).toEqual([
+      ["f1", "done"],
+      ["f2", "done"],
+    ]);
+  });
+
   it("stops on first failure", async () => {
+    const runtimeStore = mockRuntimeStore();
     const result = await runFeatures(
       {
         missionStore: mockMissionStore([mission]),
         featureStore: mockFeatureStore(mission.id, features),
         assertionStore: mockAssertionStore(mission.id, []),
-        runtimeStore: mockRuntimeStore(),
+        runtimeStore,
         runtimeEventStore: mockRuntimeEventStore(),
         executionStore: mockExecutionStore(),
         transport: mockTransport([{
@@ -212,6 +276,10 @@ describe("runFeatures", () => {
     expect(result.success).toBe(false);
     expect(result.stoppedOnFeatureId).toBe("f1");
     expect(result.outcomes[0]?.status).toBe("blocked");
+    await expect(runtimeStore.get(mission.id, "f1")).resolves.toEqual(expect.objectContaining({
+      runtimeState: "failed",
+      failureReason: "boom",
+    }));
   });
 
   it("fails fast when a feature already has live runtime ownership", async () => {
@@ -289,6 +357,60 @@ describe("runFeatures", () => {
     expect(events.some((event) => event.text?.includes("Reading runtime-supervision"))).toBe(true);
     expect(runtime?.sessionId).toBe("session-123");
     expect(runtime?.agent).toBe("codex");
+  });
+
+  it("converts thrown transport failures into blocked outcomes and closes runtime state", async () => {
+    const runtimeStore = mockRuntimeStore();
+    const featureStore = mockFeatureStore(mission.id, [features[0]!]);
+    const executionStore = mockExecutionStore();
+
+    const result = await runFeatures(
+      {
+        missionStore: mockMissionStore([{
+          ...mission,
+          features: ["f1"],
+          milestones: [{
+            ...mission.milestones[0]!,
+            featureIds: ["f1"],
+          }],
+        }]),
+        featureStore,
+        assertionStore: mockAssertionStore(mission.id, []),
+        runtimeStore,
+        runtimeEventStore: mockRuntimeEventStore(),
+        executionStore,
+        transport: mockTransport([], async () => {
+          throw new Error("spawn failed");
+        }),
+        baseDir,
+        config: DEFAULT_CONFIG,
+      },
+      {
+        missionId: mission.id,
+      },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.outcomes).toEqual([
+      expect.objectContaining({
+        featureId: "f1",
+        status: "blocked",
+        summary: "Failed to run worker 'codex': spawn failed",
+      }),
+    ]);
+    await expect(featureStore.get(mission.id, "f1")).resolves.toEqual(expect.objectContaining({
+      status: "blocked",
+    }));
+    await expect(runtimeStore.get(mission.id, "f1")).resolves.toEqual(expect.objectContaining({
+      runtimeState: "failed",
+      failureReason: "Failed to run worker 'codex': spawn failed",
+    }));
+    await expect(executionStore.getByFeature(mission.id, "f1")).resolves.toEqual([
+      expect.objectContaining({
+        success: false,
+        failureClass: "infrastructure",
+      }),
+    ]);
   });
 
   it("skips features that are already in review", async () => {
