@@ -51,6 +51,76 @@ describe("CliTransportAdapter", () => {
     expect(result.filesChanged).toContain("created.txt");
   });
 
+  it("only reports files changed by the current attempt", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "cli-transport-"));
+    await initGitRepo(cwd);
+    await mkdir(join(cwd, ".maestro"), { recursive: true });
+    await writeFile(join(cwd, "existing.txt"), "before");
+    const script = join(cwd, "worker.ts");
+    await writeFile(
+      script,
+      [
+        "await Bun.write('new-file.txt', 'created');",
+        "console.log('done');",
+      ].join("\n"),
+    );
+
+    const adapter = new CliTransportAdapter();
+    const result = await adapter.spawn(
+      {
+        enabled: true,
+        transport: "cli",
+        command: "bun",
+        args: [script],
+        outputMode: "raw",
+      },
+      "hello world",
+      {
+        cwd,
+        featureId: "f1",
+        missionId: "m1",
+        workerSlug: "codex",
+      },
+    );
+
+    expect(result.filesChanged).toContain("new-file.txt");
+    expect(result.filesChanged).not.toContain("existing.txt");
+  });
+
+  it("does not fail execution when progress telemetry throws", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "cli-transport-"));
+    await initGitRepo(cwd);
+    const script = join(cwd, "worker.ts");
+    await writeFile(
+      script,
+      "console.log('worker ok');",
+    );
+
+    const adapter = new CliTransportAdapter();
+    const result = await adapter.spawn(
+      {
+        enabled: true,
+        transport: "cli",
+        command: "bun",
+        args: [script],
+        outputMode: "raw",
+      },
+      "ignored",
+      {
+        cwd,
+        featureId: "f1",
+        missionId: "m1",
+        workerSlug: "codex",
+        onEvent: async () => {
+          throw new Error("event store offline");
+        },
+      },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.summary).toBe("worker ok");
+  });
+
   it("parses stream-json worker output", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "cli-transport-"));
     await initGitRepo(cwd);

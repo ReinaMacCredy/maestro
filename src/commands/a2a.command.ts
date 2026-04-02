@@ -11,6 +11,7 @@ export function registerA2aCommand(program: Command): void {
     .command("serve-demo")
     .description("Start a local streaming A2A demo worker you can watch in Mission Control")
     .option("--host <host>", "Host to bind", "127.0.0.1")
+    .option("--public", "Allow binding the demo server to a non-loopback host")
     .option("--port <port>", "Port to bind (0 chooses a random free port)", parseInteger, 4123)
     .option("--delay-ms <ms>", "Delay between streamed demo updates", parseInteger, 1500)
     .option("--step <text>", "Artifact text chunk to stream in order", collectValues, [])
@@ -23,6 +24,10 @@ Examples:
   maestro a2a serve-demo --step "Reading mission" --step "Applying patch" --step "Done"
 `)
     .action(async (opts) => {
+      if (!isLoopbackHost(opts.host as string) && opts.public !== true) {
+        throw new Error("Refusing to bind demo A2A server to a non-loopback host without --public");
+      }
+
       const isJson = resolveJsonFlag(opts, program);
       const server = await startA2aDemoServer({
         host: opts.host as string,
@@ -79,6 +84,10 @@ function parseInteger(value: string): number {
 
 function collectValues(value: string, previous: string[]): string[] {
   return [...previous, value];
+}
+
+function isLoopbackHost(host: string): boolean {
+  return host === "127.0.0.1" || host === "localhost" || host === "::1";
 }
 
 async function waitForShutdown(close: () => Promise<void>): Promise<void> {

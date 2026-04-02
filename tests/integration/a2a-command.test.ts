@@ -57,6 +57,13 @@ describe("a2a CLI command", () => {
     expect(payload.outcomes.every((outcome) => outcome.status === "done")).toBe(true);
     expect(payload.outcomes.every((outcome) => outcome.worker === "demo-a2a")).toBe(true);
   });
+
+  it("refuses non-loopback binding without --public", async () => {
+    const result = await run(["a2a", "serve-demo", "--host", "0.0.0.0", "--port", "0"], tmpDir);
+
+    expect(result.exitCode).toBe(1);
+    expect(`${result.stdout}\n${result.stderr}`).toContain("Refusing to bind demo A2A server to a non-loopback host without --public");
+  });
 });
 
 async function run(

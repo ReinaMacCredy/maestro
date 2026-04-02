@@ -25,6 +25,7 @@ export class A2aTransportAdapter implements TransportPort {
     const rawEvents: string[] = [];
     const outputChunks: string[] = [];
     let finalState: string | undefined;
+    let emittedState: string | undefined;
     let sessionId: string | undefined;
     let heartbeat: ReturnType<typeof setInterval> | undefined;
 
@@ -38,10 +39,14 @@ export class A2aTransportAdapter implements TransportPort {
         runtimeState?: "starting" | "live" | "stale" | "failed" | "recoverable" | "completed";
       },
     ): Promise<void> => {
-      await opts.onEvent?.({
-        ...event,
-        sessionId: event.sessionId ?? sessionId,
-      });
+      try {
+        await opts.onEvent?.({
+          ...event,
+          sessionId: event.sessionId ?? sessionId,
+        });
+      } catch {
+        // Progress telemetry should not fail worker execution.
+      }
     };
 
     try {
@@ -100,7 +105,8 @@ export class A2aTransportAdapter implements TransportPort {
         if (event.kind === "status-update") {
           finalState = event.status.state;
         }
-        if (finalState) {
+        if (finalState && finalState !== emittedState) {
+          emittedState = finalState;
           await emitEvent({
             timestamp: new Date().toISOString(),
             kind: "status",
@@ -351,7 +357,8 @@ async function* parseJsonRpcSseStream(response: Response): AsyncGenerator<A2aEve
       }
 
       if (line.startsWith("data:")) {
-        eventData = line.slice("data:".length).trim();
+        const nextData = line.slice("data:".length).trim();
+        eventData = eventData.length > 0 ? `${eventData}\n${nextData}` : nextData;
       }
     }
   }

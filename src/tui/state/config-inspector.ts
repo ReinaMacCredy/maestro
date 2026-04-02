@@ -255,7 +255,7 @@ function buildConfigValueRow(
     keyPath,
     label: copy.label,
     section,
-    valueText: stringifyConfigValue(editMeta.editKind, effectiveValue),
+    valueText: stringifyConfigValue(keyPath, editMeta.editKind, effectiveValue),
     displayValueText: effectiveDisplayValue,
     source,
     sourceBadge: sourceBadgeForValueSource(source),
@@ -265,13 +265,13 @@ function buildConfigValueRow(
     description: editMeta.description,
     summary: copy.summary,
     impactText: copy.impactText,
-    effectiveValueText: stringifyConfigValue(editMeta.editKind, effectiveValue),
+    effectiveValueText: stringifyConfigValue(keyPath, editMeta.editKind, effectiveValue),
     effectiveDisplayValueText: effectiveDisplayValue,
-    projectValueText: stringifyConfigValue(editMeta.editKind, projectValue),
+    projectValueText: stringifyConfigValue(keyPath, editMeta.editKind, projectValue),
     projectDisplayValueText: projectDisplayValue,
-    globalValueText: stringifyConfigValue(editMeta.editKind, globalValue),
+    globalValueText: stringifyConfigValue(keyPath, editMeta.editKind, globalValue),
     globalDisplayValueText: globalDisplayValue,
-    defaultValueText: stringifyConfigValue(editMeta.editKind, defaultValue),
+    defaultValueText: stringifyConfigValue(keyPath, editMeta.editKind, defaultValue),
     defaultDisplayValueText: defaultDisplayValue,
     workerChoices: keyPath === "execution.defaultWorker"
       ? buildWorkerChoices(workerSlugs, workers, features, workerHealthBySlug)
@@ -313,7 +313,7 @@ function buildScopeRows(
       keyPath: path,
       label: copy.label,
       section: copy.section ?? sectionForKey(path),
-      valueText: stringifyConfigValue(editMeta.editKind, scopeValues[path]),
+      valueText: stringifyConfigValue(path, editMeta.editKind, scopeValues[path]),
       displayValueText: displayValueForKey(path, editMeta.editKind, scopeValues[path]),
       source: scope,
       sourceBadge: sourceBadgeForValueSource(scope),
@@ -323,13 +323,13 @@ function buildScopeRows(
       description: editMeta.description,
       summary: copy.summary,
       impactText: copy.impactText,
-      effectiveValueText: stringifyConfigValue(editMeta.editKind, effectiveValues[path]),
+      effectiveValueText: stringifyConfigValue(path, editMeta.editKind, effectiveValues[path]),
       effectiveDisplayValueText: displayValueForKey(path, editMeta.editKind, effectiveValues[path]),
-      defaultValueText: scope === "default" ? stringifyConfigValue(editMeta.editKind, scopeValues[path]) : undefined,
+      defaultValueText: scope === "default" ? stringifyConfigValue(path, editMeta.editKind, scopeValues[path]) : undefined,
       defaultDisplayValueText: scope === "default" ? displayValueForKey(path, editMeta.editKind, scopeValues[path]) : undefined,
-      globalValueText: scope === "global" ? stringifyConfigValue(editMeta.editKind, scopeValues[path]) : undefined,
+      globalValueText: scope === "global" ? stringifyConfigValue(path, editMeta.editKind, scopeValues[path]) : undefined,
       globalDisplayValueText: scope === "global" ? displayValueForKey(path, editMeta.editKind, scopeValues[path]) : undefined,
-      projectValueText: scope === "project" ? stringifyConfigValue(editMeta.editKind, scopeValues[path]) : undefined,
+      projectValueText: scope === "project" ? stringifyConfigValue(path, editMeta.editKind, scopeValues[path]) : undefined,
       projectDisplayValueText: scope === "project" ? displayValueForKey(path, editMeta.editKind, scopeValues[path]) : undefined,
       workerChoices: path === "execution.defaultWorker"
         ? buildWorkerChoices(workerSlugs, workers, features, workerHealthBySlug)
@@ -380,7 +380,10 @@ function buildPlanRows(
   features: readonly Feature[],
 ): readonly MissionControlConfigRow[] {
   const pending = features.filter((feature) => feature.status === "pending");
-  const ready = pending.find((feature) => feature.dependsOn.length === 0);
+  const featureById = new Map(features.map((feature) => [feature.id, feature]));
+  const ready = pending.find((feature) => feature.dependsOn.every((dependencyId) =>
+    featureById.get(dependencyId)?.status === "done"
+  ));
 
   return [
     buildReadonlyRow({
@@ -662,7 +665,14 @@ function areEqual(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function stringifyConfigValue(editKind: MissionControlConfigEditKind, value: unknown): string {
+function stringifyConfigValue(
+  keyPath: string,
+  editKind: MissionControlConfigEditKind,
+  value: unknown,
+): string {
+  if (isSensitiveConfigKey(keyPath) && value !== undefined) {
+    return "[hidden]";
+  }
   if (editKind === "toggle") {
     return stringifyBoolean(value as boolean | undefined);
   }
@@ -674,9 +684,15 @@ function displayValueForKey(
   editKind: MissionControlConfigEditKind,
   value: unknown,
 ): string {
-  const raw = stringifyConfigValue(editKind, value);
+  const raw = stringifyConfigValue(keyPath, editKind, value);
   if (keyPath === "supervision.level" && raw === "mid") return "medium";
   return raw;
+}
+
+function isSensitiveConfigKey(keyPath: string): boolean {
+  return keyPath.includes(".env.")
+    || keyPath.includes(".headers.")
+    || /(?:token|secret|password|api[-_]?key)$/i.test(keyPath);
 }
 
 function editLabelForKind(editKind: MissionControlConfigEditKind): string {

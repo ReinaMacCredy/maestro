@@ -28,6 +28,7 @@ describe("getWorkerHealthRows", () => {
             { label: "launch test", ok: true },
           ],
         }),
+        cacheTtlMs: 0,
       },
     );
 
@@ -57,6 +58,7 @@ describe("getWorkerHealthRows", () => {
             { label: "auth/session", ok: false, detail: "auth/session check failed" },
           ],
         }),
+        cacheTtlMs: 0,
       },
     );
 
@@ -116,6 +118,45 @@ describe("getWorkerHealthRows", () => {
     expect(rows[0]?.checks).toEqual([
       { label: "probe skipped", ok: true, detail: "read-only mode" },
     ]);
+  });
+
+  it("reuses cached probe results within the ttl", async () => {
+    let probeCount = 0;
+    const workers = {
+      codex: {
+        enabled: true,
+        transport: "cli" as const,
+        command: "codex-cache-test",
+        outputMode: "raw" as const,
+      },
+    };
+
+    await getWorkerHealthRows(workers, {
+      nowMs: 1000,
+      nowIso: "2026-04-02T12:00:00.000Z",
+      cacheTtlMs: 30_000,
+      probeCli: async () => {
+        probeCount += 1;
+        return {
+          status: "ready",
+          checks: [{ label: "command found", ok: true }],
+        };
+      },
+    });
+    await getWorkerHealthRows(workers, {
+      nowMs: 2000,
+      nowIso: "2026-04-02T12:00:01.000Z",
+      cacheTtlMs: 30_000,
+      probeCli: async () => {
+        probeCount += 1;
+        return {
+          status: "ready",
+          checks: [{ label: "command found", ok: true }],
+        };
+      },
+    });
+
+    expect(probeCount).toBe(1);
   });
 
   it("confirms the A2A agent card and JSON-RPC endpoint when the worker is reachable", async () => {

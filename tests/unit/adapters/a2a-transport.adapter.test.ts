@@ -100,4 +100,65 @@ describe("A2aTransportAdapter", () => {
       text: "Connecting to a2a-worker",
     });
   });
+
+  it("parses multiline SSE data frames and tolerates telemetry callback failures", async () => {
+    const sseServer = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      routes: {
+        "/.well-known/agent-card.json": () => Response.json({
+          name: "Multiline Worker",
+          description: "Streams multiline SSE data",
+          protocolVersion: "0.3.0",
+          version: "0.1.0",
+          url: `http://127.0.0.1:${sseServer.port}/a2a/jsonrpc`,
+          capabilities: { streaming: true, pushNotifications: false },
+          defaultInputModes: ["text"],
+          defaultOutputModes: ["text"],
+          skills: [],
+        }),
+        "/a2a/jsonrpc": () => new Response(
+          [
+            "event: message",
+            "data: {\"result\":{\"kind\":\"artifact-update\",",
+            "data: \"taskId\":\"task-1\",\"contextId\":\"ctx-1\",",
+            "data: \"artifact\":{\"parts\":[{\"kind\":\"text\",\"text\":\"multiline ok\"}]}}}",
+            "",
+            "event: message",
+            "data: {\"result\":{\"kind\":\"status-update\",\"taskId\":\"task-1\",\"contextId\":\"ctx-1\",\"status\":{\"state\":\"completed\"}}}",
+            "",
+          ].join("\n"),
+          {
+            headers: { "content-type": "text/event-stream" },
+          },
+        ),
+      },
+    });
+
+    try {
+      const adapter = new A2aTransportAdapter();
+      const result = await adapter.spawn(
+        {
+          enabled: true,
+          transport: "a2a",
+          url: `http://127.0.0.1:${sseServer.port}`,
+        },
+        "implement feature",
+        {
+          cwd: process.cwd(),
+          featureId: "f1",
+          missionId: "m1",
+          workerSlug: "a2a-worker",
+          onEvent: async () => {
+            throw new Error("event store offline");
+          },
+        },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.parsedOutput).toContain("multiline ok");
+    } finally {
+      await sseServer.stop(true);
+    }
+  });
 });

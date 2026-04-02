@@ -10,15 +10,19 @@ export async function runDoctor(
   config: ConfigPort,
   dir: string,
 ): Promise<DoctorCheck[]> {
-  const [gitAvailable, cassAvailable, projectConfig, globalConfig] =
+  const [gitAvailable, cassAvailable, projectConfig, globalConfig, configLayers] =
     await Promise.all([
       git.isRepo(dir),
       cass.isAvailable(),
       config.exists("project", dir),
       config.exists("global", dir),
+      config.loadLayers(dir),
     ]);
 
-  return [
+  const effectiveWorkers = configLayers.effective.workers ?? {};
+  const defaultWorker = configLayers.effective.execution?.defaultWorker;
+  const defaultWorkerConfig = defaultWorker ? effectiveWorkers[defaultWorker] : undefined;
+  const doctorChecks: DoctorCheck[] = [
     {
       name: "git",
       status: gitAvailable ? "ok" : "fail",
@@ -44,4 +48,37 @@ export async function runDoctor(
       fix: globalConfig ? undefined : "Run: maestro init --global",
     },
   ];
+
+  if (defaultWorker) {
+    doctorChecks.push({
+      name: "default-worker",
+      status: defaultWorkerConfig?.enabled ? "ok" : "fail",
+      message: defaultWorkerConfig?.enabled
+        ? `Default worker '${defaultWorker}' is enabled`
+        : `Default worker '${defaultWorker}' is missing or disabled`,
+      fix: defaultWorkerConfig?.enabled
+        ? undefined
+        : "Set execution.defaultWorker to an enabled worker profile",
+    });
+  }
+
+  for (const [slug, worker] of Object.entries(effectiveWorkers)) {
+    if (!worker.enabled || worker.transport !== "cli") {
+      continue;
+    }
+
+    const available = Bun.which(worker.command);
+    doctorChecks.push({
+      name: `worker-${slug}`,
+      status: available ? "ok" : "fail",
+      message: available
+        ? `Worker command '${worker.command}' is available for ${slug}`
+        : `Worker command '${worker.command}' is missing for ${slug}`,
+      fix: available
+        ? undefined
+        : `Install '${worker.command}' or disable worker '${slug}'`,
+    });
+  }
+
+  return doctorChecks;
 }

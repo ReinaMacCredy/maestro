@@ -39,4 +39,42 @@ describe("runDoctor", () => {
     expect(projectCheck?.status).toBe("warn");
     expect(projectCheck?.fix).toContain("maestro init");
   });
+
+  it("reports invalid default worker and missing worker commands", async () => {
+    const config = mockConfig({
+      exists: async () => true,
+      loadLayers: async () => ({
+        defaults: {},
+        effective: {
+          execution: { defaultWorker: "missing-worker" },
+          workers: {
+            "missing-worker": {
+              enabled: false,
+              transport: "cli",
+              command: "does-not-exist",
+            },
+            codex: {
+              enabled: true,
+              transport: "cli",
+              command: "definitely-not-installed-codex",
+            },
+          },
+        },
+        errors: [],
+        paths: {
+          project: ".maestro/config.yaml",
+          global: "~/.maestro/config.yaml",
+        },
+      }),
+    });
+
+    const checks = await runDoctor(mockCass(), mockGit(), config, process.cwd());
+
+    expect(checks.find((c) => c.name === "default-worker")).toMatchObject({
+      status: "fail",
+    });
+    expect(checks.find((c) => c.name === "worker-codex")).toMatchObject({
+      status: "fail",
+    });
+  });
 });

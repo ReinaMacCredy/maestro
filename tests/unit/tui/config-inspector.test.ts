@@ -24,6 +24,9 @@ const layers: ConfigLayers = {
         transport: "cli",
         command: "codex",
         outputMode: "raw",
+        env: {
+          API_TOKEN: "top-secret-token",
+        },
       },
       "claude-code": {
         enabled: true,
@@ -100,18 +103,50 @@ describe("buildConfigInspector", () => {
       });
 
     it("builds plan and doctor tabs", () => {
+      const features = [
+        {
+          id: "f1",
+          missionId: "m1",
+          milestoneId: "m1",
+          status: "done",
+          title: "Setup",
+          description: "done",
+          workerType: "test-skill",
+          verificationSteps: [],
+          dependsOn: [],
+          fulfills: [],
+          createdAt: "2026-04-02T12:00:00.000Z",
+          updatedAt: "2026-04-02T12:00:00.000Z",
+        },
+        {
+          id: "f2",
+          missionId: "m1",
+          milestoneId: "m1",
+          status: "pending",
+          title: "Ready after setup",
+          description: "pending",
+          workerType: "test-skill",
+          verificationSteps: [],
+          dependsOn: ["f1"],
+          fulfills: [],
+          createdAt: "2026-04-02T12:00:00.000Z",
+          updatedAt: "2026-04-02T12:00:00.000Z",
+        },
+      ];
+
       const inspector = buildConfigInspector(
         {
         ...layers,
         errors: [{ scope: "project", path: ".maestro/config.yaml", message: "bad yaml" }],
         },
         [{ name: "git", status: "ok", message: "Git repository detected" }],
-        [],
+        features,
         "project",
         workerHealth,
       );
 
       expect(inspector.rowsByTab.plan.length).toBeGreaterThan(0);
+      expect(inspector.rowsByTab.plan.find((row) => row.keyPath === "plan.nextTask")?.displayValueText).toBe("f2 Ready after setup");
       expect(inspector.rowsByTab.doctor.some((row) => row.valueText.includes("bad yaml"))).toBe(true);
     });
 
@@ -124,5 +159,15 @@ describe("buildConfigInspector", () => {
         valueText: "busy",
       });
       expect(workerRow?.impactText).toContain("active on current mission");
+    });
+
+    it("masks sensitive worker config values", () => {
+      const inspector = buildConfigInspector(layers, [], [], "project", workerHealth);
+      const row = inspector.rowsByTab.effective.find((item) => item.keyPath === "workers.codex.env.API_TOKEN");
+
+      expect(row).toMatchObject({
+        valueText: "[hidden]",
+        displayValueText: "[hidden]",
+      });
     });
   });

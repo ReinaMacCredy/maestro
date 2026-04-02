@@ -16,6 +16,7 @@ export class CliTransportAdapter implements TransportPort {
     },
   ): Promise<WorkerResult> {
     const startedAt = Date.now();
+    const changedFilesBefore = await captureChangedFileSet(opts.cwd);
     let proc;
     try {
       proc = Bun.spawn([workerConfig.command, ...(workerConfig.args ?? [])], {
@@ -32,7 +33,7 @@ export class CliTransportAdapter implements TransportPort {
         summary: `Failed to start worker '${opts.workerSlug}'`,
         stdoutRaw: "",
         stderrRaw: `Command not found: ${workerConfig.command}`,
-        filesChanged: await captureChangedFiles(opts.cwd),
+        filesChanged: [],
         durationMs: Date.now() - startedAt,
         failureClass: "infrastructure",
       };
@@ -49,50 +50,56 @@ export class CliTransportAdapter implements TransportPort {
     proc.stdin.write(`${prompt}\n`);
     proc.stdin.end();
 
-    const heartbeat = setInterval(() => {
-      void emitEvent(opts, {
+    let heartbeat: ReturnType<typeof setInterval> | undefined;
+    try {
+      heartbeat = setInterval(() => {
+        void emitEvent(opts, {
+          timestamp: new Date().toISOString(),
+          kind: "heartbeat",
+          worker: opts.workerSlug,
+          runtimeState: "live",
+        });
+      }, 15_000);
+
+      const [stdoutRaw, stderrRaw] = await Promise.all([
+        collectStream(proc.stdout, "stdout", opts),
+        collectStream(proc.stderr, "stderr", opts),
+      ]);
+      const exitCode = await proc.exited;
+      const durationMs = Date.now() - startedAt;
+      const parsedOutput = workerConfig.outputMode === "stream-json"
+        ? parseStreamJsonOutput(stdoutRaw, opts.workerSlug)
+        : parseRawOutput(stdoutRaw);
+      const summary = summarizeWorkerOutput(parsedOutput, stderrRaw, exitCode, opts.workerSlug);
+
+      await emitEvent(opts, {
         timestamp: new Date().toISOString(),
-        kind: "heartbeat",
+        kind: "status",
         worker: opts.workerSlug,
-        runtimeState: "live",
+        runtimeState: exitCode === 0 ? "completed" : "failed",
+        text: exitCode === 0 ? `${opts.workerSlug} completed` : `${opts.workerSlug} exited with code ${exitCode}`,
       });
-    }, 15_000);
 
-    const [stdoutRaw, stderrRaw] = await Promise.all([
-      collectStream(proc.stdout, "stdout", opts),
-      collectStream(proc.stderr, "stderr", opts),
-    ]);
-    const exitCode = await proc.exited;
-    clearInterval(heartbeat);
-    const durationMs = Date.now() - startedAt;
-    const parsedOutput = workerConfig.outputMode === "stream-json"
-      ? parseStreamJsonOutput(stdoutRaw, opts.workerSlug)
-      : parseRawOutput(stdoutRaw);
-    const summary = summarizeWorkerOutput(parsedOutput, stderrRaw, exitCode, opts.workerSlug);
-
-    await emitEvent(opts, {
-      timestamp: new Date().toISOString(),
-      kind: "status",
-      worker: opts.workerSlug,
-      runtimeState: exitCode === 0 ? "completed" : "failed",
-      text: exitCode === 0 ? `${opts.workerSlug} completed` : `${opts.workerSlug} exited with code ${exitCode}`,
-    });
-
-    return {
-      success: exitCode === 0,
-      exitCode,
-      summary,
-      stdoutRaw: stdoutRaw.trim(),
-      stderrRaw: stderrRaw.trim(),
-      filesChanged: await captureChangedFiles(opts.cwd),
-      durationMs,
-      parsedOutput,
-      failureClass: exitCode === 0
-        ? undefined
-        : exitCode === 127
-          ? "infrastructure"
-          : "worker-crash",
-    };
+      return {
+        success: exitCode === 0,
+        exitCode,
+        summary,
+        stdoutRaw: stdoutRaw.trim(),
+        stderrRaw: stderrRaw.trim(),
+        filesChanged: await captureChangedFiles(opts.cwd, changedFilesBefore),
+        durationMs,
+        parsedOutput,
+        failureClass: exitCode === 0
+          ? undefined
+          : exitCode === 127
+            ? "infrastructure"
+            : "worker-crash",
+      };
+    } finally {
+      if (heartbeat) {
+        clearInterval(heartbeat);
+      }
+    }
   }
 }
 
@@ -163,7 +170,11 @@ async function emitEvent(
   },
   event: WorkerProgressEvent,
 ): Promise<void> {
-  await opts.onEvent?.(event);
+  try {
+    await opts.onEvent?.(event);
+  } catch {
+    // Progress telemetry should not fail worker execution.
+  }
 }
 
 function summarizeWorkerOutput(
@@ -193,22 +204,32 @@ function summarizeWorkerOutput(
     : `${workerSlug} exited with code ${exitCode}`;
 }
 
-async function captureChangedFiles(cwd: string): Promise<readonly string[]> {
+async function captureChangedFiles(
+  cwd: string,
+  before: ReadonlySet<string>,
+): Promise<readonly string[]> {
+  const after = await captureChangedFileSet(cwd);
+  return [...after].filter((path) => !before.has(path)).sort();
+}
+
+async function captureChangedFileSet(cwd: string): Promise<ReadonlySet<string>> {
   const result = await execArgv(["git", "status", "--short"], { cwd });
   if (result.exitCode !== 0 || result.stdout.length === 0) {
-    return [];
+    return new Set();
   }
 
-  return result.stdout
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .map((line) => {
-      const renamed = line.match(/^.. (.+?) -> (.+)$/);
-      if (renamed) {
-        return renamed[2];
-      }
-      return line.slice(3).trim();
-    })
-    .filter((value) => value.length > 0);
+  return new Set(
+    result.stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .map((line) => {
+        const renamed = line.match(/^.. (.+?) -> (.+)$/);
+        if (renamed) {
+          return renamed[2];
+        }
+        return line.slice(3).trim();
+      })
+      .filter((value) => value.length > 0),
+  );
 }
