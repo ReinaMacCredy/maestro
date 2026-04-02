@@ -5,7 +5,7 @@
   "sharedStateObservations": [
     {
       "type": "pattern",
-      "description": "Worker prompts are generated from skill files in .maestro/skills/{skillName}/SKILL.md",
+      "description": "Worker prompts resolve runtime skill files from .maestro/skills/{skillName}/SKILL.md first, then fall back to skills/built-in/{skillName}/SKILL.md",
       "location": "src/usecases/generate-worker-prompt.usecase.ts"
     },
     {
@@ -20,7 +20,7 @@
     },
     {
       "type": "library_entry",
-      "description": "Skill files follow SKILL.md naming convention in .maestro/skills/{skillName}/ directory",
+      "description": "Runtime skill files follow the SKILL.md naming convention under .maestro/skills/{skillName}/, with shipped fallbacks under skills/built-in/{skillName}/",
       "appliesTo": ["worker-prompt-generation"]
     }
   ],

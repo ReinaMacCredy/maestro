@@ -69,11 +69,11 @@
         {
           "action": "Run 'maestro feature prompt feat-missing-skill --mission 2026-03-30-002 --json'",
           "expected": "Error with MaestroError naming worker type and providing hints for creating skill file",
-          "observed": "Error returned: 'Worker skill 'non-existent:skill' not found at /private/tmp/maestro-test-feature-prompt/.maestro/skills/non-existent:skill/SKILL.md' with hints: ['Create skill file: /private/tmp/maestro-test-feature-prompt/.maestro/skills/non-existent:skill/SKILL.md', 'Add SKILL.md with instructions for 'non-existent:skill' worker type', 'Skill files are loaded from .maestro/skills/{workerType}/SKILL.md']"
+          "observed": "Error returned: 'Worker skill 'non-existent:skill' not found at /private/tmp/maestro-test-feature-prompt/.maestro/skills/non-existent:skill/SKILL.md' with hints: ['Create workspace skill file: /private/tmp/maestro-test-feature-prompt/.maestro/skills/non-existent:skill/SKILL.md', 'Or add built-in skill file: skills/built-in/non-existent:skill/SKILL.md', 'Searched paths: ...']"
         }
       ],
       "evidence": {
-        "stderrOutput": "Error: Worker skill 'non-existent:skill' not found at /private/tmp/maestro-test-feature-prompt/.maestro/skills/non-existent:skill/SKILL.md\n\nHints:\n- Create skill file: /private/tmp/maestro-test-feature-prompt/.maestro/skills/non-existent:skill/SKILL.md\n- Add SKILL.md with instructions for 'non-existent:skill' worker type\n- Skill files are loaded from .maestro/skills/{workerType}/SKILL.md",
+        "stderrOutput": "Error: Worker skill 'non-existent:skill' not found at /private/tmp/maestro-test-feature-prompt/.maestro/skills/non-existent:skill/SKILL.md\n\nHints:\n- Create workspace skill file: /private/tmp/maestro-test-feature-prompt/.maestro/skills/non-existent:skill/SKILL.md\n- Or add built-in skill file: skills/built-in/non-existent:skill/SKILL.md\n- Searched paths: ...",
         "exitCode": 1
       },
       "issues": null
