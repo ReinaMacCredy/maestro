@@ -68,6 +68,15 @@ beforeEach(async () => {
     } satisfies HandoffStorePort,
     config: {
       load: async () => ({ defaultAgent: "codex" }),
+      loadLayers: async () => ({
+        defaults: { defaultAgent: "codex" },
+        effective: { defaultAgent: "codex" },
+        errors: [],
+        paths: {
+          project: join(tmpDir, ".maestro", "config.yaml"),
+          global: join(tmpDir, "..", ".maestro", "config.yaml"),
+        },
+      }),
       write: async () => undefined,
       exists: async () => true,
     } satisfies ConfigPort,

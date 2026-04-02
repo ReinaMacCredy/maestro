@@ -536,18 +536,20 @@ describe("mission-control CLI", () => {
       expect(stdout).toContain("Details hidden in read-only output");
     }, SLOW_CLI_TIMEOUT_MS);
 
-    it("--preview config renders the config modal", async () => {
-      const missionId = await createMission(tmpDir);
+      it("--preview config renders the config modal", async () => {
+        const missionId = await createMission(tmpDir);
 
-      const { stdout, exitCode } = await run(
+        const { stdout, exitCode } = await run(
         ["mission-control", "--mission", missionId, "--preview", "config"],
         tmpDir,
       );
 
-      expect(exitCode).toBe(0);
-      expect(stdout).toContain("Config");
-      expect(stdout).toContain("Config source:");
-    }, SLOW_CLI_TIMEOUT_MS);
+        expect(exitCode).toBe(0);
+        expect(stdout).toContain("Config");
+        expect(stdout).toContain("[overview] effective project global defaults workers plan doctor");
+        expect(stdout).toContain("Write Scope");
+        expect(stdout).toContain("target scope: project");
+      }, SLOW_CLI_TIMEOUT_MS);
 
     it("--preview runtime renders the runtime modal", async () => {
       const missionId = await createMission(tmpDir);
@@ -1021,10 +1023,11 @@ describe("mission-control CLI", () => {
         },
       );
 
-      expectCleanPtyExit(result);
-      expect(result.plainOutput).toContain("Config");
-      expect(result.plainOutput).toContain(`.maestro/missions/${missionId}`);
-    }, PTY_TIMEOUT_MS);
+        expectCleanPtyExit(result);
+        expect(result.plainOutput).toContain("Config");
+        expect(result.plainOutput).toContain("[overview] effective project global defaults workers plan doctor");
+        expect(result.plainOutput).toContain("target scope: project");
+      }, PTY_TIMEOUT_MS);
 
     it("compiled binary interactive mode filters the command palette and activates Processes", async () => {
       if (!pythonAvailable) return;
@@ -1117,10 +1120,11 @@ describe("mission-control CLI", () => {
       },
       );
 
-      expectCleanPtyExit(result);
-      expect(result.plainOutput).toContain("Config");
-      expect(result.plainOutput).toContain(`.maestro/missions/${missionId}`);
-    }, PTY_TIMEOUT_MS);
+        expectCleanPtyExit(result);
+        expect(result.plainOutput).toContain("Config");
+        expect(result.plainOutput).toContain("[overview] effective project global defaults workers plan doctor");
+        expect(result.plainOutput).toContain("target scope: project");
+      }, PTY_TIMEOUT_MS);
 
   it("compiled binary interactive mode opens the Processes overlay", async () => {
     if (!pythonAvailable) return;

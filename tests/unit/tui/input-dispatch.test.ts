@@ -37,6 +37,34 @@ const SNAPSHOT: MissionControlSnapshot = {
   session: null,
   pendingHandoffs: [],
   configSummary: null,
+  configInspector: {
+    tabs: ["overview", "effective", "project", "global", "defaults", "workers", "plan", "doctor"],
+    rowsByTab: {
+      overview: [],
+      effective: [{
+        keyPath: "execution.stopOnFailure",
+        label: "execution.stopOnFailure",
+        section: "Execution",
+        valueText: "on",
+        source: "default",
+        editKind: "toggle",
+        options: ["off", "on"],
+        description: "desc",
+        effectiveValueText: "on",
+      }],
+      project: [],
+      global: [],
+      defaults: [],
+      workers: [],
+      plan: [],
+      doctor: [],
+    },
+    hasProjectConfig: true,
+    hasGlobalConfig: true,
+    projectPath: ".maestro/config.yaml",
+    globalPath: "~/.maestro/config.yaml",
+    errors: [],
+  },
   runtimeProcesses: [],
   progressLog: [],
   canPause: false,
@@ -76,5 +104,35 @@ describe("keyToAction", () => {
     );
 
     expect(action).toBeUndefined();
+  });
+
+  it("cycles config values with arrow keys while editing", () => {
+    const state = createInitialState(SNAPSHOT);
+    state.modal = {
+      kind: "config",
+      tab: "effective",
+      selectedRowIndex: 0,
+      phase: "edit-inline",
+      selectedScope: "project",
+      draftValue: "on",
+    };
+
+    const action = keyToAction({ type: "arrow", direction: "right" }, state);
+
+    expect(action).toEqual({ type: "config-cycle-value", direction: "next" });
+  });
+
+  it("switches config tabs with bracket hotkeys", () => {
+    const state = createInitialState(SNAPSHOT);
+    state.modal = {
+      kind: "config",
+      tab: "overview",
+      selectedRowIndex: 0,
+      phase: "browse",
+      selectedScope: "project",
+    };
+
+    expect(keyToAction({ type: "char", char: "]" }, state)).toEqual({ type: "config-next-tab" });
+    expect(keyToAction({ type: "char", char: "[" }, state)).toEqual({ type: "config-prev-tab" });
   });
 });

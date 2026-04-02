@@ -11,6 +11,7 @@ import { HEADER_DOT_INTERVAL_MS, isHeaderAnimationActive } from "../panels/heade
 import { pointInRect } from "../widgets/modal.js";
 import { getValidFeatureTransitions } from "../../domain/mission-state.js";
 import { updateFeature } from "../../usecases/feature-lifecycle.usecase.js";
+import { applyConfigEdit, previewConfigEdit } from "../../usecases/config-edit.usecase.js";
 import { renderFrame, getActiveModalLayout } from "./render.js";
 import {
   isSelectableListModal,
@@ -71,6 +72,11 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
 
     if (action.type === "enter" && shouldSubmitFeatureAction(state)) {
       await submitFeatureAction();
+      return;
+    }
+
+    if (action.type === "enter" && state.modal.kind === "config" && state.modal.phase === "confirm-write") {
+      await submitConfigEdit();
       return;
     }
 
@@ -261,6 +267,52 @@ export async function renderDashboard(opts: InteractiveOptions): Promise<void> {
       state = reduce(state, {
         type: "modal-submit-error",
         message: error instanceof Error ? error.message : "Failed to update feature",
+      });
+      dirty = true;
+    }
+  }
+
+  async function submitConfigEdit(): Promise<void> {
+    if (state.modal.kind !== "config" || state.modal.phase !== "confirm-write") return;
+
+    const row = state.snapshot.configInspector?.rowsByTab[state.modal.tab]?.[state.modal.selectedRowIndex];
+    if (!row) return;
+
+    state = reduce(state, { type: "config-submit-start" });
+    dirty = true;
+
+    try {
+      await previewConfigEdit(
+        opts.snapshotDeps.config,
+        process.cwd(),
+        state.modal.selectedScope,
+        row.keyPath,
+        state.modal.draftValue ?? row.effectiveValueText,
+      );
+      await applyConfigEdit(
+        opts.snapshotDeps.config,
+        process.cwd(),
+        state.modal.selectedScope,
+        row.keyPath,
+        state.modal.draftValue ?? row.effectiveValueText,
+      );
+
+      try {
+        const nextSnapshot = await opts.reloadSnapshot();
+        state = reduce(state, { type: "update-snapshot", snapshot: nextSnapshot });
+      } catch {
+        // Fall back to the next poll refresh if the immediate snapshot reload fails.
+      }
+
+      state = reduce(state, {
+        type: "config-submit-success",
+        message: `Updated ${row.keyPath} in ${state.modal.selectedScope} config`,
+      });
+      dirty = true;
+    } catch (error) {
+      state = reduce(state, {
+        type: "config-submit-error",
+        message: error instanceof Error ? error.message : "Failed to update config",
       });
       dirty = true;
     }

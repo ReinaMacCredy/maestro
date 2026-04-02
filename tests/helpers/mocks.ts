@@ -12,6 +12,7 @@ import type { RuntimeStorePort } from "../../src/ports/runtime-store.port.js";
 import type { ExecutionStorePort } from "../../src/ports/execution-store.port.js";
 import type { TransportPort } from "../../src/ports/transport.port.js";
 import type {
+  ConfigLayers,
   GitState,
   MaestroConfig,
   Handoff,
@@ -54,6 +55,17 @@ export function mockConfig(overrides: Partial<ConfigPort> = {}): ConfigPort {
   const store = new Map<string, MaestroConfig>();
   return {
     load: async () => ({ sessionDetection: { enabled: true, agents: ["claude-code"] } }),
+    loadLayers: async (): Promise<ConfigLayers> => ({
+      defaults: { sessionDetection: { enabled: true, agents: ["claude-code"] } },
+      effective: store.get("project") ?? store.get("global") ?? { sessionDetection: { enabled: true, agents: ["claude-code"] } },
+      project: store.get("project"),
+      global: store.get("global"),
+      errors: [],
+      paths: {
+        project: ".maestro/config.yaml",
+        global: "~/.maestro/config.yaml",
+      },
+    }),
     write: async (scope, _dir, config) => {
       store.set(scope, config);
     },

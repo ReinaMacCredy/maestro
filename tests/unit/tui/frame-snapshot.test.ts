@@ -101,11 +101,54 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
         ],
         missionDirectory: ".maestro/missions/2026-03-30-001",
         workerTypes: ["backend-worker"],
-      },
-      runtimeProcesses: [
-        {
-          featureId: "f2",
-          title: "Database config",
+        },
+        configInspector: {
+          tabs: ["overview", "effective", "project", "global", "defaults", "workers", "plan", "doctor"],
+          rowsByTab: {
+            overview: [
+              {
+                keyPath: "overview.configSource",
+                label: "Config source",
+                section: "Status",
+                valueText: "project",
+                source: "none",
+                editKind: "readonly",
+                description: "Which config layer is currently active.",
+                effectiveValueText: "project",
+              },
+              {
+                keyPath: "execution.stopOnFailure",
+                label: "Stop on failure",
+                section: "Execution",
+                valueText: "on",
+                source: "default",
+                editKind: "toggle",
+                options: ["off", "on"],
+                description: "Whether feature run stops after the first failed feature.",
+                effectiveValueText: "on",
+                defaultValueText: "on",
+                globalValueText: "unset",
+                projectValueText: "unset",
+              },
+            ],
+            effective: [],
+            project: [],
+            global: [],
+            defaults: [],
+            workers: [],
+            plan: [],
+            doctor: [],
+          },
+          hasProjectConfig: true,
+          hasGlobalConfig: true,
+          projectPath: ".maestro/config.yaml",
+          globalPath: "~/.maestro/config.yaml",
+          errors: [],
+        },
+        runtimeProcesses: [
+          {
+            featureId: "f2",
+            title: "Database config",
           status: "in-progress",
           workerType: "backend-worker",
           hasReport: false,
@@ -477,31 +520,45 @@ describe("frame rendering", () => {
           const frame = withTerminalSize(90, 28, () => {
             const buf = new Buffer(90, 28);
               const state = createInitialState(makeSnapshot());
-              state.modal = { kind: "config" };
-            renderFrame(buf, state);
-          return buf.toString();
-        });
-
-        expect(frame).toContain("Config");
-        expect(frame).toContain("Config source: project");
-        expect(frame).toContain("Mission Directory");
-        expect(frame).toContain(".maestro/missions/2026-03-30-001");
-        expect(frame).toContain("Esc close");
-          expect(frame).toContain("Workers");
-          expect(frame).toContain("backend-work");
-        });
-
-        it("shows left-back plus escape-close copy for palette-launched detail overlays", () => {
-          const frame = withTerminalSize(90, 28, () => {
-            const buf = new Buffer(90, 28);
-            const state = createInitialState(makeSnapshot());
-            state.modal = { kind: "config", returnTarget: "command-palette" };
+              state.modal = {
+                kind: "config",
+                tab: "overview",
+                selectedRowIndex: 0,
+                phase: "browse",
+                selectedScope: "project",
+              };
             renderFrame(buf, state);
             return buf.toString();
           });
 
-          expect(frame).toContain("Left back · Esc close");
-        });
+          expect(frame).toContain("Config");
+          expect(frame).toContain("[overview] effective project global defaults workers plan doctor");
+          expect(frame).toContain("Config source");
+          expect(frame).toContain("Write Scope");
+          expect(frame).toContain("target scope: project");
+          expect(frame).toContain("Esc close");
+            expect(frame).toContain("Meaning");
+            expect(frame).toContain("Values");
+          });
+
+          it("shows config browse controls for palette-launched config overlays", () => {
+            const frame = withTerminalSize(90, 28, () => {
+              const buf = new Buffer(90, 28);
+              const state = createInitialState(makeSnapshot());
+              state.modal = {
+                kind: "config",
+                tab: "overview",
+                selectedRowIndex: 0,
+                phase: "browse",
+                selectedScope: "project",
+                returnTarget: "command-palette",
+              };
+              renderFrame(buf, state);
+              return buf.toString();
+            });
+
+          expect(frame).toContain("[ / ] tabs · Up/Down rows · Enter edit · Esc close");
+          });
 
         it("renders the command palette and dims the dashboard behind it", () => {
           const buf = new Buffer(90, 28);

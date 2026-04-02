@@ -21,6 +21,7 @@ import { runDoctor } from "../../usecases/run-doctor.usecase.js";
 import { getValidFeatureTransitions } from "../../domain/mission-state.js";
 import { classifyRuntime } from "../../usecases/runtime-supervision.usecase.js";
 import { deriveEvents } from "./events.js";
+import { buildConfigInspector } from "./config-inspector.js";
 import type {
   MissionControlSnapshot,
   MissionControlFeatureRow,
@@ -86,6 +87,7 @@ export async function buildSnapshot(
     assertions,
     checkpoints,
     env,
+    configLayers,
     gitState,
     runtimes,
   ] = await Promise.all([
@@ -99,6 +101,7 @@ export async function buildSnapshot(
     deps.assertionStore.list(missionId),
     deps.checkpointStore.list(missionId),
     buildMissionControlEnvironmentSummary(deps.handoffStore, deps.config, deps.cass, deps.git, deps.cwd),
+    deps.config.loadLayers(deps.cwd),
     deps.git.getState(deps.cwd),
     deps.runtimeStore.list(missionId),
   ]);
@@ -216,6 +219,7 @@ export async function buildSnapshot(
         missionDirectory: `.maestro/missions/${mission.id}`,
         workerTypes,
       },
+      configInspector: buildConfigInspector(configLayers, env.checks, features, env.status.configSource),
         runtimeProcesses: buildRuntimeProcesses(mission, features, runtimeByFeature, activeWorker),
       progressLog,
       milestones,
@@ -231,8 +235,9 @@ export async function buildHomeSnapshot(
   deps: HomeSnapshotDeps,
   cwd: string,
 ): Promise<MissionControlSnapshot> {
-  const [env, gitState] = await Promise.all([
+  const [env, configLayers, gitState] = await Promise.all([
     buildMissionControlEnvironmentSummary(deps.handoffStore, deps.config, deps.cass, deps.git, cwd),
+    deps.config.loadLayers(cwd),
     deps.git.isRepo(cwd).then((isRepo) => isRepo ? deps.git.getState(cwd) : Promise.resolve(undefined)),
   ]);
   const { status, checks } = env;
@@ -292,6 +297,7 @@ export async function buildHomeSnapshot(
       missionDirectory: null,
       workerTypes: [],
     },
+    configInspector: buildConfigInspector(configLayers, checks, [], status.configSource),
     runtimeProcesses: [],
     progressLog: [],
     milestones: [],

@@ -23,6 +23,14 @@ export function keyToAction(key: Key, state: AppState): Action | undefined {
   if (key.type === "escape") {
     return { type: "escape" };
   }
+  if (state.modal.kind === "config" && state.modal.phase === "edit-inline" && key.type === "arrow") {
+    if (key.direction === "left") {
+      return { type: "config-cycle-value", direction: "previous" };
+    }
+    if (key.direction === "right") {
+      return { type: "config-cycle-value", direction: "next" };
+    }
+  }
     if (
       key.type === "arrow"
       && key.direction === "left"
@@ -32,7 +40,6 @@ export function keyToAction(key: Key, state: AppState): Action | undefined {
           || state.modal.kind === "dependencies"
           || state.modal.kind === "overview"
         || state.modal.kind === "handoffs"
-        || state.modal.kind === "config"
         || state.modal.kind === "processes"
       ) && state.modal.returnTarget === "command-palette")
     )
@@ -47,6 +54,17 @@ export function keyToAction(key: Key, state: AppState): Action | undefined {
   }
   if (key.type === "enter") {
     return { type: "enter" };
+  }
+  if (key.type === "char" && state.modal.kind === "config") {
+    switch (key.char) {
+      case "[":
+        return { type: "config-prev-tab" };
+      case "]":
+        return { type: "config-next-tab" };
+      case "s":
+      case "S":
+        return { type: "config-toggle-scope" };
+    }
   }
   if (key.type === "char" && state.modal.kind === "command-palette") {
     return { type: "modal-query-append", char: key.char };

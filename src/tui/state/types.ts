@@ -49,6 +49,54 @@ export interface MissionControlConfigSummary {
   workerTypes: readonly string[];
 }
 
+export type MissionControlConfigTab =
+  | "overview"
+  | "effective"
+  | "project"
+  | "global"
+  | "defaults"
+  | "workers"
+  | "plan"
+  | "doctor";
+
+export type MissionControlConfigValueSource =
+  | "project"
+  | "global"
+  | "default"
+  | "mixed"
+  | "none";
+
+export type MissionControlConfigEditKind =
+  | "readonly"
+  | "toggle"
+  | "enum"
+  | "number-preset";
+
+export interface MissionControlConfigRow {
+  keyPath: string;
+  label: string;
+  section: string;
+  valueText: string;
+  source: MissionControlConfigValueSource;
+  editKind: MissionControlConfigEditKind;
+  options?: readonly string[];
+  description: string;
+  effectiveValueText: string;
+  projectValueText?: string;
+  globalValueText?: string;
+  defaultValueText?: string;
+}
+
+export interface MissionControlConfigInspector {
+  tabs: readonly MissionControlConfigTab[];
+  rowsByTab: Readonly<Record<MissionControlConfigTab, readonly MissionControlConfigRow[]>>;
+  hasProjectConfig: boolean;
+  hasGlobalConfig: boolean;
+  projectPath: string;
+  globalPath: string;
+  errors: readonly string[];
+}
+
 export interface MissionControlRuntimeProcessRow {
   featureId: string;
   title: string;
@@ -137,6 +185,7 @@ export interface MissionControlSnapshot {
   session: MissionControlSessionSidebar | null;
   pendingHandoffs: readonly MissionControlHomeHandoff[];
   configSummary: MissionControlConfigSummary | null;
+  configInspector?: MissionControlConfigInspector | null;
   runtimeProcesses: readonly MissionControlRuntimeProcessRow[];
   progressLog: readonly MissionControlEvent[];
 

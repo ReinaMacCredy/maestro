@@ -3,7 +3,7 @@
  * Extracted from index.ts -- builds ModalOptions from AppState.
  */
 import type { AppState, Action } from "../state/reducer.js";
-import type { MissionControlSnapshot, TaskPreviewPane } from "../state/types.js";
+import type { MissionControlConfigRow, MissionControlSnapshot, TaskPreviewPane } from "../state/types.js";
 import {
   getFilteredMissionControlCommandSpecs,
   getMissionControlCommandSpecs,
@@ -16,6 +16,7 @@ import {
 import { getValidFeatureTransitions } from "../../domain/mission-state.js";
 import { FEATURE_STATUS_LABEL, FEATURE_TASK_STATUS_LABEL } from "../theme.js";
 import { shortenSessionId } from "../session-id.js";
+import { getConfigRowsForTab } from "../state/config-inspector.js";
 
 export function buildModalOptions(state: AppState): ModalOptions | undefined {
   if (state.modal.kind === "command-palette") {
@@ -149,32 +150,22 @@ export function buildModalOptions(state: AppState): ModalOptions | undefined {
     }
 
     if (state.modal.kind === "config") {
-      const summary = state.snapshot.configSummary;
-      if (!summary) return undefined;
+      const rows = getConfigRowsForTab(state.snapshot.configInspector ?? null, state.modal.tab);
+      const selectedRow = rows[state.modal.selectedRowIndex];
       return {
-        mode: "info",
+        mode: "split",
         title: "Config",
-        eyebrow: `Config source: ${summary.configSource}`,
-        items: [
-          ...(summary.missionDirectory
-            ? [{ text: summary.missionDirectory, style: "block" as const, tone: "accent" as const, section: "Mission Directory" }]
-            : []),
-          { text: `Git ${summary.gitAvailable ? "available" : "unavailable"}`, section: "Environment" },
-          { text: `CASS ${summary.cassAvailable ? "available" : "unavailable"}`, section: "Environment" },
-          ...summary.checks.map((check) => ({
-            text: check.name,
-            detail: `${check.status} · ${check.message}`,
-            section: "Doctor",
-            tone: "muted" as const,
-          })),
-          ...summary.workerTypes.map((workerType) => ({
-            text: workerType,
-            detail: "Worker model available for this mission",
-            section: "Workers",
-            tone: "muted" as const,
-          })),
-        ],
-        footer: state.modal.returnTarget === "command-palette" ? "Left back · Esc close" : "Esc close",
+        eyebrow: buildConfigTabs(state),
+        items: rows.length > 0
+          ? rows.map((row) => ({
+              label: row.label,
+              detail: `${row.valueText} · ${row.source}`,
+              section: row.section,
+            }))
+          : [{ label: "No config rows available", selectable: false, tone: "muted" }],
+        selectedIndex: Math.min(state.modal.selectedRowIndex, Math.max(0, rows.length - 1)),
+        detailItems: buildConfigDetailItems(state, selectedRow),
+        footer: buildConfigFooter(state),
         renderSpec: buildOverlayRenderSpec("config"),
       };
     }
@@ -220,6 +211,118 @@ function buildOverlayFooter(returnTarget: "command-palette" | undefined, enterLa
   return returnTarget === "command-palette"
     ? `${enterLabel} · Left back · Esc close`
     : `${enterLabel} · Esc close`;
+}
+
+function buildConfigTabs(state: AppState): string {
+  if (state.modal.kind !== "config") return "";
+  const tabs = state.snapshot.configInspector?.tabs ?? [];
+  return tabs
+    .map((tab) => tab === state.modal.tab ? `[${tab}]` : tab)
+    .join(" ");
+}
+
+function buildConfigDetailItems(
+  state: AppState,
+  row: MissionControlConfigRow | undefined,
+) {
+  if (state.modal.kind !== "config") return [];
+
+  const items = [
+    {
+      text: `target scope: ${state.modal.selectedScope}`,
+      section: "Write Scope",
+      tone: "accent" as const,
+    },
+  ];
+
+  if (!row) {
+    items.push({
+      text: "No config rows available for this tab",
+      section: "Details",
+      tone: "muted" as const,
+    });
+    return items;
+  }
+
+  items.push(
+    { text: row.description, section: "Meaning" },
+    { text: `effective: ${row.effectiveValueText}`, section: "Values" },
+  );
+
+  if (row.projectValueText !== undefined) {
+    items.push({ text: `project: ${row.projectValueText}`, section: "Values", tone: "muted" as const });
+  }
+  if (row.globalValueText !== undefined) {
+    items.push({ text: `global: ${row.globalValueText}`, section: "Values", tone: "muted" as const });
+  }
+  if (row.defaultValueText !== undefined) {
+    items.push({ text: `default: ${row.defaultValueText}`, section: "Values", tone: "muted" as const });
+  }
+
+  if (state.modal.phase === "choose-scope") {
+    items.push({
+      text: `choose project/global, current: ${state.modal.selectedScope}`,
+      section: "Edit",
+      tone: "accent" as const,
+    });
+  }
+
+  if (state.modal.phase === "edit-inline") {
+    items.push({
+      text: `draft: ${state.modal.draftValue ?? row.effectiveValueText}`,
+      section: "Edit",
+      tone: "accent" as const,
+    });
+    if (row.options?.length) {
+      items.push({
+        text: `options: ${row.options.join(" | ")}`,
+        section: "Edit",
+      });
+    }
+  }
+
+  if (state.modal.phase === "confirm-write") {
+    items.push({
+      text: `apply ${row.keyPath} = ${state.modal.draftValue ?? row.effectiveValueText}`,
+      section: "Confirm",
+      tone: "accent" as const,
+    });
+  }
+
+  if (state.modal.phase === "write-result" && state.modal.message) {
+    items.push({
+      text: state.modal.message,
+      section: "Result",
+      tone: "accent" as const,
+    });
+  }
+
+  if (state.snapshot.configInspector?.errors.length) {
+    items.push({
+      text: `errors: ${state.snapshot.configInspector.errors.join(" | ")}`,
+      section: "Doctor",
+      tone: "muted" as const,
+    });
+  }
+
+  return items;
+}
+
+function buildConfigFooter(state: AppState): string {
+  if (state.modal.kind !== "config") return "Esc close";
+  switch (state.modal.phase) {
+    case "choose-scope":
+      return "S scope · Enter choose · Esc cancel";
+    case "edit-inline":
+      return "Left/Right change · S scope · Enter review · Esc cancel";
+    case "confirm-write":
+      return "Enter apply · Esc cancel";
+    case "write-result":
+      return "Enter acknowledge · Esc close";
+    case "browse":
+    default:
+      return "[ / ] tabs · Up/Down rows · Enter edit · Esc close";
+  }
 }
 
 function getSelectedTaskPreview(state: AppState): TaskPreviewPane | null {

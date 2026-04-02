@@ -60,11 +60,22 @@ beforeEach(async () => {
     updateStatus: async () => undefined,
     delete: async () => undefined,
   } satisfies HandoffStorePort;
-  const config = {
-    load: async () => ({ defaultAgent: "codex" }),
-    write: async () => undefined,
-    exists: async () => true,
-  } satisfies ConfigPort;
+    const config = {
+      load: async () => ({ defaultAgent: "codex" }),
+      loadLayers: async () => ({
+        defaults: { defaultAgent: "codex" },
+        effective: { defaultAgent: "codex" },
+        project: { defaultAgent: "codex" },
+        global: undefined,
+        errors: [],
+        paths: {
+          project: ".maestro/config.yaml",
+          global: "~/.maestro/config.yaml",
+        },
+      }),
+      write: async () => undefined,
+      exists: async () => true,
+    } satisfies ConfigPort;
   const cass = {
     isAvailable: async () => true,
     hasBinary: async () => true,

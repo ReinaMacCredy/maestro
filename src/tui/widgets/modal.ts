@@ -237,12 +237,12 @@ export function buildOverlayRenderSpec(kind: OverlayModalKind): OverlayRenderSpe
       };
     case "config":
       return {
-        family: "info",
-        sizePreset: "standard",
+        family: "split",
+        sizePreset: "wide",
         chrome: STANDARD_CHROME,
         selection: STANDARD_SELECTION,
         text: STANDARD_TEXT,
-        layout: STANDARD_LAYOUT,
+        layout: { ...WIDE_LAYOUT, splitRatio: [46, 54] },
       };
     case "overview":
       return {

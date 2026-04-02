@@ -1,9 +1,15 @@
 /**
  * TUI application state -- focus, selection, modal management.
  */
-import type { MissionControlSnapshot, LeftPaneMode } from "./types.js";
+import type {
+  MissionControlConfigTab,
+  MissionControlSnapshot,
+  LeftPaneMode,
+} from "./types.js";
+import type { ConfigScope } from "../../ports/config.port.js";
 import { getFilteredMissionControlPaletteCommandCount } from "./mission-control-commands.js";
 import { getValidFeatureTransitions } from "../../domain/mission-state.js";
+import { getConfigRowsForTab } from "./config-inspector.js";
 
 export type FocusedPanel = "features" | "log" | "none";
 export type { LeftPaneMode };
@@ -24,7 +30,16 @@ export type ModalState =
   | { kind: "dependencies"; selectedOption: number; returnTarget?: ModalReturnTarget }
   | { kind: "overview"; returnTarget?: ModalReturnTarget }
   | { kind: "handoffs"; selectedHandoffIndex: number; returnTarget?: ModalReturnTarget }
-  | { kind: "config"; returnTarget?: ModalReturnTarget }
+  | {
+    kind: "config";
+    tab: MissionControlConfigTab;
+    selectedRowIndex: number;
+    phase: "browse" | "choose-scope" | "edit-inline" | "confirm-write" | "write-result";
+    selectedScope: ConfigScope;
+    draftValue?: string;
+    message?: string;
+    returnTarget?: ModalReturnTarget;
+  }
   | { kind: "processes"; selectedProcessIndex: number; returnTarget?: ModalReturnTarget };
 
 export interface AppState {
@@ -69,7 +84,14 @@ export type Action =
   | { type: "modal-query-append"; char: string }
   | { type: "modal-query-backspace" }
   | { type: "modal-submit-start" }
-  | { type: "modal-submit-error"; message: string };
+  | { type: "modal-submit-error"; message: string }
+  | { type: "config-next-tab" }
+  | { type: "config-prev-tab" }
+  | { type: "config-cycle-value"; direction: "previous" | "next" }
+  | { type: "config-toggle-scope" }
+  | { type: "config-submit-start" }
+  | { type: "config-submit-success"; message: string }
+  | { type: "config-submit-error"; message: string };
 
 /**
  * Pure state reducer -- returns a new state given an action.
@@ -84,13 +106,14 @@ export function reduce(state: AppState, action: Action): AppState {
           return canNavigateBackToPalette(state.modal) ? closeOrReturnModal(state) : state;
         }
 
-      if (
+        if (
         state.modal.kind === "feature-action"
         || state.modal.kind === "command-palette"
         || state.modal.kind === "feature-browser"
         || state.modal.kind === "handoffs"
         || state.modal.kind === "processes"
         || state.modal.kind === "dependencies"
+        || state.modal.kind === "config"
       ) {
         return handleModalNavigate(state, action.direction);
       }
@@ -164,6 +187,9 @@ export function reduce(state: AppState, action: Action): AppState {
           modal: { kind: "none" },
         };
       }
+      if (state.modal.kind === "config") {
+        return handleConfigEnter(state);
+      }
       if (state.focusedPanel === "features" && state.snapshot.features.length > 0) {
         return {
           ...state,
@@ -180,8 +206,35 @@ export function reduce(state: AppState, action: Action): AppState {
 
     case "escape":
       if (state.modal.kind !== "none") {
-          return { ...state, modal: { kind: "none" }, copyMode: false };
+        if (state.modal.kind === "config") {
+          if (state.modal.phase === "confirm-write") {
+            return {
+              ...state,
+              modal: {
+                ...state.modal,
+                phase: "edit-inline",
+              },
+            };
+          }
+          if (
+            state.modal.phase === "choose-scope"
+            || state.modal.phase === "edit-inline"
+            || state.modal.phase === "write-result"
+          ) {
+            return {
+              ...state,
+              modal: {
+                ...state.modal,
+                phase: "browse",
+                draftValue: undefined,
+                message: undefined,
+              },
+              copyMode: false,
+            };
+          }
         }
+        return { ...state, modal: { kind: "none" }, copyMode: false };
+      }
       if (state.copyMode) {
         return { ...state, copyMode: false };
       }
@@ -245,7 +298,14 @@ export function reduce(state: AppState, action: Action): AppState {
       if (!canOpenOverlayFromModal(state.modal)) return state;
       return {
         ...state,
-        modal: { kind: "config", returnTarget: getModalReturnTarget(state.modal) },
+        modal: {
+          kind: "config",
+          tab: "overview",
+          selectedRowIndex: 0,
+          phase: "browse",
+          selectedScope: "project",
+          returnTarget: getModalReturnTarget(state.modal),
+        },
       };
 
     case "open-processes":
@@ -331,12 +391,25 @@ export function reduce(state: AppState, action: Action): AppState {
               Math.max(0, getDependencyTargets(baseState).length - 1),
             ),
             returnTarget: state.modal.returnTarget,
-          },
-        };
-      }
+            },
+          };
+        }
 
-      return baseState;
-    }
+        if (state.modal.kind === "config") {
+          return {
+            ...baseState,
+            modal: {
+              ...state.modal,
+              selectedRowIndex: Math.min(
+                state.modal.selectedRowIndex,
+                Math.max(0, getConfigRowsForTab(action.snapshot.configInspector ?? null, state.modal.tab).length - 1),
+              ),
+            },
+          };
+        }
+
+        return baseState;
+      }
 
     case "modal-select":
       if (state.modal.kind === "command-palette") {
@@ -389,17 +462,26 @@ export function reduce(state: AppState, action: Action): AppState {
           },
         };
       }
-      if (state.modal.kind === "dependencies") {
-        return {
-          ...state,
+        if (state.modal.kind === "dependencies") {
+          return {
+            ...state,
           modal: {
             kind: "dependencies",
             selectedOption: action.option,
             returnTarget: state.modal.returnTarget,
-          },
-        };
-      }
-      return state;
+            },
+          };
+        }
+        if (state.modal.kind === "config") {
+          return {
+            ...state,
+            modal: {
+              ...state.modal,
+              selectedRowIndex: action.option,
+            },
+          };
+        }
+        return state;
 
     case "modal-query-append":
       if (state.modal.kind === "command-palette") {
@@ -440,8 +522,8 @@ export function reduce(state: AppState, action: Action): AppState {
       }
       return state;
 
-    case "modal-submit-error":
-      if (state.modal.kind === "feature-action") {
+      case "modal-submit-error":
+        if (state.modal.kind === "feature-action") {
         return {
           ...state,
           modal: {
@@ -450,11 +532,63 @@ export function reduce(state: AppState, action: Action): AppState {
             errorMessage: action.message,
           },
         };
-      }
-      return state;
+        }
+        return state;
 
-    default:
-      return state;
+      case "config-next-tab":
+      case "config-prev-tab":
+        if (state.modal.kind !== "config") return state;
+        return {
+          ...state,
+          modal: {
+            ...state.modal,
+            tab: nextConfigTab(state.modal.tab, action.type === "config-next-tab" ? 1 : -1),
+            selectedRowIndex: 0,
+            phase: "browse",
+            draftValue: undefined,
+            message: undefined,
+          },
+        };
+
+      case "config-cycle-value":
+        if (state.modal.kind !== "config" || state.modal.phase !== "edit-inline") return state;
+        return cycleConfigDraft(state, action.direction);
+
+      case "config-toggle-scope":
+        if (state.modal.kind !== "config") return state;
+        return {
+          ...state,
+          modal: {
+            ...state.modal,
+            selectedScope: state.modal.selectedScope === "project" ? "global" : "project",
+          },
+        };
+
+      case "config-submit-start":
+        if (state.modal.kind !== "config") return state;
+        return {
+          ...state,
+          modal: {
+            ...state.modal,
+            message: undefined,
+          },
+        };
+
+      case "config-submit-success":
+      case "config-submit-error":
+        if (state.modal.kind !== "config") return state;
+        return {
+          ...state,
+          modal: {
+            ...state.modal,
+            phase: "write-result",
+            message: action.message,
+            draftValue: undefined,
+          },
+        };
+
+      default:
+        return state;
   }
 }
 
@@ -591,6 +725,32 @@ function handleModalNavigate(state: AppState, direction: "up" | "down"): AppStat
         kind: "dependencies",
         selectedOption,
         returnTarget: state.modal.returnTarget,
+        },
+      };
+    }
+
+  if (state.modal.kind === "config") {
+    const total = getConfigRowsForTab(state.snapshot.configInspector ?? null, state.modal.tab).length;
+    if (state.modal.phase === "choose-scope") {
+      return {
+        ...state,
+        modal: {
+          ...state.modal,
+          selectedScope: direction === "down" ? "global" : "project",
+        },
+      };
+    }
+    if (state.modal.phase !== "browse" || total === 0) return state;
+
+    const selectedRowIndex = direction === "down"
+      ? Math.min(state.modal.selectedRowIndex + 1, total - 1)
+      : Math.max(state.modal.selectedRowIndex - 1, 0);
+
+    return {
+      ...state,
+      modal: {
+        ...state.modal,
+        selectedRowIndex,
       },
     };
   }
@@ -659,4 +819,96 @@ function getDependencyTargets(state: AppState): ReadonlyArray<{ id: string }> {
     ...(preview.blockedBy ?? []),
     ...(preview.unblocks ?? []),
   ].map((feature) => ({ id: feature.id }));
+}
+
+function handleConfigEnter(state: AppState): AppState {
+  if (state.modal.kind !== "config") return state;
+
+  const row = getConfigRowsForTab(state.snapshot.configInspector ?? null, state.modal.tab)[state.modal.selectedRowIndex];
+  if (!row) return state;
+
+  if (state.modal.phase === "browse") {
+    if (row.editKind === "readonly") {
+      return state;
+    }
+
+    return {
+      ...state,
+      modal: {
+        ...state.modal,
+        phase: state.modal.tab === "effective" ? "choose-scope" : "edit-inline",
+        draftValue: row.effectiveValueText,
+      },
+    };
+  }
+
+  if (state.modal.phase === "choose-scope") {
+    return {
+      ...state,
+      modal: {
+        ...state.modal,
+        phase: "edit-inline",
+        draftValue: state.modal.draftValue ?? row.effectiveValueText,
+      },
+    };
+  }
+
+  if (state.modal.phase === "edit-inline") {
+    return {
+      ...state,
+      modal: {
+        ...state.modal,
+        phase: "confirm-write",
+      },
+    };
+  }
+
+  if (state.modal.phase === "write-result") {
+    return {
+      ...state,
+      modal: {
+        ...state.modal,
+        phase: "browse",
+        message: undefined,
+      },
+    };
+  }
+
+  return state;
+}
+
+function nextConfigTab(current: MissionControlConfigTab, delta: 1 | -1): MissionControlConfigTab {
+  const tabs: MissionControlConfigTab[] = [
+    "overview",
+    "effective",
+    "project",
+    "global",
+    "defaults",
+    "workers",
+    "plan",
+    "doctor",
+  ];
+  const index = tabs.indexOf(current);
+  if (index < 0) return "overview";
+  return tabs[(index + delta + tabs.length) % tabs.length]!;
+}
+
+function cycleConfigDraft(state: AppState, direction: "previous" | "next"): AppState {
+  if (state.modal.kind !== "config") return state;
+  const row = getConfigRowsForTab(state.snapshot.configInspector ?? null, state.modal.tab)[state.modal.selectedRowIndex];
+  if (!row?.options || row.options.length === 0) return state;
+
+  const currentValue = state.modal.draftValue ?? row.effectiveValueText;
+  const currentIndex = Math.max(0, row.options.indexOf(currentValue));
+  const nextIndex = direction === "next"
+    ? (currentIndex + 1) % row.options.length
+    : (currentIndex - 1 + row.options.length) % row.options.length;
+
+  return {
+    ...state,
+    modal: {
+      ...state.modal,
+      draftValue: row.options[nextIndex],
+    },
+  };
 }

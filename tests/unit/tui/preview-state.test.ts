@@ -222,14 +222,21 @@ describe("buildPreviewState", () => {
     });
   });
 
-  it("opens the config screen", () => {
-    const state = buildPreviewState({
-      snapshot: makeSnapshot(),
-      screen: "config",
-    });
+    it("opens the config screen", () => {
+      const state = buildPreviewState({
+        snapshot: makeSnapshot(),
+        screen: "config",
+      });
 
-    expect(state.modal).toEqual({ kind: "config", returnTarget: undefined });
-  });
+      expect(state.modal).toEqual({
+        kind: "config",
+        tab: "overview",
+        selectedRowIndex: 0,
+        phase: "browse",
+        selectedScope: "project",
+        returnTarget: undefined,
+      });
+    });
 
   it("opens the runtime screen", () => {
     const state = buildPreviewState({

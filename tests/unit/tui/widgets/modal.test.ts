@@ -377,7 +377,7 @@ describe("renderModal", () => {
         expect(layout.detailRect?.width ?? 0).toBeGreaterThan(10);
       });
 
-      it("uses the standard shell size for palette, dependencies, runtime, and config", () => {
+        it("uses the expected shell sizes for palette, dependencies, runtime, and config", () => {
         const parent = { x: 0, y: 0, width: 120, height: 40 };
         const palette = layoutModal(parent, {
           mode: "palette",
@@ -403,12 +403,14 @@ describe("renderModal", () => {
           detailItems: [{ text: "agent", detail: "codex" }],
           renderSpec: buildOverlayRenderSpec("processes"),
         });
-        const config = layoutModal(parent, {
-          mode: "info",
-          title: "Config",
-          items: [{ text: "Git available", section: "Environment" }],
-          renderSpec: buildOverlayRenderSpec("config"),
-        });
+          const config = layoutModal(parent, {
+            mode: "split",
+            title: "Config",
+            items: [{ label: "Config source", section: "Status" }],
+            selectedIndex: 0,
+            detailItems: [{ text: "target scope: project", section: "Write Scope" }],
+            renderSpec: buildOverlayRenderSpec("config"),
+          });
 
         expect(palette.width).toBe(76);
         expect(palette.height).toBe(20);
@@ -416,9 +418,9 @@ describe("renderModal", () => {
         expect(dependencies.height).toBe(20);
         expect(runtime.width).toBe(76);
         expect(runtime.height).toBe(20);
-        expect(config.width).toBe(76);
-        expect(config.height).toBe(20);
-      });
+          expect(config.width).toBe(94);
+          expect(config.height).toBe(20);
+        });
 
       it("keeps handoffs wider and applies per-overlay split ratios", () => {
         const parent = { x: 0, y: 0, width: 120, height: 40 };
