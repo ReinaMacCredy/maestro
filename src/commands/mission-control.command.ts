@@ -34,6 +34,10 @@ const PREVIEW_SCREEN_ALIASES: Readonly<Record<string, PreviewScreen>> = {
   process: "runtime",
   processes: "runtime",
   runtime: "runtime",
+  workers: "workers",
+  worker: "workers",
+  output: "output",
+  out: "output",
 };
 
 export function registerMissionControlCommand(program: Command): void {
@@ -79,11 +83,12 @@ Examples:
         checkpointStore: services.checkpointStore,
         handoffStore: services.handoffStore,
         config: services.config,
-        cass: services.cass,
-        git: services.git,
-        runtimeStore: services.runtimeStore,
-        cwd: process.cwd(),
-      };
+          cass: services.cass,
+          git: services.git,
+          runtimeStore: services.runtimeStore,
+          runtimeEventStore: services.runtimeEventStore,
+          cwd: process.cwd(),
+        };
       const homeSnapshotDeps = {
         handoffStore: services.handoffStore,
         config: services.config,

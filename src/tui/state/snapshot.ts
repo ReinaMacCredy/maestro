@@ -11,15 +11,18 @@ import type { ConfigPort } from "../../ports/config.port.js";
 import type { CassPort } from "../../ports/cass.port.js";
 import type { GitPort } from "../../ports/git.port.js";
 import type { RuntimeStorePort } from "../../ports/runtime-store.port.js";
+import type { RuntimeEventStorePort } from "../../ports/runtime-event-store.port.js";
 import type { Mission, Feature } from "../../domain/mission-types.js";
 import type { RuntimeState, WorkerRuntime } from "../../domain/runtime-types.js";
 import type { DoctorCheck, StatusReport } from "../../domain/types.js";
+import type { RuntimeEventRecord } from "../../domain/worker-types.js";
 import { CASS_INSTALL_HINT } from "../../domain/defaults.js";
 import { generateMissionReport, type MissionReport } from "../../usecases/mission-report.usecase.js";
 import { checkStatus } from "../../usecases/check-status.usecase.js";
 import { runDoctor } from "../../usecases/run-doctor.usecase.js";
 import { getValidFeatureTransitions } from "../../domain/mission-state.js";
 import { classifyRuntime } from "../../usecases/runtime-supervision.usecase.js";
+import { getWorkerHealthRows } from "../../usecases/worker-health.usecase.js";
 import { deriveEvents } from "./events.js";
 import { buildConfigInspector } from "./config-inspector.js";
 import type {
@@ -47,6 +50,7 @@ export interface SnapshotDeps {
   cass: CassPort;
   git: GitPort;
   runtimeStore: RuntimeStorePort;
+  runtimeEventStore: RuntimeEventStorePort;
   cwd: string;
 }
 
@@ -65,6 +69,17 @@ interface RuntimeView {
   readonly agent: string;
   readonly sessionId?: string;
   readonly startedAtMs: number;
+  readonly leaseRemainingMs: number;
+}
+
+interface RuntimeTelemetry {
+  readonly currentActivity?: string;
+  readonly lastOutputAgeMs?: number;
+  readonly outputLines: readonly {
+    timestamp: string;
+    kind: "status" | "stdout" | "stderr";
+    text: string;
+  }[];
 }
 
 interface FeatureGraphEntry {
@@ -80,7 +95,7 @@ interface FeatureGraphEntry {
 export async function buildSnapshot(
   deps: SnapshotDeps,
   missionId: string,
-): Promise<MissionControlSnapshot> {
+  ): Promise<MissionControlSnapshot> {
   const [
     report,
     features,
@@ -106,13 +121,24 @@ export async function buildSnapshot(
     deps.runtimeStore.list(missionId),
   ]);
 
-  const mission = report.mission;
-  const now = Date.now();
-  const startMs = new Date(mission.approvedAt ?? mission.createdAt).getTime();
-  const runtimeByFeature = new Map(
-    runtimes.map((runtime) => [runtime.featureId, buildRuntimeView(runtime, now)]),
-  );
-  const featureGraph = buildFeatureGraph(features);
+    const mission = report.mission;
+    const now = Date.now();
+    const startMs = new Date(mission.approvedAt ?? mission.createdAt).getTime();
+    const runtimeEventsByFeature = new Map(
+      await Promise.all(
+        features.map(async (feature) => [
+          feature.id,
+          await deps.runtimeEventStore.listByFeature(missionId, feature.id),
+        ] as const),
+      ),
+    );
+    const runtimeByFeature = new Map(
+      runtimes.map((runtime) => [runtime.featureId, buildRuntimeView(runtime, now)]),
+    );
+    const runtimeTelemetryByFeature = new Map(
+      features.map((feature) => [feature.id, buildRuntimeTelemetry(runtimeEventsByFeature.get(feature.id) ?? [], now)]),
+    );
+    const featureGraph = buildFeatureGraph(features);
   const taskPreviews = features.map((feature) =>
     buildTaskPreview(feature, report, runtimeByFeature, featureGraph.get(feature.id))
   );
@@ -137,16 +163,17 @@ export async function buildSnapshot(
   const activeFeature = findActiveFeature(taskPreviews);
 
   // Active worker
-  const activeWorker = buildActiveWorker(features, runtimeByFeature, startMs, now);
+    const activeWorker = buildActiveWorker(features, runtimeByFeature, runtimeTelemetryByFeature, startMs, now);
 
   // Progress log
   const progressLog = deriveEvents({
     mission,
     features,
-    assertions,
-    checkpoints,
-    milestoneProgress: report.milestones,
-  });
+      assertions,
+      checkpoints,
+      milestoneProgress: report.milestones,
+      workerEvents: [...runtimeEventsByFeature.values()].flat(),
+    });
 
   // Milestone rows
   const milestones: MissionControlMilestoneRow[] = report.milestones.map((mp) => ({
@@ -211,17 +238,23 @@ export async function buildSnapshot(
       activeWorker,
       session: sessionSidebar,
       pendingHandoffs,
-      configSummary: {
+        configSummary: {
         configSource: env.status.configSource,
         cassAvailable: env.status.cassAvailable,
         gitAvailable: env.status.gitAvailable,
         checks: env.checks,
         missionDirectory: `.maestro/missions/${mission.id}`,
         workerTypes,
-      },
-      configInspector: buildConfigInspector(configLayers, env.checks, features, env.status.configSource),
-        runtimeProcesses: buildRuntimeProcesses(mission, features, runtimeByFeature, activeWorker),
-      progressLog,
+        },
+        configInspector: buildConfigInspector(configLayers, env.checks, features, env.status.configSource),
+        workerHealth: await getWorkerHealthRows(configLayers.effective.workers ?? {}, {
+          activeWorkers: features
+            .filter((feature) => feature.status === "assigned" || feature.status === "in-progress" || feature.status === "review")
+            .map((feature) => runtimeByFeature.get(feature.id)?.agent ?? "unknown")
+            .filter((agent) => agent !== "unknown"),
+        }),
+        runtimeProcesses: buildRuntimeProcesses(mission, features, runtimeByFeature, runtimeTelemetryByFeature, activeWorker),
+        progressLog,
       milestones,
       gateBlocked,
       gateLabel,
@@ -297,8 +330,9 @@ export async function buildHomeSnapshot(
       missionDirectory: null,
       workerTypes: [],
     },
-    configInspector: buildConfigInspector(configLayers, checks, [], status.configSource),
-    runtimeProcesses: [],
+      configInspector: buildConfigInspector(configLayers, checks, [], status.configSource),
+      workerHealth: await getWorkerHealthRows(configLayers.effective.workers ?? {}),
+      runtimeProcesses: [],
     progressLog: [],
     milestones: [],
     gateBlocked: false,
@@ -325,6 +359,7 @@ function findActiveFeature(taskPreviews: readonly TaskPreviewPane[]): MissionCon
 function buildActiveWorker(
   features: readonly Feature[],
   runtimeByFeature: ReadonlyMap<string, RuntimeView>,
+  telemetryByFeature: ReadonlyMap<string, RuntimeTelemetry>,
   startMs: number,
   nowMs: number,
 ): MissionControlWorkerPane | null {
@@ -335,6 +370,7 @@ function buildActiveWorker(
   if (!active) return null;
 
   const runtime = runtimeByFeature.get(active.id);
+  const telemetry = telemetryByFeature.get(active.id);
   const featureStartMs = runtime?.startedAtMs ?? new Date(active.updatedAt).getTime();
 
   return {
@@ -347,11 +383,13 @@ function buildActiveWorker(
     runtimeState: presentRuntimeState(runtime, active.status),
     lastSeenAgeMs: runtime?.lastSeenAgeMs,
     failureReason: runtime?.failureReason,
-    retryCount: runtime?.retryCount,
-    agent: runtime?.agent,
-    sessionId: runtime?.sessionId,
-  };
-}
+      retryCount: runtime?.retryCount,
+      agent: runtime?.agent,
+      sessionId: runtime?.sessionId,
+      currentActivity: telemetry?.currentActivity,
+      lastOutputAgeMs: telemetry?.lastOutputAgeMs,
+    };
+  }
 
 function buildHomeActions(
   status: Awaited<ReturnType<typeof checkStatus>>,
@@ -398,6 +436,7 @@ function buildRuntimeProcesses(
   mission: Mission,
   features: readonly Feature[],
   runtimeByFeature: ReadonlyMap<string, RuntimeView>,
+  runtimeTelemetryByFeature: ReadonlyMap<string, RuntimeTelemetry>,
   activeWorker: MissionControlWorkerPane | null,
 ): readonly MissionControlRuntimeProcessRow[] {
   const milestoneById = new Map(mission.milestones.map((milestone) => [milestone.id, milestone]));
@@ -411,11 +450,12 @@ function buildRuntimeProcesses(
         return feature.status === "assigned"
           || feature.status === "in-progress"
         || feature.status === "review";
-    })
-        .map((feature) => {
-          const runtime = runtimeByFeature.get(feature.id);
-          const milestone = milestoneById.get(feature.milestoneId);
-          return {
+        })
+          .map((feature) => {
+            const runtime = runtimeByFeature.get(feature.id);
+            const telemetry = runtimeTelemetryByFeature.get(feature.id);
+            const milestone = milestoneById.get(feature.milestoneId);
+            return {
             featureId: feature.id,
             title: feature.title,
             milestoneTitle: milestone?.title,
@@ -428,13 +468,17 @@ function buildRuntimeProcesses(
           : activeWorker?.featureId === feature.id,
         runtimeState: presentRuntimeState(runtime, feature.status),
         lastSeenAgeMs: runtime?.lastSeenAgeMs,
-        failureReason: runtime?.failureReason,
-        retryCount: runtime?.retryCount,
-        agent: runtime?.agent,
-        sessionId: runtime?.sessionId,
-      };
-    });
-  }
+          failureReason: runtime?.failureReason,
+          retryCount: runtime?.retryCount,
+          agent: runtime?.agent,
+          sessionId: runtime?.sessionId,
+          currentActivity: telemetry?.currentActivity,
+          lastOutputAgeMs: telemetry?.lastOutputAgeMs,
+          leaseRemainingMs: runtime?.leaseRemainingMs,
+          outputLines: telemetry?.outputLines,
+        };
+      });
+    }
 
 function buildTaskPreview(
   active: Feature,
@@ -596,9 +640,42 @@ function buildRuntimeView(runtime: WorkerRuntime, nowMs: number): RuntimeView {
     lastSeenAgeMs: classification.lastSeenAgeMs,
     failureReason: runtime.failureReason,
     retryCount: runtime.recoveryMetadata.retryCount,
-    agent: runtime.agent,
-    sessionId: runtime.sessionId,
-    startedAtMs: classification.startedAtMs,
+      agent: runtime.agent,
+      sessionId: runtime.sessionId,
+      startedAtMs: classification.startedAtMs,
+      leaseRemainingMs: Math.max(0, new Date(runtime.leaseExpiresAt).getTime() - nowMs),
+    };
+  }
+
+function buildRuntimeTelemetry(
+  events: readonly RuntimeEventRecord[],
+  nowMs: number,
+): RuntimeTelemetry {
+  const outputLines = events
+    .filter((event) =>
+      event.kind !== "heartbeat"
+      && typeof event.text === "string"
+      && event.text.trim().length > 0,
+    )
+    .slice(-8)
+    .map((event) => ({
+      timestamp: event.timestamp,
+      kind: event.kind as "status" | "stdout" | "stderr",
+      text: event.text!.trim(),
+    }));
+  const lastOutput = [...events]
+    .reverse()
+    .find((event) =>
+      (event.kind === "stdout" || event.kind === "stderr")
+      && typeof event.text === "string"
+      && event.text.trim().length > 0,
+    );
+  const currentActivity = outputLines.at(-1)?.text;
+
+  return {
+    currentActivity,
+    lastOutputAgeMs: lastOutput ? Math.max(0, nowMs - new Date(lastOutput.timestamp).getTime()) : undefined,
+    outputLines,
   };
 }
 

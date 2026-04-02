@@ -30,7 +30,8 @@ export type ModalState =
   | { kind: "dependencies"; selectedOption: number; returnTarget?: ModalReturnTarget }
   | { kind: "overview"; returnTarget?: ModalReturnTarget }
   | { kind: "handoffs"; selectedHandoffIndex: number; returnTarget?: ModalReturnTarget }
-    | {
+  | { kind: "workers"; selectedWorkerIndex: number; returnTarget?: ModalReturnTarget }
+  | {
       kind: "config";
       tab: MissionControlConfigTab;
       selectedRowIndex: number;
@@ -45,8 +46,9 @@ export type ModalState =
         content: string;
       };
       returnTarget?: ModalReturnTarget;
-    }
-  | { kind: "processes"; selectedProcessIndex: number; returnTarget?: ModalReturnTarget };
+      }
+  | { kind: "processes"; selectedProcessIndex: number; returnTarget?: ModalReturnTarget }
+  | { kind: "runtime-output"; selectedProcessIndex: number; returnTarget?: ModalReturnTarget };
 
 export interface AppState {
   snapshot: MissionControlSnapshot;
@@ -84,6 +86,8 @@ export type Action =
   | { type: "open-handoffs" }
   | { type: "open-config" }
   | { type: "open-processes" }
+  | { type: "open-workers" }
+  | { type: "open-runtime-output" }
   | { type: "toggle-copy-mode" }
   | { type: "update-snapshot"; snapshot: MissionControlSnapshot }
   | { type: "modal-select"; option: number }
@@ -125,7 +129,9 @@ export function reduce(state: AppState, action: Action): AppState {
         || state.modal.kind === "command-palette"
         || state.modal.kind === "feature-browser"
         || state.modal.kind === "handoffs"
+        || state.modal.kind === "workers"
         || state.modal.kind === "processes"
+        || state.modal.kind === "runtime-output"
         || state.modal.kind === "dependencies"
         || state.modal.kind === "config"
       ) {
@@ -181,7 +187,13 @@ export function reduce(state: AppState, action: Action): AppState {
         if (state.modal.kind === "handoffs") {
           return state;
         }
+        if (state.modal.kind === "workers") {
+          return state;
+        }
         if (state.modal.kind === "processes") {
+          return state;
+        }
+        if (state.modal.kind === "runtime-output") {
           return state;
         }
       if (state.modal.kind === "dependencies") {
@@ -349,6 +361,33 @@ export function reduce(state: AppState, action: Action): AppState {
         },
       };
 
+    case "open-workers":
+      if (!canOpenOverlayFromModal(state.modal)) return state;
+      return {
+        ...state,
+        modal: {
+          kind: "workers",
+          selectedWorkerIndex: 0,
+          returnTarget: getModalReturnTarget(state.modal),
+        },
+      };
+
+    case "open-runtime-output": {
+      if (state.snapshot.mode !== "mission") return state;
+      if (state.snapshot.runtimeProcesses.length === 0) return state;
+      const selectedProcessIndex = state.modal.kind === "processes"
+        ? state.modal.selectedProcessIndex
+        : 0;
+      return {
+        ...state,
+        modal: {
+          kind: "runtime-output",
+          selectedProcessIndex: Math.min(selectedProcessIndex, state.snapshot.runtimeProcesses.length - 1),
+          returnTarget: getModalReturnTarget(state.modal),
+        },
+      };
+    }
+
     case "toggle-copy-mode":
       return { ...state, copyMode: !state.copyMode };
 
@@ -396,6 +435,20 @@ export function reduce(state: AppState, action: Action): AppState {
         };
       }
 
+      if (state.modal.kind === "workers") {
+        return {
+          ...baseState,
+          modal: {
+            kind: "workers",
+            selectedWorkerIndex: Math.min(
+              state.modal.selectedWorkerIndex,
+              Math.max(0, (action.snapshot.workerHealth ?? []).length - 1),
+            ),
+            returnTarget: state.modal.returnTarget,
+          },
+        };
+      }
+
         if (state.modal.kind === "processes") {
           return {
             ...baseState,
@@ -420,6 +473,20 @@ export function reduce(state: AppState, action: Action): AppState {
               Math.max(0, getDependencyTargets(baseState).length - 1),
             ),
             returnTarget: state.modal.returnTarget,
+            },
+          };
+        }
+
+        if (state.modal.kind === "runtime-output") {
+          return {
+            ...baseState,
+            modal: {
+              kind: "runtime-output",
+              selectedProcessIndex: Math.min(
+                state.modal.selectedProcessIndex,
+                Math.max(0, action.snapshot.runtimeProcesses.length - 1),
+              ),
+              returnTarget: state.modal.returnTarget,
             },
           };
         }
@@ -477,6 +544,16 @@ export function reduce(state: AppState, action: Action): AppState {
           modal: {
             kind: "handoffs",
             selectedHandoffIndex: action.option,
+            returnTarget: state.modal.returnTarget,
+          },
+        };
+      }
+      if (state.modal.kind === "workers") {
+        return {
+          ...state,
+          modal: {
+            kind: "workers",
+            selectedWorkerIndex: action.option,
             returnTarget: state.modal.returnTarget,
           },
         };
@@ -794,7 +871,7 @@ function handleModalNavigate(state: AppState, direction: "up" | "down"): AppStat
     };
   }
 
-  if (state.modal.kind === "handoffs") {
+    if (state.modal.kind === "handoffs") {
     const total = state.snapshot.pendingHandoffs.length;
     if (total === 0) return state;
 
@@ -844,6 +921,24 @@ function handleModalNavigate(state: AppState, direction: "up" | "down"): AppStat
         kind: "dependencies",
         selectedOption,
         returnTarget: state.modal.returnTarget,
+        },
+      };
+    }
+
+    if (state.modal.kind === "workers") {
+      const total = state.snapshot.workerHealth?.length ?? 0;
+      if (total === 0) return state;
+
+      const selectedWorkerIndex = direction === "down"
+        ? Math.min(state.modal.selectedWorkerIndex + 1, total - 1)
+        : Math.max(state.modal.selectedWorkerIndex - 1, 0);
+
+      return {
+        ...state,
+        modal: {
+          kind: "workers",
+          selectedWorkerIndex,
+          returnTarget: state.modal.returnTarget,
         },
       };
     }
@@ -917,12 +1012,14 @@ function getModalReturnTarget(modal: ModalState): ModalReturnTarget | undefined 
       modal.kind === "feature-browser"
       || modal.kind === "dependencies"
       || modal.kind === "overview"
-      || modal.kind === "handoffs"
-      || modal.kind === "config"
-      || modal.kind === "processes"
-    ) {
-      return modal.returnTarget;
-    }
+        || modal.kind === "handoffs"
+        || modal.kind === "workers"
+        || modal.kind === "config"
+        || modal.kind === "processes"
+        || modal.kind === "runtime-output"
+      ) {
+        return modal.returnTarget;
+      }
   if (modal.kind === "command-palette") {
     return "command-palette";
   }

@@ -6,6 +6,7 @@ export type MissionControlCommandId =
   | "handoffs"
   | "config"
   | "processes"
+  | "workers"
   | "exit";
 
 export interface MissionControlCommandSpec {
@@ -102,6 +103,14 @@ export function getMissionControlCommandSpecs(
         section: "Navigate",
         keywords: ["processes", "runtime", "workers"],
       },
+    {
+      id: "workers",
+      key: "W",
+      label: "Workers",
+      detail: "Inspect worker health and readiness probes",
+      section: "Navigate",
+      keywords: ["workers", "health", "readiness", "doctor"],
+    },
     {
       id: "exit",
       key: "Ctrl+T",

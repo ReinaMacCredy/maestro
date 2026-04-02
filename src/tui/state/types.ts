@@ -49,6 +49,31 @@ export interface MissionControlConfigSummary {
   workerTypes: readonly string[];
 }
 
+export type MissionControlWorkerHealthStatus =
+  | "ready"
+  | "busy"
+  | "degraded"
+  | "missing"
+  | "disabled";
+
+export interface MissionControlWorkerHealthCheck {
+  label: string;
+  ok: boolean;
+  detail?: string;
+}
+
+export interface MissionControlWorkerHealthRow {
+  slug: string;
+  label: string;
+  status: MissionControlWorkerHealthStatus;
+  detail: string;
+  lastCheckedAt: string;
+  checks: readonly MissionControlWorkerHealthCheck[];
+  summary: string;
+  bestFor: string;
+  tradeoffs: string;
+}
+
 export type MissionControlConfigTab =
   | "overview"
   | "effective"
@@ -142,6 +167,14 @@ export interface MissionControlRuntimeProcessRow {
   retryCount?: number;
   agent?: string;
   sessionId?: string;
+  currentActivity?: string;
+  lastOutputAgeMs?: number;
+  leaseRemainingMs?: number;
+  outputLines?: readonly {
+    timestamp: string;
+    kind: "status" | "stdout" | "stderr";
+    text: string;
+  }[];
 }
 
 export interface MissionControlHomeState {
@@ -216,6 +249,7 @@ export interface MissionControlSnapshot {
   pendingHandoffs: readonly MissionControlHomeHandoff[];
   configSummary: MissionControlConfigSummary | null;
   configInspector?: MissionControlConfigInspector | null;
+  workerHealth?: readonly MissionControlWorkerHealthRow[];
   runtimeProcesses: readonly MissionControlRuntimeProcessRow[];
   progressLog: readonly MissionControlEvent[];
 
@@ -293,6 +327,8 @@ export interface MissionControlWorkerPane {
   retryCount?: number;
   agent?: string;
   sessionId?: string;
+  currentActivity?: string;
+  lastOutputAgeMs?: number;
 }
 
 export interface MissionControlEvent {

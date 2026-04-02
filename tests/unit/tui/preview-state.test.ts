@@ -126,6 +126,27 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
         workerType: "test-skill",
         hasReport: false,
         isLive: true,
+        currentActivity: "Reading runtime-supervision.usecase.ts",
+        outputLines: [
+          {
+            timestamp: "2026-04-02T12:00:10.000Z",
+            kind: "stdout",
+            text: "Reading runtime-supervision.usecase.ts",
+          },
+        ],
+      },
+    ],
+    workerHealth: [
+      {
+        slug: "codex",
+        label: "Codex",
+        status: "ready",
+        detail: "ready",
+        lastCheckedAt: "2026-04-02T12:00:00.000Z",
+        checks: [{ label: "command found", ok: true }],
+        summary: "Fast, strong general-purpose coding.",
+        bestFor: "everyday implementation",
+        tradeoffs: "less exhaustive than Claude Code",
       },
     ],
     progressLog: [],
@@ -246,6 +267,33 @@ describe("buildPreviewState", () => {
 
     expect(state.modal).toEqual({
       kind: "processes",
+      selectedProcessIndex: 0,
+      returnTarget: undefined,
+    });
+  });
+
+  it("opens the workers screen", () => {
+    const state = buildPreviewState({
+      snapshot: makeSnapshot(),
+      screen: "workers",
+    });
+
+    expect(state.modal).toEqual({
+      kind: "workers",
+      selectedWorkerIndex: 0,
+      returnTarget: undefined,
+    });
+  });
+
+  it("opens the runtime output screen for the requested feature", () => {
+    const state = buildPreviewState({
+      snapshot: makeSnapshot(),
+      screen: "output",
+      featureId: "f1",
+    });
+
+    expect(state.modal).toEqual({
+      kind: "runtime-output",
       selectedProcessIndex: 0,
       returnTarget: undefined,
     });

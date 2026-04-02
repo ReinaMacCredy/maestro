@@ -180,26 +180,62 @@ export function buildModalOptions(state: AppState): ModalOptions | undefined {
         };
       }
 
-    if (state.modal.kind === "processes") {
-      const items = state.snapshot.runtimeProcesses.map((process) => ({
-        label: `${process.featureId} · ${process.title}`,
-      }));
-      const selectedProcess = state.snapshot.runtimeProcesses[state.modal.selectedProcessIndex];
+      if (state.modal.kind === "processes") {
+        const items = state.snapshot.runtimeProcesses.map((process) => ({
+          label: `${process.featureId} · ${process.title}`,
+        }));
+        const selectedProcess = state.snapshot.runtimeProcesses[state.modal.selectedProcessIndex];
       return {
         mode: "split",
         title: "Runtime",
         eyebrow: state.snapshot.runtimeProcesses.length > 0
           ? `${state.snapshot.runtimeProcesses.length} runtime item${state.snapshot.runtimeProcesses.length === 1 ? "" : "s"}`
           : "No active runtime processes",
-        items: items.length > 0
-          ? items
-          : [{ label: "No assigned, in-progress, or review features right now.", selectable: false, tone: "muted" }],
-        selectedIndex: Math.min(state.modal.selectedProcessIndex, Math.max(0, items.length - 1)),
-        detailItems: buildRuntimeDetailItems(selectedProcess),
-        footer: buildOverlayFooter(state.modal.returnTarget, "Enter inspect"),
-        renderSpec: buildOverlayRenderSpec("processes"),
-      };
-    }
+          items: items.length > 0
+            ? items
+            : [{ label: "No assigned, in-progress, or review features right now.", selectable: false, tone: "muted" }],
+          selectedIndex: Math.min(state.modal.selectedProcessIndex, Math.max(0, items.length - 1)),
+          detailItems: buildRuntimeDetailItems(selectedProcess),
+          footer: state.modal.returnTarget === "command-palette"
+            ? "O output · Left back · Esc close"
+            : "O output · Esc close",
+          renderSpec: buildOverlayRenderSpec("processes"),
+        };
+      }
+
+      if (state.modal.kind === "workers") {
+        const items = (state.snapshot.workerHealth ?? []).map((worker) => ({
+          label: worker.label,
+          detail: worker.detail,
+        }));
+        const selectedWorker = (state.snapshot.workerHealth ?? [])[state.modal.selectedWorkerIndex];
+        return {
+          mode: "split",
+          title: "Workers",
+          eyebrow: "Real worker readiness, not just config presence.",
+          items: items.length > 0
+            ? items
+            : [{ label: "No workers configured", selectable: false, tone: "muted" }],
+          selectedIndex: Math.min(state.modal.selectedWorkerIndex, Math.max(0, items.length - 1)),
+          detailItems: buildWorkerHealthDetailItems(selectedWorker),
+          footer: buildOverlayFooter(state.modal.returnTarget, "Enter inspect"),
+          renderSpec: buildOverlayRenderSpec("processes"),
+        };
+      }
+
+      if (state.modal.kind === "runtime-output") {
+        const process = state.snapshot.runtimeProcesses[state.modal.selectedProcessIndex];
+        return {
+          mode: "info",
+          title: "Worker Output",
+          eyebrow: process
+            ? `${process.featureId} · ${process.workerType} · ${process.runtimeState ?? FEATURE_STATUS_LABEL[process.status]}`
+            : "No runtime output selected",
+          items: buildRuntimeOutputItems(process),
+          footer: state.modal.returnTarget === "command-palette" ? "Left back · Esc close" : "Esc back",
+          renderSpec: buildOverlayRenderSpec("config"),
+        };
+      }
 
   return undefined;
 }
@@ -784,21 +820,57 @@ function buildRuntimeDetailItems(process: MissionControlSnapshot["runtimeProcess
     { text: "worker", detail: process.workerType },
     { text: "runtime", detail: process.runtimeState ?? (process.isLive ? "live" : FEATURE_STATUS_LABEL[process.status]) },
     ...(typeof process.lastSeenAgeMs === "number" ? [{ text: "last seen", detail: `${Math.round(process.lastSeenAgeMs / 1000)}s ago` }] : []),
+    ...(typeof process.lastOutputAgeMs === "number" ? [{ text: "last output", detail: `${Math.round(process.lastOutputAgeMs / 1000)}s ago` }] : []),
+    ...(typeof process.leaseRemainingMs === "number" ? [{ text: "lease", detail: `${Math.max(0, Math.round(process.leaseRemainingMs / 1000))}s left` }] : []),
     ...(typeof process.retryCount === "number" ? [{ text: "retry", detail: String(process.retryCount) }] : []),
+    ...(process.currentActivity ? [{ text: "activity", detail: process.currentActivity }] : []),
     ...(process.milestoneTitle ? [{ text: "milestone", detail: process.milestoneTitle }] : []),
     ...(process.profile ? [{ text: "profile", detail: process.profile }] : []),
     ...(process.failureReason ? [{ text: "failure", detail: process.failureReason }] : []),
   ];
 }
 
+function buildWorkerHealthDetailItems(worker: NonNullable<MissionControlSnapshot["workerHealth"]>[number] | undefined) {
+  if (!worker) {
+    return [{ text: "No worker selected", tone: "muted" as const }];
+  }
+
+  return [
+    { text: worker.label, tone: "accent" as const, style: "block" as const },
+    { text: worker.detail, section: "Status" },
+    { text: worker.summary },
+    { text: worker.bestFor, section: "Best for" },
+    { text: worker.tradeoffs, section: "Tradeoffs" },
+    ...worker.checks.map((check) => ({
+      text: `${check.label}: ${check.ok ? "yes" : "no"}${check.detail ? ` · ${check.detail}` : ""}`,
+      section: "Checks",
+    })),
+  ];
+}
+
+function buildRuntimeOutputItems(process: MissionControlSnapshot["runtimeProcesses"][number] | undefined) {
+  if (!process) {
+    return [{ text: "No runtime output selected", tone: "muted" as const }];
+  }
+
+  const lines = process.outputLines ?? [];
+  return lines.length > 0
+    ? lines.map((line) => ({
+      text: `${line.timestamp.slice(11, 19)}  ${line.text}`,
+      section: "Stream",
+    }))
+    : [{ text: "No runtime output captured yet.", tone: "muted" as const }];
+}
+
 function formatTaskStatus(status: keyof typeof FEATURE_TASK_STATUS_LABEL): string {
   return FEATURE_TASK_STATUS_LABEL[status].toLowerCase();
 }
 
-export function isSelectableListModal(kind: AppState["modal"]["kind"]): kind is "feature-browser" | "handoffs" | "processes" | "dependencies" {
+export function isSelectableListModal(kind: AppState["modal"]["kind"]): kind is "feature-browser" | "handoffs" | "processes" | "dependencies" | "workers" {
   return kind === "feature-browser"
     || kind === "handoffs"
     || kind === "processes"
+    || kind === "workers"
     || kind === "dependencies";
 }
 
@@ -859,6 +931,8 @@ export function actionForMissionControlCommand(id: MissionControlCommandId): Act
       return { type: "open-config" };
     case "processes":
       return { type: "open-processes" };
+    case "workers":
+      return { type: "open-workers" };
     case "exit":
       return { type: "quit" };
   }

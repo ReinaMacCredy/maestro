@@ -9,6 +9,8 @@ export const PREVIEW_SCREENS = [
   "handoffs",
   "config",
   "runtime",
+  "workers",
+  "output",
 ] as const;
 
 export type PreviewScreen = typeof PREVIEW_SCREENS[number];
@@ -31,6 +33,7 @@ const FEATURE_SELECTOR_SCREENS: readonly PreviewScreen[] = [
   "dashboard",
   "features",
   "dependencies",
+  "output",
 ];
 
 export function buildPreviewState(opts: PreviewStateOptions): AppState {
@@ -83,6 +86,34 @@ export function buildPreviewState(opts: PreviewStateOptions): AppState {
           selectedProcessIndex: 0,
         },
       };
+    case "workers":
+      return reduce(baseState, { type: "open-workers" });
+    case "output": {
+      if (opts.snapshot.mode !== "mission") {
+        throw new MaestroError("Runtime output preview requires a mission", [
+          "Run `maestro mission-control --preview` to view the home dashboard",
+        ]);
+      }
+      const processIndex = opts.featureId
+        ? opts.snapshot.runtimeProcesses.findIndex((process) => process.featureId === opts.featureId)
+        : 0;
+      if (processIndex < 0) {
+        throw new MaestroError(`Feature ${opts.featureId} does not have a live runtime output stream`, [
+          `Run \`maestro mission-control --mission ${opts.snapshot.missionId} --preview runtime\` to inspect live items`,
+        ]);
+      }
+      const withProcess = reduce(baseState, { type: "open-processes" });
+      const nextState = withProcess.modal.kind === "processes"
+        ? {
+          ...withProcess,
+          modal: {
+            ...withProcess.modal,
+            selectedProcessIndex: processIndex,
+          },
+        }
+        : withProcess;
+      return reduce(nextState, { type: "open-runtime-output" });
+    }
   }
 }
 

@@ -8,6 +8,7 @@ import { FsFeatureStoreAdapter } from "../../../src/adapters/feature-store.adapt
 import { FsAssertionStoreAdapter } from "../../../src/adapters/assertion-store.adapter.js";
 import { FsCheckpointStoreAdapter } from "../../../src/adapters/checkpoint-store.adapter.js";
 import { FsRuntimeStoreAdapter } from "../../../src/adapters/runtime-store.adapter.js";
+import { FsRuntimeEventStoreAdapter } from "../../../src/adapters/runtime-event-store.adapter.js";
 import type { WorkerRuntime } from "../../../src/domain/runtime-types.js";
 import type { CassPort } from "../../../src/ports/cass.port.js";
 import type { ConfigPort } from "../../../src/ports/config.port.js";
@@ -17,6 +18,7 @@ import type { HandoffStorePort } from "../../../src/ports/handoff-store.port.js"
 let tmpDir: string;
 let deps: SnapshotDeps;
 let runtimeStore: FsRuntimeStoreAdapter;
+let runtimeEventStore: FsRuntimeEventStoreAdapter;
 
 async function initGitRepo(cwd: string): Promise<void> {
   const proc = Bun.spawn(["git", "init", "-b", "main"], { cwd, stdout: "pipe", stderr: "pipe" });
@@ -52,6 +54,7 @@ beforeEach(async () => {
   tmpDir = await mkdtemp(join(tmpdir(), "maestro-snapshot-"));
   await initGitRepo(tmpDir);
   runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
+  runtimeEventStore = new FsRuntimeEventStoreAdapter(tmpDir);
   deps = {
     missionStore: new FsMissionStoreAdapter(tmpDir),
     featureStore: new FsFeatureStoreAdapter(tmpDir),
@@ -97,6 +100,7 @@ beforeEach(async () => {
       isRepo: async () => true,
     } satisfies GitPort,
     runtimeStore,
+    runtimeEventStore,
     cwd: tmpDir,
   };
 });
@@ -149,6 +153,52 @@ describe("buildSnapshot", () => {
     });
     expect(snapshot.runtimeProcesses.map((process) => process.featureId)).toEqual(["f2"]);
     expect(snapshot.runtimeProcesses.find((process) => process.featureId === "f2")?.isLive).toBe(true);
+  }, 15_000);
+
+  it("projects live runtime output metadata from persisted runtime events", async () => {
+    const plan = createSamplePlan();
+    await writeFile(join(tmpDir, "plan.json"), JSON.stringify(plan));
+    const { stdout } = await run(["mission", "create", "--file", join(tmpDir, "plan.json"), "--json"], tmpDir);
+    const missionId = JSON.parse(stdout).mission.id;
+
+    await run(["mission", "approve", missionId, "--json"], tmpDir);
+    await run(["feature", "update", "f1", "--mission", missionId, "--status", "assigned", "--json"], tmpDir);
+
+    const runtime: WorkerRuntime = {
+      featureId: "f1",
+      attemptId: "attempt-1",
+      attempt: 1,
+      agent: "codex",
+      runtimeState: "live",
+      startedAt: new Date(Date.now() - 20_000).toISOString(),
+      lastSeenAt: new Date(Date.now() - 2_000).toISOString(),
+      leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+      sessionId: "session-123",
+      recoveryMetadata: {
+        retryCount: 0,
+        history: [],
+      },
+    };
+    await runtimeStore.save(missionId, "f1", runtime);
+    await runtimeEventStore.append(missionId, {
+      id: "evt-1",
+      missionId,
+      featureId: "f1",
+      attemptId: "attempt-1",
+      worker: "codex",
+      timestamp: new Date(Date.now() - 3_000).toISOString(),
+      kind: "stdout",
+      text: "Reading runtime-supervision.usecase.ts",
+      sessionId: "session-123",
+      runtimeState: "live",
+    });
+
+    const snapshot = await buildSnapshot(deps, missionId);
+
+    expect(snapshot.activeWorker?.currentActivity).toContain("Reading runtime-supervision");
+    expect(snapshot.activeWorker?.lastOutputAgeMs).toBeGreaterThanOrEqual(0);
+    expect(snapshot.runtimeProcesses[0]?.outputLines?.[0]?.text).toContain("Reading runtime-supervision");
+    expect(snapshot.progressLog.some((event) => event.kind === "worker")).toBe(true);
   }, 15_000);
 
   it("activeFeature matches first non-done feature", async () => {

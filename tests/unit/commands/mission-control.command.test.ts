@@ -7,6 +7,7 @@ import { FsCheckpointStoreAdapter } from "../../../src/adapters/checkpoint-store
 import { FsFeatureStoreAdapter } from "../../../src/adapters/feature-store.adapter.js";
 import { FsMissionStoreAdapter } from "../../../src/adapters/mission-store.adapter.js";
 import { FsRuntimeStoreAdapter } from "../../../src/adapters/runtime-store.adapter.js";
+import { FsRuntimeEventStoreAdapter } from "../../../src/adapters/runtime-event-store.adapter.js";
 import { loadMissionControlSnapshot, type MissionControlSnapshotLoadMode } from "../../../src/commands/mission-control.command.js";
 import type { CassPort } from "../../../src/ports/cass.port.js";
 import type { ConfigPort } from "../../../src/ports/config.port.js";
@@ -18,6 +19,7 @@ let tmpDir: string;
 let snapshotDeps: SnapshotDeps;
 let homeSnapshotDeps: HomeSnapshotDeps;
 let runtimeStore: FsRuntimeStoreAdapter;
+let runtimeEventStore: FsRuntimeEventStoreAdapter;
 
 const CLI = ["bun", "run", join(import.meta.dir, "..", "..", "..", "src", "index.ts")];
 
@@ -50,6 +52,7 @@ beforeEach(async () => {
   tmpDir = await mkdtemp(join(tmpdir(), "maestro-mission-control-command-"));
   await initGitRepo(tmpDir);
   runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
+  runtimeEventStore = new FsRuntimeEventStoreAdapter(tmpDir);
 
   const handoffStore = {
     create: async () => "handoff-id",
@@ -103,6 +106,7 @@ beforeEach(async () => {
     cass,
     git,
     runtimeStore,
+    runtimeEventStore,
     cwd: tmpDir,
   };
   homeSnapshotDeps = { handoffStore, config, cass, git };

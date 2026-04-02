@@ -53,7 +53,9 @@ export function keyToAction(key: Key, state: AppState): Action | undefined {
           || state.modal.kind === "dependencies"
           || state.modal.kind === "overview"
         || state.modal.kind === "handoffs"
+        || state.modal.kind === "workers"
         || state.modal.kind === "processes"
+        || state.modal.kind === "runtime-output"
       ) && state.modal.returnTarget === "command-palette")
     )
   ) {
@@ -68,7 +70,7 @@ export function keyToAction(key: Key, state: AppState): Action | undefined {
   if (key.type === "enter") {
     return { type: "enter" };
   }
-    if (key.type === "char" && state.modal.kind === "config") {
+  if (key.type === "char" && state.modal.kind === "config") {
       switch (key.char) {
         case "[":
           return { type: "config-prev-tab" };
@@ -85,6 +87,11 @@ export function keyToAction(key: Key, state: AppState): Action | undefined {
           return { type: "config-toggle-scope" };
       }
     }
+  if (key.type === "char" && state.modal.kind === "processes") {
+    if (key.char === "o" || key.char === "O") {
+      return { type: "open-runtime-output" };
+    }
+  }
   if (key.type === "char" && state.modal.kind === "command-palette") {
     return { type: "modal-query-append", char: key.char };
   }

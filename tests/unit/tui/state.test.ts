@@ -57,6 +57,7 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
         workerTypes: ["test"],
       },
       runtimeProcesses: [],
+      workerHealth: [],
       progressLog: [],
       milestones: [],
       canPause: true,
@@ -475,6 +476,58 @@ describe("reduce", () => {
 
           const closed = reduce(detail, { type: "escape" });
           expect(closed.modal.kind).toBe("none");
+        });
+      });
+
+      describe("open-workers", () => {
+        it("opens workers modal", () => {
+          const state = reduce(makeState({
+            snapshot: makeSnapshot({
+              workerHealth: [
+                {
+                  slug: "codex",
+                  label: "Codex",
+                  status: "ready",
+                  detail: "ready",
+                  lastCheckedAt: "2026-04-02T12:00:00.000Z",
+                  checks: [{ label: "command found", ok: true }],
+                  summary: "Fast, strong general-purpose coding.",
+                  bestFor: "everyday implementation",
+                  tradeoffs: "less exhaustive than Claude Code",
+                },
+              ],
+            }),
+          }), { type: "open-workers" });
+          expect(state.modal.kind).toBe("workers");
+        });
+      });
+
+      describe("open-runtime-output", () => {
+        it("opens runtime output for the selected runtime process", () => {
+          const state = reduce(makeState({
+            snapshot: makeSnapshot({
+              runtimeProcesses: [{
+                featureId: "f1",
+                title: "F1",
+                status: "assigned",
+                workerType: "test",
+                hasReport: false,
+                isLive: true,
+                outputLines: [{
+                  timestamp: "2026-04-02T12:00:10.000Z",
+                  kind: "stdout",
+                  text: "Running tests",
+                }],
+              }],
+            }),
+            modal: { kind: "processes", selectedProcessIndex: 0 },
+          }), { type: "open-runtime-output" });
+
+          expect(state.modal).toEqual({
+            kind: "runtime-output",
+            selectedProcessIndex: 0,
+            returnTarget: undefined,
+          });
         });
       });
 
