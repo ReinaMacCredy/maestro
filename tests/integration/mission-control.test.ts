@@ -9,7 +9,11 @@ import { FsFeatureStoreAdapter } from "../../src/adapters/feature-store.adapter.
 import { FsMissionStoreAdapter } from "../../src/adapters/mission-store.adapter.js";
 import { FsRuntimeEventStoreAdapter } from "../../src/adapters/runtime-event-store.adapter.js";
 import { FsRuntimeStoreAdapter } from "../../src/adapters/runtime-store.adapter.js";
+import { buildModalOptions } from "../../src/tui/app/modal-builders.js";
+import { computeScreenLayout } from "../../src/tui-opentui/components/builders.js";
+import { createInitialState, reduce } from "../../src/tui/state/reducer.js";
 import { enterAltScreen, exitAltScreen } from "../../src/tui/terminal/ansi.js";
+import type { MissionControlSnapshot } from "../../src/tui/state/types.js";
 import { buildOverlayRenderSpec, layoutModal } from "../../src/tui/widgets/modal.js";
 
 const CLI = [
@@ -460,22 +464,36 @@ function encodeLeftClick(x: number, y: number): string {
 }
 
 function getMissionControlModalParentRect(width: number, height: number) {
-  const innerRect = { x: 1, y: 1, width: width - 2, height: height - 2 };
-  const headerDividerY = innerRect.y + 1;
-  const statusRectY = headerDividerY + 1;
-  const statusDividerY = statusRectY + 1;
-  const bodyY = statusDividerY + 1;
-  const footerDividerY = height - 3;
+  if (process.env.MAESTRO_TUI_RENDERER !== "opentui") {
+    const innerRect = { x: 1, y: 1, width: width - 2, height: height - 2 };
+    const headerDividerY = innerRect.y + 1;
+    const statusRectY = headerDividerY + 1;
+    const statusDividerY = statusRectY + 1;
+    const bodyY = statusDividerY + 1;
+    const footerDividerY = height - 3;
+    return {
+      x: innerRect.x,
+      y: bodyY,
+      width: innerRect.width,
+      height: Math.max(0, footerDividerY - bodyY),
+    };
+  }
+
+  const layout = computeScreenLayout(width, height, { mode: "mission" } as never);
   return {
-    x: innerRect.x,
-    y: bodyY,
-    width: innerRect.width,
-    height: Math.max(0, footerDividerY - bodyY),
+    x: Math.max(1, Math.floor((layout.innerWidth - layout.modalWidth) / 2)),
+    y: Math.max(1, Math.floor((layout.innerHeight - layout.modalHeight) / 2)),
+    width: layout.modalWidth,
+    height: layout.modalHeight,
   };
 }
 
-function buildFeatureActionMouseSequence(optionIndex: number, width = 80, height = 24): string {
+function getFeatureActionMouseClicks(optionIndex: number, width = 80, height = 24): {
+  readonly selectClick: string;
+  readonly confirmClick: string;
+} {
   const parentRect = getMissionControlModalParentRect(width, height);
+  if (process.env.MAESTRO_TUI_RENDERER !== "opentui") {
     const selectingLayout = layoutModal(parentRect, {
       mode: "menu",
       title: "Change Feature Status",
@@ -494,9 +512,73 @@ function buildFeatureActionMouseSequence(optionIndex: number, width = 80, height
       footer: "Enter confirm · Esc cancel",
       renderSpec: buildOverlayRenderSpec("feature-action"),
     });
+    const selectRect = selectingLayout.itemRects[optionIndex]!;
+    const confirmRect = confirmingLayout.itemRects[optionIndex]!;
+    return {
+      selectClick: encodeLeftClick(selectRect.x + 1, selectRect.y),
+      confirmClick: encodeLeftClick(confirmRect.x + 1, confirmRect.y),
+    };
+  }
+
+  const snapshot: MissionControlSnapshot = {
+    mode: "mission",
+    missionId: "mission-1",
+    missionTitle: "Mission 1",
+    missionStatus: "executing",
+    effectiveStatus: "executing",
+    elapsedMs: 0,
+    featureProgress: { done: 0, total: 1, active: 1 },
+    statusProgress: {
+      completed: 0,
+      total: 1,
+      inFlight: 1,
+      blocked: 0,
+      queued: 0,
+      completionPct: 0,
+    },
+    tokenCounters: null,
+    features: [{
+      id: "f1",
+      title: "Feature 1",
+      status: "pending",
+      milestoneId: "m1",
+      workerType: "backend",
+      hasReport: false,
+    }],
+    milestones: [],
+    missionOverview: null,
+    activeFeature: null,
+    taskPreviews: [],
+    activeWorker: null,
+    session: null,
+    pendingHandoffs: [],
+    configSummary: null,
+    configInspector: null,
+    workerHealth: [],
+    runtimeProcesses: [],
+    progressLog: [],
+    canPause: false,
+    canResume: false,
+    home: null,
+  };
+  const selectingState = reduce(createInitialState(snapshot), { type: "enter" });
+  const selectingModal = buildModalOptions(selectingState);
+  if (!selectingModal) {
+    throw new Error("Expected feature-action modal options for selecting state");
+  }
+  const selectingLayout = layoutModal(parentRect, selectingModal);
+  const confirmingState = reduce(selectingState, { type: "modal-select", option: optionIndex });
+  const confirmingModal = buildModalOptions(confirmingState);
+  if (!confirmingModal) {
+    throw new Error("Expected feature-action modal options for confirming state");
+  }
+  const confirmingLayout = layoutModal(parentRect, confirmingModal);
   const selectRect = selectingLayout.itemRects[optionIndex]!;
   const confirmRect = confirmingLayout.itemRects[optionIndex]!;
-  return `${encodeLeftClick(selectRect.x + 1, selectRect.y)}${encodeLeftClick(confirmRect.x + 1, confirmRect.y)}`;
+  return {
+    selectClick: encodeLeftClick(selectRect.x + 1, selectRect.y),
+    confirmClick: encodeLeftClick(confirmRect.x + 1, confirmRect.y),
+  };
 }
 
 beforeAll(async () => {
@@ -1472,15 +1554,29 @@ describe("mission-control CLI", () => {
     expect(statuses.f1).toBe("assigned");
   }, PTY_TIMEOUT_MS);
 
-  it("compiled binary interactive mode persists a selected feature transition on mouse click confirm", async () => {
-    if (!pythonAvailable) return;
-    const missionId = await createMission(tmpDir);
+    it("compiled binary interactive mode persists a selected feature transition on mouse click confirm", async () => {
+      if (!pythonAvailable) return;
+      const missionId = await createMission(tmpDir);
+      const clicks = getFeatureActionMouseClicks(0);
 
-    const result = await runCompiledInteractivePty(
-      tmpDir,
-      ["mission-control", "--mission", missionId],
-      { input: `\r${buildFeatureActionMouseSequence(0)}q` },
-    );
+      const result = await runCompiledInteractivePty(
+        tmpDir,
+        ["mission-control", "--mission", missionId],
+        process.env.MAESTRO_TUI_RENDERER === "opentui"
+          ? {
+              input: "",
+              inputSteps: [
+                { chars: "\r", delayMs: 250 },
+                { chars: clicks.selectClick, delayMs: 350 },
+                { chars: clicks.confirmClick, delayMs: 300 },
+                { chars: "q", delayMs: 250 },
+              ],
+              waitForText: "Mission Control",
+            }
+          : {
+              input: `\r${clicks.selectClick}${clicks.confirmClick}q`,
+            },
+      );
 
     expectCleanPtyExit(result);
 
@@ -1488,15 +1584,27 @@ describe("mission-control CLI", () => {
     expect(statuses.f1).toBe("assigned");
   }, PTY_TIMEOUT_MS);
 
-  it("compiled binary interactive mode closes the modal on outside click without applying a transition", async () => {
-    if (!pythonAvailable) return;
-    const missionId = await createMission(tmpDir);
+    it("compiled binary interactive mode closes the modal on outside click without applying a transition", async () => {
+      if (!pythonAvailable) return;
+      const missionId = await createMission(tmpDir);
 
-    const result = await runCompiledInteractivePty(
-      tmpDir,
-      ["mission-control", "--mission", missionId],
-      { input: `\r${encodeLeftClick(0, 0)}q` },
-    );
+      const result = await runCompiledInteractivePty(
+        tmpDir,
+        ["mission-control", "--mission", missionId],
+        process.env.MAESTRO_TUI_RENDERER === "opentui"
+          ? {
+              input: "",
+              inputSteps: [
+                { chars: "\r", delayMs: 250 },
+                { chars: encodeLeftClick(0, 0), delayMs: 350 },
+                { chars: "q", delayMs: 250 },
+              ],
+              waitForText: "Mission Control",
+            }
+          : {
+              input: `\r${encodeLeftClick(0, 0)}q`,
+            },
+      );
 
     expectCleanPtyExit(result);
 

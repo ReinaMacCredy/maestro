@@ -1,3 +1,4 @@
+import type { MouseEvent } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/react";
 
 import { createInitialState, type AppState } from "../../tui/state/reducer.js";
@@ -11,6 +12,7 @@ export interface MissionControlAppProps {
   readonly height?: number;
   readonly animationFrame?: number;
   readonly elapsedOffsetMs?: number;
+  readonly onMouseDown?: (event: MouseEvent) => void;
 }
 
 export function MissionControlApp({
@@ -20,6 +22,7 @@ export function MissionControlApp({
   height,
   animationFrame,
   elapsedOffsetMs,
+  onMouseDown,
 }: MissionControlAppProps) {
   const dimensions = useTerminalDimensions();
   const resolvedState = state ?? createInitialState(snapshot);
@@ -31,6 +34,7 @@ export function MissionControlApp({
       height={height ?? dimensions.height}
       animationFrame={animationFrame}
       elapsedOffsetMs={elapsedOffsetMs}
+      onMouseDown={onMouseDown}
     />
   );
 }

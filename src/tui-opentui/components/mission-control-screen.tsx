@@ -1,4 +1,4 @@
-import { TextAttributes } from "@opentui/core";
+import { TextAttributes, type MouseEvent } from "@opentui/core";
 
 import type { AppState } from "../../tui/state/reducer.js";
 import type {
@@ -31,6 +31,7 @@ export interface MissionControlScreenProps {
   readonly height: number;
   readonly animationFrame?: number;
   readonly elapsedOffsetMs?: number;
+  readonly onMouseDown?: (event: MouseEvent) => void;
 }
 
 export function MissionControlScreen({
@@ -39,6 +40,7 @@ export function MissionControlScreen({
   height,
   animationFrame = 0,
   elapsedOffsetMs = 0,
+  onMouseDown,
 }: MissionControlScreenProps) {
   const layout = computeScreenLayout(width, height, state.snapshot);
   const header = buildHeaderModel(state.snapshot, animationFrame);
@@ -79,6 +81,7 @@ export function MissionControlScreen({
       border
       flexDirection="column"
       backgroundColor={OPEN_TUI_THEME.pageBg}
+      onMouseDown={onMouseDown}
     >
       <box width="100%" height={1} flexDirection="row" justifyContent="space-between">
         <text fg={header.left.fg} attributes={header.left.attributes}>{header.left.text}</text>
