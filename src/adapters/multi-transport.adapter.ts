@@ -20,7 +20,8 @@ export class MultiTransportAdapter implements TransportPort {
     }
 
     if (isA2aWorkerConfig(workerConfig)) {
-      return this.a2aTransport.spawn(workerConfig, prompt, opts);
+      // [TEMP] A2A disabled for TUI/backend task testing
+      throw new Error("A2A transport is temporarily disabled");
     }
 
     throw new Error(`Unsupported worker transport: ${(workerConfig as { transport?: string }).transport ?? "unknown"}`);

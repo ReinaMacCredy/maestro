@@ -22,19 +22,27 @@ import { BOX } from "../terminal/ansi.js";
 import { buildModalOptions } from "./modal-builders.js";
 import { buildPreviewState, type PreviewStateOptions } from "./preview-state.js";
 
-export type PreviewFrameOptions = PreviewStateOptions;
+export interface PreviewFrameOptions extends PreviewStateOptions {
+  /** Explicit width; falls back to stdout columns or 120. */
+  width?: number;
+  /** Explicit height; falls back to feature-derived minimum. */
+  height?: number;
+  /** Force output format; falls back to TTY auto-detect. */
+  format?: "plain" | "ansi";
+}
 
 /**
  * Render a single preview frame without entering interactive mode.
  */
 export function renderPreviewFrame(opts: PreviewFrameOptions): string {
-  const width = Math.min(process.stdout.columns || 120, 200);
+  const width = opts.width ?? Math.min(process.stdout.columns || 120, 200);
   const minHeight = Math.max(opts.snapshot.features.length * 2 + 24, 36);
-  const height = Math.max(process.stdout.rows || 0, minHeight);
+  const height = opts.height ?? Math.max(process.stdout.rows || 0, minHeight);
   const buf = new Buffer(width, height);
   const state = buildPreviewState(opts);
   renderFrame(buf, state, 0, 0);
-  return process.stdout.isTTY ? buf.toAnsiString() : buf.toString();
+  const format = opts.format ?? (process.stdout.isTTY ? "ansi" : "plain");
+  return format === "ansi" ? buf.toAnsiString() : buf.toString();
 }
 
 export function renderFrame(

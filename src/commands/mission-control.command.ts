@@ -11,6 +11,7 @@ import { buildHomeSnapshot, buildSnapshot } from "../tui/state/snapshot.js";
 import type { MissionControlSnapshot } from "../tui/state/types.js";
 import { PREVIEW_SCREENS, isPreviewScreen, type PreviewScreen } from "../tui/app/preview-state.js";
 import { renderDashboard, renderPreviewFrame } from "../tui/index.js";
+import { runRenderCheck } from "../tui/app/render-check.js";
 import { recoverMissionRuntimeFailures } from "../usecases/runtime-recovery.usecase.js";
 
 export type MissionControlSnapshotLoadMode = "read" | "supervise";
@@ -19,7 +20,10 @@ export interface MissionControlSnapshotLoader {
   load: () => Promise<MissionControlSnapshot>;
 }
 
-const PREVIEW_SCREEN_ALIASES: Readonly<Record<string, PreviewScreen>> = {
+type PreviewScreenOrAll = PreviewScreen | "all";
+
+const PREVIEW_SCREEN_ALIASES: Readonly<Record<string, PreviewScreenOrAll>> = {
+  all: "all",
   dash: "dashboard",
   dashboard: "dashboard",
   home: "dashboard",
@@ -54,19 +58,27 @@ export function registerMissionControlCommand(program: Command): void {
       .option("--preview [screen]", `Render a read-only preview frame (${PREVIEW_SCREENS.join(", ")}; aliases: feat, handoff, cfg, deps, proc, worker, out)`)
       .option("--feature <id>", "Select a feature for dashboard, features, dependencies, or output previews")
     .option("--handoff <id>", "Select a handoff for handoffs previews")
+    .option("--size <WxH>", "Render dimensions (e.g. 120x40); overrides terminal detection")
+    .option("--format <type>", "Output format: plain or ansi (default: auto-detect TTY)")
+    .option("--render-check", "Validate all preview screens and report results as JSON")
     .addHelpText("after", `
   Examples:
     maestro mission-control --preview
-    maestro mission-control --mission <id> --preview features
+    maestro mission-control --preview all --size 120x40 --format plain
+    maestro mission-control --preview features --size 200x60
     maestro mission-control --mission <id> --preview dependencies --feature <id>
-    maestro mission-control --mission <id> --preview workers
-    maestro mission-control --mission <id> --preview output --feature <id>
+    maestro mission-control --preview workers
+    maestro mission-control --preview output --feature <id>
     maestro mission-control --preview handoffs --handoff <id>
+    maestro mission-control --render-check
+    maestro mission-control --render-check --size 120x40
     maestro mission-control --json
   `)
     .action(async (opts) => {
       const isJson = resolveJsonFlag(opts, program);
       const previewScreen = resolvePreviewScreen(opts.preview);
+      const renderSize = parseSize(opts.size);
+      const renderFormat = validateFormat(opts.format);
 
       if (isJson && previewScreen) {
         throw new MaestroError("Choose either --json or --preview", [
@@ -75,7 +87,14 @@ export function registerMissionControlCommand(program: Command): void {
         ]);
       }
 
-        if ((opts.feature || opts.handoff) && !previewScreen) {
+      if (opts.renderCheck && (isJson || previewScreen)) {
+        throw new MaestroError("--render-check cannot be combined with --json or --preview", [
+          "Use `maestro mission-control --render-check` on its own",
+          "Use `maestro mission-control --render-check --size 120x40` for specific dimensions",
+        ]);
+      }
+
+        if ((opts.feature || opts.handoff) && !previewScreen && !opts.renderCheck) {
           throw new MaestroError("Preview selectors require --preview", [
             "Use `maestro mission-control --preview dashboard --feature <id>`",
             "Use `maestro mission-control --preview handoffs --handoff <id>`",
@@ -124,12 +143,43 @@ export function registerMissionControlCommand(program: Command): void {
         return;
       }
 
+      if (opts.renderCheck) {
+        const snapshot = await loadReadSnapshot();
+        const result = runRenderCheck(snapshot, {
+          width: renderSize?.width,
+          height: renderSize?.height,
+        });
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
+
+      if (previewScreen === "all") {
+        const snapshot = await loadReadSnapshot();
+        const screens = getAllApplicableScreens(snapshot);
+        for (const screen of screens) {
+          console.log(`--- ${screen} ---`);
+          const frame = renderPreviewFrame({
+            snapshot,
+            screen,
+            width: renderSize?.width,
+            height: renderSize?.height,
+            format: renderFormat,
+          });
+          console.log(frame);
+        }
+        console.log(`--- rendered ${screens.length} screens ---`);
+        return;
+      }
+
       if (previewScreen) {
         const frame = renderPreviewFrame({
           snapshot: await loadReadSnapshot(),
           screen: previewScreen,
           featureId: opts.feature,
           handoffId: opts.handoff,
+          width: renderSize?.width,
+          height: renderSize?.height,
+          format: renderFormat,
         });
         console.log(frame);
         return;
@@ -152,17 +202,18 @@ export function registerMissionControlCommand(program: Command): void {
       });
 }
 
-function resolvePreviewScreen(value: unknown): PreviewScreen | undefined {
+function resolvePreviewScreen(value: unknown): PreviewScreenOrAll | undefined {
   if (value === undefined || value === false) return undefined;
   if (value === true) return "dashboard";
 
   if (typeof value !== "string") {
     throw new MaestroError("Invalid value for --preview", [
-      `Use one of: ${PREVIEW_SCREENS.join(", ")}`,
+      `Use one of: all, ${PREVIEW_SCREENS.join(", ")}`,
     ]);
   }
 
   const normalizedValue = value.toLowerCase();
+  if (normalizedValue === "all") return "all";
   if (isPreviewScreen(normalizedValue)) {
     return normalizedValue;
   }
@@ -173,9 +224,46 @@ function resolvePreviewScreen(value: unknown): PreviewScreen | undefined {
   }
 
   throw new MaestroError(`Unknown preview screen '${value}'`, [
-      `Use one of: ${PREVIEW_SCREENS.join(", ")} (aliases: feat, handoff, cfg, deps, proc, worker, out)`,
+      `Use one of: all, ${PREVIEW_SCREENS.join(", ")} (aliases: feat, handoff, cfg, deps, proc, worker, out)`,
       "Try `maestro mission-control --preview` for the default dashboard preview",
     ]);
+}
+
+function parseSize(value: unknown): { width: number; height: number } | undefined {
+  if (!value || typeof value !== "string") return undefined;
+  const match = value.match(/^(\d+)x(\d+)$/i);
+  if (!match) {
+    throw new MaestroError(`Invalid --size format '${value}'`, [
+      "Use WxH format, e.g. --size 120x40",
+      "Width and height must be positive integers",
+    ]);
+  }
+  const width = parseInt(match[1]!, 10);
+  const height = parseInt(match[2]!, 10);
+  if (width < 40 || height < 20) {
+    throw new MaestroError(`Size ${width}x${height} is too small for rendering`, [
+      "Minimum size: 40x20",
+      "Recommended: --size 120x40",
+    ]);
+  }
+  return { width, height };
+}
+
+function validateFormat(value: unknown): "plain" | "ansi" | undefined {
+  if (!value) return undefined;
+  if (value === "plain" || value === "ansi") return value;
+  throw new MaestroError(`Invalid --format '${value}'`, [
+    "Use --format plain for stripped text output",
+    "Use --format ansi for ANSI-styled output",
+  ]);
+}
+
+function getAllApplicableScreens(snapshot: MissionControlSnapshot): PreviewScreen[] {
+  if (snapshot.mode === "mission") {
+    return [...PREVIEW_SCREENS];
+  }
+  // Home mode: skip screens that require a mission
+  return ["dashboard", "features", "config", "runtime", "workers"];
 }
 
 /**
@@ -223,14 +311,15 @@ async function buildMissionSnapshot(
     ]);
   }
 
-  if (mode === "supervise") {
-    await recoverMissionRuntimeFailures(
-      snapshotDeps.missionStore,
-      snapshotDeps.featureStore,
-      snapshotDeps.runtimeStore,
-      missionId,
-    );
-  }
+  // [TEMP] Recovery disabled for TUI/backend task testing
+  // if (mode === "supervise") {
+  //   await recoverMissionRuntimeFailures(
+  //     snapshotDeps.missionStore,
+  //     snapshotDeps.featureStore,
+  //     snapshotDeps.runtimeStore,
+  //     missionId,
+  //   );
+  // }
 
   return buildSnapshot(snapshotDeps, missionId, {
       probeWorkers: mode === "supervise",

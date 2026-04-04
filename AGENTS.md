@@ -58,6 +58,15 @@
 - `mission-control --json` and `mission-control --preview` must remain read-only inspection paths; recovery or supervision belongs only in explicit orchestration/supervised runtime paths
 - When adding Mission Control tests, cover both source-run and compiled `./dist/maestro` behavior if the change affects interactive flow, polling, or TTY handling
 
+## Agent-Optimized TUI Preview
+- Use `--size WxH` (e.g. `--size 120x40`) for deterministic render dimensions; do not rely on terminal auto-detection in agent or CI contexts
+- Use `--format plain` to force stripped text output; use `--format ansi` to force ANSI-styled output; omit for TTY auto-detect
+- Use `--preview all` to render every applicable screen in one pass with labeled `--- <screen> ---` separators
+- Use `--render-check` to validate all screens and get machine-parseable JSON with pass/fail per screen, warnings for `undefined`, `NaN`, empty body, and missing box corners
+- `--render-check` and `--preview all` automatically skip screens that require a mission when in home mode
+- After TUI code changes, validate with: `bun run build && ./dist/maestro mission-control --render-check --size 120x40`
+- For live iteration during TUI development, use `bun tui:dev` (watches `src/tui/**`, re-renders on save); supports `--screen`, `--size`, `--check`, `--mission`, `--compiled` flags
+
 ## Shell Gotchas
 - When running `git commit -m ...` through `zsh -lc`, do not put Markdown backticks inside double-quoted commit messages; use single-quoted heredocs, a temp file, or escaped backticks to avoid accidental command substitution
 
