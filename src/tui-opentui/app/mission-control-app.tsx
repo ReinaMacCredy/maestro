@@ -1,18 +1,36 @@
-import { TextAttributes } from "@opentui/core";
+import { useTerminalDimensions } from "@opentui/react";
 
+import { createInitialState, type AppState } from "../../tui/state/reducer.js";
 import type { MissionControlSnapshot } from "../../tui/state/types.js";
+import { MissionControlScreen } from "../components/mission-control-screen.js";
 
 export interface MissionControlAppProps {
   readonly snapshot: MissionControlSnapshot;
+  readonly state?: AppState;
+  readonly width?: number;
+  readonly height?: number;
+  readonly animationFrame?: number;
+  readonly elapsedOffsetMs?: number;
 }
 
-export function MissionControlApp({ snapshot }: MissionControlAppProps) {
+export function MissionControlApp({
+  snapshot,
+  state,
+  width,
+  height,
+  animationFrame,
+  elapsedOffsetMs,
+}: MissionControlAppProps) {
+  const dimensions = useTerminalDimensions();
+  const resolvedState = state ?? createInitialState(snapshot);
+
   return (
-    <box flexDirection="column" flexGrow={1} padding={1}>
-      <text>Mission Control</text>
-      <text attributes={TextAttributes.DIM}>
-        {snapshot.mode === "mission" ? snapshot.missionTitle : snapshot.home?.headline ?? "Home"}
-      </text>
-    </box>
+    <MissionControlScreen
+      state={resolvedState}
+      width={width ?? dimensions.width}
+      height={height ?? dimensions.height}
+      animationFrame={animationFrame}
+      elapsedOffsetMs={elapsedOffsetMs}
+    />
   );
 }

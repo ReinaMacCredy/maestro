@@ -41,7 +41,20 @@ function makeSnapshot(): MissionControlSnapshot {
 }
 
 describe("captureMissionControlFrame", () => {
-  it("renders the OpenTUI Mission Control scaffold", async () => {
+  it("renders the OpenTUI Mission Control dashboard at operator size", async () => {
+    const frame = await captureMissionControlFrame({
+      snapshot: makeSnapshot(),
+      width: 120,
+      height: 40,
+    });
+
+    expect(frame).toContain("Mission Control");
+    expect(frame).toContain("OpenTUI Scaffold");
+    expect(frame).toContain("Mission Overview unavailable");
+    expect(frame).toContain("Tasks");
+  });
+
+  it("renders a terminal-too-small fallback", async () => {
     const frame = await captureMissionControlFrame({
       snapshot: makeSnapshot(),
       width: 60,
@@ -49,6 +62,6 @@ describe("captureMissionControlFrame", () => {
     });
 
     expect(frame).toContain("Mission Control");
-    expect(frame).toContain("OpenTUI Scaffold");
+    expect(frame).toContain("Terminal too small");
   });
 });

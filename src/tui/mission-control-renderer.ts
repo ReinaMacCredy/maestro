@@ -10,9 +10,9 @@ export interface MissionControlRenderCheckOptions {
 
 export interface MissionControlRenderer {
   renderDashboard(opts: InteractiveOptions): Promise<void>;
-  renderPreviewFrame(opts: PreviewFrameOptions): string;
+  renderPreviewFrame(opts: PreviewFrameOptions): Promise<string>;
   runRenderCheck(
     snapshot: MissionControlSnapshot,
     opts?: MissionControlRenderCheckOptions,
-  ): RenderCheckResult;
+  ): Promise<RenderCheckResult>;
 }

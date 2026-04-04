@@ -148,25 +148,25 @@ export function registerMissionControlCommand(program: Command): void {
         return;
       }
 
-        if (opts.renderCheck) {
-          const snapshot = await loadReadSnapshot();
-          const result = renderer.runRenderCheck(snapshot, {
-            width: renderSize?.width,
-            height: renderSize?.height,
-          });
+          if (opts.renderCheck) {
+            const snapshot = await loadReadSnapshot();
+            const result = await renderer.runRenderCheck(snapshot, {
+              width: renderSize?.width,
+              height: renderSize?.height,
+            });
         console.log(JSON.stringify(result, null, 2));
         return;
       }
 
-      if (previewScreen === "all") {
-        const snapshot = await loadReadSnapshot();
-          const screens = getAllApplicableScreens(snapshot);
-          for (const screen of screens) {
-            console.log(`--- ${screen} ---`);
-            const frame = renderer.renderPreviewFrame({
-              snapshot,
-              screen,
-              width: renderSize?.width,
+          if (previewScreen === "all") {
+            const snapshot = await loadReadSnapshot();
+            const screens = getAllApplicableScreens(snapshot);
+            for (const screen of screens) {
+              console.log(`--- ${screen} ---`);
+              const frame = await renderer.renderPreviewFrame({
+                snapshot,
+                screen,
+                width: renderSize?.width,
             height: renderSize?.height,
             format: renderFormat,
           });
@@ -176,11 +176,11 @@ export function registerMissionControlCommand(program: Command): void {
         return;
       }
 
-        if (previewScreen) {
-          const frame = renderer.renderPreviewFrame({
-            snapshot: await loadReadSnapshot(),
-            screen: previewScreen,
-            featureId: opts.feature,
+          if (previewScreen) {
+            const frame = await renderer.renderPreviewFrame({
+              snapshot: await loadReadSnapshot(),
+              screen: previewScreen,
+              featureId: opts.feature,
           handoffId: opts.handoff,
           width: renderSize?.width,
           height: renderSize?.height,
