@@ -311,19 +311,18 @@ async function buildMissionSnapshot(
     ]);
   }
 
-  // [WIP] Runtime recovery disabled -- re-enable once supervised execution loop is validated end-to-end
-  // if (mode === "supervise") {
-  //   await recoverMissionRuntimeFailures(
-  //     snapshotDeps.missionStore,
-  //     snapshotDeps.featureStore,
-  //     snapshotDeps.runtimeStore,
-  //     missionId,
-  //   );
-  // }
+  if (mode === "supervise") {
+    await recoverMissionRuntimeFailures(
+      snapshotDeps.missionStore,
+      snapshotDeps.featureStore,
+      snapshotDeps.runtimeStore,
+      missionId,
+    );
+  }
 
   return buildSnapshot(snapshotDeps, missionId, {
-      probeWorkers: mode === "supervise",
-    });
+    probeWorkers: mode === "supervise",
+  });
 }
 
 export function createMissionControlSnapshotLoader(

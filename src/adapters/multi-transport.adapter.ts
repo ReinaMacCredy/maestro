@@ -20,8 +20,7 @@ export class MultiTransportAdapter implements TransportPort {
     }
 
     if (isA2aWorkerConfig(workerConfig)) {
-      // [WIP] A2A transport under development -- not yet ready for production use
-      throw new Error("A2A transport is under development and not yet available");
+      return this.a2aTransport.spawn(workerConfig, prompt, opts);
     }
 
     throw new Error(`Unsupported worker transport: ${(workerConfig as { transport?: string }).transport ?? "unknown"}`);

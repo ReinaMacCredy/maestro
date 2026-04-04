@@ -159,11 +159,11 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
 }
 
 describe("buildPreviewState", () => {
-  it("defaults to the dashboard preview", () => {
+  it("defaults to the live feature preview when runtime activity exists", () => {
     const state = buildPreviewState({ snapshot: makeSnapshot() });
 
     expect(state.modal.kind).toBe("none");
-    expect(state.leftPaneMode).toBe("overview");
+    expect(state.leftPaneMode).toBe("preview");
     expect(state.selectedFeatureIndex).toBe(0);
   });
 

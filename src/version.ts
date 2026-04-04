@@ -1,4 +1,4 @@
-export const VERSION = "0.10.0";
-export const BUILD_UNIX = 1775142680;
-export const GIT_SHA = "490dfc62";
-export const RELEASED_AT = "2026-04-02T15:11:20.000Z";
+export const VERSION = "0.10.1";
+export const BUILD_UNIX = 1775320577;
+export const GIT_SHA = "6269a73";
+export const RELEASED_AT = "2026-04-04T16:36:17.497Z";

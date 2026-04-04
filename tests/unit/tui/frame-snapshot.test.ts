@@ -281,14 +281,13 @@ describe("frame rendering", () => {
       expect(frame).toContain("2/4");
     });
 
-      it("contains mission overview info", () => {
-        const frame = renderPreviewFrame({ snapshot: makeSnapshot() });
-        expect(frame).toContain("Mission Overview");
-        expect(frame).toContain("Mission: Full Pipeline Test");
-        expect(frame).toContain("status     running");
-        expect(frame).toContain("agents");
-        expect(frame).toContain("Dependency Map");
-      });
+        it("contains focus and preview info", () => {
+          const frame = renderPreviewFrame({ snapshot: makeSnapshot() });
+          expect(frame).toContain("Focus / Preview");
+          expect(frame).toContain("Database config");
+          expect(frame).toContain("blocked by none");
+          expect(frame).toContain("unblocks   f3 Auth endpoints");
+        });
 
       it("emits ANSI styles for preview output when stdout is a TTY", () => {
         const frame = withStdoutTty(true, () => renderPreviewFrame({ snapshot: makeSnapshot() }));
