@@ -2,10 +2,11 @@ import type { Command } from "commander";
 import { startA2aDemoServer } from "../lib/a2a-demo-server.js";
 import { resolveJsonFlag } from "../lib/output.js";
 
+// [WIP] A2A command group -- demo server only; transport is disabled in multi-transport adapter
 export function registerA2aCommand(program: Command): void {
   const a2aCmd = program
     .command("a2a")
-    .description("A2A transport tools");
+    .description("A2A transport tools (under development)");
 
   a2aCmd
     .command("serve-demo")

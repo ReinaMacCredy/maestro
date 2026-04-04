@@ -65,6 +65,7 @@ export const DEFAULT_CONFIG: MaestroConfig = {
       args: [],
       outputMode: "raw",
     },
+    // [WIP] Gemini worker -- registered but not integration-tested; disabled by default
     gemini: {
       enabled: false,
       transport: "cli",
@@ -79,6 +80,7 @@ export const DEFAULT_CONFIG: MaestroConfig = {
     killGraceMs: 5_000,
     progressIntervalMs: 30_000,
   },
+  // [WIP] Parallel execution -- config/UI scaffolding only; runtime always runs sequentially
   parallel: {
     enabled: false,
     maxConcurrent: 1,
