@@ -3,6 +3,8 @@
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "jsxImportSource": "@opentui/react",
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noEmit": true,
@@ -15,5 +17,5 @@
     },
     "types": ["bun-types"]
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "tests/**/*.ts", "tests/**/*.tsx"]
 }

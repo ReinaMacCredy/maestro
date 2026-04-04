@@ -1,6 +1,6 @@
 {
   "name": "maestro-handoff",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "type": "module",
   "bin": {
     "maestro": "./dist/maestro"
@@ -20,8 +20,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@opentui/core": "0.1.96",
+    "@opentui/react": "0.1.96",
     "cli-spinners": "^2.9.2",
     "commander": "^13.0.0",
+    "react": "19.2.4",
     "yaml": "^2.7.0",
     "zod": "^3.24.0"
   },
