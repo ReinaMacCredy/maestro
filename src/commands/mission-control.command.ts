@@ -311,7 +311,7 @@ async function buildMissionSnapshot(
     ]);
   }
 
-  // [TEMP] Recovery disabled for TUI/backend task testing
+  // [WIP] Runtime recovery depends on A2A transport -- re-enable when A2A is production-ready
   // if (mode === "supervise") {
   //   await recoverMissionRuntimeFailures(
   //     snapshotDeps.missionStore,
