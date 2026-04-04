@@ -8,6 +8,7 @@ export interface SelectWorkerResult {
   readonly config: WorkerConfig;
 }
 
+// [WIP] _feature param reserved for feature-aware worker routing (e.g. match workerType to worker capabilities)
 export function selectWorker(
   config: MaestroConfig,
   _feature: Feature,

@@ -311,7 +311,7 @@ async function buildMissionSnapshot(
     ]);
   }
 
-  // [WIP] Runtime recovery depends on A2A transport -- re-enable when A2A is production-ready
+  // [WIP] Runtime recovery disabled -- re-enable once supervised execution loop is validated end-to-end
   // if (mode === "supervise") {
   //   await recoverMissionRuntimeFailures(
   //     snapshotDeps.missionStore,
