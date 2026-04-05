@@ -281,14 +281,17 @@ function ModalLayer({ modal, state, layout, theme }: ModalLayerProps) {
       paddingRight={1}
     >
         <ModalSurfaceFill width={layout.width - 2} height={layout.height - 2} />
-        <box width="100%" flexDirection="row" alignItems="center">
-          {modal.mode === "palette" ? (
-            <SafeText fg={OPEN_TUI_THEME.accent} attributes={TextAttributes.BOLD}>
-              {composePaletteHeaderLine(modal.title, escapeText, contentWidth)}
-            </SafeText>
-          ) : (
-            <>
-              <box flexGrow={1}>
+          <box width="100%" flexDirection="row" alignItems="center">
+            {modal.mode === "palette" ? (
+              <>
+                <SafeText fg={OPEN_TUI_THEME.text} attributes={TextAttributes.BOLD}>
+                  {composePaletteHeaderTitle(modal.title, escapeText, contentWidth)}
+                </SafeText>
+                <SafeText fg={OPEN_TUI_THEME.muted}>{composePaletteHeaderEscape(escapeText, contentWidth)}</SafeText>
+              </>
+            ) : (
+              <>
+                <box flexGrow={1}>
                 <SafeText fg={OPEN_TUI_THEME.accent} attributes={TextAttributes.BOLD}>{modal.title}</SafeText>
               </box>
               <SafeText fg={OPEN_TUI_THEME.muted}>{escapeText}</SafeText>
@@ -346,7 +349,7 @@ function PaletteModalBody({
   const items = modal.items.map((item) => normalizeModalRow(item));
   const queryText = modal.query.length > 0 ? `${modal.query}\u2588` : "\u2588";
   return (
-      <box flexDirection="column" width="100%" flexGrow={1} marginTop={1}>
+        <box flexDirection="column" width="100%" flexGrow={1}>
         <box marginBottom={1}>
           <SafeText fg={OPEN_TUI_THEME.text} attributes={TextAttributes.BOLD}>{padLine(`> ${queryText}`, contentWidth)}</SafeText>
         </box>
@@ -462,19 +465,36 @@ function PaletteModalRowView({
 }) {
   const selectedFg = OPEN_TUI_THEME.paletteSelectionFg;
   const selectedBg = OPEN_TUI_THEME.paletteSelectionBg;
-  const fg = selected ? selectedFg : OPEN_TUI_THEME.text;
-  const line = composePaletteCommandLine({
-    section: applyTextCase(row.section ?? "", sectionCase),
-    label: applyTextCase(row.label, textCase),
-    hint: row.hint ? `[${row.hint}]` : "",
-    width,
-  });
-  return (
-    <box width="100%" backgroundColor={selected ? selectedBg : undefined}>
-      <SafeText fg={fg} attributes={TextAttributes.BOLD}>{line}</SafeText>
-    </box>
-  );
-}
+  const line = composePaletteCommandSegments({
+      section: applyTextCase(row.section ?? "", sectionCase),
+      label: applyTextCase(row.label, textCase),
+      hint: row.hint ? `[${row.hint}]` : "",
+      width,
+    });
+    return (
+      <box width="100%" flexDirection="row" backgroundColor={selected ? selectedBg : undefined}>
+        <SafeText
+          fg={selected ? selectedFg : OPEN_TUI_THEME.muted}
+          attributes={selected ? TextAttributes.BOLD : undefined}
+        >
+          {line.section}
+        </SafeText>
+        <SafeText>{line.sectionGap}</SafeText>
+        <SafeText fg={selected ? selectedFg : OPEN_TUI_THEME.text} attributes={TextAttributes.BOLD}>
+          {line.label}
+        </SafeText>
+        {line.labelGap.length > 0 ? <SafeText>{line.labelGap}</SafeText> : null}
+        {line.hint.length > 0 ? (
+          <SafeText
+            fg={selected ? selectedFg : OPEN_TUI_THEME.info}
+            attributes={selected ? TextAttributes.BOLD : undefined}
+          >
+            {line.hint}
+          </SafeText>
+        ) : null}
+      </box>
+    );
+  }
 
 function InfoItemView({ item }: { readonly item: ModalInfoItem }) {
   const prefix = item.detail ? `${item.text}: ${item.detail}` : item.text;
@@ -541,13 +561,18 @@ function ModalSurfaceFill({ width, height }: { readonly width: number; readonly 
   );
 }
 
-function composePaletteHeaderLine(title: string, escapeText: string, width: number): string {
+function composePaletteHeaderTitle(title: string, escapeText: string, width: number): string {
   if (width <= 0) return "";
-  if (width <= escapeText.length + 1) return truncate(`${title} ${escapeText}`, width);
+  if (width <= escapeText.length + 1) return truncate(`${title} `, width);
 
   const contentWidth = width - escapeText.length - 1;
-  const centeredTitle = centerText(truncate(title, contentWidth), contentWidth);
-  return `${centeredTitle} ${escapeText}`;
+  return centerText(truncate(title, contentWidth), contentWidth);
+}
+
+function composePaletteHeaderEscape(escapeText: string, width: number): string {
+  if (width <= 0) return "";
+  if (width <= escapeText.length + 1) return "";
+  return ` ${escapeText}`;
 }
 
 function centerText(text: string, width: number): string {
@@ -567,7 +592,7 @@ function applyTextCase(text: string, mode: OverlayTextCase): string {
   return mode === "lower" ? text.toLowerCase() : text;
 }
 
-function composePaletteCommandLine({
+function composePaletteCommandSegments({
   section,
   label,
   hint,
@@ -577,18 +602,26 @@ function composePaletteCommandLine({
   readonly label: string;
   readonly hint: string;
   readonly width: number;
-}): string {
+}): {
+  readonly section: string;
+  readonly sectionGap: string;
+  readonly label: string;
+  readonly labelGap: string;
+  readonly hint: string;
+} {
   const sectionWidth = 12;
   const gap = 2;
   const sectionPart = padLine(section, Math.min(sectionWidth, width));
   const hintWidth = hint.length > 0 ? hint.length + gap : 0;
   const labelWidth = Math.max(0, width - sectionPart.length - gap - hintWidth);
-  const labelPart = truncate(label, labelWidth);
-  const base = `${sectionPart}${" ".repeat(Math.min(gap, Math.max(0, width - sectionPart.length)))}${labelPart}`;
-  const withHint = hint.length > 0
-    ? `${padLine(base, Math.max(0, width - hintWidth))}${" ".repeat(gap)}${hint}`
-    : base;
-  return padLine(withHint, width);
+  const labelPart = padLine(truncate(label, labelWidth), labelWidth);
+  return {
+    section: sectionPart,
+    sectionGap: " ".repeat(Math.min(gap, Math.max(0, width - sectionPart.length))),
+    label: labelPart,
+    labelGap: hint.length > 0 ? " ".repeat(gap) : "",
+    hint,
+  };
 }
 
 function contentWidth(panelWidth: number): number {

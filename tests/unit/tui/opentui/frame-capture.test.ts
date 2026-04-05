@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import { renderOpenTuiPreviewFrame } from "../../../../src/tui/opentui/app/preview.js";
-import { resolveMissionControlTheme } from "../../../../src/tui/opentui/components/builders.js";
+import { OPEN_TUI_THEME, resolveMissionControlTheme } from "../../../../src/tui/opentui/components/builders.js";
 import { captureMissionControlFrame, captureMissionControlRender } from "../../../../src/tui/opentui/testing/frame-capture.js";
 import { createInitialState, reduce } from "../../../../src/tui/state/reducer.js";
 import type { MissionControlSnapshot } from "../../../../src/tui/state/types.js";
@@ -68,7 +68,7 @@ describe("captureMissionControlFrame", () => {
     expect(frame).toContain("Terminal too small");
   });
 
-  it("resolves transparent chrome, transparent command palette, and solid detail modals for terminal background mode", () => {
+  it("resolves transparent chrome, opaque command palette, and solid detail modals for terminal background mode", () => {
     const terminalSnapshot: MissionControlSnapshot = {
       mode: "mission",
       missionId: "2026-04-04-001",
@@ -116,7 +116,7 @@ describe("captureMissionControlFrame", () => {
       expect(theme.pageBg).toBeUndefined();
       expect(theme.panelBg).toBeUndefined();
       expect(theme.headerBg).toBeUndefined();
-      expect(theme.paletteModalBg).toBeUndefined();
+      expect(theme.paletteModalBg).toBe(OPEN_TUI_THEME.panelBgElevated);
       expect(theme.modalBg).toBeTruthy();
       expect(theme.modalPanelBg).toBeTruthy();
       expect(theme.paletteSelectionBg).toBe("#ffd166");
@@ -156,7 +156,7 @@ describe("captureMissionControlFrame", () => {
       expect(ansiFrame).not.toContain("]2;PWN");
     });
 
-    it("renders the command palette with a transparent surface and legacy yellow selection in terminal mode", async () => {
+    it("renders the command palette with an opaque legacy surface and yellow selection in terminal mode", async () => {
       const snapshot: MissionControlSnapshot = {
         ...makeSnapshot(),
         configSummary: {
@@ -178,27 +178,39 @@ describe("captureMissionControlFrame", () => {
       });
 
       const titleLine = render.spans.lines.find((line) => line.spans.some((span) => span.text.includes("Command Palette")));
-      const selectedLine = render.spans.lines.find((line) => line.spans.some((span) => span.text.includes("navigate      tasks")));
+      const selectedLine = render.spans.lines.find((line) => line.spans.some((span) => span.text.includes("navigate")));
 
       expect(titleLine).toBeDefined();
       expect(selectedLine).toBeDefined();
 
       const paletteTitleSpan = titleLine!.spans.find((span) => span.text.includes("Command Palette"));
-      const selectedCommandSpan = selectedLine!.spans.find((span) => span.text.includes("navigate      tasks"));
+      const paletteEscapeSpan = titleLine!.spans.find((span) => span.text.includes("esc"));
+      const selectedSectionSpan = selectedLine!.spans.find((span) => span.text.includes("navigate"));
+      const selectedLabelSpan = selectedLine!.spans.find((span) => span.text.includes("tasks"));
+      const selectedHintSpan = selectedLine!.spans.find((span) => span.text.includes("[F]"));
 
       expect(paletteTitleSpan).toBeDefined();
-      expect(selectedCommandSpan).toBeDefined();
+      expect(paletteEscapeSpan).toBeDefined();
+      expect(selectedSectionSpan).toBeDefined();
+      expect(selectedLabelSpan).toBeDefined();
+      expect(selectedHintSpan).toBeDefined();
 
-      expect(paletteTitleSpan!.bg.buffer[0]).toBe(0);
-      expect(paletteTitleSpan!.bg.buffer[1]).toBe(0);
-      expect(paletteTitleSpan!.bg.buffer[2]).toBe(0);
+      expect(paletteTitleSpan!.bg.buffer[0]).toBeCloseTo(0.0902, 3);
+      expect(paletteTitleSpan!.bg.buffer[1]).toBeCloseTo(0.1294, 3);
+      expect(paletteTitleSpan!.bg.buffer[2]).toBeCloseTo(0.1765, 3);
+      expect(paletteEscapeSpan!.fg.buffer[0]).toBeCloseTo(0.5608, 3);
+      expect(paletteEscapeSpan!.fg.buffer[1]).toBeCloseTo(0.6353, 3);
+      expect(paletteEscapeSpan!.fg.buffer[2]).toBeCloseTo(0.7176, 3);
 
-      expect(selectedCommandSpan!.bg.buffer[0]).toBe(1);
-      expect(selectedCommandSpan!.bg.buffer[1]).toBeCloseTo(0.8196, 3);
-      expect(selectedCommandSpan!.bg.buffer[2]).toBeCloseTo(0.4, 3);
-      expect(selectedCommandSpan!.fg.buffer[0]).toBeCloseTo(0.0549, 3);
-      expect(selectedCommandSpan!.fg.buffer[1]).toBeCloseTo(0.0823, 3);
-      expect(selectedCommandSpan!.fg.buffer[2]).toBeCloseTo(0.1137, 3);
+      expect(selectedSectionSpan!.bg.buffer[0]).toBe(1);
+      expect(selectedSectionSpan!.bg.buffer[1]).toBeCloseTo(0.8196, 3);
+      expect(selectedSectionSpan!.bg.buffer[2]).toBeCloseTo(0.4, 3);
+      expect(selectedLabelSpan!.fg.buffer[0]).toBeCloseTo(0.0549, 3);
+      expect(selectedLabelSpan!.fg.buffer[1]).toBeCloseTo(0.0823, 3);
+      expect(selectedLabelSpan!.fg.buffer[2]).toBeCloseTo(0.1137, 3);
+      expect(selectedHintSpan!.fg.buffer[0]).toBeCloseTo(0.0549, 3);
+      expect(selectedHintSpan!.fg.buffer[1]).toBeCloseTo(0.0823, 3);
+      expect(selectedHintSpan!.fg.buffer[2]).toBeCloseTo(0.1137, 3);
       expect(render.charFrame).toContain("> █");
       expect(render.charFrame).toContain("navigate      tasks");
       expect(render.charFrame).toContain("[F]");
