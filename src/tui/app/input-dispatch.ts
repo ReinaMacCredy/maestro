@@ -2,7 +2,7 @@
  * Key-to-action mapping and input dispatch helpers.
  * Extracted from index.ts -- pure functions, no side effects.
  */
-import type { Key } from "../terminal/input.js";
+import type { Key } from "../input.js";
 import type { AppState, Action } from "../state/reducer.js";
 import { getMissionControlCommandSpecs } from "../state/mission-control-commands.js";
 import { actionForMissionControlCommand } from "./modal-builders.js";

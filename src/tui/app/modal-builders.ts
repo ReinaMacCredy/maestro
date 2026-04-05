@@ -12,7 +12,7 @@ import {
 import {
   buildOverlayRenderSpec,
   type ModalOptions,
-} from "../widgets/modal.js";
+} from "../modal-model.js";
 import { getValidFeatureTransitions } from "../../domain/mission-state.js";
 import { FEATURE_STATUS_LABEL, FEATURE_TASK_STATUS_LABEL } from "../theme.js";
 import { shortenSessionId } from "../session-id.js";

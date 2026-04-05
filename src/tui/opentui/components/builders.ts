@@ -13,10 +13,10 @@ import type {
 import { getMissionControlCommandSpecs } from "../../state/mission-control-commands.js";
 import { FEATURE_STATUS_LABEL, FEATURE_TASK_STATUS_LABEL, MISSION_STATUS_LABEL } from "../../theme.js";
 import { formatAge, formatElapsed, formatTokens, truncate } from "../../format.js";
-import { getHeaderDotsFrame } from "../../panels/header.js";
+import { getHeaderDotsFrame } from "../../header-animation.js";
+import type { ModalOptions } from "../../modal-model.js";
 import { shortenSessionId } from "../../session-id.js";
 import { buildModalOptions } from "../../app/modal-builders.js";
-import type { ModalOptions } from "../../widgets/modal.js";
 
 const MAX_HINT_WIDTH = 44;
 

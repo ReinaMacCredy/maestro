@@ -10,7 +10,7 @@ import type {
   PaletteModalOptions,
   SplitModalOptions,
   SplitModalRow,
-} from "../../widgets/modal.js";
+} from "../../modal-model.js";
 import {
   OPEN_TUI_THEME,
   buildFeatureListLines,
