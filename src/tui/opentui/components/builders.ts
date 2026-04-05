@@ -68,8 +68,7 @@ export function resolveMissionControlTheme(snapshot: MissionControlSnapshot): Mi
       headerBg: undefined,
       modalBg: OPEN_TUI_THEME.panelBgElevated,
       modalPanelBg: OPEN_TUI_THEME.panelBg,
-      // Keep the command palette opaque so it stays legible over the terminal background.
-      paletteModalBg: OPEN_TUI_THEME.panelBgElevated,
+      paletteModalBg: undefined,
     };
   }
 

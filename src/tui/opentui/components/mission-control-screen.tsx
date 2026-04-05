@@ -273,6 +273,7 @@ function ModalLayer({ modal, state, layout, theme }: ModalLayerProps) {
   const modalBackgroundColor = modal.mode === "palette"
     ? theme.paletteModalBg
     : theme.modalBg;
+  const shouldFillSurface = modalBackgroundColor !== undefined;
   const escapeText = "esc";
   const contentWidth = Math.max(0, layout.width - 4);
   return (
@@ -284,12 +285,12 @@ function ModalLayer({ modal, state, layout, theme }: ModalLayerProps) {
       height={layout.height}
       border
       flexDirection="column"
-      backgroundColor={modalBackgroundColor}
-      paddingLeft={1}
-      paddingRight={1}
-    >
-        <ModalSurfaceFill width={layout.width - 2} height={layout.height - 2} />
-          <box width="100%" flexDirection="row" alignItems="center">
+        backgroundColor={modalBackgroundColor}
+        paddingLeft={1}
+        paddingRight={1}
+      >
+          {shouldFillSurface ? <ModalSurfaceFill width={layout.width - 2} height={layout.height - 2} /> : null}
+            <box width="100%" flexDirection="row" alignItems="center">
             {modal.mode === "palette" ? (
               <>
                 <SafeText fg={OPEN_TUI_THEME.text} attributes={TextAttributes.BOLD}>

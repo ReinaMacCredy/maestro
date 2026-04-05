@@ -1,11 +1,13 @@
 import { describe, expect, it } from "bun:test";
 
 import { renderOpenTuiPreviewFrame } from "../../../../src/tui/opentui/app/preview.js";
-import { OPEN_TUI_THEME, resolveMissionControlTheme } from "../../../../src/tui/opentui/components/builders.js";
+import { resolveMissionControlTheme } from "../../../../src/tui/opentui/components/builders.js";
+import { buildModalModel, computeScreenLayout, getModalParentRect } from "../../../../src/tui/opentui/components/builders.js";
 import { captureMissionControlFrame, captureMissionControlRender } from "../../../../src/tui/opentui/testing/frame-capture.js";
 import { createInitialState, reduce } from "../../../../src/tui/state/reducer.js";
 import type { MissionControlSnapshot } from "../../../../src/tui/state/types.js";
 import { TextAttributes } from "@opentui/core";
+import { layoutModal } from "../../../../src/tui/shared/modal-model.js";
 
 function makeSnapshot(): MissionControlSnapshot {
   return {
@@ -69,7 +71,7 @@ describe("captureMissionControlFrame", () => {
     expect(frame).toContain("Terminal too small");
   });
 
-  it("resolves transparent chrome, opaque command palette, and solid detail modals for terminal background mode", () => {
+  it("resolves transparent chrome, transparent command palette, and solid detail modals for terminal background mode", () => {
     const terminalSnapshot: MissionControlSnapshot = {
       mode: "mission",
       missionId: "2026-04-04-001",
@@ -117,7 +119,7 @@ describe("captureMissionControlFrame", () => {
       expect(theme.pageBg).toBeUndefined();
       expect(theme.panelBg).toBeUndefined();
       expect(theme.headerBg).toBeUndefined();
-      expect(theme.paletteModalBg).toBe(OPEN_TUI_THEME.panelBgElevated);
+      expect(theme.paletteModalBg).toBeUndefined();
       expect(theme.modalBg).toBeTruthy();
       expect(theme.modalPanelBg).toBeTruthy();
       expect(theme.paletteSelectionBg).toBe("#ffd166");
@@ -157,7 +159,7 @@ describe("captureMissionControlFrame", () => {
       expect(ansiFrame).not.toContain("]2;PWN");
     });
 
-    it("renders the command palette with an opaque legacy surface and yellow selection in terminal mode", async () => {
+    it("renders the command palette with a transparent legacy surface and yellow selection in terminal mode", async () => {
       const snapshot: MissionControlSnapshot = {
         ...makeSnapshot(),
         configSummary: {
@@ -196,9 +198,9 @@ describe("captureMissionControlFrame", () => {
       expect(selectedLabelSpan).toBeDefined();
       expect(selectedHintSpan).toBeDefined();
 
-      expect(paletteTitleSpan!.bg.buffer[0]).toBeCloseTo(0.0902, 3);
-      expect(paletteTitleSpan!.bg.buffer[1]).toBeCloseTo(0.1294, 3);
-      expect(paletteTitleSpan!.bg.buffer[2]).toBeCloseTo(0.1765, 3);
+      expect(paletteTitleSpan!.bg.buffer[0]).toBe(0);
+      expect(paletteTitleSpan!.bg.buffer[1]).toBe(0);
+      expect(paletteTitleSpan!.bg.buffer[2]).toBe(0);
       expect(paletteEscapeSpan!.fg.buffer[0]).toBeCloseTo(0.5608, 3);
       expect(paletteEscapeSpan!.fg.buffer[1]).toBeCloseTo(0.6353, 3);
       expect(paletteEscapeSpan!.fg.buffer[2]).toBeCloseTo(0.7176, 3);
@@ -215,6 +217,50 @@ describe("captureMissionControlFrame", () => {
       expect(render.charFrame).toContain("> █");
       expect(render.charFrame).toContain("navigate      tasks");
       expect(render.charFrame).toContain("[F]");
+    });
+
+    it("keeps underlying dashboard text visible through blank palette rows in terminal mode", async () => {
+      const snapshot: MissionControlSnapshot = {
+        ...makeSnapshot(),
+        configSummary: {
+          configSource: "global",
+          cassAvailable: true,
+          gitAvailable: true,
+          checks: [],
+          missionDirectory: null,
+          workerTypes: [],
+          backgroundMode: "terminal",
+        },
+      };
+      const baseState = createInitialState(snapshot);
+      const paletteState = reduce(createInitialState(snapshot), { type: "open-command-palette" });
+      const baseRender = await captureMissionControlRender({
+        snapshot,
+        state: baseState,
+        width: 120,
+        height: 40,
+      });
+      const paletteRender = await captureMissionControlRender({
+        snapshot,
+        state: paletteState,
+        width: 120,
+        height: 40,
+      });
+      const modal = buildModalModel(paletteState);
+
+      expect(modal).toBeDefined();
+
+      const screenLayout = computeScreenLayout(120, 40, snapshot);
+      const modalParentRect = getModalParentRect(screenLayout);
+      const modalLayout = layoutModal(modalParentRect, modal!);
+      const blankInteriorRow = modalLayout.y + 12;
+      const left = modalLayout.x + 2;
+      const right = modalLayout.x + modalLayout.width - 2;
+      const baseLine = baseRender.charFrame.split("\n")[blankInteriorRow] ?? "";
+      const paletteLine = paletteRender.charFrame.split("\n")[blankInteriorRow] ?? "";
+
+      expect(baseLine.slice(left, right).trim().length).toBeGreaterThan(0);
+      expect(paletteLine.slice(left, right)).toBe(baseLine.slice(left, right));
     });
 
     it("dims the underlying dashboard while the command palette is open", async () => {
