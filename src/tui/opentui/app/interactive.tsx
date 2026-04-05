@@ -24,6 +24,8 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+const RESIZE_RENDER_INTERVAL_MS = 16;
+
 export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<void> {
   const renderer = await createCliRenderer({
     exitOnCtrlC: false,
@@ -36,6 +38,9 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
   let shuttingDown = false;
   let dirty = true;
   let lastRenderedAnimationFrame = -1;
+  let lastRenderMs = 0;
+  let renderScheduled = false;
+  let renderTimer: ReturnType<typeof setTimeout> | undefined;
 
   const getCurrentAnimationFrame = (): number => {
     if (!isHeaderAnimationActive(state.snapshot)) {
@@ -67,8 +72,30 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
           );
         });
         lastRenderedAnimationFrame = animationFrame;
+        lastRenderMs = Date.now();
         renderer.useMouse = !state.copyMode;
       };
+
+  const scheduleRender = (minimumDelayMs = 0): void => {
+    if (shuttingDown || renderScheduled) return;
+
+    const delayMs = Math.max(0, minimumDelayMs - (Date.now() - lastRenderMs));
+    const runRender = (): void => {
+      renderScheduled = false;
+      renderTimer = undefined;
+      if (!dirty || shuttingDown) return;
+      renderCurrentFrame();
+      dirty = false;
+    };
+
+    renderScheduled = true;
+    if (delayMs === 0) {
+      queueMicrotask(runRender);
+      return;
+    }
+
+    renderTimer = setTimeout(runRender, delayMs);
+  };
 
   async function processKey(key: Key): Promise<void> {
     if (shuttingDown) return;
@@ -164,6 +191,7 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
 
   const handleResize = (): void => {
     dirty = true;
+    scheduleRender(RESIZE_RENDER_INTERVAL_MS);
   };
 
   const handleSignal = (): void => {
@@ -203,14 +231,16 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
         }
 
         if (dirty) {
-          renderCurrentFrame();
-        dirty = false;
+          scheduleRender();
+        }
       }
-    }
-  } finally {
-    renderer.off("resize", handleResize);
-    renderer.removeInputHandler(handleRawInput);
-    process.off("SIGINT", handleSignal);
+    } finally {
+      if (renderTimer) {
+        clearTimeout(renderTimer);
+      }
+      renderer.off("resize", handleResize);
+      renderer.removeInputHandler(handleRawInput);
+      process.off("SIGINT", handleSignal);
     process.off("SIGTERM", handleSignal);
     flushSync(() => {
       root.unmount();

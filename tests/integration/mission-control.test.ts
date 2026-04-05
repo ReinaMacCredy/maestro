@@ -60,11 +60,21 @@ input_steps = [
     }
     for step in payload.get("inputSteps", [])
 ]
+resize_steps = [
+    {
+        "rows": step["rows"],
+        "cols": step["cols"],
+        "delay_s": step.get("delayMs", 0) / 1000.0,
+    }
+    for step in payload.get("resizeSteps", [])
+]
 first_output_seen = False
 send_attempts = 0
 send_at = None
 next_send_at = None
 next_step_index = 0
+next_resize_at = None
+next_resize_index = 0
 chunks = []
 timed_out = False
 sample_process = payload.get("sampleProcess", False)
@@ -104,11 +114,23 @@ while True:
                         if wait_for_text in current_output:
                             send_at = time.time()
                             next_send_at = send_at + (input_steps[0]["delay_s"] if input_steps else delay_s)
+                            next_resize_at = send_at + resize_steps[0]["delay_s"] if resize_steps else None
                     else:
                         send_at = time.time()
                         next_send_at = send_at + (input_steps[0]["delay_s"] if input_steps else delay_s)
+                        next_resize_at = send_at + resize_steps[0]["delay_s"] if resize_steps else None
         except OSError:
             pass
+
+    if first_output_seen and send_at is not None and next_resize_at is not None and now >= next_resize_at:
+        winsize = struct.pack("HHHH", resize_steps[next_resize_index]["rows"], resize_steps[next_resize_index]["cols"], 0, 0)
+        fcntl.ioctl(master, termios.TIOCSWINSZ, winsize)
+        proc.send_signal(signal.SIGWINCH)
+        next_resize_index += 1
+        if next_resize_index < len(resize_steps):
+            next_resize_at = now + resize_steps[next_resize_index]["delay_s"]
+        else:
+            next_resize_at = None
 
     if first_output_seen and send_at is not None and next_send_at is not None and now >= next_send_at:
         if input_steps:
@@ -525,6 +547,7 @@ function getDurationSamples(plainOutput: string): string[] {
 interface PtyRunOptions {
   readonly input: string;
   readonly inputSteps?: ReadonlyArray<{ chars: string; delayMs?: number }>;
+  readonly resizeSteps?: ReadonlyArray<{ rows: number; cols: number; delayMs?: number }>;
   readonly delayMs?: number;
   readonly timeoutMs?: number;
   readonly waitForText?: string;
@@ -565,13 +588,18 @@ async function runCompiledInteractivePty(
     cmd: [DIST_CLI, ...args],
     cwd,
     input: Buffer.from(opts.input, "utf8").toString("base64"),
-    inputSteps: opts.inputSteps?.map((step) => ({
-      input: Buffer.from(step.chars, "utf8").toString("base64"),
-      delayMs: step.delayMs ?? 0,
-    })),
-    delayMs: opts.delayMs ?? 250,
-    timeoutMs: opts.timeoutMs ?? PTY_TIMEOUT_MS,
-      waitForText: opts.waitForText,
+      inputSteps: opts.inputSteps?.map((step) => ({
+        input: Buffer.from(step.chars, "utf8").toString("base64"),
+        delayMs: step.delayMs ?? 0,
+      })),
+      resizeSteps: opts.resizeSteps?.map((step) => ({
+        rows: step.rows,
+        cols: step.cols,
+        delayMs: step.delayMs ?? 0,
+      })),
+      delayMs: opts.delayMs ?? 250,
+      timeoutMs: opts.timeoutMs ?? PTY_TIMEOUT_MS,
+        waitForText: opts.waitForText,
       rows: opts.rows ?? 24,
       cols: opts.cols ?? 80,
       sampleProcess: opts.sampleProcess ?? false,
@@ -1608,6 +1636,31 @@ describe("mission-control CLI", () => {
 
     expectCleanPtyExit(result);
     expect(result.plainOutput).toContain("Timeline");
+  }, PTY_TIMEOUT_MS);
+
+  it("compiled binary interactive mode repaints through rapid resize bursts", async () => {
+    if (!pythonAvailable) return;
+    const missionId = await createMission(tmpDir);
+
+    const result = await runCompiledInteractivePty(
+      tmpDir,
+      ["mission-control", "--mission", missionId],
+      {
+        input: "q",
+        delayMs: 300,
+        waitForText: "Mission Control",
+        resizeSteps: [
+          { rows: 22, cols: 70, delayMs: 30 },
+          { rows: 24, cols: 120, delayMs: 140 },
+          { rows: 22, cols: 72, delayMs: 30 },
+          { rows: 24, cols: 120, delayMs: 140 },
+        ],
+      },
+    );
+
+    expectCleanPtyExit(result);
+    expect(result.plainOutput).toContain("Mission Control");
+    expect(result.plainOutput).toContain("Terminal too small");
   }, PTY_TIMEOUT_MS);
 
     it("compiled binary interactive mode stabilizes process stats while an approved mission idles", async () => {
