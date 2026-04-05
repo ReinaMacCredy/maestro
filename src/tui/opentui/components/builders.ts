@@ -34,6 +34,8 @@ export const OPEN_TUI_THEME = {
   info: "#79c0ff",
   selectionBg: "#1f4b99",
   selectionFg: "#ffffff",
+  paletteSelectionBg: "#ffd166",
+  paletteSelectionFg: "#0e151d",
 } as const;
 
 export interface MissionControlTheme {
@@ -42,6 +44,7 @@ export interface MissionControlTheme {
   readonly headerBg?: string;
   readonly modalBg: string;
   readonly modalPanelBg: string;
+  readonly paletteModalBg?: string;
   readonly muted: string;
   readonly text: string;
   readonly accent: string;
@@ -51,6 +54,8 @@ export interface MissionControlTheme {
   readonly info: string;
   readonly selectionBg: string;
   readonly selectionFg: string;
+  readonly paletteSelectionBg: string;
+  readonly paletteSelectionFg: string;
 }
 
 export function resolveMissionControlTheme(snapshot: MissionControlSnapshot): MissionControlTheme {
@@ -63,6 +68,7 @@ export function resolveMissionControlTheme(snapshot: MissionControlSnapshot): Mi
       headerBg: undefined,
       modalBg: OPEN_TUI_THEME.panelBgElevated,
       modalPanelBg: OPEN_TUI_THEME.panelBg,
+      paletteModalBg: undefined,
     };
   }
 
@@ -70,6 +76,7 @@ export function resolveMissionControlTheme(snapshot: MissionControlSnapshot): Mi
     ...OPEN_TUI_THEME,
     modalBg: OPEN_TUI_THEME.panelBgElevated,
     modalPanelBg: OPEN_TUI_THEME.panelBg,
+    paletteModalBg: OPEN_TUI_THEME.panelBgElevated,
   };
 }
 

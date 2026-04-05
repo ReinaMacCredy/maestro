@@ -263,6 +263,9 @@ interface ModalLayerProps {
 
 function ModalLayer({ modal, state, width, height, left, top, theme }: ModalLayerProps) {
   const eyebrowLines = "eyebrow" in modal && modal.eyebrow ? modal.eyebrow.split("\n") : [];
+  const modalBackgroundColor = modal.mode === "palette"
+    ? theme.paletteModalBg
+    : theme.modalBg;
   return (
     <box
       position="absolute"
@@ -272,10 +275,10 @@ function ModalLayer({ modal, state, width, height, left, top, theme }: ModalLaye
         height={height}
         border
         flexDirection="column"
-        backgroundColor={theme.modalBg}
-        paddingLeft={1}
-        paddingRight={1}
-      >
+          backgroundColor={modalBackgroundColor}
+          paddingLeft={1}
+          paddingRight={1}
+        >
       <box width="100%" flexDirection="row" justifyContent="space-between">
         <SafeText fg={OPEN_TUI_THEME.accent} attributes={TextAttributes.BOLD}>{modal.title}</SafeText>
         <SafeText fg={OPEN_TUI_THEME.muted}>esc</SafeText>
@@ -331,14 +334,15 @@ function PaletteModalBody({ modal }: { readonly modal: PaletteModalOptions }) {
       {items.length === 0 ? (
         <SafeText fg={OPEN_TUI_THEME.muted}>{modal.emptyLabel ?? "No commands match your filter"}</SafeText>
       ) : items.map((item, index) => (
-        <ModalRowView
-          key={index}
-          row={item}
-          selected={index === modal.selectedIndex}
-        />
-      ))}
-    </box>
-  );
+          <ModalRowView
+            key={index}
+            row={item}
+            selected={index === modal.selectedIndex}
+            mode={modal.mode}
+          />
+        ))}
+      </box>
+    );
 }
 
 function InfoModalBody({ modal }: { readonly modal: InfoModalOptions }) {
@@ -374,13 +378,14 @@ function SplitModalBody({
             {items.length === 0 ? (
               <SafeText fg={OPEN_TUI_THEME.muted}>{modal.emptyLabel ?? "No items"}</SafeText>
             ) : items.map((item, index) => (
-              <ModalRowView
-                key={index}
-              row={item}
-              selected={index === modal.selectedIndex}
-            />
-          ))}
-        </box>
+                <ModalRowView
+                  key={index}
+                row={item}
+                selected={index === modal.selectedIndex}
+                mode={modal.mode}
+              />
+            ))}
+          </box>
       </box>
         <box width={1} />
           <box width={rightWidth} height="100%" border title="Detail" paddingLeft={1} paddingRight={1} backgroundColor={theme.modalPanelBg}>
@@ -399,15 +404,23 @@ function SplitModalBody({
 function ModalRowView({
   row,
   selected,
+  mode,
 }: {
   readonly row: NormalizedModalRow;
   readonly selected: boolean;
+  readonly mode: ModalOptions["mode"];
 }) {
-  const fg = selected ? OPEN_TUI_THEME.selectionFg : toneColor(row.tone);
+  const selectedFg = mode === "palette"
+    ? OPEN_TUI_THEME.paletteSelectionFg
+    : OPEN_TUI_THEME.selectionFg;
+  const selectedBg = mode === "palette"
+    ? OPEN_TUI_THEME.paletteSelectionBg
+    : OPEN_TUI_THEME.selectionBg;
+  const fg = selected ? selectedFg : toneColor(row.tone);
   const detail = row.detail ? `  ${row.detail}` : "";
   const hint = row.hint ? `  [${row.hint}]` : "";
   return (
-    <box width="100%" backgroundColor={selected ? OPEN_TUI_THEME.selectionBg : undefined}>
+    <box width="100%" backgroundColor={selected ? selectedBg : undefined}>
       <SafeText fg={fg} attributes={selected ? TextAttributes.BOLD : row.style === "block" ? TextAttributes.BOLD : undefined}>{`${row.label}${detail}${hint}`}</SafeText>
     </box>
   );

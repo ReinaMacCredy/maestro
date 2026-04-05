@@ -510,6 +510,10 @@ function hasAnimatedHeaderFrame(plainOutput: string): boolean {
   return plainOutput.includes("•●•") || plainOutput.includes("••●");
 }
 
+function containsCollapsedText(text: string, needle: string): boolean {
+  return text.replace(/\s+/g, "").includes(needle.replace(/\s+/g, ""));
+}
+
 function getDurationSamples(plainOutput: string): string[] {
   const matches = plainOutput.matchAll(/TIME\s+((?:\d+[hms]\s*)+)/g);
   return [...new Set(
@@ -1790,8 +1794,8 @@ describe("mission-control CLI", () => {
       );
 
         expectCleanPtyExit(result);
-        expect(result.plainOutput).toContain("Command Palette");
-        expect(result.plainOutput).toContain("/ type to filter");
+        expect(containsCollapsedText(result.plainOutput, "Command Palette")).toBe(true);
+        expect(containsCollapsedText(result.plainOutput, "/ type to filter")).toBe(true);
         expect(result.plainOutput).toContain("Browse mission tasks");
         expect(result.plainOutput).not.toContain("Enter open · Esc close");
       }, PTY_TIMEOUT_MS);
@@ -1818,7 +1822,7 @@ describe("mission-control CLI", () => {
       );
 
         expectCleanPtyExit(result);
-        expect(result.plainOutput).toContain("Command Palette");
+        expect(containsCollapsedText(result.plainOutput, "Command Palette")).toBe(true);
         expect(result.plainOutput).toContain("Select a task to focus");
         expect(result.plainOutput).toContain("Feature 1");
       }, PTY_TIMEOUT_MS);
