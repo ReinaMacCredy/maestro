@@ -1589,9 +1589,9 @@ describe("mission-control CLI", () => {
       expect(maxCpuPct(samples)).toBeLessThan(20);
     }, PTY_TIMEOUT_MS);
 
-    it("compiled binary interactive mode stabilizes process stats while an executing mission idles", async () => {
-      if (!pythonAvailable) return;
-      const missionId = await createMission(tmpDir);
+      it("compiled binary interactive mode stabilizes process stats while an executing mission idles", async () => {
+        if (!pythonAvailable) return;
+        const missionId = await createMission(tmpDir);
 
       await setMissionStatus(tmpDir, missionId, "approved");
       await setMissionStatus(tmpDir, missionId, "executing");
@@ -1607,6 +1607,24 @@ describe("mission-control CLI", () => {
       expect(samples.length).toBeGreaterThanOrEqual(6);
         expect(rssGrowthKb(samples)).toBeLessThan(24_576);
         expect(maxCpuPct(samples)).toBeLessThan(20);
+      }, PTY_TIMEOUT_MS);
+
+      it("compiled binary interactive mode animates the header dots while a mission is executing", async () => {
+        if (!pythonAvailable) return;
+        const missionId = await createMission(tmpDir);
+
+        await setMissionStatus(tmpDir, missionId, "approved");
+        await setMissionStatus(tmpDir, missionId, "executing");
+
+        const result = await runCompiledInteractivePty(
+          tmpDir,
+          ["mission-control", "--mission", missionId],
+          { input: "q", delayMs: 1_800, waitForText: "Mission Control" },
+        );
+
+        expectCleanPtyExit(result);
+        expect(result.plainOutput).toContain("●••");
+        expect(hasAnimatedHeaderFrame(result.plainOutput)).toBe(true);
       }, PTY_TIMEOUT_MS);
 
       it("compiled binary interactive mode keeps time-based fields advancing while idle", async () => {

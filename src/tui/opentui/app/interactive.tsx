@@ -13,6 +13,7 @@ import type { InteractiveOptions } from "../../app/interactive-shared.js";
 import { keyToAction, shouldSubmitFeatureAction } from "../../app/input-dispatch.js";
 import { getSnapshotPollIntervalMs } from "../../app/interactive-shared.js";
 import { parseKeypress, type Key } from "../../input.js";
+import { HEADER_DOT_INTERVAL_MS, isHeaderAnimationActive } from "../../shared/header-animation.js";
 import { layoutModal, pointInRect } from "../../shared/modal-model.js";
 import { getConfigRowsForTab } from "../../state/config-inspector.js";
 import { createInitialState, reduce } from "../../state/reducer.js";
@@ -34,6 +35,15 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
   let state = createInitialState(opts.snapshot);
   let shuttingDown = false;
   let dirty = true;
+  let lastRenderedAnimationFrame = -1;
+
+  const getCurrentAnimationFrame = (): number => {
+    if (!isHeaderAnimationActive(state.snapshot)) {
+      return 0;
+    }
+
+    return Math.floor(Date.now() / HEADER_DOT_INTERVAL_MS);
+  };
 
   const requestQuit = (): void => {
     if (shuttingDown) return;
@@ -42,21 +52,23 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
   };
 
   const renderCurrentFrame = (): void => {
-      flushSync(() => {
-        root.render(
-        <MissionControlApp
-          snapshot={state.snapshot}
-          state={state}
-          width={renderer.width}
-          height={renderer.height}
-          animationFrame={0}
-          elapsedOffsetMs={0}
-          onMouseDown={handleOpenTuiMouseDown}
-        />,
-        );
-      });
-      renderer.useMouse = !state.copyMode;
-    };
+        const animationFrame = getCurrentAnimationFrame();
+        flushSync(() => {
+          root.render(
+          <MissionControlApp
+            snapshot={state.snapshot}
+            state={state}
+            width={renderer.width}
+            height={renderer.height}
+            animationFrame={animationFrame}
+            elapsedOffsetMs={0}
+            onMouseDown={handleOpenTuiMouseDown}
+          />,
+          );
+        });
+        lastRenderedAnimationFrame = animationFrame;
+        renderer.useMouse = !state.copyMode;
+      };
 
   async function processKey(key: Key): Promise<void> {
     if (shuttingDown) return;
@@ -169,11 +181,11 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
     dirty = false;
     let lastPollMs = Date.now();
 
-    while (state.running) {
-      await sleep(100);
-      if (!state.running) break;
+      while (state.running) {
+        await sleep(100);
+        if (!state.running) break;
 
-      const now = Date.now();
+        const now = Date.now();
         if (now - lastPollMs >= getSnapshotPollIntervalMs(state.snapshot)) {
           lastPollMs = now;
           try {
@@ -183,11 +195,15 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
             dirty = true;
           } catch {
             // Keep the current snapshot when polling fails.
-          }
-      }
+            }
+        }
 
-      if (dirty) {
-        renderCurrentFrame();
+        if (getCurrentAnimationFrame() !== lastRenderedAnimationFrame) {
+          dirty = true;
+        }
+
+        if (dirty) {
+          renderCurrentFrame();
         dirty = false;
       }
     }
