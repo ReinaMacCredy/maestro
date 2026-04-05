@@ -41,6 +41,9 @@ import type {
 } from "./types.js";
 import type { TransportType, WorkerConfig } from "../../domain/worker-types.js";
 
+const RECENT_RUNTIME_EVENT_MAX_BYTES = 512 * 1024;
+const RECENT_RUNTIME_EVENT_MAX_LINES = 256;
+
 export interface SnapshotDeps {
   missionStore: MissionStorePort;
   featureStore: FeatureStorePort;
@@ -130,14 +133,14 @@ export async function buildSnapshot(
     const mission = report.mission;
     const now = Date.now();
     const startMs = new Date(mission.approvedAt ?? mission.createdAt).getTime();
-    const runtimeEventsByFeature = new Map(
-      await Promise.all(
-        features.map(async (feature) => [
-          feature.id,
-          await deps.runtimeEventStore.listByFeature(missionId, feature.id),
-        ] as const),
-      ),
-    );
+      const runtimeEventsByFeature = new Map(
+        await Promise.all(
+          features.map(async (feature) => [
+            feature.id,
+            await listRecentRuntimeEvents(deps.runtimeEventStore, missionId, feature.id),
+          ] as const),
+        ),
+      );
     const runtimeByFeature = new Map(
       runtimes.map((runtime) => [runtime.featureId, buildRuntimeView(runtime, now)]),
     );
@@ -279,6 +282,22 @@ export async function buildSnapshot(
       canResume: mission.status === "paused",
       home: null,
   };
+}
+
+async function listRecentRuntimeEvents(
+  runtimeEventStore: RuntimeEventStorePort,
+  missionId: string,
+  featureId: string,
+): Promise<readonly RuntimeEventRecord[]> {
+  if (runtimeEventStore.tailByFeature) {
+    return runtimeEventStore.tailByFeature(missionId, featureId, {
+      maxBytes: RECENT_RUNTIME_EVENT_MAX_BYTES,
+      maxLines: RECENT_RUNTIME_EVENT_MAX_LINES,
+    });
+  }
+
+  const events = await runtimeEventStore.listByFeature(missionId, featureId);
+  return events.slice(-RECENT_RUNTIME_EVENT_MAX_LINES);
 }
 
 export async function buildHomeSnapshot(

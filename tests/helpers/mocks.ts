@@ -472,11 +472,16 @@ export function mockRuntimeEventStore(
       events.push(event);
       return event;
     },
-    listByFeature: async (_missionId, featureId) =>
-      events
-        .filter((event) => event.featureId === featureId)
-        .sort((left, right) => left.timestamp.localeCompare(right.timestamp)),
-  };
+      listByFeature: async (_missionId, featureId) =>
+        events
+          .filter((event) => event.featureId === featureId)
+          .sort((left, right) => left.timestamp.localeCompare(right.timestamp)),
+      tailByFeature: async (_missionId, featureId, options) =>
+        events
+          .filter((event) => event.featureId === featureId)
+          .sort((left, right) => left.timestamp.localeCompare(right.timestamp))
+          .slice(-(options?.maxLines ?? 256)),
+    };
 }
 
 export function mockTransport(

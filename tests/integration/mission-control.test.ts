@@ -566,6 +566,55 @@ async function writeProbeCounterWorker(cwd: string): Promise<{ workerPath: strin
   return { workerPath, counterPath };
 }
 
+async function seedLargeRuntimeEventLog(
+  cwd: string,
+  missionId: string,
+  featureId: string,
+  options: {
+    readonly eventCount?: number;
+    readonly payloadBytes?: number;
+  } = {},
+): Promise<void> {
+  const runtimeStore = new FsRuntimeStoreAdapter(cwd);
+  const workersDir = join(cwd, ".maestro", "missions", missionId, "workers", featureId);
+  await mkdir(workersDir, { recursive: true });
+
+  const startedAt = new Date(Date.now() - 15_000).toISOString();
+  const lastSeenAt = new Date(Date.now() - 2_000).toISOString();
+  const leaseExpiresAt = new Date(Date.now() + 60_000).toISOString();
+  await runtimeStore.save(missionId, featureId, {
+    featureId,
+    attemptId: "attempt-large-log",
+    attempt: 1,
+    agent: "codex",
+    sessionId: "5634c102-9871-4001-86f8-89399077624e",
+    runtimeState: "live",
+    startedAt,
+    lastSeenAt,
+    leaseExpiresAt,
+    recoveryMetadata: {
+      retryCount: 0,
+      history: [],
+    },
+  });
+
+  const eventCount = options.eventCount ?? 10_000;
+  const payload = "X".repeat(options.payloadBytes ?? 1_024);
+  const baseMs = Date.now() - eventCount * 1_000;
+  const lines = Array.from({ length: eventCount }, (_, index) => JSON.stringify({
+    id: `large-event-${index}`,
+    missionId,
+    featureId,
+    attemptId: "attempt-large-log",
+    worker: "codex",
+    timestamp: new Date(baseMs + index * 1_000).toISOString(),
+    kind: index % 3 === 0 ? "status" : "stdout",
+    text: `line-${index} ${payload}`,
+  }));
+
+  await writeFile(join(workersDir, "events.jsonl"), `${lines.join("\n")}\n`);
+}
+
 function expectRuntimeOverlay(output: string): void {
   expect(output).toContain("Runtime");
   expect(output).toContain("features right now");
@@ -1337,7 +1386,7 @@ describe("mission-control CLI", () => {
     }
   }, PTY_TIMEOUT_MS);
 
-      it("compiled binary interactive mode does not re-probe worker health on every idle poll", async () => {
+    it("compiled binary interactive mode does not re-probe worker health on every idle poll", async () => {
       if (!pythonAvailable) return;
       const missionId = await createMission(tmpDir);
       const { workerPath, counterPath } = await writeProbeCounterWorker(tmpDir);
@@ -1353,6 +1402,28 @@ describe("mission-control CLI", () => {
       const probeCount = Number(await readFile(counterPath, "utf8"));
       expect(probeCount).toBeLessThanOrEqual(2);
       }, PTY_TIMEOUT_MS);
+
+  it("compiled binary interactive mode stays bounded with large runtime event logs", async () => {
+    if (!pythonAvailable) return;
+    const missionId = await createMission(tmpDir);
+    await setMissionStatus(tmpDir, missionId, "approved");
+    await setMissionStatus(tmpDir, missionId, "executing");
+    await seedLargeRuntimeEventLog(tmpDir, missionId, "f1", {
+      eventCount: 10_000,
+      payloadBytes: 1_024,
+    });
+
+    const result = await runCompiledInteractivePty(
+      tmpDir,
+      ["mission-control", "--mission", missionId],
+      { input: "q", delayMs: 12_500, waitForText: "Mission Control", sampleProcess: true },
+    );
+
+    expectCleanPtyExit(result);
+    expect(result.samples.length).toBeGreaterThanOrEqual(8);
+    expect(Math.max(...result.samples.map((sample) => sample.rssKb))).toBeLessThan(400_000);
+    expect(maxCpuPct(lateWindow(result.samples))).toBeLessThan(20);
+  }, PTY_TIMEOUT_MS);
 
     it("compiled binary interactive mode opens and closes the command palette with Ctrl+P", async () => {
       if (!pythonAvailable) return;
