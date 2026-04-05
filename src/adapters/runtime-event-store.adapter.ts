@@ -5,7 +5,12 @@ import { MAESTRO_DIR } from "../domain/defaults.js";
 import { validateRuntimeEventRecord } from "../domain/worker-validators.js";
 import { appendText, ensureDir, readText } from "../lib/fs.js";
 import { assertSafeSegment, resolveWithin } from "../lib/path-safety.js";
-import type { RuntimeEventStorePort, RuntimeEventTailOptions } from "../ports/runtime-event-store.port.js";
+import {
+  DEFAULT_RUNTIME_EVENT_TAIL_MAX_BYTES,
+  DEFAULT_RUNTIME_EVENT_TAIL_MAX_LINES,
+  type RuntimeEventStorePort,
+  type RuntimeEventTailOptions,
+} from "../ports/runtime-event-store.port.js";
 
 const FEATURE_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
 
@@ -50,8 +55,8 @@ export class FsRuntimeEventStoreAdapter implements RuntimeEventStorePort {
     options: RuntimeEventTailOptions = {},
   ): Promise<readonly RuntimeEventRecord[]> {
     const eventPath = this.eventPath(missionId, featureId);
-    const maxBytes = Math.max(1, options.maxBytes ?? 512 * 1024);
-    const maxLines = Math.max(1, options.maxLines ?? 256);
+    const maxBytes = Math.max(1, options.maxBytes ?? DEFAULT_RUNTIME_EVENT_TAIL_MAX_BYTES);
+    const maxLines = Math.max(1, options.maxLines ?? DEFAULT_RUNTIME_EVENT_TAIL_MAX_LINES);
 
     let file;
     try {
@@ -94,7 +99,7 @@ export class FsRuntimeEventStoreAdapter implements RuntimeEventStorePort {
         .filter((line) => line.length > 0)
         .slice(-maxLines);
 
-      return parseRuntimeEvents(lines.join("\n"));
+      return parseRuntimeEventLines(lines);
     } finally {
       await file.close();
     }
@@ -127,10 +132,16 @@ async function readUtf8Range(
 }
 
 function parseRuntimeEvents(content: string): readonly RuntimeEventRecord[] {
-  return content
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
+  return parseRuntimeEventLines(
+    content
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0),
+  );
+}
+
+function parseRuntimeEventLines(lines: readonly string[]): readonly RuntimeEventRecord[] {
+  return lines
     .map((line) => JSON.parse(line) as unknown)
     .map((value) => {
       try {

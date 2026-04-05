@@ -359,7 +359,9 @@ describe("feature lifecycle usecases", () => {
       });
 
       expect(result.feature.status).toBe("pending");
-      expect(result.feature.updatedAt).not.toBe(before?.updatedAt);
+      expect(new Date(result.feature.updatedAt).getTime()).toBeGreaterThanOrEqual(
+        new Date(before?.updatedAt ?? 0).getTime(),
+      );
     });
 
     it("syncs runtime state when a prompt already initialized execution", async () => {

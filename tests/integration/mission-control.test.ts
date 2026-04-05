@@ -10,8 +10,8 @@ import { FsMissionStoreAdapter } from "../../src/adapters/mission-store.adapter.
 import { FsRuntimeEventStoreAdapter } from "../../src/adapters/runtime-event-store.adapter.js";
 import { FsRuntimeStoreAdapter } from "../../src/adapters/runtime-store.adapter.js";
 import { buildModalOptions } from "../../src/tui/app/modal-builders.js";
-import { PREVIEW_SCREENS } from "../../src/tui/app/preview-state.js";
-import { computeScreenLayout } from "../../src/tui/opentui/components/builders.js";
+import { HOME_PREVIEW_SCREENS, PREVIEW_SCREENS } from "../../src/tui/app/preview-state.js";
+import { computeScreenLayout, getModalParentRect } from "../../src/tui/opentui/components/builders.js";
 import { createInitialState, reduce } from "../../src/tui/state/reducer.js";
 import { enterAltScreen, exitAltScreen } from "../../src/tui/shared/ansi.js";
 import type { MissionControlSnapshot } from "../../src/tui/state/types.js";
@@ -24,8 +24,6 @@ const CLI = [
 ];
 const DIST_CLI = join(import.meta.dir, "..", "..", "dist", "maestro");
 const CTRL_P = "\u0010";
-const HOME_PREVIEW_SCREENS = ["dashboard", "features", "config", "runtime", "workers"] as const;
-
 let tmpDir: string;
 const SLOW_CLI_TIMEOUT_MS = 15_000;
 const PTY_TIMEOUT_MS = 30_000;
@@ -738,12 +736,7 @@ function encodeLeftClick(x: number, y: number): string {
 
 function getMissionControlModalParentRect(width: number, height: number) {
   const layout = computeScreenLayout(width, height, { mode: "mission" } as never);
-  return {
-    x: Math.max(1, Math.floor((layout.innerWidth - layout.modalWidth) / 2)),
-    y: Math.max(1, Math.floor((layout.innerHeight - layout.modalHeight) / 2)),
-    width: layout.modalWidth,
-    height: layout.modalHeight,
-  };
+  return getModalParentRect(layout);
 }
 
 function getFeatureActionMouseClicks(optionIndex: number, width = 80, height = 24): {

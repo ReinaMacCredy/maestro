@@ -14,9 +14,23 @@ export const PREVIEW_SCREENS = [
 ] as const;
 
 export type PreviewScreen = typeof PREVIEW_SCREENS[number];
+export const HOME_PREVIEW_SCREENS = [
+  "dashboard",
+  "features",
+  "config",
+  "runtime",
+  "workers",
+] as const satisfies readonly PreviewScreen[];
 
 export function isPreviewScreen(value: string): value is PreviewScreen {
   return PREVIEW_SCREENS.includes(value as PreviewScreen);
+}
+
+export function getApplicablePreviewScreens(snapshot: Pick<MissionControlSnapshot, "mode">): PreviewScreen[] {
+  if (snapshot.mode === "mission") {
+    return [...PREVIEW_SCREENS];
+  }
+  return [...HOME_PREVIEW_SCREENS];
 }
 
 export interface PreviewSelectionOptions {

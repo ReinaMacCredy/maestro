@@ -74,6 +74,13 @@ export interface ScreenLayout {
   readonly modalHeight: number;
 }
 
+export interface ModalParentRect {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
 export function computeScreenLayout(
   width: number,
   height: number,
@@ -143,6 +150,15 @@ export function computeScreenLayout(
     stackedHeights: [leftTopHeight, rightTopHeight, leftBottomHeight, rightBottomHeight],
     modalWidth: clamp(Math.floor(innerWidth * 0.78), 60, Math.max(60, innerWidth - 6)),
     modalHeight: clamp(Math.floor(innerHeight * 0.72), 18, Math.max(18, innerHeight - 4)),
+  };
+}
+
+export function getModalParentRect(layout: ScreenLayout): ModalParentRect {
+  return {
+    x: Math.max(1, Math.floor((layout.innerWidth - layout.modalWidth) / 2)),
+    y: Math.max(1, Math.floor((layout.innerHeight - layout.modalHeight) / 2)),
+    width: layout.modalWidth,
+    height: layout.modalHeight,
   };
 }
 

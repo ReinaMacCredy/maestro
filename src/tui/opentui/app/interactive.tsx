@@ -17,7 +17,7 @@ import { layoutModal, pointInRect } from "../../shared/modal-model.js";
 import { getConfigRowsForTab } from "../../state/config-inspector.js";
 import { createInitialState, reduce } from "../../state/reducer.js";
 import { MissionControlApp } from "./mission-control-app.js";
-import { buildModalModel, computeScreenLayout } from "../components/builders.js";
+import { buildModalModel, computeScreenLayout, getModalParentRect } from "../components/builders.js";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -209,12 +209,7 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
     if (!modal) return;
 
     const screenLayout = computeScreenLayout(renderer.width, renderer.height, state.snapshot);
-    const layout = layoutModal({
-      x: Math.max(1, Math.floor((screenLayout.innerWidth - screenLayout.modalWidth) / 2)),
-      y: Math.max(1, Math.floor((screenLayout.innerHeight - screenLayout.modalHeight) / 2)),
-      width: screenLayout.modalWidth,
-      height: screenLayout.modalHeight,
-    }, modal);
+    const layout = layoutModal(getModalParentRect(screenLayout), modal);
     if (!layout) return;
 
     if (!pointInRect(layout, x, y)) {

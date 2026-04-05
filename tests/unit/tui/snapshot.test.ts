@@ -227,13 +227,13 @@ describe("buildSnapshot", () => {
       });
 
       const tailedFeatureIds: string[] = [];
-      const runtimeEventStoreWithTracking: SnapshotDeps["runtimeEventStore"] = {
-        ...deps.runtimeEventStore,
-        tailByFeature: async (trackedMissionId, featureId, options) => {
-          tailedFeatureIds.push(featureId);
-          return deps.runtimeEventStore.tailByFeature!(trackedMissionId, featureId, options);
-        },
-      };
+        const runtimeEventStoreWithTracking: SnapshotDeps["runtimeEventStore"] = {
+          ...deps.runtimeEventStore,
+          tailByFeature: async (trackedMissionId, featureId, options) => {
+            tailedFeatureIds.push(featureId);
+            return deps.runtimeEventStore.tailByFeature(trackedMissionId, featureId, options);
+          },
+        };
 
       const snapshot = await buildSnapshot(
         { ...deps, runtimeEventStore: runtimeEventStoreWithTracking },

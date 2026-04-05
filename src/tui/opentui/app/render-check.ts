@@ -1,5 +1,5 @@
 import type { MissionControlSnapshot } from "../../state/types.js";
-import { PREVIEW_SCREENS, type PreviewScreen } from "../../app/preview-state.js";
+import { PREVIEW_SCREENS, getApplicablePreviewScreens } from "../../app/preview-state.js";
 import type { RenderCheckResult, RenderCheckScreenResult } from "../../app/render-check-contract.js";
 import { renderOpenTuiPreviewFrame } from "./preview.js";
 
@@ -17,7 +17,7 @@ export async function runOpenTuiRenderCheck(
 ): Promise<RenderCheckResult> {
   const width = opts.width ?? DEFAULT_CHECK_WIDTH;
   const height = opts.height ?? DEFAULT_CHECK_HEIGHT;
-  const applicableScreens = getCheckableScreens(snapshot);
+  const applicableScreens = getApplicablePreviewScreens(snapshot);
   const results: RenderCheckScreenResult[] = [];
 
   for (const screen of PREVIEW_SCREENS) {
@@ -96,11 +96,4 @@ export async function runOpenTuiRenderCheck(
       skipped,
     },
   };
-}
-
-function getCheckableScreens(snapshot: MissionControlSnapshot): PreviewScreen[] {
-  if (snapshot.mode === "mission") {
-    return [...PREVIEW_SCREENS];
-  }
-  return ["dashboard", "features", "config", "runtime", "workers"];
 }

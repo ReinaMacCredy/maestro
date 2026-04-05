@@ -14,7 +14,12 @@ import {
 } from "../tui/opentui/index.js";
 import { buildHomeSnapshot, buildSnapshot } from "../tui/state/snapshot.js";
 import type { MissionControlSnapshot } from "../tui/state/types.js";
-import { PREVIEW_SCREENS, isPreviewScreen, type PreviewScreen } from "../tui/app/preview-state.js";
+import {
+  PREVIEW_SCREENS,
+  getApplicablePreviewScreens,
+  isPreviewScreen,
+  type PreviewScreen,
+} from "../tui/app/preview-state.js";
 import { recoverMissionRuntimeFailures } from "../usecases/runtime-recovery.usecase.js";
 
 export type MissionControlSnapshotLoadMode = "read" | "supervise";
@@ -266,11 +271,7 @@ function validateFormat(value: unknown): "plain" | "ansi" | undefined {
 }
 
 function getAllApplicableScreens(snapshot: MissionControlSnapshot): PreviewScreen[] {
-  if (snapshot.mode === "mission") {
-    return [...PREVIEW_SCREENS];
-  }
-  // Home mode: skip screens that require a mission
-  return ["dashboard", "features", "config", "runtime", "workers"];
+  return getApplicablePreviewScreens(snapshot);
 }
 
 /**

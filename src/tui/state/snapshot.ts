@@ -11,7 +11,11 @@ import type { ConfigPort } from "../../ports/config.port.js";
 import type { CassPort } from "../../ports/cass.port.js";
 import type { GitPort } from "../../ports/git.port.js";
 import type { RuntimeStorePort } from "../../ports/runtime-store.port.js";
-import type { RuntimeEventStorePort } from "../../ports/runtime-event-store.port.js";
+import {
+  DEFAULT_RUNTIME_EVENT_TAIL_MAX_BYTES,
+  DEFAULT_RUNTIME_EVENT_TAIL_MAX_LINES,
+  type RuntimeEventStorePort,
+} from "../../ports/runtime-event-store.port.js";
 import type { Mission, Feature } from "../../domain/mission-types.js";
 import type { RuntimeState, WorkerRuntime } from "../../domain/runtime-types.js";
 import type { DoctorCheck, StatusReport } from "../../domain/types.js";
@@ -40,9 +44,6 @@ import type {
   DependencyMapRow,
 } from "./types.js";
 import type { TransportType, WorkerConfig } from "../../domain/worker-types.js";
-
-const RECENT_RUNTIME_EVENT_MAX_BYTES = 512 * 1024;
-const RECENT_RUNTIME_EVENT_MAX_LINES = 256;
 
 export interface SnapshotDeps {
   missionStore: MissionStorePort;
@@ -292,15 +293,10 @@ async function listRecentRuntimeEvents(
   missionId: string,
   featureId: string,
 ): Promise<readonly RuntimeEventRecord[]> {
-  if (runtimeEventStore.tailByFeature) {
-    return runtimeEventStore.tailByFeature(missionId, featureId, {
-      maxBytes: RECENT_RUNTIME_EVENT_MAX_BYTES,
-      maxLines: RECENT_RUNTIME_EVENT_MAX_LINES,
-    });
-  }
-
-  const events = await runtimeEventStore.listByFeature(missionId, featureId);
-  return events.slice(-RECENT_RUNTIME_EVENT_MAX_LINES);
+  return runtimeEventStore.tailByFeature(missionId, featureId, {
+    maxBytes: DEFAULT_RUNTIME_EVENT_TAIL_MAX_BYTES,
+    maxLines: DEFAULT_RUNTIME_EVENT_TAIL_MAX_LINES,
+  });
 }
 
 export async function buildHomeSnapshot(

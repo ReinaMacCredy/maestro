@@ -23,6 +23,7 @@ import {
   buildSessionLines,
   buildStatusStripModel,
   computeScreenLayout,
+  getModalParentRect,
   type UiLine,
 } from "./builders.js";
 
@@ -74,6 +75,7 @@ export function MissionControlScreen({
   const logLines = buildLogLines(state, contentWidth(layout.mainWidth), contentHeight(layout.leftBottomHeight));
   const sessionLines = buildSessionLines(state, contentWidth(layout.sideWidth), contentHeight(layout.rightBottomHeight), elapsedOffsetMs);
   const modal = buildModalModel(state);
+  const modalParentRect = getModalParentRect(layout);
 
   return (
     <box
@@ -131,10 +133,10 @@ export function MissionControlScreen({
         <ModalLayer
           modal={modal}
           state={state}
-          width={layout.modalWidth}
-          height={layout.modalHeight}
-          left={Math.max(1, Math.floor((layout.innerWidth - layout.modalWidth) / 2))}
-          top={Math.max(1, Math.floor((layout.innerHeight - layout.modalHeight) / 2))}
+          width={modalParentRect.width}
+          height={modalParentRect.height}
+          left={modalParentRect.x}
+          top={modalParentRect.y}
         />
       ) : null}
     </box>
