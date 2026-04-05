@@ -536,6 +536,15 @@ function containsCollapsedText(text: string, needle: string): boolean {
   return text.replace(/\s+/g, "").includes(needle.replace(/\s+/g, ""));
 }
 
+function containsAnsiPaletteSelection(rawOutput: string, label: string): boolean {
+  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const paletteSelectionPattern = new RegExp(
+    `\\u001b\\[[0-9;]*48;2;255;209;102m(?:.|\\n|\\r)*?${escapedLabel}`,
+    "i",
+  );
+  return paletteSelectionPattern.test(rawOutput);
+}
+
 function getDurationSamples(plainOutput: string): string[] {
   const matches = plainOutput.matchAll(/TIME\s+((?:\d+[hms]\s*)+)/g);
   return [...new Set(
@@ -1927,16 +1936,63 @@ describe("mission-control CLI", () => {
         },
       );
 
-        expectCleanPtyExit(result);
-        expect(containsCollapsedText(result.plainOutput, "Command Palette")).toBe(true);
-        expect(containsCollapsedText(result.plainOutput, "> █")).toBe(true);
-        expect(containsCollapsedText(result.plainOutput, "navigate tasks [F]")).toBe(true);
-          expect(result.plainOutput).not.toContain("Enter open · Esc close");
-        }, PTY_TIMEOUT_MS);
+      expectCleanPtyExit(result);
+      expect(containsCollapsedText(result.plainOutput, "Command Palette")).toBe(true);
+      expect(containsCollapsedText(result.plainOutput, "> █")).toBe(true);
+      expect(containsCollapsedText(result.plainOutput, "navigate tasks [F]")).toBe(true);
+      expect(result.plainOutput).not.toContain("Enter open · Esc close");
+    }, PTY_TIMEOUT_MS);
 
-      it("compiled binary interactive mode opens the command palette with slash", async () => {
+      it("compiled binary interactive mode paints the command palette during a rapid open-close burst", async () => {
         if (!pythonAvailable) return;
         const missionId = await createMission(tmpDir);
+
+        const result = await runCompiledInteractivePty(
+          tmpDir,
+          ["mission-control", "--mission", missionId],
+          {
+            input: "",
+            inputSteps: [
+              { chars: CTRL_P, delayMs: 60 },
+              { chars: "\u001b", delayMs: 30 },
+              { chars: "q", delayMs: 30 },
+            ],
+            waitForText: "Mission Control",
+          },
+        );
+
+        expectCleanPtyExit(result);
+        expect(containsCollapsedText(result.plainOutput, "Command Palette")).toBe(true);
+      }, PTY_TIMEOUT_MS);
+
+      it("compiled binary interactive mode repaints rapid command palette navigation bursts", async () => {
+        if (!pythonAvailable) return;
+        const missionId = await createMission(tmpDir);
+
+        const result = await runCompiledInteractivePty(
+          tmpDir,
+          ["mission-control", "--mission", missionId],
+          {
+            input: "",
+            inputSteps: [
+              { chars: CTRL_P, delayMs: 250 },
+              { chars: "\u001b[B", delayMs: 20 },
+              { chars: "\u001b[B", delayMs: 20 },
+              { chars: "\u001b", delayMs: 20 },
+              { chars: "q", delayMs: 30 },
+            ],
+            waitForText: "Mission Control",
+          },
+        );
+
+        expectCleanPtyExit(result);
+        expect(containsCollapsedText(result.plainOutput, "Command Palette")).toBe(true);
+        expect(containsAnsiPaletteSelection(result.rawOutput, "handoffs")).toBe(true);
+      }, PTY_TIMEOUT_MS);
+
+    it("compiled binary interactive mode opens the command palette with slash", async () => {
+      if (!pythonAvailable) return;
+      const missionId = await createMission(tmpDir);
 
         const result = await runCompiledInteractivePty(
           tmpDir,

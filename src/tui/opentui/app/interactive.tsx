@@ -57,24 +57,24 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
   };
 
   const renderCurrentFrame = (): void => {
-        const animationFrame = getCurrentAnimationFrame();
-        flushSync(() => {
-          root.render(
-          <MissionControlApp
-            snapshot={state.snapshot}
-            state={state}
-            width={renderer.width}
-            height={renderer.height}
-            animationFrame={animationFrame}
-            elapsedOffsetMs={0}
-            onMouseDown={handleOpenTuiMouseDown}
-          />,
-          );
-        });
-        lastRenderedAnimationFrame = animationFrame;
-        lastRenderMs = Date.now();
-        renderer.useMouse = !state.copyMode;
-      };
+    const animationFrame = getCurrentAnimationFrame();
+    flushSync(() => {
+      root.render(
+        <MissionControlApp
+          snapshot={state.snapshot}
+          state={state}
+          width={renderer.width}
+          height={renderer.height}
+          animationFrame={animationFrame}
+          elapsedOffsetMs={0}
+          onMouseDown={handleOpenTuiMouseDown}
+        />,
+      );
+    });
+    lastRenderedAnimationFrame = animationFrame;
+    lastRenderMs = Date.now();
+    renderer.useMouse = !state.copyMode;
+  };
 
   const scheduleRender = (minimumDelayMs = 0): void => {
     if (shuttingDown || renderScheduled) return;
@@ -97,6 +97,11 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
     renderTimer = setTimeout(runRender, delayMs);
   };
 
+  const markDirty = (minimumDelayMs = 0): void => {
+    dirty = true;
+    scheduleRender(minimumDelayMs);
+  };
+
   async function processKey(key: Key): Promise<void> {
     if (shuttingDown) return;
     if (key.type === "mouse") {
@@ -112,7 +117,7 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
       if (!paletteAction) return;
       state = reduce(state, paletteAction);
       if (paletteAction.type === "quit") shuttingDown = true;
-      dirty = true;
+      markDirty();
       return;
     }
 
@@ -136,7 +141,7 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
         const nextState = reduce(state, { type: "enter" });
         if (nextState !== state) {
           state = nextState;
-          dirty = true;
+          markDirty();
         }
       }
       if (state.modal.phase === "edit-inline") {
@@ -152,13 +157,13 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
       } catch {
         // Keep the current snapshot when reload fails.
       }
-      dirty = true;
+      markDirty();
       return;
     }
 
     state = reduce(state, action);
     if (action.type === "quit") shuttingDown = true;
-    dirty = true;
+    markDirty();
   }
 
   let inputQueue = Promise.resolve();
@@ -167,7 +172,7 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
       .then(task)
       .catch(() => {
         requestQuit();
-        dirty = true;
+        markDirty();
       });
   };
 
@@ -190,13 +195,12 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
   };
 
   const handleResize = (): void => {
-    dirty = true;
-    scheduleRender(RESIZE_RENDER_INTERVAL_MS);
+    markDirty(RESIZE_RENDER_INTERVAL_MS);
   };
 
   const handleSignal = (): void => {
     requestQuit();
-    dirty = true;
+    markDirty();
   };
 
   process.on("SIGINT", handleSignal);
@@ -220,18 +224,14 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
             const snapshot = await opts.reloadSnapshot();
             const nextState = reduce(state, { type: "update-snapshot", snapshot });
             state = nextState;
-            dirty = true;
+            markDirty();
           } catch {
             // Keep the current snapshot when polling fails.
-            }
+          }
         }
 
         if (getCurrentAnimationFrame() !== lastRenderedAnimationFrame) {
-          dirty = true;
-        }
-
-        if (dirty) {
-          scheduleRender();
+          markDirty();
         }
       }
     } finally {
@@ -241,12 +241,12 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
       renderer.off("resize", handleResize);
       renderer.removeInputHandler(handleRawInput);
       process.off("SIGINT", handleSignal);
-    process.off("SIGTERM", handleSignal);
-    flushSync(() => {
-      root.unmount();
-    });
-    renderer.destroy();
-  }
+      process.off("SIGTERM", handleSignal);
+      flushSync(() => {
+        root.unmount();
+      });
+      renderer.destroy();
+    }
 
   async function handleMouseDownAt(x: number, y: number): Promise<void> {
     if (state.copyMode || state.modal.kind === "none") return;
@@ -260,7 +260,7 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
 
     if (!pointInRect(layout, x, y)) {
       state = reduce(state, { type: "escape" });
-      dirty = true;
+      markDirty();
       return;
     }
 
@@ -274,7 +274,7 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
 
       state = reduce(state, command.action);
       if (command.action.type === "quit") shuttingDown = true;
-      dirty = true;
+      markDirty();
       return;
     }
 
@@ -286,7 +286,7 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
         if (state.modal.kind === "feature-browser") {
           state = reduce(state, { type: "enter" });
         }
-        dirty = true;
+        markDirty();
       }
       return;
     }
@@ -303,8 +303,8 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
     }
 
     state = reduce(state, { type: "modal-select", option: optionIndex });
-    dirty = true;
-  }
+    markDirty();
+}
 
   async function submitFeatureAction(): Promise<void> {
     if (state.modal.kind !== "feature-action") return;
@@ -317,7 +317,7 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
     if (!nextStatus) return;
 
     state = reduce(state, { type: "modal-submit-start" });
-    dirty = true;
+    markDirty();
 
     try {
       await updateFeature(
@@ -338,45 +338,45 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
       }
 
       state = { ...state, modal: { kind: "none" } };
-      dirty = true;
+      markDirty();
     } catch (error) {
       state = reduce(state, {
         type: "modal-submit-error",
         message: error instanceof Error ? error.message : "Failed to update feature",
       });
-      dirty = true;
+      markDirty();
     }
   }
 
   async function submitConfigEdit(): Promise<void> {
     if (state.modal.kind !== "config" || state.modal.phase !== "confirm-write") return;
 
-      const row = getConfigRowsForTab(
-        state.snapshot.configInspector ?? null,
-        state.modal.tab,
-        state.modal.findQuery,
-      )[state.modal.selectedRowIndex];
-      if (!row) return;
-      const selectedScope = resolveConfigScopeForKey(row.keyPath, state.modal.selectedScope);
+    const row = getConfigRowsForTab(
+      state.snapshot.configInspector ?? null,
+      state.modal.tab,
+      state.modal.findQuery,
+    )[state.modal.selectedRowIndex];
+    if (!row) return;
+    const selectedScope = resolveConfigScopeForKey(row.keyPath, state.modal.selectedScope);
 
     state = reduce(state, { type: "config-submit-start" });
-    dirty = true;
+    markDirty();
 
     try {
-        await previewConfigEdit(
-          opts.snapshotDeps.config,
-          process.cwd(),
-          selectedScope,
-          row.keyPath,
-          state.modal.draftValue ?? row.effectiveValueText,
-        );
-        await applyConfigEdit(
-          opts.snapshotDeps.config,
-          process.cwd(),
-          selectedScope,
-          row.keyPath,
-          state.modal.draftValue ?? row.effectiveValueText,
-        );
+      await previewConfigEdit(
+        opts.snapshotDeps.config,
+        process.cwd(),
+        selectedScope,
+        row.keyPath,
+        state.modal.draftValue ?? row.effectiveValueText,
+      );
+      await applyConfigEdit(
+        opts.snapshotDeps.config,
+        process.cwd(),
+        selectedScope,
+        row.keyPath,
+        state.modal.draftValue ?? row.effectiveValueText,
+      );
 
       try {
         const nextSnapshot = await opts.reloadSnapshot();
@@ -385,39 +385,39 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
         // Fall back to the next poll refresh if the immediate snapshot reload fails.
       }
 
-        state = reduce(state, {
-          type: "config-submit-success",
-          message: `Updated ${row.keyPath} in ${selectedScope} config`,
-        });
-      dirty = true;
+      state = reduce(state, {
+        type: "config-submit-success",
+        message: `Updated ${row.keyPath} in ${selectedScope} config`,
+      });
+      markDirty();
     } catch (error) {
       state = reduce(state, {
         type: "config-submit-error",
         message: error instanceof Error ? error.message : "Failed to update config",
       });
-      dirty = true;
+      markDirty();
     }
   }
 
   async function prepareConfigReview(): Promise<void> {
     if (state.modal.kind !== "config" || state.modal.phase !== "edit-inline") return;
 
-      const row = getConfigRowsForTab(
-        state.snapshot.configInspector ?? null,
-        state.modal.tab,
-        state.modal.findQuery,
-      )[state.modal.selectedRowIndex];
-      if (!row) return;
-      const selectedScope = resolveConfigScopeForKey(row.keyPath, state.modal.selectedScope);
+    const row = getConfigRowsForTab(
+      state.snapshot.configInspector ?? null,
+      state.modal.tab,
+      state.modal.findQuery,
+    )[state.modal.selectedRowIndex];
+    if (!row) return;
+    const selectedScope = resolveConfigScopeForKey(row.keyPath, state.modal.selectedScope);
 
     try {
-        const preview = await previewConfigEdit(
-          opts.snapshotDeps.config,
-          process.cwd(),
-          selectedScope,
-          row.keyPath,
-          state.modal.draftValue ?? row.effectiveValueText,
-        );
+      const preview = await previewConfigEdit(
+        opts.snapshotDeps.config,
+        process.cwd(),
+        selectedScope,
+        row.keyPath,
+        state.modal.draftValue ?? row.effectiveValueText,
+      );
       state = reduce(state, { type: "config-preview-ready", preview });
     } catch (error) {
       state = reduce(state, {
@@ -426,6 +426,6 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
       });
     }
 
-      dirty = true;
-    }
+    markDirty();
   }
+}
