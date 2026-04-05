@@ -1,10 +1,15 @@
 import { afterEach, describe, expect, it } from "bun:test";
-import { getWorkerHealthRows, probeA2aWorkerReadiness } from "../../../src/usecases/worker-health.usecase.js";
+import {
+  clearWorkerProbeCache,
+  getWorkerHealthRows,
+  probeA2aWorkerReadiness,
+} from "../../../src/usecases/worker-health.usecase.js";
 import { startA2aTestServer, type TestA2aServer } from "../../helpers/a2a-test-server.js";
 
 let server: TestA2aServer | undefined;
 
 afterEach(async () => {
+  clearWorkerProbeCache();
   await server?.close();
   server = undefined;
 });
@@ -118,6 +123,47 @@ describe("getWorkerHealthRows", () => {
     expect(rows[0]?.checks).toEqual([
       { label: "probe skipped", ok: true, detail: "read-only mode" },
     ]);
+  });
+
+  it("reuses cached probe results in passive mode instead of downgrading to synthetic ready", async () => {
+    const workers = {
+      codex: {
+        enabled: true,
+        transport: "cli" as const,
+        command: "codex-cache-passive-test",
+        outputMode: "raw" as const,
+      },
+    };
+
+    await getWorkerHealthRows(workers, {
+      nowMs: 1000,
+      nowIso: "2026-04-02T12:00:00.000Z",
+      cacheTtlMs: 30_000,
+      probeCli: async () => ({
+        status: "degraded",
+        detail: "auth/session check failed",
+        checks: [
+          { label: "command found", ok: true },
+          { label: "auth/session", ok: false, detail: "auth/session check failed" },
+        ],
+      }),
+    });
+
+    const rows = await getWorkerHealthRows(workers, {
+      nowMs: 2000,
+      nowIso: "2026-04-02T12:00:01.000Z",
+      probe: false,
+      probeCli: async () => {
+        throw new Error("should not be called");
+      },
+    });
+
+    expect(rows[0]).toMatchObject({
+      slug: "codex",
+      status: "degraded",
+      detail: "auth/session check failed",
+      lastCheckedAt: "2026-04-02T12:00:00.000Z",
+    });
   });
 
   it("reuses cached probe results within the ttl", async () => {

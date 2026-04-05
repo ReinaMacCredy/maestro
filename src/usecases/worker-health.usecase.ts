@@ -23,10 +23,15 @@ interface A2aProbeResult {
 interface WorkerProbeCacheEntry {
   readonly expiresAtMs: number;
   readonly probe: CliProbeResult | A2aProbeResult;
+  readonly lastCheckedAt: string;
 }
 
 const DEFAULT_PROBE_CACHE_TTL_MS = 30_000;
 const workerProbeCache = new Map<string, WorkerProbeCacheEntry>();
+
+export function clearWorkerProbeCache(): void {
+  workerProbeCache.clear();
+}
 
 export interface WorkerHealthOptions {
   readonly activeWorkers?: readonly string[];
@@ -67,14 +72,10 @@ export async function getWorkerHealthRows(
       } satisfies MissionControlWorkerHealthRow;
     }
 
-    const probe = shouldProbe
-      ? await getCachedProbeResult(slug, worker, nowMs, cacheTtlMs, probeCli, probeA2a)
-      : {
-          status: "ready",
-          detail: "configured; not checked in read-only mode",
-          checks: [{ label: "probe skipped", ok: true, detail: "read-only mode" }],
-        } satisfies CliProbeResult | A2aProbeResult;
-    const status: MissionControlWorkerHealthStatus = probe.status === "ready" && activeWorkers.has(slug)
+      const probe = shouldProbe
+      ? await getCachedProbeResult(slug, worker, nowMs, nowIso, cacheTtlMs, probeCli, probeA2a)
+      : getPassiveProbeResult(slug, worker, nowIso);
+      const status: MissionControlWorkerHealthStatus = probe.status === "ready" && activeWorkers.has(slug)
       ? "busy"
       : probe.status;
 
@@ -83,7 +84,7 @@ export async function getWorkerHealthRows(
       label: formatWorkerLabel(slug),
       status,
       detail: status === "busy" ? "active on current mission" : probe.detail ?? status,
-      lastCheckedAt: nowIso,
+      lastCheckedAt: probe.lastCheckedAt,
       checks: probe.checks,
       summary: guidance.summary,
       bestFor: guidance.bestFor,
@@ -96,14 +97,18 @@ async function getCachedProbeResult(
   slug: string,
   worker: WorkerConfig,
   nowMs: number,
+  nowIso: string,
   cacheTtlMs: number,
   probeCli: (slug: string, worker: Extract<WorkerConfig, { transport: "cli" }>) => Promise<CliProbeResult>,
   probeA2a: (slug: string, worker: Extract<WorkerConfig, { transport: "a2a" }>) => Promise<A2aProbeResult>,
-): Promise<CliProbeResult | A2aProbeResult> {
+): Promise<(CliProbeResult | A2aProbeResult) & { readonly lastCheckedAt: string }> {
   const cacheKey = `${slug}:${JSON.stringify(worker)}`;
   const cached = workerProbeCache.get(cacheKey);
   if (cached && cached.expiresAtMs > nowMs) {
-    return cached.probe;
+    return {
+      ...cached.probe,
+      lastCheckedAt: cached.lastCheckedAt,
+    };
   }
 
   const probe = worker.transport === "a2a"
@@ -111,9 +116,35 @@ async function getCachedProbeResult(
     : await probeCli(slug, worker);
   workerProbeCache.set(cacheKey, {
     probe,
+    lastCheckedAt: nowIso,
     expiresAtMs: nowMs + cacheTtlMs,
   });
-  return probe;
+  return {
+    ...probe,
+    lastCheckedAt: nowIso,
+  };
+}
+
+function getPassiveProbeResult(
+  slug: string,
+  worker: WorkerConfig,
+  nowIso: string,
+): (CliProbeResult | A2aProbeResult) & { readonly lastCheckedAt: string } {
+  const cacheKey = `${slug}:${JSON.stringify(worker)}`;
+  const cached = workerProbeCache.get(cacheKey);
+  if (cached) {
+    return {
+      ...cached.probe,
+      lastCheckedAt: cached.lastCheckedAt,
+    };
+  }
+
+  return {
+    status: "ready",
+    detail: "configured; not checked in read-only mode",
+    checks: [{ label: "probe skipped", ok: true, detail: "read-only mode" }],
+    lastCheckedAt: nowIso,
+  };
 }
 
 async function defaultProbeCli(

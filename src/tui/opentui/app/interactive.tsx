@@ -407,26 +407,103 @@ function buildInteractiveRenderSignature(state: AppState, width: number, height:
     leftPaneMode: state.leftPaneMode,
     copyMode: state.copyMode,
     modal: state.modal,
-    snapshot: normalizeSnapshotForInteractiveSignature(state.snapshot),
+    snapshot: buildSnapshotRenderToken(state.snapshot),
   });
 }
 
-function normalizeSnapshotForInteractiveSignature(snapshot: MissionControlSnapshot): MissionControlSnapshot {
+function buildSnapshotRenderToken(snapshot: MissionControlSnapshot): Record<string, unknown> {
   return {
-    ...snapshot,
-    elapsedMs: 0,
+    mode: snapshot.mode,
+    missionId: snapshot.missionId,
+    missionStatus: snapshot.missionStatus,
+    effectiveStatus: snapshot.effectiveStatus,
+    featureProgress: snapshot.featureProgress,
+    statusProgress: snapshot.statusProgress,
+    gateBlocked: snapshot.gateBlocked ?? false,
+    gateLabel: snapshot.gateLabel ?? null,
+    canPause: snapshot.canPause,
+    canResume: snapshot.canResume,
+    tokenCounters: snapshot.tokenCounters,
     activeFeature: normalizeTaskPreviewForInteractiveSignature(snapshot.activeFeature),
     activeWorker: normalizeWorkerPaneForInteractiveSignature(snapshot.activeWorker),
-    runtimeProcesses: snapshot.runtimeProcesses.map(normalizeRuntimeProcessForInteractiveSignature),
     taskPreviews: snapshot.taskPreviews?.map(normalizeTaskPreviewForInteractiveSignature),
-    workerHealth: snapshot.workerHealth?.map((row) => ({
-      ...row,
-      lastCheckedAt: "",
+    features: snapshot.features.map((feature) => ({
+      id: feature.id,
+      status: feature.status,
+      title: feature.title,
+      milestoneId: feature.milestoneId,
+      workerType: feature.workerType,
+      blockedByLabel: feature.blockedByLabel ?? "",
     })),
-    progressLog: snapshot.progressLog.map((event) => ({
-      ...event,
-      timestamp: "",
-      relativeMs: 0,
+    milestones: snapshot.milestones.map((milestone) => ({
+      id: milestone.id,
+      status: milestone.status,
+      title: milestone.title,
+      kind: milestone.kind ?? null,
+      profile: milestone.profile ?? null,
+    })),
+    pendingHandoffs: snapshot.pendingHandoffs.map((handoff) => ({
+      id: handoff.id,
+      agent: handoff.agent,
+      message: handoff.message,
+    })),
+    configSummary: snapshot.configSummary && {
+      configSource: snapshot.configSummary.configSource,
+      cassAvailable: snapshot.configSummary.cassAvailable,
+      gitAvailable: snapshot.configSummary.gitAvailable,
+      missionDirectory: snapshot.configSummary.missionDirectory,
+      workerTypes: snapshot.configSummary.workerTypes,
+      checks: snapshot.configSummary.checks.map((check) => ({
+        name: check.name,
+        status: check.status,
+        message: check.message,
+      })),
+    },
+    home: snapshot.home && {
+      headline: snapshot.home.headline,
+      summary: snapshot.home.summary,
+      locationLabel: snapshot.home.locationLabel,
+      actions: snapshot.home.actions,
+      pendingHandoffs: snapshot.home.pendingHandoffs.map((handoff) => ({
+        id: handoff.id,
+        agent: handoff.agent,
+        message: handoff.message,
+      })),
+      checks: snapshot.home.checks.map((check) => ({
+        name: check.name,
+        status: check.status,
+        message: check.message,
+      })),
+    },
+    session: snapshot.session && {
+      agent: snapshot.session.agent,
+      sessionId: snapshot.session.sessionId,
+      transport: snapshot.session.transport,
+      branch: snapshot.session.branch,
+      workingTreeClean: snapshot.session.workingTreeClean,
+      diffStat: snapshot.session.diffStat,
+      fileChanges: (snapshot.session.fileChanges ?? []).map((fileChange) => ({
+        path: fileChange.path,
+        kind: fileChange.kind,
+      })),
+      changedFiles: snapshot.session.changedFiles,
+    },
+    workerHealth: snapshot.workerHealth?.map((row) => ({
+      slug: row.slug,
+      status: row.status,
+      detail: row.detail,
+      checks: row.checks.map((check) => ({
+        label: check.label,
+        ok: check.ok,
+        detail: check.detail ?? "",
+      })),
+    })),
+    runtimeProcesses: snapshot.runtimeProcesses.map(normalizeRuntimeProcessForInteractiveSignature),
+    progressLog: snapshot.progressLog.slice(-12).map((event) => ({
+      kind: event.kind,
+      title: event.title,
+      timestamp: event.timestamp,
+      detail: event.detail ?? null,
     })),
   };
 }
@@ -446,6 +523,11 @@ function normalizeWorkerPaneForInteractiveSignature(worker: MissionControlWorker
     elapsedMs: 0,
     lastSeenAgeMs: 0,
     lastOutputAgeMs: 0,
+    outputLines: worker.outputLines?.slice(-6).map((line) => ({
+      timestamp: line.timestamp,
+      kind: line.kind,
+      text: line.text,
+    })),
   };
 }
 

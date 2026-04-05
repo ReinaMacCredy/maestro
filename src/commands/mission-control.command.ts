@@ -204,7 +204,7 @@ export function registerMissionControlCommand(program: Command): void {
               await renderDashboard({
                 snapshot,
                 snapshotDeps,
-                reloadSnapshot: () => supervisedSnapshotLoader.load({ probeWorkers: false }),
+                reloadSnapshot: () => readSnapshotLoader.load({ probeWorkers: true }),
             });
           });
   }
