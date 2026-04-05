@@ -270,10 +270,12 @@ interface ModalLayerProps {
 
 function ModalLayer({ modal, state, layout, theme }: ModalLayerProps) {
   const eyebrowLines = "eyebrow" in modal && modal.eyebrow ? modal.eyebrow.split("\n") : [];
-  const modalBackgroundColor = modal.mode === "palette"
+  const paletteOrigin = modal.mode === "palette" || modal.returnTarget === "command-palette";
+  const modalBackgroundColor = paletteOrigin
     ? theme.paletteModalBg
     : theme.modalBg;
-  const shouldFillSurface = modalBackgroundColor !== undefined;
+  const shouldFillSurface = modalBackgroundColor !== undefined
+    || (paletteOrigin && modal.mode !== "palette");
   const escapeText = "esc";
   const contentWidth = Math.max(0, layout.width - 4);
   return (
@@ -312,11 +314,17 @@ function ModalLayer({ modal, state, layout, theme }: ModalLayerProps) {
         <SafeText key={index} fg={OPEN_TUI_THEME.muted}>{line}</SafeText>
       ))}
 
-        {modal.mode === "split" ? (
-            <SplitModalBody modal={modal} width={layout.width} height={layout.height} theme={theme} />
-          ) : modal.mode === "info" ? (
-            <InfoModalBody modal={modal} />
-          ) : modal.mode === "palette" ? (
+          {modal.mode === "split" ? (
+              <SplitModalBody
+                modal={modal}
+                width={layout.width}
+                height={layout.height}
+                theme={theme}
+                transparentPanels={paletteOrigin && theme.paletteModalBg === undefined}
+              />
+            ) : modal.mode === "info" ? (
+              <InfoModalBody modal={modal} />
+            ) : modal.mode === "palette" ? (
           <PaletteModalBody modal={modal} contentWidth={contentWidth} />
         ) : (
           <MenuModalBody modal={modal} />
@@ -392,12 +400,14 @@ function SplitModalBody({
   modal,
   width,
   theme,
+  transparentPanels,
   }: {
       readonly modal: SplitModalOptions;
       readonly width: number;
       readonly height: number;
     readonly theme: ReturnType<typeof resolveMissionControlTheme>;
-  }) {
+      readonly transparentPanels: boolean;
+    }) {
   const ratio = modal.renderSpec.layout.splitRatio ?? [46, 54];
   const total = ratio[0] + ratio[1];
   const leftWidth = Math.max(18, Math.floor((width - 3) * ratio[0] / total));
@@ -406,7 +416,7 @@ function SplitModalBody({
 
   return (
     <box width="100%" flexGrow={1} flexDirection="row" marginTop={1}>
-          <box width={leftWidth} height="100%" border title="List" paddingLeft={1} paddingRight={1} backgroundColor={theme.modalPanelBg}>
+            <box width={leftWidth} height="100%" border title="List" paddingLeft={1} paddingRight={1} backgroundColor={transparentPanels ? undefined : theme.modalPanelBg}>
           <box width="100%" height="100%" flexDirection="column">
             {items.length === 0 ? (
               <SafeText fg={OPEN_TUI_THEME.muted}>{modal.emptyLabel ?? "No items"}</SafeText>
@@ -421,7 +431,7 @@ function SplitModalBody({
           </box>
       </box>
         <box width={1} />
-          <box width={rightWidth} height="100%" border title="Detail" paddingLeft={1} paddingRight={1} backgroundColor={theme.modalPanelBg}>
+            <box width={rightWidth} height="100%" border title="Detail" paddingLeft={1} paddingRight={1} backgroundColor={transparentPanels ? undefined : theme.modalPanelBg}>
           <box width="100%" height="100%" flexDirection="column">
             {modal.detailItems.length === 0 ? (
               <SafeText fg={OPEN_TUI_THEME.muted}>No details</SafeText>

@@ -25,6 +25,7 @@ import { shortenSessionId } from "../session-id.js";
 import { formatWorkerLabel } from "../../domain/worker-presentation.js";
 
 export function buildModalOptions(state: AppState): ModalOptions | undefined {
+  const returnTarget = state.modal.kind !== "command-palette" ? state.modal.returnTarget : undefined;
   if (state.modal.kind === "command-palette") {
     const commands = getFilteredCommandPaletteItems(state);
     return {
@@ -86,10 +87,11 @@ export function buildModalOptions(state: AppState): ModalOptions | undefined {
           Math.max(0, state.snapshot.features.length - 1),
         ),
         footer: state.modal.returnTarget === "command-palette"
-          ? "Enter focus · Left back · Esc close"
-          : "Enter focus · Esc close",
-        renderSpec: buildOverlayRenderSpec("feature-browser"),
-      };
+            ? "Enter focus · Left back · Esc close"
+            : "Enter focus · Esc close",
+          returnTarget,
+          renderSpec: buildOverlayRenderSpec("feature-browser"),
+        };
     }
 
     if (state.modal.kind === "dependencies") {
@@ -105,12 +107,13 @@ export function buildModalOptions(state: AppState): ModalOptions | undefined {
           state.modal.selectedOption,
           Math.max(0, ((preview?.blockedBy?.length ?? 0) + (preview?.unblocks?.length ?? 0)) - 1),
         ),
-        detailItems: preview
-          ? buildDependencyDetailItems(preview)
-          : [{ text: "No dependency graph available", tone: "muted" as const }],
-        footer: buildOverlayFooter(state.modal.returnTarget, "Enter jump"),
-        renderSpec: buildOverlayRenderSpec("dependencies"),
-      };
+          detailItems: preview
+            ? buildDependencyDetailItems(preview)
+            : [{ text: "No dependency graph available", tone: "muted" as const }],
+          footer: buildOverlayFooter(state.modal.returnTarget, "Enter jump"),
+          returnTarget,
+          renderSpec: buildOverlayRenderSpec("dependencies"),
+        };
     }
 
   if (state.modal.kind === "overview" && state.snapshot.home) {
@@ -127,11 +130,12 @@ export function buildModalOptions(state: AppState): ModalOptions | undefined {
           hint: action.label,
           section: "Next Steps",
           tone: "muted" as const,
-          })),
-        ],
-        footer: state.modal.returnTarget === "command-palette" ? "Left back · Esc close" : "Esc close",
-        renderSpec: buildOverlayRenderSpec("overview"),
-      };
+            })),
+          ],
+          footer: state.modal.returnTarget === "command-palette" ? "Left back · Esc close" : "Esc close",
+          returnTarget,
+          renderSpec: buildOverlayRenderSpec("overview"),
+        };
     }
 
     if (state.modal.kind === "handoffs") {
@@ -148,11 +152,12 @@ export function buildModalOptions(state: AppState): ModalOptions | undefined {
         items: items.length > 0
           ? items
           : [{ label: "No pending handoffs in this workspace.", selectable: false, tone: "muted" }],
-        selectedIndex: Math.min(state.modal.selectedHandoffIndex, Math.max(0, items.length - 1)),
-        detailItems: buildHandoffDetailItems(selectedHandoff),
-        footer: buildOverlayFooter(state.modal.returnTarget, "Enter inspect"),
-        renderSpec: buildOverlayRenderSpec("handoffs"),
-      };
+          selectedIndex: Math.min(state.modal.selectedHandoffIndex, Math.max(0, items.length - 1)),
+          detailItems: buildHandoffDetailItems(selectedHandoff),
+          footer: buildOverlayFooter(state.modal.returnTarget, "Enter inspect"),
+          returnTarget,
+          renderSpec: buildOverlayRenderSpec("handoffs"),
+        };
     }
 
       if (state.modal.kind === "config") {
@@ -169,18 +174,20 @@ export function buildModalOptions(state: AppState): ModalOptions | undefined {
             title: "Change Saved",
             eyebrow: selectedRow?.label,
             items: buildConfigResultItems(state, selectedRow),
+            returnTarget,
             renderSpec: buildOverlayRenderSpec("config"),
           };
         }
         return {
           mode: "split",
           title: buildConfigTitle(state),
-          eyebrow: buildConfigEyebrow(state),
-          items: configItems.items,
-          selectedIndex: configItems.selectedIndex,
-          detailItems: buildConfigDetailItems(state, selectedRow),
-          renderSpec: buildOverlayRenderSpec("config"),
-        };
+            eyebrow: buildConfigEyebrow(state),
+            items: configItems.items,
+            selectedIndex: configItems.selectedIndex,
+            detailItems: buildConfigDetailItems(state, selectedRow),
+            returnTarget,
+            renderSpec: buildOverlayRenderSpec("config"),
+          };
       }
 
       if (state.modal.kind === "processes") {
@@ -198,12 +205,13 @@ export function buildModalOptions(state: AppState): ModalOptions | undefined {
             ? items
             : [{ label: "No assigned, in-progress, or review features right now.", selectable: false, tone: "muted" }],
           selectedIndex: Math.min(state.modal.selectedProcessIndex, Math.max(0, items.length - 1)),
-          detailItems: buildRuntimeDetailItems(selectedProcess),
-          footer: state.modal.returnTarget === "command-palette"
-            ? "O output · Left back · Esc close"
-            : "O output · Esc close",
-          renderSpec: buildOverlayRenderSpec("processes"),
-        };
+            detailItems: buildRuntimeDetailItems(selectedProcess),
+            footer: state.modal.returnTarget === "command-palette"
+              ? "O output · Left back · Esc close"
+              : "O output · Esc close",
+            returnTarget,
+            renderSpec: buildOverlayRenderSpec("processes"),
+          };
       }
 
       if (state.modal.kind === "workers") {
@@ -219,11 +227,12 @@ export function buildModalOptions(state: AppState): ModalOptions | undefined {
           items: items.length > 0
             ? items
             : [{ label: "No workers configured", selectable: false, tone: "muted" }],
-          selectedIndex: Math.min(state.modal.selectedWorkerIndex, Math.max(0, items.length - 1)),
-          detailItems: buildWorkerHealthDetailItems(selectedWorker),
-          footer: buildOverlayFooter(state.modal.returnTarget, "Enter inspect"),
-          renderSpec: buildOverlayRenderSpec("processes"),
-        };
+            selectedIndex: Math.min(state.modal.selectedWorkerIndex, Math.max(0, items.length - 1)),
+            detailItems: buildWorkerHealthDetailItems(selectedWorker),
+            footer: buildOverlayFooter(state.modal.returnTarget, "Enter inspect"),
+            returnTarget,
+            renderSpec: buildOverlayRenderSpec("processes"),
+          };
       }
 
       if (state.modal.kind === "runtime-output") {
@@ -234,10 +243,11 @@ export function buildModalOptions(state: AppState): ModalOptions | undefined {
           eyebrow: process
             ? `${process.featureId} · ${process.workerType} · ${process.runtimeState ?? FEATURE_STATUS_LABEL[process.status]}`
             : "No runtime output selected",
-          items: buildRuntimeOutputItems(process),
-          footer: state.modal.returnTarget === "command-palette" ? "Left back · Esc close" : "Esc back",
-          renderSpec: buildOverlayRenderSpec("config"),
-        };
+            items: buildRuntimeOutputItems(process),
+            footer: state.modal.returnTarget === "command-palette" ? "Left back · Esc close" : "Esc back",
+            returnTarget,
+            renderSpec: buildOverlayRenderSpec("config"),
+          };
       }
 
   return undefined;

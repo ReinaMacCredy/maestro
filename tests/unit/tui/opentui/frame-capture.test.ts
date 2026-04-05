@@ -71,7 +71,7 @@ describe("captureMissionControlFrame", () => {
     expect(frame).toContain("Terminal too small");
   });
 
-  it("resolves transparent chrome, transparent command palette, and solid detail modals for terminal background mode", () => {
+  it("resolves transparent chrome, transparent command palette, and solid direct detail modals for terminal background mode", () => {
     const terminalSnapshot: MissionControlSnapshot = {
       mode: "mission",
       missionId: "2026-04-04-001",
@@ -219,7 +219,7 @@ describe("captureMissionControlFrame", () => {
       expect(render.charFrame).toContain("[F]");
     });
 
-    it("keeps underlying dashboard text visible through blank palette rows in terminal mode", async () => {
+  it("keeps underlying dashboard text visible through blank palette rows in terminal mode", async () => {
       const snapshot: MissionControlSnapshot = {
         ...makeSnapshot(),
         configSummary: {
@@ -259,9 +259,65 @@ describe("captureMissionControlFrame", () => {
       const baseLine = baseRender.charFrame.split("\n")[blankInteriorRow] ?? "";
       const paletteLine = paletteRender.charFrame.split("\n")[blankInteriorRow] ?? "";
 
-      expect(baseLine.slice(left, right).trim().length).toBeGreaterThan(0);
-      expect(paletteLine.slice(left, right)).toBe(baseLine.slice(left, right));
+    expect(baseLine.slice(left, right).trim().length).toBeGreaterThan(0);
+    expect(paletteLine.slice(left, right)).toBe(baseLine.slice(left, right));
+  });
+
+  it("renders palette-launched split overlays without opaque panel backgrounds in terminal mode", async () => {
+    const snapshot: MissionControlSnapshot = {
+      ...makeSnapshot(),
+      configSummary: {
+        configSource: "global",
+        cassAvailable: true,
+        gitAvailable: true,
+        checks: [],
+        missionDirectory: null,
+        workerTypes: [],
+        backgroundMode: "terminal",
+      },
+    };
+    const configState = reduce(
+      reduce(createInitialState(snapshot), { type: "open-command-palette" }),
+      { type: "open-config" },
+    );
+    const configRender = await captureMissionControlRender({
+      snapshot,
+      state: configState,
+      width: 120,
+      height: 40,
     });
+    const modal = buildModalModel(configState);
+
+    expect(modal).toBeDefined();
+    expect(modal?.mode).toBe("split");
+    expect(modal?.returnTarget).toBe("command-palette");
+
+    const titleLine = configRender.spans.lines.find((line) => line.spans.some((span) => span.text.includes("Config")));
+    const listLine = configRender.spans.lines.find((line) => line.spans.some((span) => span.text.includes("List")));
+    const detailLine = configRender.spans.lines.find((line) => line.spans.some((span) => span.text.includes("Detail")));
+
+    expect(titleLine).toBeDefined();
+    expect(listLine).toBeDefined();
+    expect(detailLine).toBeDefined();
+
+    const titleSpan = titleLine!.spans.find((span) => span.text.includes("Config"));
+    const listSpan = listLine!.spans.find((span) => span.text.includes("List"));
+    const detailSpan = detailLine!.spans.find((span) => span.text.includes("Detail"));
+
+    expect(titleSpan).toBeDefined();
+    expect(listSpan).toBeDefined();
+    expect(detailSpan).toBeDefined();
+
+    expect(titleSpan!.bg.buffer[0]).toBe(0);
+    expect(titleSpan!.bg.buffer[1]).toBe(0);
+    expect(titleSpan!.bg.buffer[2]).toBe(0);
+    expect(listSpan!.bg.buffer[0]).toBe(0);
+    expect(listSpan!.bg.buffer[1]).toBe(0);
+    expect(listSpan!.bg.buffer[2]).toBe(0);
+    expect(detailSpan!.bg.buffer[0]).toBe(0);
+    expect(detailSpan!.bg.buffer[1]).toBe(0);
+    expect(detailSpan!.bg.buffer[2]).toBe(0);
+  });
 
     it("dims the underlying dashboard while the command palette is open", async () => {
       const snapshot = makeSnapshot();

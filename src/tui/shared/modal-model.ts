@@ -85,6 +85,7 @@ export interface MenuModalOptions {
   readonly items: readonly (string | ModalRow)[];
   readonly selectedIndex: number;
   readonly footer?: string;
+  readonly returnTarget?: "command-palette";
   readonly renderSpec: OverlayRenderSpec;
 }
 
@@ -94,6 +95,7 @@ export interface InfoModalOptions {
   readonly eyebrow?: string;
   readonly items: readonly ModalInfoItem[];
   readonly footer?: string;
+  readonly returnTarget?: "command-palette";
   readonly renderSpec: OverlayRenderSpec;
 }
 
@@ -121,6 +123,7 @@ export interface SplitModalOptions {
   readonly detailItems: readonly ModalInfoItem[];
   readonly footer?: string;
   readonly emptyLabel?: string;
+  readonly returnTarget?: "command-palette";
   readonly renderSpec: OverlayRenderSpec;
 }
 

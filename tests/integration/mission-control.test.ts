@@ -729,9 +729,8 @@ async function seedLargeRuntimeEventLog(
 }
 
 function expectRuntimeOverlay(output: string): void {
-  expect(output).toContain("Runtime");
-  expect(output).toContain("No assigned, in-");
-  expect(output).toContain("No runtime item selected");
+  expect(containsCollapsedText(output, "Runtime")).toBe(true);
+  expect(containsCollapsedText(output, "O output")).toBe(true);
 }
 
 function encodeLeftClick(x: number, y: number): string {
@@ -1823,8 +1822,8 @@ describe("mission-control CLI", () => {
 
         expectCleanPtyExit(result);
         expect(containsCollapsedText(result.plainOutput, "Command Palette")).toBe(true);
-        expect(result.plainOutput).toContain("Select a task to focus");
-        expect(result.plainOutput).toContain("Feature 1");
+          expect(containsCollapsedText(result.plainOutput, "Feature 1")).toBe(true);
+          expect(containsCollapsedText(result.plainOutput, "Enter focus")).toBe(true);
       }, PTY_TIMEOUT_MS);
 
     it("compiled binary interactive mode filters the command palette and activates Handoff", async () => {
@@ -1848,8 +1847,8 @@ describe("mission-control CLI", () => {
       );
 
         expectCleanPtyExit(result);
-        expect(result.plainOutput).toContain("Handoffs");
-        expect(result.plainOutput).toContain("No pending handoff selected");
+          expect(containsCollapsedText(result.plainOutput, "Handoffs")).toBe(true);
+          expect(containsCollapsedText(result.plainOutput, "Left back")).toBe(true);
       }, PTY_TIMEOUT_MS);
 
     it("compiled binary interactive mode filters the command palette and activates Config", async () => {
