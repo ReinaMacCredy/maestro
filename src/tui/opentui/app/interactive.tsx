@@ -15,7 +15,7 @@ import { getSnapshotPollIntervalMs } from "../../app/interactive-shared.js";
 import { parseKeypress, type Key } from "../../input.js";
 import { HEADER_DOT_INTERVAL_MS, isHeaderAnimationActive } from "../../shared/header-animation.js";
 import { layoutModal, pointInRect } from "../../shared/modal-model.js";
-import { getConfigRowsForTab } from "../../state/config-inspector.js";
+import { getConfigRowsForTab, resolveConfigScopeForKey } from "../../state/config-inspector.js";
 import { createInitialState, reduce } from "../../state/reducer.js";
 import { MissionControlApp } from "./mission-control-app.js";
 import { buildModalModel, computeScreenLayout, getModalParentRect } from "../components/builders.js";
@@ -321,31 +321,32 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
   async function submitConfigEdit(): Promise<void> {
     if (state.modal.kind !== "config" || state.modal.phase !== "confirm-write") return;
 
-    const row = getConfigRowsForTab(
-      state.snapshot.configInspector ?? null,
-      state.modal.tab,
-      state.modal.findQuery,
-    )[state.modal.selectedRowIndex];
-    if (!row) return;
+      const row = getConfigRowsForTab(
+        state.snapshot.configInspector ?? null,
+        state.modal.tab,
+        state.modal.findQuery,
+      )[state.modal.selectedRowIndex];
+      if (!row) return;
+      const selectedScope = resolveConfigScopeForKey(row.keyPath, state.modal.selectedScope);
 
     state = reduce(state, { type: "config-submit-start" });
     dirty = true;
 
     try {
-      await previewConfigEdit(
-        opts.snapshotDeps.config,
-        process.cwd(),
-        state.modal.selectedScope,
-        row.keyPath,
-        state.modal.draftValue ?? row.effectiveValueText,
-      );
-      await applyConfigEdit(
-        opts.snapshotDeps.config,
-        process.cwd(),
-        state.modal.selectedScope,
-        row.keyPath,
-        state.modal.draftValue ?? row.effectiveValueText,
-      );
+        await previewConfigEdit(
+          opts.snapshotDeps.config,
+          process.cwd(),
+          selectedScope,
+          row.keyPath,
+          state.modal.draftValue ?? row.effectiveValueText,
+        );
+        await applyConfigEdit(
+          opts.snapshotDeps.config,
+          process.cwd(),
+          selectedScope,
+          row.keyPath,
+          state.modal.draftValue ?? row.effectiveValueText,
+        );
 
       try {
         const nextSnapshot = await opts.reloadSnapshot();
@@ -354,10 +355,10 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
         // Fall back to the next poll refresh if the immediate snapshot reload fails.
       }
 
-      state = reduce(state, {
-        type: "config-submit-success",
-        message: `Updated ${row.keyPath} in ${state.modal.selectedScope} config`,
-      });
+        state = reduce(state, {
+          type: "config-submit-success",
+          message: `Updated ${row.keyPath} in ${selectedScope} config`,
+        });
       dirty = true;
     } catch (error) {
       state = reduce(state, {
@@ -371,21 +372,22 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
   async function prepareConfigReview(): Promise<void> {
     if (state.modal.kind !== "config" || state.modal.phase !== "edit-inline") return;
 
-    const row = getConfigRowsForTab(
-      state.snapshot.configInspector ?? null,
-      state.modal.tab,
-      state.modal.findQuery,
-    )[state.modal.selectedRowIndex];
-    if (!row) return;
+      const row = getConfigRowsForTab(
+        state.snapshot.configInspector ?? null,
+        state.modal.tab,
+        state.modal.findQuery,
+      )[state.modal.selectedRowIndex];
+      if (!row) return;
+      const selectedScope = resolveConfigScopeForKey(row.keyPath, state.modal.selectedScope);
 
     try {
-      const preview = await previewConfigEdit(
-        opts.snapshotDeps.config,
-        process.cwd(),
-        state.modal.selectedScope,
-        row.keyPath,
-        state.modal.draftValue ?? row.effectiveValueText,
-      );
+        const preview = await previewConfigEdit(
+          opts.snapshotDeps.config,
+          process.cwd(),
+          selectedScope,
+          row.keyPath,
+          state.modal.draftValue ?? row.effectiveValueText,
+        );
       state = reduce(state, { type: "config-preview-ready", preview });
     } catch (error) {
       state = reduce(state, {

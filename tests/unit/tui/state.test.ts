@@ -55,6 +55,7 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
         checks: [],
         missionDirectory: ".maestro/missions/2026-03-30-001",
         workerTypes: ["test"],
+        backgroundMode: "solid",
       },
       runtimeProcesses: [],
       workerHealth: [],
@@ -1072,6 +1073,42 @@ describe("reduce", () => {
       describe("config scope flow", () => {
       it("opens the explicit scope picker when S is pressed", () => {
         const state = makeState({
+          snapshot: makeSnapshot({
+            configInspector: {
+              tabs: ["overview", "effective", "project", "global", "defaults", "workers", "plan", "doctor"],
+              rowsByTab: {
+                overview: [{
+                  keyPath: "execution.stopOnFailure",
+                  label: "Stop on failure",
+                  section: "Quick settings",
+                  valueText: "on",
+                  displayValueText: "on",
+                  source: "default",
+                  sourceBadge: "D",
+                  editKind: "toggle",
+                  editKindLabel: "on/off",
+                  options: ["off", "on"],
+                  description: "desc",
+                  summary: "Choose whether Maestro stops after the first failed task.",
+                  impactText: "If this is on, the run stops on the first failure.",
+                  effectiveValueText: "on",
+                  effectiveDisplayValueText: "on",
+                }],
+                effective: [],
+                project: [],
+                global: [],
+                defaults: [],
+                workers: [],
+                plan: [],
+                doctor: [],
+              },
+              hasProjectConfig: true,
+              hasGlobalConfig: true,
+              projectPath: ".maestro/config.yaml",
+              globalPath: "~/.maestro/config.yaml",
+              errors: [],
+            },
+          }),
           modal: {
             kind: "config",
             tab: "overview",
@@ -1087,6 +1124,62 @@ describe("reduce", () => {
         if (next.modal.kind === "config") {
           expect(next.modal.phase).toBe("choose-scope");
           expect(next.modal.selectedScope).toBe("project");
+        }
+      });
+
+      it("forces global scope for global-only settings", () => {
+        const state = makeState({
+          snapshot: makeSnapshot({
+            configInspector: {
+              tabs: ["overview", "effective", "project", "global", "defaults", "workers", "plan", "doctor"],
+              rowsByTab: {
+                overview: [{
+                  keyPath: "ui.missionControl.backgroundMode",
+                  label: "Background mode",
+                  section: "Quick settings",
+                  valueText: "terminal",
+                  displayValueText: "terminal background",
+                  source: "global",
+                  sourceBadge: "G",
+                  editKind: "enum",
+                  editKindLabel: "choice",
+                  options: ["solid", "terminal"],
+                  description: "Use a solid fill or let the terminal background show through.",
+                  summary: "Choose whether Mission Control paints a solid backdrop.",
+                  impactText: "Terminal background mode keeps normal chrome transparent.",
+                  effectiveValueText: "terminal",
+                  effectiveDisplayValueText: "terminal background",
+                }],
+                effective: [],
+                project: [],
+                global: [],
+                defaults: [],
+                workers: [],
+                plan: [],
+                doctor: [],
+              },
+              hasProjectConfig: true,
+              hasGlobalConfig: true,
+              projectPath: ".maestro/config.yaml",
+              globalPath: "~/.maestro/config.yaml",
+              errors: [],
+            },
+          }),
+          modal: {
+            kind: "config",
+            tab: "overview",
+            selectedRowIndex: 0,
+            phase: "browse",
+            selectedScope: "project",
+          },
+        });
+
+        const next = reduce(state, { type: "config-toggle-scope" });
+
+        expect(next.modal.kind).toBe("config");
+        if (next.modal.kind === "config") {
+          expect(next.modal.phase).toBe("browse");
+          expect(next.modal.selectedScope).toBe("global");
         }
       });
 
@@ -1135,6 +1228,62 @@ describe("reduce", () => {
             phase: "choose-scope",
             selectedScope: "global",
             draftValue: "off",
+          },
+        });
+
+        const next = reduce(state, { type: "enter" });
+
+        expect(next.modal.kind).toBe("config");
+        if (next.modal.kind === "config") {
+          expect(next.modal.phase).toBe("edit-inline");
+          expect(next.modal.selectedScope).toBe("global");
+        }
+      });
+
+      it("normalizes enter into global scope for global-only settings", () => {
+        const state = makeState({
+          snapshot: makeSnapshot({
+            configInspector: {
+              tabs: ["overview", "effective", "project", "global", "defaults", "workers", "plan", "doctor"],
+              rowsByTab: {
+                overview: [{
+                  keyPath: "ui.missionControl.backgroundMode",
+                  label: "Background mode",
+                  section: "Quick settings",
+                  valueText: "terminal",
+                  displayValueText: "terminal background",
+                  source: "global",
+                  sourceBadge: "G",
+                  editKind: "enum",
+                  editKindLabel: "choice",
+                  options: ["solid", "terminal"],
+                  description: "Use a solid fill or let the terminal background show through.",
+                  summary: "Choose whether Mission Control paints a solid backdrop.",
+                  impactText: "Terminal background mode keeps normal chrome transparent.",
+                  effectiveValueText: "terminal",
+                  effectiveDisplayValueText: "terminal background",
+                }],
+                effective: [],
+                project: [],
+                global: [],
+                defaults: [],
+                workers: [],
+                plan: [],
+                doctor: [],
+              },
+              hasProjectConfig: true,
+              hasGlobalConfig: true,
+              projectPath: ".maestro/config.yaml",
+              globalPath: "~/.maestro/config.yaml",
+              errors: [],
+            },
+          }),
+          modal: {
+            kind: "config",
+            tab: "overview",
+            selectedRowIndex: 0,
+            phase: "browse",
+            selectedScope: "project",
           },
         });
 

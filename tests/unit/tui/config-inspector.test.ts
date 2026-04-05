@@ -9,6 +9,11 @@ const layers: ConfigLayers = {
       defaultWorker: "codex",
       stopOnFailure: true,
     },
+    ui: {
+      missionControl: {
+        backgroundMode: "solid",
+      },
+    },
     supervision: {
       level: "mid",
     },
@@ -38,10 +43,20 @@ const layers: ConfigLayers = {
     supervision: {
       level: "high",
     },
+    ui: {
+      missionControl: {
+        backgroundMode: "terminal",
+      },
+    },
   },
   global: {
     execution: {
       defaultWorker: "codex",
+    },
+    ui: {
+      missionControl: {
+        backgroundMode: "terminal",
+      },
     },
   },
   project: {
@@ -51,6 +66,11 @@ const layers: ConfigLayers = {
     },
     supervision: {
       level: "high",
+    },
+    ui: {
+      missionControl: {
+        backgroundMode: "solid",
+      },
     },
   },
   errors: [],
@@ -168,5 +188,23 @@ describe("buildConfigInspector", () => {
         valueText: "[hidden]",
         displayValueText: "[hidden]",
       });
+    });
+
+    it("surfaces mission control background mode as a global-only setting", () => {
+      const inspector = buildConfigInspector(layers, [], [], workerHealth);
+      const overviewRow = inspector.rowsByTab.overview.find((row) => row.keyPath === "ui.missionControl.backgroundMode");
+      const projectRow = inspector.rowsByTab.project.find((row) => row.keyPath === "ui.missionControl.backgroundMode");
+      const doctorRow = inspector.rowsByTab.doctor.find((row) => row.keyPath === "doctor.ignored-ui-missionControl-backgroundMode");
+
+      expect(overviewRow).toMatchObject({
+        label: "Background mode",
+        displayValueText: "terminal background",
+        source: "global",
+      });
+      expect(projectRow).toMatchObject({
+        editKind: "readonly",
+      });
+      expect(projectRow?.description).toContain("global-only");
+      expect(doctorRow?.displayValueText).toContain("Background Mode");
     });
   });

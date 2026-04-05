@@ -9,7 +9,7 @@ import type {
 import type { ConfigScope } from "../../ports/config.port.js";
 import { getFilteredMissionControlPaletteCommandCount } from "./mission-control-commands.js";
 import { getValidFeatureTransitions } from "../../domain/mission-state.js";
-import { getConfigRowsForTab } from "./config-inspector.js";
+import { getConfigRowsForTab, isGlobalOnlyConfigKey, resolveConfigScopeForKey } from "./config-inspector.js";
 
 export type FocusedPanel = "features" | "log" | "none";
 export type { LeftPaneMode };
@@ -733,11 +733,22 @@ export function reduce(state: AppState, action: Action): AppState {
           return cycleConfigDraft(state, action.direction);
 
         case "config-toggle-scope":
-          if (state.modal.kind !== "config") return state;
-          if (state.modal.phase === "choose-scope") {
-            return {
-              ...state,
-              modal: {
+            if (state.modal.kind !== "config") return state;
+            const selectedRow = getSelectedConfigRow(state);
+            if (selectedRow && isGlobalOnlyConfigKey(selectedRow.keyPath)) {
+              return {
+                ...state,
+                modal: {
+                  ...state.modal,
+                  selectedScope: "global",
+                  preview: undefined,
+                },
+              };
+            }
+            if (state.modal.phase === "choose-scope") {
+              return {
+                ...state,
+                modal: {
                 ...state.modal,
                 selectedScope: state.modal.selectedScope === "project" ? "global" : "project",
                 preview: undefined,
@@ -972,6 +983,17 @@ function handleModalNavigate(state: AppState, direction: "up" | "down"): AppStat
         state.modal.findQuery,
       ).length;
       if (state.modal.phase === "choose-scope") {
+        const selectedRow = getSelectedConfigRow(state);
+        if (selectedRow && isGlobalOnlyConfigKey(selectedRow.keyPath)) {
+          return {
+            ...state,
+            modal: {
+              ...state.modal,
+              selectedScope: "global",
+              preview: undefined,
+            },
+          };
+        }
         return {
           ...state,
           modal: {
@@ -1136,6 +1158,15 @@ function getDependencyTargets(state: AppState): ReadonlyArray<{ id: string }> {
   ].map((feature) => ({ id: feature.id }));
 }
 
+function getSelectedConfigRow(state: AppState) {
+  if (state.modal.kind !== "config") return undefined;
+  return getConfigRowsForTab(
+    state.snapshot.configInspector ?? null,
+    state.modal.tab,
+    state.modal.findQuery,
+  )[state.modal.selectedRowIndex];
+}
+
 function handleConfigEnter(state: AppState): AppState {
   if (state.modal.kind !== "config") return state;
 
@@ -1151,29 +1182,31 @@ function handleConfigEnter(state: AppState): AppState {
       return state;
     }
 
-    return {
-      ...state,
-      modal: {
-        ...state.modal,
-        phase: "edit-inline",
-        findQuery: undefined,
-        draftValue: row.effectiveValueText,
-        message: undefined,
-        preview: undefined,
+      return {
+        ...state,
+        modal: {
+          ...state.modal,
+          phase: "edit-inline",
+          selectedScope: resolveConfigScopeForKey(row.keyPath, state.modal.selectedScope),
+          findQuery: undefined,
+          draftValue: row.effectiveValueText,
+          message: undefined,
+          preview: undefined,
       },
     };
   }
 
   if (state.modal.phase === "choose-scope") {
-    return {
-      ...state,
-      modal: {
-        ...state.modal,
-        phase: state.modal.draftValue ? "edit-inline" : "browse",
-        findQuery: undefined,
-        draftValue: state.modal.draftValue ?? row.effectiveValueText,
-        preview: undefined,
-      },
+      return {
+        ...state,
+        modal: {
+          ...state.modal,
+          phase: state.modal.draftValue ? "edit-inline" : "browse",
+          selectedScope: resolveConfigScopeForKey(row.keyPath, state.modal.selectedScope),
+          findQuery: undefined,
+          draftValue: state.modal.draftValue ?? row.effectiveValueText,
+          preview: undefined,
+        },
     };
   }
 

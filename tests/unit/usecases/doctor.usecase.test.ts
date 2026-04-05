@@ -77,4 +77,51 @@ describe("runDoctor", () => {
       status: "fail",
     });
   });
+
+  it("warns when a global-only mission control setting is set in project config", async () => {
+    const config = mockConfig({
+      exists: async () => true,
+      loadLayers: async () => ({
+        defaults: {
+          ui: {
+            missionControl: {
+              backgroundMode: "solid",
+            },
+          },
+        },
+        effective: {
+          ui: {
+            missionControl: {
+              backgroundMode: "terminal",
+            },
+          },
+        },
+        global: {
+          ui: {
+            missionControl: {
+              backgroundMode: "terminal",
+            },
+          },
+        },
+        project: {
+          ui: {
+            missionControl: {
+              backgroundMode: "solid",
+            },
+          },
+        },
+        errors: [],
+        paths: {
+          project: ".maestro/config.yaml",
+          global: "~/.maestro/config.yaml",
+        },
+      }),
+    });
+
+    const checks = await runDoctor(mockCass(), mockGit(), config, process.cwd());
+
+    expect(checks.find((c) => c.name === "ignored-ui-missionControl-backgroundMode")).toMatchObject({
+      status: "warn",
+    });
+  });
 });

@@ -17,6 +17,7 @@ import {
   type RuntimeEventStorePort,
 } from "../../ports/runtime-event-store.port.js";
 import type { Mission, Feature } from "../../domain/mission-types.js";
+import { getMissionControlBackgroundMode, listIgnoredProjectConfigKeys } from "../../domain/ui-config.js";
 import type { RuntimeState, WorkerRuntime } from "../../domain/runtime-types.js";
 import type { DoctorCheck, StatusReport } from "../../domain/types.js";
 import type { RuntimeEventRecord } from "../../domain/worker-types.js";
@@ -159,10 +160,15 @@ export async function buildSnapshot(
       .map((feature) => runtimeByFeature.get(feature.id)?.agent ?? "unknown")
       .filter((agent) => agent !== "unknown"),
   });
-  const taskPreviews = features.map((feature) =>
-    buildTaskPreview(feature, report, runtimeByFeature, featureGraph.get(feature.id))
-  );
-  const taskPreviewById = new Map(taskPreviews.map((preview) => [preview.id, preview]));
+    const taskPreviews = features.map((feature) =>
+      buildTaskPreview(feature, report, runtimeByFeature, featureGraph.get(feature.id))
+    );
+    const checks = [
+      ...env.checks,
+      ...buildIgnoredProjectOverrideChecks(configLayers.project),
+    ];
+    const backgroundMode = getMissionControlBackgroundMode(configLayers.effective);
+    const taskPreviewById = new Map(taskPreviews.map((preview) => [preview.id, preview]));
 
   // Feature rows
   const featureRows: MissionControlFeatureRow[] = features.map((f) => {
@@ -264,11 +270,12 @@ export async function buildSnapshot(
         configSource: env.status.configSource,
         cassAvailable: env.status.cassAvailable,
         gitAvailable: env.status.gitAvailable,
-        checks: env.checks,
-        missionDirectory: `.maestro/missions/${mission.id}`,
-        workerTypes,
-        },
-            configInspector: buildConfigInspector(configLayers, env.checks, features, workerHealth),
+          checks,
+          missionDirectory: `.maestro/missions/${mission.id}`,
+          workerTypes,
+          backgroundMode,
+          },
+              configInspector: buildConfigInspector(configLayers, checks, features, workerHealth),
             workerHealth,
             runtimeProcesses: buildRuntimeProcesses(
               mission,
@@ -309,7 +316,12 @@ export async function buildHomeSnapshot(
     deps.config.loadLayers(cwd),
     deps.git.isRepo(cwd).then((isRepo) => isRepo ? deps.git.getState(cwd) : Promise.resolve(undefined)),
   ]);
-  const { status, checks } = env;
+  const checks = [
+    ...env.checks,
+    ...buildIgnoredProjectOverrideChecks(configLayers.project),
+  ];
+  const { status } = env;
+  const backgroundMode = getMissionControlBackgroundMode(configLayers.effective);
 
   const headline = status.gitAvailable
     ? "No missions yet"
@@ -366,10 +378,11 @@ export async function buildHomeSnapshot(
       configSource: status.configSource,
       cassAvailable: status.cassAvailable,
       gitAvailable: status.gitAvailable,
-      checks,
-      missionDirectory: null,
-      workerTypes: [],
-    },
+        checks,
+        missionDirectory: null,
+        workerTypes: [],
+        backgroundMode,
+      },
           configInspector: buildConfigInspector(configLayers, checks, [], workerHealth),
         workerHealth,
         runtimeProcesses: [],
@@ -553,6 +566,15 @@ function buildTaskPreview(
     agent: runtime?.agent,
     sessionId: runtime?.sessionId,
   };
+}
+
+function buildIgnoredProjectOverrideChecks(projectConfig: import("../../domain/types.js").MaestroConfig | undefined): DoctorCheck[] {
+  return listIgnoredProjectConfigKeys(projectConfig).map((keyPath) => ({
+    name: `ignored-${keyPath.replaceAll(".", "-")}`,
+    status: "warn" as const,
+    message: `${keyPath} is set in project config but only global config is used`,
+    fix: "Remove the project value or set it in ~/.maestro/config.yaml instead",
+  }));
 }
 
 function buildFeatureGraph(features: readonly Feature[]): Map<string, FeatureGraphEntry> {

@@ -16,10 +16,12 @@ import {
 import { getValidFeatureTransitions } from "../../domain/mission-state.js";
 import { FEATURE_STATUS_LABEL, FEATURE_TASK_STATUS_LABEL } from "../theme.js";
 import { shortenSessionId } from "../session-id.js";
-import {
-  getConfigRowsForTab,
-  getConfigTabDisplayLabel,
-} from "../state/config-inspector.js";
+  import {
+    getConfigRowsForTab,
+    getConfigTabDisplayLabel,
+    isGlobalOnlyConfigKey,
+    resolveConfigScopeForKey,
+  } from "../state/config-inspector.js";
 import { formatWorkerLabel } from "../../domain/worker-presentation.js";
 
 export function buildModalOptions(state: AppState): ModalOptions | undefined {
@@ -362,7 +364,7 @@ function displayDraftValue(row: MissionControlConfigRow, draftValue?: string): s
     return formatOptionLabel(row, draftValue ?? row.effectiveValueText);
   }
 
-function buildConfigItems(
+  function buildConfigItems(
   state: AppState,
   rows: readonly MissionControlConfigRow[],
   selectedRow: MissionControlConfigRow | undefined,
@@ -380,8 +382,29 @@ function buildConfigItems(
   if (state.modal.kind !== "config") {
     return { items: [], selectedIndex: 0 };
   }
-  if (state.modal.phase === "choose-scope") {
-    return {
+    if (state.modal.phase === "choose-scope") {
+      if (selectedRow && isGlobalOnlyConfigKey(selectedRow.keyPath)) {
+        return {
+          items: [
+            {
+              label: "Global config",
+              section: "Save destination",
+            },
+            {
+              label: "This setting is global-only",
+              selectable: false,
+              tone: "muted",
+            },
+            {
+              label: "Project config values are ignored",
+              selectable: false,
+              tone: "muted",
+            },
+          ],
+          selectedIndex: 0,
+        };
+      }
+      return {
       items: [
         {
           label: "Project config",
@@ -455,34 +478,40 @@ function buildConfigItems(
     };
   }
 
-function buildConfigBrowseDetailItems(
-  state: AppState,
-  row: MissionControlConfigRow,
-) {
-  return [
-    { text: row.label, tone: "accent" as const, style: "block" as const },
-    { text: row.summary },
-    { text: `Can edit: ${row.editKind === "readonly" ? "no" : "yes"}   Type: ${row.editKindLabel}` },
-    { text: `Saving to: ${state.modal.selectedScope === "project" ? "project config" : "global config"}` },
-    { text: row.effectiveDisplayValueText, section: "Using now", tone: "accent" as const, style: "block" as const },
-    ...buildSavedValueItems(row),
-    { text: row.impactText, section: "Why it matters" },
-    { text: "Enter change   S save to   P preview", section: "Next actions" },
-  ];
-}
+  function buildConfigBrowseDetailItems(
+    state: AppState,
+    row: MissionControlConfigRow,
+  ) {
+    const targetScope = resolveConfigScopeForKey(row.keyPath, state.modal.selectedScope);
+    const globalOnly = isGlobalOnlyConfigKey(row.keyPath);
+    return [
+      { text: row.label, tone: "accent" as const, style: "block" as const },
+      { text: row.summary },
+      { text: `Can edit: ${row.editKind === "readonly" ? "no" : "yes"}   Type: ${row.editKindLabel}` },
+      { text: `Saving to: ${targetScope === "project" ? "project config" : "global config"}` },
+      ...(globalOnly ? [{ text: "Project overrides are ignored for this setting.", section: "Scope rule" }] : []),
+      { text: row.effectiveDisplayValueText, section: "Using now", tone: "accent" as const, style: "block" as const },
+      ...buildSavedValueItems(row),
+      { text: row.impactText, section: "Why it matters" },
+      { text: globalOnly ? "Enter change   P preview" : "Enter change   S save to   P preview", section: "Next actions" },
+    ];
+  }
 
-function buildConfigEditDetailItems(
-  state: AppState,
-  row: MissionControlConfigRow,
-) {
-  return [
-    { text: row.label, tone: "accent" as const, style: "block" as const },
-    { text: row.summary },
-    { text: `Saving to: ${state.modal.selectedScope === "project" ? "project config" : "global config"}`, section: "Saving to" },
-    { text: row.impactText, section: "Why it matters" },
-    { text: "Left/Right move   Enter review", section: "Next actions" },
-  ];
-}
+  function buildConfigEditDetailItems(
+    state: AppState,
+    row: MissionControlConfigRow,
+  ) {
+    const targetScope = resolveConfigScopeForKey(row.keyPath, state.modal.selectedScope);
+    const globalOnly = isGlobalOnlyConfigKey(row.keyPath);
+    return [
+      { text: row.label, tone: "accent" as const, style: "block" as const },
+      { text: row.summary },
+      { text: `Saving to: ${targetScope === "project" ? "project config" : "global config"}`, section: "Saving to" },
+      ...(globalOnly ? [{ text: "Project overrides are ignored for this setting.", section: "Scope rule" }] : []),
+      { text: row.impactText, section: "Why it matters" },
+      { text: "Left/Right move   Enter review", section: "Next actions" },
+    ];
+  }
 
 function buildDefaultWorkerDetailItems(
   state: AppState,
@@ -505,11 +534,19 @@ function buildDefaultWorkerDetailItems(
   ];
 }
 
-function buildConfigScopeDetailItems(
-  state: AppState,
-  row: MissionControlConfigRow,
-) {
-  const projectSelected = state.modal.selectedScope === "project";
+  function buildConfigScopeDetailItems(
+    state: AppState,
+    row: MissionControlConfigRow,
+  ) {
+    if (isGlobalOnlyConfigKey(row.keyPath)) {
+      return [
+        { text: "Global-only setting", tone: "accent" as const, style: "block" as const },
+        { text: "Mission Control background mode is always read from global config." },
+        { text: "Project config values are ignored.", section: "What this means" },
+        { text: "Global config", section: "Current target", tone: "accent" as const },
+      ];
+    }
+    const projectSelected = state.modal.selectedScope === "project";
   return [
     { text: "What each option means", tone: "accent" as const, style: "block" as const },
     { text: "Project config", section: "What each option means" },
@@ -521,26 +558,31 @@ function buildConfigScopeDetailItems(
   ];
 }
 
-function buildConfigConfirmDetailItems(
-  state: AppState,
-  row: MissionControlConfigRow,
-) {
-  const previewLines = state.modal.kind === "config" && state.modal.preview
-    ? state.modal.preview.content.split("\n").filter((line) => line.length > 0).slice(0, 8)
-    : [];
-  return [
-    { text: state.modal.kind === "config" && state.modal.preview ? state.modal.preview.path : "Preview unavailable", section: "File preview", tone: "accent" as const, style: "block" as const },
-    ...previewLines.map((line, index) => ({ text: line, section: index === 0 ? "File preview" : undefined })),
-  ];
-}
+  function buildConfigConfirmDetailItems(
+    state: AppState,
+    row: MissionControlConfigRow,
+  ) {
+    const targetScope = resolveConfigScopeForKey(row.keyPath, state.modal.selectedScope);
+    const previewLines = state.modal.kind === "config" && state.modal.preview
+      ? state.modal.preview.content.split("\n").filter((line) => line.length > 0).slice(0, 8)
+      : [];
+    return [
+      { text: state.modal.kind === "config" && state.modal.preview ? state.modal.preview.path : "Preview unavailable", section: "File preview", tone: "accent" as const, style: "block" as const },
+      { text: `Saving to: ${targetScope === "project" ? "project config" : "global config"}`, section: "File preview" },
+      ...previewLines.map((line, index) => ({ text: line, section: index === 0 ? "File preview" : undefined })),
+    ];
+  }
 
-function buildConfigResultItems(
-  state: AppState,
-  row: MissionControlConfigRow | undefined,
-) {
-  const scopeLabel = state.modal.kind === "config" && state.modal.selectedScope === "global"
-    ? "global config"
-    : "project config";
+  function buildConfigResultItems(
+    state: AppState,
+    row: MissionControlConfigRow | undefined,
+  ) {
+    const scope = row && state.modal.kind === "config"
+      ? resolveConfigScopeForKey(row.keyPath, state.modal.selectedScope)
+      : state.modal.kind === "config"
+        ? state.modal.selectedScope
+        : "project";
+    const scopeLabel = scope === "global" ? "global config" : "project config";
   return [
     {
       text: `Saved to ${scopeLabel}.`,
@@ -614,11 +656,12 @@ function availabilityText(availability: NonNullable<MissionControlConfigRow["wor
   }
 }
 
-function buildValueChoiceItems(
-  state: AppState,
-  row: MissionControlConfigRow,
-) {
-  return [
+  function buildValueChoiceItems(
+    state: AppState,
+    row: MissionControlConfigRow,
+  ) {
+    const targetScope = resolveConfigScopeForKey(row.keyPath, state.modal.selectedScope);
+    return [
     ...row.options!.map((option, index) => ({
       label: formatOptionLabel(row, option),
       section: index === 0 ? "Choose a value" : undefined,
@@ -630,11 +673,11 @@ function buildValueChoiceItems(
       tone: "accent" as const,
     },
     ...buildSavedValueRows(row, "Other saved values"),
-    {
-      label: state.modal.kind === "config" && state.modal.selectedScope === "project" ? "Project config" : "Global config",
-      section: "Saving to",
-      selectable: false,
-    },
+      {
+        label: targetScope === "project" ? "Project config" : "Global config",
+        section: "Saving to",
+        selectable: false,
+      },
   ];
 }
 

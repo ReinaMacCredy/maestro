@@ -36,6 +36,43 @@ export const OPEN_TUI_THEME = {
   selectionFg: "#ffffff",
 } as const;
 
+export interface MissionControlTheme {
+  readonly pageBg?: string;
+  readonly panelBg?: string;
+  readonly headerBg?: string;
+  readonly modalBg: string;
+  readonly modalPanelBg: string;
+  readonly muted: string;
+  readonly text: string;
+  readonly accent: string;
+  readonly success: string;
+  readonly warning: string;
+  readonly danger: string;
+  readonly info: string;
+  readonly selectionBg: string;
+  readonly selectionFg: string;
+}
+
+export function resolveMissionControlTheme(snapshot: MissionControlSnapshot): MissionControlTheme {
+  const backgroundMode = snapshot.configSummary?.backgroundMode ?? "solid";
+  if (backgroundMode === "terminal") {
+    return {
+      ...OPEN_TUI_THEME,
+      pageBg: undefined,
+      panelBg: undefined,
+      headerBg: undefined,
+      modalBg: OPEN_TUI_THEME.panelBgElevated,
+      modalPanelBg: OPEN_TUI_THEME.panelBg,
+    };
+  }
+
+  return {
+    ...OPEN_TUI_THEME,
+    modalBg: OPEN_TUI_THEME.panelBgElevated,
+    modalPanelBg: OPEN_TUI_THEME.panelBg,
+  };
+}
+
 export interface UiLine {
   readonly text: string;
   readonly fg?: string;

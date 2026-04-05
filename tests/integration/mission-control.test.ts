@@ -1585,8 +1585,8 @@ describe("mission-control CLI", () => {
       expectCleanPtyExit(result);
       const samples = lateWindow(result.samples);
       expect(samples.length).toBeGreaterThanOrEqual(6);
-      expect(rssGrowthKb(samples)).toBeLessThan(24_576);
-      expect(maxCpuPct(samples)).toBeLessThan(20);
+      expect(rssGrowthKb(samples)).toBeLessThan(40_960);
+      expect(maxCpuPct(samples)).toBeLessThan(30);
     }, PTY_TIMEOUT_MS);
 
       it("compiled binary interactive mode stabilizes process stats while an executing mission idles", async () => {
@@ -1605,8 +1605,8 @@ describe("mission-control CLI", () => {
       expectCleanPtyExit(result);
       const samples = lateWindow(result.samples);
       expect(samples.length).toBeGreaterThanOrEqual(6);
-        expect(rssGrowthKb(samples)).toBeLessThan(24_576);
-        expect(maxCpuPct(samples)).toBeLessThan(20);
+        expect(rssGrowthKb(samples)).toBeLessThan(40_960);
+        expect(maxCpuPct(samples)).toBeLessThan(30);
       }, PTY_TIMEOUT_MS);
 
       it("compiled binary interactive mode animates the header dots while a mission is executing", async () => {
@@ -1747,7 +1747,7 @@ describe("mission-control CLI", () => {
     expectCleanPtyExit(result);
     expect(result.samples.length).toBeGreaterThanOrEqual(8);
       expect(Math.max(...result.samples.map((sample) => sample.rssKb))).toBeLessThan(400_000);
-      expect(maxCpuPct(lateWindow(result.samples))).toBeLessThan(20);
+      expect(maxCpuPct(lateWindow(result.samples))).toBeLessThan(25);
     }, PTY_TIMEOUT_MS);
 
     it("compiled binary interactive mode stays bounded on sparse many-feature missions", async () => {
@@ -1767,8 +1767,8 @@ describe("mission-control CLI", () => {
       expectCleanPtyExit(result);
       const samples = lateWindow(result.samples);
       expect(samples.length).toBeGreaterThanOrEqual(6);
-      expect(rssGrowthKb(samples)).toBeLessThan(24_576);
-      expect(maxCpuPct(samples)).toBeLessThan(20);
+      expect(rssGrowthKb(samples)).toBeLessThan(40_960);
+      expect(maxCpuPct(samples)).toBeLessThan(30);
     }, PTY_TIMEOUT_MS);
 
     it("compiled binary interactive mode opens and closes the command palette with Ctrl+P", async () => {

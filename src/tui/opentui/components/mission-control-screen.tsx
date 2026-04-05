@@ -12,20 +12,21 @@ import type {
   SplitModalOptions,
   SplitModalRow,
 } from "../../shared/modal-model.js";
-import {
-  OPEN_TUI_THEME,
-  buildFeatureListLines,
-  buildFocusLines,
-  buildFooterModel,
+  import {
+    OPEN_TUI_THEME,
+    buildFeatureListLines,
+    buildFocusLines,
+    buildFooterModel,
   buildHeaderModel,
   buildLogLines,
   buildModalModel,
   buildSessionLines,
-  buildStatusStripModel,
-  computeScreenLayout,
-  getModalParentRect,
-  type UiLine,
-} from "./builders.js";
+    buildStatusStripModel,
+    computeScreenLayout,
+    getModalParentRect,
+    resolveMissionControlTheme,
+    type UiLine,
+  } from "./builders.js";
 
 export interface MissionControlScreenProps {
   readonly state: AppState;
@@ -43,21 +44,22 @@ export function MissionControlScreen({
   animationFrame = 0,
   elapsedOffsetMs = 0,
   onMouseDown,
-}: MissionControlScreenProps) {
-  const layout = computeScreenLayout(width, height, state.snapshot);
-  const header = buildHeaderModel(state.snapshot, animationFrame);
-  const status = buildStatusStripModel(state.snapshot);
-  const footer = buildFooterModel(state.snapshot, state.copyMode);
+  }: MissionControlScreenProps) {
+    const layout = computeScreenLayout(width, height, state.snapshot);
+    const theme = resolveMissionControlTheme(state.snapshot);
+    const header = buildHeaderModel(state.snapshot, animationFrame);
+    const status = buildStatusStripModel(state.snapshot);
+    const footer = buildFooterModel(state.snapshot, state.copyMode);
 
   if (width < 80 || height < 24) {
     return (
       <box
         width={width}
-        height={height}
-        border
-        flexDirection="column"
-        backgroundColor={OPEN_TUI_THEME.pageBg}
-        >
+          height={height}
+          border
+          flexDirection="column"
+          backgroundColor={theme.pageBg}
+          >
         <box paddingLeft={1} paddingRight={1} paddingTop={1} flexDirection="column">
           <SafeText fg={OPEN_TUI_THEME.accent} attributes={TextAttributes.BOLD}>Mission Control</SafeText>
           <SafeText fg={OPEN_TUI_THEME.text} attributes={TextAttributes.BOLD}>Terminal too small</SafeText>
@@ -83,7 +85,7 @@ export function MissionControlScreen({
       height={height}
       border
       flexDirection="column"
-      backgroundColor={OPEN_TUI_THEME.pageBg}
+      backgroundColor={theme.pageBg}
       onMouseDown={onMouseDown}
     >
       <box width="100%" height={1} flexDirection="row" justifyContent="space-between">
@@ -110,6 +112,7 @@ export function MissionControlScreen({
           logLines={logLines}
           sessionLines={sessionLines}
           state={state}
+          theme={theme}
         />
       ) : (
         <SplitBody
@@ -119,27 +122,29 @@ export function MissionControlScreen({
           logLines={logLines}
           sessionLines={sessionLines}
           state={state}
+          theme={theme}
         />
       )}
 
-      <box width="100%" height={1} flexDirection="row" justifyContent="space-between" backgroundColor={OPEN_TUI_THEME.headerBg}>
-        <SafeText fg={state.copyMode ? OPEN_TUI_THEME.warning : OPEN_TUI_THEME.muted} attributes={state.copyMode ? TextAttributes.BOLD : undefined}>
-          {footer.left}
-        </SafeText>
-        <SafeText fg={OPEN_TUI_THEME.muted}>{footer.right}</SafeText>
-      </box>
+        <box width="100%" height={1} flexDirection="row" justifyContent="space-between" backgroundColor={theme.headerBg}>
+          <SafeText fg={state.copyMode ? theme.warning : theme.muted} attributes={state.copyMode ? TextAttributes.BOLD : undefined}>
+            {footer.left}
+          </SafeText>
+          <SafeText fg={theme.muted}>{footer.right}</SafeText>
+        </box>
 
       {modal ? (
         <ModalLayer
           modal={modal}
           state={state}
-          width={modalParentRect.width}
-          height={modalParentRect.height}
-          left={modalParentRect.x}
-          top={modalParentRect.y}
-        />
-      ) : null}
-    </box>
+            width={modalParentRect.width}
+            height={modalParentRect.height}
+            left={modalParentRect.x}
+            top={modalParentRect.y}
+            theme={theme}
+          />
+        ) : null}
+      </box>
   );
 }
 
@@ -150,51 +155,52 @@ interface BodyProps {
   readonly logLines: readonly UiLine[];
   readonly sessionLines: readonly UiLine[];
   readonly state: AppState;
+  readonly theme: ReturnType<typeof resolveMissionControlTheme>;
 }
 
-function SplitBody({ layout, focusLines, featureLines, logLines, sessionLines, state }: BodyProps) {
+function SplitBody({ layout, focusLines, featureLines, logLines, sessionLines, state, theme }: BodyProps) {
   return (
     <box width="100%" height={layout.bodyHeight} flexDirection="row">
       <box width={layout.mainWidth} height={layout.bodyHeight} flexDirection="column" paddingRight={1}>
-        <PanelFrame title={state.snapshot.mode === "home" ? "Overview" : state.leftPaneMode === "overview" ? "Mission Overview" : "Focus / Preview"} height={layout.leftTopHeight}>
-          <LineList lines={focusLines} />
-        </PanelFrame>
+          <PanelFrame title={state.snapshot.mode === "home" ? "Overview" : state.leftPaneMode === "overview" ? "Mission Overview" : "Focus / Preview"} height={layout.leftTopHeight} theme={theme}>
+            <LineList lines={focusLines} />
+          </PanelFrame>
         <Spacer />
-        <PanelFrame title={state.snapshot.mode === "home" ? "Pending Handoffs" : "Timeline"} height={layout.leftBottomHeight}>
-          <LineList lines={logLines} />
-        </PanelFrame>
+          <PanelFrame title={state.snapshot.mode === "home" ? "Pending Handoffs" : "Timeline"} height={layout.leftBottomHeight} theme={theme}>
+            <LineList lines={logLines} />
+          </PanelFrame>
       </box>
 
       <box width={layout.sideWidth} height={layout.bodyHeight} flexDirection="column">
-        <PanelFrame title={state.snapshot.mode === "home" ? "Environment" : "Tasks"} height={layout.rightTopHeight}>
-          <LineList lines={featureLines} />
-        </PanelFrame>
+          <PanelFrame title={state.snapshot.mode === "home" ? "Environment" : "Tasks"} height={layout.rightTopHeight} theme={theme}>
+            <LineList lines={featureLines} />
+          </PanelFrame>
         <Spacer />
-        <PanelFrame title="Activity / Session" height={layout.rightBottomHeight}>
-          <LineList lines={sessionLines} />
-        </PanelFrame>
+          <PanelFrame title="Activity / Session" height={layout.rightBottomHeight} theme={theme}>
+            <LineList lines={sessionLines} />
+          </PanelFrame>
       </box>
     </box>
   );
 }
 
-function StackedBody({ layout, focusLines, featureLines, logLines, sessionLines, state }: BodyProps) {
+function StackedBody({ layout, focusLines, featureLines, logLines, sessionLines, state, theme }: BodyProps) {
   const [focusHeight, listHeight, logHeight, sessionHeight] = layout.stackedHeights;
   return (
     <box width="100%" height={layout.bodyHeight} flexDirection="column">
-      <PanelFrame title={state.snapshot.mode === "home" ? "Overview" : state.leftPaneMode === "overview" ? "Mission Overview" : "Focus / Preview"} height={focusHeight}>
+      <PanelFrame title={state.snapshot.mode === "home" ? "Overview" : state.leftPaneMode === "overview" ? "Mission Overview" : "Focus / Preview"} height={focusHeight} theme={theme}>
         <LineList lines={focusLines} />
       </PanelFrame>
       <Spacer />
-      <PanelFrame title={state.snapshot.mode === "home" ? "Environment" : "Tasks"} height={listHeight}>
+      <PanelFrame title={state.snapshot.mode === "home" ? "Environment" : "Tasks"} height={listHeight} theme={theme}>
         <LineList lines={featureLines} />
       </PanelFrame>
       <Spacer />
-      <PanelFrame title={state.snapshot.mode === "home" ? "Pending Handoffs" : "Timeline"} height={logHeight}>
+      <PanelFrame title={state.snapshot.mode === "home" ? "Pending Handoffs" : "Timeline"} height={logHeight} theme={theme}>
         <LineList lines={logLines} />
       </PanelFrame>
       <Spacer />
-      <PanelFrame title="Activity / Session" height={sessionHeight}>
+      <PanelFrame title="Activity / Session" height={sessionHeight} theme={theme}>
         <LineList lines={sessionLines} />
       </PanelFrame>
     </box>
@@ -204,10 +210,11 @@ function StackedBody({ layout, focusLines, featureLines, logLines, sessionLines,
 interface PanelFrameProps {
   readonly title: string;
   readonly height: number;
+  readonly theme: ReturnType<typeof resolveMissionControlTheme>;
   readonly children: React.ReactNode;
 }
 
-function PanelFrame({ title, height, children }: PanelFrameProps) {
+function PanelFrame({ title, height, theme, children }: PanelFrameProps) {
   return (
     <box
       title={title}
@@ -215,7 +222,7 @@ function PanelFrame({ title, height, children }: PanelFrameProps) {
       width="100%"
       height={Math.max(3, height)}
       flexDirection="column"
-      backgroundColor={OPEN_TUI_THEME.panelBg}
+      backgroundColor={theme.panelBg}
       paddingLeft={1}
       paddingRight={1}
     >
@@ -251,23 +258,24 @@ interface ModalLayerProps {
   readonly height: number;
   readonly left: number;
   readonly top: number;
+  readonly theme: ReturnType<typeof resolveMissionControlTheme>;
 }
 
-function ModalLayer({ modal, state, width, height, left, top }: ModalLayerProps) {
+function ModalLayer({ modal, state, width, height, left, top, theme }: ModalLayerProps) {
   const eyebrowLines = "eyebrow" in modal && modal.eyebrow ? modal.eyebrow.split("\n") : [];
   return (
     <box
       position="absolute"
       left={left}
       top={top}
-      width={width}
-      height={height}
-      border
-      flexDirection="column"
-      backgroundColor={OPEN_TUI_THEME.panelBgElevated}
-      paddingLeft={1}
-      paddingRight={1}
-    >
+        width={width}
+        height={height}
+        border
+        flexDirection="column"
+        backgroundColor={theme.modalBg}
+        paddingLeft={1}
+        paddingRight={1}
+      >
       <box width="100%" flexDirection="row" justifyContent="space-between">
         <SafeText fg={OPEN_TUI_THEME.accent} attributes={TextAttributes.BOLD}>{modal.title}</SafeText>
         <SafeText fg={OPEN_TUI_THEME.muted}>esc</SafeText>
@@ -278,10 +286,10 @@ function ModalLayer({ modal, state, width, height, left, top }: ModalLayerProps)
       ))}
 
       {modal.mode === "split" ? (
-        <SplitModalBody modal={modal} width={width} height={height} />
-      ) : modal.mode === "info" ? (
-        <InfoModalBody modal={modal} />
-      ) : modal.mode === "palette" ? (
+          <SplitModalBody modal={modal} width={width} height={height} theme={theme} />
+        ) : modal.mode === "info" ? (
+          <InfoModalBody modal={modal} />
+        ) : modal.mode === "palette" ? (
         <PaletteModalBody modal={modal} />
       ) : (
         <MenuModalBody modal={modal} />
@@ -346,11 +354,13 @@ function InfoModalBody({ modal }: { readonly modal: InfoModalOptions }) {
 function SplitModalBody({
   modal,
   width,
-}: {
-  readonly modal: SplitModalOptions;
-  readonly width: number;
-  readonly height: number;
-}) {
+  theme,
+  }: {
+      readonly modal: SplitModalOptions;
+      readonly width: number;
+      readonly height: number;
+    readonly theme: ReturnType<typeof resolveMissionControlTheme>;
+  }) {
   const ratio = modal.renderSpec.layout.splitRatio ?? [46, 54];
   const total = ratio[0] + ratio[1];
   const leftWidth = Math.max(18, Math.floor((width - 3) * ratio[0] / total));
@@ -359,7 +369,7 @@ function SplitModalBody({
 
   return (
     <box width="100%" flexGrow={1} flexDirection="row" marginTop={1}>
-        <box width={leftWidth} height="100%" border title="List" paddingLeft={1} paddingRight={1} backgroundColor={OPEN_TUI_THEME.panelBg}>
+          <box width={leftWidth} height="100%" border title="List" paddingLeft={1} paddingRight={1} backgroundColor={theme.modalPanelBg}>
           <box width="100%" height="100%" flexDirection="column">
             {items.length === 0 ? (
               <SafeText fg={OPEN_TUI_THEME.muted}>{modal.emptyLabel ?? "No items"}</SafeText>
@@ -373,7 +383,7 @@ function SplitModalBody({
         </box>
       </box>
         <box width={1} />
-        <box width={rightWidth} height="100%" border title="Detail" paddingLeft={1} paddingRight={1} backgroundColor={OPEN_TUI_THEME.panelBg}>
+          <box width={rightWidth} height="100%" border title="Detail" paddingLeft={1} paddingRight={1} backgroundColor={theme.modalPanelBg}>
           <box width="100%" height="100%" flexDirection="column">
             {modal.detailItems.length === 0 ? (
               <SafeText fg={OPEN_TUI_THEME.muted}>No details</SafeText>

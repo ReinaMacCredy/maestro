@@ -98,6 +98,16 @@ export interface WorkflowTemplate {
   readonly phases: readonly WorkflowPhase[];
 }
 
+export type MissionControlBackgroundMode = "solid" | "terminal";
+
+export interface MissionControlUiConfig {
+  readonly backgroundMode?: MissionControlBackgroundMode;
+}
+
+export interface UiConfig {
+  readonly missionControl?: MissionControlUiConfig;
+}
+
 export interface MaestroConfig {
   readonly defaultAgent?: AgentSlug;
   readonly sourceRepo?: string;
@@ -115,6 +125,7 @@ export interface MaestroConfig {
   readonly workers?: Readonly<Record<string, import("./worker-types.js").WorkerConfig>>;
   readonly supervision?: import("./worker-types.js").SupervisionConfig;
   readonly parallel?: import("./worker-types.js").ParallelConfig;
+  readonly ui?: UiConfig;
 }
 
 export interface CassSearchResult {

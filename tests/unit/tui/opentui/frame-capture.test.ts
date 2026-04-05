@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import { renderOpenTuiPreviewFrame } from "../../../../src/tui/opentui/app/preview.js";
+import { resolveMissionControlTheme } from "../../../../src/tui/opentui/components/builders.js";
 import { captureMissionControlFrame } from "../../../../src/tui/opentui/testing/frame-capture.js";
 import type { MissionControlSnapshot } from "../../../../src/tui/state/types.js";
 
@@ -64,6 +65,58 @@ describe("captureMissionControlFrame", () => {
 
     expect(frame).toContain("Mission Control");
     expect(frame).toContain("Terminal too small");
+  });
+
+  it("resolves transparent chrome and solid modals for terminal background mode", () => {
+    const terminalSnapshot: MissionControlSnapshot = {
+      mode: "mission",
+      missionId: "2026-04-04-001",
+      missionTitle: "OpenTUI Scaffold",
+      missionStatus: "executing",
+      effectiveStatus: "executing",
+      elapsedMs: 12_000,
+      featureProgress: { done: 0, total: 1, active: 1 },
+      statusProgress: {
+        completed: 0,
+        total: 1,
+        inFlight: 1,
+        blocked: 0,
+        queued: 0,
+        completionPct: 0,
+      },
+      tokenCounters: null,
+      missionOverview: null,
+      activeFeature: null,
+      features: [],
+      taskPreviews: [],
+      activeWorker: null,
+      session: null,
+      pendingHandoffs: [],
+      configSummary: {
+        configSource: "global",
+        cassAvailable: true,
+        gitAvailable: true,
+        checks: [],
+        missionDirectory: null,
+        workerTypes: [],
+        backgroundMode: "terminal",
+      },
+      configInspector: null,
+      workerHealth: [],
+      runtimeProcesses: [],
+      progressLog: [],
+      milestones: [],
+      canPause: true,
+      canResume: false,
+      home: null,
+    };
+    const theme = resolveMissionControlTheme(terminalSnapshot);
+
+    expect(theme.pageBg).toBeUndefined();
+    expect(theme.panelBg).toBeUndefined();
+    expect(theme.headerBg).toBeUndefined();
+    expect(theme.modalBg).toBeTruthy();
+    expect(theme.modalPanelBg).toBeTruthy();
   });
 
   it("sanitizes terminal control sequences in plain and ansi previews", async () => {

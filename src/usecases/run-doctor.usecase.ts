@@ -1,6 +1,7 @@
 import type { CassPort } from "../ports/cass.port.js";
 import type { GitPort } from "../ports/git.port.js";
 import type { ConfigPort } from "../ports/config.port.js";
+import { listIgnoredProjectConfigKeys } from "../domain/ui-config.js";
 import type { DoctorCheck } from "../domain/types.js";
 import { CASS_INSTALL_HINT } from "../domain/defaults.js";
 
@@ -77,6 +78,15 @@ export async function runDoctor(
       fix: available
         ? undefined
         : `Install '${worker.command}' or disable worker '${slug}'`,
+      });
+    }
+
+  for (const keyPath of listIgnoredProjectConfigKeys(configLayers.project)) {
+    doctorChecks.push({
+      name: `ignored-${keyPath.replaceAll(".", "-")}`,
+      status: "warn",
+      message: `${keyPath} is set in project config but only global config is used`,
+      fix: "Remove the project value or set it in ~/.maestro/config.yaml instead",
     });
   }
 

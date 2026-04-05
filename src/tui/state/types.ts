@@ -9,7 +9,7 @@ import type {
   MilestoneKind,
   MilestoneProfile,
 } from "../../domain/mission-types.js";
-import type { DoctorCheck, GitFileChange } from "../../domain/types.js";
+import type { DoctorCheck, GitFileChange, MissionControlBackgroundMode } from "../../domain/types.js";
 import type { RuntimeState } from "../../domain/runtime-types.js";
 import type { TransportType } from "../../domain/worker-types.js";
 
@@ -49,6 +49,7 @@ export interface MissionControlConfigSummary {
   checks: readonly DoctorCheck[];
   missionDirectory: string | null;
   workerTypes: readonly string[];
+  backgroundMode: MissionControlBackgroundMode;
 }
 
 export type MissionControlWorkerHealthStatus =

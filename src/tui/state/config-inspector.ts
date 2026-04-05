@@ -1,8 +1,9 @@
 import type { Feature } from "../../domain/mission-types.js";
+import { listIgnoredProjectConfigKeys, isGlobalOnlyConfigKey } from "../../domain/ui-config.js";
 import type { DoctorCheck, MaestroConfig } from "../../domain/types.js";
 import type { WorkerConfig } from "../../domain/worker-types.js";
 import { formatWorkerLabel, getWorkerGuidance } from "../../domain/worker-presentation.js";
-import type { ConfigLayers } from "../../ports/config.port.js";
+import type { ConfigScope, ConfigLayers } from "../../ports/config.port.js";
 import type {
   MissionControlConfigEditKind,
   MissionControlConfigInspector,
@@ -15,6 +16,8 @@ import type {
   MissionControlWorkerHealthStatus,
 } from "./types.js";
 import { recommendWorkerFit } from "../../usecases/worker-fit-recommendation.usecase.js";
+
+export { isGlobalOnlyConfigKey };
 
 const KNOWN_TABS: readonly MissionControlConfigTab[] = [
   "overview",
@@ -49,6 +52,10 @@ const KNOWN_AGENT_OPTIONS = [
   "cursor",
 ] as const;
 
+export function resolveConfigScopeForKey(keyPath: string, scope: ConfigScope): ConfigScope {
+  return isGlobalOnlyConfigKey(keyPath) ? "global" : scope;
+}
+
 interface RowCopy {
   readonly label: string;
   readonly summary: string;
@@ -62,6 +69,11 @@ export function buildConfigInspector(
   features: readonly Feature[],
   workerHealth: readonly MissionControlWorkerHealthRow[] = [],
 ): MissionControlConfigInspector {
+  const ignoredProjectConfigKeys = listIgnoredProjectConfigKeys(layers.project);
+  const inspectionChecks = [
+    ...checks,
+    ...ignoredProjectConfigKeys.map((keyPath) => buildIgnoredProjectOverrideCheck(keyPath)),
+  ];
   const workerHealthBySlug = new Map(workerHealth.map((row) => [row.slug, row]));
   const effective = flattenConfig(layers.effective);
   const defaults = flattenConfig(layers.defaults);
@@ -72,14 +84,14 @@ export function buildConfigInspector(
     ...Object.keys(defaults),
     ...Object.keys(project),
     ...Object.keys(global),
-  ])].sort();
+    ])].sort();
 
   const workerSlugs = [...new Set([
     ...Object.keys(layers.effective.workers ?? {}),
     ...workerHealth.map((row) => row.slug),
   ])].sort();
-  const rowsByTab = {
-    overview: buildOverviewRows(layers, checks, features, workerHealthBySlug),
+    const rowsByTab = {
+      overview: buildOverviewRows(layers, inspectionChecks, features, workerHealthBySlug),
     effective: allPaths.map((path) =>
       buildConfigValueRow(
         path,
@@ -99,8 +111,8 @@ export function buildConfigInspector(
     defaults: buildScopeRows("default", defaults, effective, workerSlugs, layers.effective.workers, features, workerHealthBySlug),
     workers: buildWorkerRows(layers.effective, features, workerHealthBySlug),
     plan: buildPlanRows(layers.effective, features),
-    doctor: buildDoctorRows(checks, layers.errors),
-  } satisfies Record<MissionControlConfigTab, readonly MissionControlConfigRow[]>;
+      doctor: buildDoctorRows(inspectionChecks, layers.errors),
+    } satisfies Record<MissionControlConfigTab, readonly MissionControlConfigRow[]>;
 
   return {
     tabs: KNOWN_TABS,
@@ -215,16 +227,25 @@ function buildOverviewRows(
       Object.keys(layers.effective.workers ?? {}),
       "overview",
     ),
-    buildConfigValueRow(
-      "parallel.enabled",
-      layers.effective.parallel?.enabled,
-      layers.defaults.parallel?.enabled,
-      layers.global?.parallel?.enabled,
-      layers.project?.parallel?.enabled,
-      Object.keys(layers.effective.workers ?? {}),
-      "overview",
-    ),
-  ];
+      buildConfigValueRow(
+        "parallel.enabled",
+        layers.effective.parallel?.enabled,
+        layers.defaults.parallel?.enabled,
+        layers.global?.parallel?.enabled,
+        layers.project?.parallel?.enabled,
+        Object.keys(layers.effective.workers ?? {}),
+        "overview",
+      ),
+      buildConfigValueRow(
+        "ui.missionControl.backgroundMode",
+        layers.effective.ui?.missionControl?.backgroundMode,
+        layers.defaults.ui?.missionControl?.backgroundMode,
+        layers.global?.ui?.missionControl?.backgroundMode,
+        layers.project?.ui?.missionControl?.backgroundMode,
+        Object.keys(layers.effective.workers ?? {}),
+        "overview",
+      ),
+    ];
 
   return [...quickRows, ...workerRows, ...planRows, problemsRow];
 }
@@ -286,7 +307,7 @@ function buildScopeRows(
   workers?: MaestroConfig["workers"],
   features: readonly Feature[] = [],
   workerHealthBySlug: ReadonlyMap<string, MissionControlWorkerHealthRow> = new Map(),
-): readonly MissionControlConfigRow[] {
+  ): readonly MissionControlConfigRow[] {
   const paths = Object.keys(scopeValues).sort();
   if (paths.length === 0) {
     return [buildReadonlyRow({
@@ -305,10 +326,15 @@ function buildScopeRows(
     })];
   }
 
-  return paths.map((path) => {
-    const editMeta = getEditMeta(path, scopeValues[path], workerSlugs);
-    const copy = getRowCopy(path, scope);
-    return {
+    return paths.map((path) => {
+      const editMeta = getEditMeta(path, scopeValues[path], workerSlugs);
+      const copy = getRowCopy(path, scope);
+      const ignoredProjectOverride = scope === "project" && isGlobalOnlyConfigKey(path);
+      const editKind = scope === "default" || ignoredProjectOverride ? "readonly" : editMeta.editKind;
+      const description = ignoredProjectOverride
+        ? "This setting is global-only. Project config values are ignored."
+        : editMeta.description;
+      return {
       keyPath: path,
       label: copy.label,
       section: copy.section ?? sectionForKey(path),
@@ -316,12 +342,12 @@ function buildScopeRows(
       displayValueText: displayValueForKey(path, editMeta.editKind, scopeValues[path]),
       source: scope,
       sourceBadge: sourceBadgeForValueSource(scope),
-      editKind: scope === "default" ? "readonly" : editMeta.editKind,
-      editKindLabel: scope === "default" ? editLabelForKind("readonly") : editLabelForKind(editMeta.editKind),
-      options: scope === "default" ? undefined : editMeta.options,
-      description: editMeta.description,
-      summary: copy.summary,
-      impactText: copy.impactText,
+        editKind,
+        editKindLabel: editLabelForKind(editKind),
+        options: editKind === "readonly" ? undefined : editMeta.options,
+        description,
+        summary: copy.summary,
+        impactText: copy.impactText,
       effectiveValueText: stringifyConfigValue(path, editMeta.editKind, effectiveValues[path]),
       effectiveDisplayValueText: displayValueForKey(path, editMeta.editKind, effectiveValues[path]),
       defaultValueText: scope === "default" ? stringifyConfigValue(path, editMeta.editKind, scopeValues[path]) : undefined,
@@ -503,14 +529,15 @@ function flattenConfig(
   }
 
   return result;
-}
+  }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
+  function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function sectionForKey(keyPath: string): string {
   if (keyPath.startsWith("execution.")) return "Execution";
+  if (keyPath.startsWith("ui.")) return "Interface";
   if (keyPath.startsWith("workers.")) return "Workers";
   if (keyPath.startsWith("supervision.")) return "Supervision";
   if (keyPath.startsWith("parallel.")) return "Parallel";
@@ -536,6 +563,14 @@ function getEditMeta(
       editKind: "enum",
       options: workerSlugs,
       description: "Choose the default worker profile for feature run.",
+    };
+  }
+
+  if (keyPath === "ui.missionControl.backgroundMode") {
+    return {
+      editKind: "enum",
+      options: ["solid", "terminal"],
+      description: "Choose whether Mission Control paints solid panel backgrounds or uses the terminal background.",
     };
   }
 
@@ -638,6 +673,17 @@ function getRowCopy(keyPath: string, tab: MissionControlConfigTab | "project" | 
         impactText: "Turning this on can speed up runs when tasks do not conflict.",
         section: tab === "overview" ? "Quick settings" : undefined,
       };
+    case "ui.missionControl.backgroundMode":
+      return {
+        label: "Background mode",
+        summary: tab === "project"
+          ? "This setting is global-only. Project config values are ignored."
+          : "Choose whether Mission Control uses solid panel fills or the terminal background.",
+        impactText: tab === "project"
+          ? "Move this value to global config if you want it to affect Mission Control."
+          : "Terminal mode shows your terminal background through normal dashboard chrome; modals stay solid.",
+        section: tab === "overview" ? "Quick settings" : undefined,
+      };
     default:
       return {
         label: humanizeConfigKey(keyPath),
@@ -678,14 +724,24 @@ function stringifyConfigValue(
   return stringifyValue(value);
 }
 
-function displayValueForKey(
+  function displayValueForKey(
   keyPath: string,
   editKind: MissionControlConfigEditKind,
   value: unknown,
 ): string {
   const raw = stringifyConfigValue(keyPath, editKind, value);
-  if (keyPath === "supervision.level" && raw === "mid") return "medium";
-  return raw;
+    if (keyPath === "supervision.level" && raw === "mid") return "medium";
+    if (keyPath === "ui.missionControl.backgroundMode" && raw === "terminal") return "terminal background";
+    return raw;
+  }
+
+function buildIgnoredProjectOverrideCheck(keyPath: string): DoctorCheck {
+  return {
+    name: `ignored-${keyPath.replaceAll(".", "-")}`,
+    status: "warn",
+    message: `${humanizeConfigKey(keyPath)} is set in project config but only global config is used`,
+    fix: "Remove the project value or set it in ~/.maestro/config.yaml instead",
+  };
 }
 
 function isSensitiveConfigKey(keyPath: string): boolean {

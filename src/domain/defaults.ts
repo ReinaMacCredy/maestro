@@ -86,6 +86,11 @@ export const DEFAULT_CONFIG: MaestroConfig = {
     enabled: false,
     maxConcurrent: 1,
   },
+  ui: {
+    missionControl: {
+      backgroundMode: "solid",
+    },
+  },
 };
 
 export const NO_SESSION_ID = "none";
