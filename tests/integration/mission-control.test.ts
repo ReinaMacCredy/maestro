@@ -10,6 +10,7 @@ import { FsMissionStoreAdapter } from "../../src/adapters/mission-store.adapter.
 import { FsRuntimeEventStoreAdapter } from "../../src/adapters/runtime-event-store.adapter.js";
 import { FsRuntimeStoreAdapter } from "../../src/adapters/runtime-store.adapter.js";
 import { buildModalOptions } from "../../src/tui/app/modal-builders.js";
+import { PREVIEW_SCREENS } from "../../src/tui/app/preview-state.js";
 import { computeScreenLayout } from "../../src/tui/opentui/components/builders.js";
 import { createInitialState, reduce } from "../../src/tui/state/reducer.js";
 import { enterAltScreen, exitAltScreen } from "../../src/tui/shared/ansi.js";
@@ -23,6 +24,7 @@ const CLI = [
 ];
 const DIST_CLI = join(import.meta.dir, "..", "..", "dist", "maestro");
 const CTRL_P = "\u0010";
+const HOME_PREVIEW_SCREENS = ["dashboard", "features", "config", "runtime", "workers"] as const;
 
 let tmpDir: string;
 const SLOW_CLI_TIMEOUT_MS = 15_000;
@@ -394,6 +396,10 @@ function stripAnsi(text: string): string {
     .replace(/\u0008/g, "")
     .replace(/[^\S\n]+\n/g, "\n")
     .trim();
+}
+
+function countOccurrences(text: string, marker: string): number {
+  return text.split(marker).length - 1;
 }
 
 function hasAnimatedHeaderFrame(plainOutput: string): boolean {
@@ -950,10 +956,77 @@ describe("mission-control CLI", () => {
       expect(stdout).toContain("Worker Output");
       expect(stdout).toContain("Reading runtime-supervision.usecase.ts");
       expect(stdout).toContain("Retry budget still available");
+        }, SLOW_CLI_TIMEOUT_MS);
+
+      it("--preview respects explicit size and plain formatting overrides", async () => {
+        const missionId = await createMission(tmpDir);
+
+        const { stdout, exitCode } = await run(
+          ["mission-control", "--mission", missionId, "--preview", "--size", "140x50", "--format", "plain"],
+          tmpDir,
+        );
+
+        expect(exitCode).toBe(0);
+        expect(stdout).not.toMatch(ANSI_PATTERN);
+        const frameLine = stdout.split("\n").find((line) => line.startsWith("┌"));
+        expect(frameLine?.length).toBe(140);
       }, SLOW_CLI_TIMEOUT_MS);
 
-      it("--json keeps assigned, in-progress, and review features invisible to runtime views until a real lease exists", async () => {
-        const statuses = ["assigned", "in-progress", "review"] as const;
+      it("--preview all renders every mission screen once in plain output", async () => {
+        const missionId = await createMission(tmpDir);
+        await seedLiveRuntimeOutput(tmpDir, missionId, "f1");
+
+        const { stdout, exitCode } = await run(
+          ["mission-control", "--mission", missionId, "--preview", "all", "--size", "140x50", "--format", "plain"],
+          tmpDir,
+        );
+
+        expect(exitCode).toBe(0);
+        expect(stdout).not.toMatch(ANSI_PATTERN);
+        for (const screen of PREVIEW_SCREENS) {
+          expect(countOccurrences(stdout, `--- ${screen} ---`)).toBe(1);
+        }
+        expect(stdout).toContain(`--- rendered ${PREVIEW_SCREENS.length} screens ---`);
+      }, SLOW_CLI_TIMEOUT_MS);
+
+      it("--preview all preserves ansi formatting when requested", async () => {
+        const missionId = await createMission(tmpDir);
+        await seedLiveRuntimeOutput(tmpDir, missionId, "f1");
+
+        const { stdout, exitCode } = await run(
+          ["mission-control", "--mission", missionId, "--preview", "all", "--size", "140x50", "--format", "ansi"],
+          tmpDir,
+        );
+
+        expect(exitCode).toBe(0);
+        expect(stdout).toMatch(ANSI_PATTERN);
+        for (const screen of PREVIEW_SCREENS) {
+          expect(countOccurrences(stdout, `--- ${screen} ---`)).toBe(1);
+        }
+      }, SLOW_CLI_TIMEOUT_MS);
+
+      it("--render-check reports every mission screen at the requested size", async () => {
+        const missionId = await createMission(tmpDir);
+
+        const { stdout, exitCode } = await run(
+          ["mission-control", "--mission", missionId, "--render-check", "--size", "120x40"],
+          tmpDir,
+        );
+
+        expect(exitCode).toBe(0);
+        const result = JSON.parse(stdout) as {
+          screens: Array<{ screen: string; status: string; size: string; warnings: string[] }>;
+          summary: { total: number; passed: number; failed: number; skipped: number };
+        };
+        expect(result.summary.total).toBe(PREVIEW_SCREENS.length);
+        expect(result.summary.skipped).toBe(0);
+        expect(result.summary.failed).toBe(0);
+        expect(result.screens.map((screen) => screen.screen)).toEqual(PREVIEW_SCREENS);
+        expect(result.screens.every((screen) => screen.size === "120x40")).toBe(true);
+      }, SLOW_CLI_TIMEOUT_MS);
+
+        it("--json keeps assigned, in-progress, and review features invisible to runtime views until a real lease exists", async () => {
+          const statuses = ["assigned", "in-progress", "review"] as const;
 
         for (const status of statuses) {
           const missionId = await createMission(tmpDir);
@@ -1223,18 +1296,57 @@ describe("mission-control CLI", () => {
         expect(stdout).toContain("maestro doctor");
       }, SLOW_CLI_TIMEOUT_MS);
 
-    it("errors for dependencies previews in home mode", async () => {
-      const { stdout, stderr, exitCode } = await run(
-        ["mission-control", "--preview", "dependencies"],
-        tmpDir,
-      );
+      it("errors for dependencies previews in home mode", async () => {
+        const { stdout, stderr, exitCode } = await run(
+          ["mission-control", "--preview", "dependencies"],
+          tmpDir,
+        );
 
-      expect(exitCode).toBe(1);
-      expect(stdout + stderr).toContain("Dependencies preview requires a mission");
-    }, SLOW_CLI_TIMEOUT_MS);
+        expect(exitCode).toBe(1);
+        expect(stdout + stderr).toContain("Dependencies preview requires a mission");
+      }, SLOW_CLI_TIMEOUT_MS);
+
+      it("--preview all only renders home-mode screens when no missions exist in a git repo", async () => {
+        const { stdout, exitCode } = await run(
+          ["mission-control", "--preview", "all", "--size", "120x40", "--format", "plain"],
+          tmpDir,
+        );
+
+        expect(exitCode).toBe(0);
+        for (const screen of HOME_PREVIEW_SCREENS) {
+          expect(countOccurrences(stdout, `--- ${screen} ---`)).toBe(1);
+        }
+        for (const screen of PREVIEW_SCREENS) {
+          if (HOME_PREVIEW_SCREENS.includes(screen as typeof HOME_PREVIEW_SCREENS[number])) continue;
+          expect(stdout).not.toContain(`--- ${screen} ---`);
+        }
+        expect(stdout).toContain(`--- rendered ${HOME_PREVIEW_SCREENS.length} screens ---`);
+      }, SLOW_CLI_TIMEOUT_MS);
+
+      it("--render-check skips mission-only screens in home mode", async () => {
+        const { stdout, exitCode } = await run(
+          ["mission-control", "--render-check", "--size", "120x40"],
+          tmpDir,
+        );
+
+        expect(exitCode).toBe(0);
+        const result = JSON.parse(stdout) as {
+          screens: Array<{ screen: string; status: string; size: string; warnings: string[] }>;
+          summary: { total: number; passed: number; failed: number; skipped: number };
+        };
+
+        expect(result.summary.total).toBe(PREVIEW_SCREENS.length);
+        expect(result.summary.skipped).toBe(PREVIEW_SCREENS.length - HOME_PREVIEW_SCREENS.length);
+        expect(result.screens.filter((screen) => screen.status === "skip").map((screen) => screen.screen)).toEqual([
+          "dependencies",
+          "handoffs",
+          "output",
+        ]);
+        expect(result.screens.every((screen) => screen.size === "120x40")).toBe(true);
+      }, SLOW_CLI_TIMEOUT_MS);
 
   it("returns home mode outside a git repo", async () => {
-    const outsideDir = await mkdtemp(join(tmpdir(), "maestro-mc-home-"));
+      const outsideDir = await mkdtemp(join(tmpdir(), "maestro-mc-home-"));
     try {
       const { stdout, exitCode } = await run(
         ["mission-control", "--json"],

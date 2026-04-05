@@ -63,19 +63,34 @@ export class FsRuntimeEventStoreAdapter implements RuntimeEventStorePort {
       throw error;
     }
 
-    try {
-      const stat = await file.stat();
-      if (stat.size === 0) return [];
+      try {
+        const stat = await file.stat();
+        if (stat.size === 0) return [];
 
-      const start = Math.max(0, stat.size - maxBytes);
-      const readLength = stat.size - start;
-      const buffer = Buffer.alloc(readLength);
-      await file.read(buffer, 0, readLength, start);
+        const start = Math.max(0, stat.size - maxBytes);
+        const readLength = stat.size - start;
+        const buffer = Buffer.alloc(readLength);
+        let totalBytesRead = 0;
 
-      let content = buffer.toString("utf8");
-      if (start > 0) {
-        const firstNewline = content.indexOf("\n");
-        if (firstNewline < 0) return [];
+        while (totalBytesRead < readLength) {
+          const { bytesRead } = await file.read(
+            buffer,
+            totalBytesRead,
+            readLength - totalBytesRead,
+            start + totalBytesRead,
+          );
+          if (bytesRead <= 0) {
+            break;
+          }
+          totalBytesRead += bytesRead;
+        }
+
+        if (totalBytesRead === 0) return [];
+
+        let content = buffer.subarray(0, totalBytesRead).toString("utf8");
+        if (start > 0) {
+          const firstNewline = content.indexOf("\n");
+          if (firstNewline < 0) return [];
         content = content.slice(firstNewline + 1);
       }
 
