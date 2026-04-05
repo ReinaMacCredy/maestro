@@ -1,15 +1,5 @@
-import { createLegacyMissionControlRenderer } from "../tui/legacy-renderer.js";
-import type { MissionControlRenderer } from "../tui/mission-control-renderer.js";
-import { renderOpenTuiDashboard } from "./app/interactive.js";
-import { runOpenTuiRenderCheck } from "./app/render-check.js";
-import { renderOpenTuiPreviewFrame } from "./app/preview.js";
+export { renderOpenTuiDashboard as renderDashboard } from "./app/interactive.js";
+export { runOpenTuiRenderCheck as runRenderCheck } from "./app/render-check.js";
+export { renderOpenTuiPreviewFrame as renderPreviewFrame } from "./app/preview.js";
 
 export { MissionControlApp, type MissionControlAppProps } from "./app/mission-control-app.js";
-
-export function createOpenTuiMissionControlRenderer(): MissionControlRenderer {
-  return {
-    renderDashboard: renderOpenTuiDashboard,
-    renderPreviewFrame: renderOpenTuiPreviewFrame,
-    runRenderCheck: runOpenTuiRenderCheck,
-  };
-}

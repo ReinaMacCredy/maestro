@@ -7,9 +7,11 @@ import { getServices } from "../services.js";
 import { output, resolveJsonFlag } from "../lib/output.js";
 import { MaestroError } from "../domain/errors.js";
 import type { MissionStorePort } from "../ports/mission-store.port.js";
-import { createOpenTuiMissionControlRenderer } from "../tui-opentui/index.js";
-import { createLegacyMissionControlRenderer } from "../tui/legacy-renderer.js";
-import type { MissionControlRenderer } from "../tui/mission-control-renderer.js";
+import {
+  renderDashboard,
+  renderPreviewFrame,
+  runRenderCheck,
+} from "../tui-opentui/index.js";
 import { buildHomeSnapshot, buildSnapshot } from "../tui/state/snapshot.js";
 import type { MissionControlSnapshot } from "../tui/state/types.js";
 import { PREVIEW_SCREENS, isPreviewScreen, type PreviewScreen } from "../tui/app/preview-state.js";
@@ -22,9 +24,6 @@ export interface MissionControlSnapshotLoader {
 }
 
 type PreviewScreenOrAll = PreviewScreen | "all";
-type MissionControlRendererName = "legacy" | "opentui";
-
-const MISSION_CONTROL_RENDERER_ENV = "MAESTRO_TUI_RENDERER";
 
 const PREVIEW_SCREEN_ALIASES: Readonly<Record<string, PreviewScreenOrAll>> = {
   all: "all",
@@ -78,14 +77,13 @@ export function registerMissionControlCommand(program: Command): void {
     maestro mission-control --render-check --size 120x40
     maestro mission-control --json
   `)
-      .action(async (opts) => {
-        const isJson = resolveJsonFlag(opts, program);
-        const previewScreen = resolvePreviewScreen(opts.preview);
-        const renderSize = parseSize(opts.size);
-        const renderFormat = validateFormat(opts.format);
-        const renderer = getMissionControlRenderer();
+        .action(async (opts) => {
+          const isJson = resolveJsonFlag(opts, program);
+          const previewScreen = resolvePreviewScreen(opts.preview);
+          const renderSize = parseSize(opts.size);
+          const renderFormat = validateFormat(opts.format);
 
-      if (isJson && previewScreen) {
+        if (isJson && previewScreen) {
         throw new MaestroError("Choose either --json or --preview", [
           "Use `maestro mission-control --json` for machine-readable output",
           "Use `maestro mission-control --preview` for a read-only terminal preview",
@@ -148,12 +146,12 @@ export function registerMissionControlCommand(program: Command): void {
         return;
       }
 
-          if (opts.renderCheck) {
-            const snapshot = await loadReadSnapshot();
-            const result = await renderer.runRenderCheck(snapshot, {
-              width: renderSize?.width,
-              height: renderSize?.height,
-            });
+            if (opts.renderCheck) {
+              const snapshot = await loadReadSnapshot();
+              const result = await runRenderCheck(snapshot, {
+                width: renderSize?.width,
+                height: renderSize?.height,
+              });
         console.log(JSON.stringify(result, null, 2));
         return;
       }
@@ -161,12 +159,12 @@ export function registerMissionControlCommand(program: Command): void {
           if (previewScreen === "all") {
             const snapshot = await loadReadSnapshot();
             const screens = getAllApplicableScreens(snapshot);
-            for (const screen of screens) {
-              console.log(`--- ${screen} ---`);
-              const frame = await renderer.renderPreviewFrame({
-                snapshot,
-                screen,
-                width: renderSize?.width,
+              for (const screen of screens) {
+                console.log(`--- ${screen} ---`);
+                const frame = await renderPreviewFrame({
+                  snapshot,
+                  screen,
+                  width: renderSize?.width,
             height: renderSize?.height,
             format: renderFormat,
           });
@@ -176,11 +174,11 @@ export function registerMissionControlCommand(program: Command): void {
         return;
       }
 
-          if (previewScreen) {
-            const frame = await renderer.renderPreviewFrame({
-              snapshot: await loadReadSnapshot(),
-              screen: previewScreen,
-              featureId: opts.feature,
+            if (previewScreen) {
+              const frame = await renderPreviewFrame({
+                snapshot: await loadReadSnapshot(),
+                screen: previewScreen,
+                featureId: opts.feature,
           handoffId: opts.handoff,
           width: renderSize?.width,
           height: renderSize?.height,
@@ -197,14 +195,14 @@ export function registerMissionControlCommand(program: Command): void {
         ]);
       }
 
-          const snapshot = await supervisedSnapshotLoader.load();
+            const snapshot = await supervisedSnapshotLoader.load();
 
-          await renderer.renderDashboard({
-            snapshot,
-            snapshotDeps,
-            reloadSnapshot: () => supervisedSnapshotLoader.load(),
+            await renderDashboard({
+              snapshot,
+              snapshotDeps,
+              reloadSnapshot: () => supervisedSnapshotLoader.load(),
+          });
         });
-      });
 }
 
 function resolvePreviewScreen(value: unknown): PreviewScreenOrAll | undefined {
@@ -232,22 +230,6 @@ function resolvePreviewScreen(value: unknown): PreviewScreenOrAll | undefined {
       `Use one of: all, ${PREVIEW_SCREENS.join(", ")} (aliases: feat, handoff, cfg, deps, proc, worker, out)`,
       "Try `maestro mission-control --preview` for the default dashboard preview",
     ]);
-}
-
-function getMissionControlRenderer(): MissionControlRenderer {
-  return resolveMissionControlRendererName() === "opentui"
-    ? createOpenTuiMissionControlRenderer()
-    : createLegacyMissionControlRenderer();
-}
-
-function resolveMissionControlRendererName(): MissionControlRendererName {
-  const value = process.env[MISSION_CONTROL_RENDERER_ENV];
-  if (!value) return "opentui";
-  if (value === "legacy" || value === "opentui") return value;
-  throw new MaestroError(`Invalid ${MISSION_CONTROL_RENDERER_ENV} value '${value}'`, [
-    `${MISSION_CONTROL_RENDERER_ENV}=legacy`,
-    `${MISSION_CONTROL_RENDERER_ENV}=opentui`,
-  ]);
 }
 
 function parseSize(value: unknown): { width: number; height: number } | undefined {
