@@ -101,8 +101,8 @@ export function registerMissionControlCommand(program: Command): void {
         ]);
       }
 
-        if ((opts.feature || opts.handoff) && !previewScreen && !opts.renderCheck) {
-          throw new MaestroError("Preview selectors require --preview", [
+        if ((opts.feature || opts.handoff) && (!previewScreen || previewScreen === "all" || opts.renderCheck)) {
+          throw new MaestroError("Preview selectors require a single --preview screen", [
             "Use `maestro mission-control --preview dashboard --feature <id>`",
             "Use `maestro mission-control --preview handoffs --handoff <id>`",
             "Use `maestro mission-control --preview output --feature <id>`",
@@ -201,13 +201,13 @@ export function registerMissionControlCommand(program: Command): void {
 
               const snapshot = await supervisedSnapshotLoader.load();
 
-              await renderDashboard({
-                snapshot,
-                snapshotDeps,
-                reloadSnapshot: () => readSnapshotLoader.load({ probeWorkers: true }),
-            });
-          });
-  }
+        await renderDashboard({
+          snapshot,
+          snapshotDeps,
+          reloadSnapshot: () => supervisedSnapshotLoader.load({ probeWorkers: false }),
+      });
+    });
+}
 
 function resolvePreviewScreen(value: unknown): PreviewScreenOrAll | undefined {
   if (value === undefined || value === false) return undefined;

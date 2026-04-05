@@ -350,11 +350,51 @@ async function seedLiveRuntime(
     startedAt,
     lastSeenAt,
     leaseExpiresAt,
+      recoveryMetadata: {
+        retryCount: 0,
+        history: [],
+      },
+    });
+}
+
+async function seedRuntimeThatWillExpireAfterStartup(
+  cwd: string,
+  missionId: string,
+  featureId: string,
+): Promise<void> {
+  const runtimeStore = new FsRuntimeStoreAdapter(cwd);
+  const startedAt = new Date(Date.now() - 15_000).toISOString();
+  const lastSeenAt = new Date().toISOString();
+  const leaseExpiresAt = new Date(Date.now() + 60_000).toISOString();
+  await runtimeStore.save(missionId, featureId, {
+    featureId,
+    attemptId: "attempt-expire-after-startup",
+    attempt: 1,
+    agent: "codex",
+    sessionId: "5634c102-9871-4001-86f8-89399077624e",
+    runtimeState: "live",
+    startedAt,
+    lastSeenAt,
+    leaseExpiresAt,
     recoveryMetadata: {
       retryCount: 0,
       history: [],
     },
-    });
+  });
+}
+
+async function expireRuntimeHeartbeat(
+  cwd: string,
+  missionId: string,
+  featureId: string,
+): Promise<void> {
+  const runtimeStore = new FsRuntimeStoreAdapter(cwd);
+  const runtime = await runtimeStore.get(missionId, featureId);
+  expect(runtime).toBeDefined();
+  await runtimeStore.save(missionId, featureId, {
+    ...runtime!,
+    lastSeenAt: "2026-04-01T00:00:00.000Z",
+  });
 }
 
 async function setFeatureToReview(
@@ -408,6 +448,14 @@ function hasAnimatedHeaderFrame(plainOutput: string): boolean {
 
 function getDurationSamples(plainOutput: string): string[] {
   const matches = plainOutput.matchAll(/TIME\s+((?:\d+[hms]\s*)+)/g);
+  return [...new Set(
+    Array.from(matches, (match) => match[1]?.replace(/\s+/g, " ").trim() ?? "")
+      .filter((sample) => sample.length > 0),
+  )];
+}
+
+function getLabeledElapsedSamples(plainOutput: string, label: string): string[] {
+  const matches = plainOutput.matchAll(new RegExp(`${label}\\s+((?:\\d+[hms]\\s*)+)`, "g"));
   return [...new Set(
     Array.from(matches, (match) => match[1]?.replace(/\s+/g, " ").trim() ?? "")
       .filter((sample) => sample.length > 0),
@@ -1025,8 +1073,20 @@ describe("mission-control CLI", () => {
         expect(result.screens.every((screen) => screen.size === "120x40")).toBe(true);
       }, SLOW_CLI_TIMEOUT_MS);
 
-        it("--json keeps assigned, in-progress, and review features invisible to runtime views until a real lease exists", async () => {
-          const statuses = ["assigned", "in-progress", "review"] as const;
+      it("--render-check rejects preview selectors", async () => {
+        const missionId = await createMission(tmpDir);
+
+        const { stdout, exitCode } = await run(
+          ["mission-control", "--mission", missionId, "--render-check", "--feature", "f1"],
+          tmpDir,
+        );
+
+        expect(exitCode).toBe(1);
+        expect(stdout).toBe("");
+      }, SLOW_CLI_TIMEOUT_MS);
+
+          it("--json keeps assigned, in-progress, and review features invisible to runtime views until a real lease exists", async () => {
+            const statuses = ["assigned", "in-progress", "review"] as const;
 
         for (const status of statuses) {
           const missionId = await createMission(tmpDir);
@@ -1479,12 +1539,60 @@ describe("mission-control CLI", () => {
       expectCleanPtyExit(result);
       const samples = lateWindow(result.samples);
       expect(samples.length).toBeGreaterThanOrEqual(6);
-      expect(rssGrowthKb(samples)).toBeLessThan(24_576);
-      expect(maxCpuPct(samples)).toBeLessThan(20);
-    }, PTY_TIMEOUT_MS);
+        expect(rssGrowthKb(samples)).toBeLessThan(24_576);
+        expect(maxCpuPct(samples)).toBeLessThan(20);
+      }, PTY_TIMEOUT_MS);
 
-  it("compiled binary interactive mode remains stable across repeated launch and quit cycles", async () => {
-    if (!pythonAvailable) return;
+      it("compiled binary interactive mode keeps time-based fields advancing while idle", async () => {
+        if (!pythonAvailable) return;
+        const missionId = await createMission(tmpDir);
+
+        await setMissionStatus(tmpDir, missionId, "approved");
+        await setMissionStatus(tmpDir, missionId, "executing");
+        await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+        await seedLiveRuntime(tmpDir, missionId, "f1");
+
+        const result = await runCompiledInteractivePty(
+          tmpDir,
+          ["mission-control", "--mission", missionId],
+          { input: "q", delayMs: 5_500, waitForText: "Mission Control" },
+        );
+
+        expectCleanPtyExit(result);
+        expect(getDurationSamples(result.plainOutput).length).toBeGreaterThan(1);
+      }, PTY_TIMEOUT_MS);
+
+      it("compiled binary interactive mode recovers runtime failures that happen after startup", async () => {
+        if (!pythonAvailable) return;
+        const missionId = await createMission(tmpDir);
+        const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
+
+        await setMissionStatus(tmpDir, missionId, "approved");
+        await setMissionStatus(tmpDir, missionId, "executing");
+        await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+        await seedRuntimeThatWillExpireAfterStartup(tmpDir, missionId, "f1");
+
+        const ptyRun = runCompiledInteractivePty(
+          tmpDir,
+          ["mission-control", "--mission", missionId],
+          { input: "q", delayMs: 4_500, waitForText: "Mission Control" },
+        );
+
+        await Bun.sleep(1_200);
+        await expireRuntimeHeartbeat(tmpDir, missionId, "f1");
+
+        const result = await ptyRun;
+
+        expectCleanPtyExit(result);
+        expect(await listFeatureStatuses(tmpDir, missionId)).toMatchObject({ f1: "pending" });
+        expect(await runtimeStore.get(missionId, "f1")).toMatchObject({
+          runtimeState: "recoverable",
+          recoveryMetadata: { retryCount: 1 },
+        });
+      }, PTY_TIMEOUT_MS);
+
+    it("compiled binary interactive mode remains stable across repeated launch and quit cycles", async () => {
+      if (!pythonAvailable) return;
     const missionId = await createMission(tmpDir);
 
     for (let i = 0; i < 3; i++) {

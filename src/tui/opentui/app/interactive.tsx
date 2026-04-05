@@ -15,13 +15,7 @@ import { getSnapshotPollIntervalMs } from "../../app/interactive-shared.js";
 import { parseKeypress, type Key } from "../../input.js";
 import { layoutModal, pointInRect } from "../../shared/modal-model.js";
 import { getConfigRowsForTab } from "../../state/config-inspector.js";
-import { createInitialState, reduce, type AppState } from "../../state/reducer.js";
-import type {
-  MissionControlRuntimeProcessRow,
-  MissionControlSnapshot,
-  MissionControlWorkerPane,
-  TaskPreviewPane,
-} from "../../state/types.js";
+import { createInitialState, reduce } from "../../state/reducer.js";
 import { MissionControlApp } from "./mission-control-app.js";
 import { buildModalModel, computeScreenLayout } from "../components/builders.js";
 
@@ -40,7 +34,6 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
   let state = createInitialState(opts.snapshot);
   let shuttingDown = false;
   let dirty = true;
-  let currentSignature = "";
 
   const requestQuit = (): void => {
     if (shuttingDown) return;
@@ -49,8 +42,8 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
   };
 
   const renderCurrentFrame = (): void => {
-    flushSync(() => {
-      root.render(
+      flushSync(() => {
+        root.render(
         <MissionControlApp
           snapshot={state.snapshot}
           state={state}
@@ -60,11 +53,10 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
           elapsedOffsetMs={0}
           onMouseDown={handleOpenTuiMouseDown}
         />,
-      );
-    });
-    renderer.useMouse = !state.copyMode;
-    currentSignature = buildInteractiveRenderSignature(state, renderer.width, renderer.height);
-  };
+        );
+      });
+      renderer.useMouse = !state.copyMode;
+    };
 
   async function processKey(key: Key): Promise<void> {
     if (shuttingDown) return;
@@ -182,18 +174,16 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
       if (!state.running) break;
 
       const now = Date.now();
-      if (now - lastPollMs >= getSnapshotPollIntervalMs(state.snapshot)) {
-        lastPollMs = now;
-        try {
-          const snapshot = await opts.reloadSnapshot();
-          const nextState = reduce(state, { type: "update-snapshot", snapshot });
-          state = nextState;
-          if (buildInteractiveRenderSignature(nextState, renderer.width, renderer.height) !== currentSignature) {
+        if (now - lastPollMs >= getSnapshotPollIntervalMs(state.snapshot)) {
+          lastPollMs = now;
+          try {
+            const snapshot = await opts.reloadSnapshot();
+            const nextState = reduce(state, { type: "update-snapshot", snapshot });
+            state = nextState;
             dirty = true;
+          } catch {
+            // Keep the current snapshot when polling fails.
           }
-        } catch {
-          // Keep the current snapshot when polling fails.
-        }
       }
 
       if (dirty) {
@@ -393,151 +383,6 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
       });
     }
 
-    dirty = true;
+      dirty = true;
+    }
   }
-}
-
-function buildInteractiveRenderSignature(state: AppState, width: number, height: number): string {
-  return JSON.stringify({
-    width,
-    height,
-    focus: state.focusedPanel,
-    selectedFeatureIndex: state.selectedFeatureIndex,
-    logScrollOffset: state.logScrollOffset,
-    leftPaneMode: state.leftPaneMode,
-    copyMode: state.copyMode,
-    modal: state.modal,
-    snapshot: buildSnapshotRenderToken(state.snapshot),
-  });
-}
-
-function buildSnapshotRenderToken(snapshot: MissionControlSnapshot): Record<string, unknown> {
-  return {
-    mode: snapshot.mode,
-    missionId: snapshot.missionId,
-    missionStatus: snapshot.missionStatus,
-    effectiveStatus: snapshot.effectiveStatus,
-    featureProgress: snapshot.featureProgress,
-    statusProgress: snapshot.statusProgress,
-    gateBlocked: snapshot.gateBlocked ?? false,
-    gateLabel: snapshot.gateLabel ?? null,
-    canPause: snapshot.canPause,
-    canResume: snapshot.canResume,
-    tokenCounters: snapshot.tokenCounters,
-    activeFeature: normalizeTaskPreviewForInteractiveSignature(snapshot.activeFeature),
-    activeWorker: normalizeWorkerPaneForInteractiveSignature(snapshot.activeWorker),
-    taskPreviews: snapshot.taskPreviews?.map(normalizeTaskPreviewForInteractiveSignature),
-    features: snapshot.features.map((feature) => ({
-      id: feature.id,
-      status: feature.status,
-      title: feature.title,
-      milestoneId: feature.milestoneId,
-      workerType: feature.workerType,
-      blockedByLabel: feature.blockedByLabel ?? "",
-    })),
-    milestones: snapshot.milestones.map((milestone) => ({
-      id: milestone.id,
-      status: milestone.status,
-      title: milestone.title,
-      kind: milestone.kind ?? null,
-      profile: milestone.profile ?? null,
-    })),
-    pendingHandoffs: snapshot.pendingHandoffs.map((handoff) => ({
-      id: handoff.id,
-      agent: handoff.agent,
-      message: handoff.message,
-    })),
-    configSummary: snapshot.configSummary && {
-      configSource: snapshot.configSummary.configSource,
-      cassAvailable: snapshot.configSummary.cassAvailable,
-      gitAvailable: snapshot.configSummary.gitAvailable,
-      missionDirectory: snapshot.configSummary.missionDirectory,
-      workerTypes: snapshot.configSummary.workerTypes,
-      checks: snapshot.configSummary.checks.map((check) => ({
-        name: check.name,
-        status: check.status,
-        message: check.message,
-      })),
-    },
-    home: snapshot.home && {
-      headline: snapshot.home.headline,
-      summary: snapshot.home.summary,
-      locationLabel: snapshot.home.locationLabel,
-      actions: snapshot.home.actions,
-      pendingHandoffs: snapshot.home.pendingHandoffs.map((handoff) => ({
-        id: handoff.id,
-        agent: handoff.agent,
-        message: handoff.message,
-      })),
-      checks: snapshot.home.checks.map((check) => ({
-        name: check.name,
-        status: check.status,
-        message: check.message,
-      })),
-    },
-    session: snapshot.session && {
-      agent: snapshot.session.agent,
-      sessionId: snapshot.session.sessionId,
-      transport: snapshot.session.transport,
-      branch: snapshot.session.branch,
-      workingTreeClean: snapshot.session.workingTreeClean,
-      diffStat: snapshot.session.diffStat,
-      fileChanges: (snapshot.session.fileChanges ?? []).map((fileChange) => ({
-        path: fileChange.path,
-        kind: fileChange.kind,
-      })),
-      changedFiles: snapshot.session.changedFiles,
-    },
-    workerHealth: snapshot.workerHealth?.map((row) => ({
-      slug: row.slug,
-      status: row.status,
-      detail: row.detail,
-      checks: row.checks.map((check) => ({
-        label: check.label,
-        ok: check.ok,
-        detail: check.detail ?? "",
-      })),
-    })),
-    runtimeProcesses: snapshot.runtimeProcesses.map(normalizeRuntimeProcessForInteractiveSignature),
-    progressLog: snapshot.progressLog.slice(-12).map((event) => ({
-      kind: event.kind,
-      title: event.title,
-      timestamp: event.timestamp,
-      detail: event.detail ?? null,
-    })),
-  };
-}
-
-function normalizeTaskPreviewForInteractiveSignature(preview: TaskPreviewPane | null): TaskPreviewPane | null {
-  if (!preview) return preview;
-  return {
-    ...preview,
-    lastSeenAgeMs: 0,
-  };
-}
-
-function normalizeWorkerPaneForInteractiveSignature(worker: MissionControlWorkerPane | null): MissionControlWorkerPane | null {
-  if (!worker) return worker;
-  return {
-    ...worker,
-    elapsedMs: 0,
-    lastSeenAgeMs: 0,
-    lastOutputAgeMs: 0,
-    outputLines: worker.outputLines?.slice(-6).map((line) => ({
-      timestamp: line.timestamp,
-      kind: line.kind,
-      text: line.text,
-    })),
-  };
-}
-
-function normalizeRuntimeProcessForInteractiveSignature(
-  process: MissionControlRuntimeProcessRow,
-): MissionControlRuntimeProcessRow {
-  return {
-    ...process,
-    lastSeenAgeMs: 0,
-    lastOutputAgeMs: 0,
-    leaseRemainingMs: 0,
-  };
-}
