@@ -341,18 +341,20 @@ function ModalLayer({ modal, state, layout, theme }: ModalLayerProps) {
 
 function MenuModalBody({ modal }: { readonly modal: MenuModalOptions }) {
   const items = modal.items.map((item) => normalizeModalRow(item));
+  const paletteSelection = modal.returnTarget === "command-palette";
   return (
     <box flexDirection="column" width="100%" flexGrow={1}>
       {items.length === 0 ? (
         <SafeText fg={OPEN_TUI_THEME.muted}>{modal.footer ?? "No items"}</SafeText>
-      ) : items.map((item, index) => (
-        <ModalRowView
-          key={index}
-          row={item}
-          selected={index === modal.selectedIndex}
-        />
-      ))}
-    </box>
+          ) : items.map((item, index) => (
+          <ModalRowView
+            key={index}
+            row={item}
+            selected={index === modal.selectedIndex}
+            paletteSelection={paletteSelection}
+          />
+        ))}
+      </box>
   );
 }
 
@@ -421,13 +423,13 @@ function SplitModalBody({
             {items.length === 0 ? (
               <SafeText fg={OPEN_TUI_THEME.muted}>{modal.emptyLabel ?? "No items"}</SafeText>
             ) : items.map((item, index) => (
-                  <ModalRowView
-                    key={index}
+                <ModalRowView
+                  key={index}
                   row={item}
                   selected={index === modal.selectedIndex}
-                  mode={modal.mode}
-              />
-            ))}
+                  paletteSelection={modal.returnTarget === "command-palette"}
+                />
+              ))}
           </box>
       </box>
         <box width={1} />
@@ -447,16 +449,16 @@ function SplitModalBody({
 function ModalRowView({
   row,
   selected,
-  mode,
+  paletteSelection,
 }: {
   readonly row: NormalizedModalRow;
   readonly selected: boolean;
-  readonly mode: ModalOptions["mode"];
+  readonly paletteSelection?: boolean;
 }) {
-  const selectedFg = mode === "palette"
+  const selectedFg = paletteSelection
     ? OPEN_TUI_THEME.paletteSelectionFg
     : OPEN_TUI_THEME.selectionFg;
-  const selectedBg = mode === "palette"
+  const selectedBg = paletteSelection
     ? OPEN_TUI_THEME.paletteSelectionBg
     : OPEN_TUI_THEME.selectionBg;
   const fg = selected ? selectedFg : toneColor(row.tone);

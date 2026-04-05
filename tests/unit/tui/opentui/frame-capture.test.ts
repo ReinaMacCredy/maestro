@@ -319,6 +319,55 @@ describe("captureMissionControlFrame", () => {
     expect(detailSpan!.bg.buffer[2]).toBe(0);
   });
 
+  it("renders palette-launched split overlay selection with the legacy yellow palette colors", async () => {
+    const snapshot: MissionControlSnapshot = {
+      ...makeSnapshot(),
+      configSummary: {
+        configSource: "global",
+        cassAvailable: true,
+        gitAvailable: true,
+        checks: [],
+        missionDirectory: null,
+        workerTypes: [],
+        backgroundMode: "terminal",
+      },
+      pendingHandoffs: [
+        {
+          id: "handoff-1",
+          agent: "codex",
+          branch: "feat/test",
+          createdAt: "2026-04-05T12:00:00.000Z",
+          status: "pending",
+          message: "Investigate handoff",
+          report: undefined,
+        },
+      ],
+    };
+    const handoffState = reduce(
+      reduce(createInitialState(snapshot), { type: "open-command-palette" }),
+      { type: "open-handoffs" },
+    );
+    const render = await captureMissionControlRender({
+      snapshot,
+      state: handoffState,
+      width: 120,
+      height: 40,
+    });
+
+    const selectedLine = render.spans.lines.find((line) => line.spans.some((span) => span.text.includes("handoff-1")));
+    expect(selectedLine).toBeDefined();
+
+    const selectedLabelSpan = selectedLine!.spans.find((span) => span.text.includes("handoff-1"));
+    expect(selectedLabelSpan).toBeDefined();
+
+    expect(selectedLabelSpan!.bg.buffer[0]).toBe(1);
+    expect(selectedLabelSpan!.bg.buffer[1]).toBeCloseTo(0.8196, 3);
+    expect(selectedLabelSpan!.bg.buffer[2]).toBeCloseTo(0.4, 3);
+    expect(selectedLabelSpan!.fg.buffer[0]).toBeCloseTo(0.0549, 3);
+    expect(selectedLabelSpan!.fg.buffer[1]).toBeCloseTo(0.0823, 3);
+    expect(selectedLabelSpan!.fg.buffer[2]).toBeCloseTo(0.1137, 3);
+  });
+
     it("dims the underlying dashboard while the command palette is open", async () => {
       const snapshot = makeSnapshot();
       const render = await captureMissionControlRender({
