@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
+import { renderOpenTuiPreviewFrame } from "../../../../src/tui/opentui/app/preview.js";
 import { captureMissionControlFrame } from "../../../../src/tui/opentui/testing/frame-capture.js";
 import type { MissionControlSnapshot } from "../../../../src/tui/state/types.js";
 
@@ -63,5 +64,38 @@ describe("captureMissionControlFrame", () => {
 
     expect(frame).toContain("Mission Control");
     expect(frame).toContain("Terminal too small");
+  });
+
+  it("sanitizes terminal control sequences in plain and ansi previews", async () => {
+    const snapshot = makeSnapshot();
+    snapshot.features = [
+      {
+        id: "f1",
+        title: "Injected \u001b]2;PWN\u0007 Title",
+        status: "in-progress",
+        milestoneId: "m1",
+        workerType: "test-skill",
+        hasReport: false,
+      },
+    ];
+
+    const plainFrame = await renderOpenTuiPreviewFrame({
+      snapshot,
+      screen: "features",
+      width: 120,
+      height: 40,
+      format: "plain",
+    });
+    const ansiFrame = await renderOpenTuiPreviewFrame({
+      snapshot,
+      screen: "features",
+      width: 120,
+      height: 40,
+      format: "ansi",
+    });
+
+    expect(plainFrame).toContain("Injected  Title");
+    expect(plainFrame).not.toContain("\u001b]2;PWN\u0007");
+    expect(ansiFrame).not.toContain("]2;PWN");
   });
 });

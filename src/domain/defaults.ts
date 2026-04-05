@@ -49,6 +49,7 @@ export const DEFAULT_CONFIG: MaestroConfig = {
     stopOnFailure: true,
     retryBudget: 1,
     rotateWorkerOnRetry: false,
+    allowA2a: false,
   },
   workers: {
     "claude-code": {

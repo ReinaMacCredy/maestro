@@ -122,6 +122,7 @@ async function writeA2aConfig(cwd: string, baseUrl: string): Promise<void> {
     [
       "execution:",
       "  defaultWorker: demo-a2a",
+      "  allowA2a: true",
       "workers:",
       "  demo-a2a:",
       "    enabled: true",

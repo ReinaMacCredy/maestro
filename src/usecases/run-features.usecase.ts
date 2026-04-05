@@ -297,6 +297,7 @@ async function spawnWorkerResult(
   workerSelection: { slug: string; config: WorkerConfig },
 ): Promise<WorkerResult> {
   try {
+    assertWorkerExecutionAllowed(deps.config, workerSelection);
     return await deps.transport.spawn(workerSelection.config, prompt, {
       cwd: deps.baseDir,
       featureId: feature.id,
@@ -316,17 +317,37 @@ async function spawnWorkerResult(
   }
 }
 
+function assertWorkerExecutionAllowed(
+  config: MaestroConfig,
+  workerSelection: { slug: string; config: WorkerConfig },
+): void {
+  if (workerSelection.config.transport !== "a2a") {
+    return;
+  }
+
+  if (config.execution?.allowA2a === true) {
+    return;
+  }
+
+  throw new MaestroError(`A2A worker '${workerSelection.slug}' is disabled by default`, [
+    "Set execution.allowA2a: true in .maestro/config.yaml to opt in to remote A2A execution",
+    "Use a CLI worker instead if you do not want remote prompt egress",
+  ]);
+}
+
 function buildInfrastructureFailureResult(
   error: unknown,
   workerSlug: string,
 ): WorkerResult {
   const detail = error instanceof Error ? error.message : String(error);
+  const hints = error instanceof MaestroError ? error.hints : [];
+  const summaryDetail = hints.length > 0 ? `${detail} (${hints[0]})` : detail;
   return {
     success: false,
     exitCode: 1,
-    summary: `Failed to run worker '${workerSlug}': ${detail}`,
+    summary: `Failed to run worker '${workerSlug}': ${summaryDetail}`,
     stdoutRaw: "",
-    stderrRaw: detail,
+    stderrRaw: hints.length > 0 ? [detail, ...hints].join("\n") : detail,
     filesChanged: [],
     durationMs: 0,
     failureClass: "infrastructure",

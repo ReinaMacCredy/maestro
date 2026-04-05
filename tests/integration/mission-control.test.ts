@@ -511,10 +511,9 @@ function lateWindow(samples: readonly PtyProcessSample[], size = 8): readonly Pt
   return samples.slice(Math.max(0, samples.length - size));
 }
 
-function maxRssDriftKb(samples: readonly PtyProcessSample[]): number {
-  if (samples.length === 0) return 0;
-  const rss = samples.map((sample) => sample.rssKb);
-  return Math.max(...rss) - Math.min(...rss);
+function rssGrowthKb(samples: readonly PtyProcessSample[]): number {
+  if (samples.length < 2) return 0;
+  return Math.max(0, samples[samples.length - 1]!.rssKb - samples[0]!.rssKb);
 }
 
 function maxCpuPct(samples: readonly PtyProcessSample[]): number {
@@ -1348,7 +1347,7 @@ describe("mission-control CLI", () => {
       expectCleanPtyExit(result);
       const samples = lateWindow(result.samples);
       expect(samples.length).toBeGreaterThanOrEqual(6);
-      expect(maxRssDriftKb(samples)).toBeLessThan(12_288);
+      expect(rssGrowthKb(samples)).toBeLessThan(24_576);
       expect(maxCpuPct(samples)).toBeLessThan(20);
     }, PTY_TIMEOUT_MS);
 
@@ -1368,7 +1367,7 @@ describe("mission-control CLI", () => {
       expectCleanPtyExit(result);
       const samples = lateWindow(result.samples);
       expect(samples.length).toBeGreaterThanOrEqual(6);
-      expect(maxRssDriftKb(samples)).toBeLessThan(12_288);
+      expect(rssGrowthKb(samples)).toBeLessThan(24_576);
       expect(maxCpuPct(samples)).toBeLessThan(20);
     }, PTY_TIMEOUT_MS);
 

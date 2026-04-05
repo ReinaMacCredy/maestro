@@ -23,6 +23,7 @@ export interface ExecutionConfig {
   readonly stopOnFailure?: boolean;
   readonly retryBudget?: number;
   readonly rotateWorkerOnRetry?: boolean;
+  readonly allowA2a?: boolean;
 }
 
 export interface WorkerBaseConfig {

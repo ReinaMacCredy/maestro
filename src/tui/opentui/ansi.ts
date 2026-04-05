@@ -1,4 +1,5 @@
 import { TextAttributes, getBaseAttributes } from "@opentui/core";
+import { sanitizeTerminalText } from "../../lib/sanitize.js";
 
 import type { CapturedFrame, CapturedSpan } from "@opentui/core";
 
@@ -8,7 +9,7 @@ export function capturedFrameToAnsi(frame: CapturedFrame): string {
       if (line.spans.length === 0) {
         return "";
       }
-      return `${line.spans.map((span) => `${spanToAnsi(span)}${span.text}`).join("")}\u001b[0m`;
+      return `${line.spans.map((span) => `${spanToAnsi(span)}${sanitizeTerminalText(span.text)}`).join("")}\u001b[0m`;
     })
     .join("\n");
 }

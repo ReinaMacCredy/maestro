@@ -1,4 +1,5 @@
 import { TextAttributes, type MouseEvent } from "@opentui/core";
+import { sanitizeTerminalText } from "../../../lib/sanitize.js";
 
 import type { AppState } from "../../state/reducer.js";
 import type {
@@ -55,14 +56,14 @@ export function MissionControlScreen({
         border
         flexDirection="column"
         backgroundColor={OPEN_TUI_THEME.pageBg}
-      >
+        >
         <box paddingLeft={1} paddingRight={1} paddingTop={1} flexDirection="column">
-          <text fg={OPEN_TUI_THEME.accent} attributes={TextAttributes.BOLD}>Mission Control</text>
-          <text fg={OPEN_TUI_THEME.text} attributes={TextAttributes.BOLD}>Terminal too small</text>
-          <text fg={OPEN_TUI_THEME.muted}>
+          <SafeText fg={OPEN_TUI_THEME.accent} attributes={TextAttributes.BOLD}>Mission Control</SafeText>
+          <SafeText fg={OPEN_TUI_THEME.text} attributes={TextAttributes.BOLD}>Terminal too small</SafeText>
+          <SafeText fg={OPEN_TUI_THEME.muted}>
             Resize to at least 80x24 for the interactive dashboard, or use --size for deterministic previews.
-          </text>
-          <text fg={OPEN_TUI_THEME.muted}>{`Current: ${width}x${height}`}</text>
+          </SafeText>
+          <SafeText fg={OPEN_TUI_THEME.muted}>{`Current: ${width}x${height}`}</SafeText>
         </box>
       </box>
     );
@@ -84,18 +85,18 @@ export function MissionControlScreen({
       onMouseDown={onMouseDown}
     >
       <box width="100%" height={1} flexDirection="row" justifyContent="space-between">
-        <text fg={header.left.fg} attributes={header.left.attributes}>{header.left.text}</text>
-        <text fg={header.right.fg}>{header.right.text}</text>
+        <SafeText fg={header.left.fg} attributes={header.left.attributes}>{header.left.text}</SafeText>
+        <SafeText fg={header.right.fg}>{header.right.text}</SafeText>
       </box>
 
       <box width="100%" height={2} flexDirection="column">
         <box flexDirection="row" justifyContent="space-between">
-          <text fg={status.primaryLeft.fg} attributes={status.primaryLeft.attributes}>{status.primaryLeft.text}</text>
-          {status.primaryRight ? <text fg={status.primaryRight.fg} attributes={status.primaryRight.attributes}>{status.primaryRight.text}</text> : <box />}
+          <SafeText fg={status.primaryLeft.fg} attributes={status.primaryLeft.attributes}>{status.primaryLeft.text}</SafeText>
+          {status.primaryRight ? <SafeText fg={status.primaryRight.fg} attributes={status.primaryRight.attributes}>{status.primaryRight.text}</SafeText> : <box />}
         </box>
         <box flexDirection="row" justifyContent="space-between">
-          {status.secondaryLeft ? <text fg={status.secondaryLeft.fg} attributes={status.secondaryLeft.attributes}>{status.secondaryLeft.text}</text> : <box />}
-          {status.secondaryRight ? <text fg={status.secondaryRight.fg} attributes={status.secondaryRight.attributes}>{status.secondaryRight.text}</text> : <box />}
+          {status.secondaryLeft ? <SafeText fg={status.secondaryLeft.fg} attributes={status.secondaryLeft.attributes}>{status.secondaryLeft.text}</SafeText> : <box />}
+          {status.secondaryRight ? <SafeText fg={status.secondaryRight.fg} attributes={status.secondaryRight.attributes}>{status.secondaryRight.text}</SafeText> : <box />}
         </box>
       </box>
 
@@ -120,10 +121,10 @@ export function MissionControlScreen({
       )}
 
       <box width="100%" height={1} flexDirection="row" justifyContent="space-between" backgroundColor={OPEN_TUI_THEME.headerBg}>
-        <text fg={state.copyMode ? OPEN_TUI_THEME.warning : OPEN_TUI_THEME.muted} attributes={state.copyMode ? TextAttributes.BOLD : undefined}>
+        <SafeText fg={state.copyMode ? OPEN_TUI_THEME.warning : OPEN_TUI_THEME.muted} attributes={state.copyMode ? TextAttributes.BOLD : undefined}>
           {footer.left}
-        </text>
-        <text fg={OPEN_TUI_THEME.muted}>{footer.right}</text>
+        </SafeText>
+        <SafeText fg={OPEN_TUI_THEME.muted}>{footer.right}</SafeText>
       </box>
 
       {modal ? (
@@ -234,7 +235,7 @@ function LineList({ lines }: LineListProps) {
     <box flexDirection="column" width="100%" height="100%">
       {lines.map((line, index) => (
         <box key={index} width="100%" height={1} backgroundColor={line.bg}>
-          <text fg={line.fg} attributes={line.attributes}>{line.text}</text>
+          <SafeText fg={line.fg} attributes={line.attributes}>{line.text}</SafeText>
         </box>
       ))}
     </box>
@@ -266,12 +267,12 @@ function ModalLayer({ modal, state, width, height, left, top }: ModalLayerProps)
       paddingRight={1}
     >
       <box width="100%" flexDirection="row" justifyContent="space-between">
-        <text fg={OPEN_TUI_THEME.accent} attributes={TextAttributes.BOLD}>{modal.title}</text>
-        <text fg={OPEN_TUI_THEME.muted}>esc</text>
+        <SafeText fg={OPEN_TUI_THEME.accent} attributes={TextAttributes.BOLD}>{modal.title}</SafeText>
+        <SafeText fg={OPEN_TUI_THEME.muted}>esc</SafeText>
       </box>
 
       {eyebrowLines.map((line, index) => (
-        <text key={index} fg={OPEN_TUI_THEME.muted}>{line}</text>
+        <SafeText key={index} fg={OPEN_TUI_THEME.muted}>{line}</SafeText>
       ))}
 
       {modal.mode === "split" ? (
@@ -286,7 +287,7 @@ function ModalLayer({ modal, state, width, height, left, top }: ModalLayerProps)
 
       {modal.footer ? (
         <box marginTop={1}>
-          <text fg={OPEN_TUI_THEME.muted}>{modal.footer}</text>
+          <SafeText fg={OPEN_TUI_THEME.muted}>{modal.footer}</SafeText>
         </box>
       ) : null}
     </box>
@@ -298,7 +299,7 @@ function MenuModalBody({ modal }: { readonly modal: MenuModalOptions }) {
   return (
     <box flexDirection="column" width="100%" flexGrow={1}>
       {items.length === 0 ? (
-        <text fg={OPEN_TUI_THEME.muted}>{modal.footer ?? "No items"}</text>
+        <SafeText fg={OPEN_TUI_THEME.muted}>{modal.footer ?? "No items"}</SafeText>
       ) : items.map((item, index) => (
         <ModalRowView
           key={index}
@@ -315,10 +316,10 @@ function PaletteModalBody({ modal }: { readonly modal: PaletteModalOptions }) {
   return (
     <box flexDirection="column" width="100%" flexGrow={1}>
       <box marginTop={1} marginBottom={1}>
-        <text fg={OPEN_TUI_THEME.warning}>{`/ ${modal.query.length > 0 ? modal.query : "type to filter"}`}</text>
+        <SafeText fg={OPEN_TUI_THEME.warning}>{`/ ${modal.query.length > 0 ? modal.query : "type to filter"}`}</SafeText>
       </box>
       {items.length === 0 ? (
-        <text fg={OPEN_TUI_THEME.muted}>{modal.emptyLabel ?? "No commands match your filter"}</text>
+        <SafeText fg={OPEN_TUI_THEME.muted}>{modal.emptyLabel ?? "No commands match your filter"}</SafeText>
       ) : items.map((item, index) => (
         <ModalRowView
           key={index}
@@ -356,27 +357,27 @@ function SplitModalBody({
 
   return (
     <box width="100%" flexGrow={1} flexDirection="row" marginTop={1}>
-      <box width={leftWidth} height="100%" border title="List" paddingLeft={1} paddingRight={1} backgroundColor={OPEN_TUI_THEME.panelBg}>
-        <box width="100%" height="100%" flexDirection="column">
-          {items.length === 0 ? (
-            <text fg={OPEN_TUI_THEME.muted}>{modal.emptyLabel ?? "No items"}</text>
-          ) : items.map((item, index) => (
-            <ModalRowView
-              key={index}
+        <box width={leftWidth} height="100%" border title="List" paddingLeft={1} paddingRight={1} backgroundColor={OPEN_TUI_THEME.panelBg}>
+          <box width="100%" height="100%" flexDirection="column">
+            {items.length === 0 ? (
+              <SafeText fg={OPEN_TUI_THEME.muted}>{modal.emptyLabel ?? "No items"}</SafeText>
+            ) : items.map((item, index) => (
+              <ModalRowView
+                key={index}
               row={item}
               selected={index === modal.selectedIndex}
             />
           ))}
         </box>
       </box>
-      <box width={1} />
-      <box width={rightWidth} height="100%" border title="Detail" paddingLeft={1} paddingRight={1} backgroundColor={OPEN_TUI_THEME.panelBg}>
-        <box width="100%" height="100%" flexDirection="column">
-          {modal.detailItems.length === 0 ? (
-            <text fg={OPEN_TUI_THEME.muted}>No details</text>
-          ) : modal.detailItems.map((item, index) => (
-            <InfoItemView key={index} item={item} />
-          ))}
+        <box width={1} />
+        <box width={rightWidth} height="100%" border title="Detail" paddingLeft={1} paddingRight={1} backgroundColor={OPEN_TUI_THEME.panelBg}>
+          <box width="100%" height="100%" flexDirection="column">
+            {modal.detailItems.length === 0 ? (
+              <SafeText fg={OPEN_TUI_THEME.muted}>No details</SafeText>
+            ) : modal.detailItems.map((item, index) => (
+              <InfoItemView key={index} item={item} />
+            ))}
         </box>
       </box>
     </box>
@@ -395,9 +396,7 @@ function ModalRowView({
   const hint = row.hint ? `  [${row.hint}]` : "";
   return (
     <box width="100%" backgroundColor={selected ? OPEN_TUI_THEME.selectionBg : undefined}>
-      <text fg={fg} attributes={selected ? TextAttributes.BOLD : row.style === "block" ? TextAttributes.BOLD : undefined}>
-        {`${row.label}${detail}${hint}`}
-      </text>
+      <SafeText fg={fg} attributes={selected ? TextAttributes.BOLD : row.style === "block" ? TextAttributes.BOLD : undefined}>{`${row.label}${detail}${hint}`}</SafeText>
     </box>
   );
 }
@@ -406,7 +405,7 @@ function InfoItemView({ item }: { readonly item: ModalInfoItem }) {
   const prefix = item.detail ? `${item.text}: ${item.detail}` : item.text;
   const attributes = item.style === "block" ? TextAttributes.BOLD : item.tone === "accent" ? TextAttributes.BOLD : undefined;
   return (
-    <text fg={toneColor(item.tone)} attributes={attributes}>{prefix}</text>
+    <SafeText fg={toneColor(item.tone)} attributes={attributes}>{prefix}</SafeText>
   );
 }
 
@@ -460,4 +459,18 @@ function contentWidth(panelWidth: number): number {
 
 function contentHeight(panelHeight: number): number {
   return Math.max(1, panelHeight - 2);
+}
+
+interface SafeTextProps {
+  readonly children: string;
+  readonly fg?: string;
+  readonly attributes?: number;
+}
+
+function SafeText({ children, fg, attributes }: SafeTextProps) {
+  return (
+    <text fg={fg} attributes={attributes}>
+      {sanitizeTerminalText(children)}
+    </text>
+  );
 }

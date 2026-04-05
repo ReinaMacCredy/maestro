@@ -2,7 +2,7 @@ import type { Command } from "commander";
 import { startA2aDemoServer } from "../lib/a2a-demo-server.js";
 import { resolveJsonFlag } from "../lib/output.js";
 
-// [WIP] A2A command group -- demo server only; transport is disabled in multi-transport adapter
+// [WIP] A2A command group -- demo server only; feature execution still requires execution.allowA2a
 export function registerA2aCommand(program: Command): void {
   const a2aCmd = program
     .command("a2a")
@@ -38,13 +38,14 @@ Examples:
         finalMessage: opts.message as string,
       });
 
-      const payload = {
+        const payload = {
         baseUrl: server.baseUrl,
         agentCardUrl: server.agentCardUrl,
         jsonRpcUrl: server.jsonRpcUrl,
         configSnippet: [
           "execution:",
           "  defaultWorker: demo-a2a",
+          "  allowA2a: true",
           "workers:",
           "  demo-a2a:",
           "    enabled: true",

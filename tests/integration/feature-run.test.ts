@@ -123,6 +123,7 @@ async function writeA2aConfig(cwd: string, baseUrl: string): Promise<void> {
     [
       "execution:",
       "  defaultWorker: test-worker",
+      "  allowA2a: true",
       "workers:",
       "  test-worker:",
       "    enabled: true",
@@ -219,6 +220,33 @@ describe("feature run integration", () => {
     );
     const features = JSON.parse(listResult.stdout).features;
     expect(features.every((feature: { status: string }) => feature.status === "done")).toBe(true);
+  });
+
+  it("rejects A2A workers until execution.allowA2a is enabled explicitly", async () => {
+    const missionId = await createMission(tmpDir);
+    a2aServer = await startA2aTestServer("a2a integration ok");
+    await mkdir(join(tmpDir, ".maestro", "skills", "test-skill"), { recursive: true });
+    await writeFile(join(tmpDir, ".maestro", "skills", "test-skill", "SKILL.md"), "# test skill\n");
+    await writeFile(
+      join(tmpDir, ".maestro", "config.yaml"),
+      [
+        "execution:",
+        "  defaultWorker: test-worker",
+        "workers:",
+        "  test-worker:",
+        "    enabled: true",
+        "    transport: a2a",
+        `    url: ${a2aServer.baseUrl}`,
+      ].join("\n"),
+    );
+
+    const { stdout, stderr, exitCode } = await run(
+      ["feature", "run", "--mission", missionId, "--worker", "test-worker"],
+      tmpDir,
+    );
+
+    expect(exitCode).toBe(1);
+    expect(`${stdout}\n${stderr}`).toContain("execution.allowA2a: true");
   });
 
   it("fails fast when config yaml is malformed", async () => {
