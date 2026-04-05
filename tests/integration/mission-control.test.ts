@@ -23,11 +23,13 @@ const CLI = [
 ];
 const DIST_CLI = join(import.meta.dir, "..", "..", "dist", "maestro");
 const CTRL_P = "\u0010";
+type MissionControlRendererName = "legacy" | "opentui";
 
 let tmpDir: string;
 const SLOW_CLI_TIMEOUT_MS = 15_000;
 const PTY_TIMEOUT_MS = 30_000;
 let pythonAvailable = false;
+const ANSI_PATTERN = /\u001B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\][^\u0007\u001B]*(?:\u0007|\u001B\\))/g;
 
 const PYTHON_PTY_RUNNER = `
 import base64, json, os, select, signal, subprocess, sys, time, pty, fcntl, termios, struct
@@ -153,11 +155,13 @@ async function run(
 async function runCompiled(
   args: string[],
   cwd = process.cwd(),
+  env?: Readonly<Record<string, string | undefined>>,
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const proc = Bun.spawn([DIST_CLI, ...args], {
     stdout: "pipe",
     stderr: "pipe",
     cwd,
+    env: env ? { ...process.env, ...env } : undefined,
   });
 
   const [stdout, stderr] = await Promise.all([
@@ -367,7 +371,7 @@ async function commandExists(command: string): Promise<boolean> {
 
 function stripAnsi(text: string): string {
   return text
-    .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, "")
+    .replace(ANSI_PATTERN, "")
     .replace(/\r/g, "")
     .replace(/\u0008/g, "")
     .replace(/[^\S\n]+\n/g, "\n")
@@ -459,12 +463,53 @@ function expectCleanPtyExit(result: PtyRunResult): void {
   expect(result.rawOutput).toContain(exitAltScreen);
 }
 
+function usingOpenTuiRenderer(
+  rendererName: MissionControlRendererName | undefined = process.env.MAESTRO_TUI_RENDERER as MissionControlRendererName | undefined,
+): boolean {
+  return rendererName !== "legacy";
+}
+
+function expectConfigOverlay(output: string): void {
+  expect(output).toContain("Config");
+  if (usingOpenTuiRenderer()) {
+    expect(output).toContain("[overview]");
+    expect(output).toContain("workers");
+    expect(output).toContain("Default worker");
+    expect(output).toContain("project config");
+    return;
+  }
+  expect(output).toContain("[overview] effective project global defaults workers next problems");
+  expect(output).toContain("Using now");
+  expect(output).toContain("Why it matters");
+}
+
+function expectWorkersOverlay(output: string): void {
+  expect(output).toContain("Workers");
+  if (usingOpenTuiRenderer()) {
+    expect(output).toContain("Claude Code");
+    expect(output).toContain("configured; not checked in read-only mode");
+    return;
+  }
+  expect(output).toContain("Real worker readiness");
+}
+
+function expectRuntimeOverlay(output: string): void {
+  expect(output).toContain("Runtime");
+  if (usingOpenTuiRenderer()) {
+    expect(output).toContain("No runtime item selected");
+    expect(output).toContain("features right now");
+    return;
+  }
+  expect(output).toContain("No active runtime processes");
+  expect(output).toContain("No runtime item selected");
+}
+
 function encodeLeftClick(x: number, y: number): string {
   return `\u001b[<0;${x + 1};${y + 1}M`;
 }
 
 function getMissionControlModalParentRect(width: number, height: number) {
-  if (process.env.MAESTRO_TUI_RENDERER !== "opentui") {
+  if (!usingOpenTuiRenderer()) {
     const innerRect = { x: 1, y: 1, width: width - 2, height: height - 2 };
     const headerDividerY = innerRect.y + 1;
     const statusRectY = headerDividerY + 1;
@@ -493,7 +538,7 @@ function getFeatureActionMouseClicks(optionIndex: number, width = 80, height = 2
   readonly confirmClick: string;
 } {
   const parentRect = getMissionControlModalParentRect(width, height);
-  if (process.env.MAESTRO_TUI_RENDERER !== "opentui") {
+  if (!usingOpenTuiRenderer()) {
     const selectingLayout = layoutModal(parentRect, {
       mode: "menu",
       title: "Change Feature Status",
@@ -718,16 +763,13 @@ describe("mission-control CLI", () => {
           const missionId = await createMission(tmpDir);
 
         const { stdout, exitCode } = await run(
-        ["mission-control", "--mission", missionId, "--preview", "config"],
-        tmpDir,
-      );
+          ["mission-control", "--mission", missionId, "--preview", "config"],
+          tmpDir,
+        );
 
-          expect(exitCode).toBe(0);
-          expect(stdout).toContain("Config");
-          expect(stdout).toContain("[overview] effective project global defaults workers next problems");
-            expect(stdout).toContain("Using now");
-            expect(stdout).toContain("Why it matters");
-          }, SLOW_CLI_TIMEOUT_MS);
+        expect(exitCode).toBe(0);
+        expectConfigOverlay(stdout);
+      }, SLOW_CLI_TIMEOUT_MS);
 
       it("--preview feat accepts the feature browser shorthand", async () => {
         const missionId = await createMission(tmpDir);
@@ -751,8 +793,7 @@ describe("mission-control CLI", () => {
         );
 
         expect(exitCode).toBe(0);
-        expect(stdout).toContain("Config");
-        expect(stdout).toContain("Why it matters");
+        expectConfigOverlay(stdout);
       }, SLOW_CLI_TIMEOUT_MS);
 
     it("--preview runtime renders the runtime modal", async () => {
@@ -773,15 +814,14 @@ describe("mission-control CLI", () => {
     it("--preview workers renders the worker health modal", async () => {
       const missionId = await createMission(tmpDir);
 
-      const { stdout, exitCode } = await run(
-        ["mission-control", "--mission", missionId, "--preview", "workers"],
-        tmpDir,
-      );
+        const { stdout, exitCode } = await run(
+          ["mission-control", "--mission", missionId, "--preview", "workers"],
+          tmpDir,
+        );
 
-      expect(exitCode).toBe(0);
-      expect(stdout).toContain("Workers");
-      expect(stdout).toContain("Real worker readiness");
-    }, SLOW_CLI_TIMEOUT_MS);
+        expect(exitCode).toBe(0);
+        expectWorkersOverlay(stdout);
+      }, SLOW_CLI_TIMEOUT_MS);
 
     it("--preview output shows the empty state when no runtime output is captured yet", async () => {
       const missionId = await createMission(tmpDir);
@@ -801,15 +841,14 @@ describe("mission-control CLI", () => {
     it("--preview workers renders the workers modal", async () => {
       const missionId = await createMission(tmpDir);
 
-      const { stdout, exitCode } = await run(
-        ["mission-control", "--mission", missionId, "--preview", "workers"],
-        tmpDir,
-      );
+        const { stdout, exitCode } = await run(
+          ["mission-control", "--mission", missionId, "--preview", "workers"],
+          tmpDir,
+        );
 
-      expect(exitCode).toBe(0);
-      expect(stdout).toContain("Workers");
-      expect(stdout).toContain("Real worker readiness, not just config presence.");
-    }, SLOW_CLI_TIMEOUT_MS);
+        expect(exitCode).toBe(0);
+        expectWorkersOverlay(stdout);
+      }, SLOW_CLI_TIMEOUT_MS);
 
     it("--preview worker accepts the singular alias", async () => {
       const missionId = await createMission(tmpDir);
@@ -869,8 +908,7 @@ describe("mission-control CLI", () => {
             tmpDir,
           );
           expect(preview.exitCode).toBe(0);
-          expect(preview.stdout).toContain("No active runtime processes");
-          expect(preview.stdout).toContain("No runtime item selected");
+          expectRuntimeOverlay(preview.stdout);
         }
       }, SLOW_CLI_TIMEOUT_MS);
 
@@ -911,8 +949,13 @@ describe("mission-control CLI", () => {
           tmpDir,
         );
         expect(preview.exitCode).toBe(0);
-        expect(preview.stdout).toContain("Agent     codex");
-        expect(preview.stdout).toContain("Session   5634c102");
+        if (usingOpenTuiRenderer()) {
+          expect(preview.stdout).toContain("agent      codex");
+          expect(preview.stdout).toContain("session    5634c102");
+        } else {
+          expect(preview.stdout).toContain("Agent     codex");
+          expect(preview.stdout).toContain("Session   5634c102");
+        }
       }, SLOW_CLI_TIMEOUT_MS);
 
       it("--preview out accepts the runtime output alias", async () => {
@@ -1104,11 +1147,16 @@ describe("mission-control CLI", () => {
         tmpDir,
       );
 
-      expect(exitCode).toBe(0);
-      expect(stdout).toContain("Overview");
-      expect(stdout).toContain("Environment");
-      expect(stdout).toContain("Next Steps");
-    }, SLOW_CLI_TIMEOUT_MS);
+        expect(exitCode).toBe(0);
+        expect(stdout).toContain("Overview");
+        expect(stdout).toContain("Environment");
+        if (usingOpenTuiRenderer()) {
+          expect(stdout).toContain("maestro init");
+          expect(stdout).toContain("maestro doctor");
+        } else {
+          expect(stdout).toContain("Next Steps");
+        }
+      }, SLOW_CLI_TIMEOUT_MS);
 
     it("errors for dependencies previews in home mode", async () => {
       const { stdout, stderr, exitCode } = await run(
@@ -1137,8 +1185,8 @@ describe("mission-control CLI", () => {
     }
   }, SLOW_CLI_TIMEOUT_MS);
 
-    it("rejects interactive mode without both tty streams", async () => {
-      const missionId = await createMission(tmpDir);
+  it("rejects interactive mode without both tty streams", async () => {
+    const missionId = await createMission(tmpDir);
 
     const { stdout, stderr, exitCode } = await run(
       ["mission-control", "--mission", missionId],
@@ -1159,9 +1207,25 @@ describe("mission-control CLI", () => {
       );
 
       expect(exitCode).toBe(1);
-      expect(stdout + stderr).toContain("--once");
-      expect(stdout + stderr).toContain("--preview");
-    }, SLOW_CLI_TIMEOUT_MS);
+    expect(stdout + stderr).toContain("--once");
+    expect(stdout + stderr).toContain("--preview");
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("compiled binary render check supports explicit legacy renderer override", async () => {
+    const { stdout, stderr, exitCode } = await runCompiled(
+      ["mission-control", "--render-check", "--size", "120x40"],
+      tmpDir,
+      { MAESTRO_TUI_RENDERER: "legacy" },
+    );
+
+    expect(exitCode).toBe(0);
+    expect(stderr).toBe("");
+    const payload = JSON.parse(stdout) as {
+      summary: { failed: number; passed: number };
+    };
+    expect(payload.summary.failed).toBe(0);
+    expect(payload.summary.passed).toBeGreaterThan(0);
+  }, SLOW_CLI_TIMEOUT_MS);
 
   it("compiled binary interactive mode exits cleanly on q", async () => {
     if (!pythonAvailable) return;
@@ -1307,12 +1371,12 @@ describe("mission-control CLI", () => {
         },
       );
 
-      expectCleanPtyExit(result);
-      expect(result.plainOutput).toContain("Command Palette");
-      expect(result.plainOutput).toContain("navigate");
-      expect(result.plainOutput).toContain("tasks");
-      expect(result.plainOutput).not.toContain("Enter open · Esc close");
-    }, PTY_TIMEOUT_MS);
+        expectCleanPtyExit(result);
+        expect(result.plainOutput).toContain("Command Palette");
+        expect(result.plainOutput).toContain("/ type to filter");
+        expect(result.plainOutput).toContain("Browse mission tasks");
+        expect(result.plainOutput).not.toContain("Enter open · Esc close");
+      }, PTY_TIMEOUT_MS);
 
     it("compiled binary interactive mode filters the command palette and activates Features", async () => {
       if (!pythonAvailable) return;
@@ -1335,11 +1399,11 @@ describe("mission-control CLI", () => {
         },
       );
 
-      expectCleanPtyExit(result);
-      expect(result.plainOutput).toContain("Command Palette");
-      expect(result.plainOutput).toContain("> fea");
-      expect(result.plainOutput).toContain("Select a task to focus");
-    }, PTY_TIMEOUT_MS);
+        expectCleanPtyExit(result);
+        expect(result.plainOutput).toContain("Command Palette");
+        expect(result.plainOutput).toContain("Select a task to focus");
+        expect(result.plainOutput).toContain("Feature 1");
+      }, PTY_TIMEOUT_MS);
 
     it("compiled binary interactive mode filters the command palette and activates Handoff", async () => {
       if (!pythonAvailable) return;
@@ -1361,11 +1425,10 @@ describe("mission-control CLI", () => {
         },
       );
 
-      expectCleanPtyExit(result);
-      expect(result.plainOutput).toContain("Handoffs");
-      expect(result.plainOutput).toContain("No pending handoffs");
-      expect(result.plainOutput).toContain("No pending handoff selected");
-    }, PTY_TIMEOUT_MS);
+        expectCleanPtyExit(result);
+        expect(result.plainOutput).toContain("Handoffs");
+        expect(result.plainOutput).toContain("No pending handoff selected");
+      }, PTY_TIMEOUT_MS);
 
     it("compiled binary interactive mode filters the command palette and activates Config", async () => {
       if (!pythonAvailable) return;
@@ -1388,9 +1451,7 @@ describe("mission-control CLI", () => {
       );
 
         expectCleanPtyExit(result);
-        expect(result.plainOutput).toContain("Config");
-        expect(result.plainOutput).toContain("[overview] effective project global defaults workers next problems");
-        expect(result.plainOutput).toContain("Using now");
+        expectConfigOverlay(result.plainOutput);
       }, PTY_TIMEOUT_MS);
 
     it("compiled binary interactive mode filters the command palette and activates Processes", async () => {
@@ -1415,8 +1476,7 @@ describe("mission-control CLI", () => {
       );
 
         expectCleanPtyExit(result);
-        expect(result.plainOutput).toContain("Runtime");
-        expect(result.plainOutput).toContain("No active runtime processes");
+        expectRuntimeOverlay(result.plainOutput);
       }, PTY_TIMEOUT_MS);
 
     it("compiled binary interactive mode opens the Features overlay", async () => {
@@ -1459,12 +1519,12 @@ describe("mission-control CLI", () => {
         ],
         waitForText: "Mission Control",
       },
-    );
+      );
 
-    expectCleanPtyExit(result);
-    expect(result.plainOutput).toContain("Handoffs");
-    expect(result.plainOutput).toContain("No pending handoffs");
-  }, PTY_TIMEOUT_MS);
+      expectCleanPtyExit(result);
+      expect(result.plainOutput).toContain("Handoffs");
+      expect(result.plainOutput).toContain("No pending handoff selected");
+    }, PTY_TIMEOUT_MS);
 
   it("compiled binary interactive mode opens the Config overlay", async () => {
     if (!pythonAvailable) return;
@@ -1484,11 +1544,9 @@ describe("mission-control CLI", () => {
       },
       );
 
-        expectCleanPtyExit(result);
-        expect(result.plainOutput).toContain("Config");
-        expect(result.plainOutput).toContain("[overview] effective project global defaults workers next problems");
-        expect(result.plainOutput).toContain("Why it matters");
-      }, PTY_TIMEOUT_MS);
+      expectCleanPtyExit(result);
+      expectConfigOverlay(result.plainOutput);
+    }, PTY_TIMEOUT_MS);
 
     it("compiled binary interactive mode opens the Processes overlay", async () => {
       if (!pythonAvailable) return;
@@ -1510,10 +1568,8 @@ describe("mission-control CLI", () => {
     );
 
       expectCleanPtyExit(result);
-      expect(result.plainOutput).toContain("Runtime");
-      expect(result.plainOutput).toContain("No active runtime processes");
-      expect(result.plainOutput).toContain("No runtime item selected");
-      }, PTY_TIMEOUT_MS);
+      expectRuntimeOverlay(result.plainOutput);
+    }, PTY_TIMEOUT_MS);
 
     it("compiled binary interactive mode follows a real later runtime on startup", async () => {
       if (!pythonAvailable) return;
@@ -1533,10 +1589,15 @@ describe("mission-control CLI", () => {
         },
       );
 
-      expectCleanPtyExit(result);
-      expect(result.plainOutput).toContain("Agent     codex");
-      expect(result.plainOutput).toContain("Session   5634c102");
-    }, PTY_TIMEOUT_MS);
+        expectCleanPtyExit(result);
+        expect(result.plainOutput).toContain("Feature 2");
+        if (usingOpenTuiRenderer()) {
+          expect(result.plainOutput).toContain("in-progress");
+        } else {
+          expect(result.plainOutput).toContain("Agent     codex");
+          expect(result.plainOutput).toContain("Session   5634c102");
+        }
+      }, PTY_TIMEOUT_MS);
 
   it("compiled binary interactive mode persists a selected feature transition on keyboard confirm", async () => {
     if (!pythonAvailable) return;
@@ -1562,7 +1623,7 @@ describe("mission-control CLI", () => {
       const result = await runCompiledInteractivePty(
         tmpDir,
         ["mission-control", "--mission", missionId],
-        process.env.MAESTRO_TUI_RENDERER === "opentui"
+        usingOpenTuiRenderer()
           ? {
               input: "",
               inputSteps: [
@@ -1591,7 +1652,7 @@ describe("mission-control CLI", () => {
       const result = await runCompiledInteractivePty(
         tmpDir,
         ["mission-control", "--mission", missionId],
-        process.env.MAESTRO_TUI_RENDERER === "opentui"
+        usingOpenTuiRenderer()
           ? {
               input: "",
               inputSteps: [
@@ -1650,9 +1711,13 @@ describe("mission-control CLI", () => {
 
     const result = await ptyRun;
 
-    expectCleanPtyExit(result);
-    expect(result.plainOutput).toContain("Mission Control");
-    expect(result.plainOutput).toContain("Feature 1");
-    expect(result.plainOutput).toContain("Agent     codex");
-  }, PTY_TIMEOUT_MS);
+      expectCleanPtyExit(result);
+      expect(result.plainOutput).toContain("Mission Control");
+      expect(result.plainOutput).toContain("Feature 1");
+      if (usingOpenTuiRenderer()) {
+        expect(result.plainOutput).toContain("RUNNING");
+      } else {
+        expect(result.plainOutput).toContain("Agent     codex");
+      }
+    }, PTY_TIMEOUT_MS);
 });

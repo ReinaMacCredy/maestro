@@ -242,7 +242,7 @@ function getMissionControlRenderer(): MissionControlRenderer {
 
 function resolveMissionControlRendererName(): MissionControlRendererName {
   const value = process.env[MISSION_CONTROL_RENDERER_ENV];
-  if (!value) return "legacy";
+  if (!value) return "opentui";
   if (value === "legacy" || value === "opentui") return value;
   throw new MaestroError(`Invalid ${MISSION_CONTROL_RENDERER_ENV} value '${value}'`, [
     `${MISSION_CONTROL_RENDERER_ENV}=legacy`,
