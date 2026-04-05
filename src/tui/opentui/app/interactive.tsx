@@ -9,12 +9,12 @@ import {
   getFilteredCommandPaletteItems,
   isSelectableListModal,
 } from "../../app/modal-builders.js";
+import type { InteractiveOptions } from "../../app/interactive-shared.js";
 import { keyToAction, shouldSubmitFeatureAction } from "../../app/input-dispatch.js";
+import { getSnapshotPollIntervalMs } from "../../app/interactive-shared.js";
 import { HEADER_DOT_INTERVAL_MS, isHeaderAnimationActive } from "../../panels/header.js";
 import { getConfigRowsForTab } from "../../state/config-inspector.js";
 import { createInitialState, reduce, type AppState } from "../../state/reducer.js";
-import type { InteractiveOptions } from "../../app/app.js";
-import { getSnapshotPollIntervalMs } from "../../app/app.js";
 import { parseKeypress, type Key } from "../../terminal/input.js";
 import { layoutModal, pointInRect } from "../../widgets/modal.js";
 import { MissionControlApp } from "./mission-control-app.js";
