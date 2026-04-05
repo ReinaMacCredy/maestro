@@ -1,6 +1,6 @@
 import type { MissionControlSnapshot } from "../../state/types.js";
 import { PREVIEW_SCREENS, type PreviewScreen } from "../../app/preview-state.js";
-import type { RenderCheckResult, RenderCheckScreenResult } from "../../app/render-check.js";
+import type { RenderCheckResult, RenderCheckScreenResult } from "../../app/render-check-contract.js";
 import { renderOpenTuiPreviewFrame } from "./preview.js";
 
 const DEFAULT_CHECK_WIDTH = 120;
