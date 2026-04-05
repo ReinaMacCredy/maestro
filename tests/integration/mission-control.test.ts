@@ -540,6 +540,13 @@ interface PtyProcessSample {
   readonly rssKb: number;
 }
 
+interface MemoryProbeSample {
+  readonly iteration: number;
+  readonly rssMb: number;
+  readonly heapMb: number;
+  readonly externalMb: number;
+}
+
 interface PtyRunResult {
   readonly rawOutput: string;
   readonly plainOutput: string;
@@ -597,7 +604,23 @@ async function runCompiledInteractivePty(
       signal: result.signal,
       timedOut: result.timedOut,
       samples: result.samples ?? [],
-    };
+      };
+}
+
+async function runJsonProbe<T>(script: string, cwd = process.cwd()): Promise<T> {
+  const proc = Bun.spawn(["bun", "-e", script], {
+    stdout: "pipe",
+    stderr: "pipe",
+    cwd,
+  });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+  expect(exitCode).toBe(0);
+  expect(stderr.trim()).toBe("");
+  return JSON.parse(stdout) as T;
 }
 
 function expectCleanPtyExit(result: PtyRunResult): void {
@@ -633,6 +656,18 @@ function rssGrowthKb(samples: readonly PtyProcessSample[]): number {
 function maxCpuPct(samples: readonly PtyProcessSample[]): number {
   if (samples.length === 0) return 0;
   return Math.max(...samples.map((sample) => sample.cpuPct));
+}
+
+function lateMemoryWindow(samples: readonly MemoryProbeSample[], size = 8): readonly MemoryProbeSample[] {
+  return samples.slice(Math.max(0, samples.length - size));
+}
+
+function memoryGrowthMb(
+  samples: readonly MemoryProbeSample[],
+  key: "rssMb" | "heapMb" | "externalMb",
+): number {
+  if (samples.length < 2) return 0;
+  return Math.max(0, samples[samples.length - 1]![key] - samples[0]![key]);
 }
 
 async function writeWorkerProbeConfig(cwd: string, workerCommand: string): Promise<void> {
@@ -1582,7 +1617,7 @@ describe("mission-control CLI", () => {
       const result = await runCompiledInteractivePty(
         tmpDir,
         ["mission-control", "--mission", missionId],
-        { input: "q", delayMs: 8_500, waitForText: "Mission Control", sampleProcess: true },
+        { input: "q", delayMs: 12_500, waitForText: "Mission Control", sampleProcess: true },
       );
 
       expectCleanPtyExit(result);
@@ -1602,15 +1637,62 @@ describe("mission-control CLI", () => {
       const result = await runCompiledInteractivePty(
         tmpDir,
         ["mission-control", "--mission", missionId],
-        { input: "q", delayMs: 8_500, waitForText: "Mission Control", sampleProcess: true },
+        { input: "q", delayMs: 12_500, waitForText: "Mission Control", sampleProcess: true },
       );
 
       expectCleanPtyExit(result);
       const samples = lateWindow(result.samples);
       expect(samples.length).toBeGreaterThanOrEqual(6);
-        expect(rssGrowthKb(samples)).toBeLessThan(40_960);
-        expect(maxCpuPct(samples)).toBeLessThan(30);
-      }, PTY_TIMEOUT_MS);
+          expect(rssGrowthKb(samples)).toBeLessThan(40_960);
+          expect(maxCpuPct(samples)).toBeLessThan(30);
+        }, PTY_TIMEOUT_MS);
+
+    it("snapshot polling stabilizes memory after warmup", async () => {
+      const missionId = await createMission(tmpDir);
+
+      const samples = await runJsonProbe<readonly MemoryProbeSample[]>(`
+        import { initServices, getServices } from "./src/services.ts";
+        import { buildSnapshot } from "./src/tui/state/snapshot.ts";
+
+        const targetCwd = ${JSON.stringify(tmpDir)};
+        const missionId = ${JSON.stringify(missionId)};
+        await initServices(targetCwd);
+        const services = getServices();
+        const deps = {
+          missionStore: services.missionStore,
+          featureStore: services.featureStore,
+          assertionStore: services.assertionStore,
+          checkpointStore: services.checkpointStore,
+          handoffStore: services.handoffStore,
+          config: services.config,
+          cass: services.cass,
+          git: services.git,
+          cwd: targetCwd,
+          runtimeStore: services.runtimeStore,
+          runtimeEventStore: services.runtimeEventStore,
+        };
+
+        const samples = [];
+        for (let iteration = 1; iteration <= 24; iteration += 1) {
+          await buildSnapshot(deps, missionId, { probeWorkers: false });
+          if (global.gc) global.gc();
+          const memory = process.memoryUsage();
+          samples.push({
+            iteration,
+            rssMb: Math.round(memory.rss / 1024 / 1024),
+            heapMb: Math.round(memory.heapUsed / 1024 / 1024),
+            externalMb: Math.round(memory.external / 1024 / 1024),
+          });
+        }
+
+        console.log(JSON.stringify(samples));
+      `);
+
+      const lateSamples = lateMemoryWindow(samples);
+      expect(lateSamples.length).toBeGreaterThanOrEqual(8);
+      expect(memoryGrowthMb(lateSamples, "rssMb")).toBeLessThan(20);
+      expect(memoryGrowthMb(lateSamples, "externalMb")).toBeLessThan(8);
+    });
 
       it("compiled binary interactive mode animates the header dots while a mission is executing", async () => {
         if (!pythonAvailable) return;

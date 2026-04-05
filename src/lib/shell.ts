@@ -8,7 +8,7 @@ export interface ShellResult {
 
 /**
  * Execute a shell command and capture output.
- * Uses Bun.spawn for lightweight process execution.
+ * Uses Bun.spawnSync because repeated async pipe reads leak memory under Bun.
  */
 export async function execArgv(
   argv: string[],
@@ -44,31 +44,28 @@ async function execSpawn(
 ): Promise<ShellResult> {
   let proc;
   try {
-    proc = Bun.spawn(argv, {
-    cwd: opts.cwd,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+    proc = Bun.spawnSync(argv, {
+      cwd: opts.cwd,
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: opts.timeout ?? 30_000,
+    });
   } catch {
     return { stdout: "", stderr: `Command not found: ${argv[0]}`, exitCode: 127 };
   }
 
-  const timeoutMs = opts.timeout ?? 30_000;
-  const timer = setTimeout(() => proc.kill(), timeoutMs);
-
-  try {
-    const [stdout, stderr] = await Promise.all([
-      new Response(proc.stdout).text(),
-      new Response(proc.stderr).text(),
-    ]);
-    const exitCode = await proc.exited;
-
+  if (proc.exitedDueToTimeout) {
+    const timeoutMs = opts.timeout ?? 30_000;
     return {
-      stdout: stdout.trim(),
-      stderr: stderr.trim(),
-      exitCode,
+      stdout: "",
+      stderr: `Command timed out after ${timeoutMs}ms`,
+      exitCode: 124,
     };
-  } finally {
-    clearTimeout(timer);
   }
+
+  return {
+    stdout: proc.stdout.toString().trim(),
+    stderr: proc.stderr.toString().trim(),
+    exitCode: proc.exitCode ?? 1,
+  };
 }
