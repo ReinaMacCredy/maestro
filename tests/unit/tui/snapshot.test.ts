@@ -155,10 +155,10 @@ describe("buildSnapshot", () => {
       expect(snapshot.activeWorker).toBeNull();
     }, 15_000);
 
-  it("projects live runtime output metadata from persisted runtime events", async () => {
-    const plan = createSamplePlan();
-    await writeFile(join(tmpDir, "plan.json"), JSON.stringify(plan));
-    const { stdout } = await run(["mission", "create", "--file", join(tmpDir, "plan.json"), "--json"], tmpDir);
+    it("projects live runtime output metadata from persisted runtime events", async () => {
+      const plan = createSamplePlan();
+      await writeFile(join(tmpDir, "plan.json"), JSON.stringify(plan));
+      const { stdout } = await run(["mission", "create", "--file", join(tmpDir, "plan.json"), "--json"], tmpDir);
     const missionId = JSON.parse(stdout).mission.id;
 
     await run(["mission", "approve", missionId, "--json"], tmpDir);
@@ -197,13 +197,56 @@ describe("buildSnapshot", () => {
 
     expect(snapshot.activeWorker?.currentActivity).toContain("Reading runtime-supervision");
     expect(snapshot.activeWorker?.lastOutputAgeMs).toBeGreaterThanOrEqual(0);
-    expect(snapshot.runtimeProcesses[0]?.outputLines?.[0]?.text).toContain("Reading runtime-supervision");
-    expect(snapshot.progressLog.some((event) => event.kind === "worker")).toBe(true);
-  }, 15_000);
+      expect(snapshot.runtimeProcesses[0]?.outputLines?.[0]?.text).toContain("Reading runtime-supervision");
+      expect(snapshot.progressLog.some((event) => event.kind === "worker")).toBe(true);
+    }, 15_000);
 
-  it("activeFeature matches first non-done feature", async () => {
-    const plan = createSamplePlan();
-    await writeFile(join(tmpDir, "plan.json"), JSON.stringify(plan));
+    it("tails runtime events only for features with runtime state", async () => {
+      const plan = createSamplePlan();
+      await writeFile(join(tmpDir, "plan.json"), JSON.stringify(plan));
+      const { stdout } = await run(["mission", "create", "--file", join(tmpDir, "plan.json"), "--json"], tmpDir);
+      const missionId = JSON.parse(stdout).mission.id;
+
+      await run(["mission", "approve", missionId, "--json"], tmpDir);
+      await run(["feature", "update", "f1", "--mission", missionId, "--status", "assigned", "--json"], tmpDir);
+
+      await runtimeStore.save(missionId, "f1", {
+        featureId: "f1",
+        attemptId: "attempt-1",
+        attempt: 1,
+        agent: "codex",
+        runtimeState: "live",
+        startedAt: new Date(Date.now() - 20_000).toISOString(),
+        lastSeenAt: new Date(Date.now() - 2_000).toISOString(),
+        leaseExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+        sessionId: "session-123",
+        recoveryMetadata: {
+          retryCount: 0,
+          history: [],
+        },
+      });
+
+      const tailedFeatureIds: string[] = [];
+      const runtimeEventStoreWithTracking: SnapshotDeps["runtimeEventStore"] = {
+        ...deps.runtimeEventStore,
+        tailByFeature: async (trackedMissionId, featureId, options) => {
+          tailedFeatureIds.push(featureId);
+          return deps.runtimeEventStore.tailByFeature!(trackedMissionId, featureId, options);
+        },
+      };
+
+      const snapshot = await buildSnapshot(
+        { ...deps, runtimeEventStore: runtimeEventStoreWithTracking },
+        missionId,
+      );
+
+      expect(snapshot.runtimeProcesses.map((process) => process.featureId)).toEqual(["f1"]);
+      expect(tailedFeatureIds).toEqual(["f1"]);
+    }, 15_000);
+
+    it("activeFeature matches first non-done feature", async () => {
+      const plan = createSamplePlan();
+      await writeFile(join(tmpDir, "plan.json"), JSON.stringify(plan));
     const { stdout } = await run(["mission", "create", "--file", join(tmpDir, "plan.json"), "--json"], tmpDir);
     const missionId = JSON.parse(stdout).mission.id;
 

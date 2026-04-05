@@ -144,17 +144,17 @@ describe("FsRuntimeEventStoreAdapter", () => {
     }
   });
 
-  it("returns an empty tail when the byte window lands inside a single oversized line", async () => {
-    const store = new FsRuntimeEventStoreAdapter(baseDir);
-    await appendRuntimeEvents(store, 1, () => "x".repeat(6_000));
+    it("recovers the newest event when the byte window lands inside a single oversized line", async () => {
+      const store = new FsRuntimeEventStoreAdapter(baseDir);
+      await appendRuntimeEvents(store, 1, () => "x".repeat(6_000));
 
-    const events = await store.tailByFeature("mission-1", "f1", {
-      maxBytes: 128,
-      maxLines: 5,
+      const events = await store.tailByFeature("mission-1", "f1", {
+        maxBytes: 128,
+        maxLines: 5,
+      });
+
+      expect(events.map((event) => event.id)).toEqual(["evt-0"]);
     });
-
-    expect(events).toEqual([]);
-  });
 
   it("parses the last complete runtime event even when the file has no trailing newline", async () => {
     const eventDir = join(baseDir, ".maestro", "missions", "mission-1", "workers", "f1");

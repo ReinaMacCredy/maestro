@@ -130,22 +130,25 @@ export async function buildSnapshot(
     deps.runtimeStore.list(missionId),
   ]);
 
-    const mission = report.mission;
-    const now = Date.now();
-    const startMs = new Date(mission.approvedAt ?? mission.createdAt).getTime();
-      const runtimeEventsByFeature = new Map(
-        await Promise.all(
-          features.map(async (feature) => [
-            feature.id,
-            await listRecentRuntimeEvents(deps.runtimeEventStore, missionId, feature.id),
-          ] as const),
-        ),
-      );
-    const runtimeByFeature = new Map(
-      runtimes.map((runtime) => [runtime.featureId, buildRuntimeView(runtime, now)]),
-    );
+  const mission = report.mission;
+  const now = Date.now();
+  const startMs = new Date(mission.approvedAt ?? mission.createdAt).getTime();
+  const runtimeByFeature = new Map(
+    runtimes.map((runtime) => [runtime.featureId, buildRuntimeView(runtime, now)]),
+  );
+  const runtimeEventsByFeature = new Map(
+    await Promise.all(
+      [...runtimeByFeature.keys()].map(async (featureId) => [
+        featureId,
+        await listRecentRuntimeEvents(deps.runtimeEventStore, missionId, featureId),
+      ] as const),
+    ),
+  );
   const runtimeTelemetryByFeature = new Map(
-    features.map((feature) => [feature.id, buildRuntimeTelemetry(runtimeEventsByFeature.get(feature.id) ?? [], now)]),
+    [...runtimeEventsByFeature.entries()].map(([featureId, events]) => [
+      featureId,
+      buildRuntimeTelemetry(events, now),
+    ]),
   );
   const featureGraph = buildFeatureGraph(features);
   const workerHealth = await getWorkerHealthRows(configLayers.effective.workers ?? {}, {

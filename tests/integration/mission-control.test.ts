@@ -230,10 +230,39 @@ function createSamplePlan(): object {
   };
 }
 
+function createSamplePlanWithFeatureCount(featureCount: number): object {
+  return {
+    title: "MC Large Test Mission",
+    description: "A mission for mission-control integration stress tests",
+    milestones: [
+      { id: "m1", title: "Milestone 1", description: "First", order: 0 },
+    ],
+    features: Array.from({ length: featureCount }, (_, index) => ({
+      id: `f${index + 1}`,
+      milestoneId: "m1",
+      title: `Feature ${index + 1}`,
+      description: `Feature ${index + 1} description`,
+      workerType: "test-skill",
+      verificationSteps: ["check it"],
+    })),
+  };
+}
+
 async function createMission(cwd: string): Promise<string> {
   const plan = createSamplePlan();
   const planPath = join(cwd, "plan.json");
   await writeFile(planPath, JSON.stringify(plan, null, 2));
+  const { stdout, exitCode } = await run(
+    ["mission", "create", "--file", planPath, "--json"],
+    cwd,
+  );
+  expect(exitCode).toBe(0);
+  return JSON.parse(stdout).mission.id;
+}
+
+async function createMissionWithFeatureCount(cwd: string, featureCount: number): Promise<string> {
+  const planPath = join(cwd, `plan-${featureCount}.json`);
+  await writeFile(planPath, JSON.stringify(createSamplePlanWithFeatureCount(featureCount), null, 2));
   const { stdout, exitCode } = await run(
     ["mission", "create", "--file", planPath, "--json"],
     cwd,
@@ -327,8 +356,45 @@ async function seedLiveRuntimeOutput(
       worker: "codex",
       timestamp: stderrAt,
       kind: "stderr",
-      text: "Retry budget still available",
-      });
+        text: "Retry budget still available",
+        });
+  }
+
+async function seedOversizedRuntimeOutput(
+  cwd: string,
+  missionId: string,
+  featureId: string,
+): Promise<void> {
+  const runtimeStore = new FsRuntimeStoreAdapter(cwd);
+  const runtimeEventStore = new FsRuntimeEventStoreAdapter(cwd);
+  const startedAt = new Date(Date.now() - 15_000).toISOString();
+  const lastSeenAt = new Date(Date.now() - 2_000).toISOString();
+  const leaseExpiresAt = new Date(Date.now() + 60_000).toISOString();
+  await runtimeStore.save(missionId, featureId, {
+    featureId,
+    attemptId: "attempt-oversized-output",
+    attempt: 1,
+    agent: "codex",
+    sessionId: "5634c102-9871-4001-86f8-89399077624e",
+    runtimeState: "live",
+    startedAt,
+    lastSeenAt,
+    leaseExpiresAt,
+    recoveryMetadata: {
+      retryCount: 0,
+      history: [],
+    },
+  });
+  await runtimeEventStore.append(missionId, {
+    id: "event-oversized",
+    missionId,
+    featureId,
+    attemptId: "attempt-oversized-output",
+    worker: "codex",
+    timestamp: new Date(Date.now() - 1_000).toISOString(),
+    kind: "stdout",
+    text: `OVERSIZED-RUNTIME-LINE ${"x".repeat(600_000)}`,
+  });
 }
 
 async function seedLiveRuntime(
@@ -448,14 +514,6 @@ function hasAnimatedHeaderFrame(plainOutput: string): boolean {
 
 function getDurationSamples(plainOutput: string): string[] {
   const matches = plainOutput.matchAll(/TIME\s+((?:\d+[hms]\s*)+)/g);
-  return [...new Set(
-    Array.from(matches, (match) => match[1]?.replace(/\s+/g, " ").trim() ?? "")
-      .filter((sample) => sample.length > 0),
-  )];
-}
-
-function getLabeledElapsedSamples(plainOutput: string, label: string): string[] {
-  const matches = plainOutput.matchAll(new RegExp(`${label}\\s+((?:\\d+[hms]\\s*)+)`, "g"));
   return [...new Set(
     Array.from(matches, (match) => match[1]?.replace(/\s+/g, " ").trim() ?? "")
       .filter((sample) => sample.length > 0),
@@ -951,10 +1009,10 @@ describe("mission-control CLI", () => {
         expectWorkersOverlay(stdout);
       }, SLOW_CLI_TIMEOUT_MS);
 
-    it("--preview output shows the empty state when no runtime output is captured yet", async () => {
-      const missionId = await createMission(tmpDir);
-      await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
-      await seedLiveRuntime(tmpDir, missionId, "f1");
+      it("--preview output shows the empty state when no runtime output is captured yet", async () => {
+        const missionId = await createMission(tmpDir);
+        await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+        await seedLiveRuntime(tmpDir, missionId, "f1");
 
       const { stdout, exitCode } = await run(
         ["mission-control", "--mission", missionId, "--preview", "output", "--feature", "f1"],
@@ -962,9 +1020,24 @@ describe("mission-control CLI", () => {
       );
 
       expect(exitCode).toBe(0);
-      expect(stdout).toContain("Worker Output");
-      expect(stdout).toContain("No runtime output captured yet.");
-    }, SLOW_CLI_TIMEOUT_MS);
+        expect(stdout).toContain("Worker Output");
+        expect(stdout).toContain("No runtime output captured yet.");
+      }, SLOW_CLI_TIMEOUT_MS);
+
+      it("--preview output keeps the newest oversized runtime line visible", async () => {
+        const missionId = await createMission(tmpDir);
+        await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+        await seedOversizedRuntimeOutput(tmpDir, missionId, "f1");
+
+        const { stdout, exitCode } = await run(
+          ["mission-control", "--mission", missionId, "--preview", "output", "--feature", "f1"],
+          tmpDir,
+        );
+
+        expect(exitCode).toBe(0);
+        expect(stdout).toContain("OVERSIZED-RUNTIME-LINE");
+        expect(stdout).not.toContain("No runtime output captured yet.");
+      }, SLOW_CLI_TIMEOUT_MS);
 
     it("--preview workers renders the workers modal", async () => {
       const missionId = await createMission(tmpDir);
@@ -1605,11 +1678,11 @@ describe("mission-control CLI", () => {
     }
   }, PTY_TIMEOUT_MS);
 
-    it("compiled binary interactive mode does not re-probe worker health on every idle poll", async () => {
-      if (!pythonAvailable) return;
-      const missionId = await createMission(tmpDir);
-      const { workerPath, counterPath } = await writeProbeCounterWorker(tmpDir);
-      await writeWorkerProbeConfig(tmpDir, workerPath);
+      it("compiled binary interactive mode does not re-probe worker health on every idle poll", async () => {
+        if (!pythonAvailable) return;
+        const missionId = await createMission(tmpDir);
+        const { workerPath, counterPath } = await writeProbeCounterWorker(tmpDir);
+        await writeWorkerProbeConfig(tmpDir, workerPath);
 
       const result = await runCompiledInteractivePty(
         tmpDir,
@@ -1618,13 +1691,35 @@ describe("mission-control CLI", () => {
       );
 
       expectCleanPtyExit(result);
-      const probeCount = Number(await readFile(counterPath, "utf8"));
-      expect(probeCount).toBeLessThanOrEqual(2);
-      }, PTY_TIMEOUT_MS);
+        const probeCount = Number(await readFile(counterPath, "utf8"));
+        expect(probeCount).toBeLessThanOrEqual(2);
+        }, PTY_TIMEOUT_MS);
 
-  it("compiled binary interactive mode stays bounded with large runtime event logs", async () => {
-    if (!pythonAvailable) return;
-    const missionId = await createMission(tmpDir);
+      it("compiled binary interactive mode stays probe-free beyond the old worker probe cache TTL", async () => {
+        if (!pythonAvailable) return;
+        const missionId = await createMission(tmpDir);
+        const { workerPath, counterPath } = await writeProbeCounterWorker(tmpDir);
+        await writeWorkerProbeConfig(tmpDir, workerPath);
+
+        const result = await runCompiledInteractivePty(
+          tmpDir,
+          ["mission-control", "--mission", missionId],
+          {
+            input: "q",
+            delayMs: 35_500,
+            timeoutMs: 50_000,
+            waitForText: "Mission Control",
+          },
+        );
+
+        expectCleanPtyExit(result);
+        const probeCount = Number(await readFile(counterPath, "utf8"));
+        expect(probeCount).toBeLessThanOrEqual(1);
+      }, 60_000);
+
+    it("compiled binary interactive mode stays bounded with large runtime event logs", async () => {
+      if (!pythonAvailable) return;
+      const missionId = await createMission(tmpDir);
     await setMissionStatus(tmpDir, missionId, "approved");
     await setMissionStatus(tmpDir, missionId, "executing");
     await seedLargeRuntimeEventLog(tmpDir, missionId, "f1", {
@@ -1640,9 +1735,30 @@ describe("mission-control CLI", () => {
 
     expectCleanPtyExit(result);
     expect(result.samples.length).toBeGreaterThanOrEqual(8);
-    expect(Math.max(...result.samples.map((sample) => sample.rssKb))).toBeLessThan(400_000);
-    expect(maxCpuPct(lateWindow(result.samples))).toBeLessThan(20);
-  }, PTY_TIMEOUT_MS);
+      expect(Math.max(...result.samples.map((sample) => sample.rssKb))).toBeLessThan(400_000);
+      expect(maxCpuPct(lateWindow(result.samples))).toBeLessThan(20);
+    }, PTY_TIMEOUT_MS);
+
+    it("compiled binary interactive mode stays bounded on sparse many-feature missions", async () => {
+      if (!pythonAvailable) return;
+      const missionId = await createMissionWithFeatureCount(tmpDir, 160);
+      await setMissionStatus(tmpDir, missionId, "approved");
+      await setMissionStatus(tmpDir, missionId, "executing");
+      await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+      await seedLiveRuntimeOutput(tmpDir, missionId, "f1");
+
+      const result = await runCompiledInteractivePty(
+        tmpDir,
+        ["mission-control", "--mission", missionId],
+        { input: "q", delayMs: 10_500, waitForText: "Mission Control", sampleProcess: true },
+      );
+
+      expectCleanPtyExit(result);
+      const samples = lateWindow(result.samples);
+      expect(samples.length).toBeGreaterThanOrEqual(6);
+      expect(rssGrowthKb(samples)).toBeLessThan(24_576);
+      expect(maxCpuPct(samples)).toBeLessThan(20);
+    }, PTY_TIMEOUT_MS);
 
     it("compiled binary interactive mode opens and closes the command palette with Ctrl+P", async () => {
       if (!pythonAvailable) return;
