@@ -202,16 +202,36 @@ describe("reduce", () => {
             phase: "browse",
             selectedScope: "project",
             returnTarget: "command-palette",
+            returnPalette: { query: "hand", selectedCommandIndex: 0 },
           },
         });
-      const next = reduce(state, { type: "navigate", direction: "left" });
+        const next = reduce(state, { type: "navigate", direction: "left" });
 
-      expect(next.modal.kind).toBe("command-palette");
-      if (next.modal.kind === "command-palette") {
-        expect(next.modal.query).toBe("");
-        expect(next.modal.selectedCommandIndex).toBe(0);
-      }
-    });
+        expect(next.modal.kind).toBe("command-palette");
+        if (next.modal.kind === "command-palette") {
+          expect(next.modal.query).toBe("hand");
+          expect(next.modal.selectedCommandIndex).toBe(0);
+        }
+      });
+
+      it("preserves the active command palette query when returning from a palette-launched overlay", () => {
+        const paletteState = reduce(
+          reduce(
+            reduce(makeState(), { type: "open-command-palette" }),
+            { type: "modal-query-append", char: "h" },
+          ),
+          { type: "modal-query-append", char: "a" },
+        );
+        const overlayState = reduce(paletteState, { type: "open-handoffs" });
+        const next = reduce(overlayState, { type: "navigate", direction: "left" });
+
+        expect(overlayState.modal.kind).toBe("handoffs");
+        expect(next.modal.kind).toBe("command-palette");
+        if (next.modal.kind === "command-palette") {
+          expect(next.modal.query).toBe("ha");
+          expect(next.modal.selectedCommandIndex).toBe(0);
+        }
+      });
 
     it("ignores left-arrow on the command palette home view", () => {
       const state = makeState({

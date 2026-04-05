@@ -1826,9 +1826,9 @@ describe("mission-control CLI", () => {
           expect(containsCollapsedText(result.plainOutput, "Enter focus")).toBe(true);
       }, PTY_TIMEOUT_MS);
 
-    it("compiled binary interactive mode filters the command palette and activates Handoff", async () => {
-      if (!pythonAvailable) return;
-      const missionId = await createMission(tmpDir);
+      it("compiled binary interactive mode filters the command palette and activates Handoff", async () => {
+        if (!pythonAvailable) return;
+        const missionId = await createMission(tmpDir);
 
       const result = await runCompiledInteractivePty(
         tmpDir,
@@ -1846,14 +1846,43 @@ describe("mission-control CLI", () => {
         },
       );
 
+          expectCleanPtyExit(result);
+            expect(containsCollapsedText(result.plainOutput, "Handoffs")).toBe(true);
+            expect(containsCollapsedText(result.plainOutput, "Left back")).toBe(true);
+        }, PTY_TIMEOUT_MS);
+
+      it("compiled binary interactive mode preserves the active command palette selection when returning from Handoff", async () => {
+        if (!pythonAvailable) return;
+        const missionId = await createMission(tmpDir);
+
+        const result = await runCompiledInteractivePty(
+          tmpDir,
+          ["mission-control", "--mission", missionId],
+          {
+            input: "",
+            inputSteps: [
+              { chars: CTRL_P, delayMs: 450 },
+              { chars: "hand", delayMs: 180 },
+              { chars: "\r", delayMs: 180 },
+              { chars: "\u001b[D", delayMs: 220 },
+              { chars: "\r", delayMs: 180 },
+              { chars: "\u001b", delayMs: 250 },
+              { chars: "q", delayMs: 250 },
+            ],
+            waitForText: "Mission Control",
+          },
+        );
+
         expectCleanPtyExit(result);
-          expect(containsCollapsedText(result.plainOutput, "Handoffs")).toBe(true);
-          expect(containsCollapsedText(result.plainOutput, "Left back")).toBe(true);
+        expect(containsCollapsedText(result.plainOutput, "Command Palette")).toBe(true);
+        expect(containsCollapsedText(result.plainOutput, "Handoffs")).toBe(true);
+        expect(containsCollapsedText(result.plainOutput, "No pending handoff selected")).toBe(true);
+        expect(result.plainOutput).not.toContain("Select a task to focus");
       }, PTY_TIMEOUT_MS);
 
-    it("compiled binary interactive mode filters the command palette and activates Config", async () => {
-      if (!pythonAvailable) return;
-      const missionId = await createMission(tmpDir);
+      it("compiled binary interactive mode filters the command palette and activates Config", async () => {
+        if (!pythonAvailable) return;
+        const missionId = await createMission(tmpDir);
 
       const result = await runCompiledInteractivePty(
         tmpDir,
