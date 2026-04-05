@@ -1,4 +1,4 @@
-import { PALETTE } from "./theme.js";
+import { PALETTE } from "../theme.js";
 
 type ModalTone = "default" | "muted" | "accent";
 type ModalStyle = "plain" | "block";

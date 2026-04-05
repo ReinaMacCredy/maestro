@@ -12,9 +12,9 @@ import { FsRuntimeStoreAdapter } from "../../src/adapters/runtime-store.adapter.
 import { buildModalOptions } from "../../src/tui/app/modal-builders.js";
 import { computeScreenLayout } from "../../src/tui/opentui/components/builders.js";
 import { createInitialState, reduce } from "../../src/tui/state/reducer.js";
-import { enterAltScreen, exitAltScreen } from "../../src/tui/ansi.js";
+import { enterAltScreen, exitAltScreen } from "../../src/tui/shared/ansi.js";
 import type { MissionControlSnapshot } from "../../src/tui/state/types.js";
-import { layoutModal } from "../../src/tui/modal-model.js";
+import { layoutModal } from "../../src/tui/shared/modal-model.js";
 
 const CLI = [
   "bun",

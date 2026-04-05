@@ -1,6 +1,6 @@
 import cliSpinners from "cli-spinners";
 
-import type { MissionControlSnapshot } from "./state/types.js";
+import type { MissionControlSnapshot } from "../state/types.js";
 
 const HEADER_DOT_FRAMES = ["●••", "•●•", "••●", "•●•"] as const;
 

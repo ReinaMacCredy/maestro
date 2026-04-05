@@ -13,8 +13,8 @@ import type {
 import { getMissionControlCommandSpecs } from "../../state/mission-control-commands.js";
 import { FEATURE_STATUS_LABEL, FEATURE_TASK_STATUS_LABEL, MISSION_STATUS_LABEL } from "../../theme.js";
 import { formatAge, formatElapsed, formatTokens, truncate } from "../../format.js";
-import { getHeaderDotsFrame } from "../../header-animation.js";
-import type { ModalOptions } from "../../modal-model.js";
+import { getHeaderDotsFrame } from "../../shared/header-animation.js";
+import type { ModalOptions } from "../../shared/modal-model.js";
 import { shortenSessionId } from "../../session-id.js";
 import { buildModalOptions } from "../../app/modal-builders.js";
 

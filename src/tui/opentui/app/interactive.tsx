@@ -12,9 +12,9 @@ import {
 import type { InteractiveOptions } from "../../app/interactive-shared.js";
 import { keyToAction, shouldSubmitFeatureAction } from "../../app/input-dispatch.js";
 import { getSnapshotPollIntervalMs } from "../../app/interactive-shared.js";
-import { HEADER_DOT_INTERVAL_MS, isHeaderAnimationActive } from "../../header-animation.js";
+import { HEADER_DOT_INTERVAL_MS, isHeaderAnimationActive } from "../../shared/header-animation.js";
 import { parseKeypress, type Key } from "../../input.js";
-import { layoutModal, pointInRect } from "../../modal-model.js";
+import { layoutModal, pointInRect } from "../../shared/modal-model.js";
 import { getConfigRowsForTab } from "../../state/config-inspector.js";
 import { createInitialState, reduce, type AppState } from "../../state/reducer.js";
 import { MissionControlApp } from "./mission-control-app.js";
