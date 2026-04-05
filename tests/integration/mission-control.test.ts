@@ -1796,7 +1796,30 @@ describe("mission-control CLI", () => {
         expect(containsCollapsedText(result.plainOutput, "Command Palette")).toBe(true);
         expect(containsCollapsedText(result.plainOutput, "> █")).toBe(true);
         expect(containsCollapsedText(result.plainOutput, "navigate tasks [F]")).toBe(true);
-        expect(result.plainOutput).not.toContain("Enter open · Esc close");
+          expect(result.plainOutput).not.toContain("Enter open · Esc close");
+        }, PTY_TIMEOUT_MS);
+
+      it("compiled binary interactive mode opens the command palette with slash", async () => {
+        if (!pythonAvailable) return;
+        const missionId = await createMission(tmpDir);
+
+        const result = await runCompiledInteractivePty(
+          tmpDir,
+          ["mission-control", "--mission", missionId],
+          {
+            input: "",
+            inputSteps: [
+              { chars: "/", delayMs: 450 },
+              { chars: "\u001b", delayMs: 250 },
+              { chars: "q", delayMs: 250 },
+            ],
+            waitForText: "Mission Control",
+          },
+        );
+
+        expectCleanPtyExit(result);
+        expect(containsCollapsedText(result.plainOutput, "Command Palette")).toBe(true);
+        expect(containsCollapsedText(result.plainOutput, "> █")).toBe(true);
       }, PTY_TIMEOUT_MS);
 
     it("compiled binary interactive mode filters the command palette and activates Features", async () => {
@@ -1900,12 +1923,40 @@ describe("mission-control CLI", () => {
         },
       );
 
+          expectCleanPtyExit(result);
+          expectConfigOverlay(result.plainOutput);
+        }, PTY_TIMEOUT_MS);
+
+      it("compiled binary interactive mode preserves the active command palette selection when returning from Config", async () => {
+        if (!pythonAvailable) return;
+        const missionId = await createMission(tmpDir);
+
+        const result = await runCompiledInteractivePty(
+          tmpDir,
+          ["mission-control", "--mission", missionId],
+          {
+            input: "",
+            inputSteps: [
+              { chars: CTRL_P, delayMs: 450 },
+              { chars: "conf", delayMs: 180 },
+              { chars: "\r", delayMs: 180 },
+              { chars: "\u001b[D", delayMs: 220 },
+              { chars: "\r", delayMs: 180 },
+              { chars: "\u001b", delayMs: 250 },
+              { chars: "q", delayMs: 250 },
+            ],
+            waitForText: "Mission Control",
+          },
+        );
+
         expectCleanPtyExit(result);
+        expect(containsCollapsedText(result.plainOutput, "Command Palette")).toBe(true);
+        expect(containsCollapsedText(result.plainOutput, "Config")).toBe(true);
         expectConfigOverlay(result.plainOutput);
       }, PTY_TIMEOUT_MS);
 
-    it("compiled binary interactive mode filters the command palette and activates Processes", async () => {
-      if (!pythonAvailable) return;
+      it("compiled binary interactive mode filters the command palette and activates Processes", async () => {
+        if (!pythonAvailable) return;
       const missionId = await createMission(tmpDir);
       await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
 

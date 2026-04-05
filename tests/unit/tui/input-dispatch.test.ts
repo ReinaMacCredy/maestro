@@ -103,6 +103,12 @@ describe("keyToAction", () => {
     expect(action).toEqual({ type: "toggle-copy-mode" });
   });
 
+  it("maps slash to the command palette when no modal is open", () => {
+    const action = keyToAction({ type: "char", char: "/" }, createInitialState(SNAPSHOT));
+
+    expect(action).toEqual({ type: "open-command-palette" });
+  });
+
   it("does not map Left Arrow when the command palette is closed", () => {
     const action = keyToAction(
       { type: "arrow", direction: "left" },
@@ -126,6 +132,23 @@ describe("keyToAction", () => {
     const action = keyToAction({ type: "arrow", direction: "right" }, state);
 
     expect(action).toEqual({ type: "config-cycle-value", direction: "next" });
+  });
+
+  it("maps Left Arrow to back when config was opened from the command palette", () => {
+    const state = createInitialState(SNAPSHOT);
+    state.modal = {
+      kind: "config",
+      tab: "overview",
+      selectedRowIndex: 0,
+      phase: "browse",
+      selectedScope: "project",
+      returnTarget: "command-palette",
+      returnPalette: { query: "conf", selectedCommandIndex: 0 },
+    };
+
+    const action = keyToAction({ type: "arrow", direction: "left" }, state);
+
+    expect(action).toEqual({ type: "navigate", direction: "left" });
   });
 
     it("switches config tabs with bracket hotkeys", () => {

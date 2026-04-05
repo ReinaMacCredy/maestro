@@ -17,6 +17,9 @@ export function keyToAction(key: Key, state: AppState): Action | undefined {
   if (key.type === "ctrl" && key.char === "p") {
     return { type: "open-command-palette" };
   }
+  if (key.type === "char" && key.char === "/" && state.modal.kind === "none") {
+    return { type: "open-command-palette" };
+  }
   if (key.type === "ctrl" && key.char === "y") {
     return { type: "toggle-copy-mode" };
   }
@@ -48,18 +51,19 @@ export function keyToAction(key: Key, state: AppState): Action | undefined {
       key.type === "arrow"
       && key.direction === "left"
       && (
-        ((
-          state.modal.kind === "feature-browser"
-          || state.modal.kind === "dependencies"
-          || state.modal.kind === "overview"
-        || state.modal.kind === "handoffs"
-        || state.modal.kind === "workers"
-        || state.modal.kind === "processes"
-        || state.modal.kind === "runtime-output"
-      ) && state.modal.returnTarget === "command-palette")
-    )
-  ) {
-    return { type: "navigate", direction: "left" };
+          ((
+            state.modal.kind === "feature-browser"
+            || state.modal.kind === "dependencies"
+            || state.modal.kind === "overview"
+            || state.modal.kind === "handoffs"
+            || state.modal.kind === "workers"
+            || state.modal.kind === "config"
+            || state.modal.kind === "processes"
+            || state.modal.kind === "runtime-output"
+          ) && state.modal.returnTarget === "command-palette")
+      )
+    ) {
+      return { type: "navigate", direction: "left" };
   }
   if (key.type === "arrow" && (key.direction === "up" || key.direction === "down")) {
     return { type: "navigate", direction: key.direction };

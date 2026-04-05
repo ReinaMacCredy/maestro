@@ -510,6 +510,28 @@ describe("reduce", () => {
             expect(state.modal.findQuery).toBeUndefined();
           }
         });
+
+        it("returns palette-backed config overlays to the command palette on left-arrow back", () => {
+          const state = makeState({
+            modal: {
+              kind: "config",
+              tab: "overview",
+              selectedRowIndex: 0,
+              phase: "browse",
+              selectedScope: "project",
+              returnTarget: "command-palette",
+              returnPalette: { query: "conf", selectedCommandIndex: 0 },
+            },
+          });
+
+          const next = reduce(state, { type: "navigate", direction: "left" });
+
+          expect(next.modal.kind).toBe("command-palette");
+          if (next.modal.kind === "command-palette") {
+            expect(next.modal.query).toBe("conf");
+            expect(next.modal.selectedCommandIndex).toBe(0);
+          }
+        });
       });
 
       describe("open-processes", () => {
