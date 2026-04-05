@@ -19,8 +19,12 @@ import { recoverMissionRuntimeFailures } from "../usecases/runtime-recovery.usec
 
 export type MissionControlSnapshotLoadMode = "read" | "supervise";
 
+export interface MissionControlSnapshotLoadOptions {
+  readonly probeWorkers?: boolean;
+}
+
 export interface MissionControlSnapshotLoader {
-  load: () => Promise<MissionControlSnapshot>;
+  load: (options?: MissionControlSnapshotLoadOptions) => Promise<MissionControlSnapshot>;
 }
 
 type PreviewScreenOrAll = PreviewScreen | "all";
@@ -195,15 +199,15 @@ export function registerMissionControlCommand(program: Command): void {
         ]);
       }
 
-            const snapshot = await supervisedSnapshotLoader.load();
+              const snapshot = await supervisedSnapshotLoader.load();
 
-            await renderDashboard({
-              snapshot,
-              snapshotDeps,
-              reloadSnapshot: () => supervisedSnapshotLoader.load(),
+              await renderDashboard({
+                snapshot,
+                snapshotDeps,
+                reloadSnapshot: () => supervisedSnapshotLoader.load({ probeWorkers: false }),
+            });
           });
-        });
-}
+  }
 
 function resolvePreviewScreen(value: unknown): PreviewScreenOrAll | undefined {
   if (value === undefined || value === false) return undefined;
@@ -305,6 +309,7 @@ async function buildMissionSnapshot(
   missionId: string,
   snapshotDeps: Parameters<typeof buildSnapshot>[0],
   mode: MissionControlSnapshotLoadMode,
+  options: MissionControlSnapshotLoadOptions = {},
 ) {
   const mission = await snapshotDeps.missionStore.get(missionId);
 
@@ -324,7 +329,7 @@ async function buildMissionSnapshot(
   }
 
   return buildSnapshot(snapshotDeps, missionId, {
-    probeWorkers: mode === "supervise",
+    probeWorkers: options.probeWorkers ?? mode === "supervise",
   });
 }
 
@@ -337,19 +342,20 @@ export function createMissionControlSnapshotLoader(
   let resolvedMissionId = explicitMissionId;
 
   return {
-    load: async () => {
-      if (!explicitMissionId && !resolvedMissionId) {
-        resolvedMissionId = await resolveMissionIdFromStore(snapshotDeps.missionStore);
-      }
+      load: async (options = {}) => {
+        if (!explicitMissionId && !resolvedMissionId) {
+          resolvedMissionId = await resolveMissionIdFromStore(snapshotDeps.missionStore);
+        }
 
-      return loadMissionControlSnapshot(
+        return loadMissionControlSnapshot(
         snapshotDeps,
-        homeSnapshotDeps,
-        mode,
-        resolvedMissionId,
-      );
-    },
-  };
+          homeSnapshotDeps,
+          mode,
+          resolvedMissionId,
+          options,
+        );
+      },
+    };
 }
 
 export async function loadMissionControlSnapshot(
@@ -357,12 +363,13 @@ export async function loadMissionControlSnapshot(
   homeSnapshotDeps: Parameters<typeof buildHomeSnapshot>[0],
   mode: MissionControlSnapshotLoadMode,
   missionId?: string,
+  options: MissionControlSnapshotLoadOptions = {},
 ) {
   return missionId
-    ? buildMissionSnapshot(missionId, snapshotDeps, mode)
+    ? buildMissionSnapshot(missionId, snapshotDeps, mode, options)
     : buildHomeSnapshot(homeSnapshotDeps, process.cwd(), {
-      probeWorkers: mode === "supervise",
-    });
+      probeWorkers: options.probeWorkers ?? mode === "supervise",
+      });
 }
 
 function redactSnapshotForReadOutput(

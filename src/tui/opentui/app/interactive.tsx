@@ -12,11 +12,16 @@ import {
 import type { InteractiveOptions } from "../../app/interactive-shared.js";
 import { keyToAction, shouldSubmitFeatureAction } from "../../app/input-dispatch.js";
 import { getSnapshotPollIntervalMs } from "../../app/interactive-shared.js";
-import { HEADER_DOT_INTERVAL_MS, isHeaderAnimationActive } from "../../shared/header-animation.js";
 import { parseKeypress, type Key } from "../../input.js";
 import { layoutModal, pointInRect } from "../../shared/modal-model.js";
 import { getConfigRowsForTab } from "../../state/config-inspector.js";
 import { createInitialState, reduce, type AppState } from "../../state/reducer.js";
+import type {
+  MissionControlRuntimeProcessRow,
+  MissionControlSnapshot,
+  MissionControlWorkerPane,
+  TaskPreviewPane,
+} from "../../state/types.js";
 import { MissionControlApp } from "./mission-control-app.js";
 import { buildModalModel, computeScreenLayout } from "../components/builders.js";
 
@@ -35,10 +40,7 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
   let state = createInitialState(opts.snapshot);
   let shuttingDown = false;
   let dirty = true;
-  let animationFrame = 0;
-  let nextAnimationTickMs = Date.now() + HEADER_DOT_INTERVAL_MS;
-  let nextDurationTickMs = Date.now() + 1000;
-  let lastSnapshotMs = Date.now();
+  let currentSignature = "";
 
   const requestQuit = (): void => {
     if (shuttingDown) return;
@@ -46,7 +48,7 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
     state = reduce(state, { type: "quit" });
   };
 
-  const renderCurrentFrame = (elapsedOffsetMs = 0): void => {
+  const renderCurrentFrame = (): void => {
     flushSync(() => {
       root.render(
         <MissionControlApp
@@ -54,13 +56,14 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
           state={state}
           width={renderer.width}
           height={renderer.height}
-          animationFrame={animationFrame}
-          elapsedOffsetMs={elapsedOffsetMs}
+          animationFrame={0}
+          elapsedOffsetMs={0}
           onMouseDown={handleOpenTuiMouseDown}
         />,
       );
     });
     renderer.useMouse = !state.copyMode;
+    currentSignature = buildInteractiveRenderSignature(state, renderer.width, renderer.height);
   };
 
   async function processKey(key: Key): Promise<void> {
@@ -170,7 +173,7 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
   renderer.on("resize", handleResize);
 
   try {
-    renderCurrentFrame(0);
+    renderCurrentFrame();
     dirty = false;
     let lastPollMs = Date.now();
 
@@ -179,42 +182,22 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
       if (!state.running) break;
 
       const now = Date.now();
-      if (isHeaderAnimationActive(state.snapshot)) {
-        if (now >= nextAnimationTickMs) {
-          const elapsedTicks = Math.max(1, Math.floor((now - nextAnimationTickMs) / HEADER_DOT_INTERVAL_MS) + 1);
-          animationFrame = (animationFrame + elapsedTicks) % 4;
-          nextAnimationTickMs += elapsedTicks * HEADER_DOT_INTERVAL_MS;
-          dirty = true;
-        }
-      } else if (animationFrame !== 0) {
-        animationFrame = 0;
-        nextAnimationTickMs = now + HEADER_DOT_INTERVAL_MS;
-        dirty = true;
-      } else {
-        nextAnimationTickMs = now + HEADER_DOT_INTERVAL_MS;
-      }
-
-      if (now >= nextDurationTickMs) {
-        const elapsedTicks = Math.max(1, Math.floor((now - nextDurationTickMs) / 1000) + 1);
-        nextDurationTickMs += elapsedTicks * 1000;
-        dirty = true;
-      }
-
       if (now - lastPollMs >= getSnapshotPollIntervalMs(state.snapshot)) {
         lastPollMs = now;
         try {
           const snapshot = await opts.reloadSnapshot();
-          state = reduce(state, { type: "update-snapshot", snapshot });
-          lastSnapshotMs = now;
-          nextDurationTickMs = now + 1000;
-          dirty = true;
+          const nextState = reduce(state, { type: "update-snapshot", snapshot });
+          state = nextState;
+          if (buildInteractiveRenderSignature(nextState, renderer.width, renderer.height) !== currentSignature) {
+            dirty = true;
+          }
         } catch {
           // Keep the current snapshot when polling fails.
         }
       }
 
       if (dirty) {
-        renderCurrentFrame(now - lastSnapshotMs);
+        renderCurrentFrame();
         dirty = false;
       }
     }
@@ -266,7 +249,7 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
 
     if (state.modal.kind !== "feature-action" || state.modal.phase === "submitting") {
       if (isSelectableListModal(state.modal.kind)) {
-        const optionIndex = layout.itemRects.findIndex((rect) => pointInRect(rect, key.x, key.y));
+        const optionIndex = layout.itemRects.findIndex((rect) => pointInRect(rect, x, y));
         if (optionIndex < 0) return;
         state = reduce(state, { type: "modal-select", option: optionIndex });
         if (state.modal.kind === "feature-browser") {
@@ -412,4 +395,67 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
 
     dirty = true;
   }
+}
+
+function buildInteractiveRenderSignature(state: AppState, width: number, height: number): string {
+  return JSON.stringify({
+    width,
+    height,
+    focus: state.focusedPanel,
+    selectedFeatureIndex: state.selectedFeatureIndex,
+    logScrollOffset: state.logScrollOffset,
+    leftPaneMode: state.leftPaneMode,
+    copyMode: state.copyMode,
+    modal: state.modal,
+    snapshot: normalizeSnapshotForInteractiveSignature(state.snapshot),
+  });
+}
+
+function normalizeSnapshotForInteractiveSignature(snapshot: MissionControlSnapshot): MissionControlSnapshot {
+  return {
+    ...snapshot,
+    elapsedMs: 0,
+    activeFeature: normalizeTaskPreviewForInteractiveSignature(snapshot.activeFeature),
+    activeWorker: normalizeWorkerPaneForInteractiveSignature(snapshot.activeWorker),
+    runtimeProcesses: snapshot.runtimeProcesses.map(normalizeRuntimeProcessForInteractiveSignature),
+    taskPreviews: snapshot.taskPreviews?.map(normalizeTaskPreviewForInteractiveSignature),
+    workerHealth: snapshot.workerHealth?.map((row) => ({
+      ...row,
+      lastCheckedAt: "",
+    })),
+    progressLog: snapshot.progressLog.map((event) => ({
+      ...event,
+      timestamp: "",
+      relativeMs: 0,
+    })),
+  };
+}
+
+function normalizeTaskPreviewForInteractiveSignature(preview: TaskPreviewPane | null): TaskPreviewPane | null {
+  if (!preview) return preview;
+  return {
+    ...preview,
+    lastSeenAgeMs: 0,
+  };
+}
+
+function normalizeWorkerPaneForInteractiveSignature(worker: MissionControlWorkerPane | null): MissionControlWorkerPane | null {
+  if (!worker) return worker;
+  return {
+    ...worker,
+    elapsedMs: 0,
+    lastSeenAgeMs: 0,
+    lastOutputAgeMs: 0,
+  };
+}
+
+function normalizeRuntimeProcessForInteractiveSignature(
+  process: MissionControlRuntimeProcessRow,
+): MissionControlRuntimeProcessRow {
+  return {
+    ...process,
+    lastSeenAgeMs: 0,
+    lastOutputAgeMs: 0,
+    leaseRemainingMs: 0,
+  };
 }

@@ -2,7 +2,7 @@
  * Integration tests for mission-control command
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
-import { mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FsFeatureStoreAdapter } from "../../src/adapters/feature-store.adapter.js";
@@ -67,9 +67,29 @@ next_send_at = None
 next_step_index = 0
 chunks = []
 timed_out = False
+sample_process = payload.get("sampleProcess", False)
+sample_interval_s = payload.get("sampleIntervalMs", 500) / 1000.0
+next_sample_at = time.time()
+samples = []
 
 while True:
     now = time.time()
+    if sample_process and now >= next_sample_at and proc.poll() is None:
+        try:
+            ps_out = subprocess.check_output(
+                ["ps", "-o", "%cpu=,rss=", "-p", str(proc.pid)],
+                text=True,
+            ).strip()
+            if ps_out:
+                cpu_str, rss_str = ps_out.split()
+                samples.append({
+                    "tMs": int((now - send_at) * 1000) if send_at is not None else int((now - deadline + (payload.get("timeoutMs", 30000) / 1000.0)) * 1000),
+                    "cpuPct": float(cpu_str),
+                    "rssKb": int(rss_str),
+                })
+        except Exception:
+            pass
+        next_sample_at = now + sample_interval_s
     timeout = max(0.0, min(0.1, deadline - now))
     readable, _, _ = select.select([master], [], [], timeout)
     if readable:
@@ -129,6 +149,7 @@ result = {
     "signal": signal.Signals(-proc.returncode).name if proc.returncode is not None and proc.returncode < 0 else None,
     "timedOut": timed_out,
     "rawOutput": base64.b64encode(b"".join(chunks)).decode("ascii"),
+    "samples": samples,
 }
 print(json.dumps(result))
 `;
@@ -395,6 +416,14 @@ interface PtyRunOptions {
   readonly waitForText?: string;
   readonly rows?: number;
   readonly cols?: number;
+  readonly sampleProcess?: boolean;
+  readonly sampleIntervalMs?: number;
+}
+
+interface PtyProcessSample {
+  readonly tMs: number;
+  readonly cpuPct: number;
+  readonly rssKb: number;
 }
 
 interface PtyRunResult {
@@ -403,6 +432,7 @@ interface PtyRunResult {
   readonly exitCode: number | null;
   readonly signal: string | null;
   readonly timedOut: boolean;
+  readonly samples: readonly PtyProcessSample[];
 }
 
 async function runCompiledInteractivePty(
@@ -420,10 +450,12 @@ async function runCompiledInteractivePty(
     })),
     delayMs: opts.delayMs ?? 250,
     timeoutMs: opts.timeoutMs ?? PTY_TIMEOUT_MS,
-    waitForText: opts.waitForText,
-    rows: opts.rows ?? 24,
-    cols: opts.cols ?? 80,
-  });
+      waitForText: opts.waitForText,
+      rows: opts.rows ?? 24,
+      cols: opts.cols ?? 80,
+      sampleProcess: opts.sampleProcess ?? false,
+      sampleIntervalMs: opts.sampleIntervalMs ?? 500,
+    });
 
   const proc = Bun.spawn(["python3", "-c", PYTHON_PTY_RUNNER, payload], {
     stdout: "pipe",
@@ -438,18 +470,20 @@ async function runCompiledInteractivePty(
   expect(stderr.trim()).toBe("");
   const result = JSON.parse(stdout) as {
     exitCode: number | null;
-    signal: string | null;
-    timedOut: boolean;
-    rawOutput: string;
-  };
-  const rawOutput = Buffer.from(result.rawOutput, "base64").toString("utf8");
-  return {
+      signal: string | null;
+      timedOut: boolean;
+      rawOutput: string;
+      samples?: PtyProcessSample[];
+    };
+    const rawOutput = Buffer.from(result.rawOutput, "base64").toString("utf8");
+    return {
     rawOutput,
     plainOutput: stripAnsi(rawOutput),
-    exitCode: result.exitCode,
-    signal: result.signal,
-    timedOut: result.timedOut,
-  };
+      exitCode: result.exitCode,
+      signal: result.signal,
+      timedOut: result.timedOut,
+      samples: result.samples ?? [],
+    };
 }
 
 function expectCleanPtyExit(result: PtyRunResult): void {
@@ -471,6 +505,65 @@ function expectWorkersOverlay(output: string): void {
   expect(output).toContain("Workers");
   expect(output).toContain("Claude Code");
   expect(output).toContain("configured; not checked in read-only mode");
+}
+
+function lateWindow(samples: readonly PtyProcessSample[], size = 8): readonly PtyProcessSample[] {
+  return samples.slice(Math.max(0, samples.length - size));
+}
+
+function maxRssDriftKb(samples: readonly PtyProcessSample[]): number {
+  if (samples.length === 0) return 0;
+  const rss = samples.map((sample) => sample.rssKb);
+  return Math.max(...rss) - Math.min(...rss);
+}
+
+function maxCpuPct(samples: readonly PtyProcessSample[]): number {
+  if (samples.length === 0) return 0;
+  return Math.max(...samples.map((sample) => sample.cpuPct));
+}
+
+async function writeWorkerProbeConfig(cwd: string, workerCommand: string): Promise<void> {
+  await mkdir(join(cwd, ".maestro"), { recursive: true });
+  await writeFile(
+    join(cwd, ".maestro", "config.yaml"),
+    [
+      "execution:",
+      "  defaultWorker: test-worker",
+      "workers:",
+      "  test-worker:",
+      "    enabled: true",
+      "    transport: cli",
+      `    command: ${workerCommand}`,
+      "    outputMode: raw",
+    ].join("\n"),
+  );
+}
+
+async function writeProbeCounterWorker(cwd: string): Promise<{ workerPath: string; counterPath: string }> {
+  const workerDir = join(cwd, "bin");
+  await mkdir(workerDir, { recursive: true });
+  const counterPath = join(workerDir, "probe-count.txt");
+  const workerPath = join(workerDir, "probe-worker");
+  await writeFile(
+    workerPath,
+    [
+      "#!/bin/sh",
+      `COUNTER_FILE=${JSON.stringify(counterPath)}`,
+      "count=0",
+      "if [ -f \"$COUNTER_FILE\" ]; then",
+      "  count=$(cat \"$COUNTER_FILE\")",
+      "fi",
+      "count=$((count + 1))",
+      "printf '%s' \"$count\" > \"$COUNTER_FILE\"",
+      "if [ \"$1\" = \"--version\" ]; then",
+      "  echo probe-worker 1.0.0",
+      "  exit 0",
+      "fi",
+      "exit 0",
+    ].join("\n"),
+  );
+  await chmod(workerPath, 0o755);
+  return { workerPath, counterPath };
 }
 
 function expectRuntimeOverlay(output: string): void {
@@ -1193,42 +1286,42 @@ describe("mission-control CLI", () => {
     expect(result.plainOutput).toContain("Timeline");
   }, PTY_TIMEOUT_MS);
 
-  it("compiled binary interactive mode animates header dots while an executing mission idles", async () => {
-    if (!pythonAvailable) return;
-    const missionId = await createMission(tmpDir);
+    it("compiled binary interactive mode stabilizes process stats while an approved mission idles", async () => {
+      if (!pythonAvailable) return;
+      const missionId = await createMission(tmpDir);
 
-    await setMissionStatus(tmpDir, missionId, "approved");
-    await setMissionStatus(tmpDir, missionId, "executing");
+      const result = await runCompiledInteractivePty(
+        tmpDir,
+        ["mission-control", "--mission", missionId],
+        { input: "q", delayMs: 8_500, waitForText: "Mission Control", sampleProcess: true },
+      );
 
-    const result = await runCompiledInteractivePty(
-      tmpDir,
-      ["mission-control", "--mission", missionId],
-      { input: "q", delayMs: 1_250, waitForText: "Mission Control" },
-    );
+      expectCleanPtyExit(result);
+      const samples = lateWindow(result.samples);
+      expect(samples.length).toBeGreaterThanOrEqual(6);
+      expect(maxRssDriftKb(samples)).toBeLessThan(12_288);
+      expect(maxCpuPct(samples)).toBeLessThan(20);
+    }, PTY_TIMEOUT_MS);
 
-    expectCleanPtyExit(result);
-    expect(result.plainOutput).toContain("●••");
-    expect(hasAnimatedHeaderFrame(result.plainOutput)).toBe(true);
-  }, PTY_TIMEOUT_MS);
+    it("compiled binary interactive mode stabilizes process stats while an executing mission idles", async () => {
+      if (!pythonAvailable) return;
+      const missionId = await createMission(tmpDir);
 
-  it("compiled binary interactive mode keeps header dots static while paused", async () => {
-    if (!pythonAvailable) return;
-    const missionId = await createMission(tmpDir);
+      await setMissionStatus(tmpDir, missionId, "approved");
+      await setMissionStatus(tmpDir, missionId, "executing");
 
-    await setMissionStatus(tmpDir, missionId, "approved");
-    await setMissionStatus(tmpDir, missionId, "executing");
-    await setMissionStatus(tmpDir, missionId, "paused");
+      const result = await runCompiledInteractivePty(
+        tmpDir,
+        ["mission-control", "--mission", missionId],
+        { input: "q", delayMs: 8_500, waitForText: "Mission Control", sampleProcess: true },
+      );
 
-    const result = await runCompiledInteractivePty(
-      tmpDir,
-      ["mission-control", "--mission", missionId],
-      { input: "q", delayMs: 450 },
-    );
-
-    expectCleanPtyExit(result);
-    expect(result.plainOutput).toContain("●••");
-    expect(hasAnimatedHeaderFrame(result.plainOutput)).toBe(false);
-  }, PTY_TIMEOUT_MS);
+      expectCleanPtyExit(result);
+      const samples = lateWindow(result.samples);
+      expect(samples.length).toBeGreaterThanOrEqual(6);
+      expect(maxRssDriftKb(samples)).toBeLessThan(12_288);
+      expect(maxCpuPct(samples)).toBeLessThan(20);
+    }, PTY_TIMEOUT_MS);
 
   it("compiled binary interactive mode remains stable across repeated launch and quit cycles", async () => {
     if (!pythonAvailable) return;
@@ -1244,22 +1337,22 @@ describe("mission-control CLI", () => {
     }
   }, PTY_TIMEOUT_MS);
 
-    it("compiled binary interactive mode updates the header time every second while idle", async () => {
-    if (!pythonAvailable) return;
-    const missionId = await createMission(tmpDir);
-    await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+      it("compiled binary interactive mode does not re-probe worker health on every idle poll", async () => {
+      if (!pythonAvailable) return;
+      const missionId = await createMission(tmpDir);
+      const { workerPath, counterPath } = await writeProbeCounterWorker(tmpDir);
+      await writeWorkerProbeConfig(tmpDir, workerPath);
 
-    const result = await runCompiledInteractivePty(
-      tmpDir,
-      ["mission-control", "--mission", missionId],
-      { input: "q", delayMs: 2_300, waitForText: "Mission Control" },
-    );
+      const result = await runCompiledInteractivePty(
+        tmpDir,
+        ["mission-control", "--mission", missionId],
+        { input: "q", delayMs: 6_500, waitForText: "Mission Control" },
+      );
 
-    expectCleanPtyExit(result);
-      expect(result.plainOutput).toContain("TIME");
-      const durationSamples = getDurationSamples(result.plainOutput);
-      expect(durationSamples.length).toBeGreaterThan(1);
-    }, PTY_TIMEOUT_MS);
+      expectCleanPtyExit(result);
+      const probeCount = Number(await readFile(counterPath, "utf8"));
+      expect(probeCount).toBeLessThanOrEqual(2);
+      }, PTY_TIMEOUT_MS);
 
     it("compiled binary interactive mode opens and closes the command palette with Ctrl+P", async () => {
       if (!pythonAvailable) return;
