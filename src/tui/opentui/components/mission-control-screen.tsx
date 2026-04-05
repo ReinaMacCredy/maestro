@@ -53,7 +53,7 @@ export function MissionControlScreen({
     const theme = resolveMissionControlTheme(state.snapshot);
     const header = buildHeaderModel(state.snapshot, animationFrame);
     const status = buildStatusStripModel(state.snapshot);
-    const footer = buildFooterModel(state.snapshot, state.copyMode);
+  const footer = buildFooterModel(state.snapshot, state.copyMode);
 
   if (width < 80 || height < 24) {
     return (
@@ -81,31 +81,33 @@ export function MissionControlScreen({
   const logLines = buildLogLines(state, contentWidth(layout.mainWidth), contentHeight(layout.leftBottomHeight));
   const sessionLines = buildSessionLines(state, contentWidth(layout.sideWidth), contentHeight(layout.rightBottomHeight), elapsedOffsetMs);
   const modal = buildModalModel(state);
+  const backdropActive = modal !== undefined;
   const modalParentRect = getModalParentRect(layout);
   const modalLayout = modal ? layoutModal(modalParentRect, modal) : undefined;
 
   return (
-    <box
-      width={width}
-      height={height}
-      border
-      flexDirection="column"
-      backgroundColor={theme.pageBg}
-      onMouseDown={onMouseDown}
-    >
+      <box
+        width={width}
+        height={height}
+        border
+        borderColor={backdropActive ? dimHexColor(OPEN_TUI_THEME.text) : undefined}
+        flexDirection="column"
+        backgroundColor={theme.pageBg}
+        onMouseDown={onMouseDown}
+      >
       <box width="100%" height={1} flexDirection="row" justifyContent="space-between">
-        <SafeText fg={header.left.fg} attributes={header.left.attributes}>{header.left.text}</SafeText>
-        <SafeText fg={header.right.fg}>{header.right.text}</SafeText>
+        <SafeText fg={backdropColor(header.left.fg, backdropActive)} attributes={mergeTextAttributes(header.left.attributes, backdropActive)}>{header.left.text}</SafeText>
+        <SafeText fg={backdropColor(header.right.fg, backdropActive)} attributes={mergeTextAttributes(undefined, backdropActive)}>{header.right.text}</SafeText>
       </box>
 
       <box width="100%" height={2} flexDirection="column">
         <box flexDirection="row" justifyContent="space-between">
-          <SafeText fg={status.primaryLeft.fg} attributes={status.primaryLeft.attributes}>{status.primaryLeft.text}</SafeText>
-          {status.primaryRight ? <SafeText fg={status.primaryRight.fg} attributes={status.primaryRight.attributes}>{status.primaryRight.text}</SafeText> : <box />}
+          <SafeText fg={backdropColor(status.primaryLeft.fg, backdropActive)} attributes={mergeTextAttributes(status.primaryLeft.attributes, backdropActive)}>{status.primaryLeft.text}</SafeText>
+          {status.primaryRight ? <SafeText fg={backdropColor(status.primaryRight.fg, backdropActive)} attributes={mergeTextAttributes(status.primaryRight.attributes, backdropActive)}>{status.primaryRight.text}</SafeText> : <box />}
         </box>
         <box flexDirection="row" justifyContent="space-between">
-          {status.secondaryLeft ? <SafeText fg={status.secondaryLeft.fg} attributes={status.secondaryLeft.attributes}>{status.secondaryLeft.text}</SafeText> : <box />}
-          {status.secondaryRight ? <SafeText fg={status.secondaryRight.fg} attributes={status.secondaryRight.attributes}>{status.secondaryRight.text}</SafeText> : <box />}
+          {status.secondaryLeft ? <SafeText fg={backdropColor(status.secondaryLeft.fg, backdropActive)} attributes={mergeTextAttributes(status.secondaryLeft.attributes, backdropActive)}>{status.secondaryLeft.text}</SafeText> : <box />}
+          {status.secondaryRight ? <SafeText fg={backdropColor(status.secondaryRight.fg, backdropActive)} attributes={mergeTextAttributes(status.secondaryRight.attributes, backdropActive)}>{status.secondaryRight.text}</SafeText> : <box />}
         </box>
       </box>
 
@@ -114,29 +116,31 @@ export function MissionControlScreen({
           layout={layout}
           focusLines={focusLines}
           featureLines={featureLines}
-          logLines={logLines}
-          sessionLines={sessionLines}
-          state={state}
-          theme={theme}
-        />
-      ) : (
-        <SplitBody
+            logLines={logLines}
+            sessionLines={sessionLines}
+            state={state}
+            theme={theme}
+            dimmed={backdropActive}
+          />
+        ) : (
+          <SplitBody
           layout={layout}
           focusLines={focusLines}
           featureLines={featureLines}
-          logLines={logLines}
-          sessionLines={sessionLines}
-          state={state}
-          theme={theme}
-        />
-      )}
+            logLines={logLines}
+            sessionLines={sessionLines}
+            state={state}
+            theme={theme}
+            dimmed={backdropActive}
+          />
+        )}
 
-        <box width="100%" height={1} flexDirection="row" justifyContent="space-between" backgroundColor={theme.headerBg}>
-          <SafeText fg={state.copyMode ? theme.warning : theme.muted} attributes={state.copyMode ? TextAttributes.BOLD : undefined}>
-            {footer.left}
-          </SafeText>
-          <SafeText fg={theme.muted}>{footer.right}</SafeText>
-        </box>
+          <box width="100%" height={1} flexDirection="row" justifyContent="space-between" backgroundColor={backdropColor(theme.headerBg, backdropActive)}>
+            <SafeText fg={backdropColor(state.copyMode ? theme.warning : theme.muted, backdropActive)} attributes={mergeTextAttributes(state.copyMode ? TextAttributes.BOLD : undefined, backdropActive)}>
+              {footer.left}
+            </SafeText>
+            <SafeText fg={backdropColor(theme.muted, backdropActive)} attributes={mergeTextAttributes(undefined, backdropActive)}>{footer.right}</SafeText>
+          </box>
 
       {modal ? (
         <ModalLayer
@@ -158,52 +162,53 @@ interface BodyProps {
   readonly sessionLines: readonly UiLine[];
   readonly state: AppState;
   readonly theme: ReturnType<typeof resolveMissionControlTheme>;
+  readonly dimmed: boolean;
 }
 
-function SplitBody({ layout, focusLines, featureLines, logLines, sessionLines, state, theme }: BodyProps) {
+function SplitBody({ layout, focusLines, featureLines, logLines, sessionLines, state, theme, dimmed }: BodyProps) {
   return (
     <box width="100%" height={layout.bodyHeight} flexDirection="row">
       <box width={layout.mainWidth} height={layout.bodyHeight} flexDirection="column" paddingRight={1}>
-          <PanelFrame title={state.snapshot.mode === "home" ? "Overview" : state.leftPaneMode === "overview" ? "Mission Overview" : "Focus / Preview"} height={layout.leftTopHeight} theme={theme}>
-            <LineList lines={focusLines} />
+          <PanelFrame title={state.snapshot.mode === "home" ? "Overview" : state.leftPaneMode === "overview" ? "Mission Overview" : "Focus / Preview"} height={layout.leftTopHeight} theme={theme} dimmed={dimmed}>
+            <LineList lines={focusLines} dimmed={dimmed} />
           </PanelFrame>
         <Spacer />
-          <PanelFrame title={state.snapshot.mode === "home" ? "Pending Handoffs" : "Timeline"} height={layout.leftBottomHeight} theme={theme}>
-            <LineList lines={logLines} />
+          <PanelFrame title={state.snapshot.mode === "home" ? "Pending Handoffs" : "Timeline"} height={layout.leftBottomHeight} theme={theme} dimmed={dimmed}>
+            <LineList lines={logLines} dimmed={dimmed} />
           </PanelFrame>
       </box>
 
       <box width={layout.sideWidth} height={layout.bodyHeight} flexDirection="column">
-          <PanelFrame title={state.snapshot.mode === "home" ? "Environment" : "Tasks"} height={layout.rightTopHeight} theme={theme}>
-            <LineList lines={featureLines} />
+          <PanelFrame title={state.snapshot.mode === "home" ? "Environment" : "Tasks"} height={layout.rightTopHeight} theme={theme} dimmed={dimmed}>
+            <LineList lines={featureLines} dimmed={dimmed} />
           </PanelFrame>
         <Spacer />
-          <PanelFrame title="Activity / Session" height={layout.rightBottomHeight} theme={theme}>
-            <LineList lines={sessionLines} />
+          <PanelFrame title="Activity / Session" height={layout.rightBottomHeight} theme={theme} dimmed={dimmed}>
+            <LineList lines={sessionLines} dimmed={dimmed} />
           </PanelFrame>
       </box>
     </box>
   );
 }
 
-function StackedBody({ layout, focusLines, featureLines, logLines, sessionLines, state, theme }: BodyProps) {
+function StackedBody({ layout, focusLines, featureLines, logLines, sessionLines, state, theme, dimmed }: BodyProps) {
   const [focusHeight, listHeight, logHeight, sessionHeight] = layout.stackedHeights;
   return (
     <box width="100%" height={layout.bodyHeight} flexDirection="column">
-      <PanelFrame title={state.snapshot.mode === "home" ? "Overview" : state.leftPaneMode === "overview" ? "Mission Overview" : "Focus / Preview"} height={focusHeight} theme={theme}>
-        <LineList lines={focusLines} />
+      <PanelFrame title={state.snapshot.mode === "home" ? "Overview" : state.leftPaneMode === "overview" ? "Mission Overview" : "Focus / Preview"} height={focusHeight} theme={theme} dimmed={dimmed}>
+        <LineList lines={focusLines} dimmed={dimmed} />
       </PanelFrame>
       <Spacer />
-      <PanelFrame title={state.snapshot.mode === "home" ? "Environment" : "Tasks"} height={listHeight} theme={theme}>
-        <LineList lines={featureLines} />
+      <PanelFrame title={state.snapshot.mode === "home" ? "Environment" : "Tasks"} height={listHeight} theme={theme} dimmed={dimmed}>
+        <LineList lines={featureLines} dimmed={dimmed} />
       </PanelFrame>
       <Spacer />
-      <PanelFrame title={state.snapshot.mode === "home" ? "Pending Handoffs" : "Timeline"} height={logHeight} theme={theme}>
-        <LineList lines={logLines} />
+      <PanelFrame title={state.snapshot.mode === "home" ? "Pending Handoffs" : "Timeline"} height={logHeight} theme={theme} dimmed={dimmed}>
+        <LineList lines={logLines} dimmed={dimmed} />
       </PanelFrame>
       <Spacer />
-      <PanelFrame title="Activity / Session" height={sessionHeight} theme={theme}>
-        <LineList lines={sessionLines} />
+      <PanelFrame title="Activity / Session" height={sessionHeight} theme={theme} dimmed={dimmed}>
+        <LineList lines={sessionLines} dimmed={dimmed} />
       </PanelFrame>
     </box>
   );
@@ -213,14 +218,16 @@ interface PanelFrameProps {
   readonly title: string;
   readonly height: number;
   readonly theme: ReturnType<typeof resolveMissionControlTheme>;
+  readonly dimmed: boolean;
   readonly children: React.ReactNode;
 }
 
-function PanelFrame({ title, height, theme, children }: PanelFrameProps) {
+function PanelFrame({ title, height, theme, dimmed, children }: PanelFrameProps) {
   return (
     <box
       title={title}
       border
+      borderColor={dimmed ? dimHexColor(OPEN_TUI_THEME.text) : undefined}
       width="100%"
       height={Math.max(3, height)}
       flexDirection="column"
@@ -239,14 +246,15 @@ function Spacer() {
 
 interface LineListProps {
   readonly lines: readonly UiLine[];
+  readonly dimmed: boolean;
 }
 
-function LineList({ lines }: LineListProps) {
+function LineList({ lines, dimmed }: LineListProps) {
   return (
     <box flexDirection="column" width="100%" height="100%">
       {lines.map((line, index) => (
-        <box key={index} width="100%" height={1} backgroundColor={line.bg}>
-          <SafeText fg={line.fg} attributes={line.attributes}>{line.text}</SafeText>
+        <box key={index} width="100%" height={1} backgroundColor={backdropColor(line.bg, dimmed)}>
+          <SafeText fg={backdropColor(line.fg, dimmed)} attributes={mergeTextAttributes(line.attributes, dimmed)}>{line.text}</SafeText>
         </box>
       ))}
     </box>
@@ -586,6 +594,31 @@ function padLine(text: string, width: number): string {
   if (width <= 0) return "";
   const clipped = truncate(text, width);
   return clipped.length >= width ? clipped : `${clipped}${" ".repeat(width - clipped.length)}`;
+}
+
+function backdropColor(color: string | undefined, dimmed: boolean): string | undefined {
+  if (!dimmed || !color) return color;
+  return dimHexColor(color);
+}
+
+function mergeTextAttributes(attributes: number | undefined, dimmed: boolean): number | undefined {
+  if (!dimmed) return attributes;
+  return (attributes ?? 0) | TextAttributes.DIM;
+}
+
+function dimHexColor(color: string): string {
+  const normalized = color.trim();
+  if (!normalized.startsWith("#")) return color;
+  const hex = normalized.slice(1);
+  const fullHex = hex.length === 3
+    ? hex.split("").map((char) => `${char}${char}`).join("")
+    : hex;
+  if (fullHex.length !== 6) return color;
+
+  const [r, g, b] = [0, 2, 4].map((offset) => Number.parseInt(fullHex.slice(offset, offset + 2), 16));
+  const factor = 0.55;
+  const toHex = (value: number) => Math.max(0, Math.min(255, Math.round(value * factor))).toString(16).padStart(2, "0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
 function applyTextCase(text: string, mode: OverlayTextCase): string {

@@ -5,6 +5,7 @@ import { OPEN_TUI_THEME, resolveMissionControlTheme } from "../../../../src/tui/
 import { captureMissionControlFrame, captureMissionControlRender } from "../../../../src/tui/opentui/testing/frame-capture.js";
 import { createInitialState, reduce } from "../../../../src/tui/state/reducer.js";
 import type { MissionControlSnapshot } from "../../../../src/tui/state/types.js";
+import { TextAttributes } from "@opentui/core";
 
 function makeSnapshot(): MissionControlSnapshot {
   return {
@@ -214,5 +215,31 @@ describe("captureMissionControlFrame", () => {
       expect(render.charFrame).toContain("> █");
       expect(render.charFrame).toContain("navigate      tasks");
       expect(render.charFrame).toContain("[F]");
+    });
+
+    it("dims the underlying dashboard while the command palette is open", async () => {
+      const snapshot = makeSnapshot();
+      const render = await captureMissionControlRender({
+        snapshot,
+        state: reduce(createInitialState(snapshot), { type: "open-command-palette" }),
+        width: 120,
+        height: 40,
+      });
+
+      const headerLine = render.spans.lines.find((line) => line.spans.some((span) => span.text.includes("Mission Control")));
+      const statusLine = render.spans.lines.find((line) => line.spans.some((span) => span.text.includes("RUNNING")));
+
+      expect(headerLine).toBeDefined();
+      expect(statusLine).toBeDefined();
+
+      const missionControlSpan = headerLine!.spans.find((span) => span.text.includes("Mission Control"));
+      const runningSpan = statusLine!.spans.find((span) => span.text.includes("RUNNING"));
+
+      expect(missionControlSpan).toBeDefined();
+      expect(runningSpan).toBeDefined();
+      expect(missionControlSpan!.attributes & TextAttributes.DIM).toBe(TextAttributes.DIM);
+      expect(runningSpan!.attributes & TextAttributes.DIM).toBe(TextAttributes.DIM);
+      expect(missionControlSpan!.fg.buffer[0]).toBeLessThan(1);
+      expect(runningSpan!.fg.buffer[0]).toBeLessThan(1);
     });
   });
