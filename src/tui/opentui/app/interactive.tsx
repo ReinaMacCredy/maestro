@@ -1,22 +1,22 @@
 import { createCliRenderer, MouseButton, type MouseEvent } from "@opentui/core";
 import { createRoot, flushSync } from "@opentui/react";
 
-import { getValidFeatureTransitions } from "../../domain/mission-state.js";
-import { applyConfigEdit, previewConfigEdit } from "../../usecases/config-edit.usecase.js";
-import { updateFeature } from "../../usecases/feature-lifecycle.usecase.js";
+import { getValidFeatureTransitions } from "../../../domain/mission-state.js";
+import { applyConfigEdit, previewConfigEdit } from "../../../usecases/config-edit.usecase.js";
+import { updateFeature } from "../../../usecases/feature-lifecycle.usecase.js";
 import {
   getCommandPaletteSelectionAction,
   getFilteredCommandPaletteItems,
   isSelectableListModal,
-} from "../../tui/app/modal-builders.js";
-import { keyToAction, shouldSubmitFeatureAction } from "../../tui/app/input-dispatch.js";
-import { HEADER_DOT_INTERVAL_MS, isHeaderAnimationActive } from "../../tui/panels/header.js";
-import { getConfigRowsForTab } from "../../tui/state/config-inspector.js";
-import { createInitialState, reduce, type AppState } from "../../tui/state/reducer.js";
-import type { InteractiveOptions } from "../../tui/app/app.js";
-import { getSnapshotPollIntervalMs } from "../../tui/app/app.js";
-import { parseKeypress, type Key } from "../../tui/terminal/input.js";
-import { layoutModal, pointInRect } from "../../tui/widgets/modal.js";
+} from "../../app/modal-builders.js";
+import { keyToAction, shouldSubmitFeatureAction } from "../../app/input-dispatch.js";
+import { HEADER_DOT_INTERVAL_MS, isHeaderAnimationActive } from "../../panels/header.js";
+import { getConfigRowsForTab } from "../../state/config-inspector.js";
+import { createInitialState, reduce, type AppState } from "../../state/reducer.js";
+import type { InteractiveOptions } from "../../app/app.js";
+import { getSnapshotPollIntervalMs } from "../../app/app.js";
+import { parseKeypress, type Key } from "../../terminal/input.js";
+import { layoutModal, pointInRect } from "../../widgets/modal.js";
 import { MissionControlApp } from "./mission-control-app.js";
 import { buildModalModel, computeScreenLayout } from "../components/builders.js";
 

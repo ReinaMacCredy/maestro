@@ -1,6 +1,6 @@
 import { TextAttributes, type MouseEvent } from "@opentui/core";
 
-import type { AppState } from "../../tui/state/reducer.js";
+import type { AppState } from "../../state/reducer.js";
 import type {
   InfoModalOptions,
   MenuModalOptions,
@@ -10,7 +10,7 @@ import type {
   PaletteModalOptions,
   SplitModalOptions,
   SplitModalRow,
-} from "../../tui/widgets/modal.js";
+} from "../../widgets/modal.js";
 import {
   OPEN_TUI_THEME,
   buildFeatureListLines,

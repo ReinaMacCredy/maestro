@@ -1,8 +1,8 @@
 import type { MouseEvent } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/react";
 
-import { createInitialState, type AppState } from "../../tui/state/reducer.js";
-import type { MissionControlSnapshot } from "../../tui/state/types.js";
+import { createInitialState, type AppState } from "../../state/reducer.js";
+import type { MissionControlSnapshot } from "../../state/types.js";
 import { MissionControlScreen } from "../components/mission-control-screen.js";
 
 export interface MissionControlAppProps {

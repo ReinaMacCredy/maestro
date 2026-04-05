@@ -2,8 +2,8 @@ import type { CapturedFrame } from "@opentui/core";
 import { createTestRenderer } from "@opentui/core/testing";
 import { createRoot, flushSync } from "@opentui/react";
 
-import type { AppState } from "../../tui/state/reducer.js";
-import type { MissionControlSnapshot } from "../../tui/state/types.js";
+import type { AppState } from "../../state/reducer.js";
+import type { MissionControlSnapshot } from "../../state/types.js";
 import { MissionControlApp } from "../app/mission-control-app.js";
 
 export interface OpenTuiFrameCaptureOptions {

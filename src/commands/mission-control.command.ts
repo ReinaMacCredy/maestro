@@ -11,7 +11,7 @@ import {
   renderDashboard,
   renderPreviewFrame,
   runRenderCheck,
-} from "../tui-opentui/index.js";
+} from "../tui/opentui/index.js";
 import { buildHomeSnapshot, buildSnapshot } from "../tui/state/snapshot.js";
 import type { MissionControlSnapshot } from "../tui/state/types.js";
 import { PREVIEW_SCREENS, isPreviewScreen, type PreviewScreen } from "../tui/app/preview-state.js";

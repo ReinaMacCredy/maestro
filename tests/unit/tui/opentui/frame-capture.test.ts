@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
-import { captureMissionControlFrame } from "../../../src/tui-opentui/testing/frame-capture.js";
-import type { MissionControlSnapshot } from "../../../src/tui/state/types.js";
+import { captureMissionControlFrame } from "../../../../src/tui/opentui/testing/frame-capture.js";
+import type { MissionControlSnapshot } from "../../../../src/tui/state/types.js";
 
 function makeSnapshot(): MissionControlSnapshot {
   return {

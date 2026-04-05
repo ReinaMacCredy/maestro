@@ -10,7 +10,7 @@ import { FsMissionStoreAdapter } from "../../src/adapters/mission-store.adapter.
 import { FsRuntimeEventStoreAdapter } from "../../src/adapters/runtime-event-store.adapter.js";
 import { FsRuntimeStoreAdapter } from "../../src/adapters/runtime-store.adapter.js";
 import { buildModalOptions } from "../../src/tui/app/modal-builders.js";
-import { computeScreenLayout } from "../../src/tui-opentui/components/builders.js";
+import { computeScreenLayout } from "../../src/tui/opentui/components/builders.js";
 import { createInitialState, reduce } from "../../src/tui/state/reducer.js";
 import { enterAltScreen, exitAltScreen } from "../../src/tui/terminal/ansi.js";
 import type { MissionControlSnapshot } from "../../src/tui/state/types.js";

@@ -1,5 +1,5 @@
-import { buildPreviewState } from "../../tui/app/preview-state.js";
-import type { PreviewFrameOptions } from "../../tui/app/render.js";
+import { buildPreviewState } from "../../app/preview-state.js";
+import type { PreviewFrameOptions } from "../../app/render.js";
 import { capturedFrameToAnsi } from "../ansi.js";
 import { captureMissionControlRender } from "../testing/frame-capture.js";
 
