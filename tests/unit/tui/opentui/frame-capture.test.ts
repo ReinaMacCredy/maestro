@@ -178,13 +178,13 @@ describe("captureMissionControlFrame", () => {
       });
 
       const titleLine = render.spans.lines.find((line) => line.spans.some((span) => span.text.includes("Command Palette")));
-      const selectedLine = render.spans.lines.find((line) => line.spans.some((span) => span.text.includes("Tasks  Browse mission tasks")));
+      const selectedLine = render.spans.lines.find((line) => line.spans.some((span) => span.text.includes("navigate      tasks")));
 
       expect(titleLine).toBeDefined();
       expect(selectedLine).toBeDefined();
 
       const paletteTitleSpan = titleLine!.spans.find((span) => span.text.includes("Command Palette"));
-      const selectedCommandSpan = selectedLine!.spans.find((span) => span.text.includes("Tasks  Browse mission tasks"));
+      const selectedCommandSpan = selectedLine!.spans.find((span) => span.text.includes("navigate      tasks"));
 
       expect(paletteTitleSpan).toBeDefined();
       expect(selectedCommandSpan).toBeDefined();
@@ -199,5 +199,8 @@ describe("captureMissionControlFrame", () => {
       expect(selectedCommandSpan!.fg.buffer[0]).toBeCloseTo(0.0549, 3);
       expect(selectedCommandSpan!.fg.buffer[1]).toBeCloseTo(0.0823, 3);
       expect(selectedCommandSpan!.fg.buffer[2]).toBeCloseTo(0.1137, 3);
+      expect(render.charFrame).toContain("> █");
+      expect(render.charFrame).toContain("navigate      tasks");
+      expect(render.charFrame).toContain("[F]");
     });
   });

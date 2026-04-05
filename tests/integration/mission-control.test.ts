@@ -730,7 +730,7 @@ async function seedLargeRuntimeEventLog(
 
 function expectRuntimeOverlay(output: string): void {
   expect(output).toContain("Runtime");
-  expect(output).toContain("features right now");
+  expect(output).toContain("No assigned, in-");
   expect(output).toContain("No runtime item selected");
 }
 
@@ -1795,8 +1795,8 @@ describe("mission-control CLI", () => {
 
         expectCleanPtyExit(result);
         expect(containsCollapsedText(result.plainOutput, "Command Palette")).toBe(true);
-        expect(containsCollapsedText(result.plainOutput, "/ type to filter")).toBe(true);
-        expect(result.plainOutput).toContain("Browse mission tasks");
+        expect(containsCollapsedText(result.plainOutput, "> █")).toBe(true);
+        expect(containsCollapsedText(result.plainOutput, "navigate tasks [F]")).toBe(true);
         expect(result.plainOutput).not.toContain("Enter open · Esc close");
       }, PTY_TIMEOUT_MS);
 

@@ -2,16 +2,20 @@ import { TextAttributes, type MouseEvent } from "@opentui/core";
 import { sanitizeTerminalText } from "../../../lib/sanitize.js";
 
 import type { AppState } from "../../state/reducer.js";
+import { truncate } from "../../format.js";
 import type {
   InfoModalOptions,
   MenuModalOptions,
   ModalInfoItem,
+  ModalLayout,
   ModalOptions,
+  OverlayTextCase,
   ModalRow,
   PaletteModalOptions,
   SplitModalOptions,
   SplitModalRow,
 } from "../../shared/modal-model.js";
+import { layoutModal } from "../../shared/modal-model.js";
   import {
     OPEN_TUI_THEME,
     buildFeatureListLines,
@@ -78,6 +82,7 @@ export function MissionControlScreen({
   const sessionLines = buildSessionLines(state, contentWidth(layout.sideWidth), contentHeight(layout.rightBottomHeight), elapsedOffsetMs);
   const modal = buildModalModel(state);
   const modalParentRect = getModalParentRect(layout);
+  const modalLayout = modal ? layoutModal(modalParentRect, modal) : undefined;
 
   return (
     <box
@@ -135,16 +140,13 @@ export function MissionControlScreen({
 
       {modal ? (
         <ModalLayer
-          modal={modal}
-          state={state}
-            width={modalParentRect.width}
-            height={modalParentRect.height}
-            left={modalParentRect.x}
-            top={modalParentRect.y}
+            modal={modal}
+            state={state}
+            layout={modalLayout!}
             theme={theme}
           />
         ) : null}
-      </box>
+        </box>
   );
 }
 
@@ -254,49 +256,59 @@ function LineList({ lines }: LineListProps) {
 interface ModalLayerProps {
   readonly modal: ModalOptions;
   readonly state: AppState;
-  readonly width: number;
-  readonly height: number;
-  readonly left: number;
-  readonly top: number;
+  readonly layout: ModalLayout;
   readonly theme: ReturnType<typeof resolveMissionControlTheme>;
 }
 
-function ModalLayer({ modal, state, width, height, left, top, theme }: ModalLayerProps) {
+function ModalLayer({ modal, state, layout, theme }: ModalLayerProps) {
   const eyebrowLines = "eyebrow" in modal && modal.eyebrow ? modal.eyebrow.split("\n") : [];
   const modalBackgroundColor = modal.mode === "palette"
     ? theme.paletteModalBg
     : theme.modalBg;
+  const escapeText = "esc";
+  const contentWidth = Math.max(0, layout.width - 4);
   return (
     <box
       position="absolute"
-      left={left}
-      top={top}
-        width={width}
-        height={height}
-        border
-        flexDirection="column"
-          backgroundColor={modalBackgroundColor}
-          paddingLeft={1}
-          paddingRight={1}
-        >
-      <box width="100%" flexDirection="row" justifyContent="space-between">
-        <SafeText fg={OPEN_TUI_THEME.accent} attributes={TextAttributes.BOLD}>{modal.title}</SafeText>
-        <SafeText fg={OPEN_TUI_THEME.muted}>esc</SafeText>
-      </box>
+      left={layout.x}
+      top={layout.y}
+      width={layout.width}
+      height={layout.height}
+      border
+      flexDirection="column"
+      backgroundColor={modalBackgroundColor}
+      paddingLeft={1}
+      paddingRight={1}
+    >
+        <ModalSurfaceFill width={layout.width - 2} height={layout.height - 2} />
+        <box width="100%" flexDirection="row" alignItems="center">
+          {modal.mode === "palette" ? (
+            <SafeText fg={OPEN_TUI_THEME.accent} attributes={TextAttributes.BOLD}>
+              {composePaletteHeaderLine(modal.title, escapeText, contentWidth)}
+            </SafeText>
+          ) : (
+            <>
+              <box flexGrow={1}>
+                <SafeText fg={OPEN_TUI_THEME.accent} attributes={TextAttributes.BOLD}>{modal.title}</SafeText>
+              </box>
+              <SafeText fg={OPEN_TUI_THEME.muted}>{escapeText}</SafeText>
+            </>
+          )}
+        </box>
 
       {eyebrowLines.map((line, index) => (
         <SafeText key={index} fg={OPEN_TUI_THEME.muted}>{line}</SafeText>
       ))}
 
-      {modal.mode === "split" ? (
-          <SplitModalBody modal={modal} width={width} height={height} theme={theme} />
-        ) : modal.mode === "info" ? (
-          <InfoModalBody modal={modal} />
-        ) : modal.mode === "palette" ? (
-        <PaletteModalBody modal={modal} />
-      ) : (
-        <MenuModalBody modal={modal} />
-      )}
+        {modal.mode === "split" ? (
+            <SplitModalBody modal={modal} width={layout.width} height={layout.height} theme={theme} />
+          ) : modal.mode === "info" ? (
+            <InfoModalBody modal={modal} />
+          ) : modal.mode === "palette" ? (
+          <PaletteModalBody modal={modal} contentWidth={contentWidth} />
+        ) : (
+          <MenuModalBody modal={modal} />
+        )}
 
       {modal.footer ? (
         <box marginTop={1}>
@@ -324,25 +336,34 @@ function MenuModalBody({ modal }: { readonly modal: MenuModalOptions }) {
   );
 }
 
-function PaletteModalBody({ modal }: { readonly modal: PaletteModalOptions }) {
+function PaletteModalBody({
+  modal,
+  contentWidth,
+}: {
+  readonly modal: PaletteModalOptions;
+  readonly contentWidth: number;
+}) {
   const items = modal.items.map((item) => normalizeModalRow(item));
+  const queryText = modal.query.length > 0 ? `${modal.query}\u2588` : "\u2588";
   return (
-    <box flexDirection="column" width="100%" flexGrow={1}>
-      <box marginTop={1} marginBottom={1}>
-        <SafeText fg={OPEN_TUI_THEME.warning}>{`/ ${modal.query.length > 0 ? modal.query : "type to filter"}`}</SafeText>
-      </box>
-      {items.length === 0 ? (
-        <SafeText fg={OPEN_TUI_THEME.muted}>{modal.emptyLabel ?? "No commands match your filter"}</SafeText>
-      ) : items.map((item, index) => (
-          <ModalRowView
-            key={index}
-            row={item}
-            selected={index === modal.selectedIndex}
-            mode={modal.mode}
-          />
-        ))}
-      </box>
-    );
+      <box flexDirection="column" width="100%" flexGrow={1} marginTop={1}>
+        <box marginBottom={1}>
+          <SafeText fg={OPEN_TUI_THEME.text} attributes={TextAttributes.BOLD}>{padLine(`> ${queryText}`, contentWidth)}</SafeText>
+        </box>
+        {items.length === 0 ? (
+          <SafeText fg={OPEN_TUI_THEME.muted}>{padLine(modal.emptyLabel ?? "No commands match your filter", contentWidth)}</SafeText>
+        ) : items.map((item, index) => (
+            <PaletteModalRowView
+              key={index}
+              row={item}
+              selected={index === modal.selectedIndex}
+              width={contentWidth}
+              textCase={modal.renderSpec.text.rowCase}
+              sectionCase={modal.renderSpec.text.sectionCase}
+            />
+          ))}
+        </box>
+      );
 }
 
 function InfoModalBody({ modal }: { readonly modal: InfoModalOptions }) {
@@ -378,11 +399,11 @@ function SplitModalBody({
             {items.length === 0 ? (
               <SafeText fg={OPEN_TUI_THEME.muted}>{modal.emptyLabel ?? "No items"}</SafeText>
             ) : items.map((item, index) => (
-                <ModalRowView
-                  key={index}
-                row={item}
-                selected={index === modal.selectedIndex}
-                mode={modal.mode}
+                  <ModalRowView
+                    key={index}
+                  row={item}
+                  selected={index === modal.selectedIndex}
+                  mode={modal.mode}
               />
             ))}
           </box>
@@ -426,6 +447,35 @@ function ModalRowView({
   );
 }
 
+function PaletteModalRowView({
+  row,
+  selected,
+  width,
+  textCase,
+  sectionCase,
+}: {
+  readonly row: NormalizedModalRow;
+  readonly selected: boolean;
+  readonly width: number;
+  readonly textCase: OverlayTextCase;
+  readonly sectionCase: OverlayTextCase;
+}) {
+  const selectedFg = OPEN_TUI_THEME.paletteSelectionFg;
+  const selectedBg = OPEN_TUI_THEME.paletteSelectionBg;
+  const fg = selected ? selectedFg : OPEN_TUI_THEME.text;
+  const line = composePaletteCommandLine({
+    section: applyTextCase(row.section ?? "", sectionCase),
+    label: applyTextCase(row.label, textCase),
+    hint: row.hint ? `[${row.hint}]` : "",
+    width,
+  });
+  return (
+    <box width="100%" backgroundColor={selected ? selectedBg : undefined}>
+      <SafeText fg={fg} attributes={TextAttributes.BOLD}>{line}</SafeText>
+    </box>
+  );
+}
+
 function InfoItemView({ item }: { readonly item: ModalInfoItem }) {
   const prefix = item.detail ? `${item.text}: ${item.detail}` : item.text;
   const attributes = item.style === "block" ? TextAttributes.BOLD : item.tone === "accent" ? TextAttributes.BOLD : undefined;
@@ -440,6 +490,7 @@ interface NormalizedModalRow {
   readonly label: string;
   readonly detail?: string;
   readonly hint?: string;
+  readonly section?: string;
   readonly tone?: NormalizedModalTone;
   readonly style?: ModalRow["style"];
 }
@@ -448,20 +499,22 @@ function normalizeModalRow(item: string | ModalRow): NormalizedModalRow {
   if (typeof item === "string") {
     return { label: item };
   }
-  return {
-    label: item.label ?? item.text ?? "",
-    detail: item.detail,
-    hint: item.hint,
-    tone: item.tone,
-    style: item.style,
-  };
-}
+    return {
+      label: item.label ?? item.text ?? "",
+      detail: item.detail,
+      hint: item.hint,
+      section: item.section,
+      tone: item.tone,
+      style: item.style,
+    };
+  }
 
 function normalizeSplitModalRow(item: SplitModalRow): NormalizedModalRow {
   return {
     label: item.label ?? item.text ?? "",
     detail: item.detail,
     hint: item.hint,
+    section: item.section,
     tone: item.tone,
     style: item.style,
   };
@@ -476,6 +529,66 @@ function toneColor(tone: NormalizedModalTone): string {
     default:
       return OPEN_TUI_THEME.text;
   }
+}
+
+function ModalSurfaceFill({ width, height }: { readonly width: number; readonly height: number }) {
+  return (
+    <box position="absolute" left={1} top={1} width={width} height={height} flexDirection="column">
+      {Array.from({ length: Math.max(0, height) }, (_, index) => (
+        <SafeText key={index}>{" ".repeat(Math.max(0, width))}</SafeText>
+      ))}
+    </box>
+  );
+}
+
+function composePaletteHeaderLine(title: string, escapeText: string, width: number): string {
+  if (width <= 0) return "";
+  if (width <= escapeText.length + 1) return truncate(`${title} ${escapeText}`, width);
+
+  const contentWidth = width - escapeText.length - 1;
+  const centeredTitle = centerText(truncate(title, contentWidth), contentWidth);
+  return `${centeredTitle} ${escapeText}`;
+}
+
+function centerText(text: string, width: number): string {
+  if (text.length >= width) return text;
+  const left = Math.floor((width - text.length) / 2);
+  const right = width - text.length - left;
+  return `${" ".repeat(left)}${text}${" ".repeat(right)}`;
+}
+
+function padLine(text: string, width: number): string {
+  if (width <= 0) return "";
+  const clipped = truncate(text, width);
+  return clipped.length >= width ? clipped : `${clipped}${" ".repeat(width - clipped.length)}`;
+}
+
+function applyTextCase(text: string, mode: OverlayTextCase): string {
+  return mode === "lower" ? text.toLowerCase() : text;
+}
+
+function composePaletteCommandLine({
+  section,
+  label,
+  hint,
+  width,
+}: {
+  readonly section: string;
+  readonly label: string;
+  readonly hint: string;
+  readonly width: number;
+}): string {
+  const sectionWidth = 12;
+  const gap = 2;
+  const sectionPart = padLine(section, Math.min(sectionWidth, width));
+  const hintWidth = hint.length > 0 ? hint.length + gap : 0;
+  const labelWidth = Math.max(0, width - sectionPart.length - gap - hintWidth);
+  const labelPart = truncate(label, labelWidth);
+  const base = `${sectionPart}${" ".repeat(Math.min(gap, Math.max(0, width - sectionPart.length)))}${labelPart}`;
+  const withHint = hint.length > 0
+    ? `${padLine(base, Math.max(0, width - hintWidth))}${" ".repeat(gap)}${hint}`
+    : base;
+  return padLine(withHint, width);
 }
 
 function contentWidth(panelWidth: number): number {
