@@ -1,6 +1,7 @@
 import type { WorkerConfig, WorkerProgressEvent, WorkerResult } from "../domain/worker-types.js";
+import { createOutputCapture, type OutputCapture } from "../lib/output-capture.js";
 import { execArgv } from "../lib/shell.js";
-import { parseRawOutput, parseStreamJsonOutput } from "../lib/stream-json-parser.js";
+import { extractStreamJsonLineText, parseRawOutput } from "../lib/stream-json-parser.js";
 import type { TransportPort, TransportSpawnOptions } from "../ports/transport.port.js";
 
 export class CliTransportAdapter implements TransportPort {
@@ -46,6 +47,9 @@ export class CliTransportAdapter implements TransportPort {
 
     let heartbeat: ReturnType<typeof setInterval> | undefined;
     try {
+      const parsedOutputCapture = workerConfig.outputMode === "stream-json"
+        ? createOutputCapture()
+        : undefined;
       heartbeat = setInterval(() => {
         void emitEvent(opts, {
           timestamp: new Date().toISOString(),
@@ -56,15 +60,30 @@ export class CliTransportAdapter implements TransportPort {
       }, 15_000);
 
       const [stdoutRaw, stderrRaw] = await Promise.all([
-        collectStream(proc.stdout, "stdout", opts),
+        collectStream(proc.stdout, "stdout", opts, {
+          onLine: (line) => {
+            if (!parsedOutputCapture) {
+              return;
+            }
+            for (const text of extractStreamJsonLineText(line)) {
+              parsedOutputCapture.appendTextBlock(text);
+            }
+          },
+        }),
         collectStream(proc.stderr, "stderr", opts),
       ]);
       const exitCode = await proc.exited;
       const durationMs = Date.now() - startedAt;
       const parsedOutput = workerConfig.outputMode === "stream-json"
-        ? parseStreamJsonOutput(stdoutRaw, opts.workerSlug)
+        ? finalizeParsedOutput(parsedOutputCapture, stdoutRaw, opts.workerSlug)
         : parseRawOutput(stdoutRaw);
-      const summary = summarizeWorkerOutput(parsedOutput, stderrRaw, exitCode, opts.workerSlug);
+      const summary = summarizeWorkerOutput({
+        parsedOutput,
+        stderrRaw,
+        exitCode,
+        workerSlug: opts.workerSlug,
+        firstParsedLine: parsedOutputCapture?.firstNonEmptyLine,
+      });
 
       await emitEvent(opts, {
         timestamp: new Date().toISOString(),
@@ -101,10 +120,13 @@ async function collectStream(
   stream: ReadableStream<Uint8Array>,
   kind: "stdout" | "stderr",
   opts: TransportSpawnOptions,
+  captureOptions: {
+    readonly onLine?: (line: string) => void;
+  } = {},
 ): Promise<string> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
-  let buffer = "";
+  const capture = createOutputCapture();
   let pendingLine = "";
 
   try {
@@ -113,13 +135,14 @@ async function collectStream(
       if (done) break;
 
       const chunk = decoder.decode(value, { stream: true });
-      buffer += chunk;
       pendingLine += chunk;
       const lines = pendingLine.split(/\r?\n/);
       pendingLine = lines.pop() ?? "";
       for (const line of lines) {
         const text = line.trim();
         if (text.length === 0) continue;
+        capture.appendLine(text);
+        captureOptions.onLine?.(text);
         await emitEvent(opts, {
           timestamp: new Date().toISOString(),
           kind,
@@ -135,11 +158,12 @@ async function collectStream(
 
   const tail = decoder.decode();
   if (tail.length > 0) {
-    buffer += tail;
     pendingLine += tail;
   }
   const finalLine = pendingLine.trim();
   if (finalLine.length > 0) {
+    capture.appendLine(finalLine);
+    captureOptions.onLine?.(finalLine);
     await emitEvent(opts, {
       timestamp: new Date().toISOString(),
       kind,
@@ -149,7 +173,7 @@ async function collectStream(
     });
   }
 
-  return buffer;
+  return capture.toString();
 }
 
 async function emitEvent(
@@ -165,21 +189,40 @@ async function emitEvent(
   }
 }
 
-function summarizeWorkerOutput(
-  parsedOutput: string,
-  stderrRaw: string,
-  exitCode: number,
+function finalizeParsedOutput(
+  capture: OutputCapture | undefined,
+  stdoutRaw: string,
   workerSlug: string,
 ): string {
-  const firstParsedLine = parsedOutput
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .find((line) => line.length > 0);
+  if (!capture) {
+    return parseRawOutput(stdoutRaw);
+  }
+
+  const captured = capture.toString().trim();
+  if (captured.length > 0) {
+    return captured;
+  }
+
+  return parseRawOutput(stdoutRaw);
+}
+
+function summarizeWorkerOutput(input: {
+  readonly parsedOutput: string;
+  readonly stderrRaw: string;
+  readonly exitCode: number;
+  readonly workerSlug: string;
+  readonly firstParsedLine?: string;
+}): string {
+  const firstParsedLine = input.firstParsedLine
+    ?? input.parsedOutput
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .find((line) => line.length > 0);
   if (firstParsedLine) {
     return firstParsedLine;
   }
 
-  const firstErrorLine = stderrRaw
+  const firstErrorLine = input.stderrRaw
     .split(/\r?\n/)
     .map((line) => line.trim())
     .find((line) => line.length > 0);
@@ -187,9 +230,9 @@ function summarizeWorkerOutput(
     return firstErrorLine;
   }
 
-  return exitCode === 0
-    ? `${workerSlug} completed successfully`
-    : `${workerSlug} exited with code ${exitCode}`;
+  return input.exitCode === 0
+    ? `${input.workerSlug} completed successfully`
+    : `${input.workerSlug} exited with code ${input.exitCode}`;
 }
 
 async function captureChangedFiles(

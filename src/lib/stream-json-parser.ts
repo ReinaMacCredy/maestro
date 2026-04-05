@@ -28,8 +28,28 @@ function extractText(value: unknown): string[] {
   return [];
 }
 
+function normalizeExtractedText(values: readonly string[]): string[] {
+  return values
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
 export function parseRawOutput(raw: string): string {
   return raw.trim();
+}
+
+export function extractStreamJsonLineText(line: string): readonly string[] {
+  const trimmed = line.trim();
+  if (trimmed.length === 0) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    return normalizeExtractedText(extractText(parsed));
+  } catch {
+    return [];
+  }
 }
 
 export function parseStreamJsonOutput(raw: string, _workerSlug: string): string {
@@ -37,23 +57,10 @@ export function parseStreamJsonOutput(raw: string, _workerSlug: string): string 
   const extracted: string[] = [];
 
   for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed.length === 0) {
-      continue;
-    }
-
-    try {
-      const parsed = JSON.parse(trimmed) as unknown;
-      extracted.push(...extractText(parsed));
-    } catch {
-      continue;
-    }
+    extracted.push(...extractStreamJsonLineText(line));
   }
 
-  const normalized = extracted
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0);
-
+  const normalized = normalizeExtractedText(extracted);
   if (normalized.length === 0) {
     return raw.trim();
   }

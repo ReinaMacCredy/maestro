@@ -1,4 +1,5 @@
 import type { A2aWorkerConfig, WorkerProgressEvent, WorkerResult } from "../domain/worker-types.js";
+import { createOutputCapture } from "../lib/output-capture.js";
 import { fetchA2aAgentCard, resolveA2aJsonRpcEndpoint } from "../lib/a2a.js";
 import type { TransportPort, TransportSpawnOptions } from "../ports/transport.port.js";
 
@@ -21,8 +22,8 @@ export class A2aTransportAdapter implements TransportPort {
     opts: TransportSpawnOptions,
   ): Promise<WorkerResult> {
     const startedAt = Date.now();
-    const rawEvents: string[] = [];
-    const outputChunks: string[] = [];
+    const rawEvents = createOutputCapture();
+    const outputText = createOutputCapture();
     let finalState: string | undefined;
     let emittedState: string | undefined;
     let sessionId: string | undefined;
@@ -108,10 +109,12 @@ export class A2aTransportAdapter implements TransportPort {
             `Timed out waiting for A2A worker '${opts.workerSlug}' output`,
           );
         })) {
-          rawEvents.push(JSON.stringify(event));
+          rawEvents.appendLine(JSON.stringify(event));
           sessionId = extractRemoteHandle(event) ?? sessionId;
           const eventTexts = extractEventText(event);
-        outputChunks.push(...eventTexts);
+        for (const text of eventTexts) {
+          outputText.appendTextBlock(text);
+        }
         if (event.kind === "task") {
           finalState = event.status.state;
         }
@@ -141,7 +144,7 @@ export class A2aTransportAdapter implements TransportPort {
         }
       }
 
-      const parsedOutput = outputChunks.join("\n").trim();
+      const parsedOutput = outputText.toString().trim();
         const success = finalState === undefined
           ? parsedOutput.length > 0
           : finalState === "completed";
@@ -161,7 +164,7 @@ export class A2aTransportAdapter implements TransportPort {
         success,
         exitCode: success ? 0 : 1,
         summary: summarizeA2aResult(parsedOutput, finalState, opts.workerSlug),
-        stdoutRaw: rawEvents.join("\n"),
+        stdoutRaw: rawEvents.toString(),
         stderrRaw: "",
         filesChanged: [],
         durationMs: Date.now() - startedAt,
@@ -182,7 +185,7 @@ export class A2aTransportAdapter implements TransportPort {
           success: false,
           exitCode: 1,
           summary: `Failed to communicate with A2A worker '${opts.workerSlug}': ${detail}`,
-        stdoutRaw: rawEvents.join("\n"),
+        stdoutRaw: rawEvents.toString(),
         stderrRaw: detail,
         filesChanged: [],
         durationMs: Date.now() - startedAt,

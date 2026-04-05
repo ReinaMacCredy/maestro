@@ -151,4 +151,45 @@ describe("CliTransportAdapter", () => {
     expect(result.parsedOutput).toBe("stream ok");
     expect(result.summary).toBe("stream ok");
   });
+
+  it("truncates oversized raw worker output while preserving the first summary line and recent tail", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "cli-transport-"));
+    await initGitRepo(cwd);
+    const script = join(cwd, "noisy-worker.ts");
+    await writeFile(
+      script,
+      [
+        "console.log('first visible line');",
+        "for (let index = 0; index < 7000; index += 1) {",
+        "  console.log(`noise-${index}-${'x'.repeat(32)}`);",
+        "}",
+        "console.log('final visible tail');",
+      ].join("\n"),
+    );
+
+    const adapter = new CliTransportAdapter();
+    const result = await adapter.spawn(
+      {
+        enabled: true,
+        transport: "cli",
+        command: "bun",
+        args: [script],
+        outputMode: "raw",
+      },
+      "ignored",
+      {
+        cwd,
+        featureId: "f1",
+        missionId: "m1",
+        workerSlug: "codex",
+      },
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.summary).toBe("first visible line");
+    expect(result.stdoutRaw).toContain("first visible line");
+    expect(result.stdoutRaw).toContain("final visible tail");
+    expect(result.stdoutRaw).toContain("[truncated");
+    expect(result.stdoutRaw.length).toBeLessThan(140_000);
+  });
 });

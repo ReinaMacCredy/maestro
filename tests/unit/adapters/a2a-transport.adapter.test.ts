@@ -285,4 +285,92 @@ afterEach(async () => {
         await idleServer.stop(true);
       }
     });
+
+    it("truncates oversized A2A transcripts while preserving recent output", async () => {
+      const noisyServer = Bun.serve({
+        port: 0,
+        hostname: "127.0.0.1",
+        routes: {
+          "/.well-known/agent-card.json": () => Response.json({
+            name: "Noisy Worker",
+            description: "Streams a large number of artifacts",
+            protocolVersion: "0.3.0",
+            version: "0.1.0",
+            url: `http://127.0.0.1:${noisyServer.port}/a2a/jsonrpc`,
+            capabilities: { streaming: true, pushNotifications: false },
+            defaultInputModes: ["text"],
+            defaultOutputModes: ["text"],
+            skills: [],
+          }),
+          "/a2a/jsonrpc": () => {
+            const frames: string[] = [];
+            for (let index = 0; index < 5000; index += 1) {
+              frames.push("event: message");
+              frames.push(`data: ${JSON.stringify({
+                result: {
+                  kind: "artifact-update",
+                  taskId: "task-1",
+                  contextId: "ctx-1",
+                  artifact: {
+                    parts: [{ kind: "text", text: `artifact-${index}-${"x".repeat(32)}` }],
+                  },
+                },
+              })}`);
+              frames.push("");
+            }
+            frames.push("event: message");
+            frames.push(`data: ${JSON.stringify({
+              result: {
+                kind: "artifact-update",
+                taskId: "task-1",
+                contextId: "ctx-1",
+                artifact: {
+                  parts: [{ kind: "text", text: "final artifact tail" }],
+                },
+              },
+            })}`);
+            frames.push("");
+            frames.push("event: message");
+            frames.push(`data: ${JSON.stringify({
+              result: {
+                kind: "status-update",
+                taskId: "task-1",
+                contextId: "ctx-1",
+                status: { state: "completed" },
+              },
+            })}`);
+            frames.push("");
+            return new Response(frames.join("\n"), {
+              headers: { "content-type": "text/event-stream" },
+            });
+          },
+        },
+      });
+
+      try {
+        const adapter = new A2aTransportAdapter();
+        const result = await adapter.spawn(
+          {
+            enabled: true,
+            transport: "a2a",
+            url: `http://127.0.0.1:${noisyServer.port}`,
+          },
+          "implement feature",
+          {
+            cwd: process.cwd(),
+            featureId: "f1",
+            missionId: "m1",
+            workerSlug: "a2a-worker",
+          },
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.stdoutRaw).toContain("[truncated");
+        expect(result.stdoutRaw.length).toBeLessThan(140_000);
+        expect(result.parsedOutput).toContain("final artifact tail");
+        expect(result.summary).toBe("artifact-0-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
+      } finally {
+        await noisyServer.stop(true);
+      }
+    });
   });
