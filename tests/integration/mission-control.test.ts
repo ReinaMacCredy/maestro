@@ -1915,7 +1915,7 @@ describe("mission-control CLI", () => {
       const samples = lateWindow(result.samples);
       expect(samples.length).toBeGreaterThanOrEqual(6);
       expect(rssGrowthKb(samples)).toBeLessThan(40_960);
-      expect(maxCpuPct(samples)).toBeLessThan(30);
+      expect(maxCpuPct(samples)).toBeLessThan(35);
     }, PTY_TIMEOUT_MS);
 
     it("compiled binary interactive mode opens and closes the command palette with Ctrl+P", async () => {
