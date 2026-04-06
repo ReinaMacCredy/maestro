@@ -2376,7 +2376,7 @@ describe("mission-control CLI", () => {
       ["mission-control"],
       {
         input: "",
-        inputSteps: [{ chars: "q", delayMs: 2_600 }],
+        inputSteps: [{ chars: "q", delayMs: 6_500 }],
       },
     );
 
