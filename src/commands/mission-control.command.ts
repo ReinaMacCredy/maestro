@@ -13,6 +13,7 @@ import {
   runRenderCheck,
 } from "../tui/opentui/index.js";
 import { buildHomeSnapshot, buildSnapshot } from "../tui/state/snapshot.js";
+import { CachingGitPort, CachingCassPort } from "../lib/snapshot-poll-cache.js";
 import type { MissionControlSnapshot } from "../tui/state/types.js";
 import {
   PREVIEW_SCREENS,
@@ -350,15 +351,22 @@ export function createMissionControlSnapshotLoader(
 ): MissionControlSnapshotLoader {
   let resolvedMissionId = explicitMissionId;
 
+  // Wrap subprocess-heavy ports with TTL caches to avoid Bun spawnSync
+  // memory leak (~6 process spawns per poll cycle without caching).
+  const cachingGit = new CachingGitPort(snapshotDeps.git);
+  const cachingCass = new CachingCassPort(snapshotDeps.cass);
+  const cachedSnapshotDeps = { ...snapshotDeps, git: cachingGit, cass: cachingCass };
+  const cachedHomeSnapshotDeps = { ...homeSnapshotDeps, git: cachingGit, cass: cachingCass };
+
   return {
       load: async (options = {}) => {
         if (!explicitMissionId && !resolvedMissionId) {
-          resolvedMissionId = await resolveMissionIdFromStore(snapshotDeps.missionStore);
+          resolvedMissionId = await resolveMissionIdFromStore(cachedSnapshotDeps.missionStore);
         }
 
         return loadMissionControlSnapshot(
-        snapshotDeps,
-          homeSnapshotDeps,
+        cachedSnapshotDeps,
+          cachedHomeSnapshotDeps,
           mode,
           resolvedMissionId,
           options,
