@@ -23,6 +23,7 @@ Thumbs.db
 
 # Generated
 *.tsbuildinfo
+*.bun-build
 coverage/
 tmp/
 /hooks/
