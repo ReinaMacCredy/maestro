@@ -31,6 +31,8 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
     exitOnCtrlC: false,
     useMouse: true,
     screenMode: "alternate-screen",
+    targetFps: 4,
+    maxFps: 8,
   });
   const root = createRoot(renderer);
 
