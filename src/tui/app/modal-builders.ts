@@ -2,6 +2,7 @@
  * Modal option builders and command palette glue.
  * Extracted from index.ts -- builds ModalOptions from AppState.
  */
+import { homedir } from "node:os";
 import type { AppState, Action } from "../state/reducer.js";
 import type { MissionControlConfigRow, MissionControlSnapshot, TaskPreviewPane } from "../state/types.js";
 import {
@@ -16,6 +17,7 @@ import {
 import { getValidFeatureTransitions } from "../../domain/mission-state.js";
 import { FEATURE_STATUS_LABEL, FEATURE_TASK_STATUS_LABEL } from "../theme.js";
 import { shortenSessionId } from "../session-id.js";
+import { GRAPH_DIR } from "../../domain/defaults.js";
   import {
     getConfigRowsForTab,
     getConfigTabDisplayLabel,
@@ -317,7 +319,19 @@ function buildMemoryModal(
       detailItems: buildLearningDetailItems(memory, rawLearnings[state.modal.selectedItemIndex]),
       footer: buildTabbedOverlayFooter(returnTarget),
       returnTarget,
-      renderSpec: buildOverlayRenderSpec("memory"),
+        renderSpec: buildOverlayRenderSpec("memory"),
+      };
+    }
+
+  if (state.modal.tab === "config") {
+    return {
+      mode: "info",
+      title: "Memory System",
+      eyebrow,
+      items: buildMemoryConfigItems(state.snapshot.configInspector ?? null),
+      footer: buildTabbedOverlayFooter(returnTarget),
+      returnTarget,
+      renderSpec: buildOverlayRenderSpec("config"),
     };
   }
 
@@ -366,7 +380,7 @@ function buildGraphModal(
 }
 
 function buildMemoryTabs(state: Extract<AppState, { modal: Extract<AppState["modal"], { kind: "memory" }> }>): string {
-  const tabs = ["overview", "corrections", "learnings", "ratchet"] as const;
+  const tabs = ["overview", "corrections", "learnings", "ratchet", "config"] as const;
   return tabs.map((tab) => tab === state.modal.tab ? `[${tab}]` : tab).join(" ");
 }
 
@@ -391,21 +405,47 @@ function buildMemoryOverviewItems(memory: MissionControlSnapshot["memory"]) {
     return [{ text: "No memory system data available", tone: "muted" as const }];
   }
 
+  const correctionPreview = memory.corrections.slice(0, 4);
+  const compiledAt = formatDateTimeCompact(memory.stats.learnings.compiledAt);
+  const rawSinceCompile = memory.compiledLearnings
+    ? Math.max(0, memory.rawLearnings.length - memory.compiledLearnings.rawCount)
+    : memory.rawLearnings.length;
+  const ratchetStatus = memory.stats.ratchet.lastResult?.toUpperCase() ?? "No run";
+
   return [
-    { text: "Corrections", section: "Corrections", tone: "accent" as const },
-    { text: `${memory.stats.corrections.total} total · ${memory.stats.corrections.hard} hard · ${memory.stats.corrections.soft} soft` },
+    {
+      text: `Corrections: ${memory.stats.corrections.total}        Learnings: ${memory.stats.learnings.rawCount} raw / ${compiledAt ? `compiled ${compiledAt}` : "not compiled"}        Ratchet: ${memory.stats.ratchet.assertions}`,
+      section: "Summary",
+      tone: "accent" as const,
+    },
     { text: "" },
-    { text: "Learnings", section: "Learnings", tone: "accent" as const },
-    { text: `${memory.stats.learnings.rawCount} raw entries` },
-    { text: memory.stats.learnings.compiledAt ? `Compiled ${memory.stats.learnings.compiledAt}` : "Not compiled", tone: memory.stats.learnings.compiledAt ? undefined : "muted" },
-    ...(memory.stats.learnings.staleDays !== undefined ? [{ text: `${memory.stats.learnings.staleDays} day(s) stale` }] : []),
+    { text: "Corrections", section: "Corrections", tone: "accent" as const },
+    ...(correctionPreview.length > 0
+      ? correctionPreview.map((correction) => ({
+          text: `${correction.severity === "hard" ? "[!]" : "[ ]"} ${correction.rule}    triggers: ${formatTriggerPreview(correction.trigger.keywords, correction.trigger.fileGlobs)}    severity: ${correction.severity.toUpperCase()}`,
+        }))
+      : [{ text: "No saved corrections", tone: "muted" as const }]),
+    { text: `${memory.stats.corrections.total} total  [View All -->]` },
+    { text: "" },
+    { text: "Learnings (compiled)", section: "Learnings", tone: "accent" as const },
+    { text: compiledAt ? `Last compiled: ${compiledAt}  (${rawSinceCompile} raw entries since)` : "Last compiled: not yet" },
+    ...(memory.compiledLearnings
+      ? splitIntoBullets(memory.compiledLearnings.summary)
+      : [{ text: "- No compiled learning summary yet", tone: "muted" as const }]),
+    { text: "[Full -->]" },
+    ...(memory.stats.learnings.staleDays !== undefined
+      ? [{ text: `Staleness: ${memory.stats.learnings.staleDays} day(s)` }]
+      : []),
     { text: "" },
     { text: "Ratchet", section: "Ratchet", tone: "accent" as const },
-    { text: `${memory.stats.ratchet.assertions} assertion(s)` },
-    { text: memory.stats.ratchet.lastResult ? `Last result: ${memory.stats.ratchet.lastResult}` : "No ratchet run recorded", tone: memory.stats.ratchet.lastResult ? undefined : "muted" },
+    { text: `Suite: ${memory.stats.ratchet.assertions} assertions   Last run: ${ratchetStatus}` },
+    { text: memory.ratchetBaseline ? `Baseline score: ${formatBaselineScore(memory.ratchetBaseline.passCount, memory.ratchetSuite.assertions.length)}` : "Baseline score: n/a" },
+    ...memory.ratchetSuite.assertions.slice(0, 4).map((assertion) => ({
+      text: `[ok] ${assertion.id}    promoted ${formatDateOnly(assertion.createdAt)}`,
+    })),
     { text: "" },
     { text: "Project Graph", section: "Graph", tone: "accent" as const },
-    { text: `${memory.stats.graph.projects} project(s) · ${memory.stats.graph.links} link(s)` },
+    { text: `${memory.stats.graph.projects} projects · ${memory.stats.graph.links} links` },
   ];
 }
 
@@ -476,13 +516,111 @@ function buildRatchetDetailItems(
         ]
       : [{ text: "Choose a ratchet assertion.", tone: "muted" as const }]),
     { text: "Baseline", section: "Baseline" },
-    ...(memory.ratchetBaseline
-      ? [
-          { text: `Pass count: ${memory.ratchetBaseline.passCount}` },
-          { text: `Last run: ${memory.ratchetBaseline.lastRunAt}` },
-        ]
-      : [{ text: "No baseline recorded", tone: "muted" as const }]),
+      ...(memory.ratchetBaseline
+        ? [
+            { text: `Pass count: ${memory.ratchetBaseline.passCount}` },
+            { text: `Last run: ${memory.ratchetBaseline.lastRunAt}` },
+          ]
+        : [{ text: "No baseline recorded", tone: "muted" as const }]),
+    ];
+  }
+
+function buildMemoryConfigItems(
+  inspector: MissionControlSnapshot["configInspector"] | null,
+): ModalOptions extends { mode: "info"; items: infer T } ? T : never {
+  const rows = getConfigRowsForTab(inspector, "memory");
+  if (rows.length === 0) {
+    return [{ text: "No memory config is available for this workspace.", tone: "muted" as const }];
+  }
+
+  const items = [
+    { text: formatConfigLine("Memory System", findConfigValue(rows, "memory.enabled") ?? "unset"), section: "Memory System", tone: "accent" as const },
+    { text: "" },
+    { text: "Corrections", section: "Corrections", tone: "accent" as const },
+    ...buildConfigRowBlock(rows, [
+      "memory.corrections.enabled",
+      "memory.corrections.matching",
+      "memory.corrections.auto_capture",
+      "memory.corrections.severity_default",
+    ]),
+    { text: "" },
+    { text: "Learnings", section: "Learnings", tone: "accent" as const },
+    ...buildConfigRowBlock(rows, [
+      "memory.learnings.enabled",
+      "memory.learnings.compile_threshold",
+      "memory.learnings.max_age_days",
+    ]),
+    { text: "" },
+    { text: "Ratchet", section: "Ratchet", tone: "accent" as const },
+    ...buildConfigRowBlock(rows, [
+      "memory.ratchet.enabled",
+      "memory.ratchet.enforcement",
+    ]),
+    { text: "" },
+    { text: "Project Graph", section: "Project Graph", tone: "accent" as const },
+    ...buildConfigRowBlock(rows, ["memory.graph.enabled"]),
+    { text: formatConfigLine("Global Path", shortenHomePath(GRAPH_DIR)) },
+    { text: "" },
+    { text: "[ Save ]  [ Reset Defaults ]", tone: "accent" as const },
   ];
+
+  return items;
+}
+
+function buildConfigRowBlock(
+  rows: readonly MissionControlConfigRow[],
+  keys: readonly string[],
+) {
+  return keys.flatMap((keyPath) => {
+    const row = rows.find((candidate) => candidate.keyPath === keyPath);
+    if (!row) return [];
+    const valueText = row.displayValueText || row.valueText;
+    const optionText = row.options && row.options.length > 0 ? `  [ ${row.options.join(" | ")} ]` : "";
+    return [{ text: `${formatConfigLine(row.label, valueText)}${optionText}` }];
+  });
+}
+
+function formatConfigLine(label: string, value: string): string {
+  return `${label.padEnd(20, " ")} ${value}`;
+}
+
+function findConfigValue(rows: readonly MissionControlConfigRow[], keyPath: string): string | undefined {
+  return rows.find((row) => row.keyPath === keyPath)?.displayValueText;
+}
+
+function formatTriggerPreview(keywords: readonly string[], globs: readonly string[]): string {
+  const parts = [...keywords, ...globs];
+  if (parts.length === 0) return "none";
+  return parts.slice(0, 2).join(", ");
+}
+
+function formatDateTimeCompact(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  return value.slice(0, 16).replace("T", " ");
+}
+
+function formatDateOnly(value: string): string {
+  return value.slice(0, 10);
+}
+
+function formatBaselineScore(passCount: number, totalCount: number): string {
+  if (totalCount === 0) return "0.00";
+  return (passCount / totalCount).toFixed(2);
+}
+
+function splitIntoBullets(summary: string) {
+  return summary
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map((line) => ({
+      text: line.startsWith("-") ? line : `- ${line}`,
+    }));
+}
+
+function shortenHomePath(path: string): string {
+  const home = homedir();
+  return path.startsWith(home) ? `~${path.slice(home.length)}` : path;
 }
 
 function buildGraphDetailItems(

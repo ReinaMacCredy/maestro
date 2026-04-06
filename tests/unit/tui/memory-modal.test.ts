@@ -38,7 +38,128 @@ function makeSnapshot(): MissionControlSnapshot {
     session: null,
     pendingHandoffs: [],
     configSummary: null,
-    configInspector: null,
+    configInspector: {
+      tabs: ["overview", "effective", "project", "global", "defaults", "workers", "plan", "doctor", "memory"],
+      rowsByTab: {
+        overview: [],
+        effective: [],
+        project: [],
+        global: [],
+        defaults: [],
+        workers: [],
+        plan: [],
+        doctor: [],
+        memory: [
+          {
+            keyPath: "memory.enabled",
+            label: "Memory System",
+            section: "Memory System",
+            valueText: "on",
+            displayValueText: "Enabled",
+            source: "project",
+            sourceBadge: "P",
+            editKind: "toggle",
+            editKindLabel: "on/off",
+            options: ["Disabled", "Enabled"],
+            description: "Master toggle for the memory system.",
+            summary: "Master toggle for the memory system.",
+            impactText: "Disabling this turns off correction recall, learnings, ratchet checks, and graph context.",
+            effectiveValueText: "on",
+            effectiveDisplayValueText: "Enabled",
+          },
+          {
+            keyPath: "memory.corrections.matching",
+            label: "Trigger Matching",
+            section: "Corrections",
+            valueText: "keyword",
+            displayValueText: "keyword",
+            source: "global",
+            sourceBadge: "G",
+            editKind: "enum",
+            editKindLabel: "choice",
+            options: ["keyword", "ast-grep", "both"],
+            description: "How Maestro matches saved corrections to the current task.",
+            summary: "How Maestro matches saved corrections to the current task.",
+            impactText: "Broader matching recalls more rules; narrower matching reduces noise.",
+            effectiveValueText: "keyword",
+            effectiveDisplayValueText: "keyword",
+          },
+          {
+            keyPath: "memory.corrections.auto_capture",
+            label: "Auto Capture",
+            section: "Corrections",
+            valueText: "prompt",
+            displayValueText: "prompt",
+            source: "global",
+            sourceBadge: "G",
+            editKind: "enum",
+            editKindLabel: "choice",
+            options: ["prompt", "auto", "off"],
+            description: "When Maestro should capture corrections automatically.",
+            summary: "When Maestro should capture corrections automatically.",
+            impactText: "Prompt is safer; auto is faster; off requires explicit capture commands.",
+            effectiveValueText: "prompt",
+            effectiveDisplayValueText: "prompt",
+          },
+          {
+            keyPath: "memory.learnings.compile_threshold",
+            label: "Compile Threshold",
+            section: "Learnings",
+            valueText: "5",
+            displayValueText: "5 entries",
+            source: "project",
+            sourceBadge: "P",
+            editKind: "number-preset",
+            editKindLabel: "number",
+            options: ["3", "5", "8"],
+            description: "How many raw learning entries should accumulate before compilation is suggested.",
+            summary: "How many raw learning entries should accumulate before compilation is suggested.",
+            impactText: "Lower values compile sooner; higher values keep more raw history around.",
+            effectiveValueText: "5",
+            effectiveDisplayValueText: "5 entries",
+          },
+          {
+            keyPath: "memory.ratchet.enforcement",
+            label: "Enforcement",
+            section: "Ratchet",
+            valueText: "warn",
+            displayValueText: "warn",
+            source: "default",
+            sourceBadge: "D",
+            editKind: "enum",
+            editKindLabel: "choice",
+            options: ["warn", "block"],
+            description: "How ratchet failures are handled.",
+            summary: "How ratchet failures are handled.",
+            impactText: "Warn keeps the run moving; block stops progress until the regression is fixed.",
+            effectiveValueText: "warn",
+            effectiveDisplayValueText: "warn",
+          },
+          {
+            keyPath: "memory.graph.enabled",
+            label: "Project Graph",
+            section: "Project Graph",
+            valueText: "on",
+            displayValueText: "Enabled",
+            source: "default",
+            sourceBadge: "D",
+            editKind: "toggle",
+            editKindLabel: "on/off",
+            options: ["Disabled", "Enabled"],
+            description: "Enable cross-project relationship context.",
+            summary: "Enable cross-project relationship context.",
+            impactText: "Turning this off removes project-link context from memory and TUI graph views.",
+            effectiveValueText: "on",
+            effectiveDisplayValueText: "Enabled",
+          },
+        ],
+      },
+      hasProjectConfig: true,
+      hasGlobalConfig: true,
+      projectPath: ".maestro/config.yaml",
+      globalPath: "~/.maestro/config.yaml",
+      errors: [],
+    },
     runtimeProcesses: [],
     progressLog: [],
     canPause: false,
@@ -111,7 +232,7 @@ function makeSnapshot(): MissionControlSnapshot {
 }
 
 describe("memory modal", () => {
-  it("renders an overview panel with memory stats", () => {
+  it("renders an overview dashboard with memory cards and summaries", () => {
     const state = createInitialState(makeSnapshot());
     const memoryState = reduce(state, { type: "open-memory" });
     const modal = buildModalOptions(memoryState);
@@ -119,24 +240,35 @@ describe("memory modal", () => {
     expect(modal?.mode).toBe("info");
     if (!modal || modal.mode !== "info") return;
     expect(modal.eyebrow).toContain("[overview]");
-    expect(modal.items.some((item) => item.text.includes("1 total"))).toBe(true);
+    expect(modal.items.some((item) => item.text.includes("Corrections: 1"))).toBe(true);
+    expect(modal.items.some((item) => item.text.includes("Learnings: 2 raw"))).toBe(true);
+    expect(modal.items.some((item) => item.text.includes("Ratchet: 1"))).toBe(true);
+    expect(modal.items.some((item) => item.text.includes("Last compiled: 2026-04-06 01:00"))).toBe(true);
+    expect(modal.items.some((item) => item.text.includes("View All -->"))).toBe(true);
   });
 
-  it("cycles tabs and resets the selected item index", () => {
+  it("cycles tabs through config and resets the selected item index", () => {
     const state = reduce(createInitialState(makeSnapshot()), { type: "open-memory" });
     const correctionsState = reduce(state, { type: "memory-next-tab" });
-    const movedState = reduce(
-      { ...correctionsState, modal: correctionsState.modal.kind === "memory" ? { ...correctionsState.modal, selectedItemIndex: 3 } : correctionsState.modal },
+    const learningsState = reduce(correctionsState, { type: "memory-next-tab" });
+    const ratchetState = reduce(learningsState, { type: "memory-next-tab" });
+    const configState = reduce(
+      { ...ratchetState, modal: ratchetState.modal.kind === "memory" ? { ...ratchetState.modal, selectedItemIndex: 3 } : ratchetState.modal },
       { type: "memory-next-tab" },
     );
+    const wrappedState = reduce(state, { type: "memory-prev-tab" });
 
     expect(correctionsState.modal.kind).toBe("memory");
     if (correctionsState.modal.kind === "memory") {
       expect(correctionsState.modal.tab).toBe("corrections");
     }
-    if (movedState.modal.kind === "memory") {
-      expect(movedState.modal.tab).toBe("learnings");
-      expect(movedState.modal.selectedItemIndex).toBe(0);
+    if (configState.modal.kind === "memory") {
+      expect(configState.modal.tab).toBe("config");
+      expect(configState.modal.selectedItemIndex).toBe(0);
+    }
+    if (wrappedState.modal.kind === "memory") {
+      expect(wrappedState.modal.tab).toBe("config");
+      expect(wrappedState.modal.selectedItemIndex).toBe(0);
     }
   });
 
@@ -149,6 +281,8 @@ describe("memory modal", () => {
     if (!memoryModal || memoryModal.mode !== "split") return;
     expect(memoryModal.items[0]?.label).toContain("Use bun, not npm");
     expect(memoryModal.detailItems.some((item) => item.text.includes("Plan verification"))).toBe(true);
+    expect(memoryModal.detailItems.some((item) => item.text.includes("package, install"))).toBe(true);
+    expect(memoryModal.detailItems.some((item) => item.text.includes("HARD"))).toBe(true);
 
     const graphState = reduce(state, { type: "open-graph" });
     const graphModal = buildModalOptions(graphState);
@@ -157,5 +291,25 @@ describe("memory modal", () => {
     if (!graphModal || graphModal.mode !== "split") return;
     expect(graphModal.items[0]?.label).toContain("maestro-web");
     expect(graphModal.detailItems.some((item) => item.text.includes("mcp-tools"))).toBe(true);
+  });
+
+  it("renders a standalone memory config tab from the config inspector memory rows", () => {
+    const state = createInitialState(makeSnapshot());
+    const memoryState = reduce(state, { type: "open-memory" });
+    const correctionsState = reduce(memoryState, { type: "memory-next-tab" });
+    const learningsState = reduce(correctionsState, { type: "memory-next-tab" });
+    const ratchetState = reduce(learningsState, { type: "memory-next-tab" });
+    const configState = reduce(ratchetState, { type: "memory-next-tab" });
+    const modal = buildModalOptions(configState);
+
+    expect(modal?.mode).toBe("info");
+    if (!modal || modal.mode !== "info") return;
+    expect(modal.eyebrow).toContain("[config]");
+    expect(modal.title).toBe("Memory System");
+    expect(modal.items.some((item) => item.text.includes("Memory System"))).toBe(true);
+    expect(modal.items.some((item) => item.text.includes("Trigger Matching"))).toBe(true);
+    expect(modal.items.some((item) => item.text.includes("Compile Threshold"))).toBe(true);
+    expect(modal.items.some((item) => item.text.includes("Project Graph"))).toBe(true);
+    expect(modal.items.some((item) => item.text.includes("[ Save ]"))).toBe(true);
   });
 });

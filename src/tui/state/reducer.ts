@@ -20,7 +20,7 @@ interface CommandPaletteState {
   readonly selectedCommandIndex: number;
 }
 
-type MemoryModalTab = "overview" | "corrections" | "learnings" | "ratchet";
+type MemoryModalTab = "overview" | "corrections" | "learnings" | "ratchet" | "config";
 
 export type ModalState =
   | { kind: "none" }
@@ -1435,18 +1435,19 @@ function nextConfigTab(current: MissionControlConfigTab, delta: 1 | -1): Mission
 }
 
 function nextMemoryTab(current: MemoryModalTab, delta: 1 | -1): MemoryModalTab {
-  const tabs: MemoryModalTab[] = ["overview", "corrections", "learnings", "ratchet"];
+  const tabs: MemoryModalTab[] = ["overview", "corrections", "learnings", "ratchet", "config"];
   const index = tabs.indexOf(current);
   if (index < 0) return "overview";
   return tabs[(index + delta + tabs.length) % tabs.length]!;
 }
 
 function getMemorySelectableCount(snapshot: MissionControlSnapshot, tab: MemoryModalTab): number {
-  switch (tab) {
-    case "overview":
-      return 0;
-    case "corrections":
-      return snapshot.memory?.corrections.length ?? 0;
+    switch (tab) {
+      case "overview":
+      case "config":
+        return 0;
+      case "corrections":
+        return snapshot.memory?.corrections.length ?? 0;
     case "learnings":
       return snapshot.memory?.rawLearnings.length ?? 0;
     case "ratchet":
