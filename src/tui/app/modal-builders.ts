@@ -1014,14 +1014,14 @@ function displayDraftValue(row: MissionControlConfigRow, draftValue?: string): s
       selectedIndex: state.modal.selectedScope === "project" ? 0 : 1,
     };
   }
-  if (state.modal.phase === "edit-inline" && selectedRow?.options?.length) {
-    return {
-      items: selectedRow.keyPath === "execution.defaultWorker"
-        ? buildWorkerChoiceItems(selectedRow)
-        : buildValueChoiceItems(state, selectedRow),
-      selectedIndex: Math.max(0, selectedRow.options.indexOf(state.modal.draftValue ?? selectedRow.effectiveValueText)),
-    };
-  }
+    if (state.modal.phase === "edit-inline" && selectedRow?.options?.length) {
+      return {
+        items: selectedRow.keyPath === "execution.defaultWorker"
+          ? buildWorkerChoiceItems(selectedRow)
+          : buildValueChoiceItems(selectedRow),
+        selectedIndex: Math.max(0, selectedRow.options.indexOf(state.modal.draftValue ?? selectedRow.effectiveValueText)),
+      };
+    }
   if (state.modal.phase === "confirm-write") {
     return {
       items: [
@@ -1043,12 +1043,12 @@ function displayDraftValue(row: MissionControlConfigRow, draftValue?: string): s
       selectedIndex: 0,
     };
   }
-  return {
-    items: rows.map((row) => ({
-      label: row.label,
-      detail: row.displayValueText,
-      section: row.section,
-    })),
+    return {
+      items: rows.map((row, index) => ({
+        label: row.label,
+        detail: row.displayValueText,
+        section: index === 0 || rows[index - 1]?.section !== row.section ? row.section : undefined,
+      })),
       selectedIndex: Math.min(state.modal.selectedRowIndex, Math.max(0, rows.length - 1)),
     };
   }
@@ -1059,17 +1059,18 @@ function displayDraftValue(row: MissionControlConfigRow, draftValue?: string): s
   ) {
     const targetScope = resolveConfigScopeForKey(row.keyPath, state.modal.selectedScope);
     const globalOnly = isGlobalOnlyConfigKey(row.keyPath);
-  return [
-    { text: row.label, tone: "accent" as const, style: "block" as const },
-    { text: row.summary },
-    { text: `Save scope: ${formatScopeToggle(targetScope, globalOnly)}`, section: "Scope" },
-    ...(globalOnly ? [{ text: "Project overrides are ignored for this setting.", section: "Scope rule" }] : []),
-    { text: row.effectiveDisplayValueText, section: "Current value", tone: "accent" as const, style: "block" as const },
-    ...buildSavedValueItems(row, "Fallbacks"),
-    { text: row.impactText, section: "Why it matters" },
-    { text: globalOnly ? "Enter edit   P preview" : "Enter edit   S scope   P preview", section: "Next actions" },
-  ];
-}
+    return [
+      { text: row.label, tone: "accent" as const, style: "block" as const },
+      { text: row.summary },
+      { text: row.effectiveDisplayValueText, section: "Using now", tone: "accent" as const, style: "block" as const },
+      ...buildSavedValueItems(row, "Saved values"),
+      { text: targetScope === "project" ? "Project config" : "Global config", section: "Next save target", tone: "accent" as const },
+      ...(!globalOnly ? [{ text: "Press S to switch between project and global." }] : []),
+      ...(globalOnly ? [{ text: "Project overrides are ignored for this setting.", section: "Scope rule" }] : []),
+      { text: row.impactText, section: "Why it matters" },
+      { text: globalOnly ? "Enter edit   P preview" : "Enter edit   S scope   P preview", section: "Next actions" },
+    ];
+  }
 
   function buildConfigEditDetailItems(
     state: AppState,
@@ -1077,41 +1078,44 @@ function displayDraftValue(row: MissionControlConfigRow, draftValue?: string): s
   ) {
     const targetScope = resolveConfigScopeForKey(row.keyPath, state.modal.selectedScope);
     const globalOnly = isGlobalOnlyConfigKey(row.keyPath);
-  return [
-    { text: row.label, tone: "accent" as const, style: "block" as const },
-    { text: row.summary },
-    { text: `Save scope: ${formatScopeToggle(targetScope, globalOnly)}`, section: "Scope" },
-    ...(globalOnly ? [{ text: "Project overrides are ignored for this setting.", section: "Scope rule" }] : []),
-    { text: row.effectiveDisplayValueText, section: "Current value", tone: "accent" as const, style: "block" as const },
-    ...buildSavedValueItems(row, "Fallbacks"),
-    { text: row.impactText, section: "Why it matters" },
-    { text: globalOnly ? "Up/Down choose   P preview   Enter review" : "Up/Down choose   S scope   P preview   Enter review", section: "Next actions" },
-  ];
-}
+    return [
+      { text: row.label, tone: "accent" as const, style: "block" as const },
+      { text: row.summary },
+      { text: displayDraftValue(row, state.modal.draftValue), section: "Selected value", tone: "accent" as const, style: "block" as const },
+      { text: row.effectiveDisplayValueText, section: "Using now", tone: "accent" as const },
+      ...buildSavedValueItems(row, "Saved values"),
+      { text: targetScope === "project" ? "Project config" : "Global config", section: "Next save target", tone: "accent" as const },
+      ...(!globalOnly ? [{ text: "Press S to switch between project and global." }] : []),
+      ...(globalOnly ? [{ text: "Project overrides are ignored for this setting.", section: "Scope rule" }] : []),
+      { text: row.impactText, section: "Why it matters" },
+      { text: globalOnly ? "Up/Down choose   P preview   Enter review" : "Up/Down choose   S scope   P preview   Enter review", section: "Next actions" },
+    ];
+  }
 
-function buildDefaultWorkerDetailItems(
-  state: AppState,
-  row: MissionControlConfigRow,
-) {
+  function buildDefaultWorkerDetailItems(
+    state: AppState,
+    row: MissionControlConfigRow,
+  ) {
   const targetScope = resolveConfigScopeForKey(row.keyPath, state.modal.selectedScope);
   const choice = row.workerChoices?.find((item) => item.slug === (state.modal.draftValue ?? row.effectiveValueText))
     ?? row.workerChoices?.[0];
   if (!choice) {
     return buildConfigEditDetailItems(state, row);
   }
-  const recommendationLines = buildWorkerRecommendationLines(choice);
-  return [
-    { text: formatWorkerLabel(choice.slug), tone: "accent" as const, style: "block" as const },
-    { text: choice.summary },
-    { text: `Save scope: ${formatScopeToggle(targetScope, false)}`, section: "Scope" },
-    { text: `${availabilityText(choice.availability)}${choice.availabilityDetail ? ` · ${choice.availabilityDetail}` : ""}`, section: "Availability" },
-    { text: row.effectiveDisplayValueText, section: "Current value", tone: "accent" as const, style: "block" as const },
-    ...buildSavedValueItems(row, "Fallbacks"),
-    ...splitParagraph(choice.bestFor, "Best for"),
-    ...splitParagraph(choice.tradeoffs, "Tradeoffs"),
-    ...recommendationLines,
-    { text: "Up/Down choose   S scope   P preview   Enter review", section: "Next actions" },
-  ];
+    const recommendationLines = buildWorkerRecommendationLines(choice);
+    return [
+      { text: formatWorkerLabel(choice.slug), tone: "accent" as const, style: "block" as const },
+      { text: choice.summary },
+      { text: choice.availabilityDetail ? `${availabilityText(choice.availability)} · ${choice.availabilityDetail}` : availabilityText(choice.availability), section: "Availability", tone: "accent" as const },
+      { text: row.effectiveDisplayValueText, section: "Using now", tone: "accent" as const },
+      ...buildSavedValueItems(row, "Saved values"),
+      { text: targetScope === "project" ? "Project config" : "Global config", section: "Next save target", tone: "accent" as const },
+      { text: "Press S to switch between project and global." },
+      ...splitParagraph(choice.bestFor, "Best for"),
+      ...splitParagraph(choice.tradeoffs, "Tradeoffs"),
+      ...recommendationLines,
+      { text: "Up/Down choose   S scope   P preview   Enter review", section: "Next actions" },
+    ];
 }
 
   function buildConfigScopeDetailItems(
@@ -1199,28 +1203,21 @@ function buildSavedValueItems(row: MissionControlConfigRow, section = "Also set 
   if (meaningful.length === 0) {
     return [{ text: "No saved overrides.", section, tone: "muted" as const }];
   }
-  return meaningful.map((item) => ({
+  return meaningful.map((item, index) => ({
     text: `${item.label}   ${item.value}`,
-    section,
+    section: index === 0 ? section : undefined,
     tone: "muted" as const,
   }));
 }
 
-  function buildWorkerChoiceItems(row: MissionControlConfigRow) {
-    return [
-      ...(row.workerChoices ?? []).map((choice, index) => ({
-        label: choice.slug,
-        detail: availabilityText(choice.availability),
-        section: index === 0 ? "Choose a worker" : undefined,
-      })),
-      {
-        label: row.effectiveDisplayValueText,
-        section: "Current value",
-        selectable: false,
-        tone: "accent" as const,
-      },
-    ...buildSavedValueRows(row, "Other saved values"),
-  ];
+function buildWorkerChoiceItems(row: MissionControlConfigRow) {
+  return (row.workerChoices ?? []).map((choice, index) => ({
+    label: choice.slug,
+    detail: choice.slug === row.effectiveValueText
+      ? `${availabilityText(choice.availability)} · using now`
+      : availabilityText(choice.availability),
+    section: index === 0 ? "Choose a worker" : undefined,
+  }));
 }
 
 function availabilityText(availability: NonNullable<MissionControlConfigRow["workerChoices"]>[number]["availability"]): string {
@@ -1239,52 +1236,16 @@ function availabilityText(availability: NonNullable<MissionControlConfigRow["wor
   }
 }
 
-  function buildValueChoiceItems(
-    state: AppState,
-    row: MissionControlConfigRow,
-  ) {
-    const targetScope = resolveConfigScopeForKey(row.keyPath, state.modal.selectedScope);
-    return [
+function buildValueChoiceItems(
+  row: MissionControlConfigRow,
+) {
+  return [
     ...row.options!.map((option, index) => ({
       label: formatOptionLabel(row, option),
+      detail: option === row.effectiveValueText ? "using now" : undefined,
       section: index === 0 ? "Choose a value" : undefined,
     })),
-    {
-      label: row.effectiveDisplayValueText,
-      section: "Current value",
-      selectable: false,
-      tone: "accent" as const,
-    },
-    ...buildSavedValueRows(row, "Other saved values"),
-      {
-        label: targetScope === "project" ? "Project config" : "Global config",
-        section: "Saving to",
-        selectable: false,
-      },
   ];
-}
-
-function buildSavedValueRows(
-  row: MissionControlConfigRow,
-  section: string,
-) {
-  const items = [
-    row.projectDisplayValueText !== undefined ? { label: "Project", value: row.projectDisplayValueText } : undefined,
-    row.globalDisplayValueText !== undefined ? { label: "Global", value: row.globalDisplayValueText } : undefined,
-    row.defaultDisplayValueText !== undefined ? { label: "Default", value: row.defaultDisplayValueText } : undefined,
-  ].filter((item): item is { label: string; value: string } => Boolean(item) && item.value !== "unset");
-
-  if (items.length === 0) {
-    return [{ label: "No saved values", section, selectable: false, tone: "muted" as const }];
-  }
-
-  return items.map((item, index) => ({
-    label: item.label,
-    detail: item.value,
-    section: index === 0 ? section : undefined,
-    selectable: false,
-    tone: "muted" as const,
-  }));
 }
 
 function buildConfigActionRow(state: AppState): string {
@@ -1305,13 +1266,6 @@ function buildConfigActionRow(state: AppState): string {
     default:
       return `/ ${searchText}    Enter edit    S scope    P preview    R reload`;
   }
-}
-
-function formatScopeToggle(scope: "project" | "global", globalOnly: boolean): string {
-  if (globalOnly) {
-    return "[Global]";
-  }
-  return scope === "project" ? "[Project]  Global" : "Project  [Global]";
 }
 
 function splitParagraph(text: string, section: string) {

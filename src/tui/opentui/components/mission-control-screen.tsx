@@ -465,8 +465,13 @@ function ModalRowView({
   const detail = row.detail ? `  ${row.detail}` : "";
   const hint = row.hint ? `  [${row.hint}]` : "";
   return (
-    <box width="100%" backgroundColor={selected ? selectedBg : undefined}>
-      <SafeText fg={fg} attributes={selected ? TextAttributes.BOLD : row.style === "block" ? TextAttributes.BOLD : undefined}>{`${row.label}${detail}${hint}`}</SafeText>
+    <box width="100%" flexDirection="column">
+      {row.section ? (
+        <SafeText fg={OPEN_TUI_THEME.muted} attributes={TextAttributes.BOLD}>{row.section}</SafeText>
+      ) : null}
+      <box width="100%" backgroundColor={selected ? selectedBg : undefined}>
+        <SafeText fg={fg} attributes={selected ? TextAttributes.BOLD : row.style === "block" ? TextAttributes.BOLD : undefined}>{`${row.label}${detail}${hint}`}</SafeText>
+      </box>
     </box>
   );
 }
@@ -521,7 +526,12 @@ function InfoItemView({ item }: { readonly item: ModalInfoItem }) {
   const prefix = item.detail ? `${item.text}: ${item.detail}` : item.text;
   const attributes = item.style === "block" ? TextAttributes.BOLD : item.tone === "accent" ? TextAttributes.BOLD : undefined;
   return (
-    <SafeText fg={toneColor(item.tone)} attributes={attributes}>{prefix}</SafeText>
+    <box width="100%" flexDirection="column">
+      {item.section ? (
+        <SafeText fg={OPEN_TUI_THEME.muted} attributes={TextAttributes.BOLD}>{item.section}</SafeText>
+      ) : null}
+      <SafeText fg={toneColor(item.tone)} attributes={attributes}>{prefix}</SafeText>
+    </box>
   );
 }
 
