@@ -31,9 +31,15 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
     exitOnCtrlC: false,
     useMouse: true,
     screenMode: "alternate-screen",
-    targetFps: 4,
-    maxFps: 8,
   });
+  // Pause the render loop immediately.  OpenTUI defaults to a 30 FPS
+  // continuous loop driven by React's requestAnimationFrame polyfill.
+  // In paused state requestLive() can't restart the loop, but
+  // requestRender() (fired by React's commitUpdate) still triggers a
+  // single activateFrame() -> one loop() iteration.  This gives exactly
+  // 1-2 frames per flushSync call instead of a continuous 30 FPS loop
+  // that leaks ~120 KB of native buffers per frame.
+  renderer.pause();
   const root = createRoot(renderer);
 
   let state = createInitialState(opts.snapshot);
