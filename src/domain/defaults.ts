@@ -1,6 +1,13 @@
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type { MaestroConfig, WorkflowTemplate } from "./types.js";
+import type { MemoryConfig } from "./memory-types.js";
 
 export const MAESTRO_DIR = ".maestro";
+
+export const MEMORY_DIR = "memory";
+
+export const GRAPH_DIR = join(homedir(), ".maestro", "graph");
 
 /** Built-in workflow templates */
 export const BUILT_IN_WORKFLOWS: Readonly<Record<string, WorkflowTemplate>> = {
@@ -91,6 +98,13 @@ export const DEFAULT_CONFIG: MaestroConfig = {
       backgroundMode: "solid",
     },
   },
+  memory: {
+    enabled: true,
+    corrections: { enabled: true, matching: "keyword", auto_capture: "prompt", severity_default: "soft" },
+    learnings: { enabled: true, compile_threshold: 5, max_age_days: 7 },
+    ratchet: { enabled: false, enforcement: "warn" },
+    graph: { enabled: true },
+  } satisfies MemoryConfig,
 };
 
 export const NO_SESSION_ID = "none";

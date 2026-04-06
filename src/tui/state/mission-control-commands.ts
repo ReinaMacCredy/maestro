@@ -7,6 +7,8 @@ export type MissionControlCommandId =
   | "config"
   | "processes"
   | "workers"
+  | "memory"
+  | "graph"
   | "exit";
 
 export interface MissionControlCommandSpec {
@@ -57,6 +59,22 @@ export function getMissionControlCommandSpecs(
         detail: "Inspect workspace configuration, checks, and mission directory",
         section: "Navigate",
         keywords: ["config", "configuration", "doctor", "directory"],
+      },
+      {
+        id: "memory",
+        key: "M",
+        label: "Memory",
+        detail: "View corrections, learnings, and ratchet assertions",
+        section: "Navigate",
+        keywords: ["memory", "corrections", "learnings", "ratchet"],
+      },
+      {
+        id: "graph",
+        key: "G",
+        label: "Graph",
+        detail: "View cross-project relationships",
+        section: "Navigate",
+        keywords: ["graph", "projects", "relationships"],
       },
       {
         id: "exit",
@@ -110,6 +128,22 @@ export function getMissionControlCommandSpecs(
       detail: "Inspect worker health and readiness probes",
       section: "Navigate",
       keywords: ["workers", "health", "readiness", "doctor"],
+    },
+    {
+      id: "memory",
+      key: "M",
+      label: "Memory",
+      detail: "View corrections, learnings, and ratchet assertions",
+      section: "Navigate",
+      keywords: ["memory", "corrections", "learnings", "ratchet"],
+    },
+    {
+      id: "graph",
+      key: "G",
+      label: "Graph",
+      detail: "View cross-project relationships",
+      section: "Navigate",
+      keywords: ["graph", "projects", "relationships"],
     },
     {
       id: "exit",

@@ -6,6 +6,8 @@
 export type Key =
   | { type: "char"; char: string }
   | { type: "arrow"; direction: "up" | "down" | "left" | "right" }
+  | { type: "tab" }
+  | { type: "backtab" }
   | { type: "enter" }
   | { type: "escape" }
   | { type: "backspace" }
@@ -88,11 +90,17 @@ function parseKeypressInternal(data: Uint8Array, flushIncomplete: boolean): Pars
       continue;
     }
 
-    // Ctrl combos (0x01-0x1a except 0x0d=enter, 0x1b=escape)
-    if (byte === 0x0d || byte === 0x0a) {
-      keys.push({ type: "enter" });
-      i++;
-      continue;
+      if (byte === 0x09) {
+        keys.push({ type: "tab" });
+        i++;
+        continue;
+      }
+
+      // Ctrl combos (0x01-0x1a except 0x09=tab, 0x0d=enter, 0x1b=escape)
+      if (byte === 0x0d || byte === 0x0a) {
+        keys.push({ type: "enter" });
+        i++;
+        continue;
     }
 
     if (byte === 0x08 || byte === 0x7f) {
@@ -144,11 +152,12 @@ function parseCSI(
   const final = data[i]!;
   i++;
 
-  // Arrow keys: ESC [ A/B/C/D
-  if (final === 0x41) return { key: { type: "arrow", direction: "up" }, nextIndex: i };
-  if (final === 0x42) return { key: { type: "arrow", direction: "down" }, nextIndex: i };
-  if (final === 0x43) return { key: { type: "arrow", direction: "right" }, nextIndex: i };
-  if (final === 0x44) return { key: { type: "arrow", direction: "left" }, nextIndex: i };
+    // Arrow keys: ESC [ A/B/C/D
+    if (final === 0x41) return { key: { type: "arrow", direction: "up" }, nextIndex: i };
+    if (final === 0x42) return { key: { type: "arrow", direction: "down" }, nextIndex: i };
+    if (final === 0x43) return { key: { type: "arrow", direction: "right" }, nextIndex: i };
+    if (final === 0x44) return { key: { type: "arrow", direction: "left" }, nextIndex: i };
+    if (final === 0x5a) return { key: { type: "backtab" }, nextIndex: i };
 
   // Function keys: ESC [ N ~ (where N is the function key code)
   if (final === 0x7e) {

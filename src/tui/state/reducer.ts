@@ -20,6 +20,8 @@ interface CommandPaletteState {
   readonly selectedCommandIndex: number;
 }
 
+type MemoryModalTab = "overview" | "corrections" | "learnings" | "ratchet";
+
 export type ModalState =
   | { kind: "none" }
   | { kind: "command-palette"; query: string; selectedCommandIndex: number }
@@ -52,8 +54,10 @@ export type ModalState =
         returnTarget?: ModalReturnTarget;
         returnPalette?: CommandPaletteState;
         }
-    | { kind: "processes"; selectedProcessIndex: number; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState }
-    | { kind: "runtime-output"; selectedProcessIndex: number; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState };
+      | { kind: "processes"; selectedProcessIndex: number; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState }
+      | { kind: "runtime-output"; selectedProcessIndex: number; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState }
+      | { kind: "memory"; tab: MemoryModalTab; selectedItemIndex: number; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState }
+      | { kind: "graph"; selectedItemIndex: number; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState };
 
 export interface AppState {
   snapshot: MissionControlSnapshot;
@@ -97,6 +101,8 @@ export type Action =
   | { type: "open-config" }
   | { type: "open-processes" }
   | { type: "open-workers" }
+  | { type: "open-memory" }
+  | { type: "open-graph" }
   | { type: "open-runtime-output" }
   | { type: "toggle-copy-mode" }
   | { type: "update-snapshot"; snapshot: MissionControlSnapshot }
@@ -109,10 +115,14 @@ export type Action =
   | { type: "config-prev-tab" }
     | { type: "config-preview" }
     | { type: "config-reload" }
-    | { type: "config-cycle-value"; direction: "previous" | "next" }
-    | { type: "config-toggle-scope" }
-    | { type: "config-find-start" }
-      | { type: "config-find-append"; char: string }
+  | { type: "config-cycle-value"; direction: "previous" | "next" }
+  | { type: "config-toggle-scope" }
+  | { type: "config-find-start" }
+  | { type: "memory-next-tab" }
+  | { type: "memory-prev-tab" }
+  | { type: "memory-select-item"; index: number }
+  | { type: "graph-select-item"; index: number }
+        | { type: "config-find-append"; char: string }
       | { type: "config-find-backspace" }
       | { type: "config-find-clear" }
       | { type: "config-preview-ready"; preview: { scope: ConfigScope; path: string; content: string } }
@@ -144,6 +154,8 @@ export function reduce(state: AppState, action: Action): AppState {
         || state.modal.kind === "runtime-output"
         || state.modal.kind === "dependencies"
         || state.modal.kind === "config"
+        || state.modal.kind === "memory"
+        || state.modal.kind === "graph"
       ) {
         return handleModalNavigate(state, action.direction);
       }
@@ -393,6 +405,31 @@ export function reduce(state: AppState, action: Action): AppState {
           },
         };
 
+      case "open-memory":
+        if (!canOpenOverlayFromModal(state.modal)) return state;
+        return {
+          ...state,
+          modal: {
+            kind: "memory",
+            tab: "overview",
+            selectedItemIndex: 0,
+            returnTarget: getModalReturnTarget(state.modal),
+            returnPalette: getCommandPaletteReturnState(state.modal),
+          },
+      };
+
+    case "open-graph":
+      if (!canOpenOverlayFromModal(state.modal)) return state;
+      return {
+        ...state,
+        modal: {
+          kind: "graph",
+          selectedItemIndex: 0,
+          returnTarget: getModalReturnTarget(state.modal),
+          returnPalette: getCommandPaletteReturnState(state.modal),
+        },
+      };
+
     case "open-runtime-output": {
         if (state.snapshot.mode !== "mission") return state;
         if (state.snapshot.runtimeProcesses.length === 0) return state;
@@ -636,6 +673,29 @@ export function reduce(state: AppState, action: Action): AppState {
             },
           };
         }
+        if (state.modal.kind === "memory") {
+          return {
+            ...state,
+            modal: {
+              kind: "memory",
+              tab: state.modal.tab,
+              selectedItemIndex: action.option,
+              returnTarget: state.modal.returnTarget,
+              returnPalette: state.modal.returnPalette,
+            },
+          };
+        }
+        if (state.modal.kind === "graph") {
+          return {
+            ...state,
+            modal: {
+              kind: "graph",
+              selectedItemIndex: action.option,
+              returnTarget: state.modal.returnTarget,
+              returnPalette: state.modal.returnPalette,
+            },
+          };
+        }
         return state;
 
     case "modal-query-append":
@@ -747,9 +807,41 @@ export function reduce(state: AppState, action: Action): AppState {
                 findQuery: undefined,
                 draftValue: undefined,
                 message: undefined,
-                preview: undefined,
-                },
-            };
+                  preview: undefined,
+                  },
+              };
+
+        case "memory-next-tab":
+        case "memory-prev-tab":
+          if (state.modal.kind !== "memory") return state;
+          return {
+            ...state,
+            modal: {
+              ...state.modal,
+              tab: nextMemoryTab(state.modal.tab, action.type === "memory-next-tab" ? 1 : -1),
+              selectedItemIndex: 0,
+            },
+          };
+
+        case "memory-select-item":
+          if (state.modal.kind !== "memory") return state;
+          return {
+            ...state,
+            modal: {
+              ...state.modal,
+              selectedItemIndex: Math.max(0, action.index),
+            },
+          };
+
+        case "graph-select-item":
+          if (state.modal.kind !== "graph") return state;
+          return {
+            ...state,
+            modal: {
+              ...state.modal,
+              selectedItemIndex: Math.max(0, action.index),
+            },
+          };
 
         case "config-preview":
         case "config-reload":
@@ -1003,6 +1095,41 @@ function handleModalNavigate(state: AppState, direction: "up" | "down"): AppStat
       };
     }
 
+      if (state.modal.kind === "memory") {
+        const total = getMemorySelectableCount(state.snapshot, state.modal.tab);
+        if (total === 0) return state;
+        const selectedItemIndex = direction === "down"
+          ? Math.min(state.modal.selectedItemIndex + 1, total - 1)
+          : Math.max(state.modal.selectedItemIndex - 1, 0);
+        return {
+          ...state,
+          modal: {
+            kind: "memory",
+            tab: state.modal.tab,
+            selectedItemIndex,
+            returnTarget: state.modal.returnTarget,
+            returnPalette: state.modal.returnPalette,
+          },
+        };
+      }
+
+      if (state.modal.kind === "graph") {
+        const total = (state.snapshot.memory?.graphContext?.relationships.length ?? 0);
+        if (total === 0) return state;
+        const selectedItemIndex = direction === "down"
+          ? Math.min(state.modal.selectedItemIndex + 1, total - 1)
+          : Math.max(state.modal.selectedItemIndex - 1, 0);
+        return {
+          ...state,
+          modal: {
+            kind: "graph",
+            selectedItemIndex,
+            returnTarget: state.modal.returnTarget,
+            returnPalette: state.modal.returnPalette,
+          },
+        };
+      }
+
     if (state.modal.kind === "config") {
       const total = getConfigRowsForTab(
         state.snapshot.configInspector ?? null,
@@ -1062,7 +1189,9 @@ function blocksLiveFeatureAutoFollow(modal: ModalState): boolean {
     || modal.kind === "dependencies"
     || modal.kind === "handoffs"
     || modal.kind === "workers"
-    || modal.kind === "config";
+    || modal.kind === "config"
+    || modal.kind === "memory"
+    || modal.kind === "graph";
 }
 
 function getLiveRuntimeFeatureId(snapshot: MissionControlSnapshot): string | undefined {
@@ -1157,6 +1286,8 @@ function getModalReturnTarget(modal: ModalState): ModalReturnTarget | undefined 
         || modal.kind === "config"
         || modal.kind === "processes"
         || modal.kind === "runtime-output"
+        || modal.kind === "memory"
+        || modal.kind === "graph"
       ) {
         return modal.returnTarget;
       }
@@ -1189,6 +1320,8 @@ function getCommandPaletteReturnState(
     || modal.kind === "config"
     || modal.kind === "processes"
     || modal.kind === "runtime-output"
+    || modal.kind === "memory"
+    || modal.kind === "graph"
   ) {
     return modal.returnPalette
       ? {
@@ -1294,10 +1427,31 @@ function nextConfigTab(current: MissionControlConfigTab, delta: 1 | -1): Mission
     "workers",
     "plan",
     "doctor",
+    "memory",
   ];
   const index = tabs.indexOf(current);
   if (index < 0) return "overview";
   return tabs[(index + delta + tabs.length) % tabs.length]!;
+}
+
+function nextMemoryTab(current: MemoryModalTab, delta: 1 | -1): MemoryModalTab {
+  const tabs: MemoryModalTab[] = ["overview", "corrections", "learnings", "ratchet"];
+  const index = tabs.indexOf(current);
+  if (index < 0) return "overview";
+  return tabs[(index + delta + tabs.length) % tabs.length]!;
+}
+
+function getMemorySelectableCount(snapshot: MissionControlSnapshot, tab: MemoryModalTab): number {
+  switch (tab) {
+    case "overview":
+      return 0;
+    case "corrections":
+      return snapshot.memory?.corrections.length ?? 0;
+    case "learnings":
+      return snapshot.memory?.rawLearnings.length ?? 0;
+    case "ratchet":
+      return snapshot.memory?.ratchetSuite.assertions.length ?? 0;
+  }
 }
 
 function cycleConfigDraft(state: AppState, direction: "previous" | "next"): AppState {

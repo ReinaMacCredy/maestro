@@ -11,6 +11,8 @@ export const PREVIEW_SCREENS = [
   "runtime",
   "workers",
   "output",
+  "memory",
+  "graph",
 ] as const;
 
 export type PreviewScreen = typeof PREVIEW_SCREENS[number];
@@ -20,6 +22,8 @@ export const HOME_PREVIEW_SCREENS = [
   "config",
   "runtime",
   "workers",
+  "memory",
+  "graph",
 ] as const satisfies readonly PreviewScreen[];
 
 export function isPreviewScreen(value: string): value is PreviewScreen {
@@ -128,6 +132,10 @@ export function buildPreviewState(opts: PreviewStateOptions): AppState {
         : withProcess;
       return reduce(nextState, { type: "open-runtime-output" });
     }
+    case "memory":
+      return reduce(baseState, { type: "open-memory" });
+    case "graph":
+      return reduce(baseState, { type: "open-graph" });
   }
 }
 

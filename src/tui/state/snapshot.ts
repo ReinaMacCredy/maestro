@@ -2,6 +2,7 @@
  * Build a MissionControlSnapshot from existing stores.
  * Polls once -- no subscriptions, no event tailing.
  */
+import { basename } from "node:path";
 import type { MissionStorePort } from "../../ports/mission-store.port.js";
 import type { FeatureStorePort } from "../../ports/feature-store.port.js";
 import type { AssertionStorePort } from "../../ports/assertion-store.port.js";
@@ -16,6 +17,10 @@ import {
   DEFAULT_RUNTIME_EVENT_TAIL_MAX_LINES,
   type RuntimeEventStorePort,
 } from "../../ports/runtime-event-store.port.js";
+import type { CorrectionStorePort } from "../../ports/correction-store.port.js";
+import type { LearningStorePort } from "../../ports/learning-store.port.js";
+import type { RatchetStorePort } from "../../ports/ratchet-store.port.js";
+import type { ProjectGraphStorePort } from "../../ports/project-graph-store.port.js";
 import type { Mission, Feature } from "../../domain/mission-types.js";
 import { getMissionControlBackgroundMode, listIgnoredProjectConfigKeys } from "../../domain/ui-config.js";
 import type { RuntimeState, WorkerRuntime } from "../../domain/runtime-types.js";
@@ -28,6 +33,8 @@ import { runDoctor } from "../../usecases/run-doctor.usecase.js";
 import { getValidFeatureTransitions } from "../../domain/mission-state.js";
 import { classifyRuntime } from "../../usecases/runtime-supervision.usecase.js";
 import { getWorkerHealthRows } from "../../usecases/worker-health.usecase.js";
+import { getGraphContext } from "../../usecases/graph-context.usecase.js";
+import { getMemoryStats } from "../../usecases/memory-stats.usecase.js";
 import { deriveEvents } from "./events.js";
 import { buildConfigInspector } from "./config-inspector.js";
 import type {
@@ -43,6 +50,7 @@ import type {
   TaskPreviewPane,
   MissionOverviewPane,
   DependencyMapRow,
+  MissionControlMemorySnapshot,
 } from "./types.js";
 import type { TransportType, WorkerConfig } from "../../domain/worker-types.js";
 
@@ -57,6 +65,10 @@ export interface SnapshotDeps {
   git: GitPort;
   runtimeStore: RuntimeStorePort;
   runtimeEventStore: RuntimeEventStorePort;
+  correctionStore?: CorrectionStorePort;
+  learningStore?: LearningStorePort;
+  ratchetStore?: RatchetStorePort;
+  projectGraphStore?: ProjectGraphStorePort;
   cwd: string;
 }
 
@@ -65,6 +77,10 @@ export interface HomeSnapshotDeps {
   config: ConfigPort;
   cass: CassPort;
   git: GitPort;
+  correctionStore?: CorrectionStorePort;
+  learningStore?: LearningStorePort;
+  ratchetStore?: RatchetStorePort;
+  projectGraphStore?: ProjectGraphStorePort;
 }
 
 export interface SnapshotBuildOptions {
@@ -116,6 +132,7 @@ export async function buildSnapshot(
     configLayers,
     gitState,
     runtimes,
+    memorySnapshot,
   ] = await Promise.all([
     generateMissionReport(
       deps.missionStore,
@@ -130,7 +147,14 @@ export async function buildSnapshot(
     deps.config.loadLayers(deps.cwd),
     deps.git.getState(deps.cwd),
     deps.runtimeStore.list(missionId),
-  ]);
+    buildMissionControlMemorySnapshot({
+      correctionStore: deps.correctionStore,
+      learningStore: deps.learningStore,
+      ratchetStore: deps.ratchetStore,
+      projectGraphStore: deps.projectGraphStore,
+      cwd: deps.cwd,
+    }),
+    ]);
 
   const mission = report.mission;
   const now = Date.now();
@@ -291,9 +315,11 @@ export async function buildSnapshot(
       gateLabel,
       canPause: mission.status === "executing",
       canResume: mission.status === "paused",
-      home: null,
-  };
-}
+        memory: memorySnapshot,
+        memoryStats: memorySnapshot?.stats ?? null,
+        home: null,
+    };
+  }
 
 async function listRecentRuntimeEvents(
   runtimeEventStore: RuntimeEventStorePort,
@@ -311,10 +337,17 @@ export async function buildHomeSnapshot(
   cwd: string,
   options: SnapshotBuildOptions = {},
 ): Promise<MissionControlSnapshot> {
-  const [env, configLayers, gitState] = await Promise.all([
+  const [env, configLayers, gitState, memorySnapshot] = await Promise.all([
     buildMissionControlEnvironmentSummary(deps.handoffStore, deps.config, deps.cass, deps.git, cwd),
     deps.config.loadLayers(cwd),
     deps.git.isRepo(cwd).then((isRepo) => isRepo ? deps.git.getState(cwd) : Promise.resolve(undefined)),
+    buildMissionControlMemorySnapshot({
+      correctionStore: deps.correctionStore,
+      learningStore: deps.learningStore,
+      ratchetStore: deps.ratchetStore,
+      projectGraphStore: deps.projectGraphStore,
+      cwd,
+    }),
   ]);
   const checks = [
     ...env.checks,
@@ -392,7 +425,9 @@ export async function buildHomeSnapshot(
     gateLabel: null,
     canPause: false,
     canResume: false,
-    home: {
+      memory: memorySnapshot,
+      memoryStats: memorySnapshot?.stats ?? null,
+      home: {
       headline,
       summary,
       locationLabel: status.gitAvailable ? cwd : "Outside a git repository",
@@ -448,6 +483,59 @@ function buildActiveWorker(
       lastOutputAgeMs: telemetry?.lastOutputAgeMs,
       };
   }
+
+async function buildMissionControlMemorySnapshot(
+  deps: {
+    correctionStore?: CorrectionStorePort;
+    learningStore?: LearningStorePort;
+    ratchetStore?: RatchetStorePort;
+    projectGraphStore?: ProjectGraphStorePort;
+    cwd: string;
+  },
+): Promise<MissionControlMemorySnapshot | null> {
+  if (!deps.correctionStore || !deps.learningStore || !deps.ratchetStore) {
+    return null;
+  }
+
+  const [stats, corrections, rawLearnings, compiledLearnings, ratchetSuite, ratchetBaseline] = await Promise.all([
+    getMemoryStats(
+      deps.correctionStore,
+      deps.learningStore,
+      deps.ratchetStore,
+      deps.projectGraphStore,
+    ),
+    deps.correctionStore.list(),
+    deps.learningStore.listRaw(),
+    deps.learningStore.readCompiled(),
+    deps.ratchetStore.getSuite(),
+    deps.ratchetStore.getBaseline(),
+  ]);
+
+  const graphContext = deps.projectGraphStore
+    ? await getGraphContext(deps.projectGraphStore, basename(deps.cwd))
+    : undefined;
+
+  return {
+    stats,
+    corrections,
+    rawLearnings,
+    compiledLearnings,
+    ratchetSuite,
+    ratchetBaseline,
+    graphContext: graphContext
+      ? {
+          currentProject: graphContext.currentProject,
+          relationships: graphContext.relationships.map((relationship) => ({
+            project: relationship.project,
+            direction: relationship.direction,
+            edge: relationship.edge,
+          })),
+          totalProjects: graphContext.totalProjects,
+          totalEdges: graphContext.totalEdges,
+        }
+      : undefined,
+  };
+}
 
 function buildHomeActions(
   status: Awaited<ReturnType<typeof checkStatus>>,

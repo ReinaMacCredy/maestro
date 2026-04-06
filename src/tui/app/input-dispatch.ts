@@ -47,37 +47,47 @@ export function keyToAction(key: Key, state: AppState): Action | undefined {
       return { type: "config-cycle-value", direction: "next" };
     }
   }
-    if (
-      key.type === "arrow"
-      && key.direction === "left"
-      && (
-          ((
+      if (
+        key.type === "arrow"
+        && key.direction === "left"
+        && (
+            ((
             state.modal.kind === "feature-browser"
             || state.modal.kind === "dependencies"
             || state.modal.kind === "overview"
             || state.modal.kind === "handoffs"
-            || state.modal.kind === "workers"
-            || state.modal.kind === "config"
-            || state.modal.kind === "processes"
-            || state.modal.kind === "runtime-output"
-          ) && state.modal.returnTarget === "command-palette")
-      )
-    ) {
-      return { type: "navigate", direction: "left" };
-  }
-  if (key.type === "arrow" && (key.direction === "up" || key.direction === "down")) {
-    return { type: "navigate", direction: key.direction };
-  }
+              || state.modal.kind === "workers"
+              || state.modal.kind === "config"
+              || state.modal.kind === "processes"
+              || state.modal.kind === "runtime-output"
+              || state.modal.kind === "memory"
+              || state.modal.kind === "graph"
+            ) && state.modal.returnTarget === "command-palette")
+        )
+      ) {
+        return { type: "navigate", direction: "left" };
+    }
+    if (key.type === "tab") {
+      if (state.modal.kind === "config") return { type: "config-next-tab" };
+      if (state.modal.kind === "memory") return { type: "memory-next-tab" };
+    }
+    if (key.type === "backtab") {
+      if (state.modal.kind === "config") return { type: "config-prev-tab" };
+      if (state.modal.kind === "memory") return { type: "memory-prev-tab" };
+    }
+    if (key.type === "arrow" && (key.direction === "up" || key.direction === "down")) {
+      return { type: "navigate", direction: key.direction };
+    }
   if ((key.type === "backspace" || key.type === "delete") && state.modal.kind === "command-palette") {
     return { type: "modal-query-backspace" };
   }
   if (key.type === "enter") {
     return { type: "enter" };
   }
-  if (key.type === "char" && state.modal.kind === "config") {
-      switch (key.char) {
-        case "[":
-          return { type: "config-prev-tab" };
+    if (key.type === "char" && state.modal.kind === "config") {
+        switch (key.char) {
+          case "[":
+            return { type: "config-prev-tab" };
         case "]":
           return { type: "config-next-tab" };
         case "p":
@@ -88,12 +98,20 @@ export function keyToAction(key: Key, state: AppState): Action | undefined {
           return { type: "config-reload" };
         case "s":
         case "S":
-          return { type: "config-toggle-scope" };
+            return { type: "config-toggle-scope" };
+        }
+      }
+    if (key.type === "char" && state.modal.kind === "memory") {
+      switch (key.char) {
+        case "[":
+          return { type: "memory-prev-tab" };
+        case "]":
+          return { type: "memory-next-tab" };
       }
     }
-  if (key.type === "char" && state.modal.kind === "processes") {
-    if (key.char === "o" || key.char === "O") {
-      return { type: "open-runtime-output" };
+    if (key.type === "char" && state.modal.kind === "processes") {
+      if (key.char === "o" || key.char === "O") {
+        return { type: "open-runtime-output" };
     }
   }
   if (key.type === "char" && state.modal.kind === "command-palette") {

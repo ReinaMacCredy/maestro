@@ -250,7 +250,270 @@ export function buildModalOptions(state: AppState): ModalOptions | undefined {
           };
       }
 
+    if (state.modal.kind === "memory") {
+      return buildMemoryModal(state, returnTarget);
+    }
+
+    if (state.modal.kind === "graph") {
+      return buildGraphModal(state, returnTarget);
+    }
+
   return undefined;
+}
+
+function buildMemoryModal(
+  state: Extract<AppState, { modal: Extract<AppState["modal"], { kind: "memory" }> }>,
+  returnTarget: "command-palette" | undefined,
+): ModalOptions {
+  const memory = state.snapshot.memory;
+  const eyebrow = `${buildMemoryTabs(state)}\n${buildMemoryHelpText()}`;
+
+  if (state.modal.tab === "overview") {
+    return {
+      mode: "info",
+      title: "Memory",
+      eyebrow,
+      items: buildMemoryOverviewItems(memory),
+      footer: buildTabbedOverlayFooter(returnTarget),
+      returnTarget,
+      renderSpec: buildOverlayRenderSpec("memory"),
+    };
+  }
+
+  if (state.modal.tab === "corrections") {
+    const corrections = memory?.corrections ?? [];
+    const selectedCorrection = corrections[state.modal.selectedItemIndex];
+    return {
+      mode: "split",
+      title: "Memory",
+      eyebrow,
+      items: corrections.length > 0
+        ? corrections.map((correction) => ({
+            label: `${correction.severity === "hard" ? "[!]" : "[ ]"} ${correction.rule}`,
+            detail: correction.trigger.keywords.join(", ") || "no keywords",
+          }))
+        : [{ label: "No saved corrections", selectable: false, tone: "muted" }],
+      selectedIndex: Math.min(state.modal.selectedItemIndex, Math.max(0, corrections.length - 1)),
+      detailItems: buildCorrectionDetailItems(selectedCorrection),
+      footer: buildTabbedOverlayFooter(returnTarget),
+      returnTarget,
+      renderSpec: buildOverlayRenderSpec("memory"),
+    };
+  }
+
+  if (state.modal.tab === "learnings") {
+    const rawLearnings = memory?.rawLearnings ?? [];
+    return {
+      mode: "split",
+      title: "Memory",
+      eyebrow,
+      items: rawLearnings.length > 0
+        ? rawLearnings.map((entry) => ({
+            label: entry.sessionDate.slice(0, 10),
+            detail: firstLine(entry.content),
+          }))
+        : [{ label: "No raw learnings", selectable: false, tone: "muted" }],
+      selectedIndex: Math.min(state.modal.selectedItemIndex, Math.max(0, rawLearnings.length - 1)),
+      detailItems: buildLearningDetailItems(memory, rawLearnings[state.modal.selectedItemIndex]),
+      footer: buildTabbedOverlayFooter(returnTarget),
+      returnTarget,
+      renderSpec: buildOverlayRenderSpec("memory"),
+    };
+  }
+
+  const assertions = memory?.ratchetSuite.assertions ?? [];
+  return {
+    mode: "split",
+    title: "Memory",
+    eyebrow,
+    items: assertions.length > 0
+      ? assertions.map((assertion) => ({
+          label: assertion.rule,
+          detail: assertion.check,
+        }))
+      : [{ label: "No ratchet assertions", selectable: false, tone: "muted" }],
+    selectedIndex: Math.min(state.modal.selectedItemIndex, Math.max(0, assertions.length - 1)),
+    detailItems: buildRatchetDetailItems(memory, assertions[state.modal.selectedItemIndex]),
+    footer: buildTabbedOverlayFooter(returnTarget),
+    returnTarget,
+    renderSpec: buildOverlayRenderSpec("memory"),
+  };
+}
+
+function buildGraphModal(
+  state: Extract<AppState, { modal: Extract<AppState["modal"], { kind: "graph" }> }>,
+  returnTarget: "command-palette" | undefined,
+): ModalOptions {
+  const graphContext = state.snapshot.memory?.graphContext;
+  const relationships = graphContext?.relationships ?? [];
+  const selectedRelationship = relationships[state.modal.selectedItemIndex];
+  return {
+    mode: "split",
+    title: "Project Graph",
+    eyebrow: "Cross-project relationships and impact analysis.",
+    items: relationships.length > 0
+      ? relationships.map((relationship) => ({
+          label: `${relationship.direction === "outgoing" ? "-->" : "<--"} ${relationship.project.name}`,
+          detail: `${relationship.edge.relation}${relationship.edge.detail ? ` · ${relationship.edge.detail}` : ""}`,
+        }))
+      : [{ label: "No related projects", selectable: false, tone: "muted" }],
+    selectedIndex: Math.min(state.modal.selectedItemIndex, Math.max(0, relationships.length - 1)),
+    detailItems: buildGraphDetailItems(graphContext, selectedRelationship),
+    footer: buildListOverlayFooter(returnTarget),
+    returnTarget,
+    renderSpec: buildOverlayRenderSpec("graph"),
+  };
+}
+
+function buildMemoryTabs(state: Extract<AppState, { modal: Extract<AppState["modal"], { kind: "memory" }> }>): string {
+  const tabs = ["overview", "corrections", "learnings", "ratchet"] as const;
+  return tabs.map((tab) => tab === state.modal.tab ? `[${tab}]` : tab).join(" ");
+}
+
+function buildMemoryHelpText(): string {
+  return "Tab or [ ] switch tabs. Up and Down move through saved items.";
+}
+
+function buildTabbedOverlayFooter(returnTarget: "command-palette" | undefined): string {
+  return returnTarget === "command-palette"
+    ? "Tab cycle tabs · Left back · Esc close"
+    : "Tab cycle tabs · Esc close";
+}
+
+function buildListOverlayFooter(returnTarget: "command-palette" | undefined): string {
+  return returnTarget === "command-palette"
+    ? "Use arrows · Left back · Esc close"
+    : "Use arrows · Esc close";
+}
+
+function buildMemoryOverviewItems(memory: MissionControlSnapshot["memory"]) {
+  if (!memory) {
+    return [{ text: "No memory system data available", tone: "muted" as const }];
+  }
+
+  return [
+    { text: "Corrections", section: "Corrections", tone: "accent" as const },
+    { text: `${memory.stats.corrections.total} total · ${memory.stats.corrections.hard} hard · ${memory.stats.corrections.soft} soft` },
+    { text: "" },
+    { text: "Learnings", section: "Learnings", tone: "accent" as const },
+    { text: `${memory.stats.learnings.rawCount} raw entries` },
+    { text: memory.stats.learnings.compiledAt ? `Compiled ${memory.stats.learnings.compiledAt}` : "Not compiled", tone: memory.stats.learnings.compiledAt ? undefined : "muted" },
+    ...(memory.stats.learnings.staleDays !== undefined ? [{ text: `${memory.stats.learnings.staleDays} day(s) stale` }] : []),
+    { text: "" },
+    { text: "Ratchet", section: "Ratchet", tone: "accent" as const },
+    { text: `${memory.stats.ratchet.assertions} assertion(s)` },
+    { text: memory.stats.ratchet.lastResult ? `Last result: ${memory.stats.ratchet.lastResult}` : "No ratchet run recorded", tone: memory.stats.ratchet.lastResult ? undefined : "muted" },
+    { text: "" },
+    { text: "Project Graph", section: "Graph", tone: "accent" as const },
+    { text: `${memory.stats.graph.projects} project(s) · ${memory.stats.graph.links} link(s)` },
+  ];
+}
+
+function buildCorrectionDetailItems(correction: NonNullable<MissionControlSnapshot["memory"]>["corrections"][number] | undefined) {
+  if (!correction) {
+    return [{ text: "Choose a correction to inspect it.", tone: "muted" as const }];
+  }
+
+  return [
+    { text: correction.rule, section: "Rule", tone: "accent" as const, style: "block" as const },
+    { text: correction.source, section: "Source" },
+    { text: correction.trigger.keywords.join(", ") || "none", section: "Keywords" },
+    { text: correction.trigger.fileGlobs.join(", ") || "none", section: "Globs" },
+    { text: correction.severity.toUpperCase(), section: "Severity" },
+    { text: correction.promotedToRatchet ? `Promoted ${correction.promotedToRatchet}` : "Not promoted", section: "Ratchet" },
+    { text: correction.createdAt, section: "Created" },
+    { text: correction.updatedAt, section: "Updated" },
+  ];
+}
+
+function buildLearningDetailItems(
+  memory: MissionControlSnapshot["memory"],
+  selectedLearning: NonNullable<MissionControlSnapshot["memory"]>["rawLearnings"][number] | undefined,
+) {
+  if (!memory) {
+    return [{ text: "No learning data available.", tone: "muted" as const }];
+  }
+
+  return [
+    ...(selectedLearning
+      ? [
+          { text: selectedLearning.sessionDate, section: "Selected entry", tone: "accent" as const, style: "block" as const },
+          { text: selectedLearning.branch ?? "no branch" },
+          { text: selectedLearning.content },
+          { text: "" },
+        ]
+      : [{ text: "Choose a raw learning entry.", tone: "muted" as const }]),
+    { text: "Compiled summary", section: "Compiled" },
+    ...(memory.compiledLearnings
+      ? [
+          { text: `Compiled ${memory.compiledLearnings.compiledAt}` },
+          { text: `${memory.compiledLearnings.rawCount} raw entries included` },
+          { text: memory.compiledLearnings.summary },
+        ]
+      : [
+          { text: "Not compiled yet", tone: "muted" as const },
+          { text: `${memory.rawLearnings.length} raw entr${memory.rawLearnings.length === 1 ? "y" : "ies"} waiting` },
+        ]),
+  ];
+}
+
+function buildRatchetDetailItems(
+  memory: MissionControlSnapshot["memory"],
+  assertion: NonNullable<MissionControlSnapshot["memory"]>["ratchetSuite"]["assertions"][number] | undefined,
+) {
+  if (!memory) {
+    return [{ text: "No ratchet data available.", tone: "muted" as const }];
+  }
+
+  return [
+    ...(assertion
+      ? [
+          { text: assertion.rule, section: "Assertion", tone: "accent" as const, style: "block" as const },
+          { text: assertion.check, section: "Check" },
+          { text: assertion.correctionId, section: "Correction" },
+          { text: assertion.createdAt, section: "Created" },
+          { text: "" },
+        ]
+      : [{ text: "Choose a ratchet assertion.", tone: "muted" as const }]),
+    { text: "Baseline", section: "Baseline" },
+    ...(memory.ratchetBaseline
+      ? [
+          { text: `Pass count: ${memory.ratchetBaseline.passCount}` },
+          { text: `Last run: ${memory.ratchetBaseline.lastRunAt}` },
+        ]
+      : [{ text: "No baseline recorded", tone: "muted" as const }]),
+  ];
+}
+
+function buildGraphDetailItems(
+  graphContext: NonNullable<MissionControlSnapshot["memory"]>["graphContext"] | undefined,
+  relationship: NonNullable<NonNullable<MissionControlSnapshot["memory"]>["graphContext"]>["relationships"][number] | undefined,
+) {
+  if (!graphContext) {
+    return [{ text: "No graph data available.", tone: "muted" as const }];
+  }
+
+  return [
+    { text: graphContext.currentProject?.name ?? "Current project", section: "Current project", tone: "accent" as const, style: "block" as const },
+    { text: graphContext.currentProject?.path ?? "unknown path" },
+    ...(graphContext.currentProject?.role ? [{ text: graphContext.currentProject.role }] : []),
+    { text: "" },
+    ...(relationship
+      ? [
+          { text: relationship.project.name, section: "Selected relationship" },
+          { text: relationship.project.path },
+          ...(relationship.project.role ? [{ text: `Role: ${relationship.project.role}` }] : []),
+          { text: `${relationship.direction} · ${relationship.edge.relation}` },
+          ...(relationship.edge.detail ? [{ text: relationship.edge.detail }] : []),
+        ]
+      : [{ text: "Choose a related project.", tone: "muted" as const }]),
+    { text: "" },
+    { text: `${graphContext.totalProjects} project(s) · ${graphContext.totalEdges} link(s)`, section: "Summary" },
+  ];
+}
+
+function firstLine(text: string): string {
+  return text.split("\n").map((line) => line.trim()).find((line) => line.length > 0) ?? "";
 }
 
 function getFeatureActionFooter(modal: Extract<AppState["modal"], { kind: "feature-action" }>): string {
@@ -920,12 +1183,14 @@ function formatTaskStatus(status: keyof typeof FEATURE_TASK_STATUS_LABEL): strin
   return FEATURE_TASK_STATUS_LABEL[status].toLowerCase();
 }
 
-export function isSelectableListModal(kind: AppState["modal"]["kind"]): kind is "feature-browser" | "handoffs" | "processes" | "dependencies" | "workers" {
+export function isSelectableListModal(kind: AppState["modal"]["kind"]): kind is "feature-browser" | "handoffs" | "processes" | "dependencies" | "workers" | "memory" | "graph" {
   return kind === "feature-browser"
     || kind === "handoffs"
     || kind === "processes"
     || kind === "workers"
-    || kind === "dependencies";
+    || kind === "dependencies"
+    || kind === "memory"
+    || kind === "graph";
 }
 
 interface CommandPaletteItem {
@@ -987,6 +1252,10 @@ export function actionForMissionControlCommand(id: MissionControlCommandId): Act
       return { type: "open-processes" };
     case "workers":
       return { type: "open-workers" };
+    case "memory":
+      return { type: "open-memory" };
+    case "graph":
+      return { type: "open-graph" };
     case "exit":
       return { type: "quit" };
   }

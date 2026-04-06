@@ -115,25 +115,33 @@ export function registerMissionControlCommand(program: Command): void {
         }
 
       const services = getServices();
-      const snapshotDeps = {
-        missionStore: services.missionStore,
-        featureStore: services.featureStore,
-        assertionStore: services.assertionStore,
-        checkpointStore: services.checkpointStore,
+        const snapshotDeps = {
+          missionStore: services.missionStore,
+          featureStore: services.featureStore,
+          assertionStore: services.assertionStore,
+          checkpointStore: services.checkpointStore,
         handoffStore: services.handoffStore,
         config: services.config,
           cass: services.cass,
+            git: services.git,
+            runtimeStore: services.runtimeStore,
+            runtimeEventStore: services.runtimeEventStore,
+            correctionStore: services.correctionStore,
+            learningStore: services.learningStore,
+            ratchetStore: services.ratchetStore,
+            projectGraphStore: services.projectGraphStore,
+            cwd: process.cwd(),
+          };
+        const homeSnapshotDeps = {
+          handoffStore: services.handoffStore,
+          config: services.config,
+          cass: services.cass,
           git: services.git,
-          runtimeStore: services.runtimeStore,
-          runtimeEventStore: services.runtimeEventStore,
-          cwd: process.cwd(),
+          correctionStore: services.correctionStore,
+          learningStore: services.learningStore,
+          ratchetStore: services.ratchetStore,
+          projectGraphStore: services.projectGraphStore,
         };
-      const homeSnapshotDeps = {
-        handoffStore: services.handoffStore,
-        config: services.config,
-        cass: services.cass,
-        git: services.git,
-      };
 
         const readSnapshotLoader = createMissionControlSnapshotLoader(
           snapshotDeps,

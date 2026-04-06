@@ -126,6 +126,7 @@ export interface MaestroConfig {
   readonly supervision?: import("./worker-types.js").SupervisionConfig;
   readonly parallel?: import("./worker-types.js").ParallelConfig;
   readonly ui?: UiConfig;
+  readonly memory?: import("./memory-types.js").MemoryConfig;
 }
 
 export interface CassSearchResult {

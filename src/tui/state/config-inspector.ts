@@ -28,6 +28,7 @@ const KNOWN_TABS: readonly MissionControlConfigTab[] = [
   "workers",
   "plan",
   "doctor",
+  "memory",
 ];
 
 const TAB_LABELS: Readonly<Record<MissionControlConfigTab, string>> = {
@@ -39,6 +40,7 @@ const TAB_LABELS: Readonly<Record<MissionControlConfigTab, string>> = {
   workers: "workers",
   plan: "next",
   doctor: "problems",
+  memory: "memory",
 };
 
 const KNOWN_AGENT_OPTIONS = [
@@ -111,7 +113,8 @@ export function buildConfigInspector(
     defaults: buildScopeRows("default", defaults, effective, workerSlugs, layers.effective.workers, features, workerHealthBySlug),
     workers: buildWorkerRows(layers.effective, features, workerHealthBySlug),
     plan: buildPlanRows(layers.effective, features),
-      doctor: buildDoctorRows(inspectionChecks, layers.errors),
+        doctor: buildDoctorRows(inspectionChecks, layers.errors),
+        memory: buildMemoryConfigRows(effective, defaults, global, project, workerSlugs),
     } satisfies Record<MissionControlConfigTab, readonly MissionControlConfigRow[]>;
 
   return {
@@ -590,6 +593,38 @@ function getEditMeta(
     };
   }
 
+  if (keyPath === "memory.corrections.matching") {
+    return {
+      editKind: "enum",
+      options: ["keyword", "ast-grep", "both"],
+      description: "Choose how Maestro matches saved corrections to the current task.",
+    };
+  }
+
+  if (keyPath === "memory.corrections.auto_capture") {
+    return {
+      editKind: "enum",
+      options: ["prompt", "auto", "off"],
+      description: "Choose when Maestro captures corrections automatically.",
+    };
+  }
+
+  if (keyPath === "memory.corrections.severity_default") {
+    return {
+      editKind: "enum",
+      options: ["soft", "hard"],
+      description: "Choose the default severity for newly captured corrections.",
+    };
+  }
+
+  if (keyPath === "memory.ratchet.enforcement") {
+    return {
+      editKind: "enum",
+      options: ["warn", "block"],
+      description: "Choose whether ratchet failures warn or block progress.",
+    };
+  }
+
   if (keyPath === "sessionDetection.staleMinutes") {
     return {
       editKind: "number-preset",
@@ -603,6 +638,22 @@ function getEditMeta(
       editKind: "number-preset",
       options: ["0", "1", "2", "3"],
       description: "Retry attempts allowed for feature execution.",
+    };
+  }
+
+  if (keyPath === "memory.learnings.compile_threshold") {
+    return {
+      editKind: "number-preset",
+      options: ["1", "3", "5", "8", "10"],
+      description: "How many raw learning entries should accumulate before prompting compilation.",
+    };
+  }
+
+  if (keyPath === "memory.learnings.max_age_days") {
+    return {
+      editKind: "number-preset",
+      options: ["3", "7", "14", "30"],
+      description: "How long compiled learnings remain fresh before Maestro warns that they are stale.",
     };
   }
 
@@ -673,21 +724,98 @@ function getRowCopy(keyPath: string, tab: MissionControlConfigTab | "project" | 
         impactText: "Turning this on can speed up runs when tasks do not conflict.",
         section: tab === "overview" ? "Quick settings" : undefined,
       };
-    case "ui.missionControl.backgroundMode":
-      return {
-        label: "Background mode",
-        summary: tab === "project"
-          ? "This setting is global-only. Project config values are ignored."
-          : "Choose whether Mission Control uses solid panel fills or the terminal background.",
-        impactText: tab === "project"
-          ? "Move this value to global config if you want it to affect Mission Control."
-          : "Terminal mode shows your terminal background through normal dashboard chrome; modals stay solid.",
-        section: tab === "overview" ? "Quick settings" : undefined,
-      };
-    default:
-      return {
-        label: humanizeConfigKey(keyPath),
-        summary: `Controls ${humanizeConfigKey(keyPath).toLowerCase()}.`,
+      case "ui.missionControl.backgroundMode":
+        return {
+          label: "Background mode",
+          summary: tab === "project"
+            ? "This setting is global-only. Project config values are ignored."
+            : "Choose whether Mission Control uses solid panel fills or the terminal background.",
+          impactText: tab === "project"
+            ? "Move this value to global config if you want it to affect Mission Control."
+            : "Terminal mode shows your terminal background through normal dashboard chrome; modals stay solid.",
+          section: tab === "overview" ? "Quick settings" : undefined,
+        };
+      case "memory.enabled":
+        return {
+          label: "Memory enabled",
+          summary: "Master toggle for the memory system.",
+          impactText: "Disabling this turns off correction recall, learnings, ratchet checks, and graph context.",
+          section: "Memory",
+        };
+      case "memory.corrections.enabled":
+        return {
+          label: "Corrections enabled",
+          summary: "Capture and recall corrections for future tasks.",
+          impactText: "Turning this off stops Maestro from saving or matching corrections.",
+          section: "Corrections",
+        };
+      case "memory.corrections.matching":
+        return {
+          label: "Matching",
+          summary: "How Maestro matches saved corrections to the current task.",
+          impactText: "Broader matching recalls more rules; narrower matching reduces noise.",
+          section: "Corrections",
+        };
+      case "memory.corrections.auto_capture":
+        return {
+          label: "Auto capture",
+          summary: "When Maestro should capture corrections automatically.",
+          impactText: "Prompt is safer; auto is faster; off requires explicit capture commands.",
+          section: "Corrections",
+        };
+      case "memory.corrections.severity_default":
+        return {
+          label: "Default severity",
+          summary: "Default severity for new corrections.",
+          impactText: "Hard corrections are always recalled even when the task match is weak.",
+          section: "Corrections",
+        };
+      case "memory.learnings.enabled":
+        return {
+          label: "Learnings enabled",
+          summary: "Store raw session learnings for later compilation.",
+          impactText: "Turning this off stops the learning log from growing.",
+          section: "Learnings",
+        };
+      case "memory.learnings.compile_threshold":
+        return {
+          label: "Compile threshold",
+          summary: "How many raw learning entries should accumulate before compilation is suggested.",
+          impactText: "Lower values compile sooner; higher values keep more raw history around.",
+          section: "Learnings",
+        };
+      case "memory.learnings.max_age_days":
+        return {
+          label: "Max age",
+          summary: "How long compiled learnings remain fresh.",
+          impactText: "Older compiled learnings trigger stale warnings in linting and the TUI.",
+          section: "Learnings",
+        };
+      case "memory.ratchet.enabled":
+        return {
+          label: "Ratchet enabled",
+          summary: "Enable the regression ratchet system.",
+          impactText: "Promoted corrections become tracked checks when the ratchet is enabled.",
+          section: "Ratchet",
+        };
+      case "memory.ratchet.enforcement":
+        return {
+          label: "Enforcement",
+          summary: "How ratchet failures are handled.",
+          impactText: "Warn keeps the run moving; block stops progress until the regression is fixed.",
+          section: "Ratchet",
+        };
+      case "memory.graph.enabled":
+        return {
+          label: "Project graph",
+          summary: "Enable cross-project relationship context.",
+          impactText: "Turning this off removes project-link context from memory and TUI graph views.",
+          section: "Graph",
+        };
+      default:
+        return {
+          label: humanizeConfigKey(keyPath),
+          summary: `Controls ${humanizeConfigKey(keyPath).toLowerCase()}.`,
         impactText: "Changing this will affect future Maestro behavior.",
       };
   }
@@ -729,11 +857,13 @@ function stringifyConfigValue(
   editKind: MissionControlConfigEditKind,
   value: unknown,
 ): string {
-  const raw = stringifyConfigValue(keyPath, editKind, value);
-    if (keyPath === "supervision.level" && raw === "mid") return "medium";
-    if (keyPath === "ui.missionControl.backgroundMode" && raw === "terminal") return "terminal background";
-    return raw;
-  }
+    const raw = stringifyConfigValue(keyPath, editKind, value);
+      if (keyPath === "supervision.level" && raw === "mid") return "medium";
+      if (keyPath === "ui.missionControl.backgroundMode" && raw === "terminal") return "terminal background";
+      if (keyPath === "memory.learnings.compile_threshold" && raw !== "unset") return `${raw} entries`;
+      if (keyPath === "memory.learnings.max_age_days" && raw !== "unset") return `${raw} days`;
+      return raw;
+    }
 
 function buildIgnoredProjectOverrideCheck(keyPath: string): DoctorCheck {
   return {
@@ -905,4 +1035,51 @@ function stringifyValue(value: unknown): string {
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "boolean") return String(value);
   return JSON.stringify(value);
+}
+
+function buildMemoryConfigRows(
+  effective: Readonly<Record<string, unknown>>,
+  defaults: Readonly<Record<string, unknown>>,
+  global: Readonly<Record<string, unknown>>,
+  project: Readonly<Record<string, unknown>>,
+  workerSlugs: readonly string[],
+): readonly MissionControlConfigRow[] {
+  const memoryKeys = [
+    "memory.enabled",
+    "memory.corrections.enabled",
+    "memory.corrections.matching",
+    "memory.corrections.auto_capture",
+    "memory.corrections.severity_default",
+    "memory.learnings.enabled",
+    "memory.learnings.compile_threshold",
+    "memory.learnings.max_age_days",
+    "memory.ratchet.enabled",
+    "memory.ratchet.enforcement",
+    "memory.graph.enabled",
+  ] as const;
+
+  if (!memoryKeys.some((keyPath) => effective[keyPath] !== undefined || defaults[keyPath] !== undefined || global[keyPath] !== undefined || project[keyPath] !== undefined)) {
+      return [buildReadonlyRow({
+        keyPath: "memory",
+        label: "Memory system",
+        section: "Memory",
+      rawValue: "not configured",
+      displayValue: "Not configured",
+      summary: "Memory system is using defaults.",
+      impactText: "Add memory config to customize behavior.",
+      source: "default",
+    })];
+  }
+
+  return memoryKeys.map((keyPath) =>
+    buildConfigValueRow(
+      keyPath,
+      effective[keyPath],
+      defaults[keyPath],
+      global[keyPath],
+      project[keyPath],
+      workerSlugs,
+      "memory",
+    )
+  );
 }

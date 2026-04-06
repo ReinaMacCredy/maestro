@@ -24,6 +24,17 @@ import { registerMilestoneCommand } from "./commands/milestone.command.js";
 import { registerCheckpointCommand } from "./commands/checkpoint.command.js";
 import { registerMissionControlCommand } from "./commands/mission-control.command.js";
 import { registerA2aCommand } from "./commands/a2a.command.js";
+import { registerMemoryCorrectCommand } from "./commands/memory-correct.command.js";
+import { registerMemoryRecallCommand } from "./commands/memory-recall.command.js";
+import { registerMemorySearchCommand } from "./commands/memory-search.command.js";
+import { registerMemoryLearnCommand } from "./commands/memory-learn.command.js";
+import { registerMemoryCompileCommand } from "./commands/memory-compile.command.js";
+import { registerRatchetCheckCommand } from "./commands/ratchet-check.command.js";
+import { registerRatchetPromoteCommand } from "./commands/ratchet-promote.command.js";
+import { registerMemoryStatsCommand } from "./commands/memory-stats.command.js";
+import { registerMemoryLintCommand } from "./commands/memory-lint.command.js";
+import { registerGraphLinkCommand } from "./commands/graph-link.command.js";
+import { registerGraphContextCommand } from "./commands/graph-context.command.js";
 
 export const program = new Command()
   .name("maestro")
@@ -56,6 +67,17 @@ registerMilestoneCommand(program);
 registerCheckpointCommand(program);
 registerMissionControlCommand(program);
 registerA2aCommand(program);
+registerMemoryCorrectCommand(program);
+registerMemoryRecallCommand(program);
+registerMemorySearchCommand(program);
+registerMemoryLearnCommand(program);
+registerMemoryCompileCommand(program);
+registerRatchetCheckCommand(program);
+registerRatchetPromoteCommand(program);
+registerMemoryStatsCommand(program);
+registerMemoryLintCommand(program);
+registerGraphLinkCommand(program);
+registerGraphContextCommand(program);
 
 async function main(): Promise<void> {
   try {

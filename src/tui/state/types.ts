@@ -10,6 +10,16 @@ import type {
   MilestoneProfile,
 } from "../../domain/mission-types.js";
 import type { DoctorCheck, GitFileChange, MissionControlBackgroundMode } from "../../domain/types.js";
+import type {
+  CompiledLearnings,
+  Correction,
+  MemoryStats,
+  ProjectEdge,
+  ProjectNode,
+  RatchetBaseline,
+  RatchetSuite,
+  RawLearningEntry,
+} from "../../domain/memory-types.js";
 import type { RuntimeState } from "../../domain/runtime-types.js";
 import type { TransportType } from "../../domain/worker-types.js";
 
@@ -85,7 +95,8 @@ export type MissionControlConfigTab =
   | "defaults"
   | "workers"
   | "plan"
-  | "doctor";
+  | "doctor"
+  | "memory";
 
 export type MissionControlConfigValueSource =
   | "project"
@@ -228,6 +239,29 @@ export interface MissionOverviewPane {
   dependencyMap: readonly DependencyMapRow[];
 }
 
+export interface MissionControlProjectRelationship {
+  project: ProjectNode;
+  direction: "outgoing" | "incoming";
+  edge: ProjectEdge;
+}
+
+export interface MissionControlGraphContext {
+  currentProject?: ProjectNode;
+  relationships: readonly MissionControlProjectRelationship[];
+  totalProjects: number;
+  totalEdges: number;
+}
+
+export interface MissionControlMemorySnapshot {
+  stats: MemoryStats;
+  corrections: readonly Correction[];
+  rawLearnings: readonly RawLearningEntry[];
+  compiledLearnings?: CompiledLearnings;
+  ratchetSuite: RatchetSuite;
+  ratchetBaseline?: RatchetBaseline;
+  graphContext?: MissionControlGraphContext;
+}
+
 export interface MissionControlSnapshot {
   mode: MissionControlMode;
   // Header
@@ -268,6 +302,10 @@ export interface MissionControlSnapshot {
   // Footer state
   canPause: boolean;
   canResume: boolean;
+
+  // Memory system
+  memory?: MissionControlMemorySnapshot | null;
+  memoryStats?: MemoryStats | null;
 
   // Home mode
   home: MissionControlHomeState | null;

@@ -70,11 +70,16 @@ describe("parseKeypress", () => {
     });
   });
 
-  describe("special keys", () => {
-    it("parses enter (0x0d)", () => {
-      const keys = parseKeypress(bytes(0x0d));
-      expect(keys).toEqual([{ type: "enter" }]);
-    });
+    describe("special keys", () => {
+      it("parses tab", () => {
+        const keys = parseKeypress(bytes(0x09));
+        expect(keys).toEqual([{ type: "tab" }]);
+      });
+
+      it("parses enter (0x0d)", () => {
+        const keys = parseKeypress(bytes(0x0d));
+        expect(keys).toEqual([{ type: "enter" }]);
+      });
 
     it("parses newline as enter (0x0a)", () => {
       const keys = parseKeypress(bytes(0x0a));
@@ -92,11 +97,16 @@ describe("parseKeypress", () => {
     });
   });
 
-  describe("function keys", () => {
-    it("parses F1 (ESC [ 11 ~)", () => {
-      const keys = parseKeypress(bytes(0x1b, 0x5b, 0x31, 0x31, 0x7e));
-      expect(keys).toEqual([{ type: "function", n: 1 }]);
-    });
+    describe("function keys", () => {
+      it("parses shift+tab (ESC [ Z)", () => {
+        const keys = parseKeypress(bytes(0x1b, 0x5b, 0x5a));
+        expect(keys).toEqual([{ type: "backtab" }]);
+      });
+
+      it("parses F1 (ESC [ 11 ~)", () => {
+        const keys = parseKeypress(bytes(0x1b, 0x5b, 0x31, 0x31, 0x7e));
+        expect(keys).toEqual([{ type: "function", n: 1 }]);
+      });
 
     it("parses F5 (ESC [ 15 ~)", () => {
       const keys = parseKeypress(bytes(0x1b, 0x5b, 0x31, 0x35, 0x7e));

@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { buildHomeSnapshot, buildSnapshot, type SnapshotDeps } from "../../../src/tui/state/snapshot.js";
+import { FsCorrectionStoreAdapter } from "../../../src/adapters/correction-store.adapter.js";
+import { FsLearningStoreAdapter } from "../../../src/adapters/learning-store.adapter.js";
 import { FsMissionStoreAdapter } from "../../../src/adapters/mission-store.adapter.js";
 import { FsFeatureStoreAdapter } from "../../../src/adapters/feature-store.adapter.js";
 import { FsAssertionStoreAdapter } from "../../../src/adapters/assertion-store.adapter.js";
 import { FsCheckpointStoreAdapter } from "../../../src/adapters/checkpoint-store.adapter.js";
+import { FsRatchetStoreAdapter } from "../../../src/adapters/ratchet-store.adapter.js";
 import { FsRuntimeStoreAdapter } from "../../../src/adapters/runtime-store.adapter.js";
 import { FsRuntimeEventStoreAdapter } from "../../../src/adapters/runtime-event-store.adapter.js";
 import type { WorkerRuntime } from "../../../src/domain/runtime-types.js";
@@ -14,6 +17,7 @@ import type { CassPort } from "../../../src/ports/cass.port.js";
 import type { ConfigPort } from "../../../src/ports/config.port.js";
 import type { GitPort } from "../../../src/ports/git.port.js";
 import type { HandoffStorePort } from "../../../src/ports/handoff-store.port.js";
+import type { ProjectGraphStorePort } from "../../../src/ports/project-graph-store.port.js";
 
 let tmpDir: string;
 let deps: SnapshotDeps;
@@ -110,7 +114,7 @@ afterEach(async () => {
 });
 
 describe("buildSnapshot", () => {
-  it("returns correct featureProgress counts", async () => {
+    it("returns correct featureProgress counts", async () => {
     const plan = createSamplePlan();
     await writeFile(join(tmpDir, "plan.json"), JSON.stringify(plan));
     const { stdout } = await run(["mission", "create", "--file", join(tmpDir, "plan.json"), "--json"], tmpDir);
@@ -123,8 +127,79 @@ describe("buildSnapshot", () => {
     expect(snapshot.featureProgress.active).toBe(0);
     expect(snapshot.session?.branch).toBe("main");
     expect(snapshot.configSummary?.missionDirectory).toBe(`.maestro/missions/${missionId}`);
-    expect(snapshot.pendingHandoffs).toEqual([]);
-  }, 15_000);
+      expect(snapshot.pendingHandoffs).toEqual([]);
+    }, 15_000);
+
+    it("includes memory snapshot data when memory stores are available", async () => {
+      const plan = createSamplePlan();
+      await writeFile(join(tmpDir, "plan.json"), JSON.stringify(plan));
+      const { stdout } = await run(["mission", "create", "--file", join(tmpDir, "plan.json"), "--json"], tmpDir);
+      const missionId = JSON.parse(stdout).mission.id;
+
+      const correctionStore = new FsCorrectionStoreAdapter(tmpDir);
+      const learningStore = new FsLearningStoreAdapter(tmpDir);
+      const ratchetStore = new FsRatchetStoreAdapter(tmpDir);
+      const projectGraphStore: ProjectGraphStorePort = {
+        load: async () => ({
+          nodes: [
+            { name: basename(tmpDir), path: tmpDir, role: "cli" },
+            { name: "maestro-web", path: "/tmp/maestro-web", role: "frontend" },
+          ],
+          edges: [
+            { from: basename(tmpDir), to: "maestro-web", relation: "exposes", detail: "mcp-tools" },
+          ],
+        }),
+        save: async () => undefined,
+      };
+
+      await correctionStore.create({
+        rule: "Use bun, not npm",
+        source: "Plan verification",
+        trigger: { keywords: ["package", "install"], fileGlobs: ["package.json"] },
+        severity: "hard",
+      });
+      await learningStore.appendRaw({
+        sessionDate: "2026-04-06T00:00:00.000Z",
+        content: "Always wire snapshot data before building modal copy.",
+        branch: "feat/missionControl",
+      });
+      await learningStore.writeCompiled({
+        compiledAt: "2026-04-06T01:00:00.000Z",
+        summary: "Snapshot-backed memory UI is easier to verify.",
+        rawCount: 1,
+      });
+      await ratchetStore.writeSuite({
+        assertions: [{
+          id: "ratchet-1",
+          correctionId: "corr-1",
+          rule: "Use bun, not npm",
+          check: "rg -n \"npm\"",
+          createdAt: "2026-04-06T02:00:00.000Z",
+        }],
+      });
+      await ratchetStore.writeBaseline({
+        passCount: 1,
+        lastRunAt: "2026-04-06T03:00:00.000Z",
+      });
+
+      const snapshot = await buildSnapshot(
+        {
+          ...deps,
+          correctionStore,
+          learningStore,
+          ratchetStore,
+          projectGraphStore,
+        },
+        missionId,
+      );
+
+      expect(snapshot.memory?.stats.corrections.total).toBe(1);
+      expect(snapshot.memory?.corrections[0]?.rule).toBe("Use bun, not npm");
+      expect(snapshot.memory?.compiledLearnings?.summary).toContain("Snapshot-backed");
+      expect(snapshot.memory?.ratchetSuite.assertions).toHaveLength(1);
+      expect(snapshot.memory?.graphContext?.relationships).toHaveLength(1);
+      expect(snapshot.memoryStats?.graph.links).toBe(1);
+    }, 15_000);
 
   it("derives a dedicated statusProgress summary for the top strip", async () => {
     const plan = createSamplePlan();

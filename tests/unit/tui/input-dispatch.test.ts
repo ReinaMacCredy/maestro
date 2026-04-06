@@ -165,6 +165,30 @@ describe("keyToAction", () => {
       expect(keyToAction({ type: "char", char: "[" }, state)).toEqual({ type: "config-prev-tab" });
     });
 
+    it("switches memory tabs with tab keys", () => {
+      const state = createInitialState(SNAPSHOT);
+      state.modal = {
+        kind: "memory",
+        tab: "overview",
+        selectedItemIndex: 0,
+      };
+
+      expect(keyToAction({ type: "tab" }, state)).toEqual({ type: "memory-next-tab" });
+      expect(keyToAction({ type: "backtab" }, state)).toEqual({ type: "memory-prev-tab" });
+    });
+
+    it("maps Left Arrow to back for palette-launched memory overlays", () => {
+      const state = createInitialState(SNAPSHOT);
+      state.modal = {
+        kind: "memory",
+        tab: "overview",
+        selectedItemIndex: 0,
+        returnTarget: "command-palette",
+      };
+
+      expect(keyToAction({ type: "arrow", direction: "left" }, state)).toEqual({ type: "navigate", direction: "left" });
+    });
+
     it("opens config row finder with slash", () => {
       const state = createInitialState(SNAPSHOT);
       state.modal = {

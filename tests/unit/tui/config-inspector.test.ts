@@ -18,12 +18,33 @@ const layers: ConfigLayers = {
       level: "mid",
     },
   },
-  effective: {
-    execution: {
-      defaultWorker: "claude-code",
-      stopOnFailure: false,
-    },
-    workers: {
+    effective: {
+      execution: {
+        defaultWorker: "claude-code",
+        stopOnFailure: false,
+      },
+      memory: {
+        enabled: true,
+        corrections: {
+          enabled: true,
+          matching: "keyword",
+          auto_capture: "prompt",
+          severity_default: "soft",
+        },
+        learnings: {
+          enabled: true,
+          compile_threshold: 5,
+          max_age_days: 7,
+        },
+        ratchet: {
+          enabled: false,
+          enforcement: "warn",
+        },
+        graph: {
+          enabled: true,
+        },
+      },
+      workers: {
       codex: {
         enabled: true,
         transport: "cli",
@@ -49,24 +70,66 @@ const layers: ConfigLayers = {
       },
     },
   },
-  global: {
-    execution: {
-      defaultWorker: "codex",
-    },
-    ui: {
-      missionControl: {
-        backgroundMode: "terminal",
+    global: {
+      execution: {
+        defaultWorker: "codex",
+      },
+      memory: {
+        enabled: true,
+        corrections: {
+          enabled: true,
+          matching: "keyword",
+          auto_capture: "prompt",
+          severity_default: "soft",
+        },
+        learnings: {
+          enabled: true,
+          compile_threshold: 8,
+          max_age_days: 14,
+        },
+        ratchet: {
+          enabled: false,
+          enforcement: "warn",
+        },
+        graph: {
+          enabled: true,
+        },
+      },
+      ui: {
+        missionControl: {
+          backgroundMode: "terminal",
       },
     },
   },
-  project: {
-    execution: {
-      defaultWorker: "claude-code",
-      stopOnFailure: false,
-    },
-    supervision: {
-      level: "high",
-    },
+    project: {
+      execution: {
+        defaultWorker: "claude-code",
+        stopOnFailure: false,
+      },
+      memory: {
+        enabled: true,
+        corrections: {
+          enabled: true,
+          matching: "both",
+          auto_capture: "auto",
+          severity_default: "hard",
+        },
+        learnings: {
+          enabled: true,
+          compile_threshold: 5,
+          max_age_days: 7,
+        },
+        ratchet: {
+          enabled: true,
+          enforcement: "block",
+        },
+        graph: {
+          enabled: true,
+        },
+      },
+      supervision: {
+        level: "high",
+      },
     ui: {
       missionControl: {
         backgroundMode: "solid",
@@ -190,7 +253,7 @@ describe("buildConfigInspector", () => {
       });
     });
 
-    it("surfaces mission control background mode as a global-only setting", () => {
+  it("surfaces mission control background mode as a global-only setting", () => {
       const inspector = buildConfigInspector(layers, [], [], workerHealth);
       const overviewRow = inspector.rowsByTab.overview.find((row) => row.keyPath === "ui.missionControl.backgroundMode");
       const projectRow = inspector.rowsByTab.project.find((row) => row.keyPath === "ui.missionControl.backgroundMode");
@@ -204,7 +267,28 @@ describe("buildConfigInspector", () => {
       expect(projectRow).toMatchObject({
         editKind: "readonly",
       });
-      expect(projectRow?.description).toContain("global-only");
-      expect(doctorRow?.displayValueText).toContain("Background Mode");
+    expect(projectRow?.description).toContain("global-only");
+    expect(doctorRow?.displayValueText).toContain("Background Mode");
+  });
+
+  it("builds editable memory rows in the memory tab", () => {
+    const inspector = buildConfigInspector(layers, [], [], workerHealth);
+    const matchingRow = inspector.rowsByTab.memory.find((row) => row.keyPath === "memory.corrections.matching");
+    const thresholdRow = inspector.rowsByTab.memory.find((row) => row.keyPath === "memory.learnings.compile_threshold");
+    const ratchetRow = inspector.rowsByTab.memory.find((row) => row.keyPath === "memory.ratchet.enforcement");
+
+    expect(matchingRow).toMatchObject({
+      editKind: "enum",
+      displayValueText: "keyword",
+      source: "global",
+    });
+    expect(thresholdRow).toMatchObject({
+      editKind: "number-preset",
+      displayValueText: "5 entries",
+    });
+    expect(ratchetRow).toMatchObject({
+      editKind: "enum",
+      displayValueText: "warn",
     });
   });
+});

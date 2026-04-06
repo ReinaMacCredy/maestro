@@ -12,6 +12,10 @@ import type { RuntimeStorePort } from "../../src/ports/runtime-store.port.js";
 import type { RuntimeEventStorePort } from "../../src/ports/runtime-event-store.port.js";
 import type { ExecutionStorePort } from "../../src/ports/execution-store.port.js";
 import type { TransportPort } from "../../src/ports/transport.port.js";
+import type { CorrectionStorePort } from "../../src/ports/correction-store.port.js";
+import type { LearningStorePort } from "../../src/ports/learning-store.port.js";
+import type { RatchetStorePort } from "../../src/ports/ratchet-store.port.js";
+import type { ProjectGraphStorePort } from "../../src/ports/project-graph-store.port.js";
 import type {
   ConfigLayers,
   GitState,
@@ -23,6 +27,16 @@ import type {
   HandoffSession,
   NoteEntry,
 } from "../../src/domain/types.js";
+import type {
+  Correction,
+  CreateCorrectionInput,
+  CorrectionQuery,
+  RawLearningEntry,
+  CompiledLearnings,
+  RatchetSuite,
+  RatchetBaseline,
+  ProjectGraph,
+} from "../../src/domain/memory-types.js";
 import type {
   Mission,
   Feature,
@@ -515,6 +529,113 @@ export function mockTransport(
         filesChanged: [],
         durationMs: 1,
       };
+    },
+  };
+}
+
+export function mockCorrectionStore(
+  initial: Correction[] = [],
+): CorrectionStorePort {
+  const corrections = new Map<string, Correction>();
+  let counter = initial.length;
+
+  for (const c of initial) {
+    corrections.set(c.id, c);
+  }
+
+  return {
+    create: async (input: CreateCorrectionInput) => {
+      counter++;
+      const now = new Date().toISOString();
+      const id = `corr-${counter}`;
+      const correction: Correction = {
+        id,
+        rule: input.rule,
+        source: input.source,
+        trigger: input.trigger,
+        severity: input.severity,
+        createdAt: now,
+        updatedAt: now,
+      };
+      corrections.set(id, correction);
+      return correction;
+    },
+    get: async (id: string) => corrections.get(id),
+    list: async () => [...corrections.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    search: async (query: CorrectionQuery) => {
+      const all = [...corrections.values()];
+      return all.filter((c) => {
+        if (query.keywords?.length) {
+          const match = query.keywords.some((qk) =>
+            c.trigger.keywords.some((tk) => tk.toLowerCase().includes(qk.toLowerCase())),
+          );
+          if (!match) return false;
+        }
+        if (query.text) {
+          const text = query.text.toLowerCase();
+          if (!c.rule.toLowerCase().includes(text) && !c.source.toLowerCase().includes(text)) return false;
+        }
+        return true;
+      });
+    },
+    update: async (id: string, input: Partial<Correction>) => {
+      const existing = corrections.get(id);
+      if (!existing) return undefined;
+      const updated: Correction = { ...existing, ...input, id: existing.id, updatedAt: new Date().toISOString() };
+      corrections.set(id, updated);
+      return updated;
+    },
+    remove: async (id: string) => corrections.delete(id),
+  };
+}
+
+export function mockLearningStore(
+  initial: RawLearningEntry[] = [],
+): LearningStorePort {
+  const raw = [...initial];
+  let compiled: CompiledLearnings | undefined;
+
+  return {
+    appendRaw: async (entry: RawLearningEntry) => {
+      raw.push(entry);
+    },
+    listRaw: async () => [...raw],
+    rawCount: async () => raw.length,
+    readCompiled: async () => compiled,
+    writeCompiled: async (c: CompiledLearnings) => {
+      compiled = c;
+    },
+  };
+}
+
+export function mockRatchetStore(
+  initialSuite?: RatchetSuite,
+  initialBaseline?: RatchetBaseline,
+): RatchetStorePort {
+  let suite: RatchetSuite = initialSuite ?? { assertions: [] };
+  let baseline: RatchetBaseline | undefined = initialBaseline;
+
+  return {
+    getSuite: async () => suite,
+    writeSuite: async (s: RatchetSuite) => {
+      suite = s;
+    },
+    getBaseline: async () => baseline,
+    writeBaseline: async (b: RatchetBaseline) => {
+      baseline = b;
+    },
+  };
+}
+
+export function mockProjectGraphStore(
+  initial?: ProjectGraph,
+): ProjectGraphStorePort {
+  let graph: ProjectGraph = initial ?? { nodes: [], edges: [] };
+
+  return {
+    load: async () => graph,
+    save: async (g: ProjectGraph) => {
+      graph = g;
     },
   };
 }

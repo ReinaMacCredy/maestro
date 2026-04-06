@@ -62,7 +62,9 @@ export type OverlayModalKind =
   | "dependencies"
   | "handoffs"
   | "config"
-  | "processes";
+  | "processes"
+  | "memory"
+  | "graph";
 
 export interface ModalRow {
   readonly label?: string;
@@ -263,6 +265,24 @@ export function buildOverlayRenderSpec(kind: OverlayModalKind): OverlayRenderSpe
         selection: STANDARD_SELECTION,
         text: STANDARD_TEXT,
         layout: STANDARD_LAYOUT,
+      };
+    case "memory":
+      return {
+        family: "split",
+        sizePreset: "wide",
+        chrome: STANDARD_CHROME,
+        selection: STANDARD_SELECTION,
+        text: STANDARD_TEXT,
+        layout: { ...WIDE_LAYOUT, splitRatio: [40, 60] },
+      };
+    case "graph":
+      return {
+        family: "split",
+        sizePreset: "standard",
+        chrome: STANDARD_CHROME,
+        selection: STANDARD_SELECTION,
+        text: STANDARD_TEXT,
+        layout: { ...STANDARD_LAYOUT, splitRatio: [40, 60] },
       };
     case "feature-action":
     default:
