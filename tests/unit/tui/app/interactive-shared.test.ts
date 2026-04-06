@@ -55,6 +55,6 @@ describe("getSnapshotPollIntervalMs", () => {
   it("keeps the default polling interval when there is no active runtime", () => {
     const interval = getSnapshotPollIntervalMs(makeSnapshot());
 
-    expect(interval).toBe(2_000);
+    expect(interval).toBe(5_000);
   });
 });

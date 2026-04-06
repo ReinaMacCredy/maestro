@@ -14,5 +14,5 @@ export function getSnapshotPollIntervalMs(snapshot: MissionControlSnapshot): num
     || process.runtimeState === "stale"
     || process.runtimeState === "recoverable"
   );
-  return hasActiveRuntime ? 1_000 : 2_000;
+  return hasActiveRuntime ? 1_000 : 5_000;
 }

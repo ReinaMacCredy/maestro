@@ -10,7 +10,8 @@
  */
 import type { GitPort } from "../ports/git.port.js";
 import type { CassPort } from "../ports/cass.port.js";
-import type { GitState, CassSearchResponse } from "../domain/types.js";
+import type { ConfigPort, ConfigLayers, ConfigScope } from "../ports/config.port.js";
+import type { GitState, CassSearchResponse, MaestroConfig } from "../domain/types.js";
 
 interface CacheEntry<T> {
   value: T;
@@ -97,4 +98,63 @@ export class CachingCassPort implements CassPort {
   ): Promise<CassSearchResponse> {
     return this.inner.search(query, options);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Config
+// ---------------------------------------------------------------------------
+
+const CONFIG_LAYERS_TTL_MS = 10_000;
+
+export class CachingConfigPort implements ConfigPort {
+  private layersCache: CacheEntry<ConfigLayers> | undefined;
+
+  constructor(
+    private readonly inner: ConfigPort,
+    private readonly layersTtlMs = CONFIG_LAYERS_TTL_MS,
+  ) {}
+
+  async load(projectDir: string): Promise<MaestroConfig> {
+    const layers = await this.loadLayers(projectDir);
+    return layers.effective;
+  }
+
+  async loadLayers(projectDir: string): Promise<ConfigLayers> {
+    const hit = cached(this.layersCache);
+    if (hit !== undefined) return hit;
+
+    const value = await this.inner.loadLayers(projectDir);
+    this.layersCache = { value, expiresAt: Date.now() + this.layersTtlMs };
+    return value;
+  }
+
+  async write(scope: ConfigScope, projectDir: string, config: MaestroConfig): Promise<void> {
+    this.layersCache = undefined; // invalidate on write
+    return this.inner.write(scope, projectDir, config);
+  }
+
+  async exists(scope: ConfigScope, projectDir: string): Promise<boolean> {
+    return this.inner.exists(scope, projectDir);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Bun.which() cache
+// ---------------------------------------------------------------------------
+
+const WHICH_TTL_MS = 120_000;
+const whichCache = new Map<string, CacheEntry<string | null>>();
+
+/**
+ * Cached wrapper around Bun.which().
+ * Bun.which() resolves PATH on each call; caching avoids repeated lookups
+ * inside the TUI polling loop.
+ */
+export function cachedWhich(command: string): string | null {
+  const entry = whichCache.get(command);
+  if (entry && entry.expiresAt > Date.now()) return entry.value;
+
+  const value = Bun.which(command) ?? null;
+  whichCache.set(command, { value, expiresAt: Date.now() + WHICH_TTL_MS });
+  return value;
 }

@@ -3,6 +3,7 @@ import { listIgnoredProjectConfigKeys, isGlobalOnlyConfigKey } from "../../domai
 import type { DoctorCheck, MaestroConfig } from "../../domain/types.js";
 import type { WorkerConfig } from "../../domain/worker-types.js";
 import { formatWorkerLabel, getWorkerGuidance } from "../../domain/worker-presentation.js";
+import { cachedWhich } from "../../lib/snapshot-poll-cache.js";
 import type { ConfigScope, ConfigLayers } from "../../ports/config.port.js";
 import type {
   MissionControlConfigEditKind,
@@ -969,8 +970,8 @@ function fallbackWorkerHealth(
     return {
       slug,
       label: formatWorkerLabel(slug),
-      status: Bun.which(worker.command) ? "ready" : "missing",
-      detail: Bun.which(worker.command) ? "ready to run" : `Command not found: ${worker.command}`,
+      status: cachedWhich(worker.command) ? "ready" : "missing",
+      detail: cachedWhich(worker.command) ? "ready to run" : `Command not found: ${worker.command}`,
       lastCheckedAt: "",
       checks: [],
       summary: guidance.summary,

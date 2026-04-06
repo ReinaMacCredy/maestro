@@ -1,5 +1,6 @@
 import { execArgv } from "../lib/shell.js";
 import { fetchA2aAgentCard, resolveA2aJsonRpcEndpoint } from "../lib/a2a.js";
+import { cachedWhich } from "../lib/snapshot-poll-cache.js";
 import type { WorkerConfig } from "../domain/worker-types.js";
 import { formatWorkerLabel, getWorkerGuidance } from "../domain/worker-presentation.js";
 import type {
@@ -26,7 +27,7 @@ interface WorkerProbeCacheEntry {
   readonly lastCheckedAt: string;
 }
 
-const DEFAULT_PROBE_CACHE_TTL_MS = 30_000;
+const DEFAULT_PROBE_CACHE_TTL_MS = 120_000;
 const workerProbeCache = new Map<string, WorkerProbeCacheEntry>();
 
 export function clearWorkerProbeCache(): void {
@@ -151,7 +152,7 @@ async function defaultProbeCli(
   _slug: string,
   worker: Extract<WorkerConfig, { transport: "cli" }>,
 ): Promise<CliProbeResult> {
-  if (!Bun.which(worker.command)) {
+  if (!cachedWhich(worker.command)) {
     return {
       status: "missing",
       detail: `Command not found: ${worker.command}`,

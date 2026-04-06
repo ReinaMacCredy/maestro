@@ -484,6 +484,9 @@ function buildActiveWorker(
       };
   }
 
+const MEMORY_SNAPSHOT_TTL_MS = 30_000;
+let memorySnapshotCache: { value: MissionControlMemorySnapshot | null; expiresAt: number } | undefined;
+
 async function buildMissionControlMemorySnapshot(
   deps: {
     correctionStore?: CorrectionStorePort;
@@ -495,6 +498,10 @@ async function buildMissionControlMemorySnapshot(
 ): Promise<MissionControlMemorySnapshot | null> {
   if (!deps.correctionStore || !deps.learningStore || !deps.ratchetStore) {
     return null;
+  }
+
+  if (memorySnapshotCache && memorySnapshotCache.expiresAt > Date.now()) {
+    return memorySnapshotCache.value;
   }
 
   const [stats, corrections, rawLearnings, compiledLearnings, ratchetSuite, ratchetBaseline] = await Promise.all([
@@ -515,7 +522,7 @@ async function buildMissionControlMemorySnapshot(
     ? await getGraphContext(deps.projectGraphStore, basename(deps.cwd))
     : undefined;
 
-  return {
+  const result: MissionControlMemorySnapshot = {
     stats,
     corrections,
     rawLearnings,
@@ -535,6 +542,8 @@ async function buildMissionControlMemorySnapshot(
         }
       : undefined,
   };
+  memorySnapshotCache = { value: result, expiresAt: Date.now() + MEMORY_SNAPSHOT_TTL_MS };
+  return result;
 }
 
 function buildHomeActions(
