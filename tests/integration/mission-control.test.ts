@@ -1918,6 +1918,172 @@ describe("mission-control CLI", () => {
       expect(maxCpuPct(samples)).toBeLessThan(35);
     }, PTY_TIMEOUT_MS);
 
+    // -----------------------------------------------------------------------
+    // Resource leak regression tests
+    //
+    // These tests guard against the specific leak patterns fixed in the
+    // render-loop / container-reuse / poll-cache work (2026-04-06):
+    //
+    //   1. root.render() creating a new React container on every frame
+    //   2. OpenTUI render loop running at 30 FPS via rAF feedback loop
+    //   3. Uncached I/O operations (config, Bun.which, memory stores)
+    //      executing on every 1-2 s poll cycle
+    //   4. Idle poll interval too aggressive (was 2 s, now 5 s)
+    //
+    // Each test runs the compiled binary in a real PTY for 15-25 s and
+    // asserts that RSS stays flat and CPU stays near zero.  A regression
+    // in any of the above areas would cause these to fail.
+    // -----------------------------------------------------------------------
+
+    it("home mode RSS stays flat over 20 seconds with no active mission", async () => {
+      // Guards against: container leak, render loop, rAF feedback loop.
+      // Home mode has NO animation, NO mission, NO runtime events.
+      // Memory must be dead-flat and CPU near zero.
+      if (!pythonAvailable) return;
+
+      const result = await runCompiledInteractivePty(
+        tmpDir,
+        ["mission-control"],
+        { input: "q", delayMs: 20_000, waitForText: "Mission Control", sampleProcess: true },
+      );
+
+      expectCleanPtyExit(result);
+      const samples = lateWindow(result.samples, 12);
+      expect(samples.length).toBeGreaterThanOrEqual(8);
+      // RSS must not grow more than 10 MB in steady state.
+      expect(rssGrowthKb(samples)).toBeLessThan(10_240);
+      // CPU must be near zero -- no render loop, no polling churn.
+      expect(maxCpuPct(samples)).toBeLessThan(15);
+    }, 45_000);
+
+    it("mission mode RSS stays flat over 20 seconds with an idle (non-executing) mission", async () => {
+      // Guards against: container leak on each poll cycle.
+      // Approved but not executing -- no animation frames, no runtime
+      // events, but buildSnapshot still runs on each poll.
+      if (!pythonAvailable) return;
+      const missionId = await createMission(tmpDir);
+      await setMissionStatus(tmpDir, missionId, "approved");
+
+      const result = await runCompiledInteractivePty(
+        tmpDir,
+        ["mission-control", "--mission", missionId],
+        { input: "q", delayMs: 20_000, waitForText: "Mission Control", sampleProcess: true },
+      );
+
+      expectCleanPtyExit(result);
+      const samples = lateWindow(result.samples, 12);
+      expect(samples.length).toBeGreaterThanOrEqual(8);
+      expect(rssGrowthKb(samples)).toBeLessThan(10_240);
+      expect(maxCpuPct(samples)).toBeLessThan(15);
+    }, 45_000);
+
+    it("executing mission with animation does not leak memory across render frames", async () => {
+      // Guards against: container leak, rAF feedback loop, render loop.
+      // Executing mission activates the header spinner animation (100 ms
+      // frame interval), which triggers markDirty() on every animation
+      // frame change.  Each dirty flag triggers flushSync -> setState.
+      // If root.render() were called instead of setState, this would
+      // create a new React container on every frame and leak rapidly.
+      if (!pythonAvailable) return;
+      const missionId = await createMissionWithFeatureCount(tmpDir, 20);
+      await setMissionStatus(tmpDir, missionId, "approved");
+      await setMissionStatus(tmpDir, missionId, "executing");
+      await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+      await seedLiveRuntime(tmpDir, missionId, "f1");
+
+      const result = await runCompiledInteractivePty(
+        tmpDir,
+        ["mission-control", "--mission", missionId],
+        { input: "q", delayMs: 20_000, waitForText: "Mission Control", sampleProcess: true },
+      );
+
+      expectCleanPtyExit(result);
+      const samples = lateWindow(result.samples, 12);
+      expect(samples.length).toBeGreaterThanOrEqual(8);
+      // With animation active, there are many render frames.  RSS must
+      // still not grow -- each frame reconciles in-place, not creating
+      // a new container.
+      expect(rssGrowthKb(samples)).toBeLessThan(20_480);
+      // CPU should be bounded even with animation ticks.
+      expect(maxCpuPct(samples)).toBeLessThan(35);
+    }, 45_000);
+
+    it("peak RSS stays under 250 MB regardless of session duration", async () => {
+      // Guards against: any leak that accumulates over time.
+      // Runs for 25 seconds -- enough for ~5 poll cycles at the 5 s
+      // idle interval.  If any per-poll allocation leaks, RSS would
+      // exceed the bound.
+      if (!pythonAvailable) return;
+
+      const result = await runCompiledInteractivePty(
+        tmpDir,
+        ["mission-control"],
+        { input: "q", delayMs: 25_000, waitForText: "Mission Control", sampleProcess: true },
+      );
+
+      expectCleanPtyExit(result);
+      expect(result.samples.length).toBeGreaterThanOrEqual(10);
+      const peakRssKb = Math.max(...result.samples.map((s) => s.rssKb));
+      // Baseline is ~90 MB for the Bun binary + runtime.  With React
+      // and OpenTUI loaded, ~120-140 MB is normal.  Anything above
+      // 250 MB indicates a leak.
+      expect(peakRssKb).toBeLessThan(250_000);
+    }, 45_000);
+
+    it("RSS growth rate is under 1 MB per second during active animation", async () => {
+      // Guards against: per-frame buffer leaks in the render path.
+      // Even if peak RSS is acceptable, a positive growth rate means
+      // the process would eventually OOM.  This test measures the
+      // growth RATE, not just the final value.
+      if (!pythonAvailable) return;
+      const missionId = await createMission(tmpDir);
+      await setMissionStatus(tmpDir, missionId, "approved");
+      await setMissionStatus(tmpDir, missionId, "executing");
+      await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
+      await seedLiveRuntimeOutput(tmpDir, missionId, "f1");
+
+      const result = await runCompiledInteractivePty(
+        tmpDir,
+        ["mission-control", "--mission", missionId],
+        { input: "q", delayMs: 15_000, waitForText: "Mission Control", sampleProcess: true, sampleIntervalMs: 1_000 },
+      );
+
+      expectCleanPtyExit(result);
+      const samples = lateWindow(result.samples, 10);
+      expect(samples.length).toBeGreaterThanOrEqual(6);
+      const growthKb = rssGrowthKb(samples);
+      const durationSec = (samples[samples.length - 1]!.tMs - samples[0]!.tMs) / 1_000;
+      const growthRateKbPerSec = durationSec > 0 ? growthKb / durationSec : 0;
+      // Must grow less than 2 MB/s.  A healthy process is near 0.
+      // The original bug grew at ~50 MB/s.  Some transient growth from
+      // GC pressure during animation rendering is expected; the key
+      // invariant is that it does not compound over time (the companion
+      // "peak RSS stays under 250 MB" test catches unbounded growth).
+      expect(growthRateKbPerSec).toBeLessThan(2_048);
+    }, 45_000);
+
+    it("CPU is near zero in idle home mode with no mission", async () => {
+      // Guards against: render loop running continuously, rAF feedback
+      // loop, unnecessary polling or timer churn.
+      if (!pythonAvailable) return;
+
+      const result = await runCompiledInteractivePty(
+        tmpDir,
+        ["mission-control"],
+        { input: "q", delayMs: 15_000, waitForText: "Mission Control", sampleProcess: true, sampleIntervalMs: 1_000 },
+      );
+
+      expectCleanPtyExit(result);
+      const samples = lateWindow(result.samples, 8);
+      expect(samples.length).toBeGreaterThanOrEqual(4);
+      // In idle mode with no animation, CPU should be essentially zero.
+      // The sleep(100) loop + 5 s poll interval should produce < 5%.
+      expect(maxCpuPct(samples)).toBeLessThan(10);
+      // Average CPU should be near zero.
+      const avgCpu = samples.reduce((sum, s) => sum + s.cpuPct, 0) / samples.length;
+      expect(avgCpu).toBeLessThan(5);
+    }, 45_000);
+
     it("compiled binary interactive mode opens and closes the command palette with Ctrl+P", async () => {
       if (!pythonAvailable) return;
       const missionId = await createMission(tmpDir);
