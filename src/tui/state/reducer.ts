@@ -851,39 +851,23 @@ export function reduce(state: AppState, action: Action): AppState {
           if (state.modal.kind !== "config" || state.modal.phase !== "edit-inline") return state;
           return cycleConfigDraft(state, action.direction);
 
-        case "config-toggle-scope":
-            if (state.modal.kind !== "config") return state;
-            const selectedRow = getSelectedConfigRow(state);
-            if (selectedRow && isGlobalOnlyConfigKey(selectedRow.keyPath)) {
-              return {
-                ...state,
-                modal: {
-                  ...state.modal,
-                  selectedScope: "global",
-                  preview: undefined,
-                },
-              };
-            }
-            if (state.modal.phase === "choose-scope") {
-              return {
-                ...state,
-                modal: {
-                ...state.modal,
-                selectedScope: state.modal.selectedScope === "project" ? "global" : "project",
-                preview: undefined,
-              },
-            };
-          }
-          return {
-            ...state,
-            modal: {
-              ...state.modal,
-              phase: "choose-scope",
-              findQuery: undefined,
-              message: undefined,
-              preview: undefined,
-            },
-          };
+      case "config-toggle-scope":
+        if (state.modal.kind !== "config") return state;
+        const selectedRow = getSelectedConfigRow(state);
+        const selectedScope = selectedRow && isGlobalOnlyConfigKey(selectedRow.keyPath)
+          ? "global"
+          : state.modal.selectedScope === "project"
+            ? "global"
+            : "project";
+        return {
+          ...state,
+          modal: {
+            ...state.modal,
+            selectedScope,
+            message: undefined,
+            preview: undefined,
+          },
+        };
 
         case "config-preview-ready":
           if (state.modal.kind !== "config") return state;

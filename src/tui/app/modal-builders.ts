@@ -183,14 +183,16 @@ export function buildModalOptions(state: AppState): ModalOptions | undefined {
         return {
           mode: "split",
           title: buildConfigTitle(state),
-            eyebrow: buildConfigEyebrow(state),
-            items: configItems.items,
-            selectedIndex: configItems.selectedIndex,
-            detailItems: buildConfigDetailItems(state, selectedRow),
-            returnTarget,
-            renderSpec: buildOverlayRenderSpec("config"),
-          };
-      }
+          eyebrow: buildConfigEyebrow(state),
+          listTitle: buildConfigListTitle(state),
+          detailTitle: buildConfigDetailTitle(state),
+          items: configItems.items,
+          selectedIndex: configItems.selectedIndex,
+          detailItems: buildConfigDetailItems(state, selectedRow),
+          returnTarget,
+          renderSpec: buildOverlayRenderSpec("config"),
+        };
+        }
 
       if (state.modal.kind === "processes") {
         const items = state.snapshot.runtimeProcesses.map((process) => ({
@@ -819,24 +821,23 @@ function buildConfigTabs(state: AppState): string {
 
 function buildConfigTitle(state: AppState): string {
   if (state.modal.kind !== "config") return "Config";
+  const selectedRow = getConfigRowsForTab(
+    state.snapshot.configInspector ?? null,
+    state.modal.tab,
+    state.modal.findQuery,
+  )[state.modal.selectedRowIndex];
   switch (state.modal.phase) {
     case "edit-inline":
-      return getConfigRowsForTab(
-        state.snapshot.configInspector ?? null,
-        state.modal.tab,
-        state.modal.findQuery,
-      )[state.modal.selectedRowIndex]?.keyPath === "execution.defaultWorker"
-        ? "Change Default Worker"
-        : "Change Setting";
+      return selectedRow?.label ?? "Edit Setting";
     case "choose-scope":
-      return "Save Change To";
+      return "Choose Save Scope";
     case "confirm-write":
-      return "Review Change";
+      return selectedRow?.label ?? "Review Change";
     case "write-result":
       return "Change Saved";
     case "browse":
     default:
-      return state.modal.tab === "doctor" ? "Problems" : "Config";
+      return state.modal.tab === "doctor" ? "Problems" : "Config Palette";
   }
 }
 
@@ -850,12 +851,14 @@ function buildConfigEyebrow(state: AppState): string | undefined {
   const selectedRow = rows[state.modal.selectedRowIndex];
   switch (state.modal.phase) {
     case "edit-inline":
-      return selectedRow?.keyPath === "execution.defaultWorker"
-        ? "Pick which worker Maestro should use by default."
-        : selectedRow?.label;
+      if (!selectedRow) return "Choose a value, adjust scope if needed, and preview before saving.";
+      return selectedRow.keyPath === "execution.defaultWorker"
+        ? "Which worker should Maestro use by default?"
+        : selectedRow.summary;
     case "choose-scope":
-    case "confirm-write":
       return selectedRow?.label;
+    case "confirm-write":
+      return "Review the pending change before applying it.";
     case "write-result":
       return selectedRow?.label;
     case "browse":
@@ -864,6 +867,36 @@ function buildConfigEyebrow(state: AppState): string | undefined {
         return "Fix anything here before you trust the next run.";
       }
       return `${buildConfigTabs(state)}\n${buildConfigActionRow(state)}`;
+  }
+}
+
+function buildConfigListTitle(state: AppState): string {
+  if (state.modal.kind !== "config") return "List";
+  switch (state.modal.phase) {
+    case "edit-inline":
+      return "Choices";
+    case "confirm-write":
+      return "Summary";
+    case "choose-scope":
+      return "Scope";
+    case "browse":
+    default:
+      return "Results";
+  }
+}
+
+function buildConfigDetailTitle(state: AppState): string {
+  if (state.modal.kind !== "config") return "Detail";
+  switch (state.modal.phase) {
+    case "edit-inline":
+      return "Editor";
+    case "confirm-write":
+      return "Preview";
+    case "choose-scope":
+      return "Guidance";
+    case "browse":
+    default:
+      return "Details";
   }
 }
 
@@ -1014,7 +1047,6 @@ function displayDraftValue(row: MissionControlConfigRow, draftValue?: string): s
     items: rows.map((row) => ({
       label: row.label,
       detail: row.displayValueText,
-      hint: row.sourceBadge ? `[${row.sourceBadge}]` : undefined,
       section: row.section,
     })),
       selectedIndex: Math.min(state.modal.selectedRowIndex, Math.max(0, rows.length - 1)),
@@ -1027,18 +1059,17 @@ function displayDraftValue(row: MissionControlConfigRow, draftValue?: string): s
   ) {
     const targetScope = resolveConfigScopeForKey(row.keyPath, state.modal.selectedScope);
     const globalOnly = isGlobalOnlyConfigKey(row.keyPath);
-    return [
-      { text: row.label, tone: "accent" as const, style: "block" as const },
-      { text: row.summary },
-      { text: `Can edit: ${row.editKind === "readonly" ? "no" : "yes"}   Type: ${row.editKindLabel}` },
-      { text: `Saving to: ${targetScope === "project" ? "project config" : "global config"}` },
-      ...(globalOnly ? [{ text: "Project overrides are ignored for this setting.", section: "Scope rule" }] : []),
-      { text: row.effectiveDisplayValueText, section: "Using now", tone: "accent" as const, style: "block" as const },
-      ...buildSavedValueItems(row),
-      { text: row.impactText, section: "Why it matters" },
-      { text: globalOnly ? "Enter change   P preview" : "Enter change   S save to   P preview", section: "Next actions" },
-    ];
-  }
+  return [
+    { text: row.label, tone: "accent" as const, style: "block" as const },
+    { text: row.summary },
+    { text: `Save scope: ${formatScopeToggle(targetScope, globalOnly)}`, section: "Scope" },
+    ...(globalOnly ? [{ text: "Project overrides are ignored for this setting.", section: "Scope rule" }] : []),
+    { text: row.effectiveDisplayValueText, section: "Current value", tone: "accent" as const, style: "block" as const },
+    ...buildSavedValueItems(row, "Fallbacks"),
+    { text: row.impactText, section: "Why it matters" },
+    { text: globalOnly ? "Enter edit   P preview" : "Enter edit   S scope   P preview", section: "Next actions" },
+  ];
+}
 
   function buildConfigEditDetailItems(
     state: AppState,
@@ -1046,20 +1077,23 @@ function displayDraftValue(row: MissionControlConfigRow, draftValue?: string): s
   ) {
     const targetScope = resolveConfigScopeForKey(row.keyPath, state.modal.selectedScope);
     const globalOnly = isGlobalOnlyConfigKey(row.keyPath);
-    return [
-      { text: row.label, tone: "accent" as const, style: "block" as const },
-      { text: row.summary },
-      { text: `Saving to: ${targetScope === "project" ? "project config" : "global config"}`, section: "Saving to" },
-      ...(globalOnly ? [{ text: "Project overrides are ignored for this setting.", section: "Scope rule" }] : []),
-      { text: row.impactText, section: "Why it matters" },
-      { text: "Left/Right move   Enter review", section: "Next actions" },
-    ];
-  }
+  return [
+    { text: row.label, tone: "accent" as const, style: "block" as const },
+    { text: row.summary },
+    { text: `Save scope: ${formatScopeToggle(targetScope, globalOnly)}`, section: "Scope" },
+    ...(globalOnly ? [{ text: "Project overrides are ignored for this setting.", section: "Scope rule" }] : []),
+    { text: row.effectiveDisplayValueText, section: "Current value", tone: "accent" as const, style: "block" as const },
+    ...buildSavedValueItems(row, "Fallbacks"),
+    { text: row.impactText, section: "Why it matters" },
+    { text: globalOnly ? "Up/Down choose   P preview   Enter review" : "Up/Down choose   S scope   P preview   Enter review", section: "Next actions" },
+  ];
+}
 
 function buildDefaultWorkerDetailItems(
   state: AppState,
   row: MissionControlConfigRow,
 ) {
+  const targetScope = resolveConfigScopeForKey(row.keyPath, state.modal.selectedScope);
   const choice = row.workerChoices?.find((item) => item.slug === (state.modal.draftValue ?? row.effectiveValueText))
     ?? row.workerChoices?.[0];
   if (!choice) {
@@ -1069,11 +1103,14 @@ function buildDefaultWorkerDetailItems(
   return [
     { text: formatWorkerLabel(choice.slug), tone: "accent" as const, style: "block" as const },
     { text: choice.summary },
+    { text: `Save scope: ${formatScopeToggle(targetScope, false)}`, section: "Scope" },
     { text: `${availabilityText(choice.availability)}${choice.availabilityDetail ? ` · ${choice.availabilityDetail}` : ""}`, section: "Availability" },
+    { text: row.effectiveDisplayValueText, section: "Current value", tone: "accent" as const, style: "block" as const },
+    ...buildSavedValueItems(row, "Fallbacks"),
     ...splitParagraph(choice.bestFor, "Best for"),
     ...splitParagraph(choice.tradeoffs, "Tradeoffs"),
     ...recommendationLines,
-    { text: "Left/Right move   Enter review", section: "Next actions" },
+    { text: "Up/Down choose   S scope   P preview   Enter review", section: "Next actions" },
   ];
 }
 
@@ -1106,15 +1143,18 @@ function buildDefaultWorkerDetailItems(
     row: MissionControlConfigRow,
   ) {
     const targetScope = resolveConfigScopeForKey(row.keyPath, state.modal.selectedScope);
-    const previewLines = state.modal.kind === "config" && state.modal.preview
-      ? state.modal.preview.content.split("\n").filter((line) => line.length > 0).slice(0, 8)
-      : [];
-    return [
-      { text: state.modal.kind === "config" && state.modal.preview ? state.modal.preview.path : "Preview unavailable", section: "File preview", tone: "accent" as const, style: "block" as const },
-      { text: `Saving to: ${targetScope === "project" ? "project config" : "global config"}`, section: "File preview" },
-      ...previewLines.map((line, index) => ({ text: line, section: index === 0 ? "File preview" : undefined })),
-    ];
-  }
+  const previewLines = state.modal.kind === "config" && state.modal.preview
+    ? state.modal.preview.content.split("\n").filter((line) => line.length > 0).slice(0, 8)
+    : [];
+  return [
+    { text: row.label, section: "Pending change", tone: "accent" as const, style: "block" as const },
+    { text: `${row.effectiveDisplayValueText} -> ${displayDraftValue(row, state.modal.draftValue)}`, section: "Pending change" },
+    { text: `Save scope: ${targetScope === "project" ? "project config" : "global config"}`, section: "Pending change" },
+    { text: state.modal.kind === "config" && state.modal.preview ? state.modal.preview.path : "Preview unavailable", section: "Preview file", tone: "accent" as const, style: "block" as const },
+    ...previewLines.map((line, index) => ({ text: line, section: index === 0 ? "Preview file" : undefined })),
+    { text: "Enter apply   Esc back", section: "Next actions" },
+  ];
+}
 
   function buildConfigResultItems(
     state: AppState,
@@ -1149,7 +1189,7 @@ function buildConfigProblemsDetailItems(row: MissionControlConfigRow) {
   ];
 }
 
-function buildSavedValueItems(row: MissionControlConfigRow) {
+function buildSavedValueItems(row: MissionControlConfigRow, section = "Also set in") {
   const items = [
     row.projectDisplayValueText !== undefined ? { label: "Project", value: row.projectDisplayValueText } : undefined,
     row.globalDisplayValueText !== undefined ? { label: "Global", value: row.globalDisplayValueText } : undefined,
@@ -1157,11 +1197,11 @@ function buildSavedValueItems(row: MissionControlConfigRow) {
   ].filter((item): item is { label: string; value: string } => Boolean(item));
   const meaningful = items.filter((item) => item.value !== "unset");
   if (meaningful.length === 0) {
-    return [{ text: "No saved overrides.", section: "Also set in", tone: "muted" as const }];
+    return [{ text: "No saved overrides.", section, tone: "muted" as const }];
   }
   return meaningful.map((item) => ({
     text: `${item.label}   ${item.value}`,
-    section: "Also set in",
+    section,
     tone: "muted" as const,
   }));
 }
@@ -1249,11 +1289,29 @@ function buildSavedValueRows(
 
 function buildConfigActionRow(state: AppState): string {
   if (state.modal.kind !== "config") return "";
-  if (state.modal.findQuery !== undefined) {
-    const query = state.modal.findQuery.length > 0 ? state.modal.findQuery : "type to search";
-    return `/ find: ${query}    Enter change    S save to    P preview    R reload`;
+  const searchText = state.modal.findQuery !== undefined
+    ? state.modal.findQuery.length > 0
+      ? state.modal.findQuery
+      : "type to search"
+    : "search";
+  switch (state.modal.phase) {
+    case "edit-inline":
+      return "Up/Down choose    S scope    P preview    Enter review";
+    case "confirm-write":
+      return "Enter apply    Esc back";
+    case "choose-scope":
+      return "Up/Down scope    Enter use scope";
+    case "browse":
+    default:
+      return `/ ${searchText}    Enter edit    S scope    P preview    R reload`;
   }
-  return "/ find    Enter change    S save to    P preview    R reload";
+}
+
+function formatScopeToggle(scope: "project" | "global", globalOnly: boolean): string {
+  if (globalOnly) {
+    return "[Global]";
+  }
+  return scope === "project" ? "[Project]  Global" : "Project  [Global]";
 }
 
 function splitParagraph(text: string, section: string) {

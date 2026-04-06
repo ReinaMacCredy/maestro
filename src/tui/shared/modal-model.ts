@@ -120,6 +120,8 @@ export interface SplitModalOptions {
   readonly mode: "split";
   readonly title: string;
   readonly eyebrow?: string;
+  readonly listTitle?: string;
+  readonly detailTitle?: string;
   readonly items: readonly SplitModalRow[];
   readonly selectedIndex: number;
   readonly detailItems: readonly ModalInfoItem[];

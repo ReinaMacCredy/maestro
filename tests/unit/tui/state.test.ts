@@ -1113,7 +1113,7 @@ describe("reduce", () => {
       });
 
       describe("config scope flow", () => {
-      it("opens the explicit scope picker when S is pressed", () => {
+      it("toggles the save scope inline when S is pressed", () => {
         const state = makeState({
           snapshot: makeSnapshot({
             configInspector: {
@@ -1164,8 +1164,8 @@ describe("reduce", () => {
 
         expect(next.modal.kind).toBe("config");
         if (next.modal.kind === "config") {
-          expect(next.modal.phase).toBe("choose-scope");
-          expect(next.modal.selectedScope).toBe("project");
+          expect(next.modal.phase).toBe("browse");
+          expect(next.modal.selectedScope).toBe("global");
         }
       });
 
@@ -1225,7 +1225,7 @@ describe("reduce", () => {
         }
       });
 
-      it("returns to inline editing after confirming the scope choice", () => {
+      it("keeps inline editing active when the scope is toggled", () => {
         const state = makeState({
           snapshot: makeSnapshot({
             configInspector: {
@@ -1267,18 +1267,18 @@ describe("reduce", () => {
             kind: "config",
             tab: "overview",
             selectedRowIndex: 0,
-            phase: "choose-scope",
+            phase: "edit-inline",
             selectedScope: "global",
             draftValue: "off",
           },
         });
 
-        const next = reduce(state, { type: "enter" });
+        const next = reduce(state, { type: "config-toggle-scope" });
 
         expect(next.modal.kind).toBe("config");
         if (next.modal.kind === "config") {
           expect(next.modal.phase).toBe("edit-inline");
-          expect(next.modal.selectedScope).toBe("global");
+          expect(next.modal.selectedScope).toBe("project");
         }
       });
 

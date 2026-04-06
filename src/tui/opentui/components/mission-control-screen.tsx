@@ -418,7 +418,7 @@ function SplitModalBody({
 
   return (
     <box width="100%" flexGrow={1} flexDirection="row" marginTop={1}>
-            <box width={leftWidth} height="100%" border title="List" paddingLeft={1} paddingRight={1} backgroundColor={transparentPanels ? undefined : theme.modalPanelBg}>
+              <box width={leftWidth} height="100%" border title={modal.listTitle ?? "List"} paddingLeft={1} paddingRight={1} backgroundColor={transparentPanels ? undefined : theme.modalPanelBg}>
           <box width="100%" height="100%" flexDirection="column">
             {items.length === 0 ? (
               <SafeText fg={OPEN_TUI_THEME.muted}>{modal.emptyLabel ?? "No items"}</SafeText>
@@ -433,7 +433,7 @@ function SplitModalBody({
           </box>
       </box>
         <box width={1} />
-            <box width={rightWidth} height="100%" border title="Detail" paddingLeft={1} paddingRight={1} backgroundColor={transparentPanels ? undefined : theme.modalPanelBg}>
+              <box width={rightWidth} height="100%" border title={modal.detailTitle ?? "Detail"} paddingLeft={1} paddingRight={1} backgroundColor={transparentPanels ? undefined : theme.modalPanelBg}>
           <box width="100%" height="100%" flexDirection="column">
             {modal.detailItems.length === 0 ? (
               <SafeText fg={OPEN_TUI_THEME.muted}>No details</SafeText>

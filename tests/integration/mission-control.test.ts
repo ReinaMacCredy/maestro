@@ -672,7 +672,7 @@ function expectConfigOverlay(output: string): void {
   expect(output).toContain("Config");
   expect(output).toContain("[overview]");
   expect(output).toContain("workers");
-  expect(output).toContain("project config");
+  expect(output).toContain("Results");
 }
 
 function expectWorkersOverlay(output: string): void {

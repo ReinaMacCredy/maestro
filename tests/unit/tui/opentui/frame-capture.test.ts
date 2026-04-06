@@ -293,16 +293,16 @@ describe("captureMissionControlFrame", () => {
     expect(modal?.returnTarget).toBe("command-palette");
 
     const titleLine = configRender.spans.lines.find((line) => line.spans.some((span) => span.text.includes("Config")));
-    const listLine = configRender.spans.lines.find((line) => line.spans.some((span) => span.text.includes("List")));
-    const detailLine = configRender.spans.lines.find((line) => line.spans.some((span) => span.text.includes("Detail")));
+    const listLine = configRender.spans.lines.find((line) => line.spans.some((span) => span.text.includes("Results")));
+    const detailLine = configRender.spans.lines.find((line) => line.spans.some((span) => span.text.includes("Details")));
 
     expect(titleLine).toBeDefined();
     expect(listLine).toBeDefined();
     expect(detailLine).toBeDefined();
 
     const titleSpan = titleLine!.spans.find((span) => span.text.includes("Config"));
-    const listSpan = listLine!.spans.find((span) => span.text.includes("List"));
-    const detailSpan = detailLine!.spans.find((span) => span.text.includes("Detail"));
+    const listSpan = listLine!.spans.find((span) => span.text.includes("Results"));
+    const detailSpan = detailLine!.spans.find((span) => span.text.includes("Details"));
 
     expect(titleSpan).toBeDefined();
     expect(listSpan).toBeDefined();
