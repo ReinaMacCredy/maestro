@@ -1,5 +1,6 @@
 import { createCliRenderer, MouseButton, type MouseEvent } from "@opentui/core";
 import { createRoot, flushSync } from "@opentui/react";
+import { useState } from "react";
 
 import { getValidFeatureTransitions } from "../../../domain/mission-state.js";
 import { applyConfigEdit, previewConfigEdit } from "../../../usecases/config-edit.usecase.js";
@@ -16,9 +17,23 @@ import { parseKeypress, type Key } from "../../input.js";
 import { HEADER_DOT_INTERVAL_MS, isHeaderAnimationActive } from "../../shared/header-animation.js";
 import { layoutModal, pointInRect } from "../../shared/modal-model.js";
 import { getConfigRowsForTab, resolveConfigScopeForKey } from "../../state/config-inspector.js";
-import { createInitialState, reduce } from "../../state/reducer.js";
-import { MissionControlApp } from "./mission-control-app.js";
+import { createInitialState, reduce, type AppState } from "../../state/reducer.js";
+import { MissionControlApp, type MissionControlAppProps } from "./mission-control-app.js";
 import { buildModalModel, computeScreenLayout, getModalParentRect } from "../components/builders.js";
+
+// ---------------------------------------------------------------------------
+// Bridge component -- rendered ONCE so the React container is never recreated.
+// Updates flow through setState, not root.render().
+// ---------------------------------------------------------------------------
+
+type PropsUpdater = (props: MissionControlAppProps) => void;
+let _setProps: PropsUpdater | null = null;
+
+function DashboardBridge({ initial }: { initial: MissionControlAppProps }) {
+  const [props, setProps] = useState(initial);
+  _setProps = setProps;
+  return <MissionControlApp {...props} />;
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -72,22 +87,28 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
     state = reduce(state, { type: "quit" });
   };
 
+  const buildProps = (): MissionControlAppProps => ({
+    snapshot: state.snapshot,
+    state,
+    width: renderer.width,
+    height: renderer.height,
+    animationFrame: getCurrentAnimationFrame(),
+    elapsedOffsetMs: 0,
+    onMouseDown: handleOpenTuiMouseDown,
+  });
+
   const renderCurrentFrame = (): void => {
-    const animationFrame = getCurrentAnimationFrame();
+    const props = buildProps();
     flushSync(() => {
-      root.render(
-        <MissionControlApp
-          snapshot={state.snapshot}
-          state={state}
-          width={renderer.width}
-          height={renderer.height}
-          animationFrame={animationFrame}
-          elapsedOffsetMs={0}
-          onMouseDown={handleOpenTuiMouseDown}
-        />,
-      );
+      if (_setProps) {
+        // Update existing React tree via setState (no new container).
+        _setProps(props);
+      } else {
+        // First render -- creates the container exactly once.
+        root.render(<DashboardBridge initial={props} />);
+      }
     });
-    lastRenderedAnimationFrame = animationFrame;
+    lastRenderedAnimationFrame = props.animationFrame ?? 0;
     lastRenderMs = Date.now();
     renderer.useMouse = !state.copyMode;
   };
