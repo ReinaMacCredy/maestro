@@ -304,24 +304,16 @@ function buildMemoryModal(
   }
 
   if (state.modal.tab === "learnings") {
-    const rawLearnings = memory?.rawLearnings ?? [];
     return {
-      mode: "split",
+      mode: "info",
       title: "Memory",
       eyebrow,
-      items: rawLearnings.length > 0
-        ? rawLearnings.map((entry) => ({
-            label: entry.sessionDate.slice(0, 10),
-            detail: firstLine(entry.content),
-          }))
-        : [{ label: "No raw learnings", selectable: false, tone: "muted" }],
-      selectedIndex: Math.min(state.modal.selectedItemIndex, Math.max(0, rawLearnings.length - 1)),
-      detailItems: buildLearningDetailItems(memory, rawLearnings[state.modal.selectedItemIndex]),
+      items: buildLearningActivityItems(memory),
       footer: buildTabbedOverlayFooter(returnTarget),
       returnTarget,
-        renderSpec: buildOverlayRenderSpec("memory"),
-      };
-    }
+      renderSpec: buildOverlayRenderSpec("memory"),
+    };
+  }
 
   if (state.modal.tab === "config") {
     return {
@@ -359,20 +351,20 @@ function buildGraphModal(
   returnTarget: "command-palette" | undefined,
 ): ModalOptions {
   const graphContext = state.snapshot.memory?.graphContext;
-  const relationships = graphContext?.relationships ?? [];
-  const selectedRelationship = relationships[state.modal.selectedItemIndex];
+  const entries = buildGraphListEntries(graphContext);
+  const selectedEntry = entries[state.modal.selectedItemIndex];
   return {
     mode: "split",
     title: "Project Graph",
     eyebrow: "Cross-project relationships and impact analysis.",
-    items: relationships.length > 0
-      ? relationships.map((relationship) => ({
-          label: `${relationship.direction === "outgoing" ? "-->" : "<--"} ${relationship.project.name}`,
-          detail: `${relationship.edge.relation}${relationship.edge.detail ? ` · ${relationship.edge.detail}` : ""}`,
+    items: entries.length > 0
+      ? entries.map((entry) => ({
+          label: entry.label,
+          detail: entry.detail,
         }))
       : [{ label: "No related projects", selectable: false, tone: "muted" }],
-    selectedIndex: Math.min(state.modal.selectedItemIndex, Math.max(0, relationships.length - 1)),
-    detailItems: buildGraphDetailItems(graphContext, selectedRelationship),
+    selectedIndex: Math.min(state.modal.selectedItemIndex, Math.max(0, entries.length - 1)),
+    detailItems: buildGraphDetailItems(graphContext, selectedEntry),
     footer: buildListOverlayFooter(returnTarget),
     returnTarget,
     renderSpec: buildOverlayRenderSpec("graph"),
@@ -444,10 +436,11 @@ function buildMemoryOverviewItems(memory: MissionControlSnapshot["memory"]) {
       text: `[ok] ${assertion.id}    promoted ${formatDateOnly(assertion.createdAt)}`,
     })),
     { text: "" },
-    { text: "Project Graph", section: "Graph", tone: "accent" as const },
-    { text: `${memory.stats.graph.projects} projects · ${memory.stats.graph.links} links` },
-  ];
-}
+      { text: "Project Graph", section: "Graph", tone: "accent" as const },
+      { text: `${memory.stats.graph.projects} projects · ${memory.stats.graph.links} links` },
+      ...buildGraphImpactItems(memory.graphContext),
+    ];
+  }
 
 function buildCorrectionDetailItems(correction: NonNullable<MissionControlSnapshot["memory"]>["corrections"][number] | undefined) {
   if (!correction) {
@@ -524,6 +517,32 @@ function buildRatchetDetailItems(
         : [{ text: "No baseline recorded", tone: "muted" as const }]),
     ];
   }
+
+function buildLearningActivityItems(memory: MissionControlSnapshot["memory"]) {
+  if (!memory) {
+    return [{ text: "No learning data available.", tone: "muted" as const }];
+  }
+
+  const activity = buildLearningActivitySeries(memory);
+  const compiledAt = formatDateTimeCompact(memory.compiledLearnings?.compiledAt ?? memory.stats.learnings.compiledAt);
+  const rawSinceCompile = memory.compiledLearnings
+    ? Math.max(0, memory.rawLearnings.length - memory.compiledLearnings.rawCount)
+    : memory.rawLearnings.length;
+
+  return [
+    { text: "Learning Activity", section: "Activity", tone: "accent" as const },
+    ...activity,
+    { text: "" },
+    { text: `Corrections captured:  ${memory.stats.corrections.total} total,  ${countRecentEntries(memory.corrections.map((entry) => entry.createdAt))} this week` },
+    { text: `Learnings logged:      ${memory.stats.learnings.rawCount} total, ${countRecentEntries(memory.rawLearnings.map((entry) => entry.sessionDate))} this week` },
+    { text: `Ratchet promotions:   ${memory.stats.ratchet.assertions} total,  ${countRecentEntries(memory.ratchetSuite.assertions.map((entry) => entry.createdAt))} this week` },
+    { text: "" },
+    { text: `Compile status: ${compiledAt ? `compiled ${compiledAt}` : "not compiled"}${compiledAt ? `   Next: ~${Math.max(0, 5 - rawSinceCompile)} more entr${Math.max(0, 5 - rawSinceCompile) === 1 ? "y" : "ies"}` : ""}` },
+    ...(memory.compiledLearnings
+      ? splitIntoBullets(memory.compiledLearnings.summary)
+      : [{ text: "- No compiled learning summary yet", tone: "muted" as const }]),
+  ];
+}
 
 function buildMemoryConfigItems(
   inspector: MissionControlSnapshot["configInspector"] | null,
@@ -623,31 +642,144 @@ function shortenHomePath(path: string): string {
   return path.startsWith(home) ? `~${path.slice(home.length)}` : path;
 }
 
+interface GraphListEntry {
+  readonly label: string;
+  readonly detail: string;
+  readonly relationship?: NonNullable<NonNullable<MissionControlSnapshot["memory"]>["graphContext"]>["relationships"][number];
+}
+
+function buildGraphListEntries(
+  graphContext: NonNullable<MissionControlSnapshot["memory"]>["graphContext"] | undefined,
+): readonly GraphListEntry[] {
+  if (!graphContext) return [];
+
+  const currentProject = graphContext.currentProject;
+  const entries: GraphListEntry[] = [];
+  if (currentProject) {
+    entries.push({
+      label: `${currentProject.name}${currentProject.role ? ` (${currentProject.role})` : ""}`,
+      detail: "Current project",
+    });
+  }
+
+  for (const relationship of graphContext.relationships) {
+    entries.push({
+      label: `${relationship.project.name}${relationship.project.role ? ` (${relationship.project.role})` : ""}`,
+      detail: `${relationship.direction} · ${relationship.edge.relation}${relationship.edge.detail ? ` · ${relationship.edge.detail}` : ""}`,
+      relationship,
+    });
+  }
+
+  return entries;
+}
+
 function buildGraphDetailItems(
   graphContext: NonNullable<MissionControlSnapshot["memory"]>["graphContext"] | undefined,
-  relationship: NonNullable<NonNullable<MissionControlSnapshot["memory"]>["graphContext"]>["relationships"][number] | undefined,
+  entry: GraphListEntry | undefined,
 ) {
   if (!graphContext) {
     return [{ text: "No graph data available.", tone: "muted" as const }];
   }
 
+  const currentProjectLabel = graphContext.currentProject
+    ? `${graphContext.currentProject.name}${graphContext.currentProject.role ? ` (${graphContext.currentProject.role})` : ""}`
+    : "Current project";
+  const relationship = entry?.relationship;
+
   return [
-    { text: graphContext.currentProject?.name ?? "Current project", section: "Current project", tone: "accent" as const, style: "block" as const },
-    { text: graphContext.currentProject?.path ?? "unknown path" },
-    ...(graphContext.currentProject?.role ? [{ text: graphContext.currentProject.role }] : []),
-    { text: "" },
+    { text: `Current project: ${currentProjectLabel}`, section: "Current Project", tone: "accent" as const, style: "block" as const },
+    { text: `Path: ${graphContext.currentProject?.path ?? "unknown path"}` },
     ...(relationship
       ? [
-          { text: relationship.project.name, section: "Selected relationship" },
-          { text: relationship.project.path },
-          ...(relationship.project.role ? [{ text: `Role: ${relationship.project.role}` }] : []),
-          { text: `${relationship.direction} · ${relationship.edge.relation}` },
-          ...(relationship.edge.detail ? [{ text: relationship.edge.detail }] : []),
+          { text: "" },
+          { text: `Selected project: ${relationship.project.name}${relationship.project.role ? ` (${relationship.project.role})` : ""}`, section: "Selected Project" },
+          { text: `Path: ${relationship.project.path}` },
+          { text: `Relationship: ${relationship.direction} · ${relationship.edge.relation}` },
+          ...(relationship.edge.detail ? [{ text: `Detail: ${relationship.edge.detail}` }] : []),
         ]
-      : [{ text: "Choose a related project.", tone: "muted" as const }]),
+      : graphContext.relationships.length > 0
+        ? [
+            { text: "" },
+            { text: "Relationships:", section: "Relationships" },
+            ...graphContext.relationships.map((candidate) => ({
+              text: `${candidate.direction === "outgoing" ? "-->" : "<--"} ${candidate.project.name} · ${candidate.edge.relation}${candidate.edge.detail ? ` · ${candidate.edge.detail}` : ""}`,
+            })),
+          ]
+        : [{ text: "Choose a related project.", tone: "muted" as const }]),
     { text: "" },
+    ...buildGraphImpactItems(graphContext),
     { text: `${graphContext.totalProjects} project(s) · ${graphContext.totalEdges} link(s)`, section: "Summary" },
   ];
+}
+
+function buildGraphImpactItems(
+  graphContext: NonNullable<MissionControlSnapshot["memory"]>["graphContext"] | undefined,
+) {
+  if (!graphContext || graphContext.relationships.length === 0) {
+    return [{ text: "[ok] No downstream graph impacts recorded", tone: "muted" as const }];
+  }
+
+  return graphContext.relationships
+    .filter((relationship) => relationship.edge.detail)
+    .map((relationship) => ({
+      text: `[!] Changing ${relationship.edge.detail} will impact: ${relationship.project.name}`,
+    }));
+}
+
+function buildLearningActivitySeries(
+  memory: NonNullable<MissionControlSnapshot["memory"]>,
+) {
+  const dayKeys = buildRecentDayKeys(memory);
+  const labelLine = dayKeys.map((dayKey) => formatShortDay(dayKey).padEnd(9, " ")).join("");
+  const correctionCounts = countEntriesByDay(memory.corrections.map((entry) => entry.createdAt), dayKeys);
+  const learningCounts = countEntriesByDay(memory.rawLearnings.map((entry) => entry.sessionDate), dayKeys);
+  const ratchetCounts = countEntriesByDay(memory.ratchetSuite.assertions.map((entry) => entry.createdAt), dayKeys);
+
+  return [
+    { text: labelLine },
+    { text: `corrections: ${renderActivityBars(correctionCounts, "-")}` },
+    { text: `learnings:   ${renderActivityBars(learningCounts, "#")}` },
+    { text: `ratchet:     ${renderActivityBars(ratchetCounts, "*")}` },
+  ];
+}
+
+function buildRecentDayKeys(memory: NonNullable<MissionControlSnapshot["memory"]>): readonly string[] {
+  const timestamps = [
+    ...memory.corrections.map((entry) => entry.createdAt),
+    ...memory.rawLearnings.map((entry) => entry.sessionDate),
+    ...memory.ratchetSuite.assertions.map((entry) => entry.createdAt),
+    memory.compiledLearnings?.compiledAt ?? "",
+  ].filter((value) => value.length > 0);
+  const latestDate = timestamps.length > 0 ? new Date(timestamps.sort().at(-1)!) : new Date();
+
+  return Array.from({ length: 5 }, (_, index) => {
+    const day = new Date(latestDate);
+    day.setUTCDate(latestDate.getUTCDate() - (4 - index));
+    return day.toISOString().slice(0, 10);
+  });
+}
+
+function countEntriesByDay(timestamps: readonly string[], dayKeys: readonly string[]): readonly number[] {
+  return dayKeys.map((dayKey) => timestamps.filter((timestamp) => timestamp.startsWith(dayKey)).length);
+}
+
+function countRecentEntries(timestamps: readonly string[]): number {
+  const latest = timestamps.length > 0 ? new Date(timestamps.sort().at(-1)!) : new Date();
+  const cutoff = new Date(latest);
+  cutoff.setUTCDate(latest.getUTCDate() - 6);
+  return timestamps.filter((timestamp) => new Date(timestamp) >= cutoff).length;
+}
+
+function formatShortDay(dayKey: string): string {
+  const [year, month, day] = dayKey.split("-").map((part) => Number(part));
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.toLocaleString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+function renderActivityBars(counts: readonly number[], marker: string): string {
+  return counts
+    .map((count) => marker.repeat(Math.max(1, count)).padEnd(6, " "))
+    .join(" ");
 }
 
 function firstLine(text: string): string {

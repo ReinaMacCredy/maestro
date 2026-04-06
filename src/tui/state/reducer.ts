@@ -1113,11 +1113,11 @@ function handleModalNavigate(state: AppState, direction: "up" | "down"): AppStat
         };
       }
 
-      if (state.modal.kind === "graph") {
-        const total = (state.snapshot.memory?.graphContext?.relationships.length ?? 0);
-        if (total === 0) return state;
-        const selectedItemIndex = direction === "down"
-          ? Math.min(state.modal.selectedItemIndex + 1, total - 1)
+        if (state.modal.kind === "graph") {
+          const total = getGraphSelectableCount(state.snapshot);
+          if (total === 0) return state;
+          const selectedItemIndex = direction === "down"
+            ? Math.min(state.modal.selectedItemIndex + 1, total - 1)
           : Math.max(state.modal.selectedItemIndex - 1, 0);
         return {
           ...state,
@@ -1442,17 +1442,22 @@ function nextMemoryTab(current: MemoryModalTab, delta: 1 | -1): MemoryModalTab {
 }
 
 function getMemorySelectableCount(snapshot: MissionControlSnapshot, tab: MemoryModalTab): number {
-    switch (tab) {
-      case "overview":
-      case "config":
-        return 0;
-      case "corrections":
-        return snapshot.memory?.corrections.length ?? 0;
+  switch (tab) {
+    case "overview":
     case "learnings":
-      return snapshot.memory?.rawLearnings.length ?? 0;
+    case "config":
+      return 0;
+    case "corrections":
+      return snapshot.memory?.corrections.length ?? 0;
     case "ratchet":
       return snapshot.memory?.ratchetSuite.assertions.length ?? 0;
   }
+}
+
+function getGraphSelectableCount(snapshot: MissionControlSnapshot): number {
+  const graphContext = snapshot.memory?.graphContext;
+  if (!graphContext) return 0;
+  return graphContext.relationships.length + (graphContext.currentProject ? 1 : 0);
 }
 
 function cycleConfigDraft(state: AppState, direction: "previous" | "next"): AppState {

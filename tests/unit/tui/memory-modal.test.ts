@@ -165,12 +165,12 @@ function makeSnapshot(): MissionControlSnapshot {
     canPause: false,
     canResume: false,
     memory: {
-      stats: {
-        corrections: { total: 1, hard: 1, soft: 0 },
-        learnings: { rawCount: 2, compiledAt: "2026-04-06T01:00:00.000Z", staleDays: 0 },
-        ratchet: { assertions: 1, lastResult: "pass" },
-        graph: { projects: 2, links: 1 },
-      },
+        stats: {
+          corrections: { total: 1, hard: 1, soft: 0 },
+          learnings: { rawCount: 2, compiledAt: "2026-04-06T01:00:00.000Z", staleDays: 0 },
+          ratchet: { assertions: 1, lastResult: "pass" },
+          graph: { projects: 4, links: 3 },
+        },
       corrections: [{
         id: "corr-1",
         rule: "Use bun, not npm",
@@ -210,23 +210,35 @@ function makeSnapshot(): MissionControlSnapshot {
         passCount: 1,
         lastRunAt: "2026-04-06T03:00:00.000Z",
       },
-      graphContext: {
-        currentProject: { name: "maestro", path: "/tmp/maestro", role: "cli" },
-        relationships: [{
-          direction: "outgoing",
-          project: { name: "maestro-web", path: "/tmp/maestro-web", role: "frontend" },
-          edge: { from: "maestro", to: "maestro-web", relation: "exposes", detail: "mcp-tools" },
-        }],
-        totalProjects: 2,
-        totalEdges: 1,
+        graphContext: {
+          currentProject: { name: "maestro", path: "/tmp/maestro", role: "cli" },
+          relationships: [
+            {
+              direction: "outgoing",
+              project: { name: "maestro-web", path: "/tmp/maestro-web", role: "frontend" },
+              edge: { from: "maestro", to: "maestro-web", relation: "exposes", detail: "mcp-tools" },
+            },
+            {
+              direction: "incoming",
+              project: { name: "maestro-api", path: "/tmp/maestro-api", role: "api" },
+              edge: { from: "maestro-api", to: "maestro", relation: "consumes", detail: "rest-api" },
+            },
+            {
+              direction: "incoming",
+              project: { name: "shared-types", path: "/tmp/shared-types", role: "library" },
+              edge: { from: "shared-types", to: "maestro", relation: "shared-types", detail: "types/mission.ts, types/config.ts" },
+            },
+          ],
+          totalProjects: 4,
+          totalEdges: 3,
+        },
+    },
+      memoryStats: {
+        corrections: { total: 1, hard: 1, soft: 0 },
+        learnings: { rawCount: 2, compiledAt: "2026-04-06T01:00:00.000Z", staleDays: 0 },
+        ratchet: { assertions: 1, lastResult: "pass" },
+        graph: { projects: 4, links: 3 },
       },
-    },
-    memoryStats: {
-      corrections: { total: 1, hard: 1, soft: 0 },
-      learnings: { rawCount: 2, compiledAt: "2026-04-06T01:00:00.000Z", staleDays: 0 },
-      ratchet: { assertions: 1, lastResult: "pass" },
-      graph: { projects: 2, links: 1 },
-    },
     home: null,
   };
 }
@@ -272,7 +284,7 @@ describe("memory modal", () => {
     }
   });
 
-  it("renders correction detail and graph relationships from snapshot data", () => {
+  it("renders correction detail, a learning activity timeline, and project graph impact detail", () => {
     const state = createInitialState(makeSnapshot());
     const correctionState = reduce(reduce(state, { type: "open-memory" }), { type: "memory-next-tab" });
     const memoryModal = buildModalOptions(correctionState);
@@ -284,13 +296,24 @@ describe("memory modal", () => {
     expect(memoryModal.detailItems.some((item) => item.text.includes("package, install"))).toBe(true);
     expect(memoryModal.detailItems.some((item) => item.text.includes("HARD"))).toBe(true);
 
+    const learningsState = reduce(correctionState, { type: "memory-next-tab" });
+    const learningsModal = buildModalOptions(learningsState);
+
+    expect(learningsModal?.mode).toBe("info");
+    if (!learningsModal || learningsModal.mode !== "info") return;
+    expect(learningsModal.items.some((item) => item.text.includes("Learning Activity"))).toBe(true);
+    expect(learningsModal.items.some((item) => item.text.includes("Corrections captured:"))).toBe(true);
+    expect(learningsModal.items.some((item) => item.text.includes("Compile status:"))).toBe(true);
+
     const graphState = reduce(state, { type: "open-graph" });
     const graphModal = buildModalOptions(graphState);
 
     expect(graphModal?.mode).toBe("split");
     if (!graphModal || graphModal.mode !== "split") return;
-    expect(graphModal.items[0]?.label).toContain("maestro-web");
+    expect(graphModal.items[0]?.label).toContain("maestro");
+    expect(graphModal.detailItems.some((item) => item.text.includes("Current project: maestro (cli)"))).toBe(true);
     expect(graphModal.detailItems.some((item) => item.text.includes("mcp-tools"))).toBe(true);
+    expect(graphModal.detailItems.some((item) => item.text.includes("impact"))).toBe(true);
   });
 
   it("renders a standalone memory config tab from the config inspector memory rows", () => {
@@ -311,5 +334,33 @@ describe("memory modal", () => {
     expect(modal.items.some((item) => item.text.includes("Compile Threshold"))).toBe(true);
     expect(modal.items.some((item) => item.text.includes("Project Graph"))).toBe(true);
     expect(modal.items.some((item) => item.text.includes("[ Save ]"))).toBe(true);
+  });
+
+  it("keeps learning activity non-selectable and lets graph navigation reach related projects", () => {
+    const state = createInitialState(makeSnapshot());
+    const learningsState = reduce(
+      reduce(reduce(state, { type: "open-memory" }), { type: "memory-next-tab" }),
+      { type: "memory-next-tab" },
+    );
+    const movedLearningsState = reduce(learningsState, { type: "navigate", direction: "down" });
+
+    expect(movedLearningsState.modal.kind).toBe("memory");
+    if (movedLearningsState.modal.kind === "memory") {
+      expect(movedLearningsState.modal.tab).toBe("learnings");
+      expect(movedLearningsState.modal.selectedItemIndex).toBe(0);
+    }
+
+    const graphState = reduce(state, { type: "open-graph" });
+    const movedGraphState = reduce(graphState, { type: "navigate", direction: "down" });
+    const graphModal = buildModalOptions(movedGraphState);
+
+    expect(movedGraphState.modal.kind).toBe("graph");
+    if (movedGraphState.modal.kind === "graph") {
+      expect(movedGraphState.modal.selectedItemIndex).toBe(1);
+    }
+    expect(graphModal?.mode).toBe("split");
+    if (!graphModal || graphModal.mode !== "split") return;
+    expect(graphModal.items[1]?.label).toContain("maestro-web");
+    expect(graphModal.selectedIndex).toBe(1);
   });
 });

@@ -1,6 +1,6 @@
 {
   "name": "maestro-handoff",
-  "version": "0.13.24",
+  "version": "0.13.25",
   "type": "module",
   "bin": {
     "maestro": "./dist/maestro"
