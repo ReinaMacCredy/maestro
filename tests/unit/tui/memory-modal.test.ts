@@ -105,8 +105,8 @@ function makeSnapshot(): MissionControlSnapshot {
             keyPath: "memory.learnings.compile_threshold",
             label: "Compile Threshold",
             section: "Learnings",
-            valueText: "5",
-            displayValueText: "5 entries",
+            valueText: "8",
+            displayValueText: "8 entries",
             source: "project",
             sourceBadge: "P",
             editKind: "number-preset",
@@ -115,8 +115,8 @@ function makeSnapshot(): MissionControlSnapshot {
             description: "How many raw learning entries should accumulate before compilation is suggested.",
             summary: "How many raw learning entries should accumulate before compilation is suggested.",
             impactText: "Lower values compile sooner; higher values keep more raw history around.",
-            effectiveValueText: "5",
-            effectiveDisplayValueText: "5 entries",
+            effectiveValueText: "8",
+            effectiveDisplayValueText: "8 entries",
           },
           {
             keyPath: "memory.ratchet.enforcement",
@@ -299,11 +299,11 @@ describe("memory modal", () => {
     const learningsState = reduce(correctionState, { type: "memory-next-tab" });
     const learningsModal = buildModalOptions(learningsState);
 
-    expect(learningsModal?.mode).toBe("info");
-    if (!learningsModal || learningsModal.mode !== "info") return;
-    expect(learningsModal.items.some((item) => item.text.includes("Learning Activity"))).toBe(true);
-    expect(learningsModal.items.some((item) => item.text.includes("Corrections captured:"))).toBe(true);
-    expect(learningsModal.items.some((item) => item.text.includes("Compile status:"))).toBe(true);
+      expect(learningsModal?.mode).toBe("info");
+      if (!learningsModal || learningsModal.mode !== "info") return;
+      expect(learningsModal.items.some((item) => item.text.includes("Learning Activity"))).toBe(true);
+      expect(learningsModal.items.some((item) => item.text.includes("Corrections captured:"))).toBe(true);
+      expect(learningsModal.items.some((item) => item.text.includes("Next: ~8 more entries"))).toBe(true);
 
     const graphState = reduce(state, { type: "open-graph" });
     const graphModal = buildModalOptions(graphState);
@@ -330,11 +330,12 @@ describe("memory modal", () => {
     expect(modal.eyebrow).toContain("[config]");
     expect(modal.title).toBe("Memory System");
     expect(modal.items.some((item) => item.text.includes("Memory System"))).toBe(true);
-    expect(modal.items.some((item) => item.text.includes("Trigger Matching"))).toBe(true);
-    expect(modal.items.some((item) => item.text.includes("Compile Threshold"))).toBe(true);
-    expect(modal.items.some((item) => item.text.includes("Project Graph"))).toBe(true);
-    expect(modal.items.some((item) => item.text.includes("[ Save ]"))).toBe(true);
-  });
+      expect(modal.items.some((item) => item.text.includes("Trigger Matching"))).toBe(true);
+      expect(modal.items.some((item) => item.text.includes("Compile Threshold"))).toBe(true);
+      expect(modal.items.some((item) => item.text.includes("Project Graph"))).toBe(true);
+      expect(modal.items.some((item) => item.text.includes("Read-only summary"))).toBe(true);
+      expect(modal.items.some((item) => item.text.includes("[ Save ]"))).toBe(false);
+    });
 
   it("keeps learning activity non-selectable and lets graph navigation reach related projects", () => {
     const state = createInitialState(makeSnapshot());

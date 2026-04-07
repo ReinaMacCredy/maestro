@@ -310,7 +310,7 @@ function buildMemoryModal(
       mode: "info",
       title: "Memory",
       eyebrow,
-      items: buildLearningActivityItems(memory),
+      items: buildLearningActivityItems(memory, state.snapshot.configInspector ?? null),
       footer: buildTabbedOverlayFooter(returnTarget),
       returnTarget,
       renderSpec: buildOverlayRenderSpec("memory"),
@@ -520,7 +520,10 @@ function buildRatchetDetailItems(
     ];
   }
 
-function buildLearningActivityItems(memory: MissionControlSnapshot["memory"]) {
+function buildLearningActivityItems(
+  memory: MissionControlSnapshot["memory"],
+  inspector: MissionControlSnapshot["configInspector"] | null,
+) {
   if (!memory) {
     return [{ text: "No learning data available.", tone: "muted" as const }];
   }
@@ -530,6 +533,8 @@ function buildLearningActivityItems(memory: MissionControlSnapshot["memory"]) {
   const rawSinceCompile = memory.compiledLearnings
     ? Math.max(0, memory.rawLearnings.length - memory.compiledLearnings.rawCount)
     : memory.rawLearnings.length;
+  const compileThreshold = getMemoryCompileThreshold(inspector) ?? 5;
+  const remainingToCompile = Math.max(0, compileThreshold - rawSinceCompile);
 
   return [
     { text: "Learning Activity", section: "Activity", tone: "accent" as const },
@@ -539,7 +544,7 @@ function buildLearningActivityItems(memory: MissionControlSnapshot["memory"]) {
     { text: `Learnings logged:      ${memory.stats.learnings.rawCount} total, ${countRecentEntries(memory.rawLearnings.map((entry) => entry.sessionDate))} this week` },
     { text: `Ratchet promotions:   ${memory.stats.ratchet.assertions} total,  ${countRecentEntries(memory.ratchetSuite.assertions.map((entry) => entry.createdAt))} this week` },
     { text: "" },
-    { text: `Compile status: ${compiledAt ? `compiled ${compiledAt}` : "not compiled"}${compiledAt ? `   Next: ~${Math.max(0, 5 - rawSinceCompile)} more entr${Math.max(0, 5 - rawSinceCompile) === 1 ? "y" : "ies"}` : ""}` },
+    { text: `Compile status: ${compiledAt ? `compiled ${compiledAt}` : "not compiled"}${compiledAt ? `   Next: ~${remainingToCompile} more entr${remainingToCompile === 1 ? "y" : "ies"}` : ""}` },
     ...(memory.compiledLearnings
       ? splitIntoBullets(memory.compiledLearnings.summary)
       : [{ text: "- No compiled learning summary yet", tone: "muted" as const }]),
@@ -582,7 +587,7 @@ function buildMemoryConfigItems(
     ...buildConfigRowBlock(rows, ["memory.graph.enabled"]),
     { text: formatConfigLine("Global Path", shortenHomePath(GRAPH_DIR)) },
     { text: "" },
-    { text: "[ Save ]  [ Reset Defaults ]", tone: "accent" as const },
+    { text: "Read-only summary. Open Config to edit memory settings.", tone: "muted" as const },
   ];
 
   return items;
@@ -607,6 +612,17 @@ function formatConfigLine(label: string, value: string): string {
 
 function findConfigValue(rows: readonly MissionControlConfigRow[], keyPath: string): string | undefined {
   return rows.find((row) => row.keyPath === keyPath)?.displayValueText;
+}
+
+function getMemoryCompileThreshold(
+  inspector: MissionControlSnapshot["configInspector"] | null,
+): number | undefined {
+  const rows = getConfigRowsForTab(inspector, "memory");
+  const threshold = rows.find((row) => row.keyPath === "memory.learnings.compile_threshold");
+  const rawValue = threshold?.effectiveValueText ?? threshold?.valueText;
+  if (!rawValue) return undefined;
+  const parsed = Number.parseInt(rawValue, 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function formatTriggerPreview(keywords: readonly string[], globs: readonly string[]): string {
