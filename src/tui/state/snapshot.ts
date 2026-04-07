@@ -34,7 +34,7 @@ import { getValidFeatureTransitions } from "../../domain/mission-state.js";
 import { classifyRuntime } from "../../usecases/runtime-supervision.usecase.js";
 import { getWorkerHealthRows } from "../../usecases/worker-health.usecase.js";
 import { getGraphContext } from "../../usecases/graph-context.usecase.js";
-import { getMemoryStats } from "../../usecases/memory-stats.usecase.js";
+import { buildMemoryStats } from "../../usecases/memory-stats.usecase.js";
 import { deriveEvents } from "./events.js";
 import { buildConfigInspector } from "./config-inspector.js";
 import type {
@@ -504,23 +504,25 @@ async function buildMissionControlMemorySnapshot(
     return memorySnapshotCache.value;
   }
 
-  const [stats, corrections, rawLearnings, compiledLearnings, ratchetSuite, ratchetBaseline] = await Promise.all([
-    getMemoryStats(
-      deps.correctionStore,
-      deps.learningStore,
-      deps.ratchetStore,
-      deps.projectGraphStore,
-    ),
+  const [corrections, rawLearnings, compiledLearnings, ratchetSuite, ratchetBaseline, graphContext] = await Promise.all([
     deps.correctionStore.list(),
     deps.learningStore.listRaw(),
     deps.learningStore.readCompiled(),
     deps.ratchetStore.getSuite(),
     deps.ratchetStore.getBaseline(),
+    deps.projectGraphStore
+      ? getGraphContext(deps.projectGraphStore, basename(deps.cwd))
+      : Promise.resolve(undefined),
   ]);
-
-  const graphContext = deps.projectGraphStore
-    ? await getGraphContext(deps.projectGraphStore, basename(deps.cwd))
-    : undefined;
+  const stats = buildMemoryStats({
+    corrections,
+    rawLearningCount: rawLearnings.length,
+    compiledLearnings,
+    ratchetSuite,
+    ratchetBaseline,
+    graphProjects: graphContext?.totalProjects ?? 0,
+    graphLinks: graphContext?.totalEdges ?? 0,
+  });
 
   const result: MissionControlMemorySnapshot = {
     stats,

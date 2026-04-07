@@ -5,10 +5,6 @@ import { MAESTRO_DIR, MEMORY_DIR } from "../domain/defaults.js";
 import { ensureDir, readJson, writeJson, removeIfExists } from "../lib/fs.js";
 import type { CorrectionStorePort } from "../ports/correction-store.port.js";
 
-interface CorrectionIndex {
-  readonly keywords: Record<string, readonly string[]>;
-}
-
 export class FsCorrectionStoreAdapter implements CorrectionStorePort {
   constructor(private readonly baseDir: string) {}
 
@@ -18,10 +14,6 @@ export class FsCorrectionStoreAdapter implements CorrectionStorePort {
 
   private itemPath(id: string): string {
     return join(this.dir(), `${id}.json`);
-  }
-
-  private indexPath(): string {
-    return join(this.dir(), "_index.json");
   }
 
   async create(input: CreateCorrectionInput): Promise<Correction> {
@@ -38,7 +30,6 @@ export class FsCorrectionStoreAdapter implements CorrectionStorePort {
       updatedAt: now,
     };
     await writeJson(this.itemPath(id), correction);
-    await this.rebuildIndex();
     return correction;
   }
 
@@ -72,14 +63,11 @@ export class FsCorrectionStoreAdapter implements CorrectionStorePort {
       updatedAt: new Date().toISOString(),
     };
     await writeJson(this.itemPath(id), updated);
-    await this.rebuildIndex();
     return updated;
   }
 
   async remove(id: string): Promise<boolean> {
-    const removed = await removeIfExists(this.itemPath(id));
-    if (removed) await this.rebuildIndex();
-    return removed;
+    return removeIfExists(this.itemPath(id));
   }
 
   private matchesQuery(correction: Correction, query: CorrectionQuery): boolean {
@@ -144,19 +132,5 @@ export class FsCorrectionStoreAdapter implements CorrectionStorePort {
       if (!Number.isNaN(seq) && seq > maxSeq) maxSeq = seq;
     }
     return `${prefix}-${String(maxSeq + 1).padStart(3, "0")}`;
-  }
-
-  private async rebuildIndex(): Promise<void> {
-    const all = await this.list();
-    const keywords: Record<string, string[]> = {};
-    for (const c of all) {
-      for (const kw of c.trigger.keywords) {
-        const lower = kw.toLowerCase();
-        if (!keywords[lower]) keywords[lower] = [];
-        keywords[lower].push(c.id);
-      }
-    }
-    const index: CorrectionIndex = { keywords };
-    await writeJson(this.indexPath(), index);
   }
 }

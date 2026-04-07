@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { access, mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { FsCorrectionStoreAdapter } from "../../../src/adapters/correction-store.adapter.js";
@@ -108,13 +108,14 @@ describe("FsCorrectionStoreAdapter", () => {
     expect(result).toBeUndefined();
   });
 
-  it("builds keyword index after create", async () => {
+  it("does not write an unused keyword index after create", async () => {
     await store.create(input);
-    const { readJson } = await import("../../../src/lib/fs.js");
-    const index = await readJson<{ keywords: Record<string, string[]> }>(
-      join(dir, ".maestro", "memory", "corrections", "_index.json"),
-    );
-    expect(index?.keywords["package"]).toBeTruthy();
-    expect(index?.keywords["npm"]).toBeTruthy();
+    let exists = true;
+    try {
+      await access(join(dir, ".maestro", "memory", "corrections", "_index.json"));
+    } catch {
+      exists = false;
+    }
+    expect(exists).toBe(false);
   });
 });
