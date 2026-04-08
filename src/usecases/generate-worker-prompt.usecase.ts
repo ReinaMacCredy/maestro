@@ -10,7 +10,6 @@ import type { RuntimeStorePort } from "../ports/runtime-store.port.js";
 import type { CorrectionStorePort } from "../ports/correction-store.port.js";
 import type { LearningStorePort } from "../ports/learning-store.port.js";
 import type { Feature, Mission, Milestone, Assertion, MilestoneProfile } from "../domain/mission-types.js";
-import type { Correction, CompiledLearnings } from "../domain/memory-types.js";
 import { MaestroError } from "../domain/errors.js";
 import { WORKER_TYPE_PATTERN } from "../domain/mission-validators.js";
 import { readText, writeText, ensureDir } from "../lib/fs.js";
@@ -110,18 +109,13 @@ export async function generateWorkerPrompt(
     // worker-base skill not found -- skip handoff protocol section
   }
 
-  const previousMilestoneReports = await loadPreviousMilestoneReports(
-    baseDir,
-    mission,
-    allFeatures,
-    missionId,
-    milestone,
-  );
-
-  // Best-effort memory recall. Memory is an enhancement, never a blocker:
-  // a missing memory dir on a fresh project, a corrupted file, or an unseeded
-  // store must never prevent a worker prompt from being generated.
-  const recalledMemory = await safeRecallMemory(correctionStore, learningStore, feature);
+  // Both reads are independent filesystem operations -- run them in parallel.
+  // Memory recall is best-effort and must never block prompt generation; a
+  // missing memory dir, corrupted file, or unseeded store yields undefined.
+  const [previousMilestoneReports, recalledMemory] = await Promise.all([
+    loadPreviousMilestoneReports(baseDir, mission, allFeatures, missionId, milestone),
+    safeRecallMemory(correctionStore, learningStore, feature),
+  ]);
 
   // Generate the prompt
   const prompt = composePrompt(mission, milestone, feature, featureAssertions, skillContent, allFeatures, handoffProtocol, previousMilestoneReports, recalledMemory);
@@ -549,10 +543,11 @@ function composePrompt(
     parts.push("");
   }
 
-  // Relevant Memory - auto-injected corrections and compiled learnings
-  // from the maestro memory system, placed before the skill block so the
-  // worker reads prior rules before the generic skill instructions.
-  if (recalledMemory && (recalledMemory.corrections.length > 0 || recalledMemory.compiledLearnings)) {
+  // Relevant Memory - auto-injected corrections and compiled learnings.
+  // Placed before the skill block so the worker reads prior rules before
+  // the generic skill instructions. safeRecallMemory() already filters out
+  // empty results, so a non-undefined value always has something to render.
+  if (recalledMemory) {
     appendMemorySection(parts, recalledMemory);
   }
 
