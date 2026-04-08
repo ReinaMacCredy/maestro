@@ -163,24 +163,6 @@ describe("loadMissionControlSnapshot", () => {
     });
   });
 
-  it("applies runtime recovery in supervise mode before projecting the snapshot", async () => {
-    const missionId = await createMissionAndRuntime("supervise");
-
-    const snapshot = await loadMissionControlSnapshot(snapshotDeps, homeSnapshotDeps, "supervise", missionId);
-
-    expect(snapshot.activeFeature).toMatchObject({
-      id: "f1",
-      status: "pending",
-      runtimeState: "recoverable",
-      retryCount: 1,
-    });
-    expect(await snapshotDeps.featureStore.get(missionId, "f1")).toMatchObject({ status: "pending" });
-    expect(await runtimeStore.get(missionId, "f1")).toMatchObject({
-      runtimeState: "recoverable",
-      recoveryMetadata: { retryCount: 1 },
-    });
-  });
-
   it("re-resolves the mission after starting in home mode without an explicit mission", async () => {
     const loader = createMissionControlSnapshotLoader(
       snapshotDeps,

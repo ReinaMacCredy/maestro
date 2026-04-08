@@ -360,7 +360,6 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
       await updateFeature(
         opts.snapshotDeps.missionStore,
         opts.snapshotDeps.featureStore,
-        opts.snapshotDeps.runtimeStore,
         process.cwd(),
         state.snapshot.missionId,
         feature.id,

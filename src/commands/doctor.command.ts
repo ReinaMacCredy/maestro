@@ -11,7 +11,6 @@ export function registerDoctorCommand(program: Command): void {
     .action(async (opts) => {
       const services = getServices();
       const checks = await runDoctor(
-        services.cass,
         services.git,
         services.config,
         process.cwd(),

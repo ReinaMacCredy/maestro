@@ -11,9 +11,7 @@ export function registerStatusCommand(program: Command): void {
     .action(async (opts) => {
       const services = getServices();
       const status = await checkStatus(
-        services.handoffStore,
         services.config,
-        services.cass,
         services.git,
         process.cwd(),
       );
@@ -31,23 +29,6 @@ export function registerStatusCommand(program: Command): void {
         lines.push(
           s.gitAvailable ? "[ok] Git available" : "[!] Not in a git repo",
         );
-        lines.push(
-          s.cassAvailable
-            ? "[ok] CASS available"
-            : "[!] CASS not available. Install: brew install dicklesworthstone/tap/cass",
-        );
-
-        if (s.pendingHandoffs.length > 0) {
-          lines.push(
-            "",
-            `${s.pendingHandoffs.length} pending handoff(s):`,
-          );
-          for (const e of s.pendingHandoffs) {
-            lines.push(`  ${e.handoff.id}  ${e.handoff.message}`);
-          }
-        } else {
-          lines.push("", "No pending handoffs");
-        }
 
         return lines;
       });

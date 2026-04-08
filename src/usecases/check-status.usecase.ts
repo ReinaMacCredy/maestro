@@ -1,27 +1,26 @@
-import type { HandoffStorePort } from "../ports/handoff-store.port.js";
 import type { ConfigPort } from "../ports/config.port.js";
-import type { CassPort } from "../ports/cass.port.js";
 import type { GitPort } from "../ports/git.port.js";
 import type { StatusReport } from "../domain/types.js";
 
+/**
+ * Phase 1 strip: the conductor model does not own handoffs or CASS
+ * availability. Pending handoffs remain on the struct as an empty
+ * array until Phase 2 introduces the UKI handoff store with a new
+ * shape, and CASS availability is hardcoded false until Phase 2
+ * removes the field entirely.
+ */
 export async function checkStatus(
-  store: HandoffStorePort,
   config: ConfigPort,
-  cass: CassPort,
   git: GitPort,
   dir: string,
 ): Promise<StatusReport> {
   const [
-    pendingHandoffs,
     projectConfigExists,
     globalConfigExists,
-    cassAvailable,
     gitAvailable,
   ] = await Promise.all([
-    store.list({ status: "pending" }),
     config.exists("project", dir),
     config.exists("global", dir),
-    cass.isAvailable(),
     git.isRepo(dir),
   ]);
 
@@ -34,8 +33,8 @@ export async function checkStatus(
   return {
     initialized: projectConfigExists || globalConfigExists,
     configSource,
-    pendingHandoffs,
-    cassAvailable,
+    pendingHandoffs: [],
+    cassAvailable: false,
     gitAvailable,
   };
 }

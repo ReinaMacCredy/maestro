@@ -1024,18 +1024,6 @@ describe("mission-control CLI", () => {
       expect(stdout).toContain("Feature 1");
     }, SLOW_CLI_TIMEOUT_MS);
 
-    it("--preview workers renders the worker health modal", async () => {
-      const missionId = await createMission(tmpDir);
-
-        const { stdout, exitCode } = await run(
-          ["mission-control", "--mission", missionId, "--preview", "workers"],
-          tmpDir,
-        );
-
-        expect(exitCode).toBe(0);
-        expectWorkersOverlay(stdout);
-      }, SLOW_CLI_TIMEOUT_MS);
-
       it("--preview output shows the empty state when no runtime output is captured yet", async () => {
         const missionId = await createMission(tmpDir);
         await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
@@ -1064,18 +1052,6 @@ describe("mission-control CLI", () => {
         expect(exitCode).toBe(0);
         expect(stdout).toContain("OVERSIZED-RUNTIME-LINE");
         expect(stdout).not.toContain("No runtime output captured yet.");
-      }, SLOW_CLI_TIMEOUT_MS);
-
-    it("--preview workers renders the workers modal", async () => {
-      const missionId = await createMission(tmpDir);
-
-        const { stdout, exitCode } = await run(
-          ["mission-control", "--mission", missionId, "--preview", "workers"],
-          tmpDir,
-        );
-
-        expect(exitCode).toBe(0);
-        expectWorkersOverlay(stdout);
       }, SLOW_CLI_TIMEOUT_MS);
 
     it("--preview worker accepts the singular alias", async () => {
@@ -1732,35 +1708,6 @@ describe("mission-control CLI", () => {
         expect(getDurationSamples(result.plainOutput).length).toBeGreaterThan(1);
       }, PTY_TIMEOUT_MS);
 
-      it("compiled binary interactive mode recovers runtime failures that happen after startup", async () => {
-        if (!pythonAvailable) return;
-        const missionId = await createMission(tmpDir);
-        const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
-
-        await setMissionStatus(tmpDir, missionId, "approved");
-        await setMissionStatus(tmpDir, missionId, "executing");
-        await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
-        await seedRuntimeThatWillExpireAfterStartup(tmpDir, missionId, "f1");
-
-        const ptyRun = runCompiledInteractivePty(
-          tmpDir,
-          ["mission-control", "--mission", missionId],
-          { input: "q", delayMs: 4_500, waitForText: "Mission Control" },
-        );
-
-        await Bun.sleep(1_200);
-        await expireRuntimeHeartbeat(tmpDir, missionId, "f1");
-
-        const result = await ptyRun;
-
-        expectCleanPtyExit(result);
-        expect(await listFeatureStatuses(tmpDir, missionId)).toMatchObject({ f1: "pending" });
-        expect(await runtimeStore.get(missionId, "f1")).toMatchObject({
-          runtimeState: "recoverable",
-          recoveryMetadata: { retryCount: 1 },
-        });
-      }, PTY_TIMEOUT_MS);
-
     it("compiled binary interactive mode remains stable across repeated launch and quit cycles", async () => {
       if (!pythonAvailable) return;
     const missionId = await createMission(tmpDir);
@@ -1774,45 +1721,6 @@ describe("mission-control CLI", () => {
       expectCleanPtyExit(result);
     }
   }, PTY_TIMEOUT_MS);
-
-      it("compiled binary interactive mode does not re-probe worker health on every idle poll", async () => {
-        if (!pythonAvailable) return;
-        const missionId = await createMission(tmpDir);
-        const { workerPath, counterPath } = await writeProbeCounterWorker(tmpDir);
-        await writeWorkerProbeConfig(tmpDir, workerPath);
-
-      const result = await runCompiledInteractivePty(
-        tmpDir,
-        ["mission-control", "--mission", missionId],
-        { input: "q", delayMs: 6_500, waitForText: "Mission Control" },
-      );
-
-      expectCleanPtyExit(result);
-        const probeCount = Number(await readFile(counterPath, "utf8"));
-        expect(probeCount).toBeLessThanOrEqual(2);
-        }, PTY_TIMEOUT_MS);
-
-      it("compiled binary interactive mode stays probe-free beyond the old worker probe cache TTL", async () => {
-        if (!pythonAvailable) return;
-        const missionId = await createMission(tmpDir);
-        const { workerPath, counterPath } = await writeProbeCounterWorker(tmpDir);
-        await writeWorkerProbeConfig(tmpDir, workerPath);
-
-        const result = await runCompiledInteractivePty(
-          tmpDir,
-          ["mission-control", "--mission", missionId],
-          {
-            input: "q",
-            delayMs: 35_500,
-            timeoutMs: 50_000,
-            waitForText: "Mission Control",
-          },
-        );
-
-        expectCleanPtyExit(result);
-        const probeCount = Number(await readFile(counterPath, "utf8"));
-        expect(probeCount).toBeLessThanOrEqual(1);
-      }, 60_000);
 
     it("compiled binary interactive mode stays bounded with large runtime event logs", async () => {
       if (!pythonAvailable) return;
@@ -1836,26 +1744,6 @@ describe("mission-control CLI", () => {
       expect(maxCpuPct(lateWindow(result.samples))).toBeLessThan(25);
     }, PTY_TIMEOUT_MS);
 
-    it("compiled binary interactive mode stays bounded on sparse many-feature missions", async () => {
-      if (!pythonAvailable) return;
-      const missionId = await createMissionWithFeatureCount(tmpDir, 160);
-      await setMissionStatus(tmpDir, missionId, "approved");
-      await setMissionStatus(tmpDir, missionId, "executing");
-      await setFeatureStatus(tmpDir, missionId, "f1", "assigned");
-      await seedLiveRuntimeOutput(tmpDir, missionId, "f1");
-
-      const result = await runCompiledInteractivePty(
-        tmpDir,
-        ["mission-control", "--mission", missionId],
-        { input: "q", delayMs: 10_500, waitForText: "Mission Control", sampleProcess: true },
-      );
-
-      expectCleanPtyExit(result);
-      const samples = lateWindow(result.samples);
-      expect(samples.length).toBeGreaterThanOrEqual(6);
-      expect(rssGrowthKb(samples)).toBeLessThan(40_960);
-      expect(maxCpuPct(samples)).toBeLessThan(35);
-    }, PTY_TIMEOUT_MS);
 
     // -----------------------------------------------------------------------
     // Resource leak regression tests

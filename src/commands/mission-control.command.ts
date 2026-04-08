@@ -21,7 +21,6 @@ import {
   isPreviewScreen,
   type PreviewScreen,
 } from "../tui/app/preview-state.js";
-import { recoverMissionRuntimeFailures } from "../usecases/runtime-recovery.usecase.js";
 
 export type MissionControlSnapshotLoadMode = "read" | "supervise";
 
@@ -329,14 +328,10 @@ async function buildMissionSnapshot(
     ]);
   }
 
-  if (mode === "supervise") {
-    await recoverMissionRuntimeFailures(
-      snapshotDeps.missionStore,
-      snapshotDeps.featureStore,
-      snapshotDeps.runtimeStore,
-      missionId,
-    );
-  }
+  // Phase 1 strip: runtime recovery no longer runs inside mission
+  // control. The conductor model does not own runtime supervision;
+  // the "supervise" mode is kept as a no-op hook for future Phase 3
+  // removal so that existing call sites do not regress.
 
   return buildSnapshot(snapshotDeps, missionId, {
     probeWorkers: options.probeWorkers ?? mode === "supervise",

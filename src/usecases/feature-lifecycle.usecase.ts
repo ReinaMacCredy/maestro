@@ -4,23 +4,16 @@
  */
 import type { FeatureStorePort } from "../ports/feature-store.port.js";
 import type { MissionStorePort } from "../ports/mission-store.port.js";
-import type { RuntimeStorePort } from "../ports/runtime-store.port.js";
 import type {
   Feature,
-  FeatureStatus,
   UpdateFeatureInput,
   WorkerReport,
 } from "../domain/mission-types.js";
-import type { WorkerRuntime } from "../domain/runtime-types.js";
 import { MaestroError } from "../domain/errors.js";
 import { assertFeatureTransition } from "../domain/mission-state.js";
 import { writeJson, readJson, ensureDir } from "../lib/fs.js";
 import { join } from "node:path";
-import {
-  DEFAULT_RUNTIME_LEASE_MS,
-  MAESTRO_DIR,
-  UNKNOWN_AGENT,
-} from "../domain/defaults.js";
+import { MAESTRO_DIR } from "../domain/defaults.js";
 
 /** Result of listing features */
 export interface ListFeaturesResult {
@@ -70,12 +63,16 @@ export async function listFeatures(
 
 /**
  * Update a feature's status and/or report
- * Enforces legal state transitions and persists worker reports
+ * Enforces legal state transitions and persists worker reports.
+ *
+ * BEHAVIOR CHANGE (v1.0.0): This no longer writes to the runtime store.
+ * Runtime state is owned externally now that maestro does not spawn
+ * workers. The only persistent effect is the feature/report update
+ * (plus retry-log bookkeeping).
  */
 export async function updateFeature(
   missionStore: MissionStorePort,
   featureStore: FeatureStorePort,
-  runtimeStore: RuntimeStorePort,
   baseDir: string,
   missionId: string,
   featureId: string,
@@ -154,95 +151,7 @@ export async function updateFeature(
     throw new MaestroError(`Failed to update feature ${featureId}`);
   }
 
-  await syncWorkerRuntime(
-    runtimeStore,
-    missionId,
-    featureId,
-    existing,
-    updated,
-    reportPersisted,
-    input.retryReason,
-  );
-
   return { feature: updated, reportPersisted, missionAutoStarted };
-}
-
-async function syncWorkerRuntime(
-  runtimeStore: RuntimeStorePort,
-  missionId: string,
-  featureId: string,
-  existing: Feature,
-  updated: Feature,
-  reportPersisted?: string,
-  retryReason?: string,
-): Promise<void> {
-  const current = await runtimeStore.get(missionId, featureId);
-  if (!current) return;
-
-  const now = Date.now();
-  const nowIso = new Date(now).toISOString();
-  const nextRuntime = deriveNextRuntime(current, existing, updated, reportPersisted, retryReason, now, nowIso);
-  await runtimeStore.save(missionId, featureId, nextRuntime);
-}
-
-function deriveNextRuntime(
-  runtime: WorkerRuntime,
-  existing: Feature,
-  updated: Feature,
-  reportPersisted: string | undefined,
-  retryReason: string | undefined,
-  now: number,
-  nowIso: string,
-): WorkerRuntime {
-  const recoveryMetadata = {
-    ...runtime.recoveryMetadata,
-    history: [...runtime.recoveryMetadata.history],
-  };
-  const isPendingRetry = updated.status === "pending" && existing.status !== "pending";
-  const isActiveStatus =
-    updated.status === "assigned" || updated.status === "in-progress" || updated.status === "review";
-  const hasWorkerEvidence = reportPersisted !== undefined || isActiveStatus || updated.status === "done";
-
-  let runtimeState = runtime.runtimeState;
-  let failureReason = runtime.failureReason;
-  let agent = runtime.agent;
-  let sessionId = runtime.sessionId;
-
-  if (updated.status === "done") {
-    runtimeState = "completed";
-    failureReason = undefined;
-  } else if (updated.status === "blocked") {
-    runtimeState = "failed";
-    failureReason = updated.report?.salientSummary ?? runtime.failureReason;
-  } else if (isPendingRetry) {
-    const wasRuntimeRecovery = existing.status === "assigned" || existing.status === "in-progress";
-    runtimeState = wasRuntimeRecovery ? "recoverable" : "starting";
-    failureReason = wasRuntimeRecovery ? retryReason : undefined;
-    agent = UNKNOWN_AGENT;
-    sessionId = undefined;
-  } else if (reportPersisted !== undefined || isActiveStatus) {
-    runtimeState = "live";
-    failureReason = undefined;
-  }
-
-  return {
-    ...runtime,
-    agent,
-    sessionId,
-    runtimeState,
-    lastSeenAt: hasWorkerEvidence ? nowIso : runtime.lastSeenAt,
-    leaseExpiresAt: hasWorkerEvidence
-      ? new Date(now + DEFAULT_RUNTIME_LEASE_MS).toISOString()
-      : runtime.leaseExpiresAt,
-    failureReason,
-    ...(reportPersisted !== undefined
-      ? {
-        recoveryMetadata,
-      }
-      : {
-        recoveryMetadata,
-      }),
-  };
 }
 
 /**

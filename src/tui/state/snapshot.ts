@@ -32,7 +32,6 @@ import { checkStatus } from "../../usecases/check-status.usecase.js";
 import { runDoctor } from "../../usecases/run-doctor.usecase.js";
 import { getValidFeatureTransitions } from "../../domain/mission-state.js";
 import { classifyRuntime } from "../../usecases/runtime-supervision.usecase.js";
-import { getWorkerHealthRows } from "../../usecases/worker-health.usecase.js";
 import { getGraphContext } from "../../usecases/graph-context.usecase.js";
 import { buildMemoryStats } from "../../usecases/memory-stats.usecase.js";
 import { deriveEvents } from "./events.js";
@@ -42,6 +41,7 @@ import type {
   MissionControlFeatureRow,
   MissionControlFeatureDetail,
   MissionControlWorkerPane,
+  MissionControlWorkerHealthRow,
   MissionControlMilestoneRow,
   MissionControlHomeAction,
   MissionControlHomeHandoff,
@@ -177,13 +177,8 @@ export async function buildSnapshot(
     ]),
   );
   const featureGraph = buildFeatureGraph(features);
-  const workerHealth = await getWorkerHealthRows(configLayers.effective.workers ?? {}, {
-    probe: options.probeWorkers !== false,
-    activeWorkers: features
-      .filter((feature) => feature.status === "assigned" || feature.status === "in-progress" || feature.status === "review")
-      .map((feature) => runtimeByFeature.get(feature.id)?.agent ?? "unknown")
-      .filter((agent) => agent !== "unknown"),
-  });
+  // Phase 1 strip: worker health pane is empty until Phase 3 removes it.
+  const workerHealth: readonly MissionControlWorkerHealthRow[] = [];
     const taskPreviews = features.map((feature) =>
       buildTaskPreview(feature, report, runtimeByFeature, featureGraph.get(feature.id))
     );
@@ -369,9 +364,8 @@ export async function buildHomeSnapshot(
   const actions = buildHomeActions(status, checks);
   const pendingHandoffs = status.pendingHandoffs.map(mapPendingHandoff);
 
-    const workerHealth = await getWorkerHealthRows(configLayers.effective.workers ?? {}, {
-      probe: options.probeWorkers !== false,
-    });
+    // Phase 1 strip: worker health pane is empty until Phase 3 removes it.
+    const workerHealth: readonly MissionControlWorkerHealthRow[] = [];
 
     return {
     mode: "home",
