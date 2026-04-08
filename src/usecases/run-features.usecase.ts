@@ -5,6 +5,8 @@ import type { MissionStorePort } from "../ports/mission-store.port.js";
 import type { RuntimeStorePort } from "../ports/runtime-store.port.js";
 import type { RuntimeEventStorePort } from "../ports/runtime-event-store.port.js";
 import type { TransportPort } from "../ports/transport.port.js";
+import type { CorrectionStorePort } from "../ports/correction-store.port.js";
+import type { LearningStorePort } from "../ports/learning-store.port.js";
 import type { Feature, WorkerReport } from "../domain/mission-types.js";
 import type { MaestroConfig } from "../domain/types.js";
 import type { ExecutionRecord, FailureClass, WorkerConfig, WorkerResult } from "../domain/worker-types.js";
@@ -52,6 +54,11 @@ export interface RunFeaturesDeps {
   readonly transport: TransportPort;
   readonly baseDir: string;
   readonly config: MaestroConfig;
+  // Optional: when provided, the memory system auto-injects relevant
+  // corrections + compiled learnings into each worker prompt. When absent
+  // (or when the stores throw), prompt generation proceeds unaffected.
+  readonly correctionStore?: CorrectionStorePort;
+  readonly learningStore?: LearningStorePort;
 }
 
 export async function runFeatures(
@@ -174,6 +181,9 @@ export async function runFeatureAttempt(
     deps.baseDir,
     feature.missionId,
     feature.id,
+    undefined,
+    deps.correctionStore,
+    deps.learningStore,
   );
 
   if (opts.dryRun) {

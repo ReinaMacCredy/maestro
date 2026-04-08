@@ -13,6 +13,8 @@ import { FsMissionStoreAdapter } from "../../../src/adapters/mission-store.adapt
 import { FsFeatureStoreAdapter } from "../../../src/adapters/feature-store.adapter.js";
 import { FsAssertionStoreAdapter } from "../../../src/adapters/assertion-store.adapter.js";
 import { FsRuntimeStoreAdapter } from "../../../src/adapters/runtime-store.adapter.js";
+import { FsCorrectionStoreAdapter } from "../../../src/adapters/correction-store.adapter.js";
+import { FsLearningStoreAdapter } from "../../../src/adapters/learning-store.adapter.js";
 import { MaestroError } from "../../../src/domain/errors.js";
 import type { MilestoneInput } from "../../../src/domain/mission-types.js";
 
@@ -777,4 +779,199 @@ describe("generateWorkerPrompt", () => {
       expect(result.prompt).toContain("#### f1: Prior Feature");
       expect(result.prompt).toContain("Reusable summary");
     });
+
+  describe("memory injection", () => {
+    it("injects matching corrections as a Relevant Memory section when stores are provided", async () => {
+      const missionStore = new FsMissionStoreAdapter(tmpDir);
+      const featureStore = new FsFeatureStoreAdapter(tmpDir);
+      const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+      const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
+      const correctionStore = new FsCorrectionStoreAdapter(tmpDir);
+      const learningStore = new FsLearningStoreAdapter(tmpDir);
+
+      const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
+      await createSampleSkill(tmpDir, "test-skill", "# Test Skill");
+
+      // Seed a correction whose keywords match the test feature's title+description.
+      await correctionStore.create({
+        rule: "prefer fetch() over XMLHttpRequest for new network code",
+        source: "Prior session used deprecated API despite having fetch available",
+        trigger: { keywords: ["feature", "tests"], fileGlobs: [] },
+        severity: "soft",
+      });
+
+      const result = await generateWorkerPrompt(
+        missionStore,
+        featureStore,
+        assertionStore,
+        runtimeStore,
+        tmpDir,
+        missionId,
+        "f1",
+        undefined,
+        correctionStore,
+        learningStore,
+      );
+
+      expect(result.prompt).toContain("## Relevant Memory");
+      expect(result.prompt).toContain("prefer fetch() over XMLHttpRequest");
+      // Memory section must appear BEFORE the skill block so the worker reads rules first.
+      const memoryIdx = result.prompt.indexOf("## Relevant Memory");
+      const skillIdx = result.prompt.indexOf("## Skill Instructions");
+      expect(memoryIdx).toBeGreaterThan(-1);
+      expect(skillIdx).toBeGreaterThan(memoryIdx);
+    });
+
+    it("always surfaces hard corrections even when their keyword score is low", async () => {
+      const missionStore = new FsMissionStoreAdapter(tmpDir);
+      const featureStore = new FsFeatureStoreAdapter(tmpDir);
+      const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+      const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
+      const correctionStore = new FsCorrectionStoreAdapter(tmpDir);
+      const learningStore = new FsLearningStoreAdapter(tmpDir);
+
+      const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
+      await createSampleSkill(tmpDir, "test-skill", "# Test Skill");
+
+      // Hard rule with NO keyword overlap with the feature — must still appear.
+      await correctionStore.create({
+        rule: "never commit secrets in plaintext; use the secrets manager",
+        source: "prior leak incident",
+        trigger: { keywords: ["zzz-unrelated-token"], fileGlobs: [] },
+        severity: "hard",
+      });
+
+      const result = await generateWorkerPrompt(
+        missionStore,
+        featureStore,
+        assertionStore,
+        runtimeStore,
+        tmpDir,
+        missionId,
+        "f1",
+        undefined,
+        correctionStore,
+        learningStore,
+      );
+
+      expect(result.prompt).toContain("## Relevant Memory");
+      expect(result.prompt).toContain("never commit secrets in plaintext");
+    });
+
+    it("includes compiled learnings summary in the memory section when present", async () => {
+      const missionStore = new FsMissionStoreAdapter(tmpDir);
+      const featureStore = new FsFeatureStoreAdapter(tmpDir);
+      const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+      const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
+      const correctionStore = new FsCorrectionStoreAdapter(tmpDir);
+      const learningStore = new FsLearningStoreAdapter(tmpDir);
+
+      const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
+      await createSampleSkill(tmpDir, "test-skill", "# Test Skill");
+
+      await learningStore.writeCompiled({
+        compiledAt: new Date().toISOString(),
+        summary: "Week 3: redis TTL is load-bearing for session rotation.",
+        rawCount: 4,
+      });
+
+      const result = await generateWorkerPrompt(
+        missionStore,
+        featureStore,
+        assertionStore,
+        runtimeStore,
+        tmpDir,
+        missionId,
+        "f1",
+        undefined,
+        correctionStore,
+        learningStore,
+      );
+
+      expect(result.prompt).toContain("## Relevant Memory");
+      expect(result.prompt).toContain("redis TTL is load-bearing");
+    });
+
+    it("omits the Relevant Memory section entirely when no stores are passed (backward compat)", async () => {
+      const missionStore = new FsMissionStoreAdapter(tmpDir);
+      const featureStore = new FsFeatureStoreAdapter(tmpDir);
+      const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+      const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
+
+      const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
+      await createSampleSkill(tmpDir, "test-skill", "# Test Skill");
+
+      const result = await generateWorkerPrompt(
+        missionStore,
+        featureStore,
+        assertionStore,
+        runtimeStore,
+        tmpDir,
+        missionId,
+        "f1",
+      );
+
+      expect(result.prompt).not.toContain("## Relevant Memory");
+    });
+
+    it("omits the Relevant Memory section when memory store is empty (no noise)", async () => {
+      const missionStore = new FsMissionStoreAdapter(tmpDir);
+      const featureStore = new FsFeatureStoreAdapter(tmpDir);
+      const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+      const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
+      const correctionStore = new FsCorrectionStoreAdapter(tmpDir);
+      const learningStore = new FsLearningStoreAdapter(tmpDir);
+
+      const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
+      await createSampleSkill(tmpDir, "test-skill", "# Test Skill");
+
+      // Fresh project — no corrections, no compiled learnings on disk.
+      const result = await generateWorkerPrompt(
+        missionStore,
+        featureStore,
+        assertionStore,
+        runtimeStore,
+        tmpDir,
+        missionId,
+        "f1",
+        undefined,
+        correctionStore,
+        learningStore,
+      );
+
+      expect(result.prompt).not.toContain("## Relevant Memory");
+    });
+
+    it("never blocks prompt generation when memory read throws (best effort)", async () => {
+      const missionStore = new FsMissionStoreAdapter(tmpDir);
+      const featureStore = new FsFeatureStoreAdapter(tmpDir);
+      const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+      const runtimeStore = new FsRuntimeStoreAdapter(tmpDir);
+      const learningStore = new FsLearningStoreAdapter(tmpDir);
+
+      const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
+      await createSampleSkill(tmpDir, "test-skill", "# Test Skill");
+
+      // A correction store that blows up on every call -- memory must still not break prompt gen.
+      const explodingStore: FsCorrectionStoreAdapter = {
+        list: async () => { throw new Error("simulated disk failure"); },
+      } as unknown as FsCorrectionStoreAdapter;
+
+      const result = await generateWorkerPrompt(
+        missionStore,
+        featureStore,
+        assertionStore,
+        runtimeStore,
+        tmpDir,
+        missionId,
+        "f1",
+        undefined,
+        explodingStore,
+        learningStore,
+      );
+
+      expect(result.prompt).toContain("Worker Assignment: Test Feature");
+      expect(result.prompt).not.toContain("## Relevant Memory");
+    });
+  });
   });

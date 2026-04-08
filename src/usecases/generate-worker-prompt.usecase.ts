@@ -7,7 +7,10 @@ import type { FeatureStorePort } from "../ports/feature-store.port.js";
 import type { MissionStorePort } from "../ports/mission-store.port.js";
 import type { AssertionStorePort } from "../ports/assertion-store.port.js";
 import type { RuntimeStorePort } from "../ports/runtime-store.port.js";
+import type { CorrectionStorePort } from "../ports/correction-store.port.js";
+import type { LearningStorePort } from "../ports/learning-store.port.js";
 import type { Feature, Mission, Milestone, Assertion, MilestoneProfile } from "../domain/mission-types.js";
+import type { Correction, CompiledLearnings } from "../domain/memory-types.js";
 import { MaestroError } from "../domain/errors.js";
 import { WORKER_TYPE_PATTERN } from "../domain/mission-validators.js";
 import { readText, writeText, ensureDir } from "../lib/fs.js";
@@ -17,6 +20,7 @@ import { DEFAULT_RUNTIME_LEASE_MS, MAESTRO_DIR, UNKNOWN_AGENT } from "../domain/
 import { assertSafeSegment, resolveWithin } from "../lib/path-safety.js";
 import type { WorkerRuntime } from "../domain/runtime-types.js";
 import { parseWorkerReport } from "./feature-lifecycle.usecase.js";
+import { recallMemory, type RecallResult } from "./memory-recall.usecase.js";
 
 interface PreviousMilestoneReport {
   readonly featureId: string;
@@ -59,6 +63,8 @@ export async function generateWorkerPrompt(
   missionId: string,
   featureId: string,
   outPath?: string,
+  correctionStore?: CorrectionStorePort,
+  learningStore?: LearningStorePort,
 ): Promise<GenerateWorkerPromptResult> {
   // Verify mission exists
   const mission = await missionStore.get(missionId);
@@ -112,8 +118,13 @@ export async function generateWorkerPrompt(
     milestone,
   );
 
+  // Best-effort memory recall. Memory is an enhancement, never a blocker:
+  // a missing memory dir on a fresh project, a corrupted file, or an unseeded
+  // store must never prevent a worker prompt from being generated.
+  const recalledMemory = await safeRecallMemory(correctionStore, learningStore, feature);
+
   // Generate the prompt
-  const prompt = composePrompt(mission, milestone, feature, featureAssertions, skillContent, allFeatures, handoffProtocol, previousMilestoneReports);
+  const prompt = composePrompt(mission, milestone, feature, featureAssertions, skillContent, allFeatures, handoffProtocol, previousMilestoneReports, recalledMemory);
 
   // Track written paths
   const writtenPaths: string[] = [];
@@ -326,6 +337,44 @@ function truncatePreviousReportSummary(summary: string): string {
   return `${summary.slice(0, PREVIOUS_REPORT_SUMMARY_LIMIT)}... [truncated]`;
 }
 
+/**
+ * Best-effort memory recall for worker prompt injection.
+ *
+ * Returns undefined (no section rendered) in any of these cases:
+ *   - memory stores are not provided (backward compatibility)
+ *   - the store throws (missing dir, corrupted file, etc.)
+ *   - recall returns no corrections and no compiled learnings
+ *
+ * Memory enhances the prompt; it must never block it.
+ */
+async function safeRecallMemory(
+  correctionStore: CorrectionStorePort | undefined,
+  learningStore: LearningStorePort | undefined,
+  feature: Feature,
+): Promise<RecallResult | undefined> {
+  if (!correctionStore || !learningStore) {
+    return undefined;
+  }
+
+  try {
+    const taskDescription = `${feature.title}\n${feature.description}`;
+    const result = await recallMemory(correctionStore, learningStore, {
+      taskDescription,
+    });
+
+    // Suppress the section when there's nothing to say. Avoids injecting
+    // empty headings into every prompt on fresh or unseeded projects.
+    if (result.corrections.length === 0 && !result.compiledLearnings) {
+      return undefined;
+    }
+
+    return result;
+  } catch {
+    // Any failure in memory recall is swallowed. The prompt still generates.
+    return undefined;
+  }
+}
+
 /** Profile-specific preambles injected into the milestone context section */
 const PROFILE_PREAMBLE: Partial<Record<MilestoneProfile, string>> = {
   planning: "You are producing a design or specification. Focus on architecture decisions, interface contracts, and identifying risks before implementation begins.",
@@ -350,6 +399,7 @@ function composePrompt(
   allFeatures: readonly Feature[],
   handoffProtocol?: string,
   previousMilestoneReports?: readonly PreviousMilestoneReport[],
+  recalledMemory?: RecallResult,
 ): string {
   const parts: string[] = [];
 
@@ -499,6 +549,13 @@ function composePrompt(
     parts.push("");
   }
 
+  // Relevant Memory - auto-injected corrections and compiled learnings
+  // from the maestro memory system, placed before the skill block so the
+  // worker reads prior rules before the generic skill instructions.
+  if (recalledMemory && (recalledMemory.corrections.length > 0 || recalledMemory.compiledLearnings)) {
+    appendMemorySection(parts, recalledMemory);
+  }
+
   // Skill instructions - wrapped in a clearly delimited block
   parts.push("## Skill Instructions");
   parts.push("");
@@ -532,6 +589,48 @@ function composePrompt(
   parts.push("");
 
   return parts.join("\n");
+}
+
+/**
+ * Render the auto-injected "Relevant Memory" section from recalled corrections
+ * and compiled learnings. Hard rules are flagged inline so the worker treats
+ * them as non-negotiable. Content is sanitized to prevent prompt structure
+ * breaking via embedded markdown headers or HTML comment tokens.
+ */
+function appendMemorySection(parts: string[], recalled: RecallResult): void {
+  parts.push("## Relevant Memory");
+  parts.push("");
+  parts.push("<!-- Auto-injected from the maestro memory system based on this feature's context. -->");
+  parts.push("<!-- These are rules and insights from prior sessions. Treat hard rules as non-negotiable. -->");
+  parts.push("");
+
+  if (recalled.corrections.length > 0) {
+    parts.push(`### Corrections (${recalled.corrections.length})`);
+    parts.push("");
+    for (const c of recalled.corrections) {
+      const badge = c.severity === "hard" ? "**[HARD]**" : "[soft]";
+      // Rule text and keywords are rendered inline: use delimitContent to
+      // escape header/comment-boundary syntax without wrapping in XML tags.
+      // sanitizePromptContent is the wrong tool here because it assumes
+      // block-level isolation and produces noisy output for single-line values.
+      const keywords = c.trigger.keywords.length > 0
+        ? ` _(${c.trigger.keywords.map((k) => delimitContent(k)).join(", ")})_`
+        : "";
+      parts.push(`- ${badge} ${delimitContent(c.rule)}${keywords}`);
+    }
+    parts.push("");
+  }
+
+  if (recalled.compiledLearnings) {
+    parts.push("### Compiled Learnings");
+    parts.push("");
+    parts.push(`_Last compiled ${recalled.compiledLearnings.compiledAt} from ${recalled.compiledLearnings.rawCount} raw entries:_`);
+    parts.push("");
+    // Compiled summary is block-level (potentially multi-paragraph); full
+    // sanitization with the memory-learnings tag is appropriate here.
+    parts.push(sanitizePromptContent(recalled.compiledLearnings.summary, "memory-learnings"));
+    parts.push("");
+  }
 }
 
 /**

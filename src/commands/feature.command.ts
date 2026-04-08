@@ -141,6 +141,10 @@ export function registerFeatureCommand(program: Command): void {
             transport: services.transport,
             baseDir: process.cwd(),
             config,
+            // Enables auto-injection of corrections + compiled learnings
+            // into every worker prompt. Best-effort; never blocks on failure.
+            correctionStore: services.correctionStore,
+            learningStore: services.learningStore,
           },
           {
             missionId: opts.mission,
@@ -180,6 +184,8 @@ export function registerFeatureCommand(program: Command): void {
         opts.mission,
         featureId,
         opts.out,
+        services.correctionStore,
+        services.learningStore,
       );
 
       output(isJson, result, formatPromptResult);
