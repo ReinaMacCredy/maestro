@@ -18,7 +18,11 @@ export class FsLearningStoreAdapter implements LearningStorePort {
 
   async appendRaw(entry: RawLearningEntry): Promise<void> {
     await ensureDir(this.rawDir());
-    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    // Use hrtime.bigint() (nanosecond resolution) plus a random suffix so
+    // that appends issued inside the same millisecond tick still sort in
+    // insertion order. Previously `${Date.now()}-<rnd>` could collide on
+    // the timestamp and invert the lexicographic sort in `listRaw()`.
+    const suffix = `${process.hrtime.bigint()}-${Math.random().toString(36).slice(2, 6)}`;
     const filename = `${entry.sessionDate}-${suffix}.json`;
     await writeJson(join(this.rawDir(), filename), entry);
   }
