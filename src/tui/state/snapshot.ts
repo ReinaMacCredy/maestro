@@ -7,16 +7,8 @@ import type { MissionStorePort } from "../../ports/mission-store.port.js";
 import type { FeatureStorePort } from "../../ports/feature-store.port.js";
 import type { AssertionStorePort } from "../../ports/assertion-store.port.js";
 import type { CheckpointStorePort } from "../../ports/checkpoint-store.port.js";
-import type { HandoffStorePort } from "../../ports/handoff-store.port.js";
 import type { ConfigPort } from "../../ports/config.port.js";
-import type { CassPort } from "../../ports/cass.port.js";
 import type { GitPort } from "../../ports/git.port.js";
-import type { RuntimeStorePort } from "../../ports/runtime-store.port.js";
-import {
-  DEFAULT_RUNTIME_EVENT_TAIL_MAX_BYTES,
-  DEFAULT_RUNTIME_EVENT_TAIL_MAX_LINES,
-  type RuntimeEventStorePort,
-} from "../../ports/runtime-event-store.port.js";
 import type { CorrectionStorePort } from "../../ports/correction-store.port.js";
 import type { LearningStorePort } from "../../ports/learning-store.port.js";
 import type { RatchetStorePort } from "../../ports/ratchet-store.port.js";
@@ -26,12 +18,9 @@ import { getMissionControlBackgroundMode, listIgnoredProjectConfigKeys } from ".
 import type { RuntimeState, WorkerRuntime } from "../../domain/runtime-types.js";
 import type { DoctorCheck, StatusReport } from "../../domain/types.js";
 import type { RuntimeEventRecord } from "../../domain/worker-types.js";
-import { CASS_INSTALL_HINT } from "../../domain/defaults.js";
 import { generateMissionReport, type MissionReport } from "../../usecases/mission-report.usecase.js";
-import { checkStatus } from "../../usecases/check-status.usecase.js";
 import { runDoctor } from "../../usecases/run-doctor.usecase.js";
 import { getValidFeatureTransitions } from "../../domain/mission-state.js";
-import { classifyRuntime } from "../../usecases/runtime-supervision.usecase.js";
 import { getGraphContext } from "../../usecases/graph-context.usecase.js";
 import { buildMemoryStats } from "../../usecases/memory-stats.usecase.js";
 import { deriveEvents } from "./events.js";
@@ -59,12 +48,8 @@ export interface SnapshotDeps {
   featureStore: FeatureStorePort;
   assertionStore: AssertionStorePort;
   checkpointStore: CheckpointStorePort;
-  handoffStore: HandoffStorePort;
   config: ConfigPort;
-  cass: CassPort;
   git: GitPort;
-  runtimeStore: RuntimeStorePort;
-  runtimeEventStore: RuntimeEventStorePort;
   correctionStore?: CorrectionStorePort;
   learningStore?: LearningStorePort;
   ratchetStore?: RatchetStorePort;
@@ -73,9 +58,7 @@ export interface SnapshotDeps {
 }
 
 export interface HomeSnapshotDeps {
-  handoffStore: HandoffStorePort;
   config: ConfigPort;
-  cass: CassPort;
   git: GitPort;
   correctionStore?: CorrectionStorePort;
   learningStore?: LearningStorePort;
@@ -131,7 +114,6 @@ export async function buildSnapshot(
     env,
     configLayers,
     gitState,
-    runtimes,
     memorySnapshot,
   ] = await Promise.all([
     generateMissionReport(
@@ -143,10 +125,9 @@ export async function buildSnapshot(
     deps.featureStore.list(missionId),
     deps.assertionStore.list(missionId),
     deps.checkpointStore.list(missionId),
-    buildMissionControlEnvironmentSummary(deps.handoffStore, deps.config, deps.cass, deps.git, deps.cwd),
+    buildMissionControlEnvironmentSummary(deps.config, deps.git, deps.cwd),
     deps.config.loadLayers(deps.cwd),
     deps.git.getState(deps.cwd),
-    deps.runtimeStore.list(missionId),
     buildMissionControlMemorySnapshot({
       correctionStore: deps.correctionStore,
       learningStore: deps.learningStore,
@@ -159,23 +140,11 @@ export async function buildSnapshot(
   const mission = report.mission;
   const now = Date.now();
   const startMs = new Date(mission.approvedAt ?? mission.createdAt).getTime();
-  const runtimeByFeature = new Map(
-    runtimes.map((runtime) => [runtime.featureId, buildRuntimeView(runtime, now)]),
-  );
-  const runtimeEventsByFeature = new Map(
-    await Promise.all(
-      [...runtimeByFeature.keys()].map(async (featureId) => [
-        featureId,
-        await listRecentRuntimeEvents(deps.runtimeEventStore, missionId, featureId),
-      ] as const),
-    ),
-  );
-  const runtimeTelemetryByFeature = new Map(
-    [...runtimeEventsByFeature.entries()].map(([featureId, events]) => [
-      featureId,
-      buildRuntimeTelemetry(events, now),
-    ]),
-  );
+  // Phase 1 strip: the conductor no longer reads runtime state; worker
+  // and runtime panes are empty until Phase 3 removes them outright.
+  const runtimeByFeature = new Map<string, RuntimeView>();
+  const runtimeEventsByFeature = new Map<string, readonly RuntimeEventRecord[]>();
+  const runtimeTelemetryByFeature = new Map<string, RuntimeTelemetry>();
   const featureGraph = buildFeatureGraph(features);
   // Phase 1 strip: worker health pane is empty until Phase 3 removes it.
   const workerHealth: readonly MissionControlWorkerHealthRow[] = [];
@@ -316,24 +285,13 @@ export async function buildSnapshot(
     };
   }
 
-async function listRecentRuntimeEvents(
-  runtimeEventStore: RuntimeEventStorePort,
-  missionId: string,
-  featureId: string,
-): Promise<readonly RuntimeEventRecord[]> {
-  return runtimeEventStore.tailByFeature(missionId, featureId, {
-    maxBytes: DEFAULT_RUNTIME_EVENT_TAIL_MAX_BYTES,
-    maxLines: DEFAULT_RUNTIME_EVENT_TAIL_MAX_LINES,
-  });
-}
-
 export async function buildHomeSnapshot(
   deps: HomeSnapshotDeps,
   cwd: string,
   options: SnapshotBuildOptions = {},
 ): Promise<MissionControlSnapshot> {
   const [env, configLayers, gitState, memorySnapshot] = await Promise.all([
-    buildMissionControlEnvironmentSummary(deps.handoffStore, deps.config, deps.cass, deps.git, cwd),
+    buildMissionControlEnvironmentSummary(deps.config, deps.git, cwd),
     deps.config.loadLayers(cwd),
     deps.git.isRepo(cwd).then((isRepo) => isRepo ? deps.git.getState(cwd) : Promise.resolve(undefined)),
     buildMissionControlMemorySnapshot({
@@ -801,20 +759,6 @@ function toFeatureRef(feature: Feature): BlockedByRef {
   };
 }
 
-function buildRuntimeView(runtime: WorkerRuntime, nowMs: number): RuntimeView {
-  const classification = classifyRuntime(runtime, nowMs);
-  return {
-    runtimeState: classification.runtimeState,
-    lastSeenAgeMs: classification.lastSeenAgeMs,
-    failureReason: runtime.failureReason,
-    retryCount: runtime.recoveryMetadata.retryCount,
-      agent: runtime.agent,
-      sessionId: runtime.sessionId,
-      startedAtMs: classification.startedAtMs,
-      leaseRemainingMs: Math.max(0, new Date(runtime.leaseExpiresAt).getTime() - nowMs),
-    };
-  }
-
 function buildRuntimeTelemetry(
   events: readonly RuntimeEventRecord[],
   nowMs: number,
@@ -874,23 +818,17 @@ function mapPendingHandoff(
 }
 
 async function buildMissionControlEnvironmentSummary(
-  handoffStore: HandoffStorePort,
   config: ConfigPort,
-  cass: CassPort,
   git: GitPort,
   cwd: string,
 ): Promise<{ status: StatusReport; checks: readonly DoctorCheck[] }> {
   const [
-    pendingHandoffs,
     projectConfigExists,
     globalConfigExists,
-    cassBinaryAvailable,
     gitAvailable,
   ] = await Promise.all([
-    handoffStore.list({ status: "pending" }),
     config.exists("project", cwd),
     config.exists("global", cwd),
-    cass.hasBinary(),
     git.isRepo(cwd),
   ]);
 
@@ -904,8 +842,11 @@ async function buildMissionControlEnvironmentSummary(
     status: {
       initialized: projectConfigExists || globalConfigExists,
       configSource,
-      pendingHandoffs,
-      cassAvailable: cassBinaryAvailable,
+      // Phase 1 strip: handoff store + CASS are gone; the fields
+      // survive on StatusReport only to keep the TUI types stable
+      // until Phase 2/3 remove them.
+      pendingHandoffs: [],
+      cassAvailable: false,
       gitAvailable,
     },
     checks: [
@@ -914,12 +855,6 @@ async function buildMissionControlEnvironmentSummary(
         status: gitAvailable ? "ok" : "fail",
         message: gitAvailable ? "Git repository detected" : "Not inside a git repository",
         fix: gitAvailable ? undefined : "Run: git init",
-      },
-      {
-        name: "cass",
-        status: cassBinaryAvailable ? "ok" : "fail",
-        message: cassBinaryAvailable ? "CASS binary detected" : "CASS binary not found",
-        fix: cassBinaryAvailable ? undefined : CASS_INSTALL_HINT,
       },
       {
         name: "project-config",

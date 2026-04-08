@@ -13,7 +13,7 @@ import {
   runRenderCheck,
 } from "../tui/opentui/index.js";
 import { buildHomeSnapshot, buildSnapshot } from "../tui/state/snapshot.js";
-import { CachingGitPort, CachingCassPort, CachingConfigPort } from "../lib/snapshot-poll-cache.js";
+import { CachingGitPort, CachingConfigPort } from "../lib/snapshot-poll-cache.js";
 import type { MissionControlSnapshot } from "../tui/state/types.js";
 import {
   PREVIEW_SCREENS,
@@ -120,22 +120,16 @@ export function registerMissionControlCommand(program: Command): void {
           featureStore: services.featureStore,
           assertionStore: services.assertionStore,
           checkpointStore: services.checkpointStore,
-        handoffStore: services.handoffStore,
-        config: services.config,
-          cass: services.cass,
-            git: services.git,
-            runtimeStore: services.runtimeStore,
-            runtimeEventStore: services.runtimeEventStore,
-            correctionStore: services.correctionStore,
-            learningStore: services.learningStore,
-            ratchetStore: services.ratchetStore,
-            projectGraphStore: services.projectGraphStore,
-            cwd: process.cwd(),
-          };
-        const homeSnapshotDeps = {
-          handoffStore: services.handoffStore,
           config: services.config,
-          cass: services.cass,
+          git: services.git,
+          correctionStore: services.correctionStore,
+          learningStore: services.learningStore,
+          ratchetStore: services.ratchetStore,
+          projectGraphStore: services.projectGraphStore,
+          cwd: process.cwd(),
+        };
+        const homeSnapshotDeps = {
+          config: services.config,
           git: services.git,
           correctionStore: services.correctionStore,
           learningStore: services.learningStore,
@@ -350,10 +344,9 @@ export function createMissionControlSnapshotLoader(
   // spawnSync leaks memory in Bun 1.3.x; repeated file reads and YAML
   // parsing also pressure GC when polling every 1-2 seconds.
   const cachingGit = new CachingGitPort(snapshotDeps.git);
-  const cachingCass = new CachingCassPort(snapshotDeps.cass);
   const cachingConfig = new CachingConfigPort(snapshotDeps.config);
-  const cachedSnapshotDeps = { ...snapshotDeps, git: cachingGit, cass: cachingCass, config: cachingConfig };
-  const cachedHomeSnapshotDeps = { ...homeSnapshotDeps, git: cachingGit, cass: cachingCass, config: cachingConfig };
+  const cachedSnapshotDeps = { ...snapshotDeps, git: cachingGit, config: cachingConfig };
+  const cachedHomeSnapshotDeps = { ...homeSnapshotDeps, git: cachingGit, config: cachingConfig };
 
   return {
       load: async (options = {}) => {

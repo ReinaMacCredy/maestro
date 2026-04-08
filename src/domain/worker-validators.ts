@@ -1,16 +1,19 @@
 import { z } from "zod";
 import { MaestroError } from "./errors.js";
 import type {
-  A2aWorkerConfig,
   CliWorkerConfig,
-  ExecutionRecord,
   ParallelConfig,
-  RuntimeEventRecord,
   SupervisionConfig,
   WorkerConfig,
 } from "./worker-types.js";
 
-const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/;
+/**
+ * Phase 1 strip: the A2A transport and execution/runtime event stores
+ * were removed. Validators for `a2a` worker configs, execution records,
+ * and runtime event records were deleted. Only the CLI worker config
+ * schema survives because `maestro doctor` and Mission Control still
+ * render CLI worker definitions.
+ */
 
 const CliWorkerConfigSchema = z.object({
   enabled: z.boolean(),
@@ -21,18 +24,7 @@ const CliWorkerConfigSchema = z.object({
   env: z.record(z.string()).optional(),
 }).strict();
 
-const A2aWorkerConfigSchema = z.object({
-  enabled: z.boolean(),
-  transport: z.literal("a2a"),
-  url: z.string().url(),
-  agentCardPath: z.string().min(1).optional(),
-  headers: z.record(z.string()).optional(),
-}).strict();
-
-export const WorkerConfigSchema = z.discriminatedUnion("transport", [
-  CliWorkerConfigSchema,
-  A2aWorkerConfigSchema,
-]);
+export const WorkerConfigSchema = CliWorkerConfigSchema;
 
 export const SupervisionConfigSchema = z.object({
   level: z.enum(["low", "mid", "high"]).optional(),
@@ -44,39 +36,6 @@ export const SupervisionConfigSchema = z.object({
 export const ParallelConfigSchema = z.object({
   enabled: z.boolean().optional(),
   maxConcurrent: z.number().int().positive().optional(),
-}).strict();
-
-export const ExecutionRecordSchema = z.object({
-  id: z.string().min(1),
-  missionId: z.string().min(1),
-  featureId: z.string().min(1),
-  worker: z.string().min(1),
-  transport: z.enum(["cli", "a2a"]),
-  attemptId: z.string().min(1),
-  startedAt: z.string().regex(ISO_DATE_PATTERN),
-  completedAt: z.string().regex(ISO_DATE_PATTERN),
-  durationMs: z.number().int().nonnegative(),
-  success: z.boolean(),
-  exitCode: z.number().int(),
-  summary: z.string(),
-  stdoutRaw: z.string(),
-  stderrRaw: z.string(),
-  filesChanged: z.array(z.string()),
-  report: z.record(z.unknown()).optional(),
-  failureClass: z.enum(["infrastructure", "worker-crash", "validation", "unknown"]).optional(),
-}).strict();
-
-export const RuntimeEventRecordSchema = z.object({
-  id: z.string().min(1),
-  missionId: z.string().min(1),
-  featureId: z.string().min(1),
-  attemptId: z.string().min(1),
-  worker: z.string().min(1),
-  timestamp: z.string().regex(ISO_DATE_PATTERN),
-  kind: z.enum(["status", "stdout", "stderr", "heartbeat"]),
-  text: z.string().optional(),
-  sessionId: z.string().min(1).optional(),
-  runtimeState: z.enum(["starting", "live", "stale", "failed", "recoverable", "completed"]).optional(),
 }).strict();
 
 function formatIssues(issues: readonly z.ZodIssue[]): string[] {
@@ -99,10 +58,6 @@ export function isCliWorkerConfig(value: WorkerConfig): value is CliWorkerConfig
   return value.transport === "cli";
 }
 
-export function isA2aWorkerConfig(value: WorkerConfig): value is A2aWorkerConfig {
-  return value.transport === "a2a";
-}
-
 export function validateSupervisionConfig(value: unknown): SupervisionConfig {
   const parsed = SupervisionConfigSchema.safeParse(value);
   if (parsed.success) {
@@ -119,22 +74,4 @@ export function validateParallelConfig(value: unknown): ParallelConfig {
   }
 
   throw new MaestroError("Invalid parallel config", formatIssues(parsed.error.issues));
-}
-
-export function validateExecutionRecord(value: unknown): ExecutionRecord {
-  const parsed = ExecutionRecordSchema.safeParse(value);
-  if (parsed.success) {
-    return parsed.data as ExecutionRecord;
-  }
-
-  throw new MaestroError("Invalid execution record", formatIssues(parsed.error.issues));
-}
-
-export function validateRuntimeEventRecord(value: unknown): RuntimeEventRecord {
-  const parsed = RuntimeEventRecordSchema.safeParse(value);
-  if (parsed.success) {
-    return parsed.data as RuntimeEventRecord;
-  }
-
-  throw new MaestroError("Invalid runtime event record", formatIssues(parsed.error.issues));
 }
