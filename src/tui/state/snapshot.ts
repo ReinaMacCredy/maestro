@@ -208,7 +208,9 @@ export async function buildSnapshot(
   ).length;
   const blockedCount = features.filter((f) => f.status === "blocked").length;
   const queuedCount = features.filter((f) => f.status === "pending").length;
-  const pendingHandoffs = env.status.pendingHandoffs.map(mapPendingHandoff);
+  // Phase 1 strip: pending handoffs are empty until Phase 2 wires
+  // the UKI handoff store into Mission Control.
+  const pendingHandoffs: readonly MissionControlHomeHandoff[] = [];
   const workerTypes = [...new Set(features.map((feature) => feature.workerType))];
   const activeMilestone = milestones.find((m) => m.status === "executing" || m.status === "validating");
   const gateLabel = activeMilestone?.kind === "gate" ? activeMilestone.title : null;
@@ -320,7 +322,9 @@ export async function buildHomeSnapshot(
       : "Open a git repository to track missions, checkpoints, and handoffs here.";
 
   const actions = buildHomeActions(status, checks);
-  const pendingHandoffs = status.pendingHandoffs.map(mapPendingHandoff);
+  // Phase 1 strip: pending handoffs are empty until Phase 2 wires
+  // the UKI handoff store into Mission Control.
+  const pendingHandoffs: readonly MissionControlHomeHandoff[] = [];
 
     // Phase 1 strip: worker health pane is empty until Phase 3 removes it.
     const workerHealth: readonly MissionControlWorkerHealthRow[] = [];
@@ -501,7 +505,7 @@ async function buildMissionControlMemorySnapshot(
 }
 
 function buildHomeActions(
-  status: Awaited<ReturnType<typeof checkStatus>>,
+  status: StatusReport,
   checks: readonly DoctorCheck[],
 ): readonly MissionControlHomeAction[] {
   const actions: MissionControlHomeAction[] = [];
@@ -802,19 +806,6 @@ function presentRuntimeState(
     return "live";
   }
   return runtime.runtimeState;
-}
-
-function mapPendingHandoff(
-  entry: Awaited<ReturnType<typeof checkStatus>>["pendingHandoffs"][number],
-): MissionControlHomeHandoff {
-  return {
-    id: entry.handoff.id,
-    message: entry.handoff.message,
-    agent: entry.handoff.session.agent,
-    sessionId: entry.handoff.session.sessionId,
-    sitrep: entry.handoff.sitrep,
-    quickstart: entry.handoff.quickstart,
-  };
 }
 
 async function buildMissionControlEnvironmentSummary(

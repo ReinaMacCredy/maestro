@@ -1,4 +1,4 @@
-/** Supported agent identifiers. Extensible -- CASS connectors are the source of truth. */
+/** Supported agent identifiers. */
 export type AgentSlug =
   | "claude-code"
   | "codex"
@@ -10,29 +10,17 @@ export type AgentSlug =
   | "cursor"
   | (string & {});
 
-export type HandoffStatus = "pending" | "picked-up" | "completed";
-
-export type DetectionMethod = "pid" | "env" | "cwd-fallback" | "explicit";
-
-export interface HandoffSession {
+/**
+ * Phase 1 strip: AgentSession replaces the old HandoffSession shape.
+ * The conductor no longer owns handoff records; this type describes the
+ * identity the session-detect adapter emits so memory + notes can
+ * associate artifacts with the current shell.
+ */
+export interface AgentSession {
   readonly agent: AgentSlug;
   readonly sessionId: string;
   readonly sourcePath: string;
   readonly startedAt?: number;
-  readonly detectionMethod?: DetectionMethod;
-}
-
-export interface PlanTask {
-  readonly id: string;
-  readonly description: string;
-  readonly status: "pending" | "done" | "blocked";
-  readonly dependsOn: readonly string[];
-}
-
-export interface HandoffPlan {
-  readonly tasks: readonly PlanTask[];
-  readonly completed: number;
-  readonly remaining: number;
 }
 
 export interface GitState {
@@ -55,27 +43,6 @@ export interface GitFileChange {
     | "typechange"
     | "untracked"
     | "conflicted";
-}
-
-export interface Handoff {
-  readonly id: string;
-  readonly timestamp: string;
-  readonly message: string;
-  readonly session: HandoffSession;
-  readonly plan?: HandoffPlan;
-  readonly sitrep: string;
-  readonly quickstart: string;
-  readonly instructions?: string;
-  readonly git: GitState;
-}
-
-export interface HandoffEnvelope {
-  readonly handoff: Handoff;
-  readonly status: HandoffStatus;
-  readonly pickedUpAt?: string;
-  readonly pickedUpBy?: AgentSlug;
-  readonly completedAt?: string;
-  readonly report?: string;
 }
 
 export interface NoteEntry {
@@ -111,9 +78,6 @@ export interface UiConfig {
 export interface MaestroConfig {
   readonly defaultAgent?: AgentSlug;
   readonly sourceRepo?: string;
-  readonly cassPath?: string;
-  readonly handoffDir?: string;
-  readonly promptTemplate?: string;
   readonly sessionDetection?: {
     readonly enabled: boolean;
     readonly agents: readonly AgentSlug[];
@@ -129,24 +93,6 @@ export interface MaestroConfig {
   readonly memory?: import("./memory-types.js").MemoryConfig;
 }
 
-export interface CassSearchResult {
-  readonly title: string;
-  readonly snippet: string;
-  readonly content: string;
-  readonly score: number;
-  readonly sourcePath: string;
-  readonly agent: string;
-  readonly lineNumber: number;
-  readonly createdAt: number;
-}
-
-export interface CassSearchResponse {
-  readonly query: string;
-  readonly count: number;
-  readonly totalMatches: number;
-  readonly hits: readonly CassSearchResult[];
-}
-
 export interface DoctorCheck {
   readonly name: string;
   readonly status: "ok" | "warn" | "fail";
@@ -157,7 +103,18 @@ export interface DoctorCheck {
 export interface StatusReport {
   readonly initialized: boolean;
   readonly configSource: "global" | "project" | "none";
-  readonly pendingHandoffs: readonly HandoffEnvelope[];
+  /**
+   * Phase 1 strip: pendingHandoffs is still on the struct so the
+   * TUI snapshot shape does not cascade through every builder.
+   * The value is always empty until Phase 2 wires the UKI handoff
+   * store. Phase 3 is the earliest the field can disappear.
+   */
+  readonly pendingHandoffs: readonly unknown[];
+  /**
+   * Phase 1 strip: cassAvailable is still on the struct for the same
+   * structural reason as pendingHandoffs. Value is always false until
+   * the field is removed outright in a later phase.
+   */
   readonly cassAvailable: boolean;
   readonly gitAvailable: boolean;
 }

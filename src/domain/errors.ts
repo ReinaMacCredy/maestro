@@ -8,12 +8,6 @@ export class MaestroError extends Error {
   }
 }
 
-export function handoffNotFound(id: string): MaestroError {
-  return new MaestroError(`Handoff ${id} not found`, [
-    "List handoffs: maestro handoff --list",
-  ]);
-}
-
 // ============================
 // Mission Error Factories
 // ============================

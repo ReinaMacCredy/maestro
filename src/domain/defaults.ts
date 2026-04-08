@@ -56,7 +56,6 @@ export const DEFAULT_CONFIG: MaestroConfig = {
     stopOnFailure: true,
     retryBudget: 1,
     rotateWorkerOnRetry: false,
-    allowA2a: false,
   },
   workers: {
     "claude-code": {
@@ -109,56 +108,38 @@ export const DEFAULT_CONFIG: MaestroConfig = {
 
 export const NO_SESSION_ID = "none";
 
-export const UNKNOWN_AGENT = "unknown";
+/**
+ * Phase 1 strip: the old AGENT_INSTRUCTION_BLOCK described deleted
+ * handoff-* commands. This replacement block advertises only the
+ * mission/feature/memory surfaces that survive the v1.0.0 strip.
+ * Phase 2 will extend it with the UKI handoff workflow.
+ * The block is now static (no `{{agent}}` placeholder) because the
+ * legacy `handoff-pickup --agent <slug>` flow is gone.
+ */
+export const AGENT_INSTRUCTION_BLOCK = `## Maestro Conductor (shared score)
 
-export const DEFAULT_RUNTIME_LEASE_MS = 2 * 60_000;
-export const DEFAULT_RUNTIME_STALE_MS = 90_000;
-export const DEFAULT_RUNTIME_FAILURE_MS = 5 * 60_000;
-export const DEFAULT_RUNTIME_RETRY_BUDGET = 2;
+Projects with \`.maestro/\` hold mission and memory state that all agents share.
 
-export const CASS_INSTALL_HINT = "Install: brew install dicklesworthstone/tap/cass";
-
-export const DEFAULT_PROMPT_TEMPLATE = `You are picking up a handoff from another agent. Run these commands to get oriented:
-
-1. export MAESTRO_SESSION=$(maestro session -q)
-2. maestro handoff-pickup --claim --agent {{agent}} --markdown
-3. maestro doctor --json
-
-Follow the quickstart in the handoff output.
-Read .maestro/AGENTS.md for project-local code style and bootstrap guidance.
-{{#instructions}}Your instructions: {{instructions}}
-{{/instructions}}{{#task}}Your task: {{task}}
-{{/task}}{{#sessionId}}Session: {{sessionId}}
-If you need more context about a decision or implementation detail, search the previous agent's conversation history:
-  maestro handoff-dig "<your question>" --session {{sessionId}} --json
-
-{{/sessionId}}Use maestro handoff-report --content "summary of work done" --json when done.`;
-
-export const AGENT_INSTRUCTION_BLOCK = `## Cross-Agent Handoff (maestro)
-
-Projects with \`.maestro/\` support handoffs between agents.
-
-**Pick up a handoff assigned to you:**
+**See what is in flight:**
 \`\`\`bash
-export MAESTRO_SESSION=$(maestro session -q)
-maestro handoff-pickup --claim --agent {{agent}} --markdown
+maestro status --json
+maestro mission list --json
+maestro feature list --mission <id> --json
 \`\`\`
 
-**Create a handoff for another agent:**
+**Read a worker prompt (with injected memory):**
 \`\`\`bash
-maestro handoff --session $(maestro session -q) --prompt <agent> --task "description"
+maestro feature prompt <featureId> --mission <id>
 \`\`\`
 
-**Search previous agent's conversation for context:**
+**Capture a correction rule for future sessions:**
 \`\`\`bash
-maestro handoff-dig "<your question>" --json
+maestro memory-correct "use bun not npm" --trigger "package,install,npm"
 \`\`\`
 
-**Report completion:**
+**Report feature progress:**
 \`\`\`bash
-maestro handoff-report --content "summary" --json
+maestro feature update <featureId> --mission <id> --status <status> --report @report.json
 \`\`\`
 
-**When picking up a handoff**: If the briefing includes an \`## Instructions\` section, treat those directives as your primary task objectives. Execute them before exploring broader context. If instructions reference plan phases or tasks, resolve them via \`maestro\` commands.
-
-**When to use**: User mentions another agent, wants to delegate, or explicitly asks for a handoff.`;
+**When to use**: Start every session with \`maestro status\` to see shared state. Use \`maestro feature prompt\` to read the current feature's briefing with memory context auto-injected.`;

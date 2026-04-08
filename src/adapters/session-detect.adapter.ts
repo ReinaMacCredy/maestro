@@ -1,79 +1,54 @@
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-import { readdir, realpath } from "node:fs/promises";
-import type { DetectionMethod, HandoffSession } from "../domain/types.js";
+import type { AgentSession } from "../domain/types.js";
 import type { SessionDetectPort } from "../ports/session-detect.port.js";
 import { readJson } from "../lib/fs.js";
+
+/**
+ * Phase 1 strip: this adapter used to resolve sessions by cwd fallback,
+ * session-id prefix, and on-disk pid files. The conductor model only
+ * needs to answer "what agent is currently running?" for memory and
+ * notes scoping, so the implementation collapses to a pair of env-var
+ * reads (CLAUDECODE, CODEX_THREAD_ID). The `resolve()` method was
+ * removed from the port.
+ */
 
 interface ClaudeSessionFile {
   readonly pid: number;
   readonly sessionId: string;
   readonly cwd: string;
   readonly startedAt: number;
-  readonly kind?: string;
-  readonly entrypoint?: string;
 }
 
 const CLAUDE_SESSIONS_DIR = join(homedir(), ".claude", "sessions");
 const CODEX_SESSIONS_DIR = join(homedir(), ".codex", "sessions");
 
 export class ClaudeSessionDetectAdapter implements SessionDetectPort {
-  async detect(cwd: string): Promise<HandoffSession | undefined> {
+  async detect(_cwd: string): Promise<AgentSession | undefined> {
     if (process.env.CLAUDECODE === "1") {
       const session = await readJson<ClaudeSessionFile>(
         join(CLAUDE_SESSIONS_DIR, `${process.ppid}.json`),
       );
       if (session?.sessionId && session.cwd && session.startedAt) {
-        return buildClaudeSession(cwd, session, "pid");
+        return buildClaudeSession(session);
       }
     }
 
     const codexThreadId = process.env.CODEX_THREAD_ID;
     if (codexThreadId) {
-      return resolveCodexSession(codexThreadId, "env");
+      return resolveCodexSession(codexThreadId);
     }
 
-    return this.detectByCwd(cwd);
-  }
-
-  async resolve(cwd: string, sessionId: string): Promise<HandoffSession | undefined> {
-    const sessions = await readClaudeSessionFiles();
-    const match = sessions.find((s) => s.sessionId.startsWith(sessionId));
-    if (match) {
-      return buildClaudeSession(cwd, match, "explicit");
-    }
-    return resolveCodexSession(sessionId, "explicit");
-  }
-
-  private async detectByCwd(cwd: string): Promise<HandoffSession | undefined> {
-    const sessions = await readClaudeSessionFiles();
-    const matching = sessions
-      .filter((s) => normalizePath(s.cwd) === normalizePath(cwd))
-      .sort((a, b) => b.startedAt - a.startedAt);
-
-    const best = matching[0];
-    if (!best) return undefined;
-    return buildClaudeSession(cwd, best, "cwd-fallback");
+    return undefined;
   }
 }
 
-async function buildClaudeSession(
-  cwd: string,
-  session: ClaudeSessionFile,
-  method: DetectionMethod,
-): Promise<HandoffSession> {
-  let resolvedCwd: string;
-  try {
-    resolvedCwd = await realpath(cwd);
-  } catch {
-    resolvedCwd = cwd;
-  }
-
+function buildClaudeSession(session: ClaudeSessionFile): AgentSession {
   const sourcePath = join(
     homedir(),
     ".claude",
     "projects",
-    encodeProjectPath(normalizePath(resolvedCwd)),
+    encodeProjectPath(normalizePath(session.cwd)),
     session.sessionId + ".jsonl",
   );
 
@@ -82,27 +57,7 @@ async function buildClaudeSession(
     sessionId: session.sessionId,
     sourcePath,
     startedAt: session.startedAt,
-    detectionMethod: method,
   };
-}
-
-async function readClaudeSessionFiles(): Promise<ClaudeSessionFile[]> {
-  try {
-    const entries = await readdir(CLAUDE_SESSIONS_DIR);
-    const settled = await Promise.allSettled(
-      entries
-        .filter((e) => e.endsWith(".json"))
-        .map((e) => readJson<ClaudeSessionFile>(join(CLAUDE_SESSIONS_DIR, e))),
-    );
-    return settled
-      .filter((r): r is PromiseFulfilledResult<ClaudeSessionFile | undefined> => r.status === "fulfilled")
-      .map((r) => r.value)
-      .filter(
-        (d): d is ClaudeSessionFile => d !== undefined && !!d.sessionId && !!d.cwd && !!d.startedAt,
-      );
-  } catch {
-    return [];
-  }
 }
 
 function parseCodexTimestamp(filename: string): number | undefined {
@@ -114,15 +69,11 @@ function parseCodexTimestamp(filename: string): number | undefined {
   return Number.isNaN(ts) ? undefined : ts;
 }
 
-async function resolveCodexSession(
-  threadId: string,
-  method: DetectionMethod,
-): Promise<HandoffSession | undefined> {
+async function resolveCodexSession(threadId: string): Promise<AgentSession | undefined> {
   try {
     const glob = new Bun.Glob(`**/*-${threadId}*.jsonl`);
     for await (const path of glob.scan({ cwd: CODEX_SESSIONS_DIR, absolute: true })) {
       const filename = basename(path);
-      // Extract thread ID: rollout-YYYY-MM-DDTHH-MM-SS-<threadId>.jsonl
       const idMatch = filename.match(/rollout-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-(.+)\.jsonl$/);
       const fullId = idMatch?.[1] ?? threadId;
 
@@ -132,7 +83,6 @@ async function resolveCodexSession(
           sessionId: fullId,
           sourcePath: path,
           startedAt: parseCodexTimestamp(filename),
-          detectionMethod: method,
         };
       }
     }

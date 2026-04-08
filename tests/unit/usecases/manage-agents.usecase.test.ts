@@ -7,7 +7,6 @@ import { tmpdir } from "node:os";
 // Instead, test the underlying block functions + do a focused integration test
 // by calling inject/remove on real temp files via the lib functions.
 import { AGENT_INSTRUCTION_BLOCK } from "../../../src/domain/defaults.js";
-import { renderTemplate } from "../../../src/lib/template.js";
 import {
   hasBlock,
   extractBlock,
@@ -21,6 +20,11 @@ import {
   injectAgentBlocks,
   removeAgentBlocks,
 } from "../../../src/usecases/manage-agents.usecase.js";
+
+// Phase 1 strip: the instruction block is static (no `{{agent}}` placeholder)
+// because the legacy `handoff-pickup --agent <slug>` flow is gone.
+// The canonical marker used by the conductor block is its opening heading.
+const BLOCK_MARKER = "## Maestro Conductor (shared score)";
 
 describe("manage-agents use case logic", () => {
   let tmpDir: string;
@@ -40,7 +44,7 @@ describe("manage-agents use case logic", () => {
     await rm(homeDir, { recursive: true, force: true });
   });
 
-  const rendered = renderTemplate(AGENT_INSTRUCTION_BLOCK, { agent: "codex" });
+  const rendered = AGENT_INSTRUCTION_BLOCK;
 
   describe("inject flow", () => {
     it("injects into empty file", async () => {
@@ -53,7 +57,7 @@ describe("manage-agents use case logic", () => {
 
       const final = await Bun.file(path).text();
       expect(hasBlock(final)).toBe(true);
-      expect(final).toContain("maestro handoff-pickup --claim --agent codex");
+      expect(final).toContain(BLOCK_MARKER);
     });
 
     it("injects into existing config", async () => {
@@ -87,7 +91,7 @@ describe("manage-agents use case logic", () => {
       await writeFile(path, result!);
 
       const final = await Bun.file(path).text();
-      expect(final).toContain("maestro handoff-pickup");
+      expect(final).toContain(BLOCK_MARKER);
       expect(final).not.toContain("Old maestro instructions");
     });
   });
@@ -107,7 +111,7 @@ describe("manage-agents use case logic", () => {
 
       const final = await Bun.file(path).text();
       expect(final).not.toContain("handoff-plan");
-      expect(final).toContain("maestro handoff-pickup");
+      expect(final).toContain(BLOCK_MARKER);
       expect(hasBlock(final)).toBe(true);
       expect(final).toContain("## Other Section");
     });
@@ -137,19 +141,6 @@ describe("manage-agents use case logic", () => {
     });
   });
 
-  describe("template rendering", () => {
-    it("renders agent flag into template", () => {
-      const claude = renderTemplate(AGENT_INSTRUCTION_BLOCK, { agent: "claude" });
-      expect(claude).toContain("--agent claude");
-
-      const codex = renderTemplate(AGENT_INSTRUCTION_BLOCK, { agent: "codex" });
-      expect(codex).toContain("--agent codex");
-
-      const gemini = renderTemplate(AGENT_INSTRUCTION_BLOCK, { agent: "gemini" });
-      expect(gemini).toContain("--agent gemini");
-    });
-  });
-
   describe("droid project-local anchoring", () => {
     it("injects the droid block into project-local .maestro/AGENTS.md", async () => {
       const path = join(tmpDir, ".maestro", "AGENTS.md");
@@ -162,7 +153,7 @@ describe("manage-agents use case logic", () => {
       expect(droid).toBeDefined();
       expect(droid?.action).toBe("injected");
       expect(droid?.configPath).toBe(path);
-      expect(await readFile(path, "utf8")).toContain("maestro handoff-pickup --claim --agent droid");
+      expect(await readFile(path, "utf8")).toContain(BLOCK_MARKER);
     });
 
     it("migrates legacy project .factory/AGENTS.md into project-local .maestro/AGENTS.md", async () => {
@@ -180,14 +171,14 @@ describe("manage-agents use case logic", () => {
       expect(droid).toBeDefined();
       expect(droid?.action).toBe("migrated");
       expect(droid?.configPath).toBe(targetPath);
-      expect(await readFile(targetPath, "utf8")).toContain("maestro handoff-pickup --claim --agent droid");
+      expect(await readFile(targetPath, "utf8")).toContain(BLOCK_MARKER);
       expect(await readFile(targetPath, "utf8")).not.toContain("handoff-plan");
     });
 
     it("removes the droid block from project-local .maestro/AGENTS.md", async () => {
       const path = join(tmpDir, ".maestro", "AGENTS.md");
       await mkdir(join(tmpDir, ".maestro"), { recursive: true });
-      await writeFile(path, wrapBlock(renderTemplate(AGENT_INSTRUCTION_BLOCK, { agent: "droid" })));
+      await writeFile(path, wrapBlock(AGENT_INSTRUCTION_BLOCK));
 
       const results = await removeAgentBlocks(tmpDir);
       const droid = results.find((result) => result.agent === "Droid CLI");
@@ -195,14 +186,14 @@ describe("manage-agents use case logic", () => {
       expect(droid).toBeDefined();
       expect(droid?.action).toBe("removed");
       expect(droid?.configPath).toBe(path);
-      expect(await readFile(path, "utf8")).not.toContain("maestro handoff-pickup --claim --agent droid");
+      expect(await readFile(path, "utf8")).not.toContain(BLOCK_MARKER);
     });
 
     it("removes the droid block from legacy .factory/AGENTS.md when .maestro exists without AGENTS.md", async () => {
       const legacyPath = join(tmpDir, ".factory", "AGENTS.md");
       await mkdir(join(tmpDir, ".maestro"), { recursive: true });
       await mkdir(join(tmpDir, ".factory"), { recursive: true });
-      await writeFile(legacyPath, wrapBlock(renderTemplate(AGENT_INSTRUCTION_BLOCK, { agent: "droid" })));
+      await writeFile(legacyPath, wrapBlock(AGENT_INSTRUCTION_BLOCK));
 
       const results = await removeAgentBlocks(tmpDir);
       const droid = results.find((result) => result.agent === "Droid CLI");
@@ -210,7 +201,7 @@ describe("manage-agents use case logic", () => {
       expect(droid).toBeDefined();
       expect(droid?.action).toBe("removed");
       expect(droid?.configPath).toBe(legacyPath);
-      expect(await readFile(legacyPath, "utf8")).not.toContain("maestro handoff-pickup --claim --agent droid");
+      expect(await readFile(legacyPath, "utf8")).not.toContain(BLOCK_MARKER);
     });
   });
 });

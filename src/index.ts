@@ -31,7 +31,7 @@ import { registerGraphContextCommand } from "./commands/graph-context.command.js
 
 export const program = new Command()
   .name("maestro")
-  .description("Cross-agent handoff CLI")
+  .description("Conductor CLI -- shared mission, feature, and memory state for cross-agent workflows")
   .version(formatVersionOutputForArgv())
   .option("--json", "Output as JSON")
   .exitOverride()

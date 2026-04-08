@@ -1,9 +1,9 @@
 import type { Command } from "commander";
 import { getServices } from "../services.js";
 import { detectSession } from "../usecases/detect-session.usecase.js";
-import { output, warn } from "../lib/output.js";
+import { output } from "../lib/output.js";
 import { MaestroError } from "../domain/errors.js";
-import type { HandoffSession } from "../domain/types.js";
+import type { AgentSession } from "../domain/types.js";
 
 export function registerSessionCommand(program: Command): void {
   program
@@ -30,13 +30,8 @@ Examples:
         if (opts.quiet) process.exit(1);
         throw new MaestroError("No session detected", [
           "Run inside Claude Code, Codex, or another supported agent",
+          "The conductor reads CLAUDECODE / CODEX_THREAD_ID env vars only",
         ]);
-      }
-
-      if (result.stale) {
-        warn(
-          `Session ${result.session.sessionId.slice(0, 8)} is stale (cwd fallback). Use --session <id> or --skip-session.`,
-        );
       }
 
       if (opts.quiet) {
@@ -44,20 +39,15 @@ Examples:
         return;
       }
 
-      output(isJson, result, (r) => formatText(r.session, r.method, r.stale));
+      output(isJson, result, (r) => formatText(r.session));
     });
 }
 
-function formatText(
-  s: HandoffSession,
-  method: string,
-  stale: boolean,
-): string[] {
+function formatText(s: AgentSession): string[] {
   return [
     `Agent:     ${s.agent}`,
     `Session:   ${s.sessionId}`,
     `Source:    ${s.sourcePath}`,
-    `Method:    ${method}${stale ? " (stale)" : ""}`,
     ...(s.startedAt
       ? [`Started:   ${new Date(s.startedAt).toLocaleString()}`]
       : []),

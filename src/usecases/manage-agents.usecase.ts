@@ -6,7 +6,6 @@ import {
   type AgentConfigSpec,
 } from "../domain/agents.js";
 import { AGENT_INSTRUCTION_BLOCK } from "../domain/defaults.js";
-import { renderTemplate } from "../lib/template.js";
 import { dirExists, ensureDir, readText, writeText } from "../lib/fs.js";
 import {
   extractBlock,
@@ -28,8 +27,13 @@ export interface RemoveResult {
   readonly configPath: string;
 }
 
-function renderBlock(agent: AgentConfigSpec): string {
-  return renderTemplate(AGENT_INSTRUCTION_BLOCK, { agent: agent.agentFlag });
+/**
+ * Phase 1 strip: the instruction block no longer contains an `{{agent}}`
+ * placeholder, so rendering collapsed to a static constant. The
+ * per-agent parameter is retained for readability at call sites.
+ */
+function renderBlock(_agent: AgentConfigSpec): string {
+  return AGENT_INSTRUCTION_BLOCK;
 }
 
 interface ExistingConfig {
