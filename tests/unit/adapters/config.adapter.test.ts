@@ -32,11 +32,14 @@ describe("YamlConfigAdapter", () => {
 
   describe("write and load", () => {
     it("round-trips config through yaml", async () => {
-      const input = { defaultAgent: "codex" as const, cassPath: "/usr/local/bin/cass" };
+      const input = {
+        defaultAgent: "codex" as const,
+        sourceRepo: "git@github.com:example/repo.git",
+      };
       await config.write("project", tmpDir, input);
       const loaded = await config.load(tmpDir);
       expect(loaded.defaultAgent).toBe("codex");
-      expect(loaded.cassPath).toBe("/usr/local/bin/cass");
+      expect(loaded.sourceRepo).toBe("git@github.com:example/repo.git");
     });
 
     it("creates .maestro directory for project scope", async () => {
