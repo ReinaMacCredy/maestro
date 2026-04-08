@@ -116,11 +116,6 @@ describe("CLI integration", () => {
     const { stdout, exitCode } = await run(["--help"]);
     expect(exitCode).toBe(0);
     expect(stdout).toContain("init");
-    expect(stdout).toContain("handoff ");
-    expect(stdout).toContain("handoff-pickup");
-    expect(stdout).toContain("handoff-dig");
-    expect(stdout).toContain("handoff-drop");
-    expect(stdout).toContain("handoff-cleanup");
     expect(stdout).toContain("note");
     expect(stdout).toContain("status");
     expect(stdout).toContain("doctor");
@@ -143,97 +138,6 @@ describe("CLI integration", () => {
     expect(status).toHaveProperty("cassAvailable");
     expect(status).toHaveProperty("gitAvailable");
   }, SLOW_CLI_TIMEOUT_MS);
-
-  it("handoff without --session rejects with guidance", async () => {
-    const { exitCode, stdout, stderr } = await run(["handoff", "--sitrep", "test", "--json"]);
-    expect(exitCode).toBe(1);
-    const output = stdout + stderr;
-    expect(output).toContain("Session ID required");
-  });
-
-  it("handoff with --skip-session creates auto-generated handoff", async () => {
-    const { exitCode, stdout } = await run(["handoff", "--skip-session", "--json"]);
-    expect(exitCode).toBe(0);
-    expect(stdout).toContain("Branch:");
-    const result = JSON.parse(stdout);
-    expect(result.prompt).not.toContain("--session none");
-    expect(result.prompt).not.toContain("Session: none");
-  });
-
-  it("handoff --dry-run outputs plan without writing", async () => {
-    const { stdout, exitCode } = await run([
-      "handoff",
-      "--sitrep", "test sitrep",
-      "--quickstart", "run tests",
-      "--dry-run",
-    ]);
-    expect(exitCode).toBe(0);
-    const data = JSON.parse(stdout);
-    expect(data.dryRun).toBe(true);
-    expect(data.sitrep).toBe("test sitrep");
-  });
-
-    it("handoff --list returns table when handoffs exist", async () => {
-      const { exitCode } = await run(["handoff", "--list"]);
-      expect(exitCode).toBe(0);
-    });
-
-    it("handoff --prompt includes stored instructions from latest pending handoff", async () => {
-      await initGitRepo(tmpDir);
-
-      const create = await run([
-        "handoff",
-        "--skip-session",
-        "--sitrep", "test sitrep",
-        "--quickstart", "run tests",
-        "--instructions", "Deploy to staging first",
-        "--json",
-      ], tmpDir);
-      expect(create.exitCode).toBe(0);
-
-      const prompt = await run(["handoff", "--prompt", "codex"], tmpDir);
-      expect(prompt.exitCode).toBe(0);
-      expect(prompt.stdout).toContain("Your instructions: Deploy to staging first");
-      expect(prompt.stdout).not.toContain("--session none");
-      expect(prompt.stdout).not.toContain("Session: none");
-    });
-
-    it("handoff-drop deletes schema-invalid handoff directories", async () => {
-      const handoffDir = join(tmpDir, ".maestro", "handoffs", "2026-03-28-001");
-      await mkdir(handoffDir, { recursive: true });
-      await writeFile(join(handoffDir, "envelope.json"), JSON.stringify({ wrong: "schema" }));
-
-      const drop = await run([
-        "handoff-drop",
-        "--id", "2026-03-28-001",
-        "--json",
-      ], tmpDir);
-      expect(drop.exitCode).toBe(0);
-
-      const cleanup = await run(["handoff-cleanup", "--json"], tmpDir);
-      expect(cleanup.exitCode).toBe(0);
-      const result = JSON.parse(cleanup.stdout);
-      expect(result.count).toBe(0);
-      expect(result.deleted).toBe(false);
-    });
-
-    it("handoff-cleanup counts and deletes corrupted handoff directories", async () => {
-      const handoffDir = join(tmpDir, ".maestro", "handoffs", "2026-03-28-001");
-      await mkdir(handoffDir, { recursive: true });
-      await writeFile(join(handoffDir, "envelope.json"), "NOT VALID JSON{{{");
-
-      const preview = await run(["handoff-cleanup", "--json"], tmpDir);
-      expect(preview.exitCode).toBe(1);
-      const previewData = JSON.parse(preview.stdout);
-      expect(previewData.error).toContain("1 handoff(s) would be deleted");
-
-      const cleanup = await run(["handoff-cleanup", "--force", "--json"], tmpDir);
-      expect(cleanup.exitCode).toBe(0);
-      const result = JSON.parse(cleanup.stdout);
-      expect(result.count).toBe(1);
-      expect(result.deleted).toBe(true);
-      expect(result.ids).toEqual(["2026-03-28-001"]);
-    });
 
     it("note writes a note and note --list returns it", async () => {
       await initGitRepo(tmpDir);

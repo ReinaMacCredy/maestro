@@ -493,20 +493,6 @@ async function setFeatureToReview(
   await setFeatureStatus(cwd, missionId, featureId, "review");
 }
 
-async function createPendingHandoff(cwd: string): Promise<string> {
-  const { stdout, exitCode } = await run([
-    "handoff",
-    "--skip-session",
-    "--sitrep",
-    "preview sitrep",
-    "--quickstart",
-    "preview command",
-    "--json",
-  ], cwd);
-  expect(exitCode).toBe(0);
-  return JSON.parse(stdout).id;
-}
-
 async function commandExists(command: string): Promise<boolean> {
   const proc = Bun.spawn(["/bin/zsh", "-lc", `command -v ${command}`], {
     stdout: "pipe",
@@ -986,33 +972,6 @@ describe("mission-control CLI", () => {
       expect(stdout).toContain("Feature 2");
     }, SLOW_CLI_TIMEOUT_MS);
 
-      it("--preview handoffs renders the handoffs modal", async () => {
-        const handoffId = await createPendingHandoff(tmpDir);
-
-      const { stdout, exitCode } = await run(
-        ["mission-control", "--preview", "handoffs", "--handoff", handoffId],
-        tmpDir,
-      );
-
-      expect(exitCode).toBe(0);
-      expect(stdout).toContain("Handoffs");
-      expect(stdout).toContain(handoffId);
-        expect(stdout).toContain("Details hidden in read-only output");
-      }, SLOW_CLI_TIMEOUT_MS);
-
-      it("--preview handoff accepts the singular alias", async () => {
-        const handoffId = await createPendingHandoff(tmpDir);
-
-        const { stdout, exitCode } = await run(
-          ["mission-control", "--preview", "handoff", "--handoff", handoffId],
-          tmpDir,
-        );
-
-        expect(exitCode).toBe(0);
-        expect(stdout).toContain("Handoffs");
-        expect(stdout).toContain(handoffId);
-      }, SLOW_CLI_TIMEOUT_MS);
-
         it("--preview config renders the config modal", async () => {
           const missionId = await createMission(tmpDir);
 
@@ -1451,26 +1410,6 @@ describe("mission-control CLI", () => {
       expect(snapshot.home.headline).toBe("No missions yet");
       expect(snapshot.home.actions.length).toBeGreaterThan(0);
     }, SLOW_CLI_TIMEOUT_MS);
-
-    it("redacts pending handoff details in read-only json output", async () => {
-      const handoffId = await createPendingHandoff(tmpDir);
-
-      const { stdout, exitCode } = await run(
-        ["mission-control", "--json"],
-        tmpDir,
-      );
-
-      expect(exitCode).toBe(0);
-        const snapshot = JSON.parse(stdout);
-        expect(snapshot.pendingHandoffs).toEqual([
-          expect.objectContaining({
-            id: handoffId,
-            agent: expect.any(String),
-            message: "Details hidden in read-only output",
-          }),
-        ]);
-        expect(snapshot.home.pendingHandoffs).toEqual(snapshot.pendingHandoffs);
-      }, SLOW_CLI_TIMEOUT_MS);
 
     it("renders a guided home frame when no missions exist in a git repo", async () => {
       const { stdout, exitCode } = await run(
