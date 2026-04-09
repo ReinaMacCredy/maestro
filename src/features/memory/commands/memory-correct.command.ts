@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import type { Correction } from "../domain/memory-types.js";
-import { MaestroError } from "@/domain/errors.js";
+import { MaestroError } from "@/shared/errors.js";
 import { output } from "@/lib/output.js";
 import { getServices } from "@/services.js";
 import { captureCorrection } from "../usecases/memory-correct.usecase.js";

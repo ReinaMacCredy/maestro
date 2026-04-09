@@ -8,7 +8,7 @@ import type {
 } from "./types.js";
 import type { ConfigScope } from "../../ports/config.port.js";
 import { getFilteredMissionControlPaletteCommandCount } from "./mission-control-commands.js";
-import { getValidFeatureTransitions } from "../../domain/mission-state.js";
+import { getValidFeatureTransitions } from "@/features/mission/domain/mission-state.js";
 import { getConfigRowsForTab, isGlobalOnlyConfigKey, resolveConfigScopeForKey } from "./config-inspector.js";
 
 export type FocusedPanel = "features" | "log" | "none";

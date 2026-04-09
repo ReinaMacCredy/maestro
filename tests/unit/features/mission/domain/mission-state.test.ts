@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { MaestroError } from "@/domain/errors.js";
+import { MaestroError } from "@/shared/errors.js";
 import {
   assertMissionTransition,
   assertMilestoneTransition,
@@ -13,7 +13,7 @@ import {
   getValidMilestoneTransitions,
   getValidFeatureTransitions,
   getValidAssertionTransitions,
-} from "@/domain/mission-state.js";
+} from "@/features/mission/domain/mission-state.js";
 
 describe("mission state transitions", () => {
   describe("mission transitions", () => {

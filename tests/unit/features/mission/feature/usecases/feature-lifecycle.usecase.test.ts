@@ -6,12 +6,12 @@ import {
   listFeatures,
   updateFeature,
   parseWorkerReport,
-} from "@/usecases/feature-lifecycle.usecase.js";
-import { FsMissionStoreAdapter } from "@/adapters/mission-store.adapter.js";
-import { FsFeatureStoreAdapter } from "@/adapters/feature-store.adapter.js";
-import { FsAssertionStoreAdapter } from "@/adapters/assertion-store.adapter.js";
-import { MaestroError } from "@/domain/errors.js";
-import type { MilestoneInput } from "@/domain/mission-types.js";
+} from "@/features/mission/feature/usecases/feature-lifecycle.usecase.js";
+import { FsMissionStoreAdapter } from "@/features/mission/adapters/mission-store.adapter.js";
+import { FsFeatureStoreAdapter } from "@/features/mission/feature/adapters/feature-store.adapter.js";
+import { FsAssertionStoreAdapter } from "@/features/mission/validation/adapters/assertion-store.adapter.js";
+import { MaestroError } from "@/shared/errors.js";
+import type { MilestoneInput } from "@/features/mission/domain/mission-types.js";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mkdtemp, writeFile, mkdir } from "node:fs/promises";
@@ -64,7 +64,7 @@ async function createSampleMission(
   };
 
   // Import the createMission function to set up test data
-  const { createMission } = await import("@/usecases/mission-lifecycle.usecase.js");
+  const { createMission } = await import("@/features/mission/usecases/mission-lifecycle.usecase.js");
   const result = await createMission(missionStore, featureStore, assertionStore, samplePlan);
 
   return {

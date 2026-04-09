@@ -2,12 +2,12 @@
  * Unit tests for mission-report usecase
  */
 import { describe, expect, it, beforeEach } from "bun:test";
-import { generateMissionReport } from "@/usecases/mission-report.usecase.js";
-import { MaestroError } from "@/domain/errors.js";
-import type { Mission, Feature, Assertion, Milestone, CreateFeatureInput, UpdateFeatureInput, CreateAssertionInput, UpdateAssertionInput } from "@/domain/mission-types.js";
-import type { MissionStorePort } from "@/ports/mission-store.port.js";
-import type { FeatureStorePort } from "@/ports/feature-store.port.js";
-import type { AssertionStorePort } from "@/ports/assertion-store.port.js";
+import { generateMissionReport } from "@/features/mission/usecases/mission-report.usecase.js";
+import { MaestroError } from "@/shared/errors.js";
+import type { Mission, Feature, Assertion, Milestone, CreateFeatureInput, UpdateFeatureInput, CreateAssertionInput, UpdateAssertionInput } from "@/features/mission/domain/mission-types.js";
+import type { MissionStorePort } from "@/features/mission/ports/mission-store.port.js";
+import type { FeatureStorePort } from "@/features/mission/feature/ports/feature-store.port.js";
+import type { AssertionStorePort } from "@/features/mission/validation/ports/assertion-store.port.js";
 
 // Mock stores
 class MockMissionStore implements MissionStorePort {

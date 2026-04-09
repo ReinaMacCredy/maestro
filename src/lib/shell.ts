@@ -1,4 +1,4 @@
-import { MaestroError } from "../domain/errors.js";
+import { MaestroError } from "@/shared/errors.js";
 
 export interface ShellResult {
   readonly stdout: string;

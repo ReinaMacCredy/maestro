@@ -7,7 +7,7 @@ import { join } from "node:path";
 import type { Command } from "commander";
 import { getServices } from "@/services.js";
 import { output, resolveJsonFlag } from "@/lib/output.js";
-import { MaestroError } from "@/domain/errors.js";
+import { MaestroError } from "@/shared/errors.js";
 import type {
   ExecuteUkiHandoffContent,
   PlanUkiHandoffContent,

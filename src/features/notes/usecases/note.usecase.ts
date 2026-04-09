@@ -1,5 +1,5 @@
 import type { NoteEntry } from "@/domain/types.js";
-import { MaestroError } from "@/domain/errors.js";
+import { MaestroError } from "@/shared/errors.js";
 import type { GitPort } from "@/ports/git.port.js";
 import type { NotesStorePort } from "../ports/notes-store.port.js";
 

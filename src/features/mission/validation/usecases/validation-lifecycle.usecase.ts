@@ -5,13 +5,13 @@
  * and helpful transition errors for invalid result changes.
  */
 import type { AssertionStorePort } from "../ports/assertion-store.port.js";
-import type { MissionStorePort } from "../ports/mission-store.port.js";
+import type { MissionStorePort } from "../../ports/mission-store.port.js";
 import type {
   Assertion,
   UpdateAssertionInput,
-} from "../domain/mission-types.js";
-import { MaestroError } from "../domain/errors.js";
-import { assertAssertionTransition } from "../domain/mission-state.js";
+} from "../../domain/mission-types.js";
+import { MaestroError } from "@/shared/errors.js";
+import { assertAssertionTransition } from "../../domain/mission-state.js";
 
 /** Result of showing assertions */
 export interface ShowAssertionsResult {

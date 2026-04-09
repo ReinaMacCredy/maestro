@@ -3,7 +3,7 @@
  * Defines the interface for feature persistence operations
  * Features are stored as one JSON file per feature
  */
-import type { Feature, CreateFeatureInput, UpdateFeatureInput } from "../domain/mission-types.js";
+import type { Feature, CreateFeatureInput, UpdateFeatureInput } from "../../domain/mission-types.js";
 
 export interface FeatureStorePort {
   /** Get a feature by ID within a mission, returns undefined if not found */

@@ -1,4 +1,4 @@
-import { MaestroError } from "../../domain/errors.js";
+import { MaestroError } from "@/shared/errors.js";
 import { createInitialState, reduce, type AppState } from "../state/reducer.js";
 import type { MissionControlSnapshot } from "../state/types.js";
 

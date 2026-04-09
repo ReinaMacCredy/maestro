@@ -1,5 +1,5 @@
 import { resolve, sep } from "node:path";
-import { MaestroError } from "../domain/errors.js";
+import { MaestroError } from "@/shared/errors.js";
 
 export function assertSafeSegment(
   value: string,

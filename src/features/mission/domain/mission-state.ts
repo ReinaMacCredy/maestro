@@ -3,7 +3,7 @@
  * Defines valid transitions for Mission, Milestone, Feature, and Assertion states
  */
 
-import { MaestroError } from "./errors.js";
+import { MaestroError } from "@/shared/errors.js";
 import type {
   MissionStatus,
   MilestoneStatus,

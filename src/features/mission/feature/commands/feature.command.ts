@@ -3,8 +3,8 @@
  * Implements CLI commands: feature list|update
  */
 import type { Command } from "commander";
-import { getServices } from "../services.js";
-import { output, resolveJsonFlag } from "../lib/output.js";
+import { getServices } from "@/services.js";
+import { output, resolveJsonFlag } from "@/lib/output.js";
 import {
   listFeatures,
   updateFeature,
@@ -15,8 +15,8 @@ import {
 import {
   generateWorkerPrompt,
   type GenerateWorkerPromptResult,
-} from "../usecases/generate-worker-prompt.usecase.js";
-import { MaestroError } from "../domain/errors.js";
+} from "@/usecases/generate-worker-prompt.usecase.js";
+import { MaestroError } from "@/shared/errors.js";
 
 export function registerFeatureCommand(program: Command): void {
   const featureCmd = program

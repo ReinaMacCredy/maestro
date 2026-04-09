@@ -3,17 +3,17 @@
  * Implements feature listing, updating, and worker report persistence
  */
 import type { FeatureStorePort } from "../ports/feature-store.port.js";
-import type { MissionStorePort } from "../ports/mission-store.port.js";
+import type { MissionStorePort } from "../../ports/mission-store.port.js";
 import type {
   Feature,
   UpdateFeatureInput,
   WorkerReport,
-} from "../domain/mission-types.js";
-import { MaestroError } from "../domain/errors.js";
-import { assertFeatureTransition } from "../domain/mission-state.js";
-import { writeJson, readJson, ensureDir } from "../lib/fs.js";
+} from "../../domain/mission-types.js";
+import { MaestroError } from "@/shared/errors.js";
+import { assertFeatureTransition } from "../../domain/mission-state.js";
+import { writeJson, readJson, ensureDir } from "@/lib/fs.js";
 import { join } from "node:path";
-import { MAESTRO_DIR } from "../domain/defaults.js";
+import { MAESTRO_DIR } from "@/domain/defaults.js";
 
 /** Result of listing features */
 export interface ListFeaturesResult {
@@ -173,7 +173,7 @@ export async function parseWorkerReport(
   if (reportValue.startsWith("@")) {
     // Read from file
     const filePath = reportValue.slice(1);
-    const { readText } = await import("../lib/fs.js");
+    const { readText } = await import("@/lib/fs.js");
     const content = await readText(filePath);
     if (content === undefined) {
       throw new MaestroError(`Report file not found: ${filePath}`, [
@@ -268,4 +268,4 @@ export function getValidFeatureNextStates(feature: Feature): readonly string[] {
 }
 
 // Re-export the transition function for direct use
-import { getValidFeatureTransitions } from "../domain/mission-state.js";
+import { getValidFeatureTransitions } from "../../domain/mission-state.js";

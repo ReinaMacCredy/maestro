@@ -3,16 +3,16 @@
  * Implements CLI commands: validate show|update
  */
 import type { Command } from "commander";
-import { getServices } from "../services.js";
-import { output, resolveJsonFlag } from "../lib/output.js";
+import { getServices } from "@/services.js";
+import { output, resolveJsonFlag } from "@/lib/output.js";
 import {
   showAssertions,
   updateAssertion,
   type ShowAssertionsResult,
   type UpdateAssertionResult,
 } from "../usecases/validation-lifecycle.usecase.js";
-import { MaestroError } from "../domain/errors.js";
-import type { Assertion } from "../domain/mission-types.js";
+import { MaestroError } from "@/shared/errors.js";
+import type { Assertion } from "../../domain/mission-types.js";
 
 export function registerValidateCommand(program: Command): void {
   const validationCmd = program

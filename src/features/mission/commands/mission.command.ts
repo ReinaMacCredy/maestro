@@ -3,8 +3,8 @@
  * Implements CLI commands: mission create|list|show|approve|reject|update
  */
 import type { Command } from "commander";
-import { getServices } from "../services.js";
-import { output, resolveJsonFlag } from "../lib/output.js";
+import { getServices } from "@/services.js";
+import { output, resolveJsonFlag } from "@/lib/output.js";
 import {
   createMission,
   expandWorkflowTemplate,
@@ -16,8 +16,8 @@ import {
   type CreateMissionResult,
 } from "../usecases/mission-lifecycle.usecase.js";
 import { generateMissionReport, type MissionReport } from "../usecases/mission-report.usecase.js";
-import { MaestroError } from "../domain/errors.js";
-import { readText } from "../lib/fs.js";
+import { MaestroError } from "@/shared/errors.js";
+import { readText } from "@/lib/fs.js";
 import type { Mission, UpdateMissionInput, MissionStatus } from "../domain/mission-types.js";
 
 const DEFAULT_TEXT_MISSION_LIST_LIMIT = 10;

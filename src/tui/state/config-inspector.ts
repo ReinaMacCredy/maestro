@@ -1,4 +1,4 @@
-import type { Feature } from "../../domain/mission-types.js";
+import type { Feature } from "@/features/mission/domain/mission-types.js";
 import { listIgnoredProjectConfigKeys, isGlobalOnlyConfigKey } from "../../domain/ui-config.js";
 import type { DoctorCheck, MaestroConfig } from "../../domain/types.js";
 import type { WorkerConfig } from "../../domain/worker-types.js";

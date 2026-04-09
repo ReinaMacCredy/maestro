@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { MaestroConfig } from "../domain/types.js";
-import { MaestroError } from "../domain/errors.js";
+import { MaestroError } from "@/shared/errors.js";
 import type { ConfigLayers, ConfigLoadError, ConfigPort, ConfigScope } from "../ports/config.port.js";
 import { DEFAULT_CONFIG, MAESTRO_DIR } from "../domain/defaults.js";
 import { ensureDir, readText, writeText } from "../lib/fs.js";

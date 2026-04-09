@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FsAssertionStoreAdapter } from "@/adapters/assertion-store.adapter.js";
-import { FsCheckpointStoreAdapter } from "@/adapters/checkpoint-store.adapter.js";
-import { FsFeatureStoreAdapter } from "@/adapters/feature-store.adapter.js";
-import { FsMissionStoreAdapter } from "@/adapters/mission-store.adapter.js";
+import { FsAssertionStoreAdapter } from "@/features/mission/validation/adapters/assertion-store.adapter.js";
+import { FsCheckpointStoreAdapter } from "@/features/mission/checkpoint/adapters/checkpoint-store.adapter.js";
+import { FsFeatureStoreAdapter } from "@/features/mission/feature/adapters/feature-store.adapter.js";
+import { FsMissionStoreAdapter } from "@/features/mission/adapters/mission-store.adapter.js";
 import {
   createMissionControlSnapshotLoader,
   loadMissionControlSnapshot,

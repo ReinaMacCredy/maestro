@@ -22,7 +22,7 @@ import { validateUkiHandoff, validateUkiHandoffContent } from "../domain/validat
 import type { HandoffStorePort, UpdateHandoffStatusMeta } from "../ports/handoff-store.port.js";
 import { compressUki, parseUki } from "../lib/uki-format.js";
 import { ensureDir, readJson, removeIfExists, writeJson } from "@/lib/fs.js";
-import { MaestroError } from "@/domain/errors.js";
+import { MaestroError } from "@/shared/errors.js";
 import { assertSafeSegment, resolveWithin } from "@/lib/path-safety.js";
 import { normalizeUkiToken } from "../lib/uki-token.js";
 

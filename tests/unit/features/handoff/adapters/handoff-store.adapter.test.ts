@@ -3,7 +3,7 @@ import { access, mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises"
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { FsHandoffStoreAdapter } from "@/features/handoff";
-import { MaestroError } from "@/domain/errors.js";
+import { MaestroError } from "@/shared/errors.js";
 import type { CreateUkiHandoffInput, ExecuteUkiHandoffContent } from "@/features/handoff";
 import { compressUki, parseUki } from "@/features/handoff";
 import { LEGACY_V53_UKI } from "../../../../helpers/uki-fixtures.js";

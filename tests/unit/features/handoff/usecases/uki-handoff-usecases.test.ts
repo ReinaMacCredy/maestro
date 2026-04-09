@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { FsHandoffStoreAdapter } from "@/features/handoff";
 import type { AgentSession } from "@/domain/types.js";
 import type { ExecuteUkiHandoffContent } from "@/features/handoff";
-import { MaestroError } from "@/domain/errors.js";
+import { MaestroError } from "@/shared/errors.js";
 import type { SessionDetectPort } from "@/features/session";
 import { createUkiHandoff } from "@/features/handoff";
 import { listUkiHandoffs } from "@/features/handoff";

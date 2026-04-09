@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { MaestroError } from "@/domain/errors.js";
+import { MaestroError } from "@/shared/errors.js";
 import { output } from "@/lib/output.js";
 import { getServices } from "@/services.js";
 import { compileLearnings, type CompileResult } from "../usecases/memory-compile.usecase.js";

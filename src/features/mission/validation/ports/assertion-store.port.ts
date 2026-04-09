@@ -3,7 +3,7 @@
  * Defines the interface for assertion persistence operations
  * Assertions are stored in a single assertions.json file per mission
  */
-import type { Assertion, CreateAssertionInput, UpdateAssertionInput } from "../domain/mission-types.js";
+import type { Assertion, CreateAssertionInput, UpdateAssertionInput } from "../../domain/mission-types.js";
 
 export interface AssertionStorePort {
   /** Get an assertion by ID within a mission, returns undefined if not found */

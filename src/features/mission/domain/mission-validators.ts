@@ -4,7 +4,7 @@
  */
 
 import { z } from "zod";
-import { MaestroError } from "./errors.js";
+import { MaestroError } from "@/shared/errors.js";
 import type {
   Mission,
   Milestone,
@@ -18,7 +18,7 @@ import type {
   UpdateAssertionInput,
   MissionPlanFile,
 } from "./mission-types.js";
-import type { WorkflowTemplate } from "./types.js";
+import type { WorkflowTemplate } from "@/domain/types.js";
 
 // ============================
 // Schema Constants

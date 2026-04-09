@@ -3,7 +3,7 @@
  * Defines the interface for checkpoint persistence operations
  * Checkpoints are stored with timestamp-based filenames under checkpoints/
  */
-import type { Checkpoint } from "../domain/mission-types.js";
+import type { Checkpoint } from "../../domain/mission-types.js";
 
 export interface CheckpointStorePort {
   /** Get a checkpoint by ID within a mission, returns undefined if not found */

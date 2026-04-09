@@ -3,8 +3,8 @@
  * Implements CLI commands: milestone list|status|seal
  */
 import type { Command } from "commander";
-import { getServices } from "../services.js";
-import { output, resolveJsonFlag } from "../lib/output.js";
+import { getServices } from "@/services.js";
+import { output, resolveJsonFlag } from "@/lib/output.js";
 import {
   listMilestones,
   getMilestoneStatus,
@@ -13,7 +13,7 @@ import {
   type GetMilestoneStatusResult,
   type SealMilestoneResult,
 } from "../usecases/milestone-lifecycle.usecase.js";
-import { MaestroError } from "../domain/errors.js";
+import { MaestroError } from "@/shared/errors.js";
 
 export function registerMilestoneCommand(program: Command): void {
   const milestoneCmd = program

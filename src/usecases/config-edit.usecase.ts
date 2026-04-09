@@ -1,5 +1,5 @@
 import type { MaestroConfig } from "../domain/types.js";
-import { MaestroError } from "../domain/errors.js";
+import { MaestroError } from "@/shared/errors.js";
 import type { ConfigPort, ConfigScope } from "../ports/config.port.js";
 import { stringifyYaml } from "../lib/yaml.js";
 

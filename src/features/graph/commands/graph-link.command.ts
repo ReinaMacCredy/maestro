@@ -1,6 +1,6 @@
 import { basename } from "node:path";
 import type { Command } from "commander";
-import { MaestroError } from "@/domain/errors.js";
+import { MaestroError } from "@/shared/errors.js";
 import { output } from "@/lib/output.js";
 import { getServices } from "@/services.js";
 import { linkProjects, type LinkResult } from "../usecases/graph-link.usecase.js";

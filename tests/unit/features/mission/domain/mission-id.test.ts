@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { generateMissionId } from "@/domain/mission-id.js";
+import { generateMissionId } from "@/features/mission/domain/mission-id.js";
 
 describe("generateMissionId", () => {
   const fixedDate = new Date("2026-03-28T12:00:00Z");

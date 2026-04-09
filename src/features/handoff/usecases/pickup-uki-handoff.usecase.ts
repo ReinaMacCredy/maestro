@@ -6,7 +6,7 @@
  * the latest pending handoff in the store. Throws a MaestroError with
  * actionable hints when there is nothing to pick up.
  */
-import { MaestroError } from "@/domain/errors.js";
+import { MaestroError } from "@/shared/errors.js";
 import type { UkiHandoff } from "../domain/uki-types.js";
 import type { HandoffStorePort } from "../ports/handoff-store.port.js";
 

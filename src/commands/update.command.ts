@@ -3,7 +3,7 @@ import { injectAgentBlocks } from "../usecases/manage-agents.usecase.js";
 import { formatAgentResults, output } from "../lib/output.js";
 import { execOrThrow } from "../lib/shell.js";
 import { getServices } from "../services.js";
-import { MaestroError } from "../domain/errors.js";
+import { MaestroError } from "@/shared/errors.js";
 import { homedir } from "node:os";
 import { join } from "node:path";
 

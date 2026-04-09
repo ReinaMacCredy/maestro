@@ -3,8 +3,8 @@
  * Implements CLI commands: checkpoint save|list|load
  */
 import type { Command } from "commander";
-import { getServices } from "../services.js";
-import { output, resolveJsonFlag } from "../lib/output.js";
+import { getServices } from "@/services.js";
+import { output, resolveJsonFlag } from "@/lib/output.js";
 import {
   saveCheckpoint,
   listCheckpoints,

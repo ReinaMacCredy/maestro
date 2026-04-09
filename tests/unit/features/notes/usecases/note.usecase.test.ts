@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { MaestroError } from "@/domain/errors.js";
+import { MaestroError } from "@/shared/errors.js";
 import { createNote, listNotes } from "@/features/notes";
 import { mockGit, mockNotesStore } from "../../../../helpers/mocks.js";
 

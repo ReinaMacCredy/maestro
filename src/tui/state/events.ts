@@ -6,8 +6,8 @@
  * worker execution layer; the deriver now reads only mission, feature,
  * assertion, and checkpoint timestamps.
  */
-import type { Mission, Feature, Checkpoint, Assertion } from "../../domain/mission-types.js";
-import type { MilestoneReportProgress } from "../../usecases/mission-report.usecase.js";
+import type { Mission, Feature, Checkpoint, Assertion } from "@/features/mission/domain/mission-types.js";
+import type { MilestoneReportProgress } from "@/features/mission/usecases/mission-report.usecase.js";
 import type { MissionControlEvent } from "./types.js";
 
 interface DeriveEventsInput {

@@ -3,15 +3,15 @@
  * Provides enhanced mission status with milestone progress indicators and completion percentages
  */
 import type { MissionStorePort } from "../ports/mission-store.port.js";
-import type { FeatureStorePort } from "../ports/feature-store.port.js";
-import type { AssertionStorePort } from "../ports/assertion-store.port.js";
+import type { FeatureStorePort } from "../feature/ports/feature-store.port.js";
+import type { AssertionStorePort } from "../validation/ports/assertion-store.port.js";
 import type {
   Mission,
   MissionStatus,
   Milestone,
   MilestoneStatus,
 } from "../domain/mission-types.js";
-import { MaestroError } from "../domain/errors.js";
+import { MaestroError } from "@/shared/errors.js";
 import { isTerminalAssertionStatus } from "../domain/mission-state.js";
 import {
   deriveEffectiveMissionStatus,

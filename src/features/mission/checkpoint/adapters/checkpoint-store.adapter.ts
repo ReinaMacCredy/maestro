@@ -4,11 +4,11 @@
  * Storage layout: .maestro/missions/{missionId}/checkpoints/{timestamp}.json
  */
 import { join } from "node:path";
-import type { Checkpoint } from "../domain/mission-types.js";
+import type { Checkpoint } from "../../domain/mission-types.js";
 import type { CheckpointStorePort } from "../ports/checkpoint-store.port.js";
-import { validateCheckpoint } from "../domain/mission-validators.js";
-import { ensureDir, readJson, writeJson, listDirs } from "../lib/fs.js";
-import { MAESTRO_DIR } from "../domain/defaults.js";
+import { validateCheckpoint } from "../../domain/mission-validators.js";
+import { ensureDir, readJson, writeJson, listDirs } from "@/lib/fs.js";
+import { MAESTRO_DIR } from "@/domain/defaults.js";
 import { readdir } from "node:fs/promises";
 
 export class FsCheckpointStoreAdapter implements CheckpointStorePort {

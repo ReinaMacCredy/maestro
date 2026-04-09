@@ -11,7 +11,7 @@ import { join } from "node:path";
 const CLI = [
   "bun",
   "run",
-  join(import.meta.dir, "..", "..", "src", "index.ts"),
+  join(import.meta.dir, "..", "..", "..", "..", "src", "index.ts"),
 ];
 
 let tmpDir: string;
