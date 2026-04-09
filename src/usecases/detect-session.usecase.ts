@@ -1,5 +1,5 @@
 import type { SessionDetectPort } from "../ports/session-detect.port.js";
-import type { AgentSession, MaestroConfig } from "../domain/types.js";
+import type { AgentSession } from "../domain/types.js";
 
 /**
  * Phase 1 strip: the conductor only answers "what session is this?"
@@ -21,7 +21,6 @@ export interface DetectSessionResult {
 
 export async function detectSession(
   sessionDetect: SessionDetectPort,
-  _config: MaestroConfig,
   opts: DetectSessionOpts,
 ): Promise<DetectSessionResult | undefined> {
   if (opts.noSession) return undefined;

@@ -19,10 +19,9 @@ Examples:
     .option("-q, --quiet", "Output just the session ID")
     .action(async (opts) => {
       const services = getServices();
-      const config = await services.config.load(process.cwd());
       const isJson = opts.json ?? program.opts().json;
 
-      const result = await detectSession(services.sessionDetect, config, {
+      const result = await detectSession(services.sessionDetect, {
         cwd: process.cwd(),
       });
 

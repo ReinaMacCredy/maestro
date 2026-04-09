@@ -12,7 +12,11 @@ import { output, resolveJsonFlag } from "../lib/output.js";
 import { MaestroError } from "../domain/errors.js";
 import type { UkiSlots } from "../lib/uki-format.js";
 import { DEFAULT_STANCE_COLLAPSE } from "../lib/uki-format.js";
-import type { UkiHandoff, UkiHandoffStatus } from "../domain/uki-types.js";
+import {
+  UKI_HANDOFF_STATUSES,
+  type UkiHandoff,
+  type UkiHandoffStatus,
+} from "../domain/uki-types.js";
 import { createUkiHandoff } from "../usecases/create-uki-handoff.usecase.js";
 import { pickupUkiHandoff } from "../usecases/pickup-uki-handoff.usecase.js";
 import { listUkiHandoffs } from "../usecases/list-uki-handoffs.usecase.js";
@@ -184,21 +188,15 @@ function printPickup(handoff: UkiHandoff, format: PickupFormat): void {
     console.log(handoff.uki);
     return;
   }
-  if (format === "markdown") {
-    for (const line of formatHandoffMarkdown(handoff)) {
-      console.log(line);
-    }
-    return;
-  }
-  console.log(JSON.stringify(handoff, null, 2));
+  output(format === "json", handoff, formatHandoffMarkdown);
 }
 
 function assertHandoffStatus(raw: string): UkiHandoffStatus {
-  if (raw === "pending" || raw === "picked-up" || raw === "completed") {
-    return raw;
+  if ((UKI_HANDOFF_STATUSES as readonly string[]).includes(raw)) {
+    return raw as UkiHandoffStatus;
   }
   throw new MaestroError(`Invalid --status: ${raw}`, [
-    "Allowed values: pending | picked-up | completed",
+    `Allowed values: ${UKI_HANDOFF_STATUSES.join(" | ")}`,
   ]);
 }
 
@@ -234,23 +232,15 @@ function formatHandoffMarkdown(handoff: UkiHandoff): string[] {
     s.nextAction,
     "",
   ];
-  if (s.causalDrivers.length > 0) {
-    lines.push("## Causal drivers", ...s.causalDrivers.map((d) => `- ${d}`), "");
-  }
-  if (s.divergences.length > 0) {
-    lines.push("## Divergences", ...s.divergences.map((d) => `- ${d}`), "");
-  }
-  if (s.keyDecisions.length > 0) {
-    lines.push("## Key decisions", ...s.keyDecisions.map((d) => `- ${d}`), "");
-  }
-  if (s.signalDelta.length > 0) {
-    lines.push("## Signal delta", ...s.signalDelta.map((d) => `- ${d}`), "");
-  }
-  if (s.artifacts.length > 0) {
-    lines.push("## Artifacts", ...s.artifacts.map((d) => `- ${d}`), "");
-  }
-  if (s.boundaryState.length > 0) {
-    lines.push("## Boundary state", ...s.boundaryState.map((d) => `- ${d}`), "");
+  for (const [heading, items] of [
+    ["Causal drivers", s.causalDrivers],
+    ["Divergences", s.divergences],
+    ["Key decisions", s.keyDecisions],
+    ["Signal delta", s.signalDelta],
+    ["Artifacts", s.artifacts],
+    ["Boundary state", s.boundaryState],
+  ] satisfies ReadonlyArray<readonly [string, readonly string[]]>) {
+    appendMarkdownListSection(lines, heading, items);
   }
   lines.push(
     "## Execution state",
@@ -267,6 +257,17 @@ function formatHandoffMarkdown(handoff: UkiHandoff): string[] {
     handoff.uki,
   );
   return lines;
+}
+
+function appendMarkdownListSection(
+  lines: string[],
+  heading: string,
+  items: readonly string[],
+): void {
+  if (items.length === 0) {
+    return;
+  }
+  lines.push(`## ${heading}`, ...items.map((item) => `- ${item}`), "");
 }
 
 function formatHandoffList(handoffs: readonly UkiHandoff[]): string[] {
