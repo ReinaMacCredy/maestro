@@ -256,11 +256,11 @@ Creating a handoff returns the handoff id, detected agent/session identity, curr
 ```text
 [ok] Handoff created: 2026-04-09-001
   Agent: codex
-  Session: abc123
+  Session: 019d728a-a8b5-7882-afb2-1337f38b5c4b
   Status: pending
 
 UKI v5.2 string:
-SESSION_CORE...|SUMMARY...|NEXT_ACTION...
+SESSION_CORE-Implement the auth flow feature|CAUSAL_DRIVERS-NONE|DIVERGENCES-NONE|KEY_DECISIONS-NONE|SIGNAL_DELTA-NONE|ARTIFACTS-file_src/auth.ts|EXECUTION_STATE-unspecified|BOUNDARY_STATE-NONE|STANCE_COLLAPSE-NONE_DETECTED_LOW_FRICTION|NEXT_ACTION-Pick up feature auth-impl|CS-work_0.9|SUMMARY-Planning is complete; implementation is ready
 ```
 
 ### Pickup output formats
