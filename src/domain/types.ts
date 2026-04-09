@@ -107,7 +107,7 @@ export interface StatusReport {
    * Phase 2 reintroduced real UKI handoff records here so CLI status
    * and Mission Control agree on pending work.
    */
-  readonly pendingHandoffs: readonly import("./uki-types.js").UkiHandoff[];
+  readonly pendingHandoffs: readonly import("@/features/handoff").UkiHandoff[];
   /**
    * Phase 1 strip: cassAvailable is still on the struct for the same
    * structural reason as pendingHandoffs. Value is always false until
