@@ -294,7 +294,7 @@ MODE-execute
 If you want only the raw UKI string for piping into another agent or tool, use:
 
 ```bash
-maestro handoff create \
+  maestro handoff create \
   --mode execute \
   --session-core handoff_real_example \
   --summary Handoff_real_example-ready-low_risk \
@@ -307,15 +307,28 @@ maestro handoff create \
   --read-more file_src_auth_ts \
   --blind-spot green_tests_masked_contract_drift \
   --metaphor baton_pass_snapshot \
-  --confidence-work 0.9 \
-  --uki
+    --confidence-work 0.9 \
+    --uki
+  ```
+
+If you want a paste-ready prompt for another general agent, use `--paste`. It prepends one short instruction line and then the raw UKI packet:
+
+```bash
+maestro handoff pickup --paste
+```
+
+```text
+Use the following UKI as the canonical handoff packet. Interpret each block literally and continue from NEXT_ACTION.
+
+MODE-execute|CURRENT_STATE-execute_in_progress|SESSION_CORE-handoff_real_example|CAUSAL_DRIVERS-NONE|DIVERGENCES-NONE|MAESTRO_REFS-NONE|DECISIONS-preserve_pickup_clarity|SIGNAL_DELTA-NONE|TOUCHED_FILES-file_src_auth_ts|COMPLETED_WORK-auth_flow_scaffolded|VALIDATION-compiled_cli_green|ARTIFACTS-file_src_auth_ts|READ_MORE-file_src_auth_ts|BOUNDARY_STATE-NONE|RISKS-green_tests_masked_contract_drift|BLIND_SPOT-green_tests_masked_contract_drift|METAPHOR-baton_pass_snapshot|NEXT_ACTION-pick_up_auth_impl|CS-work_0.9|SUMMARY-Handoff_real_example-ready-low_risk
 ```
 
 ### Pickup output formats
 
-`maestro handoff pickup` supports two output modes:
+`maestro handoff pickup` supports three output modes:
 
 - default output: the raw UKI transfer string
+- `--paste`: a paste-ready agent prompt plus the raw UKI packet
 - `--json`: the full structured handoff record
 
 Example default pickup:
@@ -347,7 +360,7 @@ maestro handoff pickup
 maestro handoff pickup --claim --agent codex
 ```
 
-Use `handoff list` when you want a queue view, `pickup` when another agent should resume directly from the UKI string, and `pickup --json` when a script or debugging session needs the structured record.
+Use `handoff list` when you want a queue view, `pickup` when another agent should resume directly from the UKI string, `pickup --paste` when you are pasting into a general agent chat, and `pickup --json` when a script or debugging session needs the structured record.
 
 ## Common Commands
 

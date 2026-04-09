@@ -4,6 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseUki } from "../../src/lib/uki-format.js";
 
+const PASTE_PREAMBLE =
+  "Use the following UKI as the canonical handoff packet. Interpret each block literally and continue from NEXT_ACTION.";
+
 const CLI = [
   "bun",
   "run",
@@ -113,6 +116,33 @@ describe("UKI handoff roundtrip", () => {
     expect(parsed.readMore).toEqual(["plan_md"]);
   }, SLOW_CLI_TIMEOUT_MS);
 
+  it("create --paste returns an agent-ready preamble plus the raw UKI", async () => {
+    const create = await run(
+      [
+        "handoff",
+        "create",
+        "--mode", "plan",
+        "--session-core", "plan_handoff",
+        "--summary", "Plan_handoff-saved-and_ready-low_risk",
+        "--next-action", "start_execute_mode",
+        "--decision", "save_reference_plan",
+        "--artifact", "file_plan_md",
+        "--read-more", "plan_md",
+        "--plan-path-item", "plan_md",
+        "--maestro-sync", "mission_created",
+        "--confidence-work", "0.96",
+        "--paste",
+      ],
+      tmpDir,
+    );
+
+    expect(create.exitCode).toBe(0);
+    const [preamble, uki] = create.stdout.split("\n\n");
+    expect(preamble).toBe(PASTE_PREAMBLE);
+    expect(uki?.startsWith("MODE-plan|")).toBe(true);
+    expect(parseUki(uki ?? "")).toMatchObject({ mode: "plan" });
+  }, SLOW_CLI_TIMEOUT_MS);
+
   it("pickup --json returns the structured record while pickup defaults to UKI", async () => {
     const create = await run(
       [
@@ -144,9 +174,39 @@ describe("UKI handoff roundtrip", () => {
     );
     expect(pickupJson.exitCode).toBe(0);
     const claimed = JSON.parse(pickupJson.stdout);
-      expect(claimed.status).toBe("picked-up");
-      expect(claimed.pickedUpBy).toBe("codex");
-    }, SLOW_CLI_TIMEOUT_MS);
+    expect(claimed.status).toBe("picked-up");
+    expect(claimed.pickedUpBy).toBe("codex");
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("pickup --paste returns an agent-ready preamble plus the raw UKI", async () => {
+    const create = await run(
+      [
+        "handoff",
+        "create",
+        "--mode", "execute",
+        "--session-core", "pickup_paste_test",
+        "--summary", "Pickup_paste_test-created-low_risk",
+        "--next-action", "continue_from_packet",
+        "--artifact", "branch_pickup_paste",
+        "--read-more", "branch_pickup_paste",
+        "--completed", "handoff_created",
+        "--validation", "unit_green",
+        "--confidence-work", "0.9",
+        "--json",
+      ],
+      tmpDir,
+    );
+
+    expect(create.exitCode).toBe(0);
+    const { id } = JSON.parse(create.stdout);
+
+    const pickup = await run(["handoff", "pickup", "--id", id, "--paste"], tmpDir);
+    expect(pickup.exitCode).toBe(0);
+    const [preamble, uki] = pickup.stdout.split("\n\n");
+    expect(preamble).toBe(PASTE_PREAMBLE);
+    expect(uki?.startsWith("MODE-execute|")).toBe(true);
+    expect(parseUki(uki ?? "")).toMatchObject({ mode: "execute" });
+  }, SLOW_CLI_TIMEOUT_MS);
 
   it("prefers explicit --uki over the root --json flag on pickup", async () => {
     const create = await run(

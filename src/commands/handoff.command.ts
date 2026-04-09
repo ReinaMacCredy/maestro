@@ -23,8 +23,11 @@ import { listUkiHandoffs } from "../usecases/list-uki-handoffs.usecase.js";
 import { pickupUkiHandoff } from "../usecases/pickup-uki-handoff.usecase.js";
 import type { Services } from "../services.js";
 
-type CreateFormat = "json" | "text" | "uki";
-type PickupFormat = "json" | "uki";
+type CreateFormat = "json" | "paste" | "text" | "uki";
+type PickupFormat = "json" | "paste" | "uki";
+
+const HANDOFF_PASTE_PREAMBLE =
+  "Use the following UKI as the canonical handoff packet. Interpret each block literally and continue from NEXT_ACTION.";
 
 interface AutoCollectedContext {
   readonly currentState: string;
@@ -73,9 +76,10 @@ export function registerHandoffCommand(program: Command): void {
     .option("--confidence-summary <number>", "CS.summary (0..1)", parseFloatStrict)
     .option("--agent <name>", "Override agent identity (default auto-detect)")
     .option("--session-id <id>", "Override session id (default auto-detect)")
-    .option("--json", "Output as JSON")
-    .option("--uki", "Output only the raw UKI transfer string")
-    .action(async (opts) => {
+      .option("--json", "Output as JSON")
+      .option("--uki", "Output only the raw UKI transfer string")
+      .option("--paste", "Output an agent-ready handoff prompt plus the raw UKI packet")
+      .action(async (opts) => {
       const services = getServices();
       const format = resolveCreateFormat(opts, program);
       const content = await buildContentFromOptions(opts, services, process.cwd());
@@ -98,10 +102,11 @@ export function registerHandoffCommand(program: Command): void {
     .description("Pick up the latest pending handoff (or a specific one by id)")
     .option("--id <id>", "Specific handoff id to pick up")
     .option("--claim", "Transition pending -> picked-up (atomic claim)")
-    .option("--agent <name>", "pickedUpBy attribution when --claim is set")
-    .option("--json", "Output as JSON")
-    .option("--uki", "Output the raw UKI transfer string (default)")
-    .action(async (opts) => {
+      .option("--agent <name>", "pickedUpBy attribution when --claim is set")
+      .option("--json", "Output as JSON")
+      .option("--uki", "Output the raw UKI transfer string (default)")
+      .option("--paste", "Output an agent-ready handoff prompt plus the raw UKI packet")
+      .action(async (opts) => {
       const services = getServices();
       const format = resolvePickupFormat(opts, program);
 
@@ -355,12 +360,13 @@ function resolveCreateFormat(
   opts: Record<string, unknown>,
   program: { opts(): Record<string, unknown> },
 ): CreateFormat {
-  const flags = [Boolean(opts.uki), Boolean(opts.json)];
+  const flags = [Boolean(opts.uki), Boolean(opts.json), Boolean(opts.paste)];
   if (flags.filter(Boolean).length > 1) {
-    throw new MaestroError("--json and --uki are mutually exclusive", [
+    throw new MaestroError("--json, --uki, and --paste are mutually exclusive", [
       "Pick one output format for maestro handoff create",
     ]);
   }
+  if (opts.paste) return "paste";
   if (opts.uki) return "uki";
   if (opts.json || resolveJsonFlag(opts, program)) return "json";
   return "text";
@@ -370,12 +376,13 @@ function resolvePickupFormat(
   opts: Record<string, unknown>,
   program: { opts(): Record<string, unknown> },
 ): PickupFormat {
-  const flags = [Boolean(opts.uki), Boolean(opts.json)];
+  const flags = [Boolean(opts.uki), Boolean(opts.json), Boolean(opts.paste)];
   if (flags.filter(Boolean).length > 1) {
-    throw new MaestroError("--json and --uki are mutually exclusive", [
+    throw new MaestroError("--json, --uki, and --paste are mutually exclusive", [
       "Pick one output format for maestro handoff pickup",
     ]);
   }
+  if (opts.paste) return "paste";
   if (opts.uki) return "uki";
   if (opts.json || resolveJsonFlag(opts, program)) return "json";
   return "uki";
@@ -386,6 +393,10 @@ function printCreate(handoff: UkiHandoff, format: CreateFormat): void {
     console.log(handoff.uki);
     return;
   }
+  if (format === "paste") {
+    console.log(formatHandoffPaste(handoff.uki));
+    return;
+  }
   output(format === "json", handoff, formatHandoffCreate);
 }
 
@@ -394,7 +405,15 @@ function printPickup(handoff: UkiHandoff, format: PickupFormat): void {
     console.log(handoff.uki);
     return;
   }
+  if (format === "paste") {
+    console.log(formatHandoffPaste(handoff.uki));
+    return;
+  }
   output(true, handoff, () => []);
+}
+
+function formatHandoffPaste(uki: string): string {
+  return `${HANDOFF_PASTE_PREAMBLE}\n\n${uki}`;
 }
 
 function formatHandoffCreate(handoff: UkiHandoff): string[] {
