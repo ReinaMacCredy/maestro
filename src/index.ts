@@ -28,6 +28,7 @@ import { registerMemoryStatsCommand } from "./commands/memory-stats.command.js";
 import { registerMemoryLintCommand } from "./commands/memory-lint.command.js";
 import { registerGraphLinkCommand } from "./commands/graph-link.command.js";
 import { registerGraphContextCommand } from "./commands/graph-context.command.js";
+import { registerHandoffCommand } from "./commands/handoff.command.js";
 
 export const program = new Command()
   .name("maestro")
@@ -64,6 +65,7 @@ registerMemoryStatsCommand(program);
 registerMemoryLintCommand(program);
 registerGraphLinkCommand(program);
 registerGraphContextCommand(program);
+registerHandoffCommand(program);
 
 async function main(): Promise<void> {
   try {
