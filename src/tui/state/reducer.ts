@@ -860,15 +860,16 @@ function handleModalNavigate(state: AppState, direction: "up" | "down"): AppStat
       ? Math.min(state.modal.selectedFeatureIndex + 1, total - 1)
       : Math.max(state.modal.selectedFeatureIndex - 1, 0);
 
-    return {
-      ...state,
-      modal: {
-        kind: "feature-browser",
-        selectedFeatureIndex,
-        returnTarget: state.modal.returnTarget,
-      },
-    };
-  }
+      return {
+        ...state,
+        modal: {
+          kind: "feature-browser",
+          selectedFeatureIndex,
+          returnTarget: state.modal.returnTarget,
+          returnPalette: state.modal.returnPalette,
+        },
+      };
+    }
 
     if (state.modal.kind === "handoffs") {
     const total = state.snapshot.pendingHandoffs.length;
@@ -878,15 +879,16 @@ function handleModalNavigate(state: AppState, direction: "up" | "down"): AppStat
       ? Math.min(state.modal.selectedHandoffIndex + 1, total - 1)
       : Math.max(state.modal.selectedHandoffIndex - 1, 0);
 
-    return {
-      ...state,
-      modal: {
-        kind: "handoffs",
-        selectedHandoffIndex,
-        returnTarget: state.modal.returnTarget,
-      },
-    };
-  }
+      return {
+        ...state,
+        modal: {
+          kind: "handoffs",
+          selectedHandoffIndex,
+          returnTarget: state.modal.returnTarget,
+          returnPalette: state.modal.returnPalette,
+        },
+      };
+    }
 
   if (state.modal.kind === "dependencies") {
     const total = getDependencyTargets(state).length;
@@ -896,15 +898,16 @@ function handleModalNavigate(state: AppState, direction: "up" | "down"): AppStat
       ? Math.min(state.modal.selectedOption + 1, total - 1)
       : Math.max(state.modal.selectedOption - 1, 0);
 
-    return {
-      ...state,
-      modal: {
-        kind: "dependencies",
-        selectedOption,
-        returnTarget: state.modal.returnTarget,
-        },
-      };
-    }
+      return {
+        ...state,
+        modal: {
+          kind: "dependencies",
+          selectedOption,
+          returnTarget: state.modal.returnTarget,
+          returnPalette: state.modal.returnPalette,
+          },
+        };
+      }
 
       if (state.modal.kind === "memory") {
         const total = getMemorySelectableCount(state.snapshot, state.modal.tab);

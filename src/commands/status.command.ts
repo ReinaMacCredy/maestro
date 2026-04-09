@@ -13,6 +13,7 @@ export function registerStatusCommand(program: Command): void {
       const status = await checkStatus(
         services.config,
         services.git,
+        services.handoffStore,
         process.cwd(),
       );
 

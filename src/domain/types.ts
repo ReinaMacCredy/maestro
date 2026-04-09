@@ -104,12 +104,10 @@ export interface StatusReport {
   readonly initialized: boolean;
   readonly configSource: "global" | "project" | "none";
   /**
-   * Phase 1 strip: pendingHandoffs is still on the struct so the
-   * TUI snapshot shape does not cascade through every builder.
-   * The value is always empty until Phase 2 wires the UKI handoff
-   * store. Phase 3 is the earliest the field can disappear.
+   * Phase 2 reintroduced real UKI handoff records here so CLI status
+   * and Mission Control agree on pending work.
    */
-  readonly pendingHandoffs: readonly unknown[];
+  readonly pendingHandoffs: readonly import("./uki-types.js").UkiHandoff[];
   /**
    * Phase 1 strip: cassAvailable is still on the struct for the same
    * structural reason as pendingHandoffs. Value is always false until

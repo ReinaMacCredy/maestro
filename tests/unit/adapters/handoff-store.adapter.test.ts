@@ -2,7 +2,7 @@
  * Filesystem handoff store (v2, UKI v5.2) adapter tests.
  */
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { MaestroError } from "../../../src/domain/errors.js";
@@ -177,6 +177,58 @@ describe("FsHandoffStoreAdapter", () => {
     expect(latest?.id).toBe(created.id);
   });
 
+  it("lists legacy handoff directories alongside UKI records", async () => {
+    const created = await store.create(SAMPLE_INPUT);
+    const legacyDir = join(dir, ".maestro", "handoffs", "2026-04-08-001");
+    await mkdir(legacyDir, { recursive: true });
+    await writeFile(join(legacyDir, "handoff.json"), JSON.stringify({
+      id: "2026-04-08-001",
+      timestamp: "2026-04-08T00:00:00.000Z",
+      message: "Legacy handoff",
+      session: {
+        agent: "claude-code",
+        sessionId: "legacy-session",
+        sourcePath: "/tmp/session.jsonl",
+      },
+      sitrep: "Legacy sitrep",
+      quickstart: "Review the legacy work",
+      git: {
+        branch: "main",
+        recentCommits: [],
+        changedFiles: [],
+        workingTreeClean: true,
+        diffStat: "+0 -0",
+      },
+    }, null, 2));
+    await writeFile(join(legacyDir, "envelope.json"), JSON.stringify({
+      handoff: {
+        id: "2026-04-08-001",
+        timestamp: "2026-04-08T00:00:00.000Z",
+        message: "Legacy handoff",
+        session: {
+          agent: "claude-code",
+          sessionId: "legacy-session",
+          sourcePath: "/tmp/session.jsonl",
+        },
+        sitrep: "Legacy sitrep",
+        quickstart: "Review the legacy work",
+        git: {
+          branch: "main",
+          recentCommits: [],
+          changedFiles: [],
+          workingTreeClean: true,
+          diffStat: "+0 -0",
+        },
+      },
+      status: "pending",
+    }, null, 2));
+
+    const listed = await store.list();
+
+    expect(listed).toHaveLength(2);
+    expect(listed.map((handoff) => handoff.id)).toEqual([created.id, "2026-04-08-001"]);
+  });
+
   it("supports concurrent creates without reusing handoff ids", async () => {
     const created = await Promise.all(
       Array.from({ length: 12 }, () => store.create(SAMPLE_INPUT)),
@@ -203,6 +255,19 @@ describe("FsHandoffStoreAdapter", () => {
     const reread = await store.get(created.id);
     expect(reread?.status).toBe("picked-up");
     expect(reread?.pickedUpBy).toBe(winner);
+  });
+
+  it("recovers from a stale create lock file", async () => {
+    const handoffDir = join(dir, ".maestro", "handoffs");
+    const lockPath = join(handoffDir, ".create.lock");
+    await mkdir(handoffDir, { recursive: true });
+    await writeFile(lockPath, "");
+    const staleTime = new Date(Date.now() - 60_000);
+    await utimes(lockPath, staleTime, staleTime);
+
+    const created = await store.create(SAMPLE_INPUT);
+
+    expect(created.status).toBe("pending");
   });
 
   it("delete removes the record and returns true", async () => {

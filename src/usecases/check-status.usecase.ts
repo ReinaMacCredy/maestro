@@ -1,6 +1,7 @@
 import type { ConfigPort } from "../ports/config.port.js";
 import type { GitPort } from "../ports/git.port.js";
 import type { StatusReport } from "../domain/types.js";
+import type { HandoffStorePort } from "../ports/handoff-store.port.js";
 
 /**
  * Phase 1 strip: the conductor model does not own handoffs or CASS
@@ -12,16 +13,19 @@ import type { StatusReport } from "../domain/types.js";
 export async function checkStatus(
   config: ConfigPort,
   git: GitPort,
+  handoffStore: HandoffStorePort,
   dir: string,
 ): Promise<StatusReport> {
   const [
     projectConfigExists,
     globalConfigExists,
     gitAvailable,
+    pendingHandoffs,
   ] = await Promise.all([
     config.exists("project", dir),
     config.exists("global", dir),
     git.isRepo(dir),
+    handoffStore.list({ status: "pending" }),
   ]);
 
   const configSource: StatusReport["configSource"] = projectConfigExists
@@ -33,7 +37,7 @@ export async function checkStatus(
   return {
     initialized: projectConfigExists || globalConfigExists,
     configSource,
-    pendingHandoffs: [],
+    pendingHandoffs,
     cassAvailable: false,
     gitAvailable,
   };

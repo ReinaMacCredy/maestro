@@ -156,6 +156,19 @@ describe("pickupUkiHandoff usecase", () => {
     expect(picked.pickedUpBy).toBe("first");
   });
 
+  it("claim without an id still returns a claimed handoff under contention", async () => {
+    await createUkiHandoff(store, sessionDetect, dir, { slots: SAMPLE_SLOTS });
+    await createUkiHandoff(store, sessionDetect, dir, { slots: SAMPLE_SLOTS });
+
+    const claimed = await Promise.all([
+      pickupUkiHandoff(store, { claim: true, pickedUpBy: "alpha" }),
+      pickupUkiHandoff(store, { claim: true, pickedUpBy: "beta" }),
+    ]);
+
+    expect(claimed).toHaveLength(2);
+    expect(claimed.every((handoff) => handoff.status === "picked-up")).toBe(true);
+  });
+
   it("throws MaestroError with hints when nothing pending", async () => {
     await expect(pickupUkiHandoff(store)).rejects.toThrow(MaestroError);
   });
