@@ -1,5 +1,90 @@
 # Changelog
 
+## 1.0.2 — Mission Control cleanup
+
+Phase 3 of the conductor refactor. The Mission Control TUI was in an
+intermediate state after Phase 1 removed the worker execution layer:
+the snapshot pipeline still populated empty worker / runtime /
+progress-log panes and the preview screen set still advertised
+`runtime`, `workers`, and `output` screens whose data stores had been
+deleted. This release cleans up the dead screens, the orphaned DTOs,
+and the types that described them.
+
+### Removed preview screens
+
+- `runtime`, `workers`, `output` are no longer valid `--preview` values.
+  The TUI now renders 7 screens: `dashboard`, `features`,
+  `dependencies`, `handoffs`, `config`, `memory`, `graph`.
+- The `proc`, `process`, `processes`, `worker`, `out` screen aliases
+  were removed. Surviving aliases: `feat`, `handoff`, `cfg`, `deps`,
+  `mem`.
+
+### Removed modal kinds
+
+- `"processes"`, `"runtime-output"`, `"workers"` modal kinds were
+  deleted from the Mission Control reducer along with their
+  command-palette entries, reducer cases, modal builders, and
+  input-dispatch hotkeys. The surviving modal kinds are `none`,
+  `command-palette`, `feature-action`, `feature-browser`, `overview`,
+  `dependencies`, `handoffs`, `config`, `memory`, `graph`.
+
+### Orphaned types removed
+
+From `src/domain/worker-types.ts`:
+
+- `TransportType` union (collapsed to the literal `"cli"` on
+  `CliWorkerConfig`).
+- `A2aWorkerConfig`, the old `WorkerConfig` union variant.
+- `WorkerResult`, `ExecutionRecord`, `RuntimeEventRecord`.
+- `WorkerProgressEvent`, `WorkerProgressEventKind`, `FailureClass`.
+
+Kept because the config inspector and `DEFAULT_CONFIG` still render
+them: `CliWorkerConfig`, `WorkerConfig` (now an alias for
+`CliWorkerConfig`), `WorkerOutputMode`, `ExecutionConfig`,
+`SupervisionConfig`, `SupervisionLevel`, `ParallelConfig`.
+
+From `src/tui/state/types.ts`:
+
+- `MissionControlWorkerPane`, `MissionControlRuntimeProcessRow`.
+- `MissionControlWorkerHealthRow`, `MissionControlWorkerHealthStatus`,
+  `MissionControlWorkerHealthCheck`.
+- `activeWorker`, `runtimeProcesses`, `workerHealth` fields on
+  `MissionControlSnapshot`.
+- `transport` field on `MissionControlSessionSidebar`.
+- `runtimeState`, `lastSeenAgeMs`, `failureReason`, `retryCount`,
+  `agent`, `sessionId` fields on `TaskPreviewPane`.
+
+### Other removals
+
+- `src/usecases/worker-selection.usecase.ts` and its test. No callers
+  survived the Phase 1 strip.
+- `validateSupervisionConfig`, `validateParallelConfig`, and
+  `isCliWorkerConfig` exports in `src/domain/worker-validators.ts`.
+- `workerHealth` input to `buildConfigInspector`. The inspector now
+  derives worker availability directly from the CLI worker config via
+  `cachedWhich`.
+- `workerEvents` input to `deriveEvents`. The timeline reads only
+  mission, feature, assertion, and checkpoint timestamps.
+- The agent-per-feature aggregation in `buildMissionOverview`
+  (`agentSummary` always returns an empty array).
+- Live feature auto-follow in `createInitialState` and the reducer's
+  `update-snapshot` handler (runtime state is gone, so there is no
+  live feature to follow).
+- Session sidebar transport/session/agent rendering in the OpenTUI
+  builders.
+- Faster polling cadence in `getSnapshotPollIntervalMs` (now always
+  returns the 5s default because there is no live runtime to track).
+
+### Behavior changes
+
+- `maestro mission-control --preview output --feature <id>` now fails
+  with "Unknown preview screen" instead of rendering a runtime output
+  stream. The worker output pane was already empty after Phase 1.
+- `maestro mission-control --preview runtime` and `--preview workers`
+  fail the same way.
+- The `O` hotkey inside the runtime modal no longer does anything
+  (neither modal exists).
+
 ## 1.0.1 — UKI v5.2 handoff system
 
 Phase 2 of the conductor refactor. The single `maestro handoff` subcommand
