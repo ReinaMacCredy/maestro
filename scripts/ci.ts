@@ -8,9 +8,10 @@
  * Pipeline:
  *   1. Guard: reject dirty working tree (unstaged/staged changes)
  *   2. Auto-bump version from conventional commits
- *   3. Run tests
- *   4. Commit version files + tag
- *   5. Build the release artifact and install locally
+ *   3. Check feature-folder boundaries
+ *   4. Run tests
+ *   5. Commit version files + tag
+ *   6. Build the release artifact and install locally
  *
  * On test failure the version bump is rolled back automatically.
  */
@@ -79,7 +80,22 @@ if (origVersion === nextVersion) {
   process.exit(0);
 }
 
-// ---- step 3: test ----
+// ---- step 3: boundary check ----
+
+console.log("\n[-->] Checking feature boundaries...");
+const boundaryResult = await Bun.spawn(["bun", "run", "check:boundaries"], {
+  cwd: root,
+  stdout: "inherit",
+  stderr: "inherit",
+}).exited;
+
+if (boundaryResult !== 0) {
+  await restoreVersion(origPkgText, origVersionText);
+  fail(`Feature boundary check failed. Version reverted to ${origVersion}.`);
+}
+console.log("[ok] Feature boundaries OK.");
+
+// ---- step 4: test ----
 
 console.log("\n[-->] Running tests...");
 const testResult = await Bun.spawn(["bun", "test"], {
@@ -94,7 +110,7 @@ if (testResult !== 0) {
 }
 console.log("[ok] Tests passed.");
 
-// ---- step 4: commit + tag ----
+// ---- step 5: commit + tag ----
 
 console.log("\n[-->] Committing release...");
 await $`git add package.json src/version.ts`.cwd(root);
@@ -104,7 +120,7 @@ await $`git commit -m ${commitMsg}`.cwd(root);
 await $`git tag ${tagName}`.cwd(root);
 console.log(`[ok] Committed and tagged v${nextVersion}.`);
 
-// ---- step 5: build + install locally ----
+// ---- step 6: build + install locally ----
 
 console.log("\n[-->] Building release artifact...");
 const buildResult = await Bun.spawn(["bun", "run", "build"], {
