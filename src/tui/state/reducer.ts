@@ -22,6 +22,13 @@ interface CommandPaletteState {
 
 type MemoryModalTab = "overview" | "corrections" | "learnings" | "ratchet" | "config";
 
+/**
+ * Phase 3 strip: `processes`, `runtime-output`, and `workers` modal
+ * kinds were removed. They were backed by the worker execution layer
+ * deleted in Phase 1; their panes became empty in Commit 3.1 and the
+ * surviving command-palette entries, reducer cases, and action types
+ * are removed here in Commit 3.2.
+ */
 export type ModalState =
   | { kind: "none" }
   | { kind: "command-palette"; query: string; selectedCommandIndex: number }
@@ -36,7 +43,6 @@ export type ModalState =
     | { kind: "dependencies"; selectedOption: number; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState }
     | { kind: "overview"; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState }
     | { kind: "handoffs"; selectedHandoffIndex: number; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState }
-    | { kind: "workers"; selectedWorkerIndex: number; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState }
   | {
       kind: "config";
       tab: MissionControlConfigTab;
@@ -54,8 +60,6 @@ export type ModalState =
         returnTarget?: ModalReturnTarget;
         returnPalette?: CommandPaletteState;
         }
-      | { kind: "processes"; selectedProcessIndex: number; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState }
-      | { kind: "runtime-output"; selectedProcessIndex: number; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState }
       | { kind: "memory"; tab: MemoryModalTab; selectedItemIndex: number; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState }
       | { kind: "graph"; selectedItemIndex: number; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState };
 
@@ -71,17 +75,15 @@ export interface AppState {
 }
 
 export function createInitialState(snapshot: MissionControlSnapshot): AppState {
-  const initialLiveFeatureId = getLiveRuntimeFeatureId(snapshot);
-  const initialLiveFeatureIndex = initialLiveFeatureId
-    ? snapshot.features.findIndex((feature) => feature.id === initialLiveFeatureId)
-    : -1;
-
+  // Phase 3 strip: live feature auto-follow is gone with the runtime
+  // store. Initial state starts in overview mode with the first
+  // feature selected.
   return {
     snapshot,
     focusedPanel: "features",
-    leftPaneMode: initialLiveFeatureIndex >= 0 ? "preview" : "overview",
+    leftPaneMode: "overview",
     copyMode: false,
-    selectedFeatureIndex: initialLiveFeatureIndex >= 0 ? initialLiveFeatureIndex : 0,
+    selectedFeatureIndex: 0,
     logScrollOffset: 0,
     modal: { kind: "none" },
     running: true,
@@ -99,11 +101,8 @@ export type Action =
   | { type: "open-dependencies" }
   | { type: "open-handoffs" }
   | { type: "open-config" }
-  | { type: "open-processes" }
-  | { type: "open-workers" }
   | { type: "open-memory" }
   | { type: "open-graph" }
-  | { type: "open-runtime-output" }
   | { type: "toggle-copy-mode" }
   | { type: "update-snapshot"; snapshot: MissionControlSnapshot }
   | { type: "modal-select"; option: number }
@@ -149,9 +148,6 @@ export function reduce(state: AppState, action: Action): AppState {
         || state.modal.kind === "command-palette"
         || state.modal.kind === "feature-browser"
         || state.modal.kind === "handoffs"
-        || state.modal.kind === "workers"
-        || state.modal.kind === "processes"
-        || state.modal.kind === "runtime-output"
         || state.modal.kind === "dependencies"
         || state.modal.kind === "config"
         || state.modal.kind === "memory"
@@ -207,15 +203,6 @@ export function reduce(state: AppState, action: Action): AppState {
         };
       }
         if (state.modal.kind === "handoffs") {
-          return state;
-        }
-        if (state.modal.kind === "workers") {
-          return state;
-        }
-        if (state.modal.kind === "processes") {
-          return state;
-        }
-        if (state.modal.kind === "runtime-output") {
           return state;
         }
       if (state.modal.kind === "dependencies") {
@@ -379,32 +366,6 @@ export function reduce(state: AppState, action: Action): AppState {
               },
             };
 
-    case "open-processes":
-        if (!canOpenOverlayFromModal(state.modal)) return state;
-        if (state.snapshot.mode !== "mission") return state;
-        const selectedFeatureId = state.snapshot.features[state.selectedFeatureIndex]?.id;
-        return {
-          ...state,
-          modal: {
-              kind: "processes",
-              selectedProcessIndex: getPreferredRuntimeProcessIndex(state.snapshot, selectedFeatureId),
-              returnTarget: getModalReturnTarget(state.modal),
-              returnPalette: getCommandPaletteReturnState(state.modal),
-            },
-          };
-
-    case "open-workers":
-      if (!canOpenOverlayFromModal(state.modal)) return state;
-      return {
-        ...state,
-        modal: {
-            kind: "workers",
-            selectedWorkerIndex: 0,
-            returnTarget: getModalReturnTarget(state.modal),
-            returnPalette: getCommandPaletteReturnState(state.modal),
-          },
-        };
-
       case "open-memory":
         if (!canOpenOverlayFromModal(state.modal)) return state;
         return {
@@ -430,12 +391,6 @@ export function reduce(state: AppState, action: Action): AppState {
         },
       };
 
-    case "open-runtime-output": {
-      // Phase 3 strip: runtime output is gone. Commit 3.2 removes the
-      // modal kind entirely. Until then the handler is a no-op.
-      return state;
-    }
-
     case "toggle-copy-mode":
       return { ...state, copyMode: !state.copyMode };
 
@@ -444,24 +399,14 @@ export function reduce(state: AppState, action: Action): AppState {
         const preservedSelectedIndex = selectedFeatureId
           ? action.snapshot.features.findIndex((feature) => feature.id === selectedFeatureId)
           : -1;
-        const nextLiveFeatureId = getLiveRuntimeFeatureId(action.snapshot);
-        const previousLiveFeatureId = getLiveRuntimeFeatureId(state.snapshot);
-        const shouldAutoFollowLiveFeature = nextLiveFeatureId !== undefined
-          && nextLiveFeatureId !== previousLiveFeatureId
-          && !blocksLiveFeatureAutoFollow(state.modal);
-        const liveSelectedIndex = nextLiveFeatureId
-          ? action.snapshot.features.findIndex((feature) => feature.id === nextLiveFeatureId)
-          : -1;
+        // Phase 3 strip: auto-follow of a newly live runtime feature is
+        // gone along with the runtime store.
         const baseState: AppState = {
           ...state,
           snapshot: action.snapshot,
-          focusedPanel: shouldAutoFollowLiveFeature ? "features" : state.focusedPanel,
-          leftPaneMode: shouldAutoFollowLiveFeature ? "preview" : state.leftPaneMode,
-          selectedFeatureIndex: shouldAutoFollowLiveFeature && liveSelectedIndex >= 0
-            ? liveSelectedIndex
-            : preservedSelectedIndex >= 0
-              ? preservedSelectedIndex
-              : Math.min(state.selectedFeatureIndex, Math.max(0, action.snapshot.features.length - 1)),
+          selectedFeatureIndex: preservedSelectedIndex >= 0
+            ? preservedSelectedIndex
+            : Math.min(state.selectedFeatureIndex, Math.max(0, action.snapshot.features.length - 1)),
         };
 
       if (state.modal.kind === "feature-browser") {
@@ -497,37 +442,6 @@ export function reduce(state: AppState, action: Action): AppState {
           };
       }
 
-      if (state.modal.kind === "workers") {
-        // Phase 3 strip: worker health pane has no data; Commit 3.2 removes
-        // the modal kind. Snapshot updates leave selection untouched.
-        return {
-          ...baseState,
-          modal: {
-            kind: "workers",
-            selectedWorkerIndex: 0,
-            returnTarget: state.modal.returnTarget,
-            returnPalette: state.modal.returnPalette,
-          },
-        };
-      }
-
-          if (state.modal.kind === "processes") {
-            return {
-              ...baseState,
-              modal: {
-                kind: "processes",
-                selectedProcessIndex: getUpdatedRuntimeProcessIndex(
-                  state.snapshot,
-                  action.snapshot,
-                  state.modal.selectedProcessIndex,
-                  action.snapshot.features[baseState.selectedFeatureIndex]?.id,
-                ),
-                returnTarget: state.modal.returnTarget,
-                returnPalette: state.modal.returnPalette,
-              },
-            };
-      }
-
         if (state.modal.kind === "dependencies") {
           return {
             ...baseState,
@@ -541,23 +455,6 @@ export function reduce(state: AppState, action: Action): AppState {
               returnPalette: state.modal.returnPalette,
               },
             };
-        }
-
-          if (state.modal.kind === "runtime-output") {
-            return {
-              ...baseState,
-                modal: {
-                  kind: "runtime-output",
-                  selectedProcessIndex: getUpdatedRuntimeProcessIndex(
-                    state.snapshot,
-                    action.snapshot,
-                    state.modal.selectedProcessIndex,
-                    action.snapshot.features[baseState.selectedFeatureIndex]?.id,
-                  ),
-                  returnTarget: state.modal.returnTarget,
-                  returnPalette: state.modal.returnPalette,
-                },
-              };
         }
 
           if (state.modal.kind === "config") {
@@ -614,28 +511,6 @@ export function reduce(state: AppState, action: Action): AppState {
             modal: {
               kind: "handoffs",
               selectedHandoffIndex: action.option,
-              returnTarget: state.modal.returnTarget,
-              returnPalette: state.modal.returnPalette,
-            },
-          };
-      }
-      if (state.modal.kind === "workers") {
-        return {
-          ...state,
-            modal: {
-              kind: "workers",
-              selectedWorkerIndex: action.option,
-              returnTarget: state.modal.returnTarget,
-              returnPalette: state.modal.returnPalette,
-            },
-          };
-      }
-      if (state.modal.kind === "processes") {
-        return {
-          ...state,
-            modal: {
-              kind: "processes",
-              selectedProcessIndex: action.option,
               returnTarget: state.modal.returnTarget,
               returnPalette: state.modal.returnPalette,
             },
@@ -1013,12 +888,6 @@ function handleModalNavigate(state: AppState, direction: "up" | "down"): AppStat
     };
   }
 
-  if (state.modal.kind === "processes") {
-    // Phase 3 strip: runtime process modal has no rows; Commit 3.2
-    // removes the modal kind entirely.
-    return state;
-  }
-
   if (state.modal.kind === "dependencies") {
     const total = getDependencyTargets(state).length;
     if (total === 0) return state;
@@ -1035,12 +904,6 @@ function handleModalNavigate(state: AppState, direction: "up" | "down"): AppStat
         returnTarget: state.modal.returnTarget,
         },
       };
-    }
-
-    if (state.modal.kind === "workers") {
-      // Phase 3 strip: workers modal has no rows; Commit 3.2 removes
-      // the modal kind entirely.
-      return state;
     }
 
       if (state.modal.kind === "memory") {
@@ -1130,43 +993,6 @@ function canOpenOverlayFromModal(modal: ModalState): boolean {
   return modal.kind === "none" || modal.kind === "command-palette";
 }
 
-function blocksLiveFeatureAutoFollow(modal: ModalState): boolean {
-  return modal.kind === "command-palette"
-    || modal.kind === "feature-action"
-    || modal.kind === "feature-browser"
-    || modal.kind === "dependencies"
-    || modal.kind === "handoffs"
-    || modal.kind === "workers"
-    || modal.kind === "config"
-    || modal.kind === "memory"
-    || modal.kind === "graph";
-}
-
-function getLiveRuntimeFeatureId(_snapshot: MissionControlSnapshot): string | undefined {
-  // Phase 3 strip: live runtime tracking is gone. The reducer kept
-  // this helper on the live-feature auto-follow path; with no runtime
-  // panes there is nothing to auto-follow.
-  return undefined;
-}
-
-function getPreferredRuntimeProcessIndex(
-  _snapshot: MissionControlSnapshot,
-  _selectedFeatureId: string | undefined,
-): number {
-  // Phase 3 strip: runtime process modal is removed in Commit 3.2.
-  return 0;
-}
-
-function getUpdatedRuntimeProcessIndex(
-  _previousSnapshot: MissionControlSnapshot,
-  _nextSnapshot: MissionControlSnapshot,
-  _previousSelectedIndex: number,
-  _selectedFeatureId: string | undefined,
-): number {
-  // Phase 3 strip: runtime process modal is removed in Commit 3.2.
-  return 0;
-}
-
 function closeOrReturnModal(state: AppState): AppState {
   if (state.modal.kind === "none") {
     return { ...state, focusedPanel: "none" };
@@ -1196,10 +1022,7 @@ function getModalReturnTarget(modal: ModalState): ModalReturnTarget | undefined 
       || modal.kind === "dependencies"
       || modal.kind === "overview"
         || modal.kind === "handoffs"
-        || modal.kind === "workers"
         || modal.kind === "config"
-        || modal.kind === "processes"
-        || modal.kind === "runtime-output"
         || modal.kind === "memory"
         || modal.kind === "graph"
       ) {
@@ -1230,10 +1053,7 @@ function getCommandPaletteReturnState(
     || modal.kind === "dependencies"
     || modal.kind === "overview"
     || modal.kind === "handoffs"
-    || modal.kind === "workers"
     || modal.kind === "config"
-    || modal.kind === "processes"
-    || modal.kind === "runtime-output"
     || modal.kind === "memory"
     || modal.kind === "graph"
   ) {

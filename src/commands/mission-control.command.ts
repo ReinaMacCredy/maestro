@@ -51,14 +51,9 @@ const PREVIEW_SCREEN_ALIASES: Readonly<Record<string, PreviewScreenOrAll>> = {
   cfg: "config",
   config: "config",
   settings: "config",
-  proc: "runtime",
-  process: "runtime",
-  processes: "runtime",
-  runtime: "runtime",
-  workers: "workers",
-  worker: "workers",
-  output: "output",
-  out: "output",
+  memory: "memory",
+  mem: "memory",
+  graph: "graph",
 };
 
 export function registerMissionControlCommand(program: Command): void {
@@ -67,8 +62,8 @@ export function registerMissionControlCommand(program: Command): void {
     .description("Interactive mission control dashboard")
     .option("--mission <id>", "Mission ID (auto-selects if omitted)")
     .option("--json", "Output snapshot as JSON")
-      .option("--preview [screen]", `Render a read-only preview frame (${PREVIEW_SCREENS.join(", ")}; aliases: feat, handoff, cfg, deps, proc, worker, out)`)
-      .option("--feature <id>", "Select a feature for dashboard, features, dependencies, or output previews")
+      .option("--preview [screen]", `Render a read-only preview frame (${PREVIEW_SCREENS.join(", ")}; aliases: feat, handoff, cfg, deps, mem)`)
+      .option("--feature <id>", "Select a feature for dashboard, features, or dependencies previews")
     .option("--handoff <id>", "Select a handoff for handoffs previews")
     .option("--size <WxH>", "Render dimensions (e.g. 120x40); overrides terminal detection")
     .option("--format <type>", "Output format: plain or ansi (default: auto-detect TTY)")
@@ -79,8 +74,6 @@ export function registerMissionControlCommand(program: Command): void {
     maestro mission-control --preview all --size 120x40 --format plain
     maestro mission-control --preview features --size 200x60
     maestro mission-control --mission <id> --preview dependencies --feature <id>
-    maestro mission-control --preview workers
-    maestro mission-control --preview output --feature <id>
     maestro mission-control --preview handoffs --handoff <id>
     maestro mission-control --render-check
     maestro mission-control --render-check --size 120x40
@@ -240,7 +233,7 @@ function resolvePreviewScreen(value: unknown): PreviewScreenOrAll | undefined {
   }
 
   throw new MaestroError(`Unknown preview screen '${value}'`, [
-      `Use one of: all, ${PREVIEW_SCREENS.join(", ")} (aliases: feat, handoff, cfg, deps, proc, worker, out)`,
+      `Use one of: all, ${PREVIEW_SCREENS.join(", ")} (aliases: feat, handoff, cfg, deps, mem)`,
       "Try `maestro mission-control --preview` for the default dashboard preview",
     ]);
 }

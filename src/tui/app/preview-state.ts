@@ -2,15 +2,19 @@ import { MaestroError } from "../../domain/errors.js";
 import { createInitialState, reduce, type AppState } from "../state/reducer.js";
 import type { MissionControlSnapshot } from "../state/types.js";
 
+/**
+ * Phase 3 strip: the mission-control preview set no longer includes
+ * `runtime`, `workers`, or `output`. Those screens were backed by the
+ * worker execution layer deleted in Phase 1 and the intermediate stubs
+ * were kept until Commit 3.1 removed their snapshot data and Commit
+ * 3.2 removes them outright.
+ */
 export const PREVIEW_SCREENS = [
   "dashboard",
   "features",
   "dependencies",
   "handoffs",
   "config",
-  "runtime",
-  "workers",
-  "output",
   "memory",
   "graph",
 ] as const;
@@ -20,8 +24,6 @@ export const HOME_PREVIEW_SCREENS = [
   "dashboard",
   "features",
   "config",
-  "runtime",
-  "workers",
   "memory",
   "graph",
 ] as const satisfies readonly PreviewScreen[];
@@ -51,7 +53,6 @@ const FEATURE_SELECTOR_SCREENS: readonly PreviewScreen[] = [
   "dashboard",
   "features",
   "dependencies",
-  "output",
 ];
 
 export function buildPreviewState(opts: PreviewStateOptions): AppState {
@@ -93,25 +94,6 @@ export function buildPreviewState(opts: PreviewStateOptions): AppState {
     }
     case "config":
       return reduce(baseState, { type: "open-config" });
-    case "runtime":
-      if (opts.snapshot.mode === "mission") {
-        return reduce(baseState, { type: "open-processes" });
-      }
-      return {
-        ...baseState,
-        modal: {
-          kind: "processes",
-          selectedProcessIndex: 0,
-        },
-      };
-    case "workers":
-      return reduce(baseState, { type: "open-workers" });
-    case "output": {
-      // Phase 3 strip: runtime output screen is removed in Commit 3.2.
-      // Until then the handler falls back to the dashboard so invoking
-      // `--preview output` does not crash on the stripped snapshot.
-      return baseState;
-    }
     case "memory":
       return reduce(baseState, { type: "open-memory" });
     case "graph":
@@ -121,10 +103,9 @@ export function buildPreviewState(opts: PreviewStateOptions): AppState {
 
   function validateSelectorUsage(screen: PreviewScreen, opts: PreviewStateOptions): void {
     if (opts.featureId && !FEATURE_SELECTOR_SCREENS.includes(screen)) {
-      throw new MaestroError("--feature is only supported for dashboard, features, dependencies, and output previews", [
+      throw new MaestroError("--feature is only supported for dashboard, features, and dependencies previews", [
         "Try `maestro mission-control --preview dashboard --feature <id>`",
         "Try `maestro mission-control --preview dependencies --feature <id>`",
-        "Try `maestro mission-control --preview output --feature <id>`",
       ]);
     }
 

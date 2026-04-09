@@ -56,10 +56,7 @@ export function keyToAction(key: Key, state: AppState): Action | undefined {
             || state.modal.kind === "dependencies"
             || state.modal.kind === "overview"
             || state.modal.kind === "handoffs"
-              || state.modal.kind === "workers"
               || state.modal.kind === "config"
-              || state.modal.kind === "processes"
-              || state.modal.kind === "runtime-output"
               || state.modal.kind === "memory"
               || state.modal.kind === "graph"
             ) && state.modal.returnTarget === "command-palette")
@@ -109,11 +106,6 @@ export function keyToAction(key: Key, state: AppState): Action | undefined {
           return { type: "memory-next-tab" };
       }
     }
-    if (key.type === "char" && state.modal.kind === "processes") {
-      if (key.char === "o" || key.char === "O") {
-        return { type: "open-runtime-output" };
-    }
-  }
   if (key.type === "char" && state.modal.kind === "command-palette") {
     return { type: "modal-query-append", char: key.char };
   }

@@ -1,12 +1,14 @@
 import type { MissionControlMode } from "./types.js";
 
+/**
+ * Phase 3 strip: `processes` and `workers` command palette entries
+ * were removed along with the worker execution layer.
+ */
 export type MissionControlCommandId =
   | "features"
   | "dependencies"
   | "handoffs"
   | "config"
-  | "processes"
-  | "workers"
   | "memory"
   | "graph"
   | "exit";
@@ -112,22 +114,6 @@ export function getMissionControlCommandSpecs(
       detail: "Inspect workspace configuration, checks, and mission directory",
       section: "Navigate",
       keywords: ["config", "configuration", "doctor", "directory"],
-    },
-    {
-        id: "processes",
-        key: "P",
-        label: "Runtime",
-        detail: "List live Maestro runtime work for this mission",
-        section: "Navigate",
-        keywords: ["processes", "runtime", "workers"],
-      },
-    {
-      id: "workers",
-      key: "W",
-      label: "Workers",
-      detail: "Inspect worker health and readiness probes",
-      section: "Navigate",
-      keywords: ["workers", "health", "readiness", "doctor"],
     },
     {
       id: "memory",

@@ -194,30 +194,6 @@ export function buildModalOptions(state: AppState): ModalOptions | undefined {
         };
         }
 
-      // Phase 3 strip: the processes, workers, and runtime-output
-      // modals no longer have data backing them. Commit 3.2 removes
-      // the modal kinds entirely. Until then the handlers return an
-      // informational empty overlay so the command palette entries do
-      // not crash if they are still invoked.
-      if (
-        state.modal.kind === "processes"
-        || state.modal.kind === "workers"
-        || state.modal.kind === "runtime-output"
-      ) {
-        return {
-          mode: "info",
-          title: state.modal.kind === "workers" ? "Workers" : "Runtime",
-          eyebrow: "Removed in the Mission Control cleanup",
-          items: [{
-            text: "Mission Control no longer tracks worker runtime state.",
-            tone: "muted" as const,
-          }],
-          footer: buildOverlayFooter(state.modal.returnTarget, ""),
-          returnTarget,
-          renderSpec: buildOverlayRenderSpec("config"),
-        };
-      }
-
     if (state.modal.kind === "memory") {
       return buildMemoryModal(state, returnTarget);
     }
@@ -1395,11 +1371,9 @@ function formatTaskStatus(status: keyof typeof FEATURE_TASK_STATUS_LABEL): strin
   return FEATURE_TASK_STATUS_LABEL[status].toLowerCase();
 }
 
-export function isSelectableListModal(kind: AppState["modal"]["kind"]): kind is "feature-browser" | "handoffs" | "processes" | "dependencies" | "workers" | "memory" | "graph" {
+export function isSelectableListModal(kind: AppState["modal"]["kind"]): kind is "feature-browser" | "handoffs" | "dependencies" | "memory" | "graph" {
   return kind === "feature-browser"
     || kind === "handoffs"
-    || kind === "processes"
-    || kind === "workers"
     || kind === "dependencies"
     || kind === "memory"
     || kind === "graph";
@@ -1460,10 +1434,6 @@ export function actionForMissionControlCommand(id: MissionControlCommandId): Act
       return { type: "open-handoffs" };
     case "config":
       return { type: "open-config" };
-    case "processes":
-      return { type: "open-processes" };
-    case "workers":
-      return { type: "open-workers" };
     case "memory":
       return { type: "open-memory" };
     case "graph":
