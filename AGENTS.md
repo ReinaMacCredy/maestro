@@ -88,9 +88,59 @@
 - Prefer `feat` for user-visible functionality, `fix` for bug fixes, `refactor` for internal restructuring, and `test` for test-only changes
 
 ## Feature-Folder Layout
-- `src/` is organized by feature, not by architectural layer. Each feature is a bounded context that lives entirely under `src/features/<name>/` and contains its own `commands/`, `usecases/`, `domain/`, `ports/`, `adapters/`, plus a `services.ts` (exposing `buildXServices(projectDir)`) and an `index.ts` (the public surface)
-- Cross-feature imports MUST go through the public surface: `import { foo } from "@/features/<name>"` which resolves to that feature's `index.ts`. Deep paths across features are FORBIDDEN -- e.g. `@/features/memory/usecases/recall` or any relative equivalent like `../../memory/usecases/recall` is a boundary violation
-- Enforcement: `bun run check:boundaries` walks `src/features/*/**/*.ts`, flags any import that deep-crosses into another feature's internals (`adapters`, `usecases`, `domain`, `ports`, `lib`, `commands`), and exits non-zero on any violation. The check runs automatically in `scripts/ci.ts` before the test suite
-- Exempt files that may legitimately cross feature boundaries (checked by the script but always allowed): `src/services.ts` (composition root), `src/index.ts` (commander root), `src/tui/state/snapshot.ts` (read-only aggregation pipeline). `src/infra/commands/mission-control.command.ts` will join this list once it lands in Phase 7 as the cross-feature dashboard
-- Feature-specific exceptions are recorded in `FEATURE_EXCEPTIONS` in `scripts/check-feature-boundaries.ts`. Phase 6 will add `worker: ["mission", "memory"]` so the worker feature can legitimately consume mission and memory public surfaces. No other feature-specific exceptions are planned; extending the map requires explicit review and an AGENTS.md update
-- Adding a new feature: create `src/features/<name>/` with the layer subfolders, export the public surface from `index.ts`, wire composition in the feature's `services.ts` via a `buildXServices(projectDir)` function, compose it into `src/services.ts`, and register any commands in `src/index.ts`. Never let a sibling feature reach past `@/features/<name>`
+
+`src/` is organized by feature, not by architectural layer. The migration landed in Phase 8 (2026-04-09) and the layout is now stable.
+
+### Structure
+- `src/features/<name>/` -- each is a bounded context with `commands/ usecases/ domain/ ports/ adapters/ services.ts index.ts`. Some features nest further (e.g. `features/mission/{feature,validation,checkpoint}/`). A feature's `services.ts` exposes a single `build<Name>Services(projectDir)` factory; a feature's `index.ts` is the public surface
+- `src/infra/` -- plumbing: commands (init, doctor, status, install, update, uninstall, mission-control), usecases, config and git ports/adapters, shared infra domain (bootstrap-templates, config-types, git-types, status-types). Not a feature; is consumed by every feature through the infra public surface
+- `src/shared/` -- truly generic utilities with no domain knowledge: `lib/` (fs, yaml, shell, sanitize, path-safety, template, output, output-capture), `domain/` (id, ui-config, defaults), plus top-level `errors.ts`, `version.ts`, `version-format.ts`
+- `src/tui/` -- rendering and input. NOT a feature; legitimately reaches into features through their public surfaces via `tui/state/snapshot.ts`
+- `src/services.ts` -- composition root; one line per feature via the feature's service factory
+- `src/index.ts` -- commander root; one `register<Feature>Command` call per feature
+
+### Current features (8)
+- `ratchet` -- memory quality assertions and promotions
+- `handoff` -- UKI-format structured session handoffs between agents
+- `notes` -- project notes captured to a local file
+- `graph` -- project dependency graph linking across repos
+- `session` -- agent session identity detection
+- `memory` -- corrections, learnings, recall for agent guidance
+- `mission` -- mission/feature/milestone/checkpoint/validation lifecycle
+- `worker` -- worker prompt generation, agent management, fit recommendation (legitimately imports from `mission` and `memory`; see Feature-specific exceptions)
+
+### Public-surface rule
+Cross-feature imports MUST go through `@/features/<name>`, which resolves to that feature's `index.ts`. Deep paths across features are FORBIDDEN in both forms:
+- Alias form: `@/features/memory/usecases/recall` is a violation
+- Relative form: `../../memory/usecases/recall` is a violation
+
+Enforced by `bun run check:boundaries`, which walks `src/features/*/**/*.ts` and flags any import matching `features/<other>/(adapters|usecases|domain|ports|lib|commands)/...` where `<other>` is not the importing feature.
+
+### Exempt files (may legitimately cross feature boundaries)
+- `src/services.ts` -- composition root; wires all feature adapters into the shared `Services` interface
+- `src/index.ts` -- commander root; registers commands from every feature
+- `src/tui/state/snapshot.ts` -- read-only aggregation pipeline that assembles mission-control dashboard state from every feature
+- `src/infra/commands/mission-control.command.ts` -- cross-feature read-only dashboard view
+
+All four live outside `src/features/*`, so the boundary-check glob never walks them; the exemption list is preserved defensively so the contract survives any future relocation.
+
+### Feature-specific exceptions
+- `worker` may import from `mission` and `memory` through their public surfaces. Rationale: worker orchestrates workers using mission context and memory hints, so the cross-feature dependency is essential, not incidental
+- No other feature has exceptions. Extending `FEATURE_EXCEPTIONS` in `scripts/check-feature-boundaries.ts` requires explicit review and a matching update to this section
+
+### Enforcement workflow
+- `scripts/check-feature-boundaries.ts` walks `src/features/*/**/*.ts`, canonicalizes each import spec (alias passes through; relative joins with the importing file's directory), and exits non-zero on any violation
+- Runs automatically in `scripts/ci.ts` before `bun test`
+- Manual invocation: `bun run check:boundaries`
+
+### Adding a new feature
+1. Create `src/features/<name>/` with `commands/ usecases/ domain/ ports/ adapters/`
+2. Create `services.ts` exposing `build<Name>Services(projectDir)` -- the feature-local composition factory
+3. Create `index.ts` exposing the minimal public surface (types, commands, use-case functions that siblings or `services.ts` need)
+4. Wire into `src/services.ts`: add the feature's service interface to the `Services` intersection and spread the factory result into `initServices`
+5. Register commands in `src/index.ts` via the feature's `register<Name>Command` export
+
+### When NOT to add a feature
+- Plumbing (init, doctor, config, git adapters) -- put it in `src/infra/`
+- Truly generic primitives with no domain knowledge (file I/O, YAML parsing, shell exec, sanitization) -- put it in `src/shared/lib/`
+- Cross-cutting type primitives (IDs, UI config) -- put it in `src/shared/domain/`
