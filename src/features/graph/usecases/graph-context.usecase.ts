@@ -1,4 +1,4 @@
-import type { ProjectEdge, ProjectNode } from "@/domain/memory-types.js";
+import type { ProjectEdge, ProjectNode } from "../domain/types.js";
 import type { ProjectGraphStorePort } from "../ports/project-graph-store.port.js";
 
 export interface ProjectRelationship {

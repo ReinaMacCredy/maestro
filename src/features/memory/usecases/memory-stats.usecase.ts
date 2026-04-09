@@ -2,12 +2,10 @@ import type {
   CompiledLearnings,
   Correction,
   MemoryStats,
-  RatchetBaseline,
-  RatchetSuite,
 } from "../domain/memory-types.js";
 import type { CorrectionStorePort } from "../ports/correction-store.port.js";
 import type { LearningStorePort } from "../ports/learning-store.port.js";
-import type { RatchetStorePort } from "@/features/ratchet";
+import type { RatchetBaseline, RatchetStorePort, RatchetSuite } from "@/features/ratchet";
 import type { ProjectGraphStorePort } from "@/features/graph";
 
 export function buildMemoryStats(options: {

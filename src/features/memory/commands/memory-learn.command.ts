@@ -1,8 +1,8 @@
 import type { Command } from "commander";
 import type { RawLearningEntry } from "../domain/memory-types.js";
-import { MaestroError } from "../domain/errors.js";
-import { output } from "../lib/output.js";
-import { getServices } from "../services.js";
+import { MaestroError } from "@/domain/errors.js";
+import { output } from "@/lib/output.js";
+import { getServices } from "@/services.js";
 import { appendLearning } from "../usecases/memory-learn.usecase.js";
 
 export function registerMemoryLearnCommand(program: Command): void {

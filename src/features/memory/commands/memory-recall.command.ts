@@ -1,6 +1,6 @@
 import type { Command } from "commander";
-import { output } from "../lib/output.js";
-import { getServices } from "../services.js";
+import { output } from "@/lib/output.js";
+import { getServices } from "@/services.js";
 import { recallMemory, type RecallResult } from "../usecases/memory-recall.usecase.js";
 
 export function registerMemoryRecallCommand(program: Command): void {

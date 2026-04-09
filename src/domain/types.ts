@@ -90,7 +90,7 @@ export interface MaestroConfig {
   readonly supervision?: import("./worker-types.js").SupervisionConfig;
   readonly parallel?: import("./worker-types.js").ParallelConfig;
   readonly ui?: UiConfig;
-  readonly memory?: import("./memory-types.js").MemoryConfig;
+  readonly memory?: import("@/features/memory").MemoryConfig;
 }
 
 export interface DoctorCheck {

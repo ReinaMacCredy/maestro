@@ -43,47 +43,6 @@ export interface CompiledLearnings {
   readonly rawCount: number;
 }
 
-// -- Ratchet --
-
-export interface RatchetAssertion {
-  readonly id: string;
-  readonly correctionId: string;
-  readonly rule: string;
-  readonly check: string;
-  readonly createdAt: string;
-}
-
-export interface RatchetSuite {
-  readonly assertions: readonly RatchetAssertion[];
-}
-
-export interface RatchetBaseline {
-  readonly passCount: number;
-  readonly lastRunAt: string;
-}
-
-// -- Project Graph --
-
-export type GraphRelation = "exposes" | "consumes" | "shared-types";
-
-export interface ProjectNode {
-  readonly path: string;
-  readonly name: string;
-  readonly role?: string;
-}
-
-export interface ProjectEdge {
-  readonly from: string;
-  readonly to: string;
-  readonly relation: GraphRelation;
-  readonly detail?: string;
-}
-
-export interface ProjectGraph {
-  readonly nodes: readonly ProjectNode[];
-  readonly edges: readonly ProjectEdge[];
-}
-
 // -- Stats (for TUI) --
 
 export interface MemoryStats {

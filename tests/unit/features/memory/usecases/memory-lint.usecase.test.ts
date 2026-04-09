@@ -1,7 +1,7 @@
 import { describe, it, expect } from "bun:test";
-import { mockCorrectionStore, mockLearningStore, mockRatchetStore } from "../../helpers/mocks.js";
-import { lintMemory } from "@/usecases/memory-lint.usecase.js";
-import type { Correction } from "@/domain/memory-types.js";
+import { mockCorrectionStore, mockLearningStore, mockRatchetStore } from "../../../../helpers/mocks.js";
+import { lintMemory } from "@/features/memory/usecases/memory-lint.usecase.js";
+import type { Correction } from "@/features/memory";
 
 function makeCorrection(overrides: Partial<Correction> = {}): Correction {
   return {

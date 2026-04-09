@@ -1,6 +1,6 @@
 import type { Command } from "commander";
-import { output } from "../lib/output.js";
-import { getServices } from "../services.js";
+import { output } from "@/lib/output.js";
+import { getServices } from "@/services.js";
 import { lintMemory, type LintResult } from "../usecases/memory-lint.usecase.js";
 
 export function registerMemoryLintCommand(program: Command): void {

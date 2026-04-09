@@ -41,41 +41,6 @@ export const CompiledLearningsSchema = z.object({
   rawCount: z.number().int().nonnegative(),
 });
 
-export const RatchetAssertionSchema = z.object({
-  id: z.string().min(1),
-  correctionId: z.string().min(1),
-  rule: z.string().min(1),
-  check: z.string().min(1),
-  createdAt: z.string().min(1),
-});
-
-export const RatchetSuiteSchema = z.object({
-  assertions: z.array(RatchetAssertionSchema),
-});
-
-export const RatchetBaselineSchema = z.object({
-  passCount: z.number().int().nonnegative(),
-  lastRunAt: z.string().min(1),
-});
-
-export const ProjectNodeSchema = z.object({
-  path: z.string().min(1),
-  name: z.string().min(1),
-  role: z.string().optional(),
-});
-
-export const ProjectEdgeSchema = z.object({
-  from: z.string().min(1),
-  to: z.string().min(1),
-  relation: z.enum(["exposes", "consumes", "shared-types"]),
-  detail: z.string().optional(),
-});
-
-export const ProjectGraphSchema = z.object({
-  nodes: z.array(ProjectNodeSchema),
-  edges: z.array(ProjectEdgeSchema),
-});
-
 export const MemoryConfigSchema = z.object({
   enabled: z.boolean(),
   corrections: z.object({

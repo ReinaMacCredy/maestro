@@ -1,4 +1,4 @@
-import type { RatchetSuite, RatchetBaseline } from "@/domain/memory-types.js";
+import type { RatchetSuite, RatchetBaseline } from "../domain/types.js";
 
 export interface RatchetStorePort {
   getSuite(): Promise<RatchetSuite>;

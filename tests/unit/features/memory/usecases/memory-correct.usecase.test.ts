@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
-import { mockCorrectionStore } from "../../helpers/mocks.js";
-import { captureCorrection } from "@/usecases/memory-correct.usecase.js";
+import { mockCorrectionStore } from "../../../../helpers/mocks.js";
+import { captureCorrection } from "@/features/memory/usecases/memory-correct.usecase.js";
 
 describe("captureCorrection", () => {
   it("creates a correction via the store", async () => {

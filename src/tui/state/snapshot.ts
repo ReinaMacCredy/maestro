@@ -9,8 +9,8 @@ import type { AssertionStorePort } from "../../ports/assertion-store.port.js";
 import type { CheckpointStorePort } from "../../ports/checkpoint-store.port.js";
 import type { ConfigPort } from "../../ports/config.port.js";
 import type { GitPort } from "../../ports/git.port.js";
-import type { CorrectionStorePort } from "../../ports/correction-store.port.js";
-import type { LearningStorePort } from "../../ports/learning-store.port.js";
+import type { CorrectionStorePort, LearningStorePort } from "@/features/memory";
+import { buildMemoryStats } from "@/features/memory";
 import type { RatchetStorePort } from "@/features/ratchet";
 import type { ProjectGraphStorePort } from "@/features/graph";
 import type { HandoffStorePort, UkiHandoff } from "@/features/handoff";
@@ -20,7 +20,6 @@ import type { DoctorCheck, StatusReport } from "../../domain/types.js";
 import { generateMissionReport, type MissionReport } from "../../usecases/mission-report.usecase.js";
 import { getValidFeatureTransitions } from "../../domain/mission-state.js";
 import { getGraphContext } from "@/features/graph";
-import { buildMemoryStats } from "../../usecases/memory-stats.usecase.js";
 import { deriveEvents } from "./events.js";
 import { buildConfigInspector } from "./config-inspector.js";
 import type {

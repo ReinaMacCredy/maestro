@@ -19,12 +19,10 @@ import type {
   CompiledLearnings,
   Correction,
   MemoryStats,
-  ProjectEdge,
-  ProjectNode,
-  RatchetBaseline,
-  RatchetSuite,
   RawLearningEntry,
-} from "../../domain/memory-types.js";
+} from "@/features/memory";
+import type { ProjectEdge, ProjectNode } from "@/features/graph";
+import type { RatchetBaseline, RatchetSuite } from "@/features/ratchet";
 
 export type MissionControlMode = "mission" | "home";
 export type LeftPaneMode = "overview" | "preview";

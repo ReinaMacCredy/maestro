@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { MaestroConfig, WorkflowTemplate } from "./types.js";
-import type { MemoryConfig } from "./memory-types.js";
+import type { MemoryConfig } from "@/features/memory";
 
 export const MAESTRO_DIR = ".maestro";
 

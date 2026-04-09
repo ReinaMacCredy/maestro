@@ -7,26 +7,23 @@ import type { MissionStorePort } from "@/ports/mission-store.port.js";
 import type { FeatureStorePort } from "@/ports/feature-store.port.js";
 import type { AssertionStorePort } from "@/ports/assertion-store.port.js";
 import type { CheckpointStorePort } from "@/ports/checkpoint-store.port.js";
-import type { CorrectionStorePort } from "@/ports/correction-store.port.js";
-import type { LearningStorePort } from "@/ports/learning-store.port.js";
-import type { RatchetStorePort } from "@/features/ratchet";
-import type { ProjectGraphStorePort } from "@/features/graph";
+import type {
+  CorrectionStorePort,
+  LearningStorePort,
+  Correction,
+  CreateCorrectionInput,
+  CorrectionQuery,
+  RawLearningEntry,
+  CompiledLearnings,
+} from "@/features/memory";
+import type { RatchetStorePort, RatchetSuite, RatchetBaseline } from "@/features/ratchet";
+import type { ProjectGraphStorePort, ProjectGraph } from "@/features/graph";
 import type {
   GitState,
   MaestroConfig,
   AgentSession,
   NoteEntry,
 } from "@/domain/types.js";
-import type {
-  Correction,
-  CreateCorrectionInput,
-  CorrectionQuery,
-  RawLearningEntry,
-  CompiledLearnings,
-  RatchetSuite,
-  RatchetBaseline,
-  ProjectGraph,
-} from "@/domain/memory-types.js";
 import type {
   Mission,
   Feature,

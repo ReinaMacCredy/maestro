@@ -12,8 +12,7 @@ import {
 import { FsMissionStoreAdapter } from "@/adapters/mission-store.adapter.js";
 import { FsFeatureStoreAdapter } from "@/adapters/feature-store.adapter.js";
 import { FsAssertionStoreAdapter } from "@/adapters/assertion-store.adapter.js";
-import { FsCorrectionStoreAdapter } from "@/adapters/correction-store.adapter.js";
-import { FsLearningStoreAdapter } from "@/adapters/learning-store.adapter.js";
+import { FsCorrectionStoreAdapter, FsLearningStoreAdapter } from "@/features/memory";
 import { MaestroError } from "@/domain/errors.js";
 import type { MilestoneInput } from "@/domain/mission-types.js";
 

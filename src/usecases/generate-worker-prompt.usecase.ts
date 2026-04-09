@@ -6,8 +6,12 @@
 import type { FeatureStorePort } from "../ports/feature-store.port.js";
 import type { MissionStorePort } from "../ports/mission-store.port.js";
 import type { AssertionStorePort } from "../ports/assertion-store.port.js";
-import type { CorrectionStorePort } from "../ports/correction-store.port.js";
-import type { LearningStorePort } from "../ports/learning-store.port.js";
+import {
+  recallMemory,
+  type CorrectionStorePort,
+  type LearningStorePort,
+  type RecallResult,
+} from "@/features/memory";
 import type { Feature, Mission, Milestone, Assertion, MilestoneProfile } from "../domain/mission-types.js";
 import { MaestroError } from "../domain/errors.js";
 import { WORKER_TYPE_PATTERN } from "../domain/mission-validators.js";
@@ -17,7 +21,6 @@ import { dirname, join, resolve } from "node:path";
 import { MAESTRO_DIR } from "../domain/defaults.js";
 import { assertSafeSegment, resolveWithin } from "../lib/path-safety.js";
 import { parseWorkerReport } from "./feature-lifecycle.usecase.js";
-import { recallMemory, type RecallResult } from "./memory-recall.usecase.js";
 
 interface PreviousMilestoneReport {
   readonly featureId: string;

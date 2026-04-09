@@ -1,6 +1,6 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
-import type { RatchetAssertion, RatchetBaseline } from "@/domain/memory-types.js";
+import type { RatchetAssertion, RatchetBaseline } from "../domain/types.js";
 import type { RatchetStorePort } from "../ports/ratchet-store.port.js";
 import { readText } from "@/lib/fs.js";
 

@@ -1,7 +1,7 @@
 import type { Command } from "commander";
-import { MaestroError } from "../domain/errors.js";
-import { output } from "../lib/output.js";
-import { getServices } from "../services.js";
+import { MaestroError } from "@/domain/errors.js";
+import { output } from "@/lib/output.js";
+import { getServices } from "@/services.js";
 import { searchMemory, type SearchResult } from "../usecases/memory-search.usecase.js";
 
 export function registerMemorySearchCommand(program: Command): void {
