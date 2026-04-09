@@ -2,7 +2,7 @@ import type { GitPort } from "@/ports/git.port.js";
 import type { ConfigPort } from "@/ports/config.port.js";
 import type { ConfigLayers } from "@/ports/config.port.js";
 import type { SessionDetectPort } from "@/ports/session-detect.port.js";
-import type { NotesStorePort } from "@/ports/notes-store.port.js";
+import type { NotesStorePort } from "@/features/notes";
 import type { MissionStorePort } from "@/ports/mission-store.port.js";
 import type { FeatureStorePort } from "@/ports/feature-store.port.js";
 import type { AssertionStorePort } from "@/ports/assertion-store.port.js";

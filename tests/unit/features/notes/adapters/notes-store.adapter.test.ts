@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { FsNotesStoreAdapter } from "@/adapters/notes-store.adapter.js";
+import { FsNotesStoreAdapter } from "@/features/notes";
 
 let tmpDir: string;
 let store: FsNotesStoreAdapter;

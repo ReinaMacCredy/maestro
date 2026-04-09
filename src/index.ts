@@ -6,7 +6,7 @@ import { initServices } from "./services.js";
 import { registerInitCommand } from "./commands/init.command.js";
 import { registerStatusCommand } from "./commands/status.command.js";
 import { registerDoctorCommand } from "./commands/doctor.command.js";
-import { registerNoteCommand } from "./commands/note.command.js";
+import { registerNoteCommand } from "./features/notes/commands/note.command.js";
 import { registerInstallCommand } from "./commands/install.command.js";
 import { registerUpdateCommand } from "./commands/update.command.js";
 import { registerUninstallCommand } from "./commands/uninstall.command.js";

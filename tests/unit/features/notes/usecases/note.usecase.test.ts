@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { MaestroError } from "@/domain/errors.js";
-import { createNote, listNotes } from "@/usecases/note.usecase.js";
-import { mockGit, mockNotesStore } from "../../helpers/mocks.js";
+import { createNote, listNotes } from "@/features/notes";
+import { mockGit, mockNotesStore } from "../../../../helpers/mocks.js";
 
 describe("note usecase", () => {
   it("creates a timestamped note using the current git branch", async () => {

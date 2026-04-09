@@ -1,4 +1,4 @@
-import type { NoteEntry } from "../domain/types.js";
+import type { NoteEntry } from "@/domain/types.js";
 
 export interface NotesStorePort {
   append(note: NoteEntry): Promise<void>;
