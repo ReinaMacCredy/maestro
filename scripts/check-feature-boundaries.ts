@@ -36,6 +36,7 @@ const ALLOWED_CROSS_FEATURE: readonly string[] = [
   "src/services.ts",
   "src/index.ts",
   "src/tui/state/snapshot.ts",
+  "src/infra/commands/mission-control.command.ts",
 ];
 
 /**
