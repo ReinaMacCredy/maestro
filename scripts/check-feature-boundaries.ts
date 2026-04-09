@@ -1,34 +1,54 @@
 /**
  * Feature-folder boundary check.
  *
- * Rule: files under src/features/<own>/ may NOT deep-import from another
- * feature's internals. Cross-feature imports must go through the public
- * surface (@/features/<other> which resolves to <other>/index.ts).
+ * RULE (final form, Phase 8):
+ *   Files under src/features/<own>/ may NOT deep-import from another
+ *   feature's internals. Cross-feature imports MUST go through the
+ *   public surface (`@/features/<other>`), which resolves to that
+ *   feature's index.ts.
  *
- * A "deep cross-feature import" is any import whose specifier matches
+ * A "deep cross-feature import" is any import whose target path matches
  *   features/<other>/(adapters|usecases|domain|ports|lib|commands)/...
- * where <other> != <own>. Imports shaped like `@/features/<other>` with
- * nothing after are public-surface imports and are always allowed.
+ * where <other> != <own>. Two forms are checked:
  *
- * Exempt files: the composition roots and read-only cross-feature
- * aggregators in ALLOWED_CROSS_FEATURE are checked but never raise
- * violations (they legitimately glue features together).
+ *   1. Alias form: `@/features/<other>/usecases/foo.js`
+ *      Matched directly against DEEP_IMPORT_RE on the spec string.
  *
- * Feature-specific exceptions: FEATURE_EXCEPTIONS lets a named feature
- * import from a named sibling. Phase 6 adds `worker --> mission, memory`:
- * the worker feature composes prompts using mission state and memory
- * recall, and is the only feature that legitimately reaches across to
- * siblings. Its primary path is still through their public surfaces
- * (`@/features/mission`, `@/features/memory`), but deep imports from
- * worker into those two features are tolerated because the exception
- * is the whole point of the worker folder existing separately.
+ *   2. Relative form: `../../<other>/usecases/foo.js`
+ *      The spec starts with `./` or `../`, so we resolve it against the
+ *      importing file's directory to a repo-absolute path, then apply
+ *      DEEP_IMPORT_RE against the resolved path. Without this step,
+ *      relative imports escape detection because the literal substring
+ *      "features/" is not present in the spec itself.
  *
- * Phase 0 note: src/features/ does not exist yet, so the glob matches
- * zero files and the script exits clean.
+ * Public-surface imports (`@/features/<other>` with nothing after, or
+ * `../../<other>/index.js`) resolve to the feature's index.ts and never
+ * match DEEP_IMPORT_RE. These are the happy path.
  *
- * Usage: bun scripts/check-feature-boundaries.ts
+ * EXEMPT FILES (checked but always allowed, if ever walked):
+ *   - src/services.ts                           composition root
+ *   - src/index.ts                              commander root
+ *   - src/tui/state/snapshot.ts                 read-only dashboard aggregator
+ *   - src/infra/commands/mission-control.command.ts
+ *                                               cross-feature dashboard view
+ * These all live OUTSIDE `src/features/*`, so the glob never walks them.
+ * The list is retained as a defensive contract: if any of them ever moves
+ * under `src/features/`, the exemption survives the move.
+ *
+ * FEATURE-SPECIFIC EXCEPTIONS (FEATURE_EXCEPTIONS):
+ *   - worker: ["mission", "memory"]
+ *     The worker feature legitimately composes worker prompts using
+ *     mission state and memory recall. The happy path is still through
+ *     their public surfaces; this exception covers any deep imports that
+ *     may appear in internal reuses. No other feature has exceptions.
+ *     Extending this map should require explicit review and an AGENTS.md
+ *     update -- see the Feature-Folder Layout section.
+ *
+ * Usage:
+ *   bun scripts/check-feature-boundaries.ts
  * Exits 0 on success, 1 on any violation.
  */
+import * as path from "node:path";
 import { Glob } from "bun";
 
 /** Files that may legitimately cross feature boundaries (checked but exempt). */
@@ -69,6 +89,24 @@ function featureFromPath(relPath: string): string | undefined {
   return match?.[1];
 }
 
+/**
+ * Resolve an import spec to a repo-relative path for deep-import detection.
+ *
+ * - Alias form (`@/...`, `~/...`, bare module, etc.): returned as-is so
+ *   DEEP_IMPORT_RE can match `features/<other>/<layer>` directly.
+ * - Relative form (`./foo`, `../bar`): joined with the importing file's
+ *   directory and normalized via `path.posix.normalize`, yielding a
+ *   repo-relative path like `src/features/ratchet/usecases/foo.js` that
+ *   DEEP_IMPORT_RE can match. Without this step, a relative hop that
+ *   escapes the current feature directory slips past the check because
+ *   the literal substring `features/` is absent from the spec itself.
+ */
+function canonicalizeSpec(fileRelPath: string, spec: string): string {
+  if (!spec.startsWith(".")) return spec;
+  const fileDir = path.posix.dirname(fileRelPath);
+  return path.posix.normalize(path.posix.join(fileDir, spec));
+}
+
 const violations: Violation[] = [];
 const featureGlob = new Glob("src/features/*/**/*.ts");
 
@@ -84,7 +122,8 @@ for await (const relPath of featureGlob.scan({ cwd: ROOT })) {
   for (const match of text.matchAll(IMPORT_RE)) {
     const spec = match[1];
     if (!spec) continue;
-    const deep = spec.match(DEEP_IMPORT_RE);
+    const canonical = canonicalizeSpec(relPath, spec);
+    const deep = canonical.match(DEEP_IMPORT_RE);
     if (!deep) continue;
     const otherFeature = deep[1];
     if (!otherFeature || otherFeature === ownFeature) continue;
