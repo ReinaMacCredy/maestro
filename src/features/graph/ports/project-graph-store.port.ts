@@ -1,4 +1,4 @@
-import type { ProjectGraph } from "../domain/memory-types.js";
+import type { ProjectGraph } from "@/domain/memory-types.js";
 
 export interface ProjectGraphStorePort {
   load(): Promise<ProjectGraph>;

@@ -1,10 +1,10 @@
 import { basename } from "node:path";
 import type { Command } from "commander";
-import { MaestroError } from "../domain/errors.js";
-import { output } from "../lib/output.js";
-import { getServices } from "../services.js";
+import { MaestroError } from "@/domain/errors.js";
+import { output } from "@/lib/output.js";
+import { getServices } from "@/services.js";
 import { linkProjects, type LinkResult } from "../usecases/graph-link.usecase.js";
-import type { GraphRelation } from "../domain/memory-types.js";
+import type { GraphRelation } from "@/domain/memory-types.js";
 
 const VALID_RELATIONS: readonly GraphRelation[] = ["exposes", "consumes", "shared-types"];
 

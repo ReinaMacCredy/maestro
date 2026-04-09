@@ -1,7 +1,7 @@
 import { basename } from "node:path";
 import type { Command } from "commander";
-import { output } from "../lib/output.js";
-import { getServices } from "../services.js";
+import { output } from "@/lib/output.js";
+import { getServices } from "@/services.js";
 import { getGraphContext, type GraphContext } from "../usecases/graph-context.usecase.js";
 
 export function registerGraphContextCommand(program: Command): void {

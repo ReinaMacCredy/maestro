@@ -26,8 +26,8 @@ import { registerRatchetCheckCommand } from "./features/ratchet/commands/ratchet
 import { registerRatchetPromoteCommand } from "./features/ratchet/commands/ratchet-promote.command.js";
 import { registerMemoryStatsCommand } from "./commands/memory-stats.command.js";
 import { registerMemoryLintCommand } from "./commands/memory-lint.command.js";
-import { registerGraphLinkCommand } from "./commands/graph-link.command.js";
-import { registerGraphContextCommand } from "./commands/graph-context.command.js";
+import { registerGraphLinkCommand } from "./features/graph/commands/graph-link.command.js";
+import { registerGraphContextCommand } from "./features/graph/commands/graph-context.command.js";
 import { registerHandoffCommand } from "./features/handoff/commands/handoff.command.js";
 
 export const program = new Command()

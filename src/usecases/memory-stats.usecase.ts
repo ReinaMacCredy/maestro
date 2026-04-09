@@ -8,7 +8,7 @@ import type {
 import type { CorrectionStorePort } from "../ports/correction-store.port.js";
 import type { LearningStorePort } from "../ports/learning-store.port.js";
 import type { RatchetStorePort } from "@/features/ratchet";
-import type { ProjectGraphStorePort } from "../ports/project-graph-store.port.js";
+import type { ProjectGraphStorePort } from "@/features/graph";
 
 export function buildMemoryStats(options: {
   readonly corrections: readonly Correction[];
