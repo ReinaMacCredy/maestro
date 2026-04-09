@@ -41,12 +41,15 @@ describe("handoff status integration", () => {
       const create = await run([
         "handoff",
         "create",
+        "--mode", "execute",
         "--session-core", "status_test",
-        "--summary", "Status_test",
+        "--summary", "Status_test-visible-low_risk",
         "--next-action", "inspect_status",
-        "--decision-basis", "keep_status_visible",
+        "--decision", "keep_status_visible",
         "--validation", "status_green",
         "--artifact", "branch_main",
+        "--read-more", "branch_main",
+        "--completed", "status_handoff_created",
         "--confidence-work", "0.9",
         "--json",
     ], tmpDir);

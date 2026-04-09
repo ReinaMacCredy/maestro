@@ -91,6 +91,7 @@ export async function buildSnapshot(
     configLayers,
     gitState,
     memorySnapshot,
+    pendingHandoffs,
   ] = await Promise.all([
     generateMissionReport(
       deps.missionStore,
@@ -111,6 +112,7 @@ export async function buildSnapshot(
       projectGraphStore: deps.projectGraphStore,
       cwd: deps.cwd,
     }),
+    loadPendingHandoffs(deps.handoffStore),
     ]);
 
   const mission = report.mission;
@@ -173,10 +175,6 @@ export async function buildSnapshot(
   ).length;
   const blockedCount = features.filter((f) => f.status === "blocked").length;
   const queuedCount = features.filter((f) => f.status === "pending").length;
-  // Phase 2: populate pending handoffs from the new UKI handoff store
-  // (empty when the store is not wired or when there are no pending
-  // handoffs). Snapshot remains read-only -- no status transitions.
-  const pendingHandoffs = await loadPendingHandoffs(deps.handoffStore);
   const workerTypes = [...new Set(features.map((feature) => feature.workerType))];
   const activeMilestone = milestones.find((m) => m.status === "executing" || m.status === "validating");
   const gateLabel = activeMilestone?.kind === "gate" ? activeMilestone.title : null;
@@ -247,7 +245,7 @@ export async function buildHomeSnapshot(
   cwd: string,
   _options: SnapshotBuildOptions = {},
 ): Promise<MissionControlSnapshot> {
-  const [env, configLayers, gitState, memorySnapshot] = await Promise.all([
+  const [env, configLayers, gitState, memorySnapshot, pendingHandoffs] = await Promise.all([
     buildMissionControlEnvironmentSummary(deps.config, deps.git, cwd),
     deps.config.loadLayers(cwd),
     deps.git.isRepo(cwd).then((isRepo) => isRepo ? deps.git.getState(cwd) : Promise.resolve(undefined)),
@@ -258,6 +256,7 @@ export async function buildHomeSnapshot(
       projectGraphStore: deps.projectGraphStore,
       cwd,
     }),
+    loadPendingHandoffs(deps.handoffStore),
   ]);
   const checks = [
     ...env.checks,
@@ -277,8 +276,6 @@ export async function buildHomeSnapshot(
       : "Open a git repository to track missions, checkpoints, and handoffs here.";
 
   const actions = buildHomeActions(status, checks);
-  // Phase 2: populate pending handoffs from the new UKI handoff store.
-  const pendingHandoffs = await loadPendingHandoffs(deps.handoffStore);
 
   return {
     mode: "home",
@@ -357,18 +354,18 @@ async function loadPendingHandoffs(
 export function mapUkiHandoffToHomeHandoff(
   handoff: UkiHandoff,
 ): MissionControlHomeHandoff {
-  const slots = handoff.slots;
-  const sitrepParts = [slots.sessionCore];
-  if (slots.keyDecisions.length > 0) {
-    sitrepParts.push(slots.keyDecisions[0]!);
+  const content = handoff.content;
+  const sitrepParts = [content.sessionCore];
+  if (content.decisions.length > 0) {
+    sitrepParts.push(content.decisions[0]!);
   }
   return {
     id: handoff.id,
-    message: slots.summary,
+    message: content.summary,
     agent: handoff.agent,
     sessionId: handoff.sessionId,
     sitrep: sitrepParts.join(" -- "),
-    quickstart: slots.nextAction,
+    quickstart: content.nextAction,
   };
 }
 

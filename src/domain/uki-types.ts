@@ -1,30 +1,70 @@
 /**
  * UKI handoff domain types.
  *
- * Kept separate from `src/domain/types.ts` so the new Phase 2 handoff
- * shape does not pollute the slimmer post-Phase-1 core types. The old
- * Handoff / HandoffEnvelope / HandoffSession types were deleted in
- * Phase 1 and are replaced by UkiHandoff + UkiSlots below.
+ * The persisted handoff source of truth is now a structured JSON payload
+ * (`content`) with two explicit modes: `plan` and `execute`. The raw UKI
+ * string remains a cached transfer rendering for direct agent handoff.
  */
-import type { UkiSlots } from "../lib/uki-format.js";
 
 export const UKI_HANDOFF_STATUSES = ["pending", "picked-up", "completed"] as const;
+export const UKI_HANDOFF_MODES = ["plan", "execute"] as const;
 
 export type UkiHandoffStatus = (typeof UKI_HANDOFF_STATUSES)[number];
+export type UkiHandoffMode = (typeof UKI_HANDOFF_MODES)[number];
 
-export const UKI_HANDOFF_VERSION = "5.3";
-export const SUPPORTED_UKI_HANDOFF_VERSIONS = ["5.2", UKI_HANDOFF_VERSION] as const;
+export const UKI_HANDOFF_VERSION = "5.4";
+export const SUPPORTED_UKI_HANDOFF_VERSIONS = ["5.2", "5.3", UKI_HANDOFF_VERSION] as const;
 
 export type UkiHandoffVersion = (typeof SUPPORTED_UKI_HANDOFF_VERSIONS)[number];
 
-/**
- * A persisted UKI handoff record.
- *
- * `slots` is the source of truth -- the structured data the creator
- * supplied. `uki` is the cached compressed string generated from `slots`
- * at creation time, so external workers can `pickup --uki` without the
- * store re-compressing on every read.
- */
+export interface UkiConfidenceScores {
+  readonly work?: number;
+  readonly summary?: number;
+}
+
+export interface UkiMaestroRefs {
+  readonly missionId?: string;
+  readonly featureId?: string;
+  readonly milestoneId?: string;
+  readonly planPath?: string;
+  readonly specPath?: string;
+}
+
+export interface UkiHandoffContentBase {
+  readonly mode: UkiHandoffMode;
+  readonly currentState: string;
+  readonly sessionCore: string;
+  readonly decisions: readonly string[];
+  readonly artifacts: readonly string[];
+  readonly readMore: readonly string[];
+  readonly nextAction: string;
+  readonly summary: string;
+  readonly maestroRefs: UkiMaestroRefs;
+  readonly cs: UkiConfidenceScores;
+  readonly signalDelta: readonly string[];
+  readonly boundaryState: readonly string[];
+  readonly risks: readonly string[];
+  readonly blindSpot?: string;
+  readonly metaphor?: string;
+  readonly causalDrivers: readonly string[];
+  readonly divergences: readonly string[];
+}
+
+export interface PlanUkiHandoffContent extends UkiHandoffContentBase {
+  readonly mode: "plan";
+  readonly planPaths: readonly string[];
+  readonly maestroSync: readonly string[];
+}
+
+export interface ExecuteUkiHandoffContent extends UkiHandoffContentBase {
+  readonly mode: "execute";
+  readonly touchedFiles: readonly string[];
+  readonly completedWork: readonly string[];
+  readonly validation: readonly string[];
+}
+
+export type UkiHandoffContent = PlanUkiHandoffContent | ExecuteUkiHandoffContent;
+
 export interface UkiHandoff {
   readonly id: string;
   readonly version: UkiHandoffVersion;
@@ -32,7 +72,7 @@ export interface UkiHandoff {
   readonly status: UkiHandoffStatus;
   readonly agent: string;
   readonly sessionId: string;
-  readonly slots: UkiSlots;
+  readonly content: UkiHandoffContent;
   readonly uki: string;
   readonly pickedUpAt?: string;
   readonly pickedUpBy?: string;
@@ -41,7 +81,7 @@ export interface UkiHandoff {
 }
 
 export interface CreateUkiHandoffInput {
-  readonly slots: UkiSlots;
+  readonly content: UkiHandoffContent;
   readonly agent: string;
   readonly sessionId: string;
 }

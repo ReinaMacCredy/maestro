@@ -8,7 +8,7 @@ It is designed for a workflow where a human operator coordinates multiple termin
 
 - Shared state lives on disk in `.maestro/`, not in chat history.
 - Missions break work into milestones, features, and validation assertions.
-- UKI v5.3 handoffs let one agent session pass compact context to another.
+- UKI v5.4 handoffs let one agent session pass compact context to another in either `plan` or `execute` mode.
 - Memory commands turn corrections and learnings into reusable guidance.
 - Mission Control gives you a read-only TUI and JSON snapshots of current state.
 - The runtime stays local-first: filesystem, git, config, and terminal tools.
@@ -50,7 +50,7 @@ The human operator is the bridge between terminals. Maestro is the shared state 
 | Milestone | A phase within a mission. Milestones can act as work phases or validation gates. |
 | Feature | A concrete piece of work assigned to a worker type, with verification steps and optional dependencies. |
 | Assertion | A validation target tied to a feature. Assertions are updated to `passed`, `failed`, `blocked`, or `waived`. |
-| Handoff | A UKI v5.3 payload used to pass compact context between agent sessions. |
+| Handoff | A structured handoff record with a cached UKI v5.4 transfer string for agent-to-agent resume. |
 | Memory | Corrections, learnings, and compiled guidance that feed back into future worker prompts. |
 | Checkpoint | A timestamped mission snapshot you can save and later restore. |
 | Mission Control | A read-only dashboard for previewing mission state interactively or as JSON. |
@@ -192,14 +192,18 @@ This writes the prompt to `worker-prompt.md` and also stores it under `.maestro/
 
 ### 5. Create and pick up a handoff
 
-Create a UKI handoff from structured slots:
+Create an execute-mode handoff:
 
 ```bash
 maestro handoff create \
-  --session-core "Implement the auth flow feature" \
-  --summary "Planning is complete; implementation is ready" \
-  --next-action "Pick up feature auth-impl" \
-  --artifact file_src/auth.ts \
+  --mode execute \
+  --session-core execute_auth_flow \
+  --summary "Auth_flow_ready-handoff_created-low_risk" \
+  --next-action pick_up_auth_impl \
+  --artifact file_src_auth_ts \
+  --read-more file_src_auth_ts \
+  --completed auth_flow_scaffolded \
+  --validation build_green \
   --confidence-work 0.9
 ```
 
@@ -207,7 +211,8 @@ In another terminal, the worker can inspect or claim it:
 
 ```bash
 maestro handoff list
-maestro handoff pickup --markdown
+maestro handoff pickup
+maestro handoff pickup --json
 maestro handoff pickup --claim --agent codex
 ```
 
@@ -224,18 +229,21 @@ maestro milestone seal implement --mission <mission-id>
 
 ## Handoffs
 
-Handoffs are Maestro's compact transfer format for moving work between terminals. Each handoff is stored on disk, carries structured UKI v5.3 slots, and can be listed, picked up, or claimed later.
+Handoffs are Maestro's compact transfer format for moving work between terminals. Each handoff is stored on disk as structured JSON and also caches a UKI v5.4 transfer string so another agent can pick it up directly.
 
 ### What a handoff contains
 
 A handoff always includes:
 
+- `mode`: either `plan` or `execute`
+- `currentState`: the current baton-pass state
 - `sessionCore`: the essence of the work
 - `summary`: a short under-140-character summary
 - `nextAction`: one concrete next step
+- `readMore`: one or more follow-up anchors
 - at least one scoped confidence value via `--confidence-work` or `--confidence-summary`
 
-It can also include richer context such as decision basis, validation evidence, artifacts, divergence notes, execution state, boundary state, blind spots, and a metaphor anchor.
+It can also include decisions, signal deltas, Maestro references, plan paths, touched files, completed work, validation evidence, boundary state, risks, blind spots, and a metaphor anchor.
 
 ### Handoff status flow
 
@@ -251,29 +259,34 @@ flowchart LR
 
 ### Create output
 
-Creating a handoff returns the handoff id, detected agent/session identity, current status, and the compressed UKI string. The CLI prints the UKI payload as one line, but in the README it is wrapped by slot here for readability:
+Creating a handoff returns the handoff id, detected agent/session identity, current status, and the compressed UKI string. The CLI prints the UKI payload as one line, but in the README it is wrapped by block here for readability:
 
 ```text
 [ok] Handoff created: 2026-04-09-001
+  Mode: execute
   Agent: codex
-  Session: 019d72b0-eed3-7d51-9782-0b837f92cc30
+  Session: 019d72f5-e4e3-7db3-a693-f7dc34c7d126
   Status: pending
 
-UKI v5.3 string:
-SESSION_CORE-handoff_real_example
+UKI v5.4 string:
+MODE-execute
+|CURRENT_STATE-execute_in_progress
+|SESSION_CORE-handoff_real_example
 |CAUSAL_DRIVERS-NONE
 |DIVERGENCES-NONE
-|KEY_DECISIONS-NONE
-|DECISION_BASIS-preserve_pickup_clarity
+|MAESTRO_REFS-NONE
+|DECISIONS-preserve_pickup_clarity
 |SIGNAL_DELTA-NONE
-|VALIDATION_STATE-compiled_cli_green
-|EXECUTION_STATE-unspecified
-|BOUNDARY_STATE-NONE
-|NEXT_ACTION-pick_up_auth_impl
+|TOUCHED_FILES-file_src_auth_ts
+|COMPLETED_WORK-auth_flow_scaffolded
+|VALIDATION-compiled_cli_green
 |ARTIFACTS-file_src_auth_ts
-|STANCE_COLLAPSE-NONE_DETECTED_LOW_FRICTION
-|BLIND_SPOT-green_tests_masked_drift
+|READ_MORE-file_src_auth_ts
+|BOUNDARY_STATE-NONE
+|RISKS-green_tests_masked_contract_drift
+|BLIND_SPOT-green_tests_masked_contract_drift
 |METAPHOR-baton_pass_snapshot
+|NEXT_ACTION-pick_up_auth_impl
 |CS-work_0.9
 |SUMMARY-Handoff_real_example-ready-low_risk
 ```
@@ -282,13 +295,17 @@ If you want only the raw UKI string for piping into another agent or tool, use:
 
 ```bash
 maestro handoff create \
-  --session-core "handoff_real_example" \
-  --summary "Handoff_real_example-ready-low_risk" \
-  --next-action "pick_up_auth_impl" \
-  --decision-basis preserve_pickup_clarity \
+  --mode execute \
+  --session-core handoff_real_example \
+  --summary Handoff_real_example-ready-low_risk \
+  --next-action pick_up_auth_impl \
+  --decision preserve_pickup_clarity \
+  --touched-file file_src_auth_ts \
+  --completed auth_flow_scaffolded \
   --validation compiled_cli_green \
   --artifact file_src_auth_ts \
-  --blind-spot green_tests_masked_drift \
+  --read-more file_src_auth_ts \
+  --blind-spot green_tests_masked_contract_drift \
   --metaphor baton_pass_snapshot \
   --confidence-work 0.9 \
   --uki
@@ -296,79 +313,41 @@ maestro handoff create \
 
 ### Pickup output formats
 
-`maestro handoff pickup` supports three output modes:
+`maestro handoff pickup` supports two output modes:
 
-- default `--json`: structured data for scripts or other tools
-- `--markdown`: a human-readable view with headings for summary, next action, decision basis, validation state, artifacts, confidence, and the raw UKI string
-- `--uki`: only the compressed UKI payload
+- default output: the raw UKI transfer string
+- `--json`: the full structured handoff record
 
-Example human-readable pickup:
+Example default pickup:
 
 ```bash
-maestro handoff pickup --markdown
+maestro handoff pickup
 ```
 
-```markdown
-# Handoff 2026-04-09-001
-
-- Status: picked-up
-- Agent: codex
-- Session: 019d72b0-eed3-7d51-9782-0b837f92cc30
-- Timestamp: 2026-04-09T15:18:09.666Z
-
-## Session core
-handoff_real_example
-
-## Summary
-Handoff_real_example-ready-low_risk
-
-## Next action
-pick_up_auth_impl
-
-## Decision basis
-- preserve_pickup_clarity
-
-## Validation state
-- compiled_cli_green
-
-## Artifacts
-- file_src_auth_ts
-
-## Blind spot
-green_tests_masked_drift
-
-## Metaphor
-baton_pass_snapshot
-
-## Execution state
-unspecified
-
-## Stance collapse
-NONE_DETECTED_LOW_FRICTION
-
-## Confidence
-- work: 0.9
-- summary: n/a
+```text
+MODE-execute|CURRENT_STATE-execute_in_progress|SESSION_CORE-handoff_real_example|CAUSAL_DRIVERS-NONE|DIVERGENCES-NONE|MAESTRO_REFS-NONE|DECISIONS-preserve_pickup_clarity|SIGNAL_DELTA-NONE|TOUCHED_FILES-file_src_auth_ts|COMPLETED_WORK-auth_flow_scaffolded|VALIDATION-compiled_cli_green|ARTIFACTS-file_src_auth_ts|READ_MORE-file_src_auth_ts|BOUNDARY_STATE-NONE|RISKS-green_tests_masked_contract_drift|BLIND_SPOT-green_tests_masked_contract_drift|METAPHOR-baton_pass_snapshot|NEXT_ACTION-pick_up_auth_impl|CS-work_0.9|SUMMARY-Handoff_real_example-ready-low_risk
 ```
 
 ### Typical handoff loop
 
 ```bash
 maestro handoff create \
-  --session-core "Implement the auth flow feature" \
-  --summary "Planning is complete; implementation is ready" \
-  --next-action "Pick up feature auth-impl" \
-  --decision-basis preserve_pickup_clarity \
+  --mode execute \
+  --session-core execute_auth_flow \
+  --summary Auth_flow_ready-handoff_created-low_risk \
+  --next-action pick_up_auth_impl \
+  --decision preserve_pickup_clarity \
   --validation cli_example_green \
-  --artifact file_src/auth.ts \
+  --artifact file_src_auth_ts \
+  --read-more file_src_auth_ts \
   --confidence-work 0.9
 
 maestro handoff list
-maestro handoff pickup --markdown
+maestro handoff pickup
 maestro handoff pickup --claim --agent codex
 ```
 
-Use `handoff list` when you want a queue view, `pickup --markdown` when a human is reading it directly, and `pickup --json` or `pickup --uki` when another tool or agent should consume it.
+Use `handoff list` when you want a queue view, `pickup` when another agent should resume directly from the UKI string, and `pickup --json` when a script or debugging session needs the structured record.
 
 ## Common Commands
 
@@ -381,7 +360,7 @@ Use `handoff list` when you want a queue view, `pickup --markdown` when a human 
 | `maestro mission create --file plan.json` | Create a mission from a plan file. |
 | `maestro feature prompt <feature-id> --mission <mission-id>` | Generate the next worker prompt. |
 | `maestro handoff create ...` | Package context for another terminal or agent session. |
-| `maestro handoff pickup --markdown` | Read the next pending handoff in a human-friendly format. |
+| `maestro handoff pickup` | Get the next pending handoff as the raw UKI transfer string. |
 | `maestro mission-control --preview` | Render a read-only dashboard preview in the terminal. |
 | `maestro mission-control --json` | Get a machine-readable snapshot of mission state. |
 | `maestro mission-control --render-check --size 120x40` | Validate TUI render integrity non-interactively. |

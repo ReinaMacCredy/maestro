@@ -1,32 +1,29 @@
 /**
- * Filesystem-backed implementation of the v2 HandoffStorePort.
+ * Filesystem-backed handoff store.
  *
  * Persists records as flat JSON files under `.maestro/handoffs/<id>.json`.
- * Each file contains the full UkiHandoff including the cached UKI v5.3
- * compressed string, so reads do not need to recompress.
- *
- * Ids come from `generateHandoffId()` in `src/domain/id.ts` (shared with
- * the pre-Phase-1 handoff system -- the id shape is stable across the
- * format change).
+ * New writes store the canonical structured handoff payload in `content`
+ * plus the cached UKI transfer string.
  */
 import { join } from "node:path";
 import { open, readdir, stat } from "node:fs/promises";
 import { setTimeout as sleep } from "node:timers/promises";
-import { MAESTRO_DIR } from "../domain/defaults.js";
+import { MAESTRO_DIR, NO_SESSION_ID } from "../domain/defaults.js";
 import { generateHandoffId, HANDOFF_ID_PATTERN } from "../domain/id.js";
 import type {
   CreateUkiHandoffInput,
+  ExecuteUkiHandoffContent,
+  PlanUkiHandoffContent,
   UkiHandoff,
+  UkiHandoffContent,
   UkiHandoffStatus,
+  UkiMaestroRefs,
 } from "../domain/uki-types.js";
-import { validateUkiHandoff } from "../domain/validators.js";
-import type {
-  HandoffStorePort,
-  UpdateHandoffStatusMeta,
-} from "../ports/handoff-store.port.js";
-import { compressUki } from "../lib/uki-format.js";
-import { ensureDir, readJson, writeJson, removeIfExists } from "../lib/fs.js";
 import { UKI_HANDOFF_VERSION } from "../domain/uki-types.js";
+import { validateUkiHandoff } from "../domain/validators.js";
+import type { HandoffStorePort, UpdateHandoffStatusMeta } from "../ports/handoff-store.port.js";
+import { compressUki, parseUki } from "../lib/uki-format.js";
+import { ensureDir, readJson, removeIfExists, writeJson } from "../lib/fs.js";
 import { MaestroError } from "../domain/errors.js";
 import { assertSafeSegment, resolveWithin } from "../lib/path-safety.js";
 
@@ -42,44 +39,113 @@ function normalizePersistedHandoff(value: unknown): unknown {
   }
 
   const record = value as Record<string, unknown>;
-  const slots = record.slots;
-  if (!slots || typeof slots !== "object") {
-    return value;
+  const version = record.version === "5.2" || record.version === "5.3" || record.version === "5.4"
+    ? record.version
+    : UKI_HANDOFF_VERSION;
+
+  if (record.content && typeof record.content === "object") {
+    return {
+      ...record,
+      version,
+      content: normalizeContent(record.content as Record<string, unknown>),
+    };
   }
 
-  const slotRecord = slots as Record<string, unknown>;
-  return {
-    ...record,
-    version: record.version === "5.2" || record.version === "5.3"
-      ? record.version
-      : UKI_HANDOFF_VERSION,
-    slots: {
-      ...slotRecord,
-      decisionBasis: normalizeStringArray(slotRecord.decisionBasis),
-      validationState: normalizeStringArray(slotRecord.validationState),
-      nextAction: typeof slotRecord.nextAction === "string" ? slotRecord.nextAction : "review_handoff",
-      artifacts: normalizeStringArray(slotRecord.artifacts),
-      boundaryState: normalizeStringArray(slotRecord.boundaryState),
-      causalDrivers: normalizeStringArray(slotRecord.causalDrivers),
-      divergences: normalizeStringArray(slotRecord.divergences),
-      keyDecisions: normalizeStringArray(slotRecord.keyDecisions),
-      signalDelta: normalizeStringArray(slotRecord.signalDelta),
-      stanceCollapse: typeof slotRecord.stanceCollapse === "string" && slotRecord.stanceCollapse.length > 0
-        ? slotRecord.stanceCollapse
-        : "NONE_DETECTED_LOW_FRICTION",
-      blindSpot: typeof slotRecord.blindSpot === "string" && slotRecord.blindSpot.length > 0
-        ? slotRecord.blindSpot
-        : undefined,
-      metaphor: typeof slotRecord.metaphor === "string" && slotRecord.metaphor.length > 0
-        ? slotRecord.metaphor
-        : undefined,
-    },
+  if (typeof record.uki === "string") {
+    return {
+      ...record,
+      version,
+      content: parseUki(record.uki),
+    };
+  }
+
+  return value;
+}
+
+function normalizeContent(value: Record<string, unknown>): UkiHandoffContent {
+  const mode = value.mode === "plan" ? "plan" : "execute";
+  const common = {
+    mode,
+    currentState: typeof value.currentState === "string" && value.currentState.length > 0
+      ? value.currentState
+      : "unspecified",
+    sessionCore: typeof value.sessionCore === "string" && value.sessionCore.length > 0
+      ? value.sessionCore
+      : "handoff",
+    decisions: normalizeStringArray(value.decisions),
+    artifacts: normalizeStringArray(value.artifacts),
+    readMore: normalizeStringArray(value.readMore),
+    nextAction: typeof value.nextAction === "string" && value.nextAction.length > 0
+      ? value.nextAction
+      : "review_handoff",
+    summary: typeof value.summary === "string" && value.summary.length > 0
+      ? value.summary
+      : "Handoff-ready-needs_review",
+    maestroRefs: normalizeMaestroRefs(value.maestroRefs),
+    cs: normalizeConfidence(value.cs),
+    signalDelta: normalizeStringArray(value.signalDelta),
+    boundaryState: normalizeStringArray(value.boundaryState),
+    risks: normalizeStringArray(value.risks),
+    blindSpot: typeof value.blindSpot === "string" && value.blindSpot.length > 0
+      ? value.blindSpot
+      : undefined,
+    metaphor: typeof value.metaphor === "string" && value.metaphor.length > 0
+      ? value.metaphor
+      : undefined,
+    causalDrivers: normalizeStringArray(value.causalDrivers),
+    divergences: normalizeStringArray(value.divergences),
   };
+
+  if (mode === "plan") {
+    return {
+      ...common,
+      mode,
+      planPaths: normalizeStringArray(value.planPaths),
+      maestroSync: normalizeStringArray(value.maestroSync),
+    } satisfies PlanUkiHandoffContent;
+  }
+
+  return {
+    ...common,
+    mode,
+    touchedFiles: normalizeStringArray(value.touchedFiles),
+    completedWork: normalizeStringArray(value.completedWork),
+    validation: normalizeStringArray(value.validation),
+  } satisfies ExecuteUkiHandoffContent;
 }
 
 function normalizeStringArray(value: unknown): readonly string[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((item): item is string => typeof item === "string");
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((item): item is string => typeof item === "string" && item.length > 0);
+}
+
+function normalizeConfidence(value: unknown): { readonly work?: number; readonly summary?: number } {
+  if (!value || typeof value !== "object") {
+    return { summary: LEGACY_DEFAULT_CONFIDENCE };
+  }
+
+  const record = value as Record<string, unknown>;
+  return {
+    ...(typeof record.work === "number" ? { work: record.work } : {}),
+    ...(typeof record.summary === "number" ? { summary: record.summary } : {}),
+  };
+}
+
+function normalizeMaestroRefs(value: unknown): UkiMaestroRefs {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  const record = value as Record<string, unknown>;
+  return {
+    ...(typeof record.missionId === "string" ? { missionId: record.missionId } : {}),
+    ...(typeof record.featureId === "string" ? { featureId: record.featureId } : {}),
+    ...(typeof record.milestoneId === "string" ? { milestoneId: record.milestoneId } : {}),
+    ...(typeof record.planPath === "string" ? { planPath: record.planPath } : {}),
+    ...(typeof record.specPath === "string" ? { specPath: record.specPath } : {}),
+  };
 }
 
 export class FsHandoffStoreAdapter implements HandoffStorePort {
@@ -169,11 +235,11 @@ export class FsHandoffStoreAdapter implements HandoffStorePort {
     id: string,
     opts: { tolerant?: boolean } = {},
   ): Promise<UkiHandoff | undefined> {
-      try {
-        const raw = await readJson<unknown>(this.itemPath(id));
-        if (raw !== undefined) {
-          return validateUkiHandoff(normalizePersistedHandoff(raw));
-        }
+    try {
+      const raw = await readJson<unknown>(this.itemPath(id));
+      if (raw !== undefined) {
+        return validateUkiHandoff(normalizePersistedHandoff(raw));
+      }
 
       const legacyEnvelope = await readJson<unknown>(this.legacyEnvelopePath(id));
       if (legacyEnvelope !== undefined) {
@@ -212,7 +278,7 @@ export class FsHandoffStoreAdapter implements HandoffStorePort {
     return this.withLock(this.createLockPath(), async () => {
       const existingIds = await this.listIdsDesc();
       const id = generateHandoffId(existingIds, new Date());
-      const uki = compressUki(input.slots);
+      const uki = compressUki(input.content);
       const handoff: UkiHandoff = {
         id,
         version: UKI_HANDOFF_VERSION,
@@ -220,7 +286,7 @@ export class FsHandoffStoreAdapter implements HandoffStorePort {
         status: "pending",
         agent: input.agent,
         sessionId: input.sessionId,
-        slots: input.slots,
+        content: input.content,
         uki,
       };
       await writeJson(this.itemPath(id), handoff);
@@ -357,27 +423,31 @@ export class FsHandoffStoreAdapter implements HandoffStorePort {
       throw new Error(`Legacy handoff ${id} is missing required fields`);
     }
 
-    const branch = this.encodeLegacyToken(legacy.git?.branch, "branch_main");
-    const message = this.encodeLegacyToken(legacy.message, "legacy_handoff");
+    const branch = this.encodeLegacyToken(legacy.git?.branch, "main");
+    const sessionCore = this.encodeLegacyToken(legacy.message, "legacy_handoff");
+    const currentState = this.encodeLegacyToken(legacy.git?.diffStat, "legacy_git_state");
     const nextAction = this.encodeLegacyToken(legacy.quickstart, "review_legacy_handoff");
-    const executionState = this.encodeLegacyToken(legacy.git?.diffStat, "legacy_git_state");
     const summary = this.encodeLegacySummary(legacy.message);
-      const slots = {
-        sessionCore: message,
-        causalDrivers: [],
-        divergences: [],
-        keyDecisions: [],
-        decisionBasis: [],
-        signalDelta: [],
-        validationState: [],
-        nextAction,
-        artifacts: [`branch_${branch}`],
-        executionState,
-        boundaryState: [],
-        stanceCollapse: "NONE_DETECTED_LOW_FRICTION",
-        cs: { summary: LEGACY_DEFAULT_CONFIDENCE },
-        summary,
-      } satisfies CreateUkiHandoffInput["slots"];
+    const content: ExecuteUkiHandoffContent = {
+      mode: "execute",
+      currentState,
+      sessionCore,
+      decisions: [],
+      artifacts: [`branch_${branch}`],
+      readMore: [`branch_${branch}`],
+      nextAction,
+      summary,
+      maestroRefs: {},
+      cs: { summary: LEGACY_DEFAULT_CONFIDENCE },
+      signalDelta: [],
+      boundaryState: [],
+      risks: [],
+      causalDrivers: [],
+      divergences: [],
+      touchedFiles: [],
+      completedWork: [],
+      validation: [],
+    };
 
     return {
       id: legacy.id ?? id,
@@ -385,9 +455,9 @@ export class FsHandoffStoreAdapter implements HandoffStorePort {
       timestamp: legacy.timestamp,
       status: envelope.status,
       agent: legacy.session?.agent ?? "unknown",
-      sessionId: legacy.session?.sessionId ?? "legacy-session",
-      slots,
-      uki: compressUki(slots),
+      sessionId: legacy.session?.sessionId ?? NO_SESSION_ID,
+      content,
+      uki: compressUki(content),
       pickedUpAt: envelope.pickedUpAt,
       pickedUpBy: envelope.pickedUpBy,
       completedAt: envelope.completedAt,
@@ -408,7 +478,7 @@ export class FsHandoffStoreAdapter implements HandoffStorePort {
     return normalized
       .split("_")
       .filter(Boolean)
-      .slice(0, 4)
+      .slice(0, 6)
       .join("_");
   }
 

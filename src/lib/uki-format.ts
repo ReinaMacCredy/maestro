@@ -1,29 +1,41 @@
 /**
- * UKI v5.3 compressor/parser -- deterministic single-string compression of
- * structured handoff data for the maestro conductor model.
+ * UKI v5.4 transfer renderer/parser.
  *
- * New writes use the richer v5.3 contract, while the parser/validator remain
- * tolerant of legacy v5.2 strings so cached handoffs from older sessions can
- * still be picked up safely.
+ * New writes render from the canonical structured handoff payload.
+ * Legacy v5.2/v5.3 strings still parse for compatibility reads.
  */
 import { MaestroError } from "../domain/errors.js";
+import type {
+  ExecuteUkiHandoffContent,
+  PlanUkiHandoffContent,
+  UkiConfidenceScores,
+  UkiHandoffContent,
+  UkiMaestroRefs,
+} from "../domain/uki-types.js";
 
-export const UKI_VERSION = "5.3";
-export const LEGACY_UKI_VERSION = "5.2";
-
-/** Default value for STANCE_COLLAPSE when none is set. */
-export const DEFAULT_STANCE_COLLAPSE = "NONE_DETECTED_LOW_FRICTION";
-
-/** Placeholder emitted for empty list slots. */
+export const UKI_VERSION = "5.4";
+export const LEGACY_UKI_VERSION = "5.3";
+export const LEGACY_UKI_V52 = "5.2";
 export const EMPTY_LIST_SENTINEL = "NONE";
-
-/** Maximum allowed SUMMARY length (exclusive upper bound). */
 export const MAX_SUMMARY_LEN = 140;
+export const MAX_WORDS_PER_TOKEN = 6;
 
-/** Maximum allowed words per `_`-joined token half. */
-export const MAX_WORDS_PER_TOKEN = 4;
+type SlotKind = "single" | "list" | "refs" | "cs";
 
-export interface UkiSlots {
+interface SlotDef {
+  readonly name: string;
+  readonly field?: string;
+  readonly kind: SlotKind;
+  readonly optional?: boolean;
+}
+
+interface LayoutMatch {
+  readonly version: "5.2" | "5.3" | "5.4";
+  readonly mode?: "plan" | "execute";
+  readonly defs: readonly SlotDef[];
+}
+
+interface LegacyV53Slots {
   readonly sessionCore: string;
   readonly causalDrivers: readonly string[];
   readonly divergences: readonly string[];
@@ -38,11 +50,11 @@ export interface UkiSlots {
   readonly stanceCollapse?: string;
   readonly blindSpot?: string;
   readonly metaphor?: string;
-  readonly cs: { readonly work?: number; readonly summary?: number };
+  readonly cs: UkiConfidenceScores;
   readonly summary: string;
 }
 
-interface LegacyUkiSlots {
+interface LegacyV52Slots {
   readonly sessionCore: string;
   readonly causalDrivers: readonly string[];
   readonly divergences: readonly string[];
@@ -51,25 +63,71 @@ interface LegacyUkiSlots {
   readonly artifacts: readonly string[];
   readonly executionState: string;
   readonly boundaryState: readonly string[];
-  readonly stanceCollapse: string;
+  readonly stanceCollapse?: string;
   readonly nextAction: string;
-  readonly cs: { readonly work?: number; readonly summary?: number };
+  readonly cs: UkiConfidenceScores;
   readonly summary: string;
 }
 
-type SlotKind = "single" | "list" | "cs";
+const FIELD_FORBIDDEN_CHAR_PATTERN = /[:\n\r`*|]/;
+const OUTPUT_FORBIDDEN_CHAR_PATTERN = /[:\n\r`*]/;
+const CS_VALUE_PATTERN = /^(work_\d+(?:\.\d+)?(?:~summary_\d+(?:\.\d+)?)?|summary_\d+(?:\.\d+)?)$/;
 
-interface SlotDef {
-  readonly name: string;
-  readonly field?: string;
-  readonly kind: SlotKind;
-  readonly optional?: boolean;
-}
+const PLAN_SLOTS: readonly SlotDef[] = [
+  { name: "MODE", field: "mode", kind: "single" },
+  { name: "CURRENT_STATE", field: "currentState", kind: "single" },
+  { name: "SESSION_CORE", field: "sessionCore", kind: "single" },
+  { name: "CAUSAL_DRIVERS", field: "causalDrivers", kind: "list" },
+  { name: "DIVERGENCES", field: "divergences", kind: "list" },
+  { name: "MAESTRO_REFS", field: "maestroRefs", kind: "refs" },
+  { name: "PLAN_PATHS", field: "planPaths", kind: "list" },
+  { name: "MAESTRO_SYNC", field: "maestroSync", kind: "list" },
+  { name: "DECISIONS", field: "decisions", kind: "list" },
+  { name: "SIGNAL_DELTA", field: "signalDelta", kind: "list" },
+  { name: "ARTIFACTS", field: "artifacts", kind: "list" },
+  { name: "READ_MORE", field: "readMore", kind: "list" },
+  { name: "NEXT_ACTION", field: "nextAction", kind: "single" },
+  { name: "CS", kind: "cs" },
+  { name: "SUMMARY", field: "summary", kind: "single" },
+];
 
-interface LayoutMatch {
-  readonly version: typeof LEGACY_UKI_VERSION | typeof UKI_VERSION;
-  readonly defs: readonly SlotDef[];
-}
+const EXECUTE_HEAD_SLOTS: readonly SlotDef[] = [
+  { name: "MODE", field: "mode", kind: "single" },
+  { name: "CURRENT_STATE", field: "currentState", kind: "single" },
+  { name: "SESSION_CORE", field: "sessionCore", kind: "single" },
+  { name: "CAUSAL_DRIVERS", field: "causalDrivers", kind: "list" },
+  { name: "DIVERGENCES", field: "divergences", kind: "list" },
+  { name: "MAESTRO_REFS", field: "maestroRefs", kind: "refs" },
+  { name: "DECISIONS", field: "decisions", kind: "list" },
+  { name: "SIGNAL_DELTA", field: "signalDelta", kind: "list" },
+  { name: "TOUCHED_FILES", field: "touchedFiles", kind: "list" },
+  { name: "COMPLETED_WORK", field: "completedWork", kind: "list" },
+  { name: "VALIDATION", field: "validation", kind: "list" },
+  { name: "ARTIFACTS", field: "artifacts", kind: "list" },
+  { name: "READ_MORE", field: "readMore", kind: "list" },
+  { name: "BOUNDARY_STATE", field: "boundaryState", kind: "list" },
+  { name: "RISKS", field: "risks", kind: "list" },
+];
+
+const EXECUTE_BLIND_SPOT_SLOT: SlotDef = {
+  name: "BLIND_SPOT",
+  field: "blindSpot",
+  kind: "single",
+  optional: true,
+};
+
+const EXECUTE_METAPHOR_SLOT: SlotDef = {
+  name: "METAPHOR",
+  field: "metaphor",
+  kind: "single",
+  optional: true,
+};
+
+const EXECUTE_TAIL_SLOTS: readonly SlotDef[] = [
+  { name: "NEXT_ACTION", field: "nextAction", kind: "single" },
+  { name: "CS", kind: "cs" },
+  { name: "SUMMARY", field: "summary", kind: "single" },
+];
 
 const V53_HEAD_SLOTS: readonly SlotDef[] = [
   { name: "SESSION_CORE", field: "sessionCore", kind: "single" },
@@ -120,198 +178,15 @@ const V52_SLOTS: readonly SlotDef[] = [
   { name: "SUMMARY", field: "summary", kind: "single" },
 ];
 
-const ARTIFACT_PREFIX_PATTERN = /(?:^|-)(?:commit|branch|version|file)_/;
-const CS_VALUE_PATTERN = /^(work_\d+(?:\.\d+)?(?:~summary_\d+(?:\.\d+)?)?|summary_\d+(?:\.\d+)?)$/;
-const FORBIDDEN_CHAR_PATTERN = /[:\n\r`*]/;
-
-export function compressUki(slots: UkiSlots): string {
-  const defs = buildV53OutputDefs(slots);
-  const parts: string[] = [];
-
-  for (const def of defs) {
-    parts.push(encodeSlot(def, slots));
-  }
-
+export function compressUki(content: UkiHandoffContent): string {
+  const defs = buildOutputDefs(content);
+  const parts = defs.map((def) => encodeSlot(def, content));
   const result = parts.join("|");
   assertCompressed(result, defs.length);
   return result;
 }
 
-function buildV53OutputDefs(slots: UkiSlots): readonly SlotDef[] {
-  const defs = [...V53_HEAD_SLOTS];
-
-  if (hasOptionalSingle(slots.blindSpot)) {
-    defs.push(V53_BLIND_SPOT_SLOT);
-  }
-  if (hasOptionalSingle(slots.metaphor)) {
-    defs.push(V53_METAPHOR_SLOT);
-  }
-
-  defs.push(...V53_TAIL_SLOTS);
-  return defs;
-}
-
-function hasOptionalSingle(value: string | undefined): boolean {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
-function encodeSlot(def: SlotDef, slots: UkiSlots): string {
-  switch (def.kind) {
-    case "single":
-      return encodeSingle(def, slots);
-    case "list":
-      return encodeList(def, slots);
-    case "cs":
-      return encodeCs(slots.cs);
-  }
-}
-
-function encodeSingle(def: SlotDef, slots: UkiSlots): string {
-  let raw: string;
-
-  if (def.field === "stanceCollapse") {
-    raw = slots.stanceCollapse?.trim() || DEFAULT_STANCE_COLLAPSE;
-  } else {
-    const value = def.field ? (slots as Record<string, unknown>)[def.field] : undefined;
-    if (typeof value !== "string") {
-      throw compressError(
-        `Slot ${def.name} must be a string, got ${typeof value}`,
-        [`Field: ${String(def.field)}`],
-      );
-    }
-    raw = value.trim();
-  }
-
-  if (raw.length === 0) {
-    throw compressError(`Slot ${def.name} must not be empty`, [
-      `Field: ${String(def.field)}`,
-      "Every required UKI v5.3 single slot needs a non-empty value",
-    ]);
-  }
-
-  assertNoForbiddenChars(raw, def.name);
-
-  if (def.name === "SUMMARY" && raw.length >= MAX_SUMMARY_LEN) {
-    throw compressError(
-      `SUMMARY exceeds v5.3 limit (${raw.length} >= ${MAX_SUMMARY_LEN})`,
-      [
-        "Rewrite the summary to under 140 characters",
-        "Format hint: [Essence-Progress-Honest_Risk]",
-      ],
-    );
-  }
-
-  for (const subToken of raw.split("-")) {
-    if (subToken.length === 0) {
-      throw compressError(
-        `Slot ${def.name} contains an empty sub-token (leading, trailing, or doubled '-')`,
-        [`Offending value: ${raw}`],
-      );
-    }
-    assertWordCount(subToken, def.name);
-  }
-
-  return `${def.name}-${raw}`;
-}
-
-function encodeList(def: SlotDef, slots: UkiSlots): string {
-  const value = def.field ? (slots as Record<string, unknown>)[def.field] : undefined;
-  if (!Array.isArray(value)) {
-    throw compressError(
-      `Slot ${def.name} must be an array, got ${typeof value}`,
-      [`Field: ${String(def.field)}`],
-    );
-  }
-
-  if (value.length === 0) {
-    if (def.name === "ARTIFACTS") {
-      throw compressError(
-        "ARTIFACTS must contain at least one of commit_/branch_/version_/file_ (R6)",
-        [
-          "Add an artifact token like branch_<name> or commit_<sha>",
-          "ARTIFACTS cannot be empty in UKI v5.3",
-        ],
-      );
-    }
-    return `${def.name}-${EMPTY_LIST_SENTINEL}`;
-  }
-
-  const normalized = value.map((raw) => {
-    if (typeof raw !== "string") {
-      throw compressError(
-        `Slot ${def.name} must contain only strings`,
-        [`Got element of type ${typeof raw}`],
-      );
-    }
-
-    const token = raw.trim();
-    if (token.length === 0) {
-      throw compressError(
-        `Slot ${def.name} contains an empty token`,
-        ["Remove the empty token or merge it with its neighbor"],
-      );
-    }
-    if (token.includes("-")) {
-      throw compressError(
-        `Slot ${def.name} token '${token}' contains '-' which clashes with the list separator`,
-        [
-          "Replace '-' with '_' inside list tokens",
-          "Only single-string slots may contain '-' as a sub-token separator",
-        ],
-      );
-    }
-
-    assertNoForbiddenChars(token, def.name);
-    assertWordCount(token, def.name);
-    return token;
-  });
-
-  if (def.name === "ARTIFACTS" && !ARTIFACT_PREFIX_PATTERN.test(normalized.join("-"))) {
-    throw compressError(
-      "ARTIFACTS must contain at least one of commit_/branch_/version_/file_ (R6)",
-      [
-        "Add an artifact token like branch_<name> or commit_<sha>",
-        "Or file_<path_with_underscores> / version_<x_y_z>",
-      ],
-    );
-  }
-
-  return `${def.name}-${normalized.join("-")}`;
-}
-
-function encodeCs(cs: UkiSlots["cs"]): string {
-  const hasWork = typeof cs.work === "number";
-  const hasSummary = typeof cs.summary === "number";
-
-  if (!hasWork && !hasSummary) {
-    throw compressError(
-      "CS must have at least one of work or summary (R5)",
-      [
-        "Pass --confidence-work <n> or --confidence-summary <n>",
-        "Bare CS-N.NN is not a valid UKI shape",
-      ],
-    );
-  }
-  if (hasWork && !isFiniteNumber(cs.work)) {
-    throw compressError("CS.work must be a finite number", [`Got ${cs.work}`]);
-  }
-  if (hasSummary && !isFiniteNumber(cs.summary)) {
-    throw compressError("CS.summary must be a finite number", [`Got ${cs.summary}`]);
-  }
-
-  const parts: string[] = [];
-  if (hasWork) parts.push(`work_${formatConfidence(cs.work as number)}`);
-  if (hasSummary) parts.push(`summary_${formatConfidence(cs.summary as number)}`);
-
-  const value = parts.join("~");
-  if (!CS_VALUE_PATTERN.test(value)) {
-    throw compressError(`CS produced invalid value: ${value}`);
-  }
-
-  return `CS-${value}`;
-}
-
-export function parseUki(raw: string): UkiSlots {
+export function parseUki(raw: string): UkiHandoffContent {
   const violations = validateUki(raw);
   if (violations.length > 0) {
     throw new MaestroError(
@@ -323,23 +198,194 @@ export function parseUki(raw: string): UkiSlots {
   return parseUkiUnchecked(raw);
 }
 
-function parseUkiUnchecked(raw: string): UkiSlots {
+export function validateUki(raw: string): string[] {
+  try {
+    const parsed = parseUkiUnchecked(raw);
+    const layout = detectLayout(raw.split("|"));
+    if (layout?.version === UKI_VERSION && compressUki(parsed) !== raw) {
+      return ["UKI validation failed deterministic round-trip for v5.4 payload"];
+    }
+    return [];
+  } catch (error) {
+    if (error instanceof MaestroError) {
+      return [error.message, ...error.hints];
+    }
+    return [error instanceof Error ? error.message : String(error)];
+  }
+}
+
+function buildOutputDefs(content: UkiHandoffContent): readonly SlotDef[] {
+  if (content.mode === "plan") {
+    return PLAN_SLOTS;
+  }
+
+  const defs = [...EXECUTE_HEAD_SLOTS];
+  if (hasOptionalSingle(content.blindSpot)) {
+    defs.push(EXECUTE_BLIND_SPOT_SLOT);
+  }
+  if (hasOptionalSingle(content.metaphor)) {
+    defs.push(EXECUTE_METAPHOR_SLOT);
+  }
+  defs.push(...EXECUTE_TAIL_SLOTS);
+  return defs;
+}
+
+function encodeSlot(def: SlotDef, content: UkiHandoffContent): string {
+  switch (def.kind) {
+    case "single":
+      return encodeSingle(def, content);
+    case "list":
+      return encodeList(def, content);
+    case "refs":
+      return encodeRefs(content.maestroRefs);
+    case "cs":
+      return encodeCs(content.cs);
+  }
+}
+
+function encodeSingle(def: SlotDef, content: UkiHandoffContent): string {
+  const value = def.field ? (content as Record<string, unknown>)[def.field] : undefined;
+  if (typeof value !== "string") {
+    throw compressError(`Slot ${def.name} must be a string`, [`Field: ${String(def.field)}`]);
+  }
+
+  const raw = value.trim();
+  if (raw.length === 0) {
+    throw compressError(`Slot ${def.name} must not be empty`, [`Field: ${String(def.field)}`]);
+  }
+
+  assertNoForbiddenChars(raw, def.name);
+  if (def.name === "SUMMARY" && raw.length >= MAX_SUMMARY_LEN) {
+    throw compressError(`SUMMARY exceeds v5.4 limit (${raw.length} >= ${MAX_SUMMARY_LEN})`, [
+      "Rewrite the summary to under 140 characters",
+    ]);
+  }
+
+  for (const subToken of raw.split("-")) {
+    if (subToken.length === 0) {
+      throw compressError(`Slot ${def.name} contains an empty sub-token`, [`Offending value: ${raw}`]);
+    }
+    assertWordCount(subToken, def.name);
+  }
+
+  return `${def.name}-${raw}`;
+}
+
+function encodeList(def: SlotDef, content: UkiHandoffContent): string {
+  const value = def.field ? (content as Record<string, unknown>)[def.field] : undefined;
+  if (!Array.isArray(value)) {
+    throw compressError(`Slot ${def.name} must be an array`, [`Field: ${String(def.field)}`]);
+  }
+
+  if (def.name === "READ_MORE" && value.length === 0) {
+    throw compressError("READ_MORE must contain at least one anchor", [
+      "Provide --read-more or rely on auto-collected touched files",
+    ]);
+  }
+
+  if (def.name === "ARTIFACTS" && value.length === 0) {
+    throw compressError("ARTIFACTS must contain at least one anchor", [
+      "Provide --artifact or rely on auto-collected branch/file anchors",
+    ]);
+  }
+
+  if (value.length === 0) {
+    return `${def.name}-${EMPTY_LIST_SENTINEL}`;
+  }
+
+  const normalized = value.map((raw) => {
+    if (typeof raw !== "string") {
+      throw compressError(`Slot ${def.name} must contain only strings`, [`Got ${typeof raw}`]);
+    }
+
+    const token = raw.trim();
+    if (token.length === 0) {
+      throw compressError(`Slot ${def.name} contains an empty token`);
+    }
+    if (token.includes("-")) {
+      throw compressError(`Slot ${def.name} token '${token}' contains '-'`, [
+        "Replace '-' with '_' inside list tokens",
+      ]);
+    }
+
+    assertNoForbiddenChars(token, def.name);
+    assertWordCount(token, def.name);
+    return token;
+  });
+
+  return `${def.name}-${normalized.join("-")}`;
+}
+
+function encodeRefs(refs: UkiMaestroRefs): string {
+  const tokens: string[] = [];
+
+  if (refs.missionId) tokens.push(`mission_${refs.missionId}`);
+  if (refs.featureId) tokens.push(`feature_${refs.featureId}`);
+  if (refs.milestoneId) tokens.push(`milestone_${refs.milestoneId}`);
+  if (refs.planPath) tokens.push(`plan_${refs.planPath}`);
+  if (refs.specPath) tokens.push(`spec_${refs.specPath}`);
+
+  if (tokens.length === 0) {
+    return `MAESTRO_REFS-${EMPTY_LIST_SENTINEL}`;
+  }
+
+  for (const token of tokens) {
+    if (token.includes("-")) {
+      throw compressError(`MAESTRO_REFS token '${token}' contains '-'`, [
+        "Store Maestro refs as token-safe values before rendering UKI",
+      ]);
+    }
+    assertNoForbiddenChars(token, "MAESTRO_REFS");
+    assertWordCount(token, "MAESTRO_REFS");
+  }
+
+  return `MAESTRO_REFS-${tokens.join("-")}`;
+}
+
+function encodeCs(cs: UkiConfidenceScores): string {
+  const hasWork = typeof cs.work === "number";
+  const hasSummary = typeof cs.summary === "number";
+
+  if (!hasWork && !hasSummary) {
+    throw compressError("CS must have at least one of work or summary", [
+      "Pass --confidence-work <n> or --confidence-summary <n>",
+    ]);
+  }
+  if (hasWork && !isFiniteNumber(cs.work)) {
+    throw compressError("CS.work must be a finite number", [`Got ${cs.work}`]);
+  }
+  if (hasSummary && !isFiniteNumber(cs.summary)) {
+    throw compressError("CS.summary must be a finite number", [`Got ${cs.summary}`]);
+  }
+
+  const parts: string[] = [];
+  if (hasWork) parts.push(`work_${formatConfidence(cs.work as number)}`);
+  if (hasSummary) parts.push(`summary_${formatConfidence(cs.summary as number)}`);
+  const value = parts.join("~");
+
+  if (!CS_VALUE_PATTERN.test(value)) {
+    throw compressError(`CS produced invalid value: ${value}`);
+  }
+
+  return `CS-${value}`;
+}
+
+function parseUkiUnchecked(raw: string): UkiHandoffContent {
   const parts = raw.split("|");
   const layout = detectLayout(parts);
-
   if (!layout) {
     throw new Error("Unsupported UKI layout");
   }
 
   const valuesByName = new Map<string, string>();
-  for (let i = 0; i < layout.defs.length; i++) {
-    const def = layout.defs[i]!;
-    const slot = parts[i]!;
+  for (let index = 0; index < layout.defs.length; index += 1) {
+    const def = layout.defs[index]!;
+    const slot = parts[index]!;
     valuesByName.set(def.name, slot.slice(def.name.length + 1));
   }
 
-  if (layout.version === LEGACY_UKI_VERSION) {
-    return normalizeLegacySlots({
+  if (layout.version === LEGACY_UKI_V52) {
+    return normalizeLegacyV52({
       sessionCore: valuesByName.get("SESSION_CORE")!,
       causalDrivers: parseListValue(valuesByName.get("CAUSAL_DRIVERS")!),
       divergences: parseListValue(valuesByName.get("DIVERGENCES")!),
@@ -355,273 +401,301 @@ function parseUkiUnchecked(raw: string): UkiSlots {
     });
   }
 
+  if (layout.version === LEGACY_UKI_VERSION) {
+    return normalizeLegacyV53({
+      sessionCore: valuesByName.get("SESSION_CORE")!,
+      causalDrivers: parseListValue(valuesByName.get("CAUSAL_DRIVERS")!),
+      divergences: parseListValue(valuesByName.get("DIVERGENCES")!),
+      keyDecisions: parseListValue(valuesByName.get("KEY_DECISIONS")!),
+      decisionBasis: parseListValue(valuesByName.get("DECISION_BASIS")!),
+      signalDelta: parseListValue(valuesByName.get("SIGNAL_DELTA")!),
+      validationState: parseListValue(valuesByName.get("VALIDATION_STATE")!),
+      executionState: valuesByName.get("EXECUTION_STATE")!,
+      boundaryState: parseListValue(valuesByName.get("BOUNDARY_STATE")!),
+      nextAction: valuesByName.get("NEXT_ACTION")!,
+      artifacts: parseListValue(valuesByName.get("ARTIFACTS")!),
+      stanceCollapse: valuesByName.get("STANCE_COLLAPSE"),
+      blindSpot: valuesByName.get("BLIND_SPOT"),
+      metaphor: valuesByName.get("METAPHOR"),
+      cs: parseCsValue(valuesByName.get("CS")!),
+      summary: valuesByName.get("SUMMARY")!,
+    });
+  }
+
+  const mode = layout.mode!;
+  if (mode === "plan") {
+    return {
+      mode,
+      currentState: valuesByName.get("CURRENT_STATE")!,
+      sessionCore: valuesByName.get("SESSION_CORE")!,
+      causalDrivers: parseListValue(valuesByName.get("CAUSAL_DRIVERS")!),
+      divergences: parseListValue(valuesByName.get("DIVERGENCES")!),
+      maestroRefs: parseMaestroRefs(valuesByName.get("MAESTRO_REFS")!),
+      planPaths: parseListValue(valuesByName.get("PLAN_PATHS")!),
+      maestroSync: parseListValue(valuesByName.get("MAESTRO_SYNC")!),
+      decisions: parseListValue(valuesByName.get("DECISIONS")!),
+      signalDelta: parseListValue(valuesByName.get("SIGNAL_DELTA")!),
+      artifacts: parseListValue(valuesByName.get("ARTIFACTS")!),
+      readMore: parseListValue(valuesByName.get("READ_MORE")!),
+      nextAction: valuesByName.get("NEXT_ACTION")!,
+      cs: parseCsValue(valuesByName.get("CS")!),
+      summary: valuesByName.get("SUMMARY")!,
+      boundaryState: [],
+      risks: [],
+    };
+  }
+
+  const blindSpot = valuesByName.get("BLIND_SPOT");
+  const metaphor = valuesByName.get("METAPHOR");
+
   return {
+    mode,
+    currentState: valuesByName.get("CURRENT_STATE")!,
     sessionCore: valuesByName.get("SESSION_CORE")!,
     causalDrivers: parseListValue(valuesByName.get("CAUSAL_DRIVERS")!),
     divergences: parseListValue(valuesByName.get("DIVERGENCES")!),
-    keyDecisions: parseListValue(valuesByName.get("KEY_DECISIONS")!),
-    decisionBasis: parseListValue(valuesByName.get("DECISION_BASIS")!),
+    maestroRefs: parseMaestroRefs(valuesByName.get("MAESTRO_REFS")!),
+    decisions: parseListValue(valuesByName.get("DECISIONS")!),
     signalDelta: parseListValue(valuesByName.get("SIGNAL_DELTA")!),
-    validationState: parseListValue(valuesByName.get("VALIDATION_STATE")!),
-    executionState: valuesByName.get("EXECUTION_STATE")!,
-    boundaryState: parseListValue(valuesByName.get("BOUNDARY_STATE")!),
-    nextAction: valuesByName.get("NEXT_ACTION")!,
+    touchedFiles: parseListValue(valuesByName.get("TOUCHED_FILES")!),
+    completedWork: parseListValue(valuesByName.get("COMPLETED_WORK")!),
+    validation: parseListValue(valuesByName.get("VALIDATION")!),
     artifacts: parseListValue(valuesByName.get("ARTIFACTS")!),
-    stanceCollapse: valuesByName.get("STANCE_COLLAPSE")!,
-    blindSpot: valuesByName.get("BLIND_SPOT"),
-    metaphor: valuesByName.get("METAPHOR"),
+    readMore: parseListValue(valuesByName.get("READ_MORE")!),
+    boundaryState: parseListValue(valuesByName.get("BOUNDARY_STATE")!),
+    risks: parseListValue(valuesByName.get("RISKS")!),
+    ...(blindSpot ? { blindSpot } : {}),
+    ...(metaphor ? { metaphor } : {}),
+    nextAction: valuesByName.get("NEXT_ACTION")!,
     cs: parseCsValue(valuesByName.get("CS")!),
     summary: valuesByName.get("SUMMARY")!,
   };
 }
 
-function normalizeLegacySlots(legacy: LegacyUkiSlots): UkiSlots {
-  return {
-    sessionCore: legacy.sessionCore,
-    causalDrivers: legacy.causalDrivers,
-    divergences: legacy.divergences,
-    keyDecisions: legacy.keyDecisions,
-    decisionBasis: [],
-    signalDelta: legacy.signalDelta,
-    validationState: [],
-    executionState: legacy.executionState,
-    boundaryState: legacy.boundaryState,
-    nextAction: legacy.nextAction,
-    artifacts: legacy.artifacts,
-    stanceCollapse: legacy.stanceCollapse,
-    cs: legacy.cs,
-    summary: legacy.summary,
-  };
-}
-
-function parseListValue(value: string): readonly string[] {
-  if (value === EMPTY_LIST_SENTINEL) return [];
-  return value.split("-");
-}
-
-function parseCsValue(value: string): { work?: number; summary?: number } {
-  const parts = value.split("~");
-  const result: { work?: number; summary?: number } = {};
-
-  for (const part of parts) {
-    if (part.startsWith("work_")) {
-      result.work = Number(part.slice("work_".length));
-    } else if (part.startsWith("summary_")) {
-      result.summary = Number(part.slice("summary_".length));
-    }
-  }
-
-  return result;
-}
-
-export function validateUki(raw: string): readonly string[] {
-  const violations: string[] = [];
-
-  if (typeof raw !== "string") {
-    violations.push("input is not a string");
-    return violations;
-  }
-  if (raw.length === 0) {
-    violations.push("input is empty");
-    return violations;
-  }
-  if (FORBIDDEN_CHAR_PATTERN.test(raw)) {
-    violations.push("input contains forbidden character (':', newline, '`', or '*')");
-  }
-  if (raw !== raw.trim()) {
-    violations.push("input has leading or trailing whitespace");
-  }
-
-  const parts = raw.split("|");
-  const layout = detectLayout(parts);
-  if (!layout) {
-    violations.push(
-      `slot layout is unsupported (expected v5.2 with ${V52_SLOTS.length} slots or v5.3 with 14-16 ordered slots)`,
-    );
-    return violations;
-  }
-
-  const valuesByName = new Map<string, string>();
-  for (let i = 0; i < layout.defs.length; i++) {
-    const def = layout.defs[i]!;
-    const slot = parts[i]!;
-    if (!slot.startsWith(`${def.name}-`)) {
-      violations.push(`slot ${i} must start with '${def.name}-'`);
-      continue;
-    }
-    valuesByName.set(def.name, slot.slice(def.name.length + 1));
-  }
-
-  for (const def of layout.defs) {
-    const value = valuesByName.get(def.name)!;
-    if (value.length === 0) {
-      violations.push(`slot ${def.name} is empty`);
-    }
-  }
-
-  const stance = valuesByName.get("STANCE_COLLAPSE");
-  if (layout.version === UKI_VERSION && (!stance || stance.length === 0)) {
-    violations.push("STANCE_COLLAPSE slot must always be present");
-  }
-
-  const cs = valuesByName.get("CS");
-  if (cs && !CS_VALUE_PATTERN.test(cs)) {
-    violations.push(
-      `CS value '${cs}' is not scoped (must be CS-work_X, CS-summary_Y, or CS-work_X~summary_Y)`,
-    );
-  }
-
-  const artifacts = valuesByName.get("ARTIFACTS");
-  if (!artifacts || artifacts === EMPTY_LIST_SENTINEL) {
-    violations.push("ARTIFACTS must contain at least one token");
-  } else if (!ARTIFACT_PREFIX_PATTERN.test(artifacts)) {
-    violations.push("ARTIFACTS must contain at least one of commit_/branch_/version_/file_");
-  }
-
-  const summary = valuesByName.get("SUMMARY");
-  if (summary !== undefined && summary.length >= MAX_SUMMARY_LEN) {
-    violations.push(
-      `SUMMARY length ${summary.length} exceeds limit ${MAX_SUMMARY_LEN}`,
-    );
-  }
-
-  for (const def of layout.defs) {
-    if (def.name === "CS") continue;
-    const value = valuesByName.get(def.name);
-    if (value === undefined || value === EMPTY_LIST_SENTINEL) continue;
-
-    const tokens = value.split("-");
-    for (const token of tokens) {
-      const halves = token.split("~");
-      for (const half of halves) {
-        if (half.length === 0) continue;
-        const words = half.split("_").filter((word) => word.length > 0);
-        if (words.length > MAX_WORDS_PER_TOKEN) {
-          violations.push(
-            `slot ${def.name} token '${token}' exceeds word limit (${words.length} > ${MAX_WORDS_PER_TOKEN})`,
-          );
-        }
-      }
-    }
-  }
-
-  return violations;
-}
-
 function detectLayout(parts: readonly string[]): LayoutMatch | undefined {
-  if (parts.length === V52_SLOTS.length && matchesOrderedDefs(parts, V52_SLOTS)) {
-    return { version: LEGACY_UKI_VERSION, defs: V52_SLOTS };
+  const first = parts[0];
+  if (!first) return undefined;
+
+  if (first.startsWith("MODE-plan")) {
+    return detectV54Layout(parts, "plan");
+  }
+  if (first.startsWith("MODE-execute")) {
+    return detectV54Layout(parts, "execute");
   }
 
-  return detectV53Layout(parts);
+  const v53 = detectV53Layout(parts);
+  if (v53) return v53;
+  return detectV52Layout(parts);
+}
+
+function detectV54Layout(parts: readonly string[], mode: "plan" | "execute"): LayoutMatch | undefined {
+  if (mode === "plan") {
+    return matchesLayout(parts, PLAN_SLOTS)
+      ? { version: UKI_VERSION, mode, defs: PLAN_SLOTS }
+      : undefined;
+  }
+
+  const defs = [...EXECUTE_HEAD_SLOTS];
+  let offset = EXECUTE_HEAD_SLOTS.length;
+  if (parts[offset]?.startsWith("BLIND_SPOT-")) {
+    defs.push(EXECUTE_BLIND_SPOT_SLOT);
+    offset += 1;
+  }
+  if (parts[offset]?.startsWith("METAPHOR-")) {
+    defs.push(EXECUTE_METAPHOR_SLOT);
+  }
+  defs.push(...EXECUTE_TAIL_SLOTS);
+
+  return matchesLayout(parts, defs)
+    ? { version: UKI_VERSION, mode, defs }
+    : undefined;
 }
 
 function detectV53Layout(parts: readonly string[]): LayoutMatch | undefined {
-  let index = 0;
-  const defs: SlotDef[] = [];
-
-  for (const def of V53_HEAD_SLOTS) {
-    if (!slotStartsWith(parts[index], def.name)) {
-      return undefined;
-    }
-    defs.push(def);
-    index += 1;
-  }
-
-  if (slotStartsWith(parts[index], V53_BLIND_SPOT_SLOT.name)) {
+  const defs = [...V53_HEAD_SLOTS];
+  let offset = V53_HEAD_SLOTS.length;
+  if (parts[offset]?.startsWith("BLIND_SPOT-")) {
     defs.push(V53_BLIND_SPOT_SLOT);
-    index += 1;
+    offset += 1;
   }
-
-  if (slotStartsWith(parts[index], V53_METAPHOR_SLOT.name)) {
+  if (parts[offset]?.startsWith("METAPHOR-")) {
     defs.push(V53_METAPHOR_SLOT);
-    index += 1;
+  }
+  defs.push(...V53_TAIL_SLOTS);
+
+  return matchesLayout(parts, defs)
+    ? { version: LEGACY_UKI_VERSION, defs }
+    : undefined;
+}
+
+function detectV52Layout(parts: readonly string[]): LayoutMatch | undefined {
+  return matchesLayout(parts, V52_SLOTS)
+    ? { version: LEGACY_UKI_V52, defs: V52_SLOTS }
+    : undefined;
+}
+
+function matchesLayout(parts: readonly string[], defs: readonly SlotDef[]): boolean {
+  if (parts.length !== defs.length) {
+    return false;
   }
 
-  for (const def of V53_TAIL_SLOTS) {
-    if (!slotStartsWith(parts[index], def.name)) {
-      return undefined;
+  return defs.every((def, index) => parts[index]?.startsWith(`${def.name}-`) === true);
+}
+
+function parseListValue(raw: string): readonly string[] {
+  if (raw === EMPTY_LIST_SENTINEL) {
+    return [];
+  }
+  return raw.split("-").filter(Boolean);
+}
+
+function parseMaestroRefs(raw: string): UkiMaestroRefs {
+  const refs: UkiMaestroRefs = {};
+  if (raw === EMPTY_LIST_SENTINEL) {
+    return refs;
+  }
+
+  for (const token of raw.split("-")) {
+    if (token.startsWith("mission_")) {
+      refs.missionId = token.slice("mission_".length);
+    } else if (token.startsWith("feature_")) {
+      refs.featureId = token.slice("feature_".length);
+    } else if (token.startsWith("milestone_")) {
+      refs.milestoneId = token.slice("milestone_".length);
+    } else if (token.startsWith("plan_")) {
+      refs.planPath = token.slice("plan_".length);
+    } else if (token.startsWith("spec_")) {
+      refs.specPath = token.slice("spec_".length);
     }
-    defs.push(def);
-    index += 1;
   }
 
-  if (index !== parts.length) {
-    return undefined;
+  return refs;
+}
+
+function parseCsValue(raw: string): UkiConfidenceScores {
+  if (!CS_VALUE_PATTERN.test(raw)) {
+    throw compressError(`CS has invalid value: ${raw}`);
   }
 
-  return { version: UKI_VERSION, defs };
+  const result: UkiConfidenceScores = {};
+  for (const token of raw.split("~")) {
+    if (token.startsWith("work_")) {
+      result.work = Number(token.slice("work_".length));
+    } else if (token.startsWith("summary_")) {
+      result.summary = Number(token.slice("summary_".length));
+    }
+  }
+  return result;
 }
 
-function matchesOrderedDefs(parts: readonly string[], defs: readonly SlotDef[]): boolean {
-  if (parts.length !== defs.length) return false;
-  return defs.every((def, index) => slotStartsWith(parts[index], def.name));
+function normalizeLegacyV52(legacy: LegacyV52Slots): ExecuteUkiHandoffContent {
+  return {
+    mode: "execute",
+    currentState: legacy.executionState,
+    sessionCore: legacy.sessionCore,
+    decisions: [...legacy.keyDecisions],
+    artifacts: legacy.artifacts,
+    readMore: deriveReadMore(legacy.artifacts, legacy.nextAction),
+    nextAction: legacy.nextAction,
+    summary: legacy.summary,
+    maestroRefs: {},
+    cs: legacy.cs,
+    signalDelta: legacy.signalDelta,
+    boundaryState: legacy.boundaryState,
+    risks: [],
+    blindSpot: undefined,
+    metaphor: undefined,
+    causalDrivers: legacy.causalDrivers,
+    divergences: legacy.divergences,
+    touchedFiles: deriveTouchedFiles(legacy.artifacts),
+    completedWork: legacy.signalDelta.length > 0 ? legacy.signalDelta : legacy.keyDecisions,
+    validation: [],
+  };
 }
 
-function slotStartsWith(slot: string | undefined, name: string): boolean {
-  return typeof slot === "string" && slot.startsWith(`${name}-`);
+function normalizeLegacyV53(legacy: LegacyV53Slots): ExecuteUkiHandoffContent {
+  return {
+    mode: "execute",
+    currentState: legacy.executionState,
+    sessionCore: legacy.sessionCore,
+    decisions: [...legacy.keyDecisions, ...legacy.decisionBasis],
+    artifacts: legacy.artifacts,
+    readMore: deriveReadMore(legacy.artifacts, legacy.nextAction),
+    nextAction: legacy.nextAction,
+    summary: legacy.summary,
+    maestroRefs: {},
+    cs: legacy.cs,
+    signalDelta: legacy.signalDelta,
+    boundaryState: legacy.boundaryState,
+    risks: legacy.blindSpot ? [legacy.blindSpot] : [],
+    blindSpot: legacy.blindSpot,
+    metaphor: legacy.metaphor,
+    causalDrivers: legacy.causalDrivers,
+    divergences: legacy.divergences,
+    touchedFiles: deriveTouchedFiles(legacy.artifacts),
+    completedWork: legacy.signalDelta.length > 0 ? legacy.signalDelta : legacy.keyDecisions,
+    validation: legacy.validationState,
+  };
 }
 
-function assertNoForbiddenChars(token: string, slotName: string): void {
-  if (FORBIDDEN_CHAR_PATTERN.test(token)) {
-    throw compressError(
-      `Slot ${slotName} contains forbidden character (colon, newline, or markdown syntax)`,
-      [
-        "UKI forbids ':', newlines, '`', and '*' in any slot",
-        `Offending value: ${token}`,
-      ],
-    );
+function deriveTouchedFiles(artifacts: readonly string[]): readonly string[] {
+  return artifacts.filter((token) => token.startsWith("file_"));
+}
+
+function deriveReadMore(artifacts: readonly string[], nextAction: string): readonly string[] {
+  const fileArtifacts = deriveTouchedFiles(artifacts);
+  if (fileArtifacts.length > 0) {
+    return fileArtifacts;
+  }
+  if (artifacts.length > 0) {
+    return artifacts.slice(0, 3);
+  }
+  return [nextAction];
+}
+
+function hasOptionalSingle(value: string | undefined): boolean {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function assertCompressed(raw: string, expectedSlots: number): void {
+  const actual = raw.length === 0 ? 0 : raw.split("|").length;
+  if (actual !== expectedSlots) {
+    throw compressError(`Compressed UKI slot count mismatch (${actual} !== ${expectedSlots})`);
+  }
+  if (OUTPUT_FORBIDDEN_CHAR_PATTERN.test(raw)) {
+    throw compressError("Compressed UKI contains forbidden characters", [raw]);
   }
 }
 
-function assertWordCount(token: string, slotName: string): void {
-  const halves = token.split("~");
+function assertNoForbiddenChars(raw: string, slotName: string): void {
+  if (FIELD_FORBIDDEN_CHAR_PATTERN.test(raw)) {
+    throw compressError(`Slot ${slotName} contains a forbidden character`, [
+      "UKI forbids :, newlines, pipes, backticks, and asterisks",
+    ]);
+  }
+}
+
+function assertWordCount(raw: string, slotName: string): void {
+  const halves = raw.split("~");
   for (const half of halves) {
-    if (half.length === 0) continue;
-    const words = half.split("_").filter((word) => word.length > 0);
-    if (words.length > MAX_WORDS_PER_TOKEN) {
+    const words = half.split("_").filter(Boolean).length;
+    if (words > MAX_WORDS_PER_TOKEN) {
       throw compressError(
-        `Slot ${slotName} token exceeds word limit (${words.length} > ${MAX_WORDS_PER_TOKEN})`,
-        [
-          "UKI caps _-joined tokens at 4 words per half",
-          `Offending token: ${token}`,
-        ],
+        `Slot ${slotName} token exceeds word limit (${words} > ${MAX_WORDS_PER_TOKEN})`,
+        [`Offending token: ${half}`],
       );
     }
   }
 }
 
-function assertCompressed(result: string, slotCount: number): void {
-  if (FORBIDDEN_CHAR_PATTERN.test(result)) {
-    throw compressError("Compressed string contains forbidden character", [
-      "Internal invariant violation",
-    ]);
-  }
-
-  const pipes = countChar(result, "|");
-  if (pipes !== slotCount - 1) {
-    throw compressError(
-      `Compressed string has wrong pipe count: ${pipes} (expected ${slotCount - 1})`,
-    );
-  }
+function isFiniteNumber(value: number | undefined): boolean {
+  return typeof value === "number" && Number.isFinite(value);
 }
 
-function countChar(s: string, ch: string): number {
-  let count = 0;
-  for (const c of s) {
-    if (c === ch) count += 1;
-  }
-  return count;
-}
-
-function isFiniteNumber(n: number | undefined): n is number {
-  return typeof n === "number" && Number.isFinite(n);
-}
-
-function formatConfidence(n: number): string {
-  return String(n);
+function formatConfidence(value: number): string {
+  return Number.parseFloat(value.toFixed(2)).toString();
 }
 
 function compressError(message: string, hints: readonly string[] = []): MaestroError {
-  return new MaestroError(`UKI compress: ${message}`, hints);
+  return new MaestroError(`UKI compress: ${message}`, [...hints]);
 }
