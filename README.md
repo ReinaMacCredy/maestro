@@ -251,7 +251,7 @@ flowchart LR
 
 ### Create output
 
-Creating a handoff returns the handoff id, detected agent/session identity, current status, and the compressed UKI string:
+Creating a handoff returns the handoff id, detected agent/session identity, current status, and the compressed UKI string. The CLI prints the UKI payload as one line, but in the README it is wrapped by slot here for readability:
 
 ```text
 [ok] Handoff created: 2026-04-09-001
@@ -260,7 +260,18 @@ Creating a handoff returns the handoff id, detected agent/session identity, curr
   Status: pending
 
 UKI v5.2 string:
-SESSION_CORE-Implement the auth flow feature|CAUSAL_DRIVERS-NONE|DIVERGENCES-NONE|KEY_DECISIONS-NONE|SIGNAL_DELTA-NONE|ARTIFACTS-file_src/auth.ts|EXECUTION_STATE-unspecified|BOUNDARY_STATE-NONE|STANCE_COLLAPSE-NONE_DETECTED_LOW_FRICTION|NEXT_ACTION-Pick up feature auth-impl|CS-work_0.9|SUMMARY-Planning is complete; implementation is ready
+SESSION_CORE-Implement the auth flow feature
+|CAUSAL_DRIVERS-NONE
+|DIVERGENCES-NONE
+|KEY_DECISIONS-NONE
+|SIGNAL_DELTA-NONE
+|ARTIFACTS-file_src/auth.ts
+|EXECUTION_STATE-unspecified
+|BOUNDARY_STATE-NONE
+|STANCE_COLLAPSE-NONE_DETECTED_LOW_FRICTION
+|NEXT_ACTION-Pick up feature auth-impl
+|CS-work_0.9
+|SUMMARY-Planning is complete; implementation is ready
 ```
 
 ### Pickup output formats
