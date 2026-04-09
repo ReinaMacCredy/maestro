@@ -1,172 +1,161 @@
 ---
 name: maestro:mission-planning
-description: "Plan and structure new missions using the Mission Control CLI. Create mission definitions, set milestones, and prepare for multi-agent execution."
-argument-hint: "<mission description>"
+description: "Plan and structure new missions. Brainstorm raw ideas into decomposed missions with milestones, features, worker types, boundaries, and UKI v5.2 handoffs ready for external workers to pick up."
+argument-hint: "<raw idea or mission description>"
 ---
 
 # Mission Planning
 
-Plan and structure new missions using the Mission Control CLI. Create mission definitions, set milestones, and prepare for multi-agent execution.
+Maestro is the conductor. It holds the score, emits handoffs, and validates results, but it does not write code itself. External workers (Codex CLI, Claude Code children, Gemini, Aider) implement features once a plan and a UKI v5.2 handoff exist.
 
-## Arguments
+This skill turns a raw idea into that plan plus handoff. The input is `$ARGUMENTS` — a single sentence like "add a command palette to the TUI" or a rough paragraph describing a goal. The output is two concrete artifacts:
 
-`$ARGUMENTS`
+1. A mission persisted under `.maestro/missions/{id}/` via `maestro mission create --file plan.json`
+2. A UKI v5.2 handoff string emitted via `maestro handoff create`, ready for an external worker to consume
 
-The mission description or command to execute.
+Skip any step and the downstream worker either drifts off-scope or halts asking for clarification. All six steps are mandatory.
 
----
+## The 6-step workflow at a glance
 
-## Step 1: Validate Prerequisites
+1. Brainstorm opening — clarify intent before structure
+2. Decompose into milestones and features — 3-7 milestones, sprint-sized
+3. Match worker types — codex-cli, claude-code, subagent, human
+4. Capture boundaries — what not to touch, and why
+5. Calibrate confidence — CS-work and CS-summary, honestly
+6. Persist and emit handoff — mission file plus UKI string
 
-**Inputs:** Filesystem state.
+## Step 1 — Brainstorm opening
 
-**Actions:**
-1. Check current directory is initialized for Maestro. Run `maestro mission list` to verify.
-2. If no mission runtime state exists, you may need to initialize Mission Control first.
+**Trigger**: `$ARGUMENTS` contains a raw idea or problem statement. No structure yet.
 
-**Outputs:** Confirmed Mission Control is available.
+**Action**:
+1. Restate the idea in one sentence and read it back to the user. If the user does not confirm, ask one clarifying question and wait.
+2. Ask "what does done look like?" The answer is the core goal you will carry into Step 2.
+3. Surface any obvious assumptions the idea rests on. Write them down even if they feel trivial — they become calibration inputs in Step 5.
+4. If the idea is genuinely ambiguous (two or more valid interpretations), stop and ask the user to pick one before proceeding. Do not guess.
 
-**Transition:** Proceed to Step 2.
+**Reference**: none — this is a conversational step, not a structural one.
 
----
+**Output**: one-sentence core goal, list of known assumptions, user confirmation.
 
-## Step 2: Parse Input
+## Step 2 — Decompose into milestones and features
 
-**Inputs:** `$ARGUMENTS` string.
+**Trigger**: you have a confirmed core goal from Step 1.
 
-**Actions:**
-1. Extract mission description from `$ARGUMENTS`.
-2. If arguments contain `--json`, JSON output will be used.
-3. If arguments contain `--file <path>`, read mission definition from file.
+**Action**:
+1. Extract the core goal into a single sentence: "when this mission is done, X is true."
+2. Identify phases by asking "what has to happen before the next thing can happen?" Each answer is a milestone candidate.
+3. Break each phase into 1-5 features. Each feature is sprint-sized (30 minutes to 2 hours of focused work) and named as an outcome, not an implementation detail.
+4. Assign `dependsOn` edges between features. Empty is fine; cycles are not.
+5. Draft 2-5 `verificationSteps` per feature. Each step must be observable and repeatable.
+6. Pick one milestone `profile` per milestone from the allowed set: `planning`, `plan-review`, `implementation`, `code-review`, `bug-hunt`, `simplify`, `validation`, `custom`. Do not invent new profiles.
 
-**Outputs:** Parsed mission parameters.
+**Reference**: `reference/decomposition.md`
 
----
+**Output**: a draft plan with 3-7 milestones, 1-5 features per milestone, dependencies, and verification steps. No worker types yet.
 
-## Step 3: Create Mission
+## Step 3 — Match worker types
 
-Use the Mission Control CLI to create a new mission:
+**Trigger**: you have a decomposed plan from Step 2.
 
-```bash
-maestro mission create --file <plan.json> [--json]
-```
+**Action**:
+1. For each feature, pick a worker type from the allowed set: `codex-cli`, `claude-code`, `subagent`, `human`. Do not invent new worker types.
+2. Apply the decision table in the reference file. Mechanical work goes to `codex-cli`, ambiguous work goes to `claude-code`, exploration goes to `subagent`, trust calls go to `human`.
+3. For any milestone with a `code-review` or `plan-review` profile, confirm the reviewer worker type is a different instance than whatever produced the artifact being reviewed. Self-review is pathologically lenient.
+4. Re-read each feature's worker-type choice and ask "would this worker actually succeed here?" If not, revise.
 
-The plan file should contain:
-- `description`: Mission overview
-- `milestones`: Array of milestone definitions
-- `features`: Array of feature specifications
+**Reference**: `reference/worker-type-matching.md`
 
-**Outputs:** Mission ID generated and runtime state initialized under `.maestro/missions/{id}/`.
+**Output**: every feature has a `workerType` field. Review milestones use a different instance than the generator.
 
----
+## Step 4 — Capture boundaries
 
-## Step 4: Define Milestones
+**Trigger**: every feature has a worker type assigned.
 
-Missions progress through phases (milestones). Define them with:
+**Action**:
+1. For each feature, list the things a worker must not touch while executing it. Name specific files, APIs, patterns, or out-of-scope extensions.
+2. For each boundary, write the reason next to it. A boundary without a reason is unenforceable at edge cases.
+3. Convert each boundary to a short `BOUNDARY_STATE` token (max 4 words per `_`-link, underscores between words, no dashes inside tokens).
+4. Move the reasons into `KEY_DECISIONS` tokens or the feature description so the worker can actually read them.
+5. If any feature has more than 5 boundaries, the feature is too large — go back to Step 2 and split it.
 
-```bash
-maestro milestone list --mission <mission-id>
-maestro milestone seal <milestone-name> --mission <mission-id>
-```
+**Reference**: `reference/boundary-capture.md`
 
-Common milestone sequence:
-1. `bootstrap` - Initial setup and scaffolding
-2. `core` - Core functionality implementation
-3. `integration` - Integration and wiring
-4. `polish` - Final refinements and validation
-5. `complete` - Mission completion
+**Output**: `BOUNDARY_STATE` token list per feature, reasons captured in `KEY_DECISIONS` or feature descriptions.
 
----
+## Step 5 — Calibrate confidence
 
-## Step 5: Assign Features
+**Trigger**: you have a plan with worker types and boundaries.
 
-Features are the atomic units of work within a mission. Use:
+**Action**:
+1. Rate `CS-work` (0.0-1.0): is the plan correct and executable end-to-end?
+2. Rate `CS-summary` (0.0-1.0): does the summary you will write capture the full intent?
+3. Apply the honesty rule. Name at least one failure mode. Drop 0.1 per realistic failure mode, up to 0.2 total.
+4. Check the divergent-score rules. If `CS-work` and `CS-summary` differ by more than 0.1, revise whichever is lower. If both are below 0.80, go back to Step 1 and re-scope.
+5. Write the final `CS` slot: `CS-work_0.xx~summary_0.yy`.
 
-```bash
-maestro feature list --mission <mission-id>
-maestro feature show <feature-id> --mission <mission-id>
-maestro feature approve <feature-id> --mission <mission-id>
-```
+**Reference**: `reference/confidence-calibration.md`
 
-Each feature has:
-- `id`: Unique identifier
-- `description`: What to implement
-- `workerType`: The skill to use for implementation
-- `milestone`: Which milestone it belongs to
-- `verificationSteps`: How to verify completion
+**Output**: two calibrated numbers ready to drop into the `CS` slot of the handoff.
 
----
+## Step 6 — Persist mission and emit handoff
 
-## Step 6: Generate Worker Prompts
+**Trigger**: plan, worker types, boundaries, and confidence scores are all in hand.
 
-When ready to execute a feature, generate worker prompts:
+**Action**:
+1. Write the plan to a JSON file (typically `plans/<mission-name>.json`). Include milestones, features, dependencies, verification steps, worker types, and boundaries.
+2. Run `maestro mission create --file <plan.json>` to persist the mission. Capture the returned mission id.
+3. Assemble the 12 UKI slots. Every slot must be present; use `DIVERGENCES-NONE` and `STANCE_COLLAPSE-NONE_DETECTED_LOW_FRICTION` when nothing to report. `ARTIFACTS` must contain at least one `commit_`, `branch_`, `version_`, or `file_` token.
+4. Run `maestro handoff create` with the slots as flags. Keep `SUMMARY` under 140 characters and use the `Essence-Progress-Risk` shape.
+5. Return the mission id and the handoff string to the user so they can route the handoff to a worker.
 
-```bash
-maestro feature prompt <feature-id> --mission <mission-id> --out <path>
-```
+**Reference**: `reference/uki-cheatsheet.md`
 
-This creates a prompt file for the assigned worker with:
-- Mission context
-- Feature description and requirements
-- Verification steps
-- Skill instructions
+**Output**: a persisted mission under `.maestro/missions/{id}/` and a UKI v5.2 handoff string printed to stdout.
 
----
+## Critical constraints
 
-## Lifecycle States
+- Never skip the brainstorm opening (Step 1). Jumping straight into decomposition produces plans that solve the wrong problem cleanly.
+- Never invent worker types or milestone profiles. The allowed sets are closed. If none fit, the work needs to be re-decomposed, not given a new category.
+- Never ship a handoff without calibrated `CS-work` and `CS-summary` scores. Unscored handoffs are treated as 0.0 by downstream tooling and will be rejected.
+- Never skip the final handoff emission. A plan without a UKI handoff is not executable by external workers — it is just a draft.
+- The output of this skill is always a mission file plus a UKI handoff string. If either is missing, the skill has not completed.
 
-Missions progress through states:
+## Example output
 
-| State | Description | CLI Command |
-|-------|-------------|-------------|
-| `proposed` | Initial mission definition | `maestro mission create` |
-| `active` | Mission in progress | `maestro mission activate` |
-| `paused` | Temporarily halted | `maestro mission pause` |
-| `completed` | All features done | `maestro mission complete` |
+Input: "Refactor the auth middleware so session validation and permission checking are separate."
 
----
-
-## Related Commands
-
-| Command | Purpose |
-|---------|---------|
-| `maestro mission list` | List all missions |
-| `maestro mission show <id>` | Show mission details |
-| `maestro mission create` | Create new mission |
-| `maestro milestone list` | List milestones |
-| `maestro milestone seal` | Seal a milestone |
-| `maestro feature list` | List features |
-| `maestro feature approve` | Approve a feature |
-| `maestro validation show` | Show validation state |
-| `maestro checkpoint save` | Save checkpoint |
-
----
-
-## Best Practices
-
-1. **Keep missions focused**: A mission should have 5-15 features maximum
-2. **Use descriptive IDs**: Feature IDs should indicate purpose (e.g., `auth-login-flow`)
-3. **Match skills to features**: Assign the most specific skill for each feature
-4. **Verification steps matter**: Clear verification steps enable automatic validation
-5. **Checkpoint frequently**: Save checkpoints after major milestones
-
----
-
-## Example Workflow
+After Steps 1-5, the plan is persisted:
 
 ```bash
-# Create mission with plan file
-maestro mission create --file ./plans/api-refactor.json
-
-# Check mission status
-maestro mission show <generated-id>
-
-# List features in the mission
-maestro feature list --mission <id>
-
-# Approve first feature for work
-maestro feature approve feat-001 --mission <id>
-
-# Generate worker prompt
-maestro feature prompt feat-001 --mission <id> --out ./prompt.md
+./dist/maestro mission create --file plans/auth-split.json
+# mission_id: mis_01h8k2f9
 ```
+
+Then the handoff is emitted:
+
+```bash
+./dist/maestro handoff create \
+  --session-core auth_middleware_split \
+  --summary "Auth middleware split drafted; signature preserved; 14 callers need regression pass before code-review." \
+  --next-action assign_feat_001_to_codex_cli_worker \
+  --driver user_report_signature_churn \
+  --driver refactor_debt_audit \
+  --divergence NONE \
+  --decision split_validation_from_permission \
+  --decision keep_middleware_signature \
+  --decision defer_permission_semantics \
+  --signal callers_14_stable \
+  --signal unit_tests_42_target \
+  --artifact branch_feat_auth_split \
+  --artifact file_src_auth_middleware_ts \
+  --boundary preserve_middleware_signature \
+  --boundary no_session_store_changes \
+  --boundary no_permission_semantics_changes \
+  --execution-state plan_drafted \
+  --stance-collapse NONE_DETECTED_LOW_FRICTION \
+  --confidence-work 0.88 \
+  --confidence-summary 0.92
+```
+
+Mission persisted, handoff printed. A worker (`codex-cli` per the worker-type assignment) can now pick up the first feature by reading the mission file and the handoff string. The skill is done.
