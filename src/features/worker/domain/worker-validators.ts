@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { MaestroError } from "./errors.js";
+import { MaestroError } from "@/shared/errors.js";
 import type { WorkerConfig } from "./worker-types.js";
 
 /**

@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { removeAgentBlocks } from "../usecases/manage-agents.usecase.js";
+import { removeAgentBlocks } from "@/features/worker";
 import { formatAgentResults, output } from "../lib/output.js";
 import { removeIfExists } from "../lib/fs.js";
 import { MAESTRO_DIR } from "../domain/defaults.js";

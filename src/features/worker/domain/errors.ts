@@ -1,8 +1,6 @@
-// Transitional shim kept alive until Phase 6 moves workerSkillNotFound
-// into the worker feature. New code should import MaestroError from
-// "@/shared/errors.js" and mission factories from "@/features/mission".
+// Worker feature error factories.
+// Moved from src/domain/errors.ts in Phase 6.
 
-export { MaestroError } from "@/shared/errors.js";
 import { MaestroError } from "@/shared/errors.js";
 
 export function workerSkillNotFound(workerType: string): MaestroError {

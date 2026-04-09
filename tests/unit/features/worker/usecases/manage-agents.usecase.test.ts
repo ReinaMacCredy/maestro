@@ -15,11 +15,9 @@ import {
   removeBlock,
   removeLegacyBlock,
   wrapBlock,
-} from "@/lib/agent-block.js";
-import {
   injectAgentBlocks,
   removeAgentBlocks,
-} from "@/usecases/manage-agents.usecase.js";
+} from "@/features/worker";
 
 // Phase 1 strip: the instruction block is static (no `{{agent}}` placeholder)
 // because the legacy `handoff-pickup --agent <slug>` flow is gone.

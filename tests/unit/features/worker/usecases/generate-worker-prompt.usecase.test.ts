@@ -8,7 +8,7 @@ import { join } from "node:path";
 import {
   generateWorkerPrompt,
   type GenerateWorkerPromptResult,
-} from "@/usecases/generate-worker-prompt.usecase.js";
+} from "@/features/worker";
 import { FsMissionStoreAdapter } from "@/features/mission";
 import { FsFeatureStoreAdapter } from "@/features/mission";
 import { FsAssertionStoreAdapter } from "@/features/mission";

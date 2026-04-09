@@ -15,8 +15,13 @@
  * violations (they legitimately glue features together).
  *
  * Feature-specific exceptions: FEATURE_EXCEPTIONS lets a named feature
- * import from a named sibling. Reserved for Phase 6 (worker --> mission,
- * memory). Empty in Phase 0.
+ * import from a named sibling. Phase 6 adds `worker --> mission, memory`:
+ * the worker feature composes prompts using mission state and memory
+ * recall, and is the only feature that legitimately reaches across to
+ * siblings. Its primary path is still through their public surfaces
+ * (`@/features/mission`, `@/features/memory`), but deep imports from
+ * worker into those two features are tolerated because the exception
+ * is the whole point of the worker folder existing separately.
  *
  * Phase 0 note: src/features/ does not exist yet, so the glob matches
  * zero files and the script exits clean.
@@ -33,8 +38,18 @@ const ALLOWED_CROSS_FEATURE: readonly string[] = [
   "src/tui/state/snapshot.ts",
 ];
 
-/** Per-feature sibling exceptions (reserved; Phase 6 will add worker). */
-const FEATURE_EXCEPTIONS: Record<string, readonly string[]> = {};
+/**
+ * Per-feature sibling exceptions.
+ *
+ * Worker legitimately imports from mission and memory to compose worker
+ * prompts. The happy path goes through their public surfaces
+ * (`@/features/mission`, `@/features/memory`) which never match
+ * DEEP_IMPORT_RE anyway; this exception covers deep imports that may
+ * occur in test fixtures or future internal reuses.
+ */
+const FEATURE_EXCEPTIONS: Record<string, readonly string[]> = {
+  worker: ["mission", "memory"],
+};
 
 const ROOT = new URL("../", import.meta.url).pathname;
 const IMPORT_RE = /from\s+["']([^"']+)["']/g;

@@ -85,10 +85,10 @@ export interface MaestroConfig {
   };
   readonly defaultWorkflow?: string;
   readonly workflowTemplates?: Readonly<Record<string, WorkflowTemplate>>;
-  readonly execution?: import("./worker-types.js").ExecutionConfig;
-  readonly workers?: Readonly<Record<string, import("./worker-types.js").WorkerConfig>>;
-  readonly supervision?: import("./worker-types.js").SupervisionConfig;
-  readonly parallel?: import("./worker-types.js").ParallelConfig;
+  readonly execution?: import("@/features/worker").ExecutionConfig;
+  readonly workers?: Readonly<Record<string, import("@/features/worker").WorkerConfig>>;
+  readonly supervision?: import("@/features/worker").SupervisionConfig;
+  readonly parallel?: import("@/features/worker").ParallelConfig;
   readonly ui?: UiConfig;
   readonly memory?: import("@/features/memory").MemoryConfig;
 }

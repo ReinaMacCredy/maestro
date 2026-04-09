@@ -1,5 +1,5 @@
 import type { Feature } from "@/features/mission";
-import type { MissionControlWorkerFitRecommendation } from "../tui/state/types.js";
+import type { MissionControlWorkerFitRecommendation } from "@/tui/state/types.js";
 
 const WORKER_KEYWORDS: Readonly<Record<string, readonly string[]>> = {
   codex: ["adapter", "api", "build", "cli", "command", "fix", "implement", "parser", "refactor", "test", "transport"],

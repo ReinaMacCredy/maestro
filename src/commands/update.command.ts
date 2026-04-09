@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { injectAgentBlocks } from "../usecases/manage-agents.usecase.js";
+import { injectAgentBlocks } from "@/features/worker";
 import { formatAgentResults, output } from "../lib/output.js";
 import { execOrThrow } from "../lib/shell.js";
 import { getServices } from "../services.js";

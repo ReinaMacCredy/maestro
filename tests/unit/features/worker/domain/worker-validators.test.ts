@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { validateWorkerConfig } from "@/domain/worker-validators.js";
+import { validateWorkerConfig } from "@/features/worker";
 
 describe("worker validators", () => {
   it("accepts a valid cli worker config", () => {

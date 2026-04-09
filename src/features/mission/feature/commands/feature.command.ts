@@ -15,7 +15,7 @@ import {
 import {
   generateWorkerPrompt,
   type GenerateWorkerPromptResult,
-} from "@/usecases/generate-worker-prompt.usecase.js";
+} from "@/features/worker";
 import { MaestroError } from "@/shared/errors.js";
 
 export function registerFeatureCommand(program: Command): void {

@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import {
   parseRawOutput,
   parseStreamJsonOutput,
-} from "@/lib/stream-json-parser.js";
+} from "@/features/worker";
 
 describe("stream-json parser", () => {
   it("extracts text from line-delimited json", () => {

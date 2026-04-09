@@ -1,8 +1,8 @@
 import type { Feature } from "@/features/mission";
 import { listIgnoredProjectConfigKeys, isGlobalOnlyConfigKey } from "../../domain/ui-config.js";
 import type { DoctorCheck, MaestroConfig } from "../../domain/types.js";
-import type { WorkerConfig } from "../../domain/worker-types.js";
-import { formatWorkerLabel, getWorkerGuidance } from "../../domain/worker-presentation.js";
+import type { WorkerConfig } from "@/features/worker";
+import { formatWorkerLabel, getWorkerGuidance, recommendWorkerFit } from "@/features/worker";
 import { cachedWhich } from "../../lib/snapshot-poll-cache.js";
 import type { ConfigScope, ConfigLayers } from "../../ports/config.port.js";
 import type {
@@ -15,7 +15,6 @@ import type {
   MissionControlConfigValueSource,
   MissionControlWorkerChoiceAvailability,
 } from "./types.js";
-import { recommendWorkerFit } from "../../usecases/worker-fit-recommendation.usecase.js";
 
 /**
  * Phase 3 strip: Mission Control no longer runs worker health probes

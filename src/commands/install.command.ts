@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { getServices } from "../services.js";
 import { initMaestro } from "../usecases/init.usecase.js";
-import { injectAgentBlocks } from "../usecases/manage-agents.usecase.js";
+import { injectAgentBlocks } from "@/features/worker";
 import { formatAgentResults, output } from "../lib/output.js";
 
 export function registerInstallCommand(program: Command): void {

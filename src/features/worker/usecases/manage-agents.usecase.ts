@@ -5,8 +5,8 @@ import {
   agentLegacyConfigPaths,
   type AgentConfigSpec,
 } from "../domain/agents.js";
-import { AGENT_INSTRUCTION_BLOCK } from "../domain/defaults.js";
-import { dirExists, ensureDir, readText, writeText } from "../lib/fs.js";
+import { AGENT_INSTRUCTION_BLOCK } from "@/domain/defaults.js";
+import { dirExists, ensureDir, readText, writeText } from "@/lib/fs.js";
 import {
   extractBlock,
   injectBlock,

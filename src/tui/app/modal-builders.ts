@@ -30,7 +30,7 @@ import { GRAPH_DIR } from "../../domain/defaults.js";
     isGlobalOnlyConfigKey,
     resolveConfigScopeForKey,
   } from "../state/config-inspector.js";
-import { formatWorkerLabel } from "../../domain/worker-presentation.js";
+import { formatWorkerLabel } from "@/features/worker";
 
 type MemoryModalState = AppState & {
   modal: Extract<AppState["modal"], { kind: "memory" }>;
