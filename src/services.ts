@@ -8,7 +8,7 @@ import type { AssertionStorePort } from "./ports/assertion-store.port.js";
 import type { CheckpointStorePort } from "./ports/checkpoint-store.port.js";
 import type { CorrectionStorePort } from "./ports/correction-store.port.js";
 import type { LearningStorePort } from "./ports/learning-store.port.js";
-import type { RatchetStorePort } from "./ports/ratchet-store.port.js";
+import type { RatchetStorePort } from "./features/ratchet/ports/ratchet-store.port.js";
 import type { ProjectGraphStorePort } from "./ports/project-graph-store.port.js";
 import type { HandoffStorePort } from "./ports/handoff-store.port.js";
 import { ShellGitAdapter } from "./adapters/git.adapter.js";
@@ -21,9 +21,9 @@ import { FsAssertionStoreAdapter } from "./adapters/assertion-store.adapter.js";
 import { FsCheckpointStoreAdapter } from "./adapters/checkpoint-store.adapter.js";
 import { FsCorrectionStoreAdapter } from "./adapters/correction-store.adapter.js";
 import { FsLearningStoreAdapter } from "./adapters/learning-store.adapter.js";
-import { FsRatchetStoreAdapter } from "./adapters/ratchet-store.adapter.js";
 import { FsProjectGraphStoreAdapter } from "./adapters/project-graph-store.adapter.js";
 import { FsHandoffStoreAdapter } from "./adapters/handoff-store.adapter.js";
+import { buildRatchetServices } from "./features/ratchet/services.js";
 
 export interface Services {
   readonly git: GitPort;
@@ -55,9 +55,9 @@ export function initServices(projectDir: string): Services {
     checkpointStore: new FsCheckpointStoreAdapter(projectDir),
     correctionStore: new FsCorrectionStoreAdapter(projectDir),
     learningStore: new FsLearningStoreAdapter(projectDir),
-    ratchetStore: new FsRatchetStoreAdapter(projectDir),
     projectGraphStore: new FsProjectGraphStoreAdapter(),
     handoffStore: new FsHandoffStoreAdapter(projectDir),
+    ...buildRatchetServices(projectDir),
   };
   return instance;
 }

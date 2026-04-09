@@ -22,8 +22,8 @@ import { registerMemoryRecallCommand } from "./commands/memory-recall.command.js
 import { registerMemorySearchCommand } from "./commands/memory-search.command.js";
 import { registerMemoryLearnCommand } from "./commands/memory-learn.command.js";
 import { registerMemoryCompileCommand } from "./commands/memory-compile.command.js";
-import { registerRatchetCheckCommand } from "./commands/ratchet-check.command.js";
-import { registerRatchetPromoteCommand } from "./commands/ratchet-promote.command.js";
+import { registerRatchetCheckCommand } from "./features/ratchet/commands/ratchet-check.command.js";
+import { registerRatchetPromoteCommand } from "./features/ratchet/commands/ratchet-promote.command.js";
 import { registerMemoryStatsCommand } from "./commands/memory-stats.command.js";
 import { registerMemoryLintCommand } from "./commands/memory-lint.command.js";
 import { registerGraphLinkCommand } from "./commands/graph-link.command.js";

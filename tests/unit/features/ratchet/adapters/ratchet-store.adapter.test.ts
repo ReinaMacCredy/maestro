@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { FsRatchetStoreAdapter } from "@/adapters/ratchet-store.adapter.js";
+import { FsRatchetStoreAdapter } from "@/features/ratchet/adapters/ratchet-store.adapter.js";
 
 describe("FsRatchetStoreAdapter", () => {
   let dir: string;

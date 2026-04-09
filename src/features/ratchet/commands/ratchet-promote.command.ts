@@ -1,7 +1,7 @@
 import type { Command } from "commander";
-import { MaestroError } from "../domain/errors.js";
-import { output } from "../lib/output.js";
-import { getServices } from "../services.js";
+import { MaestroError } from "@/domain/errors.js";
+import { output } from "@/lib/output.js";
+import { getServices } from "@/services.js";
 import { promoteToRatchet, type PromoteResult } from "../usecases/ratchet-promote.usecase.js";
 
 export function registerRatchetPromoteCommand(program: Command): void {

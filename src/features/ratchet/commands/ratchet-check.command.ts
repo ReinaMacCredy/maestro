@@ -1,6 +1,6 @@
 import type { Command } from "commander";
-import { output } from "../lib/output.js";
-import { getServices } from "../services.js";
+import { output } from "@/lib/output.js";
+import { getServices } from "@/services.js";
 import { checkRatchet, type RatchetCheckResult } from "../usecases/ratchet-check.usecase.js";
 
 export function registerRatchetCheckCommand(program: Command): void {

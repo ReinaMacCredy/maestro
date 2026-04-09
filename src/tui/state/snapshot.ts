@@ -11,7 +11,7 @@ import type { ConfigPort } from "../../ports/config.port.js";
 import type { GitPort } from "../../ports/git.port.js";
 import type { CorrectionStorePort } from "../../ports/correction-store.port.js";
 import type { LearningStorePort } from "../../ports/learning-store.port.js";
-import type { RatchetStorePort } from "../../ports/ratchet-store.port.js";
+import type { RatchetStorePort } from "@/features/ratchet";
 import type { ProjectGraphStorePort } from "../../ports/project-graph-store.port.js";
 import type { HandoffStorePort } from "../../ports/handoff-store.port.js";
 import type { UkiHandoff } from "../../domain/uki-types.js";

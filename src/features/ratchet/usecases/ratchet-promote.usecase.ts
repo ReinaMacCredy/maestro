@@ -1,5 +1,5 @@
-import type { RatchetAssertion } from "../domain/memory-types.js";
-import type { CorrectionStorePort } from "../ports/correction-store.port.js";
+import type { RatchetAssertion } from "@/domain/memory-types.js";
+import type { CorrectionStorePort } from "@/ports/correction-store.port.js";
 import type { RatchetStorePort } from "../ports/ratchet-store.port.js";
 
 export interface PromoteOpts {
