@@ -297,16 +297,42 @@ maestro handoff pickup --markdown
 
 - Status: picked-up
 - Agent: codex
-- Session: abc123
+- Session: 019d72b0-eed3-7d51-9782-0b837f92cc30
+- Timestamp: 2026-04-09T15:18:09.666Z
 
 ## Session core
-Implement the auth flow feature
+handoff_real_example
 
 ## Summary
-Planning is complete; implementation is ready
+Handoff_real_example-ready-low_risk
 
 ## Next action
-Pick up feature auth-impl
+pick_up_auth_impl
+
+## Decision basis
+- preserve_pickup_clarity
+
+## Validation state
+- compiled_cli_green
+
+## Artifacts
+- file_src_auth_ts
+
+## Blind spot
+green_tests_masked_drift
+
+## Metaphor
+baton_pass_snapshot
+
+## Execution state
+unspecified
+
+## Stance collapse
+NONE_DETECTED_LOW_FRICTION
+
+## Confidence
+- work: 0.9
+- summary: n/a
 ```
 
 ### Typical handoff loop
