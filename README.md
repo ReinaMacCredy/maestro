@@ -13,6 +13,26 @@ It is designed for a workflow where a human operator coordinates multiple termin
 - Mission Control gives you a read-only TUI and JSON snapshots of current state.
 - The runtime stays local-first: filesystem, git, config, and terminal tools.
 
+## At A Glance
+
+```mermaid
+flowchart LR
+  human["Human operator"]
+  maestro["Maestro CLI + .maestro/ state"]
+  workerA["Agent terminal A"]
+  workerB["Agent terminal B"]
+  tui["Mission Control"]
+
+  human --> maestro
+  maestro --> workerA
+  maestro --> workerB
+  workerA --> maestro
+  workerB --> maestro
+  maestro --> tui
+```
+
+Maestro is the shared state layer in the middle. The human moves between terminals; agents read and write through the same local CLI surface.
+
 ## What Maestro Is Not
 
 - It does not spawn or supervise LLM agents for you.
@@ -34,6 +54,24 @@ The human operator is the bridge between terminals. Maestro is the shared state 
 | Memory | Corrections, learnings, and compiled guidance that feed back into future worker prompts. |
 | Checkpoint | A timestamped mission snapshot you can save and later restore. |
 | Mission Control | A read-only dashboard for previewing mission state interactively or as JSON. |
+
+## How Work Flows
+
+```mermaid
+flowchart TD
+  init["Initialize project"] --> plan["Create mission plan JSON"]
+  plan --> mission["maestro mission create --file plan.json"]
+  mission --> approve["maestro mission approve <mission-id>"]
+  approve --> prompt["maestro feature prompt <feature-id> --mission <mission-id>"]
+  prompt --> handoff["maestro handoff create ..."]
+  handoff --> worker["Worker picks up handoff in another terminal"]
+  worker --> progress["maestro feature update ... --status in-progress/review"]
+  progress --> validate["maestro validate update ... --result passed|failed|waived"]
+  validate --> checkpoint["maestro checkpoint save --mission <mission-id>"]
+  checkpoint --> seal["maestro milestone seal <milestone-id> --mission <mission-id>"]
+```
+
+The loop is deliberately simple: define work, hand it off, update progress, validate the outcome, and checkpoint before sealing the milestone.
 
 ## Installation
 
@@ -225,6 +263,20 @@ Available preview screens include:
 - `graph`
 
 For non-interactive environments, prefer `--preview`, `--preview all`, or `--json`.
+
+## Architecture
+
+```mermaid
+flowchart TD
+  cli["CLI commands"] --> usecases["Use cases"]
+  usecases --> domain["Domain models + validators"]
+  usecases --> ports["Ports"]
+  ports --> adapters["Filesystem, git, config, session adapters"]
+  adapters --> state[".maestro/ state + local environment"]
+  state --> tui["Mission Control snapshots"]
+```
+
+The codebase follows a hexagonal shape: commands call use cases, use cases depend on domain rules and ports, and adapters implement those ports against the local filesystem and environment.
 
 ## Storage Model
 
