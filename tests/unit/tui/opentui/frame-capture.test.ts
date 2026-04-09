@@ -284,7 +284,10 @@ describe("captureMissionControlFrame", () => {
 
     expect(modal).toBeDefined();
     expect(modal?.mode).toBe("split");
-    expect(modal?.returnTarget).toBe("command-palette");
+    if (!modal || modal.mode === "palette") {
+      throw new Error("Expected a split modal");
+    }
+    expect(modal.returnTarget).toBe("command-palette");
 
     const titleLine = configRender.spans.lines.find((line) => line.spans.some((span) => span.text.includes("Config")));
     const listLine = configRender.spans.lines.find((line) => line.spans.some((span) => span.text.includes("Results")));
@@ -329,11 +332,7 @@ describe("captureMissionControlFrame", () => {
         {
           id: "handoff-1",
           agent: "codex",
-          branch: "feat/test",
-          createdAt: "2026-04-05T12:00:00.000Z",
-          status: "pending",
           message: "Investigate handoff",
-          report: undefined,
         },
       ],
     };

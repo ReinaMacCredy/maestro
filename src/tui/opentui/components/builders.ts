@@ -654,7 +654,7 @@ function lineWithTone(
   return normalLine(text, fg);
 }
 
-function normalLine(text: string, fg = OPEN_TUI_THEME.text): UiLine {
+function normalLine(text: string, fg: string = OPEN_TUI_THEME.text): UiLine {
   return { text, fg };
 }
 

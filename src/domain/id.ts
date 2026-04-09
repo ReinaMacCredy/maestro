@@ -1,3 +1,5 @@
+export const HANDOFF_ID_PATTERN = /^\d{4}-\d{2}-\d{2}-\d{3}$/;
+
 /**
  * Generate a date-sequential handoff ID.
  * Format: YYYY-MM-DD-NNN (e.g. 2026-03-28-001)

@@ -32,7 +32,7 @@ describe("FsRatchetStoreAdapter", () => {
 
     const read = await store.getSuite();
     expect(read.assertions.length).toBe(1);
-    expect(read.assertions[0].rule).toBe("no npm");
+    expect(read.assertions[0]!.rule).toBe("no npm");
   });
 
   it("returns undefined baseline when none exists", async () => {

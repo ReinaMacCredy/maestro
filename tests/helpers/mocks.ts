@@ -1,5 +1,6 @@
 import type { GitPort } from "../../src/ports/git.port.js";
 import type { ConfigPort } from "../../src/ports/config.port.js";
+import type { ConfigLayers } from "../../src/ports/config.port.js";
 import type { SessionDetectPort } from "../../src/ports/session-detect.port.js";
 import type { NotesStorePort } from "../../src/ports/notes-store.port.js";
 import type { MissionStorePort } from "../../src/ports/mission-store.port.js";
@@ -11,7 +12,6 @@ import type { LearningStorePort } from "../../src/ports/learning-store.port.js";
 import type { RatchetStorePort } from "../../src/ports/ratchet-store.port.js";
 import type { ProjectGraphStorePort } from "../../src/ports/project-graph-store.port.js";
 import type {
-  ConfigLayers,
   GitState,
   MaestroConfig,
   AgentSession,

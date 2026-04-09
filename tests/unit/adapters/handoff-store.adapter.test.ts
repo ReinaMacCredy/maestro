@@ -2,9 +2,10 @@
  * Filesystem handoff store (v2, UKI v5.2) adapter tests.
  */
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { access, mkdtemp, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { MaestroError } from "../../../src/domain/errors.js";
 import { FsHandoffStoreAdapter } from "../../../src/adapters/handoff-store.adapter.js";
 import { parseUki, type UkiSlots } from "../../../src/lib/uki-format.js";
 import type { CreateUkiHandoffInput } from "../../../src/domain/uki-types.js";
@@ -79,6 +80,10 @@ describe("FsHandoffStoreAdapter", () => {
   it("returns undefined for missing id", async () => {
     const result = await store.get("9999-12-31-999");
     expect(result).toBeUndefined();
+  });
+
+  it("rejects handoff ids with path traversal segments", async () => {
+    await expect(store.get("../package")).rejects.toThrow(MaestroError);
   });
 
   it("lists all handoffs sorted newest first", async () => {
@@ -157,6 +162,47 @@ describe("FsHandoffStoreAdapter", () => {
   it("updateStatus returns undefined for missing id", async () => {
     const result = await store.updateStatus("9999-12-31-999", "completed");
     expect(result).toBeUndefined();
+  });
+
+  it("skips malformed persisted records during list and latest-pending scans", async () => {
+    const created = await store.create(SAMPLE_INPUT);
+    const handoffDir = join(dir, ".maestro", "handoffs");
+    await mkdir(handoffDir, { recursive: true });
+    await writeFile(join(handoffDir, "2026-04-09-999.json"), '{"id":"2026-04-09-999","broken":true}');
+
+    const listed = await store.list();
+    expect(listed.map((handoff) => handoff.id)).toEqual([created.id]);
+
+    const latest = await store.getLatestPending();
+    expect(latest?.id).toBe(created.id);
+  });
+
+  it("supports concurrent creates without reusing handoff ids", async () => {
+    const created = await Promise.all(
+      Array.from({ length: 12 }, () => store.create(SAMPLE_INPUT)),
+    );
+
+    expect(new Set(created.map((handoff) => handoff.id)).size).toBe(created.length);
+    expect((await store.list()).length).toBe(created.length);
+  });
+
+  it("allows only one concurrent claim to transition a pending handoff", async () => {
+    const created = await store.create(SAMPLE_INPUT);
+
+    const [first, second] = await Promise.all([
+      store.claimPending(created.id, "alpha"),
+      store.claimPending(created.id, "beta"),
+    ]);
+
+    const claimed = [first, second].filter((handoff) => handoff !== undefined);
+    expect(claimed).toHaveLength(1);
+    const winner = claimed[0]?.pickedUpBy ?? "";
+    expect(winner).not.toBe("");
+    expect(["alpha", "beta"]).toContain(winner);
+
+    const reread = await store.get(created.id);
+    expect(reread?.status).toBe("picked-up");
+    expect(reread?.pickedUpBy).toBe(winner);
   });
 
   it("delete removes the record and returns true", async () => {

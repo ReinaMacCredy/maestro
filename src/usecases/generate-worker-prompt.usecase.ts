@@ -12,7 +12,7 @@ import type { Feature, Mission, Milestone, Assertion, MilestoneProfile } from ".
 import { MaestroError } from "../domain/errors.js";
 import { WORKER_TYPE_PATTERN } from "../domain/mission-validators.js";
 import { readText, writeText, ensureDir } from "../lib/fs.js";
-import { sanitizePromptContent } from "../lib/sanitize.js";
+import { sanitizeInlinePromptContent, sanitizePromptContent } from "../lib/sanitize.js";
 import { dirname, join, resolve } from "node:path";
 import { MAESTRO_DIR } from "../domain/defaults.js";
 import { assertSafeSegment, resolveWithin } from "../lib/path-safety.js";
@@ -599,21 +599,10 @@ function appendMemorySection(parts: string[], recalled: RecallResult): void {
 }
 
 /**
- * Delimit content that might contain control-like text.
- * Wraps content in a way that preserves literal values without breaking
- * the overall markdown structure.
+ * Delimit content that might contain control-like text. Unlike
+ * `sanitizePromptContent`, the value is emitted inline (no XML wrapper,
+ * no HTML entity encoding) so memory rules read naturally in the prompt.
  */
 function delimitContent(content: string): string {
-  // Handle empty content
-  if (!content || content.trim().length === 0) {
-    return "_(no content)_";
-  }
-
-  // Escape markdown headers within content to prevent breaking structure
-  const escaped = content
-    .replace(/^(#{1,6})\s/gm, "\\$1 ") // Escape header syntax at line start
-    .replace(/^(<!--)/gm, "\\$1") // Escape HTML comment open
-    .replace(/^(-->)/gm, "\\$1"); // Escape HTML comment close
-
-  return escaped;
+  return sanitizeInlinePromptContent(content);
 }

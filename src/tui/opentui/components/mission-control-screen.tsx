@@ -638,7 +638,8 @@ function dimHexColor(color: string): string {
     : hex;
   if (fullHex.length !== 6) return color;
 
-  const [r, g, b] = [0, 2, 4].map((offset) => Number.parseInt(fullHex.slice(offset, offset + 2), 16));
+  const channels = [0, 2, 4].map((offset) => Number.parseInt(fullHex.slice(offset, offset + 2), 16));
+  const [r = 0, g = 0, b = 0] = channels;
   const factor = 0.55;
   const toHex = (value: number) => Math.max(0, Math.min(255, Math.round(value * factor))).toString(16).padStart(2, "0");
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;

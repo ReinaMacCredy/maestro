@@ -24,6 +24,13 @@ export interface HandoffStorePort {
   /** Create a new handoff. Generates a new id and compresses the slots. */
   create(input: CreateUkiHandoffInput): Promise<UkiHandoff>;
 
+  /**
+   * Atomically claim a pending handoff, either by explicit id or by picking the
+   * newest pending handoff. Returns the updated handoff, or undefined when the
+   * requested handoff does not exist or is no longer pending.
+   */
+  claimPending(id?: string, pickedUpBy?: string): Promise<UkiHandoff | undefined>;
+
   /** Retrieve a handoff by id, or undefined if not found. */
   get(id: string): Promise<UkiHandoff | undefined>;
 

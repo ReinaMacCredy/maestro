@@ -41,8 +41,8 @@ describe("FsCorrectionStoreAdapter", () => {
 
     const all = await store.list();
     expect(all.length).toBe(2);
-    expect(all[0].id).toBe(c2.id);
-    expect(all[1].id).toBe(c1.id);
+    expect(all[0]!.id).toBe(c2.id);
+    expect(all[1]!.id).toBe(c1.id);
   });
 
   it("searches by keyword", async () => {
@@ -56,14 +56,14 @@ describe("FsCorrectionStoreAdapter", () => {
 
     const results = await store.search({ keywords: ["npm"] });
     expect(results.length).toBe(1);
-    expect(results[0].rule).toBe("use bun not npm");
+    expect(results[0]!.rule).toBe("use bun not npm");
   });
 
   it("searches by text in rule/source", async () => {
     await store.create(input);
     const results = await store.search({ text: "setup script" });
     expect(results.length).toBe(1);
-    expect(results[0].source).toContain("setup script");
+    expect(results[0]!.source).toContain("setup script");
   });
 
   it("updates a correction", async () => {

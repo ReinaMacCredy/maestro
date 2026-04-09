@@ -4,7 +4,12 @@
  */
 import { homedir } from "node:os";
 import type { AppState, Action } from "../state/reducer.js";
-import type { MissionControlConfigRow, MissionControlSnapshot, TaskPreviewPane } from "../state/types.js";
+import type {
+  MissionControlConfigInspector,
+  MissionControlConfigRow,
+  MissionControlSnapshot,
+  TaskPreviewPane,
+} from "../state/types.js";
 import {
   getFilteredMissionControlCommandSpecs,
   getMissionControlCommandSpecs,
@@ -12,6 +17,7 @@ import {
 } from "../state/mission-control-commands.js";
 import {
   buildOverlayRenderSpec,
+  type ModalInfoItem,
   type ModalOptions,
 } from "../shared/modal-model.js";
 import { getValidFeatureTransitions } from "../../domain/mission-state.js";
@@ -26,8 +32,20 @@ import { GRAPH_DIR } from "../../domain/defaults.js";
   } from "../state/config-inspector.js";
 import { formatWorkerLabel } from "../../domain/worker-presentation.js";
 
+type MemoryModalState = AppState & {
+  modal: Extract<AppState["modal"], { kind: "memory" }>;
+};
+
+type GraphModalState = AppState & {
+  modal: Extract<AppState["modal"], { kind: "graph" }>;
+};
+
+type ConfigModalState = AppState & {
+  modal: Extract<AppState["modal"], { kind: "config" }>;
+};
+
 export function buildModalOptions(state: AppState): ModalOptions | undefined {
-  const returnTarget = state.modal.kind !== "command-palette" ? state.modal.returnTarget : undefined;
+  const returnTarget = "returnTarget" in state.modal ? state.modal.returnTarget : undefined;
   if (state.modal.kind === "command-palette") {
     const commands = getFilteredCommandPaletteItems(state);
     return {
@@ -169,44 +187,45 @@ export function buildModalOptions(state: AppState): ModalOptions | undefined {
           state.modal.findQuery,
         );
         const selectedRow = rows[state.modal.selectedRowIndex];
-        const configItems = buildConfigItems(state, rows, selectedRow);
+        const configState = state as ConfigModalState;
+        const configItems = buildConfigItems(configState, rows, selectedRow);
         if (state.modal.phase === "write-result") {
           return {
             mode: "info",
             title: "Change Saved",
-            eyebrow: selectedRow?.label,
-            items: buildConfigResultItems(state, selectedRow),
+              eyebrow: selectedRow?.label,
+              items: buildConfigResultItems(state, selectedRow),
+              returnTarget,
+              renderSpec: buildOverlayRenderSpec("config"),
+            };
+          }
+          return {
+          mode: "split",
+          title: buildConfigTitle(state),
+            eyebrow: buildConfigEyebrow(state),
+            listTitle: buildConfigListTitle(state),
+            detailTitle: buildConfigDetailTitle(state),
+            items: configItems.items,
+            selectedIndex: configItems.selectedIndex,
+            detailItems: buildConfigDetailItems(configState, selectedRow),
             returnTarget,
             renderSpec: buildOverlayRenderSpec("config"),
           };
-        }
-        return {
-          mode: "split",
-          title: buildConfigTitle(state),
-          eyebrow: buildConfigEyebrow(state),
-          listTitle: buildConfigListTitle(state),
-          detailTitle: buildConfigDetailTitle(state),
-          items: configItems.items,
-          selectedIndex: configItems.selectedIndex,
-          detailItems: buildConfigDetailItems(state, selectedRow),
-          returnTarget,
-          renderSpec: buildOverlayRenderSpec("config"),
-        };
-        }
+          }
 
-    if (state.modal.kind === "memory") {
-      return buildMemoryModal(state, returnTarget);
-    }
+      if (state.modal.kind === "memory") {
+        return buildMemoryModal(state as MemoryModalState, returnTarget);
+      }
 
-    if (state.modal.kind === "graph") {
-      return buildGraphModal(state, returnTarget);
-    }
+      if (state.modal.kind === "graph") {
+        return buildGraphModal(state as GraphModalState, returnTarget);
+      }
 
   return undefined;
 }
 
 function buildMemoryModal(
-  state: Extract<AppState, { modal: Extract<AppState["modal"], { kind: "memory" }> }>,
+  state: MemoryModalState,
   returnTarget: "command-palette" | undefined,
 ): ModalOptions {
   const memory = state.snapshot.memory;
@@ -289,7 +308,7 @@ function buildMemoryModal(
 }
 
 function buildGraphModal(
-  state: Extract<AppState, { modal: Extract<AppState["modal"], { kind: "graph" }> }>,
+  state: GraphModalState,
   returnTarget: "command-palette" | undefined,
 ): ModalOptions {
   const graphContext = state.snapshot.memory?.graphContext;
@@ -313,7 +332,7 @@ function buildGraphModal(
   };
 }
 
-function buildMemoryTabs(state: Extract<AppState, { modal: Extract<AppState["modal"], { kind: "memory" }> }>): string {
+function buildMemoryTabs(state: MemoryModalState): string {
   const tabs = ["overview", "corrections", "learnings", "ratchet", "config"] as const;
   return tabs.map((tab) => tab === state.modal.tab ? `[${tab}]` : tab).join(" ");
 }
@@ -334,7 +353,7 @@ function buildListOverlayFooter(returnTarget: "command-palette" | undefined): st
     : "Use arrows · Esc close";
 }
 
-function buildMemoryOverviewItems(memory: MissionControlSnapshot["memory"]) {
+function buildMemoryOverviewItems(memory: MissionControlSnapshot["memory"]): readonly ModalInfoItem[] {
   if (!memory) {
     return [{ text: "No memory system data available", tone: "muted" as const }];
   }
@@ -404,7 +423,7 @@ function buildCorrectionDetailItems(correction: NonNullable<MissionControlSnapsh
 function buildLearningDetailItems(
   memory: MissionControlSnapshot["memory"],
   selectedLearning: NonNullable<MissionControlSnapshot["memory"]>["rawLearnings"][number] | undefined,
-) {
+): readonly ModalInfoItem[] {
   if (!memory) {
     return [{ text: "No learning data available.", tone: "muted" as const }];
   }
@@ -435,7 +454,7 @@ function buildLearningDetailItems(
 function buildRatchetDetailItems(
   memory: MissionControlSnapshot["memory"],
   assertion: NonNullable<MissionControlSnapshot["memory"]>["ratchetSuite"]["assertions"][number] | undefined,
-) {
+): readonly ModalInfoItem[] {
   if (!memory) {
     return [{ text: "No ratchet data available.", tone: "muted" as const }];
   }
@@ -462,8 +481,8 @@ function buildRatchetDetailItems(
 
 function buildLearningActivityItems(
   memory: MissionControlSnapshot["memory"],
-  inspector: MissionControlSnapshot["configInspector"] | null,
-) {
+  inspector: MissionControlConfigInspector | null | undefined,
+): readonly ModalInfoItem[] {
   if (!memory) {
     return [{ text: "No learning data available.", tone: "muted" as const }];
   }
@@ -492,9 +511,9 @@ function buildLearningActivityItems(
 }
 
 function buildMemoryConfigItems(
-  inspector: MissionControlSnapshot["configInspector"] | null,
-): ModalOptions extends { mode: "info"; items: infer T } ? T : never {
-  const rows = getConfigRowsForTab(inspector, "memory");
+  inspector: MissionControlConfigInspector | null | undefined,
+): readonly ModalInfoItem[] {
+  const rows = getConfigRowsForTab(inspector ?? null, "memory");
   if (rows.length === 0) {
     return [{ text: "No memory config is available for this workspace.", tone: "muted" as const }];
   }
@@ -555,9 +574,9 @@ function findConfigValue(rows: readonly MissionControlConfigRow[], keyPath: stri
 }
 
 function getMemoryCompileThreshold(
-  inspector: MissionControlSnapshot["configInspector"] | null,
+  inspector: MissionControlConfigInspector | null | undefined,
 ): number | undefined {
-  const rows = getConfigRowsForTab(inspector, "memory");
+  const rows = getConfigRowsForTab(inspector ?? null, "memory");
   const threshold = rows.find((row) => row.keyPath === "memory.learnings.compile_threshold");
   const rawValue = threshold?.effectiveValueText ?? threshold?.valueText;
   if (!rawValue) return undefined;
@@ -708,7 +727,7 @@ function buildRecentDayKeys(memory: NonNullable<MissionControlSnapshot["memory"]
     ...memory.ratchetSuite.assertions.map((entry) => entry.createdAt),
     memory.compiledLearnings?.compiledAt ?? "",
   ].filter((value) => value.length > 0);
-  const latestDate = timestamps.length > 0 ? new Date(timestamps.sort().at(-1)!) : new Date();
+  const latestDate = timestamps.length > 0 ? new Date([...timestamps].sort().at(-1)!) : new Date();
 
   return Array.from({ length: 5 }, (_, index) => {
     const day = new Date(latestDate);
@@ -722,14 +741,30 @@ function countEntriesByDay(timestamps: readonly string[], dayKeys: readonly stri
 }
 
 function countRecentEntries(timestamps: readonly string[]): number {
-  const latest = timestamps.length > 0 ? new Date(timestamps.sort().at(-1)!) : new Date();
+  const latest = timestamps.length > 0 ? new Date([...timestamps].sort().at(-1)!) : new Date();
   const cutoff = new Date(latest);
   cutoff.setUTCDate(latest.getUTCDate() - 6);
   return timestamps.filter((timestamp) => new Date(timestamp) >= cutoff).length;
 }
 
 function formatShortDay(dayKey: string): string {
-  const [year, month, day] = dayKey.split("-").map((part) => Number(part));
+  const parts = dayKey.split("-").map((part) => Number(part));
+  if (parts.length !== 3) {
+    return dayKey;
+  }
+  const year = parts[0];
+  const month = parts[1];
+  const day = parts[2];
+  if (
+    year === undefined
+    || month === undefined
+    || day === undefined
+    || !Number.isFinite(year)
+    || !Number.isFinite(month)
+    || !Number.isFinite(day)
+  ) {
+    return dayKey;
+  }
   const date = new Date(Date.UTC(year, month - 1, day));
   return date.toLocaleString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 }
@@ -764,12 +799,13 @@ function buildOverlayFooter(returnTarget: "command-palette" | undefined, enterLa
 }
 
 function buildConfigTabs(state: AppState): string {
-  if (state.modal.kind !== "config") return "";
+  const modal = state.modal;
+  if (modal.kind !== "config") return "";
   const tabs = state.snapshot.configInspector?.tabs ?? [];
   const labelText = tabs
     .map((tab) => {
       const label = getConfigTabDisplayLabel(tab);
-      return tab === state.modal.tab ? `[${label}]` : label;
+      return tab === modal.tab ? `[${label}]` : label;
     })
     .join(" ");
   return labelText;
@@ -857,11 +893,9 @@ function buildConfigDetailTitle(state: AppState): string {
 }
 
 function buildConfigDetailItems(
-  state: AppState,
+  state: ConfigModalState,
   row: MissionControlConfigRow | undefined,
 ) {
-  if (state.modal.kind !== "config") return [];
-
   if (!row) {
     return [{
       text: state.modal.findQuery ? "Try a different search term." : "Choose a setting on the left to inspect it.",
@@ -896,8 +930,8 @@ function displayDraftValue(row: MissionControlConfigRow, draftValue?: string): s
     return formatOptionLabel(row, draftValue ?? row.effectiveValueText);
   }
 
-  function buildConfigItems(
-  state: AppState,
+function buildConfigItems(
+  state: ConfigModalState,
   rows: readonly MissionControlConfigRow[],
   selectedRow: MissionControlConfigRow | undefined,
 ): {
@@ -911,10 +945,7 @@ function displayDraftValue(row: MissionControlConfigRow, draftValue?: string): s
   }[];
   selectedIndex: number;
 } {
-  if (state.modal.kind !== "config") {
-    return { items: [], selectedIndex: 0 };
-  }
-    if (state.modal.phase === "choose-scope") {
+  if (state.modal.phase === "choose-scope") {
       if (selectedRow && isGlobalOnlyConfigKey(selectedRow.keyPath)) {
         return {
           items: [
@@ -970,7 +1001,7 @@ function displayDraftValue(row: MissionControlConfigRow, draftValue?: string): s
       selectedIndex: state.modal.selectedScope === "project" ? 0 : 1,
     };
   }
-    if (state.modal.phase === "edit-inline" && selectedRow?.options?.length) {
+  if (state.modal.phase === "edit-inline" && selectedRow?.options?.length) {
       return {
         items: selectedRow.keyPath === "execution.defaultWorker"
           ? buildWorkerChoiceItems(selectedRow)
@@ -1009,10 +1040,10 @@ function displayDraftValue(row: MissionControlConfigRow, draftValue?: string): s
     };
   }
 
-  function buildConfigBrowseDetailItems(
-    state: AppState,
-    row: MissionControlConfigRow,
-  ) {
+function buildConfigBrowseDetailItems(
+  state: ConfigModalState,
+  row: MissionControlConfigRow,
+) {
     const targetScope = resolveConfigScopeForKey(row.keyPath, state.modal.selectedScope);
     const globalOnly = isGlobalOnlyConfigKey(row.keyPath);
     return [
@@ -1028,10 +1059,10 @@ function displayDraftValue(row: MissionControlConfigRow, draftValue?: string): s
     ];
   }
 
-  function buildConfigEditDetailItems(
-    state: AppState,
-    row: MissionControlConfigRow,
-  ) {
+function buildConfigEditDetailItems(
+  state: ConfigModalState,
+  row: MissionControlConfigRow,
+) {
     const targetScope = resolveConfigScopeForKey(row.keyPath, state.modal.selectedScope);
     const globalOnly = isGlobalOnlyConfigKey(row.keyPath);
     return [
@@ -1048,10 +1079,10 @@ function displayDraftValue(row: MissionControlConfigRow, draftValue?: string): s
     ];
   }
 
-  function buildDefaultWorkerDetailItems(
-    state: AppState,
-    row: MissionControlConfigRow,
-  ) {
+function buildDefaultWorkerDetailItems(
+  state: ConfigModalState,
+  row: MissionControlConfigRow,
+) {
   const targetScope = resolveConfigScopeForKey(row.keyPath, state.modal.selectedScope);
   const choice = row.workerChoices?.find((item) => item.slug === (state.modal.draftValue ?? row.effectiveValueText))
     ?? row.workerChoices?.[0];
@@ -1074,10 +1105,10 @@ function displayDraftValue(row: MissionControlConfigRow, draftValue?: string): s
     ];
 }
 
-  function buildConfigScopeDetailItems(
-    state: AppState,
-    row: MissionControlConfigRow,
-  ) {
+function buildConfigScopeDetailItems(
+  state: ConfigModalState,
+  row: MissionControlConfigRow,
+) {
     if (isGlobalOnlyConfigKey(row.keyPath)) {
       return [
         { text: "Global-only setting", tone: "accent" as const, style: "block" as const },
@@ -1098,10 +1129,10 @@ function displayDraftValue(row: MissionControlConfigRow, draftValue?: string): s
   ];
 }
 
-  function buildConfigConfirmDetailItems(
-    state: AppState,
-    row: MissionControlConfigRow,
-  ) {
+function buildConfigConfirmDetailItems(
+  state: ConfigModalState,
+  row: MissionControlConfigRow,
+) {
     const targetScope = resolveConfigScopeForKey(row.keyPath, state.modal.selectedScope);
   const previewLines = state.modal.kind === "config" && state.modal.preview
     ? state.modal.preview.content.split("\n").filter((line) => line.length > 0).slice(0, 8)

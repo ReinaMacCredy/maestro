@@ -40,7 +40,7 @@ describe("checkRatchet", () => {
 
     const result = await checkRatchet(store, dir);
     expect(result.passed).toBe(false);
-    expect(result.results[0].passed).toBe(false);
+    expect(result.results[0]!.passed).toBe(false);
   });
 
   it("returns empty results for empty suite", async () => {

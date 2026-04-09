@@ -23,9 +23,9 @@ describe("FsLearningStoreAdapter", () => {
 
     const all = await store.listRaw();
     expect(all.length).toBe(2);
-    expect(all[0].content).toBe("learning one");
-    expect(all[1].content).toBe("learning two");
-    expect(all[1].branch).toBe("main");
+    expect(all[0]!.content).toBe("learning one");
+    expect(all[1]!.content).toBe("learning two");
+    expect(all[1]!.branch).toBe("main");
   });
 
   it("counts raw entries", async () => {

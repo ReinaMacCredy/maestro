@@ -174,14 +174,15 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
     }
 
     if (action.type === "config-preview" && state.modal.kind === "config") {
-      if (state.modal.phase === "browse") {
+      const modal = state.modal;
+      if (modal.phase === "browse") {
         const nextState = reduce(state, { type: "enter" });
         if (nextState !== state) {
           state = nextState;
           markDirty();
         }
       }
-      if (state.modal.phase === "edit-inline") {
+      if (state.modal.kind === "config" && state.modal.phase === "edit-inline") {
         await prepareConfigReview();
       }
       return;
@@ -394,6 +395,7 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
     )[state.modal.selectedRowIndex];
     if (!row) return;
     const selectedScope = resolveConfigScopeForKey(row.keyPath, state.modal.selectedScope);
+    const draftValue = state.modal.draftValue ?? row.effectiveValueText;
 
     state = reduce(state, { type: "config-submit-start" });
     markDirty();
@@ -404,14 +406,14 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
         process.cwd(),
         selectedScope,
         row.keyPath,
-        state.modal.draftValue ?? row.effectiveValueText,
+        draftValue,
       );
       await applyConfigEdit(
         opts.snapshotDeps.config,
         process.cwd(),
         selectedScope,
         row.keyPath,
-        state.modal.draftValue ?? row.effectiveValueText,
+        draftValue,
       );
 
       try {

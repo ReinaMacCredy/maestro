@@ -20,6 +20,13 @@ export async function pickupUkiHandoff(
   handoffStore: HandoffStorePort,
   opts: PickupUkiHandoffOptions = {},
 ): Promise<UkiHandoff> {
+  if (opts.claim) {
+    const claimed = await handoffStore.claimPending(opts.id, opts.pickedUpBy);
+    if (claimed) {
+      return claimed;
+    }
+  }
+
   let handoff: UkiHandoff | undefined;
   if (opts.id) {
     handoff = await handoffStore.get(opts.id);
@@ -33,18 +40,9 @@ export async function pickupUkiHandoff(
     handoff = await handoffStore.getLatestPending();
     if (!handoff) {
       throw new MaestroError("No pending handoffs to pick up", [
-        "Create one: maestro handoff create --summary '...' --next-action '...' --artifact 'branch_<name>' --confidence-work 0.9",
+        "Create one: maestro handoff create --session-core '...' --summary '...' --next-action '...' --artifact 'branch_<name>' --confidence-work 0.9",
         "Or list all: maestro handoff list",
       ]);
-    }
-  }
-
-  if (opts.claim && handoff.status === "pending") {
-    const updated = await handoffStore.updateStatus(handoff.id, "picked-up", {
-      pickedUpBy: opts.pickedUpBy,
-    });
-    if (updated) {
-      handoff = updated;
     }
   }
 

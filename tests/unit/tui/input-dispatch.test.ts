@@ -37,7 +37,7 @@ const SNAPSHOT: MissionControlSnapshot = {
   pendingHandoffs: [],
   configSummary: null,
   configInspector: {
-    tabs: ["overview", "effective", "project", "global", "defaults", "workers", "plan", "doctor"],
+    tabs: ["overview", "effective", "project", "global", "defaults", "workers", "plan", "doctor", "memory"],
     rowsByTab: {
       overview: [],
         effective: [{
@@ -63,6 +63,7 @@ const SNAPSHOT: MissionControlSnapshot = {
       workers: [],
       plan: [],
       doctor: [],
+      memory: [],
     },
     hasProjectConfig: true,
     hasGlobalConfig: true,
