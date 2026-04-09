@@ -278,6 +278,22 @@ SESSION_CORE-handoff_real_example
 |SUMMARY-Handoff_real_example-ready-low_risk
 ```
 
+If you want only the raw UKI string for piping into another agent or tool, use:
+
+```bash
+maestro handoff create \
+  --session-core "handoff_real_example" \
+  --summary "Handoff_real_example-ready-low_risk" \
+  --next-action "pick_up_auth_impl" \
+  --decision-basis preserve_pickup_clarity \
+  --validation compiled_cli_green \
+  --artifact file_src_auth_ts \
+  --blind-spot green_tests_masked_drift \
+  --metaphor baton_pass_snapshot \
+  --confidence-work 0.9 \
+  --uki
+```
+
 ### Pickup output formats
 
 `maestro handoff pickup` supports three output modes:

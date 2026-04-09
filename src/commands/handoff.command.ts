@@ -21,6 +21,7 @@ import { createUkiHandoff } from "../usecases/create-uki-handoff.usecase.js";
 import { pickupUkiHandoff } from "../usecases/pickup-uki-handoff.usecase.js";
 import { listUkiHandoffs } from "../usecases/list-uki-handoffs.usecase.js";
 
+type CreateFormat = "json" | "text" | "uki";
 type PickupFormat = "json" | "markdown" | "uki";
 
   export function registerHandoffCommand(program: Command): void {
@@ -50,26 +51,27 @@ type PickupFormat = "json" | "markdown" | "uki";
       .option("--confidence-work <number>", "CS.work (0..1)", parseFloatStrict)
       .option("--confidence-summary <number>", "CS.summary (0..1)", parseFloatStrict)
       .option("--agent <name>", "Override agent identity (default: auto-detect)")
-    .option("--session-id <id>", "Override session id (default: auto-detect)")
-    .option("--json", "Output as JSON")
-    .action(async (opts) => {
-      const services = getServices();
-      const isJson = resolveJsonFlag(opts, program);
+      .option("--session-id <id>", "Override session id (default: auto-detect)")
+      .option("--json", "Output as JSON")
+      .option("--uki", "Output only the raw UKI v5.3 compressed string")
+      .action(async (opts) => {
+        const services = getServices();
+        const format = resolveCreateFormat(opts, program);
 
-      const slots = buildSlotsFromOptions(opts);
-      const handoff = await createUkiHandoff(
+        const slots = buildSlotsFromOptions(opts);
+        const handoff = await createUkiHandoff(
         services.handoffStore,
         services.sessionDetect,
         process.cwd(),
         {
           slots,
           agent: opts.agent,
-          sessionId: opts.sessionId,
-        },
-      );
+            sessionId: opts.sessionId,
+          },
+        );
 
-      output(isJson, handoff, formatHandoffCreate);
-    });
+        printCreate(handoff, format);
+      });
 
   handoffCmd
     .command("pickup")
@@ -179,6 +181,23 @@ function parseFloatStrict(raw: string): number {
   return n;
 }
 
+function resolveCreateFormat(
+  opts: Record<string, unknown>,
+  program: { opts(): Record<string, unknown> },
+): CreateFormat {
+  const flags = [Boolean(opts.uki), Boolean(opts.json)];
+  const count = flags.filter(Boolean).length;
+  if (count > 1) {
+    throw new MaestroError(
+      "--json and --uki are mutually exclusive",
+      ["Pick one output format for maestro handoff create"],
+    );
+  }
+  if (opts.uki) return "uki";
+  if (opts.json || resolveJsonFlag(opts, program)) return "json";
+  return "text";
+}
+
 function resolvePickupFormat(
   opts: Record<string, unknown>,
   program: { opts(): Record<string, unknown> },
@@ -195,6 +214,14 @@ function resolvePickupFormat(
   if (opts.markdown) return "markdown";
   if (opts.json || resolveJsonFlag(opts, program)) return "json";
   return "json";
+}
+
+function printCreate(handoff: UkiHandoff, format: CreateFormat): void {
+  if (format === "uki") {
+    console.log(handoff.uki);
+    return;
+  }
+  output(format === "json", handoff, formatHandoffCreate);
 }
 
 function printPickup(handoff: UkiHandoff, format: PickupFormat): void {

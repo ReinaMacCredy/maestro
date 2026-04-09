@@ -37,7 +37,7 @@ async function run(
   return { stdout: stdout.trim(), stderr: stderr.trim(), exitCode };
 }
 
-describe("UKI handoff roundtrip", () => {
+  describe("UKI handoff roundtrip", () => {
   let tmpDir: string;
 
   beforeEach(async () => {
@@ -48,7 +48,7 @@ describe("UKI handoff roundtrip", () => {
     await rm(tmpDir, { recursive: true, force: true });
   });
 
-  it("create -> list -> pickup --uki -> parseUki round-trips faithfully", async () => {
+    it("create -> list -> pickup --uki -> parseUki round-trips faithfully", async () => {
     const create = await run(
       [
         "handoff",
@@ -105,8 +105,37 @@ describe("UKI handoff roundtrip", () => {
 
     // parseUki should deep-equal the created slots (read back from JSON)
     const parsed = parseUki(rawUki);
-    expect(parsed).toEqual(created.slots);
-  }, SLOW_CLI_TIMEOUT_MS);
+      expect(parsed).toEqual(created.slots);
+    }, SLOW_CLI_TIMEOUT_MS);
+
+    it("create --uki returns only the raw UKI payload", async () => {
+      const create = await run(
+        [
+          "handoff",
+          "create",
+          "--session-core", "uki_only_test",
+          "--summary", "Uki_only_test-direct-low_risk",
+          "--next-action", "pipe_to_agent",
+          "--decision-basis", "keep_create_pipelineable",
+          "--validation", "compiled_green",
+          "--artifact", "file_src_uki_format",
+          "--confidence-work", "0.96",
+          "--confidence-summary", "0.93",
+          "--uki",
+        ],
+        tmpDir,
+      );
+
+      expect(create.exitCode).toBe(0);
+      expect(create.stdout.startsWith("SESSION_CORE-uki_only_test|")).toBe(true);
+      expect(create.stdout.includes("\n")).toBe(false);
+      expect(create.stdout.includes("[ok] Handoff created")).toBe(false);
+
+      const parsed = parseUki(create.stdout);
+      expect(parsed.nextAction).toBe("pipe_to_agent");
+      expect(parsed.decisionBasis).toEqual(["keep_create_pipelineable"]);
+      expect(parsed.validationState).toEqual(["compiled_green"]);
+    }, SLOW_CLI_TIMEOUT_MS);
 
   it("list --status filters by status", async () => {
     await run(
