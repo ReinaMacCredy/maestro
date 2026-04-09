@@ -1,4 +1,4 @@
-import type { Feature } from "@/features/mission/domain/mission-types.js";
+import type { Feature } from "@/features/mission";
 import type { MissionControlWorkerFitRecommendation } from "../tui/state/types.js";
 
 const WORKER_KEYWORDS: Readonly<Record<string, readonly string[]>> = {

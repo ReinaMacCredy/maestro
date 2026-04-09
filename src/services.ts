@@ -2,10 +2,12 @@ import type { GitPort } from "./ports/git.port.js";
 import type { ConfigPort } from "./ports/config.port.js";
 import type { SessionDetectPort } from "./features/session/ports/session-detect.port.js";
 import type { NotesStorePort } from "./features/notes/ports/notes-store.port.js";
-import type { MissionStorePort } from "./features/mission/ports/mission-store.port.js";
-import type { FeatureStorePort } from "./features/mission/feature/ports/feature-store.port.js";
-import type { AssertionStorePort } from "./features/mission/validation/ports/assertion-store.port.js";
-import type { CheckpointStorePort } from "./features/mission/checkpoint/ports/checkpoint-store.port.js";
+import type {
+  MissionStorePort,
+  FeatureStorePort,
+  AssertionStorePort,
+  CheckpointStorePort,
+} from "./features/mission";
 import type { CorrectionStorePort } from "./features/memory/ports/correction-store.port.js";
 import type { LearningStorePort } from "./features/memory/ports/learning-store.port.js";
 import type { RatchetStorePort } from "./features/ratchet/ports/ratchet-store.port.js";
@@ -13,10 +15,7 @@ import type { ProjectGraphStorePort } from "./features/graph/ports/project-graph
 import type { HandoffStorePort } from "./features/handoff/ports/handoff-store.port.js";
 import { ShellGitAdapter } from "./adapters/git.adapter.js";
 import { YamlConfigAdapter } from "./adapters/config.adapter.js";
-import { FsMissionStoreAdapter } from "./features/mission/adapters/mission-store.adapter.js";
-import { FsFeatureStoreAdapter } from "./features/mission/feature/adapters/feature-store.adapter.js";
-import { FsAssertionStoreAdapter } from "./features/mission/validation/adapters/assertion-store.adapter.js";
-import { FsCheckpointStoreAdapter } from "./features/mission/checkpoint/adapters/checkpoint-store.adapter.js";
+import { buildMissionServices } from "./features/mission/services.js";
 import { buildSessionServices } from "./features/session/services.js";
 import { buildNotesServices } from "./features/notes/services.js";
 import { buildRatchetServices } from "./features/ratchet/services.js";
@@ -46,10 +45,7 @@ export function initServices(projectDir: string): Services {
   instance = {
     git: new ShellGitAdapter(),
     config: new YamlConfigAdapter(),
-    missionStore: new FsMissionStoreAdapter(projectDir),
-    featureStore: new FsFeatureStoreAdapter(projectDir),
-    assertionStore: new FsAssertionStoreAdapter(projectDir),
-    checkpointStore: new FsCheckpointStoreAdapter(projectDir),
+    ...buildMissionServices(projectDir),
     ...buildSessionServices(),
     ...buildNotesServices(projectDir),
     ...buildRatchetServices(projectDir),

@@ -53,9 +53,9 @@ export interface NoteEntry {
 
 /** A single phase in a workflow template */
 export interface WorkflowPhase {
-  readonly kind: import("./mission-types.js").MilestoneKind;
+  readonly kind: import("@/features/mission").MilestoneKind;
   readonly label: string;
-  readonly profile?: import("./mission-types.js").MilestoneProfile;
+  readonly profile?: import("@/features/mission").MilestoneProfile;
   readonly description?: string;
 }
 

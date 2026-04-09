@@ -13,7 +13,7 @@ import type {
   FeatureStatus,
   MilestoneKind,
   MilestoneProfile,
-} from "@/features/mission/domain/mission-types.js";
+} from "@/features/mission";
 import type { DoctorCheck, GitFileChange, MissionControlBackgroundMode } from "../../domain/types.js";
 import type {
   CompiledLearnings,

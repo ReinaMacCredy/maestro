@@ -20,7 +20,7 @@ import {
   type ModalInfoItem,
   type ModalOptions,
 } from "../shared/modal-model.js";
-import { getValidFeatureTransitions } from "@/features/mission/domain/mission-state.js";
+import { getValidFeatureTransitions } from "@/features/mission";
 import { FEATURE_STATUS_LABEL, FEATURE_TASK_STATUS_LABEL } from "../theme.js";
 import { shortenSessionId } from "../session-id.js";
 import { GRAPH_DIR } from "../../domain/defaults.js";

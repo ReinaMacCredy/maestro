@@ -18,7 +18,7 @@ import type {
 import { generateMissionId } from "../domain/mission-id.js";
 import { MaestroError } from "@/shared/errors.js";
 import type { MaestroConfig, WorkflowTemplate } from "@/domain/types.js";
-import { BUILT_IN_WORKFLOWS } from "@/domain/defaults.js";
+import { BUILT_IN_WORKFLOWS } from "../domain/workflows.js";
 import {
   validateCreateMissionInput,
   validateMissionPlanFile,

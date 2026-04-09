@@ -3,24 +3,29 @@
  * Composes a self-contained markdown worker assignment using mission context,
  * milestone context, feature verification details, and skill documentation.
  */
-import type { FeatureStorePort } from "@/features/mission/feature/ports/feature-store.port.js";
-import type { MissionStorePort } from "@/features/mission/ports/mission-store.port.js";
-import type { AssertionStorePort } from "@/features/mission/validation/ports/assertion-store.port.js";
+import type {
+  FeatureStorePort,
+  MissionStorePort,
+  AssertionStorePort,
+  Feature,
+  Mission,
+  Milestone,
+  Assertion,
+  MilestoneProfile,
+} from "@/features/mission";
+import { WORKER_TYPE_PATTERN, parseWorkerReport } from "@/features/mission";
 import {
   recallMemory,
   type CorrectionStorePort,
   type LearningStorePort,
   type RecallResult,
 } from "@/features/memory";
-import type { Feature, Mission, Milestone, Assertion, MilestoneProfile } from "@/features/mission/domain/mission-types.js";
 import { MaestroError } from "@/shared/errors.js";
-import { WORKER_TYPE_PATTERN } from "@/features/mission/domain/mission-validators.js";
 import { readText, writeText, ensureDir } from "../lib/fs.js";
 import { sanitizeInlinePromptContent, sanitizePromptContent } from "../lib/sanitize.js";
 import { dirname, join, resolve } from "node:path";
 import { MAESTRO_DIR } from "../domain/defaults.js";
 import { assertSafeSegment, resolveWithin } from "../lib/path-safety.js";
-import { parseWorkerReport } from "@/features/mission/feature/usecases/feature-lifecycle.usecase.js";
 
 interface PreviousMilestoneReport {
   readonly featureId: string;

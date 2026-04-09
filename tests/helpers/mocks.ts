@@ -3,10 +3,12 @@ import type { ConfigPort } from "@/ports/config.port.js";
 import type { ConfigLayers } from "@/ports/config.port.js";
 import type { SessionDetectPort } from "@/features/session";
 import type { NotesStorePort } from "@/features/notes";
-import type { MissionStorePort } from "@/features/mission/ports/mission-store.port.js";
-import type { FeatureStorePort } from "@/features/mission/feature/ports/feature-store.port.js";
-import type { AssertionStorePort } from "@/features/mission/validation/ports/assertion-store.port.js";
-import type { CheckpointStorePort } from "@/features/mission/checkpoint/ports/checkpoint-store.port.js";
+import type {
+  MissionStorePort,
+  FeatureStorePort,
+  AssertionStorePort,
+  CheckpointStorePort,
+} from "@/features/mission";
 import type {
   CorrectionStorePort,
   LearningStorePort,
@@ -35,7 +37,7 @@ import type {
   UpdateMissionInput,
   UpdateFeatureInput,
   UpdateAssertionInput,
-} from "@/features/mission/domain/mission-types.js";
+} from "@/features/mission";
 
 export function mockGit(overrides: Partial<GitPort> = {}): GitPort {
   return {

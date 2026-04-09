@@ -2,9 +2,8 @@ import { createCliRenderer, MouseButton, type MouseEvent } from "@opentui/core";
 import { createRoot, flushSync } from "@opentui/react";
 import { useState } from "react";
 
-import { getValidFeatureTransitions } from "@/features/mission/domain/mission-state.js";
+import { getValidFeatureTransitions, updateFeature } from "@/features/mission";
 import { applyConfigEdit, previewConfigEdit } from "../../../usecases/config-edit.usecase.js";
-import { updateFeature } from "@/features/mission/feature/usecases/feature-lifecycle.usecase.js";
 import {
   getCommandPaletteSelectionAction,
   getFilteredCommandPaletteItems,

@@ -2,7 +2,7 @@
  * TUI theme -- status-to-color maps and palette constants.
  * Uses 256-color indices for broad terminal compatibility.
  */
-import type { MissionStatus, FeatureStatus, MilestoneStatus, AssertionResult, MilestoneKind, MilestoneProfile } from "@/features/mission/domain/mission-types.js";
+import type { MissionStatus, FeatureStatus, MilestoneStatus, AssertionResult, MilestoneKind, MilestoneProfile } from "@/features/mission";
 
 // ── Palette (256-color) ─────────────────────────────
 

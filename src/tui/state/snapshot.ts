@@ -3,10 +3,12 @@
  * Polls once -- no subscriptions, no event tailing.
  */
 import { basename } from "node:path";
-import type { MissionStorePort } from "@/features/mission/ports/mission-store.port.js";
-import type { FeatureStorePort } from "@/features/mission/feature/ports/feature-store.port.js";
-import type { AssertionStorePort } from "@/features/mission/validation/ports/assertion-store.port.js";
-import type { CheckpointStorePort } from "@/features/mission/checkpoint/ports/checkpoint-store.port.js";
+import type {
+  MissionStorePort,
+  FeatureStorePort,
+  AssertionStorePort,
+  CheckpointStorePort,
+} from "@/features/mission";
 import type { ConfigPort } from "../../ports/config.port.js";
 import type { GitPort } from "../../ports/git.port.js";
 import type { CorrectionStorePort, LearningStorePort } from "@/features/memory";
@@ -14,11 +16,15 @@ import { buildMemoryStats } from "@/features/memory";
 import type { RatchetStorePort } from "@/features/ratchet";
 import type { ProjectGraphStorePort } from "@/features/graph";
 import type { HandoffStorePort, UkiHandoff } from "@/features/handoff";
-import type { Mission, Feature } from "@/features/mission/domain/mission-types.js";
+import {
+  type Mission,
+  type Feature,
+  generateMissionReport,
+  type MissionReport,
+  getValidFeatureTransitions,
+} from "@/features/mission";
 import { getMissionControlBackgroundMode, listIgnoredProjectConfigKeys } from "../../domain/ui-config.js";
 import type { DoctorCheck, StatusReport } from "../../domain/types.js";
-import { generateMissionReport, type MissionReport } from "@/features/mission/usecases/mission-report.usecase.js";
-import { getValidFeatureTransitions } from "@/features/mission/domain/mission-state.js";
 import { getGraphContext } from "@/features/graph";
 import { deriveEvents } from "./events.js";
 import { buildConfigInspector } from "./config-inspector.js";

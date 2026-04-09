@@ -6,7 +6,7 @@ import type { Command } from "commander";
 import { getServices } from "../services.js";
 import { output, resolveJsonFlag } from "../lib/output.js";
 import { MaestroError } from "@/shared/errors.js";
-import type { MissionStorePort } from "@/features/mission/ports/mission-store.port.js";
+import type { MissionStorePort } from "@/features/mission";
 import {
   renderDashboard,
   renderPreviewFrame,
