@@ -8,9 +8,10 @@
  * These wrappers add TTL caching so the vast majority of poll cycles spawn
  * zero processes.
  */
-import type { GitPort } from "../ports/git.port.js";
-import type { ConfigPort, ConfigLayers, ConfigScope } from "../ports/config.port.js";
-import type { GitState, MaestroConfig } from "../domain/types.js";
+import type { GitPort } from "@/infra/ports/git.port.js";
+import type { ConfigPort, ConfigLayers, ConfigScope } from "@/infra/ports/config.port.js";
+import type { GitState } from "@/infra/domain/git-types.js";
+import type { MaestroConfig } from "@/infra/domain/config-types.js";
 
 interface CacheEntry<T> {
   value: T;

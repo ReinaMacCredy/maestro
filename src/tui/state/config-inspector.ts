@@ -1,10 +1,11 @@
 import type { Feature } from "@/features/mission";
-import { listIgnoredProjectConfigKeys, isGlobalOnlyConfigKey } from "../../domain/ui-config.js";
-import type { DoctorCheck, MaestroConfig } from "../../domain/types.js";
+import { listIgnoredProjectConfigKeys, isGlobalOnlyConfigKey } from "@/shared/domain/ui-config.js";
+import type { DoctorCheck } from "@/infra/domain/status-types.js";
+import type { MaestroConfig } from "@/infra/domain/config-types.js";
 import type { WorkerConfig } from "@/features/worker";
 import { formatWorkerLabel, getWorkerGuidance, recommendWorkerFit } from "@/features/worker";
-import { cachedWhich } from "../../lib/snapshot-poll-cache.js";
-import type { ConfigScope, ConfigLayers } from "../../ports/config.port.js";
+import { cachedWhich } from "@/tui/lib/snapshot-poll-cache.js";
+import type { ConfigScope, ConfigLayers } from "@/infra/ports/config.port.js";
 import type {
   MissionControlConfigEditKind,
   MissionControlConfigInspector,

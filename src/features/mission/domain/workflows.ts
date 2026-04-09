@@ -1,4 +1,4 @@
-import type { WorkflowTemplate } from "@/domain/types.js";
+import type { WorkflowTemplate } from "./workflow-types.js";
 
 /** Built-in workflow templates */
 export const BUILT_IN_WORKFLOWS: Readonly<Record<string, WorkflowTemplate>> = {

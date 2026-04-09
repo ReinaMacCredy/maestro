@@ -2,8 +2,8 @@ import { describe, expect, it, beforeEach, afterEach } from "bun:test";
 import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { initMaestro } from "@/usecases/init.usecase.js";
-import { mockConfig } from "../../helpers/mocks.js";
+import { initMaestro } from "@/infra/usecases/init.usecase.js";
+import { mockConfig } from "../../../helpers/mocks.js";
 
 let tmpDir: string;
 

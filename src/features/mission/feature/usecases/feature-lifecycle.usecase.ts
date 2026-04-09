@@ -11,9 +11,9 @@ import type {
 } from "../../domain/mission-types.js";
 import { MaestroError } from "@/shared/errors.js";
 import { assertFeatureTransition } from "../../domain/mission-state.js";
-import { writeJson, readJson, ensureDir } from "@/lib/fs.js";
+import { writeJson, readJson, ensureDir } from "@/shared/lib/fs.js";
 import { join } from "node:path";
-import { MAESTRO_DIR } from "@/domain/defaults.js";
+import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 
 /** Result of listing features */
 export interface ListFeaturesResult {
@@ -173,7 +173,7 @@ export async function parseWorkerReport(
   if (reportValue.startsWith("@")) {
     // Read from file
     const filePath = reportValue.slice(1);
-    const { readText } = await import("@/lib/fs.js");
+    const { readText } = await import("@/shared/lib/fs.js");
     const content = await readText(filePath);
     if (content === undefined) {
       throw new MaestroError(`Report file not found: ${filePath}`, [

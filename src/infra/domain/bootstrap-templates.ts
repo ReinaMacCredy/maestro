@@ -4,6 +4,42 @@ export interface BootstrapTemplateFile {
   readonly executable?: boolean;
 }
 
+/**
+ * Phase 1 strip: the old AGENT_INSTRUCTION_BLOCK described deleted
+ * handoff-* commands. This replacement block advertises only the
+ * mission/feature/memory surfaces that survive the v1.0.0 strip.
+ * Phase 2 will extend it with the UKI handoff workflow.
+ * The block is now static (no `{{agent}}` placeholder) because the
+ * legacy `handoff-pickup --agent <slug>` flow is gone.
+ */
+export const AGENT_INSTRUCTION_BLOCK = `## Maestro Conductor (shared score)
+
+Projects with \`.maestro/\` hold mission and memory state that all agents share.
+
+**See what is in flight:**
+\`\`\`bash
+maestro status --json
+maestro mission list --json
+maestro feature list --mission <id> --json
+\`\`\`
+
+**Read a worker prompt (with injected memory):**
+\`\`\`bash
+maestro feature prompt <featureId> --mission <id>
+\`\`\`
+
+**Capture a correction rule for future sessions:**
+\`\`\`bash
+maestro memory-correct "use bun not npm" --trigger "package,install,npm"
+\`\`\`
+
+**Report feature progress:**
+\`\`\`bash
+maestro feature update <featureId> --mission <id> --status <status> --report @report.json
+\`\`\`
+
+**When to use**: Start every session with \`maestro status\` to see shared state. Use \`maestro feature prompt\` to read the current feature's briefing with memory context auto-injected.`;
+
 export const PROJECT_BOOTSTRAP_TEMPLATES: readonly BootstrapTemplateFile[] = [
   {
     path: ".maestro/AGENTS.md",

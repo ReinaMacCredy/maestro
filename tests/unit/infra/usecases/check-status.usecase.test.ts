@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { UkiHandoff } from "@/features/handoff";
-import { checkStatus } from "@/usecases/check-status.usecase.js";
-import { mockConfig, mockGit } from "../../helpers/mocks.js";
+import { checkStatus } from "@/infra/usecases/check-status.usecase.js";
+import { mockConfig, mockGit } from "../../../helpers/mocks.js";
 import type { HandoffStorePort } from "@/features/handoff";
 
 function makeHandoffStore(count: number): HandoffStorePort {
@@ -60,5 +60,10 @@ describe("checkStatus", () => {
     );
 
     expect(status.pendingHandoffs).toHaveLength(2);
+    expect(status.pendingHandoffs[0]).toEqual({
+      id: "2026-04-09-001",
+      agent: "codex",
+      createdAt: "2026-04-09T00:00:00.000Z",
+    });
   });
 });

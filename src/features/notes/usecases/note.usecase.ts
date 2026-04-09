@@ -1,6 +1,6 @@
-import type { NoteEntry } from "@/domain/types.js";
+import type { NoteEntry } from "../domain/types.js";
 import { MaestroError } from "@/shared/errors.js";
-import type { GitPort } from "@/ports/git.port.js";
+import type { GitPort } from "@/infra/ports/git.port.js";
 import type { NotesStorePort } from "../ports/notes-store.port.js";
 
 export interface CreateNoteOpts {

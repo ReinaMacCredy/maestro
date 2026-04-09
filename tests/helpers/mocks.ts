@@ -1,6 +1,6 @@
-import type { GitPort } from "@/ports/git.port.js";
-import type { ConfigPort } from "@/ports/config.port.js";
-import type { ConfigLayers } from "@/ports/config.port.js";
+import type { GitPort } from "@/infra/ports/git.port.js";
+import type { ConfigPort } from "@/infra/ports/config.port.js";
+import type { ConfigLayers } from "@/infra/ports/config.port.js";
 import type { SessionDetectPort } from "@/features/session";
 import type { NotesStorePort } from "@/features/notes";
 import type {
@@ -20,12 +20,10 @@ import type {
 } from "@/features/memory";
 import type { RatchetStorePort, RatchetSuite, RatchetBaseline } from "@/features/ratchet";
 import type { ProjectGraphStorePort, ProjectGraph } from "@/features/graph";
-import type {
-  GitState,
-  MaestroConfig,
-  AgentSession,
-  NoteEntry,
-} from "@/domain/types.js";
+import type { GitState } from "@/infra/domain/git-types.js";
+import type { MaestroConfig } from "@/infra/domain/config-types.js";
+import type { AgentSession } from "@/features/session";
+import type { NoteEntry } from "@/features/notes";
 import type {
   Mission,
   Feature,

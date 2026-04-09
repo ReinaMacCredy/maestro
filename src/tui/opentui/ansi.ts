@@ -1,5 +1,5 @@
 import { TextAttributes, getBaseAttributes } from "@opentui/core";
-import { sanitizeTerminalText } from "../../lib/sanitize.js";
+import { sanitizeTerminalText } from "@/shared/lib/sanitize.js";
 
 import type { CapturedFrame, CapturedSpan } from "@opentui/core";
 

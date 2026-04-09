@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { FsHandoffStoreAdapter } from "@/features/handoff";
-import type { AgentSession } from "@/domain/types.js";
+import type { AgentSession } from "@/features/session";
 import type { ExecuteUkiHandoffContent } from "@/features/handoff";
 import { MaestroError } from "@/shared/errors.js";
 import type { SessionDetectPort } from "@/features/session";

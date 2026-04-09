@@ -9,7 +9,7 @@ interface ShellMemorySample {
 }
 
 async function runShellProbe(script: string): Promise<readonly ShellMemorySample[]> {
-  const repoRoot = join(import.meta.dir, "..", "..", "..");
+  const repoRoot = join(import.meta.dir, "..", "..", "..", "..");
   const proc = Bun.spawn(["bun", "-e", script], {
     cwd: repoRoot,
     stdout: "pipe",
@@ -36,7 +36,7 @@ function growthMb(
 describe("shell exec helpers", () => {
   it("keeps memory bounded across repeated command execution", async () => {
     const samples = await runShellProbe(`
-      import { execArgv } from "./src/lib/shell.ts";
+      import { execArgv } from "./src/shared/lib/shell.ts";
 
       const cwd = process.cwd();
       const samples = [];
@@ -62,7 +62,7 @@ describe("shell exec helpers", () => {
 
   it("returns a timeout result instead of leaking a hanging child", async () => {
     const samples = await runShellProbe(`
-      import { execArgv } from "./src/lib/shell.ts";
+      import { execArgv } from "./src/shared/lib/shell.ts";
       const result = await execArgv(["sleep", "2"], { timeout: 100 });
       console.log(JSON.stringify([{
         iteration: 1,

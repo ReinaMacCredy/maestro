@@ -1,4 +1,4 @@
-import type { AgentSession } from "@/domain/types.js";
+import type { AgentSession } from "../domain/types.js";
 
 /**
  * Phase 1 strip: the conductor now owns only identity detection

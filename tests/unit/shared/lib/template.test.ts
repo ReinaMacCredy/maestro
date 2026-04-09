@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { renderTemplate } from "@/lib/template.js";
+import { renderTemplate } from "@/shared/lib/template.js";
 
 describe("renderTemplate", () => {
   it("substitutes simple variables", () => {

@@ -8,9 +8,9 @@
 import { join } from "node:path";
 import { open, readdir, stat } from "node:fs/promises";
 import { setTimeout as sleep } from "node:timers/promises";
-import { MAESTRO_DIR } from "@/domain/defaults.js";
+import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { NO_SESSION_ID } from "../domain/constants.js";
-import { generateHandoffId, HANDOFF_ID_PATTERN } from "@/domain/id.js";
+import { generateHandoffId, HANDOFF_ID_PATTERN } from "@/shared/domain/id.js";
 import type {
   CreateUkiHandoffInput,
   ExecuteUkiHandoffContent,
@@ -21,9 +21,9 @@ import { SUPPORTED_UKI_HANDOFF_VERSIONS, UKI_HANDOFF_VERSION } from "../domain/u
 import { validateUkiHandoff, validateUkiHandoffContent } from "../domain/validators.js";
 import type { HandoffStorePort, UpdateHandoffStatusMeta } from "../ports/handoff-store.port.js";
 import { compressUki, parseUki } from "../lib/uki-format.js";
-import { ensureDir, readJson, removeIfExists, writeJson } from "@/lib/fs.js";
+import { ensureDir, readJson, removeIfExists, writeJson } from "@/shared/lib/fs.js";
 import { MaestroError } from "@/shared/errors.js";
-import { assertSafeSegment, resolveWithin } from "@/lib/path-safety.js";
+import { assertSafeSegment, resolveWithin } from "@/shared/lib/path-safety.js";
 import { normalizeUkiToken } from "../lib/uki-token.js";
 
 const HANDOFFS_DIR = "handoffs";

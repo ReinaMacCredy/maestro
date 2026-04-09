@@ -1,8 +1,8 @@
 import { join } from "node:path";
 import { readdir } from "node:fs/promises";
 import type { Correction, CreateCorrectionInput, CorrectionQuery } from "../domain/memory-types.js";
-import { MAESTRO_DIR, MEMORY_DIR } from "@/domain/defaults.js";
-import { ensureDir, readJson, writeJson, removeIfExists } from "@/lib/fs.js";
+import { MAESTRO_DIR, MEMORY_DIR } from "@/shared/domain/defaults.js";
+import { ensureDir, readJson, writeJson, removeIfExists } from "@/shared/lib/fs.js";
 import type { CorrectionStorePort } from "../ports/correction-store.port.js";
 
 export class FsCorrectionStoreAdapter implements CorrectionStorePort {

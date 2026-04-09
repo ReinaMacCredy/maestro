@@ -1,6 +1,6 @@
 import { basename } from "node:path";
 import type { Command } from "commander";
-import { output } from "@/lib/output.js";
+import { output } from "@/shared/lib/output.js";
 import { getServices } from "@/services.js";
 import { getGraphContext, type GraphContext } from "../usecases/graph-context.usecase.js";
 

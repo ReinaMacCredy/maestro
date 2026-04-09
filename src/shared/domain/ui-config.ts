@@ -1,4 +1,12 @@
-import type { MaestroConfig, MissionControlBackgroundMode } from "./types.js";
+export type MissionControlBackgroundMode = "solid" | "terminal";
+
+export interface MissionControlUiConfig {
+  readonly backgroundMode?: MissionControlBackgroundMode;
+}
+
+export interface UiConfig {
+  readonly missionControl?: MissionControlUiConfig;
+}
 
 const GLOBAL_ONLY_CONFIG_KEYS = [
   "ui.missionControl.backgroundMode",
@@ -15,7 +23,15 @@ export function resolveConfigScopeForKey(
   return isGlobalOnlyConfigKey(keyPath) ? "global" : scope;
 }
 
-export function listIgnoredProjectConfigKeys(projectConfig: MaestroConfig | undefined): readonly string[] {
+/**
+ * Reads any config-like object and returns the list of keys that are
+ * only honoured at global scope (i.e. set in the project file but
+ * ignored). Parameter type is narrow so this module does not depend on
+ * the full `MaestroConfig` shape in `@/infra/domain/config-types.js`.
+ */
+export function listIgnoredProjectConfigKeys(
+  projectConfig: { readonly ui?: UiConfig } | undefined,
+): readonly string[] {
   const ignoredKeys: string[] = [];
 
   if (projectConfig?.ui?.missionControl?.backgroundMode !== undefined) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { ShellGitAdapter } from "@/adapters/git.adapter.js";
+import { ShellGitAdapter } from "@/infra/adapters/git.adapter.js";
 
 const git = new ShellGitAdapter();
 const cwd = process.cwd();

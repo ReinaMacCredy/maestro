@@ -23,7 +23,7 @@ import {
 import { getValidFeatureTransitions } from "@/features/mission";
 import { FEATURE_STATUS_LABEL, FEATURE_TASK_STATUS_LABEL } from "../theme.js";
 import { shortenSessionId } from "../session-id.js";
-import { GRAPH_DIR } from "../../domain/defaults.js";
+import { GRAPH_DIR } from "@/shared/domain/defaults.js";
   import {
     getConfigRowsForTab,
     getConfigTabDisplayLabel,

@@ -9,8 +9,8 @@ import type {
   AssertionStorePort,
   CheckpointStorePort,
 } from "@/features/mission";
-import type { ConfigPort } from "../../ports/config.port.js";
-import type { GitPort } from "../../ports/git.port.js";
+import type { ConfigPort } from "@/infra/ports/config.port.js";
+import type { GitPort } from "@/infra/ports/git.port.js";
 import type { CorrectionStorePort, LearningStorePort } from "@/features/memory";
 import { buildMemoryStats } from "@/features/memory";
 import type { RatchetStorePort } from "@/features/ratchet";
@@ -23,8 +23,8 @@ import {
   type MissionReport,
   getValidFeatureTransitions,
 } from "@/features/mission";
-import { getMissionControlBackgroundMode, listIgnoredProjectConfigKeys } from "../../domain/ui-config.js";
-import type { DoctorCheck, StatusReport } from "../../domain/types.js";
+import { getMissionControlBackgroundMode, listIgnoredProjectConfigKeys } from "@/shared/domain/ui-config.js";
+import type { DoctorCheck, StatusReport } from "@/infra/domain/status-types.js";
 import { getGraphContext } from "@/features/graph";
 import { deriveEvents } from "./events.js";
 import { buildConfigInspector } from "./config-inspector.js";

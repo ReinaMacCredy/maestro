@@ -2,8 +2,8 @@ import { describe, expect, it, beforeEach, afterEach } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { YamlConfigAdapter } from "@/adapters/config.adapter.js";
-import { ensureDir } from "@/lib/fs.js";
+import { YamlConfigAdapter } from "@/infra/adapters/config.adapter.js";
+import { ensureDir } from "@/shared/lib/fs.js";
 
 let tmpDir: string;
 const config = new YamlConfigAdapter();

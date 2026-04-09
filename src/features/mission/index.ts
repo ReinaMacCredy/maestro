@@ -51,6 +51,7 @@ export { WORKER_TYPE_PATTERN, FEATURE_ID_PATTERN } from "./domain/mission-valida
 
 // Workflow templates
 export { BUILT_IN_WORKFLOWS } from "./domain/workflows.js";
+export type { WorkflowTemplate, WorkflowPhase } from "./domain/workflow-types.js";
 
 // Error factories
 export {

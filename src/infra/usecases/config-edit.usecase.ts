@@ -1,7 +1,7 @@
-import type { MaestroConfig } from "../domain/types.js";
+import type { MaestroConfig } from "@/infra/domain/config-types.js";
 import { MaestroError } from "@/shared/errors.js";
 import type { ConfigPort, ConfigScope } from "../ports/config.port.js";
-import { stringifyYaml } from "../lib/yaml.js";
+import { stringifyYaml } from "@/shared/lib/yaml.js";
 
 export interface ConfigEditPreview {
   readonly scope: ConfigScope;

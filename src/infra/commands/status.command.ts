@@ -1,7 +1,7 @@
 import type { Command } from "commander";
-import { getServices } from "../services.js";
+import { getServices } from "@/services.js";
 import { checkStatus } from "../usecases/check-status.usecase.js";
-import { output } from "../lib/output.js";
+import { output } from "@/shared/lib/output.js";
 
 export function registerStatusCommand(program: Command): void {
   program

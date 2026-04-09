@@ -1,7 +1,7 @@
 import type { Command } from "commander";
-import { getServices } from "../services.js";
+import { getServices } from "@/services.js";
 import { runDoctor } from "../usecases/run-doctor.usecase.js";
-import { output } from "../lib/output.js";
+import { output } from "@/shared/lib/output.js";
 
 export function registerDoctorCommand(program: Command): void {
   program

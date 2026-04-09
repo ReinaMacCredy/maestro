@@ -1,4 +1,4 @@
-import type { MaestroConfig } from "../domain/types.js";
+import type { MaestroConfig } from "@/infra/domain/config-types.js";
 
 export type ConfigScope = "global" | "project";
 

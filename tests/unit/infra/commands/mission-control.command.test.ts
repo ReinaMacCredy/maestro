@@ -9,16 +9,16 @@ import { FsMissionStoreAdapter } from "@/features/mission";
 import {
   createMissionControlSnapshotLoader,
   loadMissionControlSnapshot,
-} from "@/commands/mission-control.command.js";
-import type { ConfigPort } from "@/ports/config.port.js";
-import type { GitPort } from "@/ports/git.port.js";
+} from "@/infra/commands/mission-control.command.js";
+import type { ConfigPort } from "@/infra/ports/config.port.js";
+import type { GitPort } from "@/infra/ports/git.port.js";
 import type { SnapshotDeps, HomeSnapshotDeps } from "@/tui/state/snapshot.js";
 
 let tmpDir: string;
 let snapshotDeps: SnapshotDeps;
 let homeSnapshotDeps: HomeSnapshotDeps;
 
-const CLI = ["bun", "run", join(import.meta.dir, "..", "..", "..", "src", "index.ts")];
+const CLI = ["bun", "run", join(import.meta.dir, "..", "..", "..", "..", "src", "index.ts")];
 
 async function initGitRepo(cwd: string): Promise<void> {
   const proc = Bun.spawn(["git", "init", "-b", "main"], { cwd, stdout: "pipe", stderr: "pipe" });

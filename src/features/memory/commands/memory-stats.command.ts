@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import type { MemoryStats } from "../domain/memory-types.js";
-import { output } from "@/lib/output.js";
+import { output } from "@/shared/lib/output.js";
 import { getServices } from "@/services.js";
 import { getMemoryStats } from "../usecases/memory-stats.usecase.js";
 

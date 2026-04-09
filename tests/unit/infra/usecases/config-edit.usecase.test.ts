@@ -2,8 +2,8 @@ import { describe, expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { YamlConfigAdapter } from "@/adapters/config.adapter.js";
-import { applyConfigEdit, previewConfigEdit } from "@/usecases/config-edit.usecase.js";
+import { YamlConfigAdapter } from "@/infra/adapters/config.adapter.js";
+import { applyConfigEdit, previewConfigEdit } from "@/infra/usecases/config-edit.usecase.js";
 
 describe("config-edit usecase", () => {
   it("previews and applies scalar edits to project config", async () => {

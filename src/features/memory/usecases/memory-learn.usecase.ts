@@ -1,5 +1,5 @@
 import type { RawLearningEntry } from "../domain/memory-types.js";
-import type { GitPort } from "@/ports/git.port.js";
+import type { GitPort } from "@/infra/ports/git.port.js";
 import type { LearningStorePort } from "../ports/learning-store.port.js";
 
 export interface AppendLearningOpts {

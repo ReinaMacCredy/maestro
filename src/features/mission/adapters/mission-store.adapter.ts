@@ -8,8 +8,8 @@ import type { Mission, CreateMissionInput, UpdateMissionInput } from "../domain/
 import type { MissionStorePort } from "../ports/mission-store.port.js";
 import { validateMission } from "../domain/mission-validators.js";
 import { MaestroError } from "@/shared/errors.js";
-import { ensureDir, readJson, writeJson, dirExists, listDirs } from "@/lib/fs.js";
-import { MAESTRO_DIR } from "@/domain/defaults.js";
+import { ensureDir, readJson, writeJson, dirExists, listDirs } from "@/shared/lib/fs.js";
+import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 
 export class FsMissionStoreAdapter implements MissionStorePort {
   constructor(private readonly baseDir: string) {}

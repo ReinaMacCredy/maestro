@@ -4,7 +4,7 @@
  */
 import type { Command } from "commander";
 import { getServices } from "@/services.js";
-import { output, resolveJsonFlag } from "@/lib/output.js";
+import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import {
   saveCheckpoint,
   listCheckpoints,

@@ -1,6 +1,6 @@
-import type { GitFileChange, GitState } from "../domain/types.js";
+import type { GitFileChange, GitState } from "@/infra/domain/git-types.js";
 import type { GitPort } from "../ports/git.port.js";
-import { exec } from "../lib/shell.js";
+import { exec } from "@/shared/lib/shell.js";
 
 export class ShellGitAdapter implements GitPort {
   async getState(cwd: string): Promise<GitState> {

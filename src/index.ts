@@ -1,15 +1,15 @@
 #!/usr/bin/env bun
 import { Command, CommanderError } from "commander";
-import { formatVersionOutputForArgv } from "./version-format.js";
+import { formatVersionOutputForArgv } from "@/shared/version-format.js";
 import { MaestroError } from "@/shared/errors.js";
 import { initServices } from "./services.js";
-import { registerInitCommand } from "./commands/init.command.js";
-import { registerStatusCommand } from "./commands/status.command.js";
-import { registerDoctorCommand } from "./commands/doctor.command.js";
+import { registerInitCommand } from "@/infra/commands/init.command.js";
+import { registerStatusCommand } from "@/infra/commands/status.command.js";
+import { registerDoctorCommand } from "@/infra/commands/doctor.command.js";
 import { registerNoteCommand } from "./features/notes/commands/note.command.js";
-import { registerInstallCommand } from "./commands/install.command.js";
-import { registerUpdateCommand } from "./commands/update.command.js";
-import { registerUninstallCommand } from "./commands/uninstall.command.js";
+import { registerInstallCommand } from "@/infra/commands/install.command.js";
+import { registerUpdateCommand } from "@/infra/commands/update.command.js";
+import { registerUninstallCommand } from "@/infra/commands/uninstall.command.js";
 import { registerSessionCommand } from "./features/session/commands/session.command.js";
 import {
   registerMissionCommand,
@@ -18,7 +18,7 @@ import {
   registerMilestoneCommand,
   registerCheckpointCommand,
 } from "./features/mission/index.js";
-import { registerMissionControlCommand } from "./commands/mission-control.command.js";
+import { registerMissionControlCommand } from "@/infra/commands/mission-control.command.js";
 import { registerMemoryCorrectCommand } from "./features/memory/commands/memory-correct.command.js";
 import { registerMemoryRecallCommand } from "./features/memory/commands/memory-recall.command.js";
 import { registerMemorySearchCommand } from "./features/memory/commands/memory-search.command.js";

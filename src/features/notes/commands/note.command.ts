@@ -1,7 +1,7 @@
 import type { Command } from "commander";
-import type { NoteEntry } from "@/domain/types.js";
+import type { NoteEntry } from "../domain/types.js";
 import { MaestroError } from "@/shared/errors.js";
-import { output } from "@/lib/output.js";
+import { output } from "@/shared/lib/output.js";
 import { getServices } from "@/services.js";
 import { createNote, listNotes } from "../usecases/note.usecase.js";
 

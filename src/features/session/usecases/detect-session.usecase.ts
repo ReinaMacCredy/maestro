@@ -1,5 +1,5 @@
 import type { SessionDetectPort } from "../ports/session-detect.port.js";
-import type { AgentSession } from "@/domain/types.js";
+import type { AgentSession } from "../domain/types.js";
 
 /**
  * Phase 1 strip: the conductor only answers "what session is this?"

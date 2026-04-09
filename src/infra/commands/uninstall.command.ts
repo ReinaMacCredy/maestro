@@ -1,8 +1,8 @@
 import type { Command } from "commander";
 import { removeAgentBlocks } from "@/features/worker";
-import { formatAgentResults, output } from "../lib/output.js";
-import { removeIfExists } from "../lib/fs.js";
-import { MAESTRO_DIR } from "../domain/defaults.js";
+import { formatAgentResults, output } from "@/shared/lib/output.js";
+import { removeIfExists } from "@/shared/lib/fs.js";
+import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { homedir } from "node:os";
 import { join } from "node:path";
 

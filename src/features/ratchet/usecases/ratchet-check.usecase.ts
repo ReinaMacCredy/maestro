@@ -2,7 +2,7 @@ import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { RatchetAssertion, RatchetBaseline } from "../domain/types.js";
 import type { RatchetStorePort } from "../ports/ratchet-store.port.js";
-import { readText } from "@/lib/fs.js";
+import { readText } from "@/shared/lib/fs.js";
 
 export interface AssertionResult {
   readonly assertion: RatchetAssertion;

@@ -6,11 +6,11 @@
 import type { Feature, CreateFeatureInput, UpdateFeatureInput } from "../../domain/mission-types.js";
 import type { FeatureStorePort } from "../ports/feature-store.port.js";
 import { FEATURE_ID_PATTERN, validateFeature } from "../../domain/mission-validators.js";
-import { ensureDir, readJson, writeJson, listDirs, readText } from "@/lib/fs.js";
-import { MAESTRO_DIR } from "@/domain/defaults.js";
+import { ensureDir, readJson, writeJson, listDirs, readText } from "@/shared/lib/fs.js";
+import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { assertSafeSegment, resolveWithin } from "@/lib/path-safety.js";
+import { assertSafeSegment, resolveWithin } from "@/shared/lib/path-safety.js";
 
 export class FsFeatureStoreAdapter implements FeatureStorePort {
   constructor(private readonly baseDir: string) {}

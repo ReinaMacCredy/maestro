@@ -6,7 +6,7 @@ import type {
   MissionControlSnapshot,
   LeftPaneMode,
 } from "./types.js";
-import type { ConfigScope } from "../../ports/config.port.js";
+import type { ConfigScope } from "@/infra/ports/config.port.js";
 import { getFilteredMissionControlPaletteCommandCount } from "./mission-control-commands.js";
 import { getValidFeatureTransitions } from "@/features/mission";
 import { getConfigRowsForTab, isGlobalOnlyConfigKey, resolveConfigScopeForKey } from "./config-inspector.js";

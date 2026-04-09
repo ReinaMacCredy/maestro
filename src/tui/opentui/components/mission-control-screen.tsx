@@ -1,5 +1,5 @@
 import { TextAttributes, type MouseEvent } from "@opentui/core";
-import { sanitizeTerminalText } from "../../../lib/sanitize.js";
+import { sanitizeTerminalText } from "@/shared/lib/sanitize.js";
 
 import type { AppState } from "../../state/reducer.js";
 import { truncate } from "../../format.js";

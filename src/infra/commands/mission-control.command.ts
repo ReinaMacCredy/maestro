@@ -3,24 +3,24 @@
  * Registers: maestro mission-control [--mission <id>] [--json] [--preview [screen]]
  */
 import type { Command } from "commander";
-import { getServices } from "../services.js";
-import { output, resolveJsonFlag } from "../lib/output.js";
+import { getServices } from "@/services.js";
+import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import { MaestroError } from "@/shared/errors.js";
 import type { MissionStorePort } from "@/features/mission";
 import {
   renderDashboard,
   renderPreviewFrame,
   runRenderCheck,
-} from "../tui/opentui/index.js";
-import { buildHomeSnapshot, buildSnapshot } from "../tui/state/snapshot.js";
-import { CachingGitPort, CachingConfigPort } from "../lib/snapshot-poll-cache.js";
-import type { MissionControlSnapshot } from "../tui/state/types.js";
+} from "@/tui/opentui/index.js";
+import { buildHomeSnapshot, buildSnapshot } from "@/tui/state/snapshot.js";
+import { CachingGitPort, CachingConfigPort } from "@/tui/lib/snapshot-poll-cache.js";
+import type { MissionControlSnapshot } from "@/tui/state/types.js";
 import {
   PREVIEW_SCREENS,
   getApplicablePreviewScreens,
   isPreviewScreen,
   type PreviewScreen,
-} from "../tui/app/preview-state.js";
+} from "@/tui/app/preview-state.js";
 
 export type MissionControlSnapshotLoadMode = "read" | "supervise";
 

@@ -1,14 +1,13 @@
 import type { ConfigPort } from "../ports/config.port.js";
 import type { GitPort } from "../ports/git.port.js";
-import type { StatusReport } from "../domain/types.js";
-import type { HandoffStorePort } from "@/features/handoff";
+import type { PendingHandoffSummary, StatusReport } from "@/infra/domain/status-types.js";
+import type { HandoffStorePort, UkiHandoff } from "@/features/handoff";
 
 /**
- * Phase 1 strip: the conductor model does not own handoffs or CASS
- * availability. Pending handoffs remain on the struct as an empty
- * array until Phase 2 introduces the UKI handoff store with a new
- * shape, and CASS availability is hardcoded false until Phase 2
- * removes the field entirely.
+ * Phase 7: `StatusReport.pendingHandoffs` is a narrow summary projection
+ * of UkiHandoff records. The full records still live in the handoff
+ * store and the TUI reads them directly through the handoff port; this
+ * usecase is only responsible for the CLI `status --json` view.
  */
 export async function checkStatus(
   config: ConfigPort,
@@ -37,8 +36,16 @@ export async function checkStatus(
   return {
     initialized: projectConfigExists || globalConfigExists,
     configSource,
-    pendingHandoffs,
+    pendingHandoffs: pendingHandoffs.map(toPendingHandoffSummary),
     cassAvailable: false,
     gitAvailable,
+  };
+}
+
+function toPendingHandoffSummary(handoff: UkiHandoff): PendingHandoffSummary {
+  return {
+    id: handoff.id,
+    agent: handoff.agent,
+    createdAt: handoff.timestamp,
   };
 }

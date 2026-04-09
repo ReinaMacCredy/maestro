@@ -1,8 +1,8 @@
 import type { Command } from "commander";
 import { injectAgentBlocks } from "@/features/worker";
-import { formatAgentResults, output } from "../lib/output.js";
-import { execOrThrow } from "../lib/shell.js";
-import { getServices } from "../services.js";
+import { formatAgentResults, output } from "@/shared/lib/output.js";
+import { execOrThrow } from "@/shared/lib/shell.js";
+import { getServices } from "@/services.js";
 import { MaestroError } from "@/shared/errors.js";
 import { homedir } from "node:os";
 import { join } from "node:path";

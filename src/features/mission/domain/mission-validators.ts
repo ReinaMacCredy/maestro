@@ -18,7 +18,7 @@ import type {
   UpdateAssertionInput,
   MissionPlanFile,
 } from "./mission-types.js";
-import type { WorkflowTemplate } from "@/domain/types.js";
+import type { WorkflowTemplate } from "./workflow-types.js";
 
 // ============================
 // Schema Constants

@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 // We can't easily mock homedir() in the use case since it uses os.homedir() directly.
 // Instead, test the underlying block functions + do a focused integration test
 // by calling inject/remove on real temp files via the lib functions.
-import { AGENT_INSTRUCTION_BLOCK } from "@/domain/defaults.js";
+import { AGENT_INSTRUCTION_BLOCK } from "@/infra/domain/bootstrap-templates.js";
 import {
   hasBlock,
   extractBlock,

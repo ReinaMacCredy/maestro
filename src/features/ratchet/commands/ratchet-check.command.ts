@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { output } from "@/lib/output.js";
+import { output } from "@/shared/lib/output.js";
 import { getServices } from "@/services.js";
 import { checkRatchet, type RatchetCheckResult } from "../usecases/ratchet-check.usecase.js";
 

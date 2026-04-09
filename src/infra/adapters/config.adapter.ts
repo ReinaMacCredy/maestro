@@ -1,11 +1,12 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { MaestroConfig } from "../domain/types.js";
+import type { MaestroConfig } from "@/infra/domain/config-types.js";
 import { MaestroError } from "@/shared/errors.js";
 import type { ConfigLayers, ConfigLoadError, ConfigPort, ConfigScope } from "../ports/config.port.js";
-import { DEFAULT_CONFIG, MAESTRO_DIR } from "../domain/defaults.js";
-import { ensureDir, readText, writeText } from "../lib/fs.js";
-import { parseYaml, stringifyYaml, deepMerge } from "../lib/yaml.js";
+import { DEFAULT_CONFIG } from "@/infra/domain/config-types.js";
+import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
+import { ensureDir, readText, writeText } from "@/shared/lib/fs.js";
+import { parseYaml, stringifyYaml, deepMerge } from "@/shared/lib/yaml.js";
 
 const GLOBAL_DIR = join(homedir(), MAESTRO_DIR);
 const CONFIG_FILE = "config.yaml";

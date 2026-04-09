@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import type { RatchetSuite, RatchetBaseline } from "../domain/types.js";
-import { MAESTRO_DIR, MEMORY_DIR } from "@/domain/defaults.js";
-import { ensureDir, readJson, writeJson } from "@/lib/fs.js";
+import { MAESTRO_DIR, MEMORY_DIR } from "@/shared/domain/defaults.js";
+import { ensureDir, readJson, writeJson } from "@/shared/lib/fs.js";
 import type { RatchetStorePort } from "../ports/ratchet-store.port.js";
 
 export class FsRatchetStoreAdapter implements RatchetStorePort {

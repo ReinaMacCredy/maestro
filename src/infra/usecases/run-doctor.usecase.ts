@@ -1,7 +1,7 @@
 import type { GitPort } from "../ports/git.port.js";
 import type { ConfigPort } from "../ports/config.port.js";
-import { listIgnoredProjectConfigKeys } from "../domain/ui-config.js";
-import type { DoctorCheck } from "../domain/types.js";
+import { listIgnoredProjectConfigKeys } from "@/shared/domain/ui-config.js";
+import type { DoctorCheck } from "@/infra/domain/status-types.js";
 
 /**
  * Phase 1 strip: CASS and worker-transport checks were removed. The

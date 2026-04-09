@@ -1,8 +1,8 @@
 import type { Command } from "commander";
 import { createInterface } from "node:readline/promises";
-import { getServices } from "../services.js";
+import { getServices } from "@/services.js";
 import { initMaestro } from "../usecases/init.usecase.js";
-import { output } from "../lib/output.js";
+import { output } from "@/shared/lib/output.js";
 
 export function registerInitCommand(program: Command): void {
   program

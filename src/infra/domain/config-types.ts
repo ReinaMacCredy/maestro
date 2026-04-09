@@ -1,13 +1,31 @@
-import { homedir } from "node:os";
-import { join } from "node:path";
-import type { MaestroConfig } from "./types.js";
+import type { AgentSlug } from "@/features/session";
+import type {
+  ExecutionConfig,
+  WorkerConfig,
+  SupervisionConfig,
+  ParallelConfig,
+} from "@/features/worker";
 import type { MemoryConfig } from "@/features/memory";
+import type { WorkflowTemplate } from "@/features/mission";
+import type { UiConfig } from "@/shared/domain/ui-config.js";
 
-export const MAESTRO_DIR = ".maestro";
-
-export const MEMORY_DIR = "memory";
-
-export const GRAPH_DIR = join(homedir(), ".maestro", "graph");
+export interface MaestroConfig {
+  readonly defaultAgent?: AgentSlug;
+  readonly sourceRepo?: string;
+  readonly sessionDetection?: {
+    readonly enabled: boolean;
+    readonly agents: readonly AgentSlug[];
+    readonly staleMinutes?: number;
+  };
+  readonly defaultWorkflow?: string;
+  readonly workflowTemplates?: Readonly<Record<string, WorkflowTemplate>>;
+  readonly execution?: ExecutionConfig;
+  readonly workers?: Readonly<Record<string, WorkerConfig>>;
+  readonly supervision?: SupervisionConfig;
+  readonly parallel?: ParallelConfig;
+  readonly ui?: UiConfig;
+  readonly memory?: MemoryConfig;
+}
 
 export const DEFAULT_CONFIG: MaestroConfig = {
   sessionDetection: {
@@ -69,39 +87,3 @@ export const DEFAULT_CONFIG: MaestroConfig = {
     graph: { enabled: true },
   } satisfies MemoryConfig,
 };
-
-/**
- * Phase 1 strip: the old AGENT_INSTRUCTION_BLOCK described deleted
- * handoff-* commands. This replacement block advertises only the
- * mission/feature/memory surfaces that survive the v1.0.0 strip.
- * Phase 2 will extend it with the UKI handoff workflow.
- * The block is now static (no `{{agent}}` placeholder) because the
- * legacy `handoff-pickup --agent <slug>` flow is gone.
- */
-export const AGENT_INSTRUCTION_BLOCK = `## Maestro Conductor (shared score)
-
-Projects with \`.maestro/\` hold mission and memory state that all agents share.
-
-**See what is in flight:**
-\`\`\`bash
-maestro status --json
-maestro mission list --json
-maestro feature list --mission <id> --json
-\`\`\`
-
-**Read a worker prompt (with injected memory):**
-\`\`\`bash
-maestro feature prompt <featureId> --mission <id>
-\`\`\`
-
-**Capture a correction rule for future sessions:**
-\`\`\`bash
-maestro memory-correct "use bun not npm" --trigger "package,install,npm"
-\`\`\`
-
-**Report feature progress:**
-\`\`\`bash
-maestro feature update <featureId> --mission <id> --status <status> --report @report.json
-\`\`\`
-
-**When to use**: Start every session with \`maestro status\` to see shared state. Use \`maestro feature prompt\` to read the current feature's briefing with memory context auto-injected.`;

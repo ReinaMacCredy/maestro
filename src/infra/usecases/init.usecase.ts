@@ -1,10 +1,11 @@
 import type { ConfigPort } from "../ports/config.port.js";
-import { DEFAULT_CONFIG, MAESTRO_DIR } from "../domain/defaults.js";
+import { DEFAULT_CONFIG } from "@/infra/domain/config-types.js";
+import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import {
   PROJECT_BOOTSTRAP_TEMPLATES,
   type BootstrapTemplateFile,
 } from "../domain/bootstrap-templates.js";
-import { dirExists, ensureDir, readText, writeText } from "../lib/fs.js";
+import { dirExists, ensureDir, readText, writeText } from "@/shared/lib/fs.js";
 import { homedir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { chmod, lstat, readdir } from "node:fs/promises";

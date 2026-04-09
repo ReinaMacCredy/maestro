@@ -14,7 +14,9 @@ import type {
   MilestoneKind,
   MilestoneProfile,
 } from "@/features/mission";
-import type { DoctorCheck, GitFileChange, MissionControlBackgroundMode } from "../../domain/types.js";
+import type { DoctorCheck } from "@/infra/domain/status-types.js";
+import type { GitFileChange } from "@/infra/domain/git-types.js";
+import type { MissionControlBackgroundMode } from "@/shared/domain/ui-config.js";
 import type {
   CompiledLearnings,
   Correction,

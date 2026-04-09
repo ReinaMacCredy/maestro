@@ -16,7 +16,7 @@ import { FsFeatureStoreAdapter } from "@/features/mission/feature/adapters/featu
 import { FsAssertionStoreAdapter } from "@/features/mission/validation/adapters/assertion-store.adapter.js";
 import { MaestroError } from "@/shared/errors.js";
 import type { MilestoneInput } from "@/features/mission/domain/mission-types.js";
-import type { WorkflowTemplate } from "@/domain/types.js";
+import type { WorkflowTemplate } from "@/features/mission";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mkdtemp } from "node:fs/promises";

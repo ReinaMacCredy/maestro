@@ -1,8 +1,8 @@
 import { join } from "node:path";
 import { readdir } from "node:fs/promises";
 import type { RawLearningEntry, CompiledLearnings } from "../domain/memory-types.js";
-import { MAESTRO_DIR, MEMORY_DIR } from "@/domain/defaults.js";
-import { ensureDir, readJson, writeJson } from "@/lib/fs.js";
+import { MAESTRO_DIR, MEMORY_DIR } from "@/shared/domain/defaults.js";
+import { ensureDir, readJson, writeJson } from "@/shared/lib/fs.js";
 import type { LearningStorePort } from "../ports/learning-store.port.js";
 
 export class FsLearningStoreAdapter implements LearningStorePort {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { runDoctor } from "@/usecases/run-doctor.usecase.js";
-import { mockGit, mockConfig } from "../../helpers/mocks.js";
+import { runDoctor } from "@/infra/usecases/run-doctor.usecase.js";
+import { mockGit, mockConfig } from "../../../helpers/mocks.js";
 
 describe("runDoctor", () => {
   it("reports all checks as ok when everything is available", async () => {

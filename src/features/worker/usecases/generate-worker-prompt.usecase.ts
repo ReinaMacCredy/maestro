@@ -21,11 +21,11 @@ import {
   type RecallResult,
 } from "@/features/memory";
 import { MaestroError } from "@/shared/errors.js";
-import { readText, writeText, ensureDir } from "@/lib/fs.js";
-import { sanitizeInlinePromptContent, sanitizePromptContent } from "@/lib/sanitize.js";
+import { readText, writeText, ensureDir } from "@/shared/lib/fs.js";
+import { sanitizeInlinePromptContent, sanitizePromptContent } from "@/shared/lib/sanitize.js";
 import { dirname, join, resolve } from "node:path";
-import { MAESTRO_DIR } from "@/domain/defaults.js";
-import { assertSafeSegment, resolveWithin } from "@/lib/path-safety.js";
+import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
+import { assertSafeSegment, resolveWithin } from "@/shared/lib/path-safety.js";
 
 interface PreviousMilestoneReport {
   readonly featureId: string;
