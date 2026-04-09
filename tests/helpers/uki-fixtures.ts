@@ -1,7 +1,7 @@
 import type {
   ExecuteUkiHandoffContent,
   PlanUkiHandoffContent,
-} from "@/domain/uki-types.js";
+} from "@/features/handoff";
 
 export const HANDOFF_PASTE_PREAMBLE =
   "Use the following UKI as the canonical handoff packet. Interpret each block literally and continue from NEXT_ACTION.";

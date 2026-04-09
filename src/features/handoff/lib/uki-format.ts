@@ -4,7 +4,7 @@
  * New writes render from the canonical structured handoff payload.
  * Legacy v5.2/v5.3 strings still parse for compatibility reads.
  */
-import { MaestroError } from "../domain/errors.js";
+import { MaestroError } from "@/domain/errors.js";
 import type {
   ExecuteUkiHandoffContent,
   PlanUkiHandoffContent,

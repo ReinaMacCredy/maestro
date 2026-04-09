@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { runCli } from "../helpers/run-cli.js";
+import { runCli } from "../../../helpers/run-cli.js";
 
 let tmpDir: string;
 

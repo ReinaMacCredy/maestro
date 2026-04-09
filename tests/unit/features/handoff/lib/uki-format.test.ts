@@ -1,12 +1,12 @@
 import { describe, expect, it } from "bun:test";
-import { compressUki, parseUki, validateUki } from "@/lib/uki-format.js";
-import type { ExecuteUkiHandoffContent } from "@/domain/uki-types.js";
+import { compressUki, parseUki, validateUki } from "@/features/handoff";
+import type { ExecuteUkiHandoffContent } from "@/features/handoff";
 import {
   EXECUTE_UKI_FIXTURE,
   LEGACY_V52_UKI,
   LEGACY_V53_UKI,
   PLAN_UKI_FIXTURE,
-} from "../../helpers/uki-fixtures.js";
+} from "../../../../helpers/uki-fixtures.js";
 
   describe("UKI v5.4 format", () => {
   it("compresses a plan payload in deterministic order", () => {

@@ -1,7 +1,7 @@
 import type { ConfigPort } from "../ports/config.port.js";
 import type { GitPort } from "../ports/git.port.js";
 import type { StatusReport } from "../domain/types.js";
-import type { HandoffStorePort } from "../ports/handoff-store.port.js";
+import type { HandoffStorePort } from "@/features/handoff";
 
 /**
  * Phase 1 strip: the conductor model does not own handoffs or CASS

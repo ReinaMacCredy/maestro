@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseUki } from "@/lib/uki-format.js";
-import { runCli } from "../helpers/run-cli.js";
-import { HANDOFF_PASTE_PREAMBLE } from "../helpers/uki-fixtures.js";
+import { parseUki } from "@/features/handoff";
+import { runCli } from "../../../helpers/run-cli.js";
+import { HANDOFF_PASTE_PREAMBLE } from "../../../helpers/uki-fixtures.js";
 
 const SLOW_CLI_TIMEOUT_MS = 20_000;
 

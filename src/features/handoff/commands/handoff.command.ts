@@ -5,9 +5,9 @@ import { access } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import { join } from "node:path";
 import type { Command } from "commander";
-import { getServices } from "../services.js";
-import { output, resolveJsonFlag } from "../lib/output.js";
-import { MaestroError } from "../domain/errors.js";
+import { getServices } from "@/services.js";
+import { output, resolveJsonFlag } from "@/lib/output.js";
+import { MaestroError } from "@/domain/errors.js";
 import type {
   ExecuteUkiHandoffContent,
   PlanUkiHandoffContent,
@@ -22,7 +22,7 @@ import { UKI_HANDOFF_MODES, UKI_HANDOFF_STATUSES } from "../domain/uki-types.js"
 import { createUkiHandoff } from "../usecases/create-uki-handoff.usecase.js";
 import { listUkiHandoffs } from "../usecases/list-uki-handoffs.usecase.js";
 import { pickupUkiHandoff } from "../usecases/pickup-uki-handoff.usecase.js";
-import type { Services } from "../services.js";
+import type { Services } from "@/services.js";
 import { normalizeUkiToken, UKI_ANCHOR_PREFIXES } from "../lib/uki-token.js";
 
 type CreateFormat = "json" | "paste" | "text" | "uki";

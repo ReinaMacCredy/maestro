@@ -10,8 +10,8 @@
  */
 import type { UkiHandoff, UkiHandoffContent } from "../domain/uki-types.js";
 import type { HandoffStorePort } from "../ports/handoff-store.port.js";
-import type { SessionDetectPort } from "../ports/session-detect.port.js";
-import { NO_SESSION_ID } from "../domain/defaults.js";
+import type { SessionDetectPort } from "@/ports/session-detect.port.js";
+import { NO_SESSION_ID } from "../domain/constants.js";
 
 export interface CreateUkiHandoffOptions {
   readonly content: UkiHandoffContent;

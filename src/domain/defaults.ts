@@ -106,8 +106,6 @@ export const DEFAULT_CONFIG: MaestroConfig = {
   } satisfies MemoryConfig,
 };
 
-export const NO_SESSION_ID = "none";
-
 /**
  * Phase 1 strip: the old AGENT_INSTRUCTION_BLOCK described deleted
  * handoff-* commands. This replacement block advertises only the
