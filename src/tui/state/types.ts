@@ -1,11 +1,16 @@
 /**
  * TUI data model -- read-only DTOs for the mission control dashboard.
+ *
+ * Phase 3 strip: the worker pane, runtime process row, worker health
+ * DTOs, and related snapshot fields were deleted. Those panes were
+ * backed by the Phase 1 worker execution layer and became empty stubs
+ * after Phase 1. The snapshot now renders 7 screens: dashboard,
+ * features, dependencies, handoffs, config, memory, graph.
  */
 import type {
   MissionStatus,
   MilestoneStatus,
   FeatureStatus,
-  WorkerReport,
   MilestoneKind,
   MilestoneProfile,
 } from "../../domain/mission-types.js";
@@ -20,8 +25,6 @@ import type {
   RatchetSuite,
   RawLearningEntry,
 } from "../../domain/memory-types.js";
-import type { RuntimeState } from "../../domain/runtime-types.js";
-import type { TransportType } from "../../domain/worker-types.js";
 
 export type MissionControlMode = "mission" | "home";
 export type LeftPaneMode = "overview" | "preview";
@@ -42,9 +45,6 @@ export interface MissionControlHomeHandoff {
 }
 
 export interface MissionControlSessionSidebar {
-  agent?: string;
-  sessionId?: string;
-  transport?: TransportType;
   branch: string;
   workingTreeClean: boolean;
   diffStat: string;
@@ -60,31 +60,6 @@ export interface MissionControlConfigSummary {
   missionDirectory: string | null;
   workerTypes: readonly string[];
   backgroundMode: MissionControlBackgroundMode;
-}
-
-export type MissionControlWorkerHealthStatus =
-  | "ready"
-  | "busy"
-  | "degraded"
-  | "missing"
-  | "disabled";
-
-export interface MissionControlWorkerHealthCheck {
-  label: string;
-  ok: boolean;
-  detail?: string;
-}
-
-export interface MissionControlWorkerHealthRow {
-  slug: string;
-  label: string;
-  status: MissionControlWorkerHealthStatus;
-  detail: string;
-  lastCheckedAt: string;
-  checks: readonly MissionControlWorkerHealthCheck[];
-  summary: string;
-  bestFor: string;
-  tradeoffs: string;
 }
 
 export type MissionControlConfigTab =
@@ -121,10 +96,24 @@ export interface MissionControlWorkerFitRecommendation {
   fallbackReason?: string;
 }
 
+/**
+ * Worker-profile choice surfaced in the config inspector's default
+ * worker picker. Phase 3 strip removed the per-worker health probe
+ * system; availability now always reports "ready" for enabled CLI
+ * workers and "disabled" otherwise. The choice row is retained so the
+ * config inspector can still render the default worker picker.
+ */
+export type MissionControlWorkerChoiceAvailability =
+  | "ready"
+  | "busy"
+  | "degraded"
+  | "missing"
+  | "disabled";
+
 export interface MissionControlConfigWorkerChoice {
   slug: string;
   label: string;
-  availability: MissionControlWorkerHealthStatus;
+  availability: MissionControlWorkerChoiceAvailability;
   availabilityDetail: string;
   summary: string;
   bestFor: string;
@@ -165,32 +154,6 @@ export interface MissionControlConfigInspector {
   projectPath: string;
   globalPath: string;
   errors: readonly string[];
-}
-
-export interface MissionControlRuntimeProcessRow {
-  featureId: string;
-  title: string;
-  milestoneTitle?: string;
-  profile?: MilestoneProfile;
-  status: FeatureStatus;
-  workerType: string;
-  hasReport: boolean;
-  isLive: boolean;
-  runtimeState?: RuntimeState;
-  lastSeenAgeMs?: number;
-  failureReason?: string;
-  retryCount?: number;
-  agent?: string;
-  sessionId?: string;
-  transport?: TransportType;
-  currentActivity?: string;
-  lastOutputAgeMs?: number;
-  leaseRemainingMs?: number;
-  outputLines?: readonly {
-    timestamp: string;
-    kind: "status" | "stdout" | "stderr";
-    text: string;
-  }[];
 }
 
 export interface MissionControlHomeState {
@@ -283,13 +246,10 @@ export interface MissionControlSnapshot {
   taskPreviews?: readonly TaskPreviewPane[];
 
   // Lower pane
-  activeWorker: MissionControlWorkerPane | null;
   session: MissionControlSessionSidebar | null;
   pendingHandoffs: readonly MissionControlHomeHandoff[];
   configSummary: MissionControlConfigSummary | null;
   configInspector?: MissionControlConfigInspector | null;
-  workerHealth?: readonly MissionControlWorkerHealthRow[];
-  runtimeProcesses: readonly MissionControlRuntimeProcessRow[];
   progressLog: readonly MissionControlEvent[];
 
   // Milestones (for grouping)
@@ -347,38 +307,14 @@ export interface TaskPreviewPane {
   unblocks?: readonly UnblocksRef[];
   fulfills: readonly string[];
   validTransitions: readonly FeatureStatus[];
-  runtimeState?: RuntimeState;
-  lastSeenAgeMs?: number;
-  failureReason?: string;
-  retryCount?: number;
-  agent?: string;
-  sessionId?: string;
 }
 
 export type MissionControlFeatureDetail = TaskPreviewPane;
 
-export interface MissionControlWorkerPane {
-  featureId: string;
-  featureTitle: string;
-  workerType: string;
-  status: FeatureStatus;
-  elapsedMs: number;
-  report: WorkerReport | null;
-  runtimeState?: RuntimeState;
-  lastSeenAgeMs?: number;
-  failureReason?: string;
-  retryCount?: number;
-  agent?: string;
-  sessionId?: string;
-  transport?: TransportType;
-  currentActivity?: string;
-  lastOutputAgeMs?: number;
-}
-
 export interface MissionControlEvent {
   timestamp: string;
   relativeMs: number;
-  kind: "mission" | "feature" | "milestone" | "assertion" | "checkpoint" | "worker";
+  kind: "mission" | "feature" | "milestone" | "assertion" | "checkpoint";
   title: string;
   detail?: string;
 }

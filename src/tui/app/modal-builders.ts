@@ -194,64 +194,28 @@ export function buildModalOptions(state: AppState): ModalOptions | undefined {
         };
         }
 
-      if (state.modal.kind === "processes") {
-        const items = state.snapshot.runtimeProcesses.map((process) => ({
-          label: `${process.featureId} · ${process.title}`,
-        }));
-        const selectedProcess = state.snapshot.runtimeProcesses[state.modal.selectedProcessIndex];
-      return {
-        mode: "split",
-        title: "Runtime",
-        eyebrow: state.snapshot.runtimeProcesses.length > 0
-          ? `${state.snapshot.runtimeProcesses.length} runtime item${state.snapshot.runtimeProcesses.length === 1 ? "" : "s"}`
-          : "No active runtime processes",
-          items: items.length > 0
-            ? items
-            : [{ label: "No assigned, in-progress, or review features right now.", selectable: false, tone: "muted" }],
-          selectedIndex: Math.min(state.modal.selectedProcessIndex, Math.max(0, items.length - 1)),
-            detailItems: buildRuntimeDetailItems(selectedProcess),
-            footer: state.modal.returnTarget === "command-palette"
-              ? "O output · Left back · Esc close"
-              : "O output · Esc close",
-            returnTarget,
-            renderSpec: buildOverlayRenderSpec("processes"),
-          };
-      }
-
-      if (state.modal.kind === "workers") {
-        const items = (state.snapshot.workerHealth ?? []).map((worker) => ({
-          label: worker.label,
-          detail: worker.detail,
-        }));
-        const selectedWorker = (state.snapshot.workerHealth ?? [])[state.modal.selectedWorkerIndex];
-        return {
-          mode: "split",
-          title: "Workers",
-          eyebrow: "Real worker readiness, not just config presence.",
-          items: items.length > 0
-            ? items
-            : [{ label: "No workers configured", selectable: false, tone: "muted" }],
-            selectedIndex: Math.min(state.modal.selectedWorkerIndex, Math.max(0, items.length - 1)),
-            detailItems: buildWorkerHealthDetailItems(selectedWorker),
-            footer: buildOverlayFooter(state.modal.returnTarget, "Enter inspect"),
-            returnTarget,
-            renderSpec: buildOverlayRenderSpec("processes"),
-          };
-      }
-
-      if (state.modal.kind === "runtime-output") {
-        const process = state.snapshot.runtimeProcesses[state.modal.selectedProcessIndex];
+      // Phase 3 strip: the processes, workers, and runtime-output
+      // modals no longer have data backing them. Commit 3.2 removes
+      // the modal kinds entirely. Until then the handlers return an
+      // informational empty overlay so the command palette entries do
+      // not crash if they are still invoked.
+      if (
+        state.modal.kind === "processes"
+        || state.modal.kind === "workers"
+        || state.modal.kind === "runtime-output"
+      ) {
         return {
           mode: "info",
-          title: "Worker Output",
-          eyebrow: process
-            ? `${process.featureId} · ${process.workerType} · ${process.runtimeState ?? FEATURE_STATUS_LABEL[process.status]}`
-            : "No runtime output selected",
-            items: buildRuntimeOutputItems(process),
-            footer: state.modal.returnTarget === "command-palette" ? "Left back · Esc close" : "Esc back",
-            returnTarget,
-            renderSpec: buildOverlayRenderSpec("config"),
-          };
+          title: state.modal.kind === "workers" ? "Workers" : "Runtime",
+          eyebrow: "Removed in the Mission Control cleanup",
+          items: [{
+            text: "Mission Control no longer tracks worker runtime state.",
+            tone: "muted" as const,
+          }],
+          footer: buildOverlayFooter(state.modal.returnTarget, ""),
+          returnTarget,
+          renderSpec: buildOverlayRenderSpec("config"),
+        };
       }
 
     if (state.modal.kind === "memory") {
@@ -1422,60 +1386,10 @@ function buildHandoffDetailItems(handoff: MissionControlSnapshot["pendingHandoff
   ];
 }
 
-function buildRuntimeDetailItems(process: MissionControlSnapshot["runtimeProcesses"][number] | undefined) {
-  if (!process) {
-    return [{ text: "No runtime item selected", tone: "muted" as const }];
-  }
-
-    return [
-      { text: process.title, tone: "accent" as const, style: "block" as const },
-      { text: "agent", detail: process.agent ?? "unknown" },
-      { text: "transport", detail: process.transport ?? "unknown" },
-      { text: process.transport === "a2a" ? "handle" : "session", detail: process.sessionId ? shortenSessionId(process.sessionId) : "none" },
-      { text: "worker", detail: process.workerType },
-    { text: "runtime", detail: process.runtimeState ?? (process.isLive ? "live" : FEATURE_STATUS_LABEL[process.status]) },
-    ...(typeof process.lastSeenAgeMs === "number" ? [{ text: "last seen", detail: `${Math.round(process.lastSeenAgeMs / 1000)}s ago` }] : []),
-    ...(typeof process.lastOutputAgeMs === "number" ? [{ text: "last output", detail: `${Math.round(process.lastOutputAgeMs / 1000)}s ago` }] : []),
-    ...(typeof process.leaseRemainingMs === "number" ? [{ text: "lease", detail: `${Math.max(0, Math.round(process.leaseRemainingMs / 1000))}s left` }] : []),
-    ...(typeof process.retryCount === "number" ? [{ text: "retry", detail: String(process.retryCount) }] : []),
-    ...(process.currentActivity ? [{ text: "activity", detail: process.currentActivity }] : []),
-    ...(process.milestoneTitle ? [{ text: "milestone", detail: process.milestoneTitle }] : []),
-    ...(process.profile ? [{ text: "profile", detail: process.profile }] : []),
-    ...(process.failureReason ? [{ text: "failure", detail: process.failureReason }] : []),
-  ];
-}
-
-function buildWorkerHealthDetailItems(worker: NonNullable<MissionControlSnapshot["workerHealth"]>[number] | undefined) {
-  if (!worker) {
-    return [{ text: "No worker selected", tone: "muted" as const }];
-  }
-
-  return [
-    { text: worker.label, tone: "accent" as const, style: "block" as const },
-    { text: worker.detail, section: "Status" },
-    { text: worker.summary },
-    { text: worker.bestFor, section: "Best for" },
-    { text: worker.tradeoffs, section: "Tradeoffs" },
-    ...worker.checks.map((check) => ({
-      text: `${check.label}: ${check.ok ? "yes" : "no"}${check.detail ? ` · ${check.detail}` : ""}`,
-      section: "Checks",
-    })),
-  ];
-}
-
-function buildRuntimeOutputItems(process: MissionControlSnapshot["runtimeProcesses"][number] | undefined) {
-  if (!process) {
-    return [{ text: "No runtime output selected", tone: "muted" as const }];
-  }
-
-  const lines = process.outputLines ?? [];
-  return lines.length > 0
-    ? lines.map((line) => ({
-      text: `${line.timestamp.slice(11, 19)}  ${line.text}`,
-      section: "Stream",
-    }))
-    : [{ text: "No runtime output captured yet.", tone: "muted" as const }];
-}
+// Phase 3 strip: buildRuntimeDetailItems, buildWorkerHealthDetailItems,
+// and buildRuntimeOutputItems were deleted -- their backing data was
+// removed with the worker execution layer in Phase 1 and the surviving
+// modals are deleted in Commit 3.2.
 
 function formatTaskStatus(status: keyof typeof FEATURE_TASK_STATUS_LABEL): string {
   return FEATURE_TASK_STATUS_LABEL[status].toLowerCase();

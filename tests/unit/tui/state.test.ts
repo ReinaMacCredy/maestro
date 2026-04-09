@@ -40,7 +40,6 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
         { id: "f2", title: "F2", status: "pending", milestoneId: "m1", workerType: "test", hasReport: false },
         { id: "f3", title: "F3", status: "pending", milestoneId: "m2", workerType: "test", hasReport: false },
       ],
-      activeWorker: null,
       session: {
         branch: "main",
         workingTreeClean: false,
@@ -57,8 +56,6 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
         workerTypes: ["test"],
         backgroundMode: "solid",
       },
-      runtimeProcesses: [],
-      workerHealth: [],
       progressLog: [],
       milestones: [],
       canPause: true,
@@ -84,63 +81,9 @@ function makeState(overrides?: Partial<AppState>): AppState {
       expect(state.running).toBe(true);
     });
 
-    it("follows the live feature immediately when a run is already active", () => {
-      const state = createInitialState(makeSnapshot({
-        features: [
-          { id: "f1", title: "F1", status: "pending", milestoneId: "m1", workerType: "test", hasReport: false },
-          { id: "f2", title: "F2", status: "in-progress", milestoneId: "m1", workerType: "test", hasReport: false },
-          { id: "f3", title: "F3", status: "pending", milestoneId: "m2", workerType: "test", hasReport: false },
-        ],
-        activeFeature: {
-          id: "f2",
-          title: "Feature 2",
-          status: "in-progress",
-          milestoneId: "m1",
-          milestoneTitle: "Milestone 1",
-          workerType: "test",
-          description: "Running now",
-          preconditions: undefined,
-          expectedBehavior: undefined,
-          verificationSteps: [],
-          dependsOn: [],
-          fulfills: [],
-          validTransitions: ["review"],
-          runtimeState: "live",
-          agent: "demo-a2a",
-          sessionId: "sess-2",
-        },
-        activeWorker: {
-          featureId: "f2",
-          featureTitle: "Feature 2",
-          workerType: "test",
-          status: "in-progress",
-          elapsedMs: 10_000,
-          report: null,
-          runtimeState: "live",
-          agent: "demo-a2a",
-          sessionId: "sess-2",
-          transport: "a2a",
-          currentActivity: "Applying patch draft",
-          lastOutputAgeMs: 500,
-        },
-        runtimeProcesses: [{
-          featureId: "f2",
-          title: "Feature 2",
-          status: "in-progress",
-          workerType: "test",
-          hasReport: false,
-          isLive: true,
-          runtimeState: "live",
-          agent: "demo-a2a",
-          sessionId: "sess-2",
-          transport: "a2a",
-        }],
-      }));
-
-      expect(state.focusedPanel).toBe("features");
-      expect(state.leftPaneMode).toBe("preview");
-      expect(state.selectedFeatureIndex).toBe(1);
-    });
+    // Phase 3 strip: the "follows the live feature immediately" test
+    // relied on runtimeProcesses / activeWorker to auto-select a live
+    // feature index. Both stores were deleted so auto-follow is gone.
   });
 
 describe("reduce", () => {
@@ -534,188 +477,10 @@ describe("reduce", () => {
         });
       });
 
-      describe("open-processes", () => {
-        it("opens processes modal", () => {
-          const state = reduce(makeState(), { type: "open-processes" });
-          expect(state.modal.kind).toBe("processes");
-        });
-
-        it("defaults to the active live process instead of index zero", () => {
-          const state = reduce(makeState({
-            selectedFeatureIndex: 0,
-            snapshot: makeSnapshot({
-              features: [
-                { id: "f1", title: "F1", status: "pending", milestoneId: "m1", workerType: "test", hasReport: false },
-                { id: "f2", title: "F2", status: "in-progress", milestoneId: "m1", workerType: "test", hasReport: false },
-                { id: "f3", title: "F3", status: "pending", milestoneId: "m2", workerType: "test", hasReport: false },
-              ],
-              activeWorker: {
-                featureId: "f2",
-                featureTitle: "F2",
-                workerType: "test",
-                status: "in-progress",
-                elapsedMs: 10_000,
-                report: null,
-                runtimeState: "live",
-                agent: "demo-a2a",
-                sessionId: "sess-2",
-                transport: "a2a",
-              },
-              runtimeProcesses: [
-                { featureId: "f1", title: "F1", status: "assigned", workerType: "test", hasReport: false, isLive: true },
-                { featureId: "f2", title: "F2", status: "in-progress", workerType: "test", hasReport: false, isLive: true },
-              ],
-            }),
-          }), { type: "open-processes" });
-
-          expect(state.modal.kind).toBe("processes");
-          if (state.modal.kind === "processes") {
-            expect(state.modal.selectedProcessIndex).toBe(1);
-          }
-        });
-
-        it("does not open processes from home mode", () => {
-          const state = reduce(makeState({
-            snapshot: makeSnapshot({
-              mode: "home",
-              home: {
-                headline: "Home",
-                summary: "No mission",
-                locationLabel: "repo",
-                checks: [],
-                actions: [],
-                pendingHandoffs: [],
-              },
-            }),
-          }), { type: "open-processes" });
-
-          expect(state.modal.kind).toBe("none");
-        });
-
-        it("keeps the split runtime overlay open on enter and closes on escape", () => {
-          const opened = reduce(makeState({
-            snapshot: makeSnapshot({
-              runtimeProcesses: [{
-              featureId: "f1",
-              title: "F1",
-              status: "assigned",
-              workerType: "test",
-              hasReport: false,
-              isLive: true,
-            }],
-          }),
-          }), { type: "open-processes" });
-          const detail = reduce(opened, { type: "enter" });
-
-          expect(detail.modal.kind).toBe("processes");
-
-          const closed = reduce(detail, { type: "escape" });
-          expect(closed.modal.kind).toBe("none");
-        });
-      });
-
-      describe("open-workers", () => {
-        it("opens workers modal", () => {
-          const state = reduce(makeState({
-            snapshot: makeSnapshot({
-              workerHealth: [
-                {
-                  slug: "codex",
-                  label: "Codex",
-                  status: "ready",
-                  detail: "ready",
-                  lastCheckedAt: "2026-04-02T12:00:00.000Z",
-                  checks: [{ label: "command found", ok: true }],
-                  summary: "Fast, strong general-purpose coding.",
-                  bestFor: "everyday implementation",
-                  tradeoffs: "less exhaustive than Claude Code",
-                },
-              ],
-            }),
-          }), { type: "open-workers" });
-          expect(state.modal.kind).toBe("workers");
-        });
-      });
-
-      describe("open-runtime-output", () => {
-        it("opens runtime output for the selected runtime process", () => {
-          const state = reduce(makeState({
-            snapshot: makeSnapshot({
-              runtimeProcesses: [{
-                featureId: "f1",
-                title: "F1",
-                status: "assigned",
-                workerType: "test",
-                hasReport: false,
-                isLive: true,
-                outputLines: [{
-                  timestamp: "2026-04-02T12:00:10.000Z",
-                  kind: "stdout",
-                  text: "Running tests",
-                }],
-              }],
-            }),
-            modal: { kind: "processes", selectedProcessIndex: 0 },
-          }), { type: "open-runtime-output" });
-
-          expect(state.modal).toEqual({
-            kind: "runtime-output",
-            selectedProcessIndex: 0,
-            returnTarget: undefined,
-          });
-        });
-
-        it("defaults runtime output to the followed live process when opened directly", () => {
-          const state = reduce(makeState({
-            selectedFeatureIndex: 0,
-            snapshot: makeSnapshot({
-              features: [
-                { id: "f1", title: "F1", status: "pending", milestoneId: "m1", workerType: "test", hasReport: false },
-                { id: "f2", title: "F2", status: "in-progress", milestoneId: "m1", workerType: "test", hasReport: false },
-                { id: "f3", title: "F3", status: "pending", milestoneId: "m2", workerType: "test", hasReport: false },
-              ],
-              activeWorker: {
-                featureId: "f2",
-                featureTitle: "F2",
-                workerType: "test",
-                status: "in-progress",
-                elapsedMs: 10_000,
-                report: null,
-                runtimeState: "live",
-                agent: "demo-a2a",
-                sessionId: "sess-2",
-                transport: "a2a",
-              },
-              runtimeProcesses: [
-                {
-                  featureId: "f1",
-                  title: "F1",
-                  status: "assigned",
-                  workerType: "test",
-                  hasReport: false,
-                  isLive: true,
-                  outputLines: [{ timestamp: "2026-04-02T12:00:10.000Z", kind: "stdout", text: "Waiting" }],
-                },
-                {
-                  featureId: "f2",
-                  title: "F2",
-                  status: "in-progress",
-                  workerType: "test",
-                  hasReport: false,
-                  isLive: true,
-                  outputLines: [{ timestamp: "2026-04-02T12:00:10.000Z", kind: "stdout", text: "Running tests" }],
-                },
-              ],
-            }),
-          }), { type: "open-runtime-output" });
-
-          expect(state.modal).toEqual({
-            kind: "runtime-output",
-            selectedProcessIndex: 1,
-            returnTarget: undefined,
-          });
-        });
-      });
+      // Phase 3 strip: open-processes, open-workers, and open-runtime-output
+      // modals are deleted in Commit 3.2. Their tests referenced
+      // runtimeProcesses/workerHealth/activeWorker fields that were
+      // removed from MissionControlSnapshot in Commit 3.1.
 
       describe("open-dependencies", () => {
         it("opens dependencies modal", () => {
@@ -973,72 +738,12 @@ describe("reduce", () => {
         }
       });
 
-      it("auto-follows a newly live feature on the main dashboard", () => {
-        const state = makeState({
-          focusedPanel: "log",
-          leftPaneMode: "overview",
-          selectedFeatureIndex: 0,
-        });
-        const nextSnapshot = makeSnapshot({
-          activeFeature: {
-            id: "f2",
-            title: "Feature 2",
-            status: "in-progress",
-            milestoneId: "m1",
-            milestoneTitle: "Milestone 1",
-            workerType: "test",
-            description: "Running now",
-            preconditions: undefined,
-            expectedBehavior: undefined,
-            verificationSteps: [],
-            dependsOn: [],
-            fulfills: [],
-            validTransitions: ["review"],
-            runtimeState: "live",
-            agent: "demo-a2a",
-            sessionId: "sess-2",
-          },
-          features: [
-            { id: "f1", title: "F1", status: "pending", milestoneId: "m1", workerType: "t", hasReport: false },
-            { id: "f2", title: "F2", status: "in-progress", milestoneId: "m1", workerType: "t", hasReport: false },
-            { id: "f3", title: "F3", status: "pending", milestoneId: "m2", workerType: "t", hasReport: false },
-          ],
-          activeWorker: {
-            featureId: "f2",
-            featureTitle: "Feature 2",
-            workerType: "test",
-            status: "in-progress",
-            elapsedMs: 10_000,
-            report: null,
-            runtimeState: "live",
-            agent: "demo-a2a",
-            sessionId: "sess-2",
-            transport: "a2a",
-            currentActivity: "Applying patch draft",
-            lastOutputAgeMs: 500,
-          },
-          runtimeProcesses: [{
-            featureId: "f2",
-            title: "Feature 2",
-            status: "in-progress",
-            workerType: "test",
-            hasReport: false,
-            isLive: true,
-            runtimeState: "live",
-            agent: "demo-a2a",
-            sessionId: "sess-2",
-            transport: "a2a",
-          }],
-        });
+      // Phase 3 strip: auto-follow of live runtime features is gone.
+      // It relied on runtimeProcesses + activeWorker to detect that a
+      // previously pending feature moved into a running state. Without
+      // those stores there is no live-feature signal to follow.
 
-        const next = reduce(state, { type: "update-snapshot", snapshot: nextSnapshot });
-
-        expect(next.selectedFeatureIndex).toBe(1);
-        expect(next.focusedPanel).toBe("features");
-        expect(next.leftPaneMode).toBe("preview");
-      });
-
-      it("does not auto-follow a newly live feature while a config modal is open", () => {
+      it("does not mutate focus when a config modal is open and a snapshot lands", () => {
         const state = makeState({
           leftPaneMode: "overview",
           selectedFeatureIndex: 0,
@@ -1051,27 +756,6 @@ describe("reduce", () => {
           },
         });
         const nextSnapshot = makeSnapshot({
-          activeWorker: {
-            featureId: "f2",
-            featureTitle: "Feature 2",
-            workerType: "test",
-            status: "in-progress",
-            elapsedMs: 10_000,
-            report: null,
-            runtimeState: "live",
-            agent: "demo-a2a",
-            sessionId: "sess-2",
-            transport: "a2a",
-          },
-          runtimeProcesses: [{
-            featureId: "f2",
-            title: "Feature 2",
-            status: "in-progress",
-            workerType: "test",
-            hasReport: false,
-            isLive: true,
-            runtimeState: "live",
-          }],
           features: [
             { id: "f1", title: "F1", status: "pending", milestoneId: "m1", workerType: "t", hasReport: false },
             { id: "f2", title: "F2", status: "in-progress", milestoneId: "m1", workerType: "t", hasReport: false },
@@ -1086,31 +770,9 @@ describe("reduce", () => {
         expect(next.modal.kind).toBe("config");
       });
 
-      it("preserves process selection by feature id when runtime items reorder", () => {
-        const state = makeState({
-          snapshot: makeSnapshot({
-            runtimeProcesses: [
-              { featureId: "f1", title: "F1", status: "in-progress", workerType: "t", hasReport: false, isLive: true },
-              { featureId: "f2", title: "F2", status: "assigned", workerType: "t", hasReport: false, isLive: true },
-            ],
-          }),
-          modal: { kind: "processes", selectedProcessIndex: 1 },
-        });
-        const nextSnapshot = makeSnapshot({
-          runtimeProcesses: [
-            { featureId: "f2", title: "F2", status: "assigned", workerType: "t", hasReport: false, isLive: true },
-            { featureId: "f1", title: "F1", status: "in-progress", workerType: "t", hasReport: false, isLive: true },
-          ],
-        });
-
-        const next = reduce(state, { type: "update-snapshot", snapshot: nextSnapshot });
-
-        expect(next.modal.kind).toBe("processes");
-        if (next.modal.kind === "processes") {
-          expect(next.modal.selectedProcessIndex).toBe(0);
-          expect(next.snapshot.runtimeProcesses[next.modal.selectedProcessIndex]?.featureId).toBe("f2");
-        }
-      });
+      // Phase 3 strip: the "preserves process selection by feature id
+      // when runtime items reorder" test covered the runtimeProcesses
+      // modal which is deleted in Commit 3.2.
 
       describe("config scope flow", () => {
       it("toggles the save scope inline when S is pressed", () => {

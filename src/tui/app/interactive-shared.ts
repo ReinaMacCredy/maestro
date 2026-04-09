@@ -7,12 +7,10 @@ export interface InteractiveOptions {
   reloadSnapshot: () => Promise<MissionControlSnapshot>;
 }
 
-export function getSnapshotPollIntervalMs(snapshot: MissionControlSnapshot): number {
-  const hasActiveRuntime = snapshot.runtimeProcesses.some((process) =>
-    process.isLive
-    || process.runtimeState === "starting"
-    || process.runtimeState === "stale"
-    || process.runtimeState === "recoverable"
-  );
-  return hasActiveRuntime ? 1_000 : 5_000;
+// Phase 3 strip: Mission Control no longer tracks live worker runtimes,
+// so the poll interval is simply the long interval. The function is
+// retained as the only poll-cadence hook so future callers can slow or
+// speed up polling without touching interactive.tsx directly.
+export function getSnapshotPollIntervalMs(_snapshot: MissionControlSnapshot): number {
+  return 5_000;
 }

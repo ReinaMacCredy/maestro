@@ -104,7 +104,6 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
         validTransitions: ["assigned"],
       },
     ],
-    activeWorker: null,
     session: null,
     pendingHandoffs: [
       { id: "handoff-1", agent: "codex", message: "First handoff" },
@@ -117,38 +116,8 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
       checks: [],
       missionDirectory: ".maestro/missions/2026-04-02-001",
       workerTypes: ["test-skill"],
+      backgroundMode: "solid",
     },
-    runtimeProcesses: [
-      {
-        featureId: "f1",
-        title: "Feature One",
-        status: "assigned",
-        workerType: "test-skill",
-        hasReport: false,
-        isLive: true,
-        currentActivity: "Reading runtime-supervision.usecase.ts",
-        outputLines: [
-          {
-            timestamp: "2026-04-02T12:00:10.000Z",
-            kind: "stdout",
-            text: "Reading runtime-supervision.usecase.ts",
-          },
-        ],
-      },
-    ],
-    workerHealth: [
-      {
-        slug: "codex",
-        label: "Codex",
-        status: "ready",
-        detail: "ready",
-        lastCheckedAt: "2026-04-02T12:00:00.000Z",
-        checks: [{ label: "command found", ok: true }],
-        summary: "Fast, strong general-purpose coding.",
-        bestFor: "everyday implementation",
-        tradeoffs: "less exhaustive than Claude Code",
-      },
-    ],
     progressLog: [],
     milestones: [{ id: "m1", title: "Setup", status: "executing", order: 0 }],
     canPause: true,
@@ -159,11 +128,13 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
 }
 
 describe("buildPreviewState", () => {
-  it("defaults to the live feature preview when runtime activity exists", () => {
+  it("defaults to the overview left pane when no selector is provided", () => {
     const state = buildPreviewState({ snapshot: makeSnapshot() });
 
+    // Phase 3 strip: the live-feature auto-follow path was deleted.
+    // The preview now starts in overview mode on the first feature.
     expect(state.modal.kind).toBe("none");
-    expect(state.leftPaneMode).toBe("preview");
+    expect(state.leftPaneMode).toBe("overview");
     expect(state.selectedFeatureIndex).toBe(0);
   });
 
@@ -259,45 +230,10 @@ describe("buildPreviewState", () => {
       });
     });
 
-  it("opens the runtime screen", () => {
-    const state = buildPreviewState({
-      snapshot: makeSnapshot(),
-      screen: "runtime",
-    });
-
-    expect(state.modal).toEqual({
-      kind: "processes",
-      selectedProcessIndex: 0,
-      returnTarget: undefined,
-    });
-  });
-
-  it("opens the workers screen", () => {
-    const state = buildPreviewState({
-      snapshot: makeSnapshot(),
-      screen: "workers",
-    });
-
-    expect(state.modal).toEqual({
-      kind: "workers",
-      selectedWorkerIndex: 0,
-      returnTarget: undefined,
-    });
-  });
-
-  it("opens the runtime output screen for the requested feature", () => {
-    const state = buildPreviewState({
-      snapshot: makeSnapshot(),
-      screen: "output",
-      featureId: "f1",
-    });
-
-    expect(state.modal).toEqual({
-      kind: "runtime-output",
-      selectedProcessIndex: 0,
-      returnTarget: undefined,
-    });
-  });
+  // Phase 3 strip: the runtime, workers, and output previews were
+  // deleted. Their data was removed with the worker execution layer
+  // in Phase 1 and the screens are removed from the preview set in
+  // Commit 3.2.
 
   it("rejects dependencies previews in home mode", () => {
     expect(() =>
@@ -329,20 +265,6 @@ describe("buildPreviewState", () => {
         featureId: "f1",
       })
       ).toThrow("--feature is only supported");
-    });
-
-    it("accepts feature selectors on output previews", () => {
-      const state = buildPreviewState({
-        snapshot: makeSnapshot(),
-        screen: "output",
-        featureId: "f1",
-      });
-
-      expect(state.modal).toEqual({
-        kind: "runtime-output",
-        selectedProcessIndex: 0,
-        returnTarget: undefined,
-      });
     });
 
   it("rejects unknown handoff selectors", () => {

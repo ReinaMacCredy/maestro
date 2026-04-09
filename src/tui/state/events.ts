@@ -1,9 +1,12 @@
 /**
  * Derive timeline events from existing entity timestamps.
  * No new event infrastructure -- reads from existing store data.
+ *
+ * Phase 3 strip: worker progress events were deleted with the Phase 1
+ * worker execution layer; the deriver now reads only mission, feature,
+ * assertion, and checkpoint timestamps.
  */
 import type { Mission, Feature, Checkpoint, Assertion } from "../../domain/mission-types.js";
-import type { RuntimeEventRecord } from "../../domain/worker-types.js";
 import type { MilestoneReportProgress } from "../../usecases/mission-report.usecase.js";
 import type { MissionControlEvent } from "./types.js";
 
@@ -13,7 +16,6 @@ interface DeriveEventsInput {
   assertions: readonly Assertion[];
   checkpoints: readonly Checkpoint[];
   milestoneProgress: readonly MilestoneReportProgress[];
-  workerEvents?: readonly RuntimeEventRecord[];
 }
 
 /**
@@ -52,19 +54,6 @@ export function deriveEvents(input: DeriveEventsInput): readonly MissionControlE
       relativeMs: toMs(cp.timestamp) - baseMs,
       kind: "checkpoint",
       title: `Checkpoint saved: ${cp.id}`,
-    });
-  }
-
-  for (const event of input.workerEvents ?? []) {
-    if (event.kind === "heartbeat") {
-      continue;
-    }
-    events.push({
-      timestamp: event.timestamp,
-      relativeMs: toMs(event.timestamp) - baseMs,
-      kind: "worker",
-      title: `${event.featureId} · ${event.worker}`,
-      detail: event.text,
     });
   }
 

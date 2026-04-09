@@ -431,20 +431,9 @@ export function reduce(state: AppState, action: Action): AppState {
       };
 
     case "open-runtime-output": {
-        if (state.snapshot.mode !== "mission") return state;
-        if (state.snapshot.runtimeProcesses.length === 0) return state;
-        const selectedProcessIndex = state.modal.kind === "processes"
-          ? state.modal.selectedProcessIndex
-          : getPreferredRuntimeProcessIndex(state.snapshot, state.snapshot.features[state.selectedFeatureIndex]?.id);
-        return {
-          ...state,
-          modal: {
-            kind: "runtime-output",
-            selectedProcessIndex: Math.min(selectedProcessIndex, state.snapshot.runtimeProcesses.length - 1),
-            returnTarget: getModalReturnTarget(state.modal),
-            returnPalette: getCommandPaletteReturnState(state.modal),
-          },
-        };
+      // Phase 3 strip: runtime output is gone. Commit 3.2 removes the
+      // modal kind entirely. Until then the handler is a no-op.
+      return state;
     }
 
     case "toggle-copy-mode":
@@ -509,18 +498,17 @@ export function reduce(state: AppState, action: Action): AppState {
       }
 
       if (state.modal.kind === "workers") {
+        // Phase 3 strip: worker health pane has no data; Commit 3.2 removes
+        // the modal kind. Snapshot updates leave selection untouched.
         return {
           ...baseState,
-            modal: {
-              kind: "workers",
-              selectedWorkerIndex: Math.min(
-                state.modal.selectedWorkerIndex,
-                Math.max(0, (action.snapshot.workerHealth ?? []).length - 1),
-              ),
-              returnTarget: state.modal.returnTarget,
-              returnPalette: state.modal.returnPalette,
-            },
-          };
+          modal: {
+            kind: "workers",
+            selectedWorkerIndex: 0,
+            returnTarget: state.modal.returnTarget,
+            returnPalette: state.modal.returnPalette,
+          },
+        };
       }
 
           if (state.modal.kind === "processes") {
@@ -1026,21 +1014,9 @@ function handleModalNavigate(state: AppState, direction: "up" | "down"): AppStat
   }
 
   if (state.modal.kind === "processes") {
-    const total = state.snapshot.runtimeProcesses.length;
-    if (total === 0) return state;
-
-    const selectedProcessIndex = direction === "down"
-      ? Math.min(state.modal.selectedProcessIndex + 1, total - 1)
-      : Math.max(state.modal.selectedProcessIndex - 1, 0);
-
-    return {
-      ...state,
-      modal: {
-        kind: "processes",
-        selectedProcessIndex,
-        returnTarget: state.modal.returnTarget,
-      },
-    };
+    // Phase 3 strip: runtime process modal has no rows; Commit 3.2
+    // removes the modal kind entirely.
+    return state;
   }
 
   if (state.modal.kind === "dependencies") {
@@ -1062,21 +1038,9 @@ function handleModalNavigate(state: AppState, direction: "up" | "down"): AppStat
     }
 
     if (state.modal.kind === "workers") {
-      const total = state.snapshot.workerHealth?.length ?? 0;
-      if (total === 0) return state;
-
-      const selectedWorkerIndex = direction === "down"
-        ? Math.min(state.modal.selectedWorkerIndex + 1, total - 1)
-        : Math.max(state.modal.selectedWorkerIndex - 1, 0);
-
-      return {
-        ...state,
-        modal: {
-          kind: "workers",
-          selectedWorkerIndex,
-          returnTarget: state.modal.returnTarget,
-        },
-      };
+      // Phase 3 strip: workers modal has no rows; Commit 3.2 removes
+      // the modal kind entirely.
+      return state;
     }
 
       if (state.modal.kind === "memory") {
@@ -1178,63 +1142,29 @@ function blocksLiveFeatureAutoFollow(modal: ModalState): boolean {
     || modal.kind === "graph";
 }
 
-function getLiveRuntimeFeatureId(snapshot: MissionControlSnapshot): string | undefined {
-  if (snapshot.mode !== "mission") {
-    return undefined;
-  }
-
-  if (snapshot.activeWorker?.featureId) {
-    return snapshot.activeWorker.featureId;
-  }
-
-  return snapshot.runtimeProcesses.find((process) =>
-    process.isLive
-    || process.runtimeState === "starting"
-    || process.runtimeState === "live"
-    || process.runtimeState === "stale"
-    || process.runtimeState === "recoverable"
-  )?.featureId;
+function getLiveRuntimeFeatureId(_snapshot: MissionControlSnapshot): string | undefined {
+  // Phase 3 strip: live runtime tracking is gone. The reducer kept
+  // this helper on the live-feature auto-follow path; with no runtime
+  // panes there is nothing to auto-follow.
+  return undefined;
 }
 
 function getPreferredRuntimeProcessIndex(
-  snapshot: MissionControlSnapshot,
-  selectedFeatureId: string | undefined,
+  _snapshot: MissionControlSnapshot,
+  _selectedFeatureId: string | undefined,
 ): number {
-  if (snapshot.mode !== "mission" || snapshot.runtimeProcesses.length === 0) {
-    return 0;
-  }
-
-  const candidateFeatureIds = [
-    snapshot.activeWorker?.featureId,
-    selectedFeatureId,
-    getLiveRuntimeFeatureId(snapshot),
-  ].filter((featureId): featureId is string => typeof featureId === "string" && featureId.length > 0);
-
-  for (const featureId of candidateFeatureIds) {
-    const index = snapshot.runtimeProcesses.findIndex((process) => process.featureId === featureId);
-    if (index >= 0) {
-      return index;
-    }
-  }
-
+  // Phase 3 strip: runtime process modal is removed in Commit 3.2.
   return 0;
 }
 
 function getUpdatedRuntimeProcessIndex(
-  previousSnapshot: MissionControlSnapshot,
-  nextSnapshot: MissionControlSnapshot,
-  previousSelectedIndex: number,
-  selectedFeatureId: string | undefined,
+  _previousSnapshot: MissionControlSnapshot,
+  _nextSnapshot: MissionControlSnapshot,
+  _previousSelectedIndex: number,
+  _selectedFeatureId: string | undefined,
 ): number {
-  const previousFeatureId = previousSnapshot.runtimeProcesses[previousSelectedIndex]?.featureId;
-  if (previousFeatureId) {
-    const preservedIndex = nextSnapshot.runtimeProcesses.findIndex((process) => process.featureId === previousFeatureId);
-    if (preservedIndex >= 0) {
-      return preservedIndex;
-    }
-  }
-
-  return getPreferredRuntimeProcessIndex(nextSnapshot, selectedFeatureId);
+  // Phase 3 strip: runtime process modal is removed in Commit 3.2.
+  return 0;
 }
 
 function closeOrReturnModal(state: AppState): AppState {

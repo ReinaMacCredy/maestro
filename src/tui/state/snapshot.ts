@@ -17,11 +17,8 @@ import type { HandoffStorePort } from "../../ports/handoff-store.port.js";
 import type { UkiHandoff } from "../../domain/uki-types.js";
 import type { Mission, Feature } from "../../domain/mission-types.js";
 import { getMissionControlBackgroundMode, listIgnoredProjectConfigKeys } from "../../domain/ui-config.js";
-import type { RuntimeState, WorkerRuntime } from "../../domain/runtime-types.js";
 import type { DoctorCheck, StatusReport } from "../../domain/types.js";
-import type { RuntimeEventRecord } from "../../domain/worker-types.js";
 import { generateMissionReport, type MissionReport } from "../../usecases/mission-report.usecase.js";
-import { runDoctor } from "../../usecases/run-doctor.usecase.js";
 import { getValidFeatureTransitions } from "../../domain/mission-state.js";
 import { getGraphContext } from "../../usecases/graph-context.usecase.js";
 import { buildMemoryStats } from "../../usecases/memory-stats.usecase.js";
@@ -31,19 +28,15 @@ import type {
   MissionControlSnapshot,
   MissionControlFeatureRow,
   MissionControlFeatureDetail,
-  MissionControlWorkerPane,
-  MissionControlWorkerHealthRow,
   MissionControlMilestoneRow,
   MissionControlHomeAction,
   MissionControlHomeHandoff,
-  MissionControlRuntimeProcessRow,
   BlockedByRef,
   TaskPreviewPane,
   MissionOverviewPane,
   DependencyMapRow,
   MissionControlMemorySnapshot,
 } from "./types.js";
-import type { TransportType, WorkerConfig } from "../../domain/worker-types.js";
 
 export interface SnapshotDeps {
   missionStore: MissionStorePort;
@@ -74,27 +67,6 @@ export interface SnapshotBuildOptions {
   readonly probeWorkers?: boolean;
 }
 
-interface RuntimeView {
-  readonly runtimeState: RuntimeState;
-  readonly lastSeenAgeMs: number;
-  readonly failureReason?: string;
-  readonly retryCount: number;
-  readonly agent: string;
-  readonly sessionId?: string;
-  readonly startedAtMs: number;
-  readonly leaseRemainingMs: number;
-}
-
-interface RuntimeTelemetry {
-  readonly currentActivity?: string;
-  readonly lastOutputAgeMs?: number;
-  readonly outputLines: readonly {
-    timestamp: string;
-    kind: "status" | "stdout" | "stderr";
-    text: string;
-  }[];
-}
-
 interface FeatureGraphEntry {
   readonly feature: Feature;
   readonly blockedBy: readonly Feature[];
@@ -108,7 +80,7 @@ interface FeatureGraphEntry {
 export async function buildSnapshot(
   deps: SnapshotDeps,
   missionId: string,
-  options: SnapshotBuildOptions = {},
+  _options: SnapshotBuildOptions = {},
 ): Promise<MissionControlSnapshot> {
   const [
     report,
@@ -144,23 +116,16 @@ export async function buildSnapshot(
   const mission = report.mission;
   const now = Date.now();
   const startMs = new Date(mission.approvedAt ?? mission.createdAt).getTime();
-  // Phase 1 strip: the conductor no longer reads runtime state; worker
-  // and runtime panes are empty until Phase 3 removes them outright.
-  const runtimeByFeature = new Map<string, RuntimeView>();
-  const runtimeEventsByFeature = new Map<string, readonly RuntimeEventRecord[]>();
-  const runtimeTelemetryByFeature = new Map<string, RuntimeTelemetry>();
   const featureGraph = buildFeatureGraph(features);
-  // Phase 1 strip: worker health pane is empty until Phase 3 removes it.
-  const workerHealth: readonly MissionControlWorkerHealthRow[] = [];
-    const taskPreviews = features.map((feature) =>
-      buildTaskPreview(feature, report, runtimeByFeature, featureGraph.get(feature.id))
-    );
-    const checks = [
-      ...env.checks,
-      ...buildIgnoredProjectOverrideChecks(configLayers.project),
-    ];
-    const backgroundMode = getMissionControlBackgroundMode(configLayers.effective);
-    const taskPreviewById = new Map(taskPreviews.map((preview) => [preview.id, preview]));
+  const taskPreviews = features.map((feature) =>
+    buildTaskPreview(feature, report, featureGraph.get(feature.id))
+  );
+  const checks = [
+    ...env.checks,
+    ...buildIgnoredProjectOverrideChecks(configLayers.project),
+  ];
+  const backgroundMode = getMissionControlBackgroundMode(configLayers.effective);
+  const taskPreviewById = new Map(taskPreviews.map((preview) => [preview.id, preview]));
 
   // Feature rows
   const featureRows: MissionControlFeatureRow[] = features.map((f) => {
@@ -181,19 +146,15 @@ export async function buildSnapshot(
   // Active feature: first assigned or in-progress
   const activeFeature = findActiveFeature(taskPreviews);
 
-  // Active worker
-    const effectiveWorkers = configLayers.effective.workers ?? {};
-  const activeWorker = buildActiveWorker(features, runtimeByFeature, runtimeTelemetryByFeature, now, effectiveWorkers);
-
-  // Progress log
+  // Progress log: mission/feature/assertion/checkpoint events only.
+  // Phase 3 strip: worker progress events no longer exist.
   const progressLog = deriveEvents({
     mission,
     features,
-      assertions,
-      checkpoints,
-      milestoneProgress: report.milestones,
-      workerEvents: [...runtimeEventsByFeature.values()].flat(),
-    });
+    assertions,
+    checkpoints,
+    milestoneProgress: report.milestones,
+  });
 
   // Milestone rows
   const milestones: MissionControlMilestoneRow[] = report.milestones.map((mp) => ({
@@ -225,7 +186,6 @@ export async function buildSnapshot(
     mission,
     features,
     featureGraph,
-    runtimeByFeature,
     {
       doneCount,
       blockedCount,
@@ -235,7 +195,7 @@ export async function buildSnapshot(
       gateLabel,
     },
   );
-  const sessionSidebar = buildSessionSidebar(gitState, activeWorker);
+  const sessionSidebar = buildSessionSidebar(gitState);
 
   return {
     mode: "mission",
@@ -253,49 +213,39 @@ export async function buildSnapshot(
       queued: queuedCount,
       completionPct: report.summary.overallFeaturePct,
       },
-      tokenCounters: null, // No telemetry infrastructure yet
-      missionOverview,
-      activeFeature,
-      features: featureRows,
-      taskPreviews,
-      activeWorker,
-      session: sessionSidebar,
-      pendingHandoffs,
-        configSummary: {
-        configSource: env.status.configSource,
-        cassAvailable: env.status.cassAvailable,
-        gitAvailable: env.status.gitAvailable,
-          checks,
-          missionDirectory: `.maestro/missions/${mission.id}`,
-          workerTypes,
-          backgroundMode,
-          },
-              configInspector: buildConfigInspector(configLayers, checks, features, workerHealth),
-            workerHealth,
-            runtimeProcesses: buildRuntimeProcesses(
-              mission,
-              features,
-              runtimeByFeature,
-              runtimeTelemetryByFeature,
-              activeWorker,
-              effectiveWorkers,
-            ),
-        progressLog,
-      milestones,
-      gateBlocked,
-      gateLabel,
-      canPause: mission.status === "executing",
-      canResume: mission.status === "paused",
-        memory: memorySnapshot,
-        memoryStats: memorySnapshot?.stats ?? null,
-        home: null,
-    };
-  }
+    tokenCounters: null, // No telemetry infrastructure yet
+    missionOverview,
+    activeFeature,
+    features: featureRows,
+    taskPreviews,
+    session: sessionSidebar,
+    pendingHandoffs,
+    configSummary: {
+      configSource: env.status.configSource,
+      cassAvailable: env.status.cassAvailable,
+      gitAvailable: env.status.gitAvailable,
+      checks,
+      missionDirectory: `.maestro/missions/${mission.id}`,
+      workerTypes,
+      backgroundMode,
+    },
+    configInspector: buildConfigInspector(configLayers, checks, features, []),
+    progressLog,
+    milestones,
+    gateBlocked,
+    gateLabel,
+    canPause: mission.status === "executing",
+    canResume: mission.status === "paused",
+    memory: memorySnapshot,
+    memoryStats: memorySnapshot?.stats ?? null,
+    home: null,
+  };
+}
 
 export async function buildHomeSnapshot(
   deps: HomeSnapshotDeps,
   cwd: string,
-  options: SnapshotBuildOptions = {},
+  _options: SnapshotBuildOptions = {},
 ): Promise<MissionControlSnapshot> {
   const [env, configLayers, gitState, memorySnapshot] = await Promise.all([
     buildMissionControlEnvironmentSummary(deps.config, deps.git, cwd),
@@ -330,17 +280,14 @@ export async function buildHomeSnapshot(
   // Phase 2: populate pending handoffs from the new UKI handoff store.
   const pendingHandoffs = await loadPendingHandoffs(deps.handoffStore);
 
-    // Phase 1 strip: worker health pane is empty until Phase 3 removes it.
-    const workerHealth: readonly MissionControlWorkerHealthRow[] = [];
-
-    return {
+  return {
     mode: "home",
     missionId: "home",
     missionTitle: headline,
     missionStatus: "approved",
     effectiveStatus: "approved",
     elapsedMs: 0,
-      featureProgress: { done: 0, total: 0, active: 0 },
+    featureProgress: { done: 0, total: 0, active: 0 },
     statusProgress: {
       completed: 0,
       total: 0,
@@ -349,45 +296,40 @@ export async function buildHomeSnapshot(
       queued: 0,
       completionPct: 0,
     },
-      tokenCounters: null,
-      missionOverview: null,
-      activeFeature: null,
-      features: [],
-      taskPreviews: [],
-      activeWorker: null,
-      session: gitState
-        ? {
-          agent: undefined,
-          sessionId: undefined,
-          branch: gitState.branch,
-          workingTreeClean: gitState.workingTreeClean,
-          diffStat: gitState.diffStat,
-          changedFiles: gitState.changedFiles,
-          fileChanges: gitState.fileChanges ?? [],
-        }
-        : null,
+    tokenCounters: null,
+    missionOverview: null,
+    activeFeature: null,
+    features: [],
+    taskPreviews: [],
+    session: gitState
+      ? {
+        branch: gitState.branch,
+        workingTreeClean: gitState.workingTreeClean,
+        diffStat: gitState.diffStat,
+        changedFiles: gitState.changedFiles,
+        fileChanges: gitState.fileChanges ?? [],
+      }
+      : null,
     pendingHandoffs,
     configSummary: {
       configSource: status.configSource,
       cassAvailable: status.cassAvailable,
       gitAvailable: status.gitAvailable,
-        checks,
-        missionDirectory: null,
-        workerTypes: [],
-        backgroundMode,
-      },
-          configInspector: buildConfigInspector(configLayers, checks, [], workerHealth),
-        workerHealth,
-        runtimeProcesses: [],
+      checks,
+      missionDirectory: null,
+      workerTypes: [],
+      backgroundMode,
+    },
+    configInspector: buildConfigInspector(configLayers, checks, [], []),
     progressLog: [],
     milestones: [],
     gateBlocked: false,
     gateLabel: null,
     canPause: false,
     canResume: false,
-      memory: memorySnapshot,
-      memoryStats: memorySnapshot?.stats ?? null,
-      home: {
+    memory: memorySnapshot,
+    memoryStats: memorySnapshot?.stats ?? null,
+    home: {
       headline,
       summary,
       locationLabel: status.gitAvailable ? cwd : "Outside a git repository",
@@ -435,46 +377,6 @@ function findActiveFeature(taskPreviews: readonly TaskPreviewPane[]): MissionCon
     (feature) => feature.status === "assigned" || feature.status === "in-progress" || feature.status === "review",
   ) ?? taskPreviews.find((feature) => feature.status === "pending") ?? null;
 }
-
-function buildActiveWorker(
-  features: readonly Feature[],
-  runtimeByFeature: ReadonlyMap<string, RuntimeView>,
-  telemetryByFeature: ReadonlyMap<string, RuntimeTelemetry>,
-  nowMs: number,
-  workers: Readonly<Record<string, WorkerConfig>>,
-  ): MissionControlWorkerPane | null {
-    const active = features.find((feature) => {
-      if (!(feature.status === "assigned" || feature.status === "in-progress" || feature.status === "review")) {
-        return false;
-      }
-      return runtimeByFeature.has(feature.id);
-    });
-
-    if (!active) return null;
-
-    const runtime = runtimeByFeature.get(active.id);
-    if (!runtime) return null;
-    const telemetry = telemetryByFeature.get(active.id);
-    const featureStartMs = runtime?.startedAtMs ?? new Date(active.updatedAt).getTime();
-
-  return {
-    featureId: active.id,
-    featureTitle: active.title,
-    workerType: active.workerType,
-    status: active.status,
-    elapsedMs: nowMs - featureStartMs,
-    report: active.report ?? null,
-    runtimeState: presentRuntimeState(runtime, active.status),
-    lastSeenAgeMs: runtime?.lastSeenAgeMs,
-    failureReason: runtime?.failureReason,
-      retryCount: runtime?.retryCount,
-      agent: runtime?.agent,
-      sessionId: runtime?.sessionId,
-      transport: resolveWorkerTransport(runtime?.agent, workers),
-      currentActivity: telemetry?.currentActivity,
-      lastOutputAgeMs: telemetry?.lastOutputAgeMs,
-      };
-  }
 
 const MEMORY_SNAPSHOT_TTL_MS = 30_000;
 let memorySnapshotCache: { value: MissionControlMemorySnapshot | null; expiresAt: number } | undefined;
@@ -575,64 +477,18 @@ function buildHomeActions(
   actions.push({
     label: "Run environment checks",
     command: "maestro doctor",
-    detail: "Verify git, CASS, and config health before starting work.",
+    detail: "Verify git and config health before starting work.",
   });
 
   return actions;
 }
 
-function buildRuntimeProcesses(
-  mission: Mission,
-  features: readonly Feature[],
-  runtimeByFeature: ReadonlyMap<string, RuntimeView>,
-  runtimeTelemetryByFeature: ReadonlyMap<string, RuntimeTelemetry>,
-  activeWorker: MissionControlWorkerPane | null,
-  workers: Readonly<Record<string, WorkerConfig>>,
-  ): readonly MissionControlRuntimeProcessRow[] {
-    const milestoneById = new Map(mission.milestones.map((milestone) => [milestone.id, milestone]));
-    return features
-        .filter((feature) => {
-          const runtime = runtimeByFeature.get(feature.id);
-          return runtime !== undefined
-            && runtime.runtimeState !== "completed"
-            && !(feature.status === "pending" && runtime.runtimeState === "starting");
-          })
-            .map((feature) => {
-              const runtime = runtimeByFeature.get(feature.id);
-              const telemetry = runtimeTelemetryByFeature.get(feature.id);
-              const milestone = milestoneById.get(feature.milestoneId);
-            return {
-            featureId: feature.id,
-            title: feature.title,
-            milestoneTitle: milestone?.title,
-            profile: milestone?.profile,
-            status: feature.status,
-            workerType: feature.workerType,
-          hasReport: feature.report !== undefined && feature.report !== null,
-          isLive: presentRuntimeState(runtime, feature.status) === "live",
-          runtimeState: presentRuntimeState(runtime, feature.status),
-        lastSeenAgeMs: runtime?.lastSeenAgeMs,
-          failureReason: runtime?.failureReason,
-            retryCount: runtime?.retryCount,
-            agent: runtime?.agent,
-            sessionId: runtime?.sessionId,
-            transport: resolveWorkerTransport(runtime?.agent, workers),
-            currentActivity: telemetry?.currentActivity,
-            lastOutputAgeMs: telemetry?.lastOutputAgeMs,
-            leaseRemainingMs: runtime?.leaseRemainingMs,
-          outputLines: telemetry?.outputLines,
-        };
-      });
-    }
-
 function buildTaskPreview(
   active: Feature,
   report: MissionReport,
-  runtimeByFeature: ReadonlyMap<string, RuntimeView>,
   graphEntry?: FeatureGraphEntry,
 ): TaskPreviewPane {
   const milestone = report.mission.milestones.find((m) => m.id === active.milestoneId);
-  const runtime = runtimeByFeature.get(active.id);
 
   return {
     id: active.id,
@@ -650,12 +506,6 @@ function buildTaskPreview(
     unblocks: (graphEntry?.unblocks ?? []).map(toFeatureRef),
     fulfills: active.fulfills,
     validTransitions: [...getValidFeatureTransitions(active.status)],
-    runtimeState: presentRuntimeState(runtime, active.status),
-    lastSeenAgeMs: runtime?.lastSeenAgeMs,
-    failureReason: runtime?.failureReason,
-    retryCount: runtime?.retryCount,
-    agent: runtime?.agent,
-    sessionId: runtime?.sessionId,
   };
 }
 
@@ -698,7 +548,6 @@ function buildMissionOverview(
   mission: Mission,
   features: readonly Feature[],
   featureGraph: ReadonlyMap<string, FeatureGraphEntry>,
-  runtimeByFeature: ReadonlyMap<string, RuntimeView>,
   summary: {
     doneCount: number;
     blockedCount: number;
@@ -708,16 +557,6 @@ function buildMissionOverview(
     gateLabel: string | null;
   },
 ): MissionOverviewPane {
-  const agentCounts = new Map<string, number>();
-  for (const feature of features) {
-    const runtime = runtimeByFeature.get(feature.id);
-    if (!runtime?.agent || runtime.agent === "unknown") continue;
-    if (!(feature.status === "assigned" || feature.status === "in-progress" || feature.status === "review")) {
-      continue;
-    }
-    agentCounts.set(runtime.agent, (agentCounts.get(runtime.agent) ?? 0) + 1);
-  }
-
   return {
     missionLabel: `Mission: ${mission.title}`,
     statusLabel: mission.status,
@@ -727,9 +566,9 @@ function buildMissionOverview(
     blockedCount: summary.blockedCount,
     currentMilestone: summary.currentMilestone,
     gateLabel: summary.gateLabel,
-    agentSummary: [...agentCounts.entries()]
-      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-      .map(([agent, count]) => ({ agent, count })),
+    // Phase 3 strip: agentSummary was derived from runtime state. Without
+    // a runtime store there is no per-agent activity to report.
+    agentSummary: [],
     dependencyMap: buildMinimalDependencyMap(features, featureGraph, summary.currentMilestoneId),
   };
 }
@@ -766,12 +605,8 @@ function buildMinimalDependencyMap(
 
 function buildSessionSidebar(
   gitState: Awaited<ReturnType<GitPort["getState"]>>,
-  activeWorker: MissionControlWorkerPane | null,
 ) {
   return {
-    agent: activeWorker?.agent,
-    sessionId: activeWorker?.sessionId,
-    transport: activeWorker?.transport,
     branch: gitState.branch,
     workingTreeClean: gitState.workingTreeClean,
     diffStat: gitState.diffStat,
@@ -780,68 +615,12 @@ function buildSessionSidebar(
   };
 }
 
-function resolveWorkerTransport(
-  agent: string | undefined,
-  workers: Readonly<Record<string, WorkerConfig>>,
-): TransportType | undefined {
-  if (!agent) {
-    return undefined;
-  }
-
-  return workers[agent]?.transport;
-}
-
 function toFeatureRef(feature: Feature): BlockedByRef {
   return {
     id: feature.id,
     title: feature.title,
     status: feature.status,
   };
-}
-
-function buildRuntimeTelemetry(
-  events: readonly RuntimeEventRecord[],
-  nowMs: number,
-): RuntimeTelemetry {
-  const outputLines = events
-    .filter((event) =>
-      event.kind !== "heartbeat"
-      && typeof event.text === "string"
-      && event.text.trim().length > 0,
-    )
-    .slice(-12)
-    .map((event) => ({
-      timestamp: event.timestamp,
-      kind: event.kind as "status" | "stdout" | "stderr",
-      text: event.text!.trim(),
-    }));
-  const lastOutput = [...events]
-    .reverse()
-    .find((event) =>
-      (event.kind === "stdout" || event.kind === "stderr")
-      && typeof event.text === "string"
-      && event.text.trim().length > 0,
-    );
-  const currentActivity = outputLines.at(-1)?.text;
-
-  return {
-    currentActivity,
-    lastOutputAgeMs: lastOutput ? Math.max(0, nowMs - new Date(lastOutput.timestamp).getTime()) : undefined,
-    outputLines,
-  };
-}
-
-function presentRuntimeState(
-  runtime: RuntimeView | undefined,
-  featureStatus: Feature["status"],
-): RuntimeState | undefined {
-  if (!runtime) return undefined;
-  const isActiveStatus =
-    featureStatus === "assigned" || featureStatus === "in-progress" || featureStatus === "review";
-  if (runtime.runtimeState === "starting" && isActiveStatus) {
-    return "live";
-  }
-  return runtime.runtimeState;
 }
 
 async function buildMissionControlEnvironmentSummary(

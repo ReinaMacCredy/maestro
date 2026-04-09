@@ -107,30 +107,10 @@ export function buildPreviewState(opts: PreviewStateOptions): AppState {
     case "workers":
       return reduce(baseState, { type: "open-workers" });
     case "output": {
-      if (opts.snapshot.mode !== "mission") {
-        throw new MaestroError("Runtime output preview requires a mission", [
-          "Run `maestro mission-control --preview` to view the home dashboard",
-        ]);
-      }
-      const processIndex = opts.featureId
-        ? opts.snapshot.runtimeProcesses.findIndex((process) => process.featureId === opts.featureId)
-        : 0;
-      if (processIndex < 0) {
-        throw new MaestroError(`Feature ${opts.featureId} does not have a live runtime output stream`, [
-          `Run \`maestro mission-control --mission ${opts.snapshot.missionId} --preview runtime\` to inspect live items`,
-        ]);
-      }
-      const withProcess = reduce(baseState, { type: "open-processes" });
-      const nextState = withProcess.modal.kind === "processes"
-        ? {
-          ...withProcess,
-          modal: {
-            ...withProcess.modal,
-            selectedProcessIndex: processIndex,
-          },
-        }
-        : withProcess;
-      return reduce(nextState, { type: "open-runtime-output" });
+      // Phase 3 strip: runtime output screen is removed in Commit 3.2.
+      // Until then the handler falls back to the dashboard so invoking
+      // `--preview output` does not crash on the stripped snapshot.
+      return baseState;
     }
     case "memory":
       return reduce(baseState, { type: "open-memory" });

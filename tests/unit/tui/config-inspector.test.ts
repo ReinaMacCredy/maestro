@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { buildConfigInspector } from "../../../src/tui/state/config-inspector.js";
 import type { ConfigLayers } from "../../../src/ports/config.port.js";
-import type { MissionControlWorkerHealthRow } from "../../../src/tui/state/types.js";
 
 const layers: ConfigLayers = {
   defaults: {
@@ -143,34 +142,9 @@ const layers: ConfigLayers = {
   },
 };
 
-const workerHealth: readonly MissionControlWorkerHealthRow[] = [
-  {
-    slug: "codex",
-    label: "Codex",
-    status: "busy",
-    detail: "active on current mission",
-    lastCheckedAt: "2026-04-02T12:00:00.000Z",
-    checks: [{ label: "command found", ok: true }],
-    summary: "Fast, strong general-purpose coding.",
-    bestFor: "everyday implementation",
-    tradeoffs: "less exhaustive than Claude Code",
-  },
-  {
-    slug: "claude-code",
-    label: "Claude Code",
-    status: "ready",
-    detail: "ready",
-    lastCheckedAt: "2026-04-02T12:00:00.000Z",
-    checks: [{ label: "command found", ok: true }],
-    summary: "Highest quality, slower and pricier.",
-    bestFor: "hard bugs",
-    tradeoffs: "slower",
-  },
-];
-
 describe("buildConfigInspector", () => {
     it("builds effective rows with provenance", () => {
-        const inspector = buildConfigInspector(layers, [], [], workerHealth);
+        const inspector = buildConfigInspector(layers, [], []);
         const row = inspector.rowsByTab.effective.find((item) => item.keyPath === "execution.defaultWorker");
 
       expect(row?.label).toBe("Default worker");
@@ -179,10 +153,12 @@ describe("buildConfigInspector", () => {
         expect(row?.sourceBadge).toBe("P");
         expect(row?.editKind).toBe("enum");
         expect(row?.editKindLabel).toBe("choice");
-        expect(row?.workerChoices?.find((choice) => choice.slug === "codex")).toMatchObject({
-          availability: "busy",
-          availabilityDetail: "active on current mission",
-        });
+        // Phase 3 strip: availability now derives from `cachedWhich` so
+        // the choice status depends on whether `codex` is on PATH. Only
+        // assert the static label fields here.
+        const codexChoice = row?.workerChoices?.find((choice) => choice.slug === "codex");
+        expect(codexChoice?.label).toBe("Codex");
+        expect(codexChoice?.slug).toBe("codex");
       });
 
     it("builds plan and doctor tabs", () => {
@@ -224,7 +200,6 @@ describe("buildConfigInspector", () => {
           },
           [{ name: "git", status: "ok", message: "Git repository detected" }],
           features,
-          workerHealth,
         );
 
       expect(inspector.rowsByTab.plan.length).toBeGreaterThan(0);
@@ -232,19 +207,19 @@ describe("buildConfigInspector", () => {
       expect(inspector.rowsByTab.doctor.some((row) => row.valueText.includes("bad yaml"))).toBe(true);
     });
 
-    it("uses worker health as the shared source of truth for worker rows", () => {
-        const inspector = buildConfigInspector(layers, [], [], workerHealth);
+    it("derives worker row labels from CLI config without the Phase 1 health pane", () => {
+        const inspector = buildConfigInspector(layers, [], []);
       const workerRow = inspector.rowsByTab.workers.find((row) => row.keyPath === "workers.codex");
 
-      expect(workerRow).toMatchObject({
-        label: "Codex",
-        valueText: "busy",
-      });
-      expect(workerRow?.impactText).toContain("active on current mission");
+      expect(workerRow?.label).toBe("Codex");
+      // Phase 3 strip: valueText/impactText now reflect `cachedWhich`
+      // output instead of an injected worker health row. We assert
+      // only the stable label fields.
+      expect(workerRow?.section).toBe("Workers");
     });
 
     it("masks sensitive worker config values", () => {
-        const inspector = buildConfigInspector(layers, [], [], workerHealth);
+        const inspector = buildConfigInspector(layers, [], []);
       const row = inspector.rowsByTab.effective.find((item) => item.keyPath === "workers.codex.env.API_TOKEN");
 
       expect(row).toMatchObject({
@@ -254,7 +229,7 @@ describe("buildConfigInspector", () => {
     });
 
   it("surfaces mission control background mode as a global-only setting", () => {
-      const inspector = buildConfigInspector(layers, [], [], workerHealth);
+      const inspector = buildConfigInspector(layers, [], []);
       const overviewRow = inspector.rowsByTab.overview.find((row) => row.keyPath === "ui.missionControl.backgroundMode");
       const projectRow = inspector.rowsByTab.project.find((row) => row.keyPath === "ui.missionControl.backgroundMode");
       const doctorRow = inspector.rowsByTab.doctor.find((row) => row.keyPath === "doctor.ignored-ui-missionControl-backgroundMode");
@@ -272,7 +247,7 @@ describe("buildConfigInspector", () => {
   });
 
   it("builds editable memory rows in the memory tab", () => {
-    const inspector = buildConfigInspector(layers, [], [], workerHealth);
+    const inspector = buildConfigInspector(layers, [], []);
     const matchingRow = inspector.rowsByTab.memory.find((row) => row.keyPath === "memory.corrections.matching");
     const thresholdRow = inspector.rowsByTab.memory.find((row) => row.keyPath === "memory.learnings.compile_threshold");
     const ratchetRow = inspector.rowsByTab.memory.find((row) => row.keyPath === "memory.ratchet.enforcement");

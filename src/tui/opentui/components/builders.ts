@@ -5,9 +5,7 @@ import type {
   MissionControlEvent,
   MissionControlFeatureRow,
   MissionControlMilestoneRow,
-  MissionControlRuntimeProcessRow,
   MissionControlSnapshot,
-  MissionControlWorkerPane,
   TaskPreviewPane,
 } from "../../state/types.js";
 import { getMissionControlCommandSpecs } from "../../state/mission-control-commands.js";
@@ -15,7 +13,6 @@ import { FEATURE_STATUS_LABEL, FEATURE_TASK_STATUS_LABEL, MISSION_STATUS_LABEL }
 import { formatAge, formatElapsed, formatTokens, truncate } from "../../format.js";
 import { getHeaderDotsFrame } from "../../shared/header-animation.js";
 import type { ModalOptions } from "../../shared/modal-model.js";
-import { shortenSessionId } from "../../session-id.js";
 import { buildModalOptions } from "../../app/modal-builders.js";
 
 const MAX_HINT_WIDTH = 44;
@@ -364,9 +361,6 @@ export function buildFocusLines(
     keyValueLine("status", FEATURE_TASK_STATUS_LABEL[preview.status].toLowerCase()),
     keyValueLine("milestone", preview.milestoneTitle),
     keyValueLine("worker", preview.workerType),
-    keyValueLine("agent", preview.agent ?? "--"),
-    keyValueLine("session", preview.sessionId ? shortenSessionId(preview.sessionId) : "--"),
-    keyValueLine("runtime", preview.runtimeState ?? "--"),
     blankLine(),
     keyValueLine(
       "blocked by",
@@ -470,9 +464,6 @@ export function buildSessionLines(
   }
 
   lines.push(
-    keyValueLine("agent", session.agent ?? "--"),
-    keyValueLine("transport", session.transport ?? "--"),
-    keyValueLine(session.transport === "a2a" ? "handle" : "session", session.sessionId ? shortenSessionId(session.sessionId) : "--"),
     keyValueLine("branch", session.branch),
     keyValueLine("changes", getChangesText(session)),
   );
@@ -520,7 +511,7 @@ function buildFeatureRow(feature: MissionControlFeatureRow, selected: boolean, c
 
 function buildActivitySummary(
   snapshot: MissionControlSnapshot,
-  elapsedOffsetMs: number,
+  _elapsedOffsetMs: number,
 ): UiLine[] {
   if (snapshot.mode === "home" && snapshot.home) {
     return [
@@ -531,31 +522,16 @@ function buildActivitySummary(
     ];
   }
 
-  if (snapshot.activeWorker) {
-    return workerSummaryLines(snapshot.activeWorker, elapsedOffsetMs);
-  }
-
   if (snapshot.activeFeature) {
-    const lines: UiLine[] = [
+    return [
       boldLine(snapshot.activeFeature.title),
       normalLine(
         `${snapshot.activeFeature.id} · ${FEATURE_STATUS_LABEL[snapshot.activeFeature.status]} · ${snapshot.activeFeature.workerType}`,
         OPEN_TUI_THEME.muted,
       ),
-      keyValueLine(
-        "state",
-        snapshot.activeFeature.runtimeState === "recoverable"
-          ? `Recovery ready · retry count ${snapshot.activeFeature.retryCount ?? 0}`
-          : "Waiting to start next feature",
-      ),
-      keyValueLine(
-        "next",
-        snapshot.activeFeature.runtimeState === "recoverable"
-          ? "Prompt generation can resume this feature"
-          : "Open Tasks and choose a feature to focus",
-      ),
+      keyValueLine("state", "Waiting to start next feature"),
+      keyValueLine("next", "Open Tasks and choose a feature to focus"),
     ];
-    return lines;
   }
 
   return [
@@ -564,54 +540,6 @@ function buildActivitySummary(
     keyValueLine("state", "No features in this mission yet"),
     keyValueLine("next", "Create or import work to populate Mission Control"),
   ];
-}
-
-function workerSummaryLines(worker: MissionControlWorkerPane, elapsedOffsetMs: number): UiLine[] {
-  const lines: UiLine[] = [
-    boldLine(worker.featureTitle),
-    normalLine(`${worker.featureId} · ${FEATURE_STATUS_LABEL[worker.status]} · ${worker.workerType}`, OPEN_TUI_THEME.muted),
-    keyValueLine("state", getWorkerStateText(worker)),
-    keyValueLine("next", getWorkerNextText(worker)),
-    keyValueLine("duration", formatElapsed(worker.elapsedMs + elapsedOffsetMs)),
-  ];
-  return lines;
-}
-
-function getWorkerStateText(activeWorker: MissionControlWorkerPane): string {
-  if (activeWorker.runtimeState === "failed") {
-    return activeWorker.failureReason ?? "Worker runtime failed";
-  }
-  if (activeWorker.runtimeState === "stale") {
-    return `Worker heartbeat stale · last seen ${formatElapsed(activeWorker.lastSeenAgeMs ?? 0)} ago`;
-  }
-  if (activeWorker.runtimeState === "recoverable") {
-    return `Recovery ready · retry count ${activeWorker.retryCount ?? 0}`;
-  }
-  if (activeWorker.runtimeState === "live" && activeWorker.currentActivity) {
-    return activeWorker.currentActivity;
-  }
-  if (activeWorker.report?.salientSummary) {
-    return activeWorker.report.salientSummary;
-  }
-  if (activeWorker.runtimeState === "live") {
-    return typeof activeWorker.lastOutputAgeMs === "number"
-      ? `Worker runtime live · last output ${formatElapsed(activeWorker.lastOutputAgeMs)} ago`
-      : "Worker runtime live";
-  }
-  return "Waiting for first worker report";
-}
-
-function getWorkerNextText(activeWorker: MissionControlWorkerPane): string {
-  if (activeWorker.runtimeState === "failed") {
-    return "Inspect runtime and resolve the worker failure";
-  }
-  if (activeWorker.runtimeState === "recoverable") {
-    return "Resume this feature or review the generated recovery state";
-  }
-  if (activeWorker.runtimeState === "stale") {
-    return "Wait for the next heartbeat or restart the worker";
-  }
-  return "Report update or status transition";
 }
 
 function getChangesText(session: NonNullable<MissionControlSnapshot["session"]>): string {
@@ -659,7 +587,9 @@ function featureTone(status: MissionControlFeatureRow["status"]): string {
 }
 
 function eventTone(event: MissionControlEvent): string {
-  if (event.kind === "worker") return OPEN_TUI_THEME.info;
+  // Phase 3 strip: `worker` events no longer exist; the event kind
+  // union now covers mission / feature / milestone / assertion /
+  // checkpoint only.
   if (event.kind === "checkpoint") return OPEN_TUI_THEME.warning;
   if (event.kind === "feature" && event.title.toLowerCase().includes("blocked")) return OPEN_TUI_THEME.danger;
   if (event.kind === "feature") return OPEN_TUI_THEME.success;

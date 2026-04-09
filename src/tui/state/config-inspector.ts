@@ -13,10 +13,26 @@ import type {
   MissionControlConfigSourceBadge,
   MissionControlConfigTab,
   MissionControlConfigValueSource,
-  MissionControlWorkerHealthRow,
-  MissionControlWorkerHealthStatus,
+  MissionControlWorkerChoiceAvailability,
 } from "./types.js";
 import { recommendWorkerFit } from "../../usecases/worker-fit-recommendation.usecase.js";
+
+/**
+ * Phase 3 strip: Mission Control no longer runs worker health probes
+ * as a separate snapshot pane, so the config inspector now derives the
+ * same information directly from the CLI worker config plus
+ * `cachedWhich` lookups. The resulting row shape is unchanged -- only
+ * the provenance changed.
+ */
+interface WorkerAvailabilityInfo {
+  readonly slug: string;
+  readonly label: string;
+  readonly status: MissionControlWorkerChoiceAvailability;
+  readonly detail: string;
+  readonly summary: string;
+  readonly bestFor: string;
+  readonly tradeoffs: string;
+}
 
 export { isGlobalOnlyConfigKey };
 
@@ -70,14 +86,16 @@ export function buildConfigInspector(
   layers: ConfigLayers,
   checks: readonly DoctorCheck[],
   features: readonly Feature[],
-  workerHealth: readonly MissionControlWorkerHealthRow[] = [],
+  // Phase 3 strip: the former `workerHealth` parameter is gone; the
+  // signature keeps a leading trailing parameter slot for backward
+  // compatibility with older callers that still pass an empty array.
+  _reserved: readonly unknown[] = [],
 ): MissionControlConfigInspector {
   const ignoredProjectConfigKeys = listIgnoredProjectConfigKeys(layers.project);
   const inspectionChecks = [
     ...checks,
     ...ignoredProjectConfigKeys.map((keyPath) => buildIgnoredProjectOverrideCheck(keyPath)),
   ];
-  const workerHealthBySlug = new Map(workerHealth.map((row) => [row.slug, row]));
   const effective = flattenConfig(layers.effective);
   const defaults = flattenConfig(layers.defaults);
   const project = flattenConfig(layers.project ?? {});
@@ -89,12 +107,10 @@ export function buildConfigInspector(
     ...Object.keys(global),
     ])].sort();
 
-  const workerSlugs = [...new Set([
-    ...Object.keys(layers.effective.workers ?? {}),
-    ...workerHealth.map((row) => row.slug),
-  ])].sort();
+  const workerSlugs = [...Object.keys(layers.effective.workers ?? {})].sort();
+  const availabilityBySlug = buildWorkerAvailabilityMap(workerSlugs, layers.effective.workers);
     const rowsByTab = {
-      overview: buildOverviewRows(layers, inspectionChecks, features, workerHealthBySlug),
+      overview: buildOverviewRows(layers, inspectionChecks, features, availabilityBySlug),
     effective: allPaths.map((path) =>
       buildConfigValueRow(
         path,
@@ -106,13 +122,13 @@ export function buildConfigInspector(
         "effective",
         layers.effective.workers,
         features,
-        workerHealthBySlug,
+        availabilityBySlug,
       )
     ),
-    project: buildScopeRows("project", project, effective, workerSlugs, layers.effective.workers, features, workerHealthBySlug),
-    global: buildScopeRows("global", global, effective, workerSlugs, layers.effective.workers, features, workerHealthBySlug),
-    defaults: buildScopeRows("default", defaults, effective, workerSlugs, layers.effective.workers, features, workerHealthBySlug),
-    workers: buildWorkerRows(layers.effective, features, workerHealthBySlug),
+    project: buildScopeRows("project", project, effective, workerSlugs, layers.effective.workers, features, availabilityBySlug),
+    global: buildScopeRows("global", global, effective, workerSlugs, layers.effective.workers, features, availabilityBySlug),
+    defaults: buildScopeRows("default", defaults, effective, workerSlugs, layers.effective.workers, features, availabilityBySlug),
+    workers: buildWorkerRows(layers.effective, features, availabilityBySlug),
     plan: buildPlanRows(layers.effective, features),
         doctor: buildDoctorRows(inspectionChecks, layers.errors),
         memory: buildMemoryConfigRows(effective, defaults, global, project, workerSlugs),
@@ -168,9 +184,9 @@ function buildOverviewRows(
   layers: ConfigLayers,
   checks: readonly DoctorCheck[],
   features: readonly Feature[],
-  workerHealthBySlug: ReadonlyMap<string, MissionControlWorkerHealthRow>,
+  availabilityBySlug: ReadonlyMap<string, WorkerAvailabilityInfo>,
 ): readonly MissionControlConfigRow[] {
-  const workerRows = buildWorkerRows(layers.effective, features, workerHealthBySlug).map((row) => ({
+  const workerRows = buildWorkerRows(layers.effective, features, availabilityBySlug).map((row) => ({
     ...row,
     section: "Workers",
   }));
@@ -202,7 +218,7 @@ function buildOverviewRows(
       "overview",
       layers.effective.workers,
       features,
-      workerHealthBySlug,
+      availabilityBySlug,
     ),
     buildConfigValueRow(
       "execution.stopOnFailure",
@@ -264,7 +280,7 @@ function buildConfigValueRow(
   tab: MissionControlConfigTab,
   workers?: MaestroConfig["workers"],
   features: readonly Feature[] = [],
-  workerHealthBySlug: ReadonlyMap<string, MissionControlWorkerHealthRow> = new Map(),
+  availabilityBySlug: ReadonlyMap<string, WorkerAvailabilityInfo> = new Map(),
 ): MissionControlConfigRow {
   const editMeta = getEditMeta(keyPath, effectiveValue, workerSlugs);
   const source = provenanceForValue(effectiveValue, defaultValue, globalValue, projectValue);
@@ -298,7 +314,7 @@ function buildConfigValueRow(
     defaultValueText: stringifyConfigValue(keyPath, editMeta.editKind, defaultValue),
     defaultDisplayValueText: defaultDisplayValue,
     workerChoices: keyPath === "execution.defaultWorker"
-      ? buildWorkerChoices(workerSlugs, workers, features, workerHealthBySlug)
+      ? buildWorkerChoices(workerSlugs, workers, features, availabilityBySlug)
       : undefined,
   };
 }
@@ -310,7 +326,7 @@ function buildScopeRows(
   workerSlugs: readonly string[],
   workers?: MaestroConfig["workers"],
   features: readonly Feature[] = [],
-  workerHealthBySlug: ReadonlyMap<string, MissionControlWorkerHealthRow> = new Map(),
+  availabilityBySlug: ReadonlyMap<string, WorkerAvailabilityInfo> = new Map(),
   ): readonly MissionControlConfigRow[] {
   const paths = Object.keys(scopeValues).sort();
   if (paths.length === 0) {
@@ -361,7 +377,7 @@ function buildScopeRows(
       projectValueText: scope === "project" ? stringifyConfigValue(path, editMeta.editKind, scopeValues[path]) : undefined,
       projectDisplayValueText: scope === "project" ? displayValueForKey(path, editMeta.editKind, scopeValues[path]) : undefined,
       workerChoices: path === "execution.defaultWorker"
-        ? buildWorkerChoices(workerSlugs, workers, features, workerHealthBySlug)
+        ? buildWorkerChoices(workerSlugs, workers, features, availabilityBySlug)
         : undefined,
     };
   });
@@ -370,16 +386,16 @@ function buildScopeRows(
 function buildWorkerRows(
   config: MaestroConfig,
   features: readonly Feature[],
-  workerHealthBySlug: ReadonlyMap<string, MissionControlWorkerHealthRow>,
+  availabilityBySlug: ReadonlyMap<string, WorkerAvailabilityInfo>,
 ): readonly MissionControlConfigRow[] {
   const nextFeature = features.find((feature) => feature.status === "pending");
   return Object.entries(config.workers ?? {}).map(([slug, worker]) => {
-    const health = workerHealthBySlug.get(slug) ?? fallbackWorkerHealth(slug, worker);
-    const stateLabel = health.status;
+    const info = availabilityBySlug.get(slug) ?? buildFallbackAvailability(slug, worker);
+    const stateLabel = info.status;
     const copy: RowCopy = {
-      label: health.label,
-      summary: `${health.label} is a worker Maestro can choose for task execution.`,
-      impactText: workerImpactText(health.status, nextFeature?.id),
+      label: info.label,
+      summary: `${info.label} is a worker Maestro can choose for task execution.`,
+      impactText: workerAvailabilityImpactText(info.status, nextFeature?.id),
       section: "Workers",
     };
       return {
@@ -392,9 +408,9 @@ function buildWorkerRows(
       sourceBadge: sourceBadgeForValueSource("mixed"),
       editKind: "readonly",
       editKindLabel: editLabelForKind("readonly"),
-      description: health.detail,
-      summary: health.summary || copy.summary,
-      impactText: health.detail === health.status ? copy.impactText : `${copy.impactText} ${health.detail}`.trim(),
+      description: info.detail,
+      summary: info.summary || copy.summary,
+      impactText: info.detail === info.status ? copy.impactText : `${copy.impactText} ${info.detail}`.trim(),
         effectiveValueText: stateLabel,
         effectiveDisplayValueText: stateLabel,
         projectValueText: undefined,
@@ -915,28 +931,37 @@ function buildWorkerChoices(
   workerSlugs: readonly string[],
   workers: MaestroConfig["workers"] | undefined,
   features: readonly Feature[],
-  workerHealthBySlug: ReadonlyMap<string, MissionControlWorkerHealthRow>,
+  availabilityBySlug: ReadonlyMap<string, WorkerAvailabilityInfo>,
 ): readonly MissionControlConfigWorkerChoice[] {
   return workerSlugs.map((slug) => {
     const worker = workers?.[slug];
-    const health = workerHealthBySlug.get(slug) ?? fallbackWorkerHealth(slug, worker);
+    const info = availabilityBySlug.get(slug) ?? buildFallbackAvailability(slug, worker);
     return {
       slug,
-      label: health.label,
-      availability: health.status,
-      availabilityDetail: health.detail,
-      summary: health.summary,
-      bestFor: health.bestFor,
-      tradeoffs: health.tradeoffs,
+      label: info.label,
+      availability: info.status,
+      availabilityDetail: info.detail,
+      summary: info.summary,
+      bestFor: info.bestFor,
+      tradeoffs: info.tradeoffs,
       recommendation: recommendWorkerFit(slug, features),
     };
   });
 }
 
-function fallbackWorkerHealth(
+function buildWorkerAvailabilityMap(
+  workerSlugs: readonly string[],
+  workers: MaestroConfig["workers"] | undefined,
+): ReadonlyMap<string, WorkerAvailabilityInfo> {
+  return new Map(
+    workerSlugs.map((slug) => [slug, buildFallbackAvailability(slug, workers?.[slug])]),
+  );
+}
+
+function buildFallbackAvailability(
   slug: string,
   worker: WorkerConfig | undefined,
-): MissionControlWorkerHealthRow {
+): WorkerAvailabilityInfo {
   const guidance = getWorkerGuidance(slug);
   if (!worker) {
     return {
@@ -944,8 +969,6 @@ function fallbackWorkerHealth(
       label: formatWorkerLabel(slug),
       status: "missing",
       detail: "Worker profile is missing from config.",
-      lastCheckedAt: "",
-      checks: [],
       summary: guidance.summary,
       bestFor: guidance.bestFor,
       tradeoffs: guidance.tradeoffs,
@@ -958,43 +981,26 @@ function fallbackWorkerHealth(
       label: formatWorkerLabel(slug),
       status: "disabled",
       detail: "Worker is disabled in config.",
-      lastCheckedAt: "",
-      checks: [],
       summary: guidance.summary,
       bestFor: guidance.bestFor,
       tradeoffs: guidance.tradeoffs,
     };
   }
 
-  if (worker.transport === "cli") {
-    return {
-      slug,
-      label: formatWorkerLabel(slug),
-      status: cachedWhich(worker.command) ? "ready" : "missing",
-      detail: cachedWhich(worker.command) ? "ready to run" : `Command not found: ${worker.command}`,
-      lastCheckedAt: "",
-      checks: [],
-      summary: guidance.summary,
-      bestFor: guidance.bestFor,
-      tradeoffs: guidance.tradeoffs,
-    };
-  }
-
+  const commandAvailable = cachedWhich(worker.command);
   return {
     slug,
     label: formatWorkerLabel(slug),
-    status: worker.url ? "degraded" : "missing",
-    detail: worker.url ? "Health has not been checked yet." : "Missing agent endpoint.",
-    lastCheckedAt: "",
-    checks: [],
+    status: commandAvailable ? "ready" : "missing",
+    detail: commandAvailable ? "ready to run" : `Command not found: ${worker.command}`,
     summary: guidance.summary,
     bestFor: guidance.bestFor,
     tradeoffs: guidance.tradeoffs,
   };
 }
 
-function workerImpactText(
-  status: MissionControlWorkerHealthStatus,
+function workerAvailabilityImpactText(
+  status: MissionControlWorkerChoiceAvailability,
   nextFeatureId?: string,
 ): string {
   switch (status) {
