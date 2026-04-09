@@ -1,6 +1,6 @@
 import type { GitPort } from "./ports/git.port.js";
 import type { ConfigPort } from "./ports/config.port.js";
-import type { SessionDetectPort } from "./ports/session-detect.port.js";
+import type { SessionDetectPort } from "./features/session/ports/session-detect.port.js";
 import type { NotesStorePort } from "./features/notes/ports/notes-store.port.js";
 import type { MissionStorePort } from "./ports/mission-store.port.js";
 import type { FeatureStorePort } from "./ports/feature-store.port.js";
@@ -13,13 +13,13 @@ import type { ProjectGraphStorePort } from "./features/graph/ports/project-graph
 import type { HandoffStorePort } from "./features/handoff/ports/handoff-store.port.js";
 import { ShellGitAdapter } from "./adapters/git.adapter.js";
 import { YamlConfigAdapter } from "./adapters/config.adapter.js";
-import { ClaudeSessionDetectAdapter } from "./adapters/session-detect.adapter.js";
 import { FsMissionStoreAdapter } from "./adapters/mission-store.adapter.js";
 import { FsFeatureStoreAdapter } from "./adapters/feature-store.adapter.js";
 import { FsAssertionStoreAdapter } from "./adapters/assertion-store.adapter.js";
 import { FsCheckpointStoreAdapter } from "./adapters/checkpoint-store.adapter.js";
 import { FsCorrectionStoreAdapter } from "./adapters/correction-store.adapter.js";
 import { FsLearningStoreAdapter } from "./adapters/learning-store.adapter.js";
+import { buildSessionServices } from "./features/session/services.js";
 import { buildNotesServices } from "./features/notes/services.js";
 import { buildRatchetServices } from "./features/ratchet/services.js";
 import { buildHandoffServices } from "./features/handoff/services.js";
@@ -47,13 +47,13 @@ export function initServices(projectDir: string): Services {
   instance = {
     git: new ShellGitAdapter(),
     config: new YamlConfigAdapter(),
-    sessionDetect: new ClaudeSessionDetectAdapter(),
     missionStore: new FsMissionStoreAdapter(projectDir),
     featureStore: new FsFeatureStoreAdapter(projectDir),
     assertionStore: new FsAssertionStoreAdapter(projectDir),
     checkpointStore: new FsCheckpointStoreAdapter(projectDir),
     correctionStore: new FsCorrectionStoreAdapter(projectDir),
     learningStore: new FsLearningStoreAdapter(projectDir),
+    ...buildSessionServices(),
     ...buildNotesServices(projectDir),
     ...buildRatchetServices(projectDir),
     ...buildHandoffServices(projectDir),

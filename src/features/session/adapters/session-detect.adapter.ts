@@ -1,8 +1,8 @@
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-import type { AgentSession } from "../domain/types.js";
+import type { AgentSession } from "@/domain/types.js";
 import type { SessionDetectPort } from "../ports/session-detect.port.js";
-import { readJson } from "../lib/fs.js";
+import { readJson } from "@/lib/fs.js";
 
 /**
  * Phase 1 strip: this adapter used to resolve sessions by cwd fallback,

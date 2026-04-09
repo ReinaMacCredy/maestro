@@ -1,9 +1,9 @@
 import type { Command } from "commander";
-import { getServices } from "../services.js";
+import { getServices } from "@/services.js";
 import { detectSession } from "../usecases/detect-session.usecase.js";
-import { output } from "../lib/output.js";
-import { MaestroError } from "../domain/errors.js";
-import type { AgentSession } from "../domain/types.js";
+import { output } from "@/lib/output.js";
+import { MaestroError } from "@/domain/errors.js";
+import type { AgentSession } from "@/domain/types.js";
 
 export function registerSessionCommand(program: Command): void {
   program

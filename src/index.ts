@@ -10,7 +10,7 @@ import { registerNoteCommand } from "./features/notes/commands/note.command.js";
 import { registerInstallCommand } from "./commands/install.command.js";
 import { registerUpdateCommand } from "./commands/update.command.js";
 import { registerUninstallCommand } from "./commands/uninstall.command.js";
-import { registerSessionCommand } from "./commands/session.command.js";
+import { registerSessionCommand } from "./features/session/commands/session.command.js";
 import { registerMissionCommand } from "./commands/mission.command.js";
 import { registerFeatureCommand } from "./commands/feature.command.js";
 import { registerValidateCommand } from "./commands/validate.command.js";

@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from "bun:test";
 import { mkdtemp, rm, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir, homedir } from "node:os";
-import { ClaudeSessionDetectAdapter } from "@/adapters/session-detect.adapter.js";
+import { ClaudeSessionDetectAdapter } from "@/features/session";
 
 const adapter = new ClaudeSessionDetectAdapter();
 
