@@ -294,7 +294,7 @@ MODE-execute
 If you want only the raw UKI string for piping into another agent or tool, use:
 
 ```bash
-  maestro handoff create \
+maestro handoff create \
   --mode execute \
   --session-core handoff_real_example \
   --summary Handoff_real_example-ready-low_risk \
@@ -307,9 +307,9 @@ If you want only the raw UKI string for piping into another agent or tool, use:
   --read-more file_src_auth_ts \
   --blind-spot green_tests_masked_contract_drift \
   --metaphor baton_pass_snapshot \
-    --confidence-work 0.9 \
-    --uki
-  ```
+  --confidence-work 0.9 \
+  --uki
+```
 
 If you want a paste-ready prompt for another general agent, use `--paste`. It prepends one short instruction line and then the raw UKI packet:
 

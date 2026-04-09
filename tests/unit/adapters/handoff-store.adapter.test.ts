@@ -6,6 +6,7 @@ import { FsHandoffStoreAdapter } from "../../../src/adapters/handoff-store.adapt
 import { MaestroError } from "../../../src/domain/errors.js";
 import type { CreateUkiHandoffInput, ExecuteUkiHandoffContent } from "../../../src/domain/uki-types.js";
 import { compressUki, parseUki } from "../../../src/lib/uki-format.js";
+import { LEGACY_V53_UKI } from "../../helpers/uki-fixtures.js";
 
 const SAMPLE_CONTENT: ExecuteUkiHandoffContent = {
   mode: "execute",
@@ -129,44 +130,30 @@ describe("FsHandoffStoreAdapter", () => {
     expect(retrieved?.version).toBe("5.3");
     expect(retrieved?.content.mode).toBe("execute");
     expect(retrieved?.content.readMore).toEqual(["file_src_lib_uki_format_ts"]);
-      expect(retrieved?.content.validation).toEqual(["unit_green"]);
-      expect(retrieved?.content.decisions).toEqual(["keep_pickup_safe", "safe_upgrade_path"]);
-    });
+    expect(retrieved?.content.validation).toEqual(["unit_green"]);
+    expect(retrieved?.content.decisions).toEqual(["keep_pickup_safe", "safe_upgrade_path"]);
+  });
 
-    it("canonicalizes persisted legacy uki strings from normalized content", async () => {
-      const id = "2026-04-09-124";
-      const handoffDir = join(dir, ".maestro", "handoffs");
-      await mkdir(handoffDir, { recursive: true });
-      await writeFile(join(handoffDir, `${id}.json`), JSON.stringify({
-        id,
-        version: "5.3",
-        timestamp: "2026-04-09T00:00:00.000Z",
-        status: "pending",
-        agent: "codex",
-        sessionId: "legacy-v53",
-        uki:
-          "SESSION_CORE-legacy_record"
-          + "|CAUSAL_DRIVERS-upgrade_path"
-          + "|DIVERGENCES-NONE"
-          + "|KEY_DECISIONS-keep_pickup_safe"
-          + "|DECISION_BASIS-safe_upgrade_path"
-          + "|SIGNAL_DELTA-handoffs_1_2"
-          + "|VALIDATION_STATE-unit_green"
-          + "|EXECUTION_STATE-legacy_tmpdir"
-          + "|BOUNDARY_STATE-NONE"
-          + "|NEXT_ACTION-review_upgrade"
-          + "|ARTIFACTS-branch_main-file_src_lib_uki_format_ts"
-          + "|STANCE_COLLAPSE-NONE_DETECTED_LOW_FRICTION"
-          + "|CS-work_0.8"
-          + "|SUMMARY-Legacy_record-normalized-low_risk",
-      }, null, 2));
+  it("canonicalizes persisted legacy uki strings from normalized content", async () => {
+    const id = "2026-04-09-124";
+    const handoffDir = join(dir, ".maestro", "handoffs");
+    await mkdir(handoffDir, { recursive: true });
+    await writeFile(join(handoffDir, `${id}.json`), JSON.stringify({
+      id,
+      version: "5.3",
+      timestamp: "2026-04-09T00:00:00.000Z",
+      status: "pending",
+      agent: "codex",
+      sessionId: "legacy-v53",
+      uki: LEGACY_V53_UKI,
+    }, null, 2));
 
-      const retrieved = await store.get(id);
+    const retrieved = await store.get(id);
 
-      expect(retrieved).toBeDefined();
-      expect(retrieved?.uki).toBe(compressUki(retrieved!.content));
-      expect(retrieved?.uki.startsWith("MODE-execute|")).toBe(true);
-    });
+    expect(retrieved).toBeDefined();
+    expect(retrieved?.uki).toBe(compressUki(retrieved!.content));
+    expect(retrieved?.uki.startsWith("MODE-execute|")).toBe(true);
+  });
 
     it("canonicalizes tampered uki strings from structured content on read", async () => {
       const id = "2026-04-09-125";
@@ -211,13 +198,13 @@ describe("FsHandoffStoreAdapter", () => {
       await expect(store.get(id)).rejects.toThrow(MaestroError);
     });
 
-    it("keeps reading legacy envelope directories", async () => {
+  it("keeps reading legacy envelope directories", async () => {
     const legacyDir = join(dir, ".maestro", "handoffs", "2026-04-08-001");
     await mkdir(legacyDir, { recursive: true });
     await writeFile(join(legacyDir, "envelope.json"), JSON.stringify({
-      handoff: {
-        id: "2026-04-08-001",
-        timestamp: "2026-04-08T00:00:00.000Z",
+        handoff: {
+          id: "2026-04-08-001",
+          timestamp: "2026-04-08T00:00:00.000Z",
         message: "Legacy handoff",
         sitrep: "Legacy sitrep",
         quickstart: "Review the legacy work",
@@ -229,54 +216,54 @@ describe("FsHandoffStoreAdapter", () => {
           branch: "main",
           diffStat: "+0 -0",
         },
-      },
-      status: "pending",
+        },
+        status: "pending",
     }, null, 2));
 
-      const listed = await store.list();
-      expect(listed).toHaveLength(1);
-      expect(listed[0]?.content.mode).toBe("execute");
-      expect(listed[0]?.agent).toBe("claude-code");
-    });
+    const listed = await store.list();
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.content.mode).toBe("execute");
+    expect(listed[0]?.agent).toBe("claude-code");
+  });
 
-    it("supports concurrent creates without reusing handoff ids", async () => {
-      const created = await Promise.all(
-        Array.from({ length: 12 }, () => store.create(SAMPLE_INPUT)),
-      );
+  it("supports concurrent creates without reusing handoff ids", async () => {
+    const created = await Promise.all(
+      Array.from({ length: 12 }, () => store.create(SAMPLE_INPUT)),
+    );
 
-      expect(new Set(created.map((handoff) => handoff.id)).size).toBe(created.length);
-      expect((await store.list()).length).toBe(created.length);
-    });
+    expect(new Set(created.map((handoff) => handoff.id)).size).toBe(created.length);
+    expect((await store.list()).length).toBe(created.length);
+  });
 
-    it("allows only one concurrent claim to transition a pending handoff", async () => {
-      const created = await store.create(SAMPLE_INPUT);
+  it("allows only one concurrent claim to transition a pending handoff", async () => {
+    const created = await store.create(SAMPLE_INPUT);
 
       const [first, second] = await Promise.all([
         store.claimPending(created.id, "alpha"),
         store.claimPending(created.id, "beta"),
       ]);
 
-      const claimed = [first, second].filter((handoff) => handoff !== undefined);
-      expect(claimed).toHaveLength(1);
-      const winner = claimed[0]?.pickedUpBy ?? "";
-      expect(winner).not.toBe("");
-      expect(["alpha", "beta"]).toContain(winner);
+    const claimed = [first, second].filter((handoff) => handoff !== undefined);
+    expect(claimed).toHaveLength(1);
+    const winner = claimed[0]?.pickedUpBy ?? "";
+    expect(winner).not.toBe("");
+    expect(["alpha", "beta"]).toContain(winner);
 
-      const reread = await store.get(created.id);
-      expect(reread?.status).toBe("picked-up");
-      expect(reread?.pickedUpBy).toBe(winner);
-    });
-
-    it("recovers from a stale create lock file", async () => {
-      const handoffDir = join(dir, ".maestro", "handoffs");
-      const lockPath = join(handoffDir, ".create.lock");
-      await mkdir(handoffDir, { recursive: true });
-      await writeFile(lockPath, "");
-      const staleTime = new Date(Date.now() - 60_000);
-      await utimes(lockPath, staleTime, staleTime);
-
-      const created = await store.create(SAMPLE_INPUT);
-
-      expect(created.status).toBe("pending");
-    });
+    const reread = await store.get(created.id);
+    expect(reread?.status).toBe("picked-up");
+    expect(reread?.pickedUpBy).toBe(winner);
   });
+
+  it("recovers from a stale create lock file", async () => {
+    const handoffDir = join(dir, ".maestro", "handoffs");
+    const lockPath = join(handoffDir, ".create.lock");
+    await mkdir(handoffDir, { recursive: true });
+    await writeFile(lockPath, "");
+    const staleTime = new Date(Date.now() - 60_000);
+    await utimes(lockPath, staleTime, staleTime);
+
+    const created = await store.create(SAMPLE_INPUT);
+
+    expect(created.status).toBe("pending");
+  });
+});

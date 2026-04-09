@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { UkiHandoff } from "./uki-types.js";
+import type { UkiHandoff, UkiHandoffContent } from "./uki-types.js";
 import {
   SUPPORTED_UKI_HANDOFF_VERSIONS,
   UKI_HANDOFF_MODES,
@@ -84,7 +84,7 @@ export const UkiHandoffSchema = z.object({
   report: z.string().optional(),
 }).passthrough();
 
-export function validateUkiHandoffContent(value: unknown) {
+export function validateUkiHandoffContent(value: unknown): UkiHandoffContent {
   return UkiHandoffContentSchema.parse(value);
 }
 

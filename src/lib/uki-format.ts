@@ -12,6 +12,7 @@ import type {
   UkiHandoffContent,
   UkiMaestroRefs,
 } from "../domain/uki-types.js";
+import { UKI_ANCHOR_PREFIXES } from "./uki-token.js";
 
 export const UKI_VERSION = "5.4";
 export const LEGACY_UKI_VERSION = "5.3";
@@ -33,6 +34,11 @@ interface LayoutMatch {
   readonly version: "5.2" | "5.3" | "5.4";
   readonly mode?: "plan" | "execute";
   readonly defs: readonly SlotDef[];
+}
+
+interface ParsedUkiResult {
+  readonly content: UkiHandoffContent;
+  readonly layout: LayoutMatch;
 }
 
 interface LegacyV53Slots {
@@ -187,22 +193,13 @@ export function compressUki(content: UkiHandoffContent): string {
 }
 
 export function parseUki(raw: string): UkiHandoffContent {
-  const violations = validateUki(raw);
-  if (violations.length > 0) {
-    throw new MaestroError(
-      `UKI parse: invalid string (${violations.length} violation${violations.length === 1 ? "" : "s"})`,
-      violations,
-    );
-  }
-
-  return parseUkiUnchecked(raw);
+  return parseUkiResult(raw).content;
 }
 
 export function validateUki(raw: string): string[] {
   try {
-    const parsed = parseUkiUnchecked(raw);
-    const layout = detectLayout(raw.split("|"));
-    if (layout?.version === UKI_VERSION && compressUki(parsed) !== raw) {
+    const parsed = parseUkiResult(raw);
+    if (parsed.layout.version === UKI_VERSION && compressUki(parsed.content) !== raw) {
       return ["UKI validation failed deterministic round-trip for v5.4 payload"];
     }
     return [];
@@ -319,11 +316,11 @@ function encodeList(def: SlotDef, content: UkiHandoffContent): string {
 function encodeRefs(refs: UkiMaestroRefs): string {
   const tokens: string[] = [];
 
-  if (refs.missionId) tokens.push(`mission_${refs.missionId}`);
-  if (refs.featureId) tokens.push(`feature_${refs.featureId}`);
-  if (refs.milestoneId) tokens.push(`milestone_${refs.milestoneId}`);
-  if (refs.planPath) tokens.push(`plan_${refs.planPath}`);
-  if (refs.specPath) tokens.push(`spec_${refs.specPath}`);
+  if (refs.missionId) tokens.push(`${UKI_ANCHOR_PREFIXES.mission}${refs.missionId}`);
+  if (refs.featureId) tokens.push(`${UKI_ANCHOR_PREFIXES.feature}${refs.featureId}`);
+  if (refs.milestoneId) tokens.push(`${UKI_ANCHOR_PREFIXES.milestone}${refs.milestoneId}`);
+  if (refs.planPath) tokens.push(`${UKI_ANCHOR_PREFIXES.plan}${refs.planPath}`);
+  if (refs.specPath) tokens.push(`${UKI_ANCHOR_PREFIXES.spec}${refs.specPath}`);
 
   if (tokens.length === 0) {
     return `MAESTRO_REFS-${EMPTY_LIST_SENTINEL}`;
@@ -370,11 +367,11 @@ function encodeCs(cs: UkiConfidenceScores): string {
   return `CS-${value}`;
 }
 
-function parseUkiUnchecked(raw: string): UkiHandoffContent {
+function parseUkiResult(raw: string): ParsedUkiResult {
   const parts = raw.split("|");
   const layout = detectLayout(parts);
   if (!layout) {
-    throw new Error("Unsupported UKI layout");
+    throw new MaestroError("UKI parse: unsupported UKI layout");
   }
 
   const valuesByName = new Map<string, string>();
@@ -385,27 +382,32 @@ function parseUkiUnchecked(raw: string): UkiHandoffContent {
   }
 
   if (layout.version === LEGACY_UKI_V52) {
-    return normalizeLegacyV52({
-      sessionCore: valuesByName.get("SESSION_CORE")!,
-      causalDrivers: parseListValue(valuesByName.get("CAUSAL_DRIVERS")!),
-      divergences: parseListValue(valuesByName.get("DIVERGENCES")!),
+    return {
+      layout,
+      content: normalizeLegacyV52({
+        sessionCore: valuesByName.get("SESSION_CORE")!,
+        causalDrivers: parseListValue(valuesByName.get("CAUSAL_DRIVERS")!),
+        divergences: parseListValue(valuesByName.get("DIVERGENCES")!),
       keyDecisions: parseListValue(valuesByName.get("KEY_DECISIONS")!),
       signalDelta: parseListValue(valuesByName.get("SIGNAL_DELTA")!),
       artifacts: parseListValue(valuesByName.get("ARTIFACTS")!),
       executionState: valuesByName.get("EXECUTION_STATE")!,
       boundaryState: parseListValue(valuesByName.get("BOUNDARY_STATE")!),
-      stanceCollapse: valuesByName.get("STANCE_COLLAPSE")!,
-      nextAction: valuesByName.get("NEXT_ACTION")!,
-      cs: parseCsValue(valuesByName.get("CS")!),
-      summary: valuesByName.get("SUMMARY")!,
-    });
+        stanceCollapse: valuesByName.get("STANCE_COLLAPSE")!,
+        nextAction: valuesByName.get("NEXT_ACTION")!,
+        cs: parseCsValue(valuesByName.get("CS")!),
+        summary: valuesByName.get("SUMMARY")!,
+      }),
+    };
   }
 
   if (layout.version === LEGACY_UKI_VERSION) {
-    return normalizeLegacyV53({
-      sessionCore: valuesByName.get("SESSION_CORE")!,
-      causalDrivers: parseListValue(valuesByName.get("CAUSAL_DRIVERS")!),
-      divergences: parseListValue(valuesByName.get("DIVERGENCES")!),
+    return {
+      layout,
+      content: normalizeLegacyV53({
+        sessionCore: valuesByName.get("SESSION_CORE")!,
+        causalDrivers: parseListValue(valuesByName.get("CAUSAL_DRIVERS")!),
+        divergences: parseListValue(valuesByName.get("DIVERGENCES")!),
       keyDecisions: parseListValue(valuesByName.get("KEY_DECISIONS")!),
       decisionBasis: parseListValue(valuesByName.get("DECISION_BASIS")!),
       signalDelta: parseListValue(valuesByName.get("SIGNAL_DELTA")!),
@@ -415,33 +417,37 @@ function parseUkiUnchecked(raw: string): UkiHandoffContent {
       nextAction: valuesByName.get("NEXT_ACTION")!,
       artifacts: parseListValue(valuesByName.get("ARTIFACTS")!),
       stanceCollapse: valuesByName.get("STANCE_COLLAPSE"),
-      blindSpot: valuesByName.get("BLIND_SPOT"),
-      metaphor: valuesByName.get("METAPHOR"),
-      cs: parseCsValue(valuesByName.get("CS")!),
-      summary: valuesByName.get("SUMMARY")!,
-    });
+        blindSpot: valuesByName.get("BLIND_SPOT"),
+        metaphor: valuesByName.get("METAPHOR"),
+        cs: parseCsValue(valuesByName.get("CS")!),
+        summary: valuesByName.get("SUMMARY")!,
+      }),
+    };
   }
 
   const mode = layout.mode!;
   if (mode === "plan") {
     return {
-      mode,
-      currentState: valuesByName.get("CURRENT_STATE")!,
-      sessionCore: valuesByName.get("SESSION_CORE")!,
-      causalDrivers: parseListValue(valuesByName.get("CAUSAL_DRIVERS")!),
-      divergences: parseListValue(valuesByName.get("DIVERGENCES")!),
-      maestroRefs: parseMaestroRefs(valuesByName.get("MAESTRO_REFS")!),
-      planPaths: parseListValue(valuesByName.get("PLAN_PATHS")!),
-      maestroSync: parseListValue(valuesByName.get("MAESTRO_SYNC")!),
-      decisions: parseListValue(valuesByName.get("DECISIONS")!),
-      signalDelta: parseListValue(valuesByName.get("SIGNAL_DELTA")!),
-      artifacts: parseListValue(valuesByName.get("ARTIFACTS")!),
-      readMore: parseListValue(valuesByName.get("READ_MORE")!),
-      nextAction: valuesByName.get("NEXT_ACTION")!,
-      cs: parseCsValue(valuesByName.get("CS")!),
-      summary: valuesByName.get("SUMMARY")!,
-      boundaryState: [],
-      risks: [],
+      layout,
+      content: {
+        mode,
+        currentState: valuesByName.get("CURRENT_STATE")!,
+        sessionCore: valuesByName.get("SESSION_CORE")!,
+        causalDrivers: parseListValue(valuesByName.get("CAUSAL_DRIVERS")!),
+        divergences: parseListValue(valuesByName.get("DIVERGENCES")!),
+        maestroRefs: parseMaestroRefs(valuesByName.get("MAESTRO_REFS")!),
+        planPaths: parseListValue(valuesByName.get("PLAN_PATHS")!),
+        maestroSync: parseListValue(valuesByName.get("MAESTRO_SYNC")!),
+        decisions: parseListValue(valuesByName.get("DECISIONS")!),
+        signalDelta: parseListValue(valuesByName.get("SIGNAL_DELTA")!),
+        artifacts: parseListValue(valuesByName.get("ARTIFACTS")!),
+        readMore: parseListValue(valuesByName.get("READ_MORE")!),
+        nextAction: valuesByName.get("NEXT_ACTION")!,
+        cs: parseCsValue(valuesByName.get("CS")!),
+        summary: valuesByName.get("SUMMARY")!,
+        boundaryState: [],
+        risks: [],
+      },
     };
   }
 
@@ -449,26 +455,29 @@ function parseUkiUnchecked(raw: string): UkiHandoffContent {
   const metaphor = valuesByName.get("METAPHOR");
 
   return {
-    mode,
-    currentState: valuesByName.get("CURRENT_STATE")!,
-    sessionCore: valuesByName.get("SESSION_CORE")!,
-    causalDrivers: parseListValue(valuesByName.get("CAUSAL_DRIVERS")!),
-    divergences: parseListValue(valuesByName.get("DIVERGENCES")!),
-    maestroRefs: parseMaestroRefs(valuesByName.get("MAESTRO_REFS")!),
-    decisions: parseListValue(valuesByName.get("DECISIONS")!),
-    signalDelta: parseListValue(valuesByName.get("SIGNAL_DELTA")!),
-    touchedFiles: parseListValue(valuesByName.get("TOUCHED_FILES")!),
-    completedWork: parseListValue(valuesByName.get("COMPLETED_WORK")!),
-    validation: parseListValue(valuesByName.get("VALIDATION")!),
-    artifacts: parseListValue(valuesByName.get("ARTIFACTS")!),
-    readMore: parseListValue(valuesByName.get("READ_MORE")!),
-    boundaryState: parseListValue(valuesByName.get("BOUNDARY_STATE")!),
-    risks: parseListValue(valuesByName.get("RISKS")!),
-    ...(blindSpot ? { blindSpot } : {}),
-    ...(metaphor ? { metaphor } : {}),
-    nextAction: valuesByName.get("NEXT_ACTION")!,
-    cs: parseCsValue(valuesByName.get("CS")!),
-    summary: valuesByName.get("SUMMARY")!,
+    layout,
+    content: {
+      mode,
+      currentState: valuesByName.get("CURRENT_STATE")!,
+      sessionCore: valuesByName.get("SESSION_CORE")!,
+      causalDrivers: parseListValue(valuesByName.get("CAUSAL_DRIVERS")!),
+      divergences: parseListValue(valuesByName.get("DIVERGENCES")!),
+      maestroRefs: parseMaestroRefs(valuesByName.get("MAESTRO_REFS")!),
+      decisions: parseListValue(valuesByName.get("DECISIONS")!),
+      signalDelta: parseListValue(valuesByName.get("SIGNAL_DELTA")!),
+      touchedFiles: parseListValue(valuesByName.get("TOUCHED_FILES")!),
+      completedWork: parseListValue(valuesByName.get("COMPLETED_WORK")!),
+      validation: parseListValue(valuesByName.get("VALIDATION")!),
+      artifacts: parseListValue(valuesByName.get("ARTIFACTS")!),
+      readMore: parseListValue(valuesByName.get("READ_MORE")!),
+      boundaryState: parseListValue(valuesByName.get("BOUNDARY_STATE")!),
+      risks: parseListValue(valuesByName.get("RISKS")!),
+      ...(blindSpot ? { blindSpot } : {}),
+      ...(metaphor ? { metaphor } : {}),
+      nextAction: valuesByName.get("NEXT_ACTION")!,
+      cs: parseCsValue(valuesByName.get("CS")!),
+      summary: valuesByName.get("SUMMARY")!,
+    },
   };
 }
 
@@ -495,16 +504,10 @@ function detectV54Layout(parts: readonly string[], mode: "plan" | "execute"): La
       : undefined;
   }
 
-  const defs = [...EXECUTE_HEAD_SLOTS];
-  let offset = EXECUTE_HEAD_SLOTS.length;
-  if (parts[offset]?.startsWith("BLIND_SPOT-")) {
-    defs.push(EXECUTE_BLIND_SPOT_SLOT);
-    offset += 1;
-  }
-  if (parts[offset]?.startsWith("METAPHOR-")) {
-    defs.push(EXECUTE_METAPHOR_SLOT);
-  }
-  defs.push(...EXECUTE_TAIL_SLOTS);
+  const defs = detectOptionalLayout(parts, EXECUTE_HEAD_SLOTS, EXECUTE_TAIL_SLOTS, {
+    blindSpot: EXECUTE_BLIND_SPOT_SLOT,
+    metaphor: EXECUTE_METAPHOR_SLOT,
+  });
 
   return matchesLayout(parts, defs)
     ? { version: UKI_VERSION, mode, defs }
@@ -512,16 +515,10 @@ function detectV54Layout(parts: readonly string[], mode: "plan" | "execute"): La
 }
 
 function detectV53Layout(parts: readonly string[]): LayoutMatch | undefined {
-  const defs = [...V53_HEAD_SLOTS];
-  let offset = V53_HEAD_SLOTS.length;
-  if (parts[offset]?.startsWith("BLIND_SPOT-")) {
-    defs.push(V53_BLIND_SPOT_SLOT);
-    offset += 1;
-  }
-  if (parts[offset]?.startsWith("METAPHOR-")) {
-    defs.push(V53_METAPHOR_SLOT);
-  }
-  defs.push(...V53_TAIL_SLOTS);
+  const defs = detectOptionalLayout(parts, V53_HEAD_SLOTS, V53_TAIL_SLOTS, {
+    blindSpot: V53_BLIND_SPOT_SLOT,
+    metaphor: V53_METAPHOR_SLOT,
+  });
 
   return matchesLayout(parts, defs)
     ? { version: LEGACY_UKI_VERSION, defs }
@@ -542,6 +539,28 @@ function matchesLayout(parts: readonly string[], defs: readonly SlotDef[]): bool
   return defs.every((def, index) => parts[index]?.startsWith(`${def.name}-`) === true);
 }
 
+function detectOptionalLayout(
+  parts: readonly string[],
+  head: readonly SlotDef[],
+  tail: readonly SlotDef[],
+  optional: {
+    readonly blindSpot: SlotDef;
+    readonly metaphor: SlotDef;
+  },
+): readonly SlotDef[] {
+  const defs = [...head];
+  let offset = head.length;
+  if (parts[offset]?.startsWith(`${optional.blindSpot.name}-`)) {
+    defs.push(optional.blindSpot);
+    offset += 1;
+  }
+  if (parts[offset]?.startsWith(`${optional.metaphor.name}-`)) {
+    defs.push(optional.metaphor);
+  }
+  defs.push(...tail);
+  return defs;
+}
+
 function parseListValue(raw: string): readonly string[] {
   if (raw === EMPTY_LIST_SENTINEL) {
     return [];
@@ -556,16 +575,16 @@ function parseMaestroRefs(raw: string): UkiMaestroRefs {
   }
 
   for (const token of raw.split("-")) {
-    if (token.startsWith("mission_")) {
-      refs.missionId = token.slice("mission_".length);
-    } else if (token.startsWith("feature_")) {
-      refs.featureId = token.slice("feature_".length);
-    } else if (token.startsWith("milestone_")) {
-      refs.milestoneId = token.slice("milestone_".length);
-    } else if (token.startsWith("plan_")) {
-      refs.planPath = token.slice("plan_".length);
-    } else if (token.startsWith("spec_")) {
-      refs.specPath = token.slice("spec_".length);
+    if (token.startsWith(UKI_ANCHOR_PREFIXES.mission)) {
+      refs.missionId = token.slice(UKI_ANCHOR_PREFIXES.mission.length);
+    } else if (token.startsWith(UKI_ANCHOR_PREFIXES.feature)) {
+      refs.featureId = token.slice(UKI_ANCHOR_PREFIXES.feature.length);
+    } else if (token.startsWith(UKI_ANCHOR_PREFIXES.milestone)) {
+      refs.milestoneId = token.slice(UKI_ANCHOR_PREFIXES.milestone.length);
+    } else if (token.startsWith(UKI_ANCHOR_PREFIXES.plan)) {
+      refs.planPath = token.slice(UKI_ANCHOR_PREFIXES.plan.length);
+    } else if (token.startsWith(UKI_ANCHOR_PREFIXES.spec)) {
+      refs.specPath = token.slice(UKI_ANCHOR_PREFIXES.spec.length);
     }
   }
 
@@ -589,6 +608,7 @@ function parseCsValue(raw: string): UkiConfidenceScores {
 }
 
 function normalizeLegacyV52(legacy: LegacyV52Slots): ExecuteUkiHandoffContent {
+  // STANCE_COLLAPSE existed in v5.2 only; v5.4 keeps no direct field for it.
   return {
     mode: "execute",
     currentState: legacy.executionState,
@@ -614,6 +634,7 @@ function normalizeLegacyV52(legacy: LegacyV52Slots): ExecuteUkiHandoffContent {
 }
 
 function normalizeLegacyV53(legacy: LegacyV53Slots): ExecuteUkiHandoffContent {
+  // STANCE_COLLAPSE remains a legacy-only compatibility signal in v5.3 reads.
   return {
     mode: "execute",
     currentState: legacy.executionState,

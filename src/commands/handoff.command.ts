@@ -13,6 +13,7 @@ import type {
   PlanUkiHandoffContent,
   UkiHandoff,
   UkiHandoffContent,
+  UkiHandoffContentBase,
   UkiHandoffMode,
   UkiHandoffStatus,
   UkiMaestroRefs,
@@ -22,6 +23,7 @@ import { createUkiHandoff } from "../usecases/create-uki-handoff.usecase.js";
 import { listUkiHandoffs } from "../usecases/list-uki-handoffs.usecase.js";
 import { pickupUkiHandoff } from "../usecases/pickup-uki-handoff.usecase.js";
 import type { Services } from "../services.js";
+import { normalizeUkiToken, UKI_ANCHOR_PREFIXES } from "../lib/uki-token.js";
 
 type CreateFormat = "json" | "paste" | "text" | "uki";
 type PickupFormat = "json" | "paste" | "uki";
@@ -72,17 +74,17 @@ export function registerHandoffCommand(program: Command): void {
     .option("--milestone-id <text>", "Token-safe Maestro milestone reference")
     .option("--plan-ref <text>", "Token-safe Maestro plan reference")
     .option("--spec-ref <text>", "Token-safe Maestro spec reference")
-    .option("--confidence-work <number>", "CS.work (0..1)", parseFloatStrict)
-    .option("--confidence-summary <number>", "CS.summary (0..1)", parseFloatStrict)
-    .option("--agent <name>", "Override agent identity (default auto-detect)")
-    .option("--session-id <id>", "Override session id (default auto-detect)")
+      .option("--confidence-work <number>", "CS.work (0..1)", parseFloatStrict)
+      .option("--confidence-summary <number>", "CS.summary (0..1)", parseFloatStrict)
+      .option("--agent <name>", "Override agent identity (default auto-detect)")
+      .option("--session-id <id>", "Override session id (default auto-detect)")
       .option("--json", "Output as JSON")
       .option("--uki", "Output only the raw UKI transfer string")
       .option("--paste", "Output an agent-ready handoff prompt plus the raw UKI packet")
       .action(async (opts) => {
-      const services = getServices();
-      const format = resolveCreateFormat(opts, program);
-      const content = await buildContentFromOptions(opts, services, process.cwd());
+        const services = getServices();
+        const format = resolveCreateFormat(opts, program);
+        const content = await buildContentFromOptions(opts, services, process.cwd());
       const handoff = await createUkiHandoff(
         services.handoffStore,
         services.sessionDetect,
@@ -99,16 +101,16 @@ export function registerHandoffCommand(program: Command): void {
 
   handoffCmd
     .command("pickup")
-    .description("Pick up the latest pending handoff (or a specific one by id)")
-    .option("--id <id>", "Specific handoff id to pick up")
-    .option("--claim", "Transition pending -> picked-up (atomic claim)")
+      .description("Pick up the latest pending handoff (or a specific one by id)")
+      .option("--id <id>", "Specific handoff id to pick up")
+      .option("--claim", "Transition pending -> picked-up (atomic claim)")
       .option("--agent <name>", "pickedUpBy attribution when --claim is set")
       .option("--json", "Output as JSON")
       .option("--uki", "Output the raw UKI transfer string (default)")
       .option("--paste", "Output an agent-ready handoff prompt plus the raw UKI packet")
       .action(async (opts) => {
-      const services = getServices();
-      const format = resolvePickupFormat(opts, program);
+        const services = getServices();
+        const format = resolvePickupFormat(opts, program);
 
       const handoff = await pickupUkiHandoff(services.handoffStore, {
         id: opts.id,
@@ -159,7 +161,29 @@ async function buildContentFromOptions(
     ...(typeof opts.specRef === "string" && opts.specRef.length > 0 ? { specPath: opts.specRef } : {}),
   } satisfies UkiMaestroRefs;
 
-  const base = {
+  const base = buildBaseContent(opts, auto, mode, maestroRefs, {
+    confidenceWork,
+    confidenceSummary,
+  });
+
+  if (mode === "plan") {
+    return buildPlanContent(base, auto, opts);
+  }
+
+  return buildExecuteContent(base, auto, opts);
+}
+
+function buildBaseContent(
+  opts: Record<string, unknown>,
+  auto: AutoCollectedContext,
+  mode: UkiHandoffMode,
+  maestroRefs: UkiMaestroRefs,
+  confidence: {
+    readonly confidenceWork?: number;
+    readonly confidenceSummary?: number;
+  },
+): UkiHandoffContentBase {
+  return {
     mode,
     currentState: typeof opts.currentState === "string" && opts.currentState.length > 0
       ? opts.currentState
@@ -172,8 +196,8 @@ async function buildContentFromOptions(
     summary: String(opts.summary),
     maestroRefs,
     cs: {
-      ...(confidenceWork !== undefined ? { work: confidenceWork } : {}),
-      ...(confidenceSummary !== undefined ? { summary: confidenceSummary } : {}),
+      ...(confidence.confidenceWork !== undefined ? { work: confidence.confidenceWork } : {}),
+      ...(confidence.confidenceSummary !== undefined ? { summary: confidence.confidenceSummary } : {}),
     },
     signalDelta: toStringArray(opts.signal),
     boundaryState: toStringArray(opts.boundary),
@@ -187,23 +211,33 @@ async function buildContentFromOptions(
     causalDrivers: toStringArray(opts.driver),
     divergences: toStringArray(opts.divergence),
   };
+}
 
-  if (mode === "plan") {
-    return {
-      ...base,
-      mode,
-      planPaths: uniqueTokens([...auto.planPaths, ...toStringArray(opts.planPathItem)]),
-      maestroSync: toStringArray(opts.maestroSync),
-    } satisfies PlanUkiHandoffContent;
-  }
-
+function buildPlanContent(
+  base: UkiHandoffContentBase,
+  auto: AutoCollectedContext,
+  opts: Record<string, unknown>,
+): PlanUkiHandoffContent {
   return {
     ...base,
-    mode,
+    mode: "plan",
+    planPaths: uniqueTokens([...auto.planPaths, ...toStringArray(opts.planPathItem)]),
+    maestroSync: toStringArray(opts.maestroSync),
+  };
+}
+
+function buildExecuteContent(
+  base: UkiHandoffContentBase,
+  auto: AutoCollectedContext,
+  opts: Record<string, unknown>,
+): ExecuteUkiHandoffContent {
+  return {
+    ...base,
+    mode: "execute",
     touchedFiles: uniqueTokens([...auto.touchedFiles, ...toStringArray(opts.touchedFile)]),
     completedWork: toStringArray(opts.completed),
     validation: toStringArray(opts.validation),
-  } satisfies ExecuteUkiHandoffContent;
+  };
 }
 
 async function collectAutoContext(
@@ -219,11 +253,11 @@ async function collectAutoContext(
 
   const artifacts = uniqueTokens([
     ...gitState.artifacts,
-    ...planPaths.map((token) => `file_${token}`),
+    ...planPaths.map((token) => `${UKI_ANCHOR_PREFIXES.file}${token}`),
   ]);
 
   if (missionRefs.missionId) {
-    artifacts.push(`mission_${missionRefs.missionId}`);
+    artifacts.push(`${UKI_ANCHOR_PREFIXES.mission}${missionRefs.missionId}`);
   }
 
   const readMore = mode === "plan"
@@ -247,16 +281,21 @@ async function collectGitContext(
   readonly artifacts: readonly string[];
   readonly readMore: readonly string[];
   readonly touchedFiles: readonly string[];
-}> {
+  }> {
   try {
-    const isRepo = await services.git.isRepo(cwd);
-    if (!isRepo) {
+    const state = await services.git.getState(cwd);
+    if (
+      state.branch === "HEAD"
+      && state.recentCommits.length === 0
+      && state.changedFiles.length === 0
+      && state.diffStat === "+0 -0"
+    ) {
       return { artifacts: [], readMore: [], touchedFiles: [] };
     }
-
-    const state = await services.git.getState(cwd);
-    const touchedFiles = state.changedFiles.map((file) => `file_${normalizeToken(file)}`);
-    const branchArtifact = state.branch.length > 0 ? [`branch_${normalizeToken(state.branch)}`] : [];
+    const touchedFiles = state.changedFiles.map((file) => `${UKI_ANCHOR_PREFIXES.file}${normalizeUkiToken(file)}`);
+    const branchArtifact = state.branch.length > 0
+      ? [`${UKI_ANCHOR_PREFIXES.branch}${normalizeUkiToken(state.branch)}`]
+      : [];
     const readMore = touchedFiles.length > 0 ? touchedFiles.slice(0, 5) : branchArtifact;
 
     return {
@@ -283,27 +322,22 @@ async function collectMissionRefs(services: Services): Promise<UkiMaestroRefs> {
       return {};
     }
 
-    return {
-      missionId: normalizeToken(active.id),
-    };
+      return {
+        missionId: normalizeUkiToken(active.id),
+      };
   } catch {
     return {};
   }
 }
 
 async function collectKnownPlanPaths(cwd: string): Promise<readonly string[]> {
-  const candidates = [
-    "PLAN.md",
-    join(".maestro", "reference", "handoff-redesign-plan.md"),
-  ];
-
-  const found: string[] = [];
-  for (const candidate of candidates) {
-    if (await pathExists(join(cwd, candidate))) {
-      found.push(normalizeToken(candidate));
-    }
-  }
-  return found;
+  const candidates = ["PLAN.md"];
+  const found = await Promise.all(candidates.map(async (candidate) =>
+    await pathExists(join(cwd, candidate))
+      ? normalizeUkiToken(candidate)
+      : undefined
+  ));
+  return found.filter((candidate): candidate is string => candidate !== undefined);
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -313,24 +347,6 @@ async function pathExists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-function normalizeToken(value: string): string {
-  const normalized = value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-
-  if (normalized.length === 0) {
-    return "unknown";
-  }
-
-  return normalized
-    .split("_")
-    .filter(Boolean)
-    .slice(0, 12)
-    .join("_");
 }
 
 function uniqueTokens(values: readonly string[]): string[] {
@@ -360,32 +376,40 @@ function resolveCreateFormat(
   opts: Record<string, unknown>,
   program: { opts(): Record<string, unknown> },
 ): CreateFormat {
-  const flags = [Boolean(opts.uki), Boolean(opts.json), Boolean(opts.paste)];
-  if (flags.filter(Boolean).length > 1) {
-    throw new MaestroError("--json, --uki, and --paste are mutually exclusive", [
-      "Pick one output format for maestro handoff create",
-    ]);
-  }
-  if (opts.paste) return "paste";
-  if (opts.uki) return "uki";
-  if (opts.json || resolveJsonFlag(opts, program)) return "json";
-  return "text";
+  return resolveHandoffFormat(opts, program, {
+    command: "create",
+    defaultFormat: "text",
+  }) as CreateFormat;
 }
 
 function resolvePickupFormat(
   opts: Record<string, unknown>,
   program: { opts(): Record<string, unknown> },
 ): PickupFormat {
+  return resolveHandoffFormat(opts, program, {
+    command: "pickup",
+    defaultFormat: "uki",
+  }) as PickupFormat;
+}
+
+function resolveHandoffFormat(
+  opts: Record<string, unknown>,
+  program: { opts(): Record<string, unknown> },
+  config: {
+    readonly command: "create" | "pickup";
+    readonly defaultFormat: CreateFormat | PickupFormat;
+  },
+): CreateFormat | PickupFormat {
   const flags = [Boolean(opts.uki), Boolean(opts.json), Boolean(opts.paste)];
   if (flags.filter(Boolean).length > 1) {
     throw new MaestroError("--json, --uki, and --paste are mutually exclusive", [
-      "Pick one output format for maestro handoff pickup",
+      `Pick one output format for maestro handoff ${config.command}`,
     ]);
   }
   if (opts.paste) return "paste";
   if (opts.uki) return "uki";
   if (opts.json || resolveJsonFlag(opts, program)) return "json";
-  return "uki";
+  return config.defaultFormat;
 }
 
 function printCreate(handoff: UkiHandoff, format: CreateFormat): void {
@@ -409,7 +433,7 @@ function printPickup(handoff: UkiHandoff, format: PickupFormat): void {
     console.log(formatHandoffPaste(handoff.uki));
     return;
   }
-  output(true, handoff, () => []);
+  console.log(JSON.stringify(handoff, null, 2));
 }
 
 function formatHandoffPaste(uki: string): string {

@@ -16,13 +16,14 @@ import type {
   UkiHandoff,
   UkiHandoffStatus,
 } from "../domain/uki-types.js";
-import { UKI_HANDOFF_VERSION } from "../domain/uki-types.js";
+import { SUPPORTED_UKI_HANDOFF_VERSIONS, UKI_HANDOFF_VERSION } from "../domain/uki-types.js";
 import { validateUkiHandoff, validateUkiHandoffContent } from "../domain/validators.js";
 import type { HandoffStorePort, UpdateHandoffStatusMeta } from "../ports/handoff-store.port.js";
 import { compressUki, parseUki } from "../lib/uki-format.js";
 import { ensureDir, readJson, removeIfExists, writeJson } from "../lib/fs.js";
 import { MaestroError } from "../domain/errors.js";
 import { assertSafeSegment, resolveWithin } from "../lib/path-safety.js";
+import { normalizeUkiToken } from "../lib/uki-token.js";
 
 const HANDOFFS_DIR = "handoffs";
 const LOCK_RETRY_DELAY_MS = 10;
@@ -30,37 +31,60 @@ const LOCK_RETRY_COUNT = 100;
 const LOCK_STALE_MS = 30_000;
 const LEGACY_DEFAULT_CONFIDENCE = 0.5;
 
-function normalizePersistedHandoff(value: unknown): unknown {
+function normalizePersistedHandoff(value: unknown): UkiHandoff {
   if (!value || typeof value !== "object") {
-    return value;
+    return validateUkiHandoff(value);
   }
 
   const record = value as Record<string, unknown>;
-  const version = record.version === "5.2" || record.version === "5.3" || record.version === "5.4"
-    ? record.version
-    : UKI_HANDOFF_VERSION;
+  const version = normalizePersistedVersion(record.version);
 
   if (record.content && typeof record.content === "object") {
     const content = validateUkiHandoffContent(record.content);
-    return {
+    const validated = validateUkiHandoff({
       ...record,
       version,
       content,
-      uki: compressUki(content),
+      uki: typeof record.uki === "string" && record.uki.length > 0
+        ? record.uki
+        : compressUki(content),
+    });
+    return {
+      ...validated,
+      version,
+      uki: compressUki(validated.content),
     };
   }
 
   if (typeof record.uki === "string") {
     const content = parseUki(record.uki);
-    return {
+    const validated = validateUkiHandoff({
       ...record,
       version,
       content,
-      uki: compressUki(content),
+      uki: record.uki,
+    });
+    return {
+      ...validated,
+      version,
+      uki: compressUki(validated.content),
     };
   }
 
-  return value;
+  return validateUkiHandoff({
+    ...record,
+    version,
+  });
+}
+
+function normalizePersistedVersion(value: unknown): UkiHandoff["version"] {
+  if (
+    typeof value === "string"
+    && (SUPPORTED_UKI_HANDOFF_VERSIONS as readonly string[]).includes(value)
+  ) {
+    return value as UkiHandoff["version"];
+  }
+  return UKI_HANDOFF_VERSION;
 }
 
 export class FsHandoffStoreAdapter implements HandoffStorePort {
@@ -150,11 +174,11 @@ export class FsHandoffStoreAdapter implements HandoffStorePort {
     id: string,
     opts: { tolerant?: boolean } = {},
   ): Promise<UkiHandoff | undefined> {
-    try {
-      const raw = await readJson<unknown>(this.itemPath(id));
-      if (raw !== undefined) {
-        return validateUkiHandoff(normalizePersistedHandoff(raw));
-      }
+      try {
+        const raw = await readJson<unknown>(this.itemPath(id));
+        if (raw !== undefined) {
+          return normalizePersistedHandoff(raw);
+        }
 
       const legacyEnvelope = await readJson<unknown>(this.legacyEnvelopePath(id));
       if (legacyEnvelope !== undefined) {
@@ -338,11 +362,11 @@ export class FsHandoffStoreAdapter implements HandoffStorePort {
       throw new Error(`Legacy handoff ${id} is missing required fields`);
     }
 
-    const branch = this.encodeLegacyToken(legacy.git?.branch, "main");
-    const sessionCore = this.encodeLegacyToken(legacy.message, "legacy_handoff");
-    const currentState = this.encodeLegacyToken(legacy.git?.diffStat, "legacy_git_state");
-    const nextAction = this.encodeLegacyToken(legacy.quickstart, "review_legacy_handoff");
-    const summary = this.encodeLegacySummary(legacy.message);
+      const branch = normalizeUkiToken(legacy.git?.branch, { fallback: "main", maxSegments: 6 });
+      const sessionCore = normalizeUkiToken(legacy.message, { fallback: "legacy_handoff", maxSegments: 6 });
+      const currentState = normalizeUkiToken(legacy.git?.diffStat, { fallback: "legacy_git_state", maxSegments: 6 });
+      const nextAction = normalizeUkiToken(legacy.quickstart, { fallback: "review_legacy_handoff", maxSegments: 6 });
+      const summary = this.encodeLegacySummary(legacy.message);
     const content: ExecuteUkiHandoffContent = {
       mode: "execute",
       currentState,
@@ -380,24 +404,7 @@ export class FsHandoffStoreAdapter implements HandoffStorePort {
     };
   }
 
-  private encodeLegacyToken(value: string | undefined, fallback: string): string {
-    const normalized = (value ?? "")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "_")
-      .replace(/^_+|_+$/g, "");
-
-    if (normalized.length === 0) {
-      return fallback;
-    }
-
-    return normalized
-      .split("_")
-      .filter(Boolean)
-      .slice(0, 6)
-      .join("_");
-  }
-
-  private encodeLegacySummary(value: string): string {
+    private encodeLegacySummary(value: string): string {
     const normalized = value
       .replace(/\s+/g, "_")
       .replace(/[^A-Za-z0-9_-]/g, "")
