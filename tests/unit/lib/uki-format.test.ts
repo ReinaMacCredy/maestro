@@ -179,6 +179,43 @@ describe("UKI v5.4 format", () => {
       touchedFiles: ["file_src_lib_uki_format_ts"],
       completedWork: ["tests_903_to_909", "status_pending_visible", "claim_path_atomic"],
       validation: ["build_green", "test_909_green", "real_handoff_created"],
-    } satisfies ExecuteUkiHandoffContent);
+      } satisfies ExecuteUkiHandoffContent);
+    });
+
+    it("normalizes legacy v5.2 execute strings into the new content model", () => {
+      const legacy =
+        "SESSION_CORE-legacy_record"
+        + "|CAUSAL_DRIVERS-upgrade_path"
+        + "|DIVERGENCES-NONE"
+        + "|KEY_DECISIONS-keep_pickup_safe"
+        + "|SIGNAL_DELTA-handoffs_1_2"
+        + "|ARTIFACTS-branch_main-file_src_lib_uki_format_ts"
+        + "|EXECUTION_STATE-legacy_tmpdir"
+        + "|BOUNDARY_STATE-NONE"
+        + "|STANCE_COLLAPSE-NONE_DETECTED_LOW_FRICTION"
+        + "|NEXT_ACTION-review_upgrade"
+        + "|CS-work_0.8"
+        + "|SUMMARY-Legacy_record-normalized-low_risk";
+
+      expect(parseUki(legacy)).toEqual({
+        mode: "execute",
+        currentState: "legacy_tmpdir",
+        sessionCore: "legacy_record",
+        decisions: ["keep_pickup_safe"],
+        artifacts: ["branch_main", "file_src_lib_uki_format_ts"],
+        readMore: ["file_src_lib_uki_format_ts"],
+        nextAction: "review_upgrade",
+        summary: "Legacy_record-normalized-low_risk",
+        maestroRefs: {},
+        cs: { work: 0.8 },
+        signalDelta: ["handoffs_1_2"],
+        boundaryState: [],
+        risks: [],
+        causalDrivers: ["upgrade_path"],
+        divergences: [],
+        touchedFiles: ["file_src_lib_uki_format_ts"],
+        completedWork: ["handoffs_1_2"],
+        validation: [],
+      } satisfies ExecuteUkiHandoffContent);
+    });
   });
-});

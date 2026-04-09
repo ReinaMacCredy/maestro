@@ -144,8 +144,142 @@ describe("UKI handoff roundtrip", () => {
     );
     expect(pickupJson.exitCode).toBe(0);
     const claimed = JSON.parse(pickupJson.stdout);
-    expect(claimed.status).toBe("picked-up");
-    expect(claimed.pickedUpBy).toBe("codex");
+      expect(claimed.status).toBe("picked-up");
+      expect(claimed.pickedUpBy).toBe("codex");
+    }, SLOW_CLI_TIMEOUT_MS);
+
+  it("prefers explicit --uki over the root --json flag on pickup", async () => {
+    const create = await run(
+      [
+        "handoff",
+        "create",
+        "--mode", "execute",
+        "--session-core", "pickup_flag_precedence",
+        "--summary", "Pickup_flag_precedence-created-low_risk",
+        "--next-action", "return_raw_uki",
+        "--artifact", "branch_flag_precedence",
+        "--read-more", "branch_flag_precedence",
+        "--completed", "handoff_created",
+        "--validation", "unit_green",
+        "--confidence-work", "0.9",
+        "--json",
+      ],
+      tmpDir,
+    );
+
+    expect(create.exitCode).toBe(0);
+    const created = JSON.parse(create.stdout);
+
+    const pickup = await run(
+      ["--json", "handoff", "pickup", "--id", created.id, "--uki"],
+      tmpDir,
+    );
+
+    expect(pickup.exitCode).toBe(0);
+    expect(pickup.stdout.startsWith("MODE-execute|")).toBe(true);
+    expect(() => JSON.parse(pickup.stdout)).toThrow();
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("auto-populates execute read-more and artifacts in a clean repo", async () => {
+    const init = Bun.spawn(["git", "init"], {
+      cwd: tmpDir,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    await init.exited;
+
+    const branch = Bun.spawn(["git", "checkout", "-b", "feat/handoff-clean"], {
+      cwd: tmpDir,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    await branch.exited;
+
+    const create = await run(
+      [
+        "handoff",
+        "create",
+        "--mode", "execute",
+        "--session-core", "clean_repo_execute",
+        "--summary", "Clean_repo_execute-created-low_risk",
+        "--next-action", "inspect_auto_context",
+        "--completed", "handoff_created",
+        "--validation", "unit_green",
+        "--confidence-work", "0.9",
+        "--json",
+      ],
+      tmpDir,
+    );
+
+    expect(create.exitCode).toBe(0);
+    const created = JSON.parse(create.stdout);
+    expect(created.content.readMore.length).toBeGreaterThan(0);
+    expect(created.content.artifacts).toContain("branch_feat_handoff_clean");
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("auto-populates plan read-more from known plan paths in a clean repo", async () => {
+    await Bun.write(join(tmpDir, "PLAN.md"), "# plan\n");
+    const init = Bun.spawn(["git", "init"], {
+      cwd: tmpDir,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    await init.exited;
+
+    const create = await run(
+      [
+        "handoff",
+        "create",
+        "--mode", "plan",
+        "--session-core", "clean_repo_plan",
+        "--summary", "Clean_repo_plan-created-low_risk",
+        "--next-action", "inspect_plan_auto_context",
+        "--decision", "save_plan_reference",
+        "--confidence-work", "0.9",
+        "--json",
+      ],
+      tmpDir,
+    );
+
+    expect(create.exitCode).toBe(0);
+    const created = JSON.parse(create.stdout);
+    expect(created.content.readMore).toContain("plan_md");
+    expect(created.content.planPaths).toContain("plan_md");
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("pickup canonicalizes legacy v5.3 records to v5.4 UKI output", async () => {
+    await Bun.$`mkdir -p ${join(tmpDir, ".maestro", "handoffs")}`.quiet();
+    await Bun.write(
+      join(tmpDir, ".maestro", "handoffs", "2026-04-09-123.json"),
+      JSON.stringify({
+        id: "2026-04-09-123",
+        version: "5.3",
+        timestamp: "2026-04-09T00:00:00.000Z",
+        status: "pending",
+        agent: "codex",
+        sessionId: "legacy-v53",
+        uki:
+          "SESSION_CORE-legacy_record"
+          + "|CAUSAL_DRIVERS-upgrade_path"
+          + "|DIVERGENCES-NONE"
+          + "|KEY_DECISIONS-keep_pickup_safe"
+          + "|DECISION_BASIS-safe_upgrade_path"
+          + "|SIGNAL_DELTA-handoffs_1_2"
+          + "|VALIDATION_STATE-unit_green"
+          + "|EXECUTION_STATE-legacy_tmpdir"
+          + "|BOUNDARY_STATE-NONE"
+          + "|NEXT_ACTION-review_upgrade"
+          + "|ARTIFACTS-branch_main-file_src_lib_uki_format_ts"
+          + "|STANCE_COLLAPSE-NONE_DETECTED_LOW_FRICTION"
+          + "|CS-work_0.8"
+          + "|SUMMARY-Legacy_record-normalized-low_risk",
+      }, null, 2),
+    );
+
+    const pickup = await run(["handoff", "pickup", "--id", "2026-04-09-123"], tmpDir);
+    expect(pickup.exitCode).toBe(0);
+    expect(pickup.stdout.startsWith("MODE-execute|")).toBe(true);
+    expect(pickup.stdout).toContain("|READ_MORE-file_src_lib_uki_format_ts|");
   }, SLOW_CLI_TIMEOUT_MS);
 
   it("errors cleanly when required mode is missing or no pending handoff exists", async () => {

@@ -84,6 +84,10 @@ export const UkiHandoffSchema = z.object({
   report: z.string().optional(),
 }).passthrough();
 
+export function validateUkiHandoffContent(value: unknown) {
+  return UkiHandoffContentSchema.parse(value);
+}
+
 export function validateUkiHandoff(value: unknown): UkiHandoff {
   return UkiHandoffSchema.parse(value);
 }

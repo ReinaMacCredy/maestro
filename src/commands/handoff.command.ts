@@ -252,10 +252,11 @@ async function collectGitContext(
     const state = await services.git.getState(cwd);
     const touchedFiles = state.changedFiles.map((file) => `file_${normalizeToken(file)}`);
     const branchArtifact = state.branch.length > 0 ? [`branch_${normalizeToken(state.branch)}`] : [];
+    const readMore = touchedFiles.length > 0 ? touchedFiles.slice(0, 5) : branchArtifact;
 
     return {
       artifacts: uniqueTokens([...branchArtifact, ...touchedFiles]),
-      readMore: uniqueTokens(touchedFiles.slice(0, 5)),
+      readMore: uniqueTokens(readMore),
       touchedFiles: uniqueTokens(touchedFiles),
     };
   } catch {
@@ -375,6 +376,7 @@ function resolvePickupFormat(
       "Pick one output format for maestro handoff pickup",
     ]);
   }
+  if (opts.uki) return "uki";
   if (opts.json || resolveJsonFlag(opts, program)) return "json";
   return "uki";
 }

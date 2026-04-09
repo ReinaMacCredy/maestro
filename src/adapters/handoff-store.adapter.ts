@@ -13,14 +13,11 @@ import { generateHandoffId, HANDOFF_ID_PATTERN } from "../domain/id.js";
 import type {
   CreateUkiHandoffInput,
   ExecuteUkiHandoffContent,
-  PlanUkiHandoffContent,
   UkiHandoff,
-  UkiHandoffContent,
   UkiHandoffStatus,
-  UkiMaestroRefs,
 } from "../domain/uki-types.js";
 import { UKI_HANDOFF_VERSION } from "../domain/uki-types.js";
-import { validateUkiHandoff } from "../domain/validators.js";
+import { validateUkiHandoff, validateUkiHandoffContent } from "../domain/validators.js";
 import type { HandoffStorePort, UpdateHandoffStatusMeta } from "../ports/handoff-store.port.js";
 import { compressUki, parseUki } from "../lib/uki-format.js";
 import { ensureDir, readJson, removeIfExists, writeJson } from "../lib/fs.js";
@@ -44,108 +41,26 @@ function normalizePersistedHandoff(value: unknown): unknown {
     : UKI_HANDOFF_VERSION;
 
   if (record.content && typeof record.content === "object") {
+    const content = validateUkiHandoffContent(record.content);
     return {
       ...record,
       version,
-      content: normalizeContent(record.content as Record<string, unknown>),
+      content,
+      uki: compressUki(content),
     };
   }
 
   if (typeof record.uki === "string") {
+    const content = parseUki(record.uki);
     return {
       ...record,
       version,
-      content: parseUki(record.uki),
+      content,
+      uki: compressUki(content),
     };
   }
 
   return value;
-}
-
-function normalizeContent(value: Record<string, unknown>): UkiHandoffContent {
-  const mode = value.mode === "plan" ? "plan" : "execute";
-  const common = {
-    mode,
-    currentState: typeof value.currentState === "string" && value.currentState.length > 0
-      ? value.currentState
-      : "unspecified",
-    sessionCore: typeof value.sessionCore === "string" && value.sessionCore.length > 0
-      ? value.sessionCore
-      : "handoff",
-    decisions: normalizeStringArray(value.decisions),
-    artifacts: normalizeStringArray(value.artifacts),
-    readMore: normalizeStringArray(value.readMore),
-    nextAction: typeof value.nextAction === "string" && value.nextAction.length > 0
-      ? value.nextAction
-      : "review_handoff",
-    summary: typeof value.summary === "string" && value.summary.length > 0
-      ? value.summary
-      : "Handoff-ready-needs_review",
-    maestroRefs: normalizeMaestroRefs(value.maestroRefs),
-    cs: normalizeConfidence(value.cs),
-    signalDelta: normalizeStringArray(value.signalDelta),
-    boundaryState: normalizeStringArray(value.boundaryState),
-    risks: normalizeStringArray(value.risks),
-    blindSpot: typeof value.blindSpot === "string" && value.blindSpot.length > 0
-      ? value.blindSpot
-      : undefined,
-    metaphor: typeof value.metaphor === "string" && value.metaphor.length > 0
-      ? value.metaphor
-      : undefined,
-    causalDrivers: normalizeStringArray(value.causalDrivers),
-    divergences: normalizeStringArray(value.divergences),
-  };
-
-  if (mode === "plan") {
-    return {
-      ...common,
-      mode,
-      planPaths: normalizeStringArray(value.planPaths),
-      maestroSync: normalizeStringArray(value.maestroSync),
-    } satisfies PlanUkiHandoffContent;
-  }
-
-  return {
-    ...common,
-    mode,
-    touchedFiles: normalizeStringArray(value.touchedFiles),
-    completedWork: normalizeStringArray(value.completedWork),
-    validation: normalizeStringArray(value.validation),
-  } satisfies ExecuteUkiHandoffContent;
-}
-
-function normalizeStringArray(value: unknown): readonly string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.filter((item): item is string => typeof item === "string" && item.length > 0);
-}
-
-function normalizeConfidence(value: unknown): { readonly work?: number; readonly summary?: number } {
-  if (!value || typeof value !== "object") {
-    return { summary: LEGACY_DEFAULT_CONFIDENCE };
-  }
-
-  const record = value as Record<string, unknown>;
-  return {
-    ...(typeof record.work === "number" ? { work: record.work } : {}),
-    ...(typeof record.summary === "number" ? { summary: record.summary } : {}),
-  };
-}
-
-function normalizeMaestroRefs(value: unknown): UkiMaestroRefs {
-  if (!value || typeof value !== "object") {
-    return {};
-  }
-
-  const record = value as Record<string, unknown>;
-  return {
-    ...(typeof record.missionId === "string" ? { missionId: record.missionId } : {}),
-    ...(typeof record.featureId === "string" ? { featureId: record.featureId } : {}),
-    ...(typeof record.milestoneId === "string" ? { milestoneId: record.milestoneId } : {}),
-    ...(typeof record.planPath === "string" ? { planPath: record.planPath } : {}),
-    ...(typeof record.specPath === "string" ? { specPath: record.specPath } : {}),
-  };
 }
 
 export class FsHandoffStoreAdapter implements HandoffStorePort {
