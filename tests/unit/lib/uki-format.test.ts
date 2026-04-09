@@ -77,7 +77,7 @@ const FULL: Fixture = {
       "branch_feat_missionControl",
       "version_0_16_0~0_16_1",
     ],
-    executionState: "binary_verified_working_tree_clean",
+    executionState: "binary_verified-working_tree_clean",
     boundaryState: ["no_caching", "no_refactor"],
     stanceCollapse: "NONE_DETECTED_LOW_FRICTION",
     nextAction: "push_and_open_PR",
@@ -91,7 +91,7 @@ const FULL: Fixture = {
     + "|KEY_DECISIONS-inject_at_prompt_seam-best_effort_try_catch"
     + "|SIGNAL_DELTA-recallMemory_callers_1~3-tests_27~41_green"
     + "|ARTIFACTS-commit_79dfc053~12ed055d-branch_feat_missionControl-version_0_16_0~0_16_1"
-    + "|EXECUTION_STATE-binary_verified_working_tree_clean"
+    + "|EXECUTION_STATE-binary_verified-working_tree_clean"
     + "|BOUNDARY_STATE-no_caching-no_refactor"
     + "|STANCE_COLLAPSE-NONE_DETECTED_LOW_FRICTION"
     + "|NEXT_ACTION-push_and_open_PR"
@@ -99,28 +99,29 @@ const FULL: Fixture = {
     + "|SUMMARY-Memory_auto_injects-shipped-low_risk",
 };
 
-// Edge case: long slot values pushing against limits, non-empty BOUNDARY_STATE.
-// SUMMARY is 131 chars (<140). Multiple boundary tokens.
+// Edge case: multiple sub-token slot values, non-empty BOUNDARY_STATE, CS
+// with only `summary` set. Every _-joined half is at or under the 4-word R2
+// limit. SUMMARY uses sub-tokens to encode richer data under 140 chars.
 const EDGE: Fixture = {
   name: "edge",
   slots: {
-    sessionCore: "phase2_handoff_suite_complete",
+    sessionCore: "phase2_handoff_suite-complete",
     causalDrivers: ["plan_delivered", "risk_surface_audited", "tests_failing_first"],
-    divergences: ["spec_ambiguity_on_empty_list"],
+    divergences: ["spec_ambiguity_empty_list"],
     keyDecisions: [
-      "use_NONE_for_empty_list",
+      "use_NONE_empty_list",
       "reject_summary_over_140",
       "normalize_dash_to_underscore",
     ],
     signalDelta: ["test_count_832~890_green", "handoff_commands_0~3"],
     artifacts: [
-      "file_src_lib_uki_format_ts",
-      "file_tests_unit_lib_uki_format_test_ts",
+      "file_src_lib_uki",
+      "file_tests_uki_spec",
       "branch_feat_missionControl",
     ],
-    executionState: "build_green_tests_green",
+    executionState: "build_green-tests_green-tree_clean",
     boundaryState: [
-      "no_migration_of_old_records",
+      "no_migration_old_records",
       "no_tui_modal_changes",
       "no_worker_types_touch",
     ],
@@ -128,21 +129,21 @@ const EDGE: Fixture = {
     nextAction: "run_release_local_bump",
     cs: { summary: 0.88 },
     summary:
-      "Phase2_UKI_format_plus_store_plus_CLI-shipped-no_migration_path_existing_handoffs_orphaned_by_design",
+      "Phase2_UKI_format-store_plus_CLI-shipped-no_migration-orphaned_by_design",
   },
   expected:
-    "SESSION_CORE-phase2_handoff_suite_complete"
+    "SESSION_CORE-phase2_handoff_suite-complete"
     + "|CAUSAL_DRIVERS-plan_delivered-risk_surface_audited-tests_failing_first"
-    + "|DIVERGENCES-spec_ambiguity_on_empty_list"
-    + "|KEY_DECISIONS-use_NONE_for_empty_list-reject_summary_over_140-normalize_dash_to_underscore"
+    + "|DIVERGENCES-spec_ambiguity_empty_list"
+    + "|KEY_DECISIONS-use_NONE_empty_list-reject_summary_over_140-normalize_dash_to_underscore"
     + "|SIGNAL_DELTA-test_count_832~890_green-handoff_commands_0~3"
-    + "|ARTIFACTS-file_src_lib_uki_format_ts-file_tests_unit_lib_uki_format_test_ts-branch_feat_missionControl"
-    + "|EXECUTION_STATE-build_green_tests_green"
-    + "|BOUNDARY_STATE-no_migration_of_old_records-no_tui_modal_changes-no_worker_types_touch"
+    + "|ARTIFACTS-file_src_lib_uki-file_tests_uki_spec-branch_feat_missionControl"
+    + "|EXECUTION_STATE-build_green-tests_green-tree_clean"
+    + "|BOUNDARY_STATE-no_migration_old_records-no_tui_modal_changes-no_worker_types_touch"
     + "|STANCE_COLLAPSE-NONE_DETECTED_LOW_FRICTION"
     + "|NEXT_ACTION-run_release_local_bump"
     + "|CS-summary_0.88"
-    + "|SUMMARY-Phase2_UKI_format_plus_store_plus_CLI-shipped-no_migration_path_existing_handoffs_orphaned_by_design",
+    + "|SUMMARY-Phase2_UKI_format-store_plus_CLI-shipped-no_migration-orphaned_by_design",
 };
 
 const ALL_FIXTURES: readonly Fixture[] = [MINIMAL, FULL, EDGE];
