@@ -8,7 +8,7 @@ It is designed for a workflow where a human operator coordinates multiple termin
 
 - Shared state lives on disk in `.maestro/`, not in chat history.
 - Missions break work into milestones, features, and validation assertions.
-- UKI v5.2 handoffs let one agent session pass compact context to another.
+- UKI v5.3 handoffs let one agent session pass compact context to another.
 - Memory commands turn corrections and learnings into reusable guidance.
 - Mission Control gives you a read-only TUI and JSON snapshots of current state.
 - The runtime stays local-first: filesystem, git, config, and terminal tools.
@@ -50,7 +50,7 @@ The human operator is the bridge between terminals. Maestro is the shared state 
 | Milestone | A phase within a mission. Milestones can act as work phases or validation gates. |
 | Feature | A concrete piece of work assigned to a worker type, with verification steps and optional dependencies. |
 | Assertion | A validation target tied to a feature. Assertions are updated to `passed`, `failed`, `blocked`, or `waived`. |
-| Handoff | A UKI v5.2 payload used to pass compact context between agent sessions. |
+| Handoff | A UKI v5.3 payload used to pass compact context between agent sessions. |
 | Memory | Corrections, learnings, and compiled guidance that feed back into future worker prompts. |
 | Checkpoint | A timestamped mission snapshot you can save and later restore. |
 | Mission Control | A read-only dashboard for previewing mission state interactively or as JSON. |
@@ -224,7 +224,7 @@ maestro milestone seal implement --mission <mission-id>
 
 ## Handoffs
 
-Handoffs are Maestro's compact transfer format for moving work between terminals. Each handoff is stored on disk, carries structured UKI v5.2 slots, and can be listed, picked up, or claimed later.
+Handoffs are Maestro's compact transfer format for moving work between terminals. Each handoff is stored on disk, carries structured UKI v5.3 slots, and can be listed, picked up, or claimed later.
 
 ### What a handoff contains
 
@@ -235,7 +235,7 @@ A handoff always includes:
 - `nextAction`: one concrete next step
 - at least one scoped confidence value via `--confidence-work` or `--confidence-summary`
 
-It can also include optional context such as decisions, artifacts, divergence notes, execution state, and boundary state.
+It can also include richer context such as decision basis, validation evidence, artifacts, divergence notes, execution state, boundary state, blind spots, and a metaphor anchor.
 
 ### Handoff status flow
 
@@ -256,22 +256,26 @@ Creating a handoff returns the handoff id, detected agent/session identity, curr
 ```text
 [ok] Handoff created: 2026-04-09-001
   Agent: codex
-  Session: 019d728a-a8b5-7882-afb2-1337f38b5c4b
+  Session: 019d72b0-eed3-7d51-9782-0b837f92cc30
   Status: pending
 
-UKI v5.2 string:
-SESSION_CORE-Implement the auth flow feature
+UKI v5.3 string:
+SESSION_CORE-handoff_real_example
 |CAUSAL_DRIVERS-NONE
 |DIVERGENCES-NONE
 |KEY_DECISIONS-NONE
+|DECISION_BASIS-preserve_pickup_clarity
 |SIGNAL_DELTA-NONE
-|ARTIFACTS-file_src/auth.ts
+|VALIDATION_STATE-compiled_cli_green
 |EXECUTION_STATE-unspecified
 |BOUNDARY_STATE-NONE
+|NEXT_ACTION-pick_up_auth_impl
+|ARTIFACTS-file_src_auth_ts
 |STANCE_COLLAPSE-NONE_DETECTED_LOW_FRICTION
-|NEXT_ACTION-Pick up feature auth-impl
+|BLIND_SPOT-green_tests_masked_drift
+|METAPHOR-baton_pass_snapshot
 |CS-work_0.9
-|SUMMARY-Planning is complete; implementation is ready
+|SUMMARY-Handoff_real_example-ready-low_risk
 ```
 
 ### Pickup output formats
@@ -279,7 +283,7 @@ SESSION_CORE-Implement the auth flow feature
 `maestro handoff pickup` supports three output modes:
 
 - default `--json`: structured data for scripts or other tools
-- `--markdown`: a human-readable view with headings for summary, next action, artifacts, confidence, and the raw UKI string
+- `--markdown`: a human-readable view with headings for summary, next action, decision basis, validation state, artifacts, confidence, and the raw UKI string
 - `--uki`: only the compressed UKI payload
 
 Example human-readable pickup:
@@ -312,6 +316,8 @@ maestro handoff create \
   --session-core "Implement the auth flow feature" \
   --summary "Planning is complete; implementation is ready" \
   --next-action "Pick up feature auth-impl" \
+  --decision-basis preserve_pickup_clarity \
+  --validation cli_example_green \
   --artifact file_src/auth.ts \
   --confidence-work 0.9
 

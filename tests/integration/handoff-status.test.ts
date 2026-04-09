@@ -38,15 +38,17 @@ describe("handoff status integration", () => {
   });
 
   it("status --json reports pending UKI handoffs", async () => {
-    const create = await run([
-      "handoff",
-      "create",
-      "--session-core", "status_test",
-      "--summary", "Status_test",
-      "--next-action", "inspect_status",
-      "--artifact", "branch_main",
-      "--confidence-work", "0.9",
-      "--json",
+      const create = await run([
+        "handoff",
+        "create",
+        "--session-core", "status_test",
+        "--summary", "Status_test",
+        "--next-action", "inspect_status",
+        "--decision-basis", "keep_status_visible",
+        "--validation", "status_green",
+        "--artifact", "branch_main",
+        "--confidence-work", "0.9",
+        "--json",
     ], tmpDir);
     expect(create.exitCode).toBe(0);
 

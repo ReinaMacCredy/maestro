@@ -1,5 +1,5 @@
 /**
- * Filesystem handoff store (v2, UKI v5.2) adapter tests.
+ * Filesystem handoff store (v2, UKI v5.3) adapter tests.
  */
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { access, mkdir, mkdtemp, rm, utimes, writeFile } from "node:fs/promises";
@@ -15,12 +15,14 @@ const SAMPLE_SLOTS: UkiSlots = {
   causalDrivers: ["unit_test_ran"],
   divergences: [],
   keyDecisions: ["proceed_with_persistence"],
+  decisionBasis: ["keep_store_roundtrip_safe"],
   signalDelta: ["handoffs_0~1"],
-  artifacts: ["branch_feat_missionControl"],
+  validationState: ["unit_green"],
   executionState: "tmpdir_isolated",
   boundaryState: [],
-  stanceCollapse: "NONE_DETECTED_LOW_FRICTION",
   nextAction: "verify_roundtrip",
+  artifacts: ["branch_feat_missionControl"],
+  stanceCollapse: "NONE_DETECTED_LOW_FRICTION",
   cs: { work: 0.9 },
   summary: "Adapter_test-roundtrip_verified-low_risk",
 };
@@ -50,7 +52,7 @@ describe("FsHandoffStoreAdapter", () => {
     expect(created.status).toBe("pending");
     expect(created.agent).toBe("claude-code");
     expect(created.sessionId).toBe("test-session-abc");
-    expect(created.version).toBe("5.2");
+      expect(created.version).toBe("5.3");
     expect(typeof created.timestamp).toBe("string");
     expect(created.slots).toEqual(SAMPLE_SLOTS);
   });
@@ -71,11 +73,48 @@ describe("FsHandoffStoreAdapter", () => {
     await access(filePath);
   });
 
-  it("retrieves a created handoff by id", async () => {
-    const created = await store.create(SAMPLE_INPUT);
-    const retrieved = await store.get(created.id);
-    expect(retrieved).toEqual(created);
-  });
+    it("retrieves a created handoff by id", async () => {
+      const created = await store.create(SAMPLE_INPUT);
+      const retrieved = await store.get(created.id);
+      expect(retrieved).toEqual(created);
+    });
+
+    it("normalizes persisted v5.2 slot records to the v5.3 slot shape on read", async () => {
+      const id = "2026-04-09-123";
+      const handoffDir = join(dir, ".maestro", "handoffs");
+      await mkdir(handoffDir, { recursive: true });
+      await writeFile(join(handoffDir, `${id}.json`), JSON.stringify({
+        id,
+        version: "5.2",
+        timestamp: "2026-04-09T00:00:00.000Z",
+        status: "pending",
+        agent: "codex",
+        sessionId: "legacy-v52",
+        slots: {
+          sessionCore: "legacy_record",
+          causalDrivers: ["upgrade_path"],
+          divergences: [],
+          keyDecisions: ["keep_pickup_safe"],
+          signalDelta: ["handoffs_1~2"],
+          artifacts: ["branch_main"],
+          executionState: "legacy_tmpdir",
+          boundaryState: [],
+          stanceCollapse: "NONE_DETECTED_LOW_FRICTION",
+          nextAction: "review_upgrade",
+          cs: { work: 0.8 },
+          summary: "Legacy_record-normalized-low_risk",
+        },
+        uki: "SESSION_CORE-legacy_record|CAUSAL_DRIVERS-upgrade_path|DIVERGENCES-NONE|KEY_DECISIONS-keep_pickup_safe|SIGNAL_DELTA-handoffs_1~2|ARTIFACTS-branch_main|EXECUTION_STATE-legacy_tmpdir|BOUNDARY_STATE-NONE|STANCE_COLLAPSE-NONE_DETECTED_LOW_FRICTION|NEXT_ACTION-review_upgrade|CS-work_0.8|SUMMARY-Legacy_record-normalized-low_risk",
+      }, null, 2));
+
+      const retrieved = await store.get(id);
+
+      expect(retrieved?.version).toBe("5.2");
+      expect(retrieved?.slots.decisionBasis).toEqual([]);
+      expect(retrieved?.slots.validationState).toEqual([]);
+      expect(retrieved?.slots.nextAction).toBe("review_upgrade");
+      expect(retrieved?.slots.artifacts).toEqual(["branch_main"]);
+    });
 
   it("returns undefined for missing id", async () => {
     const result = await store.get("9999-12-31-999");

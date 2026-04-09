@@ -1,5 +1,5 @@
 /**
- * UKI v5.2 handoff end-to-end round-trip integration test.
+ * UKI v5.3 handoff end-to-end round-trip integration test.
  *
  * Creates a handoff via the CLI, lists it, picks it up with --uki, then
  * runs the raw UKI string back through parseUki() and asserts the parsed
@@ -56,17 +56,22 @@ describe("UKI handoff roundtrip", () => {
         "--session-core", "integration_test",
         "--summary", "Integration_test-roundtrip-low_risk",
         "--next-action", "assert_structural_equality",
-        "--driver", "ci_ran",
-        "--driver", "suite_exercised",
-        "--decision", "use_fixture_slots",
-        "--signal", "handoffs_0~1",
-        "--artifact", "branch_feat_missionControl",
-        "--artifact", "file_tests_uki_roundtrip",
-        "--boundary", "no_real_work",
-        "--execution-state", "tmpdir_sandbox",
-        "--confidence-work", "0.95",
-        "--confidence-summary", "0.9",
-        "--json",
+          "--driver", "ci_ran",
+          "--driver", "suite_exercised",
+          "--decision", "use_fixture_slots",
+          "--decision-basis", "keep_roundtrip_lossless",
+          "--signal", "handoffs_0~1",
+          "--validation", "json_green",
+          "--validation", "pickup_green",
+          "--artifact", "branch_feat_missionControl",
+          "--artifact", "file_tests_uki_roundtrip",
+          "--boundary", "no_real_work",
+          "--execution-state", "tmpdir_sandbox",
+          "--blind-spot", "green_tests_masked_drift",
+          "--metaphor", "baton_pass_snapshot",
+          "--confidence-work", "0.95",
+          "--confidence-summary", "0.9",
+          "--json",
       ],
       tmpDir,
     );
@@ -92,9 +97,9 @@ describe("UKI handoff roundtrip", () => {
     const rawUki = pickup.stdout;
     expect(rawUki.length).toBeGreaterThan(0);
 
-    // exactly 11 pipes, 0 colons, 0 newlines
-    const pipeCount = (rawUki.match(/\|/g) ?? []).length;
-    expect(pipeCount).toBe(11);
+      // exactly 15 pipes, 0 colons, 0 newlines
+      const pipeCount = (rawUki.match(/\|/g) ?? []).length;
+      expect(pipeCount).toBe(15);
     expect(rawUki.includes(":")).toBe(false);
     expect(rawUki.includes("\n")).toBe(false);
 

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { UkiHandoff } from "./uki-types.js";
+import { SUPPORTED_UKI_HANDOFF_VERSIONS, UKI_HANDOFF_STATUSES } from "./uki-types.js";
 
 /**
  * Phase 1 strip: the handoff validators (HandoffSessionSchema,
@@ -26,12 +27,16 @@ const UkiSlotsSchema = z.object({
   causalDrivers: z.array(z.string()),
   divergences: z.array(z.string()),
   keyDecisions: z.array(z.string()),
+  decisionBasis: z.array(z.string()),
   signalDelta: z.array(z.string()),
+  validationState: z.array(z.string()),
+  nextAction: z.string().min(1),
   artifacts: z.array(z.string()),
   executionState: z.string().min(1),
   boundaryState: z.array(z.string()),
   stanceCollapse: z.string().min(1),
-  nextAction: z.string().min(1),
+  blindSpot: z.string().min(1).optional(),
+  metaphor: z.string().min(1).optional(),
   cs: z.object({
     work: z.number().optional(),
     summary: z.number().optional(),
@@ -41,9 +46,9 @@ const UkiSlotsSchema = z.object({
 
 export const UkiHandoffSchema = z.object({
   id: z.string().min(1),
-  version: z.literal("5.2"),
+  version: z.enum(SUPPORTED_UKI_HANDOFF_VERSIONS),
   timestamp: z.string().min(1),
-  status: z.enum(["pending", "picked-up", "completed"]),
+  status: z.enum(UKI_HANDOFF_STATUSES),
   agent: z.string().min(1),
   sessionId: z.string().min(1),
   slots: UkiSlotsSchema,
@@ -60,5 +65,5 @@ export const UkiHandoffSchema = z.object({
  * variant can use `UkiHandoffSchema.safeParse(value)`.
  */
 export function validateUkiHandoff(value: unknown): UkiHandoff {
-  return UkiHandoffSchema.parse(value) as unknown as UkiHandoff;
+  return UkiHandoffSchema.parse(value);
 }

@@ -37,13 +37,13 @@ export async function pickupUkiHandoff(
       ]);
     }
   } else {
-    handoff = await handoffStore.getLatestPending();
-    if (!handoff) {
-      throw new MaestroError("No pending handoffs to pick up", [
-        "Create one: maestro handoff create --session-core '...' --summary '...' --next-action '...' --artifact 'branch_<name>' --confidence-work 0.9",
-        "Or list all: maestro handoff list",
-      ]);
-    }
+      handoff = await handoffStore.getLatestPending();
+      if (!handoff) {
+        throw new MaestroError("No pending handoffs to pick up", [
+          "Create one: maestro handoff create --session-core '...' --summary '...' --next-action '...' --decision-basis '...' --validation '...' --artifact 'branch_<name>' --confidence-work 0.9",
+          "Or list all: maestro handoff list",
+        ]);
+      }
   }
 
   return handoff;

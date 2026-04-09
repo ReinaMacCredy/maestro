@@ -2,7 +2,7 @@
  * Filesystem-backed implementation of the v2 HandoffStorePort.
  *
  * Persists records as flat JSON files under `.maestro/handoffs/<id>.json`.
- * Each file contains the full UkiHandoff including the cached UKI v5.2
+ * Each file contains the full UkiHandoff including the cached UKI v5.3
  * compressed string, so reads do not need to recompress.
  *
  * Ids come from `generateHandoffId()` in `src/domain/id.ts` (shared with
@@ -35,6 +35,52 @@ const LOCK_RETRY_DELAY_MS = 10;
 const LOCK_RETRY_COUNT = 100;
 const LOCK_STALE_MS = 30_000;
 const LEGACY_DEFAULT_CONFIDENCE = 0.5;
+
+function normalizePersistedHandoff(value: unknown): unknown {
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  const record = value as Record<string, unknown>;
+  const slots = record.slots;
+  if (!slots || typeof slots !== "object") {
+    return value;
+  }
+
+  const slotRecord = slots as Record<string, unknown>;
+  return {
+    ...record,
+    version: record.version === "5.2" || record.version === "5.3"
+      ? record.version
+      : UKI_HANDOFF_VERSION,
+    slots: {
+      ...slotRecord,
+      decisionBasis: normalizeStringArray(slotRecord.decisionBasis),
+      validationState: normalizeStringArray(slotRecord.validationState),
+      nextAction: typeof slotRecord.nextAction === "string" ? slotRecord.nextAction : "review_handoff",
+      artifacts: normalizeStringArray(slotRecord.artifacts),
+      boundaryState: normalizeStringArray(slotRecord.boundaryState),
+      causalDrivers: normalizeStringArray(slotRecord.causalDrivers),
+      divergences: normalizeStringArray(slotRecord.divergences),
+      keyDecisions: normalizeStringArray(slotRecord.keyDecisions),
+      signalDelta: normalizeStringArray(slotRecord.signalDelta),
+      stanceCollapse: typeof slotRecord.stanceCollapse === "string" && slotRecord.stanceCollapse.length > 0
+        ? slotRecord.stanceCollapse
+        : "NONE_DETECTED_LOW_FRICTION",
+      blindSpot: typeof slotRecord.blindSpot === "string" && slotRecord.blindSpot.length > 0
+        ? slotRecord.blindSpot
+        : undefined,
+      metaphor: typeof slotRecord.metaphor === "string" && slotRecord.metaphor.length > 0
+        ? slotRecord.metaphor
+        : undefined,
+    },
+  };
+}
+
+function normalizeStringArray(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string");
+}
 
 export class FsHandoffStoreAdapter implements HandoffStorePort {
   constructor(private readonly baseDir: string) {}
@@ -123,11 +169,11 @@ export class FsHandoffStoreAdapter implements HandoffStorePort {
     id: string,
     opts: { tolerant?: boolean } = {},
   ): Promise<UkiHandoff | undefined> {
-    try {
-      const raw = await readJson<unknown>(this.itemPath(id));
-      if (raw !== undefined) {
-        return validateUkiHandoff(raw);
-      }
+      try {
+        const raw = await readJson<unknown>(this.itemPath(id));
+        if (raw !== undefined) {
+          return validateUkiHandoff(normalizePersistedHandoff(raw));
+        }
 
       const legacyEnvelope = await readJson<unknown>(this.legacyEnvelopePath(id));
       if (legacyEnvelope !== undefined) {
@@ -316,20 +362,22 @@ export class FsHandoffStoreAdapter implements HandoffStorePort {
     const nextAction = this.encodeLegacyToken(legacy.quickstart, "review_legacy_handoff");
     const executionState = this.encodeLegacyToken(legacy.git?.diffStat, "legacy_git_state");
     const summary = this.encodeLegacySummary(legacy.message);
-    const slots = {
-      sessionCore: message,
-      causalDrivers: [],
-      divergences: [],
-      keyDecisions: [],
-      signalDelta: [],
-      artifacts: [`branch_${branch}`],
-      executionState,
-      boundaryState: [],
-      stanceCollapse: "NONE_DETECTED_LOW_FRICTION",
-      nextAction,
-      cs: { summary: LEGACY_DEFAULT_CONFIDENCE },
-      summary,
-    } satisfies CreateUkiHandoffInput["slots"];
+      const slots = {
+        sessionCore: message,
+        causalDrivers: [],
+        divergences: [],
+        keyDecisions: [],
+        decisionBasis: [],
+        signalDelta: [],
+        validationState: [],
+        nextAction,
+        artifacts: [`branch_${branch}`],
+        executionState,
+        boundaryState: [],
+        stanceCollapse: "NONE_DETECTED_LOW_FRICTION",
+        cs: { summary: LEGACY_DEFAULT_CONFIDENCE },
+        summary,
+      } satisfies CreateUkiHandoffInput["slots"];
 
     return {
       id: legacy.id ?? id,

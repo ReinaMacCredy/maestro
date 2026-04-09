@@ -8,9 +8,14 @@
  */
 import type { UkiSlots } from "../lib/uki-format.js";
 
-export type UkiHandoffStatus = "pending" | "picked-up" | "completed";
+export const UKI_HANDOFF_STATUSES = ["pending", "picked-up", "completed"] as const;
 
-export const UKI_HANDOFF_VERSION = "5.2";
+export type UkiHandoffStatus = (typeof UKI_HANDOFF_STATUSES)[number];
+
+export const UKI_HANDOFF_VERSION = "5.3";
+export const SUPPORTED_UKI_HANDOFF_VERSIONS = ["5.2", UKI_HANDOFF_VERSION] as const;
+
+export type UkiHandoffVersion = (typeof SUPPORTED_UKI_HANDOFF_VERSIONS)[number];
 
 /**
  * A persisted UKI handoff record.
@@ -22,7 +27,7 @@ export const UKI_HANDOFF_VERSION = "5.2";
  */
 export interface UkiHandoff {
   readonly id: string;
-  readonly version: typeof UKI_HANDOFF_VERSION;
+  readonly version: UkiHandoffVersion;
   readonly timestamp: string;
   readonly status: UkiHandoffStatus;
   readonly agent: string;

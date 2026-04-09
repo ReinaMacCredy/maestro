@@ -2,7 +2,7 @@
  * `maestro handoff` command surface.
  *
  * Three subcommands:
- *   - create: builds a new UKI v5.2 handoff from structured flags
+ *   - create: builds a new UKI v5.3 handoff from structured flags
  *   - pickup: fetches the latest pending (or by id) with --json/--markdown/--uki output
  *   - list:   lists handoffs with optional status filter
  */
@@ -23,29 +23,33 @@ import { listUkiHandoffs } from "../usecases/list-uki-handoffs.usecase.js";
 
 type PickupFormat = "json" | "markdown" | "uki";
 
-export function registerHandoffCommand(program: Command): void {
+  export function registerHandoffCommand(program: Command): void {
   const handoffCmd = program
     .command("handoff")
-    .description("UKI v5.2 handoff lifecycle (create, pickup, list)")
+    .description("UKI v5.3 handoff lifecycle (create, pickup, list)")
     .option("--json", "Output as JSON");
 
   handoffCmd
     .command("create")
-    .description("Create a new UKI handoff from structured slots")
-    .requiredOption("--session-core <text>", "SESSION_CORE slot (essence of the work)")
-    .requiredOption("--summary <text>", "SUMMARY slot (under 140 chars)")
-    .requiredOption("--next-action <text>", "NEXT_ACTION slot (one concrete next step)")
-    .option("--driver <text...>", "CAUSAL_DRIVERS token (repeatable)")
-    .option("--divergence <text...>", "DIVERGENCES token (repeatable)")
-    .option("--decision <text...>", "KEY_DECISIONS token (repeatable)")
-    .option("--signal <text...>", "SIGNAL_DELTA token (repeatable, may include before~after)")
-    .option("--artifact <text...>", "ARTIFACTS token (repeatable, must include >=1 commit_/branch_/version_/file_)")
-    .option("--boundary <text...>", "BOUNDARY_STATE token (repeatable)")
-    .option("--execution-state <text>", "EXECUTION_STATE slot")
-    .option("--stance-collapse <text>", "STANCE_COLLAPSE slot (default NONE_DETECTED_LOW_FRICTION)")
-    .option("--confidence-work <number>", "CS.work (0..1)", parseFloatStrict)
-    .option("--confidence-summary <number>", "CS.summary (0..1)", parseFloatStrict)
-    .option("--agent <name>", "Override agent identity (default: auto-detect)")
+      .description("Create a new UKI handoff from structured slots")
+      .requiredOption("--session-core <text>", "SESSION_CORE slot (essence of the work)")
+      .requiredOption("--summary <text>", "SUMMARY slot (under 140 chars)")
+      .requiredOption("--next-action <text>", "NEXT_ACTION slot (one concrete next step)")
+      .option("--driver <text...>", "CAUSAL_DRIVERS token (repeatable)")
+      .option("--divergence <text...>", "DIVERGENCES token (repeatable)")
+      .option("--decision <text...>", "KEY_DECISIONS token (repeatable)")
+      .option("--decision-basis <text...>", "DECISION_BASIS token (repeatable)")
+      .option("--signal <text...>", "SIGNAL_DELTA token (repeatable, may include before~after)")
+      .option("--validation <text...>", "VALIDATION_STATE token (repeatable)")
+      .option("--artifact <text...>", "ARTIFACTS token (repeatable, must include >=1 commit_/branch_/version_/file_)")
+      .option("--boundary <text...>", "BOUNDARY_STATE token (repeatable)")
+      .option("--execution-state <text>", "EXECUTION_STATE slot")
+      .option("--stance-collapse <text>", "STANCE_COLLAPSE slot (default NONE_DETECTED_LOW_FRICTION)")
+      .option("--blind-spot <text>", "BLIND_SPOT slot")
+      .option("--metaphor <text>", "METAPHOR slot")
+      .option("--confidence-work <number>", "CS.work (0..1)", parseFloatStrict)
+      .option("--confidence-summary <number>", "CS.summary (0..1)", parseFloatStrict)
+      .option("--agent <name>", "Override agent identity (default: auto-detect)")
     .option("--session-id <id>", "Override session id (default: auto-detect)")
     .option("--json", "Output as JSON")
     .action(async (opts) => {
@@ -71,11 +75,11 @@ export function registerHandoffCommand(program: Command): void {
     .command("pickup")
     .description("Pick up the latest pending handoff (or a specific one by id)")
     .option("--id <id>", "Specific handoff id to pick up")
-    .option("--claim", "Transition pending -> picked-up (atomic claim)")
-    .option("--agent <name>", "pickedUpBy attribution when --claim is set")
-    .option("--json", "Output as JSON (default)")
-    .option("--markdown", "Output as human-readable markdown")
-    .option("--uki", "Output only the raw UKI v5.2 compressed string")
+      .option("--claim", "Transition pending -> picked-up (atomic claim)")
+      .option("--agent <name>", "pickedUpBy attribution when --claim is set")
+      .option("--json", "Output as JSON (default)")
+      .option("--markdown", "Output as human-readable markdown")
+      .option("--uki", "Output only the raw UKI v5.3 compressed string")
     .action(async (opts) => {
       const services = getServices();
       const format = resolvePickupFormat(opts, program);
@@ -107,40 +111,50 @@ function buildSlotsFromOptions(opts: Record<string, unknown>): UkiSlots {
   const causalDrivers = toStringArray(opts.driver);
   const divergences = toStringArray(opts.divergence);
   const keyDecisions = toStringArray(opts.decision);
+  const decisionBasis = toStringArray(opts.decisionBasis);
   const signalDelta = toStringArray(opts.signal);
+  const validationState = toStringArray(opts.validation);
   const artifacts = toStringArray(opts.artifact);
   const boundaryState = toStringArray(opts.boundary);
 
   const confidenceWork = opts.confidenceWork as number | undefined;
   const confidenceSummary = opts.confidenceSummary as number | undefined;
   if (confidenceWork === undefined && confidenceSummary === undefined) {
-    throw new MaestroError(
-      "At least one of --confidence-work or --confidence-summary is required",
-      [
-        "UKI v5.2 CS must be scoped (R5)",
-        "Example: --confidence-work 0.95 --confidence-summary 0.9",
-      ],
-    );
+      throw new MaestroError(
+        "At least one of --confidence-work or --confidence-summary is required",
+        [
+          "UKI v5.3 CS must be scoped (R5)",
+          "Example: --confidence-work 0.95 --confidence-summary 0.9",
+        ],
+      );
   }
 
   return {
-    sessionCore: String(opts.sessionCore),
-    causalDrivers,
-    divergences,
-    keyDecisions,
-    signalDelta,
-    artifacts,
-    executionState: typeof opts.executionState === "string" && opts.executionState.length > 0
-      ? opts.executionState
-      : "unspecified",
-    boundaryState,
-    stanceCollapse: typeof opts.stanceCollapse === "string" && opts.stanceCollapse.length > 0
-      ? opts.stanceCollapse
-      : DEFAULT_STANCE_COLLAPSE,
-    nextAction: String(opts.nextAction),
-    cs: {
-      ...(confidenceWork !== undefined ? { work: confidenceWork } : {}),
-      ...(confidenceSummary !== undefined ? { summary: confidenceSummary } : {}),
+      sessionCore: String(opts.sessionCore),
+      causalDrivers,
+      divergences,
+      keyDecisions,
+      decisionBasis,
+      signalDelta,
+      validationState,
+      executionState: typeof opts.executionState === "string" && opts.executionState.length > 0
+        ? opts.executionState
+        : "unspecified",
+      boundaryState,
+      nextAction: String(opts.nextAction),
+      artifacts,
+      stanceCollapse: typeof opts.stanceCollapse === "string" && opts.stanceCollapse.length > 0
+        ? opts.stanceCollapse
+        : DEFAULT_STANCE_COLLAPSE,
+      blindSpot: typeof opts.blindSpot === "string" && opts.blindSpot.length > 0
+        ? opts.blindSpot
+        : undefined,
+      metaphor: typeof opts.metaphor === "string" && opts.metaphor.length > 0
+        ? opts.metaphor
+        : undefined,
+      cs: {
+        ...(confidenceWork !== undefined ? { work: confidenceWork } : {}),
+        ...(confidenceSummary !== undefined ? { summary: confidenceSummary } : {}),
     },
     summary: String(opts.summary),
   };
@@ -204,13 +218,13 @@ function formatHandoffCreate(handoff: UkiHandoff): string[] {
   return [
     `[ok] Handoff created: ${handoff.id}`,
     `  Agent: ${handoff.agent}`,
-    `  Session: ${handoff.sessionId}`,
-    `  Status: ${handoff.status}`,
-    "",
-    "UKI v5.2 string:",
-    handoff.uki,
-  ];
-}
+      `  Session: ${handoff.sessionId}`,
+      `  Status: ${handoff.status}`,
+      "",
+      "UKI v5.3 string:",
+      handoff.uki,
+    ];
+  }
 
 function formatHandoffMarkdown(handoff: UkiHandoff): string[] {
   const s = handoff.slots;
@@ -232,30 +246,38 @@ function formatHandoffMarkdown(handoff: UkiHandoff): string[] {
     s.nextAction,
     "",
   ];
-  for (const [heading, items] of [
-    ["Causal drivers", s.causalDrivers],
-    ["Divergences", s.divergences],
-    ["Key decisions", s.keyDecisions],
-    ["Signal delta", s.signalDelta],
-    ["Artifacts", s.artifacts],
-    ["Boundary state", s.boundaryState],
-  ] satisfies ReadonlyArray<readonly [string, readonly string[]]>) {
-    appendMarkdownListSection(lines, heading, items);
-  }
-  lines.push(
-    "## Execution state",
-    s.executionState,
+    for (const [heading, items] of [
+      ["Causal drivers", s.causalDrivers],
+      ["Divergences", s.divergences],
+      ["Key decisions", s.keyDecisions],
+      ["Decision basis", s.decisionBasis],
+      ["Signal delta", s.signalDelta],
+      ["Validation state", s.validationState],
+      ["Artifacts", s.artifacts],
+      ["Boundary state", s.boundaryState],
+    ] satisfies ReadonlyArray<readonly [string, readonly string[]]>) {
+      appendMarkdownListSection(lines, heading, items);
+    }
+    if (s.blindSpot) {
+      lines.push("## Blind spot", s.blindSpot, "");
+    }
+    if (s.metaphor) {
+      lines.push("## Metaphor", s.metaphor, "");
+    }
+    lines.push(
+      "## Execution state",
+      s.executionState,
     "",
     "## Stance collapse",
     s.stanceCollapse,
     "",
-    "## Confidence",
-    `- work: ${s.cs.work ?? "n/a"}`,
-    `- summary: ${s.cs.summary ?? "n/a"}`,
-    "",
-    "## UKI v5.2 string",
-    handoff.uki,
-  );
+      "## Confidence",
+      `- work: ${s.cs.work ?? "n/a"}`,
+      `- summary: ${s.cs.summary ?? "n/a"}`,
+      "",
+      "## UKI v5.3 string",
+      handoff.uki,
+    );
   return lines;
 }
 
