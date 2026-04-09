@@ -222,6 +222,95 @@ maestro checkpoint save --mission <mission-id>
 maestro milestone seal implement --mission <mission-id>
 ```
 
+## Handoffs
+
+Handoffs are Maestro's compact transfer format for moving work between terminals. Each handoff is stored on disk, carries structured UKI v5.2 slots, and can be listed, picked up, or claimed later.
+
+### What a handoff contains
+
+A handoff always includes:
+
+- `sessionCore`: the essence of the work
+- `summary`: a short under-140-character summary
+- `nextAction`: one concrete next step
+- at least one scoped confidence value via `--confidence-work` or `--confidence-summary`
+
+It can also include optional context such as decisions, artifacts, divergence notes, execution state, and boundary state.
+
+### Handoff status flow
+
+```mermaid
+flowchart LR
+  pending["pending"] --> picked["picked-up"]
+  picked --> completed["completed"]
+```
+
+- `create` writes a new handoff with status `pending`
+- `pickup --claim` atomically moves a pending handoff to `picked-up`
+- `list --status ...` lets you inspect `pending`, `picked-up`, or `completed` handoffs
+
+### Create output
+
+Creating a handoff returns the handoff id, detected agent/session identity, current status, and the compressed UKI string:
+
+```text
+[ok] Handoff created: 2026-04-09-001
+  Agent: codex
+  Session: abc123
+  Status: pending
+
+UKI v5.2 string:
+SESSION_CORE...|SUMMARY...|NEXT_ACTION...
+```
+
+### Pickup output formats
+
+`maestro handoff pickup` supports three output modes:
+
+- default `--json`: structured data for scripts or other tools
+- `--markdown`: a human-readable view with headings for summary, next action, artifacts, confidence, and the raw UKI string
+- `--uki`: only the compressed UKI payload
+
+Example human-readable pickup:
+
+```bash
+maestro handoff pickup --markdown
+```
+
+```markdown
+# Handoff 2026-04-09-001
+
+- Status: picked-up
+- Agent: codex
+- Session: abc123
+
+## Session core
+Implement the auth flow feature
+
+## Summary
+Planning is complete; implementation is ready
+
+## Next action
+Pick up feature auth-impl
+```
+
+### Typical handoff loop
+
+```bash
+maestro handoff create \
+  --session-core "Implement the auth flow feature" \
+  --summary "Planning is complete; implementation is ready" \
+  --next-action "Pick up feature auth-impl" \
+  --artifact file_src/auth.ts \
+  --confidence-work 0.9
+
+maestro handoff list
+maestro handoff pickup --markdown
+maestro handoff pickup --claim --agent codex
+```
+
+Use `handoff list` when you want a queue view, `pickup --markdown` when a human is reading it directly, and `pickup --json` or `pickup --uki` when another tool or agent should consume it.
+
 ## Common Commands
 
 | Command | Use it when you want to... |
