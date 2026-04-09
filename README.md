@@ -1,213 +1,303 @@
 # maestro
 
-Cross-agent handoff and mission control CLI.
+Maestro is a local-first conductor for multi-agent software engineering. It gives you one CLI and one on-disk state model for missions, features, assertions, handoffs, checkpoints, memory, and project context so separate agent sessions can collaborate without a server, database, or background daemon.
 
-Maestro is a plan-based orchestration layer for multi-agent software engineering. It combines handoff workflows with mission state, milestone progress, validation assertions, worker prompts, checkpoints, and lightweight project notes.
+It is designed for a workflow where a human operator coordinates multiple terminals, while Maestro keeps the shared state disciplined and inspectable.
 
-## Overview
+## Why Maestro
 
-Maestro manages two primary concerns:
+- Shared state lives on disk in `.maestro/`, not in chat history.
+- Missions break work into milestones, features, and validation assertions.
+- UKI v5.2 handoffs let one agent session pass compact context to another.
+- Memory commands turn corrections and learnings into reusable guidance.
+- Mission Control gives you a read-only TUI and JSON snapshots of current state.
+- The runtime stays local-first: filesystem, git, config, and terminal tools.
 
-1. **Cross-agent handoffs** — pass work between agents with preserved context
-2. **Mission Control** — track plan execution across missions, milestones, features, assertions, and checkpoints
+## What Maestro Is Not
+
+- It does not spawn or supervise LLM agents for you.
+- It is not a hosted orchestration service.
+- It is not tied to a single model vendor or harness.
+- It does not require a database, queue, or network API to work.
+
+The human operator is the bridge between terminals. Maestro is the shared state layer underneath that workflow.
+
+## Core Concepts
+
+| Concept | Purpose |
+|---|---|
+| Mission | The top-level unit of work with a lifecycle such as `draft`, `approved`, or `executing`. |
+| Milestone | A phase within a mission. Milestones can act as work phases or validation gates. |
+| Feature | A concrete piece of work assigned to a worker type, with verification steps and optional dependencies. |
+| Assertion | A validation target tied to a feature. Assertions are updated to `passed`, `failed`, `blocked`, or `waived`. |
+| Handoff | A UKI v5.2 payload used to pass compact context between agent sessions. |
+| Memory | Corrections, learnings, and compiled guidance that feed back into future worker prompts. |
+| Checkpoint | A timestamped mission snapshot you can save and later restore. |
+| Mission Control | A read-only dashboard for previewing mission state interactively or as JSON. |
 
 ## Installation
 
-Build from source:
+### Requirements
+
+- [Bun](https://bun.sh/)
+- Git
+- A local agent harness in another terminal, such as Claude Code, Codex, Gemini CLI, or Droid CLI
+
+### Build From Source
 
 ```bash
 bun install
 bun run build
 ```
 
-The build outputs to `dist/maestro` as a standalone executable.
+This produces the compiled binary at `./dist/maestro`.
 
-To install globally and inject agent instruction blocks:
+### Install Locally
 
 ```bash
-bun run build
 ./dist/maestro install
 ```
 
-## Commands
+Or rebuild and refresh the installed binary in one step:
 
-### Core Project Setup
-
-| Command | Description |
-|---------|-------------|
-| `maestro init` | Initialize `.maestro/` in the current project |
-| `maestro init --global` | Initialize global config at `~/.maestro/` |
-| `maestro install` | Initialize global config and inject agent instruction blocks |
-| `maestro update` | Update the installed binary and refresh agent instruction blocks |
-| `maestro update --agents-only` | Refresh agent instruction blocks without rebuilding the binary |
-| `maestro uninstall` | Remove agent instruction blocks and the installed binary/config |
-| `maestro uninstall --agents-only` | Remove only the injected instruction blocks |
-
-### Cross-Agent Handoffs
-
-| Command | Description |
-|---------|-------------|
-| `maestro handoff --prompt <agent> --task "..."` | Create a handoff and generate a receiving-agent prompt |
-| `maestro handoff --prompt [agent]` | Generate a prompt for the latest pending handoff without creating a new one |
-| `maestro handoff --list [--all]` | List active handoffs, optionally including completed ones |
-| `maestro handoff-pickup [--claim] [--agent <name>]` | Pick up work from an existing handoff |
-| `maestro handoff-dig "<query>"` | Search handoff history via CASS |
-| `maestro handoff-drop <id>` | Remove a specific handoff |
-| `maestro handoff-cleanup` | Delete all handoffs |
-| `maestro handoff-report --content "..."` | Report completion on picked-up work |
-| `maestro session` | Detect the current agent session |
-| `maestro session -q` | Print only the session ID |
-| `maestro status` | Show initialization, git, CASS, and pending handoff state |
-| `maestro doctor` | Run environment and configuration health checks |
-| `maestro note --content "..."` | Append a timestamped project note |
-| `maestro note --list` | List saved project notes |
-
-### Mission Control
-
-Mission Control adds plan-based orchestration with milestones, features, assertions, worker prompts, and checkpoints.
-
-#### Mission lifecycle
-
-| Command | Description |
-|---------|-------------|
-| `maestro mission create --file plan.json` | Create a mission from a plan file |
-| `maestro mission list [--status <status>] [--limit <n>]` | List missions with optional filtering |
-| `maestro mission show <id>` | Show mission details with milestone progress and compact summary |
-| `maestro mission approve <id>` | Approve a draft mission |
-| `maestro mission reject <id>` | Reject a draft mission |
-| `maestro mission update <id> --status <status>` | Update mission status |
-| `maestro mission update <id> --title <title>` | Update mission title |
-| `maestro mission update <id> --description <desc>` | Update mission description |
-
-#### Feature management
-
-| Command | Description |
-|---------|-------------|
-| `maestro feature list --mission <id>` | List features for a mission |
-| `maestro feature list --mission <id> --milestone <mid> --status <status>` | Filter features by milestone and/or status |
-| `maestro feature update <id> --mission <mid> --status <status>` | Update feature status |
-| `maestro feature update <id> --mission <mid> --report @report.json` | Attach a worker report |
-| `maestro feature update <id> --mission <mid> --status pending --retry-reason "..."` | Reset a feature to pending with retry context |
-| `maestro feature prompt <id> --mission <mid>` | Generate a worker prompt and persist it under mission workers state |
-| `maestro feature prompt <id> --mission <mid> --out /path/prompt.md` | Also write the prompt to a custom file |
-
-#### Milestone tracking
-
-| Command | Description |
-|---------|-------------|
-| `maestro milestone list --mission <id>` | List milestones with feature and assertion progress |
-| `maestro milestone status <id> --mission <mid>` | Show detailed milestone status |
-| `maestro milestone seal <id> --mission <mid>` | Seal a milestone once all assertions are terminal |
-
-#### Validation
-
-| Command | Description |
-|---------|-------------|
-| `maestro validate show --mission <id>` | Show assertions for a mission |
-| `maestro validate show --mission <id> --milestone <mid>` | Show assertions for a single milestone |
-| `maestro validate update <id> --mission <mid> --result <result>` | Update an assertion result |
-| `maestro validate update <id> --mission <mid> --result waived --reason "..."` | Waive an assertion with a required reason |
-
-#### Checkpointing
-
-| Command | Description |
-|---------|-------------|
-| `maestro checkpoint save --mission <id>` | Save a timestamped mission state snapshot |
-| `maestro checkpoint list --mission <id>` | List checkpoints (newest first) |
-| `maestro checkpoint load --mission <id>` | Restore the latest checkpoint snapshot |
-
-### Global Option
-
-- `--json` — output structured JSON at the root command, group, or leaf command level
-
-## Storage Layout
-
-Maestro stores runtime state under `.maestro/` in the project root:
-
-```text
-.maestro/
-├── handoffs/                    # Pending and completed handoffs
-├── missions/
-│   └── {missionId}/
-│       ├── mission.json         # Mission metadata
-│       ├── features/
-│       │   └── {fid}.json       # Per-feature state
-│       ├── assertions.json      # Assertions stored per mission
-│       ├── checkpoints/
-│       │   └── {cid}.json       # Timestamped snapshots
-│       └── workers/
-│           └── {fid}/
-│               ├── prompt.md    # Generated worker prompt
-│               └── report.json  # Persisted worker report
-├── context/                     # Cross-mission context files
-└── settings.json                # User preferences
+```bash
+bun run release:local
 ```
 
-Mission creation uses a staging directory internally before finalizing mission state. `.maestro/` is runtime data and is typically added to `.gitignore`.
+`./dist/maestro` is the fresh repo build. `maestro` on your `PATH` is the installed local binary.
 
-## Plan File Format
+## Quick Start
 
-Missions are created from JSON plan files:
+### 1. Initialize a project
+
+```bash
+maestro init
+```
+
+This creates the local `.maestro/` workspace for the current repository.
+
+### 2. Create a mission plan file
+
+`mission create` expects a JSON plan file. A minimal example:
 
 ```json
 {
-  "title": "Feature Implementation",
-  "description": "Add user authentication",
+  "title": "Add authentication",
+  "description": "Ship the first authentication slice",
   "milestones": [
     {
-      "id": "m1",
-      "title": "Database Schema",
-      "description": "Create user tables",
-      "order": 0
+      "id": "plan",
+      "title": "Planning",
+      "description": "Define the implementation approach",
+      "order": 0,
+      "kind": "work",
+      "profile": "planning"
+    },
+    {
+      "id": "implement",
+      "title": "Implementation",
+      "description": "Build and verify the feature",
+      "order": 1,
+      "kind": "work",
+      "profile": "implementation"
     }
   ],
   "features": [
     {
-      "id": "f1",
-      "title": "User migration",
-      "milestoneId": "m1",
-      "description": "Create users table",
-      "workerType": "backend-worker",
-      "preconditions": "Mission approved and schema review complete",
-      "expectedBehavior": "Users table exists with required indexes",
-      "verificationSteps": ["Table exists", "Indexes created"],
-      "fulfills": ["ASSERT-001"]
+      "id": "auth-plan",
+      "milestoneId": "plan",
+      "title": "Plan the auth flow",
+      "description": "Define the login shape, risks, and acceptance criteria",
+      "workerType": "codex",
+      "verificationSteps": [
+        "Review the proposed flow with the team"
+      ]
+    },
+    {
+      "id": "auth-impl",
+      "milestoneId": "implement",
+      "title": "Implement the auth flow",
+      "description": "Build the first working authentication slice",
+      "workerType": "codex",
+      "dependsOn": [
+        "auth-plan"
+      ],
+      "verificationSteps": [
+        "Run build",
+        "Run targeted tests",
+        "Verify the login flow manually"
+      ],
+      "fulfills": [
+        "auth-login-works"
+      ]
     }
   ]
 }
 ```
 
-## Development
+### 3. Create and approve the mission
 
-### Build
+```bash
+maestro mission create --file plan.json
+maestro mission list
+maestro mission approve <mission-id>
+```
+
+### 4. Generate a worker prompt
+
+```bash
+maestro feature list --mission <mission-id>
+maestro feature prompt <feature-id> --mission <mission-id> --out worker-prompt.md
+```
+
+This writes the prompt to `worker-prompt.md` and also stores it under `.maestro/missions/<mission-id>/workers/<feature-id>/prompt.md`.
+
+### 5. Create and pick up a handoff
+
+Create a UKI handoff from structured slots:
+
+```bash
+maestro handoff create \
+  --session-core "Implement the auth flow feature" \
+  --summary "Planning is complete; implementation is ready" \
+  --next-action "Pick up feature auth-impl" \
+  --artifact file_src/auth.ts \
+  --confidence-work 0.9
+```
+
+In another terminal, the worker can inspect or claim it:
+
+```bash
+maestro handoff list
+maestro handoff pickup --markdown
+maestro handoff pickup --claim --agent codex
+```
+
+### 6. Track progress, validate, and seal
+
+```bash
+maestro feature update auth-impl --mission <mission-id> --status in-progress
+maestro feature update auth-impl --mission <mission-id> --status review
+maestro validate show --mission <mission-id>
+maestro validate update auth-login-works --mission <mission-id> --result passed --evidence "bun test"
+maestro checkpoint save --mission <mission-id>
+maestro milestone seal implement --mission <mission-id>
+```
+
+## Common Commands
+
+| Command | Use it when you want to... |
+|---|---|
+| `maestro init` | Create local project state. |
+| `maestro install` | Initialize global config and inject supported agent instruction blocks. |
+| `maestro doctor` | Check whether the local environment is configured correctly. |
+| `maestro status` | Inspect the current Maestro state quickly. |
+| `maestro mission create --file plan.json` | Create a mission from a plan file. |
+| `maestro feature prompt <feature-id> --mission <mission-id>` | Generate the next worker prompt. |
+| `maestro handoff create ...` | Package context for another terminal or agent session. |
+| `maestro handoff pickup --markdown` | Read the next pending handoff in a human-friendly format. |
+| `maestro mission-control --preview` | Render a read-only dashboard preview in the terminal. |
+| `maestro mission-control --json` | Get a machine-readable snapshot of mission state. |
+| `maestro mission-control --render-check --size 120x40` | Validate TUI render integrity non-interactively. |
+| `maestro memory-correct <rule>` | Capture a correction that should influence future runs. |
+| `maestro memory-compile` | Turn raw learnings into reusable guidance. |
+| `maestro ratchet-check` | Run the regression ratchet suite. |
+
+Run `maestro <command> --help` for full flags and examples.
+
+## Mission Control
+
+Mission Control is a read-only dashboard over Maestro state. It supports:
+
+- Interactive TTY mode with `maestro mission-control`
+- Single-frame previews with `maestro mission-control --preview`
+- Machine-readable snapshots with `maestro mission-control --json`
+- Render validation with `maestro mission-control --render-check --size 120x40`
+
+Available preview screens include:
+
+- `dashboard`
+- `features`
+- `dependencies`
+- `handoffs`
+- `config`
+- `memory`
+- `graph`
+
+For non-interactive environments, prefer `--preview`, `--preview all`, or `--json`.
+
+## Storage Model
+
+Maestro stores project-local state in `.maestro/` and user-level defaults in `~/.maestro/`.
+
+```text
+.maestro/
+├── config.yaml
+├── handoffs/
+├── memory/
+│   ├── corrections/
+│   ├── learnings/
+│   └── ratchet/
+├── missions/
+│   └── <mission-id>/
+│       ├── mission.json
+│       ├── assertions.json
+│       ├── checkpoints/
+│       ├── features/
+│       └── workers/
+└── notes.json
+
+~/.maestro/
+├── config.yaml
+└── graph/
+    └── projects.json
+```
+
+The design is intentionally transparent: state is inspectable, diffable, and easy to back up.
+
+## Architecture
+
+Maestro follows a hexagonal structure:
+
+- `src/index.ts` wires the CLI entrypoint.
+- `src/commands/` defines the command surface.
+- `src/usecases/` contains application logic.
+- `src/domain/` defines the core entities and validators.
+- `src/ports/` defines interfaces for persistence and external interactions.
+- `src/adapters/` implements those ports using the filesystem, git, and environment state.
+- `src/tui/` renders Mission Control from read-only snapshots.
+
+The runtime is intentionally narrow: filesystem-backed stores, git integration, config handling, and a terminal UI. There is no database adapter or network service in the main workflow.
+
+## Development
 
 ```bash
 bun run build
-```
-
-### Type Check
-
-```bash
 bun run typecheck
-```
-
-### Test
-
-```bash
 bun test
+bun run tui:dev
+bun run release:local
 ```
 
-### Deploy
+Useful verification commands for CLI and TUI work:
 
 ```bash
-bun run deploy
+./dist/maestro --version
+./dist/maestro --help
+./dist/maestro mission-control --preview --size 120x40 --format plain
+./dist/maestro mission-control --render-check --size 120x40
 ```
 
-## Requirements
+## Supported Agent Config Injection
 
-- Bun runtime
-- Git repository for handoff and session-aware workflows
-- Optional: CASS for handoff search
+`maestro install` and `maestro update` can inject instruction blocks for:
+
+- Claude Code
+- Codex
+- Gemini CLI
+- Droid CLI
+
+These instruction blocks help each harness read and write shared Maestro state consistently.
 
 ## License
 
