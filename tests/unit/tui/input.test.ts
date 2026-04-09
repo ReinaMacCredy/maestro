@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { createBufferedKeyParser, parseKeypress } from "../../../src/tui/input.js";
+import { createBufferedKeyParser, parseKeypress } from "@/tui/input.js";
 
 function bytes(...values: number[]): Uint8Array {
   return new Uint8Array(values);

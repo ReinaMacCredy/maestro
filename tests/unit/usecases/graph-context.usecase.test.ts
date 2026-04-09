@@ -1,6 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { mockProjectGraphStore } from "../../helpers/mocks.js";
-import { getGraphContext } from "../../../src/usecases/graph-context.usecase.js";
+import { getGraphContext } from "@/usecases/graph-context.usecase.js";
 
 describe("getGraphContext", () => {
   it("returns empty relationships for unknown project", async () => {

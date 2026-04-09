@@ -2,14 +2,14 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { FsHandoffStoreAdapter } from "../../../src/adapters/handoff-store.adapter.js";
-import type { AgentSession } from "../../../src/domain/types.js";
-import type { ExecuteUkiHandoffContent } from "../../../src/domain/uki-types.js";
-import { MaestroError } from "../../../src/domain/errors.js";
-import type { SessionDetectPort } from "../../../src/ports/session-detect.port.js";
-import { createUkiHandoff } from "../../../src/usecases/create-uki-handoff.usecase.js";
-import { listUkiHandoffs } from "../../../src/usecases/list-uki-handoffs.usecase.js";
-import { pickupUkiHandoff } from "../../../src/usecases/pickup-uki-handoff.usecase.js";
+import { FsHandoffStoreAdapter } from "@/adapters/handoff-store.adapter.js";
+import type { AgentSession } from "@/domain/types.js";
+import type { ExecuteUkiHandoffContent } from "@/domain/uki-types.js";
+import { MaestroError } from "@/domain/errors.js";
+import type { SessionDetectPort } from "@/ports/session-detect.port.js";
+import { createUkiHandoff } from "@/usecases/create-uki-handoff.usecase.js";
+import { listUkiHandoffs } from "@/usecases/list-uki-handoffs.usecase.js";
+import { pickupUkiHandoff } from "@/usecases/pickup-uki-handoff.usecase.js";
 
 const SAMPLE_CONTENT: ExecuteUkiHandoffContent = {
   mode: "execute",

@@ -2,8 +2,8 @@ import { describe, expect, it, beforeEach, afterEach } from "bun:test";
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { FsAssertionStoreAdapter } from "../../../src/adapters/assertion-store.adapter.js";
-import type { CreateAssertionInput, Assertion } from "../../../src/domain/mission-types.js";
+import { FsAssertionStoreAdapter } from "@/adapters/assertion-store.adapter.js";
+import type { CreateAssertionInput, Assertion } from "@/domain/mission-types.js";
 
 let tmpDir: string;
 let store: FsAssertionStoreAdapter;

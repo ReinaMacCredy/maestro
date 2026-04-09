@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { getSnapshotPollIntervalMs } from "../../../../src/tui/app/interactive-shared.js";
-import type { MissionControlSnapshot } from "../../../../src/tui/state/types.js";
+import { getSnapshotPollIntervalMs } from "@/tui/app/interactive-shared.js";
+import type { MissionControlSnapshot } from "@/tui/state/types.js";
 
 function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionControlSnapshot {
   return {

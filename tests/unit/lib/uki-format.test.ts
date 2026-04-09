@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { compressUki, parseUki, validateUki } from "../../../src/lib/uki-format.js";
-import type { ExecuteUkiHandoffContent } from "../../../src/domain/uki-types.js";
+import { compressUki, parseUki, validateUki } from "@/lib/uki-format.js";
+import type { ExecuteUkiHandoffContent } from "@/domain/uki-types.js";
 import {
   EXECUTE_UKI_FIXTURE,
   LEGACY_V52_UKI,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { MaestroError } from "../../../src/domain/errors.js";
-import { createNote, listNotes } from "../../../src/usecases/note.usecase.js";
+import { MaestroError } from "@/domain/errors.js";
+import { createNote, listNotes } from "@/usecases/note.usecase.js";
 import { mockGit, mockNotesStore } from "../../helpers/mocks.js";
 
 describe("note usecase", () => {

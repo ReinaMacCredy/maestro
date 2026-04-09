@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { generateHandoffId } from "../../../src/domain/id.js";
+import { generateHandoffId } from "@/domain/id.js";
 
 describe("generateHandoffId", () => {
   const fixedDate = new Date("2026-03-28T12:00:00Z");

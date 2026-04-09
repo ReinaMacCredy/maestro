@@ -12,7 +12,7 @@ import {
   validateUpdateAssertionInput,
   assertNoDanglingReferences,
   assertNoCyclicDependencies,
-} from "../../../src/domain/mission-validators.js";
+} from "@/domain/mission-validators.js";
 import type {
   Mission,
   Milestone,
@@ -24,8 +24,8 @@ import type {
   CreateFeatureInput,
   CreateAssertionInput,
   UpdateAssertionInput,
-} from "../../../src/domain/mission-types.js";
-import { MaestroError } from "../../../src/domain/errors.js";
+} from "@/domain/mission-types.js";
+import { MaestroError } from "@/domain/errors.js";
 
 // Test data builders
 const makeMission = (overrides: Partial<Mission> = {}): Mission => ({

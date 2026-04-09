@@ -1,22 +1,22 @@
-import type { GitPort } from "../../src/ports/git.port.js";
-import type { ConfigPort } from "../../src/ports/config.port.js";
-import type { ConfigLayers } from "../../src/ports/config.port.js";
-import type { SessionDetectPort } from "../../src/ports/session-detect.port.js";
-import type { NotesStorePort } from "../../src/ports/notes-store.port.js";
-import type { MissionStorePort } from "../../src/ports/mission-store.port.js";
-import type { FeatureStorePort } from "../../src/ports/feature-store.port.js";
-import type { AssertionStorePort } from "../../src/ports/assertion-store.port.js";
-import type { CheckpointStorePort } from "../../src/ports/checkpoint-store.port.js";
-import type { CorrectionStorePort } from "../../src/ports/correction-store.port.js";
-import type { LearningStorePort } from "../../src/ports/learning-store.port.js";
-import type { RatchetStorePort } from "../../src/ports/ratchet-store.port.js";
-import type { ProjectGraphStorePort } from "../../src/ports/project-graph-store.port.js";
+import type { GitPort } from "@/ports/git.port.js";
+import type { ConfigPort } from "@/ports/config.port.js";
+import type { ConfigLayers } from "@/ports/config.port.js";
+import type { SessionDetectPort } from "@/ports/session-detect.port.js";
+import type { NotesStorePort } from "@/ports/notes-store.port.js";
+import type { MissionStorePort } from "@/ports/mission-store.port.js";
+import type { FeatureStorePort } from "@/ports/feature-store.port.js";
+import type { AssertionStorePort } from "@/ports/assertion-store.port.js";
+import type { CheckpointStorePort } from "@/ports/checkpoint-store.port.js";
+import type { CorrectionStorePort } from "@/ports/correction-store.port.js";
+import type { LearningStorePort } from "@/ports/learning-store.port.js";
+import type { RatchetStorePort } from "@/ports/ratchet-store.port.js";
+import type { ProjectGraphStorePort } from "@/ports/project-graph-store.port.js";
 import type {
   GitState,
   MaestroConfig,
   AgentSession,
   NoteEntry,
-} from "../../src/domain/types.js";
+} from "@/domain/types.js";
 import type {
   Correction,
   CreateCorrectionInput,
@@ -26,7 +26,7 @@ import type {
   RatchetSuite,
   RatchetBaseline,
   ProjectGraph,
-} from "../../src/domain/memory-types.js";
+} from "@/domain/memory-types.js";
 import type {
   Mission,
   Feature,
@@ -38,7 +38,7 @@ import type {
   UpdateMissionInput,
   UpdateFeatureInput,
   UpdateAssertionInput,
-} from "../../src/domain/mission-types.js";
+} from "@/domain/mission-types.js";
 
 export function mockGit(overrides: Partial<GitPort> = {}): GitPort {
   return {

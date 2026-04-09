@@ -2,17 +2,17 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { FsAssertionStoreAdapter } from "../../../src/adapters/assertion-store.adapter.js";
-import { FsCheckpointStoreAdapter } from "../../../src/adapters/checkpoint-store.adapter.js";
-import { FsFeatureStoreAdapter } from "../../../src/adapters/feature-store.adapter.js";
-import { FsMissionStoreAdapter } from "../../../src/adapters/mission-store.adapter.js";
+import { FsAssertionStoreAdapter } from "@/adapters/assertion-store.adapter.js";
+import { FsCheckpointStoreAdapter } from "@/adapters/checkpoint-store.adapter.js";
+import { FsFeatureStoreAdapter } from "@/adapters/feature-store.adapter.js";
+import { FsMissionStoreAdapter } from "@/adapters/mission-store.adapter.js";
 import {
   createMissionControlSnapshotLoader,
   loadMissionControlSnapshot,
-} from "../../../src/commands/mission-control.command.js";
-import type { ConfigPort } from "../../../src/ports/config.port.js";
-import type { GitPort } from "../../../src/ports/git.port.js";
-import type { SnapshotDeps, HomeSnapshotDeps } from "../../../src/tui/state/snapshot.js";
+} from "@/commands/mission-control.command.js";
+import type { ConfigPort } from "@/ports/config.port.js";
+import type { GitPort } from "@/ports/git.port.js";
+import type { SnapshotDeps, HomeSnapshotDeps } from "@/tui/state/snapshot.js";
 
 let tmpDir: string;
 let snapshotDeps: SnapshotDeps;

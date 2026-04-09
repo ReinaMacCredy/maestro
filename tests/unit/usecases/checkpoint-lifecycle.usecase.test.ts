@@ -6,8 +6,8 @@ import {
   saveCheckpoint,
   listCheckpoints,
   loadCheckpoint,
-} from "../../../src/usecases/checkpoint-lifecycle.usecase.js";
-import { MaestroError } from "../../../src/domain/errors.js";
+} from "@/usecases/checkpoint-lifecycle.usecase.js";
+import { MaestroError } from "@/domain/errors.js";
 import type {
   Mission,
   Milestone,
@@ -17,11 +17,11 @@ import type {
   FeatureStatus,
   AssertionResult,
   Checkpoint,
-} from "../../../src/domain/mission-types.js";
-import type { MissionStorePort } from "../../../src/ports/mission-store.port.js";
-import type { FeatureStorePort } from "../../../src/ports/feature-store.port.js";
-import type { AssertionStorePort } from "../../../src/ports/assertion-store.port.js";
-import type { CheckpointStorePort } from "../../../src/ports/checkpoint-store.port.js";
+} from "@/domain/mission-types.js";
+import type { MissionStorePort } from "@/ports/mission-store.port.js";
+import type { FeatureStorePort } from "@/ports/feature-store.port.js";
+import type { AssertionStorePort } from "@/ports/assertion-store.port.js";
+import type { CheckpointStorePort } from "@/ports/checkpoint-store.port.js";
 
 // Test fixtures
 function createTestMission(

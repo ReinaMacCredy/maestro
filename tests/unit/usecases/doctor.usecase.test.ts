@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { runDoctor } from "../../../src/usecases/run-doctor.usecase.js";
+import { runDoctor } from "@/usecases/run-doctor.usecase.js";
 import { mockGit, mockConfig } from "../../helpers/mocks.js";
 
 describe("runDoctor", () => {

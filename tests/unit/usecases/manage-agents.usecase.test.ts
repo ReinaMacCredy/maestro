@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 // We can't easily mock homedir() in the use case since it uses os.homedir() directly.
 // Instead, test the underlying block functions + do a focused integration test
 // by calling inject/remove on real temp files via the lib functions.
-import { AGENT_INSTRUCTION_BLOCK } from "../../../src/domain/defaults.js";
+import { AGENT_INSTRUCTION_BLOCK } from "@/domain/defaults.js";
 import {
   hasBlock,
   extractBlock,
@@ -15,11 +15,11 @@ import {
   removeBlock,
   removeLegacyBlock,
   wrapBlock,
-} from "../../../src/lib/agent-block.js";
+} from "@/lib/agent-block.js";
 import {
   injectAgentBlocks,
   removeAgentBlocks,
-} from "../../../src/usecases/manage-agents.usecase.js";
+} from "@/usecases/manage-agents.usecase.js";
 
 // Phase 1 strip: the instruction block is static (no `{{agent}}` placeholder)
 // because the legacy `handoff-pickup --agent <slug>` flow is gone.

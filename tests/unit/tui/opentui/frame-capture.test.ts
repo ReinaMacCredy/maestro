@@ -1,13 +1,13 @@
 import { describe, expect, it } from "bun:test";
 
-import { renderOpenTuiPreviewFrame } from "../../../../src/tui/opentui/app/preview.js";
-import { resolveMissionControlTheme } from "../../../../src/tui/opentui/components/builders.js";
-import { buildModalModel, computeScreenLayout, getModalParentRect } from "../../../../src/tui/opentui/components/builders.js";
-import { captureMissionControlFrame, captureMissionControlRender } from "../../../../src/tui/opentui/testing/frame-capture.js";
-import { createInitialState, reduce } from "../../../../src/tui/state/reducer.js";
-import type { MissionControlSnapshot } from "../../../../src/tui/state/types.js";
+import { renderOpenTuiPreviewFrame } from "@/tui/opentui/app/preview.js";
+import { resolveMissionControlTheme } from "@/tui/opentui/components/builders.js";
+import { buildModalModel, computeScreenLayout, getModalParentRect } from "@/tui/opentui/components/builders.js";
+import { captureMissionControlFrame, captureMissionControlRender } from "@/tui/opentui/testing/frame-capture.js";
+import { createInitialState, reduce } from "@/tui/state/reducer.js";
+import type { MissionControlSnapshot } from "@/tui/state/types.js";
 import { TextAttributes } from "@opentui/core";
-import { layoutModal } from "../../../../src/tui/shared/modal-model.js";
+import { layoutModal } from "@/tui/shared/modal-model.js";
 
 function makeSnapshot(): MissionControlSnapshot {
   return {

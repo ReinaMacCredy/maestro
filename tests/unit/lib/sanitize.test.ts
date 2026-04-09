@@ -2,7 +2,7 @@
  * Unit tests for sanitizePromptContent utility
  */
 import { describe, it, expect } from "bun:test";
-import { sanitizePromptContent, sanitizeTerminalText } from "../../../src/lib/sanitize.js";
+import { sanitizePromptContent, sanitizeTerminalText } from "@/lib/sanitize.js";
 
 describe("sanitizePromptContent", () => {
   it("returns placeholder for empty string", () => {

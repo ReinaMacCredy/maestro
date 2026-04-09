@@ -2,8 +2,8 @@ import { describe, expect, it, beforeEach, afterEach } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { FsFeatureStoreAdapter } from "../../../src/adapters/feature-store.adapter.js";
-import type { CreateFeatureInput, Feature, WorkerReport } from "../../../src/domain/mission-types.js";
+import { FsFeatureStoreAdapter } from "@/adapters/feature-store.adapter.js";
+import type { CreateFeatureInput, Feature, WorkerReport } from "@/domain/mission-types.js";
 
 let tmpDir: string;
 let store: FsFeatureStoreAdapter;

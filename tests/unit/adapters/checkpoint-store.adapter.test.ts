@@ -2,8 +2,8 @@ import { describe, expect, it, beforeEach, afterEach } from "bun:test";
 import { mkdtemp, rm, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { FsCheckpointStoreAdapter } from "../../../src/adapters/checkpoint-store.adapter.js";
-import type { Checkpoint, FeatureStatus, AssertionResult } from "../../../src/domain/mission-types.js";
+import { FsCheckpointStoreAdapter } from "@/adapters/checkpoint-store.adapter.js";
+import type { Checkpoint, FeatureStatus, AssertionResult } from "@/domain/mission-types.js";
 
 let tmpDir: string;
 let store: FsCheckpointStoreAdapter;

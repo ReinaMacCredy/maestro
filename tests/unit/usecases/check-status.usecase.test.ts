@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import type { UkiHandoff } from "../../../src/domain/uki-types.js";
-import { checkStatus } from "../../../src/usecases/check-status.usecase.js";
+import type { UkiHandoff } from "@/domain/uki-types.js";
+import { checkStatus } from "@/usecases/check-status.usecase.js";
 import { mockConfig, mockGit } from "../../helpers/mocks.js";
-import type { HandoffStorePort } from "../../../src/ports/handoff-store.port.js";
+import type { HandoffStorePort } from "@/ports/handoff-store.port.js";
 
 function makeHandoffStore(count: number): HandoffStorePort {
   const handoffs: UkiHandoff[] = Array.from({ length: count }, (_, index) => ({

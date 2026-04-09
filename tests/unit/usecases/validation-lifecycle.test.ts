@@ -6,12 +6,12 @@ import { describe, expect, it, beforeEach } from "bun:test";
 import {
   showAssertions,
   updateAssertion,
-} from "../../../src/usecases/validation-lifecycle.usecase.js";
-import { FsMissionStoreAdapter } from "../../../src/adapters/mission-store.adapter.js";
-import { FsFeatureStoreAdapter } from "../../../src/adapters/feature-store.adapter.js";
-import { FsAssertionStoreAdapter } from "../../../src/adapters/assertion-store.adapter.js";
-import { MaestroError } from "../../../src/domain/errors.js";
-import type { MilestoneInput } from "../../../src/domain/mission-types.js";
+} from "@/usecases/validation-lifecycle.usecase.js";
+import { FsMissionStoreAdapter } from "@/adapters/mission-store.adapter.js";
+import { FsFeatureStoreAdapter } from "@/adapters/feature-store.adapter.js";
+import { FsAssertionStoreAdapter } from "@/adapters/assertion-store.adapter.js";
+import { MaestroError } from "@/domain/errors.js";
+import type { MilestoneInput } from "@/domain/mission-types.js";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mkdtemp } from "node:fs/promises";
@@ -64,7 +64,7 @@ async function createSampleMissionWithAssertions(
     ],
   };
 
-  const { createMission } = await import("../../../src/usecases/mission-lifecycle.usecase.js");
+  const { createMission } = await import("@/usecases/mission-lifecycle.usecase.js");
   const result = await createMission(missionStore, featureStore, assertionStore, samplePlan);
 
   const assertions = await assertionStore.list(result.mission.id);

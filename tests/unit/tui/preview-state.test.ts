@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { buildPreviewState } from "../../../src/tui/app/preview-state.js";
-import type { MissionControlSnapshot } from "../../../src/tui/state/types.js";
+import { buildPreviewState } from "@/tui/app/preview-state.js";
+import type { MissionControlSnapshot } from "@/tui/state/types.js";
 
 function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionControlSnapshot {
   return {

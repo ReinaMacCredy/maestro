@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
 
-import { buildModalOptions } from "../../../src/tui/app/modal-builders.js";
-import { createInitialState, reduce } from "../../../src/tui/state/reducer.js";
-import type { MissionControlSnapshot } from "../../../src/tui/state/types.js";
+import { buildModalOptions } from "@/tui/app/modal-builders.js";
+import { createInitialState, reduce } from "@/tui/state/reducer.js";
+import type { MissionControlSnapshot } from "@/tui/state/types.js";
 
 function makeSnapshot(): MissionControlSnapshot {
   return {

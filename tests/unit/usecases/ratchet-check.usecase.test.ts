@@ -3,7 +3,7 @@ import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { mockRatchetStore } from "../../helpers/mocks.js";
-import { checkRatchet } from "../../../src/usecases/ratchet-check.usecase.js";
+import { checkRatchet } from "@/usecases/ratchet-check.usecase.js";
 
 describe("checkRatchet", () => {
   let dir: string;

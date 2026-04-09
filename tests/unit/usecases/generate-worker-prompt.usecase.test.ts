@@ -8,14 +8,14 @@ import { join } from "node:path";
 import {
   generateWorkerPrompt,
   type GenerateWorkerPromptResult,
-} from "../../../src/usecases/generate-worker-prompt.usecase.js";
-import { FsMissionStoreAdapter } from "../../../src/adapters/mission-store.adapter.js";
-import { FsFeatureStoreAdapter } from "../../../src/adapters/feature-store.adapter.js";
-import { FsAssertionStoreAdapter } from "../../../src/adapters/assertion-store.adapter.js";
-import { FsCorrectionStoreAdapter } from "../../../src/adapters/correction-store.adapter.js";
-import { FsLearningStoreAdapter } from "../../../src/adapters/learning-store.adapter.js";
-import { MaestroError } from "../../../src/domain/errors.js";
-import type { MilestoneInput } from "../../../src/domain/mission-types.js";
+} from "@/usecases/generate-worker-prompt.usecase.js";
+import { FsMissionStoreAdapter } from "@/adapters/mission-store.adapter.js";
+import { FsFeatureStoreAdapter } from "@/adapters/feature-store.adapter.js";
+import { FsAssertionStoreAdapter } from "@/adapters/assertion-store.adapter.js";
+import { FsCorrectionStoreAdapter } from "@/adapters/correction-store.adapter.js";
+import { FsLearningStoreAdapter } from "@/adapters/learning-store.adapter.js";
+import { MaestroError } from "@/domain/errors.js";
+import type { MilestoneInput } from "@/domain/mission-types.js";
 
 let tmpDir: string;
 
@@ -77,7 +77,7 @@ async function createTestMission(
     ],
   };
 
-  const { createMission } = await import("../../../src/usecases/mission-lifecycle.usecase.js");
+  const { createMission } = await import("@/usecases/mission-lifecycle.usecase.js");
   const result = await createMission(missionStore, featureStore, assertionStore, samplePlan);
 
   return {
@@ -342,7 +342,7 @@ describe("generateWorkerPrompt", () => {
         ],
       };
 
-      const { createMission } = await import("../../../src/usecases/mission-lifecycle.usecase.js");
+      const { createMission } = await import("@/usecases/mission-lifecycle.usecase.js");
       await expect(
         createMission(missionStore, featureStore, assertionStore, samplePlan),
       ).rejects.toThrow("Invalid mission plan file");
@@ -375,7 +375,7 @@ describe("generateWorkerPrompt", () => {
       ],
     };
 
-    const { createMission } = await import("../../../src/usecases/mission-lifecycle.usecase.js");
+    const { createMission } = await import("@/usecases/mission-lifecycle.usecase.js");
     const result = await createMission(missionStore, featureStore, assertionStore, samplePlan);
     const missionId = result.mission.id;
 
@@ -442,7 +442,7 @@ describe("generateWorkerPrompt", () => {
       ],
     };
 
-    const { createMission } = await import("../../../src/usecases/mission-lifecycle.usecase.js");
+    const { createMission } = await import("@/usecases/mission-lifecycle.usecase.js");
     const result = await createMission(missionStore, featureStore, assertionStore, samplePlan);
     const missionId = result.mission.id;
 
@@ -503,7 +503,7 @@ describe("generateWorkerPrompt", () => {
       }],
     };
 
-    const { createMission } = await import("../../../src/usecases/mission-lifecycle.usecase.js");
+    const { createMission } = await import("@/usecases/mission-lifecycle.usecase.js");
     const { mission } = await createMission(missionStore, featureStore, assertionStore, samplePlan);
     await createSampleSkill(tmpDir, "test-skill", "# Skill");
 
@@ -528,7 +528,7 @@ describe("generateWorkerPrompt", () => {
       }],
     };
 
-    const { createMission } = await import("../../../src/usecases/mission-lifecycle.usecase.js");
+    const { createMission } = await import("@/usecases/mission-lifecycle.usecase.js");
     const { mission } = await createMission(missionStore, featureStore, assertionStore, samplePlan);
     await createSampleSkill(tmpDir, "test-skill", "# Skill");
 
@@ -565,7 +565,7 @@ describe("generateWorkerPrompt", () => {
       ],
     };
 
-    const { createMission } = await import("../../../src/usecases/mission-lifecycle.usecase.js");
+    const { createMission } = await import("@/usecases/mission-lifecycle.usecase.js");
     const { mission } = await createMission(missionStore, featureStore, assertionStore, samplePlan);
 
     // Progress f1 to done, f2 to in-progress
@@ -646,7 +646,7 @@ describe("generateWorkerPrompt", () => {
       ],
     };
 
-    const { createMission } = await import("../../../src/usecases/mission-lifecycle.usecase.js");
+    const { createMission } = await import("@/usecases/mission-lifecycle.usecase.js");
     const { mission } = await createMission(missionStore, featureStore, assertionStore, samplePlan);
     await featureStore.update(mission.id, "f1", { status: "in-progress" });
     await featureStore.update(mission.id, "f1", { status: "review" });
@@ -710,7 +710,7 @@ describe("generateWorkerPrompt", () => {
         ],
       };
 
-      const { createMission } = await import("../../../src/usecases/mission-lifecycle.usecase.js");
+      const { createMission } = await import("@/usecases/mission-lifecycle.usecase.js");
       const { mission } = await createMission(missionStore, featureStore, assertionStore, samplePlan);
       await featureStore.update(mission.id, "f1", { status: "in-progress" });
       await featureStore.update(mission.id, "f1", { status: "review" });

@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { access, mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { FsCorrectionStoreAdapter } from "../../../src/adapters/correction-store.adapter.js";
-import type { CreateCorrectionInput } from "../../../src/domain/memory-types.js";
+import { FsCorrectionStoreAdapter } from "@/adapters/correction-store.adapter.js";
+import type { CreateCorrectionInput } from "@/domain/memory-types.js";
 
 describe("FsCorrectionStoreAdapter", () => {
   let dir: string;

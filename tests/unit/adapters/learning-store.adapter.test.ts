@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { FsLearningStoreAdapter } from "../../../src/adapters/learning-store.adapter.js";
+import { FsLearningStoreAdapter } from "@/adapters/learning-store.adapter.js";
 
 describe("FsLearningStoreAdapter", () => {
   let dir: string;

@@ -2,12 +2,12 @@
  * Unit tests for milestone lifecycle usecases
  */
 import { describe, expect, it, beforeEach } from "bun:test";
-import { listMilestones, getMilestoneStatus, sealMilestone } from "../../../src/usecases/milestone-lifecycle.usecase.js";
-import { MaestroError } from "../../../src/domain/errors.js";
-import type { Mission, Milestone, Feature, Assertion, MissionStatus, MilestoneStatus, FeatureStatus, AssertionResult } from "../../../src/domain/mission-types.js";
-import type { MissionStorePort } from "../../../src/ports/mission-store.port.js";
-import type { FeatureStorePort } from "../../../src/ports/feature-store.port.js";
-import type { AssertionStorePort } from "../../../src/ports/assertion-store.port.js";
+import { listMilestones, getMilestoneStatus, sealMilestone } from "@/usecases/milestone-lifecycle.usecase.js";
+import { MaestroError } from "@/domain/errors.js";
+import type { Mission, Milestone, Feature, Assertion, MissionStatus, MilestoneStatus, FeatureStatus, AssertionResult } from "@/domain/mission-types.js";
+import type { MissionStorePort } from "@/ports/mission-store.port.js";
+import type { FeatureStorePort } from "@/ports/feature-store.port.js";
+import type { AssertionStorePort } from "@/ports/assertion-store.port.js";
 
 // Test fixtures
 function createTestMission(status: MissionStatus = "draft", milestones: Milestone[] = []): Mission {

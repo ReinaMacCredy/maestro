@@ -5,7 +5,7 @@ import {
   formatVersionOutputForArgv,
   getVersionMetadata,
   resolveDisplayedGitSha,
-} from "../../src/version-format.js";
+} from "@/version-format.js";
 
 describe("version formatting", () => {
   it("formats short relative ages in seconds", () => {

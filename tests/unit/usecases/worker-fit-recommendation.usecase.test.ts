@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { recommendWorkerFit } from "../../../src/usecases/worker-fit-recommendation.usecase.js";
-import type { Feature } from "../../../src/domain/mission-types.js";
+import { recommendWorkerFit } from "@/usecases/worker-fit-recommendation.usecase.js";
+import type { Feature } from "@/domain/mission-types.js";
 
 function makeFeature(overrides: Partial<Feature>): Feature {
   return {

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseUki } from "../../src/lib/uki-format.js";
+import { parseUki } from "@/lib/uki-format.js";
 import { runCli } from "../helpers/run-cli.js";
 import { HANDOFF_PASTE_PREAMBLE } from "../helpers/uki-fixtures.js";
 

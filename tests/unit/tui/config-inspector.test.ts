@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
-import { buildConfigInspector } from "../../../src/tui/state/config-inspector.js";
-import type { ConfigLayers } from "../../../src/ports/config.port.js";
-import type { Feature } from "../../../src/domain/mission-types.js";
+import { buildConfigInspector } from "@/tui/state/config-inspector.js";
+import type { ConfigLayers } from "@/ports/config.port.js";
+import type { Feature } from "@/domain/mission-types.js";
 
 const layers: ConfigLayers = {
   defaults: {

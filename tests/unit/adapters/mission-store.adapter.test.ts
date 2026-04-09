@@ -2,8 +2,8 @@ import { describe, expect, it, beforeEach, afterEach } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { FsMissionStoreAdapter } from "../../../src/adapters/mission-store.adapter.js";
-import type { CreateMissionInput, Mission } from "../../../src/domain/mission-types.js";
+import { FsMissionStoreAdapter } from "@/adapters/mission-store.adapter.js";
+import type { CreateMissionInput, Mission } from "@/domain/mission-types.js";
 
 let tmpDir: string;
 let store: FsMissionStoreAdapter;
