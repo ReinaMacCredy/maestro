@@ -126,6 +126,7 @@ export function registerMissionControlCommand(program: Command): void {
           learningStore: services.learningStore,
           ratchetStore: services.ratchetStore,
           projectGraphStore: services.projectGraphStore,
+          handoffStore: services.handoffStore,
           cwd: process.cwd(),
         };
         const homeSnapshotDeps = {
@@ -135,6 +136,7 @@ export function registerMissionControlCommand(program: Command): void {
           learningStore: services.learningStore,
           ratchetStore: services.ratchetStore,
           projectGraphStore: services.projectGraphStore,
+          handoffStore: services.handoffStore,
         };
 
         const readSnapshotLoader = createMissionControlSnapshotLoader(

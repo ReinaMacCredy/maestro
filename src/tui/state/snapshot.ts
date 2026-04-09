@@ -13,6 +13,8 @@ import type { CorrectionStorePort } from "../../ports/correction-store.port.js";
 import type { LearningStorePort } from "../../ports/learning-store.port.js";
 import type { RatchetStorePort } from "../../ports/ratchet-store.port.js";
 import type { ProjectGraphStorePort } from "../../ports/project-graph-store.port.js";
+import type { HandoffStorePort } from "../../ports/handoff-store.port.js";
+import type { UkiHandoff } from "../../domain/uki-types.js";
 import type { Mission, Feature } from "../../domain/mission-types.js";
 import { getMissionControlBackgroundMode, listIgnoredProjectConfigKeys } from "../../domain/ui-config.js";
 import type { RuntimeState, WorkerRuntime } from "../../domain/runtime-types.js";
@@ -54,6 +56,7 @@ export interface SnapshotDeps {
   learningStore?: LearningStorePort;
   ratchetStore?: RatchetStorePort;
   projectGraphStore?: ProjectGraphStorePort;
+  handoffStore?: HandoffStorePort;
   cwd: string;
 }
 
@@ -64,6 +67,7 @@ export interface HomeSnapshotDeps {
   learningStore?: LearningStorePort;
   ratchetStore?: RatchetStorePort;
   projectGraphStore?: ProjectGraphStorePort;
+  handoffStore?: HandoffStorePort;
 }
 
 export interface SnapshotBuildOptions {
@@ -208,9 +212,10 @@ export async function buildSnapshot(
   ).length;
   const blockedCount = features.filter((f) => f.status === "blocked").length;
   const queuedCount = features.filter((f) => f.status === "pending").length;
-  // Phase 1 strip: pending handoffs are empty until Phase 2 wires
-  // the UKI handoff store into Mission Control.
-  const pendingHandoffs: readonly MissionControlHomeHandoff[] = [];
+  // Phase 2: populate pending handoffs from the new UKI handoff store
+  // (empty when the store is not wired or when there are no pending
+  // handoffs). Snapshot remains read-only -- no status transitions.
+  const pendingHandoffs = await loadPendingHandoffs(deps.handoffStore);
   const workerTypes = [...new Set(features.map((feature) => feature.workerType))];
   const activeMilestone = milestones.find((m) => m.status === "executing" || m.status === "validating");
   const gateLabel = activeMilestone?.kind === "gate" ? activeMilestone.title : null;
@@ -322,9 +327,8 @@ export async function buildHomeSnapshot(
       : "Open a git repository to track missions, checkpoints, and handoffs here.";
 
   const actions = buildHomeActions(status, checks);
-  // Phase 1 strip: pending handoffs are empty until Phase 2 wires
-  // the UKI handoff store into Mission Control.
-  const pendingHandoffs: readonly MissionControlHomeHandoff[] = [];
+  // Phase 2: populate pending handoffs from the new UKI handoff store.
+  const pendingHandoffs = await loadPendingHandoffs(deps.handoffStore);
 
     // Phase 1 strip: worker health pane is empty until Phase 3 removes it.
     const workerHealth: readonly MissionControlWorkerHealthRow[] = [];
@@ -391,6 +395,38 @@ export async function buildHomeSnapshot(
       actions,
       pendingHandoffs,
     },
+  };
+}
+
+async function loadPendingHandoffs(
+  handoffStore: HandoffStorePort | undefined,
+): Promise<readonly MissionControlHomeHandoff[]> {
+  if (!handoffStore) return [];
+  try {
+    const pending = await handoffStore.list({ status: "pending" });
+    return pending.map(mapUkiHandoffToHomeHandoff);
+  } catch {
+    // Store errors should not break the snapshot projection. A missing
+    // .maestro/handoffs directory simply means no pending work.
+    return [];
+  }
+}
+
+export function mapUkiHandoffToHomeHandoff(
+  handoff: UkiHandoff,
+): MissionControlHomeHandoff {
+  const slots = handoff.slots;
+  const sitrepParts = [slots.sessionCore];
+  if (slots.keyDecisions.length > 0) {
+    sitrepParts.push(slots.keyDecisions[0]!);
+  }
+  return {
+    id: handoff.id,
+    message: slots.summary,
+    agent: handoff.agent,
+    sessionId: handoff.sessionId,
+    sitrep: sitrepParts.join(" -- "),
+    quickstart: slots.nextAction,
   };
 }
 
