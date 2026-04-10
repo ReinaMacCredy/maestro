@@ -9,7 +9,7 @@ Read `AGENTS.md` at the project root for full conventions (types, naming, async,
 - Infra (plumbing): `src/infra/commands/`, `src/infra/usecases/`, `src/infra/domain/`, `src/infra/ports/`, `src/infra/adapters/`
 - Shared primitives: `src/shared/lib/`, `src/shared/domain/`, `src/shared/errors.ts`, `src/shared/version.ts`
 - TUI rendering: `src/tui/app/render.ts`, `src/tui/app/render-check.ts`, `src/tui/state/snapshot.ts`
-- Tests: `tests/unit/features/`, `tests/unit/infra/`, `tests/unit/shared/`, `tests/unit/tui/`, `tests/integration/`
+- Tests: `tests/unit/features/`, `tests/unit/infra/`, `tests/unit/shared/`, `tests/unit/tui/`, `tests/integration/`, `tests/e2e/` (compiled-binary and end-to-end flows)
 - Build output: `dist/maestro`
 - Installed binary: `~/.local/bin/maestro`
 
