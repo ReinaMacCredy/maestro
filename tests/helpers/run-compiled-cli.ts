@@ -1,24 +1,7 @@
 /**
- * Test helpers for driving the *compiled* maestro CLI (dist/maestro).
- *
+ * Test helpers for driving the compiled maestro CLI at dist/maestro.
  * Sibling to tests/helpers/run-cli.ts, which spawns TypeScript source.
- * This file spawns the real binary produced by `bun run build` so e2e
- * suites exercise the exact artifact users and agents run.
- *
- * Usage:
- *
- *   import {
- *     runCompiled,
- *     buildCompiledCli,
- *     initGitRepo,
- *     REPO_ROOT,
- *     DIST_CLI,
- *     BUILD_TIMEOUT_MS,
- *     SLOW_CLI_TIMEOUT_MS,
- *   } from "../helpers/run-compiled-cli.js";
- *
- *   beforeAll(buildCompiledCli, BUILD_TIMEOUT_MS);
- *   const r = await runCompiled(["--version"], cwd);
+ * e2e suites use this file to exercise the real binary a user would run.
  */
 import { expect } from "bun:test";
 import { join } from "node:path";

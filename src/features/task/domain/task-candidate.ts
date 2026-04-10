@@ -1,10 +1,9 @@
 /**
- * Task candidate — a lesson captured from a closed task, ready to be
- * surfaced as a hint on a future `task ready` query.
- *
- * Phase 1 has one source: `task-close`. Phase 2 will add
- * `handoff-blind-spot`, `ratchet-failure`, and `memory-correct`, at
- * which point this type becomes a discriminated union on sourceType.
+ * A lesson captured from a closed task, ready to be surfaced as a hint on a
+ * future `task ready` query. `sourceType` is a discriminator — only
+ * `task-close` exists today but the field is reserved so other signal
+ * sources (handoff blind spots, ratchet failures) can be added without
+ * breaking serialized candidates already on disk.
  */
 
 export type CandidateSourceType = "task-close";

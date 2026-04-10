@@ -1,14 +1,11 @@
 /**
- * Keyword extractor for active-memory candidate matching.
- *
- * Phase 1 uses a deliberately dumb algorithm: lowercase, split on whitespace
- * and punctuation, drop stop words, drop tokens shorter than MIN_LENGTH,
- * drop pure numbers, dedupe while preserving order. No stemming, no
- * embeddings, no n-grams. Good enough for a pool of a few hundred
- * candidates at the scale maestro actually runs at. If the signal-to-noise
- * ever hurts, swap this one file for something smarter without changing
- * the contract.
+ * Deliberately simple keyword extractor: lowercase, split on whitespace and
+ * punctuation, drop stop words, drop short or numeric tokens, dedupe. No
+ * stemming or embeddings — swap this file wholesale if signal-to-noise ever
+ * hurts; callers depend only on the exported `extractKeywords` signature.
  */
+
+const TOKENIZER = /[\s\W_]+/;
 
 const STOP_WORDS: ReadonlySet<string> = new Set([
   "the", "and", "but", "for", "with", "was", "were", "been", "being",
@@ -28,7 +25,7 @@ const MIN_KEYWORD_LENGTH = 3;
 export function extractKeywords(text: string): readonly string[] {
   if (typeof text !== "string" || text.length === 0) return [];
 
-  const rawTokens = text.toLowerCase().split(/[\s\W_]+/);
+  const rawTokens = text.toLowerCase().split(TOKENIZER);
 
   const seen = new Set<string>();
   const result: string[] = [];

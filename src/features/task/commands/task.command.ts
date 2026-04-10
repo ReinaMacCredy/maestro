@@ -1,15 +1,8 @@
-/**
- * Task command handler.
- * Registers the `task` parent command and all subcommands.
- *
- * Round one covers: create, q, show, list, update, close, ready.
- * Subcommands are layered in via subsequent commits; this file grows
- * monotonically until all seven are wired.
- */
 import type { Command } from "commander";
 import { getServices } from "@/services.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import { MaestroError } from "@/shared/errors.js";
+import { formatRelativeAge } from "@/shared/version-format.js";
 import { createTask } from "../usecases/create-task.usecase.js";
 import { showTask } from "../usecases/show-task.usecase.js";
 import { listTasks } from "../usecases/list-tasks.usecase.js";
@@ -239,9 +232,6 @@ function registerCloseCommand(taskCmd: Command, program: Command): void {
       const isJson = resolveJsonFlag(opts, program);
 
       const closed = await closeTask(services.taskStore, id, { reason: opts.reason });
-
-      // Active memory: capture the closed task as a candidate lesson so
-      // future `task ready` queries can surface it as a hint.
       await captureTaskCandidate(services.taskCandidateStore, closed);
 
       output(isJson, closed, (t) => [
@@ -450,26 +440,8 @@ function formatTaskBriefingList(briefings: readonly TaskBriefing[]): string[] {
 }
 
 function formatHintLine(hint: TaskHint): string {
-  const age = formatRelativeTime(hint.capturedAt);
+  const age = formatRelativeAge(hint.capturedAt);
   return `${age} closed ${hint.sourceTaskId}: ${hint.reason}`;
-}
-
-/**
- * Compact human-readable age marker for hint timestamps. Not meant to
- * be precise — days/weeks/months buckets are enough to give the reader
- * a sense of recency without cluttering the terminal.
- */
-function formatRelativeTime(iso: string, now: Date = new Date()): string {
-  const captured = Date.parse(iso);
-  if (Number.isNaN(captured)) return "recently";
-  const diffMs = Math.max(0, now.getTime() - captured);
-  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  if (days < 1) return "today";
-  if (days === 1) return "1d ago";
-  if (days < 7) return `${days}d ago`;
-  if (days < 30) return `${Math.floor(days / 7)}w ago`;
-  if (days < 365) return `${Math.floor(days / 30)}mo ago`;
-  return `${Math.floor(days / 365)}y ago`;
 }
 
 function formatTaskDetail(task: Task): string[] {

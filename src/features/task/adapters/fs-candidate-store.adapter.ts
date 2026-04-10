@@ -55,14 +55,17 @@ export class FsCandidateStoreAdapter implements CandidateStorePort {
       throw err;
     }
 
+    const jsonEntries = entries.filter((e) => e.endsWith(".json"));
+    const parsed = await Promise.all(
+      jsonEntries.map((entry) =>
+        readJson<unknown>(join(this.candidatesDir(), entry)),
+      ),
+    );
+
     const result: TaskCandidate[] = [];
-    for (const entry of entries) {
-      if (!entry.endsWith(".json")) continue;
-      const raw = await readJson<unknown>(join(this.candidatesDir(), entry));
+    for (const raw of parsed) {
       const validated = validateTaskCandidate(raw);
-      if (validated) {
-        result.push(validated);
-      }
+      if (validated) result.push(validated);
     }
     return result;
   }

@@ -1,7 +1,12 @@
 import type { Task, ReadyTasksFilters } from "../domain/task-types.js";
+import { indexTasksById } from "../domain/task-types.js";
 import type { TaskStorePort } from "../ports/task-store.port.js";
 import type { CandidateStorePort } from "../ports/candidate-store.port.js";
-import { matchCandidates, type TaskHint } from "./match-candidates.usecase.js";
+import {
+  buildCandidateIndex,
+  matchCandidatesInIndex,
+  type TaskHint,
+} from "./match-candidates.usecase.js";
 
 const DEFAULT_LIMIT = 20;
 
@@ -38,7 +43,7 @@ export async function readyTasks(
   candidateStore?: CandidateStorePort,
 ): Promise<readonly TaskBriefing[]> {
   const all = await store.all();
-  const byId = new Map(all.map((t) => [t.id, t] as const));
+  const byId = indexTasksById(all);
   const nowIso = now.toISOString();
 
   const selected = all.filter((task) => {
@@ -76,24 +81,18 @@ export async function readyTasks(
     ? selected.slice(0, limit)
     : selected;
 
-  // Step 7: attach hints from candidate pool if available.
-  if (candidateStore === undefined) {
-    return sliced.map((task) => withEmptyHints(task));
-  }
-
-  const candidates = await candidateStore.all();
+  // Step 7: attach hints from candidate pool if available. Build the
+  // keyword -> candidates index once and reuse it for every ready task.
+  const candidates = candidateStore ? await candidateStore.all() : [];
   if (candidates.length === 0) {
-    return sliced.map((task) => withEmptyHints(task));
+    return sliced.map((task) => ({ ...task, hints: [] as readonly TaskHint[] }));
   }
+  const index = buildCandidateIndex(candidates);
 
   return sliced.map((task) => ({
     ...task,
-    hints: matchCandidates(task, candidates),
+    hints: matchCandidatesInIndex(task, index),
   }));
-}
-
-function withEmptyHints(task: Task): TaskBriefing {
-  return { ...task, hints: [] as readonly TaskHint[] };
 }
 
 /**

@@ -1,4 +1,5 @@
 import type { Task, UpdateTaskInput } from "../domain/task-types.js";
+import { indexTasksById } from "../domain/task-types.js";
 import type { TaskStorePort } from "../ports/task-store.port.js";
 import { validateUpdateInput, assertNoParentCycle } from "../domain/task-validators.js";
 import { closeViaCloseCommand, taskNotFound } from "../domain/task-errors.js";
@@ -34,9 +35,7 @@ export async function updateTask(
     throw closeViaCloseCommand();
   }
 
-  // Load the current store for cross-entity checks (parent existence + cycle).
-  const all = await store.all();
-  const byId = new Map(all.map((t) => [t.id, t] as const));
+  const byId = indexTasksById(await store.all());
 
   if (!byId.has(id)) {
     throw taskNotFound(id);

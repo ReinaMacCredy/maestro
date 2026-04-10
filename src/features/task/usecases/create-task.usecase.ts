@@ -1,4 +1,5 @@
 import type { Task, CreateTaskInput } from "../domain/task-types.js";
+import { indexTasksById } from "../domain/task-types.js";
 import type { TaskStorePort } from "../ports/task-store.port.js";
 import { validateCreateInput, assertNoParentCycle } from "../domain/task-validators.js";
 import { unknownDependency, taskNotFound } from "../domain/task-errors.js";
@@ -21,8 +22,7 @@ export async function createTask(
 ): Promise<Task> {
   const input = validateCreateInput(rawInput);
 
-  const existing = await store.all();
-  const byId = new Map(existing.map((t) => [t.id, t] as const));
+  const byId = indexTasksById(await store.all());
 
   if (input.dependsOn && input.dependsOn.length > 0) {
     const missing = input.dependsOn.filter((id) => !byId.has(id));

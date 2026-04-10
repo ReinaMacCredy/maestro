@@ -105,6 +105,13 @@ export const DEFAULT_TASK_TYPE: TaskType = "task";
 export const DEFAULT_TASK_PRIORITY: TaskPriority = 2;
 export const DEFAULT_TASK_STATUS: TaskStatus = "open";
 
+/** Build a `Map<id, Task>` view of a task list for cross-entity lookups. */
+export function indexTasksById(
+  tasks: readonly Task[],
+): ReadonlyMap<string, Task> {
+  return new Map(tasks.map((t) => [t.id, t] as const));
+}
+
 // ============================
 // Query / filter shapes
 // ============================
