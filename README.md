@@ -449,15 +449,16 @@ The design is intentionally transparent: state is inspectable, diffable, and eas
 
 ## Architecture
 
-Maestro follows a hexagonal structure:
+Maestro is organized as a feature-first hexagonal codebase:
 
-- `src/index.ts` wires the CLI entrypoint.
-- `src/commands/` defines the command surface.
-- `src/usecases/` contains application logic.
-- `src/domain/` defines the core entities and validators.
-- `src/ports/` defines interfaces for persistence and external interactions.
-- `src/adapters/` implements those ports using the filesystem, git, and environment state.
-- `src/tui/` renders Mission Control from read-only snapshots.
+- `src/features/<name>/` -- each feature is a bounded context containing its own `commands/`, `usecases/`, `domain/`, `ports/`, `adapters/`, plus a `services.ts` composition factory and `index.ts` public surface. Current features: `ratchet`, `handoff`, `notes`, `graph`, `session`, `memory`, `mission` (with `feature/`, `validation/`, `checkpoint/` subfolders), and `worker`.
+- `src/infra/` -- plumbing that isn't a feature: init, doctor, status, install, update, uninstall, and mission-control commands, config and git ports/adapters, and infra-owned domain types.
+- `src/shared/` -- generic utilities with no domain knowledge: filesystem, YAML, shell, path safety, and output formatting under `lib/`; cross-cutting primitives like IDs and UI config under `domain/`; plus top-level `errors.ts`, `version.ts`, and `version-format.ts`.
+- `src/tui/` -- read-only rendering and input for Mission Control; consumes features through their public surfaces.
+- `src/services.ts` -- composition root that wires every feature's adapters into a single service object.
+- `src/index.ts` -- Commander CLI entry point.
+
+Cross-feature imports must go through `@/features/<name>`, which resolves to the feature's `index.ts`. Deep imports across feature boundaries are forbidden and enforced by `bun run check:boundaries` in CI. The only exception is `worker`, which may legitimately consume the `mission` and `memory` public surfaces.
 
 The runtime is intentionally narrow: filesystem-backed stores, git integration, config handling, and a terminal UI. There is no database adapter or network service in the main workflow.
 
