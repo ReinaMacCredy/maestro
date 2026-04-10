@@ -1,5 +1,5 @@
 /**
- * Bump the patch version in package.json and src/version.ts.
+ * Bump the patch version in package.json and src/shared/version.ts.
  * Usage: bun scripts/bump.ts [major|minor|patch]
  * Default: patch
  */
@@ -8,7 +8,7 @@ import { writeVersionArtifacts } from "./version-file";
 
 const root = join(import.meta.dir, "..");
 const pkgPath = join(root, "package.json");
-const versionPath = join(root, "src", "version.ts");
+const versionPath = join(root, "src", "shared", "version.ts");
 
 const part = (process.argv[2] ?? "patch") as "major" | "minor" | "patch";
 if (!["major", "minor", "patch"].includes(part)) {

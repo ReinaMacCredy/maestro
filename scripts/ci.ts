@@ -20,7 +20,7 @@ import { $ } from "bun";
 
 const root = join(import.meta.dir, "..");
 const pkgPath = join(root, "package.json");
-const versionPath = join(root, "src", "version.ts");
+const versionPath = join(root, "src", "shared", "version.ts");
 const dryRun = process.argv.includes("--dry-run");
 
 // ---- helpers ----
@@ -72,7 +72,7 @@ const tagName = `v${nextVersion}`;
 
 // Read the pre-bump version from git
 const origPkgText = (await $`git show HEAD:package.json`.quiet()).text();
-const origVersionText = (await $`git show HEAD:src/version.ts`.quiet()).text();
+const origVersionText = (await $`git show HEAD:src/shared/version.ts`.quiet()).text();
 const origVersion: string = JSON.parse(origPkgText).version;
 
 if (origVersion === nextVersion) {
@@ -113,7 +113,7 @@ console.log("[ok] Tests passed.");
 // ---- step 5: commit + tag ----
 
 console.log("\n[-->] Committing release...");
-await $`git add package.json src/version.ts`.cwd(root);
+await $`git add package.json src/shared/version.ts`.cwd(root);
 
 const commitMsg = `chore(release): v${nextVersion}`;
 await $`git commit -m ${commitMsg}`.cwd(root);

@@ -510,7 +510,7 @@ function buildTaskPreview(
   };
 }
 
-function buildIgnoredProjectOverrideChecks(projectConfig: import("../../domain/types.js").MaestroConfig | undefined): DoctorCheck[] {
+function buildIgnoredProjectOverrideChecks(projectConfig: import("@/infra/domain/config-types.js").MaestroConfig | undefined): DoctorCheck[] {
   return listIgnoredProjectConfigKeys(projectConfig).map((keyPath) => ({
     name: `ignored-${keyPath.replaceAll(".", "-")}`,
     status: "warn" as const,

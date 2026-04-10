@@ -18,7 +18,7 @@ import { writeVersionArtifacts } from "./version-file";
 
 const root = join(import.meta.dir, "..");
 const pkgPath = join(root, "package.json");
-const versionPath = join(root, "src", "version.ts");
+const versionPath = join(root, "src", "shared", "version.ts");
 const dryRun = process.argv.includes("--dry-run");
 
 // --- Resolve base reference (tag > release commit > repo root) ---
