@@ -6,6 +6,7 @@ import { buildMemoryServices, type MemoryServices } from "./features/memory/inde
 import { buildHandoffServices, type HandoffServices } from "./features/handoff/index.js";
 import { buildRatchetServices, type RatchetServices } from "./features/ratchet/index.js";
 import { buildGraphServices, type GraphServices } from "./features/graph/index.js";
+import { buildTaskServices, type TaskServices } from "./features/task/index.js";
 
 export interface Services extends
   InfraServices,
@@ -15,7 +16,8 @@ export interface Services extends
   MemoryServices,
   HandoffServices,
   RatchetServices,
-  GraphServices { }
+  GraphServices,
+  TaskServices { }
 
 let instance: Services | undefined;
 
@@ -29,6 +31,7 @@ export function initServices(projectDir: string): Services {
     ...buildHandoffServices(projectDir),
     ...buildRatchetServices(projectDir),
     ...buildGraphServices(),
+    ...buildTaskServices(projectDir),
   };
   return instance;
 }

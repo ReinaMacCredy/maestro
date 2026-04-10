@@ -37,6 +37,7 @@ import {
   registerGraphContextCommand,
 } from "./features/graph/index.js";
 import { registerHandoffCommand } from "./features/handoff/index.js";
+import { registerTaskCommand } from "./features/task/index.js";
 
 export const program = new Command()
   .name("maestro")
@@ -74,6 +75,7 @@ registerMemoryLintCommand(program);
 registerGraphLinkCommand(program);
 registerGraphContextCommand(program);
 registerHandoffCommand(program);
+registerTaskCommand(program);
 
 async function main(): Promise<void> {
   try {
