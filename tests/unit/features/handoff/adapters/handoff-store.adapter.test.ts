@@ -130,7 +130,7 @@ describe("FsHandoffStoreAdapter", () => {
     expect(retrieved?.version).toBe("5.3");
     expect(retrieved?.content.mode).toBe("execute");
     expect(retrieved?.content.readMore).toEqual(["file_src_lib_uki_format_ts"]);
-    expect(retrieved?.content.validation).toEqual(["unit_green"]);
+    expect((retrieved?.content as ExecuteUkiHandoffContent).validation).toEqual(["unit_green"]);
     expect(retrieved?.content.decisions).toEqual(["keep_pickup_safe", "safe_upgrade_path"]);
   });
 

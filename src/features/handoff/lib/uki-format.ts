@@ -241,7 +241,7 @@ function encodeSlot(def: SlotDef, content: UkiHandoffContent): string {
 }
 
 function encodeSingle(def: SlotDef, content: UkiHandoffContent): string {
-  const value = def.field ? (content as Record<string, unknown>)[def.field] : undefined;
+  const value = def.field ? (content as unknown as Record<string, unknown>)[def.field] : undefined;
   if (typeof value !== "string") {
     throw compressError(`Slot ${def.name} must be a string`, [`Field: ${String(def.field)}`]);
   }
@@ -269,7 +269,7 @@ function encodeSingle(def: SlotDef, content: UkiHandoffContent): string {
 }
 
 function encodeList(def: SlotDef, content: UkiHandoffContent): string {
-  const value = def.field ? (content as Record<string, unknown>)[def.field] : undefined;
+  const value = def.field ? (content as unknown as Record<string, unknown>)[def.field] : undefined;
   if (!Array.isArray(value)) {
     throw compressError(`Slot ${def.name} must be an array`, [`Field: ${String(def.field)}`]);
   }
@@ -569,7 +569,13 @@ function parseListValue(raw: string): readonly string[] {
 }
 
 function parseMaestroRefs(raw: string): UkiMaestroRefs {
-  const refs: UkiMaestroRefs = {};
+  const refs: {
+    missionId?: string;
+    featureId?: string;
+    milestoneId?: string;
+    planPath?: string;
+    specPath?: string;
+  } = {};
   if (raw === EMPTY_LIST_SENTINEL) {
     return refs;
   }
@@ -596,7 +602,10 @@ function parseCsValue(raw: string): UkiConfidenceScores {
     throw compressError(`CS has invalid value: ${raw}`);
   }
 
-  const result: UkiConfidenceScores = {};
+  const result: {
+    work?: number;
+    summary?: number;
+  } = {};
   for (const token of raw.split("~")) {
     if (token.startsWith("work_")) {
       result.work = Number(token.slice("work_".length));
