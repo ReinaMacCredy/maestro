@@ -6,7 +6,9 @@ import { readyTasks } from "@/features/task/usecases/ready-tasks.usecase.js";
 import { createTask } from "@/features/task/usecases/create-task.usecase.js";
 import { closeTask } from "@/features/task/usecases/close-task.usecase.js";
 import { updateTask } from "@/features/task/usecases/update-task.usecase.js";
+import { captureTaskCandidate } from "@/features/task/usecases/capture-task-candidate.usecase.js";
 import { JsonlTaskStoreAdapter } from "@/features/task/adapters/jsonl-task-store.adapter.js";
+import { FsCandidateStoreAdapter } from "@/features/task/adapters/fs-candidate-store.adapter.js";
 
 describe("readyTasks", () => {
   let tmpDir: string;
@@ -259,6 +261,95 @@ describe("readyTasks", () => {
       await closeTask(store, mw.id, { reason: "done" });
       result = await readyTasks(store);
       expect(new Set(result.map((t) => t.id))).toEqual(new Set([ui.id, prot.id]));
+    });
+  });
+
+  describe("step 7: hint attachment (active memory)", () => {
+    it("returns briefings with empty hints when no candidate store is passed", async () => {
+      await createTask(store, { title: "JWT middleware" });
+      const result = await readyTasks(store);
+      expect(result.length).toBe(1);
+      expect(result[0]?.hints).toEqual([]);
+    });
+
+    it("returns empty hints when the candidate store is empty", async () => {
+      const candidateStore = new FsCandidateStoreAdapter(tmpDir);
+      await createTask(store, { title: "JWT middleware" });
+      const result = await readyTasks(store, {}, new Date(), candidateStore);
+      expect(result[0]?.hints).toEqual([]);
+    });
+
+    it("surfaces a hint from a closed task with overlapping keywords", async () => {
+      const candidateStore = new FsCandidateStoreAdapter(tmpDir);
+
+      // Seed a closed task with a lesson.
+      const past = await createTask(store, {
+        title: "Implement argon2 password hashing",
+      });
+      const closed = await closeTask(store, past.id, {
+        reason: "argon2 compare was backwards",
+      });
+      await captureTaskCandidate(candidateStore, closed);
+
+      // New task with overlapping keyword ("password").
+      await createTask(store, { title: "JWT password middleware" });
+
+      const result = await readyTasks(store, {}, new Date(), candidateStore);
+      expect(result.length).toBe(1);
+      expect(result[0]?.hints.length).toBeGreaterThanOrEqual(1);
+      expect(result[0]?.hints[0]?.sourceTaskId).toBe(past.id);
+      expect(result[0]?.hints[0]?.reason).toBe("argon2 compare was backwards");
+      expect(result[0]?.hints[0]?.matchedKeywords).toContain("password");
+    });
+
+    it("does not attach hints when keywords do not overlap", async () => {
+      const candidateStore = new FsCandidateStoreAdapter(tmpDir);
+
+      const past = await createTask(store, { title: "Database migration" });
+      const closed = await closeTask(store, past.id, { reason: "rollback broke" });
+      await captureTaskCandidate(candidateStore, closed);
+
+      await createTask(store, { title: "JWT middleware" });
+
+      const result = await readyTasks(store, {}, new Date(), candidateStore);
+      expect(result[0]?.hints).toEqual([]);
+    });
+
+    it("does not let a reopened task see its own past close as a hint", async () => {
+      const candidateStore = new FsCandidateStoreAdapter(tmpDir);
+
+      // Close, capture, then reopen.
+      const t = await createTask(store, { title: "JWT middleware" });
+      const closed = await closeTask(store, t.id, { reason: "jwt signing issue" });
+      await captureTaskCandidate(candidateStore, closed);
+      await updateTask(store, t.id, { patch: { status: "open" } });
+
+      const result = await readyTasks(store, {}, new Date(), candidateStore);
+      expect(result.length).toBe(1);
+      expect(result[0]?.id).toBe(t.id);
+      expect(result[0]?.hints).toEqual([]);
+    });
+
+    it("attaches hints to every matching ready task independently", async () => {
+      const candidateStore = new FsCandidateStoreAdapter(tmpDir);
+
+      const past = await createTask(store, { title: "Password hashing with argon2" });
+      const closedPast = await closeTask(store, past.id, {
+        reason: "argon2 is the correct algorithm",
+      });
+      await captureTaskCandidate(candidateStore, closedPast);
+
+      await createTask(store, { title: "JWT password middleware" });
+      await createTask(store, { title: "Login password validation" });
+      await createTask(store, { title: "Protected routes" });
+
+      const result = await readyTasks(store, {}, new Date(), candidateStore);
+      expect(result.length).toBe(3);
+
+      const byTitle = new Map(result.map((r) => [r.title, r] as const));
+      expect(byTitle.get("JWT password middleware")?.hints.length).toBe(1);
+      expect(byTitle.get("Login password validation")?.hints.length).toBe(1);
+      expect(byTitle.get("Protected routes")?.hints).toEqual([]);
     });
   });
 });

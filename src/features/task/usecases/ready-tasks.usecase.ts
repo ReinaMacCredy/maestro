@@ -1,10 +1,24 @@
 import type { Task, ReadyTasksFilters } from "../domain/task-types.js";
 import type { TaskStorePort } from "../ports/task-store.port.js";
+import type { CandidateStorePort } from "../ports/candidate-store.port.js";
+import { matchCandidates, type TaskHint } from "./match-candidates.usecase.js";
 
 const DEFAULT_LIMIT = 20;
 
 /**
- * Ready query: unblocked, actionable tasks.
+ * A Task enriched with computed hints for `task ready` output.
+ *
+ * hints is always present (empty array when no candidate store is
+ * passed, or when no candidates match). This keeps the return type
+ * stable across callers whether or not active-memory is enabled.
+ */
+export interface TaskBriefing extends Task {
+  readonly hints: readonly TaskHint[];
+}
+
+/**
+ * Ready query: unblocked, actionable tasks, each enriched with hints
+ * from the candidate pool when available.
  *
  * Algorithm (copied from br, adapted to in-memory walk):
  *  1. Exclude closed tasks.
@@ -15,17 +29,19 @@ const DEFAULT_LIMIT = 20;
  *  5. Sort by hybrid: P0/P1 first by createdAt ASC, then everything else
  *     by createdAt ASC.
  *  6. Slice to --limit (default 20, 0 = unlimited).
+ *  7. If candidateStore is provided, attach hints via matchCandidates.
  */
 export async function readyTasks(
   store: TaskStorePort,
   filters: ReadyTasksFilters = {},
   now: Date = new Date(),
-): Promise<readonly Task[]> {
+  candidateStore?: CandidateStorePort,
+): Promise<readonly TaskBriefing[]> {
   const all = await store.all();
   const byId = new Map(all.map((t) => [t.id, t] as const));
   const nowIso = now.toISOString();
 
-  const candidates = all.filter((task) => {
+  const selected = all.filter((task) => {
     // Step 1: exclude closed.
     if (task.status === "closed") return false;
 
@@ -52,14 +68,32 @@ export async function readyTasks(
   });
 
   // Step 5: hybrid sort.
-  candidates.sort(hybridCompare);
+  selected.sort(hybridCompare);
 
   // Step 6: limit.
   const limit = filters.limit ?? DEFAULT_LIMIT;
-  if (limit > 0 && candidates.length > limit) {
-    return candidates.slice(0, limit);
+  const sliced = limit > 0 && selected.length > limit
+    ? selected.slice(0, limit)
+    : selected;
+
+  // Step 7: attach hints from candidate pool if available.
+  if (candidateStore === undefined) {
+    return sliced.map((task) => withEmptyHints(task));
   }
-  return candidates;
+
+  const candidates = await candidateStore.all();
+  if (candidates.length === 0) {
+    return sliced.map((task) => withEmptyHints(task));
+  }
+
+  return sliced.map((task) => ({
+    ...task,
+    hints: matchCandidates(task, candidates),
+  }));
+}
+
+function withEmptyHints(task: Task): TaskBriefing {
+  return { ...task, hints: [] as readonly TaskHint[] };
 }
 
 /**
@@ -91,12 +125,6 @@ function hasOpenBlockingDependency(
     if (dep.status !== "closed") {
       return true; // blocked by an open ancestor in the dep chain
     }
-
-    // Walk transitively: if an ancestor's ancestor is open, we're blocked.
-    // Note: closed tasks can have their own dependsOn but they no longer
-    // block downstream work because the task itself is already done.
-    // So we only descend into... actually no, if dep is closed we do not
-    // need to walk further on it — its work is done.
   }
 
   return false;

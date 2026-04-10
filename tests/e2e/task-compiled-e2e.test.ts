@@ -345,4 +345,151 @@ describe("compiled task feature E2E", () => {
     },
     SLOW_CLI_TIMEOUT_MS,
   );
+
+  it(
+    "active memory: task close seeds a candidate and ready surfaces a hint",
+    async () => {
+      // Step 1: create and close a task with a memorable reason. The
+      // closed task becomes an active-memory candidate on disk.
+      const pastId = (
+        await runCompiled(
+          ["task", "q", "Implement argon2 password hashing"],
+          tmpDir,
+        )
+      ).stdout;
+      expect(pastId).toMatch(/^tsk-[0-9a-f]{6}$/);
+
+      const close = await runCompiled(
+        [
+          "task",
+          "close",
+          pastId,
+          "--reason",
+          "argon2 compare was backwards, wasted a day",
+        ],
+        tmpDir,
+      );
+      expect(close.exitCode).toBe(0);
+
+      // Verify the candidate file landed at the expected path with the
+      // expected shape.
+      const candidatePath = join(
+        tmpDir,
+        ".maestro",
+        "tasks",
+        "candidates",
+        `${pastId}.json`,
+      );
+      const rawCandidate = await readFile(candidatePath, "utf8");
+      const candidate: {
+        id: string;
+        sourceTaskId: string;
+        sourceType: string;
+        reason: string;
+        keywords: string[];
+        capturedAt: string;
+      } = JSON.parse(rawCandidate);
+      expect(candidate.id).toBe(pastId);
+      expect(candidate.sourceTaskId).toBe(pastId);
+      expect(candidate.sourceType).toBe("task-close");
+      expect(candidate.reason).toBe(
+        "argon2 compare was backwards, wasted a day",
+      );
+      expect(candidate.keywords).toContain("argon2");
+      expect(candidate.keywords).toContain("password");
+      expect(candidate.keywords).toContain("compare");
+      expect(candidate.capturedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+
+      // Step 2: open a new task whose title shares a keyword ("password")
+      // with the closed task. The active memory layer should surface the
+      // past close as a hint on `task ready`.
+      await runCompiled(
+        ["task", "q", "JWT password middleware"],
+        tmpDir,
+      );
+      await runCompiled(["task", "q", "Protected routes"], tmpDir);
+
+      const ready = await runCompiled(["task", "ready", "--json"], tmpDir);
+      expect(ready.exitCode).toBe(0);
+      const briefings: Array<{
+        id: string;
+        title: string;
+        hints: Array<{
+          sourceTaskId: string;
+          reason: string;
+          matchedKeywords: string[];
+        }>;
+      }> = JSON.parse(ready.stdout);
+      expect(briefings.length).toBe(2);
+
+      const byTitle = new Map(briefings.map((b) => [b.title, b] as const));
+      const jwt = byTitle.get("JWT password middleware");
+      const prot = byTitle.get("Protected routes");
+      expect(jwt).toBeDefined();
+      expect(prot).toBeDefined();
+
+      // The JWT task must carry a hint pointing at the past close.
+      expect(jwt?.hints.length).toBeGreaterThanOrEqual(1);
+      expect(jwt?.hints[0]?.sourceTaskId).toBe(pastId);
+      expect(jwt?.hints[0]?.reason).toBe(
+        "argon2 compare was backwards, wasted a day",
+      );
+      expect(jwt?.hints[0]?.matchedKeywords).toContain("password");
+
+      // The Protected routes task has no overlap, so no hint.
+      expect(prot?.hints).toEqual([]);
+    },
+    SLOW_CLI_TIMEOUT_MS,
+  );
+
+  it(
+    "active memory: --no-hints disables hint attachment for scripts",
+    async () => {
+      // Seed a candidate that would otherwise match the ready task.
+      const pastId = (
+        await runCompiled(["task", "q", "Implement auth module"], tmpDir)
+      ).stdout;
+      await runCompiled(
+        ["task", "close", pastId, "--reason", "auth token expiry wrong"],
+        tmpDir,
+      );
+      await runCompiled(["task", "q", "Refactor auth handler"], tmpDir);
+
+      // With hints (default on) — briefings carry a hint.
+      const withHints = await runCompiled(
+        ["task", "ready", "--json"],
+        tmpDir,
+      );
+      expect(withHints.exitCode).toBe(0);
+      const withHintsBriefings: Array<{ hints: unknown[] }> = JSON.parse(
+        withHints.stdout,
+      );
+      expect(withHintsBriefings[0]?.hints.length).toBeGreaterThanOrEqual(1);
+
+      // With --no-hints — briefings have empty hints arrays.
+      const noHints = await runCompiled(
+        ["task", "ready", "--no-hints", "--json"],
+        tmpDir,
+      );
+      expect(noHints.exitCode).toBe(0);
+      const noHintsBriefings: Array<{ hints: unknown[] }> = JSON.parse(
+        noHints.stdout,
+      );
+      expect(noHintsBriefings[0]?.hints).toEqual([]);
+
+      // Text mode with hints: output contains the ">>" marker.
+      const textWithHints = await runCompiled(["task", "ready"], tmpDir);
+      expect(textWithHints.exitCode).toBe(0);
+      expect(textWithHints.stdout).toContain(">>");
+
+      // Text mode without hints: no marker.
+      const textNoHints = await runCompiled(
+        ["task", "ready", "--no-hints"],
+        tmpDir,
+      );
+      expect(textNoHints.exitCode).toBe(0);
+      expect(textNoHints.stdout).not.toContain(">>");
+    },
+    SLOW_CLI_TIMEOUT_MS,
+  );
 });

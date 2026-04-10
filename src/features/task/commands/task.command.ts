@@ -15,7 +15,9 @@ import { showTask } from "../usecases/show-task.usecase.js";
 import { listTasks } from "../usecases/list-tasks.usecase.js";
 import { updateTask } from "../usecases/update-task.usecase.js";
 import { closeTask } from "../usecases/close-task.usecase.js";
-import { readyTasks } from "../usecases/ready-tasks.usecase.js";
+import { readyTasks, type TaskBriefing } from "../usecases/ready-tasks.usecase.js";
+import { captureTaskCandidate } from "../usecases/capture-task-candidate.usecase.js";
+import type { TaskHint } from "../usecases/match-candidates.usecase.js";
 import type {
   Task,
   TaskPriority,
@@ -237,6 +239,11 @@ function registerCloseCommand(taskCmd: Command, program: Command): void {
       const isJson = resolveJsonFlag(opts, program);
 
       const closed = await closeTask(services.taskStore, id, { reason: opts.reason });
+
+      // Active memory: capture the closed task as a candidate lesson so
+      // future `task ready` queries can surface it as a hint.
+      await captureTaskCandidate(services.taskCandidateStore, closed);
+
       output(isJson, closed, (t) => [
         `[ok] Task closed: ${t.id}`,
         `  Title: ${t.title}`,
@@ -260,10 +267,15 @@ function registerReadyCommand(taskCmd: Command, program: Command): void {
     .option("--assignee <name>", "Filter by assignee")
     .option("--unassigned", "Only unassigned tasks")
     .option("--include-deferred", "Include deferred tasks in the results")
+    .option("--no-hints", "Disable lesson hints surfaced from past closes")
     .option("--json", "Output as JSON")
     .action(async (opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
+
+      // Commander's --no-X pattern: opts.hints is true by default, false
+      // when --no-hints is passed. Active memory is on by default.
+      const showHints = opts.hints !== false;
 
       const filters: ReadyTasksFilters = {
         limit: parseLimit(opts.limit),
@@ -275,8 +287,13 @@ function registerReadyCommand(taskCmd: Command, program: Command): void {
         includeDeferred: opts.includeDeferred === true,
       };
 
-      const tasks = await readyTasks(services.taskStore, filters);
-      output(isJson, tasks, formatTaskList);
+      const briefings = await readyTasks(
+        services.taskStore,
+        filters,
+        new Date(),
+        showHints ? services.taskCandidateStore : undefined,
+      );
+      output(isJson, briefings, formatTaskBriefingList);
     });
 }
 
@@ -403,6 +420,56 @@ function formatTaskList(tasks: readonly Task[]): string[] {
     lines.push(`${t.id}  ${prio}  ${status}  ${title}`);
   }
   return lines;
+}
+
+/**
+ * `task ready` formatter. Renders each task as one line, then nests any
+ * active-memory hints beneath it with a `>>` marker. Empty hints arrays
+ * are silently skipped so the output stays terse when there is nothing
+ * to surface.
+ */
+function formatTaskBriefingList(briefings: readonly TaskBriefing[]): string[] {
+  if (briefings.length === 0) {
+    return ["No tasks found"];
+  }
+
+  const lines: string[] = [`${briefings.length} task(s)`, ""];
+  for (const b of briefings) {
+    const status = b.status.padEnd(12);
+    const prio = `P${b.priority}`;
+    const title = b.title.length > 40 ? `${b.title.slice(0, 37)}...` : b.title;
+    lines.push(`${b.id}  ${prio}  ${status}  ${title}`);
+    for (const hint of b.hints) {
+      lines.push(`  >> ${formatHintLine(hint)}`);
+    }
+    if (b.hints.length > 0) {
+      lines.push("");
+    }
+  }
+  return lines;
+}
+
+function formatHintLine(hint: TaskHint): string {
+  const age = formatRelativeTime(hint.capturedAt);
+  return `${age} closed ${hint.sourceTaskId}: ${hint.reason}`;
+}
+
+/**
+ * Compact human-readable age marker for hint timestamps. Not meant to
+ * be precise — days/weeks/months buckets are enough to give the reader
+ * a sense of recency without cluttering the terminal.
+ */
+function formatRelativeTime(iso: string, now: Date = new Date()): string {
+  const captured = Date.parse(iso);
+  if (Number.isNaN(captured)) return "recently";
+  const diffMs = Math.max(0, now.getTime() - captured);
+  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (days < 1) return "today";
+  if (days === 1) return "1d ago";
+  if (days < 7) return `${days}d ago`;
+  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+  if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+  return `${Math.floor(days / 365)}y ago`;
 }
 
 function formatTaskDetail(task: Task): string[] {

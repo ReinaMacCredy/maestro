@@ -10,13 +10,18 @@ describe("task-id", () => {
       }
     });
 
-    it("produces unique ids on repeated calls", () => {
+    it("produces near-unique ids on repeated calls", () => {
+      // 6-hex ids draw from a 16M space. Birthday paradox says 1000 picks
+      // produce a ~3% chance of at least one collision, so we cannot assert
+      // strict uniqueness. Assert that collisions are rare (<0.5% of draws)
+      // rather than zero, which is the real guarantee at this id length.
+      const N = 1000;
       const seen = new Set<string>();
-      for (let i = 0; i < 1000; i++) {
+      for (let i = 0; i < N; i++) {
         seen.add(generateTaskId());
       }
-      // 1000 ids out of 16M possibilities should have zero collisions.
-      expect(seen.size).toBe(1000);
+      const collisions = N - seen.size;
+      expect(collisions).toBeLessThan(5);
     });
   });
 
