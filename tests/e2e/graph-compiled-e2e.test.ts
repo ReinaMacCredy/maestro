@@ -1,20 +1,6 @@
-/**
- * End-to-end test for the graph feature against ./dist/maestro.
- *
- * Graph state is GLOBAL: it lives at ~/.maestro/graph/projects.json
- * and is shared across every project on the machine. Running e2e
- * tests against the user's real home would pollute their live graph,
- * so this suite sandboxes HOME to a fresh tmpdir for every test.
- * Setting env: { HOME: <sandbox> } on runCompiled causes the graph
- * adapter to write to <sandbox>/.maestro/graph/projects.json instead
- * of the real one.
- *
- * Each test creates two tmpdirs:
- *   - projectDir: the cwd of the command invocation
- *   - homeDir:    the sandboxed HOME where graph state lives
- *
- * We tear down both in afterEach so tests are independent.
- */
+// Graph state is GLOBAL — it lives at ~/.maestro/graph/projects.json and is
+// shared across every project on the machine. Each test gets its own homeDir
+// and passes it via env: { HOME: ... } so we never touch the user's real graph.
 import {
   afterEach,
   beforeAll,
@@ -51,7 +37,6 @@ afterEach(async () => {
   await rm(homeDir, { recursive: true, force: true });
 });
 
-/** Sandboxed env that redirects ~/.maestro/graph/ into the test home. */
 function sandboxedEnv(): Record<string, string> {
   return { HOME: homeDir };
 }
@@ -85,9 +70,8 @@ describe("compiled graph feature E2E", () => {
       expect(linked.edge.detail).toBe("shared types");
       expect(linked.nodesAdded).toBeGreaterThanOrEqual(1);
 
-      // The real ~/.maestro/graph/projects.json must NOT exist in the
-      // sandbox home (and must still exist unchanged in the real home).
-      // The sandboxed file should contain both nodes + the edge.
+      // The sandboxed projects.json must contain both nodes + the edge,
+      // proving the env override actually redirected the global graph file.
       const sandboxPath = join(
         homeDir,
         ".maestro",

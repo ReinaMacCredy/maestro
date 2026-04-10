@@ -1,19 +1,3 @@
-/**
- * End-to-end test for the ratchet feature against ./dist/maestro.
- *
- * Ratchet is a regression guard: promote a memory correction to a
- * ratchet assertion, then on every `ratchet-check` run, grep the repo
- * for the check pattern. A match means regression.
- *
- * This e2e exercises:
- *  1. ratchet-check on an empty workspace returns {results:[], passed:true}
- *  2. ratchet-promote requires a valid correction id (errors otherwise)
- *  3. Full lifecycle: seed correction -> promote -> check passes
- *     (no file matches the regex) -> add violating file -> check reports
- *     the violation with passed:false
- *  4. ratchet-check records a baseline on its first run
- *  5. ratchet-check is diagnostic (exit 0 even on violations)
- */
 import {
   afterEach,
   beforeAll,
@@ -47,10 +31,6 @@ afterEach(async () => {
   await rm(tmpDir, { recursive: true, force: true });
 });
 
-/**
- * Helper: seed a memory correction and return its id. Several tests
- * need a valid correction before they can promote to ratchet.
- */
 async function seedCorrection(
   cwd: string,
   rule = "use bun not npm",
@@ -178,7 +158,6 @@ describe("compiled ratchet feature E2E", () => {
       );
       expect(promote.exitCode).toBe(0);
 
-      // Plant a file that matches the ratchet regex.
       await writeFile(
         join(tmpDir, "violation.sh"),
         "#!/bin/sh\nnpm install something\n",
@@ -218,11 +197,9 @@ describe("compiled ratchet feature E2E", () => {
         tmpDir,
       );
 
-      // First run: no previous baseline.
       const first = await runCompiled(["ratchet-check", "--json"], tmpDir);
       expect(first.exitCode).toBe(0);
 
-      // Second run: carries a previousBaseline with lastRunAt.
       const second = await runCompiled(["ratchet-check", "--json"], tmpDir);
       expect(second.exitCode).toBe(0);
       const payload = expectJson<{

@@ -1,23 +1,3 @@
-/**
- * End-to-end test for the memory feature against ./dist/maestro.
- *
- * Memory is the largest feature surface: seven top-level subcommands
- * (memory-correct, memory-learn, memory-recall, memory-search,
- * memory-compile, memory-stats, memory-lint) plus on-disk state in
- * three separate directories under .maestro/memory/.
- *
- * The e2e runs a full lifecycle against a fresh tmpdir:
- *  1. capture a correction
- *  2. verify stats + on-disk layout
- *  3. append a raw learning
- *  4. recall + search return the captured items
- *  5. compile learnings into a summary
- *  6. lint reports a healthy system
- *
- * Plus a handful of isolated edge cases: search miss returns empty,
- * recall without context returns empty, correct with severity hard
- * is persisted correctly.
- */
 import {
   afterEach,
   beforeAll,
@@ -55,7 +35,6 @@ describe("compiled memory feature E2E", () => {
   it(
     "runs the full memory lifecycle: correct -> learn -> recall -> search -> compile -> lint",
     async () => {
-      // Phase 1: capture a correction.
       const correct = await runCompiled(
         [
           "memory-correct",
@@ -82,7 +61,6 @@ describe("compiled memory feature E2E", () => {
       expect(correction.severity).toBe("hard");
       expect(correction.trigger.keywords).toEqual(["package", "install", "npm"]);
 
-      // Verify on-disk: corrections live at .maestro/memory/corrections/<id>.json
       const correctionsDir = join(tmpDir, ".maestro", "memory", "corrections");
       const files = await readdir(correctionsDir);
       expect(files).toContain(`${correction.id}.json`);
@@ -94,13 +72,11 @@ describe("compiled memory feature E2E", () => {
       expect(parsed.id).toBe(correction.id);
       expect(parsed.severity).toBe("hard");
 
-      // Phase 2: stats shows the captured correction.
       const stats1 = await runCompiled(["memory-stats"], tmpDir);
       expect(stats1.exitCode).toBe(0);
       expect(stats1.stdout).toContain("Corrections: 1");
       expect(stats1.stdout).toContain("1 hard");
 
-      // Phase 3: append a raw learning.
       const learn = await runCompiled(
         [
           "memory-learn",
@@ -117,12 +93,10 @@ describe("compiled memory feature E2E", () => {
       expect(learning.content).toBe("handoff context needs git diff");
       expect(learning.sessionDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 
-      // Raw learnings live under .maestro/memory/learnings/raw/
       const learnDir = join(tmpDir, ".maestro", "memory", "learnings", "raw");
       const learnFiles = await readdir(learnDir);
       expect(learnFiles.length).toBe(1);
 
-      // Phase 4: recall with task context returns the matching correction.
       const recall = await runCompiled(
         [
           "memory-recall",
@@ -139,8 +113,6 @@ describe("compiled memory feature E2E", () => {
       expect(recalled.corrections.length).toBeGreaterThanOrEqual(1);
       expect(recalled.corrections[0]?.id).toBe(correction.id);
 
-      // Phase 5: search by text returns both the correction and any
-      // matching learning.
       const search = await runCompiled(
         ["memory-search", "bun", "--json"],
         tmpDir,
@@ -153,7 +125,6 @@ describe("compiled memory feature E2E", () => {
       expect(searched.corrections.length).toBeGreaterThanOrEqual(1);
       expect(searched.corrections[0]?.id).toBe(correction.id);
 
-      // Phase 6: compile the raw learnings into a summary.
       const compile = await runCompiled(
         [
           "memory-compile",
@@ -171,7 +142,6 @@ describe("compiled memory feature E2E", () => {
       expect(compileResult.compiled.compiledAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
       expect(compileResult.compiled.rawCount).toBeGreaterThanOrEqual(1);
 
-      // Compiled file exists.
       const compiledPath = join(
         tmpDir,
         ".maestro",
@@ -182,7 +152,6 @@ describe("compiled memory feature E2E", () => {
       const compiledRaw = await readFile(compiledPath, "utf8");
       expect(() => JSON.parse(compiledRaw)).not.toThrow();
 
-      // Phase 7: lint should report a healthy system.
       const lint = await runCompiled(["memory-lint"], tmpDir);
       expect(lint.exitCode).toBe(0);
       expect(lint.stdout).toContain("healthy");

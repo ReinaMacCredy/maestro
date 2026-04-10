@@ -1,14 +1,3 @@
-/**
- * End-to-end test for the notes feature against ./dist/maestro.
- *
- * The notes feature is the simplest in maestro — a single command with
- * --content (append) and --list (read) modes. This e2e verifies that:
- *  - appending a note persists to .maestro/notes.json
- *  - listing returns appended notes in order
- *  - --json round-trips through the compiled binary
- *  - invalid flag combos surface MaestroError messages
- *  - notes carry the git branch at append time
- */
 import {
   afterEach,
   beforeAll,
@@ -54,7 +43,6 @@ describe("compiled notes feature E2E", () => {
       expect(result.stdout).toContain("Note saved");
       expect(result.stdout).toContain("rerun doctor after init");
 
-      // Verify on-disk shape: .maestro/notes.json is an array of entries.
       const raw = await readFile(
         join(tmpDir, ".maestro", "notes.json"),
         "utf8",
