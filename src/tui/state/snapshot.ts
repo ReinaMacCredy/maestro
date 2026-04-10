@@ -1,7 +1,7 @@
 // Build a MissionControlSnapshot from existing stores. Polls once per call;
 // no subscriptions, no event tailing.
 import { basename } from "node:path";
-import { cached, makeEntry, type CacheEntry } from "@/tui/lib/snapshot-poll-cache.js";
+import { cached, setCachedEntry, type CacheEntry } from "@/tui/lib/snapshot-poll-cache.js";
 import { MaestroError } from "@/shared/errors.js";
 import type {
   MissionStorePort,
@@ -433,7 +433,7 @@ async function buildMissionControlMemorySnapshot(
         }
       : undefined,
   };
-  memorySnapshotCache.set(deps.cwd, makeEntry(result, MEMORY_SNAPSHOT_TTL_MS));
+  setCachedEntry(memorySnapshotCache, deps.cwd, result, MEMORY_SNAPSHOT_TTL_MS);
   return result;
 }
 

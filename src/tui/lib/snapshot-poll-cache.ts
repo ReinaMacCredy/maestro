@@ -12,6 +12,8 @@ export interface CacheEntry<T> {
   readonly expiresAt: number;
 }
 
+const DEFAULT_CACHE_ENTRY_LIMIT = 32;
+
 /** Returns the cached value if still fresh, otherwise undefined. */
 export function cached<T>(entry: CacheEntry<T> | undefined): T | undefined {
   if (entry && entry.expiresAt > Date.now()) return entry.value;
@@ -21,6 +23,36 @@ export function cached<T>(entry: CacheEntry<T> | undefined): T | undefined {
 /** Build a new cache entry with an expiry `ttlMs` from now. */
 export function makeEntry<T>(value: T, ttlMs: number): CacheEntry<T> {
   return { value, expiresAt: Date.now() + ttlMs };
+}
+
+export function pruneExpiredEntries<T>(
+  cache: Map<string, CacheEntry<T>>,
+  now = Date.now(),
+): void {
+  for (const [key, entry] of cache) {
+    if (entry.expiresAt <= now) {
+      cache.delete(key);
+    }
+  }
+}
+
+export function setCachedEntry<T>(
+  cache: Map<string, CacheEntry<T>>,
+  key: string,
+  value: T,
+  ttlMs: number,
+  maxEntries = DEFAULT_CACHE_ENTRY_LIMIT,
+): void {
+  pruneExpiredEntries(cache);
+  if (cache.has(key)) {
+    cache.delete(key);
+  }
+  while (cache.size >= maxEntries) {
+    const oldestKey = cache.keys().next().value;
+    if (oldestKey === undefined) break;
+    cache.delete(oldestKey);
+  }
+  cache.set(key, makeEntry(value, ttlMs));
 }
 
 // ---------------------------------------------------------------------------
@@ -41,20 +73,22 @@ export class CachingGitPort implements GitPort {
   ) {}
 
   async getState(cwd: string): Promise<GitState> {
+    pruneExpiredEntries(this.stateByCwd);
     const hit = cached(this.stateByCwd.get(cwd));
     if (hit !== undefined) return hit;
 
     const value = await this.inner.getState(cwd);
-    this.stateByCwd.set(cwd, makeEntry(value, this.stateTtlMs));
+    setCachedEntry(this.stateByCwd, cwd, value, this.stateTtlMs);
     return value;
   }
 
   async isRepo(cwd: string): Promise<boolean> {
+    pruneExpiredEntries(this.isRepoByCwd);
     const hit = cached(this.isRepoByCwd.get(cwd));
     if (hit !== undefined) return hit;
 
     const value = await this.inner.isRepo(cwd);
-    this.isRepoByCwd.set(cwd, makeEntry(value, this.isRepoTtlMs));
+    setCachedEntry(this.isRepoByCwd, cwd, value, this.isRepoTtlMs);
     return value;
   }
 }
@@ -66,8 +100,7 @@ export class CachingGitPort implements GitPort {
 const CONFIG_LAYERS_TTL_MS = 10_000;
 
 export class CachingConfigPort implements ConfigPort {
-  private layersCache: CacheEntry<ConfigLayers> | undefined;
-  private readonly existsByKey = new Map<string, CacheEntry<boolean>>();
+  private readonly layersByProject = new Map<string, CacheEntry<ConfigLayers>>();
 
   constructor(
     private readonly inner: ConfigPort,
@@ -80,28 +113,22 @@ export class CachingConfigPort implements ConfigPort {
   }
 
   async loadLayers(projectDir: string): Promise<ConfigLayers> {
-    const hit = cached(this.layersCache);
+    pruneExpiredEntries(this.layersByProject);
+    const hit = cached(this.layersByProject.get(projectDir));
     if (hit !== undefined) return hit;
 
     const value = await this.inner.loadLayers(projectDir);
-    this.layersCache = makeEntry(value, this.layersTtlMs);
+    setCachedEntry(this.layersByProject, projectDir, value, this.layersTtlMs);
     return value;
   }
 
   async write(scope: ConfigScope, projectDir: string, config: MaestroConfig): Promise<void> {
-    this.layersCache = undefined;
-    this.existsByKey.clear();
+    this.layersByProject.clear();
     return this.inner.write(scope, projectDir, config);
   }
 
   async exists(scope: ConfigScope, projectDir: string): Promise<boolean> {
-    const key = `${scope}:${projectDir}`;
-    const hit = cached(this.existsByKey.get(key));
-    if (hit !== undefined) return hit;
-
-    const value = await this.inner.exists(scope, projectDir);
-    this.existsByKey.set(key, makeEntry(value, this.layersTtlMs));
-    return value;
+    return this.inner.exists(scope, projectDir);
   }
 }
 
@@ -113,10 +140,11 @@ const WHICH_TTL_MS = 120_000;
 const whichCache = new Map<string, CacheEntry<string | null>>();
 
 export function cachedWhich(command: string): string | null {
+  pruneExpiredEntries(whichCache);
   const hit = cached(whichCache.get(command));
   if (hit !== undefined) return hit;
 
   const value = Bun.which(command) ?? null;
-  whichCache.set(command, makeEntry(value, WHICH_TTL_MS));
+  setCachedEntry(whichCache, command, value, WHICH_TTL_MS);
   return value;
 }
