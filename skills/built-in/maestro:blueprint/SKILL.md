@@ -20,9 +20,10 @@ The `.md` plan follows maestro conventions and integrates with tracks, missions,
 Before generating anything, understand the affected codebase areas. Launch parallel explore subagents.
 
 **Maestro-specific areas to check:**
-- `src/commands/` -- CLI command definitions
+- `src/features/<name>/` -- feature-scoped code; each feature is a bounded context with its own `commands/`, `usecases/`, `domain/`, `ports/`, `adapters/`, `services.ts`, and `index.ts` public surface
+- `src/infra/` -- plumbing that isn't a feature (init, doctor, status, install, update, uninstall, mission-control commands; config and git ports/adapters)
+- `src/shared/` -- generic utilities with no domain knowledge (`lib/` for fs, yaml, shell, output; `domain/` for IDs, UI config; top-level `errors.ts`, `version.ts`)
 - `src/tui/` -- TUI rendering if the change affects Mission Control
-- `src/ports/`, `src/adapters/`, `src/use-cases/` -- hexagonal architecture layers
 - `skills/built-in/` -- if the change affects built-in skills
 - `.maestro/context/` -- read product.md and tech-stack.md for project context
 - `.maestro/tracks/` -- check for related existing tracks
@@ -30,8 +31,9 @@ Before generating anything, understand the affected codebase areas. Launch paral
 
 **What to look for:**
 - Existing implementations that can be reused
-- The hexagonal architecture pattern: port -> adapter -> use-case -> command -> MCP tool -> test
-- Conventions from AGENTS.md (types, naming, async, imports)
+- The feature-folder layout: cross-feature imports must go through `@/features/<name>` (the feature's `index.ts`); deep paths into another feature are forbidden and enforced by `bun run check:boundaries`
+- The hexagonal pattern inside each feature: port -> adapter -> usecase -> command -> test
+- Conventions from AGENTS.md (types, naming, async, imports, feature-folder layout)
 - Files that will need modification
 - Related tracks or plans already in `.maestro/`
 
@@ -65,11 +67,14 @@ Include motivation -- why this change matters for maestro.
 
 | File | Role | Change |
 |------|------|--------|
-| `src/commands/foo.ts` | CLI command | New |
-| `src/use-cases/foo.ts` | Business logic | New |
-| `src/ports/foo.port.ts` | Port interface | New |
-| `src/adapters/foo.adapter.ts` | Adapter | New |
-| `src/index.ts` | Entry point | Add command registration |
+| `src/features/<name>/commands/foo.command.ts` | CLI command | New |
+| `src/features/<name>/usecases/foo.usecase.ts` | Business logic | New |
+| `src/features/<name>/ports/foo.port.ts` | Port interface | New |
+| `src/features/<name>/adapters/foo.adapter.ts` | Adapter | New |
+| `src/features/<name>/services.ts` | Feature composition | Wire new adapter |
+| `src/features/<name>/index.ts` | Public surface | Export new command/types |
+| `src/services.ts` | Composition root | Wire feature services (if new feature) |
+| `src/index.ts` | CLI root | Add command registration |
 
 ## Design Decisions
 
@@ -164,7 +169,7 @@ Open the HTML in the browser and tell the user both paths:
 
 Follow these when generating plans:
 
-- **Hexagonal architecture**: new features follow port -> adapter -> use-case -> command -> MCP tool -> test
+- **Feature-folder layout**: place feature-scoped work under `src/features/<name>/` and follow the hexagonal pattern inside it: port -> adapter -> usecase -> command -> test. Plumbing goes in `src/infra/`, generic utilities in `src/shared/`. Cross-feature imports must go through `@/features/<other>` (the feature's `index.ts`); enforced by `bun run check:boundaries`
 - **Conventional commits**: reference the commit types in the plan (feat, fix, refactor)
 - **Version bumps**: note if the change requires a minor/patch bump
 - **Build verification**: always include `bun run build && ./dist/maestro --version` in verification
