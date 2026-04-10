@@ -87,6 +87,30 @@
 - Keep commit messages in Conventional Commits format, e.g. `feat(mission): add retry reason support`
 - Prefer `feat` for user-visible functionality, `fix` for bug fixes, `refactor` for internal restructuring, and `test` for test-only changes
 
+## Task vs Mission
+
+Maestro has two ways to track work. They coexist and never overlap.
+
+- Use **`maestro task`** (br-style issue graph) when the unit of work is small, mutable, and the plan comes from outside maestro. Tasks are meant for the daily loop: inline capture, dep-aware queries, atomic claim, fast close. Storage is a single `.maestro/tasks/tasks.jsonl` file, one JSON object per line
+- Use **`maestro mission`** (contract + gates) when the work is a sprint with a formal plan file, milestones, worker reports, assertions, and an approval step. Missions are heavier and immutable after approval; they are the right tool when you want a verified plan on disk, not a queue
+
+One-line summary: **mission answers "what are we building?", task answers "what do I do next?"**
+
+### Daily agent loop with tasks
+
+```bash
+maestro task ready --json --limit 5               # find actionable work
+maestro task update tsk-abc --claim               # atomic assign + in_progress
+# ... do the work, commit ...
+maestro task close tsk-abc --reason "shipped"     # finish
+```
+
+`--claim` is atomic: it sets `assignee` to the current session id AND `status` to `in_progress` in one write. Use it instead of a bare `--status in_progress` so concurrent agents do not clobber each other.
+
+### When both make sense
+
+Tasks can live inside or alongside a mission. You can use a mission to hold the big plan, then create tasks for the smaller units under each milestone — the two systems do not cross-reference today, but tasks carry labels and a `parentId` so you can group them however you want.
+
 ## Feature-Folder Layout
 
 `src/` is organized by feature, not by architectural layer. The migration landed in Phase 8 (2026-04-09) and the layout is now stable.
@@ -99,7 +123,7 @@
 - `src/services.ts` -- composition root; one line per feature via the feature's service factory
 - `src/index.ts` -- commander root; one `register<Feature>Command` call per feature
 
-### Current features (8)
+### Current features (9)
 - `ratchet` -- memory quality assertions and promotions
 - `handoff` -- UKI-format structured session handoffs between agents
 - `notes` -- project notes captured to a local file
@@ -108,6 +132,7 @@
 - `memory` -- corrections, learnings, recall for agent guidance
 - `mission` -- mission/feature/milestone/checkpoint/validation lifecycle
 - `worker` -- worker prompt generation, agent management, fit recommendation (legitimately imports from `mission` and `memory`; see Feature-specific exceptions)
+- `task` -- br-style issue graph for the daily loop (create, ready, claim, close); JSONL storage at `.maestro/tasks/tasks.jsonl`
 
 ### Public-surface rule
 Cross-feature imports MUST go through `@/features/<name>`, which resolves to that feature's `index.ts`. Deep paths across features are FORBIDDEN in both forms:
