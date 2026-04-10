@@ -76,6 +76,17 @@ describe("readyTasks", () => {
       expect(result.find((t) => t.id === c.id)).toBeUndefined();
     });
 
+    it("keeps a child blocked when an intermediate task is closed out of order", async () => {
+      const g = await createTask(store, { title: "grandparent" });
+      const p = await createTask(store, { title: "parent", dependsOn: [g.id] });
+      const c = await createTask(store, { title: "child", dependsOn: [p.id] });
+      await closeTask(store, p.id, { reason: "closed early" });
+
+      const result = await readyTasks(store);
+      expect(result.map((t) => t.id)).toEqual([g.id]);
+      expect(result.find((t) => t.id === c.id)).toBeUndefined();
+    });
+
     it("parent (hierarchy) does NOT block a child", async () => {
       // parentId is hierarchy, not a blocking edge. br semantics.
       const group = await createTask(store, { title: "group" });
@@ -123,6 +134,19 @@ describe("readyTasks", () => {
 
       const result = await readyTasks(store, { includeDeferred: true });
       expect(result.find((t) => t.id === task.id)).toBeDefined();
+    });
+
+    it("excludes tasks with deferred status unless includeDeferred is set", async () => {
+      const task = await createTask(store, { title: "deferred status" });
+      await updateTask(store, task.id, {
+        patch: { status: "deferred" },
+      });
+
+      const hidden = await readyTasks(store);
+      expect(hidden.find((t) => t.id === task.id)).toBeUndefined();
+
+      const included = await readyTasks(store, { includeDeferred: true });
+      expect(included.find((t) => t.id === task.id)).toBeDefined();
     });
 
     it("treats past deferUntil as expired (task becomes ready)", async () => {

@@ -134,4 +134,42 @@ describe("task CLI daily loop", () => {
       "urgent",
     ]);
   }, SLOW_CLI_TIMEOUT_MS);
+
+  it("hides deferred tasks from ready until explicitly included", async () => {
+    const created = await runCli(
+      ["task", "create", "defer me", "--json"],
+      tmpDir,
+    );
+    const id = expectJson<{ id: string }>(created).id;
+
+    const deferred = await runCli(
+      ["task", "update", id, "--status", "deferred"],
+      tmpDir,
+    );
+    expect(deferred.exitCode).toBe(0);
+
+    const hidden = await runCli(["task", "ready", "--json"], tmpDir);
+    expect(expectJson<Array<{ id: string }>>(hidden)).toEqual([]);
+
+    const included = await runCli(
+      ["task", "ready", "--json", "--include-deferred"],
+      tmpDir,
+    );
+    expect(expectJson<Array<{ id: string }>>(included).map((task) => task.id)).toEqual([id]);
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("sanitizes terminal escape sequences in task text output", async () => {
+    const create = await runCli(
+      ["task", "create", "\u001b[31mred title\u001b[0m"],
+      tmpDir,
+    );
+    expect(create.exitCode).toBe(0);
+    expect(create.stdout).not.toContain("\u001b");
+    expect(create.stdout).toContain("red title");
+
+    const listed = await runCli(["task", "list"], tmpDir);
+    expect(listed.exitCode).toBe(0);
+    expect(listed.stdout).not.toContain("\u001b");
+    expect(listed.stdout).toContain("red title");
+  }, SLOW_CLI_TIMEOUT_MS);
 });

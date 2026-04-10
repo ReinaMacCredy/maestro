@@ -49,6 +49,7 @@ export async function readyTasks(
   const selected = all.filter((task) => {
     // Step 1: exclude closed.
     if (task.status === "closed") return false;
+    if (!filters.includeDeferred && task.status === "deferred") return false;
 
     // Step 2: exclude tasks blocked by any open dependency (transitive walk).
     if (hasOpenBlockingDependency(task, byId)) return false;
@@ -124,6 +125,7 @@ function hasOpenBlockingDependency(
     if (dep.status !== "closed") {
       return true; // blocked by an open ancestor in the dep chain
     }
+    stack.push(...dep.dependsOn);
   }
 
   return false;

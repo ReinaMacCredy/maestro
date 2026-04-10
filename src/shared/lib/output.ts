@@ -2,6 +2,8 @@
  * Dual-mode output: JSON for machines, text for humans.
  * All commands route through this to ensure consistent --json behavior.
  */
+import { sanitizeTerminalText } from "@/shared/lib/sanitize.js";
+
 export function output<T>(
   json: boolean,
   data: T,
@@ -11,7 +13,7 @@ export function output<T>(
     console.log(JSON.stringify(data, null, 2));
   } else {
     for (const line of formatter(data)) {
-      console.log(line);
+      console.log(sanitizeTerminalText(line));
     }
   }
 }

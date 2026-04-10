@@ -164,6 +164,7 @@ export function assertNoParentCycle(
   let current: string | undefined = candidateParentId;
 
   for (let depth = 0; depth < MAX_PARENT_DEPTH; depth++) {
+    if (current === undefined) return;
     const parent = tasks.get(current)?.parentId;
     if (parent === undefined) return;
     if (parent === startId) {

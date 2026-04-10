@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from "bun:test";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { JsonlTaskStoreAdapter } from "@/features/task/adapters/jsonl-task-store.adapter.js";
@@ -78,6 +78,15 @@ describe("JsonlTaskStoreAdapter", () => {
     it("returns empty array on a fresh store", async () => {
       const tasks = await store.all();
       expect(tasks).toEqual([]);
+    });
+
+    it("surfaces malformed task storage instead of dropping bad lines", async () => {
+      const tasksDir = join(tmpDir, ".maestro", "tasks");
+      await mkdir(tasksDir, { recursive: true });
+      await Bun.write(join(tasksDir, "tasks.jsonl"), "{\"id\":\n");
+
+      await expect(store.all()).rejects.toThrow(MaestroError);
+      await expect(store.create({ title: "blocked by corruption" })).rejects.toThrow(MaestroError);
     });
   });
 
