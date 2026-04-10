@@ -46,6 +46,16 @@ export function closeViaCloseCommand(): MaestroError {
   );
 }
 
+export function taskAlreadyClosed(id: string): MaestroError {
+  return new MaestroError(
+    `Task ${id} is already closed`,
+    [
+      "Use 'maestro task show <id>' to inspect the existing close reason",
+      "Closed tasks are immutable; create a follow-up task instead of re-closing",
+    ],
+  );
+}
+
 export function parentDepthExceeded(id: string, depth: number): MaestroError {
   return new MaestroError(
     `Task ${id} parent chain exceeds depth ${depth}`,

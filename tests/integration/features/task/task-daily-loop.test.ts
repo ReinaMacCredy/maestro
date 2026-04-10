@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runCli } from "../../../helpers/run-cli.js";
@@ -171,5 +171,50 @@ describe("task CLI daily loop", () => {
     expect(listed.exitCode).toBe(0);
     expect(listed.stdout).not.toContain("\u001b");
     expect(listed.stdout).toContain("red title");
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("rejects re-closing an already-closed task", async () => {
+    const created = await runCli(["task", "q", "done once"], tmpDir);
+    expect(created.exitCode).toBe(0);
+    const id = created.stdout;
+
+    const firstClose = await runCli(
+      ["task", "close", id, "--reason", "first reason"],
+      tmpDir,
+    );
+    expect(firstClose.exitCode).toBe(0);
+
+    const secondClose = await runCli(
+      ["task", "close", id, "--reason", "second reason"],
+      tmpDir,
+    );
+    expect(secondClose.exitCode).not.toBe(0);
+    expect(secondClose.stderr).toContain("already closed");
+
+    const shown = await runCli(["task", "show", id, "--json"], tmpDir);
+    const task = expectJson<{ closeReason: string }>(shown);
+    expect(task.closeReason).toBe("first reason");
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("warns but still succeeds when hint capture fails after close", async () => {
+    const created = await runCli(["task", "q", "candidate write fail"], tmpDir);
+    expect(created.exitCode).toBe(0);
+    const id = created.stdout;
+
+    const candidatePath = join(tmpDir, ".maestro", "tasks", "candidates", `${id}.json`);
+    await mkdir(candidatePath, { recursive: true });
+
+    const closed = await runCli(
+      ["task", "close", id, "--reason", "done"],
+      tmpDir,
+    );
+    expect(closed.exitCode).toBe(0);
+    expect(closed.stdout).toContain("Task closed:");
+    expect(closed.stderr).toContain("hint capture failed");
+
+    const shown = await runCli(["task", "show", id, "--json"], tmpDir);
+    const task = expectJson<{ status: string; closeReason: string }>(shown);
+    expect(task.status).toBe("closed");
+    expect(task.closeReason).toBe("done");
   }, SLOW_CLI_TIMEOUT_MS);
 });

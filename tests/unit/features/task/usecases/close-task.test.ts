@@ -33,4 +33,11 @@ describe("closeTask", () => {
   it("throws taskNotFound for unknown id", async () => {
     await expect(closeTask(store, "tsk-000000", {})).rejects.toThrow(MaestroError);
   });
+
+  it("rejects closing an already-closed task", async () => {
+    const task = await createTask(store, { title: "Done" });
+    await closeTask(store, task.id, { reason: "shipped" });
+
+    await expect(closeTask(store, task.id, { reason: "retry" })).rejects.toThrow(MaestroError);
+  });
 });

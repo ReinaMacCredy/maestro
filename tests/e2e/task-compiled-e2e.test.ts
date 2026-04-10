@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -325,6 +325,58 @@ describe("compiled task feature E2E", () => {
       );
       expect(textNoHints.exitCode).toBe(0);
       expect(textNoHints.stdout).not.toContain(">>");
+    },
+    SLOW_CLI_TIMEOUT_MS,
+  );
+
+  it(
+    "rejects re-closing an already-closed task without rewriting the close reason",
+    async () => {
+      const created = await runCompiled(["task", "q", "done once"], tmpDir);
+      expect(created.exitCode).toBe(0);
+      const id = created.stdout;
+
+      const firstClose = await runCompiled(
+        ["task", "close", id, "--reason", "first reason"],
+        tmpDir,
+      );
+      expect(firstClose.exitCode).toBe(0);
+
+      const secondClose = await runCompiled(
+        ["task", "close", id, "--reason", "second reason"],
+        tmpDir,
+      );
+      expect(secondClose.exitCode).not.toBe(0);
+      expect(secondClose.stderr).toContain("already closed");
+
+      const shown = await runCompiled(["task", "show", id, "--json"], tmpDir);
+      expect(expectJson<{ closeReason: string }>(shown).closeReason).toBe("first reason");
+    },
+    SLOW_CLI_TIMEOUT_MS,
+  );
+
+  it(
+    "still closes the task when candidate capture fails",
+    async () => {
+      const created = await runCompiled(["task", "q", "candidate write fail"], tmpDir);
+      expect(created.exitCode).toBe(0);
+      const id = created.stdout;
+
+      const candidatePath = join(tmpDir, ".maestro", "tasks", "candidates", `${id}.json`);
+      await mkdir(candidatePath, { recursive: true });
+
+      const closed = await runCompiled(
+        ["task", "close", id, "--reason", "done"],
+        tmpDir,
+      );
+      expect(closed.exitCode).toBe(0);
+      expect(closed.stdout).toContain("Task closed:");
+      expect(closed.stderr).toContain("hint capture failed");
+
+      const shown = await runCompiled(["task", "show", id, "--json"], tmpDir);
+      const task = expectJson<{ status: string; closeReason: string }>(shown);
+      expect(task.status).toBe("closed");
+      expect(task.closeReason).toBe("done");
     },
     SLOW_CLI_TIMEOUT_MS,
   );

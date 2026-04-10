@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { getServices } from "@/services.js";
-import { output, resolveJsonFlag } from "@/shared/lib/output.js";
+import { output, resolveJsonFlag, warn } from "@/shared/lib/output.js";
 import { MaestroError } from "@/shared/errors.js";
 import { formatRelativeAge } from "@/shared/version-format.js";
 import { createTask } from "../usecases/create-task.usecase.js";
@@ -232,7 +232,12 @@ function registerCloseCommand(taskCmd: Command, program: Command): void {
       const isJson = resolveJsonFlag(opts, program);
 
       const closed = await closeTask(services.taskStore, id, { reason: opts.reason });
-      await captureTaskCandidate(services.taskCandidateStore, closed);
+      try {
+        await captureTaskCandidate(services.taskCandidateStore, closed);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        warn(`Task ${closed.id} closed, but hint capture failed: ${message}`);
+      }
 
       output(isJson, closed, (t) => [
         `[ok] Task closed: ${t.id}`,
