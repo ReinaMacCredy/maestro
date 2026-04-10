@@ -51,12 +51,13 @@ function makeHandoffStore(count: number): HandoffStorePort {
 }
 
 describe("checkStatus", () => {
-  it("reports pending handoffs from the handoff store", async () => {
+  it("reports pending handoffs from the handoff store when requested", async () => {
     const status = await checkStatus(
       mockConfig({ exists: async () => true }),
       mockGit(),
       makeHandoffStore(2),
       process.cwd(),
+      { includePendingHandoffs: true },
     );
 
     expect(status.pendingHandoffs).toHaveLength(2);
@@ -91,7 +92,29 @@ describe("checkStatus", () => {
     });
   });
 
-  it("skips pending handoff reads when they are not requested", async () => {
+  it("skips pending handoff reads by default", async () => {
+    let listCalls = 0;
+    const store = makeHandoffStore(2);
+    const handoffStore: HandoffStorePort = {
+      ...store,
+      list: async (filter) => {
+        listCalls += 1;
+        return store.list(filter);
+      },
+    };
+
+    const status = await checkStatus(
+      mockConfig({ exists: async () => true }),
+      mockGit(),
+      handoffStore,
+      process.cwd(),
+    );
+
+    expect(listCalls).toBe(0);
+    expect(status.pendingHandoffs).toEqual([]);
+  });
+
+  it("skips pending handoff reads when they are explicitly disabled", async () => {
     let listCalls = 0;
     const store = makeHandoffStore(2);
     const handoffStore: HandoffStorePort = {

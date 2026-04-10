@@ -18,9 +18,9 @@ export async function checkStatus(
   dir: string,
   options: CheckStatusOptions = {},
 ): Promise<StatusReport> {
-  const pendingHandoffsPromise = options.includePendingHandoffs === false
-    ? Promise.resolve([])
-    : handoffStore.list({ status: "pending" });
+  const pendingHandoffsPromise = options.includePendingHandoffs === true
+    ? handoffStore.list({ status: "pending" })
+    : Promise.resolve([]);
 
   const [
     projectConfigExists,

@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { getServices } from "@/services.js";
-import { checkStatus } from "../usecases/check-status.usecase.js";
-import { output } from "@/shared/lib/output.js";
+import { checkStatus } from "@/infra/usecases/check-status.usecase.js";
+import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 
 export function registerStatusCommand(program: Command): void {
   program
@@ -10,7 +10,7 @@ export function registerStatusCommand(program: Command): void {
     .option("--json", "Output as JSON")
     .action(async (opts) => {
       const services = getServices();
-      const isJson = opts.json ?? program.opts().json;
+      const isJson = resolveJsonFlag(opts, program);
       const status = await checkStatus(
         services.config,
         services.git,
