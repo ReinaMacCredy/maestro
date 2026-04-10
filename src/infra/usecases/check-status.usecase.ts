@@ -1,13 +1,11 @@
 import type { ConfigPort } from "../ports/config.port.js";
 import type { GitPort } from "../ports/git.port.js";
-import type { PendingHandoffSummary, StatusReport } from "@/infra/domain/status-types.js";
-import type { HandoffStorePort, UkiHandoff } from "@/features/handoff";
+import type { StatusReport } from "@/infra/domain/status-types.js";
+import type { HandoffStorePort } from "@/features/handoff";
 
 /**
- * Phase 7: `StatusReport.pendingHandoffs` is a narrow summary projection
- * of UkiHandoff records. The full records still live in the handoff
- * store and the TUI reads them directly through the handoff port; this
- * usecase is only responsible for the CLI `status --json` view.
+ * Pending handoffs stay in their persisted record shape so CLI JSON
+ * consumers see the same contract the store exposes.
  */
 export async function checkStatus(
   config: ConfigPort,
@@ -36,16 +34,8 @@ export async function checkStatus(
   return {
     initialized: projectConfigExists || globalConfigExists,
     configSource,
-    pendingHandoffs: pendingHandoffs.map(toPendingHandoffSummary),
+    pendingHandoffs,
     cassAvailable: false,
     gitAvailable,
-  };
-}
-
-function toPendingHandoffSummary(handoff: UkiHandoff): PendingHandoffSummary {
-  return {
-    id: handoff.id,
-    agent: handoff.agent,
-    createdAt: handoff.timestamp,
   };
 }

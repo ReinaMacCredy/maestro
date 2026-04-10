@@ -32,10 +32,21 @@ describe("handoff status integration", () => {
       "--json",
     ], tmpDir);
     expect(create.exitCode).toBe(0);
+    const created = JSON.parse(create.stdout);
 
     const status = await runCli(["status", "--json"], tmpDir);
     expect(status.exitCode).toBe(0);
     const parsed = JSON.parse(status.stdout);
     expect(parsed.pendingHandoffs).toHaveLength(1);
+    expect(parsed.pendingHandoffs[0]).toMatchObject({
+      id: created.id,
+      version: created.version,
+      timestamp: created.timestamp,
+      status: created.status,
+      agent: created.agent,
+      sessionId: created.sessionId,
+      content: created.content,
+      uki: created.uki,
+    });
   });
 });
