@@ -90,4 +90,27 @@ describe("checkStatus", () => {
       uki: "uki-1",
     });
   });
+
+  it("skips pending handoff reads when they are not requested", async () => {
+    let listCalls = 0;
+    const store = makeHandoffStore(2);
+    const handoffStore: HandoffStorePort = {
+      ...store,
+      list: async (filter) => {
+        listCalls += 1;
+        return store.list(filter);
+      },
+    };
+
+    const status = await checkStatus(
+      mockConfig({ exists: async () => true }),
+      mockGit(),
+      handoffStore,
+      process.cwd(),
+      { includePendingHandoffs: false },
+    );
+
+    expect(listCalls).toBe(0);
+    expect(status.pendingHandoffs).toEqual([]);
+  });
 });

@@ -103,10 +103,10 @@ async function createMission(): Promise<string> {
 }
 
 describe("loadMissionControlSnapshot", () => {
-  it("keeps read mode inspection non-mutating", async () => {
+  it("keeps inspection non-mutating", async () => {
     const missionId = await createMission();
 
-    const snapshot = await loadMissionControlSnapshot(snapshotDeps, homeSnapshotDeps, "read", missionId);
+    const snapshot = await loadMissionControlSnapshot(snapshotDeps, homeSnapshotDeps, missionId);
 
     expect(snapshot.mode).toBe("mission");
     expect(snapshot.missionId).toBe(missionId);
@@ -117,7 +117,6 @@ describe("loadMissionControlSnapshot", () => {
     const loader = createMissionControlSnapshotLoader(
       snapshotDeps,
       homeSnapshotDeps,
-      "read",
     );
 
     const homeSnapshot = await loader.load();

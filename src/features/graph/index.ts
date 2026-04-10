@@ -1,12 +1,3 @@
-/**
- * Public surface for the graph feature.
- *
- * Cross-feature consumers (`src/tui/state/snapshot.ts`,
- * `src/features/memory/usecases/memory-stats.usecase.ts`, the composition
- * root, and tests) import from `@/features/graph`. Deep paths into the
- * feature are not allowed from outside (enforced by
- * `bun run check:boundaries`).
- */
 export type {
   GraphRelation,
   ProjectEdge,
@@ -27,3 +18,5 @@ export {
 } from "./usecases/graph-link.usecase.js";
 export { registerGraphLinkCommand } from "./commands/graph-link.command.js";
 export { registerGraphContextCommand } from "./commands/graph-context.command.js";
+export { buildGraphServices } from "./services.js";
+export type { GraphServices } from "./services.js";

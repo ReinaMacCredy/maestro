@@ -1,15 +1,3 @@
-/**
- * Public surface for the memory feature.
- *
- * Cross-feature consumers (`src/tui/state/snapshot.ts`,
- * `src/tui/state/types.ts`, the composition root, worker prompt
- * generator, and tests) import from `@/features/memory`. Deep paths
- * into the feature are not allowed from outside (enforced by
- * `bun run check:boundaries`).
- *
- * Phase 6 relies on `recallMemory` being available from this surface so
- * the worker can inject matching corrections into generated prompts.
- */
 export type {
   CompiledLearnings,
   Correction,
@@ -40,3 +28,5 @@ export { registerMemoryLintCommand } from "./commands/memory-lint.command.js";
 export { registerMemoryRecallCommand } from "./commands/memory-recall.command.js";
 export { registerMemorySearchCommand } from "./commands/memory-search.command.js";
 export { registerMemoryStatsCommand } from "./commands/memory-stats.command.js";
+export { buildMemoryServices } from "./services.js";
+export type { MemoryServices } from "./services.js";

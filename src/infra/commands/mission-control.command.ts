@@ -22,14 +22,8 @@ import {
   type PreviewScreen,
 } from "@/tui/app/preview-state.js";
 
-export type MissionControlSnapshotLoadMode = "read" | "supervise";
-
-export interface MissionControlSnapshotLoadOptions {
-  readonly probeWorkers?: boolean;
-}
-
 export interface MissionControlSnapshotLoader {
-  load: (options?: MissionControlSnapshotLoadOptions) => Promise<MissionControlSnapshot>;
+  load: () => Promise<MissionControlSnapshot>;
 }
 
 type PreviewScreenOrAll = PreviewScreen | "all";
@@ -132,20 +126,13 @@ export function registerMissionControlCommand(program: Command): void {
           handoffStore: services.handoffStore,
         };
 
-        const readSnapshotLoader = createMissionControlSnapshotLoader(
+        const snapshotLoader = createMissionControlSnapshotLoader(
           snapshotDeps,
           homeSnapshotDeps,
-          "read",
-          opts.mission,
-        );
-        const supervisedSnapshotLoader = createMissionControlSnapshotLoader(
-          snapshotDeps,
-          homeSnapshotDeps,
-          "supervise",
           opts.mission,
         );
         const loadReadSnapshot = async (): Promise<MissionControlSnapshot> =>
-          redactSnapshotForReadOutput(await readSnapshotLoader.load());
+          redactSnapshotForReadOutput(await snapshotLoader.load());
 
       if (isJson) {
         output(true, await loadReadSnapshot(), () => []);
@@ -201,12 +188,12 @@ export function registerMissionControlCommand(program: Command): void {
         ]);
       }
 
-              const snapshot = await supervisedSnapshotLoader.load();
+      const snapshot = await snapshotLoader.load();
 
-        await renderDashboard({
-          snapshot,
-          snapshotDeps,
-          reloadSnapshot: () => supervisedSnapshotLoader.load({ probeWorkers: false }),
+      await renderDashboard({
+        snapshot,
+        snapshotDeps,
+        reloadSnapshot: () => snapshotLoader.load(),
       });
     });
 }
@@ -306,8 +293,6 @@ async function resolveMissionIdFromStore(
 async function buildMissionSnapshot(
   missionId: string,
   snapshotDeps: Parameters<typeof buildSnapshot>[0],
-  mode: MissionControlSnapshotLoadMode,
-  options: MissionControlSnapshotLoadOptions = {},
 ) {
   const mission = await snapshotDeps.missionStore.get(missionId);
 
@@ -317,61 +302,46 @@ async function buildMissionSnapshot(
     ]);
   }
 
-  // Phase 1 strip: runtime recovery no longer runs inside mission
-  // control. The conductor model does not own runtime supervision;
-  // the "supervise" mode is kept as a no-op hook for future Phase 3
-  // removal so that existing call sites do not regress.
-
-  return buildSnapshot(snapshotDeps, missionId, {
-    probeWorkers: options.probeWorkers ?? mode === "supervise",
-  });
+  return buildSnapshot(snapshotDeps, missionId);
 }
 
 export function createMissionControlSnapshotLoader(
   snapshotDeps: Parameters<typeof buildSnapshot>[0],
   homeSnapshotDeps: Parameters<typeof buildHomeSnapshot>[0],
-  mode: MissionControlSnapshotLoadMode,
   explicitMissionId?: string,
 ): MissionControlSnapshotLoader {
   let resolvedMissionId = explicitMissionId;
 
-  // Wrap I/O-heavy ports with TTL caches to avoid Bun memory leaks.
-  // spawnSync leaks memory in Bun 1.3.x; repeated file reads and YAML
-  // parsing also pressure GC when polling every 1-2 seconds.
+  // Wrap I/O-heavy ports with TTL caches. spawnSync leaks memory in Bun
+  // 1.3.x; repeated YAML parsing pressures GC when polling every 1-2s.
   const cachingGit = new CachingGitPort(snapshotDeps.git);
   const cachingConfig = new CachingConfigPort(snapshotDeps.config);
   const cachedSnapshotDeps = { ...snapshotDeps, git: cachingGit, config: cachingConfig };
   const cachedHomeSnapshotDeps = { ...homeSnapshotDeps, git: cachingGit, config: cachingConfig };
 
   return {
-      load: async (options = {}) => {
-        if (!explicitMissionId && !resolvedMissionId) {
-          resolvedMissionId = await resolveMissionIdFromStore(cachedSnapshotDeps.missionStore);
-        }
+    load: async () => {
+      if (!explicitMissionId && !resolvedMissionId) {
+        resolvedMissionId = await resolveMissionIdFromStore(cachedSnapshotDeps.missionStore);
+      }
 
-        return loadMissionControlSnapshot(
+      return loadMissionControlSnapshot(
         cachedSnapshotDeps,
-          cachedHomeSnapshotDeps,
-          mode,
-          resolvedMissionId,
-          options,
-        );
-      },
-    };
+        cachedHomeSnapshotDeps,
+        resolvedMissionId,
+      );
+    },
+  };
 }
 
 export async function loadMissionControlSnapshot(
   snapshotDeps: Parameters<typeof buildSnapshot>[0],
   homeSnapshotDeps: Parameters<typeof buildHomeSnapshot>[0],
-  mode: MissionControlSnapshotLoadMode,
   missionId?: string,
-  options: MissionControlSnapshotLoadOptions = {},
 ) {
   return missionId
-    ? buildMissionSnapshot(missionId, snapshotDeps, mode, options)
-    : buildHomeSnapshot(homeSnapshotDeps, process.cwd(), {
-      probeWorkers: options.probeWorkers ?? mode === "supervise",
-      });
+    ? buildMissionSnapshot(missionId, snapshotDeps)
+    : buildHomeSnapshot(homeSnapshotDeps, process.cwd());
 }
 
 function redactSnapshotForReadOutput(

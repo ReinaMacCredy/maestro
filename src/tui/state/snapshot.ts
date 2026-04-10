@@ -1,8 +1,8 @@
-/**
- * Build a MissionControlSnapshot from existing stores.
- * Polls once -- no subscriptions, no event tailing.
- */
+// Build a MissionControlSnapshot from existing stores. Polls once per call;
+// no subscriptions, no event tailing.
 import { basename } from "node:path";
+import { cached, makeEntry, type CacheEntry } from "@/tui/lib/snapshot-poll-cache.js";
+import { MaestroError } from "@/shared/errors.js";
 import type {
   MissionStorePort,
   FeatureStorePort,
@@ -19,7 +19,7 @@ import type { HandoffStorePort, UkiHandoff } from "@/features/handoff";
 import {
   type Mission,
   type Feature,
-  generateMissionReport,
+  deriveMissionReport,
   type MissionReport,
   getValidFeatureTransitions,
 } from "@/features/mission";
@@ -67,10 +67,6 @@ export interface HomeSnapshotDeps {
   handoffStore?: HandoffStorePort;
 }
 
-export interface SnapshotBuildOptions {
-  readonly probeWorkers?: boolean;
-}
-
 interface FeatureGraphEntry {
   readonly feature: Feature;
   readonly blockedBy: readonly Feature[];
@@ -84,10 +80,9 @@ interface FeatureGraphEntry {
 export async function buildSnapshot(
   deps: SnapshotDeps,
   missionId: string,
-  _options: SnapshotBuildOptions = {},
 ): Promise<MissionControlSnapshot> {
   const [
-    report,
+    mission,
     features,
     assertions,
     checkpoints,
@@ -96,30 +91,32 @@ export async function buildSnapshot(
     gitState,
     memorySnapshot,
     pendingHandoffs,
-  ] = await Promise.all([
-    generateMissionReport(
-      deps.missionStore,
-      deps.featureStore,
-      deps.assertionStore,
-      missionId,
-    ),
+    ] = await Promise.all([
+    deps.missionStore.get(missionId),
     deps.featureStore.list(missionId),
     deps.assertionStore.list(missionId),
     deps.checkpointStore.list(missionId),
     buildMissionControlEnvironmentSummary(deps.config, deps.git, deps.cwd),
     deps.config.loadLayers(deps.cwd),
     deps.git.getState(deps.cwd),
-    buildMissionControlMemorySnapshot({
-      correctionStore: deps.correctionStore,
-      learningStore: deps.learningStore,
+      buildMissionControlMemorySnapshot({
+        correctionStore: deps.correctionStore,
+        learningStore: deps.learningStore,
       ratchetStore: deps.ratchetStore,
       projectGraphStore: deps.projectGraphStore,
       cwd: deps.cwd,
-    }),
-    loadPendingHandoffs(deps.handoffStore),
-    ]);
+      }),
+      loadPendingHandoffs(deps.handoffStore),
+  ]);
 
-  const mission = report.mission;
+  if (!mission) {
+    throw new MaestroError(`Mission ${missionId} not found`, [
+      "List missions: maestro mission list",
+      `Check that mission ID '${missionId}' is correct`,
+    ]);
+  }
+
+  const report = deriveMissionReport(mission, features, assertions);
   const now = Date.now();
   const startMs = new Date(mission.approvedAt ?? mission.createdAt).getTime();
   const featureGraph = buildFeatureGraph(features);
@@ -153,7 +150,6 @@ export async function buildSnapshot(
   const activeFeature = findActiveFeature(taskPreviews);
 
   // Progress log: mission/feature/assertion/checkpoint events only.
-  // Phase 3 strip: worker progress events no longer exist.
   const progressLog = deriveEvents({
     mission,
     features,
@@ -247,7 +243,6 @@ export async function buildSnapshot(
 export async function buildHomeSnapshot(
   deps: HomeSnapshotDeps,
   cwd: string,
-  _options: SnapshotBuildOptions = {},
 ): Promise<MissionControlSnapshot> {
   const [env, configLayers, gitState, memorySnapshot, pendingHandoffs] = await Promise.all([
     buildMissionControlEnvironmentSummary(deps.config, deps.git, cwd),
@@ -380,7 +375,7 @@ function findActiveFeature(taskPreviews: readonly TaskPreviewPane[]): MissionCon
 }
 
 const MEMORY_SNAPSHOT_TTL_MS = 30_000;
-let memorySnapshotCache: { value: MissionControlMemorySnapshot | null; expiresAt: number } | undefined;
+const memorySnapshotCache = new Map<string, CacheEntry<MissionControlMemorySnapshot | null>>();
 
 async function buildMissionControlMemorySnapshot(
   deps: {
@@ -395,9 +390,8 @@ async function buildMissionControlMemorySnapshot(
     return null;
   }
 
-  if (memorySnapshotCache && memorySnapshotCache.expiresAt > Date.now()) {
-    return memorySnapshotCache.value;
-  }
+  const hit = cached(memorySnapshotCache.get(deps.cwd));
+  if (hit !== undefined) return hit;
 
   const [corrections, rawLearnings, compiledLearnings, ratchetSuite, ratchetBaseline, graphContext] = await Promise.all([
     deps.correctionStore.list(),
@@ -439,7 +433,7 @@ async function buildMissionControlMemorySnapshot(
         }
       : undefined,
   };
-  memorySnapshotCache = { value: result, expiresAt: Date.now() + MEMORY_SNAPSHOT_TTL_MS };
+  memorySnapshotCache.set(deps.cwd, makeEntry(result, MEMORY_SNAPSHOT_TTL_MS));
   return result;
 }
 
@@ -567,8 +561,6 @@ function buildMissionOverview(
     blockedCount: summary.blockedCount,
     currentMilestone: summary.currentMilestone,
     gateLabel: summary.gateLabel,
-    // Phase 3 strip: agentSummary was derived from runtime state. Without
-    // a runtime store there is no per-agent activity to report.
     agentSummary: [],
     dependencyMap: buildMinimalDependencyMap(features, featureGraph, summary.currentMilestoneId),
   };
@@ -649,9 +641,6 @@ async function buildMissionControlEnvironmentSummary(
     status: {
       initialized: projectConfigExists || globalConfigExists,
       configSource,
-      // Phase 1 strip: handoff store + CASS are gone; the fields
-      // survive on StatusReport only to keep the TUI types stable
-      // until Phase 2/3 remove them.
       pendingHandoffs: [],
       cassAvailable: false,
       gitAvailable,

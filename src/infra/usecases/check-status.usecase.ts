@@ -7,12 +7,21 @@ import type { HandoffStorePort } from "@/features/handoff";
  * Pending handoffs stay in their persisted record shape so CLI JSON
  * consumers see the same contract the store exposes.
  */
+export interface CheckStatusOptions {
+  readonly includePendingHandoffs?: boolean;
+}
+
 export async function checkStatus(
   config: ConfigPort,
   git: GitPort,
   handoffStore: HandoffStorePort,
   dir: string,
+  options: CheckStatusOptions = {},
 ): Promise<StatusReport> {
+  const pendingHandoffsPromise = options.includePendingHandoffs === false
+    ? Promise.resolve([])
+    : handoffStore.list({ status: "pending" });
+
   const [
     projectConfigExists,
     globalConfigExists,
@@ -22,7 +31,7 @@ export async function checkStatus(
     config.exists("project", dir),
     config.exists("global", dir),
     git.isRepo(dir),
-    handoffStore.list({ status: "pending" }),
+    pendingHandoffsPromise,
   ]);
 
   const configSource: StatusReport["configSource"] = projectConfigExists

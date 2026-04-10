@@ -126,10 +126,10 @@ All four live outside `src/features/*`, so the boundary-check glob never walks t
 
 ### Feature-specific exceptions
 - `worker` may import from `mission` and `memory` through their public surfaces. Rationale: worker orchestrates workers using mission context and memory hints, so the cross-feature dependency is essential, not incidental
-- No other feature has exceptions. Extending `FEATURE_EXCEPTIONS` in `scripts/check-feature-boundaries.ts` requires explicit review and a matching update to this section
+- No other feature has exceptions. If a future feature needs an enforcement exception, add it explicitly in [scripts/check-feature-boundaries-lib.ts](/Users/reinamaccredy/Code/maestro/scripts/check-feature-boundaries-lib.ts) with matching tests and update this section in the same change
 
 ### Enforcement workflow
-- `scripts/check-feature-boundaries.ts` walks `src/features/*/**/*.ts`, canonicalizes each import spec (alias passes through; relative joins with the importing file's directory), and exits non-zero on any violation
+- `scripts/check-feature-boundaries.ts` is the CLI entry point; `scripts/check-feature-boundaries-lib.ts` performs the scan and canonicalization for feature-source imports
 - Runs automatically in `scripts/ci.ts` before `bun test`
 - Manual invocation: `bun run check:boundaries`
 

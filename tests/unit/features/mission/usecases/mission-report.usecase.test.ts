@@ -2,7 +2,7 @@
  * Unit tests for mission-report usecase
  */
 import { describe, expect, it, beforeEach } from "bun:test";
-import { generateMissionReport } from "@/features/mission/usecases/mission-report.usecase.js";
+import { deriveMissionReport, generateMissionReport } from "@/features/mission/usecases/mission-report.usecase.js";
 import { MaestroError } from "@/shared/errors.js";
 import type { Mission, Feature, Assertion, Milestone, CreateFeatureInput, UpdateFeatureInput, CreateAssertionInput, UpdateAssertionInput } from "@/features/mission/domain/mission-types.js";
 import type { MissionStorePort } from "@/features/mission/ports/mission-store.port.js";
@@ -300,6 +300,21 @@ describe("mission-report usecase", () => {
       expect(report.milestones).toHaveLength(2);
       expect(report.summary.totalFeatures).toBe(3);
       expect(report.summary.totalCompletedFeatures).toBe(1);
+  });
+
+  it("derives the same report from preloaded mission data", async () => {
+    const mission = createTestMission("2024-01-01-001-derive");
+    const features = createTestFeatures(mission.id);
+    const assertions = createTestAssertions(mission.id);
+
+    missionStore.setMission(mission);
+    featureStore.setFeatures(mission.id, features);
+    assertionStore.setAssertions(mission.id, assertions);
+
+    const generated = await generateMissionReport(missionStore, featureStore, assertionStore, mission.id);
+    const derived = deriveMissionReport(mission, features, assertions);
+
+    expect(derived).toEqual(generated);
   });
 
   it("calculates correct milestone progress", async () => {

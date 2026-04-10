@@ -1,11 +1,11 @@
 import { buildInfraServices, type InfraServices } from "./infra/services.js";
-import { buildSessionServices, type SessionServices } from "./features/session/services.js";
-import { buildNotesServices, type NotesServices } from "./features/notes/services.js";
-import { buildMissionServices, type MissionServices } from "./features/mission/services.js";
-import { buildMemoryServices, type MemoryServices } from "./features/memory/services.js";
-import { buildHandoffServices, type HandoffServices } from "./features/handoff/services.js";
-import { buildRatchetServices, type RatchetServices } from "./features/ratchet/services.js";
-import { buildGraphServices, type GraphServices } from "./features/graph/services.js";
+import { buildSessionServices, type SessionServices } from "./features/session/index.js";
+import { buildNotesServices, type NotesServices } from "./features/notes/index.js";
+import { buildMissionServices, type MissionServices } from "./features/mission/index.js";
+import { buildMemoryServices, type MemoryServices } from "./features/memory/index.js";
+import { buildHandoffServices, type HandoffServices } from "./features/handoff/index.js";
+import { buildRatchetServices, type RatchetServices } from "./features/ratchet/index.js";
+import { buildGraphServices, type GraphServices } from "./features/graph/index.js";
 
 export interface Services extends
   InfraServices,

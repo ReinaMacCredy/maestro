@@ -1,8 +1,3 @@
-// Mission feature public surface
-// External consumers should import from "@/features/mission" rather than
-// reaching into subpaths.
-
-// Domain types
 export type {
   Mission,
   Feature,
@@ -33,7 +28,6 @@ export type {
   DiscoveredIssue,
 } from "./domain/mission-types.js";
 
-// State helpers
 export {
   getValidFeatureTransitions,
   assertMissionTransition,
@@ -43,17 +37,12 @@ export {
   isTerminalAssertionStatus,
 } from "./domain/mission-state.js";
 
-// ID helpers
 export { generateMissionId } from "./domain/mission-id.js";
-
-// Validators
 export { WORKER_TYPE_PATTERN, FEATURE_ID_PATTERN } from "./domain/mission-validators.js";
 
-// Workflow templates
 export { BUILT_IN_WORKFLOWS } from "./domain/workflows.js";
 export type { WorkflowTemplate, WorkflowPhase } from "./domain/workflow-types.js";
 
-// Error factories
 export {
   missionNotFound,
   milestoneNotFound,
@@ -70,20 +59,17 @@ export {
   checkpointNotFound,
 } from "./domain/errors.js";
 
-// Ports
 export type { MissionStorePort } from "./ports/mission-store.port.js";
 export type { FeatureStorePort } from "./feature/ports/feature-store.port.js";
 export type { AssertionStorePort } from "./validation/ports/assertion-store.port.js";
 export type { CheckpointStorePort } from "./checkpoint/ports/checkpoint-store.port.js";
 
-// Adapters (classes are still exposed for tests and composition roots)
 export { FsMissionStoreAdapter } from "./adapters/mission-store.adapter.js";
 export { FsFeatureStoreAdapter } from "./feature/adapters/feature-store.adapter.js";
 export { FsAssertionStoreAdapter } from "./validation/adapters/assertion-store.adapter.js";
 export { FsCheckpointStoreAdapter } from "./checkpoint/adapters/checkpoint-store.adapter.js";
 
-// Usecases consumed externally
-export { generateMissionReport } from "./usecases/mission-report.usecase.js";
+export { deriveMissionReport, generateMissionReport } from "./usecases/mission-report.usecase.js";
 export type { MissionReport, MilestoneReportProgress } from "./usecases/mission-report.usecase.js";
 export {
   createMission,
@@ -112,13 +98,11 @@ export {
 } from "./validation/usecases/validation-lifecycle.usecase.js";
 export type { ShowAssertionsResult, UpdateAssertionResult } from "./validation/usecases/validation-lifecycle.usecase.js";
 
-// Commands
 export { registerMissionCommand } from "./commands/mission.command.js";
 export { registerMilestoneCommand } from "./commands/milestone.command.js";
 export { registerCheckpointCommand } from "./commands/checkpoint.command.js";
 export { registerFeatureCommand } from "./feature/commands/feature.command.js";
 export { registerValidateCommand } from "./validation/commands/validate.command.js";
 
-// Services (composition root helper)
 export { buildMissionServices } from "./services.js";
 export type { MissionServices } from "./services.js";

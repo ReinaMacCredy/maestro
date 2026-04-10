@@ -10,6 +10,8 @@ import type {
   MissionStatus,
   Milestone,
   MilestoneStatus,
+  Feature,
+  Assertion,
 } from "../domain/mission-types.js";
 import { MaestroError } from "@/shared/errors.js";
 import { isTerminalAssertionStatus } from "../domain/mission-state.js";
@@ -52,18 +54,14 @@ export interface MissionReport {
   };
 }
 
-async function collectMilestoneData(
-  mission: Mission,
+function collectMilestoneData(
   milestone: Milestone,
-  featureStore: FeatureStorePort,
-  assertionStore: AssertionStorePort,
-): Promise<{
+  features: readonly Feature[],
+  assertions: readonly Assertion[],
+): {
   activity: MilestoneActivitySnapshot;
   progress: Omit<MilestoneReportProgress, "status">;
-}> {
-  const features = await featureStore.list(mission.id, { milestoneId: milestone.id });
-  const assertions = await assertionStore.listByMilestone(mission.id, milestone.id);
-
+} {
   const featureCount = features.length;
   const completedFeatures = features.filter((f) => f.status === "done").length;
   const featureCompletionPct = featureCount > 0 ? Math.round((completedFeatures / featureCount) * 100) : 0;
@@ -85,9 +83,9 @@ async function collectMilestoneData(
       hasStartedFeatures: features.some((feature) => feature.status !== "pending"),
       allFeaturesCompleted: featureCount > 0 && completedFeatures === featureCount,
     },
-    progress: {
-      milestoneId: milestone.id,
-      milestone,
+      progress: {
+        milestoneId: milestone.id,
+        milestone,
       order: milestone.order,
       featureCount,
       completedFeatures,
@@ -95,36 +93,44 @@ async function collectMilestoneData(
       assertionCount,
       passedAssertions,
       waivedAssertions,
-      terminalAssertions,
-      assertionCompletionPct,
-      waivedAssertionIds,
-    },
-  };
+        terminalAssertions,
+        assertionCompletionPct,
+        waivedAssertionIds,
+      },
+    };
 }
 
-/**
- * Generate an enhanced mission report with progress indicators
- * Used by `maestro mission show <id>` to display milestone progress
- */
-export async function generateMissionReport(
-  missionStore: MissionStorePort,
-  featureStore: FeatureStorePort,
-  assertionStore: AssertionStorePort,
-  missionId: string,
-): Promise<MissionReport> {
-  const mission = await missionStore.get(missionId);
-  if (!mission) {
-    throw new MaestroError(`Mission ${missionId} not found`, [
-      "List missions: maestro mission list",
-      `Check that mission ID '${missionId}' is correct`,
-    ]);
+function groupByMilestone<T extends { readonly milestoneId: string }>(
+  items: readonly T[],
+): ReadonlyMap<string, readonly T[]> {
+  const grouped = new Map<string, T[]>();
+
+  for (const item of items) {
+    const bucket = grouped.get(item.milestoneId);
+    if (bucket) {
+      bucket.push(item);
+    } else {
+      grouped.set(item.milestoneId, [item]);
+    }
   }
 
+  return grouped;
+}
+
+export function deriveMissionReport(
+  mission: Mission,
+  features: readonly Feature[],
+  assertions: readonly Assertion[],
+): MissionReport {
+  const featuresByMilestone = groupByMilestone(features);
+  const assertionsByMilestone = groupByMilestone(assertions);
   const sortedMilestones = [...mission.milestones].sort((a, b) => a.order - b.order);
-  const milestoneData = await Promise.all(
-    sortedMilestones.map((milestone) =>
-      collectMilestoneData(mission, milestone, featureStore, assertionStore),
-    ),
+  const milestoneData = sortedMilestones.map((milestone) =>
+    collectMilestoneData(
+      milestone,
+      featuresByMilestone.get(milestone.id) ?? [],
+      assertionsByMilestone.get(milestone.id) ?? [],
+    )
   );
   const milestoneStatuses = deriveSequentialMilestoneStatuses(
     mission,
@@ -137,7 +143,6 @@ export async function generateMissionReport(
     }))
     .sort((a, b) => a.order - b.order);
 
-  // Calculate overall summary
   const totalFeatures = milestones.reduce((sum, m) => sum + m.featureCount, 0);
   const totalCompletedFeatures = milestones.reduce((sum, m) => sum + m.completedFeatures, 0);
   const overallFeaturePct = totalFeatures > 0 ? Math.round((totalCompletedFeatures / totalFeatures) * 100) : 0;
@@ -162,4 +167,30 @@ export async function generateMissionReport(
       totalWaivedAssertions,
     },
   };
+}
+
+/**
+ * Generate an enhanced mission report with progress indicators
+ * Used by `maestro mission show <id>` to display milestone progress
+ */
+export async function generateMissionReport(
+  missionStore: MissionStorePort,
+  featureStore: FeatureStorePort,
+  assertionStore: AssertionStorePort,
+  missionId: string,
+): Promise<MissionReport> {
+  const mission = await missionStore.get(missionId);
+  if (!mission) {
+    throw new MaestroError(`Mission ${missionId} not found`, [
+      "List missions: maestro mission list",
+      `Check that mission ID '${missionId}' is correct`,
+    ]);
+  }
+
+  const [features, assertions] = await Promise.all([
+    featureStore.list(missionId),
+    assertionStore.list(missionId),
+  ]);
+
+  return deriveMissionReport(mission, features, assertions);
 }

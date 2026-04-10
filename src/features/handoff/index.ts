@@ -1,11 +1,3 @@
-/**
- * Public surface for the handoff feature.
- *
- * Cross-feature consumers (`src/tui/state/snapshot.ts`, the composition
- * root, and tests) import from `@/features/handoff`. Deep paths into the
- * feature are not allowed from outside (enforced by
- * `bun run check:boundaries`).
- */
 export type {
   CreateUkiHandoffInput,
   ExecuteUkiHandoffContent,
@@ -21,3 +13,5 @@ export { createUkiHandoff } from "./usecases/create-uki-handoff.usecase.js";
 export { listUkiHandoffs } from "./usecases/list-uki-handoffs.usecase.js";
 export { pickupUkiHandoff } from "./usecases/pickup-uki-handoff.usecase.js";
 export { registerHandoffCommand } from "./commands/handoff.command.js";
+export { buildHandoffServices } from "./services.js";
+export type { HandoffServices } from "./services.js";

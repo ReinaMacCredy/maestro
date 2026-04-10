@@ -1,26 +1,26 @@
-/**
- * Caching wrappers for ports that spawn subprocesses.
- *
- * Bun 1.3.x leaks memory on repeated Bun.spawnSync calls.  The TUI polls
- * buildSnapshot every 1-2 s, which spawns ~4 processes per cycle (git +
- * git rev-parse).  Over hours this accumulates tens of GB.
- *
- * These wrappers add TTL caching so the vast majority of poll cycles spawn
- * zero processes.
- */
+// TTL-caching wrappers for ports that spawn subprocesses or stat files.
+// The TUI polls buildSnapshot every 1-2s; without these wrappers the git
+// port alone spawns ~4 processes per cycle, which leaks memory on Bun
+// 1.3.x and adds latency.
 import type { GitPort } from "@/infra/ports/git.port.js";
 import type { ConfigPort, ConfigLayers, ConfigScope } from "@/infra/ports/config.port.js";
 import type { GitState } from "@/infra/domain/git-types.js";
 import type { MaestroConfig } from "@/infra/domain/config-types.js";
 
-interface CacheEntry<T> {
-  value: T;
-  expiresAt: number;
+export interface CacheEntry<T> {
+  readonly value: T;
+  readonly expiresAt: number;
 }
 
-function cached<T>(entry: CacheEntry<T> | undefined): T | undefined {
+/** Returns the cached value if still fresh, otherwise undefined. */
+export function cached<T>(entry: CacheEntry<T> | undefined): T | undefined {
   if (entry && entry.expiresAt > Date.now()) return entry.value;
   return undefined;
+}
+
+/** Build a new cache entry with an expiry `ttlMs` from now. */
+export function makeEntry<T>(value: T, ttlMs: number): CacheEntry<T> {
+  return { value, expiresAt: Date.now() + ttlMs };
 }
 
 // ---------------------------------------------------------------------------
@@ -31,8 +31,8 @@ const GIT_STATE_TTL_MS = 10_000;
 const GIT_IS_REPO_TTL_MS = 60_000;
 
 export class CachingGitPort implements GitPort {
-  private stateCache: CacheEntry<GitState> | undefined;
-  private isRepoCache: CacheEntry<boolean> | undefined;
+  private readonly stateByCwd = new Map<string, CacheEntry<GitState>>();
+  private readonly isRepoByCwd = new Map<string, CacheEntry<boolean>>();
 
   constructor(
     private readonly inner: GitPort,
@@ -41,20 +41,20 @@ export class CachingGitPort implements GitPort {
   ) {}
 
   async getState(cwd: string): Promise<GitState> {
-    const hit = cached(this.stateCache);
+    const hit = cached(this.stateByCwd.get(cwd));
     if (hit !== undefined) return hit;
 
     const value = await this.inner.getState(cwd);
-    this.stateCache = { value, expiresAt: Date.now() + this.stateTtlMs };
+    this.stateByCwd.set(cwd, makeEntry(value, this.stateTtlMs));
     return value;
   }
 
   async isRepo(cwd: string): Promise<boolean> {
-    const hit = cached(this.isRepoCache);
+    const hit = cached(this.isRepoByCwd.get(cwd));
     if (hit !== undefined) return hit;
 
     const value = await this.inner.isRepo(cwd);
-    this.isRepoCache = { value, expiresAt: Date.now() + this.isRepoTtlMs };
+    this.isRepoByCwd.set(cwd, makeEntry(value, this.isRepoTtlMs));
     return value;
   }
 }
@@ -67,6 +67,7 @@ const CONFIG_LAYERS_TTL_MS = 10_000;
 
 export class CachingConfigPort implements ConfigPort {
   private layersCache: CacheEntry<ConfigLayers> | undefined;
+  private readonly existsByKey = new Map<string, CacheEntry<boolean>>();
 
   constructor(
     private readonly inner: ConfigPort,
@@ -83,17 +84,24 @@ export class CachingConfigPort implements ConfigPort {
     if (hit !== undefined) return hit;
 
     const value = await this.inner.loadLayers(projectDir);
-    this.layersCache = { value, expiresAt: Date.now() + this.layersTtlMs };
+    this.layersCache = makeEntry(value, this.layersTtlMs);
     return value;
   }
 
   async write(scope: ConfigScope, projectDir: string, config: MaestroConfig): Promise<void> {
-    this.layersCache = undefined; // invalidate on write
+    this.layersCache = undefined;
+    this.existsByKey.clear();
     return this.inner.write(scope, projectDir, config);
   }
 
   async exists(scope: ConfigScope, projectDir: string): Promise<boolean> {
-    return this.inner.exists(scope, projectDir);
+    const key = `${scope}:${projectDir}`;
+    const hit = cached(this.existsByKey.get(key));
+    if (hit !== undefined) return hit;
+
+    const value = await this.inner.exists(scope, projectDir);
+    this.existsByKey.set(key, makeEntry(value, this.layersTtlMs));
+    return value;
   }
 }
 
@@ -104,16 +112,11 @@ export class CachingConfigPort implements ConfigPort {
 const WHICH_TTL_MS = 120_000;
 const whichCache = new Map<string, CacheEntry<string | null>>();
 
-/**
- * Cached wrapper around Bun.which().
- * Bun.which() resolves PATH on each call; caching avoids repeated lookups
- * inside the TUI polling loop.
- */
 export function cachedWhich(command: string): string | null {
-  const entry = whichCache.get(command);
-  if (entry && entry.expiresAt > Date.now()) return entry.value;
+  const hit = cached(whichCache.get(command));
+  if (hit !== undefined) return hit;
 
   const value = Bun.which(command) ?? null;
-  whichCache.set(command, { value, expiresAt: Date.now() + WHICH_TTL_MS });
+  whichCache.set(command, makeEntry(value, WHICH_TTL_MS));
   return value;
 }

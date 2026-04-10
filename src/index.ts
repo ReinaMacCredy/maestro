@@ -6,11 +6,11 @@ import { initServices } from "./services.js";
 import { registerInitCommand } from "@/infra/commands/init.command.js";
 import { registerStatusCommand } from "@/infra/commands/status.command.js";
 import { registerDoctorCommand } from "@/infra/commands/doctor.command.js";
-import { registerNoteCommand } from "./features/notes/commands/note.command.js";
 import { registerInstallCommand } from "@/infra/commands/install.command.js";
 import { registerUpdateCommand } from "@/infra/commands/update.command.js";
 import { registerUninstallCommand } from "@/infra/commands/uninstall.command.js";
-import { registerSessionCommand } from "./features/session/commands/session.command.js";
+import { registerNoteCommand } from "./features/notes/index.js";
+import { registerSessionCommand } from "./features/session/index.js";
 import {
   registerMissionCommand,
   registerFeatureCommand,
@@ -19,18 +19,24 @@ import {
   registerCheckpointCommand,
 } from "./features/mission/index.js";
 import { registerMissionControlCommand } from "@/infra/commands/mission-control.command.js";
-import { registerMemoryCorrectCommand } from "./features/memory/commands/memory-correct.command.js";
-import { registerMemoryRecallCommand } from "./features/memory/commands/memory-recall.command.js";
-import { registerMemorySearchCommand } from "./features/memory/commands/memory-search.command.js";
-import { registerMemoryLearnCommand } from "./features/memory/commands/memory-learn.command.js";
-import { registerMemoryCompileCommand } from "./features/memory/commands/memory-compile.command.js";
-import { registerRatchetCheckCommand } from "./features/ratchet/commands/ratchet-check.command.js";
-import { registerRatchetPromoteCommand } from "./features/ratchet/commands/ratchet-promote.command.js";
-import { registerMemoryStatsCommand } from "./features/memory/commands/memory-stats.command.js";
-import { registerMemoryLintCommand } from "./features/memory/commands/memory-lint.command.js";
-import { registerGraphLinkCommand } from "./features/graph/commands/graph-link.command.js";
-import { registerGraphContextCommand } from "./features/graph/commands/graph-context.command.js";
-import { registerHandoffCommand } from "./features/handoff/commands/handoff.command.js";
+import {
+  registerMemoryCorrectCommand,
+  registerMemoryRecallCommand,
+  registerMemorySearchCommand,
+  registerMemoryLearnCommand,
+  registerMemoryCompileCommand,
+  registerMemoryStatsCommand,
+  registerMemoryLintCommand,
+} from "./features/memory/index.js";
+import {
+  registerRatchetCheckCommand,
+  registerRatchetPromoteCommand,
+} from "./features/ratchet/index.js";
+import {
+  registerGraphLinkCommand,
+  registerGraphContextCommand,
+} from "./features/graph/index.js";
+import { registerHandoffCommand } from "./features/handoff/index.js";
 
 export const program = new Command()
   .name("maestro")

@@ -10,14 +10,15 @@ export function registerStatusCommand(program: Command): void {
     .option("--json", "Output as JSON")
     .action(async (opts) => {
       const services = getServices();
+      const isJson = opts.json ?? program.opts().json;
       const status = await checkStatus(
         services.config,
         services.git,
         services.handoffStore,
         process.cwd(),
+        { includePendingHandoffs: isJson },
       );
 
-      const isJson = opts.json ?? program.opts().json;
       output(isJson, status, (s) => {
         const lines: string[] = [];
 
