@@ -26,7 +26,7 @@ export interface TaskBriefing extends Task {
  * from the candidate pool when available.
  *
  * Algorithm (copied from br, adapted to in-memory walk):
- *  1. Exclude closed tasks.
+ *  1. Exclude closed and blocked tasks.
  *  2. Exclude tasks with any open blocking dependency (walk dependsOn
  *     recursively; parentId is NOT a blocking edge — it is only hierarchy).
  *  3. Exclude deferred tasks (deferUntil > now) unless --include-deferred.
@@ -47,8 +47,9 @@ export async function readyTasks(
   const nowIso = now.toISOString();
 
   const selected = all.filter((task) => {
-    // Step 1: exclude closed.
+    // Step 1: exclude closed and manually blocked tasks.
     if (task.status === "closed") return false;
+    if (task.status === "blocked") return false;
     if (!filters.includeDeferred && task.status === "deferred") return false;
 
     // Step 2: exclude tasks blocked by any open dependency (transitive walk).
@@ -81,6 +82,10 @@ export async function readyTasks(
   const sliced = limit > 0 && selected.length > limit
     ? selected.slice(0, limit)
     : selected;
+
+  if (sliced.length === 0) {
+    return [];
+  }
 
   // Step 7: attach hints from candidate pool if available. Build the
   // keyword -> candidates index once and reuse it for every ready task.

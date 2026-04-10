@@ -9,6 +9,7 @@ import { updateTask } from "@/features/task/usecases/update-task.usecase.js";
 import { captureTaskCandidate } from "@/features/task/usecases/capture-task-candidate.usecase.js";
 import { JsonlTaskStoreAdapter } from "@/features/task/adapters/jsonl-task-store.adapter.js";
 import { FsCandidateStoreAdapter } from "@/features/task/adapters/fs-candidate-store.adapter.js";
+import type { CandidateStorePort } from "@/features/task/ports/candidate-store.port.js";
 
 describe("readyTasks", () => {
   let tmpDir: string;
@@ -30,10 +31,20 @@ describe("readyTasks", () => {
     });
   });
 
-  describe("step 2: exclude blocked by open dependency", () => {
-    it("excludes a task with an open direct dependency", async () => {
-      const parent = await createTask(store, { title: "parent" });
-      const child = await createTask(store, {
+    describe("step 2: exclude blocked by open dependency", () => {
+      it("excludes tasks explicitly marked blocked", async () => {
+        const task = await createTask(store, { title: "wait on external review" });
+        await updateTask(store, task.id, {
+          patch: { status: "blocked" },
+        });
+
+        const result = await readyTasks(store);
+        expect(result.find((t) => t.id === task.id)).toBeUndefined();
+      });
+
+      it("excludes a task with an open direct dependency", async () => {
+        const parent = await createTask(store, { title: "parent" });
+        const child = await createTask(store, {
         title: "child",
         dependsOn: [parent.id],
       });
@@ -288,10 +299,29 @@ describe("readyTasks", () => {
     });
   });
 
-  describe("step 7: hint attachment (active memory)", () => {
-    it("returns briefings with empty hints when no candidate store is passed", async () => {
-      await createTask(store, { title: "JWT middleware" });
-      const result = await readyTasks(store);
+    describe("step 7: hint attachment (active memory)", () => {
+      it("does not read candidates when there are no ready tasks", async () => {
+        const task = await createTask(store, { title: "blocked by waiting" });
+        await updateTask(store, task.id, {
+          patch: { status: "blocked" },
+        });
+
+        const candidateStore: CandidateStorePort = {
+          create: async () => {
+            throw new Error("candidate creation should not run in readyTasks");
+          },
+          all: async () => {
+            throw new Error("candidate reads should be skipped when nothing is ready");
+          },
+        };
+
+        const result = await readyTasks(store, {}, new Date(), candidateStore);
+        expect(result).toEqual([]);
+      });
+
+      it("returns briefings with empty hints when no candidate store is passed", async () => {
+        await createTask(store, { title: "JWT middleware" });
+        const result = await readyTasks(store);
       expect(result.length).toBe(1);
       expect(result[0]?.hints).toEqual([]);
     });
