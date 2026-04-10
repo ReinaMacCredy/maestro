@@ -31,6 +31,9 @@ export {
 export type { TaskStorePort } from "./ports/task-store.port.js";
 export { JsonlTaskStoreAdapter } from "./adapters/jsonl-task-store.adapter.js";
 
+export { createTask } from "./usecases/create-task.usecase.js";
+export { showTask } from "./usecases/show-task.usecase.js";
+
 export { registerTaskCommand } from "./commands/task.command.js";
 export { buildTaskServices } from "./services.js";
 export type { TaskServices } from "./services.js";
