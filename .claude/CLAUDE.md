@@ -4,9 +4,12 @@ Read `AGENTS.md` at the project root for full conventions (types, naming, async,
 
 ## Key paths
 - Source entry: `src/index.ts`
-- TUI rendering: `src/tui/app/render.ts`, `src/tui/app/render-check.ts`
-- Commands: `src/commands/`
-- Tests: `tests/unit/`, `tests/integration/`
+- Composition root: `src/services.ts`
+- Features: `src/features/<name>/` (ratchet, handoff, notes, graph, session, memory, mission, worker) with `commands/ usecases/ domain/ ports/ adapters/ services.ts index.ts`
+- Infra (plumbing): `src/infra/commands/`, `src/infra/usecases/`, `src/infra/domain/`, `src/infra/ports/`, `src/infra/adapters/`
+- Shared primitives: `src/shared/lib/`, `src/shared/domain/`, `src/shared/errors.ts`, `src/shared/version.ts`
+- TUI rendering: `src/tui/app/render.ts`, `src/tui/app/render-check.ts`, `src/tui/state/snapshot.ts`
+- Tests: `tests/unit/features/`, `tests/unit/infra/`, `tests/unit/shared/`, `tests/unit/tui/`, `tests/integration/`
 - Build output: `dist/maestro`
 - Installed binary: `~/.local/bin/maestro`
 
