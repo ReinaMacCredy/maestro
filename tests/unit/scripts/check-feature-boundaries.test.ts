@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { findCrossFeatureImportViolation } from "../../../scripts/check-feature-boundaries-lib.ts";
+import { findCrossFeatureImportViolation } from "../../../scripts/check-feature-boundaries-lib";
 
 describe("findCrossFeatureImportViolation", () => {
   it("allows public-surface imports across features", () => {
