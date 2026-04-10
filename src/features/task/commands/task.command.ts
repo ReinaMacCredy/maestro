@@ -14,6 +14,8 @@ import { createTask } from "../usecases/create-task.usecase.js";
 import { showTask } from "../usecases/show-task.usecase.js";
 import { listTasks } from "../usecases/list-tasks.usecase.js";
 import { updateTask } from "../usecases/update-task.usecase.js";
+import { closeTask } from "../usecases/close-task.usecase.js";
+import { readyTasks } from "../usecases/ready-tasks.usecase.js";
 import type {
   Task,
   TaskPriority,
@@ -22,6 +24,7 @@ import type {
   CreateTaskInput,
   UpdateTaskInput,
   ListTasksFilters,
+  ReadyTasksFilters,
 } from "../domain/task-types.js";
 import { TASK_PRIORITIES, TASK_TYPES, TASK_STATUSES } from "../domain/task-types.js";
 
@@ -36,6 +39,8 @@ export function registerTaskCommand(program: Command): void {
   registerShowCommand(taskCmd, program);
   registerListCommand(taskCmd, program);
   registerUpdateCommand(taskCmd, program);
+  registerCloseCommand(taskCmd, program);
+  registerReadyCommand(taskCmd, program);
 }
 
 // ============================
@@ -214,6 +219,64 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
         ...(t.assignee ? [`  Assignee: ${t.assignee}`] : []),
         ...(t.labels.length > 0 ? [`  Labels: ${t.labels.join(", ")}`] : []),
       ]);
+    });
+}
+
+// ============================
+// task close
+// ============================
+
+function registerCloseCommand(taskCmd: Command, program: Command): void {
+  taskCmd
+    .command("close <id>")
+    .description("Close a task")
+    .option("--reason <text>", "Why the task was closed")
+    .option("--json", "Output as JSON")
+    .action(async (id: string, opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+
+      const closed = await closeTask(services.taskStore, id, { reason: opts.reason });
+      output(isJson, closed, (t) => [
+        `[ok] Task closed: ${t.id}`,
+        `  Title: ${t.title}`,
+        ...(t.closeReason ? [`  Reason: ${t.closeReason}`] : []),
+      ]);
+    });
+}
+
+// ============================
+// task ready
+// ============================
+
+function registerReadyCommand(taskCmd: Command, program: Command): void {
+  taskCmd
+    .command("ready")
+    .description("List actionable tasks (unblocked leaves)")
+    .option("--limit <n>", "Maximum tasks to return (default 20, 0 = unlimited)")
+    .option("--label <label>", "Filter by label")
+    .option("--priority <n>", "Filter by priority 0-4")
+    .option("--type <type>", `Filter by type (${TASK_TYPES.join("|")})`)
+    .option("--assignee <name>", "Filter by assignee")
+    .option("--unassigned", "Only unassigned tasks")
+    .option("--include-deferred", "Include deferred tasks in the results")
+    .option("--json", "Output as JSON")
+    .action(async (opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+
+      const filters: ReadyTasksFilters = {
+        limit: parseLimit(opts.limit),
+        label: opts.label,
+        priority: parsePriority(opts.priority),
+        type: parseType(opts.type),
+        assignee: opts.assignee,
+        unassigned: opts.unassigned === true,
+        includeDeferred: opts.includeDeferred === true,
+      };
+
+      const tasks = await readyTasks(services.taskStore, filters);
+      output(isJson, tasks, formatTaskList);
     });
 }
 

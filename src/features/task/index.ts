@@ -39,6 +39,8 @@ export {
   type UpdateTaskOpts,
   type ClaimParams,
 } from "./usecases/update-task.usecase.js";
+export { closeTask } from "./usecases/close-task.usecase.js";
+export { readyTasks } from "./usecases/ready-tasks.usecase.js";
 
 export { registerTaskCommand } from "./commands/task.command.js";
 export { buildTaskServices } from "./services.js";
