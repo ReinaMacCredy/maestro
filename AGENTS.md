@@ -107,6 +107,10 @@ maestro task close tsk-abc --reason "shipped"     # finish
 
 `--claim` is atomic: it sets `assignee` to the current session id AND `status` to `in_progress` in one write. Use it instead of a bare `--status in_progress` so concurrent agents do not clobber each other.
 
+### Storage policy
+
+`.maestro/tasks/**` is intentionally repo-tracked: tasks, ready-state metadata, and close-derived candidate hints are part of the durable execution trail for day-to-day work, so they should be reviewed and committed deliberately when they matter. `.maestro/missions/**` and `.maestro/handoffs/**` remain ignored runtime data because they are heavier local orchestration artifacts rather than the lightweight shared queue. Task close reasons and candidate hints are persisted verbatim, so treat them with the same care you would use for commit messages or `maestro note --content`: useful context is good, secrets and throwaway venting are not.
+
 ### When both make sense
 
 Tasks can live inside or alongside a mission. You can use a mission to hold the big plan, then create tasks for the smaller units under each milestone — the two systems do not cross-reference today, but tasks carry labels and a `parentId` so you can group them however you want.
