@@ -40,13 +40,8 @@ describe("handoff status integration", () => {
     expect(parsed.pendingHandoffs).toHaveLength(1);
     expect(parsed.pendingHandoffs[0]).toMatchObject({
       id: created.id,
-      version: created.version,
-      timestamp: created.timestamp,
-      status: created.status,
       agent: created.agent,
-      sessionId: created.sessionId,
-      content: created.content,
-      uki: created.uki,
+      createdAt: created.timestamp,
     });
   });
 });

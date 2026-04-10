@@ -63,32 +63,8 @@ describe("checkStatus", () => {
     expect(status.pendingHandoffs).toHaveLength(2);
     expect(status.pendingHandoffs[0]).toEqual({
       id: "2026-04-09-001",
-      version: "5.4",
-      timestamp: "2026-04-09T00:00:00.000Z",
-      status: "pending",
       agent: "codex",
-      sessionId: "session-1",
-      content: {
-        mode: "execute",
-        currentState: "execute_in_progress",
-        sessionCore: "status_test_1",
-        decisions: [],
-        artifacts: ["branch_main"],
-        readMore: ["file_src_status_ts"],
-        nextAction: "inspect_status",
-        summary: "Status_test_1",
-        maestroRefs: {},
-        cs: { work: 0.9 },
-        signalDelta: [],
-        boundaryState: [],
-        risks: [],
-        causalDrivers: [],
-        divergences: [],
-        touchedFiles: ["file_src_status_ts"],
-        completedWork: [],
-        validation: [],
-      },
-      uki: "uki-1",
+      createdAt: "2026-04-09T00:00:00.000Z",
     });
   });
 

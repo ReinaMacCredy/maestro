@@ -1,11 +1,11 @@
 import type { ConfigPort } from "../ports/config.port.js";
 import type { GitPort } from "../ports/git.port.js";
-import type { StatusReport } from "@/infra/domain/status-types.js";
-import type { HandoffStorePort } from "@/features/handoff";
+import type { PendingHandoffSummary, StatusReport } from "@/infra/domain/status-types.js";
+import type { HandoffStorePort, UkiHandoff } from "@/features/handoff";
 
 /**
- * Pending handoffs stay in their persisted record shape so CLI JSON
- * consumers see the same contract the store exposes.
+ * Pending handoffs stay opt-in for status JSON, but they are projected to
+ * the stable summary shape that existing CLI consumers expect.
  */
 export interface CheckStatusOptions {
   readonly includePendingHandoffs?: boolean;
@@ -43,8 +43,16 @@ export async function checkStatus(
   return {
     initialized: projectConfigExists || globalConfigExists,
     configSource,
-    pendingHandoffs,
+    pendingHandoffs: pendingHandoffs.map(toPendingHandoffSummary),
     cassAvailable: false,
     gitAvailable,
+  };
+}
+
+function toPendingHandoffSummary(handoff: UkiHandoff): PendingHandoffSummary {
+  return {
+    id: handoff.id,
+    agent: handoff.agent,
+    createdAt: handoff.timestamp,
   };
 }
