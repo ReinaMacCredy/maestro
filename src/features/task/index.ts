@@ -33,6 +33,12 @@ export { JsonlTaskStoreAdapter } from "./adapters/jsonl-task-store.adapter.js";
 
 export { createTask } from "./usecases/create-task.usecase.js";
 export { showTask } from "./usecases/show-task.usecase.js";
+export { listTasks } from "./usecases/list-tasks.usecase.js";
+export {
+  updateTask,
+  type UpdateTaskOpts,
+  type ClaimParams,
+} from "./usecases/update-task.usecase.js";
 
 export { registerTaskCommand } from "./commands/task.command.js";
 export { buildTaskServices } from "./services.js";

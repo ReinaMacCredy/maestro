@@ -12,13 +12,18 @@ import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import { MaestroError } from "@/shared/errors.js";
 import { createTask } from "../usecases/create-task.usecase.js";
 import { showTask } from "../usecases/show-task.usecase.js";
+import { listTasks } from "../usecases/list-tasks.usecase.js";
+import { updateTask } from "../usecases/update-task.usecase.js";
 import type {
   Task,
   TaskPriority,
   TaskType,
+  TaskStatus,
   CreateTaskInput,
+  UpdateTaskInput,
+  ListTasksFilters,
 } from "../domain/task-types.js";
-import { TASK_PRIORITIES, TASK_TYPES } from "../domain/task-types.js";
+import { TASK_PRIORITIES, TASK_TYPES, TASK_STATUSES } from "../domain/task-types.js";
 
 export function registerTaskCommand(program: Command): void {
   const taskCmd = program
@@ -29,6 +34,8 @@ export function registerTaskCommand(program: Command): void {
   registerCreateCommand(taskCmd, program);
   registerQuickCommand(taskCmd, program);
   registerShowCommand(taskCmd, program);
+  registerListCommand(taskCmd, program);
+  registerUpdateCommand(taskCmd, program);
 }
 
 // ============================
@@ -111,6 +118,106 @@ function registerShowCommand(taskCmd: Command, program: Command): void {
 }
 
 // ============================
+// task list
+// ============================
+
+function registerListCommand(taskCmd: Command, program: Command): void {
+  taskCmd
+    .command("list")
+    .description("List tasks with optional filters")
+    .option("--status <status>", `Filter by status (${TASK_STATUSES.join("|")})`)
+    .option("--priority <n>", "Filter by priority 0-4")
+    .option("--type <type>", `Filter by type (${TASK_TYPES.join("|")})`)
+    .option("--label <label>", "Filter by label (single)")
+    .option("--parent <id>", "Filter by parent task id")
+    .option("--assignee <name>", "Filter by assignee")
+    .option("--limit <n>", "Maximum number of tasks to return")
+    .option("--json", "Output as JSON")
+    .action(async (opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+
+      const filters: ListTasksFilters = {
+        status: parseStatus(opts.status),
+        priority: parsePriority(opts.priority),
+        type: parseType(opts.type),
+        label: opts.label,
+        parentId: opts.parent,
+        assignee: opts.assignee,
+        limit: parseLimit(opts.limit),
+      };
+
+      const tasks = await listTasks(services.taskStore, filters);
+      output(isJson, tasks, formatTaskList);
+    });
+}
+
+// ============================
+// task update
+// ============================
+
+function registerUpdateCommand(taskCmd: Command, program: Command): void {
+  taskCmd
+    .command("update <id>")
+    .description("Update a task (any field)")
+    .option("--title <title>", "New title")
+    .option("--description <text>", "New description")
+    .option("--status <status>", `New status (${TASK_STATUSES.filter((s) => s !== "closed").join("|")})`)
+    .option("--priority <n>", "New priority 0-4")
+    .option("--type <type>", `New type (${TASK_TYPES.join("|")})`)
+    .option("--parent <id>", "New parent id (empty string clears)")
+    .option("--assignee <name>", "New assignee (empty string clears)")
+    .option("--add-label <labels>", "Comma-separated labels to add")
+    .option("--remove-label <labels>", "Comma-separated labels to remove")
+    .option("--claim", "Atomic: set assignee to current session AND status to in_progress")
+    .option("--json", "Output as JSON")
+    .action(async (id: string, opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+
+      const patch: UpdateTaskInput = {
+        title: opts.title,
+        description: opts.description,
+        status: parseStatus(opts.status),
+        priority: parsePriority(opts.priority),
+        type: parseType(opts.type),
+        parentId: opts.parent,
+        assignee: opts.assignee,
+        addLabels: parseList(opts.addLabel),
+        removeLabels: parseList(opts.removeLabel),
+      };
+
+      let claim: { sessionId: string } | undefined;
+      if (opts.claim) {
+        const session = await services.sessionDetect.detect(process.cwd());
+        if (!session) {
+          throw new MaestroError("Could not detect current session for --claim", [
+            "Set MAESTRO_AGENT or run from an agent environment",
+            "Or assign manually: maestro task update <id> --assignee <name>",
+          ]);
+        }
+        claim = { sessionId: `${session.agent}-${session.sessionId}` };
+      }
+
+      if (!hasAnyPatchField(patch) && !claim) {
+        throw new MaestroError("No update specified", [
+          "Pass at least one field: --title, --description, --status, --priority, --type,",
+          "--parent, --assignee, --add-label, --remove-label, or --claim",
+        ]);
+      }
+
+      const updated = await updateTask(services.taskStore, id, { patch, claim });
+      output(isJson, updated, (t) => [
+        `[ok] Task updated: ${t.id}`,
+        `  Status: ${t.status}`,
+        `  Priority: P${t.priority}`,
+        ...(t.assignee ? [`  Assignee: ${t.assignee}`] : []),
+        ...(t.labels.length > 0 ? [`  Labels: ${t.labels.join(", ")}`] : []),
+      ]);
+    });
+}
+
+// ============================
 // Helpers
 // ============================
 
@@ -145,6 +252,42 @@ function parseType(value: string | undefined): TaskType | undefined {
   throw new MaestroError(`Invalid --type '${value}'`, [
     `Valid types: ${TASK_TYPES.join(", ")}`,
   ]);
+}
+
+function parseStatus(value: string | undefined): TaskStatus | undefined {
+  if (value === undefined) return undefined;
+  if ((TASK_STATUSES as readonly string[]).includes(value)) {
+    return value as TaskStatus;
+  }
+  throw new MaestroError(`Invalid --status '${value}'`, [
+    `Valid statuses: ${TASK_STATUSES.join(", ")}`,
+  ]);
+}
+
+function parseLimit(value: string | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  const n = Number.parseInt(value, 10);
+  if (Number.isNaN(n) || n < 0) {
+    throw new MaestroError(`Invalid --limit '${value}'`, [
+      "Limit must be a non-negative integer (0 = unlimited)",
+    ]);
+  }
+  return n;
+}
+
+function hasAnyPatchField(patch: UpdateTaskInput): boolean {
+  return (
+    patch.title !== undefined ||
+    patch.description !== undefined ||
+    patch.status !== undefined ||
+    patch.priority !== undefined ||
+    patch.type !== undefined ||
+    patch.parentId !== undefined ||
+    patch.assignee !== undefined ||
+    (patch.addLabels !== undefined && patch.addLabels.length > 0) ||
+    (patch.removeLabels !== undefined && patch.removeLabels.length > 0) ||
+    patch.deferUntil !== undefined
+  );
 }
 
 function parsePriority(value: string | undefined): TaskPriority | undefined {
@@ -182,6 +325,21 @@ function formatTaskSummary(task: Task): string[] {
     ...(task.labels.length > 0 ? [`  Labels: ${task.labels.join(", ")}`] : []),
     ...(task.dependsOn.length > 0 ? [`  Depends on: ${task.dependsOn.join(", ")}`] : []),
   ];
+}
+
+function formatTaskList(tasks: readonly Task[]): string[] {
+  if (tasks.length === 0) {
+    return ["No tasks found"];
+  }
+
+  const lines: string[] = [`${tasks.length} task(s)`, ""];
+  for (const t of tasks) {
+    const status = t.status.padEnd(12);
+    const prio = `P${t.priority}`;
+    const title = t.title.length > 40 ? `${t.title.slice(0, 37)}...` : t.title;
+    lines.push(`${t.id}  ${prio}  ${status}  ${title}`);
+  }
+  return lines;
 }
 
 function formatTaskDetail(task: Task): string[] {
