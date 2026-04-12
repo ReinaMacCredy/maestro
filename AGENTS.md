@@ -66,6 +66,8 @@
 - `--render-check` and `--preview all` automatically skip screens that require a mission when in home mode
 - After TUI code changes, validate with: `bun run build && ./dist/maestro mission-control --render-check --size 120x40`
 - For live iteration during TUI development, use `bun tui:dev` (watches `src/tui/**`, re-renders on save); supports `--screen`, `--size`, `--check`, `--mission`, `--compiled` flags
+- Available preview screens: `dashboard`, `features`, `dependencies`, `handoffs`, `config`, `memory`, `graph`, `agents`, `dispatch`, `events`, `tasks`, `timeline`, `help` (aliases: `feat`, `deps`, `cfg`, `mem`, `agent`, `event`, `task`)
+- Mission-only screens: `dependencies`, `dispatch`, `timeline`. Home+mission screens: all others
 
 ## Shell Gotchas
 - When running `git commit -m ...` through `zsh -lc`, do not put Markdown backticks inside double-quoted commit messages; use single-quoted heredocs, a temp file, or escaped backticks to avoid accidental command substitution
@@ -81,9 +83,8 @@
 - `bun scripts/ci.ts` is the full local release flow: auto-bump, test, build, commit the release, tag it, and install the local binary
 - `bun run release:local` only rebuilds and reinstalls the local `maestro` binary; it does not bump the version or create a release commit
 - `bun run deploy` currently uses the manual bump flow (`bun run bump`) rather than `auto-bump`; do not assume `deploy` applies conventional-commit versioning unless it is updated explicitly
-- Bump the **minor** version for backward-compatible feature additions or meaningful capability expansions
-- Bump the **major** version for breaking CLI, API, storage, or workflow changes
-- Use the **patch** version for fixes, small internal improvements, and documentation-only changes
+- Version scheme is `0.x.y` where `x` bumps on features or breaking changes (`feat`, `feat!`, `BREAKING CHANGE`) and `y` bumps on everything else (`fix`, `refactor`, `docs`, `chore`, `test`)
+- `bun scripts/bump.ts feature` or `bun scripts/bump.ts patch` for manual bumps
 - Keep commit messages in Conventional Commits format, e.g. `feat(mission): add retry reason support`
 - Prefer `feat` for user-visible functionality, `fix` for bug fixes, `refactor` for internal restructuring, and `test` for test-only changes
 
