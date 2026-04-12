@@ -25,6 +25,13 @@ import type {
 } from "@/features/memory";
 import type { ProjectEdge, ProjectNode } from "@/features/graph";
 import type { RatchetBaseline, RatchetSuite } from "@/features/ratchet";
+import type {
+  AgentGridRow,
+  DispatchQueueItem,
+  EventStreamEntry,
+  TaskBoardSnapshot,
+  TimelineMilestoneEntry,
+} from "./screen-types.js";
 
 export type MissionControlMode = "mission" | "home";
 export type LeftPaneMode = "overview" | "preview";
@@ -267,6 +274,13 @@ export interface MissionControlSnapshot {
   memory?: MissionControlMemorySnapshot | null;
   memoryStats?: MemoryStats | null;
 
+  // Conductor screens
+  agentGrid?: readonly AgentGridRow[];
+  dispatchQueue?: readonly DispatchQueueItem[];
+  eventStream?: readonly EventStreamEntry[];
+  taskBoard?: TaskBoardSnapshot | null;
+  timelineMilestones?: readonly TimelineMilestoneEntry[];
+
   // Home mode
   home: MissionControlHomeState | null;
 }
@@ -327,3 +341,14 @@ export interface MissionControlStatusProgress {
   queued: number;
   completionPct: number;
 }
+
+export type {
+  InferredAgentStatus,
+  AgentGridRow,
+  DispatchQueueItem,
+  EventStreamEntry,
+  EventStreamEntryKind,
+  TaskBoardSnapshot,
+  TaskBoardItem,
+  TimelineMilestoneEntry,
+} from "./screen-types.js";

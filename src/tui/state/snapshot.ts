@@ -16,9 +16,12 @@ import { buildMemoryStats } from "@/features/memory";
 import type { RatchetStorePort } from "@/features/ratchet";
 import type { ProjectGraphStorePort } from "@/features/graph";
 import type { HandoffStorePort, UkiHandoff } from "@/features/handoff";
+import { TASK_STATUSES, type TaskStorePort, type TaskStatus } from "@/features/task";
+import { recommendWorkerFit } from "@/features/worker";
 import {
   type Mission,
   type Feature,
+  type Milestone,
   deriveMissionReport,
   type MissionReport,
   getValidFeatureTransitions,
@@ -29,12 +32,22 @@ import { getGraphContext } from "@/features/graph";
 import { deriveEvents } from "./events.js";
 import { buildConfigInspector } from "./config-inspector.js";
 import type {
+  AgentGridRow,
+  DispatchQueueItem,
+  EventStreamEntry,
+  TaskBoardSnapshot,
+  TaskBoardItem,
+  TimelineMilestoneEntry,
+  InferredAgentStatus,
+} from "./screen-types.js";
+import type {
   MissionControlSnapshot,
   MissionControlFeatureRow,
   MissionControlFeatureDetail,
   MissionControlMilestoneRow,
   MissionControlHomeAction,
   MissionControlHomeHandoff,
+  MissionControlEvent,
   BlockedByRef,
   TaskPreviewPane,
   MissionOverviewPane,
@@ -54,6 +67,7 @@ export interface SnapshotDeps {
   ratchetStore?: RatchetStorePort;
   projectGraphStore?: ProjectGraphStorePort;
   handoffStore?: HandoffStorePort;
+  taskStore?: TaskStorePort;
   cwd: string;
 }
 
@@ -65,6 +79,7 @@ export interface HomeSnapshotDeps {
   ratchetStore?: RatchetStorePort;
   projectGraphStore?: ProjectGraphStorePort;
   handoffStore?: HandoffStorePort;
+  taskStore?: TaskStorePort;
   cwd: string;
 }
 
@@ -196,6 +211,14 @@ export async function buildSnapshot(
   );
   const sessionSidebar = buildSessionSidebar(gitState);
 
+  // Conductor screen data
+  const agentGrid = buildAgentGrid(features, pendingHandoffs);
+  const missionMilestones = mission.milestones;
+  const dispatchQueue = buildDispatchQueue(features, missionMilestones);
+  const eventStream = buildEventStream(progressLog, pendingHandoffs);
+  const taskBoard = await buildTaskBoard(deps.taskStore);
+  const timelineMilestones = buildTimelineMilestones(missionMilestones, features);
+
   return {
     mode: "mission",
     missionId: mission.id,
@@ -237,6 +260,11 @@ export async function buildSnapshot(
     canResume: mission.status === "paused",
     memory: memorySnapshot,
     memoryStats: memorySnapshot?.stats ?? null,
+    agentGrid,
+    dispatchQueue,
+    eventStream,
+    taskBoard,
+    timelineMilestones,
     home: null,
   };
 }
@@ -275,6 +303,10 @@ export async function buildHomeSnapshot(
       : "Open a git repository to track missions, checkpoints, and handoffs here.";
 
   const actions = buildHomeActions(status, checks);
+
+  // Home mode: tasks and event stream are available without a mission
+  const taskBoard = await buildTaskBoard(deps.taskStore);
+  const homeEventStream = buildEventStream([], pendingHandoffs);
 
   return {
     mode: "home",
@@ -325,6 +357,11 @@ export async function buildHomeSnapshot(
     canResume: false,
     memory: memorySnapshot,
     memoryStats: memorySnapshot?.stats ?? null,
+    agentGrid: [],
+    dispatchQueue: [],
+    eventStream: homeEventStream,
+    taskBoard,
+    timelineMilestones: [],
     home: {
       headline,
       summary,
@@ -614,6 +651,181 @@ function toFeatureRef(feature: Feature): BlockedByRef {
     title: feature.title,
     status: feature.status,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Conductor screen builders
+// ---------------------------------------------------------------------------
+
+const STALE_THRESHOLD_MS = 60 * 60 * 1000; // 1 hour
+
+export function buildAgentGrid(
+  features: readonly Feature[],
+  pendingHandoffs: readonly MissionControlHomeHandoff[],
+): readonly AgentGridRow[] {
+  const byWorker = new Map<string, Feature[]>();
+  for (const f of features) {
+    const bucket = byWorker.get(f.workerType) ?? [];
+    bucket.push(f);
+    byWorker.set(f.workerType, bucket);
+  }
+
+  const rows: AgentGridRow[] = [];
+  for (const [workerType, workerFeatures] of byWorker) {
+    const active = workerFeatures.find(
+      (f) => f.status === "assigned" || f.status === "in-progress",
+    );
+    const hasReview = workerFeatures.some((f) => f.status === "review");
+    const allDone = workerFeatures.every((f) => f.status === "done");
+    const isStale = active !== undefined
+      && (Date.now() - new Date(active.updatedAt).getTime()) > STALE_THRESHOLD_MS;
+
+    let status: InferredAgentStatus;
+    if (isStale) status = "stale";
+    else if (active) status = "active";
+    else if (hasReview || pendingHandoffs.length > 0) status = "waiting";
+    else if (allDone) status = "completed";
+    else status = "waiting";
+
+    rows.push({
+      workerType,
+      status,
+      activeFeatureId: active?.id,
+      activeFeatureTitle: active?.title,
+      lastActivityAt: active?.updatedAt,
+      featureCount: workerFeatures.length,
+      completedCount: workerFeatures.filter((f) => f.status === "done").length,
+      pendingHandoffCount: pendingHandoffs.filter((h) => h.agent === workerType).length,
+    });
+  }
+
+  // Sort: active first, then waiting, then stale, then completed
+  const ORDER: Record<InferredAgentStatus, number> = { active: 0, waiting: 1, stale: 2, completed: 3 };
+  rows.sort((a, b) => ORDER[a.status] - ORDER[b.status]);
+  return rows;
+}
+
+export function buildDispatchQueue(
+  features: readonly Feature[],
+  milestones: readonly Milestone[],
+): readonly DispatchQueueItem[] {
+  const featureById = new Map(features.map((f) => [f.id, f]));
+  const milestoneById = new Map(milestones.map((m) => [m.id, m]));
+
+  const ready = features.filter((f) => {
+    if (f.status !== "pending") return false;
+    return f.dependsOn.every((depId) => featureById.get(depId)?.status === "done");
+  });
+
+  return ready
+    .map((f) => {
+      const milestone = milestoneById.get(f.milestoneId);
+      const fit = recommendWorkerFit(f.workerType, features);
+      return {
+        featureId: f.id,
+        featureTitle: f.title,
+        milestoneId: f.milestoneId,
+        milestoneTitle: milestone?.title ?? f.milestoneId,
+        milestoneOrder: milestone?.order ?? 0,
+        workerType: f.workerType,
+        fitReason: fit.reason,
+      };
+    })
+    .sort((a, b) => a.milestoneOrder - b.milestoneOrder);
+}
+
+export function buildEventStream(
+  progressLog: readonly MissionControlEvent[],
+  pendingHandoffs: readonly MissionControlHomeHandoff[],
+): readonly EventStreamEntry[] {
+  const entries: EventStreamEntry[] = [];
+
+  // Reuse existing progress log events
+  for (const event of progressLog) {
+    entries.push({
+      timestamp: event.timestamp,
+      relativeMs: event.relativeMs,
+      kind: event.kind,
+      title: event.title,
+      detail: event.detail,
+    });
+  }
+
+  // Add handoff events (use current time as timestamp since handoffs lack a created timestamp)
+  const now = new Date().toISOString();
+  for (const h of pendingHandoffs) {
+    entries.push({
+      timestamp: now,
+      relativeMs: 0,
+      kind: "handoff",
+      title: `Pending handoff from ${h.agent}`,
+      detail: h.message,
+    });
+  }
+
+  // Sort descending by timestamp, cap at 200
+  entries.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  return entries.slice(0, 200);
+}
+
+export async function buildTaskBoard(
+  taskStore?: TaskStorePort,
+): Promise<TaskBoardSnapshot | null> {
+  if (!taskStore) return null;
+  try {
+    const tasks = await taskStore.all();
+    if (tasks.length === 0) return null;
+
+    const columns = Object.fromEntries(
+      TASK_STATUSES.map((s) => [s, [] as TaskBoardItem[]]),
+    ) as Record<TaskStatus, TaskBoardItem[]>;
+
+    for (const task of tasks) {
+      const item: TaskBoardItem = {
+        id: task.id,
+        title: task.title,
+        status: task.status,
+        priority: task.priority,
+        assignee: task.assignee,
+        labels: task.labels,
+        dependsOnCount: task.dependsOn.length,
+      };
+      columns[task.status]?.push(item);
+    }
+
+    // Sort each column by priority (lower = higher priority), then createdAt
+    for (const status of TASK_STATUSES) {
+      columns[status]!.sort((a, b) => a.priority - b.priority);
+    }
+
+    return { columns, totalCount: tasks.length };
+  } catch {
+    return null;
+  }
+}
+
+export function buildTimelineMilestones(
+  milestones: readonly Milestone[],
+  features: readonly Feature[],
+): readonly TimelineMilestoneEntry[] {
+  return milestones.map((m) => {
+    const milestoneFeatures = features.filter((f) => f.milestoneId === m.id);
+    const doneCount = milestoneFeatures.filter((f) => f.status === "done").length;
+    const totalCount = milestoneFeatures.length;
+    return {
+      id: m.id,
+      title: m.title,
+      order: m.order,
+      kind: m.kind ?? "work",
+      profile: m.profile ?? "custom",
+      features: milestoneFeatures.map((f) => ({
+        id: f.id,
+        title: f.title,
+        status: f.status,
+      })),
+      progressPct: totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0,
+    };
+  });
 }
 
 async function buildMissionControlEnvironmentSummary(
