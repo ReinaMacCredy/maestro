@@ -14,7 +14,7 @@
  */
 import { join } from "node:path";
 import { $ } from "bun";
-import { writeVersionArtifacts } from "./version-file";
+import { parseReleaseVersion, writeVersionArtifacts } from "./version-file";
 
 const root = join(import.meta.dir, "..");
 const pkgPath = join(root, "package.json");
@@ -51,34 +51,33 @@ if (messages.length === 0) {
   process.exit(0);
 }
 
-// --- Determine bump level ---
+// --- Determine bump level (0.x.y scheme) ---
+// x bumps on feat or BREAKING CHANGE (feature slot)
+// y bumps on everything else (patch slot)
 
 const BREAKING = /BREAKING[ -]CHANGE|^[a-z]+(\(.+\))?!:/;
 const FEAT = /^feat(\(.+\))?[!:]/;
 
-let bump: "major" | "minor" | "patch" = "patch";
+let bump: "feature" | "patch" = "patch";
 for (const msg of messages) {
-  if (BREAKING.test(msg)) {
-    bump = "major";
+  if (BREAKING.test(msg) || FEAT.test(msg)) {
+    bump = "feature";
     break;
   }
-  if (FEAT.test(msg)) bump = "minor";
 }
 
-// --- Compute next version ---
+// --- Compute next version (0.x.y) ---
 
-const [maj, min, pat] = currentVersion.split(".").map(Number) as [number, number, number];
-const nextVersion =
-  bump === "major" ? `${maj + 1}.0.0` :
-  bump === "minor" ? `${maj}.${min + 1}.0` :
-  `${maj}.${min}.${pat + 1}`;
+const { feature: x, patch: y } = parseReleaseVersion(currentVersion);
+const nextVersion = bump === "feature"
+  ? `0.${x + 1}.0`
+  : `0.${x}.${y + 1}`;
 
-const featCount = messages.filter((m) => FEAT.test(m)).length;
-const fixCount = messages.filter((m) => /^fix(\(.+\))?:/.test(m)).length;
-const otherCount = messages.length - featCount - fixCount;
+const featCount = messages.filter((m) => FEAT.test(m) || BREAKING.test(m)).length;
+const patchCount = messages.length - featCount;
 
 console.log(`[-->] ${currentVersion} -> ${nextVersion} (${bump})`);
-console.log(`     ${messages.length} commits: ${featCount} feat, ${fixCount} fix, ${otherCount} other`);
+console.log(`     ${messages.length} commits: ${featCount} feature, ${patchCount} patch`);
 
 if (dryRun) {
   console.log("[--] Dry run -- no files written.");

@@ -5,11 +5,32 @@ interface PackageJson {
   [key: string]: unknown;
 }
 
+interface ReleaseVersionParts {
+  readonly feature: number;
+  readonly patch: number;
+}
+
 interface VersionFileData {
   readonly version: string;
   readonly buildUnix: number;
   readonly gitSha: string;
   readonly releasedAt: string;
+}
+
+const RELEASE_VERSION_PATTERN = /^0\.(\d+)\.(\d+)$/;
+
+export function parseReleaseVersion(version: string): ReleaseVersionParts {
+  const match = RELEASE_VERSION_PATTERN.exec(version);
+  if (!match) {
+    throw new Error(
+      `Invalid Maestro release version '${version}'. Expected 0.x.y with a zero major version.`,
+    );
+  }
+
+  return {
+    feature: Number(match[1]),
+    patch: Number(match[2]),
+  };
 }
 
 async function buildVersionFileData(
@@ -43,6 +64,7 @@ export async function writeVersionArtifacts(options: {
   readonly version: string;
 }): Promise<void> {
   const { cwd, pkgPath, versionPath, pkg, version } = options;
+  parseReleaseVersion(version);
   pkg.version = version;
   await Bun.write(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
   await Bun.write(versionPath, renderVersionFile(await buildVersionFileData(cwd, version)));
