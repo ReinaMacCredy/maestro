@@ -17,6 +17,7 @@ import type {
   UkiHandoffMode,
   UkiHandoffStatus,
   UkiMaestroRefs,
+  UkiVerificationResult,
 } from "../domain/uki-types.js";
 import { UKI_HANDOFF_MODES, UKI_HANDOFF_STATUSES } from "../domain/uki-types.js";
 import { createUkiHandoff } from "../usecases/create-uki-handoff.usecase.js";
@@ -24,6 +25,7 @@ import { listUkiHandoffs } from "../usecases/list-uki-handoffs.usecase.js";
 import { pickupUkiHandoff } from "../usecases/pickup-uki-handoff.usecase.js";
 import type { Services } from "@/services.js";
 import { normalizeUkiToken, UKI_ANCHOR_PREFIXES } from "../lib/uki-token.js";
+import { evaluateGateCheck } from "@/shared/lib/gate-check.js";
 
 type CreateFormat = "json" | "paste" | "text" | "uki";
 type PickupFormat = "json" | "paste" | "uki";
@@ -69,6 +71,10 @@ export function registerHandoffCommand(program: Command): void {
     .option("--validation <text...>", "VALIDATION token (repeatable)")
     .option("--blind-spot <text>", "BLIND_SPOT transfer value")
     .option("--metaphor <text>", "METAPHOR transfer value")
+    .option("--assumption <text...>", "Behavioral assumption (repeatable, principle gate field)")
+    .option("--scope-declaration <json>", "Scope declaration as JSON object (principle gate field)")
+    .option("--verification-result <text...>", "Verification result as step:passed|failed (repeatable)")
+    .option("--complexity-delta <json>", "Complexity delta as JSON object (principle gate field)")
     .option("--mission-id <text>", "Token-safe Maestro mission reference")
     .option("--feature-id <text>", "Token-safe Maestro feature reference")
     .option("--milestone-id <text>", "Token-safe Maestro milestone reference")
@@ -85,6 +91,9 @@ export function registerHandoffCommand(program: Command): void {
         const services = getServices();
         const format = resolveCreateFormat(opts, program);
         const content = await buildContentFromOptions(opts, services, process.cwd());
+
+        await validateGatePrinciples(content, services);
+
       const handoff = await createUkiHandoff(
         services.handoffStore,
         services.sessionDetect,
@@ -210,6 +219,7 @@ function buildBaseContent(
       : undefined,
     causalDrivers: toStringArray(opts.driver),
     divergences: toStringArray(opts.divergence),
+    ...buildPrincipleGateFields(opts),
   };
 }
 
@@ -465,6 +475,115 @@ function formatHandoffList(handoffs: readonly UkiHandoff[]): string[] {
     );
   }
   return lines;
+}
+
+function buildPrincipleGateFields(
+  opts: Record<string, unknown>,
+): Pick<UkiHandoffContentBase, "assumptions" | "scopeDeclaration" | "complexityDelta" | "verificationResults"> {
+  const result: Record<string, unknown> = {};
+
+  const assumptions = toStringArray(opts.assumption);
+  if (assumptions.length > 0) {
+    result.assumptions = assumptions;
+  }
+
+  if (typeof opts.scopeDeclaration === "string" && opts.scopeDeclaration.length > 0) {
+    try {
+      result.scopeDeclaration = JSON.parse(opts.scopeDeclaration) as Record<string, string>;
+    } catch {
+      throw new MaestroError("--scope-declaration must be valid JSON", [
+        'Example: --scope-declaration \'{"touched":"src/foo.ts","reason":"fix bug"}\'',
+      ]);
+    }
+  }
+
+  if (typeof opts.complexityDelta === "string" && opts.complexityDelta.length > 0) {
+    try {
+      result.complexityDelta = JSON.parse(opts.complexityDelta) as Record<string, unknown>;
+    } catch {
+      throw new MaestroError("--complexity-delta must be valid JSON", [
+        'Example: --complexity-delta \'{"linesAdded":10,"linesRemoved":5}\'',
+      ]);
+    }
+  }
+
+  const rawResults = toStringArray(opts.verificationResult);
+  if (rawResults.length > 0) {
+    result.verificationResults = rawResults.map(parseVerificationResult);
+  }
+
+  return result as Pick<UkiHandoffContentBase, "assumptions" | "scopeDeclaration" | "complexityDelta" | "verificationResults">;
+}
+
+function parseVerificationResult(raw: string): UkiVerificationResult {
+  const colonIdx = raw.lastIndexOf(":");
+  if (colonIdx === -1) {
+    throw new MaestroError(`Invalid --verification-result format: ${raw}`, [
+      "Expected: step_name:passed or step_name:failed",
+      'Example: --verification-result "build:passed" --verification-result "lint:failed"',
+    ]);
+  }
+  const step = raw.slice(0, colonIdx);
+  const outcome = raw.slice(colonIdx + 1);
+  if (outcome !== "passed" && outcome !== "failed") {
+    throw new MaestroError(`Invalid verification outcome '${outcome}' in: ${raw}`, [
+      "Outcome must be 'passed' or 'failed'",
+    ]);
+  }
+  return { step, passed: outcome === "passed" };
+}
+
+async function validateGatePrinciples(
+  content: UkiHandoffContent,
+  services: Services,
+): Promise<void> {
+  const { maestroRefs } = content;
+  if (!maestroRefs.missionId || !maestroRefs.featureId) return;
+
+  let profile: string | undefined;
+  try {
+    const mission = await services.missionStore.get(maestroRefs.missionId);
+    if (!mission) return;
+
+    const feature = await services.featureStore.get(maestroRefs.missionId, maestroRefs.featureId);
+    if (!feature) return;
+
+    const milestone = mission.milestones.find((m) => m.id === feature.milestoneId);
+    profile = milestone?.profile;
+  } catch {
+    return;
+  }
+
+  if (!profile) return;
+
+  let principles: readonly { readonly gateField?: string; readonly gateCheck?: string; readonly name: string; readonly mode: string }[];
+  try {
+    principles = await services.principleStore.listByProfile(profile as import("@/features/mission").MilestoneProfile);
+  } catch {
+    return;
+  }
+
+  const gates = principles.filter((p) => p.mode === "gate" && p.gateField && p.gateCheck);
+  if (gates.length === 0) return;
+
+  const failures: string[] = [];
+  for (const gate of gates) {
+    const fieldValue = (content as Record<string, unknown>)[gate.gateField!];
+    if (!evaluateGateCheck(gate.gateCheck!, fieldValue)) {
+      failures.push(`${gate.name}: field '${gate.gateField}' failed check '${gate.gateCheck}'`);
+    }
+  }
+
+  if (failures.length > 0) {
+    throw new MaestroError(
+      `Handoff rejected by ${failures.length} gate principle(s)`,
+      [
+        ...failures.map((f) => `  [x] ${f}`),
+        "Add the required fields via CLI flags (--assumption, --scope-declaration, --verification-result)",
+        "Or use 'maestro principle list --profile <profile>' to see active gates",
+      ],
+    );
+  }
 }
 
 function assertHandoffMode(raw: string): UkiHandoffMode {

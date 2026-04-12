@@ -31,6 +31,11 @@ const MaestroRefsSchema = z.object({
   specPath: z.string().min(1).optional(),
 }).strict();
 
+const VerificationResultSchema = z.object({
+  step: z.string().min(1),
+  passed: z.boolean(),
+}).strict();
+
 const BaseHandoffContentSchema = z.object({
   mode: z.enum(UKI_HANDOFF_MODES),
   currentState: z.string().min(1),
@@ -49,6 +54,10 @@ const BaseHandoffContentSchema = z.object({
   metaphor: z.string().min(1).optional(),
   causalDrivers: z.array(z.string()),
   divergences: z.array(z.string()),
+  assumptions: z.array(z.string().min(1)).optional(),
+  scopeDeclaration: z.record(z.string()).optional(),
+  complexityDelta: z.record(z.unknown()).optional(),
+  verificationResults: z.array(VerificationResultSchema).optional(),
 }).strict();
 
 const PlanHandoffContentSchema = BaseHandoffContentSchema.extend({

@@ -30,6 +30,11 @@ export interface UkiMaestroRefs {
   readonly specPath?: string;
 }
 
+export interface UkiVerificationResult {
+  readonly step: string;
+  readonly passed: boolean;
+}
+
 export interface UkiHandoffContentBase {
   readonly mode: UkiHandoffMode;
   readonly currentState: string;
@@ -48,6 +53,10 @@ export interface UkiHandoffContentBase {
   readonly metaphor?: string;
   readonly causalDrivers: readonly string[];
   readonly divergences: readonly string[];
+  readonly assumptions?: readonly string[];
+  readonly scopeDeclaration?: Readonly<Record<string, string>>;
+  readonly complexityDelta?: Readonly<Record<string, unknown>>;
+  readonly verificationResults?: readonly UkiVerificationResult[];
 }
 
 export interface PlanUkiHandoffContent extends UkiHandoffContentBase {
