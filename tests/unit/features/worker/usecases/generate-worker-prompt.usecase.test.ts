@@ -17,6 +17,9 @@ import { FsCorrectionStoreAdapter, FsLearningStoreAdapter } from "@/features/mem
 import { MaestroError } from "@/shared/errors.js";
 import type { MilestoneInput } from "@/features/mission";
 import type { PrincipleStorePort } from "@/features/mission";
+import { FsHandoffStoreAdapter, createUkiHandoff } from "@/features/handoff";
+import type { HandoffStorePort, ExecuteUkiHandoffContent, PlanUkiHandoffContent } from "@/features/handoff";
+import type { SessionDetectPort, AgentSession } from "@/features/session";
 
 let tmpDir: string;
 
@@ -1067,6 +1070,199 @@ describe("generateWorkerPrompt", () => {
 
       expect(result.prompt).toContain("Worker Assignment: Feature");
       expect(result.prompt).not.toContain("## Behavioral Principles");
+    });
+  });
+
+  describe("replay injection", () => {
+    const stubDetect: SessionDetectPort = {
+      detect: async () => ({ agent: "test", sessionId: "test-session", sourcePath: "/tmp/fake.jsonl" } as AgentSession),
+    };
+
+    function replayExecuteContent(featureId: string, overrides: Partial<ExecuteUkiHandoffContent> = {}): ExecuteUkiHandoffContent {
+      return {
+        mode: "execute",
+        currentState: "done",
+        sessionCore: "test",
+        decisions: ["proceed"],
+        artifacts: ["branch_test"],
+        readMore: ["file_test_ts"],
+        nextAction: "next",
+        summary: "Test handoff summary",
+        maestroRefs: { featureId },
+        cs: { work: 0.9 },
+        signalDelta: [],
+        boundaryState: [],
+        risks: [],
+        causalDrivers: [],
+        divergences: [],
+        touchedFiles: ["file_test_ts"],
+        completedWork: [],
+        validation: ["unit_green"],
+        ...overrides,
+      };
+    }
+
+    it("injects Prior Session Replay section when matching handoffs exist", async () => {
+      const missionStore = new FsMissionStoreAdapter(tmpDir);
+      const featureStore = new FsFeatureStoreAdapter(tmpDir);
+      const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+      const handoffStore = new FsHandoffStoreAdapter(tmpDir);
+
+      const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
+      await createSampleSkill(tmpDir, "test-skill", "# Skill");
+
+      await createUkiHandoff(handoffStore, stubDetect, tmpDir, {
+        content: replayExecuteContent("f1", {
+          risks: ["race_condition_in_rotation"],
+          divergences: ["added_jitter_to_backoff"],
+          blindSpot: "Did not test with Redis cluster",
+        }),
+      });
+
+      const result = await generateWorkerPrompt(
+        missionStore, featureStore, assertionStore, tmpDir,
+        missionId, "f1", undefined, undefined, undefined,
+        undefined, handoffStore,
+      );
+
+      expect(result.prompt).toContain("## Prior Session Replay");
+      expect(result.prompt).toContain("race_condition_in_rotation");
+      expect(result.prompt).toContain("added_jitter_to_backoff");
+      expect(result.prompt).toContain("Did not test with Redis cluster");
+    });
+
+    it("renders verification results with PASS/FAIL badges", async () => {
+      const missionStore = new FsMissionStoreAdapter(tmpDir);
+      const featureStore = new FsFeatureStoreAdapter(tmpDir);
+      const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+      const handoffStore = new FsHandoffStoreAdapter(tmpDir);
+
+      const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
+      await createSampleSkill(tmpDir, "test-skill", "# Skill");
+
+      await createUkiHandoff(handoffStore, stubDetect, tmpDir, {
+        content: replayExecuteContent("f1", {
+          risks: ["test_risk"],
+          verificationResults: [
+            { step: "build", passed: true },
+            { step: "integration_tests", passed: false },
+          ],
+        }),
+      });
+
+      const result = await generateWorkerPrompt(
+        missionStore, featureStore, assertionStore, tmpDir,
+        missionId, "f1", undefined, undefined, undefined,
+        undefined, handoffStore,
+      );
+
+      expect(result.prompt).toContain("[PASS] build");
+      expect(result.prompt).toContain("**[FAIL]** integration_tests");
+    });
+
+    it("skips section when no handoffStore provided (backward compat)", async () => {
+      const missionStore = new FsMissionStoreAdapter(tmpDir);
+      const featureStore = new FsFeatureStoreAdapter(tmpDir);
+      const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+
+      const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
+      await createSampleSkill(tmpDir, "test-skill", "# Skill");
+
+      const result = await generateWorkerPrompt(
+        missionStore, featureStore, assertionStore, tmpDir, missionId, "f1",
+      );
+
+      expect(result.prompt).not.toContain("## Prior Session Replay");
+    });
+
+    it("skips section when no handoffs match featureId", async () => {
+      const missionStore = new FsMissionStoreAdapter(tmpDir);
+      const featureStore = new FsFeatureStoreAdapter(tmpDir);
+      const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+      const handoffStore = new FsHandoffStoreAdapter(tmpDir);
+
+      const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
+      await createSampleSkill(tmpDir, "test-skill", "# Skill");
+
+      await createUkiHandoff(handoffStore, stubDetect, tmpDir, {
+        content: replayExecuteContent("other_feature", { risks: ["irrelevant"] }),
+      });
+
+      const result = await generateWorkerPrompt(
+        missionStore, featureStore, assertionStore, tmpDir,
+        missionId, "f1", undefined, undefined, undefined,
+        undefined, handoffStore,
+      );
+
+      expect(result.prompt).not.toContain("## Prior Session Replay");
+    });
+
+    it("never blocks prompt when handoff store throws (best effort)", async () => {
+      const missionStore = new FsMissionStoreAdapter(tmpDir);
+      const featureStore = new FsFeatureStoreAdapter(tmpDir);
+      const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+
+      const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
+      await createSampleSkill(tmpDir, "test-skill", "# Skill");
+
+      const explodingStore = {
+        list: async () => { throw new Error("handoff store on fire"); },
+      } as unknown as HandoffStorePort;
+
+      const result = await generateWorkerPrompt(
+        missionStore, featureStore, assertionStore, tmpDir,
+        missionId, "f1", undefined, undefined, undefined,
+        undefined, explodingStore,
+      );
+
+      expect(result.prompt).toContain("Worker Assignment: Test Feature");
+      expect(result.prompt).not.toContain("## Prior Session Replay");
+    });
+
+    it("section appears after Behavioral Principles and before Skill Instructions", async () => {
+      const missionStore = new FsMissionStoreAdapter(tmpDir);
+      const featureStore = new FsFeatureStoreAdapter(tmpDir);
+      const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+      const handoffStore = new FsHandoffStoreAdapter(tmpDir);
+      const principleStore = new JsonlPrincipleStoreAdapter(tmpDir);
+
+      const samplePlan = {
+        title: "Test", description: "Test",
+        milestones: [{ id: "m1", title: "M1", description: "M1", order: 0, profile: "implementation" as const }],
+        features: [
+          { id: "f1", milestoneId: "m1", title: "Feature", description: "D", workerType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
+        ],
+      };
+
+      const { createMission } = await import("@/features/mission");
+      const { mission } = await createMission(missionStore, featureStore, assertionStore, samplePlan);
+      await createSampleSkill(tmpDir, "test-skill", "# Skill");
+
+      await principleStore.create({
+        id: "test-principle",
+        name: "Test Principle",
+        rule: "Be principled",
+        profiles: ["implementation"],
+        mode: "advisory",
+      });
+
+      await createUkiHandoff(handoffStore, stubDetect, tmpDir, {
+        content: replayExecuteContent("f1", { risks: ["ordering_test_risk"] }),
+      });
+
+      const result = await generateWorkerPrompt(
+        missionStore, featureStore, assertionStore, tmpDir,
+        mission.id, "f1", undefined, undefined, undefined,
+        principleStore, handoffStore,
+      );
+
+      const principleIdx = result.prompt.indexOf("## Behavioral Principles");
+      const replayIdx = result.prompt.indexOf("## Prior Session Replay");
+      const skillIdx = result.prompt.indexOf("## Skill Instructions");
+
+      expect(principleIdx).toBeGreaterThan(-1);
+      expect(replayIdx).toBeGreaterThan(principleIdx);
+      expect(skillIdx).toBeGreaterThan(replayIdx);
     });
   });
   });

@@ -133,6 +133,7 @@ export function registerFeatureCommand(program: Command): void {
         services.correctionStore,
         services.learningStore,
         services.principleStore,
+        services.handoffStore,
       );
 
       output(isJson, result, formatPromptResult);
