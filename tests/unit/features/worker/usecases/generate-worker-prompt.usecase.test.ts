@@ -12,9 +12,11 @@ import {
 import { FsMissionStoreAdapter } from "@/features/mission";
 import { FsFeatureStoreAdapter } from "@/features/mission";
 import { FsAssertionStoreAdapter } from "@/features/mission";
+import { JsonlPrincipleStoreAdapter } from "@/features/mission";
 import { FsCorrectionStoreAdapter, FsLearningStoreAdapter } from "@/features/memory";
 import { MaestroError } from "@/shared/errors.js";
 import type { MilestoneInput } from "@/features/mission";
+import type { PrincipleStorePort } from "@/features/mission";
 
 let tmpDir: string;
 
@@ -923,6 +925,148 @@ describe("generateWorkerPrompt", () => {
 
       expect(result.prompt).toContain("Worker Assignment: Test Feature");
       expect(result.prompt).not.toContain("## Relevant Memory");
+    });
+  });
+
+  describe("principle injection", () => {
+    it("injects Behavioral Principles section when principles match profile", async () => {
+      const missionStore = new FsMissionStoreAdapter(tmpDir);
+      const featureStore = new FsFeatureStoreAdapter(tmpDir);
+      const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+      const principleStore = new JsonlPrincipleStoreAdapter(tmpDir);
+
+      const samplePlan = {
+        title: "Test", description: "Test",
+        milestones: [{ id: "m1", title: "M1", description: "M1", order: 0, profile: "implementation" as const }],
+        features: [
+          { id: "f1", milestoneId: "m1", title: "Feature", description: "D", workerType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
+        ],
+      };
+
+      const { createMission } = await import("@/features/mission");
+      const { mission } = await createMission(missionStore, featureStore, assertionStore, samplePlan);
+      await createSampleSkill(tmpDir, "test-skill", "# Skill");
+
+      // Seed a gate principle matching "implementation" profile
+      await principleStore.create({
+        id: "test-gate",
+        name: "Test Gate",
+        rule: "Must provide assumptions",
+        profiles: ["implementation"],
+        mode: "gate",
+        gateField: "assumptions",
+        gateCheck: "array_min_length:1",
+      });
+
+      // Seed an advisory principle
+      await principleStore.create({
+        id: "test-advisory",
+        name: "Test Advisory",
+        rule: "Keep it simple",
+        profiles: ["implementation"],
+        mode: "advisory",
+      });
+
+      const result = await generateWorkerPrompt(
+        missionStore, featureStore, assertionStore, tmpDir,
+        mission.id, "f1", undefined, undefined, undefined,
+        principleStore,
+      );
+
+      expect(result.prompt).toContain("## Behavioral Principles");
+      expect(result.prompt).toContain("**[GATE]** Test Gate");
+      expect(result.prompt).toContain("Must provide assumptions");
+      expect(result.prompt).toContain("`assumptions` (array_min_length:1)");
+      expect(result.prompt).toContain("[advisory] Test Advisory");
+      expect(result.prompt).toContain("Keep it simple");
+
+      // Principles section must appear before the skill block
+      const principleIdx = result.prompt.indexOf("## Behavioral Principles");
+      const skillIdx = result.prompt.indexOf("## Skill Instructions");
+      expect(principleIdx).toBeGreaterThan(-1);
+      expect(skillIdx).toBeGreaterThan(principleIdx);
+    });
+
+    it("skips section when no principleStore is provided (backward compat)", async () => {
+      const missionStore = new FsMissionStoreAdapter(tmpDir);
+      const featureStore = new FsFeatureStoreAdapter(tmpDir);
+      const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+
+      const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
+      await createSampleSkill(tmpDir, "test-skill", "# Test Skill");
+
+      const result = await generateWorkerPrompt(
+        missionStore, featureStore, assertionStore, tmpDir, missionId, "f1",
+      );
+
+      expect(result.prompt).not.toContain("## Behavioral Principles");
+    });
+
+    it("skips section when no principles match the milestone profile", async () => {
+      const missionStore = new FsMissionStoreAdapter(tmpDir);
+      const featureStore = new FsFeatureStoreAdapter(tmpDir);
+      const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+      const principleStore = new JsonlPrincipleStoreAdapter(tmpDir);
+
+      const samplePlan = {
+        title: "Test", description: "Test",
+        milestones: [{ id: "m1", title: "M1", description: "M1", order: 0, profile: "bug-hunt" as const }],
+        features: [
+          { id: "f1", milestoneId: "m1", title: "Feature", description: "D", workerType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
+        ],
+      };
+
+      const { createMission } = await import("@/features/mission");
+      const { mission } = await createMission(missionStore, featureStore, assertionStore, samplePlan);
+      await createSampleSkill(tmpDir, "test-skill", "# Skill");
+
+      // Principle only targets "planning" -- should not appear for "bug-hunt"
+      await principleStore.create({
+        id: "planning-only",
+        name: "Planning Only",
+        rule: "Plan first",
+        profiles: ["planning"],
+        mode: "advisory",
+      });
+
+      const result = await generateWorkerPrompt(
+        missionStore, featureStore, assertionStore, tmpDir,
+        mission.id, "f1", undefined, undefined, undefined,
+        principleStore,
+      );
+
+      expect(result.prompt).not.toContain("## Behavioral Principles");
+    });
+
+    it("never blocks prompt generation when principle store throws", async () => {
+      const missionStore = new FsMissionStoreAdapter(tmpDir);
+      const featureStore = new FsFeatureStoreAdapter(tmpDir);
+      const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+
+      const samplePlan = {
+        title: "Test", description: "Test",
+        milestones: [{ id: "m1", title: "M1", description: "M1", order: 0, profile: "implementation" as const }],
+        features: [
+          { id: "f1", milestoneId: "m1", title: "Feature", description: "D", workerType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
+        ],
+      };
+
+      const { createMission } = await import("@/features/mission");
+      const { mission } = await createMission(missionStore, featureStore, assertionStore, samplePlan);
+      await createSampleSkill(tmpDir, "test-skill", "# Skill");
+
+      const explodingPrincipleStore = {
+        listByProfile: async () => { throw new Error("disk on fire"); },
+      } as unknown as PrincipleStorePort;
+
+      const result = await generateWorkerPrompt(
+        missionStore, featureStore, assertionStore, tmpDir,
+        mission.id, "f1", undefined, undefined, undefined,
+        explodingPrincipleStore,
+      );
+
+      expect(result.prompt).toContain("Worker Assignment: Feature");
+      expect(result.prompt).not.toContain("## Behavioral Principles");
     });
   });
   });

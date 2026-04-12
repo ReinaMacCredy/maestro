@@ -7,10 +7,12 @@ import type {
   FeatureStorePort,
   MissionStorePort,
   AssertionStorePort,
+  PrincipleStorePort,
   Feature,
   Mission,
   Milestone,
   Assertion,
+  Principle,
   MilestoneProfile,
 } from "@/features/mission";
 import { WORKER_TYPE_PATTERN, parseWorkerReport } from "@/features/mission";
@@ -69,6 +71,7 @@ export async function generateWorkerPrompt(
   outPath?: string,
   correctionStore?: CorrectionStorePort,
   learningStore?: LearningStorePort,
+  principleStore?: PrincipleStorePort,
 ): Promise<GenerateWorkerPromptResult> {
   // Verify mission exists
   const mission = await missionStore.get(missionId);
@@ -114,16 +117,17 @@ export async function generateWorkerPrompt(
     // worker-base skill not found -- skip handoff protocol section
   }
 
-  // Both reads are independent filesystem operations -- run them in parallel.
-  // Memory recall is best-effort and must never block prompt generation; a
-  // missing memory dir, corrupted file, or unseeded store yields undefined.
-  const [previousMilestoneReports, recalledMemory] = await Promise.all([
+  // All three reads are independent filesystem operations -- run in parallel.
+  // Memory recall and principle loading are best-effort and must never block
+  // prompt generation; a missing dir, corrupted file, or unseeded store yields undefined.
+  const [previousMilestoneReports, recalledMemory, principles] = await Promise.all([
     loadPreviousMilestoneReports(baseDir, mission, allFeatures, missionId, milestone),
     safeRecallMemory(correctionStore, learningStore, feature),
+    safeLoadPrinciples(principleStore, milestone.profile),
   ]);
 
   // Generate the prompt
-  const prompt = composePrompt(mission, milestone, feature, featureAssertions, skillContent, allFeatures, handoffProtocol, previousMilestoneReports, recalledMemory);
+  const prompt = composePrompt(mission, milestone, feature, featureAssertions, skillContent, allFeatures, handoffProtocol, previousMilestoneReports, recalledMemory, principles);
 
   // Track written paths
   const writtenPaths: string[] = [];
@@ -372,6 +376,7 @@ function composePrompt(
   handoffProtocol?: string,
   previousMilestoneReports?: readonly PreviousMilestoneReport[],
   recalledMemory?: RecallResult,
+  principles?: readonly Principle[],
 ): string {
   const parts: string[] = [];
 
@@ -529,6 +534,12 @@ function composePrompt(
     appendMemorySection(parts, recalledMemory);
   }
 
+  // Behavioral Principles -- injected between memory and skill so the
+  // worker sees constraints before the generic skill instructions.
+  if (principles && principles.length > 0) {
+    appendPrincipleSection(parts, principles);
+  }
+
   // Skill instructions - wrapped in a clearly delimited block
   parts.push("## Skill Instructions");
   parts.push("");
@@ -604,6 +615,46 @@ function appendMemorySection(parts: string[], recalled: RecallResult): void {
     parts.push(sanitizePromptContent(recalled.compiledLearnings.summary, "memory-learnings"));
     parts.push("");
   }
+}
+
+/**
+ * Best-effort principle loading for worker prompt injection.
+ * Returns undefined when the store is absent or the store throws.
+ * Principles enhance the prompt; they must never block it.
+ */
+async function safeLoadPrinciples(
+  principleStore: PrincipleStorePort | undefined,
+  profile: MilestoneProfile | undefined,
+): Promise<readonly Principle[] | undefined> {
+  if (!principleStore || !profile) return undefined;
+  try {
+    const principles = await principleStore.listByProfile(profile);
+    return principles.length > 0 ? principles : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Render the "Behavioral Principles" section from active principles.
+ * Gate principles show a [GATE] badge and required handoff field notice.
+ * Advisory principles show an [advisory] badge.
+ */
+function appendPrincipleSection(parts: string[], principles: readonly Principle[]): void {
+  parts.push("## Behavioral Principles");
+  parts.push("");
+  parts.push("<!-- Auto-injected from the maestro principle system based on milestone profile. -->");
+  parts.push("");
+
+  for (const p of principles) {
+    if (p.mode === "gate") {
+      parts.push(`- **[GATE]** ${delimitContent(p.name)}: ${delimitContent(p.rule)}`);
+      parts.push(`  _Required handoff field:_ \`${p.gateField}\` (${p.gateCheck})`);
+    } else {
+      parts.push(`- [advisory] ${delimitContent(p.name)}: ${delimitContent(p.rule)}`);
+    }
+  }
+  parts.push("");
 }
 
 /**

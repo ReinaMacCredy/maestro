@@ -132,6 +132,7 @@ export function registerFeatureCommand(program: Command): void {
         opts.out,
         services.correctionStore,
         services.learningStore,
+        services.principleStore,
       );
 
       output(isJson, result, formatPromptResult);
