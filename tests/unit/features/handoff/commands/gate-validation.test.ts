@@ -197,7 +197,7 @@ describe("gate validation on handoff content", () => {
   });
 
   describe("handoff create command", () => {
-    it("allows auto-collected mission refs when no feature ref is provided", async () => {
+    it("auto-collects a single actionable feature and enforces its active gates", async () => {
       const missionId = await createImplementationMission();
       const approveResult = await runCli(["mission", "approve", missionId, "--json"], tmpDir);
       expect(approveResult.exitCode).toBe(0);
@@ -216,8 +216,11 @@ describe("gate validation on handoff content", () => {
         "--json",
       ], tmpDir);
 
-      expect(result.exitCode).toBe(0);
-      expect(result.stderr).not.toContain("Gate validation requires both missionId and featureId");
+      expect(result.exitCode).toBe(1);
+      expect(result.stdout).toContain("Handoff rejected by");
+      expect(result.stdout).toContain("assumptions");
+      expect(result.stdout).toContain("scopeDeclaration");
+      expect(result.stdout).toContain("verificationResults");
     });
 
     it("rejects mission-linked handoffs that do not satisfy active gates", async () => {

@@ -334,9 +334,21 @@ async function collectMissionRefs(services: Services): Promise<UkiMaestroRefs> {
       return {};
     }
 
-      return {
-        missionId: normalizeUkiToken(active.id),
-      };
+    const features = await services.featureStore.list(active.id);
+    const actionableFeatures = features.filter((feature) =>
+      feature.status === "assigned"
+      || feature.status === "in-progress"
+      || feature.status === "review"
+      || feature.status === "pending",
+    );
+    const autoFeatureId = actionableFeatures.length === 1
+      ? actionableFeatures[0]?.id
+      : undefined;
+
+    return {
+      missionId: normalizeUkiToken(active.id),
+      ...(autoFeatureId ? { featureId: autoFeatureId } : {}),
+    };
   } catch {
     return {};
   }
@@ -554,8 +566,17 @@ async function validateGatePrinciples(
   services: Services,
 ): Promise<void> {
   const { maestroRefs } = content;
-  if (!maestroRefs.missionId || !maestroRefs.featureId) {
+  if (!maestroRefs.missionId) {
     return;
+  }
+
+  if (!maestroRefs.featureId) {
+    throw new MaestroError(
+      "Mission-linked handoffs require a feature ref for gate validation",
+      [
+        "Pass --feature-id explicitly, or run the command from a mission with exactly one actionable feature",
+      ],
+    );
   }
 
   const mission = await resolveMissionRef(services, maestroRefs.missionId);
