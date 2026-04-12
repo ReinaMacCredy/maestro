@@ -59,15 +59,27 @@ export {
   checkpointNotFound,
 } from "./domain/errors.js";
 
+export type {
+  Principle,
+  CreatePrincipleInput,
+  PrincipleMode,
+  GateCheckType,
+  PrincipleSource,
+} from "./domain/principle-types.js";
+export { DEFAULT_PRINCIPLES } from "./domain/default-principles.js";
+export { validatePrinciple, validateCreatePrincipleInput } from "./domain/principle-validators.js";
+
 export type { MissionStorePort } from "./ports/mission-store.port.js";
 export type { FeatureStorePort } from "./feature/ports/feature-store.port.js";
 export type { AssertionStorePort } from "./validation/ports/assertion-store.port.js";
 export type { CheckpointStorePort } from "./checkpoint/ports/checkpoint-store.port.js";
+export type { PrincipleStorePort } from "./ports/principle-store.port.js";
 
 export { FsMissionStoreAdapter } from "./adapters/mission-store.adapter.js";
 export { FsFeatureStoreAdapter } from "./feature/adapters/feature-store.adapter.js";
 export { FsAssertionStoreAdapter } from "./validation/adapters/assertion-store.adapter.js";
 export { FsCheckpointStoreAdapter } from "./checkpoint/adapters/checkpoint-store.adapter.js";
+export { JsonlPrincipleStoreAdapter } from "./adapters/principle-store.adapter.js";
 
 export { deriveMissionReport, generateMissionReport } from "./usecases/mission-report.usecase.js";
 export type { MissionReport, MilestoneReportProgress } from "./usecases/mission-report.usecase.js";
