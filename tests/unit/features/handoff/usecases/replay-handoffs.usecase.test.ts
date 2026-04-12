@@ -229,18 +229,51 @@ describe("loadPriorHandoffs", () => {
   });
 
   it("uses the targeted handoff query instead of listing the full store", async () => {
-    const matching: UkiHandoff = {
-      id: "2026-04-13-001",
-      version: "5.4",
-      timestamp: "2026-04-13T00:00:00.000Z",
-      status: "pending",
-      agent: "test",
-      sessionId: "session",
-      content: makeExecuteContent(missionA, "f1", { risks: ["risk"] }),
-      uki: "uki",
-    };
-
     let targetedCalls = 0;
+    let requestedLimit = 0;
+    const matching = [
+      {
+        id: "2026-04-13-004",
+        version: "5.4",
+        timestamp: "2026-04-13T00:03:00.000Z",
+        status: "pending",
+        agent: "test",
+        sessionId: "session",
+        content: makeExecuteContent(missionA, "f1"),
+        uki: "uki-4",
+      },
+      {
+        id: "2026-04-13-003",
+        version: "5.4",
+        timestamp: "2026-04-13T00:02:00.000Z",
+        status: "pending",
+        agent: "test",
+        sessionId: "session",
+        content: makeExecuteContent(missionA, "f1"),
+        uki: "uki-3",
+      },
+      {
+        id: "2026-04-13-002",
+        version: "5.4",
+        timestamp: "2026-04-13T00:01:00.000Z",
+        status: "pending",
+        agent: "test",
+        sessionId: "session",
+        content: makeExecuteContent(missionA, "f1"),
+        uki: "uki-2",
+      },
+      {
+        id: "2026-04-13-001",
+        version: "5.4",
+        timestamp: "2026-04-13T00:00:00.000Z",
+        status: "pending",
+        agent: "test",
+        sessionId: "session",
+        content: makeExecuteContent(missionA, "f1", { risks: ["risk"] }),
+        uki: "uki-1",
+      },
+    ] as const satisfies readonly UkiHandoff[];
+
     const handoffStore = {
       async create() {
         throw new Error("not used");
@@ -257,9 +290,14 @@ describe("loadPriorHandoffs", () => {
       async list() {
         throw new Error("broad list should not be called");
       },
-      async listRecentByFeatureRefs() {
+      async listRecentByFeatureRefs(
+        _missionId: string,
+        _featureId: string,
+        limit: number,
+      ) {
         targetedCalls += 1;
-        return [matching];
+        requestedLimit = limit;
+        return matching.slice(0, limit);
       },
       async updateStatus() {
         throw new Error("not used");
@@ -271,6 +309,7 @@ describe("loadPriorHandoffs", () => {
 
     const result = await loadPriorHandoffs(handoffStore, missionA, "f1");
     expect(targetedCalls).toBe(1);
+    expect(requestedLimit).toBe(Number.MAX_SAFE_INTEGER);
     expect(result).toHaveLength(1);
     expect(result![0].risks).toEqual(["risk"]);
   });

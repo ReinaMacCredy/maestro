@@ -15,6 +15,7 @@ import type {
 import { normalizeUkiToken } from "../lib/uki-token.js";
 
 const MAX_REPLAY_HANDOFFS = 3;
+const TARGETED_REPLAY_SEARCH_LIMIT = Number.MAX_SAFE_INTEGER;
 
 export interface PriorSessionSummary {
   readonly handoffId: string;
@@ -43,7 +44,11 @@ export async function loadPriorHandoffs(
   featureId: string,
 ): Promise<readonly PriorSessionSummary[] | undefined> {
   const all = handoffStore.listRecentByFeatureRefs
-    ? await handoffStore.listRecentByFeatureRefs(missionId, featureId, MAX_REPLAY_HANDOFFS)
+    ? await handoffStore.listRecentByFeatureRefs(
+      missionId,
+      featureId,
+      TARGETED_REPLAY_SEARCH_LIMIT,
+    )
     : await handoffStore.list();
   const normalizedMissionId = normalizeUkiToken(missionId);
 
