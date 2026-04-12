@@ -66,6 +66,14 @@ export interface GenerateWorkerPromptResult {
  * The prompt includes mission context, milestone context, feature details,
  * verification expectations, and the worker skill instructions.
  */
+/** Optional enrichment stores for worker prompt generation. */
+export interface WorkerPromptStores {
+  readonly correctionStore?: CorrectionStorePort;
+  readonly learningStore?: LearningStorePort;
+  readonly principleStore?: PrincipleStorePort;
+  readonly handoffStore?: HandoffStorePort;
+}
+
 export async function generateWorkerPrompt(
   missionStore: MissionStorePort,
   featureStore: FeatureStorePort,
@@ -74,10 +82,7 @@ export async function generateWorkerPrompt(
   missionId: string,
   featureId: string,
   outPath?: string,
-  correctionStore?: CorrectionStorePort,
-  learningStore?: LearningStorePort,
-  principleStore?: PrincipleStorePort,
-  handoffStore?: HandoffStorePort,
+  stores?: WorkerPromptStores,
 ): Promise<GenerateWorkerPromptResult> {
   // Verify mission exists
   const mission = await missionStore.get(missionId);
@@ -128,9 +133,9 @@ export async function generateWorkerPrompt(
   // must never block prompt generation; missing data yields undefined.
   const [previousMilestoneReports, recalledMemory, principles, priorHandoffs] = await Promise.all([
     loadPreviousMilestoneReports(baseDir, mission, allFeatures, missionId, milestone),
-    safeRecallMemory(correctionStore, learningStore, feature),
-    safeLoadPrinciples(principleStore, milestone.profile),
-    safeLoadPriorHandoffs(handoffStore, featureId),
+    safeRecallMemory(stores?.correctionStore, stores?.learningStore, feature),
+    safeLoadPrinciples(stores?.principleStore, milestone.profile),
+    safeLoadPriorHandoffs(stores?.handoffStore, featureId),
   ]);
 
   // Generate the prompt
@@ -702,47 +707,21 @@ function appendReplaySection(parts: string[], handoffs: readonly PriorSessionSum
   parts.push("");
 
   for (const h of handoffs) {
-    parts.push(`### Session ${delimitContent(h.handoffId)} (${h.mode}, ${h.timestamp})`);
+    parts.push(`### Session ${delimitContent(h.handoffId)} (${delimitContent(h.mode)}, ${delimitContent(h.timestamp)})`);
     parts.push("");
     parts.push(`**Summary:** ${delimitContent(h.summary)}`);
     parts.push("");
 
-    if (h.risks.length > 0) {
-      parts.push("**Risks:**");
-      for (const r of h.risks) {
-        parts.push(`- ${delimitContent(r)}`);
-      }
-      parts.push("");
-    }
-
-    if (h.divergences.length > 0) {
-      parts.push("**Divergences from plan:**");
-      for (const d of h.divergences) {
-        parts.push(`- ${delimitContent(d)}`);
-      }
-      parts.push("");
-    }
-
-    if (h.causalDrivers.length > 0) {
-      parts.push("**Causal drivers:**");
-      for (const c of h.causalDrivers) {
-        parts.push(`- ${delimitContent(c)}`);
-      }
-      parts.push("");
-    }
+    renderListField(parts, "Risks", h.risks);
+    renderListField(parts, "Divergences from plan", h.divergences);
+    renderListField(parts, "Causal drivers", h.causalDrivers);
 
     if (h.blindSpot) {
       parts.push(`**Blind spot:** ${delimitContent(h.blindSpot)}`);
       parts.push("");
     }
 
-    if (h.assumptions && h.assumptions.length > 0) {
-      parts.push("**Assumptions:**");
-      for (const a of h.assumptions) {
-        parts.push(`- ${delimitContent(a)}`);
-      }
-      parts.push("");
-    }
+    renderListField(parts, "Assumptions", h.assumptions);
 
     if (h.verificationResults && h.verificationResults.length > 0) {
       parts.push("**Verification results:**");
@@ -753,14 +732,17 @@ function appendReplaySection(parts: string[], handoffs: readonly PriorSessionSum
       parts.push("");
     }
 
-    if (h.completedWork && h.completedWork.length > 0) {
-      parts.push("**Completed work:**");
-      for (const w of h.completedWork) {
-        parts.push(`- ${delimitContent(w)}`);
-      }
-      parts.push("");
-    }
+    renderListField(parts, "Completed work", h.completedWork);
   }
+}
+
+function renderListField(parts: string[], label: string, items: readonly string[] | undefined): void {
+  if (!items || items.length === 0) return;
+  parts.push(`**${label}:**`);
+  for (const item of items) {
+    parts.push(`- ${delimitContent(item)}`);
+  }
+  parts.push("");
 }
 
 /**

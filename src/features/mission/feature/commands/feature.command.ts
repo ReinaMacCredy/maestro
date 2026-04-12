@@ -130,10 +130,12 @@ export function registerFeatureCommand(program: Command): void {
         opts.mission,
         featureId,
         opts.out,
-        services.correctionStore,
-        services.learningStore,
-        services.principleStore,
-        services.handoffStore,
+        {
+          correctionStore: services.correctionStore,
+          learningStore: services.learningStore,
+          principleStore: services.principleStore,
+          handoffStore: services.handoffStore,
+        },
       );
 
       output(isJson, result, formatPromptResult);

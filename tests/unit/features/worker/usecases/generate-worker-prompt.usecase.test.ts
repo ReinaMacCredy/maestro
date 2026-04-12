@@ -775,8 +775,7 @@ describe("generateWorkerPrompt", () => {
         missionId,
         "f1",
         undefined,
-        correctionStore,
-        learningStore,
+        { correctionStore, learningStore },
       );
 
       expect(result.prompt).toContain("## Relevant Memory");
@@ -814,8 +813,7 @@ describe("generateWorkerPrompt", () => {
         missionId,
         "f1",
         undefined,
-        correctionStore,
-        learningStore,
+        { correctionStore, learningStore },
       );
 
       expect(result.prompt).toContain("## Relevant Memory");
@@ -846,8 +844,7 @@ describe("generateWorkerPrompt", () => {
         missionId,
         "f1",
         undefined,
-        correctionStore,
-        learningStore,
+        { correctionStore, learningStore },
       );
 
       expect(result.prompt).toContain("## Relevant Memory");
@@ -893,8 +890,7 @@ describe("generateWorkerPrompt", () => {
         missionId,
         "f1",
         undefined,
-        correctionStore,
-        learningStore,
+        { correctionStore, learningStore },
       );
 
       expect(result.prompt).not.toContain("## Relevant Memory");
@@ -922,8 +918,7 @@ describe("generateWorkerPrompt", () => {
         missionId,
         "f1",
         undefined,
-        explodingStore,
-        learningStore,
+        { correctionStore: explodingStore, learningStore },
       );
 
       expect(result.prompt).toContain("Worker Assignment: Test Feature");
@@ -972,8 +967,8 @@ describe("generateWorkerPrompt", () => {
 
       const result = await generateWorkerPrompt(
         missionStore, featureStore, assertionStore, tmpDir,
-        mission.id, "f1", undefined, undefined, undefined,
-        principleStore,
+        mission.id, "f1", undefined,
+        { principleStore },
       );
 
       expect(result.prompt).toContain("## Behavioral Principles");
@@ -1034,8 +1029,8 @@ describe("generateWorkerPrompt", () => {
 
       const result = await generateWorkerPrompt(
         missionStore, featureStore, assertionStore, tmpDir,
-        mission.id, "f1", undefined, undefined, undefined,
-        principleStore,
+        mission.id, "f1", undefined,
+        { principleStore },
       );
 
       expect(result.prompt).not.toContain("## Behavioral Principles");
@@ -1064,8 +1059,8 @@ describe("generateWorkerPrompt", () => {
 
       const result = await generateWorkerPrompt(
         missionStore, featureStore, assertionStore, tmpDir,
-        mission.id, "f1", undefined, undefined, undefined,
-        explodingPrincipleStore,
+        mission.id, "f1", undefined,
+        { principleStore: explodingPrincipleStore },
       );
 
       expect(result.prompt).toContain("Worker Assignment: Feature");
@@ -1121,8 +1116,8 @@ describe("generateWorkerPrompt", () => {
 
       const result = await generateWorkerPrompt(
         missionStore, featureStore, assertionStore, tmpDir,
-        missionId, "f1", undefined, undefined, undefined,
-        undefined, handoffStore,
+        missionId, "f1", undefined,
+        { handoffStore },
       );
 
       expect(result.prompt).toContain("## Prior Session Replay");
@@ -1152,8 +1147,8 @@ describe("generateWorkerPrompt", () => {
 
       const result = await generateWorkerPrompt(
         missionStore, featureStore, assertionStore, tmpDir,
-        missionId, "f1", undefined, undefined, undefined,
-        undefined, handoffStore,
+        missionId, "f1", undefined,
+        { handoffStore },
       );
 
       expect(result.prompt).toContain("[PASS] build");
@@ -1190,8 +1185,8 @@ describe("generateWorkerPrompt", () => {
 
       const result = await generateWorkerPrompt(
         missionStore, featureStore, assertionStore, tmpDir,
-        missionId, "f1", undefined, undefined, undefined,
-        undefined, handoffStore,
+        missionId, "f1", undefined,
+        { handoffStore },
       );
 
       expect(result.prompt).not.toContain("## Prior Session Replay");
@@ -1211,8 +1206,8 @@ describe("generateWorkerPrompt", () => {
 
       const result = await generateWorkerPrompt(
         missionStore, featureStore, assertionStore, tmpDir,
-        missionId, "f1", undefined, undefined, undefined,
-        undefined, explodingStore,
+        missionId, "f1", undefined,
+        { handoffStore: explodingStore },
       );
 
       expect(result.prompt).toContain("Worker Assignment: Test Feature");
@@ -1252,8 +1247,8 @@ describe("generateWorkerPrompt", () => {
 
       const result = await generateWorkerPrompt(
         missionStore, featureStore, assertionStore, tmpDir,
-        mission.id, "f1", undefined, undefined, undefined,
-        principleStore, handoffStore,
+        mission.id, "f1", undefined,
+        { principleStore, handoffStore },
       );
 
       const principleIdx = result.prompt.indexOf("## Behavioral Principles");
