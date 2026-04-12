@@ -73,7 +73,6 @@ export class CachingGitPort implements GitPort {
   ) {}
 
   async getState(cwd: string): Promise<GitState> {
-    pruneExpiredEntries(this.stateByCwd);
     const hit = cached(this.stateByCwd.get(cwd));
     if (hit !== undefined) return hit;
 
@@ -83,7 +82,6 @@ export class CachingGitPort implements GitPort {
   }
 
   async isRepo(cwd: string): Promise<boolean> {
-    pruneExpiredEntries(this.isRepoByCwd);
     const hit = cached(this.isRepoByCwd.get(cwd));
     if (hit !== undefined) return hit;
 
@@ -113,7 +111,6 @@ export class CachingConfigPort implements ConfigPort {
   }
 
   async loadLayers(projectDir: string): Promise<ConfigLayers> {
-    pruneExpiredEntries(this.layersByProject);
     const hit = cached(this.layersByProject.get(projectDir));
     if (hit !== undefined) return hit;
 
@@ -140,7 +137,6 @@ const WHICH_TTL_MS = 120_000;
 const whichCache = new Map<string, CacheEntry<string | null>>();
 
 export function cachedWhich(command: string): string | null {
-  pruneExpiredEntries(whichCache);
   const hit = cached(whichCache.get(command));
   if (hit !== undefined) return hit;
 

@@ -12,25 +12,12 @@ import {
 } from "@/infra/commands/mission-control.command.js";
 import type { ConfigPort } from "@/infra/ports/config.port.js";
 import type { GitPort } from "@/infra/ports/git.port.js";
-import type { SnapshotDeps, HomeSnapshotDeps } from "@/tui/state/snapshot.js";
+import type { SnapshotDeps } from "@/tui/state/snapshot.js";
+import { runCli } from "../../../helpers/run-cli.js";
+import { initGitRepo } from "../../../helpers/run-compiled-cli.js";
 
 let tmpDir: string;
 let snapshotDeps: SnapshotDeps;
-let homeSnapshotDeps: HomeSnapshotDeps;
-
-const CLI = ["bun", "run", join(import.meta.dir, "..", "..", "..", "..", "src", "index.ts")];
-
-async function initGitRepo(cwd: string): Promise<void> {
-  const proc = Bun.spawn(["git", "init", "-b", "main"], { cwd, stdout: "pipe", stderr: "pipe" });
-  await proc.exited;
-}
-
-async function run(args: string[], cwd: string): Promise<{ stdout: string; exitCode: number }> {
-  const proc = Bun.spawn([...CLI, ...args], { stdout: "pipe", stderr: "pipe", cwd });
-  const stdout = await new Response(proc.stdout).text();
-  const exitCode = await proc.exited;
-  return { stdout: stdout.trim(), exitCode };
-}
 
 function createSamplePlan(): object {
   return {
@@ -85,28 +72,27 @@ beforeEach(async () => {
     git,
     cwd: tmpDir,
   };
-  homeSnapshotDeps = { config, git };
-});
+  });
 
 afterEach(async () => {
   await rm(tmpDir, { recursive: true, force: true });
 });
 
 async function createMission(): Promise<string> {
-  const planPath = join(tmpDir, "plan.json");
-  await writeFile(planPath, JSON.stringify(createSamplePlan()));
-  const { stdout } = await run(["mission", "create", "--file", planPath, "--json"], tmpDir);
-  const missionId = JSON.parse(stdout).mission.id as string;
-  await run(["mission", "approve", missionId, "--json"], tmpDir);
-  await run(["feature", "update", "f1", "--mission", missionId, "--status", "assigned", "--json"], tmpDir);
-  return missionId;
-}
+    const planPath = join(tmpDir, "plan.json");
+    await writeFile(planPath, JSON.stringify(createSamplePlan()));
+    const { stdout } = await runCli(["mission", "create", "--file", planPath, "--json"], tmpDir);
+    const missionId = JSON.parse(stdout).mission.id as string;
+    await runCli(["mission", "approve", missionId, "--json"], tmpDir);
+    await runCli(["feature", "update", "f1", "--mission", missionId, "--status", "assigned", "--json"], tmpDir);
+    return missionId;
+  }
 
 describe("loadMissionControlSnapshot", () => {
   it("keeps inspection non-mutating", async () => {
     const missionId = await createMission();
 
-    const snapshot = await loadMissionControlSnapshot(snapshotDeps, homeSnapshotDeps, missionId);
+      const snapshot = await loadMissionControlSnapshot(snapshotDeps, missionId);
 
     expect(snapshot.mode).toBe("mission");
     expect(snapshot.missionId).toBe(missionId);
@@ -114,10 +100,9 @@ describe("loadMissionControlSnapshot", () => {
   });
 
   it("re-resolves the mission after starting in home mode without an explicit mission", async () => {
-    const loader = createMissionControlSnapshotLoader(
-      snapshotDeps,
-      homeSnapshotDeps,
-    );
+      const loader = createMissionControlSnapshotLoader(
+        snapshotDeps,
+      );
 
     const homeSnapshot = await loader.load();
     expect(homeSnapshot.mode).toBe("home");

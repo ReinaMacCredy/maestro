@@ -40,18 +40,19 @@ describe("JsonlTaskStoreAdapter", () => {
     });
 
     it("respects provided priority, type, labels, depends-on", async () => {
+      const dependency = await store.create({ title: "Dependency" });
       const task = await store.create({
         title: "Custom",
         priority: 0,
         type: "bug",
         labels: ["urgent", "auth"],
-        dependsOn: ["tsk-000001"],
+        dependsOn: [dependency.id],
       });
 
       expect(task.priority).toBe(0);
       expect(task.type).toBe("bug");
       expect(task.labels).toEqual(["urgent", "auth"]);
-      expect(task.dependsOn).toEqual(["tsk-000001"]);
+      expect(task.dependsOn).toEqual([dependency.id]);
     });
 
     it("creates distinct ids for sequential tasks", async () => {
@@ -87,6 +88,42 @@ describe("JsonlTaskStoreAdapter", () => {
 
       await expect(store.all()).rejects.toThrow(MaestroError);
       await expect(store.create({ title: "blocked by corruption" })).rejects.toThrow(MaestroError);
+    });
+
+    it("surfaces duplicate task ids instead of collapsing them on read", async () => {
+      const tasksDir = join(tmpDir, ".maestro", "tasks");
+      await mkdir(tasksDir, { recursive: true });
+      await Bun.write(
+        join(tasksDir, "tasks.jsonl"),
+        [
+          JSON.stringify({
+            id: "tsk-abc123",
+            title: "First copy",
+            type: "task",
+            priority: 2,
+            status: "open",
+            labels: [],
+            dependsOn: [],
+            createdAt: "2026-04-12T00:00:00.000Z",
+            updatedAt: "2026-04-12T00:00:00.000Z",
+          }),
+          JSON.stringify({
+            id: "tsk-abc123",
+            title: "Second copy",
+            type: "task",
+            priority: 2,
+            status: "open",
+            labels: [],
+            dependsOn: [],
+            createdAt: "2026-04-12T00:00:01.000Z",
+            updatedAt: "2026-04-12T00:00:01.000Z",
+          }),
+          "",
+        ].join("\n"),
+      );
+
+      await expect(store.all()).rejects.toThrow(MaestroError);
+      await expect(store.update("tsk-abc123", { title: "blocked" })).rejects.toThrow(MaestroError);
     });
   });
 

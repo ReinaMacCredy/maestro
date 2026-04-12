@@ -2,17 +2,14 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-
-const REPO_ROOT = join(import.meta.dir, "..", "..");
-const DIST_CLI = join(REPO_ROOT, "dist", "maestro");
-const BUILD_TIMEOUT_MS = 60_000;
-const SLOW_CLI_TIMEOUT_MS = 30_000;
-
-interface CommandResult {
-  stdout: string;
-  stderr: string;
-  exitCode: number;
-}
+import {
+  BUILD_TIMEOUT_MS,
+  REPO_ROOT,
+  SLOW_CLI_TIMEOUT_MS,
+  buildCompiledCli,
+  initGitRepo,
+  runCompiled,
+} from "../helpers/run-compiled-cli.js";
 
 interface RenderCheckResult {
   summary: {
@@ -24,53 +21,6 @@ interface RenderCheckResult {
 }
 
 let tmpDir: string;
-
-async function runCompiled(
-  args: string[],
-  cwd = process.cwd(),
-): Promise<CommandResult> {
-  const proc = Bun.spawn([DIST_CLI, ...args], {
-    stdout: "pipe",
-    stderr: "pipe",
-    cwd,
-  });
-
-  const [stdout, stderr] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-  ]);
-
-  return {
-    stdout: stdout.trim(),
-    stderr: stderr.trim(),
-    exitCode: await proc.exited,
-  };
-}
-
-async function buildCompiledCli(): Promise<void> {
-  const proc = Bun.spawn(["bun", "run", "build"], {
-    cwd: REPO_ROOT,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-
-  expect({ stdout, stderr, exitCode }).toMatchObject({ exitCode: 0 });
-}
-
-async function initGitRepo(cwd: string): Promise<void> {
-  const proc = Bun.spawn(["git", "init", "-b", "main"], {
-    cwd,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  await proc.exited;
-}
 
 async function createSkill(baseDir: string, skillName: string): Promise<void> {
   const skillDir = join(baseDir, ".maestro", "skills", skillName);

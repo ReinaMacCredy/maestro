@@ -19,7 +19,7 @@ import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { ensureDir, readText, removeIfExists, writeText } from "@/shared/lib/fs.js";
 import { generateTaskId } from "../domain/task-id.js";
 import { assertNoParentCycle, validateTask } from "../domain/task-validators.js";
-import { taskAlreadyClosed, taskNotFound } from "../domain/task-errors.js";
+import { taskAlreadyClosed, taskNotFound, unknownDependency } from "../domain/task-errors.js";
 import { MaestroError } from "@/shared/errors.js";
 import {
   DEFAULT_TASK_TYPE,
@@ -66,6 +66,18 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
   async create(input: CreateTaskInput): Promise<Task> {
     return this.withLock(async () => {
       const tasks = await this.readAll();
+      const byId = indexTasksById(Array.from(tasks.values()));
+
+      if (input.dependsOn && input.dependsOn.length > 0) {
+        const missing = input.dependsOn.filter((id) => !byId.has(id));
+        if (missing.length > 0) {
+          throw unknownDependency("<new task>", missing);
+        }
+      }
+
+      if (input.parentId !== undefined && !byId.has(input.parentId)) {
+        throw taskNotFound(input.parentId);
+      }
 
       let id: string | undefined;
       for (let attempt = 0; attempt < MAX_ID_RETRIES; attempt++) {
@@ -76,7 +88,10 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         }
       }
       if (id === undefined) {
-        throw new Error(`Failed to generate a unique task id after ${MAX_ID_RETRIES} attempts`);
+        throw new MaestroError(`Failed to generate a unique task id after ${MAX_ID_RETRIES} attempts`, [
+          "Retry the command to generate a fresh task id",
+          "If the problem persists, inspect .maestro/tasks/tasks.jsonl for duplicate ids",
+        ]);
       }
 
       const now = new Date().toISOString();
@@ -175,6 +190,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
     if (raw === undefined) return new Map();
 
     const result = new Map<string, Task>();
+    const lineById = new Map<string, number>();
     const lines = raw.split("\n");
     for (const [index, line] of lines.entries()) {
       const lineNumber = index + 1;
@@ -196,6 +212,14 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
           "Task mutations are blocked to avoid rewriting incomplete data",
         ]);
       }
+      const firstLine = lineById.get(validated.id);
+      if (firstLine !== undefined) {
+        throw new MaestroError(`Task storage contains duplicate id '${validated.id}' at lines ${firstLine} and ${lineNumber}: ${this.tasksPath()}`, [
+          "Remove or repair the duplicate task record before retrying",
+          "Task mutations are blocked to avoid dropping one of the records",
+        ]);
+      }
+      lineById.set(validated.id, lineNumber);
       result.set(validated.id, validated);
     }
     return result;

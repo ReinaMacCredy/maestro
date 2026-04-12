@@ -2,26 +2,34 @@ import type { Command } from "commander";
 import { getServices } from "@/services.js";
 import { output, resolveJsonFlag, warn } from "@/shared/lib/output.js";
 import { MaestroError } from "@/shared/errors.js";
-import { formatRelativeAge } from "@/shared/version-format.js";
 import { createTask } from "../usecases/create-task.usecase.js";
 import { showTask } from "../usecases/show-task.usecase.js";
 import { listTasks } from "../usecases/list-tasks.usecase.js";
 import { updateTask } from "../usecases/update-task.usecase.js";
 import { closeTask } from "../usecases/close-task.usecase.js";
-import { readyTasks, type TaskBriefing } from "../usecases/ready-tasks.usecase.js";
+import { readyTasks } from "../usecases/ready-tasks.usecase.js";
 import { captureTaskCandidate } from "../usecases/capture-task-candidate.usecase.js";
-import type { TaskHint } from "../usecases/match-candidates.usecase.js";
 import type {
-  Task,
-  TaskPriority,
-  TaskType,
-  TaskStatus,
-  CreateTaskInput,
   UpdateTaskInput,
   ListTasksFilters,
   ReadyTasksFilters,
 } from "../domain/task-types.js";
-import { TASK_PRIORITIES, TASK_TYPES, TASK_STATUSES } from "../domain/task-types.js";
+import { TASK_TYPES, TASK_STATUSES } from "../domain/task-types.js";
+import {
+  buildCreateInput,
+  hasAnyPatchField,
+  parseLimit,
+  parseList,
+  parsePriority,
+  parseStatus,
+  parseType,
+} from "./task-command-parsers.js";
+import {
+  formatTaskBriefingList,
+  formatTaskDetail,
+  formatTaskList,
+  formatTaskSummary,
+} from "./task-command-formatters.js";
 
 export function registerTaskCommand(program: Command): void {
   const taskCmd = program
@@ -290,183 +298,4 @@ function registerReadyCommand(taskCmd: Command, program: Command): void {
       );
       output(isJson, briefings, formatTaskBriefingList);
     });
-}
-
-// ============================
-// Helpers
-// ============================
-
-interface CreateOpts {
-  description?: string;
-  type?: string;
-  priority?: string;
-  parent?: string;
-  labels?: string;
-  dependsOn?: string;
-  assignee?: string;
-}
-
-function buildCreateInput(title: string, opts: CreateOpts): CreateTaskInput {
-  return {
-    title,
-    description: opts.description,
-    type: parseType(opts.type),
-    priority: parsePriority(opts.priority),
-    parentId: opts.parent,
-    labels: parseList(opts.labels),
-    dependsOn: parseList(opts.dependsOn),
-    assignee: opts.assignee,
-  };
-}
-
-function parseType(value: string | undefined): TaskType | undefined {
-  if (value === undefined) return undefined;
-  if ((TASK_TYPES as readonly string[]).includes(value)) {
-    return value as TaskType;
-  }
-  throw new MaestroError(`Invalid --type '${value}'`, [
-    `Valid types: ${TASK_TYPES.join(", ")}`,
-  ]);
-}
-
-function parseStatus(value: string | undefined): TaskStatus | undefined {
-  if (value === undefined) return undefined;
-  if ((TASK_STATUSES as readonly string[]).includes(value)) {
-    return value as TaskStatus;
-  }
-  throw new MaestroError(`Invalid --status '${value}'`, [
-    `Valid statuses: ${TASK_STATUSES.join(", ")}`,
-  ]);
-}
-
-function parseLimit(value: string | undefined): number | undefined {
-  if (value === undefined) return undefined;
-  const n = Number.parseInt(value, 10);
-  if (Number.isNaN(n) || n < 0) {
-    throw new MaestroError(`Invalid --limit '${value}'`, [
-      "Limit must be a non-negative integer (0 = unlimited)",
-    ]);
-  }
-  return n;
-}
-
-function hasAnyPatchField(patch: UpdateTaskInput): boolean {
-  return (
-    patch.title !== undefined ||
-    patch.description !== undefined ||
-    patch.status !== undefined ||
-    patch.priority !== undefined ||
-    patch.type !== undefined ||
-    patch.parentId !== undefined ||
-    patch.assignee !== undefined ||
-    (patch.addLabels !== undefined && patch.addLabels.length > 0) ||
-    (patch.removeLabels !== undefined && patch.removeLabels.length > 0) ||
-    patch.deferUntil !== undefined
-  );
-}
-
-function parsePriority(value: string | undefined): TaskPriority | undefined {
-  if (value === undefined) return undefined;
-  const n = Number.parseInt(value, 10);
-  if (Number.isNaN(n) || !(TASK_PRIORITIES as readonly number[]).includes(n)) {
-    throw new MaestroError(`Invalid --priority '${value}'`, [
-      "Priority must be one of 0, 1, 2, 3, 4",
-      "0 = critical, 4 = backlog",
-    ]);
-  }
-  return n as TaskPriority;
-}
-
-function parseList(value: string | undefined): readonly string[] | undefined {
-  if (value === undefined) return undefined;
-  return value
-    .split(",")
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
-}
-
-// ============================
-// Formatters
-// ============================
-
-function formatTaskSummary(task: Task): string[] {
-  return [
-    `[ok] Task created: ${task.id}`,
-    `  Title: ${task.title}`,
-    `  Status: ${task.status}`,
-    `  Priority: P${task.priority}`,
-    `  Type: ${task.type}`,
-    ...(task.parentId ? [`  Parent: ${task.parentId}`] : []),
-    ...(task.labels.length > 0 ? [`  Labels: ${task.labels.join(", ")}`] : []),
-    ...(task.dependsOn.length > 0 ? [`  Depends on: ${task.dependsOn.join(", ")}`] : []),
-  ];
-}
-
-function formatTaskList(tasks: readonly Task[]): string[] {
-  if (tasks.length === 0) {
-    return ["No tasks found"];
-  }
-
-  const lines: string[] = [`${tasks.length} task(s)`, ""];
-  for (const t of tasks) {
-    const status = t.status.padEnd(12);
-    const prio = `P${t.priority}`;
-    const title = t.title.length > 40 ? `${t.title.slice(0, 37)}...` : t.title;
-    lines.push(`${t.id}  ${prio}  ${status}  ${title}`);
-  }
-  return lines;
-}
-
-/**
- * `task ready` formatter. Renders each task as one line, then nests any
- * active-memory hints beneath it with a `>>` marker. Empty hints arrays
- * are silently skipped so the output stays terse when there is nothing
- * to surface.
- */
-function formatTaskBriefingList(briefings: readonly TaskBriefing[]): string[] {
-  if (briefings.length === 0) {
-    return ["No tasks found"];
-  }
-
-  const lines: string[] = [`${briefings.length} task(s)`, ""];
-  for (const b of briefings) {
-    const status = b.status.padEnd(12);
-    const prio = `P${b.priority}`;
-    const title = b.title.length > 40 ? `${b.title.slice(0, 37)}...` : b.title;
-    lines.push(`${b.id}  ${prio}  ${status}  ${title}`);
-    for (const hint of b.hints) {
-      lines.push(`  >> ${formatHintLine(hint)}`);
-    }
-    if (b.hints.length > 0) {
-      lines.push("");
-    }
-  }
-  return lines;
-}
-
-function formatHintLine(hint: TaskHint): string {
-  const age = formatRelativeAge(hint.capturedAt);
-  return `${age} closed ${hint.sourceTaskId}: ${hint.reason}`;
-}
-
-function formatTaskDetail(task: Task): string[] {
-  const lines: string[] = [
-    `Task: ${task.id}`,
-    `  Title: ${task.title}`,
-    `  Status: ${task.status}`,
-    `  Priority: P${task.priority}`,
-    `  Type: ${task.type}`,
-    `  Created: ${task.createdAt}`,
-    `  Updated: ${task.updatedAt}`,
-  ];
-
-  if (task.description) lines.push(`  Description: ${task.description}`);
-  if (task.parentId) lines.push(`  Parent: ${task.parentId}`);
-  if (task.assignee) lines.push(`  Assignee: ${task.assignee}`);
-  if (task.labels.length > 0) lines.push(`  Labels: ${task.labels.join(", ")}`);
-  if (task.dependsOn.length > 0) lines.push(`  Depends on: ${task.dependsOn.join(", ")}`);
-  if (task.deferUntil) lines.push(`  Deferred until: ${task.deferUntil}`);
-  if (task.closeReason) lines.push(`  Close reason: ${task.closeReason}`);
-
-  return lines;
 }

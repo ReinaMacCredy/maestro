@@ -5,24 +5,21 @@
  */
 import { expect } from "bun:test";
 import { join } from "node:path";
+import {
+  runCommand,
+  initGitRepo,
+  type CommandResult,
+  type RunCommandOptions,
+} from "./command-runner.js";
 
 export const REPO_ROOT = join(import.meta.dir, "..", "..");
 export const DIST_CLI = join(REPO_ROOT, "dist", "maestro");
 export const BUILD_TIMEOUT_MS = 60_000;
 export const SLOW_CLI_TIMEOUT_MS = 30_000;
 
-export interface CommandResult {
-  readonly stdout: string;
-  readonly stderr: string;
-  readonly exitCode: number;
-}
-
-export interface RunCompiledOptions {
-  /** Extra environment variables to inject (merged over process.env). */
-  readonly env?: Record<string, string>;
-  /** Stdin bytes or string to write to the process before reading output. */
-  readonly stdin?: string;
-}
+export type { CommandResult };
+export { initGitRepo };
+export interface RunCompiledOptions extends RunCommandOptions {}
 
 /**
  * Spawn the compiled dist/maestro binary with the given args and capture
@@ -36,29 +33,7 @@ export async function runCompiled(
   cwd: string = process.cwd(),
   options: RunCompiledOptions = {},
 ): Promise<CommandResult> {
-  const proc = Bun.spawn([DIST_CLI, ...args], {
-    stdout: "pipe",
-    stderr: "pipe",
-    stdin: options.stdin !== undefined ? "pipe" : "inherit",
-    cwd,
-    env: options.env ? { ...process.env, ...options.env } : process.env,
-  });
-
-  if (options.stdin !== undefined && proc.stdin) {
-    proc.stdin.write(options.stdin);
-    await proc.stdin.end();
-  }
-
-  const [stdout, stderr] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-  ]);
-
-  return {
-    stdout: stdout.trim(),
-    stderr: stderr.trim(),
-    exitCode: await proc.exited,
-  };
+  return runCommand([DIST_CLI, ...args], cwd, options);
 }
 
 /**
@@ -70,33 +45,8 @@ export async function runCompiled(
  * because Bun caches unchanged modules.
  */
 export async function buildCompiledCli(): Promise<void> {
-  const proc = Bun.spawn(["bun", "run", "build"], {
-    cwd: REPO_ROOT,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ]);
-
-  expect({ stdout, stderr, exitCode }).toMatchObject({ exitCode: 0 });
-}
-
-/**
- * Initialize an empty git repo in the given directory. Many maestro
- * commands short-circuit when they cannot find a git branch, so every
- * e2e test that writes to `.maestro/` should call this from beforeEach.
- */
-export async function initGitRepo(cwd: string): Promise<void> {
-  const proc = Bun.spawn(["git", "init", "-b", "main"], {
-    cwd,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  await proc.exited;
+  const result = await runCommand(["bun", "run", "build"], REPO_ROOT);
+  expect(result).toMatchObject({ exitCode: 0 });
 }
 
 /**

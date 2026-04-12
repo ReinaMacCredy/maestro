@@ -6,6 +6,8 @@
  * breaking serialized candidates already on disk.
  */
 
+import { TASK_ID_PATTERN } from "./task-id.js";
+
 export type CandidateSourceType = "task-close";
 
 export interface TaskCandidate {
@@ -29,8 +31,8 @@ export function validateTaskCandidate(value: unknown): TaskCandidate | undefined
   if (typeof value !== "object" || value === null) return undefined;
   const c = value as Record<string, unknown>;
 
-  if (typeof c.id !== "string" || c.id.length === 0) return undefined;
-  if (typeof c.sourceTaskId !== "string" || c.sourceTaskId.length === 0) return undefined;
+  if (typeof c.id !== "string" || !TASK_ID_PATTERN.test(c.id)) return undefined;
+  if (typeof c.sourceTaskId !== "string" || !TASK_ID_PATTERN.test(c.sourceTaskId)) return undefined;
   if (c.sourceType !== "task-close") return undefined;
   if (typeof c.title !== "string") return undefined;
   if (typeof c.reason !== "string") return undefined;

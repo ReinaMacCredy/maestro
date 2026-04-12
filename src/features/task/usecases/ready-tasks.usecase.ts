@@ -44,6 +44,7 @@ export async function readyTasks(
 ): Promise<readonly TaskBriefing[]> {
   const all = await store.all();
   const byId = indexTasksById(all);
+  const blockedByOpenDependency = new Map<string, boolean>();
   const nowIso = now.toISOString();
 
   const selected = all.filter((task) => {
@@ -53,7 +54,7 @@ export async function readyTasks(
     if (!filters.includeDeferred && task.status === "deferred") return false;
 
     // Step 2: exclude tasks blocked by any open dependency (transitive walk).
-    if (hasOpenBlockingDependency(task, byId)) return false;
+    if (hasOpenBlockingDependency(task, byId, blockedByOpenDependency)) return false;
 
     // Step 3: exclude deferred unless overridden.
     if (
@@ -114,25 +115,38 @@ export async function readyTasks(
 function hasOpenBlockingDependency(
   task: Task,
   byId: ReadonlyMap<string, Task>,
+  memo: Map<string, boolean>,
+  visiting = new Set<string>(),
 ): boolean {
-  if (task.dependsOn.length === 0) return false;
+  const cachedResult = memo.get(task.id);
+  if (cachedResult !== undefined) {
+    return cachedResult;
+  }
+  if (task.dependsOn.length === 0) {
+    memo.set(task.id, false);
+    return false;
+  }
 
-  const visited = new Set<string>([task.id]);
-  const stack: string[] = [...task.dependsOn];
+  visiting.add(task.id);
 
-  while (stack.length > 0) {
-    const depId = stack.pop() as string;
-    if (visited.has(depId)) continue;
-    visited.add(depId);
+  for (const depId of task.dependsOn) {
+    if (visiting.has(depId)) {
+      memo.set(task.id, true);
+      visiting.delete(task.id);
+      return true;
+    }
 
     const dep = byId.get(depId);
     if (!dep) continue; // orphaned edge; skip
-    if (dep.status !== "closed") {
-      return true; // blocked by an open ancestor in the dep chain
+    if (dep.status !== "closed" || hasOpenBlockingDependency(dep, byId, memo, visiting)) {
+      memo.set(task.id, true);
+      visiting.delete(task.id);
+      return true;
     }
-    stack.push(...dep.dependsOn);
   }
 
+  visiting.delete(task.id);
+  memo.set(task.id, false);
   return false;
 }
 

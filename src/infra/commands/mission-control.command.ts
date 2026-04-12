@@ -97,7 +97,7 @@ export function registerMissionControlCommand(program: Command): void {
           throw new MaestroError("Preview selectors require a single --preview screen", [
             "Use `maestro mission-control --preview dashboard --feature <id>`",
             "Use `maestro mission-control --preview handoffs --handoff <id>`",
-            "Use `maestro mission-control --preview output --feature <id>`",
+            "Use `maestro mission-control --preview features --feature <id>`",
           ]);
         }
 
@@ -116,19 +116,8 @@ export function registerMissionControlCommand(program: Command): void {
           handoffStore: services.handoffStore,
           cwd: process.cwd(),
         };
-        const homeSnapshotDeps = {
-          config: services.config,
-          git: services.git,
-          correctionStore: services.correctionStore,
-          learningStore: services.learningStore,
-          ratchetStore: services.ratchetStore,
-          projectGraphStore: services.projectGraphStore,
-          handoffStore: services.handoffStore,
-        };
-
         const snapshotLoader = createMissionControlSnapshotLoader(
           snapshotDeps,
-          homeSnapshotDeps,
           opts.mission,
         );
         const loadReadSnapshot = async (): Promise<MissionControlSnapshot> =>
@@ -307,7 +296,6 @@ async function buildMissionSnapshot(
 
 export function createMissionControlSnapshotLoader(
   snapshotDeps: Parameters<typeof buildSnapshot>[0],
-  homeSnapshotDeps: Parameters<typeof buildHomeSnapshot>[0],
   explicitMissionId?: string,
 ): MissionControlSnapshotLoader {
   let resolvedMissionId = explicitMissionId;
@@ -317,7 +305,6 @@ export function createMissionControlSnapshotLoader(
   const cachingGit = new CachingGitPort(snapshotDeps.git);
   const cachingConfig = new CachingConfigPort(snapshotDeps.config);
   const cachedSnapshotDeps = { ...snapshotDeps, git: cachingGit, config: cachingConfig };
-  const cachedHomeSnapshotDeps = { ...homeSnapshotDeps, git: cachingGit, config: cachingConfig };
 
   return {
     load: async () => {
@@ -327,7 +314,6 @@ export function createMissionControlSnapshotLoader(
 
       return loadMissionControlSnapshot(
         cachedSnapshotDeps,
-        cachedHomeSnapshotDeps,
         resolvedMissionId,
       );
     },
@@ -336,12 +322,11 @@ export function createMissionControlSnapshotLoader(
 
 export async function loadMissionControlSnapshot(
   snapshotDeps: Parameters<typeof buildSnapshot>[0],
-  homeSnapshotDeps: Parameters<typeof buildHomeSnapshot>[0],
   missionId?: string,
 ) {
   return missionId
     ? buildMissionSnapshot(missionId, snapshotDeps)
-    : buildHomeSnapshot(homeSnapshotDeps, process.cwd());
+    : buildHomeSnapshot(snapshotDeps);
 }
 
 function redactSnapshotForReadOutput(

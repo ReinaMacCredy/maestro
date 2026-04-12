@@ -34,6 +34,7 @@ describe("validateTaskCandidate", () => {
 
   it("rejects missing id", () => {
     expect(validateTaskCandidate({ ...fixture(), id: "" })).toBeUndefined();
+    expect(validateTaskCandidate({ ...fixture(), id: "not-a-task-id" })).toBeUndefined();
     const { id: _id, ...noId } = fixture();
     expect(validateTaskCandidate(noId)).toBeUndefined();
   });
@@ -41,6 +42,9 @@ describe("validateTaskCandidate", () => {
   it("rejects missing sourceTaskId", () => {
     expect(
       validateTaskCandidate({ ...fixture(), sourceTaskId: "" }),
+    ).toBeUndefined();
+    expect(
+      validateTaskCandidate({ ...fixture(), sourceTaskId: "bad-id" }),
     ).toBeUndefined();
   });
 

@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runCli } from "../helpers/run-cli";
+import { initGitRepo } from "../helpers/run-compiled-cli.js";
 
 interface RenderCheckScreen {
   screen: string;
@@ -30,15 +31,6 @@ interface FeatureListResult {
 
 let tmpDir: string;
 const SLOW_CLI_TIMEOUT_MS = 20_000;
-
-async function initGitRepo(cwd: string): Promise<void> {
-  const proc = Bun.spawn(["git", "init", "-b", "main"], {
-    cwd,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  await proc.exited;
-}
 
 async function createSkill(baseDir: string, skillName: string): Promise<void> {
   const skillDir = join(baseDir, ".maestro", "skills", skillName);

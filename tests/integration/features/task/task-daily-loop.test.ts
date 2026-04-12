@@ -3,20 +3,11 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runCli } from "../../../helpers/run-cli.js";
-import { expectJson } from "../../../helpers/run-compiled-cli.js";
+import { expectJson, initGitRepo } from "../../../helpers/run-compiled-cli.js";
 
 const SLOW_CLI_TIMEOUT_MS = 30_000;
 
 let tmpDir: string;
-
-async function initGitRepo(cwd: string): Promise<void> {
-  const init = Bun.spawn(["git", "init", "-b", "main"], {
-    cwd,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  await init.exited;
-}
 
 beforeEach(async () => {
   tmpDir = await mkdtemp(join(tmpdir(), "maestro-task-cli-"));

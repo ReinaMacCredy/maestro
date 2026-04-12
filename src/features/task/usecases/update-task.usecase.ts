@@ -1,8 +1,7 @@
 import type { Task, UpdateTaskInput } from "../domain/task-types.js";
-import { indexTasksById } from "../domain/task-types.js";
 import type { TaskStorePort } from "../ports/task-store.port.js";
-import { validateUpdateInput, assertNoParentCycle } from "../domain/task-validators.js";
-import { closeViaCloseCommand, taskNotFound } from "../domain/task-errors.js";
+import { validateUpdateInput } from "../domain/task-validators.js";
+import { closeViaCloseCommand } from "../domain/task-errors.js";
 
 export interface ClaimParams {
   readonly sessionId: string;
@@ -21,8 +20,7 @@ export interface UpdateTaskOpts {
 
 /**
  * Update a task. Rejects `--status closed` (route through closeTask instead)
- * so the close reason always gets captured. Verifies parent cycles via the
- * domain validator.
+ * so the close reason always gets captured.
  */
 export async function updateTask(
   store: TaskStorePort,
@@ -33,19 +31,6 @@ export async function updateTask(
 
   if (patch.status === "closed") {
     throw closeViaCloseCommand();
-  }
-
-  const byId = indexTasksById(await store.all());
-
-  if (!byId.has(id)) {
-    throw taskNotFound(id);
-  }
-
-  if (patch.parentId !== undefined && patch.parentId !== "") {
-    if (!byId.has(patch.parentId)) {
-      throw taskNotFound(patch.parentId);
-    }
-    assertNoParentCycle(id, patch.parentId, byId);
   }
 
   // Merge --claim on top of the explicit patch.

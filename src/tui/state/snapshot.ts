@@ -65,6 +65,7 @@ export interface HomeSnapshotDeps {
   ratchetStore?: RatchetStorePort;
   projectGraphStore?: ProjectGraphStorePort;
   handoffStore?: HandoffStorePort;
+  cwd: string;
 }
 
 interface FeatureGraphEntry {
@@ -242,18 +243,17 @@ export async function buildSnapshot(
 
 export async function buildHomeSnapshot(
   deps: HomeSnapshotDeps,
-  cwd: string,
 ): Promise<MissionControlSnapshot> {
   const [env, configLayers, gitState, memorySnapshot, pendingHandoffs] = await Promise.all([
-    buildMissionControlEnvironmentSummary(deps.config, deps.git, cwd),
-    deps.config.loadLayers(cwd),
-    deps.git.isRepo(cwd).then((isRepo) => isRepo ? deps.git.getState(cwd) : Promise.resolve(undefined)),
+    buildMissionControlEnvironmentSummary(deps.config, deps.git, deps.cwd),
+    deps.config.loadLayers(deps.cwd),
+    deps.git.isRepo(deps.cwd).then((isRepo) => isRepo ? deps.git.getState(deps.cwd) : Promise.resolve(undefined)),
     buildMissionControlMemorySnapshot({
       correctionStore: deps.correctionStore,
       learningStore: deps.learningStore,
       ratchetStore: deps.ratchetStore,
       projectGraphStore: deps.projectGraphStore,
-      cwd,
+      cwd: deps.cwd,
     }),
     loadPendingHandoffs(deps.handoffStore),
   ]);
@@ -328,7 +328,7 @@ export async function buildHomeSnapshot(
     home: {
       headline,
       summary,
-      locationLabel: status.gitAvailable ? cwd : "Outside a git repository",
+        locationLabel: status.gitAvailable ? deps.cwd : "Outside a git repository",
       checks,
       actions,
       pendingHandoffs,
