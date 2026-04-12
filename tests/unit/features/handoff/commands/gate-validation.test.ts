@@ -1,14 +1,56 @@
 /**
  * Tests for principle gate validation on handoff create.
  *
- * These test the gate-check integration at the handoff content level,
- * using evaluateGateCheck from shared/lib. The command-level plumbing
- * (CLI flags, validateGatePrinciples) is exercised via the content shapes.
+ * These cover both the pure gate-check helpers and the real CLI rejection
+ * paths for gate enforcement during `maestro handoff create`.
  */
-import { describe, it, expect } from "bun:test";
+import { afterEach, beforeEach, describe, it, expect } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { evaluateGateCheck } from "@/shared/lib/gate-check.js";
 import { validateUkiHandoffContent } from "@/features/handoff/domain/validators.js";
 import type { UkiHandoffContent } from "@/features/handoff/domain/uki-types.js";
+import { runCli } from "../../../../helpers/run-cli.js";
+import { initGitRepo } from "../../../../helpers/command-runner.js";
+
+let tmpDir: string;
+
+beforeEach(async () => {
+  tmpDir = await mkdtemp(join(tmpdir(), "maestro-gate-validation-"));
+  await initGitRepo(tmpDir);
+  const initResult = await runCli(["init", "--json"], tmpDir);
+  expect(initResult.exitCode).toBe(0);
+});
+
+afterEach(async () => {
+  await rm(tmpDir, { recursive: true, force: true });
+});
+
+async function createImplementationMission(): Promise<string> {
+  const planPath = join(tmpDir, "plan.json");
+  await writeFile(planPath, JSON.stringify({
+    title: "Gate Test Mission",
+    description: "Mission for handoff gate validation",
+    milestones: [
+      { id: "m1", title: "Implementation", description: "Implement", order: 0, profile: "implementation" },
+    ],
+    features: [
+      {
+        id: "f1",
+        milestoneId: "m1",
+        title: "Feature 1",
+        description: "Feature under gate test",
+        workerType: "test-skill",
+        verificationSteps: ["build", "test"],
+      },
+    ],
+  }));
+
+  const result = await runCli(["mission", "create", "--file", planPath, "--json"], tmpDir);
+  expect(result.exitCode).toBe(0);
+  return JSON.parse(result.stdout).mission.id as string;
+}
 
 function makeExecuteContent(overrides: Record<string, unknown> = {}): UkiHandoffContent {
   return {
@@ -151,6 +193,83 @@ describe("gate validation on handoff content", () => {
 
       const adHocContent = makeExecuteContent({ maestroRefs: {} });
       expect(adHocContent.maestroRefs.missionId).toBeUndefined();
+    });
+  });
+
+  describe("handoff create command", () => {
+    it("rejects mission-linked handoffs that do not satisfy active gates", async () => {
+      const missionId = await createImplementationMission();
+
+      const result = await runCli([
+        "handoff",
+        "create",
+        "--mode", "execute",
+        "--mission-id", missionId,
+        "--feature-id", "f1",
+        "--session-core", "session_abc",
+        "--summary", "summary",
+        "--next-action", "next_step",
+        "--completed", "implemented_feature",
+        "--validation", "tests_pass",
+        "--confidence-work", "0.9",
+        "--artifact", "branch_main",
+      ], tmpDir);
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("Handoff rejected by");
+      expect(result.stderr).toContain("assumptions");
+      expect(result.stderr).toContain("scopeDeclaration");
+      expect(result.stderr).toContain("verificationResults");
+    });
+
+    it("rejects non-string scope declaration values before persistence", async () => {
+      const missionId = await createImplementationMission();
+
+      const result = await runCli([
+        "handoff",
+        "create",
+        "--mode", "execute",
+        "--mission-id", missionId,
+        "--feature-id", "f1",
+        "--session-core", "session_abc",
+        "--summary", "summary",
+        "--next-action", "next_step",
+        "--completed", "implemented_feature",
+        "--validation", "tests_pass",
+        "--confidence-work", "0.9",
+        "--artifact", "branch_main",
+        "--scope-declaration", "{\"touched\":1}",
+      ], tmpDir);
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("--scope-declaration values must be strings");
+    });
+
+    it("fails closed when the principle store is unreadable", async () => {
+      const missionId = await createImplementationMission();
+      await writeFile(join(tmpDir, ".maestro", "principles.jsonl"), "{not-json}\n");
+
+      const result = await runCli([
+        "handoff",
+        "create",
+        "--mode", "execute",
+        "--mission-id", missionId,
+        "--feature-id", "f1",
+        "--session-core", "session_abc",
+        "--summary", "summary",
+        "--next-action", "next_step",
+        "--completed", "implemented_feature",
+        "--validation", "tests_pass",
+        "--confidence-work", "0.9",
+        "--artifact", "branch_main",
+        "--assumption", "one_assumption",
+        "--scope-declaration", "{\"touched\":\"src/index.ts\"}",
+        "--verification-result", "build:passed",
+      ], tmpDir);
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("Failed to load active principles");
+      expect(result.stderr).toContain("Invalid principle record at line 1");
     });
   });
 });

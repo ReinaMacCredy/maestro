@@ -79,24 +79,27 @@ export class JsonlPrincipleStoreAdapter implements PrincipleStorePort {
 
     const results: Principle[] = [];
     const lines = raw.split("\n");
-    for (const line of lines) {
+    for (const [index, line] of lines.entries()) {
       const trimmed = line.trim();
       if (trimmed.length === 0) continue;
 
       let parsed: unknown;
       try {
         parsed = JSON.parse(trimmed);
-      } catch {
-        // Skip corrupt lines rather than blocking all reads.
-        // Principles are admin-managed so partial data loss is acceptable.
-        continue;
+      } catch (error) {
+        throw new MaestroError(`Invalid principle record at line ${index + 1}`, [
+          this.filePath(),
+          error instanceof Error ? error.message : String(error),
+        ]);
       }
 
       try {
         results.push(validatePrinciple(parsed));
-      } catch {
-        // Skip invalid records -- same rationale as corrupt JSON above.
-        continue;
+      } catch (error) {
+        throw new MaestroError(`Invalid principle schema at line ${index + 1}`, [
+          this.filePath(),
+          error instanceof Error ? error.message : String(error),
+        ]);
       }
     }
     return results;

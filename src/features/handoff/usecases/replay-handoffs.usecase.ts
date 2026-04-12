@@ -1,7 +1,7 @@
 /**
  * Conductor Replay: extract prior session insights from handoff history.
  *
- * When a feature has prior handoffs (matched by maestroRefs.featureId),
+ * When a feature has prior handoffs (matched by mission + feature refs),
  * this usecase projects the replay-worthy fields into a compact summary
  * that the worker prompt generator injects as context.
  */
@@ -12,6 +12,7 @@ import type {
   UkiHandoffMode,
   UkiVerificationResult,
 } from "../domain/uki-types.js";
+import { normalizeUkiToken } from "../lib/uki-token.js";
 
 const MAX_REPLAY_HANDOFFS = 3;
 
@@ -38,14 +39,17 @@ export interface PriorSessionSummary {
  */
 export async function loadPriorHandoffs(
   handoffStore: HandoffStorePort,
+  missionId: string,
   featureId: string,
 ): Promise<readonly PriorSessionSummary[] | undefined> {
   const all = await handoffStore.list();
+  const normalizedMissionId = normalizeUkiToken(missionId);
 
   const summaries: PriorSessionSummary[] = [];
   for (const handoff of all) {
     if (summaries.length >= MAX_REPLAY_HANDOFFS) break;
-    if (handoff.content.maestroRefs.featureId !== featureId) continue;
+    const refs = handoff.content.maestroRefs;
+    if (refs.missionId !== normalizedMissionId || refs.featureId !== featureId) continue;
 
     const summary = extractReplaySummary(handoff);
     if (summary) summaries.push(summary);

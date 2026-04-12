@@ -124,7 +124,7 @@ describe("JsonlPrincipleStoreAdapter", () => {
   });
 
   describe("corrupt line handling", () => {
-    it("skips corrupt JSON lines", async () => {
+    it("throws on corrupt JSON lines", async () => {
       const content = [
         JSON.stringify({
           id: "valid",
@@ -146,11 +146,10 @@ describe("JsonlPrincipleStoreAdapter", () => {
       ].join("\n") + "\n";
 
       await writeText(join(tempDir, ".maestro", "principles.jsonl"), content);
-      const all = await adapter.list();
-      expect(all).toHaveLength(2);
+      await expect(adapter.list()).rejects.toThrow("Invalid principle record at line 2");
     });
 
-    it("skips lines that fail validation", async () => {
+    it("throws on lines that fail validation", async () => {
       const content = [
         JSON.stringify({
           id: "valid",
@@ -164,8 +163,7 @@ describe("JsonlPrincipleStoreAdapter", () => {
       ].join("\n") + "\n";
 
       await writeText(join(tempDir, ".maestro", "principles.jsonl"), content);
-      const all = await adapter.list();
-      expect(all).toHaveLength(1);
+      await expect(adapter.list()).rejects.toThrow("Invalid principle schema at line 2");
     });
   });
 });

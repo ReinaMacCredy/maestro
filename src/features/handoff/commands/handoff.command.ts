@@ -20,6 +20,7 @@ import type {
   UkiVerificationResult,
 } from "../domain/uki-types.js";
 import { UKI_HANDOFF_MODES, UKI_HANDOFF_STATUSES } from "../domain/uki-types.js";
+import { validateUkiHandoffContent } from "../domain/validators.js";
 import { createUkiHandoff } from "../usecases/create-uki-handoff.usecase.js";
 import { listUkiHandoffs } from "../usecases/list-uki-handoffs.usecase.js";
 import { pickupUkiHandoff } from "../usecases/pickup-uki-handoff.usecase.js";
@@ -163,7 +164,9 @@ async function buildContentFromOptions(
 
   const maestroRefs = {
     ...auto.maestroRefs,
-    ...(typeof opts.missionId === "string" && opts.missionId.length > 0 ? { missionId: opts.missionId } : {}),
+    ...(typeof opts.missionId === "string" && opts.missionId.length > 0
+      ? { missionId: normalizeUkiToken(opts.missionId) }
+      : {}),
     ...(typeof opts.featureId === "string" && opts.featureId.length > 0 ? { featureId: opts.featureId } : {}),
     ...(typeof opts.milestoneId === "string" && opts.milestoneId.length > 0 ? { milestoneId: opts.milestoneId } : {}),
     ...(typeof opts.planRef === "string" && opts.planRef.length > 0 ? { planPath: opts.planRef } : {}),
@@ -176,10 +179,10 @@ async function buildContentFromOptions(
   });
 
   if (mode === "plan") {
-    return buildPlanContent(base, auto, opts);
+    return validateUkiHandoffContent(buildPlanContent(base, auto, opts));
   }
 
-  return buildExecuteContent(base, auto, opts);
+  return validateUkiHandoffContent(buildExecuteContent(base, auto, opts));
 }
 
 function buildBaseContent(
@@ -487,7 +490,7 @@ function buildPrincipleGateFields(
     result.assumptions = assumptions;
   }
 
-  const scope = parseJsonOption("--scope-declaration", opts.scopeDeclaration);
+  const scope = parseStringRecordOption("--scope-declaration", opts.scopeDeclaration);
   if (scope) result.scopeDeclaration = scope;
 
   const complexity = parseJsonOption("--complexity-delta", opts.complexityDelta);
@@ -510,6 +513,23 @@ function parseJsonOption(flag: string, raw: unknown): Record<string, unknown> | 
       `Example: ${flag} '{"key":"value"}'`,
     ]);
   }
+}
+
+function parseStringRecordOption(
+  flag: string,
+  raw: unknown,
+): Record<string, string> | undefined {
+  const parsed = parseJsonOption(flag, raw);
+  if (!parsed) return undefined;
+  for (const [key, value] of Object.entries(parsed)) {
+    if (typeof value !== "string") {
+      throw new MaestroError(`${flag} values must be strings`, [
+        `Invalid value for key '${key}'`,
+        `Example: ${flag} '{"touched":"src/foo.ts"}'`,
+      ]);
+    }
+  }
+  return parsed;
 }
 
 function parseVerificationResult(raw: string): UkiVerificationResult {
@@ -535,30 +555,27 @@ async function validateGatePrinciples(
   services: Services,
 ): Promise<void> {
   const { maestroRefs } = content;
-  if (!maestroRefs.missionId || !maestroRefs.featureId) return;
-
-  let profile: import("@/features/mission").MilestoneProfile | undefined;
-  try {
-    const [mission, feature] = await Promise.all([
-      services.missionStore.get(maestroRefs.missionId),
-      services.featureStore.get(maestroRefs.missionId, maestroRefs.featureId),
+  if (!maestroRefs.missionId && !maestroRefs.featureId) return;
+  if (!maestroRefs.missionId || !maestroRefs.featureId) {
+    throw new MaestroError("Gate validation requires both missionId and featureId", [
+      "Provide both refs for mission-linked handoffs or omit both for ad-hoc handoffs",
     ]);
-    if (!mission || !feature) return;
-
-    const milestone = mission.milestones.find((m) => m.id === feature.milestoneId);
-    profile = milestone?.profile;
-  } catch {
-    return;
   }
 
+  const mission = await resolveMissionRef(services, maestroRefs.missionId);
+  const feature = await resolveFeatureRef(services, mission.id, maestroRefs.featureId);
+  const milestone = mission.milestones.find((candidate) => candidate.id === feature.milestoneId);
+  if (!milestone) {
+    throw new MaestroError(
+      `Feature '${feature.id}' references missing milestone '${feature.milestoneId}'`,
+      [`Mission '${mission.id}' is inconsistent; repair mission data before creating a handoff`],
+    );
+  }
+
+  const profile = milestone.profile;
   if (!profile) return;
 
-  let principles: readonly import("@/features/mission").Principle[];
-  try {
-    principles = await services.principleStore.listByProfile(profile);
-  } catch {
-    return;
-  }
+  const principles = await loadPrinciplesForProfile(services, profile);
 
   const gates = principles.filter(
     (p): p is import("@/features/mission").Principle & { readonly gateField: string; readonly gateCheck: string } =>
@@ -583,6 +600,64 @@ async function validateGatePrinciples(
         "Or use 'maestro principle list --profile <profile>' to see active gates",
       ],
     );
+  }
+}
+
+async function resolveMissionRef(
+  services: Services,
+  missionRef: string,
+): Promise<import("@/features/mission").Mission> {
+  try {
+    const missions = await services.missionStore.list();
+    const mission = missions.find(
+      (candidate) =>
+        candidate.id === missionRef || normalizeUkiToken(candidate.id) === missionRef,
+    );
+    if (!mission) {
+      throw new MaestroError(`Mission ref '${missionRef}' could not be resolved for gate validation`, [
+        "Use a real mission id or allow the command to auto-collect refs",
+      ]);
+    }
+    return mission;
+  } catch (error) {
+    if (error instanceof MaestroError) throw error;
+    throw new MaestroError("Failed to load mission data for gate validation", [
+      error instanceof Error ? error.message : String(error),
+    ]);
+  }
+}
+
+async function resolveFeatureRef(
+  services: Services,
+  missionId: string,
+  featureId: string,
+): Promise<import("@/features/mission").Feature> {
+  try {
+    const feature = await services.featureStore.get(missionId, featureId);
+    if (!feature) {
+      throw new MaestroError(`Feature '${featureId}' not found in mission '${missionId}' for gate validation`, [
+        `List features: maestro feature list --mission ${missionId}`,
+      ]);
+    }
+    return feature;
+  } catch (error) {
+    if (error instanceof MaestroError) throw error;
+    throw new MaestroError("Failed to load feature data for gate validation", [
+      error instanceof Error ? error.message : String(error),
+    ]);
+  }
+}
+
+async function loadPrinciplesForProfile(
+  services: Services,
+  profile: import("@/features/mission").MilestoneProfile,
+): Promise<readonly import("@/features/mission").Principle[]> {
+  try {
+    return await services.principleStore.listByProfile(profile);
+  } catch (error) {
+    throw new MaestroError(`Failed to load active principles for profile '${profile}'`, [
+      error instanceof Error ? error.message : String(error),
+    ]);
   }
 }
 

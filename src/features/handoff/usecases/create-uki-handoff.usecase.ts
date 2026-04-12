@@ -12,6 +12,8 @@ import type { UkiHandoff, UkiHandoffContent } from "../domain/uki-types.js";
 import type { HandoffStorePort } from "../ports/handoff-store.port.js";
 import type { SessionDetectPort } from "@/features/session";
 import { NO_SESSION_ID } from "../domain/constants.js";
+import { validateUkiHandoffContent } from "../domain/validators.js";
+import { MaestroError } from "@/shared/errors.js";
 
 export interface CreateUkiHandoffOptions {
   readonly content: UkiHandoffContent;
@@ -27,6 +29,7 @@ export async function createUkiHandoff(
   cwd: string,
   opts: CreateUkiHandoffOptions,
 ): Promise<UkiHandoff> {
+  const content = validateContentOrThrow(opts.content);
   let agent = opts.agent;
   let sessionId = opts.sessionId;
 
@@ -43,8 +46,18 @@ export async function createUkiHandoff(
   }
 
   return handoffStore.create({
-    content: opts.content,
+    content,
     agent: agent ?? DEFAULT_AGENT,
     sessionId: sessionId ?? NO_SESSION_ID,
   });
+}
+
+function validateContentOrThrow(content: UkiHandoffContent): UkiHandoffContent {
+  try {
+    return validateUkiHandoffContent(content);
+  } catch (error) {
+    throw new MaestroError("Invalid handoff content", [
+      error instanceof Error ? error.message : String(error),
+    ]);
+  }
 }

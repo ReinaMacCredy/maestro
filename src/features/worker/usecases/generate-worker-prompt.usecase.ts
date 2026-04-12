@@ -83,7 +83,32 @@ export async function generateWorkerPrompt(
   featureId: string,
   outPath?: string,
   stores?: WorkerPromptStores,
+): Promise<GenerateWorkerPromptResult>;
+
+export async function generateWorkerPrompt(
+  missionStore: MissionStorePort,
+  featureStore: FeatureStorePort,
+  assertionStore: AssertionStorePort,
+  baseDir: string,
+  missionId: string,
+  featureId: string,
+  outPath?: string,
+  correctionStore?: CorrectionStorePort,
+  learningStore?: LearningStorePort,
+): Promise<GenerateWorkerPromptResult>;
+
+export async function generateWorkerPrompt(
+  missionStore: MissionStorePort,
+  featureStore: FeatureStorePort,
+  assertionStore: AssertionStorePort,
+  baseDir: string,
+  missionId: string,
+  featureId: string,
+  outPath?: string,
+  storesOrCorrectionStore?: WorkerPromptStores | CorrectionStorePort,
+  learningStore?: LearningStorePort,
 ): Promise<GenerateWorkerPromptResult> {
+  const stores = normalizeWorkerPromptStores(storesOrCorrectionStore, learningStore);
   // Verify mission exists
   const mission = await missionStore.get(missionId);
   if (!mission) {
@@ -135,7 +160,7 @@ export async function generateWorkerPrompt(
     loadPreviousMilestoneReports(baseDir, mission, allFeatures, missionId, milestone),
     safeRecallMemory(stores?.correctionStore, stores?.learningStore, feature),
     safeLoadPrinciples(stores?.principleStore, milestone.profile),
-    safeLoadPriorHandoffs(stores?.handoffStore, featureId),
+    safeLoadPriorHandoffs(stores?.handoffStore, missionId, featureId),
   ]);
 
   // Generate the prompt
@@ -170,6 +195,33 @@ export async function generateWorkerPrompt(
     workerType: feature.workerType,
     writtenTo: writtenPaths.length > 0 ? writtenPaths : undefined,
   };
+}
+
+function normalizeWorkerPromptStores(
+  storesOrCorrectionStore: WorkerPromptStores | CorrectionStorePort | undefined,
+  learningStore: LearningStorePort | undefined,
+): WorkerPromptStores | undefined {
+  if (!storesOrCorrectionStore) {
+    return learningStore ? { learningStore } : undefined;
+  }
+
+  if (isWorkerPromptStores(storesOrCorrectionStore)) {
+    return storesOrCorrectionStore;
+  }
+
+  return {
+    correctionStore: storesOrCorrectionStore,
+    learningStore,
+  };
+}
+
+function isWorkerPromptStores(value: WorkerPromptStores | CorrectionStorePort): value is WorkerPromptStores {
+  return typeof value === "object" && value !== null && (
+    "correctionStore" in value
+    || "learningStore" in value
+    || "principleStore" in value
+    || "handoffStore" in value
+  );
 }
 
 /**
@@ -683,11 +735,12 @@ function appendPrincipleSection(parts: string[], principles: readonly Principle[
  */
 async function safeLoadPriorHandoffs(
   handoffStore: HandoffStorePort | undefined,
+  missionId: string,
   featureId: string,
 ): Promise<readonly PriorSessionSummary[] | undefined> {
   if (!handoffStore) return undefined;
   try {
-    return await loadPriorHandoffs(handoffStore, featureId);
+    return await loadPriorHandoffs(handoffStore, missionId, featureId);
   } catch {
     return undefined;
   }
