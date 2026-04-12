@@ -113,6 +113,7 @@ export type { ShowAssertionsResult, UpdateAssertionResult } from "./validation/u
 export { registerMissionCommand } from "./commands/mission.command.js";
 export { registerMilestoneCommand } from "./commands/milestone.command.js";
 export { registerCheckpointCommand } from "./commands/checkpoint.command.js";
+export { registerPrincipleCommand } from "./commands/principle.command.js";
 export { registerFeatureCommand } from "./feature/commands/feature.command.js";
 export { registerValidateCommand } from "./validation/commands/validate.command.js";
 

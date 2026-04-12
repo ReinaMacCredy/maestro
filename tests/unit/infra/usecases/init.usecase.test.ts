@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { initMaestro } from "@/infra/usecases/init.usecase.js";
 import { mockConfig } from "../../../helpers/mocks.js";
+import { DEFAULT_PRINCIPLES } from "@/features/mission";
 
 let tmpDir: string;
 
@@ -165,5 +166,36 @@ describe("initMaestro", () => {
     await expect(initMaestro(config, { global: false, dir: linkRoot })).rejects.toThrow(
       "Refusing to initialize through symlinked project root",
     );
+  });
+
+  it("creates principles.jsonl with default principles on fresh init", async () => {
+    const config = mockConfig();
+    const result = await initMaestro(config, { global: false, dir: tmpDir });
+
+    const principlesPath = join(tmpDir, ".maestro", "principles.jsonl");
+    expect(result.created).toContain(principlesPath);
+
+    const raw = await readFile(principlesPath, "utf8");
+    const lines = raw.trim().split("\n");
+    expect(lines).toHaveLength(DEFAULT_PRINCIPLES.length);
+
+    const parsed = lines.map((line) => JSON.parse(line));
+    expect(parsed[0].id).toBe("think-before-coding");
+    expect(parsed[3].id).toBe("goal-driven-execution");
+  });
+
+  it("does not overwrite existing principles.jsonl on re-init", async () => {
+    const config = mockConfig();
+    const principlesPath = join(tmpDir, ".maestro", "principles.jsonl");
+    await mkdir(join(tmpDir, ".maestro"), { recursive: true });
+    await writeFile(principlesPath, '{"id":"custom"}\n');
+
+    const result = await initMaestro(config, { global: false, dir: tmpDir });
+
+    expect(result.skipped).toContain(principlesPath);
+    expect(result.created).not.toContain(principlesPath);
+
+    const raw = await readFile(principlesPath, "utf8");
+    expect(raw).toBe('{"id":"custom"}\n');
   });
 });

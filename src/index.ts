@@ -17,6 +17,7 @@ import {
   registerValidateCommand,
   registerMilestoneCommand,
   registerCheckpointCommand,
+  registerPrincipleCommand,
 } from "./features/mission/index.js";
 import { registerMissionControlCommand } from "@/infra/commands/mission-control.command.js";
 import {
@@ -76,6 +77,7 @@ registerGraphLinkCommand(program);
 registerGraphContextCommand(program);
 registerHandoffCommand(program);
 registerTaskCommand(program);
+registerPrincipleCommand(program);
 
 async function main(): Promise<void> {
   try {

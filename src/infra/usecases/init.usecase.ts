@@ -9,6 +9,7 @@ import { dirExists, ensureDir, readText, writeText } from "@/shared/lib/fs.js";
 import { homedir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { chmod, lstat, readdir } from "node:fs/promises";
+import { DEFAULT_PRINCIPLES } from "@/features/mission";
 
 const RUNTIME_GITIGNORE_COMMENT = "# Maestro runtime state";
 const RUNTIME_GITIGNORE_LINES = [
@@ -100,6 +101,15 @@ export async function initMaestro(
       created.push(join(opts.dir, ".gitignore"));
     } else if (await readText(join(opts.dir, ".gitignore")) !== undefined) {
       skipped.push(join(opts.dir, ".gitignore"));
+    }
+
+    const principlesPath = join(maestroDir, "principles.jsonl");
+    if (await readText(principlesPath) === undefined) {
+      const lines = DEFAULT_PRINCIPLES.map((p) => JSON.stringify(p));
+      await writeText(principlesPath, lines.join("\n") + "\n");
+      created.push(principlesPath);
+    } else {
+      skipped.push(principlesPath);
     }
   }
 
