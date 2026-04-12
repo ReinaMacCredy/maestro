@@ -3,6 +3,7 @@ import { getServices } from "@/services.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import { MaestroError } from "@/shared/errors.js";
 import type { Principle, CreatePrincipleInput } from "../domain/principle-types.js";
+import { MilestoneProfileSchema } from "../domain/mission-validators.js";
 import { validateCreatePrincipleInput } from "../domain/principle-validators.js";
 
 export function registerPrincipleCommand(program: Command): void {
@@ -19,9 +20,10 @@ export function registerPrincipleCommand(program: Command): void {
     .action(async (opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
+      const profile = typeof opts.profile === "string" ? parsePrincipleProfile(opts.profile) : undefined;
 
-      const principles = opts.profile
-        ? await services.principleStore.listByProfile(opts.profile)
+      const principles = profile
+        ? await services.principleStore.listByProfile(profile)
         : await services.principleStore.list();
 
       output(isJson, principles, formatPrincipleList);
@@ -119,4 +121,15 @@ function formatPrincipleCreated(principle: Principle): string[] {
 
 function formatPrincipleRemoved(result: { id: string }): string[] {
   return [`[ok] Principle removed: ${result.id}`];
+}
+
+function parsePrincipleProfile(raw: string): import("../domain/mission-types.js").MilestoneProfile {
+  const result = MilestoneProfileSchema.safeParse(raw);
+  if (result.success) {
+    return result.data;
+  }
+
+  throw new MaestroError(`Invalid principle profile: ${raw}`, [
+    `Allowed values: ${MilestoneProfileSchema.options.join(" | ")}`,
+  ]);
 }

@@ -46,6 +46,16 @@ export interface HandoffStorePort {
   list(filter?: { status?: UkiHandoffStatus }): Promise<readonly UkiHandoff[]>;
 
   /**
+   * Return the most recent handoffs for a mission/feature pair, newest first.
+   * Implementations may short-circuit once `limit` matches have been found.
+   */
+  listRecentByFeatureRefs?(
+    missionId: string,
+    featureId: string,
+    limit: number,
+  ): Promise<readonly UkiHandoff[]>;
+
+  /**
    * Transition a handoff's status and optionally set related metadata
    * (pickedUpBy on `picked-up`, completedAt + report on `completed`).
    * Returns the updated record, or undefined if the id was not found.

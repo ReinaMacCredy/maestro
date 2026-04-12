@@ -265,6 +265,46 @@ export class FsHandoffStoreAdapter implements HandoffStorePort {
     );
   }
 
+  async listRecentByFeatureRefs(
+    missionId: string,
+    featureId: string,
+    limit: number,
+  ): Promise<readonly UkiHandoff[]> {
+    if (limit <= 0) {
+      return [];
+    }
+
+    const normalizedMissionId = normalizeUkiToken(missionId);
+    const ids = await this.listIdsDesc();
+    const matches: UkiHandoff[] = [];
+
+    for (const id of ids) {
+      if (matches.length >= limit) {
+        break;
+      }
+
+      const handoff = await this.readValidated(id, { tolerant: true });
+      if (!handoff) {
+        continue;
+      }
+
+      const { maestroRefs } = handoff.content;
+      const candidateMissionId = maestroRefs.missionId;
+      if (!candidateMissionId || maestroRefs.featureId !== featureId) {
+        continue;
+      }
+
+      if (
+        candidateMissionId === missionId
+        || normalizeUkiToken(candidateMissionId) === normalizedMissionId
+      ) {
+        matches.push(handoff);
+      }
+    }
+
+    return matches;
+  }
+
   async updateStatus(
     id: string,
     status: UkiHandoffStatus,

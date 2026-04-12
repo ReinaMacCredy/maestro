@@ -20,7 +20,6 @@ import type {
   UkiVerificationResult,
 } from "../domain/uki-types.js";
 import { UKI_HANDOFF_MODES, UKI_HANDOFF_STATUSES } from "../domain/uki-types.js";
-import { validateUkiHandoffContent } from "../domain/validators.js";
 import { createUkiHandoff } from "../usecases/create-uki-handoff.usecase.js";
 import { listUkiHandoffs } from "../usecases/list-uki-handoffs.usecase.js";
 import { pickupUkiHandoff } from "../usecases/pickup-uki-handoff.usecase.js";
@@ -179,10 +178,10 @@ async function buildContentFromOptions(
   });
 
   if (mode === "plan") {
-    return validateUkiHandoffContent(buildPlanContent(base, auto, opts));
+    return buildPlanContent(base, auto, opts);
   }
 
-  return validateUkiHandoffContent(buildExecuteContent(base, auto, opts));
+  return buildExecuteContent(base, auto, opts);
 }
 
 function buildBaseContent(
@@ -555,11 +554,8 @@ async function validateGatePrinciples(
   services: Services,
 ): Promise<void> {
   const { maestroRefs } = content;
-  if (!maestroRefs.missionId && !maestroRefs.featureId) return;
   if (!maestroRefs.missionId || !maestroRefs.featureId) {
-    throw new MaestroError("Gate validation requires both missionId and featureId", [
-      "Provide both refs for mission-linked handoffs or omit both for ad-hoc handoffs",
-    ]);
+    return;
   }
 
   const mission = await resolveMissionRef(services, maestroRefs.missionId);
@@ -608,16 +604,26 @@ async function resolveMissionRef(
   missionRef: string,
 ): Promise<import("@/features/mission").Mission> {
   try {
-    const missions = await services.missionStore.list();
-    const mission = missions.find(
-      (candidate) =>
-        candidate.id === missionRef || normalizeUkiToken(candidate.id) === missionRef,
-    );
-    if (!mission) {
+    const direct = await services.missionStore.get(missionRef);
+    if (direct) {
+      return direct;
+    }
+
+    const missionIds = await services.missionStore.listIds();
+    const matchedId = missionIds.find((candidateId) => normalizeUkiToken(candidateId) === missionRef);
+    if (!matchedId) {
       throw new MaestroError(`Mission ref '${missionRef}' could not be resolved for gate validation`, [
         "Use a real mission id or allow the command to auto-collect refs",
       ]);
     }
+
+    const mission = await services.missionStore.get(matchedId);
+    if (!mission) {
+      throw new MaestroError(`Mission '${matchedId}' disappeared during gate validation`, [
+        "Retry the command after refreshing mission state",
+      ]);
+    }
+
     return mission;
   } catch (error) {
     if (error instanceof MaestroError) throw error;

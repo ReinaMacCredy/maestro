@@ -42,20 +42,38 @@ export async function loadPriorHandoffs(
   missionId: string,
   featureId: string,
 ): Promise<readonly PriorSessionSummary[] | undefined> {
-  const all = await handoffStore.list();
+  const all = handoffStore.listRecentByFeatureRefs
+    ? await handoffStore.listRecentByFeatureRefs(missionId, featureId, MAX_REPLAY_HANDOFFS)
+    : await handoffStore.list();
   const normalizedMissionId = normalizeUkiToken(missionId);
 
   const summaries: PriorSessionSummary[] = [];
   for (const handoff of all) {
     if (summaries.length >= MAX_REPLAY_HANDOFFS) break;
     const refs = handoff.content.maestroRefs;
-    if (refs.missionId !== normalizedMissionId || refs.featureId !== featureId) continue;
+    if (!matchesFeatureRefs(refs.missionId, normalizedMissionId, featureId, refs.featureId)) continue;
 
     const summary = extractReplaySummary(handoff);
     if (summary) summaries.push(summary);
   }
 
   return summaries.length > 0 ? summaries : undefined;
+}
+
+function matchesFeatureRefs(
+  candidateMissionId: string | undefined,
+  normalizedMissionId: string,
+  expectedFeatureId: string,
+  candidateFeatureId: string | undefined,
+): boolean {
+  if (!candidateMissionId || candidateFeatureId !== expectedFeatureId) {
+    return false;
+  }
+
+  return (
+    candidateMissionId === normalizedMissionId
+    || normalizeUkiToken(candidateMissionId) === normalizedMissionId
+  );
 }
 
 function extractReplaySummary(handoff: UkiHandoff): PriorSessionSummary | undefined {

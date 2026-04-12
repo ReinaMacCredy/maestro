@@ -197,6 +197,29 @@ describe("gate validation on handoff content", () => {
   });
 
   describe("handoff create command", () => {
+    it("allows auto-collected mission refs when no feature ref is provided", async () => {
+      const missionId = await createImplementationMission();
+      const approveResult = await runCli(["mission", "approve", missionId, "--json"], tmpDir);
+      expect(approveResult.exitCode).toBe(0);
+
+      const result = await runCli([
+        "handoff",
+        "create",
+        "--mode", "execute",
+        "--session-core", "session_abc",
+        "--summary", "summary",
+        "--next-action", "next_step",
+        "--completed", "implemented_feature",
+        "--validation", "tests_pass",
+        "--confidence-work", "0.9",
+        "--artifact", "branch_main",
+        "--json",
+      ], tmpDir);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.stderr).not.toContain("Gate validation requires both missionId and featureId");
+    });
+
     it("rejects mission-linked handoffs that do not satisfy active gates", async () => {
       const missionId = await createImplementationMission();
 
@@ -243,6 +266,25 @@ describe("gate validation on handoff content", () => {
 
       expect(result.exitCode).toBe(1);
       expect(result.stderr).toContain("--scope-declaration values must be strings");
+    });
+
+    it("reports invalid verification results as a CLI error instead of leaking zod output", async () => {
+      const result = await runCli([
+        "handoff",
+        "create",
+        "--mode", "execute",
+        "--session-core", "session_abc",
+        "--summary", "summary",
+        "--next-action", "next_step",
+        "--completed", "implemented_feature",
+        "--validation", "tests_pass",
+        "--confidence-work", "0.9",
+        "--verification-result", ":passed",
+      ], tmpDir);
+
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain("Invalid handoff content");
+      expect(result.stderr).not.toContain("ZodError");
     });
 
     it("fails closed when the principle store is unreadable", async () => {

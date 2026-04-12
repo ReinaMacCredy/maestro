@@ -3,7 +3,12 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { FsHandoffStoreAdapter, loadPriorHandoffs } from "@/features/handoff";
-import type { ExecuteUkiHandoffContent, PlanUkiHandoffContent } from "@/features/handoff";
+import type {
+  ExecuteUkiHandoffContent,
+  HandoffStorePort,
+  PlanUkiHandoffContent,
+  UkiHandoff,
+} from "@/features/handoff";
 import type { SessionDetectPort, AgentSession } from "@/features/session";
 import { createUkiHandoff } from "@/features/handoff";
 
@@ -221,5 +226,52 @@ describe("loadPriorHandoffs", () => {
     const result = await loadPriorHandoffs(store, missionA, "f1");
     expect(result).toHaveLength(1);
     expect(result![0].risks).toEqual(["mission_a_risk"]);
+  });
+
+  it("uses the targeted handoff query instead of listing the full store", async () => {
+    const matching: UkiHandoff = {
+      id: "2026-04-13-001",
+      version: "5.4",
+      timestamp: "2026-04-13T00:00:00.000Z",
+      status: "pending",
+      agent: "test",
+      sessionId: "session",
+      content: makeExecuteContent(missionA, "f1", { risks: ["risk"] }),
+      uki: "uki",
+    };
+
+    let targetedCalls = 0;
+    const handoffStore = {
+      async create() {
+        throw new Error("not used");
+      },
+      async claimPending() {
+        throw new Error("not used");
+      },
+      async get() {
+        throw new Error("not used");
+      },
+      async getLatestPending() {
+        throw new Error("not used");
+      },
+      async list() {
+        throw new Error("broad list should not be called");
+      },
+      async listRecentByFeatureRefs() {
+        targetedCalls += 1;
+        return [matching];
+      },
+      async updateStatus() {
+        throw new Error("not used");
+      },
+      async delete() {
+        throw new Error("not used");
+      },
+    } as unknown as HandoffStorePort;
+
+    const result = await loadPriorHandoffs(handoffStore, missionA, "f1");
+    expect(targetedCalls).toBe(1);
+    expect(result).toHaveLength(1);
+    expect(result![0].risks).toEqual(["risk"]);
   });
 });

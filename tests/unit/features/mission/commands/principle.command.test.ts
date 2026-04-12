@@ -53,6 +53,18 @@ describe("principle command", () => {
     expect(principles.map((principle) => principle.id)).toContain("test-review-principle");
   });
 
+  it("rejects invalid profile filters", async () => {
+    const result = await runCli([
+      "principle",
+      "list",
+      "--profile", "definitely-not-a-profile",
+      "--json",
+    ], tmpDir);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stdout).toContain("Invalid principle profile");
+  });
+
   it("removes an added principle", async () => {
     const addResult = await runCli([
       "principle",
