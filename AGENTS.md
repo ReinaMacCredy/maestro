@@ -134,7 +134,7 @@ Tasks can live inside or alongside a mission. You can use a mission to hold the 
 - `graph` -- project dependency graph linking across repos
 - `session` -- agent session identity detection
 - `memory` -- corrections, learnings, recall for agent guidance
-- `mission` -- mission/feature/milestone/checkpoint/validation lifecycle
+- `mission` -- mission/feature/milestone/checkpoint/validation/principle lifecycle; includes behavioral principles (`.maestro/principles.jsonl`) that inject into worker prompts (score) and gate handoff creation
 - `worker` -- worker prompt generation, agent management, fit recommendation (legitimately imports from `mission` and `memory`; see Feature-specific exceptions)
 - `task` -- br-style issue graph for the daily loop (create, ready, claim, close); JSONL storage at `.maestro/tasks/tasks.jsonl`
 
