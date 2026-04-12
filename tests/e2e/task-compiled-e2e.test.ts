@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -377,6 +377,25 @@ describe("compiled task feature E2E", () => {
       const task = expectJson<{ status: string; closeReason: string }>(shown);
       expect(task.status).toBe("closed");
       expect(task.closeReason).toBe("done");
+    },
+    SLOW_CLI_TIMEOUT_MS,
+  );
+
+  it(
+    "keeps task ready working when a candidate file is malformed",
+    async () => {
+      const id = (
+        await runCompiled(["task", "q", "candidate reader"], tmpDir)
+      ).stdout;
+      expect(id).toMatch(/^tsk-[0-9a-f]{6}$/);
+
+      const candidatesDir = join(tmpDir, ".maestro", "tasks", "candidates");
+      await mkdir(candidatesDir, { recursive: true });
+      await writeFile(join(candidatesDir, "broken.json"), "{bad json\n");
+
+      const ready = await runCompiled(["task", "ready", "--json"], tmpDir);
+      expect(ready.exitCode).toBe(0);
+      expect(expectJson<Array<{ id: string }>>(ready).map((task) => task.id)).toEqual([id]);
     },
     SLOW_CLI_TIMEOUT_MS,
   );

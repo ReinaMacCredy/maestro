@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from "bun:test";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FsCandidateStoreAdapter } from "@/features/task/adapters/fs-candidate-store.adapter.js";
@@ -105,6 +105,36 @@ describe("FsCandidateStoreAdapter", () => {
       const all = await store.all();
       expect(all.length).toBe(1);
       expect(all[0]?.id).toBe("tsk-real");
+    });
+
+    it("skips malformed candidate json instead of failing the whole read", async () => {
+      await store.create({
+        id: "tsk-real",
+        sourceTaskId: "tsk-real",
+        title: "real",
+        reason: "r",
+        keywords: ["real"],
+      });
+      const candidatesDir = join(tmpDir, ".maestro", "tasks", "candidates");
+      await Bun.write(join(candidatesDir, "broken.json"), "{bad json\n");
+
+      const all = await store.all();
+      expect(all.map((candidate) => candidate.id)).toEqual(["tsk-real"]);
+    });
+
+    it("ignores nested directories in the candidates folder", async () => {
+      await store.create({
+        id: "tsk-real",
+        sourceTaskId: "tsk-real",
+        title: "real",
+        reason: "r",
+        keywords: ["real"],
+      });
+      const candidatesDir = join(tmpDir, ".maestro", "tasks", "candidates");
+      await mkdir(join(candidatesDir, "nested"), { recursive: true });
+
+      const all = await store.all();
+      expect(all.map((candidate) => candidate.id)).toEqual(["tsk-real"]);
     });
   });
 });

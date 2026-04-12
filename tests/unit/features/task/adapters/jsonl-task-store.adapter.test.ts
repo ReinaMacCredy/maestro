@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from "bun:test";
-import { mkdtemp, mkdir } from "node:fs/promises";
+import { mkdtemp, mkdir, stat, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { JsonlTaskStoreAdapter } from "@/features/task/adapters/jsonl-task-store.adapter.js";
@@ -132,6 +132,14 @@ describe("JsonlTaskStoreAdapter", () => {
     it("throws taskNotFound for unknown id", async () => {
       await expect(store.update("tsk-000000", { title: "x" })).rejects.toThrow(MaestroError);
     });
+
+    it("rejects parent cycles inside the locked store transaction", async () => {
+      const root = await store.create({ title: "Root" });
+      const mid = await store.create({ title: "Mid", parentId: root.id });
+      const leaf = await store.create({ title: "Leaf", parentId: mid.id });
+
+      await expect(store.update(root.id, { parentId: leaf.id })).rejects.toThrow(MaestroError);
+    });
   });
 
   describe("close", () => {
@@ -162,5 +170,44 @@ describe("JsonlTaskStoreAdapter", () => {
     it("throws taskNotFound for unknown id", async () => {
       await expect(store.close("tsk-000000", {})).rejects.toThrow(MaestroError);
     });
+
+    it("rejects re-closing an already closed task at the store layer", async () => {
+      const task = await store.create({ title: "Done" });
+      await store.close(task.id, { reason: "first" });
+
+      await expect(store.close(task.id, { reason: "second" })).rejects.toThrow(MaestroError);
+    });
+  });
+
+  describe("locking", () => {
+    it("does not steal a stale-looking lock when the owner pid is still alive", async () => {
+      const lockPath = await writeLockFile(tmpDir, { pid: process.pid, createdAt: "2026-04-12T00:00:00.000Z" });
+      const stale = new Date(Date.now() - 60_000);
+      await utimes(lockPath, stale, stale);
+
+      await expect(store.create({ title: "blocked" })).rejects.toThrow(MaestroError);
+      expect((await stat(lockPath)).isFile()).toBe(true);
+    });
+
+    it("clears a stale lock when the owner pid is dead", async () => {
+      const lockPath = await writeLockFile(tmpDir, { pid: 999_999, createdAt: "2026-04-12T00:00:00.000Z" });
+      const stale = new Date(Date.now() - 60_000);
+      await utimes(lockPath, stale, stale);
+
+      const created = await store.create({ title: "unblocked" });
+      expect(created.title).toBe("unblocked");
+      await expect(stat(lockPath)).rejects.toThrow();
+    });
   });
 });
+
+async function writeLockFile(
+  baseDir: string,
+  metadata: { pid: number; createdAt: string },
+): Promise<string> {
+  const tasksDir = join(baseDir, ".maestro", "tasks");
+  await mkdir(tasksDir, { recursive: true });
+  const lockPath = join(tasksDir, ".tasks.lock");
+  await Bun.write(lockPath, `${JSON.stringify(metadata)}\n`);
+  return lockPath;
+}

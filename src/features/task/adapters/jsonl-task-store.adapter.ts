@@ -18,19 +18,25 @@ import type { TaskStorePort } from "../ports/task-store.port.js";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { ensureDir, readText, removeIfExists, writeText } from "@/shared/lib/fs.js";
 import { generateTaskId } from "../domain/task-id.js";
-import { validateTask } from "../domain/task-validators.js";
-import { taskNotFound } from "../domain/task-errors.js";
+import { assertNoParentCycle, validateTask } from "../domain/task-validators.js";
+import { taskAlreadyClosed, taskNotFound } from "../domain/task-errors.js";
 import { MaestroError } from "@/shared/errors.js";
 import {
   DEFAULT_TASK_TYPE,
   DEFAULT_TASK_PRIORITY,
   DEFAULT_TASK_STATUS,
+  indexTasksById,
 } from "../domain/task-types.js";
 
 const MAX_ID_RETRIES = 5;
 const LOCK_RETRY_DELAY_MS = 10;
 const LOCK_RETRY_COUNT = 100;
 const LOCK_STALE_MS = 30_000;
+
+interface TaskStoreLockMetadata {
+  readonly pid: number;
+  readonly createdAt: string;
+}
 
 export class JsonlTaskStoreAdapter implements TaskStorePort {
   constructor(private readonly baseDir: string) {}
@@ -103,6 +109,13 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         throw taskNotFound(id);
       }
 
+      if (patch.parentId !== undefined && patch.parentId !== "") {
+        if (!tasks.has(patch.parentId)) {
+          throw taskNotFound(patch.parentId);
+        }
+        assertNoParentCycle(id, patch.parentId, indexTasksById(Array.from(tasks.values())));
+      }
+
       const labels = applyLabelPatch(existing.labels, patch.addLabels, patch.removeLabels);
 
       const updated: Task = {
@@ -135,6 +148,9 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
       const existing = tasks.get(id);
       if (!existing) {
         throw taskNotFound(id);
+      }
+      if (existing.status === "closed") {
+        throw taskAlreadyClosed(id);
       }
 
       const closed: Task = {
@@ -201,6 +217,10 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
       if (Date.now() - lockStat.mtimeMs < LOCK_STALE_MS) {
         return false;
       }
+      const metadata = await this.readLockMetadata(lockPath);
+      if (metadata && isProcessAlive(metadata.pid)) {
+        return false;
+      }
       await removeIfExists(lockPath);
       return true;
     } catch (error) {
@@ -221,6 +241,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
       try {
         const handle = await open(lockPath, "wx");
         try {
+          await handle.writeFile(serializeLockMetadata());
           return await fn();
         } finally {
           await handle.close();
@@ -243,6 +264,26 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         attempt += 1;
         await sleep(LOCK_RETRY_DELAY_MS);
       }
+    }
+  }
+
+  private async readLockMetadata(lockPath: string): Promise<TaskStoreLockMetadata | undefined> {
+    const raw = await readText(lockPath);
+    if (!raw) return undefined;
+    try {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      if (typeof parsed.pid !== "number" || !Number.isInteger(parsed.pid)) {
+        return undefined;
+      }
+      if (typeof parsed.createdAt !== "string") {
+        return undefined;
+      }
+      return {
+        pid: parsed.pid,
+        createdAt: parsed.createdAt,
+      };
+    } catch {
+      return undefined;
     }
   }
 }
@@ -269,4 +310,28 @@ function applyLabelPatch(
   }
 
   return result;
+}
+
+function serializeLockMetadata(): string {
+  const metadata: TaskStoreLockMetadata = {
+    pid: process.pid,
+    createdAt: new Date().toISOString(),
+  };
+  return `${JSON.stringify(metadata)}\n`;
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    const errno = error as NodeJS.ErrnoException;
+    if (errno.code === "ESRCH") {
+      return false;
+    }
+    if (errno.code === "EPERM") {
+      return true;
+    }
+    return false;
+  }
 }

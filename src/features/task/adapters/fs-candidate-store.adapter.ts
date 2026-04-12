@@ -47,25 +47,29 @@ export class FsCandidateStoreAdapter implements CandidateStorePort {
   }
 
   async all(): Promise<readonly TaskCandidate[]> {
-    let entries: string[];
+    let entries: Awaited<ReturnType<typeof readdir>>;
     try {
-      entries = await readdir(this.candidatesDir());
+      entries = await readdir(this.candidatesDir(), { withFileTypes: true });
     } catch (err: unknown) {
       if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
       throw err;
     }
 
-    const jsonEntries = entries.filter((e) => e.endsWith(".json"));
-    const parsed = await Promise.all(
-      jsonEntries.map((entry) =>
-        readJson<unknown>(join(this.candidatesDir(), entry)),
-      ),
-    );
-
     const result: TaskCandidate[] = [];
-    for (const raw of parsed) {
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith(".json")) {
+        continue;
+      }
+      let raw: unknown;
+      try {
+        raw = await readJson<unknown>(join(this.candidatesDir(), entry.name));
+      } catch {
+        continue;
+      }
       const validated = validateTaskCandidate(raw);
-      if (validated) result.push(validated);
+      if (validated) {
+        result.push(validated);
+      }
     }
     return result;
   }
