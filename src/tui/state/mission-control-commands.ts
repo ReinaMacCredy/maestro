@@ -11,6 +11,12 @@ export type MissionControlCommandId =
   | "config"
   | "memory"
   | "graph"
+  | "agent-grid"
+  | "dispatch"
+  | "event-stream"
+  | "task-board"
+  | "timeline"
+  | "help"
   | "exit";
 
 export interface MissionControlCommandSpec {
@@ -47,12 +53,36 @@ export function getMissionControlCommandSpecs(
     return [
       featureCommand,
       {
+        id: "agent-grid",
+        key: "A",
+        label: "Agents",
+        detail: "View worker agent status and activity",
+        section: "Navigate",
+        keywords: ["agents", "workers", "status", "grid"],
+      },
+      {
         id: "handoffs",
         key: "H",
         label: "Handoffs",
         detail: "Review pending cross-agent handoffs",
         section: "Navigate",
         keywords: ["handoff", "handoffs", "agent"],
+      },
+      {
+        id: "event-stream",
+        key: "E",
+        label: "Events",
+        detail: "Browse the event timeline",
+        section: "Navigate",
+        keywords: ["events", "timeline", "stream", "log"],
+      },
+      {
+        id: "task-board",
+        key: "T",
+        label: "Tasks",
+        detail: "Kanban-style task board with status columns",
+        section: "Navigate",
+        keywords: ["tasks", "board", "kanban", "issues"],
       },
       {
         id: "config",
@@ -79,6 +109,14 @@ export function getMissionControlCommandSpecs(
         keywords: ["graph", "projects", "relationships"],
       },
       {
+        id: "help",
+        key: "?",
+        label: "Help",
+        detail: "Show keyboard shortcuts and available commands",
+        section: "Session",
+        keywords: ["help", "keys", "shortcuts", "hotkeys"],
+      },
+      {
         id: "exit",
         key: "Ctrl+T",
         label: "Exit",
@@ -92,8 +130,32 @@ export function getMissionControlCommandSpecs(
   return [
       featureCommand,
       {
-        id: "dependencies",
+        id: "agent-grid",
+        key: "A",
+        label: "Agents",
+        detail: "View worker agent status and activity",
+        section: "Navigate",
+        keywords: ["agents", "workers", "status", "grid"],
+      },
+      {
+        id: "dispatch",
         key: "D",
+        label: "Dispatch",
+        detail: "Prepare and assign ready features to workers",
+        section: "Navigate",
+        keywords: ["dispatch", "assign", "queue", "ready"],
+      },
+      {
+        id: "event-stream",
+        key: "E",
+        label: "Events",
+        detail: "Browse the event timeline",
+        section: "Navigate",
+        keywords: ["events", "timeline", "stream", "log"],
+      },
+      {
+        id: "dependencies",
+        key: "G",
         label: "Dependencies",
         detail: "Inspect blockers and downstream tasks for the selected item",
         section: "Navigate",
@@ -106,39 +168,55 @@ export function getMissionControlCommandSpecs(
         detail: "Review pending cross-agent handoffs",
         section: "Navigate",
         keywords: ["handoff", "handoffs", "agent"],
-    },
-    {
-      id: "config",
-      key: "C",
-      label: "Config",
-      detail: "Inspect workspace configuration, checks, and mission directory",
-      section: "Navigate",
-      keywords: ["config", "configuration", "doctor", "directory"],
-    },
-    {
-      id: "memory",
-      key: "M",
-      label: "Memory",
-      detail: "View corrections, learnings, and ratchet assertions",
-      section: "Navigate",
-      keywords: ["memory", "corrections", "learnings", "ratchet"],
-    },
-    {
-      id: "graph",
-      key: "G",
-      label: "Graph",
-      detail: "View cross-project relationships",
-      section: "Navigate",
-      keywords: ["graph", "projects", "relationships"],
-    },
-    {
-      id: "exit",
-      key: "Ctrl+T",
-      label: "Exit",
-      detail: "Close Mission Control cleanly",
-      section: "Session",
-      keywords: ["quit", "exit", "close"],
-    },
+      },
+      {
+        id: "timeline",
+        key: "L",
+        label: "Timeline",
+        detail: "View milestone progress and feature assignments",
+        section: "Navigate",
+        keywords: ["timeline", "milestones", "progress"],
+      },
+      {
+        id: "task-board",
+        key: "T",
+        label: "Tasks",
+        detail: "Kanban-style task board with status columns",
+        section: "Navigate",
+        keywords: ["tasks", "board", "kanban", "issues"],
+      },
+      {
+        id: "config",
+        key: "C",
+        label: "Config",
+        detail: "Inspect workspace configuration, checks, and mission directory",
+        section: "Navigate",
+        keywords: ["config", "configuration", "doctor", "directory"],
+      },
+      {
+        id: "memory",
+        key: "M",
+        label: "Memory",
+        detail: "View corrections, learnings, and ratchet assertions",
+        section: "Navigate",
+        keywords: ["memory", "corrections", "learnings", "ratchet"],
+      },
+      {
+        id: "help",
+        key: "?",
+        label: "Help",
+        detail: "Show keyboard shortcuts and available commands",
+        section: "Session",
+        keywords: ["help", "keys", "shortcuts", "hotkeys"],
+      },
+      {
+        id: "exit",
+        key: "Ctrl+T",
+        label: "Exit",
+        detail: "Close Mission Control cleanly",
+        section: "Session",
+        keywords: ["quit", "exit", "close"],
+      },
   ];
 }
 

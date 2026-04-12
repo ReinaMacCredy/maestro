@@ -247,7 +247,8 @@ describe("captureMissionControlFrame", () => {
       const screenLayout = computeScreenLayout(120, 40, snapshot);
       const modalParentRect = getModalParentRect(screenLayout);
       const modalLayout = layoutModal(modalParentRect, modal!);
-      const blankInteriorRow = modalLayout.y + 14;
+      // Pick a row near the bottom of the modal interior, past all command items
+      const blankInteriorRow = modalLayout.y + modalLayout.height - 3;
       const left = modalLayout.x + 2;
       const right = modalLayout.x + modalLayout.width - 2;
       const baseLine = baseRender.charFrame.split("\n")[blankInteriorRow] ?? "";

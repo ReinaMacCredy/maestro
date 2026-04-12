@@ -48,6 +48,15 @@ const PREVIEW_SCREEN_ALIASES: Readonly<Record<string, PreviewScreenOrAll>> = {
   memory: "memory",
   mem: "memory",
   graph: "graph",
+  agents: "agents",
+  agent: "agents",
+  dispatch: "dispatch",
+  events: "events",
+  event: "events",
+  tasks: "tasks",
+  task: "tasks",
+  timeline: "timeline",
+  help: "help",
 };
 
 export function registerMissionControlCommand(program: Command): void {

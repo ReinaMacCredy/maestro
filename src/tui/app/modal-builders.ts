@@ -9,6 +9,11 @@ import type {
   MissionControlConfigRow,
   MissionControlSnapshot,
   TaskPreviewPane,
+  AgentGridRow,
+  DispatchQueueItem,
+  EventStreamEntry,
+  TaskBoardSnapshot,
+  TimelineMilestoneEntry,
 } from "../state/types.js";
 import {
   getFilteredMissionControlCommandSpecs,
@@ -21,6 +26,7 @@ import {
   type ModalOptions,
 } from "../shared/modal-model.js";
 import { getValidFeatureTransitions } from "@/features/mission";
+import { TASK_STATUSES, type TaskStatus } from "@/features/task";
 import { FEATURE_STATUS_LABEL, FEATURE_TASK_STATUS_LABEL } from "../theme.js";
 import { shortenSessionId } from "../session-id.js";
 import { GRAPH_DIR } from "@/shared/domain/defaults.js";
@@ -221,6 +227,30 @@ export function buildModalOptions(state: AppState): ModalOptions | undefined {
         return buildGraphModal(state as GraphModalState, returnTarget);
       }
 
+      if (state.modal.kind === "agent-grid") {
+        return buildAgentGridModal(state, returnTarget);
+      }
+
+      if (state.modal.kind === "dispatch") {
+        return buildDispatchModal(state, returnTarget);
+      }
+
+      if (state.modal.kind === "event-stream") {
+        return buildEventStreamModal(state, returnTarget);
+      }
+
+      if (state.modal.kind === "task-board") {
+        return buildTaskBoardModal(state, returnTarget);
+      }
+
+      if (state.modal.kind === "timeline") {
+        return buildTimelineModal(state, returnTarget);
+      }
+
+      if (state.modal.kind === "help") {
+        return buildHelpModal(state, returnTarget);
+      }
+
   return undefined;
 }
 
@@ -330,6 +360,271 @@ function buildGraphModal(
     returnTarget,
     renderSpec: buildOverlayRenderSpec("graph"),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Conductor screen modal builders
+// ---------------------------------------------------------------------------
+
+const AGENT_STATUS_LABEL: Record<import("../state/screen-types.js").InferredAgentStatus, string> = {
+  active: "Active",
+  waiting: "Waiting",
+  completed: "Done",
+  stale: "Stale",
+};
+
+function buildAgentGridModal(
+  state: AppState,
+  returnTarget: "command-palette" | undefined,
+): ModalOptions {
+  if (state.modal.kind !== "agent-grid") return undefined!;
+  const grid = state.snapshot.agentGrid ?? [];
+  const selected = grid[state.modal.selectedIndex];
+  return {
+    mode: "split",
+    title: "Agent Grid",
+    eyebrow: "Worker status and feature assignments.",
+    items: grid.length > 0
+      ? grid.map((row) => ({
+          label: formatWorkerLabel(row.workerType),
+          detail: AGENT_STATUS_LABEL[row.status],
+          hint: `${row.completedCount}/${row.featureCount}`,
+        }))
+      : [{ label: "No agents assigned", selectable: false, tone: "muted" as const }],
+    selectedIndex: Math.min(state.modal.selectedIndex, Math.max(0, grid.length - 1)),
+    detailItems: selected
+      ? [
+          { text: `Worker: ${formatWorkerLabel(selected.workerType)}` },
+          { text: `Status: ${AGENT_STATUS_LABEL[selected.status]}` },
+          ...(selected.activeFeatureId
+            ? [{ text: `Active: ${selected.activeFeatureId}`, detail: selected.activeFeatureTitle }]
+            : []),
+          { text: `Progress: ${selected.completedCount}/${selected.featureCount} features done` },
+          ...(selected.pendingHandoffCount > 0
+            ? [{ text: `Pending handoffs: ${selected.pendingHandoffCount}` }]
+            : []),
+          ...(selected.lastActivityAt
+            ? [{ text: `Last activity: ${new Date(selected.lastActivityAt).toLocaleString()}`, tone: "muted" as const }]
+            : []),
+        ]
+      : [{ text: "Select an agent to view details" }],
+    footer: buildListOverlayFooter(returnTarget),
+    returnTarget,
+    renderSpec: buildOverlayRenderSpec("agent-grid"),
+  };
+}
+
+function buildDispatchModal(
+  state: AppState,
+  returnTarget: "command-palette" | undefined,
+): ModalOptions {
+  if (state.modal.kind !== "dispatch") return undefined!;
+  const queue = state.snapshot.dispatchQueue ?? [];
+  const selected = queue[state.modal.selectedIndex];
+  const { phase } = state.modal;
+
+  let footer = buildOverlayFooter(returnTarget, "prepare");
+  if (phase === "generating") footer = "Generating worker prompt...";
+  else if (phase === "generated") footer = `Prompt written to ${state.modal.promptPath ?? "disk"} -- Esc close`;
+  else if (phase === "error") footer = `Error: ${state.modal.errorMessage ?? "unknown"} -- Esc close`;
+
+  return {
+    mode: "split",
+    title: "Dispatch Console",
+    eyebrow: phase === "browse"
+      ? "Ready features sorted by milestone priority."
+      : phase === "generating"
+        ? "Generating..."
+        : phase === "generated"
+          ? "Prompt generated."
+          : "Error during generation.",
+    items: queue.length > 0
+      ? queue.map((item) => ({
+          label: item.featureTitle,
+          detail: `${item.workerType} -- ${item.milestoneTitle}`,
+          hint: item.featureId,
+        }))
+      : [{ label: "No features ready for dispatch", selectable: false, tone: "muted" as const }],
+    selectedIndex: Math.min(state.modal.selectedIndex, Math.max(0, queue.length - 1)),
+    detailItems: selected
+      ? [
+          { text: `Feature: ${selected.featureId}`, detail: selected.featureTitle },
+          { text: `Milestone: ${selected.milestoneTitle} (#${selected.milestoneOrder})` },
+          { text: `Worker: ${formatWorkerLabel(selected.workerType)}` },
+          { text: "Fit:", section: "Recommendation" },
+          { text: selected.fitReason, tone: "muted" as const },
+        ]
+      : [{ text: "Select a feature to view dispatch details" }],
+    footer,
+    returnTarget,
+    renderSpec: buildOverlayRenderSpec("dispatch"),
+  };
+}
+
+function buildEventStreamModal(
+  state: AppState,
+  returnTarget: "command-palette" | undefined,
+): ModalOptions {
+  if (state.modal.kind !== "event-stream") return undefined!;
+  const allEvents = state.snapshot.eventStream ?? [];
+  const filterKind = state.modal.filterKind;
+  const events = filterKind ? allEvents.filter((e) => e.kind === filterKind) : allEvents;
+  const selected = events[state.modal.selectedIndex];
+  const filterLabel = filterKind ?? "all";
+
+  return {
+    mode: "split",
+    title: "Event Stream",
+    eyebrow: `Showing: ${filterLabel} (F to cycle filter) -- ${events.length} events`,
+    items: events.length > 0
+      ? events.map((e) => ({
+          label: e.title,
+          detail: e.kind,
+          hint: new Date(e.timestamp).toLocaleTimeString(),
+        }))
+      : [{ label: "No events", selectable: false, tone: "muted" as const }],
+    selectedIndex: Math.min(state.modal.selectedIndex, Math.max(0, events.length - 1)),
+    detailItems: selected
+      ? [
+          { text: selected.title },
+          { text: `Kind: ${selected.kind}` },
+          { text: `Time: ${new Date(selected.timestamp).toLocaleString()}` },
+          ...(selected.detail ? [{ text: selected.detail, tone: "muted" as const }] : []),
+        ]
+      : [{ text: "Select an event to view details" }],
+    footer: buildListOverlayFooter(returnTarget),
+    returnTarget,
+    renderSpec: buildOverlayRenderSpec("event-stream"),
+  };
+}
+
+const TASK_STATUS_COLUMN_LABEL: Record<import("@/features/task").TaskStatus, string> = {
+  open: "Open",
+  in_progress: "In Progress",
+  blocked: "Blocked",
+  deferred: "Deferred",
+  closed: "Closed",
+};
+
+function buildTaskBoardModal(
+  state: AppState,
+  returnTarget: "command-palette" | undefined,
+): ModalOptions {
+  if (state.modal.kind !== "task-board") return undefined!;
+  const board = state.snapshot.taskBoard;
+  const col = state.modal.selectedColumn;
+  const items = board?.columns[col] ?? [];
+  const selected = items[state.modal.selectedIndex];
+
+  const columnTabs = TASK_STATUSES
+    .map((s) => {
+      const count = board?.columns[s]?.length ?? 0;
+      const label = `${TASK_STATUS_COLUMN_LABEL[s]} (${count})`;
+      return s === col ? `[${label}]` : label;
+    })
+    .join("  ");
+
+  return {
+    mode: "split",
+    title: "Task Board",
+    eyebrow: columnTabs,
+    listTitle: TASK_STATUS_COLUMN_LABEL[col],
+    items: items.length > 0
+      ? items.map((item) => ({
+          label: item.title,
+          detail: item.assignee ? `@${item.assignee}` : undefined,
+          hint: item.id,
+        }))
+      : [{ label: `No ${TASK_STATUS_COLUMN_LABEL[col].toLowerCase()} tasks`, selectable: false, tone: "muted" as const }],
+    selectedIndex: Math.min(state.modal.selectedIndex, Math.max(0, items.length - 1)),
+    detailItems: selected
+      ? [
+          { text: selected.title },
+          { text: `ID: ${selected.id}` },
+          { text: `Priority: ${selected.priority}` },
+          ...(selected.assignee ? [{ text: `Assignee: ${selected.assignee}` }] : []),
+          ...(selected.labels.length > 0 ? [{ text: `Labels: ${selected.labels.join(", ")}` }] : []),
+          ...(selected.dependsOnCount > 0 ? [{ text: `Dependencies: ${selected.dependsOnCount}` }] : []),
+        ]
+      : [{ text: "Select a task to view details" }],
+    footer: `Tab/[/] columns -- ${buildListOverlayFooter(returnTarget)}`,
+    returnTarget,
+    renderSpec: buildOverlayRenderSpec("task-board"),
+  };
+}
+
+function buildTimelineModal(
+  state: AppState,
+  returnTarget: "command-palette" | undefined,
+): ModalOptions {
+  if (state.modal.kind !== "timeline") return undefined!;
+  const milestones = state.snapshot.timelineMilestones ?? [];
+  const selected = milestones[state.modal.selectedIndex];
+
+  return {
+    mode: "split",
+    title: "Mission Timeline",
+    eyebrow: "Milestone progress and feature assignments.",
+    items: milestones.length > 0
+      ? milestones.map((m) => {
+          const bar = buildProgressBar(m.progressPct, 10);
+          return {
+            label: m.title,
+            detail: `${m.kind} -- ${m.profile}`,
+            hint: `${bar} ${m.progressPct}%`,
+          };
+        })
+      : [{ label: "No milestones", selectable: false, tone: "muted" as const }],
+    selectedIndex: Math.min(state.modal.selectedIndex, Math.max(0, milestones.length - 1)),
+    detailItems: selected
+      ? [
+          { text: `Milestone: ${selected.title}`, section: "Overview" },
+          { text: `Order: ${selected.order} -- ${selected.kind} (${selected.profile})` },
+          { text: `Progress: ${selected.progressPct}%` },
+          { text: "", section: "Features" },
+          ...selected.features.map((f) => ({
+            text: `${FEATURE_STATUS_LABEL[f.status] ?? f.status} ${f.title}`,
+            detail: f.id,
+          })),
+        ]
+      : [{ text: "Select a milestone to view features" }],
+    footer: buildListOverlayFooter(returnTarget),
+    returnTarget,
+    renderSpec: buildOverlayRenderSpec("timeline"),
+  };
+}
+
+function buildHelpModal(
+  state: AppState,
+  returnTarget: "command-palette" | undefined,
+): ModalOptions {
+  const specs = getMissionControlCommandSpecs(state.snapshot.mode);
+  return {
+    mode: "info",
+    title: "Keyboard Shortcuts",
+    items: [
+      ...specs.map((spec) => ({
+        text: `${spec.key.padEnd(8)} ${spec.label}`,
+        detail: spec.detail,
+        section: spec.section,
+      })),
+      { text: "", section: "Navigation" },
+      { text: "j/k      Up/Down" },
+      { text: "Enter    Select / Drill in" },
+      { text: "Esc      Back / Close" },
+      { text: "Ctrl+P   Command Palette" },
+      { text: "/        Quick search" },
+      { text: "Ctrl+Y   Copy mode" },
+    ],
+    footer: "Press any key to dismiss",
+    returnTarget,
+    renderSpec: buildOverlayRenderSpec("help"),
+  };
+}
+
+function buildProgressBar(pct: number, width: number): string {
+  const filled = Math.round((pct / 100) * width);
+  return "[" + "#".repeat(filled) + "-".repeat(width - filled) + "]";
 }
 
 function buildMemoryTabs(state: MemoryModalState): string {
@@ -1402,12 +1697,17 @@ function formatTaskStatus(status: keyof typeof FEATURE_TASK_STATUS_LABEL): strin
   return FEATURE_TASK_STATUS_LABEL[status].toLowerCase();
 }
 
-export function isSelectableListModal(kind: AppState["modal"]["kind"]): kind is "feature-browser" | "handoffs" | "dependencies" | "memory" | "graph" {
+export function isSelectableListModal(kind: AppState["modal"]["kind"]): kind is "feature-browser" | "handoffs" | "dependencies" | "memory" | "graph" | "agent-grid" | "dispatch" | "event-stream" | "task-board" | "timeline" {
   return kind === "feature-browser"
     || kind === "handoffs"
     || kind === "dependencies"
     || kind === "memory"
-    || kind === "graph";
+    || kind === "graph"
+    || kind === "agent-grid"
+    || kind === "dispatch"
+    || kind === "event-stream"
+    || kind === "task-board"
+    || kind === "timeline";
 }
 
 interface CommandPaletteItem {
@@ -1469,6 +1769,18 @@ export function actionForMissionControlCommand(id: MissionControlCommandId): Act
       return { type: "open-memory" };
     case "graph":
       return { type: "open-graph" };
+    case "agent-grid":
+      return { type: "open-agent-grid" };
+    case "dispatch":
+      return { type: "open-dispatch" };
+    case "event-stream":
+      return { type: "open-event-stream" };
+    case "task-board":
+      return { type: "open-task-board" };
+    case "timeline":
+      return { type: "open-timeline" };
+    case "help":
+      return { type: "open-help" };
     case "exit":
       return { type: "quit" };
   }

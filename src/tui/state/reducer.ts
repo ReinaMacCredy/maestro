@@ -9,6 +9,7 @@ import type {
 import type { ConfigScope } from "@/infra/ports/config.port.js";
 import { getFilteredMissionControlPaletteCommandCount } from "./mission-control-commands.js";
 import { getValidFeatureTransitions } from "@/features/mission";
+import { TASK_STATUSES, type TaskStatus } from "@/features/task";
 import { getConfigRowsForTab, isGlobalOnlyConfigKey, resolveConfigScopeForKey } from "./config-inspector.js";
 
 export type FocusedPanel = "features" | "log" | "none";
@@ -61,7 +62,27 @@ export type ModalState =
         returnPalette?: CommandPaletteState;
         }
       | { kind: "memory"; tab: MemoryModalTab; selectedItemIndex: number; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState }
-      | { kind: "graph"; selectedItemIndex: number; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState };
+      | { kind: "graph"; selectedItemIndex: number; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState }
+      | { kind: "agent-grid"; selectedIndex: number; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState }
+      | {
+          kind: "dispatch";
+          selectedIndex: number;
+          phase: "browse" | "generating" | "generated" | "error";
+          promptPath?: string;
+          errorMessage?: string;
+          returnTarget?: ModalReturnTarget;
+          returnPalette?: CommandPaletteState;
+        }
+      | { kind: "event-stream"; selectedIndex: number; filterKind?: string; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState }
+      | {
+          kind: "task-board";
+          selectedColumn: import("@/features/task").TaskStatus;
+          selectedIndex: number;
+          returnTarget?: ModalReturnTarget;
+          returnPalette?: CommandPaletteState;
+        }
+      | { kind: "timeline"; selectedIndex: number; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState }
+      | { kind: "help"; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState };
 
 export interface AppState {
   snapshot: MissionControlSnapshot;
@@ -103,6 +124,18 @@ export type Action =
   | { type: "open-config" }
   | { type: "open-memory" }
   | { type: "open-graph" }
+  | { type: "open-agent-grid" }
+  | { type: "open-dispatch" }
+  | { type: "open-event-stream" }
+  | { type: "open-task-board" }
+  | { type: "open-timeline" }
+  | { type: "open-help" }
+  | { type: "dispatch-generate-start" }
+  | { type: "dispatch-generate-success"; promptPath?: string }
+  | { type: "dispatch-generate-error"; message: string }
+  | { type: "event-stream-cycle-filter" }
+  | { type: "task-board-next-column" }
+  | { type: "task-board-prev-column" }
   | { type: "toggle-copy-mode" }
   | { type: "update-snapshot"; snapshot: MissionControlSnapshot }
   | { type: "modal-select"; option: number }
@@ -152,6 +185,11 @@ export function reduce(state: AppState, action: Action): AppState {
         || state.modal.kind === "config"
         || state.modal.kind === "memory"
         || state.modal.kind === "graph"
+        || state.modal.kind === "agent-grid"
+        || state.modal.kind === "dispatch"
+        || state.modal.kind === "event-stream"
+        || state.modal.kind === "task-board"
+        || state.modal.kind === "timeline"
       ) {
         return handleModalNavigate(state, action.direction);
       }
@@ -391,6 +429,110 @@ export function reduce(state: AppState, action: Action): AppState {
         },
       };
 
+    case "open-agent-grid":
+      if (!canOpenOverlayFromModal(state.modal)) return state;
+      return {
+        ...state,
+        modal: {
+          kind: "agent-grid",
+          selectedIndex: 0,
+          returnTarget: getModalReturnTarget(state.modal),
+          returnPalette: getCommandPaletteReturnState(state.modal),
+        },
+      };
+
+    case "open-dispatch":
+      if (!canOpenOverlayFromModal(state.modal)) return state;
+      if (state.snapshot.mode !== "mission") return state;
+      return {
+        ...state,
+        modal: {
+          kind: "dispatch",
+          selectedIndex: 0,
+          phase: "browse",
+          returnTarget: getModalReturnTarget(state.modal),
+          returnPalette: getCommandPaletteReturnState(state.modal),
+        },
+      };
+
+    case "open-event-stream":
+      if (!canOpenOverlayFromModal(state.modal)) return state;
+      return {
+        ...state,
+        modal: {
+          kind: "event-stream",
+          selectedIndex: 0,
+          returnTarget: getModalReturnTarget(state.modal),
+          returnPalette: getCommandPaletteReturnState(state.modal),
+        },
+      };
+
+    case "open-task-board":
+      if (!canOpenOverlayFromModal(state.modal)) return state;
+      return {
+        ...state,
+        modal: {
+          kind: "task-board",
+          selectedColumn: "open",
+          selectedIndex: 0,
+          returnTarget: getModalReturnTarget(state.modal),
+          returnPalette: getCommandPaletteReturnState(state.modal),
+        },
+      };
+
+    case "open-timeline":
+      if (!canOpenOverlayFromModal(state.modal)) return state;
+      if (state.snapshot.mode !== "mission") return state;
+      return {
+        ...state,
+        modal: {
+          kind: "timeline",
+          selectedIndex: 0,
+          returnTarget: getModalReturnTarget(state.modal),
+          returnPalette: getCommandPaletteReturnState(state.modal),
+        },
+      };
+
+    case "open-help":
+      if (!canOpenOverlayFromModal(state.modal)) return state;
+      return {
+        ...state,
+        modal: {
+          kind: "help",
+          returnTarget: getModalReturnTarget(state.modal),
+          returnPalette: getCommandPaletteReturnState(state.modal),
+        },
+      };
+
+    case "dispatch-generate-start":
+      if (state.modal.kind !== "dispatch") return state;
+      return { ...state, modal: { ...state.modal, phase: "generating", errorMessage: undefined } };
+
+    case "dispatch-generate-success":
+      if (state.modal.kind !== "dispatch") return state;
+      return { ...state, modal: { ...state.modal, phase: "generated", promptPath: action.promptPath, errorMessage: undefined } };
+
+    case "dispatch-generate-error":
+      if (state.modal.kind !== "dispatch") return state;
+      return { ...state, modal: { ...state.modal, phase: "error", errorMessage: action.message } };
+
+    case "event-stream-cycle-filter": {
+      if (state.modal.kind !== "event-stream") return state;
+      const FILTER_KINDS = [undefined, "mission", "feature", "assertion", "checkpoint", "handoff", "task"];
+      const currentIdx = FILTER_KINDS.indexOf(state.modal.filterKind);
+      const nextKind = FILTER_KINDS[(currentIdx + 1) % FILTER_KINDS.length];
+      return { ...state, modal: { ...state.modal, filterKind: nextKind, selectedIndex: 0 } };
+    }
+
+    case "task-board-next-column":
+    case "task-board-prev-column": {
+      if (state.modal.kind !== "task-board") return state;
+      const delta = action.type === "task-board-next-column" ? 1 : -1;
+      const colIdx = TASK_STATUSES.indexOf(state.modal.selectedColumn);
+      const nextCol = TASK_STATUSES[(colIdx + delta + TASK_STATUSES.length) % TASK_STATUSES.length]!;
+      return { ...state, modal: { ...state.modal, selectedColumn: nextCol, selectedIndex: 0 } };
+    }
+
     case "toggle-copy-mode":
       return { ...state, copyMode: !state.copyMode };
 
@@ -558,6 +700,21 @@ export function reduce(state: AppState, action: Action): AppState {
               returnPalette: state.modal.returnPalette,
             },
           };
+        }
+        if (state.modal.kind === "agent-grid") {
+          return { ...state, modal: { ...state.modal, selectedIndex: action.option } };
+        }
+        if (state.modal.kind === "dispatch") {
+          return { ...state, modal: { ...state.modal, selectedIndex: action.option } };
+        }
+        if (state.modal.kind === "event-stream") {
+          return { ...state, modal: { ...state.modal, selectedIndex: action.option } };
+        }
+        if (state.modal.kind === "task-board") {
+          return { ...state, modal: { ...state.modal, selectedIndex: action.option } };
+        }
+        if (state.modal.kind === "timeline") {
+          return { ...state, modal: { ...state.modal, selectedIndex: action.option } };
         }
         return state;
 
@@ -944,6 +1101,51 @@ function handleModalNavigate(state: AppState, direction: "up" | "down"): AppStat
         };
       }
 
+      if (state.modal.kind === "agent-grid") {
+        const total = state.snapshot.agentGrid?.length ?? 0;
+        if (total === 0) return state;
+        const selectedIndex = direction === "down"
+          ? Math.min(state.modal.selectedIndex + 1, total - 1)
+          : Math.max(state.modal.selectedIndex - 1, 0);
+        return { ...state, modal: { ...state.modal, selectedIndex } };
+      }
+
+      if (state.modal.kind === "dispatch") {
+        const total = state.snapshot.dispatchQueue?.length ?? 0;
+        if (total === 0) return state;
+        const selectedIndex = direction === "down"
+          ? Math.min(state.modal.selectedIndex + 1, total - 1)
+          : Math.max(state.modal.selectedIndex - 1, 0);
+        return { ...state, modal: { ...state.modal, selectedIndex } };
+      }
+
+      if (state.modal.kind === "event-stream") {
+        const filtered = getFilteredEventStream(state);
+        if (filtered.length === 0) return state;
+        const selectedIndex = direction === "down"
+          ? Math.min(state.modal.selectedIndex + 1, filtered.length - 1)
+          : Math.max(state.modal.selectedIndex - 1, 0);
+        return { ...state, modal: { ...state.modal, selectedIndex } };
+      }
+
+      if (state.modal.kind === "task-board") {
+        const col = state.snapshot.taskBoard?.columns[state.modal.selectedColumn] ?? [];
+        if (col.length === 0) return state;
+        const selectedIndex = direction === "down"
+          ? Math.min(state.modal.selectedIndex + 1, col.length - 1)
+          : Math.max(state.modal.selectedIndex - 1, 0);
+        return { ...state, modal: { ...state.modal, selectedIndex } };
+      }
+
+      if (state.modal.kind === "timeline") {
+        const total = state.snapshot.timelineMilestones?.length ?? 0;
+        if (total === 0) return state;
+        const selectedIndex = direction === "down"
+          ? Math.min(state.modal.selectedIndex + 1, total - 1)
+          : Math.max(state.modal.selectedIndex - 1, 0);
+        return { ...state, modal: { ...state.modal, selectedIndex } };
+      }
+
     if (state.modal.kind === "config") {
       const total = getConfigRowsForTab(
         state.snapshot.configInspector ?? null,
@@ -1028,6 +1230,12 @@ function getModalReturnTarget(modal: ModalState): ModalReturnTarget | undefined 
         || modal.kind === "config"
         || modal.kind === "memory"
         || modal.kind === "graph"
+        || modal.kind === "agent-grid"
+        || modal.kind === "dispatch"
+        || modal.kind === "event-stream"
+        || modal.kind === "task-board"
+        || modal.kind === "timeline"
+        || modal.kind === "help"
       ) {
         return modal.returnTarget;
       }
@@ -1059,6 +1267,12 @@ function getCommandPaletteReturnState(
     || modal.kind === "config"
     || modal.kind === "memory"
     || modal.kind === "graph"
+    || modal.kind === "agent-grid"
+    || modal.kind === "dispatch"
+    || modal.kind === "event-stream"
+    || modal.kind === "task-board"
+    || modal.kind === "timeline"
+    || modal.kind === "help"
   ) {
     return modal.returnPalette
       ? {
@@ -1222,3 +1436,9 @@ function cycleConfigDraft(state: AppState, direction: "previous" | "next"): AppS
       },
     };
   }
+
+function getFilteredEventStream(state: AppState): readonly import("./screen-types.js").EventStreamEntry[] {
+  const stream = state.snapshot.eventStream ?? [];
+  if (state.modal.kind !== "event-stream" || !state.modal.filterKind) return stream;
+  return stream.filter((e) => e.kind === state.modal.filterKind);
+}

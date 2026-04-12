@@ -17,6 +17,12 @@ export const PREVIEW_SCREENS = [
   "config",
   "memory",
   "graph",
+  "agents",
+  "dispatch",
+  "events",
+  "tasks",
+  "timeline",
+  "help",
 ] as const;
 
 export type PreviewScreen = typeof PREVIEW_SCREENS[number];
@@ -26,6 +32,10 @@ export const HOME_PREVIEW_SCREENS = [
   "config",
   "memory",
   "graph",
+  "agents",
+  "events",
+  "tasks",
+  "help",
 ] as const satisfies readonly PreviewScreen[];
 
 export function isPreviewScreen(value: string): value is PreviewScreen {
@@ -98,6 +108,28 @@ export function buildPreviewState(opts: PreviewStateOptions): AppState {
       return reduce(baseState, { type: "open-memory" });
     case "graph":
       return reduce(baseState, { type: "open-graph" });
+    case "agents":
+      return reduce(baseState, { type: "open-agent-grid" });
+    case "dispatch":
+      if (opts.snapshot.mode !== "mission") {
+        throw new MaestroError("Dispatch preview requires a mission", [
+          "Run `maestro mission-control --preview` to view the home dashboard",
+        ]);
+      }
+      return reduce(baseState, { type: "open-dispatch" });
+    case "events":
+      return reduce(baseState, { type: "open-event-stream" });
+    case "tasks":
+      return reduce(baseState, { type: "open-task-board" });
+    case "timeline":
+      if (opts.snapshot.mode !== "mission") {
+        throw new MaestroError("Timeline preview requires a mission", [
+          "Run `maestro mission-control --preview` to view the home dashboard",
+        ]);
+      }
+      return reduce(baseState, { type: "open-timeline" });
+    case "help":
+      return reduce(baseState, { type: "open-help" });
   }
 }
 

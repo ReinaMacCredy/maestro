@@ -64,7 +64,13 @@ export type OverlayModalKind =
   | "config"
   | "processes"
   | "memory"
-  | "graph";
+  | "graph"
+  | "agent-grid"
+  | "dispatch"
+  | "event-stream"
+  | "task-board"
+  | "timeline"
+  | "help";
 
 export interface ModalRow {
   readonly label?: string;
@@ -285,6 +291,60 @@ export function buildOverlayRenderSpec(kind: OverlayModalKind): OverlayRenderSpe
         selection: STANDARD_SELECTION,
         text: STANDARD_TEXT,
         layout: { ...STANDARD_LAYOUT, splitRatio: [40, 60] },
+      };
+    case "agent-grid":
+      return {
+        family: "split",
+        sizePreset: "standard",
+        chrome: STANDARD_CHROME,
+        selection: STANDARD_SELECTION,
+        text: STANDARD_TEXT,
+        layout: { ...STANDARD_LAYOUT, splitRatio: [40, 60] },
+      };
+    case "dispatch":
+      return {
+        family: "split",
+        sizePreset: "standard",
+        chrome: STANDARD_CHROME,
+        selection: STANDARD_SELECTION,
+        text: STANDARD_TEXT,
+        layout: { ...STANDARD_LAYOUT, splitRatio: [44, 56] },
+      };
+    case "event-stream":
+      return {
+        family: "split",
+        sizePreset: "wide",
+        chrome: STANDARD_CHROME,
+        selection: STANDARD_SELECTION,
+        text: STANDARD_TEXT,
+        layout: { ...WIDE_LAYOUT, splitRatio: [42, 58] },
+      };
+    case "task-board":
+      return {
+        family: "split",
+        sizePreset: "wide",
+        chrome: STANDARD_CHROME,
+        selection: STANDARD_SELECTION,
+        text: STANDARD_TEXT,
+        layout: { ...WIDE_LAYOUT, splitRatio: [36, 64] },
+      };
+    case "timeline":
+      return {
+        family: "split",
+        sizePreset: "standard",
+        chrome: STANDARD_CHROME,
+        selection: STANDARD_SELECTION,
+        text: STANDARD_TEXT,
+        layout: { ...STANDARD_LAYOUT, splitRatio: [44, 56] },
+      };
+    case "help":
+      return {
+        family: "info",
+        sizePreset: "standard",
+        chrome: STANDARD_CHROME,
+        selection: STANDARD_SELECTION,
+        text: STANDARD_TEXT,
+        layout: STANDARD_LAYOUT,
       };
     case "feature-action":
     default:

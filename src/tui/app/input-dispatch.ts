@@ -59,6 +59,12 @@ export function keyToAction(key: Key, state: AppState): Action | undefined {
               || state.modal.kind === "config"
               || state.modal.kind === "memory"
               || state.modal.kind === "graph"
+              || state.modal.kind === "agent-grid"
+              || state.modal.kind === "dispatch"
+              || state.modal.kind === "event-stream"
+              || state.modal.kind === "task-board"
+              || state.modal.kind === "timeline"
+              || state.modal.kind === "help"
             ) && state.modal.returnTarget === "command-palette")
         )
       ) {
@@ -67,10 +73,12 @@ export function keyToAction(key: Key, state: AppState): Action | undefined {
     if (key.type === "tab") {
       if (state.modal.kind === "config") return { type: "config-next-tab" };
       if (state.modal.kind === "memory") return { type: "memory-next-tab" };
+      if (state.modal.kind === "task-board") return { type: "task-board-next-column" };
     }
     if (key.type === "backtab") {
       if (state.modal.kind === "config") return { type: "config-prev-tab" };
       if (state.modal.kind === "memory") return { type: "memory-prev-tab" };
+      if (state.modal.kind === "task-board") return { type: "task-board-prev-column" };
     }
     if (key.type === "arrow" && (key.direction === "up" || key.direction === "down")) {
       return { type: "navigate", direction: key.direction };
@@ -105,6 +113,13 @@ export function keyToAction(key: Key, state: AppState): Action | undefined {
         case "]":
           return { type: "memory-next-tab" };
       }
+    }
+    if (key.type === "char" && state.modal.kind === "event-stream") {
+      if (key.char === "f" || key.char === "F") return { type: "event-stream-cycle-filter" };
+    }
+    if (key.type === "char" && state.modal.kind === "task-board") {
+      if (key.char === "[") return { type: "task-board-prev-column" };
+      if (key.char === "]") return { type: "task-board-next-column" };
     }
   if (key.type === "char" && state.modal.kind === "command-palette") {
     return { type: "modal-query-append", char: key.char };
