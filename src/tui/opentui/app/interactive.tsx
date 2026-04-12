@@ -3,6 +3,8 @@ import { createRoot, flushSync } from "@opentui/react";
 import { useState } from "react";
 
 import { getValidFeatureTransitions, updateFeature } from "@/features/mission";
+import { generateWorkerPrompt } from "@/features/worker";
+import { updateTask, type TaskStatus } from "@/features/task";
 import { applyConfigEdit, previewConfigEdit } from "@/infra/usecases/config-edit.usecase.js";
 import {
   getCommandPaletteSelectionAction,
@@ -198,6 +200,12 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
       return;
     }
 
+    // Dispatch: Enter on a queue item prepares the worker prompt
+    if (action.type === "enter" && state.modal.kind === "dispatch" && state.modal.phase === "browse") {
+      await submitDispatchPrepare();
+      return;
+    }
+
     state = reduce(state, action);
     if (action.type === "quit") shuttingDown = true;
     markDirty();
@@ -379,6 +387,63 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
       state = reduce(state, {
         type: "modal-submit-error",
         message: error instanceof Error ? error.message : "Failed to update feature",
+      });
+      markDirty();
+    }
+  }
+
+  async function submitDispatchPrepare(): Promise<void> {
+    if (state.modal.kind !== "dispatch" || state.modal.phase !== "browse") return;
+
+    const queue = state.snapshot.dispatchQueue ?? [];
+    const selected = queue[state.modal.selectedIndex];
+    if (!selected) return;
+
+    state = reduce(state, { type: "dispatch-generate-start" });
+    markDirty();
+
+    try {
+      const result = await generateWorkerPrompt(
+        opts.snapshotDeps.missionStore,
+        opts.snapshotDeps.featureStore,
+        opts.snapshotDeps.assertionStore,
+        process.cwd(),
+        state.snapshot.missionId,
+        selected.featureId,
+        undefined,
+        {
+          correctionStore: opts.snapshotDeps.correctionStore,
+          learningStore: opts.snapshotDeps.learningStore,
+          handoffStore: opts.snapshotDeps.handoffStore,
+        },
+      );
+
+      // Mark the feature as assigned
+      await updateFeature(
+        opts.snapshotDeps.missionStore,
+        opts.snapshotDeps.featureStore,
+        process.cwd(),
+        state.snapshot.missionId,
+        selected.featureId,
+        { status: "assigned" },
+      );
+
+      try {
+        const nextSnapshot = await opts.reloadSnapshot();
+        state = reduce(state, { type: "update-snapshot", snapshot: nextSnapshot });
+      } catch {
+        // Fall back to the next poll refresh
+      }
+
+      state = reduce(state, {
+        type: "dispatch-generate-success",
+        promptPath: result.writtenTo?.[0],
+      });
+      markDirty();
+    } catch (error) {
+      state = reduce(state, {
+        type: "dispatch-generate-error",
+        message: error instanceof Error ? error.message : "Failed to generate prompt",
       });
       markDirty();
     }
