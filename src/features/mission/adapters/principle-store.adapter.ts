@@ -79,7 +79,7 @@ export class JsonlPrincipleStoreAdapter implements PrincipleStorePort {
 
     const results: Principle[] = [];
     const lines = raw.split("\n");
-    for (const [index, line] of lines.entries()) {
+    for (const line of lines) {
       const trimmed = line.trim();
       if (trimmed.length === 0) continue;
 

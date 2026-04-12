@@ -487,25 +487,11 @@ function buildPrincipleGateFields(
     result.assumptions = assumptions;
   }
 
-  if (typeof opts.scopeDeclaration === "string" && opts.scopeDeclaration.length > 0) {
-    try {
-      result.scopeDeclaration = JSON.parse(opts.scopeDeclaration) as Record<string, string>;
-    } catch {
-      throw new MaestroError("--scope-declaration must be valid JSON", [
-        'Example: --scope-declaration \'{"touched":"src/foo.ts","reason":"fix bug"}\'',
-      ]);
-    }
-  }
+  const scope = parseJsonOption("--scope-declaration", opts.scopeDeclaration);
+  if (scope) result.scopeDeclaration = scope;
 
-  if (typeof opts.complexityDelta === "string" && opts.complexityDelta.length > 0) {
-    try {
-      result.complexityDelta = JSON.parse(opts.complexityDelta) as Record<string, unknown>;
-    } catch {
-      throw new MaestroError("--complexity-delta must be valid JSON", [
-        'Example: --complexity-delta \'{"linesAdded":10,"linesRemoved":5}\'',
-      ]);
-    }
-  }
+  const complexity = parseJsonOption("--complexity-delta", opts.complexityDelta);
+  if (complexity) result.complexityDelta = complexity;
 
   const rawResults = toStringArray(opts.verificationResult);
   if (rawResults.length > 0) {
@@ -513,6 +499,17 @@ function buildPrincipleGateFields(
   }
 
   return result as Pick<UkiHandoffContentBase, "assumptions" | "scopeDeclaration" | "complexityDelta" | "verificationResults">;
+}
+
+function parseJsonOption(flag: string, raw: unknown): Record<string, unknown> | undefined {
+  if (typeof raw !== "string" || raw.length === 0) return undefined;
+  try {
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    throw new MaestroError(`${flag} must be valid JSON`, [
+      `Example: ${flag} '{"key":"value"}'`,
+    ]);
+  }
 }
 
 function parseVerificationResult(raw: string): UkiVerificationResult {
@@ -540,13 +537,13 @@ async function validateGatePrinciples(
   const { maestroRefs } = content;
   if (!maestroRefs.missionId || !maestroRefs.featureId) return;
 
-  let profile: string | undefined;
+  let profile: import("@/features/mission").MilestoneProfile | undefined;
   try {
-    const mission = await services.missionStore.get(maestroRefs.missionId);
-    if (!mission) return;
-
-    const feature = await services.featureStore.get(maestroRefs.missionId, maestroRefs.featureId);
-    if (!feature) return;
+    const [mission, feature] = await Promise.all([
+      services.missionStore.get(maestroRefs.missionId),
+      services.featureStore.get(maestroRefs.missionId, maestroRefs.featureId),
+    ]);
+    if (!mission || !feature) return;
 
     const milestone = mission.milestones.find((m) => m.id === feature.milestoneId);
     profile = milestone?.profile;
@@ -556,20 +553,23 @@ async function validateGatePrinciples(
 
   if (!profile) return;
 
-  let principles: readonly { readonly gateField?: string; readonly gateCheck?: string; readonly name: string; readonly mode: string }[];
+  let principles: readonly import("@/features/mission").Principle[];
   try {
-    principles = await services.principleStore.listByProfile(profile as import("@/features/mission").MilestoneProfile);
+    principles = await services.principleStore.listByProfile(profile);
   } catch {
     return;
   }
 
-  const gates = principles.filter((p) => p.mode === "gate" && p.gateField && p.gateCheck);
+  const gates = principles.filter(
+    (p): p is import("@/features/mission").Principle & { readonly gateField: string; readonly gateCheck: string } =>
+      p.mode === "gate" && p.gateField !== undefined && p.gateCheck !== undefined,
+  );
   if (gates.length === 0) return;
 
+  const contentRecord = content as Record<string, unknown>;
   const failures: string[] = [];
   for (const gate of gates) {
-    const fieldValue = (content as Record<string, unknown>)[gate.gateField!];
-    if (!evaluateGateCheck(gate.gateCheck!, fieldValue)) {
+    if (!evaluateGateCheck(gate.gateCheck, contentRecord[gate.gateField])) {
       failures.push(`${gate.name}: field '${gate.gateField}' failed check '${gate.gateCheck}'`);
     }
   }
