@@ -29,8 +29,9 @@ import {
 } from "../domain/task-types.js";
 
 const MAX_ID_RETRIES = 5;
-const LOCK_RETRY_DELAY_MS = 10;
-const LOCK_RETRY_COUNT = 100;
+const LOCK_WAIT_TIMEOUT_MS = 5_000;
+const LOCK_INITIAL_RETRY_DELAY_MS = 10;
+const LOCK_MAX_RETRY_DELAY_MS = 100;
 const LOCK_STALE_MS = 30_000;
 
 interface TaskStoreLockMetadata {
@@ -259,7 +260,8 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
   private async withLock<T>(fn: () => Promise<T>): Promise<T> {
     await ensureDir(this.tasksDir());
     const lockPath = this.lockPath();
-    let attempt = 0;
+    const deadline = Date.now() + LOCK_WAIT_TIMEOUT_MS;
+    let retryDelayMs = LOCK_INITIAL_RETRY_DELAY_MS;
 
     while (true) {
       try {
@@ -279,14 +281,14 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         if (await this.removeStaleLock(lockPath)) {
           continue;
         }
-        if (attempt >= LOCK_RETRY_COUNT) {
+        if (Date.now() >= deadline) {
           throw new MaestroError(`Task store lock is still active: ${lockPath}`, [
             "Retry once the other task command finishes",
             `If this lock is stale, remove it manually: rm ${lockPath}`,
           ]);
         }
-        attempt += 1;
-        await sleep(LOCK_RETRY_DELAY_MS);
+        await sleep(retryDelayMs);
+        retryDelayMs = Math.min(retryDelayMs * 2, LOCK_MAX_RETRY_DELAY_MS);
       }
     }
   }

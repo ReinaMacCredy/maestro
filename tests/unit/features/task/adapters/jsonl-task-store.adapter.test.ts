@@ -1,7 +1,8 @@
 import { describe, expect, it, beforeEach } from "bun:test";
-import { mkdtemp, mkdir, stat, utimes } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, stat, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { JsonlTaskStoreAdapter } from "@/features/task/adapters/jsonl-task-store.adapter.js";
 import { MaestroError } from "@/shared/errors.js";
 import { TASK_ID_PATTERN } from "@/features/task/domain/task-id.js";
@@ -224,7 +225,7 @@ describe("JsonlTaskStoreAdapter", () => {
 
       await expect(store.create({ title: "blocked" })).rejects.toThrow(MaestroError);
       expect((await stat(lockPath)).isFile()).toBe(true);
-    });
+    }, 8_000);
 
     it("clears a stale lock when the owner pid is dead", async () => {
       const lockPath = await writeLockFile(tmpDir, { pid: 999_999, createdAt: "2026-04-12T00:00:00.000Z" });
@@ -235,6 +236,24 @@ describe("JsonlTaskStoreAdapter", () => {
       expect(created.title).toBe("unblocked");
       await expect(stat(lockPath)).rejects.toThrow();
     });
+
+    it("waits for a live lock to clear before giving up", async () => {
+      const lockPath = await writeLockFile(tmpDir, {
+        pid: process.pid,
+        createdAt: new Date().toISOString(),
+      });
+
+      const releaseLock = (async () => {
+        await sleep(1_200);
+        await rm(lockPath, { force: true });
+      })();
+
+      const created = await store.create({ title: "waited through contention" });
+      await releaseLock;
+
+      expect(created.title).toBe("waited through contention");
+      await expect(stat(lockPath)).rejects.toThrow();
+    }, 8_000);
   });
 });
 

@@ -56,8 +56,8 @@ export function parseStatus(value: string | undefined): TaskStatus | undefined {
 
 export function parseLimit(value: string | undefined): number | undefined {
   if (value === undefined) return undefined;
-  const n = Number.parseInt(value, 10);
-  if (Number.isNaN(n) || n < 0) {
+  const n = parseWholeNumber(value);
+  if (n === undefined) {
     throw new MaestroError(`Invalid --limit '${value}'`, [
       "Limit must be a non-negative integer (0 = unlimited)",
     ]);
@@ -82,14 +82,23 @@ export function hasAnyPatchField(patch: UpdateTaskInput): boolean {
 
 export function parsePriority(value: string | undefined): TaskPriority | undefined {
   if (value === undefined) return undefined;
-  const n = Number.parseInt(value, 10);
-  if (Number.isNaN(n) || !isTaskPriority(n)) {
+  const n = parseWholeNumber(value);
+  if (n === undefined || !isTaskPriority(n)) {
     throw new MaestroError(`Invalid --priority '${value}'`, [
       `Priority must be one of ${TASK_PRIORITIES.join(", ")}`,
       "0 = critical, 4 = backlog",
     ]);
   }
   return n;
+}
+
+function parseWholeNumber(value: string): number | undefined {
+  if (!/^\d+$/.test(value)) {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : undefined;
 }
 
 export function parseList(value: string | undefined): readonly string[] | undefined {
