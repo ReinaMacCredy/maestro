@@ -2,9 +2,17 @@ import type { Command } from "commander";
 import { getServices } from "@/services.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import { MaestroError } from "@/shared/errors.js";
-import type { Principle, CreatePrincipleInput } from "../domain/principle-types.js";
+import type {
+  Principle,
+  CreatePrincipleInput,
+  PrincipleEffectiveness,
+} from "../domain/principle-types.js";
 import { MilestoneProfileSchema } from "../domain/mission-validators.js";
 import { validateCreatePrincipleInput } from "../domain/principle-validators.js";
+import {
+  buildPrincipleEffectiveness,
+  PRINCIPLE_SMALL_SAMPLE_THRESHOLD,
+} from "../usecases/principle-effectiveness.usecase.js";
 
 export function registerPrincipleCommand(program: Command): void {
   const principleCmd = program
@@ -74,6 +82,39 @@ export function registerPrincipleCommand(program: Command): void {
     });
 
   principleCmd
+    .command("effectiveness")
+    .alias("stats")
+    .description("Per-principle helpful/unhelpful scoreboard (worst first)")
+    .option("--json", "Output as JSON")
+    .option("--all", "Include principles that fall below the small-sample threshold")
+    .action(async (opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+
+      const [principles, outcomes] = await Promise.all([
+        services.principleStore.list(),
+        services.principleStore.listOutcomes(),
+      ]);
+      const rollup = buildPrincipleEffectiveness(principles, outcomes);
+      const principleById = new Map(principles.map((p) => [p.id, p]));
+      const showAll = opts.all === true;
+      const rows = [...rollup.values()]
+        .filter((row) => showAll || row.helpful + row.unhelpful >= PRINCIPLE_SMALL_SAMPLE_THRESHOLD)
+        .sort(sortWorstFirst);
+
+      if (isJson) {
+        const payload = rows.map((row) => ({
+          ...row,
+          name: principleById.get(row.principleId)?.name,
+          lowSample: row.helpful + row.unhelpful < PRINCIPLE_SMALL_SAMPLE_THRESHOLD,
+        }));
+        console.log(JSON.stringify(payload, null, 2));
+        return;
+      }
+      output(false, rows, (r) => formatEffectivenessTable(r, principleById));
+    });
+
+  principleCmd
     .command("remove <id>")
     .description("Remove a principle by id")
     .option("--json", "Output as JSON")
@@ -121,6 +162,44 @@ function formatPrincipleCreated(principle: Principle): string[] {
 
 function formatPrincipleRemoved(result: { id: string }): string[] {
   return [`[ok] Principle removed: ${result.id}`];
+}
+
+function sortWorstFirst(a: PrincipleEffectiveness, b: PrincipleEffectiveness): number {
+  const ae = a.effectiveness ?? Number.POSITIVE_INFINITY;
+  const be = b.effectiveness ?? Number.POSITIVE_INFINITY;
+  if (ae !== be) return ae - be; // worst first
+  // Secondary sort: more decided outcomes first (higher-signal rows surface).
+  const aDecided = a.helpful + a.unhelpful;
+  const bDecided = b.helpful + b.unhelpful;
+  return bDecided - aDecided;
+}
+
+function formatEffectivenessTable(
+  rows: readonly PrincipleEffectiveness[],
+  principleById: ReadonlyMap<string, Principle>,
+): string[] {
+  if (rows.length === 0) {
+    return [
+      "No principles with recorded outcomes yet.",
+      "Run `maestro principle effectiveness --all` to include low-sample entries.",
+    ];
+  }
+  const lines: string[] = [
+    `${rows.length} principle(s)  (sorted by effectiveness, worst first)`,
+    "",
+    "  eff%    helpful / total   principle",
+  ];
+  for (const row of rows) {
+    const effStr = row.effectiveness === undefined
+      ? "   -  "
+      : `${(row.effectiveness * 100).toFixed(0).padStart(4)}%`;
+    const decided = row.helpful + row.unhelpful;
+    const lowSample = decided < PRINCIPLE_SMALL_SAMPLE_THRESHOLD ? " [low]" : "";
+    const name = principleById.get(row.principleId)?.name ?? row.principleId;
+    const pendingStr = row.pending > 0 ? ` +${row.pending} pending` : "";
+    lines.push(`  ${effStr}   ${String(row.helpful).padStart(3)} / ${String(decided).padStart(3)}      ${row.principleId.padEnd(30)} ${name}${pendingStr}${lowSample}`);
+  }
+  return lines;
 }
 
 function parsePrincipleProfile(raw: string): import("../domain/mission-types.js").MilestoneProfile {

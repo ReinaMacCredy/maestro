@@ -70,7 +70,15 @@ export type {
   PrincipleMode,
   GateCheckType,
   PrincipleSource,
+  PrincipleOutcome,
+  PrincipleOutcomeRecord,
+  PrincipleEffectiveness,
 } from "./domain/principle-types.js";
+export {
+  buildPrincipleEffectiveness,
+  hasSufficientSample,
+  PRINCIPLE_SMALL_SAMPLE_THRESHOLD,
+} from "./usecases/principle-effectiveness.usecase.js";
 export { DEFAULT_PRINCIPLES } from "./domain/default-principles.js";
 export { validatePrinciple, validateCreatePrincipleInput } from "./domain/principle-validators.js";
 

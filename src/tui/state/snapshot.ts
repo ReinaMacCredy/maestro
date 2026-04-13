@@ -17,8 +17,9 @@ import type { RatchetStorePort } from "@/features/ratchet";
 import type { ProjectGraphStorePort } from "@/features/graph";
 import type { HandoffStorePort, UkiHandoff } from "@/features/handoff";
 import { TASK_STATUSES, type TaskStorePort, type TaskStatus } from "@/features/task";
-import type { ReplyStorePort, WorkerReply } from "@/features/reply";
+import type { ReplyStorePort, WorkerReply, ReplyOutcome } from "@/features/reply";
 import { ingestReply } from "@/features/reply";
+import type { PrincipleStorePort } from "@/features/mission";
 import { recommendWorkerFit } from "@/features/worker";
 import {
   type Mission,
@@ -72,6 +73,7 @@ export interface SnapshotDeps {
   handoffStore?: HandoffStorePort;
   taskStore?: TaskStorePort;
   replyStore?: ReplyStorePort;
+  principleStore?: PrincipleStorePort;
   cwd: string;
 }
 
@@ -867,6 +869,8 @@ async function loadAndIngestReplies(
     const replies = await deps.replyStore.list();
     if (replies.length === 0) return [];
 
+    const recordPrincipleOutcomes = buildPrincipleRecorder(deps, missionId);
+
     for (const reply of replies) {
       try {
         await ingestReply(
@@ -876,6 +880,7 @@ async function loadAndIngestReplies(
             assertionStore: deps.assertionStore,
             replyStore: deps.replyStore,
             baseDir: deps.cwd,
+            ...(recordPrincipleOutcomes ? { recordPrincipleOutcomes } : {}),
           },
           missionId,
           reply.featureId,
@@ -890,6 +895,50 @@ async function loadAndIngestReplies(
   } catch {
     return [];
   }
+}
+
+/**
+ * Build a principle-outcome recorder that, on every reply ingest, marks
+ * every `pending` principle row for the handoffs linked to the feature as
+ * either `helpful` or `unhelpful` based on the inferred outcome.
+ */
+function buildPrincipleRecorder(
+  deps: SnapshotDeps,
+  missionId: string,
+): ((featureId: string, outcome: ReplyOutcome) => Promise<number>) | undefined {
+  const principleStore = deps.principleStore;
+  const handoffStore = deps.handoffStore;
+  if (!principleStore || !handoffStore) return undefined;
+
+  return async (featureId, outcome) => {
+    const resolved = outcome === "completed" ? "helpful" : "unhelpful";
+    try {
+      const recentHandoffs = handoffStore.listRecentByFeatureRefs
+        ? await handoffStore.listRecentByFeatureRefs(missionId, featureId, 25)
+        : (await handoffStore.list()).filter((h) => h.content.maestroRefs.featureId === featureId);
+      if (recentHandoffs.length === 0) return 0;
+
+      let recorded = 0;
+      const recordedAt = new Date().toISOString();
+      for (const handoff of recentHandoffs) {
+        const pending = await principleStore.listPendingOutcomesForHandoff(handoff.id);
+        for (const row of pending) {
+          await principleStore.recordOutcome({
+            principleId: row.principleId,
+            handoffId: handoff.id,
+            featureId,
+            missionId,
+            outcome: resolved,
+            recordedAt,
+          });
+          recorded += 1;
+        }
+      }
+      return recorded;
+    } catch {
+      return 0;
+    }
+  };
 }
 
 async function safeListReplies(
