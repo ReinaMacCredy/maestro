@@ -4,7 +4,6 @@ import { useState } from "react";
 
 import { getValidFeatureTransitions, updateFeature } from "@/features/mission";
 import { generateWorkerPrompt } from "@/features/worker";
-import { updateTask, type TaskStatus } from "@/features/task";
 import { applyConfigEdit, previewConfigEdit } from "@/infra/usecases/config-edit.usecase.js";
 import {
   getCommandPaletteSelectionAction,
@@ -200,7 +199,6 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
       return;
     }
 
-    // Dispatch: Enter on a queue item prepares the worker prompt
     if (action.type === "enter" && state.modal.kind === "dispatch" && state.modal.phase === "browse") {
       await submitDispatchPrepare();
       return;

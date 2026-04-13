@@ -10,6 +10,7 @@ import type { ConfigScope } from "@/infra/ports/config.port.js";
 import { getFilteredMissionControlPaletteCommandCount } from "./mission-control-commands.js";
 import { getValidFeatureTransitions } from "@/features/mission";
 import { TASK_STATUSES, type TaskStatus } from "@/features/task";
+import type { EventStreamEntry } from "./screen-types.js";
 import { getConfigRowsForTab, isGlobalOnlyConfigKey, resolveConfigScopeForKey } from "./config-inspector.js";
 
 export type FocusedPanel = "features" | "log" | "none";
@@ -76,7 +77,7 @@ export type ModalState =
       | { kind: "event-stream"; selectedIndex: number; filterKind?: string; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState }
       | {
           kind: "task-board";
-          selectedColumn: import("@/features/task").TaskStatus;
+          selectedColumn: TaskStatus;
           selectedIndex: number;
           returnTarget?: ModalReturnTarget;
           returnPalette?: CommandPaletteState;
@@ -1437,7 +1438,7 @@ function cycleConfigDraft(state: AppState, direction: "previous" | "next"): AppS
     };
   }
 
-function getFilteredEventStream(state: AppState): readonly import("./screen-types.js").EventStreamEntry[] {
+function getFilteredEventStream(state: AppState): readonly EventStreamEntry[] {
   const stream = state.snapshot.eventStream ?? [];
   if (state.modal.kind !== "event-stream" || !state.modal.filterKind) return stream;
   return stream.filter((e) => e.kind === state.modal.filterKind);

@@ -107,6 +107,7 @@ export async function buildSnapshot(
     gitState,
     memorySnapshot,
     pendingHandoffs,
+    taskBoard,
     ] = await Promise.all([
     deps.missionStore.get(missionId),
     deps.featureStore.list(missionId),
@@ -123,6 +124,7 @@ export async function buildSnapshot(
       cwd: deps.cwd,
       }),
       loadPendingHandoffs(deps.handoffStore),
+      buildTaskBoard(deps.taskStore),
   ]);
 
   if (!mission) {
@@ -211,12 +213,11 @@ export async function buildSnapshot(
   );
   const sessionSidebar = buildSessionSidebar(gitState);
 
-  // Conductor screen data
+  // Conductor screen data (taskBoard fetched in parallel above)
   const agentGrid = buildAgentGrid(features, pendingHandoffs);
   const missionMilestones = mission.milestones;
   const dispatchQueue = buildDispatchQueue(features, missionMilestones);
   const eventStream = buildEventStream(progressLog, pendingHandoffs);
-  const taskBoard = await buildTaskBoard(deps.taskStore);
   const timelineMilestones = buildTimelineMilestones(missionMilestones, features);
 
   return {
@@ -272,7 +273,7 @@ export async function buildSnapshot(
 export async function buildHomeSnapshot(
   deps: HomeSnapshotDeps,
 ): Promise<MissionControlSnapshot> {
-  const [env, configLayers, gitState, memorySnapshot, pendingHandoffs] = await Promise.all([
+  const [env, configLayers, gitState, memorySnapshot, pendingHandoffs, taskBoard] = await Promise.all([
     buildMissionControlEnvironmentSummary(deps.config, deps.git, deps.cwd),
     deps.config.loadLayers(deps.cwd),
     deps.git.isRepo(deps.cwd).then((isRepo) => isRepo ? deps.git.getState(deps.cwd) : Promise.resolve(undefined)),
@@ -284,6 +285,7 @@ export async function buildHomeSnapshot(
       cwd: deps.cwd,
     }),
     loadPendingHandoffs(deps.handoffStore),
+    buildTaskBoard(deps.taskStore),
   ]);
   const checks = [
     ...env.checks,
@@ -304,8 +306,7 @@ export async function buildHomeSnapshot(
 
   const actions = buildHomeActions(status, checks);
 
-  // Home mode: tasks and event stream are available without a mission
-  const taskBoard = await buildTaskBoard(deps.taskStore);
+  // Home mode: tasks and event stream are available without a mission (taskBoard fetched in parallel above)
   const homeEventStream = buildEventStream([], pendingHandoffs);
 
   return {

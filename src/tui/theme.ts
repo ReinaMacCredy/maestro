@@ -3,6 +3,8 @@
  * Uses 256-color indices for broad terminal compatibility.
  */
 import type { MissionStatus, FeatureStatus, MilestoneStatus, AssertionResult, MilestoneKind, MilestoneProfile } from "@/features/mission";
+import type { TaskStatus } from "@/features/task";
+import type { InferredAgentStatus } from "./state/screen-types.js";
 
 // ── Palette (256-color) ─────────────────────────────
 
@@ -130,6 +132,21 @@ export const FEATURE_TASK_STATUS_LABEL: Record<FeatureStatus, string> = {
   review: "REVIEW",
   done: "DONE",
   blocked: "BLOCKED",
+};
+
+export const TASK_STATUS_COLUMN_LABEL: Record<TaskStatus, string> = {
+  open: "Open",
+  in_progress: "In Progress",
+  blocked: "Blocked",
+  deferred: "Deferred",
+  closed: "Closed",
+};
+
+export const AGENT_STATUS_LABEL: Record<InferredAgentStatus, string> = {
+  active: "Active",
+  waiting: "Waiting",
+  completed: "Done",
+  stale: "Stale",
 };
 
 export const FEATURE_TASK_STATUS_COLOR: Record<FeatureStatus, number> = {

@@ -9,11 +9,6 @@ import type {
   MissionControlConfigRow,
   MissionControlSnapshot,
   TaskPreviewPane,
-  AgentGridRow,
-  DispatchQueueItem,
-  EventStreamEntry,
-  TaskBoardSnapshot,
-  TimelineMilestoneEntry,
 } from "../state/types.js";
 import {
   getFilteredMissionControlCommandSpecs,
@@ -26,8 +21,8 @@ import {
   type ModalOptions,
 } from "../shared/modal-model.js";
 import { getValidFeatureTransitions } from "@/features/mission";
-import { TASK_STATUSES, type TaskStatus } from "@/features/task";
-import { FEATURE_STATUS_LABEL, FEATURE_TASK_STATUS_LABEL } from "../theme.js";
+import { TASK_STATUSES } from "@/features/task";
+import { FEATURE_STATUS_LABEL, FEATURE_TASK_STATUS_LABEL, TASK_STATUS_COLUMN_LABEL, AGENT_STATUS_LABEL } from "../theme.js";
 import { shortenSessionId } from "../session-id.js";
 import { GRAPH_DIR } from "@/shared/domain/defaults.js";
   import {
@@ -228,23 +223,23 @@ export function buildModalOptions(state: AppState): ModalOptions | undefined {
       }
 
       if (state.modal.kind === "agent-grid") {
-        return buildAgentGridModal(state, returnTarget);
+        return buildAgentGridModal(state as AgentGridModalState, returnTarget);
       }
 
       if (state.modal.kind === "dispatch") {
-        return buildDispatchModal(state, returnTarget);
+        return buildDispatchModal(state as DispatchModalState, returnTarget);
       }
 
       if (state.modal.kind === "event-stream") {
-        return buildEventStreamModal(state, returnTarget);
+        return buildEventStreamModal(state as EventStreamModalState, returnTarget);
       }
 
       if (state.modal.kind === "task-board") {
-        return buildTaskBoardModal(state, returnTarget);
+        return buildTaskBoardModal(state as TaskBoardModalState, returnTarget);
       }
 
       if (state.modal.kind === "timeline") {
-        return buildTimelineModal(state, returnTarget);
+        return buildTimelineModal(state as TimelineModalState, returnTarget);
       }
 
       if (state.modal.kind === "help") {
@@ -366,18 +361,16 @@ function buildGraphModal(
 // Conductor screen modal builders
 // ---------------------------------------------------------------------------
 
-const AGENT_STATUS_LABEL: Record<import("../state/screen-types.js").InferredAgentStatus, string> = {
-  active: "Active",
-  waiting: "Waiting",
-  completed: "Done",
-  stale: "Stale",
-};
+type AgentGridModalState = AppState & { modal: Extract<AppState["modal"], { kind: "agent-grid" }> };
+type DispatchModalState = AppState & { modal: Extract<AppState["modal"], { kind: "dispatch" }> };
+type EventStreamModalState = AppState & { modal: Extract<AppState["modal"], { kind: "event-stream" }> };
+type TaskBoardModalState = AppState & { modal: Extract<AppState["modal"], { kind: "task-board" }> };
+type TimelineModalState = AppState & { modal: Extract<AppState["modal"], { kind: "timeline" }> };
 
 function buildAgentGridModal(
-  state: AppState,
+  state: AgentGridModalState,
   returnTarget: "command-palette" | undefined,
 ): ModalOptions {
-  if (state.modal.kind !== "agent-grid") return undefined!;
   const grid = state.snapshot.agentGrid ?? [];
   const selected = grid[state.modal.selectedIndex];
   return {
@@ -415,10 +408,9 @@ function buildAgentGridModal(
 }
 
 function buildDispatchModal(
-  state: AppState,
+  state: DispatchModalState,
   returnTarget: "command-palette" | undefined,
 ): ModalOptions {
-  if (state.modal.kind !== "dispatch") return undefined!;
   const queue = state.snapshot.dispatchQueue ?? [];
   const selected = queue[state.modal.selectedIndex];
   const { phase } = state.modal;
@@ -462,10 +454,9 @@ function buildDispatchModal(
 }
 
 function buildEventStreamModal(
-  state: AppState,
+  state: EventStreamModalState,
   returnTarget: "command-palette" | undefined,
 ): ModalOptions {
-  if (state.modal.kind !== "event-stream") return undefined!;
   const allEvents = state.snapshot.eventStream ?? [];
   const filterKind = state.modal.filterKind;
   const events = filterKind ? allEvents.filter((e) => e.kind === filterKind) : allEvents;
@@ -498,19 +489,10 @@ function buildEventStreamModal(
   };
 }
 
-const TASK_STATUS_COLUMN_LABEL: Record<import("@/features/task").TaskStatus, string> = {
-  open: "Open",
-  in_progress: "In Progress",
-  blocked: "Blocked",
-  deferred: "Deferred",
-  closed: "Closed",
-};
-
 function buildTaskBoardModal(
-  state: AppState,
+  state: TaskBoardModalState,
   returnTarget: "command-palette" | undefined,
 ): ModalOptions {
-  if (state.modal.kind !== "task-board") return undefined!;
   const board = state.snapshot.taskBoard;
   const col = state.modal.selectedColumn;
   const items = board?.columns[col] ?? [];
@@ -554,10 +536,9 @@ function buildTaskBoardModal(
 }
 
 function buildTimelineModal(
-  state: AppState,
+  state: TimelineModalState,
   returnTarget: "command-palette" | undefined,
 ): ModalOptions {
-  if (state.modal.kind !== "timeline") return undefined!;
   const milestones = state.snapshot.timelineMilestones ?? [];
   const selected = milestones[state.modal.selectedIndex];
 

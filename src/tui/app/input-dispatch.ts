@@ -121,7 +121,6 @@ export function keyToAction(key: Key, state: AppState): Action | undefined {
       if (key.char === "[") return { type: "task-board-prev-column" };
       if (key.char === "]") return { type: "task-board-next-column" };
     }
-    // Help: dismiss on any non-escape key (escape handled above)
     if (state.modal.kind === "help" && (key.type === "char" || key.type === "enter")) {
       return { type: "escape" };
     }
