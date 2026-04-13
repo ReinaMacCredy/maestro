@@ -949,43 +949,47 @@ function buildPrincipleRecorder(
   deps: SnapshotDeps,
   missionId: string,
   outcomesCache: PrincipleOutcomeRecord[] | undefined,
-): ((featureId: string, outcome: ReplyOutcome) => Promise<number>) | undefined {
+): ((featureId: string, outcome: ReplyOutcome) => Promise<{ recorded: number; complete: boolean }>) | undefined {
   const principleStore = deps.principleStore;
   const handoffStore = deps.handoffStore;
   if (!principleStore || !handoffStore || !outcomesCache) return undefined;
 
-  return async (featureId, outcome) => {
-    const resolved = outcome === "completed" ? "helpful" : "unhelpful";
-    try {
+    return async (featureId, outcome) => {
+      const resolved = outcome === "completed" ? "helpful" : "unhelpful";
+      try {
       const recentHandoffs = handoffStore.listRecentByFeatureRefs
         ? await handoffStore.listRecentByFeatureRefs(missionId, featureId, 25)
         : (await handoffStore.list()).filter((h) => h.content.maestroRefs.featureId === featureId);
       if (recentHandoffs.length === 0) return 0;
 
-      let recorded = 0;
-      const recordedAt = new Date().toISOString();
-      for (const handoff of recentHandoffs) {
-        const pending = filterPendingForHandoff(outcomesCache, handoff.id);
-        for (const row of pending) {
-          const record: PrincipleOutcomeRecord = {
+        let recorded = 0;
+        let complete = true;
+        const recordedAt = new Date().toISOString();
+        for (const handoff of recentHandoffs) {
+          const pending = filterPendingForHandoff(outcomesCache, handoff.id);
+          for (const row of pending) {
+            const record: PrincipleOutcomeRecord = {
             principleId: row.principleId,
             handoffId: handoff.id,
             featureId,
             missionId,
-            outcome: resolved,
-            recordedAt,
-          };
-          await principleStore.recordOutcome(record);
-          outcomesCache.push(record);
-          recorded += 1;
+              outcome: resolved,
+              recordedAt,
+            };
+            if (await principleStore.recordOutcome(record)) {
+              outcomesCache.push(record);
+              recorded += 1;
+              continue;
+            }
+            complete = false;
+          }
         }
+        return { recorded, complete };
+      } catch {
+        return { recorded: 0, complete: false };
       }
-      return recorded;
-    } catch {
-      return 0;
-    }
-  };
-}
+    };
+  }
 
 async function safeListReplies(
   replyStore: ReplyStorePort,

@@ -126,17 +126,19 @@ export class JsonlPrincipleStoreAdapter implements PrincipleStorePort {
     await writeText(this.filePath(), content);
   }
 
-  async recordOutcome(record: PrincipleOutcomeRecord): Promise<void> {
+  async recordOutcome(record: PrincipleOutcomeRecord): Promise<boolean> {
     // Schema validation catches drift (bad outcome values, missing ids) at
     // the write boundary so the JSONL never gains unreadable rows.
     const validated = PrincipleOutcomeRecordSchema.safeParse(record);
-    if (!validated.success) return;
+    if (!validated.success) return false;
     try {
       await ensureDir(join(this.baseDir, MAESTRO_DIR, "principles"));
       await appendText(this.outcomesPath(), JSON.stringify(validated.data) + "\n");
+      return true;
     } catch {
       // Best-effort: outcome recording must never block the caller. The
       // next write attempt will retry. Telemetry can be layered on later.
+      return false;
     }
   }
 

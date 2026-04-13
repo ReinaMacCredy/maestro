@@ -23,10 +23,10 @@ export interface PrincipleStorePort {
 
   /**
    * Append a principle outcome record to `outcomes.jsonl`. Best-effort:
-   * implementations swallow IO errors so recording never blocks the
-   * caller (handoff creation, reply ingest).
+   * implementations return false when persistence fails so callers can
+   * decide whether to retry.
    */
-  recordOutcome(record: PrincipleOutcomeRecord): Promise<void>;
+  recordOutcome(record: PrincipleOutcomeRecord): Promise<boolean>;
 
   /**
    * List recorded principle outcomes. Tail-capped by default to keep

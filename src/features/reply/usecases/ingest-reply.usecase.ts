@@ -37,7 +37,7 @@ import type {
 export type PrincipleOutcomeRecorder = (
   featureId: string,
   outcome: ReplyOutcome,
-) => Promise<number>;
+) => Promise<{ recorded: number; complete: boolean }>;
 
 export interface IngestReplyDeps {
   readonly missionStore: MissionStorePort;
@@ -87,16 +87,18 @@ export async function ingestReply(
   const inferred = inferEffectiveOutcome(reply, feature, assertionsPass);
   const advance = await applyOutcomeTransition(deps, missionId, feature, reply, inferred);
 
-  const principlesRecorded = deps.recordPrincipleOutcomes
+  const principleOutcomeResult = deps.recordPrincipleOutcomes
     ? await deps.recordPrincipleOutcomes(featureId, inferred.outcome)
-    : 0;
+    : { recorded: 0, complete: true };
 
-  await deps.replyStore.markIngested(missionId, featureId);
+  if (principleOutcomeResult.complete) {
+    await deps.replyStore.markIngested(missionId, featureId);
+  }
 
   return {
     reply,
     featureAdvanced: advance.advanced,
-    principlesRecorded,
+    principlesRecorded: principleOutcomeResult.recorded,
     kickedBack: inferred.outcome !== "completed",
     downgradeReason: inferred.downgradeReason,
   };
@@ -113,6 +115,9 @@ function inferEffectiveOutcome(
   assertionsPass: boolean,
 ): InferredOutcome {
   if (reply.outcome === "completed") {
+    if (feature.status === "done" && assertionsPass) {
+      return { outcome: "completed" };
+    }
     if (feature.status !== "review") {
       return {
         outcome: "kicked-back",

@@ -230,7 +230,7 @@ describe("ingestReply", () => {
         baseDir: tmpDir,
         recordPrincipleOutcomes: async (fid, o) => {
           calls.push({ featureId: fid, outcome: o });
-          return 3;
+          return { recorded: 3, complete: true };
         },
       },
       missionId,
@@ -239,6 +239,57 @@ describe("ingestReply", () => {
 
     expect(calls).toEqual([{ featureId, outcome: "completed" }]);
     expect(result?.principlesRecorded).toBe(3);
+  });
+
+  it("retries principle outcome recording without re-downgrading a completed reply", async () => {
+    const { missionId, featureId } = await setupMission();
+    await updateFeature(missionStore, featureStore, tmpDir, missionId, featureId, { status: "in-progress" });
+    await updateFeature(missionStore, featureStore, tmpDir, missionId, featureId, { status: "review" });
+    const assertions = await assertionStore.list(missionId);
+    for (const assertion of assertions) {
+      await assertionStore.update(missionId, assertion.id, { result: "passed" });
+    }
+
+    await writeWorkerReply(replyStore, {
+      missionId,
+      featureId,
+      outcome: "completed",
+    });
+
+    const first = await ingestReply(
+      {
+        missionStore,
+        featureStore,
+        assertionStore,
+        replyStore,
+        baseDir: tmpDir,
+        recordPrincipleOutcomes: async () => ({ recorded: 0, complete: false }),
+      },
+      missionId,
+      featureId,
+    );
+    expect(first?.featureAdvanced).toBe(true);
+    expect(first?.kickedBack).toBe(false);
+    expect(await replyStore.isIngested(missionId, featureId)).toBe(false);
+    expect((await featureStore.get(missionId, featureId))?.status).toBe("done");
+
+    const second = await ingestReply(
+      {
+        missionStore,
+        featureStore,
+        assertionStore,
+        replyStore,
+        baseDir: tmpDir,
+        recordPrincipleOutcomes: async () => ({ recorded: 2, complete: true }),
+      },
+      missionId,
+      featureId,
+    );
+    expect(second?.featureAdvanced).toBe(false);
+    expect(second?.kickedBack).toBe(false);
+    expect(second?.principlesRecorded).toBe(2);
+    expect(await replyStore.isIngested(missionId, featureId)).toBe(true);
+    expect((await featureStore.get(missionId, featureId))?.status).toBe("done");
   });
 
   it("records reply but does not move state when feature is missing", async () => {
