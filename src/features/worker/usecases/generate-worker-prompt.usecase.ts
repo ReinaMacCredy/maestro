@@ -650,8 +650,7 @@ function composePrompt(
   parts.push(`**Current Status:** ${feature.status}`);
   parts.push(`**Generated:** ${new Date().toISOString()}`);
   parts.push("");
-  parts.push("When complete, report results using:");
-  parts.push(`\`maestro feature update ${feature.id} --mission ${mission.id} --status <status> --report @report.json\``);
+  parts.push("When complete, use the Reply Contract above as the final handoff back to Maestro.");
   parts.push("");
 
   return parts.join("\n");

@@ -42,7 +42,7 @@ export class FsReplyStoreAdapter implements ReplyStorePort {
   async get(featureId: string): Promise<WorkerReply | undefined> {
     const raw = await readText(this.replyPath(featureId));
     if (raw === undefined) return undefined;
-    return parseReplyText(raw);
+    return parseReplyText(raw, featureId);
   }
 
   async list(): Promise<readonly WorkerReply[]> {
@@ -92,10 +92,14 @@ async function listReplyIds(dir: string): Promise<string[]> {
   }
 }
 
-function parseReplyText(raw: string): WorkerReply | undefined {
+function parseReplyText(raw: string, expectedFeatureId: string): WorkerReply | undefined {
   try {
     const parsed = parseYaml<unknown>(raw);
-    return validateWorkerReply(parsed);
+    const reply = validateWorkerReply(parsed);
+    if (reply.featureId !== expectedFeatureId) {
+      return undefined;
+    }
+    return reply;
   } catch {
     return undefined;
   }

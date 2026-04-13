@@ -648,6 +648,8 @@ describe("generateWorkerPrompt", () => {
     expect(result.prompt).toContain("outcome: completed");
     expect(result.prompt).toContain("kicked-back");
     expect(result.prompt).toContain("abandoned");
+    expect(result.prompt).toContain("When complete, use the Reply Contract above as the final handoff back to Maestro.");
+    expect(result.prompt).not.toContain("maestro feature update f1");
   });
 
     it("sanitizes previous milestone output and skips unreadable report artifacts", async () => {

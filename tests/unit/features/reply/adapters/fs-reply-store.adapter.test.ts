@@ -73,6 +73,24 @@ describe("FsReplyStoreAdapter", () => {
       const result = await store.get("f-bad");
       expect(result).toBeUndefined();
     });
+
+    it("returns undefined when the payload featureId disagrees with the filename", async () => {
+      const dir = join(tmpDir, ".maestro", "replies");
+      await mkdir(dir, { recursive: true });
+      await writeFile(
+        join(dir, "f-expected.yaml"),
+        [
+          "featureId: f-actual",
+          "outcome: completed",
+          "writtenAt: 2026-04-13T05:00:00.000Z",
+          "writtenBy: human",
+          "",
+        ].join("\n"),
+      );
+
+      const result = await store.get("f-expected");
+      expect(result).toBeUndefined();
+    });
   });
 
   describe("list", () => {
@@ -99,6 +117,23 @@ describe("FsReplyStoreAdapter", () => {
       await writeFile(
         join(tmpDir, ".maestro", "replies", "f-empty.yaml"),
         "",
+      );
+
+      const list = await store.list();
+      expect(list.map((r) => r.featureId)).toEqual(["f-1"]);
+    });
+
+    it("skips files whose payload featureId disagrees with the filename", async () => {
+      await store.write(makeReply({ featureId: "f-1" }));
+      await writeFile(
+        join(tmpDir, ".maestro", "replies", "f-expected.yaml"),
+        [
+          "featureId: f-other",
+          "outcome: completed",
+          "writtenAt: 2026-04-13T07:00:00.000Z",
+          "writtenBy: human",
+          "",
+        ].join("\n"),
       );
 
       const list = await store.list();
