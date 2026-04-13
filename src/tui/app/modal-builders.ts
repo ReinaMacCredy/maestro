@@ -242,6 +242,10 @@ export function buildModalOptions(state: AppState): ModalOptions | undefined {
         return buildTimelineModal(state as TimelineModalState, returnTarget);
       }
 
+      if (state.modal.kind === "principle-review") {
+        return buildPrincipleReviewModal(state as PrincipleReviewModalState, returnTarget);
+      }
+
       if (state.modal.kind === "help") {
         return buildHelpModal(state, returnTarget);
       }
@@ -366,6 +370,7 @@ type DispatchModalState = AppState & { modal: Extract<AppState["modal"], { kind:
 type EventStreamModalState = AppState & { modal: Extract<AppState["modal"], { kind: "event-stream" }> };
 type TaskBoardModalState = AppState & { modal: Extract<AppState["modal"], { kind: "task-board" }> };
 type TimelineModalState = AppState & { modal: Extract<AppState["modal"], { kind: "timeline" }> };
+type PrincipleReviewModalState = AppState & { modal: Extract<AppState["modal"], { kind: "principle-review" }> };
 
 function buildAgentGridModal(
   state: AgentGridModalState,
@@ -572,6 +577,72 @@ function buildTimelineModal(
     footer: buildListOverlayFooter(returnTarget),
     returnTarget,
     renderSpec: buildOverlayRenderSpec("timeline"),
+  };
+}
+
+function buildPrincipleReviewModal(
+  state: PrincipleReviewModalState,
+  returnTarget: "command-palette" | undefined,
+): ModalOptions {
+  const rows = state.snapshot.principleEffectiveness ?? [];
+  const selected = rows[state.modal.selectedIndex];
+  const eyebrow = rows.length === 0
+    ? "No principle outcomes recorded yet. Create a handoff that passes gates, then reply to see scores."
+    : "Sorted worst-first. [GATE] = gating principle, [adv] = advisory. Pending outcomes wait for reply.";
+
+  return {
+    mode: "split",
+    title: "Principle Effectiveness",
+    eyebrow,
+    items: rows.length > 0
+      ? rows.map((row) => {
+          const badge = row.mode === "gate" ? "[GATE]" : "[adv] ";
+          const effStr = row.effectivenessPct === undefined
+            ? " -- "
+            : `${row.effectivenessPct}%`.padStart(4);
+          const sampleNote = row.lowSample ? " (low sample)" : "";
+          return {
+            label: `${badge} ${row.name}`,
+            detail: `eff ${effStr} -- ${row.helpful}/${row.helpful + row.unhelpful} decided${sampleNote}`,
+            hint: row.pending > 0 ? `+${row.pending} pending` : "",
+            tone: row.lowSample ? "muted" as const : undefined,
+          };
+        })
+      : [{ label: "No principles with outcomes yet", selectable: false, tone: "muted" as const }],
+    selectedIndex: Math.min(state.modal.selectedIndex, Math.max(0, rows.length - 1)),
+    detailItems: selected
+      ? [
+          { text: selected.name, section: "Principle" },
+          { text: `ID: ${selected.id}`, tone: "muted" as const },
+          { text: `Mode: ${selected.mode}` },
+          {
+            text: selected.effectivenessPct === undefined
+              ? "Effectiveness: no decided outcomes yet"
+              : `Effectiveness: ${selected.effectivenessPct}% (${selected.helpful} helpful / ${selected.helpful + selected.unhelpful} decided)`,
+          },
+          ...(selected.pending > 0
+            ? [{ text: `Pending: ${selected.pending} handoff(s) awaiting a reply`, tone: "muted" as const }]
+            : []),
+          ...(selected.lowSample
+            ? [{
+                text: "Sample size is below the 3-outcome threshold; treat the ratio as weak signal.",
+                tone: "muted" as const,
+              }]
+            : []),
+          ...(selected.recentKickbackExamples.length > 0
+            ? [
+                { text: "", section: "Recent kickbacks" },
+                ...selected.recentKickbackExamples.map((example) => ({
+                  text: example,
+                  tone: "muted" as const,
+                })),
+              ]
+            : []),
+        ]
+      : [{ text: "Select a principle to view its outcomes" }],
+    footer: buildListOverlayFooter(returnTarget),
+    returnTarget,
+    renderSpec: buildOverlayRenderSpec("principle-review"),
   };
 }
 
@@ -1760,6 +1831,8 @@ export function actionForMissionControlCommand(id: MissionControlCommandId): Act
       return { type: "open-task-board" };
     case "timeline":
       return { type: "open-timeline" };
+    case "principle-review":
+      return { type: "open-principle-review" };
     case "help":
       return { type: "open-help" };
     case "exit":

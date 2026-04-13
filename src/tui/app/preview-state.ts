@@ -22,6 +22,7 @@ export const PREVIEW_SCREENS = [
   "events",
   "tasks",
   "timeline",
+  "principles",
   "help",
 ] as const;
 
@@ -36,6 +37,7 @@ export const HOME_PREVIEW_SCREENS = [
   "agents",
   "events",
   "tasks",
+  "principles",
   "help",
 ] as const satisfies readonly PreviewScreen[];
 
@@ -129,6 +131,8 @@ export function buildPreviewState(opts: PreviewStateOptions): AppState {
         ]);
       }
       return reduce(baseState, { type: "open-timeline" });
+    case "principles":
+      return reduce(baseState, { type: "open-principle-review" });
     case "help":
       return reduce(baseState, { type: "open-help" });
   }

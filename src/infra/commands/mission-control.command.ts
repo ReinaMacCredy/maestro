@@ -60,6 +60,8 @@ const PREVIEW_SCREEN_ALIASES: Readonly<Record<string, PreviewScreenOrAll>> = {
   tasks: "tasks",
   task: "tasks",
   timeline: "timeline",
+  principles: "principles",
+  principle: "principles",
   help: "help",
 };
 

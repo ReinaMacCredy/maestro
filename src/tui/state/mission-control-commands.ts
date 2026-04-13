@@ -16,6 +16,7 @@ export type MissionControlCommandId =
   | "event-stream"
   | "task-board"
   | "timeline"
+  | "principle-review"
   | "help"
   | "exit";
 
@@ -107,6 +108,14 @@ export function getMissionControlCommandSpecs(
         detail: "View cross-project relationships",
         section: "Navigate",
         keywords: ["graph", "projects", "relationships"],
+      },
+      {
+        id: "principle-review",
+        key: "R",
+        label: "Principles",
+        detail: "Review principle effectiveness and outcomes",
+        section: "Navigate",
+        keywords: ["principles", "principle", "gates", "effectiveness", "outcomes", "scoreboard", "helpful", "unhelpful"],
       },
       {
         id: "help",
@@ -208,6 +217,14 @@ export function getMissionControlCommandSpecs(
         detail: "View cross-project relationships",
         section: "Navigate",
         keywords: ["graph", "projects", "relationships"],
+      },
+      {
+        id: "principle-review",
+        key: "R",
+        label: "Principles",
+        detail: "Review principle effectiveness and outcomes",
+        section: "Navigate",
+        keywords: ["principles", "principle", "gates", "effectiveness", "outcomes", "scoreboard", "helpful", "unhelpful"],
       },
       {
         id: "help",

@@ -55,7 +55,9 @@
 
 ## Mission Control Contracts
 - Keep `buildSnapshot()` and `buildHomeSnapshot()` read-only; do not perform runtime recovery, feature updates, or other state mutation inside snapshot projection
-- `mission-control --json` and `mission-control --preview` must remain read-only inspection paths; recovery or supervision belongs only in explicit orchestration/supervised runtime paths
+- Reply ingest (Sprint 2 of the closed-loop principle work) is the sole sanctioned side effect and is strictly gated by `SnapshotBuildOptions.includeReplies` defaulting to false
+- `mission-control --json` and `mission-control --preview` must remain read-only inspection paths; recovery or supervision belongs only in explicit orchestration/supervised runtime paths. Those paths never set `includeReplies: true`
+- Interactive Mission Control may set `includeReplies: true` when the `[R]` Principles modal is open. This is the only path where reply YAMLs can advance feature state or append principle outcomes to `.maestro/principles/outcomes.jsonl`
 - When adding Mission Control tests, cover both source-run and compiled `./dist/maestro` behavior if the change affects interactive flow, polling, or TTY handling
 
 ## Agent-Optimized TUI Preview
@@ -66,8 +68,8 @@
 - `--render-check` and `--preview all` automatically skip screens that require a mission when in home mode
 - After TUI code changes, validate with: `bun run build && ./dist/maestro mission-control --render-check --size 120x40`
 - For live iteration during TUI development, use `bun tui:dev` (watches `src/tui/**`, re-renders on save); supports `--screen`, `--size`, `--check`, `--mission`, `--compiled` flags
-- Available preview screens: `dashboard`, `features`, `dependencies`, `handoffs`, `config`, `memory`, `graph`, `agents`, `dispatch`, `events`, `tasks`, `timeline`, `help` (aliases: `feat`, `deps`, `cfg`, `mem`, `agent`, `event`, `task`)
-- Mission-only screens: `dependencies`, `dispatch`, `timeline`. Home+mission screens: all others
+- Available preview screens: `dashboard`, `features`, `dependencies`, `handoffs`, `config`, `memory`, `graph`, `agents`, `dispatch`, `events`, `tasks`, `timeline`, `principles`, `help` (aliases: `feat`, `deps`, `cfg`, `mem`, `agent`, `event`, `task`, `principle`)
+- Mission-only screens: `dependencies`, `dispatch`, `timeline`. Home+mission screens: all others (including `principles`)
 
 ## Shell Gotchas
 - When running `git commit -m ...` through `zsh -lc`, do not put Markdown backticks inside double-quoted commit messages; use single-quoted heredocs, a temp file, or escaped backticks to avoid accidental command substitution

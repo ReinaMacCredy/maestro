@@ -70,6 +70,7 @@ export type OverlayModalKind =
   | "event-stream"
   | "task-board"
   | "timeline"
+  | "principle-review"
   | "help";
 
 export interface ModalRow {
@@ -336,6 +337,15 @@ export function buildOverlayRenderSpec(kind: OverlayModalKind): OverlayRenderSpe
         selection: STANDARD_SELECTION,
         text: STANDARD_TEXT,
         layout: { ...STANDARD_LAYOUT, splitRatio: [44, 56] },
+      };
+    case "principle-review":
+      return {
+        family: "split",
+        sizePreset: "wide",
+        chrome: STANDARD_CHROME,
+        selection: STANDARD_SELECTION,
+        text: STANDARD_TEXT,
+        layout: { ...WIDE_LAYOUT, splitRatio: [44, 56] },
       };
     case "help":
       return {

@@ -29,6 +29,7 @@ import type {
   AgentGridRow,
   DispatchQueueItem,
   EventStreamEntry,
+  PrincipleEffectivenessRow,
   ReplyInboxEntry,
   TaskBoardSnapshot,
   TimelineMilestoneEntry,
@@ -283,6 +284,7 @@ export interface MissionControlSnapshot {
   taskBoard?: TaskBoardSnapshot | null;
   timelineMilestones?: readonly TimelineMilestoneEntry[];
   replyInbox?: readonly ReplyInboxEntry[];
+  principleEffectiveness?: readonly PrincipleEffectivenessRow[];
 
   // Home mode
   home: MissionControlHomeState | null;

@@ -19,7 +19,15 @@ import type { HandoffStorePort, UkiHandoff } from "@/features/handoff";
 import { TASK_STATUSES, type TaskStorePort, type TaskStatus } from "@/features/task";
 import type { ReplyStorePort, WorkerReply, ReplyOutcome } from "@/features/reply";
 import { ingestReply } from "@/features/reply";
-import type { PrincipleStorePort } from "@/features/mission";
+import type {
+  Principle,
+  PrincipleOutcomeRecord,
+  PrincipleStorePort,
+} from "@/features/mission";
+import {
+  buildPrincipleEffectiveness,
+  PRINCIPLE_SMALL_SAMPLE_THRESHOLD,
+} from "@/features/mission";
 import { recommendWorkerFit } from "@/features/worker";
 import {
   type Mission,
@@ -38,6 +46,7 @@ import type {
   AgentGridRow,
   DispatchQueueItem,
   EventStreamEntry,
+  PrincipleEffectivenessRow,
   ReplyInboxEntry,
   TaskBoardSnapshot,
   TaskBoardItem,
@@ -87,6 +96,7 @@ export interface HomeSnapshotDeps {
   handoffStore?: HandoffStorePort;
   taskStore?: TaskStorePort;
   replyStore?: ReplyStorePort;
+  principleStore?: PrincipleStorePort;
   cwd: string;
 }
 
@@ -239,6 +249,12 @@ export async function buildSnapshot(
 
   const replyInbox = replies ? buildReplyInbox(features, replies) : undefined;
 
+  // Principle effectiveness rollup (piggybacks on includeReplies because
+  // the reply ingest is what produces most of the decided outcomes).
+  const principleEffectiveness = options.includeReplies === true
+    ? await loadPrincipleEffectiveness(deps)
+    : undefined;
+
   // Conductor screen data
   const agentGrid = buildAgentGrid(features, pendingHandoffs);
   const missionMilestones = mission.milestones;
@@ -294,6 +310,7 @@ export async function buildSnapshot(
     taskBoard,
     timelineMilestones,
     replyInbox,
+    principleEffectiveness,
     home: null,
   };
 }
@@ -402,6 +419,9 @@ export async function buildHomeSnapshot(
     taskBoard,
     timelineMilestones: [],
     replyInbox: homeReplyInbox,
+    principleEffectiveness: options.includeReplies === true
+      ? await loadPrincipleEffectiveness(deps)
+      : undefined,
     home: {
       headline,
       summary,
@@ -949,6 +969,82 @@ async function safeListReplies(
   } catch {
     return [];
   }
+}
+
+async function loadPrincipleEffectiveness(
+  deps: SnapshotDeps | HomeSnapshotDeps,
+): Promise<readonly PrincipleEffectivenessRow[] | undefined> {
+  const principleStore = deps.principleStore;
+  const handoffStore = deps.handoffStore;
+  if (!principleStore) return undefined;
+  try {
+    const [principles, outcomes, handoffs] = await Promise.all([
+      principleStore.list(),
+      principleStore.listOutcomes(),
+      handoffStore ? handoffStore.list() : Promise.resolve<readonly UkiHandoff[]>([]),
+    ]);
+    return buildPrincipleEffectivenessRows(principles, outcomes, handoffs);
+  } catch {
+    return undefined;
+  }
+}
+
+export function buildPrincipleEffectivenessRows(
+  principles: readonly Principle[],
+  outcomes: readonly PrincipleOutcomeRecord[],
+  handoffs: readonly UkiHandoff[],
+): readonly PrincipleEffectivenessRow[] {
+  const rollup = buildPrincipleEffectiveness(principles, outcomes);
+  const principleById = new Map(principles.map((p) => [p.id, p]));
+  const handoffById = new Map(handoffs.map((h) => [h.id, h]));
+
+  // Index most recent unhelpful outcomes per principle, newest first.
+  const unhelpfulByPrinciple = new Map<string, PrincipleOutcomeRecord[]>();
+  for (const record of [...outcomes].sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))) {
+    if (record.outcome !== "unhelpful") continue;
+    const bucket = unhelpfulByPrinciple.get(record.principleId) ?? [];
+    if (bucket.length < 3) bucket.push(record);
+    unhelpfulByPrinciple.set(record.principleId, bucket);
+  }
+
+  const rows: PrincipleEffectivenessRow[] = [];
+  for (const stats of rollup.values()) {
+    const principle = principleById.get(stats.principleId);
+    const decided = stats.helpful + stats.unhelpful;
+    const examples = (unhelpfulByPrinciple.get(stats.principleId) ?? [])
+      .map((r) => {
+        const handoff = handoffById.get(r.handoffId);
+        const title = handoff?.content.summary ?? r.handoffId;
+        return `${r.handoffId}: ${title}`;
+      });
+
+    rows.push({
+      id: stats.principleId,
+      name: principle?.name ?? stats.principleId,
+      mode: principle?.mode ?? "advisory",
+      helpful: stats.helpful,
+      unhelpful: stats.unhelpful,
+      pending: stats.pending,
+      total: stats.total,
+      effectivenessPct: stats.effectiveness === undefined
+        ? undefined
+        : Math.round(stats.effectiveness * 100),
+      lowSample: decided < PRINCIPLE_SMALL_SAMPLE_THRESHOLD,
+      recentKickbackExamples: examples,
+    });
+  }
+
+  // Worst first (lowest effectiveness). Principles with no decided outcomes
+  // sort last so the scoreboard leads with actionable signal.
+  rows.sort((a, b) => {
+    const ae = a.effectivenessPct ?? 101;
+    const be = b.effectivenessPct ?? 101;
+    if (ae !== be) return ae - be;
+    const aDecided = a.helpful + a.unhelpful;
+    const bDecided = b.helpful + b.unhelpful;
+    return bDecided - aDecided;
+  });
+  return rows;
 }
 
 export function buildReplyInbox(
