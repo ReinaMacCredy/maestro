@@ -6,6 +6,7 @@ import { FsAssertionStoreAdapter } from "@/features/mission";
 import { FsCheckpointStoreAdapter } from "@/features/mission";
 import { FsFeatureStoreAdapter } from "@/features/mission";
 import { FsMissionStoreAdapter } from "@/features/mission";
+import { FsHandoffStoreAdapter } from "@/features/handoff";
   import {
     createMissionControlSnapshotLoader,
     loadMissionControlSnapshot,
@@ -178,5 +179,45 @@ describe("loadMissionControlSnapshot", () => {
 
     const taskSnapshot = await loader.load({ includeTaskBoard: true });
     expect(taskSnapshot.taskBoard?.totalCount).toBe(1);
+  });
+
+  it("redacts handoff event details in json output", async () => {
+    const missionId = await createMission();
+    const handoffStore = new FsHandoffStoreAdapter(tmpDir);
+    await handoffStore.create({
+      agent: "codex",
+      sessionId: "session-1",
+      content: {
+        mode: "execute",
+        currentState: "pending",
+        sessionCore: "Mission handoff",
+        decisions: [],
+        artifacts: ["branch_main"],
+        readMore: ["file_src_index_ts"],
+        nextAction: "Pick up the work",
+        summary: "Sensitive handoff summary",
+        maestroRefs: {},
+        cs: { summary: 0.8 },
+        signalDelta: [],
+        boundaryState: [],
+        risks: [],
+        causalDrivers: [],
+        divergences: [],
+        touchedFiles: [],
+        completedWork: [],
+        validation: [],
+      },
+    });
+
+    const { stdout } = await runCli(
+      ["mission-control", "--mission", missionId, "--json"],
+      tmpDir,
+    );
+    const snapshot = JSON.parse(stdout) as {
+      eventStream?: Array<{ kind: string; detail?: string }>;
+    };
+    const handoffEvent = snapshot.eventStream?.find((event) => event.kind === "handoff");
+
+    expect(handoffEvent?.detail).toBe("Details hidden in read-only output");
   });
 });

@@ -361,9 +361,18 @@ function redactSnapshotForReadOutput(
       timestamp: handoff.timestamp,
       message: "Details hidden in read-only output",
     });
+  const redactEventStreamEntry = (
+    entry: NonNullable<MissionControlSnapshot["eventStream"]>[number],
+  ) => entry.kind === "handoff"
+    ? {
+        ...entry,
+        detail: "Details hidden in read-only output",
+      }
+    : entry;
 
   return {
     ...snapshot,
+    eventStream: snapshot.eventStream?.map(redactEventStreamEntry),
     pendingHandoffs: snapshot.pendingHandoffs.map(redactPendingHandoff),
     home: snapshot.home
       ? {
