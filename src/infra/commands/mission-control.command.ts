@@ -300,6 +300,7 @@ async function resolveMissionIdFromStore(
 async function buildMissionSnapshot(
   missionId: string,
   snapshotDeps: Parameters<typeof buildSnapshot>[0],
+  options?: SnapshotBuildOptions,
 ) {
   const mission = await snapshotDeps.missionStore.get(missionId);
 
@@ -309,7 +310,7 @@ async function buildMissionSnapshot(
     ]);
   }
 
-  return buildSnapshot(snapshotDeps, missionId);
+  return buildSnapshot(snapshotDeps, missionId, options);
 }
 
 export function createMissionControlSnapshotLoader(

@@ -115,7 +115,7 @@ describe("loadMissionControlSnapshot", () => {
       expect(missionSnapshot.missionId).toBe(missionId);
     });
 
-    it("loads task-board data only when requested", async () => {
+  it("loads task-board data only when requested", async () => {
       const taskStore: TaskStorePort = {
         create: async () => { throw new Error("unused"); },
         update: async () => { throw new Error("unused"); },
@@ -142,7 +142,41 @@ describe("loadMissionControlSnapshot", () => {
       const homeSnapshot = await loader.load();
       expect(homeSnapshot.taskBoard).toBeUndefined();
 
-      const taskSnapshot = await loader.load({ includeTaskBoard: true });
-      expect(taskSnapshot.taskBoard?.totalCount).toBe(1);
-    });
+    const taskSnapshot = await loader.load({ includeTaskBoard: true });
+    expect(taskSnapshot.taskBoard?.totalCount).toBe(1);
   });
+
+  it("loads task-board data for mission snapshots when requested", async () => {
+    const missionId = await createMission();
+    const taskStore: TaskStorePort = {
+      create: async () => { throw new Error("unused"); },
+      update: async () => { throw new Error("unused"); },
+      close: async () => { throw new Error("unused"); },
+      get: async () => undefined,
+      all: async () => [
+        {
+          id: "tsk-1",
+          title: "Task 1",
+          description: "desc",
+          type: "task",
+          priority: 1,
+          status: "open",
+          labels: [],
+          dependsOn: [],
+          createdAt: "2026-01-01T00:00:00Z",
+          updatedAt: "2026-01-01T00:00:00Z",
+        },
+      ],
+    };
+    const loader = createMissionControlSnapshotLoader(
+      { ...snapshotDeps, taskStore },
+      missionId,
+    );
+
+    const missionSnapshot = await loader.load();
+    expect(missionSnapshot.taskBoard).toBeUndefined();
+
+    const taskSnapshot = await loader.load({ includeTaskBoard: true });
+    expect(taskSnapshot.taskBoard?.totalCount).toBe(1);
+  });
+});
