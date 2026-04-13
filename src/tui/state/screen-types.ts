@@ -4,6 +4,7 @@
  */
 import type { TaskStatus, TaskPriority } from "@/features/task";
 import type { MilestoneKind, MilestoneProfile, FeatureStatus } from "@/features/mission";
+import type { ReplyOutcome, ReplyAuthor } from "@/features/reply";
 import type { MissionControlEvent } from "./types.js";
 
 export type InferredAgentStatus = "active" | "waiting" | "completed" | "stale";
@@ -29,7 +30,7 @@ export interface DispatchQueueItem {
   readonly fitReason: string;
 }
 
-export type EventStreamEntryKind = MissionControlEvent["kind"] | "handoff" | "task";
+export type EventStreamEntryKind = MissionControlEvent["kind"] | "handoff" | "task" | "reply";
 
 export interface EventStreamEntry {
   readonly timestamp: string;
@@ -52,6 +53,17 @@ export interface TaskBoardItem {
 export interface TaskBoardSnapshot {
   readonly columns: Readonly<Record<TaskStatus, readonly TaskBoardItem[]>>;
   readonly totalCount: number;
+}
+
+export interface ReplyInboxEntry {
+  readonly featureId: string;
+  readonly outcome: ReplyOutcome;
+  readonly writtenAt: string;
+  readonly writtenBy: ReplyAuthor;
+  readonly featureTitle?: string;
+  readonly featureStatus?: FeatureStatus;
+  readonly pending: boolean;
+  readonly notes?: string;
 }
 
 export interface TimelineMilestoneEntry {

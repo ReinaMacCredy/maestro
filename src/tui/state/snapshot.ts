@@ -17,6 +17,8 @@ import type { RatchetStorePort } from "@/features/ratchet";
 import type { ProjectGraphStorePort } from "@/features/graph";
 import type { HandoffStorePort, UkiHandoff } from "@/features/handoff";
 import { TASK_STATUSES, type TaskStorePort, type TaskStatus } from "@/features/task";
+import type { ReplyStorePort, WorkerReply } from "@/features/reply";
+import { ingestReply } from "@/features/reply";
 import { recommendWorkerFit } from "@/features/worker";
 import {
   type Mission,
@@ -35,6 +37,7 @@ import type {
   AgentGridRow,
   DispatchQueueItem,
   EventStreamEntry,
+  ReplyInboxEntry,
   TaskBoardSnapshot,
   TaskBoardItem,
   TimelineMilestoneEntry,
@@ -68,6 +71,7 @@ export interface SnapshotDeps {
   projectGraphStore?: ProjectGraphStorePort;
   handoffStore?: HandoffStorePort;
   taskStore?: TaskStorePort;
+  replyStore?: ReplyStorePort;
   cwd: string;
 }
 
@@ -80,11 +84,13 @@ export interface HomeSnapshotDeps {
   projectGraphStore?: ProjectGraphStorePort;
   handoffStore?: HandoffStorePort;
   taskStore?: TaskStorePort;
+  replyStore?: ReplyStorePort;
   cwd: string;
 }
 
 export interface SnapshotBuildOptions {
   includeTaskBoard?: boolean;
+  includeReplies?: boolean;
 }
 
 interface FeatureGraphEntry {
@@ -105,6 +111,14 @@ export async function buildSnapshot(
   const taskBoardPromise = options.includeTaskBoard === true
     ? buildTaskBoard(deps.taskStore)
     : Promise.resolve(undefined);
+
+  // Ingest replies FIRST when requested, so the features list below reflects
+  // post-ingest state (advanced/kicked-back). Without this the inbox appears
+  // stale for one poll cycle.
+  const replies = options.includeReplies === true
+    ? await loadAndIngestReplies(deps, missionId)
+    : undefined;
+
   const [
     mission,
     features,
@@ -221,11 +235,14 @@ export async function buildSnapshot(
   );
   const sessionSidebar = buildSessionSidebar(gitState);
 
+  const replyInbox = replies ? buildReplyInbox(features, replies) : undefined;
+
   // Conductor screen data
   const agentGrid = buildAgentGrid(features, pendingHandoffs);
   const missionMilestones = mission.milestones;
   const dispatchQueue = buildDispatchQueue(features, missionMilestones);
-  const eventStream = buildEventStream(progressLog, pendingHandoffs);
+
+  const eventStream = buildEventStream(progressLog, pendingHandoffs, replies ?? []);
   const timelineMilestones = buildTimelineMilestones(missionMilestones, features);
 
   return {
@@ -274,6 +291,7 @@ export async function buildSnapshot(
     eventStream,
     taskBoard,
     timelineMilestones,
+    replyInbox,
     home: null,
   };
 }
@@ -319,7 +337,13 @@ export async function buildHomeSnapshot(
   const actions = buildHomeActions(status, checks);
 
   const agentGrid = buildAgentGrid([], pendingHandoffs);
-  const homeEventStream = buildEventStream([], pendingHandoffs);
+  // Replies in home mode: list without ingest (home mode has no mission to
+  // update). Home surface is purely read-only per Mission Control contracts.
+  const homeReplies = options.includeReplies === true && deps.replyStore
+    ? await safeListReplies(deps.replyStore)
+    : undefined;
+  const homeReplyInbox = homeReplies ? buildReplyInbox([], homeReplies) : undefined;
+  const homeEventStream = buildEventStream([], pendingHandoffs, homeReplies ?? []);
 
   return {
     mode: "home",
@@ -375,6 +399,7 @@ export async function buildHomeSnapshot(
     eventStream: homeEventStream,
     taskBoard,
     timelineMilestones: [],
+    replyInbox: homeReplyInbox,
     home: {
       headline,
       summary,
@@ -766,6 +791,7 @@ export function buildDispatchQueue(
 export function buildEventStream(
   progressLog: readonly MissionControlEvent[],
   pendingHandoffs: readonly MissionControlHomeHandoff[],
+  replies: readonly WorkerReply[] = [],
 ): readonly EventStreamEntry[] {
   const entries: EventStreamEntry[] = [];
   const baseMs = getEventStreamBaseMs(progressLog);
@@ -794,6 +820,24 @@ export function buildEventStream(
     });
   }
 
+  for (const r of replies) {
+    const replyMs = new Date(r.writtenAt).getTime();
+    const title = r.outcome === "kicked-back"
+      ? `${r.featureId} kicked back`
+      : r.outcome === "abandoned"
+        ? `${r.featureId} abandoned`
+        : `${r.featureId} completed`;
+    entries.push({
+      timestamp: r.writtenAt,
+      relativeMs: baseMs === undefined || Number.isNaN(replyMs)
+        ? 0
+        : replyMs - baseMs,
+      kind: "reply",
+      title,
+      detail: r.notes,
+    });
+  }
+
   // Sort descending by timestamp, cap at 200
   entries.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   return entries.slice(0, 200);
@@ -812,6 +856,80 @@ function getEventStreamBaseMs(
   }
 
   return Number.isFinite(baseMs) ? baseMs : undefined;
+}
+
+async function loadAndIngestReplies(
+  deps: SnapshotDeps,
+  missionId: string,
+): Promise<readonly WorkerReply[]> {
+  if (!deps.replyStore) return [];
+  try {
+    const replies = await deps.replyStore.list();
+    if (replies.length === 0) return [];
+
+    for (const reply of replies) {
+      try {
+        await ingestReply(
+          {
+            missionStore: deps.missionStore,
+            featureStore: deps.featureStore,
+            assertionStore: deps.assertionStore,
+            replyStore: deps.replyStore,
+            baseDir: deps.cwd,
+          },
+          missionId,
+          reply.featureId,
+        );
+      } catch {
+        // Snapshot projection must not throw on a single bad reply.
+        // The reply remains on disk; next poll will retry.
+      }
+    }
+
+    return replies;
+  } catch {
+    return [];
+  }
+}
+
+async function safeListReplies(
+  replyStore: ReplyStorePort,
+): Promise<readonly WorkerReply[]> {
+  try {
+    return await replyStore.list();
+  } catch {
+    return [];
+  }
+}
+
+export function buildReplyInbox(
+  features: readonly Feature[],
+  replies: readonly WorkerReply[],
+): readonly ReplyInboxEntry[] {
+  const featureById = new Map(features.map((f) => [f.id, f]));
+  const entries: ReplyInboxEntry[] = replies.map((reply) => {
+    const feature = featureById.get(reply.featureId);
+    return {
+      featureId: reply.featureId,
+      outcome: reply.outcome,
+      writtenAt: reply.writtenAt,
+      writtenBy: reply.writtenBy,
+      featureTitle: feature?.title,
+      featureStatus: feature?.status,
+      pending: isReplyPending(reply, feature),
+      notes: reply.notes,
+    };
+  });
+  entries.sort((a, b) => b.writtenAt.localeCompare(a.writtenAt));
+  return entries;
+}
+
+function isReplyPending(reply: WorkerReply, feature: Feature | undefined): boolean {
+  if (!feature) return true;
+  if (reply.outcome === "completed") return feature.status !== "done";
+  if (reply.outcome === "abandoned") return feature.status !== "blocked";
+  // kicked-back: the loop lands at pending
+  return feature.status !== "pending";
 }
 
 export async function buildTaskBoard(

@@ -32,6 +32,7 @@ export {
   getValidFeatureTransitions,
   assertMissionTransition,
   canTransitionMission,
+  canTransitionFeature,
   assertFeatureTransition,
   assertAssertionTransition,
   isTerminalAssertionStatus,

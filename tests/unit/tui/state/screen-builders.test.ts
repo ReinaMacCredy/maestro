@@ -3,12 +3,14 @@ import {
   buildAgentGrid,
   buildDispatchQueue,
   buildEventStream,
+  buildReplyInbox,
   buildTaskBoard,
   buildTimelineMilestones,
 } from "@/tui/state/snapshot.js";
 import type { Feature, Milestone } from "@/features/mission";
 import type { MissionControlEvent, MissionControlHomeHandoff } from "@/tui/state/types.js";
 import type { TaskStorePort } from "@/features/task";
+import type { WorkerReply } from "@/features/reply";
 
 function makeFeature(overrides: Partial<Feature> & { id: string }): Feature {
   return {
@@ -283,5 +285,64 @@ describe("buildTimelineMilestones", () => {
     const timeline = buildTimelineMilestones(milestones, []);
     expect(timeline[0]!.progressPct).toBe(0);
     expect(timeline[0]!.features).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildReplyInbox
+// ---------------------------------------------------------------------------
+
+function makeReply(overrides: Partial<WorkerReply> & { featureId: string }): WorkerReply {
+  return {
+    outcome: "completed",
+    writtenAt: "2026-04-13T00:00:00.000Z",
+    writtenBy: "human",
+    ...overrides,
+  };
+}
+
+describe("buildReplyInbox", () => {
+  it("enriches entries with matching feature title and status", () => {
+    const features = [
+      makeFeature({ id: "f1", title: "Feature One", status: "done" }),
+      makeFeature({ id: "f2", title: "Feature Two", status: "review" }),
+    ];
+    const replies = [
+      makeReply({ featureId: "f1", outcome: "completed", writtenAt: "2026-04-13T01:00:00.000Z" }),
+      makeReply({ featureId: "f2", outcome: "kicked-back", writtenAt: "2026-04-13T02:00:00.000Z" }),
+    ];
+
+    const inbox = buildReplyInbox(features, replies);
+    // Newest first
+    expect(inbox.map((e) => e.featureId)).toEqual(["f2", "f1"]);
+    expect(inbox[0]!.featureTitle).toBe("Feature Two");
+    expect(inbox[0]!.featureStatus).toBe("review");
+    expect(inbox[0]!.pending).toBe(true); // kicked-back expects pending, feature is review
+    expect(inbox[1]!.featureStatus).toBe("done");
+    expect(inbox[1]!.pending).toBe(false); // completed, feature is done -- settled
+  });
+
+  it("marks reply as pending when no feature match exists", () => {
+    const inbox = buildReplyInbox([], [makeReply({ featureId: "f-missing" })]);
+    expect(inbox[0]!.pending).toBe(true);
+    expect(inbox[0]!.featureTitle).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildEventStream with reply entries
+// ---------------------------------------------------------------------------
+
+describe("buildEventStream with replies", () => {
+  it("merges reply entries with kind='reply'", () => {
+    const replies = [
+      makeReply({ featureId: "f1", outcome: "completed", writtenAt: "2026-04-13T01:00:00.000Z" }),
+      makeReply({ featureId: "f2", outcome: "kicked-back", writtenAt: "2026-04-13T02:00:00.000Z" }),
+    ];
+
+    const entries = buildEventStream([], [], replies);
+    expect(entries.filter((e) => e.kind === "reply")).toHaveLength(2);
+    const kickback = entries.find((e) => e.title.includes("kicked back"));
+    expect(kickback).toBeDefined();
   });
 });

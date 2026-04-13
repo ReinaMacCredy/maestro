@@ -29,6 +29,7 @@ import type {
   AgentGridRow,
   DispatchQueueItem,
   EventStreamEntry,
+  ReplyInboxEntry,
   TaskBoardSnapshot,
   TimelineMilestoneEntry,
 } from "./screen-types.js";
@@ -281,6 +282,7 @@ export interface MissionControlSnapshot {
   eventStream?: readonly EventStreamEntry[];
   taskBoard?: TaskBoardSnapshot | null;
   timelineMilestones?: readonly TimelineMilestoneEntry[];
+  replyInbox?: readonly ReplyInboxEntry[];
 
   // Home mode
   home: MissionControlHomeState | null;

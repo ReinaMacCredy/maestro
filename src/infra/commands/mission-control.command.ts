@@ -128,6 +128,7 @@ export function registerMissionControlCommand(program: Command): void {
           projectGraphStore: services.projectGraphStore,
           handoffStore: services.handoffStore,
           taskStore: services.taskStore,
+          replyStore: services.replyStore,
           cwd: process.cwd(),
         };
         const snapshotLoader = createMissionControlSnapshotLoader(
