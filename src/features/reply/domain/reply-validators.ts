@@ -6,7 +6,11 @@
  * wrap in try/catch.
  */
 import { z } from "zod";
-import { FEATURE_ID_PATTERN, WorkerReportSchema } from "@/features/mission/index.js";
+import {
+  FEATURE_ID_PATTERN,
+  MISSION_ID_PATTERN,
+  WorkerReportSchema,
+} from "@/features/mission/index.js";
 import { MaestroError } from "@/shared/errors.js";
 import type { WorkerReply } from "./reply-types.js";
 import { REPLY_OUTCOMES } from "./reply-types.js";
@@ -16,6 +20,7 @@ const ReplyAuthorSchema = z.enum(["agent", "human"]);
 const IsoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/);
 
 const WorkerReplySchema = z.object({
+  missionId: z.string().regex(MISSION_ID_PATTERN, "Mission id must match YYYY-MM-DD-NNN"),
   featureId: z.string().regex(FEATURE_ID_PATTERN, "Feature id must match [A-Za-z0-9][A-Za-z0-9_-]*"),
   outcome: ReplyOutcomeSchema,
   report: WorkerReportSchema.optional(),
@@ -32,7 +37,7 @@ export function validateWorkerReply(value: unknown): WorkerReply {
     const path = first?.path.join(".") || "<root>";
     throw new MaestroError(`Invalid reply: ${path}: ${first?.message ?? "unknown"}`, [
       "Replies must conform to the WorkerReply schema",
-      "See `.maestro/replies/<id>.yaml` in the prompt's Reply Contract",
+      "See `.maestro/replies/<mission-id>/<id>.yaml` in the prompt's Reply Contract",
     ]);
   }
   return parsed.data as WorkerReply;

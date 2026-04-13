@@ -3,9 +3,9 @@
  *
  * A reply is the agent's (or human's) inbound half of the worker contract:
  * after maestro publishes a worker prompt, the agent writes
- * `.maestro/replies/<feature-id>.yaml` to signal completion, kickback, or
- * abandonment. Ingest then advances feature state and records principle
- * outcomes.
+ * `.maestro/replies/<mission-id>/<feature-id>.yaml` to signal completion,
+ * kickback, or abandonment. Ingest then advances feature state and records
+ * principle outcomes.
  */
 import type { WorkerReport } from "@/features/mission/index.js";
 
@@ -16,8 +16,9 @@ export type ReplyOutcome = (typeof REPLY_OUTCOMES)[number];
 /** Who wrote the reply. "agent" comes from agent-driven paths; "human" from the CLI override. */
 export type ReplyAuthor = "agent" | "human";
 
-/** Canonical reply record persisted at `.maestro/replies/<feature-id>.yaml`. */
+/** Canonical reply record persisted at `.maestro/replies/<mission-id>/<feature-id>.yaml`. */
 export interface WorkerReply {
+  readonly missionId: string;
   readonly featureId: string;
   readonly outcome: ReplyOutcome;
   readonly report?: WorkerReport;

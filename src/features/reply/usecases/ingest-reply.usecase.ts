@@ -8,7 +8,7 @@
  * the claim to a kickback and records the discrepancy in the result's
  * `downgradeReason`.
  *
- * Idempotent: `replyStore.isIngested(featureId)` short-circuits repeated
+ * Idempotent: `replyStore.isIngested(missionId, featureId)` short-circuits repeated
  * polls. Callers should wrap in try/catch; this usecase never mutates on
  * parse/validation failures.
  */
@@ -53,9 +53,9 @@ export async function ingestReply(
   missionId: string,
   featureId: string,
 ): Promise<ReplyIngestResult | undefined> {
-  const reply = await deps.replyStore.get(featureId);
+  const reply = await deps.replyStore.get(missionId, featureId);
   if (!reply) return undefined;
-  if (await deps.replyStore.isIngested(featureId)) {
+  if (await deps.replyStore.isIngested(missionId, featureId)) {
     return {
       reply,
       featureAdvanced: false,
@@ -68,7 +68,7 @@ export async function ingestReply(
   if (!feature) {
     // Reply exists but no feature. Mark as ingested so we do not spin on
     // every poll. Caller can delete the reply or fix the reference.
-    await deps.replyStore.markIngested(featureId);
+    await deps.replyStore.markIngested(missionId, featureId);
     return {
       reply,
       featureAdvanced: false,
@@ -91,7 +91,7 @@ export async function ingestReply(
     ? await deps.recordPrincipleOutcomes(featureId, inferred.outcome)
     : 0;
 
-  await deps.replyStore.markIngested(featureId);
+  await deps.replyStore.markIngested(missionId, featureId);
 
   return {
     reply,
@@ -178,4 +178,3 @@ async function applyOutcomeTransition(
   );
   return { advanced: true };
 }
-

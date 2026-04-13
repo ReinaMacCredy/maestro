@@ -2,8 +2,8 @@
  * `maestro reply <feature-id>` CLI. Agent-friendly (flags-only; no prompts).
  *
  * Usage:
- *   maestro reply f-42 --outcome completed --note "tests pass"
- *   maestro reply f-42 --outcome completed --report-file ./report.json
+ *   maestro reply write f-42 --mission 2026-04-13-001 --outcome completed --note "tests pass"
+ *   maestro reply write f-42 --mission 2026-04-13-001 --outcome completed --report-file ./report.json
  *   maestro reply list
  */
 import type { Command } from "commander";
@@ -26,6 +26,7 @@ export function registerReplyCommand(program: Command): void {
   replyCmd
     .command("write <featureId>")
     .description("Write a reply for the given feature id")
+    .requiredOption("--mission <id>", "Mission id for the reply (YYYY-MM-DD-NNN)")
     .option("--outcome <outcome>", `Outcome (${REPLY_OUTCOMES.join("|")})`)
     .option("--note <text>", "Free-form notes")
     .option("--report-file <path>", "Path to a JSON file containing a WorkerReport")
@@ -39,6 +40,7 @@ export function registerReplyCommand(program: Command): void {
       const report = await loadReport(opts.reportFile);
 
       const reply = await writeWorkerReply(services.replyStore, {
+        missionId: opts.mission,
         featureId,
         outcome,
         notes: typeof opts.note === "string" ? opts.note : undefined,
@@ -48,7 +50,7 @@ export function registerReplyCommand(program: Command): void {
       });
 
       output(isJson, reply, (r) => [
-        `[ok] Reply recorded: ${r.featureId}`,
+        `[ok] Reply recorded: ${r.missionId}/${r.featureId}`,
         `  Outcome: ${r.outcome}`,
         `  Written: ${r.writtenAt} (by ${r.writtenBy})`,
         ...(r.notes ? [`  Notes: ${r.notes}`] : []),
@@ -73,7 +75,7 @@ export function registerReplyCommand(program: Command): void {
 function parseOutcome(raw: unknown): ReplyOutcome {
   if (typeof raw !== "string" || !(REPLY_OUTCOMES as readonly string[]).includes(raw)) {
     throw new MaestroError(`--outcome is required (${REPLY_OUTCOMES.join("|")})`, [
-      "Example: maestro reply write f-42 --outcome completed --note 'tests pass'",
+      "Example: maestro reply write f-42 --mission 2026-04-13-001 --outcome completed --note 'tests pass'",
     ]);
   }
   return raw as ReplyOutcome;
@@ -116,7 +118,7 @@ function formatReplyList(replies: readonly WorkerReply[]): string[] {
   }
   const lines: string[] = [];
   for (const r of replies) {
-    lines.push(`${r.featureId} [${r.outcome}] ${r.writtenAt} by ${r.writtenBy}`);
+    lines.push(`${r.missionId}/${r.featureId} [${r.outcome}] ${r.writtenAt} by ${r.writtenBy}`);
     if (r.notes) lines.push(`  note: ${r.notes}`);
   }
   return lines;

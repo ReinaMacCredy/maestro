@@ -12,6 +12,7 @@ import type { ReplyStorePort } from "../ports/reply-store.port.js";
 import type { ReplyAuthor, ReplyOutcome, WorkerReply } from "../domain/reply-types.js";
 
 export interface WriteReplyInput {
+  readonly missionId: string;
   readonly featureId: string;
   readonly outcome: ReplyOutcome;
   readonly report?: WorkerReport;
@@ -27,6 +28,7 @@ export async function writeWorkerReply(
   input: WriteReplyInput,
 ): Promise<WorkerReply> {
   const reply: WorkerReply = {
+    missionId: input.missionId,
     featureId: input.featureId,
     outcome: input.outcome,
     report: input.report,

@@ -296,6 +296,7 @@ describe("buildTimelineMilestones", () => {
 
 function makeReply(overrides: Partial<WorkerReply> & { featureId: string }): WorkerReply {
   return {
+    missionId: "2026-04-13-001",
     outcome: "completed",
     writtenAt: "2026-04-13T00:00:00.000Z",
     writtenBy: "human",

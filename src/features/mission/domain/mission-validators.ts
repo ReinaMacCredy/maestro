@@ -24,7 +24,7 @@ import type { WorkflowTemplate } from "./workflow-types.js";
 // Schema Constants
 // ============================
 
-const MISSION_ID_PATTERN = /^\d{4}-\d{2}-\d{2}-\d{3}$/;
+export const MISSION_ID_PATTERN = /^\d{4}-\d{2}-\d{2}-\d{3}$/;
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/;
 export const FEATURE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 export const WORKER_TYPE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:_-]*$/;

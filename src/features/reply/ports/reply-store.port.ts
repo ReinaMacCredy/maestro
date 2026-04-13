@@ -1,7 +1,7 @@
 /**
  * Reply store port.
  *
- * Persists `.maestro/replies/<feature-id>.yaml` files, one per feature.
+ * Persists `.maestro/replies/<mission-id>/<feature-id>.yaml` files.
  * Malformed files are tolerated on read (logged and skipped) so one bad
  * reply does not poison the inbox.
  */
@@ -11,8 +11,8 @@ export interface ReplyStorePort {
   /** List every valid reply on disk. Malformed files are skipped. */
   list(): Promise<readonly WorkerReply[]>;
 
-  /** Fetch a reply by feature id, or undefined when missing or malformed. */
-  get(featureId: string): Promise<WorkerReply | undefined>;
+  /** Fetch a reply by mission+feature id, or undefined when missing or malformed. */
+  get(missionId: string, featureId: string): Promise<WorkerReply | undefined>;
 
   /** List replies whose `writtenAt` is greater than or equal to the ISO cutoff. */
   listSince(isoTimestamp: string): Promise<readonly WorkerReply[]>;
@@ -21,8 +21,8 @@ export interface ReplyStorePort {
   write(reply: WorkerReply): Promise<void>;
 
   /** True when the reply has already been ingested (sidecar marker present). */
-  isIngested(featureId: string): Promise<boolean>;
+  isIngested(missionId: string, featureId: string): Promise<boolean>;
 
   /** Mark a reply as ingested by creating the sidecar marker. Idempotent. */
-  markIngested(featureId: string): Promise<void>;
+  markIngested(missionId: string, featureId: string): Promise<void>;
 }

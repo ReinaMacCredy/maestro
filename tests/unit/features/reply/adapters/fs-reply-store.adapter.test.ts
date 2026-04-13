@@ -9,6 +9,7 @@ let tmpDir: string;
 let store: FsReplyStoreAdapter;
 
 const makeReply = (overrides: Partial<WorkerReply> = {}): WorkerReply => ({
+  missionId: "2026-04-13-001",
   featureId: "f-42",
   outcome: "completed",
   writtenAt: "2026-04-13T05:00:00.000Z",
@@ -31,7 +32,7 @@ describe("FsReplyStoreAdapter", () => {
       const reply = makeReply();
       await store.write(reply);
 
-      const loaded = await store.get(reply.featureId);
+      const loaded = await store.get(reply.missionId, reply.featureId);
       expect(loaded).toEqual(reply);
     });
 
@@ -39,7 +40,7 @@ describe("FsReplyStoreAdapter", () => {
       const reply = makeReply({ notes: "tests pass", source: "cli" });
       await store.write(reply);
 
-      const loaded = await store.get(reply.featureId);
+      const loaded = await store.get(reply.missionId, reply.featureId);
       expect(loaded?.notes).toBe("tests pass");
       expect(loaded?.source).toBe("cli");
     });
@@ -48,7 +49,7 @@ describe("FsReplyStoreAdapter", () => {
       await store.write(makeReply({ notes: "first" }));
       await store.write(makeReply({ notes: "second" }));
 
-      const loaded = await store.get("f-42");
+      const loaded = await store.get("2026-04-13-001", "f-42");
       expect(loaded?.notes).toBe("second");
     });
 
@@ -61,25 +62,28 @@ describe("FsReplyStoreAdapter", () => {
 
   describe("get", () => {
     it("returns undefined for missing feature", async () => {
-      const result = await store.get("never-written");
+      const result = await store.get("2026-04-13-001", "never-written");
       expect(result).toBeUndefined();
     });
 
     it("returns undefined for malformed YAML (tolerant)", async () => {
       const dir = join(tmpDir, ".maestro", "replies");
-      await mkdir(dir, { recursive: true });
-      await writeFile(join(dir, "f-bad.yaml"), "outcome: !!not-a-valid-tag\n  : : :\n");
+      const missionDir = join(dir, "2026-04-13-001");
+      await mkdir(missionDir, { recursive: true });
+      await writeFile(join(missionDir, "f-bad.yaml"), "outcome: !!not-a-valid-tag\n  : : :\n");
 
-      const result = await store.get("f-bad");
+      const result = await store.get("2026-04-13-001", "f-bad");
       expect(result).toBeUndefined();
     });
 
     it("returns undefined when the payload featureId disagrees with the filename", async () => {
       const dir = join(tmpDir, ".maestro", "replies");
-      await mkdir(dir, { recursive: true });
+      const missionDir = join(dir, "2026-04-13-001");
+      await mkdir(missionDir, { recursive: true });
       await writeFile(
-        join(dir, "f-expected.yaml"),
+        join(missionDir, "f-expected.yaml"),
         [
+          "missionId: 2026-04-13-001",
           "featureId: f-actual",
           "outcome: completed",
           "writtenAt: 2026-04-13T05:00:00.000Z",
@@ -88,7 +92,7 @@ describe("FsReplyStoreAdapter", () => {
         ].join("\n"),
       );
 
-      const result = await store.get("f-expected");
+      const result = await store.get("2026-04-13-001", "f-expected");
       expect(result).toBeUndefined();
     });
   });
@@ -111,11 +115,11 @@ describe("FsReplyStoreAdapter", () => {
     it("skips malformed yaml files", async () => {
       await store.write(makeReply({ featureId: "f-1" }));
       await writeFile(
-        join(tmpDir, ".maestro", "replies", "f-bad.yaml"),
+        join(tmpDir, ".maestro", "replies", "2026-04-13-001", "f-bad.yaml"),
         "::: not really yaml :::\n",
       );
       await writeFile(
-        join(tmpDir, ".maestro", "replies", "f-empty.yaml"),
+        join(tmpDir, ".maestro", "replies", "2026-04-13-001", "f-empty.yaml"),
         "",
       );
 
@@ -126,8 +130,9 @@ describe("FsReplyStoreAdapter", () => {
     it("skips files whose payload featureId disagrees with the filename", async () => {
       await store.write(makeReply({ featureId: "f-1" }));
       await writeFile(
-        join(tmpDir, ".maestro", "replies", "f-expected.yaml"),
+        join(tmpDir, ".maestro", "replies", "2026-04-13-001", "f-expected.yaml"),
         [
+          "missionId: 2026-04-13-001",
           "featureId: f-other",
           "outcome: completed",
           "writtenAt: 2026-04-13T07:00:00.000Z",
@@ -154,20 +159,20 @@ describe("FsReplyStoreAdapter", () => {
   describe("ingested marker", () => {
     it("reports not-ingested before markIngested is called", async () => {
       await store.write(makeReply());
-      expect(await store.isIngested("f-42")).toBe(false);
+      expect(await store.isIngested("2026-04-13-001", "f-42")).toBe(false);
     });
 
     it("reports ingested after markIngested", async () => {
       await store.write(makeReply());
-      await store.markIngested("f-42");
-      expect(await store.isIngested("f-42")).toBe(true);
+      await store.markIngested("2026-04-13-001", "f-42");
+      expect(await store.isIngested("2026-04-13-001", "f-42")).toBe(true);
     });
 
     it("markIngested is idempotent", async () => {
       await store.write(makeReply());
-      await store.markIngested("f-42");
-      await store.markIngested("f-42");
-      expect(await store.isIngested("f-42")).toBe(true);
+      await store.markIngested("2026-04-13-001", "f-42");
+      await store.markIngested("2026-04-13-001", "f-42");
+      expect(await store.isIngested("2026-04-13-001", "f-42")).toBe(true);
     });
   });
 });

@@ -76,6 +76,7 @@ describe("ingestReply", () => {
     }
 
     await writeWorkerReply(replyStore, {
+      missionId,
       featureId,
       outcome: "completed",
       notes: "all green",
@@ -101,6 +102,7 @@ describe("ingestReply", () => {
     // Assertions left pending
 
     await writeWorkerReply(replyStore, {
+      missionId,
       featureId,
       outcome: "completed",
     });
@@ -122,6 +124,7 @@ describe("ingestReply", () => {
     await updateFeature(missionStore, featureStore, tmpDir, missionId, featureId, { status: "in-progress" });
 
     await writeWorkerReply(replyStore, {
+      missionId,
       featureId,
       outcome: "completed",
     });
@@ -145,6 +148,7 @@ describe("ingestReply", () => {
     await updateFeature(missionStore, featureStore, tmpDir, missionId, featureId, { status: "review" });
 
     await writeWorkerReply(replyStore, {
+      missionId,
       featureId,
       outcome: "kicked-back",
       notes: "broke migration",
@@ -166,6 +170,7 @@ describe("ingestReply", () => {
     await updateFeature(missionStore, featureStore, tmpDir, missionId, featureId, { status: "review" });
 
     await writeWorkerReply(replyStore, {
+      missionId,
       featureId,
       outcome: "abandoned",
       notes: "out of scope",
@@ -188,7 +193,7 @@ describe("ingestReply", () => {
     const assertions = await assertionStore.list(missionId);
     for (const a of assertions) await assertionStore.update(missionId, a.id, { result: "passed" });
 
-    await writeWorkerReply(replyStore, { featureId, outcome: "completed" });
+    await writeWorkerReply(replyStore, { missionId, featureId, outcome: "completed" });
 
     const first = await ingestReply(
       { missionStore, featureStore, assertionStore, replyStore, baseDir: tmpDir },
@@ -213,7 +218,7 @@ describe("ingestReply", () => {
     const assertions = await assertionStore.list(missionId);
     for (const a of assertions) await assertionStore.update(missionId, a.id, { result: "passed" });
 
-    await writeWorkerReply(replyStore, { featureId, outcome: "completed" });
+    await writeWorkerReply(replyStore, { missionId, featureId, outcome: "completed" });
 
     const calls: Array<{ featureId: string; outcome: string }> = [];
     const result = await ingestReply(
@@ -239,6 +244,7 @@ describe("ingestReply", () => {
   it("records reply but does not move state when feature is missing", async () => {
     const { missionId } = await setupMission();
     await writeWorkerReply(replyStore, {
+      missionId,
       featureId: "f-missing",
       outcome: "completed",
     });
@@ -252,6 +258,39 @@ describe("ingestReply", () => {
     expect(result).toBeDefined();
     expect(result?.featureAdvanced).toBe(false);
     expect(result?.downgradeReason).toContain("not found");
-    expect(await replyStore.isIngested("f-missing")).toBe(true);
+    expect(await replyStore.isIngested(missionId, "f-missing")).toBe(true);
+  });
+
+  it("does not ingest a reply written for another mission with the same feature id", async () => {
+    const first = await setupMission();
+    const second = await setupMission();
+
+    await updateFeature(missionStore, featureStore, tmpDir, second.missionId, second.featureId, { status: "in-progress" });
+    await updateFeature(missionStore, featureStore, tmpDir, second.missionId, second.featureId, { status: "review" });
+    const assertions = await assertionStore.list(second.missionId);
+    for (const assertion of assertions) {
+      await assertionStore.update(second.missionId, assertion.id, { result: "passed" });
+    }
+
+    await writeWorkerReply(replyStore, {
+      missionId: second.missionId,
+      featureId: second.featureId,
+      outcome: "completed",
+    });
+
+    const firstResult = await ingestReply(
+      { missionStore, featureStore, assertionStore, replyStore, baseDir: tmpDir },
+      first.missionId,
+      first.featureId,
+    );
+    expect(firstResult).toBeUndefined();
+    expect(await replyStore.isIngested(first.missionId, first.featureId)).toBe(false);
+
+    const secondResult = await ingestReply(
+      { missionStore, featureStore, assertionStore, replyStore, baseDir: tmpDir },
+      second.missionId,
+      second.featureId,
+    );
+    expect(secondResult?.featureAdvanced).toBe(true);
   });
 });

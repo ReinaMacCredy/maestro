@@ -895,7 +895,7 @@ async function loadAndIngestReplies(
 ): Promise<IngestResult> {
   if (!deps.replyStore) return { replies: [] };
   try {
-    const replies = await deps.replyStore.list();
+    const replies = (await deps.replyStore.list()).filter((reply) => reply.missionId === missionId);
     if (replies.length === 0) return { replies: [] };
 
     // Cache outcomes once so the recorder doesn't re-read the JSONL per
@@ -912,7 +912,7 @@ async function loadAndIngestReplies(
       // Fast path: skip already-ingested replies without entering the
       // usecase at all. The usecase also defends against this, but this
       // avoids the extra function call and conditional wiring.
-      if (await deps.replyStore.isIngested(reply.featureId)) continue;
+        if (await deps.replyStore.isIngested(missionId, reply.featureId)) continue;
       try {
         await ingestReply(
           {

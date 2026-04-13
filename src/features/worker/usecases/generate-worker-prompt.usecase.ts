@@ -639,7 +639,7 @@ function composePrompt(
   parts.push("");
   parts.push("<!-- BEGIN REPLY CONTRACT -->");
   parts.push("");
-  parts.push(buildReplyContractSection(feature.id));
+    parts.push(buildReplyContractSection(mission.id, feature.id));
   parts.push("");
   parts.push("<!-- END REPLY CONTRACT -->");
   parts.push("");
@@ -663,15 +663,16 @@ function composePrompt(
  * closed-loop reply protocol -- without this section agents would not know
  * about .maestro/replies/ at all.
  */
-function buildReplyContractSection(featureId: string): string {
+function buildReplyContractSection(missionId: string, featureId: string): string {
   const lines = [
-    `When you finish (or give up), write your reply as your final action:`,
-    ``,
-    `Path: \`.maestro/replies/${featureId}.yaml\``,
-    ``,
-    `Schema:`,
-    `\`\`\`yaml`,
-    `featureId: ${featureId}`,
+      `When you finish (or give up), write your reply as your final action:`,
+      ``,
+      `Path: \`.maestro/replies/${missionId}/${featureId}.yaml\``,
+      ``,
+      `Schema:`,
+      `\`\`\`yaml`,
+      `missionId: ${missionId}`,
+      `featureId: ${featureId}`,
     `outcome: completed            # or: kicked-back | abandoned`,
     `writtenAt: <ISO-8601 UTC>     # e.g. 2026-04-13T12:34:56.000Z`,
     `writtenBy: agent              # always 'agent' for prompt-driven replies`,

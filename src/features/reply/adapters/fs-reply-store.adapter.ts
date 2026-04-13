@@ -2,8 +2,8 @@
  * Filesystem-backed reply store.
  *
  * Layout:
- *   .maestro/replies/<feature-id>.yaml     -- the reply itself
- *   .maestro/replies/<feature-id>.ingested -- sidecar marker (empty file)
+ *   .maestro/replies/<mission-id>/<feature-id>.yaml     -- the reply itself
+ *   .maestro/replies/<mission-id>/<feature-id>.ingested -- sidecar marker
  *
  * Writes are atomic (write-then-rename). Reads are tolerant: malformed YAML
  * or missing required fields are logged and skipped so one bad reply does
@@ -12,7 +12,7 @@
 import { join } from "node:path";
 import { readdir } from "node:fs/promises";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
-import { FEATURE_ID_PATTERN } from "@/features/mission/index.js";
+import { FEATURE_ID_PATTERN, MISSION_ID_PATTERN } from "@/features/mission/index.js";
 import { ensureDir, readText, removeIfExists, writeText } from "@/shared/lib/fs.js";
 import { parseYaml, stringifyYaml } from "@/shared/lib/yaml.js";
 import { assertSafeSegment, resolveWithin } from "@/shared/lib/path-safety.js";
@@ -29,28 +29,34 @@ export class FsReplyStoreAdapter implements ReplyStorePort {
     return join(this.baseDir, MAESTRO_DIR, REPLIES_DIR);
   }
 
-  private replyPath(featureId: string): string {
-    assertSafeSegment(featureId, "feature ID", FEATURE_ID_PATTERN, "letters, numbers, dashes, and underscores");
-    return resolveWithin(this.dir(), `${featureId}.yaml`, "Reply path");
+  private missionDir(missionId: string): string {
+    assertSafeSegment(missionId, "mission ID", MISSION_ID_PATTERN, "YYYY-MM-DD-NNN");
+    return resolveWithin(this.dir(), missionId, "Replies mission directory");
   }
 
-  private ingestedMarkerPath(featureId: string): string {
+  private replyPath(missionId: string, featureId: string): string {
     assertSafeSegment(featureId, "feature ID", FEATURE_ID_PATTERN, "letters, numbers, dashes, and underscores");
-    return resolveWithin(this.dir(), `${featureId}.ingested`, "Reply ingested marker");
+    return resolveWithin(this.missionDir(missionId), `${featureId}.yaml`, "Reply path");
   }
 
-  async get(featureId: string): Promise<WorkerReply | undefined> {
-    const raw = await readText(this.replyPath(featureId));
+  private ingestedMarkerPath(missionId: string, featureId: string): string {
+    assertSafeSegment(featureId, "feature ID", FEATURE_ID_PATTERN, "letters, numbers, dashes, and underscores");
+    return resolveWithin(this.missionDir(missionId), `${featureId}.ingested`, "Reply ingested marker");
+  }
+
+  async get(missionId: string, featureId: string): Promise<WorkerReply | undefined> {
+    const raw = await readText(this.replyPath(missionId, featureId));
     if (raw === undefined) return undefined;
-    return parseReplyText(raw, featureId);
+    return parseReplyText(raw, missionId, featureId);
   }
 
   async list(): Promise<readonly WorkerReply[]> {
-    const ids = await listReplyIds(this.dir());
     const replies: WorkerReply[] = [];
-    for (const id of ids) {
-      const reply = await this.get(id);
-      if (reply) replies.push(reply);
+    for (const ref of await listReplyRefs(this.dir())) {
+      const reply = await this.get(ref.missionId, ref.featureId);
+      if (reply) {
+        replies.push(reply);
+      }
     }
     return replies.sort((a, b) => a.writtenAt.localeCompare(b.writtenAt));
   }
@@ -62,41 +68,69 @@ export class FsReplyStoreAdapter implements ReplyStorePort {
 
   async write(reply: WorkerReply): Promise<void> {
     const validated = validateWorkerReply(reply);
-    await ensureDir(this.dir());
-    await writeText(this.replyPath(validated.featureId), stringifyYaml(validated));
+    await ensureDir(this.missionDir(validated.missionId));
+    await writeText(this.replyPath(validated.missionId, validated.featureId), stringifyYaml(validated));
     // Overwriting a reply invalidates any prior ingestion marker so the
     // next snapshot poll re-runs ingest against the fresh content.
-    await removeIfExists(this.ingestedMarkerPath(validated.featureId));
+    await removeIfExists(this.ingestedMarkerPath(validated.missionId, validated.featureId));
   }
 
-  async isIngested(featureId: string): Promise<boolean> {
-    const text = await readText(this.ingestedMarkerPath(featureId));
+  async isIngested(missionId: string, featureId: string): Promise<boolean> {
+    const text = await readText(this.ingestedMarkerPath(missionId, featureId));
     return text !== undefined;
   }
 
-  async markIngested(featureId: string): Promise<void> {
-    await ensureDir(this.dir());
-    await writeText(this.ingestedMarkerPath(featureId), new Date().toISOString() + "\n");
+  async markIngested(missionId: string, featureId: string): Promise<void> {
+    await ensureDir(this.missionDir(missionId));
+    await writeText(this.ingestedMarkerPath(missionId, featureId), new Date().toISOString() + "\n");
   }
 }
 
-async function listReplyIds(dir: string): Promise<string[]> {
+interface ReplyRef {
+  readonly missionId: string;
+  readonly featureId: string;
+}
+
+async function listReplyRefs(dir: string): Promise<readonly ReplyRef[]> {
   try {
-    const entries = await readdir(dir);
-    return entries
-      .filter((entry) => entry.endsWith(".yaml"))
-      .map((entry) => entry.replace(/\.yaml$/, ""))
-      .filter((id) => FEATURE_ID_PATTERN.test(id));
+    const missionEntries = await readdir(dir, { withFileTypes: true });
+    const refs: ReplyRef[] = [];
+    for (const missionEntry of missionEntries) {
+      if (!missionEntry.isDirectory() || !MISSION_ID_PATTERN.test(missionEntry.name)) {
+        continue;
+      }
+      const missionId = missionEntry.name;
+      const missionDir = join(dir, missionId);
+      const replyEntries = await readdir(missionDir);
+      for (const entry of replyEntries) {
+        if (!entry.endsWith(".yaml")) {
+          continue;
+        }
+        const featureId = entry.replace(/\.yaml$/, "");
+        if (!FEATURE_ID_PATTERN.test(featureId)) {
+          continue;
+        }
+        refs.push({ missionId, featureId });
+      }
+    }
+    return refs;
   } catch {
     return [];
   }
 }
 
-function parseReplyText(raw: string, expectedFeatureId: string): WorkerReply | undefined {
+function parseReplyText(
+  raw: string,
+  expectedMissionId: string,
+  expectedFeatureId: string,
+): WorkerReply | undefined {
   try {
     const parsed = parseYaml<unknown>(raw);
     const reply = validateWorkerReply(parsed);
-    if (reply.featureId !== expectedFeatureId) {
+    if (
+      reply.missionId !== expectedMissionId
+      || reply.featureId !== expectedFeatureId
+    ) {
       return undefined;
     }
     return reply;

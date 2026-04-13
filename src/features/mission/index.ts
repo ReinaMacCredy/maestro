@@ -40,6 +40,7 @@ export {
 
 export { generateMissionId } from "./domain/mission-id.js";
 export {
+  MISSION_ID_PATTERN,
   WORKER_TYPE_PATTERN,
   FEATURE_ID_PATTERN,
   WorkerReportSchema,

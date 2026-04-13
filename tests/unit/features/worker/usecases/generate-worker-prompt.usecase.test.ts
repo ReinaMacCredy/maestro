@@ -640,14 +640,15 @@ describe("generateWorkerPrompt", () => {
     const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
     await createSampleSkill(tmpDir, "test-skill", "# Skill");
 
-    const result = await generateWorkerPrompt(missionStore, featureStore, assertionStore, tmpDir, missionId, "f1");
-    expect(result.prompt).toContain("## Reply Contract");
-    expect(result.prompt).toContain("<!-- BEGIN REPLY CONTRACT -->");
-    expect(result.prompt).toContain("<!-- END REPLY CONTRACT -->");
-    expect(result.prompt).toContain(".maestro/replies/f1.yaml");
-    expect(result.prompt).toContain("outcome: completed");
-    expect(result.prompt).toContain("kicked-back");
-    expect(result.prompt).toContain("abandoned");
+      const result = await generateWorkerPrompt(missionStore, featureStore, assertionStore, tmpDir, missionId, "f1");
+      expect(result.prompt).toContain("## Reply Contract");
+      expect(result.prompt).toContain("<!-- BEGIN REPLY CONTRACT -->");
+      expect(result.prompt).toContain("<!-- END REPLY CONTRACT -->");
+      expect(result.prompt).toContain(`.maestro/replies/${missionId}/f1.yaml`);
+      expect(result.prompt).toContain(`missionId: ${missionId}`);
+      expect(result.prompt).toContain("outcome: completed");
+      expect(result.prompt).toContain("kicked-back");
+      expect(result.prompt).toContain("abandoned");
     expect(result.prompt).toContain("When complete, use the Reply Contract above as the final handoff back to Maestro.");
     expect(result.prompt).not.toContain("maestro feature update f1");
   });
