@@ -1,0 +1,15 @@
+{
+  "featureId": "validation-cli-lifecycle",
+  "reviewedAt": "2026-03-30T03:00:00.000Z",
+  "commitId": "8892d6b5bba0968a50551a7f86e8a0451555eb90",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The validation-cli-lifecycle feature implementation is comprehensive and well-structured. It successfully implements `maestro validate show|update` commands with all required functionality: milestone filtering, evidence persistence, waive-with-reason handling, retry-to-pending from failed/blocked states, and helpful transition error hints. The code follows project conventions, uses proper TypeScript types, and includes thorough test coverage.",
+    "issues": []
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "The validation-cli-lifecycle feature has been implemented correctly. The usecases (validation-lifecycle.usecase.ts) provide clean separation of concerns between showing assertions and updating them. The command handler (validation.command.ts) properly wires CLI arguments to usecases with JSON/text output support using the shared `resolveJsonFlag` pattern. All test coverage is present: 500+ lines of unit tests covering milestone filtering, evidence persistence, waive validation, retry paths, and transition errors; plus 500+ lines of integration tests validating CLI behavior. The implementation correctly fulfills VAL-VALIDATION-001 and VAL-VALIDATION-002 from the validation contract."
+}

@@ -1,0 +1,17 @@
+{
+  "assertionId": "VAL-MISSION-002",
+  "status": "pass",
+  "evidence": {
+    "commands": [
+      {
+        "cmd": "bun test tests/integration/mission-commands.test.ts",
+        "exitCode": 0,
+        "stdout": "mission list shows created missions [pass], mission show <id> displays mission details [pass], mission show --json outputs parseable JSON [pass]",
+        "stderr": ""
+      }
+    ],
+    "files": []
+  },
+  "blockers": [],
+  "frictions": []
+}

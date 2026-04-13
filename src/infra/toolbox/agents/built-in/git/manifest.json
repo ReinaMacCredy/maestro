@@ -1,7 +1,0 @@
-{
-  "name": "git",
-  "binary": "git",
-  "detect": "git --version",
-  "category": "version-control",
-  "description": "Git version control for audit trail and change tracking"
-}

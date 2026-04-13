@@ -1,7 +1,0 @@
-{
-  "name": "sg",
-  "binary": "sg",
-  "detect": "sg --version",
-  "category": "code-patterns",
-  "description": "AST-aware structural code search and rewrite (ast-grep)"
-}

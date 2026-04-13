@@ -1,0 +1,29 @@
+{
+  "title": "Mission Control Smoke Test",
+  "description": "Small mission used to smoke test the Mission Control CLI workflow.",
+  "milestones": [
+    {
+      "id": "smoke-setup",
+      "title": "Smoke Setup",
+      "description": "Create and advance a single feature through the workflow.",
+      "order": 0
+    }
+  ],
+  "features": [
+    {
+      "id": "feature-smoke",
+      "milestoneId": "smoke-setup",
+      "title": "Run smoke feature",
+      "description": "Exercise prompt generation, state transition, and checkpoint handling.",
+      "workerType": "maestro:worker-base",
+      "verificationSteps": [
+        "Create the mission from this plan file",
+        "Approve the mission and list features",
+        "Advance the feature to in-progress and verify the update"
+      ],
+      "fulfills": [
+        "Smoke workflow can create and advance a feature"
+      ]
+    }
+  ]
+}

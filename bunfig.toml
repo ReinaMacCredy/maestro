@@ -1,0 +1,5 @@
+[test]
+timeout = 10000
+
+[install]
+peer = false

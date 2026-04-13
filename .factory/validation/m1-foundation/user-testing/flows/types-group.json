@@ -1,0 +1,32 @@
+{
+  "groupId": "types",
+  "assertions": {
+    "VAL-M1-TYPES-001": {
+      "status": "passed",
+      "evidence": "4/4 tests passed: creates a mission with all required fields, supports all mission statuses, supports optional fields, readonly prevents mutation at compile time"
+    },
+    "VAL-M1-TYPES-002": {
+      "status": "passed",
+      "evidence": "5/5 tests passed: creates a feature with all required fields, supports all feature statuses, supports optional preconditions, supports expected behavior and verification steps, supports fulfills with assertion IDs"
+    },
+    "VAL-M1-TYPES-003": {
+      "status": "passed",
+      "evidence": "5/5 tests passed: creates a task with all required fields, supports all task statuses, supports dependsOn for task dependencies, supports estimated effort and acceptance criteria, supports task timing fields"
+    },
+    "VAL-M1-TYPES-004": {
+      "status": "passed",
+      "evidence": "5/5 tests passed: creates a worker with all required fields, supports all worker statuses, supports custom agent slugs, supports config and fallback chain, supports worker constraints"
+    },
+    "VAL-M1-TYPES-005": {
+      "status": "passed",
+      "evidence": "3/3 tests passed: creates a validation contract with mission ID and assertions, supports assertions with evidence requirements, supports multiple assertions"
+    },
+    "VAL-M1-TYPES-006": {
+      "status": "passed",
+      "evidence": "4/4 tests passed: creates validation state with mission ID and assertions map, supports all validation statuses, supports assertion state with evidence and message, tracks multiple assertion statuses"
+    }
+  },
+  "frictions": [],
+  "blockers": [],
+  "toolsUsed": ["bun test"]
+}

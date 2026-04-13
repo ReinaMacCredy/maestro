@@ -1,51 +1,39 @@
 {
-  "name": "maestro-orchestrator",
-  "version": "0.2.0",
+  "name": "maestro-handoff",
+  "version": "0.32.0",
   "type": "module",
-  "description": "Agent-optimized development orchestrator with direct worker CLI execution and workflow enforcement",
-  "keywords": ["mcp", "orchestration", "tdd", "agent", "claude-code", "workflow", "codex"],
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/ReinaMacCredy/maestro"
-  },
-  "homepage": "https://github.com/ReinaMacCredy/maestro#readme",
-  "bugs": "https://github.com/ReinaMacCredy/maestro/issues",
-  "license": "MIT",
   "bin": {
-    "maestro": "./dist/cli.js"
+    "maestro": "./dist/maestro"
   },
-  "main": "./dist/server.bundle.mjs",
-  "exports": {
-    ".": "./dist/server.bundle.mjs",
-    "./cli": "./dist/cli.js"
-  },
-  "files": [
-    "dist/server.bundle.mjs",
-    "dist/cli.js",
-    "hooks",
-    "skills",
-    ".claude-plugin",
-    ".mcp.json",
-    "start.mjs",
-    "README.md"
-  ],
   "scripts": {
-    "build": "bun run build.ts",
-    "test": "bun test src/",
-    "typecheck": "tsc --noEmit",
-    "check": "bun run typecheck && bun run test",
-    "dev": "bun src/surfaces/cli/index.ts",
-    "prepublishOnly": "bun run check && bun run build"
+    "build": "bun scripts/build.ts",
+    "bump": "bun scripts/bump.ts",
+    "auto-bump": "bun scripts/auto-bump.ts",
+    "check:boundaries": "bun scripts/check-feature-boundaries.ts",
+    "ci": "bun scripts/ci.ts",
+    "ci:dry": "bun scripts/ci.ts --dry-run",
+    "install:local": "bash ./scripts/install-local.sh ./dist/maestro",
+    "release:local": "bun run build && bun run install:local",
+    "deploy": "bun run bump && bun test && bun run release:local",
+    "dev": "bun run src/index.ts",
+    "tui:dev": "bun scripts/tui-dev.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "agent-memory": "file:../agentMemory",
-    "simple-git": "^3.27.0"
+    "@opentui/core": "0.1.96",
+    "@opentui/react": "0.1.96",
+    "cli-spinners": "^2.9.2",
+    "commander": "^13.0.0",
+    "react": "19.2.4",
+    "react-devtools-core": "^7.0.1",
+    "ws": "^8.18.0",
+    "yaml": "^2.7.0",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.1",
-    "@types/bun": "^1.2.0",
-    "citty": "^0.1.6",
-    "typescript": "^5.0.0",
-    "zod": "^3.24.4"
+    "@types/bun": "latest",
+    "@types/react": "^19.2.14",
+    "typescript": "^5.7.0"
   }
 }

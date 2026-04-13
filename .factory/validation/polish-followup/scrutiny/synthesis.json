@@ -1,0 +1,36 @@
+{
+  "milestone": "polish-followup",
+  "round": 1,
+  "status": "pass",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "bun test",
+      "exitCode": 0,
+      "summary": "576 tests pass, 0 fail, 1504 expect() calls"
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "bun run typecheck",
+      "exitCode": 0,
+      "summary": "tsc --noEmit completed successfully"
+    },
+    "lint": {
+      "passed": true,
+      "command": "echo 'No linter configured'",
+      "exitCode": 0,
+      "summary": "No linter configured in project"
+    }
+  },
+  "reviewsSummary": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "failedFeatures": []
+  },
+  "blockingIssues": [],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [],
+  "rejectedObservations": [],
+  "previousRound": null
+}

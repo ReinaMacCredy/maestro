@@ -1,0 +1,9 @@
+{
+  "outputStyle": "default",
+  "permissions": {
+    "allow": [
+      "Bash(rtk ls:*)",
+      "Bash(mkdir -p ~/.claude/blueprint ~/.agent/diagrams)"
+    ]
+  }
+}

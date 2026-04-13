@@ -1,0 +1,101 @@
+{
+  "groupId": "cross-cutting",
+  "testedAt": "2026-03-29T16:30:00Z",
+  "isolation": {
+    "tempDir": "/tmp/maestro-test-84428",
+    "gitRepo": true,
+    "cliPath": "/Users/reinamaccredy/Code/maestro/src/index.ts"
+  },
+  "toolsUsed": ["CLI via Bun.spawn"],
+  "assertions": [
+    {
+      "id": "VAL-CROSS-002",
+      "title": "JSON output works from root, group, and leaf flag positions",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Create a mission with leaf position: bun run src/index.ts mission create --file plan.json --json",
+          "expected": "Valid JSON output with mission object",
+          "observed": "Valid JSON output with mission id, status, title, description, milestones, features, createdAt, updatedAt fields"
+        },
+        {
+          "action": "Create a mission with group position: bun run src/index.ts mission --json create --file plan.json",
+          "expected": "Valid JSON output with same structure",
+          "observed": "Valid JSON output with identical structure to leaf position test"
+        },
+        {
+          "action": "Create a mission with root position: bun run src/index.ts --json mission create --file plan.json",
+          "expected": "Valid JSON output with same structure",
+          "observed": "Valid JSON output with identical structure to leaf and group position tests"
+        },
+        {
+          "action": "Test feature list command with JSON: bun run src/index.ts feature list --mission <id> --json",
+          "expected": "Valid JSON output containing features array",
+          "observed": "Valid JSON array with feature objects containing id, missionId, milestoneId, status, title, description, skillName, verificationSteps, dependsOn, createdAt, updatedAt"
+        },
+        {
+          "action": "Test mission list command with JSON: bun run src/index.ts mission list --json",
+          "expected": "Valid JSON output containing mission array",
+          "observed": "Valid JSON array with all missions created during testing"
+        }
+      ],
+      "evidence": {
+        "commandsRun": [
+          "bun run /Users/reinamaccredy/Code/maestro/src/index.ts mission create --file plan.json --json",
+          "bun run /Users/reinamaccredy/Code/maestro/src/index.ts mission --json create --file plan.json",
+          "bun run /Users/reinamaccredy/Code/maestro/src/index.ts --json mission create --file plan.json",
+          "bun run /Users/reinamaccredy/Code/maestro/src/index.ts mission list --json",
+          "bun run /Users/reinamaccredy/Code/maestro/src/index.ts mission show 2026-03-29-010 --json",
+          "bun run /Users/reinamaccredy/Code/maestro/src/index.ts feature list --mission 2026-03-29-010 --json"
+        ],
+        "stdoutSamples": {
+          "leafPosition": {
+            "mission": {
+              "id": "2026-03-29-005",
+              "status": "draft",
+              "title": "Cross-Cutting Test Mission",
+              "description": "A test mission for JSON flag position validation",
+              "milestones": [{ "id": "m1", "title": "Milestone 1", "description": "First milestone", "order": 1 }],
+              "features": ["f1"],
+              "createdAt": "2026-03-29T16:23:18.309Z",
+              "updatedAt": "2026-03-29T16:23:18.309Z"
+            },
+            "features": [{ "id": "f1", "missionId": "2026-03-29-005", "milestoneId": "m1", "status": "pending", "title": "Feature 1", "description": "First feature", "skillName": "developer", "verificationSteps": ["Step 1"], "dependsOn": [], "createdAt": "2026-03-29T16:23:18.310Z", "updatedAt": "2026-03-29T16:23:18.310Z" }]
+          },
+          "groupPosition": {
+            "mission": {
+              "id": "2026-03-29-007",
+              "status": "draft",
+              "title": "Cross-Cutting Test Mission",
+              "description": "A test mission for JSON flag position validation",
+              "milestones": [{ "id": "m1", "title": "Milestone 1", "description": "First milestone", "order": 1 }],
+              "features": ["f1"],
+              "createdAt": "2026-03-29T16:23:22.624Z",
+              "updatedAt": "2026-03-29T16:23:22.624Z"
+            },
+            "features": [{ "id": "f1", "missionId": "2026-03-29-007", "milestoneId": "m1", "status": "pending", "title": "Feature 1", "description": "First feature", "skillName": "developer", "verificationSteps": ["Step 1"], "dependsOn": [], "createdAt": "2026-03-29T16:23:22.625Z", "updatedAt": "2026-03-29T16:23:22.625Z" }]
+          },
+          "rootPosition": {
+            "mission": {
+              "id": "2026-03-29-009",
+              "status": "draft",
+              "title": "Cross-Cutting Test Mission",
+              "description": "A test mission for JSON flag position validation",
+              "milestones": [{ "id": "m1", "title": "Milestone 1", "description": "First milestone", "order": 1 }],
+              "features": ["f1"],
+              "createdAt": "2026-03-29T16:23:25.683Z",
+              "updatedAt": "2026-03-29T16:23:25.683Z"
+            },
+            "features": [{ "id": "f1", "missionId": "2026-03-29-009", "milestoneId": "m1", "status": "pending", "title": "Feature 1", "description": "First feature", "skillName": "developer", "verificationSteps": ["Step 1"], "dependsOn": [], "createdAt": "2026-03-29T16:23:25.684Z", "updatedAt": "2026-03-29T16:23:25.684Z" }]
+          }
+        },
+        "stderr": "none (all exit codes were 0)",
+        "exitCodes": { "leafPosition": 0, "groupPosition": 0, "rootPosition": 0 }
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "summary": "Tested VAL-CROSS-002: JSON output works from root, group, and leaf flag positions. All three flag positions (leaf: mission create --json, group: mission --json create, root: --json mission create) emit valid JSON with identical structure. Additional commands (feature list, mission list, mission show) also produce valid JSON output. 1 assertion tested: 1 passed, 0 failed, 0 blocked."
+}

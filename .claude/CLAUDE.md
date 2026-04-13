@@ -1,31 +1,26 @@
-# Collaborator Workspace
+# Maestro CLI
 
-This is a Collaborator workspace. Files in the root are sources (notes, articles, transcripts).
-Files in `.collaborator/` are managed by the Collaborator agent.
+Read `AGENTS.md` at the project root for full conventions (types, naming, async, testing, release, Mission Control contracts, agent-optimized TUI preview).
 
-## File types
-- Sources (root): note, article, transcript, pdf
-- Inferences (.collaborator/inferences/): concept, insight, objective
+## Key paths
+- Source entry: `src/index.ts`
+- Composition root: `src/services.ts`
+- Features: `src/features/<name>/` (ratchet, handoff, notes, graph, session, memory, mission, worker) with `commands/ usecases/ domain/ ports/ adapters/ services.ts index.ts`
+- Infra (plumbing): `src/infra/commands/`, `src/infra/usecases/`, `src/infra/domain/`, `src/infra/ports/`, `src/infra/adapters/`
+- Shared primitives: `src/shared/lib/`, `src/shared/domain/`, `src/shared/errors.ts`, `src/shared/version.ts`
+- TUI rendering: `src/tui/app/render.ts`, `src/tui/app/render-check.ts`, `src/tui/state/snapshot.ts`
+- Tests: `tests/unit/features/`, `tests/unit/infra/`, `tests/unit/shared/`, `tests/unit/tui/`, `tests/integration/`, `tests/e2e/` (compiled-binary and end-to-end flows)
+- Build output: `dist/maestro`
+- Installed binary: `~/.local/bin/maestro`
 
-## Front-matter
-All .md files should have YAML front-matter with at least a `type` field.
-Files without `collab_reviewed: true` are inbox items awaiting processing.
-
-## Persona
-- `.collaborator/persona/identity.md` — who this collaborator is
-- `.collaborator/persona/values.md` — beliefs, priorities, decision style
-
-<!-- collaborator:rpc-start -->
-
-## Collaborator RPC
-
-The Collaborator desktop app exposes a JSON-RPC 2.0 server over a Unix domain socket.
-Read the socket path from `/Users/reinamaccredy/.collaborator/socket-path`, then send newline-delimited JSON.
-
-Call `rpc.discover` to list available methods:
+## After code changes
 ```bash
-SOCK=$(cat "/Users/reinamaccredy/.collaborator/socket-path")
-echo '{"jsonrpc":"2.0","id":1,"method":"rpc.discover"}' | nc -U "$SOCK"
+bun run build && ./dist/maestro --version
+bun test
 ```
 
-<!-- collaborator:rpc-end -->
+## After TUI changes
+```bash
+./dist/maestro mission-control --render-check --size 120x40
+bun tui:dev --screen all --size 120x40
+```

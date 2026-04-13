@@ -1,35 +1,47 @@
-/**
- * Thin compatibility shim over container.ts.
- *
- * citty doesn't propagate parent context to subcommands, so CLI handlers
- * call getServices(). This shim preserves that pattern while delegating
- * to the immutable createContainer() factory.
- *
- * New code should import from container.ts directly.
- */
+import { buildInfraServices, type InfraServices } from "./infra/services.js";
+import { buildSessionServices, type SessionServices } from "./features/session/services.js";
+import { buildNotesServices, type NotesServices } from "./features/notes/services.js";
+import { buildMissionServices, type MissionServices } from "./features/mission/services.js";
+import { buildMemoryServices, type MemoryServices } from "./features/memory/services.js";
+import { buildHandoffServices, type HandoffServices } from "./features/handoff/services.js";
+import { buildRatchetServices, type RatchetServices } from "./features/ratchet/services.js";
+import { buildGraphServices, type GraphServices } from "./features/graph/services.js";
+import { buildTaskServices, type TaskServices } from "./features/task/services.js";
+import { buildReplyServices, type ReplyServices } from "./features/reply/services.js";
 
-import { createContainer, type MaestroContainer } from './container.ts';
-import type { ToolboxRegistry } from './infra/toolbox/registry.ts';
-import { MaestroError } from './domain/errors.ts';
+export interface Services extends
+  InfraServices,
+  SessionServices,
+  NotesServices,
+  MissionServices,
+  MemoryServices,
+  HandoffServices,
+  RatchetServices,
+  GraphServices,
+  TaskServices,
+  ReplyServices { }
 
-export type MaestroServices = MaestroContainer;
+let instance: Services | undefined;
 
-let _services: MaestroContainer | undefined;
-
-export function initServices(
-  directory: string,
-  toolbox?: ToolboxRegistry,
-): MaestroServices {
-  _services = createContainer(directory, toolbox);
-  return _services;
+export function initServices(projectDir: string): Services {
+  instance = {
+    ...buildInfraServices(projectDir),
+    ...buildSessionServices(),
+    ...buildNotesServices(projectDir),
+    ...buildMissionServices(projectDir),
+    ...buildMemoryServices(projectDir),
+    ...buildHandoffServices(projectDir),
+    ...buildRatchetServices(projectDir),
+    ...buildGraphServices(),
+    ...buildTaskServices(projectDir),
+    ...buildReplyServices(projectDir),
+  };
+  return instance;
 }
 
-export function getServices(): MaestroServices {
-  if (!_services) {
-    throw new MaestroError(
-      'Services not initialized',
-      ['Run maestro from a project directory with .maestro/ or run: maestro init'],
-    );
+export function getServices(): Services {
+  if (!instance) {
+    throw new Error("Services not initialized. Call initServices() first.");
   }
-  return _services;
+  return instance;
 }

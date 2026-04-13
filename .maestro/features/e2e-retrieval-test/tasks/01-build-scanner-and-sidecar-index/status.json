@@ -1,9 +1,0 @@
-{
-  "schemaVersion": 2,
-  "status": "done",
-  "origin": "plan",
-  "planTitle": "Build scanner and sidecar index",
-  "dependsOn": [],
-  "summary": "Built scanner.ts, index-manager.ts, frontmatter.ts, keywords.ts. Indexes 29 memories from .maestro/ in <100ms.",
-  "completedAt": "2026-03-26T10:22:33.087Z"
-}
