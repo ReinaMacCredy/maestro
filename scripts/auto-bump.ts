@@ -14,6 +14,7 @@
  */
 import { join } from "node:path";
 import { $ } from "bun";
+import { splitCommitMessages, summarizeCommitBumps } from "./auto-bump-lib";
 import { parseReleaseVersion, writeVersionArtifacts } from "./version-file";
 
 const root = join(import.meta.dir, "..");
@@ -43,8 +44,8 @@ try {
 
 // --- Collect commits since base ---
 
-const raw = (await $`git log ${baseRef}..HEAD --format=%s`.quiet()).text().trim();
-const messages = raw ? raw.split("\n") : [];
+const raw = (await $`git log ${baseRef}..HEAD --format=%B%x00`.quiet()).text();
+const messages = splitCommitMessages(raw);
 
 if (messages.length === 0) {
   console.log(`[ok] No new commits since v${currentVersion}. Nothing to bump.`);
@@ -55,16 +56,7 @@ if (messages.length === 0) {
 // x bumps on feat or BREAKING CHANGE (feature slot)
 // y bumps on everything else (patch slot)
 
-const BREAKING = /BREAKING[ -]CHANGE|^[a-z]+(\(.+\))?!:/;
-const FEAT = /^feat(\(.+\))?[!:]/;
-
-let bump: "feature" | "patch" = "patch";
-for (const msg of messages) {
-  if (BREAKING.test(msg) || FEAT.test(msg)) {
-    bump = "feature";
-    break;
-  }
-}
+const { bump, featureCount: featCount, patchCount } = summarizeCommitBumps(messages);
 
 // --- Compute next version (0.x.y) ---
 
@@ -72,9 +64,6 @@ const { feature: x, patch: y } = parseReleaseVersion(currentVersion);
 const nextVersion = bump === "feature"
   ? `0.${x + 1}.0`
   : `0.${x}.${y + 1}`;
-
-const featCount = messages.filter((m) => FEAT.test(m) || BREAKING.test(m)).length;
-const patchCount = messages.length - featCount;
 
 console.log(`[-->] ${currentVersion} -> ${nextVersion} (${bump})`);
 console.log(`     ${messages.length} commits: ${featCount} feature, ${patchCount} patch`);

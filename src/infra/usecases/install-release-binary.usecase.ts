@@ -88,8 +88,9 @@ export async function installReleaseBinary(
     platform: options.platform,
     arch: options.arch,
   });
+  const installedBinaryExists = await Bun.file(installPath).exists();
 
-  if (!requestedTag && !options.force && release.version === VERSION) {
+  if (!requestedTag && !options.force && installedBinaryExists && release.version === VERSION) {
     return {
       binaryUpdated: false,
       alreadyCurrent: true,

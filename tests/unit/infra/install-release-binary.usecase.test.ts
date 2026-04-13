@@ -75,6 +75,7 @@ describe("install release binary usecase", () => {
   it("skips the download when already on the latest released version", async () => {
     const installDir = await mkdtemp(join(tmpdir(), "maestro-release-install-"));
     installDirs.push(installDir);
+    await Bun.write(join(installDir, "maestro"), "existing-binary");
 
     let downloadRequested = false;
     const fetchImpl: typeof fetch = async (input) => {
@@ -106,7 +107,47 @@ describe("install release binary usecase", () => {
     expect(result.alreadyCurrent).toBe(true);
     expect(result.version).toBe(VERSION);
     expect(downloadRequested).toBe(false);
-    expect(await Bun.file(join(installDir, "maestro")).exists()).toBe(false);
+    expect(await Bun.file(join(installDir, "maestro")).text()).toBe("existing-binary");
+  });
+
+  it("downloads the latest binary when versions match but no installed binary exists", async () => {
+    const installDir = await mkdtemp(join(tmpdir(), "maestro-release-install-"));
+    installDirs.push(installDir);
+
+    let downloadRequested = false;
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/releases/latest")) {
+        return Response.json({
+          tag_name: `v${VERSION}`,
+          assets: [
+            {
+              name: "maestro-darwin-arm64",
+              browser_download_url: "https://downloads.example.test/maestro-darwin-arm64",
+            },
+          ],
+        });
+      }
+
+      if (url === "https://downloads.example.test/maestro-darwin-arm64") {
+        downloadRequested = true;
+        return new Response("binary-data", { status: 200 });
+      }
+
+      throw new Error(`Unexpected fetch: ${url}`);
+    };
+
+    const result = await installReleaseBinary({
+      fetchImpl,
+      installDir,
+      platform: "darwin",
+      arch: "arm64",
+    });
+
+    expect(result.binaryUpdated).toBe(true);
+    expect(result.alreadyCurrent).toBe(false);
+    expect(downloadRequested).toBe(true);
+    expect(await Bun.file(join(installDir, "maestro")).text()).toBe("binary-data");
   });
 
   it("fails clearly when the platform is unsupported", () => {
