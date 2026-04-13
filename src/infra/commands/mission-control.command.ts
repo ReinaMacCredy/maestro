@@ -12,7 +12,11 @@ import {
   renderPreviewFrame,
   runRenderCheck,
 } from "@/tui/opentui/index.js";
-import { buildHomeSnapshot, buildSnapshot } from "@/tui/state/snapshot.js";
+import {
+  buildHomeSnapshot,
+  buildSnapshot,
+  type SnapshotBuildOptions,
+} from "@/tui/state/snapshot.js";
 import { CachingGitPort, CachingConfigPort } from "@/tui/lib/snapshot-poll-cache.js";
 import type { MissionControlSnapshot } from "@/tui/state/types.js";
 import {
@@ -23,7 +27,7 @@ import {
 } from "@/tui/app/preview-state.js";
 
 export interface MissionControlSnapshotLoader {
-  load: () => Promise<MissionControlSnapshot>;
+  load: (options?: SnapshotBuildOptions) => Promise<MissionControlSnapshot>;
 }
 
 type PreviewScreenOrAll = PreviewScreen | "all";
@@ -130,16 +134,18 @@ export function registerMissionControlCommand(program: Command): void {
           snapshotDeps,
           opts.mission,
         );
-        const loadReadSnapshot = async (): Promise<MissionControlSnapshot> =>
-          redactSnapshotForReadOutput(await snapshotLoader.load());
+        const loadReadSnapshot = async (
+          options?: SnapshotBuildOptions,
+        ): Promise<MissionControlSnapshot> =>
+          redactSnapshotForReadOutput(await snapshotLoader.load(options));
 
-      if (isJson) {
-        output(true, await loadReadSnapshot(), () => []);
-        return;
-      }
+        if (isJson) {
+          output(true, await loadReadSnapshot({ includeTaskBoard: true }), () => []);
+          return;
+        }
 
             if (opts.renderCheck) {
-              const snapshot = await loadReadSnapshot();
+                const snapshot = await loadReadSnapshot({ includeTaskBoard: true });
               const result = await runRenderCheck(snapshot, {
                 width: renderSize?.width,
                 height: renderSize?.height,
@@ -149,7 +155,7 @@ export function registerMissionControlCommand(program: Command): void {
       }
 
           if (previewScreen === "all") {
-            const snapshot = await loadReadSnapshot();
+              const snapshot = await loadReadSnapshot({ includeTaskBoard: true });
             const screens = getAllApplicableScreens(snapshot);
               for (const screen of screens) {
                 console.log(`--- ${screen} ---`);
@@ -167,9 +173,11 @@ export function registerMissionControlCommand(program: Command): void {
       }
 
             if (previewScreen) {
-              const frame = await renderPreviewFrame({
-                snapshot: await loadReadSnapshot(),
-                screen: previewScreen,
+                const frame = await renderPreviewFrame({
+                  snapshot: await loadReadSnapshot({
+                    includeTaskBoard: previewScreen === "tasks",
+                  }),
+                  screen: previewScreen,
                 featureId: opts.feature,
           handoffId: opts.handoff,
           width: renderSize?.width,
@@ -192,7 +200,7 @@ export function registerMissionControlCommand(program: Command): void {
       await renderDashboard({
         snapshot,
         snapshotDeps,
-        reloadSnapshot: () => snapshotLoader.load(),
+        reloadSnapshot: (options) => snapshotLoader.load(options),
       });
     });
 }
@@ -317,26 +325,28 @@ export function createMissionControlSnapshotLoader(
   const cachedSnapshotDeps = { ...snapshotDeps, git: cachingGit, config: cachingConfig };
 
   return {
-    load: async () => {
-      if (!explicitMissionId && !resolvedMissionId) {
-        resolvedMissionId = await resolveMissionIdFromStore(cachedSnapshotDeps.missionStore);
-      }
+      load: async (options) => {
+        if (!explicitMissionId && !resolvedMissionId) {
+          resolvedMissionId = await resolveMissionIdFromStore(cachedSnapshotDeps.missionStore);
+        }
 
-      return loadMissionControlSnapshot(
-        cachedSnapshotDeps,
-        resolvedMissionId,
-      );
-    },
+        return loadMissionControlSnapshot(
+          cachedSnapshotDeps,
+          resolvedMissionId,
+          options,
+        );
+      },
   };
 }
 
 export async function loadMissionControlSnapshot(
   snapshotDeps: Parameters<typeof buildSnapshot>[0],
   missionId?: string,
+  options?: SnapshotBuildOptions,
 ) {
   return missionId
-    ? buildMissionSnapshot(missionId, snapshotDeps)
-    : buildHomeSnapshot(snapshotDeps);
+    ? buildMissionSnapshot(missionId, snapshotDeps, options)
+    : buildHomeSnapshot(snapshotDeps, options);
 }
 
 function redactSnapshotForReadOutput(
@@ -344,11 +354,12 @@ function redactSnapshotForReadOutput(
 ): MissionControlSnapshot {
   const redactPendingHandoff = (
     handoff: MissionControlSnapshot["pendingHandoffs"][number],
-  ) => ({
-    id: handoff.id,
-    agent: handoff.agent,
-    message: "Details hidden in read-only output",
-  });
+    ) => ({
+      id: handoff.id,
+      agent: handoff.agent,
+      timestamp: handoff.timestamp,
+      message: "Details hidden in read-only output",
+    });
 
   return {
     ...snapshot,

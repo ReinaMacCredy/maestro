@@ -46,6 +46,7 @@ export interface MissionControlHomeHandoff {
   id: string;
   message: string;
   agent: string;
+  timestamp: string;
   sessionId?: string;
   sitrep?: string;
   quickstart?: string;

@@ -6,10 +6,11 @@ import { FsAssertionStoreAdapter } from "@/features/mission";
 import { FsCheckpointStoreAdapter } from "@/features/mission";
 import { FsFeatureStoreAdapter } from "@/features/mission";
 import { FsMissionStoreAdapter } from "@/features/mission";
-import {
-  createMissionControlSnapshotLoader,
-  loadMissionControlSnapshot,
-} from "@/infra/commands/mission-control.command.js";
+  import {
+    createMissionControlSnapshotLoader,
+    loadMissionControlSnapshot,
+  } from "@/infra/commands/mission-control.command.js";
+  import type { TaskStorePort } from "@/features/task";
 import type { ConfigPort } from "@/infra/ports/config.port.js";
 import type { GitPort } from "@/infra/ports/git.port.js";
 import type { SnapshotDeps } from "@/tui/state/snapshot.js";
@@ -110,7 +111,38 @@ describe("loadMissionControlSnapshot", () => {
     const missionId = await createMission();
     const missionSnapshot = await loader.load();
 
-    expect(missionSnapshot.mode).toBe("mission");
-    expect(missionSnapshot.missionId).toBe(missionId);
+      expect(missionSnapshot.mode).toBe("mission");
+      expect(missionSnapshot.missionId).toBe(missionId);
+    });
+
+    it("loads task-board data only when requested", async () => {
+      const taskStore: TaskStorePort = {
+        create: async () => { throw new Error("unused"); },
+        update: async () => { throw new Error("unused"); },
+        close: async () => { throw new Error("unused"); },
+        get: async () => undefined,
+        all: async () => [
+          {
+            id: "tsk-1",
+            title: "Task 1",
+            description: "desc",
+            type: "task",
+            priority: 1,
+            status: "open",
+            labels: [],
+            dependsOn: [],
+            createdAt: "2026-01-01T00:00:00Z",
+            updatedAt: "2026-01-01T00:00:00Z",
+          },
+        ],
+      };
+      const depsWithTasks = { ...snapshotDeps, taskStore };
+      const loader = createMissionControlSnapshotLoader(depsWithTasks);
+
+      const homeSnapshot = await loader.load();
+      expect(homeSnapshot.taskBoard).toBeUndefined();
+
+      const taskSnapshot = await loader.load({ includeTaskBoard: true });
+      expect(taskSnapshot.taskBoard?.totalCount).toBe(1);
+    });
   });
-});

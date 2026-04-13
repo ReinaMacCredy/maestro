@@ -41,7 +41,7 @@ function sleep(ms: number): Promise<void> {
 
 const RESIZE_RENDER_INTERVAL_MS = 16;
 
-export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<void> {
+  export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<void> {
   const renderer = await createCliRenderer({
     exitOnCtrlC: false,
     useMouse: true,
@@ -81,11 +81,13 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
     return Math.floor(Date.now() / HEADER_DOT_INTERVAL_MS);
   };
 
-  const requestQuit = (): void => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    state = reduce(state, { type: "quit" });
-  };
+    const requestQuit = (): void => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      state = reduce(state, { type: "quit" });
+    };
+
+    const shouldIncludeTaskBoard = (): boolean => state.modal.kind === "task-board";
 
   const buildProps = (): MissionControlAppProps => ({
     snapshot: state.snapshot,
@@ -188,20 +190,35 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
       return;
     }
 
-    if (action.type === "config-reload" && state.modal.kind === "config") {
-      try {
-        const nextSnapshot = await opts.reloadSnapshot();
-        state = reduce(state, { type: "update-snapshot", snapshot: nextSnapshot });
-      } catch {
-        // Keep the current snapshot when reload fails.
+      if (action.type === "config-reload" && state.modal.kind === "config") {
+        try {
+          const nextSnapshot = await opts.reloadSnapshot({
+            includeTaskBoard: shouldIncludeTaskBoard(),
+          });
+          state = reduce(state, { type: "update-snapshot", snapshot: nextSnapshot });
+        } catch {
+          // Keep the current snapshot when reload fails.
       }
       markDirty();
       return;
     }
 
-    if (action.type === "enter" && state.modal.kind === "dispatch" && state.modal.phase === "browse") {
-      await submitDispatchPrepare();
-      return;
+      if (action.type === "open-task-board" && state.snapshot.taskBoard === undefined) {
+        state = reduce(state, action);
+        markDirty();
+        try {
+          const nextSnapshot = await opts.reloadSnapshot({ includeTaskBoard: true });
+          state = reduce(state, { type: "update-snapshot", snapshot: nextSnapshot });
+        } catch {
+          // Keep the modal open; the next poll will retry.
+        }
+        markDirty();
+        return;
+      }
+
+      if (action.type === "enter" && state.modal.kind === "dispatch" && state.modal.phase === "browse") {
+        await submitDispatchPrepare();
+        return;
     }
 
     state = reduce(state, action);
@@ -262,12 +279,14 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
 
         const now = Date.now();
         if (now - lastPollMs >= getSnapshotPollIntervalMs(state.snapshot)) {
-          lastPollMs = now;
-          try {
-            const snapshot = await opts.reloadSnapshot();
-            const nextState = reduce(state, { type: "update-snapshot", snapshot });
-            state = nextState;
-            markDirty();
+            lastPollMs = now;
+            try {
+              const snapshot = await opts.reloadSnapshot({
+                includeTaskBoard: shouldIncludeTaskBoard(),
+              });
+              const nextState = reduce(state, { type: "update-snapshot", snapshot });
+              state = nextState;
+              markDirty();
           } catch {
             // Keep the current snapshot when polling fails.
           }
@@ -363,7 +382,7 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
     markDirty();
 
     try {
-      await updateFeature(
+        await updateFeature(
         opts.snapshotDeps.missionStore,
         opts.snapshotDeps.featureStore,
         process.cwd(),
@@ -372,10 +391,12 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
         { status: nextStatus },
       );
 
-      try {
-        const nextSnapshot = await opts.reloadSnapshot();
-        state = reduce(state, { type: "update-snapshot", snapshot: nextSnapshot });
-      } catch {
+        try {
+          const nextSnapshot = await opts.reloadSnapshot({
+            includeTaskBoard: shouldIncludeTaskBoard(),
+          });
+          state = reduce(state, { type: "update-snapshot", snapshot: nextSnapshot });
+        } catch {
         // Fall back to the next poll refresh if the immediate snapshot reload fails.
       }
 
@@ -426,10 +447,12 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
         { status: "assigned" },
       );
 
-      try {
-        const nextSnapshot = await opts.reloadSnapshot();
-        state = reduce(state, { type: "update-snapshot", snapshot: nextSnapshot });
-      } catch {
+        try {
+          const nextSnapshot = await opts.reloadSnapshot({
+            includeTaskBoard: shouldIncludeTaskBoard(),
+          });
+          state = reduce(state, { type: "update-snapshot", snapshot: nextSnapshot });
+        } catch {
         // Fall back to the next poll refresh
       }
 
@@ -478,10 +501,12 @@ export async function renderOpenTuiDashboard(opts: InteractiveOptions): Promise<
         draftValue,
       );
 
-      try {
-        const nextSnapshot = await opts.reloadSnapshot();
-        state = reduce(state, { type: "update-snapshot", snapshot: nextSnapshot });
-      } catch {
+        try {
+          const nextSnapshot = await opts.reloadSnapshot({
+            includeTaskBoard: shouldIncludeTaskBoard(),
+          });
+          state = reduce(state, { type: "update-snapshot", snapshot: nextSnapshot });
+        } catch {
         // Fall back to the next poll refresh if the immediate snapshot reload fails.
       }
 

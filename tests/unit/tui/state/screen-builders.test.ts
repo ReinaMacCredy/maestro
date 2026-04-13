@@ -38,7 +38,7 @@ function makeMilestone(overrides: Partial<Milestone> & { id: string }): Mileston
 }
 
 function makeHandoff(id: string, agent = "codex"): MissionControlHomeHandoff {
-  return { id, message: "test", agent };
+  return { id, message: "test", agent, timestamp: "2026-01-01T00:00:00Z" };
 }
 
 // ---------------------------------------------------------------------------
@@ -86,6 +86,19 @@ describe("buildAgentGrid", () => {
     const handoffs = [makeHandoff("h1", "codex"), makeHandoff("h2", "gemini")];
     const grid = buildAgentGrid(features, handoffs);
     expect(grid[0]!.pendingHandoffCount).toBe(1);
+  });
+
+  it("creates waiting rows for agents that only have pending handoffs", () => {
+    const grid = buildAgentGrid([], [makeHandoff("h1", "codex")]);
+
+    expect(grid).toEqual([
+      expect.objectContaining({
+        workerType: "codex",
+        status: "waiting",
+        featureCount: 0,
+        pendingHandoffCount: 1,
+      }),
+    ]);
   });
 
   it("does not mark completed workers waiting for another worker's handoff", () => {
@@ -160,9 +173,10 @@ describe("buildEventStream", () => {
     const handoffs = [makeHandoff("h1", "codex")];
     const stream = buildEventStream(log, handoffs);
 
-    // Handoff uses current timestamp, so it should be first (newest)
+    // Handoff keeps its stored timestamp, so the newer feature event stays first.
     expect(stream.length).toBeGreaterThanOrEqual(3);
-    expect(stream[0]!.kind).toBe("handoff");
+    expect(stream[0]!.kind).toBe("feature");
+    expect(stream.find((entry) => entry.kind === "handoff")?.timestamp).toBe("2026-01-01T00:00:00Z");
   });
 
   it("caps at 200 entries", () => {

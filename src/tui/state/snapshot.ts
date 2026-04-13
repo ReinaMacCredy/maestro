@@ -83,6 +83,10 @@ export interface HomeSnapshotDeps {
   cwd: string;
 }
 
+export interface SnapshotBuildOptions {
+  includeTaskBoard?: boolean;
+}
+
 interface FeatureGraphEntry {
   readonly feature: Feature;
   readonly blockedBy: readonly Feature[];
@@ -96,7 +100,11 @@ interface FeatureGraphEntry {
 export async function buildSnapshot(
   deps: SnapshotDeps,
   missionId: string,
+  options: SnapshotBuildOptions = {},
 ): Promise<MissionControlSnapshot> {
+  const taskBoardPromise = options.includeTaskBoard === true
+    ? buildTaskBoard(deps.taskStore)
+    : Promise.resolve(undefined);
   const [
     mission,
     features,
@@ -108,7 +116,7 @@ export async function buildSnapshot(
     memorySnapshot,
     pendingHandoffs,
     taskBoard,
-    ] = await Promise.all([
+  ] = await Promise.all([
     deps.missionStore.get(missionId),
     deps.featureStore.list(missionId),
     deps.assertionStore.list(missionId),
@@ -119,12 +127,12 @@ export async function buildSnapshot(
       buildMissionControlMemorySnapshot({
         correctionStore: deps.correctionStore,
         learningStore: deps.learningStore,
-      ratchetStore: deps.ratchetStore,
-      projectGraphStore: deps.projectGraphStore,
-      cwd: deps.cwd,
+        ratchetStore: deps.ratchetStore,
+        projectGraphStore: deps.projectGraphStore,
+        cwd: deps.cwd,
       }),
       loadPendingHandoffs(deps.handoffStore),
-      buildTaskBoard(deps.taskStore),
+      taskBoardPromise,
   ]);
 
   if (!mission) {
@@ -213,7 +221,7 @@ export async function buildSnapshot(
   );
   const sessionSidebar = buildSessionSidebar(gitState);
 
-  // Conductor screen data (taskBoard fetched in parallel above)
+  // Conductor screen data
   const agentGrid = buildAgentGrid(features, pendingHandoffs);
   const missionMilestones = mission.milestones;
   const dispatchQueue = buildDispatchQueue(features, missionMilestones);
@@ -272,7 +280,11 @@ export async function buildSnapshot(
 
 export async function buildHomeSnapshot(
   deps: HomeSnapshotDeps,
+  options: SnapshotBuildOptions = {},
 ): Promise<MissionControlSnapshot> {
+  const taskBoardPromise = options.includeTaskBoard === true
+    ? buildTaskBoard(deps.taskStore)
+    : Promise.resolve(undefined);
   const [env, configLayers, gitState, memorySnapshot, pendingHandoffs, taskBoard] = await Promise.all([
     buildMissionControlEnvironmentSummary(deps.config, deps.git, deps.cwd),
     deps.config.loadLayers(deps.cwd),
@@ -285,7 +297,7 @@ export async function buildHomeSnapshot(
       cwd: deps.cwd,
     }),
     loadPendingHandoffs(deps.handoffStore),
-    buildTaskBoard(deps.taskStore),
+    taskBoardPromise,
   ]);
   const checks = [
     ...env.checks,
@@ -306,7 +318,7 @@ export async function buildHomeSnapshot(
 
   const actions = buildHomeActions(status, checks);
 
-  // Home mode: tasks and event stream are available without a mission (taskBoard fetched in parallel above)
+  const agentGrid = buildAgentGrid([], pendingHandoffs);
   const homeEventStream = buildEventStream([], pendingHandoffs);
 
   return {
@@ -358,7 +370,7 @@ export async function buildHomeSnapshot(
     canResume: false,
     memory: memorySnapshot,
     memoryStats: memorySnapshot?.stats ?? null,
-    agentGrid: [],
+    agentGrid,
     dispatchQueue: [],
     eventStream: homeEventStream,
     taskBoard,
@@ -400,6 +412,7 @@ export function mapUkiHandoffToHomeHandoff(
     id: handoff.id,
     message: content.summary,
     agent: handoff.agent,
+    timestamp: handoff.timestamp,
     sessionId: handoff.sessionId,
     sitrep: sitrepParts.join(" -- "),
     quickstart: content.nextAction,
@@ -671,14 +684,28 @@ export function buildAgentGrid(
     byWorker.set(f.workerType, bucket);
   }
 
+  const pendingHandoffsByAgent = new Map<string, number>();
+  for (const handoff of pendingHandoffs) {
+    pendingHandoffsByAgent.set(
+      handoff.agent,
+      (pendingHandoffsByAgent.get(handoff.agent) ?? 0) + 1,
+    );
+  }
+
   const rows: AgentGridRow[] = [];
-  for (const [workerType, workerFeatures] of byWorker) {
+  const workerTypes = new Set<string>([
+    ...byWorker.keys(),
+    ...pendingHandoffsByAgent.keys(),
+  ]);
+
+  for (const workerType of workerTypes) {
+    const workerFeatures = byWorker.get(workerType) ?? [];
     const active = workerFeatures.find(
       (f) => f.status === "assigned" || f.status === "in-progress",
     );
     const hasReview = workerFeatures.some((f) => f.status === "review");
-    const allDone = workerFeatures.every((f) => f.status === "done");
-    const pendingHandoffCount = pendingHandoffs.filter((h) => h.agent === workerType).length;
+    const allDone = workerFeatures.length > 0 && workerFeatures.every((f) => f.status === "done");
+    const pendingHandoffCount = pendingHandoffsByAgent.get(workerType) ?? 0;
     const isStale = active !== undefined
       && (Date.now() - new Date(active.updatedAt).getTime()) > STALE_THRESHOLD_MS;
 
@@ -741,6 +768,7 @@ export function buildEventStream(
   pendingHandoffs: readonly MissionControlHomeHandoff[],
 ): readonly EventStreamEntry[] {
   const entries: EventStreamEntry[] = [];
+  const baseMs = getEventStreamBaseMs(progressLog);
 
   // Reuse existing progress log events
   for (const event of progressLog) {
@@ -753,12 +781,13 @@ export function buildEventStream(
     });
   }
 
-  // Add handoff events (use current time as timestamp since handoffs lack a created timestamp)
-  const now = new Date().toISOString();
   for (const h of pendingHandoffs) {
+    const handoffMs = new Date(h.timestamp).getTime();
     entries.push({
-      timestamp: now,
-      relativeMs: 0,
+      timestamp: h.timestamp,
+      relativeMs: baseMs === undefined || Number.isNaN(handoffMs)
+        ? 0
+        : handoffMs - baseMs,
       kind: "handoff",
       title: `Pending handoff from ${h.agent}`,
       detail: h.message,
@@ -768,6 +797,21 @@ export function buildEventStream(
   // Sort descending by timestamp, cap at 200
   entries.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   return entries.slice(0, 200);
+}
+
+function getEventStreamBaseMs(
+  progressLog: readonly MissionControlEvent[],
+): number | undefined {
+  if (progressLog.length === 0) return undefined;
+
+  let baseMs = Number.POSITIVE_INFINITY;
+  for (const event of progressLog) {
+    const eventMs = new Date(event.timestamp).getTime();
+    if (Number.isNaN(eventMs)) continue;
+    baseMs = Math.min(baseMs, eventMs - event.relativeMs);
+  }
+
+  return Number.isFinite(baseMs) ? baseMs : undefined;
 }
 
 export async function buildTaskBoard(

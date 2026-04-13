@@ -1,10 +1,10 @@
-import type { SnapshotDeps } from "../state/snapshot.js";
+import type { SnapshotBuildOptions, SnapshotDeps } from "../state/snapshot.js";
 import type { MissionControlSnapshot } from "../state/types.js";
 
 export interface InteractiveOptions {
   snapshot: MissionControlSnapshot;
   snapshotDeps: SnapshotDeps;
-  reloadSnapshot: () => Promise<MissionControlSnapshot>;
+  reloadSnapshot: (options?: SnapshotBuildOptions) => Promise<MissionControlSnapshot>;
 }
 
 // Phase 3 strip: Mission Control no longer tracks live worker runtimes,
