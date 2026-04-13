@@ -166,4 +166,105 @@ describe("JsonlPrincipleStoreAdapter", () => {
       await expect(adapter.list()).rejects.toThrow("Invalid principle schema at line 2");
     });
   });
+
+  describe("recordOutcome + listOutcomes", () => {
+    it("returns empty list when no outcomes file exists", async () => {
+      expect(await adapter.listOutcomes()).toEqual([]);
+    });
+
+    it("appends records to outcomes.jsonl", async () => {
+      await adapter.recordOutcome({
+        principleId: "p-1",
+        handoffId: "2026-04-13-001",
+        outcome: "pending",
+        recordedAt: "2026-04-13T00:00:00.000Z",
+      });
+      await adapter.recordOutcome({
+        principleId: "p-1",
+        handoffId: "2026-04-13-001",
+        outcome: "helpful",
+        recordedAt: "2026-04-13T01:00:00.000Z",
+      });
+      const all = await adapter.listOutcomes();
+      expect(all).toHaveLength(2);
+      expect(all[0]!.outcome).toBe("pending");
+      expect(all[1]!.outcome).toBe("helpful");
+    });
+
+    it("skips malformed JSONL lines silently", async () => {
+      await adapter.recordOutcome({
+        principleId: "p-1",
+        handoffId: "h1",
+        outcome: "helpful",
+        recordedAt: "2026-04-13T00:00:00.000Z",
+      });
+      const path = join(tempDir, ".maestro", "principles", "outcomes.jsonl");
+      const existing = await readText(path) ?? "";
+      await writeText(path, existing + "this is not json\n" + JSON.stringify({ invalid: true }) + "\n");
+
+      const all = await adapter.listOutcomes();
+      expect(all).toHaveLength(1);
+      expect(all[0]!.principleId).toBe("p-1");
+    });
+
+    it("tail-caps at the given limit", async () => {
+      for (let i = 0; i < 5; i++) {
+        await adapter.recordOutcome({
+          principleId: `p-${i}`,
+          handoffId: `h-${i}`,
+          outcome: "helpful",
+          recordedAt: `2026-04-13T0${i}:00:00.000Z`,
+        });
+      }
+      const last2 = await adapter.listOutcomes(2);
+      expect(last2).toHaveLength(2);
+      expect(last2[0]!.principleId).toBe("p-3");
+      expect(last2[1]!.principleId).toBe("p-4");
+    });
+
+    it("refuses to record invalid outcome types (silent drop)", async () => {
+      await adapter.recordOutcome({
+        principleId: "p-1",
+        handoffId: "h1",
+        outcome: "not-an-outcome" as unknown as "helpful",
+        recordedAt: "2026-04-13T00:00:00.000Z",
+      });
+      expect(await adapter.listOutcomes()).toEqual([]);
+    });
+  });
+
+  describe("listPendingOutcomesForHandoff", () => {
+    it("returns only rows where latest state is pending", async () => {
+      await adapter.recordOutcome({
+        principleId: "p-1",
+        handoffId: "h1",
+        outcome: "pending",
+        recordedAt: "2026-04-13T00:00:00.000Z",
+      });
+      await adapter.recordOutcome({
+        principleId: "p-2",
+        handoffId: "h1",
+        outcome: "pending",
+        recordedAt: "2026-04-13T00:00:01.000Z",
+      });
+      // p-2 was later resolved
+      await adapter.recordOutcome({
+        principleId: "p-2",
+        handoffId: "h1",
+        outcome: "helpful",
+        recordedAt: "2026-04-13T01:00:00.000Z",
+      });
+      // unrelated handoff
+      await adapter.recordOutcome({
+        principleId: "p-3",
+        handoffId: "h2",
+        outcome: "pending",
+        recordedAt: "2026-04-13T02:00:00.000Z",
+      });
+
+      const pending = await adapter.listPendingOutcomesForHandoff("h1");
+      expect(pending).toHaveLength(1);
+      expect(pending[0]!.principleId).toBe("p-1");
+    });
+  });
 });

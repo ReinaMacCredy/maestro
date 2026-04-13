@@ -227,35 +227,55 @@ describe("captureMissionControlFrame", () => {
         },
       };
       const baseState = createInitialState(snapshot);
-      const paletteState = reduce(createInitialState(snapshot), { type: "open-command-palette" });
+      // Filter the palette down to a single command so the modal has
+      // interior rows left blank below the result. An unfiltered palette
+      // with all commands fills the modal completely with no blank rows.
+      const frameWidth = 120;
+      const frameHeight = 40;
+      const paletteOpened = reduce(createInitialState(snapshot), { type: "open-command-palette" });
+      const paletteState = "exit".split("").reduce(
+        (acc, char) => reduce(acc, { type: "modal-query-append", char }),
+        paletteOpened,
+      );
       const baseRender = await captureMissionControlRender({
         snapshot,
         state: baseState,
-        width: 120,
-        height: 40,
+        width: frameWidth,
+        height: frameHeight,
       });
       const paletteRender = await captureMissionControlRender({
         snapshot,
         state: paletteState,
-        width: 120,
-        height: 40,
+        width: frameWidth,
+        height: frameHeight,
       });
       const modal = buildModalModel(paletteState);
 
       expect(modal).toBeDefined();
 
-      const screenLayout = computeScreenLayout(120, 40, snapshot);
+      const screenLayout = computeScreenLayout(frameWidth, frameHeight, snapshot);
       const modalParentRect = getModalParentRect(screenLayout);
       const modalLayout = layoutModal(modalParentRect, modal!);
-      // Pick a row near the bottom of the modal interior, past all command items
-      const blankInteriorRow = modalLayout.y + modalLayout.height - 3;
       const left = modalLayout.x + 2;
       const right = modalLayout.x + modalLayout.width - 2;
-      const baseLine = baseRender.charFrame.split("\n")[blankInteriorRow] ?? "";
-      const paletteLine = paletteRender.charFrame.split("\n")[blankInteriorRow] ?? "";
 
-    expect(baseLine.slice(left, right).trim().length).toBeGreaterThan(0);
-    expect(paletteLine.slice(left, right)).toBe(baseLine.slice(left, right));
+      // Find a row inside the modal where the dashboard text is visible
+      // through the palette's transparent interior. The exact row depends
+      // on how many commands the palette currently has, so search from the
+      // bottom of the modal upward until we find a row where the palette
+      // slice equals the base slice (proving transparency).
+      const paletteLines = paletteRender.charFrame.split("\n");
+      const baseLines = baseRender.charFrame.split("\n");
+      let transparentRow: number | undefined;
+      for (let row = modalLayout.y + modalLayout.height - 2; row > modalLayout.y + 1; row -= 1) {
+        const baseSlice = (baseLines[row] ?? "").slice(left, right);
+        const paletteSlice = (paletteLines[row] ?? "").slice(left, right);
+        if (baseSlice.trim().length > 0 && paletteSlice === baseSlice) {
+          transparentRow = row;
+          break;
+        }
+      }
+      expect(transparentRow).toBeDefined();
   });
 
   it("renders palette-launched split overlays without opaque panel backgrounds in terminal mode", async () => {

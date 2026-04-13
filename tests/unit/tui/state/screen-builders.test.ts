@@ -3,12 +3,16 @@ import {
   buildAgentGrid,
   buildDispatchQueue,
   buildEventStream,
+  buildPrincipleEffectivenessRows,
+  buildReplyInbox,
   buildTaskBoard,
   buildTimelineMilestones,
 } from "@/tui/state/snapshot.js";
-import type { Feature, Milestone } from "@/features/mission";
+import type { Feature, Milestone, Principle, PrincipleOutcomeRecord } from "@/features/mission";
+import type { UkiHandoff } from "@/features/handoff";
 import type { MissionControlEvent, MissionControlHomeHandoff } from "@/tui/state/types.js";
 import type { TaskStorePort } from "@/features/task";
+import type { WorkerReply } from "@/features/reply";
 
 function makeFeature(overrides: Partial<Feature> & { id: string }): Feature {
   return {
@@ -283,5 +287,150 @@ describe("buildTimelineMilestones", () => {
     const timeline = buildTimelineMilestones(milestones, []);
     expect(timeline[0]!.progressPct).toBe(0);
     expect(timeline[0]!.features).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildReplyInbox
+// ---------------------------------------------------------------------------
+
+function makeReply(overrides: Partial<WorkerReply> & { featureId: string }): WorkerReply {
+  return {
+    missionId: "2026-04-13-001",
+    outcome: "completed",
+    writtenAt: "2026-04-13T00:00:00.000Z",
+    writtenBy: "human",
+    ...overrides,
+  };
+}
+
+describe("buildReplyInbox", () => {
+  it("enriches entries with matching feature title and status", () => {
+    const features = [
+      makeFeature({ id: "f1", title: "Feature One", status: "done" }),
+      makeFeature({ id: "f2", title: "Feature Two", status: "review" }),
+    ];
+    const replies = [
+      makeReply({ featureId: "f1", outcome: "completed", writtenAt: "2026-04-13T01:00:00.000Z" }),
+      makeReply({ featureId: "f2", outcome: "kicked-back", writtenAt: "2026-04-13T02:00:00.000Z" }),
+    ];
+
+    const inbox = buildReplyInbox(features, replies);
+    // Newest first
+    expect(inbox.map((e) => e.featureId)).toEqual(["f2", "f1"]);
+    expect(inbox[0]!.featureTitle).toBe("Feature Two");
+    expect(inbox[0]!.featureStatus).toBe("review");
+    expect(inbox[0]!.pending).toBe(true); // kicked-back expects pending, feature is review
+    expect(inbox[1]!.featureStatus).toBe("done");
+    expect(inbox[1]!.pending).toBe(false); // completed, feature is done -- settled
+  });
+
+  it("marks reply as pending when no feature match exists", () => {
+    const inbox = buildReplyInbox([], [makeReply({ featureId: "f-missing" })]);
+    expect(inbox[0]!.pending).toBe(true);
+    expect(inbox[0]!.featureTitle).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildEventStream with reply entries
+// ---------------------------------------------------------------------------
+
+describe("buildEventStream with replies", () => {
+  it("merges reply entries with kind='reply'", () => {
+    const replies = [
+      makeReply({ featureId: "f1", outcome: "completed", writtenAt: "2026-04-13T01:00:00.000Z" }),
+      makeReply({ featureId: "f2", outcome: "kicked-back", writtenAt: "2026-04-13T02:00:00.000Z" }),
+    ];
+
+    const entries = buildEventStream([], [], replies);
+    expect(entries.filter((e) => e.kind === "reply")).toHaveLength(2);
+    const kickback = entries.find((e) => e.title.includes("kicked back"));
+    expect(kickback).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildPrincipleEffectivenessRows
+// ---------------------------------------------------------------------------
+
+function makePrinciple(id: string, name: string = id): Principle {
+  return {
+    id,
+    name,
+    source: "custom",
+    rule: "r",
+    profiles: ["implementation"],
+    mode: "gate",
+    gateField: "assumptions",
+    gateCheck: "array_min_length:1",
+  };
+}
+
+function makeOutcome(
+  principleId: string,
+  handoffId: string,
+  outcome: "pending" | "helpful" | "unhelpful",
+  recordedAt: string,
+): PrincipleOutcomeRecord {
+  return { principleId, handoffId, outcome, recordedAt };
+}
+
+describe("buildPrincipleEffectivenessRows", () => {
+  it("returns empty when no principles exist", () => {
+    const rows = buildPrincipleEffectivenessRows([], [], []);
+    expect(rows).toEqual([]);
+  });
+
+  it("sorts by effectiveness ascending (worst first) and flags low sample", () => {
+    const principles = [
+      makePrinciple("p-good", "Good"),
+      makePrinciple("p-bad", "Bad"),
+      makePrinciple("p-new", "New"),
+    ];
+    const outcomes = [
+      makeOutcome("p-good", "h1", "helpful", "2026-04-13T00:00:00Z"),
+      makeOutcome("p-good", "h2", "helpful", "2026-04-13T01:00:00Z"),
+      makeOutcome("p-good", "h3", "helpful", "2026-04-13T02:00:00Z"),
+      makeOutcome("p-bad", "h1", "unhelpful", "2026-04-13T00:00:00Z"),
+      makeOutcome("p-bad", "h2", "helpful", "2026-04-13T01:00:00Z"),
+      makeOutcome("p-bad", "h3", "unhelpful", "2026-04-13T02:00:00Z"),
+      makeOutcome("p-new", "h4", "helpful", "2026-04-13T03:00:00Z"),
+    ];
+
+    const rows = buildPrincipleEffectivenessRows(principles, outcomes, []);
+    // p-bad: 33%, p-good: 100%, p-new: undecided+low -> sorts last
+    expect(rows[0]!.id).toBe("p-bad");
+    expect(rows[0]!.effectivenessPct).toBe(33);
+    expect(rows[0]!.lowSample).toBe(false);
+    expect(rows[1]!.id).toBe("p-good");
+    expect(rows[1]!.effectivenessPct).toBe(100);
+    expect(rows[2]!.id).toBe("p-new");
+    expect(rows[2]!.lowSample).toBe(true);
+  });
+
+  it("collects recent kickback examples from handoffs when available", () => {
+    const principles = [makePrinciple("p-1")];
+    const outcomes = [
+      makeOutcome("p-1", "h-1", "unhelpful", "2026-04-13T00:00:00Z"),
+      makeOutcome("p-1", "h-2", "unhelpful", "2026-04-13T01:00:00Z"),
+      makeOutcome("p-1", "h-3", "helpful", "2026-04-13T02:00:00Z"),
+    ];
+    const handoffs = [
+      {
+        id: "h-1",
+        content: { summary: "Broken migration" },
+      } as unknown as UkiHandoff,
+      {
+        id: "h-2",
+        content: { summary: "Failing tests" },
+      } as unknown as UkiHandoff,
+    ];
+
+    const rows = buildPrincipleEffectivenessRows(principles, outcomes, handoffs);
+    const row = rows[0]!;
+    expect(row.recentKickbackExamples.length).toBe(2);
+    expect(row.recentKickbackExamples[0]).toContain("Failing tests"); // newest first
+    expect(row.recentKickbackExamples[1]).toContain("Broken migration");
   });
 });

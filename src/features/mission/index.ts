@@ -32,13 +32,19 @@ export {
   getValidFeatureTransitions,
   assertMissionTransition,
   canTransitionMission,
+  canTransitionFeature,
   assertFeatureTransition,
   assertAssertionTransition,
   isTerminalAssertionStatus,
 } from "./domain/mission-state.js";
 
 export { generateMissionId } from "./domain/mission-id.js";
-export { WORKER_TYPE_PATTERN, FEATURE_ID_PATTERN } from "./domain/mission-validators.js";
+export {
+  MISSION_ID_PATTERN,
+  WORKER_TYPE_PATTERN,
+  FEATURE_ID_PATTERN,
+  WorkerReportSchema,
+} from "./domain/mission-validators.js";
 
 export { BUILT_IN_WORKFLOWS } from "./domain/workflows.js";
 export type { WorkflowTemplate, WorkflowPhase } from "./domain/workflow-types.js";
@@ -65,7 +71,15 @@ export type {
   PrincipleMode,
   GateCheckType,
   PrincipleSource,
+  PrincipleOutcome,
+  PrincipleOutcomeRecord,
+  PrincipleEffectiveness,
 } from "./domain/principle-types.js";
+export {
+  buildPrincipleEffectiveness,
+  hasSufficientSample,
+  PRINCIPLE_SMALL_SAMPLE_THRESHOLD,
+} from "./usecases/principle-effectiveness.usecase.js";
 export { DEFAULT_PRINCIPLES } from "./domain/default-principles.js";
 export { validatePrinciple, validateCreatePrincipleInput } from "./domain/principle-validators.js";
 

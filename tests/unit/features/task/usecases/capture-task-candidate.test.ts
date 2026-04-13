@@ -50,7 +50,7 @@ describe("captureTaskCandidate", () => {
 
   it("persists the candidate to disk", async () => {
     const t = task({
-      id: "tsk-persist",
+      id: "tsk-a1b2c3",
       title: "Persistence",
       closeReason: "some reason",
     });
@@ -58,7 +58,7 @@ describe("captureTaskCandidate", () => {
 
     const all = await store.all();
     expect(all.length).toBe(1);
-    expect(all[0]?.id).toBe("tsk-persist");
+    expect(all[0]?.id).toBe("tsk-a1b2c3");
   });
 
   it("returns undefined when closeReason is missing", async () => {

@@ -632,6 +632,27 @@ describe("generateWorkerPrompt", () => {
     expect(result.prompt).not.toContain("## Handoff Protocol");
   });
 
+  it("includes the Reply Contract section with the feature-specific path", async () => {
+    const missionStore = new FsMissionStoreAdapter(tmpDir);
+    const featureStore = new FsFeatureStoreAdapter(tmpDir);
+    const assertionStore = new FsAssertionStoreAdapter(tmpDir);
+
+    const { missionId } = await createTestMission(missionStore, featureStore, assertionStore, tmpDir);
+    await createSampleSkill(tmpDir, "test-skill", "# Skill");
+
+      const result = await generateWorkerPrompt(missionStore, featureStore, assertionStore, tmpDir, missionId, "f1");
+      expect(result.prompt).toContain("## Reply Contract");
+      expect(result.prompt).toContain("<!-- BEGIN REPLY CONTRACT -->");
+      expect(result.prompt).toContain("<!-- END REPLY CONTRACT -->");
+      expect(result.prompt).toContain(`.maestro/replies/${missionId}/f1.yaml`);
+      expect(result.prompt).toContain(`missionId: ${missionId}`);
+      expect(result.prompt).toContain("outcome: completed");
+      expect(result.prompt).toContain("kicked-back");
+      expect(result.prompt).toContain("abandoned");
+    expect(result.prompt).toContain("When complete, use the Reply Contract above as the final handoff back to Maestro.");
+    expect(result.prompt).not.toContain("maestro feature update f1");
+  });
+
     it("sanitizes previous milestone output and skips unreadable report artifacts", async () => {
     const missionStore = new FsMissionStoreAdapter(tmpDir);
     const featureStore = new FsFeatureStoreAdapter(tmpDir);

@@ -141,6 +141,7 @@ describe("buildPreviewState", () => {
       "agents",
       "events",
       "tasks",
+      "principles",
       "help",
     ]);
   });

@@ -25,3 +25,31 @@ export interface CreatePrincipleInput {
   readonly gateField?: string;
   readonly gateCheck?: string;
 }
+
+/** Outcome attribution for a principle gate against a single handoff. */
+export type PrincipleOutcome = "pending" | "helpful" | "unhelpful";
+
+/**
+ * One row in `.maestro/principles/outcomes.jsonl`. Append-only:
+ * later rows for the same (principleId, handoffId) pair supersede earlier
+ * ones; the effectiveness aggregator takes the last state.
+ */
+export interface PrincipleOutcomeRecord {
+  readonly principleId: string;
+  readonly handoffId: string;
+  readonly featureId?: string;
+  readonly missionId?: string;
+  readonly outcome: PrincipleOutcome;
+  readonly recordedAt: string;
+}
+
+/** Rolled-up effectiveness stats for a single principle. */
+export interface PrincipleEffectiveness {
+  readonly principleId: string;
+  readonly helpful: number;
+  readonly unhelpful: number;
+  readonly pending: number;
+  readonly total: number;
+  /** helpful / (helpful + unhelpful) expressed as 0..1, or undefined if both are zero. */
+  readonly effectiveness?: number;
+}

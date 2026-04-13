@@ -83,6 +83,7 @@ export type ModalState =
           returnPalette?: CommandPaletteState;
         }
       | { kind: "timeline"; selectedIndex: number; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState }
+      | { kind: "principle-review"; selectedIndex: number; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState }
       | { kind: "help"; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState };
 
 export interface AppState {
@@ -130,6 +131,7 @@ export type Action =
   | { type: "open-event-stream" }
   | { type: "open-task-board" }
   | { type: "open-timeline" }
+  | { type: "open-principle-review" }
   | { type: "open-help" }
   | { type: "dispatch-generate-start" }
   | { type: "dispatch-generate-success"; promptPath?: string }
@@ -191,6 +193,7 @@ export function reduce(state: AppState, action: Action): AppState {
         || state.modal.kind === "event-stream"
         || state.modal.kind === "task-board"
         || state.modal.kind === "timeline"
+        || state.modal.kind === "principle-review"
       ) {
         return handleModalNavigate(state, action.direction);
       }
@@ -494,6 +497,18 @@ export function reduce(state: AppState, action: Action): AppState {
         },
       };
 
+    case "open-principle-review":
+      if (!canOpenOverlayFromModal(state.modal)) return state;
+      return {
+        ...state,
+        modal: {
+          kind: "principle-review",
+          selectedIndex: 0,
+          returnTarget: getModalReturnTarget(state.modal),
+          returnPalette: getCommandPaletteReturnState(state.modal),
+        },
+      };
+
     case "open-help":
       if (!canOpenOverlayFromModal(state.modal)) return state;
       return {
@@ -715,6 +730,9 @@ export function reduce(state: AppState, action: Action): AppState {
           return { ...state, modal: { ...state.modal, selectedIndex: action.option } };
         }
         if (state.modal.kind === "timeline") {
+          return { ...state, modal: { ...state.modal, selectedIndex: action.option } };
+        }
+        if (state.modal.kind === "principle-review") {
           return { ...state, modal: { ...state.modal, selectedIndex: action.option } };
         }
         return state;
@@ -1147,6 +1165,15 @@ function handleModalNavigate(state: AppState, direction: "up" | "down"): AppStat
         return { ...state, modal: { ...state.modal, selectedIndex } };
       }
 
+      if (state.modal.kind === "principle-review") {
+        const total = state.snapshot.principleEffectiveness?.length ?? 0;
+        if (total === 0) return state;
+        const selectedIndex = direction === "down"
+          ? Math.min(state.modal.selectedIndex + 1, total - 1)
+          : Math.max(state.modal.selectedIndex - 1, 0);
+        return { ...state, modal: { ...state.modal, selectedIndex } };
+      }
+
     if (state.modal.kind === "config") {
       const total = getConfigRowsForTab(
         state.snapshot.configInspector ?? null,
@@ -1236,6 +1263,7 @@ function getModalReturnTarget(modal: ModalState): ModalReturnTarget | undefined 
         || modal.kind === "event-stream"
         || modal.kind === "task-board"
         || modal.kind === "timeline"
+        || modal.kind === "principle-review"
         || modal.kind === "help"
       ) {
         return modal.returnTarget;
@@ -1273,6 +1301,7 @@ function getCommandPaletteReturnState(
     || modal.kind === "event-stream"
     || modal.kind === "task-board"
     || modal.kind === "timeline"
+    || modal.kind === "principle-review"
     || modal.kind === "help"
   ) {
     return modal.returnPalette

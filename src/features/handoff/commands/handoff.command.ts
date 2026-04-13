@@ -92,7 +92,7 @@ export function registerHandoffCommand(program: Command): void {
         const format = resolveCreateFormat(opts, program);
         const content = await buildContentFromOptions(opts, services, process.cwd());
 
-        await validateGatePrinciples(content, services);
+        const gateEvaluation = await evaluateGatePrinciples(content, services);
 
       const handoff = await createUkiHandoff(
         services.handoffStore,
@@ -104,6 +104,27 @@ export function registerHandoffCommand(program: Command): void {
           sessionId: opts.sessionId,
         },
       );
+
+      // Record one pending outcome per gate that passed so reply ingest
+      // can later mark them helpful or unhelpful. Best-effort; recording
+      // failures must not block handoff creation.
+      if (gateEvaluation.passed.length > 0) {
+        const recordedAt = new Date().toISOString();
+        const missionId = content.maestroRefs.missionId;
+        const featureId = content.maestroRefs.featureId;
+        await Promise.all(
+          gateEvaluation.passed.map((principle) =>
+            services.principleStore.recordOutcome({
+              principleId: principle.id,
+              handoffId: handoff.id,
+              ...(missionId ? { missionId } : {}),
+              ...(featureId ? { featureId } : {}),
+              outcome: "pending",
+              recordedAt,
+            }),
+          ),
+        );
+      }
 
       printCreate(handoff, format);
     });
@@ -561,13 +582,23 @@ function parseVerificationResult(raw: string): UkiVerificationResult {
   return { step, passed: outcome === "passed" };
 }
 
-async function validateGatePrinciples(
+interface GateEvaluationResult {
+  readonly passed: readonly import("@/features/mission").Principle[];
+  readonly failed: readonly string[];
+}
+
+/**
+ * Evaluate every gate principle attached to this handoff's profile.
+ * Throws on failure with the aggregated failure list. On success, returns
+ * the list of passed principles so the caller can record pending outcomes.
+ */
+async function evaluateGatePrinciples(
   content: UkiHandoffContent,
   services: Services,
-): Promise<void> {
+): Promise<GateEvaluationResult> {
   const { maestroRefs } = content;
   if (!maestroRefs.missionId) {
-    return;
+    return { passed: [], failed: [] };
   }
 
   if (!maestroRefs.featureId) {
@@ -590,7 +621,7 @@ async function validateGatePrinciples(
   }
 
   const profile = milestone.profile;
-  if (!profile) return;
+  if (!profile) return { passed: [], failed: [] };
 
   const principles = await loadPrinciplesForProfile(services, profile);
 
@@ -598,12 +629,15 @@ async function validateGatePrinciples(
     (p): p is import("@/features/mission").Principle & { readonly gateField: string; readonly gateCheck: string } =>
       p.mode === "gate" && p.gateField !== undefined && p.gateCheck !== undefined,
   );
-  if (gates.length === 0) return;
+  if (gates.length === 0) return { passed: [], failed: [] };
 
-  const contentRecord = content as Record<string, unknown>;
+  const contentRecord = content as unknown as Record<string, unknown>;
+  const passed: import("@/features/mission").Principle[] = [];
   const failures: string[] = [];
   for (const gate of gates) {
-    if (!evaluateGateCheck(gate.gateCheck, contentRecord[gate.gateField])) {
+    if (evaluateGateCheck(gate.gateCheck, contentRecord[gate.gateField])) {
+      passed.push(gate);
+    } else {
       failures.push(`${gate.name}: field '${gate.gateField}' failed check '${gate.gateCheck}'`);
     }
   }
@@ -618,6 +652,8 @@ async function validateGatePrinciples(
       ],
     );
   }
+
+  return { passed, failed: failures };
 }
 
 async function resolveMissionRef(

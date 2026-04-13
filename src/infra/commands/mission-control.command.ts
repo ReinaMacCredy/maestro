@@ -60,6 +60,8 @@ const PREVIEW_SCREEN_ALIASES: Readonly<Record<string, PreviewScreenOrAll>> = {
   tasks: "tasks",
   task: "tasks",
   timeline: "timeline",
+  principles: "principles",
+  principle: "principles",
   help: "help",
 };
 
@@ -128,6 +130,8 @@ export function registerMissionControlCommand(program: Command): void {
           projectGraphStore: services.projectGraphStore,
           handoffStore: services.handoffStore,
           taskStore: services.taskStore,
+          replyStore: services.replyStore,
+          principleStore: services.principleStore,
           cwd: process.cwd(),
         };
         const snapshotLoader = createMissionControlSnapshotLoader(

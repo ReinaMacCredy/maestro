@@ -46,8 +46,8 @@ describe("FsCandidateStoreAdapter", () => {
 
     it("persists across instances (round trip via disk)", async () => {
       await store.create({
-        id: "tsk-persist",
-        sourceTaskId: "tsk-persist",
+        id: "tsk-a1b2c3",
+        sourceTaskId: "tsk-a1b2c3",
         title: "Persistence test",
         reason: "reason",
         keywords: ["persist"],
@@ -56,29 +56,29 @@ describe("FsCandidateStoreAdapter", () => {
       const fresh = new FsCandidateStoreAdapter(tmpDir);
       const all = await fresh.all();
       expect(all.length).toBe(1);
-      expect(all[0]?.id).toBe("tsk-persist");
+      expect(all[0]?.id).toBe("tsk-a1b2c3");
     });
   });
 
   describe("all (after creates)", () => {
     it("returns every created candidate, unordered", async () => {
       await store.create({
-        id: "tsk-a",
-        sourceTaskId: "tsk-a",
+        id: "tsk-aaaaaa",
+        sourceTaskId: "tsk-aaaaaa",
         title: "A",
         reason: "a",
         keywords: ["a"],
       });
       await store.create({
-        id: "tsk-b",
-        sourceTaskId: "tsk-b",
+        id: "tsk-bbbbbb",
+        sourceTaskId: "tsk-bbbbbb",
         title: "B",
         reason: "b",
         keywords: ["b"],
       });
       await store.create({
-        id: "tsk-c",
-        sourceTaskId: "tsk-c",
+        id: "tsk-cccccc",
+        sourceTaskId: "tsk-cccccc",
         title: "C",
         reason: "c",
         keywords: ["c"],
@@ -86,15 +86,15 @@ describe("FsCandidateStoreAdapter", () => {
 
       const all = await store.all();
       const ids = all.map((c) => c.id).sort();
-      expect(ids).toEqual(["tsk-a", "tsk-b", "tsk-c"]);
+      expect(ids).toEqual(["tsk-aaaaaa", "tsk-bbbbbb", "tsk-cccccc"]);
     });
 
     it("silently skips non-json entries in the directory", async () => {
       // Write a stray file into the candidates dir to simulate a user
       // dropping garbage in there. The adapter should not crash.
       await store.create({
-        id: "tsk-real",
-        sourceTaskId: "tsk-real",
+        id: "tsk-abcdef",
+        sourceTaskId: "tsk-abcdef",
         title: "real",
         reason: "r",
         keywords: ["real"],
@@ -104,13 +104,13 @@ describe("FsCandidateStoreAdapter", () => {
 
       const all = await store.all();
       expect(all.length).toBe(1);
-      expect(all[0]?.id).toBe("tsk-real");
+      expect(all[0]?.id).toBe("tsk-abcdef");
     });
 
     it("skips malformed candidate json instead of failing the whole read", async () => {
       await store.create({
-        id: "tsk-real",
-        sourceTaskId: "tsk-real",
+        id: "tsk-abcdef",
+        sourceTaskId: "tsk-abcdef",
         title: "real",
         reason: "r",
         keywords: ["real"],
@@ -119,13 +119,13 @@ describe("FsCandidateStoreAdapter", () => {
       await Bun.write(join(candidatesDir, "broken.json"), "{bad json\n");
 
       const all = await store.all();
-      expect(all.map((candidate) => candidate.id)).toEqual(["tsk-real"]);
+      expect(all.map((candidate) => candidate.id)).toEqual(["tsk-abcdef"]);
     });
 
     it("ignores nested directories in the candidates folder", async () => {
       await store.create({
-        id: "tsk-real",
-        sourceTaskId: "tsk-real",
+        id: "tsk-abcdef",
+        sourceTaskId: "tsk-abcdef",
         title: "real",
         reason: "r",
         keywords: ["real"],
@@ -134,7 +134,7 @@ describe("FsCandidateStoreAdapter", () => {
       await mkdir(join(candidatesDir, "nested"), { recursive: true });
 
       const all = await store.all();
-      expect(all.map((candidate) => candidate.id)).toEqual(["tsk-real"]);
+      expect(all.map((candidate) => candidate.id)).toEqual(["tsk-abcdef"]);
     });
   });
 });

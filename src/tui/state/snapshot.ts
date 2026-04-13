@@ -17,6 +17,17 @@ import type { RatchetStorePort } from "@/features/ratchet";
 import type { ProjectGraphStorePort } from "@/features/graph";
 import type { HandoffStorePort, UkiHandoff } from "@/features/handoff";
 import { TASK_STATUSES, type TaskStorePort, type TaskStatus } from "@/features/task";
+import type { ReplyStorePort, WorkerReply, ReplyOutcome } from "@/features/reply";
+import { ingestReply } from "@/features/reply";
+import type {
+  Principle,
+  PrincipleOutcomeRecord,
+  PrincipleStorePort,
+} from "@/features/mission";
+import {
+  buildPrincipleEffectiveness,
+  PRINCIPLE_SMALL_SAMPLE_THRESHOLD,
+} from "@/features/mission";
 import { recommendWorkerFit } from "@/features/worker";
 import {
   type Mission,
@@ -35,6 +46,8 @@ import type {
   AgentGridRow,
   DispatchQueueItem,
   EventStreamEntry,
+  PrincipleEffectivenessRow,
+  ReplyInboxEntry,
   TaskBoardSnapshot,
   TaskBoardItem,
   TimelineMilestoneEntry,
@@ -68,6 +81,8 @@ export interface SnapshotDeps {
   projectGraphStore?: ProjectGraphStorePort;
   handoffStore?: HandoffStorePort;
   taskStore?: TaskStorePort;
+  replyStore?: ReplyStorePort;
+  principleStore?: PrincipleStorePort;
   cwd: string;
 }
 
@@ -80,11 +95,14 @@ export interface HomeSnapshotDeps {
   projectGraphStore?: ProjectGraphStorePort;
   handoffStore?: HandoffStorePort;
   taskStore?: TaskStorePort;
+  replyStore?: ReplyStorePort;
+  principleStore?: PrincipleStorePort;
   cwd: string;
 }
 
 export interface SnapshotBuildOptions {
   includeTaskBoard?: boolean;
+  includeReplies?: boolean;
 }
 
 interface FeatureGraphEntry {
@@ -105,6 +123,15 @@ export async function buildSnapshot(
   const taskBoardPromise = options.includeTaskBoard === true
     ? buildTaskBoard(deps.taskStore)
     : Promise.resolve(undefined);
+
+  // Ingest replies FIRST when requested, so the features list below reflects
+  // post-ingest state (advanced/kicked-back). Without this the inbox appears
+  // stale for one poll cycle.
+  const ingest = options.includeReplies === true
+    ? await loadAndIngestReplies(deps, missionId)
+    : { replies: undefined as readonly WorkerReply[] | undefined, outcomesCache: undefined };
+  const replies = ingest.replies;
+
   const [
     mission,
     features,
@@ -221,11 +248,22 @@ export async function buildSnapshot(
   );
   const sessionSidebar = buildSessionSidebar(gitState);
 
+  const replyInbox = replies ? buildReplyInbox(features, replies) : undefined;
+
+  // Principle effectiveness rollup (piggybacks on includeReplies because
+  // the reply ingest is what produces most of the decided outcomes).
+  // Reuse the in-memory outcomes cache from ingest to avoid re-reading
+  // outcomes.jsonl.
+  const principleEffectiveness = options.includeReplies === true
+    ? await loadPrincipleEffectiveness(deps, ingest.outcomesCache)
+    : undefined;
+
   // Conductor screen data
   const agentGrid = buildAgentGrid(features, pendingHandoffs);
   const missionMilestones = mission.milestones;
   const dispatchQueue = buildDispatchQueue(features, missionMilestones);
-  const eventStream = buildEventStream(progressLog, pendingHandoffs);
+
+  const eventStream = buildEventStream(progressLog, pendingHandoffs, replies ?? []);
   const timelineMilestones = buildTimelineMilestones(missionMilestones, features);
 
   return {
@@ -274,6 +312,8 @@ export async function buildSnapshot(
     eventStream,
     taskBoard,
     timelineMilestones,
+    replyInbox,
+    principleEffectiveness,
     home: null,
   };
 }
@@ -319,7 +359,13 @@ export async function buildHomeSnapshot(
   const actions = buildHomeActions(status, checks);
 
   const agentGrid = buildAgentGrid([], pendingHandoffs);
-  const homeEventStream = buildEventStream([], pendingHandoffs);
+  // Replies in home mode: list without ingest (home mode has no mission to
+  // update). Home surface is purely read-only per Mission Control contracts.
+  const homeReplies = options.includeReplies === true && deps.replyStore
+    ? await safeListReplies(deps.replyStore)
+    : undefined;
+  const homeReplyInbox = homeReplies ? buildReplyInbox([], homeReplies) : undefined;
+  const homeEventStream = buildEventStream([], pendingHandoffs, homeReplies ?? []);
 
   return {
     mode: "home",
@@ -375,6 +421,10 @@ export async function buildHomeSnapshot(
     eventStream: homeEventStream,
     taskBoard,
     timelineMilestones: [],
+    replyInbox: homeReplyInbox,
+    principleEffectiveness: options.includeReplies === true
+      ? await loadPrincipleEffectiveness(deps)
+      : undefined,
     home: {
       headline,
       summary,
@@ -766,6 +816,7 @@ export function buildDispatchQueue(
 export function buildEventStream(
   progressLog: readonly MissionControlEvent[],
   pendingHandoffs: readonly MissionControlHomeHandoff[],
+  replies: readonly WorkerReply[] = [],
 ): readonly EventStreamEntry[] {
   const entries: EventStreamEntry[] = [];
   const baseMs = getEventStreamBaseMs(progressLog);
@@ -794,6 +845,24 @@ export function buildEventStream(
     });
   }
 
+  for (const r of replies) {
+    const replyMs = new Date(r.writtenAt).getTime();
+    const title = r.outcome === "kicked-back"
+      ? `${r.featureId} kicked back`
+      : r.outcome === "abandoned"
+        ? `${r.featureId} abandoned`
+        : `${r.featureId} completed`;
+    entries.push({
+      timestamp: r.writtenAt,
+      relativeMs: baseMs === undefined || Number.isNaN(replyMs)
+        ? 0
+        : replyMs - baseMs,
+      kind: "reply",
+      title,
+      detail: r.notes,
+    });
+  }
+
   // Sort descending by timestamp, cap at 200
   entries.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   return entries.slice(0, 200);
@@ -812,6 +881,255 @@ function getEventStreamBaseMs(
   }
 
   return Number.isFinite(baseMs) ? baseMs : undefined;
+}
+
+interface IngestResult {
+  readonly replies: readonly WorkerReply[];
+  /** Cached outcomes (plus any appends from this ingest pass) for downstream aggregators. */
+  readonly outcomesCache?: readonly PrincipleOutcomeRecord[];
+}
+
+async function loadAndIngestReplies(
+  deps: SnapshotDeps,
+  missionId: string,
+): Promise<IngestResult> {
+  if (!deps.replyStore) return { replies: [] };
+  try {
+    const replies = (await deps.replyStore.list()).filter((reply) => reply.missionId === missionId);
+    if (replies.length === 0) return { replies: [] };
+
+    // Cache outcomes once so the recorder doesn't re-read the JSONL per
+    // handoff per reply (N*M disk reads -> 1). Appends are tracked
+    // in-memory so subsequent recorder calls and the effectiveness
+    // aggregator see the post-ingest state.
+    const outcomesCache: PrincipleOutcomeRecord[] | undefined = deps.principleStore
+      ? [...(await deps.principleStore.listOutcomes())]
+      : undefined;
+
+    const recordPrincipleOutcomes = buildPrincipleRecorder(deps, missionId, outcomesCache);
+
+    for (const reply of replies) {
+      // Fast path: skip already-ingested replies without entering the
+      // usecase at all. The usecase also defends against this, but this
+      // avoids the extra function call and conditional wiring.
+        if (await deps.replyStore.isIngested(missionId, reply.featureId)) continue;
+      try {
+        await ingestReply(
+          {
+            missionStore: deps.missionStore,
+            featureStore: deps.featureStore,
+            assertionStore: deps.assertionStore,
+            replyStore: deps.replyStore,
+            baseDir: deps.cwd,
+            ...(recordPrincipleOutcomes ? { recordPrincipleOutcomes } : {}),
+          },
+          missionId,
+          reply.featureId,
+        );
+      } catch {
+        // Snapshot projection must not throw on a single bad reply.
+        // The reply remains on disk; next poll will retry.
+      }
+    }
+
+    return { replies, outcomesCache };
+  } catch {
+    return { replies: [] };
+  }
+}
+
+/**
+ * Build a principle-outcome recorder that marks every `pending` principle
+ * row for the handoffs linked to the feature as either `helpful` or
+ * `unhelpful`. The `outcomesCache` is filtered in-memory to avoid
+ * re-reading outcomes.jsonl once per handoff; appends are pushed back
+ * into the cache so the effectiveness aggregator sees fresh state.
+ */
+function buildPrincipleRecorder(
+  deps: SnapshotDeps,
+  missionId: string,
+  outcomesCache: PrincipleOutcomeRecord[] | undefined,
+): ((featureId: string, outcome: ReplyOutcome) => Promise<{ recorded: number; complete: boolean }>) | undefined {
+  const principleStore = deps.principleStore;
+  const handoffStore = deps.handoffStore;
+  if (!principleStore || !handoffStore || !outcomesCache) return undefined;
+
+    return async (featureId, outcome) => {
+      const resolved = outcome === "completed" ? "helpful" : "unhelpful";
+      try {
+      const recentHandoffs = handoffStore.listRecentByFeatureRefs
+        ? await handoffStore.listRecentByFeatureRefs(missionId, featureId, 25)
+        : (await handoffStore.list()).filter((h) => h.content.maestroRefs.featureId === featureId);
+        if (recentHandoffs.length === 0) {
+          return { recorded: 0, complete: true };
+        }
+
+        let recorded = 0;
+        let complete = true;
+        const recordedAt = new Date().toISOString();
+        for (const handoff of recentHandoffs) {
+          const pending = filterPendingForHandoff(outcomesCache, handoff.id);
+          for (const row of pending) {
+            const record: PrincipleOutcomeRecord = {
+            principleId: row.principleId,
+            handoffId: handoff.id,
+            featureId,
+            missionId,
+              outcome: resolved,
+              recordedAt,
+            };
+            if (await principleStore.recordOutcome(record)) {
+              outcomesCache.push(record);
+              recorded += 1;
+              continue;
+            }
+            complete = false;
+          }
+        }
+        return { recorded, complete };
+      } catch {
+        return { recorded: 0, complete: false };
+      }
+    };
+  }
+
+async function safeListReplies(
+  replyStore: ReplyStorePort,
+): Promise<readonly WorkerReply[]> {
+  try {
+    return await replyStore.list();
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Return the effective `pending` outcomes for a single handoff, using the
+ * latest record per (principleId, handoffId) pair. Pure in-memory filter
+ * over the pre-fetched cache; mirrors JsonlPrincipleStoreAdapter.listPendingOutcomesForHandoff.
+ */
+function filterPendingForHandoff(
+  outcomes: readonly PrincipleOutcomeRecord[],
+  handoffId: string,
+): readonly PrincipleOutcomeRecord[] {
+  const latestByPrinciple = new Map<string, PrincipleOutcomeRecord>();
+  for (const record of outcomes) {
+    if (record.handoffId !== handoffId) continue;
+    const existing = latestByPrinciple.get(record.principleId);
+    if (!existing || existing.recordedAt <= record.recordedAt) {
+      latestByPrinciple.set(record.principleId, record);
+    }
+  }
+  return [...latestByPrinciple.values()].filter((r) => r.outcome === "pending");
+}
+
+async function loadPrincipleEffectiveness(
+  deps: SnapshotDeps | HomeSnapshotDeps,
+  cachedOutcomes?: readonly PrincipleOutcomeRecord[],
+): Promise<readonly PrincipleEffectivenessRow[] | undefined> {
+  const principleStore = deps.principleStore;
+  const handoffStore = deps.handoffStore;
+  if (!principleStore) return undefined;
+  try {
+    const [principles, outcomes, handoffs] = await Promise.all([
+      principleStore.list(),
+      cachedOutcomes !== undefined
+        ? Promise.resolve(cachedOutcomes)
+        : principleStore.listOutcomes(),
+      handoffStore ? handoffStore.list() : Promise.resolve<readonly UkiHandoff[]>([]),
+    ]);
+    return buildPrincipleEffectivenessRows(principles, outcomes, handoffs);
+  } catch {
+    return undefined;
+  }
+}
+
+export function buildPrincipleEffectivenessRows(
+  principles: readonly Principle[],
+  outcomes: readonly PrincipleOutcomeRecord[],
+  handoffs: readonly UkiHandoff[],
+): readonly PrincipleEffectivenessRow[] {
+  const rollup = buildPrincipleEffectiveness(principles, outcomes);
+  const principleById = new Map(principles.map((p) => [p.id, p]));
+  const handoffById = new Map(handoffs.map((h) => [h.id, h]));
+
+  // Index most recent unhelpful outcomes per principle, newest first.
+  const unhelpfulByPrinciple = new Map<string, PrincipleOutcomeRecord[]>();
+  for (const record of [...outcomes].sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))) {
+    if (record.outcome !== "unhelpful") continue;
+    const bucket = unhelpfulByPrinciple.get(record.principleId) ?? [];
+    if (bucket.length < 3) bucket.push(record);
+    unhelpfulByPrinciple.set(record.principleId, bucket);
+  }
+
+  const rows: PrincipleEffectivenessRow[] = [];
+  for (const stats of rollup.values()) {
+    const principle = principleById.get(stats.principleId);
+    const decided = stats.helpful + stats.unhelpful;
+    const examples = (unhelpfulByPrinciple.get(stats.principleId) ?? [])
+      .map((r) => {
+        const handoff = handoffById.get(r.handoffId);
+        const title = handoff?.content.summary ?? r.handoffId;
+        return `${r.handoffId}: ${title}`;
+      });
+
+    rows.push({
+      id: stats.principleId,
+      name: principle?.name ?? stats.principleId,
+      mode: principle?.mode ?? "advisory",
+      helpful: stats.helpful,
+      unhelpful: stats.unhelpful,
+      pending: stats.pending,
+      total: stats.total,
+      effectivenessPct: stats.effectiveness === undefined
+        ? undefined
+        : Math.round(stats.effectiveness * 100),
+      lowSample: decided < PRINCIPLE_SMALL_SAMPLE_THRESHOLD,
+      recentKickbackExamples: examples,
+    });
+  }
+
+  // Worst first (lowest effectiveness). Principles with no decided outcomes
+  // sort last so the scoreboard leads with actionable signal.
+  rows.sort((a, b) => {
+    const ae = a.effectivenessPct ?? 101;
+    const be = b.effectivenessPct ?? 101;
+    if (ae !== be) return ae - be;
+    const aDecided = a.helpful + a.unhelpful;
+    const bDecided = b.helpful + b.unhelpful;
+    return bDecided - aDecided;
+  });
+  return rows;
+}
+
+export function buildReplyInbox(
+  features: readonly Feature[],
+  replies: readonly WorkerReply[],
+): readonly ReplyInboxEntry[] {
+  const featureById = new Map(features.map((f) => [f.id, f]));
+  const entries: ReplyInboxEntry[] = replies.map((reply) => {
+    const feature = featureById.get(reply.featureId);
+    return {
+      featureId: reply.featureId,
+      outcome: reply.outcome,
+      writtenAt: reply.writtenAt,
+      writtenBy: reply.writtenBy,
+      featureTitle: feature?.title,
+      featureStatus: feature?.status,
+      pending: isReplyPending(reply, feature),
+      notes: reply.notes,
+    };
+  });
+  entries.sort((a, b) => b.writtenAt.localeCompare(a.writtenAt));
+  return entries;
+}
+
+function isReplyPending(reply: WorkerReply, feature: Feature | undefined): boolean {
+  if (!feature) return true;
+  if (reply.outcome === "completed") return feature.status !== "done";
+  if (reply.outcome === "abandoned") return feature.status !== "blocked";
+  // kicked-back: the loop lands at pending
+  return feature.status !== "pending";
 }
 
 export async function buildTaskBoard(

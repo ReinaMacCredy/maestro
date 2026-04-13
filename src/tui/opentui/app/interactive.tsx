@@ -88,6 +88,7 @@ const RESIZE_RENDER_INTERVAL_MS = 16;
     };
 
     const shouldIncludeTaskBoard = (): boolean => state.modal.kind === "task-board";
+    const shouldIncludeReplies = (): boolean => state.modal.kind === "principle-review";
 
   const buildProps = (): MissionControlAppProps => ({
     snapshot: state.snapshot,
@@ -194,6 +195,7 @@ const RESIZE_RENDER_INTERVAL_MS = 16;
         try {
           const nextSnapshot = await opts.reloadSnapshot({
             includeTaskBoard: shouldIncludeTaskBoard(),
+            includeReplies: shouldIncludeReplies(),
           });
           state = reduce(state, { type: "update-snapshot", snapshot: nextSnapshot });
         } catch {
@@ -208,6 +210,19 @@ const RESIZE_RENDER_INTERVAL_MS = 16;
         markDirty();
         try {
           const nextSnapshot = await opts.reloadSnapshot({ includeTaskBoard: true });
+          state = reduce(state, { type: "update-snapshot", snapshot: nextSnapshot });
+        } catch {
+          // Keep the modal open; the next poll will retry.
+        }
+        markDirty();
+        return;
+      }
+
+      if (action.type === "open-principle-review" && state.snapshot.principleEffectiveness === undefined) {
+        state = reduce(state, action);
+        markDirty();
+        try {
+          const nextSnapshot = await opts.reloadSnapshot({ includeReplies: true });
           state = reduce(state, { type: "update-snapshot", snapshot: nextSnapshot });
         } catch {
           // Keep the modal open; the next poll will retry.
@@ -283,6 +298,7 @@ const RESIZE_RENDER_INTERVAL_MS = 16;
             try {
               const snapshot = await opts.reloadSnapshot({
                 includeTaskBoard: shouldIncludeTaskBoard(),
+                includeReplies: shouldIncludeReplies(),
               });
               const nextState = reduce(state, { type: "update-snapshot", snapshot });
               state = nextState;
@@ -394,6 +410,7 @@ const RESIZE_RENDER_INTERVAL_MS = 16;
         try {
           const nextSnapshot = await opts.reloadSnapshot({
             includeTaskBoard: shouldIncludeTaskBoard(),
+            includeReplies: shouldIncludeReplies(),
           });
           state = reduce(state, { type: "update-snapshot", snapshot: nextSnapshot });
         } catch {
@@ -450,6 +467,7 @@ const RESIZE_RENDER_INTERVAL_MS = 16;
         try {
           const nextSnapshot = await opts.reloadSnapshot({
             includeTaskBoard: shouldIncludeTaskBoard(),
+            includeReplies: shouldIncludeReplies(),
           });
           state = reduce(state, { type: "update-snapshot", snapshot: nextSnapshot });
         } catch {
@@ -504,6 +522,7 @@ const RESIZE_RENDER_INTERVAL_MS = 16;
         try {
           const nextSnapshot = await opts.reloadSnapshot({
             includeTaskBoard: shouldIncludeTaskBoard(),
+            includeReplies: shouldIncludeReplies(),
           });
           state = reduce(state, { type: "update-snapshot", snapshot: nextSnapshot });
         } catch {

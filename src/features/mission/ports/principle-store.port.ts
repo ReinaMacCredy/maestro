@@ -1,4 +1,8 @@
-import type { Principle, CreatePrincipleInput } from "../domain/principle-types.js";
+import type {
+  Principle,
+  CreatePrincipleInput,
+  PrincipleOutcomeRecord,
+} from "../domain/principle-types.js";
 import type { MilestoneProfile } from "../domain/mission-types.js";
 
 export interface PrincipleStorePort {
@@ -16,4 +20,27 @@ export interface PrincipleStorePort {
 
   /** Remove a principle by id. Returns true if removed, false if not found. */
   remove(id: string): Promise<boolean>;
+
+  /**
+   * Append a principle outcome record to `outcomes.jsonl`. Best-effort:
+   * implementations return false when persistence fails so callers can
+   * decide whether to retry.
+   */
+  recordOutcome(record: PrincipleOutcomeRecord): Promise<boolean>;
+
+  /**
+   * List recorded principle outcomes. Tail-capped by default to keep
+   * large outcome logs from blowing up memory. Malformed lines are
+   * silently skipped.
+   */
+  listOutcomes(limit?: number): Promise<readonly PrincipleOutcomeRecord[]>;
+
+  /**
+   * Convenience filter: return the most recent `pending` rows for a given
+   * handoff so the reply ingest usecase can resolve them to helpful or
+   * unhelpful in one pass.
+   */
+  listPendingOutcomesForHandoff(
+    handoffId: string,
+  ): Promise<readonly PrincipleOutcomeRecord[]>;
 }

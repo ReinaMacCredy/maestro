@@ -634,17 +634,74 @@ function composePrompt(
     parts.push("");
   }
 
+  // Reply Contract -- the agent's final action
+  parts.push("## Reply Contract");
+  parts.push("");
+  parts.push("<!-- BEGIN REPLY CONTRACT -->");
+  parts.push("");
+    parts.push(buildReplyContractSection(mission.id, feature.id));
+  parts.push("");
+  parts.push("<!-- END REPLY CONTRACT -->");
+  parts.push("");
+
   // Footer with status reminder
   parts.push("---");
   parts.push("");
   parts.push(`**Current Status:** ${feature.status}`);
   parts.push(`**Generated:** ${new Date().toISOString()}`);
   parts.push("");
-  parts.push("When complete, report results using:");
-  parts.push(`\`maestro feature update ${feature.id} --mission ${mission.id} --status <status> --report @report.json\``);
+  parts.push("When complete, use the Reply Contract above as the final handoff back to Maestro.");
   parts.push("");
 
   return parts.join("\n");
+}
+
+/**
+ * Render the Reply Contract block. This tells the agent exactly what to
+ * write when it finishes (or gives up), where to write it, and how maestro
+ * interprets the outcome. The contract is the agent's half of the
+ * closed-loop reply protocol -- without this section agents would not know
+ * about .maestro/replies/ at all.
+ */
+function buildReplyContractSection(missionId: string, featureId: string): string {
+  const lines = [
+      `When you finish (or give up), write your reply as your final action:`,
+      ``,
+      `Path: \`.maestro/replies/${missionId}/${featureId}.yaml\``,
+      ``,
+      `Schema:`,
+      `\`\`\`yaml`,
+      `missionId: ${missionId}`,
+      `featureId: ${featureId}`,
+    `outcome: completed            # or: kicked-back | abandoned`,
+    `writtenAt: <ISO-8601 UTC>     # e.g. 2026-04-13T12:34:56.000Z`,
+    `writtenBy: agent              # always 'agent' for prompt-driven replies`,
+    `source: agent:<your-name>     # optional free-form origin marker`,
+    `notes: |                      # optional free-form notes`,
+    `  What changed, what was tricky, what you could not verify.`,
+    `report:                       # optional structured WorkerReport`,
+    `  salientSummary: ...`,
+    `  whatWasImplemented: ...`,
+    `  whatWasLeftUndone: ...`,
+    `  verification:`,
+    `    commandsRun: [...]`,
+    `    interactiveChecks: [...]`,
+    `  tests:`,
+    `    added: [...]`,
+    `  discoveredIssues: [...]`,
+    `\`\`\``,
+    ``,
+    `Outcome meanings:`,
+    `  - completed:    assertions pass, feature is ready to mark done.`,
+    `  - kicked-back:  cannot complete now; needs retry. Put the blocker in notes.`,
+    `  - abandoned:    out of scope or impossible; put the reason in notes.`,
+    ``,
+    `Maestro cross-checks your outcome against feature status and assertion`,
+    `results. If you claim 'completed' but assertions are not passing or the`,
+    `feature is not in 'review', it will be downgraded to 'kicked-back' and`,
+    `the discrepancy recorded. Be honest; cheating is visible.`,
+  ];
+  return lines.join("\n");
 }
 
 /**
