@@ -38,7 +38,11 @@ export {
 } from "./domain/mission-state.js";
 
 export { generateMissionId } from "./domain/mission-id.js";
-export { WORKER_TYPE_PATTERN, FEATURE_ID_PATTERN } from "./domain/mission-validators.js";
+export {
+  WORKER_TYPE_PATTERN,
+  FEATURE_ID_PATTERN,
+  WorkerReportSchema,
+} from "./domain/mission-validators.js";
 
 export { BUILT_IN_WORKFLOWS } from "./domain/workflows.js";
 export type { WorkflowTemplate, WorkflowPhase } from "./domain/workflow-types.js";

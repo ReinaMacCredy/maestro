@@ -39,6 +39,7 @@ import {
 } from "./features/graph/index.js";
 import { registerHandoffCommand } from "./features/handoff/index.js";
 import { registerTaskCommand } from "./features/task/index.js";
+import { registerReplyCommand } from "./features/reply/index.js";
 
 export const program = new Command()
   .name("maestro")
@@ -77,6 +78,7 @@ registerGraphLinkCommand(program);
 registerGraphContextCommand(program);
 registerHandoffCommand(program);
 registerTaskCommand(program);
+registerReplyCommand(program);
 registerPrincipleCommand(program);
 
 async function main(): Promise<void> {
