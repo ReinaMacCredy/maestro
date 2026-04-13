@@ -81,6 +81,26 @@ The loop is deliberately simple: define work, hand it off, update progress, vali
 - Git
 - A local agent harness in another terminal, such as Claude Code, Codex, Gemini CLI, or Droid CLI
 
+### Install From Release
+
+Install the latest published Maestro binary:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/scripts/install.sh | bash
+```
+
+Install a specific published release:
+
+```bash
+MAESTRO_VERSION=0.32.0 curl -fsSL https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/scripts/install.sh | bash
+```
+
+After installation, refresh to the latest published release with:
+
+```bash
+maestro update
+```
+
 ### Build From Source
 
 ```bash
