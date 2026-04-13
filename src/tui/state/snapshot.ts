@@ -678,13 +678,14 @@ export function buildAgentGrid(
     );
     const hasReview = workerFeatures.some((f) => f.status === "review");
     const allDone = workerFeatures.every((f) => f.status === "done");
+    const pendingHandoffCount = pendingHandoffs.filter((h) => h.agent === workerType).length;
     const isStale = active !== undefined
       && (Date.now() - new Date(active.updatedAt).getTime()) > STALE_THRESHOLD_MS;
 
     let status: InferredAgentStatus;
     if (isStale) status = "stale";
     else if (active) status = "active";
-    else if (hasReview || pendingHandoffs.length > 0) status = "waiting";
+    else if (hasReview || pendingHandoffCount > 0) status = "waiting";
     else if (allDone) status = "completed";
     else status = "waiting";
 
@@ -696,7 +697,7 @@ export function buildAgentGrid(
       lastActivityAt: active?.updatedAt,
       featureCount: workerFeatures.length,
       completedCount: workerFeatures.filter((f) => f.status === "done").length,
-      pendingHandoffCount: pendingHandoffs.filter((h) => h.agent === workerType).length,
+      pendingHandoffCount,
     });
   }
 

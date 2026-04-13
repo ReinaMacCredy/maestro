@@ -29,6 +29,7 @@ export type PreviewScreen = typeof PREVIEW_SCREENS[number];
 export const HOME_PREVIEW_SCREENS = [
   "dashboard",
   "features",
+  "handoffs",
   "config",
   "memory",
   "graph",

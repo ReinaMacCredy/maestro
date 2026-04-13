@@ -87,6 +87,18 @@ describe("buildAgentGrid", () => {
     const grid = buildAgentGrid(features, handoffs);
     expect(grid[0]!.pendingHandoffCount).toBe(1);
   });
+
+  it("does not mark completed workers waiting for another worker's handoff", () => {
+    const features = [
+      makeFeature({ id: "f1", workerType: "claude-code", status: "done" }),
+      makeFeature({ id: "f2", workerType: "claude-code", status: "done" }),
+      makeFeature({ id: "f3", workerType: "codex", status: "pending" }),
+    ];
+    const grid = buildAgentGrid(features, [makeHandoff("h1", "codex")]);
+
+    expect(grid.find((row) => row.workerType === "claude-code")?.status).toBe("completed");
+    expect(grid.find((row) => row.workerType === "codex")?.status).toBe("waiting");
+  });
 });
 
 // ---------------------------------------------------------------------------

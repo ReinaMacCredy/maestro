@@ -155,7 +155,7 @@ export function getMissionControlCommandSpecs(
       },
       {
         id: "dependencies",
-        key: "G",
+        key: "B",
         label: "Dependencies",
         detail: "Inspect blockers and downstream tasks for the selected item",
         section: "Navigate",
@@ -200,6 +200,14 @@ export function getMissionControlCommandSpecs(
         detail: "View corrections, learnings, and ratchet assertions",
         section: "Navigate",
         keywords: ["memory", "corrections", "learnings", "ratchet"],
+      },
+      {
+        id: "graph",
+        key: "G",
+        label: "Graph",
+        detail: "View cross-project relationships",
+        section: "Navigate",
+        keywords: ["graph", "projects", "relationships"],
       },
       {
         id: "help",

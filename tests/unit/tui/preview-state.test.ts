@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { buildPreviewState } from "@/tui/app/preview-state.js";
+import { buildPreviewState, getApplicablePreviewScreens } from "@/tui/app/preview-state.js";
 import type { MissionControlSnapshot } from "@/tui/state/types.js";
 
 function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionControlSnapshot {
@@ -128,6 +128,23 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
 }
 
 describe("buildPreviewState", () => {
+  it("keeps handoffs in the home preview set while excluding mission-only screens", () => {
+    const screens = getApplicablePreviewScreens({ mode: "home" });
+
+    expect(screens).toEqual([
+      "dashboard",
+      "features",
+      "handoffs",
+      "config",
+      "memory",
+      "graph",
+      "agents",
+      "events",
+      "tasks",
+      "help",
+    ]);
+  });
+
   it("defaults to the overview left pane when no selector is provided", () => {
     const state = buildPreviewState({ snapshot: makeSnapshot() });
 
