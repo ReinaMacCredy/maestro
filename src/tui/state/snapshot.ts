@@ -127,9 +127,10 @@ export async function buildSnapshot(
   // Ingest replies FIRST when requested, so the features list below reflects
   // post-ingest state (advanced/kicked-back). Without this the inbox appears
   // stale for one poll cycle.
-  const replies = options.includeReplies === true
+  const ingest = options.includeReplies === true
     ? await loadAndIngestReplies(deps, missionId)
-    : undefined;
+    : { replies: undefined as readonly WorkerReply[] | undefined, outcomesCache: undefined };
+  const replies = ingest.replies;
 
   const [
     mission,
@@ -251,8 +252,10 @@ export async function buildSnapshot(
 
   // Principle effectiveness rollup (piggybacks on includeReplies because
   // the reply ingest is what produces most of the decided outcomes).
+  // Reuse the in-memory outcomes cache from ingest to avoid re-reading
+  // outcomes.jsonl.
   const principleEffectiveness = options.includeReplies === true
-    ? await loadPrincipleEffectiveness(deps)
+    ? await loadPrincipleEffectiveness(deps, ingest.outcomesCache)
     : undefined;
 
   // Conductor screen data
@@ -880,18 +883,36 @@ function getEventStreamBaseMs(
   return Number.isFinite(baseMs) ? baseMs : undefined;
 }
 
+interface IngestResult {
+  readonly replies: readonly WorkerReply[];
+  /** Cached outcomes (plus any appends from this ingest pass) for downstream aggregators. */
+  readonly outcomesCache?: readonly PrincipleOutcomeRecord[];
+}
+
 async function loadAndIngestReplies(
   deps: SnapshotDeps,
   missionId: string,
-): Promise<readonly WorkerReply[]> {
-  if (!deps.replyStore) return [];
+): Promise<IngestResult> {
+  if (!deps.replyStore) return { replies: [] };
   try {
     const replies = await deps.replyStore.list();
-    if (replies.length === 0) return [];
+    if (replies.length === 0) return { replies: [] };
 
-    const recordPrincipleOutcomes = buildPrincipleRecorder(deps, missionId);
+    // Cache outcomes once so the recorder doesn't re-read the JSONL per
+    // handoff per reply (N*M disk reads -> 1). Appends are tracked
+    // in-memory so subsequent recorder calls and the effectiveness
+    // aggregator see the post-ingest state.
+    const outcomesCache: PrincipleOutcomeRecord[] | undefined = deps.principleStore
+      ? [...(await deps.principleStore.listOutcomes())]
+      : undefined;
+
+    const recordPrincipleOutcomes = buildPrincipleRecorder(deps, missionId, outcomesCache);
 
     for (const reply of replies) {
+      // Fast path: skip already-ingested replies without entering the
+      // usecase at all. The usecase also defends against this, but this
+      // avoids the extra function call and conditional wiring.
+      if (await deps.replyStore.isIngested(reply.featureId)) continue;
       try {
         await ingestReply(
           {
@@ -911,24 +932,27 @@ async function loadAndIngestReplies(
       }
     }
 
-    return replies;
+    return { replies, outcomesCache };
   } catch {
-    return [];
+    return { replies: [] };
   }
 }
 
 /**
- * Build a principle-outcome recorder that, on every reply ingest, marks
- * every `pending` principle row for the handoffs linked to the feature as
- * either `helpful` or `unhelpful` based on the inferred outcome.
+ * Build a principle-outcome recorder that marks every `pending` principle
+ * row for the handoffs linked to the feature as either `helpful` or
+ * `unhelpful`. The `outcomesCache` is filtered in-memory to avoid
+ * re-reading outcomes.jsonl once per handoff; appends are pushed back
+ * into the cache so the effectiveness aggregator sees fresh state.
  */
 function buildPrincipleRecorder(
   deps: SnapshotDeps,
   missionId: string,
+  outcomesCache: PrincipleOutcomeRecord[] | undefined,
 ): ((featureId: string, outcome: ReplyOutcome) => Promise<number>) | undefined {
   const principleStore = deps.principleStore;
   const handoffStore = deps.handoffStore;
-  if (!principleStore || !handoffStore) return undefined;
+  if (!principleStore || !handoffStore || !outcomesCache) return undefined;
 
   return async (featureId, outcome) => {
     const resolved = outcome === "completed" ? "helpful" : "unhelpful";
@@ -941,16 +965,18 @@ function buildPrincipleRecorder(
       let recorded = 0;
       const recordedAt = new Date().toISOString();
       for (const handoff of recentHandoffs) {
-        const pending = await principleStore.listPendingOutcomesForHandoff(handoff.id);
+        const pending = filterPendingForHandoff(outcomesCache, handoff.id);
         for (const row of pending) {
-          await principleStore.recordOutcome({
+          const record: PrincipleOutcomeRecord = {
             principleId: row.principleId,
             handoffId: handoff.id,
             featureId,
             missionId,
             outcome: resolved,
             recordedAt,
-          });
+          };
+          await principleStore.recordOutcome(record);
+          outcomesCache.push(record);
           recorded += 1;
         }
       }
@@ -971,8 +997,29 @@ async function safeListReplies(
   }
 }
 
+/**
+ * Return the effective `pending` outcomes for a single handoff, using the
+ * latest record per (principleId, handoffId) pair. Pure in-memory filter
+ * over the pre-fetched cache; mirrors JsonlPrincipleStoreAdapter.listPendingOutcomesForHandoff.
+ */
+function filterPendingForHandoff(
+  outcomes: readonly PrincipleOutcomeRecord[],
+  handoffId: string,
+): readonly PrincipleOutcomeRecord[] {
+  const latestByPrinciple = new Map<string, PrincipleOutcomeRecord>();
+  for (const record of outcomes) {
+    if (record.handoffId !== handoffId) continue;
+    const existing = latestByPrinciple.get(record.principleId);
+    if (!existing || existing.recordedAt <= record.recordedAt) {
+      latestByPrinciple.set(record.principleId, record);
+    }
+  }
+  return [...latestByPrinciple.values()].filter((r) => r.outcome === "pending");
+}
+
 async function loadPrincipleEffectiveness(
   deps: SnapshotDeps | HomeSnapshotDeps,
+  cachedOutcomes?: readonly PrincipleOutcomeRecord[],
 ): Promise<readonly PrincipleEffectivenessRow[] | undefined> {
   const principleStore = deps.principleStore;
   const handoffStore = deps.handoffStore;
@@ -980,7 +1027,9 @@ async function loadPrincipleEffectiveness(
   try {
     const [principles, outcomes, handoffs] = await Promise.all([
       principleStore.list(),
-      principleStore.listOutcomes(),
+      cachedOutcomes !== undefined
+        ? Promise.resolve(cachedOutcomes)
+        : principleStore.listOutcomes(),
       handoffStore ? handoffStore.list() : Promise.resolve<readonly UkiHandoff[]>([]),
     ]);
     return buildPrincipleEffectivenessRows(principles, outcomes, handoffs);

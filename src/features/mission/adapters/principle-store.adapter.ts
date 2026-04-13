@@ -12,17 +12,19 @@ import type {
   Principle,
   CreatePrincipleInput,
   PrincipleOutcomeRecord,
-  PrincipleOutcome,
 } from "../domain/principle-types.js";
 import type { MilestoneProfile } from "../domain/mission-types.js";
 import type { PrincipleStorePort } from "../ports/principle-store.port.js";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { ensureDir, readText, writeText, appendText } from "@/shared/lib/fs.js";
-import { validatePrinciple } from "../domain/principle-validators.js";
+import {
+  validatePrinciple,
+  PrincipleOutcomeRecordSchema,
+  safeParsePrincipleOutcomeRecord,
+} from "../domain/principle-validators.js";
 import { MaestroError } from "@/shared/errors.js";
 
 const DEFAULT_OUTCOME_TAIL_LIMIT = 500;
-const VALID_OUTCOMES: ReadonlySet<PrincipleOutcome> = new Set(["pending", "helpful", "unhelpful"]);
 
 export class JsonlPrincipleStoreAdapter implements PrincipleStorePort {
   constructor(private readonly baseDir: string) {}
@@ -125,10 +127,13 @@ export class JsonlPrincipleStoreAdapter implements PrincipleStorePort {
   }
 
   async recordOutcome(record: PrincipleOutcomeRecord): Promise<void> {
-    if (!VALID_OUTCOMES.has(record.outcome)) return;
+    // Schema validation catches drift (bad outcome values, missing ids) at
+    // the write boundary so the JSONL never gains unreadable rows.
+    const validated = PrincipleOutcomeRecordSchema.safeParse(record);
+    if (!validated.success) return;
     try {
       await ensureDir(join(this.baseDir, MAESTRO_DIR, "principles"));
-      await appendText(this.outcomesPath(), JSON.stringify(record) + "\n");
+      await appendText(this.outcomesPath(), JSON.stringify(validated.data) + "\n");
     } catch {
       // Best-effort: outcome recording must never block the caller. The
       // next write attempt will retry. Telemetry can be layered on later.
@@ -138,12 +143,17 @@ export class JsonlPrincipleStoreAdapter implements PrincipleStorePort {
   async listOutcomes(limit: number = DEFAULT_OUTCOME_TAIL_LIMIT): Promise<readonly PrincipleOutcomeRecord[]> {
     const raw = await readText(this.outcomesPath());
     if (raw === undefined) return [];
-    const lines = raw.split("\n");
     const records: PrincipleOutcomeRecord[] = [];
-    for (const line of lines) {
+    for (const line of raw.split("\n")) {
       const trimmed = line.trim();
       if (trimmed.length === 0) continue;
-      const parsed = safeParseOutcomeRecord(trimmed);
+      let json: unknown;
+      try {
+        json = JSON.parse(trimmed);
+      } catch {
+        continue;
+      }
+      const parsed = safeParsePrincipleOutcomeRecord(json);
       if (parsed) records.push(parsed);
     }
     if (limit > 0 && records.length > limit) {
@@ -168,30 +178,5 @@ export class JsonlPrincipleStoreAdapter implements PrincipleStorePort {
       }
     }
     return [...latestByPair.values()].filter((r) => r.outcome === "pending");
-  }
-}
-
-function safeParseOutcomeRecord(line: string): PrincipleOutcomeRecord | undefined {
-  try {
-    const parsed = JSON.parse(line) as Record<string, unknown>;
-    if (
-      typeof parsed.principleId !== "string"
-      || typeof parsed.handoffId !== "string"
-      || typeof parsed.outcome !== "string"
-      || typeof parsed.recordedAt !== "string"
-      || !VALID_OUTCOMES.has(parsed.outcome as PrincipleOutcome)
-    ) {
-      return undefined;
-    }
-    return {
-      principleId: parsed.principleId,
-      handoffId: parsed.handoffId,
-      featureId: typeof parsed.featureId === "string" ? parsed.featureId : undefined,
-      missionId: typeof parsed.missionId === "string" ? parsed.missionId : undefined,
-      outcome: parsed.outcome as PrincipleOutcome,
-      recordedAt: parsed.recordedAt,
-    };
-  } catch {
-    return undefined;
   }
 }

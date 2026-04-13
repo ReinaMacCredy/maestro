@@ -10,7 +10,8 @@
 import type { WorkerReport } from "@/features/mission/index.js";
 
 /** How the caller claims the work resolved. Cross-checked against objective state on ingest. */
-export type ReplyOutcome = "completed" | "kicked-back" | "abandoned";
+export const REPLY_OUTCOMES = ["completed", "kicked-back", "abandoned"] as const;
+export type ReplyOutcome = (typeof REPLY_OUTCOMES)[number];
 
 /** Who wrote the reply. "agent" comes from agent-driven paths; "human" from the CLI override. */
 export type ReplyAuthor = "agent" | "human";

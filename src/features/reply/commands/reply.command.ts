@@ -13,10 +13,9 @@ import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 import { MaestroError } from "@/shared/errors.js";
 import { writeWorkerReply } from "../usecases/write-reply.usecase.js";
 import type { ReplyOutcome, WorkerReply } from "../domain/reply-types.js";
+import { REPLY_OUTCOMES } from "../domain/reply-types.js";
 import type { WorkerReport } from "@/features/mission/index.js";
 import { WorkerReportSchema } from "@/features/mission/index.js";
-
-const VALID_OUTCOMES: readonly ReplyOutcome[] = ["completed", "kicked-back", "abandoned"];
 
 export function registerReplyCommand(program: Command): void {
   const replyCmd = program
@@ -27,7 +26,7 @@ export function registerReplyCommand(program: Command): void {
   replyCmd
     .command("write <featureId>")
     .description("Write a reply for the given feature id")
-    .option("--outcome <outcome>", `Outcome (${VALID_OUTCOMES.join("|")})`)
+    .option("--outcome <outcome>", `Outcome (${REPLY_OUTCOMES.join("|")})`)
     .option("--note <text>", "Free-form notes")
     .option("--report-file <path>", "Path to a JSON file containing a WorkerReport")
     .option("--source <tag>", "Free-form origin marker, e.g. 'cli' or 'agent:claude'")
@@ -46,7 +45,6 @@ export function registerReplyCommand(program: Command): void {
         report,
         writtenBy: opts.agent ? "agent" : "human",
         source: typeof opts.source === "string" ? opts.source : undefined,
-        projectDir: process.cwd(),
       });
 
       output(isJson, reply, (r) => [
@@ -73,8 +71,8 @@ export function registerReplyCommand(program: Command): void {
 }
 
 function parseOutcome(raw: unknown): ReplyOutcome {
-  if (typeof raw !== "string" || !VALID_OUTCOMES.includes(raw as ReplyOutcome)) {
-    throw new MaestroError(`--outcome is required (${VALID_OUTCOMES.join("|")})`, [
+  if (typeof raw !== "string" || !(REPLY_OUTCOMES as readonly string[]).includes(raw)) {
+    throw new MaestroError(`--outcome is required (${REPLY_OUTCOMES.join("|")})`, [
       "Example: maestro reply write f-42 --outcome completed --note 'tests pass'",
     ]);
   }

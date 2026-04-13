@@ -4,6 +4,7 @@ export type {
   ReplyAuthor,
   ReplyIngestResult,
 } from "./domain/reply-types.js";
+export { REPLY_OUTCOMES } from "./domain/reply-types.js";
 export { validateWorkerReply } from "./domain/reply-validators.js";
 
 export type { ReplyStorePort } from "./ports/reply-store.port.js";

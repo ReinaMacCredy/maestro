@@ -64,6 +64,9 @@ export class FsReplyStoreAdapter implements ReplyStorePort {
     const validated = validateWorkerReply(reply);
     await ensureDir(this.dir());
     await writeText(this.replyPath(validated.featureId), stringifyYaml(validated));
+    // Overwriting a reply invalidates any prior ingestion marker so the
+    // next snapshot poll re-runs ingest against the fresh content.
+    await removeIfExists(this.ingestedMarkerPath(validated.featureId));
   }
 
   async isIngested(featureId: string): Promise<boolean> {
@@ -96,15 +99,4 @@ function parseReplyText(raw: string): WorkerReply | undefined {
   } catch {
     return undefined;
   }
-}
-
-/** Exposed for testing only. Removes the sidecar marker. */
-export async function clearIngestedMarker(baseDir: string, featureId: string): Promise<void> {
-  assertSafeSegment(featureId, "feature ID", FEATURE_ID_PATTERN, "letters, numbers, dashes, and underscores");
-  const markerPath = resolveWithin(
-    join(baseDir, MAESTRO_DIR, REPLIES_DIR),
-    `${featureId}.ingested`,
-    "Reply ingested marker",
-  );
-  await removeIfExists(markerPath);
 }

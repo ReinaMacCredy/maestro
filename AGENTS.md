@@ -55,7 +55,7 @@
 
 ## Mission Control Contracts
 - Keep `buildSnapshot()` and `buildHomeSnapshot()` read-only; do not perform runtime recovery, feature updates, or other state mutation inside snapshot projection
-- Reply ingest (Sprint 2 of the closed-loop principle work) is the sole sanctioned side effect and is strictly gated by `SnapshotBuildOptions.includeReplies` defaulting to false
+- Reply ingest is the sole sanctioned side effect and is strictly gated by `SnapshotBuildOptions.includeReplies` defaulting to false
 - `mission-control --json` and `mission-control --preview` must remain read-only inspection paths; recovery or supervision belongs only in explicit orchestration/supervised runtime paths. Those paths never set `includeReplies: true`
 - Interactive Mission Control may set `includeReplies: true` when the `[R]` Principles modal is open. This is the only path where reply YAMLs can advance feature state or append principle outcomes to `.maestro/principles/outcomes.jsonl`
 - When adding Mission Control tests, cover both source-run and compiled `./dist/maestro` behavior if the change affects interactive flow, polling, or TTY handling

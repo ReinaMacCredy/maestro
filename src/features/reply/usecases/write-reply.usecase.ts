@@ -2,13 +2,14 @@
  * Write a reply to disk. The CLI and agent paths both land here -- they
  * differ only in `writtenBy` ("human" for CLI, "agent" for prompt-driven).
  *
- * No cross-feature lookups -- this is a pure write. Ingest (Sprint 2)
- * handles feature advance and principle outcome recording.
+ * No cross-feature lookups -- this is a pure write. The snapshot ingest
+ * path handles feature advance and principle outcome recording on the
+ * next poll cycle. The adapter's `write()` invalidates any prior
+ * `.ingested` sidecar so overwrites re-run ingest automatically.
  */
 import type { WorkerReport } from "@/features/mission/index.js";
 import type { ReplyStorePort } from "../ports/reply-store.port.js";
 import type { ReplyAuthor, ReplyOutcome, WorkerReply } from "../domain/reply-types.js";
-import { clearIngestedMarker } from "../adapters/fs-reply-store.adapter.js";
 
 export interface WriteReplyInput {
   readonly featureId: string;
@@ -19,8 +20,6 @@ export interface WriteReplyInput {
   readonly source?: string;
   /** Override timestamp for tests. Defaults to now(). */
   readonly writtenAt?: string;
-  /** Project root for invalidating the `.ingested` sidecar on overwrite. */
-  readonly projectDir?: string;
 }
 
 export async function writeWorkerReply(
@@ -37,10 +36,5 @@ export async function writeWorkerReply(
     source: input.source,
   };
   await store.write(reply);
-  // Overwriting a reply invalidates any prior ingestion marker so the next
-  // snapshot poll re-runs ingest against the fresh content.
-  if (input.projectDir) {
-    await clearIngestedMarker(input.projectDir, input.featureId);
-  }
   return reply;
 }

@@ -105,9 +105,9 @@ export function registerHandoffCommand(program: Command): void {
         },
       );
 
-      // Record one pending outcome per gate that passed so Sprint 3's
-      // reply ingest can later mark them helpful or unhelpful. Best-effort;
-      // failures here never block handoff creation.
+      // Record one pending outcome per gate that passed so reply ingest
+      // can later mark them helpful or unhelpful. Best-effort; recording
+      // failures must not block handoff creation.
       if (gateEvaluation.passed.length > 0) {
         const recordedAt = new Date().toISOString();
         const missionId = content.maestroRefs.missionId;

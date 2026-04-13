@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { MilestoneProfileSchema } from "./mission-validators.js";
-import type { Principle, CreatePrincipleInput } from "./principle-types.js";
+import type {
+  Principle,
+  CreatePrincipleInput,
+  PrincipleOutcomeRecord,
+} from "./principle-types.js";
+
+export const PRINCIPLE_OUTCOMES = ["pending", "helpful", "unhelpful"] as const;
+export const PrincipleOutcomeSchema = z.enum(PRINCIPLE_OUTCOMES);
 
 const PRINCIPLE_ID_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
 
@@ -51,10 +58,25 @@ export const CreatePrincipleInputSchema = z.object({
   { message: "Gate-mode principles require --gate-field and --gate-check" },
 );
 
+export const PrincipleOutcomeRecordSchema = z.object({
+  principleId: z.string().min(1),
+  handoffId: z.string().min(1),
+  featureId: z.string().optional(),
+  missionId: z.string().optional(),
+  outcome: PrincipleOutcomeSchema,
+  recordedAt: z.string().min(1),
+}).strict();
+
 export function validatePrinciple(data: unknown): Principle {
   return PrincipleSchema.parse(data) as Principle;
 }
 
 export function validateCreatePrincipleInput(data: unknown): CreatePrincipleInput {
   return CreatePrincipleInputSchema.parse(data) as CreatePrincipleInput;
+}
+
+/** Lenient parse for JSONL rows -- returns undefined instead of throwing. */
+export function safeParsePrincipleOutcomeRecord(data: unknown): PrincipleOutcomeRecord | undefined {
+  const result = PrincipleOutcomeRecordSchema.safeParse(data);
+  return result.success ? (result.data as PrincipleOutcomeRecord) : undefined;
 }

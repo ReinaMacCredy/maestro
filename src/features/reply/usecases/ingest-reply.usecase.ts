@@ -30,9 +30,9 @@ import type {
 
 /**
  * Optional hook for recording principle outcomes attributable to this
- * reply. Sprint 3 plugs in the principle store; Sprint 2 leaves this
- * undefined (principles recorded: 0). Kept in this interface so the
- * composition root can evolve without changing the ingest signature.
+ * reply. Kept out of the store dependency list so the ingest usecase does
+ * not have to know the principle-store shape; the composition root wires
+ * the recorder in when it has the store and handoff data to support it.
  */
 export type PrincipleOutcomeRecorder = (
   featureId: string,
@@ -87,7 +87,6 @@ export async function ingestReply(
   const inferred = inferEffectiveOutcome(reply, feature, assertionsPass);
   const advance = await applyOutcomeTransition(deps, missionId, feature, reply, inferred);
 
-  // Principle attribution is wired up in Sprint 3.
   const principlesRecorded = deps.recordPrincipleOutcomes
     ? await deps.recordPrincipleOutcomes(featureId, inferred.outcome)
     : 0;

@@ -9,8 +9,9 @@ import { z } from "zod";
 import { FEATURE_ID_PATTERN, WorkerReportSchema } from "@/features/mission/index.js";
 import { MaestroError } from "@/shared/errors.js";
 import type { WorkerReply } from "./reply-types.js";
+import { REPLY_OUTCOMES } from "./reply-types.js";
 
-const ReplyOutcomeSchema = z.enum(["completed", "kicked-back", "abandoned"]);
+const ReplyOutcomeSchema = z.enum(REPLY_OUTCOMES);
 const ReplyAuthorSchema = z.enum(["agent", "human"]);
 const IsoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/);
 
