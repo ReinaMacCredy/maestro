@@ -2,85 +2,92 @@
 set -euo pipefail
 
 INSTALL_DIR="${MAESTRO_INSTALL_DIR:-$HOME/.local/bin}"
+RELEASE_REPO="${MAESTRO_RELEASE_REPO:-ReinaMacCredy/maestro}"
+REQUESTED_VERSION="${MAESTRO_VERSION:-latest}"
+TARGET_BIN="$INSTALL_DIR/maestro"
+TMP_BIN="$INSTALL_DIR/.maestro.tmp.$$"
 
 info()  { echo "[ok] $*"; }
-warn()  { echo "[--] $*"; }
-fail()  { echo "[!!] $*" >&2; exit 1; }
+warn()  { echo "[!] $*"; }
+fail()  { echo "[!] $*" >&2; exit 1; }
 
 main() {
-  echo "maestro installer"
+  echo "maestro release installer"
   echo ""
 
-  # 1. Check prerequisites
-  command -v bun >/dev/null 2>&1 || fail "bun is required. Install: https://bun.sh"
-  command -v git >/dev/null 2>&1 || fail "git is required."
-  info "bun $(bun --version)"
-  info "git $(git --version | cut -d' ' -f3)"
+  command -v curl >/dev/null 2>&1 || fail "curl is required."
 
-  # 2. Install CASS if missing
-  if command -v cass >/dev/null 2>&1; then
-    info "cass already installed: $(cass --version 2>/dev/null || echo 'unknown')"
-  else
-    echo ""
-    echo "CASS (Coding Agent Session Search) is required."
-    if command -v brew >/dev/null 2>&1; then
-      echo "Installing via Homebrew..."
-      brew install dicklesworthstone/tap/cass
-      info "cass installed"
-    else
-      echo ""
-      echo "Install CASS manually:"
-      echo "  # Homebrew (Apple Silicon macOS + Linux)"
-      echo "  brew install dicklesworthstone/tap/cass"
-      echo ""
-      echo "  # Windows (Scoop)"
-      echo "  scoop bucket add cass https://github.com/Dicklesworthstone/coding_agent_session_search"
-      echo "  scoop install cass"
-      echo ""
-      echo "  # Or build from source:"
-      echo "  cargo install coding-agent-session-search"
-      echo ""
-      fail "Install CASS first, then re-run this script."
-    fi
-  fi
+  local asset url
+  asset="$(resolve_asset_name)"
+  url="$(build_download_url "$asset")"
 
-  # 3. Build maestro
+  mkdir -p "$INSTALL_DIR"
+  trap 'rm -f "$TMP_BIN"' EXIT
+
+  echo "Installing asset: $asset"
+  echo "Download URL: $url"
   echo ""
-  echo "Building maestro..."
-  if [ -f "package.json" ] && grep -q "maestro-handoff" package.json 2>/dev/null; then
-    bun install --frozen-lockfile
-    bun run build
-  else
-    fail "Run this script from the maestro repository root."
-  fi
-  info "Built dist/maestro"
 
-  # 4. Install binary
-  ./scripts/install-local.sh ./dist/maestro
+  curl -fsSL "$url" -o "$TMP_BIN"
+  chmod +x "$TMP_BIN"
+  mv "$TMP_BIN" "$TARGET_BIN"
 
-  # 5. Verify
-  if "$INSTALL_DIR/maestro" --version >/dev/null 2>&1; then
-    info "Installed maestro $("$INSTALL_DIR/maestro" --version) to $INSTALL_DIR/maestro"
+  if "$TARGET_BIN" --version >/dev/null 2>&1; then
+    info "Installed maestro $("$TARGET_BIN" --version) to $TARGET_BIN"
   else
     fail "Installation verification failed"
   fi
 
-  # 6. Initialize global config + inject agent instructions
-  "$INSTALL_DIR/maestro" install --json 2>/dev/null && info "Initialized config and agent instructions" || true
+  local resolved_path
+  resolved_path="$(command -v maestro || true)"
+  if [ -n "$resolved_path" ]; then
+    info "PATH maestro resolves to $resolved_path"
+  fi
 
-  # 7. PATH hint
   if ! echo "$PATH" | grep -q "$INSTALL_DIR"; then
     echo ""
     warn "$INSTALL_DIR is not in your PATH"
     echo "    Add: export PATH=\"$INSTALL_DIR:\$PATH\""
   fi
 
-  # 7. Post-install hint
   echo ""
   echo "Next steps:"
   echo "  maestro init --global    # set up global config"
   echo "  maestro init             # set up project config"
   echo "  maestro doctor           # verify everything works"
+}
+
+build_download_url() {
+  local asset="$1"
+  local base_url="https://github.com/$RELEASE_REPO/releases"
+  if [ "$REQUESTED_VERSION" = "latest" ]; then
+    printf "%s/latest/download/%s" "$base_url" "$asset"
+    return
+  fi
+
+  local tag="$REQUESTED_VERSION"
+  case "$tag" in
+    v*) ;;
+    *) tag="v$tag" ;;
+  esac
+  printf "%s/download/%s/%s" "$base_url" "$tag" "$asset"
+}
+
+resolve_asset_name() {
+  local os arch
+  case "$(uname -s)" in
+    Darwin) os="darwin" ;;
+    Linux) os="linux" ;;
+    *) fail "Unsupported platform: $(uname -s). Release installs support macOS and Linux." ;;
+  esac
+
+  case "$(uname -m)" in
+    arm64|aarch64) arch="arm64" ;;
+    x86_64|amd64) arch="x64" ;;
+    *) fail "Unsupported architecture: $(uname -m). Release installs support x64 and arm64." ;;
+  esac
+
+  printf "maestro-%s-%s" "$os" "$arch"
 }
 
 main "$@"

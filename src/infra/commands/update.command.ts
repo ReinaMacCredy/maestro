@@ -1,50 +1,74 @@
 import type { Command } from "commander";
 import { injectAgentBlocks } from "@/features/worker";
 import { formatAgentResults, output } from "@/shared/lib/output.js";
-import { execOrThrow } from "@/shared/lib/shell.js";
-import { getServices } from "@/services.js";
-import { MaestroError } from "@/shared/errors.js";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { installReleaseBinary } from "../usecases/install-release-binary.usecase.js";
 
 export function registerUpdateCommand(program: Command): void {
   program
     .command("update")
-    .description("Update maestro binary and/or agent instruction blocks")
-    .option("--agents-only", "Only update agent instruction blocks, skip binary rebuild")
+    .description("Update maestro from the latest published release and/or refresh agent instruction blocks")
+    .option("--agents-only", "Only update agent instruction blocks, skip binary download")
+    .option("--version <version>", "Install a specific release version or tag")
+    .option("--force", "Reinstall even when already on the latest published release")
     .option("--json", "Output as JSON")
     .action(async (opts) => {
-      const services = getServices();
       const isJson = opts.json ?? program.opts().json;
-
-      let binaryUpdated = false;
+      let binary:
+        | {
+          readonly binaryUpdated: boolean;
+          readonly alreadyCurrent: boolean;
+          readonly installPath: string;
+          readonly tagName: string;
+          readonly version: string;
+          readonly assetName: string;
+        }
+        | undefined;
 
       if (!opts.agentsOnly) {
-        const config = await services.config.load(process.cwd());
-        const sourceRepo = config.sourceRepo;
-
-        if (!sourceRepo) {
-          throw new MaestroError("No sourceRepo in config", [
-            "Run maestro install from the repo first",
-          ]);
-        }
-
-        await execOrThrow(["git", "-C", sourceRepo, "pull"], "git pull");
-        await execOrThrow(["bun", "install", "--frozen-lockfile"], "bun install", { cwd: sourceRepo });
-        await execOrThrow(["bun", "run", "build"], "bun run build", { cwd: sourceRepo });
-
-        const installDir = process.env.MAESTRO_INSTALL_DIR ?? join(homedir(), ".local", "bin");
-        await execOrThrow(["cp", `${sourceRepo}/dist/maestro`, `${installDir}/maestro`], "copy binary");
-
-        binaryUpdated = true;
+        binary = await installReleaseBinary({
+          version: opts.version,
+          force: opts.force,
+        });
       }
 
       const agentResults = await injectAgentBlocks(process.cwd());
 
-      output(isJson, { binaryUpdated, agents: agentResults }, (r) => [
-        r.binaryUpdated ? "[ok] Binary updated" : "[--] Binary skipped (--agents-only)",
+      output(isJson, { binary, agents: agentResults }, (r) => [
+        describeBinaryUpdate(r.binary, opts.agentsOnly),
+        ...(r.binary ? [
+          `  --> Release: ${r.binary.tagName}`,
+          `  --> Asset: ${r.binary.assetName}`,
+          `  --> Installed to ${r.binary.installPath}`,
+        ] : []),
         "",
         ...formatAgentResults(r.agents),
       ]);
     });
+}
+
+function describeBinaryUpdate(
+  binary: {
+    readonly binaryUpdated: boolean;
+    readonly alreadyCurrent: boolean;
+    readonly version: string;
+  } | undefined,
+  agentsOnly: boolean,
+): string {
+  if (agentsOnly) {
+    return "[--] Binary skipped (--agents-only)";
+  }
+
+  if (!binary) {
+    return "[--] Binary skipped";
+  }
+
+  if (binary.alreadyCurrent) {
+    return `[ok] Binary already current at ${binary.version}`;
+  }
+
+  if (binary.binaryUpdated) {
+    return `[ok] Binary updated to ${binary.version}`;
+  }
+
+  return "[--] Binary skipped";
 }
