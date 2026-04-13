@@ -1,6 +1,3 @@
-// Worker feature error factories.
-// Moved from src/domain/errors.ts in Phase 6.
-
 import { MaestroError } from "@/shared/errors.js";
 
 export function workerSkillNotFound(workerType: string): MaestroError {
