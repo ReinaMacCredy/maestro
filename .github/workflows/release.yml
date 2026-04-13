@@ -1,22 +1,47 @@
 name: Release
+
 on:
   push:
-    tags: ['v*']
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
+    name: Build and Publish Release
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
-      - run: bun install
-      - run: bun run check
-      - run: bun run build
+          bun-version: 1.3.11
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Check feature boundaries
+        run: bun run check:boundaries
+      - name: Run test suite
+        run: bun test
+      - name: Build compiled binary
+        run: bun run build
+      - name: Verify compiled binary version
+        run: ./dist/maestro --version
+      - name: Smoke-test Mission Control renderer
+        run: ./dist/maestro mission-control --render-check --size 120x40
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: maestro-${{ github.ref_name }}
+          path: dist/maestro
+          if-no-files-found: error
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:

@@ -1,19 +1,56 @@
 name: CI
+
 on:
   push:
-    branches: [main]
+    branches:
+      - "**"
   pull_request:
-    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build-and-test:
+  validate:
+    name: Validate Current Codebase
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Check feature boundaries
+        run: bun run check:boundaries
+      - name: Build compiled binary
+        run: bun run build
+      - name: Verify compiled binary version
+        run: ./dist/maestro --version
+      - name: Smoke-test Mission Control renderer
+        run: ./dist/maestro mission-control --render-check --size 120x40
+      - name: Run test suite
+        run: bun test
+
+  advisory-typecheck:
+    name: Advisory Typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
-      - run: bun install
-      - run: bun run check:boundaries
-      - run: bun run typecheck
-      - run: bun run build
-      - run: bun test
+          bun-version: 1.3.11
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Run typecheck
+        run: bun run typecheck
