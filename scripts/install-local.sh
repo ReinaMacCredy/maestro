@@ -4,7 +4,6 @@ set -euo pipefail
 INSTALL_DIR="${MAESTRO_INSTALL_DIR:-$HOME/.local/bin}"
 SOURCE_BIN="${1:-./dist/maestro}"
 TARGET_BIN="$INSTALL_DIR/maestro"
-TMP_BIN="$INSTALL_DIR/.maestro.tmp.$$"
 
 if [ ! -f "$SOURCE_BIN" ]; then
   echo "[!!] Built binary not found at $SOURCE_BIN" >&2
@@ -13,6 +12,7 @@ if [ ! -f "$SOURCE_BIN" ]; then
 fi
 
 mkdir -p "$INSTALL_DIR"
+TMP_BIN="$(mktemp "$INSTALL_DIR/.maestro.tmp.XXXXXX")"
 cp "$SOURCE_BIN" "$TMP_BIN"
 chmod +x "$TMP_BIN"
 mv "$TMP_BIN" "$TARGET_BIN"

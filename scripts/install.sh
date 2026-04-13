@@ -5,7 +5,6 @@ INSTALL_DIR="${MAESTRO_INSTALL_DIR:-$HOME/.local/bin}"
 RELEASE_REPO="${MAESTRO_RELEASE_REPO:-ReinaMacCredy/maestro}"
 REQUESTED_VERSION="${MAESTRO_VERSION:-latest}"
 TARGET_BIN="$INSTALL_DIR/maestro"
-TMP_BIN="$INSTALL_DIR/.maestro.tmp.$$"
 
 info()  { echo "[ok] $*"; }
 warn()  { echo "[!] $*"; }
@@ -22,6 +21,7 @@ main() {
   url="$(build_download_url "$asset")"
 
   mkdir -p "$INSTALL_DIR"
+  TMP_BIN="$(mktemp "$INSTALL_DIR/.maestro.tmp.XXXXXX")"
   trap 'rm -f "$TMP_BIN"' EXIT
 
   echo "Installing asset: $asset"
