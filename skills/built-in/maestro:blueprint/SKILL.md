@@ -126,9 +126,9 @@ graph TD
 
 - [ ] Build: `bun run build && ./dist/maestro --version`
 - [ ] Tests: `bun test`
-- [ ] TUI (if applicable): `./dist/maestro mission-control --render-check --size 120x40`
-- [ ] CLI: `./dist/maestro <command-under-test>`
-- [ ] Release: `bun run release:local` (if user-facing)
+- [ ] TUI (if applicable): `maestro mission-control --render-check --size 120x40`
+- [ ] CLI: `maestro <command-under-test>`
+- [ ] Release: `bun run release:local && command -v maestro && maestro --version` (if user-facing)
 ```
 
 ### 4. Generate the Visual Blueprint (.html)
@@ -172,9 +172,10 @@ Follow these when generating plans:
 - **Feature-folder layout**: place feature-scoped work under `src/features/<name>/` and follow the hexagonal pattern inside it: port -> adapter -> usecase -> command -> test. Plumbing goes in `src/infra/`, generic utilities in `src/shared/`. Cross-feature imports must go through `@/features/<other>` (the feature's `index.ts`); enforced by `bun run check:boundaries`
 - **Conventional commits**: reference the commit types in the plan (feat, fix, refactor)
 - **Version bumps**: note if the change requires a minor/patch bump
-- **Build verification**: always include `bun run build && ./dist/maestro --version` in verification
+- **Build verification**: always include `bun run build && ./dist/maestro --version` to prove the fresh repo build
+- **Release verification**: for user-facing CLI or TUI work, include `bun run release:local && command -v maestro && maestro --version`
 - **TUI changes**: include `--render-check` verification if the change touches TUI
-- **Binary verification**: specify whether to test against `./dist/maestro` or installed `maestro`
+- **Binary verification**: default examples should use installed `maestro`; call out `./dist/maestro` only when validating the fresh build artifact
 
 ## Quality Checks
 

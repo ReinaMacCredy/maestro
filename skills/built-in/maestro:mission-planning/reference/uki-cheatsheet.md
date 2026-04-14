@@ -44,10 +44,10 @@ UKI v5.2 is 12 slots, in fixed order, joined by `|`. Each slot is `NAME-VALUE` (
 
 ## The `maestro handoff create` command template
 
-The exact flags (verified against `./dist/maestro handoff create --help`):
+The exact flags (verified against `maestro handoff create --help`):
 
 ```bash
-./dist/maestro handoff create \
+maestro handoff create \
   --session-core <token> \
   --summary "<under 140 chars>" \
   --next-action <token> \

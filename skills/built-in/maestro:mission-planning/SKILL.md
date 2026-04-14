@@ -128,14 +128,14 @@ Input: "Refactor the auth middleware so session validation and permission checki
 After Steps 1-5, the plan is persisted:
 
 ```bash
-./dist/maestro mission create --file plans/auth-split.json
+maestro mission create --file plans/auth-split.json
 # mission_id: mis_01h8k2f9
 ```
 
 Then the handoff is emitted:
 
 ```bash
-./dist/maestro handoff create \
+maestro handoff create \
   --session-core auth_middleware_split \
   --summary "Auth middleware split drafted; signature preserved; 14 callers need regression pass before code-review." \
   --next-action assign_feat_001_to_codex_cli_worker \

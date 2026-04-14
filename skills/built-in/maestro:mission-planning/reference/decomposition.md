@@ -50,7 +50,7 @@ Verification steps are what the worker runs to prove the feature is done. They m
 
 Good verification:
 - `bun test tests/unit/auth/login.test.ts passes`
-- `./dist/maestro handoff create --help shows --boundary flag`
+- `maestro handoff create --help shows --boundary flag`
 - `grep -r "TODO.*auth" src/ returns zero hits`
 
 Bad verification:
@@ -87,6 +87,6 @@ Decomposed:
    - `feat-6` (title: "Review palette implementation") — different agent than implementer. Verification: review notes exist in `plans/palette/review.md`; at least one concern raised or explicit "no concerns."
 
 4. **`validation` milestone — `palette-validate`** (depends on `palette-review`)
-   - `feat-7` (title: "Run render-check across all screens with palette open") — `./dist/maestro mission-control --render-check --size 120x40` green. Verification: exit code 0; zero warnings.
+   - `feat-7` (title: "Run render-check across all screens with palette open") — `maestro mission-control --render-check --size 120x40` green. Verification: exit code 0; zero warnings.
 
 Four milestones, seven features, covers planning through validation, each feature is sprint-sized.
