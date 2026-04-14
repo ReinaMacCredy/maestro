@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { removeRootBunBuildArtifacts } from "./build-lib";
 import { getGitShortSha } from "./git-short-sha";
 
 const root = join(import.meta.dir, "..");
@@ -18,16 +19,26 @@ const args = [
   "--env=MAESTRO_BUILD_*",
 ];
 
-const build = Bun.spawn(args, {
-  cwd: root,
-  stdout: "inherit",
-  stderr: "inherit",
-  env: {
-    ...process.env,
-    MAESTRO_BUILD_UNIX: buildUnix,
-    MAESTRO_BUILD_RELEASED_AT: releasedAt,
-    ...(gitSha ? { MAESTRO_BUILD_GIT_SHA: gitSha } : {}),
-  },
-});
+let exitCode = 1;
 
-process.exit(await build.exited);
+await removeRootBunBuildArtifacts(root);
+
+try {
+  const build = Bun.spawn(args, {
+    cwd: root,
+    stdout: "inherit",
+    stderr: "inherit",
+    env: {
+      ...process.env,
+      MAESTRO_BUILD_UNIX: buildUnix,
+      MAESTRO_BUILD_RELEASED_AT: releasedAt,
+      ...(gitSha ? { MAESTRO_BUILD_GIT_SHA: gitSha } : {}),
+    },
+  });
+
+  exitCode = await build.exited;
+} finally {
+  await removeRootBunBuildArtifacts(root);
+}
+
+process.exit(exitCode);
