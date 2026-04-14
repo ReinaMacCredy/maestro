@@ -41,3 +41,6 @@ feedback.jsonl
 
 # Claude plans
 .claude/plans/
+
+# The Desktop App for Maestro is still under development.
+/apps/
