@@ -482,7 +482,7 @@ Maestro is organized as a feature-first hexagonal codebase:
 - `src/features/<name>/` -- each feature is a bounded context containing its own `commands/`, `usecases/`, `domain/`, `ports/`, `adapters/`, plus a `services.ts` composition factory and `index.ts` public surface. Current features: `ratchet`, `handoff`, `notes`, `graph`, `session`, `memory`, `mission` (with `feature/`, `validation/`, `checkpoint/` subfolders), and `worker`.
 - `src/infra/` -- plumbing that isn't a feature: init, doctor, status, install, update, uninstall, and mission-control commands, config and git ports/adapters, and infra-owned domain types.
 - `src/shared/` -- generic utilities with no domain knowledge: filesystem, YAML, shell, path safety, and output formatting under `lib/`; cross-cutting primitives like IDs and UI config under `domain/`; plus top-level `errors.ts`, `version.ts`, and `version-format.ts`.
-- `src/tui/` -- read-only rendering and input for Mission Control; consumes features through their public surfaces.
+- `src/tui/` -- read-only rendering and input for Mission Control; consumes features through their public surfaces. See `src/tui/README.md` for the contributor-oriented TUI architecture walkthrough.
 - `src/services.ts` -- composition root that wires every feature's adapters into a single service object.
 - `src/index.ts` -- Commander CLI entry point.
 
