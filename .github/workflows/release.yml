@@ -36,7 +36,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
-          EXPECTED_RELEASE_SUBJECT: chore(release): v${{ steps.version.outputs.version }}
+          EXPECTED_RELEASE_SUBJECT: "chore(release): v${{ steps.version.outputs.version }}"
         run: |
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             echo "Manual release run requested."
