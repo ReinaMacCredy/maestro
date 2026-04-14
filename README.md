@@ -55,6 +55,12 @@ The human operator is the bridge between terminals. Maestro is the shared state 
 | Checkpoint | A timestamped mission snapshot you can save and later restore. |
 | Mission Control | A read-only dashboard for previewing mission state interactively or as JSON. |
 
+## Mission Control Preview
+
+Mission Control gives you a read-only terminal dashboard over the current Maestro state.
+
+![Mission Control preview](assets/images/Misson_Control_Preview.png)
+
 ## How Work Flows
 
 ```mermaid
@@ -113,13 +119,15 @@ This produces the compiled binary at `./dist/maestro`.
 ### Install Locally
 
 ```bash
-./dist/maestro install
+bun run release:local
+command -v maestro
+maestro --version
 ```
 
-Or rebuild and refresh the installed binary in one step:
+If you also want to initialize global config and inject supported agent instruction blocks:
 
 ```bash
-bun run release:local
+maestro install
 ```
 
 `./dist/maestro` is the fresh repo build. `maestro` on your `PATH` is the installed local binary.
@@ -496,9 +504,10 @@ Useful verification commands for CLI and TUI work:
 
 ```bash
 ./dist/maestro --version
-./dist/maestro --help
-./dist/maestro mission-control --preview --size 120x40 --format plain
-./dist/maestro mission-control --render-check --size 120x40
+maestro --version
+maestro --help
+maestro mission-control --preview --size 120x40 --format plain
+maestro mission-control --render-check --size 120x40
 ```
 
 ## Supported Agent Config Injection
