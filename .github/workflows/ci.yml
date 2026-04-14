@@ -36,7 +36,7 @@ jobs:
       - name: Smoke-test Mission Control renderer
         run: ./dist/maestro mission-control --render-check --size 120x40
       - name: Run test suite
-        run: bun test
+        run: bun run test
 
   advisory-typecheck:
     name: Advisory Typecheck

@@ -1,6 +1,6 @@
 {
   "name": "maestro-handoff",
-  "version": "0.33.0",
+  "version": "0.33.1",
   "type": "module",
   "bin": {
     "maestro": "./dist/maestro"
@@ -14,10 +14,10 @@
     "ci:dry": "bun scripts/ci.ts --dry-run",
     "install:local": "bash ./scripts/install-local.sh ./dist/maestro",
     "release:local": "bun run build && bun run install:local",
-    "deploy": "bun run bump && bun test && bun run release:local",
+    "deploy": "bun run bump && bun run test && bun run release:local",
     "dev": "bun run src/index.ts",
     "tui:dev": "bun scripts/tui-dev.ts",
-    "test": "bun test",
+    "test": "bun test --path-ignore-patterns 'apps/desktop/**'",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

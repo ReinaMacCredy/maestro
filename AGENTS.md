@@ -82,13 +82,16 @@
 - Treat documentation-only or comment-only changes as exempt from version bumps unless they ship alongside behavior changes
 - Make the version bump part of the same working increment and commit as the behavior change; do not leave version updates for a later cleanup commit
 - `bun scripts/auto-bump.ts` computes the next version from conventional commits and updates tracked version files, but does not build, tag, install, or publish by itself
-- `bun scripts/ci.ts` is the full local release flow: auto-bump, test, build, commit the release, tag it, and install the local binary
+- `bun scripts/ci.ts` is the full local release-prep flow: auto-bump, test, build, commit the release metadata, and install the local binary. It does not push tags
 - `bun run release:local` only rebuilds and reinstalls the local `maestro` binary; it does not bump the version or create a release commit
 - `bun run deploy` currently uses the manual bump flow (`bun run bump`) rather than `auto-bump`; do not assume `deploy` applies conventional-commit versioning unless it is updated explicitly
 - Version scheme is `0.x.y` where `x` bumps on features or breaking changes (`feat`, `feat!`, `BREAKING CHANGE`) and `y` bumps on everything else (`fix`, `refactor`, `docs`, `chore`, `test`)
 - `bun scripts/bump.ts feature` or `bun scripts/bump.ts patch` for manual bumps
 - Keep commit messages in Conventional Commits format, e.g. `feat(mission): add retry reason support`
 - Prefer `feat` for user-visible functionality, `fix` for bug fixes, `refactor` for internal restructuring, and `test` for test-only changes
+- Automatic GitHub releases only publish when `main` receives a dedicated release commit whose subject exactly matches `chore(release): v<package.json version>`
+- Ordinary commits on `main`, including README or docs updates, must not publish releases; only the dedicated `chore(release): v...` commit is release-eligible
+- Normal release flow is: run `bun scripts/ci.ts`, then push or merge that dedicated release commit to `main`; GitHub Actions creates the remote tag and GitHub Release automatically
 
 ## Task vs Mission
 

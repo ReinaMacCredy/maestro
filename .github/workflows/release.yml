@@ -2,8 +2,9 @@ name: Release
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -13,8 +14,49 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  release-gate:
+    name: Determine Release Eligibility
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.gate.outputs.should_release }}
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Resolve release version
+        id: version
+        run: |
+          VERSION=$(node -p "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Check release trigger
+        id: gate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          EXPECTED_RELEASE_SUBJECT: chore(release): v${{ steps.version.outputs.version }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "Manual release run requested."
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$HEAD_COMMIT_MESSAGE" = "$EXPECTED_RELEASE_SUBJECT" ]; then
+            echo "Release commit detected on main."
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Non-release commit detected; skipping publish jobs."
+          echo "should_release=false" >> "$GITHUB_OUTPUT"
+
   verify:
     name: Verify Release Candidate
+    needs: release-gate
+    if: needs.release-gate.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -29,7 +71,7 @@ jobs:
       - name: Check feature boundaries
         run: bun run check:boundaries
       - name: Run test suite
-        run: bun test
+        run: bun run test
       - name: Build compiled binary
         run: bun run build
       - name: Verify compiled binary version
@@ -39,7 +81,10 @@ jobs:
 
   build-assets:
     name: Build ${{ matrix.asset }}
-    needs: verify
+    needs:
+      - release-gate
+      - verify
+    if: needs.release-gate.outputs.should_release == 'true'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     strategy:
@@ -76,7 +121,10 @@ jobs:
 
   release:
     name: Publish Release
-    needs: build-assets
+    needs:
+      - release-gate
+      - build-assets
+    if: needs.release-gate.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -87,7 +135,12 @@ jobs:
           pattern: maestro-*
           merge-multiple: true
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          files: dist/*
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.release-gate.outputs.tag }}
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          gh release create "$TAG_NAME" \
+            --target "$TARGET_SHA" \
+            --generate-notes \
+            dist/*

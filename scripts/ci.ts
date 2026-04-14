@@ -1,5 +1,5 @@
 /**
- * Local CI: auto-bump, test, build, commit, tag, install.
+ * Local CI: auto-bump, test, build, commit, install.
  *
  * Usage:
  *   bun scripts/ci.ts             # full release pipeline
@@ -10,7 +10,7 @@
  *   2. Auto-bump version from conventional commits
  *   3. Check feature-folder boundaries
  *   4. Run tests
- *   5. Commit version files + tag
+ *   5. Commit version files
  *   6. Build the release artifact and install locally
  *
  * On test failure the version bump is rolled back automatically.
@@ -35,12 +35,7 @@ async function restoreVersion(pkgText: string, versionText: string): Promise<voi
   await Bun.write(versionPath, versionText);
 }
 
-async function rollbackRelease(previousHead: string, tagName: string): Promise<void> {
-  try {
-    await $`git tag -d ${tagName}`.cwd(root).quiet();
-  } catch {
-    // Tag may not exist yet.
-  }
+async function rollbackRelease(previousHead: string): Promise<void> {
   await $`git reset --hard ${previousHead}`.cwd(root).quiet();
 }
 
@@ -68,7 +63,6 @@ if (dryRun) process.exit(0);
 const pkg = await Bun.file(pkgPath).json();
 const nextVersion: string = pkg.version;
 const previousHead = (await $`git rev-parse HEAD`.quiet()).text().trim();
-const tagName = `v${nextVersion}`;
 
 // Read the pre-bump version from git
 const origPkgText = (await $`git show HEAD:package.json`.quiet()).text();
@@ -98,7 +92,7 @@ console.log("[ok] Feature boundaries OK.");
 // ---- step 4: test ----
 
 console.log("\n[-->] Running tests...");
-const testResult = await Bun.spawn(["bun", "test"], {
+const testResult = await Bun.spawn(["bun", "run", "test"], {
   cwd: root,
   stdout: "inherit",
   stderr: "inherit",
@@ -110,15 +104,14 @@ if (testResult !== 0) {
 }
 console.log("[ok] Tests passed.");
 
-// ---- step 5: commit + tag ----
+// ---- step 5: commit release metadata ----
 
 console.log("\n[-->] Committing release...");
 await $`git add package.json src/shared/version.ts`.cwd(root);
 
 const commitMsg = `chore(release): v${nextVersion}`;
 await $`git commit -m ${commitMsg}`.cwd(root);
-await $`git tag ${tagName}`.cwd(root);
-console.log(`[ok] Committed and tagged v${nextVersion}.`);
+console.log(`[ok] Committed release metadata for v${nextVersion}.`);
 
 // ---- step 6: build + install locally ----
 
@@ -130,7 +123,7 @@ const buildResult = await Bun.spawn(["bun", "run", "build"], {
 }).exited;
 
 if (buildResult !== 0) {
-  await rollbackRelease(previousHead, tagName);
+  await rollbackRelease(previousHead);
   fail(`Release build failed. Rolled back v${nextVersion}.`);
 }
 console.log("[ok] Built dist/maestro from the release commit.");
@@ -143,11 +136,12 @@ const installResult = await Bun.spawn(["bash", "scripts/install-local.sh", "./di
 }).exited;
 
 if (installResult !== 0) {
-  await rollbackRelease(previousHead, tagName);
+  await rollbackRelease(previousHead);
   fail(`Local install failed. Rolled back v${nextVersion}.`);
 }
 
 // ---- done ----
 
 console.log(`\n[ok] Release v${nextVersion} complete.`);
-console.log(`     Run 'git push && git push --tags' to publish.`);
+console.log("     Push or merge this release commit to main to publish.");
+console.log("     GitHub Actions will create the remote tag and GitHub Release automatically.");
