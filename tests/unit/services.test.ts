@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { getServices, initServices } from "@/services";
 
 describe("services composition root", () => {
   it("imports feature service builders directly instead of feature public surfaces", async () => {
@@ -21,5 +22,32 @@ describe("services composition root", () => {
     expect(source).not.toContain('./features/ratchet/index.js');
     expect(source).not.toContain('./features/graph/index.js');
     expect(source).not.toContain('./features/task/index.js');
+  });
+
+  it("throws when getServices is called before initialization", async () => {
+    const freshServicesModule = await import(`@/services?uninitialized=${Date.now()}`);
+
+    expect(() => freshServicesModule.getServices()).toThrow(
+      "Services not initialized. Call initServices() first.",
+    );
+  });
+
+  it("initializes and returns the shared service instance", () => {
+    const services = initServices(process.cwd());
+
+    expect(getServices()).toBe(services);
+    expect(services).toMatchObject({
+      config: expect.any(Object),
+      git: expect.any(Object),
+      sessionDetect: expect.any(Object),
+      notesStore: expect.any(Object),
+      missionStore: expect.any(Object),
+      correctionStore: expect.any(Object),
+      handoffStore: expect.any(Object),
+      ratchetStore: expect.any(Object),
+      projectGraphStore: expect.any(Object),
+      taskStore: expect.any(Object),
+      replyStore: expect.any(Object),
+    });
   });
 });
