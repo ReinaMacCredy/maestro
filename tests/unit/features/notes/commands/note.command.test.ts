@@ -1,5 +1,8 @@
-import { afterEach, describe, expect, it, mock } from "bun:test";
+import { afterEach, describe, expect, it } from "bun:test";
 import { Command } from "commander";
+import type { CreateNoteOpts, NoteEntry, NotesStorePort } from "@/features/notes";
+import { registerNoteCommand } from "@/features/notes";
+import type { GitPort } from "@/infra/ports/git.port.js";
 
 const originalConsoleLog = console.log;
 const originalConsoleError = console.error;
@@ -19,47 +22,54 @@ function captureConsole(): {
   return { logs, errors };
 }
 
-async function loadRegisterNoteCommand(options: {
-  readonly createNote?: (git: unknown, store: unknown, opts: { content: string; dir: string }) => Promise<unknown>;
-  readonly listNotes?: (store: unknown) => Promise<unknown>;
-}) {
-  mock.module("@/services.js", () => ({
+function noteDeps(options: {
+  readonly createNote?: (git: GitPort, store: NotesStorePort, opts: CreateNoteOpts) => Promise<NoteEntry>;
+  readonly listNotes?: (store: NotesStorePort) => Promise<readonly NoteEntry[]>;
+} = {}) {
+  return {
     getServices: () => ({
-      git: { mocked: true },
-      notesStore: { mocked: true },
+      git: {
+        isRepo: async () => true,
+        getState: async () => ({
+          branch: "main",
+          recentCommits: [],
+          changedFiles: [],
+          workingTreeClean: true,
+          diffStat: "+0 -0",
+        }),
+      },
+      notesStore: {
+        append: async () => undefined,
+        list: async () => [],
+      },
     }),
-  }));
-  mock.module("@/features/notes/usecases/note.usecase.js", () => ({
     createNote: options.createNote ?? (async () => ({
       timestamp: "2026-04-15T09:00:00.000Z",
       git_branch: "main",
       content: "default",
     })),
     listNotes: options.listNotes ?? (async () => []),
-  }));
-
-  return import(`@/features/notes/commands/note.command.ts?test=${Date.now()}-${Math.random()}`);
+  };
 }
 
 afterEach(() => {
   console.log = originalConsoleLog;
   console.error = originalConsoleError;
-  mock.restore();
 });
 
 describe("registerNoteCommand", () => {
-  it("writes a note and formats text output", async () => {
-    const captured = captureConsole();
-    const { registerNoteCommand } = await loadRegisterNoteCommand({
-      createNote: async (_git, _store, opts) => ({
-        timestamp: "2026-04-15T09:00:00.000Z",
-        git_branch: "feat/coverage",
-        content: opts.content,
-      }),
-    });
+    it("writes a note and formats text output", async () => {
+      const captured = captureConsole();
+      const deps = noteDeps({
+        createNote: async (_git, _store, opts) => ({
+          timestamp: "2026-04-15T09:00:00.000Z",
+          git_branch: "feat/coverage",
+          content: opts.content,
+        }),
+      });
 
-    const program = new Command().name("maestro").option("--json", "Output as JSON");
-    registerNoteCommand(program);
+      const program = new Command().name("maestro").option("--json", "Output as JSON");
+      registerNoteCommand(program, deps);
 
     await program.parseAsync(["node", "maestro", "note", "--content", "remember this"]);
 
@@ -71,13 +81,13 @@ describe("registerNoteCommand", () => {
     ]);
   });
 
-  it("lists notes in text mode and reports the empty state", async () => {
-    const captured = captureConsole();
-    let firstCall = true;
-    const { registerNoteCommand } = await loadRegisterNoteCommand({
-      listNotes: async () => {
-        if (firstCall) {
-          firstCall = false;
+    it("lists notes in text mode and reports the empty state", async () => {
+      const captured = captureConsole();
+      let firstCall = true;
+      const deps = noteDeps({
+        listNotes: async () => {
+          if (firstCall) {
+            firstCall = false;
           return [
             {
               timestamp: "2026-04-15T09:00:00.000Z",
@@ -87,12 +97,12 @@ describe("registerNoteCommand", () => {
           ];
         }
 
-        return [];
-      },
-    });
+          return [];
+        },
+      });
 
-    const program = new Command().name("maestro").option("--json", "Output as JSON");
-    registerNoteCommand(program);
+      const program = new Command().name("maestro").option("--json", "Output as JSON");
+      registerNoteCommand(program, deps);
 
     await program.parseAsync(["node", "maestro", "note", "--list"]);
     expect(captured.logs).toEqual([
@@ -108,10 +118,9 @@ describe("registerNoteCommand", () => {
     expect(captured.logs).toEqual(["No notes found"]);
   });
 
-  it("rejects using --content and --list together", async () => {
-    const { registerNoteCommand } = await loadRegisterNoteCommand({});
-    const program = new Command().name("maestro").option("--json", "Output as JSON");
-    registerNoteCommand(program);
+    it("rejects using --content and --list together", async () => {
+      const program = new Command().name("maestro").option("--json", "Output as JSON");
+      registerNoteCommand(program, noteDeps());
 
     await expect(
       program.parseAsync(["node", "maestro", "note", "--list", "--content", "oops"]),
@@ -120,10 +129,9 @@ describe("registerNoteCommand", () => {
     });
   });
 
-  it("rejects missing content when --list is not used", async () => {
-    const { registerNoteCommand } = await loadRegisterNoteCommand({});
-    const program = new Command().name("maestro").option("--json", "Output as JSON");
-    registerNoteCommand(program);
+    it("rejects missing content when --list is not used", async () => {
+      const program = new Command().name("maestro").option("--json", "Output as JSON");
+      registerNoteCommand(program, noteDeps());
 
     await expect(
       program.parseAsync(["node", "maestro", "note"]),

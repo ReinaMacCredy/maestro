@@ -349,14 +349,15 @@ describe("captureMissionControlFrame", () => {
         workerTypes: [],
         backgroundMode: "terminal",
       },
-      pendingHandoffs: [
-        {
-          id: "handoff-1",
-          agent: "codex",
-          message: "Investigate handoff",
-        },
-      ],
-    };
+        pendingHandoffs: [
+          {
+            id: "handoff-1",
+            agent: "codex",
+            message: "Investigate handoff",
+            timestamp: "2026-04-15T00:00:00.000Z",
+          },
+        ],
+      };
     const handoffState = reduce(
       reduce(createInitialState(snapshot), { type: "open-command-palette" }),
       { type: "open-handoffs" },

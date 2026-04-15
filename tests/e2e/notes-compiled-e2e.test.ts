@@ -96,10 +96,10 @@ describe("compiled notes feature E2E", () => {
       expect(list.exitCode).toBe(0);
       expect(list.stdout).toContain("No notes found");
 
-      const listJson = await runCompiled(["note", "--list", "--json"], tmpDir);
-      expect(listJson.exitCode).toBe(0);
-      expect(expectJson(listJson)).toEqual([]);
-    },
+        const listJson = await runCompiled(["note", "--list", "--json"], tmpDir);
+        expect(listJson.exitCode).toBe(0);
+        expect(expectJson<unknown[]>(listJson)).toEqual([]);
+      },
     SLOW_CLI_TIMEOUT_MS,
   );
 

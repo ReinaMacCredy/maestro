@@ -104,11 +104,11 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
         validTransitions: ["assigned"],
       },
     ],
-    session: null,
-    pendingHandoffs: [
-      { id: "handoff-1", agent: "codex", message: "First handoff" },
-      { id: "handoff-2", agent: "claude", message: "Second handoff" },
-    ],
+      session: null,
+      pendingHandoffs: [
+        { id: "handoff-1", agent: "codex", message: "First handoff", timestamp: "2026-04-15T00:00:00.000Z" },
+        { id: "handoff-2", agent: "claude", message: "Second handoff", timestamp: "2026-04-15T00:01:00.000Z" },
+      ],
     configSummary: {
       configSource: "project",
       cassAvailable: true,

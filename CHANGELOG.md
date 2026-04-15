@@ -1,6 +1,19 @@
 # Changelog
 
-## 1.0.2 — Mission Control cleanup
+## 0.35.4 — Typecheck and release metadata alignment
+
+- Fix the repo's standing `bun run typecheck` failures across source and test
+  files.
+- Align the changelog back to the `0.x.y` version scheme used by
+  `package.json` and `src/shared/version.ts`.
+- Fix `scripts/bump.ts` so it reports the pre-bump and post-bump versions
+  correctly.
+
+## 0.35.3 — Built-in skill handoff link docs
+
+- Add active handoff links between built-in skills.
+
+## 0.35.2 — Mission Control cleanup
 
 Phase 3 of the conductor refactor. The Mission Control TUI was in an
 intermediate state after Phase 1 removed the worker execution layer:
@@ -85,7 +98,7 @@ From `src/tui/state/types.ts`:
 - The `O` hotkey inside the runtime modal no longer does anything
   (neither modal exists).
 
-## 1.0.1 — UKI v5.2 handoff system
+## 0.35.1 — UKI v5.2 handoff system
 
 Phase 2 of the conductor refactor. The single `maestro handoff` subcommand
 is back, producing deterministic, machine-readable UKI v5.2 records that
@@ -118,7 +131,7 @@ a single compressed string.
 
 ### Notes
 
-- The old handoff format (pre-1.0.0) was deleted in Phase 1. Existing
+- The old handoff format (pre-0.35.0) was deleted in Phase 1. Existing
   `.maestro/handoffs/` contents from before the strip become orphaned
   when upgrading -- the new format is a flat-file JSON shape (not the
   previous directory-per-handoff layout) and the compressed string is
@@ -133,13 +146,12 @@ a single compressed string.
 - `STANCE_COLLAPSE` is always emitted; if the caller does not supply a
   value the compressor defaults to `NONE_DETECTED_LOW_FRICTION` (R6).
 
-## 1.0.0 — Phase 1 strip
+## 0.35.0 — Phase 1 strip
 
-This release is the v1 cutover to the conductor model. Maestro is no longer a
-harness that spawns workers; it is a shared mission/memory artifact that
-external workers (Claude Code, Codex, Gemini CLI, etc.) read from and write to
-via the CLI. The worker-execution layer has been removed wholesale, which is
-why Phase 1 ships as a major bump.
+This release is the conductor-model cutover. Maestro is no longer a harness
+that spawns workers; it is a shared mission/memory artifact that external
+workers (Claude Code, Codex, Gemini CLI, etc.) read from and write to via the
+CLI. The worker-execution layer has been removed wholesale.
 
 ### Removed CLI subcommands
 
@@ -153,7 +165,7 @@ why Phase 1 ships as a major bump.
 - `maestro a2a` (agent-to-agent debug command)
 
 Phase 2 will re-introduce a single `maestro handoff` command that produces
-UKI v5.2 format records; this 1.0.0 release intentionally has no handoff
+UKI v5.2 format records; this 0.35.0 release intentionally has no handoff
 surface at all.
 
 ### Removed ports and adapters

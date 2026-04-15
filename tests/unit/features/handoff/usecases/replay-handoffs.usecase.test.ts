@@ -95,12 +95,13 @@ describe("loadPriorHandoffs", () => {
     });
     await createUkiHandoff(store, detect, dir, {
       content: makeExecuteContent(missionA, "f2", { risks: ["unrelated"] }),
-    });
+      });
 
-    const result = await loadPriorHandoffs(store, missionA, "f1");
-    expect(result).toBeDefined();
-    expect(result).toHaveLength(1);
-    expect(result![0].risks).toEqual(["race condition"]);
+      const result = await loadPriorHandoffs(store, missionA, "f1");
+      expect(result).toBeDefined();
+      if (!result) throw new Error("Expected prior handoffs");
+      expect(result).toHaveLength(1);
+      expect(result[0]?.risks).toEqual(["race condition"]);
   });
 
   it("returns undefined when no handoffs match", async () => {
@@ -138,9 +139,11 @@ describe("loadPriorHandoffs", () => {
       content: makeExecuteContent(missionA, "f1", { risks: ["actual risk"] }),
     });
 
-    const result = await loadPriorHandoffs(store, missionA, "f1");
-    expect(result).toHaveLength(1);
-    expect(result![0].risks).toEqual(["actual risk"]);
+      const result = await loadPriorHandoffs(store, missionA, "f1");
+      expect(result).toBeDefined();
+      if (!result) throw new Error("Expected prior handoffs");
+      expect(result).toHaveLength(1);
+      expect(result[0]?.risks).toEqual(["actual risk"]);
   });
 
   it("includes completedWork for execute mode", async () => {
@@ -151,8 +154,10 @@ describe("loadPriorHandoffs", () => {
       }),
     });
 
-    const result = await loadPriorHandoffs(store, missionA, "f1");
-    expect(result![0].completedWork).toEqual(["implemented retry logic"]);
+      const result = await loadPriorHandoffs(store, missionA, "f1");
+      expect(result).toBeDefined();
+      if (!result) throw new Error("Expected prior handoffs");
+      expect(result[0]?.completedWork).toEqual(["implemented retry logic"]);
   });
 
   it("omits completedWork for plan mode", async () => {
@@ -160,9 +165,11 @@ describe("loadPriorHandoffs", () => {
       content: makePlanContent(missionA, "f1", { risks: ["design risk"] }),
     });
 
-    const result = await loadPriorHandoffs(store, missionA, "f1");
-    expect(result![0].completedWork).toBeUndefined();
-    expect(result![0].mode).toBe("plan");
+      const result = await loadPriorHandoffs(store, missionA, "f1");
+      expect(result).toBeDefined();
+      if (!result) throw new Error("Expected prior handoffs");
+      expect(result[0]?.completedWork).toBeUndefined();
+      expect(result[0]?.mode).toBe("plan");
   });
 
   it("preserves newest-first order", async () => {
@@ -176,11 +183,12 @@ describe("loadPriorHandoffs", () => {
       content: makeExecuteContent(missionA, "f1", { risks: ["third"] }),
     });
 
-    const result = await loadPriorHandoffs(store, missionA, "f1");
-    expect(result).toHaveLength(3);
-    // Store returns newest first, so "third" should be first in result
-    expect(result![0].risks).toEqual(["third"]);
-    expect(result![2].risks).toEqual(["first"]);
+      const result = await loadPriorHandoffs(store, missionA, "f1");
+      expect(result).toHaveLength(3);
+      // Store returns newest first, so "third" should be first in result
+      if (!result) throw new Error("Expected prior handoffs");
+      expect(result[0]?.risks).toEqual(["third"]);
+      expect(result[2]?.risks).toEqual(["first"]);
   });
 
   it("includes assumptions and verificationResults when present", async () => {
@@ -194,12 +202,14 @@ describe("loadPriorHandoffs", () => {
       }),
     });
 
-    const result = await loadPriorHandoffs(store, missionA, "f1");
-    expect(result![0].assumptions).toEqual(["Redis is available"]);
-    expect(result![0].verificationResults).toEqual([
-      { step: "build", passed: true },
-      { step: "test", passed: false },
-    ]);
+      const result = await loadPriorHandoffs(store, missionA, "f1");
+      expect(result).toBeDefined();
+      if (!result) throw new Error("Expected prior handoffs");
+      expect(result[0]?.assumptions).toEqual(["Redis is available"]);
+      expect(result[0]?.verificationResults).toEqual([
+        { step: "build", passed: true },
+        { step: "test", passed: false },
+      ]);
   });
 
   it("includes blindSpot and causalDrivers", async () => {
@@ -210,9 +220,11 @@ describe("loadPriorHandoffs", () => {
       }),
     });
 
-    const result = await loadPriorHandoffs(store, missionA, "f1");
-    expect(result![0].blindSpot).toBe("Did not test with cluster mode");
-    expect(result![0].causalDrivers).toEqual(["CI flake rate was 12%"]);
+      const result = await loadPriorHandoffs(store, missionA, "f1");
+      expect(result).toBeDefined();
+      if (!result) throw new Error("Expected prior handoffs");
+      expect(result[0]?.blindSpot).toBe("Did not test with cluster mode");
+      expect(result[0]?.causalDrivers).toEqual(["CI flake rate was 12%"]);
   });
 
   it("ignores handoffs from other missions with the same featureId", async () => {
@@ -223,9 +235,10 @@ describe("loadPriorHandoffs", () => {
       content: makeExecuteContent(missionB, "f1", { risks: ["mission_b_risk"] }),
     });
 
-    const result = await loadPriorHandoffs(store, missionA, "f1");
-    expect(result).toHaveLength(1);
-    expect(result![0].risks).toEqual(["mission_a_risk"]);
+      const result = await loadPriorHandoffs(store, missionA, "f1");
+      expect(result).toHaveLength(1);
+      if (!result) throw new Error("Expected prior handoffs");
+      expect(result[0]?.risks).toEqual(["mission_a_risk"]);
   });
 
   it("uses the targeted handoff query instead of listing the full store", async () => {
@@ -307,10 +320,11 @@ describe("loadPriorHandoffs", () => {
       },
     } as unknown as HandoffStorePort;
 
-    const result = await loadPriorHandoffs(handoffStore, missionA, "f1");
-    expect(targetedCalls).toBe(1);
-    expect(requestedLimit).toBe(Number.MAX_SAFE_INTEGER);
-    expect(result).toHaveLength(1);
-    expect(result![0].risks).toEqual(["risk"]);
+      const result = await loadPriorHandoffs(handoffStore, missionA, "f1");
+      expect(targetedCalls).toBe(1);
+      expect(requestedLimit).toBe(Number.MAX_SAFE_INTEGER);
+      expect(result).toHaveLength(1);
+      if (!result) throw new Error("Expected prior handoffs");
+      expect(result[0]?.risks).toEqual(["risk"]);
+    });
   });
-});

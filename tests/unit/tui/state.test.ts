@@ -180,12 +180,12 @@ describe("reduce", () => {
         const paletteState = reduce(
           reduce(
             reduce(makeState({
-              snapshot: makeSnapshot({
-                pendingHandoffs: [
-                  { id: "h1", agent: "codex", message: "one" },
-                  { id: "h2", agent: "claude-code", message: "two" },
-                ],
-              }),
+                snapshot: makeSnapshot({
+                  pendingHandoffs: [
+                    { id: "h1", agent: "codex", message: "one", timestamp: "2026-04-15T00:00:00.000Z" },
+                    { id: "h2", agent: "claude-code", message: "two", timestamp: "2026-04-15T00:01:00.000Z" },
+                  ],
+                }),
             }), { type: "open-command-palette" }),
             { type: "modal-query-append", char: "h" },
           ),
@@ -456,13 +456,13 @@ describe("reduce", () => {
         });
 
         it("keeps the split handoff overlay open on enter and closes on escape", () => {
-          const opened = reduce(makeState({
-            snapshot: makeSnapshot({
-              pendingHandoffs: [
-                { id: "h1", message: "Review this", agent: "codex" },
-              ],
-            }),
-          }), { type: "open-handoffs" });
+            const opened = reduce(makeState({
+              snapshot: makeSnapshot({
+                pendingHandoffs: [
+                  { id: "h1", message: "Review this", agent: "codex", timestamp: "2026-04-15T00:00:00.000Z" },
+                ],
+              }),
+            }), { type: "open-handoffs" });
           const detail = reduce(opened, { type: "enter" });
 
           expect(detail.modal.kind).toBe("handoffs");

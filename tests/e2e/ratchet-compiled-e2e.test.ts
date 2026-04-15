@@ -131,13 +131,13 @@ describe("compiled ratchet feature E2E", () => {
         passCount: number;
         totalCount: number;
         passed: boolean;
-      }>(check);
-      expect(checked.totalCount).toBe(1);
-      expect(checked.passCount).toBe(1);
-      expect(checked.passed).toBe(true);
-      expect(checked.results[0]?.passed).toBe(true);
-      expect(checked.results[0]?.assertion.correctionId).toBe(correctionId);
-    },
+        }>(check);
+        expect(checked.totalCount).toBe(1);
+        expect(checked.passCount).toBe(1);
+        expect(checked.passed).toBe(true);
+        expect(checked.results[0]?.passed).toBe(true);
+        expect(checked.results[0]?.assertion.id).toBe(promoted.assertion.id);
+      },
     SLOW_CLI_TIMEOUT_MS,
   );
 

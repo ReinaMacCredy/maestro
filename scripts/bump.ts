@@ -18,7 +18,8 @@ if (!["feature", "patch"].includes(part)) {
 }
 
 const pkg = await Bun.file(pkgPath).json();
-const { feature: x, patch: y } = parseReleaseVersion(pkg.version);
+const currentVersion: string = pkg.version;
+const { feature: x, patch: y } = parseReleaseVersion(currentVersion);
 
 const next = part === "feature"
   ? `0.${x + 1}.0`
@@ -32,4 +33,4 @@ await writeVersionArtifacts({
   version: next,
 });
 
-console.log(`[ok] ${pkg.version} --> ${next}`);
+console.log(`[ok] ${currentVersion} --> ${next}`);

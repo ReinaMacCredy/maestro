@@ -553,6 +553,7 @@ function parseStringRecordOption(
 ): Record<string, string> | undefined {
   const parsed = parseJsonOption(flag, raw);
   if (!parsed) return undefined;
+  const stringRecord: Record<string, string> = {};
   for (const [key, value] of Object.entries(parsed)) {
     if (typeof value !== "string") {
       throw new MaestroError(`${flag} values must be strings`, [
@@ -560,8 +561,9 @@ function parseStringRecordOption(
         `Example: ${flag} '{"touched":"src/foo.ts"}'`,
       ]);
     }
+    stringRecord[key] = value;
   }
-  return parsed;
+  return stringRecord;
 }
 
 function parseVerificationResult(raw: string): UkiVerificationResult {

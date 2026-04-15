@@ -165,14 +165,15 @@ export function assertNoParentCycle(
 
   for (let depth = 0; depth < MAX_PARENT_DEPTH; depth++) {
     if (current === undefined) return;
-    const parent = tasks.get(current)?.parentId;
-    if (parent === undefined) return;
-    if (parent === startId) {
-      chain.push(parent);
-      throw cyclicParent(startId, chain);
-    }
-    chain.push(parent);
-    current = parent;
+      const currentTask = tasks.get(current);
+      const parentId = currentTask?.parentId;
+      if (parentId === undefined) return;
+      if (parentId === startId) {
+        chain.push(parentId);
+        throw cyclicParent(startId, chain);
+      }
+      chain.push(parentId);
+      current = parentId;
   }
 
   throw parentDepthExceeded(startId, MAX_PARENT_DEPTH);

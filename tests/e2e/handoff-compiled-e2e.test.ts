@@ -219,11 +219,11 @@ describe("compiled handoff feature E2E", () => {
 
   it(
     "list returns empty array on a fresh workspace",
-    async () => {
-      const result = await runCompiled(["handoff", "list", "--json"], tmpDir);
-      expect(result.exitCode).toBe(0);
-      expect(expectJson(result)).toEqual([]);
-    },
+      async () => {
+        const result = await runCompiled(["handoff", "list", "--json"], tmpDir);
+        expect(result.exitCode).toBe(0);
+        expect(expectJson<unknown[]>(result)).toEqual([]);
+      },
     SLOW_CLI_TIMEOUT_MS,
   );
 

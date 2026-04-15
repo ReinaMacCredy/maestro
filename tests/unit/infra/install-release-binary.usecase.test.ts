@@ -13,6 +13,12 @@ import {
 
 const installDirs: string[] = [];
 
+function asFetch(
+  fn: (input: URL | RequestInfo, init?: RequestInit) => Promise<Response>,
+): typeof fetch {
+  return fn as unknown as typeof fetch;
+}
+
 afterEach(async () => {
   await Promise.all(
     installDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })),
@@ -37,10 +43,10 @@ describe("install release binary usecase", () => {
     const installDir = await mkdtemp(join(tmpdir(), "maestro-release-install-"));
     installDirs.push(installDir);
 
-    const fetchImpl: typeof fetch = async (input) => {
-      const url = String(input);
-      if (url.endsWith("/releases/latest")) {
-        return Response.json({
+      const fetchImpl = asFetch(async (input) => {
+        const url = String(input);
+        if (url.endsWith("/releases/latest")) {
+          return Response.json({
           tag_name: "v9.9.9",
           assets: [
             {
@@ -51,12 +57,12 @@ describe("install release binary usecase", () => {
         });
       }
 
-      if (url === "https://downloads.example.test/maestro-darwin-arm64") {
-        return new Response("binary-data", { status: 200 });
-      }
+        if (url === "https://downloads.example.test/maestro-darwin-arm64") {
+          return new Response("binary-data", { status: 200 });
+        }
 
-      throw new Error(`Unexpected fetch: ${url}`);
-    };
+        throw new Error(`Unexpected fetch: ${url}`);
+      });
 
     const result = await installReleaseBinary({
       fetchImpl,
@@ -78,10 +84,10 @@ describe("install release binary usecase", () => {
     await Bun.write(join(installDir, "maestro"), "existing-binary");
 
     let downloadRequested = false;
-    const fetchImpl: typeof fetch = async (input) => {
-      const url = String(input);
-      if (url.endsWith("/releases/latest")) {
-        return Response.json({
+      const fetchImpl = asFetch(async (input) => {
+        const url = String(input);
+        if (url.endsWith("/releases/latest")) {
+          return Response.json({
           tag_name: `v${VERSION}`,
           assets: [
             {
@@ -92,9 +98,9 @@ describe("install release binary usecase", () => {
         });
       }
 
-      downloadRequested = true;
-      return new Response("binary-data", { status: 200 });
-    };
+        downloadRequested = true;
+        return new Response("binary-data", { status: 200 });
+      });
 
     const result = await installReleaseBinary({
       fetchImpl,
@@ -115,10 +121,10 @@ describe("install release binary usecase", () => {
     installDirs.push(installDir);
 
     let downloadRequested = false;
-    const fetchImpl: typeof fetch = async (input) => {
-      const url = String(input);
-      if (url.endsWith("/releases/latest")) {
-        return Response.json({
+      const fetchImpl = asFetch(async (input) => {
+        const url = String(input);
+        if (url.endsWith("/releases/latest")) {
+          return Response.json({
           tag_name: `v${VERSION}`,
           assets: [
             {
@@ -134,8 +140,8 @@ describe("install release binary usecase", () => {
         return new Response("binary-data", { status: 200 });
       }
 
-      throw new Error(`Unexpected fetch: ${url}`);
-    };
+        throw new Error(`Unexpected fetch: ${url}`);
+      });
 
     const result = await installReleaseBinary({
       fetchImpl,

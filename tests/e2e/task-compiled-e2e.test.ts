@@ -158,8 +158,8 @@ describe("compiled task feature E2E", () => {
       );
       expect(closeMw.exitCode).toBe(0);
 
-      const readyEmpty = await runCompiled(["task", "ready", "--json"], tmpDir);
-      expect(expectJson(readyEmpty)).toEqual([]);
+        const readyEmpty = await runCompiled(["task", "ready", "--json"], tmpDir);
+        expect(expectJson<unknown[]>(readyEmpty)).toEqual([]);
 
       // Regression guard: adding the task feature must not clobber sibling
       // features — if the command is still parseable, services wiring is intact.

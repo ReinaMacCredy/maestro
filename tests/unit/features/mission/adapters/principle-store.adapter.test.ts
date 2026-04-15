@@ -64,11 +64,11 @@ describe("JsonlPrincipleStoreAdapter", () => {
     });
 
     it("persists to disk and survives re-read", async () => {
-      await adapter.create(ADVISORY_INPUT);
-      const fresh = new JsonlPrincipleStoreAdapter(tempDir);
-      const all = await fresh.list();
-      expect(all).toHaveLength(1);
-      expect(all[0].id).toBe("test-advisory");
+        await adapter.create(ADVISORY_INPUT);
+        const fresh = new JsonlPrincipleStoreAdapter(tempDir);
+        const all = await fresh.list();
+        expect(all).toHaveLength(1);
+        expect(all[0]?.id).toBe("test-advisory");
     });
 
     it("throws on duplicate id", async () => {
@@ -99,9 +99,9 @@ describe("JsonlPrincipleStoreAdapter", () => {
       const implResults = await adapter.listByProfile("implementation");
       expect(implResults).toHaveLength(2);
 
-      const planResults = await adapter.listByProfile("planning");
-      expect(planResults).toHaveLength(1);
-      expect(planResults[0].id).toBe("test-gate");
+        const planResults = await adapter.listByProfile("planning");
+        expect(planResults).toHaveLength(1);
+        expect(planResults[0]?.id).toBe("test-gate");
 
       const reviewResults = await adapter.listByProfile("code-review");
       expect(reviewResults).toHaveLength(0);

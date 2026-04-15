@@ -145,12 +145,12 @@ describe("gate validation on handoff content", () => {
         scopeDeclaration: { touched: "src/foo.ts", reason: "fix bug" },
         complexityDelta: { linesAdded: 10 },
         verificationResults: [{ step: "build", passed: true }],
+        });
+        const parsed = validateUkiHandoffContent(raw);
+        expect(parsed.assumptions).toEqual(["Assumed no breaking changes"]);
+        expect((parsed as unknown as Record<string, unknown>).scopeDeclaration).toEqual({ touched: "src/foo.ts", reason: "fix bug" });
+        expect((parsed as unknown as Record<string, unknown>).verificationResults).toEqual([{ step: "build", passed: true }]);
       });
-      const parsed = validateUkiHandoffContent(raw);
-      expect(parsed.assumptions).toEqual(["Assumed no breaking changes"]);
-      expect((parsed as Record<string, unknown>).scopeDeclaration).toEqual({ touched: "src/foo.ts", reason: "fix bug" });
-      expect((parsed as Record<string, unknown>).verificationResults).toEqual([{ step: "build", passed: true }]);
-    });
 
     it("validates content without principle gate fields (backward compat)", () => {
       const raw = makeExecuteContent();

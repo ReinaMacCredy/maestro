@@ -121,9 +121,9 @@ export function keyToAction(key: Key, state: AppState): Action | undefined {
       if (key.char === "[") return { type: "task-board-prev-column" };
       if (key.char === "]") return { type: "task-board-next-column" };
     }
-    if (state.modal.kind === "help" && (key.type === "char" || key.type === "enter")) {
-      return { type: "escape" };
-    }
+      if (state.modal.kind === "help" && key.type === "char") {
+        return { type: "escape" };
+      }
   if (key.type === "char" && state.modal.kind === "command-palette") {
     return { type: "modal-query-append", char: key.char };
   }

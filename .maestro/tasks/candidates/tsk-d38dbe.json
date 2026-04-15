@@ -1,0 +1,33 @@
+{
+  "id": "tsk-d38dbe",
+  "sourceTaskId": "tsk-d38dbe",
+  "sourceType": "task-close",
+  "title": "Audit and correct product-risk notes for release/versioning, typecheck, automation scope, and refactor status",
+  "reason": "Completed factual audit of risk notes; verified repo, CI, README, changelog, release page, build, and typecheck; produced corrected copy.",
+  "keywords": [
+    "audit",
+    "correct",
+    "product",
+    "risk",
+    "notes",
+    "release",
+    "versioning",
+    "typecheck",
+    "automation",
+    "scope",
+    "refactor",
+    "status",
+    "completed",
+    "factual",
+    "verified",
+    "repo",
+    "readme",
+    "changelog",
+    "page",
+    "build",
+    "produced",
+    "corrected",
+    "copy"
+  ],
+  "capturedAt": "2026-04-15T12:04:59.669Z"
+}

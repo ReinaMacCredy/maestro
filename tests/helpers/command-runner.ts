@@ -14,7 +14,7 @@ export async function runCommand(
   cwd: string = process.cwd(),
   options: RunCommandOptions = {},
 ): Promise<CommandResult> {
-  const proc = Bun.spawn(command, {
+  const proc = Bun.spawn([...command], {
     stdout: "pipe",
     stderr: "pipe",
     stdin: options.stdin !== undefined ? "pipe" : "inherit",

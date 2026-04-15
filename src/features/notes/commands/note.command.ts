@@ -2,10 +2,23 @@ import type { Command } from "commander";
 import type { NoteEntry } from "../domain/types.js";
 import { MaestroError } from "@/shared/errors.js";
 import { output } from "@/shared/lib/output.js";
-import { getServices } from "@/services.js";
+import { getServices, type Services } from "@/services.js";
 import { createNote, listNotes } from "../usecases/note.usecase.js";
 
-export function registerNoteCommand(program: Command): void {
+interface NoteCommandDeps {
+  readonly getServices: () => Pick<Services, "git" | "notesStore">;
+  readonly createNote: typeof createNote;
+  readonly listNotes: typeof listNotes;
+}
+
+export function registerNoteCommand(
+  program: Command,
+  deps: NoteCommandDeps = {
+    getServices,
+    createNote,
+    listNotes,
+  },
+): void {
   program
     .command("note")
     .description("Append or list project notes")
@@ -19,8 +32,8 @@ Examples:
     .option("--list", "List saved notes")
     .option("--json", "Output as JSON")
     .action(async (opts) => {
-      const services = getServices();
-      const isJson = opts.json ?? program.opts().json;
+        const services = deps.getServices();
+        const isJson = opts.json ?? program.opts().json;
 
       if (opts.list && opts.content) {
         throw new MaestroError("--content and --list cannot be used together", [
@@ -29,11 +42,11 @@ Examples:
         ]);
       }
 
-      if (opts.list) {
-        const notes = await listNotes(services.notesStore);
-        output(isJson, notes, formatList);
-        return;
-      }
+        if (opts.list) {
+          const notes = await deps.listNotes(services.notesStore);
+          output(isJson, notes, formatList);
+          return;
+        }
 
       if (!opts.content) {
         throw new MaestroError("--content is required unless --list is used", [
@@ -42,10 +55,10 @@ Examples:
         ]);
       }
 
-      const note = await createNote(services.git, services.notesStore, {
-        content: opts.content,
-        dir: process.cwd(),
-      });
+        const note = await deps.createNote(services.git, services.notesStore, {
+          content: opts.content,
+          dir: process.cwd(),
+        });
 
       output(isJson, note, formatSaved);
     });

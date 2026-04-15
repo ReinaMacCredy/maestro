@@ -1,10 +1,21 @@
 import { basename } from "node:path";
 import type { Command } from "commander";
 import { output } from "@/shared/lib/output.js";
-import { getServices } from "@/services.js";
+import { getServices, type Services } from "@/services.js";
 import { getGraphContext, type GraphContext } from "../usecases/graph-context.usecase.js";
 
-export function registerGraphContextCommand(program: Command): void {
+interface GraphContextCommandDeps {
+  readonly getServices: () => Pick<Services, "projectGraphStore">;
+  readonly getGraphContext: typeof getGraphContext;
+}
+
+export function registerGraphContextCommand(
+  program: Command,
+  deps: GraphContextCommandDeps = {
+    getServices,
+    getGraphContext,
+  },
+): void {
   program
     .command("graph-context")
     .description("Show this project's relationships in the project graph")
@@ -15,11 +26,11 @@ Examples:
 `)
     .option("--json", "Output as JSON")
     .action(async (opts) => {
-      const services = getServices();
-      const isJson = opts.json ?? program.opts().json;
-      const currentName = basename(process.cwd());
+        const services = deps.getServices();
+        const isJson = opts.json ?? program.opts().json;
+        const currentName = basename(process.cwd());
 
-      const ctx = await getGraphContext(services.projectGraphStore, currentName);
+        const ctx = await deps.getGraphContext(services.projectGraphStore, currentName);
 
       output(isJson, ctx, formatContext);
     });

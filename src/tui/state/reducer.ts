@@ -1469,6 +1469,8 @@ function cycleConfigDraft(state: AppState, direction: "previous" | "next"): AppS
 
 function getFilteredEventStream(state: AppState): readonly EventStreamEntry[] {
   const stream = state.snapshot.eventStream ?? [];
-  if (state.modal.kind !== "event-stream" || !state.modal.filterKind) return stream;
-  return stream.filter((e) => e.kind === state.modal.filterKind);
+  if (state.modal.kind !== "event-stream") return stream;
+  const { filterKind } = state.modal;
+  if (!filterKind) return stream;
+  return stream.filter((e) => e.kind === filterKind);
 }

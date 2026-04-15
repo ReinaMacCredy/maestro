@@ -78,23 +78,23 @@ describe("searchMemory", () => {
   it("returns matching corrections and case-insensitive learning content matches", async () => {
     const corrections = mockCorrectionStore([
       {
-        id: "corr-1",
-        rule: "Never skip coverage checks",
-        source: "user",
-        severity: "hard",
-        trigger: { keywords: ["coverage", "tests"] },
-        createdAt: "2026-04-15T00:00:00.000Z",
-        updatedAt: "2026-04-15T00:00:00.000Z",
-      },
+          id: "corr-1",
+          rule: "Never skip coverage checks",
+          source: "user",
+          severity: "hard",
+          trigger: { keywords: ["coverage", "tests"], fileGlobs: [] },
+          createdAt: "2026-04-15T00:00:00.000Z",
+          updatedAt: "2026-04-15T00:00:00.000Z",
+        },
       {
-        id: "corr-2",
-        rule: "Different topic",
-        source: "user",
-        severity: "soft",
-        trigger: { keywords: ["other"] },
-        createdAt: "2026-04-16T00:00:00.000Z",
-        updatedAt: "2026-04-16T00:00:00.000Z",
-      },
+          id: "corr-2",
+          rule: "Different topic",
+          source: "user",
+          severity: "soft",
+          trigger: { keywords: ["other"], fileGlobs: [] },
+          createdAt: "2026-04-16T00:00:00.000Z",
+          updatedAt: "2026-04-16T00:00:00.000Z",
+        },
     ]);
     const learnings = mockLearningStore([
       { sessionDate: "2026-04-15", content: "Coverage work is incomplete", branch: "main" },
@@ -116,23 +116,23 @@ describe("buildMemoryStats", () => {
     const stats = buildMemoryStats({
       corrections: [
         {
-          id: "corr-1",
-          rule: "Hard rule",
-          source: "user",
-          severity: "hard",
-          trigger: { keywords: ["coverage"] },
-          createdAt: "2026-04-15T00:00:00.000Z",
-          updatedAt: "2026-04-15T00:00:00.000Z",
-        },
+            id: "corr-1",
+            rule: "Hard rule",
+            source: "user",
+            severity: "hard",
+            trigger: { keywords: ["coverage"], fileGlobs: [] },
+            createdAt: "2026-04-15T00:00:00.000Z",
+            updatedAt: "2026-04-15T00:00:00.000Z",
+          },
         {
-          id: "corr-2",
-          rule: "Soft rule",
-          source: "user",
-          severity: "soft",
-          trigger: { keywords: ["notes"] },
-          createdAt: "2026-04-16T00:00:00.000Z",
-          updatedAt: "2026-04-16T00:00:00.000Z",
-        },
+            id: "corr-2",
+            rule: "Soft rule",
+            source: "user",
+            severity: "soft",
+            trigger: { keywords: ["notes"], fileGlobs: [] },
+            createdAt: "2026-04-16T00:00:00.000Z",
+            updatedAt: "2026-04-16T00:00:00.000Z",
+          },
       ],
       rawLearningCount: 4,
       compiledLearnings: {
@@ -140,18 +140,16 @@ describe("buildMemoryStats", () => {
         summary: "Compiled",
         rawCount: 4,
       },
-      ratchetSuite: {
-        assertions: [
-          { id: "a1", correctionId: "corr-1", regex: "foo", description: "first" },
-          { id: "a2", correctionId: "corr-2", regex: "bar", description: "second" },
-        ],
-      },
-      ratchetBaseline: {
-        checkedAt: "2026-04-16T00:00:00.000Z",
-        passCount: 2,
-        failCount: 0,
-        totalCount: 2,
-      },
+        ratchetSuite: {
+          assertions: [
+            { id: "a1", correctionId: "corr-1", rule: "first", check: "foo", createdAt: "2026-04-16T00:00:00.000Z" },
+            { id: "a2", correctionId: "corr-2", rule: "second", check: "bar", createdAt: "2026-04-16T00:00:00.000Z" },
+          ],
+        },
+        ratchetBaseline: {
+          lastRunAt: "2026-04-16T00:00:00.000Z",
+          passCount: 2,
+        },
       graphProjects: 3,
       graphLinks: 5,
     });
@@ -183,14 +181,14 @@ describe("getMemoryStats", () => {
   it("loads stores in aggregate and includes graph counts when a graph store is provided", async () => {
     const corrStore = mockCorrectionStore([
       {
-        id: "corr-1",
-        rule: "Hard rule",
-        source: "user",
-        severity: "hard",
-        trigger: { keywords: ["coverage"] },
-        createdAt: "2026-04-15T00:00:00.000Z",
-        updatedAt: "2026-04-15T00:00:00.000Z",
-      },
+          id: "corr-1",
+          rule: "Hard rule",
+          source: "user",
+          severity: "hard",
+          trigger: { keywords: ["coverage"], fileGlobs: [] },
+          createdAt: "2026-04-15T00:00:00.000Z",
+          updatedAt: "2026-04-15T00:00:00.000Z",
+        },
     ]);
     const learnStore = mockLearningStore([
       { sessionDate: "2026-04-15", content: "one", branch: "main" },
@@ -201,17 +199,15 @@ describe("getMemoryStats", () => {
       summary: "summary",
       rawCount: 2,
     });
-    const ratchetStore = mockRatchetStore(
-      {
-        assertions: [{ id: "a1", correctionId: "corr-1", regex: "foo", description: "desc" }],
-      },
-      {
-        checkedAt: "2026-04-16T00:00:00.000Z",
-        passCount: 0,
-        failCount: 1,
-        totalCount: 1,
-      },
-    );
+      const ratchetStore = mockRatchetStore(
+        {
+          assertions: [{ id: "a1", correctionId: "corr-1", rule: "desc", check: "foo", createdAt: "2026-04-16T00:00:00.000Z" }],
+        },
+        {
+          lastRunAt: "2026-04-16T00:00:00.000Z",
+          passCount: 0,
+        },
+      );
     const graphStore = mockProjectGraphStore({
       nodes: [
         { name: "maestro", path: "/code/maestro" },
