@@ -40,6 +40,7 @@ import {
 import { registerHandoffCommand } from "./features/handoff/index.js";
 import { registerTaskCommand } from "./features/task/index.js";
 import { registerReplyCommand } from "./features/reply/index.js";
+import { registerBundleCommand } from "./features/bundle/index.js";
 
 export const program = new Command()
   .name("maestro")
@@ -80,6 +81,7 @@ registerHandoffCommand(program);
 registerTaskCommand(program);
 registerReplyCommand(program);
 registerPrincipleCommand(program);
+registerBundleCommand(program);
 
 async function main(): Promise<void> {
   try {

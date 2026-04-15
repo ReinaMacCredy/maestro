@@ -23,6 +23,13 @@ bun test                       # full suite
 bun test tests/unit/tui/       # TUI unit tests only
 ```
 
+### Mission bundles
+```bash
+maestro bundle export <missionId> --out ./review.mission.tar.gz
+maestro bundle export <missionId> --redact memory,prompts --json
+maestro bundle inspect ./review.mission.tar.gz --json
+```
+
 ### Conventions
 - Conventional Commits: `feat(scope):`, `fix(scope):`, `refactor(scope):`
 - Bump version for every behavior change (minor=feature, patch=fix, major=breaking)

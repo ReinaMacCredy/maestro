@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.36.0 - Mission bundles (phase 1: export + inspect)
+
+- Add `maestro bundle export <missionId>` that packages a mission and
+  its artifacts (plan, features, workers, replies, handoffs, principles,
+  memory) as a portable `.mission.tar.gz` archive with a v1 manifest.
+- Add `maestro bundle inspect <path>` that prints the manifest of a
+  bundle without extracting it.
+- Support `--out`, `--base <ref>` (include `diff.patch` from
+  `<ref>..HEAD`), `--redact <memory|prompts|replies>`, and `--json` on
+  the export subcommand.
+- Manifest `schemaVersion: 1` captures bundle id, created-at, maestro
+  version, mission summary, per-section stats, redaction flags, and an
+  optional git patch descriptor so future readers can reject unknown
+  versions cleanly.
+
 ## 0.35.4 — Typecheck and release metadata alignment
 
 - Fix the repo's standing `bun run typecheck` failures across source and test
