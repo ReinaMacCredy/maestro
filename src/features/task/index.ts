@@ -5,7 +5,6 @@ export type {
   TaskPriority,
   CreateTaskInput,
   UpdateTaskInput,
-  CloseTaskInput,
   ClaimTaskInput,
   UnclaimTaskInput,
   ListTasksFilters,
@@ -52,8 +51,7 @@ export { unclaimTask } from "./usecases/unclaim-task.usecase.js";
 export {
   blockTasks,
   unblockTasks,
-} from "./usecases/manage-task-dependencies.usecase.js";
-export { closeTask } from "./usecases/close-task.usecase.js";
+} from "./usecases/manage-task-blockers.usecase.js";
 export { releaseOwnedTasks } from "./usecases/release-owned-tasks.usecase.js";
 export {
   readyTasks,

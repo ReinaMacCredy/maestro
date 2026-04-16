@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from "bun:test";
-import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, mkdir, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { ClaudeSessionDetectAdapter } from "@/features/session";
@@ -85,6 +85,24 @@ describe("ClaudeSessionDetectAdapter", () => {
       const session = await adapter.detect(process.cwd());
 
       expect(session).toBeUndefined();
+    });
+
+    it("invalidates cached codex sessions when the rollout file disappears", async () => {
+      const sessionsDir = process.env.MAESTRO_CODEX_SESSIONS_DIR!;
+      const rolloutPath = join(
+        sessionsDir,
+        "suite",
+        "rollout-2026-04-16T14-00-00-thread-cache.jsonl",
+      );
+      await mkdir(join(sessionsDir, "suite"), { recursive: true });
+      await writeFile(rolloutPath, "{}\n");
+      process.env.CODEX_THREAD_ID = "thread-cache";
+
+      const cachedAdapter = new ClaudeSessionDetectAdapter();
+      expect((await cachedAdapter.detect(process.cwd()))?.sourcePath).toBe(rolloutPath);
+
+      await unlink(rolloutPath);
+      expect(await cachedAdapter.detect(process.cwd())).toBeUndefined();
     });
 
     it("treats an empty codex root override as unset", async () => {

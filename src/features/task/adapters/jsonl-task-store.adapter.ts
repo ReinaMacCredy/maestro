@@ -16,7 +16,6 @@ import type {
   Task,
   CreateTaskInput,
   UpdateTaskInput,
-  CloseTaskInput,
 } from "../domain/task-types.js";
 import type { TaskStorePort } from "../ports/task-store.port.js";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
@@ -28,7 +27,6 @@ import {
   validateTask,
 } from "../domain/task-validators.js";
 import {
-  claimedTaskCannotBeReopened,
   taskAlreadyClaimed,
   taskAlreadyCompleted,
   taskBlockedByOpenTasks,
@@ -36,7 +34,6 @@ import {
   taskClaimOwnedByDifferentSession,
   taskNotClaimed,
   taskNotFound,
-  taskStatusRequiresClaim,
   unknownBlocker,
 } from "../domain/task-errors.js";
 import { MaestroError } from "@/shared/errors.js";
@@ -45,6 +42,11 @@ import {
   DEFAULT_TASK_PRIORITY,
   DEFAULT_TASK_STATUS,
 } from "../domain/task-types.js";
+import {
+  assertTaskUpdateAllowed,
+  getUnresolvedBlockerIds,
+  releaseTaskOwnership,
+} from "../domain/task-state.js";
 
 const MAX_ID_RETRIES = 5;
 const LOCK_WAIT_TIMEOUT_MS = 5_000;
@@ -144,9 +146,6 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
       if (!existing) {
         throw taskNotFound(id);
       }
-      if (existing.status === "completed") {
-        throw taskAlreadyCompleted(id);
-      }
 
       if (patch.parentId !== undefined && patch.parentId !== "") {
         if (!tasks.has(patch.parentId)) {
@@ -155,23 +154,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         assertNoParentCycle(id, patch.parentId, tasks);
       }
 
-      const nextStatus = patch.status ?? existing.status;
-      if (!existing.assignee && nextStatus === "in_progress") {
-        throw taskStatusRequiresClaim("in_progress");
-      }
-      if (existing.assignee && nextStatus === "pending") {
-        throw claimedTaskCannotBeReopened(id);
-      }
-      if (
-        patch.status !== undefined &&
-        patch.status !== existing.status &&
-        (patch.status === "in_progress" || patch.status === "completed")
-      ) {
-        const blockers = getOpenBlockers(existing, tasks);
-        if (blockers.length > 0) {
-          throw taskBlockedByOpenTasks(id, blockers);
-        }
-      }
+      const nextStatus = assertTaskUpdateAllowed(existing, patch, tasks);
 
       const labels = applyLabelPatch(existing.labels, patch.addLabels, patch.removeLabels);
       const reason = patch.reason === undefined
@@ -215,7 +198,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         throw taskAlreadyClaimed(id, existing.assignee);
       }
 
-      const blockers = getOpenBlockers(existing, tasks);
+      const blockers = getUnresolvedBlockerIds(existing, tasks);
       if (blockers.length > 0) {
         throw taskBlockedByOpenTasks(id, blockers);
       }
@@ -267,13 +250,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
       }
 
       const now = new Date().toISOString();
-      const unclaimed: Task = {
-        ...existing,
-        assignee: undefined,
-        claimedAt: undefined,
-        status: existing.status === "in_progress" ? "pending" : existing.status,
-        updatedAt: now,
-      };
+      const unclaimed = releaseTaskOwnership(existing, now);
 
       tasks.set(id, unclaimed);
       await this.writeAll(tasks);
@@ -297,30 +274,16 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
 
       const now = new Date().toISOString();
       let blockerChanged = false;
-      const nextBlocks = dedupeValues([...blocker.blocks, ...blockedTaskIds]);
-      if (!sameValues(blocker.blocks, nextBlocks)) {
-        tasks.set(id, {
-          ...blocker,
-          blocks: nextBlocks,
-          updatedAt: now,
-        });
-        blockerChanged = true;
-      }
+      blockerChanged = upsertBlockList(tasks, id, blocker, [...blocker.blocks, ...blockedTaskIds], now) || blockerChanged;
 
       for (const blockedTaskId of blockedTaskIds) {
         const blockedTask = tasks.get(blockedTaskId)!;
         if (blockedTask.status === "completed") {
           throw taskAlreadyCompleted(blockedTaskId);
         }
-        const nextBlockedBy = dedupeValues([...blockedTask.blockedBy, id]);
-        if (!sameValues(blockedTask.blockedBy, nextBlockedBy)) {
-          tasks.set(blockedTaskId, {
-            ...blockedTask,
-            blockedBy: nextBlockedBy,
-            updatedAt: now,
-          });
-          blockerChanged = true;
-        }
+        blockerChanged =
+          upsertBlockedByList(tasks, blockedTaskId, blockedTask, [...blockedTask.blockedBy, id], now) ||
+          blockerChanged;
       }
 
       if (!blockerChanged) {
@@ -346,16 +309,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
       const removeSet = new Set(blockedTaskIds);
       const nextBlocks = blocker.blocks.filter((blockedId) => !removeSet.has(blockedId));
       const now = new Date().toISOString();
-      let changed = false;
-
-      if (!sameValues(blocker.blocks, nextBlocks)) {
-        tasks.set(id, {
-          ...blocker,
-          blocks: nextBlocks,
-          updatedAt: now,
-        });
-        changed = true;
-      }
+      let changed = upsertBlockList(tasks, id, blocker, nextBlocks, now);
 
       for (const blockedTaskId of blockedTaskIds) {
         const blockedTask = tasks.get(blockedTaskId);
@@ -363,14 +317,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
           continue;
         }
         const nextBlockedBy = blockedTask.blockedBy.filter((blockerId) => blockerId !== id);
-        if (!sameValues(blockedTask.blockedBy, nextBlockedBy)) {
-          tasks.set(blockedTaskId, {
-            ...blockedTask,
-            blockedBy: nextBlockedBy,
-            updatedAt: now,
-          });
-          changed = true;
-        }
+        changed = upsertBlockedByList(tasks, blockedTaskId, blockedTask, nextBlockedBy, now) || changed;
       }
 
       if (!changed) {
@@ -379,34 +326,6 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
 
       await this.writeAll(tasks);
       return tasks.get(id)!;
-    });
-  }
-
-  async close(id: string, input: CloseTaskInput): Promise<Task> {
-    return this.withLock(async () => {
-      const tasks = await this.readAll();
-      const existing = tasks.get(id);
-      if (!existing) {
-        throw taskNotFound(id);
-      }
-      if (existing.status === "completed") {
-        throw taskAlreadyCompleted(id);
-      }
-      const blockers = getOpenBlockers(existing, tasks);
-      if (blockers.length > 0) {
-        throw taskBlockedByOpenTasks(id, blockers);
-      }
-
-      const completed: Task = {
-        ...existing,
-        status: "completed",
-        closeReason: input.reason?.trim() || existing.closeReason,
-        updatedAt: new Date().toISOString(),
-      };
-
-      tasks.set(id, completed);
-      await this.writeAll(tasks);
-      return completed;
     });
   }
 
@@ -420,13 +339,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         if (task.status === "completed" || task.assignee !== sessionId) {
           continue;
         }
-        const updated: Task = {
-          ...task,
-          assignee: undefined,
-          claimedAt: undefined,
-          status: task.status === "in_progress" ? "pending" : task.status,
-          updatedAt: now,
-        };
+        const updated = releaseTaskOwnership(task, now);
         tasks.set(id, updated);
         released.push(updated);
       }
@@ -606,44 +519,93 @@ function ensureTasksExist(
   }
 }
 
-function getOpenBlockers(task: Task, tasks: ReadonlyMap<string, Task>): readonly string[] {
-  return task.blockedBy.filter((blockerId) => {
-    const blocker = tasks.get(blockerId);
-    return blocker === undefined || blocker.status !== "completed";
-  });
-}
+function normalizeGraph(tasks: Map<string, Task>): Map<string, Task> {
+  let normalized: Map<string, Task> | undefined;
 
-function normalizeGraph(tasks: ReadonlyMap<string, Task>): Map<string, Task> {
-  const normalized = new Map<string, Task>();
+  const ensureMutable = (): Map<string, Task> => {
+    if (!normalized) {
+      normalized = new Map(tasks);
+    }
+    return normalized;
+  };
 
   for (const [id, task] of tasks.entries()) {
-    normalized.set(id, {
-      ...task,
-      blocks: dedupeValues(task.blocks),
-      blockedBy: dedupeValues(task.blockedBy),
-    });
+    const nextBlocks = dedupeValues(task.blocks);
+    const nextBlockedBy = dedupeValues(task.blockedBy);
+    if (!sameValues(task.blocks, nextBlocks) || !sameValues(task.blockedBy, nextBlockedBy)) {
+      ensureMutable().set(id, {
+        ...task,
+        blocks: nextBlocks,
+        blockedBy: nextBlockedBy,
+      });
+    }
   }
 
-  for (const task of normalized.values()) {
+  const source = normalized ?? tasks;
+  for (const task of source.values()) {
     for (const blockedId of task.blocks) {
-      const blockedTask = normalized.get(blockedId);
+      const blockedTask = (normalized ?? tasks).get(blockedId);
       if (!blockedTask || blockedTask.blockedBy.includes(task.id)) continue;
-      normalized.set(blockedId, {
-        ...blockedTask,
-        blockedBy: [...blockedTask.blockedBy, task.id],
-      });
+      upsertBlockedByList(
+        ensureMutable(),
+        blockedId,
+        blockedTask,
+        [...blockedTask.blockedBy, task.id],
+        blockedTask.updatedAt,
+      );
     }
     for (const blockerId of task.blockedBy) {
-      const blockerTask = normalized.get(blockerId);
+      const blockerTask = (normalized ?? tasks).get(blockerId);
       if (!blockerTask || blockerTask.blocks.includes(task.id)) continue;
-      normalized.set(blockerId, {
-        ...blockerTask,
-        blocks: [...blockerTask.blocks, task.id],
-      });
+      upsertBlockList(
+        ensureMutable(),
+        blockerId,
+        blockerTask,
+        [...blockerTask.blocks, task.id],
+        blockerTask.updatedAt,
+      );
     }
   }
 
-  return normalized;
+  return normalized ?? tasks;
+}
+
+function upsertBlockList(
+  tasks: Map<string, Task>,
+  id: string,
+  task: Task,
+  nextBlocksRaw: readonly string[],
+  updatedAt: string,
+): boolean {
+  const nextBlocks = dedupeValues(nextBlocksRaw);
+  if (sameValues(task.blocks, nextBlocks)) {
+    return false;
+  }
+  tasks.set(id, {
+    ...task,
+    blocks: nextBlocks,
+    updatedAt,
+  });
+  return true;
+}
+
+function upsertBlockedByList(
+  tasks: Map<string, Task>,
+  id: string,
+  task: Task,
+  nextBlockedByRaw: readonly string[],
+  updatedAt: string,
+): boolean {
+  const nextBlockedBy = dedupeValues(nextBlockedByRaw);
+  if (sameValues(task.blockedBy, nextBlockedBy)) {
+    return false;
+  }
+  tasks.set(id, {
+    ...task,
+    blockedBy: nextBlockedBy,
+    updatedAt,
+  });
+  return true;
 }
 
 function dedupeValues(values: readonly string[]): readonly string[] {

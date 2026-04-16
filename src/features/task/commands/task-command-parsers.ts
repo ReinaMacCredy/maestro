@@ -10,11 +10,10 @@ import {
   type UpdateTaskInput,
 } from "../domain/task-types.js";
 import { isTaskPriority, isTaskStatus, isTaskType } from "../domain/task-validators.js";
+import { isLegacyTaskStatus } from "../domain/task-state.js";
 import {
   taskCompletedViaUpdateStatus,
 } from "../domain/task-errors.js";
-
-const LEGACY_TASK_STATUSES = new Set(["open", "blocked", "deferred", "closed"]);
 
 export interface CreateOpts {
   description?: string;
@@ -52,7 +51,7 @@ export function parseStatus(value: string | undefined): TaskStatus | undefined {
   if (isTaskStatus(value)) {
     return value;
   }
-  if (LEGACY_TASK_STATUSES.has(value)) {
+  if (isLegacyTaskStatus(value)) {
     if (value === "closed") {
       throw taskCompletedViaUpdateStatus();
     }

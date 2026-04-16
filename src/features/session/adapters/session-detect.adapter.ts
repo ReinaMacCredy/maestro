@@ -1,5 +1,6 @@
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
+import { access } from "node:fs/promises";
 import type { AgentSession } from "../domain/types.js";
 import type { SessionDetectPort } from "../ports/session-detect.port.js";
 import { readJson } from "@/shared/lib/fs.js";
@@ -27,6 +28,8 @@ interface SessionRootOptions {
 }
 
 export class ClaudeSessionDetectAdapter implements SessionDetectPort {
+  private readonly codexSessionCache = new Map<string, AgentSession>();
+
   constructor(private readonly roots: SessionRootOptions = {}) {}
 
   async detect(_cwd: string): Promise<AgentSession | undefined> {
@@ -64,19 +67,29 @@ export class ClaudeSessionDetectAdapter implements SessionDetectPort {
 
   private async resolveCodexSession(threadId: string): Promise<AgentSession | undefined> {
     try {
+      const sessionsDir = this.resolveCodexSessionsDir();
+      const cacheKey = `${sessionsDir}::${threadId}`;
+      const cached = this.codexSessionCache.get(cacheKey);
+      if (cached && await pathExists(cached.sourcePath)) {
+        return cached;
+      }
+      this.codexSessionCache.delete(cacheKey);
+
       const glob = new Bun.Glob(`**/*-${threadId}*.jsonl`);
-      for await (const path of glob.scan({ cwd: this.resolveCodexSessionsDir(), absolute: true })) {
+      for await (const path of glob.scan({ cwd: sessionsDir, absolute: true })) {
         const filename = basename(path);
         const idMatch = filename.match(/rollout-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-(.+)\.jsonl$/);
         const fullId = idMatch?.[1] ?? threadId;
 
         if (fullId === threadId || fullId.startsWith(threadId)) {
-          return {
+          const session: AgentSession = {
             agent: "codex",
             sessionId: fullId,
             sourcePath: path,
             startedAt: parseCodexTimestamp(filename),
           };
+          this.codexSessionCache.set(cacheKey, session);
+          return session;
         }
       }
       return undefined;
@@ -133,4 +146,13 @@ function normalizePath(p: string): string {
 
 function encodeProjectPath(cwd: string): string {
   return cwd.replace(/\//g, "-");
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
 }

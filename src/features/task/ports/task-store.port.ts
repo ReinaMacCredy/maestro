@@ -2,7 +2,6 @@ import type {
   Task,
   CreateTaskInput,
   UpdateTaskInput,
-  CloseTaskInput,
 } from "../domain/task-types.js";
 
 export interface TaskQueryPort {
@@ -31,9 +30,6 @@ export interface TaskStorePort extends TaskQueryPort {
 
   /** Remove blocker edges from an existing task. */
   unblock(id: string, blockedTaskIds: readonly string[]): Promise<Task>;
-
-  /** Close a task. Throws if id does not exist. */
-  close(id: string, input: CloseTaskInput): Promise<Task>;
 
   /** Release unresolved tasks owned by a session back to the pending queue. */
   releaseOwned(sessionId: string): Promise<readonly Task[]>;

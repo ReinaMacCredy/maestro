@@ -88,10 +88,6 @@ export interface UpdateTaskInput {
   readonly removeLabels?: readonly string[];
 }
 
-export interface CloseTaskInput {
-  readonly reason?: string;
-}
-
 // ============================
 // Defaults
 // ============================

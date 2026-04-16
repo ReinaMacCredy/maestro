@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { JsonlTaskStoreAdapter } from "@/features/task/adapters/jsonl-task-store.adapter.js";
 import { createTask } from "@/features/task/usecases/create-task.usecase.js";
-import { blockTasks, unblockTasks } from "@/features/task/usecases/manage-task-dependencies.usecase.js";
+import { blockTasks, unblockTasks } from "@/features/task/usecases/manage-task-blockers.usecase.js";
 import { MaestroError } from "@/shared/errors.js";
 
 describe("manage blocker edges", () => {

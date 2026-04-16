@@ -199,9 +199,9 @@ describe("JsonlTaskStoreAdapter", () => {
     expect((await store.get(blocked.id))?.blockedBy).toEqual([]);
   });
 
-  it("completes tasks and persists close reasons", async () => {
+  it("completes tasks through update and persists close reasons", async () => {
     const task = await store.create({ title: "Done" });
-    const completed = await store.close(task.id, { reason: "shipped" });
+    const completed = await store.update(task.id, { status: "completed", reason: "shipped" });
 
     expect(completed.status).toBe("completed");
     expect(completed.closeReason).toBe("shipped");

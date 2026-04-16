@@ -1,5 +1,6 @@
 import type { Task, ReadyTasksFilters } from "../domain/task-types.js";
 import { indexTasksById } from "../domain/task-types.js";
+import { hasUnresolvedBlockers } from "../domain/task-state.js";
 import type { TaskQueryPort } from "../ports/task-store.port.js";
 import type { CandidateStorePort } from "../ports/candidate-store.port.js";
 import {
@@ -25,7 +26,7 @@ export async function readyTasks(
 
   const selected = all.filter((task) => {
     if (task.status !== "pending") return false;
-    if (hasOpenBlockers(task, byId)) return false;
+    if (hasUnresolvedBlockers(task, byId)) return false;
 
     if (filters.label !== undefined && !task.labels.includes(filters.label)) return false;
     if (filters.priority !== undefined && task.priority !== filters.priority) return false;
@@ -58,19 +59,6 @@ export async function readyTasks(
     ...task,
     hints: matchCandidatesInIndex(task, index),
   }));
-}
-
-function hasOpenBlockers(
-  task: Task,
-  byId: ReadonlyMap<string, Task>,
-): boolean {
-  for (const blockerId of task.blockedBy) {
-    const blocker = byId.get(blockerId);
-    if (!blocker || blocker.status !== "completed") {
-      return true;
-    }
-  }
-  return false;
 }
 
 function hybridCompare(a: Task, b: Task): number {

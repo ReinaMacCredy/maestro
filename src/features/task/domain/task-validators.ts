@@ -17,9 +17,9 @@ import {
   taskBlockCycle,
   taskSelfBlock,
 } from "./task-errors.js";
+import { normalizeStoredTaskStatus } from "./task-state.js";
 
 const MAX_PARENT_DEPTH = 32;
-const LEGACY_STATUSES = new Set(["open", "blocked", "deferred", "closed"]);
 
 export function isTaskStatus(value: unknown): value is TaskStatus {
   return typeof value === "string" && (TASK_STATUSES as readonly string[]).includes(value);
@@ -222,56 +222,60 @@ export function assertNoBlockCycle(
     if (blockedTaskId === blockerId) {
       throw taskSelfBlock(blockerId);
     }
-    const visited = new Set<string>([blockerId, blockedTaskId]);
-    const stack: Array<{ currentId: string; chain: readonly string[] }> = [
-      { currentId: blockedTaskId, chain: [blockerId, blockedTaskId] },
-    ];
+    const parents = new Map<string, string | undefined>([[blockedTaskId, blockerId]]);
+    const stack: string[] = [blockedTaskId];
 
     while (stack.length > 0) {
-      const currentEntry = stack.pop();
-      if (!currentEntry) {
+      const currentId = stack.pop();
+      if (!currentId) {
         continue;
       }
-      const current = tasks.get(currentEntry.currentId);
+      const current = tasks.get(currentId);
       if (!current) {
         continue;
       }
 
       for (const nextBlockedId of current.blocks) {
         if (nextBlockedId === blockerId) {
-          throw taskBlockCycle(blockerId, [...currentEntry.chain, blockerId]);
+          throw taskBlockCycle(blockerId, buildBlockCycleChain(blockerId, currentId, parents));
         }
-        if (visited.has(nextBlockedId)) {
+        if (parents.has(nextBlockedId)) {
           continue;
         }
-        visited.add(nextBlockedId);
-        stack.push({
-          currentId: nextBlockedId,
-          chain: [...currentEntry.chain, nextBlockedId],
-        });
+        parents.set(nextBlockedId, currentId);
+        stack.push(nextBlockedId);
       }
     }
   }
 }
 
-function normalizeStoredStatus(value: unknown): TaskStatus | undefined {
-  if (isTaskStatus(value)) {
-    return value;
-  }
-  if (typeof value !== "string" || !LEGACY_STATUSES.has(value)) {
-    return undefined;
+function buildBlockCycleChain(
+  blockerId: string,
+  currentId: string,
+  parents: ReadonlyMap<string, string | undefined>,
+): readonly string[] {
+  const chain: string[] = [currentId];
+  let cursor = currentId;
+
+  while (true) {
+    const parentId = parents.get(cursor);
+    if (parentId === undefined) {
+      break;
+    }
+    chain.push(parentId);
+    if (parentId === blockerId) {
+      break;
+    }
+    cursor = parentId;
   }
 
-  switch (value) {
-    case "open":
-    case "blocked":
-    case "deferred":
-      return "pending";
-    case "closed":
-      return "completed";
-    default:
-      return undefined;
-  }
+  chain.reverse();
+  chain.push(blockerId);
+  return chain;
+}
+
+function normalizeStoredStatus(value: unknown): TaskStatus | undefined {
+  return normalizeStoredTaskStatus(value);
 }
 
 function normalizeTaskIdArray(value: unknown): readonly string[] | undefined {
