@@ -14,21 +14,21 @@ describe("config-edit usecase", () => {
       adapter,
       dir,
       "project",
-      "execution.stopOnFailure",
+      "workers.codex.enabled",
       "off",
     );
 
-    expect(preview.content).toContain("stopOnFailure: false");
+    expect(preview.content).toContain("enabled: false");
 
     await applyConfigEdit(
       adapter,
       dir,
       "project",
-      "execution.stopOnFailure",
+      "workers.codex.enabled",
       "off",
     );
 
     const layers = await adapter.loadLayers(dir);
-    expect(layers.project?.execution?.stopOnFailure).toBe(false);
+    expect(layers.project?.workers?.codex?.enabled).toBe(false);
   });
 });

@@ -1,10 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import { buildConfigInspector } from "@/tui/state/config-inspector.js";
+import type { MaestroConfig } from "@/infra/domain/config-types.js";
 import type { ConfigLayers } from "@/infra/ports/config.port.js";
 import type { Feature } from "@/features/mission";
 
+const withLegacyConfig = <T extends MaestroConfig>(value: T): T => value as T;
+
 const layers: ConfigLayers = {
-  defaults: {
+  defaults: withLegacyConfig({
     execution: {
       defaultWorker: "codex",
       stopOnFailure: true,
@@ -17,8 +20,8 @@ const layers: ConfigLayers = {
     supervision: {
       level: "mid",
     },
-  },
-    effective: {
+  }),
+    effective: withLegacyConfig({
       execution: {
         defaultWorker: "claude-code",
         stopOnFailure: false,
@@ -69,8 +72,8 @@ const layers: ConfigLayers = {
         backgroundMode: "terminal",
       },
     },
-  },
-    global: {
+  }),
+    global: withLegacyConfig({
       execution: {
         defaultWorker: "codex",
       },
@@ -100,8 +103,8 @@ const layers: ConfigLayers = {
           backgroundMode: "terminal",
       },
     },
-  },
-    project: {
+  }),
+    project: withLegacyConfig({
       execution: {
         defaultWorker: "claude-code",
         stopOnFailure: false,
@@ -135,7 +138,7 @@ const layers: ConfigLayers = {
         backgroundMode: "solid",
       },
     },
-  },
+  }),
   errors: [],
   paths: {
     project: ".maestro/config.yaml",
@@ -266,5 +269,26 @@ describe("buildConfigInspector", () => {
       editKind: "enum",
       displayValueText: "warn",
     });
+  });
+
+  it("hides dead execution, supervision, parallel, and outputMode keys from all tabs", () => {
+    const inspector = buildConfigInspector(layers, [], []);
+    const forbiddenPaths = [
+      "execution.stopOnFailure",
+      "execution.retryBudget",
+      "execution.rotateWorkerOnRetry",
+      "parallel.enabled",
+      "parallel.maxConcurrent",
+      "supervision.level",
+      "workers.codex.outputMode",
+      "workers.claude-code.outputMode",
+    ];
+
+    for (const keyPath of forbiddenPaths) {
+      expect(inspector.rowsByTab.effective.some((row) => row.keyPath === keyPath)).toBe(false);
+      expect(inspector.rowsByTab.project.some((row) => row.keyPath === keyPath)).toBe(false);
+      expect(inspector.rowsByTab.global.some((row) => row.keyPath === keyPath)).toBe(false);
+      expect(inspector.rowsByTab.defaults.some((row) => row.keyPath === keyPath)).toBe(false);
+    }
   });
 });

@@ -101,6 +101,29 @@ describe("TarArchiveAdapter", () => {
     await expect(adapter.readManifest(outPath)).rejects.toThrow(/not valid JSON/);
   });
 
+  it("rejects structurally invalid schema-v1 manifests", async () => {
+    const outPath = join(tmpDir, "invalid-shape.tar.gz");
+    await adapter.writeTarGz(outPath, [
+      {
+        path: "invalid-shape.mission/manifest.json",
+        content: JSON.stringify({ schemaVersion: 1 }) + "\n",
+      },
+    ]);
+
+    await expect(adapter.readManifest(outPath)).rejects.toThrow(/manifest/i);
+  });
+
+  it("rejects bundle files that escape the staging root", async () => {
+    const outPath = join(tmpDir, "unsafe-path.tar.gz");
+
+    await expect(adapter.writeTarGz(outPath, [
+      {
+        path: "../escaped.txt",
+        content: "nope",
+      },
+    ])).rejects.toThrow(/outside the allowed root/i);
+  });
+
   it("surfaces tar errors when given a missing file", async () => {
     const missing = join(tmpDir, "does-not-exist.tar.gz");
     await expect(adapter.readManifest(missing)).rejects.toThrow();

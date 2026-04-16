@@ -18,6 +18,7 @@ import type {
 import { MISSION_ID_PATTERN } from "@/features/mission/index.js";
 import type { HandoffStorePort } from "@/features/handoff/index.js";
 import type { ReplyStorePort } from "@/features/reply/index.js";
+import { MaestroError } from "@/shared/errors.js";
 import { readText, dirExists } from "@/shared/lib/fs.js";
 import { MAESTRO_DIR, MEMORY_DIR } from "@/shared/domain/defaults.js";
 import { assertSafeSegment } from "@/shared/lib/path-safety.js";
@@ -72,7 +73,10 @@ export async function collectBundleSources(
 
   const mission = await deps.missionStore.get(missionId);
   if (!mission) {
-    throw new Error(`Mission ${missionId} not found`);
+    throw new MaestroError(`Mission ${missionId} not found`, [
+      "List missions: maestro mission list",
+      "Check that the mission ID is correct",
+    ]);
   }
 
   // mission.json
@@ -314,4 +318,3 @@ function filterOutcomesForMission(
   }
   return kept.length > 0 ? kept.join("\n") + "\n" : "";
 }
-

@@ -70,6 +70,12 @@ const KNOWN_AGENT_OPTIONS = [
   "aider",
   "cursor",
 ] as const;
+const HIDDEN_CONFIG_KEY_PATTERNS = [
+  /^execution\.(stopOnFailure|retryBudget|rotateWorkerOnRetry)$/,
+  /^parallel\./,
+  /^supervision\./,
+  /^workers\.[^.]+\.outputMode$/,
+] as const;
 
 export function resolveConfigScopeForKey(keyPath: string, scope: ConfigScope): ConfigScope {
   return isGlobalOnlyConfigKey(keyPath) ? "global" : scope;
@@ -105,7 +111,9 @@ export function buildConfigInspector(
     ...Object.keys(defaults),
     ...Object.keys(project),
     ...Object.keys(global),
-    ])].sort();
+    ])]
+    .filter((path) => isVisibleConfigPath(path))
+    .sort();
 
   const workerSlugs = [...Object.keys(layers.effective.workers ?? {})].sort();
   const availabilityBySlug = buildWorkerAvailabilityMap(workerSlugs, layers.effective.workers);
@@ -293,7 +301,8 @@ function buildScopeRows(
   availabilityBySlug: ReadonlyMap<string, WorkerAvailabilityInfo> = new Map(),
   ): readonly MissionControlConfigRow[] {
   const paths = Object.keys(scopeValues).sort();
-  if (paths.length === 0) {
+  const visiblePaths = paths.filter((path) => isVisibleConfigPath(path));
+  if (visiblePaths.length === 0) {
     return [buildReadonlyRow({
       keyPath: `${scope}.empty`,
       label: scope === "default" ? "Built-in defaults" : `No ${scope} settings`,
@@ -306,14 +315,14 @@ function buildScopeRows(
       impactText: scope === "default"
         ? "These values are read-only in Mission Control."
         : `Save a change to ${scope} config to populate this tab.`,
-      source: scope === "default" ? "default" : "none",
-    })];
-  }
+        source: scope === "default" ? "default" : "none",
+      })];
+    }
 
-    return paths.map((path) => {
-      const editMeta = getEditMeta(path, scopeValues[path], workerSlugs);
-      const copy = getRowCopy(path, scope);
-      const ignoredProjectOverride = scope === "project" && isGlobalOnlyConfigKey(path);
+      return visiblePaths.map((path) => {
+        const editMeta = getEditMeta(path, scopeValues[path], workerSlugs);
+        const copy = getRowCopy(path, scope);
+        const ignoredProjectOverride = scope === "project" && isGlobalOnlyConfigKey(path);
       const editKind = scope === "default" || ignoredProjectOverride ? "readonly" : editMeta.editKind;
       const description = ignoredProjectOverride
         ? "This setting is global-only. Project config values are ignored."
@@ -514,6 +523,10 @@ function flattenConfig(
 
   return result;
   }
+
+function isVisibleConfigPath(keyPath: string): boolean {
+  return !HIDDEN_CONFIG_KEY_PATTERNS.some((pattern) => pattern.test(keyPath));
+}
 
   function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

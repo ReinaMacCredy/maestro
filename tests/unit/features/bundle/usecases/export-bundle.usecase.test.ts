@@ -59,12 +59,11 @@ class InMemoryArchive implements ArchivePort {
 const missionStore: MissionStorePort = {
   async get(id) { return id === MISSION_ID ? mission : undefined; },
   async exists(id) { return id === MISSION_ID; },
-  async stage() { throw new Error("nope"); },
+  async stage(): Promise<string> { throw new Error("nope"); },
   async finalize() { throw new Error("nope"); },
   async update() { return undefined; },
   async list() { return [mission]; },
   async listIds() { return [MISSION_ID]; },
-  async cleanOrphanedStaging() { return 0; },
 };
 
 const featureStore: FeatureStorePort = {

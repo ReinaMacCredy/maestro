@@ -132,6 +132,25 @@ describe("manage-agents use case logic", () => {
       expect(droid?.action).toBe("skipped");
     });
 
+    it("cleans stale inline blocks even when MAESTRO.md and reference already match", async () => {
+      const maestroDir = join(tmpDir, ".maestro");
+      await mkdir(maestroDir, { recursive: true });
+      await writeFile(join(maestroDir, REFERENCE_FILE), AGENT_INSTRUCTION_BLOCK + "\n");
+      await writeFile(
+        join(maestroDir, "AGENTS.md"),
+        `# Config\n\n${REFERENCE_LINE}\n\n${wrapBlock("Old maestro instructions")}\n`,
+      );
+
+      const results = await injectAgentBlocks(tmpDir);
+      const droid = results.find((r) => r.agent === "Droid CLI");
+
+      expect(droid?.action).toBe("migrated");
+
+      const config = await readFile(join(maestroDir, "AGENTS.md"), "utf8");
+      expect(hasReference(config)).toBe(true);
+      expect(hasBlock(config)).toBe(false);
+    });
+
     it("updates MAESTRO.md when content differs", async () => {
       const maestroDir = join(tmpDir, ".maestro");
       await mkdir(maestroDir, { recursive: true });

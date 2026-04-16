@@ -42,6 +42,22 @@ interface ExistingConfig {
   readonly content: string;
 }
 
+function stripLegacyAgentSections(content: string): {
+  readonly cleaned: string;
+  readonly hadLegacySections: boolean;
+} {
+  let cleaned = content;
+  const blockCleaned = removeBlock(cleaned);
+  if (blockCleaned !== null) cleaned = blockCleaned;
+  const legacyCleaned = removeLegacyBlock(cleaned);
+  if (legacyCleaned !== null) cleaned = legacyCleaned;
+
+  return {
+    cleaned,
+    hadLegacySections: blockCleaned !== null || legacyCleaned !== null,
+  };
+}
+
 async function processInject(agent: AgentConfigSpec, projectDir: string): Promise<InjectResult> {
   const configPath = agentConfigPath(agent, projectDir);
   const dirPath = agentConfigDirPath(agent, projectDir);
@@ -69,8 +85,9 @@ async function processInject(agent: AgentConfigSpec, projectDir: string): Promis
   // Ensure @MAESTRO.md reference exists in the main config file
   const mainContent = targetContent ?? legacySource?.content ?? "";
   const alreadyReferenced = hasReference(mainContent);
+  const { cleaned, hadLegacySections } = stripLegacyAgentSections(mainContent);
 
-  if (alreadyReferenced && refUpToDate) {
+  if (alreadyReferenced && refUpToDate && !hadLegacySections) {
     if (migrating) {
       // Content came from legacy path but reference already present -- write to target
       await ensureDir(dirPath);
@@ -81,21 +98,13 @@ async function processInject(agent: AgentConfigSpec, projectDir: string): Promis
   }
 
   // Clean up old block markers and legacy headings before adding reference
-  let cleaned = mainContent;
-  const blockCleaned = removeBlock(cleaned);
-  if (blockCleaned !== null) cleaned = blockCleaned;
-  const legacyCleaned = removeLegacyBlock(cleaned);
-  if (legacyCleaned !== null) cleaned = legacyCleaned;
-
-  const hadOldBlocks = blockCleaned !== null || legacyCleaned !== null;
-
   // Add the @MAESTRO.md reference
   const final = injectReference(cleaned);
 
   await ensureDir(dirPath);
   await writeText(configPath, final);
 
-  const action = migrating || hadOldBlocks ? "migrated"
+  const action = migrating || hadLegacySections ? "migrated"
     : alreadyReferenced ? "updated"
     : "injected";
 

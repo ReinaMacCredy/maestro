@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { collectBundleSources } from "@/features/bundle/usecases/collect-bundle-sources.usecase.js";
 import type { BundleFile } from "@/features/bundle/domain/bundle-types.js";
+import { MaestroError } from "@/shared/errors.js";
 import type {
   Assertion,
   AssertionStorePort,
@@ -18,12 +19,19 @@ import type { HandoffStorePort } from "@/features/handoff/index.js";
 import type {
   UkiHandoff,
   UkiHandoffContent,
-  UkiMaestroRefs,
 } from "@/features/handoff/index.js";
 import type { ReplyStorePort } from "@/features/reply/index.js";
 import type { WorkerReply } from "@/features/reply/index.js";
 
 const MISSION_ID = "2026-04-13-001";
+
+interface TestUkiMaestroRefs {
+  readonly missionId?: string;
+  readonly featureId?: string;
+  readonly milestoneId?: string;
+  readonly planPath?: string;
+  readonly specPath?: string;
+}
 
 let projectDir: string;
 
@@ -93,7 +101,7 @@ function buildCheckpoint(id: string): Checkpoint {
   };
 }
 
-function buildHandoffContent(refs: UkiMaestroRefs): UkiHandoffContent {
+function buildHandoffContent(refs: TestUkiMaestroRefs): UkiHandoffContent {
   return {
     mode: "execute",
     currentState: "state",
@@ -116,7 +124,7 @@ function buildHandoffContent(refs: UkiMaestroRefs): UkiHandoffContent {
   };
 }
 
-function buildHandoff(id: string, refs: UkiMaestroRefs): UkiHandoff {
+function buildHandoff(id: string, refs: TestUkiMaestroRefs): UkiHandoff {
   return {
     id,
     version: "5.4",
@@ -143,12 +151,11 @@ class FakeMissionStore implements MissionStorePort {
   constructor(private readonly missions: ReadonlyMap<string, Mission>) {}
   async get(id: string) { return this.missions.get(id); }
   async exists(id: string) { return this.missions.has(id); }
-  async stage() { throw new Error("not implemented"); }
+  async stage(): Promise<string> { throw new Error("not implemented"); }
   async finalize() { throw new Error("not implemented"); }
   async update() { return undefined; }
   async list() { return [...this.missions.values()]; }
   async listIds() { return [...this.missions.keys()]; }
-  async cleanOrphanedStaging() { return 0; }
 }
 
 class FakeFeatureStore implements FeatureStorePort {
@@ -387,13 +394,14 @@ describe("collectBundleSources", () => {
 
   it("throws when the mission does not exist", async () => {
     const deps = makeDeps();
-    await expect(
-      collectBundleSources(deps, {
-        missionId: "2020-01-01-999",
-        projectDir,
-        options: { redact: [] },
-      }),
-    ).rejects.toThrow(/not found/);
+    const promise = collectBundleSources(deps, {
+      missionId: "2020-01-01-999",
+      projectDir,
+      options: { redact: [] },
+    });
+
+    await expect(promise).rejects.toBeInstanceOf(MaestroError);
+    await expect(promise).rejects.toThrow(/not found/);
   });
 
   it("rejects unsafe mission ids", async () => {
