@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.37.4 - Inline GitHub release notes
+
+- Publish GitHub releases with readable inline notes instead of only the
+  default compare link.
+- Prefer the matching `CHANGELOG.md` section for release notes when it
+  exists, and fall back to inline commit bullets when it does not.
+
 ## 0.36.0 - Mission bundles (phase 1: export + inspect)
 
 - Add `maestro bundle export <missionId>` that packages a mission and
