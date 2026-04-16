@@ -178,6 +178,26 @@ describe("JsonlTaskStoreAdapter", () => {
 
       await expect(store.update(root.id, { parentId: leaf.id })).rejects.toThrow(MaestroError);
     });
+
+    it("rejects reopening a claimed task via update", async () => {
+      const task = await store.create({ title: "Claimed" });
+      await store.claim(task.id, "codex-session-a");
+
+      await expect(store.update(task.id, { status: "open" })).rejects.toThrow(MaestroError);
+    });
+
+    it("rejects moving an unclaimed task to in_progress via update", async () => {
+      const task = await store.create({ title: "Unclaimed" });
+
+      await expect(store.update(task.id, { status: "in_progress" })).rejects.toThrow(MaestroError);
+    });
+
+    it("rejects edits to closed tasks at the store layer", async () => {
+      const task = await store.create({ title: "Done" });
+      await store.close(task.id, { reason: "shipped" });
+
+      await expect(store.update(task.id, { title: "still mutable" })).rejects.toThrow(MaestroError);
+    });
   });
 
   describe("claim / unclaim", () => {
@@ -245,6 +265,33 @@ describe("JsonlTaskStoreAdapter", () => {
 
       const stored = await store.get(task.id);
       expect(stored?.assignee).toBe((fulfilled[0] as PromiseFulfilledResult<{ assignee?: string }>).value.assignee);
+    });
+
+    it("normalizes legacy same-owner claims into canonical claimed state", async () => {
+      const tasksDir = join(tmpDir, ".maestro", "tasks");
+      await mkdir(tasksDir, { recursive: true });
+      await Bun.write(
+        join(tasksDir, "tasks.jsonl"),
+        `${JSON.stringify({
+          id: "tsk-abc123",
+          title: "Legacy",
+          type: "task",
+          priority: 2,
+          status: "open",
+          labels: [],
+          dependsOn: [],
+          assignee: "codex-legacy",
+          createdAt: "2026-04-12T00:00:00.000Z",
+          updatedAt: "2026-04-12T00:00:00.000Z",
+        })}\n`,
+      );
+
+      const claimed = await store.claim("tsk-abc123", "codex-legacy");
+
+      expect(claimed.assignee).toBe("codex-legacy");
+      expect(claimed.status).toBe("in_progress");
+      expect(claimed.claimedAt).toBeString();
+      expect(claimed.updatedAt).not.toBe("2026-04-12T00:00:00.000Z");
     });
   });
 

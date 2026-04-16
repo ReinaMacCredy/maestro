@@ -29,11 +29,13 @@ import {
   validateTask,
 } from "../domain/task-validators.js";
 import {
+  claimedTaskCannotBeReopened,
   taskAlreadyClaimed,
   taskAlreadyClosed,
   taskClaimOwnedByDifferentSession,
   taskNotClaimed,
   taskNotFound,
+  taskStatusRequiresClaim,
   unknownDependency,
 } from "../domain/task-errors.js";
 import { MaestroError } from "@/shared/errors.js";
@@ -137,12 +139,23 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
       if (!existing) {
         throw taskNotFound(id);
       }
+      if (existing.status === "closed") {
+        throw taskAlreadyClosed(id);
+      }
 
       if (patch.parentId !== undefined && patch.parentId !== "") {
         if (!tasks.has(patch.parentId)) {
           throw taskNotFound(patch.parentId);
         }
         assertNoParentCycle(id, patch.parentId, tasks);
+      }
+
+      const nextStatus = patch.status ?? existing.status;
+      if (!existing.assignee && nextStatus === "in_progress") {
+        throw taskStatusRequiresClaim("in_progress");
+      }
+      if (existing.assignee && nextStatus === "open") {
+        throw claimedTaskCannotBeReopened(id);
       }
 
       const labels = applyLabelPatch(existing.labels, patch.addLabels, patch.removeLabels);
@@ -178,19 +191,26 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
       if (existing.status === "closed") {
         throw taskAlreadyClosed(id);
       }
-      if (existing.assignee === sessionId) {
-        return existing;
-      }
-      if (existing.assignee && !opts.force) {
+      if (existing.assignee && existing.assignee !== sessionId && !opts.force) {
         throw taskAlreadyClaimed(id, existing.assignee);
+      }
+
+      const normalizedStatus = existing.status === "open" ? "in_progress" : existing.status;
+      const needsNormalization =
+        existing.assignee !== sessionId ||
+        existing.claimedAt === undefined ||
+        existing.status !== normalizedStatus;
+
+      if (!needsNormalization) {
+        return existing;
       }
 
       const now = new Date().toISOString();
       const claimed: Task = {
         ...existing,
         assignee: sessionId,
-        claimedAt: now,
-        status: existing.status === "open" ? "in_progress" : existing.status,
+        claimedAt: existing.claimedAt ?? now,
+        status: normalizedStatus,
         updatedAt: now,
       };
 

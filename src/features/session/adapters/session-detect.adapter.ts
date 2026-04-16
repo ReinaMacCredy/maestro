@@ -20,39 +20,91 @@ interface ClaudeSessionFile {
   readonly startedAt: number;
 }
 
+interface SessionRootOptions {
+  readonly claudeSessionsDir?: string;
+  readonly claudeProjectsDir?: string;
+  readonly codexSessionsDir?: string;
+}
+
 export class ClaudeSessionDetectAdapter implements SessionDetectPort {
+  constructor(private readonly roots: SessionRootOptions = {}) {}
+
   async detect(_cwd: string): Promise<AgentSession | undefined> {
     if (process.env.CLAUDECODE === "1") {
       const session = await readJson<ClaudeSessionFile>(
-        join(resolveClaudeSessionsDir(), `${process.ppid}.json`),
+        join(this.resolveClaudeSessionsDir(), `${process.ppid}.json`),
       );
       if (session?.sessionId && session.cwd && session.startedAt) {
-        return buildClaudeSession(session);
+        return this.buildClaudeSession(session);
       }
     }
 
     const codexThreadId = process.env.CODEX_THREAD_ID;
     if (codexThreadId) {
-      return resolveCodexSession(codexThreadId);
+      return this.resolveCodexSession(codexThreadId);
     }
 
     return undefined;
   }
-}
 
-function buildClaudeSession(session: ClaudeSessionFile): AgentSession {
-  const sourcePath = join(
-    resolveClaudeProjectsDir(),
-    encodeProjectPath(normalizePath(session.cwd)),
-    `${session.sessionId}.jsonl`,
-  );
+  private buildClaudeSession(session: ClaudeSessionFile): AgentSession {
+    const sourcePath = join(
+      this.resolveClaudeProjectsDir(),
+      encodeProjectPath(normalizePath(session.cwd)),
+      `${session.sessionId}.jsonl`,
+    );
 
-  return {
-    agent: "claude-code",
-    sessionId: session.sessionId,
-    sourcePath,
-    startedAt: session.startedAt,
-  };
+    return {
+      agent: "claude-code",
+      sessionId: session.sessionId,
+      sourcePath,
+      startedAt: session.startedAt,
+    };
+  }
+
+  private async resolveCodexSession(threadId: string): Promise<AgentSession | undefined> {
+    try {
+      const glob = new Bun.Glob(`**/*-${threadId}*.jsonl`);
+      for await (const path of glob.scan({ cwd: this.resolveCodexSessionsDir(), absolute: true })) {
+        const filename = basename(path);
+        const idMatch = filename.match(/rollout-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-(.+)\.jsonl$/);
+        const fullId = idMatch?.[1] ?? threadId;
+
+        if (fullId === threadId || fullId.startsWith(threadId)) {
+          return {
+            agent: "codex",
+            sessionId: fullId,
+            sourcePath: path,
+            startedAt: parseCodexTimestamp(filename),
+          };
+        }
+      }
+      return undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private resolveClaudeSessionsDir(): string {
+    return resolveDirOverride(
+      process.env.MAESTRO_CLAUDE_SESSIONS_DIR,
+      this.roots.claudeSessionsDir ?? join(homedir(), ".claude", "sessions"),
+    );
+  }
+
+  private resolveClaudeProjectsDir(): string {
+    return resolveDirOverride(
+      process.env.MAESTRO_CLAUDE_PROJECTS_DIR,
+      this.roots.claudeProjectsDir ?? join(homedir(), ".claude", "projects"),
+    );
+  }
+
+  private resolveCodexSessionsDir(): string {
+    return resolveDirOverride(
+      process.env.MAESTRO_CODEX_SESSIONS_DIR,
+      this.roots.codexSessionsDir ?? join(homedir(), ".codex", "sessions"),
+    );
+  }
 }
 
 function parseCodexTimestamp(filename: string): number | undefined {
@@ -64,42 +116,15 @@ function parseCodexTimestamp(filename: string): number | undefined {
   return Number.isNaN(ts) ? undefined : ts;
 }
 
-async function resolveCodexSession(threadId: string): Promise<AgentSession | undefined> {
-  try {
-    const glob = new Bun.Glob(`**/*-${threadId}*.jsonl`);
-    for await (const path of glob.scan({ cwd: resolveCodexSessionsDir(), absolute: true })) {
-      const filename = basename(path);
-      const idMatch = filename.match(/rollout-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-(.+)\.jsonl$/);
-      const fullId = idMatch?.[1] ?? threadId;
-
-      if (fullId === threadId || fullId.startsWith(threadId)) {
-        return {
-          agent: "codex",
-          sessionId: fullId,
-          sourcePath: path,
-          startedAt: parseCodexTimestamp(filename),
-        };
-      }
-    }
-    return undefined;
-  } catch {
-    return undefined;
+function resolveDirOverride(
+  override: string | undefined,
+  fallback: string,
+): string {
+  if (override === undefined) {
+    return fallback;
   }
-}
-
-function resolveClaudeSessionsDir(): string {
-  return process.env.MAESTRO_CLAUDE_SESSIONS_DIR
-    ?? join(homedir(), ".claude", "sessions");
-}
-
-function resolveClaudeProjectsDir(): string {
-  return process.env.MAESTRO_CLAUDE_PROJECTS_DIR
-    ?? join(homedir(), ".claude", "projects");
-}
-
-function resolveCodexSessionsDir(): string {
-  return process.env.MAESTRO_CODEX_SESSIONS_DIR
-    ?? join(homedir(), ".codex", "sessions");
+  const trimmed = override.trim();
+  return trimmed.length > 0 ? trimmed : fallback;
 }
 
 function normalizePath(p: string): string {

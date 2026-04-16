@@ -1136,36 +1136,32 @@ export async function buildTaskBoard(
   taskStore?: TaskQueryPort,
 ): Promise<TaskBoardSnapshot | null> {
   if (!taskStore) return null;
-  try {
-    const tasks = await taskStore.all();
-    if (tasks.length === 0) return null;
+  const tasks = await taskStore.all();
+  if (tasks.length === 0) return null;
 
-    const columns = Object.fromEntries(
-      TASK_STATUSES.map((s) => [s, [] as TaskBoardItem[]]),
-    ) as Record<TaskStatus, TaskBoardItem[]>;
+  const columns = Object.fromEntries(
+    TASK_STATUSES.map((s) => [s, [] as TaskBoardItem[]]),
+  ) as Record<TaskStatus, TaskBoardItem[]>;
 
-    for (const task of tasks) {
-      const item: TaskBoardItem = {
-        id: task.id,
-        title: task.title,
-        status: task.status,
-        priority: task.priority,
-        assignee: task.assignee,
-        labels: task.labels,
-        dependsOnCount: task.dependsOn.length,
-      };
-      columns[task.status]?.push(item);
-    }
-
-    // Sort each column by priority (lower = higher priority), then createdAt
-    for (const status of TASK_STATUSES) {
-      columns[status]!.sort((a, b) => a.priority - b.priority);
-    }
-
-    return { columns, totalCount: tasks.length };
-  } catch {
-    return null;
+  for (const task of tasks) {
+    const item: TaskBoardItem = {
+      id: task.id,
+      title: task.title,
+      status: task.status,
+      priority: task.priority,
+      assignee: task.assignee,
+      labels: task.labels,
+      dependsOnCount: task.dependsOn.length,
+    };
+    columns[task.status]?.push(item);
   }
+
+  // Sort each column by priority (lower = higher priority), then createdAt
+  for (const status of TASK_STATUSES) {
+    columns[status]!.sort((a, b) => a.priority - b.priority);
+  }
+
+  return { columns, totalCount: tasks.length };
 }
 
 export function buildTimelineMilestones(

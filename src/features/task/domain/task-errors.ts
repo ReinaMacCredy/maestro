@@ -96,6 +96,26 @@ export function taskAlreadyClosed(id: string): MaestroError {
   );
 }
 
+export function taskStatusRequiresClaim(status: "in_progress"): MaestroError {
+  return new MaestroError(
+    `Status '${status}' requires task ownership`,
+    [
+      "Use 'maestro task claim <id>' to enter in-progress work",
+      "Or choose another status such as 'open', 'blocked', or 'deferred'",
+    ],
+  );
+}
+
+export function claimedTaskCannotBeReopened(id: string): MaestroError {
+  return new MaestroError(
+    `Task ${id} cannot move to 'open' while still claimed`,
+    [
+      "Use 'maestro task unclaim <id>' to release ownership first",
+      "Or move the task to 'blocked' or 'deferred' while keeping the claim",
+    ],
+  );
+}
+
 export function taskAlreadyClaimed(id: string, assignee: string): MaestroError {
   return new MaestroError(
     `Task ${id} is already claimed by ${assignee}`,

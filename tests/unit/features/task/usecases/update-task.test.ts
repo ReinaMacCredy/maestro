@@ -38,8 +38,31 @@ describe("updateTask", () => {
 
   it("accepts other status transitions", async () => {
     const task = await createTask(store, { title: "Doing" });
-    const updated = await updateTask(store, task.id, { status: "in_progress" });
-    expect(updated.status).toBe("in_progress");
+    const updated = await updateTask(store, task.id, { status: "blocked" });
+    expect(updated.status).toBe("blocked");
+  });
+
+  it("rejects moving an unclaimed task to in_progress", async () => {
+    const task = await createTask(store, { title: "Doing" });
+    await expect(
+      updateTask(store, task.id, { status: "in_progress" }),
+    ).rejects.toThrow(MaestroError);
+  });
+
+  it("rejects reopening a claimed task via update", async () => {
+    const task = await createTask(store, { title: "Claimed" });
+    await store.claim(task.id, "codex-session-a");
+    await expect(
+      updateTask(store, task.id, { status: "open" }),
+    ).rejects.toThrow(MaestroError);
+  });
+
+  it("rejects edits to closed tasks", async () => {
+    const task = await createTask(store, { title: "Done" });
+    await store.close(task.id, { reason: "shipped" });
+    await expect(
+      updateTask(store, task.id, { title: "still mutable?" }),
+    ).rejects.toThrow(MaestroError);
   });
 
   it("rejects parenting under an unknown task", async () => {

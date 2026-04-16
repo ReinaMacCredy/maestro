@@ -246,6 +246,17 @@ describe("buildTaskBoard", () => {
     const result = await buildTaskBoard(store);
     expect(result).toBeNull();
   });
+
+  it("surfaces task store errors instead of hiding corruption", async () => {
+    const store = {
+      get: async () => undefined,
+      all: async () => {
+        throw new Error("corrupted tasks");
+      },
+    };
+
+    await expect(buildTaskBoard(store)).rejects.toThrow("corrupted tasks");
+  });
 });
 
 // ---------------------------------------------------------------------------

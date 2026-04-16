@@ -87,6 +87,22 @@ describe("ClaudeSessionDetectAdapter", () => {
       expect(session).toBeUndefined();
     });
 
+    it("treats an empty codex root override as unset", async () => {
+      const fallbackDir = join(tempRoot, "fallback-codex");
+      const cwdRolloutPath = join(tempRoot, "rollout-2026-04-16T14-00-00-thread-emptydir.jsonl");
+      await mkdir(fallbackDir, { recursive: true });
+      await writeFile(cwdRolloutPath, "{}\n");
+      process.env.MAESTRO_CODEX_SESSIONS_DIR = "";
+      process.env.CODEX_THREAD_ID = "thread-emptydir";
+
+      const hermeticAdapter = new ClaudeSessionDetectAdapter({
+        codexSessionsDir: fallbackDir,
+      });
+      const session = await hermeticAdapter.detect(tempRoot);
+
+      expect(session).toBeUndefined();
+    });
+
     it("returns a claude session from the configured session roots", async () => {
       const cwd = join(tempRoot, "repo");
       const sessionId = "claude-session-1";

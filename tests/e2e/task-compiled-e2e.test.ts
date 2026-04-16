@@ -346,6 +346,30 @@ describe("compiled task feature E2E", () => {
     );
 
     it(
+      "rejects update paths that would violate ownership invariants",
+      async () => {
+        const sessionA = await seedCodexSession(tmpDir, "task-claim-invariants");
+        const id = (await runCompiled(["task", "q", "ownership invariants"], tmpDir)).stdout;
+
+        await runCompiled(["task", "claim", id, "--json"], tmpDir, {
+          env: sessionA,
+        });
+
+        const reopen = await runCompiled(["task", "update", id, "--status", "open"], tmpDir);
+        expect(reopen.exitCode).not.toBe(0);
+        expect(reopen.stderr).toContain("cannot move to 'open' while still claimed");
+
+        const closedId = (await runCompiled(["task", "q", "closed immutable"], tmpDir)).stdout;
+        await runCompiled(["task", "close", closedId, "--reason", "done"], tmpDir);
+
+        const closedEdit = await runCompiled(["task", "update", closedId, "--title", "still mutable?"], tmpDir);
+        expect(closedEdit.exitCode).not.toBe(0);
+        expect(closedEdit.stderr).toContain("already closed");
+      },
+      SLOW_CLI_TIMEOUT_MS,
+    );
+
+    it(
       "validates --depends-on against existing tasks",
       async () => {
       const bad = await runCompiled(
