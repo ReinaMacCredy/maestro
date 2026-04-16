@@ -51,10 +51,8 @@ main() {
   fi
 
   echo ""
-  echo "Next steps:"
-  echo "  maestro init --global    # set up global config"
-  echo "  maestro init             # set up project config"
-  echo "  maestro doctor           # verify everything works"
+  info "Running maestro install..."
+  "$TARGET_BIN" install
 }
 
 build_download_url() {
