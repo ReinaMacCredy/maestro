@@ -24,9 +24,9 @@ export {
   validateTask,
   validateCreateInput,
   validateUpdateInput,
-  validateDependencyIds,
+  validateBlockIds,
   assertNoParentCycle,
-  assertNoDependencyCycle,
+  assertNoBlockCycle,
   isTaskStatus,
   isTaskType,
   isTaskPriority,
@@ -50,8 +50,8 @@ export { updateTask } from "./usecases/update-task.usecase.js";
 export { claimTask } from "./usecases/claim-task.usecase.js";
 export { unclaimTask } from "./usecases/unclaim-task.usecase.js";
 export {
-  addTaskDependencies,
-  removeTaskDependencies,
+  blockTasks,
+  unblockTasks,
 } from "./usecases/manage-task-dependencies.usecase.js";
 export { closeTask } from "./usecases/close-task.usecase.js";
 export {

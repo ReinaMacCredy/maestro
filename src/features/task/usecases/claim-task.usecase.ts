@@ -6,5 +6,8 @@ export async function claimTask(
   id: string,
   input: ClaimTaskInput,
 ): Promise<Task> {
-  return store.claim(id, input.sessionId, { force: input.force });
+  return store.claim(id, input.sessionId, {
+    force: input.force,
+    checkBusy: input.checkBusy,
+  });
 }

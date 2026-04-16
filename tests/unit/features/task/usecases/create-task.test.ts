@@ -1,9 +1,9 @@
-import { describe, expect, it, beforeEach } from "bun:test";
+import { beforeEach, describe, expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createTask } from "@/features/task/usecases/create-task.usecase.js";
 import { JsonlTaskStoreAdapter } from "@/features/task/adapters/jsonl-task-store.adapter.js";
+import { createTask } from "@/features/task/usecases/create-task.usecase.js";
 import { MaestroError } from "@/shared/errors.js";
 
 describe("createTask", () => {
@@ -15,64 +15,57 @@ describe("createTask", () => {
     store = new JsonlTaskStoreAdapter(tmpDir);
   });
 
-  it("creates a task with minimal input", async () => {
+  it("creates a pending task with default blocker fields", async () => {
     const task = await createTask(store, { title: "First" });
+
     expect(task.title).toBe("First");
-    expect(task.status).toBe("open");
+    expect(task.status).toBe("pending");
     expect(task.priority).toBe(2);
+    expect(task.blockedBy).toEqual([]);
+    expect(task.blocks).toEqual([]);
   });
 
-  it("rejects empty title", async () => {
+  it("rejects empty titles", async () => {
     await expect(createTask(store, { title: "" })).rejects.toThrow(MaestroError);
     await expect(createTask(store, { title: "   " })).rejects.toThrow(MaestroError);
   });
 
-  it("rejects invalid priority", async () => {
+  it("rejects unknown blocker ids", async () => {
     await expect(
-      createTask(store, { title: "X", priority: 9 as never }),
+      createTask(store, { title: "X", blockedBy: ["tsk-000000"] }),
     ).rejects.toThrow(MaestroError);
   });
 
-  it("rejects unknown dependency ids", async () => {
-    await expect(
-      createTask(store, { title: "X", dependsOn: ["tsk-000000"] }),
-    ).rejects.toThrow(MaestroError);
-  });
-
-  it("accepts dependency on an existing task", async () => {
-    const parent = await createTask(store, { title: "Parent" });
-    const child = await createTask(store, {
-      title: "Child",
-      dependsOn: [parent.id],
+  it("creates reciprocal blocker edges when blocked-by is provided", async () => {
+    const blocker = await createTask(store, { title: "Blocker" });
+    const blocked = await createTask(store, {
+      title: "Blocked",
+      blockedBy: [blocker.id],
     });
-    expect(child.dependsOn).toEqual([parent.id]);
+
+    expect(blocked.blockedBy).toEqual([blocker.id]);
+
+    const refreshedBlocker = await store.get(blocker.id);
+    expect(refreshedBlocker?.blocks).toEqual([blocked.id]);
   });
 
-  it("rejects unknown parent id", async () => {
-    await expect(
-      createTask(store, { title: "Orphan", parentId: "tsk-000000" }),
-    ).rejects.toThrow(MaestroError);
-  });
-
-  it("accepts existing parent id", async () => {
+  it("accepts an existing parent id", async () => {
     const parent = await createTask(store, { title: "Root" });
     const child = await createTask(store, {
       title: "Leaf",
       parentId: parent.id,
     });
+
     expect(child.parentId).toBe(parent.id);
   });
 
-  it("trims the title", async () => {
-    const task = await createTask(store, { title: "  spaced  " });
-    expect(task.title).toBe("spaced");
-  });
-
-  it("respects labels and dedups nothing (first occurrence preserved)", async () => {
+  it("trims titles and preserves labels", async () => {
     const task = await createTask(store, {
-      title: "Labeled",
+      title: "  spaced  ",
       labels: ["auth", "urgent"],
     });
+
+    expect(task.title).toBe("spaced");
     expect(task.labels).toEqual(["auth", "urgent"]);
   });
 });

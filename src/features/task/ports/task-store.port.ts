@@ -21,17 +21,20 @@ export interface TaskStorePort extends TaskQueryPort {
   update(id: string, patch: UpdateTaskInput): Promise<Task>;
 
   /** Claim an existing task for a session, optionally forcing takeover. */
-  claim(id: string, sessionId: string, opts?: { force?: boolean }): Promise<Task>;
+  claim(id: string, sessionId: string, opts?: { force?: boolean; checkBusy?: boolean }): Promise<Task>;
 
   /** Release task ownership for a session, optionally forcing release. */
   unclaim(id: string, sessionId: string, opts?: { force?: boolean }): Promise<Task>;
 
-  /** Add dependency edges to an existing task. */
-  addDependencies(id: string, depIds: readonly string[]): Promise<Task>;
+  /** Add blocker edges to an existing task. */
+  block(id: string, blockedTaskIds: readonly string[]): Promise<Task>;
 
-  /** Remove dependency edges from an existing task. */
-  removeDependencies(id: string, depIds: readonly string[]): Promise<Task>;
+  /** Remove blocker edges from an existing task. */
+  unblock(id: string, blockedTaskIds: readonly string[]): Promise<Task>;
 
   /** Close a task. Throws if id does not exist. */
   close(id: string, input: CloseTaskInput): Promise<Task>;
+
+  /** Release unresolved tasks owned by a session back to the pending queue. */
+  releaseOwned(sessionId: string): Promise<readonly Task[]>;
 }

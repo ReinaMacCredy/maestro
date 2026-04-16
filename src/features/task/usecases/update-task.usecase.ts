@@ -3,15 +3,11 @@ import type { TaskStorePort } from "../ports/task-store.port.js";
 import { validateUpdateInput } from "../domain/task-validators.js";
 import {
   claimedTaskCannotBeReopened,
-  closeViaCloseCommand,
-  taskAlreadyClosed,
+  taskAlreadyCompleted,
+  taskReasonRequiresCompletedStatus,
   taskStatusRequiresClaim,
 } from "../domain/task-errors.js";
 
-/**
- * Update a task. Rejects `--status closed` (route through closeTask instead)
- * so the close reason always gets captured.
- */
 export async function updateTask(
   store: TaskStorePort,
   id: string,
@@ -22,17 +18,17 @@ export async function updateTask(
   if (!existing) {
     return store.update(id, validated);
   }
-  if (existing.status === "closed") {
-    throw taskAlreadyClosed(id);
+  if (existing.status === "completed") {
+    throw taskAlreadyCompleted(id);
   }
 
-  if (validated.status === "closed") {
-    throw closeViaCloseCommand();
+  if (validated.reason !== undefined && validated.status !== "completed") {
+    throw taskReasonRequiresCompletedStatus();
   }
   if (!existing.assignee && validated.status === "in_progress") {
     throw taskStatusRequiresClaim("in_progress");
   }
-  if (existing.assignee && validated.status === "open") {
+  if (existing.assignee && validated.status === "pending") {
     throw claimedTaskCannotBeReopened(id);
   }
 

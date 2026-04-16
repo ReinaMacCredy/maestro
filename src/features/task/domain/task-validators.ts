@@ -14,11 +14,12 @@ import {
   invalidTaskField,
   cyclicParent,
   parentDepthExceeded,
-  taskDependencyCycle,
-  taskSelfDependency,
+  taskBlockCycle,
+  taskSelfBlock,
 } from "./task-errors.js";
 
 const MAX_PARENT_DEPTH = 32;
+const LEGACY_STATUSES = new Set(["open", "blocked", "deferred", "closed"]);
 
 export function isTaskStatus(value: unknown): value is TaskStatus {
   return typeof value === "string" && (TASK_STATUSES as readonly string[]).includes(value);
@@ -33,8 +34,13 @@ export function isTaskPriority(value: unknown): value is TaskPriority {
 }
 
 /**
- * Validate a Task object loaded from storage. Returns the task if valid,
- * undefined otherwise. Matches the `validateMission` pattern.
+ * Validate a Task object loaded from storage. Returns the normalized task if
+ * valid, undefined otherwise.
+ *
+ * Legacy task rows are accepted and normalized:
+ * - open|blocked|deferred -> pending
+ * - closed -> completed
+ * - dependsOn -> blockedBy
  */
 export function validateTask(value: unknown): Task | undefined {
   if (typeof value !== "object" || value === null) return undefined;
@@ -44,11 +50,17 @@ export function validateTask(value: unknown): Task | undefined {
   if (typeof t.title !== "string" || t.title.length === 0) return undefined;
   if (!isTaskType(t.type)) return undefined;
   if (!isTaskPriority(t.priority)) return undefined;
-  if (!isTaskStatus(t.status)) return undefined;
+  const normalizedStatus = normalizeStoredStatus(t.status);
+  if (!normalizedStatus) return undefined;
   if (!Array.isArray(t.labels)) return undefined;
   if (!t.labels.every((l) => typeof l === "string")) return undefined;
-  if (!Array.isArray(t.dependsOn)) return undefined;
-  if (!t.dependsOn.every((d) => typeof d === "string")) return undefined;
+
+  const blocks = normalizeTaskIdArray(t.blocks);
+  if (!blocks) return undefined;
+
+  const blockedBy = normalizeBlockedBy(t);
+  if (!blockedBy) return undefined;
+
   if (typeof t.createdAt !== "string") return undefined;
   if (typeof t.updatedAt !== "string") return undefined;
 
@@ -56,7 +68,6 @@ export function validateTask(value: unknown): Task | undefined {
   if (t.parentId !== undefined && typeof t.parentId !== "string") return undefined;
   if (t.assignee !== undefined && typeof t.assignee !== "string") return undefined;
   if (t.claimedAt !== undefined && typeof t.claimedAt !== "string") return undefined;
-  if (t.deferUntil !== undefined && typeof t.deferUntil !== "string") return undefined;
   if (t.closeReason !== undefined && typeof t.closeReason !== "string") return undefined;
 
   return {
@@ -65,13 +76,13 @@ export function validateTask(value: unknown): Task | undefined {
     description: t.description as string | undefined,
     type: t.type,
     priority: t.priority,
-    status: t.status,
+    status: normalizedStatus,
     parentId: t.parentId as string | undefined,
     labels: t.labels as readonly string[],
-    dependsOn: t.dependsOn as readonly string[],
+    blocks,
+    blockedBy,
     assignee: t.assignee as string | undefined,
     claimedAt: t.claimedAt as string | undefined,
-    deferUntil: t.deferUntil as string | undefined,
     closeReason: t.closeReason as string | undefined,
     createdAt: t.createdAt,
     updatedAt: t.updatedAt,
@@ -80,7 +91,6 @@ export function validateTask(value: unknown): Task | undefined {
 
 /**
  * Validate a CreateTaskInput. Throws MaestroError on invalid input.
- * Sanitized inputs are returned for downstream use-case consumption.
  */
 export function validateCreateInput(input: CreateTaskInput): CreateTaskInput {
   if (typeof input.title !== "string" || input.title.trim().length === 0) {
@@ -95,10 +105,10 @@ export function validateCreateInput(input: CreateTaskInput): CreateTaskInput {
   if (input.parentId !== undefined && !TASK_ID_PATTERN.test(input.parentId)) {
     throw invalidTaskField("parent", `must match ${TASK_ID_PATTERN}`);
   }
-  if (input.dependsOn !== undefined) {
-    for (const dep of input.dependsOn) {
-      if (!TASK_ID_PATTERN.test(dep)) {
-        throw invalidTaskField("depends-on", `'${dep}' does not match ${TASK_ID_PATTERN}`);
+  if (input.blockedBy !== undefined) {
+    for (const blocker of input.blockedBy) {
+      if (!TASK_ID_PATTERN.test(blocker)) {
+        throw invalidTaskField("blocked-by", `'${blocker}' does not match ${TASK_ID_PATTERN}`);
       }
     }
   }
@@ -117,7 +127,7 @@ export function validateCreateInput(input: CreateTaskInput): CreateTaskInput {
     priority: input.priority,
     parentId: input.parentId,
     labels: input.labels,
-    dependsOn: input.dependsOn,
+    blockedBy: input.blockedBy,
   };
 }
 
@@ -140,27 +150,31 @@ export function validateUpdateInput(input: UpdateTaskInput): UpdateTaskInput {
   if (input.parentId !== undefined && input.parentId !== "" && !TASK_ID_PATTERN.test(input.parentId)) {
     throw invalidTaskField("parent", `must match ${TASK_ID_PATTERN} or be empty`);
   }
+  if (input.reason !== undefined && typeof input.reason !== "string") {
+    throw invalidTaskField("reason", "must be a string");
+  }
 
   return {
     ...input,
     title: input.title?.trim(),
+    reason: input.reason?.trim(),
   };
 }
 
-export function validateDependencyIds(depIds: readonly string[]): readonly string[] {
-  if (depIds.length === 0) {
-    throw invalidTaskField("depends-on", "must include at least one task id");
+export function validateBlockIds(blockedTaskIds: readonly string[]): readonly string[] {
+  if (blockedTaskIds.length === 0) {
+    throw invalidTaskField("block", "must include at least one task id");
   }
 
   const seen = new Set<string>();
   const normalized: string[] = [];
-  for (const depId of depIds) {
-    if (!TASK_ID_PATTERN.test(depId)) {
-      throw invalidTaskField("depends-on", `'${depId}' does not match ${TASK_ID_PATTERN}`);
+  for (const taskId of blockedTaskIds) {
+    if (!TASK_ID_PATTERN.test(taskId)) {
+      throw invalidTaskField("block", `'${taskId}' does not match ${TASK_ID_PATTERN}`);
     }
-    if (!seen.has(depId)) {
-      normalized.push(depId);
-      seen.add(depId);
+    if (!seen.has(taskId)) {
+      normalized.push(taskId);
+      seen.add(taskId);
     }
   }
 
@@ -170,9 +184,6 @@ export function validateDependencyIds(depIds: readonly string[]): readonly strin
 /**
  * Walk the parent chain from `startId` and ensure `candidateParentId` does not
  * appear as an ancestor of `startId`, which would create a cycle.
- *
- * Throws cyclicParent if a cycle would be introduced.
- * Throws parentDepthExceeded if the chain is longer than MAX_PARENT_DEPTH.
  */
 export function assertNoParentCycle(
   startId: string,
@@ -188,52 +199,101 @@ export function assertNoParentCycle(
 
   for (let depth = 0; depth < MAX_PARENT_DEPTH; depth++) {
     if (current === undefined) return;
-      const currentTask = tasks.get(current);
-      const parentId = currentTask?.parentId;
-      if (parentId === undefined) return;
-      if (parentId === startId) {
-        chain.push(parentId);
-        throw cyclicParent(startId, chain);
-      }
+    const currentTask = tasks.get(current);
+    const parentId = currentTask?.parentId;
+    if (parentId === undefined) return;
+    if (parentId === startId) {
       chain.push(parentId);
-      current = parentId;
+      throw cyclicParent(startId, chain);
+    }
+    chain.push(parentId);
+    current = parentId;
   }
 
   throw parentDepthExceeded(startId, MAX_PARENT_DEPTH);
 }
 
-export function assertNoDependencyCycle(
-  startId: string,
-  dependencyIds: readonly string[],
+export function assertNoBlockCycle(
+  blockerId: string,
+  blockedTaskIds: readonly string[],
   tasks: ReadonlyMap<string, Task>,
 ): void {
-  for (const depId of dependencyIds) {
-    if (depId === startId) {
-      throw taskSelfDependency(startId);
+  for (const blockedTaskId of blockedTaskIds) {
+    if (blockedTaskId === blockerId) {
+      throw taskSelfBlock(blockerId);
     }
-    walkDependency(depId, [startId, depId], startId, tasks, new Set([startId, depId]));
+    walkBlocks(blockedTaskId, [blockerId, blockedTaskId], blockerId, tasks, new Set([blockerId, blockedTaskId]));
   }
 }
 
-function walkDependency(
+function walkBlocks(
   currentId: string,
   chain: readonly string[],
-  startId: string,
+  blockerId: string,
   tasks: ReadonlyMap<string, Task>,
   visiting: Set<string>,
 ): void {
   const current = tasks.get(currentId);
   if (!current) return;
 
-  for (const depId of current.dependsOn) {
-    if (depId === startId) {
-      throw taskDependencyCycle(startId, [...chain, startId]);
+  for (const blockedTaskId of current.blocks) {
+    if (blockedTaskId === blockerId) {
+      throw taskBlockCycle(blockerId, [...chain, blockerId]);
     }
-    if (visiting.has(depId)) {
+    if (visiting.has(blockedTaskId)) {
       continue;
     }
-    visiting.add(depId);
-    walkDependency(depId, [...chain, depId], startId, tasks, visiting);
-    visiting.delete(depId);
+    visiting.add(blockedTaskId);
+    walkBlocks(blockedTaskId, [...chain, blockedTaskId], blockerId, tasks, visiting);
+    visiting.delete(blockedTaskId);
   }
+}
+
+function normalizeStoredStatus(value: unknown): TaskStatus | undefined {
+  if (isTaskStatus(value)) {
+    return value;
+  }
+  if (typeof value !== "string" || !LEGACY_STATUSES.has(value)) {
+    return undefined;
+  }
+
+  switch (value) {
+    case "open":
+    case "blocked":
+    case "deferred":
+      return "pending";
+    case "closed":
+      return "completed";
+    default:
+      return undefined;
+  }
+}
+
+function normalizeTaskIdArray(value: unknown): readonly string[] | undefined {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) return undefined;
+  if (!value.every((item) => typeof item === "string")) return undefined;
+  return value;
+}
+
+function normalizeBlockedBy(value: Record<string, unknown>): readonly string[] | undefined {
+  const blockedBy = normalizeTaskIdArray(value.blockedBy);
+  if (!blockedBy) return undefined;
+
+  if (value.dependsOn === undefined) {
+    return blockedBy;
+  }
+
+  const legacyDependsOn = normalizeTaskIdArray(value.dependsOn);
+  if (!legacyDependsOn) return undefined;
+
+  const seen = new Set<string>(blockedBy);
+  const normalized = [...blockedBy];
+  for (const depId of legacyDependsOn) {
+    if (!seen.has(depId)) {
+      normalized.push(depId);
+      seen.add(depId);
+    }
+  }
+  return normalized;
 }

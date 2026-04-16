@@ -97,7 +97,7 @@
 
 Maestro has two ways to track work. They coexist and never overlap.
 
-- Use **`maestro task`** (br-style issue graph) when the unit of work is small, mutable, and the plan comes from outside maestro. Tasks are meant for the daily loop: inline capture, dep-aware queries, atomic claim, fast close. Storage is a single `.maestro/tasks/tasks.jsonl` file, one JSON object per line
+- Use **`maestro task`** (Claude-style blocker graph) when the unit of work is small, mutable, and the plan comes from outside maestro. Tasks are meant for the daily loop: inline capture, blocker-aware queries, explicit ownership, and lightweight completion metadata. Storage is a single `.maestro/tasks/tasks.jsonl` file, one JSON object per line
 - Use **`maestro mission`** (contract + gates) when the work is a sprint with a formal plan file, milestones, worker reports, assertions, and an approval step. Missions are heavier and immutable after approval; they are the right tool when you want a verified plan on disk, not a queue
 
 One-line summary: **mission answers "what are we building?", task answers "what do I do next?"**
@@ -106,17 +106,19 @@ One-line summary: **mission answers "what are we building?", task answers "what 
 
 ```bash
 maestro task ready --json --limit 5               # find actionable work
-maestro task claim tsk-abc                        # atomic assign + in_progress
+maestro task claim tsk-abc                        # take ownership
+maestro task update tsk-abc --status in_progress  # explicitly start work
 # ... do the work, commit ...
-maestro task close tsk-abc --reason "shipped"     # finish
+maestro task update tsk-abc --status completed --reason "shipped"  # finish
 # or: maestro task unclaim tsk-abc                # release without closing
+# blockers: maestro task block tsk-a tsk-b        # tsk-a blocks tsk-b
 ```
 
-`task claim` is atomic: it sets `assignee` to the current session id AND `status` to `in_progress` in one write. Use it instead of a bare `--status in_progress` so concurrent agents do not clobber each other. When session auto-detection is unavailable, use `maestro task claim <id> --force --session <id>` or `maestro task unclaim <id> --force --session <id>` as the explicit operator recovery path.
+`task claim` is ownership-only: it sets `assignee` and `claimedAt`, but status stays separate. Use `maestro task update <id> --status in_progress` when work actually starts, and `maestro task update <id> --status completed --reason "..."` when it is done. Blocked tasks cannot be claimed until every task in `blockedBy` is completed. When session auto-detection is unavailable, use `maestro task claim <id> --force --session <id>` or `maestro task unclaim <id> --force --session <id>` as the explicit operator recovery path.
 
 ### Storage policy
 
-`.maestro/tasks/**` is intentionally repo-tracked: tasks, ready-state metadata, and close-derived candidate hints are part of the durable execution trail for day-to-day work, so they should be reviewed and committed deliberately when they matter. `.maestro/missions/**` and `.maestro/handoffs/**` remain ignored runtime data because they are heavier local orchestration artifacts rather than the lightweight shared queue. Task close reasons and candidate hints are persisted verbatim, so treat them with the same care you would use for commit messages or `maestro note --content`: useful context is good, secrets and throwaway venting are not.
+`.maestro/tasks/**` is intentionally repo-tracked: tasks, ready-state metadata, and completion-derived candidate hints are part of the durable execution trail for day-to-day work, so they should be reviewed and committed deliberately when they matter. `.maestro/missions/**` and `.maestro/handoffs/**` remain ignored runtime data because they are heavier local orchestration artifacts rather than the lightweight shared queue. Task completion reasons and candidate hints are persisted verbatim, so treat them with the same care you would use for commit messages or `maestro note --content`: useful context is good, secrets and throwaway venting are not.
 
 ### When both make sense
 

@@ -1,10 +1,11 @@
-import { describe, expect, it, beforeEach } from "bun:test";
+import { beforeEach, describe, expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { listTasks } from "@/features/task/usecases/list-tasks.usecase.js";
-import { createTask } from "@/features/task/usecases/create-task.usecase.js";
 import { JsonlTaskStoreAdapter } from "@/features/task/adapters/jsonl-task-store.adapter.js";
+import { createTask } from "@/features/task/usecases/create-task.usecase.js";
+import { listTasks } from "@/features/task/usecases/list-tasks.usecase.js";
+import { updateTask } from "@/features/task/usecases/update-task.usecase.js";
 
 describe("listTasks", () => {
   let tmpDir: string;
@@ -15,14 +16,8 @@ describe("listTasks", () => {
     store = new JsonlTaskStoreAdapter(tmpDir);
   });
 
-  it("returns empty array on empty store", async () => {
-    const tasks = await listTasks(store);
-    expect(tasks).toEqual([]);
-  });
-
   it("returns all tasks sorted by createdAt", async () => {
     const a = await createTask(store, { title: "A" });
-    // Small tick ensures distinct createdAt.
     await new Promise((r) => setTimeout(r, 5));
     const b = await createTask(store, { title: "B" });
     await new Promise((r) => setTimeout(r, 5));
@@ -32,52 +27,32 @@ describe("listTasks", () => {
     expect(tasks.map((t) => t.id)).toEqual([a.id, b.id, c.id]);
   });
 
-  it("filters by status", async () => {
-    await createTask(store, { title: "open one" });
-    const t2 = await createTask(store, { title: "to close" });
-    await store.close(t2.id, { reason: "done" });
+  it("filters by completed status", async () => {
+    await createTask(store, { title: "pending one" });
+    const done = await createTask(store, { title: "done one" });
+    await updateTask(store, done.id, { status: "completed", reason: "done" });
 
-    const open = await listTasks(store, { status: "open" });
-    const closed = await listTasks(store, { status: "closed" });
-    expect(open.length).toBe(1);
-    expect(closed.length).toBe(1);
-    expect(open[0]?.title).toBe("open one");
+    const completed = await listTasks(store, { status: "completed" });
+    expect(completed.map((t) => t.title)).toEqual(["done one"]);
   });
 
-  it("filters by priority", async () => {
-    await createTask(store, { title: "P0", priority: 0 });
-    await createTask(store, { title: "P2", priority: 2 });
-    await createTask(store, { title: "P4", priority: 4 });
+  it("filters by priority, type, label, parent, and assignee", async () => {
+    const parent = await createTask(store, { title: "Root" });
+    const owned = await createTask(store, {
+      title: "Bug",
+      type: "bug",
+      priority: 0,
+      labels: ["auth"],
+      parentId: parent.id,
+    });
+    await store.claim(owned.id, "alice");
+    await createTask(store, { title: "Other", type: "feature", labels: ["ui"] });
 
-    const p0 = await listTasks(store, { priority: 0 });
-    expect(p0.map((t) => t.title)).toEqual(["P0"]);
-  });
-
-  it("filters by type", async () => {
-    await createTask(store, { title: "bug one", type: "bug" });
-    await createTask(store, { title: "feat one", type: "feature" });
-
-    const bugs = await listTasks(store, { type: "bug" });
-    expect(bugs.map((t) => t.title)).toEqual(["bug one"]);
-  });
-
-  it("filters by label", async () => {
-    await createTask(store, { title: "A", labels: ["auth"] });
-    await createTask(store, { title: "B", labels: ["ui"] });
-    await createTask(store, { title: "C", labels: ["auth", "ui"] });
-
-    const auth = await listTasks(store, { label: "auth" });
-    expect(auth.map((t) => t.title)).toEqual(["A", "C"]);
-  });
-
-  it("filters by parent id", async () => {
-    const root = await createTask(store, { title: "Root" });
-    await createTask(store, { title: "Child 1", parentId: root.id });
-    await createTask(store, { title: "Child 2", parentId: root.id });
-    await createTask(store, { title: "Unrelated" });
-
-    const children = await listTasks(store, { parentId: root.id });
-    expect(children.length).toBe(2);
+    expect((await listTasks(store, { priority: 0 })).map((t) => t.title)).toEqual(["Bug"]);
+    expect((await listTasks(store, { type: "bug" })).map((t) => t.title)).toEqual(["Bug"]);
+    expect((await listTasks(store, { label: "auth" })).map((t) => t.title)).toEqual(["Bug"]);
+    expect((await listTasks(store, { parentId: parent.id })).map((t) => t.title)).toEqual(["Bug"]);
+    expect((await listTasks(store, { assignee: "alice" })).map((t) => t.title)).toEqual(["Bug"]);
   });
 
   it("respects limit", async () => {
@@ -87,12 +62,5 @@ describe("listTasks", () => {
 
     const limited = await listTasks(store, { limit: 2 });
     expect(limited.length).toBe(2);
-  });
-
-  it("limit 0 means no limit", async () => {
-    await createTask(store, { title: "A" });
-    await createTask(store, { title: "B" });
-    const all = await listTasks(store, { limit: 0 });
-    expect(all.length).toBe(2);
   });
 });

@@ -214,31 +214,30 @@ describe("buildTaskBoard", () => {
 
   it("groups tasks into status columns sorted by priority", async () => {
       const store = makeTaskQueryStore([
-        { id: "t1", title: "A", description: "d", type: "task", priority: 2, status: "open", labels: [], dependsOn: [], createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z" },
-        { id: "t2", title: "B", description: "d", type: "task", priority: 0, status: "open", labels: [], dependsOn: ["t1"], createdAt: "2026-01-01T00:00:01Z", updatedAt: "2026-01-01T00:00:01Z" },
-        { id: "t3", title: "C", description: "d", type: "task", priority: 1, status: "in_progress", labels: ["urgent"], dependsOn: [], createdAt: "2026-01-01T00:00:02Z", updatedAt: "2026-01-01T00:00:02Z" },
-        { id: "t4", title: "D", description: "d", type: "task", priority: 3, status: "closed", labels: [], dependsOn: [], createdAt: "2026-01-01T00:00:03Z", updatedAt: "2026-01-01T00:00:03Z" },
+        { id: "t1", title: "A", description: "d", type: "task", priority: 2, status: "pending", labels: [], blocks: [], blockedBy: [], createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z" },
+        { id: "t2", title: "B", description: "d", type: "task", priority: 0, status: "pending", labels: [], blocks: [], blockedBy: ["t1"], createdAt: "2026-01-01T00:00:01Z", updatedAt: "2026-01-01T00:00:01Z" },
+        { id: "t3", title: "C", description: "d", type: "task", priority: 1, status: "in_progress", labels: ["urgent"], blocks: [], blockedBy: [], createdAt: "2026-01-01T00:00:02Z", updatedAt: "2026-01-01T00:00:02Z" },
+        { id: "t4", title: "D", description: "d", type: "task", priority: 3, status: "completed", labels: [], blocks: [], blockedBy: [], createdAt: "2026-01-01T00:00:03Z", updatedAt: "2026-01-01T00:00:03Z" },
       ]);
     const board = await buildTaskBoard(store);
     expect(board).not.toBeNull();
     expect(board!.totalCount).toBe(4);
 
-    // Open column: t2 (priority 0) before t1 (priority 2)
-    expect(board!.columns.open).toHaveLength(2);
-    expect(board!.columns.open[0]!.id).toBe("t2");
-    expect(board!.columns.open[0]!.dependsOnCount).toBe(1);
-    expect(board!.columns.open[1]!.id).toBe("t1");
+    // Pending column: t2 (priority 0) before t1 (priority 2)
+    expect(board!.columns.pending).toHaveLength(2);
+    expect(board!.columns.pending[0]!.id).toBe("t2");
+    expect(board!.columns.pending[0]!.blockedByCount).toBe(1);
+    expect(board!.columns.pending[1]!.id).toBe("t1");
 
     // In-progress column
     expect(board!.columns.in_progress).toHaveLength(1);
     expect(board!.columns.in_progress[0]!.labels).toEqual(["urgent"]);
 
-    // Closed column
-    expect(board!.columns.closed).toHaveLength(1);
+    // Completed column
+    expect(board!.columns.completed).toHaveLength(1);
 
-    // Empty columns
-    expect(board!.columns.blocked).toHaveLength(0);
-    expect(board!.columns.deferred).toHaveLength(0);
+    // Remaining column
+    expect(board!.columns.in_progress).toHaveLength(1);
   });
 
   it("returns null when store has no tasks", async () => {

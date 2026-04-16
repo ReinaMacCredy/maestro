@@ -12,7 +12,8 @@ export function formatTaskSummary(task: Task): string[] {
     `  Type: ${task.type}`,
     ...(task.parentId ? [`  Parent: ${task.parentId}`] : []),
     ...(task.labels.length > 0 ? [`  Labels: ${task.labels.join(", ")}`] : []),
-    ...(task.dependsOn.length > 0 ? [`  Depends on: ${task.dependsOn.join(", ")}`] : []),
+    ...(task.blockedBy.length > 0 ? [`  Blocked by: ${task.blockedBy.join(", ")}`] : []),
+    ...(task.blocks.length > 0 ? [`  Blocks: ${task.blocks.join(", ")}`] : []),
   ];
 }
 
@@ -73,8 +74,8 @@ export function formatTaskDetail(task: Task): string[] {
   if (task.assignee) lines.push(`  Assignee: ${task.assignee}`);
   if (task.claimedAt) lines.push(`  Claimed at: ${task.claimedAt}`);
   if (task.labels.length > 0) lines.push(`  Labels: ${task.labels.join(", ")}`);
-  if (task.dependsOn.length > 0) lines.push(`  Depends on: ${task.dependsOn.join(", ")}`);
-  if (task.deferUntil) lines.push(`  Deferred until: ${task.deferUntil}`);
+  if (task.blockedBy.length > 0) lines.push(`  Blocked by: ${task.blockedBy.join(", ")}`);
+  if (task.blocks.length > 0) lines.push(`  Blocks: ${task.blocks.join(", ")}`);
   if (task.closeReason) lines.push(`  Close reason: ${task.closeReason}`);
 
   return lines;

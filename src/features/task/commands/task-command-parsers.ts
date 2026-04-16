@@ -10,6 +10,11 @@ import {
   type UpdateTaskInput,
 } from "../domain/task-types.js";
 import { isTaskPriority, isTaskStatus, isTaskType } from "../domain/task-validators.js";
+import {
+  taskCompletedViaUpdateStatus,
+} from "../domain/task-errors.js";
+
+const LEGACY_TASK_STATUSES = new Set(["open", "blocked", "deferred", "closed"]);
 
 export interface CreateOpts {
   description?: string;
@@ -17,7 +22,7 @@ export interface CreateOpts {
   priority?: string;
   parent?: string;
   labels?: string;
-  dependsOn?: string;
+  blockedBy?: string;
 }
 
 export function buildCreateInput(title: string, opts: CreateOpts): CreateTaskInput {
@@ -28,7 +33,7 @@ export function buildCreateInput(title: string, opts: CreateOpts): CreateTaskInp
     priority: parsePriority(opts.priority),
     parentId: opts.parent,
     labels: parseList(opts.labels),
-    dependsOn: parseList(opts.dependsOn),
+    blockedBy: parseList(opts.blockedBy),
   };
 }
 
@@ -46,6 +51,16 @@ export function parseStatus(value: string | undefined): TaskStatus | undefined {
   if (value === undefined) return undefined;
   if (isTaskStatus(value)) {
     return value;
+  }
+  if (LEGACY_TASK_STATUSES.has(value)) {
+    if (value === "closed") {
+      throw taskCompletedViaUpdateStatus();
+    }
+    throw new MaestroError(`Legacy --status '${value}' is no longer supported`, [
+      "Use one of: pending, in_progress, completed",
+      "Use 'maestro task claim <id>' before moving work to in_progress",
+      "Use 'maestro task update <id> --status completed --reason \"...\"' to finish work",
+    ]);
   }
   throw new MaestroError(`Invalid --status '${value}'`, [
     `Valid statuses: ${TASK_STATUSES.join(", ")}`,
@@ -68,12 +83,12 @@ export function hasAnyPatchField(patch: UpdateTaskInput): boolean {
     patch.title !== undefined ||
     patch.description !== undefined ||
     patch.status !== undefined ||
+    patch.reason !== undefined ||
     patch.priority !== undefined ||
     patch.type !== undefined ||
     patch.parentId !== undefined ||
     (patch.addLabels !== undefined && patch.addLabels.length > 0) ||
-    (patch.removeLabels !== undefined && patch.removeLabels.length > 0) ||
-    patch.deferUntil !== undefined
+    (patch.removeLabels !== undefined && patch.removeLabels.length > 0)
   );
 }
 

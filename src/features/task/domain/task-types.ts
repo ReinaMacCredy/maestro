@@ -11,11 +11,9 @@
 // ============================
 
 export type TaskStatus =
-  | "open"
+  | "pending"
   | "in_progress"
-  | "blocked"
-  | "deferred"
-  | "closed";
+  | "completed";
 
 export type TaskType =
   | "task"
@@ -27,11 +25,9 @@ export type TaskType =
 export type TaskPriority = 0 | 1 | 2 | 3 | 4;
 
 export const TASK_STATUSES: readonly TaskStatus[] = [
-  "open",
+  "pending",
   "in_progress",
-  "blocked",
-  "deferred",
-  "closed",
+  "completed",
 ] as const;
 
 export const TASK_TYPES: readonly TaskType[] = [
@@ -57,10 +53,10 @@ export interface Task {
   readonly status: TaskStatus;
   readonly parentId?: string;
   readonly labels: readonly string[];
-  readonly dependsOn: readonly string[];
+  readonly blocks: readonly string[];
+  readonly blockedBy: readonly string[];
   readonly assignee?: string;
   readonly claimedAt?: string;
-  readonly deferUntil?: string;
   readonly closeReason?: string;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -77,19 +73,19 @@ export interface CreateTaskInput {
   readonly priority?: TaskPriority;
   readonly parentId?: string;
   readonly labels?: readonly string[];
-  readonly dependsOn?: readonly string[];
+  readonly blockedBy?: readonly string[];
 }
 
 export interface UpdateTaskInput {
   readonly title?: string;
   readonly description?: string;
   readonly status?: TaskStatus;
+  readonly reason?: string;
   readonly priority?: TaskPriority;
   readonly type?: TaskType;
   readonly parentId?: string;
   readonly addLabels?: readonly string[];
   readonly removeLabels?: readonly string[];
-  readonly deferUntil?: string;
 }
 
 export interface CloseTaskInput {
@@ -102,7 +98,7 @@ export interface CloseTaskInput {
 
 export const DEFAULT_TASK_TYPE: TaskType = "task";
 export const DEFAULT_TASK_PRIORITY: TaskPriority = 2;
-export const DEFAULT_TASK_STATUS: TaskStatus = "open";
+export const DEFAULT_TASK_STATUS: TaskStatus = "pending";
 
 /** Build a `Map<id, Task>` view of a task list for cross-entity lookups. */
 export function indexTasksById(
@@ -132,12 +128,12 @@ export interface ReadyTasksFilters {
   readonly type?: TaskType;
   readonly assignee?: string;
   readonly unassigned?: boolean;
-  readonly includeDeferred?: boolean;
 }
 
 export interface ClaimTaskInput {
   readonly sessionId: string;
   readonly force?: boolean;
+  readonly checkBusy?: boolean;
 }
 
 export interface UnclaimTaskInput {

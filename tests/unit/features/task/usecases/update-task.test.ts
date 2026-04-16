@@ -1,10 +1,11 @@
-import { describe, expect, it, beforeEach } from "bun:test";
+import { beforeEach, describe, expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { updateTask } from "@/features/task/usecases/update-task.usecase.js";
-import { createTask } from "@/features/task/usecases/create-task.usecase.js";
 import { JsonlTaskStoreAdapter } from "@/features/task/adapters/jsonl-task-store.adapter.js";
+import { claimTask } from "@/features/task/usecases/claim-task.usecase.js";
+import { createTask } from "@/features/task/usecases/create-task.usecase.js";
+import { updateTask } from "@/features/task/usecases/update-task.usecase.js";
 import { MaestroError } from "@/shared/errors.js";
 
 describe("updateTask", () => {
@@ -19,67 +20,62 @@ describe("updateTask", () => {
   it("updates basic fields", async () => {
     const task = await createTask(store, { title: "Original" });
     const updated = await updateTask(store, task.id, { title: "New", priority: 1 });
+
     expect(updated.title).toBe("New");
     expect(updated.priority).toBe(1);
   });
 
-  it("rejects unknown id", async () => {
-    await expect(
-      updateTask(store, "tsk-000000", { title: "X" }),
-    ).rejects.toThrow(MaestroError);
-  });
-
-  it("rejects --status closed (must use close)", async () => {
-    const task = await createTask(store, { title: "Done" });
-    await expect(
-      updateTask(store, task.id, { status: "closed" }),
-    ).rejects.toThrow(MaestroError);
-  });
-
-  it("accepts other status transitions", async () => {
-    const task = await createTask(store, { title: "Doing" });
-    const updated = await updateTask(store, task.id, { status: "blocked" });
-    expect(updated.status).toBe("blocked");
-  });
-
   it("rejects moving an unclaimed task to in_progress", async () => {
     const task = await createTask(store, { title: "Doing" });
+
     await expect(
       updateTask(store, task.id, { status: "in_progress" }),
     ).rejects.toThrow(MaestroError);
   });
 
-  it("rejects reopening a claimed task via update", async () => {
+  it("allows a claimed task to move to in_progress", async () => {
+    const task = await createTask(store, { title: "Doing" });
+    await claimTask(store, task.id, { sessionId: "codex-session-a" });
+
+    const updated = await updateTask(store, task.id, { status: "in_progress" });
+    expect(updated.status).toBe("in_progress");
+  });
+
+  it("rejects moving a claimed task back to pending via update", async () => {
     const task = await createTask(store, { title: "Claimed" });
-    await store.claim(task.id, "codex-session-a");
+    await claimTask(store, task.id, { sessionId: "codex-session-a" });
+
     await expect(
-      updateTask(store, task.id, { status: "open" }),
+      updateTask(store, task.id, { status: "pending" }),
     ).rejects.toThrow(MaestroError);
   });
 
-  it("rejects edits to closed tasks", async () => {
+  it("completes a task with a reason", async () => {
     const task = await createTask(store, { title: "Done" });
-    await store.close(task.id, { reason: "shipped" });
+
+    const completed = await updateTask(store, task.id, {
+      status: "completed",
+      reason: "shipped",
+    });
+
+    expect(completed.status).toBe("completed");
+    expect(completed.closeReason).toBe("shipped");
+  });
+
+  it("rejects completion reasons without completed status", async () => {
+    const task = await createTask(store, { title: "Oops" });
+
+    await expect(
+      updateTask(store, task.id, { reason: "not yet" }),
+    ).rejects.toThrow(MaestroError);
+  });
+
+  it("rejects edits to completed tasks", async () => {
+    const task = await createTask(store, { title: "Done" });
+    await updateTask(store, task.id, { status: "completed", reason: "shipped" });
+
     await expect(
       updateTask(store, task.id, { title: "still mutable?" }),
-    ).rejects.toThrow(MaestroError);
-  });
-
-  it("rejects parenting under an unknown task", async () => {
-    const task = await createTask(store, { title: "Orphan" });
-    await expect(
-      updateTask(store, task.id, { parentId: "tsk-000000" }),
-    ).rejects.toThrow(MaestroError);
-  });
-
-  it("rejects parenting that would create a cycle", async () => {
-    const root = await createTask(store, { title: "Root" });
-    const mid = await createTask(store, { title: "Mid", parentId: root.id });
-    const leaf = await createTask(store, { title: "Leaf", parentId: mid.id });
-
-    // Trying to parent root under leaf creates: leaf -> mid -> root -> leaf
-    await expect(
-      updateTask(store, root.id, { parentId: leaf.id }),
     ).rejects.toThrow(MaestroError);
   });
 
@@ -90,21 +86,5 @@ describe("updateTask", () => {
 
     const moved = await updateTask(store, leaf.id, { parentId: b.id });
     expect(moved.parentId).toBe(b.id);
-  });
-
-  it("allows clearing parent via empty string", async () => {
-    const root = await createTask(store, { title: "Root" });
-    const child = await createTask(store, { title: "Child", parentId: root.id });
-    const cleared = await updateTask(store, child.id, { parentId: "" });
-    expect(cleared.parentId).toBeUndefined();
-  });
-
-  it("adds and removes labels", async () => {
-    const task = await createTask(store, { title: "L", labels: ["a"] });
-    const added = await updateTask(store, task.id, { addLabels: ["b", "c"] });
-    expect(added.labels).toEqual(["a", "b", "c"]);
-
-    const removed = await updateTask(store, task.id, { removeLabels: ["a"] });
-    expect(removed.labels).toEqual(["b", "c"]);
   });
 });

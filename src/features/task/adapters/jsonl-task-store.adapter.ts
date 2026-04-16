@@ -3,8 +3,7 @@
  * Storage layout: `.maestro/tasks/tasks.jsonl` (one JSON object per line).
  *
  * Read: load whole file, parse each non-empty line with validator.
- * Write: serialize all tasks, write atomically via writeText (routes through
- *        writeAtomic which does a temp-file + rename).
+ * Write: serialize all tasks, write atomically via writeText.
  *
  * Concurrency: mutation commands take a lock around the full read/modify/write
  * cycle so claims and updates do not clobber each other.
@@ -24,19 +23,21 @@ import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { ensureDir, readText, removeIfExists, writeText } from "@/shared/lib/fs.js";
 import { generateTaskId } from "../domain/task-id.js";
 import {
-  assertNoDependencyCycle,
+  assertNoBlockCycle,
   assertNoParentCycle,
   validateTask,
 } from "../domain/task-validators.js";
 import {
   claimedTaskCannotBeReopened,
   taskAlreadyClaimed,
-  taskAlreadyClosed,
+  taskAlreadyCompleted,
+  taskBlockedByOpenTasks,
+  taskClaimBusySession,
   taskClaimOwnedByDifferentSession,
   taskNotClaimed,
   taskNotFound,
   taskStatusRequiresClaim,
-  unknownDependency,
+  unknownBlocker,
 } from "../domain/task-errors.js";
 import { MaestroError } from "@/shared/errors.js";
 import {
@@ -85,16 +86,10 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
     return this.withLock(async () => {
       const tasks = await this.readAll();
 
-      if (input.dependsOn && input.dependsOn.length > 0) {
-        const missing = input.dependsOn.filter((id) => !tasks.has(id));
-        if (missing.length > 0) {
-          throw unknownDependency("<new task>", missing);
-        }
-      }
-
       if (input.parentId !== undefined && !tasks.has(input.parentId)) {
         throw taskNotFound(input.parentId);
       }
+      ensureTasksExist("<new task>", input.blockedBy ?? [], tasks);
 
       let id: string | undefined;
       for (let attempt = 0; attempt < MAX_ID_RETRIES; attempt++) {
@@ -121,14 +116,24 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         status: DEFAULT_TASK_STATUS,
         parentId: input.parentId,
         labels: input.labels ?? [],
-        dependsOn: dedupeValues(input.dependsOn ?? []),
+        blocks: [],
+        blockedBy: dedupeValues(input.blockedBy ?? []),
         createdAt: now,
         updatedAt: now,
       };
 
       tasks.set(id, task);
+      for (const blockerId of task.blockedBy) {
+        const blocker = tasks.get(blockerId)!;
+        tasks.set(blockerId, {
+          ...blocker,
+          blocks: dedupeValues([...blocker.blocks, id]),
+          updatedAt: now,
+        });
+      }
+
       await this.writeAll(tasks);
-      return task;
+      return tasks.get(id)!;
     });
   }
 
@@ -139,8 +144,8 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
       if (!existing) {
         throw taskNotFound(id);
       }
-      if (existing.status === "closed") {
-        throw taskAlreadyClosed(id);
+      if (existing.status === "completed") {
+        throw taskAlreadyCompleted(id);
       }
 
       if (patch.parentId !== undefined && patch.parentId !== "") {
@@ -154,11 +159,14 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
       if (!existing.assignee && nextStatus === "in_progress") {
         throw taskStatusRequiresClaim("in_progress");
       }
-      if (existing.assignee && nextStatus === "open") {
+      if (existing.assignee && nextStatus === "pending") {
         throw claimedTaskCannotBeReopened(id);
       }
 
       const labels = applyLabelPatch(existing.labels, patch.addLabels, patch.removeLabels);
+      const reason = patch.reason === undefined
+        ? existing.closeReason
+        : (patch.reason.length === 0 ? undefined : patch.reason);
 
       const updated: Task = {
         ...existing,
@@ -166,12 +174,10 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         description: patch.description !== undefined ? patch.description : existing.description,
         type: patch.type ?? existing.type,
         priority: patch.priority ?? existing.priority,
-        status: patch.status ?? existing.status,
+        status: nextStatus,
         parentId: patch.parentId === "" ? undefined : (patch.parentId ?? existing.parentId),
         labels,
-        deferUntil: patch.deferUntil !== undefined
-          ? (patch.deferUntil === "" ? undefined : patch.deferUntil)
-          : existing.deferUntil,
+        closeReason: nextStatus === "completed" ? reason : existing.closeReason,
         updatedAt: new Date().toISOString(),
       };
 
@@ -181,27 +187,41 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
     });
   }
 
-  async claim(id: string, sessionId: string, opts: { force?: boolean } = {}): Promise<Task> {
+  async claim(
+    id: string,
+    sessionId: string,
+    opts: { force?: boolean; checkBusy?: boolean } = {},
+  ): Promise<Task> {
     return this.withLock(async () => {
       const tasks = await this.readAll();
       const existing = tasks.get(id);
       if (!existing) {
         throw taskNotFound(id);
       }
-      if (existing.status === "closed") {
-        throw taskAlreadyClosed(id);
+      if (existing.status === "completed") {
+        throw taskAlreadyCompleted(id);
       }
       if (existing.assignee && existing.assignee !== sessionId && !opts.force) {
         throw taskAlreadyClaimed(id, existing.assignee);
       }
 
-      const normalizedStatus = existing.status === "open" ? "in_progress" : existing.status;
-      const needsNormalization =
-        existing.assignee !== sessionId ||
-        existing.claimedAt === undefined ||
-        existing.status !== normalizedStatus;
+      const blockers = getOpenBlockers(existing, tasks);
+      if (blockers.length > 0) {
+        throw taskBlockedByOpenTasks(id, blockers);
+      }
 
-      if (!needsNormalization) {
+      if (opts.checkBusy) {
+        const owned = Array.from(tasks.values()).filter((task) =>
+          task.id !== id &&
+          task.status !== "completed" &&
+          task.assignee === sessionId
+        );
+        if (owned.length > 0) {
+          throw taskClaimBusySession(sessionId, owned.map((task) => task.id));
+        }
+      }
+
+      if (existing.assignee === sessionId && existing.claimedAt !== undefined) {
         return existing;
       }
 
@@ -210,7 +230,6 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         ...existing,
         assignee: sessionId,
         claimedAt: existing.claimedAt ?? now,
-        status: normalizedStatus,
         updatedAt: now,
       };
 
@@ -227,8 +246,8 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
       if (!existing) {
         throw taskNotFound(id);
       }
-      if (existing.status === "closed") {
-        throw taskAlreadyClosed(id);
+      if (existing.status === "completed") {
+        throw taskAlreadyCompleted(id);
       }
       if (!existing.assignee) {
         throw taskNotClaimed(id);
@@ -242,7 +261,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         ...existing,
         assignee: undefined,
         claimedAt: undefined,
-        status: existing.status === "in_progress" ? "open" : existing.status,
+        status: existing.status === "in_progress" ? "pending" : existing.status,
         updatedAt: now,
       };
 
@@ -252,56 +271,104 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
     });
   }
 
-  async addDependencies(id: string, depIds: readonly string[]): Promise<Task> {
+  async block(id: string, blockedTaskIds: readonly string[]): Promise<Task> {
     return this.withLock(async () => {
       const tasks = await this.readAll();
-      const existing = tasks.get(id);
-      if (!existing) {
+      const blocker = tasks.get(id);
+      if (!blocker) {
         throw taskNotFound(id);
       }
-
-      ensureDependenciesExist(id, depIds, tasks);
-      const nextDependsOn = dedupeValues([...existing.dependsOn, ...depIds]);
-      assertNoDependencyCycle(id, nextDependsOn, tasks);
-      if (sameValues(existing.dependsOn, nextDependsOn)) {
-        return existing;
+      if (blocker.status === "completed") {
+        throw taskAlreadyCompleted(id);
       }
 
-      const updated: Task = {
-        ...existing,
-        dependsOn: nextDependsOn,
-        updatedAt: new Date().toISOString(),
-      };
+      ensureTasksExist(id, blockedTaskIds, tasks);
+      assertNoBlockCycle(id, blockedTaskIds, tasks);
 
-      tasks.set(id, updated);
+      const now = new Date().toISOString();
+      let blockerChanged = false;
+      const nextBlocks = dedupeValues([...blocker.blocks, ...blockedTaskIds]);
+      if (!sameValues(blocker.blocks, nextBlocks)) {
+        tasks.set(id, {
+          ...blocker,
+          blocks: nextBlocks,
+          updatedAt: now,
+        });
+        blockerChanged = true;
+      }
+
+      for (const blockedTaskId of blockedTaskIds) {
+        const blockedTask = tasks.get(blockedTaskId)!;
+        if (blockedTask.status === "completed") {
+          throw taskAlreadyCompleted(blockedTaskId);
+        }
+        const nextBlockedBy = dedupeValues([...blockedTask.blockedBy, id]);
+        if (!sameValues(blockedTask.blockedBy, nextBlockedBy)) {
+          tasks.set(blockedTaskId, {
+            ...blockedTask,
+            blockedBy: nextBlockedBy,
+            updatedAt: now,
+          });
+          blockerChanged = true;
+        }
+      }
+
+      if (!blockerChanged) {
+        return tasks.get(id)!;
+      }
+
       await this.writeAll(tasks);
-      return updated;
+      return tasks.get(id)!;
     });
   }
 
-  async removeDependencies(id: string, depIds: readonly string[]): Promise<Task> {
+  async unblock(id: string, blockedTaskIds: readonly string[]): Promise<Task> {
     return this.withLock(async () => {
       const tasks = await this.readAll();
-      const existing = tasks.get(id);
-      if (!existing) {
+      const blocker = tasks.get(id);
+      if (!blocker) {
         throw taskNotFound(id);
       }
-
-      const removeSet = new Set(depIds);
-      const nextDependsOn = existing.dependsOn.filter((depId) => !removeSet.has(depId));
-      if (sameValues(existing.dependsOn, nextDependsOn)) {
-        return existing;
+      if (blocker.status === "completed") {
+        throw taskAlreadyCompleted(id);
       }
 
-      const updated: Task = {
-        ...existing,
-        dependsOn: nextDependsOn,
-        updatedAt: new Date().toISOString(),
-      };
+      const removeSet = new Set(blockedTaskIds);
+      const nextBlocks = blocker.blocks.filter((blockedId) => !removeSet.has(blockedId));
+      const now = new Date().toISOString();
+      let changed = false;
 
-      tasks.set(id, updated);
+      if (!sameValues(blocker.blocks, nextBlocks)) {
+        tasks.set(id, {
+          ...blocker,
+          blocks: nextBlocks,
+          updatedAt: now,
+        });
+        changed = true;
+      }
+
+      for (const blockedTaskId of blockedTaskIds) {
+        const blockedTask = tasks.get(blockedTaskId);
+        if (!blockedTask) {
+          continue;
+        }
+        const nextBlockedBy = blockedTask.blockedBy.filter((blockerId) => blockerId !== id);
+        if (!sameValues(blockedTask.blockedBy, nextBlockedBy)) {
+          tasks.set(blockedTaskId, {
+            ...blockedTask,
+            blockedBy: nextBlockedBy,
+            updatedAt: now,
+          });
+          changed = true;
+        }
+      }
+
+      if (!changed) {
+        return tasks.get(id)!;
+      }
+
       await this.writeAll(tasks);
-      return updated;
+      return tasks.get(id)!;
     });
   }
 
@@ -312,20 +379,50 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
       if (!existing) {
         throw taskNotFound(id);
       }
-      if (existing.status === "closed") {
-        throw taskAlreadyClosed(id);
+      if (existing.status === "completed") {
+        throw taskAlreadyCompleted(id);
       }
 
-      const closed: Task = {
+      const completed: Task = {
         ...existing,
-        status: "closed",
-        closeReason: input.reason,
+        status: "completed",
+        closeReason: input.reason?.trim() || existing.closeReason,
         updatedAt: new Date().toISOString(),
       };
 
-      tasks.set(id, closed);
+      tasks.set(id, completed);
       await this.writeAll(tasks);
-      return closed;
+      return completed;
+    });
+  }
+
+  async releaseOwned(sessionId: string): Promise<readonly Task[]> {
+    return this.withLock(async () => {
+      const tasks = await this.readAll();
+      const now = new Date().toISOString();
+      const released: Task[] = [];
+
+      for (const [id, task] of tasks.entries()) {
+        if (task.status === "completed" || task.assignee !== sessionId) {
+          continue;
+        }
+        const updated: Task = {
+          ...task,
+          assignee: undefined,
+          claimedAt: undefined,
+          status: task.status === "in_progress" ? "pending" : task.status,
+          updatedAt: now,
+        };
+        tasks.set(id, updated);
+        released.push(updated);
+      }
+
+      if (released.length === 0) {
+        return [];
+      }
+
+      await this.writeAll(tasks);
+      return released;
     });
   }
 
@@ -370,7 +467,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
       lineById.set(validated.id, lineNumber);
       result.set(validated.id, validated);
     }
-    return result;
+    return normalizeGraph(result);
   }
 
   private async writeAll(tasks: ReadonlyMap<string, Task>): Promise<void> {
@@ -461,7 +558,6 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
   }
 }
 
-/** Apply --add-label / --remove-label patches while preserving order + dedup. */
 function applyLabelPatch(
   current: readonly string[],
   add: readonly string[] | undefined,
@@ -485,15 +581,55 @@ function applyLabelPatch(
   return result;
 }
 
-function ensureDependenciesExist(
+function ensureTasksExist(
   id: string,
-  depIds: readonly string[],
+  taskIds: readonly string[],
   tasks: ReadonlyMap<string, Task>,
 ): void {
-  const missing = depIds.filter((depId) => !tasks.has(depId));
+  const missing = taskIds.filter((taskId) => !tasks.has(taskId));
   if (missing.length > 0) {
-    throw unknownDependency(id, missing);
+    throw unknownBlocker(id, missing);
   }
+}
+
+function getOpenBlockers(task: Task, tasks: ReadonlyMap<string, Task>): readonly string[] {
+  return task.blockedBy.filter((blockerId) => {
+    const blocker = tasks.get(blockerId);
+    return blocker !== undefined && blocker.status !== "completed";
+  });
+}
+
+function normalizeGraph(tasks: ReadonlyMap<string, Task>): Map<string, Task> {
+  const normalized = new Map<string, Task>();
+
+  for (const [id, task] of tasks.entries()) {
+    normalized.set(id, {
+      ...task,
+      blocks: dedupeValues(task.blocks.filter((blockedId) => tasks.has(blockedId))),
+      blockedBy: dedupeValues(task.blockedBy.filter((blockerId) => tasks.has(blockerId))),
+    });
+  }
+
+  for (const task of normalized.values()) {
+    for (const blockedId of task.blocks) {
+      const blockedTask = normalized.get(blockedId);
+      if (!blockedTask || blockedTask.blockedBy.includes(task.id)) continue;
+      normalized.set(blockedId, {
+        ...blockedTask,
+        blockedBy: [...blockedTask.blockedBy, task.id],
+      });
+    }
+    for (const blockerId of task.blockedBy) {
+      const blockerTask = normalized.get(blockerId);
+      if (!blockerTask || blockerTask.blocks.includes(task.id)) continue;
+      normalized.set(blockerId, {
+        ...blockerTask,
+        blocks: [...blockerTask.blocks, task.id],
+      });
+    }
+  }
+
+  return normalized;
 }
 
 function dedupeValues(values: readonly string[]): readonly string[] {

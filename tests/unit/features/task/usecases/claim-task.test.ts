@@ -1,10 +1,11 @@
-import { describe, expect, it, beforeEach } from "bun:test";
+import { beforeEach, describe, expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { JsonlTaskStoreAdapter } from "@/features/task/adapters/jsonl-task-store.adapter.js";
 import { claimTask } from "@/features/task/usecases/claim-task.usecase.js";
 import { createTask } from "@/features/task/usecases/create-task.usecase.js";
-import { JsonlTaskStoreAdapter } from "@/features/task/adapters/jsonl-task-store.adapter.js";
+import { updateTask } from "@/features/task/usecases/update-task.usecase.js";
 import { MaestroError } from "@/shared/errors.js";
 
 describe("claimTask", () => {
@@ -16,7 +17,7 @@ describe("claimTask", () => {
     store = new JsonlTaskStoreAdapter(tmpDir);
   });
 
-  it("claims an open task and moves it to in_progress", async () => {
+  it("claims a pending task without changing its status", async () => {
     const task = await createTask(store, { title: "Claim me" });
 
     const claimed = await claimTask(store, task.id, {
@@ -25,22 +26,17 @@ describe("claimTask", () => {
 
     expect(claimed.assignee).toBe("codex-session-a");
     expect(claimed.claimedAt).toBeString();
-    expect(claimed.status).toBe("in_progress");
+    expect(claimed.status).toBe("pending");
   });
 
   it("is idempotent for the same session", async () => {
     const task = await createTask(store, { title: "Claim me" });
-    const first = await claimTask(store, task.id, {
-      sessionId: "codex-session-a",
-    });
-
-    const second = await claimTask(store, task.id, {
-      sessionId: "codex-session-a",
-    });
+    const first = await claimTask(store, task.id, { sessionId: "codex-session-a" });
+    const second = await claimTask(store, task.id, { sessionId: "codex-session-a" });
 
     expect(second.assignee).toBe("codex-session-a");
-    expect(second.status).toBe("in_progress");
     expect(second.claimedAt).toBe(first.claimedAt);
+    expect(second.status).toBe("pending");
   });
 
   it("rejects a different session without force", async () => {
@@ -52,7 +48,7 @@ describe("claimTask", () => {
     ).rejects.toThrow(MaestroError);
   });
 
-  it("allows force-claim takeover", async () => {
+  it("allows force takeover when blockers are clear", async () => {
     const task = await createTask(store, { title: "Claim me" });
     await claimTask(store, task.id, { sessionId: "codex-session-a" });
 
@@ -62,25 +58,34 @@ describe("claimTask", () => {
     });
 
     expect(claimed.assignee).toBe("codex-session-b");
-    expect(claimed.status).toBe("in_progress");
-    expect(claimed.claimedAt).toBeString();
+    expect(claimed.status).toBe("pending");
   });
 
-  it("preserves blocked status when claimed", async () => {
-    const task = await createTask(store, { title: "Blocked" });
-    await store.update(task.id, { status: "blocked" });
-
-    const claimed = await claimTask(store, task.id, {
-      sessionId: "codex-session-a",
+  it("rejects blocked tasks even with force", async () => {
+    const blocker = await createTask(store, { title: "Blocker" });
+    const blocked = await createTask(store, {
+      title: "Blocked",
+      blockedBy: [blocker.id],
     });
 
-    expect(claimed.status).toBe("blocked");
-    expect(claimed.assignee).toBe("codex-session-a");
+    await expect(
+      claimTask(store, blocked.id, { sessionId: "codex-session-a", force: true }),
+    ).rejects.toThrow(MaestroError);
   });
 
-  it("rejects closed tasks", async () => {
+  it("supports optional busy-check enforcement", async () => {
+    const first = await createTask(store, { title: "First" });
+    const second = await createTask(store, { title: "Second" });
+    await claimTask(store, first.id, { sessionId: "codex-session-a" });
+
+    await expect(
+      claimTask(store, second.id, { sessionId: "codex-session-a", checkBusy: true }),
+    ).rejects.toThrow(MaestroError);
+  });
+
+  it("rejects completed tasks", async () => {
     const task = await createTask(store, { title: "Done" });
-    await store.close(task.id, { reason: "shipped" });
+    await updateTask(store, task.id, { status: "completed", reason: "shipped" });
 
     await expect(
       claimTask(store, task.id, { sessionId: "codex-session-a" }),

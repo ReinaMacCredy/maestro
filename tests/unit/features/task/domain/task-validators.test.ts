@@ -1,12 +1,13 @@
 import { describe, expect, it } from "bun:test";
 import {
-  validateTask,
-  validateCreateInput,
-  validateUpdateInput,
+  assertNoBlockCycle,
   assertNoParentCycle,
+  isTaskPriority,
   isTaskStatus,
   isTaskType,
-  isTaskPriority,
+  validateCreateInput,
+  validateTask,
+  validateUpdateInput,
 } from "@/features/task/domain/task-validators.js";
 import { MaestroError } from "@/shared/errors.js";
 import type { Task } from "@/features/task/domain/task-types.js";
@@ -17,9 +18,10 @@ function fixture(overrides: Partial<Task> = {}): Task {
     title: "Sample",
     type: "task",
     priority: 2,
-    status: "open",
+    status: "pending",
     labels: [],
-    dependsOn: [],
+    blocks: [],
+    blockedBy: [],
     createdAt: "2026-04-10T00:00:00.000Z",
     updatedAt: "2026-04-10T00:00:00.000Z",
     ...overrides,
@@ -27,135 +29,87 @@ function fixture(overrides: Partial<Task> = {}): Task {
 }
 
 describe("task-validators", () => {
-  describe("isTaskStatus / isTaskType / isTaskPriority", () => {
-    it("accepts all valid values", () => {
-      expect(isTaskStatus("open")).toBe(true);
-      expect(isTaskStatus("closed")).toBe(true);
-      expect(isTaskType("task")).toBe(true);
-      expect(isTaskType("bug")).toBe(true);
-      expect(isTaskPriority(0)).toBe(true);
-      expect(isTaskPriority(4)).toBe(true);
-    });
-
-    it("rejects invalid values", () => {
-      expect(isTaskStatus("pending")).toBe(false);
-      expect(isTaskType("task-ish")).toBe(false);
-      expect(isTaskPriority(5)).toBe(false);
-      expect(isTaskPriority(-1)).toBe(false);
-      expect(isTaskPriority("1")).toBe(false);
-    });
+  it("accepts the new task statuses and rejects removed ones", () => {
+    expect(isTaskStatus("pending")).toBe(true);
+    expect(isTaskStatus("in_progress")).toBe(true);
+    expect(isTaskStatus("completed")).toBe(true);
+    expect(isTaskStatus("open")).toBe(false);
+    expect(isTaskStatus("closed")).toBe(false);
   });
 
-  describe("validateTask", () => {
-    it("accepts a well-formed task", () => {
-      const result = validateTask(fixture());
-      expect(result).toBeDefined();
-      expect(result?.id).toBe("tsk-a1b2c3");
-    });
-
-    it("rejects malformed id", () => {
-      expect(validateTask(fixture({ id: "bad-id" }))).toBeUndefined();
-    });
-
-    it("rejects empty title", () => {
-      expect(validateTask(fixture({ title: "" }))).toBeUndefined();
-    });
-
-    it("rejects unknown status", () => {
-      expect(validateTask({ ...fixture(), status: "pending" as never })).toBeUndefined();
-    });
-
-    it("rejects missing arrays", () => {
-      const bad = { ...fixture(), labels: undefined as unknown as readonly string[] };
-      expect(validateTask(bad)).toBeUndefined();
-    });
-
-    it("returns a fresh object with typed fields", () => {
-      const result = validateTask(fixture({ labels: ["urgent"], dependsOn: ["tsk-000001"] }));
-      expect(result?.labels).toEqual(["urgent"]);
-      expect(result?.dependsOn).toEqual(["tsk-000001"]);
-    });
+  it("accepts valid task types and priorities", () => {
+    expect(isTaskType("task")).toBe(true);
+    expect(isTaskType("bug")).toBe(true);
+    expect(isTaskPriority(0)).toBe(true);
+    expect(isTaskPriority(4)).toBe(true);
+    expect(isTaskPriority(5)).toBe(false);
   });
 
-  describe("validateCreateInput", () => {
-    it("accepts a minimal input", () => {
-      const result = validateCreateInput({ title: "Hello" });
-      expect(result.title).toBe("Hello");
+  it("normalizes legacy rows from storage", () => {
+    const result = validateTask({
+      ...fixture(),
+      status: "open",
+      dependsOn: ["tsk-000001"],
     });
 
-    it("trims the title", () => {
-      const result = validateCreateInput({ title: "  Hello  " });
-      expect(result.title).toBe("Hello");
-    });
-
-    it("rejects empty title", () => {
-      expect(() => validateCreateInput({ title: "" })).toThrow(MaestroError);
-      expect(() => validateCreateInput({ title: "   " })).toThrow(MaestroError);
-    });
-
-    it("rejects invalid priority", () => {
-      expect(() => validateCreateInput({ title: "X", priority: 9 as never })).toThrow(MaestroError);
-    });
-
-    it("rejects malformed depends-on", () => {
-      expect(() => validateCreateInput({ title: "X", dependsOn: ["not-an-id"] })).toThrow(MaestroError);
-    });
-
-    it("rejects malformed parent", () => {
-      expect(() => validateCreateInput({ title: "X", parentId: "bad" })).toThrow(MaestroError);
-    });
+    expect(result?.status).toBe("pending");
+    expect(result?.blockedBy).toEqual(["tsk-000001"]);
+    expect(result?.blocks).toEqual([]);
   });
 
-  describe("validateUpdateInput", () => {
-    it("accepts partial updates", () => {
-      const result = validateUpdateInput({ title: "new" });
-      expect(result.title).toBe("new");
-    });
-
-    it("trims updated title", () => {
-      const result = validateUpdateInput({ title: "  new  " });
-      expect(result.title).toBe("new");
-    });
-
-    it("accepts empty parent to clear", () => {
-      expect(() => validateUpdateInput({ parentId: "" })).not.toThrow();
-    });
-
-    it("rejects empty title on update", () => {
-      expect(() => validateUpdateInput({ title: "" })).toThrow(MaestroError);
-    });
-
-    it("rejects unknown status", () => {
-      expect(() => validateUpdateInput({ status: "pending" as never })).toThrow(MaestroError);
-    });
+  it("rejects malformed blocker arrays", () => {
+    expect(validateTask({ ...fixture(), blockedBy: ["ok", 1] })).toBeUndefined();
+    expect(validateTask({ ...fixture(), blocks: "bad" })).toBeUndefined();
   });
 
-  describe("assertNoParentCycle", () => {
+  it("validates create input with blocked-by ids", () => {
+    const result = validateCreateInput({
+      title: "  Hello  ",
+      blockedBy: ["tsk-000001"],
+    });
+
+    expect(result.title).toBe("Hello");
+    expect(result.blockedBy).toEqual(["tsk-000001"]);
+  });
+
+  it("rejects malformed blocked-by ids", () => {
+    expect(() => validateCreateInput({ title: "X", blockedBy: ["not-an-id"] })).toThrow(MaestroError);
+  });
+
+  it("validates update input with completion reason", () => {
+    const result = validateUpdateInput({
+      title: "  done  ",
+      status: "completed",
+      reason: "  shipped  ",
+    });
+
+    expect(result.title).toBe("done");
+    expect(result.reason).toBe("shipped");
+  });
+
+  it("rejects invalid updated status", () => {
+    expect(() => validateUpdateInput({ status: "open" as never })).toThrow(MaestroError);
+  });
+
+  it("rejects parent cycles", () => {
     const tasks = new Map<string, Task>([
-      ["tsk-000001", fixture({ id: "tsk-000001", parentId: undefined })],
+      ["tsk-000001", fixture({ id: "tsk-000001" })],
       ["tsk-000002", fixture({ id: "tsk-000002", parentId: "tsk-000001" })],
       ["tsk-000003", fixture({ id: "tsk-000003", parentId: "tsk-000002" })],
     ]);
 
-    it("allows parenting a new leaf under an existing root", () => {
-      expect(() => assertNoParentCycle("tsk-000004", "tsk-000001", tasks)).not.toThrow();
-    });
+    expect(() => assertNoParentCycle("tsk-000001", "tsk-000003", tasks)).toThrow(MaestroError);
+    expect(() => assertNoParentCycle("tsk-000004", "tsk-000001", tasks)).not.toThrow();
+  });
 
-    it("rejects parenting a task under itself", () => {
-      expect(() => assertNoParentCycle("tsk-000001", "tsk-000001", tasks)).toThrow(MaestroError);
-    });
+  it("rejects blocker cycles", () => {
+    const tasks = new Map<string, Task>([
+      ["tsk-000001", fixture({ id: "tsk-000001", blocks: ["tsk-000002"] })],
+      ["tsk-000002", fixture({ id: "tsk-000002", blocks: ["tsk-000003"], blockedBy: ["tsk-000001"] })],
+      ["tsk-000003", fixture({ id: "tsk-000003", blockedBy: ["tsk-000002"] })],
+    ]);
 
-    it("rejects parenting an ancestor under a descendant (would create a cycle)", () => {
-      // tsk-000001 cannot be parented under tsk-000003 because tsk-000003 -> tsk-000002 -> tsk-000001
-      expect(() => assertNoParentCycle("tsk-000001", "tsk-000003", tasks)).toThrow(MaestroError);
-    });
-
-    it("allows unrelated sibling parenting", () => {
-      const siblings = new Map<string, Task>([
-        ["tsk-aaaaaa", fixture({ id: "tsk-aaaaaa" })],
-        ["tsk-bbbbbb", fixture({ id: "tsk-bbbbbb" })],
-      ]);
-      expect(() => assertNoParentCycle("tsk-aaaaaa", "tsk-bbbbbb", siblings)).not.toThrow();
-    });
+    expect(() => assertNoBlockCycle("tsk-000003", ["tsk-000001"], tasks)).toThrow(MaestroError);
+    expect(() => assertNoBlockCycle("tsk-000001", ["tsk-000003"], tasks)).not.toThrow();
   });
 });

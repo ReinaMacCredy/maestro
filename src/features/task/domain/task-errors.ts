@@ -11,33 +11,33 @@ export function taskNotFound(id: string): MaestroError {
   ]);
 }
 
-export function unknownDependency(id: string, missing: readonly string[]): MaestroError {
+export function unknownBlocker(id: string, missing: readonly string[]): MaestroError {
   return new MaestroError(
-    `Task ${id} references unknown task(s): ${missing.join(", ")}`,
+    `Task ${id} references unknown blocker task(s): ${missing.join(", ")}`,
     [
-      "Create the referenced task(s) first",
-      "Or remove the unknown IDs from --depends-on",
+      "Create the referenced blocker task(s) first",
+      "Or remove the unknown IDs from --blocked-by / task block",
       "List existing tasks: maestro task list",
     ],
   );
 }
 
-export function taskSelfDependency(id: string): MaestroError {
+export function taskSelfBlock(id: string): MaestroError {
   return new MaestroError(
-    `Task ${id} cannot depend on itself`,
+    `Task ${id} cannot block itself`,
     [
-      "Remove the task id from the dependency list",
-      "Use other task ids in --depends-on or task deps add",
+      "Remove the task id from the blocker edge",
+      "Use a different task id with task block",
     ],
   );
 }
 
-export function taskDependencyCycle(id: string, chain: readonly string[]): MaestroError {
+export function taskBlockCycle(id: string, chain: readonly string[]): MaestroError {
   return new MaestroError(
-    `Dependency cycle detected for ${id}: ${chain.join(" -> ")}`,
+    `Task blocker cycle detected for ${id}: ${chain.join(" -> ")}`,
     [
-      "A task cannot depend on a chain that leads back to itself",
-      "Remove one of the dependency edges before retrying",
+      "A task cannot block a chain that leads back to itself",
+      "Remove one of the blocker edges before retrying",
     ],
   );
 }
@@ -54,16 +54,6 @@ export function cyclicParent(id: string, chain: readonly string[]): MaestroError
 
 export function invalidTaskField(field: string, reason: string): MaestroError {
   return new MaestroError(`Invalid task ${field}: ${reason}`);
-}
-
-export function closeViaCloseCommand(): MaestroError {
-  return new MaestroError(
-    "Cannot set status to 'closed' via update",
-    [
-      "Use 'maestro task close <id> --reason \"...\"' to close a task",
-      "The reason field is captured on close and shows up in the audit trail",
-    ],
-  );
 }
 
 export function taskUpdateOwnershipViaClaim(): MaestroError {
@@ -86,12 +76,43 @@ export function taskUpdateClaimViaDedicatedCommand(): MaestroError {
   );
 }
 
-export function taskAlreadyClosed(id: string): MaestroError {
+export function taskDependencyCommandsRenamed(): MaestroError {
   return new MaestroError(
-    `Task ${id} is already closed`,
+    "Task dependency commands were replaced by blocker commands",
     [
-      "Use 'maestro task show <id>' to inspect the existing close reason",
-      "Closed tasks are immutable; create a follow-up task instead of re-closing",
+      "Use 'maestro task block <blockerId> <blockedId...>'",
+      "Use 'maestro task unblock <blockerId> <blockedId...>'",
+      "Use '--blocked-by <ids>' when creating a task",
+    ],
+  );
+}
+
+export function taskCompletedViaUpdateStatus(): MaestroError {
+  return new MaestroError(
+    "Task completion moved to update status",
+    [
+      "Use 'maestro task update <id> --status completed --reason \"...\"'",
+      "Completed tasks keep their reason for task-ready hints",
+    ],
+  );
+}
+
+export function taskReasonRequiresCompletedStatus(): MaestroError {
+  return new MaestroError(
+    "Task completion reason requires status 'completed'",
+    [
+      "Use 'maestro task update <id> --status completed --reason \"...\"'",
+      "Or omit --reason when updating a task to a non-completed status",
+    ],
+  );
+}
+
+export function taskAlreadyCompleted(id: string): MaestroError {
+  return new MaestroError(
+    `Task ${id} is already completed`,
+    [
+      "Use 'maestro task show <id>' to inspect the existing completion reason",
+      "Completed tasks are immutable; create a follow-up task instead",
     ],
   );
 }
@@ -100,18 +121,18 @@ export function taskStatusRequiresClaim(status: "in_progress"): MaestroError {
   return new MaestroError(
     `Status '${status}' requires task ownership`,
     [
-      "Use 'maestro task claim <id>' to enter in-progress work",
-      "Or choose another status such as 'open', 'blocked', or 'deferred'",
+      "Use 'maestro task claim <id>' before moving work into progress",
+      "Or leave the task in 'pending' until an owner is assigned",
     ],
   );
 }
 
 export function claimedTaskCannotBeReopened(id: string): MaestroError {
   return new MaestroError(
-    `Task ${id} cannot move to 'open' while still claimed`,
+    `Task ${id} cannot move to 'pending' while still claimed`,
     [
       "Use 'maestro task unclaim <id>' to release ownership first",
-      "Or move the task to 'blocked' or 'deferred' while keeping the claim",
+      "Or keep the task in progress while the owner still holds it",
     ],
   );
 }
@@ -143,6 +164,27 @@ export function taskClaimOwnedByDifferentSession(id: string, assignee: string): 
       "Use 'maestro task unclaim <id> --force' for an explicit admin release",
       "Pass '--session <id>' when forcing release outside an agent session",
       "Or ask the current owner to release the task",
+    ],
+  );
+}
+
+export function taskBlockedByOpenTasks(id: string, blockers: readonly string[]): MaestroError {
+  return new MaestroError(
+    `Task ${id} is blocked by unresolved task(s): ${blockers.join(", ")}`,
+    [
+      "Resolve or complete the blocker tasks before claiming this task",
+      "Use 'maestro task show <id>' to inspect blocker relationships",
+      "Blocked tasks cannot be claimed, even with --force",
+    ],
+  );
+}
+
+export function taskClaimBusySession(sessionId: string, taskIds: readonly string[]): MaestroError {
+  return new MaestroError(
+    `Session ${sessionId} already owns unresolved task(s): ${taskIds.join(", ")}`,
+    [
+      "Finish or unclaim the existing task before claiming another one",
+      "Retry without the busy-check path if multiple concurrent claims are intentional",
     ],
   );
 }

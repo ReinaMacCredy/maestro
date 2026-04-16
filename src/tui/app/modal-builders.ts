@@ -531,7 +531,7 @@ function buildTaskBoardModal(
           { text: `Priority: ${selected.priority}` },
           ...(selected.assignee ? [{ text: `Assignee: ${selected.assignee}` }] : []),
           ...(selected.labels.length > 0 ? [{ text: `Labels: ${selected.labels.join(", ")}` }] : []),
-          ...(selected.dependsOnCount > 0 ? [{ text: `Dependencies: ${selected.dependsOnCount}` }] : []),
+          ...(selected.blockedByCount > 0 ? [{ text: `Blocked by: ${selected.blockedByCount}` }] : []),
         ]
       : [{ text: "Select a task to view details" }],
     footer: `Tab/[/] columns -- ${buildListOverlayFooter(returnTarget)}`,

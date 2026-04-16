@@ -8,16 +8,17 @@ import { listTasks } from "../usecases/list-tasks.usecase.js";
 import { updateTask } from "../usecases/update-task.usecase.js";
 import { claimTask } from "../usecases/claim-task.usecase.js";
 import { unclaimTask } from "../usecases/unclaim-task.usecase.js";
-import { addTaskDependencies, removeTaskDependencies } from "../usecases/manage-task-dependencies.usecase.js";
+import { blockTasks, unblockTasks } from "../usecases/manage-task-dependencies.usecase.js";
 import { closeTask } from "../usecases/close-task.usecase.js";
 import { readyTasks } from "../usecases/ready-tasks.usecase.js";
 import { captureTaskCandidate } from "../usecases/capture-task-candidate.usecase.js";
 import type {
-  UpdateTaskInput,
   ListTasksFilters,
   ReadyTasksFilters,
+  Task,
+  UpdateTaskInput,
 } from "../domain/task-types.js";
-import { TASK_TYPES, TASK_STATUSES } from "../domain/task-types.js";
+import { TASK_STATUSES, TASK_TYPES } from "../domain/task-types.js";
 import {
   buildCreateInput,
   hasAnyPatchField,
@@ -28,6 +29,8 @@ import {
   parseType,
 } from "./task-command-parsers.js";
 import {
+  taskCompletedViaUpdateStatus,
+  taskDependencyCommandsRenamed,
   taskUpdateClaimViaDedicatedCommand,
   taskUpdateOwnershipViaClaim,
 } from "../domain/task-errors.js";
@@ -41,24 +44,22 @@ import {
 export function registerTaskCommand(program: Command): void {
   const taskCmd = program
     .command("task")
-    .description("Task lifecycle management (br-style issue graph)")
+    .description("Task lifecycle management (Claude-style blocker graph)")
     .option("--json", "Output as JSON");
 
   registerCreateCommand(taskCmd, program);
   registerQuickCommand(taskCmd, program);
-    registerShowCommand(taskCmd, program);
-    registerListCommand(taskCmd, program);
-    registerUpdateCommand(taskCmd, program);
-    registerClaimCommand(taskCmd, program);
-    registerUnclaimCommand(taskCmd, program);
-    registerDepsCommand(taskCmd, program);
-    registerCloseCommand(taskCmd, program);
-    registerReadyCommand(taskCmd, program);
-  }
-
-// ============================
-// task create
-// ============================
+  registerShowCommand(taskCmd, program);
+  registerListCommand(taskCmd, program);
+  registerUpdateCommand(taskCmd, program);
+  registerClaimCommand(taskCmd, program);
+  registerUnclaimCommand(taskCmd, program);
+  registerBlockCommand(taskCmd, program);
+  registerUnblockCommand(taskCmd, program);
+  registerLegacyDepsCommand(taskCmd);
+  registerCloseCommand(taskCmd);
+  registerReadyCommand(taskCmd, program);
+}
 
 function registerCreateCommand(taskCmd: Command, program: Command): void {
   taskCmd
@@ -66,23 +67,30 @@ function registerCreateCommand(taskCmd: Command, program: Command): void {
     .description("Create a new task")
     .option("--description <text>", "Task description")
     .option("--type <type>", `Task type (${TASK_TYPES.join("|")})`)
-      .option("--priority <n>", `Priority 0-4 (0=critical, 4=backlog)`)
-      .option("--parent <id>", "Parent task id for hierarchy grouping")
-      .option("--labels <labels>", "Comma-separated labels")
-      .option("--depends-on <ids>", "Comma-separated ids this task blocks on")
-      .addOption(new Option("--assignee <name>").hideHelp())
-      .option("--silent", "Print only the id (for scripts)")
-      .option("--json", "Output as JSON")
-      .action(async (title: string, opts) => {
-        const services = getServices();
-        const isJson = resolveJsonFlag(opts, program);
+    .option("--priority <n>", "Priority 0-4 (0=critical, 4=backlog)")
+    .option("--parent <id>", "Parent task id for hierarchy grouping")
+    .option("--labels <labels>", "Comma-separated labels")
+    .option("--blocked-by <ids>", "Comma-separated blocker task ids")
+    .addOption(new Option("--assignee <name>").hideHelp())
+    .option("--silent", "Print only the id (for scripts)")
+    .option("--json", "Output as JSON")
+    .action(async (title: string, opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
 
-        if (opts.assignee !== undefined) {
-          throw taskUpdateOwnershipViaClaim();
-        }
+      if (opts.assignee !== undefined) {
+        throw taskUpdateOwnershipViaClaim();
+      }
 
-        const input = buildCreateInput(title, opts);
-        const task = await createTask(services.taskStore, input);
+      const input = buildCreateInput(title, {
+        description: opts.description,
+        type: opts.type,
+        priority: opts.priority,
+        parent: opts.parent,
+        labels: opts.labels,
+        blockedBy: opts.blockedBy,
+      });
+      const task = await createTask(services.taskStore, input);
 
       if (opts.silent) {
         console.log(task.id);
@@ -93,10 +101,6 @@ function registerCreateCommand(taskCmd: Command, program: Command): void {
     });
 }
 
-// ============================
-// task q (quick capture alias)
-// ============================
-
 function registerQuickCommand(taskCmd: Command, program: Command): void {
   taskCmd
     .command("q <title>")
@@ -105,12 +109,19 @@ function registerQuickCommand(taskCmd: Command, program: Command): void {
     .option("--priority <n>", "Priority 0-4")
     .option("--labels <labels>", "Comma-separated labels")
     .option("--parent <id>", "Parent task id")
+    .option("--blocked-by <ids>", "Comma-separated blocker task ids")
     .option("--json", "Output as JSON")
     .action(async (title: string, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
 
-      const input = buildCreateInput(title, opts);
+      const input = buildCreateInput(title, {
+        type: opts.type,
+        priority: opts.priority,
+        labels: opts.labels,
+        parent: opts.parent,
+        blockedBy: opts.blockedBy,
+      });
       const task = await createTask(services.taskStore, input);
 
       if (isJson) {
@@ -120,10 +131,6 @@ function registerQuickCommand(taskCmd: Command, program: Command): void {
       console.log(task.id);
     });
 }
-
-// ============================
-// task show
-// ============================
 
 function registerShowCommand(taskCmd: Command, program: Command): void {
   taskCmd
@@ -138,10 +145,6 @@ function registerShowCommand(taskCmd: Command, program: Command): void {
       output(isJson, task, formatTaskDetail);
     });
 }
-
-// ============================
-// task list
-// ============================
 
 function registerListCommand(taskCmd: Command, program: Command): void {
   taskCmd
@@ -174,70 +177,73 @@ function registerListCommand(taskCmd: Command, program: Command): void {
     });
 }
 
-// ============================
-// task update
-// ============================
-
 function registerUpdateCommand(taskCmd: Command, program: Command): void {
   taskCmd
     .command("update <id>")
-    .description("Update a task (any field)")
+    .description("Update task fields or move task status explicitly")
     .option("--title <title>", "New title")
     .option("--description <text>", "New description")
-    .option("--status <status>", `New status (${TASK_STATUSES.filter((s) => s !== "closed").join("|")})`)
-      .option("--priority <n>", "New priority 0-4")
-      .option("--type <type>", `New type (${TASK_TYPES.join("|")})`)
-      .option("--parent <id>", "New parent id (empty string clears)")
-      .addOption(new Option("--assignee <name>").hideHelp())
-      .option("--add-label <labels>", "Comma-separated labels to add")
-      .option("--remove-label <labels>", "Comma-separated labels to remove")
-      .addOption(new Option("--claim").hideHelp())
-      .option("--json", "Output as JSON")
-      .action(async (id: string, opts) => {
-        const services = getServices();
-        const isJson = resolveJsonFlag(opts, program);
+    .option("--status <status>", `New status (${TASK_STATUSES.join("|")})`)
+    .option("--reason <text>", "Completion reason when --status completed")
+    .option("--priority <n>", "New priority 0-4")
+    .option("--type <type>", `New type (${TASK_TYPES.join("|")})`)
+    .option("--parent <id>", "New parent id (empty string clears)")
+    .addOption(new Option("--assignee <name>").hideHelp())
+    .option("--add-label <labels>", "Comma-separated labels to add")
+    .option("--remove-label <labels>", "Comma-separated labels to remove")
+    .addOption(new Option("--claim").hideHelp())
+    .option("--json", "Output as JSON")
+    .action(async (id: string, opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
 
-        if (opts.assignee !== undefined) {
-          throw taskUpdateOwnershipViaClaim();
-        }
-        if (opts.claim === true) {
-          throw taskUpdateClaimViaDedicatedCommand();
-        }
+      if (opts.assignee !== undefined) {
+        throw taskUpdateOwnershipViaClaim();
+      }
+      if (opts.claim === true) {
+        throw taskUpdateClaimViaDedicatedCommand();
+      }
 
-        const patch: UpdateTaskInput = {
-          title: opts.title,
-          description: opts.description,
-          status: parseStatus(opts.status),
-          priority: parsePriority(opts.priority),
-          type: parseType(opts.type),
-          parentId: opts.parent,
-          addLabels: parseList(opts.addLabel),
-          removeLabels: parseList(opts.removeLabel),
-        };
+      const patch: UpdateTaskInput = {
+        title: opts.title,
+        description: opts.description,
+        status: parseStatus(opts.status),
+        reason: opts.reason,
+        priority: parsePriority(opts.priority),
+        type: parseType(opts.type),
+        parentId: opts.parent,
+        addLabels: parseList(opts.addLabel),
+        removeLabels: parseList(opts.removeLabel),
+      };
 
-        if (!hasAnyPatchField(patch)) {
-          throw new MaestroError("No update specified", [
-            "Pass at least one field: --title, --description, --status, --priority, --type,",
-            "--parent, --add-label, or --remove-label",
-          ]);
-        }
+      if (!hasAnyPatchField(patch)) {
+        throw new MaestroError("No update specified", [
+          "Pass at least one field such as --title, --description, --status, --reason,",
+          "--priority, --type, --parent, --add-label, or --remove-label",
+        ]);
+      }
 
-        const updated = await updateTask(services.taskStore, id, patch);
-        output(isJson, updated, (t) => [
-          `[ok] Task updated: ${t.id}`,
-          `  Status: ${t.status}`,
-          `  Priority: P${t.priority}`,
-        ...(t.assignee ? [`  Assignee: ${t.assignee}`] : []),
-        ...(t.labels.length > 0 ? [`  Labels: ${t.labels.join(", ")}`] : []),
+      const updated = await updateTask(services.taskStore, id, patch);
+      await maybeCaptureCompletionHint(updated);
+
+      output(isJson, updated, (task) => [
+        `[ok] Task updated: ${task.id}`,
+        `  Status: ${task.status}`,
+        `  Priority: P${task.priority}`,
+        ...(task.assignee ? [`  Assignee: ${task.assignee}`] : []),
+        ...(task.blockedBy.length > 0 ? [`  Blocked by: ${task.blockedBy.join(", ")}`] : []),
+        ...(task.blocks.length > 0 ? [`  Blocks: ${task.blocks.join(", ")}`] : []),
+        ...(task.closeReason ? [`  Reason: ${task.closeReason}`] : []),
       ]);
-      });
-  }
+    });
+}
 
 function registerClaimCommand(taskCmd: Command, program: Command): void {
   taskCmd
     .command("claim <id>")
     .description("Claim exclusive ownership of a task")
     .option("--force", "Take over a task already claimed by another session")
+    .option("--busy-check", "Reject the claim if this session already owns unresolved work")
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--json", "Output as JSON")
     .action(async (id: string, opts) => {
@@ -248,6 +254,7 @@ function registerClaimCommand(taskCmd: Command, program: Command): void {
       const claimed = await claimTask(services.taskStore, id, {
         sessionId,
         force: opts.force === true,
+        checkBusy: opts.busyCheck === true,
       });
 
       output(isJson, claimed, (task) => [
@@ -282,71 +289,68 @@ function registerUnclaimCommand(taskCmd: Command, program: Command): void {
     });
 }
 
-function registerDepsCommand(taskCmd: Command, program: Command): void {
-  const depsCmd = taskCmd
-    .command("deps")
-    .description("Manage task dependency edges");
-
-  depsCmd
-    .command("add <id> <dependencyIds...>")
-    .description("Add dependency edges to a task")
+function registerBlockCommand(taskCmd: Command, program: Command): void {
+  taskCmd
+    .command("block <id> <blockedTaskIds...>")
+    .description("Mark this task as blocking the target task ids")
     .option("--json", "Output as JSON")
-    .action(async (id: string, dependencyIds: string[], opts) => {
+    .action(async (id: string, blockedTaskIds: string[], opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const updated = await addTaskDependencies(services.taskStore, id, dependencyIds);
+      const updated = await blockTasks(services.taskStore, id, blockedTaskIds);
 
       output(isJson, updated, (task) => [
-        `[ok] Dependencies added: ${task.id}`,
-        ...(task.dependsOn.length > 0 ? [`  Depends on: ${task.dependsOn.join(", ")}`] : []),
-      ]);
-    });
-
-  depsCmd
-    .command("remove <id> <dependencyIds...>")
-    .description("Remove dependency edges from a task")
-    .option("--json", "Output as JSON")
-    .action(async (id: string, dependencyIds: string[], opts) => {
-      const services = getServices();
-      const isJson = resolveJsonFlag(opts, program);
-      const updated = await removeTaskDependencies(services.taskStore, id, dependencyIds);
-
-      output(isJson, updated, (task) => [
-        `[ok] Dependencies removed: ${task.id}`,
-        ...(task.dependsOn.length > 0 ? [`  Depends on: ${task.dependsOn.join(", ")}`] : ["  Depends on: none"]),
+        `[ok] Blockers added: ${task.id}`,
+        ...(task.blocks.length > 0 ? [`  Blocks: ${task.blocks.join(", ")}`] : ["  Blocks: none"]),
       ]);
     });
 }
 
-// ============================
-// task close
-// ============================
-
-function registerCloseCommand(taskCmd: Command, program: Command): void {
+function registerUnblockCommand(taskCmd: Command, program: Command): void {
   taskCmd
-    .command("close <id>")
-    .description("Close a task")
-    .option("--reason <text>", "Why the task was closed")
+    .command("unblock <id> <blockedTaskIds...>")
+    .description("Remove blocker edges from this task to the target task ids")
     .option("--json", "Output as JSON")
-    .action(async (id: string, opts) => {
+    .action(async (id: string, blockedTaskIds: string[], opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
+      const updated = await unblockTasks(services.taskStore, id, blockedTaskIds);
 
-      const closed = await closeTask(services.taskStore, id, { reason: opts.reason });
-      try {
-        await captureTaskCandidate(services.taskCandidateStore, closed);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        warn(`Task ${closed.id} closed, but hint capture failed: ${message}`);
-      }
-
-      output(isJson, closed, (t) => [
-        `[ok] Task closed: ${t.id}`,
-        `  Title: ${t.title}`,
-        ...(t.closeReason ? [`  Reason: ${t.closeReason}`] : []),
+      output(isJson, updated, (task) => [
+        `[ok] Blockers removed: ${task.id}`,
+        ...(task.blocks.length > 0 ? [`  Blocks: ${task.blocks.join(", ")}`] : ["  Blocks: none"]),
       ]);
-      });
-  }
+    });
+}
+
+function registerLegacyDepsCommand(taskCmd: Command): void {
+  const depsCmd = taskCmd
+    .command("deps")
+    .description("Legacy compatibility shim for renamed blocker commands");
+
+  depsCmd
+    .command("add <id> <dependencyIds...>")
+    .description("Legacy compatibility shim")
+    .action(() => {
+      throw taskDependencyCommandsRenamed();
+    });
+
+  depsCmd
+    .command("remove <id> <dependencyIds...>")
+    .description("Legacy compatibility shim")
+    .action(() => {
+      throw taskDependencyCommandsRenamed();
+    });
+}
+
+function registerCloseCommand(taskCmd: Command): void {
+  taskCmd
+    .command("close <id>")
+    .description("Legacy compatibility shim; completion moved to task update")
+    .action(() => {
+      throw taskCompletedViaUpdateStatus();
+    });
+}
 
 async function resolveOwnershipSessionId(explicitSessionId: string | undefined): Promise<string> {
   if (explicitSessionId !== undefined) {
@@ -370,29 +374,21 @@ async function resolveOwnershipSessionId(explicitSessionId: string | undefined):
   return `${session.agent}-${session.sessionId}`;
 }
 
-// ============================
-// task ready
-// ============================
-
 function registerReadyCommand(taskCmd: Command, program: Command): void {
   taskCmd
     .command("ready")
-    .description("List actionable tasks (unblocked leaves)")
+    .description("List actionable pending tasks with no unresolved blockers")
     .option("--limit <n>", "Maximum tasks to return (default 20, 0 = unlimited)")
     .option("--label <label>", "Filter by label")
     .option("--priority <n>", "Filter by priority 0-4")
     .option("--type <type>", `Filter by type (${TASK_TYPES.join("|")})`)
     .option("--assignee <name>", "Filter by assignee")
-    .option("--unassigned", "Only unassigned tasks")
-    .option("--include-deferred", "Include deferred tasks in the results")
-    .option("--no-hints", "Disable lesson hints surfaced from past closes")
+    .option("--unassigned", "Only include unassigned tasks")
+    .option("--no-hints", "Disable lesson hints surfaced from past completed tasks")
     .option("--json", "Output as JSON")
     .action(async (opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-
-      // Commander's --no-X pattern: opts.hints is true by default, false
-      // when --no-hints is passed. Active memory is on by default.
       const showHints = opts.hints !== false;
 
       const filters: ReadyTasksFilters = {
@@ -402,7 +398,6 @@ function registerReadyCommand(taskCmd: Command, program: Command): void {
         type: parseType(opts.type),
         assignee: opts.assignee,
         unassigned: opts.unassigned === true,
-        includeDeferred: opts.includeDeferred === true,
       };
 
       const briefings = await readyTasks(
@@ -413,4 +408,18 @@ function registerReadyCommand(taskCmd: Command, program: Command): void {
       );
       output(isJson, briefings, formatTaskBriefingList);
     });
+}
+
+async function maybeCaptureCompletionHint(task: Task): Promise<void> {
+  if (task.status !== "completed") {
+    return;
+  }
+
+  const services = getServices();
+  try {
+    await captureTaskCandidate(services.taskCandidateStore, task);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    warn(`Task ${task.id} completed, but hint capture failed: ${message}`);
+  }
 }

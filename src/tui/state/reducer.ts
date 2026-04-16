@@ -477,7 +477,7 @@ export function reduce(state: AppState, action: Action): AppState {
         ...state,
         modal: {
           kind: "task-board",
-          selectedColumn: "open",
+          selectedColumn: "pending",
           selectedIndex: 0,
           returnTarget: getModalReturnTarget(state.modal),
           returnPalette: getCommandPaletteReturnState(state.modal),

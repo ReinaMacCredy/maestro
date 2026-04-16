@@ -1151,7 +1151,7 @@ export async function buildTaskBoard(
       priority: task.priority,
       assignee: task.assignee,
       labels: task.labels,
-      dependsOnCount: task.dependsOn.length,
+      blockedByCount: task.blockedBy.length,
     };
     columns[task.status]?.push(item);
   }

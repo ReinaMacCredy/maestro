@@ -1,19 +1,19 @@
 import type { Task } from "../domain/task-types.js";
 import type { TaskStorePort } from "../ports/task-store.port.js";
-import { validateDependencyIds } from "../domain/task-validators.js";
+import { validateBlockIds } from "../domain/task-validators.js";
 
-export async function addTaskDependencies(
+export async function blockTasks(
   store: TaskStorePort,
   id: string,
-  depIds: readonly string[],
+  blockedTaskIds: readonly string[],
 ): Promise<Task> {
-  return store.addDependencies(id, validateDependencyIds(depIds));
+  return store.block(id, validateBlockIds(blockedTaskIds));
 }
 
-export async function removeTaskDependencies(
+export async function unblockTasks(
   store: TaskStorePort,
   id: string,
-  depIds: readonly string[],
+  blockedTaskIds: readonly string[],
 ): Promise<Task> {
-  return store.removeDependencies(id, validateDependencyIds(depIds));
+  return store.unblock(id, validateBlockIds(blockedTaskIds));
 }

@@ -135,11 +135,9 @@ export const FEATURE_TASK_STATUS_LABEL: Record<FeatureStatus, string> = {
 };
 
 export const TASK_STATUS_COLUMN_LABEL: Record<TaskStatus, string> = {
-  open: "Open",
+  pending: "Pending",
   in_progress: "In Progress",
-  blocked: "Blocked",
-  deferred: "Deferred",
-  closed: "Closed",
+  completed: "Completed",
 };
 
 export const AGENT_STATUS_LABEL: Record<InferredAgentStatus, string> = {

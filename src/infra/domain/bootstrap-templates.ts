@@ -42,11 +42,13 @@ maestro feature update <featureId> --mission <id> --status <status> --report @re
 \`\`\`bash
 maestro task ready --json
 maestro task claim <id>
-maestro task close <id> --reason "shipped"
+maestro task update <id> --status in_progress
+maestro task update <id> --status completed --reason "shipped"
 # or: maestro task unclaim <id>
+# blockers: maestro task block <blockerId> <blockedId...>
 \`\`\`
 
-**When to use**: Start every session with \`maestro status\` to see shared state. Use \`maestro feature prompt\` to read the current feature's briefing with memory context auto-injected. Use \`maestro task ready\` to inspect shared queue work before claiming a task.`;
+**When to use**: Start every session with \`maestro status\` to see shared state. Use \`maestro feature prompt\` to read the current feature's briefing with memory context auto-injected. Use \`maestro task ready\` to inspect the shared queue, \`maestro task claim\` to take ownership, and explicit status updates to start or complete work.`;
 
 export const PROJECT_BOOTSTRAP_TEMPLATES: readonly BootstrapTemplateFile[] = [
   {

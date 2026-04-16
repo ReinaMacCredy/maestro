@@ -1,67 +1,61 @@
-import { describe, expect, it, beforeEach } from "bun:test";
+import { beforeEach, describe, expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { addTaskDependencies, removeTaskDependencies } from "@/features/task/usecases/manage-task-dependencies.usecase.js";
-import { createTask } from "@/features/task/usecases/create-task.usecase.js";
 import { JsonlTaskStoreAdapter } from "@/features/task/adapters/jsonl-task-store.adapter.js";
+import { createTask } from "@/features/task/usecases/create-task.usecase.js";
+import { blockTasks, unblockTasks } from "@/features/task/usecases/manage-task-dependencies.usecase.js";
 import { MaestroError } from "@/shared/errors.js";
 
-describe("manageTaskDependencies", () => {
+describe("manage blocker edges", () => {
   let tmpDir: string;
   let store: JsonlTaskStoreAdapter;
 
   beforeEach(async () => {
-    tmpDir = await mkdtemp(join(tmpdir(), "task-deps-"));
+    tmpDir = await mkdtemp(join(tmpdir(), "task-block-"));
     store = new JsonlTaskStoreAdapter(tmpDir);
   });
 
-  it("adds dependencies after task creation", async () => {
-    const depA = await createTask(store, { title: "A" });
-    const depB = await createTask(store, { title: "B" });
-    const task = await createTask(store, { title: "Main" });
+  it("adds reciprocal blocker edges after creation", async () => {
+    const blocker = await createTask(store, { title: "A" });
+    const blockedA = await createTask(store, { title: "B" });
+    const blockedB = await createTask(store, { title: "C" });
 
-    const updated = await addTaskDependencies(store, task.id, [depA.id, depB.id]);
+    const updated = await blockTasks(store, blocker.id, [blockedA.id, blockedB.id]);
 
-    expect(updated.dependsOn).toEqual([depA.id, depB.id]);
+    expect(updated.blocks).toEqual([blockedA.id, blockedB.id]);
+    expect((await store.get(blockedA.id))?.blockedBy).toEqual([blocker.id]);
+    expect((await store.get(blockedB.id))?.blockedBy).toEqual([blocker.id]);
   });
 
-  it("deduplicates repeated dependencies while preserving order", async () => {
-    const depA = await createTask(store, { title: "A" });
-    const depB = await createTask(store, { title: "B" });
-    const task = await createTask(store, { title: "Main", dependsOn: [depA.id] });
-
-    const updated = await addTaskDependencies(store, task.id, [depA.id, depB.id, depA.id]);
-
-    expect(updated.dependsOn).toEqual([depA.id, depB.id]);
-  });
-
-  it("rejects self-dependencies", async () => {
+  it("rejects self-block cycles", async () => {
     const task = await createTask(store, { title: "Main" });
 
     await expect(
-      addTaskDependencies(store, task.id, [task.id]),
+      blockTasks(store, task.id, [task.id]),
     ).rejects.toThrow(MaestroError);
   });
 
-  it("rejects transitive dependency cycles", async () => {
+  it("rejects transitive blocker cycles", async () => {
     const taskA = await createTask(store, { title: "A" });
-    const taskB = await createTask(store, { title: "B", dependsOn: [taskA.id] });
+    const taskB = await createTask(store, { title: "B" });
+    await blockTasks(store, taskA.id, [taskB.id]);
 
     await expect(
-      addTaskDependencies(store, taskA.id, [taskB.id]),
+      blockTasks(store, taskB.id, [taskA.id]),
     ).rejects.toThrow(MaestroError);
   });
 
-  it("removes dependencies idempotently", async () => {
-    const depA = await createTask(store, { title: "A" });
-    const depB = await createTask(store, { title: "B" });
-    const task = await createTask(store, { title: "Main", dependsOn: [depA.id, depB.id] });
+  it("removes blocker edges idempotently", async () => {
+    const blocker = await createTask(store, { title: "A" });
+    const blocked = await createTask(store, { title: "B" });
+    await blockTasks(store, blocker.id, [blocked.id]);
 
-    const once = await removeTaskDependencies(store, task.id, [depA.id]);
-    expect(once.dependsOn).toEqual([depB.id]);
+    const once = await unblockTasks(store, blocker.id, [blocked.id]);
+    const twice = await unblockTasks(store, blocker.id, [blocked.id]);
 
-    const twice = await removeTaskDependencies(store, task.id, [depA.id]);
-    expect(twice.dependsOn).toEqual([depB.id]);
+    expect(once.blocks).toEqual([]);
+    expect(twice.blocks).toEqual([]);
+    expect((await store.get(blocked.id))?.blockedBy).toEqual([]);
   });
 });

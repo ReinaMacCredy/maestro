@@ -52,7 +52,7 @@ export interface TaskBoardItem {
   readonly priority: TaskPriority;
   readonly assignee: string | undefined;
   readonly labels: readonly string[];
-  readonly dependsOnCount: number;
+  readonly blockedByCount: number;
 }
 
 export interface TaskBoardSnapshot {
