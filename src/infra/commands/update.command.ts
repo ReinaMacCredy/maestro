@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { injectAgentBlocks } from "@/features/worker";
+import { injectAgentBlocks } from "@/features/agent";
 import { formatAgentResults, output } from "@/shared/lib/output.js";
 import { installReleaseBinary } from "../usecases/install-release-binary.usecase.js";
 

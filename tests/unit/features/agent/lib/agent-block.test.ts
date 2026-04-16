@@ -7,7 +7,7 @@ import {
   replaceBlock,
   removeBlock,
   removeLegacyBlock,
-} from "@/features/worker";
+} from "@/features/agent";
 
 const SAMPLE = "## Cross-Agent Handoff (maestro)\n\nPick up a handoff.";
 const WRAPPED = `<!-- maestro:start -->\n${SAMPLE}\n<!-- maestro:end -->`;

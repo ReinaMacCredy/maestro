@@ -1,14 +1,7 @@
 export type {
   WorkerConfig,
-  WorkerOutputMode,
-  SupervisionLevel,
   CliWorkerConfig,
-  ExecutionConfig,
-  SupervisionConfig,
-  ParallelConfig,
 } from "./domain/worker-types.js";
-
-export { WorkerConfigSchema, validateWorkerConfig } from "./domain/worker-validators.js";
 
 export {
   type WorkerGuidance,
@@ -19,10 +12,12 @@ export {
 export {
   type AgentConfigSpec,
   SUPPORTED_AGENTS,
+  REFERENCE_FILE,
   BLOCK_START_MARKER,
   BLOCK_END_MARKER,
   agentConfigPath,
   agentConfigDirPath,
+  agentReferencePath,
   agentLegacyConfigPaths,
 } from "./domain/agents.js";
 
@@ -49,9 +44,7 @@ export {
   replaceBlock,
   removeBlock,
   removeLegacyBlock,
+  hasReference,
+  injectReference,
+  removeReference,
 } from "./lib/agent-block.js";
-export {
-  parseRawOutput,
-  parseStreamJsonOutput,
-  extractStreamJsonLineText,
-} from "./lib/stream-json-parser.js";

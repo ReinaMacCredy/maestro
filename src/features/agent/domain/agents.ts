@@ -4,6 +4,8 @@ import { join } from "node:path";
 export const BLOCK_START_MARKER = "<!-- maestro:start -->";
 export const BLOCK_END_MARKER = "<!-- maestro:end -->";
 
+export const REFERENCE_FILE = "MAESTRO.md";
+
 export interface AgentConfigSpec {
   readonly slug: string;
   readonly displayName: string;
@@ -30,6 +32,12 @@ export function agentConfigDirPath(agent: AgentConfigSpec, projectDir = process.
   return agent.configScope === "project"
     ? join(projectDir, agent.configDir)
     : join(homedir(), agent.configDir);
+}
+
+export function agentReferencePath(agent: AgentConfigSpec, projectDir = process.cwd()): string {
+  return agent.configScope === "project"
+    ? join(projectDir, agent.configDir, REFERENCE_FILE)
+    : join(homedir(), agent.configDir, REFERENCE_FILE);
 }
 
 export function agentLegacyConfigPaths(

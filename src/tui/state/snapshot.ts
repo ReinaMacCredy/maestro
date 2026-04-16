@@ -28,7 +28,7 @@ import {
   buildPrincipleEffectiveness,
   PRINCIPLE_SMALL_SAMPLE_THRESHOLD,
 } from "@/features/mission";
-import { recommendWorkerFit } from "@/features/worker";
+import { recommendWorkerFit } from "@/features/agent";
 import {
   type Mission,
   type Feature,

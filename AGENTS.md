@@ -141,7 +141,7 @@ Tasks can live inside or alongside a mission. You can use a mission to hold the 
 - `session` -- agent session identity detection
 - `memory` -- corrections, learnings, recall for agent guidance
 - `mission` -- mission/feature/milestone/checkpoint/validation/principle lifecycle; includes behavioral principles (`.maestro/principles.jsonl`) that inject into worker prompts (score) and gate handoff creation
-- `worker` -- worker prompt generation, agent management, fit recommendation, prior handoff replay (legitimately imports from `mission`, `memory`, and `handoff`; see Feature-specific exceptions)
+- `agent` -- worker prompt generation, agent management, fit recommendation, prior handoff replay (legitimately imports from `mission`, `memory`, and `handoff`; see Feature-specific exceptions)
 - `task` -- br-style issue graph for the daily loop (create, ready, claim, close); JSONL storage at `.maestro/tasks/tasks.jsonl`
 - `bundle` -- package a mission + its artifacts (plan, features, workers, replies, handoffs, principles, memory) as a portable `.mission.tar.gz` bundle; read-only aggregator (see Feature-specific exceptions)
 
@@ -161,7 +161,7 @@ Enforced by `bun run check:boundaries`, which walks `src/features/*/**/*.ts` and
 All four live outside `src/features/*`, so the boundary-check glob never walks them; the exemption list is preserved defensively so the contract survives any future relocation.
 
 ### Feature-specific exceptions
-- `worker` may import from `mission`, `memory`, and `handoff` through their public surfaces. Rationale: worker composes prompts from mission context, memory hints, and prior handoff replay, so the cross-feature dependencies are essential, not incidental
+- `agent` may import from `mission`, `memory`, and `handoff` through their public surfaces. Rationale: agent composes prompts from mission context, memory hints, and prior handoff replay, so the cross-feature dependencies are essential, not incidental
 - `bundle` may import from `mission`, `reply`, `handoff`, and `session` through their public surfaces. Rationale: bundle is a read-only aggregator that snapshots every mission artifact into a portable archive; the cross-feature reads are the whole point of the feature
 - No other feature has exceptions. If a future feature needs an enforcement exception, add it explicitly in [scripts/check-feature-boundaries-lib.ts](/Users/reinamaccredy/Code/maestro/scripts/check-feature-boundaries-lib.ts) with matching tests and update this section in the same change
 

@@ -21,14 +21,14 @@ describe("findCrossFeatureImportViolation", () => {
   it("allows public-surface imports across features", () => {
     expect(
       findCrossFeatureImportViolation(
-        "src/features/worker/usecases/example.ts",
+        "src/features/agent/usecases/example.ts",
         "@/features/mission",
       ),
     ).toBeUndefined();
 
     expect(
       findCrossFeatureImportViolation(
-        "src/features/worker/usecases/example.ts",
+        "src/features/agent/usecases/example.ts",
         "../../mission/index.js",
       ),
     ).toBeUndefined();
@@ -37,35 +37,35 @@ describe("findCrossFeatureImportViolation", () => {
   it("flags deep imports into direct and nested mission internals", () => {
     expect(
       findCrossFeatureImportViolation(
-        "src/features/worker/usecases/example.ts",
+        "src/features/agent/usecases/example.ts",
         "@/features/mission/usecases/mission-report.usecase.js",
       ),
     ).toMatchObject({
-      ownFeature: "worker",
+      ownFeature: "agent",
       otherFeature: "mission",
       importSpec: "@/features/mission/usecases/mission-report.usecase.js",
     });
 
     expect(
       findCrossFeatureImportViolation(
-        "src/features/worker/usecases/example.ts",
+        "src/features/agent/usecases/example.ts",
         "@/features/mission/feature/usecases/feature-lifecycle.usecase.js",
       ),
     ).toMatchObject({
-      ownFeature: "worker",
+      ownFeature: "agent",
       otherFeature: "mission",
       importSpec: "@/features/mission/feature/usecases/feature-lifecycle.usecase.js",
     });
   });
 
-  it("does not exempt worker deep imports into memory internals", () => {
+  it("does not exempt agent deep imports into memory internals", () => {
     expect(
       findCrossFeatureImportViolation(
-        "src/features/worker/usecases/example.ts",
+        "src/features/agent/usecases/example.ts",
         "@/features/memory/domain/memory-types.js",
       ),
     ).toMatchObject({
-      ownFeature: "worker",
+      ownFeature: "agent",
       otherFeature: "memory",
       importSpec: "@/features/memory/domain/memory-types.js",
     });
@@ -81,15 +81,15 @@ describe("findCrossFeatureImportViolation", () => {
   });
 
   it("scans feature files on disk and ignores exempt cross-feature aggregators", async () => {
-    const workerDir = join(tmpDir, "src", "features", "worker", "usecases");
+    const agentDir = join(tmpDir, "src", "features", "agent", "usecases");
     const graphDir = join(tmpDir, "src", "features", "graph");
     const tuiDir = join(tmpDir, "src", "tui", "state");
-    await mkdir(workerDir, { recursive: true });
+    await mkdir(agentDir, { recursive: true });
     await mkdir(graphDir, { recursive: true });
     await mkdir(tuiDir, { recursive: true });
 
     await writeFile(
-      join(workerDir, "bad-import.ts"),
+      join(agentDir, "bad-import.ts"),
       'import { x } from "@/features/mission/usecases/mission-report.usecase.js";\n',
     );
     await writeFile(join(graphDir, "index.ts"), 'export * from "./services.js";\n');
@@ -102,8 +102,8 @@ describe("findCrossFeatureImportViolation", () => {
 
     expect(violations).toEqual([
       {
-        file: "src/features/worker/usecases/bad-import.ts",
-        ownFeature: "worker",
+        file: "src/features/agent/usecases/bad-import.ts",
+        ownFeature: "agent",
         importSpec: "@/features/mission/usecases/mission-report.usecase.js",
         otherFeature: "mission",
       },

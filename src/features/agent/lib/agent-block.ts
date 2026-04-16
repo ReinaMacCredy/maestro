@@ -1,9 +1,34 @@
-import { BLOCK_START_MARKER, BLOCK_END_MARKER } from "../domain/agents.js";
+import { BLOCK_START_MARKER, BLOCK_END_MARKER, REFERENCE_FILE } from "../domain/agents.js";
 
 const BLOCK_REGEX = new RegExp(
   `${BLOCK_START_MARKER.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[\\s\\S]*?${BLOCK_END_MARKER.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
 );
 const LEGACY_HEADING_REGEX = /\n## Cross-Agent Handoff \(maestro\)[\s\S]*?(?=\n## |\n$|$)/;
+
+const REFERENCE_LINE = `@${REFERENCE_FILE}`;
+
+function referenceRegex(): RegExp {
+  return new RegExp(`^${REFERENCE_LINE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "m");
+}
+
+export function hasReference(content: string): boolean {
+  return referenceRegex().test(content);
+}
+
+export function injectReference(content: string): string {
+  if (hasReference(content)) return content;
+  const trimmed = content.trimEnd();
+  if (trimmed.length === 0) return REFERENCE_LINE + "\n";
+  return trimmed + "\n\n" + REFERENCE_LINE + "\n";
+}
+
+export function removeReference(content: string): string | null {
+  if (!hasReference(content)) return null;
+  return content
+    .replace(referenceRegex(), "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trimEnd() + "\n";
+}
 
 export function wrapBlock(content: string): string {
   return `${BLOCK_START_MARKER}\n${content}\n${BLOCK_END_MARKER}`;

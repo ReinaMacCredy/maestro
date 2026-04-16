@@ -31,7 +31,7 @@ import { GRAPH_DIR } from "@/shared/domain/defaults.js";
     isGlobalOnlyConfigKey,
     resolveConfigScopeForKey,
   } from "../state/config-inspector.js";
-import { formatWorkerLabel } from "@/features/worker";
+import { formatWorkerLabel } from "@/features/agent";
 
 type MemoryModalState = AppState & {
   modal: Extract<AppState["modal"], { kind: "memory" }>;
@@ -1268,8 +1268,7 @@ function buildConfigDetailItems(
     }
     }
 
-function formatOptionLabel(row: MissionControlConfigRow, option: string): string {
-  if (row.keyPath === "supervision.level" && option === "mid") return "medium";
+function formatOptionLabel(_row: MissionControlConfigRow, option: string): string {
   return option;
 }
 

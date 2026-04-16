@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { SUPPORTED_AGENTS, agentConfigPath } from "@/features/worker";
+import { SUPPORTED_AGENTS, agentConfigPath } from "@/features/agent";
 
 describe("agent config specs", () => {
   it("anchors Droid config under project-local .maestro/AGENTS.md", () => {
