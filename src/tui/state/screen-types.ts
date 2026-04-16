@@ -32,7 +32,6 @@ export interface DispatchQueueItem {
   readonly milestoneTitle: string;
   readonly milestoneOrder: number;
   readonly workerType: string;
-  readonly fitReason: string;
 }
 
 export type EventStreamEntryKind = MissionControlEvent["kind"] | "handoff" | "task" | "reply";

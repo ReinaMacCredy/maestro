@@ -205,7 +205,6 @@ describe("CLI integration", () => {
     const { stdout, exitCode } = await run(["status", "--json"]);
     expect(exitCode).toBe(0);
     const status = JSON.parse(stdout);
-    expect(status).toHaveProperty("cassAvailable");
     expect(status).toHaveProperty("gitAvailable");
   }, SLOW_CLI_TIMEOUT_MS);
 

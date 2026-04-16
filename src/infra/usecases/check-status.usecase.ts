@@ -44,7 +44,6 @@ export async function checkStatus(
     initialized: projectConfigExists || globalConfigExists,
     configSource,
     pendingHandoffs: pendingHandoffs.map(toPendingHandoffSummary),
-    cassAvailable: false,
     gitAvailable,
   };
 }

@@ -94,7 +94,6 @@ describe("captureMissionControlFrame", () => {
       pendingHandoffs: [],
       configSummary: {
         configSource: "global",
-        cassAvailable: true,
         gitAvailable: true,
         checks: [],
         missionDirectory: null,
@@ -158,7 +157,6 @@ describe("captureMissionControlFrame", () => {
         ...makeSnapshot(),
         configSummary: {
           configSource: "global",
-          cassAvailable: true,
           gitAvailable: true,
           checks: [],
           missionDirectory: null,
@@ -218,7 +216,6 @@ describe("captureMissionControlFrame", () => {
         ...makeSnapshot(),
         configSummary: {
           configSource: "global",
-          cassAvailable: true,
           gitAvailable: true,
           checks: [],
           missionDirectory: null,
@@ -283,7 +280,6 @@ describe("captureMissionControlFrame", () => {
       ...makeSnapshot(),
       configSummary: {
         configSource: "global",
-        cassAvailable: true,
         gitAvailable: true,
         checks: [],
         missionDirectory: null,
@@ -342,7 +338,6 @@ describe("captureMissionControlFrame", () => {
       ...makeSnapshot(),
       configSummary: {
         configSource: "global",
-        cassAvailable: true,
         gitAvailable: true,
         checks: [],
         missionDirectory: null,

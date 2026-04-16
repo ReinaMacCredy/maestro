@@ -1,5 +1,4 @@
 import type { AgentSlug } from "@/features/session";
-import type { WorkerConfig } from "@/features/agent";
 import type { MemoryConfig } from "@/features/memory";
 import type { WorkflowTemplate } from "@/features/mission";
 import type { UiConfig } from "@/shared/domain/ui-config.js";
@@ -14,10 +13,6 @@ export interface MaestroConfig {
   };
   readonly defaultWorkflow?: string;
   readonly workflowTemplates?: Readonly<Record<string, WorkflowTemplate>>;
-  readonly execution?: {
-    readonly defaultWorker?: string;
-  };
-  readonly workers?: Readonly<Record<string, WorkerConfig>>;
   readonly ui?: UiConfig;
   readonly memory?: MemoryConfig;
 }
@@ -28,29 +23,6 @@ export const DEFAULT_CONFIG: MaestroConfig = {
     agents: ["claude-code"],
   },
   defaultWorkflow: "plan-implement",
-  execution: {
-    defaultWorker: "codex",
-  },
-  workers: {
-    "claude-code": {
-      enabled: true,
-      transport: "cli",
-      command: "claude",
-      args: ["--print"],
-    },
-    codex: {
-      enabled: true,
-      transport: "cli",
-      command: "codex",
-      args: [],
-    },
-    gemini: {
-      enabled: false,
-      transport: "cli",
-      command: "gemini",
-      args: [],
-    },
-  },
   ui: {
     missionControl: {
       backgroundMode: "solid",

@@ -49,7 +49,6 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
       pendingHandoffs: [],
       configSummary: {
         configSource: "project",
-        cassAvailable: true,
         gitAvailable: true,
         checks: [],
         missionDirectory: ".maestro/missions/2026-03-30-001",

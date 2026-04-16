@@ -4,141 +4,98 @@ import type { MaestroConfig } from "@/infra/domain/config-types.js";
 import type { ConfigLayers } from "@/infra/ports/config.port.js";
 import type { Feature } from "@/features/mission";
 
-const withLegacyConfig = <T extends MaestroConfig>(value: T): T => value as T;
-
 const layers: ConfigLayers = {
-  defaults: withLegacyConfig({
-    execution: {
-      defaultWorker: "codex",
-      stopOnFailure: true,
-    },
+  defaults: {
     ui: {
       missionControl: {
         backgroundMode: "solid",
       },
     },
-    supervision: {
-      level: "mid",
-    },
-  }),
-    effective: withLegacyConfig({
-      execution: {
-        defaultWorker: "claude-code",
-        stopOnFailure: false,
-      },
-      memory: {
+  } satisfies MaestroConfig,
+  effective: {
+    memory: {
+      enabled: true,
+      corrections: {
         enabled: true,
-        corrections: {
-          enabled: true,
-          matching: "keyword",
-          auto_capture: "prompt",
-          severity_default: "soft",
-        },
-        learnings: {
-          enabled: true,
-          compile_threshold: 5,
-          max_age_days: 7,
-        },
-        ratchet: {
-          enabled: false,
-          enforcement: "warn",
-        },
-        graph: {
-          enabled: true,
-        },
+        matching: "keyword",
+        auto_capture: "prompt",
+        severity_default: "soft",
       },
-      workers: {
-      codex: {
+      learnings: {
         enabled: true,
-        transport: "cli",
-        command: "codex",
-        outputMode: "raw",
-        env: {
-          API_TOKEN: "top-secret-token",
-        },
+        compile_threshold: 5,
+        max_age_days: 7,
       },
-      "claude-code": {
+      ratchet: {
+        enabled: false,
+        enforcement: "warn",
+      },
+      graph: {
         enabled: true,
-        transport: "cli",
-        command: "claude",
-        outputMode: "stream-json",
       },
-    },
-    supervision: {
-      level: "high",
     },
     ui: {
       missionControl: {
         backgroundMode: "terminal",
       },
     },
-  }),
-    global: withLegacyConfig({
-      execution: {
-        defaultWorker: "codex",
-      },
-      memory: {
+  } satisfies MaestroConfig,
+  global: {
+    memory: {
+      enabled: true,
+      corrections: {
         enabled: true,
-        corrections: {
-          enabled: true,
-          matching: "keyword",
-          auto_capture: "prompt",
-          severity_default: "soft",
-        },
-        learnings: {
-          enabled: true,
-          compile_threshold: 8,
-          max_age_days: 14,
-        },
-        ratchet: {
-          enabled: false,
-          enforcement: "warn",
-        },
-        graph: {
-          enabled: true,
-        },
+        matching: "keyword",
+        auto_capture: "prompt",
+        severity_default: "soft",
       },
-      ui: {
-        missionControl: {
-          backgroundMode: "terminal",
+      learnings: {
+        enabled: true,
+        compile_threshold: 8,
+        max_age_days: 14,
+      },
+      ratchet: {
+        enabled: false,
+        enforcement: "warn",
+      },
+      graph: {
+        enabled: true,
       },
     },
-  }),
-    project: withLegacyConfig({
-      execution: {
-        defaultWorker: "claude-code",
-        stopOnFailure: false,
+    ui: {
+      missionControl: {
+        backgroundMode: "terminal",
       },
-      memory: {
+    },
+  } satisfies MaestroConfig,
+  project: {
+    memory: {
+      enabled: true,
+      corrections: {
         enabled: true,
-        corrections: {
-          enabled: true,
-          matching: "both",
-          auto_capture: "auto",
-          severity_default: "hard",
-        },
-        learnings: {
-          enabled: true,
-          compile_threshold: 5,
-          max_age_days: 7,
-        },
-        ratchet: {
-          enabled: true,
-          enforcement: "block",
-        },
-        graph: {
-          enabled: true,
-        },
+        matching: "both",
+        auto_capture: "auto",
+        severity_default: "hard",
       },
-      supervision: {
-        level: "high",
+      learnings: {
+        enabled: true,
+        compile_threshold: 5,
+        max_age_days: 7,
       },
+      ratchet: {
+        enabled: true,
+        enforcement: "block",
+      },
+      graph: {
+        enabled: true,
+      },
+    },
     ui: {
       missionControl: {
         backgroundMode: "solid",
       },
     },
-  }),
+  } satisfies MaestroConfig,
   errors: [],
   paths: {
     project: ".maestro/config.yaml",
@@ -147,114 +104,103 @@ const layers: ConfigLayers = {
 };
 
 describe("buildConfigInspector", () => {
-    it("builds effective rows with provenance", () => {
-        const inspector = buildConfigInspector(layers, [], []);
-        const row = inspector.rowsByTab.effective.find((item) => item.keyPath === "execution.defaultWorker");
+  it("builds effective rows with provenance", () => {
+    const inspector = buildConfigInspector(layers, [], []);
+    const row = inspector.rowsByTab.effective.find(
+      (item) => item.keyPath === "memory.corrections.matching",
+    );
 
-      expect(row?.label).toBe("Default worker");
-      expect(row?.displayValueText).toBe("claude-code");
-        expect(row?.source).toBe("project");
-        expect(row?.sourceBadge).toBe("P");
-        expect(row?.editKind).toBe("enum");
-        expect(row?.editKindLabel).toBe("choice");
-        // Phase 3 strip: availability now derives from `cachedWhich` so
-        // the choice status depends on whether `codex` is on PATH. Only
-        // assert the static label fields here.
-        const codexChoice = row?.workerChoices?.find((choice) => choice.slug === "codex");
-        expect(codexChoice?.label).toBe("Codex");
-        expect(codexChoice?.slug).toBe("codex");
-      });
+    expect(row?.label).toBe("Matching");
+    expect(row?.displayValueText).toBe("keyword");
+    expect(row?.source).toBe("global");
+    expect(row?.sourceBadge).toBe("G");
+    expect(row?.editKind).toBe("enum");
+    expect(row?.editKindLabel).toBe("choice");
+  });
 
-    it("builds plan and doctor tabs", () => {
-      const features: Feature[] = [
-        {
-          id: "f1",
-          missionId: "m1",
-          milestoneId: "m1",
-          status: "done",
-          title: "Setup",
-          description: "done",
-          workerType: "test-skill",
-          verificationSteps: [],
-          dependsOn: [],
-          fulfills: [],
-          createdAt: "2026-04-02T12:00:00.000Z",
-          updatedAt: "2026-04-02T12:00:00.000Z",
-        },
-        {
-          id: "f2",
-          missionId: "m1",
-          milestoneId: "m1",
-          status: "pending",
-          title: "Ready after setup",
-          description: "pending",
-          workerType: "test-skill",
-          verificationSteps: [],
-          dependsOn: ["f1"],
-          fulfills: [],
-          createdAt: "2026-04-02T12:00:00.000Z",
-          updatedAt: "2026-04-02T12:00:00.000Z",
-        },
-      ];
+  it("builds plan and doctor tabs", () => {
+    const features: Feature[] = [
+      {
+        id: "f1",
+        missionId: "m1",
+        milestoneId: "m1",
+        status: "done",
+        title: "Setup",
+        description: "done",
+        workerType: "test-skill",
+        verificationSteps: [],
+        dependsOn: [],
+        fulfills: [],
+        createdAt: "2026-04-02T12:00:00.000Z",
+        updatedAt: "2026-04-02T12:00:00.000Z",
+      },
+      {
+        id: "f2",
+        missionId: "m1",
+        milestoneId: "m1",
+        status: "pending",
+        title: "Ready after setup",
+        description: "pending",
+        workerType: "test-skill",
+        verificationSteps: [],
+        dependsOn: ["f1"],
+        fulfills: [],
+        createdAt: "2026-04-02T12:00:00.000Z",
+        updatedAt: "2026-04-02T12:00:00.000Z",
+      },
+    ];
 
-        const inspector = buildConfigInspector(
-          {
-          ...layers,
-          errors: [{ scope: "project", path: ".maestro/config.yaml", message: "bad yaml" }],
-          },
-          [{ name: "git", status: "ok", message: "Git repository detected" }],
-          features,
-        );
+    const inspector = buildConfigInspector(
+      {
+        ...layers,
+        errors: [{ scope: "project", path: ".maestro/config.yaml", message: "bad yaml" }],
+      },
+      [{ name: "git", status: "ok", message: "Git repository detected" }],
+      features,
+    );
 
-      expect(inspector.rowsByTab.plan.length).toBeGreaterThan(0);
-      expect(inspector.rowsByTab.plan.find((row) => row.keyPath === "plan.nextTask")?.displayValueText).toBe("f2 Ready after setup");
-      expect(inspector.rowsByTab.doctor.some((row) => row.valueText.includes("bad yaml"))).toBe(true);
-    });
-
-    it("derives worker row labels from CLI config without the Phase 1 health pane", () => {
-        const inspector = buildConfigInspector(layers, [], []);
-      const workerRow = inspector.rowsByTab.workers.find((row) => row.keyPath === "workers.codex");
-
-      expect(workerRow?.label).toBe("Codex");
-      // Phase 3 strip: valueText/impactText now reflect `cachedWhich`
-      // output instead of an injected worker health row. We assert
-      // only the stable label fields.
-      expect(workerRow?.section).toBe("Workers");
-    });
-
-    it("masks sensitive worker config values", () => {
-        const inspector = buildConfigInspector(layers, [], []);
-      const row = inspector.rowsByTab.effective.find((item) => item.keyPath === "workers.codex.env.API_TOKEN");
-
-      expect(row).toMatchObject({
-        valueText: "[hidden]",
-        displayValueText: "[hidden]",
-      });
-    });
+    expect(inspector.rowsByTab.plan.length).toBeGreaterThan(0);
+    expect(
+      inspector.rowsByTab.plan.find((row) => row.keyPath === "plan.nextTask")?.displayValueText,
+    ).toBe("f2 Ready after setup");
+    expect(inspector.rowsByTab.doctor.some((row) => row.valueText.includes("bad yaml"))).toBe(true);
+  });
 
   it("surfaces mission control background mode as a global-only setting", () => {
-      const inspector = buildConfigInspector(layers, [], []);
-      const overviewRow = inspector.rowsByTab.overview.find((row) => row.keyPath === "ui.missionControl.backgroundMode");
-      const projectRow = inspector.rowsByTab.project.find((row) => row.keyPath === "ui.missionControl.backgroundMode");
-      const doctorRow = inspector.rowsByTab.doctor.find((row) => row.keyPath === "doctor.ignored-ui-missionControl-backgroundMode");
+    const inspector = buildConfigInspector(layers, [], []);
+    const overviewRow = inspector.rowsByTab.overview.find(
+      (row) => row.keyPath === "ui.missionControl.backgroundMode",
+    );
+    const projectRow = inspector.rowsByTab.project.find(
+      (row) => row.keyPath === "ui.missionControl.backgroundMode",
+    );
+    const doctorRow = inspector.rowsByTab.doctor.find(
+      (row) => row.keyPath === "doctor.ignored-ui-missionControl-backgroundMode",
+    );
 
-      expect(overviewRow).toMatchObject({
-        label: "Background mode",
-        displayValueText: "terminal background",
-        source: "global",
-      });
-      expect(projectRow).toMatchObject({
-        editKind: "readonly",
-      });
+    expect(overviewRow).toMatchObject({
+      label: "Background mode",
+      displayValueText: "terminal background",
+      source: "global",
+    });
+    expect(projectRow).toMatchObject({
+      editKind: "readonly",
+    });
     expect(projectRow?.description).toContain("global-only");
     expect(doctorRow?.displayValueText).toContain("Background Mode");
   });
 
   it("builds editable memory rows in the memory tab", () => {
     const inspector = buildConfigInspector(layers, [], []);
-    const matchingRow = inspector.rowsByTab.memory.find((row) => row.keyPath === "memory.corrections.matching");
-    const thresholdRow = inspector.rowsByTab.memory.find((row) => row.keyPath === "memory.learnings.compile_threshold");
-    const ratchetRow = inspector.rowsByTab.memory.find((row) => row.keyPath === "memory.ratchet.enforcement");
+    const matchingRow = inspector.rowsByTab.memory.find(
+      (row) => row.keyPath === "memory.corrections.matching",
+    );
+    const thresholdRow = inspector.rowsByTab.memory.find(
+      (row) => row.keyPath === "memory.learnings.compile_threshold",
+    );
+    const ratchetRow = inspector.rowsByTab.memory.find(
+      (row) => row.keyPath === "memory.ratchet.enforcement",
+    );
 
     expect(matchingRow).toMatchObject({
       editKind: "enum",
@@ -271,24 +217,23 @@ describe("buildConfigInspector", () => {
     });
   });
 
-  it("hides dead execution, supervision, parallel, and outputMode keys from all tabs", () => {
-    const inspector = buildConfigInspector(layers, [], []);
-    const forbiddenPaths = [
-      "execution.stopOnFailure",
-      "execution.retryBudget",
-      "execution.rotateWorkerOnRetry",
-      "parallel.enabled",
-      "parallel.maxConcurrent",
-      "supervision.level",
-      "workers.codex.outputMode",
-      "workers.claude-code.outputMode",
-    ];
-
-    for (const keyPath of forbiddenPaths) {
-      expect(inspector.rowsByTab.effective.some((row) => row.keyPath === keyPath)).toBe(false);
-      expect(inspector.rowsByTab.project.some((row) => row.keyPath === keyPath)).toBe(false);
-      expect(inspector.rowsByTab.global.some((row) => row.keyPath === keyPath)).toBe(false);
-      expect(inspector.rowsByTab.defaults.some((row) => row.keyPath === keyPath)).toBe(false);
+  it("hides parallel.* keys from all tabs", () => {
+    const inspectorWithParallel = buildConfigInspector(
+      {
+        ...layers,
+        effective: {
+          ...layers.effective,
+          // @ts-expect-error -- parallel.* is an unknown legacy key; the filter must hide it
+          parallel: { enabled: true, maxConcurrent: 4 },
+        },
+      },
+      [],
+      [],
+    );
+    for (const tab of ["effective", "project", "global", "defaults"] as const) {
+      expect(
+        inspectorWithParallel.rowsByTab[tab].some((row) => row.keyPath.startsWith("parallel.")),
+      ).toBe(false);
     }
   });
 });

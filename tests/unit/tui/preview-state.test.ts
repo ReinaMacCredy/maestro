@@ -111,7 +111,6 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
       ],
     configSummary: {
       configSource: "project",
-      cassAvailable: true,
       gitAvailable: true,
       checks: [],
       missionDirectory: ".maestro/missions/2026-04-02-001",

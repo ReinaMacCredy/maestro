@@ -28,7 +28,6 @@ import {
   buildPrincipleEffectiveness,
   PRINCIPLE_SMALL_SAMPLE_THRESHOLD,
 } from "@/features/mission";
-import { recommendWorkerFit } from "@/features/agent";
 import {
   type Mission,
   type Feature,
@@ -228,7 +227,6 @@ export async function buildSnapshot(
   ).length;
   const blockedCount = features.filter((f) => f.status === "blocked").length;
   const queuedCount = features.filter((f) => f.status === "pending").length;
-  const workerTypes = [...new Set(features.map((feature) => feature.workerType))];
   const activeMilestone = milestones.find((m) => m.status === "executing" || m.status === "validating");
   const gateLabel = activeMilestone?.kind === "gate" ? activeMilestone.title : null;
   const gateBlocked = Boolean(activeMilestone && activeMilestone.kind === "gate"
@@ -291,14 +289,12 @@ export async function buildSnapshot(
     pendingHandoffs,
     configSummary: {
       configSource: env.status.configSource,
-      cassAvailable: env.status.cassAvailable,
       gitAvailable: env.status.gitAvailable,
       checks,
       missionDirectory: `.maestro/missions/${mission.id}`,
-      workerTypes,
       backgroundMode,
     },
-    configInspector: buildConfigInspector(configLayers, checks, features, []),
+    configInspector: buildConfigInspector(configLayers, checks, features),
     progressLog,
     milestones,
     gateBlocked,
@@ -400,14 +396,12 @@ export async function buildHomeSnapshot(
     pendingHandoffs,
     configSummary: {
       configSource: status.configSource,
-      cassAvailable: status.cassAvailable,
       gitAvailable: status.gitAvailable,
       checks,
       missionDirectory: null,
-      workerTypes: [],
       backgroundMode,
     },
-    configInspector: buildConfigInspector(configLayers, checks, [], []),
+    configInspector: buildConfigInspector(configLayers, checks, []),
     progressLog: [],
     milestones: [],
     gateBlocked: false,
@@ -799,7 +793,6 @@ export function buildDispatchQueue(
   return ready
     .map((f) => {
       const milestone = milestoneById.get(f.milestoneId);
-      const fit = recommendWorkerFit(f.workerType, features);
       return {
         featureId: f.id,
         featureTitle: f.title,
@@ -807,7 +800,6 @@ export function buildDispatchQueue(
         milestoneTitle: milestone?.title ?? f.milestoneId,
         milestoneOrder: milestone?.order ?? 0,
         workerType: f.workerType,
-        fitReason: fit.reason,
       };
     })
     .sort((a, b) => a.milestoneOrder - b.milestoneOrder);
@@ -1214,7 +1206,6 @@ async function buildMissionControlEnvironmentSummary(
       initialized: projectConfigExists || globalConfigExists,
       configSource,
       pendingHandoffs: [],
-      cassAvailable: false,
       gitAvailable,
     },
     checks: [

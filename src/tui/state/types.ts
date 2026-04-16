@@ -64,11 +64,9 @@ export interface MissionControlSessionSidebar {
 
 export interface MissionControlConfigSummary {
   configSource: "project" | "global" | "none";
-  cassAvailable: boolean;
   gitAvailable: boolean;
   checks: readonly DoctorCheck[];
   missionDirectory: string | null;
-  workerTypes: readonly string[];
   backgroundMode: MissionControlBackgroundMode;
 }
 
@@ -78,7 +76,6 @@ export type MissionControlConfigTab =
   | "project"
   | "global"
   | "defaults"
-  | "workers"
   | "plan"
   | "doctor"
   | "memory";
@@ -97,39 +94,6 @@ export type MissionControlConfigEditKind =
   | "toggle"
   | "enum"
   | "number-preset";
-
-export interface MissionControlWorkerFitRecommendation {
-  workerSlug: string;
-  featureId?: string;
-  featureTitle?: string;
-  reason: string;
-  fallbackReason?: string;
-}
-
-/**
- * Worker-profile choice surfaced in the config inspector's default
- * worker picker. Phase 3 strip removed the per-worker health probe
- * system; availability now always reports "ready" for enabled CLI
- * workers and "disabled" otherwise. The choice row is retained so the
- * config inspector can still render the default worker picker.
- */
-export type MissionControlWorkerChoiceAvailability =
-  | "ready"
-  | "busy"
-  | "degraded"
-  | "missing"
-  | "disabled";
-
-export interface MissionControlConfigWorkerChoice {
-  slug: string;
-  label: string;
-  availability: MissionControlWorkerChoiceAvailability;
-  availabilityDetail: string;
-  summary: string;
-  bestFor: string;
-  tradeoffs: string;
-  recommendation: MissionControlWorkerFitRecommendation;
-}
 
 export interface MissionControlConfigRow {
     keyPath: string;
@@ -153,7 +117,6 @@ export interface MissionControlConfigRow {
       globalDisplayValueText?: string;
       defaultValueText?: string;
       defaultDisplayValueText?: string;
-      workerChoices?: readonly MissionControlConfigWorkerChoice[];
     }
 
 export interface MissionControlConfigInspector {

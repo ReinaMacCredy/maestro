@@ -59,7 +59,7 @@ export function getMissionControlCommandSpecs(
         label: "Agents",
         detail: "View worker agent status and activity",
         section: "Navigate",
-        keywords: ["agents", "workers", "status", "grid"],
+        keywords: ["agents", "status", "grid"],
       },
       {
         id: "handoffs",
@@ -144,7 +144,7 @@ export function getMissionControlCommandSpecs(
         label: "Agents",
         detail: "View worker agent status and activity",
         section: "Navigate",
-        keywords: ["agents", "workers", "status", "grid"],
+        keywords: ["agents", "status", "grid"],
       },
       {
         id: "dispatch",

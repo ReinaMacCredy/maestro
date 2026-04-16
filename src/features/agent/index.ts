@@ -1,14 +1,3 @@
-export type {
-  WorkerConfig,
-  CliWorkerConfig,
-} from "./domain/worker-types.js";
-
-export {
-  type WorkerGuidance,
-  formatWorkerLabel,
-  getWorkerGuidance,
-} from "./domain/worker-presentation.js";
-
 export {
   type AgentConfigSpec,
   SUPPORTED_AGENTS,
@@ -28,7 +17,6 @@ export {
   type GenerateWorkerPromptResult,
   type WorkerPromptStores,
 } from "./usecases/generate-worker-prompt.usecase.js";
-export { recommendWorkerFit } from "./usecases/worker-fit-recommendation.usecase.js";
 export {
   injectAgentBlocks,
   removeAgentBlocks,

@@ -31,7 +31,12 @@ import { GRAPH_DIR } from "@/shared/domain/defaults.js";
     isGlobalOnlyConfigKey,
     resolveConfigScopeForKey,
   } from "../state/config-inspector.js";
-import { formatWorkerLabel } from "@/features/agent";
+function formatAgentLabel(slug: string): string {
+  return slug
+    .split("-")
+    .map((part) => part.length === 0 ? part : part[0]!.toUpperCase() + part.slice(1))
+    .join(" ");
+}
 
 type MemoryModalState = AppState & {
   modal: Extract<AppState["modal"], { kind: "memory" }>;
@@ -384,7 +389,7 @@ function buildAgentGridModal(
     eyebrow: "Worker status and feature assignments.",
     items: grid.length > 0
       ? grid.map((row) => ({
-          label: formatWorkerLabel(row.workerType),
+          label: formatAgentLabel(row.workerType),
           detail: AGENT_STATUS_LABEL[row.status],
           hint: `${row.completedCount}/${row.featureCount}`,
         }))
@@ -392,7 +397,7 @@ function buildAgentGridModal(
     selectedIndex: Math.min(state.modal.selectedIndex, Math.max(0, grid.length - 1)),
     detailItems: selected
       ? [
-          { text: `Worker: ${formatWorkerLabel(selected.workerType)}` },
+          { text: `Worker: ${formatAgentLabel(selected.workerType)}` },
           { text: `Status: ${AGENT_STATUS_LABEL[selected.status]}` },
           ...(selected.activeFeatureId
             ? [{ text: `Active: ${selected.activeFeatureId}`, detail: selected.activeFeatureTitle }]
@@ -447,9 +452,7 @@ function buildDispatchModal(
       ? [
           { text: `Feature: ${selected.featureId}`, detail: selected.featureTitle },
           { text: `Milestone: ${selected.milestoneTitle} (#${selected.milestoneOrder})` },
-          { text: `Worker: ${formatWorkerLabel(selected.workerType)}` },
-          { text: "Fit:", section: "Recommendation" },
-          { text: selected.fitReason, tone: "muted" as const },
+          { text: `Worker: ${formatAgentLabel(selected.workerType)}` },
         ]
       : [{ text: "Select a feature to view dispatch details" }],
     footer,
@@ -1191,9 +1194,7 @@ function buildConfigEyebrow(state: AppState): string | undefined {
   switch (state.modal.phase) {
     case "edit-inline":
       if (!selectedRow) return "Choose a value, adjust scope if needed, and preview before saving.";
-      return selectedRow.keyPath === "execution.defaultWorker"
-        ? "Which worker should Maestro use by default?"
-        : selectedRow.summary;
+      return selectedRow.summary;
     case "choose-scope":
       return selectedRow?.label;
     case "confirm-write":
@@ -1255,9 +1256,7 @@ function buildConfigDetailItems(
     case "choose-scope":
       return buildConfigScopeDetailItems(state, row);
     case "edit-inline":
-      return row.keyPath === "execution.defaultWorker"
-        ? buildDefaultWorkerDetailItems(state, row)
-        : buildConfigEditDetailItems(state, row);
+      return buildConfigEditDetailItems(state, row);
       case "confirm-write":
         return buildConfigConfirmDetailItems(state, row);
       case "browse":
@@ -1349,9 +1348,7 @@ function buildConfigItems(
   }
   if (state.modal.phase === "edit-inline" && selectedRow?.options?.length) {
       return {
-        items: selectedRow.keyPath === "execution.defaultWorker"
-          ? buildWorkerChoiceItems(selectedRow)
-          : buildValueChoiceItems(selectedRow),
+        items: buildValueChoiceItems(selectedRow),
         selectedIndex: Math.max(0, selectedRow.options.indexOf(state.modal.draftValue ?? selectedRow.effectiveValueText)),
       };
     }
@@ -1424,32 +1421,6 @@ function buildConfigEditDetailItems(
       { text: globalOnly ? "Up/Down choose   P preview   Enter review" : "Up/Down choose   S scope   P preview   Enter review", section: "Next actions" },
     ];
   }
-
-function buildDefaultWorkerDetailItems(
-  state: ConfigModalState,
-  row: MissionControlConfigRow,
-) {
-  const targetScope = resolveConfigScopeForKey(row.keyPath, state.modal.selectedScope);
-  const choice = row.workerChoices?.find((item) => item.slug === (state.modal.draftValue ?? row.effectiveValueText))
-    ?? row.workerChoices?.[0];
-  if (!choice) {
-    return buildConfigEditDetailItems(state, row);
-  }
-    const recommendationLines = buildWorkerRecommendationLines(choice);
-    return [
-      { text: formatWorkerLabel(choice.slug), tone: "accent" as const, style: "block" as const },
-      { text: choice.summary },
-      { text: choice.availabilityDetail ? `${availabilityText(choice.availability)} · ${choice.availabilityDetail}` : availabilityText(choice.availability), section: "Availability", tone: "accent" as const },
-      { text: row.effectiveDisplayValueText, section: "Using now", tone: "accent" as const },
-      ...buildSavedValueItems(row, "Saved values"),
-      { text: targetScope === "project" ? "Project config" : "Global config", section: "Next save target", tone: "accent" as const },
-      { text: "Press S to switch between project and global." },
-      ...splitParagraph(choice.bestFor, "Best for"),
-      ...splitParagraph(choice.tradeoffs, "Tradeoffs"),
-      ...recommendationLines,
-      { text: "Up/Down choose   S scope   P preview   Enter review", section: "Next actions" },
-    ];
-}
 
 function buildConfigScopeDetailItems(
   state: ConfigModalState,
@@ -1543,32 +1514,6 @@ function buildSavedValueItems(row: MissionControlConfigRow, section = "Also set 
   }));
 }
 
-function buildWorkerChoiceItems(row: MissionControlConfigRow) {
-  return (row.workerChoices ?? []).map((choice, index) => ({
-    label: choice.slug,
-    detail: choice.slug === row.effectiveValueText
-      ? `${availabilityText(choice.availability)} · using now`
-      : availabilityText(choice.availability),
-    section: index === 0 ? "Choose a worker" : undefined,
-  }));
-}
-
-function availabilityText(availability: NonNullable<MissionControlConfigRow["workerChoices"]>[number]["availability"]): string {
-  switch (availability) {
-    case "ready":
-      return "ready";
-    case "busy":
-      return "busy";
-    case "degraded":
-      return "degraded";
-    case "missing":
-      return "missing";
-    case "disabled":
-    default:
-      return "disabled";
-  }
-}
-
 function buildValueChoiceItems(
   row: MissionControlConfigRow,
 ) {
@@ -1599,50 +1544,6 @@ function buildConfigActionRow(state: AppState): string {
     default:
       return `/ ${searchText}    Enter edit    S scope    P preview    R reload`;
   }
-}
-
-function splitParagraph(text: string, section: string) {
-  const lines = text
-    .split(/[\n;]/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .map((line) => line.startsWith("-") ? line : `- ${line}`);
-  return lines.map((line, index) => ({
-    text: line,
-    section: index === 0 ? section : undefined,
-  }));
-}
-
-function buildWorkerRecommendationLines(choice: NonNullable<MissionControlConfigRow["workerChoices"]>[number]) {
-  if (choice.recommendation.featureId) {
-    return [
-      {
-        text: `${choice.recommendation.featureId} ${choice.recommendation.featureTitle ?? ""}`.trim(),
-        section: "Good fit in this mission",
-      },
-      {
-        text: normalizeRecommendationReason(choice.recommendation.reason, choice.slug),
-      },
-    ];
-  }
-
-  return [{
-    text: choice.recommendation.fallbackReason ?? "No clear match in this mission right now.",
-    section: "Good fit in this mission",
-  }];
-}
-
-function normalizeRecommendationReason(reason: string, workerSlug: string): string {
-  if (workerSlug === "codex" && /ready now/i.test(reason)) {
-    return "Good fit because this is active implementation work with medium complexity.";
-  }
-  if (workerSlug === "claude-code") {
-    return "Better if you want maximum reliability over speed.";
-  }
-  if (workerSlug === "gemini") {
-    return "Best for lower-risk support work.";
-  }
-  return reason;
 }
 
 function getSelectedTaskPreview(state: AppState): TaskPreviewPane | null {

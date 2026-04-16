@@ -1405,7 +1405,6 @@ function nextConfigTab(current: MissionControlConfigTab, delta: 1 | -1): Mission
     "project",
     "global",
     "defaults",
-    "workers",
     "plan",
     "doctor",
     "memory",
