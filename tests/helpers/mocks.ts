@@ -95,6 +95,10 @@ export function mockSessionDetect(
   };
   return {
     detect: async () => session ?? defaultSession,
+    lookup: async (_agent, sessionId) => {
+      const active = session ?? defaultSession;
+      return active.sessionId === sessionId ? active : undefined;
+    },
   };
 }
 

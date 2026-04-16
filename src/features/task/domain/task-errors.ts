@@ -168,6 +168,35 @@ export function taskClaimOwnedByDifferentSession(id: string, assignee: string): 
   );
 }
 
+export function taskMutationRequiresOwnershipContext(
+  id: string,
+  assignee: string,
+  action: "update" | "block" | "unblock",
+): MaestroError {
+  return new MaestroError(
+    `Task ${id} is claimed by ${assignee}; '${action}' requires the owner session or --force`,
+    [
+      `Run 'maestro task ${action} ${id} --session ${assignee}' from the owning session`,
+      "Or pass '--force' for an explicit operator override",
+      "If the owner is dead, use a real agent-prefixed session id so stale-owner recovery can release it automatically",
+    ],
+  );
+}
+
+export function taskMutationOwnedByDifferentSession(
+  id: string,
+  assignee: string,
+  action: "update" | "block" | "unblock",
+): MaestroError {
+  return new MaestroError(
+    `Task ${id} is claimed by ${assignee}; current session cannot '${action}' it`,
+    [
+      `Retry from the owning session or pass '--force' to override`,
+      "Use 'maestro task show <id>' to inspect current ownership",
+    ],
+  );
+}
+
 export function taskBlockedByOpenTasks(id: string, blockers: readonly string[]): MaestroError {
   return new MaestroError(
     `Task ${id} is blocked by unresolved task(s): ${blockers.join(", ")}`,

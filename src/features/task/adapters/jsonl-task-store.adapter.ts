@@ -15,6 +15,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import type {
   Task,
   CreateTaskInput,
+  TaskMutationInput,
   UpdateTaskInput,
 } from "../domain/task-types.js";
 import type { TaskStorePort } from "../ports/task-store.port.js";
@@ -43,6 +44,7 @@ import {
   DEFAULT_TASK_STATUS,
 } from "../domain/task-types.js";
 import {
+  assertTaskMutationOwnership,
   assertTaskUpdateAllowed,
   getUnresolvedBlockerIds,
   releaseTaskOwnership,
@@ -139,7 +141,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
     });
   }
 
-  async update(id: string, patch: UpdateTaskInput): Promise<Task> {
+  async update(id: string, patch: UpdateTaskInput, opts: TaskMutationInput = {}): Promise<Task> {
     return this.withLock(async () => {
       const tasks = await this.readAll();
       const existing = tasks.get(id);
@@ -154,7 +156,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         assertNoParentCycle(id, patch.parentId, tasks);
       }
 
-      const nextStatus = assertTaskUpdateAllowed(existing, patch, tasks);
+      const nextStatus = assertTaskUpdateAllowed(existing, patch, tasks, opts);
 
       const labels = applyLabelPatch(existing.labels, patch.addLabels, patch.removeLabels);
       const reason = patch.reason === undefined
@@ -258,7 +260,11 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
     });
   }
 
-  async block(id: string, blockedTaskIds: readonly string[]): Promise<Task> {
+  async block(
+    id: string,
+    blockedTaskIds: readonly string[],
+    opts: TaskMutationInput = {},
+  ): Promise<Task> {
     return this.withLock(async () => {
       const tasks = await this.readAll();
       const blocker = tasks.get(id);
@@ -268,6 +274,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
       if (blocker.status === "completed") {
         throw taskAlreadyCompleted(id);
       }
+      assertTaskMutationOwnership(blocker, opts, "block");
 
       ensureTasksExist(id, blockedTaskIds, tasks);
       assertNoBlockCycle(id, blockedTaskIds, tasks);
@@ -281,6 +288,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         if (blockedTask.status === "completed") {
           throw taskAlreadyCompleted(blockedTaskId);
         }
+        assertTaskMutationOwnership(blockedTask, opts, "block");
         blockerChanged =
           upsertBlockedByList(tasks, blockedTaskId, blockedTask, [...blockedTask.blockedBy, id], now) ||
           blockerChanged;
@@ -295,7 +303,11 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
     });
   }
 
-  async unblock(id: string, blockedTaskIds: readonly string[]): Promise<Task> {
+  async unblock(
+    id: string,
+    blockedTaskIds: readonly string[],
+    opts: TaskMutationInput = {},
+  ): Promise<Task> {
     return this.withLock(async () => {
       const tasks = await this.readAll();
       const blocker = tasks.get(id);
@@ -305,6 +317,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
       if (blocker.status === "completed") {
         throw taskAlreadyCompleted(id);
       }
+      assertTaskMutationOwnership(blocker, opts, "unblock");
 
       const removeSet = new Set(blockedTaskIds);
       const nextBlocks = blocker.blocks.filter((blockedId) => !removeSet.has(blockedId));
@@ -316,6 +329,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         if (!blockedTask) {
           continue;
         }
+        assertTaskMutationOwnership(blockedTask, opts, "unblock");
         const nextBlockedBy = blockedTask.blockedBy.filter((blockerId) => blockerId !== id);
         changed = upsertBlockedByList(tasks, blockedTaskId, blockedTask, nextBlockedBy, now) || changed;
       }

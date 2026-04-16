@@ -16,6 +16,10 @@ class StubSessionDetect implements SessionDetectPort {
   async detect(): Promise<AgentSession | undefined> {
     return { agent: "test", sessionId: "test-session", sourcePath: "/tmp/fake.jsonl" };
   }
+
+  async lookup(): Promise<AgentSession | undefined> {
+    return undefined;
+  }
 }
 
 function makeExecuteContent(

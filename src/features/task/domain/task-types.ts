@@ -88,6 +88,11 @@ export interface UpdateTaskInput {
   readonly removeLabels?: readonly string[];
 }
 
+export interface TaskMutationInput {
+  readonly sessionId?: string;
+  readonly force?: boolean;
+}
+
 // ============================
 // Defaults
 // ============================

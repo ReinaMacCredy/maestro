@@ -1,4 +1,4 @@
-import type { Task, UpdateTaskInput } from "../domain/task-types.js";
+import type { Task, TaskMutationInput, UpdateTaskInput } from "../domain/task-types.js";
 import type { TaskStorePort } from "../ports/task-store.port.js";
 import { validateUpdateInput } from "../domain/task-validators.js";
 
@@ -6,7 +6,8 @@ export async function updateTask(
   store: TaskStorePort,
   id: string,
   patch: UpdateTaskInput,
+  opts: TaskMutationInput = {},
 ): Promise<Task> {
   const validated = validateUpdateInput(patch);
-  return store.update(id, validated);
+  return store.update(id, validated, opts);
 }

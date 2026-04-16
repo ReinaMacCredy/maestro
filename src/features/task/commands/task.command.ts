@@ -1,7 +1,8 @@
 import { Command, Option } from "commander";
+import type { AgentSlug } from "@/features/session/domain/types.js";
 import { getServices } from "@/services.js";
-import { output, resolveJsonFlag, warn } from "@/shared/lib/output.js";
 import { MaestroError } from "@/shared/errors.js";
+import { output, resolveJsonFlag, warn } from "@/shared/lib/output.js";
 import { createTask } from "../usecases/create-task.usecase.js";
 import { showTask } from "../usecases/show-task.usecase.js";
 import { listTasks } from "../usecases/list-tasks.usecase.js";
@@ -40,6 +41,17 @@ import {
   formatTaskList,
   formatTaskSummary,
 } from "./task-command-formatters.js";
+
+const STALE_OWNER_AGENT_PREFIXES = [
+  "claude-code",
+  "opencode",
+  "codex",
+  "gemini",
+  "amp",
+  "cline",
+  "aider",
+  "cursor",
+] as const satisfies readonly AgentSlug[];
 
 export function registerTaskCommand(program: Command): void {
   const taskCmd = program
@@ -189,6 +201,8 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
     .option("--priority <n>", "New priority 0-4")
     .option("--type <type>", `New type (${TASK_TYPES.join("|")})`)
     .option("--parent <id>", "New parent id (empty string clears)")
+    .option("--force", "Override ownership checks on claimed tasks")
+    .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .addOption(new Option("--assignee <name>").hideHelp())
     .option("--add-label <labels>", "Comma-separated labels to add")
     .option("--remove-label <labels>", "Comma-separated labels to remove")
@@ -205,17 +219,17 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
         throw taskUpdateClaimViaDedicatedCommand();
       }
 
-      const patch: UpdateTaskInput = {
-        title: opts.title,
-        description: opts.description,
-        status: parseStatus(opts.status),
-        reason: opts.reason,
-        priority: parsePriority(opts.priority),
-        type: parseType(opts.type),
-        parentId: opts.parent,
-        addLabels: parseList(opts.addLabel),
-        removeLabels: parseList(opts.removeLabel),
-      };
+        const patch: UpdateTaskInput = {
+          title: opts.title,
+          description: opts.description,
+          status: parseStatus(opts.status),
+          reason: opts.reason,
+          priority: parsePriority(opts.priority),
+          type: parseType(opts.type),
+          parentId: opts.parent,
+          addLabels: parseList(opts.addLabel),
+          removeLabels: parseList(opts.removeLabel),
+        };
 
       if (!hasAnyPatchField(patch)) {
         throw new MaestroError("No update specified", [
@@ -224,7 +238,16 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
         ]);
       }
 
-      const updated = await updateTask(services.taskStore, id, patch);
+      await maybeReleaseStaleOwnedTasks(normalizeExplicitSessionId(opts.session));
+      const updated = await updateTask(
+        services.taskStore,
+        id,
+        patch,
+        {
+          sessionId: await resolveOptionalOwnershipSessionId(opts.session),
+          force: opts.force === true,
+        },
+      );
       await maybeCaptureCompletionHint(updated);
 
       output(isJson, updated, (task) => [
@@ -250,6 +273,7 @@ function registerClaimCommand(taskCmd: Command, program: Command): void {
     .action(async (id: string, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
+      await maybeReleaseStaleOwnedTasks(normalizeExplicitSessionId(opts.session));
       const sessionId = await resolveOwnershipSessionId(opts.session);
 
       const claimed = await claimTask(services.taskStore, id, {
@@ -316,11 +340,22 @@ function registerBlockCommand(taskCmd: Command, program: Command): void {
   taskCmd
     .command("block <id> <blockedTaskIds...>")
     .description("Mark this task as blocking the target task ids")
+    .option("--force", "Override ownership checks on claimed tasks")
+    .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--json", "Output as JSON")
     .action(async (id: string, blockedTaskIds: string[], opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const updated = await blockTasks(services.taskStore, id, blockedTaskIds);
+      await maybeReleaseStaleOwnedTasks(normalizeExplicitSessionId(opts.session));
+      const updated = await blockTasks(
+        services.taskStore,
+        id,
+        blockedTaskIds,
+        {
+          sessionId: await resolveOptionalOwnershipSessionId(opts.session),
+          force: opts.force === true,
+        },
+      );
 
       output(isJson, updated, (task) => [
         `[ok] Blockers added: ${task.id}`,
@@ -333,11 +368,22 @@ function registerUnblockCommand(taskCmd: Command, program: Command): void {
   taskCmd
     .command("unblock <id> <blockedTaskIds...>")
     .description("Remove blocker edges from this task to the target task ids")
+    .option("--force", "Override ownership checks on claimed tasks")
+    .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--json", "Output as JSON")
     .action(async (id: string, blockedTaskIds: string[], opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const updated = await unblockTasks(services.taskStore, id, blockedTaskIds);
+      await maybeReleaseStaleOwnedTasks(normalizeExplicitSessionId(opts.session));
+      const updated = await unblockTasks(
+        services.taskStore,
+        id,
+        blockedTaskIds,
+        {
+          sessionId: await resolveOptionalOwnershipSessionId(opts.session),
+          force: opts.force === true,
+        },
+      );
 
       output(isJson, updated, (task) => [
         `[ok] Blockers removed: ${task.id}`,
@@ -397,6 +443,24 @@ async function resolveOwnershipSessionId(explicitSessionId: string | undefined):
   return `${session.agent}-${session.sessionId}`;
 }
 
+async function resolveOptionalOwnershipSessionId(explicitSessionId: string | undefined): Promise<string | undefined> {
+  if (explicitSessionId !== undefined) {
+    return resolveOwnershipSessionId(explicitSessionId);
+  }
+
+  const services = getServices();
+  const session = await services.sessionDetect.detect(process.cwd());
+  return session ? `${session.agent}-${session.sessionId}` : undefined;
+}
+
+function normalizeExplicitSessionId(explicitSessionId: string | undefined): readonly string[] {
+  if (explicitSessionId === undefined) {
+    return [];
+  }
+  const trimmed = explicitSessionId.trim();
+  return trimmed.length > 0 ? [trimmed] : [];
+}
+
 function registerReadyCommand(taskCmd: Command, program: Command): void {
   taskCmd
     .command("ready")
@@ -413,6 +477,7 @@ function registerReadyCommand(taskCmd: Command, program: Command): void {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const showHints = opts.hints !== false;
+      await maybeReleaseStaleOwnedTasks();
 
       const filters: ReadyTasksFilters = {
         limit: parseLimit(opts.limit),
@@ -431,6 +496,57 @@ function registerReadyCommand(taskCmd: Command, program: Command): void {
       );
       output(isJson, briefings, formatTaskBriefingList);
     });
+}
+
+async function maybeReleaseStaleOwnedTasks(skipAssignees: readonly string[] = []): Promise<void> {
+  const services = getServices();
+  const tasks = await services.taskStore.all();
+  const staleOwners = new Set<string>();
+  const skipSet = new Set(skipAssignees);
+
+  for (const task of tasks) {
+    if (!task.assignee || task.status === "completed") {
+      continue;
+    }
+    if (skipSet.has(task.assignee)) {
+      continue;
+    }
+    const parsed = parseKnownAgentAssignee(task.assignee);
+    if (!parsed) {
+      continue;
+    }
+    const session = await services.sessionDetect.lookup(parsed.agent, parsed.sessionId);
+    if (!session) {
+      staleOwners.add(task.assignee);
+    }
+  }
+
+  for (const assignee of staleOwners) {
+    try {
+      const released = await releaseOwnedTasks(services.taskStore, assignee);
+      if (released.length > 0) {
+        warn(`[ok] Released ${released.length} stale task(s) owned by ${assignee}`);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      warn(`Stale task recovery failed for ${assignee}: ${message}`);
+    }
+  }
+}
+
+function parseKnownAgentAssignee(assignee: string): { agent: AgentSlug; sessionId: string } | undefined {
+  for (const agent of STALE_OWNER_AGENT_PREFIXES) {
+    const prefix = `${agent}-`;
+    if (!assignee.startsWith(prefix)) {
+      continue;
+    }
+    const sessionId = assignee.slice(prefix.length).trim();
+    if (sessionId.length === 0) {
+      return undefined;
+    }
+    return { agent, sessionId };
+  }
+  return undefined;
 }
 
 async function maybeCaptureCompletionHint(task: Task): Promise<void> {

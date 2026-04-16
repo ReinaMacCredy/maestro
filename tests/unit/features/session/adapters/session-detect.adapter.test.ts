@@ -105,6 +105,20 @@ describe("ClaudeSessionDetectAdapter", () => {
       expect(await cachedAdapter.detect(process.cwd())).toBeUndefined();
     });
 
+    it("prefers the newest matching codex rollout when multiple prefix matches exist", async () => {
+      const sessionsDir = process.env.MAESTRO_CODEX_SESSIONS_DIR!;
+      const suiteDir = join(sessionsDir, "suite");
+      await mkdir(suiteDir, { recursive: true });
+      await writeFile(join(suiteDir, "rollout-2026-04-16T14-00-00-thread-cacheAAAA.jsonl"), "{}\n");
+      process.env.CODEX_THREAD_ID = "thread-cache";
+
+      const cachedAdapter = new ClaudeSessionDetectAdapter();
+      expect((await cachedAdapter.detect(process.cwd()))?.sessionId).toBe("thread-cacheAAAA");
+
+      await writeFile(join(suiteDir, "rollout-2026-04-16T14-05-00-thread-cacheBBBB.jsonl"), "{}\n");
+      expect((await cachedAdapter.detect(process.cwd()))?.sessionId).toBe("thread-cacheBBBB");
+    });
+
     it("treats an empty codex root override as unset", async () => {
       const fallbackDir = join(tempRoot, "fallback-codex");
       const cwdRolloutPath = join(tempRoot, "rollout-2026-04-16T14-00-00-thread-emptydir.jsonl");

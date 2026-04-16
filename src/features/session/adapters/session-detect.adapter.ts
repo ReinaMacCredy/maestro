@@ -50,6 +50,17 @@ export class ClaudeSessionDetectAdapter implements SessionDetectPort {
     return undefined;
   }
 
+  async lookup(agent: AgentSession["agent"], sessionId: string): Promise<AgentSession | undefined> {
+    switch (agent) {
+      case "codex":
+        return this.findCodexSession(sessionId, "exact");
+      case "claude-code":
+        return this.findClaudeProjectSession(sessionId);
+      default:
+        return undefined;
+    }
+  }
+
   private buildClaudeSession(session: ClaudeSessionFile): AgentSession {
     const sourcePath = join(
       this.resolveClaudeProjectsDir(),
@@ -70,29 +81,70 @@ export class ClaudeSessionDetectAdapter implements SessionDetectPort {
       const sessionsDir = this.resolveCodexSessionsDir();
       const cacheKey = `${sessionsDir}::${threadId}`;
       const cached = this.codexSessionCache.get(cacheKey);
-      if (cached && await pathExists(cached.sourcePath)) {
+      if (cached && cached.sessionId === threadId && await pathExists(cached.sourcePath)) {
         return cached;
       }
       this.codexSessionCache.delete(cacheKey);
 
-      const glob = new Bun.Glob(`**/*-${threadId}*.jsonl`);
-      for await (const path of glob.scan({ cwd: sessionsDir, absolute: true })) {
-        const filename = basename(path);
-        const idMatch = filename.match(/rollout-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-(.+)\.jsonl$/);
-        const fullId = idMatch?.[1] ?? threadId;
+      const session = await this.findCodexSession(threadId, "prefix");
+      if (session?.sessionId === threadId) {
+        this.codexSessionCache.set(cacheKey, session);
+      }
+      return session;
+    } catch {
+      return undefined;
+    }
+  }
 
-        if (fullId === threadId || fullId.startsWith(threadId)) {
-          const session: AgentSession = {
-            agent: "codex",
-            sessionId: fullId,
-            sourcePath: path,
-            startedAt: parseCodexTimestamp(filename),
-          };
-          this.codexSessionCache.set(cacheKey, session);
-          return session;
+  private async findCodexSession(
+    threadId: string,
+    mode: "exact" | "prefix",
+  ): Promise<AgentSession | undefined> {
+    const sessionsDir = this.resolveCodexSessionsDir();
+    const glob = new Bun.Glob(mode === "exact" ? `**/*-${threadId}.jsonl` : `**/*-${threadId}*.jsonl`);
+    let best: AgentSession | undefined;
+
+    for await (const path of glob.scan({ cwd: sessionsDir, absolute: true })) {
+      const filename = basename(path);
+      const idMatch = filename.match(/rollout-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-(.+)\.jsonl$/);
+      const fullId = idMatch?.[1] ?? threadId;
+      const matches = mode === "exact" ? fullId === threadId : fullId === threadId || fullId.startsWith(threadId);
+      if (!matches) {
+        continue;
+      }
+      const candidate: AgentSession = {
+        agent: "codex",
+        sessionId: fullId,
+        sourcePath: path,
+        startedAt: parseCodexTimestamp(filename),
+      };
+      if (!best || compareSessionCandidates(threadId, candidate, best) < 0) {
+        best = candidate;
+      }
+    }
+
+    return best;
+  }
+
+  private async findClaudeProjectSession(sessionId: string): Promise<AgentSession | undefined> {
+    try {
+      const projectsDir = this.resolveClaudeProjectsDir();
+      const glob = new Bun.Glob(`**/${sessionId}.jsonl`);
+      let best: AgentSession | undefined;
+
+      for await (const path of glob.scan({ cwd: projectsDir, absolute: true })) {
+        const candidate: AgentSession = {
+          agent: "claude-code",
+          sessionId,
+          sourcePath: path,
+          startedAt: undefined,
+        };
+        if (!best || candidate.sourcePath > best.sourcePath) {
+          best = candidate;
         }
       }
-      return undefined;
+
+      return best;
     } catch {
       return undefined;
     }
@@ -155,4 +207,24 @@ async function pathExists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function compareSessionCandidates(
+  requestedId: string,
+  left: AgentSession,
+  right: AgentSession,
+): number {
+  const leftExact = left.sessionId === requestedId ? 0 : 1;
+  const rightExact = right.sessionId === requestedId ? 0 : 1;
+  if (leftExact !== rightExact) {
+    return leftExact - rightExact;
+  }
+
+  const leftStarted = left.startedAt ?? Number.NEGATIVE_INFINITY;
+  const rightStarted = right.startedAt ?? Number.NEGATIVE_INFINITY;
+  if (leftStarted !== rightStarted) {
+    return rightStarted - leftStarted;
+  }
+
+  return right.sourcePath.localeCompare(left.sourcePath);
 }

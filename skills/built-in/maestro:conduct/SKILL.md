@@ -182,7 +182,7 @@ For each task, dispatch a worker using the five-section brief format (see below)
 
 ```bash
 maestro task claim <taskId> --session <worker-id>
-maestro task update <taskId> --status in_progress
+maestro task update <taskId> --status in_progress --session <worker-id>
 ```
 
 See `reference/brief-templates.md` for copy-paste templates for common scenarios.

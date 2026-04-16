@@ -112,15 +112,17 @@ describe("JsonlTaskStoreAdapter", () => {
     expect((await store.get(blocker.id))?.blocks).toEqual([blocked.id]);
   });
 
-  it("updates tasks while enforcing the new status invariants", async () => {
-    const task = await store.create({ title: "Doing" });
+    it("updates tasks while enforcing the new status invariants", async () => {
+      const task = await store.create({ title: "Doing" });
 
-    await expect(store.update(task.id, { status: "in_progress" })).rejects.toThrow(MaestroError);
-    await store.claim(task.id, "codex-session-a");
-    const working = await store.update(task.id, { status: "in_progress" });
-    expect(working.status).toBe("in_progress");
-    await expect(store.update(task.id, { status: "pending" })).rejects.toThrow(MaestroError);
-  });
+      await expect(store.update(task.id, { status: "in_progress" })).rejects.toThrow(MaestroError);
+      await store.claim(task.id, "codex-session-a");
+      const working = await store.update(task.id, { status: "in_progress" }, { sessionId: "codex-session-a" });
+      expect(working.status).toBe("in_progress");
+      await expect(
+        store.update(task.id, { status: "pending" }, { sessionId: "codex-session-a" }),
+      ).rejects.toThrow(MaestroError);
+    });
 
   it("claims ownership without changing status", async () => {
     const task = await store.create({ title: "Claim me" });
@@ -147,15 +149,49 @@ describe("JsonlTaskStoreAdapter", () => {
     ).rejects.toThrow(MaestroError);
   });
 
-  it("unclaims in-progress work back to pending", async () => {
-    const task = await store.create({ title: "Claim me" });
-    await store.claim(task.id, "codex-session-a");
-    await store.update(task.id, { status: "in_progress" });
+    it("unclaims in-progress work back to pending", async () => {
+      const task = await store.create({ title: "Claim me" });
+      await store.claim(task.id, "codex-session-a");
+      await store.update(task.id, { status: "in_progress" }, { sessionId: "codex-session-a" });
 
-    const unclaimed = await store.unclaim(task.id, "codex-session-a");
-    expect(unclaimed.status).toBe("pending");
-    expect(unclaimed.assignee).toBeUndefined();
-  });
+      const unclaimed = await store.unclaim(task.id, "codex-session-a");
+      expect(unclaimed.status).toBe("pending");
+      expect(unclaimed.assignee).toBeUndefined();
+    });
+
+    it("allows same-owner metadata edits while a task stays pending", async () => {
+      const task = await store.create({ title: "Claim me" });
+      await store.claim(task.id, "codex-session-a");
+
+      const updated = await store.update(
+        task.id,
+        { title: "Retitled" },
+        { sessionId: "codex-session-a" },
+      );
+
+      expect(updated.title).toBe("Retitled");
+      expect(updated.status).toBe("pending");
+    });
+
+    it("rejects claimed-task mutations without the owner context", async () => {
+      const blocker = await store.create({ title: "Blocker" });
+      const blocked = await store.create({ title: "Blocked" });
+      await store.claim(blocker.id, "codex-session-a");
+      await store.claim(blocked.id, "codex-session-a");
+
+      await expect(store.update(blocker.id, { title: "Nope" })).rejects.toThrow(MaestroError);
+      await expect(
+        store.update(blocker.id, { title: "Nope" }, { sessionId: "codex-session-b" }),
+      ).rejects.toThrow(MaestroError);
+      await expect(store.block(blocker.id, [blocked.id])).rejects.toThrow(MaestroError);
+      await expect(
+        store.block(blocker.id, [blocked.id], { sessionId: "codex-session-b" }),
+      ).rejects.toThrow(MaestroError);
+      await expect(store.unblock(blocker.id, [blocked.id])).rejects.toThrow(MaestroError);
+      await expect(
+        store.unblock(blocker.id, [blocked.id], { sessionId: "codex-session-b" }),
+      ).rejects.toThrow(MaestroError);
+    });
 
   it("normalizes same-owner legacy claimed rows into canonical claimed state", async () => {
     const tasksDir = join(tmpDir, ".maestro", "tasks");
@@ -210,13 +246,13 @@ describe("JsonlTaskStoreAdapter", () => {
     expect((await fresh.get(task.id))?.closeReason).toBe("shipped");
   });
 
-  it("releases unresolved tasks owned by a dead session", async () => {
-    const task = await store.create({ title: "Owned" });
-    await store.claim(task.id, "codex-session-a");
-    await store.update(task.id, { status: "in_progress" });
+    it("releases unresolved tasks owned by a dead session", async () => {
+      const task = await store.create({ title: "Owned" });
+      await store.claim(task.id, "codex-session-a");
+      await store.update(task.id, { status: "in_progress" }, { sessionId: "codex-session-a" });
 
-    const released = await store.releaseOwned("codex-session-a");
-    expect(released).toHaveLength(1);
+      const released = await store.releaseOwned("codex-session-a");
+      expect(released).toHaveLength(1);
     expect(released[0]?.status).toBe("pending");
     expect(released[0]?.assignee).toBeUndefined();
   });

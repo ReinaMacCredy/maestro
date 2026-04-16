@@ -1,6 +1,7 @@
 import type {
   Task,
   CreateTaskInput,
+  TaskMutationInput,
   UpdateTaskInput,
 } from "../domain/task-types.js";
 
@@ -17,7 +18,7 @@ export interface TaskStorePort extends TaskQueryPort {
   create(input: CreateTaskInput): Promise<Task>;
 
   /** Patch an existing task. Throws if id does not exist. */
-  update(id: string, patch: UpdateTaskInput): Promise<Task>;
+  update(id: string, patch: UpdateTaskInput, opts?: TaskMutationInput): Promise<Task>;
 
   /** Claim an existing task for a session, optionally forcing takeover. */
   claim(id: string, sessionId: string, opts?: { force?: boolean; checkBusy?: boolean }): Promise<Task>;
@@ -26,10 +27,10 @@ export interface TaskStorePort extends TaskQueryPort {
   unclaim(id: string, sessionId: string, opts?: { force?: boolean }): Promise<Task>;
 
   /** Add blocker edges to an existing task. */
-  block(id: string, blockedTaskIds: readonly string[]): Promise<Task>;
+  block(id: string, blockedTaskIds: readonly string[], opts?: TaskMutationInput): Promise<Task>;
 
   /** Remove blocker edges from an existing task. */
-  unblock(id: string, blockedTaskIds: readonly string[]): Promise<Task>;
+  unblock(id: string, blockedTaskIds: readonly string[], opts?: TaskMutationInput): Promise<Task>;
 
   /** Release unresolved tasks owned by a session back to the pending queue. */
   releaseOwned(sessionId: string): Promise<readonly Task[]>;

@@ -11,6 +11,7 @@ describe("detectSession", () => {
           detectCalls += 1;
           return undefined;
         },
+        lookup: async () => undefined,
       },
       {
         cwd: "/tmp/project",
@@ -29,6 +30,7 @@ describe("detectSession", () => {
           expect(cwd).toBe("/tmp/project");
           return undefined;
         },
+        lookup: async () => undefined,
       },
       { cwd: "/tmp/project" },
     );
@@ -47,6 +49,7 @@ describe("detectSession", () => {
     const result = await detectSession(
       {
         detect: async () => session,
+        lookup: async () => session,
       },
       { cwd: "/tmp/project" },
     );

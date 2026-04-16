@@ -37,16 +37,45 @@ describe("updateTask", () => {
     const task = await createTask(store, { title: "Doing" });
     await claimTask(store, task.id, { sessionId: "codex-session-a" });
 
-    const updated = await updateTask(store, task.id, { status: "in_progress" });
+    const updated = await updateTask(store, task.id, { status: "in_progress" }, { sessionId: "codex-session-a" });
     expect(updated.status).toBe("in_progress");
   });
 
   it("rejects moving a claimed task back to pending via update", async () => {
     const task = await createTask(store, { title: "Claimed" });
     await claimTask(store, task.id, { sessionId: "codex-session-a" });
+    await updateTask(store, task.id, { status: "in_progress" }, { sessionId: "codex-session-a" });
 
     await expect(
-      updateTask(store, task.id, { status: "pending" }),
+      updateTask(store, task.id, { status: "pending" }, { sessionId: "codex-session-a" }),
+    ).rejects.toThrow(MaestroError);
+  });
+
+  it("allows same-owner metadata edits while a task remains claimed and pending", async () => {
+    const task = await createTask(store, { title: "Claimed" });
+    await claimTask(store, task.id, { sessionId: "codex-session-a" });
+
+    const updated = await updateTask(
+      store,
+      task.id,
+      { title: "Retitled while pending" },
+      { sessionId: "codex-session-a" },
+    );
+
+    expect(updated.title).toBe("Retitled while pending");
+    expect(updated.status).toBe("pending");
+  });
+
+  it("rejects claimed-task edits without the owning session", async () => {
+    const task = await createTask(store, { title: "Claimed" });
+    await claimTask(store, task.id, { sessionId: "codex-session-a" });
+
+    await expect(
+      updateTask(store, task.id, { title: "Nope" }),
+    ).rejects.toThrow(MaestroError);
+
+    await expect(
+      updateTask(store, task.id, { title: "Still nope" }, { sessionId: "codex-session-b" }),
     ).rejects.toThrow(MaestroError);
   });
 

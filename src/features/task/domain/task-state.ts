@@ -2,11 +2,14 @@ import {
   claimedTaskCannotBeReopened,
   taskAlreadyCompleted,
   taskBlockedByOpenTasks,
+  taskMutationOwnedByDifferentSession,
+  taskMutationRequiresOwnershipContext,
   taskReasonRequiresCompletedStatus,
   taskStatusRequiresClaim,
 } from "./task-errors.js";
 import type {
   Task,
+  TaskMutationInput,
   TaskStatus,
   UpdateTaskInput,
 } from "./task-types.js";
@@ -65,10 +68,12 @@ export function assertTaskUpdateAllowed(
   existing: Task,
   patch: UpdateTaskInput,
   tasks: ReadonlyMap<string, Task>,
+  actor: TaskMutationInput = {},
 ): TaskStatus {
   if (existing.status === "completed") {
     throw taskAlreadyCompleted(existing.id);
   }
+  assertTaskMutationOwnership(existing, actor, "update");
   if (patch.reason !== undefined && patch.status !== "completed") {
     throw taskReasonRequiresCompletedStatus();
   }
@@ -77,7 +82,7 @@ export function assertTaskUpdateAllowed(
   if (!existing.assignee && nextStatus === "in_progress") {
     throw taskStatusRequiresClaim("in_progress");
   }
-  if (existing.assignee && nextStatus === "pending") {
+  if (existing.assignee && patch.status === "pending" && existing.status !== "pending") {
     throw claimedTaskCannotBeReopened(existing.id);
   }
   if (
@@ -102,4 +107,20 @@ export function releaseTaskOwnership(task: Task, now: string): Task {
     status: task.status === "in_progress" ? "pending" : task.status,
     updatedAt: now,
   };
+}
+
+export function assertTaskMutationOwnership(
+  task: Task,
+  actor: TaskMutationInput,
+  action: "update" | "block" | "unblock",
+): void {
+  if (!task.assignee || actor.force) {
+    return;
+  }
+  if (!actor.sessionId) {
+    throw taskMutationRequiresOwnershipContext(task.id, task.assignee, action);
+  }
+  if (task.assignee !== actor.sessionId) {
+    throw taskMutationOwnedByDifferentSession(task.id, task.assignee, action);
+  }
 }

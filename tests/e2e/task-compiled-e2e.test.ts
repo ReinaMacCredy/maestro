@@ -83,21 +83,46 @@ describe("compiled task feature E2E", () => {
       expect(claimedTask.status).toBe("pending");
       expect(claimedTask.claimedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
 
-      const started = await runCompiled(
-        ["task", "update", apiId, "--title", "POST /login endpoint", "--status", "in_progress", "--json"],
-        tmpDir,
-      );
+        const started = await runCompiled(
+          [
+            "task",
+            "update",
+            apiId,
+            "--title",
+            "POST /login endpoint",
+            "--status",
+            "in_progress",
+            "--session",
+            "operator-a",
+            "--json",
+          ],
+          tmpDir,
+        );
       expect(expectJson<{ title: string; status: string }>(started)).toEqual(
         expect.objectContaining({ title: "POST /login endpoint", status: "in_progress" }),
       );
 
-      const relabeled = await runCompiled(["task", "update", apiId, "--add-label", "urgent", "--json"], tmpDir);
-      expect(expectJson<{ labels: string[] }>(relabeled).labels).toEqual(["urgent"]);
+        const relabeled = await runCompiled(
+          ["task", "update", apiId, "--add-label", "urgent", "--session", "operator-a", "--json"],
+          tmpDir,
+        );
+        expect(expectJson<{ labels: string[] }>(relabeled).labels).toEqual(["urgent"]);
 
-      const completed = await runCompiled(
-        ["task", "update", apiId, "--status", "completed", "--reason", "shipped", "--json"],
-        tmpDir,
-      );
+        const completed = await runCompiled(
+          [
+            "task",
+            "update",
+            apiId,
+            "--status",
+            "completed",
+            "--reason",
+            "shipped",
+            "--session",
+            "operator-a",
+            "--json",
+          ],
+          tmpDir,
+        );
       const closed = expectJson<{ status: string; closeReason: string }>(completed);
       expect(closed.status).toBe("completed");
       expect(closed.closeReason).toBe("shipped");
@@ -233,10 +258,10 @@ describe("compiled task feature E2E", () => {
 
     it(
       "releases unresolved tasks owned by a dead session",
-      async () => {
-        const id = (await runCompiled(["task", "q", "recover me"], tmpDir)).stdout;
-        await runCompiled(["task", "claim", id, "--session", "dead-session", "--json"], tmpDir);
-        await runCompiled(["task", "update", id, "--status", "in_progress", "--json"], tmpDir);
+        async () => {
+          const id = (await runCompiled(["task", "q", "recover me"], tmpDir)).stdout;
+          await runCompiled(["task", "claim", id, "--session", "dead-session", "--json"], tmpDir);
+          await runCompiled(["task", "update", id, "--status", "in_progress", "--session", "dead-session", "--json"], tmpDir);
 
         const released = await runCompiled(["task", "release-owned", "dead-session", "--json"], tmpDir);
         const payload = expectJson<Array<{ id: string; status: string; assignee?: string }>>(released);
@@ -249,13 +274,31 @@ describe("compiled task feature E2E", () => {
 
     it(
       "enforces ownership and status invariants through update paths",
-    async () => {
-      const id = (await runCompiled(["task", "q", "ownership invariants"], tmpDir)).stdout;
-      await runCompiled(["task", "claim", id, "--session", "session-a", "--json"], tmpDir);
+        async () => {
+          const id = (await runCompiled(["task", "q", "ownership invariants"], tmpDir)).stdout;
+          await runCompiled(["task", "claim", id, "--session", "session-a", "--json"], tmpDir);
 
-      const reopen = await runCompiled(["task", "update", id, "--status", "pending"], tmpDir);
-      expect(reopen.exitCode).not.toBe(0);
-      expect(reopen.stderr).toContain("cannot move to 'pending' while still claimed");
+        const retitle = await runCompiled(
+          ["task", "update", id, "--title", "same owner edit", "--session", "session-a", "--json"],
+          tmpDir,
+        );
+        expect(expectJson<{ title: string; status: string }>(retitle)).toEqual(
+          expect.objectContaining({ title: "same owner edit", status: "pending" }),
+        );
+
+        const foreignComplete = await runCompiled(
+          ["task", "update", id, "--status", "completed", "--reason", "stolen", "--json"],
+          tmpDir,
+          { env: { CLAUDECODE: "", CODEX_THREAD_ID: "" } },
+        );
+        expect(foreignComplete.exitCode).not.toBe(0);
+        expect(`${foreignComplete.stdout}\n${foreignComplete.stderr}`).toContain("requires the owner session or --force");
+
+        await runCompiled(["task", "update", id, "--status", "in_progress", "--session", "session-a", "--json"], tmpDir);
+
+        const reopen = await runCompiled(["task", "update", id, "--status", "pending", "--session", "session-a"], tmpDir);
+        expect(reopen.exitCode).not.toBe(0);
+        expect(reopen.stderr).toContain("cannot move to 'pending' while still claimed");
 
       const unclaimedId = (await runCompiled(["task", "q", "unclaimed progress"], tmpDir)).stdout;
       const badStart = await runCompiled(["task", "update", unclaimedId, "--status", "in_progress"], tmpDir);
@@ -280,6 +323,24 @@ describe("compiled task feature E2E", () => {
         );
         expect(blockedComplete.exitCode).not.toBe(0);
         expect(blockedComplete.stderr).toContain("blocked by unresolved");
+      },
+        SLOW_CLI_TIMEOUT_MS,
+      );
+
+    it(
+      "auto-releases stale known-agent owners during ready queries",
+      async () => {
+        const id = (await runCompiled(["task", "q", "stale owner"], tmpDir)).stdout;
+        await runCompiled(["task", "claim", id, "--session", "codex-dead-thread", "--json"], tmpDir);
+
+        const ready = await runCompiled(["task", "ready", "--json"], tmpDir);
+        expect(ready.stderr).toContain("Released 1 stale task(s) owned by codex-dead-thread");
+        expect(expectJson<Array<{ id: string }>>(ready).map((task) => task.id)).toContain(id);
+
+        const shown = await runCompiled(["task", "show", id, "--json"], tmpDir);
+        const releasedTask = expectJson<{ assignee?: string; status: string }>(shown);
+        expect(releasedTask.status).toBe("pending");
+        expect(releasedTask.assignee).toBeUndefined();
       },
       SLOW_CLI_TIMEOUT_MS,
     );

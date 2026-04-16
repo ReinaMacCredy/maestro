@@ -8,4 +8,5 @@ import type { AgentSession } from "../domain/types.js";
  */
 export interface SessionDetectPort {
   detect(cwd: string): Promise<AgentSession | undefined>;
+  lookup(agent: AgentSession["agent"], sessionId: string): Promise<AgentSession | undefined>;
 }

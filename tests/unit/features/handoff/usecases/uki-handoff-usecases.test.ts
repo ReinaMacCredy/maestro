@@ -38,6 +38,10 @@ class StubSessionDetect implements SessionDetectPort {
   async detect(_cwd: string): Promise<AgentSession | undefined> {
     return this.session;
   }
+
+  async lookup(): Promise<AgentSession | undefined> {
+    return this.session;
+  }
 }
 
 const CLAUDE_SESSION: AgentSession = {

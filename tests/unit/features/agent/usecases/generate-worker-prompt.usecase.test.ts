@@ -1123,10 +1123,11 @@ describe("generateWorkerPrompt", () => {
     });
   });
 
-  describe("replay injection", () => {
-    const stubDetect: SessionDetectPort = {
-      detect: async () => ({ agent: "test", sessionId: "test-session", sourcePath: "/tmp/fake.jsonl" } as AgentSession),
-    };
+    describe("replay injection", () => {
+      const stubDetect: SessionDetectPort = {
+        detect: async () => ({ agent: "test", sessionId: "test-session", sourcePath: "/tmp/fake.jsonl" } as AgentSession),
+        lookup: async () => undefined,
+      };
 
     function replayExecuteContent(
       missionId: string,
