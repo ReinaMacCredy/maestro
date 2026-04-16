@@ -1,12 +1,3 @@
-/**
- * TUI data model -- read-only DTOs for the mission control dashboard.
- *
- * Phase 3 strip: the worker pane, runtime process row, worker health
- * DTOs, and related snapshot fields were deleted. Those panes were
- * backed by the Phase 1 worker execution layer and became empty stubs
- * after Phase 1. The snapshot now renders 7 screens: dashboard,
- * features, dependencies, handoffs, config, memory, graph.
- */
 import type {
   MissionStatus,
   MilestoneStatus,

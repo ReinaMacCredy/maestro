@@ -1,9 +1,5 @@
 import type { MissionControlMode } from "./types.js";
 
-/**
- * Phase 3 strip: `processes` and `workers` command palette entries
- * were removed along with the worker execution layer.
- */
 export type MissionControlCommandId =
   | "features"
   | "dependencies"

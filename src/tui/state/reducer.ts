@@ -24,13 +24,6 @@ interface CommandPaletteState {
 
 type MemoryModalTab = "overview" | "corrections" | "learnings" | "ratchet" | "config";
 
-/**
- * Phase 3 strip: `processes`, `runtime-output`, and `workers` modal
- * kinds were removed. They were backed by the worker execution layer
- * deleted in Phase 1; their panes became empty in Commit 3.1 and the
- * surviving command-palette entries, reducer cases, and action types
- * are removed here in Commit 3.2.
- */
 export type ModalState =
   | { kind: "none" }
   | { kind: "command-palette"; query: string; selectedCommandIndex: number }
@@ -98,9 +91,6 @@ export interface AppState {
 }
 
 export function createInitialState(snapshot: MissionControlSnapshot): AppState {
-  // Phase 3 strip: live feature auto-follow is gone with the runtime
-  // store. Initial state starts in overview mode with the first
-  // feature selected.
   return {
     snapshot,
     focusedPanel: "features",
@@ -557,8 +547,6 @@ export function reduce(state: AppState, action: Action): AppState {
         const preservedSelectedIndex = selectedFeatureId
           ? action.snapshot.features.findIndex((feature) => feature.id === selectedFeatureId)
           : -1;
-        // Phase 3 strip: auto-follow of a newly live runtime feature is
-        // gone along with the runtime store.
         const baseState: AppState = {
           ...state,
           snapshot: action.snapshot,

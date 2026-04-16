@@ -85,8 +85,10 @@ export function buildConfigInspector(
     .filter((path) => isVisibleConfigPath(path))
     .sort();
 
+  const planRows = buildPlanRows(features);
+
   const rowsByTab = {
-    overview: buildOverviewRows(layers, inspectionChecks, features),
+    overview: buildOverviewRows(layers, inspectionChecks, planRows),
     effective: allPaths.map((path) =>
       buildConfigValueRow(
         path,
@@ -100,7 +102,7 @@ export function buildConfigInspector(
     project: buildScopeRows("project", project, effective),
     global: buildScopeRows("global", global, effective),
     defaults: buildScopeRows("default", defaults, effective),
-    plan: buildPlanRows(layers.effective, features),
+    plan: planRows,
     doctor: buildDoctorRows(inspectionChecks, layers.errors),
     memory: buildMemoryConfigRows(effective, defaults, global, project),
   } satisfies Record<MissionControlConfigTab, readonly MissionControlConfigRow[]>;
@@ -154,9 +156,9 @@ function filterConfigRows(
 function buildOverviewRows(
   layers: ConfigLayers,
   checks: readonly DoctorCheck[],
-  features: readonly Feature[],
+  planRows: readonly MissionControlConfigRow[],
 ): readonly MissionControlConfigRow[] {
-  const planRows = buildPlanRows(layers.effective, features).map((row) => ({
+  const overviewPlanRows = planRows.map((row) => ({
     ...row,
     section: "What happens next",
   }));
@@ -184,7 +186,7 @@ function buildOverviewRows(
     ),
   ];
 
-  return [...quickRows, ...planRows, problemsRow];
+  return [...quickRows, ...overviewPlanRows, problemsRow];
 }
 
 function buildConfigValueRow(
@@ -199,6 +201,7 @@ function buildConfigValueRow(
   const source = provenanceForValue(effectiveValue, defaultValue, globalValue, projectValue);
   const copy = getRowCopy(keyPath, tab);
   const section = copy.section ?? sectionForKey(keyPath);
+  const effectiveRaw = stringifyConfigValue(keyPath, editMeta.editKind, effectiveValue);
   const effectiveDisplayValue = displayValueForKey(keyPath, editMeta.editKind, effectiveValue);
   const projectDisplayValue = displayValueForKey(keyPath, editMeta.editKind, projectValue);
   const globalDisplayValue = displayValueForKey(keyPath, editMeta.editKind, globalValue);
@@ -208,7 +211,7 @@ function buildConfigValueRow(
     keyPath,
     label: copy.label,
     section,
-    valueText: stringifyConfigValue(keyPath, editMeta.editKind, effectiveValue),
+    valueText: effectiveRaw,
     displayValueText: effectiveDisplayValue,
     source,
     sourceBadge: sourceBadgeForValueSource(source),
@@ -218,7 +221,7 @@ function buildConfigValueRow(
     description: editMeta.description,
     summary: copy.summary,
     impactText: copy.impactText,
-    effectiveValueText: stringifyConfigValue(keyPath, editMeta.editKind, effectiveValue),
+    effectiveValueText: effectiveRaw,
     effectiveDisplayValueText: effectiveDisplayValue,
     projectValueText: stringifyConfigValue(keyPath, editMeta.editKind, projectValue),
     projectDisplayValueText: projectDisplayValue,
@@ -288,7 +291,6 @@ function buildScopeRows(
 }
 
 function buildPlanRows(
-  _config: MaestroConfig,
   features: readonly Feature[],
 ): readonly MissionControlConfigRow[] {
   const pending = features.filter((feature) => feature.status === "pending");

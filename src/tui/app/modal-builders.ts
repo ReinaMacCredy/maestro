@@ -1640,11 +1640,6 @@ function buildHandoffDetailItems(handoff: MissionControlSnapshot["pendingHandoff
   ];
 }
 
-// Phase 3 strip: buildRuntimeDetailItems, buildWorkerHealthDetailItems,
-// and buildRuntimeOutputItems were deleted -- their backing data was
-// removed with the worker execution layer in Phase 1 and the surviving
-// modals are deleted in Commit 3.2.
-
 function formatTaskStatus(status: keyof typeof FEATURE_TASK_STATUS_LABEL): string {
   return FEATURE_TASK_STATUS_LABEL[status].toLowerCase();
 }

@@ -1,11 +1,3 @@
-/**
- * Derive timeline events from existing entity timestamps.
- * No new event infrastructure -- reads from existing store data.
- *
- * Phase 3 strip: worker progress events were deleted with the Phase 1
- * worker execution layer; the deriver now reads only mission, feature,
- * assertion, and checkpoint timestamps.
- */
 import type { Mission, Feature, Checkpoint, Assertion, MilestoneReportProgress } from "@/features/mission";
 import type { MissionControlEvent } from "./types.js";
 
