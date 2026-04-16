@@ -1,12 +1,12 @@
 import type { Task, ListTasksFilters } from "../domain/task-types.js";
-import type { TaskStorePort } from "../ports/task-store.port.js";
+import type { TaskQueryPort } from "../ports/task-store.port.js";
 
 /**
  * List tasks applying filter composition and optional limit.
  * Results are sorted by createdAt ASC so output is deterministic.
  */
 export async function listTasks(
-  store: TaskStorePort,
+  store: TaskQueryPort,
   filters: ListTasksFilters = {},
 ): Promise<readonly Task[]> {
   const all = await store.all();

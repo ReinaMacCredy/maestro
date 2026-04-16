@@ -20,14 +20,11 @@ interface ClaudeSessionFile {
   readonly startedAt: number;
 }
 
-const CLAUDE_SESSIONS_DIR = join(homedir(), ".claude", "sessions");
-const CODEX_SESSIONS_DIR = join(homedir(), ".codex", "sessions");
-
 export class ClaudeSessionDetectAdapter implements SessionDetectPort {
   async detect(_cwd: string): Promise<AgentSession | undefined> {
     if (process.env.CLAUDECODE === "1") {
       const session = await readJson<ClaudeSessionFile>(
-        join(CLAUDE_SESSIONS_DIR, `${process.ppid}.json`),
+        join(resolveClaudeSessionsDir(), `${process.ppid}.json`),
       );
       if (session?.sessionId && session.cwd && session.startedAt) {
         return buildClaudeSession(session);
@@ -45,11 +42,9 @@ export class ClaudeSessionDetectAdapter implements SessionDetectPort {
 
 function buildClaudeSession(session: ClaudeSessionFile): AgentSession {
   const sourcePath = join(
-    homedir(),
-    ".claude",
-    "projects",
+    resolveClaudeProjectsDir(),
     encodeProjectPath(normalizePath(session.cwd)),
-    session.sessionId + ".jsonl",
+    `${session.sessionId}.jsonl`,
   );
 
   return {
@@ -72,7 +67,7 @@ function parseCodexTimestamp(filename: string): number | undefined {
 async function resolveCodexSession(threadId: string): Promise<AgentSession | undefined> {
   try {
     const glob = new Bun.Glob(`**/*-${threadId}*.jsonl`);
-    for await (const path of glob.scan({ cwd: CODEX_SESSIONS_DIR, absolute: true })) {
+    for await (const path of glob.scan({ cwd: resolveCodexSessionsDir(), absolute: true })) {
       const filename = basename(path);
       const idMatch = filename.match(/rollout-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-(.+)\.jsonl$/);
       const fullId = idMatch?.[1] ?? threadId;
@@ -90,6 +85,21 @@ async function resolveCodexSession(threadId: string): Promise<AgentSession | und
   } catch {
     return undefined;
   }
+}
+
+function resolveClaudeSessionsDir(): string {
+  return process.env.MAESTRO_CLAUDE_SESSIONS_DIR
+    ?? join(homedir(), ".claude", "sessions");
+}
+
+function resolveClaudeProjectsDir(): string {
+  return process.env.MAESTRO_CLAUDE_PROJECTS_DIR
+    ?? join(homedir(), ".claude", "projects");
+}
+
+function resolveCodexSessionsDir(): string {
+  return process.env.MAESTRO_CODEX_SESSIONS_DIR
+    ?? join(homedir(), ".codex", "sessions");
 }
 
 function normalizePath(p: string): string {

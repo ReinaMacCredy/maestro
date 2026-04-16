@@ -16,7 +16,7 @@ import { buildMemoryStats } from "@/features/memory";
 import type { RatchetStorePort } from "@/features/ratchet";
 import type { ProjectGraphStorePort } from "@/features/graph";
 import type { HandoffStorePort, UkiHandoff } from "@/features/handoff";
-import { TASK_STATUSES, type TaskStorePort, type TaskStatus } from "@/features/task";
+import { TASK_STATUSES, type TaskQueryPort, type TaskStatus } from "@/features/task";
 import type { ReplyStorePort, WorkerReply, ReplyOutcome } from "@/features/reply";
 import { ingestReply } from "@/features/reply";
 import type {
@@ -80,7 +80,7 @@ export interface SnapshotDeps {
   ratchetStore?: RatchetStorePort;
   projectGraphStore?: ProjectGraphStorePort;
   handoffStore?: HandoffStorePort;
-  taskStore?: TaskStorePort;
+  taskStore?: TaskQueryPort;
   replyStore?: ReplyStorePort;
   principleStore?: PrincipleStorePort;
   cwd: string;
@@ -94,7 +94,7 @@ export interface HomeSnapshotDeps {
   ratchetStore?: RatchetStorePort;
   projectGraphStore?: ProjectGraphStorePort;
   handoffStore?: HandoffStorePort;
-  taskStore?: TaskStorePort;
+  taskStore?: TaskQueryPort;
   replyStore?: ReplyStorePort;
   principleStore?: PrincipleStorePort;
   cwd: string;
@@ -1133,7 +1133,7 @@ function isReplyPending(reply: WorkerReply, feature: Feature | undefined): boole
 }
 
 export async function buildTaskBoard(
-  taskStore?: TaskStorePort,
+  taskStore?: TaskQueryPort,
 ): Promise<TaskBoardSnapshot | null> {
   if (!taskStore) return null;
   try {

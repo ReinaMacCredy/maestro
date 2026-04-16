@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from "bun:test";
-import { mkdtemp, mkdir, rm, stat, utimes } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, stat, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -259,6 +259,19 @@ describe("JsonlTaskStoreAdapter", () => {
       expect(updated.dependsOn).toEqual([depA.id, depB.id]);
     });
 
+    it("returns the existing task without rewriting when dependencies are unchanged", async () => {
+      const depA = await store.create({ title: "A" });
+      const task = await store.create({ title: "Main", dependsOn: [depA.id] });
+      const jsonlPath = join(tmpDir, ".maestro", "tasks", "tasks.jsonl");
+      const before = await readFile(jsonlPath, "utf8");
+
+      const unchanged = await store.addDependencies(task.id, [depA.id]);
+      const after = await readFile(jsonlPath, "utf8");
+
+      expect(unchanged.updatedAt).toBe(task.updatedAt);
+      expect(after).toBe(before);
+    });
+
     it("rejects dependency cycles", async () => {
       const taskA = await store.create({ title: "A" });
       const taskB = await store.create({ title: "B", dependsOn: [taskA.id] });
@@ -276,6 +289,19 @@ describe("JsonlTaskStoreAdapter", () => {
 
       const twice = await store.removeDependencies(task.id, [depA.id]);
       expect(twice.dependsOn).toEqual([depB.id]);
+    });
+
+    it("returns the existing task without rewriting when removeDependencies is a no-op", async () => {
+      const depA = await store.create({ title: "A" });
+      const task = await store.create({ title: "Main", dependsOn: [depA.id] });
+      const jsonlPath = join(tmpDir, ".maestro", "tasks", "tasks.jsonl");
+      const before = await readFile(jsonlPath, "utf8");
+
+      const unchanged = await store.removeDependencies(task.id, ["tsk-ffffff"]);
+      const after = await readFile(jsonlPath, "utf8");
+
+      expect(unchanged.updatedAt).toBe(task.updatedAt);
+      expect(after).toBe(before);
     });
   });
 

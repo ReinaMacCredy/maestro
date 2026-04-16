@@ -1,55 +1,121 @@
 import { describe, expect, it, beforeEach, afterEach } from "bun:test";
-import { mkdtemp, rm, mkdir } from "node:fs/promises";
+import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { tmpdir, homedir } from "node:os";
+import { tmpdir } from "node:os";
 import { ClaudeSessionDetectAdapter } from "@/features/session";
 
 const adapter = new ClaudeSessionDetectAdapter();
 
 describe("ClaudeSessionDetectAdapter", () => {
+  let tempRoot: string;
   let originalCodexThreadId: string | undefined;
+  let originalClaudeCode: string | undefined;
+  let originalCodexSessionsDir: string | undefined;
+  let originalClaudeSessionsDir: string | undefined;
+  let originalClaudeProjectsDir: string | undefined;
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    tempRoot = await mkdtemp(join(tmpdir(), "maestro-session-detect-"));
     originalCodexThreadId = process.env.CODEX_THREAD_ID;
+    originalClaudeCode = process.env.CLAUDECODE;
+    originalCodexSessionsDir = process.env.MAESTRO_CODEX_SESSIONS_DIR;
+    originalClaudeSessionsDir = process.env.MAESTRO_CLAUDE_SESSIONS_DIR;
+    originalClaudeProjectsDir = process.env.MAESTRO_CLAUDE_PROJECTS_DIR;
     delete process.env.CODEX_THREAD_ID;
+    delete process.env.CLAUDECODE;
+    process.env.MAESTRO_CODEX_SESSIONS_DIR = join(tempRoot, "codex-sessions");
+    process.env.MAESTRO_CLAUDE_SESSIONS_DIR = join(tempRoot, "claude-sessions");
+    process.env.MAESTRO_CLAUDE_PROJECTS_DIR = join(tempRoot, "claude-projects");
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await rm(tempRoot, { recursive: true, force: true });
     if (originalCodexThreadId === undefined) {
       delete process.env.CODEX_THREAD_ID;
-      return;
+    } else {
+      process.env.CODEX_THREAD_ID = originalCodexThreadId;
     }
-    process.env.CODEX_THREAD_ID = originalCodexThreadId;
+    if (originalClaudeCode === undefined) {
+      delete process.env.CLAUDECODE;
+    } else {
+      process.env.CLAUDECODE = originalClaudeCode;
+    }
+    if (originalCodexSessionsDir === undefined) {
+      delete process.env.MAESTRO_CODEX_SESSIONS_DIR;
+    } else {
+      process.env.MAESTRO_CODEX_SESSIONS_DIR = originalCodexSessionsDir;
+    }
+    if (originalClaudeSessionsDir === undefined) {
+      delete process.env.MAESTRO_CLAUDE_SESSIONS_DIR;
+    } else {
+      process.env.MAESTRO_CLAUDE_SESSIONS_DIR = originalClaudeSessionsDir;
+    }
+    if (originalClaudeProjectsDir === undefined) {
+      delete process.env.MAESTRO_CLAUDE_PROJECTS_DIR;
+    } else {
+      process.env.MAESTRO_CLAUDE_PROJECTS_DIR = originalClaudeProjectsDir;
+    }
   });
 
   describe("detect", () => {
-    it("returns a session for the current working directory", async () => {
-      // This test uses the real ~/.claude/sessions/ directory
-      const cwd = process.cwd();
-      const session = await adapter.detect(cwd);
+    it("returns a codex session from the configured session root", async () => {
+      const sessionsDir = process.env.MAESTRO_CODEX_SESSIONS_DIR!;
+      const rolloutPath = join(
+        sessionsDir,
+        "suite",
+        "rollout-2026-04-16T14-00-00-thread-123.jsonl",
+      );
+      await mkdir(join(sessionsDir, "suite"), { recursive: true });
+      await writeFile(rolloutPath, "{}\n");
+      process.env.CODEX_THREAD_ID = "thread-123";
 
-      // May or may not find a session depending on environment
-      if (session) {
-        expect(session.agent).toBe("claude-code");
-        expect(session.sessionId).toBeTruthy();
-        expect(session.sourcePath).toContain(".claude/projects");
-      }
+      const session = await adapter.detect(process.cwd());
+
+      expect(session).toEqual({
+        agent: "codex",
+        sessionId: "thread-123",
+        sourcePath: rolloutPath,
+        startedAt: new Date("2026-04-16T14:00:00").getTime(),
+      });
     });
 
-    it("returns undefined for a directory with no session", async () => {
-      const session = await adapter.detect("/tmp/nonexistent-project-12345");
+    it("returns undefined when the configured codex session root has no match", async () => {
+      process.env.CODEX_THREAD_ID = "missing-thread";
+
+      const session = await adapter.detect(process.cwd());
+
       expect(session).toBeUndefined();
     });
 
-    it("returns session with correct agent slug", async () => {
-      const cwd = process.cwd();
+    it("returns a claude session from the configured session roots", async () => {
+      const cwd = join(tempRoot, "repo");
+      const sessionId = "claude-session-1";
+      const startedAt = 1_777_000_000_000;
+      await mkdir(cwd, { recursive: true });
+      await mkdir(process.env.MAESTRO_CLAUDE_SESSIONS_DIR!, { recursive: true });
+      await writeFile(
+        join(process.env.MAESTRO_CLAUDE_SESSIONS_DIR!, `${process.ppid}.json`),
+        JSON.stringify({
+          pid: process.pid,
+          sessionId,
+          cwd,
+          startedAt,
+        }),
+      );
+      process.env.CLAUDECODE = "1";
+
       const session = await adapter.detect(cwd);
 
-      if (session) {
-        expect(session.agent).toBe("claude-code");
-        expect(typeof session.sessionId).toBe("string");
-        expect(typeof session.sourcePath).toBe("string");
-      }
+      expect(session).toEqual({
+        agent: "claude-code",
+        sessionId,
+        sourcePath: join(
+          process.env.MAESTRO_CLAUDE_PROJECTS_DIR!,
+          cwd.replace(/\/+$/, "").replace(/\//g, "-"),
+          `${sessionId}.jsonl`,
+        ),
+        startedAt,
+      });
     });
   });
 });

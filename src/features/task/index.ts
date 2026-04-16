@@ -35,7 +35,7 @@ export type { TaskCandidate, CandidateSourceType } from "./domain/task-candidate
 export { validateTaskCandidate } from "./domain/task-candidate.js";
 export { extractKeywords } from "./domain/extract-keywords.js";
 
-export type { TaskStorePort } from "./ports/task-store.port.js";
+export type { TaskQueryPort, TaskStorePort } from "./ports/task-store.port.js";
 export type {
   CandidateStorePort,
   CreateCandidateInput,

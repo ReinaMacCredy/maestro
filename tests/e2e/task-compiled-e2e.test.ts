@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   BUILD_TIMEOUT_MS,
@@ -12,7 +12,6 @@ import {
 } from "../helpers/run-compiled-cli.js";
 
 let tmpDir: string;
-let sessionFixturePaths: string[] = [];
 
 beforeAll(buildCompiledCli, BUILD_TIMEOUT_MS);
 
@@ -23,8 +22,6 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await rm(tmpDir, { recursive: true, force: true });
-  await Promise.all(sessionFixturePaths.map((path) => rm(path, { force: true })));
-  sessionFixturePaths = [];
 });
 
 describe("compiled task feature E2E", () => {
@@ -92,7 +89,7 @@ describe("compiled task feature E2E", () => {
       expect(readyText.stdout).toContain(apiId);
       expect(readyText.stdout).toContain("P1");
 
-        const sessionA = await seedCodexSession("task-daily-loop-a");
+        const sessionA = await seedCodexSession(tmpDir, "task-daily-loop-a");
         const claimed = await runCompiled(
           ["task", "claim", apiId, "--json"],
           tmpDir,
@@ -211,7 +208,7 @@ describe("compiled task feature E2E", () => {
     async () => {
       const created = await runCompiled(["task", "q", "recoverable"], tmpDir);
       const id = created.stdout;
-      const sessionA = await seedCodexSession("task-recovery-a");
+      const sessionA = await seedCodexSession(tmpDir, "task-recovery-a");
 
       const initialClaim = await runCompiled(
         ["task", "claim", id, "--json"],
@@ -237,7 +234,7 @@ describe("compiled task feature E2E", () => {
     async () => {
       const created = await runCompiled(["task", "q", "recoverable release"], tmpDir);
       const id = created.stdout;
-      const sessionA = await seedCodexSession("task-recovery-b");
+      const sessionA = await seedCodexSession(tmpDir, "task-recovery-b");
 
       await runCompiled(
         ["task", "claim", id, "--json"],
@@ -316,8 +313,8 @@ describe("compiled task feature E2E", () => {
     it(
       "enforces strict claim ownership unless force is used",
       async () => {
-        const sessionA = await seedCodexSession("task-claim-a");
-        const sessionB = await seedCodexSession("task-claim-b");
+        const sessionA = await seedCodexSession(tmpDir, "task-claim-a");
+        const sessionB = await seedCodexSession(tmpDir, "task-claim-b");
         const id = (await runCompiled(["task", "q", "ownership"], tmpDir)).stdout;
 
         const firstClaim = await runCompiled(["task", "claim", id, "--json"], tmpDir, {
@@ -559,14 +556,17 @@ describe("compiled task feature E2E", () => {
   );
   });
 
-async function seedCodexSession(threadId: string): Promise<Record<string, string>> {
-  const sessionDir = join(homedir(), ".codex", "sessions", "maestro-task-e2e");
+async function seedCodexSession(
+  testRoot: string,
+  threadId: string,
+): Promise<Record<string, string>> {
+  const sessionDir = join(testRoot, ".tmp-codex-sessions", "maestro-task-e2e");
   const sessionPath = join(sessionDir, `rollout-2026-04-16T14-00-00-${threadId}.jsonl`);
   await mkdir(sessionDir, { recursive: true });
   await writeFile(sessionPath, "{}\n");
-  sessionFixturePaths.push(sessionPath);
   return {
     CODEX_THREAD_ID: threadId,
     CLAUDECODE: "",
+    MAESTRO_CODEX_SESSIONS_DIR: sessionDir,
   };
 }

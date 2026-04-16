@@ -11,7 +11,7 @@ import {
 import type { Feature, Milestone, Principle, PrincipleOutcomeRecord } from "@/features/mission";
 import type { UkiHandoff } from "@/features/handoff";
 import type { MissionControlEvent, MissionControlHomeHandoff } from "@/tui/state/types.js";
-import type { TaskStorePort } from "@/features/task";
+import type { Task, TaskQueryPort } from "@/features/task";
 import type { WorkerReply } from "@/features/reply";
 
 function makeFeature(overrides: Partial<Feature> & { id: string }): Feature {
@@ -43,6 +43,13 @@ function makeMilestone(overrides: Partial<Milestone> & { id: string }): Mileston
 
 function makeHandoff(id: string, agent = "codex"): MissionControlHomeHandoff {
   return { id, message: "test", agent, timestamp: "2026-01-01T00:00:00Z" };
+}
+
+function makeTaskQueryStore(tasks: readonly Task[]): TaskQueryPort {
+  return {
+    get: async (id: string) => tasks.find((task) => task.id === id),
+    all: async () => tasks,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -206,22 +213,12 @@ describe("buildTaskBoard", () => {
   });
 
   it("groups tasks into status columns sorted by priority", async () => {
-      const store: TaskStorePort = {
-        create: async () => { throw new Error("unused"); },
-        update: async () => { throw new Error("unused"); },
-        claim: async () => { throw new Error("unused"); },
-        unclaim: async () => { throw new Error("unused"); },
-        addDependencies: async () => { throw new Error("unused"); },
-        removeDependencies: async () => { throw new Error("unused"); },
-        close: async () => { throw new Error("unused"); },
-        get: async () => undefined,
-        all: async () => [
+      const store = makeTaskQueryStore([
         { id: "t1", title: "A", description: "d", type: "task", priority: 2, status: "open", labels: [], dependsOn: [], createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z" },
         { id: "t2", title: "B", description: "d", type: "task", priority: 0, status: "open", labels: [], dependsOn: ["t1"], createdAt: "2026-01-01T00:00:01Z", updatedAt: "2026-01-01T00:00:01Z" },
         { id: "t3", title: "C", description: "d", type: "task", priority: 1, status: "in_progress", labels: ["urgent"], dependsOn: [], createdAt: "2026-01-01T00:00:02Z", updatedAt: "2026-01-01T00:00:02Z" },
         { id: "t4", title: "D", description: "d", type: "task", priority: 3, status: "closed", labels: [], dependsOn: [], createdAt: "2026-01-01T00:00:03Z", updatedAt: "2026-01-01T00:00:03Z" },
-      ],
-    };
+      ]);
     const board = await buildTaskBoard(store);
     expect(board).not.toBeNull();
     expect(board!.totalCount).toBe(4);
@@ -245,17 +242,7 @@ describe("buildTaskBoard", () => {
   });
 
   it("returns null when store has no tasks", async () => {
-      const store: TaskStorePort = {
-        create: async () => { throw new Error("unused"); },
-        update: async () => { throw new Error("unused"); },
-        claim: async () => { throw new Error("unused"); },
-        unclaim: async () => { throw new Error("unused"); },
-        addDependencies: async () => { throw new Error("unused"); },
-        removeDependencies: async () => { throw new Error("unused"); },
-        close: async () => { throw new Error("unused"); },
-        get: async () => undefined,
-        all: async () => [],
-    };
+      const store = makeTaskQueryStore([]);
     const result = await buildTaskBoard(store);
     expect(result).toBeNull();
   });

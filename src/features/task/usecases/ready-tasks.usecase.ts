@@ -1,6 +1,6 @@
 import type { Task, ReadyTasksFilters } from "../domain/task-types.js";
 import { indexTasksById } from "../domain/task-types.js";
-import type { TaskStorePort } from "../ports/task-store.port.js";
+import type { TaskQueryPort } from "../ports/task-store.port.js";
 import type { CandidateStorePort } from "../ports/candidate-store.port.js";
 import {
   buildCandidateIndex,
@@ -37,7 +37,7 @@ export interface TaskBriefing extends Task {
  *  7. If candidateStore is provided, attach hints via matchCandidates.
  */
 export async function readyTasks(
-  store: TaskStorePort,
+  store: TaskQueryPort,
   filters: ReadyTasksFilters = {},
   now: Date = new Date(),
   candidateStore?: CandidateStorePort,

@@ -41,7 +41,6 @@ import {
   DEFAULT_TASK_TYPE,
   DEFAULT_TASK_PRIORITY,
   DEFAULT_TASK_STATUS,
-  indexTasksById,
 } from "../domain/task-types.js";
 
 const MAX_ID_RETRIES = 5;
@@ -83,16 +82,15 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
   async create(input: CreateTaskInput): Promise<Task> {
     return this.withLock(async () => {
       const tasks = await this.readAll();
-      const byId = indexTasksById(Array.from(tasks.values()));
 
       if (input.dependsOn && input.dependsOn.length > 0) {
-        const missing = input.dependsOn.filter((id) => !byId.has(id));
+        const missing = input.dependsOn.filter((id) => !tasks.has(id));
         if (missing.length > 0) {
           throw unknownDependency("<new task>", missing);
         }
       }
 
-      if (input.parentId !== undefined && !byId.has(input.parentId)) {
+      if (input.parentId !== undefined && !tasks.has(input.parentId)) {
         throw taskNotFound(input.parentId);
       }
 
@@ -144,7 +142,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         if (!tasks.has(patch.parentId)) {
           throw taskNotFound(patch.parentId);
         }
-        assertNoParentCycle(id, patch.parentId, indexTasksById(Array.from(tasks.values())));
+        assertNoParentCycle(id, patch.parentId, tasks);
       }
 
       const labels = applyLabelPatch(existing.labels, patch.addLabels, patch.removeLabels);
@@ -242,10 +240,12 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         throw taskNotFound(id);
       }
 
-      const byId = indexTasksById(Array.from(tasks.values()));
-      ensureDependenciesExist(id, depIds, byId);
+      ensureDependenciesExist(id, depIds, tasks);
       const nextDependsOn = dedupeValues([...existing.dependsOn, ...depIds]);
-      assertNoDependencyCycle(id, nextDependsOn, byId);
+      assertNoDependencyCycle(id, nextDependsOn, tasks);
+      if (sameValues(existing.dependsOn, nextDependsOn)) {
+        return existing;
+      }
 
       const updated: Task = {
         ...existing,
@@ -268,9 +268,14 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
       }
 
       const removeSet = new Set(depIds);
+      const nextDependsOn = existing.dependsOn.filter((depId) => !removeSet.has(depId));
+      if (sameValues(existing.dependsOn, nextDependsOn)) {
+        return existing;
+      }
+
       const updated: Task = {
         ...existing,
-        dependsOn: existing.dependsOn.filter((depId) => !removeSet.has(depId)),
+        dependsOn: nextDependsOn,
         updatedAt: new Date().toISOString(),
       };
 
@@ -481,6 +486,10 @@ function dedupeValues(values: readonly string[]): readonly string[] {
     }
   }
   return result;
+}
+
+function sameValues(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function serializeLockMetadata(): string {

@@ -11,7 +11,7 @@ import { FsHandoffStoreAdapter } from "@/features/handoff";
     createMissionControlSnapshotLoader,
     loadMissionControlSnapshot,
   } from "@/infra/commands/mission-control.command.js";
-  import type { TaskStorePort } from "@/features/task";
+  import type { Task, TaskQueryPort } from "@/features/task";
 import type { ConfigPort } from "@/infra/ports/config.port.js";
 import type { GitPort } from "@/infra/ports/git.port.js";
 import type { SnapshotDeps } from "@/tui/state/snapshot.js";
@@ -20,6 +20,13 @@ import { initGitRepo } from "../../../helpers/run-compiled-cli.js";
 
 let tmpDir: string;
 let snapshotDeps: SnapshotDeps;
+
+function makeTaskQueryStore(tasks: readonly Task[]): TaskQueryPort {
+  return {
+    get: async (id: string) => tasks.find((task) => task.id === id),
+    all: async () => tasks,
+  };
+}
 
 function createSamplePlan(): object {
   return {
@@ -117,52 +124,7 @@ describe("loadMissionControlSnapshot", () => {
     });
 
   it("loads task-board data only when requested", async () => {
-      const taskStore: TaskStorePort = {
-        create: async () => { throw new Error("unused"); },
-        update: async () => { throw new Error("unused"); },
-        claim: async () => { throw new Error("unused"); },
-        unclaim: async () => { throw new Error("unused"); },
-        addDependencies: async () => { throw new Error("unused"); },
-        removeDependencies: async () => { throw new Error("unused"); },
-        close: async () => { throw new Error("unused"); },
-        get: async () => undefined,
-        all: async () => [
-          {
-            id: "tsk-1",
-            title: "Task 1",
-            description: "desc",
-            type: "task",
-            priority: 1,
-            status: "open",
-            labels: [],
-            dependsOn: [],
-            createdAt: "2026-01-01T00:00:00Z",
-            updatedAt: "2026-01-01T00:00:00Z",
-          },
-        ],
-      };
-      const depsWithTasks = { ...snapshotDeps, taskStore };
-      const loader = createMissionControlSnapshotLoader(depsWithTasks);
-
-      const homeSnapshot = await loader.load();
-      expect(homeSnapshot.taskBoard).toBeUndefined();
-
-    const taskSnapshot = await loader.load({ includeTaskBoard: true });
-    expect(taskSnapshot.taskBoard?.totalCount).toBe(1);
-  });
-
-  it("loads task-board data for mission snapshots when requested", async () => {
-    const missionId = await createMission();
-      const taskStore: TaskStorePort = {
-        create: async () => { throw new Error("unused"); },
-        update: async () => { throw new Error("unused"); },
-        claim: async () => { throw new Error("unused"); },
-        unclaim: async () => { throw new Error("unused"); },
-        addDependencies: async () => { throw new Error("unused"); },
-        removeDependencies: async () => { throw new Error("unused"); },
-        close: async () => { throw new Error("unused"); },
-        get: async () => undefined,
-        all: async () => [
+      const taskStore = makeTaskQueryStore([
         {
           id: "tsk-1",
           title: "Task 1",
@@ -175,8 +137,33 @@ describe("loadMissionControlSnapshot", () => {
           createdAt: "2026-01-01T00:00:00Z",
           updatedAt: "2026-01-01T00:00:00Z",
         },
-      ],
-    };
+      ]);
+      const depsWithTasks = { ...snapshotDeps, taskStore };
+      const loader = createMissionControlSnapshotLoader(depsWithTasks);
+
+      const homeSnapshot = await loader.load();
+      expect(homeSnapshot.taskBoard).toBeUndefined();
+
+    const taskSnapshot = await loader.load({ includeTaskBoard: true });
+    expect(taskSnapshot.taskBoard?.totalCount).toBe(1);
+  });
+
+  it("loads task-board data for mission snapshots when requested", async () => {
+    const missionId = await createMission();
+      const taskStore = makeTaskQueryStore([
+        {
+          id: "tsk-1",
+          title: "Task 1",
+          description: "desc",
+          type: "task",
+          priority: 1,
+          status: "open",
+          labels: [],
+          dependsOn: [],
+          createdAt: "2026-01-01T00:00:00Z",
+          updatedAt: "2026-01-01T00:00:00Z",
+        },
+      ]);
     const loader = createMissionControlSnapshotLoader(
       { ...snapshotDeps, taskStore },
       missionId,
