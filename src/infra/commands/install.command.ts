@@ -15,7 +15,7 @@ export function registerInstallCommand(program: Command): void {
 
       const [initResult, agentResults] = await Promise.all([
         initMaestro(services.config, { global: true, dir: process.cwd() }),
-        injectAgentBlocks(process.cwd()),
+        injectAgentBlocks(process.cwd(), "home"),
       ]);
 
       output(isJson, { init: initResult, agents: agentResults }, (r) => [

@@ -42,6 +42,17 @@ interface ExistingConfig {
   readonly content: string;
 }
 
+type AgentConfigTargetScope = "all" | "home" | "project";
+
+function agentMatchesTargetScope(
+  agent: AgentConfigSpec,
+  targetScope: AgentConfigTargetScope,
+): boolean {
+  if (targetScope === "all") return true;
+  if (targetScope === "project") return agent.configScope === "project";
+  return agent.configScope !== "project";
+}
+
 function stripLegacyAgentSections(content: string): {
   readonly cleaned: string;
   readonly hadLegacySections: boolean;
@@ -171,10 +182,24 @@ async function firstExistingConfig(paths: readonly string[]): Promise<ExistingCo
   return undefined;
 }
 
-export async function injectAgentBlocks(projectDir = process.cwd()): Promise<InjectResult[]> {
-  return Promise.all(SUPPORTED_AGENTS.map((agent) => processInject(agent, projectDir)));
+export async function injectAgentBlocks(
+  projectDir = process.cwd(),
+  targetScope: AgentConfigTargetScope = "all",
+): Promise<InjectResult[]> {
+  return Promise.all(
+    SUPPORTED_AGENTS
+      .filter((agent) => agentMatchesTargetScope(agent, targetScope))
+      .map((agent) => processInject(agent, projectDir)),
+  );
 }
 
-export async function removeAgentBlocks(projectDir = process.cwd()): Promise<RemoveResult[]> {
-  return Promise.all(SUPPORTED_AGENTS.map((agent) => processRemove(agent, projectDir)));
+export async function removeAgentBlocks(
+  projectDir = process.cwd(),
+  targetScope: AgentConfigTargetScope = "all",
+): Promise<RemoveResult[]> {
+  return Promise.all(
+    SUPPORTED_AGENTS
+      .filter((agent) => agentMatchesTargetScope(agent, targetScope))
+      .map((agent) => processRemove(agent, projectDir)),
+  );
 }

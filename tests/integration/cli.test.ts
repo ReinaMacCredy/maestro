@@ -16,11 +16,13 @@ const SLOW_CLI_TIMEOUT_MS = 15_000;
 async function run(
   args: string[],
   cwd = process.cwd(),
+  env: Record<string, string | undefined> = process.env,
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const proc = Bun.spawn([...CLI, ...args], {
     stdout: "pipe",
     stderr: "pipe",
     cwd,
+    env,
   });
   const [stdout, stderr] = await Promise.all([
     new Response(proc.stdout).text(),
@@ -110,6 +112,74 @@ describe("CLI integration", () => {
     const result = JSON.parse(stdout);
     expect(result.binaryRemoved).toBe(true);
     expect(await Bun.file(join(installDir, "maestro")).exists()).toBe(false);
+  });
+
+  it("install only injects home-scoped agent files", async () => {
+    const homeDir = join(tmpDir, "home");
+    await mkdir(homeDir, { recursive: true });
+
+    const { stdout, exitCode } = await run(
+      ["install", "--json"],
+      tmpDir,
+      {
+        ...process.env,
+        HOME: homeDir,
+      },
+    );
+
+    expect(exitCode).toBe(0);
+    const result = JSON.parse(stdout);
+    expect(Array.isArray(result.agents)).toBe(true);
+    expect(result.agents.some((agent: { agent: string }) => agent.agent === "Droid CLI")).toBe(false);
+    expect(await Bun.file(join(tmpDir, ".maestro", "AGENTS.md")).exists()).toBe(false);
+    expect(await Bun.file(join(homeDir, ".maestro", "config.yaml")).exists()).toBe(true);
+  });
+
+  it("update --agents-only leaves project-scoped agent files untouched", async () => {
+    const homeDir = join(tmpDir, "home");
+    await mkdir(join(homeDir, ".claude"), { recursive: true });
+    await mkdir(join(tmpDir, ".maestro"), { recursive: true });
+    await writeFile(join(tmpDir, ".maestro", "AGENTS.md"), "# Project config\n");
+
+    const { stdout, exitCode } = await run(
+      ["update", "--agents-only", "--json"],
+      tmpDir,
+      {
+        ...process.env,
+        HOME: homeDir,
+      },
+    );
+
+    expect(exitCode).toBe(0);
+    const result = JSON.parse(stdout);
+    expect(Array.isArray(result.agents)).toBe(true);
+    expect(result.agents.some((agent: { agent: string }) => agent.agent === "Droid CLI")).toBe(false);
+    expect(await Bun.file(join(tmpDir, ".maestro", "AGENTS.md")).text()).toBe("# Project config\n");
+  });
+
+  it("compiled uninstall leaves project-scoped agent files untouched", async () => {
+    const homeDir = join(tmpDir, "home");
+    const installDir = join(tmpDir, "custom-bin");
+    await mkdir(join(homeDir, ".maestro"), { recursive: true });
+    await mkdir(join(tmpDir, ".maestro"), { recursive: true });
+    await mkdir(installDir, { recursive: true });
+    await writeFile(join(installDir, "maestro"), "test-binary");
+    await writeFile(join(tmpDir, ".maestro", "AGENTS.md"), "# Project config\n");
+
+    const { stdout, exitCode } = await runCompiled(
+      ["uninstall", "--json"],
+      tmpDir,
+      {
+        ...process.env,
+        HOME: homeDir,
+        MAESTRO_INSTALL_DIR: installDir,
+      },
+    );
+
+    expect(exitCode).toBe(0);
+    const result = JSON.parse(stdout);
+    expect(result.binaryRemoved).toBe(true);
+    expect(await Bun.file(join(tmpDir, ".maestro", "AGENTS.md")).text()).toBe("# Project config\n");
   });
 
   it("prints help with all commands", async () => {

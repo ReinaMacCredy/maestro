@@ -31,7 +31,7 @@ export function registerUpdateCommand(program: Command): void {
         });
       }
 
-      const agentResults = await injectAgentBlocks(process.cwd());
+      const agentResults = await injectAgentBlocks(process.cwd(), "home");
 
       output(isJson, { binary, agents: agentResults }, (r) => [
         describeBinaryUpdate(r.binary, opts.agentsOnly),
