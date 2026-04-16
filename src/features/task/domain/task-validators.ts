@@ -14,6 +14,8 @@ import {
   invalidTaskField,
   cyclicParent,
   parentDepthExceeded,
+  taskDependencyCycle,
+  taskSelfDependency,
 } from "./task-errors.js";
 
 const MAX_PARENT_DEPTH = 32;
@@ -53,6 +55,7 @@ export function validateTask(value: unknown): Task | undefined {
   if (t.description !== undefined && typeof t.description !== "string") return undefined;
   if (t.parentId !== undefined && typeof t.parentId !== "string") return undefined;
   if (t.assignee !== undefined && typeof t.assignee !== "string") return undefined;
+  if (t.claimedAt !== undefined && typeof t.claimedAt !== "string") return undefined;
   if (t.deferUntil !== undefined && typeof t.deferUntil !== "string") return undefined;
   if (t.closeReason !== undefined && typeof t.closeReason !== "string") return undefined;
 
@@ -67,6 +70,7 @@ export function validateTask(value: unknown): Task | undefined {
     labels: t.labels as readonly string[],
     dependsOn: t.dependsOn as readonly string[],
     assignee: t.assignee as string | undefined,
+    claimedAt: t.claimedAt as string | undefined,
     deferUntil: t.deferUntil as string | undefined,
     closeReason: t.closeReason as string | undefined,
     createdAt: t.createdAt,
@@ -114,7 +118,6 @@ export function validateCreateInput(input: CreateTaskInput): CreateTaskInput {
     parentId: input.parentId,
     labels: input.labels,
     dependsOn: input.dependsOn,
-    assignee: input.assignee,
   };
 }
 
@@ -142,6 +145,26 @@ export function validateUpdateInput(input: UpdateTaskInput): UpdateTaskInput {
     ...input,
     title: input.title?.trim(),
   };
+}
+
+export function validateDependencyIds(depIds: readonly string[]): readonly string[] {
+  if (depIds.length === 0) {
+    throw invalidTaskField("depends-on", "must include at least one task id");
+  }
+
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const depId of depIds) {
+    if (!TASK_ID_PATTERN.test(depId)) {
+      throw invalidTaskField("depends-on", `'${depId}' does not match ${TASK_ID_PATTERN}`);
+    }
+    if (!seen.has(depId)) {
+      normalized.push(depId);
+      seen.add(depId);
+    }
+  }
+
+  return normalized;
 }
 
 /**
@@ -177,4 +200,40 @@ export function assertNoParentCycle(
   }
 
   throw parentDepthExceeded(startId, MAX_PARENT_DEPTH);
+}
+
+export function assertNoDependencyCycle(
+  startId: string,
+  dependencyIds: readonly string[],
+  tasks: ReadonlyMap<string, Task>,
+): void {
+  for (const depId of dependencyIds) {
+    if (depId === startId) {
+      throw taskSelfDependency(startId);
+    }
+    walkDependency(depId, [startId, depId], startId, tasks, new Set([startId, depId]));
+  }
+}
+
+function walkDependency(
+  currentId: string,
+  chain: readonly string[],
+  startId: string,
+  tasks: ReadonlyMap<string, Task>,
+  visiting: Set<string>,
+): void {
+  const current = tasks.get(currentId);
+  if (!current) return;
+
+  for (const depId of current.dependsOn) {
+    if (depId === startId) {
+      throw taskDependencyCycle(startId, [...chain, startId]);
+    }
+    if (visiting.has(depId)) {
+      continue;
+    }
+    visiting.add(depId);
+    walkDependency(depId, [...chain, depId], startId, tasks, visiting);
+    visiting.delete(depId);
+  }
 }

@@ -120,6 +120,10 @@ describe("loadMissionControlSnapshot", () => {
       const taskStore: TaskStorePort = {
         create: async () => { throw new Error("unused"); },
         update: async () => { throw new Error("unused"); },
+        claim: async () => { throw new Error("unused"); },
+        unclaim: async () => { throw new Error("unused"); },
+        addDependencies: async () => { throw new Error("unused"); },
+        removeDependencies: async () => { throw new Error("unused"); },
         close: async () => { throw new Error("unused"); },
         get: async () => undefined,
         all: async () => [
@@ -149,12 +153,16 @@ describe("loadMissionControlSnapshot", () => {
 
   it("loads task-board data for mission snapshots when requested", async () => {
     const missionId = await createMission();
-    const taskStore: TaskStorePort = {
-      create: async () => { throw new Error("unused"); },
-      update: async () => { throw new Error("unused"); },
-      close: async () => { throw new Error("unused"); },
-      get: async () => undefined,
-      all: async () => [
+      const taskStore: TaskStorePort = {
+        create: async () => { throw new Error("unused"); },
+        update: async () => { throw new Error("unused"); },
+        claim: async () => { throw new Error("unused"); },
+        unclaim: async () => { throw new Error("unused"); },
+        addDependencies: async () => { throw new Error("unused"); },
+        removeDependencies: async () => { throw new Error("unused"); },
+        close: async () => { throw new Error("unused"); },
+        get: async () => undefined,
+        all: async () => [
         {
           id: "tsk-1",
           title: "Task 1",

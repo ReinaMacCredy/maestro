@@ -38,7 +38,15 @@ maestro memory-correct "use bun not npm" --trigger "package,install,npm"
 maestro feature update <featureId> --mission <id> --status <status> --report @report.json
 \`\`\`
 
-**When to use**: Start every session with \`maestro status\` to see shared state. Use \`maestro feature prompt\` to read the current feature's briefing with memory context auto-injected.`;
+**Coordinate shared task work:**
+\`\`\`bash
+maestro task ready --json
+maestro task claim <id>
+maestro task close <id> --reason "shipped"
+# or: maestro task unclaim <id>
+\`\`\`
+
+**When to use**: Start every session with \`maestro status\` to see shared state. Use \`maestro feature prompt\` to read the current feature's briefing with memory context auto-injected. Use \`maestro task ready\` to inspect shared queue work before claiming a task.`;
 
 export const PROJECT_BOOTSTRAP_TEMPLATES: readonly BootstrapTemplateFile[] = [
   {

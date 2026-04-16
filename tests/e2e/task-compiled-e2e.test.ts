@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   BUILD_TIMEOUT_MS,
@@ -12,6 +12,7 @@ import {
 } from "../helpers/run-compiled-cli.js";
 
 let tmpDir: string;
+let sessionFixturePaths: string[] = [];
 
 beforeAll(buildCompiledCli, BUILD_TIMEOUT_MS);
 
@@ -22,6 +23,8 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await rm(tmpDir, { recursive: true, force: true });
+  await Promise.all(sessionFixturePaths.map((path) => rm(path, { force: true })));
+  sessionFixturePaths = [];
 });
 
 describe("compiled task feature E2E", () => {
@@ -89,10 +92,25 @@ describe("compiled task feature E2E", () => {
       expect(readyText.stdout).toContain(apiId);
       expect(readyText.stdout).toContain("P1");
 
-      const retitled = await runCompiled(
-        ["task", "update", apiId, "--title", "POST /login endpoint", "--json"],
-        tmpDir,
-      );
+        const sessionA = await seedCodexSession("task-daily-loop-a");
+        const claimed = await runCompiled(
+          ["task", "claim", apiId, "--json"],
+          tmpDir,
+          { env: sessionA },
+        );
+        const claimedTask = expectJson<{
+          assignee: string;
+          status: string;
+          claimedAt: string;
+        }>(claimed);
+        expect(claimedTask.assignee).toBe("codex-task-daily-loop-a");
+        expect(claimedTask.status).toBe("in_progress");
+        expect(claimedTask.claimedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+
+        const retitled = await runCompiled(
+          ["task", "update", apiId, "--title", "POST /login endpoint", "--json"],
+          tmpDir,
+        );
       expect(expectJson<{ title: string }>(retitled).title).toBe("POST /login endpoint");
 
       const relabeled = await runCompiled(
@@ -171,28 +189,116 @@ describe("compiled task feature E2E", () => {
   );
 
   it(
-    "--claim succeeds or fails loudly depending on session detection",
-    async () => {
-      // The test runner may or may not carry an agent env marker (CLAUDECODE,
-      // CODEX_THREAD_ID). Force the "no session" branch so the assertion is
-      // deterministic regardless of the parent shell.
-      const created = await runCompiled(["task", "q", "unclaimed"], tmpDir);
-      const id = created.stdout;
+      "task claim fails loudly when session detection is unavailable",
+      async () => {
+        const created = await runCompiled(["task", "q", "unclaimed"], tmpDir);
+        const id = created.stdout;
 
-      const claim = await runCompiled(
-        ["task", "update", id, "--claim"],
-        tmpDir,
-        { env: { CLAUDECODE: "", CODEX_THREAD_ID: "" } },
-      );
-      expect(claim.exitCode).not.toBe(0);
-      expect(claim.stderr).toContain("Could not detect current session");
+        const claim = await runCompiled(
+          ["task", "claim", id],
+          tmpDir,
+          { env: { CLAUDECODE: "", CODEX_THREAD_ID: "" } },
+        );
+        expect(claim.exitCode).not.toBe(0);
+        expect(claim.stderr).toContain("Could not detect current session");
     },
     SLOW_CLI_TIMEOUT_MS,
   );
 
-  it(
-    "validates --depends-on against existing tasks",
-    async () => {
+    it(
+      "rejects legacy ownership flags with migration guidance",
+      async () => {
+        const id = (await runCompiled(["task", "q", "legacy flags"], tmpDir)).stdout;
+
+        const updateAssignee = await runCompiled(
+          ["task", "update", id, "--assignee", "someone-else"],
+          tmpDir,
+        );
+        expect(updateAssignee.exitCode).not.toBe(0);
+        expect(updateAssignee.stderr).toContain("task claim");
+
+        const updateClaim = await runCompiled(
+          ["task", "update", id, "--claim"],
+          tmpDir,
+        );
+        expect(updateClaim.exitCode).not.toBe(0);
+        expect(updateClaim.stderr).toContain("task claim");
+      },
+      SLOW_CLI_TIMEOUT_MS,
+    );
+
+    it(
+      "supports dependency lifecycle edits after creation",
+      async () => {
+        const depId = (await runCompiled(["task", "q", "dependency"], tmpDir)).stdout;
+        const taskId = (await runCompiled(["task", "q", "main work"], tmpDir)).stdout;
+
+        const initialReady = await runCompiled(["task", "ready", "--json"], tmpDir);
+        expect(expectJson<Array<{ id: string }>>(initialReady).map((task) => task.id).sort()).toEqual(
+          [depId, taskId].sort(),
+        );
+
+        const added = await runCompiled(
+          ["task", "deps", "add", taskId, depId, "--json"],
+          tmpDir,
+        );
+        expect(expectJson<{ dependsOn: string[] }>(added).dependsOn).toEqual([depId]);
+
+        const blockedReady = await runCompiled(["task", "ready", "--json"], tmpDir);
+        expect(expectJson<Array<{ id: string }>>(blockedReady).map((task) => task.id)).toEqual([depId]);
+
+        const removed = await runCompiled(
+          ["task", "deps", "remove", taskId, depId, "--json"],
+          tmpDir,
+        );
+        expect(expectJson<{ dependsOn: string[] }>(removed).dependsOn).toEqual([]);
+
+        const unblockedReady = await runCompiled(["task", "ready", "--json"], tmpDir);
+        expect(expectJson<Array<{ id: string }>>(unblockedReady).map((task) => task.id).sort()).toEqual(
+          [depId, taskId].sort(),
+        );
+      },
+      SLOW_CLI_TIMEOUT_MS,
+    );
+
+    it(
+      "enforces strict claim ownership unless force is used",
+      async () => {
+        const sessionA = await seedCodexSession("task-claim-a");
+        const sessionB = await seedCodexSession("task-claim-b");
+        const id = (await runCompiled(["task", "q", "ownership"], tmpDir)).stdout;
+
+        const firstClaim = await runCompiled(["task", "claim", id, "--json"], tmpDir, {
+          env: sessionA,
+        });
+        expect(expectJson<{ assignee: string }>(firstClaim).assignee).toBe("codex-task-claim-a");
+
+        const denied = await runCompiled(["task", "claim", id], tmpDir, {
+          env: sessionB,
+        });
+        expect(denied.exitCode).not.toBe(0);
+        expect(denied.stderr).toContain("already claimed");
+
+        const forced = await runCompiled(["task", "claim", id, "--force", "--json"], tmpDir, {
+          env: sessionB,
+        });
+        const forcedTask = expectJson<{ assignee: string; status: string }>(forced);
+        expect(forcedTask.assignee).toBe("codex-task-claim-b");
+        expect(forcedTask.status).toBe("in_progress");
+
+        const released = await runCompiled(["task", "unclaim", id, "--json"], tmpDir, {
+          env: sessionB,
+        });
+        const releasedTask = expectJson<{ assignee?: string; status: string }>(released);
+        expect(releasedTask.assignee).toBeUndefined();
+        expect(releasedTask.status).toBe("open");
+      },
+      SLOW_CLI_TIMEOUT_MS,
+    );
+
+    it(
+      "validates --depends-on against existing tasks",
+      async () => {
       const bad = await runCompiled(
         [
           "task",
@@ -399,4 +505,16 @@ describe("compiled task feature E2E", () => {
     },
     SLOW_CLI_TIMEOUT_MS,
   );
-});
+  });
+
+async function seedCodexSession(threadId: string): Promise<Record<string, string>> {
+  const sessionDir = join(homedir(), ".codex", "sessions", "maestro-task-e2e");
+  const sessionPath = join(sessionDir, `rollout-2026-04-16T14-00-00-${threadId}.jsonl`);
+  await mkdir(sessionDir, { recursive: true });
+  await writeFile(sessionPath, "{}\n");
+  sessionFixturePaths.push(sessionPath);
+  return {
+    CODEX_THREAD_ID: threadId,
+    CLAUDECODE: "",
+  };
+}

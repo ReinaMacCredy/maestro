@@ -13,13 +13,29 @@
 import { join } from "node:path";
 import { open, stat } from "node:fs/promises";
 import { setTimeout as sleep } from "node:timers/promises";
-import type { Task, CreateTaskInput, UpdateTaskInput, CloseTaskInput } from "../domain/task-types.js";
+import type {
+  Task,
+  CreateTaskInput,
+  UpdateTaskInput,
+  CloseTaskInput,
+} from "../domain/task-types.js";
 import type { TaskStorePort } from "../ports/task-store.port.js";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { ensureDir, readText, removeIfExists, writeText } from "@/shared/lib/fs.js";
 import { generateTaskId } from "../domain/task-id.js";
-import { assertNoParentCycle, validateTask } from "../domain/task-validators.js";
-import { taskAlreadyClosed, taskNotFound, unknownDependency } from "../domain/task-errors.js";
+import {
+  assertNoDependencyCycle,
+  assertNoParentCycle,
+  validateTask,
+} from "../domain/task-validators.js";
+import {
+  taskAlreadyClaimed,
+  taskAlreadyClosed,
+  taskClaimOwnedByDifferentSession,
+  taskNotClaimed,
+  taskNotFound,
+  unknownDependency,
+} from "../domain/task-errors.js";
 import { MaestroError } from "@/shared/errors.js";
 import {
   DEFAULT_TASK_TYPE,
@@ -105,8 +121,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         status: DEFAULT_TASK_STATUS,
         parentId: input.parentId,
         labels: input.labels ?? [],
-        dependsOn: input.dependsOn ?? [],
-        assignee: input.assignee,
+        dependsOn: dedupeValues(input.dependsOn ?? []),
         createdAt: now,
         updatedAt: now,
       };
@@ -142,13 +157,120 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         priority: patch.priority ?? existing.priority,
         status: patch.status ?? existing.status,
         parentId: patch.parentId === "" ? undefined : (patch.parentId ?? existing.parentId),
-        assignee: patch.assignee !== undefined
-          ? (patch.assignee === "" ? undefined : patch.assignee)
-          : existing.assignee,
         labels,
         deferUntil: patch.deferUntil !== undefined
           ? (patch.deferUntil === "" ? undefined : patch.deferUntil)
           : existing.deferUntil,
+        updatedAt: new Date().toISOString(),
+      };
+
+      tasks.set(id, updated);
+      await this.writeAll(tasks);
+      return updated;
+    });
+  }
+
+  async claim(id: string, sessionId: string, opts: { force?: boolean } = {}): Promise<Task> {
+    return this.withLock(async () => {
+      const tasks = await this.readAll();
+      const existing = tasks.get(id);
+      if (!existing) {
+        throw taskNotFound(id);
+      }
+      if (existing.status === "closed") {
+        throw taskAlreadyClosed(id);
+      }
+      if (existing.assignee === sessionId) {
+        return existing;
+      }
+      if (existing.assignee && !opts.force) {
+        throw taskAlreadyClaimed(id, existing.assignee);
+      }
+
+      const now = new Date().toISOString();
+      const claimed: Task = {
+        ...existing,
+        assignee: sessionId,
+        claimedAt: now,
+        status: existing.status === "open" ? "in_progress" : existing.status,
+        updatedAt: now,
+      };
+
+      tasks.set(id, claimed);
+      await this.writeAll(tasks);
+      return claimed;
+    });
+  }
+
+  async unclaim(id: string, sessionId: string, opts: { force?: boolean } = {}): Promise<Task> {
+    return this.withLock(async () => {
+      const tasks = await this.readAll();
+      const existing = tasks.get(id);
+      if (!existing) {
+        throw taskNotFound(id);
+      }
+      if (existing.status === "closed") {
+        throw taskAlreadyClosed(id);
+      }
+      if (!existing.assignee) {
+        throw taskNotClaimed(id);
+      }
+      if (existing.assignee !== sessionId && !opts.force) {
+        throw taskClaimOwnedByDifferentSession(id, existing.assignee);
+      }
+
+      const now = new Date().toISOString();
+      const unclaimed: Task = {
+        ...existing,
+        assignee: undefined,
+        claimedAt: undefined,
+        status: existing.status === "in_progress" ? "open" : existing.status,
+        updatedAt: now,
+      };
+
+      tasks.set(id, unclaimed);
+      await this.writeAll(tasks);
+      return unclaimed;
+    });
+  }
+
+  async addDependencies(id: string, depIds: readonly string[]): Promise<Task> {
+    return this.withLock(async () => {
+      const tasks = await this.readAll();
+      const existing = tasks.get(id);
+      if (!existing) {
+        throw taskNotFound(id);
+      }
+
+      const byId = indexTasksById(Array.from(tasks.values()));
+      ensureDependenciesExist(id, depIds, byId);
+      const nextDependsOn = dedupeValues([...existing.dependsOn, ...depIds]);
+      assertNoDependencyCycle(id, nextDependsOn, byId);
+
+      const updated: Task = {
+        ...existing,
+        dependsOn: nextDependsOn,
+        updatedAt: new Date().toISOString(),
+      };
+
+      tasks.set(id, updated);
+      await this.writeAll(tasks);
+      return updated;
+    });
+  }
+
+  async removeDependencies(id: string, depIds: readonly string[]): Promise<Task> {
+    return this.withLock(async () => {
+      const tasks = await this.readAll();
+      const existing = tasks.get(id);
+      if (!existing) {
+        throw taskNotFound(id);
+      }
+
+      const removeSet = new Set(depIds);
+      const updated: Task = {
+        ...existing,
+        dependsOn: existing.dependsOn.filter((depId) => !removeSet.has(depId)),
         updatedAt: new Date().toISOString(),
       };
 
@@ -335,6 +457,29 @@ function applyLabelPatch(
     }
   }
 
+  return result;
+}
+
+function ensureDependenciesExist(
+  id: string,
+  depIds: readonly string[],
+  tasks: ReadonlyMap<string, Task>,
+): void {
+  const missing = depIds.filter((depId) => !tasks.has(depId));
+  if (missing.length > 0) {
+    throw unknownDependency(id, missing);
+  }
+}
+
+function dedupeValues(values: readonly string[]): readonly string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    if (!seen.has(value)) {
+      result.push(value);
+      seen.add(value);
+    }
+  }
   return result;
 }
 

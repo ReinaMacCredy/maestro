@@ -18,58 +18,34 @@ describe("updateTask", () => {
 
   it("updates basic fields", async () => {
     const task = await createTask(store, { title: "Original" });
-    const updated = await updateTask(store, task.id, {
-      patch: { title: "New", priority: 1 },
-    });
+    const updated = await updateTask(store, task.id, { title: "New", priority: 1 });
     expect(updated.title).toBe("New");
     expect(updated.priority).toBe(1);
   });
 
   it("rejects unknown id", async () => {
     await expect(
-      updateTask(store, "tsk-000000", { patch: { title: "X" } }),
+      updateTask(store, "tsk-000000", { title: "X" }),
     ).rejects.toThrow(MaestroError);
   });
 
   it("rejects --status closed (must use close)", async () => {
     const task = await createTask(store, { title: "Done" });
     await expect(
-      updateTask(store, task.id, { patch: { status: "closed" } }),
+      updateTask(store, task.id, { status: "closed" }),
     ).rejects.toThrow(MaestroError);
   });
 
   it("accepts other status transitions", async () => {
     const task = await createTask(store, { title: "Doing" });
-    const updated = await updateTask(store, task.id, {
-      patch: { status: "in_progress" },
-    });
-    expect(updated.status).toBe("in_progress");
-  });
-
-  it("applies --claim to set assignee and status atomically", async () => {
-    const task = await createTask(store, { title: "Claim me" });
-    const updated = await updateTask(store, task.id, {
-      patch: {},
-      claim: { sessionId: "claude-code-abc123" },
-    });
-    expect(updated.assignee).toBe("claude-code-abc123");
-    expect(updated.status).toBe("in_progress");
-  });
-
-  it("--claim overrides an explicit assignee in the patch", async () => {
-    const task = await createTask(store, { title: "Claim" });
-    const updated = await updateTask(store, task.id, {
-      patch: { assignee: "someone-else" },
-      claim: { sessionId: "winner" },
-    });
-    expect(updated.assignee).toBe("winner");
+    const updated = await updateTask(store, task.id, { status: "in_progress" });
     expect(updated.status).toBe("in_progress");
   });
 
   it("rejects parenting under an unknown task", async () => {
     const task = await createTask(store, { title: "Orphan" });
     await expect(
-      updateTask(store, task.id, { patch: { parentId: "tsk-000000" } }),
+      updateTask(store, task.id, { parentId: "tsk-000000" }),
     ).rejects.toThrow(MaestroError);
   });
 
@@ -80,7 +56,7 @@ describe("updateTask", () => {
 
     // Trying to parent root under leaf creates: leaf -> mid -> root -> leaf
     await expect(
-      updateTask(store, root.id, { patch: { parentId: leaf.id } }),
+      updateTask(store, root.id, { parentId: leaf.id }),
     ).rejects.toThrow(MaestroError);
   });
 
@@ -89,29 +65,23 @@ describe("updateTask", () => {
     const b = await createTask(store, { title: "B" });
     const leaf = await createTask(store, { title: "leaf", parentId: a.id });
 
-    const moved = await updateTask(store, leaf.id, { patch: { parentId: b.id } });
+    const moved = await updateTask(store, leaf.id, { parentId: b.id });
     expect(moved.parentId).toBe(b.id);
   });
 
   it("allows clearing parent via empty string", async () => {
     const root = await createTask(store, { title: "Root" });
     const child = await createTask(store, { title: "Child", parentId: root.id });
-    const cleared = await updateTask(store, child.id, {
-      patch: { parentId: "" },
-    });
+    const cleared = await updateTask(store, child.id, { parentId: "" });
     expect(cleared.parentId).toBeUndefined();
   });
 
   it("adds and removes labels", async () => {
     const task = await createTask(store, { title: "L", labels: ["a"] });
-    const added = await updateTask(store, task.id, {
-      patch: { addLabels: ["b", "c"] },
-    });
+    const added = await updateTask(store, task.id, { addLabels: ["b", "c"] });
     expect(added.labels).toEqual(["a", "b", "c"]);
 
-    const removed = await updateTask(store, task.id, {
-      patch: { removeLabels: ["a"] },
-    });
+    const removed = await updateTask(store, task.id, { removeLabels: ["a"] });
     expect(removed.labels).toEqual(["b", "c"]);
   });
 });

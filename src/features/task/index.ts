@@ -6,6 +6,8 @@ export type {
   CreateTaskInput,
   UpdateTaskInput,
   CloseTaskInput,
+  ClaimTaskInput,
+  UnclaimTaskInput,
   ListTasksFilters,
   ReadyTasksFilters,
 } from "./domain/task-types.js";
@@ -22,7 +24,9 @@ export {
   validateTask,
   validateCreateInput,
   validateUpdateInput,
+  validateDependencyIds,
   assertNoParentCycle,
+  assertNoDependencyCycle,
   isTaskStatus,
   isTaskType,
   isTaskPriority,
@@ -42,11 +46,13 @@ export { FsCandidateStoreAdapter } from "./adapters/fs-candidate-store.adapter.j
 export { createTask } from "./usecases/create-task.usecase.js";
 export { showTask } from "./usecases/show-task.usecase.js";
 export { listTasks } from "./usecases/list-tasks.usecase.js";
+export { updateTask } from "./usecases/update-task.usecase.js";
+export { claimTask } from "./usecases/claim-task.usecase.js";
+export { unclaimTask } from "./usecases/unclaim-task.usecase.js";
 export {
-  updateTask,
-  type UpdateTaskOpts,
-  type ClaimParams,
-} from "./usecases/update-task.usecase.js";
+  addTaskDependencies,
+  removeTaskDependencies,
+} from "./usecases/manage-task-dependencies.usecase.js";
 export { closeTask } from "./usecases/close-task.usecase.js";
 export {
   readyTasks,

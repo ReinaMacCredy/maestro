@@ -34,9 +34,7 @@ describe("readyTasks", () => {
     describe("step 2: exclude blocked by open dependency", () => {
       it("excludes tasks explicitly marked blocked", async () => {
         const task = await createTask(store, { title: "wait on external review" });
-        await updateTask(store, task.id, {
-          patch: { status: "blocked" },
-        });
+        await updateTask(store, task.id, { status: "blocked" });
 
         const result = await readyTasks(store);
         expect(result.find((t) => t.id === task.id)).toBeUndefined();
@@ -147,11 +145,9 @@ describe("readyTasks", () => {
       expect(result.find((t) => t.id === task.id)).toBeDefined();
     });
 
-    it("excludes tasks with deferred status unless includeDeferred is set", async () => {
-      const task = await createTask(store, { title: "deferred status" });
-      await updateTask(store, task.id, {
-        patch: { status: "deferred" },
-      });
+      it("excludes tasks with deferred status unless includeDeferred is set", async () => {
+        const task = await createTask(store, { title: "deferred status" });
+        await updateTask(store, task.id, { status: "deferred" });
 
       const hidden = await readyTasks(store);
       expect(hidden.find((t) => t.id === task.id)).toBeUndefined();
@@ -196,8 +192,10 @@ describe("readyTasks", () => {
     });
 
     it("filters by assignee", async () => {
-      const t1 = await createTask(store, { title: "mine", assignee: "alice" });
-      await createTask(store, { title: "theirs", assignee: "bob" });
+      const t1 = await createTask(store, { title: "mine" });
+      const t2 = await createTask(store, { title: "theirs" });
+      await store.claim(t1.id, "alice");
+      await store.claim(t2.id, "bob");
 
       const result = await readyTasks(store, { assignee: "alice" });
       expect(result.map((t) => t.id)).toEqual([t1.id]);
@@ -205,7 +203,8 @@ describe("readyTasks", () => {
 
     it("filters by unassigned", async () => {
       await createTask(store, { title: "unassigned" });
-      await createTask(store, { title: "assigned", assignee: "alice" });
+      const assigned = await createTask(store, { title: "assigned" });
+      await store.claim(assigned.id, "alice");
 
       const result = await readyTasks(store, { unassigned: true });
       expect(result.map((t) => t.title)).toEqual(["unassigned"]);
@@ -302,9 +301,7 @@ describe("readyTasks", () => {
     describe("step 7: hint attachment (active memory)", () => {
       it("does not read candidates when there are no ready tasks", async () => {
         const task = await createTask(store, { title: "blocked by waiting" });
-        await updateTask(store, task.id, {
-          patch: { status: "blocked" },
-        });
+        await updateTask(store, task.id, { status: "blocked" });
 
         const candidateStore: CandidateStorePort = {
           create: async () => {
@@ -376,7 +373,7 @@ describe("readyTasks", () => {
       const t = await createTask(store, { title: "JWT middleware" });
       const closed = await closeTask(store, t.id, { reason: "jwt signing issue" });
       await captureTaskCandidate(candidateStore, closed);
-      await updateTask(store, t.id, { patch: { status: "open" } });
+      await updateTask(store, t.id, { status: "open" });
 
       const result = await readyTasks(store, {}, new Date(), candidateStore);
       expect(result.length).toBe(1);

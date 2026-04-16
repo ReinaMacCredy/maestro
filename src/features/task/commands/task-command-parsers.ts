@@ -18,7 +18,6 @@ export interface CreateOpts {
   parent?: string;
   labels?: string;
   dependsOn?: string;
-  assignee?: string;
 }
 
 export function buildCreateInput(title: string, opts: CreateOpts): CreateTaskInput {
@@ -30,7 +29,6 @@ export function buildCreateInput(title: string, opts: CreateOpts): CreateTaskInp
     parentId: opts.parent,
     labels: parseList(opts.labels),
     dependsOn: parseList(opts.dependsOn),
-    assignee: opts.assignee,
   };
 }
 
@@ -73,7 +71,6 @@ export function hasAnyPatchField(patch: UpdateTaskInput): boolean {
     patch.priority !== undefined ||
     patch.type !== undefined ||
     patch.parentId !== undefined ||
-    patch.assignee !== undefined ||
     (patch.addLabels !== undefined && patch.addLabels.length > 0) ||
     (patch.removeLabels !== undefined && patch.removeLabels.length > 0) ||
     patch.deferUntil !== undefined

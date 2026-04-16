@@ -180,6 +180,105 @@ describe("JsonlTaskStoreAdapter", () => {
     });
   });
 
+  describe("claim / unclaim", () => {
+    it("claims an unowned task", async () => {
+      const task = await store.create({ title: "Claim me" });
+
+      const claimed = await store.claim(task.id, "codex-session-a");
+
+      expect(claimed.assignee).toBe("codex-session-a");
+      expect(claimed.claimedAt).toBeString();
+      expect(claimed.status).toBe("in_progress");
+    });
+
+    it("rejects claim by another session without force", async () => {
+      const task = await store.create({ title: "Claim me" });
+      await store.claim(task.id, "codex-session-a");
+
+      await expect(store.claim(task.id, "codex-session-b")).rejects.toThrow(MaestroError);
+    });
+
+    it("force-claims a task from another session", async () => {
+      const task = await store.create({ title: "Claim me" });
+      await store.claim(task.id, "codex-session-a");
+
+      const claimed = await store.claim(task.id, "codex-session-b", { force: true });
+
+      expect(claimed.assignee).toBe("codex-session-b");
+      expect(claimed.status).toBe("in_progress");
+    });
+
+    it("unclaims the current owner and reopens in-progress tasks", async () => {
+      const task = await store.create({ title: "Claim me" });
+      await store.claim(task.id, "codex-session-a");
+
+      const unclaimed = await store.unclaim(task.id, "codex-session-a");
+
+      expect(unclaimed.assignee).toBeUndefined();
+      expect(unclaimed.claimedAt).toBeUndefined();
+      expect(unclaimed.status).toBe("open");
+    });
+
+    it("allows force-unclaim by another session", async () => {
+      const task = await store.create({ title: "Claim me" });
+      await store.claim(task.id, "codex-session-a");
+
+      const unclaimed = await store.unclaim(task.id, "codex-session-b", { force: true });
+
+      expect(unclaimed.assignee).toBeUndefined();
+      expect(unclaimed.status).toBe("open");
+    });
+
+    it("resolves competing claim attempts without corrupting storage", async () => {
+      const task = await store.create({ title: "Race" });
+
+      const results = await Promise.allSettled([
+        store.claim(task.id, "codex-session-a"),
+        store.claim(task.id, "codex-session-b"),
+      ]);
+
+      const fulfilled = results.filter((result) => result.status === "fulfilled");
+      const rejected = results.filter((result) => result.status === "rejected");
+
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+
+      const stored = await store.get(task.id);
+      expect(stored?.assignee).toBe((fulfilled[0] as PromiseFulfilledResult<{ assignee?: string }>).value.assignee);
+    });
+  });
+
+  describe("dependency lifecycle", () => {
+    it("adds dependencies after creation", async () => {
+      const depA = await store.create({ title: "A" });
+      const depB = await store.create({ title: "B" });
+      const task = await store.create({ title: "Main" });
+
+      const updated = await store.addDependencies(task.id, [depA.id, depB.id]);
+
+      expect(updated.dependsOn).toEqual([depA.id, depB.id]);
+    });
+
+    it("rejects dependency cycles", async () => {
+      const taskA = await store.create({ title: "A" });
+      const taskB = await store.create({ title: "B", dependsOn: [taskA.id] });
+
+      await expect(store.addDependencies(taskA.id, [taskB.id])).rejects.toThrow(MaestroError);
+    });
+
+    it("removes dependencies idempotently", async () => {
+      const depA = await store.create({ title: "A" });
+      const depB = await store.create({ title: "B" });
+      const task = await store.create({ title: "Main", dependsOn: [depA.id, depB.id] });
+
+      const once = await store.removeDependencies(task.id, [depA.id]);
+      expect(once.dependsOn).toEqual([depB.id]);
+
+      const twice = await store.removeDependencies(task.id, [depA.id]);
+      expect(twice.dependsOn).toEqual([depB.id]);
+    });
+  });
+
   describe("close", () => {
     it("closes a task with a reason", async () => {
       const task = await store.create({ title: "Done" });

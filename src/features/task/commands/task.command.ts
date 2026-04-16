@@ -1,4 +1,4 @@
-import type { Command } from "commander";
+import { Command, Option } from "commander";
 import { getServices } from "@/services.js";
 import { output, resolveJsonFlag, warn } from "@/shared/lib/output.js";
 import { MaestroError } from "@/shared/errors.js";
@@ -6,6 +6,9 @@ import { createTask } from "../usecases/create-task.usecase.js";
 import { showTask } from "../usecases/show-task.usecase.js";
 import { listTasks } from "../usecases/list-tasks.usecase.js";
 import { updateTask } from "../usecases/update-task.usecase.js";
+import { claimTask } from "../usecases/claim-task.usecase.js";
+import { unclaimTask } from "../usecases/unclaim-task.usecase.js";
+import { addTaskDependencies, removeTaskDependencies } from "../usecases/manage-task-dependencies.usecase.js";
 import { closeTask } from "../usecases/close-task.usecase.js";
 import { readyTasks } from "../usecases/ready-tasks.usecase.js";
 import { captureTaskCandidate } from "../usecases/capture-task-candidate.usecase.js";
@@ -25,6 +28,10 @@ import {
   parseType,
 } from "./task-command-parsers.js";
 import {
+  taskUpdateClaimViaDedicatedCommand,
+  taskUpdateOwnershipViaClaim,
+} from "../domain/task-errors.js";
+import {
   formatTaskBriefingList,
   formatTaskDetail,
   formatTaskList,
@@ -39,12 +46,15 @@ export function registerTaskCommand(program: Command): void {
 
   registerCreateCommand(taskCmd, program);
   registerQuickCommand(taskCmd, program);
-  registerShowCommand(taskCmd, program);
-  registerListCommand(taskCmd, program);
-  registerUpdateCommand(taskCmd, program);
-  registerCloseCommand(taskCmd, program);
-  registerReadyCommand(taskCmd, program);
-}
+    registerShowCommand(taskCmd, program);
+    registerListCommand(taskCmd, program);
+    registerUpdateCommand(taskCmd, program);
+    registerClaimCommand(taskCmd, program);
+    registerUnclaimCommand(taskCmd, program);
+    registerDepsCommand(taskCmd, program);
+    registerCloseCommand(taskCmd, program);
+    registerReadyCommand(taskCmd, program);
+  }
 
 // ============================
 // task create
@@ -56,19 +66,23 @@ function registerCreateCommand(taskCmd: Command, program: Command): void {
     .description("Create a new task")
     .option("--description <text>", "Task description")
     .option("--type <type>", `Task type (${TASK_TYPES.join("|")})`)
-    .option("--priority <n>", `Priority 0-4 (0=critical, 4=backlog)`)
-    .option("--parent <id>", "Parent task id for hierarchy grouping")
-    .option("--labels <labels>", "Comma-separated labels")
-    .option("--depends-on <ids>", "Comma-separated ids this task blocks on")
-    .option("--assignee <name>", "Assignee")
-    .option("--silent", "Print only the id (for scripts)")
-    .option("--json", "Output as JSON")
-    .action(async (title: string, opts) => {
-      const services = getServices();
-      const isJson = resolveJsonFlag(opts, program);
+      .option("--priority <n>", `Priority 0-4 (0=critical, 4=backlog)`)
+      .option("--parent <id>", "Parent task id for hierarchy grouping")
+      .option("--labels <labels>", "Comma-separated labels")
+      .option("--depends-on <ids>", "Comma-separated ids this task blocks on")
+      .addOption(new Option("--assignee <name>").hideHelp())
+      .option("--silent", "Print only the id (for scripts)")
+      .option("--json", "Output as JSON")
+      .action(async (title: string, opts) => {
+        const services = getServices();
+        const isJson = resolveJsonFlag(opts, program);
 
-      const input = buildCreateInput(title, opts);
-      const task = await createTask(services.taskStore, input);
+        if (opts.assignee !== undefined) {
+          throw taskUpdateOwnershipViaClaim();
+        }
+
+        const input = buildCreateInput(title, opts);
+        const task = await createTask(services.taskStore, input);
 
       if (opts.silent) {
         console.log(task.id);
@@ -171,56 +185,133 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
     .option("--title <title>", "New title")
     .option("--description <text>", "New description")
     .option("--status <status>", `New status (${TASK_STATUSES.filter((s) => s !== "closed").join("|")})`)
-    .option("--priority <n>", "New priority 0-4")
-    .option("--type <type>", `New type (${TASK_TYPES.join("|")})`)
-    .option("--parent <id>", "New parent id (empty string clears)")
-    .option("--assignee <name>", "New assignee (empty string clears)")
-    .option("--add-label <labels>", "Comma-separated labels to add")
-    .option("--remove-label <labels>", "Comma-separated labels to remove")
-    .option("--claim", "Atomic: set assignee to current session AND status to in_progress")
+      .option("--priority <n>", "New priority 0-4")
+      .option("--type <type>", `New type (${TASK_TYPES.join("|")})`)
+      .option("--parent <id>", "New parent id (empty string clears)")
+      .addOption(new Option("--assignee <name>").hideHelp())
+      .option("--add-label <labels>", "Comma-separated labels to add")
+      .option("--remove-label <labels>", "Comma-separated labels to remove")
+      .addOption(new Option("--claim").hideHelp())
+      .option("--json", "Output as JSON")
+      .action(async (id: string, opts) => {
+        const services = getServices();
+        const isJson = resolveJsonFlag(opts, program);
+
+        if (opts.assignee !== undefined) {
+          throw taskUpdateOwnershipViaClaim();
+        }
+        if (opts.claim === true) {
+          throw taskUpdateClaimViaDedicatedCommand();
+        }
+
+        const patch: UpdateTaskInput = {
+          title: opts.title,
+          description: opts.description,
+          status: parseStatus(opts.status),
+          priority: parsePriority(opts.priority),
+          type: parseType(opts.type),
+          parentId: opts.parent,
+          addLabels: parseList(opts.addLabel),
+          removeLabels: parseList(opts.removeLabel),
+        };
+
+        if (!hasAnyPatchField(patch)) {
+          throw new MaestroError("No update specified", [
+            "Pass at least one field: --title, --description, --status, --priority, --type,",
+            "--parent, --add-label, or --remove-label",
+          ]);
+        }
+
+        const updated = await updateTask(services.taskStore, id, patch);
+        output(isJson, updated, (t) => [
+          `[ok] Task updated: ${t.id}`,
+          `  Status: ${t.status}`,
+          `  Priority: P${t.priority}`,
+        ...(t.assignee ? [`  Assignee: ${t.assignee}`] : []),
+        ...(t.labels.length > 0 ? [`  Labels: ${t.labels.join(", ")}`] : []),
+      ]);
+      });
+  }
+
+function registerClaimCommand(taskCmd: Command, program: Command): void {
+  taskCmd
+    .command("claim <id>")
+    .description("Claim exclusive ownership of a task")
+    .option("--force", "Take over a task already claimed by another session")
     .option("--json", "Output as JSON")
     .action(async (id: string, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
+      const sessionId = await detectCurrentSessionId();
 
-      const patch: UpdateTaskInput = {
-        title: opts.title,
-        description: opts.description,
-        status: parseStatus(opts.status),
-        priority: parsePriority(opts.priority),
-        type: parseType(opts.type),
-        parentId: opts.parent,
-        assignee: opts.assignee,
-        addLabels: parseList(opts.addLabel),
-        removeLabels: parseList(opts.removeLabel),
-      };
+      const claimed = await claimTask(services.taskStore, id, {
+        sessionId,
+        force: opts.force === true,
+      });
 
-      let claim: { sessionId: string } | undefined;
-      if (opts.claim) {
-        const session = await services.sessionDetect.detect(process.cwd());
-        if (!session) {
-          throw new MaestroError("Could not detect current session for --claim", [
-            "Set MAESTRO_AGENT or run from an agent environment",
-            "Or assign manually: maestro task update <id> --assignee <name>",
-          ]);
-        }
-        claim = { sessionId: `${session.agent}-${session.sessionId}` };
-      }
+      output(isJson, claimed, (task) => [
+        `[ok] Task claimed: ${task.id}`,
+        `  Assignee: ${task.assignee}`,
+        `  Status: ${task.status}`,
+      ]);
+    });
+}
 
-      if (!hasAnyPatchField(patch) && !claim) {
-        throw new MaestroError("No update specified", [
-          "Pass at least one field: --title, --description, --status, --priority, --type,",
-          "--parent, --assignee, --add-label, --remove-label, or --claim",
-        ]);
-      }
+function registerUnclaimCommand(taskCmd: Command, program: Command): void {
+  taskCmd
+    .command("unclaim <id>")
+    .description("Release task ownership")
+    .option("--force", "Release a task owned by another session")
+    .option("--json", "Output as JSON")
+    .action(async (id: string, opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+      const sessionId = await detectCurrentSessionId();
 
-      const updated = await updateTask(services.taskStore, id, { patch, claim });
-      output(isJson, updated, (t) => [
-        `[ok] Task updated: ${t.id}`,
-        `  Status: ${t.status}`,
-        `  Priority: P${t.priority}`,
-        ...(t.assignee ? [`  Assignee: ${t.assignee}`] : []),
-        ...(t.labels.length > 0 ? [`  Labels: ${t.labels.join(", ")}`] : []),
+      const unclaimed = await unclaimTask(services.taskStore, id, {
+        sessionId,
+        force: opts.force === true,
+      });
+
+      output(isJson, unclaimed, (task) => [
+        `[ok] Task unclaimed: ${task.id}`,
+        `  Status: ${task.status}`,
+      ]);
+    });
+}
+
+function registerDepsCommand(taskCmd: Command, program: Command): void {
+  const depsCmd = taskCmd
+    .command("deps")
+    .description("Manage task dependency edges");
+
+  depsCmd
+    .command("add <id> <dependencyIds...>")
+    .description("Add dependency edges to a task")
+    .option("--json", "Output as JSON")
+    .action(async (id: string, dependencyIds: string[], opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+      const updated = await addTaskDependencies(services.taskStore, id, dependencyIds);
+
+      output(isJson, updated, (task) => [
+        `[ok] Dependencies added: ${task.id}`,
+        ...(task.dependsOn.length > 0 ? [`  Depends on: ${task.dependsOn.join(", ")}`] : []),
+      ]);
+    });
+
+  depsCmd
+    .command("remove <id> <dependencyIds...>")
+    .description("Remove dependency edges from a task")
+    .option("--json", "Output as JSON")
+    .action(async (id: string, dependencyIds: string[], opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+      const updated = await removeTaskDependencies(services.taskStore, id, dependencyIds);
+
+      output(isJson, updated, (task) => [
+        `[ok] Dependencies removed: ${task.id}`,
+        ...(task.dependsOn.length > 0 ? [`  Depends on: ${task.dependsOn.join(", ")}`] : ["  Depends on: none"]),
       ]);
     });
 }
@@ -252,7 +343,19 @@ function registerCloseCommand(taskCmd: Command, program: Command): void {
         `  Title: ${t.title}`,
         ...(t.closeReason ? [`  Reason: ${t.closeReason}`] : []),
       ]);
-    });
+      });
+  }
+
+async function detectCurrentSessionId(): Promise<string> {
+  const services = getServices();
+  const session = await services.sessionDetect.detect(process.cwd());
+  if (!session) {
+    throw new MaestroError("Could not detect current session for task ownership", [
+      "Set CODEX_THREAD_ID or run from an agent environment",
+      "Ownership commands require a detectable agent session",
+    ]);
+  }
+  return `${session.agent}-${session.sessionId}`;
 }
 
 // ============================

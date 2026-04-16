@@ -206,12 +206,16 @@ describe("buildTaskBoard", () => {
   });
 
   it("groups tasks into status columns sorted by priority", async () => {
-    const store: TaskStorePort = {
-      create: async () => { throw new Error("unused"); },
-      update: async () => { throw new Error("unused"); },
-      close: async () => { throw new Error("unused"); },
-      get: async () => undefined,
-      all: async () => [
+      const store: TaskStorePort = {
+        create: async () => { throw new Error("unused"); },
+        update: async () => { throw new Error("unused"); },
+        claim: async () => { throw new Error("unused"); },
+        unclaim: async () => { throw new Error("unused"); },
+        addDependencies: async () => { throw new Error("unused"); },
+        removeDependencies: async () => { throw new Error("unused"); },
+        close: async () => { throw new Error("unused"); },
+        get: async () => undefined,
+        all: async () => [
         { id: "t1", title: "A", description: "d", type: "task", priority: 2, status: "open", labels: [], dependsOn: [], createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z" },
         { id: "t2", title: "B", description: "d", type: "task", priority: 0, status: "open", labels: [], dependsOn: ["t1"], createdAt: "2026-01-01T00:00:01Z", updatedAt: "2026-01-01T00:00:01Z" },
         { id: "t3", title: "C", description: "d", type: "task", priority: 1, status: "in_progress", labels: ["urgent"], dependsOn: [], createdAt: "2026-01-01T00:00:02Z", updatedAt: "2026-01-01T00:00:02Z" },
@@ -241,12 +245,16 @@ describe("buildTaskBoard", () => {
   });
 
   it("returns null when store has no tasks", async () => {
-    const store: TaskStorePort = {
-      create: async () => { throw new Error("unused"); },
-      update: async () => { throw new Error("unused"); },
-      close: async () => { throw new Error("unused"); },
-      get: async () => undefined,
-      all: async () => [],
+      const store: TaskStorePort = {
+        create: async () => { throw new Error("unused"); },
+        update: async () => { throw new Error("unused"); },
+        claim: async () => { throw new Error("unused"); },
+        unclaim: async () => { throw new Error("unused"); },
+        addDependencies: async () => { throw new Error("unused"); },
+        removeDependencies: async () => { throw new Error("unused"); },
+        close: async () => { throw new Error("unused"); },
+        get: async () => undefined,
+        all: async () => [],
     };
     const result = await buildTaskBoard(store);
     expect(result).toBeNull();

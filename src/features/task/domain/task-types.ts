@@ -59,6 +59,7 @@ export interface Task {
   readonly labels: readonly string[];
   readonly dependsOn: readonly string[];
   readonly assignee?: string;
+  readonly claimedAt?: string;
   readonly deferUntil?: string;
   readonly closeReason?: string;
   readonly createdAt: string;
@@ -77,7 +78,6 @@ export interface CreateTaskInput {
   readonly parentId?: string;
   readonly labels?: readonly string[];
   readonly dependsOn?: readonly string[];
-  readonly assignee?: string;
 }
 
 export interface UpdateTaskInput {
@@ -87,7 +87,6 @@ export interface UpdateTaskInput {
   readonly priority?: TaskPriority;
   readonly type?: TaskType;
   readonly parentId?: string;
-  readonly assignee?: string;
   readonly addLabels?: readonly string[];
   readonly removeLabels?: readonly string[];
   readonly deferUntil?: string;
@@ -134,4 +133,14 @@ export interface ReadyTasksFilters {
   readonly assignee?: string;
   readonly unassigned?: boolean;
   readonly includeDeferred?: boolean;
+}
+
+export interface ClaimTaskInput {
+  readonly sessionId: string;
+  readonly force?: boolean;
+}
+
+export interface UnclaimTaskInput {
+  readonly sessionId: string;
+  readonly force?: boolean;
 }

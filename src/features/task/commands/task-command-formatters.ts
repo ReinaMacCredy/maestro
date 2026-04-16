@@ -71,6 +71,7 @@ export function formatTaskDetail(task: Task): string[] {
   if (task.description) lines.push(`  Description: ${task.description}`);
   if (task.parentId) lines.push(`  Parent: ${task.parentId}`);
   if (task.assignee) lines.push(`  Assignee: ${task.assignee}`);
+  if (task.claimedAt) lines.push(`  Claimed at: ${task.claimedAt}`);
   if (task.labels.length > 0) lines.push(`  Labels: ${task.labels.join(", ")}`);
   if (task.dependsOn.length > 0) lines.push(`  Depends on: ${task.dependsOn.join(", ")}`);
   if (task.deferUntil) lines.push(`  Deferred until: ${task.deferUntil}`);
