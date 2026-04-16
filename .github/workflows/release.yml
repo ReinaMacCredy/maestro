@@ -35,7 +35,6 @@ jobs:
         id: gate
         env:
           EVENT_NAME: ${{ github.event_name }}
-          HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
           EXPECTED_RELEASE_SUBJECT: "chore(release): v${{ steps.version.outputs.version }}"
         run: |
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
@@ -44,7 +43,9 @@ jobs:
             exit 0
           fi
 
-          if [ "$HEAD_COMMIT_MESSAGE" = "$EXPECTED_RELEASE_SUBJECT" ]; then
+          HEAD_COMMIT_SUBJECT="$(git log -1 --pretty=%s)"
+
+          if [ "$HEAD_COMMIT_SUBJECT" = "$EXPECTED_RELEASE_SUBJECT" ]; then
             echo "Release commit detected on main."
             echo "should_release=true" >> "$GITHUB_OUTPUT"
             exit 0
