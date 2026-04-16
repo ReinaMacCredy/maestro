@@ -318,7 +318,7 @@ describe("compiled task feature E2E", () => {
         const blockerId = (await runCompiled(["task", "q", "blocking"], tmpDir)).stdout;
         const blockedId = (await runCompiled(["task", "q", "blocked later", "--blocked-by", blockerId], tmpDir)).stdout;
         const blockedComplete = await runCompiled(
-          ["task", "update", blockedId, "--status", "completed", "--reason", "nope"],
+          ["task", "update", blockedId, "--status", "completed", "--reason", "nope", "--session", "operator-a"],
           tmpDir,
         );
         expect(blockedComplete.exitCode).not.toBe(0);

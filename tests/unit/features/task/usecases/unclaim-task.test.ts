@@ -21,7 +21,7 @@ describe("unclaimTask", () => {
   it("unclaims the current owner and resets in-progress work to pending", async () => {
     const task = await createTask(store, { title: "Claim me" });
     await claimTask(store, task.id, { sessionId: "codex-session-a" });
-    await updateTask(store, task.id, { status: "in_progress" });
+    await updateTask(store, task.id, { status: "in_progress" }, { sessionId: "codex-session-a" });
 
     const unclaimed = await unclaimTask(store, task.id, {
       sessionId: "codex-session-a",

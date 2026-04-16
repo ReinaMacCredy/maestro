@@ -166,4 +166,14 @@ describe("ClaudeSessionDetectAdapter", () => {
       });
     });
   });
+
+  describe("lookup", () => {
+    it("returns undefined when the configured codex session root is missing", async () => {
+      const hermeticAdapter = new ClaudeSessionDetectAdapter({
+        codexSessionsDir: join(tempRoot, "missing-codex-sessions"),
+      });
+
+      await expect(hermeticAdapter.lookup("codex", "dead-thread")).resolves.toBeUndefined();
+    });
+  });
 });

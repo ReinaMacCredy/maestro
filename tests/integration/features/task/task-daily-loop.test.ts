@@ -39,11 +39,14 @@ describe("task CLI daily loop", () => {
       expect.objectContaining({ assignee: "test-owner", status: "pending" }),
     );
 
-    const working = await runCli(["task", "update", apiId, "--status", "in_progress", "--json"], tmpDir);
+    const working = await runCli(
+      ["task", "update", apiId, "--status", "in_progress", "--session", "test-owner", "--json"],
+      tmpDir,
+    );
     expect(expectJson<{ status: string }>(working).status).toBe("in_progress");
 
     const completed = await runCli(
-      ["task", "update", apiId, "--status", "completed", "--reason", "shipped", "--json"],
+      ["task", "update", apiId, "--status", "completed", "--reason", "shipped", "--session", "test-owner", "--json"],
       tmpDir,
     );
     const closed = expectJson<{ status: string; closeReason: string }>(completed);
@@ -89,7 +92,7 @@ describe("task CLI daily loop", () => {
   it("releases unresolved tasks owned by a dead session through the recovery command", async () => {
     const id = (await runCli(["task", "q", "recover me"], tmpDir)).stdout;
     await runCli(["task", "claim", id, "--session", "dead-session", "--json"], tmpDir);
-    await runCli(["task", "update", id, "--status", "in_progress", "--json"], tmpDir);
+    await runCli(["task", "update", id, "--status", "in_progress", "--session", "dead-session", "--json"], tmpDir);
 
     const released = await runCli(["task", "release-owned", "dead-session", "--json"], tmpDir);
     const payload = expectJson<Array<{ id: string; status: string; assignee?: string }>>(released);

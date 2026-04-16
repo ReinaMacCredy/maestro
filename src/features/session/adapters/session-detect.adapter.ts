@@ -101,6 +101,9 @@ export class ClaudeSessionDetectAdapter implements SessionDetectPort {
     mode: "exact" | "prefix",
   ): Promise<AgentSession | undefined> {
     const sessionsDir = this.resolveCodexSessionsDir();
+    if (!await pathExists(sessionsDir)) {
+      return undefined;
+    }
     const glob = new Bun.Glob(mode === "exact" ? `**/*-${threadId}.jsonl` : `**/*-${threadId}*.jsonl`);
     let best: AgentSession | undefined;
 
@@ -129,6 +132,9 @@ export class ClaudeSessionDetectAdapter implements SessionDetectPort {
   private async findClaudeProjectSession(sessionId: string): Promise<AgentSession | undefined> {
     try {
       const projectsDir = this.resolveClaudeProjectsDir();
+      if (!await pathExists(projectsDir)) {
+        return undefined;
+      }
       const glob = new Bun.Glob(`**/${sessionId}.jsonl`);
       let best: AgentSession | undefined;
 

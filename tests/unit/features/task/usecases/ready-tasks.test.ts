@@ -24,7 +24,7 @@ describe("readyTasks", () => {
     const pending = await createTask(store, { title: "keep pending" });
     const working = await createTask(store, { title: "working" });
     await claimTask(store, working.id, { sessionId: "alice" });
-    await updateTask(store, working.id, { status: "in_progress" });
+    await updateTask(store, working.id, { status: "in_progress" }, { sessionId: "alice" });
     const done = await createTask(store, { title: "done" });
     await updateTask(store, done.id, { status: "completed", reason: "done" });
 
@@ -92,7 +92,7 @@ describe("readyTasks", () => {
     };
 
     await claimTask(store, blocker.id, { sessionId: "alice" });
-    await updateTask(store, blocker.id, { status: "in_progress" });
+    await updateTask(store, blocker.id, { status: "in_progress" }, { sessionId: "alice" });
     const result = await readyTasks(store, {}, new Date(), candidateStore);
     expect(result).toEqual([]);
   });
