@@ -27,7 +27,7 @@ import type { WorkflowTemplate } from "./workflow-types.js";
 export const MISSION_ID_PATTERN = /^\d{4}-\d{2}-\d{2}-\d{3}$/;
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/;
 export const FEATURE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
-export const WORKER_TYPE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:_-]*$/;
+export const AGENT_TYPE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:_-]*$/;
 
 // ============================
 // Zod Schemas
@@ -137,7 +137,7 @@ export const FeatureSchema = z.object({
   status: z.enum(["pending", "assigned", "in-progress", "review", "done", "blocked"]),
   title: z.string().min(1),
   description: z.string(),
-  workerType: z.string().regex(WORKER_TYPE_PATTERN),
+  agentType: z.string().regex(AGENT_TYPE_PATTERN),
   verificationSteps: z.array(z.string().min(1)).min(1),
   dependsOn: z.array(z.string()).default([]),
   fulfills: z.array(z.string()).default([]),
@@ -231,7 +231,7 @@ export const CreateFeatureInputSchema = z.object({
   milestoneId: z.string().min(1),
   title: z.string().min(1),
   description: z.string(),
-  workerType: z.string().regex(WORKER_TYPE_PATTERN),
+  agentType: z.string().regex(AGENT_TYPE_PATTERN),
   verificationSteps: z.array(z.string().min(1)).min(1),
   dependsOn: z.array(z.string()).optional(),
   fulfills: z.array(z.string()).optional(),
@@ -252,7 +252,7 @@ const MissionPlanFeatureSchema = z.object({
   milestoneId: z.string().min(1),
   title: z.string().min(1),
   description: z.string(),
-  workerType: z.string().regex(WORKER_TYPE_PATTERN),
+  agentType: z.string().regex(AGENT_TYPE_PATTERN),
   verificationSteps: z.array(z.string().min(1)).min(1),
   dependsOn: z.array(z.string()).optional(),
   fulfills: z.array(z.string()).optional(),

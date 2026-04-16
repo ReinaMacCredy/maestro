@@ -103,7 +103,7 @@ export function buildModalOptions(state: AppState): ModalOptions | undefined {
       items: state.snapshot.features.length > 0
         ? state.snapshot.features.map((feature) => ({
           label: feature.title,
-          detail: `${feature.id} · ${FEATURE_STATUS_LABEL[feature.status]} · ${feature.workerType}`,
+          detail: `${feature.id} · ${FEATURE_STATUS_LABEL[feature.status]} · ${feature.agentType}`,
           hint: feature.hasReport ? "report" : undefined,
           section: "Mission",
         }))
@@ -389,7 +389,7 @@ function buildAgentGridModal(
     eyebrow: "Worker status and feature assignments.",
     items: grid.length > 0
       ? grid.map((row) => ({
-          label: formatAgentLabel(row.workerType),
+          label: formatAgentLabel(row.agentType),
           detail: AGENT_STATUS_LABEL[row.status],
           hint: `${row.completedCount}/${row.featureCount}`,
         }))
@@ -397,7 +397,7 @@ function buildAgentGridModal(
     selectedIndex: Math.min(state.modal.selectedIndex, Math.max(0, grid.length - 1)),
     detailItems: selected
       ? [
-          { text: `Worker: ${formatAgentLabel(selected.workerType)}` },
+          { text: `Worker: ${formatAgentLabel(selected.agentType)}` },
           { text: `Status: ${AGENT_STATUS_LABEL[selected.status]}` },
           ...(selected.activeFeatureId
             ? [{ text: `Active: ${selected.activeFeatureId}`, detail: selected.activeFeatureTitle }]
@@ -443,7 +443,7 @@ function buildDispatchModal(
     items: queue.length > 0
       ? queue.map((item) => ({
           label: item.featureTitle,
-          detail: `${item.workerType} -- ${item.milestoneTitle}`,
+          detail: `${item.agentType} -- ${item.milestoneTitle}`,
           hint: item.featureId,
         }))
       : [{ label: "No features ready for dispatch", selectable: false, tone: "muted" as const }],
@@ -452,7 +452,7 @@ function buildDispatchModal(
       ? [
           { text: `Feature: ${selected.featureId}`, detail: selected.featureTitle },
           { text: `Milestone: ${selected.milestoneTitle} (#${selected.milestoneOrder})` },
-          { text: `Worker: ${formatAgentLabel(selected.workerType)}` },
+          { text: `Worker: ${formatAgentLabel(selected.agentType)}` },
         ]
       : [{ text: "Select a feature to view dispatch details" }],
     footer,

@@ -48,7 +48,7 @@ async function writeBundlePlan(cwd: string): Promise<string> {
             milestoneId: "m1",
             title: "Ship the core",
             description: "Do the thing",
-            workerType: "implementer",
+            agentType: "implementer",
             verificationSteps: ["verify it"],
             fulfills: ["assertion-core-1"],
           },

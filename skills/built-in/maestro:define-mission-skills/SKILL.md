@@ -158,7 +158,7 @@ After creating a skill, validate it:
 2. **Name consistency**: File path matches `name` in frontmatter
 3. **Procedures clear**: Work procedure has actionable steps
 
-**Next step**: after the skill passes validation, return to the caller that invoked you. If `maestro:mission-planning` sent you here, return to its Step 3 (Match worker types) to assign the new workerType to the feature that triggered this registration. If `maestro:conduct` sent you here mid-execution, return to conduct so it can dispatch the feature with the new workerType.
+**Next step**: after the skill passes validation, return to the caller that invoked you. If `maestro:mission-planning` sent you here, return to its Step 3 (Match worker types) to assign the new agentType to the feature that triggered this registration. If `maestro:conduct` sent you here mid-execution, return to conduct so it can dispatch the feature with the new agentType.
 4. **Handoff documented**: Clear what the handoff should contain
 
 ---
@@ -180,4 +180,4 @@ After creating a skill, validate it:
 3. **Document return conditions**: Clearly state when to return to orchestrator
 4. **Include verification**: Every skill should specify how to verify its work
 5. **Keep skills focused**: One skill = one responsibility
-6. **Document lookup order**: Runtime workers load `.maestro/skills/{workerType}/SKILL.md` first, then fall back to `skills/built-in/{workerType}/SKILL.md`
+6. **Document lookup order**: Runtime workers load `.maestro/skills/{agentType}/SKILL.md` first, then fall back to `skills/built-in/{agentType}/SKILL.md`

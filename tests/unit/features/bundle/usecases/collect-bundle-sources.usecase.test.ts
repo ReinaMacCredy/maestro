@@ -67,7 +67,7 @@ function buildFeature(id: string, milestoneId: string): Feature {
     status: "done",
     title: `Feature ${id}`,
     description: "desc",
-    workerType: "implementer",
+    agentType: "implementer",
     verificationSteps: [],
     dependsOn: [],
     fulfills: [],

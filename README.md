@@ -174,7 +174,7 @@ This creates the local `.maestro/` workspace for the current repository.
       "milestoneId": "plan",
       "title": "Plan the auth flow",
       "description": "Define the login shape, risks, and acceptance criteria",
-      "workerType": "codex",
+      "agentType": "codex",
       "verificationSteps": [
         "Review the proposed flow with the team"
       ]
@@ -184,7 +184,7 @@ This creates the local `.maestro/` workspace for the current repository.
       "milestoneId": "implement",
       "title": "Implement the auth flow",
       "description": "Build the first working authentication slice",
-      "workerType": "codex",
+      "agentType": "codex",
       "dependsOn": [
         "auth-plan"
       ],

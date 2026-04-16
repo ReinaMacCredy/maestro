@@ -66,8 +66,8 @@ This project uses Maestro for local bootstrap and runtime orchestration.
 
 ## Worker Skill Lookup
 
-1. \`.maestro/skills/{workerType}/SKILL.md\`
-2. \`skills/built-in/{workerType}/SKILL.md\`
+1. \`.maestro/skills/{agentType}/SKILL.md\`
+2. \`skills/built-in/{agentType}/SKILL.md\`
 
 ## Bootstrap Assets
 

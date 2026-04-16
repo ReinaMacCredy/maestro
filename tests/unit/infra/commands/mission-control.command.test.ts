@@ -36,7 +36,7 @@ function createSamplePlan(): object {
       { id: "m1", title: "Milestone 1", description: "First", order: 0 },
     ],
     features: [
-      { id: "f1", milestoneId: "m1", title: "Feature 1", description: "First feature", workerType: "test-skill", verificationSteps: ["check it"] },
+      { id: "f1", milestoneId: "m1", title: "Feature 1", description: "First feature", agentType: "test-skill", verificationSteps: ["check it"] },
     ],
   };
 }

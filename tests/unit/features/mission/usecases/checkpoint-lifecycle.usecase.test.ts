@@ -59,7 +59,7 @@ function createTestFeature(
     status,
     title: `Feature ${id}`,
     description: "Test feature",
-      workerType: "test-skill",
+      agentType: "test-skill",
       verificationSteps: ["step1"],
       dependsOn: [],
       fulfills: [],

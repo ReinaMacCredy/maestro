@@ -360,7 +360,7 @@ export function buildFocusLines(
     keyValueLine("id", preview.id),
     keyValueLine("status", FEATURE_TASK_STATUS_LABEL[preview.status].toLowerCase()),
     keyValueLine("milestone", preview.milestoneTitle),
-    keyValueLine("worker", preview.workerType),
+    keyValueLine("agent", preview.agentType),
     blankLine(),
     keyValueLine(
       "blocked by",
@@ -526,7 +526,7 @@ function buildActivitySummary(
     return [
       boldLine(snapshot.activeFeature.title),
       normalLine(
-        `${snapshot.activeFeature.id} · ${FEATURE_STATUS_LABEL[snapshot.activeFeature.status]} · ${snapshot.activeFeature.workerType}`,
+        `${snapshot.activeFeature.id} · ${FEATURE_STATUS_LABEL[snapshot.activeFeature.status]} · ${snapshot.activeFeature.agentType}`,
         OPEN_TUI_THEME.muted,
       ),
       keyValueLine("state", "Waiting to start next feature"),

@@ -14,7 +14,7 @@ const makeCreateInput = (overrides: Partial<CreateFeatureInput> = {}): CreateFea
   milestoneId: "m1",
   title: "Test Feature",
   description: "A test feature",
-  workerType: "test-skill",
+  agentType: "test-skill",
   verificationSteps: ["step 1", "step 2"],
   ...overrides,
 });

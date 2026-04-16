@@ -191,7 +191,7 @@ export async function buildSnapshot(
       title: f.title,
       status: f.status,
       milestoneId: f.milestoneId,
-      workerType: f.workerType,
+      agentType: f.agentType,
       hasReport: f.report !== undefined && f.report !== null,
       blockedByIds: preview?.blockedBy?.map((item) => item.id) ?? [],
       blockedByLabel: buildBlockedByLabel(preview?.blockedBy ?? []),
@@ -586,7 +586,7 @@ function buildTaskPreview(
     status: active.status,
     milestoneId: active.milestoneId,
     milestoneTitle: milestone?.title ?? active.milestoneId,
-    workerType: active.workerType,
+    agentType: active.agentType,
     description: active.description,
     preconditions: active.preconditions,
     expectedBehavior: active.expectedBehavior,
@@ -723,9 +723,9 @@ export function buildAgentGrid(
 ): readonly AgentGridRow[] {
   const byWorker = new Map<string, Feature[]>();
   for (const f of features) {
-    const bucket = byWorker.get(f.workerType) ?? [];
+    const bucket = byWorker.get(f.agentType) ?? [];
     bucket.push(f);
-    byWorker.set(f.workerType, bucket);
+    byWorker.set(f.agentType, bucket);
   }
 
   const pendingHandoffsByAgent = new Map<string, number>();
@@ -737,19 +737,19 @@ export function buildAgentGrid(
   }
 
   const rows: AgentGridRow[] = [];
-  const workerTypes = new Set<string>([
+  const agentTypes = new Set<string>([
     ...byWorker.keys(),
     ...pendingHandoffsByAgent.keys(),
   ]);
 
-  for (const workerType of workerTypes) {
-    const workerFeatures = byWorker.get(workerType) ?? [];
+  for (const agentType of agentTypes) {
+    const workerFeatures = byWorker.get(agentType) ?? [];
     const active = workerFeatures.find(
       (f) => f.status === "assigned" || f.status === "in-progress",
     );
     const hasReview = workerFeatures.some((f) => f.status === "review");
     const allDone = workerFeatures.length > 0 && workerFeatures.every((f) => f.status === "done");
-    const pendingHandoffCount = pendingHandoffsByAgent.get(workerType) ?? 0;
+    const pendingHandoffCount = pendingHandoffsByAgent.get(agentType) ?? 0;
     const isStale = active !== undefined
       && (Date.now() - new Date(active.updatedAt).getTime()) > STALE_THRESHOLD_MS;
 
@@ -761,7 +761,7 @@ export function buildAgentGrid(
     else status = "waiting";
 
     rows.push({
-      workerType,
+      agentType,
       status,
       activeFeatureId: active?.id,
       activeFeatureTitle: active?.title,
@@ -799,7 +799,7 @@ export function buildDispatchQueue(
         milestoneId: f.milestoneId,
         milestoneTitle: milestone?.title ?? f.milestoneId,
         milestoneOrder: milestone?.order ?? 0,
-        workerType: f.workerType,
+        agentType: f.agentType,
       };
     })
     .sort((a, b) => a.milestoneOrder - b.milestoneOrder);

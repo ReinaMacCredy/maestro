@@ -24,7 +24,7 @@ function makeFeature(overrides: Partial<Feature> = {}): Feature {
     status: "pending",
     title: "Feature 1",
     description: "First feature",
-    workerType: "test-skill",
+    agentType: "test-skill",
     verificationSteps: [],
     dependsOn: [],
     fulfills: [],

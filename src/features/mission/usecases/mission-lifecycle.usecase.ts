@@ -157,7 +157,7 @@ export async function createMission(
         milestoneId: featureDef.milestoneId,
         title: featureDef.title,
         description: featureDef.description,
-        workerType: featureDef.workerType,
+        agentType: featureDef.agentType,
         verificationSteps: featureDef.verificationSteps,
         dependsOn: featureDef.dependsOn ?? [],
         fulfills: featureDef.fulfills ?? [],

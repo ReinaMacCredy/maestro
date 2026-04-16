@@ -28,7 +28,7 @@ async function setupMission(): Promise<{ missionId: string; featureId: string }>
         milestoneId: "m1",
         title: "Feature 1",
         description: "first",
-        workerType: "test-skill",
+        agentType: "test-skill",
         verificationSteps: ["step 1"],
         dependsOn: [],
         fulfills: ["assertion1"],

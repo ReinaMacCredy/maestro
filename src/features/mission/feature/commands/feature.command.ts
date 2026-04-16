@@ -189,7 +189,7 @@ function formatFeatureUpdate(result: UpdateFeatureResult): string[] {
 function formatPromptResult(result: GenerateWorkerPromptResult): string[] {
   const lines: string[] = [
     `[ok] Worker prompt generated for: ${result.featureId}`,
-    `  Worker type: ${result.workerType}`,
+    `  Agent type: ${result.agentType}`,
   ];
 
   if (result.writtenTo) {

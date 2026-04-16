@@ -191,7 +191,7 @@ export function mockFeatureStore(
         status: "pending",
           title: input.title,
           description: input.description,
-          workerType: input.workerType,
+          agentType: input.agentType,
           verificationSteps: input.verificationSteps,
           dependsOn: input.dependsOn ?? [],
           fulfills: input.fulfills ?? [],

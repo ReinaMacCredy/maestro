@@ -56,7 +56,7 @@ function createSamplePlan(): object {
         milestoneId: "m1",
         title: "Feature 1",
         description: "First feature",
-        workerType: "test-skill",
+        agentType: "test-skill",
         verificationSteps: ["step1", "step2"],
         fulfills: ["assertion-1"],
       },
@@ -65,7 +65,7 @@ function createSamplePlan(): object {
         milestoneId: "m1",
         title: "Feature 2",
         description: "Second feature",
-        workerType: "test-skill",
+        agentType: "test-skill",
         verificationSteps: ["step3"],
         dependsOn: ["f1"],
       },
@@ -74,7 +74,7 @@ function createSamplePlan(): object {
         milestoneId: "m2",
         title: "Feature 3",
         description: "Third feature",
-        workerType: "test-skill",
+        agentType: "test-skill",
         verificationSteps: ["step4"],
       },
     ],
@@ -560,7 +560,7 @@ describe("feature CLI commands", () => {
 
       expect(exitCode).toBe(0);
       expect(stdout).toContain("Worker prompt generated for: f1");
-      expect(stdout).toContain("Worker type: test-skill");
+      expect(stdout).toContain("Agent type: test-skill");
       expect(stdout).toContain("--- PROMPT BEGIN ---");
       expect(stdout).toContain("--- PROMPT END ---");
       expect(stdout).toContain("Worker Assignment: Feature 1");
@@ -580,7 +580,7 @@ describe("feature CLI commands", () => {
       const result = JSON.parse(stdout);
       expect(result.prompt).toBeDefined();
       expect(result.featureId).toBe("f1");
-      expect(result.workerType).toBe("test-skill");
+      expect(result.agentType).toBe("test-skill");
       expect(result.writtenTo).toBeDefined();
       expect(result.writtenTo.length).toBe(1);
       expect(result.writtenTo[0]).toContain("workers/f1/prompt.md");
