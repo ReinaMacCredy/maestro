@@ -68,6 +68,42 @@ describe("JsonlTaskStoreAdapter", () => {
     expect(rawAfterRead.trim()).toBe(`${legacyRow}\n${blockerRow}`);
   });
 
+  it("preserves orphan blocker references across unrelated writes", async () => {
+    const tasksDir = join(tmpDir, ".maestro", "tasks");
+    const jsonlPath = join(tasksDir, "tasks.jsonl");
+    await mkdir(tasksDir, { recursive: true });
+    await Bun.write(
+      jsonlPath,
+      `${JSON.stringify({
+        id: "tsk-0f0f0f",
+        title: "Legacy",
+        type: "task",
+        priority: 2,
+        status: "pending",
+        labels: [],
+        blocks: ["tsk-feed02"],
+        blockedBy: ["tsk-dead01"],
+        createdAt: "2026-04-12T00:00:00.000Z",
+        updatedAt: "2026-04-12T00:00:00.000Z",
+      })}\n`,
+    );
+
+    const loaded = await store.get("tsk-0f0f0f");
+    expect(loaded?.blocks).toEqual(["tsk-feed02"]);
+    expect(loaded?.blockedBy).toEqual(["tsk-dead01"]);
+
+    await store.update("tsk-0f0f0f", { title: "Still blocked" });
+
+    const rewritten = JSON.parse((await readFile(jsonlPath, "utf8")).trim()) as {
+      blocks: string[];
+      blockedBy: string[];
+      title: string;
+    };
+    expect(rewritten.title).toBe("Still blocked");
+    expect(rewritten.blocks).toEqual(["tsk-feed02"]);
+    expect(rewritten.blockedBy).toEqual(["tsk-dead01"]);
+  });
+
   it("creates reciprocal blocker edges", async () => {
     const blocker = await store.create({ title: "Blocker" });
     const blocked = await store.create({ title: "Blocked", blockedBy: [blocker.id] });

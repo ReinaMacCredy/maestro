@@ -162,6 +162,16 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
       if (existing.assignee && nextStatus === "pending") {
         throw claimedTaskCannotBeReopened(id);
       }
+      if (
+        patch.status !== undefined &&
+        patch.status !== existing.status &&
+        (patch.status === "in_progress" || patch.status === "completed")
+      ) {
+        const blockers = getOpenBlockers(existing, tasks);
+        if (blockers.length > 0) {
+          throw taskBlockedByOpenTasks(id, blockers);
+        }
+      }
 
       const labels = applyLabelPatch(existing.labels, patch.addLabels, patch.removeLabels);
       const reason = patch.reason === undefined
@@ -382,6 +392,10 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
       if (existing.status === "completed") {
         throw taskAlreadyCompleted(id);
       }
+      const blockers = getOpenBlockers(existing, tasks);
+      if (blockers.length > 0) {
+        throw taskBlockedByOpenTasks(id, blockers);
+      }
 
       const completed: Task = {
         ...existing,
@@ -595,7 +609,7 @@ function ensureTasksExist(
 function getOpenBlockers(task: Task, tasks: ReadonlyMap<string, Task>): readonly string[] {
   return task.blockedBy.filter((blockerId) => {
     const blocker = tasks.get(blockerId);
-    return blocker !== undefined && blocker.status !== "completed";
+    return blocker === undefined || blocker.status !== "completed";
   });
 }
 
@@ -605,8 +619,8 @@ function normalizeGraph(tasks: ReadonlyMap<string, Task>): Map<string, Task> {
   for (const [id, task] of tasks.entries()) {
     normalized.set(id, {
       ...task,
-      blocks: dedupeValues(task.blocks.filter((blockedId) => tasks.has(blockedId))),
-      blockedBy: dedupeValues(task.blockedBy.filter((blockerId) => tasks.has(blockerId))),
+      blocks: dedupeValues(task.blocks),
+      blockedBy: dedupeValues(task.blockedBy),
     });
   }
 

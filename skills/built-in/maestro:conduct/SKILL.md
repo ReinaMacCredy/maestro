@@ -166,8 +166,8 @@ Break the confirmed work into 2-7 discrete tasks. Each task should be:
 Create tasks in the maestro task graph:
 
 ```bash
-maestro task create "Add input validation for email field" --label conduct
-maestro task create "Write unit tests for validation" --label conduct --depends-on <prevId>
+maestro task create "Add input validation for email field" --labels conduct
+maestro task create "Write unit tests for validation" --labels conduct --blocked-by <prevId>
 ```
 
 Show the breakdown to the user before dispatching. Include estimated dependencies and which tasks can run in parallel.
@@ -181,7 +181,8 @@ Before parallel dispatch, apply the independence check from `reference/independe
 For each task, dispatch a worker using the five-section brief format (see below). Claim the task before dispatching:
 
 ```bash
-maestro task update <taskId> --claim
+maestro task claim <taskId> --session <worker-id>
+maestro task update <taskId> --status in_progress
 ```
 
 See `reference/brief-templates.md` for copy-paste templates for common scenarios.
@@ -195,7 +196,7 @@ When workers return:
 3. Surface what you learned, what succeeded, what needs attention
 4. Close completed tasks:
    ```bash
-   maestro task close <taskId> --reason "implemented: <summary>"
+   maestro task update <taskId> --status completed --reason "implemented: <summary>"
    ```
 5. Present the user with options for the next step
 

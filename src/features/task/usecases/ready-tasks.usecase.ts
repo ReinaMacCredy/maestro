@@ -66,7 +66,7 @@ function hasOpenBlockers(
 ): boolean {
   for (const blockerId of task.blockedBy) {
     const blocker = byId.get(blockerId);
-    if (blocker && blocker.status !== "completed") {
+    if (!blocker || blocker.status !== "completed") {
       return true;
     }
   }

@@ -222,30 +222,35 @@ export function assertNoBlockCycle(
     if (blockedTaskId === blockerId) {
       throw taskSelfBlock(blockerId);
     }
-    walkBlocks(blockedTaskId, [blockerId, blockedTaskId], blockerId, tasks, new Set([blockerId, blockedTaskId]));
-  }
-}
+    const visited = new Set<string>([blockerId, blockedTaskId]);
+    const stack: Array<{ currentId: string; chain: readonly string[] }> = [
+      { currentId: blockedTaskId, chain: [blockerId, blockedTaskId] },
+    ];
 
-function walkBlocks(
-  currentId: string,
-  chain: readonly string[],
-  blockerId: string,
-  tasks: ReadonlyMap<string, Task>,
-  visiting: Set<string>,
-): void {
-  const current = tasks.get(currentId);
-  if (!current) return;
+    while (stack.length > 0) {
+      const currentEntry = stack.pop();
+      if (!currentEntry) {
+        continue;
+      }
+      const current = tasks.get(currentEntry.currentId);
+      if (!current) {
+        continue;
+      }
 
-  for (const blockedTaskId of current.blocks) {
-    if (blockedTaskId === blockerId) {
-      throw taskBlockCycle(blockerId, [...chain, blockerId]);
+      for (const nextBlockedId of current.blocks) {
+        if (nextBlockedId === blockerId) {
+          throw taskBlockCycle(blockerId, [...currentEntry.chain, blockerId]);
+        }
+        if (visited.has(nextBlockedId)) {
+          continue;
+        }
+        visited.add(nextBlockedId);
+        stack.push({
+          currentId: nextBlockedId,
+          chain: [...currentEntry.chain, nextBlockedId],
+        });
+      }
     }
-    if (visiting.has(blockedTaskId)) {
-      continue;
-    }
-    visiting.add(blockedTaskId);
-    walkBlocks(blockedTaskId, [...chain, blockedTaskId], blockerId, tasks, visiting);
-    visiting.delete(blockedTaskId);
   }
 }
 

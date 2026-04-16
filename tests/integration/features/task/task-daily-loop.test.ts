@@ -85,4 +85,16 @@ describe("task CLI daily loop", () => {
     const removed = await runCli(["task", "unblock", blockerId, blockedId, "--json"], tmpDir);
     expect(expectJson<{ blocks: string[] }>(removed).blocks).toEqual([]);
   }, SLOW_CLI_TIMEOUT_MS);
+
+  it("releases unresolved tasks owned by a dead session through the recovery command", async () => {
+    const id = (await runCli(["task", "q", "recover me"], tmpDir)).stdout;
+    await runCli(["task", "claim", id, "--session", "dead-session", "--json"], tmpDir);
+    await runCli(["task", "update", id, "--status", "in_progress", "--json"], tmpDir);
+
+    const released = await runCli(["task", "release-owned", "dead-session", "--json"], tmpDir);
+    const payload = expectJson<Array<{ id: string; status: string; assignee?: string }>>(released);
+    expect(payload).toHaveLength(1);
+    expect(payload[0]).toEqual(expect.objectContaining({ id, status: "pending" }));
+    expect(payload[0]?.assignee).toBeUndefined();
+  }, SLOW_CLI_TIMEOUT_MS);
 });

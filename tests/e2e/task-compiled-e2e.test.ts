@@ -196,8 +196,8 @@ describe("compiled task feature E2E", () => {
     SLOW_CLI_TIMEOUT_MS,
   );
 
-  it(
-    "supports blocker lifecycle edits after creation",
+    it(
+      "supports blocker lifecycle edits after creation",
     async () => {
       const blockerId = (await runCompiled(["task", "q", "blocker"], tmpDir)).stdout;
       const blockedId = (await runCompiled(["task", "q", "blocked"], tmpDir)).stdout;
@@ -227,12 +227,28 @@ describe("compiled task feature E2E", () => {
       expect(expectJson<Array<{ id: string }>>(unblockedReady).map((task) => task.id).sort()).toEqual(
         [blockerId, blockedId].sort(),
       );
-    },
-    SLOW_CLI_TIMEOUT_MS,
-  );
+      },
+      SLOW_CLI_TIMEOUT_MS,
+    );
 
-  it(
-    "enforces ownership and status invariants through update paths",
+    it(
+      "releases unresolved tasks owned by a dead session",
+      async () => {
+        const id = (await runCompiled(["task", "q", "recover me"], tmpDir)).stdout;
+        await runCompiled(["task", "claim", id, "--session", "dead-session", "--json"], tmpDir);
+        await runCompiled(["task", "update", id, "--status", "in_progress", "--json"], tmpDir);
+
+        const released = await runCompiled(["task", "release-owned", "dead-session", "--json"], tmpDir);
+        const payload = expectJson<Array<{ id: string; status: string; assignee?: string }>>(released);
+        expect(payload).toHaveLength(1);
+        expect(payload[0]).toEqual(expect.objectContaining({ id, status: "pending" }));
+        expect(payload[0]?.assignee).toBeUndefined();
+      },
+      SLOW_CLI_TIMEOUT_MS,
+    );
+
+    it(
+      "enforces ownership and status invariants through update paths",
     async () => {
       const id = (await runCompiled(["task", "q", "ownership invariants"], tmpDir)).stdout;
       await runCompiled(["task", "claim", id, "--session", "session-a", "--json"], tmpDir);
@@ -252,12 +268,21 @@ describe("compiled task feature E2E", () => {
         tmpDir,
       );
 
-      const completedEdit = await runCompiled(["task", "update", completedId, "--title", "still mutable?"], tmpDir);
-      expect(completedEdit.exitCode).not.toBe(0);
-      expect(completedEdit.stderr).toContain("already completed");
-    },
-    SLOW_CLI_TIMEOUT_MS,
-  );
+        const completedEdit = await runCompiled(["task", "update", completedId, "--title", "still mutable?"], tmpDir);
+        expect(completedEdit.exitCode).not.toBe(0);
+        expect(completedEdit.stderr).toContain("already completed");
+
+        const blockerId = (await runCompiled(["task", "q", "blocking"], tmpDir)).stdout;
+        const blockedId = (await runCompiled(["task", "q", "blocked later", "--blocked-by", blockerId], tmpDir)).stdout;
+        const blockedComplete = await runCompiled(
+          ["task", "update", blockedId, "--status", "completed", "--reason", "nope"],
+          tmpDir,
+        );
+        expect(blockedComplete.exitCode).not.toBe(0);
+        expect(blockedComplete.stderr).toContain("blocked by unresolved");
+      },
+      SLOW_CLI_TIMEOUT_MS,
+    );
 
   it(
     "validates --blocked-by against existing tasks",

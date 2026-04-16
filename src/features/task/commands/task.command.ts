@@ -10,6 +10,7 @@ import { claimTask } from "../usecases/claim-task.usecase.js";
 import { unclaimTask } from "../usecases/unclaim-task.usecase.js";
 import { blockTasks, unblockTasks } from "../usecases/manage-task-dependencies.usecase.js";
 import { closeTask } from "../usecases/close-task.usecase.js";
+import { releaseOwnedTasks } from "../usecases/release-owned-tasks.usecase.js";
 import { readyTasks } from "../usecases/ready-tasks.usecase.js";
 import { captureTaskCandidate } from "../usecases/capture-task-candidate.usecase.js";
 import type {
@@ -54,6 +55,7 @@ export function registerTaskCommand(program: Command): void {
   registerUpdateCommand(taskCmd, program);
   registerClaimCommand(taskCmd, program);
   registerUnclaimCommand(taskCmd, program);
+  registerReleaseOwnedCommand(taskCmd, program);
   registerBlockCommand(taskCmd, program);
   registerUnblockCommand(taskCmd, program);
   registerLegacyDepsCommand(taskCmd);
@@ -286,6 +288,28 @@ function registerUnclaimCommand(taskCmd: Command, program: Command): void {
         `[ok] Task unclaimed: ${task.id}`,
         `  Status: ${task.status}`,
       ]);
+    });
+}
+
+function registerReleaseOwnedCommand(taskCmd: Command, program: Command): void {
+  taskCmd
+    .command("release-owned <sessionId>")
+    .description("Release unresolved tasks owned by a dead or stale session")
+    .option("--json", "Output as JSON")
+    .action(async (sessionId: string, opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+      const released = await releaseOwnedTasks(services.taskStore, sessionId.trim());
+
+      output(isJson, released, (tasks) => {
+        if (tasks.length === 0) {
+          return [`No unresolved tasks owned by ${sessionId.trim()}`];
+        }
+        return [
+          `[ok] Released ${tasks.length} task(s) owned by ${sessionId.trim()}`,
+          ...tasks.map((task) => `  ${task.id} -> ${task.status}`),
+        ];
+      });
     });
 }
 

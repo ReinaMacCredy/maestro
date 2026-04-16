@@ -172,9 +172,9 @@ export function taskBlockedByOpenTasks(id: string, blockers: readonly string[]):
   return new MaestroError(
     `Task ${id} is blocked by unresolved task(s): ${blockers.join(", ")}`,
     [
-      "Resolve or complete the blocker tasks before claiming this task",
+      "Resolve or complete the blocker tasks before starting or completing this task",
       "Use 'maestro task show <id>' to inspect blocker relationships",
-      "Blocked tasks cannot be claimed, even with --force",
+      "Blocked tasks cannot be claimed or completed while blockers remain unresolved",
     ],
   );
 }

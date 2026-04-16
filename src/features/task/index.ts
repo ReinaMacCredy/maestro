@@ -54,6 +54,7 @@ export {
   unblockTasks,
 } from "./usecases/manage-task-dependencies.usecase.js";
 export { closeTask } from "./usecases/close-task.usecase.js";
+export { releaseOwnedTasks } from "./usecases/release-owned-tasks.usecase.js";
 export {
   readyTasks,
   type TaskBriefing,

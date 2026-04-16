@@ -62,6 +62,15 @@ describe("updateTask", () => {
     expect(completed.closeReason).toBe("shipped");
   });
 
+  it("rejects completing a task while unresolved blockers remain", async () => {
+    const blocker = await createTask(store, { title: "Blocker" });
+    const blocked = await createTask(store, { title: "Blocked", blockedBy: [blocker.id] });
+
+    await expect(
+      updateTask(store, blocked.id, { status: "completed", reason: "skipped ahead" }),
+    ).rejects.toThrow(MaestroError);
+  });
+
   it("rejects completion reasons without completed status", async () => {
     const task = await createTask(store, { title: "Oops" });
 

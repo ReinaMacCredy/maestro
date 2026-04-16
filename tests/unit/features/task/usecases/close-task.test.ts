@@ -30,4 +30,11 @@ describe("closeTask compatibility alias", () => {
 
     await expect(closeTask(store, task.id, { reason: "retry" })).rejects.toThrow(MaestroError);
   });
+
+  it("rejects completing a task while blockers remain unresolved", async () => {
+    const blocker = await createTask(store, { title: "Blocker" });
+    const blocked = await createTask(store, { title: "Blocked", blockedBy: [blocker.id] });
+
+    await expect(closeTask(store, blocked.id, { reason: "skipped ahead" })).rejects.toThrow(MaestroError);
+  });
 });
