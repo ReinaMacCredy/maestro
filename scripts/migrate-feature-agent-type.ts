@@ -1,60 +1,34 @@
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import { join } from "node:path";
+import { readJson, writeJson } from "@/shared/lib/fs.js";
 
 const MISSIONS_DIR = join(process.cwd(), ".maestro", "missions");
 
 interface FeatureRecord {
-  [key: string]: unknown;
+  readonly workerType?: unknown;
+  readonly agentType?: unknown;
+  readonly [key: string]: unknown;
 }
 
 async function migrateFile(path: string): Promise<"migrated" | "skipped" | "error"> {
-  let raw: string;
-  try {
-    raw = await readFile(path, "utf8");
-  } catch {
-    return "error";
-  }
-
-  let parsed: FeatureRecord;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    console.error(`[!] Failed to parse ${path}`);
-    return "error";
-  }
-
-  if (!("workerType" in parsed)) {
-    return "skipped";
-  }
+  const parsed = await readJson<FeatureRecord>(path);
+  if (!parsed) return "error";
+  if (!("workerType" in parsed)) return "skipped";
 
   const { workerType, ...rest } = parsed;
-  const migrated: FeatureRecord = {};
-  for (const key of Object.keys(rest)) {
-    migrated[key] = rest[key];
-    if (key === "description") {
-      migrated.agentType = workerType;
-    }
-  }
-  if (!("agentType" in migrated)) {
-    migrated.agentType = workerType;
-  }
-
-  await writeFile(path, JSON.stringify(migrated, null, 2) + "\n");
+  await writeJson(path, { ...rest, agentType: workerType });
   return "migrated";
 }
 
-async function main(): Promise<void> {
+async function collectFeaturePaths(): Promise<string[]> {
   let missionDirs: string[];
   try {
     missionDirs = await readdir(MISSIONS_DIR);
   } catch {
-    console.log("[ok] No .maestro/missions directory. Nothing to migrate.");
-    return;
+    return [];
   }
 
-  let migrated = 0;
-  let skipped = 0;
-
+  const paths: string[] = [];
   for (const missionId of missionDirs) {
     if (missionId.startsWith(".")) continue;
     const featuresDir = join(MISSIONS_DIR, missionId, "features");
@@ -65,14 +39,29 @@ async function main(): Promise<void> {
       continue;
     }
     for (const entry of entries) {
-      if (!entry.endsWith(".json")) continue;
-      const result = await migrateFile(join(featuresDir, entry));
-      if (result === "migrated") migrated++;
-      if (result === "skipped") skipped++;
+      if (entry.endsWith(".json")) paths.push(join(featuresDir, entry));
     }
   }
+  return paths;
+}
+
+async function main(): Promise<void> {
+  const paths = await collectFeaturePaths();
+  if (paths.length === 0) {
+    console.log("[ok] No .maestro/missions directory. Nothing to migrate.");
+    return;
+  }
+
+  const results = await Promise.all(paths.map(migrateFile));
+  const migrated = results.filter((r) => r === "migrated").length;
+  const skipped = results.filter((r) => r === "skipped").length;
+  const errors = results.filter((r) => r === "error").length;
 
   console.log(`[ok] Migrated ${migrated} files (${skipped} already on new schema)`);
+  if (errors > 0) {
+    console.error(`[!] ${errors} files failed to migrate`);
+    process.exit(1);
+  }
 }
 
 await main();

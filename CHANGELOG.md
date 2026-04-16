@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.38.0 - Rename Feature.workerType to Feature.agentType (BREAKING)
+
+- Rename `Feature.workerType` to `Feature.agentType` across domain types,
+  Zod schemas, TUI DTOs, CLI JSON output, and generated prompt headers.
+  The field names a brand classifier (codex-cli, claude-code, subagent,
+  human, maestro:worker-base etc.) which is the `agent` concept in the
+  conductor model, not the `worker` (role) concept.
+- Rename exported `WORKER_TYPE_PATTERN` constant to `AGENT_TYPE_PATTERN`.
+- CLI stdout now prints `Agent type: <value>` (was `Worker type:`).
+- Generated prompt header is `**Agent Type:** <value>` (was
+  `**Worker Type:**`).
+- Breaking surfaces: mission plan YAML/JSON input contract, persisted
+  `.maestro/missions/<id>/features/*.json` on-disk format, `feature
+  prompt --json` output shape.
+- Migration: run `bun scripts/migrate-feature-agent-type.ts` once to
+  rewrite existing local feature JSON; the script is idempotent.
+- What survives unchanged (intentional, role-level): `maestro:worker-base`
+  skill name, `WorkerReport`, `WorkerReply`, `generateWorkerPrompt`,
+  `.maestro/missions/<id>/workers/` directory, `# Worker Assignment:`
+  prompt H1 header, `Worker skill '...' not found` error message, and
+  all general worker-as-role prose in shipped skills.
+
+## 0.37.5 - Strip pre-conductor worker-dispatch config surface
+
+- Remove the dead worker-dispatch config surface left behind by the
+  2026-04-08 conductor refactor: `execution.defaultWorker`,
+  `workers: { transport, command, args, env }`, `WorkerConfig`,
+  `CliWorkerConfig`, `recommendWorkerFit`, `getWorkerGuidance`,
+  `formatWorkerLabel`, the Mission Control `workers` config tab, and
+  the default-worker picker modal.
+- Remove residual `cassAvailable` fields from `StatusReport` and
+  `MissionControlConfigSummary`; `status --json` no longer emits the
+  field.
+- Remove dead `HIDDEN_CONFIG_KEY_PATTERNS` regex entries for config
+  keys that no longer exist (`supervision.*`, `rotateWorkerOnRetry`,
+  `workers.*.outputMode`).
+- Net delete of ~693 lines; maestro stays a conductor that never spawns
+  workers.
+
 ## 0.37.4 - Inline GitHub release notes
 
 - Publish GitHub releases with readable inline notes instead of only the
