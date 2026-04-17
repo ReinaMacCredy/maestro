@@ -18,6 +18,8 @@ The skill name and optional scope flag.
 - `--project`: Store skill in project `.maestro/skills/` (default runtime lookup path)
 - `--global`: Store skill in personal `~/.maestro/skills/`
 
+When a skill name contains `:`, replace it with `%3A` in the on-disk directory name.
+
 ---
 
 ## Step 1: Validate Prerequisites
@@ -79,15 +81,17 @@ The main body describing:
 **For project-scoped skills:**
 
 ```bash
-mkdir -p .maestro/skills/<skill-name>
-# Create .maestro/skills/<skill-name>/SKILL.md
+mkdir -p .maestro/skills/<skill-dir>
+# Create .maestro/skills/<skill-dir>/SKILL.md
 ```
+
+Where `<skill-dir>` is the skill name with `:` replaced by `%3A`.
 
 **For global skills:**
 
 ```bash
-mkdir -p ~/.maestro/skills/<skill-name>
-# Create ~/.maestro/skills/<skill-name>/SKILL.md
+mkdir -p ~/.maestro/skills/<skill-dir>
+# Create ~/.maestro/skills/<skill-dir>/SKILL.md
 ```
 
 ---
@@ -180,4 +184,4 @@ After creating a skill, validate it:
 3. **Document return conditions**: Clearly state when to return to orchestrator
 4. **Include verification**: Every skill should specify how to verify its work
 5. **Keep skills focused**: One skill = one responsibility
-6. **Document lookup order**: Runtime workers load `.maestro/skills/{agentType}/SKILL.md` first, then fall back to `skills/built-in/{agentType}/SKILL.md`
+6. **Document lookup order**: Runtime workers load `.maestro/skills/{agentType with : replaced by %3A}/SKILL.md` first, then fall back to `skills/built-in/{agentType with : replaced by %3A}/SKILL.md`

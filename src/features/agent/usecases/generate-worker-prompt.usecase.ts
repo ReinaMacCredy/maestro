@@ -33,6 +33,7 @@ import { sanitizeInlinePromptContent, sanitizePromptContent } from "@/shared/lib
 import { dirname, join, resolve } from "node:path";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { assertSafeSegment, resolveWithin } from "@/shared/lib/path-safety.js";
+import { resolveSkillDirectoryName } from "@/shared/lib/skill-path.js";
 
 interface PreviousMilestoneReport {
   readonly featureId: string;
@@ -231,12 +232,13 @@ function isWorkerPromptStores(value: WorkerPromptStores | CorrectionStorePort): 
  */
 async function readWorkerSkill(baseDir: string, agentType: string): Promise<string> {
   assertSafeSegment(agentType, "agent type", AGENT_TYPE_PATTERN, "letters, numbers, colons, dashes, and underscores");
+  const skillDirName = resolveSkillDirectoryName(agentType);
   const searchedPaths: string[] = [];
 
   for (const dir of enumerateSearchRoots(baseDir)) {
     const workspaceSkillPath = resolveWithin(
       join(dir, MAESTRO_DIR, "skills"),
-      join(agentType, "SKILL.md"),
+      join(skillDirName, "SKILL.md"),
       "Workspace skill path",
     );
     searchedPaths.push(workspaceSkillPath);
@@ -247,7 +249,7 @@ async function readWorkerSkill(baseDir: string, agentType: string): Promise<stri
 
     const builtInSkillPath = resolveWithin(
       join(dir, "skills", "built-in"),
-      join(agentType, "SKILL.md"),
+      join(skillDirName, "SKILL.md"),
       "Built-in skill path",
     );
     searchedPaths.push(builtInSkillPath);
@@ -259,14 +261,14 @@ async function readWorkerSkill(baseDir: string, agentType: string): Promise<stri
 
   const primaryPath = searchedPaths[0] ?? resolveWithin(
     join(baseDir, MAESTRO_DIR, "skills"),
-    join(agentType, "SKILL.md"),
+    join(skillDirName, "SKILL.md"),
     "Workspace skill path",
   );
   throw new MaestroError(
     `Worker skill '${agentType}' not found at ${primaryPath}`,
     [
       `Create workspace skill file: ${primaryPath}`,
-      `Or add built-in skill file: skills/built-in/${agentType}/SKILL.md`,
+      `Or add built-in skill file: skills/built-in/${skillDirName}/SKILL.md`,
       `Searched paths: ${searchedPaths.join(", ")}`,
     ],
   );

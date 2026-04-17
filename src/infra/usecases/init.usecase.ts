@@ -10,6 +10,10 @@ import {
   type BuiltInSkillTemplate,
 } from "../domain/built-in-skill-templates.js";
 import { dirExists, ensureDir, readText, writeText } from "@/shared/lib/fs.js";
+import {
+  isManagedSkillDirectoryName,
+  resolveSkillDirectoryName,
+} from "@/shared/lib/skill-path.js";
 import { homedir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { chmod, lstat, readdir, rm } from "node:fs/promises";
@@ -25,7 +29,6 @@ const MANAGED_AGENT_SKILL_ROOTS = [
   [".claude", "skills"],
   [".codex", "skills"],
 ] as const;
-const MANAGED_SKILL_PREFIX = "maestro:";
 
 export interface InitResult {
   readonly created: string[];
@@ -273,7 +276,9 @@ async function syncProjectAgentBuiltInSkills(rootDir: string, created: string[])
 }
 
 async function removeStaleManagedSkillDirs(rootDir: string, skillRoot: string): Promise<void> {
-  const shippedSkillNames = new Set(BUILT_IN_SKILL_TEMPLATES.map((template) => template.name));
+  const shippedSkillDirNames = new Set(
+    BUILT_IN_SKILL_TEMPLATES.map((template) => resolveSkillDirectoryName(template.name)),
+  );
   const entries = (await readdir(skillRoot, { withFileTypes: true }))
     .sort((left, right) => left.name.localeCompare(right.name));
 
@@ -282,7 +287,7 @@ async function removeStaleManagedSkillDirs(rootDir: string, skillRoot: string): 
       continue;
     }
 
-    if (!isManagedSkillName(entry.name) || shippedSkillNames.has(entry.name)) {
+    if (!isManagedSkillDirectoryName(entry.name) || shippedSkillDirNames.has(entry.name)) {
       continue;
     }
 
@@ -298,7 +303,7 @@ async function syncManagedSkillTemplate(
   template: BuiltInSkillTemplate,
   created: string[],
 ): Promise<void> {
-  const skillDir = join(skillRoot, template.name);
+  const skillDir = join(skillRoot, resolveSkillDirectoryName(template.name));
   await assertProjectLocalPathSafe(rootDir, skillDir);
 
   if (await skillDirMatchesTemplate(skillDir, template)) {
@@ -342,11 +347,6 @@ async function skillDirMatchesTemplate(skillDir: string, template: BuiltInSkillT
 
   return true;
 }
-
-function isManagedSkillName(name: string): boolean {
-  return name.startsWith(MANAGED_SKILL_PREFIX);
-}
-
 async function assertProjectLocalPathSafe(
   rootDir: string,
   target: string,

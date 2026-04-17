@@ -14,30 +14,30 @@
         {
           "action": "List built-in skills directory",
           "expected": "Exactly five skill directories exist",
-          "observed": "Five skill directories found: maestro:mission-planning, maestro:define-mission-skills, maestro:worker-base, maestro:scrutiny-validator, maestro:user-testing-validator"
+          "observed": "Five skill directories found: maestro%3Amission-planning, maestro%3Adefine-mission-skills, maestro%3Aworker-base, maestro%3Ascrutiny-validator, maestro%3Auser-testing-validator"
         },
         {
-          "action": "Read maestro:mission-planning/SKILL.md",
+          "action": "Read maestro%3Amission-planning/SKILL.md",
           "expected": "Valid YAML frontmatter with --- delimiters",
           "observed": "Valid frontmatter with name, description, argument-hint fields. Contains --- delimiters at start and end of frontmatter block."
         },
         {
-          "action": "Read maestro:define-mission-skills/SKILL.md",
+          "action": "Read maestro%3Adefine-mission-skills/SKILL.md",
           "expected": "Valid YAML frontmatter with --- delimiters",
           "observed": "Valid frontmatter with name, description, argument-hint fields. Contains --- delimiters at start and end of frontmatter block."
         },
         {
-          "action": "Read maestro:worker-base/SKILL.md",
+          "action": "Read maestro%3Aworker-base/SKILL.md",
           "expected": "Valid YAML frontmatter with --- delimiters",
           "observed": "Valid frontmatter with name, description, argument-hint fields. Contains --- delimiters at start and end of frontmatter block."
         },
         {
-          "action": "Read maestro:scrutiny-validator/SKILL.md",
+          "action": "Read maestro%3Ascrutiny-validator/SKILL.md",
           "expected": "Valid YAML frontmatter with --- delimiters",
           "observed": "Valid frontmatter with name, description, argument-hint fields. Contains --- delimiters at start and end of frontmatter block."
         },
         {
-          "action": "Read maestro:user-testing-validator/SKILL.md",
+          "action": "Read maestro%3Auser-testing-validator/SKILL.md",
           "expected": "Valid YAML frontmatter with --- delimiters",
           "observed": "Valid frontmatter with name, description, argument-hint fields. Contains --- delimiters at start and end of frontmatter block."
         },
@@ -69,11 +69,11 @@
       ],
       "evidence": {
         "filePaths": [
-          "skills/built-in/maestro:mission-planning/SKILL.md",
-          "skills/built-in/maestro:define-mission-skills/SKILL.md",
-          "skills/built-in/maestro:worker-base/SKILL.md",
-          "skills/built-in/maestro:scrutiny-validator/SKILL.md",
-          "skills/built-in/maestro:user-testing-validator/SKILL.md"
+            "skills/built-in/maestro%3Amission-planning/SKILL.md",
+            "skills/built-in/maestro%3Adefine-mission-skills/SKILL.md",
+            "skills/built-in/maestro%3Aworker-base/SKILL.md",
+            "skills/built-in/maestro%3Ascrutiny-validator/SKILL.md",
+            "skills/built-in/maestro%3Auser-testing-validator/SKILL.md"
         ],
         "frontmatterValidation": "All five files have valid YAML frontmatter with --- delimiters containing name, description, and argument-hint fields",
         "commandReferences": "Spot-checked command references across all five skills - all consistent with CLI syntax patterns using 'maestro <noun> <verb> [--flag <value>]' structure"

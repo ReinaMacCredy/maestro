@@ -209,7 +209,7 @@ The parent `CLAUDE.md` at `/Users/reinamaccredy/Code/agent-hive-cc/CLAUDE.md` is
 - [ ] `bun src/cli.ts skill-list` shows 18 skills with descriptions and argument hints
 - [ ] `bun src/cli.ts status` shows updated recommendations with colon-prefixed names
 - [ ] `bun src/cli.ts skill writing-plans` shows deprecation warning + loads maestro:design
-- [ ] Internal skill override: create `.maestro/skills/maestro:brainstorming/SKILL.md`, verify it shadows built-in
+- [ ] Internal skill override: create `.maestro/skills/maestro%3Abrainstorming/SKILL.md`, verify it shadows built-in
 
 ## Non-Goals
 - Skill packaging/distribution (.skill ZIP format)

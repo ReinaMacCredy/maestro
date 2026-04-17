@@ -21,6 +21,7 @@ import { FsHandoffStoreAdapter, createUkiHandoff } from "@/features/handoff";
 import type { HandoffStorePort, ExecuteUkiHandoffContent, PlanUkiHandoffContent } from "@/features/handoff";
 import type { SessionDetectPort, AgentSession } from "@/features/session";
 import { normalizeUkiToken } from "@/features/handoff/lib/uki-token.js";
+import { resolveSkillDirectoryName } from "@/shared/lib/skill-path.js";
 
 let tmpDir: string;
 
@@ -41,7 +42,7 @@ async function createSampleSkill(baseDir: string, skillName: string, content: st
 }
 
 async function createBuiltInSkill(baseDir: string, skillName: string, content: string): Promise<void> {
-  const skillDir = join(baseDir, "skills", "built-in", skillName);
+  const skillDir = join(baseDir, "skills", "built-in", resolveSkillDirectoryName(skillName));
   await mkdir(skillDir, { recursive: true });
   await writeFile(join(skillDir, "SKILL.md"), content);
 }

@@ -10,7 +10,7 @@ description: "Create, update, or debug maestro built-in skills. Covers SKILL.md 
 Every built-in skill is a directory under `skills/built-in/`:
 
 ```
-skills/built-in/maestro:{name}/
+skills/built-in/maestro%3A{name}/
   SKILL.md              (required -- frontmatter + content)
   reference/            (optional)
     {file}.md           (reference documents)
@@ -19,7 +19,7 @@ skills/built-in/maestro:{name}/
       step-02-{name}.md
 ```
 
-The directory name IS the skill slug. It must use the `maestro:` prefix (with a literal colon in the directory name).
+The directory name is the URL-escaped skill slug. For built-in `maestro:*` skills, replace `:` with `%3A` on disk while keeping the frontmatter name unchanged.
 
 ## SKILL.md Format
 
@@ -35,7 +35,7 @@ argument-hint: "<track description>"
 
 | Field | Required | Notes |
 |-------|----------|-------|
-| `name` | Yes | Must match directory name exactly |
+| `name` | Yes | Must match the logical skill slug; the on-disk directory uses `%3A` instead of `:` |
 | `description` | Yes | Primary trigger mechanism -- be specific about when to use |
 | `argument-hint` | No | Shown in `skill-list` output. Bracket notation, not camelCase. |
 
@@ -127,7 +127,7 @@ References can be nested (e.g., `reference/codex-skills/land/SKILL.md`). The bui
 
 When you run `bun run build`, the generator (`src/skills/generate.ts`) processes all skills:
 
-1. Reads every `skills/built-in/maestro:*/SKILL.md`
+1. Reads every `skills/built-in/maestro%3A*/SKILL.md`
 2. Parses frontmatter (validates name + description)
 3. Recursively reads all files in `reference/`
 4. Outputs `src/skills/registry.generated.ts` (~320KB)
@@ -148,7 +148,7 @@ If you skip the rebuild, the MCP server and CLI will serve stale skill content.
 
 | Convention | Example | Notes |
 |-----------|---------|-------|
-| Directory name | `maestro:design` | Literal colon in name |
+| Directory name | `maestro%3Adesign` | URL-escaped on-disk path |
 | Slug in code | `'maestro:design'` | String key in registry |
 | CLI usage | `maestro skill maestro:design` | User-facing |
 

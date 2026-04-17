@@ -3,6 +3,7 @@ import { access, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:f
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { initMaestro } from "@/infra/usecases/init.usecase.js";
+import { resolveSkillDirectoryName } from "@/shared/lib/skill-path.js";
 import { mockConfig } from "../../../helpers/mocks.js";
 import { DEFAULT_PRINCIPLES } from "@/features/mission";
 
@@ -201,11 +202,12 @@ describe("initMaestro", () => {
 
   it("syncs built-in maestro skills into project-local claude and codex folders", async () => {
     const config = mockConfig();
+    const workerBaseDir = resolveSkillDirectoryName("maestro:worker-base");
 
     const result = await initMaestro(config, { global: false, dir: tmpDir });
 
-    const claudeSkillPath = join(tmpDir, ".claude", "skills", "maestro:worker-base", "SKILL.md");
-    const codexSkillPath = join(tmpDir, ".codex", "skills", "maestro:worker-base", "SKILL.md");
+    const claudeSkillPath = join(tmpDir, ".claude", "skills", workerBaseDir, "SKILL.md");
+    const codexSkillPath = join(tmpDir, ".codex", "skills", workerBaseDir, "SKILL.md");
 
     expect(result.created).toContain(claudeSkillPath);
     expect(result.created).toContain(codexSkillPath);
@@ -215,9 +217,10 @@ describe("initMaestro", () => {
 
   it("overwrites existing synced maestro skills with the shipped version", async () => {
     const config = mockConfig();
-    const claudeSkillPath = join(tmpDir, ".claude", "skills", "maestro:worker-base", "SKILL.md");
+    const workerBaseDir = resolveSkillDirectoryName("maestro:worker-base");
+    const claudeSkillPath = join(tmpDir, ".claude", "skills", workerBaseDir, "SKILL.md");
 
-    await mkdir(join(tmpDir, ".claude", "skills", "maestro:worker-base"), { recursive: true });
+    await mkdir(join(tmpDir, ".claude", "skills", workerBaseDir), { recursive: true });
     await writeFile(claudeSkillPath, "# old worker base\n");
 
     const result = await initMaestro(config, { global: false, dir: tmpDir });
@@ -228,12 +231,13 @@ describe("initMaestro", () => {
 
   it("removes stale synced maestro skills without touching non-maestro skills", async () => {
     const config = mockConfig();
-    const staleClaudeSkillPath = join(tmpDir, ".claude", "skills", "maestro:obsolete", "SKILL.md");
-    const staleCodexSkillPath = join(tmpDir, ".codex", "skills", "maestro:obsolete", "SKILL.md");
+    const staleSkillDir = resolveSkillDirectoryName("maestro:obsolete");
+    const staleClaudeSkillPath = join(tmpDir, ".claude", "skills", staleSkillDir, "SKILL.md");
+    const staleCodexSkillPath = join(tmpDir, ".codex", "skills", staleSkillDir, "SKILL.md");
     const customSkillPath = join(tmpDir, ".claude", "skills", "custom-skill", "SKILL.md");
 
-    await mkdir(join(tmpDir, ".claude", "skills", "maestro:obsolete"), { recursive: true });
-    await mkdir(join(tmpDir, ".codex", "skills", "maestro:obsolete"), { recursive: true });
+    await mkdir(join(tmpDir, ".claude", "skills", staleSkillDir), { recursive: true });
+    await mkdir(join(tmpDir, ".codex", "skills", staleSkillDir), { recursive: true });
     await mkdir(join(tmpDir, ".claude", "skills", "custom-skill"), { recursive: true });
     await writeFile(staleClaudeSkillPath, "# old skill\n");
     await writeFile(staleCodexSkillPath, "# old skill\n");
@@ -243,6 +247,22 @@ describe("initMaestro", () => {
 
     await expect(access(staleClaudeSkillPath)).rejects.toThrow();
     await expect(access(staleCodexSkillPath)).rejects.toThrow();
-    expect(await readFile(customSkillPath, "utf8")).toBe("# keep me\n");
+      expect(await readFile(customSkillPath, "utf8")).toBe("# keep me\n");
+    });
+
+    it("removes legacy colon-named synced maestro skills during re-init", async () => {
+      const config = mockConfig();
+      const legacyClaudeSkillPath = join(tmpDir, ".claude", "skills", "maestro:obsolete", "SKILL.md");
+      const legacyCodexSkillPath = join(tmpDir, ".codex", "skills", "maestro:obsolete", "SKILL.md");
+
+      await mkdir(join(tmpDir, ".claude", "skills", "maestro:obsolete"), { recursive: true });
+      await mkdir(join(tmpDir, ".codex", "skills", "maestro:obsolete"), { recursive: true });
+      await writeFile(legacyClaudeSkillPath, "# old skill\n");
+      await writeFile(legacyCodexSkillPath, "# old skill\n");
+
+      await initMaestro(config, { global: false, dir: tmpDir });
+
+      await expect(access(legacyClaudeSkillPath)).rejects.toThrow();
+      await expect(access(legacyCodexSkillPath)).rejects.toThrow();
+    });
   });
-});
