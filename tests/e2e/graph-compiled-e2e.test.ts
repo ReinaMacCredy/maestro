@@ -38,7 +38,9 @@ afterEach(async () => {
 });
 
 function sandboxedEnv(): Record<string, string> {
-  return { HOME: homeDir };
+  // Node's os.homedir() reads USERPROFILE on Windows and HOME on POSIX.
+  // Set both so the sandbox applies to every platform the test runs on.
+  return { HOME: homeDir, USERPROFILE: homeDir };
 }
 
 describe("compiled graph feature E2E", () => {

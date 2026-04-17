@@ -103,20 +103,38 @@ export class FsMissionStoreAdapter implements MissionStorePort {
     const stagingPath = this.stagingDir(id);
     const finalPath = this.missionDir(id);
 
-    // Move from staging to final location with error handling
+    // Move from staging to final location with error handling.
+    // Windows can transiently refuse the rename with EPERM when antivirus
+    // or the filesystem indexer still holds a handle on files we just
+    // wrote into staging. Retry a few times with short backoff.
     const { rename, rm } = await import("node:fs/promises");
-    try {
-      await rename(stagingPath, finalPath);
-    } catch (err: unknown) {
-      const code = (err as NodeJS.ErrnoException).code;
-      if (code === "ENOTEMPTY" || code === "EEXIST") {
-        await rm(stagingPath, { recursive: true, force: true });
-        throw new MaestroError(`Mission ${id} already exists`, [
-          "Use a different mission ID or delete the existing mission",
-          `Mission directory: ${finalPath}`,
-        ]);
+    const maxAttempts = process.platform === "win32" ? 5 : 1;
+    let lastErr: unknown;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        await rename(stagingPath, finalPath);
+        lastErr = undefined;
+        break;
+      } catch (err: unknown) {
+        lastErr = err;
+        const code = (err as NodeJS.ErrnoException).code;
+        if (code === "ENOTEMPTY" || code === "EEXIST") {
+          await rm(stagingPath, { recursive: true, force: true });
+          throw new MaestroError(`Mission ${id} already exists`, [
+            "Use a different mission ID or delete the existing mission",
+            `Mission directory: ${finalPath}`,
+          ]);
+        }
+        if (code !== "EPERM" && code !== "EBUSY" && code !== "EACCES") {
+          throw err;
+        }
+        if (attempt < maxAttempts) {
+          await new Promise((r) => setTimeout(r, 50 * attempt));
+        }
       }
-      throw err;
+    }
+    if (lastErr) {
+      throw lastErr;
     }
 
     // Create subdirectories for features, workers, reports, checkpoints

@@ -5,13 +5,14 @@
  * directory into a gzipped tarball. Staging is cleaned up in both success
  * and failure paths.
  *
- * Platform note: on Windows, requires `tar.exe` (bsdtar) which ships
- * with Windows 10 1803+ and Windows Server 2019+. Argv arrays are passed
- * directly via Bun.spawnSync (no shell), so path escaping is handled by
- * the OS.
+ * Platform note: we pass only relative paths to tar and set the working
+ * directory via spawn's `cwd`. This avoids drive-letter arguments like
+ * `C:\...` that Git Bash's GNU tar on Windows misinterprets as
+ * `host:path` ("Cannot connect to C: resolve failed"). Works identically
+ * with GNU tar and bsdtar.
  */
-import { dirname, join, resolve } from "node:path";
-import { mkdtemp, rm, stat } from "node:fs/promises";
+import { basename, dirname, join, resolve } from "node:path";
+import { copyFile, mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { z } from "zod";
 import { MaestroError } from "@/shared/errors.js";
@@ -59,11 +60,16 @@ const BundleManifestSchema = z.object({
   }).nullable(),
 }).strict();
 
+const WORK_DIRNAME = "work";
+const ARCHIVE_FILENAME = "bundle.tar.gz";
+
 export class TarArchiveAdapter implements ArchivePort {
   async writeTarGz(outPath: string, files: readonly BundleFile[]): Promise<number> {
     const absoluteOut = resolve(outPath);
     await ensureDir(dirname(absoluteOut));
-    const staging = await mkdtemp(join(tmpdir(), "maestro-bundle-"));
+    const scratch = await mkdtemp(join(tmpdir(), "maestro-bundle-"));
+    const staging = join(scratch, WORK_DIRNAME);
+    await ensureDir(staging);
     try {
       for (const file of files) {
         const target = resolveWithin(staging, file.path, `Bundle file path '${file.path}'`);
@@ -74,12 +80,17 @@ export class TarArchiveAdapter implements ArchivePort {
           await Bun.write(target, file.content);
         }
       }
+      // Only relative paths in argv. Drive-letter-prefixed cwd is safe
+      // because Bun.spawnSync sets it via a dedicated OS parameter, not argv.
       await execOrThrow(
-        ["tar", "-czf", absoluteOut, "-C", staging, "."],
+        ["tar", "-czf", ARCHIVE_FILENAME, "-C", WORK_DIRNAME, "."],
         "bundle.tar",
+        { cwd: scratch },
       );
+      // copyFile works across drives where rename may not (Windows D: -> C:).
+      await copyFile(join(scratch, ARCHIVE_FILENAME), absoluteOut);
     } finally {
-      await rm(staging, { recursive: true, force: true });
+      await rm(scratch, { recursive: true, force: true });
     }
 
     const info = await stat(absoluteOut);
@@ -88,9 +99,13 @@ export class TarArchiveAdapter implements ArchivePort {
 
   async readManifest(tarPath: string): Promise<BundleManifest> {
     const absolute = resolve(tarPath);
+    const archiveDir = dirname(absolute);
+    const archiveBase = basename(absolute);
+
     const listing = await execOrThrow(
-      ["tar", "-tzf", absolute],
+      ["tar", "-tzf", archiveBase],
       "bundle.list",
+      { cwd: archiveDir },
     );
     const manifestEntry = listing.stdout
       .split("\n")
@@ -103,13 +118,10 @@ export class TarArchiveAdapter implements ArchivePort {
       ]);
     }
 
-    const extract = await execArgv([
-      "tar",
-      "-xzf",
-      absolute,
-      "-O",
-      manifestEntry,
-    ]);
+    const extract = await execArgv(
+      ["tar", "-xzf", archiveBase, "-O", manifestEntry],
+      { cwd: archiveDir },
+    );
     if (extract.exitCode !== 0) {
       throw new MaestroError(`Failed to read bundle manifest: ${extract.stderr}`, [
         `Archive: ${tarPath}`,
