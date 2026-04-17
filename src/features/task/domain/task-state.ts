@@ -79,12 +79,6 @@ export function assertTaskUpdateAllowed(
   }
 
   const nextStatus = patch.status ?? existing.status;
-  if (!existing.assignee && nextStatus === "in_progress") {
-    throw taskStatusRequiresClaim("in_progress");
-  }
-  if (existing.assignee && patch.status === "pending" && existing.status !== "pending") {
-    throw claimedTaskCannotBeReopened(existing.id);
-  }
   if (
     patch.status !== undefined &&
     patch.status !== existing.status &&
@@ -94,6 +88,12 @@ export function assertTaskUpdateAllowed(
     if (blockers.length > 0) {
       throw taskBlockedByOpenTasks(existing.id, blockers);
     }
+  }
+  if (existing.assignee && patch.status === "pending" && existing.status !== "pending") {
+    throw claimedTaskCannotBeReopened(existing.id);
+  }
+  if (!existing.assignee && nextStatus === "in_progress") {
+    throw taskStatusRequiresClaim("in_progress");
   }
 
   return nextStatus;

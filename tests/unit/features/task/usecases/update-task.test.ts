@@ -100,6 +100,15 @@ describe("updateTask", () => {
     ).rejects.toThrow(MaestroError);
   });
 
+  it("surfaces blocker error before the unclaimed-in_progress check", async () => {
+    const blocker = await createTask(store, { title: "Blocker" });
+    const blocked = await createTask(store, { title: "Blocked", blockedBy: [blocker.id] });
+
+    await expect(
+      updateTask(store, blocked.id, { status: "in_progress" }),
+    ).rejects.toThrow(/blocked by unresolved/);
+  });
+
   it("rejects completion reasons without completed status", async () => {
     const task = await createTask(store, { title: "Oops" });
 
