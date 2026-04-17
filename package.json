@@ -1,6 +1,6 @@
 {
   "name": "maestro",
-  "version": "0.40.6",
+  "version": "0.40.7",
   "type": "module",
   "bin": {
     "maestro": "./dist/maestro"
@@ -10,6 +10,8 @@
     "bump": "bun scripts/bump.ts",
     "auto-bump": "bun scripts/auto-bump.ts",
     "check:boundaries": "bun scripts/check-feature-boundaries.ts",
+    "check:skills": "bun scripts/sync-built-in-skills.ts --check",
+    "sync:skills": "bun scripts/sync-built-in-skills.ts",
     "ci": "bun scripts/ci.ts",
     "ci:dry": "bun scripts/ci.ts --dry-run",
     "install:local": "bun scripts/install-local.ts",

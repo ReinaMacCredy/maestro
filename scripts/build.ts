@@ -5,6 +5,18 @@ import { getGitShortSha } from "./git-short-sha";
 
 const root = join(import.meta.dir, "..");
 
+// Keep the embedded built-in skill templates in sync with skills/built-in/
+// before compile. The binary ships the embedded copy; drift here would mean
+// users get stale skills on `maestro init`.
+const syncSkills = Bun.spawn(["bun", join(root, "scripts", "sync-built-in-skills.ts")], {
+  cwd: root,
+  stdout: "inherit",
+  stderr: "inherit",
+});
+if ((await syncSkills.exited) !== 0) {
+  process.exit(1);
+}
+
 const gitSha = await getGitShortSha(root);
 const buildUnix = Math.floor(Date.now() / 1_000).toString();
 const releasedAt = new Date().toISOString();
