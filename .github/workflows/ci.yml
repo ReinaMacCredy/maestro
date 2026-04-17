@@ -13,11 +13,25 @@ concurrency:
 
 jobs:
   validate:
-    name: Validate Current Codebase
-    runs-on: ubuntu-latest
+    name: Validate (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 25
     permissions:
       contents: read
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            src: maestro
+            experimental: false
+          - runner: windows-latest
+            src: maestro.exe
+            experimental: true
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v6
         with:
@@ -32,9 +46,9 @@ jobs:
       - name: Build compiled binary
         run: bun run build
       - name: Verify compiled binary version
-        run: ./dist/maestro --version
+        run: ./dist/${{ matrix.src }} --version
       - name: Smoke-test Mission Control renderer
-        run: ./dist/maestro mission-control --render-check --size 120x40
+        run: ./dist/${{ matrix.src }} mission-control --render-check --size 120x40
       - name: Run test suite
         run: bun run test
 

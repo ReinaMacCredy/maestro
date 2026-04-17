@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { tmpdir } from "node:os";
 import { ShellGitAdapter } from "@/infra/adapters/git.adapter.js";
 
 const git = new ShellGitAdapter();
@@ -12,7 +13,7 @@ describe("ShellGitAdapter", () => {
     });
 
     it("returns false for a non-repo directory", async () => {
-      const result = await git.isRepo("/tmp");
+      const result = await git.isRepo(tmpdir());
       expect(result).toBe(false);
     });
   });

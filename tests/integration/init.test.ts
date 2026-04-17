@@ -145,6 +145,11 @@ async function initGitRepo(cwd: string): Promise<void> {
 }
 
 async function commandExists(command: string): Promise<boolean> {
+  if (process.platform === "win32") {
+    // The interactive PTY path requires POSIX python3 + pty. Windows uses
+    // the non-interactive --yes path instead, so no probe is needed.
+    return false;
+  }
   const proc = Bun.spawn(["bash", "-lc", `command -v ${command}`], {
     stdout: "pipe",
     stderr: "pipe",
@@ -207,7 +212,7 @@ describe("init CLI", () => {
 
     expect(exitCode).toBe(0);
     const result = JSON.parse(stdout);
-    expect(result.skipped.some((path: string) => path.endsWith("/.maestro/AGENTS.md"))).toBe(true);
+    expect(result.skipped.some((path: string) => path.endsWith(join(".maestro", "AGENTS.md")))).toBe(true);
     expect(await readFile(agentsPath, "utf8")).toBe("custom bootstrap\n");
   });
 
@@ -219,7 +224,7 @@ describe("init CLI", () => {
     expect(exitCode).toBe(0);
     const result = JSON.parse(stdout);
     expect(result.created).toEqual([]);
-    expect(result.skipped.some((path: string) => path.endsWith("/.maestro/config.yaml"))).toBe(true);
+    expect(result.skipped.some((path: string) => path.endsWith(join(".maestro", "config.yaml")))).toBe(true);
   });
 
   it("migrates legacy .factory bootstrap files into .maestro", async () => {

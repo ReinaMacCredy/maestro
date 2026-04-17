@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { tmpdir } from "node:os";
 import {
   exportBundle,
@@ -147,7 +147,7 @@ describe("exportBundle", () => {
       },
     );
 
-    expect(result.outputPath.startsWith("/")).toBe(true);
+    expect(isAbsolute(result.outputPath)).toBe(true);
     expect(result.outputPath.endsWith("rel.tar.gz")).toBe(true);
   });
 

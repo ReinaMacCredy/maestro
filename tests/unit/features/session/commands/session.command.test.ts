@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
 import { Command } from "commander";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+const SESSION_SOURCE = join(tmpdir(), "claude", "session.jsonl");
+const CODEX_SOURCE = join(tmpdir(), "codex", "session.jsonl");
 
 const originalConsoleLog = console.log;
 const originalConsoleError = console.error;
@@ -70,7 +75,7 @@ describe("registerSessionCommand", () => {
       detect: async () => ({
         agent: "claude-code",
         sessionId: "claude-1",
-        sourcePath: "/tmp/claude/session.jsonl",
+        sourcePath: SESSION_SOURCE,
         startedAt: 1_777_000_000_000,
       }),
     });
@@ -82,7 +87,7 @@ describe("registerSessionCommand", () => {
 
     expect(captured.logs).toContain("Agent:     claude-code");
     expect(captured.logs).toContain("Session:   claude-1");
-    expect(captured.logs).toContain("Source:    /tmp/claude/session.jsonl");
+    expect(captured.logs).toContain(`Source:    ${SESSION_SOURCE}`);
     expect(captured.logs.some((line) => line.startsWith("Started:   "))).toBe(true);
   });
 
@@ -92,7 +97,7 @@ describe("registerSessionCommand", () => {
       detect: async () => ({
         agent: "codex",
         sessionId: "quiet-123",
-        sourcePath: "/tmp/codex/session.jsonl",
+        sourcePath: CODEX_SOURCE,
       }),
     });
 

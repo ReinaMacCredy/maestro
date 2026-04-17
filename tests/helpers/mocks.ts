@@ -1,3 +1,5 @@
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { GitPort } from "@/infra/ports/git.port.js";
 import type { ConfigPort } from "@/infra/ports/config.port.js";
 import type { ConfigLayers } from "@/infra/ports/config.port.js";
@@ -91,7 +93,7 @@ export function mockSessionDetect(
   const defaultSession: AgentSession = {
     agent: "claude-code",
     sessionId: "test-session-123",
-    sourcePath: "/tmp/sessions/test",
+    sourcePath: join(tmpdir(), "sessions", "test"),
   };
   return {
     detect: async () => session ?? defaultSession,
