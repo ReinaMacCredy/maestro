@@ -3,7 +3,7 @@
  * Implements the MissionStorePort using atomic file writes
  * Storage layout: .maestro/missions/{id}/
  */
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import type { Mission, CreateMissionInput, UpdateMissionInput } from "../domain/mission-types.js";
 import type { MissionStorePort } from "../ports/mission-store.port.js";
 import { validateMission } from "../domain/mission-validators.js";
@@ -37,7 +37,7 @@ export class FsMissionStoreAdapter implements MissionStorePort {
   async listIds(): Promise<readonly string[]> {
     const dirs = await listDirs(this.missionsRoot());
     return dirs
-      .map((d) => d.split("/").pop() || "")
+      .map((d) => basename(d))
       .filter((id) => !id.startsWith(".") && id.length > 0)
       .sort()
       .reverse();
@@ -103,20 +103,51 @@ export class FsMissionStoreAdapter implements MissionStorePort {
     const stagingPath = this.stagingDir(id);
     const finalPath = this.missionDir(id);
 
-    // Move from staging to final location with error handling
-    const { rename, rm } = await import("node:fs/promises");
-    try {
-      await rename(stagingPath, finalPath);
-    } catch (err: unknown) {
-      const code = (err as NodeJS.ErrnoException).code;
-      if (code === "ENOTEMPTY" || code === "EEXIST") {
-        await rm(stagingPath, { recursive: true, force: true });
-        throw new MaestroError(`Mission ${id} already exists`, [
-          "Use a different mission ID or delete the existing mission",
-          `Mission directory: ${finalPath}`,
-        ]);
+    // Move from staging to final location with error handling.
+    // Windows can transiently refuse the rename with EPERM when antivirus
+    // or the filesystem indexer still holds a handle on files we just
+    // wrote into staging. Retry a few times with short backoff, then
+    // fall back to a copy+remove which doesn't depend on the source
+    // inode being releasable.
+    const { cp, rename, rm } = await import("node:fs/promises");
+    const isWindows = process.platform === "win32";
+    const maxAttempts = isWindows ? 5 : 1;
+    let lastErr: unknown;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        await rename(stagingPath, finalPath);
+        lastErr = undefined;
+        break;
+      } catch (err: unknown) {
+        lastErr = err;
+        const code = (err as NodeJS.ErrnoException).code;
+        if (code === "ENOTEMPTY" || code === "EEXIST") {
+          await rm(stagingPath, { recursive: true, force: true });
+          throw new MaestroError(`Mission ${id} already exists`, [
+            "Use a different mission ID or delete the existing mission",
+            `Mission directory: ${finalPath}`,
+          ]);
+        }
+        if (code !== "EPERM" && code !== "EBUSY" && code !== "EACCES") {
+          throw err;
+        }
+        if (attempt < maxAttempts) {
+          await new Promise((r) => setTimeout(r, 100 * attempt));
+        }
       }
-      throw err;
+    }
+    if (lastErr) {
+      if (!isWindows) {
+        throw lastErr;
+      }
+      // Windows last-resort: copy the staging tree to the final path, then
+      // remove staging. cp+rm tolerates file handles that defeat rename.
+      try {
+        await cp(stagingPath, finalPath, { recursive: true, errorOnExist: true, force: false });
+        await rm(stagingPath, { recursive: true, force: true });
+      } catch {
+        throw lastErr;
+      }
     }
 
     // Create subdirectories for features, workers, reports, checkpoints

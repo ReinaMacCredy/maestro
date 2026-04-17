@@ -48,11 +48,15 @@ The human operator is the bridge between terminals. Maestro is the shared state 
 |---|---|
 | Mission | The top-level unit of work with a lifecycle such as `draft`, `approved`, or `executing`. |
 | Milestone | A phase within a mission. Milestones can act as work phases or validation gates. |
-| Feature | A concrete piece of work assigned to a worker type, with verification steps and optional dependencies. |
+| Feature | A concrete piece of work assigned to an agent type, with verification steps and optional dependencies. |
 | Assertion | A validation target tied to a feature. Assertions are updated to `passed`, `failed`, `blocked`, or `waived`. |
 | Handoff | A structured handoff record with a cached UKI v5.4 transfer string for agent-to-agent resume. |
+| Task | A Claude-style blocker-graph work item for the daily loop; lives at `.maestro/tasks/tasks.jsonl` independent of missions. |
+| Reply | A worker's structured outcome record for a feature, optionally gated by behavioral principles. |
+| Principle | A behavioral rule injected into worker prompts and scored against replies. Stored at `.maestro/principles.jsonl`. |
 | Memory | Corrections, learnings, and compiled guidance that feed back into future worker prompts. |
 | Checkpoint | A timestamped mission snapshot you can save and later restore. |
+| Bundle | A portable `.mission.tar.gz` archive of a mission plus its artifacts for review or transfer. |
 | Mission Control | A read-only dashboard for previewing mission state interactively or as JSON. |
 
 ## Mission Control Preview
@@ -98,7 +102,7 @@ curl -fsSL https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/scripts/
 Install a specific published release:
 
 ```bash
-MAESTRO_VERSION=0.32.0 curl -fsSL https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/scripts/install.sh | bash
+MAESTRO_VERSION=<version> curl -fsSL https://raw.githubusercontent.com/ReinaMacCredy/maestro/main/scripts/install.sh | bash
 ```
 
 After installation, refresh to the latest published release with:
@@ -174,7 +178,7 @@ This creates the local `.maestro/` workspace for the current repository.
       "milestoneId": "plan",
       "title": "Plan the auth flow",
       "description": "Define the login shape, risks, and acceptance criteria",
-      "workerType": "codex",
+      "agentType": "codex-cli",
       "verificationSteps": [
         "Review the proposed flow with the team"
       ]
@@ -184,7 +188,7 @@ This creates the local `.maestro/` workspace for the current repository.
       "milestoneId": "implement",
       "title": "Implement the auth flow",
       "description": "Build the first working authentication slice",
-      "workerType": "codex",
+      "agentType": "codex-cli",
       "dependsOn": [
         "auth-plan"
       ],
@@ -241,7 +245,7 @@ In another terminal, the worker can inspect or claim it:
 maestro handoff list
 maestro handoff pickup
 maestro handoff pickup --json
-maestro handoff pickup --claim --agent codex
+maestro handoff pickup --claim --agent codex-cli
 ```
 
 ### 6. Track progress, validate, and seal
@@ -292,7 +296,7 @@ Creating a handoff returns the handoff id, detected agent/session identity, curr
 ```text
 [ok] Handoff created: 2026-04-09-001
   Mode: execute
-  Agent: codex
+  Agent: codex-cli
   Session: 019d72f5-e4e3-7db3-a693-f7dc34c7d126
   Status: pending
 
@@ -385,7 +389,7 @@ maestro handoff create \
 
 maestro handoff list
 maestro handoff pickup
-maestro handoff pickup --claim --agent codex
+maestro handoff pickup --claim --agent codex-cli
 ```
 
 Use `handoff list` when you want a queue view, `pickup` when another agent should resume directly from the UKI string, `pickup --paste` when you are pasting into a general agent chat, and `pickup --json` when a script or debugging session needs the structured record.
@@ -396,15 +400,25 @@ Use `handoff list` when you want a queue view, `pickup` when another agent shoul
 |---|---|
 | `maestro init` | Create local project state. |
 | `maestro install` | Initialize global config and inject supported agent instruction blocks. |
+| `maestro update` | Upgrade the local binary to the latest release and refresh agent instruction blocks. |
 | `maestro doctor` | Check whether the local environment is configured correctly. |
 | `maestro status` | Inspect the current Maestro state quickly. |
 | `maestro mission create --file plan.json` | Create a mission from a plan file. |
 | `maestro feature prompt <feature-id> --mission <mission-id>` | Generate the next worker prompt. |
+| `maestro feature update <feature-id> --mission <mission-id> --status <status>` | Advance a feature through `pending`, `assigned`, `in-progress`, `review`, `done`, or `blocked`. |
+| `maestro reply write <feature-id>` | Record a worker reply (outcome + optional report) for a feature. |
 | `maestro handoff create ...` | Package context for another terminal or agent session. |
 | `maestro handoff pickup` | Get the next pending handoff as the raw UKI transfer string. |
 | `maestro mission-control --preview` | Render a read-only dashboard preview in the terminal. |
 | `maestro mission-control --json` | Get a machine-readable snapshot of mission state. |
 | `maestro mission-control --render-check --size 120x40` | Validate TUI render integrity non-interactively. |
+| `maestro task ready` | List actionable pending tasks with no unresolved blockers. |
+| `maestro task claim <id>` | Take ownership of a task for the current session. |
+| `maestro task update <id> --status in_progress` / `--status completed --reason "..."` | Start or finish a task. |
+| `maestro task block <id> <blockedTaskIds...>` | Record that one task blocks others. |
+| `maestro principle list` / `principle add` | Inspect or register a behavioral principle. |
+| `maestro bundle export <mission-id> --out ./review.mission.tar.gz` | Package a mission + artifacts as a portable archive. |
+| `maestro bundle inspect <path>` | Print a mission bundle's manifest without extracting. |
 | `maestro memory-correct <rule>` | Capture a correction that should influence future runs. |
 | `maestro memory-compile` | Turn raw learnings into reusable guidance. |
 | `maestro ratchet-check` | Run the regression ratchet suite. |
@@ -424,11 +438,20 @@ Available preview screens include:
 
 - `dashboard`
 - `features`
-- `dependencies`
+- `dependencies` (mission-only)
 - `handoffs`
 - `config`
 - `memory`
 - `graph`
+- `agents`
+- `dispatch` (mission-only)
+- `events`
+- `tasks`
+- `timeline` (mission-only)
+- `principles`
+- `help`
+
+Aliases: `feat`, `deps`, `cfg`, `mem`, `agent`, `event`, `task`, `principle`. Mission-only screens are skipped automatically when running in home mode.
 
 For non-interactive environments, prefer `--preview`, `--preview all`, or `--json`.
 
@@ -465,6 +488,10 @@ Maestro stores project-local state in `.maestro/` and user-level defaults in `~/
 │       ├── checkpoints/
 │       ├── features/
 │       └── workers/
+├── tasks/
+│   ├── tasks.jsonl
+│   └── candidates/
+├── principles.jsonl
 └── notes.json
 
 ~/.maestro/
@@ -473,20 +500,23 @@ Maestro stores project-local state in `.maestro/` and user-level defaults in `~/
     └── projects.json
 ```
 
-The design is intentionally transparent: state is inspectable, diffable, and easy to back up.
+The design is intentionally transparent: state is inspectable, diffable, and easy to back up. `.maestro/tasks/**` and `.maestro/principles.jsonl` are intentionally repo-tracked so the daily queue and behavioral rules are reviewed like any other code change; `.maestro/missions/**` and `.maestro/handoffs/**` stay ignored as local orchestration artifacts.
 
-## Architecture
+## Codebase Layout
 
 Maestro is organized as a feature-first hexagonal codebase:
 
-- `src/features/<name>/` -- each feature is a bounded context containing its own `commands/`, `usecases/`, `domain/`, `ports/`, `adapters/`, plus a `services.ts` composition factory and `index.ts` public surface. Current features: `ratchet`, `handoff`, `notes`, `graph`, `session`, `memory`, `mission` (with `feature/`, `validation/`, `checkpoint/` subfolders), and `worker`.
+- `src/features/<name>/` -- each feature is a bounded context containing its own `commands/`, `usecases/`, `domain/`, `ports/`, `adapters/`, plus a `services.ts` composition factory and `index.ts` public surface. Current features: `ratchet`, `handoff`, `notes`, `graph`, `session`, `memory`, `mission` (with `feature/`, `validation/`, `checkpoint/` subfolders and behavioral principles), `agent` (library-only; composes worker prompts and manages harness config injection), `task` (Claude-style blocker graph for the daily loop), `reply` (worker reply ingest with principle gating), and `bundle` (portable mission archive).
 - `src/infra/` -- plumbing that isn't a feature: init, doctor, status, install, update, uninstall, and mission-control commands, config and git ports/adapters, and infra-owned domain types.
 - `src/shared/` -- generic utilities with no domain knowledge: filesystem, YAML, shell, path safety, and output formatting under `lib/`; cross-cutting primitives like IDs and UI config under `domain/`; plus top-level `errors.ts`, `version.ts`, and `version-format.ts`.
 - `src/tui/` -- read-only rendering and input for Mission Control; consumes features through their public surfaces. See `src/tui/README.md` for the contributor-oriented TUI architecture walkthrough.
 - `src/services.ts` -- composition root that wires every feature's adapters into a single service object.
 - `src/index.ts` -- Commander CLI entry point.
 
-Cross-feature imports must go through `@/features/<name>`, which resolves to the feature's `index.ts`. Deep imports across feature boundaries are forbidden and enforced by `bun run check:boundaries` in CI. The only exception is `worker`, which may legitimately consume the `mission` and `memory` public surfaces.
+Cross-feature imports must go through `@/features/<name>`, which resolves to the feature's `index.ts`. Deep imports across feature boundaries are forbidden and enforced by `bun run check:boundaries` in CI. Two features have explicit, scoped exceptions:
+
+- `agent` may import from `mission`, `memory`, and `handoff` through their public surfaces, because agent composes prompts from mission context, memory hints, and prior handoff replay.
+- `bundle` may import from `mission`, `reply`, `handoff`, and `session` through their public surfaces, because bundle is a read-only aggregator that snapshots every mission artifact into a portable archive.
 
 The runtime is intentionally narrow: filesystem-backed stores, git integration, config handling, and a terminal UI. There is no database adapter or network service in the main workflow.
 

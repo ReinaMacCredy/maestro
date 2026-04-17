@@ -1,8 +1,9 @@
 import { describe, expect, it, beforeEach, afterEach } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { FsFeatureStoreAdapter } from "@/features/mission/feature/adapters/feature-store.adapter.js";
+import { migrateLegacyWorkerType } from "@/features/mission/feature/feature-migration.js";
 import type { CreateFeatureInput, Feature, WorkerReport } from "@/features/mission/domain/mission-types.js";
 
 let tmpDir: string;
@@ -14,7 +15,7 @@ const makeCreateInput = (overrides: Partial<CreateFeatureInput> = {}): CreateFea
   milestoneId: "m1",
   title: "Test Feature",
   description: "A test feature",
-  workerType: "test-skill",
+  agentType: "test-skill",
   verificationSteps: ["step 1", "step 2"],
   ...overrides,
 });
@@ -91,6 +92,64 @@ describe("FsFeatureStoreAdapter", () => {
 
     it("rejects feature IDs with path traversal on read", async () => {
       await expect(store.get(missionId, "../escape")).rejects.toThrow("Invalid feature ID");
+    });
+
+    it("transparently upgrades legacy workerType records on read", async () => {
+      const now = new Date().toISOString();
+      const legacyRecord = {
+        id: "legacy",
+        missionId,
+        milestoneId: "m1",
+        status: "pending",
+        title: "Legacy",
+        description: "",
+        workerType: "codex-cli",
+        verificationSteps: ["v"],
+        dependsOn: [],
+        fulfills: [],
+        createdAt: now,
+        updatedAt: now,
+      };
+      const path = join(tmpDir, ".maestro", "missions", missionId, "features", "legacy.json");
+      await writeFile(path, JSON.stringify(legacyRecord, null, 2) + "\n", "utf8");
+
+      const feature = await store.get(missionId, "legacy");
+      expect(feature).toBeDefined();
+      expect(feature!.agentType).toBe("codex-cli");
+
+      // Disk copy should have been rewritten so the next read hits the new schema.
+      const { readFile } = await import("node:fs/promises");
+      const after = JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
+      expect(after.agentType).toBe("codex-cli");
+      expect("workerType" in after).toBe(false);
+    });
+  });
+
+  describe("migrateLegacyWorkerType", () => {
+    it("renames workerType to agentType when agentType is absent", () => {
+      const { normalized, migrated } = migrateLegacyWorkerType({
+        id: "f1",
+        workerType: "codex-cli",
+      });
+      expect(migrated).toBe(true);
+      expect(normalized).toEqual({ id: "f1", agentType: "codex-cli" });
+    });
+
+    it("prefers existing agentType when both fields are present", () => {
+      const { normalized, migrated } = migrateLegacyWorkerType({
+        id: "f1",
+        workerType: "legacy",
+        agentType: "claude-code",
+      });
+      expect(migrated).toBe(true);
+      expect(normalized).toEqual({ id: "f1", agentType: "claude-code" });
+    });
+
+    it("is a no-op when workerType is absent", () => {
+      const input = { id: "f1", agentType: "codex-cli" };
+      const { normalized, migrated } = migrateLegacyWorkerType(input);
+      expect(migrated).toBe(false);
+      expect(normalized).toBe(input);
     });
   });
 

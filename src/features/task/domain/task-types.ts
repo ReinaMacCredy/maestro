@@ -93,6 +93,11 @@ export interface TaskMutationInput {
   readonly force?: boolean;
 }
 
+export interface UpdateTaskResult {
+  readonly task: Task;
+  readonly autoClaimed: boolean;
+}
+
 // ============================
 // Defaults
 // ============================

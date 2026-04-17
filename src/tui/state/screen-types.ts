@@ -15,7 +15,7 @@ import type { MissionControlEvent } from "./types.js";
 export type InferredAgentStatus = "active" | "waiting" | "completed" | "stale";
 
 export interface AgentGridRow {
-  readonly workerType: string;
+  readonly agentType: string;
   readonly status: InferredAgentStatus;
   readonly activeFeatureId: string | undefined;
   readonly activeFeatureTitle: string | undefined;
@@ -31,7 +31,7 @@ export interface DispatchQueueItem {
   readonly milestoneId: string;
   readonly milestoneTitle: string;
   readonly milestoneOrder: number;
-  readonly workerType: string;
+  readonly agentType: string;
 }
 
 export type EventStreamEntryKind = MissionControlEvent["kind"] | "handoff" | "task" | "reply";

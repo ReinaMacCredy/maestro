@@ -279,7 +279,9 @@ const RESIZE_RENDER_INTERVAL_MS = 16;
   };
 
   process.on("SIGINT", handleSignal);
-  process.on("SIGTERM", handleSignal);
+  if (process.platform !== "win32") {
+    process.on("SIGTERM", handleSignal);
+  }
   renderer.prependInputHandler(handleRawInput);
   renderer.on("resize", handleResize);
 
@@ -319,7 +321,9 @@ const RESIZE_RENDER_INTERVAL_MS = 16;
       renderer.off("resize", handleResize);
       renderer.removeInputHandler(handleRawInput);
       process.off("SIGINT", handleSignal);
-      process.off("SIGTERM", handleSignal);
+      if (process.platform !== "win32") {
+        process.off("SIGTERM", handleSignal);
+      }
       flushSync(() => {
         root.unmount();
       });

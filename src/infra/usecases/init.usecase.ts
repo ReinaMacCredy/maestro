@@ -10,8 +10,12 @@ import {
   type BuiltInSkillTemplate,
 } from "../domain/built-in-skill-templates.js";
 import { dirExists, ensureDir, readText, writeText } from "@/shared/lib/fs.js";
+import {
+  isManagedSkillDirectoryName,
+  resolveSkillDirectoryName,
+} from "@/shared/lib/skill-path.js";
 import { homedir } from "node:os";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { dirname, join, posix, relative, resolve, sep } from "node:path";
 import { chmod, lstat, readdir, rm } from "node:fs/promises";
 import { DEFAULT_PRINCIPLES } from "@/features/mission";
 
@@ -25,7 +29,6 @@ const MANAGED_AGENT_SKILL_ROOTS = [
   [".claude", "skills"],
   [".codex", "skills"],
 ] as const;
-const MANAGED_SKILL_PREFIX = "maestro:";
 
 export interface InitResult {
   readonly created: string[];
@@ -99,7 +102,7 @@ export async function initMaestro(
       }
 
       await writeText(target, template.content);
-      if (template.executable) {
+      if (template.executable && process.platform !== "win32") {
         await chmod(target, 0o755);
       }
       created.push(target);
@@ -182,12 +185,25 @@ async function overlayLegacyTree(
     }
 
     const stat = await lstat(sourcePath);
-    files.set(join(targetDir, relativePath), {
-      path: join(targetDir, relativePath),
+    // Template map keys are canonical POSIX paths (`.maestro/bootstrap/...`)
+    // everywhere else; use posix.join so Windows backslash segments don't
+    // split the map into two disjoint entries that silently overwrite each
+    // other later during the write phase.
+    const key = posix.join(targetDir, relativePath.split(sep).join("/"));
+    files.set(key, {
+      path: key,
       content,
-      executable: Boolean(stat.mode & 0o111),
+      executable: isExecutable(stat.mode, relativePath),
     });
   }
+}
+
+function isExecutable(mode: number, relativePath: string): boolean {
+  if (process.platform === "win32") {
+    const ext = relativePath.slice(relativePath.lastIndexOf(".")).toLowerCase();
+    return ext === ".exe" || ext === ".cmd" || ext === ".bat" || ext === ".ps1";
+  }
+  return Boolean(mode & 0o111);
 }
 
 async function listFilesRecursive(dir: string): Promise<string[]> {
@@ -265,7 +281,9 @@ async function syncProjectAgentBuiltInSkills(rootDir: string, created: string[])
 }
 
 async function removeStaleManagedSkillDirs(rootDir: string, skillRoot: string): Promise<void> {
-  const shippedSkillNames = new Set(BUILT_IN_SKILL_TEMPLATES.map((template) => template.name));
+  const shippedSkillDirNames = new Set(
+    BUILT_IN_SKILL_TEMPLATES.map((template) => resolveSkillDirectoryName(template.name)),
+  );
   const entries = (await readdir(skillRoot, { withFileTypes: true }))
     .sort((left, right) => left.name.localeCompare(right.name));
 
@@ -274,7 +292,7 @@ async function removeStaleManagedSkillDirs(rootDir: string, skillRoot: string): 
       continue;
     }
 
-    if (!isManagedSkillName(entry.name) || shippedSkillNames.has(entry.name)) {
+    if (!isManagedSkillDirectoryName(entry.name) || shippedSkillDirNames.has(entry.name)) {
       continue;
     }
 
@@ -290,7 +308,7 @@ async function syncManagedSkillTemplate(
   template: BuiltInSkillTemplate,
   created: string[],
 ): Promise<void> {
-  const skillDir = join(skillRoot, template.name);
+  const skillDir = join(skillRoot, resolveSkillDirectoryName(template.name));
   await assertProjectLocalPathSafe(rootDir, skillDir);
 
   if (await skillDirMatchesTemplate(skillDir, template)) {
@@ -321,7 +339,10 @@ async function skillDirMatchesTemplate(skillDir: string, template: BuiltInSkillT
   }
 
   for (const file of actualFiles) {
-    const relativePath = relative(skillDir, file);
+    // Template file paths are canonical POSIX; on Windows `relative` returns
+    // backslash segments, which would miss the expectedFiles map entry and
+    // drive a spurious rewrite each idempotent init run.
+    const relativePath = relative(skillDir, file).split(sep).join("/");
     const expectedContent = expectedFiles.get(relativePath);
     if (expectedContent === undefined) {
       return false;
@@ -334,11 +355,6 @@ async function skillDirMatchesTemplate(skillDir: string, template: BuiltInSkillT
 
   return true;
 }
-
-function isManagedSkillName(name: string): boolean {
-  return name.startsWith(MANAGED_SKILL_PREFIX);
-}
-
 async function assertProjectLocalPathSafe(
   rootDir: string,
   target: string,

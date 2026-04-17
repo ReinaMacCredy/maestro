@@ -6,6 +6,7 @@
 import type { Feature, CreateFeatureInput, UpdateFeatureInput } from "../../domain/mission-types.js";
 import type { FeatureStorePort } from "../ports/feature-store.port.js";
 import { FEATURE_ID_PATTERN, validateFeature } from "../../domain/mission-validators.js";
+import { migrateLegacyWorkerType } from "../feature-migration.js";
 import { ensureDir, readJson, writeJson, listDirs, readText } from "@/shared/lib/fs.js";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { readdir } from "node:fs/promises";
@@ -33,10 +34,16 @@ export class FsFeatureStoreAdapter implements FeatureStorePort {
   }
 
   async get(missionId: string, featureId: string): Promise<Feature | undefined> {
-    const data = await readJson<unknown>(this.featurePath(missionId, featureId));
+    const path = this.featurePath(missionId, featureId);
+    const data = await readJson<unknown>(path);
     if (!data) return undefined;
+    const { normalized, migrated } = migrateLegacyWorkerType(data);
     try {
-      return validateFeature(data);
+      const validated = validateFeature(normalized);
+      if (migrated) {
+        await writeJson(path, validated);
+      }
+      return validated;
     } catch {
       return undefined;
     }
@@ -62,7 +69,7 @@ export class FsFeatureStoreAdapter implements FeatureStorePort {
       status: "pending",
       title: input.title,
       description: input.description,
-      workerType: input.workerType,
+      agentType: input.agentType,
       verificationSteps: input.verificationSteps,
       dependsOn: input.dependsOn ?? [],
       fulfills: input.fulfills ?? [],

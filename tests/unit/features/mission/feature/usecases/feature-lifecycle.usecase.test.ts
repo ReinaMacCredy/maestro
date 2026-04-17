@@ -37,7 +37,7 @@ async function createSampleMission(
         milestoneId: "m1",
         title: "Feature 1",
         description: "First feature",
-        workerType: "test-skill",
+        agentType: "test-skill",
         verificationSteps: ["step1", "step2"],
         dependsOn: [],
         fulfills: ["assertion1"],
@@ -47,7 +47,7 @@ async function createSampleMission(
         milestoneId: "m1",
         title: "Feature 2",
         description: "Second feature",
-        workerType: "test-skill",
+        agentType: "test-skill",
         verificationSteps: ["step3"],
         dependsOn: ["f1"],
       },
@@ -56,7 +56,7 @@ async function createSampleMission(
         milestoneId: "m2",
         title: "Feature 3",
         description: "Third feature",
-        workerType: "test-skill",
+        agentType: "test-skill",
         verificationSteps: ["step4"],
         dependsOn: [],
       },
@@ -265,7 +265,7 @@ describe("feature lifecycle usecases", () => {
         discoveredIssues: [],
       });
       expect(result.reportPersisted).toBeDefined();
-      expect(result.reportPersisted).toContain("workers/f1/report.json");
+      expect(result.reportPersisted).toContain(join("workers", "f1", "report.json"));
     });
 
     it("preserves existing report when retrying without new report", async () => {

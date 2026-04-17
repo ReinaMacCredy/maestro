@@ -100,7 +100,7 @@ describe("readyTasks", () => {
   it("attaches hints from past completed tasks", async () => {
     const candidateStore = new FsCandidateStoreAdapter(tmpDir);
     const past = await createTask(store, { title: "Implement argon2 password hashing" });
-    const closed = await updateTask(store, past.id, {
+    const { task: closed } = await updateTask(store, past.id, {
       status: "completed",
       reason: "argon2 compare was backwards",
     });

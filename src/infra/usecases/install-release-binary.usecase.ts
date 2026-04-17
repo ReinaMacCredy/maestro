@@ -1,11 +1,36 @@
 import { chmod, mkdir, rename, rm } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, posix, win32 } from "node:path";
+import { fileExists, renameForInPlaceReplace } from "@/shared/lib/fs.js";
 import { MaestroError } from "@/shared/errors.js";
 import { VERSION } from "@/shared/version.js";
 
 const DEFAULT_RELEASE_REPO = "ReinaMacCredy/maestro";
-const TARGET_BINARY_NAME = "maestro";
+const TARGET_BINARY_BASENAME = "maestro";
+
+export function resolveInstalledBinaryName(
+  platform: NodeJS.Platform = process.platform,
+): string {
+  return platform === "win32" ? `${TARGET_BINARY_BASENAME}.exe` : TARGET_BINARY_BASENAME;
+}
+
+export function resolveInstallDir(
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  return env.MAESTRO_INSTALL_DIR ?? resolveDefaultInstallDir(platform, env);
+}
+
+export function resolveDefaultInstallDir(
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  if (platform === "win32") {
+    const base = env.LOCALAPPDATA ?? win32.join(homedir(), "AppData", "Local");
+    return win32.join(base, "Programs", "maestro");
+  }
+  return posix.join(env.HOME ?? homedir(), ".local", "bin");
+}
 
 interface GitHubReleaseAssetPayload {
   readonly name?: string;
@@ -40,6 +65,11 @@ export interface InstallReleaseBinaryResult {
   readonly assetName: string;
 }
 
+interface ReplaceInstalledBinaryOptions {
+  readonly removeImpl?: typeof rm;
+  readonly renameImpl?: typeof rename;
+}
+
 export function normalizeReleaseTag(versionOrTag: string): string {
   const trimmed = versionOrTag.trim();
   if (!trimmed) {
@@ -60,8 +90,9 @@ export function resolveReleaseAssetName(
   arch: string = process.arch,
 ): string {
   const normalizedOs = resolveReleaseOs(platform);
-  const normalizedArch = resolveReleaseArch(arch);
-  return `${TARGET_BINARY_NAME}-${normalizedOs}-${normalizedArch}`;
+  const normalizedArch = resolveReleaseArch(normalizedOs, arch);
+  const suffix = normalizedOs === "windows" ? ".exe" : "";
+  return `${TARGET_BINARY_BASENAME}-${normalizedOs}-${normalizedArch}${suffix}`;
 }
 
 export function buildReleaseDownloadUrl(
@@ -80,8 +111,9 @@ export async function installReleaseBinary(
   options: InstallReleaseBinaryOptions = {},
 ): Promise<InstallReleaseBinaryResult> {
   const fetchImpl = options.fetchImpl ?? fetch;
-  const installDir = options.installDir ?? join(homedir(), ".local", "bin");
-  const installPath = join(installDir, TARGET_BINARY_NAME);
+  const platform = options.platform ?? process.platform;
+  const installDir = options.installDir ?? resolveInstallDir(platform);
+  const installPath = join(installDir, resolveInstalledBinaryName(platform));
   const requestedTag = options.version ? normalizeReleaseTag(options.version) : undefined;
   const release = await resolveRelease(fetchImpl, {
     tagName: requestedTag,
@@ -107,9 +139,13 @@ export async function installReleaseBinary(
   try {
     const binaryBytes = await downloadAsset(fetchImpl, release.asset.downloadUrl);
     await Bun.write(tempPath, binaryBytes);
-    await chmod(tempPath, 0o755);
-    await rename(tempPath, installPath);
+    if (platform !== "win32") {
+      await chmod(tempPath, 0o755);
+    }
+    await replaceInstalledBinary(tempPath, installPath, platform);
   } catch (error) {
+    // Best-effort temp cleanup; surfacing a cleanup failure here would mask
+    // the original download/write/rename error the caller needs to see.
     await rm(tempPath, { force: true }).catch(() => undefined);
     throw error;
   }
@@ -206,6 +242,39 @@ function resolveReleaseAsset(
   };
 }
 
+export async function replaceInstalledBinary(
+  tempPath: string,
+  installPath: string,
+  platform: NodeJS.Platform,
+  options: ReplaceInstalledBinaryOptions = {},
+): Promise<void> {
+  const renameImpl = options.renameImpl ?? rename;
+  if (platform === "win32") {
+    await renameForInPlaceReplace(installPath, {
+      removeImpl: options.removeImpl,
+      renameImpl,
+    });
+    try {
+      await renameImpl(tempPath, installPath);
+    } catch (error) {
+      try {
+        await rollbackWindowsBinary(installPath, renameImpl);
+      } catch (rollbackError) {
+        throw new MaestroError(
+          "Could not replace installed Windows binary and restore the previous version",
+          [
+            `Replacement error: ${describeError(error)}`,
+            `Rollback error: ${describeError(rollbackError)}`,
+          ],
+        );
+      }
+      throw error;
+    }
+    return;
+  }
+  await renameImpl(tempPath, installPath);
+}
+
 async function downloadAsset(
   fetchImpl: typeof fetch,
   url: string,
@@ -226,22 +295,42 @@ async function downloadAsset(
   return new Uint8Array(await response.arrayBuffer());
 }
 
-function resolveReleaseOs(platform: NodeJS.Platform): "darwin" | "linux" {
+function resolveReleaseOs(platform: NodeJS.Platform): "darwin" | "linux" | "windows" {
   switch (platform) {
     case "darwin":
     case "linux":
       return platform;
+    case "win32":
+      return "windows";
     default:
       throw new MaestroError(`Unsupported platform for release installs: ${platform}`, [
-        "Release installs currently support macOS and Linux",
+        "Release installs currently support macOS, Linux, and Windows",
       ]);
   }
 }
 
-function resolveReleaseArch(arch: string): "arm64" | "x64" {
+async function rollbackWindowsBinary(
+  installPath: string,
+  renameImpl: typeof rename,
+): Promise<void> {
+  const oldPath = `${installPath}.old`;
+  if (!(await fileExists(oldPath))) return;
+  await renameImpl(oldPath, installPath);
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function resolveReleaseArch(os: "darwin" | "linux" | "windows", arch: string): "arm64" | "x64" {
   switch (arch) {
     case "arm64":
     case "aarch64":
+      if (os === "windows") {
+        throw new MaestroError("Windows release installs currently support x64 only", [
+          "Windows arm64 assets are not published yet",
+        ]);
+      }
       return "arm64";
     case "x64":
     case "amd64":

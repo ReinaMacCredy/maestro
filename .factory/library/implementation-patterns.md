@@ -43,4 +43,4 @@ Established code patterns to preserve while adding Mission Control.
 - `src/index.ts` is the main command registration point
 - `src/services.ts` is the central dependency wiring point
 - `.maestro/` already exists for current product state; Mission Control must extend it rather than inventing a parallel runtime namespace
-- `skills/built-in/maestro:*` deletions are already present in the working tree; replacing that legacy surface is part of the migration
+- `skills/built-in/maestro%3A*` deletions are already present in the working tree; replacing that legacy surface is part of the migration

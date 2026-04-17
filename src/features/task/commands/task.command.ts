@@ -238,16 +238,19 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
         ]);
       }
 
-      await maybeReleaseStaleOwnedTasks(normalizeExplicitSessionId(opts.session));
-      const updated = await updateTask(
+      const sessionId = await resolveSessionAndReleaseStale(opts.session);
+      const { task: updated, autoClaimed } = await updateTask(
         services.taskStore,
         id,
         patch,
         {
-          sessionId: await resolveOptionalOwnershipSessionId(opts.session),
+          sessionId,
           force: opts.force === true,
         },
       );
+      if (autoClaimed && updated.assignee) {
+        warn(`Auto-claimed ${updated.id} for session ${updated.assignee}`);
+      }
       await maybeCaptureCompletionHint(updated);
 
       output(isJson, updated, (task) => [
@@ -273,8 +276,8 @@ function registerClaimCommand(taskCmd: Command, program: Command): void {
     .action(async (id: string, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      await maybeReleaseStaleOwnedTasks(normalizeExplicitSessionId(opts.session));
       const sessionId = await resolveOwnershipSessionId(opts.session);
+      await maybeReleaseStaleOwnedTasks([sessionId]);
 
       const claimed = await claimTask(services.taskStore, id, {
         sessionId,
@@ -346,13 +349,13 @@ function registerBlockCommand(taskCmd: Command, program: Command): void {
     .action(async (id: string, blockedTaskIds: string[], opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      await maybeReleaseStaleOwnedTasks(normalizeExplicitSessionId(opts.session));
+      const sessionId = await resolveSessionAndReleaseStale(opts.session);
       const updated = await blockTasks(
         services.taskStore,
         id,
         blockedTaskIds,
         {
-          sessionId: await resolveOptionalOwnershipSessionId(opts.session),
+          sessionId,
           force: opts.force === true,
         },
       );
@@ -374,13 +377,13 @@ function registerUnblockCommand(taskCmd: Command, program: Command): void {
     .action(async (id: string, blockedTaskIds: string[], opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      await maybeReleaseStaleOwnedTasks(normalizeExplicitSessionId(opts.session));
+      const sessionId = await resolveSessionAndReleaseStale(opts.session);
       const updated = await unblockTasks(
         services.taskStore,
         id,
         blockedTaskIds,
         {
-          sessionId: await resolveOptionalOwnershipSessionId(opts.session),
+          sessionId,
           force: opts.force === true,
         },
       );
@@ -453,12 +456,12 @@ async function resolveOptionalOwnershipSessionId(explicitSessionId: string | und
   return session ? `${session.agent}-${session.sessionId}` : undefined;
 }
 
-function normalizeExplicitSessionId(explicitSessionId: string | undefined): readonly string[] {
-  if (explicitSessionId === undefined) {
-    return [];
-  }
-  const trimmed = explicitSessionId.trim();
-  return trimmed.length > 0 ? [trimmed] : [];
+async function resolveSessionAndReleaseStale(
+  explicitSessionId: string | undefined,
+): Promise<string | undefined> {
+  const sessionId = await resolveOptionalOwnershipSessionId(explicitSessionId);
+  await maybeReleaseStaleOwnedTasks(sessionId ? [sessionId] : []);
+  return sessionId;
 }
 
 function registerReadyCommand(taskCmd: Command, program: Command): void {

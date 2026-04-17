@@ -258,7 +258,7 @@ export interface MissionControlFeatureRow {
   title: string;
   status: FeatureStatus;
   milestoneId: string;
-  workerType: string;
+  agentType: string;
   hasReport: boolean;
   blockedByIds?: readonly string[];
   blockedByLabel?: string;
@@ -270,7 +270,7 @@ export interface TaskPreviewPane {
   status: FeatureStatus;
   milestoneId: string;
   milestoneTitle: string;
-  workerType: string;
+  agentType: string;
   description: string;
   preconditions: string | undefined;
   expectedBehavior: string | undefined;

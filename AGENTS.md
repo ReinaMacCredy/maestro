@@ -92,6 +92,8 @@
 - Automatic GitHub releases only publish when `main` receives a dedicated release commit whose subject exactly matches `chore(release): v<package.json version>`
 - Ordinary commits on `main`, including README or docs updates, must not publish releases; only the dedicated `chore(release): v...` commit is release-eligible
 - Normal release flow is: run `bun scripts/ci.ts`, then push or merge that dedicated release commit to `main`; GitHub Actions creates the remote tag and GitHub Release automatically
+- Release trigger matching now uses the checked-out commit subject (`git log -1 --pretty=%s`), not the full multiline commit message; release commits may include a body, but the first line must still be exactly `chore(release): v<package.json version>`
+- Do not treat a green `Release` workflow as proof that a GitHub Release exists; confirm the `Publish Release` job ran and verify the tag with `gh release list` or the Releases page
 
 ## Task vs Mission
 

@@ -58,7 +58,7 @@ async function createMission(cwd: string): Promise<string> {
             milestoneId: "m1",
             title: "Feature 1",
             description: "First feature",
-            workerType: "test-skill",
+            agentType: "test-skill",
             verificationSteps: ["check it"],
           },
         ],

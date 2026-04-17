@@ -58,7 +58,7 @@ function createFullPlan(): object {
         milestoneId: "m1",
         title: "Setup Feature",
         description: "Initial setup and configuration",
-        workerType: "test-skill",
+        agentType: "test-skill",
         verificationSteps: ["Verify setup completes"],
         fulfills: ["assertion-setup-1"],
       },
@@ -67,7 +67,7 @@ function createFullPlan(): object {
         milestoneId: "m1",
         title: "Core Feature",
         description: "Main implementation work",
-        workerType: "test-skill",
+        agentType: "test-skill",
         verificationSteps: ["Verify core logic", "Check edge cases"],
         fulfills: ["assertion-core-1", "assertion-core-2"],
       },
@@ -76,7 +76,7 @@ function createFullPlan(): object {
         milestoneId: "m2",
         title: "Validation Feature",
         description: "Final validation steps",
-        workerType: "test-skill",
+        agentType: "test-skill",
         verificationSteps: ["Run integration tests"],
         fulfills: ["assertion-val-1"],
       },
@@ -413,7 +413,7 @@ describe("full mission lifecycle", () => {
     const promptData = JSON.parse(promptResult.stdout);
     expect(promptData.prompt).toContain("f1");
     expect(promptData.prompt).toContain("Setup Feature");
-    expect(promptData.workerType).toBe("test-skill");
+    expect(promptData.agentType).toBe("test-skill");
     expect(promptData.writtenTo.length).toBeGreaterThan(0);
 
     // Verify prompt file was written

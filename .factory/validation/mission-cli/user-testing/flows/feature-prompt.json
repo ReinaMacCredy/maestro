@@ -13,9 +13,9 @@
       "status": "pass",
       "steps": [
         {
-          "action": "Create mission with skill file at .maestro/skills/maestro:worker-base/SKILL.md",
+          "action": "Create mission with skill file at .maestro/skills/maestro%3Aworker-base/SKILL.md",
           "expected": "Skill file created successfully",
-          "observed": "Skill file created at .maestro/skills/maestro:worker-base/SKILL.md"
+          "observed": "Skill file created at .maestro/skills/maestro%3Aworker-base/SKILL.md"
         },
         {
           "action": "Create mission with feat-test-001 feature",

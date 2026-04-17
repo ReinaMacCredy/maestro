@@ -21,6 +21,7 @@ import { FsHandoffStoreAdapter, createUkiHandoff } from "@/features/handoff";
 import type { HandoffStorePort, ExecuteUkiHandoffContent, PlanUkiHandoffContent } from "@/features/handoff";
 import type { SessionDetectPort, AgentSession } from "@/features/session";
 import { normalizeUkiToken } from "@/features/handoff/lib/uki-token.js";
+import { resolveSkillDirectoryName } from "@/shared/lib/skill-path.js";
 
 let tmpDir: string;
 
@@ -41,7 +42,7 @@ async function createSampleSkill(baseDir: string, skillName: string, content: st
 }
 
 async function createBuiltInSkill(baseDir: string, skillName: string, content: string): Promise<void> {
-  const skillDir = join(baseDir, "skills", "built-in", skillName);
+  const skillDir = join(baseDir, "skills", "built-in", resolveSkillDirectoryName(skillName));
   await mkdir(skillDir, { recursive: true });
   await writeFile(join(skillDir, "SKILL.md"), content);
 }
@@ -66,7 +67,7 @@ async function createTestMission(
         milestoneId: "m1",
         title: "Test Feature",
         description: "This feature tests worker prompt generation.",
-        workerType: "test-skill",
+        agentType: "test-skill",
         verificationSteps: ["Step 1: Do something", "Step 2: Verify result"],
         dependsOn: [],
       },
@@ -75,7 +76,7 @@ async function createTestMission(
         milestoneId: "m1",
         title: "Feature 2",
         description: "Second feature with dependencies.",
-        workerType: "test-skill",
+        agentType: "test-skill",
         verificationSteps: ["Step 3"],
         dependsOn: ["f1"],
       },
@@ -124,7 +125,7 @@ describe("generateWorkerPrompt", () => {
     // Assertions
     expect(result.prompt).toContain("Worker Assignment: Test Feature");
     expect(result.prompt).toContain("Feature ID:** f1");
-    expect(result.prompt).toContain("Worker Type:** test-skill");
+    expect(result.prompt).toContain("Agent Type:** test-skill");
     expect(result.prompt).toContain(`Mission:** ${missionId}`);
     expect(result.prompt).toContain("Milestone:** m1");
     expect(result.prompt).toContain("## Mission Context");
@@ -137,7 +138,7 @@ describe("generateWorkerPrompt", () => {
     expect(result.prompt).toContain("<!-- END SKILL -->");
     expect(result.prompt).toContain("# Test Skill");
     expect(result.featureId).toBe("f1");
-    expect(result.workerType).toBe("test-skill");
+    expect(result.agentType).toBe("test-skill");
   });
 
   it("includes related assertions in the prompt", async () => {
@@ -195,7 +196,7 @@ describe("generateWorkerPrompt", () => {
 
     expect(result.writtenTo).toBeDefined();
     expect(result.writtenTo?.length).toBe(1);
-    expect(result.writtenTo?.[0]).toContain("workers/f1/prompt.md");
+    expect(result.writtenTo?.[0]).toContain(join("workers", "f1", "prompt.md"));
   });
 
   it("writes to --out path when provided", async () => {
@@ -223,7 +224,7 @@ describe("generateWorkerPrompt", () => {
     expect(result.writtenTo).toBeDefined();
     expect(result.writtenTo?.length).toBe(2);
     expect(result.writtenTo?.[0]).toBe(outPath);
-    expect(result.writtenTo?.[1]).toContain("workers/f1/prompt.md");
+    expect(result.writtenTo?.[1]).toContain(join("workers", "f1", "prompt.md"));
   });
 
   it("falls back to built-in skills when workspace skill is missing", async () => {
@@ -319,8 +320,12 @@ describe("generateWorkerPrompt", () => {
       errorThrown = true;
       expect(err).toBeInstanceOf(MaestroError);
       expect((err as Error).message).toContain("Worker skill 'test-skill' not found");
-      expect((err as Error).message).toContain(".maestro/skills/test-skill/SKILL.md");
-      expect((err as MaestroError).hints.join("\n")).toContain("skills/built-in/test-skill/SKILL.md");
+      expect((err as Error).message).toContain(
+        join(".maestro", "skills", "test-skill", "SKILL.md"),
+      );
+      expect((err as MaestroError).hints.join("\n")).toContain(
+        join("skills", "built-in", "test-skill", "SKILL.md"),
+      );
     }
 
       expect(errorThrown).toBe(true);
@@ -341,7 +346,7 @@ describe("generateWorkerPrompt", () => {
             milestoneId: "m1",
             title: "Unsafe Feature",
             description: "Bad worker type",
-            workerType: "../../../../etc",
+            agentType: "../../../../etc",
             verificationSteps: ["Step 1"],
           },
         ],
@@ -373,7 +378,7 @@ describe("generateWorkerPrompt", () => {
           milestoneId: "m1",
           title: "Test Feature",
           description: "# Feature Header\nSome text <!-- comment --> -->",
-          workerType: "test-skill",
+          agentType: "test-skill",
           verificationSteps: ["Step 1"],
           dependsOn: [],
         },
@@ -422,7 +427,7 @@ describe("generateWorkerPrompt", () => {
           milestoneId: "m1",
           title: "Feature 1",
           description: "First feature",
-          workerType: "test-skill",
+          agentType: "test-skill",
           verificationSteps: ["Step 1"],
           dependsOn: ["f2", "f3"],
         },
@@ -431,7 +436,7 @@ describe("generateWorkerPrompt", () => {
           milestoneId: "m1",
           title: "Feature 2",
           description: "Second feature",
-          workerType: "test-skill",
+          agentType: "test-skill",
           verificationSteps: ["Step 2"],
           dependsOn: [],
         },
@@ -440,7 +445,7 @@ describe("generateWorkerPrompt", () => {
           milestoneId: "m1",
           title: "Feature 3",
           description: "Third feature",
-          workerType: "test-skill",
+          agentType: "test-skill",
           verificationSteps: ["Step 3"],
           dependsOn: [],
         },
@@ -502,7 +507,7 @@ describe("generateWorkerPrompt", () => {
       milestones: [{ id: "m1", title: "M1", description: "M1 desc", order: 0 }],
       features: [{
         id: "f1", milestoneId: "m1", title: "Feature",
-        description: "Desc", workerType: "test-skill",
+        description: "Desc", agentType: "test-skill",
         verificationSteps: ["Step 1"], dependsOn: [],
         preconditions: "Docker running on port 2375",
       }],
@@ -527,7 +532,7 @@ describe("generateWorkerPrompt", () => {
       milestones: [{ id: "m1", title: "M1", description: "M1 desc", order: 0 }],
       features: [{
         id: "f1", milestoneId: "m1", title: "Feature",
-        description: "Desc", workerType: "test-skill",
+        description: "Desc", agentType: "test-skill",
         verificationSteps: ["Step 1"], dependsOn: [],
         expectedBehavior: "Returns 200 OK with JWT token",
       }],
@@ -564,9 +569,9 @@ describe("generateWorkerPrompt", () => {
       title: "Test", description: "Test",
       milestones: [{ id: "m1", title: "M1", description: "M1", order: 0 }],
       features: [
-        { id: "f1", milestoneId: "m1", title: "Done Feature", description: "D", workerType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
-        { id: "f2", milestoneId: "m1", title: "Active Feature", description: "D", workerType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
-        { id: "f3", milestoneId: "m1", title: "Target Feature", description: "D", workerType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
+        { id: "f1", milestoneId: "m1", title: "Done Feature", description: "D", agentType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
+        { id: "f2", milestoneId: "m1", title: "Active Feature", description: "D", agentType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
+        { id: "f3", milestoneId: "m1", title: "Target Feature", description: "D", agentType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
       ],
     };
 
@@ -666,9 +671,9 @@ describe("generateWorkerPrompt", () => {
         { id: "review", title: "Plan Review", description: "Review", order: 1, kind: "gate" as const, profile: "plan-review" as const },
       ],
       features: [
-        { id: "f1", milestoneId: "plan", title: "Prior # Feature", description: "D", workerType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
-        { id: "f-bad", milestoneId: "plan", title: "Unreadable Feature", description: "D", workerType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
-        { id: "f2", milestoneId: "review", title: "Review Feature", description: "D", workerType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
+        { id: "f1", milestoneId: "plan", title: "Prior # Feature", description: "D", agentType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
+        { id: "f-bad", milestoneId: "plan", title: "Unreadable Feature", description: "D", agentType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
+        { id: "f2", milestoneId: "review", title: "Review Feature", description: "D", agentType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
       ],
     };
 
@@ -731,8 +736,8 @@ describe("generateWorkerPrompt", () => {
           { id: "review", title: "Plan Review", description: "Review", order: 1, kind: "gate" as const, profile: "plan-review" as const },
         ],
         features: [
-          { id: "f1", milestoneId: "plan", title: "Prior Feature", description: "D", workerType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
-          { id: "f2", milestoneId: "review", title: "Review Feature", description: "D", workerType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
+          { id: "f1", milestoneId: "plan", title: "Prior Feature", description: "D", agentType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
+          { id: "f2", milestoneId: "review", title: "Review Feature", description: "D", agentType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
         ],
       };
 
@@ -992,7 +997,7 @@ describe("generateWorkerPrompt", () => {
         title: "Test", description: "Test",
         milestones: [{ id: "m1", title: "M1", description: "M1", order: 0, profile: "implementation" as const }],
         features: [
-          { id: "f1", milestoneId: "m1", title: "Feature", description: "D", workerType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
+          { id: "f1", milestoneId: "m1", title: "Feature", description: "D", agentType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
         ],
       };
 
@@ -1065,7 +1070,7 @@ describe("generateWorkerPrompt", () => {
         title: "Test", description: "Test",
         milestones: [{ id: "m1", title: "M1", description: "M1", order: 0, profile: "bug-hunt" as const }],
         features: [
-          { id: "f1", milestoneId: "m1", title: "Feature", description: "D", workerType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
+          { id: "f1", milestoneId: "m1", title: "Feature", description: "D", agentType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
         ],
       };
 
@@ -1100,7 +1105,7 @@ describe("generateWorkerPrompt", () => {
         title: "Test", description: "Test",
         milestones: [{ id: "m1", title: "M1", description: "M1", order: 0, profile: "implementation" as const }],
         features: [
-          { id: "f1", milestoneId: "m1", title: "Feature", description: "D", workerType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
+          { id: "f1", milestoneId: "m1", title: "Feature", description: "D", agentType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
         ],
       };
 
@@ -1285,7 +1290,7 @@ describe("generateWorkerPrompt", () => {
         title: "Test", description: "Test",
         milestones: [{ id: "m1", title: "M1", description: "M1", order: 0, profile: "implementation" as const }],
         features: [
-          { id: "f1", milestoneId: "m1", title: "Feature", description: "D", workerType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
+          { id: "f1", milestoneId: "m1", title: "Feature", description: "D", agentType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
         ],
       };
 
@@ -1331,7 +1336,7 @@ describe("generateWorkerPrompt", () => {
         title: "Other Test", description: "Other Test",
         milestones: [{ id: "m1", title: "M1", description: "M1", order: 0, profile: "implementation" as const }],
         features: [
-          { id: "f1", milestoneId: "m1", title: "Other Feature", description: "Other", workerType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
+          { id: "f1", milestoneId: "m1", title: "Other Feature", description: "Other", agentType: "test-skill", verificationSteps: ["S"], dependsOn: [] },
         ],
       };
       const { createMission } = await import("@/features/mission");

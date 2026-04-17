@@ -49,7 +49,7 @@ async function writePipelinePlan(cwd: string): Promise<string> {
             milestoneId: "m1",
             title: "Bootstrap worker prompt",
             description: "Generate the first worker prompt and complete the setup task",
-            workerType: "test-skill",
+            agentType: "test-skill",
             verificationSteps: ["Confirm prompt generation", "Confirm setup completed"],
             fulfills: ["assertion-bootstrap-1"],
           },
@@ -58,7 +58,7 @@ async function writePipelinePlan(cwd: string): Promise<string> {
             milestoneId: "m1",
             title: "Deliver core feature",
             description: "Complete the dependent core task",
-            workerType: "test-skill",
+            agentType: "test-skill",
             verificationSteps: ["Verify core implementation"],
             dependsOn: ["f1"],
             fulfills: ["assertion-core-1", "assertion-core-2"],
@@ -68,7 +68,7 @@ async function writePipelinePlan(cwd: string): Promise<string> {
             milestoneId: "m2",
             title: "Validate release workflow",
             description: "Finish the final validation step",
-            workerType: "test-skill",
+            agentType: "test-skill",
             verificationSteps: ["Run release validation"],
             fulfills: ["assertion-release-1"],
           },
@@ -159,7 +159,7 @@ describe("compiled CLI pipeline E2E", () => {
     expect(promptResult.exitCode).toBe(0);
     const promptData = JSON.parse(promptResult.stdout);
     expect(promptData.featureId).toBe("f1");
-    expect(promptData.workerType).toBe("test-skill");
+    expect(promptData.agentType).toBe("test-skill");
     expect(promptData.prompt).toContain("# Worker Assignment: Bootstrap worker prompt");
     const promptPath = join(
       tmpDir,

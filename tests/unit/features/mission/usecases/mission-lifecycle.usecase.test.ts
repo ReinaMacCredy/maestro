@@ -42,7 +42,7 @@ describe("mission lifecycle usecases", () => {
         milestoneId: "m1",
         title: "Feature 1",
         description: "First feature",
-        workerType: "test-skill",
+        agentType: "test-skill",
         verificationSteps: ["step1", "step2"] as const,
         dependsOn: [],
         fulfills: ["assertion1", "assertion2"],
@@ -52,7 +52,7 @@ describe("mission lifecycle usecases", () => {
         milestoneId: "m2",
         title: "Feature 2",
         description: "Second feature",
-        workerType: "test-skill",
+        agentType: "test-skill",
         verificationSteps: ["step3"] as const,
         dependsOn: ["f1"],
       },
@@ -95,7 +95,7 @@ describe("mission lifecycle usecases", () => {
       expect(f1).toBeDefined();
       expect(f1?.missionId).toBe(result.mission.id);
       expect(f1?.milestoneId).toBe("m1");
-      expect(f1?.workerType).toBe("test-skill");
+      expect(f1?.agentType).toBe("test-skill");
       expect(f1?.verificationSteps).toEqual(["step1", "step2"]);
     });
 
@@ -122,7 +122,7 @@ describe("mission lifecycle usecases", () => {
             milestoneId: "m1",
             title: "Feature 3",
             description: "No assertions",
-            workerType: "test-skill",
+            agentType: "test-skill",
             verificationSteps: ["step"],
           },
         ],
@@ -162,7 +162,7 @@ describe("mission lifecycle usecases", () => {
             milestoneId: "nonexistent",
             title: "Bad Feature",
             description: "References invalid milestone",
-            workerType: "test-skill",
+            agentType: "test-skill",
             verificationSteps: ["step"],
           },
         ],
@@ -194,7 +194,7 @@ describe("mission lifecycle usecases", () => {
             milestoneId: "m1",
             title: "A",
             description: "Depends on B",
-            workerType: "test-skill",
+            agentType: "test-skill",
             verificationSteps: ["step"] as const,
             dependsOn: ["b"] as const,
           },
@@ -203,7 +203,7 @@ describe("mission lifecycle usecases", () => {
             milestoneId: "m1",
             title: "B",
             description: "Depends on A",
-            workerType: "test-skill",
+            agentType: "test-skill",
             verificationSteps: ["step"] as const,
             dependsOn: ["a"] as const,
           },

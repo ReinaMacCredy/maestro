@@ -28,7 +28,7 @@ function makeSnapshot(): MissionControlSnapshot {
         title: "Feature 1",
         status: "assigned",
         milestoneId: "m1",
-        workerType: "backend",
+        agentType: "backend",
         hasReport: false,
       },
     ],

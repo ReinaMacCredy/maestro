@@ -1,4 +1,6 @@
 import { describe, expect, it } from "bun:test";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { SUPPORTED_AGENTS, agentConfigPath } from "@/features/agent";
 
 describe("agent config specs", () => {
@@ -8,6 +10,7 @@ describe("agent config specs", () => {
     expect(droid?.configDir).toBe(".maestro");
     expect(droid?.configFile).toBe("AGENTS.md");
     expect(droid?.configScope).toBe("project");
-    expect(agentConfigPath(droid!, "/tmp/project")).toBe("/tmp/project/.maestro/AGENTS.md");
+    const projectDir = join(tmpdir(), "project");
+    expect(agentConfigPath(droid!, projectDir)).toBe(join(projectDir, ".maestro", "AGENTS.md"));
   });
 });

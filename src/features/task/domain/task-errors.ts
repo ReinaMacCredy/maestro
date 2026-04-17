@@ -213,7 +213,7 @@ export function taskClaimBusySession(sessionId: string, taskIds: readonly string
     `Session ${sessionId} already owns unresolved task(s): ${taskIds.join(", ")}`,
     [
       "Finish or unclaim the existing task before claiming another one",
-      "Retry without the busy-check path if multiple concurrent claims are intentional",
+      "Use explicit 'maestro task claim <id>' for intentional multi-task ownership",
     ],
   );
 }

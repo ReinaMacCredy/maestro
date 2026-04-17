@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "maestro-handoff",
+      "name": "maestro",
       "dependencies": {
         "@opentui/core": "0.1.96",
         "@opentui/react": "0.1.96",

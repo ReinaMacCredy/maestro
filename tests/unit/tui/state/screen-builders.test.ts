@@ -21,7 +21,7 @@ function makeFeature(overrides: Partial<Feature> & { id: string }): Feature {
     status: "pending",
     title: overrides.id,
     description: "",
-    workerType: "codex",
+    agentType: "codex",
     verificationSteps: [],
     dependsOn: [],
     fulfills: [],
@@ -57,42 +57,42 @@ function makeTaskQueryStore(tasks: readonly Task[]): TaskQueryPort {
 // ---------------------------------------------------------------------------
 
 describe("buildAgentGrid", () => {
-  it("groups features by workerType and infers status", () => {
+  it("groups features by agentType and infers status", () => {
     const features = [
-      makeFeature({ id: "f1", workerType: "codex", status: "assigned", updatedAt: new Date().toISOString() }),
-      makeFeature({ id: "f2", workerType: "codex", status: "pending" }),
-      makeFeature({ id: "f3", workerType: "claude-code", status: "done" }),
-      makeFeature({ id: "f4", workerType: "claude-code", status: "done" }),
+      makeFeature({ id: "f1", agentType: "codex", status: "assigned", updatedAt: new Date().toISOString() }),
+      makeFeature({ id: "f2", agentType: "codex", status: "pending" }),
+      makeFeature({ id: "f3", agentType: "claude-code", status: "done" }),
+      makeFeature({ id: "f4", agentType: "claude-code", status: "done" }),
     ];
     const grid = buildAgentGrid(features, []);
     expect(grid).toHaveLength(2);
 
-    const codex = grid.find((r) => r.workerType === "codex");
+    const codex = grid.find((r) => r.agentType === "codex");
     expect(codex?.status).toBe("active");
     expect(codex?.featureCount).toBe(2);
     expect(codex?.completedCount).toBe(0);
     expect(codex?.activeFeatureId).toBe("f1");
 
-    const claude = grid.find((r) => r.workerType === "claude-code");
+    const claude = grid.find((r) => r.agentType === "claude-code");
     expect(claude?.status).toBe("completed");
     expect(claude?.completedCount).toBe(2);
   });
 
   it("sorts active before waiting before completed", () => {
     const features = [
-      makeFeature({ id: "f1", workerType: "a-completed", status: "done" }),
-      makeFeature({ id: "f2", workerType: "b-active", status: "in-progress", updatedAt: new Date().toISOString() }),
-      makeFeature({ id: "f3", workerType: "c-waiting", status: "review" }),
+      makeFeature({ id: "f1", agentType: "a-completed", status: "done" }),
+      makeFeature({ id: "f2", agentType: "b-active", status: "in-progress", updatedAt: new Date().toISOString() }),
+      makeFeature({ id: "f3", agentType: "c-waiting", status: "review" }),
     ];
     const grid = buildAgentGrid(features, []);
-    expect(grid[0]!.workerType).toBe("b-active");
-    expect(grid[1]!.workerType).toBe("c-waiting");
-    expect(grid[2]!.workerType).toBe("a-completed");
+    expect(grid[0]!.agentType).toBe("b-active");
+    expect(grid[1]!.agentType).toBe("c-waiting");
+    expect(grid[2]!.agentType).toBe("a-completed");
   });
 
   it("counts pending handoffs per agent", () => {
     const features = [
-      makeFeature({ id: "f1", workerType: "codex", status: "pending" }),
+      makeFeature({ id: "f1", agentType: "codex", status: "pending" }),
     ];
     const handoffs = [makeHandoff("h1", "codex"), makeHandoff("h2", "gemini")];
     const grid = buildAgentGrid(features, handoffs);
@@ -104,7 +104,7 @@ describe("buildAgentGrid", () => {
 
     expect(grid).toEqual([
       expect.objectContaining({
-        workerType: "codex",
+        agentType: "codex",
         status: "waiting",
         featureCount: 0,
         pendingHandoffCount: 1,
@@ -114,14 +114,14 @@ describe("buildAgentGrid", () => {
 
   it("does not mark completed workers waiting for another worker's handoff", () => {
     const features = [
-      makeFeature({ id: "f1", workerType: "claude-code", status: "done" }),
-      makeFeature({ id: "f2", workerType: "claude-code", status: "done" }),
-      makeFeature({ id: "f3", workerType: "codex", status: "pending" }),
+      makeFeature({ id: "f1", agentType: "claude-code", status: "done" }),
+      makeFeature({ id: "f2", agentType: "claude-code", status: "done" }),
+      makeFeature({ id: "f3", agentType: "codex", status: "pending" }),
     ];
     const grid = buildAgentGrid(features, [makeHandoff("h1", "codex")]);
 
-    expect(grid.find((row) => row.workerType === "claude-code")?.status).toBe("completed");
-    expect(grid.find((row) => row.workerType === "codex")?.status).toBe("waiting");
+    expect(grid.find((row) => row.agentType === "claude-code")?.status).toBe("completed");
+    expect(grid.find((row) => row.agentType === "codex")?.status).toBe("waiting");
   });
 });
 

@@ -77,7 +77,7 @@ This generates a self-contained worker assignment from mission metadata. **You m
 - Does the `expectedBehavior` match what the mission actually needs?
 - Are `verificationSteps` specific and observable?
 - Are `fulfills` assertions achievable within the feature's scope?
-- Does the `workerType` skill exist?
+- Does the `agentType` skill exist?
 
 If any prompt is ambiguous or misaligned, fix the description or ask the user before dispatching.
 
@@ -89,7 +89,7 @@ Quick check: list the files each feature will touch. Any overlap means sequentia
 
 ### A5. Dispatch Workers
 
-For each ready feature, dispatch a worker. Workers should load `maestro:worker-base` for their startup/cleanup procedure, then their feature's `workerType` skill for the actual work.
+For each ready feature, dispatch a worker. Workers should load `maestro:worker-base` for their startup/cleanup procedure, then their feature's `agentType` skill for the actual work.
 
 Track dispatch:
 

@@ -41,7 +41,7 @@ async function createImplementationMission(): Promise<string> {
         milestoneId: "m1",
         title: "Feature 1",
         description: "Feature under gate test",
-        workerType: "test-skill",
+        agentType: "test-skill",
         verificationSteps: ["build", "test"],
       },
     ],

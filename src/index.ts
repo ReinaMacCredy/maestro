@@ -1,7 +1,9 @@
 #!/usr/bin/env bun
+import { basename, win32 } from "node:path";
 import { Command, CommanderError } from "commander";
 import { formatVersionOutputForArgv } from "@/shared/version-format.js";
 import { MaestroError } from "@/shared/errors.js";
+import { removeIfExists } from "@/shared/lib/fs.js";
 import { initServices } from "./services.js";
 import { registerInitCommand } from "@/infra/commands/init.command.js";
 import { registerStatusCommand } from "@/infra/commands/status.command.js";
@@ -9,6 +11,10 @@ import { registerDoctorCommand } from "@/infra/commands/doctor.command.js";
 import { registerInstallCommand } from "@/infra/commands/install.command.js";
 import { registerUpdateCommand } from "@/infra/commands/update.command.js";
 import { registerUninstallCommand } from "@/infra/commands/uninstall.command.js";
+import {
+  resolveInstallDir,
+  resolveInstalledBinaryName,
+} from "@/infra/usecases/install-release-binary.usecase.js";
 import { registerNoteCommand } from "./features/notes/index.js";
 import { registerSessionCommand } from "./features/session/index.js";
 import {
@@ -83,8 +89,35 @@ registerReplyCommand(program);
 registerPrincipleCommand(program);
 registerBundleCommand(program);
 
+export function shouldCleanupStaleWindowsBinary(
+  platform: NodeJS.Platform = process.platform,
+  execPath: string = process.execPath,
+): boolean {
+  if (platform !== "win32") return false;
+  const executableName = basename(execPath.replaceAll("\\", "/")).toLowerCase();
+  if (executableName !== resolveInstalledBinaryName("win32")) return false;
+
+  const expectedPath = win32.join(
+    resolveInstallDir("win32"),
+    resolveInstalledBinaryName("win32"),
+  ).toLowerCase();
+  return win32.normalize(execPath).toLowerCase() === expectedPath;
+}
+
+export async function cleanupStaleWindowsBinary(
+  platform: NodeJS.Platform = process.platform,
+  execPath: string = process.execPath,
+  removeIfExistsImpl: typeof removeIfExists = removeIfExists,
+): Promise<void> {
+  if (!shouldCleanupStaleWindowsBinary(platform, execPath)) return;
+  try {
+    await removeIfExistsImpl(`${execPath}.old`);
+  } catch {}
+}
+
 async function main(): Promise<void> {
   try {
+    await cleanupStaleWindowsBinary();
     assertNoDeprecatedMissionControlFlags(process.argv);
     await program.parseAsync(process.argv);
   } catch (err) {
@@ -123,4 +156,6 @@ function assertNoDeprecatedMissionControlFlags(argv: readonly string[]): void {
   ]);
 }
 
-main();
+if (import.meta.main) {
+  void main();
+}

@@ -159,7 +159,9 @@ describe("ClaudeSessionDetectAdapter", () => {
         sessionId,
         sourcePath: join(
           process.env.MAESTRO_CLAUDE_PROJECTS_DIR!,
-          cwd.replace(/\/+$/, "").replace(/\//g, "-"),
+          // Matches encodeProjectPath in the adapter: both slash flavors
+          // become dashes so the encoding stays stable across platforms.
+          cwd.replace(/[\\/]+$/, "").replace(/[\\/]/g, "-"),
           `${sessionId}.jsonl`,
         ),
         startedAt,

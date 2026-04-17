@@ -26,7 +26,7 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
       status: "pending",
       milestoneId: "m1",
       milestoneTitle: "Milestone 1",
-      workerType: "test",
+      agentType: "test",
       description: "Test",
       preconditions: undefined,
       expectedBehavior: undefined,
@@ -36,9 +36,9 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
       validTransitions: ["assigned", "in-progress"],
       },
       features: [
-        { id: "f1", title: "F1", status: "pending", milestoneId: "m1", workerType: "test", hasReport: false },
-        { id: "f2", title: "F2", status: "pending", milestoneId: "m1", workerType: "test", hasReport: false },
-        { id: "f3", title: "F3", status: "pending", milestoneId: "m2", workerType: "test", hasReport: false },
+        { id: "f1", title: "F1", status: "pending", milestoneId: "m1", agentType: "test", hasReport: false },
+        { id: "f2", title: "F2", status: "pending", milestoneId: "m1", agentType: "test", hasReport: false },
+        { id: "f3", title: "F3", status: "pending", milestoneId: "m2", agentType: "test", hasReport: false },
       ],
       session: {
         branch: "main",
@@ -52,7 +52,7 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
         gitAvailable: true,
         checks: [],
         missionDirectory: ".maestro/missions/2026-03-30-001",
-        workerTypes: ["test"],
+        agentTypes: ["test"],
         backgroundMode: "solid",
       },
       progressLog: [],
@@ -535,9 +535,9 @@ describe("reduce", () => {
         it("jumps to a selected dependency on enter", () => {
         const snapshot = makeSnapshot({
           features: [
-            { id: "f1", title: "F1", status: "done", milestoneId: "m1", workerType: "test", hasReport: true },
-            { id: "f2", title: "F2", status: "pending", milestoneId: "m1", workerType: "test", hasReport: false },
-            { id: "f3", title: "F3", status: "pending", milestoneId: "m2", workerType: "test", hasReport: false },
+            { id: "f1", title: "F1", status: "done", milestoneId: "m1", agentType: "test", hasReport: true },
+            { id: "f2", title: "F2", status: "pending", milestoneId: "m1", agentType: "test", hasReport: false },
+            { id: "f3", title: "F3", status: "pending", milestoneId: "m2", agentType: "test", hasReport: false },
           ],
           taskPreviews: [
             {
@@ -546,7 +546,7 @@ describe("reduce", () => {
               status: "done",
               milestoneId: "m1",
               milestoneTitle: "Milestone 1",
-              workerType: "test",
+              agentType: "test",
               description: "Done",
               preconditions: undefined,
               expectedBehavior: undefined,
@@ -561,7 +561,7 @@ describe("reduce", () => {
               status: "pending",
               milestoneId: "m1",
               milestoneTitle: "Milestone 1",
-              workerType: "test",
+              agentType: "test",
               description: "Blocked work",
               preconditions: undefined,
               expectedBehavior: undefined,
@@ -578,7 +578,7 @@ describe("reduce", () => {
               status: "pending",
               milestoneId: "m2",
               milestoneTitle: "Milestone 2",
-              workerType: "test",
+              agentType: "test",
               description: "Downstream work",
               preconditions: undefined,
               expectedBehavior: undefined,
@@ -700,9 +700,9 @@ describe("reduce", () => {
         });
         const reordered = makeSnapshot({
           features: [
-            { id: "f2", title: "F2", status: "pending", milestoneId: "m1", workerType: "test", hasReport: false },
-            { id: "f1", title: "F1", status: "pending", milestoneId: "m1", workerType: "test", hasReport: false },
-            { id: "f3", title: "F3", status: "pending", milestoneId: "m2", workerType: "test", hasReport: false },
+            { id: "f2", title: "F2", status: "pending", milestoneId: "m1", agentType: "test", hasReport: false },
+            { id: "f1", title: "F1", status: "pending", milestoneId: "m1", agentType: "test", hasReport: false },
+            { id: "f3", title: "F3", status: "pending", milestoneId: "m2", agentType: "test", hasReport: false },
           ],
         });
 
@@ -720,7 +720,7 @@ describe("reduce", () => {
       const state = makeState({ selectedFeatureIndex: 5 });
       const newSnap = makeSnapshot({
         features: [
-          { id: "f1", title: "F1", status: "done", milestoneId: "m1", workerType: "t", hasReport: false },
+          { id: "f1", title: "F1", status: "done", milestoneId: "m1", agentType: "t", hasReport: false },
         ],
       });
       const next = reduce(state, { type: "update-snapshot", snapshot: newSnap });
@@ -732,9 +732,9 @@ describe("reduce", () => {
       const state = makeState({ selectedFeatureIndex: 1 });
       const reordered = makeSnapshot({
         features: [
-          { id: "f3", title: "F3", status: "pending", milestoneId: "m2", workerType: "t", hasReport: false },
-          { id: "f2", title: "F2", status: "assigned", milestoneId: "m1", workerType: "t", hasReport: false },
-          { id: "f1", title: "F1", status: "pending", milestoneId: "m1", workerType: "t", hasReport: false },
+          { id: "f3", title: "F3", status: "pending", milestoneId: "m2", agentType: "t", hasReport: false },
+          { id: "f2", title: "F2", status: "assigned", milestoneId: "m1", agentType: "t", hasReport: false },
+          { id: "f1", title: "F1", status: "pending", milestoneId: "m1", agentType: "t", hasReport: false },
         ],
       });
       const next = reduce(state, { type: "update-snapshot", snapshot: reordered });
@@ -749,9 +749,9 @@ describe("reduce", () => {
       });
       const reordered = makeSnapshot({
         features: [
-          { id: "f2", title: "F2", status: "assigned", milestoneId: "m1", workerType: "t", hasReport: false },
-          { id: "f3", title: "F3", status: "pending", milestoneId: "m2", workerType: "t", hasReport: false },
-          { id: "f1", title: "F1", status: "pending", milestoneId: "m1", workerType: "t", hasReport: false },
+          { id: "f2", title: "F2", status: "assigned", milestoneId: "m1", agentType: "t", hasReport: false },
+          { id: "f3", title: "F3", status: "pending", milestoneId: "m2", agentType: "t", hasReport: false },
+          { id: "f1", title: "F1", status: "pending", milestoneId: "m1", agentType: "t", hasReport: false },
         ],
       });
 
@@ -783,9 +783,9 @@ describe("reduce", () => {
         });
         const nextSnapshot = makeSnapshot({
           features: [
-            { id: "f1", title: "F1", status: "pending", milestoneId: "m1", workerType: "t", hasReport: false },
-            { id: "f2", title: "F2", status: "in-progress", milestoneId: "m1", workerType: "t", hasReport: false },
-            { id: "f3", title: "F3", status: "pending", milestoneId: "m2", workerType: "t", hasReport: false },
+            { id: "f1", title: "F1", status: "pending", milestoneId: "m1", agentType: "t", hasReport: false },
+            { id: "f2", title: "F2", status: "in-progress", milestoneId: "m1", agentType: "t", hasReport: false },
+            { id: "f3", title: "F3", status: "pending", milestoneId: "m2", agentType: "t", hasReport: false },
           ],
         });
 

@@ -17,6 +17,7 @@ import type {
   CreateTaskInput,
   TaskMutationInput,
   UpdateTaskInput,
+  UpdateTaskResult,
 } from "../domain/task-types.js";
 import type { TaskStorePort } from "../ports/task-store.port.js";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
@@ -46,6 +47,7 @@ import {
 import {
   assertTaskMutationOwnership,
   assertTaskUpdateAllowed,
+  findBusySessionTasks,
   getUnresolvedBlockerIds,
   releaseTaskOwnership,
 } from "../domain/task-state.js";
@@ -141,7 +143,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
     });
   }
 
-  async update(id: string, patch: UpdateTaskInput, opts: TaskMutationInput = {}): Promise<Task> {
+  async update(id: string, patch: UpdateTaskInput, opts: TaskMutationInput = {}): Promise<UpdateTaskResult> {
     return this.withLock(async () => {
       const tasks = await this.readAll();
       const existing = tasks.get(id);
@@ -156,12 +158,13 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         assertNoParentCycle(id, patch.parentId, tasks);
       }
 
-      const nextStatus = assertTaskUpdateAllowed(existing, patch, tasks, opts);
+      const { nextStatus, autoClaim } = assertTaskUpdateAllowed(existing, patch, tasks, opts);
 
       const labels = applyLabelPatch(existing.labels, patch.addLabels, patch.removeLabels);
       const reason = patch.reason === undefined
         ? existing.closeReason
         : (patch.reason.length === 0 ? undefined : patch.reason);
+      const now = new Date().toISOString();
 
       const updated: Task = {
         ...existing,
@@ -172,13 +175,15 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         status: nextStatus,
         parentId: patch.parentId === "" ? undefined : (patch.parentId ?? existing.parentId),
         labels,
+        assignee: autoClaim ? autoClaim.sessionId : existing.assignee,
+        claimedAt: autoClaim ? now : existing.claimedAt,
         closeReason: nextStatus === "completed" ? reason : existing.closeReason,
-        updatedAt: new Date().toISOString(),
+        updatedAt: now,
       };
 
       tasks.set(id, updated);
       await this.writeAll(tasks);
-      return updated;
+      return { task: updated, autoClaimed: autoClaim !== undefined };
     });
   }
 
@@ -206,13 +211,9 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
       }
 
       if (opts.checkBusy) {
-        const owned = Array.from(tasks.values()).filter((task) =>
-          task.id !== id &&
-          task.status !== "completed" &&
-          task.assignee === sessionId
-        );
-        if (owned.length > 0) {
-          throw taskClaimBusySession(sessionId, owned.map((task) => task.id));
+        const busy = findBusySessionTasks(sessionId, id, tasks);
+        if (busy.length > 0) {
+          throw taskClaimBusySession(sessionId, busy);
         }
       }
 

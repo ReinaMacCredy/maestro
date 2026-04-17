@@ -2,6 +2,7 @@ import {
   claimedTaskCannotBeReopened,
   taskAlreadyCompleted,
   taskBlockedByOpenTasks,
+  taskClaimBusySession,
   taskMutationOwnedByDifferentSession,
   taskMutationRequiresOwnershipContext,
   taskReasonRequiresCompletedStatus,
@@ -13,6 +14,11 @@ import type {
   TaskStatus,
   UpdateTaskInput,
 } from "./task-types.js";
+
+export interface UpdateDecision {
+  readonly nextStatus: TaskStatus;
+  readonly autoClaim?: { readonly sessionId: string };
+}
 
 export const LEGACY_TASK_STATUSES = [
   "open",
@@ -69,7 +75,7 @@ export function assertTaskUpdateAllowed(
   patch: UpdateTaskInput,
   tasks: ReadonlyMap<string, Task>,
   actor: TaskMutationInput = {},
-): TaskStatus {
+): UpdateDecision {
   if (existing.status === "completed") {
     throw taskAlreadyCompleted(existing.id);
   }
@@ -79,12 +85,6 @@ export function assertTaskUpdateAllowed(
   }
 
   const nextStatus = patch.status ?? existing.status;
-  if (!existing.assignee && nextStatus === "in_progress") {
-    throw taskStatusRequiresClaim("in_progress");
-  }
-  if (existing.assignee && patch.status === "pending" && existing.status !== "pending") {
-    throw claimedTaskCannotBeReopened(existing.id);
-  }
   if (
     patch.status !== undefined &&
     patch.status !== existing.status &&
@@ -95,8 +95,37 @@ export function assertTaskUpdateAllowed(
       throw taskBlockedByOpenTasks(existing.id, blockers);
     }
   }
+  if (existing.assignee && patch.status === "pending" && existing.status !== "pending") {
+    throw claimedTaskCannotBeReopened(existing.id);
+  }
+  if (!existing.assignee && nextStatus === "in_progress") {
+    if (!actor.sessionId) {
+      throw taskStatusRequiresClaim("in_progress");
+    }
+    const busy = findBusySessionTasks(actor.sessionId, existing.id, tasks);
+    if (busy.length > 0) {
+      throw taskClaimBusySession(actor.sessionId, busy);
+    }
+    return { nextStatus, autoClaim: { sessionId: actor.sessionId } };
+  }
 
-  return nextStatus;
+  return { nextStatus };
+}
+
+export function findBusySessionTasks(
+  sessionId: string,
+  excludeId: string,
+  tasks: ReadonlyMap<string, Task>,
+): readonly string[] {
+  const busy: string[] = [];
+  for (const task of tasks.values()) {
+    if (task.id === excludeId) continue;
+    if (task.status === "completed") continue;
+    if (task.assignee === sessionId) {
+      busy.push(task.id);
+    }
+  }
+  return busy;
 }
 
 export function releaseTaskOwnership(task: Task, now: string): Task {

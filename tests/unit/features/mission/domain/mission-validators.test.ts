@@ -66,7 +66,7 @@ const makeFeature = (overrides: Partial<Feature> = {}): Feature => ({
   status: "pending",
   title: "Test Feature",
   description: "A test feature",
-  workerType: "test-skill",
+  agentType: "test-skill",
   verificationSteps: ["step 1"],
   dependsOn: [],
   fulfills: [],
@@ -252,7 +252,7 @@ describe("mission validators", () => {
         milestoneId: "m1",
         title: "New Feature",
         description: "A new feature",
-        workerType: "test-skill",
+        agentType: "test-skill",
         verificationSteps: ["step 1"],
       };
       const result = validateCreateFeatureInput(input);
@@ -265,7 +265,7 @@ describe("mission validators", () => {
         milestoneId: "m1",
         title: "New Feature",
         description: "A new feature",
-        workerType: "test-skill",
+        agentType: "test-skill",
         verificationSteps: [],
       };
       expect(() => validateCreateFeatureInput(input)).toThrow(ZodError);

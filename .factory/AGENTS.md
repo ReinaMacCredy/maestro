@@ -10,8 +10,8 @@ Use this directory as committed bootstrap and worker-reference infrastructure fo
 
 ## Skill Lookup
 
-- Runtime worker prompt lookup resolves `.maestro/skills/{workerType}/SKILL.md` first
-- If no project-local skill exists, runtime falls back to `skills/built-in/{workerType}/SKILL.md`
+- Runtime worker prompt lookup resolves `.maestro/skills/{agentType}/SKILL.md` first
+- If no project-local skill exists, runtime falls back to `skills/built-in/{agentType}/SKILL.md`
 - `.factory/skills/` is reference material for authors and reviewers, not the runtime lookup path
 
 ## Mission Control

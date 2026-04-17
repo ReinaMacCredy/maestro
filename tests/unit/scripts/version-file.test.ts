@@ -57,7 +57,7 @@ describe("writeVersionArtifacts", () => {
   it("writes both package.json and version.ts artifacts for a valid release version", async () => {
     const pkgPath = join(tmpDir, "package.json");
     const versionPath = join(tmpDir, "version.ts");
-    const pkg = { version: "0.25.1", name: "maestro-handoff" };
+    const pkg = { version: "0.25.1", name: "maestro" };
 
     await writeVersionArtifacts({
       cwd: tmpDir,

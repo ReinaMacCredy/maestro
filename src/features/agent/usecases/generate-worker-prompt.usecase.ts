@@ -15,7 +15,7 @@ import type {
   Principle,
   MilestoneProfile,
 } from "@/features/mission";
-import { WORKER_TYPE_PATTERN, parseWorkerReport } from "@/features/mission";
+import { AGENT_TYPE_PATTERN, parseWorkerReport } from "@/features/mission";
 import {
   recallMemory,
   type CorrectionStorePort,
@@ -33,6 +33,7 @@ import { sanitizeInlinePromptContent, sanitizePromptContent } from "@/shared/lib
 import { dirname, join, resolve } from "node:path";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { assertSafeSegment, resolveWithin } from "@/shared/lib/path-safety.js";
+import { resolveSkillDirectoryName } from "@/shared/lib/skill-path.js";
 
 interface PreviousMilestoneReport {
   readonly featureId: string;
@@ -55,8 +56,8 @@ export interface GenerateWorkerPromptResult {
   readonly prompt: string;
   /** The feature ID */
   readonly featureId: string;
-  /** The worker type (skill name) */
-  readonly workerType: string;
+  /** The agent type (skill name) */
+  readonly agentType: string;
   /** Path where prompt was written (if --out was provided) */
   readonly writtenTo?: readonly string[];
 }
@@ -140,7 +141,7 @@ export async function generateWorkerPrompt(
   const featureAssertions = assertions.filter((a) => a.featureId === featureId);
 
   // Read skill file
-  const skillContent = await readWorkerSkill(baseDir, feature.workerType);
+  const skillContent = await readWorkerSkill(baseDir, feature.agentType);
 
   // Load all features for sibling context in prompt
   const allFeatures = await featureStore.list(missionId);
@@ -192,7 +193,7 @@ export async function generateWorkerPrompt(
   return {
     prompt,
     featureId,
-    workerType: feature.workerType,
+    agentType: feature.agentType,
     writtenTo: writtenPaths.length > 0 ? writtenPaths : undefined,
   };
 }
@@ -226,17 +227,18 @@ function isWorkerPromptStores(value: WorkerPromptStores | CorrectionStorePort): 
 
 /**
  * Read worker skill markdown from either:
- * 1. .maestro/skills/{workerType}/SKILL.md in the current workspace or any ancestor
- * 2. skills/built-in/{workerType}/SKILL.md in the current workspace or any ancestor
+ * 1. .maestro/skills/{agentType}/SKILL.md in the current workspace or any ancestor
+ * 2. skills/built-in/{agentType}/SKILL.md in the current workspace or any ancestor
  */
-async function readWorkerSkill(baseDir: string, workerType: string): Promise<string> {
-  assertSafeSegment(workerType, "worker type", WORKER_TYPE_PATTERN, "letters, numbers, colons, dashes, and underscores");
+async function readWorkerSkill(baseDir: string, agentType: string): Promise<string> {
+  assertSafeSegment(agentType, "agent type", AGENT_TYPE_PATTERN, "letters, numbers, colons, dashes, and underscores");
+  const skillDirName = resolveSkillDirectoryName(agentType);
   const searchedPaths: string[] = [];
 
   for (const dir of enumerateSearchRoots(baseDir)) {
     const workspaceSkillPath = resolveWithin(
       join(dir, MAESTRO_DIR, "skills"),
-      join(workerType, "SKILL.md"),
+      join(skillDirName, "SKILL.md"),
       "Workspace skill path",
     );
     searchedPaths.push(workspaceSkillPath);
@@ -247,7 +249,7 @@ async function readWorkerSkill(baseDir: string, workerType: string): Promise<str
 
     const builtInSkillPath = resolveWithin(
       join(dir, "skills", "built-in"),
-      join(workerType, "SKILL.md"),
+      join(skillDirName, "SKILL.md"),
       "Built-in skill path",
     );
     searchedPaths.push(builtInSkillPath);
@@ -259,14 +261,14 @@ async function readWorkerSkill(baseDir: string, workerType: string): Promise<str
 
   const primaryPath = searchedPaths[0] ?? resolveWithin(
     join(baseDir, MAESTRO_DIR, "skills"),
-    join(workerType, "SKILL.md"),
+    join(skillDirName, "SKILL.md"),
     "Workspace skill path",
   );
   throw new MaestroError(
-    `Worker skill '${workerType}' not found at ${primaryPath}`,
+    `Worker skill '${agentType}' not found at ${primaryPath}`,
     [
       `Create workspace skill file: ${primaryPath}`,
-      `Or add built-in skill file: skills/built-in/${workerType}/SKILL.md`,
+      `Or add built-in skill file: skills/built-in/${skillDirName}/SKILL.md`,
       `Searched paths: ${searchedPaths.join(", ")}`,
     ],
   );
@@ -451,7 +453,7 @@ function composePrompt(
 
   // Feature identification
   parts.push(`**Feature ID:** ${feature.id}`);
-  parts.push(`**Worker Type:** ${feature.workerType}`);
+  parts.push(`**Agent Type:** ${feature.agentType}`);
   parts.push(`**Mission:** ${mission.id} - ${mission.title}`);
   parts.push(`**Milestone:** ${milestone.id} - ${milestone.title}`);
   parts.push("");

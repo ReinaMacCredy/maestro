@@ -2,8 +2,10 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { pathToFileURL } from "node:url";
 import {
   findCrossFeatureImportViolation,
+  resolveBoundaryCheckRoot,
   scanFeatureBoundaryViolations,
 } from "../../../scripts/check-feature-boundaries-lib";
 
@@ -18,6 +20,17 @@ afterEach(async () => {
 });
 
 describe("findCrossFeatureImportViolation", () => {
+  it("resolves script roots as decoded filesystem paths instead of raw URL pathnames", () => {
+    const rootDir = join(tmpDir, "repo with spaces");
+    const scriptUrl = pathToFileURL(join(rootDir, "scripts", "check-feature-boundaries.ts")).href;
+
+    // resolveBoundaryCheckRoot normalizes to POSIX separators so that its
+    // return value is consistent across Windows and Unix runners.
+    expect(resolveBoundaryCheckRoot(scriptUrl)).toBe(
+      `${rootDir.replace(/\\/g, "/")}/`,
+    );
+  });
+
   it("allows public-surface imports across features", () => {
     expect(
       findCrossFeatureImportViolation(

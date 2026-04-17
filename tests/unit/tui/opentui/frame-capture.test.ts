@@ -97,7 +97,7 @@ describe("captureMissionControlFrame", () => {
         gitAvailable: true,
         checks: [],
         missionDirectory: null,
-        workerTypes: [],
+        agentTypes: [],
         backgroundMode: "terminal",
       },
       configInspector: null,
@@ -127,7 +127,7 @@ describe("captureMissionControlFrame", () => {
         title: "Injected \u001b]2;PWN\u0007 Title",
         status: "in-progress",
         milestoneId: "m1",
-        workerType: "test-skill",
+        agentType: "test-skill",
         hasReport: false,
       },
     ];
@@ -160,7 +160,7 @@ describe("captureMissionControlFrame", () => {
           gitAvailable: true,
           checks: [],
           missionDirectory: null,
-          workerTypes: [],
+          agentTypes: [],
           backgroundMode: "terminal",
         },
       };
@@ -219,7 +219,7 @@ describe("captureMissionControlFrame", () => {
           gitAvailable: true,
           checks: [],
           missionDirectory: null,
-          workerTypes: [],
+          agentTypes: [],
           backgroundMode: "terminal",
         },
       };
@@ -283,7 +283,7 @@ describe("captureMissionControlFrame", () => {
         gitAvailable: true,
         checks: [],
         missionDirectory: null,
-        workerTypes: [],
+        agentTypes: [],
         backgroundMode: "terminal",
       },
     };
@@ -341,7 +341,7 @@ describe("captureMissionControlFrame", () => {
         gitAvailable: true,
         checks: [],
         missionDirectory: null,
-        workerTypes: [],
+        agentTypes: [],
         backgroundMode: "terminal",
       },
         pendingHandoffs: [

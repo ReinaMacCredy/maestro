@@ -63,6 +63,46 @@ export async function dirExists(dir: string): Promise<boolean> {
   }
 }
 
+export async function fileExists(path: string): Promise<boolean> {
+  return Bun.file(path).exists();
+}
+
+interface RenameForInPlaceReplaceOptions {
+  readonly removeImpl?: typeof rm;
+  readonly renameImpl?: typeof rename;
+}
+
+/**
+ * Rename `target` to `target`.old before a caller writes the new file.
+ * Windows cannot overwrite a running executable in place, but renaming
+ * a running exe on the same volume is allowed, so the new binary can
+ * be written to `target` and the .old copy cleaned up on next startup.
+ */
+export async function renameForInPlaceReplace(
+  target: string,
+  options: RenameForInPlaceReplaceOptions = {},
+): Promise<void> {
+  const removeImpl = options.removeImpl ?? rm;
+  const renameImpl = options.renameImpl ?? rename;
+  const oldPath = `${target}.old`;
+  try {
+    await removeImpl(oldPath, { force: true });
+  } catch (err: unknown) {
+    // On Windows, a prior `.old` can still be locked by the previous maestro
+    // process (antivirus, slow handle release). `force: true` only swallows
+    // ENOENT, not EBUSY/EPERM/EACCES. Tolerate those so the rename below can
+    // still proceed; if it genuinely cannot, that path will fail loudly.
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== "EBUSY" && code !== "EPERM" && code !== "EACCES") throw err;
+  }
+  try {
+    await renameImpl(target, oldPath);
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw err;
+  }
+}
+
 export async function listDirs(dir: string): Promise<string[]> {
   try {
     const entries = await readdir(dir, { withFileTypes: true });

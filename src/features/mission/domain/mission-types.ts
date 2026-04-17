@@ -144,7 +144,7 @@ export interface Feature {
   readonly status: FeatureStatus;
   readonly title: string;
   readonly description: string;
-  readonly workerType: string;
+  readonly agentType: string;
   readonly verificationSteps: readonly string[];
   readonly dependsOn: readonly string[];
   readonly fulfills: readonly string[];
@@ -215,7 +215,7 @@ export interface CreateFeatureInput {
   readonly milestoneId: string;
   readonly title: string;
   readonly description: string;
-  readonly workerType: string;
+  readonly agentType: string;
   readonly verificationSteps: readonly string[];
   readonly dependsOn?: readonly string[];
   readonly fulfills?: readonly string[];
@@ -229,7 +229,7 @@ export interface MissionPlanFeature {
   readonly milestoneId: string;
   readonly title: string;
   readonly description: string;
-  readonly workerType: string;
+  readonly agentType: string;
   readonly verificationSteps: readonly string[];
   readonly dependsOn?: readonly string[];
   readonly fulfills?: readonly string[];

@@ -145,6 +145,7 @@ async function initGitRepo(cwd: string): Promise<void> {
 }
 
 async function commandExists(command: string): Promise<boolean> {
+  if (process.platform === "win32") return false;
   const proc = Bun.spawn(["bash", "-lc", `command -v ${command}`], {
     stdout: "pipe",
     stderr: "pipe",
@@ -207,7 +208,7 @@ describe("init CLI", () => {
 
     expect(exitCode).toBe(0);
     const result = JSON.parse(stdout);
-    expect(result.skipped.some((path: string) => path.endsWith("/.maestro/AGENTS.md"))).toBe(true);
+    expect(result.skipped.some((path: string) => path.endsWith(join(".maestro", "AGENTS.md")))).toBe(true);
     expect(await readFile(agentsPath, "utf8")).toBe("custom bootstrap\n");
   });
 
@@ -219,7 +220,7 @@ describe("init CLI", () => {
     expect(exitCode).toBe(0);
     const result = JSON.parse(stdout);
     expect(result.created).toEqual([]);
-    expect(result.skipped.some((path: string) => path.endsWith("/.maestro/config.yaml"))).toBe(true);
+    expect(result.skipped.some((path: string) => path.endsWith(join(".maestro", "config.yaml")))).toBe(true);
   });
 
   it("migrates legacy .factory bootstrap files into .maestro", async () => {
@@ -250,16 +251,23 @@ describe("init CLI", () => {
     const sessionPath = join(tmpDir, ".maestro", "sessions", "events.jsonl");
     await writeFile(sessionPath, "{}\n");
 
-    const proc = Bun.spawn(["git", "check-ignore", sessionPath], {
-      cwd: tmpDir,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    const proc = Bun.spawn(
+      ["git", "-c", "core.quotePath=false", "check-ignore", sessionPath],
+      {
+        cwd: tmpDir,
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
     const stdout = await new Response(proc.stdout).text();
     const exitCode = await proc.exited;
 
     expect(exitCode).toBe(0);
-    expect(stdout.trim()).toBe(sessionPath);
+    // Windows git still renders backslash paths as C-escaped double-quoted
+    // strings in check-ignore output (e.g. "C:\\Users\\..."); unwrap them
+    // before comparing so the test is deterministic across runners.
+    const reported = stdout.trim().replace(/^"(.*)"$/, "$1").replace(/\\\\/g, "\\");
+    expect(reported).toBe(sessionPath);
   });
 
   it("exits cleanly in tty mode when no replacement prompt is needed", async () => {

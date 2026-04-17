@@ -1,15 +1,15 @@
 import type { GitFileChange, GitState } from "@/infra/domain/git-types.js";
 import type { GitPort } from "../ports/git.port.js";
-import { exec } from "@/shared/lib/shell.js";
+import { execArgv } from "@/shared/lib/shell.js";
 
 export class ShellGitAdapter implements GitPort {
   async getState(cwd: string): Promise<GitState> {
     const [branchResult, logResult, statusResult, diffResult] =
       await Promise.all([
-        exec("git branch --show-current", { cwd }),
-        exec("git log --oneline -10", { cwd }),
-        exec("git status --porcelain", { cwd }),
-        exec("git diff --stat HEAD", { cwd }),
+        execArgv(["git", "branch", "--show-current"], { cwd }),
+        execArgv(["git", "log", "--oneline", "-10"], { cwd }),
+        execArgv(["git", "status", "--porcelain"], { cwd }),
+        execArgv(["git", "diff", "--stat", "HEAD"], { cwd }),
       ]);
 
     const branch = branchResult.stdout || "HEAD";
@@ -37,7 +37,7 @@ export class ShellGitAdapter implements GitPort {
   }
 
   async isRepo(cwd: string): Promise<boolean> {
-    const result = await exec("git rev-parse --is-inside-work-tree", { cwd });
+    const result = await execArgv(["git", "rev-parse", "--is-inside-work-tree"], { cwd });
     return result.exitCode === 0 && result.stdout === "true";
   }
 }

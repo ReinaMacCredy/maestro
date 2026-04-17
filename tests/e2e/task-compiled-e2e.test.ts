@@ -328,6 +328,77 @@ describe("compiled task feature E2E", () => {
       );
 
     it(
+      "auto-claims unowned task when update --status in_progress ships a session",
+      async () => {
+        const id = (await runCompiled(["task", "q", "auto claim happy path"], tmpDir)).stdout;
+
+        const started = await runCompiled(
+          ["task", "update", id, "--status", "in_progress", "--session", "autoclaim-session-1", "--json"],
+          tmpDir,
+        );
+        expect(started.exitCode).toBe(0);
+        expect(started.stderr).toContain("Auto-claimed");
+        expect(started.stderr).toContain("autoclaim-session-1");
+
+        const shown = await runCompiled(["task", "show", id, "--json"], tmpDir);
+        const shownTask = expectJson<{ status: string; assignee?: string; claimedAt?: string }>(shown);
+        expect(shownTask.status).toBe("in_progress");
+        expect(shownTask.assignee).toBe("autoclaim-session-1");
+        expect(shownTask.claimedAt).toBeDefined();
+
+        const retry = await runCompiled(
+          ["task", "update", id, "--status", "in_progress", "--session", "autoclaim-session-1", "--json"],
+          tmpDir,
+        );
+        expect(retry.exitCode).toBe(0);
+        expect(retry.stderr).not.toContain("Auto-claimed");
+      },
+      SLOW_CLI_TIMEOUT_MS,
+    );
+
+    it(
+      "auto-claim enforces single-task policy via busy-check",
+      async () => {
+        const first = (await runCompiled(["task", "q", "busy first"], tmpDir)).stdout;
+        const second = (await runCompiled(["task", "q", "busy second"], tmpDir)).stdout;
+
+        const firstStart = await runCompiled(
+          ["task", "update", first, "--status", "in_progress", "--session", "busy-session", "--json"],
+          tmpDir,
+        );
+        expect(firstStart.exitCode).toBe(0);
+
+        const secondStart = await runCompiled(
+          ["task", "update", second, "--status", "in_progress", "--session", "busy-session"],
+          tmpDir,
+        );
+        expect(secondStart.exitCode).not.toBe(0);
+        expect(secondStart.stderr).toContain("already owns unresolved");
+      },
+      SLOW_CLI_TIMEOUT_MS,
+    );
+
+    it(
+      "auto-claim surfaces blocker errors before attempting ownership",
+      async () => {
+        const blocker = (await runCompiled(["task", "q", "blocker-parent"], tmpDir)).stdout;
+        const blocked = (await runCompiled(
+          ["task", "q", "blocker-child", "--blocked-by", blocker],
+          tmpDir,
+        )).stdout;
+
+        const attempt = await runCompiled(
+          ["task", "update", blocked, "--status", "in_progress", "--session", "blocker-session"],
+          tmpDir,
+        );
+        expect(attempt.exitCode).not.toBe(0);
+        expect(attempt.stderr).toContain("blocked by unresolved");
+        expect(attempt.stderr).not.toContain("requires task ownership");
+      },
+      SLOW_CLI_TIMEOUT_MS,
+    );
+
+    it(
       "auto-releases stale known-agent owners during ready queries",
       async () => {
         const id = (await runCompiled(["task", "q", "stale owner"], tmpDir)).stdout;

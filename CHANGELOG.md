@@ -1,5 +1,71 @@
 # Changelog
 
+## 0.40.0 - Install hardening and task workflow improvements
+
+- Windows install flow: harden running-exe replacement, tolerate EBUSY/EPERM
+  on prior `.old` locks, and keep local verification paths honest when the
+  install directory is overridden.
+- `maestro update` honors the configured install path instead of defaulting
+  to the system location.
+- Task workflow: auto-claim on `task update --status in_progress`, surface
+  blocker errors before ownership checks, extract stale-session recovery
+  into a reusable helper.
+- CI: stabilize the Windows matrix (bundle/tar/rename/build paths, skill
+  path encoding, boundary check root, last-mile test failures).
+- Docs: sync README features, commands, storage model, and TUI screen set
+  with current state.
+
+## 0.39.0 - Windows CLI support
+
+- Publish a Windows x64 release asset (`maestro-windows-x64.exe`) and
+  extend the platform resolver to find it.
+- Add a Windows install flow that handles replacing a running executable
+  via a `.old`-rename-and-swap dance, including rollback on verification
+  failure.
+- Add a PowerShell installer (`scripts/install.ps1`) mirroring the POSIX
+  `install.sh` flow and surfacing user-PATH guidance.
+- Drop `sh -c` usage from cross-platform code paths and fix POSIX-leaky
+  tests so the CI matrix runs green on `windows-latest`.
+
+## 0.38.0 - Rename Feature.workerType to Feature.agentType (BREAKING)
+
+- Rename `Feature.workerType` to `Feature.agentType` across domain types,
+  Zod schemas, TUI DTOs, CLI JSON output, and generated prompt headers.
+  The field names a brand classifier (codex-cli, claude-code, subagent,
+  human, maestro:worker-base etc.) which is the `agent` concept in the
+  conductor model, not the `worker` (role) concept.
+- Rename exported `WORKER_TYPE_PATTERN` constant to `AGENT_TYPE_PATTERN`.
+- CLI stdout now prints `Agent type: <value>` (was `Worker type:`).
+- Generated prompt header is `**Agent Type:** <value>` (was
+  `**Worker Type:**`).
+- Breaking surfaces: mission plan YAML/JSON input contract, persisted
+  `.maestro/missions/<id>/features/*.json` on-disk format, `feature
+  prompt --json` output shape.
+- Migration: run `bun scripts/migrate-feature-agent-type.ts` once to
+  rewrite existing local feature JSON; the script is idempotent.
+- What survives unchanged (intentional, role-level): `maestro:worker-base`
+  skill name, `WorkerReport`, `WorkerReply`, `generateWorkerPrompt`,
+  `.maestro/missions/<id>/workers/` directory, `# Worker Assignment:`
+  prompt H1 header, `Worker skill '...' not found` error message, and
+  all general worker-as-role prose in shipped skills.
+
+## 0.37.5 - Strip pre-conductor worker-dispatch config surface
+
+- Remove the dead worker-dispatch config surface left behind by the
+  2026-04-08 conductor refactor: `execution.defaultWorker`,
+  `workers: { transport, command, args, env }`, `WorkerConfig`,
+  `CliWorkerConfig`, `recommendWorkerFit`, `getWorkerGuidance`,
+  `formatWorkerLabel`, the Mission Control `workers` config tab, and
+  the default-worker picker modal.
+- Remove residual `cassAvailable` fields from `StatusReport` and
+  `MissionControlConfigSummary`; `status --json` no longer emits the
+  field.
+- Remove dead `HIDDEN_CONFIG_KEY_PATTERNS` regex entries for config
+  keys that no longer exist (`supervision.*`, `rotateWorkerOnRetry`,
+  `workers.*.outputMode`).
+- Net delete of ~693 lines; maestro stays a conductor that never spawns
+  workers.
+
 ## 0.37.4 - Inline GitHub release notes
 
 - Publish GitHub releases with readable inline notes instead of only the

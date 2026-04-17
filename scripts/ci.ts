@@ -18,6 +18,13 @@
 import { join } from "node:path";
 import { $ } from "bun";
 
+if (process.platform === "win32") {
+  console.error("[!!] scripts/ci.ts uses Bun's sh-backed template tag and is POSIX-only.");
+  console.error("     Windows contributors: run bun scripts/build.ts + bun test directly,");
+  console.error("     or open a PR; release cuts remain a macOS/Linux maintainer flow.");
+  process.exit(2);
+}
+
 const root = join(import.meta.dir, "..");
 const pkgPath = join(root, "package.json");
 const versionPath = join(root, "src", "shared", "version.ts");
@@ -129,7 +136,7 @@ if (buildResult !== 0) {
 console.log("[ok] Built dist/maestro from the release commit.");
 
 console.log("\n[-->] Installing locally...");
-const installResult = await Bun.spawn(["bash", "scripts/install-local.sh", "./dist/maestro"], {
+const installResult = await Bun.spawn(["bun", "scripts/install-local.ts"], {
   cwd: root,
   stdout: "inherit",
   stderr: "inherit",

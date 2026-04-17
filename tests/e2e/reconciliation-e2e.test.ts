@@ -57,7 +57,7 @@ function createBasicPlan(): object {
         milestoneId: "m1",
         title: "Feature 1",
         description: "First feature",
-        workerType: "test-skill",
+        agentType: "test-skill",
         verificationSteps: ["step1"],
         fulfills: ["assertion-1"],
       },
@@ -66,7 +66,7 @@ function createBasicPlan(): object {
         milestoneId: "m1",
         title: "Feature 2",
         description: "Second feature",
-        workerType: "test-skill",
+        agentType: "test-skill",
         verificationSteps: ["step2"],
         fulfills: ["assertion-2"],
       },
@@ -88,7 +88,7 @@ function createRichFieldsPlan(): object {
         milestoneId: "m1",
         title: "Feature With Rich Fields",
         description: "Tests fulfills, preconditions, expectedBehavior",
-        workerType: "test-skill",
+        agentType: "test-skill",
         verificationSteps: ["Verify DB connection", "Check HTTP 200"],
         fulfills: ["assertion-db", "assertion-http"],
         preconditions: "PostgreSQL running on port 5432",
@@ -558,8 +558,8 @@ describe("reconciliation E2E: milestone validating -> executing retry", () => {
         { id: "m2", title: "M2", description: "Second", order: 1 },
       ],
       features: [
-        { id: "f1", milestoneId: "m1", title: "F1", description: "D", workerType: "w", verificationSteps: ["S"], fulfills: ["A1"] },
-        { id: "f2", milestoneId: "m2", title: "F2", description: "D", workerType: "w", verificationSteps: ["S"], fulfills: ["A2"] },
+        { id: "f1", milestoneId: "m1", title: "F1", description: "D", agentType: "w", verificationSteps: ["S"], fulfills: ["A1"] },
+        { id: "f2", milestoneId: "m2", title: "F2", description: "D", agentType: "w", verificationSteps: ["S"], fulfills: ["A2"] },
       ],
     };
     const planPath = join(tmpDir, "compact-plan.json");

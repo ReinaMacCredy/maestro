@@ -13,7 +13,7 @@ import {
 } from "./command-runner.js";
 
 export const REPO_ROOT = join(import.meta.dir, "..", "..");
-export const DIST_CLI = join(REPO_ROOT, "dist", "maestro");
+export const DIST_CLI = join(REPO_ROOT, "dist", process.platform === "win32" ? "maestro.exe" : "maestro");
 export const BUILD_TIMEOUT_MS = 60_000;
 export const SLOW_CLI_TIMEOUT_MS = 30_000;
 
@@ -41,12 +41,23 @@ export async function runCompiled(
  * Use inside `beforeAll(buildCompiledCli, BUILD_TIMEOUT_MS)` so the
  * binary is fresh for the entire suite.
  *
- * Subsequent runs of `bun run build` are cheap (~200ms bundle + compile)
- * because Bun caches unchanged modules.
+ * The build is cached per-process: repeated calls across e2e test files
+ * reuse the first result. This avoids hammering Windows with repeated
+ * `rename dist/maestro.exe` calls that intermittently fail with EPERM
+ * due to transient file locks (antivirus / lingering handles).
  */
+let buildPromise: Promise<void> | null = null;
 export async function buildCompiledCli(): Promise<void> {
-  const result = await runCommand(["bun", "run", "build"], REPO_ROOT);
-  expect(result).toMatchObject({ exitCode: 0 });
+  if (!buildPromise) {
+    buildPromise = (async () => {
+      const result = await runCommand(["bun", "run", "build"], REPO_ROOT);
+      expect(result).toMatchObject({ exitCode: 0 });
+    })().catch((err) => {
+      buildPromise = null;
+      throw err;
+    });
+  }
+  return buildPromise;
 }
 
 /**

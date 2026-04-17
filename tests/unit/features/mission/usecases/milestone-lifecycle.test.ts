@@ -34,7 +34,7 @@ function createTestFeature(missionId: string, milestoneId: string, status: Featu
     status,
     title: `Feature ${id}`,
     description: "Test feature",
-      workerType: "test-skill",
+      agentType: "test-skill",
       verificationSteps: ["step1"],
       dependsOn: [],
       fulfills: [],

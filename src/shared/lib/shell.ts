@@ -31,13 +31,6 @@ export async function execOrThrow(
   return result;
 }
 
-export async function exec(
-  cmd: string,
-  opts: { cwd?: string; timeout?: number } = {},
-): Promise<ShellResult> {
-  return execSpawn(["sh", "-c", cmd], opts);
-}
-
 async function execSpawn(
   argv: string[],
   opts: { cwd?: string; timeout?: number },
