@@ -5,7 +5,13 @@ import { MaestroError } from "@/shared/errors.js";
 import { VERSION } from "@/shared/version.js";
 
 const DEFAULT_RELEASE_REPO = "ReinaMacCredy/maestro";
-const TARGET_BINARY_NAME = "maestro";
+const TARGET_BINARY_BASENAME = "maestro";
+
+export function resolveInstalledBinaryName(
+  platform: NodeJS.Platform = process.platform,
+): string {
+  return platform === "win32" ? `${TARGET_BINARY_BASENAME}.exe` : TARGET_BINARY_BASENAME;
+}
 
 interface GitHubReleaseAssetPayload {
   readonly name?: string;
@@ -61,7 +67,8 @@ export function resolveReleaseAssetName(
 ): string {
   const normalizedOs = resolveReleaseOs(platform);
   const normalizedArch = resolveReleaseArch(arch);
-  return `${TARGET_BINARY_NAME}-${normalizedOs}-${normalizedArch}`;
+  const suffix = normalizedOs === "windows" ? ".exe" : "";
+  return `${TARGET_BINARY_BASENAME}-${normalizedOs}-${normalizedArch}${suffix}`;
 }
 
 export function buildReleaseDownloadUrl(
@@ -80,8 +87,9 @@ export async function installReleaseBinary(
   options: InstallReleaseBinaryOptions = {},
 ): Promise<InstallReleaseBinaryResult> {
   const fetchImpl = options.fetchImpl ?? fetch;
+  const platform = options.platform ?? process.platform;
   const installDir = options.installDir ?? join(homedir(), ".local", "bin");
-  const installPath = join(installDir, TARGET_BINARY_NAME);
+  const installPath = join(installDir, resolveInstalledBinaryName(platform));
   const requestedTag = options.version ? normalizeReleaseTag(options.version) : undefined;
   const release = await resolveRelease(fetchImpl, {
     tagName: requestedTag,
@@ -107,7 +115,9 @@ export async function installReleaseBinary(
   try {
     const binaryBytes = await downloadAsset(fetchImpl, release.asset.downloadUrl);
     await Bun.write(tempPath, binaryBytes);
-    await chmod(tempPath, 0o755);
+    if (platform !== "win32") {
+      await chmod(tempPath, 0o755);
+    }
     await rename(tempPath, installPath);
   } catch (error) {
     await rm(tempPath, { force: true }).catch(() => undefined);
@@ -226,14 +236,16 @@ async function downloadAsset(
   return new Uint8Array(await response.arrayBuffer());
 }
 
-function resolveReleaseOs(platform: NodeJS.Platform): "darwin" | "linux" {
+function resolveReleaseOs(platform: NodeJS.Platform): "darwin" | "linux" | "windows" {
   switch (platform) {
     case "darwin":
     case "linux":
       return platform;
+    case "win32":
+      return "windows";
     default:
       throw new MaestroError(`Unsupported platform for release installs: ${platform}`, [
-        "Release installs currently support macOS and Linux",
+        "Release installs currently support macOS, Linux, and Windows",
       ]);
   }
 }

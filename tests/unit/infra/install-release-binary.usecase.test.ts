@@ -8,6 +8,7 @@ import {
   buildReleaseDownloadUrl,
   installReleaseBinary,
   normalizeReleaseTag,
+  resolveInstalledBinaryName,
   resolveReleaseAssetName,
 } from "@/infra/usecases/install-release-binary.usecase.js";
 
@@ -31,6 +32,13 @@ describe("install release binary usecase", () => {
     expect(resolveReleaseAssetName("darwin", "x64")).toBe("maestro-darwin-x64");
     expect(resolveReleaseAssetName("linux", "x86_64")).toBe("maestro-linux-x64");
     expect(resolveReleaseAssetName("linux", "aarch64")).toBe("maestro-linux-arm64");
+    expect(resolveReleaseAssetName("win32", "x64")).toBe("maestro-windows-x64.exe");
+  });
+
+  it("adds .exe suffix to installed binary name on Windows", () => {
+    expect(resolveInstalledBinaryName("darwin")).toBe("maestro");
+    expect(resolveInstalledBinaryName("linux")).toBe("maestro");
+    expect(resolveInstalledBinaryName("win32")).toBe("maestro.exe");
   });
 
   it("normalizes release tags and direct download URLs", () => {
@@ -157,6 +165,6 @@ describe("install release binary usecase", () => {
   });
 
   it("fails clearly when the platform is unsupported", () => {
-    expect(() => resolveReleaseAssetName("win32", "x64")).toThrow(MaestroError);
+    expect(() => resolveReleaseAssetName("freebsd" as NodeJS.Platform, "x64")).toThrow(MaestroError);
   });
 });
