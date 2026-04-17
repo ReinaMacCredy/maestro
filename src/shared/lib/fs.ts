@@ -63,6 +63,23 @@ export async function dirExists(dir: string): Promise<boolean> {
   }
 }
 
+export async function fileExists(path: string): Promise<boolean> {
+  return Bun.file(path).exists();
+}
+
+/**
+ * Rename `target` to `target`.old before a caller writes the new file.
+ * Windows cannot overwrite a running executable in place, but renaming
+ * a running exe on the same volume is allowed, so the new binary can
+ * be written to `target` and the .old copy cleaned up on next startup.
+ */
+export async function renameForInPlaceReplace(target: string): Promise<void> {
+  if (!(await fileExists(target))) return;
+  const oldPath = `${target}.old`;
+  await rm(oldPath, { force: true });
+  await rename(target, oldPath);
+}
+
 export async function listDirs(dir: string): Promise<string[]> {
   try {
     const entries = await readdir(dir, { withFileTypes: true });

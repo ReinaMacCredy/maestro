@@ -3,7 +3,7 @@ import { getServices } from "@/services.js";
 import { initMaestro } from "../usecases/init.usecase.js";
 import { injectAgentBlocks } from "@/features/agent";
 import { formatAgentResults, output } from "@/shared/lib/output.js";
-import { resolveDefaultInstallDir } from "../usecases/install-release-binary.usecase.js";
+import { resolveInstallDir } from "../usecases/install-release-binary.usecase.js";
 
 export function registerInstallCommand(program: Command): void {
   program
@@ -27,8 +27,7 @@ export function registerInstallCommand(program: Command): void {
           ...formatAgentResults(r.agents),
         ];
         if (process.platform === "win32") {
-          const installDir = resolveDefaultInstallDir();
-          lines.push("", `[!] On Windows, ensure ${installDir} is on your user PATH.`);
+          lines.push("", `[!] On Windows, ensure ${resolveInstallDir()} is on your user PATH.`);
           lines.push("    See scripts/install.ps1 for guidance.");
         }
         return lines;

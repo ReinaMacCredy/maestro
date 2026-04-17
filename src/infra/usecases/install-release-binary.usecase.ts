@@ -1,6 +1,7 @@
-import { access, chmod, mkdir, rename, rm } from "node:fs/promises";
+import { chmod, mkdir, rename, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, posix, win32 } from "node:path";
+import { fileExists, renameForInPlaceReplace } from "@/shared/lib/fs.js";
 import { MaestroError } from "@/shared/errors.js";
 import { VERSION } from "@/shared/version.js";
 
@@ -11,6 +12,13 @@ export function resolveInstalledBinaryName(
   platform: NodeJS.Platform = process.platform,
 ): string {
   return platform === "win32" ? `${TARGET_BINARY_BASENAME}.exe` : TARGET_BINARY_BASENAME;
+}
+
+export function resolveInstallDir(
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  return env.MAESTRO_INSTALL_DIR ?? resolveDefaultInstallDir(platform, env);
 }
 
 export function resolveDefaultInstallDir(
@@ -131,7 +139,7 @@ export async function installReleaseBinary(
     }
     await replaceBinary(tempPath, installPath, platform);
   } catch (error) {
-    await rm(tempPath, { force: true }).catch(() => undefined);
+    await rm(tempPath, { force: true });
     throw error;
   }
 
@@ -232,21 +240,10 @@ async function replaceBinary(
   installPath: string,
   platform: NodeJS.Platform,
 ): Promise<void> {
-  if (platform === "win32" && await fileExists(installPath)) {
-    const oldPath = `${installPath}.old`;
-    await rm(oldPath, { force: true }).catch(() => undefined);
-    await rename(installPath, oldPath);
+  if (platform === "win32") {
+    await renameForInPlaceReplace(installPath);
   }
   await rename(tempPath, installPath);
-}
-
-async function fileExists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 async function downloadAsset(

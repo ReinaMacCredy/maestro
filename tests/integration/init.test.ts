@@ -145,11 +145,7 @@ async function initGitRepo(cwd: string): Promise<void> {
 }
 
 async function commandExists(command: string): Promise<boolean> {
-  if (process.platform === "win32") {
-    // The interactive PTY path requires POSIX python3 + pty. Windows uses
-    // the non-interactive --yes path instead, so no probe is needed.
-    return false;
-  }
+  if (process.platform === "win32") return false;
   const proc = Bun.spawn(["bash", "-lc", `command -v ${command}`], {
     stdout: "pipe",
     stderr: "pipe",

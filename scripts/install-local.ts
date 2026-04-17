@@ -1,14 +1,15 @@
-import { access, chmod, copyFile, mkdir, mkdtemp, rename, rm, unlink } from "node:fs/promises";
-import { delimiter, join } from "node:path";
+import { chmod, copyFile, mkdir, mkdtemp, rename, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { fileExists, renameForInPlaceReplace } from "../src/shared/lib/fs.js";
 import {
-  resolveDefaultInstallDir,
+  resolveInstallDir,
   resolveInstalledBinaryName,
 } from "../src/infra/usecases/install-release-binary.usecase.js";
 
 const platform = process.platform;
-const sourceBin = process.argv[2] ?? join("dist", resolveInstalledBinaryName(platform));
-const installDir = process.env.MAESTRO_INSTALL_DIR ?? resolveDefaultInstallDir(platform);
 const binaryName = resolveInstalledBinaryName(platform);
+const sourceBin = process.argv[2] ?? join("dist", binaryName);
+const installDir = resolveInstallDir(platform);
 const targetBin = join(installDir, binaryName);
 
 if (!(await fileExists(sourceBin))) {
@@ -26,18 +27,18 @@ try {
   if (platform !== "win32") {
     await chmod(tempBin, 0o755);
   }
-  if (platform === "win32" && (await fileExists(targetBin))) {
-    const oldPath = `${targetBin}.old`;
-    await unlink(oldPath).catch(() => undefined);
-    await rename(targetBin, oldPath);
+  if (platform === "win32") {
+    await renameForInPlaceReplace(targetBin);
   }
   await rename(tempBin, targetBin);
 } finally {
   await rm(tempDir, { recursive: true, force: true });
 }
 
-const resolvedOnPath = await resolveOnPath(binaryName);
-const version = await readInstalledVersion(targetBin);
+const [resolvedOnPath, version] = await Promise.all([
+  Promise.resolve(Bun.which(binaryName) ?? undefined),
+  readInstalledVersion(targetBin),
+]);
 
 console.log(`[ok] Installed maestro ${version} to ${targetBin}`);
 if (resolvedOnPath) {
@@ -47,29 +48,6 @@ if (resolvedOnPath) {
   if (platform === "win32") {
     console.log(`     Add ${installDir} to your user PATH to use maestro from any shell`);
   }
-}
-
-async function fileExists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function resolveOnPath(name: string): Promise<string | undefined> {
-  const pathEnv = process.env.PATH ?? "";
-  const exts = platform === "win32"
-    ? (process.env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";")
-    : [""];
-  for (const dir of pathEnv.split(delimiter).filter(Boolean)) {
-    for (const ext of exts) {
-      const candidate = join(dir, ext && !name.toLowerCase().endsWith(ext.toLowerCase()) ? `${name}${ext}` : name);
-      if (await fileExists(candidate)) return candidate;
-    }
-  }
-  return undefined;
 }
 
 async function readInstalledVersion(bin: string): Promise<string> {

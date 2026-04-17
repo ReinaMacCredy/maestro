@@ -9,6 +9,7 @@ import {
   installReleaseBinary,
   normalizeReleaseTag,
   resolveDefaultInstallDir,
+  resolveInstallDir,
   resolveInstalledBinaryName,
   resolveReleaseAssetName,
 } from "@/infra/usecases/install-release-binary.usecase.js";
@@ -50,6 +51,17 @@ describe("install release binary usecase", () => {
       { LOCALAPPDATA: "C:\\Users\\u\\AppData\\Local" } as NodeJS.ProcessEnv,
     );
     expect(win).toBe("C:\\Users\\u\\AppData\\Local\\Programs\\maestro");
+  });
+
+  it("resolveInstallDir prefers MAESTRO_INSTALL_DIR over the platform default", () => {
+    const override = resolveInstallDir(
+      "linux",
+      { HOME: "/home/u", MAESTRO_INSTALL_DIR: "/opt/maestro" } as NodeJS.ProcessEnv,
+    );
+    expect(override).toBe("/opt/maestro");
+
+    const fallback = resolveInstallDir("linux", { HOME: "/home/u" } as NodeJS.ProcessEnv);
+    expect(fallback).toMatch(/\.local[\\/]bin$/);
   });
 
   it("renames an existing Windows binary to .old before replacing (sidesteps locked exe)", async () => {
