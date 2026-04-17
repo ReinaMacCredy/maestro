@@ -251,11 +251,17 @@ describe("init CLI", () => {
     const sessionPath = join(tmpDir, ".maestro", "sessions", "events.jsonl");
     await writeFile(sessionPath, "{}\n");
 
-    const proc = Bun.spawn(["git", "check-ignore", sessionPath], {
-      cwd: tmpDir,
-      stdout: "pipe",
-      stderr: "pipe",
-    });
+    // core.quotePath=false keeps Windows backslash paths from being quoted
+    // in git's output (default behavior would wrap them in "..." with
+    // escaped backslashes, which fails a bare string compare below).
+    const proc = Bun.spawn(
+      ["git", "-c", "core.quotePath=false", "check-ignore", sessionPath],
+      {
+        cwd: tmpDir,
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
     const stdout = await new Response(proc.stdout).text();
     const exitCode = await proc.exited;
 

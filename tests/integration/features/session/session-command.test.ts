@@ -62,6 +62,7 @@ describe("session command integration", () => {
     const result = await runSessionCommand(["session", "--json"], {
       ...process.env,
       HOME: homeDir,
+      USERPROFILE: homeDir,
       CODEX_THREAD_ID: threadId,
       CLAUDECODE: "",
     });
@@ -87,6 +88,7 @@ describe("session command integration", () => {
     const result = await runSessionCommand(["session", "--quiet"], {
       ...process.env,
       HOME: homeDir,
+      USERPROFILE: homeDir,
       CODEX_THREAD_ID: threadId,
       CLAUDECODE: "",
     });

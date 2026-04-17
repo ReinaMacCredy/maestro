@@ -46,7 +46,9 @@ function isPublicSurfaceImport(subPath: string | undefined): boolean {
 }
 
 export function resolveBoundaryCheckRoot(metaUrl: string): string {
-  return fileURLToPath(new URL("../", metaUrl));
+  // Normalize to POSIX separators so downstream path joins and test
+  // assertions behave identically on Windows and Unix.
+  return toPosixPath(fileURLToPath(new URL("../", metaUrl)));
 }
 
 export function findCrossFeatureImportViolation(
@@ -86,7 +88,10 @@ export async function scanFeatureBoundaryViolations(root: string): Promise<Viola
       const imports = transpiler.scanImports(text);
 
       for (const { path: spec } of imports) {
-        const violation = findCrossFeatureImportViolation(relPath, spec);
+        const violation = findCrossFeatureImportViolation(
+          toPosixPath(relPath),
+          spec,
+        );
         if (violation) {
           violations.push(violation);
         }

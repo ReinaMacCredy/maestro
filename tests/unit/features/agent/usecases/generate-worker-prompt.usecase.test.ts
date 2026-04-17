@@ -196,7 +196,7 @@ describe("generateWorkerPrompt", () => {
 
     expect(result.writtenTo).toBeDefined();
     expect(result.writtenTo?.length).toBe(1);
-    expect(result.writtenTo?.[0]).toContain("workers/f1/prompt.md");
+    expect(result.writtenTo?.[0]).toContain(join("workers", "f1", "prompt.md"));
   });
 
   it("writes to --out path when provided", async () => {
@@ -224,7 +224,7 @@ describe("generateWorkerPrompt", () => {
     expect(result.writtenTo).toBeDefined();
     expect(result.writtenTo?.length).toBe(2);
     expect(result.writtenTo?.[0]).toBe(outPath);
-    expect(result.writtenTo?.[1]).toContain("workers/f1/prompt.md");
+    expect(result.writtenTo?.[1]).toContain(join("workers", "f1", "prompt.md"));
   });
 
   it("falls back to built-in skills when workspace skill is missing", async () => {
@@ -320,8 +320,12 @@ describe("generateWorkerPrompt", () => {
       errorThrown = true;
       expect(err).toBeInstanceOf(MaestroError);
       expect((err as Error).message).toContain("Worker skill 'test-skill' not found");
-      expect((err as Error).message).toContain(".maestro/skills/test-skill/SKILL.md");
-      expect((err as MaestroError).hints.join("\n")).toContain("skills/built-in/test-skill/SKILL.md");
+      expect((err as Error).message).toContain(
+        join(".maestro", "skills", "test-skill", "SKILL.md"),
+      );
+      expect((err as MaestroError).hints.join("\n")).toContain(
+        join("skills", "built-in", "test-skill", "SKILL.md"),
+      );
     }
 
       expect(errorThrown).toBe(true);

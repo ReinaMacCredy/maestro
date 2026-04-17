@@ -265,7 +265,7 @@ describe("feature lifecycle usecases", () => {
         discoveredIssues: [],
       });
       expect(result.reportPersisted).toBeDefined();
-      expect(result.reportPersisted).toContain("workers/f1/report.json");
+      expect(result.reportPersisted).toContain(join("workers", "f1", "report.json"));
     });
 
     it("preserves existing report when retrying without new report", async () => {

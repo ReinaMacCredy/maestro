@@ -106,6 +106,7 @@ describe("CLI integration", () => {
       {
         ...process.env,
         HOME: homeDir,
+        USERPROFILE: homeDir,
         MAESTRO_INSTALL_DIR: installDir,
       },
     );
@@ -126,6 +127,7 @@ describe("CLI integration", () => {
       {
         ...process.env,
         HOME: homeDir,
+        USERPROFILE: homeDir,
       },
     );
 
@@ -149,6 +151,7 @@ describe("CLI integration", () => {
       {
         ...process.env,
         HOME: homeDir,
+        USERPROFILE: homeDir,
       },
     );
 
@@ -174,6 +177,7 @@ describe("CLI integration", () => {
       {
         ...process.env,
         HOME: homeDir,
+        USERPROFILE: homeDir,
         MAESTRO_INSTALL_DIR: installDir,
       },
     );
