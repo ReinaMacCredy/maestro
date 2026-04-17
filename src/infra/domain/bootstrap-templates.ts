@@ -40,9 +40,10 @@ maestro feature update <featureId> --mission <id> --status <status> --report @re
 
 **Coordinate shared task work:**
 \`\`\`bash
-# Create (always starts as 'pending'; do NOT pass --status on create)
+# Create a task (defaults to 'pending'; add --status in_progress to start immediately)
 maestro task create "Title" [--description "..."] [--type task|bug|feature|epic|chore] \\
-  [--priority 0-4] [--labels a,b] [--parent <id>] [--blocked-by <id1,id2>]
+  [--priority 0-4] [--labels a,b] [--parent <id>] [--blocked-by <id1,id2>] \\
+  [--status pending|in_progress]
 
 # Discover, claim, work, complete
 maestro task ready --json --limit 5
@@ -56,15 +57,11 @@ maestro task block <blockerId> <blockedId...>                # blockerId must fi
 maestro task unblock <blockerId> <blockedId...>
 \`\`\`
 
-**Task contract (read before first use):**
-- \`task create\` has no \`--status\` option. New tasks are always \`pending\`. Use \`task update <id> --status ...\` to move state.
-- The only valid statuses are \`pending\`, \`in_progress\`, \`completed\`. Legacy values \`open\`, \`blocked\`, \`deferred\`, \`closed\` are rejected.
-- There is no \`task close\` and no \`task update --claim\`. Complete via \`task update --status completed --reason "..."\`. Take ownership via \`task claim <id>\`.
-- \`task claim\` only sets ownership (\`assignee\`, \`claimedAt\`); status changes require an explicit \`task update --status ...\`.
-- A task cannot be claimed while any id in its \`blockedBy\` list is not yet \`completed\`.
-- Completion \`--reason\` is persisted verbatim as shared context; keep it terse and free of secrets.
+**Task contract (the two non-obvious rules):**
+- A task cannot move to \`in_progress\` or \`completed\` while any id in its \`blockedBy\` list is unresolved. Resolve blockers first or create them as \`completed\` upstream.
+- Completion \`--reason\` is persisted verbatim as shared context for future sessions. Keep it terse, factual, and free of secrets.
 
-**When to use**: Start every session with \`maestro status\` to see shared state. Use \`maestro feature prompt\` to read the current feature's briefing with memory context auto-injected. Use \`maestro task ready\` to inspect the shared queue, \`maestro task claim\` to take ownership, and explicit \`task update --status\` calls to start or complete work.`;
+**When to use**: Start every session with \`maestro status\` to see shared state. Use \`maestro feature prompt\` to read the current feature's briefing with memory context auto-injected. Use \`maestro task ready\` to inspect the shared queue, and \`maestro task create ... --status in_progress\` or \`maestro task claim\` to take ownership.`;
 
 export const PROJECT_BOOTSTRAP_TEMPLATES: readonly BootstrapTemplateFile[] = [
   {

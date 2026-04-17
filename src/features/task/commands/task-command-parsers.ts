@@ -13,6 +13,7 @@ import { isTaskPriority, isTaskStatus, isTaskType } from "../domain/task-validat
 import { isLegacyTaskStatus } from "../domain/task-state.js";
 import {
   taskCompletedViaUpdateStatus,
+  taskCreateCompletedRejected,
 } from "../domain/task-errors.js";
 
 export interface CreateOpts {
@@ -64,6 +65,16 @@ export function parseStatus(value: string | undefined): TaskStatus | undefined {
   throw new MaestroError(`Invalid --status '${value}'`, [
     `Valid statuses: ${TASK_STATUSES.join(", ")}`,
   ]);
+}
+
+export function parseCreateStatus(value: string | undefined): "pending" | "in_progress" | undefined {
+  if (value === undefined) return undefined;
+  const parsed = parseStatus(value);
+  if (parsed === undefined) return undefined;
+  if (parsed === "completed") {
+    throw taskCreateCompletedRejected();
+  }
+  return parsed;
 }
 
 export function parseLimit(value: string | undefined): number | undefined {

@@ -8,21 +8,21 @@ describe("AGENT_INSTRUCTION_BLOCK", () => {
     expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task unclaim <id>");
   });
 
-  it("warns agents that task create has no --status option", () => {
-    expect(AGENT_INSTRUCTION_BLOCK).toContain("do NOT pass --status on create");
-    expect(AGENT_INSTRUCTION_BLOCK).toContain("`task create` has no `--status` option");
+  it("advertises the in_progress shortcut on task create", () => {
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("--status pending|in_progress");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain(
+      "add --status in_progress to start immediately",
+    );
   });
 
-  it("enumerates the three valid statuses and rejects legacy values", () => {
-    expect(AGENT_INSTRUCTION_BLOCK).toContain("`pending`, `in_progress`, `completed`");
-    expect(AGENT_INSTRUCTION_BLOCK).toContain("`open`, `blocked`, `deferred`, `closed`");
+  it("keeps the two non-obvious rules agents can't derive from --help", () => {
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("blockedBy");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("persisted verbatim");
   });
 
   it("points completion at update --status completed with a reason", () => {
     expect(AGENT_INSTRUCTION_BLOCK).toContain(
       "maestro task update <id> --status completed --reason",
     );
-    expect(AGENT_INSTRUCTION_BLOCK).toContain("no `task close`");
-    expect(AGENT_INSTRUCTION_BLOCK).toContain("no `task update --claim`");
   });
 });

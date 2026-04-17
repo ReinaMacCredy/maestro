@@ -23,6 +23,7 @@ import { TASK_STATUSES, TASK_TYPES } from "../domain/task-types.js";
 import {
   buildCreateInput,
   hasAnyPatchField,
+  parseCreateStatus,
   parseLimit,
   parseList,
   parsePriority,
@@ -84,6 +85,11 @@ function registerCreateCommand(taskCmd: Command, program: Command): void {
     .option("--parent <id>", "Parent task id for hierarchy grouping")
     .option("--labels <labels>", "Comma-separated labels")
     .option("--blocked-by <ids>", "Comma-separated blocker task ids")
+    .option(
+      "--status <status>",
+      "Initial status: pending (default) or in_progress (auto-claims the task); completed is rejected",
+    )
+    .option("--session <id>", "Use an explicit session id instead of auto-detection (only with --status in_progress)")
     .addOption(new Option("--assignee <name>").hideHelp())
     .option("--silent", "Print only the id (for scripts)")
     .option("--json", "Output as JSON")
@@ -95,6 +101,8 @@ function registerCreateCommand(taskCmd: Command, program: Command): void {
         throw taskUpdateOwnershipViaClaim();
       }
 
+      const initialStatus = parseCreateStatus(opts.status);
+
       const input = buildCreateInput(title, {
         description: opts.description,
         type: opts.type,
@@ -103,7 +111,21 @@ function registerCreateCommand(taskCmd: Command, program: Command): void {
         labels: opts.labels,
         blockedBy: opts.blockedBy,
       });
-      const task = await createTask(services.taskStore, input);
+      let task = await createTask(services.taskStore, input);
+
+      if (initialStatus === "in_progress") {
+        const sessionId = await resolveSessionAndReleaseStale(opts.session);
+        const { task: started, autoClaimed } = await updateTask(
+          services.taskStore,
+          task.id,
+          { status: "in_progress" },
+          { sessionId },
+        );
+        task = started;
+        if (autoClaimed && started.assignee) {
+          warn(`Auto-claimed ${started.id} for session ${started.assignee}`);
+        }
+      }
 
       if (opts.silent) {
         console.log(task.id);

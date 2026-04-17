@@ -97,6 +97,17 @@ export function taskCompletedViaUpdateStatus(): MaestroError {
   );
 }
 
+export function taskCreateCompletedRejected(): MaestroError {
+  return new MaestroError(
+    "Tasks cannot be created already 'completed'",
+    [
+      "Create first: maestro task create \"...\"",
+      "Then complete: maestro task update <id> --status completed --reason \"...\"",
+      "Completion requires a reason, which cannot be supplied at create time",
+    ],
+  );
+}
+
 export function taskReasonRequiresCompletedStatus(): MaestroError {
   return new MaestroError(
     "Task completion reason requires status 'completed'",
