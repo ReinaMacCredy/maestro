@@ -1,6 +1,6 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { readJson, writeJson } from "@/shared/lib/fs.js";
+import { dirExists, readJson, writeJson } from "@/shared/lib/fs.js";
 
 const MISSIONS_DIR = join(process.cwd(), ".maestro", "missions");
 
@@ -11,23 +11,37 @@ interface FeatureRecord {
 }
 
 async function migrateFile(path: string): Promise<"migrated" | "skipped" | "error"> {
-  const parsed = await readJson<FeatureRecord>(path);
-  if (!parsed) return "error";
-  if (!("workerType" in parsed)) return "skipped";
+  try {
+    const parsed = await readJson<FeatureRecord>(path);
+    if (!parsed) return "error";
+    if (!("workerType" in parsed)) return "skipped";
 
-  const { workerType, ...rest } = parsed;
-  await writeJson(path, { ...rest, agentType: workerType });
-  return "migrated";
+    const { workerType, ...rest } = parsed;
+    // Idempotent guard: if a file already carries a non-undefined agentType
+    // (partial migration, manual edit, re-run after rollback), preserve the
+    // existing value and just strip the stale workerType field.
+    if ("agentType" in parsed && parsed.agentType !== undefined) {
+      await writeJson(path, rest);
+      return "skipped";
+    }
+    await writeJson(path, { ...rest, agentType: workerType });
+    return "migrated";
+  } catch {
+    console.error(`[!] Failed to migrate ${path}`);
+    return "error";
+  }
 }
 
-async function collectFeaturePaths(): Promise<string[]> {
-  let missionDirs: string[];
-  try {
-    missionDirs = await readdir(MISSIONS_DIR);
-  } catch {
-    return [];
-  }
+interface CollectedFeaturePaths {
+  readonly paths: string[];
+  readonly missionsDirExists: boolean;
+}
 
+async function collectFeaturePaths(): Promise<CollectedFeaturePaths> {
+  const missionsDirExists = await dirExists(MISSIONS_DIR);
+  if (!missionsDirExists) return { paths: [], missionsDirExists: false };
+
+  const missionDirs = await readdir(MISSIONS_DIR);
   const paths: string[] = [];
   for (const missionId of missionDirs) {
     if (missionId.startsWith(".")) continue;
@@ -42,13 +56,17 @@ async function collectFeaturePaths(): Promise<string[]> {
       if (entry.endsWith(".json")) paths.push(join(featuresDir, entry));
     }
   }
-  return paths;
+  return { paths, missionsDirExists: true };
 }
 
 async function main(): Promise<void> {
-  const paths = await collectFeaturePaths();
+  const { paths, missionsDirExists } = await collectFeaturePaths();
   if (paths.length === 0) {
-    console.log("[ok] No .maestro/missions directory. Nothing to migrate.");
+    if (!missionsDirExists) {
+      console.log("[ok] No .maestro/missions directory. Nothing to migrate.");
+    } else {
+      console.log("[ok] .maestro/missions has no feature JSONs. Nothing to migrate.");
+    }
     return;
   }
 

@@ -451,7 +451,7 @@ Available preview screens include:
 - `principles`
 - `help`
 
-Aliases: `feat`, `handoff`, `cfg`, `deps`, `mem`. Mission-only screens are skipped automatically when running in home mode.
+Aliases: `feat`, `deps`, `cfg`, `mem`, `agent`, `event`, `task`, `principle`. Mission-only screens are skipped automatically when running in home mode.
 
 For non-interactive environments, prefer `--preview`, `--preview all`, or `--json`.
 

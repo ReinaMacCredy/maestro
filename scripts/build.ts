@@ -8,23 +8,23 @@ const root = join(import.meta.dir, "..");
 const gitSha = await getGitShortSha(root);
 const buildUnix = Math.floor(Date.now() / 1_000).toString();
 const releasedAt = new Date().toISOString();
+// Bun's `--compile --outfile` appends `.exe` implicitly on Windows, but
+// make it explicit so both the build arg and the post-build verification
+// path agree without depending on that implicit behavior.
+const outfileName = process.platform === "win32" ? "maestro.exe" : "maestro";
 const args = [
   "bun",
   "build",
   "src/index.ts",
   "--compile",
   "--outfile",
-  "dist/maestro",
+  `dist/${outfileName}`,
   "--target",
   "bun",
   "--env=MAESTRO_BUILD_*",
 ];
 
-const outExe = join(
-  root,
-  "dist",
-  process.platform === "win32" ? "maestro.exe" : "maestro",
-);
+const outExe = join(root, "dist", outfileName);
 
 // Windows can fail Bun's final "move executable" rename with EPERM when the
 // previous dist/maestro.exe is still held by a file lock (prior CI step,

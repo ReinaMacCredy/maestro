@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.40.0 - Install hardening and task workflow improvements
+
+- Windows install flow: harden running-exe replacement, tolerate EBUSY/EPERM
+  on prior `.old` locks, and keep local verification paths honest when the
+  install directory is overridden.
+- `maestro update` honors the configured install path instead of defaulting
+  to the system location.
+- Task workflow: auto-claim on `task update --status in_progress`, surface
+  blocker errors before ownership checks, extract stale-session recovery
+  into a reusable helper.
+- CI: stabilize the Windows matrix (bundle/tar/rename/build paths, skill
+  path encoding, boundary check root, last-mile test failures).
+- Docs: sync README features, commands, storage model, and TUI screen set
+  with current state.
+
+## 0.39.0 - Windows CLI support
+
+- Publish a Windows x64 release asset (`maestro-windows-x64.exe`) and
+  extend the platform resolver to find it.
+- Add a Windows install flow that handles replacing a running executable
+  via a `.old`-rename-and-swap dance, including rollback on verification
+  failure.
+- Add a PowerShell installer (`scripts/install.ps1`) mirroring the POSIX
+  `install.sh` flow and surfacing user-PATH guidance.
+- Drop `sh -c` usage from cross-platform code paths and fix POSIX-leaky
+  tests so the CI matrix runs green on `windows-latest`.
+
 ## 0.38.0 - Rename Feature.workerType to Feature.agentType (BREAKING)
 
 - Rename `Feature.workerType` to `Feature.agentType` across domain types,

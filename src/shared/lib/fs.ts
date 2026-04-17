@@ -85,7 +85,16 @@ export async function renameForInPlaceReplace(
   const removeImpl = options.removeImpl ?? rm;
   const renameImpl = options.renameImpl ?? rename;
   const oldPath = `${target}.old`;
-  await removeImpl(oldPath, { force: true });
+  try {
+    await removeImpl(oldPath, { force: true });
+  } catch (err: unknown) {
+    // On Windows, a prior `.old` can still be locked by the previous maestro
+    // process (antivirus, slow handle release). `force: true` only swallows
+    // ENOENT, not EBUSY/EPERM/EACCES. Tolerate those so the rename below can
+    // still proceed; if it genuinely cannot, that path will fail loudly.
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code !== "EBUSY" && code !== "EPERM" && code !== "EACCES") throw err;
+  }
   try {
     await renameImpl(target, oldPath);
   } catch (err: unknown) {

@@ -8,7 +8,7 @@ $targetBin = Join-Path $installDir "maestro.exe"
 
 function Write-Info { param($msg) Write-Host "[ok] $msg" }
 function Write-Warn { param($msg) Write-Host "[!] $msg" }
-function Write-Fail { param($msg) Write-Host "[!] $msg" -ForegroundColor Red; exit 1 }
+function Write-Fail { param($msg) Write-Host "[!] $msg" -ForegroundColor Red; throw $msg }
 
 Write-Host "maestro release installer"
 Write-Host ""
@@ -74,7 +74,7 @@ if (-not ($userPath -split ";" | Where-Object { $_.TrimEnd("\") -eq $installDir.
     Write-Warn "$installDir is not in your user PATH"
     Write-Host "    Add it manually via System Properties > Environment Variables,"
     Write-Host "    or run this in PowerShell:"
-    Write-Host "    [Environment]::SetEnvironmentVariable('Path', `"`$env:Path;$installDir`", 'User')"
+    Write-Host "    [Environment]::SetEnvironmentVariable('Path', `"$userPath;$installDir`", 'User')"
     Write-Host "    Then open a new terminal to pick up the change."
 }
 

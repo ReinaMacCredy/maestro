@@ -144,7 +144,9 @@ export async function installReleaseBinary(
     }
     await replaceInstalledBinary(tempPath, installPath, platform);
   } catch (error) {
-    await rm(tempPath, { force: true });
+    // Best-effort temp cleanup; surfacing a cleanup failure here would mask
+    // the original download/write/rename error the caller needs to see.
+    await rm(tempPath, { force: true }).catch(() => undefined);
     throw error;
   }
 

@@ -33,10 +33,18 @@ export class FsFeatureStoreAdapter implements FeatureStorePort {
   }
 
   async get(missionId: string, featureId: string): Promise<Feature | undefined> {
-    const data = await readJson<unknown>(this.featurePath(missionId, featureId));
+    const path = this.featurePath(missionId, featureId);
+    const data = await readJson<unknown>(path);
     if (!data) return undefined;
+    const { normalized, migrated } = migrateLegacyWorkerType(data);
     try {
-      return validateFeature(data);
+      const validated = validateFeature(normalized);
+      if (migrated) {
+        // Persist the migrated shape so the next read hits the new schema
+        // directly and downstream tools don't have to keep translating.
+        await writeJson(path, validated);
+      }
+      return validated;
     } catch {
       return undefined;
     }
@@ -149,4 +157,29 @@ export class FsFeatureStoreAdapter implements FeatureStorePort {
       .map((r) => r.value)
       .filter((f): f is Feature => f !== undefined);
   }
+}
+
+// Transparently upgrade pre-rename feature JSON where `workerType` still
+// sits on disk. Validation would otherwise reject the strict schema and
+// `get()` would swallow it, silently breaking every feature read.
+export function migrateLegacyWorkerType(
+  data: unknown,
+): { normalized: unknown; migrated: boolean } {
+  if (data === null || typeof data !== "object" || Array.isArray(data)) {
+    return { normalized: data, migrated: false };
+  }
+
+  const record = data as Record<string, unknown>;
+  if (!("workerType" in record)) {
+    return { normalized: data, migrated: false };
+  }
+
+  const { workerType, ...rest } = record;
+  if ("agentType" in record && record.agentType !== undefined) {
+    // Both fields coexist (partial migration, manual edit). Prefer the
+    // existing agentType and just drop the stale workerType.
+    return { normalized: rest, migrated: true };
+  }
+
+  return { normalized: { ...rest, agentType: workerType }, migrated: true };
 }
