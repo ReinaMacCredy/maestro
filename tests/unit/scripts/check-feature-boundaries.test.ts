@@ -24,7 +24,11 @@ describe("findCrossFeatureImportViolation", () => {
     const rootDir = join(tmpDir, "repo with spaces");
     const scriptUrl = pathToFileURL(join(rootDir, "scripts", "check-feature-boundaries.ts")).href;
 
-    expect(resolveBoundaryCheckRoot(scriptUrl)).toBe(`${rootDir}/`);
+    // resolveBoundaryCheckRoot normalizes to POSIX separators so that its
+    // return value is consistent across Windows and Unix runners.
+    expect(resolveBoundaryCheckRoot(scriptUrl)).toBe(
+      `${rootDir.replace(/\\/g, "/")}/`,
+    );
   });
 
   it("allows public-surface imports across features", () => {

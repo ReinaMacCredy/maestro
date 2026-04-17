@@ -250,19 +250,25 @@ describe("initMaestro", () => {
       expect(await readFile(customSkillPath, "utf8")).toBe("# keep me\n");
     });
 
-    it("removes legacy colon-named synced maestro skills during re-init", async () => {
-      const config = mockConfig();
-      const legacyClaudeSkillPath = join(tmpDir, ".claude", "skills", "maestro:obsolete", "SKILL.md");
-      const legacyCodexSkillPath = join(tmpDir, ".codex", "skills", "maestro:obsolete", "SKILL.md");
+    it.skipIf(process.platform === "win32")(
+      "removes legacy colon-named synced maestro skills during re-init",
+      async () => {
+        // Windows reserves `:` as the drive separator and rejects it in filenames
+        // (ENOTDIR on mkdir). The legacy colon-named skill directories could only
+        // ever have existed on POSIX, so the re-init cleanup is unreachable there.
+        const config = mockConfig();
+        const legacyClaudeSkillPath = join(tmpDir, ".claude", "skills", "maestro:obsolete", "SKILL.md");
+        const legacyCodexSkillPath = join(tmpDir, ".codex", "skills", "maestro:obsolete", "SKILL.md");
 
-      await mkdir(join(tmpDir, ".claude", "skills", "maestro:obsolete"), { recursive: true });
-      await mkdir(join(tmpDir, ".codex", "skills", "maestro:obsolete"), { recursive: true });
-      await writeFile(legacyClaudeSkillPath, "# old skill\n");
-      await writeFile(legacyCodexSkillPath, "# old skill\n");
+        await mkdir(join(tmpDir, ".claude", "skills", "maestro:obsolete"), { recursive: true });
+        await mkdir(join(tmpDir, ".codex", "skills", "maestro:obsolete"), { recursive: true });
+        await writeFile(legacyClaudeSkillPath, "# old skill\n");
+        await writeFile(legacyCodexSkillPath, "# old skill\n");
 
-      await initMaestro(config, { global: false, dir: tmpDir });
+        await initMaestro(config, { global: false, dir: tmpDir });
 
-      await expect(access(legacyClaudeSkillPath)).rejects.toThrow();
-      await expect(access(legacyCodexSkillPath)).rejects.toThrow();
-    });
+        await expect(access(legacyClaudeSkillPath)).rejects.toThrow();
+        await expect(access(legacyCodexSkillPath)).rejects.toThrow();
+      },
+    );
   });

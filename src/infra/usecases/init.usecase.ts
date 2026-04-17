@@ -15,7 +15,7 @@ import {
   resolveSkillDirectoryName,
 } from "@/shared/lib/skill-path.js";
 import { homedir } from "node:os";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { dirname, join, posix, relative, resolve, sep } from "node:path";
 import { chmod, lstat, readdir, rm } from "node:fs/promises";
 import { DEFAULT_PRINCIPLES } from "@/features/mission";
 
@@ -185,8 +185,13 @@ async function overlayLegacyTree(
     }
 
     const stat = await lstat(sourcePath);
-    files.set(join(targetDir, relativePath), {
-      path: join(targetDir, relativePath),
+    // Template map keys are canonical POSIX paths (`.maestro/bootstrap/...`)
+    // everywhere else; use posix.join so Windows backslash segments don't
+    // split the map into two disjoint entries that silently overwrite each
+    // other later during the write phase.
+    const key = posix.join(targetDir, relativePath.split(sep).join("/"));
+    files.set(key, {
+      path: key,
       content,
       executable: isExecutable(stat.mode, relativePath),
     });
@@ -334,7 +339,10 @@ async function skillDirMatchesTemplate(skillDir: string, template: BuiltInSkillT
   }
 
   for (const file of actualFiles) {
-    const relativePath = relative(skillDir, file);
+    // Template file paths are canonical POSIX; on Windows `relative` returns
+    // backslash segments, which would miss the expectedFiles map entry and
+    // drive a spurious rewrite each idempotent init run.
+    const relativePath = relative(skillDir, file).split(sep).join("/");
     const expectedContent = expectedFiles.get(relativePath);
     if (expectedContent === undefined) {
       return false;

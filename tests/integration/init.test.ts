@@ -251,9 +251,6 @@ describe("init CLI", () => {
     const sessionPath = join(tmpDir, ".maestro", "sessions", "events.jsonl");
     await writeFile(sessionPath, "{}\n");
 
-    // core.quotePath=false keeps Windows backslash paths from being quoted
-    // in git's output (default behavior would wrap them in "..." with
-    // escaped backslashes, which fails a bare string compare below).
     const proc = Bun.spawn(
       ["git", "-c", "core.quotePath=false", "check-ignore", sessionPath],
       {
@@ -266,7 +263,11 @@ describe("init CLI", () => {
     const exitCode = await proc.exited;
 
     expect(exitCode).toBe(0);
-    expect(stdout.trim()).toBe(sessionPath);
+    // Windows git still renders backslash paths as C-escaped double-quoted
+    // strings in check-ignore output (e.g. "C:\\Users\\..."); unwrap them
+    // before comparing so the test is deterministic across runners.
+    const reported = stdout.trim().replace(/^"(.*)"$/, "$1").replace(/\\\\/g, "\\");
+    expect(reported).toBe(sessionPath);
   });
 
   it("exits cleanly in tty mode when no replacement prompt is needed", async () => {
