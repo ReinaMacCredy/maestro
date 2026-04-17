@@ -154,10 +154,10 @@ describe("install release binary usecase", () => {
     expect(await Bun.file(`${existingPath}.old`).text()).toBe("old-binary");
   });
 
-  it("restores the previous Windows binary when the final rename fails", async () => {
-    const installDir = await mkdtemp(join(tmpdir(), "maestro-release-install-"));
-    installDirs.push(installDir);
-    const installPath = join(installDir, "maestro.exe");
+    it("restores the previous Windows binary when the final rename fails", async () => {
+      const installDir = await mkdtemp(join(tmpdir(), "maestro-release-install-"));
+      installDirs.push(installDir);
+      const installPath = join(installDir, "maestro.exe");
     const tempPath = join(installDir, "maestro.exe.tmp");
     await Bun.write(installPath, "old-binary");
     await Bun.write(tempPath, "new-binary");
@@ -176,14 +176,55 @@ describe("install release binary usecase", () => {
       replaceInstalledBinary(tempPath, installPath, "win32", { renameImpl }),
     ).rejects.toThrow("rename failed");
 
-    expect(await Bun.file(installPath).text()).toBe("old-binary");
-    expect(await Bun.file(`${installPath}.old`).exists()).toBe(false);
-    expect(await Bun.file(tempPath).text()).toBe("new-binary");
-  });
+      expect(await Bun.file(installPath).text()).toBe("old-binary");
+      expect(await Bun.file(`${installPath}.old`).exists()).toBe(false);
+      expect(await Bun.file(tempPath).text()).toBe("new-binary");
+    });
 
-  it("normalizes release tags and direct download URLs", () => {
-    expect(normalizeReleaseTag("0.32.0")).toBe("v0.32.0");
-    expect(buildReleaseDownloadUrl("maestro-darwin-arm64")).toContain("/latest/download/maestro-darwin-arm64");
+    it("surfaces a MaestroError when replacement and rollback both fail on Windows", async () => {
+      const installDir = await mkdtemp(join(tmpdir(), "maestro-release-install-"));
+      installDirs.push(installDir);
+      const installPath = join(installDir, "maestro.exe");
+      const tempPath = join(installDir, "maestro.exe.tmp");
+      await Bun.write(installPath, "old-binary");
+      await Bun.write(tempPath, "new-binary");
+
+      let renameCalls = 0;
+      const renameImpl = async (from: string, to: string): Promise<void> => {
+        renameCalls += 1;
+        if (renameCalls === 2) {
+          throw new Error("rename failed");
+        }
+        if (renameCalls === 3) {
+          throw new Error("rollback failed");
+        }
+        await Bun.write(to, await Bun.file(from).text());
+        await rm(from, { force: true });
+      };
+
+      let caught: unknown;
+      try {
+        await replaceInstalledBinary(tempPath, installPath, "win32", { renameImpl });
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeInstanceOf(MaestroError);
+      expect((caught as MaestroError).message).toBe(
+        "Could not replace installed Windows binary and restore the previous version",
+      );
+      expect((caught as MaestroError).hints).toEqual([
+        "Replacement error: rename failed",
+        "Rollback error: rollback failed",
+      ]);
+      expect(await Bun.file(installPath).exists()).toBe(false);
+      expect(await Bun.file(`${installPath}.old`).text()).toBe("old-binary");
+      expect(await Bun.file(tempPath).text()).toBe("new-binary");
+    });
+
+    it("normalizes release tags and direct download URLs", () => {
+      expect(normalizeReleaseTag("0.32.0")).toBe("v0.32.0");
+      expect(buildReleaseDownloadUrl("maestro-darwin-arm64")).toContain("/latest/download/maestro-darwin-arm64");
     expect(buildReleaseDownloadUrl("maestro-darwin-arm64", "0.32.0")).toContain("/download/v0.32.0/maestro-darwin-arm64");
   });
 

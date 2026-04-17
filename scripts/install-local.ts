@@ -1,6 +1,7 @@
 import { chmod, copyFile, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { fileExists } from "../src/shared/lib/fs.js";
+import { readInstalledVersion } from "./install-local-lib";
 import {
   replaceInstalledBinary,
   resolveInstallDir,
@@ -33,10 +34,8 @@ try {
   await rm(tempDir, { recursive: true, force: true });
 }
 
-const [resolvedOnPath, version] = await Promise.all([
-  Promise.resolve(Bun.which(binaryName) ?? undefined),
-  readInstalledVersion(targetBin),
-]);
+const resolvedOnPath = Bun.which(binaryName) ?? undefined;
+const version = readInstalledVersion(targetBin);
 
 console.log(`[ok] Installed maestro ${version} to ${targetBin}`);
 if (resolvedOnPath) {
@@ -46,12 +45,4 @@ if (resolvedOnPath) {
   if (platform === "win32") {
     console.log(`     Add ${installDir} to your user PATH to use maestro from any shell`);
   }
-}
-
-async function readInstalledVersion(bin: string): Promise<string> {
-  const proc = Bun.spawnSync([bin, "--version"], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  return proc.stdout.toString().trim() || "unknown";
 }

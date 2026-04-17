@@ -19,4 +19,27 @@ describe("startup cleanup", () => {
       }
     }
   });
+
+  it("ignores stale binary cleanup delete failures", async () => {
+    const mod = await import("@/index.js").catch(() => ({}));
+    const cleanupStaleWindowsBinary = (
+      mod as {
+        cleanupStaleWindowsBinary?: (
+          platform?: NodeJS.Platform,
+          execPath?: string,
+          removeIfExistsImpl?: (path: string) => Promise<boolean>,
+        ) => Promise<void>;
+      }
+    ).cleanupStaleWindowsBinary;
+    expect(typeof cleanupStaleWindowsBinary).toBe("function");
+    if (!cleanupStaleWindowsBinary) return;
+
+    await expect(cleanupStaleWindowsBinary(
+      "win32",
+      "C:\\Users\\u\\bin\\maestro.exe",
+      async () => {
+        throw Object.assign(new Error("locked"), { code: "EPERM" });
+      },
+    )).resolves.toBeUndefined();
+  });
 });

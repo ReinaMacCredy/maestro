@@ -255,7 +255,17 @@ export async function replaceInstalledBinary(
     try {
       await renameImpl(tempPath, installPath);
     } catch (error) {
-      await rollbackWindowsBinary(installPath, renameImpl).catch(() => undefined);
+      try {
+        await rollbackWindowsBinary(installPath, renameImpl);
+      } catch (rollbackError) {
+        throw new MaestroError(
+          "Could not replace installed Windows binary and restore the previous version",
+          [
+            `Replacement error: ${describeError(error)}`,
+            `Rollback error: ${describeError(rollbackError)}`,
+          ],
+        );
+      }
       throw error;
     }
     return;
@@ -304,6 +314,10 @@ async function rollbackWindowsBinary(
   const oldPath = `${installPath}.old`;
   if (!(await fileExists(oldPath))) return;
   await renameImpl(oldPath, installPath);
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function resolveReleaseArch(os: "darwin" | "linux" | "windows", arch: string): "arm64" | "x64" {

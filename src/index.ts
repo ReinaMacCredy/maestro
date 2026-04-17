@@ -104,9 +104,15 @@ export function shouldCleanupStaleWindowsBinary(
   return win32.normalize(execPath).toLowerCase() === expectedPath;
 }
 
-async function cleanupStaleWindowsBinary(): Promise<void> {
-  if (!shouldCleanupStaleWindowsBinary()) return;
-  await removeIfExists(`${process.execPath}.old`);
+export async function cleanupStaleWindowsBinary(
+  platform: NodeJS.Platform = process.platform,
+  execPath: string = process.execPath,
+  removeIfExistsImpl: typeof removeIfExists = removeIfExists,
+): Promise<void> {
+  if (!shouldCleanupStaleWindowsBinary(platform, execPath)) return;
+  try {
+    await removeIfExistsImpl(`${execPath}.old`);
+  } catch {}
 }
 
 async function main(): Promise<void> {
