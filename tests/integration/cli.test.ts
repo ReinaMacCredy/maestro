@@ -2,13 +2,15 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { resolveInstalledBinaryName } from "@/infra/usecases/install-release-binary.usecase.js";
 
 const CLI = [
   "bun",
   "run",
   join(import.meta.dir, "..", "..", "src", "index.ts"),
 ];
-const DIST_CLI = join(import.meta.dir, "..", "..", "dist", "maestro");
+const INSTALLED_BINARY_NAME = resolveInstalledBinaryName();
+const DIST_CLI = join(import.meta.dir, "..", "..", "dist", INSTALLED_BINARY_NAME);
 
 let tmpDir: string;
 const SLOW_CLI_TIMEOUT_MS = 15_000;
@@ -96,7 +98,7 @@ describe("CLI integration", () => {
     const installDir = join(tmpDir, "custom-bin");
     await mkdir(join(homeDir, ".maestro"), { recursive: true });
     await mkdir(installDir, { recursive: true });
-    await writeFile(join(installDir, "maestro"), "test-binary");
+      await writeFile(join(installDir, INSTALLED_BINARY_NAME), "test-binary");
 
     const { stdout, exitCode } = await runCompiled(
       ["uninstall", "--json"],
@@ -111,7 +113,7 @@ describe("CLI integration", () => {
     expect(exitCode).toBe(0);
     const result = JSON.parse(stdout);
     expect(result.binaryRemoved).toBe(true);
-    expect(await Bun.file(join(installDir, "maestro")).exists()).toBe(false);
+      expect(await Bun.file(join(installDir, INSTALLED_BINARY_NAME)).exists()).toBe(false);
   });
 
   it("install only injects home-scoped agent files", async () => {
@@ -163,7 +165,7 @@ describe("CLI integration", () => {
     await mkdir(join(homeDir, ".maestro"), { recursive: true });
     await mkdir(join(tmpDir, ".maestro"), { recursive: true });
     await mkdir(installDir, { recursive: true });
-    await writeFile(join(installDir, "maestro"), "test-binary");
+      await writeFile(join(installDir, INSTALLED_BINARY_NAME), "test-binary");
     await writeFile(join(tmpDir, ".maestro", "AGENTS.md"), "# Project config\n");
 
     const { stdout, exitCode } = await runCompiled(

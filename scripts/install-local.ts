@@ -1,7 +1,8 @@
-import { chmod, copyFile, mkdir, mkdtemp, rename, rm } from "node:fs/promises";
+import { chmod, copyFile, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { fileExists, renameForInPlaceReplace } from "../src/shared/lib/fs.js";
+import { fileExists } from "../src/shared/lib/fs.js";
 import {
+  replaceInstalledBinary,
   resolveInstallDir,
   resolveInstalledBinaryName,
 } from "../src/infra/usecases/install-release-binary.usecase.js";
@@ -27,10 +28,7 @@ try {
   if (platform !== "win32") {
     await chmod(tempBin, 0o755);
   }
-  if (platform === "win32") {
-    await renameForInPlaceReplace(targetBin);
-  }
-  await rename(tempBin, targetBin);
+  await replaceInstalledBinary(tempBin, targetBin, platform);
 } finally {
   await rm(tempDir, { recursive: true, force: true });
 }

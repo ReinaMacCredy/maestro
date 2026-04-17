@@ -65,6 +65,11 @@ export interface InstallReleaseBinaryResult {
   readonly assetName: string;
 }
 
+interface ReplaceInstalledBinaryOptions {
+  readonly removeImpl?: typeof rm;
+  readonly renameImpl?: typeof rename;
+}
+
 export function normalizeReleaseTag(versionOrTag: string): string {
   const trimmed = versionOrTag.trim();
   if (!trimmed) {
@@ -85,7 +90,7 @@ export function resolveReleaseAssetName(
   arch: string = process.arch,
 ): string {
   const normalizedOs = resolveReleaseOs(platform);
-  const normalizedArch = resolveReleaseArch(arch);
+  const normalizedArch = resolveReleaseArch(normalizedOs, arch);
   const suffix = normalizedOs === "windows" ? ".exe" : "";
   return `${TARGET_BINARY_BASENAME}-${normalizedOs}-${normalizedArch}${suffix}`;
 }
@@ -137,7 +142,7 @@ export async function installReleaseBinary(
     if (platform !== "win32") {
       await chmod(tempPath, 0o755);
     }
-    await replaceBinary(tempPath, installPath, platform);
+    await replaceInstalledBinary(tempPath, installPath, platform);
   } catch (error) {
     await rm(tempPath, { force: true });
     throw error;
@@ -235,15 +240,27 @@ function resolveReleaseAsset(
   };
 }
 
-async function replaceBinary(
+export async function replaceInstalledBinary(
   tempPath: string,
   installPath: string,
   platform: NodeJS.Platform,
+  options: ReplaceInstalledBinaryOptions = {},
 ): Promise<void> {
+  const renameImpl = options.renameImpl ?? rename;
   if (platform === "win32") {
-    await renameForInPlaceReplace(installPath);
+    await renameForInPlaceReplace(installPath, {
+      removeImpl: options.removeImpl,
+      renameImpl,
+    });
+    try {
+      await renameImpl(tempPath, installPath);
+    } catch (error) {
+      await rollbackWindowsBinary(installPath, renameImpl).catch(() => undefined);
+      throw error;
+    }
+    return;
   }
-  await rename(tempPath, installPath);
+  await renameImpl(tempPath, installPath);
 }
 
 async function downloadAsset(
@@ -280,10 +297,24 @@ function resolveReleaseOs(platform: NodeJS.Platform): "darwin" | "linux" | "wind
   }
 }
 
-function resolveReleaseArch(arch: string): "arm64" | "x64" {
+async function rollbackWindowsBinary(
+  installPath: string,
+  renameImpl: typeof rename,
+): Promise<void> {
+  const oldPath = `${installPath}.old`;
+  if (!(await fileExists(oldPath))) return;
+  await renameImpl(oldPath, installPath);
+}
+
+function resolveReleaseArch(os: "darwin" | "linux" | "windows", arch: string): "arm64" | "x64" {
   switch (arch) {
     case "arm64":
     case "aarch64":
+      if (os === "windows") {
+        throw new MaestroError("Windows release installs currently support x64 only", [
+          "Windows arm64 assets are not published yet",
+        ]);
+      }
       return "arm64";
     case "x64":
     case "amd64":

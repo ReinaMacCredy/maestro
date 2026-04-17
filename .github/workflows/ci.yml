@@ -18,17 +18,14 @@ jobs:
     timeout-minutes: 25
     permissions:
       contents: read
-    continue-on-error: ${{ matrix.experimental }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - runner: ubuntu-latest
             src: maestro
-            experimental: false
           - runner: windows-latest
             src: maestro.exe
-            experimental: true
     defaults:
       run:
         shell: bash

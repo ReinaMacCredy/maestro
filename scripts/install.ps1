@@ -21,6 +21,8 @@ switch ($arch) {
 }
 
 $asset = "maestro-windows-$archSlug.exe"
+$oldBin = "$targetBin.old"
+$restored = $false
 
 $baseUrl = "https://github.com/$releaseRepo/releases"
 if ($requestedVersion -eq "latest") {
@@ -42,7 +44,6 @@ try {
     Invoke-WebRequest -Uri $url -OutFile $tempBin -UseBasicParsing
 
     if (Test-Path $targetBin) {
-        $oldBin = "$targetBin.old"
         if (Test-Path $oldBin) { Remove-Item $oldBin -Force -ErrorAction SilentlyContinue }
         Move-Item -Force $targetBin $oldBin
     }
@@ -54,6 +55,16 @@ try {
     Write-Info "Installed maestro $version to $targetBin"
 } catch {
     if (Test-Path $tempBin) { Remove-Item $tempBin -Force -ErrorAction SilentlyContinue }
+    if (Test-Path $oldBin) {
+        if (Test-Path $targetBin) { Remove-Item $targetBin -Force -ErrorAction SilentlyContinue }
+        try {
+            Move-Item -Force $oldBin $targetBin
+            $restored = $true
+        } catch {
+            Write-Warn "Failed to restore previous binary from $oldBin"
+        }
+    }
+    if ($restored) { Write-Warn "Restored previous maestro.exe after installation failure" }
     throw
 }
 

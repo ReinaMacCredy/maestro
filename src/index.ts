@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { rm } from "node:fs/promises";
+import { basename } from "node:path";
 import { Command, CommanderError } from "commander";
 import { formatVersionOutputForArgv } from "@/shared/version-format.js";
 import { MaestroError } from "@/shared/errors.js";
@@ -84,8 +85,16 @@ registerReplyCommand(program);
 registerPrincipleCommand(program);
 registerBundleCommand(program);
 
+export function shouldCleanupStaleWindowsBinary(
+  platform: NodeJS.Platform = process.platform,
+  execPath: string = process.execPath,
+): boolean {
+  const executableName = basename(execPath.replaceAll("\\", "/")).toLowerCase();
+  return platform === "win32" && executableName === "maestro.exe";
+}
+
 async function cleanupStaleWindowsBinary(): Promise<void> {
-  if (process.platform !== "win32") return;
+  if (!shouldCleanupStaleWindowsBinary()) return;
   await rm(`${process.execPath}.old`, { force: true }).catch(() => undefined);
 }
 
@@ -130,4 +139,6 @@ function assertNoDeprecatedMissionControlFlags(argv: readonly string[]): void {
   ]);
 }
 
-main();
+if (import.meta.main) {
+  void main();
+}

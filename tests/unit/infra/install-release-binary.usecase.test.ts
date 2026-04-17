@@ -8,6 +8,7 @@ import {
   buildReleaseDownloadUrl,
   installReleaseBinary,
   normalizeReleaseTag,
+  replaceInstalledBinary,
   resolveDefaultInstallDir,
   resolveInstallDir,
   resolveInstalledBinaryName,
@@ -35,6 +36,10 @@ describe("install release binary usecase", () => {
     expect(resolveReleaseAssetName("linux", "x86_64")).toBe("maestro-linux-x64");
     expect(resolveReleaseAssetName("linux", "aarch64")).toBe("maestro-linux-arm64");
     expect(resolveReleaseAssetName("win32", "x64")).toBe("maestro-windows-x64.exe");
+  });
+
+  it("rejects Windows arm64 until release assets exist for that platform", () => {
+    expect(() => resolveReleaseAssetName("win32", "arm64")).toThrow(MaestroError);
   });
 
   it("adds .exe suffix to installed binary name on Windows", () => {
@@ -97,6 +102,33 @@ describe("install release binary usecase", () => {
     expect(result.binaryUpdated).toBe(true);
     expect(await Bun.file(existingPath).text()).toBe("new-binary");
     expect(await Bun.file(`${existingPath}.old`).text()).toBe("old-binary");
+  });
+
+  it("restores the previous Windows binary when the final rename fails", async () => {
+    const installDir = await mkdtemp(join(tmpdir(), "maestro-release-install-"));
+    installDirs.push(installDir);
+    const installPath = join(installDir, "maestro.exe");
+    const tempPath = join(installDir, "maestro.exe.tmp");
+    await Bun.write(installPath, "old-binary");
+    await Bun.write(tempPath, "new-binary");
+
+    let renameCalls = 0;
+    const renameImpl = async (from: string, to: string): Promise<void> => {
+      renameCalls += 1;
+      if (renameCalls === 2) {
+        throw new Error("rename failed");
+      }
+      await Bun.write(to, await Bun.file(from).text());
+      await rm(from, { force: true });
+    };
+
+    await expect(
+      replaceInstalledBinary(tempPath, installPath, "win32", { renameImpl }),
+    ).rejects.toThrow("rename failed");
+
+    expect(await Bun.file(installPath).text()).toBe("old-binary");
+    expect(await Bun.file(`${installPath}.old`).exists()).toBe(false);
+    expect(await Bun.file(tempPath).text()).toBe("new-binary");
   });
 
   it("normalizes release tags and direct download URLs", () => {
