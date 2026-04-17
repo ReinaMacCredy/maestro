@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
-import { rm } from "node:fs/promises";
-import { basename } from "node:path";
+import { basename, win32 } from "node:path";
 import { Command, CommanderError } from "commander";
 import { formatVersionOutputForArgv } from "@/shared/version-format.js";
 import { MaestroError } from "@/shared/errors.js";
+import { removeIfExists } from "@/shared/lib/fs.js";
 import { initServices } from "./services.js";
 import { registerInitCommand } from "@/infra/commands/init.command.js";
 import { registerStatusCommand } from "@/infra/commands/status.command.js";
@@ -11,6 +11,10 @@ import { registerDoctorCommand } from "@/infra/commands/doctor.command.js";
 import { registerInstallCommand } from "@/infra/commands/install.command.js";
 import { registerUpdateCommand } from "@/infra/commands/update.command.js";
 import { registerUninstallCommand } from "@/infra/commands/uninstall.command.js";
+import {
+  resolveInstallDir,
+  resolveInstalledBinaryName,
+} from "@/infra/usecases/install-release-binary.usecase.js";
 import { registerNoteCommand } from "./features/notes/index.js";
 import { registerSessionCommand } from "./features/session/index.js";
 import {
@@ -89,13 +93,20 @@ export function shouldCleanupStaleWindowsBinary(
   platform: NodeJS.Platform = process.platform,
   execPath: string = process.execPath,
 ): boolean {
+  if (platform !== "win32") return false;
   const executableName = basename(execPath.replaceAll("\\", "/")).toLowerCase();
-  return platform === "win32" && executableName === "maestro.exe";
+  if (executableName !== resolveInstalledBinaryName("win32")) return false;
+
+  const expectedPath = win32.join(
+    resolveInstallDir("win32"),
+    resolveInstalledBinaryName("win32"),
+  ).toLowerCase();
+  return win32.normalize(execPath).toLowerCase() === expectedPath;
 }
 
 async function cleanupStaleWindowsBinary(): Promise<void> {
   if (!shouldCleanupStaleWindowsBinary()) return;
-  await rm(`${process.execPath}.old`, { force: true }).catch(() => undefined);
+  await removeIfExists(`${process.execPath}.old`);
 }
 
 async function main(): Promise<void> {

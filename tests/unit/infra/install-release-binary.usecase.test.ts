@@ -69,6 +69,56 @@ describe("install release binary usecase", () => {
     expect(fallback).toMatch(/\.local[\\/]bin$/);
   });
 
+  it("installs into MAESTRO_INSTALL_DIR when no explicit installDir is provided", async () => {
+    const homeDir = await mkdtemp(join(tmpdir(), "maestro-release-home-"));
+    const installDir = join(homeDir, "custom-bin");
+    installDirs.push(homeDir);
+
+    const previousHome = process.env.HOME;
+    const previousInstallDir = process.env.MAESTRO_INSTALL_DIR;
+    process.env.HOME = homeDir;
+    process.env.MAESTRO_INSTALL_DIR = installDir;
+
+    const fetchImpl = asFetch(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/releases/latest")) {
+        return Response.json({
+          tag_name: "v9.9.9",
+          assets: [{
+            name: "maestro-linux-x64",
+            browser_download_url: "https://downloads.example.test/maestro-linux-x64",
+          }],
+        });
+      }
+      if (url.endsWith("/maestro-linux-x64")) {
+        return new Response("new-binary", { status: 200 });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    try {
+      const result = await installReleaseBinary({
+        fetchImpl,
+        platform: "linux",
+        arch: "x64",
+      });
+
+      expect(result.installPath).toBe(join(installDir, "maestro"));
+      expect(await Bun.file(join(installDir, "maestro")).text()).toBe("new-binary");
+    } finally {
+      if (previousHome === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = previousHome;
+      }
+      if (previousInstallDir === undefined) {
+        delete process.env.MAESTRO_INSTALL_DIR;
+      } else {
+        process.env.MAESTRO_INSTALL_DIR = previousInstallDir;
+      }
+    }
+  });
+
   it("renames an existing Windows binary to .old before replacing (sidesteps locked exe)", async () => {
     const installDir = await mkdtemp(join(tmpdir(), "maestro-release-install-"));
     installDirs.push(installDir);

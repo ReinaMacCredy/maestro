@@ -82,12 +82,16 @@ export async function renameForInPlaceReplace(
   target: string,
   options: RenameForInPlaceReplaceOptions = {},
 ): Promise<void> {
-  if (!(await fileExists(target))) return;
   const removeImpl = options.removeImpl ?? rm;
   const renameImpl = options.renameImpl ?? rename;
   const oldPath = `${target}.old`;
   await removeImpl(oldPath, { force: true });
-  await renameImpl(target, oldPath);
+  try {
+    await renameImpl(target, oldPath);
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return;
+    throw err;
+  }
 }
 
 export async function listDirs(dir: string): Promise<string[]> {

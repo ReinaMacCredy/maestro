@@ -112,7 +112,7 @@ export async function installReleaseBinary(
 ): Promise<InstallReleaseBinaryResult> {
   const fetchImpl = options.fetchImpl ?? fetch;
   const platform = options.platform ?? process.platform;
-  const installDir = options.installDir ?? resolveDefaultInstallDir(platform);
+  const installDir = options.installDir ?? resolveInstallDir(platform);
   const installPath = join(installDir, resolveInstalledBinaryName(platform));
   const requestedTag = options.version ? normalizeReleaseTag(options.version) : undefined;
   const release = await resolveRelease(fetchImpl, {
