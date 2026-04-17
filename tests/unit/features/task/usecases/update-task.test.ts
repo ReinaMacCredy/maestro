@@ -19,10 +19,14 @@ describe("updateTask", () => {
 
   it("updates basic fields", async () => {
     const task = await createTask(store, { title: "Original" });
-    const updated = await updateTask(store, task.id, { title: "New", priority: 1 });
+    const { task: updated, autoClaimed } = await updateTask(store, task.id, {
+      title: "New",
+      priority: 1,
+    });
 
     expect(updated.title).toBe("New");
     expect(updated.priority).toBe(1);
+    expect(autoClaimed).toBe(false);
   });
 
   it("rejects moving an unclaimed task to in_progress", async () => {
@@ -37,8 +41,14 @@ describe("updateTask", () => {
     const task = await createTask(store, { title: "Doing" });
     await claimTask(store, task.id, { sessionId: "codex-session-a" });
 
-    const updated = await updateTask(store, task.id, { status: "in_progress" }, { sessionId: "codex-session-a" });
+    const { task: updated, autoClaimed } = await updateTask(
+      store,
+      task.id,
+      { status: "in_progress" },
+      { sessionId: "codex-session-a" },
+    );
     expect(updated.status).toBe("in_progress");
+    expect(autoClaimed).toBe(false);
   });
 
   it("rejects moving a claimed task back to pending via update", async () => {
@@ -55,7 +65,7 @@ describe("updateTask", () => {
     const task = await createTask(store, { title: "Claimed" });
     await claimTask(store, task.id, { sessionId: "codex-session-a" });
 
-    const updated = await updateTask(
+    const { task: updated } = await updateTask(
       store,
       task.id,
       { title: "Retitled while pending" },
@@ -82,7 +92,7 @@ describe("updateTask", () => {
   it("completes a task with a reason", async () => {
     const task = await createTask(store, { title: "Done" });
 
-    const completed = await updateTask(store, task.id, {
+    const { task: completed } = await updateTask(store, task.id, {
       status: "completed",
       reason: "shipped",
     });
@@ -109,6 +119,62 @@ describe("updateTask", () => {
     ).rejects.toThrow(/blocked by unresolved/);
   });
 
+  it("auto-claims an unowned task when transitioning to in_progress with a session", async () => {
+    const task = await createTask(store, { title: "To start" });
+
+    const { task: updated, autoClaimed } = await updateTask(
+      store,
+      task.id,
+      { status: "in_progress" },
+      { sessionId: "codex-session-a" },
+    );
+
+    expect(autoClaimed).toBe(true);
+    expect(updated.status).toBe("in_progress");
+    expect(updated.assignee).toBe("codex-session-a");
+    expect(updated.claimedAt).toBeDefined();
+  });
+
+  it("refuses auto-claim when no session can be resolved", async () => {
+    const task = await createTask(store, { title: "To start" });
+
+    await expect(
+      updateTask(store, task.id, { status: "in_progress" }),
+    ).rejects.toThrow(/requires task ownership/);
+  });
+
+  it("enforces busy-check on the auto-claim path", async () => {
+    const first = await createTask(store, { title: "In flight" });
+    const second = await createTask(store, { title: "Next up" });
+    await claimTask(store, first.id, { sessionId: "codex-session-a" });
+    await updateTask(store, first.id, { status: "in_progress" }, { sessionId: "codex-session-a" });
+
+    await expect(
+      updateTask(
+        store,
+        second.id,
+        { status: "in_progress" },
+        { sessionId: "codex-session-a" },
+      ),
+    ).rejects.toThrow(/already owns unresolved/);
+  });
+
+  it("reports autoClaimed=false when the caller had already claimed explicitly", async () => {
+    const task = await createTask(store, { title: "Pre-claimed" });
+    await claimTask(store, task.id, { sessionId: "codex-session-a" });
+
+    const { task: updated, autoClaimed } = await updateTask(
+      store,
+      task.id,
+      { status: "in_progress" },
+      { sessionId: "codex-session-a" },
+    );
+
+    expect(autoClaimed).toBe(false);
+    expect(updated.status).toBe("in_progress");
+    expect(updated.assignee).toBe("codex-session-a");
+  });
+
   it("rejects completion reasons without completed status", async () => {
     const task = await createTask(store, { title: "Oops" });
 
@@ -131,7 +197,7 @@ describe("updateTask", () => {
     const b = await createTask(store, { title: "B" });
     const leaf = await createTask(store, { title: "leaf", parentId: a.id });
 
-    const moved = await updateTask(store, leaf.id, { parentId: b.id });
+    const { task: moved } = await updateTask(store, leaf.id, { parentId: b.id });
     expect(moved.parentId).toBe(b.id);
   });
 });

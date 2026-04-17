@@ -117,7 +117,7 @@ describe("JsonlTaskStoreAdapter", () => {
 
       await expect(store.update(task.id, { status: "in_progress" })).rejects.toThrow(MaestroError);
       await store.claim(task.id, "codex-session-a");
-      const working = await store.update(task.id, { status: "in_progress" }, { sessionId: "codex-session-a" });
+      const { task: working } = await store.update(task.id, { status: "in_progress" }, { sessionId: "codex-session-a" });
       expect(working.status).toBe("in_progress");
       await expect(
         store.update(task.id, { status: "pending" }, { sessionId: "codex-session-a" }),
@@ -163,7 +163,7 @@ describe("JsonlTaskStoreAdapter", () => {
       const task = await store.create({ title: "Claim me" });
       await store.claim(task.id, "codex-session-a");
 
-      const updated = await store.update(
+      const { task: updated } = await store.update(
         task.id,
         { title: "Retitled" },
         { sessionId: "codex-session-a" },
@@ -237,7 +237,7 @@ describe("JsonlTaskStoreAdapter", () => {
 
   it("completes tasks through update and persists close reasons", async () => {
     const task = await store.create({ title: "Done" });
-    const completed = await store.update(task.id, { status: "completed", reason: "shipped" });
+    const { task: completed } = await store.update(task.id, { status: "completed", reason: "shipped" });
 
     expect(completed.status).toBe("completed");
     expect(completed.closeReason).toBe("shipped");
