@@ -1,5 +1,5 @@
 {
-  "name": "maestro-handoff",
+  "name": "maestro",
   "version": "0.38.1",
   "type": "module",
   "bin": {
