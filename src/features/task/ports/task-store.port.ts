@@ -5,7 +5,7 @@ import type {
   UpdateTaskInput,
   UpdateTaskResult,
 } from "../domain/task-types.js";
-import type { CreateBatchInput } from "../domain/task-batch-types.js";
+import type { BatchResult, CreateBatchInput } from "../domain/task-batch-types.js";
 
 export interface TaskQueryPort {
   /** Read a single task by id. Returns undefined if not found. */
@@ -55,4 +55,16 @@ export interface TaskStorePort extends TaskQueryPort {
 
   /** Release unresolved tasks owned by a session back to the pending queue. */
   releaseOwned(sessionId: string): Promise<readonly Task[]>;
+
+  /**
+   * Look up a stored batch receipt for idempotency replay.
+   *
+   * Returns undefined if no prior batch submitted the given id. Does not
+   * validate whether cached ids still exist in the store -- callers handle
+   * drift detection.
+   */
+  findBatchReceipt(batchId: string): Promise<BatchResult | undefined>;
+
+  /** Persist a batch receipt for future idempotent replay. */
+  writeBatchReceipt(result: BatchResult): Promise<void>;
 }

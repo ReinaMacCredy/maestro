@@ -298,6 +298,17 @@ export function batchUnknownReference(name: string, source: "parent" | "blockedB
   );
 }
 
+export function batchStaleReceipt(batchId: string, missingIds: readonly string[]): MaestroError {
+  return new MaestroError(
+    `Batch '${batchId}' has stale receipt: ${missingIds.length} task(s) missing from store`,
+    [
+      `Missing ids: ${missingIds.join(", ")}`,
+      "tasks.jsonl has drifted since the original batch was submitted",
+      "Drop the batchId and re-submit to re-create, or restore tasks.jsonl from backup",
+    ],
+  );
+}
+
 export function batchValidationErrors(issues: readonly string[]): MaestroError {
   const header = issues.length === 1
     ? "Plan validation failed"

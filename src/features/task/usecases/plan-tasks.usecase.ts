@@ -14,6 +14,7 @@ import {
   batchMalformedInput,
   batchNameLooksLikeTaskId,
   batchSizeExceeded,
+  batchStaleReceipt,
   batchUnknownReference,
   batchValidationErrors,
 } from "../domain/task-errors.js";
@@ -38,6 +39,11 @@ export async function planTasks(
     throw batchSizeExceeded(input.tasks.length, maxBatchSize);
   }
 
+  if (input.batchId !== undefined) {
+    const replay = await tryReplayReceipt(store, input.batchId);
+    if (replay) return replay;
+  }
+
   const nameToIndex = buildNameIndex(input.tasks);
   const validationIssues = collectValidationIssues(input.tasks);
   if (validationIssues.length > 0) {
@@ -57,10 +63,32 @@ export async function planTasks(
     assignee: task.assignee,
   }));
 
-  return {
+  const result: BatchResult = {
     batchId: input.batchId,
     created: results,
   };
+
+  if (input.batchId !== undefined) {
+    await store.writeBatchReceipt(result);
+  }
+
+  return result;
+}
+
+async function tryReplayReceipt(
+  store: TaskStorePort,
+  batchId: string,
+): Promise<BatchResult | undefined> {
+  const receipt = await store.findBatchReceipt(batchId);
+  if (!receipt) return undefined;
+
+  const liveTasks = await store.all();
+  const liveIds = new Set(liveTasks.map((task) => task.id));
+  const missing = receipt.created.filter((t) => !liveIds.has(t.id)).map((t) => t.id);
+  if (missing.length > 0) {
+    throw batchStaleReceipt(batchId, missing);
+  }
+  return receipt;
 }
 
 function buildNameIndex(tasks: readonly BatchTaskInput[]): ReadonlyMap<string, number> {

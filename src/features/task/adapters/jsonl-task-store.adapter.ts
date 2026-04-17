@@ -19,7 +19,7 @@ import type {
   UpdateTaskInput,
   UpdateTaskResult,
 } from "../domain/task-types.js";
-import type { CreateBatchInput } from "../domain/task-batch-types.js";
+import type { BatchResult, CreateBatchInput } from "../domain/task-batch-types.js";
 import type { TaskStorePort } from "../ports/task-store.port.js";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { ensureDir, readText, removeIfExists, writeText } from "@/shared/lib/fs.js";
@@ -73,6 +73,15 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
 
   private tasksPath(): string {
     return join(this.tasksDir(), "tasks.jsonl");
+  }
+
+  private batchesDir(): string {
+    return join(this.tasksDir(), "batches");
+  }
+
+  private batchReceiptPath(batchId: string): string {
+    assertBatchIdShape(batchId);
+    return join(this.batchesDir(), `${batchId}.json`);
   }
 
   private lockPath(): string {
@@ -414,6 +423,28 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
     });
   }
 
+  async findBatchReceipt(batchId: string): Promise<BatchResult | undefined> {
+    const path = this.batchReceiptPath(batchId);
+    const raw = await readText(path);
+    if (raw === undefined) return undefined;
+    try {
+      const parsed = JSON.parse(raw) as BatchResult;
+      if (typeof parsed !== "object" || parsed === null || !Array.isArray(parsed.created)) {
+        return undefined;
+      }
+      return parsed;
+    } catch {
+      return undefined;
+    }
+  }
+
+  async writeBatchReceipt(result: BatchResult): Promise<void> {
+    if (!result.batchId) return;
+    const path = this.batchReceiptPath(result.batchId);
+    await ensureDir(this.batchesDir());
+    await writeText(path, `${JSON.stringify(result, null, 2)}\n`);
+  }
+
   async releaseOwned(sessionId: string): Promise<readonly Task[]> {
     return this.withLock(async () => {
       const tasks = await this.readAll();
@@ -601,6 +632,17 @@ function ensureTasksExist(
   const missing = taskIds.filter((taskId) => !tasks.has(taskId));
   if (missing.length > 0) {
     throw unknownBlocker(id, missing);
+  }
+}
+
+const BATCH_ID_PATTERN = /^[a-zA-Z0-9._-]{1,64}$/;
+
+function assertBatchIdShape(batchId: string): void {
+  if (!BATCH_ID_PATTERN.test(batchId)) {
+    throw new MaestroError(`Invalid batchId '${batchId}'`, [
+      "batchId must match /^[a-zA-Z0-9._-]{1,64}$/",
+      "Pick a stable identifier the agent can re-submit verbatim for idempotent replay",
+    ]);
   }
 }
 

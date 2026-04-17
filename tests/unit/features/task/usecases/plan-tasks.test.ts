@@ -179,4 +179,61 @@ describe("planTasks", () => {
     const leaf = await store.get(byName.get("leaf")!);
     expect(leaf?.parentId).toBe(byName.get("root")!);
   });
+
+  describe("idempotency via batchId", () => {
+    it("returns cached receipt on repeat submission with same batchId", async () => {
+      const input = {
+        batchId: "idem-1",
+        tasks: [
+          { name: "a", title: "A" },
+          { name: "b", title: "B", blockedBy: ["a"] },
+        ],
+      };
+
+      const first = await planTasks(store, input);
+      const second = await planTasks(store, input);
+
+      expect(second.batchId).toBe("idem-1");
+      expect(second.created.map((t) => t.id)).toEqual(first.created.map((t) => t.id));
+      expect(await store.all()).toHaveLength(2);
+    });
+
+    it("persists a receipt only when batchId is provided", async () => {
+      await planTasks(store, { tasks: [{ name: "x", title: "X" }] });
+      expect(await store.findBatchReceipt("nonexistent")).toBeUndefined();
+
+      await planTasks(store, {
+        batchId: "has-id",
+        tasks: [{ name: "y", title: "Y" }],
+      });
+      const receipt = await store.findBatchReceipt("has-id");
+      expect(receipt?.created).toHaveLength(1);
+    });
+
+    it("hard-fails replay when cached ids are missing from the store", async () => {
+      await planTasks(store, {
+        batchId: "drift-1",
+        tasks: [{ name: "a", title: "A" }],
+      });
+
+      const tasksPath = `${tmpDir}/.maestro/tasks/tasks.jsonl`;
+      await Bun.write(tasksPath, "");
+
+      await expect(
+        planTasks(store, {
+          batchId: "drift-1",
+          tasks: [{ name: "a", title: "A" }],
+        }),
+      ).rejects.toThrow(/stale receipt.*missing from store/);
+    });
+
+    it("rejects invalid batchId shapes at the adapter boundary", async () => {
+      await expect(
+        planTasks(store, {
+          batchId: "../hack",
+          tasks: [{ name: "a", title: "A" }],
+        }),
+      ).rejects.toThrow(/Invalid batchId/);
+    });
+  });
 });
