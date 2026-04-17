@@ -67,10 +67,11 @@ export function parseStatus(value: string | undefined): TaskStatus | undefined {
   ]);
 }
 
-export function parseCreateStatus(value: string | undefined): "pending" | "in_progress" | undefined {
+export function parseCreateStatus(
+  value: string | undefined,
+): Exclude<TaskStatus, "completed"> | undefined {
   if (value === undefined) return undefined;
   const parsed = parseStatus(value);
-  if (parsed === undefined) return undefined;
   if (parsed === "completed") {
     throw taskCreateCompletedRejected();
   }

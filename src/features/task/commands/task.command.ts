@@ -103,6 +103,19 @@ function registerCreateCommand(taskCmd: Command, program: Command): void {
 
       const initialStatus = parseCreateStatus(opts.status);
 
+      if (opts.session !== undefined && initialStatus !== "in_progress") {
+        throw new MaestroError("--session only applies with --status in_progress", [
+          "Drop --session for a plain create (new tasks have no owner)",
+          "Or pair --session with --status in_progress to auto-claim at create time",
+        ]);
+      }
+
+      let sessionId: string | undefined;
+      if (initialStatus === "in_progress") {
+        sessionId = await resolveOwnershipSessionId(opts.session);
+        await maybeReleaseStaleOwnedTasks([sessionId]);
+      }
+
       const input = buildCreateInput(title, {
         description: opts.description,
         type: opts.type,
@@ -114,7 +127,6 @@ function registerCreateCommand(taskCmd: Command, program: Command): void {
       let task = await createTask(services.taskStore, input);
 
       if (initialStatus === "in_progress") {
-        const sessionId = await resolveSessionAndReleaseStale(opts.session);
         const { task: started, autoClaimed } = await updateTask(
           services.taskStore,
           task.id,
@@ -122,9 +134,7 @@ function registerCreateCommand(taskCmd: Command, program: Command): void {
           { sessionId },
         );
         task = started;
-        if (autoClaimed && started.assignee) {
-          warn(`Auto-claimed ${started.id} for session ${started.assignee}`);
-        }
+        warnAutoClaimed(started, autoClaimed);
       }
 
       if (opts.silent) {
@@ -270,9 +280,7 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
           force: opts.force === true,
         },
       );
-      if (autoClaimed && updated.assignee) {
-        warn(`Auto-claimed ${updated.id} for session ${updated.assignee}`);
-      }
+      warnAutoClaimed(updated, autoClaimed);
       await maybeCaptureCompletionHint(updated);
 
       output(isJson, updated, (task) => [
@@ -484,6 +492,12 @@ async function resolveSessionAndReleaseStale(
   const sessionId = await resolveOptionalOwnershipSessionId(explicitSessionId);
   await maybeReleaseStaleOwnedTasks(sessionId ? [sessionId] : []);
   return sessionId;
+}
+
+function warnAutoClaimed(task: Task, autoClaimed: boolean): void {
+  if (autoClaimed && task.assignee) {
+    warn(`Auto-claimed ${task.id} for session ${task.assignee}`);
+  }
 }
 
 function registerReadyCommand(taskCmd: Command, program: Command): void {
