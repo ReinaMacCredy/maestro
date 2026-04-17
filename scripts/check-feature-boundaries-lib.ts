@@ -26,13 +26,18 @@ const PUBLIC_SURFACE_RE = /^(?:index\.(?:[cm]?tsx?|js))?$/;
 const FEATURE_IMPORT_RE = /(?:^|\/)features\/([^/]+)(?:\/(.+))?$/;
 const transpiler = new Transpiler({ loader: "tsx" });
 
+function toPosixPath(p: string): string {
+  return p.replace(/\\/g, "/");
+}
+
 function featureFromPath(relPath: string): string | undefined {
-  return relPath.match(/^src\/features\/([^/]+)\//)?.[1];
+  return toPosixPath(relPath).match(/^src\/features\/([^/]+)\//)?.[1];
 }
 
 function canonicalizeSpec(fileRelPath: string, spec: string): string {
   if (!spec.startsWith(".")) return spec;
-  return path.posix.normalize(path.posix.join(path.posix.dirname(fileRelPath), spec));
+  const posixRel = toPosixPath(fileRelPath);
+  return path.posix.normalize(path.posix.join(path.posix.dirname(posixRel), spec));
 }
 
 function isPublicSurfaceImport(subPath: string | undefined): boolean {
@@ -70,7 +75,7 @@ export async function scanFeatureBoundaryViolations(root: string): Promise<Viola
   for (const pattern of FEATURE_FILE_GLOBS) {
     const featureGlob = new Glob(pattern);
     for await (const relPath of featureGlob.scan({ cwd: root })) {
-      if (ALLOWED_CROSS_FEATURE.includes(relPath)) continue;
+      if (ALLOWED_CROSS_FEATURE.includes(toPosixPath(relPath))) continue;
 
       const text = await Bun.file(path.join(root, relPath)).text();
       const imports = transpiler.scanImports(text);

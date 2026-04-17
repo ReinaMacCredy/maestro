@@ -99,7 +99,7 @@ export async function initMaestro(
       }
 
       await writeText(target, template.content);
-      if (template.executable) {
+      if (template.executable && process.platform !== "win32") {
         await chmod(target, 0o755);
       }
       created.push(target);
@@ -185,9 +185,17 @@ async function overlayLegacyTree(
     files.set(join(targetDir, relativePath), {
       path: join(targetDir, relativePath),
       content,
-      executable: Boolean(stat.mode & 0o111),
+      executable: isExecutable(stat.mode, relativePath),
     });
   }
+}
+
+function isExecutable(mode: number, relativePath: string): boolean {
+  if (process.platform === "win32") {
+    const ext = relativePath.slice(relativePath.lastIndexOf(".")).toLowerCase();
+    return ext === ".exe" || ext === ".cmd" || ext === ".bat" || ext === ".ps1";
+  }
+  return Boolean(mode & 0o111);
 }
 
 async function listFilesRecursive(dir: string): Promise<string[]> {

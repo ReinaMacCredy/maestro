@@ -199,11 +199,11 @@ function resolveDirOverride(
 }
 
 function normalizePath(p: string): string {
-  return p.replace(/\/+$/, "");
+  return p.replace(/[\\/]+$/, "");
 }
 
 function encodeProjectPath(cwd: string): string {
-  return cwd.replace(/\//g, "-");
+  return cwd.replace(/[\\/]/g, "-");
 }
 
 async function pathExists(path: string): Promise<boolean> {

@@ -965,6 +965,7 @@ function splitIntoBullets(summary: string) {
 }
 
 function shortenHomePath(path: string): string {
+  if (process.platform === "win32") return path;
   const home = homedir();
   return path.startsWith(home) ? `~${path.slice(home.length)}` : path;
 }

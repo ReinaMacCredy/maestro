@@ -4,6 +4,11 @@
  * Uses the system `tar` binary via `execOrThrow` to stream a staging
  * directory into a gzipped tarball. Staging is cleaned up in both success
  * and failure paths.
+ *
+ * Platform note: on Windows, requires `tar.exe` (bsdtar) which ships
+ * with Windows 10 1803+ and Windows Server 2019+. Argv arrays are passed
+ * directly via Bun.spawnSync (no shell), so path escaping is handled by
+ * the OS.
  */
 import { dirname, join, resolve } from "node:path";
 import { mkdtemp, rm, stat } from "node:fs/promises";
