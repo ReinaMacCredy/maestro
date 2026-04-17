@@ -238,8 +238,7 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
         ]);
       }
 
-      const sessionId = await resolveOptionalOwnershipSessionId(opts.session);
-      await maybeReleaseStaleOwnedTasks(sessionId ? [sessionId] : []);
+      const sessionId = await resolveSessionAndReleaseStale(opts.session);
       const { task: updated, autoClaimed } = await updateTask(
         services.taskStore,
         id,
@@ -350,8 +349,7 @@ function registerBlockCommand(taskCmd: Command, program: Command): void {
     .action(async (id: string, blockedTaskIds: string[], opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const sessionId = await resolveOptionalOwnershipSessionId(opts.session);
-      await maybeReleaseStaleOwnedTasks(sessionId ? [sessionId] : []);
+      const sessionId = await resolveSessionAndReleaseStale(opts.session);
       const updated = await blockTasks(
         services.taskStore,
         id,
@@ -379,8 +377,7 @@ function registerUnblockCommand(taskCmd: Command, program: Command): void {
     .action(async (id: string, blockedTaskIds: string[], opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const sessionId = await resolveOptionalOwnershipSessionId(opts.session);
-      await maybeReleaseStaleOwnedTasks(sessionId ? [sessionId] : []);
+      const sessionId = await resolveSessionAndReleaseStale(opts.session);
       const updated = await unblockTasks(
         services.taskStore,
         id,
@@ -457,6 +454,14 @@ async function resolveOptionalOwnershipSessionId(explicitSessionId: string | und
   const services = getServices();
   const session = await services.sessionDetect.detect(process.cwd());
   return session ? `${session.agent}-${session.sessionId}` : undefined;
+}
+
+async function resolveSessionAndReleaseStale(
+  explicitSessionId: string | undefined,
+): Promise<string | undefined> {
+  const sessionId = await resolveOptionalOwnershipSessionId(explicitSessionId);
+  await maybeReleaseStaleOwnedTasks(sessionId ? [sessionId] : []);
+  return sessionId;
 }
 
 function registerReadyCommand(taskCmd: Command, program: Command): void {

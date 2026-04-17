@@ -21,9 +21,9 @@ export interface TaskStorePort extends TaskQueryPort {
   /**
    * Patch an existing task. Throws if id does not exist.
    *
-   * Returns the updated task plus an `autoClaimed` flag that is true when the
-   * patch transitioned an unowned task to `in_progress` and the store took
-   * ownership on the caller's behalf in the same write.
+   * `autoClaimed` is carried on the result rather than inferred from the task
+   * because callers lack the pre-update snapshot needed to tell an explicit
+   * claim-then-update from an auto-claim folded into the same write.
    */
   update(id: string, patch: UpdateTaskInput, opts?: TaskMutationInput): Promise<UpdateTaskResult>;
 
