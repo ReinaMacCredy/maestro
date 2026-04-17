@@ -8,6 +8,7 @@ import {
   buildReleaseDownloadUrl,
   installReleaseBinary,
   normalizeReleaseTag,
+  resolveDefaultInstallDir,
   resolveInstalledBinaryName,
   resolveReleaseAssetName,
 } from "@/infra/usecases/install-release-binary.usecase.js";
@@ -39,6 +40,51 @@ describe("install release binary usecase", () => {
     expect(resolveInstalledBinaryName("darwin")).toBe("maestro");
     expect(resolveInstalledBinaryName("linux")).toBe("maestro");
     expect(resolveInstalledBinaryName("win32")).toBe("maestro.exe");
+  });
+
+  it("resolves platform-specific default install directories", () => {
+    expect(resolveDefaultInstallDir("linux", { HOME: "/home/u" } as NodeJS.ProcessEnv)).toMatch(/\.local[\\/]bin$/);
+    expect(resolveDefaultInstallDir("darwin", { HOME: "/home/u" } as NodeJS.ProcessEnv)).toMatch(/\.local[\\/]bin$/);
+    const win = resolveDefaultInstallDir(
+      "win32",
+      { LOCALAPPDATA: "C:\\Users\\u\\AppData\\Local" } as NodeJS.ProcessEnv,
+    );
+    expect(win).toBe("C:\\Users\\u\\AppData\\Local\\Programs\\maestro");
+  });
+
+  it("renames an existing Windows binary to .old before replacing (sidesteps locked exe)", async () => {
+    const installDir = await mkdtemp(join(tmpdir(), "maestro-release-install-"));
+    installDirs.push(installDir);
+    const existingPath = join(installDir, "maestro.exe");
+    await Bun.write(existingPath, "old-binary");
+
+    const fetchImpl = asFetch(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/releases/latest")) {
+        return Response.json({
+          tag_name: "v9.9.9",
+          assets: [{
+            name: "maestro-windows-x64.exe",
+            browser_download_url: "https://downloads.example.test/maestro-windows-x64.exe",
+          }],
+        });
+      }
+      if (url.endsWith("/maestro-windows-x64.exe")) {
+        return new Response("new-binary", { status: 200 });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const result = await installReleaseBinary({
+      fetchImpl,
+      installDir,
+      platform: "win32",
+      arch: "x64",
+    });
+
+    expect(result.binaryUpdated).toBe(true);
+    expect(await Bun.file(existingPath).text()).toBe("new-binary");
+    expect(await Bun.file(`${existingPath}.old`).text()).toBe("old-binary");
   });
 
   it("normalizes release tags and direct download URLs", () => {

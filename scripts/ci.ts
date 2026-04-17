@@ -129,7 +129,7 @@ if (buildResult !== 0) {
 console.log("[ok] Built dist/maestro from the release commit.");
 
 console.log("\n[-->] Installing locally...");
-const installResult = await Bun.spawn(["bash", "scripts/install-local.sh", "./dist/maestro"], {
+const installResult = await Bun.spawn(["bun", "scripts/install-local.ts"], {
   cwd: root,
   stdout: "inherit",
   stderr: "inherit",

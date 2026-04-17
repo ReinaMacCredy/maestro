@@ -1,6 +1,6 @@
-import { chmod, mkdir, rename, rm } from "node:fs/promises";
+import { access, chmod, mkdir, rename, rm } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, posix, win32 } from "node:path";
 import { MaestroError } from "@/shared/errors.js";
 import { VERSION } from "@/shared/version.js";
 
@@ -11,6 +11,17 @@ export function resolveInstalledBinaryName(
   platform: NodeJS.Platform = process.platform,
 ): string {
   return platform === "win32" ? `${TARGET_BINARY_BASENAME}.exe` : TARGET_BINARY_BASENAME;
+}
+
+export function resolveDefaultInstallDir(
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  if (platform === "win32") {
+    const base = env.LOCALAPPDATA ?? win32.join(homedir(), "AppData", "Local");
+    return win32.join(base, "Programs", "maestro");
+  }
+  return posix.join(env.HOME ?? homedir(), ".local", "bin");
 }
 
 interface GitHubReleaseAssetPayload {
@@ -88,7 +99,7 @@ export async function installReleaseBinary(
 ): Promise<InstallReleaseBinaryResult> {
   const fetchImpl = options.fetchImpl ?? fetch;
   const platform = options.platform ?? process.platform;
-  const installDir = options.installDir ?? join(homedir(), ".local", "bin");
+  const installDir = options.installDir ?? resolveDefaultInstallDir(platform);
   const installPath = join(installDir, resolveInstalledBinaryName(platform));
   const requestedTag = options.version ? normalizeReleaseTag(options.version) : undefined;
   const release = await resolveRelease(fetchImpl, {
@@ -118,7 +129,7 @@ export async function installReleaseBinary(
     if (platform !== "win32") {
       await chmod(tempPath, 0o755);
     }
-    await rename(tempPath, installPath);
+    await replaceBinary(tempPath, installPath, platform);
   } catch (error) {
     await rm(tempPath, { force: true }).catch(() => undefined);
     throw error;
@@ -214,6 +225,28 @@ function resolveReleaseAsset(
     name: assetName,
     downloadUrl: asset.browser_download_url,
   };
+}
+
+async function replaceBinary(
+  tempPath: string,
+  installPath: string,
+  platform: NodeJS.Platform,
+): Promise<void> {
+  if (platform === "win32" && await fileExists(installPath)) {
+    const oldPath = `${installPath}.old`;
+    await rm(oldPath, { force: true }).catch(() => undefined);
+    await rename(installPath, oldPath);
+  }
+  await rename(tempPath, installPath);
+}
+
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function downloadAsset(

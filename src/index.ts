@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { rm } from "node:fs/promises";
 import { Command, CommanderError } from "commander";
 import { formatVersionOutputForArgv } from "@/shared/version-format.js";
 import { MaestroError } from "@/shared/errors.js";
@@ -83,8 +84,14 @@ registerReplyCommand(program);
 registerPrincipleCommand(program);
 registerBundleCommand(program);
 
+async function cleanupStaleWindowsBinary(): Promise<void> {
+  if (process.platform !== "win32") return;
+  await rm(`${process.execPath}.old`, { force: true }).catch(() => undefined);
+}
+
 async function main(): Promise<void> {
   try {
+    await cleanupStaleWindowsBinary();
     assertNoDeprecatedMissionControlFlags(process.argv);
     await program.parseAsync(process.argv);
   } catch (err) {
