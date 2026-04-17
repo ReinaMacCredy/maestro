@@ -155,6 +155,8 @@ function registerPlanCommand(taskCmd: Command, program: Command): void {
     .command("plan")
     .description("Create a batch of tasks atomically from a JSON plan")
     .requiredOption("--file <path>", "Plan file path ('-' to read JSON from stdin)")
+    .option("--start <name>", "After ingest, auto-claim and move the named batch-local task to in_progress")
+    .option("--session <id>", "Use an explicit session id for --start (only with --start)")
     .option("--dry-run", "Validate + resolve references without writing any tasks")
     .option("--json", "Output as JSON")
     .action(async (opts) => {
@@ -164,6 +166,26 @@ function registerPlanCommand(taskCmd: Command, program: Command): void {
       const raw = await readPlanSource(opts.file);
       const batchInput = parsePlanInput(raw);
 
+      if (opts.session !== undefined && opts.start === undefined) {
+        throw new MaestroError("--session only applies with --start", [
+          "Pair --session with --start <name> to auto-claim the named task",
+          "Drop --session for a plan without start-of-work",
+        ]);
+      }
+
+      let sessionId: string | undefined;
+      if (opts.start !== undefined) {
+        const named = batchInput.tasks.find((t) => t.name === opts.start);
+        if (!named) {
+          throw new MaestroError(`--start '${opts.start}' does not match any 'name' in the plan`, [
+            "The value must match a task's 'name' slot in the same batch",
+            "Add a 'name' to the task you want to start, then pass it here",
+          ]);
+        }
+        sessionId = await resolveOwnershipSessionId(opts.session);
+        await maybeReleaseStaleOwnedTasks([sessionId]);
+      }
+
       if (opts.dryRun === true) {
         output(isJson, { batchId: batchInput.batchId, taskCount: batchInput.tasks.length, dryRun: true }, (data) => [
           `[ok] Dry run: ${data.taskCount} task(s) validated, nothing written`,
@@ -172,12 +194,43 @@ function registerPlanCommand(taskCmd: Command, program: Command): void {
       }
 
       const result = await planTasks(services.taskStore, batchInput);
+      const created = [...result.created];
 
-      output(isJson, result, (r) => {
+      let startedTaskId: string | undefined;
+      if (opts.start !== undefined && sessionId !== undefined) {
+        const targetIdx = created.findIndex((t) => t.name === opts.start);
+        if (targetIdx >= 0) {
+          const target = created[targetIdx]!;
+          try {
+            const { task: updated, autoClaimed } = await updateTask(
+              services.taskStore,
+              target.id,
+              { status: "in_progress" },
+              { sessionId },
+            );
+            created[targetIdx] = {
+              ...target,
+              status: updated.status,
+              assignee: updated.assignee,
+            };
+            startedTaskId = updated.id;
+            warnAutoClaimed(updated, autoClaimed);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            warn(`Could not auto-start ${target.id}: ${message}`);
+            warn("Batch was committed. Claim manually if needed: maestro task claim <id> --force");
+          }
+        }
+      }
+
+      output(isJson, { ...result, created, startedTaskId }, (r) => {
         const lines = [`[ok] ${r.created.length} task(s) created`];
         for (const task of r.created) {
           const label = task.name ? `${task.name}  --> ${task.id}` : `  --> ${task.id}`;
           lines.push(`  ${label}`);
+        }
+        if (r.startedTaskId) {
+          lines.push(`[ok] Started: ${r.startedTaskId}`);
         }
         return lines;
       });
