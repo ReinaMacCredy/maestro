@@ -1,30 +1,19 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { dirExists, readJson, writeJson } from "@/shared/lib/fs.js";
+import { migrateLegacyWorkerType } from "@/features/mission/feature/feature-migration.js";
 
 const MISSIONS_DIR = join(process.cwd(), ".maestro", "missions");
 
-interface FeatureRecord {
-  readonly workerType?: unknown;
-  readonly agentType?: unknown;
-  readonly [key: string]: unknown;
-}
-
 async function migrateFile(path: string): Promise<"migrated" | "skipped" | "error"> {
   try {
-    const parsed = await readJson<FeatureRecord>(path);
+    const parsed = await readJson<unknown>(path);
     if (!parsed) return "error";
-    if (!("workerType" in parsed)) return "skipped";
 
-    const { workerType, ...rest } = parsed;
-    // Idempotent guard: if a file already carries a non-undefined agentType
-    // (partial migration, manual edit, re-run after rollback), preserve the
-    // existing value and just strip the stale workerType field.
-    if ("agentType" in parsed && parsed.agentType !== undefined) {
-      await writeJson(path, rest);
-      return "skipped";
-    }
-    await writeJson(path, { ...rest, agentType: workerType });
+    const { normalized, migrated } = migrateLegacyWorkerType(parsed);
+    if (!migrated) return "skipped";
+
+    await writeJson(path, normalized);
     return "migrated";
   } catch {
     console.error(`[!] Failed to migrate ${path}`);

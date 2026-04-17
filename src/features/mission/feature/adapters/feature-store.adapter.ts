@@ -6,6 +6,7 @@
 import type { Feature, CreateFeatureInput, UpdateFeatureInput } from "../../domain/mission-types.js";
 import type { FeatureStorePort } from "../ports/feature-store.port.js";
 import { FEATURE_ID_PATTERN, validateFeature } from "../../domain/mission-validators.js";
+import { migrateLegacyWorkerType } from "../feature-migration.js";
 import { ensureDir, readJson, writeJson, listDirs, readText } from "@/shared/lib/fs.js";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { readdir } from "node:fs/promises";
@@ -40,8 +41,6 @@ export class FsFeatureStoreAdapter implements FeatureStorePort {
     try {
       const validated = validateFeature(normalized);
       if (migrated) {
-        // Persist the migrated shape so the next read hits the new schema
-        // directly and downstream tools don't have to keep translating.
         await writeJson(path, validated);
       }
       return validated;
@@ -157,29 +156,4 @@ export class FsFeatureStoreAdapter implements FeatureStorePort {
       .map((r) => r.value)
       .filter((f): f is Feature => f !== undefined);
   }
-}
-
-// Transparently upgrade pre-rename feature JSON where `workerType` still
-// sits on disk. Validation would otherwise reject the strict schema and
-// `get()` would swallow it, silently breaking every feature read.
-export function migrateLegacyWorkerType(
-  data: unknown,
-): { normalized: unknown; migrated: boolean } {
-  if (data === null || typeof data !== "object" || Array.isArray(data)) {
-    return { normalized: data, migrated: false };
-  }
-
-  const record = data as Record<string, unknown>;
-  if (!("workerType" in record)) {
-    return { normalized: data, migrated: false };
-  }
-
-  const { workerType, ...rest } = record;
-  if ("agentType" in record && record.agentType !== undefined) {
-    // Both fields coexist (partial migration, manual edit). Prefer the
-    // existing agentType and just drop the stale workerType.
-    return { normalized: rest, migrated: true };
-  }
-
-  return { normalized: { ...rest, agentType: workerType }, migrated: true };
 }

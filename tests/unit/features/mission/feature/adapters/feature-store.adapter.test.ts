@@ -2,10 +2,8 @@ import { describe, expect, it, beforeEach, afterEach } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import {
-  FsFeatureStoreAdapter,
-  migrateLegacyWorkerType,
-} from "@/features/mission/feature/adapters/feature-store.adapter.js";
+import { FsFeatureStoreAdapter } from "@/features/mission/feature/adapters/feature-store.adapter.js";
+import { migrateLegacyWorkerType } from "@/features/mission/feature/feature-migration.js";
 import type { CreateFeatureInput, Feature, WorkerReport } from "@/features/mission/domain/mission-types.js";
 
 let tmpDir: string;
