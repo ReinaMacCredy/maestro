@@ -1,8 +1,11 @@
 // Feature-folder boundary check. See AGENTS.md (Feature-Folder Layout)
 // for the rule; this script enforces it on the repo's feature sources.
-import { scanFeatureBoundaryViolations } from "./check-feature-boundaries-lib";
+import {
+  resolveBoundaryCheckRoot,
+  scanFeatureBoundaryViolations,
+} from "./check-feature-boundaries-lib";
 
-const ROOT = new URL("../", import.meta.url).pathname;
+const ROOT = resolveBoundaryCheckRoot(import.meta.url);
 const violations = await scanFeatureBoundaryViolations(ROOT);
 
 if (violations.length === 0) {

@@ -1,4 +1,5 @@
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import { Glob, Transpiler } from "bun";
 
 export interface Violation {
@@ -42,6 +43,10 @@ function canonicalizeSpec(fileRelPath: string, spec: string): string {
 
 function isPublicSurfaceImport(subPath: string | undefined): boolean {
   return subPath === undefined || PUBLIC_SURFACE_RE.test(subPath);
+}
+
+export function resolveBoundaryCheckRoot(metaUrl: string): string {
+  return fileURLToPath(new URL("../", metaUrl));
 }
 
 export function findCrossFeatureImportViolation(
