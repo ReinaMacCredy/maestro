@@ -15,23 +15,11 @@ import type {
   Mission,
   MissionStorePort,
 } from "@/features/mission/index.js";
-import type { HandoffStorePort } from "@/features/handoff/index.js";
-import type {
-  UkiHandoff,
-  UkiHandoffContent,
-} from "@/features/handoff/index.js";
+import type { HandoffLaunchRecord, LaunchStorePort } from "@/features/handoff/index.js";
 import type { ReplyStorePort } from "@/features/reply/index.js";
 import type { WorkerReply } from "@/features/reply/index.js";
 
 const MISSION_ID = "2026-04-13-001";
-
-interface TestUkiMaestroRefs {
-  readonly missionId?: string;
-  readonly featureId?: string;
-  readonly milestoneId?: string;
-  readonly planPath?: string;
-  readonly specPath?: string;
-}
 
 let projectDir: string;
 
@@ -101,39 +89,22 @@ function buildCheckpoint(id: string): Checkpoint {
   };
 }
 
-function buildHandoffContent(refs: TestUkiMaestroRefs): UkiHandoffContent {
-  return {
-    mode: "execute",
-    currentState: "state",
-    sessionCore: "core",
-    decisions: [],
-    artifacts: [],
-    readMore: [],
-    nextAction: "next",
-    summary: "sum",
-    maestroRefs: refs,
-    cs: {},
-    signalDelta: [],
-    boundaryState: [],
-    risks: [],
-    causalDrivers: [],
-    divergences: [],
-    touchedFiles: [],
-    completedWork: [],
-    validation: [],
-  };
-}
-
-function buildHandoff(id: string, refs: TestUkiMaestroRefs): UkiHandoff {
+function buildLaunch(id: string, refs: HandoffLaunchRecord["refs"]): HandoffLaunchRecord {
   return {
     id,
-    version: "5.4",
-    timestamp: "2026-04-13T02:00:00.000Z",
+    createdAt: "2026-04-13T02:00:00.000Z",
+    task: "bundle launch",
+    name: "[Handoff] bundle launch",
+    provider: "claude",
+    model: "opus",
     status: "completed",
-    agent: "claude",
-    sessionId: "sess-1",
-    content: buildHandoffContent(refs),
-    uki: `UKI:${id}`,
+    wait: true,
+    sourceDir: projectDir,
+    targetDir: projectDir,
+    promptPath: `.maestro/launches/${id}/prompt.md`,
+    outputPath: `.maestro/launches/${id}/output.log`,
+    command: ["claude", "--print", "bundle launch"],
+    refs,
   };
 }
 
@@ -210,15 +181,13 @@ class FakeReplyStore implements ReplyStorePort {
   async markIngested() { /* noop */ }
 }
 
-class FakeHandoffStore implements HandoffStorePort {
-  constructor(private readonly handoffs: readonly UkiHandoff[]) {}
-  async create(): Promise<UkiHandoff> { throw new Error("not implemented"); }
-  async claimPending() { return undefined; }
-  async get(id: string) { return this.handoffs.find((h) => h.id === id); }
-  async getLatestPending() { return undefined; }
-  async list() { return this.handoffs; }
-  async updateStatus() { return undefined; }
-  async delete() { return false; }
+class FakeLaunchStore implements LaunchStorePort {
+  constructor(private readonly launches: readonly HandoffLaunchRecord[]) {}
+  async create(): Promise<HandoffLaunchRecord> { throw new Error("not implemented"); }
+  async update(record: HandoffLaunchRecord) { return record; }
+  async get(id: string) { return this.launches.find((launch) => launch.id === id); }
+  async list() { return this.launches; }
+  resolveArtifactPath(relativePath: string) { return join(projectDir, relativePath); }
 }
 
 async function seedWorkers(featureId: string): Promise<void> {
@@ -271,7 +240,7 @@ async function seedMemory(): Promise<void> {
 
 function makeDeps({
   replies = new Map<string, WorkerReply>(),
-  handoffs = [] as readonly UkiHandoff[],
+  launches = [] as readonly HandoffLaunchRecord[],
   checkpoints = [] as readonly Checkpoint[],
   assertions = [] as readonly Assertion[],
 } = {}) {
@@ -285,7 +254,7 @@ function makeDeps({
     assertionStore: new FakeAssertionStore(assertions),
     checkpointStore: new FakeCheckpointStore(checkpoints),
     replyStore: new FakeReplyStore(replies),
-    handoffStore: new FakeHandoffStore(handoffs),
+    launchStore: new FakeLaunchStore(launches),
   };
 }
 
@@ -294,7 +263,7 @@ function filesByPath(files: readonly BundleFile[]): Map<string, BundleFile> {
 }
 
 describe("collectBundleSources", () => {
-  it("aggregates a minimal mission without replies, handoffs, or memory", async () => {
+  it("aggregates a minimal mission without replies, launches, or memory", async () => {
     const deps = makeDeps();
     const result = await collectBundleSources(deps, {
       missionId: MISSION_ID,
@@ -311,19 +280,19 @@ describe("collectBundleSources", () => {
     expect(result.stats.milestones).toBe(2);
     expect(result.stats.workers).toBe(0);
     expect(result.stats.replies).toBe(0);
-    expect(result.stats.handoffs).toBe(0);
+    expect(result.stats.launches).toBe(0);
     expect(result.stats.memorySnapshot).toEqual({ corrections: 0, learnings: 0 });
   });
 
-  it("includes worker files, replies, handoffs, checkpoints, principles, and memory", async () => {
+  it("includes worker files, replies, launches, checkpoints, principles, and memory", async () => {
     await seedWorkers("f1");
     await seedWorkers("f2");
     await seedReplies("f1");
     await seedPrinciplesAndOutcomes();
     await seedMemory();
 
-    const handoffInScope = buildHandoff("2026-04-13-101", { missionId: MISSION_ID });
-    const handoffOutOfScope = buildHandoff("2026-04-13-102", { missionId: "2020-01-01-001" });
+    const launchInScope = buildLaunch("2026-04-13-101", { missionId: MISSION_ID });
+    const launchOutOfScope = buildLaunch("2026-04-13-102", { missionId: "2020-01-01-001" });
 
     const replies = new Map<string, WorkerReply>([
       [`${MISSION_ID}:f1`, buildReply("f1")],
@@ -331,7 +300,7 @@ describe("collectBundleSources", () => {
 
     const deps = makeDeps({
       replies,
-      handoffs: [handoffInScope, handoffOutOfScope],
+      launches: [launchInScope, launchOutOfScope],
       checkpoints: [buildCheckpoint("20260413-010000-000")],
       assertions: [buildAssertion("a1", "m1")],
     });
@@ -347,8 +316,8 @@ describe("collectBundleSources", () => {
     expect(files.has(`${MISSION_ID}.mission/mission/workers/f1/report.json`)).toBe(true);
     expect(files.has(`${MISSION_ID}.mission/mission/workers/f2/prompt.md`)).toBe(true);
     expect(files.has(`${MISSION_ID}.mission/replies/f1.yaml`)).toBe(true);
-    expect(files.has(`${MISSION_ID}.mission/handoffs/2026-04-13-101.json`)).toBe(true);
-    expect(files.has(`${MISSION_ID}.mission/handoffs/2026-04-13-102.json`)).toBe(false);
+    expect(files.has(`${MISSION_ID}.mission/launches/2026-04-13-101.json`)).toBe(true);
+    expect(files.has(`${MISSION_ID}.mission/launches/2026-04-13-102.json`)).toBe(false);
     expect(files.has(`${MISSION_ID}.mission/mission/checkpoints/20260413-010000-000.json`)).toBe(true);
     expect(files.has(`${MISSION_ID}.mission/principles/principles.jsonl`)).toBe(true);
     expect(files.has(`${MISSION_ID}.mission/principles/outcomes.jsonl`)).toBe(true);
@@ -358,7 +327,7 @@ describe("collectBundleSources", () => {
     expect(result.stats.features).toBe(2);
     expect(result.stats.workers).toBe(2);
     expect(result.stats.replies).toBe(1);
-    expect(result.stats.handoffs).toBe(1);
+    expect(result.stats.launches).toBe(1);
     expect(result.stats.checkpoints).toBe(1);
     expect(result.stats.assertions).toBe(1);
     expect(result.stats.principlesSnapshot).toBe(2);

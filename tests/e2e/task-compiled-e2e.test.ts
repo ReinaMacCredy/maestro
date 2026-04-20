@@ -301,7 +301,11 @@ describe("compiled task feature E2E", () => {
         expect(reopen.stderr).toContain("cannot move to 'pending' while still claimed");
 
       const unclaimedId = (await runCompiled(["task", "q", "unclaimed progress"], tmpDir)).stdout;
-      const badStart = await runCompiled(["task", "update", unclaimedId, "--status", "in_progress"], tmpDir);
+      const badStart = await runCompiled(
+        ["task", "update", unclaimedId, "--status", "in_progress"],
+        tmpDir,
+        { env: { CLAUDECODE: "", CODEX_THREAD_ID: "" } },
+      );
       expect(badStart.exitCode).not.toBe(0);
       expect(badStart.stderr).toContain("requires task ownership");
 
@@ -473,7 +477,7 @@ describe("compiled task feature E2E", () => {
 
   it(
     "active memory: --no-hints disables hint attachment for scripts",
-    async () => {
+      async () => {
       const pastId = (await runCompiled(["task", "q", "Implement auth module"], tmpDir)).stdout;
       await runCompiled(
         ["task", "update", pastId, "--status", "completed", "--reason", "auth token expiry wrong"],
@@ -491,8 +495,85 @@ describe("compiled task feature E2E", () => {
   );
 
   it(
-    "warns but still succeeds when candidate capture fails after completion",
+    "returns compact JSON with page metadata and minimal task items",
     async () => {
+      const firstId = (await runCompiled(["task", "q", "Compact auth task", "--priority", "0"], tmpDir)).stdout;
+      await runCompiled(["task", "q", "Compact ui task", "--priority", "2"], tmpDir);
+
+      const compact = await runCompiled(["task", "ready", "--json", "--compact", "--limit", "1"], tmpDir);
+      const payload = expectJson<{
+        schemaVersion: number;
+        totalReady: number;
+        returned: number;
+        hasMore: boolean;
+        items: Array<Record<string, unknown> & { id: string; title: string; status: string; priority: number; type: string; labels: string[] }>;
+      }>(compact);
+
+      expect(payload.schemaVersion).toBe(1);
+      expect(payload.totalReady).toBe(2);
+      expect(payload.returned).toBe(1);
+      expect(payload.hasMore).toBe(true);
+      expect(payload.items).toHaveLength(1);
+      const firstItem = payload.items[0];
+      expect(firstItem).toBeDefined();
+      expect(firstItem).toEqual(
+        expect.objectContaining({
+          id: firstId,
+          title: "Compact auth task",
+          status: "pending",
+          priority: 0,
+          type: "task",
+          labels: [],
+        }),
+      );
+      if (!firstItem) {
+        throw new Error("expected one compact ready item");
+      }
+      expect("description" in firstItem).toBe(false);
+      expect("hints" in firstItem).toBe(false);
+      expect("blockedBy" in firstItem).toBe(false);
+    },
+    SLOW_CLI_TIMEOUT_MS,
+  );
+
+  it(
+    "rejects --compact without --json",
+    async () => {
+      const result = await runCompiled(["task", "ready", "--compact"], tmpDir);
+      expect(result.exitCode).not.toBe(0);
+      expect(`${result.stdout}\n${result.stderr}`).toContain("--compact requires --json");
+    },
+    SLOW_CLI_TIMEOUT_MS,
+  );
+
+  it(
+    "compact ready skips malformed candidate reads and returns all items for limit 0",
+    async () => {
+      const firstId = (await runCompiled(["task", "q", "Compact reader first"], tmpDir)).stdout;
+      const secondId = (await runCompiled(["task", "q", "Compact reader second"], tmpDir)).stdout;
+      const candidatesDir = join(tmpDir, ".maestro", "tasks", "candidates");
+      await mkdir(candidatesDir, { recursive: true });
+      await writeFile(join(candidatesDir, "broken.json"), "{bad json\n");
+
+      const compact = await runCompiled(["task", "ready", "--json", "--compact", "--limit", "0"], tmpDir);
+      const payload = expectJson<{
+        totalReady: number;
+        returned: number;
+        hasMore: boolean;
+        items: Array<{ id: string }>;
+      }>(compact);
+
+      expect(payload.totalReady).toBe(2);
+      expect(payload.returned).toBe(2);
+      expect(payload.hasMore).toBe(false);
+      expect(payload.items.map((task) => task.id)).toEqual([firstId, secondId]);
+    },
+    SLOW_CLI_TIMEOUT_MS,
+  );
+
+  it(
+    "warns but still succeeds when candidate capture fails after completion",
+      async () => {
       const id = (await runCompiled(["task", "q", "candidate write fail"], tmpDir)).stdout;
       const candidatePath = join(tmpDir, ".maestro", "tasks", "candidates", `${id}.json`);
       await mkdir(candidatePath, { recursive: true });
@@ -506,10 +587,10 @@ describe("compiled task feature E2E", () => {
       expect(completed.stderr).toContain("hint capture failed");
 
       const shown = await runCompiled(["task", "show", id, "--json"], tmpDir);
-      expect(expectJson<{ status: string; closeReason: string }>(shown)).toEqual(
-        expect.objectContaining({ status: "completed", closeReason: "done" }),
-      );
-    },
+        expect(expectJson<{ status: string; closeReason: string }>(shown)).toEqual(
+          expect.objectContaining({ status: "completed", closeReason: "done" }),
+        );
+      },
     SLOW_CLI_TIMEOUT_MS,
   );
 

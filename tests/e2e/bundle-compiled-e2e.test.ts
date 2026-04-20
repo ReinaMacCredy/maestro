@@ -83,7 +83,7 @@ interface ExportManifest {
     assertions: number;
     workers: number;
     replies: number;
-    handoffs: number;
+    launches: number;
     checkpoints: number;
     principlesSnapshot: number;
     outcomesSnapshot: number;

@@ -44,8 +44,6 @@ const PREVIEW_SCREEN_ALIASES: Readonly<Record<string, PreviewScreenOrAll>> = {
   deps: "dependencies",
   dependency: "dependencies",
   dependencies: "dependencies",
-  handoff: "handoffs",
-  handoffs: "handoffs",
   cfg: "config",
   config: "config",
   settings: "config",
@@ -71,9 +69,8 @@ export function registerMissionControlCommand(program: Command): void {
     .description("Interactive mission control dashboard")
     .option("--mission <id>", "Mission ID (auto-selects if omitted)")
     .option("--json", "Output snapshot as JSON")
-      .option("--preview [screen]", `Render a read-only preview frame (${PREVIEW_SCREENS.join(", ")}; aliases: feat, handoff, cfg, deps, mem)`)
+      .option("--preview [screen]", `Render a read-only preview frame (${PREVIEW_SCREENS.join(", ")}; aliases: feat, cfg, deps, mem)`)
       .option("--feature <id>", "Select a feature for dashboard, features, or dependencies previews")
-    .option("--handoff <id>", "Select a handoff for handoffs previews")
     .option("--size <WxH>", "Render dimensions (e.g. 120x40); overrides terminal detection")
     .option("--format <type>", "Output format: plain or ansi (default: auto-detect TTY)")
     .option("--render-check", "Validate all preview screens and report results as JSON")
@@ -83,7 +80,6 @@ export function registerMissionControlCommand(program: Command): void {
     maestro mission-control --preview all --size 120x40 --format plain
     maestro mission-control --preview features --size 200x60
     maestro mission-control --mission <id> --preview dependencies --feature <id>
-    maestro mission-control --preview handoffs --handoff <id>
     maestro mission-control --render-check
     maestro mission-control --render-check --size 120x40
     maestro mission-control --json
@@ -108,10 +104,9 @@ export function registerMissionControlCommand(program: Command): void {
         ]);
       }
 
-        if ((opts.feature || opts.handoff) && (!previewScreen || previewScreen === "all" || opts.renderCheck)) {
+        if (opts.feature && (!previewScreen || previewScreen === "all" || opts.renderCheck)) {
           throw new MaestroError("Preview selectors require a single --preview screen", [
             "Use `maestro mission-control --preview dashboard --feature <id>`",
-            "Use `maestro mission-control --preview handoffs --handoff <id>`",
             "Use `maestro mission-control --preview features --feature <id>`",
           ]);
         }
@@ -128,7 +123,7 @@ export function registerMissionControlCommand(program: Command): void {
           learningStore: services.learningStore,
           ratchetStore: services.ratchetStore,
           projectGraphStore: services.projectGraphStore,
-          handoffStore: services.handoffStore,
+          launchStore: services.launchStore,
           taskStore: services.taskStore,
           replyStore: services.replyStore,
           principleStore: services.principleStore,
@@ -183,7 +178,6 @@ export function registerMissionControlCommand(program: Command): void {
                   }),
                   screen: previewScreen,
                 featureId: opts.feature,
-          handoffId: opts.handoff,
           width: renderSize?.width,
           height: renderSize?.height,
           format: renderFormat,
@@ -231,7 +225,7 @@ function resolvePreviewScreen(value: unknown): PreviewScreenOrAll | undefined {
   }
 
   throw new MaestroError(`Unknown preview screen '${value}'`, [
-      `Use one of: all, ${PREVIEW_SCREENS.join(", ")} (aliases: feat, handoff, cfg, deps, mem)`,
+      `Use one of: all, ${PREVIEW_SCREENS.join(", ")} (aliases: feat, cfg, deps, mem)`,
       "Try `maestro mission-control --preview` for the default dashboard preview",
     ]);
 }
@@ -357,32 +351,8 @@ export async function loadMissionControlSnapshot(
 function redactSnapshotForReadOutput(
   snapshot: MissionControlSnapshot,
 ): MissionControlSnapshot {
-  const redactPendingHandoff = (
-    handoff: MissionControlSnapshot["pendingHandoffs"][number],
-    ) => ({
-      id: handoff.id,
-      agent: handoff.agent,
-      timestamp: handoff.timestamp,
-      message: "Details hidden in read-only output",
-    });
-  const redactEventStreamEntry = (
-    entry: NonNullable<MissionControlSnapshot["eventStream"]>[number],
-  ) => entry.kind === "handoff"
-    ? {
-        ...entry,
-        detail: "Details hidden in read-only output",
-      }
-    : entry;
-
   return {
     ...snapshot,
-    eventStream: snapshot.eventStream?.map(redactEventStreamEntry),
-    pendingHandoffs: snapshot.pendingHandoffs.map(redactPendingHandoff),
-    home: snapshot.home
-      ? {
-        ...snapshot.home,
-        pendingHandoffs: snapshot.home.pendingHandoffs.map(redactPendingHandoff),
-      }
-      : null,
+    eventStream: snapshot.eventStream,
   };
 }

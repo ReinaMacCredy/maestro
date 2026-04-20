@@ -19,7 +19,7 @@ import type {
   Mission,
   MissionStorePort,
 } from "@/features/mission/index.js";
-import type { HandoffStorePort, UkiHandoff } from "@/features/handoff/index.js";
+import type { HandoffLaunchRecord, LaunchStorePort } from "@/features/handoff/index.js";
 import type { ReplyStorePort, WorkerReply } from "@/features/reply/index.js";
 
 const MISSION_ID = "2026-04-15-001";
@@ -102,21 +102,19 @@ const replyStore: ReplyStorePort = {
   async markIngested() { /* noop */ },
 };
 
-const handoffStore: HandoffStorePort = {
-  async create(): Promise<UkiHandoff> { throw new Error("nope"); },
-  async claimPending() { return undefined; },
+const launchStore: LaunchStorePort = {
+  async create(): Promise<HandoffLaunchRecord> { throw new Error("nope"); },
+  async update(record) { return record; },
   async get() { return undefined; },
-  async getLatestPending() { return undefined; },
   async list() { return []; },
-  async updateStatus() { return undefined; },
-  async delete() { return false; },
+  resolveArtifactPath(relativePath: string) { return join(projectDir, relativePath); },
 };
 
 describe("exportBundle", () => {
   it("writes a manifest with schema v1 and the current maestro version", async () => {
     const archive = new InMemoryArchive();
     const result = await exportBundle(
-      { missionStore, featureStore, assertionStore, checkpointStore, replyStore, handoffStore, archive },
+      { missionStore, featureStore, assertionStore, checkpointStore, replyStore, launchStore, archive },
       {
         missionId: MISSION_ID,
         projectDir,
@@ -139,7 +137,7 @@ describe("exportBundle", () => {
   it("resolves --out to an absolute path", async () => {
     const archive = new InMemoryArchive();
     const result = await exportBundle(
-      { missionStore, featureStore, assertionStore, checkpointStore, replyStore, handoffStore, archive },
+      { missionStore, featureStore, assertionStore, checkpointStore, replyStore, launchStore, archive },
       {
         missionId: MISSION_ID,
         projectDir,
@@ -154,7 +152,7 @@ describe("exportBundle", () => {
   it("falls back to a timestamped default output name", async () => {
     const archive = new InMemoryArchive();
     const result = await exportBundle(
-      { missionStore, featureStore, assertionStore, checkpointStore, replyStore, handoffStore, archive },
+      { missionStore, featureStore, assertionStore, checkpointStore, replyStore, launchStore, archive },
       {
         missionId: MISSION_ID,
         projectDir,

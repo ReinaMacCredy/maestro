@@ -1,9 +1,19 @@
+import { spawn } from "node:child_process";
+import { createWriteStream } from "node:fs";
+import { dirname } from "node:path";
 import { MaestroError } from "@/shared/errors.js";
+import { ensureDir } from "./fs.js";
 
 export interface ShellResult {
   readonly stdout: string;
   readonly stderr: string;
   readonly exitCode: number;
+}
+
+export interface LoggedCommandResult {
+  readonly command: readonly string[];
+  readonly pid?: number;
+  readonly exitCode?: number;
 }
 
 /**
@@ -60,5 +70,54 @@ async function execSpawn(
     stdout: proc.stdout.toString().trim(),
     stderr: proc.stderr.toString().trim(),
     exitCode: proc.exitCode ?? 1,
+  };
+}
+
+export async function runLoggedCommand(
+  argv: string[],
+  opts: {
+    readonly cwd?: string;
+    readonly logPath: string;
+    readonly wait: boolean;
+  },
+): Promise<LoggedCommandResult> {
+  await ensureDir(dirname(opts.logPath));
+
+  const logStream = createWriteStream(opts.logPath, { flags: "a" });
+  const child = spawn(argv[0]!, argv.slice(1), {
+    cwd: opts.cwd,
+    detached: !opts.wait,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  child.stdout?.pipe(logStream, { end: false });
+  child.stderr?.pipe(logStream, { end: false });
+
+  await new Promise<void>((resolve, reject) => {
+    child.once("spawn", () => resolve());
+    child.once("error", (error) => reject(error));
+  });
+
+  if (!opts.wait) {
+    child.unref();
+    return {
+      command: argv,
+      pid: child.pid ?? undefined,
+    };
+  }
+
+  const exitCode = await new Promise<number>((resolve, reject) => {
+    child.once("close", (code, signal) => resolve(code ?? (signal ? 1 : 0)));
+    child.once("error", (error) => reject(error));
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    logStream.end((error) => error ? reject(error) : resolve());
+  });
+
+  return {
+    command: argv,
+    pid: child.pid ?? undefined,
+    exitCode,
   };
 }

@@ -35,16 +35,6 @@ export interface MissionControlHomeAction {
   detail: string;
 }
 
-export interface MissionControlHomeHandoff {
-  id: string;
-  message: string;
-  agent: string;
-  timestamp: string;
-  sessionId?: string;
-  sitrep?: string;
-  quickstart?: string;
-}
-
 export interface MissionControlSessionSidebar {
   branch: string;
   workingTreeClean: boolean;
@@ -126,7 +116,6 @@ export interface MissionControlHomeState {
   locationLabel: string;
   checks: readonly DoctorCheck[];
   actions: readonly MissionControlHomeAction[];
-  pendingHandoffs: readonly MissionControlHomeHandoff[];
 }
 
 export interface BlockedByRef {
@@ -211,7 +200,6 @@ export interface MissionControlSnapshot {
 
   // Lower pane
   session: MissionControlSessionSidebar | null;
-  pendingHandoffs: readonly MissionControlHomeHandoff[];
   configSummary: MissionControlConfigSummary | null;
   configInspector?: MissionControlConfigInspector | null;
   progressLog: readonly MissionControlEvent[];

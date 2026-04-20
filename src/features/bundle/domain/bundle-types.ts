@@ -3,7 +3,7 @@
  *
  * A mission bundle is a portable, auditable `.tar.gz` that packages everything
  * the conductor and workers produced for a single mission: mission plan,
- * features, assertions, worker prompts + reports, replies, handoffs,
+ * features, assertions, worker prompts + reports, replies, launches,
  * principles snapshot, and optional memory + git patch.
  *
  * Phase 1 scope: export + inspect only. Import/replay is phase 2.
@@ -37,7 +37,7 @@ export interface BundleStats {
   readonly assertions: number;
   readonly workers: number;
   readonly replies: number;
-  readonly handoffs: number;
+  readonly launches: number;
   readonly checkpoints: number;
   readonly principlesSnapshot: number;
   readonly outcomesSnapshot: number;

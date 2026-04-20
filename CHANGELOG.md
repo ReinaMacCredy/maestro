@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.44.3 - Native handoff launcher
+
+- Replace the old UKI queue-based handoff flow with `maestro handoff <task>`,
+  which builds a self-contained markdown brief and launches a fresh Codex or
+  Claude run, optionally in a sibling worktree.
+- Persist launch artifacts under `.maestro/launches/` (`prompt.md`,
+  `launch.json`, `output.log`) and remove the old `handoff create`, `pickup`,
+  and `list` subcommands plus pending-handoff Mission Control surfaces.
+- Drop handoff replay injection from worker prompt generation and switch
+  bundle export to snapshot launch records instead of UKI handoff records.
+- Update built-in mission-planning guidance, bootstrap templates, README,
+  AGENTS, and TUI docs to teach the new launcher-based workflow.
+- Keep legacy `.maestro/handoffs/` artifacts ignored but unused, with `status`
+  and `doctor` warning when they are still present.
+
 ## 0.40.0 - Install hardening and task workflow improvements
 
 - Windows install flow: harden running-exe replacement, tolerate EBUSY/EPERM

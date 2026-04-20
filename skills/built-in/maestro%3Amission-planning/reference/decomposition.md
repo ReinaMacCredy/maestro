@@ -1,8 +1,8 @@
 # Decomposition: Raw Idea to Milestones and Features
 
-This is the second step of mission planning. You have a clarified goal from the brainstorm opening. You need to turn it into a structured plan that a maestro mission file can hold.
+This is the second step of mission planning. You have a clarified goal from the brainstorm opening. You need to turn it into a structured plan that a Maestro mission file can hold and that a later `maestro handoff` command can launch cleanly.
 
-The output of this step is a draft plan with 3-7 milestones, each with 1-5 features. No worker types yet, no boundaries yet, no confidence yet — those come in later steps.
+The output of this step is a draft plan with 3-7 milestones, each with 1-5 features. No worker types yet, no constraints yet — those come in later steps.
 
 ## The rule of 3-7 milestones
 
@@ -50,7 +50,7 @@ Verification steps are what the worker runs to prove the feature is done. They m
 
 Good verification:
 - `bun test tests/unit/auth/login.test.ts passes`
-- `maestro handoff create --help shows --boundary flag`
+- `maestro handoff --help shows --provider and --worktree flags`
 - `grep -r "TODO.*auth" src/ returns zero hits`
 
 Bad verification:

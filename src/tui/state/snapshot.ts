@@ -15,7 +15,7 @@ import type { CorrectionStorePort, LearningStorePort } from "@/features/memory";
 import { buildMemoryStats } from "@/features/memory";
 import type { RatchetStorePort } from "@/features/ratchet";
 import type { ProjectGraphStorePort } from "@/features/graph";
-import type { HandoffStorePort, UkiHandoff } from "@/features/handoff";
+import type { HandoffLaunchRecord, LaunchStorePort } from "@/features/handoff";
 import { TASK_STATUSES, type TaskQueryPort, type TaskStatus } from "@/features/task";
 import type { ReplyStorePort, WorkerReply, ReplyOutcome } from "@/features/reply";
 import { ingestReply } from "@/features/reply";
@@ -58,7 +58,6 @@ import type {
   MissionControlFeatureDetail,
   MissionControlMilestoneRow,
   MissionControlHomeAction,
-  MissionControlHomeHandoff,
   MissionControlEvent,
   BlockedByRef,
   TaskPreviewPane,
@@ -78,7 +77,7 @@ export interface SnapshotDeps {
   learningStore?: LearningStorePort;
   ratchetStore?: RatchetStorePort;
   projectGraphStore?: ProjectGraphStorePort;
-  handoffStore?: HandoffStorePort;
+  launchStore?: LaunchStorePort;
   taskStore?: TaskQueryPort;
   replyStore?: ReplyStorePort;
   principleStore?: PrincipleStorePort;
@@ -92,7 +91,7 @@ export interface HomeSnapshotDeps {
   learningStore?: LearningStorePort;
   ratchetStore?: RatchetStorePort;
   projectGraphStore?: ProjectGraphStorePort;
-  handoffStore?: HandoffStorePort;
+  launchStore?: LaunchStorePort;
   taskStore?: TaskQueryPort;
   replyStore?: ReplyStorePort;
   principleStore?: PrincipleStorePort;
@@ -140,7 +139,6 @@ export async function buildSnapshot(
     configLayers,
     gitState,
     memorySnapshot,
-    pendingHandoffs,
     taskBoard,
   ] = await Promise.all([
     deps.missionStore.get(missionId),
@@ -157,7 +155,6 @@ export async function buildSnapshot(
         projectGraphStore: deps.projectGraphStore,
         cwd: deps.cwd,
       }),
-      loadPendingHandoffs(deps.handoffStore),
       taskBoardPromise,
   ]);
 
@@ -257,11 +254,11 @@ export async function buildSnapshot(
     : undefined;
 
   // Conductor screen data
-  const agentGrid = buildAgentGrid(features, pendingHandoffs);
+  const agentGrid = buildAgentGrid(features);
   const missionMilestones = mission.milestones;
   const dispatchQueue = buildDispatchQueue(features, missionMilestones);
 
-  const eventStream = buildEventStream(progressLog, pendingHandoffs, replies ?? []);
+  const eventStream = buildEventStream(progressLog, replies ?? []);
   const timelineMilestones = buildTimelineMilestones(missionMilestones, features);
 
   return {
@@ -286,7 +283,6 @@ export async function buildSnapshot(
     features: featureRows,
     taskPreviews,
     session: sessionSidebar,
-    pendingHandoffs,
     configSummary: {
       configSource: env.status.configSource,
       gitAvailable: env.status.gitAvailable,
@@ -321,7 +317,7 @@ export async function buildHomeSnapshot(
   const taskBoardPromise = options.includeTaskBoard === true
     ? buildTaskBoard(deps.taskStore)
     : Promise.resolve(undefined);
-  const [env, configLayers, gitState, memorySnapshot, pendingHandoffs, taskBoard] = await Promise.all([
+  const [env, configLayers, gitState, memorySnapshot, taskBoard] = await Promise.all([
     buildMissionControlEnvironmentSummary(deps.config, deps.git, deps.cwd),
     deps.config.loadLayers(deps.cwd),
     deps.git.isRepo(deps.cwd).then((isRepo) => isRepo ? deps.git.getState(deps.cwd) : Promise.resolve(undefined)),
@@ -332,7 +328,6 @@ export async function buildHomeSnapshot(
       projectGraphStore: deps.projectGraphStore,
       cwd: deps.cwd,
     }),
-    loadPendingHandoffs(deps.handoffStore),
     taskBoardPromise,
   ]);
   const checks = [
@@ -350,18 +345,18 @@ export async function buildHomeSnapshot(
     ? "Initialize this repository, then create your first mission."
     : status.initialized
       ? "Global setup is ready. Open a project repository to start tracking missions here."
-      : "Open a git repository to track missions, checkpoints, and handoffs here.";
+      : "Open a git repository to track missions, checkpoints, and launches here.";
 
   const actions = buildHomeActions(status, checks);
 
-  const agentGrid = buildAgentGrid([], pendingHandoffs);
+  const agentGrid = buildAgentGrid([]);
   // Replies in home mode: list without ingest (home mode has no mission to
   // update). Home surface is purely read-only per Mission Control contracts.
   const homeReplies = options.includeReplies === true && deps.replyStore
     ? await safeListReplies(deps.replyStore)
     : undefined;
   const homeReplyInbox = homeReplies ? buildReplyInbox([], homeReplies) : undefined;
-  const homeEventStream = buildEventStream([], pendingHandoffs, homeReplies ?? []);
+  const homeEventStream = buildEventStream([], homeReplies ?? []);
 
   return {
     mode: "home",
@@ -393,7 +388,6 @@ export async function buildHomeSnapshot(
         fileChanges: gitState.fileChanges ?? [],
       }
       : null,
-    pendingHandoffs,
     configSummary: {
       configSource: status.configSource,
       gitAvailable: status.gitAvailable,
@@ -422,44 +416,10 @@ export async function buildHomeSnapshot(
     home: {
       headline,
       summary,
-        locationLabel: status.gitAvailable ? deps.cwd : "Outside a git repository",
+      locationLabel: status.gitAvailable ? deps.cwd : "Outside a git repository",
       checks,
       actions,
-      pendingHandoffs,
     },
-  };
-}
-
-async function loadPendingHandoffs(
-  handoffStore: HandoffStorePort | undefined,
-): Promise<readonly MissionControlHomeHandoff[]> {
-  if (!handoffStore) return [];
-  try {
-    const pending = await handoffStore.list({ status: "pending" });
-    return pending.map(mapUkiHandoffToHomeHandoff);
-  } catch {
-    // Store errors should not break the snapshot projection. A missing
-    // .maestro/handoffs directory simply means no pending work.
-    return [];
-  }
-}
-
-export function mapUkiHandoffToHomeHandoff(
-  handoff: UkiHandoff,
-): MissionControlHomeHandoff {
-  const content = handoff.content;
-  const sitrepParts = [content.sessionCore];
-  if (content.decisions.length > 0) {
-    sitrepParts.push(content.decisions[0]!);
-  }
-  return {
-    id: handoff.id,
-    message: content.summary,
-    agent: handoff.agent,
-    timestamp: handoff.timestamp,
-    sessionId: handoff.sessionId,
-    sitrep: sitrepParts.join(" -- "),
-    quickstart: content.nextAction,
   };
 }
 
@@ -719,7 +679,6 @@ const STALE_THRESHOLD_MS = 60 * 60 * 1000; // 1 hour
 
 export function buildAgentGrid(
   features: readonly Feature[],
-  pendingHandoffs: readonly MissionControlHomeHandoff[],
 ): readonly AgentGridRow[] {
   const byWorker = new Map<string, Feature[]>();
   for (const f of features) {
@@ -728,19 +687,8 @@ export function buildAgentGrid(
     byWorker.set(f.agentType, bucket);
   }
 
-  const pendingHandoffsByAgent = new Map<string, number>();
-  for (const handoff of pendingHandoffs) {
-    pendingHandoffsByAgent.set(
-      handoff.agent,
-      (pendingHandoffsByAgent.get(handoff.agent) ?? 0) + 1,
-    );
-  }
-
   const rows: AgentGridRow[] = [];
-  const agentTypes = new Set<string>([
-    ...byWorker.keys(),
-    ...pendingHandoffsByAgent.keys(),
-  ]);
+  const agentTypes = new Set<string>(byWorker.keys());
 
   for (const agentType of agentTypes) {
     const workerFeatures = byWorker.get(agentType) ?? [];
@@ -749,14 +697,13 @@ export function buildAgentGrid(
     );
     const hasReview = workerFeatures.some((f) => f.status === "review");
     const allDone = workerFeatures.length > 0 && workerFeatures.every((f) => f.status === "done");
-    const pendingHandoffCount = pendingHandoffsByAgent.get(agentType) ?? 0;
     const isStale = active !== undefined
       && (Date.now() - new Date(active.updatedAt).getTime()) > STALE_THRESHOLD_MS;
 
     let status: InferredAgentStatus;
     if (isStale) status = "stale";
     else if (active) status = "active";
-    else if (hasReview || pendingHandoffCount > 0) status = "waiting";
+    else if (hasReview) status = "waiting";
     else if (allDone) status = "completed";
     else status = "waiting";
 
@@ -768,7 +715,6 @@ export function buildAgentGrid(
       lastActivityAt: active?.updatedAt,
       featureCount: workerFeatures.length,
       completedCount: workerFeatures.filter((f) => f.status === "done").length,
-      pendingHandoffCount,
     });
   }
 
@@ -807,7 +753,6 @@ export function buildDispatchQueue(
 
 export function buildEventStream(
   progressLog: readonly MissionControlEvent[],
-  pendingHandoffs: readonly MissionControlHomeHandoff[],
   replies: readonly WorkerReply[] = [],
 ): readonly EventStreamEntry[] {
   const entries: EventStreamEntry[] = [];
@@ -821,19 +766,6 @@ export function buildEventStream(
       kind: event.kind,
       title: event.title,
       detail: event.detail,
-    });
-  }
-
-  for (const h of pendingHandoffs) {
-    const handoffMs = new Date(h.timestamp).getTime();
-    entries.push({
-      timestamp: h.timestamp,
-      relativeMs: baseMs === undefined || Number.isNaN(handoffMs)
-        ? 0
-        : handoffMs - baseMs,
-      kind: "handoff",
-      title: `Pending handoff from ${h.agent}`,
-      detail: h.message,
     });
   }
 
@@ -932,9 +864,9 @@ async function loadAndIngestReplies(
 
 /**
  * Build a principle-outcome recorder that marks every `pending` principle
- * row for the handoffs linked to the feature as either `helpful` or
+ * row for the launches linked to the feature as either `helpful` or
  * `unhelpful`. The `outcomesCache` is filtered in-memory to avoid
- * re-reading outcomes.jsonl once per handoff; appends are pushed back
+ * re-reading outcomes.jsonl once per launch; appends are pushed back
  * into the cache so the effectiveness aggregator sees fresh state.
  */
 function buildPrincipleRecorder(
@@ -943,47 +875,47 @@ function buildPrincipleRecorder(
   outcomesCache: PrincipleOutcomeRecord[] | undefined,
 ): ((featureId: string, outcome: ReplyOutcome) => Promise<{ recorded: number; complete: boolean }>) | undefined {
   const principleStore = deps.principleStore;
-  const handoffStore = deps.handoffStore;
-  if (!principleStore || !handoffStore || !outcomesCache) return undefined;
+  const launchStore = deps.launchStore;
+  if (!principleStore || !launchStore || !outcomesCache) return undefined;
 
-    return async (featureId, outcome) => {
-      const resolved = outcome === "completed" ? "helpful" : "unhelpful";
-      try {
-      const recentHandoffs = handoffStore.listRecentByFeatureRefs
-        ? await handoffStore.listRecentByFeatureRefs(missionId, featureId, 25)
-        : (await handoffStore.list()).filter((h) => h.content.maestroRefs.featureId === featureId);
-        if (recentHandoffs.length === 0) {
-          return { recorded: 0, complete: true };
-        }
+  return async (featureId, outcome) => {
+    const resolved = outcome === "completed" ? "helpful" : "unhelpful";
+    try {
+      const recentLaunches = (await launchStore.list())
+        .filter((launch) => launch.refs.missionId === missionId && launch.refs.featureId === featureId)
+        .slice(0, 25);
+      if (recentLaunches.length === 0) {
+        return { recorded: 0, complete: true };
+      }
 
-        let recorded = 0;
-        let complete = true;
-        const recordedAt = new Date().toISOString();
-        for (const handoff of recentHandoffs) {
-          const pending = filterPendingForHandoff(outcomesCache, handoff.id);
-          for (const row of pending) {
-            const record: PrincipleOutcomeRecord = {
+      let recorded = 0;
+      let complete = true;
+      const recordedAt = new Date().toISOString();
+      for (const launch of recentLaunches) {
+        const pending = filterPendingForLaunch(outcomesCache, launch.id);
+        for (const row of pending) {
+          const record: PrincipleOutcomeRecord = {
             principleId: row.principleId,
-            handoffId: handoff.id,
+            handoffId: launch.id,
             featureId,
             missionId,
-              outcome: resolved,
-              recordedAt,
-            };
-            if (await principleStore.recordOutcome(record)) {
-              outcomesCache.push(record);
-              recorded += 1;
-              continue;
-            }
-            complete = false;
+            outcome: resolved,
+            recordedAt,
+          };
+          if (await principleStore.recordOutcome(record)) {
+            outcomesCache.push(record);
+            recorded += 1;
+            continue;
           }
+          complete = false;
         }
-        return { recorded, complete };
-      } catch {
-        return { recorded: 0, complete: false };
       }
-    };
-  }
+      return { recorded, complete };
+    } catch {
+      return { recorded: 0, complete: false };
+    }
+  };
+}
 
 async function safeListReplies(
   replyStore: ReplyStorePort,
@@ -996,17 +928,17 @@ async function safeListReplies(
 }
 
 /**
- * Return the effective `pending` outcomes for a single handoff, using the
+ * Return the effective `pending` outcomes for a single launch, using the
  * latest record per (principleId, handoffId) pair. Pure in-memory filter
  * over the pre-fetched cache; mirrors JsonlPrincipleStoreAdapter.listPendingOutcomesForHandoff.
  */
-function filterPendingForHandoff(
+function filterPendingForLaunch(
   outcomes: readonly PrincipleOutcomeRecord[],
-  handoffId: string,
+  launchId: string,
 ): readonly PrincipleOutcomeRecord[] {
   const latestByPrinciple = new Map<string, PrincipleOutcomeRecord>();
   for (const record of outcomes) {
-    if (record.handoffId !== handoffId) continue;
+    if (record.handoffId !== launchId) continue;
     const existing = latestByPrinciple.get(record.principleId);
     if (!existing || existing.recordedAt <= record.recordedAt) {
       latestByPrinciple.set(record.principleId, record);
@@ -1020,17 +952,17 @@ async function loadPrincipleEffectiveness(
   cachedOutcomes?: readonly PrincipleOutcomeRecord[],
 ): Promise<readonly PrincipleEffectivenessRow[] | undefined> {
   const principleStore = deps.principleStore;
-  const handoffStore = deps.handoffStore;
+  const launchStore = deps.launchStore;
   if (!principleStore) return undefined;
   try {
-    const [principles, outcomes, handoffs] = await Promise.all([
+    const [principles, outcomes, launches] = await Promise.all([
       principleStore.list(),
       cachedOutcomes !== undefined
         ? Promise.resolve(cachedOutcomes)
         : principleStore.listOutcomes(),
-      handoffStore ? handoffStore.list() : Promise.resolve<readonly UkiHandoff[]>([]),
+      launchStore ? launchStore.list() : Promise.resolve<readonly HandoffLaunchRecord[]>([]),
     ]);
-    return buildPrincipleEffectivenessRows(principles, outcomes, handoffs);
+    return buildPrincipleEffectivenessRows(principles, outcomes, launches);
   } catch {
     return undefined;
   }
@@ -1039,11 +971,11 @@ async function loadPrincipleEffectiveness(
 export function buildPrincipleEffectivenessRows(
   principles: readonly Principle[],
   outcomes: readonly PrincipleOutcomeRecord[],
-  handoffs: readonly UkiHandoff[],
+  launches: readonly HandoffLaunchRecord[],
 ): readonly PrincipleEffectivenessRow[] {
   const rollup = buildPrincipleEffectiveness(principles, outcomes);
   const principleById = new Map(principles.map((p) => [p.id, p]));
-  const handoffById = new Map(handoffs.map((h) => [h.id, h]));
+  const launchById = new Map(launches.map((launch) => [launch.id, launch]));
 
   // Index most recent unhelpful outcomes per principle, newest first.
   const unhelpfulByPrinciple = new Map<string, PrincipleOutcomeRecord[]>();
@@ -1060,8 +992,8 @@ export function buildPrincipleEffectivenessRows(
     const decided = stats.helpful + stats.unhelpful;
     const examples = (unhelpfulByPrinciple.get(stats.principleId) ?? [])
       .map((r) => {
-        const handoff = handoffById.get(r.handoffId);
-        const title = handoff?.content.summary ?? r.handoffId;
+        const launch = launchById.get(r.handoffId);
+        const title = launch?.name ?? launch?.task ?? r.handoffId;
         return `${r.handoffId}: ${title}`;
       });
 
@@ -1205,7 +1137,6 @@ async function buildMissionControlEnvironmentSummary(
     status: {
       initialized: projectConfigExists || globalConfigExists,
       configSource,
-      pendingHandoffs: [],
       gitAvailable,
     },
     checks: [

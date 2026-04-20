@@ -43,7 +43,11 @@ describe("services composition root", () => {
       notesStore: expect.any(Object),
       missionStore: expect.any(Object),
       correctionStore: expect.any(Object),
-      handoffStore: expect.any(Object),
+      launchStore: expect.any(Object),
+      handoffLaunchers: {
+        codex: expect.any(Object),
+        claude: expect.any(Object),
+      },
       ratchetStore: expect.any(Object),
       projectGraphStore: expect.any(Object),
       taskStore: expect.any(Object),

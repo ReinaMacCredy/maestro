@@ -230,7 +230,6 @@ export function buildStatusStripModel(snapshot: MissionControlSnapshot): StatusS
     const summary = [
       `${snapshot.home.checks.length} checks`,
       `${snapshot.home.actions.length} next`,
-      snapshot.home.pendingHandoffs.length > 0 ? `${snapshot.home.pendingHandoffs.length} handoffs` : undefined,
     ].filter(Boolean).join("  ·  ");
 
     const statusColor = failed > 0
@@ -295,7 +294,6 @@ export function buildFocusLines(
       blankLine(),
       sectionLine("Workspace"),
       bulletLine(state.snapshot.home.locationLabel),
-      bulletLine(`${state.snapshot.home.pendingHandoffs.length} pending handoff${plural(state.snapshot.home.pendingHandoffs.length)}`),
       bulletLine(`${state.snapshot.home.actions.length} suggested next step${plural(state.snapshot.home.actions.length)}`),
     ];
     return clampLines(lines, contentWidth, contentHeight);
@@ -420,12 +418,12 @@ export function buildLogLines(
 ): readonly UiLine[] {
   if (state.snapshot.mode === "home" && state.snapshot.home) {
     const lines: UiLine[] = [];
-    if (state.snapshot.home.pendingHandoffs.length === 0) {
-      lines.push(mutedLine("No pending handoffs"));
+    if (state.snapshot.home.actions.length === 0) {
+      lines.push(mutedLine("No suggested next steps"));
     } else {
-      for (const handoff of state.snapshot.home.pendingHandoffs) {
-        lines.push(normalLine(`${handoff.id} · ${handoff.agent}`, OPEN_TUI_THEME.muted));
-        lines.push(normalLine(handoff.message));
+      for (const action of state.snapshot.home.actions) {
+        lines.push(normalLine(action.command, OPEN_TUI_THEME.info));
+        lines.push(normalLine(action.detail));
         lines.push(blankLine());
       }
     }

@@ -34,7 +34,7 @@ const sampleManifest: BundleManifest = {
     assertions: 0,
     workers: 0,
     replies: 0,
-    handoffs: 0,
+    launches: 0,
     checkpoints: 0,
     principlesSnapshot: 0,
     outcomesSnapshot: 0,

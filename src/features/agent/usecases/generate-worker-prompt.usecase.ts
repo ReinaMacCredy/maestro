@@ -22,11 +22,6 @@ import {
   type LearningStorePort,
   type RecallResult,
 } from "@/features/memory";
-import {
-  loadPriorHandoffs,
-  type PriorSessionSummary,
-  type HandoffStorePort,
-} from "@/features/handoff";
 import { MaestroError } from "@/shared/errors.js";
 import { readText, writeText, ensureDir } from "@/shared/lib/fs.js";
 import { sanitizeInlinePromptContent, sanitizePromptContent } from "@/shared/lib/sanitize.js";
@@ -72,7 +67,6 @@ export interface WorkerPromptStores {
   readonly correctionStore?: CorrectionStorePort;
   readonly learningStore?: LearningStorePort;
   readonly principleStore?: PrincipleStorePort;
-  readonly handoffStore?: HandoffStorePort;
 }
 
 export async function generateWorkerPrompt(
@@ -154,18 +148,17 @@ export async function generateWorkerPrompt(
     // worker-base skill not found -- skip handoff protocol section
   }
 
-  // All four reads are independent filesystem operations -- run in parallel.
-  // Memory recall, principle loading, and handoff replay are best-effort and
-  // must never block prompt generation; missing data yields undefined.
-  const [previousMilestoneReports, recalledMemory, principles, priorHandoffs] = await Promise.all([
+  // All three reads are independent filesystem operations -- run in parallel.
+  // Memory recall and principle loading are best-effort and must never block
+  // prompt generation; missing data yields undefined.
+  const [previousMilestoneReports, recalledMemory, principles] = await Promise.all([
     loadPreviousMilestoneReports(baseDir, mission, allFeatures, missionId, milestone),
     safeRecallMemory(stores?.correctionStore, stores?.learningStore, feature),
     safeLoadPrinciples(stores?.principleStore, milestone.profile),
-    safeLoadPriorHandoffs(stores?.handoffStore, missionId, featureId),
   ]);
 
   // Generate the prompt
-  const prompt = composePrompt(mission, milestone, feature, featureAssertions, skillContent, allFeatures, handoffProtocol, previousMilestoneReports, recalledMemory, principles, priorHandoffs);
+  const prompt = composePrompt(mission, milestone, feature, featureAssertions, skillContent, allFeatures, handoffProtocol, previousMilestoneReports, recalledMemory, principles);
 
   // Track written paths
   const writtenPaths: string[] = [];
@@ -221,7 +214,6 @@ function isWorkerPromptStores(value: WorkerPromptStores | CorrectionStorePort): 
     "correctionStore" in value
     || "learningStore" in value
     || "principleStore" in value
-    || "handoffStore" in value
   );
 }
 
@@ -443,7 +435,6 @@ function composePrompt(
   previousMilestoneReports?: readonly PreviousMilestoneReport[],
   recalledMemory?: RecallResult,
   principles?: readonly Principle[],
-  priorHandoffs?: readonly PriorSessionSummary[],
 ): string {
   const parts: string[] = [];
 
@@ -607,13 +598,6 @@ function composePrompt(
     appendPrincipleSection(parts, principles);
   }
 
-  // Prior Session Replay -- insights from previous handoffs for this
-  // feature. Placed after principles and before skill so the worker
-  // sees accumulated context before the generic skill instructions.
-  if (priorHandoffs && priorHandoffs.length > 0) {
-    appendReplaySection(parts, priorHandoffs);
-  }
-
   // Skill instructions - wrapped in a clearly delimited block
   parts.push("## Skill Instructions");
   parts.push("");
@@ -768,7 +752,7 @@ async function safeLoadPrinciples(
 
 /**
  * Render the "Behavioral Principles" section from active principles.
- * Gate principles show a [GATE] badge and required handoff field notice.
+ * Gate principles show a [GATE] badge and required field notice.
  * Advisory principles show an [advisory] badge.
  */
 function appendPrincipleSection(parts: string[], principles: readonly Principle[]): void {
@@ -780,72 +764,12 @@ function appendPrincipleSection(parts: string[], principles: readonly Principle[
   for (const p of principles) {
     if (p.mode === "gate") {
       parts.push(`- **[GATE]** ${delimitContent(p.name)}: ${delimitContent(p.rule)}`);
-      parts.push(`  _Required handoff field:_ \`${p.gateField}\` (${p.gateCheck})`);
+      parts.push(`  _Required field:_ \`${p.gateField}\` (${p.gateCheck})`);
     } else {
       parts.push(`- [advisory] ${delimitContent(p.name)}: ${delimitContent(p.rule)}`);
     }
   }
   parts.push("");
-}
-
-/**
- * Best-effort handoff replay loading for worker prompt injection.
- * Returns undefined when the store is absent or throws.
- */
-async function safeLoadPriorHandoffs(
-  handoffStore: HandoffStorePort | undefined,
-  missionId: string,
-  featureId: string,
-): Promise<readonly PriorSessionSummary[] | undefined> {
-  if (!handoffStore) return undefined;
-  try {
-    return await loadPriorHandoffs(handoffStore, missionId, featureId);
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * Render the "Prior Session Replay" section from previous handoffs.
- * Each handoff becomes a subsection with its replay-worthy fields.
- * All content is sanitized because handoff data originates from
- * worker sessions that could inject malicious markdown/HTML.
- */
-function appendReplaySection(parts: string[], handoffs: readonly PriorSessionSummary[]): void {
-  parts.push("## Prior Session Replay");
-  parts.push("");
-  parts.push("<!-- Auto-injected from previous handoffs for this feature. -->");
-  parts.push("<!-- Use these insights to avoid repeating mistakes and build on prior progress. -->");
-  parts.push("");
-
-  for (const h of handoffs) {
-    parts.push(`### Session ${delimitContent(h.handoffId)} (${delimitContent(h.mode)}, ${delimitContent(h.timestamp)})`);
-    parts.push("");
-    parts.push(`**Summary:** ${delimitContent(h.summary)}`);
-    parts.push("");
-
-    renderListField(parts, "Risks", h.risks);
-    renderListField(parts, "Divergences from plan", h.divergences);
-    renderListField(parts, "Causal drivers", h.causalDrivers);
-
-    if (h.blindSpot) {
-      parts.push(`**Blind spot:** ${delimitContent(h.blindSpot)}`);
-      parts.push("");
-    }
-
-    renderListField(parts, "Assumptions", h.assumptions);
-
-    if (h.verificationResults && h.verificationResults.length > 0) {
-      parts.push("**Verification results:**");
-      for (const v of h.verificationResults) {
-        const icon = v.passed ? "[PASS]" : "**[FAIL]**";
-        parts.push(`- ${icon} ${delimitContent(v.step)}`);
-      }
-      parts.push("");
-    }
-
-    renderListField(parts, "Completed work", h.completedWork);
-  }
 }
 
 function renderListField(parts: string[], label: string, items: readonly string[] | undefined): void {

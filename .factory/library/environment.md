@@ -15,14 +15,14 @@ Environment variables, dependencies, and repository-scoped setup notes for the M
 
 ## Optional Tools
 
-- **CASS** remains optional and only matters for existing handoff search flows; Mission Control itself must not depend on it
-- Other agent CLIs may exist on the machine, but Mission Control must not spawn them directly
+- Other agent CLIs may exist on the machine. Mission Control itself must not spawn them directly, but `maestro handoff` can launch Codex or Claude when the operator requests a fresh handoff.
 
 ## Product Runtime Storage
 
 - Mission Control runtime state belongs under `.maestro/missions/{missionId}/`
 - Per-project worker skills for generated prompts belong under `.maestro/skills/{agentType}/SKILL.md`
-- Existing handoff/session data remains under `.maestro/handoffs/`
+- Native handoff launch artifacts live under `.maestro/launches/`
+- Legacy handoff artifacts may still exist under `.maestro/handoffs/`, but they are no longer read
 
 ## Repository Infrastructure
 

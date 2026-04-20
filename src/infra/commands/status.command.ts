@@ -14,9 +14,7 @@ export function registerStatusCommand(program: Command): void {
       const status = await checkStatus(
         services.config,
         services.git,
-        services.handoffStore,
         process.cwd(),
-        { includePendingHandoffs: isJson },
       );
 
       output(isJson, status, (s) => {
@@ -31,6 +29,12 @@ export function registerStatusCommand(program: Command): void {
         lines.push(
           s.gitAvailable ? "[ok] Git available" : "[!] Not in a git repo",
         );
+
+        if (s.legacyHandoffCount > 0) {
+          lines.push(
+            `[--] Found ${s.legacyHandoffCount} legacy handoff artifact(s) under .maestro/handoffs/`,
+          );
+        }
 
         return lines;
       });

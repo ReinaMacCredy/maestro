@@ -1,18 +1,25 @@
 export type {
-  CreateUkiHandoffInput,
-  ExecuteUkiHandoffContent,
-  PlanUkiHandoffContent,
-  UkiHandoff,
-  UkiHandoffContent,
-} from "./domain/uki-types.js";
-export { NO_SESSION_ID } from "./domain/constants.js";
-export type { HandoffStorePort } from "./ports/handoff-store.port.js";
-export { FsHandoffStoreAdapter } from "./adapters/handoff-store.adapter.js";
-export { compressUki, parseUki, validateUki } from "./lib/uki-format.js";
-export { createUkiHandoff } from "./usecases/create-uki-handoff.usecase.js";
-export { listUkiHandoffs } from "./usecases/list-uki-handoffs.usecase.js";
-export { pickupUkiHandoff } from "./usecases/pickup-uki-handoff.usecase.js";
-export { loadPriorHandoffs, type PriorSessionSummary } from "./usecases/replay-handoffs.usecase.js";
+  HandoffLaunchPort,
+  HandoffLaunchRequest,
+  HandoffLaunchRecord,
+  HandoffLaunchResult,
+  HandoffLaunchStatus,
+  HandoffPromptContext,
+  HandoffProvider,
+  HandoffRefs,
+  HandoffRelevantFile,
+  HandoffWorktree,
+  LaunchStorePort,
+} from "./domain/launch-types.js";
+export { DEFAULT_HANDOFF_MODELS } from "./domain/launch-types.js";
+export { FsLaunchStoreAdapter } from "./adapters/launch-store.adapter.js";
+export { CodexHandoffLaunchAdapter } from "./adapters/codex-handoff-launch.adapter.js";
+export { ClaudeHandoffLaunchAdapter } from "./adapters/claude-handoff-launch.adapter.js";
+export { buildHandoffPrompt } from "./usecases/build-handoff-prompt.usecase.js";
+export type { BuildHandoffPromptResult } from "./usecases/build-handoff-prompt.usecase.js";
+export { launchHandoff } from "./usecases/launch-handoff.usecase.js";
+export type { LaunchHandoffResult } from "./usecases/launch-handoff.usecase.js";
+export { countLegacyHandoffFiles } from "./usecases/inspect-legacy-handoffs.usecase.js";
 export { registerHandoffCommand } from "./commands/handoff.command.js";
 export { buildHandoffServices } from "./services.js";
 export type { HandoffServices } from "./services.js";

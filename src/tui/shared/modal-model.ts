@@ -60,7 +60,6 @@ export type OverlayModalKind =
   | "feature-browser"
   | "overview"
   | "dependencies"
-  | "handoffs"
   | "config"
   | "processes"
   | "memory"
@@ -238,15 +237,6 @@ export function buildOverlayRenderSpec(kind: OverlayModalKind): OverlayRenderSpe
         selection: STANDARD_SELECTION,
         text: STANDARD_TEXT,
         layout: { ...STANDARD_LAYOUT, splitRatio: [42, 58] },
-      };
-    case "handoffs":
-      return {
-        family: "split",
-        sizePreset: "wide",
-        chrome: STANDARD_CHROME,
-        selection: STANDARD_SELECTION,
-        text: STANDARD_TEXT,
-        layout: { ...WIDE_LAYOUT, splitRatio: [36, 64] },
       };
     case "config":
       return {

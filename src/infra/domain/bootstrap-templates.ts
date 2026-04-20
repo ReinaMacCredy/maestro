@@ -5,12 +5,9 @@ export interface BootstrapTemplateFile {
 }
 
 /**
- * Phase 1 strip: the old AGENT_INSTRUCTION_BLOCK described deleted
- * handoff-* commands. This replacement block advertises only the
- * mission/feature/memory surfaces that survive the v1.0.0 strip.
- * Phase 2 will extend it with the UKI handoff workflow.
- * The block is now static (no `{{agent}}` placeholder) because the
- * legacy `handoff-pickup --agent <slug>` flow is gone.
+ * Static agent block for initialized projects. It documents the shared
+ * conductor surfaces plus the native handoff launcher that replaced the
+ * old queue-based create/list/pickup flow.
  */
 export const AGENT_INSTRUCTION_BLOCK = `## Maestro Conductor (shared score)
 
@@ -27,6 +24,12 @@ maestro feature list --mission <id> --json
 \`\`\`bash
 maestro feature prompt <featureId> --mission <id>
 \`\`\`
+
+**Launch a fresh Codex or Claude handoff:**
+\`\`\`bash
+maestro handoff "Implement <featureId> for mission <id>" [--provider codex|claude] [--worktree [slug]] [--wait]
+\`\`\`
+Maestro persists the briefing and launch log under \`.maestro/launches/<id>/\`.
 
 **Capture a correction rule for future sessions:**
 \`\`\`bash
@@ -46,7 +49,7 @@ maestro task create "Title" [--description "..."] [--type task|bug|feature|epic|
   [--status pending|in_progress]
 
 # Discover, claim, work, complete
-maestro task ready --json --limit 5
+maestro task ready --json --compact --limit 5
 maestro task claim <id>                                      # session auto-detected; --session <id> for explicit override
 maestro task update <id> --status in_progress                # auto-claims if unowned
 maestro task update <id> --status completed --reason "<one-line outcome>"
@@ -89,7 +92,7 @@ This project uses Maestro for local bootstrap and runtime orchestration.
 
 - \`.maestro/bootstrap/\` contains committed project bootstrap assets
 - \`.maestro/skills/\` contains project-local worker skills
-- \`.maestro/missions/\`, \`.maestro/sessions/\`, and \`.maestro/handoffs/\` contain runtime state
+- \`.maestro/missions/\`, \`.maestro/sessions/\`, and \`.maestro/launches/\` contain runtime state
 - \`skills/built-in/\` contains shipped built-in fallback skills
 
 ## Worker Skill Lookup
@@ -184,7 +187,7 @@ Use this document for required tools, environment variables, and local setup not
 
 - \`.maestro/bootstrap/\` is the committed bootstrap layer
 - \`.maestro/skills/\` is the local runtime skill layer
-- \`.maestro/missions/\`, \`.maestro/sessions/\`, and \`.maestro/handoffs/\` are runtime state
+- \`.maestro/missions/\`, \`.maestro/sessions/\`, and \`.maestro/launches/\` are runtime state
 
 ## Environment Variables
 

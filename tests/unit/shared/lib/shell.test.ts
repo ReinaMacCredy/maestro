@@ -1,5 +1,7 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 interface ShellMemorySample {
   readonly iteration: number;
@@ -73,5 +75,32 @@ describe("shell exec helpers", () => {
     `);
 
     expect(samples[0]?.rssMb).toBe(124);
+  });
+
+  describe("runLoggedCommand", () => {
+    let tempDir: string;
+
+    beforeEach(async () => {
+      tempDir = await mkdtemp(join(tmpdir(), "maestro-shell-log-"));
+    });
+
+    afterEach(async () => {
+      await rm(tempDir, { recursive: true, force: true });
+    });
+
+    it("captures child output into the requested log file", async () => {
+      const { runLoggedCommand } = await import("@/shared/lib/shell.js");
+      const logPath = join(tempDir, "output.log");
+
+      const result = await runLoggedCommand(
+        ["bash", "-lc", "echo hello && echo world 1>&2"],
+        { cwd: tempDir, logPath, wait: true },
+      );
+
+      expect(result.exitCode).toBe(0);
+      const log = await readFile(logPath, "utf8");
+      expect(log).toContain("hello");
+      expect(log).toContain("world");
+    });
   });
 });

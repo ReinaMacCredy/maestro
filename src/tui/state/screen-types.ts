@@ -22,7 +22,6 @@ export interface AgentGridRow {
   readonly lastActivityAt: string | undefined;
   readonly featureCount: number;
   readonly completedCount: number;
-  readonly pendingHandoffCount: number;
 }
 
 export interface DispatchQueueItem {
@@ -34,7 +33,7 @@ export interface DispatchQueueItem {
   readonly agentType: string;
 }
 
-export type EventStreamEntryKind = MissionControlEvent["kind"] | "handoff" | "task" | "reply";
+export type EventStreamEntryKind = MissionControlEvent["kind"] | "task" | "reply";
 
 export interface EventStreamEntry {
   readonly timestamp: string;
@@ -71,7 +70,7 @@ export interface PrincipleEffectivenessRow {
   readonly effectivenessPct?: number;
   /** true when decided outcomes < small-sample threshold. UI should visually de-emphasize. */
   readonly lowSample: boolean;
-  /** Recent handoff summaries where this principle's outcome ended as unhelpful. Empty when none. */
+  /** Recent launch summaries where this principle's outcome ended as unhelpful. Empty when none. */
   readonly recentKickbackExamples: readonly string[];
 }
 

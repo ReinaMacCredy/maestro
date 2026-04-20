@@ -13,7 +13,6 @@ export const PREVIEW_SCREENS = [
   "dashboard",
   "features",
   "dependencies",
-  "handoffs",
   "config",
   "memory",
   "graph",
@@ -30,7 +29,6 @@ export type PreviewScreen = typeof PREVIEW_SCREENS[number];
 export const HOME_PREVIEW_SCREENS = [
   "dashboard",
   "features",
-  "handoffs",
   "config",
   "memory",
   "graph",
@@ -55,7 +53,6 @@ export function getApplicablePreviewScreens(snapshot: Pick<MissionControlSnapsho
 export interface PreviewSelectionOptions {
   screen?: PreviewScreen;
   featureId?: string;
-  handoffId?: string;
 }
 
 export interface PreviewStateOptions extends PreviewSelectionOptions {
@@ -74,7 +71,6 @@ export function buildPreviewState(opts: PreviewStateOptions): AppState {
 
   const state = createInitialState(opts.snapshot);
   const selectedFeatureIndex = resolveSelectedFeatureIndex(opts);
-  const selectedHandoffIndex = resolveSelectedHandoffIndex(opts);
 
   const baseState = selectedFeatureIndex === undefined
     ? state
@@ -95,16 +91,6 @@ export function buildPreviewState(opts: PreviewStateOptions): AppState {
         ]);
       }
       return reduce(baseState, { type: "open-dependencies" });
-    case "handoffs": {
-      const handoffState = reduce(baseState, { type: "open-handoffs" });
-      if (handoffState.modal.kind !== "handoffs" || selectedHandoffIndex === undefined) {
-        return handoffState;
-      }
-      return {
-        ...handoffState,
-        modal: { ...handoffState.modal, selectedHandoffIndex },
-      };
-    }
     case "config":
       return reduce(baseState, { type: "open-config" });
     case "memory":
@@ -146,11 +132,6 @@ export function buildPreviewState(opts: PreviewStateOptions): AppState {
       ]);
     }
 
-  if (opts.handoffId && screen !== "handoffs") {
-    throw new MaestroError("--handoff is only supported for handoffs previews", [
-      "Try `maestro mission-control --preview handoffs --handoff <id>`",
-    ]);
-  }
 }
 
 function resolveSelectedFeatureIndex(opts: PreviewStateOptions): number | undefined {
@@ -168,18 +149,5 @@ function resolveSelectedFeatureIndex(opts: PreviewStateOptions): number | undefi
 
   throw new MaestroError(`Feature ${opts.featureId} not found in mission ${opts.snapshot.missionId}`, [
     `List tasks with \`maestro mission-control --mission ${opts.snapshot.missionId} --preview features\``,
-  ]);
-}
-
-function resolveSelectedHandoffIndex(opts: PreviewStateOptions): number | undefined {
-  if (!opts.handoffId) {
-    return opts.snapshot.pendingHandoffs.length > 0 ? 0 : undefined;
-  }
-
-  const handoffIndex = opts.snapshot.pendingHandoffs.findIndex((handoff) => handoff.id === opts.handoffId);
-  if (handoffIndex >= 0) return handoffIndex;
-
-  throw new MaestroError(`Handoff ${opts.handoffId} not found in pending handoffs`, [
-    "Run `maestro mission-control --preview handoffs` to list pending handoffs",
   ]);
 }

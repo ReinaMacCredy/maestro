@@ -16,7 +16,7 @@ import type {
   MissionStorePort,
 } from "@/features/mission/index.js";
 import { MISSION_ID_PATTERN } from "@/features/mission/index.js";
-import type { HandoffStorePort } from "@/features/handoff/index.js";
+import type { LaunchStorePort } from "@/features/handoff/index.js";
 import type { ReplyStorePort } from "@/features/reply/index.js";
 import { MaestroError } from "@/shared/errors.js";
 import { readText, dirExists } from "@/shared/lib/fs.js";
@@ -42,7 +42,7 @@ export interface CollectBundleSourcesDeps {
   readonly assertionStore: AssertionStorePort;
   readonly checkpointStore: CheckpointStorePort;
   readonly replyStore: ReplyStorePort;
-  readonly handoffStore: HandoffStorePort;
+  readonly launchStore: LaunchStorePort;
 }
 
 export interface BundleSources {
@@ -147,16 +147,16 @@ export async function collectBundleSources(
     }
   }
 
-  // handoffs that reference this mission id
-  const allHandoffs = await deps.handoffStore.list();
-  const missionHandoffs = allHandoffs.filter(
-    (h) => h.content.maestroRefs.missionId === missionId,
+  // handoff launches that reference this mission id
+  const allLaunches = await deps.launchStore.list();
+  const missionLaunches = allLaunches.filter(
+    (launch) => launch.refs.missionId === missionId,
   );
-  const missionHandoffIds = new Set(missionHandoffs.map((h) => h.id));
-  for (const handoff of missionHandoffs) {
+  const missionLaunchIds = new Set(missionLaunches.map((launch) => launch.id));
+  for (const launch of missionLaunches) {
     files.push({
-      path: `${root}/handoffs/${handoff.id}.json`,
-      content: stringifyJson(handoff),
+      path: `${root}/launches/${launch.id}.json`,
+      content: stringifyJson(launch),
     });
   }
 
@@ -175,7 +175,7 @@ export async function collectBundleSources(
   const filteredOutcomes = filterOutcomesForMission(
     outcomesRaw ?? "",
     missionId,
-    missionHandoffIds,
+    missionLaunchIds,
   );
   files.push({
     path: `${root}/principles/outcomes.jsonl`,
@@ -196,7 +196,7 @@ export async function collectBundleSources(
     assertions: assertions.length,
     workers: workerFeatureIds.length,
     replies: replyCount,
-    handoffs: missionHandoffs.length,
+    launches: missionLaunches.length,
     checkpoints: checkpoints.length,
     principlesSnapshot,
     outcomesSnapshot,
@@ -297,7 +297,7 @@ function countLearnings(compiledText: string): number {
 function filterOutcomesForMission(
   raw: string,
   missionId: string,
-  handoffIds: ReadonlySet<string>,
+  launchIds: ReadonlySet<string>,
 ): string {
   if (!raw) return "";
   const kept: string[] = [];
@@ -308,7 +308,7 @@ function filterOutcomesForMission(
       const parsed = JSON.parse(trimmed) as { missionId?: string; handoffId?: string };
       if (
         parsed.missionId === missionId
-        || (parsed.handoffId && handoffIds.has(parsed.handoffId))
+        || (parsed.handoffId && launchIds.has(parsed.handoffId))
       ) {
         kept.push(trimmed);
       }

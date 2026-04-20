@@ -21,7 +21,7 @@ import { DEFAULT_PRINCIPLES } from "@/features/mission";
 
 const RUNTIME_GITIGNORE_COMMENT = "# Maestro runtime state";
 const RUNTIME_GITIGNORE_LINES = [
-  ".maestro/handoffs/",
+  ".maestro/launches/",
   ".maestro/missions/",
   ".maestro/sessions/",
 ] as const;
@@ -61,7 +61,7 @@ export async function initMaestro(
     }
   } else {
     const maestroDir = join(opts.dir, MAESTRO_DIR);
-    const handoffsDir = join(maestroDir, "handoffs");
+    const launchesDir = join(maestroDir, "launches");
     const skillsDir = join(maestroDir, "skills");
     const bootstrapDir = join(maestroDir, "bootstrap");
     const configPath = join(maestroDir, "config.yaml");
@@ -70,7 +70,7 @@ export async function initMaestro(
     await assertProjectLocalPathSafe(opts.dir, configPath);
 
     await ensureDirIfMissing(maestroDir, created);
-    await ensureDirIfMissing(handoffsDir, created);
+    await ensureDirIfMissing(launchesDir, created);
     await ensureDirIfMissing(skillsDir, created);
     await ensureDirIfMissing(bootstrapDir, created);
 

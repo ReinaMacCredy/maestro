@@ -34,7 +34,6 @@ const SNAPSHOT: MissionControlSnapshot = {
   milestones: [],
   activeFeature: null,
   session: null,
-  pendingHandoffs: [],
   configSummary: null,
   configInspector: {
     tabs: ["overview", "effective", "project", "global", "defaults", "workers", "plan", "doctor", "memory"],
@@ -89,7 +88,7 @@ describe("keyToAction", () => {
 
   it("maps Left Arrow to back when a palette-launched detail overlay is open", () => {
     const state = createInitialState(SNAPSHOT);
-    state.modal = { kind: "handoffs", selectedHandoffIndex: 0, returnTarget: "command-palette" };
+    state.modal = { kind: "feature-browser", selectedFeatureIndex: 0, returnTarget: "command-palette" };
 
     const action = keyToAction({ type: "arrow", direction: "left" }, state);
 

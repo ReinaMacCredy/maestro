@@ -3,7 +3,6 @@ import type { MissionControlMode } from "./types.js";
 export type MissionControlCommandId =
   | "features"
   | "dependencies"
-  | "handoffs"
   | "config"
   | "memory"
   | "graph"
@@ -56,14 +55,6 @@ export function getMissionControlCommandSpecs(
         detail: "View worker agent status and activity",
         section: "Navigate",
         keywords: ["agents", "status", "grid"],
-      },
-      {
-        id: "handoffs",
-        key: "H",
-        label: "Handoffs",
-        detail: "Review pending cross-agent handoffs",
-        section: "Navigate",
-        keywords: ["handoff", "handoffs", "agent"],
       },
       {
         id: "event-stream",
@@ -165,14 +156,6 @@ export function getMissionControlCommandSpecs(
         detail: "Inspect blockers and downstream tasks for the selected item",
         section: "Navigate",
         keywords: ["dependencies", "blocked by", "graph", "unblocks"],
-      },
-      {
-        id: "handoffs",
-        key: "H",
-        label: "Handoffs",
-        detail: "Review pending cross-agent handoffs",
-        section: "Navigate",
-        keywords: ["handoff", "handoffs", "agent"],
       },
       {
         id: "timeline",

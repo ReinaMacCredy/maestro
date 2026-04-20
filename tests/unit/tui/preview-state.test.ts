@@ -104,11 +104,7 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
         validTransitions: ["assigned"],
       },
     ],
-      session: null,
-      pendingHandoffs: [
-        { id: "handoff-1", agent: "codex", message: "First handoff", timestamp: "2026-04-15T00:00:00.000Z" },
-        { id: "handoff-2", agent: "claude", message: "Second handoff", timestamp: "2026-04-15T00:01:00.000Z" },
-      ],
+    session: null,
     configSummary: {
       configSource: "project",
       gitAvailable: true,
@@ -127,13 +123,12 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
 }
 
 describe("buildPreviewState", () => {
-  it("keeps handoffs in the home preview set while excluding mission-only screens", () => {
+  it("keeps home previews limited to non-mission screens", () => {
     const screens = getApplicablePreviewScreens({ mode: "home" });
 
     expect(screens).toEqual([
       "dashboard",
       "features",
-      "handoffs",
       "config",
       "memory",
       "graph",
@@ -193,7 +188,6 @@ describe("buildPreviewState", () => {
           locationLabel: "In a git repository",
           checks: [],
           actions: [],
-          pendingHandoffs: [],
         },
       }),
       screen: "features",
@@ -213,20 +207,6 @@ describe("buildPreviewState", () => {
     expect(state.modal).toEqual({
       kind: "dependencies",
       selectedOption: 0,
-      returnTarget: undefined,
-    });
-  });
-
-  it("opens the requested handoff in the handoffs modal", () => {
-    const state = buildPreviewState({
-      snapshot: makeSnapshot(),
-      screen: "handoffs",
-      handoffId: "handoff-2",
-    });
-
-    expect(state.modal).toEqual({
-      kind: "handoffs",
-      selectedHandoffIndex: 1,
       returnTarget: undefined,
     });
   });
@@ -266,7 +246,6 @@ describe("buildPreviewState", () => {
             locationLabel: "In a git repository",
             checks: [],
             actions: [],
-            pendingHandoffs: [],
           },
         }),
         screen: "dependencies",
@@ -278,19 +257,9 @@ describe("buildPreviewState", () => {
     expect(() =>
       buildPreviewState({
         snapshot: makeSnapshot(),
-        screen: "handoffs",
+        screen: "config",
         featureId: "f1",
       })
       ).toThrow("--feature is only supported");
-    });
-
-  it("rejects unknown handoff selectors", () => {
-    expect(() =>
-      buildPreviewState({
-        snapshot: makeSnapshot(),
-        screen: "handoffs",
-        handoffId: "handoff-missing",
-      })
-    ).toThrow("Handoff handoff-missing not found");
   });
 });

@@ -8,7 +8,6 @@ describe("getMissionControlCommandSpecs", () => {
     expect(commandIds).toEqual([
       "features",
       "agent-grid",
-      "handoffs",
       "event-stream",
       "task-board",
       "config",
@@ -29,7 +28,6 @@ describe("getMissionControlCommandSpecs", () => {
       "dispatch",
       "event-stream",
       "dependencies",
-      "handoffs",
       "timeline",
       "task-board",
       "config",

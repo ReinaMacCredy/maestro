@@ -9,8 +9,8 @@ import {
   buildTimelineMilestones,
 } from "@/tui/state/snapshot.js";
 import type { Feature, Milestone, Principle, PrincipleOutcomeRecord } from "@/features/mission";
-import type { UkiHandoff } from "@/features/handoff";
-import type { MissionControlEvent, MissionControlHomeHandoff } from "@/tui/state/types.js";
+import type { HandoffLaunchRecord } from "@/features/handoff";
+import type { MissionControlEvent } from "@/tui/state/types.js";
 import type { Task, TaskQueryPort } from "@/features/task";
 import type { WorkerReply } from "@/features/reply";
 
@@ -41,8 +41,24 @@ function makeMilestone(overrides: Partial<Milestone> & { id: string }): Mileston
   };
 }
 
-function makeHandoff(id: string, agent = "codex"): MissionControlHomeHandoff {
-  return { id, message: "test", agent, timestamp: "2026-01-01T00:00:00Z" };
+function makeLaunch(id: string, overrides: Partial<HandoffLaunchRecord> = {}): HandoffLaunchRecord {
+  return {
+    id,
+    createdAt: "2026-01-01T00:00:00Z",
+    task: `Task ${id}`,
+    name: `Launch ${id}`,
+    provider: "codex",
+    model: "gpt-5.4",
+    status: "launched",
+    wait: false,
+    sourceDir: "/tmp/source",
+    targetDir: "/tmp/target",
+    promptPath: `.maestro/launches/${id}/prompt.md`,
+    outputPath: `.maestro/launches/${id}/output.log`,
+    command: ["codex", "exec"],
+    refs: {},
+    ...overrides,
+  };
 }
 
 function makeTaskQueryStore(tasks: readonly Task[]): TaskQueryPort {
@@ -64,7 +80,7 @@ describe("buildAgentGrid", () => {
       makeFeature({ id: "f3", agentType: "claude-code", status: "done" }),
       makeFeature({ id: "f4", agentType: "claude-code", status: "done" }),
     ];
-    const grid = buildAgentGrid(features, []);
+    const grid = buildAgentGrid(features);
     expect(grid).toHaveLength(2);
 
     const codex = grid.find((r) => r.agentType === "codex");
@@ -84,41 +100,19 @@ describe("buildAgentGrid", () => {
       makeFeature({ id: "f2", agentType: "b-active", status: "in-progress", updatedAt: new Date().toISOString() }),
       makeFeature({ id: "f3", agentType: "c-waiting", status: "review" }),
     ];
-    const grid = buildAgentGrid(features, []);
+    const grid = buildAgentGrid(features);
     expect(grid[0]!.agentType).toBe("b-active");
     expect(grid[1]!.agentType).toBe("c-waiting");
     expect(grid[2]!.agentType).toBe("a-completed");
   });
 
-  it("counts pending handoffs per agent", () => {
-    const features = [
-      makeFeature({ id: "f1", agentType: "codex", status: "pending" }),
-    ];
-    const handoffs = [makeHandoff("h1", "codex"), makeHandoff("h2", "gemini")];
-    const grid = buildAgentGrid(features, handoffs);
-    expect(grid[0]!.pendingHandoffCount).toBe(1);
-  });
-
-  it("creates waiting rows for agents that only have pending handoffs", () => {
-    const grid = buildAgentGrid([], [makeHandoff("h1", "codex")]);
-
-    expect(grid).toEqual([
-      expect.objectContaining({
-        agentType: "codex",
-        status: "waiting",
-        featureCount: 0,
-        pendingHandoffCount: 1,
-      }),
-    ]);
-  });
-
-  it("does not mark completed workers waiting for another worker's handoff", () => {
+  it("does not mark completed workers waiting for another worker's pending work", () => {
     const features = [
       makeFeature({ id: "f1", agentType: "claude-code", status: "done" }),
       makeFeature({ id: "f2", agentType: "claude-code", status: "done" }),
       makeFeature({ id: "f3", agentType: "codex", status: "pending" }),
     ];
-    const grid = buildAgentGrid(features, [makeHandoff("h1", "codex")]);
+    const grid = buildAgentGrid(features);
 
     expect(grid.find((row) => row.agentType === "claude-code")?.status).toBe("completed");
     expect(grid.find((row) => row.agentType === "codex")?.status).toBe("waiting");
@@ -176,18 +170,19 @@ describe("buildDispatchQueue", () => {
 // ---------------------------------------------------------------------------
 
 describe("buildEventStream", () => {
-  it("merges progress log and handoff events, sorted descending", () => {
+  it("merges progress log and reply events, sorted descending", () => {
     const log: MissionControlEvent[] = [
       { timestamp: "2026-01-01T00:00:00Z", relativeMs: 0, kind: "mission", title: "Created" },
       { timestamp: "2026-01-01T01:00:00Z", relativeMs: 3600000, kind: "feature", title: "f1 assigned" },
     ];
-    const handoffs = [makeHandoff("h1", "codex")];
-    const stream = buildEventStream(log, handoffs);
+    const replies = [
+      makeReply({ featureId: "f1", outcome: "completed", writtenAt: "2026-01-01T00:30:00Z" }),
+    ];
+    const stream = buildEventStream(log, replies);
 
-    // Handoff keeps its stored timestamp, so the newer feature event stays first.
     expect(stream.length).toBeGreaterThanOrEqual(3);
     expect(stream[0]!.kind).toBe("feature");
-    expect(stream.find((entry) => entry.kind === "handoff")?.timestamp).toBe("2026-01-01T00:00:00Z");
+    expect(stream.find((entry) => entry.kind === "reply")?.timestamp).toBe("2026-01-01T00:30:00Z");
   });
 
   it("caps at 200 entries", () => {
@@ -197,7 +192,7 @@ describe("buildEventStream", () => {
       kind: "feature" as const,
       title: `Event ${i}`,
     }));
-    const stream = buildEventStream(log, []);
+    const stream = buildEventStream(log);
     expect(stream).toHaveLength(200);
   });
 });
@@ -348,7 +343,7 @@ describe("buildEventStream with replies", () => {
       makeReply({ featureId: "f2", outcome: "kicked-back", writtenAt: "2026-04-13T02:00:00.000Z" }),
     ];
 
-    const entries = buildEventStream([], [], replies);
+    const entries = buildEventStream([], replies);
     expect(entries.filter((e) => e.kind === "reply")).toHaveLength(2);
     const kickback = entries.find((e) => e.title.includes("kicked back"));
     expect(kickback).toBeDefined();
@@ -414,25 +409,19 @@ describe("buildPrincipleEffectivenessRows", () => {
     expect(rows[2]!.lowSample).toBe(true);
   });
 
-  it("collects recent kickback examples from handoffs when available", () => {
+  it("collects recent kickback examples from launches when available", () => {
     const principles = [makePrinciple("p-1")];
     const outcomes = [
       makeOutcome("p-1", "h-1", "unhelpful", "2026-04-13T00:00:00Z"),
       makeOutcome("p-1", "h-2", "unhelpful", "2026-04-13T01:00:00Z"),
       makeOutcome("p-1", "h-3", "helpful", "2026-04-13T02:00:00Z"),
     ];
-    const handoffs = [
-      {
-        id: "h-1",
-        content: { summary: "Broken migration" },
-      } as unknown as UkiHandoff,
-      {
-        id: "h-2",
-        content: { summary: "Failing tests" },
-      } as unknown as UkiHandoff,
+    const launches = [
+      makeLaunch("h-1", { name: "Broken migration" }),
+      makeLaunch("h-2", { name: "Failing tests" }),
     ];
 
-    const rows = buildPrincipleEffectivenessRows(principles, outcomes, handoffs);
+    const rows = buildPrincipleEffectivenessRows(principles, outcomes, launches);
     const row = rows[0]!;
     expect(row.recentKickbackExamples.length).toBe(2);
     expect(row.recentKickbackExamples[0]).toContain("Failing tests"); // newest first

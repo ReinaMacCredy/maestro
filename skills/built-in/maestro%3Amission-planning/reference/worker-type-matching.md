@@ -2,7 +2,7 @@
 
 This is the third step of mission planning. You have a decomposed plan with milestones and features from Step 2. You need to assign each feature to a worker type that can actually execute it.
 
-Workers are the external processes that implement features. Maestro is the conductor — it holds the score, emits handoffs, and validates results, but it does not write code itself. The four worker types below cover every real execution pattern.
+Workers are the external processes that implement features. Maestro is the conductor — it holds the score, drafts the next handoff, and validates results, but it does not write code itself. The four worker types below cover every real execution pattern.
 
 ## The four worker types
 
@@ -42,18 +42,18 @@ Self-review is pathologically lenient. The Anthropic harness-engineering article
 - "Rename `WorkerKind` to `WorkerType` across `src/` and `tests/`." Pure mechanical rewrite.
 
 `codex-cli` — anti-example:
-- "Design a retry policy for the handoff emitter." Requires taste and judgment. Hand to `claude-code`.
+- "Design a provider-selection policy for the handoff launcher." Requires taste and judgment. Hand to `claude-code`.
 
 `subagent` — matches:
-- "List every file that imports from `src/runtime/supervisor.ts` and group by directory." Discoverable, summary-shaped output.
-- "Find all places where `CS-work` is parsed from a string, and note which parsers enforce the 0..1 bound." Pure exploration.
+- "List every file that imports `buildHandoffPrompt()` and group by directory." Discoverable, summary-shaped output.
+- "Find all places where launch records are filtered by mission id and note which ones also read principle outcomes." Pure exploration.
 
 `subagent` — anti-example:
 - "Implement a new supervisor replacement across 12 files." Too large, too long-running. Hand to `claude-code`.
 
 `claude-code` — matches:
-- "Refactor the handoff emitter so v5.2 slots are produced by a pluggable builder instead of an inline switch." Architectural, multiple valid shapes.
-- "Review the `codex-cli`-generated retry policy from the previous milestone." Fresh instance, applies judgment.
+- "Refactor `buildHandoffPrompt()` so mission and repository contexts share less duplicated logic." Architectural, multiple valid shapes.
+- "Review the `codex-cli`-generated launch-store refactor from the previous milestone." Fresh instance, applies judgment.
 
 `claude-code` — anti-example:
 - "Add a trailing newline to `CHANGELOG.md`." Massive overkill. Hand to `codex-cli`.

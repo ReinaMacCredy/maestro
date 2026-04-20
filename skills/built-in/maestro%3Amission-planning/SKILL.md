@@ -1,28 +1,27 @@
 ---
 name: maestro:mission-planning
-description: "Plan and structure new missions. Brainstorm raw ideas into decomposed missions with milestones, features, worker types, boundaries, and UKI v5.4 plan handoffs ready for external workers to pick up."
+description: "Plan and structure new missions. Brainstorm raw ideas into decomposed missions with milestones, features, worker types, constraints, and the exact `maestro handoff` command for the first external worker."
 argument-hint: "<raw idea or mission description>"
 ---
 
 # Mission Planning
 
-Maestro is the conductor. It holds the score, emits handoffs, and validates results, but it does not write code itself. External workers (Codex CLI, Claude Code children, Gemini, Aider) implement features once a plan and a UKI v5.4 plan handoff exist.
+Maestro is the conductor. It persists the mission, keeps shared context on disk, and can launch a fresh Codex or Claude handoff with a self-contained markdown brief. This skill turns a raw idea into that plan plus the exact handoff command the operator should run next.
 
-This skill turns a raw idea into that plan plus handoff. The input is `$ARGUMENTS` — a single sentence like "add a command palette to the TUI" or a rough paragraph describing a goal. The output is two concrete artifacts:
+The input is `$ARGUMENTS` — a single sentence like "add a command palette to the TUI" or a rough paragraph describing a goal. The output is two concrete artifacts:
 
 1. A mission persisted under `.maestro/missions/{id}/` via `maestro mission create --file plan.json`
-2. A UKI v5.4 plan handoff string emitted via `maestro handoff create`, ready for an external worker to consume
+2. The exact `maestro handoff ...` command for the first external worker
 
-Skip any step and the downstream worker either drifts off-scope or halts asking for clarification. All six steps are mandatory.
+Do not auto-launch the handoff in this skill. Planning stops once the mission exists and the launch command is drafted. Skip any step and the downstream worker either drifts off-scope or halts asking for clarification.
 
-## The 6-step workflow at a glance
+## The 5-step workflow at a glance
 
 1. Brainstorm opening — clarify intent before structure
 2. Decompose into milestones and features — 3-7 milestones, sprint-sized
 3. Match worker types — codex-cli, claude-code, subagent, human
-4. Capture boundaries — what not to touch, and why
-5. Calibrate confidence — CS-work and CS-summary, honestly
-6. Persist and emit handoff — mission file plus UKI string
+4. Capture constraints — what not to touch, and why
+5. Persist mission and draft the first handoff command
 
 ## Step 1 — Brainstorm opening
 
@@ -31,7 +30,7 @@ Skip any step and the downstream worker either drifts off-scope or halts asking 
 **Action**:
 1. Restate the idea in one sentence and read it back to the user. If the user does not confirm, ask one clarifying question and wait.
 2. Ask "what does done look like?" The answer is the core goal you will carry into Step 2.
-3. Surface any obvious assumptions the idea rests on. Write them down even if they feel trivial — they become calibration inputs in Step 5.
+3. Surface any obvious assumptions the idea rests on. Write them down even if they feel trivial — they become launch-readiness checks in Step 5.
 4. If the idea is genuinely ambiguous (two or more valid interpretations), stop and ask the user to pick one before proceeding. Do not guess.
 
 **Reference**: none — this is a conversational step, not a structural one.
@@ -63,106 +62,73 @@ Skip any step and the downstream worker either drifts off-scope or halts asking 
 2. Apply the decision table in the reference file. Mechanical work goes to `codex-cli`, ambiguous work goes to `claude-code`, exploration goes to `subagent`, trust calls go to `human`.
 3. For any milestone with a `code-review` or `plan-review` profile, confirm the reviewer worker type is a different instance than whatever produced the artifact being reviewed. Self-review is pathologically lenient.
 4. Re-read each feature's worker-type choice and ask "would this worker actually succeed here?" If not, revise.
+5. Identify the first feature that should be launched through `maestro handoff`. It must be assigned to `codex-cli` or `claude-code`. If your first execution feature is `subagent` or `human`, either re-scope the plan or choose the next feature that should run as a fresh external worker.
 
 **Reference**: `reference/worker-type-matching.md`
 
-**Output**: every feature has an `agentType` field. Review milestones use a different instance than the generator.
+**Output**: every feature has an `agentType` field. Review milestones use a different instance than the generator, and the first external worker candidate is identified.
 
-## Step 4 — Capture boundaries
+## Step 4 — Capture constraints
 
 **Trigger**: every feature has a worker type assigned.
 
 **Action**:
 1. For each feature, list the things a worker must not touch while executing it. Name specific files, APIs, patterns, or out-of-scope extensions.
-2. For each boundary, write the reason next to it. A boundary without a reason is unenforceable at edge cases.
-3. Convert each boundary to a short `BOUNDARY_STATE` token (max 4 words per `_`-link, underscores between words, no dashes inside tokens).
-4. Move the reasons into `DECISIONS` tokens or the feature description so the worker can actually read them.
-5. If any feature has more than 5 boundaries, the feature is too large — go back to Step 2 and split it.
+2. For each constraint, write the reason next to it. A constraint without a reason is unenforceable at edge cases.
+3. Store the reason somewhere the worker will later see it: `preconditions`, feature description, or a concrete verification note.
+4. Keep each feature to 1-4 real constraints. If a feature needs more than that, it is too large — go back to Step 2 and split it.
+5. Make sure the first external worker's feature has explicit constraints. Those become the `## Constraints` section of the eventual handoff brief.
 
 **Reference**: `reference/boundary-capture.md`
 
-**Output**: `BOUNDARY_STATE` token list per feature, reasons captured in `DECISIONS` or feature descriptions.
+**Output**: a concrete constraint list per feature, with reasons captured in `preconditions`, descriptions, or verification notes.
 
-## Step 5 — Calibrate confidence
+## Step 5 — Persist mission and draft the first handoff command
 
-**Trigger**: you have a plan with worker types and boundaries.
-
-**Action**:
-1. Rate `CS-work` (0.0-1.0): is the plan correct and executable end-to-end?
-2. Rate `CS-summary` (0.0-1.0): does the summary you will write capture the full intent?
-3. Apply the honesty rule. Name at least one failure mode. Drop 0.1 per realistic failure mode, up to 0.2 total.
-4. Check the divergent-score rules. If `CS-work` and `CS-summary` differ by more than 0.1, revise whichever is lower. If both are below 0.80, go back to Step 1 and re-scope.
-5. Write the final `CS` slot: `CS-work_0.xx~summary_0.yy`.
-
-**Reference**: `reference/confidence-calibration.md`
-
-**Output**: two calibrated numbers ready to drop into the `CS` slot of the handoff.
-
-## Step 6 — Persist mission and emit handoff
-
-**Trigger**: plan, worker types, boundaries, and confidence scores are all in hand.
+**Trigger**: plan, worker types, and constraints are all in hand.
 
 **Action**:
-1. Write the plan to a JSON file (typically `plans/<mission-name>.json`). Include milestones, features, dependencies, verification steps, worker types, and boundaries.
+1. Write the plan to a JSON file (typically `plans/<mission-name>.json`). Include milestones, features, dependencies, verification steps, worker types, and constraints.
 2. Run `maestro mission create --file <plan.json>` to persist the mission. Capture the returned mission id.
-3. Assemble the v5.4 plan packet in the current slot order: `MODE`, `CURRENT_STATE`, `SESSION_CORE`, `CAUSAL_DRIVERS`, `DIVERGENCES`, `MAESTRO_REFS`, `PLAN_PATHS`, `MAESTRO_SYNC`, `DECISIONS`, `SIGNAL_DELTA`, `ARTIFACTS`, `READ_MORE`, `NEXT_ACTION`, `CS`, `SUMMARY`.
-4. Run `maestro handoff create --mode plan` with the packet fields as flags. `CURRENT_STATE` should usually be `plan_ready`. `ARTIFACTS` and `READ_MORE` cannot be empty. Keep `SUMMARY` under 140 characters and use the `Essence-Progress-Risk` shape.
-5. Return the mission id and the handoff string to the user so they can route the handoff to a worker.
+3. Run the readiness check. If the plan is still missing a launchable first worker, go back to Steps 2-4 instead of drafting a bad command.
+4. Map the first worker's `agentType` to a provider:
+   - `codex-cli` -> `--provider codex`
+   - `claude-code` -> `--provider claude`
+5. Draft the exact handoff command. The task string must name the mission id, feature id or title, expected outcome, and the requirement to run the listed verification steps before stopping.
+6. Add `--worktree <slug>` when the worker should operate in an isolated sibling checkout, especially for risky review or parallel implementation slices.
+7. Return the mission id and the exact handoff command to the user. Do not run the command inside this skill.
 
-**Reference**: `reference/uki-cheatsheet.md`
+**Reference**: `reference/readiness-check.md`, `reference/handoff-command-cheatsheet.md`
 
-**Output**: a persisted mission under `.maestro/missions/{id}/` and a UKI v5.4 plan handoff string printed to stdout.
+**Output**: a persisted mission under `.maestro/missions/{id}/` and an exact `maestro handoff ...` command ready for the operator to launch.
 
-**Next step**: once the mission is persisted and the handoff is emitted, invoke `maestro:conduct --mission <missionId>` to begin dispatching workers against the new mission. This skill ends at plan emission; execution is the conductor's job.
+**Next step**: once the mission is persisted, the human operator can approve the mission if needed and run the drafted handoff command. This skill ends at plan creation plus launch-command drafting; execution is separate.
 
 ## Critical constraints
 
 - Never skip the brainstorm opening (Step 1). Jumping straight into decomposition produces plans that solve the wrong problem cleanly.
 - Never invent worker types or milestone profiles. The allowed sets are closed. If none fit, the work needs to be re-decomposed, not given a new category.
-- Never ship a handoff without calibrated `CS-work` and `CS-summary` scores. The renderer requires at least one scoped confidence score, and plan handoffs should include both.
-- Never skip the final handoff emission. A plan without a UKI handoff is not executable by external workers — it is just a draft.
-- The output of this skill is always a mission file plus a UKI handoff string. If either is missing, the skill has not completed.
+- Never draft the first handoff command for a `subagent` or `human` feature. Native handoff launching is only for fresh Codex or Claude runs.
+- Never auto-launch the handoff from this skill. The output is the exact command, not the running child process.
+- The output of this skill is always a mission file plus the exact next `maestro handoff ...` command. If either is missing, the skill has not completed.
 
 ## Example output
 
 Input: "Refactor the auth middleware so session validation and permission checking are separate."
 
-After Steps 1-5, the plan is persisted:
+After Steps 1-4, the plan is persisted:
 
 ```bash
 maestro mission create --file plans/auth-split.json
 # mission_id: mis_01h8k2f9
 ```
 
-Then the handoff is emitted:
+Then the next launch command is drafted:
 
 ```bash
-maestro handoff create \
-  --mode plan \
-  --session-core auth_middleware_split \
-  --current-state plan_ready \
-  --summary "Auth middleware split drafted; signature preserved; 14 callers need regression pass before code-review." \
-  --next-action assign_feat_001_codex_cli \
-  --driver user_report_signature_churn \
-  --driver refactor_debt_audit \
-  --divergence NONE \
-  --mission-id mis_01h8k2f9 \
-  --plan-ref plan_auth_split_json \
-  --plan-path-item plan_auth_split_json \
-  --maestro-sync mission_created \
-  --decision split_validation_from_permission \
-  --decision keep_middleware_signature \
-  --decision defer_permission_semantics \
-  --signal callers_14_stable \
-  --signal unit_tests_42_target \
-  --artifact branch_feat_auth_split \
-  --artifact file_plans_auth_split_json \
-  --read-more plan_auth_split_json \
-  --boundary preserve_middleware_signature \
-  --boundary no_session_store_changes \
-  --boundary no_permission_semantics_changes \
-  --confidence-work 0.88 \
-  --confidence-summary 0.92
+maestro handoff \
+  "Implement feature auth-impl for mission mis_01h8k2f9. Split session validation from permission checks while preserving the existing middleware signature, keeping session-store changes out of scope, and running the listed verification steps before stopping." \
+  --provider codex
 ```
 
-Mission persisted, handoff printed. A worker (`codex-cli` per the worker-type assignment) can now pick up the first feature by reading the mission file and the v5.4 plan packet. The skill is done.
+Mission persisted, launch command drafted. The operator can now run that command to start the first Codex worker with a persisted markdown handoff brief. The skill is done.

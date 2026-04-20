@@ -68,7 +68,7 @@
 - `--render-check` and `--preview all` automatically skip screens that require a mission when in home mode
 - After TUI code changes, validate with: `bun run build && ./dist/maestro mission-control --render-check --size 120x40`
 - For live iteration during TUI development, use `bun tui:dev` (watches `src/tui/**`, re-renders on save); supports `--screen`, `--size`, `--check`, `--mission`, `--compiled` flags
-- Available preview screens: `dashboard`, `features`, `dependencies`, `handoffs`, `config`, `memory`, `graph`, `agents`, `dispatch`, `events`, `tasks`, `timeline`, `principles`, `help` (aliases: `feat`, `deps`, `cfg`, `mem`, `agent`, `event`, `task`, `principle`)
+- Available preview screens: `dashboard`, `features`, `dependencies`, `config`, `memory`, `graph`, `agents`, `dispatch`, `events`, `tasks`, `timeline`, `principles`, `help` (aliases: `feat`, `deps`, `cfg`, `mem`, `agent`, `event`, `task`, `principle`)
 - Mission-only screens: `dependencies`, `dispatch`, `timeline`. Home+mission screens: all others (including `principles`)
 
 ## Shell Gotchas
@@ -107,7 +107,7 @@ One-line summary: **mission answers "what are we building?", task answers "what 
 ### Daily agent loop with tasks
 
 ```bash
-maestro task ready --json --limit 5               # find actionable work
+maestro task ready --json --compact --limit 5     # find actionable work
 maestro task claim tsk-abc                        # take ownership
 maestro task update tsk-abc --status in_progress  # explicitly start work
 # ... do the work, commit ...
@@ -120,7 +120,7 @@ maestro task update tsk-abc --status completed --reason "shipped"  # finish
 
 ### Storage policy
 
-`.maestro/tasks/**` is intentionally repo-tracked: tasks, ready-state metadata, and completion-derived candidate hints are part of the durable execution trail for day-to-day work, so they should be reviewed and committed deliberately when they matter. `.maestro/missions/**` and `.maestro/handoffs/**` remain ignored runtime data because they are heavier local orchestration artifacts rather than the lightweight shared queue. Task completion reasons and candidate hints are persisted verbatim, so treat them with the same care you would use for commit messages or `maestro note --content`: useful context is good, secrets and throwaway venting are not.
+`.maestro/tasks/**` is intentionally repo-tracked: tasks, ready-state metadata, and completion-derived candidate hints are part of the durable execution trail for day-to-day work, so they should be reviewed and committed deliberately when they matter. `.maestro/missions/**` and `.maestro/launches/**` remain ignored runtime data because they are heavier local orchestration artifacts rather than the lightweight shared queue. Legacy `.maestro/handoffs/**` folders may still exist locally, but they are unused now and `maestro status` or `maestro doctor` will warn when they are present. Task completion reasons and candidate hints are persisted verbatim, so treat them with the same care you would use for commit messages or `maestro note --content`: useful context is good, secrets and throwaway venting are not.
 
 ### When both make sense
 
@@ -138,17 +138,18 @@ Tasks can live inside or alongside a mission. You can use a mission to hold the 
 - `src/services.ts` -- composition root; one line per feature via the feature's service factory
 - `src/index.ts` -- commander root; one `register<Feature>Command` call per feature
 
-### Current features (10)
+### Current features (11)
 - `ratchet` -- memory quality assertions and promotions
-- `handoff` -- UKI-format structured session handoffs between agents
+- `handoff` -- Paseo-style markdown handoff briefs plus native Codex or Claude launch orchestration
 - `notes` -- project notes captured to a local file
 - `graph` -- project dependency graph linking across repos
 - `session` -- agent session identity detection
 - `memory` -- corrections, learnings, recall for agent guidance
-- `mission` -- mission/feature/milestone/checkpoint/validation/principle lifecycle; includes behavioral principles (`.maestro/principles.jsonl`) that inject into worker prompts (score) and gate handoff creation
-- `agent` -- worker prompt generation, agent management, fit recommendation, prior handoff replay (legitimately imports from `mission`, `memory`, and `handoff`; see Feature-specific exceptions)
+- `mission` -- mission/feature/milestone/checkpoint/validation/principle lifecycle; includes behavioral principles (`.maestro/principles.jsonl`) that inject into worker prompts and score replies
+- `agent` -- worker prompt generation, agent management, and fit recommendation (legitimately imports from `mission`, `memory`, and `handoff`; see Feature-specific exceptions)
 - `task` -- br-style issue graph for the daily loop (create, ready, claim, close); JSONL storage at `.maestro/tasks/tasks.jsonl`
-- `bundle` -- package a mission + its artifacts (plan, features, workers, replies, handoffs, principles, memory) as a portable `.mission.tar.gz` bundle; read-only aggregator (see Feature-specific exceptions)
+- `reply` -- worker reply ingest plus principle-gated outcome handling
+- `bundle` -- package a mission + its artifacts (plan, features, workers, replies, launches, principles, memory) as a portable `.mission.tar.gz` bundle; read-only aggregator (see Feature-specific exceptions)
 
 ### Public-surface rule
 Cross-feature imports MUST go through `@/features/<name>`, which resolves to that feature's `index.ts`. Deep paths across features are FORBIDDEN in both forms:
@@ -166,8 +167,8 @@ Enforced by `bun run check:boundaries`, which walks `src/features/*/**/*.ts` and
 All four live outside `src/features/*`, so the boundary-check glob never walks them; the exemption list is preserved defensively so the contract survives any future relocation.
 
 ### Feature-specific exceptions
-- `agent` may import from `mission`, `memory`, and `handoff` through their public surfaces. Rationale: agent composes prompts from mission context, memory hints, and prior handoff replay, so the cross-feature dependencies are essential, not incidental
-- `bundle` may import from `mission`, `reply`, `handoff`, and `session` through their public surfaces. Rationale: bundle is a read-only aggregator that snapshots every mission artifact into a portable archive; the cross-feature reads are the whole point of the feature
+- `agent` may import from `mission`, `memory`, and `handoff` through their public surfaces. Rationale: agent composes prompts from mission context, memory hints, and the native handoff launcher APIs, so the cross-feature dependencies are essential, not incidental
+- `bundle` may import from `mission`, `reply`, `handoff`, and `session` through their public surfaces. Rationale: bundle is a read-only aggregator that snapshots every mission artifact, including launches, into a portable archive; the cross-feature reads are the whole point of the feature
 - No other feature has exceptions. If a future feature needs an enforcement exception, add it explicitly in [scripts/check-feature-boundaries-lib.ts](/Users/reinamaccredy/Code/maestro/scripts/check-feature-boundaries-lib.ts) with matching tests and update this section in the same change
 
 ### Enforcement workflow
@@ -186,3 +187,47 @@ All four live outside `src/features/*`, so the boundary-check glob never walks t
 - Plumbing (init, doctor, config, git adapters) -- put it in `src/infra/`
 - Truly generic primitives with no domain knowledge (file I/O, YAML parsing, shell exec, sanitization) -- put it in `src/shared/lib/`
 - Cross-cutting type primitives (IDs, UI config) -- put it in `src/shared/domain/`
+
+<!-- gitnexus:start -->
+# GitNexus — Code Intelligence
+
+This project is indexed by GitNexus as **maestro** (6819 symbols, 12545 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+
+> If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
+
+## Always Do
+
+- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `gitnexus_impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
+- **MUST run `gitnexus_detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows.
+- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
+- When exploring unfamiliar code, use `gitnexus_query({query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
+- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `gitnexus_context({name: "symbolName"})`.
+
+## Never Do
+
+- NEVER edit a function, class, or method without first running `gitnexus_impact` on it.
+- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
+- NEVER rename symbols with find-and-replace — use `gitnexus_rename` which understands the call graph.
+- NEVER commit changes without running `gitnexus_detect_changes()` to check affected scope.
+
+## Resources
+
+| Resource | Use for |
+|----------|---------|
+| `gitnexus://repo/maestro/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/maestro/clusters` | All functional areas |
+| `gitnexus://repo/maestro/processes` | All execution flows |
+| `gitnexus://repo/maestro/process/{name}` | Step-by-step execution trace |
+
+## CLI
+
+| Task | Read this skill file |
+|------|---------------------|
+| Understand architecture / "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
+| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
+| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus/gitnexus-debugging/SKILL.md` |
+| Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
+| Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
+| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
+
+<!-- gitnexus:end -->

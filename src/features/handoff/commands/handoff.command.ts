@@ -1,745 +1,96 @@
-/**
- * `maestro handoff` command surface.
- */
-import { access } from "node:fs/promises";
-import { constants as fsConstants } from "node:fs";
-import { join } from "node:path";
 import type { Command } from "commander";
 import { getServices } from "@/services.js";
-import { output, resolveJsonFlag } from "@/shared/lib/output.js";
+import {
+  DEFAULT_HANDOFF_MODELS,
+  launchHandoff,
+  type HandoffProvider,
+} from "@/features/handoff";
 import { MaestroError } from "@/shared/errors.js";
-import type {
-  ExecuteUkiHandoffContent,
-  PlanUkiHandoffContent,
-  UkiHandoff,
-  UkiHandoffContent,
-  UkiHandoffContentBase,
-  UkiHandoffMode,
-  UkiHandoffStatus,
-  UkiMaestroRefs,
-  UkiVerificationResult,
-} from "../domain/uki-types.js";
-import { UKI_HANDOFF_MODES, UKI_HANDOFF_STATUSES } from "../domain/uki-types.js";
-import { createUkiHandoff } from "../usecases/create-uki-handoff.usecase.js";
-import { listUkiHandoffs } from "../usecases/list-uki-handoffs.usecase.js";
-import { pickupUkiHandoff } from "../usecases/pickup-uki-handoff.usecase.js";
-import type { Services } from "@/services.js";
-import { normalizeUkiToken, UKI_ANCHOR_PREFIXES } from "../lib/uki-token.js";
-import { evaluateGateCheck } from "@/shared/lib/gate-check.js";
-
-type CreateFormat = "json" | "paste" | "text" | "uki";
-type PickupFormat = "json" | "paste" | "uki";
-
-const HANDOFF_PASTE_PREAMBLE =
-  "Use the following UKI as the canonical handoff packet. Interpret each block literally and continue from NEXT_ACTION.";
-
-interface AutoCollectedContext {
-  readonly currentState: string;
-  readonly maestroRefs: UkiMaestroRefs;
-  readonly artifacts: readonly string[];
-  readonly readMore: readonly string[];
-  readonly planPaths: readonly string[];
-  readonly touchedFiles: readonly string[];
-}
+import { output, resolveJsonFlag } from "@/shared/lib/output.js";
 
 export function registerHandoffCommand(program: Command): void {
-  const handoffCmd = program
-    .command("handoff")
-    .description("Agent handoff lifecycle (create, pickup, list)")
-    .option("--json", "Output as JSON");
-
-  handoffCmd
-    .command("create")
-    .description("Create a new plan or execute handoff")
-    .requiredOption("--mode <mode>", "Handoff mode (plan | execute)")
-    .requiredOption("--session-core <text>", "SESSION_CORE transfer value")
-    .requiredOption("--summary <text>", "SUMMARY transfer value")
-    .requiredOption("--next-action <text>", "NEXT_ACTION transfer value")
-    .option("--current-state <text>", "CURRENT_STATE transfer value")
-    .option("--decision <text...>", "DECISIONS token (repeatable)")
-    .option("--signal <text...>", "SIGNAL_DELTA token (repeatable)")
-    .option("--artifact <text...>", "ARTIFACTS token (repeatable)")
-    .option("--read-more <text...>", "READ_MORE token (repeatable)")
-    .option("--risk <text...>", "RISKS token (repeatable)")
-    .option("--driver <text...>", "CAUSAL_DRIVERS token (repeatable)")
-    .option("--divergence <text...>", "DIVERGENCES token (repeatable)")
-    .option("--boundary <text...>", "BOUNDARY_STATE token (repeatable)")
-    .option("--plan-path-item <text...>", "PLAN_PATHS token (repeatable)")
-    .option("--maestro-sync <text...>", "MAESTRO_SYNC token (repeatable)")
-    .option("--touched-file <text...>", "TOUCHED_FILES token (repeatable)")
-    .option("--completed <text...>", "COMPLETED_WORK token (repeatable)")
-    .option("--validation <text...>", "VALIDATION token (repeatable)")
-    .option("--blind-spot <text>", "BLIND_SPOT transfer value")
-    .option("--metaphor <text>", "METAPHOR transfer value")
-    .option("--assumption <text...>", "Behavioral assumption (repeatable, principle gate field)")
-    .option("--scope-declaration <json>", "Scope declaration as JSON object (principle gate field)")
-    .option("--verification-result <text...>", "Verification result as step:passed|failed (repeatable)")
-    .option("--complexity-delta <json>", "Complexity delta as JSON object (principle gate field)")
-    .option("--mission-id <text>", "Token-safe Maestro mission reference")
-    .option("--feature-id <text>", "Token-safe Maestro feature reference")
-    .option("--milestone-id <text>", "Token-safe Maestro milestone reference")
-    .option("--plan-ref <text>", "Token-safe Maestro plan reference")
-    .option("--spec-ref <text>", "Token-safe Maestro spec reference")
-      .option("--confidence-work <number>", "CS.work (0..1)", parseFloatStrict)
-      .option("--confidence-summary <number>", "CS.summary (0..1)", parseFloatStrict)
-      .option("--agent <name>", "Override agent identity (default auto-detect)")
-      .option("--session-id <id>", "Override session id (default auto-detect)")
-      .option("--json", "Output as JSON")
-      .option("--uki", "Output only the raw UKI transfer string")
-      .option("--paste", "Output an agent-ready handoff prompt plus the raw UKI packet")
-      .action(async (opts) => {
-        const services = getServices();
-        const format = resolveCreateFormat(opts, program);
-        const content = await buildContentFromOptions(opts, services, process.cwd());
-
-        const gateEvaluation = await evaluateGatePrinciples(content, services);
-
-      const handoff = await createUkiHandoff(
-        services.handoffStore,
-        services.sessionDetect,
-        process.cwd(),
-        {
-          content,
-          agent: opts.agent,
-          sessionId: opts.sessionId,
-        },
-      );
-
-      // Record one pending outcome per gate that passed so reply ingest
-      // can later mark them helpful or unhelpful. Best-effort; recording
-      // failures must not block handoff creation.
-      if (gateEvaluation.passed.length > 0) {
-        const recordedAt = new Date().toISOString();
-        const missionId = content.maestroRefs.missionId;
-        const featureId = content.maestroRefs.featureId;
-        await Promise.all(
-          gateEvaluation.passed.map((principle) =>
-            services.principleStore.recordOutcome({
-              principleId: principle.id,
-              handoffId: handoff.id,
-              ...(missionId ? { missionId } : {}),
-              ...(featureId ? { featureId } : {}),
-              outcome: "pending",
-              recordedAt,
-            }),
-          ),
-        );
-      }
-
-      printCreate(handoff, format);
-    });
-
-  handoffCmd
-    .command("pickup")
-      .description("Pick up the latest pending handoff (or a specific one by id)")
-      .option("--id <id>", "Specific handoff id to pick up")
-      .option("--claim", "Transition pending -> picked-up (atomic claim)")
-      .option("--agent <name>", "pickedUpBy attribution when --claim is set")
-      .option("--json", "Output as JSON")
-      .option("--uki", "Output the raw UKI transfer string (default)")
-      .option("--paste", "Output an agent-ready handoff prompt plus the raw UKI packet")
-      .action(async (opts) => {
-        const services = getServices();
-        const format = resolvePickupFormat(opts, program);
-
-      const handoff = await pickupUkiHandoff(services.handoffStore, {
-        id: opts.id,
-        claim: Boolean(opts.claim),
-        pickedUpBy: opts.agent,
-      });
-
-      printPickup(handoff, format);
-    });
-
-  handoffCmd
-    .command("list")
-    .description("List handoffs, optionally filtered by status")
-    .option("--status <status>", "Filter by status (pending | picked-up | completed)")
+  program
+    .command("handoff <task>")
+    .description("Launch a fresh Codex or Claude handoff with a self-contained markdown briefing")
+    .option("--provider <provider>", "Provider (codex|claude)", "codex")
+    .option("--model <model>", "Override the provider default model")
+    .option("--worktree [slug]", "Create and use a sibling git worktree for the handoff")
+    .option("--base <branch>", "Base branch to use with --worktree")
+    .option("--name <title>", "Display name for the launched session")
+    .option("--wait", "Wait for the external agent to finish before returning")
     .option("--json", "Output as JSON")
-    .action(async (opts) => {
+    .action(async (task: string, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const status = opts.status ? assertHandoffStatus(opts.status) : undefined;
-      const handoffs = await listUkiHandoffs(services.handoffStore, { status });
-      output(isJson, handoffs, formatHandoffList);
+      const provider = parseProvider(opts.provider);
+      const result = await launchHandoff({
+        missionStore: services.missionStore,
+        featureStore: services.featureStore,
+        assertionStore: services.assertionStore,
+        git: services.git,
+        launchStore: services.launchStore,
+        launchers: services.handoffLaunchers,
+      }, {
+        cwd: process.cwd(),
+        task,
+        provider,
+        model: typeof opts.model === "string" ? opts.model : undefined,
+        name: typeof opts.name === "string" ? opts.name : undefined,
+        wait: Boolean(opts.wait),
+        worktree: opts.worktree as string | boolean | undefined,
+        baseBranch: typeof opts.base === "string" ? opts.base : undefined,
+      });
+
+      output(isJson, result.record, (record) => formatLaunchRecord(record, provider));
     });
 }
 
-async function buildContentFromOptions(
-  opts: Record<string, unknown>,
-  services: Services,
-  cwd: string,
-): Promise<UkiHandoffContent> {
-  const mode = assertHandoffMode(String(opts.mode));
-  const auto = await collectAutoContext(services, cwd, mode);
-  const confidenceWork = opts.confidenceWork as number | undefined;
-  const confidenceSummary = opts.confidenceSummary as number | undefined;
-
-  if (confidenceWork === undefined && confidenceSummary === undefined) {
-    throw new MaestroError(
-      "At least one of --confidence-work or --confidence-summary is required",
-      ["UKI transfer strings must carry at least one confidence score"],
-    );
+function parseProvider(value: unknown): HandoffProvider {
+  if (value === "codex" || value === "claude") {
+    return value;
   }
 
-  const maestroRefs = {
-    ...auto.maestroRefs,
-    ...(typeof opts.missionId === "string" && opts.missionId.length > 0
-      ? { missionId: normalizeUkiToken(opts.missionId) }
-      : {}),
-    ...(typeof opts.featureId === "string" && opts.featureId.length > 0 ? { featureId: opts.featureId } : {}),
-    ...(typeof opts.milestoneId === "string" && opts.milestoneId.length > 0 ? { milestoneId: opts.milestoneId } : {}),
-    ...(typeof opts.planRef === "string" && opts.planRef.length > 0 ? { planPath: opts.planRef } : {}),
-    ...(typeof opts.specRef === "string" && opts.specRef.length > 0 ? { specPath: opts.specRef } : {}),
-  } satisfies UkiMaestroRefs;
-
-  const base = buildBaseContent(opts, auto, mode, maestroRefs, {
-    confidenceWork,
-    confidenceSummary,
-  });
-
-  if (mode === "plan") {
-    return buildPlanContent(base, auto, opts);
-  }
-
-  return buildExecuteContent(base, auto, opts);
-}
-
-function buildBaseContent(
-  opts: Record<string, unknown>,
-  auto: AutoCollectedContext,
-  mode: UkiHandoffMode,
-  maestroRefs: UkiMaestroRefs,
-  confidence: {
-    readonly confidenceWork?: number;
-    readonly confidenceSummary?: number;
-  },
-): UkiHandoffContentBase {
-  return {
-    mode,
-    currentState: typeof opts.currentState === "string" && opts.currentState.length > 0
-      ? opts.currentState
-      : auto.currentState,
-    sessionCore: String(opts.sessionCore),
-    decisions: toStringArray(opts.decision),
-    artifacts: uniqueTokens([...auto.artifacts, ...toStringArray(opts.artifact)]),
-    readMore: uniqueTokens([...auto.readMore, ...toStringArray(opts.readMore)]),
-    nextAction: String(opts.nextAction),
-    summary: String(opts.summary),
-    maestroRefs,
-    cs: {
-      ...(confidence.confidenceWork !== undefined ? { work: confidence.confidenceWork } : {}),
-      ...(confidence.confidenceSummary !== undefined ? { summary: confidence.confidenceSummary } : {}),
-    },
-    signalDelta: toStringArray(opts.signal),
-    boundaryState: toStringArray(opts.boundary),
-    risks: toStringArray(opts.risk),
-    blindSpot: typeof opts.blindSpot === "string" && opts.blindSpot.length > 0
-      ? opts.blindSpot
-      : undefined,
-    metaphor: typeof opts.metaphor === "string" && opts.metaphor.length > 0
-      ? opts.metaphor
-      : undefined,
-    causalDrivers: toStringArray(opts.driver),
-    divergences: toStringArray(opts.divergence),
-    ...buildPrincipleGateFields(opts),
-  };
-}
-
-function buildPlanContent(
-  base: UkiHandoffContentBase,
-  auto: AutoCollectedContext,
-  opts: Record<string, unknown>,
-): PlanUkiHandoffContent {
-  return {
-    ...base,
-    mode: "plan",
-    planPaths: uniqueTokens([...auto.planPaths, ...toStringArray(opts.planPathItem)]),
-    maestroSync: toStringArray(opts.maestroSync),
-  };
-}
-
-function buildExecuteContent(
-  base: UkiHandoffContentBase,
-  auto: AutoCollectedContext,
-  opts: Record<string, unknown>,
-): ExecuteUkiHandoffContent {
-  return {
-    ...base,
-    mode: "execute",
-    touchedFiles: uniqueTokens([...auto.touchedFiles, ...toStringArray(opts.touchedFile)]),
-    completedWork: toStringArray(opts.completed),
-    validation: toStringArray(opts.validation),
-  };
-}
-
-async function collectAutoContext(
-  services: Services,
-  cwd: string,
-  mode: UkiHandoffMode,
-): Promise<AutoCollectedContext> {
-  const [gitState, missionRefs, planPaths] = await Promise.all([
-    collectGitContext(services, cwd),
-    collectMissionRefs(services),
-    mode === "plan" ? collectKnownPlanPaths(cwd) : Promise.resolve<readonly string[]>([]),
+  throw new MaestroError(`Invalid --provider '${String(value)}'`, [
+    "Valid providers: codex, claude",
+    `Defaults: codex=${DEFAULT_HANDOFF_MODELS.codex}, claude=${DEFAULT_HANDOFF_MODELS.claude}`,
   ]);
-
-  const artifacts = uniqueTokens([
-    ...gitState.artifacts,
-    ...planPaths.map((token) => `${UKI_ANCHOR_PREFIXES.file}${token}`),
-  ]);
-
-  if (missionRefs.missionId) {
-    artifacts.push(`${UKI_ANCHOR_PREFIXES.mission}${missionRefs.missionId}`);
-  }
-
-  const readMore = mode === "plan"
-    ? uniqueTokens(planPaths.length > 0 ? planPaths : gitState.readMore)
-    : uniqueTokens(gitState.readMore);
-
-  return {
-    currentState: mode === "plan" ? "plan_ready" : "execute_in_progress",
-    maestroRefs: missionRefs,
-    artifacts: uniqueTokens(artifacts),
-    readMore,
-    planPaths,
-    touchedFiles: gitState.touchedFiles,
-  };
 }
 
-async function collectGitContext(
-  services: Services,
-  cwd: string,
-): Promise<{
-  readonly artifacts: readonly string[];
-  readonly readMore: readonly string[];
-  readonly touchedFiles: readonly string[];
-  }> {
-  try {
-    const state = await services.git.getState(cwd);
-    if (
-      state.branch === "HEAD"
-      && state.recentCommits.length === 0
-      && state.changedFiles.length === 0
-      && state.diffStat === "+0 -0"
-    ) {
-      return { artifacts: [], readMore: [], touchedFiles: [] };
-    }
-    const touchedFiles = state.changedFiles.map((file) => `${UKI_ANCHOR_PREFIXES.file}${normalizeUkiToken(file)}`);
-    const branchArtifact = state.branch.length > 0
-      ? [`${UKI_ANCHOR_PREFIXES.branch}${normalizeUkiToken(state.branch)}`]
-      : [];
-    const readMore = touchedFiles.length > 0 ? touchedFiles.slice(0, 5) : branchArtifact;
-
-    return {
-      artifacts: uniqueTokens([...branchArtifact, ...touchedFiles]),
-      readMore: uniqueTokens(readMore),
-      touchedFiles: uniqueTokens(touchedFiles),
-    };
-  } catch {
-    return { artifacts: [], readMore: [], touchedFiles: [] };
-  }
-}
-
-async function collectMissionRefs(services: Services): Promise<UkiMaestroRefs> {
-  try {
-    const missions = await services.missionStore.list();
-    const active = missions.find((mission) =>
-      mission.status === "executing"
-      || mission.status === "validating"
-      || mission.status === "approved"
-      || mission.status === "paused",
-    );
-
-    if (!active) {
-      return {};
-    }
-
-    const features = await services.featureStore.list(active.id);
-    const actionableFeatures = features.filter((feature) =>
-      feature.status === "assigned"
-      || feature.status === "in-progress"
-      || feature.status === "review"
-      || feature.status === "pending",
-    );
-    const autoFeatureId = actionableFeatures.length === 1
-      ? actionableFeatures[0]?.id
-      : undefined;
-
-    return {
-      missionId: normalizeUkiToken(active.id),
-      ...(autoFeatureId ? { featureId: autoFeatureId } : {}),
-    };
-  } catch {
-    return {};
-  }
-}
-
-async function collectKnownPlanPaths(cwd: string): Promise<readonly string[]> {
-  const candidates = ["PLAN.md"];
-  const found = await Promise.all(candidates.map(async (candidate) =>
-    await pathExists(join(cwd, candidate))
-      ? normalizeUkiToken(candidate)
-      : undefined
-  ));
-  return found.filter((candidate): candidate is string => candidate !== undefined);
-}
-
-async function pathExists(path: string): Promise<boolean> {
-  try {
-    await access(path, fsConstants.F_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function uniqueTokens(values: readonly string[]): string[] {
-  return [...new Set(values.filter((value) => value.length > 0))];
-}
-
-function toStringArray(value: unknown): readonly string[] {
-  if (value === undefined || value === null) return [];
-  if (Array.isArray(value)) {
-    return value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0);
-  }
-  if (typeof value === "string") return [value];
-  return [];
-}
-
-function parseFloatStrict(raw: string): number {
-  const value = Number(raw);
-  if (!Number.isFinite(value)) {
-    throw new MaestroError(`Not a finite number: ${raw}`, [
-      "Confidence values must be numeric, e.g. --confidence-work 0.95",
-    ]);
-  }
-  return value;
-}
-
-function resolveCreateFormat(
-  opts: Record<string, unknown>,
-  program: { opts(): Record<string, unknown> },
-): CreateFormat {
-  return resolveHandoffFormat(opts, program, {
-    command: "create",
-    defaultFormat: "text",
-  }) as CreateFormat;
-}
-
-function resolvePickupFormat(
-  opts: Record<string, unknown>,
-  program: { opts(): Record<string, unknown> },
-): PickupFormat {
-  return resolveHandoffFormat(opts, program, {
-    command: "pickup",
-    defaultFormat: "uki",
-  }) as PickupFormat;
-}
-
-function resolveHandoffFormat(
-  opts: Record<string, unknown>,
-  program: { opts(): Record<string, unknown> },
-  config: {
-    readonly command: "create" | "pickup";
-    readonly defaultFormat: CreateFormat | PickupFormat;
+function formatLaunchRecord(
+  record: {
+    readonly id: string;
+    readonly provider: HandoffProvider;
+    readonly model: string;
+    readonly status: string;
+    readonly targetDir: string;
+    readonly promptPath: string;
+    readonly outputPath: string;
+    readonly worktree?: { readonly branch: string; readonly baseBranch: string; readonly path: string };
+    readonly pid?: number;
+    readonly exitCode?: number;
   },
-): CreateFormat | PickupFormat {
-  const flags = [Boolean(opts.uki), Boolean(opts.json), Boolean(opts.paste)];
-  if (flags.filter(Boolean).length > 1) {
-    throw new MaestroError("--json, --uki, and --paste are mutually exclusive", [
-      `Pick one output format for maestro handoff ${config.command}`,
-    ]);
-  }
-  if (opts.paste) return "paste";
-  if (opts.uki) return "uki";
-  if (opts.json || resolveJsonFlag(opts, program)) return "json";
-  return config.defaultFormat;
-}
-
-function printCreate(handoff: UkiHandoff, format: CreateFormat): void {
-  if (format === "uki") {
-    console.log(handoff.uki);
-    return;
-  }
-  if (format === "paste") {
-    console.log(formatHandoffPaste(handoff.uki));
-    return;
-  }
-  output(format === "json", handoff, formatHandoffCreate);
-}
-
-function printPickup(handoff: UkiHandoff, format: PickupFormat): void {
-  if (format === "uki") {
-    console.log(handoff.uki);
-    return;
-  }
-  if (format === "paste") {
-    console.log(formatHandoffPaste(handoff.uki));
-    return;
-  }
-  console.log(JSON.stringify(handoff, null, 2));
-}
-
-function formatHandoffPaste(uki: string): string {
-  return `${HANDOFF_PASTE_PREAMBLE}\n\n${uki}`;
-}
-
-function formatHandoffCreate(handoff: UkiHandoff): string[] {
-  return [
-    `[ok] Handoff created: ${handoff.id}`,
-    `  Mode: ${handoff.content.mode}`,
-    `  Agent: ${handoff.agent}`,
-    `  Session: ${handoff.sessionId}`,
-    `  Status: ${handoff.status}`,
-    "",
-    "UKI v5.4 string:",
-    handoff.uki,
+  provider: HandoffProvider,
+): string[] {
+  const lines = [
+    `[ok] Handoff launched: ${record.id}`,
+    `  Provider: ${provider}/${record.model}`,
+    `  Status: ${record.status}`,
+    `  Target: ${record.targetDir}`,
+    `  Prompt: ${record.promptPath}`,
+    `  Log: ${record.outputPath}`,
   ];
-}
 
-function formatHandoffList(handoffs: readonly UkiHandoff[]): string[] {
-  if (handoffs.length === 0) {
-    return ["No handoffs found"];
+  if (record.worktree) {
+    lines.push(`  Worktree: ${record.worktree.path} (${record.worktree.branch} from ${record.worktree.baseBranch})`);
   }
 
-  const lines = [`${handoffs.length} handoff(s)`, ""];
-  for (const handoff of handoffs) {
-    lines.push(
-      `${handoff.id}  ${handoff.status.padEnd(10)}  ${handoff.content.mode.padEnd(7)}  ${handoff.content.summary.slice(0, 60)}`,
-    );
+  if (record.pid !== undefined) {
+    lines.push(`  PID: ${record.pid}`);
   }
+
+  if (record.exitCode !== undefined) {
+    lines.push(`  Exit code: ${record.exitCode}`);
+  }
+
   return lines;
-}
-
-function buildPrincipleGateFields(
-  opts: Record<string, unknown>,
-): Pick<UkiHandoffContentBase, "assumptions" | "scopeDeclaration" | "complexityDelta" | "verificationResults"> {
-  const result: Record<string, unknown> = {};
-
-  const assumptions = toStringArray(opts.assumption);
-  if (assumptions.length > 0) {
-    result.assumptions = assumptions;
-  }
-
-  const scope = parseStringRecordOption("--scope-declaration", opts.scopeDeclaration);
-  if (scope) result.scopeDeclaration = scope;
-
-  const complexity = parseJsonOption("--complexity-delta", opts.complexityDelta);
-  if (complexity) result.complexityDelta = complexity;
-
-  const rawResults = toStringArray(opts.verificationResult);
-  if (rawResults.length > 0) {
-    result.verificationResults = rawResults.map(parseVerificationResult);
-  }
-
-  return result as Pick<UkiHandoffContentBase, "assumptions" | "scopeDeclaration" | "complexityDelta" | "verificationResults">;
-}
-
-function parseJsonOption(flag: string, raw: unknown): Record<string, unknown> | undefined {
-  if (typeof raw !== "string" || raw.length === 0) return undefined;
-  try {
-    return JSON.parse(raw) as Record<string, unknown>;
-  } catch {
-    throw new MaestroError(`${flag} must be valid JSON`, [
-      `Example: ${flag} '{"key":"value"}'`,
-    ]);
-  }
-}
-
-function parseStringRecordOption(
-  flag: string,
-  raw: unknown,
-): Record<string, string> | undefined {
-  const parsed = parseJsonOption(flag, raw);
-  if (!parsed) return undefined;
-  const stringRecord: Record<string, string> = {};
-  for (const [key, value] of Object.entries(parsed)) {
-    if (typeof value !== "string") {
-      throw new MaestroError(`${flag} values must be strings`, [
-        `Invalid value for key '${key}'`,
-        `Example: ${flag} '{"touched":"src/foo.ts"}'`,
-      ]);
-    }
-    stringRecord[key] = value;
-  }
-  return stringRecord;
-}
-
-function parseVerificationResult(raw: string): UkiVerificationResult {
-  const colonIdx = raw.lastIndexOf(":");
-  if (colonIdx === -1) {
-    throw new MaestroError(`Invalid --verification-result format: ${raw}`, [
-      "Expected: step_name:passed or step_name:failed",
-      'Example: --verification-result "build:passed" --verification-result "lint:failed"',
-    ]);
-  }
-  const step = raw.slice(0, colonIdx);
-  const outcome = raw.slice(colonIdx + 1);
-  if (outcome !== "passed" && outcome !== "failed") {
-    throw new MaestroError(`Invalid verification outcome '${outcome}' in: ${raw}`, [
-      "Outcome must be 'passed' or 'failed'",
-    ]);
-  }
-  return { step, passed: outcome === "passed" };
-}
-
-interface GateEvaluationResult {
-  readonly passed: readonly import("@/features/mission").Principle[];
-  readonly failed: readonly string[];
-}
-
-/**
- * Evaluate every gate principle attached to this handoff's profile.
- * Throws on failure with the aggregated failure list. On success, returns
- * the list of passed principles so the caller can record pending outcomes.
- */
-async function evaluateGatePrinciples(
-  content: UkiHandoffContent,
-  services: Services,
-): Promise<GateEvaluationResult> {
-  const { maestroRefs } = content;
-  if (!maestroRefs.missionId) {
-    return { passed: [], failed: [] };
-  }
-
-  if (!maestroRefs.featureId) {
-    throw new MaestroError(
-      "Mission-linked handoffs require a feature ref for gate validation",
-      [
-        "Pass --feature-id explicitly, or run the command from a mission with exactly one actionable feature",
-      ],
-    );
-  }
-
-  const mission = await resolveMissionRef(services, maestroRefs.missionId);
-  const feature = await resolveFeatureRef(services, mission.id, maestroRefs.featureId);
-  const milestone = mission.milestones.find((candidate) => candidate.id === feature.milestoneId);
-  if (!milestone) {
-    throw new MaestroError(
-      `Feature '${feature.id}' references missing milestone '${feature.milestoneId}'`,
-      [`Mission '${mission.id}' is inconsistent; repair mission data before creating a handoff`],
-    );
-  }
-
-  const profile = milestone.profile;
-  if (!profile) return { passed: [], failed: [] };
-
-  const principles = await loadPrinciplesForProfile(services, profile);
-
-  const gates = principles.filter(
-    (p): p is import("@/features/mission").Principle & { readonly gateField: string; readonly gateCheck: string } =>
-      p.mode === "gate" && p.gateField !== undefined && p.gateCheck !== undefined,
-  );
-  if (gates.length === 0) return { passed: [], failed: [] };
-
-  const contentRecord = content as unknown as Record<string, unknown>;
-  const passed: import("@/features/mission").Principle[] = [];
-  const failures: string[] = [];
-  for (const gate of gates) {
-    if (evaluateGateCheck(gate.gateCheck, contentRecord[gate.gateField])) {
-      passed.push(gate);
-    } else {
-      failures.push(`${gate.name}: field '${gate.gateField}' failed check '${gate.gateCheck}'`);
-    }
-  }
-
-  if (failures.length > 0) {
-    throw new MaestroError(
-      `Handoff rejected by ${failures.length} gate principle(s)`,
-      [
-        ...failures.map((f) => `  [x] ${f}`),
-        "Add the required fields via CLI flags (--assumption, --scope-declaration, --verification-result)",
-        "Or use 'maestro principle list --profile <profile>' to see active gates",
-      ],
-    );
-  }
-
-  return { passed, failed: failures };
-}
-
-async function resolveMissionRef(
-  services: Services,
-  missionRef: string,
-): Promise<import("@/features/mission").Mission> {
-  try {
-    const direct = await services.missionStore.get(missionRef);
-    if (direct) {
-      return direct;
-    }
-
-    const missionIds = await services.missionStore.listIds();
-    const matchedId = missionIds.find((candidateId) => normalizeUkiToken(candidateId) === missionRef);
-    if (!matchedId) {
-      throw new MaestroError(`Mission ref '${missionRef}' could not be resolved for gate validation`, [
-        "Use a real mission id or allow the command to auto-collect refs",
-      ]);
-    }
-
-    const mission = await services.missionStore.get(matchedId);
-    if (!mission) {
-      throw new MaestroError(`Mission '${matchedId}' disappeared during gate validation`, [
-        "Retry the command after refreshing mission state",
-      ]);
-    }
-
-    return mission;
-  } catch (error) {
-    if (error instanceof MaestroError) throw error;
-    throw new MaestroError("Failed to load mission data for gate validation", [
-      error instanceof Error ? error.message : String(error),
-    ]);
-  }
-}
-
-async function resolveFeatureRef(
-  services: Services,
-  missionId: string,
-  featureId: string,
-): Promise<import("@/features/mission").Feature> {
-  try {
-    const feature = await services.featureStore.get(missionId, featureId);
-    if (!feature) {
-      throw new MaestroError(`Feature '${featureId}' not found in mission '${missionId}' for gate validation`, [
-        `List features: maestro feature list --mission ${missionId}`,
-      ]);
-    }
-    return feature;
-  } catch (error) {
-    if (error instanceof MaestroError) throw error;
-    throw new MaestroError("Failed to load feature data for gate validation", [
-      error instanceof Error ? error.message : String(error),
-    ]);
-  }
-}
-
-async function loadPrinciplesForProfile(
-  services: Services,
-  profile: import("@/features/mission").MilestoneProfile,
-): Promise<readonly import("@/features/mission").Principle[]> {
-  try {
-    return await services.principleStore.listByProfile(profile);
-  } catch (error) {
-    throw new MaestroError(`Failed to load active principles for profile '${profile}'`, [
-      error instanceof Error ? error.message : String(error),
-    ]);
-  }
-}
-
-function assertHandoffMode(raw: string): UkiHandoffMode {
-  if ((UKI_HANDOFF_MODES as readonly string[]).includes(raw)) {
-    return raw as UkiHandoffMode;
-  }
-  throw new MaestroError(`Invalid --mode: ${raw}`, [
-    `Allowed values: ${UKI_HANDOFF_MODES.join(" | ")}`,
-  ]);
-}
-
-function assertHandoffStatus(raw: string): UkiHandoffStatus {
-  if ((UKI_HANDOFF_STATUSES as readonly string[]).includes(raw)) {
-    return raw as UkiHandoffStatus;
-  }
-  throw new MaestroError(`Invalid --status: ${raw}`, [
-    `Allowed values: ${UKI_HANDOFF_STATUSES.join(" | ")}`,
-  ]);
 }

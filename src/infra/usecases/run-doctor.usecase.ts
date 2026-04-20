@@ -2,6 +2,7 @@ import type { GitPort } from "../ports/git.port.js";
 import type { ConfigPort } from "../ports/config.port.js";
 import { listIgnoredProjectConfigKeys } from "@/shared/domain/ui-config.js";
 import type { DoctorCheck } from "@/infra/domain/status-types.js";
+import { countLegacyHandoffFiles } from "@/features/handoff";
 
 /**
  * Phase 1 strip: CASS and worker-transport checks were removed. The
@@ -13,12 +14,13 @@ export async function runDoctor(
   config: ConfigPort,
   dir: string,
 ): Promise<DoctorCheck[]> {
-  const [gitAvailable, projectConfig, globalConfig, configLayers] =
+  const [gitAvailable, projectConfig, globalConfig, configLayers, legacyHandoffCount] =
     await Promise.all([
       git.isRepo(dir),
       config.exists("project", dir),
       config.exists("global", dir),
       config.loadLayers(dir),
+      countLegacyHandoffFiles(dir),
     ]);
 
   const doctorChecks: DoctorCheck[] = [
@@ -48,6 +50,15 @@ export async function runDoctor(
       status: "warn",
       message: `${keyPath} is set in project config but only global config is used`,
       fix: "Remove the project value or set it in ~/.maestro/config.yaml instead",
+    });
+  }
+
+  if (legacyHandoffCount > 0) {
+    doctorChecks.push({
+      name: "legacy-handoffs",
+      status: "warn",
+      message: `Found ${legacyHandoffCount} legacy handoff artifact(s) under .maestro/handoffs/`,
+      fix: "Review or remove the old files manually. Maestro now writes launch artifacts to .maestro/launches/",
     });
   }
 

@@ -32,7 +32,6 @@ function makeSnapshot(): MissionControlSnapshot {
     features: [],
     taskPreviews: [],
     session: null,
-    pendingHandoffs: [],
     configSummary: null,
     configInspector: null,
     progressLog: [],
@@ -91,7 +90,6 @@ describe("captureMissionControlFrame", () => {
       features: [],
       taskPreviews: [],
       session: null,
-      pendingHandoffs: [],
       configSummary: {
         configSource: "global",
         gitAvailable: true,
@@ -344,30 +342,33 @@ describe("captureMissionControlFrame", () => {
         agentTypes: [],
         backgroundMode: "terminal",
       },
-        pendingHandoffs: [
-          {
-            id: "handoff-1",
-            agent: "codex",
-            message: "Investigate handoff",
-            timestamp: "2026-04-15T00:00:00.000Z",
-          },
-        ],
-      };
-    const handoffState = reduce(
+      agentGrid: [
+        {
+          agentType: "codex",
+          status: "active",
+          activeFeatureId: "f1",
+          activeFeatureTitle: "Feature 1",
+          lastActivityAt: "2026-04-15T00:00:00.000Z",
+          featureCount: 1,
+          completedCount: 0,
+        },
+      ],
+    };
+    const agentState = reduce(
       reduce(createInitialState(snapshot), { type: "open-command-palette" }),
-      { type: "open-handoffs" },
+      { type: "open-agent-grid" },
     );
     const render = await captureMissionControlRender({
       snapshot,
-      state: handoffState,
+      state: agentState,
       width: 120,
       height: 40,
     });
 
-    const selectedLine = render.spans.lines.find((line) => line.spans.some((span) => span.text.includes("handoff-1")));
+    const selectedLine = render.spans.lines.find((line) => line.spans.some((span) => span.text.includes("Codex")));
     expect(selectedLine).toBeDefined();
 
-    const selectedLabelSpan = selectedLine!.spans.find((span) => span.text.includes("handoff-1"));
+    const selectedLabelSpan = selectedLine!.spans.find((span) => span.text.includes("Codex"));
     expect(selectedLabelSpan).toBeDefined();
 
     expect(selectedLabelSpan!.bg.buffer[0]).toBe(1);

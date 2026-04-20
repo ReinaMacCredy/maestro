@@ -55,7 +55,6 @@ export function keyToAction(key: Key, state: AppState): Action | undefined {
             state.modal.kind === "feature-browser"
             || state.modal.kind === "dependencies"
             || state.modal.kind === "overview"
-            || state.modal.kind === "handoffs"
               || state.modal.kind === "config"
               || state.modal.kind === "memory"
               || state.modal.kind === "graph"

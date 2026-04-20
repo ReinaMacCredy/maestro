@@ -1,12 +1,22 @@
-import type { HandoffStorePort } from "./ports/handoff-store.port.js";
-import { FsHandoffStoreAdapter } from "./adapters/handoff-store.adapter.js";
+import type { HandoffLaunchPort, LaunchStorePort } from "./domain/launch-types.js";
+import { ClaudeHandoffLaunchAdapter } from "./adapters/claude-handoff-launch.adapter.js";
+import { CodexHandoffLaunchAdapter } from "./adapters/codex-handoff-launch.adapter.js";
+import { FsLaunchStoreAdapter } from "./adapters/launch-store.adapter.js";
 
 export interface HandoffServices {
-  readonly handoffStore: HandoffStorePort;
+  readonly launchStore: LaunchStorePort;
+  readonly handoffLaunchers: {
+    readonly codex: HandoffLaunchPort;
+    readonly claude: HandoffLaunchPort;
+  };
 }
 
 export function buildHandoffServices(projectDir: string): HandoffServices {
   return {
-    handoffStore: new FsHandoffStoreAdapter(projectDir),
+    launchStore: new FsLaunchStoreAdapter(projectDir),
+    handoffLaunchers: {
+      codex: new CodexHandoffLaunchAdapter(),
+      claude: new ClaudeHandoffLaunchAdapter(),
+    },
   };
 }

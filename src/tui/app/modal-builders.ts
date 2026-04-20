@@ -23,7 +23,6 @@ import {
 import { getValidFeatureTransitions } from "@/features/mission";
 import { TASK_STATUSES } from "@/features/task";
 import { FEATURE_STATUS_LABEL, FEATURE_TASK_STATUS_LABEL, TASK_STATUS_COLUMN_LABEL, AGENT_STATUS_LABEL } from "../theme.js";
-import { shortenSessionId } from "../session-id.js";
 import { GRAPH_DIR } from "@/shared/domain/defaults.js";
   import {
     getConfigRowsForTab,
@@ -161,28 +160,6 @@ export function buildModalOptions(state: AppState): ModalOptions | undefined {
           footer: state.modal.returnTarget === "command-palette" ? "Left back · Esc close" : "Esc close",
           returnTarget,
           renderSpec: buildOverlayRenderSpec("overview"),
-        };
-    }
-
-    if (state.modal.kind === "handoffs") {
-      const items = state.snapshot.pendingHandoffs.map((handoff) => ({
-        label: `${handoff.id} · ${handoff.agent}`,
-      }));
-      const selectedHandoff = state.snapshot.pendingHandoffs[state.modal.selectedHandoffIndex];
-      return {
-        mode: "split",
-        title: "Handoffs",
-        eyebrow: state.snapshot.pendingHandoffs.length > 0
-          ? `${state.snapshot.pendingHandoffs.length} pending`
-          : "No pending handoffs",
-        items: items.length > 0
-          ? items
-          : [{ label: "No pending handoffs in this workspace.", selectable: false, tone: "muted" }],
-          selectedIndex: Math.min(state.modal.selectedHandoffIndex, Math.max(0, items.length - 1)),
-          detailItems: buildHandoffDetailItems(selectedHandoff),
-          footer: buildOverlayFooter(state.modal.returnTarget, "Enter inspect"),
-          returnTarget,
-          renderSpec: buildOverlayRenderSpec("handoffs"),
         };
     }
 
@@ -403,9 +380,6 @@ function buildAgentGridModal(
             ? [{ text: `Active: ${selected.activeFeatureId}`, detail: selected.activeFeatureTitle }]
             : []),
           { text: `Progress: ${selected.completedCount}/${selected.featureCount} features done` },
-          ...(selected.pendingHandoffCount > 0
-            ? [{ text: `Pending handoffs: ${selected.pendingHandoffCount}` }]
-            : []),
           ...(selected.lastActivityAt
             ? [{ text: `Last activity: ${new Date(selected.lastActivityAt).toLocaleString()}`, tone: "muted" as const }]
             : []),
@@ -590,7 +564,7 @@ function buildPrincipleReviewModal(
   const rows = state.snapshot.principleEffectiveness ?? [];
   const selected = rows[state.modal.selectedIndex];
   const eyebrow = rows.length === 0
-    ? "No principle outcomes recorded yet. Create a handoff that passes gates, then reply to see scores."
+    ? "No principle outcomes recorded yet. Launch work and ingest replies to score principles."
     : "Sorted worst-first. [GATE] = gating principle, [adv] = advisory. Pending outcomes wait for reply.";
 
   return {
@@ -624,7 +598,7 @@ function buildPrincipleReviewModal(
               : `Effectiveness: ${selected.effectivenessPct}% (${selected.helpful} helpful / ${selected.helpful + selected.unhelpful} decided)`,
           },
           ...(selected.pending > 0
-            ? [{ text: `Pending: ${selected.pending} handoff(s) awaiting a reply`, tone: "muted" as const }]
+            ? [{ text: `Pending: ${selected.pending} launch outcome(s) awaiting a reply`, tone: "muted" as const }]
             : []),
           ...(selected.lowSample
             ? [{
@@ -1627,27 +1601,12 @@ function buildDependencyDetailItems(preview: TaskPreviewPane) {
   ];
 }
 
-function buildHandoffDetailItems(handoff: MissionControlSnapshot["pendingHandoffs"][number] | undefined) {
-  if (!handoff) {
-    return [{ text: "No pending handoff selected", tone: "muted" as const }];
-  }
-
-  return [
-    { text: `${handoff.agent} handoff`, tone: "accent" as const, style: "block" as const },
-    { text: handoff.message, section: "message" },
-    { text: handoff.sessionId ? `${handoff.agent} · ${shortenSessionId(handoff.sessionId)}` : handoff.agent, section: "session" },
-    ...(handoff.sitrep ? [{ text: handoff.sitrep, section: "sitrep" as const }] : []),
-    ...(handoff.quickstart ? [{ text: handoff.quickstart, section: "quickstart" as const }] : []),
-  ];
-}
-
 function formatTaskStatus(status: keyof typeof FEATURE_TASK_STATUS_LABEL): string {
   return FEATURE_TASK_STATUS_LABEL[status].toLowerCase();
 }
 
-export function isSelectableListModal(kind: AppState["modal"]["kind"]): kind is "feature-browser" | "handoffs" | "dependencies" | "memory" | "graph" | "agent-grid" | "dispatch" | "event-stream" | "task-board" | "timeline" {
+export function isSelectableListModal(kind: AppState["modal"]["kind"]): kind is "feature-browser" | "dependencies" | "memory" | "graph" | "agent-grid" | "dispatch" | "event-stream" | "task-board" | "timeline" {
   return kind === "feature-browser"
-    || kind === "handoffs"
     || kind === "dependencies"
     || kind === "memory"
     || kind === "graph"
@@ -1709,8 +1668,6 @@ export function actionForMissionControlCommand(id: MissionControlCommandId): Act
       return { type: "open-features" };
     case "dependencies":
       return { type: "open-dependencies" };
-    case "handoffs":
-      return { type: "open-handoffs" };
     case "config":
       return { type: "open-config" };
     case "memory":

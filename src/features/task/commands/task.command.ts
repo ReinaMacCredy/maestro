@@ -12,7 +12,7 @@ import { claimTask } from "../usecases/claim-task.usecase.js";
 import { unclaimTask } from "../usecases/unclaim-task.usecase.js";
 import { blockTasks, unblockTasks } from "../usecases/manage-task-blockers.usecase.js";
 import { releaseOwnedTasks } from "../usecases/release-owned-tasks.usecase.js";
-import { readyTasks } from "../usecases/ready-tasks.usecase.js";
+import { readyTaskPage, readyTasks } from "../usecases/ready-tasks.usecase.js";
 import { captureTaskCandidate } from "../usecases/capture-task-candidate.usecase.js";
 import { planTasks } from "../usecases/plan-tasks.usecase.js";
 import type {
@@ -40,6 +40,7 @@ import {
   taskUpdateOwnershipViaClaim,
 } from "../domain/task-errors.js";
 import {
+  buildCompactReadyTaskPayload,
   formatTaskBriefingList,
   formatTaskDetail,
   formatTaskList,
@@ -612,10 +613,17 @@ function registerReadyCommand(taskCmd: Command, program: Command): void {
     .option("--assignee <name>", "Filter by assignee")
     .option("--unassigned", "Only include unassigned tasks")
     .option("--no-hints", "Disable lesson hints surfaced from past completed tasks")
+    .option("--compact", "Output compact JSON envelope for agents/scripts (use with --json)")
     .option("--json", "Output as JSON")
     .action(async (opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
+      if (opts.compact === true && !isJson) {
+        throw new MaestroError("Invalid flag combination: --compact requires --json", [
+          "Pass '--json --compact' to request the compact machine-readable envelope",
+        ]);
+      }
+      const useCompactJson = opts.compact === true;
       const showHints = opts.hints !== false;
       await maybeReleaseStaleOwnedTasks();
 
@@ -627,6 +635,15 @@ function registerReadyCommand(taskCmd: Command, program: Command): void {
         assignee: opts.assignee,
         unassigned: opts.unassigned === true,
       };
+
+      if (useCompactJson) {
+        const page = await readyTaskPage(
+          services.taskStore,
+          filters,
+        );
+        output(true, buildCompactReadyTaskPayload(page), () => []);
+        return;
+      }
 
       const briefings = await readyTasks(
         services.taskStore,

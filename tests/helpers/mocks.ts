@@ -49,6 +49,13 @@ export function mockGit(overrides: Partial<GitPort> = {}): GitPort {
       workingTreeClean: true,
       diffStat: "+0 -0",
     }),
+    getCurrentBranch: async () => "main",
+    createWorktree: async (_cwd, input) => ({
+      slug: input.slug,
+      baseBranch: input.baseBranch,
+      branch: `${input.branchPrefix}/${input.slug}`,
+      path: join(tmpdir(), input.slug),
+    }),
     ...overrides,
   };
 }

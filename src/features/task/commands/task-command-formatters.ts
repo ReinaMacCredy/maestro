@@ -1,7 +1,20 @@
 import { formatRelativeAge } from "@/shared/version-format.js";
 import type { Task } from "../domain/task-types.js";
 import type { TaskHint } from "../usecases/match-candidates.usecase.js";
-import type { TaskBriefing } from "../usecases/ready-tasks.usecase.js";
+import type { ReadyTaskPage, TaskBriefing } from "../usecases/ready-tasks.usecase.js";
+
+export type CompactReadyTaskItem = Pick<
+  Task,
+  "id" | "title" | "status" | "priority" | "type" | "labels" | "parentId" | "assignee"
+>;
+
+export interface CompactReadyTaskPayload {
+  readonly schemaVersion: 1;
+  readonly totalReady: number;
+  readonly returned: number;
+  readonly hasMore: boolean;
+  readonly items: readonly CompactReadyTaskItem[];
+}
 
 export function formatTaskSummary(task: Task): string[] {
   return [
@@ -51,6 +64,25 @@ export function formatTaskBriefingList(briefings: readonly TaskBriefing[]): stri
     }
   }
   return lines;
+}
+
+export function buildCompactReadyTaskPayload(page: ReadyTaskPage): CompactReadyTaskPayload {
+  return {
+    schemaVersion: 1,
+    totalReady: page.totalReady,
+    returned: page.items.length,
+    hasMore: page.items.length < page.totalReady,
+    items: page.items.map((task) => ({
+      id: task.id,
+      title: task.title,
+      status: task.status,
+      priority: task.priority,
+      type: task.type,
+      labels: task.labels,
+      ...(task.parentId ? { parentId: task.parentId } : {}),
+      ...(task.assignee ? { assignee: task.assignee } : {}),
+    })),
+  };
 }
 
 function formatHintLine(hint: TaskHint): string {

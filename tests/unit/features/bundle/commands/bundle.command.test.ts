@@ -18,7 +18,7 @@ import type {
   Mission,
   MissionStorePort,
 } from "@/features/mission/index.js";
-import type { HandoffStorePort, UkiHandoff } from "@/features/handoff/index.js";
+import type { HandoffLaunchRecord, LaunchStorePort } from "@/features/handoff/index.js";
 import type { ReplyStorePort, WorkerReply } from "@/features/reply/index.js";
 
 const originalConsoleLog = console.log;
@@ -95,14 +95,12 @@ const replyStore: ReplyStorePort = {
   async markIngested() { /* noop */ },
 };
 
-const handoffStore: HandoffStorePort = {
-  async create(): Promise<UkiHandoff> { throw new Error("nope"); },
-  async claimPending() { return undefined; },
+const launchStore: LaunchStorePort = {
+  async create(): Promise<HandoffLaunchRecord> { throw new Error("nope"); },
+  async update(record) { return record; },
   async get() { return undefined; },
-  async getLatestPending() { return undefined; },
   async list() { return []; },
-  async updateStatus() { return undefined; },
-  async delete() { return false; },
+  resolveArtifactPath(relativePath: string) { return join(tmpDir, relativePath); },
 };
 
 class RecordingArchive implements ArchivePort {
@@ -133,7 +131,7 @@ async function loadRegisterBundleCommand() {
       assertionStore,
       checkpointStore,
       replyStore,
-      handoffStore,
+      launchStore,
       archive,
       sessionDetect: undefined,
     }),
@@ -269,7 +267,7 @@ describe("bundle commands", () => {
         assertions: 0,
         workers: 0,
         replies: 0,
-        handoffs: 0,
+        launches: 0,
         checkpoints: 0,
         principlesSnapshot: 0,
         outcomesSnapshot: 0,

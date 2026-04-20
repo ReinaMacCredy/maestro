@@ -37,7 +37,6 @@ export type ModalState =
     | { kind: "feature-browser"; selectedFeatureIndex: number; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState }
     | { kind: "dependencies"; selectedOption: number; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState }
     | { kind: "overview"; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState }
-    | { kind: "handoffs"; selectedHandoffIndex: number; returnTarget?: ModalReturnTarget; returnPalette?: CommandPaletteState }
   | {
       kind: "config";
       tab: MissionControlConfigTab;
@@ -112,7 +111,6 @@ export type Action =
   | { type: "open-command-palette" }
   | { type: "open-features" }
   | { type: "open-dependencies" }
-  | { type: "open-handoffs" }
   | { type: "open-config" }
   | { type: "open-memory" }
   | { type: "open-graph" }
@@ -173,7 +171,6 @@ export function reduce(state: AppState, action: Action): AppState {
         state.modal.kind === "feature-action"
         || state.modal.kind === "command-palette"
         || state.modal.kind === "feature-browser"
-        || state.modal.kind === "handoffs"
         || state.modal.kind === "dependencies"
         || state.modal.kind === "config"
         || state.modal.kind === "memory"
@@ -234,9 +231,6 @@ export function reduce(state: AppState, action: Action): AppState {
           modal: { kind: "none" },
         };
       }
-        if (state.modal.kind === "handoffs") {
-          return state;
-        }
       if (state.modal.kind === "dependencies") {
         const targetId = getSelectedDependencyTargetId(state);
         if (!targetId) return state;
@@ -364,18 +358,6 @@ export function reduce(state: AppState, action: Action): AppState {
         modal: {
             kind: "dependencies",
             selectedOption: 0,
-            returnTarget: getModalReturnTarget(state.modal),
-            returnPalette: getCommandPaletteReturnState(state.modal),
-          },
-        };
-
-    case "open-handoffs":
-      if (!canOpenOverlayFromModal(state.modal)) return state;
-      return {
-        ...state,
-        modal: {
-            kind: "handoffs",
-            selectedHandoffIndex: 0,
             returnTarget: getModalReturnTarget(state.modal),
             returnPalette: getCommandPaletteReturnState(state.modal),
           },
@@ -573,21 +555,6 @@ export function reduce(state: AppState, action: Action): AppState {
           };
       }
 
-      if (state.modal.kind === "handoffs") {
-        return {
-          ...baseState,
-            modal: {
-              kind: "handoffs",
-              selectedHandoffIndex: Math.min(
-                state.modal.selectedHandoffIndex,
-                Math.max(0, action.snapshot.pendingHandoffs.length - 1),
-              ),
-              returnTarget: state.modal.returnTarget,
-              returnPalette: state.modal.returnPalette,
-            },
-          };
-      }
-
         if (state.modal.kind === "dependencies") {
           return {
             ...baseState,
@@ -646,17 +613,6 @@ export function reduce(state: AppState, action: Action): AppState {
             modal: {
               kind: "feature-browser",
               selectedFeatureIndex: action.option,
-              returnTarget: state.modal.returnTarget,
-              returnPalette: state.modal.returnPalette,
-            },
-          };
-      }
-      if (state.modal.kind === "handoffs") {
-        return {
-          ...state,
-            modal: {
-              kind: "handoffs",
-              selectedHandoffIndex: action.option,
               returnTarget: state.modal.returnTarget,
               returnPalette: state.modal.returnPalette,
             },
@@ -1035,25 +991,6 @@ function handleModalNavigate(state: AppState, direction: "up" | "down"): AppStat
       };
     }
 
-    if (state.modal.kind === "handoffs") {
-    const total = state.snapshot.pendingHandoffs.length;
-    if (total === 0) return state;
-
-    const selectedHandoffIndex = direction === "down"
-      ? Math.min(state.modal.selectedHandoffIndex + 1, total - 1)
-      : Math.max(state.modal.selectedHandoffIndex - 1, 0);
-
-      return {
-        ...state,
-        modal: {
-          kind: "handoffs",
-          selectedHandoffIndex,
-          returnTarget: state.modal.returnTarget,
-          returnPalette: state.modal.returnPalette,
-        },
-      };
-    }
-
   if (state.modal.kind === "dependencies") {
     const total = getDependencyTargets(state).length;
     if (total === 0) return state;
@@ -1242,7 +1179,6 @@ function getModalReturnTarget(modal: ModalState): ModalReturnTarget | undefined 
       modal.kind === "feature-browser"
       || modal.kind === "dependencies"
       || modal.kind === "overview"
-        || modal.kind === "handoffs"
         || modal.kind === "config"
         || modal.kind === "memory"
         || modal.kind === "graph"
@@ -1280,7 +1216,6 @@ function getCommandPaletteReturnState(
     modal.kind === "feature-browser"
     || modal.kind === "dependencies"
     || modal.kind === "overview"
-    || modal.kind === "handoffs"
     || modal.kind === "config"
     || modal.kind === "memory"
     || modal.kind === "graph"

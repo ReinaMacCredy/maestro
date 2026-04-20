@@ -19,3 +19,10 @@ export interface GitFileChange {
     | "untracked"
     | "conflicted";
 }
+
+export interface GitWorktree {
+  readonly slug: string;
+  readonly baseBranch: string;
+  readonly branch: string;
+  readonly path: string;
+}

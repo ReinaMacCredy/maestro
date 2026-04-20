@@ -3,7 +3,8 @@ import { AGENT_INSTRUCTION_BLOCK } from "@/infra/domain/bootstrap-templates.js";
 
 describe("AGENT_INSTRUCTION_BLOCK", () => {
   it("documents the shared task coordination workflow", () => {
-    expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task ready --json");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task ready --json --compact --limit 5");
+    expect(AGENT_INSTRUCTION_BLOCK).not.toContain("maestro task ready --json --limit 5");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task claim <id>");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task unclaim <id>");
   });
@@ -32,5 +33,10 @@ describe("AGENT_INSTRUCTION_BLOCK", () => {
     expect(AGENT_INSTRUCTION_BLOCK).toContain(
       "maestro task update <id> --status completed --reason",
     );
+  });
+
+  it("documents the native handoff launcher and launch artifact path", () => {
+    expect(AGENT_INSTRUCTION_BLOCK).toContain('maestro handoff "Implement <featureId> for mission <id>"');
+    expect(AGENT_INSTRUCTION_BLOCK).toContain(".maestro/launches/<id>/");
   });
 });

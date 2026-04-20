@@ -15,13 +15,46 @@ export interface TaskBriefing extends Task {
   readonly hints: readonly TaskHint[];
 }
 
+export interface ReadyTaskPage {
+  readonly totalReady: number;
+  readonly items: readonly Task[];
+}
+
+export async function readyTaskPage(
+  store: TaskQueryPort,
+  filters: ReadyTasksFilters = {},
+): Promise<ReadyTaskPage> {
+  const all = await store.all();
+  return selectReadyTaskPage(all, filters);
+}
+
 export async function readyTasks(
   store: TaskQueryPort,
   filters: ReadyTasksFilters = {},
   _now: Date = new Date(),
   candidateStore?: CandidateStorePort,
 ): Promise<readonly TaskBriefing[]> {
-  const all = await store.all();
+  const page = await readyTaskPage(store, filters);
+  if (page.items.length === 0) {
+    return [];
+  }
+
+  const candidates = candidateStore ? await candidateStore.all() : [];
+  if (candidates.length === 0) {
+    return page.items.map((task) => ({ ...task, hints: [] as readonly TaskHint[] }));
+  }
+  const index = buildCandidateIndex(candidates);
+
+  return page.items.map((task) => ({
+    ...task,
+    hints: matchCandidatesInIndex(task, index),
+  }));
+}
+
+function selectReadyTaskPage(
+  all: readonly Task[],
+  filters: ReadyTasksFilters,
+): ReadyTaskPage {
   const byId = indexTasksById(all);
 
   const selected = all.filter((task) => {
@@ -41,24 +74,14 @@ export async function readyTasks(
   selected.sort(hybridCompare);
 
   const limit = filters.limit ?? DEFAULT_LIMIT;
-  const sliced = limit > 0 && selected.length > limit
+  const items = limit > 0 && selected.length > limit
     ? selected.slice(0, limit)
     : selected;
 
-  if (sliced.length === 0) {
-    return [];
-  }
-
-  const candidates = candidateStore ? await candidateStore.all() : [];
-  if (candidates.length === 0) {
-    return sliced.map((task) => ({ ...task, hints: [] as readonly TaskHint[] }));
-  }
-  const index = buildCandidateIndex(candidates);
-
-  return sliced.map((task) => ({
-    ...task,
-    hints: matchCandidatesInIndex(task, index),
-  }));
+  return {
+    totalReady: selected.length,
+    items,
+  };
 }
 
 function hybridCompare(a: Task, b: Task): number {

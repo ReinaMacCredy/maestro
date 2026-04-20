@@ -39,7 +39,7 @@ The important boundary is that the snapshot is the source of truth for display d
 
 `src/infra/commands/mission-control.command.ts` does the orchestration work:
 
-- resolves `--json`, `--preview`, `--render-check`, `--feature`, `--handoff`, `--size`, and `--format`
+- resolves `--json`, `--preview`, `--render-check`, `--feature`, `--size`, and `--format`
 - builds snapshot dependencies from the shared services object
 - creates a snapshot loader with cached config and git ports
 - keeps read-only outputs redacted through `redactSnapshotForReadOutput`
@@ -49,7 +49,7 @@ This file is also where mission selection falls back from explicit `--mission` t
 
 ### 3. Snapshot building
 
-`src/tui/state/snapshot.ts` is the core read-model builder. It gathers mission state, features, assertions, checkpoints, config, git state, memory data, pending handoffs, tasks, replies, and principle effectiveness into a single snapshot object.
+`src/tui/state/snapshot.ts` is the core read-model builder. It gathers mission state, features, assertions, checkpoints, config, git state, memory data, launch-linked principle outcomes, tasks, replies, and principle effectiveness into a single snapshot object.
 
 Two rules matter here:
 
@@ -63,7 +63,7 @@ That split keeps `maestro mission-control --json` and `maestro mission-control -
 Preview and interactive mode share the same state machine:
 
 - `src/tui/state/reducer.ts` defines `AppState`, modal variants, actions, and the pure `reduce()` function.
-- `src/tui/app/preview-state.ts` seeds the reducer for preview screens such as `dashboard`, `features`, `handoffs`, `tasks`, and `principles`.
+- `src/tui/app/preview-state.ts` seeds the reducer for preview screens such as `dashboard`, `features`, `tasks`, and `principles`.
 - `src/tui/opentui/app/interactive.tsx` drives keyboard and mouse input through the reducer, reloads snapshots, and performs the limited write actions that interactive Mission Control supports.
 
 That separation is intentional:

@@ -134,7 +134,6 @@ export function registerFeatureCommand(program: Command): void {
           correctionStore: services.correctionStore,
           learningStore: services.learningStore,
           principleStore: services.principleStore,
-          handoffStore: services.handoffStore,
         },
       );
 

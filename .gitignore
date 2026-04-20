@@ -37,6 +37,7 @@ feedback.jsonl
 
 # Runtime data
 .maestro/handoffs/
+.maestro/launches/
 .maestro/missions/
 .maestro/tasks/batches/
 
@@ -45,3 +46,4 @@ feedback.jsonl
 
 # The Desktop App for Maestro is still under development.
 /apps/
+.gitnexus

@@ -1,6 +1,9 @@
-import type { GitFileChange, GitState } from "@/infra/domain/git-types.js";
+import { dirname, basename, join } from "node:path";
+import type { GitFileChange, GitState, GitWorktree } from "@/infra/domain/git-types.js";
 import type { GitPort } from "../ports/git.port.js";
 import { execArgv } from "@/shared/lib/shell.js";
+import { dirExists } from "@/shared/lib/fs.js";
+import { execOrThrow } from "@/shared/lib/shell.js";
 
 export class ShellGitAdapter implements GitPort {
   async getState(cwd: string): Promise<GitState> {
@@ -39,6 +42,57 @@ export class ShellGitAdapter implements GitPort {
   async isRepo(cwd: string): Promise<boolean> {
     const result = await execArgv(["git", "rev-parse", "--is-inside-work-tree"], { cwd });
     return result.exitCode === 0 && result.stdout === "true";
+  }
+
+  async getCurrentBranch(cwd: string): Promise<string> {
+    const result = await execArgv(["git", "branch", "--show-current"], { cwd });
+    return result.stdout || "HEAD";
+  }
+
+  async createWorktree(
+    cwd: string,
+    input: {
+      readonly slug: string;
+      readonly baseBranch: string;
+      readonly branchPrefix: string;
+    },
+  ): Promise<GitWorktree> {
+    const repoName = basename(cwd);
+    const parentDir = dirname(cwd);
+
+    for (let index = 0; index < 100; index += 1) {
+      const suffix = index === 0 ? "" : `-${index + 1}`;
+      const effectiveSlug = `${input.slug}${suffix}`;
+      const branch = `${input.branchPrefix}/${effectiveSlug}`;
+      const path = join(parentDir, `${repoName}-${effectiveSlug}`);
+      const branchExists = await this.branchExists(cwd, branch);
+      if (branchExists || await dirExists(path)) {
+        continue;
+      }
+
+      await execOrThrow(
+        ["git", "worktree", "add", "-b", branch, path, input.baseBranch],
+        "git worktree add",
+        { cwd },
+      );
+
+      return {
+        slug: effectiveSlug,
+        baseBranch: input.baseBranch,
+        branch,
+        path,
+      };
+    }
+
+    throw new Error(`Unable to create a unique worktree for slug '${input.slug}'`);
+  }
+
+  private async branchExists(cwd: string, branch: string): Promise<boolean> {
+    const result = await execArgv(
+      ["git", "show-ref", "--verify", "--quiet", `refs/heads/${branch}`],
+      { cwd },
+    );
+    return result.exitCode === 0;
   }
 }
 

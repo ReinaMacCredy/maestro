@@ -46,7 +46,6 @@ function makeSnapshot(overrides?: Partial<MissionControlSnapshot>): MissionContr
         diffStat: "+4 -1",
         changedFiles: ["src/tui/index.ts"],
       },
-      pendingHandoffs: [],
       configSummary: {
         configSource: "project",
         gitAvailable: true,
@@ -164,10 +163,10 @@ describe("reduce", () => {
           ),
           { type: "modal-query-append", char: "a" },
         );
-        const overlayState = reduce(paletteState, { type: "open-handoffs" });
+        const overlayState = reduce(paletteState, { type: "open-features" });
         const next = reduce(overlayState, { type: "navigate", direction: "left" });
 
-        expect(overlayState.modal.kind).toBe("handoffs");
+        expect(overlayState.modal.kind).toBe("feature-browser");
         expect(next.modal.kind).toBe("command-palette");
         if (next.modal.kind === "command-palette") {
           expect(next.modal.query).toBe("ha");
@@ -175,22 +174,15 @@ describe("reduce", () => {
           }
         });
 
-      it("preserves the palette query after navigating inside palette-launched handoffs", () => {
+      it("preserves the palette query after navigating inside palette-launched overlays", () => {
         const paletteState = reduce(
           reduce(
-            reduce(makeState({
-                snapshot: makeSnapshot({
-                  pendingHandoffs: [
-                    { id: "h1", agent: "codex", message: "one", timestamp: "2026-04-15T00:00:00.000Z" },
-                    { id: "h2", agent: "claude-code", message: "two", timestamp: "2026-04-15T00:01:00.000Z" },
-                  ],
-                }),
-            }), { type: "open-command-palette" }),
+            reduce(makeState(), { type: "open-command-palette" }),
             { type: "modal-query-append", char: "h" },
           ),
           { type: "modal-query-append", char: "a" },
         );
-        const overlayState = reduce(paletteState, { type: "open-handoffs" });
+        const overlayState = reduce(paletteState, { type: "open-features" });
         const navigated = reduce(overlayState, { type: "navigate", direction: "down" });
         const next = reduce(navigated, { type: "navigate", direction: "left" });
 
@@ -260,7 +252,6 @@ describe("reduce", () => {
               locationLabel: "Outside a git repository",
               checks: [],
               actions: [],
-              pendingHandoffs: [],
             },
           }),
         });
@@ -436,41 +427,6 @@ describe("reduce", () => {
       });
     });
 
-    describe("open-handoffs", () => {
-      it("opens handoffs modal", () => {
-        const state = reduce(makeState(), { type: "open-handoffs" });
-        expect(state.modal.kind).toBe("handoffs");
-      });
-
-      it("keeps palette return context when opened from the command palette", () => {
-        const state = reduce(
-          makeState({ modal: { kind: "command-palette", query: "han", selectedCommandIndex: 0 } }),
-          { type: "open-handoffs" },
-        );
-
-        expect(state.modal.kind).toBe("handoffs");
-        if (state.modal.kind === "handoffs") {
-          expect(state.modal.returnTarget).toBe("command-palette");
-        }
-        });
-
-        it("keeps the split handoff overlay open on enter and closes on escape", () => {
-            const opened = reduce(makeState({
-              snapshot: makeSnapshot({
-                pendingHandoffs: [
-                  { id: "h1", message: "Review this", agent: "codex", timestamp: "2026-04-15T00:00:00.000Z" },
-                ],
-              }),
-            }), { type: "open-handoffs" });
-          const detail = reduce(opened, { type: "enter" });
-
-          expect(detail.modal.kind).toBe("handoffs");
-
-          const closed = reduce(detail, { type: "escape" });
-          expect(closed.modal.kind).toBe("none");
-        });
-      });
-
       describe("open-config", () => {
         it("opens config modal", () => {
           const state = reduce(makeState(), { type: "open-config" });
@@ -524,7 +480,6 @@ describe("reduce", () => {
                 locationLabel: "repo",
                 checks: [],
                 actions: [],
-                pendingHandoffs: [],
               },
             }),
           }), { type: "open-dependencies" });

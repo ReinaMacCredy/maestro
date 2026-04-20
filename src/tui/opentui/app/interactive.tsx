@@ -454,7 +454,6 @@ const RESIZE_RENDER_INTERVAL_MS = 16;
         {
           correctionStore: opts.snapshotDeps.correctionStore,
           learningStore: opts.snapshotDeps.learningStore,
-          handoffStore: opts.snapshotDeps.handoffStore,
         },
       );
 
