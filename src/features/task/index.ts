@@ -7,6 +7,7 @@ export type {
   UpdateTaskInput,
   ClaimTaskInput,
   UnclaimTaskInput,
+  TaskMetadataPatch,
   ListTasksFilters,
   ReadyTasksFilters,
 } from "./domain/task-types.js";
@@ -66,6 +67,7 @@ export { listTasks } from "./usecases/list-tasks.usecase.js";
 export { updateTask } from "./usecases/update-task.usecase.js";
 export { claimTask } from "./usecases/claim-task.usecase.js";
 export { unclaimTask } from "./usecases/unclaim-task.usecase.js";
+export { syncTaskMetadata } from "./usecases/sync-task-metadata.usecase.js";
 export {
   blockTasks,
   unblockTasks,

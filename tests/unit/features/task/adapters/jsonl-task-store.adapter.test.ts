@@ -246,6 +246,19 @@ describe("JsonlTaskStoreAdapter", () => {
     expect((await fresh.get(task.id))?.closeReason).toBe("shipped");
   });
 
+  it("syncs internal task metadata without widening task update", async () => {
+    const task = await store.create({ title: "Meta" });
+
+    const updated = await store.syncMetadata(task.id, {
+      contractId: "c-a1b2c3",
+      claimedAtCommit: "0123456789abcdef0123456789abcdef01234567",
+    });
+
+    expect(updated.contractId).toBe("c-a1b2c3");
+    expect(updated.claimedAtCommit).toBe("0123456789abcdef0123456789abcdef01234567");
+    expect(updated.updatedAt).toBe(task.updatedAt);
+  });
+
     it("releases unresolved tasks owned by a dead session", async () => {
       const task = await store.create({ title: "Owned" });
       await store.claim(task.id, "codex-session-a");

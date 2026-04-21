@@ -1,6 +1,7 @@
 import type {
   Task,
   CreateTaskInput,
+  TaskMetadataPatch,
   TaskMutationInput,
   UpdateTaskInput,
   UpdateTaskResult,
@@ -83,5 +84,8 @@ export interface TaskStorePort extends TaskQueryPort {
    * drift detection.
    */
   findBatchReceipt(batchId: string): Promise<BatchResult | undefined>;
+
+  /** Persist internal task metadata without widening the public task update surface. */
+  syncMetadata(id: string, patch: TaskMetadataPatch): Promise<Task>;
 
 }

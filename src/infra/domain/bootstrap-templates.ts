@@ -77,6 +77,25 @@ Rules:
 - Completion \`--reason\` is persisted verbatim as shared context for future sessions. Keep it short, factual, and free of secrets.
 - Reopen a completed task before resuming work on it.
 
+## Task Contracts (optional, recommended for non-trivial work)
+
+Before starting work:
+  1. maestro task claim <id>
+  2. maestro task contract new <id>
+       intent: 1-3 sentences on what you will change and why
+       scope.filesExpected: globs you expect to touch
+       scope.filesForbidden: globs you commit not to touch
+       doneWhen: bullets that signal completion
+  3. maestro task contract lock <id>
+
+Useful contract commands:
+  - maestro task contract show <id>
+  - maestro task contract list
+  - maestro task contract discard <id>
+
+At completion the declared scope is diffed against actual changes.
+Out-of-scope files are signal, not failure, unless strict mode is on.
+
 **Create a standalone Codex or Claude handoff packet:**
 \`\`\`bash
 maestro handoff "Implement <featureId> for mission <id>" \\
@@ -200,7 +219,18 @@ This project uses Maestro for local bootstrap and runtime orchestration.
 - \`.maestro/bootstrap/\` contains committed project bootstrap assets
 - \`.maestro/skills/\` contains project-local agent skills
 - \`.maestro/missions/\`, \`.maestro/sessions/\`, and \`.maestro/launches/\` contain runtime state
+- \`.maestro/tasks/contracts/\` stores one task contract JSON per task plus an append-only index
 - \`skills/built-in/\` contains shipped built-in fallback skills
+
+## Task Contracts
+
+- Create and lock a task contract before non-trivial work:
+  - \`maestro task contract new <id>\`
+  - \`maestro task contract lock <id>\`
+- Inspect or clean up contract drafts:
+  - \`maestro task contract show <id>\`
+  - \`maestro task contract list\`
+  - \`maestro task contract discard <id>\`
 
 ## Agent Skill Lookup
 

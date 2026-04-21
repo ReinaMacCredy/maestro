@@ -15,6 +15,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import type {
   Task,
   CreateTaskInput,
+  TaskMetadataPatch,
   TaskMutationInput,
   TaskReceipt,
   UpdateTaskInput,
@@ -456,6 +457,30 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
     } catch {
       return undefined;
     }
+  }
+
+  async syncMetadata(id: string, patch: TaskMetadataPatch): Promise<Task> {
+    return this.withLock(async () => {
+      const tasks = await this.readAll();
+      const existing = tasks.get(id);
+      if (!existing) {
+        throw taskNotFound(id);
+      }
+
+      const updated: Task = {
+        ...existing,
+        contractId: patch.contractId === undefined
+          ? existing.contractId
+          : (patch.contractId ?? undefined),
+        claimedAtCommit: patch.claimedAtCommit === undefined
+          ? existing.claimedAtCommit
+          : (patch.claimedAtCommit ?? undefined),
+      };
+
+      tasks.set(id, updated);
+      await this.writeAll(tasks);
+      return updated;
+    });
   }
 
   private async writeReceiptFile(result: BatchResult): Promise<void> {

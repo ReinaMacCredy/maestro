@@ -1,5 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import { AGENT_INSTRUCTION_BLOCK } from "@/infra/domain/bootstrap-templates.js";
+import {
+  AGENT_INSTRUCTION_BLOCK,
+  PROJECT_BOOTSTRAP_TEMPLATES,
+} from "@/infra/domain/bootstrap-templates.js";
 
 describe("AGENT_INSTRUCTION_BLOCK", () => {
   it("documents the shared task coordination workflow", () => {
@@ -33,6 +36,22 @@ describe("AGENT_INSTRUCTION_BLOCK", () => {
     expect(AGENT_INSTRUCTION_BLOCK).toContain(
       "maestro task update <id> --status completed --reason",
     );
+  });
+
+  it("documents the task contract workflow", () => {
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("## Task Contracts");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract new <id>");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract lock <id>");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract show <id>");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract list");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract discard <id>");
+  });
+
+  it("mirrors contract guidance into the bootstrap AGENTS template", () => {
+    const agentsTemplate = PROJECT_BOOTSTRAP_TEMPLATES.find((template) => template.path === ".maestro/AGENTS.md");
+    expect(agentsTemplate?.content).toContain(".maestro/tasks/contracts/");
+    expect(agentsTemplate?.content).toContain("maestro task contract new <id>");
+    expect(agentsTemplate?.content).toContain("maestro task contract lock <id>");
   });
 
   it("documents the native handoff launcher and launch artifact path", () => {

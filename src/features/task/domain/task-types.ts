@@ -112,6 +112,11 @@ export interface UpdateTaskResult {
   readonly autoClaimed: boolean;
 }
 
+export interface TaskMetadataPatch {
+  readonly contractId?: string | null;
+  readonly claimedAtCommit?: string | null;
+}
+
 // ============================
 // Defaults
 // ============================

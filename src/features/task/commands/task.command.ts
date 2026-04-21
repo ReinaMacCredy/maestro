@@ -60,6 +60,7 @@ import {
   formatTaskList,
   formatTaskSummary,
 } from "./task-command-formatters.js";
+import { registerContractCommand } from "./contract.command.js";
 
 interface ContinuationEditInput {
   readonly currentState?: string;
@@ -81,6 +82,7 @@ export function registerTaskCommand(program: Command): void {
   registerListCommand(taskCmd, program);
   registerUpdateCommand(taskCmd, program);
   registerClaimCommand(taskCmd, program);
+  registerContractCommand(taskCmd, program);
   registerUnclaimCommand(taskCmd, program);
   registerReleaseOwnedCommand(taskCmd, program);
   registerBlockCommand(taskCmd, program);
