@@ -340,6 +340,25 @@ describe("compiled task feature E2E", () => {
     );
 
     it(
+      "releases canonical agent owners when given the bare session id",
+      async () => {
+        const id = (await runCompiled(["task", "q", "canonical owner release"], tmpDir)).stdout;
+        await runCompiled(["task", "claim", id, "--session", "claude-code-pickup-1", "--json"], tmpDir);
+        await runCompiled(
+          ["task", "update", id, "--status", "in_progress", "--session", "claude-code-pickup-1", "--json"],
+          tmpDir,
+        );
+
+        const released = await runCompiled(["task", "release-owned", "pickup-1", "--json"], tmpDir);
+        const payload = expectJson<Array<{ id: string; status: string; assignee?: string }>>(released);
+        expect(payload).toHaveLength(1);
+        expect(payload[0]).toEqual(expect.objectContaining({ id, status: "pending" }));
+        expect(payload[0]?.assignee).toBeUndefined();
+      },
+      SLOW_CLI_TIMEOUT_MS,
+    );
+
+    it(
       "enforces ownership and status invariants through update paths",
         async () => {
           const id = (await runCompiled(["task", "q", "ownership invariants"], tmpDir)).stdout;

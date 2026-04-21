@@ -545,16 +545,18 @@ function registerReleaseOwnedCommand(taskCmd: Command, program: Command): void {
     .action(async (sessionId: string, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const before = new Map((await services.taskStore.all()).map((task) => [task.id, task] as const));
-      const released = await releaseOwnedTasks(services.taskStore, sessionId.trim());
+      const trimmedSessionId = sessionId.trim();
+      const beforeTasks = await services.taskStore.all();
+      const before = new Map(beforeTasks.map((task) => [task.id, task] as const));
+      const released = await releaseMatchingOwnedTasks(services.taskStore, beforeTasks, trimmedSessionId);
       await syncRecoveredStaleOwnerTasks(services, before, released);
 
       output(isJson, released, (tasks) => {
         if (tasks.length === 0) {
-          return [`No unresolved tasks owned by ${sessionId.trim()}`];
+          return [`No unresolved tasks owned by ${trimmedSessionId}`];
         }
         return [
-          `[ok] Released ${tasks.length} task(s) owned by ${sessionId.trim()}`,
+          `[ok] Released ${tasks.length} task(s) owned by ${trimmedSessionId}`,
           ...tasks.map((task) => `  ${task.id} -> ${task.status}`),
         ];
       });
@@ -809,6 +811,48 @@ async function resolveSessionAndReleaseStale(
   await maybeReleaseStaleOwnedTasks(sessionId ? [sessionId] : []);
   return sessionId;
 }
+async function releaseMatchingOwnedTasks(
+  taskStore: ReturnType<typeof getServices>["taskStore"],
+  tasks: readonly Task[],
+  sessionId: string,
+): Promise<readonly Task[]> {
+  const ownerIds = collectReleaseOwnerIds(tasks, sessionId);
+  const released: Task[] = [];
+  const seen = new Set<string>();
+
+  for (const ownerId of ownerIds) {
+    const ownerReleased = await releaseOwnedTasks(taskStore, ownerId);
+    for (const task of ownerReleased) {
+      if (seen.has(task.id)) {
+        continue;
+      }
+      seen.add(task.id);
+      released.push(task);
+    }
+  }
+
+  return released;
+}
+
+function collectReleaseOwnerIds(
+  tasks: readonly Task[],
+  sessionId: string,
+): readonly string[] {
+  const ownerIds = new Set<string>([sessionId]);
+
+  for (const task of tasks) {
+    if (!task.assignee) {
+      continue;
+    }
+    const parsed = parseTaskOwnerId(task.assignee);
+    if (parsed?.sessionId === sessionId) {
+      ownerIds.add(task.assignee);
+    }
+  }
+
+  return [...ownerIds];
+}
+
 
 function warnAutoClaimed(task: Task, autoClaimed: boolean): void {
   if (autoClaimed && task.assignee) {

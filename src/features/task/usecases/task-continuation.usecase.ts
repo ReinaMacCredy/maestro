@@ -29,10 +29,14 @@ const OWNER_AGENT_ALIASES: Readonly<Record<string, AgentSlug>> = {
   claude: "claude-code",
 };
 
-const KNOWN_OWNER_PREFIXES = [...new Set([
-  ...KNOWN_AGENT_PREFIXES,
-  ...Object.keys(OWNER_AGENT_ALIASES),
-])].sort((left, right) => right.length - left.length);
+const byDescendingLength = (left: string, right: string): number => right.length - left.length;
+
+const SORTED_AGENT_PREFIXES: readonly string[] = [...KNOWN_AGENT_PREFIXES].sort(byDescendingLength);
+
+// Stale-owner recovery only parses canonical persisted owner ids.
+// Bare `claude-*` values can also be explicit manual session ids, so
+// treating them as Claude runtime owners causes false stale releases.
+const KNOWN_OWNER_PREFIXES = [...KNOWN_AGENT_PREFIXES].sort(byDescendingLength);
 
 export interface TaskContinuationDeps {
   readonly taskStore: TaskQueryPort;
@@ -127,8 +131,7 @@ export function deriveAgentFromAssignee(
 ): TaskContinuationAgent | undefined {
   if (!assignee) return undefined;
 
-  const prefix = [...KNOWN_AGENT_PREFIXES]
-    .sort((left, right) => right.length - left.length)
+  const prefix = SORTED_AGENT_PREFIXES
     .find((known) => assignee === known || assignee.startsWith(`${known}-`));
 
   if (prefix) {

@@ -101,6 +101,21 @@ describe("task CLI daily loop", () => {
     expect(payload[0]?.assignee).toBeUndefined();
   }, SLOW_CLI_TIMEOUT_MS);
 
+  it("releases canonical agent owners when given the bare session id", async () => {
+    const id = (await runCli(["task", "q", "canonical owner release"], tmpDir)).stdout;
+    await runCli(["task", "claim", id, "--session", "claude-code-pickup-1", "--json"], tmpDir);
+    await runCli(
+      ["task", "update", id, "--status", "in_progress", "--session", "claude-code-pickup-1", "--json"],
+      tmpDir,
+    );
+
+    const released = await runCli(["task", "release-owned", "pickup-1", "--json"], tmpDir);
+    const payload = expectJson<Array<{ id: string; status: string; assignee?: string }>>(released);
+    expect(payload).toHaveLength(1);
+    expect(payload[0]).toEqual(expect.objectContaining({ id, status: "pending" }));
+    expect(payload[0]?.assignee).toBeUndefined();
+  }, SLOW_CLI_TIMEOUT_MS);
+
   it("syncs continuation state when ready auto-releases a stale owner", async () => {
     const id = (await runCli(["task", "q", "stale owner continuation"], tmpDir)).stdout;
     await runCli(["task", "claim", id, "--session", "codex-stale-session", "--json"], tmpDir);
@@ -147,6 +162,40 @@ describe("task CLI daily loop", () => {
     const historyPath = join(tmpDir, ".maestro", "tasks", "local-history", `${id}.jsonl`);
     const history = await readFile(historyPath, "utf8");
     expect(history).toContain("Recovered from stale owner codex-stale-session");
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("preserves manual claude-prefixed owners during stale-owner recovery", async () => {
+    const id = (await runCli(["task", "q", "manual claude owner"], tmpDir)).stdout;
+    await runCli(["task", "claim", id, "--session", "claude-ops", "--json"], tmpDir);
+    await runCli(
+      ["task", "update", id, "--status", "in_progress", "--session", "claude-ops", "--json"],
+      tmpDir,
+    );
+
+    const ready = await runCli(
+      ["task", "ready", "--json"],
+      tmpDir,
+      {
+        env: {
+          MAESTRO_CODEX_SESSIONS_DIR: join(tmpDir, "missing-codex-sessions"),
+          MAESTRO_CLAUDE_SESSIONS_DIR: join(tmpDir, "missing-claude-sessions"),
+          MAESTRO_CLAUDE_PROJECTS_DIR: join(tmpDir, "missing-claude-projects"),
+        },
+      },
+    );
+    expect(ready.exitCode).toBe(0);
+
+    const shown = await runCli(["task", "show", id, "--json"], tmpDir);
+    expect(expectJson<{ assignee?: string; status: string }>(shown)).toEqual(
+      expect.objectContaining({
+        assignee: "claude-ops",
+        status: "in_progress",
+      }),
+    );
+
+    const historyPath = join(tmpDir, ".maestro", "tasks", "local-history", `${id}.jsonl`);
+    const history = await readFile(historyPath, "utf8");
+    expect(history).not.toContain("Recovered from stale owner");
   }, SLOW_CLI_TIMEOUT_MS);
 
   it("writes a continuation summary on active work and archives it on completion", async () => {
