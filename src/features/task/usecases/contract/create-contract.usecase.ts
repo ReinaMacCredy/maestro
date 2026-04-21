@@ -10,6 +10,7 @@ import { taskAlreadyCompleted, taskNotFound } from "../../domain/task-errors.js"
 import type { ContractStorePort } from "../../ports/contract-store.port.js";
 import type { TaskStorePort } from "../../ports/task-store.port.js";
 import { syncTaskMetadata } from "../sync-task-metadata.usecase.js";
+import { normalizeScope } from "./amend-contract.usecase.js";
 
 export interface CreateContractInput {
   readonly taskId: string;
@@ -70,19 +71,4 @@ export async function createContract(
   }
 
   return contract;
-}
-
-function normalizeScope(scope: ContractScope): ContractScope {
-  return {
-    filesExpected: dedupe(scope.filesExpected),
-    filesForbidden: dedupe(scope.filesForbidden),
-    ...(scope.maxFilesTouched !== undefined ? { maxFilesTouched: scope.maxFilesTouched } : {}),
-  };
-}
-
-function dedupe(values: readonly string[]): readonly string[] {
-  const next = values
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0);
-  return Array.from(new Set(next));
 }

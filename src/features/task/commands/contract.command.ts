@@ -580,7 +580,7 @@ function readTemplateDoneWhen(
     return {
       ...(id ? { id } : {}),
       text,
-      kind,
+      ...(kind !== undefined ? { kind } : {}),
     };
   });
 }
@@ -718,7 +718,9 @@ function formatContractVerdictPreview(preview: ContractVerdictPreview): string[]
 }
 
 function resolveContractSilent(opts: { silent?: unknown }): boolean {
-  return opts.silent === true || process.env.MAESTRO_TASK_SILENT === "1";
+  if (opts.silent === true) return true;
+  const envFlag = process.env.MAESTRO_TASK_SILENT?.toLowerCase();
+  return envFlag === "1" || envFlag === "true";
 }
 
 function warnScopeOverlap(contract: Contract, opts: { silent?: unknown }): void {

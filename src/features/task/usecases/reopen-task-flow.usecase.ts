@@ -34,7 +34,7 @@ export async function reopenTaskFlow(
   if (!previous) {
     throw taskNotFound(taskId);
   }
-  await loadContractForReopen(deps.contractStore, previous);
+  const contractForReopen = await loadContractForReopen(deps.contractStore, previous);
 
   const reopened = await deps.taskStore.reopen(taskId);
   const existingSummary = await loadTaskContinuationSummary(deps.continuationStore, taskId);
@@ -59,8 +59,8 @@ export async function reopenTaskFlow(
     await deps.continuationStore.upsertActive(summary);
   }
 
-  const contract = reopened.contractId
-    ? await reopenContractForTask(deps.contractStore, reopened)
+  const contract = reopened.contractId && contractForReopen
+    ? await reopenContractForTask(deps.contractStore, reopened, contractForReopen)
     : undefined;
   return { task: reopened, contract };
 }

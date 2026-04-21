@@ -49,20 +49,19 @@ export class ShellGitAnchorAdapter implements GitAnchorPort {
       };
     }
 
-    const [range, workingTree, staged, untracked, mergeSourcedFiles] = await Promise.all([
+    const [range, workingTree, staged, mergeSourcedFiles] = await Promise.all([
       anchorResolution.anchor
         ? execArgv(["git", "diff", "--name-only", anchorResolution.anchor, head], { cwd: input.repoRoot })
         : Promise.resolve({ stdout: "", stderr: "", exitCode: 0 }),
       execArgv(["git", "diff", "--name-only"], { cwd: input.repoRoot }),
       execArgv(["git", "diff", "--cached", "--name-only"], { cwd: input.repoRoot }),
-      execArgv(["git", "ls-files", "--others", "--exclude-standard"], { cwd: input.repoRoot }),
       anchorResolution.anchor
         ? this.collectMergeSourcedFiles(input.repoRoot, anchorResolution.anchor, head)
         : Promise.resolve([] as readonly string[]),
     ]);
 
     const files = new Set<string>();
-    for (const output of [range.stdout, workingTree.stdout, staged.stdout, untracked.stdout]) {
+    for (const output of [range.stdout, workingTree.stdout, staged.stdout]) {
       for (const path of splitPaths(output)) {
         if (!isContractRuntimePath(path)) {
           files.add(path);
@@ -74,7 +73,6 @@ export class ShellGitAnchorAdapter implements GitAnchorPort {
       anchorResolution.notes,
       workingTree.stdout ? "Includes uncommitted tracked changes." : undefined,
       staged.stdout ? "Includes staged changes." : undefined,
-      untracked.stdout ? "Includes untracked files." : undefined,
       mergeSourcedFiles.length > 0 ? formatMergeSourcedFilesNote(mergeSourcedFiles) : undefined,
     ].filter((value): value is string => Boolean(value));
 

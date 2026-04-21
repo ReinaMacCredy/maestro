@@ -43,18 +43,27 @@ export async function loadContractForReopen(
 export async function reopenContractForTask(
   contractStore: ContractStorePort,
   task: Pick<Task, "id" | "contractId">,
+  loadedContract?: Contract,
 ): Promise<Contract | undefined> {
-  const contract = await loadContractForReopen(contractStore, task);
+  const contract = loadedContract ?? await loadContractForReopen(contractStore, task);
   if (!contract) {
     return undefined;
   }
+
+  return reopenLoadedContract(contractStore, contract);
+}
+
+async function reopenLoadedContract(
+  contractStore: ContractStorePort,
+  contract: Contract,
+): Promise<Contract> {
   if (!canReopenContract(contract)) {
     return contract;
   }
 
   return contractStore.save({
     ...contract,
-    status: contract.amendments.length > 0 ? "amended" : "locked",
+    status: "locked",
     closedAt: undefined,
     closedAtCommit: undefined,
     closedBy: undefined,

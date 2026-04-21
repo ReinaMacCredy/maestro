@@ -265,6 +265,34 @@ describe("task contract CLI", () => {
     ]);
   }, SLOW_CLI_TIMEOUT_MS);
 
+  it("respects MAESTRO_TASK_SILENT=true for contract mutators", async () => {
+    const createdTask = await runCli(["task", "create", "env silent contract", "--json"], tmpDir);
+    const task = expectJson<{ id: string }>(createdTask);
+    const templatePath = await writeTemplate(
+      "env-silent-contract.yaml",
+      [
+        "intent: Verify contract silent-mode env parity",
+        "scope:",
+        "  filesExpected:",
+        "    - src/features/task/**",
+        "  filesForbidden: []",
+        "doneWhen:",
+        "  - text: contract can be discarded silently",
+        "",
+      ].join("\n"),
+    );
+
+    const drafted = await runCli(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir);
+    const contract = expectJson<{ id: string }>(drafted);
+
+    const discarded = await runCli(
+      ["task", "contract", "discard", contract.id],
+      tmpDir,
+      { env: { MAESTRO_TASK_SILENT: "true" } },
+    );
+    expect(discarded.stdout).toBe(`${contract.id} [ok]`);
+  }, SLOW_CLI_TIMEOUT_MS);
+
   it("amends a locked contract and manages criteria", async () => {
     const createdTask = await runCli(["task", "create", "criteria contract", "--json"], tmpDir);
     const task = expectJson<{ id: string }>(createdTask);
@@ -404,7 +432,7 @@ describe("task contract CLI", () => {
     expect(payload.scope.filesExpected).toContain("tests/integration/features/task/**");
   }, SLOW_CLI_TIMEOUT_MS);
 
-  it("reopens a completed amended contract through the contract surface and preserves amended status", async () => {
+  it("reopens a completed amended contract through the contract surface and relocks it", async () => {
     await Bun.write(join(tmpDir, "README.md"), "seed\n");
     await runCli(["git", "config", "user.email", "test@example.com"], tmpDir);
     await runCli(["git", "config", "user.name", "Test User"], tmpDir);
@@ -446,7 +474,7 @@ describe("task contract CLI", () => {
     );
 
     const reopened = await runCli(["task", "contract", "reopen", contract.id, "--json"], tmpDir);
-    expect(expectJson<{ status: string }>(reopened).status).toBe("amended");
+    expect(expectJson<{ status: string }>(reopened).status).toBe("locked");
 
     const shownTask = await runCli(["task", "show", task.id, "--json"], tmpDir);
     expect(expectJson<{ status: string }>(shownTask).status).toBe("pending");

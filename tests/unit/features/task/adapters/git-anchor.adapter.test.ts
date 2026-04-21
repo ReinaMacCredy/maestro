@@ -107,7 +107,7 @@ describe("ShellGitAnchorAdapter", () => {
     expect(result.notes).toContain("feature.txt");
   });
 
-  it("includes untracked files in the touched set and notes", async () => {
+  it("ignores untracked files when collecting touched files for contract verdicts", async () => {
     await commitFile("base.txt", "base\n", "base");
     await Bun.write(join(tmpDir, "scratch.txt"), "scratch\n");
 
@@ -117,8 +117,8 @@ describe("ShellGitAnchorAdapter", () => {
       rebaseFallback: "best-effort",
     });
 
-    expect(result.actualFilesTouched).toContain("scratch.txt");
-    expect(result.notes).toContain("Includes untracked files.");
+    expect(result.actualFilesTouched).not.toContain("scratch.txt");
+    expect(result.notes ?? "").not.toContain("Includes untracked files.");
   });
 
   it("ignores Maestro task runtime files in the touched set", async () => {
