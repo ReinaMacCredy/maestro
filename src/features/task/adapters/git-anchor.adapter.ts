@@ -173,12 +173,12 @@ export class ShellGitAnchorAdapter implements GitAnchorPort {
       };
     }
 
-    const present = await execArgv(["git", "cat-file", "-e", `${claimedAtCommit}^{commit}`], { cwd });
-    if (present.exitCode === 0) {
+    const reflogCommit = await this.findReflogCommit(cwd, claimedAtCommit);
+    if (reflogCommit) {
       return {
-        anchor: claimedAtCommit,
+        anchor: reflogCommit,
         anchorFallback: "reflog",
-        notes: "Used the original claim anchor even though it is no longer an ancestor of HEAD.",
+        notes: "Recovered claim anchor from git reflog even though it is no longer an ancestor of HEAD.",
       };
     }
 
@@ -195,6 +195,18 @@ export class ShellGitAnchorAdapter implements GitAnchorPort {
       anchorFallback: "lost",
       notes: "Claim anchor could not be recovered after history rewriting.",
     };
+  }
+
+  private async findReflogCommit(cwd: string, claimedAtCommit: string): Promise<string | undefined> {
+    const reflog = await execArgv(["git", "reflog", "--all", "--format=%H"], { cwd });
+    if (reflog.exitCode !== 0 || !reflog.stdout) {
+      return undefined;
+    }
+
+    return reflog.stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .find((entry) => entry === claimedAtCommit || entry.startsWith(claimedAtCommit));
   }
 
   private resolveWindow(

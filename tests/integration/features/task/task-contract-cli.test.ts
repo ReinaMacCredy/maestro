@@ -113,6 +113,103 @@ describe("task contract CLI", () => {
     expect(locked.stderr).toContain("src/features/task/commands/**");
   }, SLOW_CLI_TIMEOUT_MS);
 
+  it("snapshots contract config at lock time, not draft time", async () => {
+    const createdTask = await runCli(["task", "create", "lock-time config snapshot", "--json"], tmpDir);
+    const task = expectJson<{ id: string }>(createdTask);
+    const templatePath = await writeTemplate(
+      "lock-config-template.yaml",
+      [
+        "intent: Capture the final lock-time contract policy",
+        "scope:",
+        "  filesExpected:",
+        "    - README.md",
+        "  filesForbidden: []",
+        "doneWhen:",
+        "  - text: config is captured at lock",
+        "",
+      ].join("\n"),
+    );
+
+    const drafted = await runCli(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir);
+    const contract = expectJson<{ id: string }>(drafted);
+
+    await Bun.write(
+      join(tmpDir, ".maestro", "config.yaml"),
+      [
+        "contracts:",
+        "  strict: true",
+        "  overlapPolicy: annotate",
+        "  rebaseFallback: fail",
+        "  defaultMaxFilesTouched: 1",
+        "  staleReclaimContractPolicy: block",
+        "",
+      ].join("\n"),
+    );
+
+    const locked = await runCli(["task", "contract", "lock", contract.id, "--json"], tmpDir);
+    const lockedContract = expectJson<{
+      configSnapshot: {
+        strict: boolean;
+        overlapPolicy: string;
+        rebaseFallback: string;
+        defaultMaxFilesTouched?: number;
+        staleReclaimContractPolicy: string;
+      };
+    }>(locked);
+
+    expect(lockedContract.configSnapshot).toEqual({
+      strict: true,
+      overlapPolicy: "annotate",
+      rebaseFallback: "fail",
+      defaultMaxFilesTouched: 1,
+      staleReclaimContractPolicy: "block",
+    });
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("uses the lock-time overlap policy when another active contract already exists", async () => {
+    const firstTask = expectJson<{ id: string }>(await runCli(["task", "create", "first overlap task", "--json"], tmpDir));
+    const secondTask = expectJson<{ id: string }>(await runCli(["task", "create", "second overlap task", "--json"], tmpDir));
+    const templatePath = await writeTemplate(
+      "annotate-overlap-template.yaml",
+      [
+        "intent: Allow overlap when config changes before lock",
+        "scope:",
+        "  filesExpected:",
+        "    - src/features/task/**",
+        "  filesForbidden: []",
+        "doneWhen:",
+        "  - text: overlap policy is evaluated at lock time",
+        "",
+      ].join("\n"),
+    );
+
+    const firstDraft = expectJson<{ id: string }>(
+      await runCli(["task", "contract", "new", firstTask.id, "--from", templatePath, "--json"], tmpDir),
+    );
+    await runCli(["task", "contract", "lock", firstDraft.id, "--json"], tmpDir);
+
+    const secondDraft = expectJson<{ id: string }>(
+      await runCli(["task", "contract", "new", secondTask.id, "--from", templatePath, "--json"], tmpDir),
+    );
+
+    await Bun.write(
+      join(tmpDir, ".maestro", "config.yaml"),
+      [
+        "contracts:",
+        "  overlapPolicy: annotate",
+        "",
+      ].join("\n"),
+    );
+
+    const locked = await runCli(["task", "contract", "lock", secondDraft.id, "--json"], tmpDir);
+    expect(expectJson<{ status: string; configSnapshot: { overlapPolicy: string } }>(locked)).toEqual(
+      expect.objectContaining({
+        status: "locked",
+        configSnapshot: expect.objectContaining({ overlapPolicy: "annotate" }),
+      }),
+    );
+  }, SLOW_CLI_TIMEOUT_MS);
+
   it("discards a draft contract and filters it by status", async () => {
     const createdTask = await runCli(["task", "create", "discarded contract", "--json"], tmpDir);
     const task = expectJson<{ id: string }>(createdTask);

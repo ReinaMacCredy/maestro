@@ -1,6 +1,6 @@
 import { MaestroError } from "@/shared/errors.js";
 import { isContractLockable } from "../../domain/contract/contract-state.js";
-import type { Contract } from "../../domain/contract/contract-types.js";
+import type { Contract, ContractConfigSnapshot } from "../../domain/contract/contract-types.js";
 import type { ContractStorePort } from "../../ports/contract-store.port.js";
 import { resolveContractRef } from "./resolve-contract.usecase.js";
 
@@ -8,6 +8,7 @@ export interface LockContractInput {
   readonly ref: string;
   readonly actorId: string;
   readonly claimedAtCommit?: string;
+  readonly configSnapshot: ContractConfigSnapshot;
 }
 
 export async function lockContract(
@@ -27,7 +28,7 @@ export async function lockContract(
     && (candidate.status === "locked" || candidate.status === "amended")
     && candidate.repoRoot === contract.repoRoot,
   );
-  if (overlapping.length > 0 && contract.configSnapshot.overlapPolicy === "fail") {
+  if (overlapping.length > 0 && input.configSnapshot.overlapPolicy === "fail") {
     throw new MaestroError(
       `Contract ${contract.id} overlaps an active contract in the same repo: ${overlapping.map((item) => item.id).join(", ")}`,
       [
@@ -44,5 +45,6 @@ export async function lockContract(
     lockedAt: now,
     lockedBy: input.actorId,
     claimedAtCommit: input.claimedAtCommit ?? contract.claimedAtCommit,
+    configSnapshot: input.configSnapshot,
   });
 }

@@ -106,10 +106,12 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .action(async (ref: string, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
+      const config = await services.config.load(process.cwd());
       const contract = await lockContract(services.contractStore, {
         ref,
         actorId: await resolveContractActor(ref),
         claimedAtCommit: await services.gitAnchor.resolveHeadCommit(process.cwd()),
+        configSnapshot: buildContractConfigSnapshot(config),
       });
       await refreshContractNowMd();
       warnScopeOverlap(contract, opts);

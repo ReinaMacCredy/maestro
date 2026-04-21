@@ -62,6 +62,12 @@ describe("pickupHandoff", () => {
     await lockContract(contractStore, {
       ref: drafted.id,
       actorId: "codex-old-session",
+      configSnapshot: {
+        strict: false,
+        overlapPolicy: "fail",
+        rebaseFallback: "best-effort",
+        staleReclaimContractPolicy: "inherit",
+      },
     });
     await syncTaskContinuation(
       {
