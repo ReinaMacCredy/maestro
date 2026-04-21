@@ -86,10 +86,14 @@ function renderModule(templates: readonly SkillTemplate[]): string {
   return `${header}\n${body};\n`;
 }
 
+function normalizeLineEndings(text: string | undefined): string | undefined {
+  return text?.replace(/\r\n/g, "\n");
+}
+
 export async function syncBuiltInSkills(options: { check?: boolean } = {}): Promise<void> {
   const templates = await collectTemplates();
   const rendered = renderModule(templates);
-  const current = await readText(TARGET_FILE);
+  const current = normalizeLineEndings(await readText(TARGET_FILE));
 
   if (current === rendered) {
     console.log(`[ok] ${relative(ROOT, TARGET_FILE)} is in sync with skills/built-in/`);

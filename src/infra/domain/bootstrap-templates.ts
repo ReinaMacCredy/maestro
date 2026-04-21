@@ -71,7 +71,7 @@ maestro task reopen <id>
 
 Rules:
 - A task cannot move to \`in_progress\` or \`completed\` while unresolved blockers remain.
-- Completion \`--reason\` becomes shared context for future sessions. Keep it short, factual, and free of secrets.
+- Completion \`--reason\` is persisted verbatim as shared context for future sessions. Keep it short, factual, and free of secrets.
 - Reopen a completed task before resuming work on it.
 
 **Create a standalone Codex or Claude handoff packet:**
