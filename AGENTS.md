@@ -46,6 +46,7 @@ maestro/
 - Keep `src/index.ts` and `src/services.ts` thin. Put behavior in the owning feature or infra use case.
 - Cross-feature imports go through `@/features/<name>` public surfaces only.
 - `skills/built-in/` is the source of truth for shipped skills. Sync it into generated templates; do not hand-edit the generated embed file.
+- When adding a new agent-facing feature or changing related agent behavior, update the install/bootstrap agent instruction block in `src/infra/domain/bootstrap-templates.ts` in the same change so injected `.maestro/AGENTS.md` guidance stays current.
 - `buildSnapshot()` and `buildHomeSnapshot()` are read models. Preview, JSON, and render-check paths must remain inspection-only.
 - Treat `./dist/maestro` and installed `maestro` on `PATH` as different artifacts. Verify which binary was exercised.
 - Repo-tracked behavior changes bump the CLI version. Docs-only/comment-only changes do not.
