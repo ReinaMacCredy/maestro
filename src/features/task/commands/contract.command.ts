@@ -6,7 +6,8 @@ import { getServices } from "@/services.js";
 import type { MaestroConfig } from "@/infra/domain/config-types.js";
 import { MaestroError } from "@/shared/errors.js";
 import { readTextOrStdin, writeText } from "@/shared/lib/fs.js";
-import { output, resolveJsonFlag } from "@/shared/lib/output.js";
+import { output, resolveJsonFlag, warn } from "@/shared/lib/output.js";
+import { normalizeSlashes } from "@/shared/lib/path-normalize.js";
 import { parseYaml, stringifyYaml } from "@/shared/lib/yaml.js";
 import {
   DONE_WHEN_ID_PATTERN,
@@ -111,6 +112,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
         claimedAtCommit: await services.gitAnchor.resolveHeadCommit(process.cwd()),
       });
       await refreshContractNowMd();
+      warnScopeOverlap(contract, opts);
 
       if (emitContractSilentSuccess(isJson, opts, contract)) return;
       output(isJson, contract, formatContractDetail);
@@ -626,6 +628,51 @@ function formatContractVerdictPreview(preview: ContractVerdictPreview): string[]
 
 function resolveContractSilent(opts: { silent?: unknown }): boolean {
   return opts.silent === true || process.env.MAESTRO_TASK_SILENT === "1";
+}
+
+function warnScopeOverlap(contract: Contract, opts: { silent?: unknown }): void {
+  if (resolveContractSilent(opts)) {
+    return;
+  }
+  const overlappingForbidden = findLikelyScopeOverlaps(contract.scope);
+  if (overlappingForbidden.length === 0) {
+    return;
+  }
+  warn(`Contract ${contract.id} filesForbidden overlaps filesExpected; forbidden wins for: ${overlappingForbidden.join(", ")}`);
+}
+
+function findLikelyScopeOverlaps(scope: ContractScope): readonly string[] {
+  const overlapping = new Set<string>();
+  for (const forbidden of scope.filesForbidden) {
+    if (scope.filesExpected.some((expected) => patternsLikelyOverlap(expected, forbidden))) {
+      overlapping.add(forbidden);
+    }
+  }
+  return [...overlapping].sort();
+}
+
+function patternsLikelyOverlap(left: string, right: string): boolean {
+  const normalizedLeft = normalizeSlashes(left.trim());
+  const normalizedRight = normalizeSlashes(right.trim());
+  if (!normalizedLeft || !normalizedRight) {
+    return false;
+  }
+  if (normalizedLeft === normalizedRight) {
+    return true;
+  }
+
+  const leftPrefix = staticGlobPrefix(normalizedLeft);
+  const rightPrefix = staticGlobPrefix(normalizedRight);
+  if (!leftPrefix || !rightPrefix) {
+    return false;
+  }
+  return leftPrefix.startsWith(rightPrefix) || rightPrefix.startsWith(leftPrefix);
+}
+
+function staticGlobPrefix(pattern: string): string {
+  const index = pattern.search(/[*?[{]/);
+  const prefix = index === -1 ? pattern : pattern.slice(0, index);
+  return prefix.replace(/[^/]*$/, "");
 }
 
 function emitContractSilentSuccess(

@@ -436,6 +436,19 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
       }
 
       const sessionId = await resolveSessionAndReleaseStale(opts.session);
+      if (previous?.status === "completed" && patch.status === "completed") {
+        if (emitSilentSuccess(isJson, opts, previous)) return;
+        output(isJson, previous, (task) => [
+          `[ok] Task updated: ${task.id}`,
+          `  Status: ${task.status}`,
+          `  Priority: P${task.priority}`,
+          ...(task.assignee ? [`  Assignee: ${task.assignee}`] : []),
+          ...(task.blockedBy.length > 0 ? [`  Blocked by: ${task.blockedBy.join(", ")}`] : []),
+          ...(task.blocks.length > 0 ? [`  Blocks: ${task.blocks.join(", ")}`] : []),
+          ...(task.closeReason ? [`  Reason: ${task.closeReason}`] : []),
+        ]);
+        return;
+      }
       if (patch.status === "completed" && previous) {
         await enforceContractCompletionPolicy(previous, patch, {
           strictFlag: opts.strict === true,
@@ -446,6 +459,14 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
       let autoClaimed = false;
 
       if (hasTaskPatch) {
+        if (previous?.status === "completed" && patch.status === "in_progress") {
+          await reopenTaskFlow({
+            taskStore: services.taskStore,
+            continuationStore: services.taskContinuationStore,
+            continuationHistory: services.taskContinuationHistory,
+            contractStore: services.contractStore,
+          }, id);
+        }
         const result = await updateTask(
           services.taskStore,
           id,

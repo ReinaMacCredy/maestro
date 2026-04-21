@@ -49,12 +49,15 @@ export class ShellGitAnchorAdapter implements GitAnchorPort {
       };
     }
 
-    const [range, workingTree, staged] = await Promise.all([
+    const [range, workingTree, staged, mergeSourcedFiles] = await Promise.all([
       anchorResolution.anchor
         ? execArgv(["git", "diff", "--name-only", anchorResolution.anchor, head], { cwd: input.repoRoot })
         : Promise.resolve({ stdout: "", stderr: "", exitCode: 0 }),
       execArgv(["git", "diff", "--name-only"], { cwd: input.repoRoot }),
       execArgv(["git", "diff", "--cached", "--name-only"], { cwd: input.repoRoot }),
+      anchorResolution.anchor
+        ? this.collectMergeSourcedFiles(input.repoRoot, anchorResolution.anchor, head)
+        : Promise.resolve([] as readonly string[]),
     ]);
 
     const files = new Set<string>();
@@ -68,6 +71,7 @@ export class ShellGitAnchorAdapter implements GitAnchorPort {
       anchorResolution.notes,
       workingTree.stdout ? "Includes uncommitted tracked changes." : undefined,
       staged.stdout ? "Includes staged changes." : undefined,
+      mergeSourcedFiles.length > 0 ? formatMergeSourcedFilesNote(mergeSourcedFiles) : undefined,
     ].filter((value): value is string => Boolean(value));
 
     return {
@@ -220,6 +224,26 @@ export class ShellGitAnchorAdapter implements GitAnchorPort {
     const result = await execArgv(["git", "cat-file", "-e", `${commit}^{commit}`], { cwd });
     return result.exitCode === 0;
   }
+
+  private async collectMergeSourcedFiles(cwd: string, anchor: string, head: string): Promise<readonly string[]> {
+    const merges = await execArgv(["git", "rev-list", "--merges", `${anchor}..${head}`], { cwd });
+    if (merges.exitCode !== 0 || !merges.stdout) {
+      return [];
+    }
+
+    const files = new Set<string>();
+    for (const mergeCommit of merges.stdout.split("\n").map((line) => line.trim()).filter(Boolean)) {
+      const diff = await execArgv(["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "-m", mergeCommit], { cwd });
+      if (diff.exitCode !== 0) {
+        continue;
+      }
+      for (const path of splitPaths(diff.stdout)) {
+        files.add(path);
+      }
+    }
+
+    return [...files].sort();
+  }
 }
 
 function splitPaths(output: string): readonly string[] {
@@ -227,4 +251,10 @@ function splitPaths(output: string): readonly string[] {
     .split("\n")
     .map((line) => normalizeSlashes(line.trim()))
     .filter((line) => line.length > 0);
+}
+
+function formatMergeSourcedFilesNote(files: readonly string[]): string {
+  const displayed = files.slice(0, 20);
+  const suffix = files.length > displayed.length ? `, +${files.length - displayed.length} more` : "";
+  return `Merge-sourced files: ${displayed.join(", ")}${suffix}.`;
 }

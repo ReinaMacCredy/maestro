@@ -86,6 +86,33 @@ describe("task contract CLI", () => {
     expect(lockedContract.claimedAtCommit).toMatch(/^[0-9a-f]{40}$/);
   }, SLOW_CLI_TIMEOUT_MS);
 
+  it("warns when forbidden scope overlaps expected scope at lock time", async () => {
+    const createdTask = await runCli(["task", "create", "overlapping scope contract", "--json"], tmpDir);
+    const task = expectJson<{ id: string }>(createdTask);
+    const templatePath = await writeTemplate(
+      "overlap-scope-template.yaml",
+      [
+        "intent: Demonstrate overlapping contract scope",
+        "scope:",
+        "  filesExpected:",
+        "    - src/features/task/**",
+        "  filesForbidden:",
+        "    - src/features/task/commands/**",
+        "doneWhen:",
+        "  - text: overlap warning is visible",
+        "",
+      ].join("\n"),
+    );
+
+    const drafted = await runCli(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir);
+    const contract = expectJson<{ id: string }>(drafted);
+
+    const locked = await runCli(["task", "contract", "lock", contract.id, "--json"], tmpDir);
+    expect(expectJson<{ status: string }>(locked).status).toBe("locked");
+    expect(locked.stderr).toContain("filesForbidden overlaps filesExpected");
+    expect(locked.stderr).toContain("src/features/task/commands/**");
+  }, SLOW_CLI_TIMEOUT_MS);
+
   it("discards a draft contract and filters it by status", async () => {
     const createdTask = await runCli(["task", "create", "discarded contract", "--json"], tmpDir);
     const task = expectJson<{ id: string }>(createdTask);

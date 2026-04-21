@@ -330,4 +330,92 @@ describe("task contract completion", () => {
     expect(reset.closedAt).toBeUndefined();
     expect(reset.closedBy).toBeUndefined();
   }, SLOW_CLI_TIMEOUT_MS);
+
+  it("reopens a contracted task through update and treats repeated completion as idempotent", async () => {
+    await seedTrackedFile("README.md", "hello\n");
+
+    const created = await runCli(["task", "create", "update reopen contracted task", "--json"], tmpDir);
+    const task = expectJson<{ id: string }>(created);
+
+    await runCli(["task", "claim", task.id, "--session", "update-reopen-owner", "--json"], tmpDir);
+    await runCli(["task", "update", task.id, "--status", "in_progress", "--session", "update-reopen-owner", "--json"], tmpDir);
+
+    const templatePath = await writeTemplate(
+      "update-reopen-template.yaml",
+      [
+        "intent: Keep the update-reopen flow scoped to README",
+        "scope:",
+        "  filesExpected:",
+        "    - README.md",
+        "  filesForbidden: []",
+        "doneWhen:",
+        "  - text: manual",
+        "    kind: receipt-hint",
+        "",
+      ].join("\n"),
+    );
+
+    const drafted = await runCli(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir);
+    const contract = expectJson<{ id: string }>(drafted);
+    await runCli(["task", "contract", "lock", contract.id, "--json"], tmpDir);
+
+    await Bun.write(join(tmpDir, "README.md"), "hello\nfirst close\n");
+    await runCli(
+      [
+        "task",
+        "update",
+        task.id,
+        "--status",
+        "completed",
+        "--reason",
+        "done",
+        "--verified-by",
+        "manual",
+        "--session",
+        "update-reopen-owner",
+        "--json",
+      ],
+      tmpDir,
+    );
+
+    const repeated = await runCli(
+      [
+        "task",
+        "update",
+        task.id,
+        "--status",
+        "completed",
+        "--reason",
+        "done again",
+        "--session",
+        "update-reopen-owner",
+        "--json",
+      ],
+      tmpDir,
+    );
+    expect(expectJson<{ status: string }>(repeated).status).toBe("completed");
+
+    const reopened = await runCli(
+      ["task", "update", task.id, "--status", "in_progress", "--session", "update-reopen-owner", "--json"],
+      tmpDir,
+    );
+    expect(expectJson<{ status: string; assignee?: string }>(reopened)).toEqual(
+      expect.objectContaining({
+        status: "in_progress",
+        assignee: "update-reopen-owner",
+      }),
+    );
+
+    const shown = await runCli(["task", "contract", "show", contract.id, "--json"], tmpDir);
+    const reset = expectJson<{
+      status: string;
+      verdict?: unknown;
+      closedAtCommit?: string;
+      closedBy?: string;
+    }>(shown);
+    expect(reset.status).toBe("locked");
+    expect(reset.verdict).toBeUndefined();
+    expect(reset.closedAtCommit).toBeUndefined();
+    expect(reset.closedBy).toBeUndefined();
+  }, SLOW_CLI_TIMEOUT_MS);
 });
