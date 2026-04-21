@@ -37,6 +37,15 @@ Completed resume state moves to \`.maestro/tasks/continuations/completed/<taskId
 Local per-task history lives in \`.maestro/tasks/local-history/<taskId>.jsonl\`.
 Task continuation is the source of truth for normal resume. Standalone handoff packets are for cross-agent transfer.
 
+\`.maestro/tasks/candidates/\` and \`.maestro/tasks/continuations/completed/\` are local-only per-machine state (gitignored). They grow over time as you close tasks; prune them manually when the count gets large:
+\`\`\`bash
+maestro task prune --dry-run           # preview (default: keep newest 500 per kind)
+maestro task prune                     # keep newest 500 per kind
+maestro task prune --keep 1000         # override the cap
+maestro task prune --candidates-only   # or --continuations-only
+maestro task prune --all               # purge everything in those two dirs
+\`\`\`
+
 If you are taking new work:
 \`\`\`bash
 maestro task claim <id>
@@ -191,6 +200,8 @@ maestro task release-owned <sessionId>                       # release tasks own
 maestro task block <blockerId> <blockedId...>                # blockerId must finish before blockedId is ready
 maestro task unblock <blockerId> <blockedId...>
 maestro task delete <id> [--session <id>] [--force]         # remove a task; claimed tasks require the owner session or --force
+maestro task prune [--keep N] [--candidates-only|--continuations-only] [--all] [--dry-run] [--json]
+                                                             # bound local candidates + completed continuations; default keep newest 500 per kind
 \`\`\`
 
 \`.maestro/tasks/NOW.md\` is refreshed after every task mutation; \`cat\` it for a short in-progress/ready/stuck view anchored to the current state. Active task contracts add a one-line scope/progress summary under in-progress work.

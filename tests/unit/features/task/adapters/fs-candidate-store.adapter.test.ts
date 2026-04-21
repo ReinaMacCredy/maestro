@@ -137,4 +137,24 @@ describe("FsCandidateStoreAdapter", () => {
       expect(all.map((candidate) => candidate.id)).toEqual(["tsk-abcdef"]);
     });
   });
+
+  describe("delete", () => {
+    it("removes the candidate file", async () => {
+      await store.create({
+        id: "tsk-abcdef",
+        sourceTaskId: "tsk-abcdef",
+        title: "victim",
+        reason: "r",
+        keywords: ["v"],
+      });
+
+      await store.delete("tsk-abcdef");
+
+      expect(await store.all()).toEqual([]);
+    });
+
+    it("tolerates missing candidates without throwing", async () => {
+      await expect(store.delete("tsk-absent")).resolves.toBeUndefined();
+    });
+  });
 });

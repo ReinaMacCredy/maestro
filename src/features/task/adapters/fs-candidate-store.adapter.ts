@@ -17,7 +17,7 @@ import type {
   CreateCandidateInput,
 } from "../ports/candidate-store.port.js";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
-import { ensureDir, readJson, writeJson } from "@/shared/lib/fs.js";
+import { ensureDir, readJson, removeIfExists, writeJson } from "@/shared/lib/fs.js";
 import { validateTaskCandidate } from "../domain/task-candidate.js";
 
 export class FsCandidateStoreAdapter implements CandidateStorePort {
@@ -70,5 +70,9 @@ export class FsCandidateStoreAdapter implements CandidateStorePort {
       const validated = validateTaskCandidate(raw);
       return validated ? [validated] : [];
     });
+  }
+
+  async delete(id: string): Promise<void> {
+    await removeIfExists(this.candidatePath(id));
   }
 }

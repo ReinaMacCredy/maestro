@@ -14,4 +14,7 @@ export interface CandidateStorePort {
 
   /** Return all candidates in the store, unordered. Callers sort/filter. */
   all(): Promise<readonly TaskCandidate[]>;
+
+  /** Remove a candidate by id. Tolerates missing entries. */
+  delete(id: string): Promise<void>;
 }

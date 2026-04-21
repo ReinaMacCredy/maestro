@@ -38,6 +38,15 @@ describe("AGENT_INSTRUCTION_BLOCK", () => {
     );
   });
 
+  it("documents task prune for bounding local candidates and completed continuations", () => {
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task prune");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("local-only per-machine state");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("--candidates-only");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("--continuations-only");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("--dry-run");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("keep newest 500 per kind");
+  });
+
   it("documents the task contract workflow", () => {
     expect(AGENT_INSTRUCTION_BLOCK).toContain("## Task Contracts");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract new <id>");

@@ -3,6 +3,10 @@ import type { Task } from "../domain/task-types.js";
 import type { TaskShowView } from "../usecases/task-continuation.usecase.js";
 import type { TaskHint } from "../usecases/match-candidates.usecase.js";
 import type { ReadyTaskPage, TaskBriefing } from "../usecases/ready-tasks.usecase.js";
+import type {
+  PruneKindReport,
+  PruneReport,
+} from "../usecases/prune-local-task-state.usecase.js";
 
 export type CompactReadyTaskItem = Pick<
   Task,
@@ -153,6 +157,35 @@ export function formatTaskShowView(view: TaskShowView): string[] {
     lines.push(`    - ${event.at} ${formatContinuationEvent(event)}`);
   }
   return lines;
+}
+
+export function formatPruneReport(report: PruneReport): string[] {
+  const lines: string[] = [formatPruneHeader(report)];
+  if (report.kinds !== "continuations") {
+    lines.push(`  candidates: ${formatPruneKindLine(report.candidates, report.dryRun)}`);
+  }
+  if (report.kinds !== "candidates") {
+    lines.push(`  continuations/completed: ${formatPruneKindLine(report.continuations, report.dryRun)}`);
+  }
+  return lines;
+}
+
+function formatPruneHeader(report: PruneReport): string {
+  const prefix = report.dryRun ? "[dry-run] Would" : "[ok]";
+  if (report.all) {
+    const verb = report.dryRun ? "purge" : "Purged";
+    return `${prefix} ${verb} all local task state (kinds: ${report.kinds})`;
+  }
+  const verb = report.dryRun ? "prune" : "Pruned";
+  return `${prefix} ${verb} local task state (keep ${report.keep} per kind, kinds: ${report.kinds})`;
+}
+
+function formatPruneKindLine(kind: PruneKindReport, dryRun: boolean): string {
+  const verb = dryRun ? "would purge" : "purged";
+  const parts = [`${verb} ${kind.purged}`, `kept ${kind.kept}`];
+  if (kind.oldestKeptAt) parts.push(`oldest kept ${kind.oldestKeptAt}`);
+  if (kind.newestPurgedAt) parts.push(`newest purged ${kind.newestPurgedAt}`);
+  return parts.join(", ");
 }
 
 function formatContinuationEvent(event: TaskShowView["recentEvents"][number]): string {

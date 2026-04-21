@@ -21,6 +21,10 @@ import { computeContractVerdictForTask } from "../usecases/contract/compute-verd
 import { loadContractForReopen } from "../usecases/contract/reopen-contract.usecase.js";
 import { transferContractOwnership } from "../usecases/contract/transfer-ownership.usecase.js";
 import { deleteTaskFlow } from "../usecases/delete-task-flow.usecase.js";
+import {
+  pruneLocalTaskState,
+  type PruneKinds,
+} from "../usecases/prune-local-task-state.usecase.js";
 import { STUCK_THRESHOLD_MS, isStuckTask } from "../domain/now-md-format.js";
 import { parseDuration } from "./duration.js";
 import {
@@ -62,6 +66,7 @@ import {
 import { assertTaskMutationOwnership, assertTaskUpdateAllowed } from "../domain/task-state.js";
 import {
   buildCompactReadyTaskPayload,
+  formatPruneReport,
   formatTaskBriefingList,
   formatTaskDetail,
   formatTaskShowView,
@@ -98,6 +103,7 @@ export function registerTaskCommand(program: Command): void {
   registerUnblockCommand(taskCmd, program);
   registerReopenCommand(taskCmd, program);
   registerDeleteCommand(taskCmd, program);
+  registerPruneCommand(taskCmd, program);
   registerLegacyDepsCommand(taskCmd);
   registerCloseCommand(taskCmd);
   registerReadyCommand(taskCmd, program);
@@ -732,6 +738,51 @@ function registerDeleteCommand(taskCmd: Command, program: Command): void {
         `[ok] Task deleted: ${task.id}`,
         `  Title: ${task.title}`,
       ]);
+    });
+}
+
+const DEFAULT_PRUNE_KEEP = 500;
+
+function registerPruneCommand(taskCmd: Command, program: Command): void {
+  taskCmd
+    .command("prune")
+    .description("Bound local per-machine task state (candidates + completed continuations)")
+    .option("--keep <n>", `Keep the most recent N entries per kind (default ${DEFAULT_PRUNE_KEEP})`)
+    .option("--candidates-only", "Only prune .maestro/tasks/candidates/")
+    .option("--continuations-only", "Only prune .maestro/tasks/continuations/completed/")
+    .option("--all", "Purge everything in the targeted directories")
+    .option("--dry-run", "Report what would be purged without deleting")
+    .option("--json", "Output as JSON")
+    .action(async (opts) => {
+      if (opts.candidatesOnly === true && opts.continuationsOnly === true) {
+        throw new MaestroError(
+          "Choose either --candidates-only or --continuations-only, not both",
+        );
+      }
+
+      const isJson = resolveJsonFlag(opts, program);
+      const keep = parseLimit(opts.keep) ?? DEFAULT_PRUNE_KEEP;
+      const kinds: PruneKinds = opts.candidatesOnly === true
+        ? "candidates"
+        : opts.continuationsOnly === true
+          ? "continuations"
+          : "both";
+
+      const services = getServices();
+      const report = await pruneLocalTaskState(
+        {
+          candidateStore: services.taskCandidateStore,
+          continuationStore: services.taskContinuationStore,
+        },
+        {
+          keep,
+          kinds,
+          all: opts.all === true,
+          dryRun: opts.dryRun === true,
+        },
+      );
+
+      output(isJson, report, formatPruneReport);
     });
 }
 

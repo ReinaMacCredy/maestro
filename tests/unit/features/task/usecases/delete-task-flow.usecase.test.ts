@@ -104,12 +104,14 @@ function createContinuationStore(state: { deletes: number; failOnce?: boolean })
     getActive: unused,
     getCompleted: unused,
     listActive: unused,
+    listCompleted: unused,
     upsertActive: unused,
     archiveCompleted: unused,
     reopen: unused,
     delete: async () => {
       state.deletes += 1;
     },
+    deleteCompleted: unused,
   };
 }
 

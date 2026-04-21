@@ -26,8 +26,16 @@ export class FsTaskContinuationStoreAdapter implements TaskContinuationStorePort
   }
 
   async listActive(): Promise<readonly TaskContinuationSummary[]> {
-    const entries = await this.listSummaryFiles("active");
-    const summaries = await Promise.all(entries.map((entry) => this.readSummary(join(this.stateDir("active"), entry))));
+    return this.listSummaries("active");
+  }
+
+  async listCompleted(): Promise<readonly TaskContinuationSummary[]> {
+    return this.listSummaries("completed");
+  }
+
+  private async listSummaries(state: ContinuationState): Promise<readonly TaskContinuationSummary[]> {
+    const entries = await this.listSummaryFiles(state);
+    const summaries = await Promise.all(entries.map((entry) => this.readSummary(join(this.stateDir(state), entry))));
     return summaries
       .filter((summary): summary is TaskContinuationSummary => summary !== undefined)
       .sort((left, right) => right.lastActiveAt.localeCompare(left.lastActiveAt));
@@ -63,6 +71,10 @@ export class FsTaskContinuationStoreAdapter implements TaskContinuationStorePort
       removeIfExists(this.summaryPath("active", taskId)),
       removeIfExists(this.summaryPath("completed", taskId)),
     ]);
+  }
+
+  async deleteCompleted(taskId: string): Promise<void> {
+    await removeIfExists(this.summaryPath("completed", taskId));
   }
 
   private continuationsDir(): string {

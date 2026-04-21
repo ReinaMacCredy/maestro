@@ -127,6 +127,9 @@ describe("readyTasks", () => {
       all: async () => {
         throw new Error("candidate reads should be skipped when nothing is ready");
       },
+      delete: async () => {
+        throw new Error("candidate delete should not run in readyTasks");
+      },
     };
 
     await claimTask(store, blocker.id, { sessionId: "alice" });

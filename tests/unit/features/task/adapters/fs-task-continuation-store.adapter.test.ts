@@ -100,6 +100,51 @@ describe("FsTaskContinuationStoreAdapter", () => {
     expect(await store.getActive("tsk-reopen")).toEqual(reopened);
   });
 
+  it("lists completed summaries ordered by most recent lastActiveAt", async () => {
+    const older = await store.archiveCompleted({
+      ...makeSummary("tsk-old", "2026-04-20T10:00:00.000Z"),
+      status: "completed",
+      activeAgent: undefined,
+    });
+    const newer = await store.archiveCompleted({
+      ...makeSummary("tsk-new", "2026-04-21T10:00:00.000Z"),
+      status: "completed",
+      activeAgent: undefined,
+    });
+
+    expect((await store.listCompleted()).map((summary) => summary.taskId)).toEqual([
+      "tsk-new",
+      "tsk-old",
+    ]);
+    expect(older.taskId).toBe("tsk-old");
+    expect(newer.taskId).toBe("tsk-new");
+  });
+
+  it("returns no completed summaries on a fresh store", async () => {
+    expect(await store.listCompleted()).toEqual([]);
+  });
+
+  it("deleteCompleted removes only the completed summary and leaves active entries untouched", async () => {
+    const active = makeSummary("tsk-keep-active", "2026-04-21T10:00:00.000Z");
+    await store.upsertActive(active);
+
+    const completed = await store.archiveCompleted({
+      ...makeSummary("tsk-drop", "2026-04-21T11:00:00.000Z"),
+      status: "completed",
+      activeAgent: undefined,
+    });
+    expect(await store.getCompleted("tsk-drop")).toEqual(completed);
+
+    await store.deleteCompleted("tsk-drop");
+
+    expect(await store.getCompleted("tsk-drop")).toBeUndefined();
+    expect(await store.getActive("tsk-keep-active")).toEqual(active);
+  });
+
+  it("deleteCompleted tolerates a missing summary", async () => {
+    await expect(store.deleteCompleted("tsk-absent")).resolves.toBeUndefined();
+  });
+
   it("treats split active and completed files for the same task as repair-needed drift", async () => {
     const tasksDir = join(tmpDir, ".maestro", "tasks", "continuations");
     await mkdir(join(tasksDir, "active"), { recursive: true });
