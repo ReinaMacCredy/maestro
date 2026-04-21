@@ -4,6 +4,7 @@ import {
   getUnresolvedBlockerIds,
   loadTaskContinuationSummary,
   syncTaskContinuation,
+  transferContractOwnership,
   updateTask,
   type TaskContinuationHistoryPort,
   type TaskContinuationStorePort,
@@ -15,6 +16,7 @@ import { MaestroError } from "@/shared/errors.js";
 export interface PickupHandoffDeps {
   readonly launchStore: LaunchStorePort;
   readonly taskStore: TaskStorePort;
+  readonly contractStore: Parameters<typeof transferContractOwnership>[0];
   readonly continuationStore: TaskContinuationStorePort;
   readonly continuationHistory: TaskContinuationHistoryPort;
 }
@@ -88,6 +90,7 @@ export async function pickupHandoff(
         { status: "in_progress" },
         { sessionId: input.ownerId, force: true },
       )).task;
+  await transferContractOwnership(deps.contractStore, taskId, input.ownerId);
 
   const priorSummary = await loadTaskContinuationSummary(deps.continuationStore, taskId);
   const priorAgent = deriveAgentFromAssignee(beforeTask.assignee, beforeTask.updatedAt);

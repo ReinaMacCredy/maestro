@@ -99,6 +99,38 @@ async function createActiveTask(
   return id;
 }
 
+async function attachLockedContract(taskId: string, scope = "README.md"): Promise<string> {
+  const templatePath = join(tmpDir, `contract-${taskId}.yaml`);
+  await writeFile(
+    templatePath,
+    [
+      "intent: keep ownership aligned across handoff pickup",
+      "scope:",
+      "  filesExpected:",
+      `    - ${scope}`,
+      "  filesForbidden: []",
+      "doneWhen:",
+      "  - text: pickup preserves contract ownership",
+      "    kind: manual",
+      "",
+    ].join("\n"),
+  );
+
+  const created = await runCompiled(
+    ["task", "contract", "new", taskId, "--from", templatePath, "--json"],
+    tmpDir,
+  );
+  expect(created.exitCode).toBe(0);
+  const contract = expectJson<{ id: string }>(created);
+
+  const locked = await runCompiled(
+    ["task", "contract", "lock", contract.id, "--json"],
+    tmpDir,
+  );
+  expect(locked.exitCode).toBe(0);
+  return contract.id;
+}
+
 describe("compiled handoff launcher E2E", () => {
   it(
     "launches codex by default, writes prompt artifacts, and returns launch metadata",
@@ -329,6 +361,7 @@ describe("compiled handoff launcher E2E", () => {
     "consumes a handoff packet once and updates the linked task owner on pickup",
     async () => {
       const taskId = await createActiveTask("Transfer this task", "codex-session-a");
+      const contractId = await attachLockedContract(taskId);
       const argsPath = join(tmpDir, "codex-pickup-args.txt");
       const cwdPath = join(tmpDir, "codex-pickup-cwd.txt");
       const binDir = await installFakeProvider("codex", argsPath, cwdPath);
@@ -363,6 +396,14 @@ describe("compiled handoff launcher E2E", () => {
       expect(task).toMatchObject({
         assignee: "claude-code-pickup-1",
         status: "in_progress",
+      });
+      const contract = expectJson<{ id: string; lockedBy?: string; status: string }>(
+        await runCompiled(["task", "contract", "show", contractId, "--json"], tmpDir),
+      );
+      expect(contract).toMatchObject({
+        id: contractId,
+        status: "locked",
+        lockedBy: "claude-code-pickup-1",
       });
 
       const secondPickup = await runCompiled(

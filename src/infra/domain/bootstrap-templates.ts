@@ -131,6 +131,7 @@ maestro handoff pickup [--id <handoff-id>] [--agent codex|claude --session <id>]
 Pickup behavior:
 - picking up a packet immediately takes over the linked task
 - task ownership switches to the current session
+- any active task contract lock follows the new owner
 - the picked-up packet is consumed for live work
 
 **Capture a correction rule for future sessions:**
@@ -250,6 +251,7 @@ This project uses Maestro for local bootstrap and runtime orchestration.
 - Reopening a completed task relocks its contract and clears the stored verdict.
 - \`.maestro/tasks/NOW.md\` adds a one-line contract status summary for active contracted work.
 - Stale reclaim inherits active contract ownership by default; set \`contracts.staleReclaimContractPolicy: block\` to refuse it.
+- Handoff pickup transfers active contract ownership with the linked task.
 
 ## Agent Skill Lookup
 

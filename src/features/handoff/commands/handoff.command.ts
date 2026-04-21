@@ -95,6 +95,7 @@ export function registerHandoffCommand(program: Command): void {
         {
           launchStore: services.launchStore,
           taskStore: services.taskStore,
+          contractStore: services.contractStore,
           continuationStore: services.taskContinuationStore,
           continuationHistory: services.taskContinuationHistory,
         },
