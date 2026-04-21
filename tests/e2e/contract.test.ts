@@ -30,6 +30,21 @@ async function writeTemplate(name: string, body: string): Promise<string> {
   return path;
 }
 
+async function writeEditorScript(name: string, replacement: string): Promise<string> {
+  const path = join(tmpDir, name);
+  await Bun.write(
+    path,
+    [
+      "#!/bin/sh",
+      "cat <<'EOF' > \"$1\"",
+      replacement,
+      "EOF",
+      "",
+    ].join("\n"),
+  );
+  return path;
+}
+
 async function seedTrackedFile(path: string, content: string): Promise<void> {
   await Bun.write(join(tmpDir, path), content);
   await runCommand(["git", "config", "user.email", "test@example.com"], tmpDir);
@@ -159,5 +174,78 @@ describe("task contract compiled E2E", () => {
     expect(shown.status).toBe("fulfilled");
     expect(shown.verdict?.fulfilled).toBe(true);
     expect(shown.verdict?.actualFilesTouched).toContain("README.md");
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("prints the plain ok marker for amend and criteria mutators in silent mode", async () => {
+    const taskId = (await runCompiled(["task", "create", "silent amend", "--silent"], tmpDir)).stdout;
+    const templatePath = await writeTemplate(
+      "silent-amend-template.yaml",
+      [
+        "intent: Keep contract work in task files",
+        "scope:",
+        "  filesExpected:",
+        "    - src/features/task/**",
+        "  filesForbidden: []",
+        "doneWhen:",
+        "  - text: criterion exists",
+        "    kind: manual",
+        "",
+      ].join("\n"),
+    );
+
+    const created = await runCompiled(["task", "contract", "new", taskId, "--from", templatePath, "--json"], tmpDir);
+    const contract = JSON.parse(created.stdout) as {
+      id: string;
+      doneWhen: Array<{ id: string }>;
+    };
+    await runCompiled(["task", "contract", "lock", contract.id, "--json"], tmpDir);
+
+    const editorPath = await writeEditorScript(
+      "silent-amend-editor.sh",
+      [
+        "intent: Keep contract work in task files and tests",
+        "scope:",
+        "  filesExpected:",
+        "    - src/features/task/**",
+        "    - tests/e2e/**",
+        "  filesForbidden: []",
+        "doneWhen:",
+        `  - id: ${contract.doneWhen[0]?.id}`,
+        "    text: criterion exists in source and e2e",
+        "    kind: manual",
+        "",
+      ].join("\n"),
+    );
+
+    const amended = await runCompiled(
+      ["task", "contract", "amend", contract.id, "--reason", "expand checks", "--silent"],
+      tmpDir,
+      { env: { EDITOR: `sh ${editorPath}` } },
+    );
+    expect(amended.stdout).toBe(`${contract.id} [ok]`);
+
+    const added = await runCompiled(
+      ["task", "contract", "criteria", "add", contract.id, "extra criterion", "--silent"],
+      tmpDir,
+    );
+    expect(added.stdout).toBe(`${contract.id} [ok]`);
+
+    const shown = JSON.parse((await runCompiled(["task", "contract", "show", contract.id, "--json"], tmpDir)).stdout) as {
+      doneWhen: Array<{ id: string; text: string }>;
+    };
+    const addedCriterion = shown.doneWhen.find((criterion) => criterion.text === "extra criterion");
+    expect(addedCriterion?.id).toMatch(/^dw-[0-9a-f]{6}$/);
+
+    const marked = await runCompiled(
+      ["task", "contract", "criteria", "mark", contract.id, addedCriterion!.id, "--met", "--silent"],
+      tmpDir,
+    );
+    expect(marked.stdout).toBe(`${contract.id} [ok]`);
+
+    const removed = await runCompiled(
+      ["task", "contract", "criteria", "remove", contract.id, addedCriterion!.id, "--silent"],
+      tmpDir,
+    );
+    expect(removed.stdout).toBe(`${contract.id} [ok]`);
   }, SLOW_CLI_TIMEOUT_MS);
 });

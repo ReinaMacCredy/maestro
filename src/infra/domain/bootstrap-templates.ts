@@ -92,6 +92,10 @@ Useful contract commands:
   - maestro task contract show <id>
   - maestro task contract list
   - maestro task contract discard <id>
+  - maestro task contract amend <id> --reason "..."
+  - maestro task contract criteria mark <id> <criterionId> --met
+  - maestro task contract criteria add <id> "..."
+  - maestro task contract criteria remove <id> <criterionId>
 
 At completion the declared scope is diffed against actual changes.
 Out-of-scope files are signal, not failure, unless strict mode is on.
@@ -232,6 +236,12 @@ This project uses Maestro for local bootstrap and runtime orchestration.
   - \`maestro task contract show <id>\`
   - \`maestro task contract list\`
   - \`maestro task contract discard <id>\`
+- Amend a locked contract with a recorded reason:
+  - \`maestro task contract amend <id> --reason "..." \`
+- Manage criteria directly while the contract is active:
+  - \`maestro task contract criteria mark <id> <criterionId> --met\`
+  - \`maestro task contract criteria add <id> "..." \`
+  - \`maestro task contract criteria remove <id> <criterionId>\`
 - Completion can enforce contracts with \`maestro task update <id> --status completed --strict\`.
 - Use \`--no-contract\` only when config requires a contract but the task intentionally has none.
 - After completion, \`task contract show\` includes the stored verdict.

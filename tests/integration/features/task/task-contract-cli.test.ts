@@ -28,6 +28,21 @@ async function writeTemplate(name: string, body: string): Promise<string> {
   return path;
 }
 
+async function writeEditorScript(name: string, replacement: string): Promise<string> {
+  const path = join(tmpDir, name);
+  await Bun.write(
+    path,
+    [
+      "#!/bin/sh",
+      "cat <<'EOF' > \"$1\"",
+      replacement,
+      "EOF",
+      "",
+    ].join("\n"),
+  );
+  return path;
+}
+
 describe("task contract CLI", () => {
   it("creates, shows, lists, and locks a contract from a template", async () => {
     const createdTask = await runCli(["task", "create", "contracted task", "--json"], tmpDir);
@@ -97,6 +112,99 @@ describe("task contract CLI", () => {
     const listed = await runCli(["task", "contract", "list", "--status", "discarded", "--json"], tmpDir);
     expect(expectJson<Array<{ id: string; status: string }>>(listed)).toEqual([
       expect.objectContaining({ id: contract.id, status: "discarded" }),
+    ]);
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("amends a locked contract and manages criteria", async () => {
+    const createdTask = await runCli(["task", "create", "criteria contract", "--json"], tmpDir);
+    const task = expectJson<{ id: string }>(createdTask);
+    const templatePath = await writeTemplate(
+      "criteria-template.yaml",
+      [
+        "intent: Keep the task work inside the task feature",
+        "scope:",
+        "  filesExpected:",
+        "    - src/features/task/**",
+        "  filesForbidden:",
+        "    - src/features/mission/**",
+        "doneWhen:",
+        "  - text: task contract commands are available",
+        "    kind: manual",
+        "",
+      ].join("\n"),
+    );
+
+    const drafted = await runCli(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir);
+    const contract = expectJson<{ id: string; doneWhen: Array<{ id: string }> }>(drafted);
+    await runCli(["task", "contract", "lock", contract.id, "--json"], tmpDir);
+
+    const editorPath = await writeEditorScript(
+      "amend-editor.sh",
+      [
+        "intent: Keep the task work and tests inside the task surface",
+        "scope:",
+        "  filesExpected:",
+        "    - src/features/task/**",
+        "    - tests/integration/features/task/**",
+        "  filesForbidden:",
+        "    - src/features/mission/**",
+        "doneWhen:",
+        `  - id: ${contract.doneWhen[0]?.id}`,
+        "    text: task contract commands cover source and tests",
+        "    kind: manual",
+        "",
+      ].join("\n"),
+    );
+
+    const amended = await runCli(
+      ["task", "contract", "amend", contract.id, "--reason", "expanded test coverage", "--json"],
+      tmpDir,
+      { env: { EDITOR: `sh ${editorPath}` } },
+    );
+    const amendedContract = expectJson<{ status: string; scope: { filesExpected: string[] }; amendments: Array<{ reason: string }> }>(amended);
+    expect(amendedContract.status).toBe("amended");
+    expect(amendedContract.scope.filesExpected).toContain("tests/integration/features/task/**");
+    expect(amendedContract.amendments.at(-1)?.reason).toBe("expanded test coverage");
+
+    const added = await runCli(
+      ["task", "contract", "criteria", "add", contract.id, "receipt hint exists", "--json"],
+      tmpDir,
+    );
+    const addedContract = expectJson<{ doneWhen: Array<{ id: string; text: string }>; amendments: Array<{ reason: string }> }>(added);
+    const addedCriterion = addedContract.doneWhen.find((criterion) => criterion.text === "receipt hint exists");
+    expect(addedCriterion?.id).toMatch(/^dw-[0-9a-f]{6}$/);
+    expect(addedContract.amendments.at(-1)?.reason).toContain("Added criterion");
+
+    const marked = await runCli(
+      [
+        "task",
+        "contract",
+        "criteria",
+        "mark",
+        contract.id,
+        addedCriterion!.id,
+        "--met",
+        "--evidence",
+        "manual",
+        "--json",
+      ],
+      tmpDir,
+    );
+    const markedContract = expectJson<{ doneWhen: Array<{ id: string; met?: boolean; metEvidence?: string }> }>(marked);
+    expect(markedContract.doneWhen.find((criterion) => criterion.id === addedCriterion!.id)).toEqual(
+      expect.objectContaining({
+        id: addedCriterion!.id,
+        met: true,
+        metEvidence: "manual",
+      }),
+    );
+
+    const removed = await runCli(
+      ["task", "contract", "criteria", "remove", contract.id, addedCriterion!.id, "--json"],
+      tmpDir,
+    );
+    expect(expectJson<{ doneWhen: Array<{ id: string }> }>(removed).doneWhen.map((criterion) => criterion.id)).toEqual([
+      contract.doneWhen[0]!.id,
     ]);
   }, SLOW_CLI_TIMEOUT_MS);
 });

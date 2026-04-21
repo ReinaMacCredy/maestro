@@ -45,6 +45,10 @@ describe("AGENT_INSTRUCTION_BLOCK", () => {
     expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract show <id>");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract list");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract discard <id>");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract amend <id> --reason");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract criteria mark <id> <criterionId> --met");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract criteria add <id>");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract criteria remove <id> <criterionId>");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("--strict");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("--no-contract");
   });
@@ -54,6 +58,8 @@ describe("AGENT_INSTRUCTION_BLOCK", () => {
     expect(agentsTemplate?.content).toContain(".maestro/tasks/contracts/");
     expect(agentsTemplate?.content).toContain("maestro task contract new <id>");
     expect(agentsTemplate?.content).toContain("maestro task contract lock <id>");
+    expect(agentsTemplate?.content).toContain("maestro task contract amend <id> --reason");
+    expect(agentsTemplate?.content).toContain("maestro task contract criteria mark <id> <criterionId> --met");
     expect(agentsTemplate?.content).toContain("--strict");
     expect(agentsTemplate?.content).toContain("stored verdict");
   });

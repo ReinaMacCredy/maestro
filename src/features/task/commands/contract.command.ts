@@ -7,9 +7,11 @@ import type { MaestroConfig } from "@/infra/domain/config-types.js";
 import { MaestroError } from "@/shared/errors.js";
 import { readTextOrStdin, writeText } from "@/shared/lib/fs.js";
 import { output, resolveJsonFlag } from "@/shared/lib/output.js";
-import { execArgv } from "@/shared/lib/shell.js";
 import { parseYaml, stringifyYaml } from "@/shared/lib/yaml.js";
-import { countMetCriteria } from "../domain/contract/contract-state.js";
+import {
+  DONE_WHEN_ID_PATTERN,
+  countMetCriteria,
+} from "../domain/contract/contract-state.js";
 import type {
   Contract,
   ContractConfigSnapshot,
@@ -17,6 +19,12 @@ import type {
   ContractStatus,
   DoneWhenCriterion,
 } from "../domain/contract/contract-types.js";
+import { amendContract } from "../usecases/contract/amend-contract.usecase.js";
+import {
+  addContractCriterion,
+  markContractCriterion,
+  removeContractCriterion,
+} from "../usecases/contract/criteria.usecase.js";
 import { createContract } from "../usecases/contract/create-contract.usecase.js";
 import { discardContract } from "../usecases/contract/discard-contract.usecase.js";
 import { listContracts } from "../usecases/contract/list-contracts.usecase.js";
@@ -62,7 +70,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
       const template = await loadContractDraftTemplate(opts.from, opts.editor);
       const contract = await createContract(services.taskStore, services.contractStore, {
         taskId,
-        repoRoot: await resolveRepoRoot(cwd),
+        repoRoot: await services.gitAnchor.resolveRepoRoot(cwd),
         intent: readTemplateIntent(template),
         scope: readTemplateScope(template),
         doneWhen: readTemplateDoneWhen(template),
@@ -85,11 +93,36 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
       const contract = await lockContract(services.contractStore, {
         ref,
         actorId: await resolveContractActor(ref),
-        claimedAtCommit: await resolveHeadCommit(process.cwd()),
+        claimedAtCommit: await services.gitAnchor.resolveHeadCommit(process.cwd()),
       });
 
       if (emitContractSilentSuccess(isJson, opts, contract)) return;
       output(isJson, contract, formatContractDetail);
+    });
+
+  contractCmd
+    .command("amend <ref>")
+    .description("Amend a locked contract and record why it changed")
+    .requiredOption("--reason <text>", "Why the contract changed")
+    .option("--editor <cmd>", "Open an editor command to update the draft YAML")
+    .option("--silent", "Print only '<id> [ok]' (for scripts)")
+    .option("--json", "Output as JSON")
+    .action(async (ref: string, opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+      const contract = await showContract(services.contractStore, ref);
+      const template = await loadContractDraftTemplate(undefined, opts.editor, renderEditableContract(contract));
+      const amended = await amendContract(services.contractStore, {
+        ref,
+        actorId: await resolveContractActor(ref),
+        reason: opts.reason,
+        intent: readTemplateIntent(template),
+        scope: readTemplateScope(template),
+        doneWhen: readTemplateDoneWhen(template),
+      });
+
+      if (emitContractSilentSuccess(isJson, opts, amended)) return;
+      output(isJson, amended, formatContractDetail);
     });
 
   contractCmd
@@ -143,6 +176,73 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
       if (emitContractSilentSuccess(isJson, opts, contract)) return;
       output(isJson, contract, formatContractDetail);
     });
+
+  const criteriaCmd = contractCmd
+    .command("criteria")
+    .description("Manage contract done-when criteria");
+
+  criteriaCmd
+    .command("mark <ref> <criterionId>")
+    .description("Mark a criterion met or unmet")
+    .option("--met", "Mark the criterion met (default)")
+    .option("--unmet", "Mark the criterion unmet and clear evidence")
+    .option("--evidence <text>", "Attach met evidence")
+    .option("--silent", "Print only '<id> [ok]' (for scripts)")
+    .option("--json", "Output as JSON")
+    .action(async (ref: string, criterionId: string, opts) => {
+      if (opts.met === true && opts.unmet === true) {
+        throw new MaestroError("Choose either --met or --unmet, not both");
+      }
+
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+      const contract = await markContractCriterion(services.contractStore, {
+        ref,
+        criterionId,
+        actorId: await resolveContractActor(ref),
+        met: opts.unmet === true ? false : true,
+        evidence: opts.evidence,
+      });
+
+      if (emitContractSilentSuccess(isJson, opts, contract)) return;
+      output(isJson, contract, formatContractDetail);
+    });
+
+  criteriaCmd
+    .command("add <ref> <text>")
+    .description("Add a manual criterion to a locked contract")
+    .option("--silent", "Print only '<id> [ok]' (for scripts)")
+    .option("--json", "Output as JSON")
+    .action(async (ref: string, text: string, opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+      const contract = await addContractCriterion(services.contractStore, {
+        ref,
+        text,
+        actorId: await resolveContractActor(ref),
+      });
+
+      if (emitContractSilentSuccess(isJson, opts, contract)) return;
+      output(isJson, contract, formatContractDetail);
+    });
+
+  criteriaCmd
+    .command("remove <ref> <criterionId>")
+    .description("Remove one criterion from a locked contract")
+    .option("--silent", "Print only '<id> [ok]' (for scripts)")
+    .option("--json", "Output as JSON")
+    .action(async (ref: string, criterionId: string, opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+      const contract = await removeContractCriterion(services.contractStore, {
+        ref,
+        criterionId,
+        actorId: await resolveContractActor(ref),
+      });
+
+      if (emitContractSilentSuccess(isJson, opts, contract)) return;
+      output(isJson, contract, formatContractDetail);
+    });
 }
 
 function buildContractConfigSnapshot(config: MaestroConfig): ContractConfigSnapshot {
@@ -158,6 +258,7 @@ function buildContractConfigSnapshot(config: MaestroConfig): ContractConfigSnaps
 async function loadContractDraftTemplate(
   fromPath: string | undefined,
   editorCommand: string | undefined,
+  initialContent = defaultContractTemplate(),
 ): Promise<ContractDraftTemplate> {
   if (!fromPath && !editorCommand && !process.env.EDITOR && !process.env.VISUAL) {
     throw new MaestroError("Provide --from <path> or --editor <cmd> to create a contract draft", [
@@ -170,7 +271,7 @@ async function loadContractDraftTemplate(
     ?? (fromPath ? undefined : (process.env.EDITOR ?? process.env.VISUAL));
   const baseContent = fromPath
     ? await readDraftSource(fromPath)
-    : defaultContractTemplate();
+    : initialContent;
   const finalContent = resolvedEditor
     ? await editContractDraft(baseContent, resolvedEditor)
     : baseContent;
@@ -247,7 +348,7 @@ function readTemplateScope(template: ContractDraftTemplate): ContractScope {
 
 function readTemplateDoneWhen(
   template: ContractDraftTemplate,
-): readonly Array<{ readonly text: string; readonly kind?: DoneWhenCriterion["kind"] }> {
+): readonly Array<{ readonly id?: string; readonly text: string; readonly kind?: DoneWhenCriterion["kind"] }> {
   if (template.doneWhen === undefined) return [];
   if (!Array.isArray(template.doneWhen)) {
     throw new MaestroError("Invalid contract draft: doneWhen must be an array", [
@@ -267,16 +368,21 @@ function readTemplateDoneWhen(
 
     const text = (entry as { text?: unknown }).text;
     const kind = (entry as { kind?: unknown }).kind;
+    const id = (entry as { id?: unknown }).id;
     if (typeof text !== "string") {
       throw new MaestroError(`Invalid contract draft: doneWhen[${index}].text must be a string`, [
         "Each doneWhen item needs human-readable text",
       ]);
+    }
+    if (id !== undefined && (typeof id !== "string" || !DONE_WHEN_ID_PATTERN.test(id))) {
+      throw new MaestroError(`Invalid contract draft: doneWhen[${index}].id must look like dw-xxxxxx`);
     }
     if (kind !== undefined && kind !== "manual" && kind !== "receipt-hint") {
       throw new MaestroError(`Invalid contract draft: doneWhen[${index}].kind must be manual or receipt-hint`);
     }
 
     return {
+      ...(id ? { id } : {}),
       text,
       kind,
     };
@@ -316,15 +422,32 @@ function formatContractDetail(contract: Contract): string[] {
     `  Repo root: ${contract.repoRoot}`,
     `  Created: ${contract.createdAt}`,
     ...(contract.lockedAt ? [`  Locked at: ${contract.lockedAt}`] : []),
+    ...(contract.lockedBy ? [`  Locked by: ${contract.lockedBy}`] : []),
     ...(contract.claimedAtCommit ? [`  Claimed at commit: ${contract.claimedAtCommit}`] : []),
+    ...(contract.closedAt ? [`  Closed at: ${contract.closedAt}`] : []),
+    ...(contract.closedBy ? [`  Closed by: ${contract.closedBy}`] : []),
     ...(contract.discardedAt ? [`  Discarded at: ${contract.discardedAt}`] : []),
     `  Scope expected: ${contract.scope.filesExpected.join(", ") || "(none)"}`,
     `  Scope forbidden: ${contract.scope.filesForbidden.join(", ") || "(none)"}`,
     `  Done when: ${countMetCriteria(contract.doneWhen)}/${contract.doneWhen.length} met`,
+    `  Amendments: ${contract.amendments.length}`,
   ];
 
   for (const criterion of contract.doneWhen) {
-    lines.push(`    - [${criterion.met ? "x" : " "}] ${criterion.id} (${criterion.kind}) ${criterion.text}`);
+    lines.push(
+      `    - [${criterion.met ? "x" : " "}] ${criterion.id} (${criterion.kind}) ${criterion.text}`
+      + (criterion.metEvidence ? ` [${criterion.metEvidence}]` : ""),
+    );
+  }
+  if (contract.amendments.length > 0) {
+    lines.push("  Amendment log:");
+    for (const amendment of contract.amendments) {
+      lines.push(`    - ${amendment.id} ${amendment.at} ${amendment.by}: ${amendment.reason}`);
+    }
+  }
+  if (contract.verdict) {
+    lines.push(`  Verdict: ${contract.verdict.fulfilled ? "fulfilled" : "broken"}`);
+    lines.push(`  Files touched: ${contract.verdict.actualFilesTouched.join(", ") || "(none)"}`);
   }
   return lines;
 }
@@ -355,25 +478,6 @@ function emitContractSilentSuccess(
   return true;
 }
 
-async function resolveRepoRoot(cwd: string): Promise<string> {
-  const result = await execArgv(["git", "rev-parse", "--show-toplevel"], { cwd });
-  return result.exitCode === 0 && result.stdout ? result.stdout : cwd;
-}
-
-async function resolveHeadCommit(cwd: string): Promise<string | undefined> {
-  const result = await execArgv(["git", "rev-parse", "HEAD"], { cwd });
-  if (result.exitCode === 0 && result.stdout) {
-    return result.stdout;
-  }
-
-  const repoCheck = await execArgv(["git", "rev-parse", "--is-inside-work-tree"], { cwd });
-  if (repoCheck.exitCode === 0 && repoCheck.stdout === "true") {
-    return "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
-  }
-
-  return undefined;
-}
-
 async function resolveContractActor(ref: string): Promise<string> {
   const services = getServices();
   const task = await services.taskStore.get(ref);
@@ -387,5 +491,27 @@ async function resolveContractActor(ref: string): Promise<string> {
   }
 
   const contract = await services.contractStore.get(ref);
-  return contract?.lockedBy ?? contract?.createdBy ?? "user";
+  if (contract) {
+    const owner = await services.taskStore.get(contract.taskId);
+    return owner?.assignee ?? contract.lockedBy ?? contract.createdBy;
+  }
+  return "user";
+}
+
+function renderEditableContract(contract: Contract): string {
+  return `${stringifyYaml({
+    intent: contract.intent,
+    scope: {
+      filesExpected: contract.scope.filesExpected,
+      filesForbidden: contract.scope.filesForbidden,
+      ...(contract.scope.maxFilesTouched !== undefined
+        ? { maxFilesTouched: contract.scope.maxFilesTouched }
+        : {}),
+    },
+    doneWhen: contract.doneWhen.map((criterion) => ({
+      id: criterion.id,
+      text: criterion.text,
+      kind: criterion.kind,
+    })),
+  }).trimEnd()}\n`;
 }
