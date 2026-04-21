@@ -60,6 +60,7 @@ export { JsonlTaskStoreAdapter } from "./adapters/jsonl-task-store.adapter.js";
 export { FsCandidateStoreAdapter } from "./adapters/fs-candidate-store.adapter.js";
 export { FsTaskContinuationStoreAdapter } from "./adapters/fs-task-continuation-store.adapter.js";
 export { FsTaskContinuationHistoryStoreAdapter } from "./adapters/fs-task-continuation-history-store.adapter.js";
+export type { Contract } from "./domain/contract/contract-types.js";
 
 export { createTask } from "./usecases/create-task.usecase.js";
 export { showTask } from "./usecases/show-task.usecase.js";
@@ -106,3 +107,4 @@ export type {
 export { registerTaskCommand } from "./commands/task.command.js";
 export { buildTaskServices } from "./services.js";
 export type { TaskServices } from "./services.js";
+export { transferContractOwnership } from "./usecases/contract/transfer-ownership.usecase.js";

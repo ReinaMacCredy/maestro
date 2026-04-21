@@ -169,7 +169,8 @@ maestro task stuck [--older-than 4h]                         # in_progress tasks
 
 # Liveness + silent mode
 maestro task heartbeat <id>                                  # bump lastActivityAt so the claim doesn't age out
-maestro task claim <id> [--stale-after 4h]                   # takes over an aged-out claim from a dead session
+maestro task claim <id> [--stale-after 4h]                   # takes over an aged-out claim from a dead session;
+                                                             # active contracts follow the new owner unless policy blocks reclaim
 maestro task update <id> ... --silent                        # print '<id> <marker>' only; MAESTRO_TASK_SILENT=1 opts in
 
 # Release or re-wire
@@ -247,6 +248,7 @@ This project uses Maestro for local bootstrap and runtime orchestration.
 - Use \`--no-contract\` only when config requires a contract but the task intentionally has none.
 - After completion, \`task contract show\` includes the stored verdict.
 - Reopening a completed task relocks its contract and clears the stored verdict.
+- Stale reclaim inherits active contract ownership by default; set \`contracts.staleReclaimContractPolicy: block\` to refuse it.
 
 ## Agent Skill Lookup
 

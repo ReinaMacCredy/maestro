@@ -19,6 +19,7 @@ import { heartbeatTask } from "../usecases/heartbeat-task.usecase.js";
 import { closeContractForTask } from "../usecases/contract/close-contract.usecase.js";
 import { computeContractVerdictForTask } from "../usecases/contract/compute-verdict.usecase.js";
 import { reopenContractForTask } from "../usecases/contract/reopen-contract.usecase.js";
+import { transferContractOwnership } from "../usecases/contract/transfer-ownership.usecase.js";
 import { STUCK_THRESHOLD_MS, isStuckTask } from "../domain/now-md-format.js";
 import { parseDuration } from "./duration.js";
 import {
@@ -520,6 +521,9 @@ function registerClaimCommand(taskCmd: Command, program: Command): void {
         force: opts.force === true,
         checkBusy: opts.busyCheck === true,
       });
+      if (claimed.contractId) {
+        await transferContractOwnership(services.contractStore, claimed.id, sessionId);
+      }
       await maybeAttachClaimAnchor(claimed.id);
       await syncTaskContinuation(
         {
@@ -1250,12 +1254,16 @@ async function maybeReleaseStaleOwnedTasks(skipAssignees: readonly string[] = []
 
   for (const assignee of staleOwners) {
     try {
+      await assertStaleContractsReclaimable(tasks.filter((task) => task.assignee === assignee));
       const released = await releaseOwnedTasks(services.taskStore, assignee);
       await syncRecoveredStaleOwnerTasks(services, before, released);
       if (released.length > 0) {
         warn(`[ok] Released ${released.length} stale task(s) owned by ${assignee}`);
       }
     } catch (error) {
+      if (error instanceof MaestroError && error.message.includes("stale reclaim is blocked by contract policy")) {
+        throw error;
+      }
       const message = error instanceof Error ? error.message : String(error);
       warn(`Stale task recovery failed for ${assignee}: ${message}`);
     }
@@ -1486,11 +1494,37 @@ async function maybeReleaseStaleClaim(
     return;
   }
 
+  await assertStaleContractsReclaimable([task]);
   const before = new Map([[task.id, task]]);
   const released = await releaseOwnedTasks(services.taskStore, task.assignee);
   await syncRecoveredStaleOwnerTasks(services, before, released);
   if (released.length > 0) {
     warn(`Released stale-claim (auto-released) on ${task.id} from ${task.assignee}`);
+  }
+}
+
+async function assertStaleContractsReclaimable(tasks: readonly Task[]): Promise<void> {
+  const services = getServices();
+  for (const task of tasks) {
+    if (!task.contractId) {
+      continue;
+    }
+
+    const contract = await services.contractStore.get(task.contractId);
+    if (!contract || (contract.status !== "locked" && contract.status !== "amended")) {
+      continue;
+    }
+    if (contract.configSnapshot.staleReclaimContractPolicy !== "block") {
+      continue;
+    }
+
+    throw new MaestroError(
+      `Task ${task.id} has active contract ${contract.id}; stale reclaim is blocked by contract policy`,
+      [
+        `Inspect the contract first: maestro task contract show ${contract.id}`,
+        `Release the stale owner manually once reviewed: maestro task release-owned ${task.assignee}`,
+      ],
+    );
   }
 }
 

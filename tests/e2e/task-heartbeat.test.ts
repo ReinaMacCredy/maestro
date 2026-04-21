@@ -24,6 +24,12 @@ afterEach(async () => {
   await rm(tmpDir, { recursive: true, force: true });
 });
 
+async function writeTemplate(name: string, body: string): Promise<string> {
+  const path = join(tmpDir, name);
+  await Bun.write(path, body);
+  return path;
+}
+
 describe("task heartbeat and stale-claim auto-release", () => {
   it(
     "heartbeat bumps lastActivityAt on a claimed task",
@@ -82,6 +88,70 @@ describe("task heartbeat and stale-claim auto-release", () => {
       );
       const result = expectJson<{ assignee: string }>(claim);
       expect(result.assignee).toBe("operator-new");
+    },
+    SLOW_CLI_TIMEOUT_MS,
+  );
+
+  it(
+    "stale reclaim inherits contract ownership by default and blocks when configured",
+    async () => {
+      const created = await runCompiled(["task", "create", "stale contract", "--json"], tmpDir);
+      const task = expectJson<{ id: string }>(created);
+      const staleOwner = "codex-bogusxyz001";
+
+      await runCompiled(["task", "claim", task.id, "--session", staleOwner, "--json"], tmpDir);
+      await runCompiled(["task", "update", task.id, "--status", "in_progress", "--session", staleOwner, "--json"], tmpDir);
+
+      const templatePath = await writeTemplate(
+        "stale-contract-template.yaml",
+        [
+          "intent: Keep stale reclaim inside task files",
+          "scope:",
+          "  filesExpected:",
+          "    - src/features/task/**",
+          "  filesForbidden: []",
+          "doneWhen:",
+          "  - text: contract exists",
+          "",
+        ].join("\n"),
+      );
+      await runCompiled(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir);
+      await runCompiled(["task", "contract", "lock", task.id, "--json"], tmpDir);
+
+      await new Promise((r) => setTimeout(r, 20));
+      const claimed = await runCompiled(
+        ["task", "claim", task.id, "--session", "operator-new", "--stale-after", "1ms", "--json"],
+        tmpDir,
+      );
+      expect(expectJson<{ assignee: string }>(claimed).assignee).toBe("operator-new");
+
+      const inherited = await runCompiled(["task", "contract", "show", task.id, "--json"], tmpDir);
+      expect(expectJson<{ lockedBy?: string }>(inherited).lockedBy).toBe("operator-new");
+
+      const blockedCreated = await runCompiled(["task", "create", "blocked stale contract", "--json"], tmpDir);
+      const blockedTask = expectJson<{ id: string }>(blockedCreated);
+      const blockedOwner = "codex-bogusxyz002";
+
+      await runCompiled(["task", "claim", blockedTask.id, "--session", blockedOwner, "--json"], tmpDir);
+      await runCompiled(
+        ["task", "update", blockedTask.id, "--status", "in_progress", "--session", blockedOwner, "--json"],
+        tmpDir,
+      );
+      await Bun.write(
+        join(tmpDir, ".maestro", "config.yaml"),
+        "contracts:\n  staleReclaimContractPolicy: block\n  overlapPolicy: annotate\n",
+      );
+      await runCompiled(["task", "contract", "new", blockedTask.id, "--from", templatePath, "--json"], tmpDir);
+      const locked = await runCompiled(["task", "contract", "lock", blockedTask.id, "--json"], tmpDir);
+      expect(expectJson<{ status: string }>(locked).status).toBe("locked");
+
+      await new Promise((r) => setTimeout(r, 20));
+      const blocked = await runCompiled(
+        ["task", "claim", blockedTask.id, "--session", "operator-blocked", "--stale-after", "1ms"],
+        tmpDir,
+      );
+      expect(blocked.exitCode).not.toBe(0);
+      expect(blocked.stderr).toContain("stale reclaim is blocked by contract policy");
     },
     SLOW_CLI_TIMEOUT_MS,
   );
