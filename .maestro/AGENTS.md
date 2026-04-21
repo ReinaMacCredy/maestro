@@ -6,7 +6,7 @@ Use this directory with the repo-root `AGENTS.md`. `.maestro/` is the repo-owned
 ```text
 .maestro/
 ├── context/     # durable project guidance and workflow docs
-├── tasks/       # tracked daily task queue
+├── tasks/       # tracked daily task queue, contracts, and reusable contract templates
 ├── plans/       # active planning notes
 ├── drafts/      # in-progress long-form docs
 ├── wisdom/      # promoted guidance/history
@@ -20,6 +20,7 @@ Use this directory with the repo-root `AGENTS.md`. `.maestro/` is the repo-owned
 | Shared operator guidance | `context/`, `MAESTRO.md` | Read before changing workflow assumptions |
 | Daily task queue | `tasks/tasks.jsonl` | Tracked durable state; reasons become history |
 | Task contracts | `tasks/contracts/` | Per-task intent/scope/verdict files with append-only `index.jsonl` history |
+| Contract draft templates | `tasks/contract-templates/` | Repo-local YAML seeds for `maestro task contract new <id> --from <name>` |
 | Local planning corpus | `plans/`, `drafts/`, `wisdom/`, `archive/` | Reference material, not automatically current product truth |
 | Retrieval/memory data | `retrieval-index.json`, `feedback.jsonl` | Generated/supporting artifacts |
 | Repo config | `config.yaml`, `settings.json` | Project-local Maestro settings |

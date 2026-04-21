@@ -99,4 +99,43 @@ describe("reopenContractForTask", () => {
     expect(reopened?.closedBy).toBeUndefined();
     expect(reopened?.verdict).toBeUndefined();
   });
+
+  it("rejects reopen when another active contract already owns the repo under fail overlap policy", async () => {
+    const created = await store.create(createInput());
+    const fulfilled = await store.save({
+      ...created,
+      status: "fulfilled",
+      lockedAt: "2026-04-21T00:10:00.000Z",
+      lockedBy: "session:codex:a",
+      closedAt: "2026-04-21T01:00:00.000Z",
+      closedAtCommit: "abc123",
+      closedBy: "session:codex:a",
+      verdict: {
+        fulfilled: true,
+        computedAt: "2026-04-21T01:00:00.000Z",
+        actualFilesTouched: ["README.md"],
+        expectedFilesMatched: ["README.md"],
+        outOfScopeFiles: [],
+        forbiddenTouched: [],
+        filesExpectedUnused: [],
+        unmetCriteria: [],
+        metCriteria: [],
+      },
+    });
+
+    const overlappingDraft = await store.create(createInput({
+      taskId: "tsk-b2c3d4",
+    }));
+    await store.save({
+      ...overlappingDraft,
+      status: "locked",
+      lockedAt: "2026-04-21T02:00:00.000Z",
+      lockedBy: "session:codex:b",
+    });
+
+    await expect(reopenContractForTask(store, {
+      id: fulfilled.taskId,
+      contractId: fulfilled.id,
+    })).rejects.toThrow("overlaps an active contract in the same repo");
+  });
 });

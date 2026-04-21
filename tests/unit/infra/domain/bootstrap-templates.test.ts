@@ -41,6 +41,8 @@ describe("AGENT_INSTRUCTION_BLOCK", () => {
   it("documents the task contract workflow", () => {
     expect(AGENT_INSTRUCTION_BLOCK).toContain("## Task Contracts");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract new <id>");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("--from default");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain(".maestro/tasks/contract-templates/default.md");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract lock <id>");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract show <id>");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract verdict <id>");
@@ -59,6 +61,7 @@ describe("AGENT_INSTRUCTION_BLOCK", () => {
   it("mirrors contract guidance into the bootstrap AGENTS template", () => {
     const agentsTemplate = PROJECT_BOOTSTRAP_TEMPLATES.find((template) => template.path === ".maestro/AGENTS.md");
     expect(agentsTemplate?.content).toContain(".maestro/tasks/contracts/");
+    expect(agentsTemplate?.content).toContain(".maestro/tasks/contract-templates/");
     expect(agentsTemplate?.content).toContain("maestro task contract new <id>");
     expect(agentsTemplate?.content).toContain("maestro task contract lock <id>");
     expect(agentsTemplate?.content).toContain("maestro task contract verdict <id>");
@@ -69,6 +72,15 @@ describe("AGENT_INSTRUCTION_BLOCK", () => {
     expect(agentsTemplate?.content).toContain("contracts.overlapPolicy: annotate");
     expect(agentsTemplate?.content).toContain("relocks its contract");
     expect(agentsTemplate?.content).toContain("staleReclaimContractPolicy: block");
+  });
+
+  it("ships the default contract draft template in bootstrap assets", () => {
+    const template = PROJECT_BOOTSTRAP_TEMPLATES.find(
+      (entry) => entry.path === ".maestro/tasks/contract-templates/default.md",
+    );
+    expect(template?.content).toContain("intent:");
+    expect(template?.content).toContain("filesExpected:");
+    expect(template?.content).toContain("doneWhen:");
   });
 
   it("documents the native handoff launcher and launch artifact path", () => {

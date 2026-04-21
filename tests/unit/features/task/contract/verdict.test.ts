@@ -217,4 +217,52 @@ describe("computeContractVerdict", () => {
     });
     expect(computed.verdict.outOfScopeFiles).toEqual(["src/index.ts", "tests/unit/sample.test.ts"]);
   });
+
+  it("notes when out-of-scope files were previously allowed by amendment history", () => {
+    const contract = contractFixture({
+      scope: {
+        filesExpected: ["src/**"],
+        filesForbidden: [],
+      },
+      doneWhen: [],
+      amendments: [
+        {
+          id: "a-a1b2c3",
+          at: "2026-04-21T00:06:00.000Z",
+          by: "session:test",
+          reason: "narrowed scope after the docs edit landed",
+          before: {
+            scope: {
+              filesExpected: ["README.md", "src/**"],
+              filesForbidden: [],
+            },
+          },
+          after: {
+            scope: {
+              filesExpected: ["src/**"],
+              filesForbidden: [],
+            },
+          },
+        },
+      ],
+    });
+    const gitResult: GitTouchedFilesResult = {
+      gitAvailable: true,
+      actualFilesTouched: ["README.md"],
+      closedAtCommit: "89abcdef0123456789abcdef0123456789abcdef",
+      anchorFallback: "direct",
+    };
+
+    const computed = computeContractVerdict(
+      contract,
+      gitResult,
+      undefined,
+      "session:test",
+      "2026-04-21T00:10:00.000Z",
+    );
+
+    expect(computed.verdict.fulfilled).toBe(false);
+    expect(computed.verdict.outOfScopeFiles).toEqual(["README.md"]);
+    expect(computed.verdict.notes).toContain("Previously in scope under amendments: README.md");
+  });
 });

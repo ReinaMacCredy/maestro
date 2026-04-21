@@ -9,7 +9,10 @@ import {
   buildTaskContinuationSummary,
   loadTaskContinuationSummary,
 } from "./task-continuation.usecase.js";
-import { reopenContractForTask } from "./contract/reopen-contract.usecase.js";
+import {
+  loadContractForReopen,
+  reopenContractForTask,
+} from "./contract/reopen-contract.usecase.js";
 
 export interface ReopenTaskFlowDeps {
   readonly taskStore: TaskStorePort;
@@ -31,6 +34,7 @@ export async function reopenTaskFlow(
   if (!previous) {
     throw taskNotFound(taskId);
   }
+  await loadContractForReopen(deps.contractStore, previous);
 
   const reopened = await deps.taskStore.reopen(taskId);
   const existingSummary = await loadTaskContinuationSummary(deps.continuationStore, taskId);

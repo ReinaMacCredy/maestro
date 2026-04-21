@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { initGitRepo } from "../../../helpers/run-compiled-cli.js";
@@ -84,6 +84,32 @@ describe("task contract CLI", () => {
     const lockedContract = expectJson<{ status: string; claimedAtCommit?: string }>(locked);
     expect(lockedContract.status).toBe("locked");
     expect(lockedContract.claimedAtCommit).toMatch(/^[0-9a-f]{40}$/);
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("loads named templates from .maestro/tasks/contract-templates", async () => {
+    const createdTask = await runCli(["task", "create", "templated contract", "--json"], tmpDir);
+    const task = expectJson<{ id: string }>(createdTask);
+    const templateDir = join(tmpDir, ".maestro", "tasks", "contract-templates");
+    await mkdir(templateDir, { recursive: true });
+    await Bun.write(
+      join(templateDir, "default.md"),
+      [
+        "intent: Create the contract from the repo-local default template",
+        "scope:",
+        "  filesExpected:",
+        "    - src/features/task/**",
+        "  filesForbidden: []",
+        "doneWhen:",
+        "  - text: named template lookup works",
+        "    kind: manual",
+        "",
+      ].join("\n"),
+    );
+
+    const drafted = await runCli(["task", "contract", "new", task.id, "--from", "default", "--json"], tmpDir);
+    const contract = expectJson<{ intent: string; scope: { filesExpected: string[] } }>(drafted);
+    expect(contract.intent).toBe("Create the contract from the repo-local default template");
+    expect(contract.scope.filesExpected).toEqual(["src/features/task/**"]);
   }, SLOW_CLI_TIMEOUT_MS);
 
   it("warns when forbidden scope overlaps expected scope at lock time", async () => {

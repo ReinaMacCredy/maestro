@@ -73,7 +73,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
   contractCmd
     .command("new <taskId>")
     .description("Create a draft contract for a task")
-    .option("--from <path>", "Load a YAML template from a file ('-' for stdin)")
+    .option("--from <path>", "Load YAML from a file or named template ('-' for stdin)")
     .option("--editor <cmd>", "Open an editor command to write the draft YAML")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
     .option("--json", "Output as JSON")
@@ -395,13 +395,41 @@ async function loadContractDraftTemplate(
 
 async function readDraftSource(path: string): Promise<string> {
   const raw = await readTextOrStdin(path);
-  if (raw === undefined) {
-    throw new MaestroError(`Contract template not found: ${path}`, [
-      "Check the file path and retry",
-      "Use '-' to read YAML from stdin",
-    ]);
+  if (raw !== undefined) {
+    return raw;
   }
-  return raw;
+
+  const namedTemplate = await resolveNamedContractTemplate(path);
+  if (namedTemplate) {
+    return await Bun.file(namedTemplate).text();
+  }
+
+  throw new MaestroError(`Contract template not found: ${path}`, [
+    "Check the file path and retry",
+    "Or add a reusable draft under .maestro/tasks/contract-templates/",
+    "Use '-' to read YAML from stdin",
+  ]);
+}
+
+async function resolveNamedContractTemplate(path: string): Promise<string | undefined> {
+  if (
+    path === "-"
+    || path.trim().length === 0
+    || path.includes("/")
+    || path.includes("\\")
+  ) {
+    return undefined;
+  }
+
+  const templateDir = join(process.cwd(), ".maestro", "tasks", "contract-templates");
+  for (const suffix of ["", ".md", ".yaml", ".yml"] as const) {
+    const candidate = join(templateDir, `${path}${suffix}`);
+    if (await Bun.file(candidate).exists()) {
+      return candidate;
+    }
+  }
+
+  return undefined;
 }
 
 async function editContractDraft(initialContent: string, editorCommand: string): Promise<string> {

@@ -88,6 +88,9 @@ Before starting work:
        doneWhen: bullets that signal completion
   3. maestro task contract lock <id>
 
+Project-local draft templates can live under \`.maestro/tasks/contract-templates/\`.
+Use \`maestro task contract new <id> --from default\` to load \`.maestro/tasks/contract-templates/default.md\`.
+
 Useful contract commands:
   - maestro task contract edit <id>
   - maestro task contract show <id>
@@ -234,6 +237,7 @@ This project uses Maestro for local bootstrap and runtime orchestration.
 - \`.maestro/skills/\` contains project-local agent skills
 - \`.maestro/missions/\`, \`.maestro/sessions/\`, and \`.maestro/launches/\` contain runtime state
 - \`.maestro/tasks/contracts/\` stores one task contract JSON per task plus an append-only index
+- \`.maestro/tasks/contract-templates/\` stores reusable contract draft YAML templates such as \`default.md\`
 - \`skills/built-in/\` contains shipped built-in fallback skills
 
 ## Task Contracts
@@ -241,6 +245,7 @@ This project uses Maestro for local bootstrap and runtime orchestration.
 - Create and lock a task contract before non-trivial work:
   - \`maestro task contract new <id>\`
   - \`maestro task contract lock <id>\`
+- Reusable drafts live under \`.maestro/tasks/contract-templates/\`; \`maestro task contract new <id> --from default\` loads \`.maestro/tasks/contract-templates/default.md\`.
 - Inspect or clean up contract drafts:
   - \`maestro task contract edit <id>\`
   - \`maestro task contract show <id>\`
@@ -276,6 +281,19 @@ This project uses Maestro for local bootstrap and runtime orchestration.
 - \`.maestro/bootstrap/services.yaml\` defines commands and service helpers
 - \`.maestro/bootstrap/library/\` stores reusable local guidance
 - \`.maestro/bootstrap/validation/\` stores local validation/reference artifacts
+`,
+  },
+  {
+    path: ".maestro/tasks/contract-templates/default.md",
+    content: `intent: >
+  State what will change and why in 1-3 sentences.
+scope:
+  filesExpected:
+    - src/**
+  filesForbidden: []
+doneWhen:
+  - text: Describe the observable signal that proves the task is done.
+    kind: manual
 `,
   },
   {

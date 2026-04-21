@@ -331,6 +331,86 @@ describe("task contract completion", () => {
     expect(reset.closedBy).toBeUndefined();
   }, SLOW_CLI_TIMEOUT_MS);
 
+  it("refuses reopen when another active contract already owns the repo and leaves state unchanged", async () => {
+    await seedTrackedFile("README.md", "hello\n");
+
+    const closedTask = expectJson<{ id: string }>(await runCli(["task", "create", "closed reopen conflict", "--json"], tmpDir));
+    await runCli(["task", "claim", closedTask.id, "--session", "closed-owner", "--json"], tmpDir);
+    await runCli(["task", "update", closedTask.id, "--status", "in_progress", "--session", "closed-owner", "--json"], tmpDir);
+
+    const closedTemplatePath = await writeTemplate(
+      "closed-reopen-conflict.yaml",
+      [
+        "intent: Close one contracted task before opening another",
+        "scope:",
+        "  filesExpected:",
+        "    - README.md",
+        "  filesForbidden: []",
+        "doneWhen:",
+        "  - text: manual",
+        "    kind: receipt-hint",
+        "",
+      ].join("\n"),
+    );
+
+    const closedContract = expectJson<{ id: string }>(
+      await runCli(["task", "contract", "new", closedTask.id, "--from", closedTemplatePath, "--json"], tmpDir),
+    );
+    await runCli(["task", "contract", "lock", closedContract.id, "--json"], tmpDir);
+
+    await Bun.write(join(tmpDir, "README.md"), "hello\nclosed\n");
+    await runCli(
+      [
+        "task",
+        "update",
+        closedTask.id,
+        "--status",
+        "completed",
+        "--reason",
+        "done",
+        "--verified-by",
+        "manual",
+        "--session",
+        "closed-owner",
+        "--json",
+      ],
+      tmpDir,
+    );
+
+    const activeTask = expectJson<{ id: string }>(await runCli(["task", "create", "active reopen conflict", "--json"], tmpDir));
+    await runCli(["task", "claim", activeTask.id, "--session", "active-owner", "--json"], tmpDir);
+    await runCli(["task", "update", activeTask.id, "--status", "in_progress", "--session", "active-owner", "--json"], tmpDir);
+
+    const activeTemplatePath = await writeTemplate(
+      "active-reopen-conflict.yaml",
+      [
+        "intent: Hold an active lock in the same repo",
+        "scope:",
+        "  filesExpected:",
+        "    - src/features/task/**",
+        "  filesForbidden: []",
+        "doneWhen:",
+        "  - text: active lock remains",
+        "    kind: manual",
+        "",
+      ].join("\n"),
+    );
+
+    await runCli(["task", "contract", "new", activeTask.id, "--from", activeTemplatePath, "--json"], tmpDir);
+    await runCli(["task", "contract", "lock", activeTask.id, "--json"], tmpDir);
+
+    const blocked = await runCli(["task", "reopen", closedTask.id, "--json"], tmpDir);
+    const blockedOutput = `${blocked.stdout}\n${blocked.stderr}`;
+    expect(blocked.exitCode).not.toBe(0);
+    expect(blockedOutput).toContain("overlaps an active contract in the same repo");
+
+    const shownTask = await runCli(["task", "show", closedTask.id, "--json"], tmpDir);
+    expect(expectJson<{ status: string }>(shownTask).status).toBe("completed");
+
+    const shownContract = await runCli(["task", "contract", "show", closedContract.id, "--json"], tmpDir);
+    expect(expectJson<{ status: string }>(shownContract).status).toBe("fulfilled");
+  }, SLOW_CLI_TIMEOUT_MS);
+
   it("reopens a contracted task through update and treats repeated completion as idempotent", async () => {
     await seedTrackedFile("README.md", "hello\n");
 

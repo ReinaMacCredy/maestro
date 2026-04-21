@@ -47,6 +47,10 @@ export function computeContractVerdict(
   const unmetCriteria = criteria.filter((criterion) => criterion.met !== true);
   const anchorFailed = gitResult.gitAvailable && gitResult.anchorFallback === "lost";
   const overlapBlocks = opts?.overlapDetected?.policy === "fail";
+  const amendmentScopeNote = buildAmendmentScopeNote(contract, outOfScopeFiles);
+  const notes = [gitResult.notes, amendmentScopeNote]
+    .filter((note): note is string => typeof note === "string" && note.trim().length > 0)
+    .join(" ");
 
   return {
     criteria,
@@ -78,9 +82,26 @@ export function computeContractVerdict(
             },
           }
         : {}),
-      ...(gitResult.notes ? { notes: gitResult.notes } : {}),
+      ...(notes ? { notes } : {}),
     },
   };
+}
+
+function buildAmendmentScopeNote(contract: Contract, outOfScopeFiles: readonly string[]): string | undefined {
+  if (outOfScopeFiles.length === 0 || contract.amendments.length === 0) {
+    return undefined;
+  }
+
+  const previouslyInScope = Array.from(new Set(outOfScopeFiles.filter((path) =>
+    contract.amendments.some((amendment) =>
+      matchesScope(amendment.before.scope, path) || matchesScope(amendment.after.scope, path),
+    ),
+  ))).sort();
+  if (previouslyInScope.length === 0) {
+    return undefined;
+  }
+
+  return `Previously in scope under amendments: ${previouslyInScope.join(", ")}.`;
 }
 
 function applyReceiptHints(
@@ -122,6 +143,19 @@ function looselyMatches(left: string, right: string): boolean {
 
 function matchesAny(patterns: readonly string[], path: string): boolean {
   return patterns.some((pattern) => matches(pattern, path));
+}
+
+function matchesScope(
+  scope: Contract["scope"] | undefined,
+  path: string,
+): boolean {
+  if (!scope) {
+    return false;
+  }
+  if (matchesAny(scope.filesForbidden, path)) {
+    return false;
+  }
+  return matchesAny(scope.filesExpected, path);
 }
 
 function matches(pattern: string, path: string): boolean {
