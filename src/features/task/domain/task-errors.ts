@@ -11,6 +11,13 @@ export function taskNotFound(id: string): MaestroError {
   ]);
 }
 
+export function invalidSimilarTaskLimit(limit: number): MaestroError {
+  return new MaestroError(`Invalid similar-task limit: ${limit}`, [
+    "Limit must be a non-negative integer",
+    "Use 0 to request unlimited results",
+  ]);
+}
+
 export function unknownBlocker(id: string, missing: readonly string[]): MaestroError {
   return new MaestroError(
     `Task ${id} references unknown blocker task(s): ${missing.join(", ")}`,

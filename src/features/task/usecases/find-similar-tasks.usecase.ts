@@ -3,7 +3,7 @@ import type { Task } from "../domain/task-types.js";
 import { extractKeywords } from "../domain/extract-keywords.js";
 import type { ContractStoreQueryPort } from "../ports/contract-store.port.js";
 import type { TaskQueryPort } from "../ports/task-store.port.js";
-import { taskNotFound } from "../domain/task-errors.js";
+import { invalidSimilarTaskLimit, taskNotFound } from "../domain/task-errors.js";
 
 export interface SimilarTaskMatch {
   readonly task: Task;
@@ -19,6 +19,10 @@ export async function findSimilarTasks(
   limit: number = DEFAULT_LIMIT,
   contractStore?: ContractStoreQueryPort,
 ): Promise<readonly SimilarTaskMatch[]> {
+  if (limit < 0) {
+    throw invalidSimilarTaskLimit(limit);
+  }
+
   const all = await store.all();
   const target = all.find((task) => task.id === targetId);
   if (!target) {
@@ -55,7 +59,7 @@ export async function findSimilarTasks(
     return b.task.updatedAt.localeCompare(a.task.updatedAt);
   });
 
-  return limit > 0 ? scored.slice(0, limit) : scored;
+  return limit === 0 ? scored : scored.slice(0, limit);
 }
 
 const EMPTY_CONTRACTS = new Map<string, Contract>();

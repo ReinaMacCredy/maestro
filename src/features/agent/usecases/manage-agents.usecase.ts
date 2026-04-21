@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import {
   SUPPORTED_AGENTS,
   agentConfigPath,
@@ -69,13 +70,13 @@ function stripLegacyAgentSections(content: string): {
   };
 }
 
-async function processInject(agent: AgentConfigSpec, projectDir: string): Promise<InjectResult> {
-  const configPath = agentConfigPath(agent, projectDir);
-  const dirPath = agentConfigDirPath(agent, projectDir);
-  const refPath = agentReferencePath(agent, projectDir);
+async function processInject(agent: AgentConfigSpec, projectDir: string, homeDir: string): Promise<InjectResult> {
+  const configPath = agentConfigPath(agent, projectDir, homeDir);
+  const dirPath = agentConfigDirPath(agent, projectDir, homeDir);
+  const refPath = agentReferencePath(agent, projectDir, homeDir);
   const targetContent = await readText(configPath);
   const legacySource = targetContent === undefined
-    ? await firstExistingConfig(agentLegacyConfigPaths(agent, projectDir))
+    ? await firstExistingConfig(agentLegacyConfigPaths(agent, projectDir, homeDir))
     : undefined;
 
   if (!(await dirExists(dirPath)) && !legacySource) {
@@ -122,12 +123,12 @@ async function processInject(agent: AgentConfigSpec, projectDir: string): Promis
   return { agent: agent.displayName, action, configPath: refPath };
 }
 
-async function processRemove(agent: AgentConfigSpec, projectDir: string): Promise<RemoveResult> {
-  const configPath = agentConfigPath(agent, projectDir);
-  const refPath = agentReferencePath(agent, projectDir);
+async function processRemove(agent: AgentConfigSpec, projectDir: string, homeDir: string): Promise<RemoveResult> {
+  const configPath = agentConfigPath(agent, projectDir, homeDir);
+  const refPath = agentReferencePath(agent, projectDir, homeDir);
   const current = await firstExistingConfig([
     configPath,
-    ...agentLegacyConfigPaths(agent, projectDir),
+    ...agentLegacyConfigPaths(agent, projectDir, homeDir),
   ]);
 
   if (!current) {
@@ -185,21 +186,25 @@ async function firstExistingConfig(paths: readonly string[]): Promise<ExistingCo
 export async function injectAgentBlocks(
   projectDir = process.cwd(),
   targetScope: AgentConfigTargetScope = "all",
+  homeDir?: string,
 ): Promise<InjectResult[]> {
+  const resolvedHomeDir = homeDir ?? homedir();
   return Promise.all(
     SUPPORTED_AGENTS
       .filter((agent) => agentMatchesTargetScope(agent, targetScope))
-      .map((agent) => processInject(agent, projectDir)),
+      .map((agent) => processInject(agent, projectDir, resolvedHomeDir)),
   );
 }
 
 export async function removeAgentBlocks(
   projectDir = process.cwd(),
   targetScope: AgentConfigTargetScope = "all",
+  homeDir?: string,
 ): Promise<RemoveResult[]> {
+  const resolvedHomeDir = homeDir ?? homedir();
   return Promise.all(
     SUPPORTED_AGENTS
       .filter((agent) => agentMatchesTargetScope(agent, targetScope))
-      .map((agent) => processRemove(agent, projectDir)),
+      .map((agent) => processRemove(agent, projectDir, resolvedHomeDir)),
   );
 }

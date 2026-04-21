@@ -1782,7 +1782,7 @@ function emitSilentSuccess(
 function registerSimilarCommand(taskCmd: Command, program: Command): void {
   taskCmd
     .command("similar <id>")
-    .description("Show past tasks with keyword overlap to this task's title/receipt")
+    .description("Show past tasks with keyword overlap across title, completion reason, receipt text, and linked contract text")
     .option("--limit <n>", "Maximum results (default 5, 0 = unlimited)")
     .option("--json", "Output as JSON")
     .action(async (id: string, opts) => {

@@ -6,7 +6,7 @@ The output of this step is a short list of constraints per feature, written in p
 
 ## What a boundary actually is
 
-A constraint is a thing not to touch, plus the reason. The reason is load-bearing — without it, the rule cannot be enforced at edge cases. A agent that hits an unexpected obstacle and sees "do not modify X.ts" with no reason will either violate the rule or halt the mission asking for clarification. Both are failures.
+A constraint is a thing not to touch, plus the reason. The reason is load-bearing — without it, the rule cannot be enforced at edge cases. An agent that hits an unexpected obstacle and sees "do not modify X.ts" with no reason will either violate the rule or halt the mission asking for clarification. Both are failures.
 
 A constraint with a reason lets the agent reason about its own edge case: "the rule says do not modify X.ts because Y, and in my situation Y still applies, so I should not modify X.ts." Agents that can reason about constraints execute further without needing intervention.
 
@@ -67,4 +67,4 @@ Constraints:
 
 3. Keep permission semantics unchanged because this feature is a pure refactor, not a product behavior change. Good location: `preconditions`.
 
-Three constraints, each in a different category (API, files, out-of-scope), each with a reason, each visible to the agent in normal Maestro context. A agent hitting an edge case during the refactor can reason about each rule without asking for human intervention.
+Three constraints, each in a different category (API, files, out-of-scope), each with a reason, each visible to the agent in normal Maestro context. An agent hitting an edge case during the refactor can reason about each rule without asking for human intervention.

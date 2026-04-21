@@ -22,27 +22,28 @@ export const SUPPORTED_AGENTS: readonly AgentConfigSpec[] = [
   { slug: "gemini", displayName: "Gemini CLI", configDir: ".gemini", configFile: "GEMINI.md", agentFlag: "gemini" },
 ];
 
-export function agentConfigPath(agent: AgentConfigSpec, projectDir = process.cwd()): string {
+export function agentConfigPath(agent: AgentConfigSpec, projectDir = process.cwd(), homeDir = homedir()): string {
   return agent.configScope === "project"
     ? join(projectDir, agent.configDir, agent.configFile)
-    : join(homedir(), agent.configDir, agent.configFile);
+    : join(homeDir, agent.configDir, agent.configFile);
 }
 
-export function agentConfigDirPath(agent: AgentConfigSpec, projectDir = process.cwd()): string {
+export function agentConfigDirPath(agent: AgentConfigSpec, projectDir = process.cwd(), homeDir = homedir()): string {
   return agent.configScope === "project"
     ? join(projectDir, agent.configDir)
-    : join(homedir(), agent.configDir);
+    : join(homeDir, agent.configDir);
 }
 
-export function agentReferencePath(agent: AgentConfigSpec, projectDir = process.cwd()): string {
+export function agentReferencePath(agent: AgentConfigSpec, projectDir = process.cwd(), homeDir = homedir()): string {
   return agent.configScope === "project"
     ? join(projectDir, agent.configDir, REFERENCE_FILE)
-    : join(homedir(), agent.configDir, REFERENCE_FILE);
+    : join(homeDir, agent.configDir, REFERENCE_FILE);
 }
 
 export function agentLegacyConfigPaths(
   agent: AgentConfigSpec,
   projectDir = process.cwd(),
+  homeDir = homedir(),
 ): string[] {
   if (agent.slug !== "droid") {
     return [];
@@ -50,7 +51,7 @@ export function agentLegacyConfigPaths(
 
   return [
     join(projectDir, ".factory", "AGENTS.md"),
-    join(homedir(), ".factory", "AGENTS.md"),
-    join(homedir(), ".maestro", "AGENTS.md"),
-  ].filter((path) => path !== agentConfigPath(agent, projectDir));
+    join(homeDir, ".factory", "AGENTS.md"),
+    join(homeDir, ".maestro", "AGENTS.md"),
+  ].filter((path) => path !== agentConfigPath(agent, projectDir, homeDir));
 }

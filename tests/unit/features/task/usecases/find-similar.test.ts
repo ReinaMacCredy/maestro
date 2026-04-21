@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { MaestroError } from "@/shared/errors.js";
 import { FsContractStoreAdapter } from "@/features/task/adapters/fs-contract-store.adapter.js";
 import { JsonlTaskStoreAdapter } from "@/features/task/adapters/jsonl-task-store.adapter.js";
 import { createContract } from "@/features/task/usecases/contract/create-contract.usecase.js";
@@ -80,6 +81,12 @@ describe("findSimilarTasks", () => {
     const target = await createTask(store, { title: "demo keyword target" });
     const matches = await findSimilarTasks(store, target.id, 3);
     expect(matches.length).toBe(3);
+  });
+
+  it("rejects negative limits", async () => {
+    const target = await createTask(store, { title: "demo keyword target" });
+
+    await expect(findSimilarTasks(store, target.id, -1)).rejects.toThrow(MaestroError);
   });
 
   it("includes contract intent and criteria text in the similarity pool", async () => {

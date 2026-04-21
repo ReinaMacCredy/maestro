@@ -49,7 +49,7 @@ If you only remember one distinction: `mission` is for planned execution; `task`
 | Assertion | A validation target tied to a feature. Assertions are updated to `passed`, `failed`, `blocked`, or `waived`. |
 | Handoff | A persisted launch record plus markdown brief for starting a fresh Codex or Claude session from current mission or repo context. |
 | Task | A Claude-style blocker-graph work item for the daily loop; lives at `.maestro/tasks/tasks.jsonl` independent of missions. |
-| Reply | A agent's structured outcome record for a feature, optionally gated by behavioral principles. |
+| Reply | An agent's structured outcome record for a feature, optionally gated by behavioral principles. |
 | Principle | A behavioral rule injected into agent prompts and scored against replies. Stored at `.maestro/principles.jsonl`. |
 | Memory | Corrections, learnings, and compiled guidance that feed back into future agent prompts. |
 | Checkpoint | A timestamped mission snapshot you can save and later restore. |
@@ -356,7 +356,7 @@ Rules enforced by the domain layer:
 | `maestro task ready` | Pending, unblocked, unassigned tasks, `P0`/`P1` first. |
 | `maestro task mine` | Tasks claimed by the active session. |
 | `maestro task stuck` | `in_progress` tasks idle past `--older-than` (default `4h`). |
-| `maestro task similar <id>` | Tasks that look alike by title, labels, and contract scope. |
+| `maestro task similar <id>` | Tasks that look alike by title, completion reason, receipt text, and linked contract text. |
 | `maestro task list` | Full filter set: `--status`, `--priority`, `--type`, `--label`, `--parent`, `--assignee`, `--limit`. |
 
 ### Ownership and claim

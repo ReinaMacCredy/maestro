@@ -240,8 +240,16 @@ describe("manage-agents use case logic", () => {
       expect(hasBlock(config)).toBe(false);
     });
 
-    // not-detected is environment-dependent: os.homedir() leaks the real
-    // home in Bun, so legacy path lookup may find ~/.maestro/AGENTS.md.
-    // The not-detected path is trivial (dirExists check); skip it here.
+    it("returns not-detected when neither project config nor legacy home paths exist", async () => {
+      const fakeHome = join(tmpDir, "fake-home");
+      await mkdir(fakeHome, { recursive: true });
+
+      const results = await injectAgentBlocks(tmpDir, "all", fakeHome);
+      const droid = results.find((r) => r.agent === "Droid CLI");
+
+      expect(droid).toBeDefined();
+      expect(droid?.action).toBe("not-detected");
+      expect(droid?.configPath).toBe(join(tmpDir, ".maestro", REFERENCE_FILE));
+    });
   });
 });
