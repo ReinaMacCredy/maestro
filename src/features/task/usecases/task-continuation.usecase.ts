@@ -25,6 +25,15 @@ const NORMALIZED_AGENT_LABELS: Readonly<Record<string, string>> = {
   "claude-code": "claude",
 };
 
+const OWNER_AGENT_ALIASES: Readonly<Record<string, AgentSlug>> = {
+  claude: "claude-code",
+};
+
+const KNOWN_OWNER_PREFIXES = [...new Set([
+  ...KNOWN_AGENT_PREFIXES,
+  ...Object.keys(OWNER_AGENT_ALIASES),
+])].sort((left, right) => right.length - left.length);
+
 export interface TaskContinuationDeps {
   readonly taskStore: TaskQueryPort;
   readonly continuationStore: TaskContinuationStorePort;
@@ -146,6 +155,40 @@ export function deriveAgentFromAssignee(
     ...(sessionId ? { sessionId } : {}),
     lastSeenAt: at,
   };
+}
+
+export function buildTaskOwnerId(agent: string, sessionId: string): string {
+  const normalizedAgent = normalizeTaskOwnerAgent(agent);
+  const trimmedSessionId = sessionId.trim();
+  return trimmedSessionId.length > 0
+    ? `${normalizedAgent}-${trimmedSessionId}`
+    : normalizedAgent;
+}
+
+export function parseTaskOwnerId(
+  assignee: string,
+): { agent: AgentSlug; sessionId: string } | undefined {
+  for (const prefix of KNOWN_OWNER_PREFIXES) {
+    const token = `${prefix}-`;
+    if (!assignee.startsWith(token)) {
+      continue;
+    }
+    const sessionId = assignee.slice(token.length).trim();
+    if (sessionId.length === 0) {
+      return undefined;
+    }
+    return {
+      agent: normalizeTaskOwnerAgent(prefix),
+      sessionId,
+    };
+  }
+
+  return undefined;
+}
+
+function normalizeTaskOwnerAgent(agent: string): AgentSlug {
+  const trimmed = agent.trim();
+  return OWNER_AGENT_ALIASES[trimmed] ?? trimmed;
 }
 
 function deriveCurrentState(task: Task, existing?: TaskContinuationSummary): string {

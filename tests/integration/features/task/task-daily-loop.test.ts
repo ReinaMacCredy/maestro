@@ -101,6 +101,54 @@ describe("task CLI daily loop", () => {
     expect(payload[0]?.assignee).toBeUndefined();
   }, SLOW_CLI_TIMEOUT_MS);
 
+  it("syncs continuation state when ready auto-releases a stale owner", async () => {
+    const id = (await runCli(["task", "q", "stale owner continuation"], tmpDir)).stdout;
+    await runCli(["task", "claim", id, "--session", "codex-stale-session", "--json"], tmpDir);
+    await runCli(
+      [
+        "task",
+        "update",
+        id,
+        "--status",
+        "in_progress",
+        "--session",
+        "codex-stale-session",
+        "--current-state",
+        "Actively investigating before the shell disappeared.",
+        "--json",
+      ],
+      tmpDir,
+    );
+
+    const ready = await runCli(
+      ["task", "ready", "--json"],
+      tmpDir,
+      {
+        env: {
+          MAESTRO_CODEX_SESSIONS_DIR: join(tmpDir, "missing-codex-sessions"),
+          MAESTRO_CLAUDE_SESSIONS_DIR: join(tmpDir, "missing-claude-sessions"),
+          MAESTRO_CLAUDE_PROJECTS_DIR: join(tmpDir, "missing-claude-projects"),
+        },
+      },
+    );
+    expect(ready.exitCode).toBe(0);
+    expect(expectJson<Array<{ id: string }>>(ready).map((task) => task.id)).toContain(id);
+
+    const summaryPath = join(tmpDir, ".maestro", "tasks", "continuations", "active", `${id}.json`);
+    const summary = JSON.parse(await readFile(summaryPath, "utf8")) as {
+      status: string;
+      currentState: string;
+      activeAgent?: unknown;
+    };
+    expect(summary.status).toBe("pending");
+    expect(summary.currentState).toBe("Task ownership released back to the queue.");
+    expect(summary.activeAgent).toBeUndefined();
+
+    const historyPath = join(tmpDir, ".maestro", "tasks", "local-history", `${id}.jsonl`);
+    const history = await readFile(historyPath, "utf8");
+    expect(history).toContain("Recovered from stale owner codex-stale-session");
+  }, SLOW_CLI_TIMEOUT_MS);
+
   it("writes a continuation summary on active work and archives it on completion", async () => {
     const id = (await runCli(["task", "q", "continue me"], tmpDir)).stdout;
     await runCli(["task", "claim", id, "--session", "codex-session-a", "--json"], tmpDir);

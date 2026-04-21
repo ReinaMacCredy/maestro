@@ -1,5 +1,4 @@
 import { Command, Option } from "commander";
-import type { AgentSlug } from "@/features/session/domain/types.js";
 import { getServices } from "@/services.js";
 import { MaestroError } from "@/shared/errors.js";
 import { readTextOrStdin } from "@/shared/lib/fs.js";
@@ -18,9 +17,11 @@ import { captureTaskCandidate } from "../usecases/capture-task-candidate.usecase
 import { planTasks } from "../usecases/plan-tasks.usecase.js";
 import {
   buildTaskContinuationSummary,
+  buildTaskOwnerId,
   buildTaskShowView,
   deriveAgentFromAssignee,
   loadTaskContinuationSummary,
+  parseTaskOwnerId,
   syncTaskContinuation,
 } from "../usecases/task-continuation.usecase.js";
 import type {
@@ -56,17 +57,6 @@ import {
   formatTaskList,
   formatTaskSummary,
 } from "./task-command-formatters.js";
-
-const STALE_OWNER_AGENT_PREFIXES = [
-  "claude-code",
-  "opencode",
-  "codex",
-  "gemini",
-  "amp",
-  "cline",
-  "aider",
-  "cursor",
-] as const satisfies readonly AgentSlug[];
 
 interface ContinuationEditInput {
   readonly currentState?: string;
@@ -557,28 +547,7 @@ function registerReleaseOwnedCommand(taskCmd: Command, program: Command): void {
       const isJson = resolveJsonFlag(opts, program);
       const before = new Map((await services.taskStore.all()).map((task) => [task.id, task] as const));
       const released = await releaseOwnedTasks(services.taskStore, sessionId.trim());
-      for (const task of released) {
-        const previous = before.get(task.id);
-        await syncTaskContinuation(
-          {
-            continuationStore: services.taskContinuationStore,
-            continuationHistory: services.taskContinuationHistory,
-          },
-          {
-            task,
-            summary: {
-              currentState: "Task ownership released back to the queue.",
-              activeAgent: null,
-            },
-            event: {
-              kind: "snapshot",
-              at: task.updatedAt,
-              summary: previous?.assignee ? `Recovered from stale owner ${previous.assignee}` : "Recovered from stale owner",
-              currentState: "Task ownership released back to the queue.",
-            },
-          },
-        );
-      }
+      await syncRecoveredStaleOwnerTasks(services, before, released);
 
       output(isJson, released, (tasks) => {
         if (tasks.length === 0) {
@@ -651,8 +620,9 @@ function registerBlockCommand(taskCmd: Command, program: Command): void {
           force: opts.force === true,
         },
       );
+      const tasksById = new Map((await services.taskStore.all()).map((task) => [task.id, task] as const));
       for (const blockedTaskId of blockedTaskIds) {
-        const blockedTask = await services.taskStore.get(blockedTaskId);
+        const blockedTask = tasksById.get(blockedTaskId);
         if (!blockedTask) continue;
         await syncTaskContinuation(
           {
@@ -722,8 +692,9 @@ function registerUnblockCommand(taskCmd: Command, program: Command): void {
           force: opts.force === true,
         },
       );
+      const tasksById = new Map((await services.taskStore.all()).map((task) => [task.id, task] as const));
       for (const blockedTaskId of blockedTaskIds) {
-        const blockedTask = await services.taskStore.get(blockedTaskId);
+        const blockedTask = tasksById.get(blockedTaskId);
         if (!blockedTask) continue;
         await syncTaskContinuation(
           {
@@ -818,7 +789,7 @@ async function resolveOwnershipSessionId(explicitSessionId: string | undefined):
       "Or pass --session <id> for an explicit operator or CI override",
     ]);
   }
-  return `${session.agent}-${session.sessionId}`;
+  return buildTaskOwnerId(session.agent, session.sessionId);
 }
 
 async function resolveOptionalOwnershipSessionId(explicitSessionId: string | undefined): Promise<string | undefined> {
@@ -828,7 +799,7 @@ async function resolveOptionalOwnershipSessionId(explicitSessionId: string | und
 
   const services = getServices();
   const session = await services.sessionDetect.detect(process.cwd());
-  return session ? `${session.agent}-${session.sessionId}` : undefined;
+  return session ? buildTaskOwnerId(session.agent, session.sessionId) : undefined;
 }
 
 async function resolveSessionAndReleaseStale(
@@ -1128,6 +1099,7 @@ function registerReadyCommand(taskCmd: Command, program: Command): void {
 async function maybeReleaseStaleOwnedTasks(skipAssignees: readonly string[] = []): Promise<void> {
   const services = getServices();
   const tasks = await services.taskStore.all();
+  const before = new Map(tasks.map((task) => [task.id, task] as const));
   const staleOwners = new Set<string>();
   const skipSet = new Set(skipAssignees);
 
@@ -1138,7 +1110,7 @@ async function maybeReleaseStaleOwnedTasks(skipAssignees: readonly string[] = []
     if (skipSet.has(task.assignee)) {
       continue;
     }
-    const parsed = parseKnownAgentAssignee(task.assignee);
+    const parsed = parseTaskOwnerId(task.assignee);
     if (!parsed) {
       continue;
     }
@@ -1151,6 +1123,7 @@ async function maybeReleaseStaleOwnedTasks(skipAssignees: readonly string[] = []
   for (const assignee of staleOwners) {
     try {
       const released = await releaseOwnedTasks(services.taskStore, assignee);
+      await syncRecoveredStaleOwnerTasks(services, before, released);
       if (released.length > 0) {
         warn(`[ok] Released ${released.length} stale task(s) owned by ${assignee}`);
       }
@@ -1161,19 +1134,33 @@ async function maybeReleaseStaleOwnedTasks(skipAssignees: readonly string[] = []
   }
 }
 
-function parseKnownAgentAssignee(assignee: string): { agent: AgentSlug; sessionId: string } | undefined {
-  for (const agent of STALE_OWNER_AGENT_PREFIXES) {
-    const prefix = `${agent}-`;
-    if (!assignee.startsWith(prefix)) {
-      continue;
-    }
-    const sessionId = assignee.slice(prefix.length).trim();
-    if (sessionId.length === 0) {
-      return undefined;
-    }
-    return { agent, sessionId };
+async function syncRecoveredStaleOwnerTasks(
+  services: ReturnType<typeof getServices>,
+  before: ReadonlyMap<string, Task>,
+  released: readonly Task[],
+): Promise<void> {
+  for (const task of released) {
+    const previous = before.get(task.id);
+    await syncTaskContinuation(
+      {
+        continuationStore: services.taskContinuationStore,
+        continuationHistory: services.taskContinuationHistory,
+      },
+      {
+        task,
+        summary: {
+          currentState: "Task ownership released back to the queue.",
+          activeAgent: null,
+        },
+        event: {
+          kind: "snapshot",
+          at: task.updatedAt,
+          summary: previous?.assignee ? `Recovered from stale owner ${previous.assignee}` : "Recovered from stale owner",
+          currentState: "Task ownership released back to the queue.",
+        },
+      },
+    );
   }
-  return undefined;
 }
 
 async function maybeCaptureCompletionHint(task: Task): Promise<void> {

@@ -361,7 +361,7 @@ describe("compiled handoff launcher E2E", () => {
         await runCompiled(["task", "show", taskId, "--json"], tmpDir),
       );
       expect(task).toMatchObject({
-        assignee: "claude-pickup-1",
+        assignee: "claude-code-pickup-1",
         status: "in_progress",
       });
 

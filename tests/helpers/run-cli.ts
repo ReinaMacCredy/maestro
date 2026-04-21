@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { runCommand, type CommandResult } from "./command-runner.js";
+import { runCommand, type CommandResult, type RunCommandOptions } from "./command-runner.js";
 
 const CLI = [
   "bun",
@@ -10,6 +10,7 @@ const CLI = [
 export async function runCli(
   args: readonly string[],
   cwd: string,
+  options: RunCommandOptions = {},
 ): Promise<CommandResult> {
-  return runCommand([...CLI, ...args], cwd);
+  return runCommand([...CLI, ...args], cwd, options);
 }

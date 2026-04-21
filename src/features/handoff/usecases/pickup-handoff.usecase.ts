@@ -1,6 +1,7 @@
 import {
   claimTask,
   deriveAgentFromAssignee,
+  getUnresolvedBlockerIds,
   loadTaskContinuationSummary,
   syncTaskContinuation,
   updateTask,
@@ -50,7 +51,8 @@ export async function pickupHandoff(
     ]);
   }
 
-  const beforeTask = await deps.taskStore.get(taskId);
+  const tasks = new Map((await deps.taskStore.all()).map((task) => [task.id, task] as const));
+  const beforeTask = tasks.get(taskId);
   if (!beforeTask) {
     throw new MaestroError(`Linked task not found for handoff ${input.id}: ${taskId}`);
   }
@@ -60,11 +62,7 @@ export async function pickupHandoff(
     ]);
   }
 
-  const tasks = await deps.taskStore.all();
-  const unresolvedBlockers = beforeTask.blockedBy.filter((blockerId) => {
-    const blocker = tasks.find((task) => task.id === blockerId);
-    return blocker === undefined || blocker.status !== "completed";
-  });
+  const unresolvedBlockers = getUnresolvedBlockerIds(beforeTask, tasks);
   if (unresolvedBlockers.length > 0) {
     throw new MaestroError(`Task ${taskId} is blocked and cannot be resumed`, [
       `Unresolved blockers: ${unresolvedBlockers.join(", ")}`,

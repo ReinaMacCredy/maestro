@@ -8,6 +8,7 @@ import {
 } from "@/features/handoff";
 import {
   buildTaskContinuationSummary,
+  buildTaskOwnerId,
   loadTaskContinuationSummary,
   type TaskContinuationEvent,
   type TaskContinuationSummary,
@@ -191,14 +192,14 @@ async function resolvePickupId(explicitId: string | undefined): Promise<string> 
 
 async function resolvePickupActor(
   opts: { agent?: unknown; session?: unknown },
-  inherited?: { agent?: unknown; session?: unknown },
+  inherited?: { agent?: unknown },
 ): Promise<{
   readonly agent: HandoffAgent;
   readonly sessionId?: string;
   readonly ownerId: string;
 }> {
   const rawAgent = opts.agent ?? inherited?.agent;
-  const rawSession = opts.session ?? inherited?.session;
+  const rawSession = opts.session;
   const explicitAgent = typeof rawAgent === "string" ? rawAgent.trim() : undefined;
   const explicitSession = typeof rawSession === "string" ? rawSession.trim() : undefined;
   if ((explicitAgent && !explicitSession) || (!explicitAgent && explicitSession)) {
@@ -211,7 +212,7 @@ async function resolvePickupActor(
     return {
       agent,
       sessionId: explicitSession,
-      ownerId: `${agent}-${explicitSession}`,
+      ownerId: buildTaskOwnerId(agent, explicitSession),
     };
   }
 
@@ -226,7 +227,7 @@ async function resolvePickupActor(
   return {
     agent,
     sessionId: session.sessionId,
-    ownerId: `${session.agent}-${session.sessionId}`,
+    ownerId: buildTaskOwnerId(session.agent, session.sessionId),
   };
 }
 

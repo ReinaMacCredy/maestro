@@ -76,7 +76,7 @@ describe("pickupHandoff", () => {
         id: launch.id,
         actorAgent: "claude",
         actorSessionId: "pickup-1",
-        ownerId: "claude-pickup-1",
+        ownerId: "claude-code-pickup-1",
       },
     );
 
@@ -89,7 +89,7 @@ describe("pickupHandoff", () => {
     const resumed = await taskStore.get(task.id);
     expect(resumed).toMatchObject({
       status: "in_progress",
-      assignee: "claude-pickup-1",
+      assignee: "claude-code-pickup-1",
     });
 
     const summary = await continuationStore.getActive(task.id);

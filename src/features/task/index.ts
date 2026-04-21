@@ -29,6 +29,7 @@ export {
   validateTaskContinuationEvent,
 } from "./domain/task-continuation-types.js";
 export { TASK_ID_PATTERN, generateTaskId, isTaskId } from "./domain/task-id.js";
+export { getUnresolvedBlockerIds } from "./domain/task-state.js";
 export {
   validateTask,
   validateCreateInput,
@@ -81,8 +82,10 @@ export { planTasks } from "./usecases/plan-tasks.usecase.js";
 export {
   buildTaskShowView,
   buildTaskContinuationSummary,
+  buildTaskOwnerId,
   deriveAgentFromAssignee,
   loadTaskContinuationSummary,
+  parseTaskOwnerId,
   syncTaskContinuation,
 } from "./usecases/task-continuation.usecase.js";
 export type {
