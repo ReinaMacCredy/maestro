@@ -90,7 +90,11 @@ export async function pickupHandoff(
         { status: "in_progress" },
         { sessionId: input.ownerId, force: true },
       )).task;
-  await transferContractOwnership(deps.contractStore, taskId, input.ownerId, "handoff_pickup");
+  try {
+    await transferContractOwnership(deps.contractStore, taskId, input.ownerId, "handoff_pickup");
+  } catch {
+    // The handoff was already consumed and the task resumed; contract ownership follows best-effort.
+  }
 
   const priorSummary = await loadTaskContinuationSummary(deps.continuationStore, taskId);
   const priorAgent = deriveAgentFromAssignee(beforeTask.assignee, beforeTask.updatedAt);

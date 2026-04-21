@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ShellGitAnchorAdapter } from "@/features/task/adapters/git-anchor.adapter.js";
@@ -107,7 +107,7 @@ describe("ShellGitAnchorAdapter", () => {
     expect(result.notes).toContain("feature.txt");
   });
 
-  it("ignores untracked files when collecting touched files for contract verdicts", async () => {
+  it("includes untracked files when collecting touched files for contract verdicts", async () => {
     await commitFile("base.txt", "base\n", "base");
     await Bun.write(join(tmpDir, "scratch.txt"), "scratch\n");
 
@@ -117,8 +117,8 @@ describe("ShellGitAnchorAdapter", () => {
       rebaseFallback: "best-effort",
     });
 
-    expect(result.actualFilesTouched).not.toContain("scratch.txt");
-    expect(result.notes ?? "").not.toContain("Includes untracked files.");
+    expect(result.actualFilesTouched).toContain("scratch.txt");
+    expect(result.notes ?? "").toContain("Includes untracked working-tree files.");
   });
 
   it("ignores Maestro task runtime files in the touched set", async () => {
@@ -132,5 +132,21 @@ describe("ShellGitAnchorAdapter", () => {
     });
 
     expect(result.actualFilesTouched).not.toContain(".maestro/tasks/tasks.jsonl");
+  });
+
+  it("keeps repo-tracked contract templates in the touched set", async () => {
+    await mkdir(join(tmpDir, ".maestro", "tasks", "contract-templates"), { recursive: true });
+    await Bun.write(join(tmpDir, ".maestro", "tasks", "contract-templates", "default.md"), "base\n");
+    await runCommand(["git", "add", ".maestro/tasks/contract-templates/default.md"], tmpDir);
+    await runCommand(["git", "commit", "-m", "seed contract template"], tmpDir);
+    await Bun.write(join(tmpDir, ".maestro", "tasks", "contract-templates", "default.md"), "updated\n");
+
+    const result = await new ShellGitAnchorAdapter().collectTouchedFiles({
+      repoRoot: tmpDir,
+      claimedAtCommit: (await runCommand(["git", "rev-parse", "HEAD"], tmpDir)).stdout,
+      rebaseFallback: "best-effort",
+    });
+
+    expect(result.actualFilesTouched).toContain(".maestro/tasks/contract-templates/default.md");
   });
 });

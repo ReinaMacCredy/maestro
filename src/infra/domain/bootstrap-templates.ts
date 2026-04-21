@@ -102,6 +102,7 @@ Useful contract commands:
   - maestro task contract criteria mark <id> <criterionId> --met
   - maestro task contract criteria add <id> "..."
   - maestro task contract criteria remove <id> <criterionId>
+Use \`--session <id>\` on contract new/edit/lock/discard/amend/criteria commands when the owning task is already claimed outside the current shell.
 
 At completion the declared scope is diffed against actual changes.
 Out-of-scope files are signal, not failure, unless strict mode is on.
@@ -189,7 +190,7 @@ maestro task release-owned <sessionId>                       # release tasks own
                                                              # Manual \`claude-*\` operator sessions are preserved by \`task ready\`.
 maestro task block <blockerId> <blockedId...>                # blockerId must finish before blockedId is ready
 maestro task unblock <blockerId> <blockedId...>
-maestro task delete <id>                                     # remove a task; contract and continuation state cascade with it
+maestro task delete <id> [--session <id>] [--force]         # remove a task; claimed tasks require the owner session or --force
 \`\`\`
 
 \`.maestro/tasks/NOW.md\` is refreshed after every task mutation; \`cat\` it for a short in-progress/ready/stuck view anchored to the current state. Active task contracts add a one-line scope/progress summary under in-progress work.
@@ -259,6 +260,7 @@ This project uses Maestro for local bootstrap and runtime orchestration.
   - \`maestro task contract criteria mark <id> <criterionId> --met\`
   - \`maestro task contract criteria add <id> "..." \`
   - \`maestro task contract criteria remove <id> <criterionId>\`
+- Use \`--session <id>\` on new/edit/lock/discard/amend/criteria commands when the owning task is already claimed outside the current shell.
 - Completion can enforce contracts with \`maestro task update <id> --status completed --strict\`.
 - Claiming can remind or require contract setup with \`maestro task claim <id> --contract-required\`; use \`--no-contract\` to suppress the note for a single claim.
 - Use \`--no-contract\` only when config requires a contract but the task intentionally has none.

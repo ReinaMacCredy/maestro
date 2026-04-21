@@ -54,6 +54,15 @@ function taskFixture(): Task {
   };
 }
 
+function claimedTaskFixture(): Task {
+  return {
+    ...taskFixture(),
+    assignee: "codex-owner",
+    claimedAt: "2026-04-21T00:10:00.000Z",
+    lastActivityAt: "2026-04-21T00:10:00.000Z",
+  };
+}
+
 function createTaskStore(state: { current?: Task; deleteCalls: number }): TaskStorePort {
   const unused = async (..._args: unknown[]) => {
     throw new Error("unused");
@@ -191,5 +200,51 @@ describe("deleteTaskFlow", () => {
     expect(historyState.deletes).toBe(1);
     expect(contractState.deletes).toBe(1);
     expect(contractState.byTask).toBeUndefined();
+  });
+
+  it("rejects invalid task ids before any cleanup path runs", async () => {
+    const continuationState = { deletes: 0 };
+    const historyState = { deletes: 0 };
+    const contractState = { deletes: 0, byTask: CONTRACT_FIXTURE };
+
+    await expect(deleteTaskFlow({
+      taskStore: createTaskStore({ current: undefined, deleteCalls: 0 }),
+      continuationStore: createContinuationStore(continuationState),
+      continuationHistory: createHistoryStore(historyState),
+      contractStore: createContractStore(contractState),
+    }, "../keep")).rejects.toThrow("Task ../keep not found");
+
+    expect(continuationState.deletes).toBe(0);
+    expect(historyState.deletes).toBe(0);
+    expect(contractState.deletes).toBe(0);
+    expect(contractState.byTask).toBe(CONTRACT_FIXTURE);
+  });
+
+  it("requires the owner session or force before deleting a claimed task", async () => {
+    const taskState = { current: claimedTaskFixture(), deleteCalls: 0 };
+
+    await expect(deleteTaskFlow({
+      taskStore: createTaskStore(taskState),
+      continuationStore: createContinuationStore({ deletes: 0 }),
+      continuationHistory: createHistoryStore({ deletes: 0 }),
+      contractStore: createContractStore({ deletes: 0, byTask: CONTRACT_FIXTURE }),
+    }, taskState.current!.id)).rejects.toThrow("requires the owner session or --force");
+
+    await expect(deleteTaskFlow({
+      taskStore: createTaskStore(taskState),
+      continuationStore: createContinuationStore({ deletes: 0 }),
+      continuationHistory: createHistoryStore({ deletes: 0 }),
+      contractStore: createContractStore({ deletes: 0, byTask: CONTRACT_FIXTURE }),
+    }, taskState.current!.id, { sessionId: "codex-other" })).rejects.toThrow("current session cannot 'delete' it");
+
+    const deleted = await deleteTaskFlow({
+      taskStore: createTaskStore(taskState),
+      continuationStore: createContinuationStore({ deletes: 0 }),
+      continuationHistory: createHistoryStore({ deletes: 0 }),
+      contractStore: createContractStore({ deletes: 0, byTask: CONTRACT_FIXTURE }),
+    }, taskState.current!.id, { sessionId: "codex-owner" });
+
+    expect(deleted.id).toBe(taskState.current?.id ?? "tsk-a1b2c3");
+    expect(taskState.deleteCalls).toBe(1);
   });
 });

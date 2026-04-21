@@ -115,8 +115,11 @@ describe("task heartbeat and stale-claim auto-release", () => {
           "",
         ].join("\n"),
       );
-      await runCompiled(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir);
-      await runCompiled(["task", "contract", "lock", task.id, "--json"], tmpDir);
+      await runCompiled(
+        ["task", "contract", "new", task.id, "--from", templatePath, "--session", staleOwner, "--json"],
+        tmpDir,
+      );
+      await runCompiled(["task", "contract", "lock", task.id, "--session", staleOwner, "--json"], tmpDir);
 
       await new Promise((r) => setTimeout(r, 20));
       const claimed = await runCompiled(
@@ -141,8 +144,14 @@ describe("task heartbeat and stale-claim auto-release", () => {
         join(tmpDir, ".maestro", "config.yaml"),
         "contracts:\n  staleReclaimContractPolicy: block\n  overlapPolicy: annotate\n",
       );
-      await runCompiled(["task", "contract", "new", blockedTask.id, "--from", templatePath, "--json"], tmpDir);
-      const locked = await runCompiled(["task", "contract", "lock", blockedTask.id, "--json"], tmpDir);
+      await runCompiled(
+        ["task", "contract", "new", blockedTask.id, "--from", templatePath, "--session", blockedOwner, "--json"],
+        tmpDir,
+      );
+      const locked = await runCompiled(
+        ["task", "contract", "lock", blockedTask.id, "--session", blockedOwner, "--json"],
+        tmpDir,
+      );
       expect(expectJson<{ status: string }>(locked).status).toBe("locked");
 
       await new Promise((r) => setTimeout(r, 20));

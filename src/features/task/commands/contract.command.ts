@@ -37,6 +37,7 @@ import { listContracts } from "../usecases/contract/list-contracts.usecase.js";
 import { lockContract } from "../usecases/contract/lock-contract.usecase.js";
 import { showContract } from "../usecases/contract/show-contract.usecase.js";
 import { reopenTaskFlow } from "../usecases/reopen-task-flow.usecase.js";
+import { buildTaskOwnerId } from "../usecases/task-continuation.usecase.js";
 
 const CONTRACT_STATUSES: readonly ContractStatus[] = [
   "draft",
@@ -76,6 +77,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .description("Create a draft contract for a task")
     .option("--from <path>", "Load YAML from a file or named template ('-' for stdin)")
     .option("--editor <cmd>", "Open an editor command to write the draft YAML")
+    .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
     .option("--json", "Output as JSON")
     .action(async (taskId: string, opts) => {
@@ -90,7 +92,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
         intent: readTemplateIntent(template),
         scope: readTemplateScope(template),
         doneWhen: readTemplateDoneWhen(template),
-        createdBy: await resolveContractActor(taskId),
+        createdBy: await resolveDraftContractActor(taskId, opts.session),
         configSnapshot: buildContractConfigSnapshot(config),
       });
       await refreshContractNowMd();
@@ -102,6 +104,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
   contractCmd
     .command("lock <ref>")
     .description("Lock a draft contract so completion can diff against it")
+    .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
     .option("--json", "Output as JSON")
     .action(async (ref: string, opts) => {
@@ -110,7 +113,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
       const config = await services.config.load(process.cwd());
       const contract = await lockContract(services.contractStore, {
         ref,
-        actorId: await resolveContractActor(ref),
+        actorId: await resolveDraftContractActor(ref, opts.session),
         claimedAtCommit: await services.gitAnchor.resolveHeadCommit(process.cwd()),
         configSnapshot: buildContractConfigSnapshot(config),
       });
@@ -125,9 +128,11 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .command("edit <ref>")
     .description("Edit a draft contract before lock")
     .option("--editor <cmd>", "Open an editor command to update the draft YAML")
+    .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
     .option("--json", "Output as JSON")
     .action(async (ref: string, opts) => {
+      await resolveDraftContractActor(ref, opts.session);
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const contract = await showContract(services.contractStore, ref);
@@ -149,6 +154,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .description("Amend a locked contract and record why it changed")
     .requiredOption("--reason <text>", "Why the contract changed")
     .option("--editor <cmd>", "Open an editor command to update the draft YAML")
+    .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
     .option("--json", "Output as JSON")
     .action(async (ref: string, opts) => {
@@ -158,7 +164,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
       const template = await loadContractDraftTemplate(undefined, opts.editor, renderEditableContract(contract));
       const amended = await amendContract(services.contractStore, {
         ref,
-        actorId: await resolveContractActor(ref),
+        actorId: await resolveActiveContractActor(ref, opts.session),
         reason: opts.reason,
         intent: readTemplateIntent(template),
         scope: readTemplateScope(template),
@@ -248,12 +254,14 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
   contractCmd
     .command("discard <ref>")
     .description("Discard a draft contract")
+    .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
     .option("--json", "Output as JSON")
     .action(async (ref: string, opts) => {
+      await resolveDraftContractActor(ref, opts.session);
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const contract = await discardContract(services.contractStore, ref);
+      const contract = await discardContract(services.taskStore, services.contractStore, ref);
       await refreshContractNowMd();
 
       if (emitContractSilentSuccess(isJson, opts, contract)) return;
@@ -292,6 +300,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .option("--met", "Mark the criterion met (default)")
     .option("--unmet", "Mark the criterion unmet and clear evidence")
     .option("--evidence <text>", "Attach met evidence")
+    .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
     .option("--json", "Output as JSON")
     .action(async (ref: string, criterionId: string, opts) => {
@@ -304,7 +313,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
       const contract = await markContractCriterion(services.contractStore, {
         ref,
         criterionId,
-        actorId: await resolveContractActor(ref),
+        actorId: await resolveActiveContractActor(ref, opts.session),
         met: opts.unmet === true ? false : true,
         evidence: opts.evidence,
       });
@@ -317,6 +326,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
   criteriaCmd
     .command("add <ref> <text>")
     .description("Add a manual criterion to a locked contract")
+    .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
     .option("--json", "Output as JSON")
     .action(async (ref: string, text: string, opts) => {
@@ -325,7 +335,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
       const contract = await addContractCriterion(services.contractStore, {
         ref,
         text,
-        actorId: await resolveContractActor(ref),
+        actorId: await resolveActiveContractActor(ref, opts.session),
       });
       await refreshContractNowMd();
 
@@ -336,6 +346,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
   criteriaCmd
     .command("remove <ref> <criterionId>")
     .description("Remove one criterion from a locked contract")
+    .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
     .option("--json", "Output as JSON")
     .action(async (ref: string, criterionId: string, opts) => {
@@ -344,7 +355,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
       const contract = await removeContractCriterion(services.contractStore, {
         ref,
         criterionId,
-        actorId: await resolveContractActor(ref),
+        actorId: await resolveActiveContractActor(ref, opts.session),
       });
       await refreshContractNowMd();
 
@@ -802,6 +813,101 @@ async function resolveContractActor(ref: string): Promise<string> {
     return owner?.assignee ?? contract.lockedBy ?? contract.createdBy;
   }
   return "user";
+}
+
+async function resolveDraftContractActor(
+  ref: string,
+  explicitSessionId: string | undefined,
+): Promise<string> {
+  const services = getServices();
+  const task = await resolveContractTask(ref);
+  const currentActorId = await resolveOptionalContractActorSessionId(explicitSessionId);
+
+  if (!task?.assignee) {
+    return currentActorId ?? "user";
+  }
+  if (!currentActorId) {
+    throw new MaestroError(`Task ${task.id} is claimed by ${task.assignee}; contract draft changes require the owner session`, [
+      `Retry from the owning session or pass '--session ${task.assignee}'`,
+      "Use 'maestro task show <task-id>' to inspect task ownership",
+    ]);
+  }
+  if (currentActorId !== task.assignee) {
+    throw new MaestroError(`Task ${task.id} is claimed by ${task.assignee}; current session cannot modify its contract draft`, [
+      `Retry from the owning session or pass '--session ${task.assignee}'`,
+      "If the owner is dead, reclaim the task before changing its contract",
+    ]);
+  }
+
+  return currentActorId;
+}
+
+async function resolveActiveContractActor(
+  ref: string,
+  explicitSessionId: string | undefined,
+): Promise<string> {
+  const services = getServices();
+  const contract = await resolveContractRef(ref);
+  if (!contract || !isActiveContract(contract)) {
+    return resolveContractActor(ref);
+  }
+
+  const task = await services.taskStore.get(contract.taskId);
+  const ownerId = task?.assignee ?? contract.lockedBy ?? contract.createdBy ?? "user";
+  const currentActorId = await resolveOptionalContractActorSessionId(explicitSessionId);
+
+  if (ownerId === "user") {
+    return currentActorId ?? "user";
+  }
+
+  if (!currentActorId) {
+    throw new MaestroError(`Contract ${contract.id} is owned by ${ownerId}; mutating it requires the owner session`, [
+      `Retry from the owning session or pass '--session ${ownerId}'`,
+      "If the owner is dead, reclaim the task before amending the contract",
+    ]);
+  }
+  if (currentActorId !== ownerId) {
+    throw new MaestroError(`Contract ${contract.id} is owned by ${ownerId}; current session cannot modify it`, [
+      `Retry from the owning session or pass '--session ${ownerId}'`,
+      "Use 'maestro task show <task-id>' to inspect task ownership",
+    ]);
+  }
+
+  return currentActorId;
+}
+
+async function resolveOptionalContractActorSessionId(
+  explicitSessionId: string | undefined,
+): Promise<string | undefined> {
+  if (explicitSessionId !== undefined) {
+    const trimmed = explicitSessionId.trim();
+    if (trimmed.length === 0) {
+      throw new MaestroError("Invalid --session value", [
+        "Pass a non-empty session id such as 'codex-1234' or 'operator-recovery'",
+      ]);
+    }
+    return trimmed;
+  }
+
+  const services = getServices();
+  const session = await services.sessionDetect.detect(process.cwd());
+  return session ? buildTaskOwnerId(session.agent, session.sessionId) : undefined;
+}
+
+async function resolveContractRef(ref: string): Promise<Contract | undefined> {
+  const services = getServices();
+  return await services.contractStore.get(ref) ?? await services.contractStore.getByTaskId(ref);
+}
+
+async function resolveContractTask(ref: string) {
+  const services = getServices();
+  const task = await services.taskStore.get(ref);
+  if (task) {
+    return task;
+  }
+
+  const contract = await resolveContractRef(ref);
+  return contract ? await services.taskStore.get(contract.taskId) : undefined;
 }
 
 async function refreshContractNowMd(): Promise<void> {

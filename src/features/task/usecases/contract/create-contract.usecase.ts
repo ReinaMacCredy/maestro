@@ -38,10 +38,15 @@ export async function createContract(
     throw taskAlreadyCompleted(task.id);
   }
   if (task.contractId) {
-    throw new MaestroError(`Task ${task.id} already has a contract: ${task.contractId}`, [
-      `Show it: maestro task contract show ${task.id}`,
-      "Discard the draft first if you need to stop using it",
-    ]);
+    const linked = await contractStore.get(task.contractId);
+    if (linked?.status === "discarded") {
+      await syncTaskMetadata(taskStore, task.id, { contractId: null });
+    } else {
+      throw new MaestroError(`Task ${task.id} already has a contract: ${task.contractId}`, [
+        `Show it: maestro task contract show ${task.id}`,
+        "Discard the draft first if you need to stop using it",
+      ]);
+    }
   }
 
   const contract = await contractStore.create({

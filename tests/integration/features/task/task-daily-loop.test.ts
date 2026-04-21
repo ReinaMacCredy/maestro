@@ -229,8 +229,11 @@ describe("task CLI daily loop", () => {
         "",
       ].join("\n"),
     );
-    await runCli(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir);
-    await runCli(["task", "contract", "lock", task.id, "--json"], tmpDir);
+    await runCli(
+      ["task", "contract", "new", task.id, "--from", templatePath, "--session", staleOwner, "--json"],
+      tmpDir,
+    );
+    await runCli(["task", "contract", "lock", task.id, "--session", staleOwner, "--json"], tmpDir);
 
     await new Promise((r) => setTimeout(r, 20));
     const claimed = await runCli(
@@ -273,8 +276,11 @@ describe("task CLI daily loop", () => {
         "",
       ].join("\n"),
     );
-    await runCli(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir);
-    const locked = await runCli(["task", "contract", "lock", task.id, "--json"], tmpDir);
+    await runCli(
+      ["task", "contract", "new", task.id, "--from", templatePath, "--session", staleOwner, "--json"],
+      tmpDir,
+    );
+    const locked = await runCli(["task", "contract", "lock", task.id, "--session", staleOwner, "--json"], tmpDir);
     expect(expectJson<{ status: string }>(locked).status).toBe("locked");
 
     await new Promise((r) => setTimeout(r, 20));
@@ -287,6 +293,55 @@ describe("task CLI daily loop", () => {
 
     const shownTask = await runCli(["task", "show", task.id, "--json"], tmpDir);
     expect(expectJson<{ assignee?: string }>(shownTask).assignee).toBe(staleOwner);
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("skips blocked stale reclaim during unrelated ready and claim flows", async () => {
+    const blockedTask = expectJson<{ id: string }>(
+      await runCli(["task", "create", "blocked stale contract", "--json"], tmpDir),
+    );
+    const unrelatedTask = expectJson<{ id: string }>(
+      await runCli(["task", "create", "healthy unrelated task", "--json"], tmpDir),
+    );
+    const staleOwner = "codex-blockedbg";
+
+    await runCli(["task", "claim", blockedTask.id, "--session", staleOwner, "--json"], tmpDir);
+    await runCli(["task", "update", blockedTask.id, "--status", "in_progress", "--session", staleOwner, "--json"], tmpDir);
+    await Bun.write(
+      join(tmpDir, ".maestro", "config.yaml"),
+      "contracts:\n  staleReclaimContractPolicy: block\n  overlapPolicy: annotate\n",
+    );
+
+    const templatePath = await writeTemplate(
+      "stale-background-block-template.yaml",
+      [
+        "intent: Keep blocked reclaim scoped to the original task",
+        "scope:",
+        "  filesExpected:",
+        "    - src/features/task/**",
+        "  filesForbidden: []",
+        "doneWhen:",
+        "  - text: contract exists",
+        "",
+      ].join("\n"),
+    );
+    await runCli(
+      ["task", "contract", "new", blockedTask.id, "--from", templatePath, "--session", staleOwner, "--json"],
+      tmpDir,
+    );
+    await runCli(["task", "contract", "lock", blockedTask.id, "--session", staleOwner, "--json"], tmpDir);
+
+    const ready = await runCli(["task", "ready", "--json"], tmpDir);
+    expect(ready.exitCode).toBe(0);
+    expect(expectJson<Array<{ id: string }>>(ready).map((task) => task.id)).toContain(unrelatedTask.id);
+    expect(ready.stderr).toContain("stale reclaim is blocked by contract policy");
+
+    const claimed = await runCli(["task", "claim", unrelatedTask.id, "--session", "operator-clean", "--json"], tmpDir);
+    expect(claimed.exitCode).toBe(0);
+    expect(expectJson<{ assignee: string }>(claimed).assignee).toBe("operator-clean");
+    expect(claimed.stderr).toContain("stale reclaim is blocked by contract policy");
+
+    const shownBlocked = await runCli(["task", "show", blockedTask.id, "--json"], tmpDir);
+    expect(expectJson<{ assignee?: string }>(shownBlocked).assignee).toBe(staleOwner);
   }, SLOW_CLI_TIMEOUT_MS);
 
   it("warns on claim when contracts are required and lets --no-contract suppress the note", async () => {

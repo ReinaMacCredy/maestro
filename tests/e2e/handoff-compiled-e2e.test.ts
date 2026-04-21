@@ -99,7 +99,11 @@ async function createActiveTask(
   return id;
 }
 
-async function attachLockedContract(taskId: string, scope = "README.md"): Promise<string> {
+async function attachLockedContract(
+  taskId: string,
+  scope = "README.md",
+  ownerSessionId = "codex-session-a",
+): Promise<string> {
   const templatePath = join(tmpDir, `contract-${taskId}.yaml`);
   await writeFile(
     templatePath,
@@ -117,14 +121,14 @@ async function attachLockedContract(taskId: string, scope = "README.md"): Promis
   );
 
   const created = await runCompiled(
-    ["task", "contract", "new", taskId, "--from", templatePath, "--json"],
+    ["task", "contract", "new", taskId, "--from", templatePath, "--session", ownerSessionId, "--json"],
     tmpDir,
   );
   expect(created.exitCode).toBe(0);
   const contract = expectJson<{ id: string }>(created);
 
   const locked = await runCompiled(
-    ["task", "contract", "lock", contract.id, "--json"],
+    ["task", "contract", "lock", contract.id, "--session", ownerSessionId, "--json"],
     tmpDir,
   );
   expect(locked.exitCode).toBe(0);

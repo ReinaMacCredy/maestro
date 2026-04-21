@@ -141,9 +141,14 @@ describe("task contract compiled E2E", () => {
     );
 
     const contract = JSON.parse(
-      (await runCompiled(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir)).stdout,
+      (
+        await runCompiled(
+          ["task", "contract", "new", task.id, "--from", templatePath, "--session", "compiled-owner", "--json"],
+          tmpDir,
+        )
+      ).stdout,
     ) as { id: string };
-    await runCompiled(["task", "contract", "lock", contract.id, "--json"], tmpDir);
+    await runCompiled(["task", "contract", "lock", contract.id, "--session", "compiled-owner", "--json"], tmpDir);
     await rm(templatePath, { force: true });
 
     await Bun.write(join(tmpDir, "README.md"), "hello\ncompiled\n");
@@ -205,9 +210,27 @@ describe("task contract compiled E2E", () => {
     );
 
     const contract = JSON.parse(
-      (await runCompiled(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir)).stdout,
+      (
+        await runCompiled(
+          [
+            "task",
+            "contract",
+            "new",
+            task.id,
+            "--from",
+            templatePath,
+            "--session",
+            "compiled-preview-owner",
+            "--json",
+          ],
+          tmpDir,
+        )
+      ).stdout,
     ) as { id: string };
-    await runCompiled(["task", "contract", "lock", contract.id, "--json"], tmpDir);
+    await runCompiled(
+      ["task", "contract", "lock", contract.id, "--session", "compiled-preview-owner", "--json"],
+      tmpDir,
+    );
 
     await Bun.write(join(tmpDir, "README.md"), "hello\npreview\n");
 
@@ -227,6 +250,11 @@ describe("task contract compiled E2E", () => {
 
   it("prints the plain ok marker for amend and criteria mutators in silent mode", async () => {
     const taskId = (await runCompiled(["task", "create", "silent amend", "--silent"], tmpDir)).stdout;
+    await runCompiled(["task", "claim", taskId, "--session", "compiled-silent-owner", "--json"], tmpDir);
+    await runCompiled(
+      ["task", "update", taskId, "--status", "in_progress", "--session", "compiled-silent-owner", "--json"],
+      tmpDir,
+    );
     const templatePath = await writeTemplate(
       "silent-amend-template.yaml",
       [
@@ -242,12 +270,18 @@ describe("task contract compiled E2E", () => {
       ].join("\n"),
     );
 
-    const created = await runCompiled(["task", "contract", "new", taskId, "--from", templatePath, "--json"], tmpDir);
+    const created = await runCompiled(
+      ["task", "contract", "new", taskId, "--from", templatePath, "--session", "compiled-silent-owner", "--json"],
+      tmpDir,
+    );
     const contract = JSON.parse(created.stdout) as {
       id: string;
       doneWhen: Array<{ id: string }>;
     };
-    await runCompiled(["task", "contract", "lock", contract.id, "--json"], tmpDir);
+    await runCompiled(
+      ["task", "contract", "lock", contract.id, "--session", "compiled-silent-owner", "--json"],
+      tmpDir,
+    );
 
     const editorPath = await writeEditorScript(
       "silent-amend-editor.sh",
@@ -267,14 +301,34 @@ describe("task contract compiled E2E", () => {
     );
 
     const amended = await runCompiled(
-      ["task", "contract", "amend", contract.id, "--reason", "expand checks", "--silent"],
+      [
+        "task",
+        "contract",
+        "amend",
+        contract.id,
+        "--reason",
+        "expand checks",
+        "--session",
+        "compiled-silent-owner",
+        "--silent",
+      ],
       tmpDir,
       { env: { EDITOR: `sh ${editorPath}` } },
     );
     expect(amended.stdout).toBe(`${contract.id} [ok]`);
 
     const added = await runCompiled(
-      ["task", "contract", "criteria", "add", contract.id, "extra criterion", "--silent"],
+      [
+        "task",
+        "contract",
+        "criteria",
+        "add",
+        contract.id,
+        "extra criterion",
+        "--session",
+        "compiled-silent-owner",
+        "--silent",
+      ],
       tmpDir,
     );
     expect(added.stdout).toBe(`${contract.id} [ok]`);
@@ -286,13 +340,34 @@ describe("task contract compiled E2E", () => {
     expect(addedCriterion?.id).toMatch(/^dw-[0-9a-f]{6}$/);
 
     const marked = await runCompiled(
-      ["task", "contract", "criteria", "mark", contract.id, addedCriterion!.id, "--met", "--silent"],
+      [
+        "task",
+        "contract",
+        "criteria",
+        "mark",
+        contract.id,
+        addedCriterion!.id,
+        "--met",
+        "--session",
+        "compiled-silent-owner",
+        "--silent",
+      ],
       tmpDir,
     );
     expect(marked.stdout).toBe(`${contract.id} [ok]`);
 
     const removed = await runCompiled(
-      ["task", "contract", "criteria", "remove", contract.id, addedCriterion!.id, "--silent"],
+      [
+        "task",
+        "contract",
+        "criteria",
+        "remove",
+        contract.id,
+        addedCriterion!.id,
+        "--session",
+        "compiled-silent-owner",
+        "--silent",
+      ],
       tmpDir,
     );
     expect(removed.stdout).toBe(`${contract.id} [ok]`);
@@ -326,10 +401,19 @@ describe("task contract compiled E2E", () => {
     );
 
     const contract = JSON.parse(
-      (await runCompiled(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir)).stdout,
+      (
+        await runCompiled(
+          ["task", "contract", "new", task.id, "--from", templatePath, "--session", "compiled-owner", "--json"],
+          tmpDir,
+        )
+      ).stdout,
     ) as { id: string };
-    await runCompiled(["task", "contract", "lock", contract.id, "--json"], tmpDir);
-    await runCompiled(["task", "contract", "criteria", "add", contract.id, "extra check", "--json"], tmpDir);
+    await runCompiled(["task", "contract", "lock", contract.id, "--session", "compiled-owner", "--json"], tmpDir);
+    await rm(templatePath, { force: true });
+    await runCompiled(
+      ["task", "contract", "criteria", "add", contract.id, "extra check", "--session", "compiled-owner", "--json"],
+      tmpDir,
+    );
 
     await Bun.write(join(tmpDir, "README.md"), "hello\ncompiled\n");
     await runCompiled(

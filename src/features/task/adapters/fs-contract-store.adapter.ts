@@ -105,7 +105,7 @@ export class FsContractStoreAdapter implements ContractStorePort {
   async create(input: CreateContractRecordInput): Promise<Contract> {
     return this.withLock(async () => {
       const existingByTask = await this.getByTaskId(input.taskId);
-      if (existingByTask) {
+      if (existingByTask && existingByTask.status !== "discarded") {
         throw new MaestroError(`Task ${input.taskId} already has a contract: ${existingByTask.id}`, [
           "Edit or discard the existing contract before creating another one",
         ]);

@@ -189,4 +189,99 @@ describe("pickupHandoff", () => {
     const reloaded = await launchStore.get(launch.id);
     expect(reloaded?.consumedAt).toBeUndefined();
   });
+
+  it("keeps pickup successful when contract ownership transfer fails after resume", async () => {
+    const task = await createTask(taskStore, { title: "Resume even if contract transfer fails" });
+    await claimTask(taskStore, task.id, { sessionId: "codex-old-session" });
+    const started = (await updateTask(
+      taskStore,
+      task.id,
+      { status: "in_progress" },
+      { sessionId: "codex-old-session" },
+    )).task;
+    const drafted = await createContract(taskStore, contractStore, {
+      taskId: task.id,
+      repoRoot: tmpDir,
+      intent: "Keep pickup resilient even if contract transfer fails",
+      scope: {
+        filesExpected: ["README.md"],
+        filesForbidden: [],
+      },
+      doneWhen: [{ text: "pickup succeeds", kind: "manual" }],
+      createdBy: "codex-old-session",
+      configSnapshot: {
+        strict: false,
+        overlapPolicy: "fail",
+        rebaseFallback: "best-effort",
+        staleReclaimContractPolicy: "inherit",
+      },
+    });
+    await lockContract(contractStore, {
+      ref: drafted.id,
+      actorId: "codex-old-session",
+      configSnapshot: {
+        strict: false,
+        overlapPolicy: "fail",
+        rebaseFallback: "best-effort",
+        staleReclaimContractPolicy: "inherit",
+      },
+    });
+    await syncTaskContinuation(
+      {
+        continuationStore,
+        continuationHistory,
+      },
+      {
+        task: started,
+        summary: {
+          currentState: "Existing state before handoff pickup",
+          nextAction: "Keep working on the task",
+        },
+      },
+    );
+
+    const launch = await launchStore.create({
+      task: "Pick this up",
+      name: "[Handoff] Pick this up",
+      agent: "claude",
+      model: "opus",
+      wait: false,
+      sourceDir: tmpDir,
+      targetDir: tmpDir,
+      refs: { taskId: task.id },
+      createdByAgent: "codex",
+      createdBySessionId: "old-session",
+      prompt: "## Task\n\nPick this up\n",
+    });
+
+    const result = await pickupHandoff(
+      {
+        launchStore,
+        taskStore,
+        contractStore: {
+          ...contractStore,
+          getByTaskId: async () => {
+            throw new Error("contract store offline");
+          },
+        },
+        continuationStore,
+        continuationHistory,
+      },
+      {
+        id: launch.id,
+        actorAgent: "claude",
+        actorSessionId: "pickup-3",
+        ownerId: "claude-code-pickup-3",
+      },
+    );
+
+    expect(result.taskId).toBe(task.id);
+    const resumed = await taskStore.get(task.id);
+    expect(resumed).toMatchObject({
+      status: "in_progress",
+      assignee: "claude-code-pickup-3",
+    });
+    const reloaded = await launchStore.get(launch.id);
+    expect(reloaded?.consumedAt).toBeTruthy();
+  });
 });

@@ -49,19 +49,20 @@ export class ShellGitAnchorAdapter implements GitAnchorPort {
       };
     }
 
-    const [range, workingTree, staged, mergeSourcedFiles] = await Promise.all([
+    const [range, workingTree, staged, untracked, mergeSourcedFiles] = await Promise.all([
       anchorResolution.anchor
         ? execArgv(["git", "diff", "--name-only", anchorResolution.anchor, head], { cwd: input.repoRoot })
         : Promise.resolve({ stdout: "", stderr: "", exitCode: 0 }),
       execArgv(["git", "diff", "--name-only"], { cwd: input.repoRoot }),
       execArgv(["git", "diff", "--cached", "--name-only"], { cwd: input.repoRoot }),
+      execArgv(["git", "ls-files", "--others", "--exclude-standard"], { cwd: input.repoRoot }),
       anchorResolution.anchor
         ? this.collectMergeSourcedFiles(input.repoRoot, anchorResolution.anchor, head)
         : Promise.resolve([] as readonly string[]),
     ]);
 
     const files = new Set<string>();
-    for (const output of [range.stdout, workingTree.stdout, staged.stdout]) {
+    for (const output of [range.stdout, workingTree.stdout, staged.stdout, untracked.stdout]) {
       for (const path of splitPaths(output)) {
         if (!isContractRuntimePath(path)) {
           files.add(path);
@@ -73,6 +74,7 @@ export class ShellGitAnchorAdapter implements GitAnchorPort {
       anchorResolution.notes,
       workingTree.stdout ? "Includes uncommitted tracked changes." : undefined,
       staged.stdout ? "Includes staged changes." : undefined,
+      untracked.stdout ? "Includes untracked working-tree files." : undefined,
       mergeSourcedFiles.length > 0 ? formatMergeSourcedFilesNote(mergeSourcedFiles) : undefined,
     ].filter((value): value is string => Boolean(value));
 
@@ -266,7 +268,14 @@ export class ShellGitAnchorAdapter implements GitAnchorPort {
 
 function isContractRuntimePath(path: string): boolean {
   const normalized = normalizeSlashes(path);
-  return normalized === ".maestro/tasks" || normalized.startsWith(".maestro/tasks/");
+  return normalized === ".maestro/tasks/tasks.jsonl"
+    || normalized === ".maestro/tasks/NOW.md"
+    || normalized === ".maestro/tasks/.tasks.lock"
+    || normalized.startsWith(".maestro/tasks/continuations/")
+    || normalized.startsWith(".maestro/tasks/local-history/")
+    || normalized.startsWith(".maestro/tasks/contracts/")
+    || normalized.startsWith(".maestro/tasks/batches/")
+    || normalized.startsWith(".maestro/tasks/candidates/");
 }
 
 function splitPaths(output: string): readonly string[] {

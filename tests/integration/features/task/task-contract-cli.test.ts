@@ -141,6 +141,52 @@ describe("task contract CLI", () => {
     expect(locked.stderr).toContain("src/features/task/commands/**");
   }, SLOW_CLI_TIMEOUT_MS);
 
+  it("requires the owning session to create and lock a contract for a claimed task", async () => {
+    const createdTask = await runCli(["task", "create", "claimed contract ownership", "--json"], tmpDir);
+    const task = expectJson<{ id: string }>(createdTask);
+    await runCli(["task", "claim", task.id, "--session", "owner-a", "--json"], tmpDir);
+    await runCli(["task", "update", task.id, "--status", "in_progress", "--session", "owner-a", "--json"], tmpDir);
+
+    const templatePath = await writeTemplate(
+      "claimed-contract-template.yaml",
+      [
+        "intent: Only the owner can establish this contract",
+        "scope:",
+        "  filesExpected:",
+        "    - src/features/task/**",
+        "  filesForbidden: []",
+        "doneWhen:",
+        "  - text: owner validates the contract",
+        "    kind: manual",
+        "",
+      ].join("\n"),
+    );
+
+    const rejectedDraft = await runCli(
+      ["task", "contract", "new", task.id, "--from", templatePath, "--session", "owner-b"],
+      tmpDir,
+    );
+    expect(rejectedDraft.exitCode).toBe(1);
+
+    const drafted = await runCli(
+      ["task", "contract", "new", task.id, "--from", templatePath, "--session", "owner-a", "--json"],
+      tmpDir,
+    );
+    const contract = expectJson<{ id: string }>(drafted);
+
+    const rejectedLock = await runCli(
+      ["task", "contract", "lock", contract.id, "--session", "owner-b"],
+      tmpDir,
+    );
+    expect(rejectedLock.exitCode).toBe(1);
+
+    const locked = await runCli(
+      ["task", "contract", "lock", contract.id, "--session", "owner-a", "--json"],
+      tmpDir,
+    );
+    expect(expectJson<{ status: string }>(locked).status).toBe("locked");
+  }, SLOW_CLI_TIMEOUT_MS);
+
   it("snapshots contract config at lock time, not draft time", async () => {
     const createdTask = await runCli(["task", "create", "lock-time config snapshot", "--json"], tmpDir);
     const task = expectJson<{ id: string }>(createdTask);
@@ -261,10 +307,18 @@ describe("task contract CLI", () => {
     const discarded = await runCli(["task", "contract", "discard", contract.id, "--json"], tmpDir);
     expect(expectJson<{ status: string }>(discarded).status).toBe("discarded");
 
+    const shownTask = await runCli(["task", "show", task.id, "--json"], tmpDir);
+    expect(expectJson<{ contractId?: string }>(shownTask).contractId).toBeUndefined();
+
     const listed = await runCli(["task", "contract", "list", "--status", "discarded", "--json"], tmpDir);
     expect(expectJson<Array<{ id: string; status: string }>>(listed)).toEqual([
       expect.objectContaining({ id: contract.id, status: "discarded" }),
     ]);
+
+    const draftedAgain = await runCli(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir);
+    const second = expectJson<{ id: string; status: string }>(draftedAgain);
+    expect(second.id).not.toBe(contract.id);
+    expect(second.status).toBe("draft");
   }, SLOW_CLI_TIMEOUT_MS);
 
   it("respects MAESTRO_TASK_SILENT=true for contract mutators", async () => {
@@ -298,6 +352,8 @@ describe("task contract CLI", () => {
   it("amends a locked contract and manages criteria", async () => {
     const createdTask = await runCli(["task", "create", "criteria contract", "--json"], tmpDir);
     const task = expectJson<{ id: string }>(createdTask);
+    await runCli(["task", "claim", task.id, "--session", "criteria-owner", "--json"], tmpDir);
+    await runCli(["task", "update", task.id, "--status", "in_progress", "--session", "criteria-owner", "--json"], tmpDir);
     const templatePath = await writeTemplate(
       "criteria-template.yaml",
       [
@@ -314,9 +370,12 @@ describe("task contract CLI", () => {
       ].join("\n"),
     );
 
-    const drafted = await runCli(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir);
+    const drafted = await runCli(
+      ["task", "contract", "new", task.id, "--from", templatePath, "--session", "criteria-owner", "--json"],
+      tmpDir,
+    );
     const contract = expectJson<{ id: string; doneWhen: Array<{ id: string }> }>(drafted);
-    await runCli(["task", "contract", "lock", contract.id, "--json"], tmpDir);
+    await runCli(["task", "contract", "lock", contract.id, "--session", "criteria-owner", "--json"], tmpDir);
 
     const editorPath = await writeEditorScript(
       "amend-editor.sh",
@@ -337,7 +396,7 @@ describe("task contract CLI", () => {
     );
 
     const amended = await runCli(
-      ["task", "contract", "amend", contract.id, "--reason", "expanded test coverage", "--json"],
+      ["task", "contract", "amend", contract.id, "--reason", "expanded test coverage", "--session", "criteria-owner", "--json"],
       tmpDir,
       { env: { EDITOR: `sh ${editorPath}` } },
     );
@@ -347,7 +406,7 @@ describe("task contract CLI", () => {
     expect(amendedContract.amendments.at(-1)?.reason).toBe("expanded test coverage");
 
     const added = await runCli(
-      ["task", "contract", "criteria", "add", contract.id, "receipt hint exists", "--json"],
+      ["task", "contract", "criteria", "add", contract.id, "receipt hint exists", "--session", "criteria-owner", "--json"],
       tmpDir,
     );
     const addedContract = expectJson<{ doneWhen: Array<{ id: string; text: string }>; amendments: Array<{ reason: string }> }>(added);
@@ -366,6 +425,8 @@ describe("task contract CLI", () => {
         "--met",
         "--evidence",
         "manual",
+        "--session",
+        "criteria-owner",
         "--json",
       ],
       tmpDir,
@@ -380,12 +441,59 @@ describe("task contract CLI", () => {
     );
 
     const removed = await runCli(
-      ["task", "contract", "criteria", "remove", contract.id, addedCriterion!.id, "--json"],
+      ["task", "contract", "criteria", "remove", contract.id, addedCriterion!.id, "--session", "criteria-owner", "--json"],
       tmpDir,
     );
     expect(expectJson<{ doneWhen: Array<{ id: string }> }>(removed).doneWhen.map((criterion) => criterion.id)).toEqual([
       contract.doneWhen[0]!.id,
     ]);
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("rejects active contract mutations from a different session", async () => {
+    const createdTask = await runCli(["task", "create", "owned contract mutation", "--json"], tmpDir);
+    const task = expectJson<{ id: string }>(createdTask);
+    await runCli(["task", "claim", task.id, "--session", "owner-a", "--json"], tmpDir);
+    await runCli(["task", "update", task.id, "--status", "in_progress", "--session", "owner-a", "--json"], tmpDir);
+
+    const templatePath = await writeTemplate(
+      "owned-contract-template.yaml",
+      [
+        "intent: Keep the mutation owned by one session",
+        "scope:",
+        "  filesExpected:",
+        "    - src/features/task/**",
+        "  filesForbidden: []",
+        "doneWhen:",
+        "  - text: active contract ownership is enforced",
+        "    kind: manual",
+        "",
+      ].join("\n"),
+    );
+
+    const drafted = await runCli(
+      ["task", "contract", "new", task.id, "--from", templatePath, "--session", "owner-a", "--json"],
+      tmpDir,
+    );
+    const contract = expectJson<{ id: string; status: string }>(drafted);
+    await runCli(["task", "contract", "lock", contract.id, "--session", "owner-a", "--json"], tmpDir);
+
+    const rejected = await runCli(
+      ["task", "contract", "criteria", "add", contract.id, "unauthorized criterion", "--session", "owner-b"],
+      tmpDir,
+    );
+    expect(rejected.exitCode).toBe(1);
+    expect(rejected.stderr).toContain(`Contract ${contract.id} is owned by owner-a`);
+    expect(rejected.stderr).toContain("current session cannot modify it");
+
+    const shown = await runCli(["task", "contract", "show", contract.id, "--json"], tmpDir);
+    const payload = expectJson<{
+      status: string;
+      amendments: Array<unknown>;
+      doneWhen: Array<{ text: string }>;
+    }>(shown);
+    expect(payload.status).toBe("locked");
+    expect(payload.amendments).toHaveLength(0);
+    expect(payload.doneWhen.map((criterion) => criterion.text)).not.toContain("unauthorized criterion");
   }, SLOW_CLI_TIMEOUT_MS);
 
   it("edits a draft contract before lock", async () => {
@@ -461,11 +569,14 @@ describe("task contract CLI", () => {
       ].join("\n"),
     );
 
-    const drafted = await runCli(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir);
+    const drafted = await runCli(
+      ["task", "contract", "new", task.id, "--from", templatePath, "--session", "reopen-owner", "--json"],
+      tmpDir,
+    );
     const contract = expectJson<{ id: string }>(drafted);
-    await runCli(["task", "contract", "lock", contract.id, "--json"], tmpDir);
+    await runCli(["task", "contract", "lock", contract.id, "--session", "reopen-owner", "--json"], tmpDir);
     await runCli(
-      ["task", "contract", "criteria", "add", contract.id, "extra amended criterion", "--json"],
+      ["task", "contract", "criteria", "add", contract.id, "extra amended criterion", "--session", "reopen-owner", "--json"],
       tmpDir,
     );
 
@@ -476,7 +587,7 @@ describe("task contract CLI", () => {
     );
 
     const reopened = await runCli(["task", "contract", "reopen", contract.id, "--json"], tmpDir);
-    expect(expectJson<{ status: string }>(reopened).status).toBe("locked");
+    expect(expectJson<{ status: string }>(reopened).status).toBe("amended");
 
     const shownTask = await runCli(["task", "show", task.id, "--json"], tmpDir);
     expect(expectJson<{ status: string }>(shownTask).status).toBe("pending");

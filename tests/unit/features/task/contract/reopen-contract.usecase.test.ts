@@ -43,7 +43,7 @@ describe("reopenContractForTask", () => {
     store = new FsContractStoreAdapter(tmpDir);
   });
 
-  it("reopens amended contracts as locked while preserving amendment history", async () => {
+  it("reopens amended contracts as amended while preserving amendment history", async () => {
     const created = await store.create(createInput());
     const fulfilled = await store.save({
       ...created,
@@ -92,7 +92,7 @@ describe("reopenContractForTask", () => {
       contractId: fulfilled.id,
     });
 
-    expect(reopened?.status).toBe("locked");
+    expect(reopened?.status).toBe("amended");
     expect(reopened?.amendments).toHaveLength(1);
     expect(reopened?.closedAt).toBeUndefined();
     expect(reopened?.closedAtCommit).toBeUndefined();

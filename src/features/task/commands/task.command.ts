@@ -18,6 +18,7 @@ import { findSimilarTasks } from "../usecases/find-similar-tasks.usecase.js";
 import { heartbeatTask } from "../usecases/heartbeat-task.usecase.js";
 import { closeContractForTask } from "../usecases/contract/close-contract.usecase.js";
 import { computeContractVerdictForTask } from "../usecases/contract/compute-verdict.usecase.js";
+import { loadContractForReopen } from "../usecases/contract/reopen-contract.usecase.js";
 import { transferContractOwnership } from "../usecases/contract/transfer-ownership.usecase.js";
 import { deleteTaskFlow } from "../usecases/delete-task-flow.usecase.js";
 import { STUCK_THRESHOLD_MS, isStuckTask } from "../domain/now-md-format.js";
@@ -36,10 +37,11 @@ import type {
   ListTasksFilters,
   ReadyTasksFilters,
   Task,
+  TaskMutationInput,
   TaskReceipt,
   UpdateTaskInput,
 } from "../domain/task-types.js";
-import { TASK_STATUSES, TASK_TYPES } from "../domain/task-types.js";
+import { TASK_STATUSES, TASK_TYPES, indexTasksById } from "../domain/task-types.js";
 import {
   buildCreateInput,
   hasAnyPatchField,
@@ -57,7 +59,7 @@ import {
   taskUpdateClaimViaDedicatedCommand,
   taskUpdateOwnershipViaClaim,
 } from "../domain/task-errors.js";
-import { assertTaskMutationOwnership } from "../domain/task-state.js";
+import { assertTaskMutationOwnership, assertTaskUpdateAllowed } from "../domain/task-state.js";
 import {
   buildCompactReadyTaskPayload,
   formatTaskBriefingList,
@@ -467,6 +469,10 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
 
       if (hasTaskPatch) {
         if (previous?.status === "completed" && patch.status === "in_progress") {
+          await preflightCompletedTaskRestart(previous, patch, {
+            sessionId,
+            force: opts.force === true,
+          });
           await reopenTaskFlow({
             taskStore: services.taskStore,
             continuationStore: services.taskContinuationStore,
@@ -555,7 +561,7 @@ function registerClaimCommand(taskCmd: Command, program: Command): void {
         checkBusy: opts.busyCheck === true,
       });
       if (claimed.contractId) {
-        await transferContractOwnership(services.contractStore, claimed.id, sessionId);
+        await maybeTransferClaimedContractOwnership(claimed.id, sessionId);
       }
       await maybeAttachClaimAnchor(claimed.id);
       await syncTaskContinuation(
@@ -700,17 +706,24 @@ function registerDeleteCommand(taskCmd: Command, program: Command): void {
   taskCmd
     .command("delete <id>")
     .description("Delete a task and clean up its contract and continuation state")
+    .option("--force", "Delete a task claimed by another session")
+    .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
     .action(async (id: string, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
+      const sessionId = await resolveOptionalOwnershipSessionId(opts.session);
+      const actor: TaskMutationInput = {
+        ...(opts.force === true ? { force: true } : {}),
+        ...(sessionId ? { sessionId } : {}),
+      };
       const deleted = await deleteTaskFlow({
         taskStore: services.taskStore,
         continuationStore: services.taskContinuationStore,
         continuationHistory: services.taskContinuationHistory,
         contractStore: services.contractStore,
-      }, id);
+      }, id, actor);
       await refreshNowMd();
 
       if (emitSilentSuccess(isJson, opts, deleted)) return;
@@ -941,6 +954,32 @@ async function resolveSessionAndReleaseStale(
   const sessionId = await resolveOptionalOwnershipSessionId(explicitSessionId);
   await maybeReleaseStaleOwnedTasks(sessionId ? [sessionId] : []);
   return sessionId;
+}
+
+async function preflightCompletedTaskRestart(
+  previous: Task,
+  patch: UpdateTaskInput,
+  actor: TaskMutationInput,
+): Promise<void> {
+  const services = getServices();
+  const reopenedTask = buildPreflightReopenedTask(previous);
+  const allTasks = await services.taskStore.all();
+  const tasks = indexTasksById(allTasks.map((task) => task.id === reopenedTask.id ? reopenedTask : task));
+  assertTaskUpdateAllowed(reopenedTask, patch, tasks, actor);
+  await loadContractForReopen(services.contractStore, previous);
+}
+
+function buildPreflightReopenedTask(previous: Task): Task {
+  return {
+    ...previous,
+    status: "pending",
+    assignee: undefined,
+    claimedAt: undefined,
+    lastActivityAt: undefined,
+    closeReason: undefined,
+    receipt: undefined,
+    updatedAt: previous.updatedAt,
+  };
 }
 
 async function releaseMatchingOwnedTasks(
@@ -1312,7 +1351,8 @@ async function maybeReleaseStaleOwnedTasks(skipAssignees: readonly string[] = []
       }
     } catch (error) {
       if (error instanceof MaestroError && error.message.includes("stale reclaim is blocked by contract policy")) {
-        throw error;
+        warn(error.message);
+        continue;
       }
       const message = error instanceof Error ? error.message : String(error);
       warn(`Stale task recovery failed for ${assignee}: ${message}`);
@@ -1548,6 +1588,20 @@ async function maybeFinalizeTaskContract(task: Task): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     warn(`Task ${task.id} completed, but contract close failed: ${message}`);
+  }
+}
+
+async function maybeTransferClaimedContractOwnership(
+  taskId: string,
+  newActor: string,
+  reason: "claim_reclaim" | "handoff_pickup" = "claim_reclaim",
+): Promise<void> {
+  try {
+    const services = getServices();
+    await transferContractOwnership(services.contractStore, taskId, newActor, reason);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    warn(`Task ${taskId} kept its new owner, but contract ownership transfer failed: ${message}`);
   }
 }
 

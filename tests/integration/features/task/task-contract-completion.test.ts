@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expectJson, initGitRepo } from "../../../helpers/run-compiled-cli.js";
@@ -61,9 +61,13 @@ describe("task contract completion", () => {
       ].join("\n"),
     );
 
-    const drafted = await runCli(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir);
+    const drafted = await runCli(
+      ["task", "contract", "new", task.id, "--from", templatePath, "--session", "test-owner", "--json"],
+      tmpDir,
+    );
     const contract = expectJson<{ id: string }>(drafted);
-    await runCli(["task", "contract", "lock", contract.id, "--json"], tmpDir);
+    await runCli(["task", "contract", "lock", contract.id, "--session", "test-owner", "--json"], tmpDir);
+    await rm(templatePath, { force: true });
 
     await Bun.write(join(tmpDir, "README.md"), "hello\nworld\n");
     const completed = await runCli(
@@ -126,8 +130,12 @@ describe("task contract completion", () => {
       ].join("\n"),
     );
 
-    await runCli(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir);
-    await runCli(["task", "contract", "lock", task.id, "--json"], tmpDir);
+    await runCli(
+      ["task", "contract", "new", task.id, "--from", templatePath, "--session", "strict-owner", "--json"],
+      tmpDir,
+    );
+    await runCli(["task", "contract", "lock", task.id, "--session", "strict-owner", "--json"], tmpDir);
+    await rm(templatePath, { force: true });
 
     await Bun.write(join(tmpDir, "README.md"), "hello\nstrict\n");
     const blocked = await runCli(
@@ -180,9 +188,13 @@ describe("task contract completion", () => {
       ].join("\n"),
     );
     const firstContract = expectJson<{ id: string }>(
-      await runCli(["task", "contract", "new", firstTask.id, "--from", firstTemplatePath, "--json"], tmpDir),
+      await runCli(
+        ["task", "contract", "new", firstTask.id, "--from", firstTemplatePath, "--session", "overlap-owner-1", "--json"],
+        tmpDir,
+      ),
     );
-    await runCli(["task", "contract", "lock", firstContract.id, "--json"], tmpDir);
+    await runCli(["task", "contract", "lock", firstContract.id, "--session", "overlap-owner-1", "--json"], tmpDir);
+    await rm(firstTemplatePath, { force: true });
 
     const secondTask = expectJson<{ id: string }>(await runCli(["task", "create", "second overlap task", "--json"], tmpDir));
     await runCli(["task", "claim", secondTask.id, "--session", "overlap-owner-2", "--json"], tmpDir);
@@ -203,9 +215,13 @@ describe("task contract completion", () => {
       ].join("\n"),
     );
     const secondContract = expectJson<{ id: string }>(
-      await runCli(["task", "contract", "new", secondTask.id, "--from", secondTemplatePath, "--json"], tmpDir),
+      await runCli(
+        ["task", "contract", "new", secondTask.id, "--from", secondTemplatePath, "--session", "overlap-owner-2", "--json"],
+        tmpDir,
+      ),
     );
-    await runCli(["task", "contract", "lock", secondContract.id, "--json"], tmpDir);
+    await runCli(["task", "contract", "lock", secondContract.id, "--session", "overlap-owner-2", "--json"], tmpDir);
+    await rm(secondTemplatePath, { force: true });
 
     await Bun.write(join(tmpDir, "README.md"), "hello\noverlap\n");
 
@@ -226,6 +242,144 @@ describe("task contract completion", () => {
       policy: "annotate",
       otherContractIds: [firstContract.id],
     });
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("includes repo-tracked contract templates in verdict touched files", async () => {
+    await mkdir(join(tmpDir, ".maestro", "tasks", "contract-templates"), { recursive: true });
+    await Bun.write(
+      join(tmpDir, ".maestro", "tasks", "contract-templates", "default.md"),
+      "base template\n",
+    );
+    await runCommand(["git", "config", "user.email", "test@example.com"], tmpDir);
+    await runCommand(["git", "config", "user.name", "Test User"], tmpDir);
+    await runCommand(["git", "add", ".maestro/tasks/contract-templates/default.md"], tmpDir);
+    await runCommand(["git", "commit", "-m", "seed contract template"], tmpDir);
+
+    const created = await runCli(["task", "create", "template verdict scope", "--json"], tmpDir);
+    const task = expectJson<{ id: string }>(created);
+
+    await runCli(["task", "claim", task.id, "--session", "template-owner", "--json"], tmpDir);
+    await runCli(["task", "update", task.id, "--status", "in_progress", "--session", "template-owner", "--json"], tmpDir);
+
+    const templatePath = await writeTemplate(
+      "template-scope.yaml",
+      [
+        "intent: Keep the work inside repo-tracked contract templates",
+        "scope:",
+        "  filesExpected:",
+        "    - .maestro/tasks/contract-templates/**",
+        "  filesForbidden: []",
+        "doneWhen:",
+        "  - text: template touched",
+        "    kind: receipt-hint",
+        "",
+      ].join("\n"),
+    );
+
+    const drafted = await runCli(
+      ["task", "contract", "new", task.id, "--from", templatePath, "--session", "template-owner", "--json"],
+      tmpDir,
+    );
+    const contract = expectJson<{ id: string }>(drafted);
+    await runCli(["task", "contract", "lock", contract.id, "--session", "template-owner", "--json"], tmpDir);
+    await rm(templatePath, { force: true });
+
+    await Bun.write(join(tmpDir, ".maestro", "tasks", "contract-templates", "default.md"), "updated template\n");
+    await runCli(
+      [
+        "task",
+        "update",
+        task.id,
+        "--status",
+        "completed",
+        "--reason",
+        "done",
+        "--verified-by",
+        "template touched",
+        "--session",
+        "template-owner",
+        "--json",
+      ],
+      tmpDir,
+    );
+
+    const shown = await runCli(["task", "contract", "show", contract.id, "--json"], tmpDir);
+    const closed = expectJson<{
+      status: string;
+      verdict?: {
+        fulfilled: boolean;
+        actualFilesTouched: string[];
+      };
+    }>(shown);
+    expect(closed.status).toBe("fulfilled");
+    expect(closed.verdict?.fulfilled).toBe(true);
+    expect(closed.verdict?.actualFilesTouched).toContain(".maestro/tasks/contract-templates/default.md");
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("includes untracked working-tree files in the stored verdict", async () => {
+    await seedTrackedFile("README.md", "hello\n");
+
+    const created = await runCli(["task", "create", "untracked verdict scope", "--json"], tmpDir);
+    const task = expectJson<{ id: string }>(created);
+
+    await runCli(["task", "claim", task.id, "--session", "untracked-owner", "--json"], tmpDir);
+    await runCli(["task", "update", task.id, "--status", "in_progress", "--session", "untracked-owner", "--json"], tmpDir);
+
+    const templatePath = await writeTemplate(
+      "untracked-scope.yaml",
+      [
+        "intent: Keep the work scoped to an untracked file",
+        "scope:",
+        "  filesExpected:",
+        "    - new-file.txt",
+        "  filesForbidden: []",
+        "doneWhen:",
+        "  - text: manual",
+        "    kind: receipt-hint",
+        "",
+      ].join("\n"),
+    );
+
+    const drafted = await runCli(
+      ["task", "contract", "new", task.id, "--from", templatePath, "--session", "untracked-owner", "--json"],
+      tmpDir,
+    );
+    const contract = expectJson<{ id: string }>(drafted);
+    await runCli(["task", "contract", "lock", contract.id, "--session", "untracked-owner", "--json"], tmpDir);
+    await rm(templatePath, { force: true });
+
+    await Bun.write(join(tmpDir, "new-file.txt"), "hello from untracked\n");
+    await runCli(
+      [
+        "task",
+        "update",
+        task.id,
+        "--status",
+        "completed",
+        "--reason",
+        "done",
+        "--verified-by",
+        "manual",
+        "--session",
+        "untracked-owner",
+        "--json",
+      ],
+      tmpDir,
+    );
+
+    const shown = await runCli(["task", "contract", "show", contract.id, "--json"], tmpDir);
+    const closed = expectJson<{
+      status: string;
+      verdict?: {
+        fulfilled: boolean;
+        actualFilesTouched: string[];
+        filesExpectedUnused: string[];
+      };
+    }>(shown);
+    expect(closed.status).toBe("fulfilled");
+    expect(closed.verdict?.fulfilled).toBe(true);
+    expect(closed.verdict?.actualFilesTouched).toContain("new-file.txt");
+    expect(closed.verdict?.filesExpectedUnused).toEqual([]);
   }, SLOW_CLI_TIMEOUT_MS);
 
   it("requires a contract only when config asks for it and honors --no-contract", async () => {
@@ -289,10 +443,14 @@ describe("task contract completion", () => {
       ].join("\n"),
     );
 
-    const drafted = await runCli(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir);
+    const drafted = await runCli(
+      ["task", "contract", "new", task.id, "--from", templatePath, "--session", "reopen-owner", "--json"],
+      tmpDir,
+    );
     const contract = expectJson<{ id: string }>(drafted);
-    await runCli(["task", "contract", "lock", contract.id, "--json"], tmpDir);
-    await runCli(["task", "contract", "criteria", "add", contract.id, "extra check", "--json"], tmpDir);
+    await runCli(["task", "contract", "lock", contract.id, "--session", "reopen-owner", "--json"], tmpDir);
+    await rm(templatePath, { force: true });
+    await runCli(["task", "contract", "criteria", "add", contract.id, "extra check", "--session", "reopen-owner", "--json"], tmpDir);
 
     await Bun.write(join(tmpDir, "README.md"), "hello\nworld\n");
     await runCli(
@@ -324,7 +482,7 @@ describe("task contract completion", () => {
       closedBy?: string;
       amendments: Array<unknown>;
     }>(shown);
-    expect(reset.status).toBe("locked");
+    expect(reset.status).toBe("amended");
     expect(reset.amendments).toHaveLength(1);
     expect(reset.verdict).toBeUndefined();
     expect(reset.closedAt).toBeUndefined();
@@ -354,9 +512,13 @@ describe("task contract completion", () => {
     );
 
     const closedContract = expectJson<{ id: string }>(
-      await runCli(["task", "contract", "new", closedTask.id, "--from", closedTemplatePath, "--json"], tmpDir),
+      await runCli(
+        ["task", "contract", "new", closedTask.id, "--from", closedTemplatePath, "--session", "closed-owner", "--json"],
+        tmpDir,
+      ),
     );
-    await runCli(["task", "contract", "lock", closedContract.id, "--json"], tmpDir);
+    await runCli(["task", "contract", "lock", closedContract.id, "--session", "closed-owner", "--json"], tmpDir);
+    await rm(closedTemplatePath, { force: true });
 
     await Bun.write(join(tmpDir, "README.md"), "hello\nclosed\n");
     await runCli(
@@ -396,8 +558,12 @@ describe("task contract completion", () => {
       ].join("\n"),
     );
 
-    await runCli(["task", "contract", "new", activeTask.id, "--from", activeTemplatePath, "--json"], tmpDir);
-    await runCli(["task", "contract", "lock", activeTask.id, "--json"], tmpDir);
+    await runCli(
+      ["task", "contract", "new", activeTask.id, "--from", activeTemplatePath, "--session", "active-owner", "--json"],
+      tmpDir,
+    );
+    await runCli(["task", "contract", "lock", activeTask.id, "--session", "active-owner", "--json"], tmpDir);
+    await rm(activeTemplatePath, { force: true });
 
     const blocked = await runCli(["task", "reopen", closedTask.id, "--json"], tmpDir);
     const blockedOutput = `${blocked.stdout}\n${blocked.stderr}`;
@@ -435,9 +601,13 @@ describe("task contract completion", () => {
       ].join("\n"),
     );
 
-    const drafted = await runCli(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir);
+    const drafted = await runCli(
+      ["task", "contract", "new", task.id, "--from", templatePath, "--session", "update-reopen-owner", "--json"],
+      tmpDir,
+    );
     const contract = expectJson<{ id: string }>(drafted);
-    await runCli(["task", "contract", "lock", contract.id, "--json"], tmpDir);
+    await runCli(["task", "contract", "lock", contract.id, "--session", "update-reopen-owner", "--json"], tmpDir);
+    await rm(templatePath, { force: true });
 
     await Bun.write(join(tmpDir, "README.md"), "hello\nfirst close\n");
     await runCli(
@@ -513,5 +683,81 @@ describe("task contract completion", () => {
     expect(reset.verdict).toBeUndefined();
     expect(reset.closedAtCommit).toBeUndefined();
     expect(reset.closedBy).toBeUndefined();
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("leaves completed task state unchanged when update-reopen cannot claim ownership", async () => {
+    await seedTrackedFile("README.md", "hello\n");
+
+    const created = await runCli(["task", "create", "failed update reopen stays closed", "--json"], tmpDir);
+    const task = expectJson<{ id: string }>(created);
+
+    await runCli(["task", "claim", task.id, "--session", "restart-owner", "--json"], tmpDir);
+    await runCli(["task", "update", task.id, "--status", "in_progress", "--session", "restart-owner", "--json"], tmpDir);
+
+    const templatePath = await writeTemplate(
+      "failed-reopen-template.yaml",
+      [
+        "intent: Keep the completion scoped to README",
+        "scope:",
+        "  filesExpected:",
+        "    - README.md",
+        "  filesForbidden: []",
+        "doneWhen:",
+        "  - text: manual",
+        "    kind: receipt-hint",
+        "",
+      ].join("\n"),
+    );
+
+    const drafted = await runCli(
+      ["task", "contract", "new", task.id, "--from", templatePath, "--session", "restart-owner", "--json"],
+      tmpDir,
+    );
+    const contract = expectJson<{ id: string }>(drafted);
+    await runCli(["task", "contract", "lock", contract.id, "--session", "restart-owner", "--json"], tmpDir);
+    await rm(templatePath, { force: true });
+
+    await Bun.write(join(tmpDir, "README.md"), "hello\nrestart\n");
+    await runCli(
+      [
+        "task",
+        "update",
+        task.id,
+        "--status",
+        "completed",
+        "--reason",
+        "done",
+        "--verified-by",
+        "manual",
+        "--session",
+        "restart-owner",
+        "--json",
+      ],
+      tmpDir,
+    );
+
+    const failed = await runCli(
+      ["task", "update", task.id, "--status", "in_progress"],
+      tmpDir,
+      {
+        env: {
+          CLAUDECODE: "0",
+          CODEX_THREAD_ID: "",
+        },
+      },
+    );
+    expect(failed.exitCode).toBe(1);
+    expect(failed.stderr).toContain("Status 'in_progress' requires task ownership");
+
+    const shownTask = await runCli(["task", "show", task.id, "--json"], tmpDir);
+    expect(expectJson<{ status: string }>(shownTask).status).toBe("completed");
+
+    const shownContract = await runCli(["task", "contract", "show", contract.id, "--json"], tmpDir);
+    const closed = expectJson<{
+      status: string;
+      verdict?: { fulfilled: boolean };
+    }>(shownContract);
+    expect(closed.status).toBe("fulfilled");
+    expect(closed.verdict?.fulfilled).toBe(true);
   }, SLOW_CLI_TIMEOUT_MS);
 });

@@ -43,6 +43,7 @@ describe("AGENT_INSTRUCTION_BLOCK", () => {
     expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract new <id>");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("--from default");
     expect(AGENT_INSTRUCTION_BLOCK).toContain(".maestro/tasks/contract-templates/default.md");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("new/edit/lock/discard/amend/criteria");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract lock <id>");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract show <id>");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract verdict <id>");
@@ -52,6 +53,7 @@ describe("AGENT_INSTRUCTION_BLOCK", () => {
     expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract criteria mark <id> <criterionId> --met");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract criteria add <id>");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract criteria remove <id> <criterionId>");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("--session <id>");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("--strict");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("--no-contract");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("Reopening a completed task reactivates its contract");
@@ -65,9 +67,11 @@ describe("AGENT_INSTRUCTION_BLOCK", () => {
     expect(agentsTemplate?.content).toContain(".maestro/tasks/contract-templates/");
     expect(agentsTemplate?.content).toContain("maestro task contract new <id>");
     expect(agentsTemplate?.content).toContain("maestro task contract lock <id>");
+    expect(agentsTemplate?.content).toContain("new/edit/lock/discard/amend/criteria");
     expect(agentsTemplate?.content).toContain("maestro task contract verdict <id>");
     expect(agentsTemplate?.content).toContain("maestro task contract amend <id> --reason");
     expect(agentsTemplate?.content).toContain("maestro task contract criteria mark <id> <criterionId> --met");
+    expect(agentsTemplate?.content).toContain("--session <id>");
     expect(agentsTemplate?.content).toContain("--strict");
     expect(agentsTemplate?.content).toContain("stored verdict");
     expect(agentsTemplate?.content).toContain("contracts.overlapPolicy: annotate");

@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { ensureDir, fileExists, readJson, removeIfExists, writeJson } from "@/shared/lib/fs.js";
 import { MaestroError } from "@/shared/errors.js";
+import { resolveWithin } from "@/shared/lib/path-safety.js";
 import type { TaskContinuationStorePort } from "../ports/task-continuation-store.port.js";
 import {
   validateTaskContinuationSummary,
@@ -73,7 +74,7 @@ export class FsTaskContinuationStoreAdapter implements TaskContinuationStorePort
   }
 
   private summaryPath(state: ContinuationState, taskId: string): string {
-    return join(this.stateDir(state), `${taskId}.json`);
+    return resolveWithin(this.stateDir(state), `${taskId}.json`, "Task continuation summary path");
   }
 
   private async assertNoSplitState(taskId: string): Promise<void> {
