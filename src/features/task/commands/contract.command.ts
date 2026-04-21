@@ -8,6 +8,7 @@ import { MaestroError } from "@/shared/errors.js";
 import { fileExists, readTextOrStdin, writeText } from "@/shared/lib/fs.js";
 import { output, resolveJsonFlag, warn } from "@/shared/lib/output.js";
 import { normalizeSlashes } from "@/shared/lib/path-normalize.js";
+import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 import { parseYaml, stringifyYaml } from "@/shared/lib/yaml.js";
 import {
   DONE_WHEN_ID_PATTERN,
@@ -421,7 +422,12 @@ async function resolveNamedContractTemplate(path: string): Promise<string | unde
     return undefined;
   }
 
-  const templateDir = join(process.cwd(), ".maestro", "tasks", "contract-templates");
+  const templateDir = join(
+    resolveMaestroProjectRoot(process.cwd()),
+    ".maestro",
+    "tasks",
+    "contract-templates",
+  );
   for (const suffix of ["", ".md", ".yaml", ".yml"] as const) {
     const candidate = join(templateDir, `${path}${suffix}`);
     if (await fileExists(candidate)) {

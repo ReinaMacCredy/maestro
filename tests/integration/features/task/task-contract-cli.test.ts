@@ -90,7 +90,9 @@ describe("task contract CLI", () => {
     const createdTask = await runCli(["task", "create", "templated contract", "--json"], tmpDir);
     const task = expectJson<{ id: string }>(createdTask);
     const templateDir = join(tmpDir, ".maestro", "tasks", "contract-templates");
+    const nestedDir = join(tmpDir, "nested", "deeper");
     await mkdir(templateDir, { recursive: true });
+    await mkdir(nestedDir, { recursive: true });
     await Bun.write(
       join(templateDir, "default.md"),
       [
@@ -106,7 +108,7 @@ describe("task contract CLI", () => {
       ].join("\n"),
     );
 
-    const drafted = await runCli(["task", "contract", "new", task.id, "--from", "default", "--json"], tmpDir);
+    const drafted = await runCli(["task", "contract", "new", task.id, "--from", "default", "--json"], nestedDir);
     const contract = expectJson<{ intent: string; scope: { filesExpected: string[] } }>(drafted);
     expect(contract.intent).toBe("Create the contract from the repo-local default template");
     expect(contract.scope.filesExpected).toEqual(["src/features/task/**"]);

@@ -436,7 +436,11 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
       }
 
       const sessionId = await resolveSessionAndReleaseStale(opts.session);
-      if (previous?.status === "completed" && patch.status === "completed") {
+      if (
+        previous?.status === "completed"
+        && patch.status === "completed"
+        && !hasAdditionalCompletedTaskEdits(patch, continuationEdits)
+      ) {
         if (emitSilentSuccess(isJson, opts, previous)) return;
         output(isJson, previous, (task) => [
           `[ok] Task updated: ${task.id}`,
@@ -448,6 +452,9 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
           ...(task.closeReason ? [`  Reason: ${task.closeReason}`] : []),
         ]);
         return;
+      }
+      if (previous?.status === "completed" && patch.status === "completed") {
+        throw completedTaskUpdateRequiresReopen(id);
       }
       if (patch.status === "completed" && previous) {
         await enforceContractCompletionPolicy(previous, patch, {
@@ -483,9 +490,7 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
           throw new MaestroError(`Task not found: ${id}`);
         }
         if (previous.status === "completed") {
-          throw new MaestroError(`Task ${id} is already completed and cannot be updated`, [
-            "Reopen the task first if you want to resume or revise its continuation",
-          ]);
+          throw completedTaskUpdateRequiresReopen(id);
         }
         assertTaskMutationOwnership(previous, { sessionId, force: opts.force === true }, "update");
         updated = previous;
@@ -1487,6 +1492,32 @@ function previewTaskReceipt(task: Task, patch: UpdateTaskInput): TaskReceipt | u
 function nonEmpty(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed && trimmed.length > 0 ? trimmed : undefined;
+}
+
+function hasAdditionalCompletedTaskEdits(
+  patch: UpdateTaskInput,
+  continuationEdits: ContinuationEditInput,
+): boolean {
+  return (
+    patch.title !== undefined
+    || patch.description !== undefined
+    || patch.reason !== undefined
+    || patch.priority !== undefined
+    || patch.type !== undefined
+    || patch.parentId !== undefined
+    || (patch.addLabels !== undefined && patch.addLabels.length > 0)
+    || (patch.removeLabels !== undefined && patch.removeLabels.length > 0)
+    || patch.summary !== undefined
+    || patch.surprise !== undefined
+    || (patch.verifiedBy !== undefined && patch.verifiedBy.length > 0)
+    || hasContinuationEdits(continuationEdits)
+  );
+}
+
+function completedTaskUpdateRequiresReopen(id: string): MaestroError {
+  return new MaestroError(`Task ${id} is already completed and cannot be updated`, [
+    "Reopen the task first if you want to revise its receipt or continuation",
+  ]);
 }
 
 function formatVerdictHint(verdict: {

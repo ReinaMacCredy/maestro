@@ -465,8 +465,6 @@ describe("task contract completion", () => {
         task.id,
         "--status",
         "completed",
-        "--reason",
-        "done again",
         "--session",
         "update-reopen-owner",
         "--json",
@@ -474,6 +472,24 @@ describe("task contract completion", () => {
       tmpDir,
     );
     expect(expectJson<{ status: string }>(repeated).status).toBe("completed");
+
+    const rejectedReceiptEdit = await runCli(
+      [
+        "task",
+        "update",
+        task.id,
+        "--status",
+        "completed",
+        "--summary",
+        "changed after close",
+        "--session",
+        "update-reopen-owner",
+      ],
+      tmpDir,
+    );
+    expect(rejectedReceiptEdit.exitCode).toBe(1);
+    expect(rejectedReceiptEdit.stderr).toContain("already completed and cannot be updated");
+    expect(rejectedReceiptEdit.stderr).toContain("Reopen the task first");
 
     const reopened = await runCli(
       ["task", "update", task.id, "--status", "in_progress", "--session", "update-reopen-owner", "--json"],
