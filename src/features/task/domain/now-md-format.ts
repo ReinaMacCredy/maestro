@@ -1,3 +1,5 @@
+import { countMetCriteria, isActiveContract } from "./contract/contract-state.js";
+import type { Contract } from "./contract/contract-types.js";
 import type { Task } from "./task-types.js";
 import { indexTasksById } from "./task-types.js";
 import { hasUnresolvedBlockers } from "./task-state.js";
@@ -11,9 +13,10 @@ const DESCRIPTION_TRUNCATE = 300;
 export interface BuildNowMdInput {
   readonly tasks: readonly Task[];
   readonly now: Date;
+  readonly contracts?: ReadonlyMap<string, Contract>;
 }
 
-export function buildNowMd({ tasks, now }: BuildNowMdInput): string {
+export function buildNowMd({ tasks, now, contracts = new Map() }: BuildNowMdInput): string {
   const updated = now.toISOString();
 
   if (tasks.length === 0) {
@@ -44,7 +47,7 @@ export function buildNowMd({ tasks, now }: BuildNowMdInput): string {
     lines.push("None.");
   } else {
     for (const task of inProgress) {
-      lines.push(...renderTask(task, now, byId, { includeOwner: true }));
+      lines.push(...renderTask(task, now, byId, contracts, { includeOwner: true, includeContract: true }));
     }
   }
   lines.push("");
@@ -54,7 +57,7 @@ export function buildNowMd({ tasks, now }: BuildNowMdInput): string {
     lines.push("None.");
   } else {
     for (const task of ready) {
-      lines.push(...renderTask(task, now, byId, { includeOwner: false }));
+      lines.push(...renderTask(task, now, byId, contracts, { includeOwner: false, includeContract: false }));
     }
   }
   lines.push("");
@@ -64,7 +67,7 @@ export function buildNowMd({ tasks, now }: BuildNowMdInput): string {
     lines.push("None.");
   } else {
     for (const task of stuck) {
-      lines.push(...renderTask(task, now, byId, { includeOwner: true }));
+      lines.push(...renderTask(task, now, byId, contracts, { includeOwner: true, includeContract: false }));
     }
   }
 
@@ -87,7 +90,8 @@ function renderTask(
   task: Task,
   now: Date,
   byId: ReadonlyMap<string, Task>,
-  opts: { includeOwner: boolean },
+  contracts: ReadonlyMap<string, Contract>,
+  opts: { includeOwner: boolean; includeContract: boolean },
 ): readonly string[] {
   const out: string[] = [];
   out.push(`### ${task.id} . ${task.title}`);
@@ -122,8 +126,35 @@ function renderTask(
     out.push(truncated);
   }
 
+  const contract = opts.includeContract ? resolveActiveContract(task, contracts) : undefined;
+  if (contract) {
+    out.push(
+      `Contract: ${contract.id} (${contract.status}, ${countMetCriteria(contract.doneWhen)}/${contract.doneWhen.length} done-when met, scope: ${summarizeScope(contract)})`,
+    );
+  }
+
   out.push("");
   return out;
+}
+
+function resolveActiveContract(task: Task, contracts: ReadonlyMap<string, Contract>): Contract | undefined {
+  if (!task.contractId) {
+    return undefined;
+  }
+  const contract = contracts.get(task.contractId);
+  if (!contract || !isActiveContract(contract)) {
+    return undefined;
+  }
+  return contract;
+}
+
+function summarizeScope(contract: Contract): string {
+  const first = contract.scope.filesExpected[0];
+  if (!first) {
+    return "(none)";
+  }
+  const extra = contract.scope.filesExpected.length - 1;
+  return extra > 0 ? `${first} +${extra} more` : first;
 }
 
 function byPriorityThenCreated(a: Task, b: Task): number {

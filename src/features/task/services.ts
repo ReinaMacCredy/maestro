@@ -24,13 +24,14 @@ export interface TaskServices {
 }
 
 export function buildTaskServices(projectDir: string): TaskServices {
+  const contractStore = new FsContractStoreAdapter(projectDir);
   return {
     taskStore: new JsonlTaskStoreAdapter(projectDir),
-    contractStore: new FsContractStoreAdapter(projectDir),
+    contractStore,
     gitAnchor: new ShellGitAnchorAdapter(),
     taskCandidateStore: new FsCandidateStoreAdapter(projectDir),
     taskContinuationStore: new FsTaskContinuationStoreAdapter(projectDir),
     taskContinuationHistory: new FsTaskContinuationHistoryStoreAdapter(projectDir),
-    taskNowMdWriter: new FsNowMdWriterAdapter(projectDir),
+    taskNowMdWriter: new FsNowMdWriterAdapter(projectDir, contractStore),
   };
 }

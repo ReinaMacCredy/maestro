@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import type { Contract } from "@/features/task/domain/contract/contract-types.js";
 import type { Task } from "@/features/task/domain/task-types.js";
 import { buildNowMd } from "@/features/task/domain/now-md-format.js";
 
@@ -14,6 +15,47 @@ function task(overrides: Partial<Task> = {}): Task {
     blockedBy: [],
     createdAt: "2026-04-21T00:00:00.000Z",
     updatedAt: "2026-04-21T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+function contract(overrides: Partial<Contract> = {}): Contract {
+  return {
+    schemaVersion: 1,
+    id: "c-123abc",
+    taskId: "tsk-000001",
+    repoRoot: "/repo",
+    status: "locked",
+    createdAt: "2026-04-21T00:00:00.000Z",
+    intent: "Keep the task scoped",
+    scope: {
+      filesExpected: ["src/features/task/**"],
+      filesForbidden: [],
+    },
+    doneWhen: [
+      {
+        id: "dw-123abc",
+        text: "criterion one",
+        kind: "manual",
+      },
+      {
+        id: "dw-456def",
+        text: "criterion two",
+        kind: "manual",
+        met: true,
+        metAt: "2026-04-21T01:00:00.000Z",
+        metBy: "alice",
+      },
+    ],
+    amendments: [],
+    createdBy: "alice",
+    lockedBy: "alice",
+    configSnapshot: {
+      strict: false,
+      overlapPolicy: "fail",
+      rebaseFallback: "best-effort",
+      staleReclaimContractPolicy: "inherit",
+    },
     ...overrides,
   };
 }
@@ -113,5 +155,56 @@ describe("buildNowMd", () => {
 
     expect(md).toContain("x".repeat(300) + "...");
     expect(md).not.toContain("x".repeat(301));
+  });
+
+  it("renders active contract progress for in-progress tasks", () => {
+    const md = buildNowMd({
+      tasks: [
+        task({
+          id: "tsk-contract",
+          title: "contracted work",
+          status: "in_progress",
+          contractId: "c-123abc",
+        }),
+      ],
+      contracts: new Map([
+        [
+          "c-123abc",
+          contract({
+            id: "c-123abc",
+            taskId: "tsk-contract",
+          }),
+        ],
+      ]),
+      now: new Date("2026-04-21T12:00:00.000Z"),
+    });
+
+    expect(md).toContain("Contract: c-123abc (locked, 1/2 done-when met, scope: src/features/task/**)");
+  });
+
+  it("skips discarded or completed contracts in NOW.md", () => {
+    const md = buildNowMd({
+      tasks: [
+        task({
+          id: "tsk-contract",
+          title: "contracted work",
+          status: "in_progress",
+          contractId: "c-123abc",
+        }),
+      ],
+      contracts: new Map([
+        [
+          "c-123abc",
+          contract({
+            id: "c-123abc",
+            taskId: "tsk-contract",
+            status: "fulfilled",
+          }),
+        ],
+      ]),
+      now: new Date("2026-04-21T12:00:00.000Z"),
+    });
+
+    expect(md).not.toContain("Contract: c-123abc");
   });
 });

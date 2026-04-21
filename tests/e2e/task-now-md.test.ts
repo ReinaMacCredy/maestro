@@ -90,4 +90,43 @@ describe("task NOW.md recitation", () => {
     },
     SLOW_CLI_TIMEOUT_MS,
   );
+
+  it(
+    "includes the active contract summary for in-progress work",
+    async () => {
+      const nowMdPath = join(tmpDir, ".maestro", "tasks", "NOW.md");
+      const created = await runCompiled(["task", "create", "contracted now line", "--json"], tmpDir);
+      const task = JSON.parse(created.stdout) as { id: string };
+
+      const templatePath = join(tmpDir, "contract-template.yaml");
+      await Bun.write(
+        templatePath,
+        [
+          "intent: Keep NOW.md coverage scoped to README",
+          "scope:",
+          "  filesExpected:",
+          "    - README.md",
+          "  filesForbidden: []",
+          "doneWhen:",
+          "  - text: criteria exists",
+          "    kind: manual",
+          "",
+        ].join("\n"),
+      );
+
+      const contract = JSON.parse(
+        (await runCompiled(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir)).stdout,
+      ) as { id: string };
+      await runCompiled(["task", "contract", "lock", contract.id, "--json"], tmpDir);
+      await runCompiled(["task", "claim", task.id, "--session", "operator-a", "--json"], tmpDir);
+      await runCompiled(
+        ["task", "update", task.id, "--status", "in_progress", "--session", "operator-a", "--json"],
+        tmpDir,
+      );
+
+      const md = await readFile(nowMdPath, "utf8");
+      expect(md).toContain(`Contract: ${contract.id} (locked, 0/1 done-when met, scope: README.md)`);
+    },
+    SLOW_CLI_TIMEOUT_MS,
+  );
 });

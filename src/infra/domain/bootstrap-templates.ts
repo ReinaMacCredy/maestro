@@ -182,7 +182,7 @@ maestro task block <blockerId> <blockedId...>                # blockerId must fi
 maestro task unblock <blockerId> <blockedId...>
 \`\`\`
 
-\`.maestro/tasks/NOW.md\` is refreshed after every task mutation; \`cat\` it for a short in-progress/ready/stuck view anchored to the current state.
+\`.maestro/tasks/NOW.md\` is refreshed after every task mutation; \`cat\` it for a short in-progress/ready/stuck view anchored to the current state. Active task contracts add a one-line scope/progress summary under in-progress work.
 
 **Plan a batch of tasks upfront (one write, atomic):**
 \`\`\`bash
@@ -248,6 +248,7 @@ This project uses Maestro for local bootstrap and runtime orchestration.
 - Use \`--no-contract\` only when config requires a contract but the task intentionally has none.
 - After completion, \`task contract show\` includes the stored verdict.
 - Reopening a completed task relocks its contract and clears the stored verdict.
+- \`.maestro/tasks/NOW.md\` adds a one-line contract status summary for active contracted work.
 - Stale reclaim inherits active contract ownership by default; set \`contracts.staleReclaimContractPolicy: block\` to refuse it.
 
 ## Agent Skill Lookup
