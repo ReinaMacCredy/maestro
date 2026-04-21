@@ -133,6 +133,7 @@ export function releaseTaskOwnership(task: Task, now: string): Task {
     ...task,
     assignee: undefined,
     claimedAt: undefined,
+    lastActivityAt: undefined,
     status: task.status === "in_progress" ? "pending" : task.status,
     updatedAt: now,
   };

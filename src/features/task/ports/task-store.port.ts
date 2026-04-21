@@ -69,6 +69,13 @@ export interface TaskStorePort extends TaskQueryPort {
   reopen(id: string): Promise<Task>;
 
   /**
+   * Bump `lastActivityAt` on a claimed task without any other state change.
+   * Used by `task heartbeat` so long-running sessions signal they are alive.
+   * Throws if the caller is not the current owner (unless forced).
+   */
+  heartbeat(id: string, sessionId: string, opts?: { force?: boolean }): Promise<Task>;
+
+  /**
    * Look up a stored batch receipt for idempotency replay.
    *
    * Returns undefined if no prior batch submitted the given id. Does not

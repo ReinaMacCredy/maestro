@@ -133,8 +133,19 @@ maestro task update <id> --status in_progress                # auto-claims if un
 maestro task update <id> --current-state "..." --next-action "..."
 maestro task update <id> --add-decision "keep api stable"
 maestro task update <id> --remove-decision "old constraint"
-maestro task update <id> --status completed --reason "<one-line outcome>"
+maestro task update <id> --status completed --reason "<one-line outcome>" \\
+  [--summary "<receipt summary>"] [--surprise "<gotcha>"] [--verified-by <name>]
 maestro task reopen <id>
+
+# Discover context
+maestro task similar <id>                                    # past tasks with keyword overlap (title + receipt)
+maestro task mine                                            # tasks owned by current session
+maestro task stuck [--older-than 4h]                         # in_progress tasks with no activity
+
+# Liveness + silent mode
+maestro task heartbeat <id>                                  # bump lastActivityAt so the claim doesn't age out
+maestro task claim <id> [--stale-after 4h]                   # takes over an aged-out claim from a dead session
+maestro task update <id> ... --silent                        # print '<id> <marker>' only; MAESTRO_TASK_SILENT=1 opts in
 
 # Release or re-wire
 maestro task unclaim <id>
@@ -144,6 +155,8 @@ maestro task release-owned <sessionId>                       # release tasks own
 maestro task block <blockerId> <blockedId...>                # blockerId must finish before blockedId is ready
 maestro task unblock <blockerId> <blockedId...>
 \`\`\`
+
+\`.maestro/tasks/NOW.md\` is refreshed after every task mutation; \`cat\` it for a short in-progress/ready/stuck view anchored to the current state.
 
 **Plan a batch of tasks upfront (one write, atomic):**
 \`\`\`bash

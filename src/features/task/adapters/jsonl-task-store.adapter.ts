@@ -257,6 +257,10 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         : (patch.reason.length === 0 ? undefined : patch.reason);
       const now = new Date().toISOString();
       const receipt = buildReceiptForUpdate(existing, patch, nextStatus, reason, now);
+      const nextAssignee = autoClaim ? autoClaim.sessionId : existing.assignee;
+      const lastActivityAt = isMutationByOwner(nextAssignee, opts)
+        ? now
+        : existing.lastActivityAt;
 
       const updated: Task = {
         ...existing,
@@ -267,8 +271,9 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         status: nextStatus,
         parentId: patch.parentId === "" ? undefined : (patch.parentId ?? existing.parentId),
         labels,
-        assignee: autoClaim ? autoClaim.sessionId : existing.assignee,
+        assignee: nextAssignee,
         claimedAt: autoClaim ? now : existing.claimedAt,
+        lastActivityAt,
         closeReason: nextStatus === "completed" ? reason : existing.closeReason,
         receipt,
         updatedAt: now,
@@ -319,6 +324,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         ...existing,
         assignee: sessionId,
         claimedAt: existing.claimedAt ?? now,
+        lastActivityAt: now,
         updatedAt: now,
       };
 
@@ -483,6 +489,36 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
     });
   }
 
+  async heartbeat(id: string, sessionId: string, opts: { force?: boolean } = {}): Promise<Task> {
+    return this.withLock(async () => {
+      const tasks = await this.readAll();
+      const existing = tasks.get(id);
+      if (!existing) {
+        throw taskNotFound(id);
+      }
+      if (existing.status === "completed") {
+        throw taskAlreadyCompleted(id);
+      }
+      if (!existing.assignee) {
+        throw taskNotClaimed(id);
+      }
+      if (existing.assignee !== sessionId && !opts.force) {
+        throw taskClaimOwnedByDifferentSession(id, existing.assignee);
+      }
+
+      const now = new Date().toISOString();
+      const beat: Task = {
+        ...existing,
+        lastActivityAt: now,
+        updatedAt: now,
+      };
+
+      tasks.set(id, beat);
+      await this.writeAll(tasks);
+      return beat;
+    });
+  }
+
   async reopen(id: string): Promise<Task> {
     return this.withLock(async () => {
       const tasks = await this.readAll();
@@ -500,6 +536,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         status: "pending",
         assignee: undefined,
         claimedAt: undefined,
+        lastActivityAt: undefined,
         closeReason: undefined,
         receipt: undefined,
         updatedAt: now,
@@ -641,6 +678,15 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
       return undefined;
     }
   }
+}
+
+function isMutationByOwner(
+  nextAssignee: string | undefined,
+  opts: TaskMutationInput,
+): boolean {
+  if (nextAssignee === undefined) return false;
+  if (opts.sessionId === undefined) return false;
+  return nextAssignee === opts.sessionId;
 }
 
 function buildReceiptForUpdate(

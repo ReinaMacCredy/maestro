@@ -15,6 +15,7 @@ import { readyTaskPage, readyTasks } from "../usecases/ready-tasks.usecase.js";
 import { captureTaskCandidate } from "../usecases/capture-task-candidate.usecase.js";
 import { planTasks } from "../usecases/plan-tasks.usecase.js";
 import { findSimilarTasks } from "../usecases/find-similar-tasks.usecase.js";
+import { heartbeatTask } from "../usecases/heartbeat-task.usecase.js";
 import { parseDuration } from "./duration.js";
 import {
   buildTaskContinuationSummary,
@@ -90,6 +91,7 @@ export function registerTaskCommand(program: Command): void {
   registerSimilarCommand(taskCmd, program);
   registerMineCommand(taskCmd, program);
   registerStuckCommand(taskCmd, program);
+  registerHeartbeatCommand(taskCmd, program);
 }
 
 function registerCreateCommand(taskCmd: Command, program: Command): void {
@@ -488,6 +490,7 @@ function registerClaimCommand(taskCmd: Command, program: Command): void {
     .option("--force", "Take over a task already claimed by another session")
     .option("--busy-check", "Reject the claim if this session already owns unresolved work")
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
+    .option("--stale-after <duration>", "Auto-release a dead owner's stale claim after this idle window (default 4h)")
     .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
     .action(async (id: string, opts) => {
@@ -495,6 +498,7 @@ function registerClaimCommand(taskCmd: Command, program: Command): void {
       const isJson = resolveJsonFlag(opts, program);
       const sessionId = await resolveOwnershipSessionId(opts.session);
       await maybeReleaseStaleOwnedTasks([sessionId]);
+      await maybeReleaseStaleClaim(id, sessionId, opts.staleAfter);
       const previous = await services.taskStore.get(id);
 
       const claimed = await claimTask(services.taskStore, id, {
@@ -1307,6 +1311,48 @@ async function refreshNowMd(): Promise<void> {
   }
 }
 
+const DEFAULT_STALE_AFTER_MS = 4 * 60 * 60 * 1000;
+
+async function maybeReleaseStaleClaim(
+  taskId: string,
+  newSessionId: string,
+  staleAfterRaw: unknown,
+): Promise<void> {
+  const services = getServices();
+  const task = await services.taskStore.get(taskId);
+  if (!task || !task.assignee || task.assignee === newSessionId) {
+    return;
+  }
+
+  const thresholdMs = typeof staleAfterRaw === "string"
+    ? parseDuration(staleAfterRaw, "--stale-after")
+    : DEFAULT_STALE_AFTER_MS;
+
+  const last = task.lastActivityAt !== undefined
+    ? Date.parse(task.lastActivityAt)
+    : 0;
+  const idleMs = Date.now() - last;
+  if (idleMs < thresholdMs) {
+    return;
+  }
+
+  const parsed = parseTaskOwnerId(task.assignee);
+  if (!parsed) {
+    return;
+  }
+  const session = await services.sessionDetect.lookup(parsed.agent, parsed.sessionId);
+  if (session) {
+    return;
+  }
+
+  const before = new Map([[task.id, task]]);
+  const released = await releaseOwnedTasks(services.taskStore, task.assignee);
+  await syncRecoveredStaleOwnerTasks(services, before, released);
+  if (released.length > 0) {
+    warn(`[ok] Released stale-claim (auto-released) on ${task.id} from ${task.assignee}`);
+  }
+}
+
 function appendVerifier(value: string, previous: string[]): string[] {
   const trimmed = value.trim();
   if (trimmed.length === 0) {
@@ -1423,4 +1469,35 @@ function registerStuckCommand(taskCmd: Command, program: Command): void {
 
 function truncate(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max - 3)}...` : text;
+}
+
+function registerHeartbeatCommand(taskCmd: Command, program: Command): void {
+  taskCmd
+    .command("heartbeat <id>")
+    .description("Bump the task's lastActivityAt timestamp without any other state change")
+    .option("--force", "Heartbeat a task owned by another session")
+    .option("--session <id>", "Use an explicit session id instead of auto-detection")
+    .option("--silent", "Print only '<id> <marker>' (for scripts)")
+    .option("--json", "Output as JSON")
+    .action(async (id: string, opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+      const sessionId = await resolveOwnershipSessionId(opts.session);
+
+      const task = await heartbeatTask(services.taskStore, id, sessionId, {
+        force: opts.force === true,
+      });
+
+      await refreshNowMd();
+
+      if (!isJson && resolveSilent(opts)) {
+        printSilent(task);
+        return;
+      }
+
+      output(isJson, task, (t) => [
+        `[ok] Task heartbeat: ${t.id}`,
+        `  Last activity: ${t.lastActivityAt ?? "n/a"}`,
+      ]);
+    });
 }

@@ -69,6 +69,7 @@ export function validateTask(value: unknown): Task | undefined {
   if (t.parentId !== undefined && typeof t.parentId !== "string") return undefined;
   if (t.assignee !== undefined && typeof t.assignee !== "string") return undefined;
   if (t.claimedAt !== undefined && typeof t.claimedAt !== "string") return undefined;
+  if (t.lastActivityAt !== undefined && typeof t.lastActivityAt !== "string") return undefined;
   if (t.closeReason !== undefined && typeof t.closeReason !== "string") return undefined;
 
   let receipt: TaskReceipt | undefined;
@@ -91,6 +92,7 @@ export function validateTask(value: unknown): Task | undefined {
     blockedBy,
     assignee: t.assignee as string | undefined,
     claimedAt: t.claimedAt as string | undefined,
+    lastActivityAt: t.lastActivityAt as string | undefined,
     closeReason: t.closeReason as string | undefined,
     receipt,
     createdAt: t.createdAt,
