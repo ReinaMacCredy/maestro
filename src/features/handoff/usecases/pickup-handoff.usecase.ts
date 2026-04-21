@@ -90,7 +90,7 @@ export async function pickupHandoff(
         { status: "in_progress" },
         { sessionId: input.ownerId, force: true },
       )).task;
-  await transferContractOwnership(deps.contractStore, taskId, input.ownerId);
+  await transferContractOwnership(deps.contractStore, taskId, input.ownerId, "handoff_pickup");
 
   const priorSummary = await loadTaskContinuationSummary(deps.continuationStore, taskId);
   const priorAgent = deriveAgentFromAssignee(beforeTask.assignee, beforeTask.updatedAt);

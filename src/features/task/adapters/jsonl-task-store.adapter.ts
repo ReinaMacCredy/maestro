@@ -573,6 +573,60 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
     });
   }
 
+  async delete(id: string): Promise<Task> {
+    return this.withLock(async () => {
+      const tasks = await this.readAll();
+      const existing = tasks.get(id);
+      if (!existing) {
+        throw taskNotFound(id);
+      }
+
+      const now = new Date().toISOString();
+      tasks.delete(id);
+
+      for (const [taskId, task] of tasks.entries()) {
+        let changed = false;
+        let nextTask = task;
+
+        if (task.parentId === id) {
+          nextTask = {
+            ...nextTask,
+            parentId: undefined,
+            updatedAt: now,
+          };
+          changed = true;
+        }
+
+        const nextBlocks = task.blocks.filter((blockedId) => blockedId !== id);
+        if (!sameValues(task.blocks, nextBlocks)) {
+          nextTask = {
+            ...nextTask,
+            blocks: nextBlocks,
+            updatedAt: now,
+          };
+          changed = true;
+        }
+
+        const nextBlockedBy = task.blockedBy.filter((blockerId) => blockerId !== id);
+        if (!sameValues(task.blockedBy, nextBlockedBy)) {
+          nextTask = {
+            ...nextTask,
+            blockedBy: nextBlockedBy,
+            updatedAt: now,
+          };
+          changed = true;
+        }
+
+        if (changed) {
+          tasks.set(taskId, nextTask);
+        }
+      }
+
+      await this.writeAll(tasks);
+      return existing;
+    });
+  }
+
   // ============================
   // Internal helpers
   // ============================

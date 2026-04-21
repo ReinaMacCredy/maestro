@@ -18,8 +18,8 @@ import { findSimilarTasks } from "../usecases/find-similar-tasks.usecase.js";
 import { heartbeatTask } from "../usecases/heartbeat-task.usecase.js";
 import { closeContractForTask } from "../usecases/contract/close-contract.usecase.js";
 import { computeContractVerdictForTask } from "../usecases/contract/compute-verdict.usecase.js";
-import { reopenContractForTask } from "../usecases/contract/reopen-contract.usecase.js";
 import { transferContractOwnership } from "../usecases/contract/transfer-ownership.usecase.js";
+import { deleteTaskFlow } from "../usecases/delete-task-flow.usecase.js";
 import { STUCK_THRESHOLD_MS, isStuckTask } from "../domain/now-md-format.js";
 import { parseDuration } from "./duration.js";
 import {
@@ -31,6 +31,7 @@ import {
   parseTaskOwnerId,
   syncTaskContinuation,
 } from "../usecases/task-continuation.usecase.js";
+import { reopenTaskFlow } from "../usecases/reopen-task-flow.usecase.js";
 import type {
   ListTasksFilters,
   ReadyTasksFilters,
@@ -94,6 +95,7 @@ export function registerTaskCommand(program: Command): void {
   registerBlockCommand(taskCmd, program);
   registerUnblockCommand(taskCmd, program);
   registerReopenCommand(taskCmd, program);
+  registerDeleteCommand(taskCmd, program);
   registerLegacyDepsCommand(taskCmd);
   registerCloseCommand(taskCmd);
   registerReadyCommand(taskCmd, program);
@@ -504,6 +506,8 @@ function registerClaimCommand(taskCmd: Command, program: Command): void {
     .description("Claim exclusive ownership of a task")
     .option("--force", "Take over a task already claimed by another session")
     .option("--busy-check", "Reject the claim if this session already owns unresolved work")
+    .option("--contract-required", "Always print the contract reminder note after claim")
+    .option("--no-contract", "Suppress the contract reminder note for this claim")
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--stale-after <duration>", "Auto-release a dead owner's stale claim after this idle window (default 4h)")
     .option("--silent", "Print only '<id> <marker>' (for scripts)")
@@ -512,6 +516,9 @@ function registerClaimCommand(taskCmd: Command, program: Command): void {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const sessionId = await resolveOwnershipSessionId(opts.session);
+      if (opts.contractRequired === true && opts.contract === false) {
+        throw new MaestroError("Choose either --contract-required or --no-contract, not both");
+      }
       await maybeReleaseStaleOwnedTasks([sessionId]);
       await maybeReleaseStaleClaim(id, sessionId, opts.staleAfter);
       const previous = await services.taskStore.get(id);
@@ -534,6 +541,14 @@ function registerClaimCommand(taskCmd: Command, program: Command): void {
       );
 
       await refreshNowMd();
+      try {
+        await maybeWarnMissingContractAfterClaim(claimed, {
+          contractRequired: opts.contractRequired === true,
+          noContract: opts.contract === false,
+        });
+      } catch {
+        // Contract reminder notes must not block a successful claim.
+      }
 
       if (emitSilentSuccess(isJson, opts, claimed)) return;
 
@@ -637,39 +652,46 @@ function registerReopenCommand(taskCmd: Command, program: Command): void {
     .action(async (id: string, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const previous = await services.taskStore.get(id);
-      const reopened = await services.taskStore.reopen(id);
-      const existingSummary = await loadTaskContinuationSummary(services.taskContinuationStore, id);
-      const summary = buildTaskContinuationSummary(reopened, existingSummary, {
-        currentState: "Task reopened and ready to resume.",
-        nextAction: `Resume ${reopened.title}.`,
-        activeAgent: null,
-      });
-
-      const restored = await services.taskContinuationStore.reopen(id, summary);
-      if (!restored) {
-        await services.taskContinuationStore.upsertActive(summary);
-      }
-      await services.taskContinuationHistory.append(id, {
-        kind: "task_reopened",
-        at: reopened.updatedAt,
-        summary: previous?.closeReason
-          ? `Reopened after completion: ${previous.closeReason}`
-          : "Reopened and returned to pending",
-        ...(previous?.closeReason ? { reason: previous.closeReason } : {}),
-      });
-
-      if (reopened.contractId) {
-        await maybeReopenTaskContract(reopened);
-      }
+      const reopened = await reopenTaskFlow({
+        taskStore: services.taskStore,
+        continuationStore: services.taskContinuationStore,
+        continuationHistory: services.taskContinuationHistory,
+        contractStore: services.contractStore,
+      }, id);
       await refreshNowMd();
 
-      if (emitSilentSuccess(isJson, opts, reopened)) return;
+      if (emitSilentSuccess(isJson, opts, reopened.task)) return;
 
-      output(isJson, reopened, (task) => [
+      output(isJson, reopened.task, (task) => [
         `[ok] Task reopened: ${task.id}`,
         `  Status: ${task.status}`,
         `  Next: Resume ${task.title}.`,
+      ]);
+    });
+}
+
+function registerDeleteCommand(taskCmd: Command, program: Command): void {
+  taskCmd
+    .command("delete <id>")
+    .description("Delete a task and clean up its contract and continuation state")
+    .option("--silent", "Print only '<id> <marker>' (for scripts)")
+    .option("--json", "Output as JSON")
+    .action(async (id: string, opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+      const deleted = await deleteTaskFlow({
+        taskStore: services.taskStore,
+        continuationStore: services.taskContinuationStore,
+        continuationHistory: services.taskContinuationHistory,
+        contractStore: services.contractStore,
+      }, id);
+      await refreshNowMd();
+
+      if (emitSilentSuccess(isJson, opts, deleted)) return;
+
+      output(isJson, deleted, (task) => [
+        `[ok] Task deleted: ${task.id}`,
+        `  Title: ${task.title}`,
       ]);
     });
 }
@@ -1326,6 +1348,36 @@ async function maybeAttachClaimAnchor(taskId: string): Promise<void> {
   }
 }
 
+async function maybeWarnMissingContractAfterClaim(
+  task: Task,
+  opts: {
+    readonly contractRequired: boolean;
+    readonly noContract: boolean;
+  },
+): Promise<void> {
+  if (task.contractId || opts.noContract) {
+    return;
+  }
+
+  const services = getServices();
+  const config = await services.config.load(process.cwd());
+  const policy = opts.contractRequired
+    ? "required"
+    : (config.contracts?.default ?? "prompt");
+
+  if (policy === "optional") {
+    return;
+  }
+  if (policy === "prompt" && !process.stderr.isTTY) {
+    return;
+  }
+
+  const message = policy === "required"
+    ? `Task ${task.id} requires a task contract before substantial work. Create and lock one: maestro task contract new ${task.id} && maestro task contract lock ${task.id}`
+    : `Consider creating a task contract before you start: maestro task contract new ${task.id} && maestro task contract lock ${task.id}`;
+  warn(message);
+}
+
 async function enforceContractCompletionPolicy(
   task: Task,
   patch: UpdateTaskInput,
@@ -1438,16 +1490,6 @@ async function maybeFinalizeTaskContract(task: Task): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     warn(`Task ${task.id} completed, but contract close failed: ${message}`);
-  }
-}
-
-async function maybeReopenTaskContract(task: Task): Promise<void> {
-  try {
-    const services = getServices();
-    await reopenContractForTask(services.contractStore, task);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    warn(`Task ${task.id} reopened, but contract reset failed: ${message}`);
   }
 }
 

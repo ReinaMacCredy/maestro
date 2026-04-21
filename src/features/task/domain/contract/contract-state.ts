@@ -6,6 +6,7 @@ import type {
   ContractAmendment,
   ContractConfigSnapshot,
   ContractIndexEntry,
+  ContractOwnershipTransfer,
   ContractScope,
   ContractStatus,
   ContractVerdict,
@@ -112,6 +113,8 @@ export function validateContract(value: unknown): Contract | undefined {
   if (typeof value.createdBy !== "string" || value.createdBy.length === 0) return undefined;
   if (!isOptionalNonEmptyString(value.lockedBy)) return undefined;
   if (!isOptionalNonEmptyString(value.closedBy)) return undefined;
+  const ownershipHistory = value.ownershipHistory === undefined ? undefined : validateOwnershipHistory(value.ownershipHistory);
+  if (value.ownershipHistory !== undefined && !ownershipHistory) return undefined;
 
   const configSnapshot = validateConfigSnapshot(value.configSnapshot);
   if (!configSnapshot) return undefined;
@@ -142,6 +145,7 @@ export function validateContract(value: unknown): Contract | undefined {
     createdBy: value.createdBy,
     lockedBy: value.lockedBy,
     closedBy: value.closedBy,
+    ownershipHistory,
     configSnapshot,
   };
 }
@@ -300,6 +304,11 @@ function validateVerdict(value: unknown): ContractVerdict | undefined {
   const metCriteria = validateDoneWhenArray(value.metCriteria);
   if (!unmetCriteria || !metCriteria) return undefined;
 
+  const actualFilesTouchedTruncated = value.actualFilesTouchedTruncated === undefined
+    ? undefined
+    : validateTouchedFilesTruncated(value.actualFilesTouchedTruncated);
+  if (value.actualFilesTouchedTruncated !== undefined && !actualFilesTouchedTruncated) return undefined;
+
   const capExceeded = value.capExceeded === undefined ? undefined : validateCapExceeded(value.capExceeded);
   if (value.capExceeded !== undefined && !capExceeded) return undefined;
 
@@ -324,6 +333,7 @@ function validateVerdict(value: unknown): ContractVerdict | undefined {
     fulfilled: value.fulfilled,
     computedAt: value.computedAt,
     actualFilesTouched: value.actualFilesTouched,
+    actualFilesTouchedTruncated,
     expectedFilesMatched: value.expectedFilesMatched,
     outOfScopeFiles: value.outOfScopeFiles,
     forbiddenTouched: value.forbiddenTouched,
@@ -335,6 +345,19 @@ function validateVerdict(value: unknown): ContractVerdict | undefined {
     receiptLinked,
     anchorFallback: value.anchorFallback,
     notes: value.notes,
+  };
+}
+
+function validateTouchedFilesTruncated(
+  value: unknown,
+): { readonly stored: number; readonly actual: number } | undefined {
+  if (!isRecord(value)) return undefined;
+  if (!isPositiveInteger(value.stored)) return undefined;
+  if (!isPositiveInteger(value.actual)) return undefined;
+  if (value.stored >= value.actual) return undefined;
+  return {
+    stored: value.stored,
+    actual: value.actual,
   };
 }
 
@@ -361,6 +384,31 @@ function validateOverlapDetected(value: unknown): {
   return {
     otherContractIds: value.otherContractIds,
     policy: value.policy,
+  };
+}
+
+function validateOwnershipHistory(value: unknown): readonly ContractOwnershipTransfer[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const history: ContractOwnershipTransfer[] = [];
+  for (const item of value) {
+    const parsed = validateOwnershipTransfer(item);
+    if (!parsed) return undefined;
+    history.push(parsed);
+  }
+  return history;
+}
+
+function validateOwnershipTransfer(value: unknown): ContractOwnershipTransfer | undefined {
+  if (!isRecord(value)) return undefined;
+  if (!isNonEmptyString(value.from)) return undefined;
+  if (!isNonEmptyString(value.to)) return undefined;
+  if (!isIsoString(value.at)) return undefined;
+  if (value.reason !== "claim_reclaim" && value.reason !== "handoff_pickup") return undefined;
+  return {
+    from: value.from,
+    to: value.to,
+    at: value.at,
+    reason: value.reason,
   };
 }
 
@@ -405,7 +453,11 @@ function isOptionalString(value: unknown): value is string | undefined {
 }
 
 function isOptionalNonEmptyString(value: unknown): value is string | undefined {
-  return value === undefined || (typeof value === "string" && value.length > 0);
+  return value === undefined || isNonEmptyString(value);
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
 }
 
 function isPositiveInteger(value: unknown): value is number {

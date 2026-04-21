@@ -10,6 +10,13 @@ export type ContractStatus =
 
 export type ActorId = string;
 
+export interface ContractOwnershipTransfer {
+  readonly from: ActorId;
+  readonly to: ActorId;
+  readonly at: string;
+  readonly reason: "claim_reclaim" | "handoff_pickup";
+}
+
 export interface ContractScope {
   readonly filesExpected: readonly string[];
   readonly filesForbidden: readonly string[];
@@ -45,6 +52,10 @@ export interface ContractVerdict {
   readonly fulfilled: boolean;
   readonly computedAt: string;
   readonly actualFilesTouched: readonly string[];
+  readonly actualFilesTouchedTruncated?: {
+    readonly stored: number;
+    readonly actual: number;
+  };
   readonly expectedFilesMatched: readonly string[];
   readonly outOfScopeFiles: readonly string[];
   readonly forbiddenTouched: readonly string[];
@@ -96,6 +107,7 @@ export interface Contract {
   readonly createdBy: ActorId;
   readonly lockedBy?: ActorId;
   readonly closedBy?: ActorId;
+  readonly ownershipHistory?: readonly ContractOwnershipTransfer[];
   readonly configSnapshot: ContractConfigSnapshot;
 }
 

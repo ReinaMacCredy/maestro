@@ -24,6 +24,9 @@ export function computeContractVerdict(
 ): ComputedContractVerdict {
   const criteria = applyReceiptHints(contract.doneWhen, receipt, actorId, at);
   const actualFilesTouched = gitResult.actualFilesTouched.map((path) => normalizeSlashes(path));
+  const storedActualFilesTouched = gitResult.actualFilesTouchedTruncated
+    ? actualFilesTouched.slice(0, gitResult.actualFilesTouchedTruncated.stored)
+    : actualFilesTouched;
   const forbiddenTouched = actualFilesTouched.filter((path) => matchesAny(contract.scope.filesForbidden, path));
   const expectedFilesMatched = actualFilesTouched.filter((path) =>
     !matchesAny(contract.scope.filesForbidden, path) && matchesAny(contract.scope.filesExpected, path),
@@ -55,7 +58,8 @@ export function computeContractVerdict(
         && capExceeded === undefined
         && !overlapBlocks,
       computedAt: at,
-      actualFilesTouched,
+      actualFilesTouched: storedActualFilesTouched,
+      ...(gitResult.actualFilesTouchedTruncated ? { actualFilesTouchedTruncated: gitResult.actualFilesTouchedTruncated } : {}),
       expectedFilesMatched,
       outOfScopeFiles,
       forbiddenTouched,

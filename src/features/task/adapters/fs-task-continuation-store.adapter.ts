@@ -57,6 +57,13 @@ export class FsTaskContinuationStoreAdapter implements TaskContinuationStorePort
     return nextSummary;
   }
 
+  async delete(taskId: string): Promise<void> {
+    await Promise.all([
+      removeIfExists(this.summaryPath("active", taskId)),
+      removeIfExists(this.summaryPath("completed", taskId)),
+    ]);
+  }
+
   private continuationsDir(): string {
     return join(this.baseDir, MAESTRO_DIR, "tasks", "continuations");
   }

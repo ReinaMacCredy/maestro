@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { ensureDir, appendText, readText } from "@/shared/lib/fs.js";
+import { ensureDir, appendText, readText, removeIfExists } from "@/shared/lib/fs.js";
 import type { TaskContinuationHistoryPort } from "../ports/task-continuation-history.port.js";
 import {
   validateTaskContinuationEvent,
@@ -34,6 +34,10 @@ export class FsTaskContinuationHistoryStoreAdapter implements TaskContinuationHi
 
     if (limit <= 0) return events;
     return events.slice(-limit);
+  }
+
+  async delete(taskId: string): Promise<void> {
+    await removeIfExists(this.historyPath(taskId));
   }
 
   private historyDir(): string {

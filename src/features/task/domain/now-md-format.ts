@@ -128,8 +128,9 @@ function renderTask(
 
   const contract = opts.includeContract ? resolveActiveContract(task, contracts) : undefined;
   if (contract) {
+    const inherited = latestInheritanceSource(contract);
     out.push(
-      `Contract: ${contract.id} (${contract.status}, ${countMetCriteria(contract.doneWhen)}/${contract.doneWhen.length} done-when met, scope: ${summarizeScope(contract)})`,
+      `Contract: ${contract.id} (${contract.status}${inherited ? `, inherited from ${inherited}` : ""}, ${countMetCriteria(contract.doneWhen)}/${contract.doneWhen.length} done-when met, scope: ${summarizeScope(contract)})`,
     );
   }
 
@@ -155,6 +156,14 @@ function summarizeScope(contract: Contract): string {
   }
   const extra = contract.scope.filesExpected.length - 1;
   return extra > 0 ? `${first} +${extra} more` : first;
+}
+
+function latestInheritanceSource(contract: Contract): string | undefined {
+  const latest = contract.ownershipHistory?.at(-1);
+  if (!latest || latest.to !== contract.lockedBy) {
+    return undefined;
+  }
+  return latest.from;
 }
 
 function byPriorityThenCreated(a: Task, b: Task): number {

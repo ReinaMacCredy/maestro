@@ -54,9 +54,16 @@ describe("transferContractOwnership", () => {
 
     const transferred = await transferContractOwnership(store, locked.taskId, "session:codex:b");
     expect(transferred?.lockedBy).toBe("session:codex:b");
+    expect(transferred?.ownershipHistory).toEqual([
+      expect.objectContaining({
+        from: "session:codex:a",
+        to: "session:codex:b",
+        reason: "claim_reclaim",
+      }),
+    ]);
 
     const fulfilled = await store.save({
-      ...locked,
+      ...transferred!,
       status: "fulfilled",
       closedAt: "2026-04-21T00:20:00.000Z",
       closedBy: "session:codex:b",
@@ -74,6 +81,7 @@ describe("transferContractOwnership", () => {
     });
 
     const closed = await transferContractOwnership(store, fulfilled.taskId, "session:codex:c");
-    expect(closed?.lockedBy).toBe("session:codex:a");
+    expect(closed?.lockedBy).toBe("session:codex:b");
+    expect(closed?.ownershipHistory).toHaveLength(1);
   });
 });

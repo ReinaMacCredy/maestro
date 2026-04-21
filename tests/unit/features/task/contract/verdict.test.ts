@@ -186,4 +186,35 @@ describe("computeContractVerdict", () => {
       policy: "fail",
     });
   });
+
+  it("stores a capped touched-file list and keeps the truncation metadata", () => {
+    const contract = contractFixture({
+      doneWhen: [],
+    });
+    const gitResult: GitTouchedFilesResult = {
+      gitAvailable: true,
+      actualFilesTouched: ["README.md", "src/index.ts", "tests/unit/sample.test.ts"],
+      actualFilesTouchedTruncated: {
+        stored: 2,
+        actual: 3,
+      },
+      closedAtCommit: "89abcdef0123456789abcdef0123456789abcdef",
+      anchorFallback: "direct",
+    };
+
+    const computed = computeContractVerdict(
+      contract,
+      gitResult,
+      undefined,
+      "session:test",
+      "2026-04-21T00:10:00.000Z",
+    );
+
+    expect(computed.verdict.actualFilesTouched).toEqual(["README.md", "src/index.ts"]);
+    expect(computed.verdict.actualFilesTouchedTruncated).toEqual({
+      stored: 2,
+      actual: 3,
+    });
+    expect(computed.verdict.outOfScopeFiles).toEqual(["src/index.ts", "tests/unit/sample.test.ts"]);
+  });
 });

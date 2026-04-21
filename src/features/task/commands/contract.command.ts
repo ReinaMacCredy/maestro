@@ -23,6 +23,7 @@ import type {
 } from "../domain/contract/contract-types.js";
 import { amendContract } from "../usecases/contract/amend-contract.usecase.js";
 import { computeContractVerdictForTask } from "../usecases/contract/compute-verdict.usecase.js";
+import { editContract } from "../usecases/contract/edit-contract.usecase.js";
 import {
   addContractCriterion,
   markContractCriterion,
@@ -33,6 +34,7 @@ import { discardContract } from "../usecases/contract/discard-contract.usecase.j
 import { listContracts } from "../usecases/contract/list-contracts.usecase.js";
 import { lockContract } from "../usecases/contract/lock-contract.usecase.js";
 import { showContract } from "../usecases/contract/show-contract.usecase.js";
+import { reopenTaskFlow } from "../usecases/reopen-task-flow.usecase.js";
 
 const CONTRACT_STATUSES: readonly ContractStatus[] = [
   "draft",
@@ -89,6 +91,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
         createdBy: await resolveContractActor(taskId),
         configSnapshot: buildContractConfigSnapshot(config),
       });
+      await refreshContractNowMd();
 
       if (emitContractSilentSuccess(isJson, opts, contract)) return;
       output(isJson, contract, formatContractDetail);
@@ -107,9 +110,33 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
         actorId: await resolveContractActor(ref),
         claimedAtCommit: await services.gitAnchor.resolveHeadCommit(process.cwd()),
       });
+      await refreshContractNowMd();
 
       if (emitContractSilentSuccess(isJson, opts, contract)) return;
       output(isJson, contract, formatContractDetail);
+    });
+
+  contractCmd
+    .command("edit <ref>")
+    .description("Edit a draft contract before lock")
+    .option("--editor <cmd>", "Open an editor command to update the draft YAML")
+    .option("--silent", "Print only '<id> [ok]' (for scripts)")
+    .option("--json", "Output as JSON")
+    .action(async (ref: string, opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+      const contract = await showContract(services.contractStore, ref);
+      const template = await loadContractDraftTemplate(undefined, opts.editor, renderEditableContract(contract));
+      const edited = await editContract(services.contractStore, {
+        ref,
+        intent: readTemplateIntent(template),
+        scope: readTemplateScope(template),
+        doneWhen: readTemplateDoneWhen(template),
+      });
+      await refreshContractNowMd();
+
+      if (emitContractSilentSuccess(isJson, opts, edited)) return;
+      output(isJson, edited, formatContractDetail);
     });
 
   contractCmd
@@ -132,6 +159,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
         scope: readTemplateScope(template),
         doneWhen: readTemplateDoneWhen(template),
       });
+      await refreshContractNowMd();
 
       if (emitContractSilentSuccess(isJson, opts, amended)) return;
       output(isJson, amended, formatContractDetail);
@@ -221,9 +249,32 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const contract = await discardContract(services.contractStore, ref);
+      await refreshContractNowMd();
 
       if (emitContractSilentSuccess(isJson, opts, contract)) return;
       output(isJson, contract, formatContractDetail);
+    });
+
+  contractCmd
+    .command("reopen <ref>")
+    .description("Reopen the completed task linked to a contract and relock the contract")
+    .option("--silent", "Print only '<id> [ok]' (for scripts)")
+    .option("--json", "Output as JSON")
+    .action(async (ref: string, opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+      const contract = await showContract(services.contractStore, ref);
+      const reopened = await reopenTaskFlow({
+        taskStore: services.taskStore,
+        continuationStore: services.taskContinuationStore,
+        continuationHistory: services.taskContinuationHistory,
+        contractStore: services.contractStore,
+      }, contract.taskId);
+      await refreshContractNowMd();
+
+      const payload = reopened.contract ?? await showContract(services.contractStore, contract.id);
+      if (emitContractSilentSuccess(isJson, opts, payload)) return;
+      output(isJson, payload, formatContractDetail);
     });
 
   const criteriaCmd = contractCmd
@@ -252,6 +303,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
         met: opts.unmet === true ? false : true,
         evidence: opts.evidence,
       });
+      await refreshContractNowMd();
 
       if (emitContractSilentSuccess(isJson, opts, contract)) return;
       output(isJson, contract, formatContractDetail);
@@ -270,6 +322,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
         text,
         actorId: await resolveContractActor(ref),
       });
+      await refreshContractNowMd();
 
       if (emitContractSilentSuccess(isJson, opts, contract)) return;
       output(isJson, contract, formatContractDetail);
@@ -288,6 +341,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
         criterionId,
         actorId: await resolveContractActor(ref),
       });
+      await refreshContractNowMd();
 
       if (emitContractSilentSuccess(isJson, opts, contract)) return;
       output(isJson, contract, formatContractDetail);
@@ -480,6 +534,9 @@ function formatContractDetail(contract: Contract): string[] {
     `  Scope forbidden: ${contract.scope.filesForbidden.join(", ") || "(none)"}`,
     `  Done when: ${countMetCriteria(contract.doneWhen)}/${contract.doneWhen.length} met`,
     `  Amendments: ${contract.amendments.length}`,
+    ...(contract.ownershipHistory && contract.ownershipHistory.length > 0
+      ? [`  Ownership transfers: ${contract.ownershipHistory.length}`]
+      : []),
   ];
 
   for (const criterion of contract.doneWhen) {
@@ -494,9 +551,20 @@ function formatContractDetail(contract: Contract): string[] {
       lines.push(`    - ${amendment.id} ${amendment.at} ${amendment.by}: ${amendment.reason}`);
     }
   }
+  if (contract.ownershipHistory && contract.ownershipHistory.length > 0) {
+    lines.push("  Ownership log:");
+    for (const transfer of contract.ownershipHistory) {
+      lines.push(`    - ${transfer.at} ${transfer.from} -> ${transfer.to} (${transfer.reason})`);
+    }
+  }
   if (contract.verdict) {
     lines.push(`  Verdict: ${contract.verdict.fulfilled ? "fulfilled" : "broken"}`);
     lines.push(`  Files touched: ${contract.verdict.actualFilesTouched.join(", ") || "(none)"}`);
+    if (contract.verdict.actualFilesTouchedTruncated) {
+      lines.push(
+        `  Files touched stored: ${contract.verdict.actualFilesTouchedTruncated.stored}/${contract.verdict.actualFilesTouchedTruncated.actual}`,
+      );
+    }
   }
   return lines;
 }
@@ -523,6 +591,12 @@ function formatContractVerdictPreview(preview: ContractVerdictPreview): string[]
     `  Done when: ${countMetCriteria(preview.criteria)}/${preview.criteria.length} met`,
     `  Files touched: ${preview.verdict.actualFilesTouched.join(", ") || "(none)"}`,
   ];
+
+  if (preview.verdict.actualFilesTouchedTruncated) {
+    lines.push(
+      `  Files touched stored: ${preview.verdict.actualFilesTouchedTruncated.stored}/${preview.verdict.actualFilesTouchedTruncated.actual}`,
+    );
+  }
 
   if (preview.verdict.outOfScopeFiles.length > 0) {
     lines.push(`  Out of scope: ${preview.verdict.outOfScopeFiles.join(", ")}`);
@@ -582,6 +656,15 @@ async function resolveContractActor(ref: string): Promise<string> {
     return owner?.assignee ?? contract.lockedBy ?? contract.createdBy;
   }
   return "user";
+}
+
+async function refreshContractNowMd(): Promise<void> {
+  try {
+    const services = getServices();
+    await services.taskNowMdWriter.write(await services.taskStore.all());
+  } catch {
+    // NOW.md is derived output; never block a contract mutation on it.
+  }
 }
 
 function assertContractCanPreviewVerdict(contract: Contract): asserts contract is Contract & {

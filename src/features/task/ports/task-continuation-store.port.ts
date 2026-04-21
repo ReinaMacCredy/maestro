@@ -10,4 +10,5 @@ export interface TaskContinuationStorePort extends TaskContinuationQueryPort {
   upsertActive(summary: TaskContinuationSummary): Promise<TaskContinuationSummary>;
   archiveCompleted(summary: TaskContinuationSummary): Promise<TaskContinuationSummary>;
   reopen(taskId: string, nextSummary: TaskContinuationSummary): Promise<TaskContinuationSummary | undefined>;
+  delete(taskId: string): Promise<void>;
 }

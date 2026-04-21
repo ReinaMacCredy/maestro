@@ -69,6 +69,9 @@ export interface TaskStorePort extends TaskQueryPort {
   /** Reopen a completed task back into the pending queue. */
   reopen(id: string): Promise<Task>;
 
+  /** Delete a task and remove its graph references from the remaining store. */
+  delete(id: string): Promise<Task>;
+
   /**
    * Bump `lastActivityAt` on a claimed task without any other state change.
    * Used by `task heartbeat` so long-running sessions signal they are alive.

@@ -285,6 +285,85 @@ describe("task CLI daily loop", () => {
     expect(expectJson<{ assignee?: string }>(shownTask).assignee).toBe(staleOwner);
   }, SLOW_CLI_TIMEOUT_MS);
 
+  it("warns on claim when contracts are required and lets --no-contract suppress the note", async () => {
+    await Bun.write(
+      join(tmpDir, ".maestro", "config.yaml"),
+      "contracts:\n  default: required\n",
+    );
+
+    const taskId = (await runCli(["task", "q", "contract note"], tmpDir)).stdout;
+
+    const warned = await runCli(
+      ["task", "claim", taskId, "--session", "contract-note-owner", "--contract-required", "--json"],
+      tmpDir,
+    );
+    expect(expectJson<{ assignee: string }>(warned)).toEqual(
+      expect.objectContaining({ assignee: "contract-note-owner" }),
+    );
+    expect(warned.stderr).toContain("requires a task contract before substantial work");
+    expect(warned.stderr).toContain(`maestro task contract new ${taskId}`);
+
+    await runCli(["task", "unclaim", taskId, "--session", "contract-note-owner", "--json"], tmpDir);
+
+    const suppressed = await runCli(
+      ["task", "claim", taskId, "--session", "contract-note-owner", "--no-contract", "--json"],
+      tmpDir,
+    );
+    expect(expectJson<{ assignee: string }>(suppressed)).toEqual(
+      expect.objectContaining({ assignee: "contract-note-owner" }),
+    );
+    expect(suppressed.stderr).not.toContain("task contract");
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("deletes a task, removes graph edges, and cascades contract cleanup", async () => {
+    const blocker = expectJson<{ id: string }>(await runCli(["task", "create", "blocker", "--json"], tmpDir));
+    const target = expectJson<{ id: string }>(
+      await runCli(["task", "create", "target", "--blocked-by", blocker.id, "--json"], tmpDir),
+    );
+    const child = expectJson<{ id: string }>(
+      await runCli(["task", "create", "child", "--parent", target.id, "--json"], tmpDir),
+    );
+
+    const templatePath = await writeTemplate(
+      "delete-contract-template.yaml",
+      [
+        "intent: Delete this task cleanly",
+        "scope:",
+        "  filesExpected:",
+        "    - src/features/task/**",
+        "  filesForbidden: []",
+        "doneWhen:",
+        "  - text: delete path exists",
+        "",
+      ].join("\n"),
+    );
+
+    const contract = expectJson<{ id: string }>(
+      await runCli(["task", "contract", "new", target.id, "--from", templatePath, "--json"], tmpDir),
+    );
+
+    const deleted = await runCli(["task", "delete", target.id, "--json"], tmpDir);
+    expect(expectJson<{ id: string }>(deleted).id).toBe(target.id);
+
+    const listedTasks = expectJson<Array<{ id: string }>>(await runCli(["task", "list", "--json"], tmpDir));
+    expect(listedTasks.map((task) => task.id)).not.toContain(target.id);
+
+    const blockerAfter = expectJson<{ blocks: string[] }>(await runCli(["task", "show", blocker.id, "--json"], tmpDir));
+    expect(blockerAfter.blocks).toEqual([]);
+
+    const childAfter = expectJson<{ parentId?: string }>(await runCli(["task", "show", child.id, "--json"], tmpDir));
+    expect(childAfter.parentId).toBeUndefined();
+
+    const listedContracts = expectJson<Array<{ id: string }>>(await runCli(["task", "contract", "list", "--json"], tmpDir));
+    expect(listedContracts.map((entry) => entry.id)).not.toContain(contract.id);
+
+    await expect(access(join(tmpDir, ".maestro", "tasks", "contracts", `${contract.id}.json`))).rejects.toThrow();
+
+    const contractIndex = await readFile(join(tmpDir, ".maestro", "tasks", "contracts", "index.jsonl"), "utf8");
+    expect(contractIndex).toContain(`"id":"${contract.id}"`);
+    expect(contractIndex).toContain('"reason":"task_deleted"');
+  }, SLOW_CLI_TIMEOUT_MS);
+
   it("writes a continuation summary on active work and archives it on completion", async () => {
     const id = (await runCli(["task", "q", "continue me"], tmpDir)).stdout;
     await runCli(["task", "claim", id, "--session", "codex-session-a", "--json"], tmpDir);

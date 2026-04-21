@@ -20,7 +20,7 @@ export async function computeContractVerdictForTask(
   const at = task.updatedAt;
   const actorId = task.assignee ?? contract.lockedBy ?? contract.createdBy;
   const receipt = receiptOverride ?? task.receipt;
-  const overlapDetected = await detectContractOverlap(contractStore, contract, at);
+  const overlapDetected = await detectContractOverlap(contractStore, gitAnchor, contract, gitResult.closedAtCommit);
   const computed = computeContractVerdict(contract, gitResult, receipt, actorId, at, {
     overlapDetected,
   });
@@ -33,23 +33,39 @@ export async function computeContractVerdictForTask(
 
 async function detectContractOverlap(
   contractStore: ContractStoreQueryPort,
+  gitAnchor: GitAnchorPort,
   contract: Contract,
-  at: string,
+  currentClosedAtCommit: string | undefined,
 ): Promise<ContractVerdict["overlapDetected"] | undefined> {
-  const currentWindow = resolveContractWindow(contract, at);
-  if (!currentWindow) {
+  if (!contract.claimedAtCommit || !currentClosedAtCommit) {
     return undefined;
   }
 
-  const overlapping = (await contractStore.all())
-    .filter((candidate) => candidate.id !== contract.id && candidate.repoRoot === contract.repoRoot)
-    .filter((candidate) => candidate.status !== "draft" && candidate.status !== "discarded")
-    .filter((candidate) => {
-      const candidateWindow = resolveContractWindow(candidate, at);
-      return candidateWindow !== undefined && windowsOverlap(currentWindow, candidateWindow);
-    })
-    .map((candidate) => candidate.id)
-    .sort();
+  const overlapping: string[] = [];
+  for (const candidate of await contractStore.all()) {
+    if (candidate.id === contract.id || candidate.repoRoot !== contract.repoRoot) {
+      continue;
+    }
+    if (candidate.status === "draft" || candidate.status === "discarded") {
+      continue;
+    }
+
+    const overlaps = await gitAnchor.windowsOverlap({
+      repoRoot: contract.repoRoot,
+      left: {
+        claimedAtCommit: contract.claimedAtCommit,
+        closedAtCommit: currentClosedAtCommit,
+      },
+      right: {
+        claimedAtCommit: candidate.claimedAtCommit,
+        closedAtCommit: candidate.closedAtCommit ?? currentClosedAtCommit,
+      },
+    });
+    if (overlaps) {
+      overlapping.push(candidate.id);
+    }
+  }
+  overlapping.sort();
 
   if (overlapping.length === 0) {
     return undefined;
@@ -59,26 +75,4 @@ async function detectContractOverlap(
     otherContractIds: overlapping,
     policy: contract.configSnapshot.overlapPolicy,
   };
-}
-
-function resolveContractWindow(
-  contract: Contract,
-  fallbackEndAt: string,
-): { readonly startAt: number; readonly endAt: number } | undefined {
-  const startAt = Date.parse(contract.lockedAt ?? contract.createdAt);
-  const endAt = Date.parse(contract.closedAt ?? fallbackEndAt);
-  if (!Number.isFinite(startAt) || !Number.isFinite(endAt)) {
-    return undefined;
-  }
-  return {
-    startAt,
-    endAt,
-  };
-}
-
-function windowsOverlap(
-  left: { readonly startAt: number; readonly endAt: number },
-  right: { readonly startAt: number; readonly endAt: number },
-): boolean {
-  return left.startAt <= right.endAt && right.startAt <= left.endAt;
 }

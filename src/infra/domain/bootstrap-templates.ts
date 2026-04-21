@@ -89,11 +89,13 @@ Before starting work:
   3. maestro task contract lock <id>
 
 Useful contract commands:
+  - maestro task contract edit <id>
   - maestro task contract show <id>
   - maestro task contract verdict <id>
   - maestro task contract list
   - maestro task contract discard <id>
   - maestro task contract amend <id> --reason "..."
+  - maestro task contract reopen <id>
   - maestro task contract criteria mark <id> <criterionId> --met
   - maestro task contract criteria add <id> "..."
   - maestro task contract criteria remove <id> <criterionId>
@@ -156,6 +158,8 @@ maestro task create "Title" [--description "..."] [--type task|bug|feature|epic|
 maestro task ready --json --compact --limit 5
 maestro task show <id>                                       # inspect task details and resume state
 maestro task claim <id>                                      # session auto-detected; --session <id> for explicit override
+                                                             # add --contract-required to force the reminder note
+                                                             # or --no-contract to suppress it for one claim
 maestro task update <id> --status in_progress                # auto-claims if unowned
 maestro task update <id> --current-state "..." --next-action "..."
 maestro task update <id> --add-decision "keep api stable"
@@ -182,6 +186,7 @@ maestro task release-owned <sessionId>                       # release tasks own
                                                              # Manual \`claude-*\` operator sessions are preserved by \`task ready\`.
 maestro task block <blockerId> <blockedId...>                # blockerId must finish before blockedId is ready
 maestro task unblock <blockerId> <blockedId...>
+maestro task delete <id>                                     # remove a task; contract and continuation state cascade with it
 \`\`\`
 
 \`.maestro/tasks/NOW.md\` is refreshed after every task mutation; \`cat\` it for a short in-progress/ready/stuck view anchored to the current state. Active task contracts add a one-line scope/progress summary under in-progress work.
@@ -237,10 +242,12 @@ This project uses Maestro for local bootstrap and runtime orchestration.
   - \`maestro task contract new <id>\`
   - \`maestro task contract lock <id>\`
 - Inspect or clean up contract drafts:
+  - \`maestro task contract edit <id>\`
   - \`maestro task contract show <id>\`
   - \`maestro task contract verdict <id>\`
   - \`maestro task contract list\`
   - \`maestro task contract discard <id>\`
+  - \`maestro task contract reopen <id>\`
 - Amend a locked contract with a recorded reason:
   - \`maestro task contract amend <id> --reason "..." \`
 - Manage criteria directly while the contract is active:
@@ -248,10 +255,12 @@ This project uses Maestro for local bootstrap and runtime orchestration.
   - \`maestro task contract criteria add <id> "..." \`
   - \`maestro task contract criteria remove <id> <criterionId>\`
 - Completion can enforce contracts with \`maestro task update <id> --status completed --strict\`.
+- Claiming can remind or require contract setup with \`maestro task claim <id> --contract-required\`; use \`--no-contract\` to suppress the note for a single claim.
 - Use \`--no-contract\` only when config requires a contract but the task intentionally has none.
 - After completion, \`task contract show\` includes the stored verdict.
 - Set \`contracts.overlapPolicy: annotate\` to allow overlapping active contracts while still recording the overlap in verdicts.
 - Reopening a completed task relocks its contract and clears the stored verdict.
+- Deleting a task removes its linked contract file and appends a \`task_deleted\` discard record to the contract index.
 - \`.maestro/tasks/NOW.md\` adds a one-line contract status summary for active contracted work.
 - Stale reclaim inherits active contract ownership by default; set \`contracts.staleReclaimContractPolicy: block\` to refuse it.
 - Handoff pickup transfers active contract ownership with the linked task.

@@ -207,4 +207,94 @@ describe("task contract CLI", () => {
       contract.doneWhen[0]!.id,
     ]);
   }, SLOW_CLI_TIMEOUT_MS);
+
+  it("edits a draft contract before lock", async () => {
+    const createdTask = await runCli(["task", "create", "editable contract", "--json"], tmpDir);
+    const task = expectJson<{ id: string }>(createdTask);
+    const templatePath = await writeTemplate(
+      "editable-template.yaml",
+      [
+        "intent: Initial draft intent",
+        "scope:",
+        "  filesExpected:",
+        "    - src/features/task/**",
+        "  filesForbidden: []",
+        "doneWhen:",
+        "  - text: initial criterion",
+        "",
+      ].join("\n"),
+    );
+    const drafted = await runCli(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir);
+    const contract = expectJson<{ id: string }>(drafted);
+
+    const editorPath = await writeEditorScript(
+      "edit-editor.sh",
+      [
+        "intent: Edited draft intent",
+        "scope:",
+        "  filesExpected:",
+        "    - src/features/task/**",
+        "    - tests/integration/features/task/**",
+        "  filesForbidden: []",
+        "doneWhen:",
+        "  - text: edited criterion",
+        "    kind: manual",
+        "",
+      ].join("\n"),
+    );
+
+    const edited = await runCli(
+      ["task", "contract", "edit", contract.id, "--json"],
+      tmpDir,
+      { env: { EDITOR: `sh ${editorPath}` } },
+    );
+    const payload = expectJson<{ status: string; intent: string; scope: { filesExpected: string[] } }>(edited);
+    expect(payload.status).toBe("draft");
+    expect(payload.intent).toBe("Edited draft intent");
+    expect(payload.scope.filesExpected).toContain("tests/integration/features/task/**");
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("reopens a completed task through the contract surface and relocks the contract", async () => {
+    await Bun.write(join(tmpDir, "README.md"), "seed\n");
+    await runCli(["git", "config", "user.email", "test@example.com"], tmpDir);
+    await runCli(["git", "config", "user.name", "Test User"], tmpDir);
+    await runCli(["git", "add", "README.md"], tmpDir);
+    await runCli(["git", "commit", "-m", "seed"], tmpDir);
+
+    const createdTask = await runCli(["task", "create", "reopen via contract", "--json"], tmpDir);
+    const task = expectJson<{ id: string }>(createdTask);
+    await runCli(["task", "claim", task.id, "--session", "reopen-owner", "--json"], tmpDir);
+    await runCli(["task", "update", task.id, "--status", "in_progress", "--session", "reopen-owner", "--json"], tmpDir);
+
+    const templatePath = await writeTemplate(
+      "reopen-via-contract.yaml",
+      [
+        "intent: Keep reopen flow scoped to README",
+        "scope:",
+        "  filesExpected:",
+        "    - README.md",
+        "  filesForbidden: []",
+        "doneWhen:",
+        "  - text: manual",
+        "    kind: receipt-hint",
+        "",
+      ].join("\n"),
+    );
+
+    const drafted = await runCli(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir);
+    const contract = expectJson<{ id: string }>(drafted);
+    await runCli(["task", "contract", "lock", contract.id, "--json"], tmpDir);
+
+    await Bun.write(join(tmpDir, "README.md"), "seed\nupdated\n");
+    await runCli(
+      ["task", "update", task.id, "--status", "completed", "--reason", "done", "--verified-by", "manual", "--session", "reopen-owner", "--json"],
+      tmpDir,
+    );
+
+    const reopened = await runCli(["task", "contract", "reopen", contract.id, "--json"], tmpDir);
+    expect(expectJson<{ status: string }>(reopened).status).toBe("locked");
+
+    const shownTask = await runCli(["task", "show", task.id, "--json"], tmpDir);
+    expect(expectJson<{ status: string }>(shownTask).status).toBe("pending");
+  }, SLOW_CLI_TIMEOUT_MS);
 });

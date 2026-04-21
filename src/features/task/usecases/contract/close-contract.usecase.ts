@@ -34,13 +34,32 @@ export async function closeContractForTask(
   }
 
   const computed = await computeContractVerdictForTask(contractStore, gitAnchor, contract, task);
+  const verdict = withOwnershipNotes(contract, computed.verdict);
   return contractStore.save({
     ...contract,
-    status: computed.verdict.fulfilled ? "fulfilled" : "broken",
+    status: verdict.fulfilled ? "fulfilled" : "broken",
     closedAt: task.updatedAt,
     closedAtCommit: computed.closedAtCommit,
     closedBy: task.assignee ?? contract.lockedBy ?? contract.createdBy,
     doneWhen: computed.criteria,
-    verdict: computed.verdict,
+    verdict,
   });
+}
+
+function withOwnershipNotes(contract: Contract, verdict: Contract["verdict"]): NonNullable<Contract["verdict"]> {
+  if (!verdict || !contract.ownershipHistory || contract.ownershipHistory.length === 0) {
+    return verdict!;
+  }
+
+  const chain = contract.ownershipHistory
+    .map((transfer) => `${transfer.from} -> ${transfer.to} (${transfer.reason})`)
+    .join("; ");
+  const notes = [verdict.notes, `Ownership chain: ${chain}.`]
+    .filter((value): value is string => Boolean(value))
+    .join(" ");
+
+  return {
+    ...verdict,
+    notes,
+  };
 }

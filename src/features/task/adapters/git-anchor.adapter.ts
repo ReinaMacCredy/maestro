@@ -3,6 +3,7 @@ import { normalizeSlashes } from "@/shared/lib/path-normalize.js";
 import type { GitAnchorPort, GitTouchedFilesResult } from "../ports/git-anchor.port.js";
 
 const EMPTY_TREE_HASH = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+const MAX_STORED_TOUCHED_FILES = 2_000;
 
 export class ShellGitAnchorAdapter implements GitAnchorPort {
   async resolveRepoRoot(cwd: string): Promise<string> {
@@ -72,10 +73,57 @@ export class ShellGitAnchorAdapter implements GitAnchorPort {
     return {
       gitAvailable: true,
       actualFilesTouched: [...files].sort(),
+      ...([...files].length > MAX_STORED_TOUCHED_FILES
+        ? {
+            actualFilesTouchedTruncated: {
+              stored: MAX_STORED_TOUCHED_FILES,
+              actual: files.size,
+            },
+          }
+        : {}),
       closedAtCommit: head,
       anchorFallback: anchorResolution.anchorFallback,
       ...(notes.length > 0 ? { notes: notes.join(" ") } : {}),
     };
+  }
+
+  async windowsOverlap(input: {
+    readonly repoRoot: string;
+    readonly left: {
+      readonly claimedAtCommit?: string;
+      readonly closedAtCommit?: string;
+    };
+    readonly right: {
+      readonly claimedAtCommit?: string;
+      readonly closedAtCommit?: string;
+    };
+  }): Promise<boolean | undefined> {
+    const head = await this.resolveHeadCommit(input.repoRoot);
+    if (!head) {
+      return undefined;
+    }
+
+    const leftWindow = this.resolveWindow(input.left, head);
+    const rightWindow = this.resolveWindow(input.right, head);
+    if (!leftWindow || !rightWindow) {
+      return undefined;
+    }
+    const commitsPresent = await Promise.all([
+      this.commitExists(input.repoRoot, leftWindow.start),
+      this.commitExists(input.repoRoot, leftWindow.end),
+      this.commitExists(input.repoRoot, rightWindow.start),
+      this.commitExists(input.repoRoot, rightWindow.end),
+    ]);
+    if (commitsPresent.some((present) => !present)) {
+      return undefined;
+    }
+
+    const [leftBeforeRight, rightBeforeLeft] = await Promise.all([
+      this.isStrictAncestor(input.repoRoot, leftWindow.end, rightWindow.start),
+      this.isStrictAncestor(input.repoRoot, rightWindow.end, leftWindow.start),
+    ]);
+
+    return !leftBeforeRight && !rightBeforeLeft;
   }
 
   private async resolveAnchor(
@@ -143,6 +191,34 @@ export class ShellGitAnchorAdapter implements GitAnchorPort {
       anchorFallback: "lost",
       notes: "Claim anchor could not be recovered after history rewriting.",
     };
+  }
+
+  private resolveWindow(
+    window: {
+      readonly claimedAtCommit?: string;
+      readonly closedAtCommit?: string;
+    },
+    head: string,
+  ): { readonly start: string; readonly end: string } | undefined {
+    const start = window.claimedAtCommit;
+    const end = window.closedAtCommit ?? head;
+    if (!start || !end) {
+      return undefined;
+    }
+    return { start, end };
+  }
+
+  private async isStrictAncestor(cwd: string, older: string, newer: string): Promise<boolean> {
+    if (older === newer) {
+      return false;
+    }
+    const result = await execArgv(["git", "merge-base", "--is-ancestor", older, newer], { cwd });
+    return result.exitCode === 0;
+  }
+
+  private async commitExists(cwd: string, commit: string): Promise<boolean> {
+    const result = await execArgv(["git", "cat-file", "-e", `${commit}^{commit}`], { cwd });
+    return result.exitCode === 0;
   }
 }
 

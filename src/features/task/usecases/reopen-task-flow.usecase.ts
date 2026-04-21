@@ -1,0 +1,60 @@
+import { taskNotFound } from "../domain/task-errors.js";
+import type { Contract } from "../domain/contract/contract-types.js";
+import type { Task } from "../domain/task-types.js";
+import type { ContractStorePort } from "../ports/contract-store.port.js";
+import type { TaskContinuationHistoryPort } from "../ports/task-continuation-history.port.js";
+import type { TaskContinuationStorePort } from "../ports/task-continuation-store.port.js";
+import type { TaskStorePort } from "../ports/task-store.port.js";
+import {
+  buildTaskContinuationSummary,
+  loadTaskContinuationSummary,
+} from "./task-continuation.usecase.js";
+import { reopenContractForTask } from "./contract/reopen-contract.usecase.js";
+
+export interface ReopenTaskFlowDeps {
+  readonly taskStore: TaskStorePort;
+  readonly continuationStore: TaskContinuationStorePort;
+  readonly continuationHistory: TaskContinuationHistoryPort;
+  readonly contractStore: ContractStorePort;
+}
+
+export interface ReopenTaskFlowResult {
+  readonly task: Task;
+  readonly contract?: Contract;
+}
+
+export async function reopenTaskFlow(
+  deps: ReopenTaskFlowDeps,
+  taskId: string,
+): Promise<ReopenTaskFlowResult> {
+  const previous = await deps.taskStore.get(taskId);
+  if (!previous) {
+    throw taskNotFound(taskId);
+  }
+
+  const reopened = await deps.taskStore.reopen(taskId);
+  const existingSummary = await loadTaskContinuationSummary(deps.continuationStore, taskId);
+  const summary = buildTaskContinuationSummary(reopened, existingSummary, {
+    currentState: "Task reopened and ready to resume.",
+    nextAction: `Resume ${reopened.title}.`,
+    activeAgent: null,
+  });
+
+  const restored = await deps.continuationStore.reopen(taskId, summary);
+  if (!restored) {
+    await deps.continuationStore.upsertActive(summary);
+  }
+  await deps.continuationHistory.append(taskId, {
+    kind: "task_reopened",
+    at: reopened.updatedAt,
+    summary: previous.closeReason
+      ? `Reopened after completion: ${previous.closeReason}`
+      : "Reopened and returned to pending",
+    ...(previous.closeReason ? { reason: previous.closeReason } : {}),
+  });
+
+  const contract = reopened.contractId
+    ? await reopenContractForTask(deps.contractStore, reopened)
+    : undefined;
+  return { task: reopened, contract };
+}

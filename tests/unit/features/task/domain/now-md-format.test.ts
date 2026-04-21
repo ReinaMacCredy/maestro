@@ -182,6 +182,40 @@ describe("buildNowMd", () => {
     expect(md).toContain("Contract: c-123abc (locked, 1/2 done-when met, scope: src/features/task/**)");
   });
 
+  it("renders inherited ownership details for transferred active contracts", () => {
+    const md = buildNowMd({
+      tasks: [
+        task({
+          id: "tsk-contract",
+          title: "contracted work",
+          status: "in_progress",
+          contractId: "c-123abc",
+        }),
+      ],
+      contracts: new Map([
+        [
+          "c-123abc",
+          contract({
+            id: "c-123abc",
+            taskId: "tsk-contract",
+            lockedBy: "operator-next",
+            ownershipHistory: [
+              {
+                from: "codex-staleowner1",
+                to: "operator-next",
+                at: "2026-04-21T01:30:00.000Z",
+                reason: "claim_reclaim",
+              },
+            ],
+          }),
+        ],
+      ]),
+      now: new Date("2026-04-21T12:00:00.000Z"),
+    });
+
+    expect(md).toContain("Contract: c-123abc (locked, inherited from codex-staleowner1, 1/2 done-when met, scope: src/features/task/**)");
+  });
+
   it("skips discarded or completed contracts in NOW.md", () => {
     const md = buildNowMd({
       tasks: [

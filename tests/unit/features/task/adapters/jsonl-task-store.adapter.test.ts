@@ -259,6 +259,18 @@ describe("JsonlTaskStoreAdapter", () => {
     expect(updated.updatedAt).toBe(task.updatedAt);
   });
 
+  it("deletes a task and removes blocker and parent references from the remaining graph", async () => {
+    const blocker = await store.create({ title: "Blocker" });
+    const target = await store.create({ title: "Target", blockedBy: [blocker.id] });
+    const child = await store.create({ title: "Child", parentId: target.id });
+
+    const deleted = await store.delete(target.id);
+    expect(deleted.id).toBe(target.id);
+    expect(await store.get(target.id)).toBeUndefined();
+    expect((await store.get(blocker.id))?.blocks).toEqual([]);
+    expect((await store.get(child.id))?.parentId).toBeUndefined();
+  });
+
     it("releases unresolved tasks owned by a dead session", async () => {
       const task = await store.create({ title: "Owned" });
       await store.claim(task.id, "codex-session-a");
