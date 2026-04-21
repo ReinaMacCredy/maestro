@@ -355,6 +355,9 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
     .option("--description <text>", "New description")
     .option("--status <status>", `New status (${TASK_STATUSES.join("|")})`)
     .option("--reason <text>", "Completion reason when --status completed")
+    .option("--summary <text>", "Receipt summary captured on --status completed (defaults to --reason)")
+    .option("--surprise <text>", "Surprise/gotcha captured on --status completed")
+    .option("--verified-by <name>", "Verifier captured on --status completed (repeatable)", appendVerifier, [] as string[])
     .option("--priority <n>", "New priority 0-4")
     .option("--type <type>", `New type (${TASK_TYPES.join("|")})`)
     .option("--parent <id>", "New parent id (empty string clears)")
@@ -392,6 +395,11 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
         parentId: opts.parent,
         addLabels: parseList(opts.addLabel),
         removeLabels: parseList(opts.removeLabel),
+        summary: typeof opts.summary === "string" ? opts.summary : undefined,
+        surprise: typeof opts.surprise === "string" ? opts.surprise : undefined,
+        verifiedBy: Array.isArray(opts.verifiedBy) && opts.verifiedBy.length > 0
+          ? opts.verifiedBy as readonly string[]
+          : undefined,
       };
 
       const hasTaskPatch = hasAnyPatchField(patch);
@@ -1248,4 +1256,12 @@ async function refreshNowMd(): Promise<void> {
   } catch {
     // NOW.md is a derived view; never block a mutation on it
   }
+}
+
+function appendVerifier(value: string, previous: string[]): string[] {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return previous;
+  }
+  return [...previous, trimmed];
 }

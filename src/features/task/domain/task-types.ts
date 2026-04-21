@@ -44,6 +44,13 @@ export const TASK_PRIORITIES: readonly TaskPriority[] = [0, 1, 2, 3, 4] as const
 // Core entity
 // ============================
 
+export interface TaskReceipt {
+  readonly summary: string;
+  readonly surprise?: string;
+  readonly verifiedBy?: readonly string[];
+  readonly capturedAt: string;
+}
+
 export interface Task {
   readonly id: string;
   readonly title: string;
@@ -58,6 +65,7 @@ export interface Task {
   readonly assignee?: string;
   readonly claimedAt?: string;
   readonly closeReason?: string;
+  readonly receipt?: TaskReceipt;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
@@ -86,6 +94,9 @@ export interface UpdateTaskInput {
   readonly parentId?: string;
   readonly addLabels?: readonly string[];
   readonly removeLabels?: readonly string[];
+  readonly summary?: string;
+  readonly surprise?: string;
+  readonly verifiedBy?: readonly string[];
 }
 
 export interface TaskMutationInput {

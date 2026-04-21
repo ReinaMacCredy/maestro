@@ -110,6 +110,17 @@ export function formatTaskDetail(task: Task): string[] {
   if (task.blockedBy.length > 0) lines.push(`  Blocked by: ${task.blockedBy.join(", ")}`);
   if (task.blocks.length > 0) lines.push(`  Blocks: ${task.blocks.join(", ")}`);
   if (task.closeReason) lines.push(`  Close reason: ${task.closeReason}`);
+  if (task.receipt) {
+    lines.push(`  Receipt:`);
+    lines.push(`    Summary: ${task.receipt.summary}`);
+    if (task.receipt.surprise) {
+      lines.push(`    Surprise: ${task.receipt.surprise}`);
+    }
+    if (task.receipt.verifiedBy && task.receipt.verifiedBy.length > 0) {
+      lines.push(`    Verified by: ${task.receipt.verifiedBy.join(", ")}`);
+    }
+    lines.push(`    Captured at: ${task.receipt.capturedAt}`);
+  }
 
   return lines;
 }

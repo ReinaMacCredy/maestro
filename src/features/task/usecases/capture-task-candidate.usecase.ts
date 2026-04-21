@@ -24,18 +24,24 @@ export async function captureTaskCandidate(
   store: CandidateStorePort,
   task: Task,
 ): Promise<TaskCandidate | undefined> {
-  if (task.closeReason === undefined) return undefined;
-  const reason = task.closeReason.trim();
-  if (reason.length === 0) return undefined;
+  const reason = task.closeReason?.trim() ?? "";
+  const summary = task.receipt?.summary.trim() ?? "";
+  const surprise = task.receipt?.surprise?.trim() ?? "";
+  if (reason.length === 0 && summary.length === 0 && surprise.length === 0) {
+    return undefined;
+  }
 
-  const keywords = extractKeywords(`${task.title} ${reason}`);
+  const keywordSource = [task.title, reason, summary, surprise].filter((s) => s.length > 0).join(" ");
+  const keywords = extractKeywords(keywordSource);
   if (keywords.length === 0) return undefined;
+
+  const storedReason = reason.length > 0 ? reason : summary;
 
   return store.create({
     id: task.id,
     sourceTaskId: task.id,
     title: task.title,
-    reason,
+    reason: storedReason,
     keywords,
   });
 }

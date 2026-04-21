@@ -16,6 +16,7 @@ import type {
   Task,
   CreateTaskInput,
   TaskMutationInput,
+  TaskReceipt,
   UpdateTaskInput,
   UpdateTaskResult,
 } from "../domain/task-types.js";
@@ -255,6 +256,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         ? existing.closeReason
         : (patch.reason.length === 0 ? undefined : patch.reason);
       const now = new Date().toISOString();
+      const receipt = buildReceiptForUpdate(existing, patch, nextStatus, reason, now);
 
       const updated: Task = {
         ...existing,
@@ -268,6 +270,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         assignee: autoClaim ? autoClaim.sessionId : existing.assignee,
         claimedAt: autoClaim ? now : existing.claimedAt,
         closeReason: nextStatus === "completed" ? reason : existing.closeReason,
+        receipt,
         updatedAt: now,
       };
 
@@ -498,6 +501,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         assignee: undefined,
         claimedAt: undefined,
         closeReason: undefined,
+        receipt: undefined,
         updatedAt: now,
       };
 
@@ -637,6 +641,41 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
       return undefined;
     }
   }
+}
+
+function buildReceiptForUpdate(
+  existing: Task,
+  patch: UpdateTaskInput,
+  nextStatus: Task["status"],
+  reason: string | undefined,
+  now: string,
+): TaskReceipt | undefined {
+  if (nextStatus !== "completed") {
+    return existing.receipt;
+  }
+
+  const summaryFromPatch = patch.summary?.trim();
+  const summary = summaryFromPatch && summaryFromPatch.length > 0
+    ? summaryFromPatch
+    : reason;
+
+  const surprise = patch.surprise?.trim();
+  const verifiedBy = patch.verifiedBy?.filter((name) => name.length > 0) ?? [];
+
+  const hasAnyField = (summary !== undefined && summary.length > 0)
+    || (surprise !== undefined && surprise.length > 0)
+    || verifiedBy.length > 0;
+
+  if (!hasAnyField) {
+    return existing.receipt;
+  }
+
+  return {
+    summary: summary ?? "",
+    ...(surprise && surprise.length > 0 ? { surprise } : {}),
+    ...(verifiedBy.length > 0 ? { verifiedBy } : {}),
+    capturedAt: now,
+  };
 }
 
 function applyLabelPatch(

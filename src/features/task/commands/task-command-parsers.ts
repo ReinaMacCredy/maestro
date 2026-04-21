@@ -102,7 +102,10 @@ export function hasAnyPatchField(patch: UpdateTaskInput): boolean {
     patch.type !== undefined ||
     patch.parentId !== undefined ||
     (patch.addLabels !== undefined && patch.addLabels.length > 0) ||
-    (patch.removeLabels !== undefined && patch.removeLabels.length > 0)
+    (patch.removeLabels !== undefined && patch.removeLabels.length > 0) ||
+    patch.summary !== undefined ||
+    patch.surprise !== undefined ||
+    (patch.verifiedBy !== undefined && patch.verifiedBy.length > 0)
   );
 }
 
