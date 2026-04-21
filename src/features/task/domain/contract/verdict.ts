@@ -18,6 +18,9 @@ export function computeContractVerdict(
   receipt: TaskReceipt | undefined,
   actorId: string,
   at: string,
+  opts?: {
+    readonly overlapDetected?: ContractVerdict["overlapDetected"];
+  },
 ): ComputedContractVerdict {
   const criteria = applyReceiptHints(contract.doneWhen, receipt, actorId, at);
   const actualFilesTouched = gitResult.actualFilesTouched.map((path) => normalizeSlashes(path));
@@ -40,6 +43,7 @@ export function computeContractVerdict(
   const metCriteria = criteria.filter((criterion) => criterion.met === true);
   const unmetCriteria = criteria.filter((criterion) => criterion.met !== true);
   const anchorFailed = gitResult.gitAvailable && gitResult.anchorFallback === "lost";
+  const overlapBlocks = opts?.overlapDetected?.policy === "fail";
 
   return {
     criteria,
@@ -48,7 +52,8 @@ export function computeContractVerdict(
         && forbiddenTouched.length === 0
         && outOfScopeFiles.length === 0
         && unmetCriteria.length === 0
-        && capExceeded === undefined,
+        && capExceeded === undefined
+        && !overlapBlocks,
       computedAt: at,
       actualFilesTouched,
       expectedFilesMatched,
@@ -58,6 +63,7 @@ export function computeContractVerdict(
       ...(capExceeded ? { capExceeded } : {}),
       unmetCriteria,
       metCriteria,
+      ...(opts?.overlapDetected ? { overlapDetected: opts.overlapDetected } : {}),
       ...(gitResult.anchorFallback ? { anchorFallback: gitResult.anchorFallback } : {}),
       ...(receipt
         ? {

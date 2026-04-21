@@ -1371,6 +1371,7 @@ async function enforceContractCompletionPolicy(
   }
 
   const preview = await computeContractVerdictForTask(
+    services.contractStore,
     services.gitAnchor,
     contract,
     {

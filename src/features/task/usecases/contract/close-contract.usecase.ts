@@ -33,7 +33,7 @@ export async function closeContractForTask(
     ]);
   }
 
-  const computed = await computeContractVerdictForTask(gitAnchor, contract, task);
+  const computed = await computeContractVerdictForTask(contractStore, gitAnchor, contract, task);
   return contractStore.save({
     ...contract,
     status: computed.verdict.fulfilled ? "fulfilled" : "broken",

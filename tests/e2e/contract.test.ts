@@ -176,6 +176,54 @@ describe("task contract compiled E2E", () => {
     expect(shown.verdict?.actualFilesTouched).toContain("README.md");
   }, SLOW_CLI_TIMEOUT_MS);
 
+  it("previews the current verdict through the compiled CLI", async () => {
+    await seedTrackedFile("README.md", "hello\n");
+
+    const task = JSON.parse((await runCompiled(["task", "create", "compiled preview", "--json"], tmpDir)).stdout) as {
+      id: string;
+    };
+    await runCompiled(["task", "claim", task.id, "--session", "compiled-preview-owner", "--json"], tmpDir);
+    await runCompiled(
+      ["task", "update", task.id, "--status", "in_progress", "--session", "compiled-preview-owner", "--json"],
+      tmpDir,
+    );
+
+    const templatePath = await writeTemplate(
+      "preview-template.yaml",
+      [
+        "intent: Preview the verdict before completion",
+        "scope:",
+        "  filesExpected:",
+        "    - README.md",
+        "  filesForbidden: []",
+        "doneWhen:",
+        "  - text: manual",
+        "    kind: manual",
+        "",
+      ].join("\n"),
+    );
+
+    const contract = JSON.parse(
+      (await runCompiled(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir)).stdout,
+    ) as { id: string };
+    await runCompiled(["task", "contract", "lock", contract.id, "--json"], tmpDir);
+
+    await Bun.write(join(tmpDir, "README.md"), "hello\npreview\n");
+
+    const preview = JSON.parse(
+      (await runCompiled(["task", "contract", "verdict", contract.id, "--json"], tmpDir)).stdout,
+    ) as {
+      contractId: string;
+      verdict: {
+        fulfilled: boolean;
+        actualFilesTouched: string[];
+      };
+    };
+    expect(preview.contractId).toBe(contract.id);
+    expect(preview.verdict.fulfilled).toBe(false);
+    expect(preview.verdict.actualFilesTouched).toContain("README.md");
+  }, SLOW_CLI_TIMEOUT_MS);
+
   it("prints the plain ok marker for amend and criteria mutators in silent mode", async () => {
     const taskId = (await runCompiled(["task", "create", "silent amend", "--silent"], tmpDir)).stdout;
     const templatePath = await writeTemplate(

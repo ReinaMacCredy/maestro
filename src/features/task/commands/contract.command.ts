@@ -11,15 +11,18 @@ import { parseYaml, stringifyYaml } from "@/shared/lib/yaml.js";
 import {
   DONE_WHEN_ID_PATTERN,
   countMetCriteria,
+  isActiveContract,
 } from "../domain/contract/contract-state.js";
 import type {
   Contract,
   ContractConfigSnapshot,
   ContractScope,
   ContractStatus,
+  ContractVerdict,
   DoneWhenCriterion,
 } from "../domain/contract/contract-types.js";
 import { amendContract } from "../usecases/contract/amend-contract.usecase.js";
+import { computeContractVerdictForTask } from "../usecases/contract/compute-verdict.usecase.js";
 import {
   addContractCriterion,
   markContractCriterion,
@@ -48,6 +51,15 @@ interface ContractDraftTemplate {
     readonly maxFilesTouched?: unknown;
   };
   readonly doneWhen?: unknown;
+}
+
+interface ContractVerdictPreview {
+  readonly contractId: string;
+  readonly taskId: string;
+  readonly contractStatus: ContractStatus;
+  readonly closedAtCommit?: string;
+  readonly verdict: ContractVerdict;
+  readonly criteria: readonly DoneWhenCriterion[];
 }
 
 export function registerContractCommand(taskCmd: Command, program: Command): void {
@@ -145,6 +157,43 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
       }
 
       output(false, contract, formatContractDetail);
+    });
+
+  contractCmd
+    .command("verdict <ref>")
+    .description("Preview the current verdict without closing the task")
+    .option("--json", "Output as JSON")
+    .action(async (ref: string, opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+      const contract = await showContract(services.contractStore, ref);
+      assertContractCanPreviewVerdict(contract);
+
+      const task = await services.taskStore.get(contract.taskId);
+      if (!task) {
+        throw new MaestroError(`Task ${contract.taskId} linked to contract ${contract.id} was not found`, [
+          "Inspect .maestro/tasks/tasks.jsonl for stale or corrupted state",
+        ]);
+      }
+
+      const preview = await computeContractVerdictForTask(
+        services.contractStore,
+        services.gitAnchor,
+        contract,
+        {
+          ...task,
+          updatedAt: new Date().toISOString(),
+        },
+      );
+
+      output(isJson, {
+        contractId: contract.id,
+        taskId: contract.taskId,
+        contractStatus: contract.status,
+        closedAtCommit: preview.closedAtCommit,
+        verdict: preview.verdict,
+        criteria: preview.criteria,
+      } satisfies ContractVerdictPreview, formatContractVerdictPreview);
     });
 
   contractCmd
@@ -464,6 +513,43 @@ function formatContractList(contracts: readonly Contract[]): string[] {
   return lines;
 }
 
+function formatContractVerdictPreview(preview: ContractVerdictPreview): string[] {
+  const lines = [
+    `Contract verdict preview: ${preview.contractId}`,
+    `  Task: ${preview.taskId}`,
+    `  Status: ${preview.contractStatus}`,
+    `  Result: ${preview.verdict.fulfilled ? "fulfilled" : "broken"}`,
+    ...(preview.closedAtCommit ? [`  Closed at commit: ${preview.closedAtCommit}`] : []),
+    `  Done when: ${countMetCriteria(preview.criteria)}/${preview.criteria.length} met`,
+    `  Files touched: ${preview.verdict.actualFilesTouched.join(", ") || "(none)"}`,
+  ];
+
+  if (preview.verdict.outOfScopeFiles.length > 0) {
+    lines.push(`  Out of scope: ${preview.verdict.outOfScopeFiles.join(", ")}`);
+  }
+  if (preview.verdict.forbiddenTouched.length > 0) {
+    lines.push(`  Forbidden touched: ${preview.verdict.forbiddenTouched.join(", ")}`);
+  }
+  if (preview.verdict.unmetCriteria.length > 0) {
+    lines.push(
+      `  Unmet criteria: ${preview.verdict.unmetCriteria.map((criterion) => criterion.id).join(", ")}`,
+    );
+  }
+  if (preview.verdict.overlapDetected) {
+    lines.push(
+      `  Overlap: ${preview.verdict.overlapDetected.otherContractIds.join(", ")} (${preview.verdict.overlapDetected.policy})`,
+    );
+  }
+  if (preview.verdict.anchorFallback && preview.verdict.anchorFallback !== "direct") {
+    lines.push(`  Anchor fallback: ${preview.verdict.anchorFallback}`);
+  }
+  if (preview.verdict.notes) {
+    lines.push(`  Notes: ${preview.verdict.notes}`);
+  }
+
+  return lines;
+}
+
 function resolveContractSilent(opts: { silent?: unknown }): boolean {
   return opts.silent === true || process.env.MAESTRO_TASK_SILENT === "1";
 }
@@ -496,6 +582,27 @@ async function resolveContractActor(ref: string): Promise<string> {
     return owner?.assignee ?? contract.lockedBy ?? contract.createdBy;
   }
   return "user";
+}
+
+function assertContractCanPreviewVerdict(contract: Contract): asserts contract is Contract & {
+  readonly status: "locked" | "amended";
+} {
+  if (isActiveContract(contract)) {
+    return;
+  }
+  if (contract.status === "draft") {
+    throw new MaestroError(`Contract ${contract.id} is still draft`, [
+      `Lock it first: maestro task contract lock ${contract.id}`,
+    ]);
+  }
+  if (contract.status === "discarded") {
+    throw new MaestroError(`Contract ${contract.id} was discarded`, [
+      `Show the discarded draft: maestro task contract show ${contract.id}`,
+    ]);
+  }
+  throw new MaestroError(`Contract ${contract.id} already has a stored verdict`, [
+    `Show it instead: maestro task contract show ${contract.id}`,
+  ]);
 }
 
 function renderEditableContract(contract: Contract): string {

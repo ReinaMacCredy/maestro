@@ -43,6 +43,7 @@ describe("AGENT_INSTRUCTION_BLOCK", () => {
     expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract new <id>");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract lock <id>");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract show <id>");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract verdict <id>");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract list");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract discard <id>");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract amend <id> --reason");
@@ -60,10 +61,12 @@ describe("AGENT_INSTRUCTION_BLOCK", () => {
     expect(agentsTemplate?.content).toContain(".maestro/tasks/contracts/");
     expect(agentsTemplate?.content).toContain("maestro task contract new <id>");
     expect(agentsTemplate?.content).toContain("maestro task contract lock <id>");
+    expect(agentsTemplate?.content).toContain("maestro task contract verdict <id>");
     expect(agentsTemplate?.content).toContain("maestro task contract amend <id> --reason");
     expect(agentsTemplate?.content).toContain("maestro task contract criteria mark <id> <criterionId> --met");
     expect(agentsTemplate?.content).toContain("--strict");
     expect(agentsTemplate?.content).toContain("stored verdict");
+    expect(agentsTemplate?.content).toContain("contracts.overlapPolicy: annotate");
     expect(agentsTemplate?.content).toContain("relocks its contract");
     expect(agentsTemplate?.content).toContain("staleReclaimContractPolicy: block");
   });

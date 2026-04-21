@@ -116,4 +116,74 @@ describe("computeContractVerdict", () => {
     expect(computed.verdict.unmetCriteria).toHaveLength(1);
     expect(computed.verdict.anchorFallback).toBe("lost");
   });
+
+  it("records overlap annotations without failing when policy is annotate", () => {
+    const contract = contractFixture({
+      configSnapshot: {
+        strict: false,
+        overlapPolicy: "annotate",
+        rebaseFallback: "best-effort",
+        staleReclaimContractPolicy: "inherit",
+      },
+      doneWhen: [],
+    });
+    const gitResult: GitTouchedFilesResult = {
+      gitAvailable: true,
+      actualFilesTouched: ["README.md"],
+      closedAtCommit: "89abcdef0123456789abcdef0123456789abcdef",
+      anchorFallback: "direct",
+    };
+
+    const computed = computeContractVerdict(
+      contract,
+      gitResult,
+      undefined,
+      "session:test",
+      "2026-04-21T00:10:00.000Z",
+      {
+        overlapDetected: {
+          otherContractIds: ["c-b2c3d4"],
+          policy: "annotate",
+        },
+      },
+    );
+
+    expect(computed.verdict.fulfilled).toBe(true);
+    expect(computed.verdict.overlapDetected).toEqual({
+      otherContractIds: ["c-b2c3d4"],
+      policy: "annotate",
+    });
+  });
+
+  it("fails the verdict when overlap policy is fail", () => {
+    const contract = contractFixture({
+      doneWhen: [],
+    });
+    const gitResult: GitTouchedFilesResult = {
+      gitAvailable: true,
+      actualFilesTouched: ["README.md"],
+      closedAtCommit: "89abcdef0123456789abcdef0123456789abcdef",
+      anchorFallback: "direct",
+    };
+
+    const computed = computeContractVerdict(
+      contract,
+      gitResult,
+      undefined,
+      "session:test",
+      "2026-04-21T00:10:00.000Z",
+      {
+        overlapDetected: {
+          otherContractIds: ["c-b2c3d4"],
+          policy: "fail",
+        },
+      },
+    );
+
+    expect(computed.verdict.fulfilled).toBe(false);
+    expect(computed.verdict.overlapDetected).toEqual({
+      otherContractIds: ["c-b2c3d4"],
+      policy: "fail",
+    });
+  });
 });

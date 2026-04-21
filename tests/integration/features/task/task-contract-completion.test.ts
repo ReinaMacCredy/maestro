@@ -154,6 +154,80 @@ describe("task contract completion", () => {
     expect(expectJson<{ status: string }>(shown).status).toBe("in_progress");
   }, SLOW_CLI_TIMEOUT_MS);
 
+  it("previews overlap in verdict output when annotate policy allows concurrent contracts", async () => {
+    await seedTrackedFile("README.md", "hello\n");
+    await Bun.write(
+      join(tmpDir, ".maestro", "config.yaml"),
+      "contracts:\n  overlapPolicy: annotate\n",
+    );
+
+    const firstTask = expectJson<{ id: string }>(await runCli(["task", "create", "first overlap task", "--json"], tmpDir));
+    await runCli(["task", "claim", firstTask.id, "--session", "overlap-owner-1", "--json"], tmpDir);
+    await runCli(["task", "update", firstTask.id, "--status", "in_progress", "--session", "overlap-owner-1", "--json"], tmpDir);
+
+    const firstTemplatePath = await writeTemplate(
+      "overlap-template-1.yaml",
+      [
+        "intent: Keep the first overlap task inside README",
+        "scope:",
+        "  filesExpected:",
+        "    - README.md",
+        "  filesForbidden: []",
+        "doneWhen:",
+        "  - text: manual",
+        "    kind: manual",
+        "",
+      ].join("\n"),
+    );
+    const firstContract = expectJson<{ id: string }>(
+      await runCli(["task", "contract", "new", firstTask.id, "--from", firstTemplatePath, "--json"], tmpDir),
+    );
+    await runCli(["task", "contract", "lock", firstContract.id, "--json"], tmpDir);
+
+    const secondTask = expectJson<{ id: string }>(await runCli(["task", "create", "second overlap task", "--json"], tmpDir));
+    await runCli(["task", "claim", secondTask.id, "--session", "overlap-owner-2", "--json"], tmpDir);
+    await runCli(["task", "update", secondTask.id, "--status", "in_progress", "--session", "overlap-owner-2", "--json"], tmpDir);
+
+    const secondTemplatePath = await writeTemplate(
+      "overlap-template-2.yaml",
+      [
+        "intent: Keep the second overlap task inside README",
+        "scope:",
+        "  filesExpected:",
+        "    - README.md",
+        "  filesForbidden: []",
+        "doneWhen:",
+        "  - text: manual",
+        "    kind: manual",
+        "",
+      ].join("\n"),
+    );
+    const secondContract = expectJson<{ id: string }>(
+      await runCli(["task", "contract", "new", secondTask.id, "--from", secondTemplatePath, "--json"], tmpDir),
+    );
+    await runCli(["task", "contract", "lock", secondContract.id, "--json"], tmpDir);
+
+    await Bun.write(join(tmpDir, "README.md"), "hello\noverlap\n");
+
+    const preview = expectJson<{
+      contractId: string;
+      verdict: {
+        actualFilesTouched: string[];
+        overlapDetected?: {
+          policy: "fail" | "annotate";
+          otherContractIds: string[];
+        };
+      };
+    }>(await runCli(["task", "contract", "verdict", secondContract.id, "--json"], tmpDir));
+
+    expect(preview.contractId).toBe(secondContract.id);
+    expect(preview.verdict.actualFilesTouched).toContain("README.md");
+    expect(preview.verdict.overlapDetected).toEqual({
+      policy: "annotate",
+      otherContractIds: [firstContract.id],
+    });
+  }, SLOW_CLI_TIMEOUT_MS);
+
   it("requires a contract only when config asks for it and honors --no-contract", async () => {
     const created = await runCli(["task", "create", "required contract", "--json"], tmpDir);
     const task = expectJson<{ id: string }>(created);

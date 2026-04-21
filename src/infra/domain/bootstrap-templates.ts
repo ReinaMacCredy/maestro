@@ -90,6 +90,7 @@ Before starting work:
 
 Useful contract commands:
   - maestro task contract show <id>
+  - maestro task contract verdict <id>
   - maestro task contract list
   - maestro task contract discard <id>
   - maestro task contract amend <id> --reason "..."
@@ -237,6 +238,7 @@ This project uses Maestro for local bootstrap and runtime orchestration.
   - \`maestro task contract lock <id>\`
 - Inspect or clean up contract drafts:
   - \`maestro task contract show <id>\`
+  - \`maestro task contract verdict <id>\`
   - \`maestro task contract list\`
   - \`maestro task contract discard <id>\`
 - Amend a locked contract with a recorded reason:
@@ -248,6 +250,7 @@ This project uses Maestro for local bootstrap and runtime orchestration.
 - Completion can enforce contracts with \`maestro task update <id> --status completed --strict\`.
 - Use \`--no-contract\` only when config requires a contract but the task intentionally has none.
 - After completion, \`task contract show\` includes the stored verdict.
+- Set \`contracts.overlapPolicy: annotate\` to allow overlapping active contracts while still recording the overlap in verdicts.
 - Reopening a completed task relocks its contract and clears the stored verdict.
 - \`.maestro/tasks/NOW.md\` adds a one-line contract status summary for active contracted work.
 - Stale reclaim inherits active contract ownership by default; set \`contracts.staleReclaimContractPolicy: block\` to refuse it.
