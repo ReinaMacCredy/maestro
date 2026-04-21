@@ -1,11 +1,11 @@
 export type {
+  HandoffAgent,
   HandoffLaunchPort,
   HandoffLaunchRequest,
   HandoffLaunchRecord,
   HandoffLaunchResult,
   HandoffLaunchStatus,
   HandoffPromptContext,
-  HandoffProvider,
   HandoffRefs,
   HandoffRelevantFile,
   HandoffWorktree,
@@ -19,6 +19,8 @@ export { buildHandoffPrompt } from "./usecases/build-handoff-prompt.usecase.js";
 export type { BuildHandoffPromptResult } from "./usecases/build-handoff-prompt.usecase.js";
 export { launchHandoff } from "./usecases/launch-handoff.usecase.js";
 export type { LaunchHandoffResult } from "./usecases/launch-handoff.usecase.js";
+export { pickupHandoff } from "./usecases/pickup-handoff.usecase.js";
+export type { PickupHandoffResult } from "./usecases/pickup-handoff.usecase.js";
 export { countLegacyHandoffFiles } from "./usecases/inspect-legacy-handoffs.usecase.js";
 export { registerHandoffCommand } from "./commands/handoff.command.js";
 export { buildHandoffServices } from "./services.js";

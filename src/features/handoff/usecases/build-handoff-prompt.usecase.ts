@@ -11,6 +11,7 @@ import type {
 import type { GitPort } from "@/infra/ports/git.port.js";
 import type { GitState } from "@/infra/domain/git-types.js";
 import type { HandoffPromptContext, HandoffRelevantFile } from "@/features/handoff";
+import type { TaskContinuationEvent, TaskContinuationSummary } from "@/features/task";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { fileExists } from "@/shared/lib/fs.js";
 import { sanitizeInlineCodeContent, sanitizeInlinePromptContent } from "@/shared/lib/sanitize.js";
@@ -33,6 +34,11 @@ export async function buildHandoffPrompt(
     readonly cwd: string;
     readonly task: string;
     readonly extraConstraints?: readonly string[];
+    readonly taskId?: string;
+    readonly continuation?: {
+      readonly summary: TaskContinuationSummary;
+      readonly recentEvents: readonly TaskContinuationEvent[];
+    };
   },
 ): Promise<BuildHandoffPromptResult> {
   const [gitState, missionContext] = await Promise.all([
@@ -54,7 +60,30 @@ export async function buildHandoffPrompt(
 
   const context: HandoffPromptContext = {
     ...promptContext,
+    currentState: input.continuation
+      ? [
+          input.continuation.summary.currentState,
+          `Next action: ${input.continuation.summary.nextAction}`,
+          ...promptContext.currentState,
+        ]
+      : promptContext.currentState,
+    whatWasTried: input.continuation && input.continuation.recentEvents.length > 0
+      ? [
+          ...input.continuation.recentEvents.map((event) => formatContinuationEvent(event)),
+          ...promptContext.whatWasTried,
+        ]
+      : promptContext.whatWasTried,
+    decisions: input.continuation && input.continuation.summary.keyDecisions.length > 0
+      ? [
+          ...input.continuation.summary.keyDecisions,
+          ...promptContext.decisions,
+        ]
+      : promptContext.decisions,
     constraints,
+    refs: {
+      ...promptContext.refs,
+      ...(input.taskId ? { taskId: input.taskId } : {}),
+    },
   };
 
   return {
@@ -398,4 +427,27 @@ function renderInlineCodeSpan(value: string): string {
   const fence = "`".repeat(fenceLength);
   const padded = content.startsWith("`") || content.endsWith("`") ? ` ${content} ` : content;
   return `${fence}${padded}${fence}`;
+}
+
+function formatContinuationEvent(event: TaskContinuationEvent): string {
+  switch (event.kind) {
+    case "snapshot":
+      return `Snapshot: ${event.summary}`;
+    case "decision":
+      return `Decision: ${event.summary}`;
+    case "next_action_set":
+      return `Next action: ${event.summary}`;
+    case "blocker_set":
+      return `Blocker: ${event.summary}`;
+    case "handoff_created":
+      return `Handoff created: ${event.handoffId} for ${event.agent}`;
+    case "handoff_picked_up":
+      return `Handoff picked up: ${event.handoffId} by ${event.agent}`;
+    case "agent_takeover":
+      return `Agent takeover: ${event.summary}`;
+    case "task_completed":
+      return `Task completed: ${event.summary}`;
+    case "task_reopened":
+      return `Task reopened: ${event.summary}`;
+  }
 }

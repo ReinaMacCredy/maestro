@@ -28,7 +28,7 @@ maestro feature prompt <featureId> --mission <id>
 **Launch a fresh Codex or Claude handoff:**
 \`\`\`bash
 maestro handoff "Implement <featureId> for mission <id>" \\
-  [--provider codex|claude]  # default: codex
+  [--agent codex|claude]     # default: codex
   [--model <model>]          # default: codex=gpt-5.4, claude=opus
   [--worktree [slug]]        # create/reuse sibling git worktree
   [--base <branch>]          # base branch for --worktree
@@ -39,9 +39,14 @@ maestro handoff "Implement <featureId> for mission <id>" \\
 Handoffs run detached by default: the launcher returns immediately with a launch id and the external agent keeps running in the background. Use \`--wait\` only when you need to block until the agent exits (e.g. scripts that consume its final report).
 
 Every launch persists under \`.maestro/launches/<id>/\`:
-- \`prompt.md\` -- the self-contained briefing sent to the provider
+- \`prompt.md\` -- the self-contained briefing sent to the agent
 - \`output.log\` -- live stdout/stderr from the agent process
-- \`launch.json\` -- status, timing, provider, model, and worktree metadata
+- \`launch.json\` -- status, timing, agent, model, and worktree metadata
+
+**Pick up a standalone handoff packet:**
+\`\`\`bash
+maestro handoff pickup [--id <handoff-id>] [--agent codex|claude --session <id>] [--json]
+\`\`\`
 
 **Capture a correction rule for future sessions:**
 \`\`\`bash
@@ -64,7 +69,10 @@ maestro task create "Title" [--description "..."] [--type task|bug|feature|epic|
 maestro task ready --json --compact --limit 5
 maestro task claim <id>                                      # session auto-detected; --session <id> for explicit override
 maestro task update <id> --status in_progress                # auto-claims if unowned
+maestro task update <id> --current-state "..." --next-action "..."
+maestro task update <id> --add-decision "keep api stable"
 maestro task update <id> --status completed --reason "<one-line outcome>"
+maestro task reopen <id>
 
 # Release or re-wire
 maestro task unclaim <id>
@@ -90,8 +98,9 @@ The whole batch is created under one lock. Name slots in the same batch referenc
 **Task contract (the two non-obvious rules):**
 - A task cannot move to \`in_progress\` or \`completed\` while any id in its \`blockedBy\` list is unresolved. Resolve blockers first or create them as \`completed\` upstream.
 - Completion \`--reason\` is persisted verbatim as shared context for future sessions. Keep it terse, factual, and free of secrets.
+- Continuation updates live beside the task row. Use \`--current-state\`, \`--next-action\`, and decision flags to keep resume context fresh for the next agent.
 
-**When to use**: Start every session with \`maestro status\` to see shared state. Use \`maestro feature prompt\` to read the current feature's briefing with memory context auto-injected. Use \`maestro task ready\` to inspect the shared queue, and \`maestro task create ... --status in_progress\` or \`maestro task claim\` to take ownership.`;
+**When to use**: Start every session with \`maestro status\` to see shared state. Use \`maestro feature prompt\` to read the current feature's briefing with memory context auto-injected. Use \`maestro task ready\` to inspect the shared queue, \`maestro task create ... --status in_progress\` or \`maestro task claim\` to take ownership, and \`maestro handoff pickup\` when another agent handed work back to you.`;
 
 export const PROJECT_BOOTSTRAP_TEMPLATES: readonly BootstrapTemplateFile[] = [
   {

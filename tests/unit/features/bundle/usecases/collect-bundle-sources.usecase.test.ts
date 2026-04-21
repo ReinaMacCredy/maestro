@@ -95,7 +95,7 @@ function buildLaunch(id: string, refs: HandoffLaunchRecord["refs"]): HandoffLaun
     createdAt: "2026-04-13T02:00:00.000Z",
     task: "bundle launch",
     name: "[Handoff] bundle launch",
-    provider: "claude",
+    agent: "claude",
     model: "opus",
     status: "completed",
     wait: true,
@@ -185,6 +185,7 @@ class FakeLaunchStore implements LaunchStorePort {
   constructor(private readonly launches: readonly HandoffLaunchRecord[]) {}
   async create(): Promise<HandoffLaunchRecord> { throw new Error("not implemented"); }
   async update(record: HandoffLaunchRecord) { return record; }
+  async consume(): Promise<HandoffLaunchRecord> { throw new Error("not implemented"); }
   async get(id: string) { return this.launches.find((launch) => launch.id === id); }
   async list() { return this.launches; }
   resolveArtifactPath(relativePath: string) { return join(projectDir, relativePath); }

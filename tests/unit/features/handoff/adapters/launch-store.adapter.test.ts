@@ -21,7 +21,7 @@ describe("FsLaunchStoreAdapter", () => {
     const record = await store.create({
       task: "Investigate the failing build",
       name: "[Handoff] Investigate the failing build",
-      provider: "codex",
+      agent: "codex",
       model: "gpt-5.4",
       wait: false,
       sourceDir: projectDir,
@@ -38,18 +38,18 @@ describe("FsLaunchStoreAdapter", () => {
     expect(listed).toHaveLength(1);
     expect(listed[0]).toMatchObject({
       id: record.id,
-      provider: "codex",
+      agent: "codex",
       model: "gpt-5.4",
       status: "launching",
     });
   });
 
-  it("updates launch metadata after the provider process finishes", async () => {
+  it("updates launch metadata after the agent process finishes", async () => {
     const store = new FsLaunchStoreAdapter(projectDir);
     const created = await store.create({
       task: "Fix tests",
       name: "[Handoff] Fix tests",
-      provider: "claude",
+      agent: "claude",
       model: "opus",
       wait: true,
       sourceDir: projectDir,
@@ -74,5 +74,43 @@ describe("FsLaunchStoreAdapter", () => {
       status: "completed",
       exitCode: 0,
     });
+  });
+
+  it("consumes a handoff once and rejects a second pickup", async () => {
+    const store = new FsLaunchStoreAdapter(projectDir);
+    const created = await store.create({
+      task: "Fix tests",
+      name: "[Handoff] Fix tests",
+      agent: "codex",
+      model: "gpt-5.4",
+      wait: false,
+      sourceDir: projectDir,
+      targetDir: projectDir,
+      refs: { taskId: "tsk-123" },
+      prompt: "## Task\n\nFix tests\n",
+    });
+
+    const consumed = await store.consume({
+      id: created.id,
+      agent: "claude",
+      sessionId: "pickup-1",
+      pickedUpAt: "2026-04-21T10:00:00.000Z",
+    });
+
+    expect(consumed).toMatchObject({
+      id: created.id,
+      pickedUpByAgent: "claude",
+      pickedUpBySessionId: "pickup-1",
+      consumedAt: "2026-04-21T10:00:00.000Z",
+    });
+
+    await expect(
+      store.consume({
+        id: created.id,
+        agent: "codex",
+        sessionId: "pickup-2",
+        pickedUpAt: "2026-04-21T10:01:00.000Z",
+      }),
+    ).rejects.toThrow("already consumed");
   });
 });

@@ -39,6 +39,7 @@ feedback.jsonl
 .maestro/handoffs/
 .maestro/launches/
 .maestro/missions/
+.maestro/tasks/local-history/
 .maestro/tasks/batches/
 
 # Claude plans

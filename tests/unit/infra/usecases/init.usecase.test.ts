@@ -142,6 +142,7 @@ describe("initMaestro", () => {
     expect(gitignore).toContain(".maestro/launches/");
     expect(gitignore).toContain(".maestro/missions/");
     expect(gitignore).toContain(".maestro/sessions/");
+    expect(gitignore).toContain(".maestro/tasks/local-history/");
   });
 
   it("rejects symlinked .maestro paths that escape the project root", async () => {

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expectJson, initGitRepo } from "../../../helpers/run-compiled-cli.js";
@@ -99,5 +99,130 @@ describe("task CLI daily loop", () => {
     expect(payload).toHaveLength(1);
     expect(payload[0]).toEqual(expect.objectContaining({ id, status: "pending" }));
     expect(payload[0]?.assignee).toBeUndefined();
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("writes a continuation summary on active work and archives it on completion", async () => {
+    const id = (await runCli(["task", "q", "continue me"], tmpDir)).stdout;
+    await runCli(["task", "claim", id, "--session", "codex-session-a", "--json"], tmpDir);
+    await runCli(["task", "update", id, "--status", "in_progress", "--session", "codex-session-a", "--json"], tmpDir);
+
+    const activeSummaryPath = join(tmpDir, ".maestro", "tasks", "continuations", "active", `${id}.json`);
+    const localHistoryPath = join(tmpDir, ".maestro", "tasks", "local-history", `${id}.jsonl`);
+    const activeSummary = JSON.parse(await readFile(activeSummaryPath, "utf8")) as {
+      status: string;
+      activeAgent?: { type: string; sessionId?: string };
+    };
+    expect(activeSummary).toMatchObject({
+      status: "in_progress",
+      activeAgent: {
+        type: "codex",
+        sessionId: "session-a",
+      },
+    });
+
+    const history = await readFile(localHistoryPath, "utf8");
+    expect(history).toContain("\"kind\":\"snapshot\"");
+
+    await runCli(
+      ["task", "update", id, "--status", "completed", "--reason", "done", "--session", "codex-session-a", "--json"],
+      tmpDir,
+    );
+
+    await expect(access(activeSummaryPath)).rejects.toBeDefined();
+    const completedSummary = JSON.parse(
+      await readFile(join(tmpDir, ".maestro", "tasks", "continuations", "completed", `${id}.json`), "utf8"),
+    ) as { status: string };
+    expect(completedSummary.status).toBe("completed");
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("renders the continuation summary even when local timeline history is missing", async () => {
+    const created = await runCli(["task", "create", "show me", "--json"], tmpDir);
+    const task = expectJson<{ id: string }>(created);
+    const summaryPath = join(tmpDir, ".maestro", "tasks", "continuations", "active", `${task.id}.json`);
+    await Bun.write(
+      summaryPath,
+      JSON.stringify({
+        taskId: task.id,
+        status: "in_progress",
+        lastActiveAt: "2026-04-21T10:00:00.000Z",
+        currentState: "Context restored from summary only",
+        nextAction: "Keep going from the saved next step",
+        keyDecisions: ["Do not touch the session store"],
+        activeAgent: {
+          type: "codex",
+          sessionId: "session-a",
+          lastSeenAt: "2026-04-21T10:00:00.000Z",
+        },
+      }, null, 2),
+    );
+
+    const shown = await runCli(["task", "show", task.id], tmpDir);
+    expect(shown.exitCode).toBe(0);
+    expect(shown.stdout).toContain("Current state: Context restored from summary only");
+    expect(shown.stdout).toContain("Next action: Keep going from the saved next step");
+    expect(shown.stdout).toContain("Recent timeline: no local timeline available");
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("updates explicit continuation state and active decisions through task update", async () => {
+    const id = (await runCli(["task", "q", "resume me"], tmpDir)).stdout;
+    await runCli(["task", "claim", id, "--session", "codex-session-a", "--json"], tmpDir);
+    await runCli(["task", "update", id, "--status", "in_progress", "--session", "codex-session-a", "--json"], tmpDir);
+
+    await runCli(
+      [
+        "task",
+        "update",
+        id,
+        "--session",
+        "codex-session-a",
+        "--current-state",
+        "JWT parsing is fixed; admin role mapping still fails.",
+        "--next-action",
+        "Patch role mapping and rerun auth tests.",
+        "--add-decision",
+        "Keep middleware signature unchanged,Do not touch the session store",
+        "--json",
+      ],
+      tmpDir,
+    );
+
+    const summaryPath = join(tmpDir, ".maestro", "tasks", "continuations", "active", `${id}.json`);
+    const localHistoryPath = join(tmpDir, ".maestro", "tasks", "local-history", `${id}.jsonl`);
+    const summary = JSON.parse(await readFile(summaryPath, "utf8")) as {
+      currentState: string;
+      nextAction: string;
+      keyDecisions: string[];
+    };
+    expect(summary).toMatchObject({
+      currentState: "JWT parsing is fixed; admin role mapping still fails.",
+      nextAction: "Patch role mapping and rerun auth tests.",
+      keyDecisions: [
+        "Keep middleware signature unchanged",
+        "Do not touch the session store",
+      ],
+    });
+
+    const history = await readFile(localHistoryPath, "utf8");
+    expect(history).toContain("\"kind\":\"snapshot\"");
+    expect(history).toContain("\"kind\":\"next_action_set\"");
+    expect(history).toContain("\"kind\":\"decision\"");
+
+    await runCli(
+      [
+        "task",
+        "update",
+        id,
+        "--session",
+        "codex-session-a",
+        "--remove-decision",
+        "Do not touch the session store",
+        "--json",
+      ],
+      tmpDir,
+    );
+    const narrowed = JSON.parse(await readFile(summaryPath, "utf8")) as {
+      keyDecisions: string[];
+    };
+    expect(narrowed.keyDecisions).toEqual(["Keep middleware signature unchanged"]);
   }, SLOW_CLI_TIMEOUT_MS);
 });

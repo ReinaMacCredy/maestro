@@ -17,9 +17,9 @@ Every item below must be true before you draft the command.
 2. **The first launchable feature is explicit.**
    You should be able to point at one specific feature and say "this is the next fresh Codex or Claude run."
 
-3. **That feature maps to a real provider.**
-   - `codex-cli` -> `--provider codex`
-   - `claude-code` -> `--provider claude`
+3. **That feature maps to a real handoff agent.**
+   - `codex-cli` -> `--agent codex`
+   - `claude-code` -> `--agent claude`
    - `subagent` or `human` -> not launchable through `maestro handoff`
 
 4. **Dependencies are satisfied or named.**
@@ -47,7 +47,7 @@ Mission: split auth middleware into validation and permission halves.
 
 - First launchable feature: `auth-impl`
 - `agentType`: `codex-cli`
-- Provider mapping: `--provider codex`
+- Agent mapping: `--agent codex`
 - Verification: build, targeted tests, manual login flow
 - Constraints: preserve middleware signature, do not touch the session store, no permission semantics changes
 

@@ -3,8 +3,14 @@ import type {
   FeatureStorePort,
   MissionStorePort,
 } from "@/features/mission";
-import type { HandoffLaunchPort, HandoffLaunchRecord, HandoffProvider, LaunchStorePort } from "@/features/handoff";
+import type {
+  HandoffAgent,
+  HandoffLaunchPort,
+  HandoffLaunchRecord,
+  LaunchStorePort,
+} from "@/features/handoff";
 import { DEFAULT_HANDOFF_MODELS } from "@/features/handoff";
+import type { TaskContinuationEvent, TaskContinuationSummary } from "@/features/task";
 import type { GitPort } from "@/infra/ports/git.port.js";
 import { MaestroError } from "@/shared/errors.js";
 import { buildHandoffPrompt } from "./build-handoff-prompt.usecase.js";
@@ -15,7 +21,7 @@ export interface LaunchHandoffDeps {
   readonly assertionStore: AssertionStorePort;
   readonly git: GitPort;
   readonly launchStore: LaunchStorePort;
-  readonly launchers: Readonly<Record<HandoffProvider, HandoffLaunchPort>>;
+  readonly launchers: Readonly<Record<HandoffAgent, HandoffLaunchPort>>;
 }
 
 export interface LaunchHandoffResult {
@@ -28,12 +34,21 @@ export async function launchHandoff(
   input: {
     readonly cwd: string;
     readonly task: string;
-    readonly provider: HandoffProvider;
+    readonly agent: HandoffAgent;
     readonly model?: string;
     readonly name?: string;
     readonly wait: boolean;
     readonly worktree?: string | boolean;
     readonly baseBranch?: string;
+    readonly refs?: {
+      readonly taskId?: string;
+      readonly createdByAgent?: string;
+      readonly createdBySessionId?: string;
+    };
+    readonly continuation?: {
+      readonly summary: TaskContinuationSummary;
+      readonly recentEvents: readonly TaskContinuationEvent[];
+    };
   },
 ): Promise<LaunchHandoffResult> {
   if (input.baseBranch && !input.worktree) {
@@ -42,18 +57,18 @@ export async function launchHandoff(
     ]);
   }
 
-  const providerLauncher = deps.launchers[input.provider];
-  if (!providerLauncher) {
-    throw new MaestroError(`Unsupported provider '${input.provider}'`, [
-      "Valid providers: codex, claude",
+  const handoffLauncher = deps.launchers[input.agent];
+  if (!handoffLauncher) {
+    throw new MaestroError(`Unsupported agent '${input.agent}'`, [
+      "Valid agents: codex, claude",
     ]);
   }
 
   const worktree = input.worktree
-    ? await createHandoffWorktree(deps.git, input.cwd, input.provider, input.worktree, input.baseBranch, input.task)
+    ? await createHandoffWorktree(deps.git, input.cwd, input.agent, input.worktree, input.baseBranch, input.task)
     : undefined;
   const targetDir = worktree?.path ?? input.cwd;
-  const model = input.model ?? DEFAULT_HANDOFF_MODELS[input.provider];
+  const model = input.model ?? DEFAULT_HANDOFF_MODELS[input.agent];
   const name = input.name?.trim().length
     ? input.name.trim()
     : `[Handoff] ${truncateTask(input.task)}`;
@@ -67,23 +82,30 @@ export async function launchHandoff(
     cwd: input.cwd,
     task: input.task,
     extraConstraints,
+    continuation: input.continuation,
+    taskId: input.refs?.taskId,
   });
 
   const initialRecord = await deps.launchStore.create({
     task: input.task,
     name,
-    provider: input.provider,
+    agent: input.agent,
     model,
     wait: input.wait,
     sourceDir: input.cwd,
     targetDir,
-    refs: context.refs,
+    refs: {
+      ...context.refs,
+      ...(input.refs?.taskId ? { taskId: input.refs.taskId } : {}),
+    },
+    ...(input.refs?.createdByAgent ? { createdByAgent: input.refs.createdByAgent } : {}),
+    ...(input.refs?.createdBySessionId ? { createdBySessionId: input.refs.createdBySessionId } : {}),
     ...(worktree ? { worktree } : {}),
     prompt,
   });
 
   try {
-    const launchResult = await providerLauncher.launch({
+    const launchResult = await handoffLauncher.launch({
       prompt,
       targetDir,
       model,
@@ -104,8 +126,8 @@ export async function launchHandoff(
 
     if (input.wait && waitedExitCode !== 0) {
       const message = waitedExitCode === undefined
-        ? `${input.provider} handoff did not report an exit code`
-        : `${input.provider} handoff exited with code ${waitedExitCode}`;
+        ? `${input.agent} handoff did not report an exit code`
+        : `${input.agent} handoff exited with code ${waitedExitCode}`;
       throw new MaestroError(message, [
         `Launch record: ${finalRecord.id}`,
         `Prompt: ${finalRecord.promptPath}`,
@@ -127,7 +149,7 @@ export async function launchHandoff(
       status: "failed",
       errorMessage: message,
     });
-    throw new MaestroError(`Failed to launch ${input.provider} handoff: ${message}`, [
+    throw new MaestroError(`Failed to launch ${input.agent} handoff: ${message}`, [
       `Launch record: ${failedRecord.id}`,
       `Prompt: ${failedRecord.promptPath}`,
       `Log: ${failedRecord.outputPath}`,
@@ -138,7 +160,7 @@ export async function launchHandoff(
 async function createHandoffWorktree(
   git: GitPort,
   cwd: string,
-  provider: HandoffProvider,
+  agent: HandoffAgent,
   worktree: string | boolean,
   baseBranch: string | undefined,
   task: string,
@@ -148,7 +170,7 @@ async function createHandoffWorktree(
   return git.createWorktree(cwd, {
     slug,
     baseBranch: resolvedBaseBranch,
-    branchPrefix: provider,
+    branchPrefix: agent,
   });
 }
 

@@ -91,9 +91,9 @@ Do not auto-launch the handoff in this skill. Planning stops once the mission ex
 1. Write the plan to a JSON file (typically `plans/<mission-name>.json`). Include milestones, features, dependencies, verification steps, agent types, and constraints.
 2. Run `maestro mission create --file <plan.json>` to persist the mission. Capture the returned mission id.
 3. Run the readiness check. If the plan is still missing a launchable first agent, go back to Steps 2-4 instead of drafting a bad command.
-4. Map the first agent's `agentType` to a provider:
-   - `codex-cli` -> `--provider codex`
-   - `claude-code` -> `--provider claude`
+4. Map the first agent's `agentType` to an agent flag:
+   - `codex-cli` -> `--agent codex`
+   - `claude-code` -> `--agent claude`
 5. Draft the exact handoff command. The task string must name the mission id, feature id or title, expected outcome, and the requirement to run the listed verification steps before stopping.
 6. Add `--worktree <slug>` when the agent should operate in an isolated sibling checkout, especially for risky review or parallel implementation slices.
 7. Return the mission id and the exact handoff command to the user. Do not run the command inside this skill.
@@ -128,7 +128,7 @@ Then the next launch command is drafted:
 ```bash
 maestro handoff \
   "Implement feature auth-impl for mission mis_01h8k2f9. Split session validation from permission checks while preserving the existing middleware signature, keeping session-store changes out of scope, and running the listed verification steps before stopping." \
-  --provider codex
+  --agent codex
 ```
 
 Mission persisted, launch command drafted. The operator can now run that command to start the first Codex agent with a persisted markdown handoff brief. The skill is done.

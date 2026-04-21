@@ -24,6 +24,7 @@ const RUNTIME_GITIGNORE_LINES = [
   ".maestro/launches/",
   ".maestro/missions/",
   ".maestro/sessions/",
+  ".maestro/tasks/local-history/",
 ] as const;
 const MANAGED_AGENT_SKILL_ROOTS = [
   [".claude", "skills"],
@@ -62,6 +63,11 @@ export async function initMaestro(
   } else {
     const maestroDir = join(opts.dir, MAESTRO_DIR);
     const launchesDir = join(maestroDir, "launches");
+    const tasksDir = join(maestroDir, "tasks");
+    const continuationDir = join(tasksDir, "continuations");
+    const activeContinuationDir = join(continuationDir, "active");
+    const completedContinuationDir = join(continuationDir, "completed");
+    const taskLocalHistoryDir = join(tasksDir, "local-history");
     const skillsDir = join(maestroDir, "skills");
     const bootstrapDir = join(maestroDir, "bootstrap");
     const configPath = join(maestroDir, "config.yaml");
@@ -71,6 +77,11 @@ export async function initMaestro(
 
     await ensureDirIfMissing(maestroDir, created);
     await ensureDirIfMissing(launchesDir, created);
+    await ensureDirIfMissing(tasksDir, created);
+    await ensureDirIfMissing(continuationDir, created);
+    await ensureDirIfMissing(activeContinuationDir, created);
+    await ensureDirIfMissing(completedContinuationDir, created);
+    await ensureDirIfMissing(taskLocalHistoryDir, created);
     await ensureDirIfMissing(skillsDir, created);
     await ensureDirIfMissing(bootstrapDir, created);
 

@@ -4,6 +4,7 @@ import { Command, CommanderError } from "commander";
 import { formatVersionOutputForArgv } from "@/shared/version-format.js";
 import { MaestroError } from "@/shared/errors.js";
 import { removeIfExists } from "@/shared/lib/fs.js";
+import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 import { initServices } from "./services.js";
 import { registerInitCommand } from "@/infra/commands/init.command.js";
 import { registerStatusCommand } from "@/infra/commands/status.command.js";
@@ -55,7 +56,7 @@ export const program = new Command()
   .option("--json", "Output as JSON")
   .exitOverride()
   .hook("preAction", () => {
-    initServices(process.cwd());
+    initServices(resolveMaestroProjectRoot(process.cwd()));
   });
 
 registerInitCommand(program);

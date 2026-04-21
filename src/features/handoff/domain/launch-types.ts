@@ -3,12 +3,13 @@ export const DEFAULT_HANDOFF_MODELS = {
   claude: "opus",
 } as const;
 
-export type HandoffProvider = keyof typeof DEFAULT_HANDOFF_MODELS;
+export type HandoffAgent = keyof typeof DEFAULT_HANDOFF_MODELS;
 
 export interface HandoffRefs {
   readonly missionId?: string;
   readonly featureId?: string;
   readonly milestoneId?: string;
+  readonly taskId?: string;
 }
 
 export interface HandoffRelevantFile {
@@ -46,7 +47,7 @@ export interface HandoffLaunchRecord {
   readonly createdAt: string;
   readonly task: string;
   readonly name: string;
-  readonly provider: HandoffProvider;
+  readonly agent: HandoffAgent;
   readonly model: string;
   readonly status: HandoffLaunchStatus;
   readonly wait: boolean;
@@ -56,6 +57,12 @@ export interface HandoffLaunchRecord {
   readonly outputPath: string;
   readonly command: readonly string[];
   readonly refs: HandoffRefs;
+  readonly createdByAgent?: string;
+  readonly createdBySessionId?: string;
+  readonly pickedUpByAgent?: string;
+  readonly pickedUpBySessionId?: string;
+  readonly pickedUpAt?: string;
+  readonly consumedAt?: string;
   readonly worktree?: HandoffWorktree;
   readonly pid?: number;
   readonly exitCode?: number;
@@ -78,7 +85,7 @@ export interface HandoffLaunchResult {
 }
 
 export interface HandoffLaunchPort {
-  readonly provider: HandoffProvider;
+  readonly agent: HandoffAgent;
   launch(request: HandoffLaunchRequest): Promise<HandoffLaunchResult>;
 }
 
@@ -86,16 +93,24 @@ export interface LaunchStorePort {
   create(input: {
     readonly task: string;
     readonly name: string;
-    readonly provider: HandoffProvider;
+    readonly agent: HandoffAgent;
     readonly model: string;
     readonly wait: boolean;
     readonly sourceDir: string;
     readonly targetDir: string;
     readonly refs: HandoffRefs;
+    readonly createdByAgent?: string;
+    readonly createdBySessionId?: string;
     readonly worktree?: HandoffWorktree;
     readonly prompt: string;
   }): Promise<HandoffLaunchRecord>;
   update(record: HandoffLaunchRecord): Promise<HandoffLaunchRecord>;
+  consume(input: {
+    readonly id: string;
+    readonly agent: string;
+    readonly sessionId?: string;
+    readonly pickedUpAt: string;
+  }): Promise<HandoffLaunchRecord>;
   get(id: string): Promise<HandoffLaunchRecord | undefined>;
   list(): Promise<readonly HandoffLaunchRecord[]>;
   resolveArtifactPath(relativePath: string): string;

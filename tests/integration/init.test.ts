@@ -196,6 +196,7 @@ describe("init CLI", () => {
       "maestro mission-control",
     );
     expect(await readFile(join(tmpDir, ".gitignore"), "utf8")).toContain(".maestro/sessions/");
+    expect(await readFile(join(tmpDir, ".gitignore"), "utf8")).toContain(".maestro/tasks/local-history/");
     expect(await pathExists(join(tmpDir, ".factory"))).toBe(false);
   });
 

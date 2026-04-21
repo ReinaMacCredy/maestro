@@ -12,9 +12,17 @@ import { claimTask } from "../usecases/claim-task.usecase.js";
 import { unclaimTask } from "../usecases/unclaim-task.usecase.js";
 import { blockTasks, unblockTasks } from "../usecases/manage-task-blockers.usecase.js";
 import { releaseOwnedTasks } from "../usecases/release-owned-tasks.usecase.js";
+import { reopenTask } from "../usecases/reopen-task.usecase.js";
 import { readyTaskPage, readyTasks } from "../usecases/ready-tasks.usecase.js";
 import { captureTaskCandidate } from "../usecases/capture-task-candidate.usecase.js";
 import { planTasks } from "../usecases/plan-tasks.usecase.js";
+import {
+  buildTaskContinuationSummary,
+  buildTaskShowView,
+  deriveAgentFromAssignee,
+  loadTaskContinuationSummary,
+  syncTaskContinuation,
+} from "../usecases/task-continuation.usecase.js";
 import type {
   ListTasksFilters,
   ReadyTasksFilters,
@@ -39,10 +47,12 @@ import {
   taskUpdateClaimViaDedicatedCommand,
   taskUpdateOwnershipViaClaim,
 } from "../domain/task-errors.js";
+import { assertTaskMutationOwnership } from "../domain/task-state.js";
 import {
   buildCompactReadyTaskPayload,
   formatTaskBriefingList,
   formatTaskDetail,
+  formatTaskShowView,
   formatTaskList,
   formatTaskSummary,
 } from "./task-command-formatters.js";
@@ -57,6 +67,13 @@ const STALE_OWNER_AGENT_PREFIXES = [
   "aider",
   "cursor",
 ] as const satisfies readonly AgentSlug[];
+
+interface ContinuationEditInput {
+  readonly currentState?: string;
+  readonly nextAction?: string;
+  readonly addDecisions: readonly string[];
+  readonly removeDecisions: readonly string[];
+}
 
 export function registerTaskCommand(program: Command): void {
   const taskCmd = program
@@ -75,6 +92,7 @@ export function registerTaskCommand(program: Command): void {
   registerReleaseOwnedCommand(taskCmd, program);
   registerBlockCommand(taskCmd, program);
   registerUnblockCommand(taskCmd, program);
+  registerReopenCommand(taskCmd, program);
   registerLegacyDepsCommand(taskCmd);
   registerCloseCommand(taskCmd);
   registerReadyCommand(taskCmd, program);
@@ -288,8 +306,18 @@ function registerShowCommand(taskCmd: Command, program: Command): void {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
 
-      const task = await showTask(services.taskStore, id);
-      output(isJson, task, formatTaskDetail);
+      if (isJson) {
+        const task = await showTask(services.taskStore, id);
+        output(true, task, formatTaskDetail);
+        return;
+      }
+
+      const view = await buildTaskShowView({
+        taskStore: services.taskStore,
+        continuationStore: services.taskContinuationStore,
+        continuationHistory: services.taskContinuationHistory,
+      }, id);
+      output(false, view, formatTaskShowView);
     });
 }
 
@@ -335,6 +363,10 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
     .option("--priority <n>", "New priority 0-4")
     .option("--type <type>", `New type (${TASK_TYPES.join("|")})`)
     .option("--parent <id>", "New parent id (empty string clears)")
+    .option("--current-state <text>", "Update the resumable current-state summary")
+    .option("--next-action <text>", "Update the resumable next action")
+    .option("--add-decision <items>", "Comma-separated active decisions to add")
+    .option("--remove-decision <items>", "Comma-separated active decisions to remove")
     .option("--force", "Override ownership checks on claimed tasks")
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .addOption(new Option("--assignee <name>").hideHelp())
@@ -345,6 +377,8 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
     .action(async (id: string, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
+      const previous = await services.taskStore.get(id);
+      const continuationEdits = parseContinuationEdits(opts);
 
       if (opts.assignee !== undefined) {
         throw taskUpdateOwnershipViaClaim();
@@ -353,37 +387,73 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
         throw taskUpdateClaimViaDedicatedCommand();
       }
 
-        const patch: UpdateTaskInput = {
-          title: opts.title,
-          description: opts.description,
-          status: parseStatus(opts.status),
-          reason: opts.reason,
-          priority: parsePriority(opts.priority),
-          type: parseType(opts.type),
-          parentId: opts.parent,
-          addLabels: parseList(opts.addLabel),
-          removeLabels: parseList(opts.removeLabel),
-        };
+      const patch: UpdateTaskInput = {
+        title: opts.title,
+        description: opts.description,
+        status: parseStatus(opts.status),
+        reason: opts.reason,
+        priority: parsePriority(opts.priority),
+        type: parseType(opts.type),
+        parentId: opts.parent,
+        addLabels: parseList(opts.addLabel),
+        removeLabels: parseList(opts.removeLabel),
+      };
 
-      if (!hasAnyPatchField(patch)) {
+      const hasTaskPatch = hasAnyPatchField(patch);
+      const hasContinuationPatch = hasContinuationEdits(continuationEdits);
+
+      if (!hasTaskPatch && !hasContinuationPatch) {
         throw new MaestroError("No update specified", [
           "Pass at least one field such as --title, --description, --status, --reason,",
-          "--priority, --type, --parent, --add-label, or --remove-label",
+          "--priority, --type, --parent, --current-state, --next-action,",
+          "--add-decision, --remove-decision, --add-label, or --remove-label",
         ]);
       }
 
       const sessionId = await resolveSessionAndReleaseStale(opts.session);
-      const { task: updated, autoClaimed } = await updateTask(
-        services.taskStore,
-        id,
-        patch,
-        {
-          sessionId,
-          force: opts.force === true,
-        },
-      );
+      let updated: Task;
+      let autoClaimed = false;
+
+      if (hasTaskPatch) {
+        const result = await updateTask(
+          services.taskStore,
+          id,
+          patch,
+          {
+            sessionId,
+            force: opts.force === true,
+          },
+        );
+        updated = result.task;
+        autoClaimed = result.autoClaimed;
+      } else {
+        if (!previous) {
+          throw new MaestroError(`Task not found: ${id}`);
+        }
+        if (previous.status === "completed") {
+          throw new MaestroError(`Task ${id} is already completed and cannot be updated`, [
+            "Reopen the task first if you want to resume or revise its continuation",
+          ]);
+        }
+        assertTaskMutationOwnership(previous, { sessionId, force: opts.force === true }, "update");
+        updated = previous;
+      }
+
       warnAutoClaimed(updated, autoClaimed);
-      await maybeCaptureCompletionHint(updated);
+      if (hasTaskPatch) {
+        await maybeCaptureCompletionHint(updated);
+      }
+      await applyUpdateContinuation(
+        {
+          continuationStore: services.taskContinuationStore,
+          continuationHistory: services.taskContinuationHistory,
+        },
+        previous,
+        updated,
+        patch,
+        autoClaimed,
+        continuationEdits,
+      );
 
       output(isJson, updated, (task) => [
         `[ok] Task updated: ${task.id}`,
@@ -410,12 +480,20 @@ function registerClaimCommand(taskCmd: Command, program: Command): void {
       const isJson = resolveJsonFlag(opts, program);
       const sessionId = await resolveOwnershipSessionId(opts.session);
       await maybeReleaseStaleOwnedTasks([sessionId]);
+      const previous = await services.taskStore.get(id);
 
       const claimed = await claimTask(services.taskStore, id, {
         sessionId,
         force: opts.force === true,
         checkBusy: opts.busyCheck === true,
       });
+      await syncTaskContinuation(
+        {
+          continuationStore: services.taskContinuationStore,
+          continuationHistory: services.taskContinuationHistory,
+        },
+        buildClaimContinuationInput(previous, claimed),
+      );
 
       output(isJson, claimed, (task) => [
         `[ok] Task claimed: ${task.id}`,
@@ -436,11 +514,31 @@ function registerUnclaimCommand(taskCmd: Command, program: Command): void {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const sessionId = await resolveOwnershipSessionId(opts.session);
+      const previous = await services.taskStore.get(id);
 
       const unclaimed = await unclaimTask(services.taskStore, id, {
         sessionId,
         force: opts.force === true,
       });
+      await syncTaskContinuation(
+        {
+          continuationStore: services.taskContinuationStore,
+          continuationHistory: services.taskContinuationHistory,
+        },
+        {
+          task: unclaimed,
+          summary: {
+            currentState: "Task ownership released back to the queue.",
+            activeAgent: null,
+          },
+          event: {
+            kind: "snapshot",
+            at: unclaimed.updatedAt,
+            summary: previous?.assignee ? `Ownership released from ${previous.assignee}` : "Ownership released",
+            currentState: "Task ownership released back to the queue.",
+          },
+        },
+      );
 
       output(isJson, unclaimed, (task) => [
         `[ok] Task unclaimed: ${task.id}`,
@@ -457,7 +555,30 @@ function registerReleaseOwnedCommand(taskCmd: Command, program: Command): void {
     .action(async (sessionId: string, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
+      const before = new Map((await services.taskStore.all()).map((task) => [task.id, task] as const));
       const released = await releaseOwnedTasks(services.taskStore, sessionId.trim());
+      for (const task of released) {
+        const previous = before.get(task.id);
+        await syncTaskContinuation(
+          {
+            continuationStore: services.taskContinuationStore,
+            continuationHistory: services.taskContinuationHistory,
+          },
+          {
+            task,
+            summary: {
+              currentState: "Task ownership released back to the queue.",
+              activeAgent: null,
+            },
+            event: {
+              kind: "snapshot",
+              at: task.updatedAt,
+              summary: previous?.assignee ? `Recovered from stale owner ${previous.assignee}` : "Recovered from stale owner",
+              currentState: "Task ownership released back to the queue.",
+            },
+          },
+        );
+      }
 
       output(isJson, released, (tasks) => {
         if (tasks.length === 0) {
@@ -468,6 +589,44 @@ function registerReleaseOwnedCommand(taskCmd: Command, program: Command): void {
           ...tasks.map((task) => `  ${task.id} -> ${task.status}`),
         ];
       });
+    });
+}
+
+function registerReopenCommand(taskCmd: Command, program: Command): void {
+  taskCmd
+    .command("reopen <id>")
+    .description("Restore a completed task to the pending queue")
+    .option("--json", "Output as JSON")
+    .action(async (id: string, opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+      const previous = await services.taskStore.get(id);
+      const reopened = await reopenTask(services.taskStore, id);
+      const existingSummary = await loadTaskContinuationSummary(services.taskContinuationStore, id);
+      const summary = buildTaskContinuationSummary(reopened, existingSummary, {
+        currentState: "Task reopened and ready to resume.",
+        nextAction: `Resume ${reopened.title}.`,
+        activeAgent: null,
+      });
+
+      const restored = await services.taskContinuationStore.reopen(id, summary);
+      if (!restored) {
+        await services.taskContinuationStore.upsertActive(summary);
+      }
+      await services.taskContinuationHistory.append(id, {
+        kind: "task_reopened",
+        at: reopened.updatedAt,
+        summary: previous?.closeReason
+          ? `Reopened after completion: ${previous.closeReason}`
+          : "Reopened and returned to pending",
+        ...(previous?.closeReason ? { reason: previous.closeReason } : {}),
+      });
+
+      output(isJson, reopened, (task) => [
+        `[ok] Task reopened: ${task.id}`,
+        `  Status: ${task.status}`,
+        `  Next: Resume ${task.title}.`,
+      ]);
     });
 }
 
@@ -482,6 +641,7 @@ function registerBlockCommand(taskCmd: Command, program: Command): void {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const sessionId = await resolveSessionAndReleaseStale(opts.session);
+      const before = await services.taskStore.get(id);
       const updated = await blockTasks(
         services.taskStore,
         id,
@@ -489,6 +649,49 @@ function registerBlockCommand(taskCmd: Command, program: Command): void {
         {
           sessionId,
           force: opts.force === true,
+        },
+      );
+      for (const blockedTaskId of blockedTaskIds) {
+        const blockedTask = await services.taskStore.get(blockedTaskId);
+        if (!blockedTask) continue;
+        await syncTaskContinuation(
+          {
+            continuationStore: services.taskContinuationStore,
+            continuationHistory: services.taskContinuationHistory,
+          },
+          {
+            task: blockedTask,
+            summary: {
+              currentState: `Blocked by ${id}.`,
+              nextAction: `Resolve blocker ${id} before continuing ${blockedTask.title}.`,
+            },
+            event: {
+              kind: "blocker_set",
+              at: blockedTask.updatedAt,
+              summary: `Blocked by ${id}`,
+              blockerTaskIds: blockedTask.blockedBy,
+            },
+          },
+        );
+      }
+      await syncTaskContinuation(
+        {
+          continuationStore: services.taskContinuationStore,
+          continuationHistory: services.taskContinuationHistory,
+        },
+        {
+          task: updated,
+          summary: {
+            currentState: `Blocking ${updated.blocks.length} task(s).`,
+          },
+          event: {
+            kind: "snapshot",
+            at: updated.updatedAt,
+            summary: before?.blocks.length === updated.blocks.length
+              ? `Blockers unchanged`
+              : `Now blocking ${updated.blocks.join(", ")}`,
+            currentState: `Blocking ${updated.blocks.length} task(s).`,
+          },
         },
       );
 
@@ -517,6 +720,46 @@ function registerUnblockCommand(taskCmd: Command, program: Command): void {
         {
           sessionId,
           force: opts.force === true,
+        },
+      );
+      for (const blockedTaskId of blockedTaskIds) {
+        const blockedTask = await services.taskStore.get(blockedTaskId);
+        if (!blockedTask) continue;
+        await syncTaskContinuation(
+          {
+            continuationStore: services.taskContinuationStore,
+            continuationHistory: services.taskContinuationHistory,
+          },
+          {
+            task: blockedTask,
+            summary: blockedTask.blockedBy.length === 0
+              ? {
+                  currentState: "Blockers cleared and ready to resume.",
+                  nextAction: `Resume ${blockedTask.title}.`,
+                }
+              : undefined,
+            event: {
+              kind: "blocker_set",
+              at: blockedTask.updatedAt,
+              summary: blockedTask.blockedBy.length === 0 ? `Blockers cleared` : `Remaining blockers: ${blockedTask.blockedBy.join(", ")}`,
+              blockerTaskIds: blockedTask.blockedBy,
+            },
+          },
+        );
+      }
+      await syncTaskContinuation(
+        {
+          continuationStore: services.taskContinuationStore,
+          continuationHistory: services.taskContinuationHistory,
+        },
+        {
+          task: updated,
+          event: {
+            kind: "snapshot",
+            at: updated.updatedAt,
+            summary: updated.blocks.length === 0 ? "No longer blocking other tasks" : `Still blocking ${updated.blocks.join(", ")}`,
+            currentState: updated.blocks.length === 0 ? "No longer blocking other tasks." : `Blocking ${updated.blocks.length} task(s).`,
+          },
         },
       );
 
@@ -600,6 +843,233 @@ function warnAutoClaimed(task: Task, autoClaimed: boolean): void {
   if (autoClaimed && task.assignee) {
     warn(`Auto-claimed ${task.id} for session ${task.assignee}`);
   }
+}
+
+function buildClaimContinuationInput(previous: Task | undefined, claimed: Task) {
+  const previousAgent = deriveAgentFromAssignee(previous?.assignee, previous?.updatedAt ?? claimed.updatedAt);
+  const nextAgent = deriveAgentFromAssignee(claimed.assignee, claimed.updatedAt);
+
+  if (previous?.assignee && previous.assignee !== claimed.assignee && nextAgent) {
+    return {
+      task: claimed,
+      summary: {
+        currentState: "Task claimed and ready to continue.",
+      },
+      event: {
+        kind: "agent_takeover" as const,
+        at: claimed.updatedAt,
+        summary: `${nextAgent.type} resumed this task from ${previousAgent?.type ?? previous.assignee}`,
+        reason: "claim" as const,
+        ...(previousAgent ? { from: previousAgent } : {}),
+        to: nextAgent,
+      },
+    };
+  }
+
+  return {
+    task: claimed,
+    summary: {
+      currentState: "Task claimed and ready to start.",
+      nextAction: `Start ${claimed.title}.`,
+    },
+    event: {
+      kind: "snapshot" as const,
+      at: claimed.updatedAt,
+      summary: claimed.assignee ? `Claimed by ${claimed.assignee}` : "Claimed",
+      currentState: "Task claimed and ready to start.",
+    },
+  };
+}
+
+function buildUpdateContinuationInput(
+  previous: Task | undefined,
+  updated: Task,
+  patch: UpdateTaskInput,
+  autoClaimed: boolean,
+  edits: ContinuationEditInput,
+  keyDecisions: readonly string[],
+  at: string,
+) {
+  if (updated.status === "completed") {
+    const closeSummary = updated.closeReason
+      ? `Completed: ${updated.closeReason}`
+      : `Completed: ${updated.title}`;
+    return {
+      task: updated,
+      summary: {
+        lastActiveAt: at,
+        currentState: closeSummary,
+        nextAction: "Review the completed task and decide whether follow-up work is needed.",
+        keyDecisions,
+        activeAgent: null,
+      },
+      events: [
+        {
+          kind: "task_completed" as const,
+          at,
+          summary: closeSummary,
+          ...(updated.closeReason ? { reason: updated.closeReason } : {}),
+        },
+      ],
+    };
+  }
+
+  if (patch.status === "in_progress" && previous?.status !== "in_progress") {
+    const currentState = edits.currentState ?? (updated.description?.trim().length
+      ? updated.description!.trim()
+      : `Working on ${updated.title}`);
+    const nextAction = edits.nextAction ?? currentState;
+    return {
+      task: updated,
+      summary: {
+        lastActiveAt: at,
+        currentState,
+        nextAction,
+        keyDecisions,
+      },
+      events: [
+        {
+          kind: "snapshot" as const,
+          at,
+          summary: autoClaimed ? "Auto-claimed and started work" : "Started work",
+          currentState,
+        },
+        ...(edits.nextAction
+          ? [{
+              kind: "next_action_set" as const,
+              at,
+              summary: "Next action updated",
+              nextAction,
+            }]
+          : []),
+        ...buildDecisionEvents(edits, at),
+      ],
+    };
+  }
+
+  const currentState = edits.currentState ?? (patch.description ?? patch.title
+    ? (updated.description?.trim().length
+        ? updated.description!.trim()
+        : `Working on ${updated.title}`)
+    : undefined);
+  const nextAction = edits.nextAction;
+  const updateSummary = currentState
+    ? (patch.description ?? patch.title ? "Task summary updated" : "Progress snapshot updated")
+    : "Task metadata updated";
+
+  return {
+    task: updated,
+    summary: {
+      lastActiveAt: at,
+      ...(currentState !== undefined ? { currentState } : {}),
+      ...(nextAction !== undefined ? { nextAction } : {}),
+      keyDecisions,
+    },
+    events: [
+      ...(currentState !== undefined
+        ? [{
+            kind: "snapshot" as const,
+            at,
+            summary: updateSummary,
+            currentState,
+          }]
+        : []),
+      ...(nextAction !== undefined
+        ? [{
+            kind: "next_action_set" as const,
+            at,
+            summary: "Next action updated",
+            nextAction,
+          }]
+        : []),
+      ...buildDecisionEvents(edits, at),
+    ],
+  };
+}
+
+async function applyUpdateContinuation(
+  deps: Parameters<typeof syncTaskContinuation>[0],
+  previous: Task | undefined,
+  updated: Task,
+  patch: UpdateTaskInput,
+  autoClaimed: boolean,
+  edits: ContinuationEditInput,
+): Promise<void> {
+  const at = patch.status === undefined && !hasAnyPatchField(patch)
+    ? new Date().toISOString()
+    : updated.updatedAt;
+  const existing = await loadTaskContinuationSummary(deps.continuationStore, updated.id);
+  const keyDecisions = mergeDecisionEdits(existing?.keyDecisions ?? [], edits);
+  const input = buildUpdateContinuationInput(previous, updated, patch, autoClaimed, edits, keyDecisions, at);
+  const summary = buildTaskContinuationSummary(updated, existing, input.summary);
+
+  if (updated.status === "completed") {
+    await deps.continuationStore.archiveCompleted(summary);
+  } else {
+    await deps.continuationStore.upsertActive(summary);
+  }
+
+  for (const event of input.events) {
+    await deps.continuationHistory.append(updated.id, event);
+  }
+}
+
+function parseContinuationEdits(opts: {
+  currentState?: unknown;
+  nextAction?: unknown;
+  addDecision?: unknown;
+  removeDecision?: unknown;
+}): ContinuationEditInput {
+  return {
+    ...(typeof opts.currentState === "string" && opts.currentState.trim().length > 0
+      ? { currentState: opts.currentState.trim() }
+      : {}),
+    ...(typeof opts.nextAction === "string" && opts.nextAction.trim().length > 0
+      ? { nextAction: opts.nextAction.trim() }
+      : {}),
+    addDecisions: parseList(typeof opts.addDecision === "string" ? opts.addDecision : undefined) ?? [],
+    removeDecisions: parseList(typeof opts.removeDecision === "string" ? opts.removeDecision : undefined) ?? [],
+  };
+}
+
+function hasContinuationEdits(edits: ContinuationEditInput): boolean {
+  return edits.currentState !== undefined
+    || edits.nextAction !== undefined
+    || edits.addDecisions.length > 0
+    || edits.removeDecisions.length > 0;
+}
+
+function mergeDecisionEdits(
+  existing: readonly string[],
+  edits: ContinuationEditInput,
+): readonly string[] {
+  const next = new Set(existing);
+  for (const decision of edits.addDecisions) {
+    next.add(decision);
+  }
+  for (const decision of edits.removeDecisions) {
+    next.delete(decision);
+  }
+  return [...next];
+}
+
+function buildDecisionEvents(edits: ContinuationEditInput, at: string) {
+  return [
+    ...edits.addDecisions.map((decision) => ({
+      kind: "decision" as const,
+      at,
+      summary: `Decision added: ${decision}`,
+      decision,
+      active: true,
+    })),
+    ...edits.removeDecisions.map((decision) => ({
+      kind: "decision" as const,
+      at,
+      summary: `Decision removed: ${decision}`,
+      decision,
+      active: false,
+    })),
+  ];
 }
 
 function registerReadyCommand(taskCmd: Command, program: Command): void {

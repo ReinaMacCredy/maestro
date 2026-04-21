@@ -37,6 +37,7 @@ import {
   taskClaimOwnedByDifferentSession,
   taskNotClaimed,
   taskNotFound,
+  taskReopenRequiresCompletedStatus,
   unknownBlocker,
 } from "../domain/task-errors.js";
 import { MaestroError } from "@/shared/errors.js";
@@ -476,6 +477,33 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
 
       await this.writeAll(tasks);
       return released;
+    });
+  }
+
+  async reopen(id: string): Promise<Task> {
+    return this.withLock(async () => {
+      const tasks = await this.readAll();
+      const existing = tasks.get(id);
+      if (!existing) {
+        throw taskNotFound(id);
+      }
+      if (existing.status !== "completed") {
+        throw taskReopenRequiresCompletedStatus(id);
+      }
+
+      const now = new Date().toISOString();
+      const reopened: Task = {
+        ...existing,
+        status: "pending",
+        assignee: undefined,
+        claimedAt: undefined,
+        closeReason: undefined,
+        updatedAt: now,
+      };
+
+      tasks.set(id, reopened);
+      await this.writeAll(tasks);
+      return reopened;
     });
   }
 

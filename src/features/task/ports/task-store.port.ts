@@ -65,6 +65,9 @@ export interface TaskStorePort extends TaskQueryPort {
   /** Release unresolved tasks owned by a session back to the pending queue. */
   releaseOwned(sessionId: string): Promise<readonly Task[]>;
 
+  /** Reopen a completed task back into the pending queue. */
+  reopen(id: string): Promise<Task>;
+
   /**
    * Look up a stored batch receipt for idempotency replay.
    *

@@ -1,0 +1,153 @@
+import { beforeEach, describe, expect, it } from "bun:test";
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { FsLaunchStoreAdapter, pickupHandoff } from "@/features/handoff";
+import {
+  FsTaskContinuationHistoryStoreAdapter,
+  FsTaskContinuationStoreAdapter,
+  JsonlTaskStoreAdapter,
+  claimTask,
+  createTask,
+  syncTaskContinuation,
+  updateTask,
+} from "@/features/task";
+
+describe("pickupHandoff", () => {
+  let tmpDir: string;
+  let launchStore: FsLaunchStoreAdapter;
+  let taskStore: JsonlTaskStoreAdapter;
+  let continuationStore: FsTaskContinuationStoreAdapter;
+  let continuationHistory: FsTaskContinuationHistoryStoreAdapter;
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), "handoff-pickup-usecase-"));
+    launchStore = new FsLaunchStoreAdapter(tmpDir);
+    taskStore = new JsonlTaskStoreAdapter(tmpDir);
+    continuationStore = new FsTaskContinuationStoreAdapter(tmpDir);
+    continuationHistory = new FsTaskContinuationHistoryStoreAdapter(tmpDir);
+  });
+
+  it("consumes the handoff, force-claims the linked task, and records pickup history", async () => {
+    const task = await createTask(taskStore, { title: "Resume me" });
+    await claimTask(taskStore, task.id, { sessionId: "codex-old-session" });
+    const started = (await updateTask(
+      taskStore,
+      task.id,
+      { status: "in_progress" },
+      { sessionId: "codex-old-session" },
+    )).task;
+    await syncTaskContinuation(
+      {
+        continuationStore,
+        continuationHistory,
+      },
+      {
+        task: started,
+        summary: {
+          currentState: "Existing state before handoff pickup",
+          nextAction: "Keep working on the task",
+        },
+      },
+    );
+
+    const launch = await launchStore.create({
+      task: "Pick this up",
+      name: "[Handoff] Pick this up",
+      agent: "claude",
+      model: "opus",
+      wait: false,
+      sourceDir: tmpDir,
+      targetDir: tmpDir,
+      refs: { taskId: task.id },
+      createdByAgent: "codex",
+      createdBySessionId: "old-session",
+      prompt: "## Task\n\nPick this up\n",
+    });
+
+    const result = await pickupHandoff(
+      {
+        launchStore,
+        taskStore,
+        continuationStore,
+        continuationHistory,
+      },
+      {
+        id: launch.id,
+        actorAgent: "claude",
+        actorSessionId: "pickup-1",
+        ownerId: "claude-pickup-1",
+      },
+    );
+
+    expect(result.record).toMatchObject({
+      id: launch.id,
+      pickedUpByAgent: "claude",
+      pickedUpBySessionId: "pickup-1",
+    });
+
+    const resumed = await taskStore.get(task.id);
+    expect(resumed).toMatchObject({
+      status: "in_progress",
+      assignee: "claude-pickup-1",
+    });
+
+    const summary = await continuationStore.getActive(task.id);
+    expect(summary?.currentState).toContain(`Resumed from handoff ${launch.id}`);
+    expect(summary?.nextAction).toBe("Keep working on the task");
+
+    const history = await continuationHistory.listRecent(task.id, 5);
+    expect(history.map((event) => event.kind)).toContain("handoff_picked_up");
+  });
+
+  it("rejects pickup when the linked task has already completed", async () => {
+    const task = await createTask(taskStore, { title: "Done already" });
+    const completed = (await updateTask(taskStore, task.id, { status: "completed", reason: "done" })).task;
+    await syncTaskContinuation(
+      {
+        continuationStore,
+        continuationHistory,
+      },
+      {
+        task: completed,
+        summary: {
+          currentState: "Completed already",
+          nextAction: "Nothing left to do",
+          activeAgent: null,
+        },
+      },
+    );
+
+    const launch = await launchStore.create({
+      task: "Should fail",
+      name: "[Handoff] Should fail",
+      agent: "codex",
+      model: "gpt-5.4",
+      wait: false,
+      sourceDir: tmpDir,
+      targetDir: tmpDir,
+      refs: { taskId: task.id },
+      prompt: "## Task\n\nShould fail\n",
+    });
+
+    await expect(
+      pickupHandoff(
+        {
+          launchStore,
+          taskStore,
+          continuationStore,
+          continuationHistory,
+        },
+        {
+          id: launch.id,
+          actorAgent: "codex",
+          actorSessionId: "pickup-2",
+          ownerId: "codex-pickup-2",
+        },
+      ),
+    ).rejects.toThrow("already completed");
+
+    const reloaded = await launchStore.get(launch.id);
+    expect(reloaded?.consumedAt).toBeUndefined();
+  });
+});

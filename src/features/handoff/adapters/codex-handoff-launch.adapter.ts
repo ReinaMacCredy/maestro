@@ -6,7 +6,7 @@ import type {
 import { runLoggedCommand } from "@/shared/lib/shell.js";
 
 export class CodexHandoffLaunchAdapter implements HandoffLaunchPort {
-  readonly provider = "codex" as const;
+  readonly agent = "codex" as const;
 
   async launch(request: HandoffLaunchRequest): Promise<HandoffLaunchResult> {
     const command = [

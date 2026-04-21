@@ -6,7 +6,7 @@ This is the final reference for mission planning. Once the mission exists and th
 
 ```bash
 maestro handoff "<task>" \
-  [--provider codex|claude] \
+  [--agent codex|claude] \
   [--model <model>] \
   [--worktree [slug]] \
   [--base <branch>] \
@@ -15,14 +15,14 @@ maestro handoff "<task>" \
   [--json]
 ```
 
-## Provider mapping
+## Agent mapping
 
 Be explicit in the drafted command even though Codex is the CLI default.
 
-| Feature `agentType` | Provider flag |
+| Feature `agentType` | Agent flag |
 |---|---|
-| `codex-cli` | `--provider codex` |
-| `claude-code` | `--provider claude` |
+| `codex-cli` | `--agent codex` |
+| `claude-code` | `--agent claude` |
 | `subagent` | Do not draft a native handoff command for this feature |
 | `human` | Do not draft a native handoff command for this feature |
 
@@ -65,7 +65,7 @@ Codex implementation:
 ```bash
 maestro handoff \
   "Implement feature auth-impl for mission mis_01h8k2f9. Build the first working authentication slice and run the listed verification steps before stopping." \
-  --provider codex
+  --agent codex
 ```
 
 Claude review in a sibling worktree:
@@ -73,7 +73,7 @@ Claude review in a sibling worktree:
 ```bash
 maestro handoff \
   "Review feature auth-impl for mission mis_01h8k2f9. Check for regressions, missing tests, and scope drift before stopping." \
-  --provider claude \
+  --agent claude \
   --worktree auth-review
 ```
 
@@ -82,7 +82,7 @@ Automation-friendly foreground run:
 ```bash
 maestro handoff \
   "Finish feature auth-impl for mission mis_01h8k2f9 and return only after the verification steps pass." \
-  --provider codex \
+  --agent codex \
   --wait \
   --json
 ```
@@ -90,7 +90,7 @@ maestro handoff \
 ## Common mistakes
 
 - Drafting the command for a `subagent` or `human` feature
-- Relying on the default provider instead of writing the explicit mapping
+- Relying on the default agent instead of writing the explicit mapping
 - Using `--base` without `--worktree`
 - Writing a vague task string that omits the mission or feature anchor
 - Auto-launching the command inside the planning skill instead of handing it back to the operator

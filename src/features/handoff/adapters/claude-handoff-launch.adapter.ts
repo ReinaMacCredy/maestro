@@ -6,7 +6,7 @@ import type {
 import { runLoggedCommand } from "@/shared/lib/shell.js";
 
 export class ClaudeHandoffLaunchAdapter implements HandoffLaunchPort {
-  readonly provider = "claude" as const;
+  readonly agent = "claude" as const;
 
   async launch(request: HandoffLaunchRequest): Promise<HandoffLaunchResult> {
     const command = [

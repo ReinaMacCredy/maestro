@@ -218,16 +218,17 @@ Launch a fresh Codex run for the next implementation slice:
 ```bash
 maestro handoff \
   "Implement auth-impl for mission <mission-id> and run the listed verification steps before stopping" \
-  --provider codex
+  --agent codex
 ```
 
-Launches are detached by default. Maestro persists the handoff under `.maestro/launches/<id>/` and returns the launch record with the prompt path, log path, target directory, and provider details.
+Launches are detached by default. Maestro persists the handoff under `.maestro/launches/<id>/` and returns the launch record with the prompt path, log path, target directory, linked task id, and agent details.
 
 Useful variants:
 
 ```bash
-maestro handoff "Review auth-impl before merge" --provider claude --worktree auth-review
-maestro handoff "Finish auth-impl and wait for the result" --provider codex --wait --json
+maestro handoff "Review auth-impl before merge" --agent claude --worktree auth-review
+maestro handoff "Finish auth-impl and wait for the result" --agent codex --wait --json
+maestro handoff pickup --id <handoff-id> --json
 ```
 
 ### 6. Track progress, validate, and seal
@@ -243,16 +244,17 @@ maestro milestone seal implement --mission <mission-id>
 
 ## Handoffs
 
-`maestro handoff "<task>"` builds a self-contained markdown brief and launches a fresh Codex or Claude run from the current repo state. Every launch is persisted under `.maestro/launches/<id>/` so the operator can inspect exactly what was sent and what the child process printed.
+`maestro handoff "<task>"` builds a self-contained markdown brief from the current repo state plus the linked task continuation, then launches a fresh Codex or Claude run. Every launch is persisted under `.maestro/launches/<id>/` so the operator can inspect exactly what was sent and what the child process printed. `maestro handoff pickup` consumes one open packet and immediately takes over the linked task.
 
 ### What a launch contains
 
 A launch record always includes:
 
-- `id`, `provider`, and `model`
+- `id`, `agent`, and `model`
 - `status`: `launching`, `launched`, `completed`, or `failed`
 - `targetDir`: the directory handed to the external agent
 - `promptPath`, `outputPath`, and the exact launched `command`
+- task and takeover metadata such as `refs.taskId`, `createdByAgent`, `pickedUpByAgent`, and `consumedAt`
 - optional `worktree` metadata when `--worktree` is used
 - optional `pid` and `exitCode`, depending on detached vs `--wait` mode
 
@@ -271,6 +273,7 @@ The prompt itself is stored separately as markdown. Maestro always renders the s
 
 - If exactly one actionable feature exists in the active mission, Maestro anchors the brief to that mission, milestone, feature, assertions, agent prompt or report artifacts, and the current git state.
 - Otherwise it falls back to repository context: current branch, recent commits, and changed files.
+- If the handoff is linked to an active task continuation, Maestro injects the saved `currentState`, `nextAction`, active decisions, and recent local timeline into the prompt before launch.
 - When `--worktree` is used, Maestro creates the sibling worktree first and appends that worktree path and branch information to the `Constraints` section.
 
 ### Launch status flow
@@ -278,8 +281,9 @@ The prompt itself is stored separately as markdown. Maestro always renders the s
 ![Launch status flow](assets/diagrams/readme-launch-status.svg)
 
 - Default mode returns as soon as the child process is started and records status `launched`.
-- `--wait` blocks until the provider exits and records `completed` or `failed`.
+- `--wait` blocks until the agent exits and records `completed` or `failed`.
 - `--json` prints the persisted launch record for automation or debugging.
+- `handoff pickup` atomically consumes a packet on first pickup and records the new active agent on the linked task continuation.
 
 Standalone diagram source: [`readme-launch-status.html`](assets/diagrams/readme-launch-status.html)
 
@@ -290,7 +294,7 @@ Default Codex launch:
 ```bash
 maestro handoff \
   "Implement auth-impl for mission <mission-id> and verify the touched surface area" \
-  --provider codex
+  --agent codex
 ```
 
 Claude launch in a sibling worktree:
@@ -298,7 +302,7 @@ Claude launch in a sibling worktree:
 ```bash
 maestro handoff \
   "Review auth-impl for regressions and missing tests" \
-  --provider claude \
+  --agent claude \
   --worktree auth-review
 ```
 
@@ -307,12 +311,12 @@ Foreground automation-friendly launch:
 ```bash
 maestro handoff \
   "Finish auth-impl and return only after the tests pass" \
-  --provider codex \
+  --agent codex \
   --wait \
   --json
 ```
 
-Use `--model` to override the provider default (`gpt-5.4` for Codex, `opus` for Claude), `--name` to label the launch, and `--base` when you need a specific base branch for a worktree handoff.
+Use `--model` to override the agent default (`gpt-5.4` for Codex, `opus` for Claude), `--name` to label the launch, and `--base` when you need a specific base branch for a worktree handoff. Use `maestro handoff pickup` to consume a packet and immediately take over its linked task.
 
 ## Common Commands
 
@@ -327,7 +331,8 @@ Use `--model` to override the provider default (`gpt-5.4` for Codex, `opus` for 
 | `maestro feature prompt <feature-id> --mission <mission-id>` | Generate the next agent prompt. |
 | `maestro feature update <feature-id> --mission <mission-id> --status <status>` | Advance a feature through `pending`, `assigned`, `in-progress`, `review`, `done`, or `blocked`. |
 | `maestro reply write <feature-id>` | Record an agent reply (outcome + optional report) for a feature. |
-| `maestro handoff "<task>" --provider <provider>` | Build a markdown brief from current repo or mission context and launch a fresh agent run. |
+| `maestro handoff "<task>" --agent <agent>` | Build a markdown brief from current repo or mission context and launch a fresh agent run. |
+| `maestro handoff pickup [--id <handoff-id>]` | Consume one open handoff packet and immediately take over its linked task. |
 | `maestro handoff "<task>" --worktree [slug] --wait --json` | Launch in a sibling worktree, wait for completion, and return structured metadata. |
 | `maestro mission-control --preview` | Render a read-only dashboard preview in the terminal. |
 | `maestro mission-control --json` | Get a machine-readable snapshot of mission state. |
@@ -335,6 +340,8 @@ Use `--model` to override the provider default (`gpt-5.4` for Codex, `opus` for 
 | `maestro task ready` | List actionable pending tasks with no unresolved blockers. |
 | `maestro task claim <id>` | Take ownership of a task for the current session. |
 | `maestro task update <id> --status in_progress` / `--status completed --reason "..."` | Start or finish a task. |
+| `maestro task update <id> --current-state "..." --next-action "..." --add-decision "..."` | Refresh the resumable continuation summary for the next agent. |
+| `maestro task reopen <id>` | Move a completed task back to the pending queue and restore its continuation summary. |
 | `maestro task block <id> <blockedTaskIds...>` | Record that one task blocks others. |
 | `maestro principle list` / `principle add` | Inspect or register a behavioral principle. |
 | `maestro bundle export <mission-id> --out ./review.mission.tar.gz` | Package a mission + artifacts as a portable archive. |

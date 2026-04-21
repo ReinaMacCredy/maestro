@@ -197,6 +197,73 @@ describe("compiled task feature E2E", () => {
   );
 
   it(
+    "updates resumable continuation state and decision history through task update",
+    async () => {
+      const id = (await runCompiled(["task", "q", "resume flow"], tmpDir)).stdout;
+      await runCompiled(["task", "claim", id, "--session", "codex-session-a", "--json"], tmpDir);
+      await runCompiled(["task", "update", id, "--status", "in_progress", "--session", "codex-session-a", "--json"], tmpDir);
+
+      const updated = await runCompiled(
+        [
+          "task",
+          "update",
+          id,
+          "--session",
+          "codex-session-a",
+          "--current-state",
+          "JWT parsing is fixed; admin role mapping still fails.",
+          "--next-action",
+          "Patch role mapping and rerun auth tests.",
+          "--add-decision",
+          "Keep middleware signature unchanged,Do not touch the session store",
+          "--json",
+        ],
+        tmpDir,
+      );
+      expect(expectJson<{ id: string; status: string }>(updated)).toEqual(
+        expect.objectContaining({ id, status: "in_progress" }),
+      );
+
+      const summaryPath = join(tmpDir, ".maestro", "tasks", "continuations", "active", `${id}.json`);
+      const summary = JSON.parse(await readFile(summaryPath, "utf8")) as {
+        currentState: string;
+        nextAction: string;
+        keyDecisions: string[];
+      };
+      expect(summary).toMatchObject({
+        currentState: "JWT parsing is fixed; admin role mapping still fails.",
+        nextAction: "Patch role mapping and rerun auth tests.",
+        keyDecisions: [
+          "Keep middleware signature unchanged",
+          "Do not touch the session store",
+        ],
+      });
+
+      const shown = await runCompiled(["task", "show", id], tmpDir);
+      expect(shown.stdout).toContain("Current state: JWT parsing is fixed; admin role mapping still fails.");
+      expect(shown.stdout).toContain("Next action: Patch role mapping and rerun auth tests.");
+      expect(shown.stdout).toContain("Active decisions: Keep middleware signature unchanged | Do not touch the session store");
+
+      await runCompiled(
+        [
+          "task",
+          "update",
+          id,
+          "--session",
+          "codex-session-a",
+          "--remove-decision",
+          "Do not touch the session store",
+          "--json",
+        ],
+        tmpDir,
+      );
+      const narrowed = JSON.parse(await readFile(summaryPath, "utf8")) as { keyDecisions: string[] };
+      expect(narrowed.keyDecisions).toEqual(["Keep middleware signature unchanged"]);
+    },
+    SLOW_CLI_TIMEOUT_MS,
+  );
+
+  it(
     "rejects legacy ownership, completion, and dependency commands with migration guidance",
     async () => {
       const id = (await runCompiled(["task", "q", "legacy flags"], tmpDir)).stdout;
@@ -471,6 +538,35 @@ describe("compiled task feature E2E", () => {
       expect(byTitle.get("JWT password middleware")?.hints[0]?.sourceTaskId).toBe(pastId);
       expect(byTitle.get("JWT password middleware")?.hints[0]?.matchedKeywords).toContain("password");
       expect(byTitle.get("Protected routes")?.hints).toEqual([]);
+    },
+    SLOW_CLI_TIMEOUT_MS,
+  );
+
+  it(
+    "reopens a completed task and restores its active continuation summary",
+    async () => {
+      const id = (await runCompiled(["task", "q", "Resume the auth follow-up"], tmpDir)).stdout;
+      await runCompiled(
+        ["task", "update", id, "--status", "completed", "--reason", "shipped the first pass"],
+        tmpDir,
+      );
+
+      const completedSummaryPath = join(tmpDir, ".maestro", "tasks", "continuations", "completed", `${id}.json`);
+      expect(await Bun.file(completedSummaryPath).exists()).toBe(true);
+
+      const reopened = await runCompiled(["task", "reopen", id, "--json"], tmpDir);
+      expect(reopened.exitCode).toBe(0);
+      const reopenedTask = expectJson<{ status: string; closeReason?: string }>(reopened);
+      expect(reopenedTask.status).toBe("pending");
+      expect(reopenedTask).not.toHaveProperty("closeReason");
+
+      const activeSummaryPath = join(tmpDir, ".maestro", "tasks", "continuations", "active", `${id}.json`);
+      expect(await Bun.file(activeSummaryPath).exists()).toBe(true);
+      expect(await Bun.file(completedSummaryPath).exists()).toBe(false);
+
+      const shown = await runCompiled(["task", "show", id], tmpDir);
+      expect(shown.stdout).toContain("Task reopened and ready to resume.");
+      expect(shown.stdout).toContain("reopened:");
     },
     SLOW_CLI_TIMEOUT_MS,
   );

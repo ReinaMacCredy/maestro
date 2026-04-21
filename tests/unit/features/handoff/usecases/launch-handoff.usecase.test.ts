@@ -14,7 +14,7 @@ function makeLaunchStore(): LaunchStorePort & { readonly updates: HandoffLaunchR
         createdAt: "2026-04-20T00:00:00.000Z",
         task: input.task,
         name: input.name,
-        provider: input.provider,
+        agent: input.agent,
         model: input.model,
         status: "launching",
         wait: input.wait,
@@ -33,6 +33,9 @@ function makeLaunchStore(): LaunchStorePort & { readonly updates: HandoffLaunchR
       current = record;
       updates.push(record);
       return record;
+    },
+    async consume() {
+      throw new Error("not used");
     },
     async get() {
       return current;
@@ -71,11 +74,11 @@ function makeGit(): GitPort {
 }
 
 describe("launchHandoff", () => {
-  it("uses the provider default model and records a detached launch", async () => {
+  it("uses the agent default model and records a detached launch", async () => {
     const launchStore = makeLaunchStore();
     const launchCalls: Array<Parameters<HandoffLaunchPort["launch"]>[0]> = [];
     const codexLauncher: HandoffLaunchPort = {
-      provider: "codex",
+      agent: "codex",
       async launch(request) {
         launchCalls.push(request);
         return {
@@ -93,12 +96,12 @@ describe("launchHandoff", () => {
       launchStore,
       launchers: {
         codex: codexLauncher,
-        claude: { provider: "claude", async launch() { throw new Error("not used"); } },
+        claude: { agent: "claude", async launch() { throw new Error("not used"); } },
       },
     }, {
       cwd: "/tmp/project",
       task: "Investigate the failing bundle export",
-      provider: "codex",
+      agent: "codex",
       wait: false,
     });
 
@@ -119,13 +122,13 @@ describe("launchHandoff", () => {
         git: makeGit(),
         launchStore: makeLaunchStore(),
         launchers: {
-          codex: { provider: "codex", async launch() { throw new Error("not used"); } },
-          claude: { provider: "claude", async launch() { throw new Error("not used"); } },
+          codex: { agent: "codex", async launch() { throw new Error("not used"); } },
+          claude: { agent: "claude", async launch() { throw new Error("not used"); } },
         },
       }, {
         cwd: "/tmp/project",
         task: "Fail fast",
-        provider: "codex",
+        agent: "codex",
         wait: false,
         baseBranch: "main",
       }),
@@ -135,7 +138,7 @@ describe("launchHandoff", () => {
   it("creates a worktree and waits for a claude launch to finish", async () => {
     const launchStore = makeLaunchStore();
     const claudeLauncher: HandoffLaunchPort = {
-      provider: "claude",
+      agent: "claude",
       async launch(request) {
         expect(request.targetDir).toBe("/tmp/fix-handoff");
         expect(request.model).toBe("opus");
@@ -153,13 +156,13 @@ describe("launchHandoff", () => {
       git: makeGit(),
       launchStore,
       launchers: {
-        codex: { provider: "codex", async launch() { throw new Error("not used"); } },
+        codex: { agent: "codex", async launch() { throw new Error("not used"); } },
         claude: claudeLauncher,
       },
     }, {
       cwd: "/tmp/project",
       task: "Fix handoff worktree behavior",
-      provider: "claude",
+      agent: "claude",
       wait: true,
       worktree: "fix-handoff",
     });
@@ -186,7 +189,7 @@ describe("launchHandoff", () => {
         launchStore,
         launchers: {
           codex: {
-            provider: "codex",
+            agent: "codex",
             async launch() {
               return {
                 command: ["codex", "exec"],
@@ -194,12 +197,12 @@ describe("launchHandoff", () => {
               };
             },
           },
-          claude: { provider: "claude", async launch() { throw new Error("not used"); } },
+          claude: { agent: "claude", async launch() { throw new Error("not used"); } },
         },
       }, {
         cwd: "/tmp/project",
         task: "Fail loudly",
-        provider: "codex",
+        agent: "codex",
         wait: true,
       }),
     ).rejects.toThrow("codex handoff exited with code 7");
@@ -220,19 +223,19 @@ describe("launchHandoff", () => {
         launchStore,
         launchers: {
           codex: {
-            provider: "codex",
+            agent: "codex",
             async launch() {
               return {
                 command: ["codex", "exec"],
               };
             },
           },
-          claude: { provider: "claude", async launch() { throw new Error("not used"); } },
+          claude: { agent: "claude", async launch() { throw new Error("not used"); } },
         },
       }, {
         cwd: "/tmp/project",
         task: "Missing exit code",
-        provider: "codex",
+        agent: "codex",
         wait: true,
       }),
     ).rejects.toThrow("codex handoff did not report an exit code");

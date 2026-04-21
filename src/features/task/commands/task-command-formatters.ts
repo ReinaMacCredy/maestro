@@ -1,5 +1,6 @@
 import { formatRelativeAge } from "@/shared/version-format.js";
 import type { Task } from "../domain/task-types.js";
+import type { TaskShowView } from "../usecases/task-continuation.usecase.js";
 import type { TaskHint } from "../usecases/match-candidates.usecase.js";
 import type { ReadyTaskPage, TaskBriefing } from "../usecases/ready-tasks.usecase.js";
 
@@ -111,4 +112,57 @@ export function formatTaskDetail(task: Task): string[] {
   if (task.closeReason) lines.push(`  Close reason: ${task.closeReason}`);
 
   return lines;
+}
+
+export function formatTaskShowView(view: TaskShowView): string[] {
+  const lines = formatTaskDetail(view.task);
+  const summary = view.continuation;
+  if (!summary) {
+    return lines;
+  }
+
+  lines.push(`  Last active: ${summary.lastActiveAt}`);
+  if (summary.activeAgent) {
+    const sessionSuffix = summary.activeAgent.sessionId ? `/${summary.activeAgent.sessionId}` : "";
+    lines.push(`  Active agent: ${summary.activeAgent.type}${sessionSuffix}`);
+  }
+  lines.push(`  Current state: ${summary.currentState}`);
+  lines.push(`  Next action: ${summary.nextAction}`);
+  if (summary.keyDecisions.length > 0) {
+    lines.push(`  Active decisions: ${summary.keyDecisions.join(" | ")}`);
+  }
+
+  if (view.recentEvents.length === 0) {
+    lines.push(`  Recent timeline: no local timeline available`);
+    return lines;
+  }
+
+  lines.push(`  Recent timeline:`);
+  for (const event of view.recentEvents) {
+    lines.push(`    - ${event.at} ${formatContinuationEvent(event)}`);
+  }
+  return lines;
+}
+
+function formatContinuationEvent(event: TaskShowView["recentEvents"][number]): string {
+  switch (event.kind) {
+    case "snapshot":
+      return `snapshot: ${event.summary}`;
+    case "decision":
+      return `decision: ${event.summary}`;
+    case "next_action_set":
+      return `next action: ${event.summary}`;
+    case "blocker_set":
+      return `blocker change: ${event.summary}`;
+    case "handoff_created":
+      return `handoff created: ${event.handoffId} for ${event.agent}`;
+    case "handoff_picked_up":
+      return `handoff picked up: ${event.handoffId} by ${event.agent}`;
+    case "agent_takeover":
+      return `agent takeover: ${event.summary}`;
+    case "task_completed":
+      return `completed: ${event.summary}`;
+    case "task_reopened":
+      return `reopened: ${event.summary}`;
+  }
 }

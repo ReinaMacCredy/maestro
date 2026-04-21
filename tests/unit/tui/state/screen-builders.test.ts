@@ -47,7 +47,7 @@ function makeLaunch(id: string, overrides: Partial<HandoffLaunchRecord> = {}): H
     createdAt: "2026-01-01T00:00:00Z",
     task: `Task ${id}`,
     name: `Launch ${id}`,
-    provider: "codex",
+    agent: "codex",
     model: "gpt-5.4",
     status: "launched",
     wait: false,

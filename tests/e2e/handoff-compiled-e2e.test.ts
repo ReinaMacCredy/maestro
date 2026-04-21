@@ -84,16 +84,32 @@ async function waitForFile(path: string, timeoutMs = 2_000): Promise<void> {
   throw new Error(`Timed out waiting for file: ${path}`);
 }
 
+async function createActiveTask(
+  title: string,
+  sessionId = "codex-session-a",
+): Promise<string> {
+  const created = await runCompiled(["task", "q", title], tmpDir);
+  expect(created.exitCode).toBe(0);
+  const id = created.stdout.trim();
+  await runCompiled(["task", "claim", id, "--session", sessionId, "--json"], tmpDir);
+  await runCompiled(
+    ["task", "update", id, "--status", "in_progress", "--session", sessionId, "--json"],
+    tmpDir,
+  );
+  return id;
+}
+
 describe("compiled handoff launcher E2E", () => {
   it(
     "launches codex by default, writes prompt artifacts, and returns launch metadata",
     async () => {
+      const taskId = await createActiveTask("Investigate the bundle export regression");
       const argsPath = join(tmpDir, "codex-args.txt");
       const cwdPath = join(tmpDir, "codex-cwd.txt");
       const binDir = await installFakeProvider("codex", argsPath, cwdPath);
 
       const result = await runCompiled(
-        ["handoff", "Investigate the bundle export regression", "--json"],
+        ["handoff", "Investigate the bundle export regression", "--task-id", taskId, "--json"],
         tmpDir,
         {
           env: {
@@ -107,18 +123,20 @@ describe("compiled handoff launcher E2E", () => {
       expect(result.exitCode).toBe(0);
       const record = expectJson<{
         id: string;
-        provider: string;
+        agent: string;
         model: string;
         status: string;
         promptPath: string;
         outputPath: string;
         command: string[];
+        refs: { taskId?: string };
         pid?: number;
       }>(result);
 
-      expect(record.provider).toBe("codex");
+      expect(record.agent).toBe("codex");
       expect(record.model).toBe("gpt-5.4");
       expect(record.status).toBe("launched");
+      expect(record.refs.taskId).toBe(taskId);
       expect(record.pid).toBeDefined();
 
       await waitForFile(argsPath);
@@ -127,9 +145,11 @@ describe("compiled handoff launcher E2E", () => {
       const prompt = await readFile(join(tmpDir, record.promptPath), "utf8");
       expect(prompt).toContain("## Task");
       expect(prompt).toContain("## Acceptance Criteria");
+      expect(prompt).toContain("Next action:");
 
       const launchMeta = await readFile(join(tmpDir, ".maestro", "launches", record.id, "launch.json"), "utf8");
-      expect(launchMeta).toContain('"provider": "codex"');
+      expect(launchMeta).toContain('"agent": "codex"');
+      expect(launchMeta).toContain(`"taskId": "${taskId}"`);
 
       const loggedArgs = await readFile(argsPath, "utf8");
       expect(loggedArgs).toContain("exec");
@@ -146,6 +166,7 @@ describe("compiled handoff launcher E2E", () => {
   it(
     "launches claude in a sibling worktree and waits for completion when requested",
     async () => {
+      const taskId = await createActiveTask("Finish the worktree handoff flow");
       const argsPath = join(tmpDir, "claude-args.txt");
       const cwdPath = join(tmpDir, "claude-cwd.txt");
       const binDir = await installFakeProvider("claude", argsPath, cwdPath);
@@ -154,7 +175,9 @@ describe("compiled handoff launcher E2E", () => {
         [
           "handoff",
           "Finish the worktree handoff flow",
-          "--provider",
+          "--task-id",
+          taskId,
+          "--agent",
           "claude",
           "--worktree",
           "finish-worktree",
@@ -174,7 +197,7 @@ describe("compiled handoff launcher E2E", () => {
       expect(result.exitCode).toBe(0);
       const record = expectJson<{
         id: string;
-        provider: string;
+        agent: string;
         model: string;
         status: string;
         exitCode?: number;
@@ -186,7 +209,7 @@ describe("compiled handoff launcher E2E", () => {
         outputPath: string;
       }>(result);
 
-      expect(record.provider).toBe("claude");
+      expect(record.agent).toBe("claude");
       expect(record.model).toBe("opus");
       expect(record.status).toBe("completed");
       expect(record.exitCode).toBe(0);
@@ -194,7 +217,8 @@ describe("compiled handoff launcher E2E", () => {
         branch: "claude/finish-worktree",
         baseBranch: "main",
       });
-      expect(record.worktree?.path.endsWith(`${basename(tmpDir)}-finish-worktree`)).toBe(true);
+      expect(record.worktree?.path).toBeDefined();
+      expect(record.worktree!.path.endsWith(`${basename(tmpDir)}-finish-worktree`)).toBe(true);
 
       const loggedArgs = await readFile(argsPath, "utf8");
       expect(loggedArgs).toContain("--print");
@@ -203,7 +227,7 @@ describe("compiled handoff launcher E2E", () => {
       expect(loggedArgs).toContain("opus");
 
       const loggedCwd = (await readFile(cwdPath, "utf8")).trim();
-      expect(loggedCwd).toBe(record.worktree?.path);
+      expect(loggedCwd).toBe(record.worktree!.path);
 
       const outputLog = await readFile(join(tmpDir, record.outputPath), "utf8");
       expect(outputLog).toContain("claude output");
@@ -214,6 +238,7 @@ describe("compiled handoff launcher E2E", () => {
   it(
     "creates a sibling worktree from the repo root when launched from a nested cwd",
     async () => {
+      const taskId = await createActiveTask("Create the nested cwd worktree");
       const argsPath = join(tmpDir, "claude-nested-args.txt");
       const cwdPath = join(tmpDir, "claude-nested-cwd.txt");
       const nestedDir = join(tmpDir, "nested", "deeper");
@@ -224,7 +249,9 @@ describe("compiled handoff launcher E2E", () => {
         [
           "handoff",
           "Create the nested cwd worktree",
-          "--provider",
+          "--task-id",
+          taskId,
+          "--agent",
           "claude",
           "--worktree",
           "nested-cwd",
@@ -254,22 +281,24 @@ describe("compiled handoff launcher E2E", () => {
         branch: "claude/nested-cwd",
         baseBranch: "main",
       });
-      expect(record.worktree?.path.endsWith(`${basename(tmpDir)}-nested-cwd`)).toBe(true);
-      expect(record.worktree?.path.includes(`${basename(nestedDir)}-nested-cwd`)).toBe(false);
+      expect(record.worktree?.path).toBeDefined();
+      expect(record.worktree!.path.endsWith(`${basename(tmpDir)}-nested-cwd`)).toBe(true);
+      expect(record.worktree!.path.includes(`${basename(nestedDir)}-nested-cwd`)).toBe(false);
 
       const loggedCwd = (await readFile(cwdPath, "utf8")).trim();
-      expect(loggedCwd).toBe(record.worktree?.path);
+      expect(loggedCwd).toBe(record.worktree!.path);
     },
     SLOW_CLI_TIMEOUT_MS,
   );
 
   it(
-    "fails the CLI in --wait mode when the provider exits non-zero",
+    "fails the CLI in --wait mode when the agent exits non-zero",
     async () => {
+      const taskId = await createActiveTask("Fail the waited handoff");
       const binDir = await installFailingProvider("claude");
 
       const result = await runCompiled(
-        ["handoff", "Fail the waited handoff", "--provider", "claude", "--wait", "--json"],
+        ["handoff", "Fail the waited handoff", "--task-id", taskId, "--agent", "claude", "--wait", "--json"],
         tmpDir,
         {
           env: {
@@ -292,6 +321,56 @@ describe("compiled handoff launcher E2E", () => {
       };
       expect(launchRecord.status).toBe("failed");
       expect(launchRecord.exitCode).toBe(7);
+    },
+    SLOW_CLI_TIMEOUT_MS,
+  );
+
+  it(
+    "consumes a handoff packet once and updates the linked task owner on pickup",
+    async () => {
+      const taskId = await createActiveTask("Transfer this task", "codex-session-a");
+      const argsPath = join(tmpDir, "codex-pickup-args.txt");
+      const cwdPath = join(tmpDir, "codex-pickup-cwd.txt");
+      const binDir = await installFakeProvider("codex", argsPath, cwdPath);
+
+      const launched = await runCompiled(
+        ["handoff", "Transfer this task", "--task-id", taskId, "--json"],
+        tmpDir,
+        {
+          env: {
+            PATH: `${binDir}:${process.env.PATH ?? ""}`,
+            FAKE_PROVIDER_ARGS: argsPath,
+            FAKE_PROVIDER_CWD: cwdPath,
+          },
+        },
+      );
+      expect(launched.exitCode).toBe(0);
+      const record = expectJson<{ id: string }>(launched);
+
+      const picked = await runCompiled(
+        ["handoff", "pickup", "--id", record.id, "--agent", "claude", "--session", "pickup-1", "--json"],
+        tmpDir,
+      );
+      expect(picked.exitCode).toBe(0);
+      const consumed = expectJson<{ pickedUpByAgent?: string; pickedUpBySessionId?: string; consumedAt?: string }>(picked);
+      expect(consumed.pickedUpByAgent).toBe("claude");
+      expect(consumed.pickedUpBySessionId).toBe("pickup-1");
+      expect(consumed.consumedAt).toBeDefined();
+
+      const task = expectJson<{ assignee?: string; status: string }>(
+        await runCompiled(["task", "show", taskId, "--json"], tmpDir),
+      );
+      expect(task).toMatchObject({
+        assignee: "claude-pickup-1",
+        status: "in_progress",
+      });
+
+      const secondPickup = await runCompiled(
+        ["handoff", "pickup", "--id", record.id, "--agent", "codex", "--session", "pickup-2", "--json"],
+        tmpDir,
+      );
+      expect(secondPickup.exitCode).not.toBe(0);
+      expect(expectJson<{ error: string }>(secondPickup).error).toContain("already consumed");
     },
     SLOW_CLI_TIMEOUT_MS,
   );

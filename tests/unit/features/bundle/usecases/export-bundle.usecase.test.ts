@@ -105,6 +105,7 @@ const replyStore: ReplyStorePort = {
 const launchStore: LaunchStorePort = {
   async create(): Promise<HandoffLaunchRecord> { throw new Error("nope"); },
   async update(record) { return record; },
+  async consume(): Promise<HandoffLaunchRecord> { throw new Error("nope"); },
   async get() { return undefined; },
   async list() { return []; },
   resolveArtifactPath(relativePath: string) { return join(projectDir, relativePath); },

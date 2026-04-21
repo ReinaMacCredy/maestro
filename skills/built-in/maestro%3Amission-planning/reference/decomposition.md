@@ -50,7 +50,7 @@ Verification steps are what the agent runs to prove the feature is done. They mu
 
 Good verification:
 - `bun test tests/unit/auth/login.test.ts passes`
-- `maestro handoff --help shows --provider and --worktree flags`
+- `maestro handoff --help shows --agent and --worktree flags`
 - `grep -r "TODO.*auth" src/ returns zero hits`
 
 Bad verification:

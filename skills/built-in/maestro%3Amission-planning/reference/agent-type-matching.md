@@ -42,7 +42,7 @@ Self-review is pathologically lenient. The Anthropic harness-engineering article
 - "Rename `AgentKind` to `AgentType` across `src/` and `tests/`." Pure mechanical rewrite.
 
 `codex-cli` — anti-example:
-- "Design a provider-selection policy for the handoff launcher." Requires taste and judgment. Hand to `claude-code`.
+- "Design a handoff agent-selection policy." Requires taste and judgment. Hand to `claude-code`.
 
 `subagent` — matches:
 - "List every file that imports `buildHandoffPrompt()` and group by directory." Discoverable, summary-shaped output.
