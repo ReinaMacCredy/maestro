@@ -312,6 +312,171 @@ maestro handoff \
 
 Use `--model` to override the agent default (`gpt-5.4` for Codex, `opus` for Claude), `--name` to label the launch, and `--base` when you need a specific base branch for a worktree handoff. Use `maestro handoff pickup` to consume a packet and immediately take over its linked task.
 
+## Task System
+
+Tasks are Maestro's lightweight, mutable issue graph for the daily queue. A task answers "what do I do next?"; a mission answers "what are we building?" Tasks live in `.maestro/tasks/tasks.jsonl`, are repo-tracked, and review like regular diffs.
+
+### Lifecycle
+
+```mermaid
+flowchart LR
+    pending -->|claim| in_progress
+    in_progress -->|unclaim| pending
+    in_progress -->|complete| completed
+    completed -.->|reopen| pending
+```
+
+- `pending` tasks sit in the queue.
+- `in_progress` tasks are claimed by exactly one session.
+- `completed` tasks are locked; edits or re-runs require `task reopen`, which restores the task and its continuation summary.
+- Legacy statuses (`open`, `blocked`, `deferred`, `closed`) still parse from older state files and collapse to `pending` or `completed` on read.
+
+Every task carries a `type` (`task`, `bug`, `feature`, `epic`, `chore`), a `priority` (`P0`-`P4`, default `P2`), freeform `labels`, optional `parentId`, ownership metadata (`assignee`, `claimedAt`, `lastActivityAt`), optional `contractId`, and an optional `receipt` (`summary`, `surprise`, `verifiedBy`) captured at completion.
+
+### Dependencies and blocking
+
+Blocking is symmetric and stored on both sides. Each task has a `blockedBy` list of prerequisites and a `blocks` list of dependents. Declaring that `A` blocks `B, C` atomically updates all three tasks.
+
+```bash
+maestro task block <id> <blockedTaskIds...>
+maestro task unblock <id> <blockedTaskIds...>
+maestro task create "..." --blocked-by <ids>
+```
+
+Rules enforced by the domain layer:
+
+- A task is **ready** only when every entry in its `blockedBy` is `completed` (or missing from the store). `task ready` returns exactly the pending, unblocked, unassigned set, ranked `P0`/`P1` first and then by creation time.
+- Status moves into `in_progress` or `completed` fail with a blocker error when any prerequisite is still open.
+- The retired `task deps add|remove` verbs now error and point to `task block` / `task unblock`.
+
+### Discovery
+
+| Command | Returns |
+|---|---|
+| `maestro task ready` | Pending, unblocked, unassigned tasks, `P0`/`P1` first. |
+| `maestro task mine` | Tasks claimed by the active session. |
+| `maestro task stuck` | `in_progress` tasks idle past `--older-than` (default `4h`). |
+| `maestro task similar <id>` | Tasks that look alike by title, labels, and contract scope. |
+| `maestro task list` | Full filter set: `--status`, `--priority`, `--type`, `--label`, `--parent`, `--assignee`, `--limit`. |
+
+### Ownership and claim
+
+Claiming is exclusive and session-scoped. Session IDs come from the `sessionDetection` config (Claude Code out of the box) or `--session <id>` when scripting.
+
+```bash
+maestro task claim <id>
+maestro task claim <id> --busy-check        # refuse if this session already owns open work
+maestro task claim <id> --force             # steal from another session
+maestro task claim <id> --stale-after 4h    # auto-release a dead owner's stale claim
+maestro task unclaim <id>                   # in_progress demotes to pending
+maestro task release-owned <sessionId>      # release everything a session held
+maestro task heartbeat <id>                 # bump lastActivityAt without other edits
+```
+
+`task update <id> --status in_progress` auto-claims an unassigned task for the current session, provided the session has no other open work (or `--force` is passed). This preserves the invariant that a session owns at most one in-flight task at a time.
+
+### Batch planning
+
+Agents can stage a whole queue upfront from one JSON file. References between tasks use a batch-local `name` slot that resolves to real ids inside a single atomic write.
+
+```bash
+maestro task plan --file plan.json
+maestro task plan --file - < plan.json
+maestro task plan --file plan.json --start scaffold    # auto-claim the named task
+maestro task plan --file plan.json --dry-run           # validate without writing
+```
+
+```json
+{
+  "batchId": "auth-slice",
+  "tasks": [
+    { "name": "scaffold", "title": "Scaffold auth module", "type": "chore", "priority": 2 },
+    { "name": "tests", "title": "Add login tests", "blockedBy": ["scaffold"] },
+    { "title": "Wire login route", "blockedBy": ["scaffold", "tests"], "labels": ["auth"] }
+  ]
+}
+```
+
+### Resumable continuation
+
+Every task keeps a continuation record at `.maestro/tasks/continuations/` describing where work stands. Agents read it on resume; every update refreshes it.
+
+Fields per task: `currentState`, `nextAction`, `keyDecisions`, `activeAgent`, `lastActiveAt`. An append-only event log captures `snapshot`, `decision`, `next_action_set`, `blocker_set`, `handoff_created`, `handoff_picked_up`, `agent_takeover`, `task_completed`, and `task_reopened` entries so the next session can trace how the task got here.
+
+```bash
+maestro task update <id> \
+  --current-state "Tests pass locally; rebased on main" \
+  --next-action "Open PR and request review" \
+  --add-decision "Use bcrypt over argon2 for parity with legacy" \
+  --remove-decision "Use JWTs in localStorage"
+```
+
+### Contracts
+
+A contract is a machine-checked agreement attached to a task: what to touch, what to avoid, and what "done" means. At completion, Maestro diffs `claimedAtCommit..HEAD` and renders a verdict.
+
+Lifecycle: `draft` -> `locked` or `amended` -> `fulfilled` or `broken`, with `discarded` as an early-exit from `draft`. A closed contract can be reopened alongside its task.
+
+```bash
+maestro task contract new <taskId> --editor "$EDITOR"   # or --from template.yaml
+maestro task contract edit <ref>
+maestro task contract lock <ref>                         # freeze scope + claim commit
+maestro task contract amend <ref>                        # record a post-lock change
+maestro task contract show <ref>
+maestro task contract list
+maestro task contract verdict <ref>                      # preview without closing
+maestro task contract discard <ref>                      # draft only
+maestro task contract reopen <ref>                       # after fulfilled/broken
+maestro task contract criteria mark <ref> <criterionId> --evidence "bun test"
+maestro task contract criteria add <ref> "New criterion text"
+maestro task contract criteria remove <ref> <criterionId>
+```
+
+A contract records:
+
+- `intent` -- one-sentence goal.
+- `scope` -- `filesExpected`, `filesForbidden`, optional `maxFilesTouched` cap.
+- `doneWhen[]` -- explicit criteria, each `manual` or `receipt-hint`, each markable with evidence.
+- `claimedAtCommit` -- git HEAD captured at lock; the verdict diffs against it.
+- `configSnapshot` -- strictness, overlap policy, anchor-rebase fallback, and stale-reclaim policy in effect at lock time.
+- `ownershipHistory` -- transfers from `claim --force` reclaims and `handoff pickup`.
+
+Completion gating: `task update --status completed` against a task with a locked contract closes the contract, renders a verdict, and fails completion when the verdict is broken and either `contracts.strict=true` is set or `--strict` is passed. Use `--no-contract` to complete without a contract when `contracts.default=required`.
+
+Relevant config (`.maestro/config.yaml`):
+
+```yaml
+contracts:
+  default: prompt              # required | prompt | optional
+  strict: false                # block completion on broken verdict
+  overlapPolicy: fail          # fail | annotate (active contract scope overlap)
+  rebaseFallback: best-effort  # best-effort | fail (when claimedAtCommit is missing)
+  defaultMaxFilesTouched: ~    # integer cap or unset
+  staleReclaimContractPolicy: inherit  # inherit | block (when taking over a stale claim)
+```
+
+### Task storage
+
+```text
+.maestro/tasks/
+├── tasks.jsonl                 # authoritative task graph (repo-tracked)
+├── contracts/                  # per-task locked contracts and verdicts (repo-tracked)
+├── contract-templates/         # reusable YAML drafts for `contract new --from`
+├── continuations/              # per-task resume summaries + event logs
+├── batches/                    # batch plan manifests
+├── candidates/                 # captured work candidates awaiting promotion
+└── local-history/              # per-machine audit log (ignored)
+```
+
+`tasks.jsonl`, `contracts/`, and `principles.jsonl` are intentionally repo-tracked so the queue and its policies review like any other code change. Local histories and candidate piles stay per-machine. Bound their growth with:
+
+```bash
+maestro task prune                       # keep the most recent 500 entries per kind
+maestro task prune --keep 100 --candidates-only
+maestro task prune --continuations-only --dry-run
+maestro task prune --all                 # purge both piles
+```
+
 ## Common Commands
 
 | Command | Use it when you want to... |
@@ -408,7 +573,12 @@ Maestro stores project-local state in `.maestro/` and user-level defaults in `~/
 │       └── agents/
 ├── tasks/
 │   ├── tasks.jsonl
-│   └── candidates/
+│   ├── contracts/
+│   ├── contract-templates/
+│   ├── continuations/
+│   ├── batches/
+│   ├── candidates/
+│   └── local-history/
 ├── principles.jsonl
 └── notes.json
 
