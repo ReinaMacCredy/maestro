@@ -51,6 +51,7 @@ describe("AGENT_INSTRUCTION_BLOCK", () => {
     expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract criteria remove <id> <criterionId>");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("--strict");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("--no-contract");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("Reopening a completed task relocks its contract");
   });
 
   it("mirrors contract guidance into the bootstrap AGENTS template", () => {
@@ -62,6 +63,7 @@ describe("AGENT_INSTRUCTION_BLOCK", () => {
     expect(agentsTemplate?.content).toContain("maestro task contract criteria mark <id> <criterionId> --met");
     expect(agentsTemplate?.content).toContain("--strict");
     expect(agentsTemplate?.content).toContain("stored verdict");
+    expect(agentsTemplate?.content).toContain("relocks its contract");
   });
 
   it("documents the native handoff launcher and launch artifact path", () => {

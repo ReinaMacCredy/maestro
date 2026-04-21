@@ -18,6 +18,7 @@ import { findSimilarTasks } from "../usecases/find-similar-tasks.usecase.js";
 import { heartbeatTask } from "../usecases/heartbeat-task.usecase.js";
 import { closeContractForTask } from "../usecases/contract/close-contract.usecase.js";
 import { computeContractVerdictForTask } from "../usecases/contract/compute-verdict.usecase.js";
+import { reopenContractForTask } from "../usecases/contract/reopen-contract.usecase.js";
 import { STUCK_THRESHOLD_MS, isStuckTask } from "../domain/now-md-format.js";
 import { parseDuration } from "./duration.js";
 import {
@@ -654,6 +655,9 @@ function registerReopenCommand(taskCmd: Command, program: Command): void {
         ...(previous?.closeReason ? { reason: previous.closeReason } : {}),
       });
 
+      if (reopened.contractId) {
+        await maybeReopenTaskContract(reopened);
+      }
       await refreshNowMd();
 
       if (emitSilentSuccess(isJson, opts, reopened)) return;
@@ -1425,6 +1429,16 @@ async function maybeFinalizeTaskContract(task: Task): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     warn(`Task ${task.id} completed, but contract close failed: ${message}`);
+  }
+}
+
+async function maybeReopenTaskContract(task: Task): Promise<void> {
+  try {
+    const services = getServices();
+    await reopenContractForTask(services.contractStore, task);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    warn(`Task ${task.id} reopened, but contract reset failed: ${message}`);
   }
 }
 

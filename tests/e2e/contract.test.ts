@@ -248,4 +248,71 @@ describe("task contract compiled E2E", () => {
     );
     expect(removed.stdout).toBe(`${contract.id} [ok]`);
   }, SLOW_CLI_TIMEOUT_MS);
+
+  it("relocks the contract after task reopen", async () => {
+    await seedTrackedFile("README.md", "hello\n");
+
+    const task = JSON.parse((await runCompiled(["task", "create", "compiled reopen", "--json"], tmpDir)).stdout) as {
+      id: string;
+    };
+    await runCompiled(["task", "claim", task.id, "--session", "compiled-owner", "--json"], tmpDir);
+    await runCompiled(
+      ["task", "update", task.id, "--status", "in_progress", "--session", "compiled-owner", "--json"],
+      tmpDir,
+    );
+
+    const templatePath = await writeTemplate(
+      "reopen-verdict-template.yaml",
+      [
+        "intent: Keep the compiled completion inside README",
+        "scope:",
+        "  filesExpected:",
+        "    - README.md",
+        "  filesForbidden: []",
+        "doneWhen:",
+        "  - text: manual",
+        "    kind: receipt-hint",
+        "",
+      ].join("\n"),
+    );
+
+    const contract = JSON.parse(
+      (await runCompiled(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir)).stdout,
+    ) as { id: string };
+    await runCompiled(["task", "contract", "lock", contract.id, "--json"], tmpDir);
+    await runCompiled(["task", "contract", "criteria", "add", contract.id, "extra check", "--json"], tmpDir);
+
+    await Bun.write(join(tmpDir, "README.md"), "hello\ncompiled\n");
+    await runCompiled(
+      [
+        "task",
+        "update",
+        task.id,
+        "--status",
+        "completed",
+        "--reason",
+        "done",
+        "--verified-by",
+        "manual",
+        "--session",
+        "compiled-owner",
+        "--json",
+      ],
+      tmpDir,
+    );
+
+    const reopened = await runCompiled(["task", "reopen", task.id, "--json"], tmpDir);
+    expect(JSON.parse(reopened.stdout)).toEqual(expect.objectContaining({ status: "pending" }));
+
+    const shown = JSON.parse(
+      (await runCompiled(["task", "contract", "show", contract.id, "--json"], tmpDir)).stdout,
+    ) as {
+      status: string;
+      verdict?: unknown;
+      amendments: unknown[];
+    };
+    expect(shown.status).toBe("locked");
+    expect(shown.amendments).toHaveLength(1);
+    expect(shown.verdict).toBeUndefined();
+  }, SLOW_CLI_TIMEOUT_MS);
 });

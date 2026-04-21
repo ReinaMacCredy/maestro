@@ -190,4 +190,70 @@ describe("task contract completion", () => {
     );
     expect(expectJson<{ status: string }>(allowed).status).toBe("completed");
   }, SLOW_CLI_TIMEOUT_MS);
+
+  it("relocks a completed contract when the task is reopened", async () => {
+    await seedTrackedFile("README.md", "hello\n");
+
+    const created = await runCli(["task", "create", "reopen contracted task", "--json"], tmpDir);
+    const task = expectJson<{ id: string }>(created);
+
+    await runCli(["task", "claim", task.id, "--session", "reopen-owner", "--json"], tmpDir);
+    await runCli(["task", "update", task.id, "--status", "in_progress", "--session", "reopen-owner", "--json"], tmpDir);
+
+    const templatePath = await writeTemplate(
+      "reopen-template.yaml",
+      [
+        "intent: Keep the completion scoped to README",
+        "scope:",
+        "  filesExpected:",
+        "    - README.md",
+        "  filesForbidden: []",
+        "doneWhen:",
+        "  - text: manual",
+        "    kind: receipt-hint",
+        "",
+      ].join("\n"),
+    );
+
+    const drafted = await runCli(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir);
+    const contract = expectJson<{ id: string }>(drafted);
+    await runCli(["task", "contract", "lock", contract.id, "--json"], tmpDir);
+    await runCli(["task", "contract", "criteria", "add", contract.id, "extra check", "--json"], tmpDir);
+
+    await Bun.write(join(tmpDir, "README.md"), "hello\nworld\n");
+    await runCli(
+      [
+        "task",
+        "update",
+        task.id,
+        "--status",
+        "completed",
+        "--reason",
+        "done",
+        "--verified-by",
+        "manual",
+        "--session",
+        "reopen-owner",
+        "--json",
+      ],
+      tmpDir,
+    );
+
+    const reopened = await runCli(["task", "reopen", task.id, "--json"], tmpDir);
+    expect(expectJson<{ status: string }>(reopened).status).toBe("pending");
+
+    const shown = await runCli(["task", "contract", "show", contract.id, "--json"], tmpDir);
+    const reset = expectJson<{
+      status: string;
+      verdict?: unknown;
+      closedAt?: string;
+      closedBy?: string;
+      amendments: Array<unknown>;
+    }>(shown);
+    expect(reset.status).toBe("locked");
+    expect(reset.amendments).toHaveLength(1);
+    expect(reset.verdict).toBeUndefined();
+    expect(reset.closedAt).toBeUndefined();
+    expect(reset.closedBy).toBeUndefined();
+  }, SLOW_CLI_TIMEOUT_MS);
 });
