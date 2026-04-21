@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { FsContractStoreAdapter } from "@/features/task/adapters/fs-contract-store.adapter.js";
 import { JsonlTaskStoreAdapter } from "@/features/task/adapters/jsonl-task-store.adapter.js";
+import { createContract } from "@/features/task/usecases/contract/create-contract.usecase.js";
 import { createTask } from "@/features/task/usecases/create-task.usecase.js";
 import { updateTask } from "@/features/task/usecases/update-task.usecase.js";
 import { findSimilarTasks } from "@/features/task/usecases/find-similar-tasks.usecase.js";
@@ -10,10 +12,12 @@ import { findSimilarTasks } from "@/features/task/usecases/find-similar-tasks.us
 describe("findSimilarTasks", () => {
   let tmpDir: string;
   let store: JsonlTaskStoreAdapter;
+  let contractStore: FsContractStoreAdapter;
 
   beforeEach(async () => {
     tmpDir = await mkdtemp(join(tmpdir(), "task-similar-"));
     store = new JsonlTaskStoreAdapter(tmpDir);
+    contractStore = new FsContractStoreAdapter(tmpDir);
   });
 
   it("returns tasks with title overlap, ranked by overlap count", async () => {
@@ -76,5 +80,36 @@ describe("findSimilarTasks", () => {
     const target = await createTask(store, { title: "demo keyword target" });
     const matches = await findSimilarTasks(store, target.id, 3);
     expect(matches.length).toBe(3);
+  });
+
+  it("includes contract intent and criteria text in the similarity pool", async () => {
+    const contracted = await createTask(store, { title: "unrelated backlog item" });
+    await createContract(store, contractStore, {
+      taskId: contracted.id,
+      repoRoot: tmpDir,
+      intent: "stabilize websocket backpressure flow",
+      scope: {
+        filesExpected: ["src/features/task/**"],
+        filesForbidden: [],
+      },
+      doneWhen: [
+        {
+          text: "backpressure metrics are covered",
+          kind: "manual",
+        },
+      ],
+      createdBy: "user",
+      configSnapshot: {
+        strict: false,
+        overlapPolicy: "fail",
+        rebaseFallback: "best-effort",
+        staleReclaimContractPolicy: "inherit",
+      },
+    });
+
+    const target = await createTask(store, { title: "plan websocket metrics cleanup" });
+    const matches = await findSimilarTasks(store, target.id, 5, contractStore);
+
+    expect(matches.map((match) => match.task.id)).toContain(contracted.id);
   });
 });

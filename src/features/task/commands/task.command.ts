@@ -1573,7 +1573,7 @@ function registerSimilarCommand(taskCmd: Command, program: Command): void {
       const isJson = resolveJsonFlag(opts, program);
       const limit = opts.limit === undefined ? 5 : parseLimit(opts.limit) ?? 5;
 
-      const matches = await findSimilarTasks(services.taskStore, id, limit);
+      const matches = await findSimilarTasks(services.taskStore, id, limit, services.contractStore);
 
       output(isJson, matches, (results) => {
         if (results.length === 0) {
