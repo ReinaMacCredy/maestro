@@ -35,5 +35,5 @@ Children:
 - [integration/AGENTS.md](integration/AGENTS.md)
 - [e2e/AGENTS.md](e2e/AGENTS.md)
 
-Managed by `agents-md-hierarchy`. Edit outside this block.
+Managed by `init-deep`. Edit outside this block.
 <!-- AGENTS-HIERARCHY:END -->

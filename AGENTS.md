@@ -2,9 +2,9 @@
 
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-04-21 01:56:37 +07
-**Commit:** 18d66d4c
-**Branch:** main
+**Generated:** 2026-04-22 05:24:37 +0700
+**Commit:** 6136b0a4
+**Branch:** feat/task-contracts-stack
 
 ## OVERVIEW
 Maestro is a local-first conductor for multi-agent software engineering. It is a single-package Bun/TypeScript CLI with an OpenTUI dashboard, repo-owned agent surfaces, and shared project state under `.maestro/`.
@@ -127,5 +127,5 @@ Children:
 - [src/AGENTS.md](src/AGENTS.md)
 - [tests/AGENTS.md](tests/AGENTS.md)
 
-Managed by `agents-md-hierarchy`. Edit outside this block.
+Managed by `init-deep`. Edit outside this block.
 <!-- AGENTS-HIERARCHY:END -->

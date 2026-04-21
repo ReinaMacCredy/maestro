@@ -35,5 +35,5 @@ Parent:
 Children:
 - none
 
-Managed by `agents-md-hierarchy`. Edit outside this block.
+Managed by `init-deep`. Edit outside this block.
 <!-- AGENTS-HIERARCHY:END -->
