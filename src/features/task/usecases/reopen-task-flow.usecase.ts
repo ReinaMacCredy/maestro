@@ -44,18 +44,20 @@ export async function reopenTaskFlow(
     activeAgent: null,
   });
 
-  const restored = await deps.continuationStore.reopen(taskId, summary);
+  const [restored] = await Promise.all([
+    deps.continuationStore.reopen(taskId, summary),
+    deps.continuationHistory.append(taskId, {
+      kind: "task_reopened",
+      at: reopened.updatedAt,
+      summary: previous.closeReason
+        ? `Reopened after completion: ${previous.closeReason}`
+        : "Reopened and returned to pending",
+      ...(previous.closeReason ? { reason: previous.closeReason } : {}),
+    }),
+  ]);
   if (!restored) {
     await deps.continuationStore.upsertActive(summary);
   }
-  await deps.continuationHistory.append(taskId, {
-    kind: "task_reopened",
-    at: reopened.updatedAt,
-    summary: previous.closeReason
-      ? `Reopened after completion: ${previous.closeReason}`
-      : "Reopened and returned to pending",
-    ...(previous.closeReason ? { reason: previous.closeReason } : {}),
-  });
 
   const contract = reopened.contractId
     ? await reopenContractForTask(deps.contractStore, reopened)

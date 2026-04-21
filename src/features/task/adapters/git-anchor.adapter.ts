@@ -81,7 +81,7 @@ export class ShellGitAnchorAdapter implements GitAnchorPort {
     return {
       gitAvailable: true,
       actualFilesTouched: [...files].sort(),
-      ...([...files].length > MAX_STORED_TOUCHED_FILES
+      ...(files.size > MAX_STORED_TOUCHED_FILES
         ? {
             actualFilesTouchedTruncated: {
               stored: MAX_STORED_TOUCHED_FILES,
@@ -247,12 +247,16 @@ export class ShellGitAnchorAdapter implements GitAnchorPort {
       return [];
     }
 
+    const mergeCommits = merges.stdout.split("\n").map((line) => line.trim()).filter(Boolean);
+    const diffs = await Promise.all(
+      mergeCommits.map((mergeCommit) =>
+        execArgv(["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "-m", mergeCommit], { cwd }),
+      ),
+    );
+
     const files = new Set<string>();
-    for (const mergeCommit of merges.stdout.split("\n").map((line) => line.trim()).filter(Boolean)) {
-      const diff = await execArgv(["git", "diff-tree", "--no-commit-id", "--name-only", "-r", "-m", mergeCommit], { cwd });
-      if (diff.exitCode !== 0) {
-        continue;
-      }
+    for (const diff of diffs) {
+      if (diff.exitCode !== 0) continue;
       for (const path of splitPaths(diff.stdout)) {
         files.add(path);
       }

@@ -1,5 +1,6 @@
 import { MaestroError } from "@/shared/errors.js";
 import {
+  buildActiveOverlapError,
   canReopenContract,
   isActiveContract,
 } from "../../domain/contract/contract-state.js";
@@ -32,13 +33,7 @@ export async function loadContractForReopen(
       && isActiveContract(candidate),
     );
     if (overlapping.length > 0) {
-      throw new MaestroError(
-        `Contract ${contract.id} overlaps an active contract in the same repo: ${overlapping.map((item) => item.id).join(", ")}`,
-        [
-          "Discard or finish the other contract first",
-          "Or set contracts.overlapPolicy: annotate before reopening intentionally overlapping work",
-        ],
-      );
+      throw buildActiveOverlapError(contract.id, overlapping.map((item) => item.id));
     }
   }
 

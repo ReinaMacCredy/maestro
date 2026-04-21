@@ -1,3 +1,4 @@
+import { MaestroError } from "@/shared/errors.js";
 import { TASK_ID_PATTERN } from "../task-id.js";
 import { generateTaskId } from "../task-id.js";
 import type {
@@ -165,6 +166,16 @@ export function validateContractIndexEntry(value: unknown): ContractIndexEntry |
     at: value.at,
     reason: value.reason,
   };
+}
+
+export function buildActiveOverlapError(contractId: string, overlappingIds: readonly string[]): MaestroError {
+  return new MaestroError(
+    `Contract ${contractId} overlaps an active contract in the same repo: ${overlappingIds.join(", ")}`,
+    [
+      "Discard or finish the other contract first",
+      "Or switch contracts.overlapPolicy to annotate if you intentionally allow overlap",
+    ],
+  );
 }
 
 export function lastContractIndexedAt(contract: Contract): string {

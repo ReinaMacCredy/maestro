@@ -41,15 +41,17 @@ async function detectContractOverlap(
     return undefined;
   }
 
-  const overlapping: string[] = [];
-  for (const candidate of await contractStore.all()) {
-    if (candidate.id === contract.id || candidate.repoRoot !== contract.repoRoot) {
-      continue;
-    }
-    if (candidate.status === "draft" || candidate.status === "discarded") {
-      continue;
-    }
+  const candidates = (await contractStore.all()).filter((candidate) =>
+    candidate.id !== contract.id
+    && candidate.repoRoot === contract.repoRoot
+    && candidate.status !== "draft"
+    && candidate.status !== "discarded",
+  );
+  if (candidates.length === 0) {
+    return undefined;
+  }
 
+  const results = await Promise.all(candidates.map(async (candidate) => {
     const overlaps = await gitAnchor.windowsOverlap({
       repoRoot: contract.repoRoot,
       left: {
@@ -61,11 +63,9 @@ async function detectContractOverlap(
         closedAtCommit: candidate.closedAtCommit ?? currentClosedAtCommit,
       },
     });
-    if (overlaps) {
-      overlapping.push(candidate.id);
-    }
-  }
-  overlapping.sort();
+    return overlaps ? candidate.id : undefined;
+  }));
+  const overlapping = results.filter((id): id is string => id !== undefined).sort();
 
   if (overlapping.length === 0) {
     return undefined;

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { getServices } from "@/services.js";
 import type { MaestroConfig } from "@/infra/domain/config-types.js";
 import { MaestroError } from "@/shared/errors.js";
-import { readTextOrStdin, writeText } from "@/shared/lib/fs.js";
+import { fileExists, readTextOrStdin, writeText } from "@/shared/lib/fs.js";
 import { output, resolveJsonFlag, warn } from "@/shared/lib/output.js";
 import { normalizeSlashes } from "@/shared/lib/path-normalize.js";
 import { parseYaml, stringifyYaml } from "@/shared/lib/yaml.js";
@@ -424,7 +424,7 @@ async function resolveNamedContractTemplate(path: string): Promise<string | unde
   const templateDir = join(process.cwd(), ".maestro", "tasks", "contract-templates");
   for (const suffix of ["", ".md", ".yaml", ".yml"] as const) {
     const candidate = join(templateDir, `${path}${suffix}`);
-    if (await Bun.file(candidate).exists()) {
+    if (await fileExists(candidate)) {
       return candidate;
     }
   }

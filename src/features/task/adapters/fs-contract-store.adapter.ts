@@ -6,6 +6,7 @@ import { MaestroError } from "@/shared/errors.js";
 import { appendText, ensureDir, readText, removeIfExists, writeJson } from "@/shared/lib/fs.js";
 import {
   CONTRACT_ID_PATTERN,
+  buildActiveOverlapError,
   generateContractId,
   isActiveContract,
   lastContractIndexedAt,
@@ -234,18 +235,15 @@ export class FsContractStoreAdapter implements ContractStorePort {
       latestById.set(entry.id, entry);
     }
 
-    const activeContracts: Contract[] = [];
+    const candidateIds: string[] = [];
     for (const entry of latestById.values()) {
-      if (entry.status !== "locked" && entry.status !== "amended") {
-        continue;
-      }
-      const contract = await this.get(entry.id);
-      if (contract && isActiveContract(contract)) {
-        activeContracts.push(contract);
+      if (entry.status === "locked" || entry.status === "amended") {
+        candidateIds.push(entry.id);
       }
     }
 
-    return activeContracts;
+    const loaded = await Promise.all(candidateIds.map((id) => this.get(id)));
+    return loaded.filter((contract): contract is Contract => contract !== undefined && isActiveContract(contract));
   }
 
   private async assertActiveOverlapInvariant(contract: Contract): Promise<void> {
@@ -260,13 +258,7 @@ export class FsContractStoreAdapter implements ContractStorePort {
       return;
     }
 
-    throw new MaestroError(
-      `Contract ${contract.id} overlaps an active contract in the same repo: ${overlapping.map((item) => item.id).join(", ")}`,
-      [
-        "Discard or finish the other contract first",
-        "Or switch contracts.overlapPolicy to annotate if you intentionally allow overlap",
-      ],
-    );
+    throw buildActiveOverlapError(contract.id, overlapping.map((item) => item.id));
   }
 
   private async readContractFilenames(dir: string): Promise<readonly string[]> {

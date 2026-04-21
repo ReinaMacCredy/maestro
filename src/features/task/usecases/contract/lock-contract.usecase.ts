@@ -23,21 +23,6 @@ export async function lockContract(
     ]);
   }
 
-  const overlapping = (await contractStore.all()).filter((candidate) =>
-    candidate.id !== contract.id
-    && (candidate.status === "locked" || candidate.status === "amended")
-    && candidate.repoRoot === contract.repoRoot,
-  );
-  if (overlapping.length > 0 && input.configSnapshot.overlapPolicy === "fail") {
-    throw new MaestroError(
-      `Contract ${contract.id} overlaps an active contract in the same repo: ${overlapping.map((item) => item.id).join(", ")}`,
-      [
-        "Discard or finish the other contract first",
-        "Or switch contracts.overlapPolicy to annotate if you intentionally allow overlap",
-      ],
-    );
-  }
-
   const now = new Date().toISOString();
   return contractStore.save({
     ...contract,
