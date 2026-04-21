@@ -6,6 +6,14 @@ import type { UiConfig } from "@/shared/domain/ui-config.js";
 export interface MaestroConfig {
   readonly defaultAgent?: AgentSlug;
   readonly sourceRepo?: string;
+  readonly contracts?: {
+    readonly default?: "required" | "prompt" | "optional";
+    readonly strict?: boolean;
+    readonly overlapPolicy?: "fail" | "annotate";
+    readonly rebaseFallback?: "best-effort" | "fail";
+    readonly defaultMaxFilesTouched?: number;
+    readonly staleReclaimContractPolicy?: "inherit" | "block";
+  };
   readonly sessionDetection?: {
     readonly enabled: boolean;
     readonly agents: readonly AgentSlug[];
@@ -18,6 +26,13 @@ export interface MaestroConfig {
 }
 
 export const DEFAULT_CONFIG: MaestroConfig = {
+  contracts: {
+    default: "prompt",
+    strict: false,
+    overlapPolicy: "fail",
+    rebaseFallback: "best-effort",
+    staleReclaimContractPolicy: "inherit",
+  },
   sessionDetection: {
     enabled: true,
     agents: ["claude-code"],

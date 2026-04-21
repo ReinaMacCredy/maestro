@@ -54,6 +54,13 @@ describe("YamlConfigAdapter", () => {
       const loaded = await config.load(tmpDir);
       expect(loaded.sessionDetection?.enabled).toBe(true);
       expect(loaded.sessionDetection?.agents).toContain("claude-code");
+      expect(loaded.contracts).toEqual({
+        default: "prompt",
+        strict: false,
+        overlapPolicy: "fail",
+        rebaseFallback: "best-effort",
+        staleReclaimContractPolicy: "inherit",
+      });
     });
 
     it("merges project config over defaults", async () => {
@@ -64,6 +71,25 @@ describe("YamlConfigAdapter", () => {
       const loaded = await config.load(tmpDir);
       expect(loaded.defaultAgent).toBe("gemini");
       expect(loaded.sessionDetection?.enabled).toBe(false);
+    });
+
+    it("merges nested contracts config over defaults", async () => {
+      await config.write("project", tmpDir, {
+        contracts: {
+          strict: true,
+          overlapPolicy: "annotate",
+        },
+      });
+
+      const loaded = await config.load(tmpDir);
+
+      expect(loaded.contracts).toEqual({
+        default: "prompt",
+        strict: true,
+        overlapPolicy: "annotate",
+        rebaseFallback: "best-effort",
+        staleReclaimContractPolicy: "inherit",
+      });
     });
 
     it("throws when yaml is malformed", async () => {

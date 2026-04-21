@@ -64,6 +64,8 @@ export interface Task {
   readonly blockedBy: readonly string[];
   readonly assignee?: string;
   readonly claimedAt?: string;
+  readonly contractId?: string;
+  readonly claimedAtCommit?: string;
   readonly lastActivityAt?: string;
   readonly closeReason?: string;
   readonly receipt?: TaskReceipt;

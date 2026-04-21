@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { Task } from "@/features/task/domain/task-types.js";
-import { assertNoBlockCycle } from "@/features/task/domain/task-validators.js";
+import { assertNoBlockCycle, validateTask } from "@/features/task/domain/task-validators.js";
 
 function makeTask(id: string, blocks: readonly string[] = []): Task {
   return {
@@ -29,5 +29,29 @@ describe("assertNoBlockCycle", () => {
     }
 
     expect(() => assertNoBlockCycle("tsk-a0a0a0", ["tsk-000000"], tasks)).not.toThrow();
+  });
+});
+
+describe("validateTask", () => {
+  it("accepts stored contract pointers and claim anchors", () => {
+    const parsed = validateTask({
+      id: "tsk-a1b2c3",
+      title: "Contract-aware task",
+      type: "task",
+      priority: 2,
+      status: "pending",
+      labels: [],
+      blocks: [],
+      blockedBy: [],
+      contractId: "c-a1b2c3",
+      claimedAtCommit: "abc123def456",
+      createdAt: "2026-04-21T00:00:00.000Z",
+      updatedAt: "2026-04-21T00:00:00.000Z",
+    });
+
+    expect(parsed).toMatchObject({
+      contractId: "c-a1b2c3",
+      claimedAtCommit: "abc123def456",
+    });
   });
 });
