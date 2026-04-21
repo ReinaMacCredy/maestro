@@ -149,6 +149,8 @@ function registerCreateCommand(taskCmd: Command, program: Command): void {
         warnAutoClaimed(started, autoClaimed);
       }
 
+      await refreshNowMd();
+
       if (opts.silent) {
         console.log(task.id);
         return;
@@ -241,6 +243,8 @@ function registerPlanCommand(taskCmd: Command, program: Command): void {
         }
         return lines;
       });
+
+      await refreshNowMd();
     });
 }
 
@@ -277,6 +281,8 @@ function registerQuickCommand(taskCmd: Command, program: Command): void {
         blockedBy: opts.blockedBy,
       });
       const task = await createTask(services.taskStore, input);
+
+      await refreshNowMd();
 
       if (isJson) {
         output(true, { id: task.id }, () => []);
@@ -484,6 +490,8 @@ function registerClaimCommand(taskCmd: Command, program: Command): void {
         buildClaimContinuationInput(previous, claimed),
       );
 
+      await refreshNowMd();
+
       output(isJson, claimed, (task) => [
         `[ok] Task claimed: ${task.id}`,
         `  Assignee: ${task.assignee}`,
@@ -529,6 +537,8 @@ function registerUnclaimCommand(taskCmd: Command, program: Command): void {
         },
       );
 
+      await refreshNowMd();
+
       output(isJson, unclaimed, (task) => [
         `[ok] Task unclaimed: ${task.id}`,
         `  Status: ${task.status}`,
@@ -549,6 +559,8 @@ function registerReleaseOwnedCommand(taskCmd: Command, program: Command): void {
       const before = new Map(beforeTasks.map((task) => [task.id, task] as const));
       const released = await releaseMatchingOwnedTasks(services.taskStore, beforeTasks, trimmedSessionId);
       await syncRecoveredStaleOwnerTasks(services, before, released);
+
+      await refreshNowMd();
 
       output(isJson, released, (tasks) => {
         if (tasks.length === 0) {
@@ -591,6 +603,8 @@ function registerReopenCommand(taskCmd: Command, program: Command): void {
           : "Reopened and returned to pending",
         ...(previous?.closeReason ? { reason: previous.closeReason } : {}),
       });
+
+      await refreshNowMd();
 
       output(isJson, reopened, (task) => [
         `[ok] Task reopened: ${task.id}`,
@@ -666,6 +680,8 @@ function registerBlockCommand(taskCmd: Command, program: Command): void {
         },
       );
 
+      await refreshNowMd();
+
       output(isJson, updated, (task) => [
         `[ok] Blockers added: ${task.id}`,
         ...(task.blocks.length > 0 ? [`  Blocks: ${task.blocks.join(", ")}`] : ["  Blocks: none"]),
@@ -734,6 +750,8 @@ function registerUnblockCommand(taskCmd: Command, program: Command): void {
           },
         },
       );
+
+      await refreshNowMd();
 
       output(isJson, updated, (task) => [
         `[ok] Blockers removed: ${task.id}`,
@@ -1026,6 +1044,8 @@ async function applyUpdateContinuation(
   for (const event of input.events) {
     await deps.continuationHistory.append(updated.id, event);
   }
+
+  await refreshNowMd();
 }
 
 function parseContinuationEdits(opts: {
@@ -1217,5 +1237,15 @@ async function maybeCaptureCompletionHint(task: Task): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     warn(`Task ${task.id} completed, but hint capture failed: ${message}`);
+  }
+}
+
+async function refreshNowMd(): Promise<void> {
+  try {
+    const services = getServices();
+    const tasks = await services.taskStore.all();
+    await services.taskNowMdWriter.write(tasks);
+  } catch {
+    // NOW.md is a derived view; never block a mutation on it
   }
 }
