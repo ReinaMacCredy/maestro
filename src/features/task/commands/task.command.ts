@@ -376,6 +376,7 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
     .option("--add-label <labels>", "Comma-separated labels to add")
     .option("--remove-label <labels>", "Comma-separated labels to remove")
     .addOption(new Option("--claim").hideHelp())
+    .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
     .action(async (id: string, opts) => {
       const services = getServices();
@@ -463,6 +464,11 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
         continuationEdits,
       );
 
+      if (!isJson && resolveSilent(opts)) {
+        printSilent(updated);
+        return;
+      }
+
       output(isJson, updated, (task) => [
         `[ok] Task updated: ${task.id}`,
         `  Status: ${task.status}`,
@@ -482,6 +488,7 @@ function registerClaimCommand(taskCmd: Command, program: Command): void {
     .option("--force", "Take over a task already claimed by another session")
     .option("--busy-check", "Reject the claim if this session already owns unresolved work")
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
+    .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
     .action(async (id: string, opts) => {
       const services = getServices();
@@ -505,6 +512,11 @@ function registerClaimCommand(taskCmd: Command, program: Command): void {
 
       await refreshNowMd();
 
+      if (!isJson && resolveSilent(opts)) {
+        printSilent(claimed);
+        return;
+      }
+
       output(isJson, claimed, (task) => [
         `[ok] Task claimed: ${task.id}`,
         `  Assignee: ${task.assignee}`,
@@ -519,6 +531,7 @@ function registerUnclaimCommand(taskCmd: Command, program: Command): void {
     .description("Release task ownership")
     .option("--force", "Release a task owned by another session")
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
+    .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
     .action(async (id: string, opts) => {
       const services = getServices();
@@ -552,6 +565,11 @@ function registerUnclaimCommand(taskCmd: Command, program: Command): void {
 
       await refreshNowMd();
 
+      if (!isJson && resolveSilent(opts)) {
+        printSilent(unclaimed);
+        return;
+      }
+
       output(isJson, unclaimed, (task) => [
         `[ok] Task unclaimed: ${task.id}`,
         `  Status: ${task.status}`,
@@ -563,6 +581,7 @@ function registerReleaseOwnedCommand(taskCmd: Command, program: Command): void {
   taskCmd
     .command("release-owned <sessionId>")
     .description("Release unresolved tasks owned by a dead or stale session")
+    .option("--silent", "Print only '<id> <marker>' per released task (for scripts)")
     .option("--json", "Output as JSON")
     .action(async (sessionId: string, opts) => {
       const services = getServices();
@@ -574,6 +593,13 @@ function registerReleaseOwnedCommand(taskCmd: Command, program: Command): void {
       await syncRecoveredStaleOwnerTasks(services, before, released);
 
       await refreshNowMd();
+
+      if (!isJson && resolveSilent(opts)) {
+        for (const task of released) {
+          printSilent(task);
+        }
+        return;
+      }
 
       output(isJson, released, (tasks) => {
         if (tasks.length === 0) {
@@ -591,6 +617,7 @@ function registerReopenCommand(taskCmd: Command, program: Command): void {
   taskCmd
     .command("reopen <id>")
     .description("Restore a completed task to the pending queue")
+    .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
     .action(async (id: string, opts) => {
       const services = getServices();
@@ -619,6 +646,11 @@ function registerReopenCommand(taskCmd: Command, program: Command): void {
 
       await refreshNowMd();
 
+      if (!isJson && resolveSilent(opts)) {
+        printSilent(reopened);
+        return;
+      }
+
       output(isJson, reopened, (task) => [
         `[ok] Task reopened: ${task.id}`,
         `  Status: ${task.status}`,
@@ -633,6 +665,7 @@ function registerBlockCommand(taskCmd: Command, program: Command): void {
     .description("Mark this task as blocking the target task ids")
     .option("--force", "Override ownership checks on claimed tasks")
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
+    .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
     .action(async (id: string, blockedTaskIds: string[], opts) => {
       const services = getServices();
@@ -695,6 +728,11 @@ function registerBlockCommand(taskCmd: Command, program: Command): void {
 
       await refreshNowMd();
 
+      if (!isJson && resolveSilent(opts)) {
+        printSilent(updated);
+        return;
+      }
+
       output(isJson, updated, (task) => [
         `[ok] Blockers added: ${task.id}`,
         ...(task.blocks.length > 0 ? [`  Blocks: ${task.blocks.join(", ")}`] : ["  Blocks: none"]),
@@ -708,6 +746,7 @@ function registerUnblockCommand(taskCmd: Command, program: Command): void {
     .description("Remove blocker edges from this task to the target task ids")
     .option("--force", "Override ownership checks on claimed tasks")
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
+    .option("--silent", "Print only '<id> <marker>' (for scripts)")
     .option("--json", "Output as JSON")
     .action(async (id: string, blockedTaskIds: string[], opts) => {
       const services = getServices();
@@ -765,6 +804,11 @@ function registerUnblockCommand(taskCmd: Command, program: Command): void {
       );
 
       await refreshNowMd();
+
+      if (!isJson && resolveSilent(opts)) {
+        printSilent(updated);
+        return;
+      }
 
       output(isJson, updated, (task) => [
         `[ok] Blockers removed: ${task.id}`,
@@ -1269,6 +1313,24 @@ function appendVerifier(value: string, previous: string[]): string[] {
     return previous;
   }
   return [...previous, trimmed];
+}
+
+function resolveSilent(opts: { silent?: unknown }): boolean {
+  if (opts.silent === true) return true;
+  const envFlag = process.env.MAESTRO_TASK_SILENT;
+  return envFlag === "1" || envFlag === "true";
+}
+
+function statusMarker(status: Task["status"]): string {
+  switch (status) {
+    case "pending": return ".";
+    case "in_progress": return ">";
+    case "completed": return "x";
+  }
+}
+
+function printSilent(task: Task): void {
+  console.log(`${task.id} ${statusMarker(task.status)}`);
 }
 
 function registerSimilarCommand(taskCmd: Command, program: Command): void {
