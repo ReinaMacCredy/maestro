@@ -399,28 +399,36 @@ maestro task plan --file plan.json --dry-run           # validate without writin
 
 ### Resumable continuation
 
-Every task keeps a continuation record at `.maestro/tasks/continuations/active/<taskId>.json` (it moves to `completed/<taskId>.json` on closure) describing where work stands. Agents read it on resume; every update refreshes it.
+Every task has a durable, on-disk continuation record that tells the next agent where work stands. It is the source of truth for resume across sessions, across agents, and across context compaction. Standalone handoff packets are the transfer artifact; the continuation is the state.
 
-Fields per task: `currentState`, `nextAction`, `keyDecisions`, `activeAgent`, `lastActiveAt`. An append-only event log at `.maestro/tasks/local-history/<taskId>.jsonl` captures `snapshot`, `decision`, `next_action_set`, `blocker_set`, `handoff_created`, `handoff_picked_up`, `agent_takeover`, `task_completed`, and `task_reopened` entries so the next session can trace how the task got here.
+Two files back each task:
 
-#### Chat-intent resume
+- `.maestro/tasks/continuations/active/<taskId>.json` -- live summary. Moves to `completed/<taskId>.json` at `task update --status completed` and returns to `active/` on `task reopen`.
+- `.maestro/tasks/local-history/<taskId>.jsonl` -- append-only event log (per-machine).
 
-Maestro ships Claude Code hooks that hydrate the active continuation into the agent's context without any CLI call:
+Summary fields: `currentState`, `nextAction`, `keyDecisions`, `activeAgent`, `lastActiveAt`. Event kinds: `snapshot`, `decision`, `next_action_set`, `blocker_set`, `handoff_created`, `handoff_picked_up`, `agent_takeover`, `task_completed`, `task_reopened`.
 
-- `SessionStart` injects a short pointer when an active task exists: id, title, status, last-active timestamp, and a nudge to say `continue` or `resume`.
-- `UserPromptSubmit` watches for these exact phrases (case- and punctuation-insensitive) and expands them into the full resume payload before the model sees the prompt:
-  - `continue`
-  - `continue work`
-  - `resume`
-  - `resume work`
-  - `pick up where we left off`
-  - `resume where we left off`
-  - `resume from where we left off`
-- `PreCompact` preserves the continuation in the compacted summary so resume survives a context reset.
+#### Three ways work resumes
 
-The expanded payload includes the current state, next action, active decisions, and recent timeline entries. These are plain chat intents, not Maestro CLI commands. Use `maestro task show <id>` to read the same state directly outside a chat.
+1. **Same session, chat intent.** Maestro installs Claude Code hooks that hydrate the active continuation into the agent's context with no CLI call:
+   - `SessionStart` injects a short pointer when an active task exists: id, title, status, last-active timestamp, and a nudge to say `continue` or `resume`.
+   - `UserPromptSubmit` watches for these exact phrases (case- and punctuation-insensitive) and expands them into the full resume payload (current state, next action, active decisions, recent timeline) before the model sees the prompt:
+     - `continue`
+     - `continue work`
+     - `resume`
+     - `resume work`
+     - `pick up where we left off`
+     - `resume where we left off`
+     - `resume from where we left off`
+   - `PreCompact` preserves the continuation in the compacted summary so resume survives a context reset.
 
-#### Updating the continuation while working
+   These are plain chat intents, not Maestro CLI commands.
+
+2. **Different agent, handoff pickup.** `maestro handoff pickup [--id <handoffId>]` consumes one open packet atomically, force-claims the linked task for the current session, moves it to `in_progress`, transfers any contract ownership, rewrites the continuation summary with a `Resumed from handoff ...` prefix, and records `agent_takeover` + `handoff_picked_up` events. The new agent inherits the prior `nextAction` and `keyDecisions` without a separate chat intent.
+
+3. **Manual inspection.** `maestro task show <id>` prints the raw task and continuation state for offline review.
+
+#### Keep the continuation fresh while working
 
 ```bash
 maestro task update <id> \
@@ -429,6 +437,8 @@ maestro task update <id> \
   --add-decision "Use bcrypt over argon2 for parity with legacy" \
   --remove-decision "Use JWTs in localStorage"
 ```
+
+Refresh when current state or next action changes, when a load-bearing decision or constraint changes, or when blockers appear or clear.
 
 ### Contracts
 
