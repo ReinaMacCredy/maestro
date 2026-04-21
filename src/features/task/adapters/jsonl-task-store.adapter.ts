@@ -700,28 +700,25 @@ function buildReceiptForUpdate(
     return existing.receipt;
   }
 
-  const summaryFromPatch = patch.summary?.trim();
-  const summary = summaryFromPatch && summaryFromPatch.length > 0
-    ? summaryFromPatch
-    : reason;
-
-  const surprise = patch.surprise?.trim();
+  const summary = nonEmpty(patch.summary) ?? reason;
+  const surprise = nonEmpty(patch.surprise);
   const verifiedBy = patch.verifiedBy?.filter((name) => name.length > 0) ?? [];
 
-  const hasAnyField = (summary !== undefined && summary.length > 0)
-    || (surprise !== undefined && surprise.length > 0)
-    || verifiedBy.length > 0;
-
-  if (!hasAnyField) {
+  if (!summary && !surprise && verifiedBy.length === 0) {
     return existing.receipt;
   }
 
   return {
     summary: summary ?? "",
-    ...(surprise && surprise.length > 0 ? { surprise } : {}),
+    ...(surprise ? { surprise } : {}),
     ...(verifiedBy.length > 0 ? { verifiedBy } : {}),
     capturedAt: now,
   };
+}
+
+function nonEmpty(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : undefined;
 }
 
 function applyLabelPatch(

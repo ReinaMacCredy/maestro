@@ -1,17 +1,19 @@
-import type { Task } from "../domain/task-types.js";
-import { indexTasksById } from "../domain/task-types.js";
-import { hasUnresolvedBlockers } from "../domain/task-state.js";
+import type { Task } from "./task-types.js";
+import { indexTasksById } from "./task-types.js";
+import { hasUnresolvedBlockers } from "./task-state.js";
+import { formatRelativeAge } from "@/shared/version-format.js";
+
+export const STUCK_THRESHOLD_MS = 4 * 60 * 60 * 1000;
 
 const READY_LIMIT = 5;
-const STUCK_THRESHOLD_MS = 4 * 60 * 60 * 1000;
 const DESCRIPTION_TRUNCATE = 300;
 
-export interface WriteNowMdInput {
+export interface BuildNowMdInput {
   readonly tasks: readonly Task[];
   readonly now: Date;
 }
 
-export function buildNowMd({ tasks, now }: WriteNowMdInput): string {
+export function buildNowMd({ tasks, now }: BuildNowMdInput): string {
   const updated = now.toISOString();
 
   if (tasks.length === 0) {
@@ -30,7 +32,7 @@ export function buildNowMd({ tasks, now }: WriteNowMdInput): string {
     .sort(byPriorityThenCreated)
     .slice(0, READY_LIMIT);
 
-  const stuck = inProgress.filter((task) => isStuck(task, now));
+  const stuck = inProgress.filter((task) => isStuckTask(task, now));
 
   const lines: string[] = [];
   lines.push("# NOW");
@@ -69,6 +71,18 @@ export function buildNowMd({ tasks, now }: WriteNowMdInput): string {
   return lines.join("\n") + "\n";
 }
 
+export function isStuckTask(task: Task, now: Date, thresholdMs: number = STUCK_THRESHOLD_MS): boolean {
+  const last = lastActivityMs(task);
+  if (last === undefined) return false;
+  return now.getTime() - last > thresholdMs;
+}
+
+function lastActivityMs(task: Task): number | undefined {
+  const source = task.lastActivityAt ?? task.updatedAt;
+  const parsed = Date.parse(source);
+  return Number.isNaN(parsed) ? undefined : parsed;
+}
+
 function renderTask(
   task: Task,
   now: Date,
@@ -79,8 +93,8 @@ function renderTask(
   out.push(`### ${task.id} . ${task.title}`);
 
   if (opts.includeOwner && task.assignee) {
-    const claimed = task.claimedAt ? relative(task.claimedAt, now) : "unknown";
-    const activity = relative(task.updatedAt, now);
+    const claimed = task.claimedAt ? formatRelativeAge(task.claimedAt, now) : "unknown";
+    const activity = formatRelativeAge(task.lastActivityAt ?? task.updatedAt, now);
     out.push(`Owner: ${task.assignee} (claimed ${claimed}, last activity ${activity})`);
   }
 
@@ -115,26 +129,4 @@ function renderTask(
 function byPriorityThenCreated(a: Task, b: Task): number {
   if (a.priority !== b.priority) return a.priority - b.priority;
   return a.createdAt.localeCompare(b.createdAt);
-}
-
-function isStuck(task: Task, now: Date): boolean {
-  const updated = Date.parse(task.updatedAt);
-  if (Number.isNaN(updated)) return false;
-  return now.getTime() - updated > STUCK_THRESHOLD_MS;
-}
-
-function relative(iso: string, now: Date): string {
-  const ts = Date.parse(iso);
-  if (Number.isNaN(ts)) return "unknown";
-  const delta = now.getTime() - ts;
-  if (delta < 0) return "just now";
-
-  const sec = Math.floor(delta / 1000);
-  if (sec < 60) return `${sec}s ago`;
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h ago`;
-  const day = Math.floor(hr / 24);
-  return `${day}d ago`;
 }

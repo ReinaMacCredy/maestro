@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { Task } from "@/features/task/domain/task-types.js";
-import { buildNowMd } from "@/features/task/usecases/write-now-md.usecase.js";
+import { buildNowMd } from "@/features/task/domain/now-md-format.js";
 
 function task(overrides: Partial<Task> = {}): Task {
   return {

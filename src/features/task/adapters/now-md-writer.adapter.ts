@@ -3,7 +3,7 @@ import type { Task } from "../domain/task-types.js";
 import type { NowMdWriterPort } from "../ports/now-md-writer.port.js";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { ensureDir, writeText } from "@/shared/lib/fs.js";
-import { buildNowMd } from "../usecases/write-now-md.usecase.js";
+import { buildNowMd } from "../domain/now-md-format.js";
 
 export class FsNowMdWriterAdapter implements NowMdWriterPort {
   constructor(private readonly baseDir: string) {}

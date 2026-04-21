@@ -16,7 +16,8 @@ export async function findSimilarTasks(
   targetId: string,
   limit: number = DEFAULT_LIMIT,
 ): Promise<readonly SimilarTaskMatch[]> {
-  const target = await store.get(targetId);
+  const all = await store.all();
+  const target = all.find((task) => task.id === targetId);
   if (!target) {
     throw taskNotFound(targetId);
   }
@@ -24,9 +25,7 @@ export async function findSimilarTasks(
   const targetKeywords = tokensFor(target);
   if (targetKeywords.size === 0) return [];
 
-  const all = await store.all();
   const scored: SimilarTaskMatch[] = [];
-
   for (const task of all) {
     if (task.id === target.id) continue;
     const otherKeywords = tokensFor(task);

@@ -16,6 +16,7 @@ import { captureTaskCandidate } from "../usecases/capture-task-candidate.usecase
 import { planTasks } from "../usecases/plan-tasks.usecase.js";
 import { findSimilarTasks } from "../usecases/find-similar-tasks.usecase.js";
 import { heartbeatTask } from "../usecases/heartbeat-task.usecase.js";
+import { STUCK_THRESHOLD_MS, isStuckTask } from "../domain/now-md-format.js";
 import { parseDuration } from "./duration.js";
 import {
   buildTaskContinuationSummary,
@@ -466,10 +467,7 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
         continuationEdits,
       );
 
-      if (!isJson && resolveSilent(opts)) {
-        printSilent(updated);
-        return;
-      }
+      if (emitSilentSuccess(isJson, opts, updated)) return;
 
       output(isJson, updated, (task) => [
         `[ok] Task updated: ${task.id}`,
@@ -516,10 +514,7 @@ function registerClaimCommand(taskCmd: Command, program: Command): void {
 
       await refreshNowMd();
 
-      if (!isJson && resolveSilent(opts)) {
-        printSilent(claimed);
-        return;
-      }
+      if (emitSilentSuccess(isJson, opts, claimed)) return;
 
       output(isJson, claimed, (task) => [
         `[ok] Task claimed: ${task.id}`,
@@ -569,10 +564,7 @@ function registerUnclaimCommand(taskCmd: Command, program: Command): void {
 
       await refreshNowMd();
 
-      if (!isJson && resolveSilent(opts)) {
-        printSilent(unclaimed);
-        return;
-      }
+      if (emitSilentSuccess(isJson, opts, unclaimed)) return;
 
       output(isJson, unclaimed, (task) => [
         `[ok] Task unclaimed: ${task.id}`,
@@ -599,9 +591,7 @@ function registerReleaseOwnedCommand(taskCmd: Command, program: Command): void {
       await refreshNowMd();
 
       if (!isJson && resolveSilent(opts)) {
-        for (const task of released) {
-          printSilent(task);
-        }
+        released.forEach(printSilent);
         return;
       }
 
@@ -650,10 +640,7 @@ function registerReopenCommand(taskCmd: Command, program: Command): void {
 
       await refreshNowMd();
 
-      if (!isJson && resolveSilent(opts)) {
-        printSilent(reopened);
-        return;
-      }
+      if (emitSilentSuccess(isJson, opts, reopened)) return;
 
       output(isJson, reopened, (task) => [
         `[ok] Task reopened: ${task.id}`,
@@ -732,10 +719,7 @@ function registerBlockCommand(taskCmd: Command, program: Command): void {
 
       await refreshNowMd();
 
-      if (!isJson && resolveSilent(opts)) {
-        printSilent(updated);
-        return;
-      }
+      if (emitSilentSuccess(isJson, opts, updated)) return;
 
       output(isJson, updated, (task) => [
         `[ok] Blockers added: ${task.id}`,
@@ -809,10 +793,7 @@ function registerUnblockCommand(taskCmd: Command, program: Command): void {
 
       await refreshNowMd();
 
-      if (!isJson && resolveSilent(opts)) {
-        printSilent(updated);
-        return;
-      }
+      if (emitSilentSuccess(isJson, opts, updated)) return;
 
       output(isJson, updated, (task) => [
         `[ok] Blockers removed: ${task.id}`,
@@ -1349,7 +1330,7 @@ async function maybeReleaseStaleClaim(
   const released = await releaseOwnedTasks(services.taskStore, task.assignee);
   await syncRecoveredStaleOwnerTasks(services, before, released);
   if (released.length > 0) {
-    warn(`[ok] Released stale-claim (auto-released) on ${task.id} from ${task.assignee}`);
+    warn(`Released stale-claim (auto-released) on ${task.id} from ${task.assignee}`);
   }
 }
 
@@ -1367,16 +1348,24 @@ function resolveSilent(opts: { silent?: unknown }): boolean {
   return envFlag === "1" || envFlag === "true";
 }
 
-function statusMarker(status: Task["status"]): string {
-  switch (status) {
-    case "pending": return ".";
-    case "in_progress": return ">";
-    case "completed": return "x";
-  }
-}
+const STATUS_MARKER: Record<Task["status"], string> = {
+  pending: ".",
+  in_progress: ">",
+  completed: "x",
+};
 
 function printSilent(task: Task): void {
-  console.log(`${task.id} ${statusMarker(task.status)}`);
+  console.log(`${task.id} ${STATUS_MARKER[task.status]}`);
+}
+
+function emitSilentSuccess(
+  isJson: boolean,
+  opts: { silent?: unknown },
+  task: Task,
+): boolean {
+  if (isJson || !resolveSilent(opts)) return false;
+  printSilent(task);
+  return true;
 }
 
 function registerSimilarCommand(taskCmd: Command, program: Command): void {
@@ -1448,20 +1437,16 @@ function registerStuckCommand(taskCmd: Command, program: Command): void {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
 
-      const rawThreshold = typeof opts.olderThan === "string" ? opts.olderThan : "4h";
-      const thresholdMs = parseDuration(rawThreshold, "--older-than");
-      const cutoff = Date.now() - thresholdMs;
+      const thresholdMs = typeof opts.olderThan === "string"
+        ? parseDuration(opts.olderThan, "--older-than")
+        : STUCK_THRESHOLD_MS;
+      const now = new Date();
 
       const all = await services.taskStore.all();
       const stuck = all
-        .filter((task) => {
-          if (task.status !== "in_progress") return false;
-          const updated = Date.parse(task.updatedAt);
-          if (Number.isNaN(updated)) return false;
-          return updated < cutoff;
-        })
+        .filter((task) => task.status === "in_progress" && isStuckTask(task, now, thresholdMs))
         .slice()
-        .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
+        .sort((a, b) => (a.lastActivityAt ?? a.updatedAt).localeCompare(b.lastActivityAt ?? b.updatedAt));
 
       output(isJson, stuck, formatTaskList);
     });
@@ -1490,10 +1475,7 @@ function registerHeartbeatCommand(taskCmd: Command, program: Command): void {
 
       await refreshNowMd();
 
-      if (!isJson && resolveSilent(opts)) {
-        printSilent(task);
-        return;
-      }
+      if (emitSilentSuccess(isJson, opts, task)) return;
 
       output(isJson, task, (t) => [
         `[ok] Task heartbeat: ${t.id}`,
