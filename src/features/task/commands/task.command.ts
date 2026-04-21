@@ -14,6 +14,8 @@ import { releaseOwnedTasks } from "../usecases/release-owned-tasks.usecase.js";
 import { readyTaskPage, readyTasks } from "../usecases/ready-tasks.usecase.js";
 import { captureTaskCandidate } from "../usecases/capture-task-candidate.usecase.js";
 import { planTasks } from "../usecases/plan-tasks.usecase.js";
+import { findSimilarTasks } from "../usecases/find-similar-tasks.usecase.js";
+import { parseDuration } from "./duration.js";
 import {
   buildTaskContinuationSummary,
   buildTaskOwnerId,
@@ -85,6 +87,9 @@ export function registerTaskCommand(program: Command): void {
   registerLegacyDepsCommand(taskCmd);
   registerCloseCommand(taskCmd);
   registerReadyCommand(taskCmd, program);
+  registerSimilarCommand(taskCmd, program);
+  registerMineCommand(taskCmd, program);
+  registerStuckCommand(taskCmd, program);
 }
 
 function registerCreateCommand(taskCmd: Command, program: Command): void {
@@ -1264,4 +1269,96 @@ function appendVerifier(value: string, previous: string[]): string[] {
     return previous;
   }
   return [...previous, trimmed];
+}
+
+function registerSimilarCommand(taskCmd: Command, program: Command): void {
+  taskCmd
+    .command("similar <id>")
+    .description("Show past tasks with keyword overlap to this task's title/receipt")
+    .option("--limit <n>", "Maximum results (default 5, 0 = unlimited)")
+    .option("--json", "Output as JSON")
+    .action(async (id: string, opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+      const limit = opts.limit === undefined ? 5 : parseLimit(opts.limit) ?? 5;
+
+      const matches = await findSimilarTasks(services.taskStore, id, limit);
+
+      output(isJson, matches, (results) => {
+        if (results.length === 0) {
+          return ["No similar tasks found"];
+        }
+        const lines: string[] = [`${results.length} similar task(s)`, ""];
+        for (const match of results) {
+          const { task } = match;
+          const title = task.title.length > 40 ? `${task.title.slice(0, 37)}...` : task.title;
+          lines.push(`${task.id}  ${task.status.padEnd(12)}  x${match.overlap}  ${title}`);
+          if (task.receipt?.summary) {
+            const summary = truncate(task.receipt.summary, 80);
+            lines.push(`  summary: ${summary}`);
+          }
+          if (task.receipt?.surprise) {
+            const surprise = truncate(task.receipt.surprise, 80);
+            lines.push(`  surprise: ${surprise}`);
+          }
+        }
+        return lines;
+      });
+    });
+}
+
+function registerMineCommand(taskCmd: Command, program: Command): void {
+  taskCmd
+    .command("mine")
+    .description("List tasks owned by the current session")
+    .option("--session <id>", "Use an explicit session id instead of auto-detection")
+    .option("--status <status>", `Filter by status (${TASK_STATUSES.join("|")})`)
+    .option("--limit <n>", "Maximum tasks to return")
+    .option("--json", "Output as JSON")
+    .action(async (opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+      const sessionId = await resolveOwnershipSessionId(opts.session);
+
+      const filters: ListTasksFilters = {
+        status: parseStatus(opts.status),
+        limit: parseLimit(opts.limit),
+        assignee: sessionId,
+      };
+      const tasks = await listTasks(services.taskStore, filters);
+      output(isJson, tasks, formatTaskList);
+    });
+}
+
+function registerStuckCommand(taskCmd: Command, program: Command): void {
+  taskCmd
+    .command("stuck")
+    .description("List in_progress tasks with no activity for a while")
+    .option("--older-than <duration>", "Inactivity threshold, e.g. 4h, 30m, 2d (default 4h)")
+    .option("--json", "Output as JSON")
+    .action(async (opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+
+      const rawThreshold = typeof opts.olderThan === "string" ? opts.olderThan : "4h";
+      const thresholdMs = parseDuration(rawThreshold, "--older-than");
+      const cutoff = Date.now() - thresholdMs;
+
+      const all = await services.taskStore.all();
+      const stuck = all
+        .filter((task) => {
+          if (task.status !== "in_progress") return false;
+          const updated = Date.parse(task.updatedAt);
+          if (Number.isNaN(updated)) return false;
+          return updated < cutoff;
+        })
+        .slice()
+        .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt));
+
+      output(isJson, stuck, formatTaskList);
+    });
+}
+
+function truncate(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max - 3)}...` : text;
 }
