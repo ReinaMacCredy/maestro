@@ -404,7 +404,7 @@ describe("task contract CLI", () => {
     expect(payload.scope.filesExpected).toContain("tests/integration/features/task/**");
   }, SLOW_CLI_TIMEOUT_MS);
 
-  it("reopens a completed task through the contract surface and relocks the contract", async () => {
+  it("reopens a completed amended contract through the contract surface and preserves amended status", async () => {
     await Bun.write(join(tmpDir, "README.md"), "seed\n");
     await runCli(["git", "config", "user.email", "test@example.com"], tmpDir);
     await runCli(["git", "config", "user.name", "Test User"], tmpDir);
@@ -434,6 +434,10 @@ describe("task contract CLI", () => {
     const drafted = await runCli(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir);
     const contract = expectJson<{ id: string }>(drafted);
     await runCli(["task", "contract", "lock", contract.id, "--json"], tmpDir);
+    await runCli(
+      ["task", "contract", "criteria", "add", contract.id, "extra amended criterion", "--json"],
+      tmpDir,
+    );
 
     await Bun.write(join(tmpDir, "README.md"), "seed\nupdated\n");
     await runCli(
@@ -442,7 +446,7 @@ describe("task contract CLI", () => {
     );
 
     const reopened = await runCli(["task", "contract", "reopen", contract.id, "--json"], tmpDir);
-    expect(expectJson<{ status: string }>(reopened).status).toBe("locked");
+    expect(expectJson<{ status: string }>(reopened).status).toBe("amended");
 
     const shownTask = await runCli(["task", "show", task.id, "--json"], tmpDir);
     expect(expectJson<{ status: string }>(shownTask).status).toBe("pending");

@@ -72,6 +72,54 @@ describe("FsContractStoreAdapter", () => {
     expect((await fresh.get(created.id))?.lockedBy).toBe("session:codex:1");
   });
 
+  it("resolves a task contract from the index without loading unrelated broken files", async () => {
+    const store = new FsContractStoreAdapter(tmpDir);
+    const created = await store.create(createInput());
+    const contractsDir = join(tmpDir, ".maestro", "tasks", "contracts");
+    await Bun.write(join(contractsDir, "c-badbad.json"), "{not json");
+    await Bun.write(
+      join(contractsDir, "index.jsonl"),
+      [
+        JSON.stringify({
+          id: created.id,
+          taskId: created.taskId,
+          status: "draft",
+          at: created.createdAt,
+        }),
+        JSON.stringify({
+          id: "c-badbad",
+          taskId: "tsk-badbad",
+          status: "draft",
+          at: "2026-04-21T00:30:00.000Z",
+        }),
+        "",
+      ].join("\n"),
+    );
+
+    const resolved = await store.getByTaskId(created.taskId);
+    expect(resolved?.id).toBe(created.id);
+  });
+
+  it("rejects saving a second active contract in the same repo when overlap policy is fail", async () => {
+    const store = new FsContractStoreAdapter(tmpDir);
+    const first = await store.create(createInput({ taskId: "tsk-a1b2c3" }));
+    const second = await store.create(createInput({ taskId: "tsk-b2c3d4" }));
+
+    await store.save({
+      ...first,
+      status: "locked",
+      lockedAt: "2026-04-21T01:00:00.000Z",
+      lockedBy: "session:codex:1",
+    });
+
+    await expect(store.save({
+      ...second,
+      status: "locked",
+      lockedAt: "2026-04-21T01:05:00.000Z",
+      lockedBy: "session:codex:2",
+    })).rejects.toThrow("overlaps an active contract in the same repo");
+  });
+
   it("retries one generated id collision before failing", async () => {
     const store = new FsContractStoreAdapter(tmpDir, {
       generateId: (() => {

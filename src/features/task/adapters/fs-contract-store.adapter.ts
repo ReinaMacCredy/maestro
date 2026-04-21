@@ -7,6 +7,7 @@ import { appendText, ensureDir, readText, removeIfExists, writeJson } from "@/sh
 import {
   CONTRACT_ID_PATTERN,
   generateContractId,
+  isActiveContract,
   lastContractIndexedAt,
   validateContract,
   validateContractIndexEntry,
@@ -65,8 +66,11 @@ export class FsContractStoreAdapter implements ContractStorePort {
   }
 
   async getByTaskId(taskId: string): Promise<Contract | undefined> {
-    const contracts = await this.all();
-    return contracts.find((contract) => contract.taskId === taskId);
+    const entry = await this.findLatestTaskIndexEntry(taskId);
+    if (!entry) {
+      return undefined;
+    }
+    return this.get(entry.id);
   }
 
   async readIndex(): Promise<readonly ContractIndexEntry[]> {
@@ -161,6 +165,7 @@ export class FsContractStoreAdapter implements ContractStorePort {
           "Repair the contract object before saving it",
         ]);
       }
+      await this.assertActiveOverlapInvariant(validated);
       await this.writeContractFile(validated);
       await this.appendIndex({
         id: validated.id,
@@ -210,6 +215,58 @@ export class FsContractStoreAdapter implements ContractStorePort {
   private async appendIndex(entry: ContractIndexEntry): Promise<void> {
     await ensureDir(this.contractsDir());
     await appendText(this.indexPath(), `${JSON.stringify(entry)}\n`);
+  }
+
+  private async findLatestTaskIndexEntry(taskId: string): Promise<ContractIndexEntry | undefined> {
+    const index = await this.readIndex();
+    for (let i = index.length - 1; i >= 0; i -= 1) {
+      const entry = index[i];
+      if (entry?.taskId === taskId) {
+        return entry;
+      }
+    }
+    return undefined;
+  }
+
+  private async listActiveIndexedContracts(): Promise<readonly Contract[]> {
+    const latestById = new Map<string, ContractIndexEntry>();
+    for (const entry of await this.readIndex()) {
+      latestById.set(entry.id, entry);
+    }
+
+    const activeContracts: Contract[] = [];
+    for (const entry of latestById.values()) {
+      if (entry.status !== "locked" && entry.status !== "amended") {
+        continue;
+      }
+      const contract = await this.get(entry.id);
+      if (contract && isActiveContract(contract)) {
+        activeContracts.push(contract);
+      }
+    }
+
+    return activeContracts;
+  }
+
+  private async assertActiveOverlapInvariant(contract: Contract): Promise<void> {
+    if (!isActiveContract(contract) || contract.configSnapshot.overlapPolicy !== "fail") {
+      return;
+    }
+
+    const overlapping = (await this.listActiveIndexedContracts()).filter((candidate) =>
+      candidate.id !== contract.id && candidate.repoRoot === contract.repoRoot,
+    );
+    if (overlapping.length === 0) {
+      return;
+    }
+
+    throw new MaestroError(
+      `Contract ${contract.id} overlaps an active contract in the same repo: ${overlapping.map((item) => item.id).join(", ")}`,
+      [
+        "Discard or finish the other contract first",
+        "Or switch contracts.overlapPolicy to annotate if you intentionally allow overlap",
+      ],
+    );
   }
 
   private async readContractFilenames(dir: string): Promise<readonly string[]> {

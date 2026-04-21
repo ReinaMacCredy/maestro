@@ -50,6 +50,7 @@ export function isContractLockable(contract: Contract): boolean {
   if (contract.intent.trim().length === 0) return false;
   if (contract.scope.filesExpected.length === 0) return false;
   if (contract.doneWhen.length === 0) return false;
+  if (contract.doneWhen.some((criterion) => criterion.text.trim().length === 0)) return false;
   return true;
 }
 
@@ -441,7 +442,10 @@ function isStringArray(value: unknown): value is readonly string[] {
 }
 
 function isIsoString(value: unknown): value is string {
-  return typeof value === "string";
+  if (typeof value !== "string") return false;
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return false;
+  return new Date(parsed).toISOString() === value;
 }
 
 function isOptionalIsoString(value: unknown): value is string | undefined {

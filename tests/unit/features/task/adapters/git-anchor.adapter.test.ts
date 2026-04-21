@@ -106,4 +106,31 @@ describe("ShellGitAnchorAdapter", () => {
     expect(result.notes).toContain("Merge-sourced files:");
     expect(result.notes).toContain("feature.txt");
   });
+
+  it("includes untracked files in the touched set and notes", async () => {
+    await commitFile("base.txt", "base\n", "base");
+    await Bun.write(join(tmpDir, "scratch.txt"), "scratch\n");
+
+    const result = await new ShellGitAnchorAdapter().collectTouchedFiles({
+      repoRoot: tmpDir,
+      claimedAtCommit: (await runCommand(["git", "rev-parse", "HEAD"], tmpDir)).stdout,
+      rebaseFallback: "best-effort",
+    });
+
+    expect(result.actualFilesTouched).toContain("scratch.txt");
+    expect(result.notes).toContain("Includes untracked files.");
+  });
+
+  it("ignores Maestro task runtime files in the touched set", async () => {
+    await commitFile("base.txt", "base\n", "base");
+    await Bun.write(join(tmpDir, ".maestro", "tasks", "tasks.jsonl"), "{}\n");
+
+    const result = await new ShellGitAnchorAdapter().collectTouchedFiles({
+      repoRoot: tmpDir,
+      claimedAtCommit: (await runCommand(["git", "rev-parse", "HEAD"], tmpDir)).stdout,
+      rebaseFallback: "best-effort",
+    });
+
+    expect(result.actualFilesTouched).not.toContain(".maestro/tasks/tasks.jsonl");
+  });
 });

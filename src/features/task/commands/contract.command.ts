@@ -261,7 +261,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
 
   contractCmd
     .command("reopen <ref>")
-    .description("Reopen the completed task linked to a contract and relock the contract")
+    .description("Reopen the completed task linked to a contract and reactivate the contract")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
     .option("--json", "Output as JSON")
     .action(async (ref: string, opts) => {
@@ -438,7 +438,8 @@ async function editContractDraft(initialContent: string, editorCommand: string):
   await writeText(draftPath, initialContent);
 
   try {
-    const result = Bun.spawnSync(["sh", "-lc", `${editorCommand} "${draftPath}"`], {
+    const editorArgv = parseEditorCommand(editorCommand);
+    const result = Bun.spawnSync([...editorArgv, draftPath], {
       stdio: ["inherit", "inherit", "inherit"],
     });
     if ((result.exitCode ?? 1) !== 0) {
@@ -451,6 +452,66 @@ async function editContractDraft(initialContent: string, editorCommand: string):
   } finally {
     await rm(draftDir, { recursive: true, force: true });
   }
+}
+
+function parseEditorCommand(command: string): string[] {
+  const argv: string[] = [];
+  let current = "";
+  let quote: "\"" | "'" | undefined;
+  let escaped = false;
+
+  for (const char of command) {
+    if (escaped) {
+      current += char;
+      escaped = false;
+      continue;
+    }
+
+    if (char === "\\" && quote !== "'") {
+      escaped = true;
+      continue;
+    }
+
+    if (quote) {
+      if (char === quote) {
+        quote = undefined;
+      } else {
+        current += char;
+      }
+      continue;
+    }
+
+    if (char === "\"" || char === "'") {
+      quote = char;
+      continue;
+    }
+
+    if (/\s/.test(char)) {
+      if (current.length > 0) {
+        argv.push(current);
+        current = "";
+      }
+      continue;
+    }
+
+    current += char;
+  }
+
+  if (escaped || quote) {
+    throw new MaestroError(`Editor command is malformed: ${command}`, [
+      "Close any open quotes or trailing escapes and retry",
+    ]);
+  }
+  if (current.length > 0) {
+    argv.push(current);
+  }
+  if (argv.length === 0) {
+    throw new MaestroError("Editor command is empty", [
+      "Pass --editor '<cmd>' or set $EDITOR to a real executable",
+    ]);
+  }
+
+  return argv;
 }
 
 function defaultContractTemplate(): string {

@@ -110,17 +110,22 @@ function applyReceiptHints(
   actorId: string,
   at: string,
 ): readonly DoneWhenCriterion[] {
-  const verifiedBy = receipt?.verifiedBy ?? [];
+  const verifiedBy = receipt?.verifiedBy
+    ?.map((value) => ({
+      raw: value,
+      normalized: normalizeReceiptText(value),
+    }))
+    .filter((value) => value.normalized.length > 0) ?? [];
   if (verifiedBy.length === 0) {
     return criteria;
   }
 
   return criteria.map((criterion) => {
-    if (criterion.met === true) {
+    if (criterion.met === true || criterion.kind !== "receipt-hint") {
       return criterion;
     }
 
-    const matchedVerifier = verifiedBy.find((value) => looselyMatches(criterion.text, value));
+    const matchedVerifier = verifiedBy.find((value) => looselyMatches(criterion.text, value.normalized));
     if (!matchedVerifier) {
       return criterion;
     }
@@ -130,15 +135,31 @@ function applyReceiptHints(
       met: true,
       metAt: at,
       metBy: actorId,
-      metEvidence: `receipt.verifiedBy:${matchedVerifier}`,
+      metEvidence: `receipt.verifiedBy:${matchedVerifier.raw}`,
     };
   });
 }
 
 function looselyMatches(left: string, right: string): boolean {
-  const normalizedLeft = left.trim().toLowerCase();
-  const normalizedRight = right.trim().toLowerCase();
-  return normalizedLeft.includes(normalizedRight) || normalizedRight.includes(normalizedLeft);
+  const normalizedLeft = normalizeReceiptText(left);
+  const normalizedRight = normalizeReceiptText(right);
+  if (normalizedLeft.length === 0 || normalizedRight.length === 0) {
+    return false;
+  }
+  if (normalizedLeft === normalizedRight) {
+    return true;
+  }
+  if (normalizedLeft.length < 3) {
+    return false;
+  }
+  return normalizedRight.includes(normalizedLeft);
+}
+
+function normalizeReceiptText(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
 }
 
 function matchesAny(patterns: readonly string[], path: string): boolean {

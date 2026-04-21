@@ -61,6 +61,9 @@ describe("contract-state", () => {
     expect(isContractLockable(contract({ intent: "   " }))).toBe(false);
     expect(isContractLockable(contract({ scope: { filesExpected: [], filesForbidden: [] } }))).toBe(false);
     expect(isContractLockable(contract({ doneWhen: [] }))).toBe(false);
+    expect(isContractLockable(contract({
+      doneWhen: [{ id: "dw-a1b2c3", text: "   ", kind: "manual" }],
+    }))).toBe(false);
     expect(isContractLockable(contract({ status: "locked" }))).toBe(false);
   });
 
@@ -106,6 +109,7 @@ describe("contract-state", () => {
 
   it("rejects hand-edited invalid contracts", () => {
     expect(validateContract({ ...contract(), id: "nope" })).toBeUndefined();
+    expect(validateContract({ ...contract(), createdAt: "2026-04-21" })).toBeUndefined();
     expect(validateContract({ ...contract(), doneWhen: [{ id: "dw-a1b2c3", text: 1, kind: "manual" }] })).toBeUndefined();
     expect(validateContract({ ...contract(), configSnapshot: { strict: false } })).toBeUndefined();
     expect(validateContract({ ...contract(), verdict: { fulfilled: "nope" } })).toBeUndefined();

@@ -155,6 +155,10 @@ describe("task CLI daily loop", () => {
     expect(ready.exitCode).toBe(0);
     expect(expectJson<Array<{ id: string }>>(ready).map((task) => task.id)).toContain(id);
 
+    const nowMd = await readFile(join(tmpDir, ".maestro", "tasks", "NOW.md"), "utf8");
+    expect(nowMd).toContain(`### ${id} . stale owner continuation`);
+    expect(nowMd).not.toContain("Owner: codex-stale-session");
+
     const summaryPath = join(tmpDir, ".maestro", "tasks", "continuations", "active", `${id}.json`);
     const summary = JSON.parse(await readFile(summaryPath, "utf8")) as {
       status: string;

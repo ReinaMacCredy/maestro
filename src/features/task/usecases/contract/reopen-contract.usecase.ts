@@ -59,7 +59,7 @@ export async function reopenContractForTask(
 
   return contractStore.save({
     ...contract,
-    status: "locked",
+    status: contract.amendments.length > 0 ? "amended" : "locked",
     closedAt: undefined,
     closedAtCommit: undefined,
     closedBy: undefined,

@@ -106,7 +106,7 @@ Useful contract commands:
 At completion the declared scope is diffed against actual changes.
 Out-of-scope files are signal, not failure, unless strict mode is on.
 After a contracted task completes, \`maestro task contract show <id>\` includes the stored verdict.
-Reopening a completed task relocks its contract and clears the stored verdict while keeping amendment history.
+Reopening a completed task reactivates its contract, clears the stored verdict, and preserves amendment history. Previously amended contracts reopen as amended.
 
 **Create a standalone Codex or Claude handoff packet:**
 \`\`\`bash
@@ -264,7 +264,7 @@ This project uses Maestro for local bootstrap and runtime orchestration.
 - Use \`--no-contract\` only when config requires a contract but the task intentionally has none.
 - After completion, \`task contract show\` includes the stored verdict.
 - Set \`contracts.overlapPolicy: annotate\` to allow overlapping active contracts while still recording the overlap in verdicts.
-- Reopening a completed task relocks its contract and clears the stored verdict.
+- Reopening a completed task reactivates its contract, clears the stored verdict, and preserves amendment history. Previously amended contracts reopen as amended.
 - Deleting a task removes its linked contract file and appends a \`task_deleted\` discard record to the contract index.
 - \`.maestro/tasks/NOW.md\` adds a one-line contract status summary for active contracted work.
 - Stale reclaim inherits active contract ownership by default; set \`contracts.staleReclaimContractPolicy: block\` to refuse it.

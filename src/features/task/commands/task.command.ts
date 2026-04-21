@@ -1277,6 +1277,7 @@ async function maybeReleaseStaleOwnedTasks(skipAssignees: readonly string[] = []
   const before = new Map(tasks.map((task) => [task.id, task] as const));
   const staleOwners = new Set<string>();
   const skipSet = new Set(skipAssignees);
+  let refreshedNowMd = false;
 
   for (const task of tasks) {
     if (!task.assignee || task.status === "completed") {
@@ -1301,6 +1302,7 @@ async function maybeReleaseStaleOwnedTasks(skipAssignees: readonly string[] = []
       const released = await releaseOwnedTasks(services.taskStore, assignee);
       await syncRecoveredStaleOwnerTasks(services, before, released);
       if (released.length > 0) {
+        refreshedNowMd = true;
         warn(`[ok] Released ${released.length} stale task(s) owned by ${assignee}`);
       }
     } catch (error) {
@@ -1310,6 +1312,10 @@ async function maybeReleaseStaleOwnedTasks(skipAssignees: readonly string[] = []
       const message = error instanceof Error ? error.message : String(error);
       warn(`Stale task recovery failed for ${assignee}: ${message}`);
     }
+  }
+
+  if (refreshedNowMd) {
+    await refreshNowMd();
   }
 }
 
@@ -1541,9 +1547,10 @@ async function maybeReleaseStaleClaim(
     ? parseDuration(staleAfterRaw, "--stale-after")
     : DEFAULT_STALE_AFTER_MS;
 
-  const last = task.lastActivityAt !== undefined
-    ? Date.parse(task.lastActivityAt)
-    : 0;
+  const last = lastStaleClaimActivityMs(task);
+  if (last === undefined) {
+    return;
+  }
   const idleMs = Date.now() - last;
   if (idleMs < thresholdMs) {
     return;
@@ -1565,6 +1572,16 @@ async function maybeReleaseStaleClaim(
   if (released.length > 0) {
     warn(`Released stale-claim (auto-released) on ${task.id} from ${task.assignee}`);
   }
+}
+
+function lastStaleClaimActivityMs(task: Pick<Task, "lastActivityAt" | "updatedAt">): number | undefined {
+  const preferred = task.lastActivityAt ? Date.parse(task.lastActivityAt) : Number.NaN;
+  if (Number.isFinite(preferred)) {
+    return preferred;
+  }
+
+  const fallback = Date.parse(task.updatedAt);
+  return Number.isFinite(fallback) ? fallback : undefined;
 }
 
 async function assertStaleContractsReclaimable(tasks: readonly Task[]): Promise<void> {

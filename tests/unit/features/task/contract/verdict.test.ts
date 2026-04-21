@@ -78,6 +78,77 @@ describe("computeContractVerdict", () => {
     );
   });
 
+  it("only auto-marks receipt-hint criteria from receipt verification", () => {
+    const contract = contractFixture({
+      doneWhen: [
+        {
+          id: "dw-hint01",
+          text: "manual",
+          kind: "receipt-hint",
+        },
+        {
+          id: "dw-manual",
+          text: "manual",
+          kind: "manual",
+        },
+      ],
+    });
+
+    const computed = computeContractVerdict(
+      contract,
+      {
+        gitAvailable: true,
+        actualFilesTouched: ["README.md"],
+        closedAtCommit: "89abcdef0123456789abcdef0123456789abcdef",
+        anchorFallback: "direct",
+      },
+      {
+        summary: "verified",
+        verifiedBy: ["manual"],
+        capturedAt: "2026-04-21T00:10:00.000Z",
+      },
+      "session:test",
+      "2026-04-21T00:10:00.000Z",
+    );
+
+    expect(computed.criteria.find((criterion) => criterion.id === "dw-hint01")).toEqual(
+      expect.objectContaining({ met: true }),
+    );
+    expect(computed.criteria.find((criterion) => criterion.id === "dw-manual")?.met).not.toBe(true);
+  });
+
+  it("avoids false-positive receipt hint matches from short verifier substrings", () => {
+    const contract = contractFixture({
+      doneWhen: [
+        {
+          id: "dw-hint01",
+          text: "manual review",
+          kind: "receipt-hint",
+        },
+      ],
+    });
+
+    const computed = computeContractVerdict(
+      contract,
+      {
+        gitAvailable: true,
+        actualFilesTouched: ["README.md"],
+        closedAtCommit: "89abcdef0123456789abcdef0123456789abcdef",
+        anchorFallback: "direct",
+      },
+      {
+        summary: "verified",
+        verifiedBy: ["manual"],
+        capturedAt: "2026-04-21T00:10:00.000Z",
+      },
+      "session:test",
+      "2026-04-21T00:10:00.000Z",
+    );
+
+    expect(computed.criteria[0]?.met).not.toBe(true);
+    expect(computed.verdict.fulfilled).toBe(false);
+  });
+
   it("marks the verdict broken for lost anchors, forbidden files, out-of-scope files, and unmet criteria", () => {
     const contract = contractFixture({
       scope: {

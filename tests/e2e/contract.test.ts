@@ -144,6 +144,7 @@ describe("task contract compiled E2E", () => {
       (await runCompiled(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir)).stdout,
     ) as { id: string };
     await runCompiled(["task", "contract", "lock", contract.id, "--json"], tmpDir);
+    await rm(templatePath, { force: true });
 
     await Bun.write(join(tmpDir, "README.md"), "hello\ncompiled\n");
     const completed = await runCompiled(
@@ -297,7 +298,7 @@ describe("task contract compiled E2E", () => {
     expect(removed.stdout).toBe(`${contract.id} [ok]`);
   }, SLOW_CLI_TIMEOUT_MS);
 
-  it("relocks the contract after task reopen", async () => {
+  it("reactivates amended contracts after task reopen", async () => {
     await seedTrackedFile("README.md", "hello\n");
 
     const task = JSON.parse((await runCompiled(["task", "create", "compiled reopen", "--json"], tmpDir)).stdout) as {
@@ -359,7 +360,7 @@ describe("task contract compiled E2E", () => {
       verdict?: unknown;
       amendments: unknown[];
     };
-    expect(shown.status).toBe("locked");
+    expect(shown.status).toBe("amended");
     expect(shown.amendments).toHaveLength(1);
     expect(shown.verdict).toBeUndefined();
   }, SLOW_CLI_TIMEOUT_MS);

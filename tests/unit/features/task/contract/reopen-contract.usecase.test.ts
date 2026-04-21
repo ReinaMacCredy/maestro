@@ -43,7 +43,7 @@ describe("reopenContractForTask", () => {
     store = new FsContractStoreAdapter(tmpDir);
   });
 
-  it("relocks closed contracts while preserving amendment history", async () => {
+  it("reopens amended contracts as amended while preserving amendment history", async () => {
     const created = await store.create(createInput());
     const fulfilled = await store.save({
       ...created,
@@ -92,12 +92,43 @@ describe("reopenContractForTask", () => {
       contractId: fulfilled.id,
     });
 
-    expect(reopened?.status).toBe("locked");
+    expect(reopened?.status).toBe("amended");
     expect(reopened?.amendments).toHaveLength(1);
     expect(reopened?.closedAt).toBeUndefined();
     expect(reopened?.closedAtCommit).toBeUndefined();
     expect(reopened?.closedBy).toBeUndefined();
     expect(reopened?.verdict).toBeUndefined();
+  });
+
+  it("reopens untouched contracts as locked", async () => {
+    const created = await store.create(createInput());
+    const fulfilled = await store.save({
+      ...created,
+      status: "fulfilled",
+      lockedAt: "2026-04-21T00:10:00.000Z",
+      lockedBy: "session:codex:a",
+      closedAt: "2026-04-21T01:00:00.000Z",
+      closedAtCommit: "abc123",
+      closedBy: "session:codex:a",
+      verdict: {
+        fulfilled: true,
+        computedAt: "2026-04-21T01:00:00.000Z",
+        actualFilesTouched: ["README.md"],
+        expectedFilesMatched: ["README.md"],
+        outOfScopeFiles: [],
+        forbiddenTouched: [],
+        filesExpectedUnused: [],
+        unmetCriteria: [],
+        metCriteria: [],
+      },
+    });
+
+    const reopened = await reopenContractForTask(store, {
+      id: fulfilled.taskId,
+      contractId: fulfilled.id,
+    });
+
+    expect(reopened?.status).toBe("locked");
   });
 
   it("rejects reopen when another active contract already owns the repo under fail overlap policy", async () => {
