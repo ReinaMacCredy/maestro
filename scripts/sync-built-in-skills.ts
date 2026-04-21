@@ -57,7 +57,7 @@ async function collectTemplates(): Promise<SkillTemplate[]> {
     const files: SkillFile[] = [];
     for (const absolute of absolutePaths) {
       const relativePath = relative(skillDir, absolute).split(sep).join("/");
-      const content = await readFile(absolute, "utf8");
+      const content = normalizeLineEndings(await readFile(absolute, "utf8")) ?? "";
       files.push({ path: relativePath, content });
     }
     templates.push({ name, files });
@@ -86,7 +86,7 @@ function renderModule(templates: readonly SkillTemplate[]): string {
   return `${header}\n${body};\n`;
 }
 
-function normalizeLineEndings(text: string | undefined): string | undefined {
+export function normalizeLineEndings(text: string | undefined): string | undefined {
   return text?.replace(/\r\n/g, "\n");
 }
 
