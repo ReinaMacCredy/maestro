@@ -9,6 +9,7 @@ import {
   initGitRepo,
   runCompiled,
 } from "../helpers/run-compiled-cli.js";
+import { runCommand } from "../helpers/command-runner.js";
 
 let tmpDir: string;
 
@@ -27,6 +28,14 @@ async function writeTemplate(name: string, body: string): Promise<string> {
   const path = join(tmpDir, name);
   await Bun.write(path, body);
   return path;
+}
+
+async function seedTrackedFile(path: string, content: string): Promise<void> {
+  await Bun.write(join(tmpDir, path), content);
+  await runCommand(["git", "config", "user.email", "test@example.com"], tmpDir);
+  await runCommand(["git", "config", "user.name", "Test User"], tmpDir);
+  await runCommand(["git", "add", path], tmpDir);
+  await runCommand(["git", "commit", "-m", "seed tracked file"], tmpDir);
 }
 
 describe("task contract compiled E2E", () => {
@@ -87,5 +96,68 @@ describe("task contract compiled E2E", () => {
       tmpDir,
     );
     expect(discarded.stdout).toBe(`${contractId} [ok]`);
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("stores a fulfilled verdict after compiled completion", async () => {
+    await seedTrackedFile("README.md", "hello\n");
+
+    const task = JSON.parse((await runCompiled(["task", "create", "compiled verdict", "--json"], tmpDir)).stdout) as {
+      id: string;
+    };
+    await runCompiled(["task", "claim", task.id, "--session", "compiled-owner", "--json"], tmpDir);
+    await runCompiled(
+      ["task", "update", task.id, "--status", "in_progress", "--session", "compiled-owner", "--json"],
+      tmpDir,
+    );
+
+    const templatePath = await writeTemplate(
+      "verdict-template.yaml",
+      [
+        "intent: Keep the compiled completion inside README",
+        "scope:",
+        "  filesExpected:",
+        "    - README.md",
+        "  filesForbidden: []",
+        "doneWhen:",
+        "  - text: manual",
+        "    kind: receipt-hint",
+        "",
+      ].join("\n"),
+    );
+
+    const contract = JSON.parse(
+      (await runCompiled(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir)).stdout,
+    ) as { id: string };
+    await runCompiled(["task", "contract", "lock", contract.id, "--json"], tmpDir);
+
+    await Bun.write(join(tmpDir, "README.md"), "hello\ncompiled\n");
+    const completed = await runCompiled(
+      [
+        "task",
+        "update",
+        task.id,
+        "--status",
+        "completed",
+        "--reason",
+        "done",
+        "--verified-by",
+        "manual",
+        "--session",
+        "compiled-owner",
+        "--json",
+      ],
+      tmpDir,
+    );
+    expect(JSON.parse(completed.stdout)).toEqual(expect.objectContaining({ status: "completed" }));
+
+    const shown = JSON.parse(
+      (await runCompiled(["task", "contract", "show", contract.id, "--json"], tmpDir)).stdout,
+    ) as {
+      status: string;
+      verdict?: { fulfilled: boolean; actualFilesTouched: string[] };
+    };
+    expect(shown.status).toBe("fulfilled");
+    expect(shown.verdict?.fulfilled).toBe(true);
+    expect(shown.verdict?.actualFilesTouched).toContain("README.md");
   }, SLOW_CLI_TIMEOUT_MS);
 });

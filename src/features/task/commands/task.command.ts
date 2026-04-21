@@ -16,6 +16,8 @@ import { captureTaskCandidate } from "../usecases/capture-task-candidate.usecase
 import { planTasks } from "../usecases/plan-tasks.usecase.js";
 import { findSimilarTasks } from "../usecases/find-similar-tasks.usecase.js";
 import { heartbeatTask } from "../usecases/heartbeat-task.usecase.js";
+import { closeContractForTask } from "../usecases/contract/close-contract.usecase.js";
+import { computeContractVerdictForTask } from "../usecases/contract/compute-verdict.usecase.js";
 import { STUCK_THRESHOLD_MS, isStuckTask } from "../domain/now-md-format.js";
 import { parseDuration } from "./duration.js";
 import {
@@ -31,6 +33,7 @@ import type {
   ListTasksFilters,
   ReadyTasksFilters,
   Task,
+  TaskReceipt,
   UpdateTaskInput,
 } from "../domain/task-types.js";
 import { TASK_STATUSES, TASK_TYPES } from "../domain/task-types.js";
@@ -61,6 +64,7 @@ import {
   formatTaskSummary,
 } from "./task-command-formatters.js";
 import { registerContractCommand } from "./contract.command.js";
+import { syncTaskMetadata } from "../usecases/sync-task-metadata.usecase.js";
 
 interface ContinuationEditInput {
   readonly currentState?: string;
@@ -368,6 +372,8 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
     .option("--summary <text>", "Receipt summary captured on --status completed (defaults to --reason)")
     .option("--surprise <text>", "Surprise/gotcha captured on --status completed")
     .option("--verified-by <name>", "Verifier captured on --status completed (repeatable)", appendVerifier, [] as string[])
+    .option("--strict", "Block completion when the contract verdict is broken")
+    .option("--no-contract", "Allow completion without a contract when contracts.default=required")
     .option("--priority <n>", "New priority 0-4")
     .option("--type <type>", `New type (${TASK_TYPES.join("|")})`)
     .option("--parent <id>", "New parent id (empty string clears)")
@@ -415,6 +421,7 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
 
       const hasTaskPatch = hasAnyPatchField(patch);
       const hasContinuationPatch = hasContinuationEdits(continuationEdits);
+      const noContract = opts.contract === false;
 
       if (!hasTaskPatch && !hasContinuationPatch) {
         throw new MaestroError("No update specified", [
@@ -425,6 +432,12 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
       }
 
       const sessionId = await resolveSessionAndReleaseStale(opts.session);
+      if (patch.status === "completed" && previous) {
+        await enforceContractCompletionPolicy(previous, patch, {
+          strictFlag: opts.strict === true,
+          noContract,
+        });
+      }
       let updated: Task;
       let autoClaimed = false;
 
@@ -506,6 +519,7 @@ function registerClaimCommand(taskCmd: Command, program: Command): void {
         force: opts.force === true,
         checkBusy: opts.busyCheck === true,
       });
+      await maybeAttachClaimAnchor(claimed.id);
       await syncTaskContinuation(
         {
           continuationStore: services.taskContinuationStore,
@@ -1090,6 +1104,9 @@ async function applyUpdateContinuation(
   }
 
   await refreshNowMd();
+  if (updated.status === "completed" && updated.contractId) {
+    await maybeFinalizeTaskContract(updated);
+  }
 }
 
 function parseContinuationEdits(opts: {
@@ -1281,6 +1298,133 @@ async function maybeCaptureCompletionHint(task: Task): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     warn(`Task ${task.id} completed, but hint capture failed: ${message}`);
+  }
+}
+
+async function maybeAttachClaimAnchor(taskId: string): Promise<void> {
+  try {
+    const services = getServices();
+    const claimedAtCommit = await services.gitAnchor.resolveHeadCommit(process.cwd());
+    if (!claimedAtCommit) {
+      return;
+    }
+    await syncTaskMetadata(services.taskStore, taskId, { claimedAtCommit });
+  } catch {
+    // Claim anchor is best-effort and should not block ownership.
+  }
+}
+
+async function enforceContractCompletionPolicy(
+  task: Task,
+  patch: UpdateTaskInput,
+  opts: { readonly strictFlag: boolean; readonly noContract: boolean },
+): Promise<void> {
+  const services = getServices();
+  const config = await services.config.load(process.cwd());
+
+  if (!task.contractId) {
+    if (!opts.noContract && config.contracts?.default === "required") {
+      throw new MaestroError(`Task ${task.id} requires a locked contract before completion`, [
+        `Create one: maestro task contract new ${task.id}`,
+        `Or bypass the requirement for this completion only: maestro task update ${task.id} --status completed --no-contract ...`,
+      ]);
+    }
+    return;
+  }
+
+  if (opts.noContract) {
+    throw new MaestroError(`Task ${task.id} already has contract ${task.contractId}; --no-contract cannot ignore it`, [
+      "Drop --no-contract and either lock the contract or discard it first",
+    ]);
+  }
+
+  const contract = await services.contractStore.get(task.contractId);
+  if (!contract) {
+    throw new MaestroError(`Contract ${task.contractId} not found for task ${task.id}`, [
+      "Inspect .maestro/tasks/contracts/ for corruption or stale state",
+    ]);
+  }
+  if (contract.status === "draft") {
+    throw new MaestroError(`Contract ${contract.id} is still draft`, [
+      `Lock it first: maestro task contract lock ${contract.id}`,
+    ]);
+  }
+  if (contract.status === "discarded" || contract.status === "fulfilled" || contract.status === "broken") {
+    return;
+  }
+
+  const strict = opts.strictFlag || contract.configSnapshot.strict;
+  if (!strict) {
+    return;
+  }
+
+  const preview = await computeContractVerdictForTask(
+    services.gitAnchor,
+    contract,
+    {
+      assignee: task.assignee,
+      receipt: previewTaskReceipt(task, patch),
+      updatedAt: new Date().toISOString(),
+    },
+  );
+
+  if (!preview.verdict.fulfilled) {
+    throw new MaestroError(`Contract ${contract.id} is broken and strict mode refused completion`, [
+      formatVerdictHint(preview.verdict),
+      `Inspect the contract: maestro task contract show ${contract.id} --json`,
+    ]);
+  }
+}
+
+function previewTaskReceipt(task: Task, patch: UpdateTaskInput): TaskReceipt | undefined {
+  const summary = nonEmpty(patch.summary) ?? nonEmpty(patch.reason) ?? task.receipt?.summary;
+  const surprise = nonEmpty(patch.surprise);
+  const verifiedBy = patch.verifiedBy?.filter((name) => name.length > 0) ?? [];
+  if (!summary && !surprise && verifiedBy.length === 0) {
+    return task.receipt;
+  }
+
+  return {
+    summary: summary ?? "",
+    ...(surprise ? { surprise } : {}),
+    ...(verifiedBy.length > 0 ? { verifiedBy } : {}),
+    capturedAt: new Date().toISOString(),
+  };
+}
+
+function nonEmpty(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : undefined;
+}
+
+function formatVerdictHint(verdict: {
+  readonly outOfScopeFiles: readonly string[];
+  readonly forbiddenTouched: readonly string[];
+  readonly unmetCriteria: readonly Array<{ readonly text: string }>;
+  readonly capExceeded?: { readonly actual: number; readonly cap: number };
+}): string {
+  if (verdict.outOfScopeFiles.length > 0) {
+    return `Out of scope: ${verdict.outOfScopeFiles.join(", ")}`;
+  }
+  if (verdict.forbiddenTouched.length > 0) {
+    return `Forbidden files touched: ${verdict.forbiddenTouched.join(", ")}`;
+  }
+  if (verdict.unmetCriteria.length > 0) {
+    return `Unmet criteria: ${verdict.unmetCriteria.map((item) => item.text).join(" | ")}`;
+  }
+  if (verdict.capExceeded) {
+    return `Touched ${verdict.capExceeded.actual} files, exceeding the cap of ${verdict.capExceeded.cap}`;
+  }
+  return "Inspect the stored verdict for details.";
+}
+
+async function maybeFinalizeTaskContract(task: Task): Promise<void> {
+  try {
+    const services = getServices();
+    await closeContractForTask(services.contractStore, services.gitAnchor, task);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    warn(`Task ${task.id} completed, but contract close failed: ${message}`);
   }
 }
 

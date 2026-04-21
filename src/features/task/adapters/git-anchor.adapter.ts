@@ -1,0 +1,154 @@
+import { execArgv } from "@/shared/lib/shell.js";
+import { normalizeSlashes } from "@/shared/lib/path-normalize.js";
+import type { GitAnchorPort, GitTouchedFilesResult } from "../ports/git-anchor.port.js";
+
+const EMPTY_TREE_HASH = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+
+export class ShellGitAnchorAdapter implements GitAnchorPort {
+  async resolveRepoRoot(cwd: string): Promise<string> {
+    const result = await execArgv(["git", "rev-parse", "--show-toplevel"], { cwd });
+    return result.exitCode === 0 && result.stdout ? result.stdout : cwd;
+  }
+
+  async resolveHeadCommit(cwd: string): Promise<string | undefined> {
+    const repo = await execArgv(["git", "rev-parse", "--is-inside-work-tree"], { cwd });
+    if (repo.exitCode !== 0 || repo.stdout !== "true") {
+      return undefined;
+    }
+
+    const head = await execArgv(["git", "rev-parse", "HEAD"], { cwd });
+    if (head.exitCode === 0 && head.stdout) {
+      return head.stdout;
+    }
+    return EMPTY_TREE_HASH;
+  }
+
+  async collectTouchedFiles(input: {
+    readonly repoRoot: string;
+    readonly claimedAtCommit?: string;
+    readonly rebaseFallback: "best-effort" | "fail";
+  }): Promise<GitTouchedFilesResult> {
+    const head = await this.resolveHeadCommit(input.repoRoot);
+    if (!head) {
+      return {
+        gitAvailable: false,
+        actualFilesTouched: [],
+        notes: "Git is unavailable for this contract window.",
+      };
+    }
+
+    const anchorResolution = await this.resolveAnchor(input.repoRoot, input.claimedAtCommit, head, input.rebaseFallback);
+    if (anchorResolution.anchorFallback === "lost") {
+      return {
+        gitAvailable: true,
+        actualFilesTouched: [],
+        closedAtCommit: head,
+        anchorFallback: "lost",
+        notes: anchorResolution.notes,
+      };
+    }
+
+    const [range, workingTree, staged] = await Promise.all([
+      anchorResolution.anchor
+        ? execArgv(["git", "diff", "--name-only", anchorResolution.anchor, head], { cwd: input.repoRoot })
+        : Promise.resolve({ stdout: "", stderr: "", exitCode: 0 }),
+      execArgv(["git", "diff", "--name-only"], { cwd: input.repoRoot }),
+      execArgv(["git", "diff", "--cached", "--name-only"], { cwd: input.repoRoot }),
+    ]);
+
+    const files = new Set<string>();
+    for (const output of [range.stdout, workingTree.stdout, staged.stdout]) {
+      for (const path of splitPaths(output)) {
+        files.add(path);
+      }
+    }
+
+    const notes = [
+      anchorResolution.notes,
+      workingTree.stdout ? "Includes uncommitted tracked changes." : undefined,
+      staged.stdout ? "Includes staged changes." : undefined,
+    ].filter((value): value is string => Boolean(value));
+
+    return {
+      gitAvailable: true,
+      actualFilesTouched: [...files].sort(),
+      closedAtCommit: head,
+      anchorFallback: anchorResolution.anchorFallback,
+      ...(notes.length > 0 ? { notes: notes.join(" ") } : {}),
+    };
+  }
+
+  private async resolveAnchor(
+    cwd: string,
+    claimedAtCommit: string | undefined,
+    head: string,
+    rebaseFallback: "best-effort" | "fail",
+  ): Promise<{
+    readonly anchor?: string;
+    readonly anchorFallback?: "direct" | "reflog" | "merge-base" | "lost";
+    readonly notes?: string;
+  }> {
+    if (!claimedAtCommit) {
+      return {
+        anchor: head,
+        anchorFallback: "direct",
+      };
+    }
+    if (claimedAtCommit === EMPTY_TREE_HASH) {
+      return {
+        anchor: claimedAtCommit,
+        anchorFallback: "direct",
+      };
+    }
+    if (claimedAtCommit === head) {
+      return {
+        anchor: claimedAtCommit,
+        anchorFallback: "direct",
+      };
+    }
+
+    const reachable = await execArgv(["git", "merge-base", "--is-ancestor", claimedAtCommit, head], { cwd });
+    if (reachable.exitCode === 0) {
+      return {
+        anchor: claimedAtCommit,
+        anchorFallback: "direct",
+      };
+    }
+    if (rebaseFallback === "fail") {
+      return {
+        anchorFallback: "lost",
+        notes: "Claim anchor is no longer reachable from HEAD.",
+      };
+    }
+
+    const present = await execArgv(["git", "cat-file", "-e", `${claimedAtCommit}^{commit}`], { cwd });
+    if (present.exitCode === 0) {
+      return {
+        anchor: claimedAtCommit,
+        anchorFallback: "reflog",
+        notes: "Used the original claim anchor even though it is no longer an ancestor of HEAD.",
+      };
+    }
+
+    const mergeBase = await execArgv(["git", "merge-base", claimedAtCommit, head], { cwd });
+    if (mergeBase.exitCode === 0 && mergeBase.stdout) {
+      return {
+        anchor: mergeBase.stdout,
+        anchorFallback: "merge-base",
+        notes: `Claim anchor was lost; fell back to merge-base ${mergeBase.stdout}.`,
+      };
+    }
+
+    return {
+      anchorFallback: "lost",
+      notes: "Claim anchor could not be recovered after history rewriting.",
+    };
+  }
+}
+
+function splitPaths(output: string): readonly string[] {
+  return output
+    .split("\n")
+    .map((line) => normalizeSlashes(line.trim()))
+    .filter((line) => line.length > 0);
+}

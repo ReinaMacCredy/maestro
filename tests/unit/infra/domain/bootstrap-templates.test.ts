@@ -45,6 +45,8 @@ describe("AGENT_INSTRUCTION_BLOCK", () => {
     expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract show <id>");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract list");
     expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task contract discard <id>");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("--strict");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("--no-contract");
   });
 
   it("mirrors contract guidance into the bootstrap AGENTS template", () => {
@@ -52,6 +54,8 @@ describe("AGENT_INSTRUCTION_BLOCK", () => {
     expect(agentsTemplate?.content).toContain(".maestro/tasks/contracts/");
     expect(agentsTemplate?.content).toContain("maestro task contract new <id>");
     expect(agentsTemplate?.content).toContain("maestro task contract lock <id>");
+    expect(agentsTemplate?.content).toContain("--strict");
+    expect(agentsTemplate?.content).toContain("stored verdict");
   });
 
   it("documents the native handoff launcher and launch artifact path", () => {

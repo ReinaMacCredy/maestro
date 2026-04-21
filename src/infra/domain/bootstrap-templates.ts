@@ -95,6 +95,7 @@ Useful contract commands:
 
 At completion the declared scope is diffed against actual changes.
 Out-of-scope files are signal, not failure, unless strict mode is on.
+After a contracted task completes, \`maestro task contract show <id>\` includes the stored verdict.
 
 **Create a standalone Codex or Claude handoff packet:**
 \`\`\`bash
@@ -153,7 +154,7 @@ maestro task update <id> --current-state "..." --next-action "..."
 maestro task update <id> --add-decision "keep api stable"
 maestro task update <id> --remove-decision "old constraint"
 maestro task update <id> --status completed --reason "<one-line outcome>" \\
-  [--summary "<receipt summary>"] [--surprise "<gotcha>"] [--verified-by <name>]
+  [--summary "<receipt summary>"] [--surprise "<gotcha>"] [--verified-by <name>] [--strict] [--no-contract]
 maestro task reopen <id>
 
 # Discover context
@@ -231,6 +232,9 @@ This project uses Maestro for local bootstrap and runtime orchestration.
   - \`maestro task contract show <id>\`
   - \`maestro task contract list\`
   - \`maestro task contract discard <id>\`
+- Completion can enforce contracts with \`maestro task update <id> --status completed --strict\`.
+- Use \`--no-contract\` only when config requires a contract but the task intentionally has none.
+- After completion, \`task contract show\` includes the stored verdict.
 
 ## Agent Skill Lookup
 

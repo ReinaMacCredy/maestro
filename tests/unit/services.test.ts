@@ -52,6 +52,7 @@ describe("services composition root", () => {
       projectGraphStore: expect.any(Object),
       taskStore: expect.any(Object),
       contractStore: expect.any(Object),
+      gitAnchor: expect.any(Object),
       replyStore: expect.any(Object),
     });
   });

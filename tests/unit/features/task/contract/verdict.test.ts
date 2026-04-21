@@ -1,0 +1,119 @@
+import { describe, expect, it } from "bun:test";
+import { computeContractVerdict } from "@/features/task/domain/contract/verdict.js";
+import type { Contract } from "@/features/task/domain/contract/contract-types.js";
+import type { GitTouchedFilesResult } from "@/features/task/ports/git-anchor.port.js";
+
+function contractFixture(overrides: Partial<Contract> = {}): Contract {
+  return {
+    schemaVersion: 1,
+    id: "c-a1b2c3",
+    taskId: "tsk-a1b2c3",
+    repoRoot: "/tmp/repo",
+    status: "locked",
+    createdAt: "2026-04-21T00:00:00.000Z",
+    lockedAt: "2026-04-21T00:05:00.000Z",
+    intent: "Keep the change inside the scoped files.",
+    scope: {
+      filesExpected: ["README.md"],
+      filesForbidden: [],
+    },
+    doneWhen: [
+      {
+        id: "dw-a1b2c3",
+        text: "manual",
+        kind: "receipt-hint",
+      },
+    ],
+    claimedAtCommit: "0123456789abcdef0123456789abcdef01234567",
+    amendments: [],
+    createdBy: "user",
+    lockedBy: "session:test",
+    configSnapshot: {
+      strict: false,
+      overlapPolicy: "fail",
+      rebaseFallback: "best-effort",
+      staleReclaimContractPolicy: "inherit",
+    },
+    ...overrides,
+  };
+}
+
+describe("computeContractVerdict", () => {
+  it("fulfills a contract when touched files stay in scope and receipt hints satisfy criteria", () => {
+    const contract = contractFixture({
+      scope: {
+        filesExpected: ["README.md", "src/**"],
+        filesForbidden: [],
+      },
+    });
+    const gitResult: GitTouchedFilesResult = {
+      gitAvailable: true,
+      actualFilesTouched: ["README.md"],
+      closedAtCommit: "89abcdef0123456789abcdef0123456789abcdef",
+      anchorFallback: "direct",
+    };
+
+    const computed = computeContractVerdict(
+      contract,
+      gitResult,
+      {
+        summary: "updated docs",
+        verifiedBy: ["manual"],
+        capturedAt: "2026-04-21T00:10:00.000Z",
+      },
+      "session:test",
+      "2026-04-21T00:10:00.000Z",
+    );
+
+    expect(computed.verdict.fulfilled).toBe(true);
+    expect(computed.verdict.expectedFilesMatched).toEqual(["README.md"]);
+    expect(computed.verdict.outOfScopeFiles).toEqual([]);
+    expect(computed.verdict.filesExpectedUnused).toEqual(["src/**"]);
+    expect(computed.verdict.metCriteria).toHaveLength(1);
+    expect(computed.criteria[0]).toEqual(
+      expect.objectContaining({
+        met: true,
+        metEvidence: "receipt.verifiedBy:manual",
+      }),
+    );
+  });
+
+  it("marks the verdict broken for lost anchors, forbidden files, out-of-scope files, and unmet criteria", () => {
+    const contract = contractFixture({
+      scope: {
+        filesExpected: ["src/**"],
+        filesForbidden: ["secret.env"],
+        maxFilesTouched: 1,
+      },
+      doneWhen: [
+        {
+          id: "dw-bad123",
+          text: "manual review",
+          kind: "manual",
+        },
+      ],
+    });
+    const gitResult: GitTouchedFilesResult = {
+      gitAvailable: true,
+      actualFilesTouched: ["README.md", "secret.env"],
+      closedAtCommit: "89abcdef0123456789abcdef0123456789abcdef",
+      anchorFallback: "lost",
+      notes: "Claim anchor could not be recovered after history rewriting.",
+    };
+
+    const computed = computeContractVerdict(
+      contract,
+      gitResult,
+      undefined,
+      "session:test",
+      "2026-04-21T00:10:00.000Z",
+    );
+
+    expect(computed.verdict.fulfilled).toBe(false);
+    expect(computed.verdict.outOfScopeFiles).toEqual(["README.md"]);
+    expect(computed.verdict.forbiddenTouched).toEqual(["secret.env"]);
+    expect(computed.verdict.capExceeded).toEqual({ cap: 1, actual: 2 });
+    expect(computed.verdict.unmetCriteria).toHaveLength(1);
+    expect(computed.verdict.anchorFallback).toBe("lost");
+  });
+});
