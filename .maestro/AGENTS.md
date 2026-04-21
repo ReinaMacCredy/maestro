@@ -19,6 +19,7 @@ Use this directory with the repo-root `AGENTS.md`. `.maestro/` is the repo-owned
 |------|----------|-------|
 | Shared operator guidance | `context/`, `MAESTRO.md` | Read before changing workflow assumptions |
 | Daily task queue | `tasks/tasks.jsonl` | Tracked durable state; reasons become history |
+| Task contracts | `tasks/contracts/` | Per-task intent/scope/verdict files with append-only `index.jsonl` history |
 | Local planning corpus | `plans/`, `drafts/`, `wisdom/`, `archive/` | Reference material, not automatically current product truth |
 | Retrieval/memory data | `retrieval-index.json`, `feedback.jsonl` | Generated/supporting artifacts |
 | Repo config | `config.yaml`, `settings.json` | Project-local Maestro settings |
