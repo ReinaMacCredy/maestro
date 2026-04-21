@@ -68,6 +68,16 @@ describe("version formatting", () => {
     });
   });
 
+  it("ignores malformed MAESTRO_BUILD_UNIX overrides instead of truncating them", () => {
+    const baseline = getVersionMetadata({});
+    const withMalformedOverride = getVersionMetadata({
+      MAESTRO_BUILD_UNIX: "1776000000oops",
+      MAESTRO_BUILD_RELEASED_AT: "2026-04-02T11:11:12.000Z",
+    });
+
+    expect(withMalformedOverride.buildUnix).toBe(baseline.buildUnix);
+  });
+
   it("avoids live git lookup when version output is not requested", () => {
     const output = formatVersionOutputForArgv(
       ["bun", "src/index.ts", "status"],

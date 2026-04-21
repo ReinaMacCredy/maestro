@@ -34,6 +34,7 @@ function normalizeGitSha(value: string | undefined): string | undefined {
 function normalizeBuildUnix(value: string | undefined): number | undefined {
   const trimmed = value?.trim();
   if (!trimmed) return undefined;
+  if (!/^\d+$/.test(trimmed)) return undefined;
   const parsed = Number.parseInt(trimmed, 10);
   return Number.isFinite(parsed) ? parsed : undefined;
 }
