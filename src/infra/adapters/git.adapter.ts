@@ -147,9 +147,12 @@ function parsePorcelainPath(line: string): string | undefined {
   const padded = line.length >= 3 && line[2] === " " ? line : " " + line;
   const body = padded.slice(3).trim();
   if (body.length === 0) return undefined;
-  // Rename/copy: "ORIG -> NEW". Prefer the new path.
-  const renameMatch = body.match(/^(.*?) -> (.+)$/);
-  if (renameMatch) return renameMatch[2];
+  // Rename/copy: "ORIG -> NEW". Prefer the new path. Skip the regex on the
+  // common path to avoid per-line allocation.
+  if (body.includes(" -> ")) {
+    const renameMatch = body.match(/^(.*?) -> (.+)$/);
+    if (renameMatch) return renameMatch[2];
+  }
   return body;
 }
 

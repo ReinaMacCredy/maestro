@@ -109,19 +109,16 @@ async function writeBundledSkill(
   template: BundledSkillTemplate,
 ): Promise<boolean> {
   const skillDir = join(skillRoot, template.name);
-  let changed = false;
-
-  for (const file of template.files) {
+  const results = await Promise.all(template.files.map(async (file) => {
     const absolute = join(skillDir, file.path);
     const existing = await readText(absolute);
-    if (existing === file.content) continue;
+    if (existing === file.content) return false;
 
     await ensureDir(dirname(absolute));
     await writeText(absolute, file.content);
-    changed = true;
-  }
-
-  return changed;
+    return true;
+  }));
+  return results.some(Boolean);
 }
 
 /**
@@ -171,32 +168,19 @@ async function processInject(
   await ensureDir(skillsRoot);
   await removeStaleBundledSkillDirs(skillsRoot);
 
-  let anyChanged = false;
-  const installed: string[] = [];
-  for (const template of BUNDLED_SKILL_TEMPLATES) {
-    const changed = await writeBundledSkill(skillsRoot, template);
-    if (changed) anyChanged = true;
-    installed.push(template.name);
-  }
+  const changes = await Promise.all(
+    BUNDLED_SKILL_TEMPLATES.map((template) => writeBundledSkill(skillsRoot, template)),
+  );
+  const anyChanged = changes.some(Boolean);
+  const installed = BUNDLED_SKILL_TEMPLATES.map((template) => template.name);
 
   const hadLegacy = await cleanupLegacyMaestroMd(agent, projectDir, homeDir);
 
-  let action: InjectResult["action"];
-  if (hadLegacy) {
-    action = "migrated-to-skills";
-  } else if (anyChanged) {
-    action = "installed";
-  } else {
-    action = "skipped";
-  }
-
-  // If skills were already in sync but we still needed to cleanup nothing,
-  // the action is "skipped". If skills were already in sync but we did
-  // clean up legacy state, it's "migrated-to-skills". If some skill file
-  // changed (new skill, edited SKILL.md, etc.), it's "installed" on first
-  // run and effectively an update on subsequent runs. We keep a single
-  // "installed" bucket for both to avoid action-sprawl; tests can look at
-  // installedSkills to see what was written.
+  const action: InjectResult["action"] = hadLegacy
+    ? "migrated-to-skills"
+    : anyChanged
+      ? "installed"
+      : "skipped";
 
   return {
     agent: agent.displayName,
@@ -223,20 +207,20 @@ async function processRemove(
     };
   }
 
-  let didSomething = false;
-  const removed: string[] = [];
+  const [skillResults, legacyRemoved] = await Promise.all([
+    Promise.all(
+      BUNDLED_SKILL_TEMPLATES.map(async (template) => {
+        const skillDir = join(skillsRoot, template.name);
+        return (await removeIfExists(skillDir, { recursive: true }))
+          ? template.name
+          : undefined;
+      }),
+    ),
+    cleanupLegacyMaestroMd(agent, projectDir, homeDir),
+  ]);
 
-  for (const template of BUNDLED_SKILL_TEMPLATES) {
-    const skillDir = join(skillsRoot, template.name);
-    if (await removeIfExists(skillDir, { recursive: true })) {
-      removed.push(template.name);
-      didSomething = true;
-    }
-  }
-
-  if (await cleanupLegacyMaestroMd(agent, projectDir, homeDir)) {
-    didSomething = true;
-  }
+  const removed = skillResults.filter((name): name is string => name !== undefined);
+  const didSomething = removed.length > 0 || legacyRemoved;
 
   return {
     agent: agent.displayName,

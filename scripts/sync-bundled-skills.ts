@@ -14,7 +14,7 @@
 
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
-import { readText } from "@/shared/lib/fs.js";
+import { listFilesRecursive, readText } from "@/shared/lib/fs.js";
 
 const ROOT = join(import.meta.dir, "..");
 const SOURCE_DIR = join(ROOT, "skills", "bundled");
@@ -28,21 +28,6 @@ interface SkillFile {
 interface SkillTemplate {
   readonly name: string;
   readonly files: readonly SkillFile[];
-}
-
-async function listFilesRecursive(dir: string): Promise<string[]> {
-  const entries = (await readdir(dir, { withFileTypes: true }))
-    .sort((left, right) => left.name.localeCompare(right.name));
-  const files: string[] = [];
-  for (const entry of entries) {
-    const absolute = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...await listFilesRecursive(absolute));
-      continue;
-    }
-    if (entry.isFile()) files.push(absolute);
-  }
-  return files;
 }
 
 async function collectTemplates(): Promise<SkillTemplate[]> {
