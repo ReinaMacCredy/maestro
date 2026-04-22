@@ -611,4 +611,53 @@ describe.skipIf(process.platform === "win32")("compiled handoff launcher E2E", (
     },
     SLOW_CLI_TIMEOUT_MS,
   );
+
+  it(
+    "enumerates open packet ids when pickup is ambiguous",
+    async () => {
+      const fakeHome = join(tmpDir, "fake-home-ambiguous");
+      await Bun.$`mkdir -p ${fakeHome}`.quiet();
+      const argsPath = join(tmpDir, "claude-ambig-args.txt");
+      const cwdPath = join(tmpDir, "claude-ambig-cwd.txt");
+      const binDir = await installFakeProvider("claude", argsPath, cwdPath);
+
+      const env = {
+        HOME: fakeHome,
+        PATH: `${binDir}:${process.env.PATH ?? ""}`,
+        FAKE_PROVIDER_ARGS: argsPath,
+        FAKE_PROVIDER_CWD: cwdPath,
+      };
+
+      const first = await runCompiled(
+        ["handoff", "first ambiguous task", "--agent", "claude", "--json"],
+        tmpDir,
+        { env },
+      );
+      expect(first.exitCode).toBe(0);
+      const firstRecord = expectJson<{ id: string }>(first);
+
+      const second = await runCompiled(
+        ["handoff", "second ambiguous task", "--agent", "claude", "--json"],
+        tmpDir,
+        { env },
+      );
+      expect(second.exitCode).toBe(0);
+      const secondRecord = expectJson<{ id: string }>(second);
+
+      const picked = await runCompiled(
+        ["handoff", "pickup", "--agent", "claude", "--json"],
+        tmpDir,
+        { env },
+      );
+      expect(picked.exitCode).not.toBe(0);
+      const err = expectJson<{ error: string; hints: string[] }>(picked);
+      expect(err.error).toContain("ambiguous");
+      const hintsBlob = err.hints.join("\n");
+      expect(hintsBlob).toContain(firstRecord.id);
+      expect(hintsBlob).toContain(secondRecord.id);
+      expect(hintsBlob).toContain("first ambiguous task");
+      expect(hintsBlob).toContain("second ambiguous task");
+    },
+    SLOW_CLI_TIMEOUT_MS,
+  );
 });

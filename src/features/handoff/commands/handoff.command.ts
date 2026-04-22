@@ -197,9 +197,19 @@ async function resolvePickupId(explicitId: string | undefined): Promise<string> 
     throw new MaestroError("No open handoff packets are available to pick up");
   }
   if (open.length !== 1) {
-    throw new MaestroError("Multiple open handoff packets exist; pickup is ambiguous", [
-      "Pass `--id <handoff-id>` to choose one explicitly",
-    ]);
+    const sorted = [...open].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    const preview = sorted.slice(0, 10).map((r) => {
+      const task = r.task.length > 60 ? `${r.task.slice(0, 57)}...` : r.task;
+      return `  ${r.id}  agent=${r.agent}  created=${r.createdAt}  task=${JSON.stringify(task)}`;
+    });
+    const hints = [
+      `${open.length} open packets. Pass --id <handoff-id> to choose one:`,
+      ...preview,
+    ];
+    if (sorted.length > preview.length) {
+      hints.push(`  ...and ${sorted.length - preview.length} more`);
+    }
+    throw new MaestroError("Multiple open handoff packets exist; pickup is ambiguous", hints);
   }
   return open[0]!.id;
 }
