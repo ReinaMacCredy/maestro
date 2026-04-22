@@ -419,4 +419,78 @@ describe.skipIf(process.platform === "win32")("compiled handoff launcher E2E", (
     },
     SLOW_CLI_TIMEOUT_MS,
   );
+
+  it(
+    "launches a task-less handoff on first try and round-trips through pickup without creating a task",
+    async () => {
+      const argsPath = join(tmpDir, "claude-taskless-args.txt");
+      const cwdPath = join(tmpDir, "claude-taskless-cwd.txt");
+      const binDir = await installFakeProvider("claude", argsPath, cwdPath);
+
+      const launched = await runCompiled(
+        [
+          "handoff",
+          "Explore the AGENTS.md template",
+          "--agent",
+          "claude",
+          "--name",
+          "taskless walkthrough",
+          "--json",
+        ],
+        tmpDir,
+        {
+          env: {
+            PATH: `${binDir}:${process.env.PATH ?? ""}`,
+            FAKE_PROVIDER_ARGS: argsPath,
+            FAKE_PROVIDER_CWD: cwdPath,
+          },
+        },
+      );
+      expect(launched.exitCode).toBe(0);
+      const record = expectJson<{
+        id: string;
+        agent: string;
+        status: string;
+        refs: { taskId?: string };
+      }>(launched);
+      expect(record.agent).toBe("claude");
+      expect(record.status).toBe("launched");
+      expect(record.refs.taskId).toBeUndefined();
+
+      const launchMeta = await readFile(
+        join(tmpDir, ".maestro", "launches", record.id, "launch.json"),
+        "utf8",
+      );
+      expect(launchMeta).not.toContain('"taskId"');
+
+      const tasksBeforePickup = expectJson<readonly unknown[]>(
+        await runCompiled(["task", "list", "--json"], tmpDir),
+      );
+      expect(tasksBeforePickup).toEqual([]);
+
+      const picked = await runCompiled(
+        [
+          "handoff",
+          "pickup",
+          "--id",
+          record.id,
+          "--agent",
+          "claude",
+          "--session",
+          "pickup-taskless",
+          "--json",
+        ],
+        tmpDir,
+      );
+      expect(picked.exitCode).toBe(0);
+      const consumed = expectJson<{ consumedAt?: string }>(picked);
+      expect(consumed.consumedAt).toBeDefined();
+
+      const tasksAfterPickup = expectJson<readonly unknown[]>(
+        await runCompiled(["task", "list", "--json"], tmpDir),
+      );
+      expect(tasksAfterPickup).toEqual([]);
+    },
+    SLOW_CLI_TIMEOUT_MS,
+  );
 });

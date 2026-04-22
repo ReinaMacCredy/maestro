@@ -23,7 +23,7 @@ export interface PickupHandoffDeps {
 
 export interface PickupHandoffResult {
   readonly record: HandoffLaunchRecord;
-  readonly taskId: string;
+  readonly taskId?: string;
   readonly ownerId: string;
   readonly contractTransferWarning?: string;
 }
@@ -49,9 +49,16 @@ export async function pickupHandoff(
 
   const taskId = launch.refs.taskId;
   if (!taskId) {
-    throw new MaestroError(`Handoff ${input.id} is not linked to a task`, [
-      "Create new handoffs from an active task continuation or pass --task-id",
-    ]);
+    const consumedOnly = await deps.launchStore.consume({
+      id: input.id,
+      agent: input.actorAgent,
+      ...(input.actorSessionId ? { sessionId: input.actorSessionId } : {}),
+      pickedUpAt: new Date().toISOString(),
+    });
+    return {
+      record: consumedOnly,
+      ownerId: input.ownerId,
+    };
   }
 
   const tasks = new Map((await deps.taskStore.all()).map((task) => [task.id, task] as const));

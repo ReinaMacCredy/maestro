@@ -59,22 +59,28 @@ export function registerHandoffCommand(program: Command): void {
         baseBranch: typeof opts.base === "string" ? opts.base : undefined,
         refs: {
           taskId: linkedTask.taskId,
-          createdByAgent: linkedTask.summary.activeAgent?.type,
-          createdBySessionId: linkedTask.summary.activeAgent?.sessionId,
+          createdByAgent: linkedTask.summary?.activeAgent?.type,
+          createdBySessionId: linkedTask.summary?.activeAgent?.sessionId,
         },
-        continuation: {
-          summary: linkedTask.summary,
-          recentEvents: linkedTask.recentEvents,
-        },
+        ...(linkedTask.summary
+          ? {
+              continuation: {
+                summary: linkedTask.summary,
+                recentEvents: linkedTask.recentEvents,
+              },
+            }
+          : {}),
       });
 
-      await services.taskContinuationHistory.append(linkedTask.taskId, {
-        kind: "handoff_created",
-        at: result.record.createdAt,
-        summary: `Created handoff ${result.record.id} for ${agent}`,
-        handoffId: result.record.id,
-        agent,
-      });
+      if (linkedTask.taskId) {
+        await services.taskContinuationHistory.append(linkedTask.taskId, {
+          kind: "handoff_created",
+          at: result.record.createdAt,
+          summary: `Created handoff ${result.record.id} for ${agent}`,
+          handoffId: result.record.id,
+          agent,
+        });
+      }
 
       output(isJson, result.record, formatLaunchRecord);
     });
@@ -130,17 +136,15 @@ function parseAgent(value: unknown): HandoffAgent {
 }
 
 async function resolveLinkedTask(explicitTaskId: string | undefined): Promise<{
-  readonly taskId: string;
-  readonly summary: TaskContinuationSummary;
+  readonly taskId?: string;
+  readonly summary?: TaskContinuationSummary;
   readonly recentEvents: readonly TaskContinuationEvent[];
 }> {
   const services = getTaskServices();
   if (!explicitTaskId) {
     const active = await services.taskContinuationStore.listActive();
     if (active.length === 0) {
-      throw new MaestroError("No active task continuation is available for handoff inference", [
-        "Start or resume a task first, or pass `--task-id <id>`",
-      ]);
+      return { recentEvents: [] };
     }
     if (active.length !== 1) {
       throw new MaestroError("Multiple active task continuations exist; handoff task inference is ambiguous", [
@@ -290,12 +294,12 @@ function formatPickupRecord(
     readonly consumedAt?: string;
     readonly promptPath: string;
   },
-  taskId: string,
+  taskId: string | undefined,
   ownerId: string,
 ): string[] {
   return [
     `[ok] Handoff picked up: ${record.id}`,
-    `  Task: ${taskId}`,
+    ...(taskId ? [`  Task: ${taskId}`] : []),
     `  Owner: ${ownerId}`,
     ...(record.pickedUpByAgent ? [`  Picked up by: ${record.pickedUpByAgent}${record.pickedUpBySessionId ? `/${record.pickedUpBySessionId}` : ""}`] : []),
     ...(record.consumedAt ? [`  Consumed at: ${record.consumedAt}`] : []),

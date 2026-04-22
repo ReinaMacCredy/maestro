@@ -130,7 +130,7 @@ maestro handoff "Implement <featureId> for mission <id>" \\
   [--wait]                   # foreground: block until the agent exits
   [--json]                   # machine-readable launch descriptor
 \`\`\`
-Handoff packets are portable transfer artifacts built from the active task continuation summary plus recent local task history.
+Handoff packets are portable transfer artifacts. When an active task is in play (or \`--task-id\` is passed) the packet carries that task's continuation summary plus recent local task history. With no active task and no \`--task-id\`, the packet is prompt-only: it carries just the task description you pass, and \`refs.taskId\` is absent. No stub task is created to satisfy the command.
 They run detached by default: the launcher returns immediately with a handoff id and the external agent keeps running in the background.
 Use \`--wait\` only when you need to block until the agent exits.
 
@@ -145,10 +145,9 @@ maestro handoff pickup [--id <handoff-id>] [--agent codex|claude --session <id>]
 \`\`\`
 
 Pickup behavior:
-- picking up a packet immediately takes over the linked task
-- task ownership switches to the current session
-- any active task contract lock follows the new owner
-- the picked-up packet is consumed for live work
+- for a task-linked packet: picking it up immediately takes over the linked task, switches task ownership to the current session, and follows any active task contract lock to the new owner
+- for a prompt-only packet (no \`taskId\` in \`refs\`): pickup loads the prompt and marks the packet consumed; no task is created or claimed
+- in both cases the picked-up packet is consumed for live work
 
 **Capture a correction rule for future sessions:**
 \`\`\`bash

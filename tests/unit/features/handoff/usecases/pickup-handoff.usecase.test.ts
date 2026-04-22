@@ -138,6 +138,52 @@ describe("pickupHandoff", () => {
     expect(history.map((event) => event.kind)).toContain("handoff_picked_up");
   });
 
+  it("consumes a task-less handoff without touching task state", async () => {
+    const launch = await launchStore.create({
+      task: "Prompt-only handoff",
+      name: "[Handoff] Prompt-only",
+      agent: "claude",
+      model: "opus",
+      wait: false,
+      sourceDir: tmpDir,
+      targetDir: tmpDir,
+      refs: {},
+      prompt: "## Task\n\nPrompt-only handoff\n",
+    });
+
+    const result = await pickupHandoff(
+      {
+        launchStore,
+        taskStore,
+        contractStore,
+        continuationStore,
+        continuationHistory,
+      },
+      {
+        id: launch.id,
+        actorAgent: "claude",
+        actorSessionId: "pickup-taskless",
+        ownerId: "claude-code-pickup-taskless",
+      },
+    );
+
+    expect(result.taskId).toBeUndefined();
+    expect(result.contractTransferWarning).toBeUndefined();
+    expect(result.ownerId).toBe("claude-code-pickup-taskless");
+    expect(result.record).toMatchObject({
+      id: launch.id,
+      pickedUpByAgent: "claude",
+      pickedUpBySessionId: "pickup-taskless",
+    });
+    expect(result.record.consumedAt).toBeTruthy();
+
+    const reloaded = await launchStore.get(launch.id);
+    expect(reloaded?.consumedAt).toBeTruthy();
+
+    const tasksAfter = await taskStore.all();
+    expect(tasksAfter).toEqual([]);
+  });
+
   it("rejects pickup when the linked task has already completed", async () => {
     const task = await createTask(taskStore, { title: "Done already" });
     const completed = (await updateTask(taskStore, task.id, { status: "completed", reason: "done" })).task;
