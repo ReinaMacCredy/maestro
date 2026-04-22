@@ -54,7 +54,7 @@ async function collectTemplates(): Promise<SkillTemplate[]> {
 function renderModule(templates: readonly SkillTemplate[]): string {
   const header = [
     "// Generated from skills/bundled so compiled releases can install shipped skills",
-    "// into ~/.claude/skills/ and ~/.codex/skills/ via `maestro agent inject`.",
+    "// into ~/.claude/skills/ and ~/.codex/skills/ via `maestro install` / `maestro update`.",
     "// Edit the files under skills/bundled/ and run `bun scripts/sync-bundled-skills.ts`.",
     "export interface BundledSkillFile {",
     "  readonly path: string;",

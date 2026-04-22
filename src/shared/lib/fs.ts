@@ -32,6 +32,10 @@ export async function readJson<T>(path: string): Promise<T | undefined> {
     return await Bun.file(path).json() as T;
   } catch (err: unknown) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    // Tolerate a corrupt or hand-mangled JSON file rather than crashing the
+    // caller. Treat it as "no data"; callers that need stricter validation
+    // can re-read with Bun.file(path).json() directly.
+    if (err instanceof SyntaxError) return undefined;
     throw err;
   }
 }

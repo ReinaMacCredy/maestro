@@ -33,7 +33,7 @@ import { VERSION } from "@/shared/version.js";
 
 export interface InjectResult {
   readonly agent: string;
-  readonly action: "installed" | "updated" | "migrated-to-skills" | "skipped" | "not-detected";
+  readonly action: "installed" | "migrated-to-skills" | "skipped" | "not-detected";
   readonly configPath: string;
   readonly installedSkills: readonly string[];
   readonly preservedUserEdits: readonly string[];
@@ -169,6 +169,17 @@ async function writeBundledSkill(
     const prevHash = prevManifest?.fileHashes?.[file.path];
     if (prevHash !== undefined && prevHash !== existingHash) {
       return { path: file.path, hash: existingHash, changed: false, preserved: true };
+    }
+
+    if (prevHash === undefined) {
+      // Migration path: no prior manifest entry for this file. Existing
+      // content could be an older shipped version OR a user-authored file
+      // that happens to share a path with something we now ship. We
+      // overwrite (to complete the migration) but surface the action so
+      // the user can notice if we stomped something they wanted kept.
+      process.stderr.write(
+        `[warn] migrated: overwriting pre-manifest file with shipped content: ${template.name}/${file.path}\n`,
+      );
     }
 
     await writeText(absolute, file.content);
@@ -311,27 +322,46 @@ async function processRemove(
     };
   }
 
-  const [skillResults, legacyRemoved] = await Promise.all([
-    Promise.all(
-      BUNDLED_SKILL_TEMPLATES.map(async (template) => {
-        const skillDir = join(skillsRoot, template.name);
-        return (await removeIfExists(skillDir, { recursive: true }))
-          ? template.name
-          : undefined;
-      }),
-    ),
+  const [managedDirs, legacyRemoved] = await Promise.all([
+    listManagedSkillDirs(skillsRoot),
     cleanupLegacyMaestroMd(agent, projectDir, homeDir),
   ]);
 
-  const removed = skillResults.filter((name): name is string => name !== undefined);
-  const didSomething = removed.length > 0 || legacyRemoved;
+  const removed = await Promise.all(managedDirs.map(async (name) => {
+    const skillDir = join(skillsRoot, name);
+    return (await removeIfExists(skillDir, { recursive: true })) ? name : undefined;
+  }));
+  const removedNames = removed.filter((name): name is string => name !== undefined);
+  const didSomething = removedNames.length > 0 || legacyRemoved;
 
   return {
     agent: agent.displayName,
     action: didSomething ? "removed" : "not-found",
     configPath: configDir,
-    removedSkills: removed,
+    removedSkills: removedNames,
   };
+}
+
+/**
+ * Enumerate every maestro-managed skill dir under `skillsRoot` (any dir
+ * containing a `.maestro-bundled.json` manifest with `managedBy: "maestro"`),
+ * regardless of whether the skill is still in the current bundled set.
+ * `maestro uninstall` uses this to sweep skills that were dropped from the
+ * bundle in a prior release so they don't orphan on disk.
+ */
+async function listManagedSkillDirs(skillsRoot: string): Promise<string[]> {
+  if (!(await dirExists(skillsRoot))) return [];
+  const entries = (await readdir(skillsRoot, { withFileTypes: true }))
+    .sort((left, right) => left.name.localeCompare(right.name));
+  const results = await Promise.all(entries.map(async (entry) => {
+    if (!entry.isDirectory()) return undefined;
+    if (!entry.name.startsWith(BUNDLED_SKILL_PREFIX)) return undefined;
+    const manifest = await readJson<BundledSkillManifest>(
+      join(skillsRoot, entry.name, MANIFEST_FILENAME),
+    );
+    return manifest?.managedBy === "maestro" ? entry.name : undefined;
+  }));
+  return results.filter((name): name is string => name !== undefined);
 }
 
 export async function injectAgentBlocks(

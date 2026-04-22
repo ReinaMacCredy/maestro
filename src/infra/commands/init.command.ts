@@ -28,6 +28,9 @@ export function registerInitCommand(program: Command): void {
           `[ok] Initialized ${r.scope} ${r.bootstrapGenerated ? "bootstrap" : "config"}`,
           ...r.created.map((p) => `  --> ${p}`),
           ...r.skipped.map((p) => `  [skip] ${p}`),
+          "",
+          "Next: run `maestro install` to install the bundled agent skills into",
+          "      ~/.claude/skills/ and ~/.codex/skills/ for Claude Code / Codex.",
         ]);
       } finally {
         replacementPrompter?.close();

@@ -284,5 +284,52 @@ describe("manage-agents use case logic", () => {
       expect(results.find((r) => r.agent === "Claude Code")?.action).toBe("not-detected");
       expect(results.find((r) => r.agent === "Codex")?.action).toBe("not-detected");
     });
+
+    it("sweeps manifest-bearing skill dirs that are no longer in the bundle", async () => {
+      await mkdir(join(fakeHome, ".claude"), { recursive: true });
+      await mkdir(join(fakeHome, ".codex"), { recursive: true });
+      // Install current bundle first (writes manifests for each shipped skill).
+      await injectAgentBlocks(tmpDir, "all", fakeHome);
+
+      // Simulate a skill dropped from the bundle in a later release: manifest
+      // is present (so uninstall sweeps it) but the name is not in the current
+      // BUNDLED_SKILL_TEMPLATES set.
+      const droppedDir = join(fakeHome, ".claude", "skills", "maestro-dropped");
+      await mkdir(droppedDir, { recursive: true });
+      await writeFile(join(droppedDir, "SKILL.md"), "---\nname: maestro-dropped\n---\n# old\n");
+      await writeFile(
+        join(droppedDir, ".maestro-bundled.json"),
+        JSON.stringify({ managedBy: "maestro", skillName: "maestro-dropped", fileHashes: {} }),
+      );
+
+      const results = await removeAgentBlocks(tmpDir, "all", fakeHome);
+      const claude = results.find((r) => r.agent === "Claude Code")!;
+      expect(claude.action).toBe("removed");
+      expect(claude.removedSkills).toContain("maestro-dropped");
+      expect(existsSync(droppedDir)).toBe(false);
+    });
+  });
+
+  describe("corrupt manifest tolerance", () => {
+    it("treats an invalid-JSON manifest as missing and re-writes shipped content", async () => {
+      await mkdir(join(fakeHome, ".claude"), { recursive: true });
+      await mkdir(join(fakeHome, ".codex"), { recursive: true });
+
+      // Put a shipped skill dir in place with a corrupt manifest.
+      const skillDir = join(fakeHome, ".claude", "skills", "maestro-task");
+      await mkdir(skillDir, { recursive: true });
+      await writeFile(join(skillDir, ".maestro-bundled.json"), "{not valid json");
+      await writeFile(join(skillDir, "SKILL.md"), "stale content");
+
+      const results = await injectAgentBlocks(tmpDir, "all", fakeHome);
+      expect(results.find((r) => r.agent === "Claude Code")?.action).toBe("installed");
+
+      // Manifest rewritten to valid JSON, skill content refreshed.
+      const raw = await readFile(join(skillDir, ".maestro-bundled.json"), "utf8");
+      const manifest = JSON.parse(raw);
+      expect(manifest.managedBy).toBe("maestro");
+      const skillContent = await readFile(join(skillDir, "SKILL.md"), "utf8");
+      expect(skillContent).toContain("name: maestro-task");
+    });
   });
 });

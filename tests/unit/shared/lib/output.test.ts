@@ -109,7 +109,7 @@ describe("formatAgentResults", () => {
     expect(formatAgentResults([
       {
         agent: "claude",
-        action: "updated",
+        action: "installed",
         configPath: "/tmp/claude.md",
       },
       {
@@ -118,7 +118,7 @@ describe("formatAgentResults", () => {
         configPath: "/tmp/agents.md",
       },
     ])).toEqual([
-      "  claude: updated (/tmp/claude.md)",
+      "  claude: installed (/tmp/claude.md)",
       "  codex: removed (/tmp/agents.md)",
     ]);
   });
