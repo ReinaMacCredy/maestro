@@ -115,9 +115,12 @@ describe("task NOW.md recitation", () => {
       );
 
       const contract = JSON.parse(
-        (await runCompiled(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir)).stdout,
+        (await runCompiled(
+          ["task", "contract", "new", task.id, "--from", templatePath, "--session", "operator-a", "--json"],
+          tmpDir,
+        )).stdout,
       ) as { id: string };
-      await runCompiled(["task", "contract", "lock", contract.id, "--json"], tmpDir);
+      await runCompiled(["task", "contract", "lock", contract.id, "--session", "operator-a", "--json"], tmpDir);
       await runCompiled(["task", "claim", task.id, "--session", "operator-a", "--json"], tmpDir);
       await runCompiled(
         ["task", "update", task.id, "--status", "in_progress", "--session", "operator-a", "--json"],
