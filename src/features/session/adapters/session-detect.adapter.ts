@@ -32,13 +32,18 @@ export class ClaudeSessionDetectAdapter implements SessionDetectPort {
 
   constructor(private readonly roots: SessionRootOptions = {}) {}
 
-  async detect(_cwd: string): Promise<AgentSession | undefined> {
+  async detect(cwd: string): Promise<AgentSession | undefined> {
     if (process.env.CLAUDECODE === "1") {
       const session = await readJson<ClaudeSessionFile>(
         join(this.resolveClaudeSessionsDir(), `${process.ppid}.json`),
       );
       if (session?.sessionId && session.cwd && session.startedAt) {
         return this.buildClaudeSession(session);
+      }
+
+      const fallback = await this.findClaudeSessionByCwd(cwd);
+      if (fallback) {
+        return this.buildClaudeSession(fallback);
       }
     }
 
@@ -48,6 +53,24 @@ export class ClaudeSessionDetectAdapter implements SessionDetectPort {
     }
 
     return undefined;
+  }
+
+  private async findClaudeSessionByCwd(cwd: string): Promise<ClaudeSessionFile | undefined> {
+    const sessionsDir = this.resolveClaudeSessionsDir();
+    if (!await pathExists(sessionsDir)) {
+      return undefined;
+    }
+    const glob = new Bun.Glob("*.json");
+    let best: ClaudeSessionFile | undefined;
+    for await (const path of glob.scan({ cwd: sessionsDir, absolute: true })) {
+      const session = await readJson<ClaudeSessionFile>(path).catch(() => undefined);
+      if (!session?.sessionId || !session.cwd || !session.startedAt) continue;
+      if (!isCwdAncestorOrSame(session.cwd, cwd)) continue;
+      if (!best || session.startedAt > best.startedAt) {
+        best = session;
+      }
+    }
+    return best;
   }
 
   async lookup(agent: AgentSession["agent"], sessionId: string): Promise<AgentSession | undefined> {
@@ -200,6 +223,13 @@ function resolveDirOverride(
 
 function normalizePath(p: string): string {
   return p.replace(/[\\/]+$/, "");
+}
+
+function isCwdAncestorOrSame(ancestor: string, descendant: string): boolean {
+  const a = normalizePath(ancestor);
+  const d = normalizePath(descendant);
+  if (a === d) return true;
+  return d.startsWith(`${a}/`) || d.startsWith(`${a}\\`);
 }
 
 function encodeProjectPath(cwd: string): string {

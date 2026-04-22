@@ -24,7 +24,7 @@ export interface PickupHandoffDeps {
 export interface PickupHandoffResult {
   readonly record: HandoffLaunchRecord;
   readonly taskId?: string;
-  readonly ownerId: string;
+  readonly ownerId?: string;
   readonly contractTransferWarning?: string;
 }
 
@@ -34,7 +34,7 @@ export async function pickupHandoff(
     readonly id: string;
     readonly actorAgent: string;
     readonly actorSessionId?: string;
-    readonly ownerId: string;
+    readonly ownerId?: string;
   },
 ): Promise<PickupHandoffResult> {
   const launch = await deps.launchStore.get(input.id);
@@ -59,6 +59,11 @@ export async function pickupHandoff(
       record: consumedOnly,
       ownerId: input.ownerId,
     };
+  }
+
+  const ownerId = input.ownerId;
+  if (!ownerId) {
+    throw new MaestroError(`Pickup for task-linked handoff ${input.id} requires an ownerId`);
   }
 
   const tasks = new Map((await deps.taskStore.all()).map((task) => [task.id, task] as const));
@@ -87,7 +92,7 @@ export async function pickupHandoff(
   });
 
   const claimed = await claimTask(deps.taskStore, taskId, {
-    sessionId: input.ownerId,
+    sessionId: ownerId,
     force: true,
   });
   const resumed = claimed.status === "in_progress"
@@ -96,14 +101,14 @@ export async function pickupHandoff(
         deps.taskStore,
         taskId,
         { status: "in_progress" },
-        { sessionId: input.ownerId, force: true },
+        { sessionId: ownerId, force: true },
       )).task;
   // The handoff was already consumed and the task resumed. Contract ownership
   // transfer is best-effort; the caller surfaces contractTransferWarning so the
   // user sees the failure instead of silently leaving lockedBy out of sync.
   let contractTransferWarning: string | undefined;
   try {
-    await transferContractOwnership(deps.contractStore, taskId, input.ownerId, "handoff_pickup");
+    await transferContractOwnership(deps.contractStore, taskId, ownerId, "handoff_pickup");
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     contractTransferWarning = `Task ${taskId} was resumed from handoff ${input.id}, but contract ownership transfer failed: ${message}`;
@@ -161,7 +166,7 @@ export async function pickupHandoff(
   return {
     record: consumed,
     taskId,
-    ownerId: input.ownerId,
+    ownerId,
     ...(contractTransferWarning ? { contractTransferWarning } : {}),
   };
 }

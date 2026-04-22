@@ -167,6 +167,90 @@ describe("ClaudeSessionDetectAdapter", () => {
         startedAt,
       });
     });
+
+    it("falls back to cwd-scan when the ppid-keyed session file is missing", async () => {
+      const repoCwd = join(tempRoot, "repo");
+      const otherCwd = join(tempRoot, "other");
+      const sessionsDir = process.env.MAESTRO_CLAUDE_SESSIONS_DIR!;
+      await mkdir(repoCwd, { recursive: true });
+      await mkdir(sessionsDir, { recursive: true });
+      await writeFile(
+        join(sessionsDir, "99999.json"),
+        JSON.stringify({
+          pid: 99999,
+          sessionId: "claude-match",
+          cwd: repoCwd,
+          startedAt: 1_777_000_000_000,
+        }),
+      );
+      await writeFile(
+        join(sessionsDir, "88888.json"),
+        JSON.stringify({
+          pid: 88888,
+          sessionId: "claude-other",
+          cwd: otherCwd,
+          startedAt: 1_777_000_001_000,
+        }),
+      );
+      process.env.CLAUDECODE = "1";
+
+      const session = await adapter.detect(join(repoCwd, "nested", "deeper"));
+
+      expect(session?.agent).toBe("claude-code");
+      expect(session?.sessionId).toBe("claude-match");
+    });
+
+    it("picks the most recent session when multiple match the cwd ancestry", async () => {
+      const repoCwd = join(tempRoot, "repo");
+      const sessionsDir = process.env.MAESTRO_CLAUDE_SESSIONS_DIR!;
+      await mkdir(repoCwd, { recursive: true });
+      await mkdir(sessionsDir, { recursive: true });
+      await writeFile(
+        join(sessionsDir, "11111.json"),
+        JSON.stringify({
+          pid: 11111,
+          sessionId: "claude-old",
+          cwd: repoCwd,
+          startedAt: 1_777_000_000_000,
+        }),
+      );
+      await writeFile(
+        join(sessionsDir, "22222.json"),
+        JSON.stringify({
+          pid: 22222,
+          sessionId: "claude-new",
+          cwd: repoCwd,
+          startedAt: 1_777_000_005_000,
+        }),
+      );
+      process.env.CLAUDECODE = "1";
+
+      const session = await adapter.detect(repoCwd);
+
+      expect(session?.sessionId).toBe("claude-new");
+    });
+
+    it("returns undefined when no claude session cwd is an ancestor of the caller", async () => {
+      const callerCwd = join(tempRoot, "repo");
+      const unrelatedCwd = join(tempRoot, "elsewhere");
+      const sessionsDir = process.env.MAESTRO_CLAUDE_SESSIONS_DIR!;
+      await mkdir(callerCwd, { recursive: true });
+      await mkdir(sessionsDir, { recursive: true });
+      await writeFile(
+        join(sessionsDir, "77777.json"),
+        JSON.stringify({
+          pid: 77777,
+          sessionId: "claude-unrelated",
+          cwd: unrelatedCwd,
+          startedAt: 1_777_000_000_000,
+        }),
+      );
+      process.env.CLAUDECODE = "1";
+
+      const session = await adapter.detect(callerCwd);
+
+      expect(session).toBeUndefined();
+    });
   });
 
   describe("lookup", () => {

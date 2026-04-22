@@ -184,6 +184,40 @@ describe("pickupHandoff", () => {
     expect(tasksAfter).toEqual([]);
   });
 
+  it("consumes a task-less handoff without an ownerId when no session is resolved", async () => {
+    const launch = await launchStore.create({
+      task: "Prompt-only handoff, agent only",
+      name: "[Handoff] Prompt-only no-session",
+      agent: "claude",
+      model: "opus",
+      wait: false,
+      sourceDir: tmpDir,
+      targetDir: tmpDir,
+      refs: {},
+      prompt: "## Task\n\nPrompt-only\n",
+    });
+
+    const result = await pickupHandoff(
+      {
+        launchStore,
+        taskStore,
+        contractStore,
+        continuationStore,
+        continuationHistory,
+      },
+      {
+        id: launch.id,
+        actorAgent: "claude",
+      },
+    );
+
+    expect(result.taskId).toBeUndefined();
+    expect(result.ownerId).toBeUndefined();
+    expect(result.record.pickedUpByAgent).toBe("claude");
+    expect(result.record.pickedUpBySessionId).toBeUndefined();
+    expect(result.record.consumedAt).toBeTruthy();
+  });
+
   it("rejects pickup when the linked task has already completed", async () => {
     const task = await createTask(taskStore, { title: "Done already" });
     const completed = (await updateTask(taskStore, task.id, { status: "completed", reason: "done" })).task;

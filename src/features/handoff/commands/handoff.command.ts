@@ -95,8 +95,13 @@ export function registerHandoffCommand(program: Command): void {
     .action(async (opts, command: Command) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const actor = await resolvePickupActor(opts, command.parent?.opts());
       const handoffId = await resolvePickupId(typeof opts.id === "string" ? opts.id : undefined);
+      const launch = await services.launchStore.get(handoffId);
+      if (!launch) {
+        throw new MaestroError(`Handoff not found: ${handoffId}`);
+      }
+      const requireSession = Boolean(launch.refs.taskId);
+      const actor = await resolvePickupActor(opts, command.parent?.opts(), { requireSession });
       const result = await pickupHandoff(
         {
           launchStore: services.launchStore,
@@ -109,7 +114,7 @@ export function registerHandoffCommand(program: Command): void {
           id: handoffId,
           actorAgent: actor.agent,
           ...(actor.sessionId ? { actorSessionId: actor.sessionId } : {}),
-          ownerId: actor.ownerId,
+          ...(actor.ownerId ? { ownerId: actor.ownerId } : {}),
         },
       );
 
@@ -201,21 +206,48 @@ async function resolvePickupId(explicitId: string | undefined): Promise<string> 
 
 async function resolvePickupActor(
   opts: { agent?: unknown; session?: unknown },
-  inherited?: { agent?: unknown },
+  inherited: { agent?: unknown } | undefined,
+  mode: { readonly requireSession: boolean },
 ): Promise<{
   readonly agent: HandoffAgent;
   readonly sessionId?: string;
-  readonly ownerId: string;
+  readonly ownerId?: string;
 }> {
   const rawAgent = opts.agent ?? inherited?.agent;
   const rawSession = opts.session;
   const explicitAgent = typeof rawAgent === "string" ? rawAgent.trim() : undefined;
   const explicitSession = typeof rawSession === "string" ? rawSession.trim() : undefined;
-  if ((explicitAgent && !explicitSession) || (!explicitAgent && explicitSession)) {
-    throw new MaestroError("Pass both --agent and --session together when overriding pickup identity", [
-      "Or run pickup from a detected Codex or Claude session",
-    ]);
+
+  if (mode.requireSession) {
+    if ((explicitAgent && !explicitSession) || (!explicitAgent && explicitSession)) {
+      throw new MaestroError("Pass both --agent and --session together when overriding pickup identity", [
+        "Or run pickup from a detected Codex or Claude session",
+      ]);
+    }
+    if (explicitAgent && explicitSession) {
+      const agent = parseAgent(explicitAgent);
+      return {
+        agent,
+        sessionId: explicitSession,
+        ownerId: buildTaskOwnerId(agent, explicitSession),
+      };
+    }
+
+    const services = getServices();
+    const session = await services.sessionDetect.detect(process.cwd());
+    if (!session) {
+      throw new MaestroError("Could not detect the current session for handoff pickup", [
+        "Run from Codex or Claude, or pass both --agent <agent> and --session <id>",
+      ]);
+    }
+    const agent = normalizeDetectedAgent(session.agent);
+    return {
+      agent,
+      sessionId: session.sessionId,
+      ownerId: buildTaskOwnerId(session.agent, session.sessionId),
+    };
   }
+
   if (explicitAgent && explicitSession) {
     const agent = parseAgent(explicitAgent);
     return {
@@ -226,17 +258,24 @@ async function resolvePickupActor(
   }
 
   const services = getServices();
-  const session = await services.sessionDetect.detect(process.cwd());
-  if (!session) {
-    throw new MaestroError("Could not detect the current session for handoff pickup", [
-      "Run from Codex or Claude, or pass both --agent <agent> and --session <id>",
+  const detected = await services.sessionDetect.detect(process.cwd());
+  const agent = explicitAgent
+    ? parseAgent(explicitAgent)
+    : detected
+      ? normalizeDetectedAgent(detected.agent)
+      : undefined;
+
+  if (!agent) {
+    throw new MaestroError("No agent specified for handoff pickup", [
+      "Pass --agent codex|claude, or run from a detected Codex or Claude session",
     ]);
   }
-  const agent = normalizeDetectedAgent(session.agent);
+
+  const sessionId = explicitSession ?? detected?.sessionId;
   return {
     agent,
-    sessionId: session.sessionId,
-    ownerId: buildTaskOwnerId(session.agent, session.sessionId),
+    ...(sessionId ? { sessionId } : {}),
+    ...(sessionId ? { ownerId: buildTaskOwnerId(agent, sessionId) } : {}),
   };
 }
 
@@ -295,12 +334,12 @@ function formatPickupRecord(
     readonly promptPath: string;
   },
   taskId: string | undefined,
-  ownerId: string,
+  ownerId: string | undefined,
 ): string[] {
   return [
     `[ok] Handoff picked up: ${record.id}`,
     ...(taskId ? [`  Task: ${taskId}`] : []),
-    `  Owner: ${ownerId}`,
+    ...(ownerId ? [`  Owner: ${ownerId}`] : []),
     ...(record.pickedUpByAgent ? [`  Picked up by: ${record.pickedUpByAgent}${record.pickedUpBySessionId ? `/${record.pickedUpBySessionId}` : ""}`] : []),
     ...(record.consumedAt ? [`  Consumed at: ${record.consumedAt}`] : []),
     `  Prompt: ${record.promptPath}`,

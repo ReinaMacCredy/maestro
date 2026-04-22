@@ -493,4 +493,43 @@ describe.skipIf(process.platform === "win32")("compiled handoff launcher E2E", (
     },
     SLOW_CLI_TIMEOUT_MS,
   );
+
+  it(
+    "picks up a task-less handoff with --agent only (no --session required)",
+    async () => {
+      const argsPath = join(tmpDir, "claude-pickup-agentonly-args.txt");
+      const cwdPath = join(tmpDir, "claude-pickup-agentonly-cwd.txt");
+      const binDir = await installFakeProvider("claude", argsPath, cwdPath);
+
+      const launched = await runCompiled(
+        ["handoff", "pickup smoke", "--agent", "claude", "--name", "pickup smoke", "--json"],
+        tmpDir,
+        {
+          env: {
+            PATH: `${binDir}:${process.env.PATH ?? ""}`,
+            FAKE_PROVIDER_ARGS: argsPath,
+            FAKE_PROVIDER_CWD: cwdPath,
+          },
+        },
+      );
+      expect(launched.exitCode).toBe(0);
+      const record = expectJson<{ id: string; refs: { taskId?: string } }>(launched);
+      expect(record.refs.taskId).toBeUndefined();
+
+      const picked = await runCompiled(
+        ["handoff", "pickup", "--id", record.id, "--agent", "claude", "--json"],
+        tmpDir,
+      );
+      expect(picked.exitCode).toBe(0);
+      const consumed = expectJson<{
+        pickedUpByAgent?: string;
+        pickedUpBySessionId?: string;
+        consumedAt?: string;
+      }>(picked);
+      expect(consumed.pickedUpByAgent).toBe("claude");
+      expect(consumed.pickedUpBySessionId).toBeUndefined();
+      expect(consumed.consumedAt).toBeDefined();
+    },
+    SLOW_CLI_TIMEOUT_MS,
+  );
 });
