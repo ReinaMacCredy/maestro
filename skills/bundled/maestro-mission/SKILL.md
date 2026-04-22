@@ -42,13 +42,13 @@ Mission lifecycle transitions (`draft -> approved -> executing -> completed`), m
 maestro feature list --mission <id> --json
 maestro feature prompt <featureId> --mission <id>
 maestro feature update <featureId> --mission <id> \
-  --status <passed|failed|blocked|waived> \
+  --status <pending|assigned|in-progress|review|done|blocked> \
   --report @report.json
 ```
 
 `feature prompt` returns the briefing a feature-scoped agent reads before execution, with memory context auto-injected. Use it to understand what a feature expects, or to re-render after memory changes.
 
-Assertion states (`passed|failed|blocked|waived`) and how reports feed back into a mission: `./reference/assertions.md`.
+The `--status` value tracks the feature's own state (pending, assigned, in-progress, review, done, blocked). The attached `--report` is where per-assertion results live (passed / failed / blocked / waived). The two are distinct axes: a feature can be `done` with a mix of `passed` and `waived` assertion results. See `./reference/assertions.md` for the report shape.
 
 ## Memory corrections
 
@@ -68,14 +68,15 @@ maestro memory-correct "use bun not npm" --trigger "package,install,npm"
 maestro mission-control --preview --size 120x40 --format plain
 maestro mission-control --preview all --size 120x40 --format plain
 maestro mission-control --render-check --size 120x40
-maestro mission-control --preview --size 120x40 --format json
+maestro mission-control --json --size 120x40
 ```
 
 Preview modes:
 - `--preview`: renders the current default screen as plain text.
-- `--preview all`: renders every screen sequentially.
-- `--render-check`: validates the TUI renders without errors, returns non-zero on failure.
-- `--format plain|json`: pick plain-text for agent-consumable frames or JSON for structured snapshots.
+- `--preview [screen]`: renders a specific screen (`dashboard`, `features`, `dependencies`, `config`, `memory`, `graph`, `agents`, `dispatch`, `events`, `tasks`, `timeline`, `principles`, `help`). Use `all` to render every screen sequentially.
+- `--render-check`: validates every preview screen renders without errors, returns a JSON report.
+- `--format plain|ansi`: plain-text for agent-consumable frames or ANSI-styled output (default auto-detects TTY). `--format` is ONLY valid with `--preview`.
+- `--json`: print a structured snapshot instead of a rendered frame. Use `--json` alone; it is mutually exclusive with `--preview`.
 
 **Read-only contract.** Preview, JSON, and render-check paths must not mutate state. Use for inspection only. Full flag reference: `./reference/mission-control-tui.md`.
 

@@ -1,8 +1,15 @@
 # Assertions
 
-Assertions are validation targets attached to features. They carry a state machine that mirrors how a test run reports back: pass, fail, block, or explicitly waive.
+Assertions are validation targets attached to features. A **feature** has its own status (pending / assigned / in-progress / review / done / blocked); the **assertions** attached to that feature have their own results (passed / failed / blocked / waived). The two are distinct.
 
-## States
+## Feature status vs assertion result
+
+| Axis | Values |
+|---|---|
+| `maestro feature update --status` | `pending`, `assigned`, `in-progress`, `review`, `done`, `blocked` |
+| Assertion result (inside `--report`) | `passed`, `failed`, `blocked`, `waived` (plus `pending` before reporting) |
+
+## Assertion result states
 
 - `pending`: assertion exists but has not been validated.
 - `passed`: assertion succeeded.
@@ -14,7 +21,7 @@ Assertions are validation targets attached to features. They carry a state machi
 
 ```bash
 maestro feature update <featureId> --mission <missionId> \
-  --status <passed|failed|blocked|waived> \
+  --status done \
   --report @report.json
 ```
 

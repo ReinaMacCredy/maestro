@@ -6,13 +6,16 @@ A mission passes through a small number of named states as it is planned, approv
 
 - `draft`: mission scaffold exists; milestones and features may be incomplete; not ready for execution.
 - `approved`: design has been signed off; features are scoped; ready to begin.
+- `rejected`: the mission proposal was explicitly rejected.
 - `executing`: at least one milestone or feature is actively being worked on.
+- `paused`: execution was paused; agents should not pick up new features until resumed.
+- `validating`: execution is complete and final assertions are being checked.
 - `completed`: all milestones closed, final assertions passed or explicitly waived.
-- `abandoned`: mission explicitly closed without completion (rare; requires explicit transition).
+- `failed`: terminal failure; the mission closed without completing its goal.
 
 ## Transitions
 
-Lifecycle transitions happen through `maestro mission` verbs or through upstream actions (e.g., marking the last feature `passed` can auto-transition a mission from `executing` to `completed` when all milestones are closed).
+Lifecycle transitions happen through `maestro mission` verbs or through upstream actions (e.g., marking the last assertion result as `passed` can auto-transition a mission from `validating` to `completed`).
 
 Inspect current state:
 

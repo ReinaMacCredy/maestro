@@ -2,9 +2,9 @@
 
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-04-22 06:13:30 +0700
-**Commit:** 0e72e7ec
-**Branch:** feat/task-contracts-stack
+**Generated:** 2026-04-23 00:41:04 +0700
+**Commit:** 49083147
+**Branch:** feat/skill-bundle
 
 ## OVERVIEW
 Maestro is a local-first conductor for multi-agent software engineering. It is a single-package Bun/TypeScript CLI with an OpenTUI dashboard, repo-owned agent surfaces, and shared project state under `.maestro/`.
@@ -16,7 +16,7 @@ maestro/
 ├── .maestro/    # repo-tracked project state, plans, tasks, and context
 ├── hooks/       # session/tool hook entrypoints
 ├── scripts/     # build, version, install, release, and TUI helpers
-├── skills/      # shipped built-in skill sources
+├── skills/      # shipped built-in and bundled skill sources
 ├── src/         # feature-first CLI + TUI source tree
 └── tests/       # unit, integration, and compiled-binary coverage
 ```
@@ -28,7 +28,7 @@ maestro/
 | Dependency wiring | `src/services.ts` | Composition root only |
 | Feature boundaries and imports | `src/features/`, `scripts/check-feature-boundaries-lib.ts` | Cross-feature deep imports are forbidden |
 | Mission Control flow | `src/infra/commands/mission-control.command.ts`, `src/tui/README.md`, `src/tui/state/snapshot.ts` | Preview, JSON, and render-check stay read-only |
-| Built-in skills | `skills/built-in/`, `scripts/sync-built-in-skills.ts` | `src/infra/domain/built-in-skill-templates.ts` is generated |
+| Shipped agent skills | `skills/built-in/`, `skills/bundled/`, `scripts/sync-*-skills.ts` | Both template embeds under `src/infra/domain/` are generated |
 | Release and install behavior | `scripts/build.ts`, `scripts/ci.ts`, `scripts/install-local.ts`, `.github/workflows/` | `ci.ts` is local release-prep, not a harmless smoke script |
 | Daily task loop vs mission workflow | `.maestro/tasks/tasks.jsonl`, `README.md`, `.maestro/MAESTRO.md` | `task` and `mission` are separate systems |
 | Compiled-binary verification | `tests/e2e/`, `tests/helpers/run-compiled-cli.ts` | Distinguish `./dist/maestro` from installed `maestro` |
@@ -65,6 +65,7 @@ maestro/
 bun run build
 bun run check:boundaries
 bun run check:skills
+bun run check:bundled-skills
 bun run test
 ./dist/maestro mission-control --render-check --size 120x40
 bun run release:local
