@@ -1,10 +1,9 @@
 import { join } from "node:path";
-import { open, readdir } from "node:fs/promises";
-import { setTimeout as sleep } from "node:timers/promises";
+import { readdir } from "node:fs/promises";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { MaestroError } from "@/shared/errors.js";
 import { appendText, ensureDir, readText, removeIfExists, writeJson } from "@/shared/lib/fs.js";
-import { removeStaleLock, serializeLockMetadata } from "@/shared/lib/fs-lock.js";
+import { withFileLock } from "@/shared/lib/fs-lock.js";
 import { assertSafeSegment, resolveWithin } from "@/shared/lib/path-safety.js";
 import {
   CONTRACT_ID_PATTERN,
@@ -65,7 +64,7 @@ export class FsContractStoreAdapter implements ContractStorePort {
   }
 
   async getByTaskId(taskId: string): Promise<Contract | undefined> {
-    const entry = await this.findLatestTaskIndexEntry(taskId);
+    const entry = this.findLatestTaskIndexEntry(taskId, await this.readIndex());
     if (!entry) {
       return undefined;
     }
@@ -102,14 +101,18 @@ export class FsContractStoreAdapter implements ContractStorePort {
 
   async create(input: CreateContractRecordInput): Promise<Contract> {
     return this.withLock(async () => {
-      const existingByTask = await this.getByTaskId(input.taskId);
+      const index = await this.readIndex();
+      const existingByTaskEntry = this.findLatestTaskIndexEntry(input.taskId, index);
+      const existingByTask = existingByTaskEntry
+        ? await this.get(existingByTaskEntry.id)
+        : undefined;
       if (existingByTask && existingByTask.status !== "discarded") {
         throw new MaestroError(`Task ${input.taskId} already has a contract: ${existingByTask.id}`, [
           "Edit or discard the existing contract before creating another one",
         ]);
       }
 
-      const knownIds = new Set((await this.readIndex()).map((entry) => entry.id));
+      const knownIds = new Set(index.map((entry) => entry.id));
       let id = input.id ?? this.generateId();
       if (knownIds.has(id)) {
         if (input.id !== undefined) {
@@ -220,8 +223,10 @@ export class FsContractStoreAdapter implements ContractStorePort {
     await appendText(this.indexPath(), `${JSON.stringify(entry)}\n`);
   }
 
-  private async findLatestTaskIndexEntry(taskId: string): Promise<ContractIndexEntry | undefined> {
-    const index = await this.readIndex();
+  private findLatestTaskIndexEntry(
+    taskId: string,
+    index: readonly ContractIndexEntry[],
+  ): ContractIndexEntry | undefined {
     for (let i = index.length - 1; i >= 0; i -= 1) {
       const entry = index[i];
       if (entry?.taskId === taskId) {
@@ -305,36 +310,20 @@ export class FsContractStoreAdapter implements ContractStorePort {
   private async withLock<T>(fn: () => Promise<T>): Promise<T> {
     await ensureDir(this.contractsDir());
     const lockPath = this.lockPath();
-    const deadline = Date.now() + LOCK_WAIT_TIMEOUT_MS;
-    let retryDelayMs = LOCK_INITIAL_RETRY_DELAY_MS;
-
-    while (true) {
-      try {
-        const handle = await open(lockPath, "wx");
-        try {
-          await handle.writeFile(serializeLockMetadata());
-          return await fn();
-        } finally {
-          await handle.close();
-          await removeIfExists(lockPath);
-        }
-      } catch (error) {
-        const errno = error as NodeJS.ErrnoException;
-        if (errno.code !== "EEXIST") {
-          throw error;
-        }
-        if (await removeStaleLock(lockPath, LOCK_STALE_MS)) {
-          continue;
-        }
-        if (Date.now() >= deadline) {
-          throw new MaestroError(`Contract store lock is still active: ${lockPath}`, [
-            "Retry once the other contract command finishes",
-            `If this lock is stale, remove it manually: rm ${lockPath}`,
-          ]);
-        }
-        await sleep(retryDelayMs);
-        retryDelayMs = Math.min(retryDelayMs * 2, LOCK_MAX_RETRY_DELAY_MS);
-      }
-    }
+    return withFileLock(
+      {
+        lockPath,
+        staleMs: LOCK_STALE_MS,
+        timeoutMs: LOCK_WAIT_TIMEOUT_MS,
+        initialRetryDelayMs: LOCK_INITIAL_RETRY_DELAY_MS,
+        maxRetryDelayMs: LOCK_MAX_RETRY_DELAY_MS,
+        timeoutMessage: `Contract store lock is still active: ${lockPath}`,
+        timeoutHints: [
+          "Retry once the other contract command finishes",
+          `If this lock is stale, remove it manually: rm ${lockPath}`,
+        ],
+      },
+      fn,
+    );
   }
 }

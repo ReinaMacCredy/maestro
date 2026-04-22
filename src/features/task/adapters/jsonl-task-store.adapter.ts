@@ -10,22 +10,19 @@
  */
 
 import { join } from "node:path";
-import { open } from "node:fs/promises";
-import { setTimeout as sleep } from "node:timers/promises";
-import { removeStaleLock, serializeLockMetadata } from "@/shared/lib/fs-lock.js";
+import { withFileLock } from "@/shared/lib/fs-lock.js";
 import type {
   Task,
   CreateTaskInput,
   TaskMetadataPatch,
   TaskMutationInput,
-  TaskReceipt,
   UpdateTaskInput,
   UpdateTaskResult,
 } from "../domain/task-types.js";
 import type { BatchResult, CreateBatchInput } from "../domain/task-batch-types.js";
 import type { TaskStorePort } from "../ports/task-store.port.js";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
-import { ensureDir, readText, removeIfExists, writeText } from "@/shared/lib/fs.js";
+import { ensureDir, readText, writeText } from "@/shared/lib/fs.js";
 import { generateTaskId } from "../domain/task-id.js";
 import {
   assertNoBlockCycle,
@@ -48,6 +45,7 @@ import {
   DEFAULT_TASK_TYPE,
   DEFAULT_TASK_PRIORITY,
   DEFAULT_TASK_STATUS,
+  buildTaskReceipt,
 } from "../domain/task-types.js";
 import {
   assertTaskMutationOwnership,
@@ -253,7 +251,14 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         ? existing.closeReason
         : (patch.reason.length === 0 ? undefined : patch.reason);
       const now = new Date().toISOString();
-      const receipt = buildReceiptForUpdate(existing, patch, nextStatus, reason, now);
+      const receipt = buildTaskReceipt(existing.receipt, {
+        nextStatus,
+        capturedAt: now,
+        summary: patch.summary,
+        surprise: patch.surprise,
+        verifiedBy: patch.verifiedBy,
+        reasonFallback: reason,
+      });
       const nextAssignee = autoClaim ? autoClaim.sessionId : existing.assignee;
       const lastActivityAt = isMutationByOwner(nextAssignee, opts)
         ? now
@@ -681,37 +686,21 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
   private async withLock<T>(fn: () => Promise<T>): Promise<T> {
     await ensureDir(this.tasksDir());
     const lockPath = this.lockPath();
-    const deadline = Date.now() + LOCK_WAIT_TIMEOUT_MS;
-    let retryDelayMs = LOCK_INITIAL_RETRY_DELAY_MS;
-
-    while (true) {
-      try {
-        const handle = await open(lockPath, "wx");
-        try {
-          await handle.writeFile(serializeLockMetadata());
-          return await fn();
-        } finally {
-          await handle.close();
-          await removeIfExists(lockPath);
-        }
-      } catch (error) {
-        const errno = error as NodeJS.ErrnoException;
-        if (errno.code !== "EEXIST") {
-          throw error;
-        }
-        if (await removeStaleLock(lockPath, LOCK_STALE_MS)) {
-          continue;
-        }
-        if (Date.now() >= deadline) {
-          throw new MaestroError(`Task store lock is still active: ${lockPath}`, [
-            "Retry once the other task command finishes",
-            `If this lock is stale, remove it manually: rm ${lockPath}`,
-          ]);
-        }
-        await sleep(retryDelayMs);
-        retryDelayMs = Math.min(retryDelayMs * 2, LOCK_MAX_RETRY_DELAY_MS);
-      }
-    }
+    return withFileLock(
+      {
+        lockPath,
+        staleMs: LOCK_STALE_MS,
+        timeoutMs: LOCK_WAIT_TIMEOUT_MS,
+        initialRetryDelayMs: LOCK_INITIAL_RETRY_DELAY_MS,
+        maxRetryDelayMs: LOCK_MAX_RETRY_DELAY_MS,
+        timeoutMessage: `Task store lock is still active: ${lockPath}`,
+        timeoutHints: [
+          "Retry once the other task command finishes",
+          `If this lock is stale, remove it manually: rm ${lockPath}`,
+        ],
+      },
+      fn,
+    );
   }
 }
 
@@ -722,38 +711,6 @@ function isMutationByOwner(
   if (nextAssignee === undefined) return false;
   if (opts.sessionId === undefined) return false;
   return nextAssignee === opts.sessionId;
-}
-
-function buildReceiptForUpdate(
-  existing: Task,
-  patch: UpdateTaskInput,
-  nextStatus: Task["status"],
-  reason: string | undefined,
-  now: string,
-): TaskReceipt | undefined {
-  if (nextStatus !== "completed") {
-    return existing.receipt;
-  }
-
-  const summary = nonEmpty(patch.summary) ?? reason;
-  const surprise = nonEmpty(patch.surprise);
-  const verifiedBy = patch.verifiedBy?.filter((name) => name.length > 0) ?? [];
-
-  if (!summary && !surprise && verifiedBy.length === 0) {
-    return existing.receipt;
-  }
-
-  return {
-    summary: summary ?? "",
-    ...(surprise ? { surprise } : {}),
-    ...(verifiedBy.length > 0 ? { verifiedBy } : {}),
-    capturedAt: now,
-  };
-}
-
-function nonEmpty(value: string | undefined): string | undefined {
-  const trimmed = value?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : undefined;
 }
 
 function applyLabelPatch(

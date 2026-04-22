@@ -38,6 +38,7 @@ import { lockContract } from "../usecases/contract/lock-contract.usecase.js";
 import { showContract } from "../usecases/contract/show-contract.usecase.js";
 import { reopenTaskFlow } from "../usecases/reopen-task-flow.usecase.js";
 import { buildTaskOwnerId } from "../usecases/task-continuation.usecase.js";
+import { resolveTaskSilentMode } from "./command-silence.js";
 
 const CONTRACT_STATUSES: readonly ContractStatus[] = [
   "draft",
@@ -737,9 +738,7 @@ function formatContractVerdictPreview(preview: ContractVerdictPreview): string[]
 }
 
 function resolveContractSilent(opts: { silent?: unknown }): boolean {
-  if (opts.silent === true) return true;
-  const envFlag = process.env.MAESTRO_TASK_SILENT?.toLowerCase();
-  return envFlag === "1" || envFlag === "true";
+  return resolveTaskSilentMode(opts);
 }
 
 function warnScopeOverlap(contract: Contract, opts: { silent?: unknown }): void {

@@ -111,6 +111,22 @@ describe("task mutating commands --silent", () => {
   );
 
   it(
+    "respects MAESTRO_TASK_SILENT=TRUE without --silent flag",
+    async () => {
+      const first = await runCompiled(["task", "create", "env-silent-uppercase", "--silent"], tmpDir);
+      const id = first.stdout;
+
+      const result = await runCompiled(
+        ["task", "claim", id, "--session", "operator-c"],
+        tmpDir,
+        { env: { MAESTRO_TASK_SILENT: "TRUE" } },
+      );
+      expect(result.stdout).toBe(`${id} .`);
+    },
+    SLOW_CLI_TIMEOUT_MS,
+  );
+
+  it(
     "silent mode falls back to verbose output on failure",
     async () => {
       const bogus = await runCompiled(

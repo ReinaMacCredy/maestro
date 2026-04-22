@@ -102,6 +102,15 @@ export interface UpdateTaskInput {
   readonly verifiedBy?: readonly string[];
 }
 
+export interface BuildTaskReceiptInput {
+  readonly nextStatus: TaskStatus;
+  readonly capturedAt: string;
+  readonly summary?: string;
+  readonly surprise?: string;
+  readonly verifiedBy?: readonly string[];
+  readonly reasonFallback?: string;
+}
+
 export interface TaskMutationInput {
   readonly sessionId?: string;
   readonly force?: boolean;
@@ -164,4 +173,33 @@ export interface ClaimTaskInput {
 export interface UnclaimTaskInput {
   readonly sessionId: string;
   readonly force?: boolean;
+}
+
+export function buildTaskReceipt(
+  existingReceipt: TaskReceipt | undefined,
+  input: BuildTaskReceiptInput,
+): TaskReceipt | undefined {
+  if (input.nextStatus !== "completed") {
+    return existingReceipt;
+  }
+
+  const summary = nonEmpty(input.summary) ?? nonEmpty(input.reasonFallback);
+  const surprise = nonEmpty(input.surprise);
+  const verifiedBy = input.verifiedBy?.filter((name) => name.length > 0) ?? [];
+
+  if (!summary && !surprise && verifiedBy.length === 0) {
+    return existingReceipt;
+  }
+
+  return {
+    summary: summary ?? "",
+    ...(surprise ? { surprise } : {}),
+    ...(verifiedBy.length > 0 ? { verifiedBy } : {}),
+    capturedAt: input.capturedAt,
+  };
+}
+
+function nonEmpty(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : undefined;
 }

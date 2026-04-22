@@ -329,7 +329,7 @@ describe("task contract CLI", () => {
     expect(second.status).toBe("draft");
   }, SLOW_CLI_TIMEOUT_MS);
 
-  it("respects MAESTRO_TASK_SILENT=true for contract mutators", async () => {
+  it("respects MAESTRO_TASK_SILENT=TRUE for contract mutators", async () => {
     const createdTask = await runCli(["task", "create", "env silent contract", "--json"], tmpDir);
     const task = expectJson<{ id: string }>(createdTask);
     const templatePath = await writeTemplate(
@@ -352,7 +352,7 @@ describe("task contract CLI", () => {
     const discarded = await runCli(
       ["task", "contract", "discard", contract.id],
       tmpDir,
-      { env: { MAESTRO_TASK_SILENT: "true" } },
+      { env: { MAESTRO_TASK_SILENT: "TRUE" } },
     );
     expect(discarded.stdout).toBe(`${contract.id} [ok]`);
   }, SLOW_CLI_TIMEOUT_MS);

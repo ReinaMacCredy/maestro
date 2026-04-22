@@ -1,4 +1,6 @@
-import { stat } from "node:fs/promises";
+import { open, stat } from "node:fs/promises";
+import { setTimeout as sleep } from "node:timers/promises";
+import { MaestroError } from "@/shared/errors.js";
 import { readText, removeIfExists } from "@/shared/lib/fs.js";
 
 export interface LockMetadata {
@@ -74,5 +76,49 @@ export async function removeStaleLock(lockPath: string, staleMs: number): Promis
       return false;
     }
     throw error;
+  }
+}
+
+export interface FileLockOptions {
+  readonly lockPath: string;
+  readonly staleMs: number;
+  readonly timeoutMs: number;
+  readonly initialRetryDelayMs: number;
+  readonly maxRetryDelayMs: number;
+  readonly timeoutMessage: string;
+  readonly timeoutHints: readonly string[];
+}
+
+export async function withFileLock<T>(
+  options: FileLockOptions,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const deadline = Date.now() + options.timeoutMs;
+  let retryDelayMs = options.initialRetryDelayMs;
+
+  while (true) {
+    try {
+      const handle = await open(options.lockPath, "wx");
+      try {
+        await handle.writeFile(serializeLockMetadata());
+        return await fn();
+      } finally {
+        await handle.close();
+        await removeIfExists(options.lockPath);
+      }
+    } catch (error) {
+      const errno = error as NodeJS.ErrnoException;
+      if (errno.code !== "EEXIST") {
+        throw error;
+      }
+      if (await removeStaleLock(options.lockPath, options.staleMs)) {
+        continue;
+      }
+      if (Date.now() >= deadline) {
+        throw new MaestroError(options.timeoutMessage, [...options.timeoutHints]);
+      }
+      await sleep(retryDelayMs);
+      retryDelayMs = Math.min(retryDelayMs * 2, options.maxRetryDelayMs);
+    }
   }
 }

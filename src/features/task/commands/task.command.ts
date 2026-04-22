@@ -45,7 +45,7 @@ import type {
   TaskReceipt,
   UpdateTaskInput,
 } from "../domain/task-types.js";
-import { TASK_STATUSES, TASK_TYPES, indexTasksById } from "../domain/task-types.js";
+import { TASK_STATUSES, TASK_TYPES, buildTaskReceipt, indexTasksById } from "../domain/task-types.js";
 import {
   buildCreateInput,
   hasAnyPatchField,
@@ -75,6 +75,7 @@ import {
 } from "./task-command-formatters.js";
 import { registerContractCommand } from "./contract.command.js";
 import { syncTaskMetadata } from "../usecases/sync-task-metadata.usecase.js";
+import { resolveTaskSilentMode } from "./command-silence.js";
 
 interface ContinuationEditInput {
   readonly currentState?: string;
@@ -1370,8 +1371,8 @@ async function maybeReleaseStaleOwnedTasks(skipAssignees: readonly string[] = []
   const services = getServices();
   const tasks = await services.taskStore.all();
   const before = new Map(tasks.map((task) => [task.id, task] as const));
-  const staleOwners = new Set<string>();
   const skipSet = new Set(skipAssignees);
+  const tasksByAssignee = new Map<string, Task[]>();
   let refreshedNowMd = false;
 
   for (const task of tasks) {
@@ -1385,15 +1386,19 @@ async function maybeReleaseStaleOwnedTasks(skipAssignees: readonly string[] = []
     if (!parsed) {
       continue;
     }
-    const session = await services.sessionDetect.lookup(parsed.agent, parsed.sessionId);
-    if (!session) {
-      staleOwners.add(task.assignee);
+    const grouped = tasksByAssignee.get(task.assignee);
+    if (grouped) {
+      grouped.push(task);
+    } else {
+      tasksByAssignee.set(task.assignee, [task]);
     }
   }
 
+  const staleOwners = await collectStaleOwners(services, [...tasksByAssignee.keys()]);
   for (const assignee of staleOwners) {
+    const ownedTasks = tasksByAssignee.get(assignee) ?? [];
     try {
-      await assertStaleContractsReclaimable(tasks.filter((task) => task.assignee === assignee));
+      await assertStaleContractsReclaimable(ownedTasks);
       const released = await releaseOwnedTasks(services.taskStore, assignee);
       await syncRecoveredStaleOwnerTasks(services, before, released);
       if (released.length > 0) {
@@ -1413,6 +1418,35 @@ async function maybeReleaseStaleOwnedTasks(skipAssignees: readonly string[] = []
   if (refreshedNowMd) {
     await refreshNowMd();
   }
+}
+
+const STALE_OWNER_LOOKUP_CONCURRENCY = 8;
+
+async function collectStaleOwners(
+  services: ReturnType<typeof getServices>,
+  assignees: readonly string[],
+): Promise<readonly string[]> {
+  const staleOwners = new Set<string>();
+
+  for (let index = 0; index < assignees.length; index += STALE_OWNER_LOOKUP_CONCURRENCY) {
+    const chunk = assignees.slice(index, index + STALE_OWNER_LOOKUP_CONCURRENCY);
+    const statuses = await Promise.all(chunk.map(async (assignee) => {
+      const parsed = parseTaskOwnerId(assignee);
+      if (!parsed) {
+        return undefined;
+      }
+      const session = await services.sessionDetect.lookup(parsed.agent, parsed.sessionId);
+      return session ? undefined : assignee;
+    }));
+
+    for (const assignee of statuses) {
+      if (assignee) {
+        staleOwners.add(assignee);
+      }
+    }
+  }
+
+  return [...staleOwners];
 }
 
 async function syncRecoveredStaleOwnerTasks(
@@ -1567,24 +1601,14 @@ async function enforceContractCompletionPolicy(
 }
 
 function previewTaskReceipt(task: Task, patch: UpdateTaskInput): TaskReceipt | undefined {
-  const summary = nonEmpty(patch.summary) ?? nonEmpty(patch.reason) ?? task.receipt?.summary;
-  const surprise = nonEmpty(patch.surprise);
-  const verifiedBy = patch.verifiedBy?.filter((name) => name.length > 0) ?? [];
-  if (!summary && !surprise && verifiedBy.length === 0) {
-    return task.receipt;
-  }
-
-  return {
-    summary: summary ?? "",
-    ...(surprise ? { surprise } : {}),
-    ...(verifiedBy.length > 0 ? { verifiedBy } : {}),
+  return buildTaskReceipt(task.receipt, {
+    nextStatus: "completed",
     capturedAt: new Date().toISOString(),
-  };
-}
-
-function nonEmpty(value: string | undefined): string | undefined {
-  const trimmed = value?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : undefined;
+    summary: patch.summary,
+    surprise: patch.surprise,
+    verifiedBy: patch.verifiedBy,
+    reasonFallback: patch.reason,
+  });
 }
 
 function hasAdditionalCompletedTaskEdits(
@@ -1764,9 +1788,7 @@ function appendVerifier(value: string, previous: string[]): string[] {
 }
 
 function resolveSilent(opts: { silent?: unknown }): boolean {
-  if (opts.silent === true) return true;
-  const envFlag = process.env.MAESTRO_TASK_SILENT;
-  return envFlag === "1" || envFlag === "true";
+  return resolveTaskSilentMode(opts);
 }
 
 const STATUS_MARKER: Record<Task["status"], string> = {
