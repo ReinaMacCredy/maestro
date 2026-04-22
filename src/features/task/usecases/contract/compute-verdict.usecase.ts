@@ -51,20 +51,29 @@ async function detectContractOverlap(
     return undefined;
   }
 
-  const results = await Promise.all(candidates.map(async (candidate) => {
-    const overlaps = await gitAnchor.windowsOverlap({
-      repoRoot: contract.repoRoot,
-      left: {
-        claimedAtCommit: contract.claimedAtCommit,
-        closedAtCommit: currentClosedAtCommit,
-      },
-      right: {
-        claimedAtCommit: candidate.claimedAtCommit,
-        closedAtCommit: candidate.closedAtCommit ?? currentClosedAtCommit,
-      },
-    });
-    return overlaps ? candidate.id : undefined;
-  }));
+  // Each windowsOverlap call spawns up to four git subprocesses. Unbounded
+  // Promise.all over many locked contracts can spike child process count on
+  // large repos, so we batch the work in fixed-size chunks.
+  const OVERLAP_CONCURRENCY = 4;
+  const results: (string | undefined)[] = [];
+  for (let i = 0; i < candidates.length; i += OVERLAP_CONCURRENCY) {
+    const chunk = candidates.slice(i, i + OVERLAP_CONCURRENCY);
+    const chunkResults = await Promise.all(chunk.map(async (candidate) => {
+      const overlaps = await gitAnchor.windowsOverlap({
+        repoRoot: contract.repoRoot,
+        left: {
+          claimedAtCommit: contract.claimedAtCommit,
+          closedAtCommit: currentClosedAtCommit,
+        },
+        right: {
+          claimedAtCommit: candidate.claimedAtCommit,
+          closedAtCommit: candidate.closedAtCommit ?? currentClosedAtCommit,
+        },
+      });
+      return overlaps ? candidate.id : undefined;
+    }));
+    results.push(...chunkResults);
+  }
   const overlapping = results.filter((id): id is string => id !== undefined).sort();
 
   if (overlapping.length === 0) {

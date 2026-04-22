@@ -283,5 +283,7 @@ describe("pickupHandoff", () => {
     });
     const reloaded = await launchStore.get(launch.id);
     expect(reloaded?.consumedAt).toBeTruthy();
+    expect(result.contractTransferWarning).toMatch(/contract ownership transfer failed/);
+    expect(result.contractTransferWarning).toContain("contract store offline");
   });
 });

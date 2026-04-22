@@ -179,6 +179,16 @@ function matchesScope(
   return matchesAny(scope.filesExpected, path);
 }
 
+// Verdict computation matches every (pattern × path) pair, so caching the
+// compiled Glob avoids reallocating on every cross-product lookup.
+const globCache = new Map<string, Bun.Glob>();
+
 function matches(pattern: string, path: string): boolean {
-  return new Bun.Glob(normalizeSlashes(pattern)).match(path);
+  const normalized = normalizeSlashes(pattern);
+  let glob = globCache.get(normalized);
+  if (!glob) {
+    glob = new Bun.Glob(normalized);
+    globCache.set(normalized, glob);
+  }
+  return glob.match(path);
 }

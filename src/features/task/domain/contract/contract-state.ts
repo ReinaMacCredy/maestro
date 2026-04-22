@@ -444,7 +444,7 @@ function isDoneWhenKind(value: unknown): value is DoneWhenCriterion["kind"] {
   return typeof value === "string" && (DONE_WHEN_KINDS as readonly string[]).includes(value);
 }
 
-function isRecord(value: unknown): value is Record<string, any> {
+function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 

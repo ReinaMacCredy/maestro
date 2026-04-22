@@ -10,8 +10,9 @@
  */
 
 import { join } from "node:path";
-import { open, stat } from "node:fs/promises";
+import { open } from "node:fs/promises";
 import { setTimeout as sleep } from "node:timers/promises";
+import { removeStaleLock, serializeLockMetadata } from "@/shared/lib/fs-lock.js";
 import type {
   Task,
   CreateTaskInput,
@@ -61,11 +62,6 @@ const LOCK_WAIT_TIMEOUT_MS = 5_000;
 const LOCK_INITIAL_RETRY_DELAY_MS = 10;
 const LOCK_MAX_RETRY_DELAY_MS = 100;
 const LOCK_STALE_MS = 30_000;
-
-interface TaskStoreLockMetadata {
-  readonly pid: number;
-  readonly createdAt: string;
-}
 
 export class JsonlTaskStoreAdapter implements TaskStorePort {
   constructor(private readonly baseDir: string) {}
@@ -561,6 +557,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         status: "pending",
         assignee: undefined,
         claimedAt: undefined,
+        claimedAtCommit: undefined,
         lastActivityAt: undefined,
         closeReason: undefined,
         receipt: undefined,
@@ -681,27 +678,6 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
     await writeText(this.tasksPath(), content);
   }
 
-  private async removeStaleLock(lockPath: string): Promise<boolean> {
-    try {
-      const lockStat = await stat(lockPath);
-      if (Date.now() - lockStat.mtimeMs < LOCK_STALE_MS) {
-        return false;
-      }
-      const metadata = await this.readLockMetadata(lockPath);
-      if (metadata && isProcessAlive(metadata.pid)) {
-        return false;
-      }
-      await removeIfExists(lockPath);
-      return true;
-    } catch (error) {
-      const errno = error as NodeJS.ErrnoException;
-      if (errno.code === "ENOENT") {
-        return false;
-      }
-      throw error;
-    }
-  }
-
   private async withLock<T>(fn: () => Promise<T>): Promise<T> {
     await ensureDir(this.tasksDir());
     const lockPath = this.lockPath();
@@ -723,7 +699,7 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         if (errno.code !== "EEXIST") {
           throw error;
         }
-        if (await this.removeStaleLock(lockPath)) {
+        if (await removeStaleLock(lockPath, LOCK_STALE_MS)) {
           continue;
         }
         if (Date.now() >= deadline) {
@@ -735,26 +711,6 @@ export class JsonlTaskStoreAdapter implements TaskStorePort {
         await sleep(retryDelayMs);
         retryDelayMs = Math.min(retryDelayMs * 2, LOCK_MAX_RETRY_DELAY_MS);
       }
-    }
-  }
-
-  private async readLockMetadata(lockPath: string): Promise<TaskStoreLockMetadata | undefined> {
-    const raw = await readText(lockPath);
-    if (!raw) return undefined;
-    try {
-      const parsed = JSON.parse(raw) as Record<string, unknown>;
-      if (typeof parsed.pid !== "number" || !Number.isInteger(parsed.pid)) {
-        return undefined;
-      }
-      if (typeof parsed.createdAt !== "string") {
-        return undefined;
-      }
-      return {
-        pid: parsed.pid,
-        createdAt: parsed.createdAt,
-      };
-    } catch {
-      return undefined;
     }
   }
 }
@@ -978,28 +934,4 @@ function dedupeValues(values: readonly string[]): readonly string[] {
 
 function sameValues(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
-}
-
-function serializeLockMetadata(): string {
-  const metadata: TaskStoreLockMetadata = {
-    pid: process.pid,
-    createdAt: new Date().toISOString(),
-  };
-  return `${JSON.stringify(metadata)}\n`;
-}
-
-function isProcessAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    const errno = error as NodeJS.ErrnoException;
-    if (errno.code === "ESRCH") {
-      return false;
-    }
-    if (errno.code === "EPERM") {
-      return true;
-    }
-    return false;
-  }
 }

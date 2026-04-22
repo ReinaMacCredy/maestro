@@ -157,4 +157,34 @@ describe("FsCandidateStoreAdapter", () => {
       await expect(store.delete("tsk-absent")).resolves.toBeUndefined();
     });
   });
+
+  describe("path safety", () => {
+    it("rejects traversal segments in the candidate id on create", async () => {
+      await expect(
+        store.create({
+          id: "../../etc/passwd",
+          sourceTaskId: "tsk-abcdef",
+          title: "bad",
+          reason: "r",
+          keywords: ["r"],
+        }),
+      ).rejects.toThrow(/Invalid candidate id/);
+    });
+
+    it("rejects traversal segments in the candidate id on delete", async () => {
+      await expect(store.delete("../etc/passwd")).rejects.toThrow(/Invalid candidate id/);
+    });
+
+    it("rejects path separators in the candidate id", async () => {
+      await expect(
+        store.create({
+          id: "nested/foo",
+          sourceTaskId: "tsk-abcdef",
+          title: "bad",
+          reason: "r",
+          keywords: ["r"],
+        }),
+      ).rejects.toThrow(/Invalid candidate id/);
+    });
+  });
 });

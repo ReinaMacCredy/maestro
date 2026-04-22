@@ -18,7 +18,13 @@ import type {
 } from "../ports/candidate-store.port.js";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { ensureDir, readJson, removeIfExists, writeJson } from "@/shared/lib/fs.js";
+import { assertSafeSegment, resolveWithin } from "@/shared/lib/path-safety.js";
 import { validateTaskCandidate } from "../domain/task-candidate.js";
+
+// Defense in depth for the write path. `validateTaskCandidate` enforces the
+// stricter TASK_ID_PATTERN on read; this keeps the adapter symmetric with
+// the launch/feature/reply stores, which all use assertSafeSegment.
+const SAFE_CANDIDATE_ID = /^[A-Za-z0-9._-]+$/;
 
 export class FsCandidateStoreAdapter implements CandidateStorePort {
   constructor(private readonly baseDir: string) {}
@@ -28,7 +34,8 @@ export class FsCandidateStoreAdapter implements CandidateStorePort {
   }
 
   private candidatePath(id: string): string {
-    return join(this.candidatesDir(), `${id}.json`);
+    assertSafeSegment(id, "candidate id", SAFE_CANDIDATE_ID, "alphanumerics, '.', '_', or '-'");
+    return resolveWithin(this.candidatesDir(), `${id}.json`, "Candidate storage path");
   }
 
   async create(input: CreateCandidateInput): Promise<TaskCandidate> {

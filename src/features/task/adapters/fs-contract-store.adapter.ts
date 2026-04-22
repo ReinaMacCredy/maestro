@@ -1,9 +1,11 @@
 import { join } from "node:path";
-import { open, readdir, stat } from "node:fs/promises";
+import { open, readdir } from "node:fs/promises";
 import { setTimeout as sleep } from "node:timers/promises";
 import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
 import { MaestroError } from "@/shared/errors.js";
 import { appendText, ensureDir, readText, removeIfExists, writeJson } from "@/shared/lib/fs.js";
+import { removeStaleLock, serializeLockMetadata } from "@/shared/lib/fs-lock.js";
+import { assertSafeSegment, resolveWithin } from "@/shared/lib/path-safety.js";
 import {
   CONTRACT_ID_PATTERN,
   buildActiveOverlapError,
@@ -26,11 +28,6 @@ const LOCK_WAIT_TIMEOUT_MS = 5_000;
 const LOCK_INITIAL_RETRY_DELAY_MS = 10;
 const LOCK_MAX_RETRY_DELAY_MS = 100;
 const LOCK_STALE_MS = 30_000;
-
-interface ContractStoreLockMetadata {
-  readonly pid: number;
-  readonly createdAt: string;
-}
 
 export interface FsContractStoreAdapterOptions {
   readonly generateId?: () => string;
@@ -179,6 +176,7 @@ export class FsContractStoreAdapter implements ContractStorePort {
   }
 
   async delete(id: string, input: DeleteContractRecordInput): Promise<boolean> {
+    assertSafeSegment(id, "contract id", CONTRACT_ID_PATTERN, "'c-' followed by 6 hex characters");
     return this.withLock(async () => {
       const removed = await removeIfExists(this.contractPath(id));
       await this.appendIndex({
@@ -197,7 +195,7 @@ export class FsContractStoreAdapter implements ContractStorePort {
   }
 
   private contractPath(id: string): string {
-    return join(this.contractsDir(), `${id}.json`);
+    return resolveWithin(this.contractsDir(), `${id}.json`, "Contract storage path");
   }
 
   private indexPath(): string {
@@ -302,27 +300,6 @@ export class FsContractStoreAdapter implements ContractStorePort {
     return validated;
   }
 
-  private async removeStaleLock(lockPath: string): Promise<boolean> {
-    try {
-      const lockStat = await stat(lockPath);
-      if (Date.now() - lockStat.mtimeMs < LOCK_STALE_MS) {
-        return false;
-      }
-      const metadata = await this.readLockMetadata(lockPath);
-      if (metadata && isProcessAlive(metadata.pid)) {
-        return false;
-      }
-      await removeIfExists(lockPath);
-      return true;
-    } catch (error) {
-      const errno = error as NodeJS.ErrnoException;
-      if (errno.code === "ENOENT") {
-        return false;
-      }
-      throw error;
-    }
-  }
-
   private async withLock<T>(fn: () => Promise<T>): Promise<T> {
     await ensureDir(this.contractsDir());
     const lockPath = this.lockPath();
@@ -344,7 +321,7 @@ export class FsContractStoreAdapter implements ContractStorePort {
         if (errno.code !== "EEXIST") {
           throw error;
         }
-        if (await this.removeStaleLock(lockPath)) {
+        if (await removeStaleLock(lockPath, LOCK_STALE_MS)) {
           continue;
         }
         if (Date.now() >= deadline) {
@@ -357,49 +334,5 @@ export class FsContractStoreAdapter implements ContractStorePort {
         retryDelayMs = Math.min(retryDelayMs * 2, LOCK_MAX_RETRY_DELAY_MS);
       }
     }
-  }
-
-  private async readLockMetadata(lockPath: string): Promise<ContractStoreLockMetadata | undefined> {
-    const raw = await readText(lockPath);
-    if (!raw) return undefined;
-    try {
-      const parsed = JSON.parse(raw) as Record<string, unknown>;
-      if (typeof parsed.pid !== "number" || !Number.isInteger(parsed.pid)) {
-        return undefined;
-      }
-      if (typeof parsed.createdAt !== "string") {
-        return undefined;
-      }
-      return {
-        pid: parsed.pid,
-        createdAt: parsed.createdAt,
-      };
-    } catch {
-      return undefined;
-    }
-  }
-}
-
-function serializeLockMetadata(): string {
-  const metadata: ContractStoreLockMetadata = {
-    pid: process.pid,
-    createdAt: new Date().toISOString(),
-  };
-  return `${JSON.stringify(metadata)}\n`;
-}
-
-function isProcessAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    const errno = error as NodeJS.ErrnoException;
-    if (errno.code === "ESRCH") {
-      return false;
-    }
-    if (errno.code === "EPERM") {
-      return true;
-    }
-    return false;
   }
 }

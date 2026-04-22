@@ -25,6 +25,7 @@ export interface PickupHandoffResult {
   readonly record: HandoffLaunchRecord;
   readonly taskId: string;
   readonly ownerId: string;
+  readonly contractTransferWarning?: string;
 }
 
 export async function pickupHandoff(
@@ -90,10 +91,15 @@ export async function pickupHandoff(
         { status: "in_progress" },
         { sessionId: input.ownerId, force: true },
       )).task;
+  // The handoff was already consumed and the task resumed. Contract ownership
+  // transfer is best-effort; the caller surfaces contractTransferWarning so the
+  // user sees the failure instead of silently leaving lockedBy out of sync.
+  let contractTransferWarning: string | undefined;
   try {
     await transferContractOwnership(deps.contractStore, taskId, input.ownerId, "handoff_pickup");
-  } catch {
-    // The handoff was already consumed and the task resumed; contract ownership follows best-effort.
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    contractTransferWarning = `Task ${taskId} was resumed from handoff ${input.id}, but contract ownership transfer failed: ${message}`;
   }
 
   const priorSummary = await loadTaskContinuationSummary(deps.continuationStore, taskId);
@@ -149,5 +155,6 @@ export async function pickupHandoff(
     record: consumed,
     taskId,
     ownerId: input.ownerId,
+    ...(contractTransferWarning ? { contractTransferWarning } : {}),
   };
 }

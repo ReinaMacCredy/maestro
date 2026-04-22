@@ -281,4 +281,23 @@ describe("JsonlTaskStoreAdapter", () => {
     expect(released[0]?.status).toBe("pending");
     expect(released[0]?.assignee).toBeUndefined();
   });
+
+  it("reopen clears claimedAtCommit along with other claim-scoped state", async () => {
+    const task = await store.create({ title: "Reopen me" });
+    await store.claim(task.id, "session-a");
+    await store.syncMetadata(task.id, { claimedAtCommit: "deadbeef" });
+    await store.update(
+      task.id,
+      { status: "completed", reason: "done" },
+      { sessionId: "session-a" },
+    );
+
+    const reopened = await store.reopen(task.id);
+    expect(reopened.status).toBe("pending");
+    expect(reopened.assignee).toBeUndefined();
+    expect(reopened.claimedAt).toBeUndefined();
+    expect(reopened.claimedAtCommit).toBeUndefined();
+    // contractId is intentionally preserved so the reopen flow can re-lock
+    // the prior contract for the task.
+  });
 });

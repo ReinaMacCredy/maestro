@@ -1,4 +1,5 @@
 import { appendFile, mkdir, readdir, rename, rm, stat } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 
 export async function ensureDir(dir: string): Promise<void> {
@@ -48,7 +49,10 @@ export async function appendText(path: string, content: string): Promise<void> {
 }
 
 async function writeAtomic(path: string, content: string): Promise<void> {
-  const tmp = `${path}.tmp.${Date.now()}`;
+  // randomUUID gives per-write uniqueness even when two callers race within the
+  // same millisecond; a colliding tmp path could otherwise be overwritten and
+  // the loser's rename would read partial content.
+  const tmp = `${path}.tmp.${randomUUID()}`;
   await Bun.write(tmp, content);
   await rename(tmp, path);
 }

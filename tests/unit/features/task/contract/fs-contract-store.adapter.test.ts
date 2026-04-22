@@ -170,4 +170,20 @@ describe("FsContractStoreAdapter", () => {
     const store = new FsContractStoreAdapter(tmpDir);
     await expect(store.get("c-badbad")).rejects.toThrow(MaestroError);
   });
+
+  it("rejects traversal segments in the contract id on delete", async () => {
+    const store = new FsContractStoreAdapter(tmpDir);
+    await expect(
+      store.delete("../../etc/passwd", {
+        taskId: "tsk-a1b2c3",
+        at: "2026-04-21T00:00:00.000Z",
+      }),
+    ).rejects.toThrow(/Invalid contract id/);
+  });
+
+  it("rejects traversal segments in the contract id on get", async () => {
+    const store = new FsContractStoreAdapter(tmpDir);
+    // Malformed ids resolve to undefined without touching disk.
+    expect(await store.get("../../etc/passwd")).toBeUndefined();
+  });
 });
