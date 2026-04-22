@@ -26,6 +26,7 @@ export interface PickupHandoffResult {
   readonly taskId?: string;
   readonly ownerId?: string;
   readonly contractTransferWarning?: string;
+  readonly unlinkedTaskId?: string;
 }
 
 export async function pickupHandoff(
@@ -69,7 +70,17 @@ export async function pickupHandoff(
   const tasks = new Map((await deps.taskStore.all()).map((task) => [task.id, task] as const));
   const beforeTask = tasks.get(taskId);
   if (!beforeTask) {
-    throw new MaestroError(`Linked task not found for handoff ${input.id}: ${taskId}`);
+    const consumedOnly = await deps.launchStore.consume({
+      id: input.id,
+      agent: input.actorAgent,
+      ...(input.actorSessionId ? { sessionId: input.actorSessionId } : {}),
+      pickedUpAt: new Date().toISOString(),
+    });
+    return {
+      record: consumedOnly,
+      ownerId: input.ownerId,
+      unlinkedTaskId: taskId,
+    };
   }
   if (beforeTask.status === "completed") {
     throw new MaestroError(`Task ${taskId} is already completed and cannot be resumed from handoff ${input.id}`, [

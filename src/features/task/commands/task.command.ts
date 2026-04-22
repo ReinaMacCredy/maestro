@@ -14,6 +14,9 @@ import { releaseOwnedTasks } from "../usecases/release-owned-tasks.usecase.js";
 import { readyTaskPage, readyTasks } from "../usecases/ready-tasks.usecase.js";
 import { captureTaskCandidate } from "../usecases/capture-task-candidate.usecase.js";
 import { planTasks } from "../usecases/plan-tasks.usecase.js";
+import { buildBatchInputSchema } from "../usecases/batch-input-schema.usecase.js";
+import { nextTask } from "../usecases/next-task.usecase.js";
+import { listOpenHandoffsForTask } from "@/features/handoff";
 import { findSimilarTasks } from "../usecases/find-similar-tasks.usecase.js";
 import { heartbeatTask } from "../usecases/heartbeat-task.usecase.js";
 import { closeContractForTask } from "../usecases/contract/close-contract.usecase.js";
@@ -90,8 +93,22 @@ export function registerTaskCommand(program: Command): void {
     .description("Task lifecycle management (Claude-style blocker graph)")
     .option("--json", "Output as JSON");
 
+  taskCmd.addHelpText(
+    "after",
+    `
+Primary verbs for agents:
+  task plan --file <path>     populate the queue atomically from a JSON plan
+  task plan --schema          print the JSON Schema accepted by --file
+  task next [--json]          claim the next ready task for the current session (one at a time)
+  task update <id> --status   advance a task (in_progress, completed, ...)
+
+Typical loop:
+  task plan --file plan.json  ->  task next  ->  (work)  ->  task update <id> --status completed`,
+  );
+
   registerCreateCommand(taskCmd, program);
   registerPlanCommand(taskCmd, program);
+  registerNextCommand(taskCmd, program);
   registerQuickCommand(taskCmd, program);
   registerShowCommand(taskCmd, program);
   registerListCommand(taskCmd, program);
@@ -191,7 +208,8 @@ function registerPlanCommand(taskCmd: Command, program: Command): void {
   taskCmd
     .command("plan")
     .description("Create a batch of tasks atomically from a JSON plan")
-    .requiredOption("--file <path>", "Plan file path ('-' to read JSON from stdin)")
+    .option("--file <path>", "Plan file path ('-' to read JSON from stdin)")
+    .option("--schema", "Print the JSON Schema for plan input and exit")
     .option("--start <name>", "After ingest, auto-claim and move the named batch-local task to in_progress")
     .option("--session <id>", "Use an explicit session id for --start (only with --start)")
     .option("--dry-run", "Validate + resolve references without writing any tasks")
@@ -199,6 +217,19 @@ function registerPlanCommand(taskCmd: Command, program: Command): void {
     .action(async (opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
+
+      if (opts.schema === true) {
+        process.stdout.write(JSON.stringify(buildBatchInputSchema(), null, 2) + "\n");
+        return;
+      }
+
+      if (typeof opts.file !== "string" || opts.file.length === 0) {
+        throw new MaestroError("--file is required (or pass --schema to print the plan schema)", [
+          "Provide a plan file: --file plan.json",
+          "Use '-' to read plan JSON from stdin",
+          "Run 'maestro task plan --schema' to see the expected input shape",
+        ]);
+      }
 
       const raw = await readPlanSource(opts.file);
       const batchInput = parsePlanInput(raw);
@@ -329,17 +360,29 @@ function registerShowCommand(taskCmd: Command, program: Command): void {
       const isJson = resolveJsonFlag(opts, program);
 
       if (isJson) {
-        const task = await showTask(services.taskStore, id);
-        output(true, task, formatTaskDetail);
+        const [task, openHandoffs] = await Promise.all([
+          showTask(services.taskStore, id),
+          listOpenHandoffsForTask(services.launchStore, id),
+        ]);
+        output(true, { ...task, openHandoffs }, formatTaskDetail);
         return;
       }
 
-      const view = await buildTaskShowView({
-        taskStore: services.taskStore,
-        continuationStore: services.taskContinuationStore,
-        continuationHistory: services.taskContinuationHistory,
-      }, id);
-      output(false, view, formatTaskShowView);
+      const [view, openHandoffs] = await Promise.all([
+        buildTaskShowView({
+          taskStore: services.taskStore,
+          continuationStore: services.taskContinuationStore,
+          continuationHistory: services.taskContinuationHistory,
+        }, id),
+        listOpenHandoffsForTask(services.launchStore, id),
+      ]);
+      output(false, view, (v) => {
+        const lines = [...formatTaskShowView(v)];
+        if (openHandoffs.length > 0) {
+          lines.push(`  Open handoffs: ${openHandoffs.join(", ")}`);
+        }
+        return lines;
+      });
     });
 }
 
@@ -1312,6 +1355,45 @@ function buildDecisionEvents(edits: ContinuationEditInput, at: string) {
       active: false,
     })),
   ];
+}
+
+function registerNextCommand(taskCmd: Command, program: Command): void {
+  taskCmd
+    .command("next")
+    .description("Claim the next ready task for the current session (one at a time)")
+    .option("--limit <n>", "Candidate pool size (default 8)")
+    .option("--label <label>", "Filter candidates by label")
+    .option("--priority <n>", "Filter candidates by priority 0-4")
+    .option("--type <type>", `Filter candidates by type (${TASK_TYPES.join("|")})`)
+    .option("--force", "Claim another task even if this session already holds one")
+    .option("--session <id>", "Explicit session id (defaults to detected session)")
+    .option("--json", "Output as JSON")
+    .action(async (opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+      const sessionId = await resolveOwnershipSessionId(opts.session);
+      await maybeReleaseStaleOwnedTasks([sessionId]);
+
+      const filters: ReadyTasksFilters = {
+        limit: parseLimit(opts.limit),
+        label: opts.label,
+        priority: parsePriority(opts.priority),
+        type: parseType(opts.type),
+      };
+
+      const result = await nextTask(services.taskStore, {
+        sessionId,
+        force: opts.force === true,
+        filters,
+      });
+
+      output(isJson, result, (r) => {
+        if (r.task) {
+          return [`[ok] Claimed ${r.task.id}: ${r.task.title}`, `  Priority: ${r.task.priority}`, `  Status: ${r.task.status}`];
+        }
+        return [`[!] No task claimed (${r.reason ?? "unknown"})`];
+      });
+    });
 }
 
 function registerReadyCommand(taskCmd: Command, program: Command): void {

@@ -17,6 +17,7 @@ export interface TaskBriefing extends Task {
 
 export interface ReadyTaskPage {
   readonly totalReady: number;
+  readonly totalPending: number;
   readonly items: readonly Task[];
 }
 
@@ -56,9 +57,11 @@ function selectReadyTaskPage(
   filters: ReadyTasksFilters,
 ): ReadyTaskPage {
   const byId = indexTasksById(all);
+  let totalPending = 0;
 
   const selected = all.filter((task) => {
     if (task.status !== "pending") return false;
+    totalPending += 1;
     if (hasUnresolvedBlockers(task, byId)) return false;
 
     if (filters.label !== undefined && !task.labels.includes(filters.label)) return false;
@@ -80,6 +83,7 @@ function selectReadyTaskPage(
 
   return {
     totalReady: selected.length,
+    totalPending,
     items,
   };
 }

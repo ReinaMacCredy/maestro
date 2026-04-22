@@ -366,4 +366,45 @@ describe("pickupHandoff", () => {
     expect(result.contractTransferWarning).toMatch(/contract ownership transfer failed/);
     expect(result.contractTransferWarning).toContain("contract store offline");
   });
+
+  it("unlinks and proceeds standalone when the linked task was deleted", async () => {
+    const task = await createTask(taskStore, { title: "About to be deleted" });
+    const launch = await launchStore.create({
+      task: "Pick this up",
+      name: "[Handoff] deleted target",
+      agent: "claude",
+      model: "opus",
+      wait: false,
+      sourceDir: tmpDir,
+      targetDir: tmpDir,
+      refs: { taskId: task.id },
+      prompt: "## Task\n\nPick this up\n",
+    });
+
+    await taskStore.delete(task.id);
+
+    const result = await pickupHandoff(
+      {
+        launchStore,
+        taskStore,
+        contractStore,
+        continuationStore,
+        continuationHistory,
+      },
+      {
+        id: launch.id,
+        actorAgent: "claude",
+        actorSessionId: "pickup-deleted",
+        ownerId: "claude-code-pickup-deleted",
+      },
+    );
+
+    expect(result.unlinkedTaskId).toBe(task.id);
+    expect(result.taskId).toBeUndefined();
+    expect(result.record.consumedAt).toBeTruthy();
+    expect(result.record.pickedUpByAgent).toBe("claude");
+
+    const reloaded = await launchStore.get(launch.id);
+    expect(reloaded?.consumedAt).toBeTruthy();
+  });
 });

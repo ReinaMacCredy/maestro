@@ -81,6 +81,9 @@ export {
 export { captureTaskCandidate } from "./usecases/capture-task-candidate.usecase.js";
 export { matchCandidates, type TaskHint } from "./usecases/match-candidates.usecase.js";
 export { planTasks } from "./usecases/plan-tasks.usecase.js";
+export { buildBatchInputSchema } from "./usecases/batch-input-schema.usecase.js";
+export { nextTask } from "./usecases/next-task.usecase.js";
+export type { NextTaskInput, NextTaskResult, NextTaskReason } from "./usecases/next-task.usecase.js";
 export {
   buildTaskShowView,
   buildTaskContinuationSummary,

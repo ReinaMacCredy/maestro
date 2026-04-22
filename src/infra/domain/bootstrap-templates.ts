@@ -13,6 +13,26 @@ export const AGENT_INSTRUCTION_BLOCK = `## Maestro Conductor (shared score)
 
 Projects with \`.maestro/\` hold mission and memory state that all agents share.
 
+**Agent session loop (three primary verbs):**
+\`\`\`bash
+maestro task plan --file plan.json                    # populate the queue atomically
+maestro task plan --schema                            # print the JSON Schema for plan input
+maestro task next --json                              # claim the next ready task for this session
+maestro task update <id> --status completed --reason "<one-line outcome>"
+\`\`\`
+
+\`task next\` is one-task-at-a-time by default; it errors if the current session already holds an open task. Pass \`--force\` to override. When the queue is empty, \`task next\` returns \`{"task": null, "reason": "nothing pending"}\`; when every pending task is blocked, \`"reason": "all blocked"\`. The secondary verbs (\`ready\`, \`mine\`, \`claim\`, \`stuck\`, \`similar\`, \`heartbeat\`, \`unclaim\`, \`block\`, \`release-owned\`) still work and remain useful for diagnostics and recovery.
+
+**Hand work off and pick it up:**
+\`\`\`bash
+maestro handoff "<task description>" --task-id <tsk-id>    # drop a packet linked to a task
+maestro handoff list --open --json                         # see what is available to pick up
+maestro handoff pickup [--id <handoff-id>]                 # consume a packet and take over its task
+maestro handoff show <handoff-id>                          # inspect a packet without consuming it
+\`\`\`
+
+Pickup automatically claims the linked task for the current session; if another session holds it, pickup transfers the claim silently and records a \`handoff_claim_transferred\` event in the continuation history. If the linked task was deleted out of band, pickup unlinks silently and proceeds as a standalone pickup.
+
 **See what is in flight:**
 \`\`\`bash
 maestro status --json

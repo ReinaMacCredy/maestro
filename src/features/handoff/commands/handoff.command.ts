@@ -3,8 +3,11 @@ import { getServices } from "@/services.js";
 import {
   DEFAULT_HANDOFF_MODELS,
   launchHandoff,
+  listLaunches,
   pickupHandoff,
+  showLaunch,
   type HandoffAgent,
+  type HandoffLaunchRecord,
 } from "@/features/handoff";
 import {
   buildTaskContinuationSummary,
@@ -121,8 +124,36 @@ export function registerHandoffCommand(program: Command): void {
       if (result.contractTransferWarning) {
         warn(result.contractTransferWarning);
       }
+      if (result.unlinkedTaskId) {
+        warn(
+          `Handoff ${handoffId} pointed at task ${result.unlinkedTaskId}, which no longer exists. Packet was unlinked and picked up as standalone.`,
+        );
+      }
 
       output(isJson, result.record, (record) => formatPickupRecord(record, result.taskId, result.ownerId));
+    });
+
+  handoffCmd
+    .command("list")
+    .description("List handoff packets")
+    .option("--open", "Only show packets that have not been consumed")
+    .option("--json", "Output as JSON")
+    .action(async (opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+      const records = await listLaunches(services.launchStore, { openOnly: Boolean(opts.open) });
+      output(isJson, records, formatLaunchList);
+    });
+
+  handoffCmd
+    .command("show <id>")
+    .description("Show a handoff packet")
+    .option("--json", "Output as JSON")
+    .action(async (id: string, opts) => {
+      const services = getServices();
+      const isJson = resolveJsonFlag(opts, program);
+      const record = await showLaunch(services.launchStore, id);
+      output(isJson, record, (r) => formatLaunchDetail(r));
     });
 }
 
@@ -192,13 +223,12 @@ async function resolvePickupId(explicitId: string | undefined): Promise<string> 
   }
 
   const services = getServices();
-  const open = (await services.launchStore.list()).filter((record) => !record.consumedAt);
+  const open = await listLaunches(services.launchStore, { openOnly: true });
   if (open.length === 0) {
     throw new MaestroError("No open handoff packets are available to pick up");
   }
   if (open.length !== 1) {
-    const sorted = [...open].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-    const preview = sorted.slice(0, 10).map((r) => {
+    const preview = open.slice(0, 10).map((r) => {
       const task = r.task.length > 60 ? `${r.task.slice(0, 57)}...` : r.task;
       return `  ${r.id}  agent=${r.agent}  created=${r.createdAt}  task=${JSON.stringify(task)}`;
     });
@@ -206,8 +236,8 @@ async function resolvePickupId(explicitId: string | undefined): Promise<string> 
       `${open.length} open packets. Pass --id <handoff-id> to choose one:`,
       ...preview,
     ];
-    if (sorted.length > preview.length) {
-      hints.push(`  ...and ${sorted.length - preview.length} more`);
+    if (open.length > preview.length) {
+      hints.push(`  ...and ${open.length - preview.length} more`);
     }
     throw new MaestroError("Multiple open handoff packets exist; pickup is ambiguous", hints);
   }
@@ -354,6 +384,46 @@ function formatPickupRecord(
     ...(record.consumedAt ? [`  Consumed at: ${record.consumedAt}`] : []),
     `  Prompt: ${record.promptPath}`,
   ];
+}
+
+function formatLaunchList(records: readonly HandoffLaunchRecord[]): string[] {
+  if (records.length === 0) {
+    return ["No handoff packets"];
+  }
+  const lines = [`[ok] ${records.length} packet(s)`];
+  for (const r of records) {
+    const state = r.consumedAt ? "consumed" : "open";
+    const task = r.refs.taskId ? ` task=${r.refs.taskId}` : "";
+    const short = r.task.length > 60 ? `${r.task.slice(0, 57)}...` : r.task;
+    lines.push(`  ${r.id}  ${state}  agent=${r.agent}  created=${r.createdAt}${task}  ${JSON.stringify(short)}`);
+  }
+  return lines;
+}
+
+function formatLaunchDetail(record: HandoffLaunchRecord): string[] {
+  const lines = [
+    `[ok] ${record.id}`,
+    `  State: ${record.consumedAt ? "consumed" : "open"}`,
+    `  Agent: ${record.agent}/${record.model}`,
+    `  Status: ${record.status}`,
+    `  Created: ${record.createdAt}`,
+    `  Task: ${JSON.stringify(record.task)}`,
+    ...(record.refs.taskId ? [`  Linked task: ${record.refs.taskId}`] : []),
+    ...(record.createdByAgent
+      ? [`  Created by: ${record.createdByAgent}${record.createdBySessionId ? `/${record.createdBySessionId}` : ""}`]
+      : []),
+    ...(record.pickedUpByAgent
+      ? [`  Picked up by: ${record.pickedUpByAgent}${record.pickedUpBySessionId ? `/${record.pickedUpBySessionId}` : ""}`]
+      : []),
+    ...(record.consumedAt ? [`  Consumed at: ${record.consumedAt}`] : []),
+    `  Target: ${record.targetDir}`,
+    `  Prompt: ${record.promptPath}`,
+    `  Log: ${record.outputPath}`,
+  ];
+  if (record.worktree) {
+    lines.push(`  Worktree: ${record.worktree.path} (${record.worktree.branch} from ${record.worktree.baseBranch})`);
+  }
+  return lines;
 }
 
 function getTaskServices() {

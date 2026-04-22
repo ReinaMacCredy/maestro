@@ -122,4 +122,15 @@ describe("AGENT_INSTRUCTION_BLOCK", () => {
     expect(AGENT_INSTRUCTION_BLOCK).toContain('maestro handoff "Implement <featureId> for mission <id>"');
     expect(AGENT_INSTRUCTION_BLOCK).toContain(".maestro/launches/<id>/");
   });
+
+  it("advertises the three primary agent verbs up front", () => {
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("Agent session loop");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task next --json");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task plan --schema");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task plan --file plan.json");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("maestro task update <id> --status completed --reason");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("one-task-at-a-time");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("handoff list --open --json");
+    expect(AGENT_INSTRUCTION_BLOCK).toContain("handoff_claim_transferred");
+  });
 });

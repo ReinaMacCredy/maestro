@@ -176,6 +176,10 @@ export function taskAlreadyClaimed(id: string, assignee: string): MaestroError {
   );
 }
 
+export function isTaskAlreadyClaimedError(error: unknown): error is MaestroError {
+  return error instanceof MaestroError && error.message.includes("is already claimed by");
+}
+
 export function taskNotClaimed(id: string): MaestroError {
   return new MaestroError(
     `Task ${id} is not currently claimed`,

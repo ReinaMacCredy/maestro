@@ -22,6 +22,7 @@ import type {
 } from "@/features/memory";
 import type { RatchetStorePort, RatchetSuite, RatchetBaseline } from "@/features/ratchet";
 import type { ProjectGraphStorePort, ProjectGraph } from "@/features/graph";
+import type { HandoffLaunchRecord, LaunchStorePort } from "@/features/handoff";
 import type { GitState } from "@/infra/domain/git-types.js";
 import type { MaestroConfig } from "@/infra/domain/config-types.js";
 import type { AgentSession } from "@/features/session";
@@ -460,5 +461,42 @@ export function mockProjectGraphStore(
     save: async (g: ProjectGraph) => {
       graph = g;
     },
+  };
+}
+
+export function makeHandoffLaunchRecord(
+  partial: Partial<HandoffLaunchRecord> & { id: string; createdAt: string },
+): HandoffLaunchRecord {
+  return {
+    id: partial.id,
+    createdAt: partial.createdAt,
+    task: partial.task ?? "work",
+    name: partial.name ?? partial.id,
+    agent: partial.agent ?? "codex",
+    model: partial.model ?? "gpt-5.4",
+    status: partial.status ?? "launched",
+    wait: partial.wait ?? false,
+    sourceDir: partial.sourceDir ?? "/src",
+    targetDir: partial.targetDir ?? "/target",
+    promptPath: partial.promptPath ?? "prompt.md",
+    outputPath: partial.outputPath ?? "output.log",
+    command: partial.command ?? [],
+    refs: partial.refs ?? {},
+    ...(partial.consumedAt !== undefined ? { consumedAt: partial.consumedAt } : {}),
+    ...(partial.pickedUpByAgent !== undefined ? { pickedUpByAgent: partial.pickedUpByAgent } : {}),
+    ...(partial.pickedUpBySessionId !== undefined ? { pickedUpBySessionId: partial.pickedUpBySessionId } : {}),
+    ...(partial.pickedUpAt !== undefined ? { pickedUpAt: partial.pickedUpAt } : {}),
+    ...(partial.worktree !== undefined ? { worktree: partial.worktree } : {}),
+  };
+}
+
+export function mockLaunchStore(records: readonly HandoffLaunchRecord[] = []): LaunchStorePort {
+  return {
+    async create() { throw new Error("not used in mockLaunchStore"); },
+    async update(r) { return r; },
+    async consume() { throw new Error("not used in mockLaunchStore"); },
+    async get(id) { return records.find((r) => r.id === id); },
+    async list() { return records; },
+    resolveArtifactPath(p: string) { return p; },
   };
 }
