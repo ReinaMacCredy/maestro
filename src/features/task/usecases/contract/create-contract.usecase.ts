@@ -1,5 +1,8 @@
 import { MaestroError } from "@/shared/errors.js";
-import { generateDoneWhenId } from "../../domain/contract/contract-state.js";
+import {
+  generateDoneWhenId,
+  normalizeStoredContractRepoRoot,
+} from "../../domain/contract/contract-state.js";
 import type {
   Contract,
   ContractConfigSnapshot,
@@ -51,7 +54,7 @@ export async function createContract(
 
   const contract = await contractStore.create({
     taskId: input.taskId,
-    repoRoot: input.repoRoot,
+    repoRoot: normalizeStoredContractRepoRoot(input.repoRoot),
     createdAt: new Date().toISOString(),
     intent: input.intent.trim(),
     scope: normalizeScope(input.scope),

@@ -11,16 +11,24 @@ export async function computeContractVerdictForTask(
   contract: Contract,
   task: Pick<Task, "assignee" | "receipt" | "updatedAt">,
   receiptOverride?: TaskReceipt,
+  runtimeRepoRoot?: string,
 ): Promise<ComputedContractVerdict & { readonly closedAtCommit?: string }> {
+  const repoRoot = runtimeRepoRoot ?? contract.repoRoot;
   const gitResult = await gitAnchor.collectTouchedFiles({
-    repoRoot: contract.repoRoot,
+    repoRoot,
     claimedAtCommit: contract.claimedAtCommit,
     rebaseFallback: contract.configSnapshot.rebaseFallback,
   });
   const at = task.updatedAt;
   const actorId = task.assignee ?? contract.lockedBy ?? contract.createdBy;
   const receipt = receiptOverride ?? task.receipt;
-  const overlapDetected = await detectContractOverlap(contractStore, gitAnchor, contract, gitResult.closedAtCommit);
+  const overlapDetected = await detectContractOverlap(
+    contractStore,
+    gitAnchor,
+    contract,
+    gitResult.closedAtCommit,
+    repoRoot,
+  );
   const computed = computeContractVerdict(contract, gitResult, receipt, actorId, at, {
     overlapDetected,
   });
@@ -36,6 +44,7 @@ async function detectContractOverlap(
   gitAnchor: GitAnchorPort,
   contract: Contract,
   currentClosedAtCommit: string | undefined,
+  runtimeRepoRoot: string,
 ): Promise<ContractVerdict["overlapDetected"] | undefined> {
   if (!contract.claimedAtCommit || !currentClosedAtCommit) {
     return undefined;
@@ -43,7 +52,6 @@ async function detectContractOverlap(
 
   const candidates = (await contractStore.all()).filter((candidate) =>
     candidate.id !== contract.id
-    && candidate.repoRoot === contract.repoRoot
     && candidate.status !== "draft"
     && candidate.status !== "discarded",
   );
@@ -60,7 +68,7 @@ async function detectContractOverlap(
     const chunk = candidates.slice(i, i + OVERLAP_CONCURRENCY);
     const chunkResults = await Promise.all(chunk.map(async (candidate) => {
       const overlaps = await gitAnchor.windowsOverlap({
-        repoRoot: contract.repoRoot,
+        repoRoot: runtimeRepoRoot,
         left: {
           claimedAtCommit: contract.claimedAtCommit,
           closedAtCommit: currentClosedAtCommit,

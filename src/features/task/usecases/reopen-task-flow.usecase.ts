@@ -35,8 +35,19 @@ export async function reopenTaskFlow(
     throw taskNotFound(taskId);
   }
   const contractForReopen = await loadContractForReopen(deps.contractStore, previous);
+  const contract = contractForReopen
+    ? await reopenContractForTask(deps.contractStore, previous, contractForReopen)
+    : undefined;
 
-  const reopened = await deps.taskStore.reopen(taskId);
+  let reopened: Task;
+  try {
+    reopened = await deps.taskStore.reopen(taskId);
+  } catch (error) {
+    if (contractForReopen && contract) {
+      await deps.contractStore.save(contractForReopen).catch(() => {});
+    }
+    throw error;
+  }
   const existingSummary = await loadTaskContinuationSummary(deps.continuationStore, taskId);
   const summary = buildTaskContinuationSummary(reopened, existingSummary, {
     currentState: "Task reopened and ready to resume.",
@@ -58,9 +69,5 @@ export async function reopenTaskFlow(
   if (!restored) {
     await deps.continuationStore.upsertActive(summary);
   }
-
-  const contract = reopened.contractId && contractForReopen
-    ? await reopenContractForTask(deps.contractStore, reopened, contractForReopen)
-    : undefined;
   return { task: reopened, contract };
 }

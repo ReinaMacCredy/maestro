@@ -1554,6 +1554,8 @@ async function enforceContractCompletionPolicy(
       receipt: previewTaskReceipt(task, patch),
       updatedAt: new Date().toISOString(),
     },
+    undefined,
+    await services.gitAnchor.resolveRepoRoot(process.cwd()),
   );
 
   if (!preview.verdict.fulfilled) {
@@ -1635,7 +1637,12 @@ function formatVerdictHint(verdict: {
 async function maybeFinalizeTaskContract(task: Task): Promise<void> {
   try {
     const services = getServices();
-    await closeContractForTask(services.contractStore, services.gitAnchor, task);
+    await closeContractForTask(
+      services.contractStore,
+      services.gitAnchor,
+      task,
+      await services.gitAnchor.resolveRepoRoot(process.cwd()),
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     warn(`Task ${task.id} completed, but contract close failed: ${message}`);
@@ -1701,8 +1708,11 @@ async function maybeReleaseStaleClaim(
     return;
   }
 
-  await assertStaleContractsReclaimable([task]);
-  const before = new Map([[task.id, task]]);
+  const ownedTasks = (await services.taskStore.all()).filter((candidate) =>
+    candidate.assignee === task.assignee && candidate.status !== "completed"
+  );
+  await assertStaleContractsReclaimable(ownedTasks);
+  const before = new Map(ownedTasks.map((ownedTask) => [ownedTask.id, ownedTask] as const));
   const released = await releaseOwnedTasks(services.taskStore, task.assignee);
   await syncRecoveredStaleOwnerTasks(services, before, released);
   if (released.length > 0) {

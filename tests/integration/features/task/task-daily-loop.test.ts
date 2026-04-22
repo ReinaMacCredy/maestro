@@ -295,6 +295,61 @@ describe("task CLI daily loop", () => {
     expect(expectJson<{ assignee?: string }>(shownTask).assignee).toBe(staleOwner);
   }, SLOW_CLI_TIMEOUT_MS);
 
+  it("does not release blocked sibling contracts during targeted stale reclaim", async () => {
+    const target = expectJson<{ id: string }>(
+      await runCli(["task", "create", "targeted stale reclaim", "--json"], tmpDir),
+    );
+    const protectedSibling = expectJson<{ id: string }>(
+      await runCli(["task", "create", "protected sibling", "--json"], tmpDir),
+    );
+    const staleOwner = "codex-stale-siblings";
+
+    await runCli(["task", "claim", target.id, "--session", staleOwner, "--json"], tmpDir);
+    await runCli(["task", "update", target.id, "--status", "in_progress", "--session", staleOwner, "--json"], tmpDir);
+    await runCli(["task", "claim", protectedSibling.id, "--session", staleOwner, "--json"], tmpDir);
+    await runCli(
+      ["task", "update", protectedSibling.id, "--status", "in_progress", "--session", staleOwner, "--json"],
+      tmpDir,
+    );
+    await Bun.write(
+      join(tmpDir, ".maestro", "config.yaml"),
+      "contracts:\n  staleReclaimContractPolicy: block\n  overlapPolicy: annotate\n",
+    );
+
+    const templatePath = await writeTemplate(
+      "stale-sibling-block-template.yaml",
+      [
+        "intent: Keep blocked sibling ownership intact",
+        "scope:",
+        "  filesExpected:",
+        "    - src/features/task/**",
+        "  filesForbidden: []",
+        "doneWhen:",
+        "  - text: sibling remains claimed",
+        "",
+      ].join("\n"),
+    );
+    await runCli(
+      ["task", "contract", "new", protectedSibling.id, "--from", templatePath, "--session", staleOwner, "--json"],
+      tmpDir,
+    );
+    await runCli(["task", "contract", "lock", protectedSibling.id, "--session", staleOwner, "--json"], tmpDir);
+
+    await new Promise((r) => setTimeout(r, 20));
+    const blocked = await runCli(
+      ["task", "claim", target.id, "--session", "operator-next", "--stale-after", "1ms"],
+      tmpDir,
+    );
+    expect(blocked.exitCode).not.toBe(0);
+    expect(blocked.stderr).toContain("stale reclaim is blocked by contract policy");
+
+    const shownTarget = await runCli(["task", "show", target.id, "--json"], tmpDir);
+    expect(expectJson<{ assignee?: string }>(shownTarget).assignee).toBe(staleOwner);
+
+    const shownSibling = await runCli(["task", "show", protectedSibling.id, "--json"], tmpDir);
+    expect(expectJson<{ assignee?: string }>(shownSibling).assignee).toBe(staleOwner);
+  }, SLOW_CLI_TIMEOUT_MS);
+
   it("skips blocked stale reclaim during unrelated ready and claim flows", async () => {
     const blockedTask = expectJson<{ id: string }>(
       await runCli(["task", "create", "blocked stale contract", "--json"], tmpDir),

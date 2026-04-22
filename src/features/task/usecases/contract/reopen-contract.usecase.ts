@@ -29,7 +29,6 @@ export async function loadContractForReopen(
   if (contract.configSnapshot.overlapPolicy === "fail") {
     const overlapping = (await contractStore.all()).filter((candidate) =>
       candidate.id !== contract.id
-      && candidate.repoRoot === contract.repoRoot
       && isActiveContract(candidate),
     );
     if (overlapping.length > 0) {

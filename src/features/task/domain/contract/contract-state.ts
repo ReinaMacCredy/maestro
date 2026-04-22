@@ -18,6 +18,7 @@ import { CONTRACT_SCHEMA_VERSION } from "./contract-types.js";
 export const CONTRACT_ID_PATTERN = /^c-[0-9a-f]{6}$/;
 export const DONE_WHEN_ID_PATTERN = /^dw-[0-9a-f]{6}$/;
 export const AMENDMENT_ID_PATTERN = /^a-[0-9a-f]{6}$/;
+export const STORED_CONTRACT_REPO_ROOT = ".";
 
 const CONTRACT_STATUSES: readonly ContractStatus[] = [
   "draft",
@@ -185,6 +186,10 @@ export function lastContractIndexedAt(contract: Contract): string {
     ?? latestAmendment
     ?? contract.lockedAt
     ?? contract.createdAt;
+}
+
+export function normalizeStoredContractRepoRoot(_repoRoot: string): string {
+  return STORED_CONTRACT_REPO_ROOT;
 }
 
 function prefixTaskShortId(prefix: string): string {

@@ -10,6 +10,7 @@ export async function closeContractForTask(
   contractStore: ContractStorePort,
   gitAnchor: GitAnchorPort,
   task: Task,
+  runtimeRepoRoot: string,
 ): Promise<Contract | undefined> {
   if (!task.contractId) {
     return undefined;
@@ -33,7 +34,14 @@ export async function closeContractForTask(
     ]);
   }
 
-  const computed = await computeContractVerdictForTask(contractStore, gitAnchor, contract, task);
+  const computed = await computeContractVerdictForTask(
+    contractStore,
+    gitAnchor,
+    contract,
+    task,
+    undefined,
+    runtimeRepoRoot,
+  );
   const verdict = withOwnershipNotes(contract, computed.verdict);
   return contractStore.save({
     ...contract,

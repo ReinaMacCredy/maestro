@@ -12,6 +12,7 @@ import {
   generateContractId,
   isActiveContract,
   lastContractIndexedAt,
+  normalizeStoredContractRepoRoot,
   validateContract,
   validateContractIndexEntry,
 } from "../domain/contract/contract-state.js";
@@ -128,7 +129,7 @@ export class FsContractStoreAdapter implements ContractStorePort {
         schemaVersion: CONTRACT_SCHEMA_VERSION,
         id,
         taskId: input.taskId,
-        repoRoot: input.repoRoot,
+        repoRoot: normalizeStoredContractRepoRoot(input.repoRoot),
         status: "draft",
         createdAt: input.createdAt,
         intent: input.intent,
@@ -157,7 +158,10 @@ export class FsContractStoreAdapter implements ContractStorePort {
 
   async save(contract: Contract): Promise<Contract> {
     return this.withLock(async () => {
-      const validated = validateContract(contract);
+      const validated = validateContract({
+        ...contract,
+        repoRoot: normalizeStoredContractRepoRoot(contract.repoRoot),
+      });
       if (!validated) {
         throw new MaestroError(`Refusing to persist invalid contract ${contract.id}`, [
           "Repair the contract object before saving it",
@@ -249,9 +253,7 @@ export class FsContractStoreAdapter implements ContractStorePort {
       return;
     }
 
-    const overlapping = (await this.listActiveIndexedContracts()).filter((candidate) =>
-      candidate.id !== contract.id && candidate.repoRoot === contract.repoRoot,
-    );
+    const overlapping = (await this.listActiveIndexedContracts()).filter((candidate) => candidate.id !== contract.id);
     if (overlapping.length === 0) {
       return;
     }

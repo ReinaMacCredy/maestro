@@ -64,10 +64,17 @@ describe("task contract CLI", () => {
     );
 
     const drafted = await runCli(["task", "contract", "new", task.id, "--from", templatePath, "--json"], tmpDir);
-    const contract = expectJson<{ id: string; status: string; taskId: string; doneWhen: Array<{ id: string }> }>(drafted);
+    const contract = expectJson<{
+      id: string;
+      status: string;
+      taskId: string;
+      repoRoot: string;
+      doneWhen: Array<{ id: string }>;
+    }>(drafted);
     expect(contract.id).toMatch(/^c-[0-9a-f]{6}$/);
     expect(contract.status).toBe("draft");
     expect(contract.taskId).toBe(task.id);
+    expect(contract.repoRoot).toBe(".");
     expect(contract.doneWhen[0]?.id).toMatch(/^dw-[0-9a-f]{6}$/);
 
     const shownTask = await runCli(["task", "show", task.id, "--json"], tmpDir);
@@ -76,6 +83,7 @@ describe("task contract CLI", () => {
     const shownContract = await runCli(["task", "contract", "show", task.id], tmpDir);
     expect(shownContract.stdout).toContain(contract.id);
     expect(shownContract.stdout).toContain("Status: draft");
+    expect(shownContract.stdout).not.toContain(tmpDir);
 
     const listed = await runCli(["task", "contract", "list", "--json"], tmpDir);
     expect(expectJson<Array<{ id: string }>>(listed).map((entry) => entry.id)).toContain(contract.id);

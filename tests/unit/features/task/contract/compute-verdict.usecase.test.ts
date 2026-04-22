@@ -148,4 +148,42 @@ describe("computeContractVerdictForTask", () => {
       policy: "annotate",
     });
   });
+
+  it("uses the trusted runtime repo root instead of the stored contract path", async () => {
+    const current = contractFixture({
+      id: "c-current",
+      repoRoot: "/tmp/untrusted-contract-path",
+      claimedAtCommit: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    });
+    const trustedRepoRoot = "/tmp/trusted-runtime-root";
+
+    const gitAnchor: GitAnchorPort = {
+      async resolveRepoRoot(cwd) {
+        return cwd;
+      },
+      async resolveHeadCommit() {
+        return baseGitResult.closedAtCommit;
+      },
+      async collectTouchedFiles(input) {
+        expect(input.repoRoot).toBe(trustedRepoRoot);
+        return baseGitResult;
+      },
+      async windowsOverlap(input) {
+        expect(input.repoRoot).toBe(trustedRepoRoot);
+        return false;
+      },
+    };
+
+    await computeContractVerdictForTask(
+      contractStore([current]),
+      gitAnchor,
+      current,
+      {
+        updatedAt: "2026-04-21T03:00:00.000Z",
+        assignee: "session:test",
+      },
+      undefined,
+      trustedRepoRoot,
+    );
+  });
 });

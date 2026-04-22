@@ -223,6 +223,8 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
           ...task,
           updatedAt: new Date().toISOString(),
         },
+        undefined,
+        await services.gitAnchor.resolveRepoRoot(process.cwd()),
       );
 
       output(isJson, {
@@ -632,7 +634,7 @@ function formatContractDetail(contract: Contract): string[] {
     `  Task: ${contract.taskId}`,
     `  Status: ${contract.status}`,
     `  Intent: ${contract.intent || "(empty)"}`,
-    `  Repo root: ${contract.repoRoot}`,
+    "  Repo root: current workspace",
     `  Created: ${contract.createdAt}`,
     ...(contract.lockedAt ? [`  Locked at: ${contract.lockedAt}`] : []),
     ...(contract.lockedBy ? [`  Locked by: ${contract.lockedBy}`] : []),
