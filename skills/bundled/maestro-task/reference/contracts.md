@@ -4,13 +4,31 @@ Lightweight agreements about what a task will change before it is worked on. Use
 
 ## Lifecycle
 
+`contract new` opens an editor by default. For non-interactive / agent use, pipe the YAML in via `--from -`:
+
 ```bash
-maestro task contract new <id>       # create a draft
-# edit intent, scope.filesExpected, scope.filesForbidden, doneWhen
-maestro task contract lock <id>      # lock the draft; contract becomes active
+cat <<'YAML' | maestro task contract new <id> --from - --session <id>
+intent: >
+  One to three sentences on what this task changes and why.
+scope:
+  filesExpected:
+    - src/**
+  filesForbidden: []
+doneWhen:
+  - text: Describe the observable signal that proves the task is done.
+    kind: manual
+YAML
+
+maestro task contract lock <id> --session <id>
 ```
 
-Contract drafts live under `.maestro/tasks/contracts/`. Locked contracts are recorded in the contract index.
+Load a project-local template with `--from <name>`:
+
+```bash
+maestro task contract new <id> --from default --session <id>
+```
+
+This reads `.maestro/tasks/contract-templates/<name>.md`. Contract drafts live under `.maestro/tasks/contracts/`. Locked contracts are recorded in the contract index.
 
 ## Required fields
 
@@ -32,16 +50,18 @@ This loads `.maestro/tasks/contract-templates/default.md`.
 ## Verbs
 
 ```bash
-maestro task contract new <id> [--from <template>]
-maestro task contract edit <id>
+maestro task contract new <id> [--from <path|name|->] [--editor <cmd>]
+maestro task contract edit <id> [--editor <cmd>]
 maestro task contract show <id>
 maestro task contract verdict <id>
 maestro task contract list
 maestro task contract discard <id>
 maestro task contract lock <id>
 maestro task contract reopen <id>
-maestro task contract amend <id> --reason "..."
+maestro task contract amend <id> --reason "..." [--editor <cmd>]
 ```
+
+`new`, `edit`, and `amend` open an editor by default. For agent use, supply `--editor <cmd>` that writes the file non-interactively (e.g., `--editor 'cp /path/to/amended.yml'`). `new` is the only verb that also accepts `--from -` / `--from <path>` / `--from <template-name>` as a non-editor alternative.
 
 Criteria:
 ```bash

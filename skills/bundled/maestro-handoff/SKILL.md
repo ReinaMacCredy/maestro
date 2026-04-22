@@ -21,10 +21,18 @@ You are handing off the current task to another session via maestro's native lau
 
 ## What a maestro handoff is
 
-A portable transfer artifact persisted at `.maestro/launches/<id>/`:
+A portable transfer artifact persisted on disk:
+
 - `prompt.md`: the brief sent to the receiving session
 - `launch.json`: metadata (agent, model, status, refs, timing)
 - `output.log`: stdout/stderr from the launched session
+
+**Where the packet lands depends on `--task-id`:**
+
+- **With `--task-id`** (task-linked packet): `<project>/.maestro/launches/<id>/`, inside the current project. Use this for work tied to a specific maestro task the receiver should also pick up.
+- **Without `--task-id`** (standalone packet): `~/.maestro/launches/<id>/`, in the global home store. Use this for ad-hoc handoffs that don't link to a task.
+
+`promptPath` and `outputPath` in the JSON output are relative; resolve them against the project root for task-linked packets and against `~/` for standalone packets. `maestro handoff list` reads from both stores and returns a merged view, so packets from other workspaces show up there too.
 
 Packets are detached by default. The launcher returns immediately with a handoff id; the receiver runs in the background and can be picked up later by a different session.
 
@@ -55,6 +63,8 @@ If the user names a specific model ("codex gpt-5.4-fast", "claude sonnet 4.7"), 
 ### Task link
 
 Mention of `tsk-abc123`, "for task X", "link to task Y": add `--task-id <id>`. Task-linked packets carry the task's continuation summary and transfer claim ownership on pickup.
+
+**Note:** if the current project has multiple tasks with active continuations and the user did not name one, `maestro handoff` errors with `"Multiple active task continuations exist; handoff task inference is ambiguous"`. Pick one explicitly with `--task-id` (or create a standalone packet by passing no task linkage at all when the project has no active continuation).
 
 ## Writing the brief
 
@@ -146,10 +156,12 @@ Do not wait unless the user explicitly asked. The receiver runs detached.
 
 When the user says "pickup handoff", "take over handoff":
 
-1. `maestro handoff list --open --json` to enumerate open packets.
-2. Single open packet: `maestro handoff pickup --json`.
-3. User specified an id: `maestro handoff pickup --id <id> --json`.
+1. `maestro handoff list --open --json` to enumerate open packets. Note: this list is cross-workspace and may include packets from other projects.
+2. Single open packet: `maestro handoff pickup --agent <claude|codex> --session <id> --json`.
+3. User specified an id: `maestro handoff pickup --id <id> --agent <claude|codex> --session <id> --json`.
 4. Multiple packets and no id: the CLI errors with a clean list of open packets. Surface the list to the user and ask which.
+
+**`--agent` and `--session` are required unless `pickup` runs inside an actively-detected Claude Code / Codex session.** Auto-detection only fires when `CLAUDECODE=1` (with a matching `~/.claude/sessions/<ppid>.json`) or `CODEX_THREAD_ID` is set. Any scripted or nested-subprocess caller must pass both flags.
 
 Pickup auto-claims any linked task. Prompt-only packets (no `refs.taskId`) create no task.
 

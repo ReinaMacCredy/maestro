@@ -11,9 +11,19 @@ maestro handoff pickup --id <id> --json  # consume a specific packet
 
 ## Auto-detection
 
-`pickup` detects the current agent and session from the environment when
-possible. Pass `--agent codex|claude` and `--session <id>` when auto-detection
-cannot determine the caller.
+`pickup` detects the current agent and session from the environment only when
+one of these env vars is set and matches a live agent process:
+
+- `CLAUDECODE=1` plus a readable `~/.claude/sessions/<ppid>.json` (set by
+  Claude Code at the top of its process tree).
+- `CODEX_THREAD_ID` (set by Codex).
+
+Anywhere else -- a plain shell, CI, a nested subprocess whose `ppid` no
+longer points at the agent, a script invoked by a tool call -- auto-detection
+returns nothing and `pickup` fails with `"No agent specified for handoff
+pickup"`. In those cases, pass `--agent codex|claude` and `--session <id>`
+explicitly. Assume you must pass them unless you can confirm your process
+is the direct agent.
 
 ## Ambiguity
 
