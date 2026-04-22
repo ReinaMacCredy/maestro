@@ -135,7 +135,7 @@ async function attachLockedContract(
   return contract.id;
 }
 
-describe("compiled handoff launcher E2E", () => {
+describe.skipIf(process.platform === "win32")("compiled handoff launcher E2E", () => {
   it(
     "launches codex by default, writes prompt artifacts, and returns launch metadata",
     async () => {

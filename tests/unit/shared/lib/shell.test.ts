@@ -119,7 +119,7 @@ describe("shell exec helpers", () => {
       const logPath = join(tempDir, "output.log");
 
       const result = await runLoggedCommand(
-        ["bash", "-lc", "echo hello && echo world 1>&2"],
+        ["bun", "-e", "console.log('hello'); console.error('world');"],
         { cwd: tempDir, logPath, wait: true },
       );
 
@@ -134,8 +134,8 @@ describe("shell exec helpers", () => {
       const result = await runShellScript(`
         import { runLoggedCommand } from "./src/shared/lib/shell.ts";
         await runLoggedCommand(
-          ["bash", "-lc", "sleep 1; echo detached-done"],
-          { cwd: "/tmp", logPath: ${JSON.stringify(logPath)}, wait: false },
+          ["bun", "-e", "await Bun.sleep(1000); console.log('detached-done');"],
+          { cwd: ${JSON.stringify(tempDir)}, logPath: ${JSON.stringify(logPath)}, wait: false },
         );
         console.log("returned");
       `);
