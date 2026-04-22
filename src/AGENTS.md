@@ -50,6 +50,7 @@ Parent:
 Children:
 - [features/AGENTS.md](features/AGENTS.md)
 - [infra/AGENTS.md](infra/AGENTS.md)
+- [shared/AGENTS.md](shared/AGENTS.md)
 - [tui/AGENTS.md](tui/AGENTS.md)
 
 Managed by `init-deep`. Edit outside this block.

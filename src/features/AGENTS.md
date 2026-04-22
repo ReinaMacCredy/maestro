@@ -31,7 +31,8 @@ Parent:
 - [../AGENTS.md](../AGENTS.md)
 
 Children:
-- none
+- [mission/AGENTS.md](mission/AGENTS.md)
+- [task/AGENTS.md](task/AGENTS.md)
 
 Managed by `init-deep`. Edit outside this block.
 <!-- AGENTS-HIERARCHY:END -->

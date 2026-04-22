@@ -2,8 +2,8 @@
 
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-04-22 05:24:37 +0700
-**Commit:** 6136b0a4
+**Generated:** 2026-04-22 06:13:30 +0700
+**Commit:** 0e72e7ec
 **Branch:** feat/task-contracts-stack
 
 ## OVERVIEW
@@ -72,7 +72,7 @@ bun run release:local
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **maestro** (7172 symbols, 13256 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **maestro** (8236 symbols, 15303 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
