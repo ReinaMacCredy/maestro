@@ -132,7 +132,7 @@ export class FsLaunchStoreAdapter implements LaunchStorePort {
     return records.filter((record): record is HandoffLaunchRecord => record !== undefined);
   }
 
-  resolveArtifactPath(relativePath: string): string {
+  resolveArtifactPath(relativePath: string, _refs: HandoffRefs): string {
     return join(this.projectDir, relativePath);
   }
 

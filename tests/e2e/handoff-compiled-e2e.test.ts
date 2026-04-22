@@ -423,9 +423,18 @@ describe.skipIf(process.platform === "win32")("compiled handoff launcher E2E", (
   it(
     "launches a task-less handoff on first try and round-trips through pickup without creating a task",
     async () => {
+      const fakeHome = join(tmpDir, "fake-home");
+      await Bun.$`mkdir -p ${fakeHome}`.quiet();
       const argsPath = join(tmpDir, "claude-taskless-args.txt");
       const cwdPath = join(tmpDir, "claude-taskless-cwd.txt");
       const binDir = await installFakeProvider("claude", argsPath, cwdPath);
+
+      const env = {
+        HOME: fakeHome,
+        PATH: `${binDir}:${process.env.PATH ?? ""}`,
+        FAKE_PROVIDER_ARGS: argsPath,
+        FAKE_PROVIDER_CWD: cwdPath,
+      };
 
       const launched = await runCompiled(
         [
@@ -438,13 +447,7 @@ describe.skipIf(process.platform === "win32")("compiled handoff launcher E2E", (
           "--json",
         ],
         tmpDir,
-        {
-          env: {
-            PATH: `${binDir}:${process.env.PATH ?? ""}`,
-            FAKE_PROVIDER_ARGS: argsPath,
-            FAKE_PROVIDER_CWD: cwdPath,
-          },
-        },
+        { env },
       );
       expect(launched.exitCode).toBe(0);
       const record = expectJson<{
@@ -458,7 +461,7 @@ describe.skipIf(process.platform === "win32")("compiled handoff launcher E2E", (
       expect(record.refs.taskId).toBeUndefined();
 
       const launchMeta = await readFile(
-        join(tmpDir, ".maestro", "launches", record.id, "launch.json"),
+        join(fakeHome, ".maestro", "launches", record.id, "launch.json"),
         "utf8",
       );
       expect(launchMeta).not.toContain('"taskId"');
@@ -481,6 +484,7 @@ describe.skipIf(process.platform === "win32")("compiled handoff launcher E2E", (
           "--json",
         ],
         tmpDir,
+        { env },
       );
       expect(picked.exitCode).toBe(0);
       const consumed = expectJson<{ consumedAt?: string }>(picked);
@@ -497,20 +501,23 @@ describe.skipIf(process.platform === "win32")("compiled handoff launcher E2E", (
   it(
     "picks up a task-less handoff with --agent only (no --session required)",
     async () => {
+      const fakeHome = join(tmpDir, "fake-home-agentonly");
+      await Bun.$`mkdir -p ${fakeHome}`.quiet();
       const argsPath = join(tmpDir, "claude-pickup-agentonly-args.txt");
       const cwdPath = join(tmpDir, "claude-pickup-agentonly-cwd.txt");
       const binDir = await installFakeProvider("claude", argsPath, cwdPath);
 
+      const env = {
+        HOME: fakeHome,
+        PATH: `${binDir}:${process.env.PATH ?? ""}`,
+        FAKE_PROVIDER_ARGS: argsPath,
+        FAKE_PROVIDER_CWD: cwdPath,
+      };
+
       const launched = await runCompiled(
         ["handoff", "pickup smoke", "--agent", "claude", "--name", "pickup smoke", "--json"],
         tmpDir,
-        {
-          env: {
-            PATH: `${binDir}:${process.env.PATH ?? ""}`,
-            FAKE_PROVIDER_ARGS: argsPath,
-            FAKE_PROVIDER_CWD: cwdPath,
-          },
-        },
+        { env },
       );
       expect(launched.exitCode).toBe(0);
       const record = expectJson<{ id: string; refs: { taskId?: string } }>(launched);
@@ -519,6 +526,7 @@ describe.skipIf(process.platform === "win32")("compiled handoff launcher E2E", (
       const picked = await runCompiled(
         ["handoff", "pickup", "--id", record.id, "--agent", "claude", "--json"],
         tmpDir,
+        { env },
       );
       expect(picked.exitCode).toBe(0);
       const consumed = expectJson<{
@@ -529,6 +537,77 @@ describe.skipIf(process.platform === "win32")("compiled handoff launcher E2E", (
       expect(consumed.pickedUpByAgent).toBe("claude");
       expect(consumed.pickedUpBySessionId).toBeUndefined();
       expect(consumed.consumedAt).toBeDefined();
+    },
+    SLOW_CLI_TIMEOUT_MS,
+  );
+
+  it(
+    "picks up a task-less handoff created in a different workspace via the global store",
+    async () => {
+      const fakeHome = await mkdtemp(join(tmpdir(), "maestro-handoff-home-"));
+      const workspaceA = await mkdtemp(join(tmpdir(), "maestro-handoff-ws-a-"));
+      const workspaceB = await mkdtemp(join(tmpdir(), "maestro-handoff-ws-b-"));
+      try {
+        await initGitRepo(workspaceA);
+        await runCommand(["git", "config", "user.name", "Test User"], workspaceA);
+        await runCommand(["git", "config", "user.email", "test@example.com"], workspaceA);
+        await writeFile(join(workspaceA, "README.md"), "# A\n");
+        await runCommand(["git", "add", "README.md"], workspaceA);
+        await runCommand(["git", "commit", "-m", "init"], workspaceA);
+
+        await initGitRepo(workspaceB);
+        await runCommand(["git", "config", "user.name", "Test User"], workspaceB);
+        await runCommand(["git", "config", "user.email", "test@example.com"], workspaceB);
+        await writeFile(join(workspaceB, "README.md"), "# B\n");
+        await runCommand(["git", "add", "README.md"], workspaceB);
+        await runCommand(["git", "commit", "-m", "init"], workspaceB);
+
+        const argsPath = join(fakeHome, "claude-cross-args.txt");
+        const cwdPath = join(fakeHome, "claude-cross-cwd.txt");
+        const binDir = join(fakeHome, "bin");
+        await Bun.$`mkdir -p ${binDir}`.quiet();
+        const fakeClaude = join(binDir, "claude");
+        await writeFile(
+          fakeClaude,
+          `#!/bin/sh\nprintf '%s\\n' "$PWD" > "$FAKE_PROVIDER_CWD"\nprintf '%s\\n' "$@" > "$FAKE_PROVIDER_ARGS"\necho claude output\n`,
+        );
+        await chmod(fakeClaude, 0o755);
+
+        const commonEnv = {
+          HOME: fakeHome,
+          PATH: `${binDir}:${process.env.PATH ?? ""}`,
+          FAKE_PROVIDER_ARGS: argsPath,
+          FAKE_PROVIDER_CWD: cwdPath,
+        };
+
+        const launched = await runCompiled(
+          ["handoff", "cross-workspace task", "--agent", "claude", "--json"],
+          workspaceA,
+          { env: commonEnv },
+        );
+        expect(launched.exitCode).toBe(0);
+        const record = expectJson<{ id: string; refs: { taskId?: string } }>(launched);
+        expect(record.refs.taskId).toBeUndefined();
+
+        await access(join(fakeHome, ".maestro", "launches", record.id, "launch.json"));
+        await expect(
+          access(join(workspaceA, ".maestro", "launches", record.id, "launch.json")),
+        ).rejects.toThrow();
+
+        const picked = await runCompiled(
+          ["handoff", "pickup", "--id", record.id, "--agent", "claude", "--json"],
+          workspaceB,
+          { env: commonEnv },
+        );
+        expect(picked.exitCode).toBe(0);
+        const consumed = expectJson<{ consumedAt?: string; pickedUpByAgent?: string }>(picked);
+        expect(consumed.consumedAt).toBeDefined();
+        expect(consumed.pickedUpByAgent).toBe("claude");
+      } finally {
+        await rm(fakeHome, { recursive: true, force: true });
+        await rm(workspaceA, { recursive: true, force: true });
+        await rm(workspaceB, { recursive: true, force: true });
+      }
     },
     SLOW_CLI_TIMEOUT_MS,
   );

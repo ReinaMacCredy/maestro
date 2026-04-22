@@ -113,5 +113,5 @@ export interface LaunchStorePort {
   }): Promise<HandoffLaunchRecord>;
   get(id: string): Promise<HandoffLaunchRecord | undefined>;
   list(): Promise<readonly HandoffLaunchRecord[]>;
-  resolveArtifactPath(relativePath: string): string;
+  resolveArtifactPath(relativePath: string, refs: HandoffRefs): string;
 }

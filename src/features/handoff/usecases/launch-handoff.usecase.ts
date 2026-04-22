@@ -111,7 +111,7 @@ export async function launchHandoff(
       model,
       name,
       wait: input.wait,
-      logPath: deps.launchStore.resolveArtifactPath(initialRecord.outputPath),
+      logPath: deps.launchStore.resolveArtifactPath(initialRecord.outputPath, initialRecord.refs),
     });
     const waitedExitCode = input.wait ? launchResult.exitCode : undefined;
     const finalRecord = await deps.launchStore.update({

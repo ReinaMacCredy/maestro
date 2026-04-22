@@ -13,6 +13,7 @@ export type {
 } from "./domain/launch-types.js";
 export { DEFAULT_HANDOFF_MODELS } from "./domain/launch-types.js";
 export { FsLaunchStoreAdapter } from "./adapters/launch-store.adapter.js";
+export { CompositeLaunchStore } from "./adapters/composite-launch-store.adapter.js";
 export { CodexHandoffLaunchAdapter } from "./adapters/codex-handoff-launch.adapter.js";
 export { ClaudeHandoffLaunchAdapter } from "./adapters/claude-handoff-launch.adapter.js";
 export { buildHandoffPrompt } from "./usecases/build-handoff-prompt.usecase.js";
