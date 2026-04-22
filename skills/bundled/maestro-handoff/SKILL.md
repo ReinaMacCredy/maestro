@@ -64,7 +64,7 @@ If the user names a specific model ("codex gpt-5.4-fast", "claude sonnet 4.7"), 
 
 Mention of `tsk-abc123`, "for task X", "link to task Y": add `--task-id <id>`. Task-linked packets carry the task's continuation summary and transfer claim ownership on pickup.
 
-**Note:** if the current project has multiple tasks with active continuations and the user did not name one, `maestro handoff` errors with `"Multiple active task continuations exist; handoff task inference is ambiguous"`. Pick one explicitly with `--task-id` (or create a standalone packet by passing no task linkage at all when the project has no active continuation).
+If no `--task-id` is passed and the project has exactly one active continuation, maestro links to it automatically. With zero or multiple active continuations, the packet is standalone.
 
 ## Writing the brief
 
@@ -156,12 +156,12 @@ Do not wait unless the user explicitly asked. The receiver runs detached.
 
 When the user says "pickup handoff", "take over handoff":
 
-1. `maestro handoff list --open --json` to enumerate open packets. Note: this list is cross-workspace and may include packets from other projects.
-2. Single open packet: `maestro handoff pickup --agent <claude|codex> --session <id> --json`.
-3. User specified an id: `maestro handoff pickup --id <id> --agent <claude|codex> --session <id> --json`.
+1. `maestro handoff list --open --json` to enumerate open packets (this list is cross-workspace; packets from other projects may appear).
+2. Single open packet: `maestro handoff pickup --json`.
+3. User specified an id: `maestro handoff pickup --id <id> --json`.
 4. Multiple packets and no id: the CLI errors with a clean list of open packets. Surface the list to the user and ask which.
 
-**`--agent` and `--session` are required unless `pickup` runs inside an actively-detected Claude Code / Codex session.** Auto-detection only fires when `CLAUDECODE=1` (with a matching `~/.claude/sessions/<ppid>.json`) or `CODEX_THREAD_ID` is set. Any scripted or nested-subprocess caller must pass both flags.
+If the session environment provides a detected agent (Claude Code / Codex) the CLI uses it; otherwise it defaults to the packet's own `agent` field. Pass `--agent codex|claude` and `--session <id>` together to override identity explicitly.
 
 Pickup auto-claims any linked task. Prompt-only packets (no `refs.taskId`) create no task.
 

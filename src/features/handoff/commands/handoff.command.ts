@@ -106,7 +106,11 @@ export function registerHandoffCommand(program: Command): void {
         throw new MaestroError(`Handoff not found: ${handoffId}`);
       }
       const requireSession = Boolean(launch.refs.taskId);
-      const actor = await resolvePickupActor(opts, command.parent?.opts(), { requireSession });
+      const actor = await resolvePickupActor(
+        opts,
+        command.parent?.opts(),
+        { requireSession, fallbackAgent: launch.agent },
+      );
       const result = await pickupHandoff(
         {
           launchStore: services.launchStore,
@@ -185,9 +189,11 @@ async function resolveLinkedTask(explicitTaskId: string | undefined): Promise<{
       return { recentEvents: [] };
     }
     if (active.length !== 1) {
-      throw new MaestroError("Multiple active task continuations exist; handoff task inference is ambiguous", [
-        "Pass `--task-id <id>` to choose the linked task explicitly",
-      ]);
+      // Multiple active continuations: cannot safely infer which task this
+      // handoff belongs to. Fall back to a standalone packet rather than
+      // blocking the caller. Users who want task linkage pass --task-id
+      // explicitly; everyone else gets a usable standalone handoff.
+      return { recentEvents: [] };
     }
     return {
       taskId: active[0]!.taskId,
@@ -249,7 +255,7 @@ async function resolvePickupId(explicitId: string | undefined): Promise<string> 
 async function resolvePickupActor(
   opts: { agent?: unknown; session?: unknown },
   inherited: { agent?: unknown } | undefined,
-  mode: { readonly requireSession: boolean },
+  mode: { readonly requireSession: boolean; readonly fallbackAgent: HandoffAgent },
 ): Promise<{
   readonly agent: HandoffAgent;
   readonly sessionId?: string;
@@ -260,34 +266,13 @@ async function resolvePickupActor(
   const explicitAgent = typeof rawAgent === "string" ? rawAgent.trim() : undefined;
   const explicitSession = typeof rawSession === "string" ? rawSession.trim() : undefined;
 
-  if (mode.requireSession) {
-    if ((explicitAgent && !explicitSession) || (!explicitAgent && explicitSession)) {
-      throw new MaestroError("Pass both --agent and --session together when overriding pickup identity", [
-        "Or run pickup from a detected Codex or Claude session",
-      ]);
-    }
-    if (explicitAgent && explicitSession) {
-      const agent = parseAgent(explicitAgent);
-      return {
-        agent,
-        sessionId: explicitSession,
-        ownerId: buildTaskOwnerId(agent, explicitSession),
-      };
-    }
+  const services = getServices();
+  const detected = await services.sessionDetect.detect(process.cwd());
 
-    const services = getServices();
-    const session = await services.sessionDetect.detect(process.cwd());
-    if (!session) {
-      throw new MaestroError("Could not detect the current session for handoff pickup", [
-        "Run from Codex or Claude, or pass both --agent <agent> and --session <id>",
-      ]);
-    }
-    const agent = normalizeDetectedAgent(session.agent);
-    return {
-      agent,
-      sessionId: session.sessionId,
-      ownerId: buildTaskOwnerId(session.agent, session.sessionId),
-    };
+  if ((explicitAgent && !explicitSession) || (!explicitAgent && explicitSession)) {
+    throw new MaestroError("Pass both --agent and --session together when overriding pickup identity", [
+      "Or run pickup from a detected Codex or Claude session",
+    ]);
   }
 
   if (explicitAgent && explicitSession) {
@@ -299,25 +284,26 @@ async function resolvePickupActor(
     };
   }
 
-  const services = getServices();
-  const detected = await services.sessionDetect.detect(process.cwd());
-  const agent = explicitAgent
-    ? parseAgent(explicitAgent)
-    : detected
-      ? normalizeDetectedAgent(detected.agent)
-      : undefined;
+  // Agent: prefer detected session's agent, fall back to the packet's own
+  // agent field. This lets `maestro handoff pickup --id <id>` just work from
+  // any shell when the packet already knows who it was meant for.
+  const agent = detected ? normalizeDetectedAgent(detected.agent) : mode.fallbackAgent;
 
-  if (!agent) {
-    throw new MaestroError("No agent specified for handoff pickup", [
-      "Pass --agent codex|claude, or run from a detected Codex or Claude session",
-    ]);
+  if (mode.requireSession) {
+    const sessionId = detected?.sessionId ?? `pickup-ppid-${process.ppid}`;
+    const ownerAgent = detected?.agent ?? agent;
+    return {
+      agent,
+      sessionId,
+      ownerId: buildTaskOwnerId(ownerAgent, sessionId),
+    };
   }
 
-  const sessionId = explicitSession ?? detected?.sessionId;
+  const sessionId = detected?.sessionId;
   return {
     agent,
     ...(sessionId ? { sessionId } : {}),
-    ...(sessionId ? { ownerId: buildTaskOwnerId(agent, sessionId) } : {}),
+    ...(sessionId ? { ownerId: buildTaskOwnerId(detected?.agent ?? agent, sessionId) } : {}),
   };
 }
 

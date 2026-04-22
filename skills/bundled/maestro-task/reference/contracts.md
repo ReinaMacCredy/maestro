@@ -4,10 +4,10 @@ Lightweight agreements about what a task will change before it is worked on. Use
 
 ## Lifecycle
 
-`contract new` opens an editor by default. For non-interactive / agent use, pipe the YAML in via `--from -`:
+Pipe the YAML on stdin (auto-detected when stdin is not a TTY) or pass `--from <path|name|->`:
 
 ```bash
-cat <<'YAML' | maestro task contract new <id> --from - --session <id>
+cat <<'YAML' | maestro task contract new <id>
 intent: >
   One to three sentences on what this task changes and why.
 scope:
@@ -19,13 +19,13 @@ doneWhen:
     kind: manual
 YAML
 
-maestro task contract lock <id> --session <id>
+maestro task contract lock <id>
 ```
 
-Load a project-local template with `--from <name>`:
+Load a project-local template:
 
 ```bash
-maestro task contract new <id> --from default --session <id>
+maestro task contract new <id> --from default
 ```
 
 This reads `.maestro/tasks/contract-templates/<name>.md`. Contract drafts live under `.maestro/tasks/contracts/`. Locked contracts are recorded in the contract index.
@@ -51,17 +51,17 @@ This loads `.maestro/tasks/contract-templates/default.md`.
 
 ```bash
 maestro task contract new <id> [--from <path|name|->] [--editor <cmd>]
-maestro task contract edit <id> [--editor <cmd>]
+maestro task contract edit <id> [--from <path|name|->] [--editor <cmd>]
 maestro task contract show <id>
 maestro task contract verdict <id>
 maestro task contract list
 maestro task contract discard <id>
 maestro task contract lock <id>
 maestro task contract reopen <id>
-maestro task contract amend <id> --reason "..." [--editor <cmd>]
+maestro task contract amend <id> --reason "..." [--from <path|name|->] [--editor <cmd>]
 ```
 
-`new`, `edit`, and `amend` open an editor by default. For agent use, supply `--editor <cmd>` that writes the file non-interactively (e.g., `--editor 'cp /path/to/amended.yml'`). `new` is the only verb that also accepts `--from -` / `--from <path>` / `--from <template-name>` as a non-editor alternative.
+`new`, `edit`, and `amend` accept either a `--from` source (file path, template name, or `-` for stdin) or an `--editor <cmd>`. When neither is passed and stdin is piped, the YAML is read from stdin automatically. An interactive TTY falls back to `$EDITOR`.
 
 Criteria:
 ```bash

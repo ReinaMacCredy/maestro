@@ -1011,6 +1011,8 @@ function registerCloseCommand(taskCmd: Command): void {
     });
 }
 
+let warnedAboutFallbackSession = false;
+
 async function resolveOwnershipSessionId(explicitSessionId: string | undefined): Promise<string> {
   if (explicitSessionId !== undefined) {
     const trimmed = explicitSessionId.trim();
@@ -1024,13 +1026,23 @@ async function resolveOwnershipSessionId(explicitSessionId: string | undefined):
 
   const services = getServices();
   const session = await services.sessionDetect.detect(process.cwd());
-  if (!session) {
-    throw new MaestroError("Could not detect current session for task ownership", [
-      "Set CODEX_THREAD_ID or run from an agent environment",
-      "Or pass --session <id> for an explicit operator or CI override",
-    ]);
+  if (session) {
+    return buildTaskOwnerId(session.agent, session.sessionId);
   }
-  return buildTaskOwnerId(session.agent, session.sessionId);
+
+  // No detected agent session. Synthesize a stable per-shell fallback so the
+  // command does not block. `ppid` is stable across invocations from the
+  // same parent shell, giving coordinated ownership within one terminal
+  // without any setup. Agents that need cross-shell coordination should
+  // export CODEX_THREAD_ID or pass --session explicitly.
+  if (!warnedAboutFallbackSession) {
+    warnedAboutFallbackSession = true;
+    process.stderr.write(
+      "[info] no agent session detected; using a synthesized fallback session\n"
+      + "       (export CODEX_THREAD_ID / CLAUDECODE or pass --session <id> for cross-shell coordination)\n",
+    );
+  }
+  return buildTaskOwnerId("shell", `ppid-${process.ppid}`);
 }
 
 async function resolveOptionalOwnershipSessionId(explicitSessionId: string | undefined): Promise<string | undefined> {

@@ -27,17 +27,6 @@ Do not activate for one-liner edits or read-only questions.
 4. **Blockers block transitions.** A task cannot move to `in_progress` or `completed` with unresolved blockers.
 5. **Handoff is for cross-session transfer only.** Same-session resume uses continuation state, not handoffs.
 
-## Session detection
-
-Every ownership verb (`task next`, `task claim`, `task create --status in_progress`, `task update --status in_progress`, `task unclaim`, `task heartbeat`, `task mine`, `task plan --start <name>`, any `task contract *` that mutates) needs to know which session is acting. Maestro auto-detects the session from two env vars:
-
-- `CLAUDECODE=1` plus a valid `~/.claude/sessions/<ppid>.json` (set by Claude Code).
-- `CODEX_THREAD_ID` (set by Codex).
-
-When the skill is loaded inside a running Claude Code or Codex session, auto-detection works — no extra flags needed. In any other context (a plain shell, CI, a nested subprocess whose `ppid` no longer points at the agent process), auto-detection fails and the command errors with: `"Could not detect current session for task ownership"`.
-
-Fix: pass `--session <id>` explicitly to every ownership verb. Use any stable identifier (e.g., `--session claude-nested-<timestamp>`). Read-only verbs do not take `--session` and will reject it: `task ready`, `task stuck`, `task similar`, `task show`, `task plan --file` (without `--start`).
-
 ## Converting a plan into a task batch
 
 When you have a plan (from `/maestro-plan`, `/planner`, or a markdown checklist):
@@ -106,10 +95,10 @@ maestro task update <id> --status in_progress
 
 ## Optional: lock a contract for non-trivial work
 
-`contract new` opens an editor by default, which hangs a non-interactive agent. Supply the draft via stdin or a template file instead:
+Pipe the YAML on stdin (the CLI auto-detects piped input) or pass `--from <path|name|->`:
 
 ```bash
-cat <<'YAML' | maestro task contract new <id> --from - --session <id>
+cat <<'YAML' | maestro task contract new <id>
 intent: >
   One to three sentences on what this task changes and why.
 scope:
@@ -121,12 +110,12 @@ doneWhen:
     kind: manual
 YAML
 
-maestro task contract lock <id> --session <id>
+maestro task contract lock <id>
 ```
 
-To load a project-local template: `maestro task contract new <id> --from default --session <id>` (reads `.maestro/tasks/contract-templates/default.md`).
+Load a project-local template: `maestro task contract new <id> --from default` (reads `.maestro/tasks/contract-templates/default.md`).
 
-Contract amend/reopen/criteria verbs and verdict semantics live in `./reference/contracts.md`. Note: `contract amend` has no `--from` flag; it opens an editor. Use `--editor <cmd>` to drive it non-interactively.
+Contract amend/reopen/criteria verbs and verdict semantics live in `./reference/contracts.md`.
 
 ## While working, keep resume state fresh
 

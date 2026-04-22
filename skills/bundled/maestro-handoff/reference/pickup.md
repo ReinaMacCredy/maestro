@@ -9,21 +9,23 @@ maestro handoff pickup --json            # consume the only open packet (errors 
 maestro handoff pickup --id <id> --json  # consume a specific packet
 ```
 
-## Auto-detection
+## Identity resolution
 
-`pickup` detects the current agent and session from the environment only when
-one of these env vars is set and matches a live agent process:
+`pickup` resolves identity in this order:
 
-- `CLAUDECODE=1` plus a readable `~/.claude/sessions/<ppid>.json` (set by
-  Claude Code at the top of its process tree).
-- `CODEX_THREAD_ID` (set by Codex).
+1. If `--agent` and `--session` are both passed, use them. (Either both or
+   neither -- passing one without the other errors.)
+2. Otherwise, if the environment exposes a detected agent session
+   (`CLAUDECODE=1` + a matching `~/.claude/sessions/<ppid>.json`, or
+   `CODEX_THREAD_ID`), use it.
+3. Otherwise, fall back to the packet's own `agent` field. For task-linked
+   packets, a synthesized session id derived from the calling shell's `ppid`
+   is used for ownership tracking.
 
-Anywhere else -- a plain shell, CI, a nested subprocess whose `ppid` no
-longer points at the agent, a script invoked by a tool call -- auto-detection
-returns nothing and `pickup` fails with `"No agent specified for handoff
-pickup"`. In those cases, pass `--agent codex|claude` and `--session <id>`
-explicitly. Assume you must pass them unless you can confirm your process
-is the direct agent.
+The bare `maestro handoff pickup --id <id>` form works from any shell --
+the CLI always has enough information to pick up, because the packet itself
+tells it which agent to impersonate. Pass explicit flags only when you need
+to override identity (e.g., running recovery from an operator account).
 
 ## Ambiguity
 

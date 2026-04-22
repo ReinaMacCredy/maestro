@@ -128,6 +128,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
   contractCmd
     .command("edit <ref>")
     .description("Edit a draft contract before lock")
+    .option("--from <path>", "Load YAML from a file or named template ('-' for stdin)")
     .option("--editor <cmd>", "Open an editor command to update the draft YAML")
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
@@ -137,7 +138,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const contract = await showContract(services.contractStore, ref);
-      const template = await loadContractDraftTemplate(undefined, opts.editor, renderEditableContract(contract));
+      const template = await loadContractDraftTemplate(opts.from, opts.editor, renderEditableContract(contract));
       const edited = await editContract(services.contractStore, {
         ref,
         intent: readTemplateIntent(template),
@@ -154,6 +155,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .command("amend <ref>")
     .description("Amend a locked contract and record why it changed")
     .requiredOption("--reason <text>", "Why the contract changed")
+    .option("--from <path>", "Load YAML from a file or named template ('-' for stdin)")
     .option("--editor <cmd>", "Open an editor command to update the draft YAML")
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
@@ -162,7 +164,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const contract = await showContract(services.contractStore, ref);
-      const template = await loadContractDraftTemplate(undefined, opts.editor, renderEditableContract(contract));
+      const template = await loadContractDraftTemplate(opts.from, opts.editor, renderEditableContract(contract));
       const amended = await amendContract(services.contractStore, {
         ref,
         actorId: await resolveActiveContractActor(ref, opts.session),
@@ -382,17 +384,26 @@ async function loadContractDraftTemplate(
   editorCommand: string | undefined,
   initialContent = defaultContractTemplate(),
 ): Promise<ContractDraftTemplate> {
-  if (!fromPath && !editorCommand && !process.env.EDITOR && !process.env.VISUAL) {
-    throw new MaestroError("Provide --from <path> or --editor <cmd> to create a contract draft", [
+  // Auto-detect piped stdin when the caller passed neither --from nor --editor.
+  // Lets `cat contract.yaml | maestro task contract new <id>` work without
+  // spelling `--from -`, matching Unix tradition and making the command safe
+  // for non-interactive (agent) callers. `isTTY` is `undefined` for pipes on
+  // some runtimes, so use a falsy check to cover both cases.
+  const resolvedFromPath = fromPath
+    ?? (!editorCommand && !process.stdin.isTTY ? "-" : undefined);
+
+  if (!resolvedFromPath && !editorCommand && !process.env.EDITOR && !process.env.VISUAL) {
+    throw new MaestroError("Provide --from <path>, pipe YAML on stdin, or pass --editor <cmd>", [
       "Example: maestro task contract new <id> --from contract.yaml",
+      "Example: cat contract.yaml | maestro task contract new <id>",
       "Or set $EDITOR and rerun without --from",
     ]);
   }
 
   const resolvedEditor = editorCommand
-    ?? (fromPath ? undefined : (process.env.EDITOR ?? process.env.VISUAL));
-  const baseContent = fromPath
-    ? await readDraftSource(fromPath)
+    ?? (resolvedFromPath ? undefined : (process.env.EDITOR ?? process.env.VISUAL));
+  const baseContent = resolvedFromPath
+    ? await readDraftSource(resolvedFromPath)
     : initialContent;
   const finalContent = resolvedEditor
     ? await editContractDraft(baseContent, resolvedEditor)
