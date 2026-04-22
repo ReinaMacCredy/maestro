@@ -170,12 +170,17 @@ describe("manage-agents use case logic", () => {
       expect(after).toContain("## Other");
     });
 
-    it("removes stale maestro-* skill dirs not in the bundled set", async () => {
+    it("removes stale maestro-managed skill dirs not in the bundled set", async () => {
       await mkdir(join(fakeHome, ".claude"), { recursive: true });
       await mkdir(join(fakeHome, ".codex"), { recursive: true });
       const staleDir = join(fakeHome, ".claude", "skills", "maestro-obsolete");
       await mkdir(staleDir, { recursive: true });
       await writeFile(join(staleDir, "SKILL.md"), "---\nname: maestro-obsolete\n---\n# old\n");
+      // A maestro-managed skill dir carries the manifest marker.
+      await writeFile(
+        join(staleDir, ".maestro-bundled.json"),
+        JSON.stringify({ managedBy: "maestro", skillName: "maestro-obsolete", fileHashes: {} }),
+      );
 
       const results = await injectAgentBlocks(tmpDir, "all", fakeHome);
       expect(results.find((r) => r.agent === "Claude Code")?.action).toBe("installed");
@@ -191,6 +196,58 @@ describe("manage-agents use case logic", () => {
 
       await injectAgentBlocks(tmpDir, "all", fakeHome);
       expect(existsSync(userSkill)).toBe(true);
+    });
+
+    it("leaves user-authored maestro-prefixed skill dirs untouched (no manifest marker)", async () => {
+      await mkdir(join(fakeHome, ".claude"), { recursive: true });
+      await mkdir(join(fakeHome, ".codex"), { recursive: true });
+      // User's own skill that happens to use the maestro- prefix. No manifest.
+      const userSkill = join(fakeHome, ".claude", "skills", "maestro-my-custom");
+      await mkdir(userSkill, { recursive: true });
+      await writeFile(join(userSkill, "SKILL.md"), "---\nname: maestro-my-custom\n---\n# mine\n");
+
+      await injectAgentBlocks(tmpDir, "all", fakeHome);
+      expect(existsSync(userSkill)).toBe(true);
+      expect(existsSync(join(userSkill, "SKILL.md"))).toBe(true);
+    });
+
+    it("writes a .maestro-bundled.json manifest to each shipped skill dir", async () => {
+      await mkdir(join(fakeHome, ".claude"), { recursive: true });
+      await mkdir(join(fakeHome, ".codex"), { recursive: true });
+
+      await injectAgentBlocks(tmpDir, "all", fakeHome);
+
+      for (const skillName of BUNDLED_SKILL_NAMES) {
+        const manifestPath = join(fakeHome, ".claude", "skills", skillName, ".maestro-bundled.json");
+        expect(existsSync(manifestPath)).toBe(true);
+        const raw = await readFile(manifestPath, "utf8");
+        const manifest = JSON.parse(raw);
+        expect(manifest.managedBy).toBe("maestro");
+        expect(manifest.skillName).toBe(skillName);
+        expect(manifest.fileHashes["SKILL.md"]).toMatch(/^[0-9a-f]{64}$/);
+      }
+    });
+
+    it("preserves user edits to installed skill files across updates", async () => {
+      await mkdir(join(fakeHome, ".claude"), { recursive: true });
+      await mkdir(join(fakeHome, ".codex"), { recursive: true });
+
+      // First install writes baseline files + manifest.
+      await injectAgentBlocks(tmpDir, "all", fakeHome);
+
+      // User edits maestro-task/SKILL.md.
+      const userEditedPath = join(fakeHome, ".claude", "skills", "maestro-task", "SKILL.md");
+      const userContent = "---\nname: maestro-task\n---\n# my custom override\n";
+      await writeFile(userEditedPath, userContent);
+
+      // Second install should preserve the edit because the manifest hash
+      // differs from the on-disk hash.
+      const second = await injectAgentBlocks(tmpDir, "all", fakeHome);
+      const claude = second.find((r) => r.agent === "Claude Code")!;
+      expect(claude.preservedUserEdits).toContain("maestro-task/SKILL.md");
+
+      const afterContent = await readFile(userEditedPath, "utf8");
+      expect(afterContent).toBe(userContent);
     });
   });
 

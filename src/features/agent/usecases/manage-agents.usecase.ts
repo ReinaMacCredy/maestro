@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import { readdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -17,7 +18,9 @@ import {
 import {
   dirExists,
   ensureDir,
+  readJson,
   readText,
+  writeJson,
   writeText,
   removeIfExists,
 } from "@/shared/lib/fs.js";
@@ -26,12 +29,14 @@ import {
   removeBlock,
   removeLegacyBlock,
 } from "../lib/agent-block.js";
+import { VERSION } from "@/shared/version.js";
 
 export interface InjectResult {
   readonly agent: string;
   readonly action: "installed" | "updated" | "migrated-to-skills" | "skipped" | "not-detected";
   readonly configPath: string;
   readonly installedSkills: readonly string[];
+  readonly preservedUserEdits: readonly string[];
 }
 
 export interface RemoveResult {
@@ -44,6 +49,25 @@ export interface RemoveResult {
 type AgentConfigTargetScope = "all" | "home" | "project";
 
 const BUNDLED_SKILL_PREFIX = "maestro-";
+const MANIFEST_FILENAME = ".maestro-bundled.json";
+
+/**
+ * Marker written into each shipped skill directory. Its presence identifies
+ * a dir as maestro-managed (so stale cleanup can delete it safely), and its
+ * file-hash map lets us detect user edits between releases so we don't
+ * silently clobber them.
+ */
+interface BundledSkillManifest {
+  readonly managedBy: "maestro";
+  readonly skillName: string;
+  readonly installedAt: string;
+  readonly maestroVersion: string;
+  readonly fileHashes: Record<string, string>;
+}
+
+function contentHash(content: string): string {
+  return createHash("sha256").update(content).digest("hex");
+}
 
 function agentMatchesTargetScope(
   agent: AgentConfigSpec,
@@ -100,52 +124,123 @@ async function cleanupLegacyMaestroMd(
   return didSomething;
 }
 
+interface WriteBundledSkillResult {
+  readonly changed: boolean;
+  readonly preservedUserEdits: readonly string[];
+}
+
 /**
- * Write a single bundled skill into its install location. Returns true if
- * anything was actually written (content differed from what was on disk).
+ * Write a single bundled skill into its install location. Uses a per-skill
+ * manifest (`.maestro-bundled.json`) to distinguish user edits from stale
+ * content so user edits are preserved across updates.
+ *
+ * Decision table per file (existing = on-disk content, shipped = new content
+ * from the bundled template, prev = hash recorded in the prior manifest):
+ *   - existing missing                    -> write, record new hash
+ *   - existing == shipped                 -> no-op
+ *   - existing != shipped, prev missing   -> migration; write, record new hash
+ *   - existing != shipped, hash(existing) == prev -> no user edit; overwrite
+ *   - existing != shipped, hash(existing) != prev -> user edit; preserve
  */
 async function writeBundledSkill(
   skillRoot: string,
   template: BundledSkillTemplate,
-): Promise<boolean> {
+): Promise<WriteBundledSkillResult> {
   const skillDir = join(skillRoot, template.name);
-  const results = await Promise.all(template.files.map(async (file) => {
-    const absolute = join(skillDir, file.path);
-    const existing = await readText(absolute);
-    if (existing === file.content) return false;
+  const manifestPath = join(skillDir, MANIFEST_FILENAME);
+  const prevManifest = await readJson<BundledSkillManifest>(manifestPath);
 
-    await ensureDir(dirname(absolute));
+  const perFile = await Promise.all(template.files.map(async (file) => {
+    const absolute = join(skillDir, file.path);
+    const shippedHash = contentHash(file.content);
+    const existing = await readText(absolute);
+
+    if (existing === undefined) {
+      await ensureDir(dirname(absolute));
+      await writeText(absolute, file.content);
+      return { path: file.path, hash: shippedHash, changed: true, preserved: false };
+    }
+
+    if (existing === file.content) {
+      return { path: file.path, hash: shippedHash, changed: false, preserved: false };
+    }
+
+    const existingHash = contentHash(existing);
+    const prevHash = prevManifest?.fileHashes?.[file.path];
+    if (prevHash !== undefined && prevHash !== existingHash) {
+      return { path: file.path, hash: existingHash, changed: false, preserved: true };
+    }
+
     await writeText(absolute, file.content);
-    return true;
+    return { path: file.path, hash: shippedHash, changed: true, preserved: false };
   }));
-  return results.some(Boolean);
+
+  const fileHashes: Record<string, string> = {};
+  const preservedUserEdits: string[] = [];
+  let changed = false;
+  for (const result of perFile) {
+    fileHashes[result.path] = result.hash;
+    if (result.changed) changed = true;
+    if (result.preserved) {
+      preservedUserEdits.push(`${template.name}/${result.path}`);
+    }
+  }
+
+  await ensureDir(skillDir);
+  const newManifest: BundledSkillManifest = {
+    managedBy: "maestro",
+    skillName: template.name,
+    installedAt: new Date().toISOString(),
+    maestroVersion: VERSION,
+    fileHashes,
+  };
+  if (!prevManifest || !manifestsEqual(prevManifest, newManifest)) {
+    await writeJson(manifestPath, newManifest);
+  }
+
+  return { changed, preservedUserEdits };
+}
+
+function manifestsEqual(a: BundledSkillManifest, b: BundledSkillManifest): boolean {
+  if (a.skillName !== b.skillName) return false;
+  const aKeys = Object.keys(a.fileHashes).sort();
+  const bKeys = Object.keys(b.fileHashes).sort();
+  if (aKeys.length !== bKeys.length) return false;
+  for (let i = 0; i < aKeys.length; i++) {
+    const key = aKeys[i]!;
+    if (bKeys[i] !== key) return false;
+    if (a.fileHashes[key] !== b.fileHashes[key]) return false;
+  }
+  return true;
 }
 
 /**
- * Remove any `maestro-*` skill directory under the agent's skills root that
- * does not correspond to a current bundled template. This keeps the install
- * clean when we rename or drop skills in future releases.
+ * Remove any maestro-managed skill directory under the agent's skills root
+ * that is no longer in the current bundled template set. A skill dir is
+ * maestro-managed iff it contains the `.maestro-bundled.json` manifest.
+ * User-authored directories sharing the `maestro-` prefix are left untouched.
  */
 async function removeStaleBundledSkillDirs(skillRoot: string): Promise<string[]> {
   if (!(await dirExists(skillRoot))) return [];
 
   const shipped = new Set(BUNDLED_SKILL_TEMPLATES.map((template) => template.name));
-  const removed: string[] = [];
-
   const entries = (await readdir(skillRoot, { withFileTypes: true }))
     .sort((left, right) => left.name.localeCompare(right.name));
 
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    if (!entry.name.startsWith(BUNDLED_SKILL_PREFIX)) continue;
-    if (shipped.has(entry.name)) continue;
+  const results = await Promise.all(entries.map(async (entry) => {
+    if (!entry.isDirectory()) return undefined;
+    if (!entry.name.startsWith(BUNDLED_SKILL_PREFIX)) return undefined;
+    if (shipped.has(entry.name)) return undefined;
 
-    const staleDir = join(skillRoot, entry.name);
-    await removeIfExists(staleDir, { recursive: true });
-    removed.push(entry.name);
-  }
+    const manifestPath = join(skillRoot, entry.name, MANIFEST_FILENAME);
+    const manifest = await readJson<BundledSkillManifest>(manifestPath);
+    if (manifest?.managedBy !== "maestro") return undefined;
 
-  return removed;
+    await removeIfExists(join(skillRoot, entry.name), { recursive: true });
+    return entry.name;
+  }));
+
+  return results.filter((name): name is string => name !== undefined);
 }
 
 async function processInject(
@@ -162,17 +257,25 @@ async function processInject(
       action: "not-detected",
       configPath: configDir,
       installedSkills: [],
+      preservedUserEdits: [],
     };
   }
 
   await ensureDir(skillsRoot);
   await removeStaleBundledSkillDirs(skillsRoot);
 
-  const changes = await Promise.all(
+  const results = await Promise.all(
     BUNDLED_SKILL_TEMPLATES.map((template) => writeBundledSkill(skillsRoot, template)),
   );
-  const anyChanged = changes.some(Boolean);
+  const anyChanged = results.some((r) => r.changed);
   const installed = BUNDLED_SKILL_TEMPLATES.map((template) => template.name);
+  const preservedUserEdits = results.flatMap((r) => r.preservedUserEdits);
+
+  for (const path of preservedUserEdits) {
+    process.stderr.write(
+      `[warn] preserved user-edited skill file: ~/${join(agent.configDir, "skills", path)} (not overwritten)\n`,
+    );
+  }
 
   const hadLegacy = await cleanupLegacyMaestroMd(agent, projectDir, homeDir);
 
@@ -187,6 +290,7 @@ async function processInject(
     action,
     configPath: configDir,
     installedSkills: installed,
+    preservedUserEdits,
   };
 }
 

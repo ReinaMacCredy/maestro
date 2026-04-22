@@ -34,5 +34,13 @@ export function warn(message: string): void {
 export function formatAgentResults(
   agents: ReadonlyArray<{ agent: string; action: string; configPath: string }>,
 ): string[] {
-  return agents.map((a) => `  ${a.agent}: ${a.action} (${a.configPath})`);
+  const lines = agents.map((a) => `  ${a.agent}: ${a.action} (${a.configPath})`);
+  if (agents.length > 0 && agents.every((a) => a.action === "not-detected")) {
+    lines.push(
+      "",
+      "[!] No supported agents detected. Install Claude Code or Codex and re-run",
+      "    `maestro install` (or `maestro update --agents-only`).",
+    );
+  }
+  return lines;
 }

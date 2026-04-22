@@ -6,8 +6,8 @@ import { installReleaseBinary } from "../usecases/install-release-binary.usecase
 export function registerUpdateCommand(program: Command): void {
   program
     .command("update")
-    .description("Update maestro from the latest published release and/or refresh agent instruction blocks")
-    .option("--agents-only", "Only update agent instruction blocks, skip binary download")
+    .description("Update maestro from the latest published release and/or refresh bundled agent skills")
+    .option("--agents-only", "Only refresh bundled agent skills, skip binary download")
     .option("--version <version>", "Install a specific release version or tag")
     .option("--force", "Reinstall even when already on the latest published release")
     .option("--json", "Output as JSON")
