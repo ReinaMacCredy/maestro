@@ -283,6 +283,38 @@ This project uses Maestro for local bootstrap and runtime orchestration.
 - Stale reclaim inherits active contract ownership by default; set \`contracts.staleReclaimContractPolicy: block\` to refuse it.
 - Handoff pickup transfers active contract ownership with the linked task.
 
+## Shared Task Loop
+
+- Inspect active work with:
+  - \`maestro status --json\`
+  - \`maestro task ready --json --compact --limit 5\`
+  - \`maestro task show <id>\`
+- Claim and start work with:
+  - \`maestro task claim <id>\`
+  - \`maestro task update <id> --status in_progress\`
+  - \`maestro task claim <id> --contract-required\`
+  - \`maestro task claim <id> --no-contract\`
+- Keep resume state fresh while working:
+  - \`maestro task update <id> --current-state "..." --next-action "..."\`
+  - \`maestro task update <id> --add-decision "keep api stable"\`
+  - \`maestro task update <id> --remove-decision "old constraint"\`
+- Complete with a receipt when useful:
+  - \`maestro task update <id> --status completed --reason "<one-line outcome>"\`
+  - \`maestro task update <id> --status completed --reason "<one-line outcome>" --summary "<receipt summary>" --surprise "<gotcha>" --verified-by <name>\`
+  - add \`--strict\` to block completion on a broken contract verdict
+- Discover context and stalled work with:
+  - \`maestro task similar <id>\`
+  - \`maestro task mine\`
+  - \`maestro task stuck [--older-than 4h]\`
+- Keep claims alive or recover stale ownership with:
+  - \`maestro task heartbeat <id>\`
+  - \`maestro task claim <id> [--stale-after 4h]\`
+  - \`maestro task update <id> ... --silent\` or \`MAESTRO_TASK_SILENT=1\`
+- Bound local-only task artifacts with:
+  - \`maestro task prune --dry-run\`
+  - \`maestro task prune [--keep N] [--candidates-only|--continuations-only] [--all]\`
+- \`.maestro/tasks/NOW.md\` is refreshed after task mutations; \`cat\` it for a short in-progress/ready/stuck view.
+
 ## Agent Skill Lookup
 
 1. \`.maestro/skills/{agentType}/SKILL.md\`

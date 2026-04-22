@@ -89,6 +89,26 @@ describe("AGENT_INSTRUCTION_BLOCK", () => {
     expect(agentsTemplate?.content).toContain("staleReclaimContractPolicy: block");
   });
 
+  it("mirrors the PR 35 shared task loop guidance into the bootstrap AGENTS template", () => {
+    const agentsTemplate = PROJECT_BOOTSTRAP_TEMPLATES.find((template) => template.path === ".maestro/AGENTS.md");
+    expect(agentsTemplate?.content).toContain("## Shared Task Loop");
+    expect(agentsTemplate?.content).toContain("maestro task ready --json --compact --limit 5");
+    expect(agentsTemplate?.content).toContain("maestro task show <id>");
+    expect(agentsTemplate?.content).toContain("maestro task claim <id> --contract-required");
+    expect(agentsTemplate?.content).toContain("maestro task claim <id> --no-contract");
+    expect(agentsTemplate?.content).toContain('--summary "<receipt summary>"');
+    expect(agentsTemplate?.content).toContain('--surprise "<gotcha>"');
+    expect(agentsTemplate?.content).toContain("--verified-by <name>");
+    expect(agentsTemplate?.content).toContain("maestro task similar <id>");
+    expect(agentsTemplate?.content).toContain("maestro task mine");
+    expect(agentsTemplate?.content).toContain("maestro task stuck [--older-than 4h]");
+    expect(agentsTemplate?.content).toContain("maestro task heartbeat <id>");
+    expect(agentsTemplate?.content).toContain("maestro task claim <id> [--stale-after 4h]");
+    expect(agentsTemplate?.content).toContain("MAESTRO_TASK_SILENT=1");
+    expect(agentsTemplate?.content).toContain("maestro task prune --dry-run");
+    expect(agentsTemplate?.content).toContain(".maestro/tasks/NOW.md");
+  });
+
   it("ships the default contract draft template in bootstrap assets", () => {
     const template = PROJECT_BOOTSTRAP_TEMPLATES.find(
       (entry) => entry.path === ".maestro/tasks/contract-templates/default.md",
