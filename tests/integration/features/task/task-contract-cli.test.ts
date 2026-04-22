@@ -29,16 +29,10 @@ async function writeTemplate(name: string, body: string): Promise<string> {
 }
 
 async function writeEditorScript(name: string, replacement: string): Promise<string> {
-  const path = join(tmpDir, name);
+  const path = join(tmpDir, `${name.replace(/\.sh$/, "")}.ts`);
   await Bun.write(
     path,
-    [
-      "#!/bin/sh",
-      "cat <<'EOF' > \"$1\"",
-      replacement,
-      "EOF",
-      "",
-    ].join("\n"),
+    `await Bun.write(process.argv[2] ?? "", ${JSON.stringify(replacement)});\n`,
   );
   return path;
 }
@@ -406,7 +400,7 @@ describe("task contract CLI", () => {
     const amended = await runCli(
       ["task", "contract", "amend", contract.id, "--reason", "expanded test coverage", "--session", "criteria-owner", "--json"],
       tmpDir,
-      { env: { EDITOR: `sh ${editorPath}` } },
+      { env: { EDITOR: `bun '${editorPath}'` } },
     );
     const amendedContract = expectJson<{ status: string; scope: { filesExpected: string[] }; amendments: Array<{ reason: string }> }>(amended);
     expect(amendedContract.status).toBe("amended");
@@ -542,7 +536,7 @@ describe("task contract CLI", () => {
     const edited = await runCli(
       ["task", "contract", "edit", contract.id, "--json"],
       tmpDir,
-      { env: { EDITOR: `sh ${editorPath}` } },
+      { env: { EDITOR: `bun '${editorPath}'` } },
     );
     const payload = expectJson<{ status: string; intent: string; scope: { filesExpected: string[] } }>(edited);
     expect(payload.status).toBe("draft");

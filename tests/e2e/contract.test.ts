@@ -31,16 +31,10 @@ async function writeTemplate(name: string, body: string): Promise<string> {
 }
 
 async function writeEditorScript(name: string, replacement: string): Promise<string> {
-  const path = join(tmpDir, name);
+  const path = join(tmpDir, `${name.replace(/\.sh$/, "")}.ts`);
   await Bun.write(
     path,
-    [
-      "#!/bin/sh",
-      "cat <<'EOF' > \"$1\"",
-      replacement,
-      "EOF",
-      "",
-    ].join("\n"),
+    `await Bun.write(process.argv[2] ?? "", ${JSON.stringify(replacement)});\n`,
   );
   return path;
 }
@@ -313,7 +307,7 @@ describe("task contract compiled E2E", () => {
         "--silent",
       ],
       tmpDir,
-      { env: { EDITOR: `sh ${editorPath}` } },
+      { env: { EDITOR: `bun '${editorPath}'` } },
     );
     expect(amended.stdout).toBe(`${contract.id} [ok]`);
 
