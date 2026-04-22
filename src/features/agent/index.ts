@@ -8,6 +8,7 @@ export {
   agentConfigDirPath,
   agentReferencePath,
   agentLegacyConfigPaths,
+  agentSkillsRoot,
 } from "./domain/agents.js";
 
 export {

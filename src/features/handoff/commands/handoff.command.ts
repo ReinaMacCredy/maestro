@@ -30,6 +30,7 @@ export function registerHandoffCommand(program: Command): void {
     .option("--worktree [slug]", "Create and use a sibling git worktree for the handoff")
     .option("--base <branch>", "Base branch to use with --worktree")
     .option("--name <title>", "Display name for the launched session")
+    .option("--prompt-file <path>", "Path to a pre-written brief; skips auto-generation")
     .option("--wait", "Wait for the external agent to finish before returning")
     .option("--json", "Output as JSON")
     .action(async (task: string | undefined, opts) => {
@@ -60,6 +61,7 @@ export function registerHandoffCommand(program: Command): void {
         wait: Boolean(opts.wait),
         worktree: opts.worktree as string | boolean | undefined,
         baseBranch: typeof opts.base === "string" ? opts.base : undefined,
+        promptFile: typeof opts.promptFile === "string" ? opts.promptFile : undefined,
         refs: {
           taskId: linkedTask.taskId,
           createdByAgent: linkedTask.summary?.activeAgent?.type,

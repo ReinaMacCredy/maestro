@@ -1,0 +1,4 @@
+interface:
+  display_name: "Maestro Brainstorm"
+  short_description: "Shape ideas into an approved design"
+  default_prompt: "Use $maestro-brainstorm to inspect the current context, ask one question at a time, compare a few approaches, and get an approved design before handing off to maestro-plan."

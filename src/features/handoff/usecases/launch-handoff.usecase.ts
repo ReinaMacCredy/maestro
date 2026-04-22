@@ -1,3 +1,4 @@
+import { isAbsolute, resolve } from "node:path";
 import type {
   AssertionStorePort,
   FeatureStorePort,
@@ -7,13 +8,17 @@ import type {
   HandoffAgent,
   HandoffLaunchPort,
   HandoffLaunchRecord,
+  HandoffPromptContext,
   LaunchStorePort,
 } from "@/features/handoff";
 import { DEFAULT_HANDOFF_MODELS } from "@/features/handoff";
 import type { TaskContinuationEvent, TaskContinuationSummary } from "@/features/task";
 import type { GitPort } from "@/infra/ports/git.port.js";
 import { MaestroError } from "@/shared/errors.js";
+import { readText } from "@/shared/lib/fs.js";
 import { buildHandoffPrompt } from "./build-handoff-prompt.usecase.js";
+
+const PROMPT_FILE_SIZE_WARN_BYTES = 500_000;
 
 export interface LaunchHandoffDeps {
   readonly missionStore: MissionStorePort;
@@ -40,6 +45,7 @@ export async function launchHandoff(
     readonly wait: boolean;
     readonly worktree?: string | boolean;
     readonly baseBranch?: string;
+    readonly promptFile?: string;
     readonly refs?: {
       readonly taskId?: string;
       readonly createdByAgent?: string;
@@ -78,13 +84,18 @@ export async function launchHandoff(
       : undefined,
   ].filter((line): line is string => line !== undefined);
 
-  const { prompt, context } = await buildHandoffPrompt(deps, {
-    cwd: input.cwd,
-    task: input.task,
-    extraConstraints,
-    continuation: input.continuation,
-    taskId: input.refs?.taskId,
-  });
+  const { prompt, context } = input.promptFile !== undefined
+    ? {
+        prompt: await readPromptFromFile(input.promptFile, input.cwd),
+        context: buildMinimalContext(input.task, extraConstraints, input.refs?.taskId),
+      }
+    : await buildHandoffPrompt(deps, {
+        cwd: input.cwd,
+        task: input.task,
+        extraConstraints,
+        continuation: input.continuation,
+        taskId: input.refs?.taskId,
+      });
 
   const initialRecord = await deps.launchStore.create({
     task: input.task,
@@ -186,4 +197,48 @@ function normalizeWorktreeSlug(value: string): string {
 function truncateTask(task: string): string {
   const normalized = task.replace(/\s+/g, " ").trim();
   return normalized.length > 72 ? `${normalized.slice(0, 69)}...` : normalized;
+}
+
+async function readPromptFromFile(promptFile: string, cwd: string): Promise<string> {
+  const absolute = isAbsolute(promptFile) ? promptFile : resolve(cwd, promptFile);
+  const content = await readText(absolute);
+  if (content === undefined) {
+    throw new MaestroError(`--prompt-file not found: ${absolute}`, [
+      "Check the path is correct and readable",
+      "Use an absolute path or a path relative to the current working directory",
+    ]);
+  }
+  if (content.trim().length === 0) {
+    throw new MaestroError(`--prompt-file is empty: ${absolute}`, [
+      "Write the handoff brief to the file before launching",
+      "An empty prompt produces a useless launch",
+    ]);
+  }
+  if (Buffer.byteLength(content, "utf8") > PROMPT_FILE_SIZE_WARN_BYTES) {
+    // Warn but do not hard-fail. Brief files this large are unusual and
+    // probably indicate something went wrong upstream (wrong file, runaway
+    // template, log dump). Keep launching so the agent can still use it.
+    process.stderr.write(
+      `[warn] --prompt-file is larger than ${PROMPT_FILE_SIZE_WARN_BYTES} bytes: ${absolute}\n`,
+    );
+  }
+  return content;
+}
+
+function buildMinimalContext(
+  task: string,
+  extraConstraints: readonly string[],
+  taskId: string | undefined,
+): HandoffPromptContext {
+  return {
+    task,
+    context: [],
+    relevantFiles: [],
+    currentState: [],
+    whatWasTried: [],
+    decisions: [],
+    acceptanceCriteria: [],
+    constraints: extraConstraints,
+    refs: taskId ? { taskId } : {},
+  };
 }

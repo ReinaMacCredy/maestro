@@ -243,4 +243,133 @@ describe("launchHandoff", () => {
     expect(launchStore.updates.at(-1)?.status).toBe("failed");
     expect(launchStore.updates.at(-1)?.exitCode).toBeUndefined();
   });
+
+  describe("--prompt-file bypass", () => {
+    it("uses the file contents verbatim as the prompt and skips auto-generation", async () => {
+      const briefPath = `/tmp/maestro-prompt-file-test-${Date.now()}.md`;
+      const briefContent = "## Task\n\nHand-written brief body.\n\n## Constraints\n- Do not edit.\n";
+      await Bun.write(briefPath, briefContent);
+
+      const launchStore = makeLaunchStore();
+      const codexLauncher: HandoffLaunchPort = {
+        agent: "codex",
+        async launch(request) {
+          // launchStore persistence uses `prompt` from the create call, which
+          // must be the raw file content (not the auto-generated brief).
+          expect(request.prompt).toBe(briefContent);
+          return {
+            command: ["codex", "exec", "--model", request.model, request.prompt],
+            pid: 1234,
+          };
+        },
+      };
+
+      const result = await launchHandoff({
+        missionStore: mockMissionStore([]),
+        featureStore: mockFeatureStore("2026-04-20-001", []),
+        assertionStore: mockAssertionStore("2026-04-20-001", []),
+        git: makeGit(),
+        launchStore,
+        launchers: {
+          codex: codexLauncher,
+          claude: { agent: "claude", async launch() { throw new Error("not used"); } },
+        },
+      }, {
+        cwd: "/tmp/project",
+        task: "Ignored when promptFile is set",
+        agent: "codex",
+        wait: false,
+        promptFile: briefPath,
+      });
+
+      expect(result.prompt).toBe(briefContent);
+      expect(launchStore.updates[0]?.task).toBe("Ignored when promptFile is set");
+      // Note: the supplied brief is what launchStore persists to prompt.md.
+    });
+
+    it("throws a MaestroError when --prompt-file does not exist", async () => {
+      await expect(
+        launchHandoff({
+          missionStore: mockMissionStore([]),
+          featureStore: mockFeatureStore("2026-04-20-001", []),
+          assertionStore: mockAssertionStore("2026-04-20-001", []),
+          git: makeGit(),
+          launchStore: makeLaunchStore(),
+          launchers: {
+            codex: { agent: "codex", async launch() { throw new Error("not used"); } },
+            claude: { agent: "claude", async launch() { throw new Error("not used"); } },
+          },
+        }, {
+          cwd: "/tmp/project",
+          task: "probe",
+          agent: "codex",
+          wait: false,
+          promptFile: "/tmp/maestro-prompt-file-definitely-not-here-xyz.md",
+        }),
+      ).rejects.toThrow("--prompt-file not found");
+    });
+
+    it("throws a MaestroError when --prompt-file is empty", async () => {
+      const briefPath = `/tmp/maestro-prompt-file-empty-${Date.now()}.md`;
+      await Bun.write(briefPath, "   \n\n");
+
+      await expect(
+        launchHandoff({
+          missionStore: mockMissionStore([]),
+          featureStore: mockFeatureStore("2026-04-20-001", []),
+          assertionStore: mockAssertionStore("2026-04-20-001", []),
+          git: makeGit(),
+          launchStore: makeLaunchStore(),
+          launchers: {
+            codex: { agent: "codex", async launch() { throw new Error("not used"); } },
+            claude: { agent: "claude", async launch() { throw new Error("not used"); } },
+          },
+        }, {
+          cwd: "/tmp/project",
+          task: "probe",
+          agent: "codex",
+          wait: false,
+          promptFile: briefPath,
+        }),
+      ).rejects.toThrow("--prompt-file is empty");
+    });
+
+    it("resolves a relative --prompt-file path against cwd", async () => {
+      // Write the brief to the test cwd and pass a relative path. This verifies
+      // the resolve() behavior without requiring a specific project directory
+      // layout.
+      const briefName = `maestro-prompt-file-rel-${Date.now()}.md`;
+      const cwd = process.cwd();
+      await Bun.write(`${cwd}/${briefName}`, "## Task\nRelative probe.\n");
+
+      try {
+        const result = await launchHandoff({
+          missionStore: mockMissionStore([]),
+          featureStore: mockFeatureStore("2026-04-20-001", []),
+          assertionStore: mockAssertionStore("2026-04-20-001", []),
+          git: makeGit(),
+          launchStore: makeLaunchStore(),
+          launchers: {
+            codex: {
+              agent: "codex",
+              async launch(req) {
+                return { command: ["codex", req.prompt], pid: 1 };
+              },
+            },
+            claude: { agent: "claude", async launch() { throw new Error("not used"); } },
+          },
+        }, {
+          cwd,
+          task: "probe",
+          agent: "codex",
+          wait: false,
+          promptFile: briefName,
+        });
+
+        expect(result.prompt).toContain("Relative probe");
+      } finally {
+        await Bun.file(`${cwd}/${briefName}`).delete?.();
+      }
+    });
+  });
 });

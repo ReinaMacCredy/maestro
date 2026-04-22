@@ -15,12 +15,21 @@ export interface AgentConfigSpec {
   readonly configScope?: "home" | "project";
 }
 
+// droid and gemini will be re-added once skill support lands in those CLIs
 export const SUPPORTED_AGENTS: readonly AgentConfigSpec[] = [
   { slug: "claude-code", displayName: "Claude Code", configDir: ".claude", configFile: "CLAUDE.md", agentFlag: "claude" },
   { slug: "codex", displayName: "Codex", configDir: ".codex", configFile: "AGENTS.md", agentFlag: "codex" },
-  { slug: "droid", displayName: "Droid CLI", configDir: ".maestro", configFile: "AGENTS.md", agentFlag: "droid", configScope: "project" },
-  { slug: "gemini", displayName: "Gemini CLI", configDir: ".gemini", configFile: "GEMINI.md", agentFlag: "gemini" },
 ];
+
+/**
+ * Directory where bundled maestro-* skills live for an agent, e.g.
+ * `~/.claude/skills/` for Claude Code.
+ */
+export function agentSkillsRoot(agent: AgentConfigSpec, projectDir = process.cwd(), homeDir = homedir()): string {
+  return agent.configScope === "project"
+    ? join(projectDir, agent.configDir, "skills")
+    : join(homeDir, agent.configDir, "skills");
+}
 
 export function agentConfigPath(agent: AgentConfigSpec, projectDir = process.cwd(), homeDir = homedir()): string {
   return agent.configScope === "project"
@@ -41,17 +50,12 @@ export function agentReferencePath(agent: AgentConfigSpec, projectDir = process.
 }
 
 export function agentLegacyConfigPaths(
-  agent: AgentConfigSpec,
-  projectDir = process.cwd(),
-  homeDir = homedir(),
+  _agent: AgentConfigSpec,
+  _projectDir = process.cwd(),
+  _homeDir = homedir(),
 ): string[] {
-  if (agent.slug !== "droid") {
-    return [];
-  }
-
-  return [
-    join(projectDir, ".factory", "AGENTS.md"),
-    join(homeDir, ".factory", "AGENTS.md"),
-    join(homeDir, ".maestro", "AGENTS.md"),
-  ].filter((path) => path !== agentConfigPath(agent, projectDir, homeDir));
+  // The remaining supported agents (claude-code, codex) have no legacy config
+  // paths to migrate from. Droid's .factory/.maestro fallbacks were dropped
+  // when the droid integration was removed.
+  return [];
 }
