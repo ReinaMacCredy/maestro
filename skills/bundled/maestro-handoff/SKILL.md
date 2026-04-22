@@ -10,8 +10,6 @@ You are handing off the current task to another session via maestro's native lau
 
 **User's arguments:** $ARGUMENTS
 
-> Requires `maestro >= 0.57.0` for the `--prompt-file` path below. On older binaries the flag is unknown and the command exits with a usage error. If that happens, upgrade maestro (`maestro update`) and retry, or drop `--prompt-file` and pass the task description as the positional argument; the CLI will then auto-generate a brief from git state plus your task string.
-
 ---
 
 ## Prerequisites

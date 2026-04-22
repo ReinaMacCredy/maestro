@@ -184,21 +184,27 @@ async function resolveLinkedTask(explicitTaskId: string | undefined): Promise<{
 }> {
   const services = getTaskServices();
   if (!explicitTaskId) {
-    const active = await services.taskContinuationStore.listActive();
-    if (active.length === 0) {
-      return { recentEvents: [] };
+    // Auto-link only fires for tasks actually in_progress. `listActive` can
+    // surface continuations for pending tasks that were claimed-then-
+    // unclaimed, which would otherwise cause a surprise project-store link
+    // for a packet the user meant to be standalone.
+    const allActive = await services.taskContinuationStore.listActive();
+    const inProgress: TaskContinuationSummary[] = [];
+    for (const summary of allActive) {
+      const task = await services.taskStore.get(summary.taskId);
+      if (task?.status === "in_progress") {
+        inProgress.push(summary);
+      }
     }
-    if (active.length !== 1) {
-      // Multiple active continuations: cannot safely infer which task this
-      // handoff belongs to. Fall back to a standalone packet rather than
-      // blocking the caller. Users who want task linkage pass --task-id
-      // explicitly; everyone else gets a usable standalone handoff.
+    if (inProgress.length !== 1) {
+      // Zero, or multiple: safest to treat as standalone. Callers who want
+      // task linkage pass --task-id explicitly.
       return { recentEvents: [] };
     }
     return {
-      taskId: active[0]!.taskId,
-      summary: active[0]!,
-      recentEvents: await services.taskContinuationHistory.listRecent(active[0]!.taskId, 5),
+      taskId: inProgress[0]!.taskId,
+      summary: inProgress[0]!,
+      recentEvents: await services.taskContinuationHistory.listRecent(inProgress[0]!.taskId, 5),
     };
   }
 

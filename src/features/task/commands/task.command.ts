@@ -1,3 +1,4 @@
+import { userInfo } from "node:os";
 import { Command, Option } from "commander";
 import { getServices } from "@/services.js";
 import { MaestroError } from "@/shared/errors.js";
@@ -1030,29 +1031,38 @@ async function resolveOwnershipSessionId(explicitSessionId: string | undefined):
     return buildTaskOwnerId(session.agent, session.sessionId);
   }
 
-  // No detected agent session. Synthesize a stable per-shell fallback so the
-  // command does not block. `ppid` is stable across invocations from the
-  // same parent shell, giving coordinated ownership within one terminal
-  // without any setup. Agents that need cross-shell coordination should
-  // export CODEX_THREAD_ID or pass --session explicitly.
+  // No detected agent session. Synthesize a per-user stable fallback so the
+  // command does not block AND so subsequent invocations from the same user
+  // (across shells, across tool calls) see the same owner id. Agents that
+  // need multi-user coordination should export CODEX_THREAD_ID / CLAUDECODE
+  // or pass --session explicitly.
   if (!warnedAboutFallbackSession) {
     warnedAboutFallbackSession = true;
     process.stderr.write(
-      "[info] no agent session detected; using a synthesized fallback session\n"
-      + "       (export CODEX_THREAD_ID / CLAUDECODE or pass --session <id> for cross-shell coordination)\n",
+      "[info] no agent session detected; using a per-user synthesized session\n"
+      + "       (export CODEX_THREAD_ID / CLAUDECODE or pass --session <id> for coordination)\n",
     );
   }
-  return buildTaskOwnerId("shell", `ppid-${process.ppid}`);
+  return buildTaskOwnerId("local", fallbackSessionUserId());
+}
+
+function fallbackSessionUserId(): string {
+  const envUser = (process.env.USER ?? process.env.USERNAME ?? "").trim();
+  if (envUser.length > 0) return envUser;
+  try {
+    return userInfo().username;
+  } catch {
+    return "default";
+  }
 }
 
 async function resolveOptionalOwnershipSessionId(explicitSessionId: string | undefined): Promise<string | undefined> {
-  if (explicitSessionId !== undefined) {
-    return resolveOwnershipSessionId(explicitSessionId);
-  }
-
-  const services = getServices();
-  const session = await services.sessionDetect.detect(process.cwd());
-  return session ? buildTaskOwnerId(session.agent, session.sessionId) : undefined;
+  // Always produce a stable actor id, synthesizing a per-user fallback when
+  // no env var / explicit session is available. Previously this function
+  // could return undefined, which surfaced as "requires ownership context"
+  // errors on update/heartbeat/unclaim paths that the skill documents as
+  // bare forms.
+  return resolveOwnershipSessionId(explicitSessionId);
 }
 
 async function resolveSessionAndReleaseStale(
