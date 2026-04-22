@@ -140,7 +140,8 @@ export function taskReopenRequiresCompletedStatus(id: string): MaestroError {
     `Task ${id} is not completed and cannot be reopened`,
     [
       "Only completed tasks can be reopened",
-      "Use 'maestro task update <id> ...' for active or pending tasks",
+      "For active or pending tasks, use `maestro task update <id> ...` instead",
+      "For contract-only changes, use `maestro task contract amend` or `contract criteria *`",
     ],
   );
 }

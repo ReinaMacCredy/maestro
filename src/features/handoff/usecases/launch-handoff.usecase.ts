@@ -201,7 +201,18 @@ function truncateTask(task: string): string {
 
 async function readPromptFromFile(promptFile: string, cwd: string): Promise<string> {
   const absolute = isAbsolute(promptFile) ? promptFile : resolve(cwd, promptFile);
-  const content = await readText(absolute);
+  let content: string | undefined;
+  try {
+    content = await readText(absolute);
+  } catch (err: unknown) {
+    const code = (err as NodeJS.ErrnoException | undefined)?.code;
+    if (code === "EISDIR") {
+      throw new MaestroError(`--prompt-file is a directory, not a file: ${absolute}`, [
+        "Pass a path to a readable file containing the brief",
+      ]);
+    }
+    throw err;
+  }
   if (content === undefined) {
     throw new MaestroError(`--prompt-file not found: ${absolute}`, [
       "Check the path is correct and readable",

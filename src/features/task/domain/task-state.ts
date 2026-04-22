@@ -102,9 +102,11 @@ export function assertTaskUpdateAllowed(
     if (!actor.sessionId) {
       throw taskStatusRequiresClaim("in_progress");
     }
-    const busy = findBusySessionTasks(actor.sessionId, existing.id, tasks);
-    if (busy.length > 0) {
-      throw taskClaimBusySession(actor.sessionId, busy);
+    if (!actor.force) {
+      const busy = findBusySessionTasks(actor.sessionId, existing.id, tasks);
+      if (busy.length > 0) {
+        throw taskClaimBusySession(actor.sessionId, busy);
+      }
     }
     return { nextStatus, autoClaim: { sessionId: actor.sessionId } };
   }

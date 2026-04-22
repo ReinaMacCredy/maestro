@@ -34,9 +34,19 @@ export function registerHandoffCommand(program: Command): void {
     .option("--wait", "Wait for the external agent to finish before returning")
     .option("--json", "Output as JSON")
     .action(async (task: string | undefined, opts) => {
-      if (!task) {
+      const promptFile = typeof opts.promptFile === "string" ? opts.promptFile : undefined;
+      const name = typeof opts.name === "string" ? opts.name : undefined;
+      // When the caller supplies a pre-written brief via --prompt-file, the
+      // positional task arg is optional: the brief itself carries the task
+      // description. Synthesize a short task string from --name (preferred)
+      // or a stable fallback, so the launch record and prompt remain well-
+      // formed without forcing every skill example to re-spell the task.
+      const resolvedTask = task
+        ?? (promptFile ? (name?.trim().length ? name!.trim() : "Handoff") : undefined);
+      if (!resolvedTask) {
         throw new MaestroError("Task description required for handoff launch", [
           "Use `maestro handoff <task>` to create a packet",
+          "Or pass --prompt-file <path> to skip the positional (the brief is enough)",
           "Or use `maestro handoff pickup` to consume an existing packet",
         ]);
       }
@@ -54,14 +64,14 @@ export function registerHandoffCommand(program: Command): void {
         launchers: services.handoffLaunchers,
       }, {
         cwd: process.cwd(),
-        task,
+        task: resolvedTask,
         agent,
         model: typeof opts.model === "string" ? opts.model : undefined,
-        name: typeof opts.name === "string" ? opts.name : undefined,
+        name,
         wait: Boolean(opts.wait),
         worktree: opts.worktree as string | boolean | undefined,
         baseBranch: typeof opts.base === "string" ? opts.base : undefined,
-        promptFile: typeof opts.promptFile === "string" ? opts.promptFile : undefined,
+        promptFile,
         refs: {
           taskId: linkedTask.taskId,
           createdByAgent: linkedTask.summary?.activeAgent?.type,

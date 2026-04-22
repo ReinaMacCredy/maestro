@@ -292,7 +292,8 @@ function registerPlanCommand(taskCmd: Command, program: Command): void {
         : result.created;
 
       output(isJson, { ...result, created, startedTaskId }, (r) => {
-        const lines = [`[ok] ${r.created.length} task(s) created`];
+        const verb = r.replayed ? "already present (replayed)" : "created";
+        const lines = [`[ok] ${r.created.length} task(s) ${verb}`];
         for (const task of r.created) {
           const label = task.name ? `${task.name}  --> ${task.id}` : `  --> ${task.id}`;
           lines.push(`  ${label}`);
@@ -488,7 +489,45 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
         ]);
       }
 
+      // Hard rule 2: every completion carries --reason. Enforce at the CLI so
+      // receipts cannot be written with a null reason silently.
+      if (
+        patch.status === "completed"
+        && (previous?.status !== "completed" || hasAdditionalCompletedTaskEdits(patch, continuationEdits))
+        && (typeof opts.reason !== "string" || opts.reason.trim().length === 0)
+      ) {
+        throw new MaestroError("Completion requires --reason", [
+          "Pass a short one-line outcome: --reason \"<one-line outcome>\"",
+          "The reason is persisted verbatim as shared context for future sessions",
+        ]);
+      }
+
       const sessionId = await resolveSessionAndReleaseStale(opts.session);
+
+      // Hard rule 1: one task in_progress per session unless --force. Enforce
+      // when transitioning to in_progress and the current session already
+      // holds another unresolved task.
+      if (
+        patch.status === "in_progress"
+        && previous?.status !== "in_progress"
+        && opts.force !== true
+        && sessionId !== undefined
+      ) {
+        const owned = await listTasks(services.taskStore, { assignee: sessionId });
+        const held = owned.filter((task) => task.id !== id && task.status === "in_progress");
+        if (held.length > 0) {
+          const first = held[0]!.id;
+          throw new MaestroError(
+            `You already hold ${first}; finish or unclaim it before starting ${id}`,
+            [
+              `Held task ids: ${held.map((t) => t.id).join(", ")}`,
+              `Run 'maestro task update ${first} --status completed --reason "..."' when finished`,
+              `Run 'maestro task unclaim ${first}' to release without completing`,
+              `Pass '--force' to start ${id} while holding ${first}`,
+            ],
+          );
+        }
+      }
       if (
         previous?.status === "completed"
         && patch.status === "completed"

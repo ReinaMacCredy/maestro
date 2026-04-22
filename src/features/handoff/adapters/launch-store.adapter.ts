@@ -95,6 +95,7 @@ export class FsLaunchStoreAdapter implements LaunchStorePort {
           }
           const updated: HandoffLaunchRecord = {
             ...current,
+            status: "consumed",
             pickedUpByAgent: input.agent,
             ...(input.sessionId ? { pickedUpBySessionId: input.sessionId } : {}),
             pickedUpAt: input.pickedUpAt,

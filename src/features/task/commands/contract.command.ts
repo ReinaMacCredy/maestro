@@ -1,3 +1,4 @@
+import { userInfo } from "node:os";
 import { Command } from "commander";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -903,7 +904,25 @@ async function resolveOptionalContractActorSessionId(
 
   const services = getServices();
   const session = await services.sessionDetect.detect(process.cwd());
-  return session ? buildTaskOwnerId(session.agent, session.sessionId) : undefined;
+  if (session) {
+    return buildTaskOwnerId(session.agent, session.sessionId);
+  }
+  // Synthesize the same per-user fallback as the task command so task ownership
+  // established in one shell can be matched by contract-mutating commands in
+  // another. Without this, the synthesized `local-<user>` assignee on a task
+  // is rejected by contract new/edit/amend because this resolver returned
+  // undefined for the caller.
+  return buildTaskOwnerId("local", fallbackContractUserId());
+}
+
+function fallbackContractUserId(): string {
+  const envUser = (process.env.USER ?? process.env.USERNAME ?? "").trim();
+  if (envUser.length > 0) return envUser;
+  try {
+    return userInfo().username;
+  } catch {
+    return "default";
+  }
 }
 
 async function resolveContractRef(ref: string): Promise<Contract | undefined> {

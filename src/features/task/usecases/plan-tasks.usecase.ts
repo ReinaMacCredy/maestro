@@ -41,7 +41,7 @@ export async function planTasks(
 
   if (input.batchId !== undefined) {
     const replay = await tryReplayReceipt(store, input.batchId);
-    if (replay) return replay;
+    if (replay) return { ...replay, replayed: true };
   }
 
   const nameToIndex = buildNameIndex(input.tasks);
