@@ -2,7 +2,7 @@ import type { GitPort } from "../ports/git.port.js";
 import type { ConfigPort } from "../ports/config.port.js";
 import { listIgnoredProjectConfigKeys } from "@/shared/domain/ui-config.js";
 import type { DoctorCheck } from "@/infra/domain/status-types.js";
-import { countLegacyHandoffFiles } from "@/features/handoff";
+import { countLegacyHandoffFiles, type CountLegacyHandoffFilesOptions } from "@/features/handoff";
 
 /**
  * Phase 1 strip: CASS and agent-transport checks were removed. The
@@ -13,7 +13,7 @@ export async function runDoctor(
   git: GitPort,
   config: ConfigPort,
   dir: string,
-  options: { readonly homeDir?: string } = {},
+  options: CountLegacyHandoffFilesOptions = {},
 ): Promise<DoctorCheck[]> {
   const [gitAvailable, projectConfig, globalConfig, configLayers, legacyHandoffCount] =
     await Promise.all([
@@ -21,7 +21,7 @@ export async function runDoctor(
       config.exists("project", dir),
       config.exists("global", dir),
       config.loadLayers(dir),
-      countLegacyHandoffFiles(dir, { homeDir: options.homeDir }),
+      countLegacyHandoffFiles(dir, options),
     ]);
 
   const doctorChecks: DoctorCheck[] = [

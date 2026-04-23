@@ -1,5 +1,10 @@
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { basename, dirname, join, parse, resolve } from "node:path";
+import { MAESTRO_DIR } from "@/shared/domain/defaults.js";
+
+const GIT_DIR = ".git";
+const GITDIR_LINE_PATTERN = /^gitdir:\s*(.+)$/m;
+const COMMON_GIT_DIR_FILE = "commondir";
 
 export function resolveMaestroProjectRoot(startDir: string): string {
   let current = safeRealpath(startDir);
@@ -7,10 +12,10 @@ export function resolveMaestroProjectRoot(startDir: string): string {
   let gitFallback: string | undefined;
 
   while (true) {
-    if (existsSync(join(current, ".maestro"))) {
+    if (existsSync(join(current, MAESTRO_DIR))) {
       return current;
     }
-    const gitPath = join(current, ".git");
+    const gitPath = join(current, GIT_DIR);
     if (existsSync(gitPath)) {
       gitFallback ??= current;
       const worktreeRoot = resolveMaestroRootFromGitFile(gitPath);
@@ -26,16 +31,16 @@ export function resolveMaestroProjectRoot(startDir: string): string {
 function resolveMaestroRootFromGitFile(gitPath: string): string | undefined {
   if (!isFile(gitPath)) return undefined;
   try {
-    const match = /^gitdir:\s*(.+)$/m.exec(readFileSync(gitPath, "utf8"));
+    const match = GITDIR_LINE_PATTERN.exec(readFileSync(gitPath, "utf8"));
     const rawGitDir = match?.[1]?.trim();
     if (!rawGitDir) return undefined;
 
     const worktreeGitDir = safeRealpath(resolve(dirname(gitPath), rawGitDir));
     const commonGitDir = readCommonGitDir(worktreeGitDir);
-    if (basename(commonGitDir) !== ".git") return undefined;
+    if (basename(commonGitDir) !== GIT_DIR) return undefined;
 
     const candidateRoot = dirname(commonGitDir);
-    return existsSync(join(candidateRoot, ".maestro")) ? candidateRoot : undefined;
+    return existsSync(join(candidateRoot, MAESTRO_DIR)) ? candidateRoot : undefined;
   } catch {
     return undefined;
   }
@@ -43,7 +48,7 @@ function resolveMaestroRootFromGitFile(gitPath: string): string | undefined {
 
 function readCommonGitDir(worktreeGitDir: string): string {
   try {
-    const rawCommonDir = readFileSync(join(worktreeGitDir, "commondir"), "utf8").trim();
+    const rawCommonDir = readFileSync(join(worktreeGitDir, COMMON_GIT_DIR_FILE), "utf8").trim();
     if (rawCommonDir.length > 0) {
       return safeRealpath(resolve(worktreeGitDir, rawCommonDir));
     }

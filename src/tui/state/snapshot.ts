@@ -119,7 +119,9 @@ export async function buildSnapshot(
   missionId: string,
   options: SnapshotBuildOptions = {},
 ): Promise<MissionControlSnapshot> {
-  const currentProjectRoot = resolveMaestroProjectRoot(deps.cwd);
+  const currentProjectRoot = options.includeReplies === true
+    ? resolveMaestroProjectRoot(deps.cwd)
+    : undefined;
   const taskBoardPromise = options.includeTaskBoard === true
     ? buildTaskBoard(deps.taskStore)
     : Promise.resolve(undefined);
@@ -127,9 +129,13 @@ export async function buildSnapshot(
   // Ingest replies FIRST when requested, so the features list below reflects
   // post-ingest state (advanced/kicked-back). Without this the inbox appears
   // stale for one poll cycle.
-  const ingest = options.includeReplies === true
+  const ingest = currentProjectRoot !== undefined
     ? await loadAndIngestReplies(deps, missionId, currentProjectRoot)
-    : { replies: undefined as readonly AgentReply[] | undefined, outcomesCache: undefined };
+    : {
+        replies: undefined as readonly AgentReply[] | undefined,
+        outcomesCache: undefined as readonly PrincipleOutcomeRecord[] | undefined,
+        handoffsCache: undefined as readonly HandoffRecord[] | undefined,
+      };
   const replies = ingest.replies;
 
   const [
@@ -251,7 +257,7 @@ export async function buildSnapshot(
   // the reply ingest is what produces most of the decided outcomes).
   // Reuse the in-memory outcomes cache from ingest to avoid re-reading
   // outcomes.jsonl.
-  const principleEffectiveness = options.includeReplies === true
+  const principleEffectiveness = currentProjectRoot !== undefined
     ? await loadPrincipleEffectiveness(deps, currentProjectRoot, ingest.outcomesCache, ingest.handoffsCache)
     : undefined;
 
@@ -316,7 +322,9 @@ export async function buildHomeSnapshot(
   deps: HomeSnapshotDeps,
   options: SnapshotBuildOptions = {},
 ): Promise<MissionControlSnapshot> {
-  const currentProjectRoot = resolveMaestroProjectRoot(deps.cwd);
+  const currentProjectRoot = options.includeReplies === true
+    ? resolveMaestroProjectRoot(deps.cwd)
+    : undefined;
   const taskBoardPromise = options.includeTaskBoard === true
     ? buildTaskBoard(deps.taskStore)
     : Promise.resolve(undefined);
@@ -355,7 +363,7 @@ export async function buildHomeSnapshot(
   const agentGrid = buildAgentGrid([]);
   // Replies in home mode: list without ingest (home mode has no mission to
   // update). Home surface is purely read-only per Mission Control contracts.
-  const homeReplies = options.includeReplies === true && deps.replyStore
+  const homeReplies = currentProjectRoot !== undefined && deps.replyStore
     ? await safeListReplies(deps.replyStore)
     : undefined;
   const homeReplyInbox = homeReplies ? buildReplyInbox([], homeReplies) : undefined;
@@ -413,7 +421,7 @@ export async function buildHomeSnapshot(
     taskBoard,
     timelineMilestones: [],
     replyInbox: homeReplyInbox,
-    principleEffectiveness: options.includeReplies === true
+    principleEffectiveness: currentProjectRoot !== undefined
       ? await loadPrincipleEffectiveness(deps, currentProjectRoot)
       : undefined,
     home: {
@@ -975,8 +983,11 @@ async function loadPrincipleEffectiveness(
         ? Promise.resolve(cachedHandoffs)
         : (handoffStore ? handoffStore.list() : Promise.resolve<readonly HandoffRecord[]>([])),
     ]);
-    const scopedHandoffs = filterHandoffsForProject(handoffs, currentProjectRoot);
-    const scopedOutcomes = handoffStore || cachedHandoffs !== undefined
+    const scopedHandoffs = cachedHandoffs !== undefined
+      ? handoffs
+      : filterHandoffsForProject(handoffs, currentProjectRoot);
+    const hasHandoffScopeSource = handoffStore !== undefined || cachedHandoffs !== undefined;
+    const scopedOutcomes = hasHandoffScopeSource
       ? filterOutcomesForHandoffs(outcomes, scopedHandoffs)
       : outcomes;
     return buildPrincipleEffectivenessRows(principles, scopedOutcomes, scopedHandoffs);
@@ -996,6 +1007,7 @@ function filterOutcomesForHandoffs(
   outcomes: readonly PrincipleOutcomeRecord[],
   handoffs: readonly HandoffRecord[],
 ): readonly PrincipleOutcomeRecord[] {
+  if (handoffs.length === 0) return [];
   const handoffIds = new Set(handoffs.map((handoff) => handoff.id));
   return outcomes.filter((record) => handoffIds.has(record.handoffId));
 }
@@ -1170,6 +1182,7 @@ async function buildMissionControlEnvironmentSummary(
       initialized: projectConfigExists || globalConfigExists,
       configSource,
       gitAvailable,
+      legacyHandoffCount: 0,
     },
     checks: [
       {

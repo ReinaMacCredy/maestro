@@ -1,13 +1,13 @@
 import type { ConfigPort } from "../ports/config.port.js";
 import type { GitPort } from "../ports/git.port.js";
 import type { StatusReport } from "@/infra/domain/status-types.js";
-import { countLegacyHandoffFiles } from "@/features/handoff";
+import { countLegacyHandoffFiles, type CountLegacyHandoffFilesOptions } from "@/features/handoff";
 
 export async function checkStatus(
   config: ConfigPort,
   git: GitPort,
   dir: string,
-  options: { readonly homeDir?: string } = {},
+  options: CountLegacyHandoffFilesOptions = {},
 ): Promise<StatusReport> {
   const [
     projectConfigExists,
@@ -18,7 +18,7 @@ export async function checkStatus(
     config.exists("project", dir),
     config.exists("global", dir),
     git.isRepo(dir),
-    countLegacyHandoffFiles(dir, { homeDir: options.homeDir }),
+    countLegacyHandoffFiles(dir, options),
   ]);
 
   const configSource: StatusReport["configSource"] = projectConfigExists
