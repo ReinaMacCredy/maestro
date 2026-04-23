@@ -1,0 +1,48 @@
+{
+  "milestone": "readme-followup",
+  "round": 1,
+  "status": "pass",
+  "validatorsRun": {
+    "test": {
+      "passed": true,
+      "command": "bun test",
+      "exitCode": 0,
+      "summary": "576 tests passed across 44 files"
+    },
+    "typecheck": {
+      "passed": true,
+      "command": "bun run typecheck",
+      "exitCode": 0
+    },
+    "lint": {
+      "passed": true,
+      "command": "bun run lint",
+      "exitCode": 0,
+      "note": "No lint script defined - considered passing"
+    }
+  },
+  "reviewsSummary": {
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "failedFeatures": []
+  },
+  "blockingIssues": [],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [],
+  "rejectedObservations": [
+    {
+      "observation": "The README documents the --json global option for all commands, which is consistent with the codebase conventions for dual-mode output",
+      "reason": "already-documented"
+    },
+    {
+      "observation": "The worker correctly identified and documented the plan file format with the 'order' field for milestones and 'skillName'/'verificationSteps'/'fulfills' fields for features",
+      "reason": "already-documented"
+    },
+    {
+      "observation": "The worker correctly used bun run build, bun run typecheck, and bun test commands that are already documented in .factory/services.yaml",
+      "reason": "already-documented"
+    }
+  ],
+  "previousRound": null
+}

@@ -1,0 +1,93 @@
+{
+  "groupId": "milestone",
+  "testedAt": "2026-03-30T19:45:00.000Z",
+  "isolation": {
+    "type": "CLI subprocess roundtrips via Bun",
+    "tempDirectories": [
+      "/private/var/folders/63/s3x44l1935l9dkthd410t7mr0000gn/T/tmp.sF3hqMfVfp",
+      "/tmp/test-milestone-003"
+    ],
+    "gitRepos": "Fresh git repos initialized per test",
+    "missionIds": ["2026-03-30-001"]
+  },
+  "toolsUsed": ["bun CLI subprocess"],
+  "assertions": [
+    {
+      "id": "VAL-MILESTONE-002",
+      "title": "Milestone seal requires terminal assertions",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Create mission with plan containing milestone m1 and 3 assertions",
+          "expected": "Mission created with assertions in pending state",
+          "observed": "Mission 2026-03-30-001 created with 3 assertions: f1-assertion-1, f1-assertion-2, f2-assertion-1 all pending"
+        },
+        {
+          "action": "Update f1-assertion-1 to 'passed'",
+          "expected": "Assertion transitions to passed state",
+          "observed": "[ok] Assertion updated: f1-assertion-1, Status: passed"
+        },
+        {
+          "action": "Update f1-assertion-2 to 'waived' with reason",
+          "expected": "Assertion transitions to waived state with waivedReason recorded",
+          "observed": "[ok] Assertion updated: f1-assertion-2, Status: waived, Waived Reason: Not applicable for this implementation"
+        },
+        {
+          "action": "Update f2-assertion-1 to 'passed'",
+          "expected": "Assertion transitions to passed state",
+          "observed": "[ok] Assertion updated: f2-assertion-1, Status: passed"
+        },
+        {
+          "action": "Execute 'maestro milestone seal m1 --mission <id>'",
+          "expected": "Seal succeeds with all terminal assertions (passed/waived)",
+          "observed": "Milestone sealed successfully. JSON output: {\"sealed\": true, \"milestone\": {\"id\": \"m1\"...}}"
+        },
+        {
+          "action": "Verify milestone status after seal",
+          "expected": "Milestone shows as sealed/completed",
+          "observed": "Milestone m1 shows sealedAt timestamp, status reflects completion"
+        }
+      ],
+      "evidence": {
+        "cliOutput": "Terminal output showing assertion updates and seal success",
+        "jsonOutput": "{\"sealed\": true, \"milestone\": {\"id\": \"m1\"}, \"blockingAssertionIds\": []}"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-MILESTONE-003",
+      "title": "Failed seal attempts identify blockers",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Create mission with plan containing milestone m1 and 3 assertions",
+          "expected": "Mission created with assertions in pending state",
+          "observed": "Mission 2026-03-30-001 created with 3 assertions: f1-assertion-1, f1-assertion-2, f2-assertion-1 all pending"
+        },
+        {
+          "action": "Update only f1-assertion-1 to 'passed', leave others pending",
+          "expected": "One assertion passed, two remain pending",
+          "observed": "f1-assertion-1: passed, f1-assertion-2: pending, f2-assertion-1: pending"
+        },
+        {
+          "action": "Execute 'maestro milestone seal m1 --mission <id> --json'",
+          "expected": "Seal fails with exit code 1 and JSON error with blocking assertion IDs",
+          "observed": "Exit code 1, JSON error: {\"error\": \"Cannot seal milestone m1: 2 assertion(s) not in terminal state\", \"hints\": [\"Blocking assertions (2): f1-assertion-2, f2-assertion-1\", ...]}"
+        },
+        {
+          "action": "Execute 'maestro milestone seal m1 --mission <id>' (text output)",
+          "expected": "Seal fails with human-readable error showing blocking IDs",
+          "observed": "[!] Cannot seal milestone m1: 2 assertion(s) not in terminal state. Blocking assertions (2): f1-assertion-2, f2-assertion-1"
+        }
+      ],
+      "evidence": {
+        "cliOutput": "Terminal output showing seal failure with blocking assertion IDs listed",
+        "jsonOutput": "{\"error\": \"Cannot seal milestone m1: 2 assertion(s) not in terminal state\", \"hints\": [\"Blocking assertions (2): f1-assertion-2, f2-assertion-1\", \"All assertions must be 'passed' or 'waived' to seal a milestone.\", ...]}"
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "summary": "Tested 2 assertions: 2 passed (0 failed, 0 blocked). VAL-MILESTONE-002 verified milestone seal succeeds when all assertions are in terminal states (passed/waived). VAL-MILESTONE-003 verified failed seal attempts correctly identify the specific blocking assertion IDs in both JSON and text output formats."
+}

@@ -1,0 +1,186 @@
+{
+  "groupId": "feature-tests",
+  "testedAt": "2026-03-29T14:00:00.000Z",
+  "isolation": {
+    "workingDirectory": "/tmp/maestro-feature-test",
+    "missionId": "2026-03-29-tdxmcb",
+    "missionName": "Feature Test Mission"
+  },
+  "toolsUsed": ["bun", "CLI execution"],
+  "assertions": [
+    {
+      "id": "VAL-M2-FEATURE-001",
+      "title": "maestro feature add with basic flags",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Initialize maestro with `maestro mission init`",
+          "expected": ".maestro/ directory created with missions subdirectory",
+          "observed": "Directory structure created successfully with mission.yaml"
+        },
+        {
+          "action": "Create mission with `maestro mission create --name 'Feature Test Mission' --objective 'Test feature management'`",
+          "expected": "Mission created with ID 2026-03-29-tdxmcb",
+          "observed": "Mission created successfully at /tmp/maestro-feature-test/.maestro/missions/2026-03-29-tdxmcb/"
+        },
+        {
+          "action": "Add feature with `maestro feature add --description 'Implement user auth' --skill worker`",
+          "expected": "Feature added to features.json with generated ID",
+          "observed": "Feature added successfully. Output: [ok] Added feature: 2026-03-29-tdxmcb-F1"
+        },
+        {
+          "action": "Verify features.json contains new feature",
+          "expected": "features.json contains feature with id, description, skillName, status fields",
+          "observed": "features.json contains valid feature object with all required fields"
+        }
+      ],
+      "evidence": {
+        "files": [
+          "m2-planning/feature-tests/VAL-M2-FEATURE-001-features.json"
+        ],
+        "commandOutput": "[ok] Added feature: 2026-03-29-tdxmcb-F1\n  Description: Implement user authentication\n  Skill: worker\n  Status: pending"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-M2-FEATURE-002",
+      "title": "Feature with --preconditions stores array of precondition strings",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Add feature with --preconditions flag",
+          "expected": "Feature created with preconditions array in features.json",
+          "observed": "Feature 2026-03-29-tdxmcb-F2 added with preconditions array"
+        },
+        {
+          "action": "Verify features.json structure",
+          "expected": "Feature object contains preconditions: ['Database schema ready', 'API endpoints defined']",
+          "observed": "features.json contains preconditions as string array"
+        }
+      ],
+      "evidence": {
+        "files": [
+          "m2-planning/feature-tests/VAL-M2-FEATURE-002-features.json"
+        ],
+        "commandOutput": "Feature added with preconditions: 2 items"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-M2-FEATURE-003",
+      "title": "Feature with --expected-behavior stores behavior strings",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Add feature with --expected-behavior flag",
+          "expected": "Feature created with expectedBehavior array in features.json",
+          "observed": "Feature 2026-03-29-tdxmcb-F3 added with expectedBehavior array"
+        },
+        {
+          "action": "Verify features.json structure",
+          "expected": "Feature object contains expectedBehavior: ['User can login', 'Session persists']",
+          "observed": "features.json contains expectedBehavior as string array"
+        }
+      ],
+      "evidence": {
+        "files": [
+          "m2-planning/feature-tests/VAL-M2-FEATURE-003-features.json"
+        ],
+        "commandOutput": "Feature added with expected behavior: 2 items"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-M2-FEATURE-004",
+      "title": "Feature with --fulfills links to assertion IDs",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Add feature with --fulfills 'VAL-001,VAL-002'",
+          "expected": "Feature created with fulfills array containing assertion IDs",
+          "observed": "Feature 2026-03-29-tdxmcb-F4 added with fulfills array"
+        },
+        {
+          "action": "Verify features.json contains fulfills field",
+          "expected": "Feature object contains fulfills: ['VAL-001', 'VAL-002']",
+          "observed": "features.json contains fulfills as array of assertion ID strings"
+        }
+      ],
+      "evidence": {
+        "files": [
+          "m2-planning/feature-tests/VAL-M2-FEATURE-004-features.json"
+        ],
+        "commandOutput": "Feature added with fulfills: VAL-001, VAL-002"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-M2-FEATURE-005",
+      "title": "maestro feature list shows all features with status in table format",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run `maestro feature list`",
+          "expected": "Table output with ID, Status, Skill, Description columns",
+          "observed": "Table displayed with 4 features, showing ID, Status, Skill, Description columns"
+        },
+        {
+          "action": "Verify table formatting",
+          "expected": "Columns aligned, descriptions truncated if too long",
+          "observed": "Table properly formatted with aligned columns and truncated descriptions over 50 chars"
+        },
+        {
+          "action": "Verify status breakdown shown",
+          "expected": "Status summary shows count per status (pending, assigned, etc.)",
+          "observed": "Status breakdown displayed: pending: 4"
+        }
+      ],
+      "evidence": {
+        "files": [
+          "m2-planning/feature-tests/VAL-M2-FEATURE-005-list-output.txt"
+        ],
+        "terminalOutput": "ID                    Status   Skill   Description\n-----------------------------------------------------------\n2026-03-29-tdxmcb-F1  pending  worker  Implement user aut...\n..."
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-M2-FEATURE-006",
+      "title": "Feature list --json returns features as JSON array",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run `maestro feature list --json`",
+          "expected": "JSON array of feature objects with all fields",
+          "observed": "Valid JSON output with missionId, features array, byStatus counts, totalCount"
+        },
+        {
+          "action": "Verify JSON structure",
+          "expected": "JSON contains: {missionId, features: [...], byStatus: {...}, totalCount}",
+          "observed": "JSON structure matches expected schema with all feature objects including id, description, status, skillName, preconditions, expectedBehavior, fulfills"
+        },
+        {
+          "action": "Validate JSON is parseable",
+          "expected": "Output can be parsed with `JSON.parse`",
+          "observed": "JSON successfully parsed, 4 features in array"
+        }
+      ],
+      "evidence": {
+        "files": [
+          "m2-planning/feature-tests/VAL-M2-FEATURE-006-list-json.json"
+        ],
+        "jsonOutput": "{\n  \"missionId\": \"2026-03-29-tdxmcb\",\n  \"features\": [...],\n  \"byStatus\": {\"pending\": 4},\n  \"totalCount\": 4\n}"
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "The --preconditions, --expected-behavior, and --fulfills flags require space-separated values which can be tricky with multi-word items. Single words work fine, but multi-word preconditions need careful quoting.",
+      "resolved": true,
+      "resolution": "Used quoted strings with spaces for multi-word preconditions: --preconditions 'Database ready' 'API defined'",
+      "affectedAssertions": ["VAL-M2-FEATURE-002", "VAL-M2-FEATURE-003"]
+    }
+  ],
+  "blockers": [],
+  "summary": "Tested 6 assertions: All 6 passed (VAL-M2-FEATURE-001 through VAL-M2-FEATURE-006). The feature add and list commands work correctly with all optional flags. Table formatting is clean, JSON output is valid and parseable."
+}

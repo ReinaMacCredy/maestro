@@ -130,11 +130,13 @@ export async function listDirs(dir: string): Promise<string[]> {
 
 /**
  * Recursively enumerate all files under `dir` as absolute paths, sorted
- * alphabetically at each directory level. Throws if `dir` does not exist.
+ * alphabetically at each directory level. Collation is pinned to "en" so
+ * generated-embed drift checks stay stable across CI runners regardless
+ * of the runner's LANG/LC_ALL.
  */
 export async function listFilesRecursive(dir: string): Promise<string[]> {
   const entries = (await readdir(dir, { withFileTypes: true }))
-    .sort((left, right) => left.name.localeCompare(right.name));
+    .sort((left, right) => left.name.localeCompare(right.name, "en"));
   const files: string[] = [];
   for (const entry of entries) {
     const absolute = join(dir, entry.name);

@@ -1,0 +1,39 @@
+{
+  "milestone": "m2-planning",
+  "round": 1,
+  "status": "pass",
+  "assertionsSummary": {
+    "total": 22,
+    "passed": 22,
+    "failed": 0,
+    "blocked": 0
+  },
+  "passedAssertions": [
+    "VAL-M2-INIT-001",
+    "VAL-M2-INIT-002",
+    "VAL-M2-INIT-003",
+    "VAL-M2-CREATE-001",
+    "VAL-M2-CREATE-002",
+    "VAL-M2-CREATE-003",
+    "VAL-M2-CREATE-004",
+    "VAL-M2-CREATE-005",
+    "VAL-M2-PLAN-001",
+    "VAL-M2-PLAN-002",
+    "VAL-M2-PLAN-003",
+    "VAL-M2-PLAN-004",
+    "VAL-M2-FEATURE-001",
+    "VAL-M2-FEATURE-002",
+    "VAL-M2-FEATURE-003",
+    "VAL-M2-FEATURE-004",
+    "VAL-M2-FEATURE-005",
+    "VAL-M2-FEATURE-006",
+    "VAL-M2-VALIDATE-001",
+    "VAL-M2-VALIDATE-002",
+    "VAL-M2-VALIDATE-003",
+    "VAL-M2-VALIDATE-004"
+  ],
+  "failedAssertions": [],
+  "blockedAssertions": [],
+  "appliedUpdates": [],
+  "previousRound": null
+}

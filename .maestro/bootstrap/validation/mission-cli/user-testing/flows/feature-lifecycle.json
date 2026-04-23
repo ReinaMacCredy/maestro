@@ -1,0 +1,107 @@
+{
+  "groupId": "feature-lifecycle",
+  "testedAt": "2026-03-30T00:30:00Z",
+  "isolation": {
+    "tempDirectory": "/tmp/test-mission-cli",
+    "missionId": "2026-03-30-002"
+  },
+  "toolsUsed": ["CLI via Bun.spawn"],
+  "assertions": [
+    {
+      "id": "VAL-FEATURE-001",
+      "title": "Feature listing stays mission-scoped and filterable",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run feature list without --mission",
+          "expected": "Command should fail with missing required flag",
+          "observed": "Exit code 1, error: required option '--mission <id>' not specified"
+        },
+        {
+          "action": "Run feature list --mission <id>",
+          "expected": "List all 5 features for the mission",
+          "observed": "Listed 5 features with stable ordering (total: 5, filtered: 5)"
+        },
+        {
+          "action": "Run feature list --mission <id> --milestone milestone-1",
+          "expected": "Filter to milestone-1 features only (3 features)",
+          "observed": "Listed 3 features from milestone-1 (total: 5, filtered: 3)"
+        },
+        {
+          "action": "Run feature list --mission <id> --milestone milestone-2",
+          "expected": "Filter to milestone-2 features only (2 features)",
+          "observed": "Listed 2 features from milestone-2 (total: 5, filtered: 2)"
+        },
+        {
+          "action": "Run feature list --mission <id> --status pending",
+          "expected": "Filter to pending status features",
+          "observed": "Listed pending features with correct filtering (total: 5, filtered: 4)"
+        },
+        {
+          "action": "Run feature list --mission <id> --milestone milestone-1 --status pending",
+          "expected": "Combine milestone and status filters",
+          "observed": "Listed 3 pending features from milestone-1 (combined filter works)"
+        }
+      ],
+      "evidence": {
+        "logFiles": [
+          "mission-cli/feature-lifecycle/VAL-FEATURE-001-list-missing-mission.txt",
+          "mission-cli/feature-lifecycle/VAL-FEATURE-001-list-base.txt",
+          "mission-cli/feature-lifecycle/VAL-FEATURE-001-list-milestone-1.txt",
+          "mission-cli/feature-lifecycle/VAL-FEATURE-001-list-milestone-2.txt",
+          "mission-cli/feature-lifecycle/VAL-FEATURE-001-list-status-pending.txt",
+          "mission-cli/feature-lifecycle/VAL-FEATURE-001-list-combined-filters.txt"
+        ]
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-FEATURE-002",
+      "title": "Feature updates persist status and worker reports safely",
+      "status": "pass",
+      "steps": [
+        {
+          "action": "Run feature update feat-001 --status in_progress",
+          "expected": "Status transition from pending to in_progress succeeds",
+          "observed": "Feature updated successfully, status: in_progress, exit code 0"
+        },
+        {
+          "action": "Verify status persisted via list --status in_progress",
+          "expected": "feat-001 appears in in_progress list",
+          "observed": "feat-001 listed with in_progress status (filtered: 1)"
+        },
+        {
+          "action": "Run feature update feat-002 --status in_progress --report '{inline-json}'",
+          "expected": "Inline report persisted and stored in workers/feat-002/report.json",
+          "observed": "Feature updated, report persisted to workers/feat-002/report.json"
+        },
+        {
+          "action": "Create report file and update feat-003 --report @file.json",
+          "expected": "File report read and persisted to workers/feat-003/report.json",
+          "observed": "File report successfully parsed and persisted"
+        },
+        {
+          "action": "Update feat-002 to completed with report, then transition back to pending",
+          "expected": "Retry transition preserves last stored report",
+          "observed": "Feature updated to pending, original report preserved in feature data"
+        }
+      ],
+      "evidence": {
+        "logFiles": [
+          "mission-cli/feature-lifecycle/VAL-FEATURE-002-update-status.txt",
+          "mission-cli/feature-lifecycle/VAL-FEATURE-002-verify-status.txt",
+          "mission-cli/feature-lifecycle/VAL-FEATURE-002-inline-report.txt",
+          "mission-cli/feature-lifecycle/VAL-FEATURE-002-file-report.txt",
+          "mission-cli/feature-lifecycle/VAL-FEATURE-002-retry-preserves-report.txt"
+        ],
+        "reportFiles": [
+          "mission-cli/feature-lifecycle/VAL-FEATURE-002-report-feat-002.json"
+        ]
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "summary": "All assertions passed. VAL-FEATURE-001: Feature listing is correctly mission-scoped and supports milestone and status filters with stable ordering. VAL-FEATURE-002: Feature updates properly persist status transitions, worker reports (inline and file-based) are stored at workers/{featureId}/report.json, and retry transitions preserve the last stored report."
+}

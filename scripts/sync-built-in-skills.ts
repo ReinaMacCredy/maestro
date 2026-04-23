@@ -14,6 +14,8 @@ import { join, relative, sep } from "node:path";
 import { listFilesRecursive, readText } from "@/shared/lib/fs.js";
 import { decodeSkillDirectoryName } from "@/shared/lib/skill-path.js";
 
+const UTF8_STRICT = new TextDecoder("utf-8", { fatal: true });
+
 const ROOT = join(import.meta.dir, "..");
 const SOURCE_DIR = join(ROOT, "skills", "built-in");
 const TARGET_FILE = join(ROOT, "src", "infra", "domain", "built-in-skill-templates.ts");
@@ -32,7 +34,7 @@ async function collectTemplates(): Promise<SkillTemplate[]> {
   const skillDirs = (await readdir(SOURCE_DIR, { withFileTypes: true }))
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
-    .sort((left, right) => left.localeCompare(right));
+    .sort((left, right) => left.localeCompare(right, "en"));
 
   const templates: SkillTemplate[] = [];
   for (const dirName of skillDirs) {
@@ -42,12 +44,24 @@ async function collectTemplates(): Promise<SkillTemplate[]> {
     const files: SkillFile[] = [];
     for (const absolute of absolutePaths) {
       const relativePath = relative(skillDir, absolute).split(sep).join("/");
-      const content = normalizeLineEndings(await readFile(absolute, "utf8")) ?? "";
+      const content = normalizeLineEndings(await readStrictUtf8(absolute)) ?? "";
       files.push({ path: relativePath, content });
     }
     templates.push({ name, files });
   }
   return templates;
+}
+
+async function readStrictUtf8(path: string): Promise<string> {
+  // Fatal decode rejects non-UTF-8 files (e.g., a stray binary dropped under
+  // skills/built-in/) so the sync fails loudly instead of silently embedding
+  // U+FFFD-mangled content into the generated template module.
+  const bytes = await readFile(path);
+  try {
+    return UTF8_STRICT.decode(bytes);
+  } catch {
+    throw new Error(`Non-UTF-8 content under skills/built-in/: ${relative(ROOT, path)}`);
+  }
 }
 
 function renderModule(templates: readonly SkillTemplate[]): string {
