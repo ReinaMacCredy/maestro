@@ -1,4 +1,6 @@
+import { userInfo } from "node:os";
 import { Command } from "commander";
+import { fstatSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -128,6 +130,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
   contractCmd
     .command("edit <ref>")
     .description("Edit a draft contract before lock")
+    .option("--from <path>", "Load YAML from a file or named template ('-' for stdin)")
     .option("--editor <cmd>", "Open an editor command to update the draft YAML")
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
@@ -137,7 +140,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const contract = await showContract(services.contractStore, ref);
-      const template = await loadContractDraftTemplate(undefined, opts.editor, renderEditableContract(contract));
+      const template = await loadContractDraftTemplate(opts.from, opts.editor, renderEditableContract(contract));
       const edited = await editContract(services.contractStore, {
         ref,
         intent: readTemplateIntent(template),
@@ -154,6 +157,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
     .command("amend <ref>")
     .description("Amend a locked contract and record why it changed")
     .requiredOption("--reason <text>", "Why the contract changed")
+    .option("--from <path>", "Load YAML from a file or named template ('-' for stdin)")
     .option("--editor <cmd>", "Open an editor command to update the draft YAML")
     .option("--session <id>", "Use an explicit session id instead of auto-detection")
     .option("--silent", "Print only '<id> [ok]' (for scripts)")
@@ -162,7 +166,7 @@ export function registerContractCommand(taskCmd: Command, program: Command): voi
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
       const contract = await showContract(services.contractStore, ref);
-      const template = await loadContractDraftTemplate(undefined, opts.editor, renderEditableContract(contract));
+      const template = await loadContractDraftTemplate(opts.from, opts.editor, renderEditableContract(contract));
       const amended = await amendContract(services.contractStore, {
         ref,
         actorId: await resolveActiveContractActor(ref, opts.session),
@@ -382,17 +386,35 @@ async function loadContractDraftTemplate(
   editorCommand: string | undefined,
   initialContent = defaultContractTemplate(),
 ): Promise<ContractDraftTemplate> {
-  if (!fromPath && !editorCommand && !process.env.EDITOR && !process.env.VISUAL) {
-    throw new MaestroError("Provide --from <path> or --editor <cmd> to create a contract draft", [
+  const envEditor = process.env.EDITOR ?? process.env.VISUAL;
+  const autoDetectedStdin = fromPath === undefined
+    && editorCommand === undefined
+    && hasRealStdinPayload();
+  // Some runners hand the child an empty pipe/file on fd0. If we auto-read
+  // that and skip the editor, edit/amend silently collapse to an empty draft.
+  const autoDetectedDraft = autoDetectedStdin
+    ? await readDraftSource("-")
+    : undefined;
+  // Auto-detect real piped/redirected stdin when the caller passed neither
+  // --from nor --editor. Lets `cat contract.yaml | maestro task contract new`
+  // and `maestro task contract new <id> < contract.yaml` work without spelling
+  // `--from -`. Keep non-empty stdin ahead of an ambient editor, but let the
+  // editor win when the inherited stdin is just an empty placeholder.
+  const resolvedFromPath = fromPath
+    ?? (autoDetectedDraft !== undefined && autoDetectedDraft.trim().length > 0 ? "-" : undefined);
+
+  if (!resolvedFromPath && !editorCommand && !envEditor) {
+    throw new MaestroError("Provide --from <path>, pipe YAML on stdin, or pass --editor <cmd>", [
       "Example: maestro task contract new <id> --from contract.yaml",
+      "Example: cat contract.yaml | maestro task contract new <id>",
       "Or set $EDITOR and rerun without --from",
     ]);
   }
 
   const resolvedEditor = editorCommand
-    ?? (fromPath ? undefined : (process.env.EDITOR ?? process.env.VISUAL));
-  const baseContent = fromPath
-    ? await readDraftSource(fromPath)
+    ?? (resolvedFromPath ? undefined : envEditor);
+  const baseContent = resolvedFromPath
+    ? (resolvedFromPath === "-" && autoDetectedDraft !== undefined ? autoDetectedDraft : await readDraftSource(resolvedFromPath))
     : initialContent;
   const finalContent = resolvedEditor
     ? await editContractDraft(baseContent, resolvedEditor)
@@ -405,6 +427,15 @@ async function loadContractDraftTemplate(
     throw new MaestroError(`Cannot parse contract draft YAML: ${detail}`, [
       "Fix the YAML syntax in the template and retry",
     ]);
+  }
+}
+
+function hasRealStdinPayload(): boolean {
+  try {
+    const stat = fstatSync(0);
+    return stat.isFIFO() || stat.isFile();
+  } catch {
+    return false;
   }
 }
 
@@ -892,7 +923,25 @@ async function resolveOptionalContractActorSessionId(
 
   const services = getServices();
   const session = await services.sessionDetect.detect(process.cwd());
-  return session ? buildTaskOwnerId(session.agent, session.sessionId) : undefined;
+  if (session) {
+    return buildTaskOwnerId(session.agent, session.sessionId);
+  }
+  // Synthesize the same per-user fallback as the task command so task ownership
+  // established in one shell can be matched by contract-mutating commands in
+  // another. Without this, the synthesized `local-<user>` assignee on a task
+  // is rejected by contract new/edit/amend because this resolver returned
+  // undefined for the caller.
+  return buildTaskOwnerId("local", fallbackContractUserId());
+}
+
+function fallbackContractUserId(): string {
+  const envUser = (process.env.USER ?? process.env.USERNAME ?? "").trim();
+  if (envUser.length > 0) return envUser;
+  try {
+    return userInfo().username;
+  } catch {
+    return "default";
+  }
 }
 
 async function resolveContractRef(ref: string): Promise<Contract | undefined> {

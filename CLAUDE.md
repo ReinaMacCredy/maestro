@@ -1,12 +1,28 @@
 # Project Instructions
 @AGENTS.md
 
+## The skill bundle is the spec
+
+`skills/bundled/` (the 5 `maestro-*` skills installed to `~/.claude/skills/` and `~/.codex/skills/` by `maestro install`) is the **source of truth** for maestro's agent-facing CLI. The CLI must match what those skills describe.
+
+- **When the CLI diverges from a skill, fix the CLI.** Do not "document around" the mismatch in the skill. The skills are what agents read; they must stay clean and authoritative.
+- **Never edit a skill to match surprising CLI behavior.** If a skill needs to change (new section, new flag, renamed verb, semantic shift), stop and ask the user first. Skill content is behavioral contract, not scratch space.
+- **Skill drafts belong in conversation, not in files.** Adjustments go through user approval before landing in `skills/bundled/`.
+
+## Always release + link locally when testing
+
+Every test/verification loop:
+```bash
+bun run release:local          # rebuild dist/maestro + install to PATH
+```
+Not `bun run build` alone. `release:local` is the only way to exercise the installed binary (`maestro` on `PATH`) against the current source. Testing only `./dist/maestro` can miss install-path or binary-packaging regressions.
+
 ## Quick Reference
 
 ### Build and verify
 ```bash
 bun run build && ./dist/maestro --version
-bun run release:local          # rebuild + install to PATH
+bun run release:local          # rebuild + install to PATH (preferred for verification)
 ```
 
 ### TUI preview (agent-friendly)

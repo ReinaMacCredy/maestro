@@ -22,8 +22,8 @@ export class ShellGitAdapter implements GitPort {
     const changedFiles = statusResult.stdout
       ? statusResult.stdout
           .split("\n")
-          .map((line) => line.slice(3).trim())
-          .filter(Boolean)
+          .map(parsePorcelainPath)
+          .filter((value): value is string => value !== undefined)
       : [];
     const workingTreeClean = statusResult.stdout === "";
 
@@ -125,6 +125,35 @@ function parseGitFileChanges(output: string): GitFileChange[] {
         kind: classifyGitFileChange(status),
       } satisfies GitFileChange;
     });
+}
+
+/**
+ * Parse a single `git status --porcelain` line into its path.
+ *
+ * Porcelain format: `XY <path>` where X is index status, Y is worktree
+ * status, and there is always one space separator before the path.
+ * Renames use `XY <orig> -> <new>`.
+ *
+ * We cannot simply `slice(3)` because `execSpawn` trims the overall stdout,
+ * which strips the leading space from the first line when X is absent
+ * (`" M path"` becomes `"M path"`). Instead, match the XY-status pattern
+ * and return the filename portion. If the line does not match the porcelain
+ * shape (empty or malformed), return undefined so it is filtered out.
+ */
+function parsePorcelainPath(line: string): string | undefined {
+  if (line.length === 0) return undefined;
+  // Pad a missing leading space so the slice offset is stable regardless of
+  // whether the first character is whitespace (trimmed by the shell).
+  const padded = line.length >= 3 && line[2] === " " ? line : " " + line;
+  const body = padded.slice(3).trim();
+  if (body.length === 0) return undefined;
+  // Rename/copy: "ORIG -> NEW". Prefer the new path. Skip the regex on the
+  // common path to avoid per-line allocation.
+  if (body.includes(" -> ")) {
+    const renameMatch = body.match(/^(.*?) -> (.+)$/);
+    if (renameMatch) return renameMatch[2];
+  }
+  return body;
 }
 
 function classifyGitFileChange(status: string): GitFileChange["kind"] {

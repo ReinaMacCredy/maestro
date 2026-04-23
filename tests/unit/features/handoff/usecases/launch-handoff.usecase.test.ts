@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { launchHandoff, type HandoffLaunchPort, type HandoffLaunchRecord, type LaunchStorePort } from "@/features/handoff";
+import type { Feature, Mission } from "@/features/mission";
 import type { GitPort } from "@/infra/ports/git.port.js";
 import { mockAssertionStore, mockFeatureStore, mockMissionStore } from "../../../../helpers/mocks.js";
 
@@ -110,7 +111,10 @@ describe("launchHandoff", () => {
     expect(result.record.pid).toBe(4321);
     expect(launchCalls[0]?.model).toBe("gpt-5.4");
     expect(launchCalls[0]?.name).toContain("[Handoff]");
+    expect(launchCalls[0]?.prompt).toContain("## Handoff Startup");
+    expect(launchCalls[0]?.prompt).toContain("maestro handoff pickup --id 2026-04-20-001 --json");
     expect(result.prompt).toContain("## Task");
+    expect(result.prompt).toContain("maestro handoff pickup --id 2026-04-20-001 --json");
   });
 
   it("rejects --base without --worktree", async () => {
@@ -242,5 +246,314 @@ describe("launchHandoff", () => {
 
     expect(launchStore.updates.at(-1)?.status).toBe("failed");
     expect(launchStore.updates.at(-1)?.exitCode).toBeUndefined();
+  });
+
+  describe("--prompt-file bypass", () => {
+    it("uses the file contents verbatim as the prompt and skips auto-generation", async () => {
+      const briefPath = `/tmp/maestro-prompt-file-test-${Date.now()}.md`;
+      const briefContent = "## Task\n\nHand-written brief body.\n\n## Constraints\n- Do not edit.\n";
+      await Bun.write(briefPath, briefContent);
+
+      const launchStore = makeLaunchStore();
+      const codexLauncher: HandoffLaunchPort = {
+        agent: "codex",
+        async launch(request) {
+          expect(request.prompt).toContain("maestro handoff pickup --id 2026-04-20-001 --json");
+          expect(request.prompt).toContain(briefContent);
+          return {
+            command: ["codex", "exec", "--model", request.model, request.prompt],
+            pid: 1234,
+          };
+        },
+      };
+
+      const result = await launchHandoff({
+        missionStore: mockMissionStore([]),
+        featureStore: mockFeatureStore("2026-04-20-001", []),
+        assertionStore: mockAssertionStore("2026-04-20-001", []),
+        git: makeGit(),
+        launchStore,
+        launchers: {
+          codex: codexLauncher,
+          claude: { agent: "claude", async launch() { throw new Error("not used"); } },
+        },
+      }, {
+        cwd: "/tmp/project",
+        task: "Ignored when promptFile is set",
+        agent: "codex",
+        wait: false,
+        promptFile: briefPath,
+      });
+
+      expect(result.prompt).toContain("maestro handoff pickup --id 2026-04-20-001 --json");
+      expect(result.prompt).toContain(briefContent);
+      expect(launchStore.updates[0]?.task).toBe("Ignored when promptFile is set");
+      // Note: the supplied brief remains embedded in the launched prompt after
+      // the startup pickup preamble is injected.
+    });
+
+    it("preserves mission refs on the launch record when --prompt-file is set", async () => {
+      const briefPath = `/tmp/maestro-prompt-file-refs-${Date.now()}.md`;
+      await Bun.write(briefPath, "## Task\n\nUse the supplied prompt.\n");
+
+      const mission: Mission = {
+        id: "2026-04-20-refs",
+        status: "executing",
+        title: "Prompt file launch",
+        description: "Keep mission linkage metadata on prompt-file launches.",
+        milestones: [
+          {
+            id: "m1",
+            title: "Launch",
+            description: "Ship the prompt-file path without losing refs.",
+            order: 0,
+            featureIds: ["f1"],
+          },
+        ],
+        features: ["f1"],
+        createdAt: "2026-04-20T00:00:00.000Z",
+        updatedAt: "2026-04-20T00:00:00.000Z",
+      };
+      const feature: Feature = {
+        id: "f1",
+        missionId: mission.id,
+        milestoneId: "m1",
+        status: "in-progress",
+        title: "Keep launch refs",
+        description: "Preserve mission linkage when using prompt files.",
+        agentType: "codex-cli",
+        verificationSteps: [],
+        dependsOn: [],
+        fulfills: [],
+        createdAt: "2026-04-20T00:00:00.000Z",
+        updatedAt: "2026-04-20T00:00:00.000Z",
+      };
+
+      const launchStore = makeLaunchStore();
+      const result = await launchHandoff({
+        missionStore: mockMissionStore([mission]),
+        featureStore: mockFeatureStore(mission.id, [feature]),
+        assertionStore: mockAssertionStore(mission.id, []),
+        git: makeGit(),
+        launchStore,
+        launchers: {
+          codex: {
+            agent: "codex",
+            async launch(request) {
+              return {
+                command: ["codex", "exec", "--model", request.model, request.prompt],
+                pid: 1234,
+              };
+            },
+          },
+          claude: { agent: "claude", async launch() { throw new Error("not used"); } },
+        },
+      }, {
+        cwd: "/tmp/project",
+        task: "Ignored when promptFile is set",
+        agent: "codex",
+        wait: false,
+        promptFile: briefPath,
+      });
+
+      expect(result.record.refs).toMatchObject({
+        missionId: mission.id,
+        featureId: feature.id,
+        milestoneId: "m1",
+      });
+      expect(launchStore.updates[0]?.refs).toMatchObject({
+        missionId: mission.id,
+        featureId: feature.id,
+        milestoneId: "m1",
+      });
+    });
+
+    it("throws a MaestroError when --prompt-file does not exist", async () => {
+      await expect(
+        launchHandoff({
+          missionStore: mockMissionStore([]),
+          featureStore: mockFeatureStore("2026-04-20-001", []),
+          assertionStore: mockAssertionStore("2026-04-20-001", []),
+          git: makeGit(),
+          launchStore: makeLaunchStore(),
+          launchers: {
+            codex: { agent: "codex", async launch() { throw new Error("not used"); } },
+            claude: { agent: "claude", async launch() { throw new Error("not used"); } },
+          },
+        }, {
+          cwd: "/tmp/project",
+          task: "probe",
+          agent: "codex",
+          wait: false,
+          promptFile: "/tmp/maestro-prompt-file-definitely-not-here-xyz.md",
+        }),
+      ).rejects.toThrow("--prompt-file not found");
+    });
+
+    it("does not create a worktree before validating --prompt-file", async () => {
+      let createWorktreeCalls = 0;
+      await expect(
+        launchHandoff({
+          missionStore: mockMissionStore([]),
+          featureStore: mockFeatureStore("2026-04-20-001", []),
+          assertionStore: mockAssertionStore("2026-04-20-001", []),
+          git: {
+            ...makeGit(),
+            async createWorktree(_cwd, input) {
+              createWorktreeCalls += 1;
+              return {
+                slug: input.slug,
+                baseBranch: input.baseBranch,
+                branch: `${input.branchPrefix}/${input.slug}`,
+                path: `/tmp/${input.slug}`,
+              };
+            },
+          },
+          launchStore: makeLaunchStore(),
+          launchers: {
+            codex: { agent: "codex", async launch() { throw new Error("not used"); } },
+            claude: { agent: "claude", async launch() { throw new Error("not used"); } },
+          },
+        }, {
+          cwd: "/tmp/project",
+          task: "probe",
+          agent: "codex",
+          wait: false,
+          worktree: "bad-prompt-worktree",
+          promptFile: "/tmp/maestro-prompt-file-definitely-not-here-xyz.md",
+        }),
+      ).rejects.toThrow("--prompt-file not found");
+
+      expect(createWorktreeCalls).toBe(0);
+    });
+
+    it("throws a MaestroError when --prompt-file points at a directory", async () => {
+      const dirPath = `/tmp/maestro-prompt-file-dir-${Date.now()}`;
+      await (await import("node:fs/promises")).mkdir(dirPath, { recursive: true });
+
+      try {
+        await expect(
+          launchHandoff({
+            missionStore: mockMissionStore([]),
+            featureStore: mockFeatureStore("2026-04-20-001", []),
+            assertionStore: mockAssertionStore("2026-04-20-001", []),
+            git: makeGit(),
+            launchStore: makeLaunchStore(),
+            launchers: {
+              codex: { agent: "codex", async launch() { throw new Error("not used"); } },
+              claude: { agent: "claude", async launch() { throw new Error("not used"); } },
+            },
+          }, {
+            cwd: "/tmp/project",
+            task: "probe",
+            agent: "codex",
+            wait: false,
+            promptFile: dirPath,
+          }),
+        ).rejects.toThrow("--prompt-file is a directory");
+      } finally {
+        await (await import("node:fs/promises")).rm(dirPath, { recursive: true, force: true });
+      }
+    });
+
+    it("throws a MaestroError when --prompt-file points at a FIFO", async () => {
+      // `mkfifo` is POSIX-only; skip on Windows runners where the syscall is
+      // unavailable. The guard itself (stats.isFile() === false) still runs
+      // on Windows for device paths, but we can't build a synthetic special
+      // file there from the test.
+      if (process.platform === "win32") return;
+
+      const fifoPath = `/tmp/maestro-prompt-file-fifo-${Date.now()}`;
+      const { spawnSync } = await import("node:child_process");
+      const mk = spawnSync("mkfifo", [fifoPath]);
+      if (mk.status !== 0) return;
+
+      try {
+        await expect(
+          launchHandoff({
+            missionStore: mockMissionStore([]),
+            featureStore: mockFeatureStore("2026-04-20-001", []),
+            assertionStore: mockAssertionStore("2026-04-20-001", []),
+            git: makeGit(),
+            launchStore: makeLaunchStore(),
+            launchers: {
+              codex: { agent: "codex", async launch() { throw new Error("not used"); } },
+              claude: { agent: "claude", async launch() { throw new Error("not used"); } },
+            },
+          }, {
+            cwd: "/tmp/project",
+            task: "probe",
+            agent: "codex",
+            wait: false,
+            promptFile: fifoPath,
+          }),
+        ).rejects.toThrow("--prompt-file is not a regular file");
+      } finally {
+        await (await import("node:fs/promises")).rm(fifoPath, { force: true });
+      }
+    });
+
+    it("throws a MaestroError when --prompt-file is empty", async () => {
+      const briefPath = `/tmp/maestro-prompt-file-empty-${Date.now()}.md`;
+      await Bun.write(briefPath, "   \n\n");
+
+      await expect(
+        launchHandoff({
+          missionStore: mockMissionStore([]),
+          featureStore: mockFeatureStore("2026-04-20-001", []),
+          assertionStore: mockAssertionStore("2026-04-20-001", []),
+          git: makeGit(),
+          launchStore: makeLaunchStore(),
+          launchers: {
+            codex: { agent: "codex", async launch() { throw new Error("not used"); } },
+            claude: { agent: "claude", async launch() { throw new Error("not used"); } },
+          },
+        }, {
+          cwd: "/tmp/project",
+          task: "probe",
+          agent: "codex",
+          wait: false,
+          promptFile: briefPath,
+        }),
+      ).rejects.toThrow("--prompt-file is empty");
+    });
+
+    it("resolves a relative --prompt-file path against cwd", async () => {
+      // Write the brief to the test cwd and pass a relative path. This verifies
+      // the resolve() behavior without requiring a specific project directory
+      // layout.
+      const briefName = `maestro-prompt-file-rel-${Date.now()}.md`;
+      const cwd = process.cwd();
+      await Bun.write(`${cwd}/${briefName}`, "## Task\nRelative probe.\n");
+
+      try {
+        const result = await launchHandoff({
+          missionStore: mockMissionStore([]),
+          featureStore: mockFeatureStore("2026-04-20-001", []),
+          assertionStore: mockAssertionStore("2026-04-20-001", []),
+          git: makeGit(),
+          launchStore: makeLaunchStore(),
+          launchers: {
+            codex: {
+              agent: "codex",
+              async launch(req) {
+                return { command: ["codex", req.prompt], pid: 1 };
+              },
+            },
+            claude: { agent: "claude", async launch() { throw new Error("not used"); } },
+          },
+        }, {
+          cwd,
+          task: "probe",
+          agent: "codex",
+          wait: false,
+          promptFile: briefName,
+        });
+
+        expect(result.prompt).toContain("Relative probe");
+      } finally {
+        await Bun.file(`${cwd}/${briefName}`).delete?.();
+      }
+    });
   });
 });

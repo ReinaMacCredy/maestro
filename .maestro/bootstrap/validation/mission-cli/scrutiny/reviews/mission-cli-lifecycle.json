@@ -1,0 +1,31 @@
+{
+  "featureId": "mission-cli-lifecycle",
+  "status": "pass",
+  "issues": [],
+  "sharedStateObservations": [
+    {
+      "type": "pattern",
+      "description": "CLI commands use resolveJsonFlag() helper for consistent --json flag handling across root, group, and leaf levels",
+      "location": "src/commands/mission.command.ts",
+      "appliesTo": ["mission-cli-lifecycle", "feature-cli-lifecycle", "worker-prompt-generation"]
+    },
+    {
+      "type": "pattern",
+      "description": "Commands use MaestroError with helpful hints for validation failures and user guidance",
+      "location": "src/commands/mission.command.ts",
+      "appliesTo": ["mission-cli-lifecycle", "feature-cli-lifecycle"]
+    },
+    {
+      "type": "convention",
+      "description": "Mission IDs use format YYYY-MM-DD-### with zero-padded sequence numbers",
+      "location": "src/domain/mission-id.ts"
+    }
+  ],
+  "notes": [
+    "Mission lifecycle commands fully implemented with create, list, show, approve, reject, update",
+    "Supports both file and stdin input for mission creation",
+    "Proper state transition validation with helpful error messages",
+    "Human-readable and JSON output modes supported",
+    "All 440 tests passing including integration tests for mission commands"
+  ]
+}

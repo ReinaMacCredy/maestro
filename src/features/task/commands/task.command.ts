@@ -1,3 +1,5 @@
+import { homedir, userInfo } from "node:os";
+import { basename } from "node:path";
 import { Command, Option } from "commander";
 import { getServices } from "@/services.js";
 import { MaestroError } from "@/shared/errors.js";
@@ -291,7 +293,8 @@ function registerPlanCommand(taskCmd: Command, program: Command): void {
         : result.created;
 
       output(isJson, { ...result, created, startedTaskId }, (r) => {
-        const lines = [`[ok] ${r.created.length} task(s) created`];
+        const verb = r.replayed ? "already present (replayed)" : "created";
+        const lines = [`[ok] ${r.created.length} task(s) ${verb}`];
         for (const task of r.created) {
           const label = task.name ? `${task.name}  --> ${task.id}` : `  --> ${task.id}`;
           lines.push(`  ${label}`);
@@ -362,7 +365,7 @@ function registerShowCommand(taskCmd: Command, program: Command): void {
       if (isJson) {
         const [task, openHandoffs] = await Promise.all([
           showTask(services.taskStore, id),
-          listOpenHandoffsForTask(services.launchStore, id),
+          listOpenHandoffsForTask(services.launchStore, id, { taskStore: services.taskStore }),
         ]);
         output(true, { ...task, openHandoffs }, formatTaskDetail);
         return;
@@ -374,9 +377,23 @@ function registerShowCommand(taskCmd: Command, program: Command): void {
           continuationStore: services.taskContinuationStore,
           continuationHistory: services.taskContinuationHistory,
         }, id),
-        listOpenHandoffsForTask(services.launchStore, id),
+        listOpenHandoffsForTask(services.launchStore, id, { taskStore: services.taskStore }),
       ]);
-      output(false, view, (v) => {
+      // Hide blockers that have already completed: the runtime treats them as
+      // resolved (they no longer gate readiness), so showing them as active
+      // "Blocked by" entries misleads. Raw graph history still lives in
+      // `show --json` and `task list --json` for agents that need it.
+      const blockerTasks = await Promise.all(
+        view.task.blockedBy.map((blockerId) => services.taskStore.get(blockerId)),
+      );
+      const activeBlockers = view.task.blockedBy.filter((_, i) => {
+        const blocker = blockerTasks[i];
+        return blocker === undefined || blocker.status !== "completed";
+      });
+      const filteredView: typeof view = activeBlockers.length !== view.task.blockedBy.length
+        ? { ...view, task: { ...view.task, blockedBy: activeBlockers } }
+        : view;
+      output(false, filteredView, (v) => {
         const lines = [...formatTaskShowView(v)];
         if (openHandoffs.length > 0) {
           lines.push(`  Open handoffs: ${openHandoffs.join(", ")}`);
@@ -488,6 +505,31 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
       }
 
       const sessionId = await resolveSessionAndReleaseStale(opts.session);
+
+      // Hard rule 1: one task in_progress per session unless --force. Enforce
+      // when transitioning to in_progress and the current session already
+      // holds another unresolved task.
+      if (
+        patch.status === "in_progress"
+        && previous?.status !== "in_progress"
+        && opts.force !== true
+        && sessionId !== undefined
+      ) {
+        const owned = await listTasks(services.taskStore, { assignee: sessionId });
+        const held = owned.filter((task) => task.id !== id && task.status === "in_progress");
+        if (held.length > 0) {
+          const first = held[0]!.id;
+          throw new MaestroError(
+            `You already hold ${first}; finish or unclaim it before starting ${id}`,
+            [
+              `Held task ids: ${held.map((t) => t.id).join(", ")}`,
+              `Run 'maestro task update ${first} --status completed --reason "..."' when finished`,
+              `Run 'maestro task unclaim ${first}' to release without completing`,
+              `Pass '--force' to start ${id} while holding ${first}`,
+            ],
+          );
+        }
+      }
       if (
         previous?.status === "completed"
         && patch.status === "completed"
@@ -507,6 +549,17 @@ function registerUpdateCommand(taskCmd: Command, program: Command): void {
       }
       if (previous?.status === "completed" && patch.status === "completed") {
         throw completedTaskUpdateRequiresReopen(id);
+      }
+      // Hard rule 2: every first-time completion carries --reason. Enforce at
+      // the CLI so receipts cannot be written with a null reason silently.
+      if (
+        patch.status === "completed"
+        && (typeof opts.reason !== "string" || opts.reason.trim().length === 0)
+      ) {
+        throw new MaestroError("Completion requires --reason", [
+          "Pass a short one-line outcome: --reason \"<one-line outcome>\"",
+          "The reason is persisted verbatim as shared context for future sessions",
+        ]);
       }
       if (patch.status === "completed" && previous) {
         await enforceContractCompletionPolicy(previous, patch, {
@@ -1011,6 +1064,8 @@ function registerCloseCommand(taskCmd: Command): void {
     });
 }
 
+let warnedAboutFallbackSession = false;
+
 async function resolveOwnershipSessionId(explicitSessionId: string | undefined): Promise<string> {
   if (explicitSessionId !== undefined) {
     const trimmed = explicitSessionId.trim();
@@ -1024,23 +1079,57 @@ async function resolveOwnershipSessionId(explicitSessionId: string | undefined):
 
   const services = getServices();
   const session = await services.sessionDetect.detect(process.cwd());
-  if (!session) {
-    throw new MaestroError("Could not detect current session for task ownership", [
-      "Set CODEX_THREAD_ID or run from an agent environment",
-      "Or pass --session <id> for an explicit operator or CI override",
-    ]);
+  if (session) {
+    return buildTaskOwnerId(session.agent, session.sessionId);
   }
-  return buildTaskOwnerId(session.agent, session.sessionId);
+
+  // No detected agent session. Synthesize a per-user stable fallback so the
+  // command does not block AND so subsequent invocations from the same user
+  // (across shells, across tool calls) see the same owner id. Agents that
+  // need multi-user coordination should export CODEX_THREAD_ID / CLAUDECODE
+  // or pass --session explicitly.
+  if (!warnedAboutFallbackSession) {
+    warnedAboutFallbackSession = true;
+    process.stderr.write(
+      "[info] no agent session detected; using a per-user synthesized session\n"
+      + "       (export CODEX_THREAD_ID / CLAUDECODE or pass --session <id> for coordination)\n",
+    );
+  }
+  return buildTaskOwnerId("local", fallbackSessionUserId());
+}
+
+function fallbackSessionUserId(): string {
+  const envUser = (process.env.USER ?? process.env.USERNAME ?? "").trim();
+  if (envUser.length > 0) return envUser;
+  // Bun's `userInfo().username` returns the literal string "unknown" when
+  // USER/USERNAME are unset. Treat it as a miss and fall through to homedir's
+  // basename, which resolves to the real account name on every platform we
+  // ship on.
+  try {
+    const name = userInfo().username.trim();
+    if (name.length > 0 && name !== "unknown") return name;
+  } catch {
+    // fall through
+  }
+  try {
+    const home = homedir().trim();
+    if (home.length > 0) {
+      const base = basename(home);
+      if (base.length > 0 && base !== "root") return base;
+    }
+  } catch {
+    // fall through
+  }
+  return "default";
 }
 
 async function resolveOptionalOwnershipSessionId(explicitSessionId: string | undefined): Promise<string | undefined> {
-  if (explicitSessionId !== undefined) {
-    return resolveOwnershipSessionId(explicitSessionId);
-  }
-
-  const services = getServices();
-  const session = await services.sessionDetect.detect(process.cwd());
-  return session ? buildTaskOwnerId(session.agent, session.sessionId) : undefined;
+  // Always produce a stable actor id, synthesizing a per-user fallback when
+  // no env var / explicit session is available. Previously this function
+  // could return undefined, which surfaced as "requires ownership context"
+  // errors on update/heartbeat/unclaim paths that the skill documents as
+  // bare forms.
+  return resolveOwnershipSessionId(explicitSessionId);
 }
 
 async function resolveSessionAndReleaseStale(

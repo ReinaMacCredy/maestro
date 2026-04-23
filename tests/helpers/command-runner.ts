@@ -6,7 +6,7 @@ export interface CommandResult {
 
 export interface RunCommandOptions {
   readonly env?: Record<string, string>;
-  readonly stdin?: string;
+  readonly stdin?: string | Blob | ReadableStream;
 }
 
 export async function runCommand(
@@ -17,12 +17,16 @@ export async function runCommand(
   const proc = Bun.spawn([...command], {
     stdout: "pipe",
     stderr: "pipe",
-    stdin: options.stdin !== undefined ? "pipe" : "inherit",
+    stdin: options.stdin === undefined
+      ? "inherit"
+      : typeof options.stdin === "string"
+        ? "pipe"
+        : options.stdin,
     cwd,
     env: options.env ? { ...process.env, ...options.env } : process.env,
   });
 
-  if (options.stdin !== undefined && proc.stdin) {
+  if (typeof options.stdin === "string" && proc.stdin) {
     proc.stdin.write(options.stdin);
     await proc.stdin.end();
   }

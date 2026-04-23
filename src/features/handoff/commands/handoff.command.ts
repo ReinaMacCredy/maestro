@@ -1,4 +1,6 @@
 import type { Command } from "commander";
+import { homedir, userInfo } from "node:os";
+import { basename } from "node:path";
 import { getServices } from "@/services.js";
 import {
   DEFAULT_HANDOFF_MODELS,
@@ -9,6 +11,7 @@ import {
   type HandoffAgent,
   type HandoffLaunchRecord,
 } from "@/features/handoff";
+import { getLaunchDisplayState } from "../domain/launch-state.js";
 import {
   buildTaskContinuationSummary,
   buildTaskOwnerId,
@@ -30,12 +33,23 @@ export function registerHandoffCommand(program: Command): void {
     .option("--worktree [slug]", "Create and use a sibling git worktree for the handoff")
     .option("--base <branch>", "Base branch to use with --worktree")
     .option("--name <title>", "Display name for the launched session")
+    .option("--prompt-file <path>", "Path to a pre-written brief; skips auto-generation")
     .option("--wait", "Wait for the external agent to finish before returning")
     .option("--json", "Output as JSON")
     .action(async (task: string | undefined, opts) => {
-      if (!task) {
+      const promptFile = typeof opts.promptFile === "string" ? opts.promptFile : undefined;
+      const name = typeof opts.name === "string" ? opts.name : undefined;
+      // When the caller supplies a pre-written brief via --prompt-file, the
+      // positional task arg is optional: the brief itself carries the task
+      // description. Synthesize a short task string from --name (preferred)
+      // or a stable fallback, so the launch record and prompt remain well-
+      // formed without forcing every skill example to re-spell the task.
+      const resolvedTask = task
+        ?? (promptFile ? (name?.trim().length ? name!.trim() : "Handoff") : undefined);
+      if (!resolvedTask) {
         throw new MaestroError("Task description required for handoff launch", [
           "Use `maestro handoff <task>` to create a packet",
+          "Or pass --prompt-file <path> to skip the positional (the brief is enough)",
           "Or use `maestro handoff pickup` to consume an existing packet",
         ]);
       }
@@ -53,13 +67,14 @@ export function registerHandoffCommand(program: Command): void {
         launchers: services.handoffLaunchers,
       }, {
         cwd: process.cwd(),
-        task,
+        task: resolvedTask,
         agent,
         model: typeof opts.model === "string" ? opts.model : undefined,
-        name: typeof opts.name === "string" ? opts.name : undefined,
+        name,
         wait: Boolean(opts.wait),
         worktree: opts.worktree as string | boolean | undefined,
         baseBranch: typeof opts.base === "string" ? opts.base : undefined,
+        promptFile,
         refs: {
           taskId: linkedTask.taskId,
           createdByAgent: linkedTask.summary?.activeAgent?.type,
@@ -104,7 +119,11 @@ export function registerHandoffCommand(program: Command): void {
         throw new MaestroError(`Handoff not found: ${handoffId}`);
       }
       const requireSession = Boolean(launch.refs.taskId);
-      const actor = await resolvePickupActor(opts, command.parent?.opts(), { requireSession });
+      const actor = await resolvePickupActor(
+        opts,
+        command.parent?.opts(),
+        { requireSession, fallbackAgent: launch.agent },
+      );
       const result = await pickupHandoff(
         {
           launchStore: services.launchStore,
@@ -141,7 +160,10 @@ export function registerHandoffCommand(program: Command): void {
     .action(async (opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const records = await listLaunches(services.launchStore, { openOnly: Boolean(opts.open) });
+      const records = await listLaunches(services.launchStore, {
+        openOnly: Boolean(opts.open),
+        taskStore: services.taskStore,
+      });
       output(isJson, records, formatLaunchList);
     });
 
@@ -152,7 +174,7 @@ export function registerHandoffCommand(program: Command): void {
     .action(async (id: string, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const record = await showLaunch(services.launchStore, id);
+      const record = await showLaunch(services.launchStore, id, { taskStore: services.taskStore });
       output(isJson, record, (r) => formatLaunchDetail(r));
     });
 }
@@ -178,19 +200,27 @@ async function resolveLinkedTask(explicitTaskId: string | undefined): Promise<{
 }> {
   const services = getTaskServices();
   if (!explicitTaskId) {
-    const active = await services.taskContinuationStore.listActive();
-    if (active.length === 0) {
+    // Auto-link only fires for tasks actually in_progress. `listActive` can
+    // surface continuations for pending tasks that were claimed-then-
+    // unclaimed, which would otherwise cause a surprise project-store link
+    // for a packet the user meant to be standalone.
+    const allActive = await services.taskContinuationStore.listActive();
+    const inProgress: TaskContinuationSummary[] = [];
+    for (const summary of allActive) {
+      const task = await services.taskStore.get(summary.taskId);
+      if (task?.status === "in_progress") {
+        inProgress.push(summary);
+      }
+    }
+    if (inProgress.length !== 1) {
+      // Zero, or multiple: safest to treat as standalone. Callers who want
+      // task linkage pass --task-id explicitly.
       return { recentEvents: [] };
     }
-    if (active.length !== 1) {
-      throw new MaestroError("Multiple active task continuations exist; handoff task inference is ambiguous", [
-        "Pass `--task-id <id>` to choose the linked task explicitly",
-      ]);
-    }
     return {
-      taskId: active[0]!.taskId,
-      summary: active[0]!,
-      recentEvents: await services.taskContinuationHistory.listRecent(active[0]!.taskId, 5),
+      taskId: inProgress[0]!.taskId,
+      summary: inProgress[0]!,
+      recentEvents: await services.taskContinuationHistory.listRecent(inProgress[0]!.taskId, 5),
     };
   }
 
@@ -223,7 +253,10 @@ async function resolvePickupId(explicitId: string | undefined): Promise<string> 
   }
 
   const services = getServices();
-  const open = await listLaunches(services.launchStore, { openOnly: true });
+  const open = await listLaunches(services.launchStore, {
+    openOnly: true,
+    taskStore: services.taskStore,
+  });
   if (open.length === 0) {
     throw new MaestroError("No open handoff packets are available to pick up");
   }
@@ -247,7 +280,7 @@ async function resolvePickupId(explicitId: string | undefined): Promise<string> 
 async function resolvePickupActor(
   opts: { agent?: unknown; session?: unknown },
   inherited: { agent?: unknown } | undefined,
-  mode: { readonly requireSession: boolean },
+  mode: { readonly requireSession: boolean; readonly fallbackAgent: HandoffAgent },
 ): Promise<{
   readonly agent: HandoffAgent;
   readonly sessionId?: string;
@@ -258,12 +291,16 @@ async function resolvePickupActor(
   const explicitAgent = typeof rawAgent === "string" ? rawAgent.trim() : undefined;
   const explicitSession = typeof rawSession === "string" ? rawSession.trim() : undefined;
 
+  const services = getServices();
+  const detected = await services.sessionDetect.detect(process.cwd());
+
   if (mode.requireSession) {
     if ((explicitAgent && !explicitSession) || (!explicitAgent && explicitSession)) {
       throw new MaestroError("Pass both --agent and --session together when overriding pickup identity", [
         "Or run pickup from a detected Codex or Claude session",
       ]);
     }
+
     if (explicitAgent && explicitSession) {
       const agent = parseAgent(explicitAgent);
       return {
@@ -273,19 +310,30 @@ async function resolvePickupActor(
       };
     }
 
-    const services = getServices();
-    const session = await services.sessionDetect.detect(process.cwd());
-    if (!session) {
-      throw new MaestroError("Could not detect the current session for handoff pickup", [
-        "Run from Codex or Claude, or pass both --agent <agent> and --session <id>",
-      ]);
+    if (detected) {
+      const agent = normalizeDetectedAgent(detected.agent);
+      return {
+        agent,
+        sessionId: detected.sessionId,
+        ownerId: buildTaskOwnerId(detected.agent, detected.sessionId),
+      };
     }
-    const agent = normalizeDetectedAgent(session.agent);
+
+    const fallbackSessionId = fallbackPickupSessionId();
     return {
-      agent,
-      sessionId: session.sessionId,
-      ownerId: buildTaskOwnerId(session.agent, session.sessionId),
+      agent: mode.fallbackAgent,
+      sessionId: fallbackSessionId,
+      // Match the same per-user undetected-shell ownership model as `task`
+      // and `task contract`, so pickup does not transfer a task to an owner id
+      // that subsequent commands from the same shell cannot mutate.
+      ownerId: buildTaskOwnerId("local", fallbackSessionId),
     };
+  }
+
+  if (!explicitAgent && explicitSession) {
+    throw new MaestroError("Pass both --agent and --session together when overriding pickup identity", [
+      "Or run pickup from a detected Codex or Claude session",
+    ]);
   }
 
   if (explicitAgent && explicitSession) {
@@ -297,26 +345,45 @@ async function resolvePickupActor(
     };
   }
 
-  const services = getServices();
-  const detected = await services.sessionDetect.detect(process.cwd());
-  const agent = explicitAgent
-    ? parseAgent(explicitAgent)
-    : detected
-      ? normalizeDetectedAgent(detected.agent)
-      : undefined;
-
-  if (!agent) {
-    throw new MaestroError("No agent specified for handoff pickup", [
-      "Pass --agent codex|claude, or run from a detected Codex or Claude session",
-    ]);
+  if (explicitAgent) {
+    return { agent: parseAgent(explicitAgent) };
   }
 
-  const sessionId = explicitSession ?? detected?.sessionId;
+  // Agent: prefer detected session's agent, fall back to the packet's own
+  // agent field. This lets `maestro handoff pickup --id <id>` just work from
+  // any shell when the packet already knows who it was meant for.
+  const agent = detected ? normalizeDetectedAgent(detected.agent) : mode.fallbackAgent;
+  const sessionId = detected?.sessionId;
   return {
     agent,
     ...(sessionId ? { sessionId } : {}),
-    ...(sessionId ? { ownerId: buildTaskOwnerId(agent, sessionId) } : {}),
+    ...(sessionId ? { ownerId: buildTaskOwnerId(detected?.agent ?? agent, sessionId) } : {}),
   };
+}
+
+function fallbackPickupSessionId(): string {
+  const envUser = (process.env.USER ?? process.env.USERNAME ?? "").trim();
+  if (envUser.length > 0) return envUser;
+  // Bun's `userInfo().username` returns the literal string "unknown" when
+  // USER/USERNAME are unset, unlike Node which falls back to getpwuid. Treat
+  // that literal as a miss and reach for homedir's basename, which is the
+  // user's real account name on every platform we run on.
+  try {
+    const name = userInfo().username.trim();
+    if (name.length > 0 && name !== "unknown") return name;
+  } catch {
+    // fall through
+  }
+  try {
+    const home = homedir().trim();
+    if (home.length > 0) {
+      const base = basename(home);
+      if (base.length > 0 && base !== "root") return base;
+    }
+  } catch {
+    // fall through
+  }
+  return "default";
 }
 
 function normalizeDetectedAgent(value: string): HandoffAgent {
@@ -392,7 +459,7 @@ function formatLaunchList(records: readonly HandoffLaunchRecord[]): string[] {
   }
   const lines = [`[ok] ${records.length} packet(s)`];
   for (const r of records) {
-    const state = r.consumedAt ? "consumed" : "open";
+    const state = getLaunchDisplayState(r);
     const task = r.refs.taskId ? ` task=${r.refs.taskId}` : "";
     const short = r.task.length > 60 ? `${r.task.slice(0, 57)}...` : r.task;
     lines.push(`  ${r.id}  ${state}  agent=${r.agent}  created=${r.createdAt}${task}  ${JSON.stringify(short)}`);
@@ -403,7 +470,7 @@ function formatLaunchList(records: readonly HandoffLaunchRecord[]): string[] {
 function formatLaunchDetail(record: HandoffLaunchRecord): string[] {
   const lines = [
     `[ok] ${record.id}`,
-    `  State: ${record.consumedAt ? "consumed" : "open"}`,
+    `  State: ${getLaunchDisplayState(record)}`,
     `  Agent: ${record.agent}/${record.model}`,
     `  Status: ${record.status}`,
     `  Created: ${record.createdAt}`,

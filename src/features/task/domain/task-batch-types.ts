@@ -55,6 +55,12 @@ export interface BatchCreatedTask {
 export interface BatchResult {
   readonly batchId?: string;
   readonly created: readonly BatchCreatedTask[];
+  /**
+   * True when the result was served from a stored receipt (idempotent replay)
+   * rather than freshly created. Lets callers distinguish "created N tasks"
+   * from "N tasks already exist from a prior batch submission".
+   */
+  readonly replayed?: boolean;
 }
 
 /** Re-export to keep batch-type consumers from reaching across modules. */

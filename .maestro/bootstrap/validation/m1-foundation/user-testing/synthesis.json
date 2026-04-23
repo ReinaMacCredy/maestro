@@ -1,0 +1,58 @@
+{
+  "milestone": "m1-foundation",
+  "round": 1,
+  "status": "pass",
+  "assertionsSummary": {
+    "total": 30,
+    "passed": 30,
+    "failed": 0,
+    "blocked": 0
+  },
+  "passedAssertions": [
+    "VAL-M1-TYPES-001",
+    "VAL-M1-TYPES-002",
+    "VAL-M1-TYPES-003",
+    "VAL-M1-TYPES-004",
+    "VAL-M1-TYPES-005",
+    "VAL-M1-TYPES-006",
+    "VAL-M1-ID-001",
+    "VAL-M1-ID-002",
+    "VAL-M1-ID-003",
+    "VAL-M1-ID-004",
+    "VAL-M1-STORAGE-001",
+    "VAL-M1-STORAGE-002",
+    "VAL-M1-STORAGE-003",
+    "VAL-M1-STORAGE-004",
+    "VAL-M1-STORAGE-005",
+    "VAL-M1-STORAGE-006",
+    "VAL-M1-STORAGE-007",
+    "VAL-M1-STORAGE-008",
+    "VAL-M1-VALIDATE-001",
+    "VAL-M1-VALIDATE-002",
+    "VAL-M1-VALIDATE-003",
+    "VAL-M1-VALIDATE-004",
+    "VAL-M1-ERROR-001",
+    "VAL-M1-ERROR-002",
+    "VAL-M1-ERROR-003"
+  ],
+  "failedAssertions": [],
+  "blockedAssertions": [],
+  "appliedUpdates": [],
+  "previousRound": null,
+  "testResults": {
+    "totalTests": 402,
+    "passedTests": 402,
+    "failedTests": 0,
+    "testFiles": 25,
+    "typeCheck": "passed",
+    "lintCheck": "not_configured"
+  },
+  "flowReports": [
+    ".factory/validation/m1-foundation/user-testing/flows/types-group.json",
+    ".factory/validation/m1-foundation/user-testing/flows/id-group.json",
+    ".factory/validation/m1-foundation/user-testing/flows/storage-group.json",
+    ".factory/validation/m1-foundation/user-testing/flows/validate-group.json",
+    ".factory/validation/m1-foundation/user-testing/flows/error-group.json"
+  ],
+  "timestamp": "2026-03-29T04:48:00Z"
+}

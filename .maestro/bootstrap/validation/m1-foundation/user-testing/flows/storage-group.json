@@ -1,0 +1,40 @@
+{
+  "groupId": "storage",
+  "assertions": {
+    "VAL-M1-STORAGE-001": {
+      "status": "passed",
+      "evidence": "2 test cases passed: creates a mission and writes to filesystem; creates mission directory structure"
+    },
+    "VAL-M1-STORAGE-002": {
+      "status": "passed",
+      "evidence": "3 test cases passed: reads a mission by ID; returns undefined for non-existent mission; returns full Mission object with all fields"
+    },
+    "VAL-M1-STORAGE-003": {
+      "status": "passed",
+      "evidence": "3 test cases passed: persists changes to disk; updates updatedAt timestamp automatically; returns undefined for non-existent mission"
+    },
+    "VAL-M1-STORAGE-004": {
+      "status": "passed",
+      "evidence": "3 test cases passed: returns all mission summaries; returns empty array when no missions exist; sorts by createdAt descending"
+    },
+    "VAL-M1-STORAGE-005": {
+      "status": "passed",
+      "evidence": "2 test cases passed: removes mission directory; returns false for non-existent mission"
+    },
+    "VAL-M1-STORAGE-006": {
+      "status": "passed",
+      "evidence": "10 test cases passed: creates feature within mission scope; reads feature by ID; updates feature; lists all features; lists by status; deletes feature; handles duplicate and non-existent cases"
+    },
+    "VAL-M1-STORAGE-007": {
+      "status": "passed",
+      "evidence": "10 test cases passed: creates worker definition; reads worker by ID; updates worker; lists all workers; lists by capability and status; deletes worker; handles duplicate and non-existent cases"
+    },
+    "VAL-M1-STORAGE-008": {
+      "status": "passed",
+      "evidence": "10 test cases passed: creates validation state to JSON; reads validation state; updates validation state; deletes validation state; updates individual assertion status; handles non-existent and duplicate cases"
+    }
+  },
+  "frictions": [],
+  "blockers": [],
+  "toolsUsed": ["bun test"]
+}

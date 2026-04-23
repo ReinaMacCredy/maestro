@@ -54,6 +54,29 @@ describe("ShellGitAdapter", () => {
       expect(Array.isArray(state.changedFiles)).toBe(true);
     });
 
+    it("does not truncate package.json when it appears as the first status line", async () => {
+      // Regression for the `ackage.json` bug: execSpawn trims leading whitespace on
+      // the full stdout, so a porcelain line like ` M package.json` arrives as
+      // `M package.json` when it's the first line. A naive `slice(3)` then eats
+      // the leading `p`. The fix is a format-aware parser that accepts either
+      // leading-space or trimmed-first-line shapes.
+      await Bun.write(join(tempRepo, "package.json"), '{"name":"x"}\n');
+      const state = await git.getState(tempRepo);
+      expect(state.changedFiles).toContain("package.json");
+      expect(state.changedFiles).not.toContain("ackage.json");
+    });
+
+    it("returns the renamed path rather than `orig -> new` for rename entries", async () => {
+      await Bun.write(join(tempRepo, "old-name.txt"), "hi\n");
+      await runCommand(["git", "add", "old-name.txt"], tempRepo);
+      await runCommand(["git", "commit", "-m", "add file"], tempRepo);
+      await runCommand(["git", "mv", "old-name.txt", "new-name.txt"], tempRepo);
+
+      const state = await git.getState(tempRepo);
+      expect(state.changedFiles).toContain("new-name.txt");
+      expect(state.changedFiles).not.toContain("old-name.txt -> new-name.txt");
+    });
+
     it("returns workingTreeClean as boolean", async () => {
       const state = await git.getState(cwd);
       expect(typeof state.workingTreeClean).toBe("boolean");

@@ -1,0 +1,17 @@
+{
+  "assertionId": "VAL-MILESTONE-001",
+  "status": "pass",
+  "evidence": {
+    "commands": [
+      {
+        "cmd": "bun test tests/integration/multi-milestone.test.ts",
+        "exitCode": 0,
+        "stdout": "milestone list shows all milestones with correct progress [pass], milestone list shows progress percentages at various completion stages [pass], correctly identifies waived assertions in milestone status [pass]",
+        "stderr": ""
+      }
+    ],
+    "files": []
+  },
+  "blockers": [],
+  "frictions": []
+}

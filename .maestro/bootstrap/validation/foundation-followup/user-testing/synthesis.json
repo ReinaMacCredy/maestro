@@ -1,0 +1,17 @@
+{
+  "milestone": "foundation-followup",
+  "round": 1,
+  "status": "pass",
+  "assertionsSummary": {
+    "total": 0,
+    "passed": 0,
+    "failed": 0,
+    "blocked": 0
+  },
+  "passedAssertions": [],
+  "failedAssertions": [],
+  "blockedAssertions": [],
+  "appliedUpdates": [],
+  "note": "foundation-followup milestone contains only 'foundation-followup-typecheck-fixes' feature with empty fulfills array. No testable assertions to validate.",
+  "previousRound": null
+}

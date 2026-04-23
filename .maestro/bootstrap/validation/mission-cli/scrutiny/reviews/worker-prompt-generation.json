@@ -1,0 +1,34 @@
+{
+  "featureId": "worker-prompt-generation",
+  "status": "pass",
+  "issues": [],
+  "sharedStateObservations": [
+    {
+      "type": "pattern",
+      "description": "Worker prompts resolve runtime skill files from .maestro/skills/{skillName}/SKILL.md first, then fall back to skills/built-in/{skillName}/SKILL.md",
+      "location": "src/usecases/generate-worker-prompt.usecase.ts"
+    },
+    {
+      "type": "pattern",
+      "description": "Prompt content sanitization uses markdown code fences to isolate user content from prompt structure",
+      "location": "src/usecases/generate-worker-prompt.usecase.ts"
+    },
+    {
+      "type": "convention",
+      "description": "Generated prompts are written to workers/{featureId}/prompt.md with optional --out override",
+      "location": "src/usecases/generate-worker-prompt.usecase.ts"
+    },
+    {
+      "type": "library_entry",
+      "description": "Runtime skill files follow the SKILL.md naming convention under .maestro/skills/{skillName}/, with shipped fallbacks under skills/built-in/{skillName}/",
+      "appliesTo": ["worker-prompt-generation"]
+    }
+  ],
+  "notes": [
+    "Feature prompt command generates complete worker assignments",
+    "Prompts include mission context, milestone context, verification details, and skill instructions",
+    "JSON flag resolution works at root, group, and leaf levels",
+    "Content sanitization prevents markdown injection issues",
+    "Dependencies section included when feature has dependencies"
+  ]
+}

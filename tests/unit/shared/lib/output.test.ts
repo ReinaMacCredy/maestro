@@ -109,7 +109,7 @@ describe("formatAgentResults", () => {
     expect(formatAgentResults([
       {
         agent: "claude",
-        action: "updated",
+        action: "installed",
         configPath: "/tmp/claude.md",
       },
       {
@@ -118,8 +118,25 @@ describe("formatAgentResults", () => {
         configPath: "/tmp/agents.md",
       },
     ])).toEqual([
-      "  claude: updated (/tmp/claude.md)",
+      "  claude: installed (/tmp/claude.md)",
       "  codex: removed (/tmp/agents.md)",
     ]);
+  });
+
+  it("appends an install hint when every agent is not-detected", () => {
+    const lines = formatAgentResults([
+      { agent: "Claude Code", action: "not-detected", configPath: "/tmp/.claude" },
+      { agent: "Codex", action: "not-detected", configPath: "/tmp/.codex" },
+    ]);
+    expect(lines).toContain("  Claude Code: not-detected (/tmp/.claude)");
+    expect(lines.some((line) => line.includes("No supported agents detected"))).toBe(true);
+  });
+
+  it("does not append the hint when at least one agent is detected", () => {
+    const lines = formatAgentResults([
+      { agent: "Claude Code", action: "installed", configPath: "/tmp/.claude" },
+      { agent: "Codex", action: "not-detected", configPath: "/tmp/.codex" },
+    ]);
+    expect(lines.some((line) => line.includes("No supported agents detected"))).toBe(false);
   });
 });

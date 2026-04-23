@@ -48,3 +48,6 @@ feedback.jsonl
 # The Desktop App for Maestro is still under development.
 /apps/
 .gitnexus
+
+# Maestro runtime state
+.maestro/sessions/

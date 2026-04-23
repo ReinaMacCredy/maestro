@@ -1,6 +1,6 @@
 {
   "name": "maestro",
-  "version": "0.56.0",
+  "version": "0.57.0",
   "type": "module",
   "bin": {
     "maestro": "./dist/maestro"
@@ -12,6 +12,8 @@
     "check:boundaries": "bun scripts/check-feature-boundaries.ts",
     "check:skills": "bun scripts/sync-built-in-skills.ts --check",
     "sync:skills": "bun scripts/sync-built-in-skills.ts",
+    "check:bundled-skills": "bun scripts/sync-bundled-skills.ts --check",
+    "sync:bundled-skills": "bun scripts/sync-bundled-skills.ts",
     "ci": "bun scripts/ci.ts",
     "ci:dry": "bun scripts/ci.ts --dry-run",
     "install:local": "bun scripts/install-local.ts",

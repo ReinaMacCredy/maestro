@@ -9,7 +9,7 @@ import {
   BUILT_IN_SKILL_TEMPLATES,
   type BuiltInSkillTemplate,
 } from "../domain/built-in-skill-templates.js";
-import { dirExists, ensureDir, readText, writeText } from "@/shared/lib/fs.js";
+import { dirExists, ensureDir, listFilesRecursive, readText, writeText } from "@/shared/lib/fs.js";
 import {
   isManagedSkillDirectoryName,
   resolveSkillDirectoryName,
@@ -217,25 +217,6 @@ function isExecutable(mode: number, relativePath: string): boolean {
   return Boolean(mode & 0o111);
 }
 
-async function listFilesRecursive(dir: string): Promise<string[]> {
-  const entries = (await readdir(dir, { withFileTypes: true }))
-    .sort((left, right) => left.name.localeCompare(right.name));
-  const files: string[] = [];
-
-  for (const entry of entries) {
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...await listFilesRecursive(path));
-      continue;
-    }
-
-    if (entry.isFile()) {
-      files.push(path);
-    }
-  }
-
-  return files;
-}
 
 function shouldAutoMigrateLegacyTemplate(
   relativePath: string,

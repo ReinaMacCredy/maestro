@@ -1,16 +1,38 @@
 import { describe, expect, it } from "bun:test";
-import { tmpdir } from "node:os";
+import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
-import { SUPPORTED_AGENTS, agentConfigPath } from "@/features/agent";
+import { SUPPORTED_AGENTS, agentConfigPath, agentSkillsRoot } from "@/features/agent";
 
 describe("agent config specs", () => {
-  it("anchors Droid config under project-local .maestro/AGENTS.md", () => {
-    const droid = SUPPORTED_AGENTS.find((agent) => agent.slug === "droid");
-    expect(droid).toBeDefined();
-    expect(droid?.configDir).toBe(".maestro");
-    expect(droid?.configFile).toBe("AGENTS.md");
-    expect(droid?.configScope).toBe("project");
-    const projectDir = join(tmpdir(), "project");
-    expect(agentConfigPath(droid!, projectDir)).toBe(join(projectDir, ".maestro", "AGENTS.md"));
+  it("ships Claude Code and Codex entries only", () => {
+    const slugs = SUPPORTED_AGENTS.map((a) => a.slug).sort();
+    expect(slugs).toEqual(["claude-code", "codex"]);
+    // droid and gemini were removed; the comment in agents.ts notes they
+    // will be re-added once skill support lands in those CLIs.
+  });
+
+  it("resolves Claude Code config to ~/.claude/CLAUDE.md", () => {
+    const claude = SUPPORTED_AGENTS.find((agent) => agent.slug === "claude-code")!;
+    expect(claude.configDir).toBe(".claude");
+    expect(claude.configFile).toBe("CLAUDE.md");
+    expect(agentConfigPath(claude, tmpdir(), homedir())).toBe(
+      join(homedir(), ".claude", "CLAUDE.md"),
+    );
+  });
+
+  it("resolves Codex config to ~/.codex/AGENTS.md", () => {
+    const codex = SUPPORTED_AGENTS.find((agent) => agent.slug === "codex")!;
+    expect(codex.configDir).toBe(".codex");
+    expect(codex.configFile).toBe("AGENTS.md");
+    expect(agentConfigPath(codex, tmpdir(), homedir())).toBe(
+      join(homedir(), ".codex", "AGENTS.md"),
+    );
+  });
+
+  it("resolves agent skills root to ~/<configDir>/skills", () => {
+    const claude = SUPPORTED_AGENTS.find((agent) => agent.slug === "claude-code")!;
+    expect(agentSkillsRoot(claude, tmpdir(), homedir())).toBe(
+      join(homedir(), ".claude", "skills"),
+    );
   });
 });

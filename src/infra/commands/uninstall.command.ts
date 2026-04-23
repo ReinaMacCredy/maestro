@@ -13,8 +13,8 @@ import { join } from "node:path";
 export function registerUninstallCommand(program: Command): void {
   program
     .command("uninstall")
-    .description("Remove agent instruction blocks and optionally the maestro binary")
-    .option("--agents-only", "Only remove agent instruction blocks")
+    .description("Remove bundled agent skills and optionally the maestro binary")
+    .option("--agents-only", "Only remove bundled agent skills")
     .option("--json", "Output as JSON")
     .action(async (opts) => {
       const isJson = opts.json ?? program.opts().json;

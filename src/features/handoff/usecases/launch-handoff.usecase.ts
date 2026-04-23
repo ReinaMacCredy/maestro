@@ -1,3 +1,5 @@
+import { stat } from "node:fs/promises";
+import { isAbsolute, resolve } from "node:path";
 import type {
   AssertionStorePort,
   FeatureStorePort,
@@ -13,7 +15,10 @@ import { DEFAULT_HANDOFF_MODELS } from "@/features/handoff";
 import type { TaskContinuationEvent, TaskContinuationSummary } from "@/features/task";
 import type { GitPort } from "@/infra/ports/git.port.js";
 import { MaestroError } from "@/shared/errors.js";
+import { readText, writeText } from "@/shared/lib/fs.js";
 import { buildHandoffPrompt } from "./build-handoff-prompt.usecase.js";
+
+const PROMPT_FILE_SIZE_WARN_BYTES = 500_000;
 
 export interface LaunchHandoffDeps {
   readonly missionStore: MissionStorePort;
@@ -40,6 +45,7 @@ export async function launchHandoff(
     readonly wait: boolean;
     readonly worktree?: string | boolean;
     readonly baseBranch?: string;
+    readonly promptFile?: string;
     readonly refs?: {
       readonly taskId?: string;
       readonly createdByAgent?: string;
@@ -64,6 +70,9 @@ export async function launchHandoff(
     ]);
   }
 
+  const promptFromFile = input.promptFile !== undefined
+    ? await readPromptFromFile(input.promptFile, input.cwd)
+    : undefined;
   const worktree = input.worktree
     ? await createHandoffWorktree(deps.git, input.cwd, input.agent, input.worktree, input.baseBranch, input.task)
     : undefined;
@@ -78,13 +87,15 @@ export async function launchHandoff(
       : undefined,
   ].filter((line): line is string => line !== undefined);
 
-  const { prompt, context } = await buildHandoffPrompt(deps, {
+  const generated = await buildHandoffPrompt(deps, {
     cwd: input.cwd,
     task: input.task,
     extraConstraints,
     continuation: input.continuation,
     taskId: input.refs?.taskId,
   });
+  const prompt = promptFromFile ?? generated.prompt;
+  const context = generated.context;
 
   const initialRecord = await deps.launchStore.create({
     task: input.task,
@@ -105,8 +116,13 @@ export async function launchHandoff(
   });
 
   try {
+    const launchPrompt = buildLaunchExecutionPrompt(prompt, initialRecord);
+    await writeText(
+      deps.launchStore.resolveArtifactPath(initialRecord.promptPath, initialRecord.refs),
+      launchPrompt,
+    );
     const launchResult = await handoffLauncher.launch({
-      prompt,
+      prompt: launchPrompt,
       targetDir,
       model,
       name,
@@ -137,7 +153,7 @@ export async function launchHandoff(
 
     return {
       record: finalRecord,
-      prompt,
+      prompt: launchPrompt,
     };
   } catch (error) {
     if (error instanceof MaestroError) {
@@ -155,6 +171,29 @@ export async function launchHandoff(
       `Log: ${failedRecord.outputPath}`,
     ]);
   }
+}
+
+function buildLaunchExecutionPrompt(prompt: string, record: Pick<HandoffLaunchRecord, "id" | "refs">): string {
+  const taskLine = record.refs.taskId
+    ? `This packet is linked to task ${record.refs.taskId}.`
+    : "This packet is prompt-only and has no linked task.";
+  return [
+    "## Handoff Startup",
+    "",
+    "Before doing any other work, consume this handoff packet so Maestro records the takeover correctly.",
+    taskLine,
+    "",
+    "Run exactly this command first:",
+    "```bash",
+    `maestro handoff pickup --id ${record.id} --json`,
+    "```",
+    "",
+    "If pickup reports that the packet is already consumed or already finished, stop and report that status instead of continuing blindly.",
+    "",
+    "---",
+    "",
+    prompt,
+  ].join("\n");
 }
 
 async function createHandoffWorktree(
@@ -186,4 +225,56 @@ function normalizeWorktreeSlug(value: string): string {
 function truncateTask(task: string): string {
   const normalized = task.replace(/\s+/g, " ").trim();
   return normalized.length > 72 ? `${normalized.slice(0, 69)}...` : normalized;
+}
+
+async function readPromptFromFile(promptFile: string, cwd: string): Promise<string> {
+  const absolute = isAbsolute(promptFile) ? promptFile : resolve(cwd, promptFile);
+  // stat() up front so directories, FIFOs, sockets, and device files get a
+  // typed MaestroError instead of an EISDIR-only guard around readText (which
+  // would hang on a FIFO and silently inject garbage from a char device).
+  let stats;
+  try {
+    stats = await stat(absolute);
+  } catch (err: unknown) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new MaestroError(`--prompt-file not found: ${absolute}`, [
+        "Check the path is correct and readable",
+        "Use an absolute path or a path relative to the current working directory",
+      ]);
+    }
+    throw err;
+  }
+  if (stats.isDirectory()) {
+    throw new MaestroError(`--prompt-file is a directory, not a file: ${absolute}`, [
+      "Pass a path to a readable file containing the brief",
+    ]);
+  }
+  if (!stats.isFile()) {
+    throw new MaestroError(`--prompt-file is not a regular file: ${absolute}`, [
+      "Pass a path to a regular file containing the brief",
+      "FIFOs, sockets, and device files are not supported here",
+    ]);
+  }
+  const content = await readText(absolute);
+  if (content === undefined) {
+    throw new MaestroError(`--prompt-file not found: ${absolute}`, [
+      "Check the path is correct and readable",
+      "Use an absolute path or a path relative to the current working directory",
+    ]);
+  }
+  if (content.trim().length === 0) {
+    throw new MaestroError(`--prompt-file is empty: ${absolute}`, [
+      "Write the handoff brief to the file before launching",
+      "An empty prompt produces a useless launch",
+    ]);
+  }
+  if (Buffer.byteLength(content, "utf8") > PROMPT_FILE_SIZE_WARN_BYTES) {
+    // Warn but do not hard-fail. Brief files this large are unusual and
+    // probably indicate something went wrong upstream (wrong file, runaway
+    // template, log dump). Keep launching so the agent can still use it.
+    process.stderr.write(
+      `[warn] --prompt-file is larger than ${PROMPT_FILE_SIZE_WARN_BYTES} bytes: ${absolute}\n`,
+    );
+  }
+  return content;
 }

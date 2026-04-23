@@ -40,7 +40,8 @@ export type HandoffLaunchStatus =
   | "launching"
   | "launched"
   | "completed"
-  | "failed";
+  | "failed"
+  | "consumed";
 
 export interface HandoffLaunchRecord {
   readonly id: string;

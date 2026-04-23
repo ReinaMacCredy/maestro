@@ -2,9 +2,9 @@
 
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-04-22 06:13:30 +0700
-**Commit:** 0e72e7ec
-**Branch:** feat/task-contracts-stack
+**Generated:** 2026-04-23 00:41:04 +0700
+**Commit:** 49083147
+**Branch:** feat/skill-bundle
 
 ## OVERVIEW
 Maestro is a local-first conductor for multi-agent software engineering. It is a single-package Bun/TypeScript CLI with an OpenTUI dashboard, repo-owned agent surfaces, and shared project state under `.maestro/`.
@@ -16,7 +16,7 @@ maestro/
 ├── .maestro/    # repo-tracked project state, plans, tasks, and context
 ├── hooks/       # session/tool hook entrypoints
 ├── scripts/     # build, version, install, release, and TUI helpers
-├── skills/      # shipped built-in skill sources
+├── skills/      # shipped built-in and bundled skill sources
 ├── src/         # feature-first CLI + TUI source tree
 └── tests/       # unit, integration, and compiled-binary coverage
 ```
@@ -28,7 +28,7 @@ maestro/
 | Dependency wiring | `src/services.ts` | Composition root only |
 | Feature boundaries and imports | `src/features/`, `scripts/check-feature-boundaries-lib.ts` | Cross-feature deep imports are forbidden |
 | Mission Control flow | `src/infra/commands/mission-control.command.ts`, `src/tui/README.md`, `src/tui/state/snapshot.ts` | Preview, JSON, and render-check stay read-only |
-| Built-in skills | `skills/built-in/`, `scripts/sync-built-in-skills.ts` | `src/infra/domain/built-in-skill-templates.ts` is generated |
+| Shipped agent skills | `skills/built-in/`, `skills/bundled/`, `scripts/sync-*-skills.ts` | Both template embeds under `src/infra/domain/` are generated |
 | Release and install behavior | `scripts/build.ts`, `scripts/ci.ts`, `scripts/install-local.ts`, `.github/workflows/` | `ci.ts` is local release-prep, not a harmless smoke script |
 | Daily task loop vs mission workflow | `.maestro/tasks/tasks.jsonl`, `README.md`, `.maestro/MAESTRO.md` | `task` and `mission` are separate systems |
 | Compiled-binary verification | `tests/e2e/`, `tests/helpers/run-compiled-cli.ts` | Distinguish `./dist/maestro` from installed `maestro` |
@@ -45,8 +45,9 @@ maestro/
 - `src/` is feature-first: `features/` owns domains, `infra/` owns plumbing, `shared/` owns generic utilities, `tui/` owns Mission Control projection/rendering.
 - Keep `src/index.ts` and `src/services.ts` thin. Put behavior in the owning feature or infra use case.
 - Cross-feature imports go through `@/features/<name>` public surfaces only.
-- `skills/built-in/` is the source of truth for shipped skills. Sync it into generated templates; do not hand-edit the generated embed file.
-- When adding a new agent-facing feature or changing related agent behavior, update the install/bootstrap agent instruction block in `src/infra/domain/bootstrap-templates.ts` in the same change so injected `.maestro/AGENTS.md` guidance stays current.
+- `skills/built-in/` is the source of truth for project-level shipped skills. Sync it into `src/infra/domain/built-in-skill-templates.ts`; do not hand-edit the generated embed file.
+- `skills/bundled/` is the source of truth for the global maestro skill bundle (`maestro-brainstorm`, `maestro-plan`, `maestro-task`, `maestro-mission`, `maestro-handoff`). Sync it into `src/infra/domain/bundled-skill-templates.ts` via `bun run sync:bundled-skills`; `bun run check:bundled-skills` enforces parity. `maestro install` installs these into `~/.claude/skills/` and `~/.codex/skills/`.
+- When adding a new agent-facing feature or changing related agent behavior, update the relevant `skills/bundled/maestro-*/SKILL.md` in the same change so the installed skills stay current. The per-project `.maestro/AGENTS.md` template in `src/infra/domain/bootstrap-templates.ts` still governs project bootstrap content.
 - `buildSnapshot()` and `buildHomeSnapshot()` are read models. Preview, JSON, and render-check paths must remain inspection-only.
 - Treat `./dist/maestro` and installed `maestro` on `PATH` as different artifacts. Verify which binary was exercised.
 - Repo-tracked behavior changes bump the CLI version. Docs-only/comment-only changes do not.
@@ -54,7 +55,7 @@ maestro/
 ## ANTI-PATTERNS
 - Deep imports into another feature's `commands/`, `usecases/`, `domain/`, `ports/`, or `adapters/`.
 - Hidden writes or recovery logic inside Mission Control snapshot/preview paths.
-- Hand-editing `src/infra/domain/built-in-skill-templates.ts`.
+- Hand-editing `src/infra/domain/built-in-skill-templates.ts` or `src/infra/domain/bundled-skill-templates.ts` (both are generated).
 - Assuming `bun run ci` is a generic verification command; it performs release-prep work and may reset git state.
 - Treating `task` and `mission` as interchangeable.
 - Assuming installed `maestro` is the fresh build without checking `command -v maestro` and the build/install path used.
@@ -64,6 +65,7 @@ maestro/
 bun run build
 bun run check:boundaries
 bun run check:skills
+bun run check:bundled-skills
 bun run test
 ./dist/maestro mission-control --render-check --size 120x40
 bun run release:local

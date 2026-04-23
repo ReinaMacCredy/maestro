@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expectJson, initGitRepo } from "../../../helpers/run-compiled-cli.js";
@@ -9,13 +9,16 @@ import { runCli } from "../../../helpers/run-cli.js";
 const SLOW_CLI_TIMEOUT_MS = 30_000;
 
 let tmpDir: string;
+let cleanupDirs: string[];
 
 beforeEach(async () => {
   tmpDir = await mkdtemp(join(tmpdir(), "maestro-task-contract-completion-"));
+  cleanupDirs = [];
   await initGitRepo(tmpDir);
 });
 
 afterEach(async () => {
+  await Promise.all(cleanupDirs.map((dir) => rm(dir, { recursive: true, force: true })));
   await rm(tmpDir, { recursive: true, force: true });
 });
 
@@ -31,6 +34,38 @@ async function seedTrackedFile(path: string, content: string): Promise<void> {
   await runCommand(["git", "config", "user.name", "Test User"], tmpDir);
   await runCommand(["git", "add", path], tmpDir);
   await runCommand(["git", "commit", "-m", "seed tracked file"], tmpDir);
+}
+
+async function installFakeProvider(name: "codex" | "claude"): Promise<string> {
+  const binDir = await mkdtemp(join(tmpdir(), `maestro-provider-bin-${name}-`));
+  cleanupDirs.push(binDir);
+  if (process.platform === "win32") {
+    const scriptPath = join(binDir, `${name}.cmd`);
+    await Bun.write(scriptPath, `@echo off\r\necho ${name} output\r\n`);
+  } else {
+    const scriptPath = join(binDir, name);
+    await Bun.write(scriptPath, `#!/bin/sh\necho "${name} output"\n`);
+    await chmod(scriptPath, 0o755);
+  }
+  return binDir;
+}
+
+async function writeContractRuntimeNoise(launchId: string): Promise<void> {
+  await mkdir(join(tmpDir, ".codex", ".tmp", "plugins"), { recursive: true });
+  await mkdir(join(tmpDir, ".codex", "skills", ".system"), { recursive: true });
+  await mkdir(join(tmpDir, ".claude"), { recursive: true });
+
+  await Bun.write(join(tmpDir, ".codex", ".tmp", "plugins.sha"), "sha\n");
+  await Bun.write(join(tmpDir, ".codex", ".tmp", "plugins", "README.md"), "plugins\n");
+  await Bun.write(join(tmpDir, ".codex", "config.toml"), "model = \"gpt-5.4\"\n");
+  await Bun.write(join(tmpDir, ".codex", "installation_id"), "installation\n");
+  await Bun.write(join(tmpDir, ".codex", "logs_2.sqlite"), "logs\n");
+  await Bun.write(join(tmpDir, ".codex", "state_5.sqlite"), "state\n");
+  await Bun.write(join(tmpDir, ".codex", "skills", ".system", ".codex-system-skills.marker"), "marker\n");
+  await Bun.write(join(tmpDir, ".claude", "scheduled_tasks.lock"), "lock\n");
+  await Bun.write(join(tmpDir, ".maestro", "config.yaml"), "contracts:\n  default: prompt\n");
+
+  expect(await Bun.file(join(tmpDir, ".maestro", "launches", launchId, "launch.json")).exists()).toBe(true);
 }
 
 describe("task contract completion", () => {
@@ -382,6 +417,106 @@ describe("task contract completion", () => {
     expect(closed.verdict?.filesExpectedUnused).toEqual([]);
   }, SLOW_CLI_TIMEOUT_MS);
 
+  it("ignores handoff launch records and agent runtime noise in contract verdicts", async () => {
+    await seedTrackedFile("README.md", "hello\n");
+
+    const created = await runCli(["task", "create", "runtime-safe handoff verdict", "--json"], tmpDir);
+    const task = expectJson<{ id: string }>(created);
+
+    await runCli(["task", "claim", task.id, "--session", "runtime-owner", "--json"], tmpDir);
+    await runCli(["task", "update", task.id, "--status", "in_progress", "--session", "runtime-owner", "--json"], tmpDir);
+
+    const templatePath = await writeTemplate(
+      "runtime-handoff-template.yaml",
+      [
+        "intent: Keep the handoff completion scoped to README",
+        "scope:",
+        "  filesExpected:",
+        "    - README.md",
+        "  filesForbidden: []",
+        "doneWhen:",
+        "  - text: manual",
+        "    kind: receipt-hint",
+        "",
+      ].join("\n"),
+    );
+
+    const drafted = await runCli(
+      ["task", "contract", "new", task.id, "--from", templatePath, "--session", "runtime-owner", "--json"],
+      tmpDir,
+    );
+    const contract = expectJson<{ id: string }>(drafted);
+    await runCli(["task", "contract", "lock", contract.id, "--session", "runtime-owner", "--json"], tmpDir);
+    await rm(templatePath, { force: true });
+
+    const binDir = await installFakeProvider("codex");
+    const env = {
+      HOME: tmpDir,
+      PATH: `${binDir}:${process.env.PATH ?? ""}`,
+      CODEX_THREAD_ID: "",
+      CLAUDECODE: "",
+    };
+
+    const launched = await runCli(["handoff", "Runtime-safe contract handoff", "--task-id", task.id, "--json"], tmpDir, { env });
+    expect(launched.exitCode).toBe(0);
+    const handoff = expectJson<{ id: string }>(launched);
+
+    await writeContractRuntimeNoise(handoff.id);
+    await Bun.write(join(tmpDir, "README.md"), "hello\nruntime-safe\n");
+
+    const preview = expectJson<{
+      contractId: string;
+      verdict: {
+        actualFilesTouched: string[];
+        outOfScopeFiles: string[];
+      };
+    }>(await runCli(["task", "contract", "verdict", contract.id, "--json"], tmpDir, { env }));
+    expect(preview.contractId).toBe(contract.id);
+    expect(preview.verdict.actualFilesTouched).toContain("README.md");
+    expect(preview.verdict.actualFilesTouched).not.toContain(".maestro/config.yaml");
+    expect(preview.verdict.actualFilesTouched).not.toContain(".codex/config.toml");
+    expect(preview.verdict.actualFilesTouched).not.toContain(".claude/scheduled_tasks.lock");
+    expect(preview.verdict.actualFilesTouched).not.toContain(`.maestro/launches/${handoff.id}/launch.json`);
+    expect(preview.verdict.outOfScopeFiles).toEqual([]);
+
+    await runCli(
+      [
+        "task",
+        "update",
+        task.id,
+        "--status",
+        "completed",
+        "--reason",
+        "done",
+        "--verified-by",
+        "manual",
+        "--session",
+        "runtime-owner",
+        "--json",
+      ],
+      tmpDir,
+      { env },
+    );
+
+    const shown = await runCli(["task", "contract", "show", contract.id, "--json"], tmpDir, { env });
+    const closed = expectJson<{
+      status: string;
+      verdict?: {
+        fulfilled: boolean;
+        actualFilesTouched: string[];
+        outOfScopeFiles: string[];
+      };
+    }>(shown);
+    expect(closed.status).toBe("fulfilled");
+    expect(closed.verdict?.fulfilled).toBe(true);
+    expect(closed.verdict?.actualFilesTouched).toContain("README.md");
+    expect(closed.verdict?.actualFilesTouched).not.toContain(".maestro/config.yaml");
+    expect(closed.verdict?.actualFilesTouched).not.toContain(".codex/config.toml");
+    expect(closed.verdict?.actualFilesTouched).not.toContain(".claude/scheduled_tasks.lock");
+    expect(closed.verdict?.actualFilesTouched).not.toContain(`.maestro/launches/${handoff.id}/launch.json`);
+    expect(closed.verdict?.outOfScopeFiles).toEqual([]);
+  }, SLOW_CLI_TIMEOUT_MS);
+
   it("requires a contract only when config asks for it and honors --no-contract", async () => {
     const created = await runCli(["task", "create", "required contract", "--json"], tmpDir);
     const task = expectJson<{ id: string }>(created);
@@ -685,7 +820,7 @@ describe("task contract completion", () => {
     expect(reset.closedBy).toBeUndefined();
   }, SLOW_CLI_TIMEOUT_MS);
 
-  it("leaves completed task state unchanged when update-reopen cannot claim ownership", async () => {
+  it("reopens completed task updates through the stable local fallback session", async () => {
     await seedTrackedFile("README.md", "hello\n");
 
     const created = await runCli(["task", "create", "failed update reopen stays closed", "--json"], tmpDir);
@@ -736,7 +871,7 @@ describe("task contract completion", () => {
       tmpDir,
     );
 
-    const failed = await runCli(
+    const reopened = await runCli(
       ["task", "update", task.id, "--status", "in_progress"],
       tmpDir,
       {
@@ -746,18 +881,22 @@ describe("task contract completion", () => {
         },
       },
     );
-    expect(failed.exitCode).toBe(1);
-    expect(failed.stderr).toContain("Status 'in_progress' requires task ownership");
+    expect(reopened.exitCode).toBe(0);
 
     const shownTask = await runCli(["task", "show", task.id, "--json"], tmpDir);
-    expect(expectJson<{ status: string }>(shownTask).status).toBe("completed");
+    expect(expectJson<{ status: string; assignee?: string }>(shownTask)).toEqual(
+      expect.objectContaining({
+        status: "in_progress",
+        assignee: expect.stringMatching(/^local-/),
+      }),
+    );
 
     const shownContract = await runCli(["task", "contract", "show", contract.id, "--json"], tmpDir);
     const closed = expectJson<{
       status: string;
       verdict?: { fulfilled: boolean };
     }>(shownContract);
-    expect(closed.status).toBe("fulfilled");
-    expect(closed.verdict?.fulfilled).toBe(true);
+    expect(closed.status).toBe("locked");
+    expect(closed.verdict).toBeUndefined();
   }, SLOW_CLI_TIMEOUT_MS);
 });
