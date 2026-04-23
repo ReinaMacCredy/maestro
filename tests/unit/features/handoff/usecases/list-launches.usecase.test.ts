@@ -23,6 +23,39 @@ describe("listLaunches", () => {
     expect(result.map((r) => r.id)).toEqual(["beta-bear-2", "alpha-fox-1"]);
   });
 
+  it("treats completed packets as closed even when consumedAt is absent", async () => {
+    const completed = makeHandoffLaunchRecord({
+      id: "delta-lark-4",
+      createdAt: "2026-04-23T00:00:00.000Z",
+      status: "completed",
+    });
+    const store = mockLaunchStore([open1, completed]);
+    const result = await listLaunches(store, { openOnly: true });
+    expect(result.map((r) => r.id)).toEqual(["alpha-fox-1"]);
+  });
+
+  it("reconciles launched task-linked packets whose linked task already completed", async () => {
+    const stale = makeHandoffLaunchRecord({
+      id: "stale-heron-5",
+      createdAt: "2026-04-23T00:00:00.000Z",
+      refs: { taskId: "tsk-done" },
+      status: "launched",
+    });
+    const store = mockLaunchStore([open1, stale]);
+    const taskStore = {
+      async get(id: string) {
+        return id === "tsk-done" ? { id, status: "completed" } : undefined;
+      },
+    };
+
+    const result = await listLaunches(store, { openOnly: true, taskStore });
+    expect(result.map((r) => r.id)).toEqual(["alpha-fox-1"]);
+
+    const reconciled = await store.get("stale-heron-5");
+    expect(reconciled?.status).toBe("completed");
+    expect(reconciled?.consumedAt).toBeUndefined();
+  });
+
   it("returns an empty array when no records exist", async () => {
     const store = mockLaunchStore([]);
     const result = await listLaunches(store);

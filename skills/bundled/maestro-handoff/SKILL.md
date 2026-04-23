@@ -32,7 +32,7 @@ A portable transfer artifact persisted on disk:
 
 `promptPath` and `outputPath` in the JSON output are relative; resolve them against the project root for task-linked packets and against `~/` for standalone packets. `maestro handoff list` reads from both stores and returns a merged view, so packets from other workspaces show up there too.
 
-Packets are detached by default. The launcher returns immediately with a handoff id; the receiver runs in the background and can be picked up later by a different session.
+Packets are detached by default. The launcher returns immediately with a handoff id. The launched receiver prompt now tells the new session to run `maestro handoff pickup --id <id> --json` before any other work so ownership and packet state stay aligned.
 
 ## Parsing arguments
 
@@ -148,7 +148,7 @@ Follow: maestro handoff show <id>
 Pickup later: maestro handoff pickup --id <id>
 ```
 
-Do not wait unless the user explicitly asked. The receiver runs detached.
+Do not wait unless the user explicitly asked. The receiver runs detached, but the launched session is expected to consume its own packet immediately on startup.
 
 ## Pickup flow
 

@@ -264,9 +264,10 @@ describe("pickupHandoff", () => {
           ownerId: "codex-pickup-2",
         },
       ),
-    ).rejects.toThrow("already completed");
+    ).rejects.toThrow(`already finished because linked task ${task.id} is completed`);
 
     const reloaded = await launchStore.get(launch.id);
+    expect(reloaded?.status).toBe("completed");
     expect(reloaded?.consumedAt).toBeUndefined();
   });
 

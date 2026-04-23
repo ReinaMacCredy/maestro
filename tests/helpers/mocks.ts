@@ -491,12 +491,16 @@ export function makeHandoffLaunchRecord(
 }
 
 export function mockLaunchStore(records: readonly HandoffLaunchRecord[] = []): LaunchStorePort {
+  const recordMap = new Map(records.map((record) => [record.id, record] as const));
   return {
     async create() { throw new Error("not used in mockLaunchStore"); },
-    async update(r) { return r; },
+    async update(r) {
+      recordMap.set(r.id, r);
+      return r;
+    },
     async consume() { throw new Error("not used in mockLaunchStore"); },
-    async get(id) { return records.find((r) => r.id === id); },
-    async list() { return records; },
+    async get(id) { return recordMap.get(id); },
+    async list() { return [...recordMap.values()]; },
     resolveArtifactPath(p: string) { return p; },
   };
 }

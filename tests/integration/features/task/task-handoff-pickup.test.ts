@@ -106,4 +106,66 @@ describe("task + handoff pickup CLI", () => {
     expect(updated.exitCode).toBe(0);
     expect(expectJson<{ id: string }>(updated).id).toBe(task.id);
   }, SLOW_CLI_TIMEOUT_MS);
+
+  it("reconciles stale launched packets after the linked task completes and hides them from open handoff surfaces", async () => {
+    const created = await runCli(["task", "create", "stale handoff completion", "--json"], tmpDir, {
+      env: noDetectedSessionEnv,
+    });
+    expect(created.exitCode).toBe(0);
+    const task = expectJson<{ id: string }>(created);
+
+    const started = await runCli(["task", "update", task.id, "--status", "in_progress", "--json"], tmpDir, {
+      env: noDetectedSessionEnv,
+    });
+    expect(started.exitCode).toBe(0);
+
+    const launchStore = new FsLaunchStoreAdapter(tmpDir);
+    const launch = await launchStore.create({
+      task: "task linked stale packet",
+      name: "task linked stale packet",
+      agent: "codex",
+      model: "gpt-5.4",
+      wait: false,
+      sourceDir: tmpDir,
+      targetDir: tmpDir,
+      refs: { taskId: task.id },
+      prompt: "## Task\n\ntask linked stale packet\n",
+    });
+
+    const completed = await runCli(
+      ["task", "update", task.id, "--status", "completed", "--reason", "done", "--json"],
+      tmpDir,
+      { env: noDetectedSessionEnv },
+    );
+    expect(completed.exitCode).toBe(0);
+
+    const shown = await runCli(["handoff", "show", launch.id, "--json"], tmpDir, {
+      env: noDetectedSessionEnv,
+    });
+    expect(shown.exitCode).toBe(0);
+    const shownPayload = expectJson<{ id: string; status: string; consumedAt?: string }>(shown);
+    expect(shownPayload.id).toBe(launch.id);
+    expect(shownPayload.status).toBe("completed");
+    expect(shownPayload.consumedAt).toBeUndefined();
+
+    const listedOpen = await runCli(["handoff", "list", "--open", "--json"], tmpDir, {
+      env: noDetectedSessionEnv,
+    });
+    expect(listedOpen.exitCode).toBe(0);
+    expect(expectJson<Array<{ id: string }>>(listedOpen).map((record) => record.id)).not.toContain(launch.id);
+
+    const taskView = await runCli(["task", "show", task.id, "--json"], tmpDir, {
+      env: noDetectedSessionEnv,
+    });
+    expect(taskView.exitCode).toBe(0);
+    expect(expectJson<{ openHandoffs?: string[] }>(taskView).openHandoffs ?? []).toEqual([]);
+
+    const picked = await runCli(["handoff", "pickup", "--id", launch.id, "--json"], tmpDir, {
+      env: noDetectedSessionEnv,
+    });
+    expect(picked.exitCode).not.toBe(0);
+    expect(expectJson<{ error: string }>(picked).error).toContain(
+      `Handoff ${launch.id} is already finished because linked task ${task.id} is completed`,
+    );
+  }, SLOW_CLI_TIMEOUT_MS);
 });

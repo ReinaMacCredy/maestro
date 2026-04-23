@@ -110,7 +110,10 @@ describe("launchHandoff", () => {
     expect(result.record.pid).toBe(4321);
     expect(launchCalls[0]?.model).toBe("gpt-5.4");
     expect(launchCalls[0]?.name).toContain("[Handoff]");
+    expect(launchCalls[0]?.prompt).toContain("## Handoff Startup");
+    expect(launchCalls[0]?.prompt).toContain("maestro handoff pickup --id 2026-04-20-001 --json");
     expect(result.prompt).toContain("## Task");
+    expect(result.prompt).toContain("maestro handoff pickup --id 2026-04-20-001 --json");
   });
 
   it("rejects --base without --worktree", async () => {
@@ -254,9 +257,8 @@ describe("launchHandoff", () => {
       const codexLauncher: HandoffLaunchPort = {
         agent: "codex",
         async launch(request) {
-          // launchStore persistence uses `prompt` from the create call, which
-          // must be the raw file content (not the auto-generated brief).
-          expect(request.prompt).toBe(briefContent);
+          expect(request.prompt).toContain("maestro handoff pickup --id 2026-04-20-001 --json");
+          expect(request.prompt).toContain(briefContent);
           return {
             command: ["codex", "exec", "--model", request.model, request.prompt],
             pid: 1234,
@@ -282,9 +284,11 @@ describe("launchHandoff", () => {
         promptFile: briefPath,
       });
 
-      expect(result.prompt).toBe(briefContent);
+      expect(result.prompt).toContain("maestro handoff pickup --id 2026-04-20-001 --json");
+      expect(result.prompt).toContain(briefContent);
       expect(launchStore.updates[0]?.task).toBe("Ignored when promptFile is set");
-      // Note: the supplied brief is what launchStore persists to prompt.md.
+      // Note: the supplied brief remains embedded in the launched prompt after
+      // the startup pickup preamble is injected.
     });
 
     it("throws a MaestroError when --prompt-file does not exist", async () => {

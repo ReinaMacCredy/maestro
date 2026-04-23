@@ -38,4 +38,26 @@ describe("listOpenHandoffsForTask", () => {
     const result = await listOpenHandoffsForTask(store, "tsk-missing");
     expect(result).toEqual([]);
   });
+
+  it("hides stale launched packets whose linked task has already completed", async () => {
+    const store = mockLaunchStore([
+      makeHandoffLaunchRecord({
+        id: "stale-ibis-9",
+        createdAt: "2026-04-23T00:00:00.000Z",
+        refs: { taskId: "tsk-abc123" },
+        status: "launched",
+      }),
+    ]);
+
+    const result = await listOpenHandoffsForTask(store, "tsk-abc123", {
+      taskStore: {
+        async get(id: string) {
+          return id === "tsk-abc123" ? { id, status: "completed" } : undefined;
+        },
+      },
+    });
+
+    expect(result).toEqual([]);
+    expect((await store.get("stale-ibis-9"))?.status).toBe("completed");
+  });
 });

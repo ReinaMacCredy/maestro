@@ -12,6 +12,7 @@ import {
 } from "@/features/task";
 import type { LaunchStorePort, HandoffLaunchRecord } from "@/features/handoff";
 import { MaestroError } from "@/shared/errors.js";
+import { reconcileLaunchRecord } from "./reconcile-launch-record.usecase.js";
 
 export interface PickupHandoffDeps {
   readonly launchStore: LaunchStorePort;
@@ -38,10 +39,14 @@ export async function pickupHandoff(
     readonly ownerId?: string;
   },
 ): Promise<PickupHandoffResult> {
-  const launch = await deps.launchStore.get(input.id);
-  if (!launch) {
+  const storedLaunch = await deps.launchStore.get(input.id);
+  if (!storedLaunch) {
     throw new MaestroError(`Handoff not found: ${input.id}`);
   }
+  const launch = await reconcileLaunchRecord(
+    { launchStore: deps.launchStore, taskStore: deps.taskStore },
+    storedLaunch,
+  );
   if (launch.consumedAt) {
     throw new MaestroError(
       `Handoff ${input.id} was already consumed by ${launch.pickedUpByAgent ?? "another agent"} at ${launch.consumedAt}`,
@@ -60,6 +65,15 @@ export async function pickupHandoff(
       record: consumedOnly,
       ownerId: input.ownerId,
     };
+  }
+  if (launch.status === "completed") {
+    throw new MaestroError(
+      `Handoff ${input.id} is already finished because linked task ${taskId} is completed`,
+      [
+        `Inspect the packet with: maestro handoff show ${input.id}`,
+        "Reopen the task and create a fresh handoff if more work is needed",
+      ],
+    );
   }
 
   const ownerId = input.ownerId;

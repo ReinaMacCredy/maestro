@@ -27,11 +27,19 @@ the CLI always has enough information to pick up, because the packet itself
 tells it which agent to impersonate. Pass explicit flags only when you need
 to override identity (e.g., running recovery from an operator account).
 
+Launched handoff receivers are instructed to run `pickup` as their first
+step. That keeps the packet state aligned with the task state instead of
+leaving a detached packet falsely open after the work is already done.
+
 ## Ambiguity
 
 If multiple open packets exist and no `--id` is passed, `pickup` errors with a
 clean list of candidate packets. Surface that list to the user and ask which
 one to pick up. Do not guess.
+
+`maestro handoff list --open` only shows packets still in the launching or
+launched state. Completed, failed, or consumed packets are not considered open,
+even if they were never explicitly consumed.
 
 ## Task linkage
 

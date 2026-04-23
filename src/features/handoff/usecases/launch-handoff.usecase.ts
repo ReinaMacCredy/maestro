@@ -15,7 +15,7 @@ import { DEFAULT_HANDOFF_MODELS } from "@/features/handoff";
 import type { TaskContinuationEvent, TaskContinuationSummary } from "@/features/task";
 import type { GitPort } from "@/infra/ports/git.port.js";
 import { MaestroError } from "@/shared/errors.js";
-import { readText } from "@/shared/lib/fs.js";
+import { readText, writeText } from "@/shared/lib/fs.js";
 import { buildHandoffPrompt } from "./build-handoff-prompt.usecase.js";
 
 const PROMPT_FILE_SIZE_WARN_BYTES = 500_000;
@@ -119,8 +119,13 @@ export async function launchHandoff(
   });
 
   try {
+    const launchPrompt = buildLaunchExecutionPrompt(prompt, initialRecord);
+    await writeText(
+      deps.launchStore.resolveArtifactPath(initialRecord.promptPath, initialRecord.refs),
+      launchPrompt,
+    );
     const launchResult = await handoffLauncher.launch({
-      prompt,
+      prompt: launchPrompt,
       targetDir,
       model,
       name,
@@ -151,7 +156,7 @@ export async function launchHandoff(
 
     return {
       record: finalRecord,
-      prompt,
+      prompt: launchPrompt,
     };
   } catch (error) {
     if (error instanceof MaestroError) {
@@ -169,6 +174,29 @@ export async function launchHandoff(
       `Log: ${failedRecord.outputPath}`,
     ]);
   }
+}
+
+function buildLaunchExecutionPrompt(prompt: string, record: Pick<HandoffLaunchRecord, "id" | "refs">): string {
+  const taskLine = record.refs.taskId
+    ? `This packet is linked to task ${record.refs.taskId}.`
+    : "This packet is prompt-only and has no linked task.";
+  return [
+    "## Handoff Startup",
+    "",
+    "Before doing any other work, consume this handoff packet so Maestro records the takeover correctly.",
+    taskLine,
+    "",
+    "Run exactly this command first:",
+    "```bash",
+    `maestro handoff pickup --id ${record.id} --json`,
+    "```",
+    "",
+    "If pickup reports that the packet is already consumed or already finished, stop and report that status instead of continuing blindly.",
+    "",
+    "---",
+    "",
+    prompt,
+  ].join("\n");
 }
 
 async function createHandoffWorktree(

@@ -10,6 +10,7 @@ import {
   type HandoffAgent,
   type HandoffLaunchRecord,
 } from "@/features/handoff";
+import { getLaunchDisplayState } from "../domain/launch-state.js";
 import {
   buildTaskContinuationSummary,
   buildTaskOwnerId,
@@ -158,7 +159,10 @@ export function registerHandoffCommand(program: Command): void {
     .action(async (opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const records = await listLaunches(services.launchStore, { openOnly: Boolean(opts.open) });
+      const records = await listLaunches(services.launchStore, {
+        openOnly: Boolean(opts.open),
+        taskStore: services.taskStore,
+      });
       output(isJson, records, formatLaunchList);
     });
 
@@ -169,7 +173,7 @@ export function registerHandoffCommand(program: Command): void {
     .action(async (id: string, opts) => {
       const services = getServices();
       const isJson = resolveJsonFlag(opts, program);
-      const record = await showLaunch(services.launchStore, id);
+      const record = await showLaunch(services.launchStore, id, { taskStore: services.taskStore });
       output(isJson, record, (r) => formatLaunchDetail(r));
     });
 }
@@ -248,7 +252,10 @@ async function resolvePickupId(explicitId: string | undefined): Promise<string> 
   }
 
   const services = getServices();
-  const open = await listLaunches(services.launchStore, { openOnly: true });
+  const open = await listLaunches(services.launchStore, {
+    openOnly: true,
+    taskStore: services.taskStore,
+  });
   if (open.length === 0) {
     throw new MaestroError("No open handoff packets are available to pick up");
   }
@@ -436,7 +443,7 @@ function formatLaunchList(records: readonly HandoffLaunchRecord[]): string[] {
   }
   const lines = [`[ok] ${records.length} packet(s)`];
   for (const r of records) {
-    const state = r.consumedAt ? "consumed" : "open";
+    const state = getLaunchDisplayState(r);
     const task = r.refs.taskId ? ` task=${r.refs.taskId}` : "";
     const short = r.task.length > 60 ? `${r.task.slice(0, 57)}...` : r.task;
     lines.push(`  ${r.id}  ${state}  agent=${r.agent}  created=${r.createdAt}${task}  ${JSON.stringify(short)}`);
@@ -447,7 +454,7 @@ function formatLaunchList(records: readonly HandoffLaunchRecord[]): string[] {
 function formatLaunchDetail(record: HandoffLaunchRecord): string[] {
   const lines = [
     `[ok] ${record.id}`,
-    `  State: ${record.consumedAt ? "consumed" : "open"}`,
+    `  State: ${getLaunchDisplayState(record)}`,
     `  Agent: ${record.agent}/${record.model}`,
     `  Status: ${record.status}`,
     `  Created: ${record.createdAt}`,

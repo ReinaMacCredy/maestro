@@ -364,7 +364,7 @@ function registerShowCommand(taskCmd: Command, program: Command): void {
       if (isJson) {
         const [task, openHandoffs] = await Promise.all([
           showTask(services.taskStore, id),
-          listOpenHandoffsForTask(services.launchStore, id),
+          listOpenHandoffsForTask(services.launchStore, id, { taskStore: services.taskStore }),
         ]);
         output(true, { ...task, openHandoffs }, formatTaskDetail);
         return;
@@ -376,7 +376,7 @@ function registerShowCommand(taskCmd: Command, program: Command): void {
           continuationStore: services.taskContinuationStore,
           continuationHistory: services.taskContinuationHistory,
         }, id),
-        listOpenHandoffsForTask(services.launchStore, id),
+        listOpenHandoffsForTask(services.launchStore, id, { taskStore: services.taskStore }),
       ]);
       output(false, view, (v) => {
         const lines = [...formatTaskShowView(v)];

@@ -26,6 +26,7 @@ export { listLaunches } from "./usecases/list-launches.usecase.js";
 export type { ListLaunchesOptions } from "./usecases/list-launches.usecase.js";
 export { showLaunch } from "./usecases/show-launch.usecase.js";
 export { listOpenHandoffsForTask } from "./usecases/list-open-handoffs-for-task.usecase.js";
+export { getLaunchDisplayState, isOpenLaunchRecord } from "./domain/launch-state.js";
 export { countLegacyHandoffFiles } from "./usecases/inspect-legacy-handoffs.usecase.js";
 export { registerHandoffCommand } from "./commands/handoff.command.js";
 export { buildHandoffServices } from "./services.js";
