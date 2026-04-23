@@ -12,6 +12,7 @@ import {
 } from "@/features/task";
 import type { HandoffStorePort, HandoffRecord } from "@/features/handoff";
 import { MaestroError } from "@/shared/errors.js";
+import { resolveHandoffProjectRoot } from "../domain/project-scope.js";
 import { reconcileHandoffRecord } from "./reconcile-handoff-record.usecase.js";
 
 export interface PickupHandoffDeps {
@@ -38,6 +39,7 @@ export async function pickupHandoff(
     readonly actorSessionId?: string;
     readonly ownerId?: string;
     readonly currentProjectRoot?: string;
+    readonly standalone?: boolean;
   },
 ): Promise<PickupHandoffResult> {
   const storedLaunch = await deps.handoffStore.get(input.id);
@@ -59,13 +61,8 @@ export async function pickupHandoff(
   }
 
   const taskId = launch.refs.taskId;
-  if (!taskId) {
-    const consumedOnly = await deps.handoffStore.consume({
-      id: input.id,
-      agent: input.actorAgent,
-      ...(input.actorSessionId ? { sessionId: input.actorSessionId } : {}),
-      pickedUpAt: new Date().toISOString(),
-    });
+  if (!taskId || input.standalone) {
+    const consumedOnly = await consumeHandoffOnly(deps.handoffStore, input);
     return {
       record: consumedOnly,
       ownerId: input.ownerId,
@@ -81,6 +78,17 @@ export async function pickupHandoff(
     );
   }
 
+  const sourceProjectRoot = resolveHandoffProjectRoot(launch);
+  if (input.currentProjectRoot && input.currentProjectRoot !== sourceProjectRoot) {
+    throw new MaestroError(
+      `Handoff ${input.id} belongs to project ${sourceProjectRoot} and remains linked to task ${taskId}`,
+      [
+        `Pick it up from the source project to preserve task ownership: ${buildSourceProjectPickupCommand(sourceProjectRoot, input.id)}`,
+        `Or consume it here as prompt-only: maestro handoff pickup --id ${input.id} --standalone --json`,
+      ],
+    );
+  }
+
   const ownerId = input.ownerId;
   if (!ownerId) {
     throw new MaestroError(`Pickup for task-linked handoff ${input.id} requires an ownerId`);
@@ -89,12 +97,7 @@ export async function pickupHandoff(
   const tasks = new Map((await deps.taskStore.all()).map((task) => [task.id, task] as const));
   const beforeTask = tasks.get(taskId);
   if (!beforeTask) {
-    const consumedOnly = await deps.handoffStore.consume({
-      id: input.id,
-      agent: input.actorAgent,
-      ...(input.actorSessionId ? { sessionId: input.actorSessionId } : {}),
-      pickedUpAt: new Date().toISOString(),
-    });
+    const consumedOnly = await consumeHandoffOnly(deps.handoffStore, input);
     return {
       record: consumedOnly,
       ownerId: input.ownerId,
@@ -199,4 +202,24 @@ export async function pickupHandoff(
     ownerId,
     ...(contractTransferWarning ? { contractTransferWarning } : {}),
   };
+}
+
+async function consumeHandoffOnly(
+  handoffStore: HandoffStorePort,
+  input: {
+    readonly id: string;
+    readonly actorAgent: string;
+    readonly actorSessionId?: string;
+  },
+): Promise<HandoffRecord> {
+  return await handoffStore.consume({
+    id: input.id,
+    agent: input.actorAgent,
+    ...(input.actorSessionId ? { sessionId: input.actorSessionId } : {}),
+    pickedUpAt: new Date().toISOString(),
+  });
+}
+
+function buildSourceProjectPickupCommand(projectRoot: string, handoffId: string): string {
+  return `cd ${JSON.stringify(projectRoot)} && maestro handoff pickup --id ${handoffId} --json`;
 }

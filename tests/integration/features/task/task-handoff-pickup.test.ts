@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FsHandoffStoreAdapter } from "@/features/handoff";
+import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 import { expectJson, initGitRepo } from "../../../helpers/run-compiled-cli.js";
 import { runCli } from "../../../helpers/run-cli.js";
 
@@ -272,5 +273,162 @@ describe("task + handoff pickup CLI", () => {
     expect(shown.exitCode).toBe(0);
     expect(expectJson<{ openHandoffs?: string[] }>(shown).openHandoffs ?? []).toEqual([]);
     expect((await handoffStore.get(handoff.id))?.status).toBe("launched");
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("rejects foreign-project task-linked pickup unless --standalone is passed", async () => {
+    const sharedHome = join(tmpDir, "shared-home");
+    const projectA = join(tmpDir, "project-a");
+    const projectB = join(tmpDir, "project-b");
+
+    await mkdir(sharedHome, { recursive: true });
+    await mkdir(projectA, { recursive: true });
+    await mkdir(projectB, { recursive: true });
+    await initGitRepo(projectA);
+    await initGitRepo(projectB);
+    expect((await runCli(["init"], projectA, { env: baseEnv(sharedHome) })).exitCode).toBe(0);
+    expect((await runCli(["init"], projectB, { env: baseEnv(sharedHome) })).exitCode).toBe(0);
+
+    const created = await runCli(["task", "create", "project-a handoff task", "--json"], projectA, {
+      env: baseEnv(sharedHome),
+    });
+    expect(created.exitCode).toBe(0);
+    const task = expectJson<{ id: string }>(created);
+
+    const started = await runCli(["task", "update", task.id, "--status", "in_progress", "--json"], projectA, {
+      env: baseEnv(sharedHome),
+    });
+    expect(started.exitCode).toBe(0);
+
+    const handoffStore = new FsHandoffStoreAdapter(sharedHome);
+    const sourceProjectRoot = resolveMaestroProjectRoot(projectA);
+    const handoff = await handoffStore.create({
+      task: "project-a linked handoff",
+      name: "project-a linked handoff",
+      agent: "codex",
+      model: "gpt-5.4",
+      wait: false,
+      sourceDir: projectA,
+      targetDir: projectA,
+      refs: { taskId: task.id },
+      prompt: "## Task\n\nproject-a linked handoff\n",
+    });
+
+    const picked = await runCli(["handoff", "pickup", "--id", handoff.id, "--json"], projectB, {
+      env: baseEnv(sharedHome),
+    });
+    expect(picked.exitCode).not.toBe(0);
+    const payload = expectJson<{ error: string; hints?: string[] }>(picked);
+    expect(payload.error).toContain(`Handoff ${handoff.id} belongs to project ${sourceProjectRoot}`);
+    expect(payload.hints ?? []).toContain(
+      `Pick it up from the source project to preserve task ownership: cd ${JSON.stringify(sourceProjectRoot)} && maestro handoff pickup --id ${handoff.id} --json`,
+    );
+
+    const reloaded = await handoffStore.get(handoff.id);
+    expect(reloaded?.consumedAt).toBeUndefined();
+
+    const sourceTask = await runCli(["task", "show", task.id, "--json"], projectA, {
+      env: baseEnv(sharedHome),
+    });
+    expect(sourceTask.exitCode).toBe(0);
+    expect(expectJson<{ status: string }>(sourceTask).status).toBe("in_progress");
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("allows explicit standalone pickup for a foreign task-linked packet", async () => {
+    const sharedHome = join(tmpDir, "shared-home");
+    const projectA = join(tmpDir, "project-a");
+    const projectB = join(tmpDir, "project-b");
+
+    await mkdir(sharedHome, { recursive: true });
+    await mkdir(projectA, { recursive: true });
+    await mkdir(projectB, { recursive: true });
+    await initGitRepo(projectA);
+    await initGitRepo(projectB);
+    expect((await runCli(["init"], projectA, { env: baseEnv(sharedHome) })).exitCode).toBe(0);
+    expect((await runCli(["init"], projectB, { env: baseEnv(sharedHome) })).exitCode).toBe(0);
+
+    const created = await runCli(["task", "create", "project-a standalone override", "--json"], projectA, {
+      env: baseEnv(sharedHome),
+    });
+    expect(created.exitCode).toBe(0);
+    const task = expectJson<{ id: string }>(created);
+
+    const started = await runCli(["task", "update", task.id, "--status", "in_progress", "--json"], projectA, {
+      env: baseEnv(sharedHome),
+    });
+    expect(started.exitCode).toBe(0);
+    const before = expectJson<{ assignee?: string }>(await runCli(["task", "show", task.id, "--json"], projectA, {
+      env: baseEnv(sharedHome),
+    }));
+
+    const handoffStore = new FsHandoffStoreAdapter(sharedHome);
+    const handoff = await handoffStore.create({
+      task: "standalone override",
+      name: "standalone override",
+      agent: "claude",
+      model: "opus",
+      wait: false,
+      sourceDir: projectA,
+      targetDir: projectA,
+      refs: { taskId: task.id },
+      prompt: "## Task\n\nstandalone override\n",
+    });
+
+    const picked = await runCli(
+      ["handoff", "pickup", "--id", handoff.id, "--standalone", "--json"],
+      projectB,
+      { env: baseEnv(sharedHome) },
+    );
+    expect(picked.exitCode).toBe(0);
+    const payload = expectJson<{
+      pickedUpByAgent?: string;
+      pickedUpBySessionId?: string;
+      consumedAt?: string;
+    }>(picked);
+    expect(payload.consumedAt).toBeDefined();
+    expect(payload.pickedUpByAgent).toBe("claude");
+    expect(picked.stderr).toContain(`Linked task ${task.id} was left unchanged`);
+
+    const sourceTask = await runCli(["task", "show", task.id, "--json"], projectA, {
+      env: baseEnv(sharedHome),
+    });
+    expect(sourceTask.exitCode).toBe(0);
+    const after = expectJson<{ assignee?: string; status: string }>(sourceTask);
+    expect(after.status).toBe("in_progress");
+    expect(after.assignee).toBe(before.assignee);
+  }, SLOW_CLI_TIMEOUT_MS);
+
+  it("allows prompt-only pickup from a different project", async () => {
+    const sharedHome = join(tmpDir, "shared-home");
+    const projectA = join(tmpDir, "project-a");
+    const projectB = join(tmpDir, "project-b");
+
+    await mkdir(sharedHome, { recursive: true });
+    await mkdir(projectA, { recursive: true });
+    await mkdir(projectB, { recursive: true });
+    await initGitRepo(projectA);
+    await initGitRepo(projectB);
+    expect((await runCli(["init"], projectA, { env: baseEnv(sharedHome) })).exitCode).toBe(0);
+    expect((await runCli(["init"], projectB, { env: baseEnv(sharedHome) })).exitCode).toBe(0);
+
+    const handoffStore = new FsHandoffStoreAdapter(sharedHome);
+    const handoff = await handoffStore.create({
+      task: "prompt-only cross project",
+      name: "prompt-only cross project",
+      agent: "claude",
+      model: "opus",
+      wait: false,
+      sourceDir: projectA,
+      targetDir: projectA,
+      refs: {},
+      prompt: "## Task\n\nprompt-only cross project\n",
+    });
+
+    const picked = await runCli(["handoff", "pickup", "--id", handoff.id, "--json"], projectB, {
+      env: baseEnv(sharedHome),
+    });
+    expect(picked.exitCode).toBe(0);
+    const payload = expectJson<{ consumedAt?: string; pickedUpByAgent?: string }>(picked);
+    expect(payload.consumedAt).toBeDefined();
+    expect(payload.pickedUpByAgent).toBe("claude");
   }, SLOW_CLI_TIMEOUT_MS);
 });

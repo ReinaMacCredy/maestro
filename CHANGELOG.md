@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.58.1 - Project-anchored task-linked handoff pickup
+
+- Keep the handoff store global at `~/.maestro/handoff/`, but stop
+  silently downgrading foreign task-linked packets to standalone pickup.
+  Prompt-only packets still pick up from any working directory. Task-linked
+  packets now require pickup from their source project unless the operator
+  explicitly passes `--standalone`.
+- `maestro handoff pickup --standalone --id <id>` is now the explicit
+  escape hatch for consuming a foreign task-linked packet as prompt-only.
+  Normal pickup errors with the source project path plus a concrete
+  `cd <project> && maestro handoff pickup --id <id> --json` command when
+  the current working directory does not match the packet provenance.
+- Mission bundle export now scopes global handoffs and principle outcomes
+  by both `missionId` and handoff project provenance, preventing same-id
+  collisions in another repo from leaking into the current bundle.
+
 ## 0.58.0 - Single global handoff store + rename launch to handoff (BREAKING)
 
 - Collapse the two-store handoff routing into a single global store at

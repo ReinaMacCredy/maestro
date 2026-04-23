@@ -16,12 +16,16 @@ import type {
   MissionStorePort,
 } from "@/features/mission/index.js";
 import { MISSION_ID_PATTERN } from "@/features/mission/index.js";
-import type { HandoffStorePort } from "@/features/handoff/index.js";
+import {
+  isHandoffInProject,
+  type HandoffStorePort,
+} from "@/features/handoff/index.js";
 import type { ReplyStorePort } from "@/features/reply/index.js";
 import { MaestroError } from "@/shared/errors.js";
 import { readText, dirExists } from "@/shared/lib/fs.js";
 import { MAESTRO_DIR, MEMORY_DIR } from "@/shared/domain/defaults.js";
 import { assertSafeSegment } from "@/shared/lib/path-safety.js";
+import { resolveMaestroProjectRoot } from "@/shared/lib/project-root.js";
 import type {
   BundleFile,
   BundleMemoryStats,
@@ -70,6 +74,7 @@ export async function collectBundleSources(
   const redact = new Set<BundleRedactScope>(options.redact);
   const root = BUNDLE_ROOT(missionId);
   const files: BundleFile[] = [];
+  const projectRoot = resolveMaestroProjectRoot(projectDir);
 
   const mission = await deps.missionStore.get(missionId);
   if (!mission) {
@@ -150,7 +155,7 @@ export async function collectBundleSources(
   // handoff packets that reference this mission id
   const allHandoffs = await deps.handoffStore.list();
   const missionHandoffs = allHandoffs.filter(
-    (handoff) => handoff.refs.missionId === missionId,
+    (handoff) => handoff.refs.missionId === missionId && isHandoffInProject(handoff, projectRoot),
   );
   const missionHandoffIds = new Set(missionHandoffs.map((handoff) => handoff.id));
   for (const handoff of missionHandoffs) {
@@ -172,9 +177,8 @@ export async function collectBundleSources(
 
   const outcomesPath = join(projectDir, MAESTRO_DIR, "principles", "outcomes.jsonl");
   const outcomesRaw = await readText(outcomesPath);
-  const filteredOutcomes = filterOutcomesForMission(
+  const filteredOutcomes = filterOutcomesForHandoffs(
     outcomesRaw ?? "",
-    missionId,
     missionHandoffIds,
   );
   files.push({
@@ -294,9 +298,8 @@ function countLearnings(compiledText: string): number {
   }
 }
 
-function filterOutcomesForMission(
+function filterOutcomesForHandoffs(
   raw: string,
-  missionId: string,
   handoffIds: ReadonlySet<string>,
 ): string {
   if (!raw) return "";
@@ -305,11 +308,8 @@ function filterOutcomesForMission(
     const trimmed = line.trim();
     if (!trimmed) continue;
     try {
-      const parsed = JSON.parse(trimmed) as { missionId?: string; handoffId?: string };
-      if (
-        parsed.missionId === missionId
-        || (parsed.handoffId && handoffIds.has(parsed.handoffId))
-      ) {
+      const parsed = JSON.parse(trimmed) as { handoffId?: string };
+      if (parsed.handoffId && handoffIds.has(parsed.handoffId)) {
         kept.push(trimmed);
       }
     } catch {

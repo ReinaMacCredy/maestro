@@ -240,7 +240,7 @@ maestro milestone seal implement --mission <mission-id>
 
 ## Handoffs
 
-`maestro handoff "<task>"` builds a self-contained markdown brief from the current repo state plus the linked task continuation, then launches a fresh Codex or Claude run. Every launch is persisted under `~/.maestro/handoff/<id>/` (a single global store) so the operator can inspect exactly what was sent and what the child process printed. `maestro handoff pickup` consumes one open packet and immediately takes over the linked task. Handoffs created in one working directory are visible from any other, so cross-project pickup works by default.
+`maestro handoff "<task>"` builds a self-contained markdown brief from the current repo state plus the linked task continuation, then launches a fresh Codex or Claude run. Every launch is persisted under `~/.maestro/handoff/<id>/` (a single global store) so the operator can inspect exactly what was sent and what the child process printed. Handoffs created in one working directory are visible from any other. Prompt-only packets can be picked up from any working directory, but task-linked packets must be picked up from their source project unless you explicitly pass `maestro handoff pickup --standalone`.
 
 ### What a launch contains
 
@@ -279,7 +279,7 @@ The prompt itself is stored separately as markdown. Maestro always renders the s
 - Default mode returns as soon as the child process is started and records status `launched`.
 - `--wait` blocks until the agent exits and records `completed` or `failed`.
 - `--json` prints the persisted launch record for automation or debugging.
-- `handoff pickup` atomically consumes a packet on first pickup and records the new active agent on the linked task continuation.
+- `handoff pickup` atomically consumes a packet on first pickup. Prompt-only packets can be consumed anywhere; task-linked packets resume their linked task only when pickup happens from the source project, unless `--standalone` is passed.
 
 ### Typical commands
 
@@ -310,7 +310,7 @@ maestro handoff \
   --json
 ```
 
-Use `--model` to override the agent default (`gpt-5.4` for Codex, `opus` for Claude), `--name` to label the launch, and `--base` when you need a specific base branch for a worktree handoff. Use `maestro handoff pickup` to consume a packet and immediately take over its linked task.
+Use `--model` to override the agent default (`gpt-5.4` for Codex, `opus` for Claude), `--name` to label the launch, and `--base` when you need a specific base branch for a worktree handoff. Use `maestro handoff pickup` to consume a packet, and pass `--standalone` when you intentionally want only the prompt without resuming a linked task.
 
 ## Task System
 
@@ -424,7 +424,7 @@ Summary fields: `currentState`, `nextAction`, `keyDecisions`, `activeAgent`, `la
 
    These are plain chat intents, not Maestro CLI commands.
 
-2. **Different agent, handoff pickup.** `maestro handoff pickup [--id <handoffId>]` consumes one open packet atomically, force-claims the linked task for the current session, moves it to `in_progress`, transfers any contract ownership, rewrites the continuation summary with a `Resumed from handoff ...` prefix, and records `agent_takeover` + `handoff_picked_up` events. The new agent inherits the prior `nextAction` and `keyDecisions` without a separate chat intent.
+2. **Different agent, handoff pickup.** `maestro handoff pickup [--id <handoffId>]` consumes one open packet atomically. Prompt-only packets can be picked up from any working directory. Task-linked packets are project-anchored: from the source project, pickup force-claims the linked task for the current session, moves it to `in_progress`, transfers any contract ownership, rewrites the continuation summary with a `Resumed from handoff ...` prefix, and records `agent_takeover` + `handoff_picked_up` events. From another project, Maestro errors with the source path and a concrete `cd ... && maestro handoff pickup ...` command. Pass `--standalone` to intentionally consume the packet without resuming the linked task.
 
 3. **Manual inspection.** `maestro task show <id>` prints the raw task and continuation state for offline review.
 
@@ -520,7 +520,7 @@ maestro task prune --all                 # purge both piles
 | `maestro feature update <feature-id> --mission <mission-id> --status <status>` | Advance a feature through `pending`, `assigned`, `in-progress`, `review`, `done`, or `blocked`. |
 | `maestro reply write <feature-id>` | Record an agent reply (outcome + optional report) for a feature. |
 | `maestro handoff "<task>" --agent <agent>` | Build a markdown brief from current repo or mission context and launch a fresh agent run. |
-| `maestro handoff pickup [--id <handoff-id>]` | Consume one open handoff packet and immediately take over its linked task. |
+| `maestro handoff pickup [--id <handoff-id>] [--standalone]` | Consume one open handoff packet. Prompt-only packets work anywhere; task-linked packets resume only from their source project unless `--standalone` is passed. |
 | `maestro handoff "<task>" --worktree [slug] --wait --json` | Launch in a sibling worktree, wait for completion, and return structured metadata. |
 | `maestro mission-control --preview` | Render a read-only dashboard preview in the terminal. |
 | `maestro mission-control --json` | Get a machine-readable snapshot of mission state. |

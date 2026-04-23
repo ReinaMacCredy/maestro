@@ -110,6 +110,7 @@ export function registerHandoffCommand(program: Command): void {
     .option("--id <id>", "Specific handoff id to pick up")
     .option("--agent <agent>", "Current agent when auto-detection is unavailable")
     .option("--session <id>", "Current session id when auto-detection is unavailable")
+    .option("--standalone", "Consume the packet without resuming its linked task")
     .option("--json", "Output as JSON")
     .action(async (opts, command: Command) => {
       const services = getServices();
@@ -120,7 +121,8 @@ export function registerHandoffCommand(program: Command): void {
       if (!launch) {
         throw new MaestroError(`Handoff not found: ${handoffId}`);
       }
-      const requireSession = Boolean(launch.refs.taskId);
+      const standalone = Boolean(opts.standalone);
+      const requireSession = Boolean(launch.refs.taskId) && !standalone;
       const actor = await resolvePickupActor(
         opts,
         command.parent?.opts(),
@@ -140,15 +142,21 @@ export function registerHandoffCommand(program: Command): void {
           ...(actor.sessionId ? { actorSessionId: actor.sessionId } : {}),
           ...(actor.ownerId ? { ownerId: actor.ownerId } : {}),
           currentProjectRoot,
+          standalone,
         },
       );
 
       if (result.contractTransferWarning) {
         warn(result.contractTransferWarning);
       }
+      if (standalone && launch.refs.taskId) {
+        warn(
+          `Handoff ${handoffId} was picked up as standalone. Linked task ${launch.refs.taskId} was left unchanged.`,
+        );
+      }
       if (result.unlinkedTaskId) {
         warn(
-          `Handoff ${handoffId} pointed at task ${result.unlinkedTaskId}, which no longer exists. Packet was unlinked and picked up as standalone.`,
+          `Handoff ${handoffId} pointed at task ${result.unlinkedTaskId}, which no longer exists in this project. Packet was unlinked and picked up as standalone.`,
         );
       }
 

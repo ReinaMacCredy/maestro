@@ -27,7 +27,7 @@ A portable transfer artifact persisted on disk:
 
 **Every packet lands in one global store: `~/.maestro/handoff/<id>/`.** There is no per-project store. `--task-id` links the packet to a task for continuation and ownership transfer on pickup, but it does not change where the packet is written. `promptPath` and `outputPath` in the JSON output are relative; resolve them against `~/` (the global store root). `maestro handoff list` scans the single global store, so handoffs created in one working directory are visible from any other.
 
-Packets are detached by default. The launcher returns immediately with a handoff id. The launched receiver prompt now tells the new session to run `maestro handoff pickup --id <id> --json` before any other work so ownership and packet state stay aligned.
+Packets are detached by default. The launcher returns immediately with a handoff id. The launched receiver prompt now tells the new session to run `maestro handoff pickup --id <id> --json` before any other work so ownership and packet state stay aligned. Prompt-only packets can be picked up from any working directory. Task-linked packets must be picked up from their source project unless the operator explicitly passes `--standalone` to discard task linkage.
 
 ## Parsing arguments
 
@@ -55,7 +55,7 @@ If the user names a specific model ("codex gpt-5.4-fast", "claude sonnet 4.7"), 
 
 ### Task link
 
-Mention of `tsk-abc123`, "for task X", "link to task Y": add `--task-id <id>`. Task-linked packets carry the task's continuation summary and transfer claim ownership on pickup.
+Mention of `tsk-abc123`, "for task X", "link to task Y": add `--task-id <id>`. Task-linked packets carry the task's continuation summary and transfer claim ownership on pickup when they are picked up from the source project.
 
 If no `--task-id` is passed and the project has exactly one active continuation, maestro links to it automatically. With zero or multiple active continuations, the packet is standalone.
 
@@ -149,14 +149,14 @@ Do not wait unless the user explicitly asked. The receiver runs detached, but th
 
 When the user says "pickup handoff", "take over handoff":
 
-1. `maestro handoff list --open --json` to enumerate open packets (this list is cross-workspace; packets from other projects may appear).
+1. `maestro handoff list --open --json` to enumerate open packets (this list is global; packets from other projects may appear).
 2. Single open packet: `maestro handoff pickup --json`.
 3. User specified an id: `maestro handoff pickup --id <id> --json`.
 4. Multiple packets and no id: the CLI errors with a clean list of open packets. Surface the list to the user and ask which.
 
 If the session environment provides a detected agent (Claude Code / Codex) the CLI uses it; otherwise it defaults to the packet's own `agent` field. Pass `--agent codex|claude` and `--session <id>` together to override identity explicitly.
 
-Pickup auto-claims any linked task. Prompt-only packets (no `refs.taskId`) create no task.
+Pickup auto-claims a linked task only when the current working directory matches the packet's source project. From another project, Maestro errors with the source path and a concrete `cd ... && maestro handoff pickup --id <id> --json` command. Use `maestro handoff pickup --id <id> --standalone --json` only when you intentionally want the prompt without resuming the linked task. Prompt-only packets (no `refs.taskId`) create no task and can be picked up anywhere.
 
 Pickup semantics including stale-claim transfer and contract inheritance live in `./reference/pickup.md`.
 

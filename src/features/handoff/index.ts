@@ -26,6 +26,7 @@ export type { ListHandoffsOptions } from "./usecases/list-handoffs.usecase.js";
 export { showHandoff } from "./usecases/show-handoff.usecase.js";
 export { listOpenHandoffsForTask } from "./usecases/list-open-handoffs-for-task.usecase.js";
 export { getHandoffDisplayState, isOpenHandoffRecord } from "./domain/handoff-state.js";
+export { isHandoffInProject, resolveHandoffProjectRoot } from "./domain/project-scope.js";
 export { countLegacyHandoffFiles } from "./usecases/inspect-legacy-handoffs.usecase.js";
 export { registerHandoffCommand } from "./commands/handoff.command.js";
 export { buildHandoffServices } from "./services.js";

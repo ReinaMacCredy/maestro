@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "bun:test";
-import { mkdtemp } from "node:fs/promises";
+import { mkdir, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FsHandoffStoreAdapter, pickupHandoff } from "@/features/handoff";
@@ -409,5 +409,94 @@ describe("pickupHandoff", () => {
 
     const reloaded = await handoffStore.get(launch.id);
     expect(reloaded?.consumedAt).toBeTruthy();
+  });
+
+  it("rejects foreign-project task pickup unless standalone was requested", async () => {
+    const task = await createTask(taskStore, { title: "Foreign project handoff" });
+    const foreignProjectRoot = join(tmpDir, "foreign-project");
+    await mkdir(foreignProjectRoot, { recursive: true });
+    const launch = await handoffStore.create({
+      task: "Pick this up elsewhere",
+      name: "[Handoff] foreign project",
+      agent: "claude",
+      model: "opus",
+      wait: false,
+      sourceDir: foreignProjectRoot,
+      targetDir: foreignProjectRoot,
+      refs: { taskId: task.id, projectRoot: foreignProjectRoot },
+      prompt: "## Task\n\nPick this up elsewhere\n",
+    });
+
+    await expect(
+      pickupHandoff(
+        {
+          handoffStore,
+          taskStore,
+          contractStore,
+          continuationStore,
+          continuationHistory,
+        },
+        {
+          id: launch.id,
+          actorAgent: "claude",
+          actorSessionId: "pickup-foreign",
+          ownerId: "claude-code-pickup-foreign",
+          currentProjectRoot: resolveMaestroProjectRoot(tmpDir),
+        },
+      ),
+    ).rejects.toThrow(`Handoff ${launch.id} belongs to project ${foreignProjectRoot}`);
+
+    const reloaded = await handoffStore.get(launch.id);
+    expect(reloaded?.consumedAt).toBeUndefined();
+  });
+
+  it("allows an explicit standalone pickup for a foreign task-linked packet", async () => {
+    const task = await createTask(taskStore, { title: "Foreign project takeover" });
+    await claimTask(taskStore, task.id, { sessionId: "codex-old-session" });
+    const started = (await updateTask(
+      taskStore,
+      task.id,
+      { status: "in_progress" },
+      { sessionId: "codex-old-session" },
+    )).task;
+    const foreignProjectRoot = join(tmpDir, "foreign-project");
+    await mkdir(foreignProjectRoot, { recursive: true });
+    const launch = await handoffStore.create({
+      task: "Take the prompt only",
+      name: "[Handoff] standalone override",
+      agent: "claude",
+      model: "opus",
+      wait: false,
+      sourceDir: foreignProjectRoot,
+      targetDir: foreignProjectRoot,
+      refs: { taskId: task.id, projectRoot: foreignProjectRoot },
+      prompt: "## Task\n\nTake the prompt only\n",
+    });
+
+    const result = await pickupHandoff(
+      {
+        handoffStore,
+        taskStore,
+        contractStore,
+        continuationStore,
+        continuationHistory,
+      },
+      {
+        id: launch.id,
+        actorAgent: "claude",
+        currentProjectRoot: resolveMaestroProjectRoot(tmpDir),
+        standalone: true,
+      },
+    );
+
+    expect(result.taskId).toBeUndefined();
+    expect(result.ownerId).toBeUndefined();
+    expect(result.record.consumedAt).toBeTruthy();
+
+    const after = await taskStore.get(task.id);
+    expect(after).toMatchObject({
+      status: "in_progress",
+      assignee: started.assignee,
+    });
   });
 });
