@@ -295,8 +295,7 @@ function isAlwaysIgnoredContractRuntimePath(path: string): boolean {
     || normalized.startsWith(".maestro/tasks/local-history/")
     || normalized.startsWith(".maestro/tasks/contracts/")
     || normalized.startsWith(".maestro/tasks/batches/")
-    || normalized.startsWith(".maestro/tasks/candidates/")
-    || normalized.startsWith(".maestro/launches/");
+    || normalized.startsWith(".maestro/tasks/candidates/");
 }
 
 function isIgnoredUntrackedContractRuntimePath(path: string): boolean {

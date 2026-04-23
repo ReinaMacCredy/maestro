@@ -15,7 +15,7 @@ This project uses Maestro for local bootstrap and runtime orchestration.
 
 - \`.maestro/bootstrap/\` contains committed project bootstrap assets
 - \`.maestro/skills/\` contains project-local agent skills
-- \`.maestro/missions/\`, \`.maestro/sessions/\`, and \`.maestro/launches/\` contain runtime state
+- \`.maestro/missions/\` and \`.maestro/sessions/\` contain runtime state (handoff packets live globally at \`~/.maestro/handoff/\`)
 - \`.maestro/tasks/contracts/\` stores one task contract JSON per task plus an append-only index
 - \`.maestro/tasks/contract-templates/\` stores reusable contract draft YAML templates such as \`default.md\`
 - \`skills/built-in/\` contains shipped built-in fallback skills
@@ -188,7 +188,7 @@ Use this document for required tools, environment variables, and local setup not
 
 - \`.maestro/bootstrap/\` is the committed bootstrap layer
 - \`.maestro/skills/\` is the local runtime skill layer
-- \`.maestro/missions/\`, \`.maestro/sessions/\`, and \`.maestro/launches/\` are runtime state
+- \`.maestro/missions/\` and \`.maestro/sessions/\` are runtime state (handoff packets live globally at \`~/.maestro/handoff/\`)
 
 ## Environment Variables
 

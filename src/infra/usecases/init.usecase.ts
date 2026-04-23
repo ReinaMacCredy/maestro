@@ -21,7 +21,6 @@ import { DEFAULT_PRINCIPLES } from "@/features/mission";
 
 const RUNTIME_GITIGNORE_COMMENT = "# Maestro runtime state";
 const RUNTIME_GITIGNORE_LINES = [
-  ".maestro/launches/",
   ".maestro/missions/",
   ".maestro/sessions/",
   ".maestro/tasks/local-history/",
@@ -62,7 +61,6 @@ export async function initMaestro(
     }
   } else {
     const maestroDir = join(opts.dir, MAESTRO_DIR);
-    const launchesDir = join(maestroDir, "launches");
     const tasksDir = join(maestroDir, "tasks");
     const continuationDir = join(tasksDir, "continuations");
     const activeContinuationDir = join(continuationDir, "active");
@@ -76,7 +74,6 @@ export async function initMaestro(
     await assertProjectLocalPathSafe(opts.dir, configPath);
 
     await ensureDirIfMissing(maestroDir, created);
-    await ensureDirIfMissing(launchesDir, created);
     await ensureDirIfMissing(tasksDir, created);
     await ensureDirIfMissing(continuationDir, created);
     await ensureDirIfMissing(activeContinuationDir, created);

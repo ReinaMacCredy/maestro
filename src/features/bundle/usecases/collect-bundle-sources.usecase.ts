@@ -147,16 +147,16 @@ export async function collectBundleSources(
     }
   }
 
-  // handoff launches that reference this mission id
-  const allLaunches = await deps.handoffStore.list();
-  const missionLaunches = allLaunches.filter(
-    (launch) => launch.refs.missionId === missionId,
+  // handoff packets that reference this mission id
+  const allHandoffs = await deps.handoffStore.list();
+  const missionHandoffs = allHandoffs.filter(
+    (handoff) => handoff.refs.missionId === missionId,
   );
-  const missionLaunchIds = new Set(missionLaunches.map((launch) => launch.id));
-  for (const launch of missionLaunches) {
+  const missionHandoffIds = new Set(missionHandoffs.map((handoff) => handoff.id));
+  for (const handoff of missionHandoffs) {
     files.push({
-      path: `${root}/launches/${launch.id}.json`,
-      content: stringifyJson(launch),
+      path: `${root}/handoffs/${handoff.id}.json`,
+      content: stringifyJson(handoff),
     });
   }
 
@@ -175,7 +175,7 @@ export async function collectBundleSources(
   const filteredOutcomes = filterOutcomesForMission(
     outcomesRaw ?? "",
     missionId,
-    missionLaunchIds,
+    missionHandoffIds,
   );
   files.push({
     path: `${root}/principles/outcomes.jsonl`,
@@ -196,7 +196,7 @@ export async function collectBundleSources(
     assertions: assertions.length,
     agents: agentFeatureIds.length,
     replies: replyCount,
-    launches: missionLaunches.length,
+    handoffs: missionHandoffs.length,
     checkpoints: checkpoints.length,
     principlesSnapshot,
     outcomesSnapshot,
@@ -297,7 +297,7 @@ function countLearnings(compiledText: string): number {
 function filterOutcomesForMission(
   raw: string,
   missionId: string,
-  launchIds: ReadonlySet<string>,
+  handoffIds: ReadonlySet<string>,
 ): string {
   if (!raw) return "";
   const kept: string[] = [];
@@ -308,7 +308,7 @@ function filterOutcomesForMission(
       const parsed = JSON.parse(trimmed) as { missionId?: string; handoffId?: string };
       if (
         parsed.missionId === missionId
-        || (parsed.handoffId && launchIds.has(parsed.handoffId))
+        || (parsed.handoffId && handoffIds.has(parsed.handoffId))
       ) {
         kept.push(trimmed);
       }

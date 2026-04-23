@@ -58,7 +58,7 @@ export async function runDoctor(
       name: "legacy-handoffs",
       status: "warn",
       message: `Found ${legacyHandoffCount} legacy handoff artifact(s) under .maestro/handoffs/`,
-      fix: "Review or remove the old files manually. Maestro now writes launch artifacts to .maestro/launches/",
+      fix: "Review or remove the old files manually. Maestro now writes handoff artifacts to ~/.maestro/handoff/",
     });
   }
 
