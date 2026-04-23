@@ -323,12 +323,12 @@ async function processInject(
   }
 
   await ensureDir(skillsRoot);
-  await removeStaleBundledSkillDirs(skillsRoot);
+  const removedStaleSkillDirs = await removeStaleBundledSkillDirs(skillsRoot);
 
   const results = await Promise.all(
     BUNDLED_SKILL_TEMPLATES.map((template) => writeBundledSkill(skillsRoot, template)),
   );
-  const anyChanged = results.some((r) => r.changed);
+  const anyChanged = removedStaleSkillDirs.length > 0 || results.some((r) => r.changed);
   const installed = BUNDLED_SKILL_TEMPLATES.map((template) => template.name);
   const preservedUserEdits = results.flatMap((r) => r.preservedUserEdits);
 

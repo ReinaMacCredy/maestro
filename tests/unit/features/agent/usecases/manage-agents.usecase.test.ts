@@ -188,6 +188,24 @@ describe("manage-agents use case logic", () => {
       expect(existsSync(staleDir)).toBe(false);
     });
 
+    it("reports installed when a later refresh only removes stale managed skill dirs", async () => {
+      await mkdir(join(fakeHome, ".claude"), { recursive: true });
+      await mkdir(join(fakeHome, ".codex"), { recursive: true });
+      await injectAgentBlocks(tmpDir, "all", fakeHome);
+
+      const staleDir = join(fakeHome, ".claude", "skills", "maestro-obsolete");
+      await mkdir(staleDir, { recursive: true });
+      await writeFile(join(staleDir, "SKILL.md"), "---\nname: maestro-obsolete\n---\n# old\n");
+      await writeFile(
+        join(staleDir, ".maestro-bundled.json"),
+        JSON.stringify({ managedBy: "maestro", skillName: "maestro-obsolete", fileHashes: {} }),
+      );
+
+      const results = await injectAgentBlocks(tmpDir, "all", fakeHome);
+      expect(results.find((r) => r.agent === "Claude Code")?.action).toBe("installed");
+      expect(existsSync(staleDir)).toBe(false);
+    });
+
     it("leaves non-maestro skill dirs untouched during stale cleanup", async () => {
       await mkdir(join(fakeHome, ".claude"), { recursive: true });
       await mkdir(join(fakeHome, ".codex"), { recursive: true });
